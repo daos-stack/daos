@@ -1,6 +1,6 @@
 """
 (C) Copyright 2022-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -225,32 +225,36 @@ class PoolCreateAllTestBase(TestWithServers):
 
         first_pool_size = None
         for index in range(pool_count):
-            self.log.info("Creating pool %d with all the available storage: size=100%%", index)
+            self.log_step(f"Creating pool {index} with all the available storage: size=100%")
             self.pool[index].size.update("100%", "pool[0].size")
             self.pool[index].create()
             self.pool[index].get_info()
             s_total = self.pool[index].info.pi_space.ps_space.s_total
             pool_size = int(s_total[0]), int(s_total[1])
-            self.log.info(
-                "Pool %d created: scm_size=%d, nvme_size=%d", index, *pool_size)
+            self.log.info("Pool %d created: %s, scm_size=%d, nvme_size=%d", index, self.pool[index],
+                          *pool_size)
+            self.log_step(f"Destroying pool {self.pool[index]}")
             self.pool[index].destroy()
 
             # Creating a pool immediately after destroy intermittently causes an error during the
             # create. Wait for a few seconds and check that the pool was destroyed.
             count = 0
+            self.log_step(f"Waiting for pool {self.pool[index]} to be destroyed")
             while True:
                 self.log.info("Wait for a few seconds for the pool to be destroyed...")
                 time.sleep(5)
                 try:
                     self.dmg.pool_query(pool=self.pool[index].identifier)
                     self.log.info(
-                        "Pool query worked. Pool hasn't been destroyed. Try again. %d", count)
+                        "Pool query succeed, indicating %s hasn't been destroyed. Try again. %d",
+                        self.pool[index], count)
                     count += 1
                 except CommandFailure as error:
-                    self.log.info("Pool query failed. Pool should have been destroyed. %s", error)
+                    self.log.info("Pool query failed, indicating %s has been destroyed: %s",
+                                  self.pool[index], error)
                     break
 
-            self.log.info("Checking SCM available storage")
+            self.log_step("Checking SCM available storage")
             timeout = 3
             while timeout > 0:
                 hosts = self.find_hosts_low_scm(90)
