@@ -34,7 +34,7 @@ LOG_LEVELS = {
     'WARN': 6,
     'NOTE': 7,
     'INFO': 8,
-    'DBUG': 9}
+    'DEBUG': 9}
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
