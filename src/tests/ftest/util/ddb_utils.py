@@ -33,11 +33,11 @@ class DdbCommandBase(CommandWithParameters):
         # Write mode that's necessary for the commands that alters the data such as load.
         self.write_mode = FormattedParameter("-w", default=False, position=1)
 
-        # Used to place rm_pool before --db_path.
+        # Used for ddb subcommand.
         self.ddb_command = BasicParameter(None, position=2)
 
         # Path to the system database. Used for MD-on-SSD.
-        self.db_path = BasicParameter(None, position=3)
+        self.db_path = FormattedParameter("--db_path {}", position=3)
 
         # VOS file path.
         self.vos_path = FormattedParameter("--vos_path {}", position=4)
@@ -111,16 +111,14 @@ class DdbCommand(DdbCommandBase):
             CommandResult: groups of command results from the same hosts with the same return status
 
         """
-        cmd = ["ls"]
-        if component_path:
-            cmd.append(component_path)
+        self.ddb_command.value = "ls"
+        self.path.value = component_path
         self.write_mode.value = False
-        self.path.value = " ".join(cmd)
 
         return self.run()
 
     def value_dump(self, component_path, out_file_path):
-        """Call ddb -R "value_dump <component_path> <out_file_path>"
+        """Call ddb value_dump <component_path> <out_file_path>
 
         dump_value writes the contents to the file. e.g., if akey is specified, its data
         will be dumped.
@@ -137,12 +135,13 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.path.value = " ".join(["value_dump", component_path, out_file_path])
+        self.ddb_command.value = "value_dump"
+        self.path.value = " ".join([component_path, out_file_path])
 
         return self.run()
 
     def value_load(self, component_path, load_file_path):
-        """Call ddb -w -R "value_load <load_file_path> <component_path>"
+        """Call ddb -w value_load <load_file_path> <component_path>
 
         load writes the given data into the container. e.g.,
         load new_data.txt [0]/[1]/[1]/[0]
@@ -158,7 +157,8 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = True
-        self.path.value = " ".join(["value_load", load_file_path, component_path])
+        self.ddb_command.value = "value_load"
+        self.path.value = " ".join([load_file_path, component_path])
 
         return self.run()
 
@@ -174,12 +174,13 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = True
-        self.path.value = " ".join(["rm", component_path])
+        self.ddb_command.value = "rm"
+        self.path.value = component_path
 
         return self.run()
 
     def ilog_dump(self, component_path):
-        """Call ddb -R "ilog_dump <component_path>"
+        """Call ddb ilog_dump <component_path>
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -190,12 +191,13 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.path.value = " ".join(["ilog_dump", component_path])
+        self.ddb_command.value = "ilog_dump"
+        self.path.value = component_path
 
         return self.run()
 
     def ilog_commit(self, component_path):
-        """Call ddb -R "ilog_commit <component_path>"
+        """Call ddb ilog_commit <component_path>
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -206,12 +208,13 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.path.value = " ".join(["ilog_commit", component_path])
+        self.ddb_command.value = "ilog_commit"
+        self.path.value = component_path
 
         return self.run()
 
     def ilog_clear(self, component_path):
-        """Call ddb -R "ilog_clear <component_path>"
+        """Call ddb ilog_clear <component_path>
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -222,12 +225,13 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.path.value = " ".join(["ilog_clear", component_path])
+        self.ddb_command.value = "ilog_clear"
+        self.path.value = component_path
 
         return self.run()
 
     def superblock_dump(self, component_path):
-        """Call ddb -R "superblock_dump <component_path>"
+        """Call ddb superblock_dump <component_path>
 
         Args:
             component_path (str): Component that comes after dump_superblock.
@@ -238,12 +242,13 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.path.value = " ".join(["superblock_dump", component_path])
+        self.ddb_command.value = "superblock_dump"
+        self.path.value = component_path
 
         return self.run()
 
     def dtx_dump(self, component_path="[0]", committed=False, active=False):
-        """Call ddb -R "dtx_dump <component_path>"
+        """Call ddb dtx_dump <component_path>
 
         committed and active can't be set at the same time.
 
@@ -258,8 +263,8 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-
-        commands = ["dtx_dump"]
+        self.ddb_command.value = "dtx_dump"
+        commands = []
         if committed:
             commands.append("-c")
         if active:
@@ -271,7 +276,7 @@ class DdbCommand(DdbCommandBase):
         return self.run()
 
     def dtx_cmt_clear(self, component_path="[0]"):
-        """Call ddb -R "dtx_cmt_clear <component_path>"
+        """Call ddb -w dtx_cmt_clear <component_path>
 
         Args:
             component_path (str): Component that comes after clear_cmt_dtx. It doesn't
@@ -282,7 +287,8 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = True
-        self.path.value = " ".join(["dtx_cmt_clear", component_path])
+        self.ddb_command.value = "dtx_cmt_clear"
+        self.path.value = component_path
 
         return self.run()
 
@@ -321,7 +327,7 @@ class DdbCommand(DdbCommandBase):
         """
         self.vos_path.value = None
         self.ddb_command.value = "rm_pool"
-        self.db_path.value = " ".join(["--db_path", db_path])
+        self.db_path.value = db_path
         self.path.value = removing_path
 
         return self.run()
