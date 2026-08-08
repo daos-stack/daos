@@ -439,14 +439,24 @@ main(int argc, char **argv)
 
 	/*
 	 * For daos_perf, if pool/cont uuids are supplied as command line
-	 * arguments it's assumed that the pool/cont were created. If only a
-	 * cont uuid is supplied then a pool and container will be created and
-	 * the cont uuid will be used during creation
+	 * arguments it's assumed that the pool/cont were already created and
+	 * will be opened. Creating a container with a user-specified UUID is
+	 * not allowed; a container UUID may only be supplied together with a
+	 * pool UUID to open an existing container.
 	 */
 	if (!uuid_is_null(ts_ctx.tsc_pool_uuid)) {
 		ts_ctx.tsc_skip_pool_create = true;
 		if (!uuid_is_null(ts_ctx.tsc_cont_uuid))
 			ts_ctx.tsc_skip_cont_create = true;
+	}
+
+	if (!uuid_is_null(ts_ctx.tsc_cont_uuid) && !ts_ctx.tsc_skip_cont_create) {
+		if (ts_ctx.tsc_mpi_rank == 0)
+			fprintf(stderr,
+				"creating a container with a user-specified UUID is not "
+				"allowed; a container UUID may only be provided together "
+				"with a pool UUID to open an existing container\n");
+		return -1;
 	}
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
