@@ -1119,16 +1119,23 @@ is_rebuild_scanning_tgt(struct rebuild_tgt_pool_tracker *rpt)
 					      idx, &tgt);
 	D_ASSERT(rc == 1);
 	switch(tgt->ta_comp.co_status) {
-		case PO_COMP_ST_DOWNOUT:
-		case PO_COMP_ST_DOWN:
-		case PO_COMP_ST_UP:
-		case PO_COMP_ST_NEW:
-			return false;
-		case PO_COMP_ST_UPIN:
-		case PO_COMP_ST_DRAIN:
+	case PO_COMP_ST_UP:
+		/* For admin stopped reintegration, the FAIL_RECLAIM may send to
+		 * the reint engine, the UP targets need to do the scan + reclaim
+		 * (see rebuild_scan_broadcast()).
+		 */
+		if (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM)
 			return true;
-		default:
-			break;
+		return false;
+	case PO_COMP_ST_DOWNOUT:
+	case PO_COMP_ST_DOWN:
+	case PO_COMP_ST_NEW:
+		return false;
+	case PO_COMP_ST_UPIN:
+	case PO_COMP_ST_DRAIN:
+		return true;
+	default:
+		break;
 	}
 
 	return false;
