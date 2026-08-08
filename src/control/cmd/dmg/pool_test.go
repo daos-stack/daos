@@ -782,6 +782,65 @@ func TestDmg_PoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Exclude with --wait issues a follow-up pool query",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Drain with --wait issues a follow-up pool query",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Extend with --wait issues a follow-up pool query",
+			"pool extend 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolExtendReq{
+					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks: []ranklist.Rank{1},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reintegrate with --wait issues a follow-up pool query",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Destroy pool with force",
 			"pool destroy 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{

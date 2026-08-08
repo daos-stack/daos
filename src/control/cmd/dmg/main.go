@@ -92,6 +92,12 @@ func (cmd *cfgCmd) setConfig(cfg *control.Config) {
 	cmd.config = cfg
 }
 
+// waitCmd is embedded in subcommands that kick off a pool rebuild and may
+// optionally block until that rebuild completes.
+type waitCmd struct {
+	Wait bool `long:"wait" description:"Block until the rebuild triggered by this operation completes"`
+}
+
 type cliOptions struct {
 	AllowProxy    bool             `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	HostList      ui.HostSetFlag   `short:"l" long:"host-list" hidden:"true" description:"DEPRECATED: A comma separated list of addresses <ipv4addr/hostname> to connect to"`
