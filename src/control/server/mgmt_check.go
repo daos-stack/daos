@@ -36,6 +36,10 @@ const (
 	checkerPoliciesKey     = "checker_policies"
 	checkerLatestPolicyKey = "checker_latest_policy"
 	checkerLeaderKey       = "checker_leader"
+
+	// numCheckLeaderRetries is the number of times to retry sending to the check leader before
+	// returning an error.
+	numCheckLeaderRetries = 3
 )
 
 func errRankNotLocal(rank ranklist.Rank) error {
@@ -188,6 +192,24 @@ func (svc *mgmtSvc) getCheckerLeaderControlAddr() (string, error) {
 	return m.Addr.String(), nil
 }
 
+func (svc *mgmtSvc) sendToCheckLeader(ctx context.Context, fwdReq *mgmtpb.CheckLeaderReq) (*mgmtpb.CheckLeaderResp, error) {
+	hostAddr, err := svc.getCheckerLeaderControlAddr()
+	if err != nil {
+		return nil, errors.Wrap(err, "get check leader control address")
+	}
+
+	ctlReq := &control.CheckLeaderReq{
+		CheckLeaderReq: *fwdReq,
+	}
+	ctlReq.HostList = []string{hostAddr}
+	resp, err := control.CheckLeaderForward(ctx, svc.rpcClient, ctlReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "forwarding request to check leader")
+	}
+
+	return &resp.CheckLeaderResp, nil
+}
+
 func (svc *mgmtSvc) forwardCheckLeaderDrpc(ctx context.Context, req proto.Message) (*mgmtpb.CheckLeaderResp, error) {
 	fwdReq := new(mgmtpb.CheckLeaderReq)
 
@@ -208,21 +230,17 @@ func (svc *mgmtSvc) forwardCheckLeaderDrpc(ctx context.Context, req proto.Messag
 		return nil, errors.Errorf("request %T cannot be forwarded to the check leader", req)
 	}
 
-	hostAddr, err := svc.getCheckerLeaderControlAddr()
-	if err != nil {
-		return nil, errors.Wrap(err, "get check leader control address")
+	var err error
+	for i := 0; i < numCheckLeaderRetries; i++ {
+		resp, tryErr := svc.sendToCheckLeader(ctx, fwdReq)
+		if tryErr == nil {
+			return resp, nil
+		}
+		svc.log.Debugf("CheckLeaderdRPC failed (retries left: %d): %s", numCheckLeaderRetries-(i+1), tryErr.Error())
+		err = tryErr
 	}
 
-	ctlReq := &control.CheckLeaderReq{
-		CheckLeaderReq: *fwdReq,
-	}
-	ctlReq.HostList = []string{hostAddr}
-	resp, err := control.CheckLeaderForward(ctx, svc.rpcClient, ctlReq)
-	if err != nil {
-		return nil, errors.Wrap(err, "forwarding request to check leader")
-	}
-
-	return &resp.CheckLeaderResp, nil
+	return nil, err
 }
 
 func (svc *mgmtSvc) verifyCheckerReady() error {
