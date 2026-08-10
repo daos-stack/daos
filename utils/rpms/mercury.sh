@@ -68,6 +68,7 @@ append_install_list "${files[@]}"
 
 ARCH="${isa}"
 build_package "mercury-ucx"
+DEPENDS=()
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_MERCURY_PREFIX}/lib64/lib*.so"
@@ -100,5 +101,19 @@ fi
 append_install_list "${files[@]}"
 
 DEPENDS=("mercury = ${mercury_full}")
+if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
+	DEPENDS+=("(${mercury_boost_dev} or ${boost_dev})")
+else
+	DEPENDS+=("${mercury_boost_dev} | ${boost_dev}")
+fi
 build_package "${mercury_dev}"
+DEPENDS=()
+
+TARGET_PATH="${includedir}"
+list_files files "${SL_MERCURY_PREFIX}/include/boost"
+append_install_list "${files[@]}"
+
+DEPENDS=("${mercury_dev} = ${mercury_full}")
+CONFLICTS=("${boost_dev}")
+build_package "${mercury_boost_dev}"
 DEPENDS=()
