@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,16 +45,7 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		il_reply.fir_flags |= DFUSE_IOCTL_FLAGS_MCACHE;
 
 	if (oh->doh_writeable) {
-		rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session,
-						      oh->doh_ie->ie_stat.st_ino, 0, 0);
-
-		if (rc == 0) {
-			DFUSE_TRA_DEBUG(oh, "inval inode %#lx rc is %d", oh->doh_ie->ie_stat.st_ino,
-					rc);
-		} else {
-			DFUSE_TRA_ERROR(oh, "inval inode %#lx rc is %d", oh->doh_ie->ie_stat.st_ino,
-					rc);
-		}
+		dfuse_notify_inval_inode(dfuse_info, oh->doh_ie->ie_stat.st_ino);
 
 		/* Mark this file handle as using the IL or similar, and if this is new then mark
 		 * the inode as well

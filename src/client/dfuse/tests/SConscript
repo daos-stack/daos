@@ -1,0 +1,17 @@
+"""Build DFuse unit tests"""
+
+
+def scons():
+    """Execute build"""
+    Import('denv')
+
+    tenv = denv.Clone()
+    tenv.AppendUnique(LIBS=['cmocka'])
+
+    notify_tests = tenv.d_test_program('notify_tests', 'notify_tests.c')
+
+    tenv.Install('$PREFIX/bin/', [notify_tests])
+
+
+if __name__ == "SCons.Script":
+    scons()

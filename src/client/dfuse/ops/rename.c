@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,7 +19,6 @@ dfuse_oid_moved(struct dfuse_info *dfuse_info, daos_obj_id_t *oid, struct dfuse_
 		const char *name, struct dfuse_inode_entry *newparent, const char *newname)
 {
 	struct dfuse_inode_entry *ie;
-	int                       rc;
 	ino_t                     ino;
 
 	dfuse_compute_inode(parent->ie_dfs, oid, &ino);
@@ -34,11 +34,7 @@ dfuse_oid_moved(struct dfuse_info *dfuse_info, daos_obj_id_t *oid, struct dfuse_
 		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
 		DFUSE_TRA_DEBUG(ie, "Invalidating old name");
 
-		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
-						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
-
-		if (rc && rc != -ENOENT)
-			DFUSE_TRA_ERROR(ie, "inval_entry() returned: %d (%s)", rc, strerror(-rc));
+		dfuse_notify_inval_entry(dfuse_info, ie->ie_parent, ie->ie_name);
 	}
 
 	/* Update the inode entry data */

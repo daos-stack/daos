@@ -240,6 +240,9 @@ def scons():
 
     cenv.Install(os.path.join("$PREFIX", 'bin'), dfuse_bin)
 
+    if prereqs.test_requested():
+        SConscript('tests/SConscript', exports={'denv': cenv})
+
 
 if __name__ == "SCons.Script":
     scons()
