@@ -354,6 +354,10 @@ main(int argc, char **argv)
 	char filter[1024];
 #endif
 
+	/* Make outputs line buffered to simplify output timestamping. */
+	setvbuf(stdout, NULL, _IOLBF, 0);
+	setvbuf(stderr, NULL, _IOLBF, 0);
+
 	d_register_alt_assert(mock_assert);
 
 	par_init(&argc, &argv);
