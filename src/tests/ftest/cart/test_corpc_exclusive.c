@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,16 +19,6 @@
 #include "crt_utils.h"
 
 static d_rank_t my_rank;
-
-static int
-corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
-{
-	return 0;
-}
-
-struct crt_corpc_ops corpc_set_ivns_ops = {
-	.co_aggregate = corpc_aggregate,
-};
 
 static void
 test_basic_corpc_hdlr(crt_rpc_t *rpc)
