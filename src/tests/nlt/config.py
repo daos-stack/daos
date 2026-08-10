@@ -59,13 +59,14 @@ class NLTConf():
         # Parse the max log size.
         if args.max_log_size:
             size = args.max_log_size
-            if size.endswith('MiB'):
-                size = int(size[:-3])
-                size *= (1024 * 1024)
-            elif size.endswith('GiB'):
-                size = int(size[:-3])
-                size *= (1024 * 1024 * 1024)
-            self.max_log_size = int(size)
+            try:
+                if size.endswith('MiB'):
+                    size = int(size[:-3]) * (1024 * 1024)
+                elif size.endswith('GiB'):
+                    size = int(size[:-3]) * (1024 * 1024 * 1024)
+                self.max_log_size = int(size)
+            except ValueError as error:
+                raise NLTestFail(f'Invalid --max-log-size value {args.max_log_size!r}') from error
 
     def __getitem__(self, key):
         return self._bc[key]

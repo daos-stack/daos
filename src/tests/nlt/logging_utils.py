@@ -26,6 +26,7 @@ class NltStdoutWrapper():
 
     def write(self, value):
         """Print to stdout.  If this is the main thread then print it, always save it"""
+        value = str(value)
         thread = threading.current_thread()
         if not thread.daemon:
             self._stdout.write(value)
@@ -37,17 +38,11 @@ class NltStdoutWrapper():
 
     def sprint(self, value):
         """Really print something to stdout"""
-        self._stdout.write(value + '\n')
+        self._stdout.write(str(value) + '\n')
 
     def get_thread_output(self):
         """Return the stdout by the calling thread, and reset for next time"""
-        thread_id = threading.get_ident()
-        try:
-            data = self._outputs[thread_id]
-            del self._outputs[thread_id]
-            return data
-        except KeyError:
-            return None
+        return self._outputs.pop(threading.get_ident(), None)
 
     def flush(self):
         """Flush"""
@@ -67,6 +62,7 @@ class NltStderrWrapper():
 
     def write(self, value):
         """Print to stderr.  Always print it, always save it"""
+        value = str(value)
         thread = threading.current_thread()
         self._stderr.write(value)
         thread_id = thread.ident
@@ -77,13 +73,7 @@ class NltStderrWrapper():
 
     def get_thread_err(self):
         """Return the stderr by the calling thread, and reset for next time"""
-        thread_id = threading.get_ident()
-        try:
-            data = self._outputs[thread_id]
-            del self._outputs[thread_id]
-            return data
-        except KeyError:
-            return None
+        return self._outputs.pop(threading.get_ident(), None)
 
     def flush(self):
         """Flush"""
