@@ -18,6 +18,8 @@
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
 
+#include <cart/rpc_gen_macros.h>
+
 /*
  * RPC operation codes
  *

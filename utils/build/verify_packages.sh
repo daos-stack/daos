@@ -152,6 +152,7 @@ case "${rpm_suffix}" in
             [isa-l_crypto-devel]=libisa-l_crypto
             [libfabric-devel]=libfabric
             [mercury-devel]=mercury
+            [mercury-boost-devel]=mercury
             [libpmem-devel]=libpmem
             [libpmemobj-devel]=libpmemobj
             [daos-devel]=daos-client
@@ -165,6 +166,7 @@ case "${rpm_suffix}" in
             [libisal_crypto-devel]=libisal_crypto2
             [libfabric-devel]=libfabric1
             [mercury-devel]=mercury
+            [mercury-boost-devel]=mercury
             [libpmem-devel]=libpmem1
             [libpmemobj-devel]=libpmemobj1
             [daos-devel]=daos-client

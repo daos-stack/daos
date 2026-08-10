@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,7 +11,6 @@
 #include <daos/pipeline.h>
 #include <daos/common.h>
 #include "pipeline_rpc.h"
-#include <mercury_proc.h>
 
 static int
 crt_proc_daos_key_desc_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_key_desc_t *key)

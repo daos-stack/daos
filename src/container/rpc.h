@@ -19,6 +19,8 @@
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
 
+#include <cart/rpc_gen_macros.h>
+
 /*
  * RPC operation codes
  *

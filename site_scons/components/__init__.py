@@ -198,7 +198,7 @@ def define_mercury(reqs):
                      '-DBUILD_TESTING_PERF:BOOL=ON',
                      '-DBUILD_TESTING_UNIT:BOOL=OFF',
                      '-DMERCURY_USE_BOOST_PP:BOOL=ON',
-                     '-DMERCURY_USE_SYSTEM_BOOST:BOOL=ON',
+                     '-DMERCURY_USE_SYSTEM_BOOST:BOOL=OFF',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
                      '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
                      '-DMERCURY_ENABLE_DEBUG:BOOL=ON',
@@ -230,7 +230,7 @@ def define_mercury(reqs):
                           ['make', 'install']],
                 libs=['mercury'],
                 pkgconfig='mercury',
-                requires=['boost', 'ofi', 'ucx'] + libs,
+                requires=['ofi', 'ucx'] + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 build_env={'CFLAGS': '-fstack-usage'})
@@ -247,8 +247,6 @@ def define_common(reqs):
     reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'], package='valgrind-devel')
 
     reqs.define('cunit', libs=['cunit'], headers=['CUnit/Basic.h'], package='CUnit-devel')
-
-    reqs.define('boost', headers=['boost/preprocessor.hpp'], package='boost-python36-devel')
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
