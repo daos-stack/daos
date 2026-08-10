@@ -96,6 +96,7 @@ class DaosCoreBase(TestWithServers):
         job.assign_hosts(cmocka_utils.hosts, self.workdir, None)
         job.assign_processes(num_clients)
         job.assign_environment(daos_test_env)
+        job.output_check = "combined"
 
         # Update the expected status for each ranks that will be stopped by this
         # test to avoid a false failure during tearDown().
