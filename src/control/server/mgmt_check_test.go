@@ -2143,6 +2143,25 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 			expErr:         errors.New("MockInvoker error"),
 			expCheckLeader: &testCheckLeaderRank,
 		},
+		"gRPC succeeds after retry": {
+			req: startReq,
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("", errors.New("temporary mock gRPC"), nil),
+					control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+						Resp: &mgmtpb.CheckLeaderResp_StartResp{
+							StartResp: &mgmtpb.CheckStartResp{},
+						},
+					}),
+				},
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				Resp: &mgmtpb.CheckLeaderResp_StartResp{
+					StartResp: &mgmtpb.CheckStartResp{},
+				},
+			},
+			expCheckLeader: &testCheckLeaderRank,
+		},
 		"CheckStartReq returns": {
 			req: startReq,
 			mic: &control.MockInvokerConfig{
