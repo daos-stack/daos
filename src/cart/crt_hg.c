@@ -1068,7 +1068,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 	if (hg_ret != HG_SUCCESS) {
 		hg_ctx->chc_self_addr = HG_ADDR_NULL;
 		D_ERROR("HG_Addr_self() failed; hg_ret: %d\n", hg_ret);
-		D_GOTO(error, rc = crt_hgret_2_der(hg_ret));
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
 	rc = crt_hg_pool_init(hg_ctx);
@@ -2012,14 +2012,6 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 		    hg_ctx->chc_bulkctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
 		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
 		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
-<<<<<<< HEAD
-	else
-		hg_ret = HG_Bulk_transfer_id(
-		    hg_ctx->chc_bulkctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
-		    rpc_priv->crp_hg_addr, HG_Get_info(rpc_priv->crp_hg_hdl)->context_id,
-		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
-		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
-=======
 	else {
 		hg_addr_t remote_addr = rpc_priv->crp_hg_addr;
 		int       remote_ctx_idx;
@@ -2050,7 +2042,6 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 					     opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
 	}
 
->>>>>>> ab04a76b1b (DAOS-19326 cart: bulk transfer issued from CORPC root handler fails (#18729))
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
 		D_FREE(bulk_cbinfo);

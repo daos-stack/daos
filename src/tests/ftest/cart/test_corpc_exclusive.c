@@ -60,14 +60,12 @@ corpc_response_hdlr(const struct crt_cb_info *info)
 	crtu_progress_stop();
 }
 
-static struct crt_proto_rpc_format my_proto_rpc_fmt_basic_corpc[] = {
-	{
-		.prf_flags	= 0,
-		.prf_req_fmt	= &CQF_basic_corpc,
-		.prf_hdlr	= test_basic_corpc_hdlr,
-		.prf_co_ops	= &corpc_set_ivns_ops,
-	}
-};
+static struct crt_proto_rpc_format my_proto_rpc_fmt_basic_corpc[] = {{
+    .prf_flags   = 0,
+    .prf_req_fmt = &CQF_basic_corpc,
+    .prf_hdlr    = test_basic_corpc_hdlr,
+    .prf_co_ops  = NULL,
+}};
 
 static struct crt_proto_format my_proto_fmt_basic_corpc = {
 	.cpf_name = "my-proto-basic_corpc",
