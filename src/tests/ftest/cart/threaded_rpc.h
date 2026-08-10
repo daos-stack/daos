@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +12,7 @@
 #define __THREADED_RPC_H__
 
 #include <cart/api.h>
+#include <cart/rpc_gen_macros.h>
 #include "common.h"
 
 #define CRT_ISEQ_RPC		/* input fields */		 \

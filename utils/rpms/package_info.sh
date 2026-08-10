@@ -39,7 +39,7 @@ export libfabric_version="1.22.0"
 export libfabric_release="5${distro_name}"
 export libfabric_full="${libfabric_version}-${libfabric_release}"
 export mercury_version="2.4.1"
-export mercury_release="5${distro_name}"
+export mercury_release="6${distro_name}"
 export mercury_full="${mercury_version}-${mercury_release}"
 export argobots_version="1.2"
 export argobots_release="4${distro_name}"
@@ -91,12 +91,16 @@ export libfabric_lib
 set_lib_name libfabric dev libfabric libfabric libfabric
 export libfabric_dev
 
-set_lib_name mercury dev mercury mercury mercury
-export mercury_dev
 set_lib_name mercury lib mercury mercury mercury
 export mercury_lib
 set_lib_name mercury_libfabric lib mercury-libfabric mercury-libfabric mercury-libfabric
 export mercury_libfabric_lib
+set_lib_name mercury dev mercury mercury mercury
+export mercury_dev
+set_lib_name mercury_boost dev mercury-boost mercury-boost mercury-boost
+export mercury_boost_dev
+set_lib_name boost dev boost boost boost
+export boost_dev
 
 set_lib_name pmemobj lib libpmemobj libpmemobj1 libpmemobj1
 set_lib_name pmemobj dev libpmemobj libpmemobj libpmemobj
