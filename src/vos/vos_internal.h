@@ -524,13 +524,10 @@ struct vos_dtx_act_ent {
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
 struct vos_dtx_cmt_ent {
-	struct vos_dtx_cmt_ent_df dce_base;
-	uint32_t                  dce_invalid : 1;
+	struct dtx_id dce_xid;
 };
 
-#define DCE_XID(dce)		((dce)->dce_base.dce_xid)
-#define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
-#define DCE_CMT_TIME(dce)	((dce)->dce_base.dce_cmt_time)
+#define DCE_XID(dce)            ((dce)->dce_xid)
 
 #define EVT_DESC_MAGIC          0xbeefdead
 

@@ -1517,9 +1517,7 @@ committed_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
 	struct vos_dtx_cmt_ent		*ent = val->iov_buf;
 	int				 rc;
 
-	entry.ddtx_id = ent->dce_base.dce_xid;
-	entry.ddtx_cmt_time = ent->dce_base.dce_cmt_time;
-	entry.ddtx_epoch = ent->dce_base.dce_epoch;
+	entry.ddtx_id = ent->dce_xid;
 
 	rc = arg->handler(&entry, arg->handler_arg);
 
