@@ -253,15 +253,16 @@ static void
 ival_drain_queue(void)
 {
 	struct dfuse_inval_item *item;
+	d_list_t                 drain;
 
-	while (1) {
-		D_MUTEX_LOCK(&ival_lock);
-		item = d_list_pop_entry(&ival_queue, struct dfuse_inval_item, link);
-		D_MUTEX_UNLOCK(&ival_lock);
+	D_INIT_LIST_HEAD(&drain);
 
-		if (item == NULL)
-			return;
+	/* Move the whole queue out under a single lock, then process without holding it. */
+	D_MUTEX_LOCK(&ival_lock);
+	d_list_splice_init(&ival_queue, &drain);
+	D_MUTEX_UNLOCK(&ival_lock);
 
+	while ((item = d_list_pop_entry(&drain, struct dfuse_inval_item, link)) != NULL) {
 		if (!ival_stop && !ival_data.session_dead) {
 			int rc;
 
