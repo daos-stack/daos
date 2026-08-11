@@ -70,7 +70,8 @@ void updateRunStage() {
         'Functional Hardware Medium UCX Provider',
         'Functional Hardware Large',
         'Functional Hardware Large MD on SSD',
-        'Functional Cluster Box Medium MD on SSD'
+        'Functional Cluster Box Medium MD on SSD',
+        'Functional Cluster Box Medium'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
@@ -221,6 +222,7 @@ void updateRunStage() {
             'Functional Hardware Large': hwBuildStage,
             'Functional Hardware Large MD on SSD': hwBuildStage,
             'Functional Cluster Box Medium MD on SSD': hwBuildStage,
+            'Functional Cluster Box Medium': hwBuildStage,
             ]
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
@@ -661,7 +663,10 @@ pipeline {
                      description: 'Run the Functional Hardware Large MD on SSD stage.')
         booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
                      defaultValue: true,
-                     description: 'Run the Functional Cluster Box test stage')
+                     description: 'Run the Functional Cluster Box MD on SSD stage')
+        booleanParam(name: bashName('Functional Cluster Box Medium'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -1359,6 +1364,21 @@ pipeline {
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional Cluster Box Medium': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium',
+                            runStage: shouldStageRun('Functional Cluster Box Medium'),
+                            pragma_suffix:'-cb-medium',
+                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                            next_version: next_version(),
+                            stage_tags: 'cb,medium',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            node_count: 5,
+                            run_if_pr: true,
+                            run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
