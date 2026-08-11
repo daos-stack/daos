@@ -7,8 +7,14 @@ set -uex
 
 NODE="${NODELIST%%,*}"
 
-rm -rf nlt_logs
-mkdir nlt_logs
+test_log_dir="${1:-}"
+if [ -z "$test_log_dir" ]; then
+    echo "test_nlt_post: The test log directory argument is missing!"
+    exit 1
+fi
+
+rm -rf "$test_log_dir"
+mkdir "$test_log_dir"
 
 # Copy any log files.  Use rsync filters here to allow us to specify
 # all files we want to copy, as it's much more flexible than using
@@ -16,14 +22,14 @@ mkdir nlt_logs
 
 # Assuming that node_local_test.py is run with --class-name,
 # the logs will be in build/nlt_logs/ on the node.
-rsync -v -rlpt -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/nlt_logs/ \
+rsync -v -rlpt -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":"build/${test_log_dir}/" \
       --filter="include dnt*.log" --filter="include dnt*.log.bz2" \
       --filter="include dnt_fi_*_logs" --filter="include */" \
-      --filter="exclude *" nlt_logs/
+      --filter="include test.cov" --filter="exclude *" "${test_log_dir}/"
 
 rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ \
       --filter="include nlt*.json" --filter="include dnt*.xml" \
-      --filter="include nltir.xml" --filter="include nltr.json" \
+      --filter="include nltir*.xml" --filter="include nltr*.json" \
       --filter="include nlt-junit.xml" --filter="exclude *" ./
 
 mkdir -p vm_test

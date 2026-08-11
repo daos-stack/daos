@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1689,6 +1689,7 @@ class TestWithServers(TestWithoutServers):
             self.server_group, dmg_cert_dir, self.bin, dmg_config_file,
             dmg_config_temp, self.mgmt_svc_replicas_suffix)
         dmg_cmd.hostlist = self.mgmt_svc_replicas
+        dmg_cmd.env[self.test_env.get_sys_env_name('bullseye_file')] = self.test_env.bullseye_file
         return dmg_cmd
 
     def get_daos_command(self):

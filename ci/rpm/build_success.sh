@@ -19,11 +19,11 @@ mkdir -p "$artdir"
 mkdir -p "$artdir/daos"
 
 if [ -d /home/daos/rpms/ ]; then
-  if [ -d /home/daos/rpms/deps ]; then
-    mkdir -p "$artdir/deps"
-    cp /home/daos/rpms/deps/*.rpm "${artdir}/deps"
-  fi
-  cp /home/daos/rpms/daos/*.rpm "${artdir}/daos"
+  # shellcheck disable=SC2044
+  for dir in $(find /home/daos/rpms/ -maxdepth 1 -mindepth 1 -type d -exec basename {} \;); do
+    mkdir -p "${artdir}/${dir}"
+    cp "/home/daos/rpms/${dir}"/*.rpm "${artdir}/${dir}"
+  done
 fi
 
 createrepo "$artdir"

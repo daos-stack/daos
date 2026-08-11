@@ -95,6 +95,7 @@ def log_environment(logger):
 
 class TestEnvironment():
     """Collection of test environment variables."""
+    # pylint: disable=too-many-public-methods
 
     __ENV_VAR_MAP = {
         'app_dir': 'DAOS_TEST_APP_DIR',
@@ -180,8 +181,7 @@ class TestEnvironment():
         if self.insecure_mode is None:
             self.insecure_mode = "True"
         if self.bullseye_src is None:
-            self.bullseye_src = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "..", "test.cov")
+            self.bullseye_src = os.path.join(os.sep, "opt", "BullseyeCoverage", "daos", "test.cov")
         if self.bullseye_file is None:
             self.bullseye_file = os.path.join(os.sep, "tmp", "test.cov")
         if self.daos_prefix is None:
@@ -194,6 +194,20 @@ class TestEnvironment():
             self.agent_config = os.path.join(self.log_dir, "configs", "daos_agent.yml")
         if self.server_config is None:
             self.server_config = os.path.join(self.log_dir, "configs", "daos_server.yml")
+
+    def get_sys_env_name(self, name):
+        """Get the system environment variable name for the provided test environment name/property.
+
+        Args:
+            name (str): test environment name
+
+        Returns:
+            str: the system environment variable name
+        """
+        if name not in self.__ENV_VAR_MAP:
+            raise TestEnvironmentException(f"Invalid test environment name: {name}")
+
+        return self.__ENV_VAR_MAP[name]
 
     def __set_value(self, key, value):
         """Set the test environment variable.

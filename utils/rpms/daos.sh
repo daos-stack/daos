@@ -15,12 +15,17 @@ if [ -z "${SL_PREFIX:-}" ]; then
   exit 1
 fi
 
+code_coverage="${1:-false}"
 daoshome="${prefix}/lib/daos"
 server_svc_name="daos_server.service"
 agent_svc_name="daos_agent.service"
 sysctl_script_name="10-daos_server.conf"
 daos_sys_dir="/var/daos"
 daos_log_dir="/var/log/daos"
+base_name="daos"
+if [ "$code_coverage" != "false" ]; then
+  base_name="${base_name}-bullseye"
+fi
 
 VERSION=${daos_version}
 RELEASE=${daos_release}
@@ -78,10 +83,24 @@ EOF
 chmod +x "${tmp}/post_install_daos"
 EXTRA_OPTS+=("--after-install" "${tmp}/post_install_daos")
 
+# Code coverage
+if [[ "${code_coverage}" != "false" ]]; then
+  code_coverage_prefix="/opt/BullseyeCoverage"
+  EXTERNAL_DEPENDS=("${bullseye_normal}")
+  TARGET_PATH="${code_coverage_prefix}/daos"
+  list_files files "test.cov"
+  append_install_list "${files[@]}"
+
+  cat << EOF  > "${tmp}/post_install_bullseye"
+chmod 666 ${code_coverage_prefix}/daos/test.cov
+EOF
+  EXTRA_OPTS+=("--after-install" "${tmp}/post_install_bullseye")
+fi
+
 DEPENDS=( "mercury >= ${mercury_version}" )
 DEPENDS+=( "${isal_lib} >= ${isal_version}" )
 DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" )
-build_package "daos"
+build_package "${base_name}"
 
 # Only build server RPMs if we built the server
 if [ -f "${SL_PREFIX}/bin/daos_server" ]; then
@@ -211,10 +230,10 @@ EOF
   fi
 
 
-  DEPENDS=( "daos = ${VERSION}-${RELEASE}" "daos-spdk = ${daos_spdk_full}" )
+  DEPENDS=( "${base_name} = ${VERSION}-${RELEASE}" "daos-spdk = ${daos_spdk_full}" )
   DEPENDS+=( "${pmemobj_lib} = ${pmdk_full}" "${argobots_lib} >= ${argobots_full}" )
   DEPENDS+=( "${isal_crypto_lib} >= ${isal_crypto_version}" "numactl" "pciutils" )
-  build_package "daos-server"
+  build_package "${base_name}-server"
 
   TARGET_PATH="${bindir}"
   list_files files "${SL_PREFIX}/bin/dtx_tests" \
@@ -233,8 +252,9 @@ EOF
   clean_bin "${files[@]}"
   append_install_list "${files[@]}"
 
-  DEPENDS=("daos-server = ${VERSION}-${RELEASE}" "daos-admin = ${VERSION}-${RELEASE}")
-  build_package "daos-server-tests"
+  DEPENDS=("${base_name}-server = ${VERSION}-${RELEASE}")
+  DEPENDS+=("${base_name}-admin = ${VERSION}-${RELEASE}")
+  build_package "${base_name}-server-tests"
 else
   echo "Skipping server packaging because server is not built"
 fi
@@ -254,8 +274,8 @@ list_files files "${SL_PREFIX}/etc/daos_control.yml"
 append_install_list "${files[@]}"
 CONFIG_FILES+=("${TARGET_PATH}/daos_control.yml")
 
-DEPENDS=( "daos = ${VERSION}-${RELEASE}" )
-build_package "daos-admin"
+DEPENDS=( "${base_name} = ${VERSION}-${RELEASE}" )
+build_package "${base_name}-admin"
 
 # daos-client package
 TARGET_PATH="${bindir}"
@@ -348,8 +368,8 @@ EOF
 fi
 
 EXTERNAL_DEPENDS=("fuse3")
-DEPENDS=("daos = ${VERSION}-${RELEASE}")
-build_package "daos-client"
+DEPENDS=("${base_name} = ${VERSION}-${RELEASE}")
+build_package "${base_name}-client"
 
 # client-tests
 TARGET_PATH="${daoshome}/TESTING"
@@ -413,9 +433,10 @@ EXTERNAL_DEPENDS+=("${ndctl_dev}")
 if [[ "${DISTRO:-el9}" =~ el ]]; then
   EXTERNAL_DEPENDS+=("daxctl-devel")
 fi
-DEPENDS=( "daos-client = ${VERSION}-${RELEASE}" "daos-admin = ${VERSION}-${RELEASE}")
-DEPENDS+=("daos-devel = ${VERSION}-${RELEASE}")
-build_package "daos-client-tests"
+DEPENDS=( "${base_name}-client = ${VERSION}-${RELEASE}")
+DEPENDS+=("${base_name}-admin = ${VERSION}-${RELEASE}")
+DEPENDS+=("${base_name}-devel = ${VERSION}-${RELEASE}")
+build_package "${base_name}-client-tests"
 
 TARGET_PATH="${includedir}"
 list_files files "${SL_PREFIX}/include/*"
@@ -433,19 +454,19 @@ list_files files "${SL_PREFIX}/lib/daos/python/*"
 append_install_list "${files[@]}"
 
 EXTERNAL_DEPENDS=("${uuid_lib}" "${libasan_lib}" "${gperftools_dev}")
-DEPENDS=("daos-client = ${VERSION}-${RELEASE}")
-build_package "${daos_dev}"
+DEPENDS=("${base_name}-client = ${VERSION}-${RELEASE}")
+build_package "${daos_dev//daos/${base_name}}"
 
 if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
   EXTERNAL_DEPENDS=("${hdf5_lib}")
   TARGET_PATH="${libdir}"
   list_files files "${SL_PREFIX}/lib64/libdaos_serialize.so"
   append_install_list "${files[@]}"
-  build_package "daos-serialize"
+  build_package "${base_name}-serialize"
 fi
 
 TARGET_PATH="${libdir}"
-DEPENDS=("daos-client-tests = ${VERSION}-${RELEASE}")
+DEPENDS=("${base_name}-client-tests = ${VERSION}-${RELEASE}")
 DEPENDS+=("hdf5-${openmpi_lib}")
 DEPENDS+=("hdf5-vol-daos-${openmpi_lib}")
 DEPENDS+=("MACSio-${openmpi_lib}")
@@ -454,12 +475,12 @@ DEPENDS+=("${openmpi_lib}")
 list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
-build_package "daos-client-tests-openmpi"
+build_package "${base_name}-client-tests-openmpi"
 
 #shim packages
 PACKAGE_TYPE="empty"
 ARCH="noarch"
-DEPENDS=("daos-client-tests = ${VERSION}-${RELEASE}")
+DEPENDS=("${base_name}-client-tests = ${VERSION}-${RELEASE}")
 DEPENDS+=("mpifileutils-mpich")
 DEPENDS+=("testmpio")
 DEPENDS+=("mpich = 4.1~a1")
@@ -470,12 +491,12 @@ DEPENDS+=("MACSio-mpich")
 DEPENDS+=("simul-mpich")
 DEPENDS+=("romio-tests")
 DEPENDS+=("python3-mpi4py-tests >= 3.1.6")
-build_package "daos-tests"
+build_package "${base_name}-tests"
 
-build_package "daos-client-tests-mpich"
+build_package "${base_name}-client-tests-mpich"
 
-DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
-DEPENDS+=("daos-client-tests-openmpi = ${VERSION}-${RELEASE}")
-DEPENDS+=("daos-client-tests-mpich = ${VERSION}-${RELEASE}")
-DEPENDS+=("daos-serialize = ${VERSION}-${RELEASE}")
-build_package "daos-tests-internal"
+DEPENDS=("${base_name}-tests = ${VERSION}-${RELEASE}")
+DEPENDS+=("${base_name}-client-tests-openmpi = ${VERSION}-${RELEASE}")
+DEPENDS+=("${base_name}-client-tests-mpich = ${VERSION}-${RELEASE}")
+DEPENDS+=("${base_name}-serialize = ${VERSION}-${RELEASE}")
+build_package "${base_name}-tests-internal"
