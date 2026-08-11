@@ -1211,7 +1211,7 @@ cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
 	struct sched_req_attr	 attr;
 	struct sched_request	*req;
 
-	D_DEBUG(DB_MD, DF_CONT": wait container destroy\n",
+	D_INFO(DF_CONT": wait container destroy\n",
 		DP_CONT(child->spc_uuid, co_uuid));
 
 	D_ASSERT(child != NULL);
@@ -1230,7 +1230,7 @@ cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
 	}
 	sched_req_put(req);
 
-	D_DEBUG(DB_MD, DF_CONT": container destroy done\n",
+	D_INFO(DF_CONT": container destroy done\n",
 		DP_CONT(child->spc_uuid, co_uuid));
 #endif
 }
@@ -1300,7 +1300,7 @@ cont_child_destroy_one(void *vin)
 	daos_lru_ref_evict_wait(tls->dt_cont_cache, &cont->sc_list);
 	cont_child_put(tls->dt_cont_cache, cont);
 
-	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",
+	D_INFO(DF_CONT": destroying vos container\n",
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
 
 	rc = vos_cont_destroy(pool->spc_hdl, in->tdi_uuid);
