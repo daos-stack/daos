@@ -27,4 +27,5 @@ rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ \
       --filter="include nlt-junit.xml" --filter="exclude *" ./
 
 mkdir -p vm_test
-mv nlt-errors.json vm_test/
+mv nlt-errors.json vm_test/ || echo "nlt-errors.json not found (NLT may have crashed)"
+mv nlt-summary.json vm_test/ || echo "nlt-summary.json not found"

@@ -32,6 +32,7 @@ import re
 import resource
 import shutil
 import signal
+import socket
 import stat
 import subprocess  # nosec
 import sys
@@ -97,6 +98,43 @@ def umount(path, background=False):
     ret = subprocess.run(cmd, check=False)
     print(f'rc from umount {ret.returncode}')
     return ret.returncode
+
+
+def terminate_process(proc,
+                      name,
+                      graceful_signal=signal.SIGTERM,
+                      graceful_timeout=5,
+                      kill_timeout=5):
+    """Terminate a subprocess and reap it deterministically.
+
+    Returns:
+        tuple[int|None, bool]: (returncode if reaped, had_to_escalate)
+    """
+    if proc is None:
+        return (None, False)
+
+    had_to_escalate = False
+    try:
+        proc.send_signal(graceful_signal)
+    except ProcessLookupError:
+        return (proc.poll(), False)
+
+    try:
+        return (proc.wait(timeout=graceful_timeout), False)
+    except subprocess.TimeoutExpired:
+        had_to_escalate = True
+        print(f'Timeout stopping {name} with {graceful_signal.name}, sending SIGKILL')
+
+    try:
+        proc.send_signal(signal.SIGKILL)
+    except ProcessLookupError:
+        return (proc.poll(), had_to_escalate)
+
+    try:
+        return (proc.wait(timeout=kill_timeout), had_to_escalate)
+    except subprocess.TimeoutExpired:
+        print(f'Unable to reap {name} after SIGKILL')
+        return (None, had_to_escalate)
 
 
 class NLTConf():
@@ -233,6 +271,7 @@ class WarningsFactory():
         self._class_id = class_id
         self.pending = []
         self._running = True
+        self._lock = threading.RLock()
         # Save the filename of the object, as __file__ does not
         # work in __del__
         self._file = __file__.lstrip('./')
@@ -290,18 +329,20 @@ class WarningsFactory():
         if not self.test_suite:
             return
 
-        test_case = junit_xml.TestCase(name, classname=self._class_name(test_class),
-                                       elapsed_sec=duration, stdout=stdout, stderr=stderr)
-        if failure:
-            test_case.add_failure_info(failure, output=output)
-        self.test_suite.test_cases.append(test_case)
+        with self._lock:
+            test_case = junit_xml.TestCase(name, classname=self._class_name(test_class),
+                                           elapsed_sec=duration, stdout=stdout, stderr=stderr)
+            if failure:
+                test_case.add_failure_info(failure, output=output)
+            self.test_suite.test_cases.append(test_case)
 
-        self._write_test_file()
+            self._write_test_file()
 
     def _write_test_file(self):
         """Write test results to file"""
-        with open('nlt-junit.xml', 'w') as file:
-            junit_xml.TestSuite.to_file(file, [self.test_suite], prettyprint=True)
+        with self._lock:
+            with open('nlt-junit.xml', 'w') as file:
+                junit_xml.TestSuite.to_file(file, [self.test_suite], prettyprint=True)
 
     def explain(self, line, log_file, esignal):
         """Log an error, along with the other errors it caused
@@ -341,29 +382,30 @@ class WarningsFactory():
         Describe an error and add it to the issues array.
         Add it to the pending array, for later clarification
         """
-        entry = {}
-        entry['fileName'] = line.filename
-        if mtype:
-            entry['type'] = mtype
-        else:
-            entry['type'] = message
-        if cat:
-            entry['category'] = cat
-        entry['lineStart'] = line.lineno
-        # Jenkins no longer seems to display the description.
-        entry['description'] = message
-        entry['message'] = f'{line.get_anon_msg()}\n{message}'
-        entry['severity'] = sev
-        self.issues.append(entry)
-        if self.pending and self.pending[0][0].pid != line.pid:
-            self.reset_pending()
-        self.pending.append((line, message))
-        self._flush()
-        if self.post or (self.post_error and sev in ('HIGH', 'ERROR')):
-            # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
-            if self.post_error:
-                message = line.get_msg()
-            print(f'::warning file={line.filename},line={line.lineno},::{self.check}, {message}')
+        with self._lock:
+            entry = {}
+            entry['fileName'] = line.filename
+            if mtype:
+                entry['type'] = mtype
+            else:
+                entry['type'] = message
+            if cat:
+                entry['category'] = cat
+            entry['lineStart'] = line.lineno
+            # Jenkins no longer seems to display the description.
+            entry['description'] = message
+            entry['message'] = f'{line.get_anon_msg()}\n{message}'
+            entry['severity'] = sev
+            self.issues.append(entry)
+            if self.pending and self.pending[0][0].pid != line.pid:
+                self.reset_pending()
+            self.pending.append((line, message))
+            self._flush()
+            if self.post or (self.post_error and sev in ('HIGH', 'ERROR')):
+                # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
+                if self.post_error:
+                    message = line.get_msg()
+                print(f'::warning file={line.filename},line={line.lineno},::{self.check}, {message}')
 
     def reset_pending(self):
         """Reset the pending list
@@ -380,35 +422,37 @@ class WarningsFactory():
         from the __del__ method of DaosServer, so do not use __file__ here
         either.
         """
-        self._fd.seek(0)
-        self._fd.truncate(0)
-        data = {}
-        data['issues'] = list(self.issues)
-        if self._running:
-            # When the test is running insert an error in case of abnormal
-            # exit, so that crashes in this code can be identified.
-            entry = {}
-            entry['fileName'] = self._file
-            # pylint: disable=protected-access
-            entry['lineStart'] = sys._getframe().f_lineno
-            entry['severity'] = 'ERROR'
-            entry['message'] = 'Tests are still running'
-            data['issues'].append(entry)
-        json.dump(data, self._fd, indent=2)
-        self._fd.flush()
+        with self._lock:
+            self._fd.seek(0)
+            self._fd.truncate(0)
+            data = {}
+            data['issues'] = list(self.issues)
+            if self._running:
+                # When the test is running insert an error in case of abnormal
+                # exit, so that crashes in this code can be identified.
+                entry = {}
+                entry['fileName'] = self._file
+                # pylint: disable=protected-access
+                entry['lineStart'] = sys._getframe().f_lineno
+                entry['severity'] = 'ERROR'
+                entry['message'] = 'Tests are still running'
+                data['issues'].append(entry)
+            json.dump(data, self._fd, indent=2)
+            self._fd.flush()
 
     def close(self):
         """Save, and close the log file"""
-        self._running = False
-        self._flush()
-        self._fd.close()
-        self._fd = None
-        print(f'Closed JSON file {self.filename} with {len(self.issues)} errors')
-        if self.test_suite:
-            # This is a controlled shutdown, so wipe the error saying forced exit.
-            self.test_suite.test_cases[1].errors = []
-            self.test_suite.test_cases[1].error_message = []
-            self._write_test_file()
+        with self._lock:
+            self._running = False
+            self._flush()
+            self._fd.close()
+            self._fd = None
+            print(f'Closed JSON file {self.filename} with {len(self.issues)} errors')
+            if self.test_suite:
+                # This is a controlled shutdown, so wipe the error saying forced exit.
+                self.test_suite.test_cases[1].errors = []
+                self.test_suite.test_cases[1].error_message = []
+                self._write_test_file()
 
 
 def load_conf(args):
@@ -883,8 +927,9 @@ class DaosServer():
         self.fetch_pools()
 
     def _stop_agent(self):
-        self._agent.send_signal(signal.SIGINT)
-        ret = self._agent.wait(timeout=5)
+        ret, _ = terminate_process(self._agent, 'daos_agent', graceful_signal=signal.SIGINT)
+        if ret is None:
+            ret = -1
         print(f'rc from agent is {ret}')
         self._agent = None
         try:
@@ -969,14 +1014,22 @@ class DaosServer():
         self._add_test_case('stop', duration=duration)
         print(f'Server stopped in {duration:.2f} seconds')
 
-        self._sp.send_signal(signal.SIGTERM)
-        ret = self._sp.wait(timeout=5)
+        ret, _ = terminate_process(self._sp, 'daos_server', graceful_signal=signal.SIGTERM)
+        if ret is None:
+            ret = -1
+            entry = {}
+            entry['fileName'] = self._file
+            # pylint: disable=protected-access
+            entry['lineStart'] = sys._getframe().f_lineno
+            entry['severity'] = 'ERROR'
+            entry['message'] = 'Unable to terminate daos_server process cleanly'
+            self.conf.wf.issues.append(entry)
         print(f'rc from server is {ret}')
 
         self.conf.compress_file(self.agent_log.name)
         self.conf.compress_file(self.control_log.name)
 
-        for log in self.server_logs:
+        for log in list(self.server_logs):
             log_test(self.conf, log.name, leak_wf=wf, skip_fi=self._fi)
             self.server_logs.remove(log)
         self.running = False
@@ -1051,12 +1104,14 @@ class DaosServer():
 
         return self.test_pool
 
-    def run_daos_client_cmd(self, cmd):
+    def run_daos_client_cmd(self, cmd, timeout=None):
         """Run a DAOS client
 
         Run a command, returning what subprocess.run() would.
 
         Enable logging, and valgrind for the command.
+
+        timeout: optional wall-clock limit in seconds; raises subprocess.TimeoutExpired if exceeded.
         """
         valgrind_hdl = ValgrindHelper(self.conf)
 
@@ -1082,7 +1137,7 @@ class DaosServer():
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
         rc = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env=cmd_env, check=False)
+                            env=cmd_env, check=False, timeout=timeout)
 
         if rc.stderr != b'':
             print('Stderr from command')
@@ -1112,7 +1167,8 @@ class DaosServer():
             rc.returncode = 0
         assert rc.returncode == 0, rc
 
-    def run_daos_client_cmd_pil4dfs(self, cmd, check=True, container=None, report=True):
+    def run_daos_client_cmd_pil4dfs(self, cmd, check=True, container=None, report=True,
+                                    timeout=None):
         """Run a DAOS client with libpil4dfs.so
 
         Run a command, returning what subprocess.run() would.
@@ -1123,6 +1179,8 @@ class DaosServer():
 
         Looks like valgrind and libpil4dfs.so do not work together sometime. Disable valgrind at
         this moment. Will revisit this issue later.
+
+        timeout: optional wall-clock limit in seconds; raises subprocess.TimeoutExpired if exceeded.
         """
         if container is not None:
             assert isinstance(container, DaosCont)
@@ -1159,7 +1217,7 @@ class DaosServer():
         print('Run command: ')
         print(cmd)
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
-                            env=cmd_env, check=False)
+                            env=cmd_env, check=False, timeout=timeout)
         print(rc)
 
         if rc.stderr != b'':
@@ -1487,8 +1545,11 @@ class DFuse():
             total_time += 1
             if total_time > 60:
                 # Kill the unresponsive dfuse command
-                self._sp.send_signal(signal.SIGTERM)
+                terminate_process(self._sp, 'dfuse(start)', graceful_signal=signal.SIGTERM)
                 self._sp = None
+                umount(self.dir, background=True)
+                time.sleep(1)
+                umount(self.dir)
                 raise NLTestFail('Timeout starting dfuse')
 
         self._daos.add_fuse(self)
@@ -1538,7 +1599,7 @@ class DFuse():
                 fatal_errors = True
         except subprocess.TimeoutExpired:
             print('Timeout stopping dfuse')
-            self._sp.send_signal(signal.SIGTERM)
+            terminate_process(self._sp, 'dfuse(stop)', graceful_signal=signal.SIGTERM)
             fatal_errors = True
             run_leak_test = False
         self._sp = None
@@ -1547,7 +1608,11 @@ class DFuse():
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
         self.valgrind.convert_xml()
-        os.rmdir(self.dir)
+        try:
+            os.rmdir(self.dir)
+        except OSError as error:
+            print(f'Failed to remove dfuse dir {self.dir}: {error}')
+            fatal_errors = True
         self._daos.remove_fuse(self)
         return fatal_errors
 
@@ -1730,12 +1795,15 @@ def run_daos_cmd(conf,
                  log_check=True,
                  ignore_busy=False,
                  use_json=False,
-                 cwd=None):
+                 cwd=None,
+                 timeout=None):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
 
     Enable logging, and valgrind for the command.
+
+    timeout: optional wall-clock limit in seconds; raises subprocess.TimeoutExpired if exceeded.
     """
     dcr = DaosCmdReturn()
     valgrind_hdl = ValgrindHelper(conf)
@@ -1778,7 +1846,7 @@ def run_daos_cmd(conf,
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
     rc = subprocess.run(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                        env=cmd_env, check=False, cwd=cwd)
+                        env=cmd_env, check=False, cwd=cwd, timeout=timeout)
 
     if rc.stderr != b'':
         print('Stderr from command')
@@ -5616,6 +5684,12 @@ def test_pydaos_kv_obj_class(server, conf):
 #
 
 
+# Maximum wall-clock seconds a single fault-injection child is allowed to run.
+# If a child exceeds this limit it is forcibly terminated so one stuck process
+# cannot stall the entire CI stage.
+_CHILD_TIMEOUT = 120
+
+
 class AllocFailTestRun():
     """Class to run a fault injection command with a single fault"""
 
@@ -5645,6 +5719,7 @@ class AllocFailTestRun():
         self._stderr = None
         self._fi_loc = None
         self._cwd = cwd
+        self._start_time = None
 
         if loc:
             prefix = f'dnt_{loc:04d}_'
@@ -5715,6 +5790,7 @@ class AllocFailTestRun():
                                     stdin=subprocess.PIPE,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
+        self._start_time = time.monotonic()
 
     def has_finished(self):
         """Check if the command has completed"""
@@ -5723,6 +5799,14 @@ class AllocFailTestRun():
 
         rc = self._sp.poll()
         if rc is None:
+            elapsed = time.monotonic() - self._start_time
+            if elapsed > _CHILD_TIMEOUT:
+                cmd_text = ' '.join(self._cmd)
+                print(f'\nFault injection child timed out after {elapsed:.0f}s '
+                      f'(loc={self.loc}, cmd={cmd_text!r}); terminating')
+                terminate_process(self._sp, cmd_text)
+                self._post(-signal.SIGKILL)
+                return True
             return False
         self._post(rc)
         return True
@@ -5732,7 +5816,14 @@ class AllocFailTestRun():
         if self.returncode is not None:
             return
 
-        self._post(self._sp.wait())
+        try:
+            self._post(self._sp.wait(timeout=_CHILD_TIMEOUT))
+        except subprocess.TimeoutExpired:
+            cmd_text = ' '.join(self._cmd)
+            print(f'\nFault injection child timed out after {_CHILD_TIMEOUT}s '
+                  f'(loc={self.loc}, cmd={cmd_text!r}); terminating')
+            terminate_process(self._sp, cmd_text)
+            self._post(-signal.SIGKILL)
 
     def _post(self, rc):
         """Helper function, called once after command is complete.
@@ -6559,26 +6650,30 @@ def server_fi(args):
     conf.set_args(args)
     setup_log_test(conf)
 
-    with DaosServer(conf, wf=wf, test_class='server-fi', enable_fi=True) as server:
+    try:
+        with DaosServer(conf, wf=wf, test_class='server-fi', enable_fi=True) as server:
 
-        pool = server.get_test_pool_obj()
-        cont = create_cont(conf, pool=pool, ctype='POSIX', label='server_test')
+            pool = server.get_test_pool_obj()
+            cont = create_cont(conf, pool=pool, ctype='POSIX', label='server_test')
 
-        # Instruct the server to fail a % of allocations.
-        server.set_fi(probability=1)
+            # Instruct the server to fail a % of allocations.
+            server.set_fi(probability=1)
 
-        for idx in range(100):
-            server.run_daos_client_cmd_pil4dfs(
-                ['touch', f'file.{idx}'], container=cont, check=False, report=False)
-            server.run_daos_client_cmd_pil4dfs(
-                ['dd', 'if=/dev/zero', f'of=file.{idx}', 'bs=1', 'count=1024'],
-                container=cont, check=False, report=False)
-            server.run_daos_client_cmd_pil4dfs(
-                ['rm', '-f', f'file.{idx}'], container=cont, check=False, report=False)
+            for idx in range(100):
+                server.run_daos_client_cmd_pil4dfs(
+                    ['touch', f'file.{idx}'], container=cont, check=False, report=False)
+                server.run_daos_client_cmd_pil4dfs(
+                    ['dd', 'if=/dev/zero', f'of=file.{idx}', 'bs=1', 'count=1024'],
+                    container=cont, check=False, report=False)
+                server.run_daos_client_cmd_pil4dfs(
+                    ['rm', '-f', f'file.{idx}'], container=cont, check=False, report=False)
 
-        # Turn off fault injection again to assist in server shutdown.
-        server.set_fi(probability=0)
-        server.set_fi(probability=0)
+            # Turn off fault injection again to assist in server shutdown.
+            server.set_fi(probability=0)
+            server.set_fi(probability=0)
+    finally:
+        wf.close()
+        close_log_test(conf)
 
 
 def generate_special_test_list():
@@ -6893,6 +6988,105 @@ def _positive_int(value):
     return ivalue
 
 
+def _load_warning_issues(filename):
+    """Load a warnings json file and return issues + parse error string if any."""
+    if not os.path.exists(filename):
+        return ([], None)
+
+    try:
+        with open(filename, 'r') as infile:
+            data = json.load(infile)
+    except (OSError, ValueError, TypeError) as error:
+        return ([], f'Unable to parse {filename}: {error}')
+
+    issues = data.get('issues', [])
+    if not isinstance(issues, list):
+        return ([], f'Invalid issues format in {filename}')
+    return (issues, None)
+
+
+def _count_severity(issues):
+    counts = {'LOW': 0, 'NORMAL': 0, 'HIGH': 0, 'ERROR': 0}
+    for issue in issues:
+        sev = issue.get('severity', 'NORMAL')
+        counts[sev] = counts.get(sev, 0) + 1
+    return counts
+
+
+def _collect_high_findings(filename, issues):
+    findings = []
+    for issue in issues:
+        sev = issue.get('severity')
+        if sev not in ('HIGH', 'ERROR'):
+            continue
+        findings.append({
+            'source': filename,
+            'severity': sev,
+            'file': issue.get('fileName'),
+            'line': issue.get('lineStart'),
+            'message': issue.get('message')
+        })
+    findings.sort(key=lambda item: 0 if item['severity'] == 'ERROR' else 1)
+    return findings
+
+
+def write_nlt_summary(args, fatal_errors=None, exception=None):
+    """Write a compact run summary as nlt-summary.json."""
+    warning_files = ['nlt-errors.json', 'nlt-server-leaks.json', 'nlt-client-leaks.json']
+    warning_summary = {}
+    parse_errors = []
+    high_findings = []
+
+    for filename in warning_files:
+        issues, parse_error = _load_warning_issues(filename)
+        if parse_error:
+            parse_errors.append(parse_error)
+        warning_summary[filename] = {
+            'present': os.path.exists(filename),
+            'issue_count': len(issues),
+            'severity_counts': _count_severity(issues)
+        }
+        high_findings.extend(_collect_high_findings(filename, issues))
+
+    result_failed = bool(exception)
+    if fatal_errors is not None:
+        result_failed = result_failed or bool(fatal_errors.errors)
+
+    summary = {
+        'schema_version': 1,
+        'generated_at_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        'result': 'failed' if result_failed else 'passed',
+        'run': {
+            'mode': args.mode,
+            'class_name': args.class_name,
+            'repeat': args.repeat,
+            'engine_count': args.engine_count,
+            'hostname': socket.gethostname(),
+            'jenkins_node': os.environ.get('NODE_NAME')
+        },
+        'warnings': warning_summary,
+        'high_severity_findings': high_findings[:20],
+        'artifacts': {
+            'nlt-junit.xml': os.path.exists('nlt-junit.xml'),
+            'nlt_logs': os.path.exists('nlt_logs'),
+            'nltir.xml': os.path.exists('nltir.xml'),
+            'nltr.json': os.path.exists('nltr.json')
+        }
+    }
+
+    if exception:
+        summary['exception'] = {
+            'type': exception.__class__.__name__,
+            'message': str(exception)
+        }
+
+    if parse_errors:
+        summary['parse_errors'] = parse_errors
+
+    with open('nlt-summary.json', 'w') as outfile:
+        json.dump(summary, outfile, indent=2)
+
+
 def main():
     """Wrap the core function, and catch/report any exceptions
 
@@ -6939,7 +7133,14 @@ def main():
             resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 
     if args.server_fi:
-        server_fi(args)
+        run_error = None
+        try:
+            server_fi(args)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            run_error = error
+            raise
+        finally:
+            write_nlt_summary(args, exception=run_error)
         return
 
     if args.mode:
@@ -6973,11 +7174,14 @@ Tests are:
                          class_id=args.class_name,
                          junit=True)
 
+    fatal_errors = None
+    run_error = None
     try:
         fatal_errors = run(wf, args)
         wf.add_test_case('exit_wrapper')
         wf.close()
     except Exception as error:
+        run_error = error
         print(error)
         print(str(error))
         print(repr(error))
@@ -6985,6 +7189,8 @@ Tests are:
         wf.add_test_case('exit_wrapper', str(error), output=trace)
         wf.close()
         raise
+    finally:
+        write_nlt_summary(args, fatal_errors=fatal_errors, exception=run_error)
 
     if fatal_errors.errors:
         print("Significant errors encountered")
