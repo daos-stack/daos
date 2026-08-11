@@ -156,7 +156,6 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 				DP_MAP(pool_uuid, map), DP_TARGET(target));
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_in_ver = ++(*version);
-			target->ta_comp.co_flags &= ~PO_COMPF_DOWN2OUT;
 			if (print_changes)
 				D_PRINT(DF_MAP ": " DF_TARGET " start reintegration.\n",
 					DP_MAP(pool_uuid, map), DP_TARGET(target));
@@ -273,7 +272,7 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 			 * or MAP_EXTEND, so this is stable):
 			 *
 			 *   co_fseq <  co_ver : fresh MAP_EXTEND (NEW->UP). fseq was
-			 *                       initialised to 1 in gen_pool_buf() and co_ver
+			 *                       initialized to 1 in gen_pool_buf() and co_ver
 			 *                       is the extend map version, which is > 1.
 			 *                       Revert to NEW.
 			 *   co_fseq == co_ver : baseline creation-DOWNOUT reintegration

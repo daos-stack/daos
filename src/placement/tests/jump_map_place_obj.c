@@ -2447,7 +2447,7 @@ revert_rebuild_three_way(void **state)
 	tgt2->ta_comp.co_ver    = 1;
 	tgt2->ta_comp.co_fseq   = 5;
 	tgt2->ta_comp.co_in_ver = 7;
-	tgt2->ta_comp.co_flags  = 0;
+	tgt2->ta_comp.co_flags  = PO_COMPF_DOWN2OUT;
 
 	/* tgt3: real DOWN interrupted mid-rebuild (co_fseq > co_ver) with DOWN2UP. */
 	tgt3->ta_comp.co_status = PO_COMP_ST_UP;
@@ -2491,6 +2491,7 @@ revert_rebuild_three_way(void **state)
 	/* tgt2: real reint revert without DOWN2UP -> DOWNOUT (real failed_downout). */
 	assert_int_equal(tgt2->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
 	assert_false(pool_comp_is_creation_downout(&tgt2->ta_comp));
+	assert_true(pool_comp_is_failed_downout(&tgt2->ta_comp));
 
 	/* tgt3: DOWN2UP revert -> DOWN. */
 	assert_int_equal(tgt3->ta_comp.co_status, PO_COMP_ST_DOWN);
