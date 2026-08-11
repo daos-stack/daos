@@ -1,6 +1,6 @@
 """
-  (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  Copyright 2020-2024 Intel Corporation.
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1833,7 +1833,8 @@ class TestWithServers(TestWithoutServers):
             self.container.append(
                 self.get_container(pool=pool, namespace=namespace, create=create))
 
-    def start_additional_servers(self, additional_servers, index=0, mgmt_svc_replicas=None):
+    def start_additional_servers(self, additional_servers, index=0, mgmt_svc_replicas=None,
+                                 format_storage=True):
         """Start additional servers.
 
         This method can be used to start a new daos_server during a test.
@@ -1844,6 +1845,8 @@ class TestWithServers(TestWithoutServers):
                 the new server.
             mgmt_svc_replicas (NodeSet): MS replica hosts. Defaults to None which
                 uses self.mgmt_svc_replicas.
+            format_storage (bool): whether or not to format storage when starting the servers.
+                Defaults to True.
         """
         self.add_server_manager(
             self.server_managers[index].manager.job.get_config_value("name"),
@@ -1859,4 +1862,5 @@ class TestWithServers(TestWithoutServers):
             self.hostfile_servers_slots,
             mgmt_svc_replicas
         )
+        self.server_managers[-1].format_storage_on_start = format_storage
         self._start_manager_list("server", [self.server_managers[-1]])
