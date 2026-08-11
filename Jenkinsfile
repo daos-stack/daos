@@ -557,9 +557,9 @@ String functionalInstRpms(String otherPackages, Boolean bullseye=false, String r
     return packages
 }
 
-Map buildSteps(String name, String target, Boolean bullseye=false) {
+Map executeBuildSteps(String name, String target, Boolean bullseye=false) {
     String stage_key = jobStatusKey(name)
-    Map results = ["${stage_key}": [:]]
+    Map results = [(stage_key): [:]]
     String compiler = bullseye ? 'covc' : 'gcc'
 
     try {
@@ -625,11 +625,12 @@ Map buildSteps(String name, String target, Boolean bullseye=false) {
             rpmlint: false,
             productArtifacts: ['daos', 'deps', 'bullseye']
         )
-    } catch(Exception error) {
+    /* groovylint-disable-next-line CatchException */
+    } catch (Exception error) {
         sh(
             label: 'Archive config.log',
             script: "if [ -f config.log ]; then mv config.log config.log-${target}-${compiler}; fi"
-        ) 
+        )
         archiveArtifacts artifacts: "config.log-${target}-${compiler}", allowEmptyArchive: true
         throw error
     }
@@ -637,9 +638,9 @@ Map buildSteps(String name, String target, Boolean bullseye=false) {
     return results
 }
 
-Map bullseyeReportStep(String name) {
+Map executeBullseyeReport(String name) {
     String stage_key = jobStatusKey(name)
-    Map results = ["${stage_key}": [:]]
+    Map results = [(stage_key): [:]]
 
     println("[${name}] Running ci/rpm/install_deps.sh")
     sh(
@@ -1015,7 +1016,7 @@ pipeline {
                                              ' --build-arg POINT_RELEASE=.7 ' +
                                              " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
                                              ' -f utils/docker/Dockerfile.el.9 .',
-                            stepMethod: { buildSteps('Build on EL 9', 'el9')},
+                            stepMethod: { executeBuildSteps('Build on EL 9', 'el9') },
                             archiveArtifactsArgs: [artifacts: 'artifacts/el9/**'],
                         ),
                         'Build on Leap 15': scriptedDockerStage(
@@ -1031,7 +1032,7 @@ pipeline {
                                              ' --build-arg POINT_RELEASE=.6' +
                                              " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
                                              ' -f utils/docker/Dockerfile.leap.15 .',
-                            stepMethod: { buildSteps('Build on Leap 15', 'leap15')},
+                            stepMethod: { executeBuildSteps('Build on Leap 15', 'leap15') },
                             archiveArtifactsArgs: [artifacts: 'artifacts/leap15/**'],
                         ),
                         'Build on EL 9 with Bullseye': scriptedDockerStage(
@@ -1050,7 +1051,7 @@ pipeline {
                                              ' --build-arg COMPILER=covc' +
                                              ' --build-arg CODE_COVERAGE=true' +
                                              ' -f utils/docker/Dockerfile.el.9 .',
-                            stepMethod: { buildSteps('Build on EL 9', 'el9', 'covc', true)},
+                            stepMethod: { executeBuildSteps('Build on EL 9', 'el9', 'covc', true) },
                             archiveArtifactsArgs: [artifacts: 'artifacts/el9-bullseye/**'],
                         )
                     )
@@ -1614,7 +1615,7 @@ pipeline {
                                              ' --build-arg COMPILER=covc' +
                                              ' --build-arg CODE_COVERAGE=true' +
                                              ' -f utils/docker/Dockerfile.el.9 .',
-                            stepMethod: { bullseyeReportStep('Bullseye Report') },
+                            stepMethod: { executeBullseyeReport('Bullseye Report') },
                             archiveArtifactsArgs: [
                                 artifacts: 'bullseye_code_coverage_report/',
                                 allowEmptyArchive: false
