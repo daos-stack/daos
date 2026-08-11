@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ * Copyright 2018-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -264,7 +264,8 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off, daos_eve
 	rg.rg_idx   = off;
 	iod.arr_rgs = &rg;
 
-	D_DEBUG(DB_TRACE, "DFS Write: Off %" PRIu64 ", Len %zu\n", off, buf_size);
+	D_DEBUG(DB_TRACE, "DFS Write: name %s Off %" PRIu64 ", Len %zu\n", obj->name, off,
+		buf_size);
 
 	if (ev)
 		daos_event_errno_rc(ev);
