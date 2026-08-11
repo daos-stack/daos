@@ -90,6 +90,34 @@ func (m *Membership) Add(member *Member) (int, error) {
 	return count, nil
 }
 
+// memberFieldsMatch checks if a member matches all join request fields
+// (excluding UUID). Returns true if all fields match.
+func memberFieldsMatch(cm *Member, req *JoinRequest) (bool, []string) {
+	// Track which fields didn't match for better error reporting
+	var missing []string
+
+	if cm.Addr.String() != req.ControlAddr.String() {
+		missing = append(missing, "control address")
+	}
+	if cm.PrimaryFabricURI != req.PrimaryFabricURI {
+		missing = append(missing, "primary fabric address")
+	}
+	if !slices.Equal(cm.SecondaryFabricURIs, req.SecondaryFabricURIs) {
+		missing = append(missing, "secondary fabric addresses")
+	}
+	if cm.PrimaryFabricContexts != req.FabricContexts {
+		missing = append(missing, "primary fabric contexts")
+	}
+	if !slices.Equal(cm.SecondaryFabricContexts, req.SecondaryFabricContexts) {
+		missing = append(missing, "secondary fabric contexts")
+	}
+	if !cm.FaultDomain.Equals(req.FaultDomain) {
+		missing = append(missing, "Fault domain")
+	}
+
+	return len(missing) == 0, missing
+}
+
 // Count returns the number of members.
 func (m *Membership) Count() (int, error) {
 	return m.db.MemberCount()
@@ -102,7 +130,7 @@ func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 		return NilRank, errors.New("unexpected rank in replace-rank request")
 	}
 
-	currentMembers, err := m.Members(nil, AllMemberFilter)
+	currentMembers, err := m.db.AllMembers()
 	if err != nil {
 		return NilRank, errors.Wrap(err, "failed to get all system members")
 	}
@@ -114,27 +142,7 @@ func (m *Membership) FindRankFromJoinRequest(req *JoinRequest) (Rank, error) {
 	rank := NilRank
 	for _, cm := range currentMembers {
 		// Only match identical member with different UUID.
-		var missing []string
-		if cm.Addr.String() != req.ControlAddr.String() {
-			missing = append(missing, "control address")
-		}
-		if cm.PrimaryFabricURI != req.PrimaryFabricURI {
-			missing = append(missing, "primary fabric address")
-		}
-		if !slices.Equal(cm.SecondaryFabricURIs, req.SecondaryFabricURIs) {
-			missing = append(missing, "secondary fabric addresses")
-		}
-		if cm.PrimaryFabricContexts != req.FabricContexts {
-			missing = append(missing, "primary fabric contexts")
-		}
-		if !slices.Equal(cm.SecondaryFabricContexts, req.SecondaryFabricContexts) {
-			missing = append(missing, "secondary fabric contexts")
-		}
-		if !cm.FaultDomain.Equals(req.FaultDomain) {
-			missing = append(missing, "Fault domain")
-		}
-
-		if len(missing) != 0 {
+		if matched, missing := memberFieldsMatch(cm, req); !matched {
 			if minMissing == nil || len(missing) < len(minMissing) {
 				minMissing = missing
 			}
@@ -191,7 +199,8 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 	}
 
 	// Update (remove then add) member with new UUID and set state to joined (regardless
-	// of previous state). Retain existing member record incarnation value.
+	// of previous state, as long as not AdminExcluded). Retain existing member record
+	// incarnation value.
 
 	cm, err := m.db.FindMemberByRank(req.Rank)
 	if err != nil {
@@ -229,6 +238,31 @@ func (m *Membership) joinReplace(req *JoinRequest) (*JoinResponse, error) {
 	}
 
 	return &resp, err
+}
+
+// checkForMatchingMember checks if an existing member matches all fields in the join request
+// except the UUID. This identifies the case when a joining rank has identical fields to an existing
+// db entry and refuses the request as --replace has not been set.
+func (m *Membership) checkForMatchingMember(req *JoinRequest) error {
+	currentMembers, err := m.db.AllMembers()
+	if err != nil {
+		return errors.Wrap(err, "failed to get all system members")
+	}
+
+	for _, cm := range currentMembers {
+		if cm.UUID == req.UUID {
+			continue // Same UUID, skip
+		}
+
+		if matched, _ := memberFieldsMatch(cm, req); !matched {
+			continue // Fields don't match, skip
+		}
+
+		// All fields match except UUID - this rank needs to use --replace
+		return FaultJoinMemberExists(req.UUID, cm.UUID)
+	}
+
+	return nil
 }
 
 // Join creates or updates an entry in the membership for the given
@@ -324,6 +358,12 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	}
 
 	if err := m.checkReqFaultDomain(req); err != nil {
+		return nil, err
+	}
+
+	// Before adding a new member, check if an existing member matches all fields except UUID.
+	// This prevents a rank from joining if it appears to be a replacement that needs --replace.
+	if err := m.checkForMatchingMember(req); err != nil {
 		return nil, err
 	}
 
@@ -783,6 +823,60 @@ func (m *Membership) CompressedFaultDomainTree(ranks ...uint32) ([]uint32, error
 
 	md := getCompressedTreeMetadata(tree)
 	return append([]uint32{md}, compressTree(subtree)...), nil
+}
+
+// FaultDomainLevel returns the fault domain level of the domain tree.
+// It assumes the tree is balanced and that the rank level is present.
+// So, the fault domain level is the second to last level of the tree.
+func (m *Membership) FaultDomainLevel() (int, error) {
+	tree := m.db.FaultDomainTree()
+	if tree == nil {
+		return 0, errors.New("uninitialized fault domain tree")
+	}
+
+	depth := tree.Depth()
+	// The depth includes the rank level but it does NOT include the root level.
+	// So, the tree needs to have more than one level to have a fault domain level.
+	if depth <= 1 {
+		return 0, errors.New("domain tree has no fault domain level")
+	}
+
+	return depth - 1, nil
+}
+
+// domainNrAtLevel returns the number of domains in the tree at the given level.
+// It traverses the tree recursively to reach the specified level.
+func domainNrAtLevel(tree *FaultDomainTree, level int) int {
+	if level == 1 {
+		return len(tree.Children)
+	}
+
+	count := 0
+	for _, child := range tree.Children {
+		count += domainNrAtLevel(child, level-1)
+	}
+	return count
+}
+
+// DomainNr returns the number of domains in the subtree of the domain tree
+// specified by the given ranks at the given level.
+// If no ranks are provided, the entire tree is considered.
+func (m *Membership) DomainNr(level int, ranks ...uint32) (int, error) {
+	tree := m.db.FaultDomainTree()
+	if tree == nil {
+		return 0, errors.New("uninitialized fault domain tree")
+	}
+
+	subtree, err := getFaultDomainSubtree(tree, ranks...)
+	if err != nil {
+		return 0, err
+	}
+
+	if level >= subtree.Depth() {
+		return 0, errors.Errorf("level %d >= subtree depth %d", level, subtree.Depth())
+	}
+
+	return domainNrAtLevel(subtree, level), nil
 }
 
 const (

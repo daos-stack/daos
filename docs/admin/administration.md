@@ -1152,10 +1152,19 @@ An examples workflow would be:
 8. Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
 
 !!! note
-    `dmg storage format --replace` can be used to replace a rank in `AdminExcluded` state. The
-    subsequent state of the rank will then no longer be `AdminExcluded`. This special case reduces
-    a chance that a duplicate rank entry is introduced inadvertently because the rank to be replaced
-    is in the `AdminExcluded` state and so is recreated rather than replaced.
+    `dmg storage format --replace` can not be used to replace a rank in `AdminExcluded` state. An
+    administrator is required to run `dmg system clear-exclude` to remove the `AdminExcluded` state
+    before being able to assign an engine it's previous rank.
+
+!!! note
+    If `dmg storage format --replace` succeeds at the format level but the subsequent rank join
+    fails (e.g. due to a misconfigured fabric URI), the engine's superblock is automatically
+    removed to prevent a new rank from being unintentionally created on the next restart. On DCPM
+    systems the PMem device (`/dev/pmemX`) will remain mounted after the failure; this is
+    intentional so that the next `dmg storage format --replace` can write the new superblock onto
+    the PMEM correctly.  Resolve the configuration issue and re-run `dmg storage format --replace`
+    or run `dmg storage format` without `--replace` to create a new rank with a different fabric
+    URI (for example).
 
 ### System Erase
 

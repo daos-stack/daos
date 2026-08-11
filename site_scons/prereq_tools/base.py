@@ -506,7 +506,6 @@ class PreReqComponent():
                               PathVariable.PathIsDirCreate))
         opts.Add('USE_INSTALLED', 'Comma separated list of preinstalled dependencies', 'none')
         opts.Add(('MPI_PKG', 'Specifies name of pkg-config to load for MPI', None))
-        opts.Add(BoolVariable('FIRMWARE_MGMT', 'Build in device firmware management.', False))
         opts.Add(EnumVariable('BUILD_TYPE', "Set the build type", 'release',
                               ['dev', 'debug', 'release'], ignorecase=1))
         opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
@@ -516,6 +515,10 @@ class PreReqComponent():
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
         opts.Add(('SANITIZERS', 'Instrument C code with Google Sanitizers', None))
+        opts.Add(BoolVariable('BUILD_GO_VALGRIND',
+                              'Build Go artifacts with the Go "valgrind" tag for Memcheck '
+                              '(also drops -race; ignored for release)',
+                              False))
         opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests', False))
         opts.Add(BoolVariable('CRT_PP', 'Preprocess CaRT sources', False))
         opts.Add(BoolVariable('HEAP_PROFILER', 'Instrument C code with Gperftools Heap Profiler',

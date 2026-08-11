@@ -11,8 +11,6 @@ env:
   # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
   #       build is done on the lowest version and test on the highest with a "sanity test"
   #       stage done on all versions in the list except the highest
-  EL8_BUILD_VERSION: ${{ vars.EL8_BUILD_VERSION_MASTER }}
-  EL8_VERSION: ${{ vars.EL8_VERSION_MASTER }}
   EL9_BUILD_VERSION: ${{ vars.EL9_BUILD_VERSION_MASTER }}
   EL9_VERSION: ${{ vars.EL9_VERSION_MASTER }}
   LEAP15_VERSION: ${{ vars.LEAP15_VERSION_MASTER }}
@@ -37,10 +35,10 @@ on:
         required: false
       functional-test-distros-json:
         # yamllint disable-line rule:line-length
-        description: 'Distros to run Functional testing on in a JSON array (i.e. ["el8", "el9", "leap15", "etc."])'
+        description: 'Distros to run Functional testing on in a JSON array (i.e. ["el9", "leap15", "etc."])'
         required: false
       functional-test-distros:
-        description: 'Distros to run Functional testing on (i.e. el8 el9 leap15, etc.)'
+        description: 'Distros to run Functional testing on (i.e. el9 leap15, etc.)'
         required: false
   schedule:
     - cron: "0 0 * * 6"     # Every Saturday
@@ -70,7 +68,6 @@ jobs:
       NAME: ${{ env.NAME }}
       DISTROS: ${{ env.COVFN_DISABLED == 'true' && vars.DISTROS_MASTER ||
                                                    vars.COVERAGE_DISTROS_MASTER }}
-      EL8_BUILD_VERSION: ${{ env.EL8_BUILD_VERSION }}
       EL9_BUILD_VERSION: ${{ env.EL9_BUILD_VERSION }}
       LEAP15_VERSION: ${{ env.LEAP15_VERSION }}
       PACKAGING_DIR: ${{ env.PACKAGING_DIR }}
@@ -91,7 +88,6 @@ jobs:
     with:
       NAME: ${{ needs.Variables.outputs.NAME }}
       DISTROS: ${{ needs.Variables.outputs.DISTROS }}
-      EL8_BUILD_VERSION: ${{ needs.Variables.outputs.EL8_BUILD_VERSION }}
       EL9_BUILD_VERSION: ${{ needs.Variables.outputs.EL9_BUILD_VERSION }}
       LEAP15_VERSION: ${{ needs.Variables.outputs.LEAP15_VERSION }}
       PACKAGING_DIR: ${{ needs.Variables.outputs.PACKAGING_DIR }}
@@ -109,7 +105,7 @@ jobs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
@@ -156,12 +152,6 @@ jobs:
              fi
 
              if ./launch.py --list "$(get_test_tags "vm")"; then
-                 if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
-                    ! ${CP_SKIP_FUNC_TEST_EL8:-false}; then
-                     # it would definitely be nicer to get these into the environment
-                     # as unquoted strings so that we didn't have to double quote here
-                     l+=('"el8"')
-                 fi
                  if ${{ github.event_name == 'push' }} ||
                     (${{ github.event_name == 'pull_request' }} &&
                     ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
@@ -215,11 +205,9 @@ jobs:
       CP_PR_REPOS:
       CP_FEATURES:
       CP_TEST_TAG:
-      CP_EL8_VM9_LABEL:
       CP_EL9_VM9_LABEL:
       CP_LEAP15_VM9_LABEL:
       CP_PRIORITY:
-      CP_EL8_VERSION:
       CP_EL9_VERSION:
       CP_LEAP15_VERSION:
       CP_RPM_TEST_VERSION:
@@ -235,7 +223,7 @@ jobs:
       COMMIT_STATUS_DISTRO_VERSION:
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -266,18 +254,6 @@ jobs:
                 DAOS_VERSION=" < ${{ env.NEXT_VERSION_master }}"
             fi
             case '${{ matrix.distro }}' in
-                'el8')
-                    CHROOT_NAME="rocky+epel-8-x86_64"
-                    DISTRO_NAME="EL"
-                    DISTRO_NAME_UPPER="EL"
-                    DISTRO_NAME_LOWER="el"
-                    DISTRO_VERSION='${{ env.CP_EL8_VERSION &&
-                                        env.CP_EL8_VERSION || env.EL8_VERSION }}'
-                    DISTRO_VERSION_MAJOR="8"
-                    OPENMPI="openmpi"
-                    LABEL='${{ env.CP_EL8_VM9_LABEL &&
-                               env.CP_EL8_VM9_LABEL || 'all_vm9' }}'
-                    ;;
                 'el9')
                     CHROOT_NAME="rocky+epel-9-x86_64"
                     DISTRO_NAME="EL"
@@ -366,7 +342,7 @@ jobs:
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040  # v2.23.0
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3  # v2.24.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -409,7 +385,7 @@ jobs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
@@ -507,8 +483,7 @@ jobs:
       CP_HW_MEDIUM_LABEL:
       CP_HW_LARGE_LABEL:
       CP_PRIORITY:
-      CP_EL8_VERSION:
-      CP_EL8_TARGET:
+      CP_EL9_VERSION:
       CLUSTER_REQUEST_reqid:
       STAGE_NAME:
       QUEUE_URL:
@@ -519,7 +494,7 @@ jobs:
       SIZE:
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -539,15 +514,13 @@ jobs:
             else
                 DAOS_VERSION=" < ${{ env.NEXT_VERSION_master }}"
             fi
-            CHROOT_NAME="rocky+epel-8-x86_64"
+            CHROOT_NAME="rocky+epel-9-x86_64"
             DISTRO_NAME="EL"
             DISTRO_NAME_UPPER="EL"
             DISTRO_NAME_LOWER="el"
-            DISTRO_VERSION='${{ env.CP_EL8_TARGET &&
-                                env.CP_EL8_TARGET ||
-                                env.CP_EL8_VERSION &&
-                                env.CP_EL8_VERSION || env.EL8_VERSION }}'
-            DISTRO_VERSION_MAJOR="8"
+            DISTRO_VERSION='${{ env.CP_EL9_VERSION &&
+                                env.CP_EL9_VERSION || env.EL9_VERSION }}'
+            DISTRO_VERSION_MAJOR="9"
             if [[ '${{ matrix.stage }}' = Medium* ]]; then
                 LABEL=${{ env.CP_HW_MEDIUM_LABEL &&
                           env.CP_HW_MEDIUM_LABEL || 'ci_nvme5' }}
@@ -636,7 +609,7 @@ jobs:
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040  # v2.23.0
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3  # v2.24.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results
           github_token: ${{ secrets.GITHUB_TOKEN }}

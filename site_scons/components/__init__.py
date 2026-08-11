@@ -265,7 +265,7 @@ def define_common(reqs):
     if ARM_PLATFORM:
         reqs.define('ipmctl', skip_arch=True)
     else:
-        reqs.define('ipmctl', headers=['nvm_management.h'], package='libipmctl-devel')
+        reqs.define('ipmctl', package='ipmctl')
 
 
 def define_ompi(reqs):

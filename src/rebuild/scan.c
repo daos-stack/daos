@@ -142,8 +142,11 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 
 		if (rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done) {
 			rc = -DER_SHUTDOWN;
-			DL_INFO(rc, DF_RB ": give up ds_object_migrate_send, shutdown rebuild",
-				DP_RB_RPT(rpt));
+			DL_INFO(rc,
+				DF_RB ": rt_abort %d rf_finishing %d rt_global_done %d, "
+				      "give up ds_object_migrate_send, shutdown rebuild",
+				DP_RB_RPT(rpt), rpt->rt_abort, rpt->rt_finishing,
+				rpt->rt_global_done);
 			break;
 		}
 
@@ -569,6 +572,28 @@ out:
 }
 
 static int
+obj_layout_upgrade_in_place(struct pl_map *map, daos_unit_oid_t oid, uint32_t old_layout_ver,
+			    uint32_t new_layout_ver, struct daos_obj_md *md, bool *in_place)
+{
+	uint32_t tgts[LOCAL_ARRAY_SIZE];
+	uint32_t shards[LOCAL_ARRAY_SIZE];
+	int      rc;
+
+	if (old_layout_ver == new_layout_ver) {
+		*in_place = true;
+		return 0;
+	}
+
+	rc = obj_layout_diff(map, oid, new_layout_ver, old_layout_ver, md, tgts, shards,
+			     LOCAL_ARRAY_SIZE);
+	if (rc < 0)
+		return rc;
+
+	*in_place = (rc == 0);
+	return 0;
+}
+
+static int
 obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	    struct daos_obj_md *md, struct rebuild_tgt_pool_tracker *rpt,
 	    d_rank_t myrank, daos_unit_oid_t oid, vos_iter_param_t *param,
@@ -579,6 +604,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	struct rebuild_pool_tls *tls;
 	daos_epoch_range_t	discard_epr;
 	bool			still_needed;
+	bool                     in_place;
 	int			rc;
 
 	/*
@@ -603,22 +629,46 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	tls->rebuild_pool_obj_count++;
 	if (still_needed) {
 		if (new_layout_ver > 0) {
-			/* upgrade job reclaim */
+			/*
+			 * Layout upgrade creates a new OI entry sharing the old object's
+			 * tree only when the shard stays on the same target. If the shard
+			 * was migrated, the old/new layout entries own different trees, so
+			 * reclaim must discard the stale tree instead of deleting only the
+			 * OI entry.
+			 */
 			if (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
 				if (oid.id_layout_ver == new_layout_ver) {
+					rc = obj_layout_upgrade_in_place(
+					    map, oid, layout_ver, new_layout_ver, md, &in_place);
+					if (rc != 0)
+						return rc;
+
 					*acts |= VOS_ITER_CB_DELETE;
-					vos_obj_delete_ent(param->ip_hdl, oid);
+					if (in_place)
+						return vos_obj_delete_ent(param->ip_hdl, oid);
+
+					goto discard;
 				}
 			} else {
 				if (oid.id_layout_ver < new_layout_ver) {
+					rc = obj_layout_upgrade_in_place(
+					    map, oid, oid.id_layout_ver, new_layout_ver, md,
+					    &in_place);
+					if (rc != 0)
+						return rc;
+
 					*acts |= VOS_ITER_CB_DELETE;
-					vos_obj_delete_ent(param->ip_hdl, oid);
+					if (in_place)
+						return vos_obj_delete_ent(param->ip_hdl, oid);
+
+					goto discard;
 				}
 			}
 		}
 		return 0;
 	}
 
+discard:
 	D_DEBUG(DB_REBUILD, DF_RB " deleting stale object " DF_UOID " oid layout %u/%u",
 		DP_RB_RPT(rpt), DP_UOID(oid), oid.id_layout_ver, new_layout_ver);
 	tls->rebuild_pool_reclaim_obj_count++;
@@ -1069,16 +1119,23 @@ is_rebuild_scanning_tgt(struct rebuild_tgt_pool_tracker *rpt)
 					      idx, &tgt);
 	D_ASSERT(rc == 1);
 	switch(tgt->ta_comp.co_status) {
-		case PO_COMP_ST_DOWNOUT:
-		case PO_COMP_ST_DOWN:
-		case PO_COMP_ST_UP:
-		case PO_COMP_ST_NEW:
-			return false;
-		case PO_COMP_ST_UPIN:
-		case PO_COMP_ST_DRAIN:
+	case PO_COMP_ST_UP:
+		/* For admin stopped reintegration, the FAIL_RECLAIM may send to
+		 * the reint engine, the UP targets need to do the scan + reclaim
+		 * (see rebuild_scan_broadcast()).
+		 */
+		if (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM)
 			return true;
-		default:
-			break;
+		return false;
+	case PO_COMP_ST_DOWNOUT:
+	case PO_COMP_ST_DOWN:
+	case PO_COMP_ST_NEW:
+		return false;
+	case PO_COMP_ST_UPIN:
+	case PO_COMP_ST_DRAIN:
+		return true;
+	default:
+		break;
 	}
 
 	return false;
@@ -1342,6 +1399,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			rpt->rt_re_report = 1;
 
 			rpt->rt_leader_rank = rsi->rsi_master_rank;
+			rpt->rt_rebuild_gen = rsi->rsi_rebuild_gen;
 
 			/* If this is the old leader, then also stop the rebuild tracking ULT. */
 			rebuild_leader_abort(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, -1,

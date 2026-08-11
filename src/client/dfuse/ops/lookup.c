@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -163,10 +163,9 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 	if (wipe_parent == 0)
 		return;
 
-	rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, wipe_parent, wipe_name,
-					      strnlen(wipe_name, NAME_MAX));
-	if (rc && rc != -ENOENT)
-		DS_ERROR(-rc, "inval_entry() failed");
+	rc = dfuse_mark_inval_entry(wipe_parent, wipe_name, NULL);
+	if (rc)
+		DS_ERROR(rc, "dfuse_mark_inval_entry() failed");
 
 	return;
 out_err:
