@@ -7,6 +7,7 @@ import os
 
 from apricot import TestWithServers
 from dlck_utils import DlckCommand
+from test_utils_pool import add_pool
 
 
 class DlckBasicTest(TestWithServers):
@@ -25,7 +26,7 @@ class DlckBasicTest(TestWithServers):
         errors = []
         dmg = self.get_dmg_command()
         self.log_step("Create a pool to run dlck")
-        self.add_pool()
+        add_pool()
         self.log_step("Setup dlck parameters to run dlck command")
         pool_uuids = dmg.get_pool_list_uuids(no_query=True)
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
@@ -46,8 +47,8 @@ class DlckBasicTest(TestWithServers):
         result = dlck_cmd.run()
         if not result.passed:
             errors.append(f"dlck failed on {result.failed_hosts}")
-        self.log.info(f"dlck basic test output: %s \n", result)
+        self.log.info("dlck basic test output: %s \n", result)
         dmg.system_start()
         if errors:
-            self.fail(f"Errors detected: %s \n", errors)
+            self.fail("Errors detected: %s \n", errors)
         self.log.info("dlck basic test passed with no errors")
