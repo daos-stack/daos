@@ -2,8 +2,8 @@
 
 The following instructions detail how to install, set up and start DAOS servers and clients on
 two or more nodes.
-This document includes instructions for RHEL8-compatible distributions. This includes
-RHEL8, Rocky Linux and AlmaLinux.
+This document includes instructions for RHEL9-compatible distributions. This includes
+RHEL9, Rocky Linux and AlmaLinux.
 
 For setup instructions on OpenSuse, refer to [OpenSuse setup](setup_suse.md).
 
@@ -68,7 +68,7 @@ daos-server RPM.
 
 1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.6/):
 
-		clush -B -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.6/EL8/packages/x86_64/daos_packages.repo'
+		clush -B -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.6/EL9/packages/x86_64/daos_packages.repo'
 
 2. Import GPG key on all nodes:
 
@@ -437,16 +437,9 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		# start agents
 		clush -B -w $CLIENT_NODES "sudo systemctl start daos_agent"
 
-2. (Optional) Check daos\_agent status:
+2. Verify daos\_agent communication:
 
-		# check status
-		clush -B -w $CLIENT_NODES "cat /var/log/daos/daos_agent.log"
-
-		# Sample output depending on number of client nodes
-		client-1: agent INFO 2022/05/05 22:38:46 DAOS Agent v2.6 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
-		client-2: agent INFO 2022/05/05 22:38:53 DAOS Agent v2.6 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
-
-		# verify client communication
+		# verify client communication to each server rank
 		clush -B -w $CLIENT_NODES "daos system query --verbose"
 
 		# Sample output

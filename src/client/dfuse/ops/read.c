@@ -352,7 +352,7 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 		goto err;
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	dfuse_eq_wakeup(eqt);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_read_slab);
@@ -556,7 +556,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	}
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	dfuse_eq_wakeup(eqt);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_read_slab);
@@ -615,8 +615,13 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 	}
 
 	/* If the length is not as expected then the file has been modified since the last stat so
-	 * discard this cache and use regular reads.  Note that this will only detect files which
-	 * have shrunk in size, not grown.
+	 * discard this cache and use regular reads.
+	 *
+	 * TODO: This validation is too weak. A length mismatch only detects one class of change,
+	 * primarily shrink. It does not detect files that were rewritten at the same size,
+	 * replaced by rename at the same size, or grown after the snapshot used for pre-read.
+	 * Timed-cache write-through workloads can hit those patterns, so the open path currently
+	 * disables pre-read there until this validation is strengthened.
 	 */
 	if (ev->de_len != ev->de_readahead_len) {
 		daos_event_fini(&ev->de_ev);
@@ -658,7 +663,7 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 		goto err;
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	dfuse_eq_wakeup(eqt);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_pre_read_slab);

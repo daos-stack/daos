@@ -78,13 +78,12 @@ dc_cont_fini(void)
  * Returns:
  *
  *   < 0			error; end the operation
- *   RSVC_CLIENT_RECHOOSE	task reinited; return 0 from completion cb
+ *   RSVC_CLIENT_RECHOOSE	retriable error; retry the operation
  *   RSVC_CLIENT_PROCEED	OK; proceed to process the reply
  */
 static int
-cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
-			      int rc_crt, struct cont_op_out *out,
-			      tse_task_t *task)
+cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep, int rc_crt,
+			      struct cont_op_out *out)
 {
 	int rc;
 
@@ -159,19 +158,12 @@ cont_create_complete(tse_task_t *task, void *data)
 	bool                       reinit = false;
 	int                        rc     = task->dt_result;
 
-	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &out->cco_op, task);
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc, &out->cco_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while creating container: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = out->cco_op.co_rc;
@@ -459,19 +451,12 @@ cont_destroy_complete(tse_task_t *task, void *data)
 	bool                        reinit = false;
 	int                         rc     = task->dt_result;
 
-	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &out->cdo_op, task);
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc, &out->cdo_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while destroying container: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = out->cdo_op.co_rc;
@@ -802,19 +787,12 @@ cont_open_complete(tse_task_t *task, void *data)
 	bool                     reinit = false;
 	int			 rc = task->dt_result;
 
-	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &out->coo_op, task);
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc, &out->coo_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while opening container: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = out->coo_op.co_rc;
@@ -1083,19 +1061,12 @@ cont_close_complete(tse_task_t *task, void *data)
 	bool                      reinit = false;
 	int                       rc     = task->dt_result;
 
-	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &out->cco_op, task);
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc, &out->cco_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while closing container: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = out->cco_op.co_rc;
@@ -1277,19 +1248,12 @@ cont_query_complete(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc   = task->dt_result;
 
-	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &out->cqo_op, task);
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc, &out->cqo_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while querying container: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = out->cqo_op.co_rc;
@@ -1542,19 +1506,12 @@ cont_set_prop_complete(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc   = task->dt_result;
 
-	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &out->cpso_op, task);
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc, &out->cpso_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while setting prop on container: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = out->cpso_op.co_rc;
@@ -1724,19 +1681,12 @@ cont_update_acl_complete(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc   = task->dt_result;
 
-	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &out->cauo_op, task);
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc, &out->cauo_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while updating ACL on container: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = out->cauo_op.co_rc;
@@ -1862,19 +1812,12 @@ cont_delete_acl_complete(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc   = task->dt_result;
 
-	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &out->cado_op, task);
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc, &out->cado_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while deleting ACL on container: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = out->cado_op.co_rc;
@@ -1995,48 +1938,39 @@ struct cont_oid_alloc_args {
 static int
 cont_oid_alloc_complete(tse_task_t *task, void *data)
 {
-	struct cont_oid_alloc_args *arg = (struct cont_oid_alloc_args *)data;
-	struct cont_oid_alloc_out *out = crt_reply_get(arg->rpc);
-	struct dc_pool *pool = arg->coaa_pool;
-	struct dc_cont *cont = arg->coaa_cont;
-	int rc = task->dt_result;
+	struct cont_oid_alloc_args *arg         = data;
+	struct cont_oid_alloc_out  *out         = crt_reply_get(arg->rpc);
+	struct dc_pool             *pool        = arg->coaa_pool;
+	struct dc_cont             *cont        = arg->coaa_cont;
+	bool                        resched     = false;
+	bool                        refresh_map = false;
+	unsigned int                map_version = 0;
+	int                         rc          = task->dt_result;
 
-	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE) {
-		tse_sched_t *sched = tse_task2sched(task);
-		tse_task_t *ptask;
-		unsigned int map_version = out->coao_op.co_map_version;
-
-		/** pool map refresh task */
-		rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl, map_version,
-						     sched, &ptask);
-		if (rc != 0)
-			D_GOTO(out, rc);
-
-		rc = dc_task_depend(task, 1, &ptask);
-		if (rc != 0) {
-			dc_pool_abandon_map_refresh_task(ptask);
-			D_GOTO(out, rc);
-		}
-
-		rc = dc_task_resched(task);
-		if (rc != 0) {
-			dc_pool_abandon_map_refresh_task(ptask);
-			D_GOTO(out, rc);
-		}
-
-		/* ignore returned value, error is reported by comp_cb */
-		tse_task_schedule(ptask, true);
-		D_GOTO(out, rc = 0);
+	if (daos_rpc_retryable_rc(rc)) {
+		resched     = true;
+		refresh_map = true;
+		goto out_resched;
 	} else if (rc != 0) {
 		/** error but non retryable RPC */
-		D_ERROR("failed to allocate oids: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+		DL_ERROR(rc, DF_CONT ": failed to allocate oids",
+			 DP_CONT(pool->dp_pool, cont->dc_uuid));
+		goto out_resched;
 	}
 
 	rc = out->coao_op.co_rc;
-	if (rc != 0) {
-		D_ERROR("failed to allocate oids: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+	if (rc == -DER_STALE) {
+		resched     = true;
+		refresh_map = true;
+		map_version = out->coao_op.co_map_version;
+		goto out_resched;
+	} else if (daos_rpc_retryable_rc(rc)) {
+		resched = true;
+		goto out_resched;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to allocate oids",
+			 DP_CONT(pool->dp_pool, cont->dc_uuid));
+		goto out_resched;
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": OID ALLOC: using hdl="DF_UUID" oid "DF_U64"/"DF_U64"\n",
@@ -2046,6 +1980,38 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 	if (arg->oid)
 		*arg->oid = out->oid;
 
+out_resched:
+	if (resched) {
+		tse_sched_t *sched = tse_task2sched(task);
+		tse_task_t  *ptask;
+
+		D_DEBUG(DB_MD, DF_CONT ": resched: refresh_map=%d map_version=%u\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), refresh_map, map_version);
+		if (refresh_map) {
+			rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl,
+							     map_version, sched, &ptask);
+			if (rc != 0)
+				goto out;
+
+			rc = dc_task_depend(task, 1, &ptask);
+			if (rc != 0) {
+				dc_pool_abandon_map_refresh_task(ptask);
+				goto out;
+			}
+		}
+		rc = dc_task_resched(task);
+		if (rc != 0) {
+			if (refresh_map)
+				dc_pool_abandon_map_refresh_task(ptask);
+			goto out;
+		}
+		if (refresh_map) {
+			/* ignore returned value, error is reported by comp_cb */
+			tse_task_schedule(ptask, true);
+			rc = 0;
+			goto out;
+		}
+	}
 out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
@@ -2482,19 +2448,12 @@ cont_req_complete(tse_task_t *task, void *data)
 	bool                 reinit     = false;
 	int                  rc         = task->dt_result;
 
-	rc = cont_rsvc_client_complete_rpc(pool, &args->cra_rpc->cr_ep,
-					   rc, op_out, task);
+	rc = cont_rsvc_client_complete_rpc(pool, &args->cra_rpc->cr_ep, rc, op_out);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while querying container: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = op_out->co_rc;

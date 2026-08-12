@@ -30,4 +30,4 @@ if ! git diff --no-commit-id --name-only "$merge_base" HEAD | grep -q -e ".*"; t
     exit 0
 fi
 git diff --no-commit-id --name-only "$merge_base" HEAD | \
-  grep -v -e "^docs/" -e "\.md$" -e "^.*LICENSE.*$"
+  grep -v -e "^docs/" -e "\.md$" -e "^mkdocs.yml$" -e "^README.*" -e "^.*LICENSE.*$"

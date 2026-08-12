@@ -7,13 +7,14 @@
 %bcond_without olddaos
 
 %if %{with server}
-%global daos_build_args FIRMWARE_MGMT=yes
+%global daos_build_args
 %else
 %global daos_build_args client test
 %endif
 %global mercury_version   2.4
 %global argobots_version 1.2
 %global __python %{__python3}
+%global daos_sys_dir "/var/daos"
 %global daos_log_dir "/var/log/daos"
 
 %if (0%{?rhel} >= 8)
@@ -24,8 +25,9 @@
 
 Name:          daos
 Version:       2.9.100
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
+Obsoletes:     daos-firmware
 
 License:       BSD-2-Clause-Patent
 URL:           https://github.com/daos-stack/daos
@@ -76,7 +78,7 @@ BuildRequires: capstone-devel
 %endif
 %if %{with server}
 BuildRequires: libaio-devel
-BuildRequires: spdk-devel >= 22.01.2
+BuildRequires: spdk-devel >= 26.01
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -98,7 +100,7 @@ BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
 %if %{with server}
-BuildRequires: libipmctl-devel
+BuildRequires: ipmctl
 %endif
 %if (0%{?rhel} >= 9)
 BuildRequires: python-devel
@@ -116,7 +118,7 @@ BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
 %if %{with server}
-BuildRequires: ipmctl-devel
+BuildRequires: ipmctl
 %endif
 BuildRequires: python3-devel
 BuildRequires: python3-distro
@@ -159,7 +161,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.2
+Requires: spdk-tools >= 26.01
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -302,15 +304,6 @@ Requires: libuuid-devel
 %description devel
 This is the package needed to build software with the DAOS library.
 
-%if %{with server}
-%package firmware
-Summary: The DAOS firmware management helper
-Requires: %{name}-server%{?_isa} = %{version}-%{release}
-
-%description firmware
-This is the package needed to manage server storage firmware on DAOS servers.
-%endif
-
 %package serialize
 Summary: DAOS serialization library that uses HDF5
 BuildRequires: hdf5-devel
@@ -407,6 +400,12 @@ getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
+# Ensure daos_sys_dir exists
+if [ ! -d %{daos_sys_dir} ]; then
+    mkdir -p %{daos_sys_dir}
+    chown daos_server:daos_daemons %{daos_sys_dir}
+    chmod 775 %{daos_sys_dir}
+fi
 # Ensure daos_log_dir exists
 if [ ! -d %{daos_log_dir} ]; then
     mkdir -p %{daos_log_dir}
@@ -476,7 +475,6 @@ fi
 # set daos_server_helper to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_server_helper
 # set daos_server to be setgid daos_server in order to invoke daos_server_helper
-# and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
@@ -626,13 +624,6 @@ fi
 %{_libdir}/libcart.so
 %{_libdir}/*.a
 %{daoshome}/python
-
-%if %{with server}
-%files firmware
-%doc README.md
-# set daos_firmware_helper to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_server) %{_bindir}/daos_firmware_helper
-%endif
 
 %files serialize
 %doc README.md

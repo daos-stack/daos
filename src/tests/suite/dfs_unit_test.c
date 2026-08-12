@@ -2246,6 +2246,7 @@ compare_oclass(daos_handle_t coh, daos_oclass_id_t acid, daos_oclass_id_t ecid)
 {
 	int		rc;
 	daos_obj_id_t	oid = {};
+	daos_oclass_id_t normalized_ecid;
 
 	/*
 	 * get the expected oclass - this is needed to convert things with GX to fit them in current
@@ -2253,12 +2254,21 @@ compare_oclass(daos_handle_t coh, daos_oclass_id_t acid, daos_oclass_id_t ecid)
 	 */
 	rc = daos_obj_generate_oid(coh, &oid, 0, ecid, 0, 0);
 	assert_rc_equal(rc, 0);
-	ecid = daos_obj_id2class(oid);
+	normalized_ecid = daos_obj_id2class(oid);
 
-	if (acid == ecid)
+	if (acid == ecid || acid == normalized_ecid)
 		return 0;
 	else
 		return 1;
+}
+
+static daos_oclass_id_t
+expected_dir_oclass(daos_oclass_id_t cid, daos_oclass_id_t fallback)
+{
+	if (daos_cid_is_ec(cid))
+		return fallback;
+
+	return cid;
 }
 
 static void
@@ -2439,7 +2449,7 @@ dfs_test_oclass_hints(void **state)
 	/** get the dir info to query what oclass will be used */
 	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
 	assert_int_equal(rc, 0);
-	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, OC_RP_2G1);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, expected_dir_oclass(ecidx, OC_RP_2G1));
 	assert_int_equal(rc, 0);
 	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
 	assert_int_equal(rc, 0);
@@ -2506,7 +2516,7 @@ dfs_test_oclass_hints(void **state)
 	/** get the dir info to query what oclass will be used */
 	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
 	assert_int_equal(rc, 0);
-	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, OC_RP_3G1);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, expected_dir_oclass(ecidx, OC_RP_3G1));
 	assert_int_equal(rc, 0);
 	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
 	assert_int_equal(rc, 0);
@@ -2573,7 +2583,7 @@ dfs_test_oclass_hints(void **state)
 	/** get the dir info to query what oclass will be used */
 	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
 	assert_int_equal(rc, 0);
-	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, OC_RP_4G1);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, expected_dir_oclass(ecidx, OC_RP_4G1));
 	assert_int_equal(rc, 0);
 	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
 	assert_int_equal(rc, 0);
@@ -3420,9 +3430,7 @@ dfs_test_oflags(void **state)
 static void
 test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 {
-#ifndef BUILD_PIPELINE
-	skip();
-#endif
+	bool             pipeline_enabled = false;
 	dfs_obj_t	*dir1, *f1;
 	int		i;
 	time_t		ts = 0;
@@ -3430,6 +3438,10 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
 	char		*dirname = "pipeline_dir";
 	int		rc;
+
+	d_getenv_bool("DAOS_PIPELINE", &pipeline_enabled);
+	if (!pipeline_enabled)
+		skip();
 
 	rc = dfs_open(dfs_mt, NULL, dirname, create_mode | S_IFDIR, create_flags, dir_oclass, 0,
 		      NULL, &dir1);

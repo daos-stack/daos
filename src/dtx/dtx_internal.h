@@ -304,7 +304,8 @@ int dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid,
 		  struct dtx_memberships *mbs, uint32_t my_tgtid, uint32_t dtx_ver,
 		  uint32_t pm_ver, bool for_check, bool need_hint, struct dtx_coll_entry **p_dce);
 int dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epoch_t epoch,
-			uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap, int **p_results);
+			uint32_t version, uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap,
+			int **p_results);
 /* clang-format on */
 
 enum dtx_status_handle_result {
