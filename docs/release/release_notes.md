@@ -396,6 +396,23 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   later package operations from leaving libdaos consumers with stale linker
   state.
 
+#### Better pool and container property defaults
+
+* The default redundancy factor that is set on the pool level is now set to
+  `rd_fac=3`; the previous default was zero. Container create operations will
+  inherit this pool-level default unless a different redundancy factor is
+  explicitly specified at container creation time. This means that new
+  containers created with DAOS Version 2.8 will now have 3-fault-tolerance
+  by default. Note that if the number of fault domains in the pool
+  (servers that are participating in the pool) is smaller than three,
+  the `rd_fac` will be adjusted down accordingly.
+
+* The default fraction of pool space that is reserved for rebuild (`space_rb`)
+  is now 5%. In previous releases, no space was reserved by default.
+
+* The default `ec_cell_sz` has been increased from 64kiB to 128kiB.
+  This improves EC performance.
+
 #### Other notable changes
 
 * Generated server configurations enable the supported NVMe hotplug path by
