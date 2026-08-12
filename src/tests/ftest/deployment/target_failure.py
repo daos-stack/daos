@@ -88,7 +88,7 @@ class TargetFailure(IorTestBase):
                 IOR.
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio_80/*")
+        self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
         self.add_container(pool=self.pool, namespace="/run/container_with_rf/*")
 
         # 2. Run IOR with oclass RP_2G1 or EC_2P1G1.
@@ -202,7 +202,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=TargetFailure,test_target_failure_wo_rf
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio_80/*")
+        self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
         self.add_container(pool=self.pool, namespace="/run/container_wo_rf/*")
 
         # 2. Run IOR with oclass SX so that excluding one target will result in a failure.

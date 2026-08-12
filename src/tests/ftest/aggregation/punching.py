@@ -34,7 +34,7 @@ class AggregationPunching(MdtestBase):
         :avocado: tags=AggregationPunching,test_aggregation_punching
         """
         if self.pool is None:
-            self.add_pool(connect=False)
+            self.pool = self.get_pool(connect=False)
         self.pool.connect()
 
         storage_index = 1  # SSD
