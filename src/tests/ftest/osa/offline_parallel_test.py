@@ -108,7 +108,8 @@ class OSAOfflineParallelTest(OSAUtils):
                 # command using the second container.
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
-
+        all_ranks = list(self.server_managers[0].ranks.keys())
+        total_ranks = len(all_ranks)
         # Start the additional servers and extend the pool
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
@@ -139,7 +140,7 @@ class OSAOfflineParallelTest(OSAUtils):
                 "exclude": {"pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
                 "reintegrate": {
                     "pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
-                "extend": {"pool": self.pool.identifier, "ranks": (rank + 2)}
+                "extend": {"pool": self.pool.identifier, "ranks": (total_ranks + 1)}
             }
             for action in sorted(action_kwargs):
                 # Add a dmg thread

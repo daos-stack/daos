@@ -100,6 +100,9 @@ class OSAOnlineParallelTest(OSAUtils):
         # Exclude rank 2.
         rank = 2
 
+        all_ranks = list(self.server_managers[0].ranks.keys())
+        total_ranks = len(all_ranks)
+
         # Start the daos_racer thread
         if racer is True:
             kwargs = {"results": self.ds_racer_queue}
@@ -135,8 +138,8 @@ class OSAOnlineParallelTest(OSAUtils):
                     "reintegrate": {"pool": self.pool[value].uuid,
                                     "ranks": (rank + 1),
                                     "tgt_idx": t_string},
-                    "extend": {"pool": self.pool.identifier,
-                               "ranks": (rank + 2)}
+                    "extend": {"pool": self.pool[value].uuid,
+                               "ranks": (total_ranks + 1)}
                 }
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
@@ -193,7 +196,7 @@ class OSAOnlineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands/IO in parallel
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cb,large
+        :avocado: tags=hw,large
         :avocado: tags=osa,checksum,osa_parallel
         :avocado: tags=OSAOnlineParallelTest,test_osa_online_parallel_test
         """
