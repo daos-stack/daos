@@ -134,7 +134,9 @@ class OSAOnlineParallelTest(OSAUtils):
                                 "tgt_idx": t_string},
                     "reintegrate": {"pool": self.pool[value].uuid,
                                     "ranks": (rank + 1),
-                                    "tgt_idx": t_string}
+                                    "tgt_idx": t_string},
+                    "extend": {"pool": self.pool.identifier,
+                               "ranks": (rank + 2)}
                 }
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
@@ -191,7 +193,7 @@ class OSAOnlineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands/IO in parallel
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cb,medium
+        :avocado: tags=cb,large
         :avocado: tags=osa,checksum,osa_parallel
         :avocado: tags=OSAOnlineParallelTest,test_osa_online_parallel_test
         """

@@ -193,7 +193,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,checksum,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test
         """
@@ -206,7 +206,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel without enabling checksum.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_without_csum
         """
@@ -222,7 +222,7 @@ class OSAOfflineParallelTest(OSAUtils):
         stop/start.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_rank_boot
         """
@@ -237,7 +237,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel with aggregation turned on.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_with_aggregation
         """
@@ -252,7 +252,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel with different object class.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_oclass
         """
