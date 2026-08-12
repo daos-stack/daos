@@ -1742,50 +1742,6 @@ class TestWithServers(TestWithoutServers):
         """
         return add_container(self, pool, namespace, create, daos, **params)
 
-    def add_container(self, pool, namespace=CONT_NAMESPACE, create=True, daos=None, **params):
-        """Add a container to the test case.
-
-        This method defines the common test container creation sequence.
-
-        Args:
-            pool (TestPool): pool in which to create the container.
-            namespace (str, optional): namespace for TestContainer parameters in the test yaml file.
-                Defaults to CONT_NAMESPACE.
-            create (bool, optional): should the container be created. Defaults to True.
-            daos (DaosCommand, optional): daos command object. Defaults to self.get_daos_command()
-            params (dict): name/value of attributes for which to call update(value, name).
-                See TestContainer for available attributes.
-        """
-        self.container = self.get_container(pool, namespace, create, daos, **params)
-
-    def add_container_qty(self, quantity, pool, namespace=CONT_NAMESPACE, create=True):
-        """Add multiple containers to the test case.
-
-        This method requires self.container to be defined as a list.
-        If self.container is undefined it will define it as a list.
-
-        Args:
-            quantity (int): number of containers to create
-            namespace (str, optional): namespace for TestContainer parameters in the
-                test yaml file. Defaults to None.
-            pool (TestPool): Pool object
-            create (bool, optional): should the container be created. Defaults to
-                True.
-
-        Raises:
-            TestFail: if self.pool is defined, but not as a list object.
-
-        """
-        if self.container is None:
-            self.container = []
-        if not isinstance(self.container, list):
-            self.fail(
-                "add_container_qty(): self.container must be a list: {}".format(
-                    type(self.container)))
-        for _ in range(quantity):
-            self.container.append(
-                self.get_container(pool=pool, namespace=namespace, create=create))
-
     def start_additional_servers(self, additional_servers, index=0, mgmt_svc_replicas=None):
         """Start additional servers.
 

@@ -34,7 +34,7 @@ class RbldWithIO(TestWithServers):
         """
         # Get the test params
         self.pool = self.get_pool(create=False)
-        self.add_container(self.pool, create=False)
+        self.container = self.get_container(self.pool, create=False)
         targets = self.server_managers[0].get_config_value("targets")
         # data = self.params.get("datasize", "/run/testparams/*")
         rank = self.params.get("rank", "/run/testparams/*")
