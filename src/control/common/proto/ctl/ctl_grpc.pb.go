@@ -31,8 +31,6 @@ const (
 	CtlSvc_StorageNvmeRebind_FullMethodName    = "/ctl.CtlSvc/StorageNvmeRebind"
 	CtlSvc_StorageNvmeAddDevice_FullMethodName = "/ctl.CtlSvc/StorageNvmeAddDevice"
 	CtlSvc_NetworkScan_FullMethodName          = "/ctl.CtlSvc/NetworkScan"
-	CtlSvc_FirmwareQuery_FullMethodName        = "/ctl.CtlSvc/FirmwareQuery"
-	CtlSvc_FirmwareUpdate_FullMethodName       = "/ctl.CtlSvc/FirmwareUpdate"
 	CtlSvc_SmdQuery_FullMethodName             = "/ctl.CtlSvc/SmdQuery"
 	CtlSvc_SmdManage_FullMethodName            = "/ctl.CtlSvc/SmdManage"
 	CtlSvc_SetEngineLogMasks_FullMethodName    = "/ctl.CtlSvc/SetEngineLogMasks"
@@ -64,10 +62,6 @@ type CtlSvcClient interface {
 	StorageNvmeAddDevice(ctx context.Context, in *NvmeAddDeviceReq, opts ...grpc.CallOption) (*NvmeAddDeviceResp, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	NetworkScan(ctx context.Context, in *NetworkScanReq, opts ...grpc.CallOption) (*NetworkScanResp, error)
-	// Retrieve firmware details from storage devices on server
-	FirmwareQuery(ctx context.Context, in *FirmwareQueryReq, opts ...grpc.CallOption) (*FirmwareQueryResp, error)
-	// Update firmware on storage devices on server
-	FirmwareUpdate(ctx context.Context, in *FirmwareUpdateReq, opts ...grpc.CallOption) (*FirmwareUpdateResp, error)
 	// Query the per-server metadata
 	SmdQuery(ctx context.Context, in *SmdQueryReq, opts ...grpc.CallOption) (*SmdQueryResp, error)
 	// Manage devices (per-server) identified in SMD table
@@ -140,26 +134,6 @@ func (c *ctlSvcClient) NetworkScan(ctx context.Context, in *NetworkScanReq, opts
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(NetworkScanResp)
 	err := c.cc.Invoke(ctx, CtlSvc_NetworkScan_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *ctlSvcClient) FirmwareQuery(ctx context.Context, in *FirmwareQueryReq, opts ...grpc.CallOption) (*FirmwareQueryResp, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(FirmwareQueryResp)
-	err := c.cc.Invoke(ctx, CtlSvc_FirmwareQuery_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *ctlSvcClient) FirmwareUpdate(ctx context.Context, in *FirmwareUpdateReq, opts ...grpc.CallOption) (*FirmwareUpdateResp, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(FirmwareUpdateResp)
-	err := c.cc.Invoke(ctx, CtlSvc_FirmwareUpdate_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -276,10 +250,6 @@ type CtlSvcServer interface {
 	StorageNvmeAddDevice(context.Context, *NvmeAddDeviceReq) (*NvmeAddDeviceResp, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	NetworkScan(context.Context, *NetworkScanReq) (*NetworkScanResp, error)
-	// Retrieve firmware details from storage devices on server
-	FirmwareQuery(context.Context, *FirmwareQueryReq) (*FirmwareQueryResp, error)
-	// Update firmware on storage devices on server
-	FirmwareUpdate(context.Context, *FirmwareUpdateReq) (*FirmwareUpdateResp, error)
 	// Query the per-server metadata
 	SmdQuery(context.Context, *SmdQueryReq) (*SmdQueryResp, error)
 	// Manage devices (per-server) identified in SMD table
@@ -322,12 +292,6 @@ func (UnimplementedCtlSvcServer) StorageNvmeAddDevice(context.Context, *NvmeAddD
 }
 func (UnimplementedCtlSvcServer) NetworkScan(context.Context, *NetworkScanReq) (*NetworkScanResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method NetworkScan not implemented")
-}
-func (UnimplementedCtlSvcServer) FirmwareQuery(context.Context, *FirmwareQueryReq) (*FirmwareQueryResp, error) {
-	return nil, status.Error(codes.Unimplemented, "method FirmwareQuery not implemented")
-}
-func (UnimplementedCtlSvcServer) FirmwareUpdate(context.Context, *FirmwareUpdateReq) (*FirmwareUpdateResp, error) {
-	return nil, status.Error(codes.Unimplemented, "method FirmwareUpdate not implemented")
 }
 func (UnimplementedCtlSvcServer) SmdQuery(context.Context, *SmdQueryReq) (*SmdQueryResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method SmdQuery not implemented")
@@ -463,42 +427,6 @@ func _CtlSvc_NetworkScan_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CtlSvcServer).NetworkScan(ctx, req.(*NetworkScanReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _CtlSvc_FirmwareQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FirmwareQueryReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CtlSvcServer).FirmwareQuery(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: CtlSvc_FirmwareQuery_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CtlSvcServer).FirmwareQuery(ctx, req.(*FirmwareQueryReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _CtlSvc_FirmwareUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FirmwareUpdateReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CtlSvcServer).FirmwareUpdate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: CtlSvc_FirmwareUpdate_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CtlSvcServer).FirmwareUpdate(ctx, req.(*FirmwareUpdateReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -691,14 +619,6 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NetworkScan",
 			Handler:    _CtlSvc_NetworkScan_Handler,
-		},
-		{
-			MethodName: "FirmwareQuery",
-			Handler:    _CtlSvc_FirmwareQuery_Handler,
-		},
-		{
-			MethodName: "FirmwareUpdate",
-			Handler:    _CtlSvc_FirmwareUpdate_Handler,
 		},
 		{
 			MethodName: "SmdQuery",

@@ -444,7 +444,6 @@ void fixup_rpmlintrc() {
                     '/usr/bin/daos',
                     '/usr/bin/daos_agent',
                     '/usr/bin/hello_drpc',
-                    '/usr/bin/daos_firmware',
                     '/usr/bin/daos_admin',
                     '/usr/bin/daos_server',
                     '/usr/bin/ddb']
@@ -1029,7 +1028,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/'],
+                            unitTestPost artifacts: ['nlt_logs/', 'nlt-summary-nlt.md'],
                                          testResults: 'nlt-junit.xml',
                                          valgrind_stash: 'nlt-memcheck',
                                          valgrind_pattern: '*memcheck.xml',
@@ -1195,7 +1194,7 @@ pipeline {
                             ],
                             unitTestPostArgs: [
                                 /* groovylint-disable-next-line DuplicateListLiteral */
-                                artifacts: ['nlt_logs/'],
+                                artifacts: ['nlt_logs/', 'nlt-summary-fault-injection.md'],
                                 testResults: 'nlt-junit.xml',
                                 with_valgrind: '',
                                 FI: true],

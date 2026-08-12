@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -134,7 +134,7 @@ class ServerRankFailure(IorTestBase):
             ior_namespace (str): Yaml namespace that defines the object class used for IOR.
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio_80/*")
+        self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
         self.add_container(pool=self.pool)
 
         # 2. Run IOR with given object class and let it run through step 7.
@@ -302,7 +302,7 @@ class ServerRankFailure(IorTestBase):
         self.log.info("engine_kill_host = %s", engine_kill_host)
 
         # 2. Create a pool across two ranks on the same node; 0 and rank_r.
-        self.add_pool(namespace="/run/pool_size_value/*", target_list=[0, rank_r])
+        self.pool = self.get_pool(namespace="/run/pool_size_value/*", target_list=[0, rank_r])
 
         # 3. Create a container without redundancy factor.
         self.container = []

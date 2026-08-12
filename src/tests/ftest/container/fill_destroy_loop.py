@@ -1,6 +1,10 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
+<<<<<<< HEAD
   (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+=======
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+>>>>>>> master
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """

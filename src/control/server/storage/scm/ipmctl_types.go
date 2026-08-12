@@ -1,43 +1,11 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package ipmctl
-
-import (
-	"bytes"
-)
-
-// DeviceUID represents the Go equivalent of an NVM_UID string buffer
-type DeviceUID [22]byte
-
-// String converts the DeviceUID bytes to a string
-func (d DeviceUID) String() string {
-	return bytes2String(d[:])
-}
-
-func bytes2String(b []byte) string {
-	n := bytes.IndexByte(b, 0)
-	return string(b[:n])
-}
-
-// Version represents the Go equivalent of an NVM_VERSION string buffer
-type Version [25]byte
-
-// String converts the Version bytes to a string
-func (v Version) String() string {
-	return bytes2String(v[:])
-}
-
-// PartNumber represents the part number string for an NVM device.
-type PartNumber [21]byte
-
-// String converts the PartNumber bytes to a string
-func (p PartNumber) String() string {
-	return bytes2String(p[:])
-}
+package scm
 
 // PMemRegionType represents PMem region type.
 type PMemRegionType uint32
@@ -112,39 +80,4 @@ func PMemRegionHealthFromString(in string) PMemRegionHealth {
 		return val
 	}
 	return RegionHealthUnknown
-}
-
-// PMemRegion represents Go equivalent of C.struct_region from nvm_management.h (NVM API) as
-// reported by "go tool cgo -godefs nvm.go".
-type PMemRegion struct {
-	IsetId        uint64     // Unique identifier of the region.
-	Type          uint32     // The type of region.
-	Capacity      uint64     // Size of the region in bytes.
-	Free_capacity uint64     // Available size of the region in bytes.
-	Socket_id     int16      // socket ID
-	Dimm_count    uint16     // The number of PMem modules in this region.
-	Dimms         [24]uint16 // Unique ID's of underlying PMem modules.
-	Health        uint32     // Rolled up health of the underlying PMem modules.
-	Reserved      [40]uint8  // reserved
-}
-
-// FWUpdateStatus values represent the ipmctl fw_update_status enum
-const (
-	// FWUpdateStatusUnknown represents unknown status
-	FWUpdateStatusUnknown = 0
-	// FWUpdateStatusStaged represents a staged FW update to be loaded on reboot
-	FWUpdateStatusStaged = 1
-	// FWUpdateStatusSuccess represents a successfully applied FW update
-	FWUpdateStatusSuccess = 2
-	// FWUpdateStatusFailed represents a failed FW update
-	FWUpdateStatusFailed = 3
-)
-
-// DeviceFirmwareInfo represents an ipmctl device_fw_info structure
-type DeviceFirmwareInfo struct {
-	ActiveFWVersion Version // currently running FW version
-	StagedFWVersion Version // FW version to be applied on next reboot
-	FWImageMaxSize  uint32  // maximum FW image size in 4096-byte chunks
-	FWUpdateStatus  uint32  // last update status
-	Reserved        [4]uint8
 }
