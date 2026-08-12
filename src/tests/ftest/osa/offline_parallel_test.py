@@ -52,8 +52,9 @@ class OSAOfflineParallelTest(OSAUtils):
                 text = "Waiting for rebuild to complete before pool reintegrate"
                 time.sleep(3)
                 self.print_and_assert_on_rebuild_failure(text)
-            if action == "exclude" and self.server_boot is True:
-                ranks = str(kwargs["rank"])
+            if action == "exclude" and self.server_boot == "true":
+                self.log.info("Stop/Start rank %s using system stop/start", kwargs["ranks"])
+                ranks = str(kwargs["ranks"])
                 dmg.system_stop(ranks=ranks)
                 self.print_and_assert_on_rebuild_failure("Stopping rank {}".format(ranks))
                 dmg.system_start(ranks=ranks)
