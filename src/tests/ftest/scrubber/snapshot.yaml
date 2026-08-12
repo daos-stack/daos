@@ -40,7 +40,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   oclass: RP_2GX
   properties: "cksum:crc64,rd_fac:1"
 

@@ -18,6 +18,5 @@ pool:
   size: 1G
 container:
   type: POSIX
-  control_method: daos
 dfuse:
   disable_wb_cache: false

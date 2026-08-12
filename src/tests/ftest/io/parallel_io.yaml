@@ -17,7 +17,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   cont_count: 10
 
 fio:
