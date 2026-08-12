@@ -59,7 +59,7 @@ class DlckBasicFaultTest(TestWithServers):
         result = dlck_cmd.run()
         if not result.passed:
             errors.append(f"dlck failed on {result.failed_hosts}")
-        self.log.info(f"dlck basic test output: {result} \n")
+        self.log.info(f"dlck basic test output: %s \n", result)
         # Now, run the other fault injection flags without rebooting or creating any new pools.
         # Rebooting the servers or creating the new pools will result in injecting fault in
         # the wrong test code. Fault injections should done only for the dlck alone.
@@ -76,7 +76,7 @@ class DlckBasicFaultTest(TestWithServers):
             self.log.info("Reading the updated fault injection file contents")
             with open(fault_inject_file, 'r') as f:
                 file_data = f.read()
-                self.log.info(f"\n {file_data}")
+                self.log.info(f"\n %s", file_data)
             distribute_files(self.log, self.hostlist_servers, fault_inject_file,
                              fault_inject_file)
             if self.server_managers[0].manager.job.using_control_metadata:
@@ -87,8 +87,8 @@ class DlckBasicFaultTest(TestWithServers):
                                        env_str=env_str)
             result = dlck_cmd.run()
             if not result.passed:
-                errors.append(f"dlck failed on {result.failed_hosts}")
-            self.log.info(f"dlck basic test output: {result}")
+                errors.append(f"dlck failed on %s", result.failed_hosts)
+            self.log.info(f"dlck basic test output: %s", result)
         dmg.system_start()
         if not errors:
             self.fail("No Errors detected:\n{}".format("\n".join(errors)))
