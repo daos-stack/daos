@@ -1,6 +1,6 @@
 # DAOS Version 2.8 Release Notes
 
-## DAOS Version 2.8.0 (2026-08-14)
+## DAOS Version 2.8.0 (2026-08-12)
 
 We are pleased to announce the release of DAOS version 2.8.
 
@@ -40,10 +40,10 @@ Storage Class Memory Support (PMem and non-PMem servers):
   created pools.
 * Existing Metadata-on-SSD Phase1 pools remain supported and retain their
   original allocator when opened.
-* DAOS Servers with 2nd gen Intel Xeon Scalable processors and Intel Optane
-  Persistent Memory 100 Series.
 * DAOS Servers with 3rd gen Intel Xeon Scalable processors and Intel Optane
   Persistent Memory 200 Series.
+* DAOS Servers with 2nd gen Intel Xeon Scalable processors and Intel Optane
+  Persistent Memory 100 Series.
 
 For a complete list of supported hardware and software, refer to the [Support
 Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
@@ -62,7 +62,7 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   updated:
 
     - Libfabric has been updated to 1.22.0
-    - UCX has been updated to 1.20.0
+    - UCX (in DOCA-OFED) has been updated to 1.20.0
     - Mercury has been updated to 2.4.1
     - SPDK has been updated to 26.01
     - PMDK has been updated to 2.1.3
@@ -78,20 +78,27 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
 
 ##### MD-on-SSD Phase 2
 
-* DAOS Version 2.8 makes Metadata-on-SSD Phase2 production ready when metadata
-  eviction is NOT enabled. The bucket-memory allocator v2 is now the default
-  metadata allocator for newly created Metadata-on-SSD pools, including pools
-  configured with a 100% memory-to-metadata ratio.
+* It is a primary feature of DAOS Version 2.8 that the Metadata-on-SSD
+  bucket-memory allocator v2 is now production ready. This allocator is now
+  the default metadata allocator for newly created Metadata-on-SSD pools.
+  It allows all new Metadata-on-SSD deployments to use the Phase2 allocator
+  and establishes a common allocator path, so the allocator v1 can be retired
+  in the longer term instead of maintaining two allocator implementations
+  indefinitely.
 
-* Making allocator v2 the production default is a primary objective of this
-  release. It allows all new Metadata-on-SSD deployments to use the Phase2
-  allocator and establishes a common allocator path, so allocator v1 can be
-  retired in the longer term instead of maintaining two allocator
-  implementations indefinitely.
+* The production ready default in DAOS Version 2.8 is to create MD-on-SSD
+  pools with a 100% memory-to-metadata ratio (`--mem-ratio 100%`),
+  so metadata eviction is not enabled.
+  As a technoloy preview, `dmg pool create` supports metadata sizing
+  with a memory-to-metadata ratio smaller than 100% (for example, using
+  `--mem-ratio 25%`).
 
-* Existing Phase1 pools remain on their original allocator and are not converted
-  when opened. Allocator v2 supplies the durable format, bucket-aware
-  allocation, cache, pinning, object preload, garbage collection, DTX, CPD, and
+* Existing MD-on-SSD Phase1 pools remain on their original allocator and are
+  not converted when opened. To migrate Phase1 pools, data in those pools
+  needs to be copied by the user to a new pool created with the v2 allocator.
+
+* Allocator v2 supplies the durable format, bucket-aware allocation, cache,
+  pinning, object preload, garbage collection, DTX, CPD, and
   accounting groundwork needed for future metadata eviction.
 
 * Allocator v2 also provides the foundation for future metadata eviction, which
@@ -100,10 +107,9 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   validated by the community; this limitation does not apply to Phase2 operation
   without metadata eviction.
 
-* `dmg pool create` supports metadata and data sizing together with
-  `--mem-ratio`. Pool create, extend, reintegration, list, query, storage
-  display, DDB, recovery, and pool recreation paths preserve the Metadata-on-SSD
-  sizing and format state required by Phase2.
+* Pool create, extend, reintegration, list, query, storage display, DDB,
+  recovery, and pool recreation paths preserve the Metadata-on-SSD sizing
+  and format state required by Phase2.
 
 * The VOS-file size is recorded independently from the metadata-blob size where
   they differ. This improves recovery and recreation handling for configurations
@@ -116,16 +122,16 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
 
 ##### Check and Repair (CR) Utilities and Framework
 
-* Catastrophic recovery remains the `dmg check` workflow for checking and
-  repairing DAOS system metadata. DAOS 2.8 expands and hardens the Technology
+* The `dmg check` command is the workflow for checking and repairing
+  DAOS system metadata. DAOS 2.8 expands and hardens the CR Technology
   Preview framework rather than presenting it as an general-purpose data repair
   facility.
 
 * DAOS 2.8 adds Metadata-on-SSD mode support to CR utilities, allowing check and
   repair workflows to operate on systems using that storage layout.
 
-* `--for-all` of `dmg check` has been removed. Administrators can use `dmg
-  check set-policy` to apply a repair decision to interactions of the same
+* The `dmg check --for-all` option has been removed. Administrators can use
+  `dmg check set-policy` to apply a repair decision to interactions of the same
   class, making repeated repair behavior explicit and reviewable.
 
 * Repeated pool arguments are filtered. Orphan processing preserves shards that
@@ -166,13 +172,13 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   persistence, restart, discard completion, and degraded-fetch races.
 
 * Rebuild status and return-code fixes improve detection of completed global
-  scans and ensure migration setup failures are returned to the controlling
+  scans, and ensure migration setup failures are returned to the controlling
   service rather than being reported as success.
 
 ##### Interactive Rebuild Control
 
-* DAOS Version 2.8 adds exceptional recovery controls for stopping and
-  restarting rebuild for an individual pool:
+* DAOS Version 2.8 adds controls for stopping and restarting rebuild for an
+  individual pool, to handle exceptional rebuild situations:
 
     - `dmg pool <pool> rebuild stop [--force]`
     - `dmg pool <pool> rebuild start`
@@ -181,17 +187,17 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   rebuild has gone wrong or an administrator must halt rebuild traffic to
   diagnose and correct server issues before continuing recovery.
 
-* A stop halts rebuild traffic and discards current progress. After fixing the
-  server issue, `rebuild start` resumes recovery by launching a new rebuild;
-  this is not a checkpointed pause or persistent disable.
+* A `rebuild stop` halts rebuild traffic and discards current progress.
+  After fixing the server issue, `rebuild start` resumes recovery by launching
+  a new rebuild. This is not a checkpointed pause or persistent disable.
 
 * `dmg pool query --health-only <pool>` reports a stopped rebuild as idle with
   `-DER_OP_CANCELED`, allowing automation to distinguish an administrator stop
   from successful completion.
 
-* Interactive stop is phase-aware. An ordinary stop works during rebuild, is
-  rejected during successful reclaim, and allows fail-reclaim cleanup to finish
-  while suppressing the next retry.
+* Interactive rebuild stop is phase-aware. An ordinary stop works during rebuild,
+  is rejected during successful reclaim, and allows fail-reclaim cleanup
+  to finish while suppressing the next retry.
 
 * `--force` is reserved for a fail-reclaim retry loop after fail-reclaim has
   failed at least once. Follow-on fixes prevent rejected stops from latching
@@ -205,8 +211,8 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
     - `dmg system rebuild start`
 
 * These commands do not establish a separate global rebuild pause state. They
-  are the system-wide administrative form of the per-pool interactive stop/start
-  operation and remain distinct from automatic self-healing policy.
+  are the system-wide administrative form of the per-pool interactive rebuild
+  stop/start operation and remain distinct from automatic self-healing policy.
 
 * Automatic recovery policy is independently configurable at system and pool
   scope through the `self_heal` property. System policy accepts `none` or an
@@ -220,7 +226,7 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   pool query output identifies whether automatic exclusion or rebuild is
   disabled by system policy, pool policy, or both.
 
-* Query output also reports data redundancy as normal or degraded.
+* Pool query output also reports data redundancy as normal or degraded.
   Administrative exclude, drain, reintegrate, extend, and rebuild-start
   operations can still schedule recovery independently of automatic policy.
 
@@ -240,7 +246,7 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   default reintegration mode.
 
 * Production deployments should continue to use the default `data_sync` mode.
-  The preview is intended for evaluation of the new mechanism and its
+  The technology preview is intended for evaluation of the new mechanism and its
   administrative workflow.
 
 ##### Control Plane and Administration
@@ -249,11 +255,19 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   and reintegrate apply the requested operation to affected pools throughout the
   system.
 
-* Server configuration adds `control_interface` and deprecates `access_points`.
-  Generated configurations enable NVMe hotplug by default, validate SPDK
-  configuration at engine start, and expose SPDK I/O-buffer tuning options.
+* Notable changes in the `daos_server.yml` configuration file:
 
-* SPDK configuration updates that are not allowed require an explicit override.
+  - `access_points` is now deprecated; use `mgmt_svc_replicas` instead.
+  - A `control_iface` option is added to set a specific network interface for
+    the control plane listener (by default, it will listen on all interfaces)
+  - Configurations generated by `dmg config generate` now enable NVMe hotplug
+    by default.
+  - SPDK I/O-buffer tuning options are exposed to allow customisation for
+    large NVMe disks: A new `spdk_iobuf` section allows to explicitly set
+    `small_pool_count` and `large_pool_count`.
+
+* The SPDK configuration is validated at engine start, and
+  SPDK configuration updates that are not allowed require an explicit override.
   This makes potentially disruptive configuration changes visible to
   administrators rather than applying them implicitly.
 
@@ -262,10 +276,12 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   namespace, and reporting for Metadata-on-SSD, non-PMem, and emulated NVMe
   configurations.
 
-* Server startup rejects conflicting transparent-hugepage settings. Packaging
-  creates persistent writable server locations, protects existing configuration
-  files during installation, and moves daemon logs from `/tmp` to
-  `/var/log/daos`.
+* Server startup rejects conflicting transparent-hugepage settings.
+
+* Packaging creates persistent writable server locations, protects existing
+  configuration files during installation.
+
+* Default daemon logfile location has changed from `/tmp` to `/var/log/daos`.
 
 * The control plane can automatically restart a configured excluded rank
   following an engine suicide event, avoids starting administratively excluded
@@ -273,7 +289,7 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
 
 * NVMe health output reports PCIe link speed and width and can emit a RAS event
   for a downgraded link. Storage fault and replacement commands require an
-  unambiguous host, and blocklisted VMD devices are not unbound.
+  unambiguous host, and blacklisted VMD devices are not unbound.
 
 * Container listing includes unlabeled containers and displays their UUIDs in
   non-verbose output, so administrators can identify containers that do not have
@@ -318,9 +334,10 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
 * RPC origin addresses, Mercury counters, CaRT counter dumps, and standardized
   timestamps improve correlation of client, transport, and server activity.
 
-* Log rotation retains the first `.old` file for diagnostics. `dmg support
-  collect-log` no longer requires optional rsync aggregation, simplifying
-  support collection on installations without that component.
+* Log rotation retains the first `.old` file for diagnostics.
+
+* `dmg support collect-log` no longer requires optional rsync aggregation,
+  simplifying support collection on installations without that component.
 
 ##### Reliability, Recovery, and Data Integrity
 
@@ -328,9 +345,10 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   client restart and conditional-operation retry, congestion pacing, and safer
   sparse-layout and resent collective-RPC handling.
 
-* An N+3 EC object class is available for automatic class selection. EC fetch,
-  recovery, enumeration, aggregation, consistency verification, and rotated
-  enumeration receive correctness fixes.
+* An N+3 EC object class is available for automatic class selection.
+
+* EC fetch, recovery, enumeration, aggregation, consistency verification,
+  and rotated enumeration receive correctness fixes.
 
 * VOS can mark corruption at object, dkey, and akey granularity. Scrub and
   checker iteration better respect visibility, operation intent, and concurrent
@@ -340,7 +358,7 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   aggregation, eviction, participant and leader races, duplicate batched
   commits, closed containers, and rebuild visibility of uncommitted entries.
 
-* DTX collective-RPC load can be limited, large merged extents are capped, and
+* DTX collective-RPC load can be limited. Large merged extents are capped, and
   huge single values can use gang allocation. These changes reduce pathological
   memory and transaction pressure.
 
@@ -378,10 +396,10 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
 
 * CaRT accepts free-form UCX provider specifications, improves multi-interface
   fabric-domain parsing, supports explicit client and agent interfaces, and
-  retries transient UCX/CXI initialization failures.
+  retries transient UCX or CXI initialization failures.
 
 * Mercury includes UCX and key-resolution fixes. OFI multi-receive is enabled
-  where supported, while bulk/RPC timeout and quota behavior are refined.
+  where supported. Mercury bulk/RPC timeout and quota behavior are refined.
 
 * Client package installation refreshes the dynamic-linker cache, preventing
   later package operations from leaving libdaos consumers with stale linker
@@ -425,10 +443,6 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
 * Check and Repair remains a recovery-oriented preview workflow with maintenance
   restrictions. A dry run leaves checked pools in immutable maintenance mode
   until the condition is resolved.
-
-* DAOS Version 2.8.0 has not reached a stable general-availability release. This
-  draft describes the v2.8.0-rc5 endpoint and does not assign or imply a future
-  GA date.
 
 ### Bug fixes
 
