@@ -398,6 +398,23 @@ Duration across processes:
 Completed test=FETCH
 ```
 
+!!! warning
+    Do not set the `PMEM_NO_FLUSH` environment variable in production. This
+    document previously recommended setting `PMEM_NO_FLUSH=1` on 3rd Gen
+    Intel® Xeon® Scalable processors (ICX) to take advantage of the extended
+    asynchronous DRAM refresh (eADR) feature; **that guidance is deprecated
+    and must no longer be followed**.
+
+    Per PMDK's [libpmem(7)](https://github.com/daos-stack/pmdk/blob/stable-2.1/doc/libpmem/libpmem.7.md)
+    documentation, environment variables such as `PMEM_NO_FLUSH` are "largely
+    intended for testing and are not normally required". Setting
+    `PMEM_NO_FLUSH=1` unconditionally disables the
+    `CLFLUSH`/`CLFLUSHOPT`/`CLWB` cache-flush instructions, regardless of
+    whether the platform's persistence domain actually covers CPU caches.
+    PMDK already checks this safely and automatically at runtime via
+    [`pmem_has_auto_flush()`](https://github.com/daos-stack/pmdk/blob/stable-2.1/doc/libpmem/pmem_flush.3.md),
+    so no manual override should be used in production.
+
 A tool called daos\_perf with the same syntax as vos\_perf is also available
 to run tests from a compute node with the full DAOS stack. Please refer
 to the next section for more information.
