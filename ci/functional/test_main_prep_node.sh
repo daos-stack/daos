@@ -397,6 +397,22 @@ if [ "$ib_count" -ge 2 ] ; then
         # DAOS tests do and records it in the console log.
         nvme_devices="$(lspci -vmm -D | grep -E '^(Slot|Class|Device|NUMANode):' |
                         grep -E 'Class:\s+Non-Volatile memory controller' -B 1 -A 2)"
+        # Identify OS boot controller PCI slots to exclude from data NVMe counts.
+        # HPE NS204i (88NR2241) is a boot-only controller, not a DAOS data drive.
+        boot_nvme_slots=()
+        boot_nvme_devs=()
+        _slot=""
+        while IFS= read -r _line; do
+            if [[ "$_line" == Slot:* ]]; then
+                _slot="${_line#Slot: }"
+            elif [[ "$_line" == Device:*88NR2241* ]]; then
+                boot_nvme_slots+=("$_slot")
+                for _blk in /sys/bus/pci/devices/"$_slot"/nvme/*/block/*/; do
+                    [[ -d "$_blk" ]] && boot_nvme_devs+=("$(basename "$_blk")")
+                done
+            fi
+        done < <(lspci -vmm -D | grep -E '^(Slot|Device):')
+
         nvme_count=0
         while IFS= read -r line; do
             if [[ "$line" != *"Class:"*"Non-Volatile memory controller"* ]];then
@@ -404,6 +420,7 @@ if [ "$ib_count" -ge 2 ] ; then
             fi
             ((nvme_count++)) || true
         done < <(printf %s "$nvme_devices")
+        nvme_count=$((nvme_count - ${#boot_nvme_slots[@]}))
 
         ((testruns++)) || true
         testcases+="  <testcase name=\"NVMe Count Node $mynodenum\">${nl}"
@@ -420,8 +437,21 @@ if [ "$ib_count" -ge 2 ] ; then
         fi
         testcases+="  </testcase>$nl"
     fi
-    # All storage found by lspci should also be in lsblk report
-    lsblk_nvme=$(lsblk | grep nvme -c)
+    # All storage found by lspci should also be in lsblk report.
+    # Count only top-level NVMe block devices, excluding boot controllers.
+    lsblk_nvme=0
+    while IFS= read -r _dev; do
+        _is_boot=false
+        for _boot in "${boot_nvme_devs[@]}"; do
+            if [[ "$_dev" == "$_boot" ]]; then
+                _is_boot=true
+                break
+            fi
+        done
+        if ! $_is_boot; then
+            ((lsblk_nvme++)) || true
+        fi
+    done < <(lsblk -d -o NAME --noheadings | grep nvme)
     lsblk_pmem=$(lsblk | grep pmem -c)
 
     if [ "$DAOS_NVME" -gt 0 ]; then
