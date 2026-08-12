@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  (C) Copyright 2025 Google LLC
+#  (C) Copyright 2025-2026 Google LLC
 #  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -13,7 +13,7 @@ set_lib_name() {
   suse_lib="$1"; shift
   deb_lib="$1"; shift
   local extension=""
-  local dist="${DISTRO:-el8}"
+  local dist="${DISTRO:-el9}"
   local -n _lib="${comp}_${vartype}"
   if [ "${vartype}" = "dev" ]; then
     if [[ "${dist}" =~ suse|el ]]; then
@@ -33,7 +33,7 @@ set_lib_name() {
   fi
 }
 
-distro_name=".${DISTRO:-el8}"
+distro_name=".${DISTRO:-el9}"
 daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
 export daos_version
 daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
@@ -45,7 +45,7 @@ export libfabric_version="1.22.0"
 export libfabric_release="5${distro_name}"
 export libfabric_full="${libfabric_version}-${libfabric_release}"
 export mercury_version="2.4.1"
-export mercury_release="2${distro_name}"
+export mercury_release="3${distro_name}"
 export mercury_full="${mercury_version}-${mercury_release}"
 export argobots_version="1.2"
 export argobots_release="4${distro_name}"
@@ -56,12 +56,12 @@ export pmdk_full="${pmdk_version}-${pmdk_release}"
 export isal_version="2.31.1"
 export isal_release="8${distro_name}"
 export isal_full="${isal_version}-${isal_release}"
-export isal_crypto_version="2.26"
+export isal_crypto_version="2.26.1"
 export isal_crypto_release="1${distro_name}"
 export isal_crypto_full="${isal_crypto_version}-${isal_crypto_release}"
 export spdk_major_version="26.01"
 export daos_spdk_version=${spdk_major_version}
-export daos_spdk_release="1${distro_name}"
+export daos_spdk_release="2${distro_name}"
 export daos_spdk_full="${daos_spdk_version}-${daos_spdk_release}"
 export fused_version="1.0.0"
 export fused_release="3${distro_name}"
@@ -140,7 +140,7 @@ set_lib_name libasan lib libasan libasan8 libasan8
 export libasan_lib
 
 lmod="Lmod"
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
+if [[ "${DISTRO:-el9}" =~ suse ]]; then
   lmod="lua-lmod"
 fi
 export lmod

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -64,7 +65,7 @@ class ContainerDestroyTest(TestWithServers):
         passed = False
 
         # Create a pool and a container.
-        self.add_pool()
+        self.pool = self.get_pool()
         self.add_container(pool=self.pool)
 
         # Open the container if required

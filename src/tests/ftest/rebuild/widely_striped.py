@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
     SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -52,7 +52,7 @@ class RbldWidelyStriped(MdtestBase):
 
         # create pool
         self.log.info(">> Creating a pool")
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
         # make sure pool looks good before we start
         checks = {

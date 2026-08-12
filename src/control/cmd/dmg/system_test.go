@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +24,62 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+// extractInfoMessages extracts INFO level messages from a log buffer, returning just
+// the message content without timestamps or prefixes. Returns a single string with
+// messages joined by newlines, terminated with a newline if any messages were found.
+// Continuation lines (lines that don't contain log level markers) are appended to
+// the previous INFO message.
+func extractInfoMessages(logOutput string) string {
+	var infoLines []string
+	lines := strings.Split(logOutput, "\n")
+
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		if strings.Contains(line, " INFO ") {
+			// Extract just the message part after the timestamp
+			// Format: "prefix INFO YYYY/MM/DD HH:MM:SS message"
+			parts := strings.SplitN(line, " INFO ", 2)
+			if len(parts) == 2 {
+				// Skip the date and time to get just the message
+				// After " INFO ", we have "YYYY/MM/DD HH:MM:SS message"
+				remainder := parts[1]
+
+				// Find the message by skipping two space-separated fields (date and time)
+				fields := strings.SplitN(remainder, " ", 3)
+				if len(fields) == 3 {
+					// fields[0] = date, fields[1] = time, fields[2] = message
+					msg := fields[2]
+
+					// Collect continuation lines (lines that don't have log level markers)
+					for i+1 < len(lines) {
+						nextLine := lines[i+1]
+						// Check if it's a continuation line (no log level marker)
+						if len(nextLine) > 0 &&
+							!strings.Contains(nextLine, " INFO ") &&
+							!strings.Contains(nextLine, " DEBUG ") &&
+							!strings.Contains(nextLine, " WARN ") &&
+							!strings.Contains(nextLine, " ERROR ") &&
+							nextLine != "captured log output:" &&
+							!strings.HasPrefix(nextLine, "---") &&
+							!strings.HasPrefix(nextLine, "===") {
+							msg += "\n" + nextLine
+							i++
+						} else {
+							break
+						}
+					}
+
+					infoLines = append(infoLines, msg)
+				}
+			}
+		}
+	}
+	if len(infoLines) == 0 {
+		return ""
+	}
+	return strings.Join(infoLines, "\n") + "\n"
+}
 
 func TestDmg_SystemCommands(t *testing.T) {
 	withRanks := func(req control.UnaryRequest, ranks ...ranklist.Rank) control.UnaryRequest {
@@ -623,17 +679,42 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			expErr: errors.New("failed"),
 		},
 		"no pools": {
-			ctlCfg:  &control.Config{},
-			opCode:  control.PoolRebuildOpCodeStop,
-			resp:    &mgmtpb.SystemRebuildManageResp{},
-			expInfo: "System-rebuild stop request succeeded on 0 pools",
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp:   &mgmtpb.SystemRebuildManageResp{},
+			expInfo: `No pools in system.
+Command completed successfully.
+`,
 		},
-		"no pools; verbose": {
-			ctlCfg:  &control.Config{},
-			opCode:  control.PoolRebuildOpCodeStart,
-			verbose: true,
-			resp:    &mgmtpb.SystemRebuildManageResp{},
-			expInfo: "System-rebuild start request succeeded on 0 pools []",
+		"rebuild stop with DER_NONEXIST and real errors": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool_success",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool_notrebuilding",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "real error happened",
+						Id:      "pool_failed",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expErr: errors.New("pool-rebuild stop failed on pool pool_failed: real error happened"),
+			expInfo: `System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  1 pool
+- Without active rebuild:            1 pool
+- Errors:                            1 pool
+`,
 		},
 		"rebuild stop failed": {
 			ctlCfg: &control.Config{},
@@ -658,8 +739,11 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expErr:  errors.New("failed on pool foo: failed, pool-rebuild stop failed on pool bar"),
-			expInfo: "System-rebuild stop request succeeded on 1 pool",
+			expErr: errors.New("pool-rebuild stop failed on pool foo: failed, pool-rebuild stop failed on pool bar: failed"),
+			expInfo: `System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  1 pool
+- Errors:                            2 pools
+`,
 		},
 		"rebuild start succeeded; verbose": {
 			ctlCfg:  &control.Config{},
@@ -669,19 +753,135 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 				Results: []*mgmtpb.PoolRebuildManageResult{
 					{
 						Id:     "foo",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
 					},
 					{
 						Id:     "bar",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
 					},
 					{
 						Id:     "baz",
-						OpCode: uint32(control.PoolRebuildOpCodeStop),
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
 					},
 				},
 			},
-			expInfo: "System-rebuild start request succeeded on 3 pools [foo bar baz]",
+			expInfo: `System-rebuild start requested for 3 pools
+- Successfully requested:            3 pools (foo, bar, baz)
+Command completed successfully.
+`,
+		},
+		"rebuild stop with only DER_NONEXIST; verbose": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStop,
+			verbose: true,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "uuid1",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "uuid2",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "uuid3",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: `System-rebuild stop requested for 3 pools
+- Without active rebuild:            3 pools (uuid1, uuid2, uuid3)
+Command completed successfully.
+`,
+		},
+		"rebuild stop with DER_BUSY - treated as success": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool1",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool2",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool3",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: `System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  3 pools
+Command completed successfully.
+`,
+		},
+		"rebuild stop mixed DER_BUSY DER_NONEXIST and success": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool_success",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool_busy",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool_norebuild",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: `System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  2 pools
+- Without active rebuild:            1 pool
+Command completed successfully.
+`,
+		},
+		"rebuild stop with DER_BUSY and real errors": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool_busy",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "real error",
+						Id:      "pool_error",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expErr: errors.New("pool-rebuild stop failed on pool pool_error: real error"),
+			expInfo: `System-rebuild stop requested for 2 pools
+- With active or finishing rebuild:  1 pool
+- Errors:                            1 pool
+`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -702,16 +902,17 @@ func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
 			gotErr := rbldCmd.execute(tc.opCode, tc.force)
 			test.CmpErr(t, tc.expErr, gotErr)
 
-			// Note this doesn't verify that the text is on an INFO or DEBUG line
-			// specifically, just that it appears in log output.
-
-			if !strings.Contains(buf.String(), tc.expInfo) {
-				t.Fatalf("expected info log output to contain %s, got %s\n",
-					tc.expInfo, buf.String())
+			if tc.expInfo == "" {
+				if strings.Contains(buf.String(), "INFO") {
+					t.Fatalf("unexpected INFO log output printed, got:\n%s", buf.String())
+				}
+				return
 			}
-			if tc.expInfo == "" && strings.Contains(buf.String(), "INFO") {
-				t.Fatalf("unexpected info log output printed, got %s\n",
-					buf.String())
+
+			gotInfo := extractInfoMessages(buf.String())
+			if gotInfo != tc.expInfo {
+				t.Fatalf("INFO output mismatch:\nexpected:\n%s\ngot:\n%s\nfull buffer:\n%s",
+					tc.expInfo, gotInfo, buf.String())
 			}
 		})
 	}

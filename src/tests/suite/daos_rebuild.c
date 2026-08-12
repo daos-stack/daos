@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1333,10 +1333,15 @@ rebuild_kill_rank_during_rebuild(void **state)
 static void
 rebuild_kill_PS_leader_during_rebuild(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oids[OBJ_NR];
-	d_rank_t	leader;
-	int		i;
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oids[OBJ_NR];
+	d_rank_t      leader;
+	d_rank_t      non_leader;
+	int           i;
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank != 0)
+		return;
 
 	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 5) {
 		print_message("need at least 5 svcs, -s5\n");
@@ -1350,25 +1355,30 @@ rebuild_kill_PS_leader_during_rebuild(void **state)
 		oids[i] = dts_oid_set_rank(oids[i], 6);
 	}
 	rebuild_io(arg, oids, OBJ_NR);
+	non_leader = leader != 6 ? 6 : 5;
+	print_message("leader=%u non_leader=%u pre_rs_version=%u pre_pool_ver=%u\n", leader,
+		      non_leader, arg->pool.pool_info.pi_rebuild_st.rs_version,
+		      arg->pool.pool_info.pi_map_ver);
 
 	/* kill non-leader rank */
-	if (leader != 6)
-		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-				 arg->pool.alive_svc, 6);
-	else
-		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-				 arg->pool.alive_svc, 5);
-	/* hang the rebuild */
-	if (arg->myrank == 0) {
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_TGT_SCAN_HANG, 0, NULL);
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 5,
-				      0, NULL);
-	}
-	sleep(2);
+	print_message("killing non-leader rank=%u to trigger first rebuild\n", non_leader);
+	daos_kill_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, non_leader);
+
+	/* Wait for the first rebuild to start scanning */
+	test_rebuild_wait_to_scanning_next(&arg, 1);
+	print_message("first rebuild started: rs_version=%u state=%d errno=%d tobe_obj=" DF_U64
+		      " rebuilt_obj=" DF_U64 "\n",
+		      arg->pool.pool_info.pi_rebuild_st.rs_version,
+		      arg->pool.pool_info.pi_rebuild_st.rs_state,
+		      arg->pool.pool_info.pi_rebuild_st.rs_errno,
+		      arg->pool.pool_info.pi_rebuild_st.rs_toberb_obj_nr,
+		      arg->pool.pool_info.pi_rebuild_st.rs_obj_nr);
+
+	print_message("killing PS leader rank=%u during active first rebuild\n", leader);
 	rebuild_single_pool_rank(arg, leader, true);
 
 	sleep(5);
+	print_message("restart/reintegrate previous PS leader rank=%u\n", leader);
 	reintegrate_single_pool_rank(arg, leader, true);
 }
 
@@ -1408,12 +1418,14 @@ reintegrate_failure_and_retry(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], true);
 
 	arg->rebuild_cb = reintegrate_failure_cb;
+	print_message("start reintegrate rank %d\n", ranks_to_kill[0]);
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
 
 	arg->rebuild_cb = NULL;
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	rebuild_io_validate(arg, oids, OBJ_NR);
 
+	print_message("redo reintegrate rank %d\n", ranks_to_kill[0]);
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
@@ -1425,11 +1437,11 @@ rebuild_kill_more_RF_ranks(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oids[OBJ_NR];
 	struct ioreq	req;
-	d_rank_t	ranks[4] = {7, 6, 5, 4};
+	d_rank_t         ranks[3] = {7, 6, 5};
 	int		i;
 
-	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 5) {
-		print_message("need at least 5 svcs, -s5\n");
+	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 7) {
+		print_message("need at least 7 svcs, -s7\n");
 		return;
 	}
 
@@ -1440,12 +1452,17 @@ rebuild_kill_more_RF_ranks(void **state)
 			      DAOS_TX_NONE, &req);
 		ioreq_fini(&req);
 	}
-	rebuild_pools_ranks(&arg, 1, ranks, 4, true);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_POOL_TGT_UPDATE_SKIP_RF_CHECK | DAOS_FAIL_ALWAYS, 0, NULL);
+
+	rebuild_pools_ranks(&arg, 1, ranks, 3, true);
 
 	reintegrate_single_pool_rank(arg, 5, true);
 	reintegrate_single_pool_rank(arg, 6, true);
-	reintegrate_single_pool_rank(arg, 4, true);
 	reintegrate_single_pool_rank(arg, 7, true);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 
 	print_message("lookup and expect -DER_RF\n");
 	for (i = 0; i < OBJ_NR; i++) {

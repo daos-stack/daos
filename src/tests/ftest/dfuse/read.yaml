@@ -20,4 +20,4 @@ container:
   type: POSIX
   control_method: daos
 dfuse:
-  disable_wb_cache: true
+  disable_wb_cache: false

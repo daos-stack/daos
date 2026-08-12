@@ -247,10 +247,10 @@ func TestPretty_PrintContainers(t *testing.T) {
 			},
 			verbose: false,
 			expPrintStr: fmt.Sprintf(`Containers in pool %s:
-  Label       
-  -----       
-  container-1 
-`, testPoolID),
+  Label       UUID                                 
+  -----       ----                                 
+  container-1 %s 
+`, testPoolID, testUUID1.String()),
 		},
 		"single container verbose": {
 			poolID: testPoolID,
@@ -289,12 +289,12 @@ func TestPretty_PrintContainers(t *testing.T) {
 			},
 			verbose: false,
 			expPrintStr: fmt.Sprintf(`Containers in pool %s:
-  Label       
-  -----       
-  container-1 
-  container-2 
-              
-`, testPoolID),
+  Label       UUID                                 
+  -----       ----                                 
+  container-1 %s 
+  container-2 %s 
+              %s 
+`, testPoolID, testUUID1.String(), testUUID2.String(), testUUID3.String()),
 		},
 		"multiple containers verbose": {
 			poolID: testPoolID,

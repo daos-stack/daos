@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -353,83 +354,6 @@ nvme_format(char *ctrlr_pci_addr)
 	return ret;
 }
 
-struct ret_t *
-nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
-{
-	int					rc = 1;
-	int					fd = -1;
-	unsigned int				size;
-	struct stat				fw_stat;
-	void					*fw_image = NULL;
-	enum spdk_nvme_fw_commit_action		commit_action;
-	struct spdk_nvme_status			status;
-	struct ctrlr_entry			*ctrlr_entry;
-	struct ret_t				*ret;
-
-	ret = init_ret();
-
-	ret->rc = get_controller(&ctrlr_entry, ctrlr_pci_addr);
-	if (ret->rc != 0)
-		return ret;
-
-	fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		sprintf(ret->info, "Open file failed");
-		ret->rc = 1;
-		return ret;
-	}
-	rc = fstat(fd, &fw_stat);
-	if (rc < 0) {
-		close(fd);
-		sprintf(ret->info, "Fstat failed");
-		ret->rc = 1;
-		return ret;
-	}
-
-	if (fw_stat.st_size % 4) {
-		close(fd);
-		sprintf(ret->info, "Firmware image size is not multiple of 4");
-		ret->rc = 1;
-		return ret;
-	}
-
-	size = fw_stat.st_size;
-
-	fw_image = spdk_dma_zmalloc(size, 4096, NULL);
-	if (fw_image == NULL) {
-		close(fd);
-		sprintf(ret->info, "Allocation error");
-		ret->rc = 1;
-		return ret;
-	}
-
-	if (read(fd, fw_image, size) != (ssize_t)size) {
-		close(fd);
-		spdk_dma_free(fw_image);
-		sprintf(ret->info, "Read firmware image failed");
-		ret->rc = 1;
-		return ret;
-	}
-	close(fd);
-
-	commit_action = SPDK_NVME_FW_COMMIT_REPLACE_AND_ENABLE_IMG;
-	rc = spdk_nvme_ctrlr_update_firmware(ctrlr_entry->ctrlr, fw_image, size,
-					     slot, commit_action, &status);
-	if (rc == -ENXIO && status.sct == SPDK_NVME_SCT_COMMAND_SPECIFIC &&
-		status.sc == SPDK_NVME_SC_FIRMWARE_REQ_CONVENTIONAL_RESET) {
-		sprintf(ret->info,
-			"conventional reset is needed to enable firmware !");
-	} else if (rc) {
-		sprintf(ret->info, "spdk_nvme_ctrlr_update_firmware failed");
-	} else {
-		sprintf(ret->info, "spdk_nvme_ctrlr_update_firmware success");
-	}
-	spdk_dma_free(fw_image);
-
-	ret->rc = rc;
-	return ret;
-}
-
 static int
 is_addr_in_allowlist(char *pci_addr, const struct spdk_pci_addr *allowlist,
 		     int num_allowlist_devices)
@@ -522,6 +446,7 @@ daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 	}
 
 out:
+	free(opts.pci_allowed);
 	ret->rc = rc;
 	return ret;
 }

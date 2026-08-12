@@ -1,3 +1,7 @@
+* Fri May 22 2026 Signed-off-by: Jeff Olivier <jeffolivier@google.com> - 26.01-2
+- Fix daos_spdk_nvme_perf binary in rpm
+- Adjust how we exclude packages to make it generic and not hardcoded
+
 * Thu May 12 2026 Signed-off-by: Tom Nabarro <thomas.nabarro@hpe.com> - 26.01-1
 - Upgrade to SPDK v26.01, update version number to match SPDK release version
 - Update external ISA-L patch for v26.01 compatibility

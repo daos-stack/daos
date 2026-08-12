@@ -1152,7 +1152,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 
 	/** allocate a new oid on the next file or dir creation */
 	dfs->oid.lo = 0;
-	dfs->oid.hi = dfs->last_hi;
+	dfs->oid.hi = dfs->last_hi = 0;
 
 	rc = D_MUTEX_INIT(&dfs->lock, NULL);
 	if (rc != 0) {
