@@ -340,7 +340,7 @@ class LogTest():
         warnings_strict = False
         warnings_mode = False
         server_shutdown = False
-        abrupt_eof = getattr(self._li, 'truncated_eof', False)
+        abrupt_eof = self._li.truncated_eof
 
         error_files = set()
 
