@@ -1085,7 +1085,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/'],
+                            unitTestPost artifacts: ['nlt_logs/', 'nlt-summary-nlt.md'],
                                          testResults: 'nlt-junit.xml',
                                          referenceJobName: 'daos-stack/daos/release%252F2.8',
                                          valgrind_stash: 'nlt-memcheck',
@@ -1267,7 +1267,7 @@ pipeline {
                             ],
                             unitTestPostArgs: [
                                 /* groovylint-disable-next-line DuplicateListLiteral */
-                                artifacts: ['nlt_logs/'],
+                                artifacts: ['nlt_logs/', 'nlt-summary-fault-injection.md'],
                                 testResults: 'nlt-junit.xml',
                                 with_valgrind: '',
                                 FI: true],
