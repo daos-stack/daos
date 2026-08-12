@@ -314,12 +314,12 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.snap = FormattedParameter("--snap={}")
 
         class DelAttrSubCommand(CommonContainerSubCommand):
-            """Defines an object for the daos container del-attrs command."""
+            """Defines an object for the daos container del-attr command."""
 
             def __init__(self):
-                """Create a daos container del-attrs command object."""
+                """Create a daos container del-attr command object."""
                 super().__init__("del-attr")
-                self.attr = BasicParameter(None, position=3)
+                self.key = BasicParameter(None, position=3)
 
         class DeleteAclSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container delete-acl command."""

@@ -1,11 +1,13 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import base64
 
 from apricot import TestWithServers
+from exception_utils import CommandFailure
 from general_utils import report_errors
 
 # Test container set-attr, get-attr, and list-attrs with different
@@ -39,43 +41,44 @@ class ContainerQueryAttributeTest(TestWithServers):
     """Test class for daos container query and attribute tests.
 
     Test Class Description:
-        Query test: Create a pool, create a container, and call daos container
-        query. From the output, verify the pool/container UUID matches the one
-        that was returned when creating the pool/container.
+        Query test: Create a pool, create a container, and call daos container query. From the
+        output, verify the pool/container UUID matches the one that was returned when creating the
+        pool/container.
 
         Attribute test:
-        1. Prepare 7 types of strings; alphabets, numbers, special characters,
-        etc.
-        2. Create attributes with each of these 7 types in attr and value;
-        i.e., 14 total attributes are created.
-        3. Call get-attr for each of the 14 attrs and verify the returned
-        values.
-        4. Call list-attrs and verify the returned attrs.
+        1. Prepare 7 types of strings; alphabets, numbers, special characters, etc.
+        2. Create attributes with each of these 7 types in attr and value; i.e., 14 total attributes
+        are created.
+        3. Call get-attr for each of the 14 attrs and verify the returned values.
+        4. Added by DAOS-19406: Call del-attr for each of the 14 attrs and verify that it's deleted.
+        5. Call list-attrs and verify the returned attrs.
+        6. Added by DAOS-19406: Delete all attributes at once and call list-attrs and verify that
+        the returned list is empty.
 
     :avocado: recursive
     """
 
     def test_container_query_attr(self):
-        """JIRA ID: DAOS-4640
-
-        Test Description:
-            Test daos container query and attribute commands as described
-            above.
+        """Test daos container query and attribute commands as described above.
 
         Use Cases:
-            Test container query, set-attr, get-attr, and list-attrs.
+            Test container query, set-attr, get-attr, list-attrs, and del-attr.
+
+        Original Jira: DAOS-4640
+        Adding delete test Jira: DAOS-19406
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,daos_cmd
         :avocado: tags=ContainerQueryAttributeTest,test_container_query_attr
         """
-        # Create a pool and a container.
-        pool = self.get_pool()
+        self.log_step("Create a pool and a container.")
+        pool = self.get_pool(connect=False)
         container = self.get_container(pool)
 
         # Call daos container query, obtain pool and container UUID, and
         # compare against those used when creating the pool and the container.
+        self.log_step("Query container and verify pool and container UUID.")
         data = container.query()['response']
         actual_pool_uuid = data['pool_uuid']
         actual_cont_uuid = data['container_uuid']
@@ -98,11 +101,12 @@ class ContainerQueryAttributeTest(TestWithServers):
                     attr_values.append([test_string, "attr" + str(attr_idx)])
                 attr_idx += 1
 
-        # Set and verify get-attr.
+        self.log_step("Set attribute and verify with get-attr.")
         errors = []
         expected_attrs = []
 
         for attr_value in attr_values:
+            self.log.info("attr_value to set and get = {}".format(attr_value))
             container.set_attr(attrs={attr_value[0]: attr_value[1]})
 
             data = container.get_attr(attr_value[0])['response']
@@ -128,10 +132,27 @@ class ContainerQueryAttributeTest(TestWithServers):
 
         report_errors(self, errors)
 
-        # Verify that attr-lists works with test_strings.
+        self.log_step("Verify that list-attrs works with test_strings.")
         expected_attrs.sort()
         actual_attrs = sorted(list(container.list_attrs()['response']))
         self.assertEqual(actual_attrs, expected_attrs, 'list-attrs does not match set-attr')
+
+        # For each attribute, delete it and check with list-attrs and get-attr that it was deleted.
+        self.log_step("Delete check.")
+        for attr_value in attr_values:
+            container.del_attr(key=attr_value[0])
+            try:
+                container.get_attr(attr_value[0])
+                self.fail(f"get-attr with deleted attribute ({attr_value[0]}) worked!")
+            except CommandFailure as error:
+                msg = (f"get-attr with deleted attribute ({attr_value[0]}) failed as expected. "
+                       f"{error}")
+                self.log.info(msg)
+            attr_list = container.list_attrs()['response']
+            self.log.info("attr_list after deleting one attr = {}".format(attr_list))
+            if attr_value[0] in attr_list:
+                msg = f"Deleted attr ({attr_value[0]}) is in the list {attr_list}!"
+                self.fail(msg)
 
     def test_container_query_attrs(self):
         """JIRA ID: DAOS-4640
@@ -209,28 +230,42 @@ class ContainerQueryAttributeTest(TestWithServers):
         report_errors(self, errors)
 
     def test_list_attrs_long(self):
-        """JIRA ID: DAOS-4640
-
-        Test Description:
-            Set many attributes and verify list-attrs works.
+        """Set many attributes and verify list-attrs works. Delete all attributes at once and check
+        that list-attrs returns empty list.
 
         Use Cases:
             Test daos container list-attrs with 50 attributes.
+            Test daos container del-attr with 50 attributes.
+
+        Original Jira: DAOS-4640
+        Adding delete test Jira: DAOS-19406
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,daos_cmd
         :avocado: tags=ContainerQueryAttributeTest,test_list_attrs_long
         """
-        # Create a pool and a container.
-        pool = self.get_pool()
+        self.log_step("Create a pool and a container.")
+        pool = self.get_pool(connect=False)
         container = self.get_container(pool)
 
         expected_attrs = {"attr" + str(idx): "val" + str(idx) for idx in range(50)}
 
+        self.log_step("Set the 50 attributes.")
         container.set_attr(attrs=expected_attrs)
 
+        self.log_step("List the 50 attributes and verify.")
         actual_attr_names = sorted(list(container.list_attrs()['response']))
         expected_attr_names = sorted(expected_attrs.keys())
         self.assertEqual(
             actual_attr_names, expected_attr_names, "Unexpected output from list_attrs")
+
+        self.log_step("Delete all attributes at once and check that list_attrs returns empty list.")
+        attr_list = ",".join(expected_attrs.keys())
+        container.del_attr(key=attr_list)
+        attr_list = container.list_attrs()['response']
+        self.log.info("attr_list after delete = {}".format(attr_list))
+        if attr_list:
+            self.fail(
+                "All attrs should have been deleted, but returned list is non-empty! {}".format(
+                    attr_list))
