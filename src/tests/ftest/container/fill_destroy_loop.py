@@ -1,10 +1,6 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
-<<<<<<< HEAD
   (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
-=======
-  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
->>>>>>> master
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -122,6 +118,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 test_loop, bytes_to_human(free_space_before_destroy), free_space_before_destroy,
                 bytes_to_human(free_space_after_destroy), free_space_after_destroy))
         # Wait for a minute if the initial space is not released.
+        time.sleep(60)
         for _ in range(10):
             if (free_space_after_destroy - free_space_init) < delta_bytes:
                 break
