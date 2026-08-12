@@ -191,6 +191,10 @@ src/cart:
 src/client/dfs/:
   test-tag: dfs
 
+# It is not ideal to exclude the build tests but they are currently unstable
+src/client/dfuse/:
+  test-tag: dfuse,-DaosBuild,-DaosBuildVM
+
 src/client/pydaos/torch/:
   test-tag: pytorch
 
