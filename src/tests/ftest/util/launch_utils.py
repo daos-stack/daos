@@ -476,9 +476,19 @@ class TestRunner():
         # The avocado worker is not the DAOS-18859 reproduction target (the suspected
         # race is inside the daos CLI process itself, during pool connect), so under
         # TSan its reporting is silenced with report_bugs=0 to avoid noise unrelated to
-        # this investigation.  Whether TSan has an equivalent to ASAN's "runtime does not
-        # come first" abort here is untested; if it recurs this will need a follow-up
-        # iteration the same way the ASAN campaign did.
+        # this investigation.
+        #
+        # Under TSan, the late dlopen() of libdaos.so (transitively pulled in by the
+        # pydaos_shim C extension when pydaos.raw is imported) fails instead with
+        # "cannot allocate memory in static TLS block".  libtsan.so uses the
+        # initial-exec TLS model and reserves a large static TLS block (measured at
+        # ~255 KiB on Rocky Linux 9/glibc 2.34), far larger than glibc's default
+        # static TLS surplus reserved at process startup for later dlopen() calls
+        # (512 bytes).  Raising glibc's optional_static_tls tunable increases that
+        # reserved surplus so the late dlopen() succeeds, without loading any
+        # sanitizer runtime into the avocado process itself (unlike LD_PRELOAD,
+        # this cannot trigger the same pthread_atfork/fork-related hang seen with
+        # ASAN above).  1 MiB gives ample headroom above the measured requirement.
         sanitizer_extra_env = {}
         if os.path.exists("/usr/lib64/libasan.so.6"):
             sanitizer_extra_env = {
@@ -487,6 +497,7 @@ class TestRunner():
         elif list(Path("/usr/lib64").glob("libtsan.so*")):
             sanitizer_extra_env = {
                 "TSAN_OPTIONS": "report_bugs=0",
+                "GLIBC_TUNABLES": "glibc.rtld.optional_static_tls=1048576",
             }
         result = run_local(logger, " ".join(command), capture_output=False,
                            extra_env=sanitizer_extra_env or None)
