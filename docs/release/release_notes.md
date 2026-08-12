@@ -295,11 +295,10 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   non-verbose output, so administrators can identify containers that do not have
   user-assigned labels.
 
-##### DFS
+##### DFS and dfuse
 
-* DFS and dfuse can mount a container snapshot read-only by snapshot name or
-  epoch. This is a verified DAOS 2.8 DFS implementation, not merely a test or
-  documentation change.
+* As a Technology Preview, DFS and dfuse can mount a container snapshot
+  read-only by snapshot name or epoch. This feature is not production ready.
 
 * Client-side DFS telemetry adds operation counters and read/write byte
   histograms for POSIX containers, providing workload visibility at the DFS
@@ -310,17 +309,14 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   practical minimum chunk size and RF3 handling.
 
 * `daos fs get-attr` reports the object OID, and `daos fs chmod` has been added.
-  Snapshot mounting, telemetry, layout selection, OID reporting, and chmod are
-  the principal verified new DFS implementations in this release.
 
 * Other DFS changes are fixes and hardening. They improve object-class
   reporting, update open directory handles after class changes, prevent EC
   classes from being assigned to directories, and reject unsafe force removal
-  from cached system mounts.
+  from cached system mounts. DFS error handling and memory ownership are hardened
 
-* DFS error handling and memory ownership are hardened. dfuse reads in larger
-  chunks, associates pre-read state with inodes, and improves directory caching,
-  readdir, and shutdown behavior.
+* dfuse reads in larger chunks, associates pre-read state with inodes, and
+  improves directory caching, readdir, and shutdown behavior.
 
 ##### Observability and Telemetry
 
@@ -387,12 +383,7 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
 * `pydaos.torch` adds checkpoint integration, automatic checkpoint-path
   creation, batch reads, and dataset directory-object caching.
 
-* Python error mapping adds `DaosErrorCode`, and dictionary cleanup has an
-  explicit destroy operation.
-
-* Go bindings cover core libdaos pool and container operations.
-  Container-property handling and system-name propagation are corrected. The
-  Java client supplies a default type identifier when none is specified.
+* PyDAOS dictionary cleanup has an explicit destroy operation.
 
 * CaRT accepts free-form UCX provider specifications, improves multi-interface
   fabric-domain parsing, supports explicit client and agent interfaces, and
