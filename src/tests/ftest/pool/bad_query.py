@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -49,7 +50,7 @@ class BadQueryTest(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.add_pool()
+        self.pool = self.get_pool()
 
         # trash the pool handle value
         handle_sav = self.pool.pool.handle
