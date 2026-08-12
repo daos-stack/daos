@@ -81,7 +81,7 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
 * It is a primary feature of DAOS Version 2.8 that the Metadata-on-SSD
   bucket-memory allocator v2 is now production ready. This allocator is now
   the default metadata allocator for newly created Metadata-on-SSD pools.
-  It allows all new Metadata-on-SSD deployments to use the Phase2 allocator
+  It allows all new Metadata-on-SSD deployments to use the v2 allocator
   and establishes a common allocator path, so the allocator v1 can be retired
   in the longer term instead of maintaining two allocator implementations
   indefinitely.
@@ -451,6 +451,27 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
 * Check and Repair remains a recovery-oriented preview workflow with maintenance
   restrictions. A dry run leaves checked pools in immutable maintenance mode
   until the condition is resolved.
+
+* When downgrading from DAOS version 2.8 back to Version 2.6, the following
+  changes to the SPDK configuration file `daos_nvme.conf` have to be manually
+  applied on all servers, to revert a parameter name change that was introduced
+  by the newer SPDK version in DAOS version 2.8:
+
+```bash
+  # For PMem based servers, with 2 engines per server:
+  export PATH0=/mnt/daos0 # matching the scm_mount path for engine 0 in daos_server.yml
+  export PATH1=/mnt/daos1 # matching the scm_mount path for engine 1 in daos_server.yml
+
+  # For MD-on-SSD based servers, with 2 engines per server:
+  export CONTROL_METADATA=/mnt # matching the control_metadata path in daos_server.yml
+  export PATH0=$CONTROL_METADATA/daos_control/engine0
+  export PATH1=$CONTROL_METADATA/daos_control/engine1
+
+  sed -i 's/vmd_enable/enable_vmd/g' $PATH0/daos_nvme.conf
+  sed -i 's/vmd_enable/enable_vmd/g' $PATH1/daos_nvme.conf
+  sed -i 's/transport_retry_count/retry_count/g' $PATH0/daos_nvme.conf
+  sed -i 's/transport_retry_count/retry_count/g' $PATH1/daos_nvme.conf
+```
 
 ### Bug fixes
 
