@@ -1,5 +1,6 @@
 #!/bin/bash
 # (C) Copyright 2025 Google LLC
+# Copyright 2026 Hewlett Packard Enterprise Development LP
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
@@ -24,7 +25,7 @@ list_files files "${SL_OFI_PREFIX}/bin/fi_*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
-if [[ "${DISTRO:-el8}" =~ el ]]; then
+if [[ "${DISTRO:-el9}" =~ el ]]; then
   TARGET_PATH="${libdir}"
   list_files files "${SL_OFI_PREFIX}/lib64/libfabric*.so.*"
   clean_bin "${files[@]}"
@@ -43,7 +44,7 @@ EXTRA_OPTS+=("--rpm-autoprov")
 ARCH="${isa}"
 build_package libfabric
 
-if [[ ! "${DISTRO:-el8}" =~ el ]]; then
+if [[ ! "${DISTRO:-el9}" =~ el ]]; then
   TARGET_PATH="${libdir}"
   list_files files "${SL_OFI_PREFIX}/lib64/libfabric*.so.*"
   clean_bin "${files[@]}"
