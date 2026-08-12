@@ -12,6 +12,7 @@ from exception_utils import CommandFailure
 from general_utils import bytes_to_human, human_to_bytes
 from ior_utils import write_data
 from run_utils import run_remote
+from test_utils_pool import add_pool
 
 
 class BoundaryPoolContainerSpace(TestWithServers):
@@ -174,7 +175,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
         # create pool
         self.log_step("Create Pool")
-        self.add_pool()
+        add_pool(self)
 
         self.log_step("Starting test loops to fill and destroy container")
         for loop_cnt in range(1, test_loop + 1):
