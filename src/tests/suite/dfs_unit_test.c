@@ -3657,9 +3657,8 @@ dfs_test_pipeline_find(void **state)
  * 18.  Write new content buf2 via newobj6.
  * 19.  Unlink file6.
  * 20.  Open file2 and verify content matches buf2.
- * 21.  Read content via file2 and verify it matches buf2.
- * 22.  Link file2 into root by passing parent=NULL, then open/read/verify content.
- *      TODO: add nlink verification once dfs_ostat() is updated to check GIT.
+ * 21.  Read content via file2, verify it matches buf2, and st_nlink == 1 (last surviving link).
+ * 22.  Link file2 into root by passing parent=NULL, open/read/verify content, and st_nlink == 2.
  * 23.  Unlink file2.
  */
 static void
@@ -4051,18 +4050,21 @@ dfs_test_link_remove(void **state)
 	assert_int_equal(rc, 0);
 
 	/**
-	 * Step 21: Content read via file2 must match buf2.
-	 *
-	 * TODO: add assertion that st_nlink == 1 once dfs_ostat() is updated
-	 * to query the GIT for the accurate hard-link count.
+	 * Step 21: Content read via file2 must match buf2. file2 is now the last surviving link,
+	 * so dfs_ostat() must report st_nlink == 1 (queried from GIT).
 	 */
-	print_message("Step 21: Verify content == buf2 via file2\n");
+	print_message("Step 21: Verify content == buf2 via file2 and st_nlink == 1\n");
 	memset(rbuf, 0, sizeof(rbuf));
 	d_iov_set(&iov, rbuf, sizeof(rbuf));
 	rc = dfs_read(dfs_mt, file2_obj, &sgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal((int)read_size, (int)sizeof(buf2));
 	assert_memory_equal(buf2, rbuf, sizeof(buf2));
+
+	memset(&statbuf1, 0, sizeof(statbuf1));
+	rc = dfs_ostat(dfs_mt, file2_obj, &statbuf1);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)statbuf1.st_nlink, 1);
 
 	/**
 	 * Step 22: Link file2 into root by passing parent=NULL and verify content.
@@ -4084,6 +4086,14 @@ dfs_test_link_remove(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal((int)read_size, (int)sizeof(buf2));
 	assert_memory_equal(buf2, rbuf, sizeof(buf2));
+
+	/** file2 now has two links (file2 + file2_root_link); dfs_ostat() must report st_nlink
+	 * == 2. */
+	memset(&statbuf1, 0, sizeof(statbuf1));
+	rc = dfs_ostat(dfs_mt, root_link_obj, &statbuf1);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)statbuf1.st_nlink, 2);
+
 	rc = dfs_release(root_link_obj);
 	assert_int_equal(rc, 0);
 	rc = dfs_remove(dfs_mt, NULL, "file2_root_link", 0, NULL);
@@ -4388,6 +4398,226 @@ dfs_test_xattr_hardlink(void **state)
 	assert_int_equal(rc, 0);
 }
 
+/**
+ * Test attribute set/get across hardlinks. After a regular file is converted to a hardlink, its
+ * inode metadata lives in the GIT object keyed by OID. Attributes set through dfs_osetattr on one
+ * link must be observable through every link and via all three stat APIs (dfs_ostat, dfs_stat, and
+ * dfs_ostatx). Writing via one link and reading via another also proves the update landed in GIT
+ * rather than a stale directory entry.
+ *
+ * In balanced mode (DFS_USE_DTX) the handles opened before the conversion are kept, exercising the
+ * transparent redirect of stale handles to GIT; in relaxed mode they are reopened after the
+ * conversion.
+ *
+ * Steps:
+ *  1. Create a directory and a regular file with two handles (hA, hB) and convert it to a hardlink.
+ *  2. dfs_osetattr mode/uid/gid via one link; verify the returned buffer.
+ *  3. Verify via dfs_ostat on the other link.
+ *  4. Verify via dfs_stat on both link names.
+ *  5. Verify via dfs_ostatx (async).
+ *  6. dfs_osetattr size; verify via dfs_ostat, dfs_stat and dfs_ostatx.
+ *  7. dfs_osetattr mtime; verify via dfs_ostat and confirm the mode set in step 2 is intact (the
+ *     internal hardlink bit was preserved on the mode write).
+ */
+static void
+dfs_test_setattr_hardlink(void **state)
+{
+	test_arg_t  *arg = *state;
+	dfs_obj_t   *dir1;
+	dfs_obj_t   *hA, *hB, *l2_obj;
+	struct stat  stbuf;
+	daos_event_t ev, *evp;
+	bool         use_dtx = false;
+	int          rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	d_getenv_bool("DFS_USE_DTX", &use_dtx);
+
+	/** Step 1: create a directory and a regular file with two open handles. */
+	rc = dfs_open(dfs_mt, NULL, "shl_dir1", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &hA);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG, O_RDWR, 0, 0, NULL, &hB);
+	assert_int_equal(rc, 0);
+
+	/** convert file1 to a hardlink; l2_obj is the second link. */
+	print_message("Step 1: convert file1 to a hardlink\n");
+	l2_obj = NULL;
+	rc     = dfs_link(dfs_mt, hA, dir1, "file1_l2", &l2_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_non_null(l2_obj);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/** relaxed mode: reopen the pre-conversion handles as valid hardlink handles. */
+	if (!use_dtx) {
+		rc = dfs_release(hA);
+		assert_int_equal(rc, 0);
+		rc = dfs_release(hB);
+		assert_int_equal(rc, 0);
+		rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG, O_RDWR, 0, 0, NULL, &hA);
+		assert_int_equal(rc, 0);
+		rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG, O_RDWR, 0, 0, NULL, &hB);
+		assert_int_equal(rc, 0);
+	}
+
+	/** Step 2: set mode/uid/gid via dfs_osetattr on one link. */
+	print_message("Step 2: dfs_osetattr mode/uid/gid on the hardlink\n");
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mode = S_IFREG | S_IRWXU;
+	stbuf.st_uid  = 3;
+	stbuf.st_gid  = 4;
+	rc            = dfs_osetattr(dfs_mt, l2_obj, &stbuf,
+				     DFS_SET_ATTR_MODE | DFS_SET_ATTR_UID | DFS_SET_ATTR_GID);
+	assert_int_equal(rc, 0);
+	/** the returned buffer carries the external mode (internal hardlink bit stripped). */
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRWXU));
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/** Step 3: verify via dfs_ostat on the *other* link (reads from GIT). */
+	print_message("Step 3: verify via dfs_ostat on the other link\n");
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, hB, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRWXU));
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/** Step 4: verify via dfs_stat on both link names. */
+	print_message("Step 4: verify via dfs_stat on both link names\n");
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, dir1, "file1", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, dir1, "file1_l2", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/** Step 5: verify via dfs_ostatx (async). */
+	print_message("Step 5: verify via dfs_ostatx\n");
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_ostatx(dfs_mt, l2_obj, &stbuf, &ev);
+	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/** Step 6: set size via dfs_osetattr; verify via dfs_ostat, dfs_stat and dfs_ostatx. */
+	print_message("Step 6: dfs_osetattr size, verify via ostat/stat/ostatx\n");
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_size = 4096;
+	rc            = dfs_osetattr(dfs_mt, hA, &stbuf, DFS_SET_ATTR_SIZE);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_size, 4096);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, l2_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_size, 4096);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, dir1, "file1", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_size, 4096);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_ostatx(dfs_mt, hB, &stbuf, &ev);
+	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_size, 4096);
+
+	/** Step 7: set mtime via dfs_osetattr; verify via dfs_ostat and that the mode is intact. */
+	print_message("Step 7: dfs_osetattr mtime, verify via dfs_ostat\n");
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mtim.tv_sec  = 1000000;
+	stbuf.st_mtim.tv_nsec = 500;
+	rc                    = dfs_osetattr(dfs_mt, l2_obj, &stbuf, DFS_SET_ATTR_MTIME);
+	assert_int_equal(rc, 0);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, hA, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mtim.tv_sec, 1000000);
+	assert_int_equal(stbuf.st_mtim.tv_nsec, 500);
+	/** mode from step 2 still intact -> the internal hardlink bit was preserved on the write.
+	 */
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRWXU));
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/** Step 8: dfs_chmod by one link name; verify via dfs_ostat and dfs_stat on the other link.
+	 */
+	print_message("Step 8: dfs_chmod on the hardlink, verify via ostat/stat\n");
+	rc = dfs_chmod(dfs_mt, dir1, "file1", S_IRUSR | S_IWUSR);
+	assert_int_equal(rc, 0);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, l2_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRUSR | S_IWUSR));
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, dir1, "file1_l2", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRUSR | S_IWUSR));
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/** Step 9: dfs_chown by the other link name; verify via dfs_ostat and dfs_stat. */
+	print_message("Step 9: dfs_chown on the hardlink, verify via ostat/stat\n");
+	rc = dfs_chown(dfs_mt, dir1, "file1_l2", 7, 8, 0);
+	assert_int_equal(rc, 0);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, hA, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 7);
+	assert_int_equal(stbuf.st_gid, 8);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, dir1, "file1", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 7);
+	assert_int_equal(stbuf.st_gid, 8);
+	/** mode from step 8 still intact after chown (only owner changed). */
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRUSR | S_IWUSR));
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/** Cleanup */
+	rc = dfs_release(l2_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(hA);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(hB);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "shl_dir1", true, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
     {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
@@ -4431,6 +4661,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST29: dfs hard link and remove", dfs_test_link_remove, async_disable,
      test_case_teardown},
     {"DFS_UNIT_TEST30: dfs xattr hardlink", dfs_test_xattr_hardlink, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST31: dfs setattr hardlink", dfs_test_setattr_hardlink, async_disable,
      test_case_teardown},
 };
 

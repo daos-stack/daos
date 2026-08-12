@@ -892,6 +892,20 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 	if (obj && (obj->oid.hi != entry.oid.hi || obj->oid.lo != entry.oid.lo))
 		return ENOENT;
 
+	/*
+	 * If the entry is a hardlink, its authoritative inode metadata (times, uid, gid, and
+	 * link count) lives in the GIT object keyed by the file OID.
+	 */
+	if (DFS_IS_HARDLINK(entry.mode)) {
+		if (!daos_handle_is_valid(dfs->git_oh))
+			return ENOTSUP;
+		if (obj)
+			dfs_set_hardlink(&obj->mode);
+		rc = git_fetch_entry(dfs->git_oh, th, &entry.oid, &entry, 0, NULL, NULL, NULL);
+		if (rc)
+			return rc;
+	}
+
 	switch (entry.mode & S_IFMT) {
 	case S_IFDIR: {
 		daos_handle_t dir_oh;
@@ -906,7 +920,11 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 			return daos_der2errno(rc);
 		}
 
-		rc = daos_obj_query_max_epoch(dir_oh, th, &ep, NULL);
+		/*
+		 * The epoch query targets the directory object, not the inode being read, so it
+		 * must stay out of any metadata DTX the caller may hold: always use DAOS_TX_NONE.
+		 */
+		rc = daos_obj_query_max_epoch(dir_oh, DAOS_TX_NONE, &ep, NULL);
 		if (rc) {
 			daos_obj_close(dir_oh, NULL);
 			return daos_der2errno(rc);
@@ -935,24 +953,28 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 			break;
 		}
 
+		/*
+		 * The array stat targets the file's array object, not the inode being read, so it
+		 * must stay out of any metadata DTX the caller may hold: always use DAOS_TX_NONE.
+		 */
 		if (obj) {
-			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
+			rc = daos_array_stat(obj->oh, DAOS_TX_NONE, &array_stbuf, NULL);
 			if (rc)
 				return daos_der2errno(rc);
 		} else {
 			daos_handle_t file_oh;
 
-			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, DAOS_OO_RO, 1,
-						       entry.chunk_size ? entry.chunk_size
-									: dfs->attr.da_chunk_size,
-						       &file_oh, NULL);
+			rc = daos_array_open_with_attr(
+			    dfs->coh, entry.oid, DAOS_TX_NONE, DAOS_OO_RO, 1,
+			    entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size, &file_oh,
+			    NULL);
 			if (rc) {
 				D_ERROR("daos_array_open_with_attr() failed " DF_RC "\n",
 					DP_RC(rc));
 				return daos_der2errno(rc);
 			}
 
-			rc = daos_array_stat(file_oh, th, &array_stbuf, NULL);
+			rc = daos_array_stat(file_oh, DAOS_TX_NONE, &array_stbuf, NULL);
 			if (rc) {
 				daos_array_close(file_oh, NULL);
 				return daos_der2errno(rc);
@@ -988,7 +1010,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		return EINVAL;
 	}
 
-	stbuf->st_nlink = 1;
+	stbuf->st_nlink = entry.link_cnt;
 	stbuf->st_size  = size;
 	stbuf->st_mode  = DFS_EXTERNAL_MODE(entry.mode);
 	stbuf->st_uid   = entry.uid;
