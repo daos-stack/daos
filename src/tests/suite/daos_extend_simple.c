@@ -522,9 +522,9 @@ static const struct CMUnitTest extend_tests[] = {
     {"EXTEND13: read object during extend and extend", dfs_extend_fetch_extend,
      rebuild_sub_3nodes_rf0_setup, test_teardown},
     {"EXTEND14: write object during extend and kill", dfs_extend_write_kill,
-     rebuild_sub_3nodes_rf0_setup, test_teardown},
+     rebuild_sub_3nodes_rf0_setup_rebuild_pool_size, test_teardown},
     {"EXTEND15: write object during extend and extend", dfs_extend_write_extend,
-     rebuild_sub_3nodes_rf0_setup, test_teardown},
+     rebuild_sub_3nodes_rf0_setup_rebuild_pool_size, test_teardown},
     {"EXTEND16: extend fail then retry", dfs_extend_fail_retry, rebuild_sub_3nodes_rf0_setup,
      test_teardown},
 };

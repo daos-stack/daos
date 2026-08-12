@@ -199,7 +199,7 @@ EOF
   chmod +x "${tmp}/pre_uninstall_server"
   EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_server")
 
-  if [[ "${DISTRO:-el8}" =~ suse ]]; then
+  if [[ "${DISTRO:-el9}" =~ suse ]]; then
     cat << EOF  > "${tmp}/post_uninstall_server"
 #!/bin/bash
 ldconfig
@@ -335,7 +335,7 @@ EOF
 chmod +x "${tmp}/pre_uninstall_client"
 EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
 
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
+if [[ "${DISTRO:-el9}" =~ suse ]]; then
   cat << EOF  > "${tmp}/post_uninstall_client"
 #!/bin/bash
 set -x
@@ -410,7 +410,7 @@ fi
 EXTERNAL_DEPENDS+=("${capstone_lib}")
 EXTERNAL_DEPENDS+=("pciutils")
 EXTERNAL_DEPENDS+=("${ndctl_dev}")
-if [[ "${DISTRO:-el8}" =~ el ]]; then
+if [[ "${DISTRO:-el9}" =~ el ]]; then
   EXTERNAL_DEPENDS+=("daxctl-devel")
 fi
 DEPENDS=( "daos-client = ${VERSION}-${RELEASE}" "daos-admin = ${VERSION}-${RELEASE}")
@@ -442,23 +442,6 @@ if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
   list_files files "${SL_PREFIX}/lib64/libdaos_serialize.so"
   append_install_list "${files[@]}"
   build_package "daos-serialize"
-fi
-
-if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
-  TARGET_PATH="${bindir}/daos_firmware_helper"
-  list_files files "${SL_PREFIX}/bin/daos_firmware_helper"
-  append_install_list "${files[@]}"
-
-cat << EOF > "${tmp}/post_install_firmware"
-#!/bin/bash
-chown root:daos_server ${bindir}/daos_firmware_helper
-chmod 4750 ${bindir}/daos_firmware_helper
-EOF
-  chmod +x "${tmp}/post_install_firmware"
-  EXTRA_OPTS+=("--after-install" "${tmp}/post_install_firmware")
-
-  DEPENDS=("daos-server = ${VERSION}-${RELEASE}")
-  build_package "daos-firmware"
 fi
 
 TARGET_PATH="${libdir}"

@@ -7,7 +7,7 @@
 %bcond_without olddaos
 
 %if %{with server}
-%global daos_build_args FIRMWARE_MGMT=yes
+%global daos_build_args
 %else
 %global daos_build_args client test
 %endif
@@ -27,6 +27,7 @@ Name:          daos
 Version:       2.9.100
 Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
+Obsoletes:     daos-firmware
 
 License:       BSD-2-Clause-Patent
 URL:           https://github.com/daos-stack/daos
@@ -99,7 +100,7 @@ BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
 %if %{with server}
-BuildRequires: libipmctl-devel
+BuildRequires: ipmctl
 %endif
 %if (0%{?rhel} >= 9)
 BuildRequires: python-devel
@@ -117,7 +118,7 @@ BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
 %if %{with server}
-BuildRequires: ipmctl-devel
+BuildRequires: ipmctl
 %endif
 BuildRequires: python3-devel
 BuildRequires: python3-distro
@@ -303,15 +304,6 @@ Requires: libuuid-devel
 %description devel
 This is the package needed to build software with the DAOS library.
 
-%if %{with server}
-%package firmware
-Summary: The DAOS firmware management helper
-Requires: %{name}-server%{?_isa} = %{version}-%{release}
-
-%description firmware
-This is the package needed to manage server storage firmware on DAOS servers.
-%endif
-
 %package serialize
 Summary: DAOS serialization library that uses HDF5
 BuildRequires: hdf5-devel
@@ -483,7 +475,6 @@ fi
 # set daos_server_helper to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_server_helper
 # set daos_server to be setgid daos_server in order to invoke daos_server_helper
-# and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
@@ -633,13 +624,6 @@ fi
 %{_libdir}/libcart.so
 %{_libdir}/*.a
 %{daoshome}/python
-
-%if %{with server}
-%files firmware
-%doc README.md
-# set daos_firmware_helper to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_server) %{_bindir}/daos_firmware_helper
-%endif
 
 %files serialize
 %doc README.md
