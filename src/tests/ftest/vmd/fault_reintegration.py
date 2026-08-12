@@ -1,5 +1,6 @@
 """
   (C) Copyright 2023-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -126,7 +127,7 @@ class NvmeFaultReintegrate(TestWithServers):
 
         # 3.
         self.log_step("Creating a pool and container with RF and starting IOR in a thread")
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         self.add_container(self.pool)
 
         job_manager = get_job_manager(self, subprocess=None, timeout=120)

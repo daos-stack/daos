@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -165,7 +166,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
 
         for transfer_size in transfer_sizes:
             ior_latency[transfer_size] = {}
-            self.add_pool(connect=False)
+            self.pool = self.get_pool(connect=False)
             self.add_containers(self.pool, oclass=self.ior_cmd.dfs_oclass.value)
             for operation in ["update", "fetch"]:
                 flags = self.params.get("F", "/run/ior/ior{}flags/".format(operation))

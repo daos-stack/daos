@@ -1726,53 +1726,6 @@ class TestWithServers(TestWithoutServers):
         """
         return add_pool(self, namespace, create, connect, dmg, **params)
 
-    def add_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
-        """Add a pool to the test case.
-
-        This method defines the common test pool creation sequence.
-
-        Args:
-            namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to POOL_NAMESPACE.
-            create (bool, optional): should the pool be created. Defaults to
-                True.
-            connect (bool, optional): should the pool be connected. Defaults to
-                True.
-            dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
-                calls test.get_dmg_command().
-            params (dict): name/value of attributes for which to call update(value, name).
-                See TestPool for available attributes.
-        """
-        self.pool = self.get_pool(namespace, create, connect, dmg, **params)
-
-    def add_pool_qty(self, quantity, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None):
-        """Add multiple pools to the test case.
-
-        This method requires self.pool to be defined as a list.  If self.pool is
-        undefined it will define it as a list.
-
-        Args:
-            quantity (int): number of pools to create
-            namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to POOL_NAMESPACE.
-            create (bool, optional): should the pool be created. Defaults to
-                True.
-            connect (bool, optional): should the pool be connected. Defaults to
-                True.
-            dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
-                calls test.get_dmg_command().
-
-        Raises:
-            TestFail: if self.pool is defined, but not as a list object.
-
-        """
-        if self.pool is None:
-            self.pool = []
-        if not isinstance(self.pool, list):
-            self.fail("add_pool_qty(): self.pool must be a list: {}".format(type(self.pool)))
-        for _ in range(quantity):
-            self.pool.append(self.get_pool(namespace, create, connect, dmg))
-
     def get_container(self, pool, namespace=CONT_NAMESPACE, create=True, daos=None, **params):
         """Create a TestContainer object.
 
