@@ -181,7 +181,7 @@ example given above.
 
 For more information on the usage of masks (`D_LOG_MASK`), streams (`DD_MASK`) and subsystems
 (`DD_SUBSYS`) parameters refer to the
-[Debugging System](https://docs.daos.io/v2.6/admin/troubleshooting/#debugging-system) section.
+[Debugging System](https://docs.daos.io/v2.8/admin/troubleshooting/#debugging-system) section.
 
 ## System Monitoring
 
@@ -362,7 +362,7 @@ wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
-[dmg pool create](https://docs.daos.io/v2.6/admin/pool_operations/#pool-creationdestroy)
+[dmg pool create](https://docs.daos.io/v2.8/admin/pool_operations/#pool-creationdestroy)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file
@@ -578,7 +578,7 @@ boro-11
 - Automatic exclusion of an NVMe SSD:
 
 Automatic exclusion based on faulty criteria is the default behavior in DAOS
-release 2.6. The default criteria parameters are `max_io_errs: 10` and
+release 2.8. The default criteria parameters are `max_io_errs: 10` and
 `max_csum_errs: <uint32_max>` (essentially eviction due to checksum errors is
 disabled by default).
 
@@ -1282,8 +1282,8 @@ Key:
 
 Examples:
 
-* daos\_server 2.4.0 is only compatible with daos\_engine 2.4.0
-* daos\_agent 2.6.0 is compatible with daos\_server 2.4.0 (2.5 is a development version)
-* dmg 2.4.1 is compatible with daos\_server 2.4.0
+* daos\_server 2.6.0 is only compatible with daos\_engine 2.6.0
+* daos\_agent 2.8.0 is compatible with daos\_server 2.6.0 (2.7 is a development version)
+* dmg 2.6.1 is compatible with daos\_server 2.6.0
 
 [1]: <deployment.md#refresh-agent-cache>(Refresh DAOS Agent Cache)
