@@ -106,7 +106,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         expected_attrs = []
 
         for attr_value in attr_values:
-            self.log.info("attr_value to set and get = {}".format(attr_value))
+            self.log.info("attr_value to set and get = %s", attr_value)
             container.set_attr(attrs={attr_value[0]: attr_value[1]})
 
             data = container.get_attr(attr_value[0])['response']
@@ -149,7 +149,7 @@ class ContainerQueryAttributeTest(TestWithServers):
                        f"{error}")
                 self.log.info(msg)
             attr_list = container.list_attrs()['response']
-            self.log.info("attr_list after deleting one attr = {}".format(attr_list))
+            self.log.info("attr_list after deleting one attr = %s", attr_list)
             if attr_value[0] in attr_list:
                 msg = f"Deleted attr ({attr_value[0]}) is in the list {attr_list}!"
                 self.fail(msg)
@@ -264,7 +264,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         attr_list = ",".join(expected_attrs.keys())
         container.del_attr(key=attr_list)
         attr_list = container.list_attrs()['response']
-        self.log.info("attr_list after delete = {}".format(attr_list))
+        self.log.info("attr_list after delete = %s", attr_list)
         if attr_list:
             self.fail(
                 "All attrs should have been deleted, but returned list is non-empty! {}".format(
