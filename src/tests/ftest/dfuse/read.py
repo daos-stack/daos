@@ -151,7 +151,7 @@ class DFusePreReadTest(TestWithServers):
             leave a handle claiming EOF at offset zero, so a later read there returned no data
             (plain read) or faulted with SIGBUS (mmap).
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse
         :avocado: tags=DFusePreReadTest,test_dfuse_pre_read_stale_eof
@@ -180,7 +180,8 @@ class DFusePreReadTest(TestWithServers):
 
         def evict_and_wait(subdir, baseline):
             # Eviction is asynchronous; a check run before the forget lands is vacuous.
-            run_or_fail(f"daos fs evict {subdir}")
+            daos_bin = os.path.join(self.prefix, "bin", "daos")
+            run_or_fail(f"{daos_bin} fs evict {subdir}")
             for _ in range(20):
                 if dfuse.get_stats()["inodes"] <= baseline:
                     return
@@ -237,7 +238,7 @@ class DFusePreReadTest(TestWithServers):
             the same handle, then re-read at the old EOF and expect the appended bytes.
             Data caching is disabled so direct-io makes every read reach dfuse.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse
         :avocado: tags=DFusePreReadTest,test_dfuse_stale_eof_after_append
