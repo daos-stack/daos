@@ -198,7 +198,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 "--%s.(2)Pool free space before container create: %s (%i bytes)",
                 test_loop, bytes_to_human(free_space), free_space)
 
-            self.write_pool_until_nospace(loop_cnt)
+            self.write_pool_until_nospace(pool, loop_cnt)
 
         self.log_step("Check server logs for errors")
         self.check_server_logs()
