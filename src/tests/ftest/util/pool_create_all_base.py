@@ -406,11 +406,9 @@ class PoolCreateAllTestBase(TestWithServers):
         """
         defaults = {
             "label": label,
-            "acl": pool.acl.value,
             "space_rb": "5%",
-            "self_heal": pool.self_heal.value,
-            "owner": pool.owner.value,
-            "owner_group": pool.owner_group.value
+            "rd_fac": "3",
+            "ec_cell_sz": "128 KiB"
         }
         response = pool.get_prop()['response']
         errors = []
