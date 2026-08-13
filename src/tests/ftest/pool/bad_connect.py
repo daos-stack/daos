@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -24,7 +25,7 @@ class BadConnectTest(TestWithServers):
         :avocado: tags=pool
         :avocado: tags=BadConnectTest,test_connect
         """
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
         # save this uuid since we might trash it as part of the test
         original_uuid = (ctypes.c_ubyte * 16)()

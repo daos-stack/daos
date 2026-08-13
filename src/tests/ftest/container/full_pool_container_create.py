@@ -48,7 +48,7 @@ class FullPoolContainerCreate(TestWithServers):
 
         # create pool and connect
         self.log_step("Create a pool and container")
-        self.add_pool()
+        self.pool = self.get_pool()
 
         # query the pool
         self.log.info("Pool Query before write")
