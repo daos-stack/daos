@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -49,7 +50,7 @@ class PoolPDAProperty(TestWithServers):
         """
 
         # Create the pool with default
-        self.add_pool(namespace="/run/pool/*")
+        self.pool = self.get_pool(namespace="/run/pool/*")
 
         # Verify pool ec_pda, pool_pda is default.
         self.assertEqual(1, self.pool.get_property("ec_pda"))
@@ -59,7 +60,7 @@ class PoolPDAProperty(TestWithServers):
         self.destroy_pools(pools=self.pool)
 
         # create pool
-        self.add_pool(namespace="/run/pool_1/*")
+        self.pool = self.get_pool(namespace="/run/pool_1/*")
 
         # create container with default
         self.add_container(self.pool, create=True)
