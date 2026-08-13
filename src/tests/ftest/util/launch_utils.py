@@ -289,15 +289,13 @@ class TestInfo():
         """
         return self.test_file
 
-    def set_yaml_info(self, logger, include_local_host=False):
+    def set_yaml_info(self, logger):
         """Set the test yaml data from the test yaml file.
 
         Args:
             logger (Logger): logger for the messages produced by this method
-            include_local_host (bool, optional): whether or not the local host be included in the
-                set of client hosts. Defaults to False.
         """
-        self.yaml_info = {"include_local_host": include_local_host}
+        self.yaml_info = {}
         yaml_data = get_yaml_data(self.yaml_file)
         for extra_yaml in self.extra_yaml:
             yaml_data.update(get_yaml_data(extra_yaml))
@@ -330,14 +328,12 @@ class TestInfo():
             setting up a slum partition
         """
         logger.debug("Using %s to define host information", self.yaml_file)
-        if self.yaml_info["include_local_host"]:
-            logger.debug("  Adding the localhost to the clients: %s", get_local_host())
         try:
             self.host_info.set_hosts(
                 logger, control_node, self.yaml_info[self.YAML_INFO_KEYS[0]],
                 self.yaml_info[self.YAML_INFO_KEYS[1]], self.yaml_info[self.YAML_INFO_KEYS[2]],
                 self.yaml_info[self.YAML_INFO_KEYS[3]], self.yaml_info[self.YAML_INFO_KEYS[4]],
-                self.yaml_info[self.YAML_INFO_KEYS[5]], self.yaml_info["include_local_host"])
+                self.yaml_info[self.YAML_INFO_KEYS[5]])
         except HostException as error:
             raise LaunchException("Error getting hosts from {self.yaml_file}") from error
 
@@ -1023,7 +1019,7 @@ class TestGroup():
                             file_name, class_name, method_name, ','.join(tags))
 
     def update_test_yaml(self, logger, scm_size, scm_mount, extra_yaml, multiplier, override,
-                         verbose, include_localhost):
+                         verbose):
         """Update each test yaml file.
 
         Args:
@@ -1034,7 +1030,6 @@ class TestGroup():
             multiplier (int): multiplier to apply to any timeouts specified in the test yaml
             override (bool): whether or not to override the number of hosts for the test
             verbose (int): level of verbosity
-            include_localhost (bool): whether or not to include the local host with the client hosts
 
         Raises:
             RunException: if there is an error modifying the test yaml files
@@ -1109,7 +1104,7 @@ class TestGroup():
                 raise RunException(f"Error listing test variants for {test.yaml_file}")
 
             # Collect the host information from the updated test yaml
-            test.set_yaml_info(logger, include_localhost)
+            test.set_yaml_info(logger)
 
     def _add_auto_storage_yaml(self, logger, storage_info, yaml_dir, tier_0_type, scm_size,
                                scm_mount, max_nvme_tiers, control_metadata):
