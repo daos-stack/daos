@@ -194,6 +194,7 @@ class Test(avocadoTest):
             self.add_test_data("skip-list", skip_list)
             self.cancelForTicket(ticket)
 
+        self.log.info("Checking for test variant in skip list: %s", self.cancel_file)
         try:
             with open(self.cancel_file, encoding="utf-8") as skip_handle:
                 skip_list = skip_handle.readlines()
