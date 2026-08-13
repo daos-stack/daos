@@ -362,8 +362,17 @@ dc_cont_create(tse_task_t *task)
 	uuid_t                  null_hdl_uuid;
 	int			rc;
 	daos_prop_t	       *rpc_prop = NULL;
+	char                   *nlt_leak = NULL;
 
 	args = dc_task_get_args(task);
+
+	/* DAOS-XXXXX TEMPORARY - NLT log-retention check: deliberately leak an allocation on
+	 * every container create so cart_logtest reports "memory not freed" and we can confirm
+	 * NLT keeps the log for a command that produces a finding.  DO NOT MERGE.
+	 */
+	D_ALLOC(nlt_leak, 64);
+	if (nlt_leak != NULL)
+		nlt_leak[0] = 0;
 
 	if (!daos_uuid_valid(args->uuid))
 		/** generate a UUID for the new container */
