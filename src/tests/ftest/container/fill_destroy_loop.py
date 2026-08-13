@@ -63,10 +63,11 @@ class BoundaryPoolContainerSpace(TestWithServers):
             0, len(hosts),
             "Unexpected errors occurred during garbage collection on hosts {}".format(hosts))
 
-    def write_pool_until_nospace(self, test_loop):
+    def write_pool_until_nospace(self, pool, test_loop):
         """write pool and container until pool is full.
 
         Args:
+            pool (TestPool): pool object to write data.
             test_loop (int): test loop for log info.
         """
         delta = self.params.get("delta", "/run/test_config/*", "0")
@@ -74,8 +75,8 @@ class BoundaryPoolContainerSpace(TestWithServers):
         self.log.info("==> Set pool delta to %s (%i bytes)", delta, delta_bytes)
 
         # Create a container and get pool free space before write
-        container = self.get_container(self.pool)
-        free_space_init = self.pool.get_pool_free_space()
+        container = self.get_container(pool)
+        free_space_init = pool.get_pool_free_space()
         self.log.info("--%i.(3)Pool free space before writing data to container %s (%i bytes)",
                       test_loop, bytes_to_human(free_space_init), free_space_init)
 
@@ -96,14 +97,14 @@ class BoundaryPoolContainerSpace(TestWithServers):
             data_written += (base_data_size * num_of_processes)
 
         # display free space and data written
-        free_space_before_destroy = self.pool.get_pool_free_space()
+        free_space_before_destroy = pool.get_pool_free_space()
         self.log.info(
             "--%i.(5) %s (%i bytes) written when pool is full.",
             test_loop, bytes_to_human(data_written), data_written)
 
         # display free space stats after destroy
         container.destroy()
-        free_space_after_destroy = self.pool.get_pool_free_space()
+        free_space_after_destroy = pool.get_pool_free_space()
         self.log.info(
             "--%i.(6)Pool full, free space before container delete %s (%i bytes)",
             test_loop, bytes_to_human(free_space_before_destroy), free_space_before_destroy)
@@ -129,7 +130,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 bytes_to_human(free_space_init - delta_bytes),
                 free_space_init - delta_bytes)
             time.sleep(6)
-            free_space_after_destroy = self.pool.get_pool_free_space()
+            free_space_after_destroy = pool.get_pool_free_space()
 
         self.assertAlmostEqual(
             free_space_init, free_space_after_destroy, delta=delta_bytes,
@@ -175,7 +176,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
         # create pool
         self.log_step("Create Pool")
-        add_pool(self)
+        pool = add_pool(self)
 
         self.log_step("Starting test loops to fill and destroy container")
         for loop_cnt in range(1, test_loop + 1):
@@ -186,13 +187,13 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 self.log.info(
                     '--%i.(0)Set Pool reclaim properties to "%s"',
                     loop_cnt, reclaim_prop)
-                self.pool.set_property("reclaim", reclaim_prop)
+                pool.set_property("reclaim", reclaim_prop)
 
-            self.pool.set_query_data()
+            pool.set_query_data()
             self.log.info(
                 "--%i.(1)Query pool %s before write: %s",
-                loop_cnt, str(self.pool), self.pool.query_data)
-            free_space = self.pool.get_pool_free_space()
+                loop_cnt, str(pool), pool.query_data)
+            free_space = pool.get_pool_free_space()
             self.log.info(
                 "--%s.(2)Pool free space before container create: %s (%i bytes)",
                 test_loop, bytes_to_human(free_space), free_space)
