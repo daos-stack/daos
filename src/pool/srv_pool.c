@@ -8063,6 +8063,9 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 	int				i;
 	int				rc;
 
+	D_ASSERTF(list->pta_number > 0, DF_UUID ": discard %d target\n",
+		  DP_UUID(svc->ps_pool->sp_uuid), list->pta_number);
+
 	rc = ds_pool_encode_opc(&opc);
 	if (rc)
 		return rc;
@@ -8085,9 +8088,6 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 		D_DEBUG(DB_MD, DF_UUID ": discard rank %u\n", DP_UUID(svc->ps_pool->sp_uuid),
 			list->pta_addrs[i].pta_rank);
 	}
-
-	D_ASSERTF(rank_list->rl_nr > 0, DF_UUID ": discard 0 rank\n",
-		  DP_UUID(svc->ps_pool->sp_uuid));
 
 	rc = crt_corpc_req_create(ctx, NULL, rank_list, opc, NULL,
 				  NULL, CRT_RPC_FLAG_FILTER_INVERT,
@@ -8148,7 +8148,8 @@ pool_join_pre(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opc,
 
 	rc = pool_recov_cont(ctx, svc, &valid_list);
 	if (rc != 0) {
-		DL_INFO(rc, DF_UUID ": recover containers", DP_UUID(svc->ps_uuid));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
+			  DF_UUID ": recover containers", DP_UUID(svc->ps_uuid));
 		goto out_valid_list;
 	}
 
@@ -8238,6 +8239,9 @@ pool_recov_cont(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr
 	int                         rc;
 	int                         i;
 
+	D_ASSERTF(list->pta_number > 0, DF_UUID ": recover cont on %d targets\n",
+		  DP_UUID(svc->ps_uuid), list->pta_number);
+
 	rc = ds_pool_encode_opc(&opc);
 	if (rc != 0)
 		goto out;
@@ -8256,8 +8260,6 @@ pool_recov_cont(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr
 				list->pta_addrs[i].pta_rank);
 		}
 	}
-
-	D_ASSERTF(ranks->rl_nr > 0, DF_UUID ": recover cont on 0 rank\n", DP_UUID(svc->ps_uuid));
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -8291,7 +8293,7 @@ pool_recov_cont(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr
 	}
 
 	rc = crt_corpc_req_create(ctx, NULL, ranks, opc, bulk /* co_bulk_hdl */, NULL,
-				  CRT_RPC_FLAG_FILTER_INVERT, crt_tree_topo(CRT_TREE_KNOMIAL, 32),
+				  CRT_RPC_FLAG_FILTER_INVERT, crt_tree_topo(CRT_TREE_KNOMIAL, 4),
 				  &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
