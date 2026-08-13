@@ -26,7 +26,7 @@ class DlckBasicTest(TestWithServers):
         errors = []
         dmg = self.get_dmg_command()
         self.log_step("Create a pool to run dlck")
-        add_pool()
+        add_pool(self)
         self.log_step("Setup dlck parameters to run dlck command")
         pool_uuids = dmg.get_pool_list_uuids(no_query=True)
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
@@ -50,5 +50,5 @@ class DlckBasicTest(TestWithServers):
         self.log.info("dlck basic test output: %s \n", result)
         dmg.system_start()
         if errors:
-            self.fail("Errors detected: %s \n", errors)
+            self.fail(f"dlck basic test failed with errors: {errors}")
         self.log.info("dlck basic test passed with no errors")
