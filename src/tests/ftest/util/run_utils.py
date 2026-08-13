@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -465,6 +465,10 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
     """
+    if hosts is None:
+        raise ValueError("No hosts specified for run_remote()")
+    if command is None:
+        raise ValueError("No command specified for run_remote()")
     task = task_self()
     task.set_info('debug', task_debug)
     task.set_default("stderr", stderr)
