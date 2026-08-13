@@ -283,8 +283,7 @@ class ParallelIo(FioBase, IorTestBase):
         self.log_step("Record free space after container destroy.")
         self.statvfs_after_cont_destroy = self.statvfs_pool(dfuse.mount_dir.value)
 
-        # Calculate the expected space to be returned after containers
-        # are destroyed.
+        # Calculate the expected space to be returned after containers are destroyed.
         reduced_space = (self.cont_count * int(self.ior_cmd.block_size.value)) / 2
 
         # Verify if expected space is returned for each pool after containers
