@@ -290,7 +290,7 @@ class ParallelIo(FioBase, IorTestBase):
         # Verify if expected space is returned for each pool after containers
         # were destroyed. If not, wait for 60 secs and check again. Wait 4
         # times, otherwise exit the test with a failure.
-        self.log_step("Verify space is retunred by aggregation after containers were destroyed.")
+        self.log_step("Verify space is returned by aggregation after containers were destroyed.")
         for count in range(self.pool_count):
             thread = threading.Thread(target=self.verify_aggregation, args=(reduced_space, count))
             threads.append(thread)
