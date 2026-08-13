@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2989,9 +2989,11 @@ dc_tx_add_read(struct dc_tx *tx, struct dc_object *obj, int opc, uint64_t flags,
 
 	dcsr->dcsr_obj = obj_addref(obj);
 
-	/* Set read TS on object shard. */
-	if (dkey == NULL)
+	/* Set read TS on object shard, without dkey there is no akey/iod to record. */
+	if (dkey == NULL) {
+		nr = 0;
 		goto done;
+	}
 
 	rc = daos_iov_copy(&dcsr->dcsr_dkey, dkey);
 	if (rc != 0)
@@ -3548,7 +3550,11 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc, tse_
 		daos_key_t		*dkey;
 		uint32_t		 nr;
 
-		if (qu->flags & DAOS_GET_DKEY) {
+		if (qu->flags == 0) {
+			/* Query max epoch only, neither dkey nor akey is given. */
+			dkey = NULL;
+			nr   = 0;
+		} else if (qu->flags & DAOS_GET_DKEY) {
 			dkey = NULL;
 			nr = 0;
 		} else if (qu->flags & DAOS_GET_AKEY) {
