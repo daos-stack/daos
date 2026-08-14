@@ -1,6 +1,5 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,16 +47,21 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value, size, flags);
 	if (rc == 0) {
 		/* Optionally remove the dentry to force a new lookup on access.
-		 * If the xattr is to set a UNS entry point, and dentry_dir caching is enabled then
-		 * invalidate the dentry to force a lookup which will check the xattr and return the
-		 * linked container.  The invalidation is queued to the invalidation thread rather
-		 * than issued here as fuse_lowlevel_notify_inval_entry() blocks on kernel inode
-		 * locks that may be held by a client waiting on this worker pool, deadlocking it.
+		 * If the xattr is to set a UNS entry point, and dentry_dir
+		 * caching is enabled then invalidate the dentry here, to force
+		 * a lookup which will check the xattr and return the linked
+		 * container.  The fuse header says this potentially deadlocks
+		 * however it does appear to work, and calling this after the
+		 * reply will introduce a race condition that future lookups
+		 * will be skipped.
 		 */
 		if (duns_attr && inode->ie_dfs->dfc_dentry_dir_timeout > 0) {
-			rc = dfuse_mark_inval_entry(inode->ie_parent, inode->ie_name, NULL);
-			if (rc)
-				DHS_ERROR(inode, rc, "dfuse_mark_inval_entry() failed");
+			struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+
+			rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session,
+							      inode->ie_parent, inode->ie_name,
+							      strnlen(inode->ie_name, NAME_MAX));
+			DFUSE_TRA_INFO(inode, "inval_entry() rc is %d", rc);
 		}
 		DFUSE_REPLY_ZERO(inode, req);
 		return;

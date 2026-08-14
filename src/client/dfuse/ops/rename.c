@@ -1,6 +1,5 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,9 +34,11 @@ dfuse_oid_moved(struct dfuse_info *dfuse_info, daos_obj_id_t *oid, struct dfuse_
 		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
 		DFUSE_TRA_DEBUG(ie, "Invalidating old name");
 
-		rc = dfuse_mark_inval_entry(ie->ie_parent, ie->ie_name, NULL);
-		if (rc)
-			DFUSE_TRA_ERROR(ie, "dfuse_mark_inval_entry() failed: %d", rc);
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
+						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
+
+		if (rc && rc != -ENOENT)
+			DFUSE_TRA_ERROR(ie, "inval_entry() returned: %d (%s)", rc, strerror(-rc));
 	}
 
 	/* Update the inode entry data */

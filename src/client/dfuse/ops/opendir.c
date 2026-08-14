@@ -1,6 +1,5 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,11 +83,12 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	if (ie) {
 		int rc;
 
-		rc = dfuse_mark_inval_entry(ie->ie_parent, ie->ie_name, ie);
-		if (rc) {
-			DHS_ERROR(ie, rc, "dfuse_mark_inval_entry() failed");
-			dfuse_inode_decref(dfuse_info, ie);
-		}
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
+						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
+
+		if (rc != 0 && rc != -ENOENT)
+			DHS_ERROR(ie, -rc, "inval_entry() error");
+		dfuse_inode_decref(dfuse_info, ie);
 	}
 	dfuse_oh_free(dfuse_info, oh);
 };

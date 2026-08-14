@@ -1,6 +1,5 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -92,22 +91,8 @@ struct dfuse_time_entry {
 /* Core data structure, maintains a list of struct dfuse_time_entry lists */
 struct dfuse_ival {
 	d_list_t             time_entry_list;
-	struct dfuse_info   *dfuse_info;
 	struct fuse_session *session;
 	bool                 session_dead;
-};
-
-/* A single on-demand dentry invalidation request.  Request handlers running on the fixed worker
- * pool enqueue these rather than calling fuse_lowlevel_notify_inval_entry() directly, as that
- * blocks acquiring the parent's kernel i_rwsem, which may be held by a client waiting on the same
- * worker pool - deadlocking it.  The dedicated invalidation thread drains the queue instead.
- */
-struct dfuse_inval_item {
-	d_list_t                  link;
-	fuse_ino_t                parent;
-	char                      name[NAME_MAX + 1];
-	/* Optional inode reference to drop once the invalidation has completed, or NULL */
-	struct dfuse_inode_entry *ie_drop;
 };
 
 /* The core data from struct dfuse_inode_entry.  No additional inode references are held on inodes
@@ -133,9 +118,6 @@ static bool              ival_stop;
 static pthread_t         ival_thread;
 static sem_t             ival_sem;
 static struct dfuse_ival ival_data;
-
-/* On-demand invalidation queue, protected by ival_lock and drained by the invalidation thread */
-static d_list_t          ival_queue;
 
 /* Eviction loop, run periodically in it's own thread
  *
@@ -218,69 +200,6 @@ out:
 	return (idx == EVICT_COUNT);
 }
 
-/* Queue a dentry invalidation for the invalidation thread.  Takes ownership of ie_drop, which is
- * released after the invalidation has been issued.  On failure ie_drop is not touched.
- */
-int
-dfuse_mark_inval_entry(fuse_ino_t parent, const char *name, struct dfuse_inode_entry *ie_drop)
-{
-	struct dfuse_inval_item *item;
-
-	D_ALLOC_PTR(item);
-	if (item == NULL)
-		return ENOMEM;
-
-	item->parent  = parent;
-	item->ie_drop = ie_drop;
-	strncpy(item->name, name, NAME_MAX);
-	item->name[NAME_MAX] = '\0';
-
-	D_MUTEX_LOCK(&ival_lock);
-	d_list_add_tail(&item->link, &ival_queue);
-	D_MUTEX_UNLOCK(&ival_lock);
-
-	sem_post(&ival_sem);
-
-	return 0;
-}
-
-/* Drain the on-demand invalidation queue.  Runs on the invalidation thread so the blocking
- * fuse_lowlevel_notify_inval_entry() call is issued off the worker pool that services /dev/fuse.
- * Once shutdown has begun (ival_stop) items are freed without issuing notifies, as the worker pool
- * is gone by then and a notify could block the thread indefinitely.
- */
-static void
-ival_drain_queue(void)
-{
-	struct dfuse_inval_item *item;
-	d_list_t                 drain;
-
-	D_INIT_LIST_HEAD(&drain);
-
-	/* Move the whole queue out under a single lock, then process without holding it. */
-	D_MUTEX_LOCK(&ival_lock);
-	d_list_splice_init(&ival_queue, &drain);
-	D_MUTEX_UNLOCK(&ival_lock);
-
-	while ((item = d_list_pop_entry(&drain, struct dfuse_inval_item, link)) != NULL) {
-		if (!ival_stop && !ival_data.session_dead) {
-			int rc;
-
-			rc = fuse_lowlevel_notify_inval_entry(ival_data.session, item->parent,
-							      item->name,
-							      strnlen(item->name, NAME_MAX));
-			if (rc && rc != -ENOENT && rc != -EBADF)
-				DHS_ERROR(&ival_data, -rc, "notify_inval_entry() failed");
-			if (rc == -EBADF)
-				ival_data.session_dead = true;
-		}
-
-		if (item->ie_drop)
-			dfuse_inode_decref(ival_data.dfuse_info, item->ie_drop);
-		D_FREE(item);
-	}
-}
-
 /* Main loop for eviction thread.  Spins until ready for exit waking after one second and iterates
  * over all newly expired dentries.
  */
@@ -299,18 +218,14 @@ ival_thread_fn(void *arg)
 
 		rc = sem_timedwait(&ival_sem, &ts);
 		if (rc == 0) {
-			if (ival_stop) {
-				ival_drain_queue();
+			if (ival_stop)
 				return NULL;
-			}
 		} else {
 			rc = errno;
 
 			if (errno != ETIMEDOUT)
 				DS_ERROR(rc, "sem_wait");
 		}
-
-		ival_drain_queue();
 
 		while (ival_loop(&sleep_time))
 			;
@@ -351,9 +266,7 @@ ival_init(struct dfuse_info *dfuse_info)
 
 	DFUSE_TRA_UP(&ival_data, dfuse_info, "invalidator");
 
-	ival_data.dfuse_info = dfuse_info;
 	D_INIT_LIST_HEAD(&ival_data.time_entry_list);
-	D_INIT_LIST_HEAD(&ival_queue);
 
 	rc = sem_init(&ival_sem, 0, 0);
 	if (rc != 0)
@@ -407,16 +320,6 @@ void
 ival_fini()
 {
 	struct dfuse_time_entry *dte, *dtep;
-	struct dfuse_inval_item *item;
-
-	/* Free any invalidation requests that were never issued.  Any inode references held by
-	 * queued items are released here.
-	 */
-	while ((item = d_list_pop_entry(&ival_queue, struct dfuse_inval_item, link)) != NULL) {
-		if (item->ie_drop)
-			dfuse_inode_decref(ival_data.dfuse_info, item->ie_drop);
-		D_FREE(item);
-	}
 
 	/* Walk the list, oldest first */
 	d_list_for_each_entry_safe(dte, dtep, &ival_data.time_entry_list, dte_list) {
