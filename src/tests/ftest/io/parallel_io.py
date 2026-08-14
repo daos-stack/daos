@@ -36,8 +36,10 @@ class ParallelIo(FioBase, IorTestBase):
         self.container = []
 
     def create_pool(self):
-        """Create a TestPool object to use with ior."""
-        self.pool.append(self.get_pool(connect=False))
+        """Create a thread safe TestPool object."""
+        # Use a dedicated DmgCommand copy per thread; sharing self.get_dmg_command()'s
+        # single instance across threads races on its parameters and causes partial commands.
+        self.pool.append(self.get_pool(connect=False, dmg=self.get_dmg_command().copy()))
 
     def _stat_free_blocks(self, path):
         """Get stat free blocks.
@@ -69,7 +71,7 @@ class ParallelIo(FioBase, IorTestBase):
 
         """
         statvfs_list = []
-        for _, pool in enumerate(self.pool):
+        for pool in self.pool:
             dfuse_pool_dir = str(path + "/" + pool.uuid)
             statvfs_info = self._stat_free_blocks(dfuse_pool_dir)
             statvfs_list.append(statvfs_info)
