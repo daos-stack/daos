@@ -2989,11 +2989,9 @@ dc_tx_add_read(struct dc_tx *tx, struct dc_object *obj, int opc, uint64_t flags,
 
 	dcsr->dcsr_obj = obj_addref(obj);
 
-	/* Set read TS on object shard, without dkey there is no akey/iod to record. */
-	if (dkey == NULL) {
-		nr = 0;
+	/* Set read TS on object shard. */
+	if (dkey == NULL)
 		goto done;
-	}
 
 	rc = daos_iov_copy(&dcsr->dcsr_dkey, dkey);
 	if (rc != 0)
