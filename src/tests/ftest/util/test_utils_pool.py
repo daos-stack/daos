@@ -21,6 +21,28 @@ from test_utils_base import LabelGenerator, TestDaosApiBase
 
 POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
+DEFAULT_POOL_PROPS = {
+    "checkpoint": "timed",
+    "checkpoint_freq": 50,
+    "data_thresh": 4096,
+    "ec_cell_sz": 131072,   # 128 KiB
+    "ec_pda": 1,
+    "global_version": 4,
+    "perf_domain": "root",
+    "rd_fac": 3,
+    "reclaim": "lazy",
+    "reintegration": "data_sync",
+    "rp_pda": 4294967295,
+    "scrub": "off",
+    "scrub_freq": 604800,
+    "scrub_thresh": 0,
+    "self_heal": "exclude;rebuild",
+    "space_rb": 5,
+    "svc_ops_enabled": 1,
+    "svc_ops_entry_age": 300,
+    "svc_rf": 2,
+    "upgrade_status": "not started"
+}
 
 
 def add_pools(dmg, add_pool_kwargs, error_handler=None):
@@ -1648,3 +1670,43 @@ class TestPool(TestDaosApiBase):
                     raise AssertionError(
                         f'Expected target {target} to be in state {expected_target_state}, '
                         f'but current state is {info["target_state"]}')
+
+        # pylint: disable=dangerous-default-value
+    def verify_props(self, expected=DEFAULT_POOL_PROPS):
+        """Verify pool properties match expected values.
+
+        Args:
+            expected (dict): Expected key/value pairs from pool properties.
+                Can be a subset of the full properties, where only expected keys are verified.
+                Defaults to DEFAULT_POOL_PROPS.
+
+        Raises:
+            TestFail: If any of the default properties are missing or have invalid values.
+        """
+        errors = {
+            "types": set(),
+            "details": []
+        }
+
+        try:
+            data = {}
+            for entry in self.get_prop()['response']:
+                data[entry['name']] = entry['value']
+            for key, value in expected.items():
+                if key not in data:
+                    errors["types"].add("missing property")
+                    errors["details"].append(f"Missing property: {key}")
+                    continue
+                if data[key] != value:
+                    errors["types"].add("property value")
+                    errors["details"].append(
+                        f"Invalid value for property: {key}, expected: {value}, got: {data[key]}")
+        except TestFail as error:
+            errors["types"].add("retrieval error")
+            errors["details"].append(f"Error retrieving pool properties: {str(error)}")
+
+        if errors["types"]:
+            self.log.error("Errors detected verifying pool properties:")
+            for error in errors["details"]:
+                self.log.error(f"  - {error}")
+            raise TestFail(f'Pool properties check failed - {", ".join(errors["types"])}')

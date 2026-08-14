@@ -129,7 +129,7 @@ class PoolCreateAllTestBase(TestWithServers):
                 f"Pool with invalid ranks: wait={wait_ranks} got={got_ranks}")
         self.log.info("Pool created: scm_size=%d, nvme_size=%d", *tier_bytes)
         self.log_step(f"Verifying TestPool_{pool_idx + 1} default attributes")
-        self.check_pool_default_attributes(self.pool[pool_idx], label=f"TestPool_{pool_idx + 1}")
+        self.pool[pool_idx].verify_props()
         self.log_step(f"Destroying TestPool_{pool_idx + 1}")
         self.pool[pool_idx].destroy()
         pool_idx += 1
@@ -152,7 +152,7 @@ class PoolCreateAllTestBase(TestWithServers):
             self.pool[pool_idx].target_list.update(ranks, f"pool[{pool_idx}].target_list")
         self.pool[pool_idx].create()
         self.log_step(f"Verifying TestPool_{pool_idx + 1} default attributes")
-        self.check_pool_default_attributes(self.pool[pool_idx], label=f"TestPool_{pool_idx + 1}")
+        self.pool[pool_idx].verify_props()
         self.log_step(f"Destroying TestPool_{pool_idx + 1}")
         self.pool[pool_idx].destroy()
         pool_idx += 1
@@ -211,7 +211,7 @@ class PoolCreateAllTestBase(TestWithServers):
             self.pool[pool_idx].target_list.update(ranks, f"pool[{pool_idx}].target_list")
         self.pool[pool_idx].create()
         self.log_step(f"Verifying TestPool_{pool_idx + 1} default attributes")
-        self.check_pool_default_attributes(self.pool[pool_idx], label=f"TestPool_{pool_idx + 1}")
+        self.pool[pool_idx].verify_props()
         self.log_step(f"Destroying TestPool_{pool_idx + 1}")
         self.pool[pool_idx].destroy()
 
@@ -393,34 +393,3 @@ class PoolCreateAllTestBase(TestWithServers):
             pool_size[1],
             delta=nvme_delta_bytes,
             msg="Pool with invalid NVME size")
-
-    def check_pool_default_attributes(self, pool, label="TestPool_1"):
-        """Check the default attributes of a pool.
-
-        Args:
-            pool (TestPool): The pool object to check.
-            label (str, optional): The label of the pool. Defaults to "TestPool_1".
-
-        Raises:
-            TestFail: If any of the default attributes are missing or have invalid values.
-        """
-        defaults = {
-            "label": label,
-            "space_rb": "5%",
-            "rd_fac": "3",
-            "ec_cell_sz": "128 KiB"
-        }
-        response = pool.get_prop()['response']
-        errors = []
-        for key, value in defaults.items():
-            if key not in response:
-                errors.append(f"Missing property: {key}")
-                continue
-            if response[key] != value:
-                errors.append(
-                    f"Invalid value for property: {key}, expected: {value}, got: {response[key]}")
-        if errors:
-            self.log.error("Pool default attributes check failed:")
-            for error in errors:
-                self.log.error(f"  - {error}")
-            raise TestFail("Pool default attributes check failed")
