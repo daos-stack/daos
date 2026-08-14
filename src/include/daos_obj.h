@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -763,6 +763,12 @@ daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
  *			offset of the previous extent.
  *			For an unfound record, the output length of the
  *			corresponding sgl is set to zero.
+ *			The output length is NOT a reliable way to detect a
+ *			partial result: a hole within the requested extents is
+ *			not transferred but is still counted in the length, and
+ *			only trailing holes shorten it. The buffer is left
+ *			untouched wherever a hole was skipped. Use \a ioms to
+ *			learn what was actually returned.
  *
  * \param[out]	ioms	Optional, upper layers can simply pass in NULL.
  *			It is the sink buffer to store the returned actual
@@ -772,6 +778,10 @@ daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
  *			(if asked for). If the extents don't fit in the io_map,
  *			the number required is set on the fetch in
  *			\a ioms[]::iom_nr for that particular iod.
+ *			This is the only accurate description of what the fetch
+ *			returned, and is required when the requested extents
+ *			came from daos_obj_list_recx() on an erasure coded
+ *			object, where they are an upper bound.
  *
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -948,6 +958,15 @@ daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 /**
  * Extent enumeration of valid records in the array.
  *
+ * For an erasure coded object the returned extents are only an UPPER BOUND. The enumeration is
+ * served by a parity shard, where a single parity block stands for a whole stripe, so a returned
+ * extent is rounded up to stripe granularity and may cover records that hold no data at all. A
+ * caller that needs the exact layout must fetch the returned extents with an io map, see
+ * daos_obj_fetch() \a ioms and DAOS_IOMF_DETAIL, and use daos_iom_t::iom_recxs. Note in
+ * particular that the length reported by the fetch cannot be used for this: only trailing holes
+ * shorten it, so a fetch of a partially populated stripe reports the full requested length while
+ * leaving the holes in the caller buffer untouched.
+ *
  * \param[in]	oh	Object open handle.
  *
  * \param[in]	th	Optional transaction handle to enumerate with.
@@ -965,7 +984,8 @@ daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *
  * \param[in,out]
  *		recxs	[in]: preallocated array of \nr records. [out]: returned
- *			records.
+ *			records. For an erasure coded object these are an upper bound, see
+ *			above.
  *
  * \param[in,out]
  *		eprs	[in]: preallocated array of \nr epoch ranges. [out]:

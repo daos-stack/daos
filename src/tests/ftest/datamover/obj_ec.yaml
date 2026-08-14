@@ -1,0 +1,43 @@
+hosts:
+  test_servers: 3
+  test_clients: 1
+
+timeout: 300
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      log_file: daos_server0.log
+      log_mask: ERR
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      log_file: daos_server1.log
+      log_mask: ERR
+      storage: auto
+
+pool:
+  size: 95%
+  svcn: 1
+
+container:
+  # the smallest cell size keeps a full stripe at 8KiB for OC_EC_2P1G1
+  properties: ec_cell_sz:4KiB
+
+dataset:
+  obj_class: OC_EC_2P1G1
+  num_objs: 4
+  num_dkeys: 2
+  num_akeys_single: 2
+  num_akeys_array: 2
+  # 16 records of 1KiB is 16KiB, two whole stripes, so parity is written at
+  # update time without waiting for aggregation
+  akey_sizes: [1024]
+  akey_extents: [16]
+  # punch the first 4KiB, one whole cell, leaving stale parity over the hole
+  punch_extents: 4
