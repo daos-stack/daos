@@ -695,13 +695,14 @@ class DaosCommand(DaosCommandBase):
             ("container", "set-attr"), pool=pool, cont=cont,
             attr=dict_to_str(attrs, ",", ":"), sys_name=sys_name)
 
-    def container_get_attr(self, pool, cont, attr, sys_name=None):
+    def container_get_attr(self, pool, cont, attr=None, sys_name=None):
         """Call daos container get-attr for a single attribute.
 
         Args:
             pool (str): pool UUID or label
             cont (str): container UUID or label
-            attr (str/list): single attribute name or list of names
+            attr (str/list, optional): single attribute name or list of names.
+                Defaults to None.
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -121,6 +122,12 @@ class DfuseContainerAttrs(TestWithServers):
 
         self.log_step("Creating DAOS container")
         container = self.get_container(pool, namespace="/run/container_02/*")
+        try:
+            self.log.info("Getting container attributes for %s", container)
+            container.get_attr()
+        except Exception as error:  # pylint: disable=broad-except
+            self.log.error(error)
+            pass
 
         self.log_step("Mounting DFuse mount point")
         dfuse = get_dfuse(self, self.dfuse_hosts)
@@ -129,7 +136,13 @@ class DfuseContainerAttrs(TestWithServers):
 
         self.log_step("Creating DAOS subcontainer with DFuse attributes")
         sub_dir = os.path.join(dfuse.mount_dir.value, "foo")
-        self.get_container(pool, namespace="/run/container_03/*", path=sub_dir)
+        sub_container = self.get_container(pool, namespace="/run/container_03/*", path=sub_dir)
+        try:
+            self.log.info("Getting container attributes for %s", sub_container)
+            sub_container.get_attr()
+        except Exception as error:  # pylint: disable=broad-except
+            self.log.error(error)
+            pass
 
         self.log_step("Checking DFuse log file")
         self._check_attrs(dfuse, namespace="/run/container_03/*")
