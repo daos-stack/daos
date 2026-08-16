@@ -1066,7 +1066,7 @@ events:
 
 ```bash
 $ dmg system query --ranks=0
-Rank UUID                                 Control Address  Fault Domain State  Reason Incarnation
+Rank UUID                                 Fabric Address   Fault Domain State  Reason Incarnation
 ---- ----                                 --------------- ------------- -----  ------ -----------
 0    12345678-1234-1234-1234-123456789012 10.0.0.1:10001  /node1        Joined        3
 ```
