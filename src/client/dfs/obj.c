@@ -894,19 +894,23 @@ ostatx_cb(tse_task_t *task, void *data)
 	/*
 	 * If we fetched from the parent dentry and it now carries the hardlink bit, we have
 	 * potentially hit a race where the file was converted to a hardlink (possibly
-	 * concurrently by another client). Since this situation is less likely to hit,
-	 * handle this race by doing a synchronous fetch from the authoritative GIT.
+	 * concurrently by another client). Re-initialize the task so that statx_task() re-runs
+	 * with the hardlink bit set and fetches from the authoritative GIT asynchronously.
 	 */
 	if (!is_obj_hardlink && DFS_IS_HARDLINK(op_args->entry.mode)) {
-		if (!daos_handle_is_valid(args->dfs->git_oh))
+		if (!daos_handle_is_valid(args->dfs->git_oh)) {
 			D_GOTO(out, rc = daos_errno2der(ENOTSUP));
-		rc = git_fetch_entry(args->dfs->git_oh, args->dfs->th, &op_args->entry.oid,
-				     &op_args->entry, 0, NULL, NULL, NULL);
-		if (rc) {
-			D_ERROR("Failed to fetch entry from GIT (%d)\n", rc);
-			D_GOTO(out, rc = daos_errno2der(rc));
+		}
+		D_FREE(op_args);
+		if (daos_handle_is_valid(args->parent_oh)) {
+			daos_obj_close(args->parent_oh, NULL);
+			args->parent_oh = DAOS_HDL_INVAL;
 		}
 		dfs_set_hardlink(&args->obj->mode);
+		rc = tse_task_reinit(task);
+		if (rc != 0)
+			D_ERROR("tse_task_reinit() failed: " DF_RC "\n", DP_RC(rc));
+		return rc;
 	}
 
 	rc = update_stbuf_times(op_args->entry, op_args->array_stbuf.st_max_epoch, args->stbuf,
@@ -1182,6 +1186,14 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 
 	if (!exists)
 		return ENOENT;
+
+	if (DFS_IS_HARDLINK(entry.mode)) {
+		if (!daos_handle_is_valid(dfs->git_oh))
+			return ENOTSUP;
+		rc = git_fetch_entry(dfs->git_oh, dfs->th, &entry.oid, &entry, 0, NULL, NULL, NULL);
+		if (rc)
+			return rc;
+	}
 
 	if (!S_ISLNK(entry.mode)) {
 		if (mask == F_OK)

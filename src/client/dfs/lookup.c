@@ -130,6 +130,15 @@ lookup_rel_path_loop:
 		if (!exists)
 			D_GOTO(err_obj, rc = ENOENT);
 
+		if (DFS_IS_HARDLINK(entry.mode)) {
+			if (!daos_handle_is_valid(dfs->git_oh))
+				D_GOTO(err_obj, rc = ENOTSUP);
+			rc = git_fetch_entry(dfs->git_oh, dfs->th, &entry.oid, &entry, 0, NULL,
+					     NULL, NULL);
+			if (rc)
+				D_GOTO(err_obj, rc);
+		}
+
 		oid_cp(&obj->oid, entry.oid);
 		oid_cp(&obj->parent_oid, parent.oid);
 		strncpy(obj->name, token, len + 1);
@@ -340,7 +349,7 @@ lookup_rel_path_loop:
 			}
 			memcpy(stbuf, &dfs->root_stbuf, sizeof(struct stat));
 		} else {
-			stbuf->st_nlink = 1;
+			stbuf->st_nlink = entry.link_cnt;
 			stbuf->st_mode  = DFS_EXTERNAL_MODE(obj->mode);
 			stbuf->st_uid   = entry.uid;
 			stbuf->st_gid   = entry.gid;
@@ -429,6 +438,19 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 
 	if (!exists)
 		return ENOENT;
+
+	if (DFS_IS_HARDLINK(entry.mode)) {
+		if (!daos_handle_is_valid(dfs->git_oh)) {
+			D_FREE(entry.value);
+			return ENOTSUP;
+		}
+		rc = git_fetch_entry(dfs->git_oh, dfs->th, &entry.oid, &entry, xnr, xnames, xvals,
+				     xsizes);
+		if (rc) {
+			D_FREE(entry.value);
+			return rc;
+		}
+	}
 
 	if (stbuf)
 		memset(stbuf, 0, sizeof(struct stat));
@@ -558,7 +580,7 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 		*mode = DFS_EXTERNAL_MODE(obj->mode);
 
 	if (stbuf) {
-		stbuf->st_nlink = 1;
+		stbuf->st_nlink = entry.link_cnt;
 		stbuf->st_mode  = DFS_EXTERNAL_MODE(obj->mode);
 		stbuf->st_uid   = entry.uid;
 		stbuf->st_gid   = entry.gid;

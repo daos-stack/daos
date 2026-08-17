@@ -920,11 +920,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 			return daos_der2errno(rc);
 		}
 
-		/*
-		 * The epoch query targets the directory object, not the inode being read, so it
-		 * must stay out of any metadata DTX the caller may hold: always use DAOS_TX_NONE.
-		 */
-		rc = daos_obj_query_max_epoch(dir_oh, DAOS_TX_NONE, &ep, NULL);
+		rc = daos_obj_query_max_epoch(dir_oh, th, &ep, NULL);
 		if (rc) {
 			daos_obj_close(dir_oh, NULL);
 			return daos_der2errno(rc);
@@ -953,28 +949,24 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 			break;
 		}
 
-		/*
-		 * The array stat targets the file's array object, not the inode being read, so it
-		 * must stay out of any metadata DTX the caller may hold: always use DAOS_TX_NONE.
-		 */
 		if (obj) {
-			rc = daos_array_stat(obj->oh, DAOS_TX_NONE, &array_stbuf, NULL);
+			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
 			if (rc)
 				return daos_der2errno(rc);
 		} else {
 			daos_handle_t file_oh;
 
-			rc = daos_array_open_with_attr(
-			    dfs->coh, entry.oid, DAOS_TX_NONE, DAOS_OO_RO, 1,
-			    entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size, &file_oh,
-			    NULL);
+			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, DAOS_OO_RO, 1,
+						       entry.chunk_size ? entry.chunk_size
+									: dfs->attr.da_chunk_size,
+						       &file_oh, NULL);
 			if (rc) {
 				D_ERROR("daos_array_open_with_attr() failed " DF_RC "\n",
 					DP_RC(rc));
 				return daos_der2errno(rc);
 			}
 
-			rc = daos_array_stat(file_oh, DAOS_TX_NONE, &array_stbuf, NULL);
+			rc = daos_array_stat(file_oh, th, &array_stbuf, NULL);
 			if (rc) {
 				daos_array_close(file_oh, NULL);
 				return daos_der2errno(rc);

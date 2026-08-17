@@ -4418,6 +4418,13 @@ dfs_test_xattr_hardlink(void **state)
  *  6. dfs_osetattr size; verify via dfs_ostat, dfs_stat and dfs_ostatx.
  *  7. dfs_osetattr mtime; verify via dfs_ostat and confirm the mode set in step 2 is intact (the
  *     internal hardlink bit was preserved on the mode write).
+ *  8. dfs_chmod by one link name; verify via dfs_ostat and dfs_stat on the other link.
+ *  9. dfs_chown by the other link name; verify via dfs_ostat and dfs_stat.
+ * 10. dfs_chown via file1; verify dfs_lookup_rel on file1_l2 returns updated uid/gid/mode/nlink.
+ * 11. dfs_chmod via file1_l2; verify dfs_lookup on /shl_dir1/file1 returns updated mode/nlink.
+ * 12. dfs_access cross-link: chmod to read-only via file1, verify W_OK fails on file1_l2.
+ * 13. Add a third link; verify dfs_lookup_rel and dfs_lookup both report st_nlink == 3.
+ * 14. HACK test to validate task reinit called in dfs_ostatx callback.
  */
 static void
 dfs_test_setattr_hardlink(void **state)
@@ -4425,6 +4432,8 @@ dfs_test_setattr_hardlink(void **state)
 	test_arg_t  *arg = *state;
 	dfs_obj_t   *dir1;
 	dfs_obj_t   *hA, *hB, *l2_obj;
+	dfs_obj_t   *tmp_obj, *l3_obj;
+	mode_t       mode;
 	struct stat  stbuf;
 	daos_event_t ev, *evp;
 	bool         use_dtx = false;
@@ -4604,6 +4613,174 @@ dfs_test_setattr_hardlink(void **state)
 	/** mode from step 8 still intact after chown (only owner changed). */
 	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRUSR | S_IWUSR));
 	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/**
+	 * Step 10: Change uid/gid via dfs_chown on file1, then verify dfs_lookup_rel on file1_l2
+	 * returns the updated attributes (exercises lookup_rel_int reading from GIT).
+	 */
+	print_message("Step 10: dfs_chown via file1, verify dfs_lookup_rel on file1_l2\n");
+	rc = dfs_chown(dfs_mt, dir1, "file1", 10, 11, 0);
+	assert_int_equal(rc, 0);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_lookup_rel(dfs_mt, dir1, "file1_l2", O_RDWR, &tmp_obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 10);
+	assert_int_equal(stbuf.st_gid, 11);
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRUSR | S_IWUSR));
+	assert_int_equal(mode, (mode_t)(S_IFREG | S_IRUSR | S_IWUSR));
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 11: Change mode via dfs_chmod on file1_l2, then verify dfs_lookup on /shl_dir1/file1
+	 * returns the updated mode (exercises lookup_rel_path reading from GIT).
+	 */
+	print_message("Step 11: dfs_chmod via file1_l2, verify dfs_lookup on /shl_dir1/file1\n");
+	rc = dfs_chmod(dfs_mt, dir1, "file1_l2", S_IRWXU);
+	assert_int_equal(rc, 0);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_lookup(dfs_mt, "/shl_dir1/file1", O_RDWR, &tmp_obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRWXU));
+	assert_int_equal(mode, (mode_t)(S_IFREG | S_IRWXU));
+	/** uid/gid from step 10 still intact. */
+	assert_int_equal(stbuf.st_uid, 10);
+	assert_int_equal(stbuf.st_gid, 11);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+	/** also verify dfs_lookup on the other path */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_lookup(dfs_mt, "/shl_dir1/file1_l2", O_RDWR, &tmp_obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRWXU));
+	assert_int_equal(mode, (mode_t)(S_IFREG | S_IRWXU));
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 12: dfs_access cross-link permission verification. First restore ownership to the
+	 * running process. Then chmod file1 to read-only and verify W_OK fails on file1_l2.
+	 */
+	print_message("Step 12: dfs_access cross-link permission check\n");
+	rc = dfs_chown(dfs_mt, dir1, "file1", getuid(), getgid(), 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_access(dfs_mt, dir1, "file1", F_OK);
+	assert_int_equal(rc, 0);
+	rc = dfs_access(dfs_mt, dir1, "file1_l2", F_OK);
+	assert_int_equal(rc, 0);
+	/** current mode from step 11 is S_IRWXU; R_OK | W_OK must succeed. */
+	rc = dfs_access(dfs_mt, dir1, "file1", R_OK | W_OK);
+	assert_int_equal(rc, 0);
+	rc = dfs_access(dfs_mt, dir1, "file1_l2", R_OK | W_OK);
+	assert_int_equal(rc, 0);
+	/** chmod file1 to read-only via one link name. */
+	rc = dfs_chmod(dfs_mt, dir1, "file1", S_IRUSR);
+	assert_int_equal(rc, 0);
+	/** W_OK must now fail on the *other* link (permission fetched from GIT). */
+	rc = dfs_access(dfs_mt, dir1, "file1_l2", W_OK);
+	assert_int_equal(rc, EACCES);
+	/** R_OK must still succeed on the other link. */
+	rc = dfs_access(dfs_mt, dir1, "file1_l2", R_OK);
+	assert_int_equal(rc, 0);
+	/** same checks on the link whose name was used for chmod. */
+	rc = dfs_access(dfs_mt, dir1, "file1", W_OK);
+	assert_int_equal(rc, EACCES);
+	rc = dfs_access(dfs_mt, dir1, "file1", R_OK);
+	assert_int_equal(rc, 0);
+	/** restore read-write for cleanup. */
+	rc = dfs_chmod(dfs_mt, dir1, "file1_l2", S_IRUSR | S_IWUSR);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 13: Add a third link, verify dfs_lookup_rel and dfs_lookup both report st_nlink
+	 * == 3. Then remove the third link and verify nlink drops back to 2.
+	 */
+	print_message("Step 13: add third link, verify nlink via lookup_rel and lookup\n");
+	l3_obj = NULL;
+	rc     = dfs_link(dfs_mt, hA, dir1, "file1_l3", &l3_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_non_null(l3_obj);
+	assert_int_equal((int)stbuf.st_nlink, 3);
+
+	/** dfs_lookup_rel on file1_l2 must report nlink == 3. */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_lookup_rel(dfs_mt, dir1, "file1_l2", O_RDWR, &tmp_obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 3);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/** dfs_lookup on /shl_dir1/file1 must report nlink == 3. */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_lookup(dfs_mt, "/shl_dir1/file1", O_RDWR, &tmp_obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 3);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/** remove the third link and verify nlink drops back to 2. */
+	rc = dfs_release(l3_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "file1_l3", 0, NULL);
+	assert_int_equal(rc, 0);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_lookup_rel(dfs_mt, dir1, "file1", O_RDWR, &tmp_obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 14 HACK test: async dfs_ostatx reinit path. Open a new file, convert it to a
+	 * hardlink, update metadata via the hardlink handle, then call async dfs_ostatx on the
+	 * stale pre-conversion handle. The parent dentry carries the hardlink bit while the
+	 * stale handle does not, triggering the reinit path in ostatx_cb() to re-fetch from GIT
+	 * asynchronously.
+	 */
+	print_message("Step 14: async dfs_ostatx reinit on stale handle\n");
+	rc = dfs_open(dfs_mt, dir1, "file2", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &tmp_obj);
+	assert_int_equal(rc, 0);
+	l3_obj = NULL;
+	rc     = dfs_link(dfs_mt, tmp_obj, dir1, "file2_l2", &l3_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_non_null(l3_obj);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/** update metadata via the hardlink handle */
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_uid = 50;
+	stbuf.st_gid = 60;
+	rc           = dfs_osetattr(dfs_mt, l3_obj, &stbuf, DFS_SET_ATTR_UID | DFS_SET_ATTR_GID);
+	assert_int_equal(rc, 0);
+
+	/** async dfs_ostatx on the stale handle triggers reinit */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_ostatx(dfs_mt, tmp_obj, &stbuf, &ev);
+	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 50);
+	assert_int_equal(stbuf.st_gid, 60);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	rc = dfs_release(l3_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "file2_l2", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "file2", 0, NULL);
+	assert_int_equal(rc, 0);
 
 	/** Cleanup */
 	rc = dfs_release(l2_obj);
