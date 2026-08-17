@@ -191,6 +191,9 @@ src/cart:
 src/client/dfs/:
   test-tag: dfs
 
+src/client/dfuse/:
+  test-tag: dfuse
+
 src/client/pydaos/torch/:
   test-tag: pytorch
 
