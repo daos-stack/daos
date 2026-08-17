@@ -123,13 +123,13 @@ class OSAOnlineParallelTest(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            threads = []
-            for oclass, api, test, flags in product(self.ior_dfs_oclass,
-                                                    self.ior_apis,
-                                                    self.ior_test_sequence,
-                                                    self.ior_flags):
+            ior_threads = []
+            dmg_threads = []
+            for oclass, test, flags in product(self.ior_dfs_oclass,
+                                               self.ior_test_sequence,
+                                               self.ior_flags):
                 # Action dictionary with OSA dmg command parameters
-                action_kwargs = {
+                action_args = {
                     "drain": {"pool": self.pool.identifier, "ranks": rank,
                               "tgt_idx": None},
                     "exclude": {"pool": self.pool.identifier,
@@ -143,34 +143,44 @@ class OSAOnlineParallelTest(OSAUtils):
                 }
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
-                    threads.append(threading.Thread(target=self.ior_thread,
-                                                    kwargs={
+                    ior_threads.append(threading.Thread(target=self.ior_thread,
+                                                        kwargs={
                                                         "pool": self.pool.identifier,
                                                         "oclass": oclass,
-                                                        "api": api,
                                                         "test": test,
                                                         "flags": flags,
                                                         "results":
                                                         self.out_queue}))
                 # Launch the IOR threads
-                for thrd in threads:
-                    self.log.info("Thread : %s", thrd)
-                    thrd.start()
+                for ior_thrd in ior_threads:
+                    self.log.info("Thread : %s", ior_thrd)
+                    ior_thrd.start()
+
+                # Wait for 5 seconds after starting IOR command
+                time.sleep(5)
+
+                for action in sorted(action_args):
+                    # Add dmg threads
+                    dmg_threads.append(threading.Thread(target=self.dmg_thread,
+                                                        kwargs={
+                                                        "action": action,
+                                                        "action_args": action_args,
+                                                        "results": self.out_queue}))
+
+                # Launch the dmg threads with 2 second delay between each thread
+                for dmg_thrd in dmg_threads:
+                    self.log.info("Thread : %s", dmg_thrd)
+                    dmg_thrd.start()
                     time.sleep(2)
 
-                for action in sorted(action_kwargs):
-                    # Add a dmg thread
-                    kwargs = action_kwargs[action].copy()
-                    kwargs['action'] = action
-                    kwargs['results'] = self.out_queue
-                    process = threading.Thread(target=self.dmg_thread, kwargs=kwargs)
-                    self.log.info("Starting pool %s in a thread", action)
-                    process.start()
-                    threads.append(process)
-
                 # Wait to finish the threads (dmg commands to get executed)
-                for thrd in threads:
-                    thrd.join(timeout=100)
+                for dmg_thrd in dmg_threads:
+                    dmg_thrd.join(timeout=100)
+
+                # Wait the IOR threads to finish
+                for ior_thrd in ior_threads:
+                    self.log.info("Thread : %s", ior_thrd)
+                    ior_thrd.join()
 
             # Check data consistency for IOR in future
             # Presently, we are running daos_racer in parallel

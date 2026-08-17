@@ -54,8 +54,6 @@ ior:
   iorflags:
     ior_flags:
       - "-w -r -R -k -G 1"
-    ior_api:
-      - DFS
     obj_class:
       - "EC_2P2GX"
   ior_test_sequence:
