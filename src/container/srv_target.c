@@ -2202,13 +2202,15 @@ cont_snap_update_one(void *vin)
 	struct ds_cont_child	*cont;
 	int			 rc;
 
-	/* The container should be exist on the system at this point, if non-exist on this target
-	 * it should be the case of reintegrate the container was destroyed ahead, so just
-	 * open_create the container here.
-	 */
-	rc = ds_cont_child_open_create(args->pool_uuid, args->cont_uuid, false, &cont);
-	if (rc != 0)
+	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	if (rc != 0) {
+		if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING) {
+			D_DEBUG(DB_MD, DF_CONT ": skip: " DF_RC "\n",
+				DP_CONT(args->pool_uuid, args->cont_uuid), DP_RC(rc));
+			rc = 0;
+		}
 		return rc;
+	}
 
 	if (args->snap_count == 0) {
 		if (cont->sc_snapshots != NULL) {
