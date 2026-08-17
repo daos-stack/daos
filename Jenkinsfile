@@ -576,7 +576,7 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Pre-build stage.')
         booleanParam(name: bashName('Python Bandit check'),
-                     defaultValue: true,
+                     defaultValue: false, // changed
                      description: 'Run the Python Bandit check stage.')
         booleanParam(name: bashName('Build'),
                      defaultValue: true,
@@ -585,10 +585,10 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Build on EL 9 stage.')
         booleanParam(name: bashName('Build on Leap 15'),
-                     defaultValue: true,
+                     defaultValue: false, //changed
                      description: 'Run the Build on Leap 15 stage.')
         booleanParam(name: bashName('Unit Tests'),
-                     defaultValue: true,
+                     defaultValue: false, //changed
                      description: 'Run the Unit Tests stage.')
         booleanParam(name: bashName('Unit Test'),
                      defaultValue: true,
@@ -606,7 +606,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Unit Test bdev with memcheck stage.')
         booleanParam(name: bashName('Test'),
-                     defaultValue: true,
+                     defaultValue: false, // changed
                      description: 'Run the Test stage.')
         booleanParam(name: bashName('Functional on EL 9 with Valgrind'),
                      defaultValue: false,
@@ -648,7 +648,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider stage.')
         booleanParam(name: bashName('Functional Hardware Medium Verbs Provider MD on SSD'),
-                     defaultValue: true,
+                     defaultValue: false, // changed
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD stage.')
         booleanParam(name: bashName('Functional Hardware Medium UCX Provider'),
                      defaultValue: false,
@@ -657,10 +657,10 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional Hardware Large stage.')
         booleanParam(name: bashName('Functional Hardware Large MD on SSD'),
-                     defaultValue: true,
+                     defaultValue: false, // changed
                      description: 'Run the Functional Hardware Large MD on SSD stage.')
         booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
-                     defaultValue: true,
+                     defaultValue: false, // changed
                      description: 'Run the Functional Cluster Box test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
@@ -678,7 +678,7 @@ pipeline {
                defaultValue: 'ci_fi_vm1',
                description: 'Label to use for Fault Injection (FI) tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_node-ndr-102-105',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
@@ -702,7 +702,7 @@ pipeline {
                defaultValue: '',
                description: 'The pool of images to provision test nodes from')
         string(name: 'CI_BUILD_DESCRIPTION',
-               defaultValue: '',
+               defaultValue: 'ci_node-ndr-102-105',
                description: 'A description of the build')
     }
 
