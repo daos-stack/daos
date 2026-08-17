@@ -1,4 +1,8 @@
 %changelog
+* Tue Aug 11 2026  Jan Michalski <jan-marian.michalski@hpe.com@hpe.com> - 2.1.4-0
+- No functional changes compared to 2.1.3-2. Just fully validated and officially released.
+
+  DAOS-18882, DAOS-12860, DAOS-11978)
 * Fri Apr 24 2026  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 2.1.3-2
 - Fix "The pool was not closed" message (no ADR failure) (daos-stack/pmdk#36, DAOS-18692)
 - Fix recalculate curr_allocated on underflow (daos-stack/pmdk#37, daos-stack/pmdk#38,

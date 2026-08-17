@@ -183,6 +183,7 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         dmg.system_start(ranks=ranks_x)
         self.server_managers[0].update_expected_states(ranks_x, ['joined'])
         self._verify_rank_state(all_ranks, 'joined', tries=5, delay=3)
+        self._wait_stabilization_delay()
 
         self.log_step('Scenario 3 - Reintegrate the rank and wait for rebuild')
         dmg.system_reintegrate(list_to_str(ranks_x))
@@ -245,6 +246,7 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         dmg.system_start(ranks=list_to_str(ranks_over_rf))
         self.server_managers[0].update_expected_states(ranks_over_rf, ['joined'])
         self._verify_rank_state(all_ranks, 'joined', tries=5, delay=3)
+        self._wait_stabilization_delay()
 
         self.log_step('Scenario 4 - Reset system self_heal to default')
         dmg.system_set_prop('self_heal:exclude;pool_exclude;pool_rebuild')
@@ -291,6 +293,7 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         dmg.system_start()
         self.server_managers[0].update_expected_states(all_ranks, ['joined'])
         self._verify_rank_state(all_ranks, 'joined', tries=5, delay=3)
+        self._wait_stabilization_delay()
 
         self.log_step('Scenario 5 - Reset system self_heal to default')
         dmg.system_set_prop('self_heal:exclude;pool_exclude;pool_rebuild')
@@ -340,6 +343,7 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         dmg.system_start()
         self.server_managers[0].update_expected_states(all_ranks, ['joined'])
         self._verify_rank_state(all_ranks, 'joined', tries=5, delay=3)
+        self._wait_stabilization_delay()
 
         self.log_step('Scenario 6 - Reset system self_heal to default')
         dmg.system_set_prop('self_heal:exclude;pool_exclude;pool_rebuild')
@@ -452,3 +456,10 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         detection_delay = 30
         self.log.info('Waiting for detection delay of %s seconds', detection_delay)
         time.sleep(detection_delay)
+
+    def _wait_stabilization_delay(self):
+        """Wait for the system to stabilize after a system start command."""
+        # Allow SWIM and system map distribution to stabilize
+        stabilization_delay = 30
+        self.log.info('Waiting for stabilization delay of %s seconds', stabilization_delay)
+        time.sleep(stabilization_delay)
