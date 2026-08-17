@@ -2664,6 +2664,20 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	}
 
 	D_ASSERT(ioc.ioc_coc != NULL);
+	if (ds_pool_child_ec_agg_paused(ioc.ioc_coc->sc_pool)) {
+		rc = -DER_OP_CANCELED;
+		DL_INFO(rc, DF_CONT " reject EC aggregation update while rebuild pause gate is set",
+			DP_CONT(ioc.ioc_coc->sc_pool_uuid, ioc.ioc_coc->sc_uuid));
+		goto out;
+	}
+	D_ASSERTF(!ds_pool_child_rebuild_started(ioc.ioc_coc->sc_pool),
+		  DF_CONT " EC aggregation handler after rebuild START: "
+			  "rank %u tgt %d " DF_UOID " stripe " DF_U64 " epoch " DF_X64 "-" DF_X64
+			  " global_pause_done " DF_X64 "\n",
+		  DP_CONT(ioc.ioc_coc->sc_pool_uuid, ioc.ioc_coc->sc_uuid), dss_self_rank(),
+		  dss_get_module_info()->dmi_tgt_id, DP_UOID(oea->ea_oid), oea->ea_stripenum,
+		  oea->ea_epoch_range.epr_lo, oea->ea_epoch_range.epr_hi,
+		  atomic_load(&ioc.ioc_coc->sc_pool->spc_rebuild_ec_agg_paused_hlc));
 	ioc.ioc_coc->sc_ec_agg_updates++;
 
 	dkey = (daos_key_t *)&oea->ea_dkey;
