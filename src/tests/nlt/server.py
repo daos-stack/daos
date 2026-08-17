@@ -448,10 +448,15 @@ class DaosServer():
 
         self.conf.compress_file(self.agent_log.name)
         self.conf.compress_file(self.control_log.name)
+        self.conf.compress_file(self.helper_log.name)
 
+        # Always keep the shared server logs; analyze the engine log for findings but do not let
+        # log_test prune it.  Only the client logs (per-command/dfuse/FI) are pruned when clean.
         for log in self.server_logs:
-            log_test(self.conf, log.name, leak_wf=wf, skip_fi=self._fi)
-            self.server_logs.remove(log)
+            log_test(self.conf, log.name, leak_wf=wf, skip_fi=self._fi, defer_prune=True)
+            if os.path.exists(log.name):
+                self.conf.compress_file(log.name)
+        self.server_logs = []
         self.running = False
         return ret
 

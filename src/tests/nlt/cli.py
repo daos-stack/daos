@@ -59,6 +59,8 @@ def main():
                              '(default nlt-summary[-<class-name>].md, "" to disable)')
     parser.add_argument('--suite', default='ci', choices=['ci', 'manual', 'all'],
                         help='which test suite to run: ci (default), manual (long/opt-in), or all')
+    parser.add_argument('--keep-logs', action='store_true',
+                        help='keep every log; by default only logs with findings are retained')
     parser.add_argument('--perf-check', action='store_true')
     parser.add_argument('--log-usage-import')
     parser.add_argument('--log-usage-export')
