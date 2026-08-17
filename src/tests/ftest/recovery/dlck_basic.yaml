@@ -15,8 +15,5 @@ server_config:
       targets: 4
       storage: auto
 
-setup:
-  start_servers_once: False
-
 pool:
   size: 50%

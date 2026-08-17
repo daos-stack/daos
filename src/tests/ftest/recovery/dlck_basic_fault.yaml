@@ -12,14 +12,8 @@ server_config:
       targets: 4
       storage: auto
 
-setup:
-  start_servers_once: True
-
 pool:
   size: 50%
-
-dlck:
-  scm_mount: /mnt/daos0
 
 faults:
   create_log_dir:

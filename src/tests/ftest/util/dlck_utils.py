@@ -1,18 +1,20 @@
 """
-  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+  Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 
-from command_utils_base import CommandWithParameters, FormattedParameter
+from command_utils import ExecutableCommand
+from command_utils_base import FormattedParameter
 from run_utils import run_remote
 
 
-class DlckCommand(CommandWithParameters):
+class DlckCommand(ExecutableCommand):
     """Defines the basic structures of dlck command."""
 
     def __init__(self, server_host, path, pool_uuid=None, nvme_conf=None, storage_mount=None,
-                 verbose=True, timeout=None, sudo=True, env_str=None):
+                 verbose=True, timeout=None, sudo=True):
         """Constructor that sets the common variables for sub-commands.
 
         Args:
@@ -26,13 +28,13 @@ class DlckCommand(CommandWithParameters):
             timeout (int, optional): Command timeout (sec) used in run. Defaults to
                 None.
             sudo (bool, optional): Whether to run dlck with sudo. Defaults to True.
-            env_str (str, optional): Environment variable string to prepend to command.
         """
         super().__init__("/run/dlck/*", "dlck", path)
-        # Pass environment variable string
-        self.env_str = ""
-        if env_str is not None:
-            self.env_str = str(env_str)
+        # Pass D_FI_CONFIG environment variable string
+        fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
+        if fault_inject_file == "None set for now":
+            self.fail("D_FI_CONFIG environment variable not set")
+        self.env_str = str("D_FI_CONFIG={} ".format(fault_inject_file))
 
         # We need to run with sudo.
         self.sudo = sudo

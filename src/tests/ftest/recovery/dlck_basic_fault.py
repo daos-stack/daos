@@ -23,8 +23,8 @@ class DlckBasicFaultTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery
-        :avocado: tags=DlckBasicFaultTest,dlck_cmd,test_dlck_basic_fault
+        :avocado: tags=recovery,dlck_cmd
+        :avocado: tags=DlckBasicFaultTest,test_dlck_basic_fault
         """
         errors = []
         faults_dict = {}
@@ -32,35 +32,33 @@ class DlckBasicFaultTest(TestWithServers):
         faults_dict = faults_object.get_faults_dict()
         fault_list = self.params.get("fault_list", '/run/dlck_test_additional_faults/*')
         dmg = self.get_dmg_command()
-        add_pool(self)
-        pool_uuids = dmg.get_pool_list_uuids(no_query=True)
+        pool = add_pool(self)
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
+        if fault_inject_file == "None set for now":
+            self.fail("D_FI_CONFIG environment variable not set")
+        self.log.info("Fault injection file contents")
+        cmd = "cat {}".format(fault_inject_file)
+        host = self.server_managers[0].hosts[0:1]
+        self.log_step("Run the command to read the fault injection file contents")
+        run_remote(self.log, self.hostlist_clients[0], cmd, timeout=30)
+        # Run the testing with the first fault which is injected at the beginning of the test.
         if self.server_managers[0].manager.job.using_control_metadata:
             log_dir = os.path.dirname(self.server_managers[0].get_config_value("log_file"))
             control_metadata_dir = os.path.join(log_dir, "control_metadata")
             daos_control_dir = os.path.join(control_metadata_dir, "daos_control")
             engine_path_dir = os.path.join(daos_control_dir, "engine0")
             nvme_conf = os.path.join(engine_path_dir, "daos_nvme.conf")
-        fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
-        if fault_inject_file == "None set for now":
-            self.fail("D_FI_CONFIG environment variable not set")
-        env_str = "D_FI_CONFIG={} ".format(fault_inject_file)
-        self.log.info("Fault injection file contents")
-        cmd = "cat {}".format(fault_inject_file)
-        host = self.server_managers[0].hosts[0:1]
-        run_remote(self.log, self.hostlist_clients[0], cmd, timeout=30)
-        dmg.system_stop()
-        # Run the testing with the first fault which is injected at the beginning of the test.
-        if self.server_managers[0].manager.job.using_control_metadata:
-            dlck_cmd = DlckCommand(host, self.bin, pool_uuids[0], nvme_conf=nvme_conf,
-                                   storage_mount=scm_mount, env_str=env_str)
+            dlck_cmd = DlckCommand(host, self.bin, pool.uuid[0], nvme_conf=nvme_conf,
+                                   storage_mount=scm_mount)
         else:
-            dlck_cmd = DlckCommand(host, self.bin, pool_uuids[0], storage_mount=scm_mount,
-                                   env_str=env_str)
+            dlck_cmd = DlckCommand(host, self.bin, pool.uuid[0], storage_mount=scm_mount)
+        self.log_step("Perform dmg system stop to run dlck command")
+        dmg.system_stop()
+        self.log_step("Run dlck command after injecting the first fault")
         result = dlck_cmd.run()
         if not result.passed:
             errors.append(f"dlck failed on {result.failed_hosts}")
-        self.log.info("dlck basic test output: %s \n", result)
         # Now, run the other fault injection flags without rebooting or creating any new pools.
         # Rebooting the servers or creating the new pools will result in injecting fault in
         # the wrong test code. Fault injections should done only for the dlck alone.
@@ -81,15 +79,15 @@ class DlckBasicFaultTest(TestWithServers):
             distribute_files(self.log, self.hostlist_servers, fault_inject_file,
                              fault_inject_file)
             if self.server_managers[0].manager.job.using_control_metadata:
-                dlck_cmd = DlckCommand(host, self.bin, pool_uuids[0], nvme_conf=nvme_conf,
-                                       storage_mount=scm_mount, env_str=env_str)
+                dlck_cmd = DlckCommand(host, self.bin, pool.uuid[0], nvme_conf=nvme_conf,
+                                       storage_mount=scm_mount)
             else:
-                dlck_cmd = DlckCommand(host, self.bin, pool_uuids[0], storage_mount=scm_mount,
-                                       env_str=env_str)
+                dlck_cmd = DlckCommand(host, self.bin, pool.uuid[0], storage_mount=scm_mount)
+            self.log_step("Run dlck command after injecting fault")
             result = dlck_cmd.run()
             if not result.passed:
                 errors.append(f"dlck failed on {result.failed_hosts}")
-            self.log.info("dlck basic test output: %s", result)
+        self.log_step("Run the dmg start command")
         dmg.system_start()
         if errors:
             self.fail(f"dlck basic faulttest failed with errors: {errors}")
