@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -20,7 +20,7 @@ class DmgPoolExcludeRanks(ControlTestBase):
         super().setUp()
 
         # Init the pool
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
     def test_pool_exclude_ranks_basic(self):
         """Test the exclusion when it break Pool RF.
