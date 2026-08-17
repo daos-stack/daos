@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -93,7 +94,7 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
             TelemetryUtils.ENGINE_IO_OPS_FETCH_ACTIVE_METRICS +\
             TelemetryUtils.ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
         loop = 0
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         self.add_container(pool=self.pool)
         metrics_data = {}
         for block_size in block_sizes:
