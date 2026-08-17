@@ -10,7 +10,7 @@ available under `src/tests`.
 
 `libdaos` is written in C and uses Doxygen comments that are added to C header
 files. The Doxygen documentation is available
-[here](https://docs.daos.io/v2.6/doxygen/html/).
+[here](https://docs.daos.io/v2.8/doxygen/html/).
 
 ## Python Bindings
 
@@ -26,9 +26,9 @@ turnaround time on implementing test cases for DAOS.
 The Python API is split into several files based on functionality:
 
 * The Python object API:
-  [daos_api.py](https://github.com/daos-stack/daos/tree/master/src/client/pydaos/raw/daos_api.py).
+  [daos\_api.py](https://github.com/daos-stack/daos/tree/master/src/client/pydaos/raw/daos_api.py).
 * The mapping of C structures to Python classes
-  [daos_cref.py](https://github.com/daos-stack/daos/tree/master/src/client/pydaos/raw/daos_cref.py)
+  [daos\_cref.py](https://github.com/daos-stack/daos/tree/master/src/client/pydaos/raw/daos_cref.py)
 
 High-level abstraction classes exist to manipulate DAOS storage:
 ```python
