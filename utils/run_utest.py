@@ -366,8 +366,6 @@ class Test():
         self.cmd = self.subst(config["cmd"], config.get("replace_path", {}), path_info)
         self.env = os.environ.copy()
         self.last = []
-        # Populated by setup(); pre-declared here so pylint doesn't flag them
-        # as defined-outside-init (attribute-defined-outside-init).
         self._san_log_snapshot = None
         self._cmocka_xml_snapshot = None
         env_vars = config.get("env_vars", {})
@@ -539,8 +537,8 @@ class Test():
                         with open(full_path + ".testname", "w",
                                   encoding="utf-8") as tf:
                             tf.write(binary_name)
-                    except OSError:
-                        pass  # best-effort; do not fail the test run
+                    except OSError as exc:
+                        print(f"Warning: failed to copy sanitizer log {full_path}: {exc}")
 
     def run(self, base, memcheck, sudo):
         """Run the test"""
