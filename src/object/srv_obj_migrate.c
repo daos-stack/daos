@@ -3483,6 +3483,7 @@ migrate_obj_ult(void *data)
 	daos_epoch_range_t	epr;
 	daos_epoch_t		stable_epoch = 0;
 	daos_handle_t            coh          = arg->ioa_coh;
+	bool                     obj_done     = false;
 	int			i;
 	int			rc = 0;
 
@@ -3559,16 +3560,18 @@ migrate_obj_ult(void *data)
 	epr.epr_hi = tls->mpt_max_eph;
 	if (arg->epoch > 0) {
 		rc = migrate_obj_epoch(tls, arg, &epr);
+		if (rc == 0)
+			obj_done = true;
 	} else {
 		/* The obj has been punched for this range */
 		D_DEBUG(DB_REBUILD,
 			DF_RB ": punched obj " DF_UOID " epoch " DF_U64 "/" DF_U64 "/" DF_U64 "\n",
 			DP_RB_MPT(tls), DP_UOID(arg->oid), arg->epoch, arg->punched_epoch,
 			epr.epr_hi);
-		arg->epoch = DAOS_EPOCH_MAX;
+		obj_done = true;
 	}
 free:
-	if (arg->epoch == DAOS_EPOCH_MAX)
+	if (obj_done)
 		tls->mpt_obj_count++;
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_OBJ_FAIL) &&
