@@ -106,6 +106,9 @@ dss_get_module_info(void)
 	struct daos_thread_local_storage *dtc;
 
 	dtc = dss_tls_get();
+	if (dtc == NULL)
+		return NULL;
+
 	dmi = (struct dss_module_info *)
 	      dss_module_key_get(dtc, &daos_srv_modkey);
 	return dmi;

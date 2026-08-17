@@ -424,7 +424,8 @@ class TelemetryUtils():
         "engine_nvme_power_cycles",
         "engine_nvme_commands_ctrl_busy_time",
         "engine_nvme_power_on_hours",
-        "engine_nvme_unsafe_shutdowns"]
+        "engine_nvme_unsafe_shutdowns",
+        "engine_nvme_percentage_used"]
     ENGINE_NVME_TEMP_METRICS = [
         "engine_nvme_temp_current"]
     ENGINE_NVME_TEMP_TIME_METRICS = [

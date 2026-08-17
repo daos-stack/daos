@@ -6,6 +6,7 @@
 # 'recipe' for Docker to build an image of Leap based
 # environment for building the DAOS project.
 #
+# Use --target build-ci to create image with basic build environment for gcc
 
 # Pull base image
 ARG POINT_RELEASE=
@@ -15,7 +16,7 @@ LABEL maintainer="daos@daos.groups.io"
 # Needed for later use of BASE_DISTRO
 ARG BASE_DISTRO
 
-# Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
+# Intermittent cache-bust. Refresh base image at least once a week.
 ARG CB0
 
 ARG REPO_FILE_URL
@@ -23,35 +24,53 @@ ARG JENKINS_URL
 ARG REPOS
 ARG DAOS_LAB_CA_FILE_URL
 
-# Accept DAOS_NO_PROXY at build time
+# Accept DAOS_HTTP_PROXY, DAOS_HTTPS_PROXY, and DAOS_NO_PROXY at build time
+ARG DAOS_HTTP_PROXY
+ARG DAOS_HTTPS_PROXY
 ARG DAOS_NO_PROXY
 # Propagate into the build environment
-ENV no_proxy=${DAOS_NO_PROXY}
-ENV NO_PROXY=${DAOS_NO_PROXY}
+ENV http_proxy=${DAOS_HTTP_PROXY} \
+    HTTP_PROXY=${DAOS_HTTP_PROXY} \
+    https_proxy=${DAOS_HTTPS_PROXY} \
+    HTTPS_PROXY=${DAOS_HTTPS_PROXY} \
+    no_proxy=${DAOS_NO_PROXY} \
+    NO_PROXY=${DAOS_NO_PROXY}
 # Persist into /etc/environment for use by shells and services
-RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
-    echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
+RUN set -e; \
+    if [ -n "$DAOS_HTTP_PROXY" ]; then \
+        echo "http_proxy=$DAOS_HTTP_PROXY" >> /etc/environment; \
+        echo "HTTP_PROXY=$DAOS_HTTP_PROXY" >> /etc/environment; \
+    fi; \
+    if [ -n "$DAOS_HTTPS_PROXY" ]; then \
+        echo "https_proxy=$DAOS_HTTPS_PROXY" >> /etc/environment; \
+        echo "HTTPS_PROXY=$DAOS_HTTPS_PROXY" >> /etc/environment; \
+    fi; \
+    if [ -n "$DAOS_NO_PROXY" ]; then \
+        echo "no_proxy=$DAOS_NO_PROXY" >> /etc/environment; \
+        echo "NO_PROXY=$DAOS_NO_PROXY" >> /etc/environment; \
+    fi
 
-# script to install OS updates basic tools and daos dependencies
-COPY ./utils/scripts/install-leap15.sh /tmp/install.sh
-# script to setup local repo if available
+# Script to setup local repo if available
 COPY ./utils/scripts/helpers/repo-helper-leap15.sh /tmp/repo-helper.sh
 
-RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
-    /tmp/repo-helper.sh &&                          \
+RUN chmod +x /tmp/repo-helper.sh && \
+    /tmp/repo-helper.sh &&          \
     rm -f /tmp/repo-helper.sh
 
-FROM basic
-# Install OS updates and package.  Include basic tools and daos dependencies
-# Install OS updates and package.  Include basic tools and daos dependencies
-# The unset commands are currently needed for the combination of running
-# with a local repository, yet needing a proxy to reach outside repositories.
-# This needs to be moved to a shell script like above in the future to
-# properly only remove the proxy variables only when they need to be removed
-RUN dnf upgrade &&        \
-    /tmp/install.sh &&    \
-    dnf clean all &&      \
-    rm -f /tmp/install.sh
+# Install OS updates.
+RUN dnf upgrade && \
+    dnf clean all
+
+# Setup docker image for gcc build only
+FROM basic AS build-ci
+# Script to install basic tools and DAOS dependencies
+COPY ./utils/scripts/install-leap15.sh /tmp/install.sh
+
+# Install basic tools and DAOS dependencies
+RUN dnf upgrade &&                                  \
+    chmod +x /tmp/install.sh &&                     \
+    INSTALL_BUILD_CI_ONLY="true" /tmp/install.sh && \
+    dnf clean all
 
 # According to https://pkgs.org/search/?q=lua-lmod, Leap 15.6 only has lua-lmod-8.7.34.
 # This version has a problem with loading modules, as described in https://github.com/TACC/Lmod/issues/687.
@@ -62,49 +81,65 @@ RUN dnf upgrade &&        \
 # opensuse-oss for lua53, lua53-luaterm,, sqlite3-tcl, tcl
 # opensuse-devel-languages-lua for lua53-luafilesystem, lua53-luaposix
 ARG JENKINS_URL
-RUN if [ -n "$JENKINS_URL" ]; then \
-    dnf -y remove lua-lmod; \
+RUN if [ -n "$JENKINS_URL" ]; then                                                                       \
+    dnf -y remove lua-lmod;                                                                              \
     dnf -y --nogpgcheck install lua-lmod --repo '*lua*' --repo '*network-cluster*' --repo '*oss-proxy*'; \
     fi
-
+    
 # Add DAOS users
 ARG UID=1000
 COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
      /tmp/daos-server-user-setup.sh
 RUN set -e;                                    \
     chmod +x /tmp/daos-server-user-setup.sh && \
-    /tmp/daos-server-user-setup.sh
-RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
-RUN echo "daos_agent:daos_agent" | chpasswd
+    /tmp/daos-server-user-setup.sh &&          \
+    rm -f /tmp/daos-server-user-setup.sh
 
-# Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
-    chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
-    chown daos_agent.daos_agent /var/run/daos_agent
-
-USER daos_server:daos_server
+# Create directory for DAOS build backend storage
+RUN mkdir -p /home/daos /opt/daos && \
+    chown -R daos_server.daos_server /home/daos /opt/daos
 
 # Setup a python venv so that python packages can be installed locally.
+USER daos_server:daos_server
 ARG PYTHON_VERSION=3.11
 RUN python${PYTHON_VERSION} -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
-COPY requirements-build.txt requirements-utest.txt ./
-RUN . /home/daos/venv/bin/activate && \
-    pip --no-cache-dir install --upgrade pip && \
-    pip --no-cache-dir install -r requirements-build.txt -r requirements-utest.txt
+WORKDIR /home/daos
+COPY requirements-build.txt ./
+RUN . /home/daos/venv/bin/activate &&                       \
+    pip --no-cache-dir install --upgrade pip &&             \
+    pip --no-cache-dir install -r requirements-build.txt && \
+    rm -r requirements-build.txt
+
+# Setup docker image for build using local copy of sources.
+# Include also clang and java compilers installation
+FROM build-ci AS build-local
+# Install remaining tools and dependencies needed for internal build.
+# This is done in a separate stage to allow for a smaller image for CI building only.
+USER root:root
+RUN /tmp/install.sh && \
+    dnf clean all &&   \
+    rm -f /tmp/install.sh
+    
+# Create directory for DAOS dependencies build storage
+USER daos_server:daos_server
+RUN mkdir -p /home/daos/pre/site_scons/prereq_tools \
+          /home/daos/pre/site_scons/components
 
 WORKDIR /home/daos/pre
-RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
 COPY --chown=daos_server:daos_server SConstruct .
 COPY --chown=daos_server:daos_server deps deps
-COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
+COPY --chown=daos_server:daos_server site_scons/prereq_tools \
+                                     site_scons/prereq_tools
 COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
-COPY --chown=daos_server:daos_server utils/scripts/copy_files.sh utils/scripts/copy_files.sh
-COPY --chown=daos_server:daos_server utils/scripts/create_spdk_pkgconfig.sh utils/scripts/create_spdk_pkgconfig.sh
+COPY --chown=daos_server:daos_server utils/scripts/copy_files.sh \
+                                     utils/scripts/copy_files.sh
+COPY --chown=daos_server:daos_server utils/scripts/create_spdk_pkgconfig.sh \
+                                     utils/scripts/create_spdk_pkgconfig.sh
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -117,14 +152,15 @@ ARG DAOS_PACKAGES_BUILD=yes
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
-# The dnf upgrade can add or re-enable distro repositories.
 USER root:root
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                             \
-        dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
-        dnf clean all;                                                                               \
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
+        dnf upgrade                      \
+            --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
+        dnf clean all;                   \
     }
-USER daos_server:daos_server
 
+# Build dependencies
+USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
@@ -136,40 +172,34 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
 COPY --chown=daos_server:daos_server utils/rpms utils/rpms
 COPY --chown=daos_server:daos_server utils/sl utils/sl
 
-# Build third party RPMs
-RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
-	export DISTRO="suse.lp15${POINT_RELEASE#\.}" &&                                           \
-	utils/rpms/build_packages.sh deps &&                                    \
-	mkdir -p /home/daos/rpms &&                                             \
-	mv *.rpm /home/daos/rpms;                                               \
+# Build dependencies RPMs
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    {                                                                         \
+        export DISTRO="suse.lp15${POINT_RELEASE#\.}" &&                       \
+        utils/rpms/build_packages.sh deps &&                                  \
+        mkdir -p /home/daos/rpms/deps &&                                      \
+        mv *.rpm /home/daos/rpms/deps;                                        \
     }
-USER root:root
 
-# select compiler to use
-# Load the COMPILER arg early, and optionally install the Intel compiler
-# Do this before the CB1 to make best use of cache as this is a big
-# download, and make it optional on the value of COMPILER for the same
-# reason.  Tell zypper to only consider the oneAPI repo here using the
-# discouraged --repo flag, however this prevents an update of the entire
-# upstream package list which would be immediately discarded, then reloaded
-# below in the general update section.  Only install the compilers at
-# ~900Mb rather than the entire stack at ~3Gb download.
-ARG COMPILER=gcc
-
-# force an upgrade to get any newly built RPMs, but only if CB1 is set.
+    # force an upgrade to get any newly built RPMs, but only if CB1 is set.
 ARG CB1
-RUN [ -z "$CB1" ] || {                                                                               \
-        dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
-        dnf clean all;                                                                               \
+USER root:root
+RUN [ -z "$CB1" ] || { \
+        dnf upgrade    \
+            --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
+        dnf clean all; \
     }
-USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
 # in github-actions to prune elements of the dockerfile below this point.
 LABEL DAOS=true
 
+# Create directory for DAOS dependencies build storage
+USER daos_server:daos_server
+RUN mkdir -p /home/daos/daos
 WORKDIR /home/daos/daos/
-COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct requirements-ftest.txt .clang-format ./
+COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct \
+                                     requirements-ftest.txt .clang-format ./
 COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server src src
 COPY --chown=daos_server:daos_server utils/build.config utils/
@@ -177,46 +207,68 @@ COPY --chown=daos_server:daos_server utils/config utils/config
 COPY --chown=daos_server:daos_server utils/certs utils/certs
 COPY --chown=daos_server:daos_server utils/completion utils/completion
 
+# select compiler to use
+ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
-RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
-        scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
-              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE    \
-	      FIRMWARE_MGMT=1 &&                                           \
-        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
-        go clean -cache &&                                                 \
-        cp -r utils/config/examples /opt/daos;                             \
+RUN [ "$DAOS_BUILD" != "yes" ] || {                                     \
+        scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER  \
+              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&        \
+        go clean -cache &&                                              \
+        cp -r utils/config/examples /opt/daos;                          \
     }
 
 COPY --chown=daos_server:daos_server utils utils
 
 # Build DAOS RPMs
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
-	export DISTRO="suse.lp15${POINT_RELEASE#\.}" &&                                      \
-	utils/rpms/build_packages.sh daos &&                               \
-	mkdir -p /home/daos/rpms &&                                        \
-	cp *.rpm /home/daos/rpms;                                          \
+	    export DISTRO="suse.lp15${POINT_RELEASE#\.}" &&                    \
+	    utils/rpms/build_packages.sh daos &&                               \
+	    mkdir -p /home/daos/rpms/daos &&                                   \
+	    mv *.rpm /home/daos/rpms/daos;                                     \
     }
-
-# Set environment variables
-ENV PATH=/opt/daos/bin:$PATH
-ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/daos/src/client/java
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-
-RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
-        mkdir /home/daos/.m2 &&                                                               \
-        cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
-        mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;      \
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                               \
+        mkdir /home/daos/.m2 &&                                        \
+        cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in \ 
+           /home/daos/.m2/settings.xml &&                              \
+        mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip              \
+            -Ddaos.install.path=/opt/daos;                             \
     }
-WORKDIR /home/daos
 
-ARG DAOS_KEEP_SRC=no
 # Remove local copy
+ARG DAOS_KEEP_SRC=no
 RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre
+
+# Setup docker image for Unit Tests
+FROM build-local AS full
+
+# Add DAOS agent users
+USER root:root
+RUN useradd --no-log-init --user-group --create-home --shell /bin/bash \
+            daos_agent &&                                              \
+    echo "daos_agent:daos_agent" | chpasswd
+
+# Create directory for DAOS runtime
+RUN mkdir -p /mnt/daos /var/run/daos_server /var/run/daos_agent &&     \
+    chown -R daos_server.daos_server /mnt/daos /var/run/daos_server && \
+    chown -R daos_agent.daos_agent /var/run/daos_agent
+
+# Update python virtual environment for unit tests
+WORKDIR /home/daos
+USER daos_server:daos_server
+COPY requirements-utest.txt ./
+RUN pip --no-cache-dir install -r requirements-utest.txt && \
+    rm -f requirements-utest.txt
+
+# Set environment variables
+ENV PATH=/opt/daos/bin:$PATH
+ENV FI_SOCKETS_MAX_CONN_RETRY=1

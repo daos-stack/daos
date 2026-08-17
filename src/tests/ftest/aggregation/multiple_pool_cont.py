@@ -1,5 +1,6 @@
 """
   (C) Copyright 2021-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -81,7 +82,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
 
         job_manager = get_job_manager(self, subprocess=False, timeout=self.get_remaining_time())
         # Create requested pools
-        self.add_pool_qty(total_pools, connect=False)
+        self.pool = [self.get_pool(connect=False) for _ in range(total_pools)]
         start_time = time.time()
         while int(finish_time - start_time) < int(total_runtime):
             # Since the transfer size is 1M, the objects will be inserted
