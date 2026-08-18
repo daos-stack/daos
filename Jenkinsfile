@@ -826,13 +826,12 @@ pipeline {
                                                 ' --target build-ci' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
-                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
+                                                " --build-arg DAOS_DEPS_INSTALL=yes"
                         }
                     }
                     steps {
                         script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -892,13 +891,12 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +
-                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
+                                                " --build-arg DAOS_DEPS_INSTALL=yes"
                         }
                     }
                     steps {
                         script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -1028,7 +1026,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/'],
+                            unitTestPost artifacts: ['nlt_logs/', 'nlt-summary-nlt.md'],
                                          testResults: 'nlt-junit.xml',
                                          valgrind_stash: 'nlt-memcheck',
                                          valgrind_pattern: '*memcheck.xml',
@@ -1194,7 +1192,7 @@ pipeline {
                             ],
                             unitTestPostArgs: [
                                 /* groovylint-disable-next-line DuplicateListLiteral */
-                                artifacts: ['nlt_logs/'],
+                                artifacts: ['nlt_logs/', 'nlt-summary-fault-injection.md'],
                                 testResults: 'nlt-junit.xml',
                                 with_valgrind: '',
                                 FI: true],
