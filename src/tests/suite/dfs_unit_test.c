@@ -3707,6 +3707,7 @@ dfs_test_pipeline_find(void **state)
  * 21.  Read content via file2, verify it matches buf2, and st_nlink == 1 (last surviving link).
  * 22.  Link file2 into root by passing parent=NULL, open/read/verify content, and st_nlink == 2.
  * 23.  Unlink file2.
+ * 24.  Open an existing hardlink with dfs_open_stat() and check stat info for correctness.
  */
 static void
 dfs_test_link_remove(void **state)
@@ -3719,6 +3720,7 @@ dfs_test_link_remove(void **state)
 	dfs_obj_t  *deleted_src_obj;
 	dfs_obj_t  *same_dir_link_obj;
 	dfs_obj_t  *root_link_obj;
+	dfs_obj_t  *open_stat_file_obj, *open_stat_obj;
 	dfs_obj_t  *newobj3, *newobj4, *newobj5, *newobj6;
 	d_sg_list_t sgl;
 	d_iov_t     iov;
@@ -3729,6 +3731,7 @@ dfs_test_link_remove(void **state)
 	const char *xvals[3]  = {"v1", "v2", "v3"};
 	struct stat statbuf1, statbuf2, statbuf3, statbuf4, statbuf5, statbuf6;
 	struct stat statbuf_same_dir;
+	struct stat statbuf_open_stat;
 
 	daos_size_t read_size;
 	int         rc;
@@ -4154,6 +4157,36 @@ dfs_test_link_remove(void **state)
 	 */
 	print_message("Step 23: Unlink dir2/file2\n");
 	rc = dfs_remove(dfs_mt, dir2, "file2", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 24: Open an existing hardlink with dfs_open_stat(). The returned stat buffer must
+	 * contain the metadata from the authoritative GIT entry, including the updated mode and
+	 * link count.
+	 */
+	print_message("Step 24: Open an existing hardlink with dfs_open_stat()\n");
+	rc = dfs_open(dfs_mt, dir1, "open_stat_file", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &open_stat_file_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_link(dfs_mt, open_stat_file_obj, dir1, "open_stat_link", NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_chmod(dfs_mt, dir1, "open_stat_file", S_IRUSR);
+	assert_int_equal(rc, 0);
+
+	memset(&statbuf_open_stat, 0, sizeof(statbuf_open_stat));
+	rc = dfs_open_stat(dfs_mt, dir1, "open_stat_link", S_IFREG, O_RDWR | O_CREAT, 0, 0, NULL,
+			   &open_stat_obj, &statbuf_open_stat);
+	assert_int_equal(rc, 0);
+	assert_int_equal(statbuf_open_stat.st_mode, (mode_t)(S_IFREG | S_IRUSR));
+	assert_int_equal((int)statbuf_open_stat.st_nlink, 2);
+
+	rc = dfs_release(open_stat_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "open_stat_link", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(open_stat_file_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "open_stat_file", 0, NULL);
 	assert_int_equal(rc, 0);
 
 	/** Cleanup: remove the now-empty directories */

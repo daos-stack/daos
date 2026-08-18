@@ -145,7 +145,7 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 
 static int
 open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
-	  struct dfs_entry *entry, daos_size_t *size, size_t len, dfs_obj_t *file)
+	  struct dfs_entry *entry, daos_size_t *size, size_t len, dfs_obj_t *file, bool fetch_inode)
 {
 	bool exists;
 	int  daos_mode;
@@ -237,6 +237,17 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 
 	if (!exists)
 		return ENOENT;
+
+	if (fetch_inode && DFS_IS_HARDLINK(entry->mode)) {
+		if (!daos_handle_is_valid(dfs->git_oh))
+			return ENOTSUP;
+
+		rc = git_fetch_entry(dfs->git_oh, dfs->th, &entry->oid, entry, 0, NULL, NULL, NULL);
+		if (rc) {
+			D_DEBUG(DB_TRACE, "git_fetch_entry %s failed %d.\n", file->name, rc);
+			return rc;
+		}
+	}
 
 	if (!S_ISREG(entry->mode)) {
 		D_FREE(entry->value);
@@ -401,7 +412,7 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 	switch (mode & S_IFMT) {
 	case S_IFREG:
 		rc = open_file(dfs, parent, flags, cid, chunk_size, &entry,
-			       stbuf ? &file_size : NULL, len, obj);
+			       stbuf ? &file_size : NULL, len, obj, stbuf ? true : false);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open file (%d)\n", rc);
 			D_GOTO(out, rc);
@@ -433,11 +444,8 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 out:
 	if (rc == 0) {
 		if (stbuf) {
-			/* We reach here only if a new file is getting created.
-			 * Hence no need to fetch the git entry.
-			 */
 			stbuf->st_size         = file_size;
-			stbuf->st_nlink        = 1;
+			stbuf->st_nlink        = entry.link_cnt;
 			stbuf->st_mode         = DFS_EXTERNAL_MODE(entry.mode);
 			stbuf->st_uid          = entry.uid;
 			stbuf->st_gid          = entry.gid;
@@ -1730,7 +1738,7 @@ restart:
 	if (flags & DFS_SET_ATTR_MODE) {
 		/** preserve the internal hardlink bit (set above for hardlinks) in the stored mode
 		 */
-		st_mode |= stbuf->st_mode;
+		st_mode |= DFS_EXTERNAL_MODE(stbuf->st_mode);
 		d_iov_set(&sg_iovs[i], &st_mode, sizeof(mode_t));
 		recxs[i].rx_idx = MODE_IDX;
 		recxs[i].rx_nr  = sizeof(mode_t);
@@ -1845,7 +1853,7 @@ restart:
 
 	iod.iod_nr = i;
 	if (i == 0)
-		D_GOTO(out_stat, rc = 0);
+		D_GOTO(out_tx, rc = 0);
 	sgl.sg_nr     = i;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs   = &sg_iovs[0];
@@ -1858,8 +1866,6 @@ restart:
 	}
 
 	DFS_OP_STAT_INCR(dfs, DOS_SETATTR);
-out_stat:
-	*stbuf = rstat;
 out_tx:
 	if (dfs->use_dtx) {
 		if (rc == 0) {
@@ -1871,6 +1877,8 @@ out_tx:
 		if (rc == ERESTART)
 			goto restart;
 	}
+	if (rc == 0)
+		*stbuf = rstat;
 	daos_obj_close(oh, NULL);
 	return rc;
 }
