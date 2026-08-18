@@ -15,9 +15,7 @@ import cart_logparse
 import cart_logtest
 from apricot import TestWithoutServers
 from ClusterShell.NodeSet import NodeSet
-from host_utils import get_local_host
-from job_manager_utils import Orterun
-from run_utils import stop_processes
+from job_manager_utils import Orterun, stop_job_manager
 from write_host_file import write_host_file
 
 
@@ -33,6 +31,7 @@ class CartTest(TestWithoutServers):
         self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))))
         self.attach_dir = None
+        self.cleanup_jobs = []
 
     def setUp(self):
         """Set up the test case."""
@@ -94,7 +93,6 @@ class CartTest(TestWithoutServers):
     def tearDown(self):
         """Tear down the test case."""
         self.report_timeout()
-        self._teardown_errors.extend(self.cleanup_processes())
         super().tearDown()
 
     @staticmethod
@@ -144,21 +142,6 @@ class CartTest(TestWithoutServers):
             os.unlink(_file)
 
         return found_files
-
-    def cleanup_processes(self):
-        """Clean up cart processes, in case avocado/apricot does not."""
-        error_list = []
-        localhost = get_local_host()
-        processes = r"'\<(crt_launch|orterun)\>'"
-        negative_filter = r"'\<(grep|defunct)\>'"
-        running = True
-        for _ in range(2):
-            _, running = stop_processes(self.log, localhost, processes, exclude=negative_filter)
-            if not running:
-                break
-        if running:
-            error_list.append("Unable to stop cart processes!")
-        return error_list
 
     @staticmethod
     def stop_process(proc):
@@ -354,6 +337,9 @@ class CartTest(TestWithoutServers):
         job.pprnode.update(tst_ppn)
         job.processes.update(tst_processes)
 
+        # Add a step to ensure this job is stopped when the test finishes or times out
+        self.register_cleanup(stop_job_manager, job_manager=job)
+
         return str(job)
 
     def convert_xml(self, xml_file):
@@ -414,7 +400,7 @@ class CartTest(TestWithoutServers):
         self.log.info("ENV : %s", os.environ)
 
         cmd = shlex.split(cmd)
-        rtn = subprocess.call(cmd)
+        rtn = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         if rtn:
             if srv1 is not None:
