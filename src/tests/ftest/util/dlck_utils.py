@@ -30,9 +30,13 @@ class DlckCommand(ExecutableCommand):
             sudo (bool, optional): Whether to run dlck with sudo. Defaults to True.
         """
         super().__init__("/run/dlck/*", "dlck", path)
-
-        # We need to run with sudo.
-        self.sudo = sudo
+        # Get the fault injection file path and set environment string for the command.
+        fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
+        # Pass environment variable string
+        self.env_str = ""
+        self.env_str = "D_FI_CONFIG={} ".format(fault_inject_file)
+        # We need to run with sudo -E -n
+        self.dlck_sudo = sudo
 
         self.host = server_host
 
@@ -59,6 +63,10 @@ class DlckCommand(ExecutableCommand):
             str: the command with all the defined parameters
         """
         value = super().__str__()
+        if self.dlck_sudo:
+            value = " ".join(["sudo -E -n", value])
+        return value
+
         return value
 
     def run(self):
@@ -75,5 +83,5 @@ class DlckCommand(ExecutableCommand):
             CommandResult: groups of command results from the same hosts with the same return status
         """
         return run_remote(
-            self.log, self.host, command=str(self), verbose=self.verbose,
+            self.log, self.host, command=self.env_str + str(self), verbose=self.verbose,
             timeout=self.timeout)
