@@ -98,7 +98,7 @@ class HarnessCoreFilesTest(TestWithServers):
         in launch.py to be tested.
 
         :avocado: tags=all
-        :avocado: tags=hw,cb,hw,medium,large
+        :avocado: tags=hw,cb,medium,large
         :avocado: tags=harness,core_files
         :avocado: tags=HarnessCoreFilesTest,test_core_files_hw
         """
