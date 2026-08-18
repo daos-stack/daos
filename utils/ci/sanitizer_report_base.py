@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+  Copyright 2026 Hewlett Packard Enterprise Development LP
   All rights reserved.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -10,7 +10,7 @@
   Provides the common infrastructure used by parse_asan_reports.py,
   parse_ubsan_reports.py, and parse_tsan_reports.py:
 
-    - StackFrame data class
+    - StackFrame class
     - FILE_LINE_COL / ADDR_FRAME_RE -- shared frame-regex fragments
     - SARIF 2.1.0 constants
     - collect_reports()       -- scan a log directory for <prefix>.<pid> files
@@ -29,23 +29,22 @@
 import argparse
 import json
 import re
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
 
 # ── Shared data structure ─────────────────────────────────────────────────────
 
 
-@dataclass
 class StackFrame:
+    # pylint: disable=too-few-public-methods
     """One frame in a sanitizer stack trace (ASan, UBSan, or TSan)."""
 
-    index: int
-    function: str
-    file: Optional[str]      # absolute path as reported by the sanitizer
-    line: Optional[int]
-    column: Optional[int]
-    rel_file: Optional[str]  # relative to source_root, filled in later
+    def __init__(self, index, function, file, line, column, rel_file):
+        self.index = index
+        self.function = function
+        self.file = file          # absolute path as reported by the sanitizer
+        self.line = line
+        self.column = column
+        self.rel_file = rel_file  # relative to source_root, filled in later
 
 
 # ── Shared frame-regex fragments ──────────────────────────────────────────────
@@ -81,8 +80,7 @@ _TOOL_VERSION = "1.0"
 
 # ── Log file collection ───────────────────────────────────────────────────────
 
-def collect_reports(report_dir: Path, prefix: str,
-                    parse_fn: Callable) -> list:
+def collect_reports(report_dir, prefix, parse_fn):
     """Scan *report_dir* for files named ``<prefix>.<pid>`` and parse each one.
 
     *parse_fn* must accept a ``Path`` and return either a single report object
@@ -108,19 +106,16 @@ def collect_reports(report_dir: Path, prefix: str,
         testname_file = entry.parent / (entry.name + ".testname")
         test_name = testname_file.read_text(encoding="utf-8").strip() \
             if testname_file.exists() else ""
-        items = result if isinstance(result, list) else [result]
-        for r in items:
+        result = result if isinstance(result, list) else [result]
+        for r in result:
             setattr(r, "test_name", test_name)
-        if isinstance(result, list):
-            reports.extend(result)
-        else:
-            reports.append(result)
+        reports.extend(result)
     return reports
 
 
 # ── Source-path resolution ────────────────────────────────────────────────────
 
-def resolve_frame_path(frame: StackFrame, source_root: Path) -> None:
+def resolve_frame_path(frame, source_root):
     """Populate *frame.rel_file* relative to *source_root*."""
     if not frame.file:
         return
@@ -130,7 +125,7 @@ def resolve_frame_path(frame: StackFrame, source_root: Path) -> None:
         frame.rel_file = frame.file  # outside checkout — keep as-is
 
 
-def resolve_paths_frames(reports: list, source_root: Path) -> None:
+def resolve_paths_frames(reports, source_root):
     """Resolve rel_file for every frame in ``report.frames``.
 
     Suitable for ASan reports where each report has a plain ``frames`` list.
@@ -142,7 +137,7 @@ def resolve_paths_frames(reports: list, source_root: Path) -> None:
             resolve_frame_path(frame, source_root)
 
 
-def resolve_paths_threaded(reports: list, source_root: Path) -> None:
+def resolve_paths_threaded(reports, source_root):
     """Resolve rel_file for TSan reports whose frames are nested inside threads."""
     for report in reports:
         for thread in report.threads:
@@ -152,12 +147,11 @@ def resolve_paths_threaded(reports: list, source_root: Path) -> None:
 
 # ── SARIF helpers ─────────────────────────────────────────────────────────────
 
-def sarif_location(rel_file: Optional[str], line: Optional[int],
-                   col: Optional[int] = None) -> dict:
+def sarif_location(rel_file, line, col=None):
     """Build a SARIF ``location`` dict for a given source position."""
     if not rel_file:
         return {}
-    loc: dict = {
+    loc = {
         "physicalLocation": {
             "artifactLocation": {"uri": rel_file, "uriBaseId": "%SRCROOT%"},
         }
@@ -170,8 +164,7 @@ def sarif_location(rel_file: Optional[str], line: Optional[int],
     return loc
 
 
-def build_sarif_doc(tool_name: str, tool_uri: str,
-                    rules: list, results: list) -> dict:
+def build_sarif_doc(tool_name, tool_uri, rules, results):
     """Assemble a complete SARIF 2.1.0 document."""
     return {
         "$schema": _SARIF_SCHEMA,
@@ -195,14 +188,14 @@ def build_sarif_doc(tool_name: str, tool_uri: str,
 # ── Markdown summary template ─────────────────────────────────────────────────
 
 def build_summary_md(
-        tool_name: str,
-        emoji: str,
-        items: list,
-        headers: list,
-        row_fn: Callable,
-        details_fn: Callable,
-        note: str = "",
-        no_items_msg: str = "") -> str:
+        tool_name,
+        emoji,
+        items,
+        headers,
+        row_fn,
+        details_fn,
+        note="",
+        no_items_msg=""):
     """Build a unified Markdown summary for any sanitizer parser.
 
     All three parsers (ASan, UBSan, TSan) share the same output structure:
@@ -258,7 +251,7 @@ def build_summary_md(
 
 # ── Shared "#### Report N" details block ──────────────────────────────────────
 
-def report_heading(index: int, report) -> list:
+def report_heading(index, report):
     """Return the Markdown lines for one report's details block.
 
     Used directly as the ``details_fn`` argument to ``build_summary_md()`` by
@@ -285,7 +278,7 @@ def report_heading(index: int, report) -> list:
 
 # ── CLI helpers ───────────────────────────────────────────────────────────────
 
-def get_args(description: str) -> argparse.Namespace:
+def get_args(description):
     """Parse the standard four CLI arguments shared by all sanitizer parsers."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--report-dir", required=True,
@@ -299,12 +292,7 @@ def get_args(description: str) -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main_runner(args: argparse.Namespace,
-                collect_fn: Callable,
-                resolve_fn: Callable,
-                build_sarif_fn: Callable,
-                build_summary_fn: Callable,
-                tool_label: str) -> int:
+def main_runner(args, collect_fn, resolve_fn, build_sarif_fn, build_summary_fn, tool_label):
     """Shared control flow for all sanitizer parsers.
 
     Returns 1 when violations are found (non-zero exit signals GHA step
