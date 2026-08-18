@@ -843,12 +843,9 @@ pipeline {
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
-                            // For non-release builds, create a separate build with the valgrind
-                            // tag for NLT memcheck testing.  This is necessary to avoid problems
-                            // caused by valgrind being confused by the Go runtime. We don't want
-                            // to use the valgrind build for normal testing because it is much slower.
-                            // BUILD_TYPE=dev is set for PR/dev builds in sconsArgs(), and
-                            // TARGET_TYPE=release is used to select pre-built cached prerequisites.
+                            // Go binaries need to be instrumented in order to work reliably
+                            // with valgrind. We do this in a separate build because we don't
+                            // want to ship the instrumented binaries.
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            build_deps: 'no',
@@ -1172,7 +1169,9 @@ pipeline {
                         ),
                         'Fault injection testing': scriptedUnitTestStage(
                             name: 'Fault injection testing',
-                            runStage: shouldStageRun('Fault injection testing'),
+                            // Release builds compile out fault injection
+                            runStage: shouldStageRun('Fault injection testing') &&
+                                      !sconsArgs().contains('BUILD_TYPE=release'),
                             label: params.CI_FI_1_LABEL,
                             jobStatus: job_status_internal,
                             distro: 'el9',
