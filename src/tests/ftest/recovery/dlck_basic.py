@@ -35,10 +35,10 @@ class DlckBasicTest(TestWithServers):
             daos_control_dir = os.path.join(control_metadata_dir, "daos_control")
             engine_path_dir = os.path.join(daos_control_dir, "engine0")
             nvme_conf = os.path.join(engine_path_dir, "daos_nvme.conf")
-            dlck_cmd = DlckCommand(host, self.bin, pool.uuid[0], nvme_conf=nvme_conf,
+            dlck_cmd = DlckCommand(host, self.bin, pool.uuid, nvme_conf=nvme_conf,
                                    storage_mount=scm_mount)
         else:
-            dlck_cmd = DlckCommand(host, self.bin, pool.uuid[0], storage_mount=scm_mount)
+            dlck_cmd = DlckCommand(host, self.bin, pool.uuid, storage_mount=scm_mount)
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
         self.log_step("Run dlck command to check the health of the pool and storage")
