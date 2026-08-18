@@ -10,7 +10,7 @@ from command_utils_base import FormattedParameter
 from run_utils import run_remote
 
 
-class DlckCommand(ExecutableCommand):
+class DlckCommand:
     """Defines the basic structures of dlck command."""
 
     def __init__(self, server_host, path, pool_uuid=None, nvme_conf=None, storage_mount=None,
@@ -29,14 +29,13 @@ class DlckCommand(ExecutableCommand):
                 None.
             sudo (bool, optional): Whether to run dlck with sudo. Defaults to True.
         """
-        super().__init__("/run/dlck/*", "dlck", path)
-        # Get the fault injection file path and set environment string for the command.
+        self.command = ExecutableCommand("/run/dlck/*", "dlck", path)
+        self.log = self.command.log
+
+        # Add the fault injection file to the environment of the remote command.
         fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
-        # Pass environment variable string
-        self.env_str = ""
-        self.env_str = "D_FI_CONFIG={} ".format(fault_inject_file)
-        # We need to run with sudo -E -n
-        self.dlck_sudo = sudo
+        self.command.env["D_FI_CONFIG"] = fault_inject_file
+        self.command.sudo = sudo
 
         self.host = server_host
 
@@ -46,15 +45,15 @@ class DlckCommand(ExecutableCommand):
 
         # Pool UUID. (--file pool_uuid[,target_id])
         if pool_uuid:
-            self.pool_uuid = FormattedParameter("--file={}", pool_uuid)
+            self.command.pool_uuid = FormattedParameter("--file={}", pool_uuid)
 
         # NVMe config file path. (--nvme nvme_conf)
         if nvme_conf:
-            self.nvme = FormattedParameter("--nvme={}", nvme_conf)
+            self.command.nvme = FormattedParameter("--nvme={}", nvme_conf)
 
         # Storage mount point. (--storage storage_mount)
         if storage_mount:
-            self.storage_mount = FormattedParameter("--storage={}", storage_mount)
+            self.command.storage_mount = FormattedParameter("--storage={}", storage_mount)
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -62,12 +61,7 @@ class DlckCommand(ExecutableCommand):
         Returns:
             str: the command with all the defined parameters
         """
-        value = super().__str__()
-        if self.dlck_sudo:
-            value = " ".join(["sudo -E -n", value])
-        return value
-
-        return value
+        return self.command.with_exports
 
     def run(self):
         """Run the dlck command.
@@ -83,5 +77,4 @@ class DlckCommand(ExecutableCommand):
             CommandResult: groups of command results from the same hosts with the same return status
         """
         return run_remote(
-            self.log, self.host, command=self.env_str + str(self), verbose=self.verbose,
-            timeout=self.timeout)
+            self.log, self.host, command=str(self), verbose=self.verbose, timeout=self.timeout)
