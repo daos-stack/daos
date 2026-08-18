@@ -102,8 +102,6 @@ class OSAOfflineParallelTest(OSAUtils):
 
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
-                if oclass != "S1":
-                    self.run_mdtest_thread()
                 # if self.test_during_aggregation is set,
                 # Create another container and run the IOR
                 # command using the second container.
@@ -184,8 +182,6 @@ class OSAOfflineParallelTest(OSAUtils):
             self.pool = pool[val]
             if data:
                 self.run_ior_thread("Read", oclass, test_seq)
-                if oclass != "S1":
-                    self.run_mdtest_thread()
                 self.container = self.pool_cont_dict[self.pool][0]
                 self.container.check()
 

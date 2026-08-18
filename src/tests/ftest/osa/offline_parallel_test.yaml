@@ -60,23 +60,6 @@ ior:
     #   Values are appx GB.
     - [6000000000, 54000000000, 500000, 500000000]
 
-mdtest:
-  api: DFS
-  client_processes:
-    np: 2
-  num_of_files_dirs: 100
-  test_dir: "/"
-  dfs_oclass: RP_3GX
-  dfs_dir_oclass: RP_3GX
-  manager: "MPICH"
-  flags: "-u"
-  wr_size:
-    32K:
-      write_bytes: 32768
-      read_bytes: 32768
-  verbosity_value: 1
-  depth: 0
-
 test_obj_class:
   oclass:
     - EC_2P2G8

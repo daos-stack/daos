@@ -142,10 +142,10 @@ class OSAOnlineParallelTest(OSAUtils):
                     # Add a thread for these IOR arguments
                     ior_threads.append(threading.Thread(target=self.ior_thread,
                                                         kwargs={
-                                                        "pool": self.pool.identifier,
-                                                        "oclass": oclass,
-                                                        "test": test,
-                                                        "flags": flags}))
+                                                            "pool": self.pool.identifier,
+                                                            "oclass": oclass,
+                                                            "test": test,
+                                                            "flags": flags}))
                 # Launch the IOR threads
                 for ior_thrd in ior_threads:
                     self.log.info("Thread : %s", ior_thrd)
@@ -158,9 +158,9 @@ class OSAOnlineParallelTest(OSAUtils):
                     # Add dmg threads
                     dmg_threads.append(threading.Thread(target=self.dmg_thread,
                                                         kwargs={
-                                                        "action": action,
-                                                        "action_args": action_args,
-                                                        "results": self.out_queue}))
+                                                            "action": action,
+                                                            "action_args": action_args,
+                                                            "results": self.out_queue}))
 
                 # Launch the dmg threads with 2 second delay between each thread
                 for dmg_thrd in dmg_threads:
