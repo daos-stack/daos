@@ -100,6 +100,16 @@ RUN . /home/daos/venv/bin/activate &&                       \
     pip --no-cache-dir install -r requirements-build.txt && \
     rm -r requirements-build.txt
 
+# Install DAOS dependencies if available
+ARG DAOS_DEPS_INSTALL=yes
+RUN --mount=type=bind,source=ci/rpm/install_deps.sh,target=/tmp/daos/ci/rpm/install_deps.sh \
+    --mount=type=bind,source=ci/parse_ci_envs.sh,target=/tmp/daos/ci/parse_ci_envs.sh \
+    --mount=type=bind,source=utils/rpms/package_version.sh,target=/tmp/daos/utils/rpms/package_version.sh \
+    --mount=type=bind,source=utils/rpms/package_info.sh,target=/tmp/daos/utils/rpms/package_info.sh \
+    --mount=type=bind,source=utils/rpms/daos.spec,target=/tmp/daos/utils/rpms/daos.spec \
+    [ "$DAOS_DEPS_INSTALL" != "yes" ] || \
+        /tmp/daos/ci/rpm/install_deps.sh el9
+
 # Setup docker image for build using local copy of sources.
 # Include also clang and java compilers installation
 FROM build-ci AS build-local
@@ -211,6 +221,7 @@ RUN [ "$DAOS_BUILD" != "yes" ] || {                                     \
     }
 
 COPY --chown=daos_server:daos_server utils utils
+COPY --chown=daos_server:daos_server utils/rpms/daos.spec daos.spec
 
 # Build DAOS RPMs
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
