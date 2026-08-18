@@ -141,7 +141,7 @@ class OSAOfflineParallelTest(OSAUtils):
                 "exclude": {"pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
                 "reintegrate": {
                     "pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
-                "extend": {"pool": self.pool.identifier, "ranks": (total_ranks + 1)}
+                "extend": {"pool": self.pool.identifier, "ranks": (total_ranks)}
             }
             for action in sorted(action_kwargs):
                 # Add a dmg thread
@@ -194,7 +194,7 @@ class OSAOfflineParallelTest(OSAUtils):
 
         Test Description: Runs multiple OSA commands in parallel.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=osa,checksum,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test

@@ -74,9 +74,6 @@ class OSAOnlineParallelTest(OSAUtils):
             getattr(dmg, "pool_{}".format(action))(**action_args[action])
         except CommandFailure:
             results.put("{} failed".format(action_args[action]))
-        # Future enhancement for extend
-        # elif action == "extend":
-        #    dmg.pool_extend(puuid, (rank + 2))
 
     def run_online_parallel_test(self, num_pool, racer=False):
         """Run multiple OSA commands / IO in parallel.
@@ -139,7 +136,7 @@ class OSAOnlineParallelTest(OSAUtils):
                                     "ranks": (rank + 1),
                                     "tgt_idx": t_string},
                     "extend": {"pool": self.pool.identifier,
-                               "ranks": (total_ranks + 1)}
+                               "ranks": (total_ranks)}
                 }
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
@@ -148,9 +145,7 @@ class OSAOnlineParallelTest(OSAUtils):
                                                         "pool": self.pool.identifier,
                                                         "oclass": oclass,
                                                         "test": test,
-                                                        "flags": flags,
-                                                        "results":
-                                                        self.out_queue}))
+                                                        "flags": flags}))
                 # Launch the IOR threads
                 for ior_thrd in ior_threads:
                     self.log.info("Thread : %s", ior_thrd)
@@ -207,7 +202,7 @@ class OSAOnlineParallelTest(OSAUtils):
 
         Test Description: Runs multiple OSA commands/IO in parallel
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
         :avocado: tags=osa,checksum,osa_parallel
         :avocado: tags=OSAOnlineParallelTest,test_osa_online_parallel_test
