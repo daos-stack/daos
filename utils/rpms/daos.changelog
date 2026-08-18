@@ -1,4 +1,16 @@
 %changelog
+* Thu Aug 07 2026 Dalton Bohning <dalton.bohning@hpe.com> 2.8.0-6
+- Fifth release candidate for 2.8.0
+
+* Thu Aug 06 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.8.0-5
+- Fourth release candidate for 2.8.0
+
+* Mon Aug 03 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.8.0-4
+- Third release candidate for 2.8.0
+
+* Mon Jul 13 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.8.0-3
+- Second release candidate for 2.8.0
+
 * Wed Jul 08 2026 Michael Hennecke <michael.hennecke@hpe.com> 2.8.0-2
 - Add a /var/daos directory writable for daos_server
 

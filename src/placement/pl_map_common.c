@@ -380,12 +380,22 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bo
 		 * try next spare.
 		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN)
+		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
+			if (spare_tgt->ta_comp.co_status == PO_COMP_ST_DOWNOUT)
+				D_ERROR(DF_OID
+					": DOWN/DRAIN failed shard remaps through DOWNOUT spare: "
+					"md_ver=%u allow_ver=%u gen_mode=%d failed=(" DF_FAILEDSHARD
+					") spare=" DF_TARGET " spare_fseq=%u spare_out_ver=%u\n",
+					DP_OID(md->omd_id), md->omd_ver, allow_version, gen_mode,
+					DP_FAILEDSHARD(*f_shard), DP_TARGET(spare_tgt),
+					spare_tgt->ta_comp.co_fseq, spare_tgt->ta_comp.co_out_ver);
+
 			D_ASSERTF(spare_tgt->ta_comp.co_status !=
 				  PO_COMP_ST_DOWNOUT,
 				  "down fseq(%u) < downout fseq(%u)\n",
 				  f_shard->fs_fseq,
 				  spare_tgt->ta_comp.co_fseq);
+		}
 
 		f_shard->fs_fseq = spare_tgt->ta_comp.co_fseq;
 		f_shard->fs_status = spare_tgt->ta_comp.co_status;
@@ -520,4 +530,3 @@ out:
 		D_FREE(grp_count);
 	return rc;
 }
-

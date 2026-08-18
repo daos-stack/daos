@@ -1857,7 +1857,9 @@ ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid, d_rank_t ran
 				daos_epoch_t ec_agg_eph, daos_epoch_t stable_eph)
 {
 	struct cont_svc			*svc;
+	struct rdb_tx                    tx;
 	struct cont_track_eph_leader	*eph_ldr;
+	struct cont                     *cont = NULL;
 	int				 rc;
 	bool				 retried = false;
 	int				 i;
@@ -1869,9 +1871,28 @@ ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid, d_rank_t ran
 retry:
 	eph_ldr = cont_track_eph_leader_lookup(svc, cont_uuid);
 	if (eph_ldr == NULL) {
-		rc = cont_track_eph_leader_alloc(svc, cont_uuid, &eph_ldr);
-		if (rc)
+		/* check container's existence before creating cont_track_eph_leader */
+		rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+		if (rc != 0)
 			D_GOTO(out_put, rc);
+
+		ABT_rwlock_rdlock(svc->cs_lock);
+		rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+		ABT_rwlock_unlock(svc->cs_lock);
+		rdb_tx_end(&tx);
+		if (rc != 0) {
+			DL_CDEBUG(rc == -DER_NONEXIST, DB_MD, DLOG_ERR, rc,
+				  DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+			D_GOTO(out_put, rc);
+		}
+		cont_put(cont);
+
+		eph_ldr = cont_track_eph_leader_lookup(svc, cont_uuid);
+		if (eph_ldr == NULL) {
+			rc = cont_track_eph_leader_alloc(svc, cont_uuid, &eph_ldr);
+			if (rc)
+				D_GOTO(out_put, rc);
+		}
 	}
 
 	for (i = 0; i < eph_ldr->cte_servers_num; i++) {
@@ -1908,7 +1929,7 @@ retry:
 
 out_put:
 	cont_svc_put_leader(svc);
-	return 0;
+	return rc;
 }
 
 #define EPH_ARG_TGT_INLINE	(64)
