@@ -76,9 +76,7 @@ class DaosServer():
         if self.valgrind:
             self.__process_name = 'memcheck-amd64-'
 
-        socket_dir = '/tmp/dnt_sockets'
-        if not os.path.exists(socket_dir):
-            os.mkdir(socket_dir)
+        os.makedirs('/tmp/dnt_sockets', exist_ok=True)
 
         self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
 
@@ -392,7 +390,7 @@ class DaosServer():
             with open(status_file, 'r') as fd:
                 for line in fd.readlines():
                     try:
-                        key, raw = line.split(':', maxsplit=2)
+                        key, raw = line.split(':', maxsplit=1)
                     except ValueError:
                         continue
                     value = raw.strip()
