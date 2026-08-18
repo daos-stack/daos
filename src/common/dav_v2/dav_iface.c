@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -286,8 +286,13 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 			err = rc;
 			goto out5;
 		}
-		heap_zinfo_init(hdl->do_heap, false);
+		rc = heap_zinfo_init(hdl->do_heap, false);
 		lw_tx_end(hdl, NULL);
+		if (rc) {
+			D_ERROR("Failed to initialize zinfo, rc = %d", daos_errno2der(rc));
+			err = rc;
+			goto out5;
+		}
 
 		rc = heap_update_mbrt_zinfo(hdl->do_heap);
 		if (rc) {

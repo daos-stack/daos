@@ -506,6 +506,8 @@ rebuild_small_sub_rf0_setup(void **state);
 int
 rebuild_sub_3nodes_rf0_setup(void **state);
 int
+rebuild_sub_3nodes_rf0_setup_rebuild_pool_size(void **state);
+int
 rebuild_sub_6nodes_rf1_setup(void **state);
 int
 rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
