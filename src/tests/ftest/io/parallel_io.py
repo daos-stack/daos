@@ -36,8 +36,10 @@ class ParallelIo(FioBase, IorTestBase):
         self.container = []
 
     def create_pool(self):
-        """Create a TestPool object to use with ior."""
-        self.pool.append(self.get_pool(connect=False))
+        """Create a thread safe TestPool object."""
+        # Use a dedicated DmgCommand copy per thread; sharing self.get_dmg_command()'s
+        # single instance across threads races on its parameters and causes partial commands.
+        self.pool.append(self.get_pool(connect=False, dmg=self.get_dmg_command().copy()))
 
     def _stat_free_blocks(self, path):
         """Get stat free blocks.
@@ -69,7 +71,7 @@ class ParallelIo(FioBase, IorTestBase):
 
         """
         statvfs_list = []
-        for _, pool in enumerate(self.pool):
+        for pool in self.pool:
             dfuse_pool_dir = str(path + "/" + pool.uuid)
             statvfs_info = self._stat_free_blocks(dfuse_pool_dir)
             statvfs_list.append(statvfs_info)
@@ -211,26 +213,27 @@ class ParallelIo(FioBase, IorTestBase):
         self.cont_count = self.params.get("cont_count", '/run/container/*')
         processes = self.params.get("np", '/run/ior/client_processes/*')
 
-        # Create pools in parallel.
+        self.log_step("Create pools in parallel.")
         for _ in range(self.pool_count):
-            pool_thread = threading.Thread(target=self.create_pool())
+            pool_thread = threading.Thread(target=self.create_pool)
             pool_threads.append(pool_thread)
             pool_thread.start()
-        # wait for container create to finish
+        # Wait for pool create to finish
         for pool_job in pool_threads:
             pool_job.join()
 
-        # start dfuse.
+        self.log_step("Start dfuse.")
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse)
 
-        # record free space using statvfs before any data is written.
+        self.log_step("Record free space using statvfs before any data is written.")
         self.statvfs_info_initial = self.statvfs_pool(dfuse.mount_dir.value)
 
         # Create 10 containers for each pool. Container create process cannot
         # be parallelized as different container create could complete at
         # different times and get appended in the self.container variable in
         # unordered manner, causing problems during the write process.
+        self.log_step("Create 10 containers for each pool.")
         self.container = []
         for _, pool in enumerate(self.pool):
             self.container.extend([self.get_container(pool) for _ in range(self.cont_count)])
@@ -239,6 +242,7 @@ class ParallelIo(FioBase, IorTestBase):
         # accessed successfully, go ahead and perform io on that location
         # using ior. This process of performing io is done in parallel for
         # all containers using threads.
+        self.log_step("Try to access each dfuse mounted container using ls and run IOR.")
         for pool_count, pool in enumerate(self.pool):
             dfuse_pool_dir = str(dfuse.mount_dir.value + "/" + pool.uuid)
             for counter in range(self.cont_count):
@@ -253,19 +257,18 @@ class ParallelIo(FioBase, IorTestBase):
                 self.ior_cmd.set_daos_params(pool, self.container[cont_num].identifier)
                 thread = threading.Thread(
                     target=self.run_ior,
-                    args=(self.get_ior_job_manager_command(), processes, None,
-                          False))
+                    args=(self.get_ior_job_manager_command(), processes, None, False))
                 threads.append(thread)
                 thread.start()
 
-        # wait for all ior jobs to be finished
+        self.log_step("Wait for all ior jobs to be finished.")
         for job in threads:
             job.join()
 
-        # Record free space after io
+        self.log_step("Record free space after io.")
         self.statvfs_before_cont_destroy = self.statvfs_pool(dfuse.mount_dir.value)
 
-        # Destroy half of the containers from each pool
+        self.log_step("Destroy half of the containers from each pool.")
         pfinal = 0
         for count in range(self.cont_count):
             pinitial = pfinal
@@ -280,20 +283,18 @@ class ParallelIo(FioBase, IorTestBase):
         for destroy_job in cont_threads:
             destroy_job.join()
 
-        # Record free space after container destroy.
+        self.log_step("Record free space after container destroy.")
         self.statvfs_after_cont_destroy = self.statvfs_pool(dfuse.mount_dir.value)
 
-        # Calculate the expected space to be returned after containers
-        # are destroyed.
+        # Calculate the expected space to be returned after containers are destroyed.
         reduced_space = (self.cont_count * int(self.ior_cmd.block_size.value)) / 2
 
         # Verify if expected space is returned for each pool after containers
         # were destroyed. If not, wait for 60 secs and check again. Wait 4
         # times, otherwise exit the test with a failure.
+        self.log_step("Verify space is returned by aggregation after containers were destroyed.")
         for count in range(self.pool_count):
-            thread = threading.Thread(
-                target=self.verify_aggregation,
-                args=(reduced_space, count))
+            thread = threading.Thread(target=self.verify_aggregation, args=(reduced_space, count))
             threads.append(thread)
             thread.start()
 
