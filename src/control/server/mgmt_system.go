@@ -1643,7 +1643,7 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEvent
 
 // eraseAndRestart is called on MS replicas to shut down the raft DB and
 // remove its files before restarting the control plane server.
-func (svc *mgmtSvc) eraseAndRestart(pause bool) error {
+func (svc *mgmtSvc) eraseAndRestart() error {
 	svc.log.Infof("%s pid %d: erasing system db", build.ControlPlaneName, os.Getpid())
 
 	if err := svc.sysdb.Stop(); err != nil {
@@ -1668,14 +1668,15 @@ func (svc *mgmtSvc) eraseAndRestart(pause bool) error {
 		return errors.Wrap(err, "unable to determine path to self")
 	}
 
-	go func() {
-		if pause {
-			time.Sleep(50 * time.Millisecond)
-		}
+	// Schedule the exec to run after the function returns and any gRPC response completes.
+	// MS replicas use a minimal delay since they don't send responses after this point.
+	delay := 50 * time.Millisecond
+
+	time.AfterFunc(delay, func() {
 		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
 			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
 		}
-	}()
+	})
 
 	return nil
 }
@@ -1843,7 +1844,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 		// Erase and restart control plane. Engines will be restarted later by
 		// ResetFormatRanks after all MS replicas are ready.
 		svc.log.Trace("SystemErase: REPLICA - Step 3: Erasing raft DB and restarting control plane")
-		if err := svc.eraseAndRestart(false); err != nil {
+		if err := svc.eraseAndRestart(); err != nil {
 			return nil, errors.Wrap(err, "erasing and restarting non-leader")
 		}
 		// Never reaches here - process is exec'd
@@ -1943,7 +1944,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 	// to complete before allowing engines to join. Without a raft leader, join requests
 	// will fail with "not the DAOS Management Service leader" errors.
 	if err := svc.waitForLeaderElection(ctx, hostAddrs); err != nil {
-		svc.log.Errorf("CRITICAL: Replicas ready but leader not elected: %s", err)
+		svc.log.Errorf("replicas ready but leader not elected: %s", err)
 		return nil, errors.Wrap(err, "waiting for raft leader election after erase")
 	}
 
@@ -1986,16 +1987,18 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 		return pbResp, errors.Wrap(err, "unable to determine path to self")
 	}
 
-	svc.log.Infof("System Erase Exec'ing %s to restart control plane", myPath)
-	go func() {
-		// Allow sufficient time for the gRPC response to be sent to the client
-		// before restarting the process. Increased from 1s to 3s to prevent EOF
-		// errors in CI environments where network/RPC completion can be slower.
-		time.Sleep(3 * time.Second)
+	svc.log.Infof("System Erase: scheduling restart of control plane in 3s")
+
+	// Schedule the exec to run after gRPC response is sent
+	// Using time.AfterFunc ensures the restart executes after the function returns
+	// and the gRPC response completes. 3 seconds allows sufficient time for response
+	// serialization and transmission to prevent EOF errors being returned to client.
+	time.AfterFunc(3*time.Second, func() {
+		svc.log.Infof("System Erase: exec'ing %s to restart control plane", myPath)
 		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
 			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
 		}
-	}()
+	})
 
 	return pbResp, nil
 }
