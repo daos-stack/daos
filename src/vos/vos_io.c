@@ -32,6 +32,8 @@ struct vos_io_context {
 	/** The epoch bound including uncertainty */
 	daos_epoch_t		 ic_bound;
 	daos_epoch_range_t	 ic_epr;
+	/** Actual stored epoch of the single value found during fetch; 0 if none was fetched */
+	daos_epoch_t              ic_sv_epoch;
 	daos_unit_oid_t		 ic_oid;
 	struct vos_container	*ic_cont;
 	daos_iod_t		*ic_iods;
@@ -962,6 +964,9 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	} else if (key.sk_epoch > epr->epr_hi) {
 		/* Uncertainty violation */
 		D_GOTO(out, rc = -DER_TX_RESTART);
+	} else {
+		/* Real SV found within the valid epoch range; record its actual stored epoch. */
+		ioc->ic_sv_epoch = key.sk_epoch;
 	}
 
 	if (ci_is_valid(&csum_info))
@@ -2044,7 +2049,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		else
 			akey_flags = ioc->ic_ts_set->ts_flags;
 
-		switch (akey_flags) {
+		switch (akey_flags & VOS_COND_AKEY_UPDATE_MASK) {
 		case VOS_OF_COND_AKEY_UPDATE:
 			update_cond = VOS_ILOG_COND_UPDATE;
 			break;
@@ -2573,13 +2578,13 @@ int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       daos_size_t *size, struct dtx_handle *dth)
 {
-	struct vos_dtx_act_ent	**daes = NULL;
-	struct vos_dtx_cmt_ent	**dces = NULL;
-	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
-	struct umem_instance	*umem;
-	bool			 tx_started = false;
-	uint16_t		 minor_epc;
-	uint64_t		 flags = VOS_OBJ_CREATE | VOS_OBJ_VISIBLE;
+	struct vos_dtx_act_ent **daes = NULL;
+	bool                    *cmts = NULL;
+	struct vos_io_context   *ioc  = vos_ioh2ioc(ioh);
+	struct umem_instance    *umem;
+	uint16_t                 minor_epc;
+	uint64_t                 flags      = VOS_OBJ_CREATE | VOS_OBJ_VISIBLE;
+	bool                     tx_started = false;
 
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
@@ -2622,12 +2627,12 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		if (daes == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
-		if (dces == NULL)
+		D_ALLOC_ARRAY(cmts, dth->dth_dti_cos_count);
+		if (cmts == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
 
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
-					      dth->dth_dti_cos_count, 0, false, NULL, daes, dces);
+					      dth->dth_dti_cos_count, 0, false, NULL, daes, cmts);
 		if (err < 0)
 			goto abort;
 		if (err == 0)
@@ -2703,8 +2708,8 @@ abort:
 			dth->dth_cos_done = 0;
 
 		if (daes != NULL)
-			vos_dtx_post_handle(ioc->ic_cont, daes, dces, dth->dth_dti_cos_count,
-					    false, err != 0, false);
+			vos_dtx_post_handle(ioc->ic_cont, daes, cmts, dth->dth_dti_cos_count, false,
+					    err != 0, false);
 	}
 
 	if (err != 0)
@@ -2721,7 +2726,7 @@ abort:
 	if (size != NULL && err == 0)
 		*size = ioc->ic_io_size;
 	D_FREE(daes);
-	D_FREE(dces);
+	D_FREE(cmts);
 	vos_ioc_destroy(ioc, err != 0 && tx_started);
 
 	return err;
@@ -2828,6 +2833,12 @@ vos_ioh2ci_nr(daos_handle_t ioh)
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 
 	return ioc->ic_csum_list.dcl_csum_infos_nr;
+}
+
+daos_epoch_t
+vos_ioh2sv_epoch(daos_handle_t ioh)
+{
+	return vos_ioh2ioc(ioh)->ic_sv_epoch;
 }
 
 struct bio_sglist *

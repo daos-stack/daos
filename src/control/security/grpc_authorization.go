@@ -37,8 +37,6 @@ var methodAuthorizations = map[string][]Component{
 	"/ctl.CtlSvc/StorageNvmeAddDevice":       {ComponentAdmin},
 	"/ctl.CtlSvc/NetworkScan":                {ComponentAdmin},
 	"/ctl.CtlSvc/CollectLog":                 {ComponentAdmin},
-	"/ctl.CtlSvc/FirmwareQuery":              {ComponentAdmin},
-	"/ctl.CtlSvc/FirmwareUpdate":             {ComponentAdmin},
 	"/ctl.CtlSvc/SmdQuery":                   {ComponentAdmin},
 	"/ctl.CtlSvc/SmdManage":                  {ComponentAdmin},
 	"/ctl.CtlSvc/SetEngineLogMasks":          {ComponentAdmin},

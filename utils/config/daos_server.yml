@@ -297,12 +297,6 @@
 #helper_log_file: /var/log/daos/daos_server_helper.log
 #
 #
-## Enable daos_firmware_helper (privileged helper) logging.
-#
-## default: disabled (errors only to control_log_file)
-#firmware_helper_log_file: /var/log/daos/daos_firmware_helper.log
-#
-#
 ## Enable HTTP endpoint for remote telemetry collection.
 #
 ## default endpoint state: disabled

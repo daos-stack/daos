@@ -252,7 +252,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/var/log/daos/daos_server.log").
 		WithHelperLogFile("/var/log/daos/daos_server_helper.log").
-		WithFirmwareHelperLogFile("/var/log/daos/daos_firmware_helper.log").
 		WithTelemetryPort(9191).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
