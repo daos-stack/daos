@@ -433,6 +433,9 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 out:
 	if (rc == 0) {
 		if (stbuf) {
+			/* We reach here only if a new file is getting created.
+			 * Hence no need to fetch the git entry.
+			 */
 			stbuf->st_size         = file_size;
 			stbuf->st_nlink        = 1;
 			stbuf->st_mode         = DFS_EXTERNAL_MODE(entry.mode);
@@ -1127,7 +1130,7 @@ dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
 
 	rc = dc_task_create(statx_task, NULL, ev, &task);
 	if (rc) {
-		if (!is_hardlink)
+		if (daos_handle_is_valid(oh))
 			daos_obj_close(oh, NULL);
 		return daos_der2errno(rc);
 	}
@@ -1228,7 +1231,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	daos_handle_t    th = DAOS_TX_NONE;
 	bool             exists;
 	bool             via_symlink;
-	struct dfs_entry entry = {0};
+	struct dfs_entry entry;
 	d_sg_list_t      sgl;
 	d_iov_t          sg_iovs[3];
 	daos_iod_t       iod;
@@ -1284,6 +1287,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	}
 
 restart:
+	memset(&entry, 0, sizeof(entry));
 	via_symlink = false;
 
 	/* Check if parent has the entry (inside the TX so a racing conversion is detected) */
@@ -1330,7 +1334,7 @@ restart:
 	}
 
 	/** set the type mode in case user has not passed it */
-	st_mode = mode | (orig_mode & S_IFMT);
+	st_mode = DFS_EXTERNAL_MODE(mode) | (orig_mode & S_IFMT);
 
 	/**
 	 * Hardlinks apply only to regular files and store their inode in GIT. Route the update
@@ -1413,7 +1417,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	daos_handle_t    th = DAOS_TX_NONE;
 	bool             exists;
 	bool             via_symlink = false;
-	struct dfs_entry entry       = {0};
+	struct dfs_entry entry;
 	daos_key_t       dkey;
 	d_sg_list_t      sgl;
 	d_iov_t          sg_iovs[4];
@@ -1452,9 +1456,6 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 		oh = parent->oh;
 	}
 
-	if (uid == -1 && gid == -1)
-		return 0;
-
 	/**
 	 * Use a DTX in balanced mode to serialize the owner update against a concurrent conversion
 	 * of the target to a hardlink.
@@ -1466,6 +1467,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	}
 
 restart:
+	memset(&entry, 0, sizeof(entry));
 	via_symlink = false;
 
 	/* Check if parent has the entry (inside the TX so a racing conversion is detected) */
@@ -1473,8 +1475,14 @@ restart:
 			 NULL);
 	if (rc)
 		D_GOTO(out_tx, rc);
+
 	if (!exists)
 		D_GOTO(out_tx, rc = ENOENT);
+
+	if (uid == -1 && gid == -1) {
+		D_FREE(entry.value);
+		D_GOTO(out_tx, rc = 0);
+	}
 
 	/** resolve symlink */
 	if (!(flags & O_NOFOLLOW) && S_ISLNK(entry.mode)) {

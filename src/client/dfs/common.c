@@ -225,8 +225,12 @@ fetch_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool is
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
-	for (i = 0; i < xnr; i++)
-		xsizes[i] = iods[i].iod_size;
+	/*
+	 * If fetching from dentry and the hardlink bit is set, do not honor xattr data returned.
+	 */
+	if (is_git_entry || !DFS_IS_HARDLINK(entry->mode))
+		for (i = 0; i < xnr; i++)
+			xsizes[i] = iods[i].iod_size;
 
 	if (is_git_entry && (S_ISLNK(entry->mode) || S_ISDIR(entry->mode)))
 		D_GOTO(out, rc = EIO);
@@ -899,11 +903,11 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 	if (DFS_IS_HARDLINK(entry.mode)) {
 		if (!daos_handle_is_valid(dfs->git_oh))
 			return ENOTSUP;
-		if (obj)
-			dfs_set_hardlink(&obj->mode);
 		rc = git_fetch_entry(dfs->git_oh, th, &entry.oid, &entry, 0, NULL, NULL, NULL);
 		if (rc)
 			return rc;
+		if (obj)
+			dfs_set_hardlink(&obj->mode);
 	}
 
 	switch (entry.mode & S_IFMT) {
