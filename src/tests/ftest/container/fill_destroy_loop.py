@@ -119,8 +119,9 @@ class BoundaryPoolContainerSpace(TestWithServers):
             "loop={}, before={} ({} bytes), end={} ({} bytes)".format(
                 test_loop, bytes_to_human(free_space_before_destroy), free_space_before_destroy,
                 bytes_to_human(free_space_after_destroy), free_space_after_destroy))
-        # Wait for a minute if the initial space is not released.
-        time.sleep(60)
+        # Wait for atleast 30 seconds for aggregation task to release some NVME space.
+        # Without it IOR command will fail with no space issue.
+        time.sleep(30)
         for _ in range(10):
             if (free_space_after_destroy - free_space_init) < delta_bytes:
                 break
