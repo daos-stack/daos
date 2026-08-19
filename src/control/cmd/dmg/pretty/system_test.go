@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -687,6 +687,334 @@ Unknown 3 hosts: foo[7-9]
 			// parameters to mimic combined output seen on terminal
 			if err := PrintSystemStopResponse(&bld, &bld, tc.resp); err != nil {
 				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintSystemRebuildManageResp(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp        *control.SystemRebuildManageResp
+		verbose     bool
+		expPrintStr string
+		expErr      error
+	}{
+		"no pools in system": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{},
+			},
+			expPrintStr: `
+No pools in system.
+Command completed successfully.
+`,
+		},
+		"rebuild stop - all successful": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:     "pool2",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:     "pool3",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  3 pools
+Command completed successfully.
+`,
+		},
+		"rebuild stop - all successful verbose": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:     "pool2",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:     "pool3",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  3 pools (pool1, pool2, pool3)
+Command completed successfully.
+`,
+		},
+		"rebuild stop - mixed success and DER_NONEXIST": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild stop requested for 2 pools
+- With active or finishing rebuild:  1 pool
+- Without active rebuild:            1 pool
+Command completed successfully.
+`,
+		},
+		"rebuild stop - only DER_NONEXIST": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:      "pool1",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): entity does not exist",
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild stop requested for 2 pools
+- Without active rebuild:            2 pools
+Command completed successfully.
+`,
+		},
+		"rebuild stop - with real errors": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "failed to stop rebuild",
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild stop requested for 2 pools
+- With active rebuild:    1 pool
+- Errors:                 1 pool
+`,
+			expErr: errors.New("pool-rebuild stop failed on pool pool2: failed to stop rebuild"),
+		},
+		"rebuild stop - mixed categories verbose": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:     "pool2",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool3",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+					},
+					{
+						ID:      "pool4",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "error 1",
+					},
+					{
+						ID:      "pool5",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "error 2",
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+System-rebuild stop requested for 5 pools
+- With active or finishing rebuild:    2 pools (pool1, pool2)
+- Without active rebuild:              1 pool (pool3)
+- Errors:                              2 pools (pool4, pool5)
+`,
+			expErr: errors.New("pool-rebuild stop failed on pool pool4: error 1, pool-rebuild stop failed on pool pool5: error 2"),
+		},
+		"rebuild start - all successful": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStart,
+					},
+					{
+						ID:     "pool2",
+						OpCode: control.PoolRebuildOpCodeStart,
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild start requested for 2 pools
+- Successfully requested:            2 pools
+Command completed successfully.
+`,
+		},
+		"rebuild start - with errors": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStart,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStart,
+						Errored: true,
+						Msg:     "failed to start rebuild",
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild start requested for 2 pools
+- Successfully requested: 1 pool
+- Errors:                 1 pool
+`,
+			expErr: errors.New("pool-rebuild start failed on pool pool2: failed to start rebuild"),
+		},
+		"rebuild stop with DER_BUSY - treated as success": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild stop requested for 2 pools
+- With active or finishing rebuild:  2 pools
+Command completed successfully.
+`,
+		},
+		"rebuild stop with DER_BUSY verbose": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+					{
+						ID:      "pool3",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  3 pools (pool1, pool2, pool3)
+Command completed successfully.
+`,
+		},
+		"rebuild stop mixed DER_BUSY DER_NONEXIST success and errors": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool_ok",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool_busy",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+					{
+						ID:      "pool_nonexist",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+					},
+					{
+						ID:      "pool_error",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "some error",
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+System-rebuild stop requested for 4 pools
+- With active or finishing rebuild:    2 pools (pool_ok, pool_busy)
+- Without active rebuild:              1 pool (pool_nonexist)
+- Errors:                              1 pool (pool_error)
+`,
+			expErr: errors.New("pool-rebuild stop failed on pool pool_error: some error"),
+		},
+		"mismatched opcodes": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStart,
+					},
+					{
+						ID:     "pool2",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+				},
+			},
+			expErr: errors.New("different system rebuild manage opcodes found in results: start and stop"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+
+			gotErr := PrintSystemRebuildManageResp(&bld, tc.resp, tc.verbose)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {

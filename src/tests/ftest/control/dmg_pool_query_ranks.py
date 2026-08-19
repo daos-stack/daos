@@ -24,7 +24,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         super().setUp()
 
         # Init the pool
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
     def test_pool_query_ranks_basic(self):
         """Test the state of ranks with dmg pool query.

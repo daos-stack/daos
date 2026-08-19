@@ -183,7 +183,7 @@ class NetworkFailureTest(IorTestBase):
         # 1. Create a pool and a container.
         self.log_step("Create a pool and a container.")
         self.container = []
-        self.add_pool(namespace="/run/pool_size_ratio_80/*")
+        self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
         self.container.append(
             self.get_container(pool=self.pool, namespace=container_namespace))
 
@@ -368,7 +368,7 @@ class NetworkFailureTest(IorTestBase):
         # 2. Create a pool across the four ranks on the two nodes. Use --nsvc=3. We have
         # to provide the size because we're using --ranks.
         self.log_step("Create a pool across the four ranks on the two nodes.")
-        self.add_pool(namespace="/run/pool_size_value/*", target_list=target_list)
+        self.pool = self.get_pool(namespace="/run/pool_size_value/*", target_list=target_list)
 
         # 3. Create a container without redundancy factor.
         self.log_step("Create a container without redundancy factor.")

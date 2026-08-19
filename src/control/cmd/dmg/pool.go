@@ -193,19 +193,46 @@ type poolCreateCmd struct {
 
 func ratio2Percentage(log logging.Logger, tier1, tier2 float64) (p float64) {
 	p = 100.00
-	min := storage.MinScmToNVMeRatio * p
 
 	if tier2 > 0 {
 		p *= tier1 / (tier1 + tier2)
-		if p < min {
-			log.Noticef("storage tier ratio is less than %0.2f%%, DAOS performance "+
-				"will suffer!", min)
-		}
 		return
 	}
 
 	log.Notice("Creating DAOS pool with only a single tier of storage")
 	return
+}
+
+// checkPoolCreateTierRatioWarning examines the pool create response and returns a warning
+// message if the tier ratio is below the minimum threshold for PMem mode. Returns empty
+// string if no warning is needed (MD-on-SSD mode or acceptable ratio).
+func checkPoolCreateTierRatioWarning(resp *control.PoolCreateResp) string {
+	// Only check for two-tier configurations (SCM/NVMe or metadata/data)
+	if len(resp.TierBytes) != 2 {
+		return ""
+	}
+
+	// Skip if second tier is not configured
+	if resp.TierBytes[1] == 0 {
+		return ""
+	}
+
+	// Skip warning for MD-on-SSD mode - low metadata ratios are normal
+	if resp.MdOnSsdActive {
+		return ""
+	}
+
+	// Calculate actual tier ratio from allocated bytes
+	percentage := 100.00 * float64(resp.TierBytes[0]) / float64(resp.TierBytes[0]+resp.TierBytes[1])
+	minPercentage := storage.MinScmToNVMeRatio * 100.00
+
+	// Warn if ratio is below minimum for PMem mode (SCM:NVMe)
+	if percentage < minPercentage {
+		return fmt.Sprintf("storage tier ratio is less than %0.2f%%, DAOS performance may suffer!",
+			minPercentage)
+	}
+
+	return ""
 }
 
 // MemRatio can be supplied as two fractions that make up 1 or a single fraction less than 1.
@@ -394,6 +421,11 @@ func (cmd *poolCreateCmd) Execute(args []string) error {
 
 	if err != nil {
 		return err
+	}
+
+	// Check if low tier ratio warning should be shown
+	if warning := checkPoolCreateTierRatioWarning(resp); warning != "" {
+		cmd.Notice(warning)
 	}
 
 	var bld strings.Builder

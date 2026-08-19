@@ -14,7 +14,6 @@ if [ -z "${SL_PREFIX:-}" ]; then
   echo "daos is not built"
   exit 1
 fi
-
 daoshome="${prefix}/lib/daos"
 server_svc_name="daos_server.service"
 agent_svc_name="daos_agent.service"
@@ -22,6 +21,12 @@ sysctl_script_name="10-daos_server.conf"
 daos_sys_dir="/var/daos"
 daos_log_dir="/var/log/daos"
 
+distro_name=".${DISTRO:-el9}"
+daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | \
+                sed 's/^Version: *//')"
+daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
+                sed 's/^Release: *//' | \
+                sed 's/%.*//')${DAOS_RELVAL:-}${distro_name}"
 VERSION=${daos_version}
 RELEASE=${daos_release}
 LICENSE="BSD-2-Clause-Patent"
@@ -199,7 +204,7 @@ EOF
   chmod +x "${tmp}/pre_uninstall_server"
   EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_server")
 
-  if [[ "${DISTRO:-el8}" =~ suse ]]; then
+  if [[ "${DISTRO:-el9}" =~ suse ]]; then
     cat << EOF  > "${tmp}/post_uninstall_server"
 #!/bin/bash
 ldconfig
@@ -335,7 +340,7 @@ EOF
 chmod +x "${tmp}/pre_uninstall_client"
 EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
 
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
+if [[ "${DISTRO:-el9}" =~ suse ]]; then
   cat << EOF  > "${tmp}/post_uninstall_client"
 #!/bin/bash
 set -x
@@ -410,7 +415,7 @@ fi
 EXTERNAL_DEPENDS+=("${capstone_lib}")
 EXTERNAL_DEPENDS+=("pciutils")
 EXTERNAL_DEPENDS+=("${ndctl_dev}")
-if [[ "${DISTRO:-el8}" =~ el ]]; then
+if [[ "${DISTRO:-el9}" =~ el ]]; then
   EXTERNAL_DEPENDS+=("daxctl-devel")
 fi
 DEPENDS=( "daos-client = ${VERSION}-${RELEASE}" "daos-admin = ${VERSION}-${RELEASE}")
@@ -442,23 +447,6 @@ if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
   list_files files "${SL_PREFIX}/lib64/libdaos_serialize.so"
   append_install_list "${files[@]}"
   build_package "daos-serialize"
-fi
-
-if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
-  TARGET_PATH="${bindir}/daos_firmware_helper"
-  list_files files "${SL_PREFIX}/bin/daos_firmware_helper"
-  append_install_list "${files[@]}"
-
-cat << EOF > "${tmp}/post_install_firmware"
-#!/bin/bash
-chown root:daos_server ${bindir}/daos_firmware_helper
-chmod 4750 ${bindir}/daos_firmware_helper
-EOF
-  chmod +x "${tmp}/post_install_firmware"
-  EXTRA_OPTS+=("--after-install" "${tmp}/post_install_firmware")
-
-  DEPENDS=("daos-server = ${VERSION}-${RELEASE}")
-  build_package "daos-firmware"
 fi
 
 TARGET_PATH="${libdir}"

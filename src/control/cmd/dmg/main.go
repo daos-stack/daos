@@ -99,29 +99,28 @@ type waitCmd struct {
 }
 
 type cliOptions struct {
-	AllowProxy     bool             `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList       ui.HostSetFlag   `short:"l" long:"host-list" hidden:"true" description:"DEPRECATED: A comma separated list of addresses <ipv4addr/hostname> to connect to"`
-	Insecure       bool             `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
-	Debug          bool             `short:"d" long:"debug" description:"Enable debug output"`
-	LogFile        string           `long:"log-file" description:"Log command output to the specified file"`
-	JSON           bool             `short:"j" long:"json" description:"Enable JSON output"`
-	JSONLogs       bool             `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
-	ConfigPath     string           `short:"o" long:"config-path" description:"Client config file path"`
-	Server         serverCmd        `command:"server" alias:"srv" description:"Perform tasks related to remote servers"`
-	Storage        storageCmd       `command:"storage" alias:"sto" description:"Perform tasks related to storage attached to remote servers"`
-	Config         configCmd        `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on remote servers"`
-	System         SystemCmd        `command:"system" alias:"sys" description:"Perform distributed tasks related to DAOS system"`
-	Network        NetCmd           `command:"network" alias:"net" description:"Perform tasks related to network devices attached to remote servers"`
-	Support        supportCmd       `command:"support" alias:"supp" description:"Perform debug tasks to help support team"`
-	Pool           PoolCmd          `command:"pool" description:"Perform tasks related to DAOS pools"`
-	Cont           ContCmd          `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
-	Version        versionCmd       `command:"version" description:"Print dmg version"`
-	ServerVersion  serverVersionCmd `command:"server-version" description:"Print server version"`
-	Telemetry      telemCmd         `command:"telemetry" alias:"telem" description:"Perform telemetry operations"`
-	Check          checkCmdRoot     `command:"check" description:"Check system health"`
-	ManPage        cmdutil.ManCmd   `command:"manpage" hidden:"true"`
-	faultsCmdRoot                   // compiled out for release builds
-	firmwareOption                  // build with tag "firmware" to enable
+	AllowProxy    bool             `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	HostList      ui.HostSetFlag   `short:"l" long:"host-list" hidden:"true" description:"DEPRECATED: A comma separated list of addresses <ipv4addr/hostname> to connect to"`
+	Insecure      bool             `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
+	Debug         bool             `short:"d" long:"debug" description:"Enable debug output"`
+	LogFile       string           `long:"log-file" description:"Log command output to the specified file"`
+	JSON          bool             `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLogs      bool             `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	ConfigPath    string           `short:"o" long:"config-path" description:"Client config file path"`
+	Server        serverCmd        `command:"server" alias:"srv" description:"Perform tasks related to remote servers"`
+	Storage       storageCmd       `command:"storage" alias:"sto" description:"Perform tasks related to storage attached to remote servers"`
+	Config        configCmd        `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on remote servers"`
+	System        SystemCmd        `command:"system" alias:"sys" description:"Perform distributed tasks related to DAOS system"`
+	Network       NetCmd           `command:"network" alias:"net" description:"Perform tasks related to network devices attached to remote servers"`
+	Support       supportCmd       `command:"support" alias:"supp" description:"Perform debug tasks to help support team"`
+	Pool          PoolCmd          `command:"pool" description:"Perform tasks related to DAOS pools"`
+	Cont          ContCmd          `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
+	Version       versionCmd       `command:"version" description:"Print dmg version"`
+	ServerVersion serverVersionCmd `command:"server-version" description:"Print server version"`
+	Telemetry     telemCmd         `command:"telemetry" alias:"telem" description:"Perform telemetry operations"`
+	Check         checkCmdRoot     `command:"check" description:"Check system health"`
+	ManPage       cmdutil.ManCmd   `command:"manpage" hidden:"true"`
+	faultsCmdRoot                  // compiled out for release builds
 }
 
 type versionCmd struct {
