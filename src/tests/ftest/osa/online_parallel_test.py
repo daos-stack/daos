@@ -196,6 +196,12 @@ class OSAOnlineParallelTest(OSAUtils):
                 self.log.info("Pool Version at the End %s", pver_end)
                 self.assertTrue(pver_end == 25, "Pool Version Error:  at the end")
 
+            # Perform a data consistency check for all containers in the pool
+            for val in range(0, num_pool):
+                self.pool = pool[val]
+                self.container = self.pool_cont_dict[self.pool][0]
+                self.container.check()
+
     def test_osa_online_parallel_test(self):
         """
         JIRA ID: DAOS-4752

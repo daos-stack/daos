@@ -102,6 +102,8 @@ class OSAOfflineParallelTest(OSAUtils):
 
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
+                # Read the data back to verify it was written correctly.
+                self.run_ior_thread("Read", oclass, test_seq)
                 # if self.test_during_aggregation is set,
                 # Create another container and run the IOR
                 # command using the second container.
