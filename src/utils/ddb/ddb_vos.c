@@ -1512,15 +1512,11 @@ struct active_dtx_cb_arg {
 static int
 committed_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
 {
-	struct committed_dtx_cb_arg	*arg = cb_arg;
-	struct dv_dtx_committed_entry	 entry;
-	struct vos_dtx_cmt_ent		*ent = val->iov_buf;
-	int				 rc;
+	struct committed_dtx_cb_arg  *arg = cb_arg;
+	struct dv_dtx_committed_entry entry;
+	int                           rc;
 
-	entry.ddtx_id = ent->dce_base.dce_xid;
-	entry.ddtx_cmt_time = ent->dce_base.dce_cmt_time;
-	entry.ddtx_epoch = ent->dce_base.dce_epoch;
-
+	memcpy(&entry.ddtx_id, key->iov_buf, sizeof(struct dtx_id));
 	rc = arg->handler(&entry, arg->handler_arg);
 
 	return rc;

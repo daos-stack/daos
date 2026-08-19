@@ -417,7 +417,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent **daes = NULL;
-	struct vos_dtx_cmt_ent **dces = NULL;
+	bool                    *cmts = NULL;
 	struct vos_ts_set       *ts_set;
 	struct vos_container    *cont;
 	struct vos_object       *obj        = NULL;
@@ -520,12 +520,12 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (daes == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
-		if (dces == NULL)
+		D_ALLOC_ARRAY(cmts, dth->dth_dti_cos_count);
+		if (cmts == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
 
-		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					     dth->dth_dti_cos_count, 0, false, NULL, daes, dces);
+		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos, dth->dth_dti_cos_count, 0,
+					     false, NULL, daes, cmts);
 		if (rc < 0)
 			goto reset;
 		if (rc == 0)
@@ -595,15 +595,15 @@ reset:
 			dth->dth_cos_done = 0;
 
 		if (daes != NULL)
-			vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
-					    false, rc != 0, false);
+			vos_dtx_post_handle(cont, daes, cmts, dth->dth_dti_cos_count, false,
+					    rc != 0, false);
 	}
 
 	if (obj != NULL)
 		vos_obj_release(obj, 0, rc != 0 && tx_started);
 
 	D_FREE(daes);
-	D_FREE(dces);
+	D_FREE(cmts);
 	vos_ts_set_free(ts_set);
 
 	if (rc == 0) {

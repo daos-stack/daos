@@ -15,6 +15,7 @@ import re
 import subprocess  # nosec
 import tempfile
 from os.path import join
+from types import NoneType
 
 from .base import get_inc_id
 from .config import get_base_env
@@ -68,11 +69,11 @@ class DaosCont():
     """Class to store data about daos containers"""
 
     def __init__(self, cont_uuid, label, pool):
+        if not isinstance(pool, (DaosPool, NoneType)):
+            raise ValueError('pool must be DaosPool or None')
         self.uuid = cont_uuid
         self.label = label
         self.pool = pool
-        if pool is not None:
-            assert isinstance(self.pool, DaosPool)
 
     # pylint: disable-next=invalid-name
     def id(self):
@@ -183,10 +184,7 @@ class ValgrindHelper():
         with open(self._xml_file, 'r') as fd:
             with open(f'{self._xml_file}.xml', 'w') as ofd:
                 for line in fd:
-                    if self.src_dir in line:
-                        ofd.write(line.replace(self.src_dir, ''))
-                    else:
-                        ofd.write(line)
+                    ofd.write(line.replace(self.src_dir, ''))
         os.unlink(self._xml_file)
 
 
@@ -358,11 +356,17 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
 
     Returns:
         DaosCont: Newly created container as DaosCont object.
+
+    Raises:
+        ValueError: on invalid inputs
     """
     cmd = ['container', 'create']
 
-    if not path:
-        assert isinstance(pool, DaosPool)
+    if not isinstance(pool, (DaosPool, NoneType)):
+        raise ValueError('pool must be DaosPool or None')
+
+    if not path and not pool:
+        raise ValueError('pool or path is required')
 
     if pool:
         cmd.append(pool.id())
