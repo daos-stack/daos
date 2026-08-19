@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -329,6 +329,34 @@ class CommandResult():
         """
         for data in self.output:
             log_result_data(log, data)
+
+    def search(self, log, regex):
+        """Check a CommandResult for any keywords in stdout/stderr.
+
+        Args:
+            log (logging.Logger): Logger object for logging messages.
+            regex (str): The regular expression pattern to search for in the command output.
+
+        Returns:
+            bool: True if the regular expression pattern was not found in the CommandResult;
+                False otherwise.
+        """
+        if not self.output:
+            log.debug("No output to search for keywords: %s", regex)
+            return False
+
+        status = True
+        log.debug("Searching the command output for any keywords: %s", regex)
+        for output in (self.joined_stdout, self.joined_stderr):
+            match = re.findall(regex, output)
+            if match:
+                log.info(
+                    "The following error messages have been detected in the command output:")
+                for item in match:
+                    log.info("  %s", item)
+                status = False
+                break
+        return status
 
 
 def log_result_data(log, data):

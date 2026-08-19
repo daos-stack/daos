@@ -152,7 +152,7 @@ class FioCommand(RunRemoteCommand):
             """
             job_namespace = namespace.split("/")
             job_namespace.insert(-1, name)
-            super().__init__("/".join(job_namespace), "--name={}".format(name))
+            super().__init__("/".join(job_namespace), f"--name={name}")
 
             # fio global/local job options
             self.description = FormattedParameter("--description={}")

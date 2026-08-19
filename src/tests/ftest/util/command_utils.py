@@ -1708,13 +1708,14 @@ class RunRemoteCommand(CommandWithParameters):
             # pylint: disable=not-callable
             self.register_cleanup_method(self.stop)
 
-        # Run fio remotely
+        # Run the command on the remote hosts
         self.result = None
         result = run_remote(
             self.log, self._hosts, self.with_exports, timeout=self.timeout, verbose=self.verbose)
         self.result = result
-        if raise_exception and not result.passed:
-            raise CommandFailure(f"Error running fio on: {result.failed_hosts}")
+        if raise_exception and not result.passed and not result.search(
+                self.log, fr"({'|'.join(self.check_results_list)})"):
+            raise CommandFailure(f"Error running {self.command} on: {result.failed_hosts}")
         return result
 
     def stop(self):
@@ -1742,31 +1743,6 @@ class RunRemoteCommand(CommandWithParameters):
             self.log.info(
                 "***At least one remote %s process needed to be killed on %s! Please investigate/"
                 "report.***", regex, detected)
-
-    def check_results(self):
-        """Check the command result for any bad keywords.
-
-        Returns:
-            bool: True if either there were no items from self.check_result_list
-                to verify or if none of the items were found in the command
-                output; False if a item was found in the command output.
-
-        """
-        status = True
-        if self.result and self.check_results_list:
-            regex = fr"({'|'.join(self.check_results_list)})"
-            self.log.debug("Checking the %s output for any bad keywords: %s", self.command, regex)
-            for output in (self.result.joined_stdout, self.result.joined_stderr):
-                match = re.findall(regex, output)
-                if match:
-                    self.log.info(
-                        "The following error messages have been detected in "
-                        "the %s output:", self.command)
-                    for item in match:
-                        self.log.info("  %s", item)
-                    status = False
-                    break
-        return status
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
