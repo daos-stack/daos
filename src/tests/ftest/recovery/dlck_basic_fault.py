@@ -89,6 +89,6 @@ class DlckBasicFaultTest(TestWithServers):
                 errors.append(f"dlck failed on {result.failed_hosts}")
         self.log_step("Run the dmg start command")
         dmg.system_start()
-        if errors:
+        if not errors:
             self.fail(f"dlck basic faulttest failed with errors: {errors}")
         self.log.info("dlck basic fault test passed with no errors")

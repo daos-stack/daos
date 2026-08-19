@@ -34,7 +34,8 @@ class DlckCommand:
 
         # Add the fault injection file to the environment of the remote command.
         fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
-        self.command.env["D_FI_CONFIG"] = fault_inject_file
+        if fault_inject_file != "None set for now":
+            self.command.env["D_FI_CONFIG"] = fault_inject_file
         self.command.sudo = sudo
 
         self.host = server_host
