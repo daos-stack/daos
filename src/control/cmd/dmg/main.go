@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"time"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -92,10 +93,30 @@ func (cmd *cfgCmd) setConfig(cfg *control.Config) {
 	cmd.config = cfg
 }
 
+// waitFlag is set by --wait[=TIMEOUT]; a zero Timeout means wait indefinitely.
+type waitFlag struct {
+	Set     bool
+	Timeout time.Duration
+}
+
+// UnmarshalFlag implements the flags.Unmarshaler interface.
+func (f *waitFlag) UnmarshalFlag(fv string) error {
+	d, err := time.ParseDuration(fv)
+	if err != nil {
+		return errors.Wrapf(err, "invalid wait timeout %q", fv)
+	}
+	if d < 0 {
+		return errors.Errorf("invalid wait timeout %q: must not be negative", fv)
+	}
+	f.Set = true
+	f.Timeout = d
+	return nil
+}
+
 // waitCmd is embedded in subcommands that kick off a pool rebuild and may
 // optionally block until that rebuild completes.
 type waitCmd struct {
-	Wait bool `long:"wait" description:"Block until the rebuild triggered by this operation completes"`
+	Wait waitFlag `long:"wait" optional:"true" optional-value:"0" value-name:"TIMEOUT" description:"Block until the rebuild triggered by this operation completes; optionally give up after TIMEOUT (e.g. --wait=30m), otherwise wait indefinitely"`
 }
 
 type cliOptions struct {

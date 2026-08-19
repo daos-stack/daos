@@ -9,12 +9,15 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -797,6 +800,27 @@ func TestDmg_PoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Exclude with --wait=TIMEOUT issues a follow-up pool query",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait=30m",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Exclude with invalid --wait timeout",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait=soon",
+			"",
+			errors.New("invalid wait timeout"),
+		},
+		{
 			"Drain with --wait issues a follow-up pool query",
 			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait",
 			strings.Join([]string{
@@ -1468,6 +1492,153 @@ func TestPoolGetACLToFile_Success(t *testing.T) {
 
 	if diff := cmp.Diff(expResult, result); diff != "" {
 		t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+	}
+}
+
+// TestDmg_PoolRanksCmds_WaitFailure covers the --wait error path for the
+// rank-op commands that return a populated response: in JSON mode the
+// response must still be emitted alongside the wait error rather than
+// falling through to the top-level null-response fallback.
+func TestDmg_PoolRanksCmds_WaitFailure(t *testing.T) {
+	poolUUID := test.MockUUID(1)
+	ranksResp := &mgmtpb.PoolRanksResp{}
+	failedQuery := &mgmtpb.PoolQueryResp{
+		Uuid: poolUUID,
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State:  mgmtpb.PoolRebuildStatus_DONE,
+			Status: int32(daos.IOError),
+		},
+	}
+	busyQuery := &mgmtpb.PoolQueryResp{
+		Uuid: poolUUID,
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State: mgmtpb.PoolRebuildStatus_BUSY,
+		},
+	}
+
+	mkCmd := func(t *testing.T, name string) (*poolRanksCmd, func() error) {
+		t.Helper()
+		var base *poolRanksCmd
+		var exec func() error
+		switch name {
+		case "exclude":
+			c := new(poolExcludeCmd)
+			base, exec = &c.poolRanksCmd, func() error { return c.Execute(nil) }
+		case "drain":
+			c := new(poolDrainCmd)
+			base, exec = &c.poolRanksCmd, func() error { return c.Execute(nil) }
+		case "reintegrate":
+			c := new(poolReintegrateCmd)
+			base, exec = &c.poolRanksCmd, func() error { return c.Execute(nil) }
+		default:
+			t.Fatalf("unknown command %q", name)
+		}
+		if err := base.Args.Pool.UnmarshalFlag(poolUUID); err != nil {
+			t.Fatal(err)
+		}
+		if err := base.RankList.UnmarshalFlag("0"); err != nil {
+			t.Fatal(err)
+		}
+		return base, exec
+	}
+
+	for name, tc := range map[string]struct {
+		cmdName   string
+		wait      waitFlag
+		json      bool
+		queryResp *mgmtpb.PoolQueryResp
+		expErr    error
+		expJSON   bool
+	}{
+		"exclude: rebuild failed, json": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true},
+			json:      true,
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+			expJSON:   true,
+		},
+		"drain: rebuild failed, json": {
+			cmdName:   "drain",
+			wait:      waitFlag{Set: true},
+			json:      true,
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+			expJSON:   true,
+		},
+		"reintegrate: rebuild failed, json": {
+			cmdName:   "reintegrate",
+			wait:      waitFlag{Set: true},
+			json:      true,
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+			expJSON:   true,
+		},
+		"exclude: rebuild failed, text": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true},
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+		},
+		"exclude: timeout expires, json": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true, Timeout: 10 * time.Millisecond},
+			json:      true,
+			queryResp: busyQuery,
+			expErr:    errors.New("did not complete within 10ms"),
+			expJSON:   true,
+		},
+		"exclude: timeout expires, text": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true, Timeout: 10 * time.Millisecond},
+			queryResp: busyQuery,
+			expErr:    errors.New("did not complete within 10ms"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("10.0.0.1:10001", nil, ranksResp),
+					control.MockMSResponse("10.0.0.1:10001", nil, tc.queryResp),
+				},
+			})
+
+			cmd, exec := mkCmd(t, tc.cmdName)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+			cmd.Wait = tc.wait
+			var out bytes.Buffer
+			if tc.json {
+				cmd.EnableJSONOutput(&out, nil)
+			}
+
+			gotErr := exec()
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if !tc.expJSON {
+				if out.Len() != 0 {
+					t.Fatalf("unexpected JSON output: %s", out.String())
+				}
+				return
+			}
+
+			var got struct {
+				Response *control.PoolRanksResp `json:"response"`
+				Error    *string                `json:"error"`
+			}
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatalf("unmarshal JSON output %q: %s", out.String(), err)
+			}
+			if got.Response == nil {
+				t.Fatalf("JSON response is null: %s", out.String())
+			}
+			if got.Error == nil || !strings.Contains(*got.Error, tc.expErr.Error()) {
+				t.Fatalf("JSON error %v does not contain %q", got.Error, tc.expErr)
+			}
+		})
 	}
 }
 

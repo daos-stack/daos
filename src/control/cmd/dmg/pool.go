@@ -577,10 +577,19 @@ type poolRanksCmd struct {
 // maybeWaitForRebuild blocks until the rebuild triggered by this command
 // completes, when --wait was supplied and rebuildTriggered is true.
 func (cmd *poolRanksCmd) maybeWaitForRebuild(rebuildTriggered bool) error {
-	if !cmd.Wait || !rebuildTriggered {
+	if !cmd.Wait.Set || !rebuildTriggered {
 		return nil
 	}
-	if err := control.WaitForPoolRebuild(cmd.MustLogCtx(), cmd.ctlInvoker, cmd.PoolID().String()); err != nil {
+	ctx := cmd.MustLogCtx()
+	if cmd.Wait.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cmd.Wait.Timeout)
+		defer cancel()
+	}
+	if err := control.WaitForPoolRebuild(ctx, cmd.ctlInvoker, cmd.PoolID().String()); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return errors.Errorf("pool %s rebuild did not complete within %s", cmd.PoolID(), cmd.Wait.Timeout)
+		}
 		return errors.Wrap(err, "waiting for rebuild")
 	}
 	return nil
@@ -613,6 +622,9 @@ func (cmd *poolExcludeCmd) Execute(args []string) error {
 	}
 
 	if err := cmd.maybeWaitForRebuild(resp.HasSuccess()); err != nil {
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp, err)
+		}
 		return err
 	}
 
@@ -656,6 +668,9 @@ func (cmd *poolDrainCmd) Execute(args []string) error {
 	}
 
 	if err := cmd.maybeWaitForRebuild(resp.HasSuccess()); err != nil {
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp, err)
+		}
 		return err
 	}
 
@@ -722,6 +737,9 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 	}
 
 	if err := cmd.maybeWaitForRebuild(resp.HasSuccess()); err != nil {
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp, err)
+		}
 		return err
 	}
 
