@@ -837,13 +837,16 @@ func (cs *ControlService) formatMetadata(instances []Engine, reformat, replace b
 			}
 		}
 
-		if len(needFormatIdxs) > 0 {
-			cs.log.Debugf("formatting control metadata storage for engines %v (--replace)", needFormatIdxs)
-			if err := cs.storage.FormatControlMetadata(needFormatIdxs); err != nil {
-				return false, errors.Wrap(err, "formatting control metadata storage")
-			}
-			return true, nil
+		if len(needFormatIdxs) == 0 {
+			return false, errors.New("format replace option only valid if at least one " +
+				"engine requires metadata format but currently no engines need metadata format")
 		}
+
+		cs.log.Debugf("formatting control metadata storage for engines %v (--replace)", needFormatIdxs)
+		if err := cs.storage.FormatControlMetadata(needFormatIdxs); err != nil {
+			return false, errors.Wrap(err, "formatting control metadata storage")
+		}
+		return true, nil
 	}
 
 	cs.log.Debug("no control metadata format needed")
