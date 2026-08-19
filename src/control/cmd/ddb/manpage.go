@@ -103,6 +103,42 @@ levels. The available log levels are: \fBTRACE\fR, \fBDEBUG\fR (or \fBDBUG\fR), 
 Logs can be redirected to a file using the \fI--log_dir=<path>\fR option. Note that \fBERROR\fR
 and above are always printed to the console, even when \fI--log_dir\fR is set.`
 
+const manPoolLifecycleSection = `.SH POOL-CONTENT VS. POOL-LIFECYCLE COMMANDS
+.SS Overview
+ddb's subcommands fall into two categories, based on how the top-level \fI--vos_path\fR/
+\fI--db_path\fR options apply to them.
+.PP
+\fBPool-content commands\fR (\fBls\fR, \fBrm\fR, \fBvalue_dump\fR, and most others) operate on
+the content of an already-open VOS pool. When one of these is given as a single command or run
+from a \fI-f\fR command file, the VOS file is opened before the command executes, using the
+top-level \fI--vos_path\fR/\fI--db_path\fR.
+.PP
+\fBPool-lifecycle commands\fR (\fBopen\fR, \fBclose\fR, \fBfeature\fR, \fBrm_pool\fR,
+\fBdev_list\fR, \fBdev_replace\fR, \fBprov_mem\fR, \fBsmd_sync\fR) manage the VOS pool's own
+open/close/remove/replace lifecycle themselves, so ddb does not pre-open a pool for them. When
+one of these is given as a single bare command directly on the command line, \fI--vos_path\fR/
+\fI--db_path\fR are \fBnot accepted\fR: ddb returns an error and the path must be provided
+directly to the command instead (see its own \fI--help\fR).
+.PP
+In interactive mode or when running a \fI-f\fR command file, \fI--vos_path\fR/\fI--db_path\fR are
+accepted: they only ever drive the one-time initial auto-open, and it is up to the user to close the
+pre-opened pool (or target a different one) before running a pool-lifecycle command from within that
+session or file that requires it to be closed.
+.SS Examples
+Rejected: \fBrm_pool\fR manages its own pool lifecycle and does not accept the top-level flags
+as a bare command.
+.sp
+.EX
+    ddb --db_path /path/to/sys/db --vos_path /path/to/vos-0 rm_pool
+.EE
+.sp
+Works: provide \fBrm_pool\fR's own db_path flag and path argument directly.
+.sp
+.EX
+    ddb rm_pool --db_path /path/to/sys/db /path/to/vos-0
+.EE
+.sp`
+
 const manMdOnSsdSection = `.SH MD-ON-SSD MODE
 .SS Overview
 The MD-on-SSD workflow differs from PMEM mode. In PMEM mode, mount points are permanently
@@ -117,7 +153,7 @@ tmpfs mount can simply be unmounted to free memory.
 .PP
 .SS Synopsis
 .Vb 1
-\&    prov_mem [flags] db_path tmpfs_mount
+\&    prov_mem [flags] tmpfs_mount
 .Ve
 .SS Description
 This command performs the following steps:
@@ -131,12 +167,14 @@ Sets up the necessary directory structure.
 Recreates VOS pool target files on the tmpfs mount.
 .SS Arguments
 .TP
-.B db_path
-Path to the sys db.
-.TP
 .B tmpfs_mount
 Path to the tmpfs mountpoint.
 .SS Flags
+.TP
+.B \-p, \-\-db_path string
+Path to the sys db. This command manages its own pool lifecycle and does not accept the
+top-level \fI--vos_path\fR/\fI--db_path\fR as a single bare command; see the POOL-CONTENT VS.
+POOL-LIFECYCLE COMMANDS section for details.
 .TP
 .B \-s, \-\-tmpfs_size uint
 Size of the tmpfs mount in GiB. Defaults to the total size of all VOS files.
@@ -144,13 +182,13 @@ Size of the tmpfs mount in GiB. Defaults to the total size of all VOS files.
 Prepare the memory environment with an auto-calculated tmpfs size:
 .sp
 .EX
-    ddb prov_mem /path/to/sys/db /mnt/tmpfs
+    ddb prov_mem --db_path /path/to/sys/db /mnt/tmpfs
 .EE
 .sp
 Prepare the memory environment with a specific tmpfs size of 16 GiB:
 .sp
 .EX
-    ddb prov_mem -s 16 /path/to/sys/db /mnt/tmpfs
+    ddb prov_mem --db_path /path/to/sys/db -s 16 /mnt/tmpfs
 .EE
 .sp
 .SS Notes
@@ -187,6 +225,8 @@ func fprintManPage(dest io.Writer, app *grumble.App, parser *flags.Parser) {
 		}
 		fmt.Fprintf(dest, ".TP\n.B %s\n%s\n", cmd.Name, cmdHelp)
 	}
+
+	fmt.Fprintln(dest, manPoolLifecycleSection)
 
 	fmt.Fprintln(dest, manPathSection)
 
