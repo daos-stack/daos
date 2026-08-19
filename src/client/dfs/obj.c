@@ -389,6 +389,9 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 	if (rc)
 		return rc;
 
+	/** default for newly created entries; fetch_entry/git_fetch_entry overwrite for existing */
+	entry.link_cnt = 1;
+
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
 		return ENOMEM;

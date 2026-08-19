@@ -3708,6 +3708,7 @@ dfs_test_pipeline_find(void **state)
  * 22.  Link file2 into root by passing parent=NULL, open/read/verify content, and st_nlink == 2.
  * 23.  Unlink file2.
  * 24.  Open an existing hardlink with dfs_open_stat() and check stat info for correctness.
+ * 25.  Create a new regular file with dfs_open_stat() and verify st_nlink == 1.
  */
 static void
 dfs_test_link_remove(void **state)
@@ -4187,6 +4188,23 @@ dfs_test_link_remove(void **state)
 	rc = dfs_release(open_stat_file_obj);
 	assert_int_equal(rc, 0);
 	rc = dfs_remove(dfs_mt, dir1, "open_stat_file", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Step 25: Create a new regular file with dfs_open_stat(). A freshly created entry is not
+	 * a hardlink, so the returned stat buffer must report st_nlink == 1.
+	 */
+	print_message("Step 25: Create a regular file with dfs_open_stat()\n");
+	memset(&statbuf_open_stat, 0, sizeof(statbuf_open_stat));
+	rc = dfs_open_stat(dfs_mt, dir1, "open_stat_create", S_IFREG | S_IWUSR | S_IRUSR,
+			   O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &open_stat_obj,
+			   &statbuf_open_stat);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)statbuf_open_stat.st_nlink, 1);
+
+	rc = dfs_release(open_stat_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir1, "open_stat_create", 0, NULL);
 	assert_int_equal(rc, 0);
 
 	/** Cleanup: remove the now-empty directories */
