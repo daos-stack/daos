@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,7 +23,7 @@ from exception_utils import CommandFailure
 from file_utils import change_file_owner, create_directory, distribute_files
 from general_utils import (DaosTestError, check_file_exists, get_file_listing,
                            get_job_manager_class, get_subprocess_stdout, run_command)
-from run_utils import command_as_user, run_remote
+from run_utils import command_as_user, run_remote, stop_processes
 from user_utils import get_primary_group
 from yaml_utils import get_yaml_data
 
@@ -1511,3 +1511,282 @@ class SystemctlCommand(ExecutableCommand):
 
         self.unit_command = BasicParameter(None, position=1)
         self.service = BasicParameter(None, position=2)
+
+
+class RunRemoteCommand(CommandWithParameters):
+    """A class for command run with run_remote()."""
+
+    def __init__(self, namespace, command, path="", check_results=None, run_user=None):
+        """Create a ExecutableCommand object.
+
+        Uses Avocado's utils.process module to run a command str provided.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command (str): string of the command to be executed.
+            path (str, optional): path to location of command binary file. Defaults to "".
+            check_results (list, optional): list of words used to mark the command as failed if
+                any are found in the command output. Defaults to None.
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
+        """
+        super().__init__(namespace, command, path)
+        self._hosts = None
+        self.timeout = None
+        self.exit_status_exception = True
+        self.register_cleanup_method = None
+        self.env = EnvironmentVariables()
+        self.verbose = True
+        self.result = None
+
+        # User to run the command as. "root" is equivalent to sudo
+        self.run_user = run_user
+
+        # List of CPU cores to pass to taskset
+        self.bind_cores = None
+
+        # Define a list of executable names associated with the command. This
+        # list is used to generate the 'command_regex' property, which can be
+        # used to check on the progress or terminate the command.
+        self._exe_names = [self.command]
+
+        # If set use the full command string when returning the 'command_regex' property
+        self.full_command_regex = False
+
+        # Optional list of words used to to mark the command as failed if any of
+        # the words are found in the command output (self.result.stdout_text and
+        # self.result.stderr_text).  Useful for detecting a command failure that
+        # may not be caught through the command exit status.
+        self.check_results_list = []
+        if check_results:
+            self.check_results_list = list(check_results)
+
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
+
+        Returns:
+            str: the command with all the defined parameters
+
+        """
+        return self.with_sudo
+
+    @property
+    def hosts(self):
+        """Get the host(s) on which to remotely run the command via run().
+
+        Returns:
+            NodeSet: remote host(s) on which the command will run.
+
+        """
+        return self._hosts
+
+    @hosts.setter
+    def hosts(self, value):
+        """Set the host(s) on which to remotely run the command via run().
+
+        If the specified host is None the command will run locally w/o ssh.
+
+        Args:
+            value (NodeSet): remote host(s) on which to run the command
+
+        Raises:
+            TypeError: if value is not a NodeSet
+
+        """
+        if not isinstance(value, NodeSet):
+            raise TypeError(f"Invalid {self.command} host NodeSet: {value} ({type(value)})")
+        self._hosts = value.copy()
+
+    @property
+    def sudo(self):
+        """Get the sudo flag.
+
+        Returns:
+            bool: whether to run as sudo/root
+
+        """
+        return self.run_user == 'root'
+
+    @sudo.setter
+    def sudo(self, value):
+        """Set the sudo flag.
+
+        Args:
+            value (bool): whether to run as sudo
+
+        """
+        self.run_user = 'root' if value else None
+
+    @property
+    def command_regex(self):
+        """Get the regular expression to use to search for the command.
+
+        Typical use would include combining with pgrep to verify a subprocess is running.
+
+        Returns:
+            str: regular expression to use to search for the command
+
+        """
+        _exe_names = '|'.join(self._exe_names)
+        return f"'({_exe_names})'"
+
+    @property
+    def with_bind(self):
+        """Get the command string with bind_cores.
+
+        Returns:
+            str: the command string with bind_cores
+
+        """
+        command = super().__str__()
+        if self.bind_cores:
+            command = ' '.join(['taskset', '-c', self.bind_cores, command])
+        return command
+
+    @property
+    def with_sudo(self):
+        """Get the command string with bind_cores and sudo, but not env exports.
+
+        Returns:
+            str: the command string with bind_cores and sudo
+
+        """
+        return command_as_user(self.with_bind, self.run_user)
+
+    @property
+    def with_exports(self):
+        """Get the command string with bind_cores, sudo, and env exports.
+
+        Returns:
+            str: the command string with bind_cores, sudo, and env exports
+
+        """
+        return command_as_user(self.with_bind, self.run_user, self.env)
+
+    @contextlib.contextmanager
+    def no_exception(self):
+        """Temporarily disable raising exceptions for failed commands."""
+        original_value = self.exit_status_exception
+        self.exit_status_exception = False
+        yield
+        self.exit_status_exception = original_value
+
+    @contextlib.contextmanager
+    def as_user(self, user):
+        """Temporarily run commands as a different user.
+
+        Args:
+            user (str): the user to temporarily run as
+        """
+        original_value = self.run_user
+        self.run_user = user
+        yield
+        self.run_user = original_value
+
+    def run(self, raise_exception=None):
+        """Run the command.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
+
+        Raises:
+            CommandFailure: if there are no hosts specified
+
+        Returns:
+            CommandResult: result from running the command
+        """
+        if not self._hosts:
+            raise CommandFailure(f'Unable to run {self.command}: No hosts specified!')
+
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
+        if callable(self.register_cleanup_method):
+            # Stop any running processes started by this job manager when the test completes
+            # pylint: disable=not-callable
+            self.register_cleanup_method(self.stop)
+
+        # Run fio remotely
+        self.result = None
+        result = run_remote(
+            self.log, self._hosts, self.with_exports, timeout=self.timeout, verbose=self.verbose)
+        self.result = result
+        if raise_exception and not result.passed:
+            raise CommandFailure(f"Error running fio on: {result.failed_hosts}")
+        return result
+
+    def stop(self):
+        """Stop the command.
+
+        Raises:
+            CommandFailure: if there are no hosts specified
+        """
+        if not self._hosts:
+            raise CommandFailure(f'Unable to stop {self.command}: No hosts specified!')
+
+        regex = self.command_regex
+        if self.full_command_regex:
+            regex = f"'{str(self)}'"
+        detected, running = stop_processes(
+            self.log, self._hosts, regex, full_command=self.job.full_command_regex)
+        if not detected:
+            self.log.info(
+                "No remote %s processes killed on %s (none found), done.", regex, self._hosts)
+        elif running:
+            self.log.info(
+                "***Unable to kill remote %s process on %s! Please investigate/report.***",
+                regex, running)
+        else:
+            self.log.info(
+                "***At least one remote %s process needed to be killed on %s! Please investigate/"
+                "report.***", regex, detected)
+
+    def check_results(self):
+        """Check the command result for any bad keywords.
+
+        Returns:
+            bool: True if either there were no items from self.check_result_list
+                to verify or if none of the items were found in the command
+                output; False if a item was found in the command output.
+
+        """
+        status = True
+        if self.result and self.check_results_list:
+            regex = fr"({'|'.join(self.check_results_list)})"
+            self.log.debug("Checking the %s output for any bad keywords: %s", self.command, regex)
+            for output in (self.result.joined_stdout, self.result.joined_stderr):
+                match = re.findall(regex, output)
+                if match:
+                    self.log.info(
+                        "The following error messages have been detected in "
+                        "the %s output:", self.command)
+                    for item in match:
+                        self.log.info("  %s", item)
+                    status = False
+                    break
+        return status
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Also gets env_vars from /run/client/* and self.namespace.
+
+        Args:
+            test (Test): avocado Test object
+
+        """
+        super().get_params(test)
+        for namespace in ['/run/client/*', self.namespace]:
+            if namespace is not None:
+                self.env.update_from_list(test.params.get("env_vars", namespace, None) or [])
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            RunRemoteCommand: a new RunRemoteCommand object
+        """
+        return RunRemoteCommand(
+            self.namespace, self._command, self._path, self.check_results_list, self.run_user)

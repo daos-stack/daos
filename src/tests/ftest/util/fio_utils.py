@@ -4,14 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ClusterShell.NodeSet import NodeSet
-from command_utils import ExecutableCommand
+from command_utils import RunRemoteCommand
 from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
-from exception_utils import CommandFailure
-from run_utils import run_remote
 
 
-class FioCommand(ExecutableCommand):
+class FioCommand(RunRemoteCommand):
     # pylint: disable=too-many-instance-attributes
     """Defines a object representing a fio command."""
 
@@ -64,36 +61,6 @@ class FioCommand(ExecutableCommand):
         # List of fio job names to run
         self.names = BasicParameter(None)
         self._jobs = {}
-
-        # List of hosts on which the fio command will run
-        self._hosts = None
-
-    @property
-    def hosts(self):
-        """Get the host(s) on which to remotely run the fio command via run().
-
-        Returns:
-            NodeSet: remote host(s) on which the fio command will run.
-
-        """
-        return self._hosts
-
-    @hosts.setter
-    def hosts(self, value):
-        """Set the host(s) on which to remotely run the fio command via run().
-
-        If the specified host is None the command will run locally w/o ssh.
-
-        Args:
-            value (NodeSet): remote host(s) on which to run the fio command
-
-        Raises:
-            TypeError: if value is not a NodeSet
-
-        """
-        if not isinstance(value, NodeSet):
-            raise TypeError("Invalid fio host NodeSet: {} ({})".format(value, type(value)))
-        self._hosts = value.copy()
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -168,32 +135,6 @@ class FioCommand(ExecutableCommand):
             else:
                 command.append(str(self._jobs[name]))
         return " ".join(command)
-
-    def _run_process(self, raise_exception=None):
-        """Run the command remotely as a foreground process.
-
-        Args:
-            raise_exception (bool, optional): whether or not to raise an exception if the command
-                fails. This overrides the self.exit_status_exception
-                setting if defined. Defaults to None.
-
-        Raises:
-            CommandFailure: if there is an error running the command
-
-        Returns:
-            CommandResult: groups of command results from the same hosts with the same return status
-        """
-        if not self._hosts:
-            raise CommandFailure('No hosts specified for fio command')
-
-        if raise_exception is None:
-            raise_exception = self.exit_status_exception
-
-        # Run fio remotely
-        result = run_remote(self.log, self._hosts, self.with_exports, timeout=None)
-        if raise_exception and not result.passed:
-            raise CommandFailure("Error running fio on: {}".format(result.failed_hosts))
-        return result
 
     class FioJob(CommandWithParameters):
         # pylint: disable=too-many-instance-attributes
