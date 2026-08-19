@@ -4,5 +4,5 @@ avocado-framework-plugin-varianter-yaml-to-mux==82
 clustershell
 distro
 paramiko
-setuptools<82
+setuptools<85
 torch
