@@ -433,16 +433,6 @@ func (p *Provider) GetBdevConfigs() TierConfigs {
 	return p.engineStorage.Tiers.BdevConfigs()
 }
 
-// QueryScmFirmware queries PMem SSD firmware.
-func (p *Provider) QueryScmFirmware(req ScmFirmwareQueryRequest) (*ScmFirmwareQueryResponse, error) {
-	return p.scm.QueryFirmware(req)
-}
-
-// UpdateScmFirmware queries PMem SSD firmware.
-func (p *Provider) UpdateScmFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmwareUpdateResponse, error) {
-	return p.scm.UpdateFirmware(req)
-}
-
 // PrepareBdevs attempts to configure NVMe devices to be usable by DAOS.
 func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, error) {
 	resp, err := p.bdev.Prepare(req)
@@ -693,16 +683,6 @@ func (p *Provider) BdevRoleMetaConfigured() bool {
 		}
 	}
 	return false
-}
-
-// QueryBdevFirmware queries NVMe SSD firmware.
-func (p *Provider) QueryBdevFirmware(req NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error) {
-	return p.bdev.QueryFirmware(req)
-}
-
-// UpdateBdevFirmware queries NVMe SSD firmware.
-func (p *Provider) UpdateBdevFirmware(req NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error) {
-	return p.bdev.UpdateFirmware(req)
 }
 
 // UpgradeBdevConfig updates an existing SPDK bdev config, if necessary.

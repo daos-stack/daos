@@ -2239,6 +2239,8 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 	}
 
 	for (i = 0; i < nr; i++) {
+		D_DEBUG(DB_TRACE, "Validating IOD[%d] %p: type=%d nr=%u recxs=%p\n", i, &iods[i],
+			iods[i].iod_type, iods[i].iod_nr, iods[i].iod_recxs);
 		if (iods[i].iod_name.iov_buf == NULL) {
 			D_ERROR("Invalid argument of NULL akey\n");
 			return -DER_INVAL;
@@ -2289,6 +2291,11 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 			return -DER_INVAL;
 
 		case DAOS_IOD_ARRAY:
+			if (iods[i].iod_nr > 0 && iods[i].iod_recxs == NULL) {
+				D_ERROR("Invalid array IOD[%d] %p: nr=%u recxs=NULL\n", i, &iods[i],
+					iods[i].iod_nr);
+				return -DER_INVAL;
+			}
 			if (sgls == NULL) {
 				/* size query or punch */
 				if ((iods[i].iod_size == DAOS_REC_ANY) ||

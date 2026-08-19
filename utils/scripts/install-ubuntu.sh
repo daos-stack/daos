@@ -79,5 +79,5 @@ sudo gem install fpm
 if [ "$arch" = x86_64 ]; then
     # shellcheck disable=SC2086
     apt-get install ${apt_get_install_args} \
-        libipmctl-dev
+        ipmctl
 fi

@@ -652,7 +652,7 @@ migrate_pool_tls_create(uuid_t pool_uuid, unsigned int version, unsigned int gen
 	} else if (unlikely(pool_child->spc_no_storage)) {
 		D_DEBUG(DB_REBUILD, DF_UUID " " DF_UUID " lost pool shard, ver %d, skip.\n",
 			DP_UUID(pool_uuid), DP_UUID(pool_hdl_uuid), version);
-		D_GOTO(out, rc = 0);
+		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	D_ALLOC_PTR(pool_tls);
