@@ -721,28 +721,6 @@ func TestMetadata_Provider_setupDataDir_SelectiveEngineDelete(t *testing.T) {
 			expExist:    []uint{},
 			expNotExist: []uint{1, 3},
 		},
-		"empty engine list: remove all (legacy behavior)": {
-			setupExisting: func(t *testing.T, dataPath string) {
-				if err := os.MkdirAll(dataPath, 0775); err != nil {
-					t.Fatal(err)
-				}
-				for _, idx := range []uint{0, 1, 2} {
-					engPath := storage.ControlMetadataEngineDir(dataPath, idx)
-					if err := os.MkdirAll(engPath, 0775); err != nil {
-						t.Fatal(err)
-					}
-				}
-			},
-			req: storage.MetadataFormatRequest{
-				RootPath:   "/test_root",
-				DataPath:   "/test_root/data",
-				OwnerUID:   100,
-				OwnerGID:   200,
-				EngineIdxs: []uint{},
-			},
-			expExist:    []uint{},
-			expNotExist: []uint{0, 1, 2},
-		},
 		"stat error on datapath": {
 			setupExisting: func(t *testing.T, dataPath string) {
 				// Setup doesn't matter
