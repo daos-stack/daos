@@ -1529,6 +1529,12 @@ rebuild_sub_rf0_setup(void **state)
 }
 
 int
+rebuild_sub_3nodes_rf0_setup_rebuild_pool_size(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_POOL_SIZE, 3, DAOS_PROP_CO_REDUN_RF0);
+}
+
+int
 rebuild_sub_3nodes_rf0_setup(void **state)
 {
 	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 3,

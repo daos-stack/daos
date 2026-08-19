@@ -2258,8 +2258,20 @@ compare_oclass(daos_handle_t coh, daos_oclass_id_t acid, daos_oclass_id_t ecid)
 
 	if (acid == ecid || acid == normalized_ecid)
 		return 0;
-	else
-		return 1;
+
+	{
+		char aname[24] = "?";
+		char ename[24] = "?";
+		char nname[24] = "?";
+
+		daos_oclass_id2name(acid, aname);
+		daos_oclass_id2name(ecid, ename);
+		daos_oclass_id2name(normalized_ecid, nname);
+		print_message(
+		    "oclass mismatch: actual=%s(%u) expected=%s(%u) GX-normalized=%s(%u)\n", aname,
+		    acid, ename, ecid, nname, normalized_ecid);
+	}
+	return 1;
 }
 
 static daos_oclass_id_t
@@ -2469,12 +2481,12 @@ dfs_test_oclass_hints(void **state)
 	rc = dfs_cont_create_with_label(arg->pool.poh, "oc_cont2", &dattr, NULL, &coh, &dfs_l);
 	assert_int_equal(rc, 0);
 
-	/** set the expect EC object class ID based on domain nr */
-	if (attr.pa_domain_nr >= 18)
+	/** expected max EC class per domain count; thresholds must match dc_set_oclass() RF2 */
+	if (attr.pa_domain_nr >= 20)
 		ecidx = OC_EC_16P2GX;
-	else if (attr.pa_domain_nr >= 10)
+	else if (attr.pa_domain_nr >= 12)
 		ecidx = OC_EC_8P2GX;
-	else if (attr.pa_domain_nr >= 6)
+	else if (attr.pa_domain_nr >= 8)
 		ecidx = OC_EC_4P2GX;
 	else
 		ecidx = OC_EC_2P2GX;
