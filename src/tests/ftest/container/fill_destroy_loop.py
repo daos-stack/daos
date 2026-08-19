@@ -47,7 +47,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
         cmd = "find {} -type f ".format(log_dir)
         if self.server_managers[0].manager.job.using_control_metadata:
-            cmd = "find {0} -path {0}/control_metadata -prune -type f ".format(log_dir)
+            cmd = "find {0} -path {0}/control_metadata -prune -o -type f ".format(log_dir)
         cmd += r"-regextype egrep "
         cmd += r"-regex '.*/daos_server\.log\.[[:digit:]]+' "
         cmd += r"-exec grep -q -E -e " + err_regex + r" {} ';' -print"
