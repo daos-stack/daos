@@ -79,6 +79,38 @@ If there are site-specific rules for the creation of users and groups, it is adv
 create these users and groups following the site-specific conventions _before_ installing the
 `daos-client` RPM.
 
+### DAOS User Creation Example
+
+The following examples show how to consistently create the DAOS groups and users
+with a set of numerical GIDs and UIDs (which are chosen by site-specific conventions),
+using the Linux `groupadd` and `useradd` commands.
+On DAOS _servers_:
+
+```bash
+groupadd -r -g 966 daos_server
+groupadd -r -g 968 daos_daemons
+groupadd -r -g 969 daos_metrics
+
+useradd -s /sbin/nologin -r \
+  -g daos_server \
+  -G daos_metrics,daos_daemons \
+  -u 966 daos_server
+```
+
+On DAOS _clients_:
+
+```bash
+groupadd -r -g 967 daos_agent
+groupadd -r -g 968 daos_daemons
+
+useradd -s /sbin/nologin -r \
+  -g daos_agent \
+  -G daos_daemons \
+  -u 967 daos_agent
+```
+
+Nodes with the DAOS _admin_ role do not need any specific user/group setup.
+
 ### User/Group Synchronization for End Users
 
 DAOS ACLs for pools and containers store the actual user and group names (instead of numeric

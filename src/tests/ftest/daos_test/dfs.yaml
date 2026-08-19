@@ -22,6 +22,7 @@ server_config:
       log_file: daos_server0.log
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
+        - DAOS_PIPELINE=1
       storage:
         0:
           class: dcpm
@@ -33,6 +34,7 @@ server_config:
       log_file: daos_server1.log
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
+        - DAOS_PIPELINE=1
       storage:
         0:
           class: dcpm
