@@ -1,4 +1,4 @@
-## Upgrading to DAOS Version 2.8
+# Upgrading to DAOS Version 2.8
 
 ## Upgrading DAOS from Version 2.6.5 to Version 2.8
 
