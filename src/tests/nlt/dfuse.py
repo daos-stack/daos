@@ -44,6 +44,9 @@ class DFuse():
             self.pool = pool.id()
         if isinstance(container, DaosCont):
             self.container = container.id()
+            if self.pool and self.pool != container.pool.id():
+                raise ValueError(
+                    f'container.pool.id() = {container.pool.id()} but self.pool = {self.pool}')
             self.pool = container.pool.id()
         self.conf = conf
         self.multi_user = multi_user
@@ -62,8 +65,7 @@ class DFuse():
         self.file_h = file_h
 
         self.valgrind = None
-        if not os.path.exists(self.dir):
-            os.mkdir(self.dir)
+        os.makedirs(self.dir, exist_ok=True)
 
     def __str__(self):
 
@@ -503,8 +505,7 @@ class needs_dfuse_with_opt():
     @staticmethod
     def parse_test_name(name):
         """Convert a string name for a parameterized test to a parameterized tuple"""
-        if not name.endswith('_caching_on') and not name.endswith('_caching_off'):
+        match = re.match(r'(.+)_(caching_on|caching_off)$', name)
+        if not match:
             return (name, None)
-
-        match = re.match(r'(.+)_(caching_on|caching_off)', name)
         return (match.group(1), match.group(2) == 'caching_on')
