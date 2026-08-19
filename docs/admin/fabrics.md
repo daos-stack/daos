@@ -103,7 +103,7 @@ For NVIDIA based InfiniBand and RoCE Ethernet fabrics, Mercury's
 [UCX](https://openucx.org/) backend is the recommended plugin.
 For all other fabrics, Mercury's
 [libfabric](https://ofiwg.github.io/libfabric/) backend is used.
-DAOS Version 2.9 uses Mercury Version 2.4.1.
+DAOS Version 2.8 uses Mercury Version 2.4.1.
 
 Mercury backends are dynamically loaded, and there is no RPM dependency
 in the base `mercury` RPM for a specific backend. Depending on the intended
@@ -173,7 +173,7 @@ Both DAOS server and DAOC clients may have more than one high-speed NIC,
 with IP addresses in the same network range.
 Some `sysctl` configuration is needed to ensure proper operation in such
 scenarios, in particular around ARP resolution.  This is discussed in the
-[Predeployment checklist](https://docs.daos.io/master/admin/predeployment_check/#multi-railnic-setup).
+[Predeployment checklist](https://docs.daos.io/v2.8/admin/predeployment_check/#multi-railnic-setup).
 
 ## Provider selection and configuration
 
