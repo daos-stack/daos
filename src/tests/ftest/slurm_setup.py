@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -35,7 +34,7 @@ class SlurmSetup():
         '/etc/slurm/slurmdbd.conf.example']
     MUNGE_DIR = '/etc/munge'
     MUNGE_KEY = '/etc/munge/munge.key'
-    PACKAGE_LIST = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']
+    PACKAGE_LIST = ['slurm', 'slurm-slurmdbd', 'slurm-slurmctld', 'slurm-slurmd']
     SLURM_CONF = '/etc/slurm/slurm.conf'
     SLURM_LOG_DIR = '/var/log/slurm'
 
@@ -183,19 +182,18 @@ class SlurmSetup():
 
         # Restart slurmctld on the control node
         self._restart_systemctl(
-            self.control, 'slurmctld', '/var/log/slurmctld.log', self.SLURM_CONF)
+            self.control, 'slurmctld', '/var/log/slurm/slurmctld.log', self.SLURM_CONF)
 
         # Restart slurmd on all nodes
-        self._restart_systemctl(
-            self.all_nodes, 'slurmd', '/var/log/slurmd.log', self.SLURM_CONF)
+        self._restart_systemctl(self.all_nodes, 'slurmd', '/var/log/slurm/slurmd.log', self.SLURM_CONF)
 
         # Update nodes to the idle state
         command = command_as_user(
             f'scontrol update nodename={str(self.nodes)} state=idle', self.root)
         result = run_remote(self.log, self.nodes, command)
         if not result.passed or debug:
-            self._display_debug(self.control, '/var/log/slurmctld.log', self.SLURM_CONF)
-            self._display_debug(self.all_nodes, '/var/log/slurmd.log', self.SLURM_CONF)
+            self._display_debug(self.control, '/var/log/slurm/slurmctld.log', self.SLURM_CONF)
+            self._display_debug(self.all_nodes, '/var/log/slurm/slurmd.log', self.SLURM_CONF)
         if not result.passed:
             raise SlurmSetupException(f'Error setting nodes to idle on {self.nodes}')
 
@@ -270,8 +268,8 @@ class SlurmSetup():
 
         # Update the config file with the slurm epilog file
         self._modify_slurm_config_file(
-            'epilog file', self.all_nodes,
-            's#EpilogSlurmctld=#EpilogSlurmctld={EPILOG_FILE}#g', self.root)
+            'epilog file', self.all_nodes, f's#EpilogSlurmctld=#EpilogSlurmctld={self.EPILOG_FILE}#g',
+            self.root)
 
         # Update the config file with the slurm control node
         not_updated = self.all_nodes.copy()
@@ -282,7 +280,7 @@ class SlurmSetup():
                 not_updated.remove(
                     self._modify_slurm_config_file(
                         'slurm control node', results.passed_hosts,
-                        f's/{control_keyword}=linux0/{control_keyword}={str(self.control)}/g',
+                        f's/{control_keyword}=localhost/{control_keyword}={str(self.control)}/g',
                         self.root))
         if not_updated:
             raise SlurmSetupException(f'Slurm control node not updated on {not_updated}')
@@ -335,7 +333,7 @@ class SlurmSetup():
             nodelist = ','.join(sorted(data.hosts))
             if "Socket" in info and "Core" in info and "Thread" in info:
                 echo_command = (f'echo \"Nodename={nodelist} Sockets={info["Socket"]} '
-                                f'CoresPerSocket={info["Core"]} ThreadsPerCore={info["Thread"]}\" ')
+                                f'CoresPerSocket={info["Core"]} ThreadsPerCore={info["Thread"]}\"')
                 mod_result = self._append_config_file(echo_command)
                 if mod_result.failed_hosts:
                     raise SlurmSetupException(
