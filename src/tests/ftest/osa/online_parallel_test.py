@@ -200,7 +200,8 @@ class OSAOnlineParallelTest(OSAUtils):
             # Perform a data consistency check for all containers in the pool
             for val in range(0, num_pool):
                 self.pool = pool[val]
-                self.ior_thread(self.pool.identifier, oclass, test, self.ior_read_flags)
+                self.ior_thread(self.pool, self.ior_dfs_oclass,
+                                self.ior_test_sequence, self.ior_read_flags)
                 self.container = self.pool_cont_dict[self.pool][0]
                 self.container.check()
 
