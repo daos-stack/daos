@@ -2053,10 +2053,17 @@ obj_get_iods_offs(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 		return 0;
 	}
 
-	if (iod_array->oia_iod_csums != NULL)
-		(*p_csums)->ic_data = csum_info;
-	else
+	if (iod_array->oia_iod_csums != NULL) {
+		/*
+		 * The caller may pass an empty slot (*p_csums == NULL), in which case
+		 * obj_get_iods_offs_by_oid() allocates the csums array and fills in
+		 * ic_data for each entry itself, so there is nothing to seed here.
+		 */
+		if (*p_csums != NULL)
+			(*p_csums)->ic_data = csum_info;
+	} else {
 		*p_csums = NULL;
+	}
 
 	rc = obj_get_iods_offs_by_oid(uoid, iod_array, oca, dkey_hash, layout_ver, iods, offs,
 				      skips, iod_array->oia_iod_csums == NULL ? NULL : p_csums, nr);
@@ -5125,7 +5132,7 @@ out:
 			struct dcs_iod_csums	*csum = pcsums[i];
 			int j;
 
-			for (j = 0; j < dcu->dcu_iod_array.oia_oiod_nr; i++) {
+			for (j = 0; j < dcu->dcu_iod_array.oia_oiod_nr; j++) {
 				if (dcu->dcu_iod_array.oia_iods[j].iod_type == DAOS_IOD_SINGLE &&
 				    csum[j].ic_data != NULL)
 					D_FREE(csum[j].ic_data);
