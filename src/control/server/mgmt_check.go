@@ -187,6 +187,10 @@ func (svc *mgmtSvc) getCheckerLeaderControlAddr() (string, error) {
 		if err != nil {
 			return "", errors.Wrap(err, "select local check leader")
 		}
+		m, err = svc.sysdb.FindMemberByRank(r)
+		if err != nil {
+			return "", errors.Wrapf(err, "look up member for local check leader rank %d", r)
+		}
 	}
 
 	return m.Addr.String(), nil
@@ -323,10 +327,13 @@ func (svc *mgmtSvc) getLocalCheckLeaderEngine() (Engine, error) {
 	// Fetch check leader and verify if it is local to this node.
 	r, err := svc.getCheckerLeaderRank()
 	if err != nil {
-		return nil, errors.Wrapf(err, "getting check leader rank")
+		return nil, errors.Wrapf(err, "get check leader rank")
 	}
 
 	engList, err := svc.harness.FilterInstancesByRankSet(r.String())
+	if err != nil {
+		return nil, errors.Wrapf(err, "filter local engines by check leader rank %d", r)
+	}
 	if len(engList) == 0 {
 		return nil, errRankNotLocal(r)
 	}
@@ -337,7 +344,7 @@ func (svc *mgmtSvc) getLocalCheckLeaderEngine() (Engine, error) {
 func (svc *mgmtSvc) makeLocalCheckLeaderDrpcCall(ctx context.Context, method drpc.Method, req proto.Message) (*drpc.Response, error) {
 	ei, err := svc.getLocalCheckLeaderEngine()
 	if err != nil {
-		return nil, errors.Wrapf(err, "getting local check leader engine")
+		return nil, errors.Wrapf(err, "get local check leader engine")
 	}
 
 	dResp, err := ei.CallDrpc(ctx, method, req)

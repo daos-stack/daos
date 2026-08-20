@@ -2013,19 +2013,20 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 	testCheckLeaderRank := ranklist.Rank(0)
 
 	for name, tc := range map[string]struct {
-		createMS       func(*testing.T, logging.Logger) *mgmtSvc
-		mic            *control.MockInvokerConfig
-		req            proto.Message
-		expResp        *mgmtpb.CheckLeaderResp
-		expErr         error
-		expCheckLeader *ranklist.Rank
+		createMS              func(*testing.T, logging.Logger) *mgmtSvc
+		mic                   *control.MockInvokerConfig
+		req                   proto.Message
+		expResp               *mgmtpb.CheckLeaderResp
+		expErr                error
+		expCheckLeader        *ranklist.Rank
+		expCheckLeaderReqAddr string
 	}{
 		"unforwardable request": {
 			req:            &mgmtpb.GetAttachInfoReq{},
 			expErr:         errors.New("cannot be forwarded"),
 			expCheckLeader: &testCheckLeaderRank,
 		},
-		"check leader fails": {
+		"check leader invalid": {
 			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
 				svc := createMSMultiInCheckerMode(t, l, 1)
 				if err := svc.setCheckerLeaderString("garbage"); err != nil {
@@ -2077,7 +2078,8 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					},
 				},
 			},
-			expCheckLeader: &testCheckLeaderRank,
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
 		},
 		"check leader unset (MS replica)": {
 			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
@@ -2089,13 +2091,7 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 			},
 			req: startReq,
 			mic: &control.MockInvokerConfig{
-				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
-					Resp: &mgmtpb.CheckLeaderResp_StartResp{
-						StartResp: &mgmtpb.CheckStartResp{
-							Status: int32(daos.MiscError),
-						},
-					},
-				}),
+				UnaryError: errors.New("shouldn't call gRPC"),
 			},
 			expErr: &system.ErrNotLeader{},
 		},
@@ -2110,10 +2106,14 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if len(members) != 1 {
+					t.Fatalf("expected 1 member, got %d: %+v", len(members), members)
+				}
 				members[0].State = system.MemberStateAdminExcluded
 				if err := svc.sysdb.UpdateMember(members[0]); err != nil {
 					t.Fatal(err)
 				}
+				t.Logf("set member %d state to %s", members[0].Rank, members[0].State)
 				return svc
 			},
 			req: startReq,
@@ -2133,7 +2133,8 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					},
 				},
 			},
-			expCheckLeader: ranklist.NewRankPtr(0),
+			expCheckLeader:        ranklist.NewRankPtr(0),
+			expCheckLeaderReqAddr: system.MockControlAddr(t, 0).String(),
 		},
 		"gRPC fails": {
 			req: startReq,
@@ -2160,7 +2161,8 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					StartResp: &mgmtpb.CheckStartResp{},
 				},
 			},
-			expCheckLeader: &testCheckLeaderRank,
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
 		},
 		"CheckStartReq returns": {
 			req: startReq,
@@ -2180,7 +2182,8 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					},
 				},
 			},
-			expCheckLeader: &testCheckLeaderRank,
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
 		},
 		"CheckStopReq returns": {
 			req: stopReq,
@@ -2200,7 +2203,8 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					},
 				},
 			},
-			expCheckLeader: &testCheckLeaderRank,
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
 		},
 		"CheckQueryReq returns": {
 			req: queryReq,
@@ -2220,7 +2224,8 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					},
 				},
 			},
-			expCheckLeader: &testCheckLeaderRank,
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
 		},
 		"CheckSetPolicyReq returns": {
 			req: setPolicyReq,
@@ -2240,7 +2245,8 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					},
 				},
 			},
-			expCheckLeader: &testCheckLeaderRank,
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -2258,7 +2264,8 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 			}
 			svc := tc.createMS(t, log)
 
-			svc.rpcClient = control.NewMockInvoker(log, tc.mic)
+			mi := control.NewMockInvoker(log, tc.mic)
+			svc.rpcClient = mi
 
 			resp, err := svc.forwardCheckLeaderDrpc(ctx, tc.req)
 
@@ -2281,6 +2288,17 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 					t.Fatalf("expected rank %d, got error: %v", *tc.expCheckLeader, err)
 				}
 				test.AssertEqual(t, *tc.expCheckLeader, finalCheckLeader, "")
+			}
+
+			if tc.expCheckLeaderReqAddr != "" {
+				if len(mi.SentReqs) == 0 {
+					t.Fatalf("no requests sent by MockInvoker")
+				}
+				lastReq, ok := mi.SentReqs[len(mi.SentReqs)-1].(*control.CheckLeaderReq)
+				if !ok {
+					t.Fatalf("last request sent by MockInvoker is not CheckLeaderReq: %T", mi.SentReqs[len(mi.SentReqs)-1])
+				}
+				test.CmpAny(t, "host address for request", []string{tc.expCheckLeaderReqAddr}, lastReq.HostList)
 			}
 		})
 	}
