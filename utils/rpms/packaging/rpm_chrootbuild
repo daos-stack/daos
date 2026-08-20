@@ -49,6 +49,15 @@ best=0
 """
 EOF
 
+if [[ "$CHROOT_NAME" == *opensuse-leap-15.5* ]]; then
+    cat <<'EOF' >> mock.cfg
+config_opts['dnf.conf'] += """
+[main]
+exclude=*.suse.lp156*
+"""
+EOF
+fi
+
 # shellcheck disable=SC2153
 repo_adds=()
 repo_dels=()
