@@ -225,8 +225,12 @@ fetch_entry_common(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, bool is
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
-	for (i = 0; i < xnr; i++)
-		xsizes[i] = iods[i].iod_size;
+	/*
+	 * If fetching from dentry and the hardlink bit is set, do not honor xattr data returned.
+	 */
+	if (is_git_entry || !DFS_IS_HARDLINK(entry->mode))
+		for (i = 0; i < xnr; i++)
+			xsizes[i] = iods[i].iod_size;
 
 	if (is_git_entry && (S_ISLNK(entry->mode) || S_ISDIR(entry->mode)))
 		D_GOTO(out, rc = EIO);
@@ -892,6 +896,20 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 	if (obj && (obj->oid.hi != entry.oid.hi || obj->oid.lo != entry.oid.lo))
 		return ENOENT;
 
+	/*
+	 * If the entry is a hardlink, its authoritative inode metadata (times, uid, gid, and
+	 * link count) lives in the GIT object keyed by the file OID.
+	 */
+	if (DFS_IS_HARDLINK(entry.mode)) {
+		if (!daos_handle_is_valid(dfs->git_oh))
+			return ENOTSUP;
+		rc = git_fetch_entry(dfs->git_oh, th, &entry.oid, &entry, 0, NULL, NULL, NULL);
+		if (rc)
+			return rc;
+		if (obj)
+			dfs_set_hardlink(&obj->mode);
+	}
+
 	switch (entry.mode & S_IFMT) {
 	case S_IFDIR: {
 		daos_handle_t dir_oh;
@@ -988,7 +1006,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		return EINVAL;
 	}
 
-	stbuf->st_nlink = 1;
+	stbuf->st_nlink = entry.link_cnt;
 	stbuf->st_size  = size;
 	stbuf->st_mode  = DFS_EXTERNAL_MODE(entry.mode);
 	stbuf->st_uid   = entry.uid;
