@@ -154,7 +154,7 @@ class ParallelIo(FioBase, IorTestBase):
                     cmd, result.failed_hosts))
             # run fio on all containers
             self.fio_cmd.update_directory(os.path.join(dfuse.mount_dir.value, cont.uuid))
-            thread = threading.Thread(target=self.execute_fio)
+            thread = threading.Thread(target=self.fio_cmd.run)
             threads.append(thread)
             thread.start()
 
@@ -172,7 +172,7 @@ class ParallelIo(FioBase, IorTestBase):
         # try accessing destroyed container, it should fail
         try:
             self.fio_cmd.update_directory(os.path.join(dfuse.mount_dir.value, container_to_destroy))
-            self.execute_fio()
+            self.fio_cmd.run()
             self.fail(f"Fio was able to access destroyed container: {self.container[0]}")
         except CommandFailure:
             self.log.info("fio failed as expected")
