@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1642,8 +1642,10 @@ crt_swim_rank_check(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incar
 	}
 	crt_swim_csm_unlock(csm);
 
-	if (updated)
+	if (updated) {
+		swim_member_reset(csm->csm_ctx, rank);
 		crt_swim_notify_rank_state(rank, &state_prev, &state);
+	}
 
 	return rc;
 }

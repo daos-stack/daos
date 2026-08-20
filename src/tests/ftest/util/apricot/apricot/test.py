@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -126,7 +126,7 @@ class Test(avocadoTest):
         self._teardown_cancel = set()
         self._teardown_errors = []
         self.prefix = None
-        self.cancel_file = os.path.join(os.sep, "CIShare", "CI-skip-list-master")
+        self.cancel_file = os.path.join(os.sep, "CIShare", "CI-skip-list-release-2.8")
 
         # List of methods to call during tearDown to cleanup after the steps
         # Use the register_cleanup() method to add methods with optional arguments
@@ -194,6 +194,7 @@ class Test(avocadoTest):
             self.add_test_data("skip-list", skip_list)
             self.cancelForTicket(ticket)
 
+        self.log.info("Checking for test variant in skip list: %s", self.cancel_file)
         try:
             with open(self.cancel_file, encoding="utf-8") as skip_handle:
                 skip_list = skip_handle.readlines()

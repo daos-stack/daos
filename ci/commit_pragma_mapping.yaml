@@ -19,7 +19,7 @@ ftest-only: &ftest-only
   need-unit-test: False
 
 # Run only cart ftest for cart ftest C utilities
-src/tests/ftest/cart/*.[ch]:
+src/tests/ftest/cart/.*\.[ch]$:
   test-tag: cart
   <<: *ftest-only
 
@@ -190,6 +190,9 @@ src/cart:
 
 src/client/dfs/:
   test-tag: dfs
+
+src/client/dfuse/:
+  test-tag: dfuse
 
 src/client/pydaos/torch/:
   test-tag: pytorch

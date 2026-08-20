@@ -14,7 +14,7 @@ Installing is a two-step process:
 
 ### 1. Install the hooks
 
-Recommended: Configure your `core.hookspath`.  
+Configure your `core.hookspath`.  
 Any new githooks added to the repository will automatically run,
 but possibly require additional software to produce the desired effect.
 Additionally, as the branch changes, the githooks change with it.
@@ -23,7 +23,8 @@ Additionally, as the branch changes, the githooks change with it.
 git config core.hookspath utils/githooks
 ```
 
-Additionally, one can copy the files into an already configured path.
+Alternatively, one can copy the files into an already configured path.
+This is not recommended as the hooks will have to be manually copied whenever there are updates.
 
 ### 2. Install the tools
 
@@ -32,13 +33,24 @@ However, some hooks will simply check for required software and are
 effectively a noop if such is not installed.
 
 Requirements come from a combination of `pip` and system packages and can usually be installed through standard means.  
-To install `pip` packages specified in [utils/cq/requirements.txt](../../utils/cq/requirements.txt) it is recommended to setup a virtual environment and install with pip.  
-If you already have a [virtual environment for building](../../docs/QSG/build_from_scratch.md#python-packages) you can simply install the requirements:
 
+#### Install pip packages
+To install `pip` packages specified in [utils/cq/requirements.txt](../../utils/cq/requirements.txt) it is recommended to setup a virtual environment and install with pip.  
+It is recommended to use python 3.11, but you need at least 3.10 to get the latest version of each package.  
+You can setup a virtual environment with:
+```sh
+python3.11 -m venv /path/to/my_env
+```
+Then, to use it:
+```sh
+source /path/to/my_env/bin/activate
+```
+Then, to install the requirements:
 ```sh
 python3 -m pip install -r utils/cq/requirements.txt
 ```
 
+#### Install System Packages
 Install system packages with your package manager - for example:
 
 ```sh
