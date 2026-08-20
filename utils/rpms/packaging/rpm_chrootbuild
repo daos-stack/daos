@@ -49,19 +49,17 @@ best=0
 """
 EOF
 
-# Leap 15.5 and Leap 15.6 DAOS packages can coexist in a single Artifactory
-# repository path. During mock/dnf dependency resolution for a Leap 15.5
-# chroot, dnf may prefer newer *.suse.lp156* (Leap 15.6) package candidates.
+# Leap 15.5 and Leap 15.6 DAOS packages COEXIST in a single Artifactory
+# repository path. During dependency resolution for Leap 15.5, dnf prefers
+# .suse.lp156 package candidates because string lp156 > lp155 from
+# the string-comparison point of view.
 #
-# This leads to 15.5 builds pulling 15.6-built packages and their dependency
-# chain (for example libpmemobj and related libraries). Those dependencies are
-# not fully ABI-compatible across these releases, especially around libc/glibc:
-# 15.6-built packages may require GLIBC_2.34 symbols, while Leap 15.5 provides
-# glibc up to 2.31.
+# This leads to 15.5 builds pulling 15.6-built packages where these packages
+# are not compatible with the Leap 15.5 system e.g. 15.6-built packages
+# require GLIBC_2.34 symbols, while Leap 15.5 provides glibc up to 2.31.
 #
-# The result can be dependency installation failures inside the Leap 15.5 root.
-# Therefore we apply a chroot-level repository filter in mock dnf.conf (exclude
-# *.suse.lp156*) instead of changing DAOS spec dependencies.
+# The result is an installation failure for Leap 15.5. Therefore we apply
+# a repository filter in dnf.conf (exclude .lp156).
 if [[ "$CHROOT_NAME" == *opensuse-leap-15.5* ]]; then
     cat <<'EOF' >> mock.cfg
 config_opts['dnf.conf'] += """
