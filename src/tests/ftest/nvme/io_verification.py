@@ -60,7 +60,7 @@ class NvmeIoVerification(IorTestBase):
                 self.log_step("Run a test pass with transfer size = {} byte".format(tsize))
                 # Get the current pool size.
                 size_before_ior = self.pool.info
-                self.log.info("Current pool size = {}".format(size_before_ior))
+                self.log.info("Current pool size = %s", size_before_ior)
 
                 self.log_step("Run ior write with the parameters specified for this pass.")
                 self.ior_cmd.transfer_size.update(tsize)
