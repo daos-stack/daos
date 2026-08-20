@@ -7,6 +7,7 @@ import os
 
 from command_utils import ExecutableCommand
 from command_utils_base import FormattedParameter
+from logging import getLogger
 from run_utils import run_remote
 
 
@@ -30,9 +31,8 @@ class DlckCommand:
             sudo (bool, optional): Whether to run dlck with sudo. Defaults to True.
         """
         self.command = ExecutableCommand("/run/dlck/*", "dlck", path)
-        self.log = self.command.log
+        self._logger = getLogger(__name__)
 
-        self.run_sudo_with_exports = False
         # Add the fault injection file to the environment of the remote command.
         fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
         if fault_inject_file != "None set for now":
@@ -64,9 +64,7 @@ class DlckCommand:
         Returns:
             str: the command with all the defined parameters
         """
-        if self.run_sudo_with_exports:
-            return self.command.with_exports
-        return str(self.command)
+        return self.command.with_exports
 
     def run(self):
         """Run the dlck command.
@@ -82,4 +80,4 @@ class DlckCommand:
             CommandResult: groups of command results from the same hosts with the same return status
         """
         return run_remote(
-            self.log, self.host, command=str(self), verbose=self.verbose, timeout=self.timeout)
+            self._logger, self.host, command=str(self), verbose=self.verbose, timeout=self.timeout)
