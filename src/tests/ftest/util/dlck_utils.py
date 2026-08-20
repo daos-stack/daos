@@ -4,10 +4,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+from logging import getLogger
 
 from command_utils import ExecutableCommand
 from command_utils_base import FormattedParameter
-from logging import getLogger
 from run_utils import run_remote
 
 
