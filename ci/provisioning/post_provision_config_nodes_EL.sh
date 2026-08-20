@@ -23,4 +23,34 @@ distro_custom() {
     # pydaos into virtual environments.
     : "${PYTHON_VERSION:=3.11}"
     dnf -y install "python${PYTHON_VERSION}" "python${PYTHON_VERSION}-devel"
+
+    # Configure IPoIB for any InfiniBand interfaces present.
+    # The base OS image may not include ifcfg files for IB devices; create them
+    # with DHCP if absent so the hardware check can verify IB connectivity.
+    local _ib_configured=false
+    for _iface_path in /sys/class/net/ib*; do
+        [[ -e "$_iface_path" ]] || continue
+        _dev=$(basename "$_iface_path")
+        _ifcfg="/etc/sysconfig/network-scripts/ifcfg-${_dev}"
+        if [[ ! -f "$_ifcfg" ]]; then
+            cat > "$_ifcfg" << EOF
+DEVICE=${_dev}
+ONBOOT=yes
+TYPE=InfiniBand
+BOOTPROTO=dhcp
+DEFROUTE=no
+DHCLIENT_SET_DEFAULT_ROUTE=no
+CONNECTED_MODE=no
+EOF
+            _ib_configured=true
+        fi
+    done
+    if $_ib_configured; then
+        nmcli con reload
+        for _iface_path in /sys/class/net/ib*; do
+            [[ -e "$_iface_path" ]] || continue
+            _dev=$(basename "$_iface_path")
+            nmcli device connect "$_dev" || true
+        done
+    fi
 }
