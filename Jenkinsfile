@@ -778,7 +778,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.code_scanning'
-                            label 'docker_runner'
+                            label '...fox-105...'
                             additionalBuildArgs dockerBuildArgs(add_repos: false) +
                                                 ' --build-arg POINT_RELEASE=.7' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
