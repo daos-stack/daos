@@ -49,6 +49,26 @@ best=0
 """
 EOF
 
+# Leap 15.5 and Leap 15.6 DAOS packages COEXIST in a single Artifactory
+# repository path. During dependency resolution for Leap 15.5, dnf prefers
+# .suse.lp156 package candidates because string lp156 > lp155 from
+# the string-comparison point of view.
+#
+# This leads to 15.5 builds pulling 15.6-built packages where these packages
+# are not compatible with the Leap 15.5 system e.g. 15.6-built packages
+# require GLIBC_2.34 symbols, while Leap 15.5 provides glibc up to 2.31.
+#
+# The result is an installation failure for Leap 15.5. Therefore we apply
+# a repository filter in dnf.conf (exclude .lp156).
+if [[ "$CHROOT_NAME" == *opensuse-leap-15.5* ]]; then
+    cat <<'EOF' >> mock.cfg
+config_opts['dnf.conf'] += """
+[main]
+exclude=*.lp156*
+"""
+EOF
+fi
+
 # shellcheck disable=SC2153
 repo_adds=()
 repo_dels=()
