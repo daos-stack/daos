@@ -1539,7 +1539,7 @@ class RunCommand(ExecutableCommand):
     def __init__(self, namespace, command, path="", check_results=None, run_user=None):
         """Create a RunCommand object.
 
-        Uses run_remote() to run a command str provided.
+        Uses run_remote()/run_local() to run a command str provided.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
@@ -1560,7 +1560,6 @@ class RunCommand(ExecutableCommand):
 
         Returns:
             NodeSet: remote host(s) on which the command will run.
-
         """
         return self._hosts
 
@@ -1575,7 +1574,6 @@ class RunCommand(ExecutableCommand):
 
         Raises:
             TypeError: if value is not a NodeSet
-
         """
         if not isinstance(value, NodeSet):
             raise TypeError(f"Invalid {self.command} host NodeSet: {value} ({type(value)})")
@@ -1590,7 +1588,8 @@ class RunCommand(ExecutableCommand):
                 setting if defined. Defaults to None.
 
         Raises:
-            CommandFailure: if there is an error running the command
+            CommandFailure: if there is an error running the command with raise_exception or
+                self.exit_status_exception (when raise_exception is None) set to True.
 
         Returns:
             CommandResult: result from running the command
@@ -1635,16 +1634,12 @@ class RunCommand(ExecutableCommand):
         return self.result.joined_stderr
 
     def stop(self):
-        """Stop the command.
-
-        Raises:
-            CommandFailure: if there are no hosts specified
-        """
+        """Stop the command."""
         regex = self.command_regex
         if self.full_command_regex:
             regex = f"'{str(self)}'"
         detected, running = stop_processes(
-            self.log, self._hosts, regex, full_command=self.job.full_command_regex)
+            self.log, self.hosts, regex, full_command=self.full_command_regex)
         if not detected:
             self.log.info(
                 "No remote %s processes killed on %s (none found), done.",
