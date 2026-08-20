@@ -4,11 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from command_utils import RunRemoteCommand
+from command_utils import RunCommand
 from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
 
 
-class FioCommand(RunRemoteCommand):
+class FioCommand(RunCommand):
     # pylint: disable=too-many-instance-attributes
     """Defines a object representing a fio command."""
 

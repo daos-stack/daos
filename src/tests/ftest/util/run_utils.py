@@ -605,8 +605,12 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
         search_command = f"/usr/bin/pgrep --list-full --full -x {pattern}"
 
     # Search for any active processes
-    log.debug("Searching for any processes on %s that match %s", hosts, pattern_match)
-    result = run_remote(log, hosts, search_command, verbose, timeout)
+    if not hosts:
+        log.debug("Searching for any local processes that match %s", pattern_match)
+        result = run_local(log, search_command, verbose, timeout)
+    else:
+        log.debug("Searching for any processes on %s that match %s", hosts, pattern_match)
+        result = run_remote(log, hosts, search_command, verbose, timeout)
     if not result.passed_hosts:
         log.debug("No processes found on %s that match %s", result.failed_hosts, pattern_match)
         return processes_detected, processes_running

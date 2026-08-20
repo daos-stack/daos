@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -105,6 +106,7 @@ class Pil4dfsFio(TestWithServers):
         start_dfuse(self, dfuse, container.pool, container)
 
         fio_cmd = FioCommand()
+        fio_cmd.register_cleanup_method = self.register_cleanup
         fio_cmd.get_params(self)
         fio_cmd.update_directory(dfuse.mount_dir.value)
         fio_cmd.update("global", "ioengine", ioengine, f"fio --name=global --ioengine='{ioengine}'")
@@ -146,6 +148,7 @@ class Pil4dfsFio(TestWithServers):
         container = self._create_container()
 
         fio_cmd = FioCommand()
+        fio_cmd.register_cleanup_method = self.register_cleanup
         fio_cmd.get_params(self)
         fio_cmd.update("global", "ioengine", "dfs", "fio --name=global --ioengine='dfs'")
         fio_cmd.update(

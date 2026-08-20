@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,6 +31,7 @@ class FioBase(TestWithServers):
 
         # Get the parameters for Fio
         self.fio_cmd = FioCommand()
+        self.fio_cmd.register_cleanup_method = self.register_cleanup
         self.fio_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/fio/client_processes/*')
         self.manager = self.params.get("manager", '/run/fio/*', "MPICH")
