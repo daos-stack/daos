@@ -32,10 +32,12 @@ class DlckCommand:
         self.command = ExecutableCommand("/run/dlck/*", "dlck", path)
         self.log = self.command.log
 
+        self.run_sudo_with_exports = False
         # Add the fault injection file to the environment of the remote command.
         fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
         if fault_inject_file != "None set for now":
             self.command.env["D_FI_CONFIG"] = fault_inject_file
+            self.run_sudo_with_exports = True
         self.command.sudo = sudo
 
         self.host = server_host
@@ -62,7 +64,9 @@ class DlckCommand:
         Returns:
             str: the command with all the defined parameters
         """
-        return self.command.with_exports
+        if self.run_sudo_with_exports:
+            return self.command.with_exports
+        return str(self.command)
 
     def run(self):
         """Run the dlck command.
