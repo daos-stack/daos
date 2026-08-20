@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -52,8 +52,9 @@ class OSAOfflineParallelTest(OSAUtils):
                 text = "Waiting for rebuild to complete before pool reintegrate"
                 time.sleep(3)
                 self.print_and_assert_on_rebuild_failure(text)
-            if action == "exclude" and self.server_boot is True:
-                ranks = str(kwargs["rank"])
+            if action == "exclude" and self.server_boot == "true":
+                self.log.info("Stop/Start rank %s using system stop/start", kwargs["ranks"])
+                ranks = str(kwargs["ranks"])
                 dmg.system_stop(ranks=ranks)
                 self.print_and_assert_on_rebuild_failure("Stopping rank {}".format(ranks))
                 dmg.system_start(ranks=ranks)
@@ -101,14 +102,15 @@ class OSAOfflineParallelTest(OSAUtils):
 
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
-                if oclass != "S1":
-                    self.run_mdtest_thread()
+                # Read the data back to verify it was written correctly.
+                self.run_ior_thread("Read", oclass, test_seq)
                 # if self.test_during_aggregation is set,
                 # Create another container and run the IOR
                 # command using the second container.
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
-
+        all_ranks = list(self.server_managers[0].ranks.keys())
+        total_ranks = len(all_ranks)
         # Start the additional servers and extend the pool
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
@@ -135,11 +137,11 @@ class OSAOfflineParallelTest(OSAUtils):
             threads = []
             # Action dictionary with OSA dmg command parameters
             action_kwargs = {
-                "drain": {"pool": self.pool.identifier, "rank": rank, "tgt_idx": None},
-                "exclude": {"pool": self.pool.identifier, "rank": (rank + 1), "tgt_idx": t_string},
+                "drain": {"pool": self.pool.identifier, "ranks": rank, "tgt_idx": None},
+                "exclude": {"pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
                 "reintegrate": {
-                    "pool": self.pool.identifier, "rank": (rank + 1), "tgt_idx": t_string},
-                "extend": {"pool": self.pool.identifier, "ranks": (rank + 2)}
+                    "pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
+                "extend": {"pool": self.pool.identifier, "ranks": (total_ranks)}
             }
             for action in sorted(action_kwargs):
                 # Add a dmg thread
@@ -147,6 +149,8 @@ class OSAOfflineParallelTest(OSAUtils):
                 kwargs['action'] = action
                 kwargs['results'] = self.out_queue
                 process = threading.Thread(target=self.dmg_thread, kwargs=kwargs)
+                # Wait for a short period before starting the next thread
+                time.sleep(5)
                 self.log.info("Starting pool %s in a thread", action)
                 process.start()
                 threads.append(process)
@@ -154,7 +158,6 @@ class OSAOfflineParallelTest(OSAUtils):
         # Wait to finish the threads
         for thread in threads:
             thread.join()
-            time.sleep(5)
 
         # Verify the queue result and make sure test has no failure
         while not self.out_queue.empty():
@@ -182,8 +185,6 @@ class OSAOfflineParallelTest(OSAUtils):
             self.pool = pool[val]
             if data:
                 self.run_ior_thread("Read", oclass, test_seq)
-                if oclass != "S1":
-                    self.run_mdtest_thread()
                 self.container = self.pool_cont_dict[self.pool][0]
                 self.container.check()
 
@@ -192,8 +193,8 @@ class OSAOfflineParallelTest(OSAUtils):
 
         Test Description: Runs multiple OSA commands in parallel.
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
         :avocado: tags=osa,checksum,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test
         """
@@ -206,7 +207,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel without enabling checksum.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_without_csum
         """
@@ -222,7 +223,7 @@ class OSAOfflineParallelTest(OSAUtils):
         stop/start.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_rank_boot
         """
@@ -237,7 +238,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel with aggregation turned on.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_with_aggregation
         """
@@ -252,7 +253,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel with different object class.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_oclass
         """
