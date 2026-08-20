@@ -503,6 +503,12 @@ func TestStorage_ControlMetadataEngineNeedsFormat(t *testing.T) {
 			expResult:    true,
 		},
 		"engine directory exists": {},
+		"engine 1 directory exists": {
+			eIdx: 1,
+		},
+		"engine 2 directory exists": {
+			eIdx: 2,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)

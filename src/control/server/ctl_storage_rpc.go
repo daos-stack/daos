@@ -918,12 +918,6 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 		}
 	}
 
-	if req.replace && len(needScmFormat) == 0 {
-		// Only valid if at least one engine requires format.
-		return nil, nil, errors.New("format replace option only valid if at least one " +
-			"engine requires scm-format but currently no engines need scm-format")
-	}
-
 	if allNeedScmFormat {
 		// Check available RAM is sufficient before formatting SCM on engines.
 		if err := checkTmpfsMem(req.log, scmCfgs, req.getSysMemInfo); err != nil {
