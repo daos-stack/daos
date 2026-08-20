@@ -31,6 +31,7 @@ class OSAOnlineParallelTest(OSAUtils):
         super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
+        self.ior_read_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.ior_dfs_oclass = self.params.get("obj_class", '/run/ior/iorflags/*')
@@ -162,11 +163,11 @@ class OSAOnlineParallelTest(OSAUtils):
                                                             "action_args": action_args,
                                                             "results": self.out_queue}))
 
-                # Launch the dmg threads with 2 second delay between each thread
+                # Launch the dmg threads with 5 second delay between each thread
                 for dmg_thrd in dmg_threads:
                     self.log.info("Thread : %s", dmg_thrd)
                     dmg_thrd.start()
-                    time.sleep(2)
+                    time.sleep(5)
 
                 # Wait to finish the threads (dmg commands to get executed)
                 for dmg_thrd in dmg_threads:
@@ -199,6 +200,7 @@ class OSAOnlineParallelTest(OSAUtils):
             # Perform a data consistency check for all containers in the pool
             for val in range(0, num_pool):
                 self.pool = pool[val]
+                self.ior_thread(self.pool.identifier, oclass, test, self.ior_read_flags)
                 self.container = self.pool_cont_dict[self.pool][0]
                 self.container.check()
 

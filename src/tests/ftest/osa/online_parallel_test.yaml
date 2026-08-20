@@ -41,7 +41,7 @@ pool:
 container:
   type: POSIX
   control_method: daos
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:2
   oclass: EC_2P2GX
 
 ior:
@@ -54,6 +54,8 @@ ior:
   iorflags:
     ior_flags:
       - "-w -r -R -k -G 1"
+    read_flags:
+      - "-r -R -k -G 1"
     obj_class:
       - "EC_2P2GX"
   ior_test_sequence:

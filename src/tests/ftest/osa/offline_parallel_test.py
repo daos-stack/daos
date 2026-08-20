@@ -149,6 +149,8 @@ class OSAOfflineParallelTest(OSAUtils):
                 kwargs['action'] = action
                 kwargs['results'] = self.out_queue
                 process = threading.Thread(target=self.dmg_thread, kwargs=kwargs)
+                # Wait for a short period before starting the next thread
+                time.sleep(5)
                 self.log.info("Starting pool %s in a thread", action)
                 process.start()
                 threads.append(process)
@@ -156,7 +158,6 @@ class OSAOfflineParallelTest(OSAUtils):
         # Wait to finish the threads
         for thread in threads:
             thread.join()
-            time.sleep(5)
 
         # Verify the queue result and make sure test has no failure
         while not self.out_queue.empty():

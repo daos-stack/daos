@@ -41,7 +41,7 @@ container:
   type: POSIX
   control_method: daos
   oclass: EC_2P2GX
-  properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rd_fac:1
+  properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rd_fac:2
 
 ior:
   clientslots:
@@ -62,7 +62,7 @@ ior:
 
 test_obj_class:
   oclass:
-    - EC_2P2G8
+    - RP_3GX
 
 loop_test:
   iterations: 3
