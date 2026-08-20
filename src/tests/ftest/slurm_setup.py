@@ -186,7 +186,8 @@ class SlurmSetup():
             self.control, 'slurmctld', '/var/log/slurm/slurmctld.log', self.SLURM_CONF)
 
         # Restart slurmd on all nodes
-        self._restart_systemctl(self.all_nodes, 'slurmd', '/var/log/slurm/slurmd.log', self.SLURM_CONF)
+        self._restart_systemctl(
+            self.all_nodes, 'slurmd', '/var/log/slurm/slurmd.log', self.SLURM_CONF)
 
         # Update nodes to the idle state
         command = command_as_user(
@@ -269,8 +270,8 @@ class SlurmSetup():
 
         # Update the config file with the slurm epilog file
         self._modify_slurm_config_file(
-            'epilog file', self.all_nodes, f's#EpilogSlurmctld=#EpilogSlurmctld={self.EPILOG_FILE}#g',
-            self.root)
+            'epilog file', self.all_nodes,
+            f's#EpilogSlurmctld=#EpilogSlurmctld={self.EPILOG_FILE}#g', self.root)
 
         # Update the config file with the slurm control node
         not_updated = self.all_nodes.copy()
