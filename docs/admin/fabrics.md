@@ -90,7 +90,7 @@ IP-over-IB over the data plane's high-speed NICs,
 and focuses on data plane configuration.
 
 Please refer to
-[Partition isolation for control plane traffic over InfiniBand)](ib-pkey.md)
+[Partition isolation for control plane traffic over InfiniBand](ib-pkey.md)
 for important control plane configuration information regarding
 InfiniBand networks.
 

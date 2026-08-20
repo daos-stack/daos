@@ -14,7 +14,7 @@ All commands should be run as root.
   before stopping the whole DAOS system.
 
 - Ensure that there are no client applications with open pool connections.
-  In paticluar, terminate any user jobs that are using DAOS
+  In particular, terminate any user jobs that are using DAOS
   and terminate any `dfuse` mounts that may still exist.
   If necessary, the `dmg pool evict` command can be used on an admin node
   to disconnect any active pool connections.
@@ -46,5 +46,5 @@ All commands should be run as root.
   `systemctl disable daos_server` in a parallel shell.
 
 - Similarly, to prevent an automatic restart of the `daos_agent` daemon
-   after client reboots, disable the systemd service on the affected clients
+  after client reboots, disable the systemd service on the affected clients
   by running `systemctl disable daos_agent` in a parallel shell.

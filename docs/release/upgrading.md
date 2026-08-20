@@ -101,3 +101,4 @@ pool if in-place updating of the pool version is not possible).
 DAOS provides "N-1" interoperability. To update from DAOS versions older than
 Version 2.6.5 to Version 2.8, please update the system to the 2.6.5 fixlevel
 first before updating to DAOS 2.8.
+
