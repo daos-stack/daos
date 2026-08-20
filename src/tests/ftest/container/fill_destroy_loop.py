@@ -75,8 +75,8 @@ class BoundaryPoolContainerSpace(TestWithServers):
         self.log.info("==> Set pool delta to %s (%i bytes)", delta, delta_bytes)
 
         # Create a container and get pool free space before write
-        container = self.get_container(pool)
         free_space_init = pool.get_pool_free_space()
+        container = self.get_container(pool)
         self.log.info("--%i.(3)Pool free space before writing data to container %s (%i bytes)",
                       test_loop, bytes_to_human(free_space_init), free_space_init)
 
