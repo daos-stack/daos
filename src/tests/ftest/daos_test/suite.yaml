@@ -26,7 +26,7 @@ timeouts:
   test_daos_rebuild_simple: 2400
   test_daos_drain_simple: 3720
   test_daos_extend_simple: 3600
-  test_daos_rebuild_interactive: 1185
+  test_daos_rebuild_interactive: 1485
   test_daos_oid_allocator: 640
   test_daos_checksum: 500
   test_daos_rebuild_ec: 9000
@@ -52,6 +52,7 @@ server_config:
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
+        - DAOS_PIPELINE=1
       storage: auto
     1:
       pinned_numa_node: 1
@@ -65,6 +66,7 @@ server_config:
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
+        - DAOS_PIPELINE=1
       storage: auto
   transport_config:
     allow_insecure: true
@@ -182,7 +184,7 @@ daos_tests:
     test_daos_rebuild_simple: -s3
     test_daos_drain_simple: -s3
     test_daos_extend_simple: -s3
-    test_daos_rebuild_interactive: -s3
+    test_daos_rebuild_interactive: -s5
     test_daos_oid_allocator: -s5
   stopped_ranks:
     test_daos_degraded_mode: [5, 6, 7]

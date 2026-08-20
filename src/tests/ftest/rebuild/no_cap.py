@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -57,7 +57,7 @@ class RbldNoCapacity(TestWithServers):
         err_pool_full = -1007
 
         # Create a pool and container
-        self.add_pool()
+        self.pool = self.get_pool()
         self.add_container(self.pool)
         self.container.open()
 

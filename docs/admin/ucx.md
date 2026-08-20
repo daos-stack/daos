@@ -8,12 +8,12 @@ The UCX provider is fully supported since DAOS 2.4.
 To enable DAOS UCX support on InfiniBand fabrics,
 the following steps are needed:
 
-*  A supported version of MLNX\_OFED must be installed _before_
+*  A supported version of DOCA-OFED must be installed _before_
    DAOS is installed. This is the same for libfabric and for UCX:
-   DAOS only supports the NVIDIA-provided MLNX\_OFED stack,
+   DAOS only supports the NVIDIA-provided DOCA-OFED stack,
    not the inbox drivers.
-   Refer to the [DAOS Support Matrix](../release/support_matrix)
-   for information about supported MLNX\_OFED releases.
+   Refer to the [DAOS Support Matrix](https://docs.daos.io/v2.8/release/support_matrix)
+   for information about supported DOCA-OFED releases.
 
 *  The `mercury-ucx` RPM package needs to be **manually** selected for
    installation. The base `mercury` RPM package ships with no plugins.
@@ -25,7 +25,7 @@ the following steps are needed:
 
 *  At DAOS **installation** time, to enable UCX support the
    `mercury-ucx` RPM package must be explicitly listed.
-   For example, using the `dnf`/`yum` package manager on EL8:
+   For example, using the `dnf` package manager on EL9:
 
 ```bash
       # on DAOS_ADMIN nodes:

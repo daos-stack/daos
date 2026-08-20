@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -199,14 +199,15 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool keep_act
 /**
  * Abort the specified DTXs.
  *
- * \param coh	[IN]	Container open handle.
- * \param dti	[IN]	The DTX identifiers to be aborted.
- * \param epoch	[IN]	The max epoch for the DTX to be aborted.
+ * \param coh     [IN]	Container open handle.
+ * \param dti     [IN]	The DTX identifiers to be aborted.
+ * \param epoch   [IN]	The max epoch for the DTX to be aborted.
+ * \param version [IN]	The max version for the DTX to be aborted.
  *
  * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
+vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch, uint32_t version);
 
 /**
  * Discard the active DTX entry's records if invalid.
@@ -1684,6 +1685,7 @@ struct scrub_ctx {
 	sc_sleep_fn_t		 sc_sleep_fn;
 	sc_yield_fn_t		 sc_yield_fn;
 	void			*sc_sched_arg;
+	uint32_t                 sc_filter_credits;
 
 	enum scrub_status        sc_status;
 	uint8_t                  sc_cont_loaded : 1, /* Have all the containers been loaded */
