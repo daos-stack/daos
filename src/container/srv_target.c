@@ -1599,6 +1599,28 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, boo
 	return rc == 0 ? 1 : rc;
 }
 
+/* Start an existing ds_cont_child without creating the VOS container on demand. */
+static int
+cont_child_start_only(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver, bool *started,
+		      struct ds_cont_child **cont_out)
+{
+	struct ds_pool_child *pool_child;
+	int                   rc;
+
+	pool_child = ds_pool_child_lookup(pool_uuid);
+	if (pool_child == NULL) {
+		D_ERROR(DF_CONT " : failed to find pool child\n", DP_CONT(pool_uuid, cont_uuid));
+		return -DER_NO_HDL;
+	}
+
+	rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
+	if (rc == 0 && cont_out != NULL)
+		(*cont_out)->sc_status_pm_ver = pm_ver;
+
+	ds_pool_child_put(pool_child);
+	return rc;
+}
+
 int
 ds_cont_local_close(uuid_t cont_hdl_uuid)
 {
@@ -1727,9 +1749,9 @@ out:
 }
 
 static int
-ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-		   uint64_t flags, uint64_t sec_capas, uint32_t status_pm_ver,
-		   bool *started, struct ds_cont_hdl **cont_hdl)
+ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid, uint64_t flags,
+		   uint64_t sec_capas, uint32_t status_pm_ver, bool create, bool *started,
+		   struct ds_cont_hdl **cont_hdl)
 {
 	struct dsm_tls       *tls    = dsm_tls_get();
 	struct ds_cont_child *cont   = NULL;
@@ -1771,7 +1793,16 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (hdl == NULL)
 		return -DER_NOMEM;
 
-	rc = cont_child_create_start(pool_uuid, cont_uuid, status_pm_ver, true, started, &cont);
+	if (create) {
+		rc = cont_child_create_start(pool_uuid, cont_uuid, status_pm_ver, true, started,
+					     &cont);
+		D_INFO(DF_CONT": local open with create: "DF_RC"\n",
+		       DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+	} else {
+		rc = cont_child_start_only(pool_uuid, cont_uuid, status_pm_ver, started, &cont);
+		D_INFO(DF_CONT": local open start only (no create): "DF_RC"\n",
+		       DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+	}
 	if (rc < 0) {
 		D_FREE(hdl);
 		return rc;
@@ -1917,6 +1948,7 @@ struct cont_tgt_open_arg {
 	uuid_t		cont_uuid;
 	uuid_t		cont_hdl_uuid;
 	bool		cont_started;
+	bool            create;
 	uint64_t	flags;
 	uint64_t	sec_capas;
 	uint32_t	status_pm_ver;
@@ -1931,15 +1963,14 @@ cont_open_one(void *vin)
 {
 	struct cont_tgt_open_arg	*arg = vin;
 
-	return ds_cont_local_open(arg->pool_uuid, arg->cont_hdl_uuid,
-				  arg->cont_uuid, arg->flags, arg->sec_capas,
-				  arg->status_pm_ver, &arg->cont_started, NULL);
+	return ds_cont_local_open(arg->pool_uuid, arg->cont_hdl_uuid, arg->cont_uuid, arg->flags,
+				  arg->sec_capas, arg->status_pm_ver, arg->create,
+				  &arg->cont_started, NULL);
 }
 
 int
-ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		 uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
-		 uint32_t status_pm_ver)
+ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid, uint64_t flags,
+		 uint64_t sec_capas, uint32_t status_pm_ver, bool create)
 {
 	struct cont_tgt_open_arg arg = {0};
 	struct ds_pool          *pool;
@@ -1960,6 +1991,7 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	arg.flags = flags;
 	arg.sec_capas = sec_capas;
 	arg.status_pm_ver = status_pm_ver;
+	arg.create        = create;
 
 	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
@@ -2202,13 +2234,18 @@ cont_snap_update_one(void *vin)
 	struct ds_cont_child	*cont;
 	int			 rc;
 
-	/* The container should be exist on the system at this point, if non-exist on this target
-	 * it should be the case of reintegrate the container was destroyed ahead, so just
-	 * open_create the container here.
+	/* The container should exist on the system at this point. With container recovery it is
+	 * (re)created ahead, so just look it up here; skip the update if it is not present.
 	 */
-	rc = ds_cont_child_open_create(args->pool_uuid, args->cont_uuid, false, &cont);
-	if (rc != 0)
+	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	if (rc != 0) {
+		if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING) {
+			D_INFO(DF_CONT": snap update skipped, container not present: "DF_RC"\n",
+			       DP_CONT(args->pool_uuid, args->cont_uuid), DP_RC(rc));
+			rc = 0;
+		}
 		return rc;
+	}
 
 	if (args->snap_count == 0) {
 		if (cont->sc_snapshots != NULL) {

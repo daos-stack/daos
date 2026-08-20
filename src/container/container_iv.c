@@ -520,7 +520,12 @@ again:
 					rc = ds_cont_tgt_open(entry->ns->iv_pool_uuid,
 							      civ_key->cont_uuid, chdl.ch_cont,
 							      chdl.ch_flags, chdl.ch_sec_capas,
-							      stat.dcs_pm_ver);
+							      stat.dcs_pm_ver, false /* create */);
+					D_INFO(DF_CONT": IV fetch opening cont (no create): "
+					       DF_RC"\n",
+					       DP_CONT(entry->ns->iv_pool_uuid,
+						       chdl.ch_cont),
+					       DP_RC(rc));
 					if (rc != 0)
 						D_GOTO(out, rc);
 
@@ -644,12 +649,12 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		civ_ent = src->sg_iovs[0].iov_buf;
 		if (entry->iv_class->iv_class_id == IV_CONT_CAPA) {
 			/* open the container locally */
-			rc = ds_cont_tgt_open(entry->ns->iv_pool_uuid,
-					      civ_key->cont_uuid,
-					      civ_ent->cont_uuid,
-					      civ_ent->iv_capa.flags,
+			rc = ds_cont_tgt_open(entry->ns->iv_pool_uuid, civ_key->cont_uuid,
+					      civ_ent->cont_uuid, civ_ent->iv_capa.flags,
 					      civ_ent->iv_capa.sec_capas,
-					      civ_ent->iv_capa.status_pm_ver);
+					      civ_ent->iv_capa.status_pm_ver, true /* create */);
+			D_INFO(DF_CONT": IV update opening cont (create): "DF_RC"\n",
+			       DP_CONT(entry->ns->iv_pool_uuid, civ_ent->cont_uuid), DP_RC(rc));
 			if (rc)
 				D_GOTO(out, rc);
 		} else if (entry->iv_class->iv_class_id == IV_CONT_PROP) {

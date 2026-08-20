@@ -269,9 +269,9 @@ void ds_cont_child_cache_destroy(struct daos_lru_cache *cache);
 int ds_cont_hdl_hash_create(struct d_hash_table *hash);
 void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
 void ds_cont_oid_alloc_handler(crt_rpc_t *rpc);
-int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
-		     uint32_t status_pm_ver);
+int
+ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid, uint64_t flags,
+		 uint64_t sec_capas, uint32_t status_pm_ver, bool create);
 int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint64_t *snapshots, int snap_count);
 int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
