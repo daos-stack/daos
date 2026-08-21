@@ -33,7 +33,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 daos_vol_tests:
   testname: h5_partest_t_bigio
