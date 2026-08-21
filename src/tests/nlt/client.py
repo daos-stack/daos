@@ -168,14 +168,22 @@ class ValgrindHelper():
         else:
             cmd.append(f"--suppressions={join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')}")
 
+        src_go_suppression_file = join('src', 'cart', 'utils', 'memcheck-go.supp')
+        if os.path.exists(src_go_suppression_file):
+            cmd.append(f'--suppressions={src_go_suppression_file}')
+        else:
+            cmd.append(f"--suppressions={join(self.conf['PREFIX'], 'etc', 'memcheck-go.supp')}")
+
         return cmd
 
     def add_memcheck_env(self, env):
-        """Disable Go async preemption for a command run under memcheck."""
+        """Adjust the Go runtime for a command run under memcheck."""
         if not self.use_valgrind:
             return
         godebug = env.get('GODEBUG')
         env['GODEBUG'] = f'{godebug},asyncpreemptoff=1' if godebug else 'asyncpreemptoff=1'
+        # disable GC, as it wastes time and interacts poorly with valgrind
+        env['GOGC'] = 'off'
 
     def convert_xml(self):
         """Modify the xml file"""

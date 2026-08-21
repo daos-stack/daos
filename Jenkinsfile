@@ -1051,6 +1051,10 @@ pipeline {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
+                        // Memcheck the valgrind-tagged build so the Go runtime's
+                        // valgrind client requests suppress the resident-runtime
+                        // noise from libdaos_control.so, like the NLT stage does.
+                        unstash 'opt-daos-valgrind'
                         job_step_update(
                             unitTest(timeout_time: 160,
                                      unstash_opt: true,
@@ -1077,6 +1081,8 @@ pipeline {
                         label params.CI_UNIT_VM1_NVME_LABEL
                     }
                     steps {
+                        // Memcheck the valgrind-tagged build (see 'Unit Test with memcheck').
+                        unstash 'opt-daos-valgrind'
                         job_step_update(
                             unitTest(timeout_time: 180,
                                      unstash_opt: true,
