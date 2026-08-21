@@ -95,6 +95,9 @@ class ExecutableCommand(CommandWithParameters):
         if check_results:
             self.check_results_list = list(check_results)
 
+        # Internal flag used to indicate if cleanup is required for the command.
+        self.__cleanup_needed = False
+
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 
@@ -206,6 +209,7 @@ class ExecutableCommand(CommandWithParameters):
             CommandFailure: if there is an error running the command
 
         """
+        self.__cleanup_needed = True
         if self.run_as_subprocess:
             self._run_subprocess()
             return None
@@ -391,6 +395,35 @@ class ExecutableCommand(CommandWithParameters):
 
             self.log.info("%s stopped successfully", self.command)
             self._process = None
+
+    def cleanup_command(self):
+        """Cleanup the command."""
+        if not self.__cleanup_needed:
+            self.log.info("No cleanup needed for %s", self.command)
+            return
+
+        self.log.info("Cleaning up %s", self.command)
+        regex = self.command_regex
+        if self.full_command_regex:
+            regex = f"'{str(self)}'"
+        hosts = None
+        if hasattr(self, "hosts"):
+            hosts = self.hosts
+        detected, running = stop_processes(
+            self.log, hosts, regex, full_command=self.full_command_regex)
+        if not detected:
+            self.log.info(
+                "No remote %s processes killed on %s (none found), done.",
+                regex, "local host" if not hosts else hosts)
+        elif running:
+            self.log.info(
+                "***Unable to kill remote %s process on %s! Please investigate/report.***",
+                regex, running)
+        else:
+            self.log.info(
+                "***At least one remote %s process needed to be killed on %s! Please investigate/"
+                "report.***", regex, detected)
+        self.__cleanup_needed = False
 
     def wait(self):
         """Wait for the sub process to complete.
@@ -1552,7 +1585,6 @@ class RunCommand(ExecutableCommand):
         """
         super().__init__(namespace, command, path, False, check_results, run_user)
         self._hosts = None
-        self.register_cleanup_method = None
 
     @property
     def hosts(self):
@@ -1594,12 +1626,6 @@ class RunCommand(ExecutableCommand):
         Returns:
             CommandResult: result from running the command
         """
-        if callable(self.register_cleanup_method):
-            # Stop any running processes started by this job manager when the test completes
-            # pylint: disable=not-callable
-            self.register_cleanup_method(self.stop)
-
-        # Run the command on the remote hosts
         self.result = None
         if not self.hosts:
             result = run_local(self.log, self.with_exports, self.verbose, self.timeout)
@@ -1632,26 +1658,6 @@ class RunCommand(ExecutableCommand):
         if not self.result:
             raise CommandFailure("No command result available to return stderr")
         return self.result.joined_stderr
-
-    def stop(self):
-        """Stop the command."""
-        regex = self.command_regex
-        if self.full_command_regex:
-            regex = f"'{str(self)}'"
-        detected, running = stop_processes(
-            self.log, self.hosts, regex, full_command=self.full_command_regex)
-        if not detected:
-            self.log.info(
-                "No remote %s processes killed on %s (none found), done.",
-                regex, "local host" if not self.hosts else self.hosts)
-        elif running:
-            self.log.info(
-                "***Unable to kill remote %s process on %s! Please investigate/report.***",
-                regex, running)
-        else:
-            self.log.info(
-                "***At least one remote %s process needed to be killed on %s! Please investigate/"
-                "report.***", regex, detected)
 
     def _get_new(self):
         """Get a new object based upon this one.

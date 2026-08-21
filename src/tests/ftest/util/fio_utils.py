@@ -4,27 +4,33 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from apricot import TestWithServers
 from command_utils import RunCommand
 from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
 
 
-def get_fio(test, hosts, path="", namespace="/run/fio/*"):
-    """Get a FioCommand object with parameters from the test yaml file.
+class TestFio(TestWithServers):
+    # pylint: disable=too-few-public-methods
+    """Base class for Fio tests.
 
-    Args:
-        test (Test): avocado Test object
-        hosts (NodeSet): hosts on which to run the ior command
-        path (str, optional): path to location of command binary file.  Defaults to "".
-        namespace (str, optional): path to yaml parameters. Defaults to "/run/fio/*".
-
-    Returns:
-        FioCommand: a FioCommand object with parameters from the test yaml file
+    :avocado: recursive
     """
-    fio = FioCommand(path, namespace)
-    fio.hosts = hosts
-    fio.register_cleanup_method = test.register_cleanup
-    fio.get_params(test)
-    return fio
+
+    def get_fio_command(self, path="", namespace="/run/fio/*"):
+        """Get a FioCommand object with parameters from the test yaml file.
+
+        Args:
+            path (str, optional): path to location of command binary file.  Defaults to "".
+            namespace (str, optional): path to yaml parameters. Defaults to "/run/fio/*".
+
+        Returns:
+            FioCommand: a FioCommand object with parameters from the test yaml file
+        """
+        fio = FioCommand(path, namespace)
+        self.register_cleanup(fio.cleanup_command)
+        fio.hosts = self.hostlist_clients
+        fio.get_params(self)
+        return fio
 
 
 class FioCommand(RunCommand):
