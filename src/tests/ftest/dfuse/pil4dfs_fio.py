@@ -8,15 +8,14 @@
 import json
 import os
 
-from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 from cpu_utils import CpuInfo
 from dfuse_utils import get_dfuse, start_dfuse
-from fio_utils import get_fio
+from fio_utils import TestFio
 from general_utils import bytes_to_human, get_log_file, percent_change
 
 
-class Pil4dfsFio(TestWithServers):
+class Pil4dfsFio(TestFio):
     """Test class Description: Runs Fio with in small config.
 
     :avocado: recursive
@@ -105,7 +104,7 @@ class Pil4dfsFio(TestWithServers):
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, container.pool, container)
 
-        fio_cmd = get_fio(self, self.hostlist_clients)
+        fio_cmd = self.get_fio_command()
         fio_cmd.update_directory(dfuse.mount_dir.value)
         fio_cmd.update("global", "ioengine", ioengine, f"fio --name=global --ioengine='{ioengine}'")
         fio_cmd.update(
@@ -144,7 +143,7 @@ class Pil4dfsFio(TestWithServers):
         """
         container = self._create_container()
 
-        fio_cmd = get_fio(self, self.hostlist_clients)
+        fio_cmd = self.get_fio_command()
         fio_cmd.update("global", "ioengine", "dfs", "fio --name=global --ioengine='dfs'")
         fio_cmd.update(
             "job", "numjobs", self.fio_numjobs, f"fio --name=job --numjobs={self.fio_numjobs}")
