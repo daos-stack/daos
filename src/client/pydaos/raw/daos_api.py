@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -834,6 +834,44 @@ class IORequest():
                    1, ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
         if ret != 0:
             raise DaosApiError("Object update returned non-zero. RC: {0}"
+                               .format(ret))
+
+    def punch_array(self, dkey, akey, rec_idx, rec_count,
+                    txn=daos_cref.DAOS_TX_NONE):
+        """Punch a range of records from an array akey.
+
+        dkey      --1st level key for the array value
+        akey      --2nd level key for the array value
+        rec_idx   --index of the first record to punch
+        rec_count --how many records to punch
+        txn       --which transaction to punch in.
+                    Default is independent transaction (DAOS_TX_NONE)
+        """
+        extent = daos_cref.Extent()
+        extent.rx_idx = rec_idx
+        extent.rx_nr = rec_count
+
+        # a zero iod_size is DAOS_REC_ANY, which makes the update a punch
+        self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
+        self.iod.iod_name.iov_buf_len = ctypes.sizeof(akey)
+        self.iod.iod_name.iov_len = ctypes.sizeof(akey)
+        self.iod.iod_type = 2
+        self.iod.iod_size = 0
+        self.iod.iod_flags = 0
+        self.iod.iod_nr = 1
+        self.iod.iod_recxs = ctypes.pointer(extent)
+
+        dkey_iov = daos_cref.IOV()
+        dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
+        dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
+        dkey_iov.iov_len = ctypes.sizeof(dkey)
+
+        func = self.context.get_function('update-obj')
+
+        ret = func(self.obj.obj_handle, txn, 0, ctypes.byref(dkey_iov),
+                   1, ctypes.byref(self.iod), None, None)
+        if ret != 0:
+            raise DaosApiError("Array punch returned non-zero. RC: {0}"
                                .format(ret))
 
     def fetch_array(self, dkey, akey, rec_count, rec_size,
