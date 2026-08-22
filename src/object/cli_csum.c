@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -130,7 +130,7 @@ dc_obj_csum_fetch(struct daos_csummer *csummer, daos_key_t *dkey, daos_iod_t *io
 
 static struct dcs_layout *
 dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
-		      struct obj_reasb_req *reasb_req)
+		      struct obj_reasb_req *reasb_req, daos_size_t *sizes)
 {
 	struct dcs_layout	*singv_lo, *singv_los;
 	daos_iod_t		*iod;
@@ -142,22 +142,36 @@ dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 
 	singv_los = reasb_req->orr_singv_los;
 	for (i = 0; i < iod_nr; i++) {
+		daos_size_t rec_size;
+
 		singv_lo = &singv_los[i];
 		iod = &iods[i];
 		sgl = &sgls[i];
-		if (singv_lo->cs_even_dist == 0 || singv_lo->cs_bytes != 0 ||
-		    iod->iod_size == DAOS_REC_ANY)
+		if (singv_lo->cs_even_dist == 0)
+			continue;
+		/* The stored single-value layout is derived from the actual
+		 * record size, which the caller may have over-estimated in the
+		 * request. Use the size replied by the server so the checksum
+		 * layout matches the one used when the record was written.
+		 */
+		rec_size = (sizes != NULL && sizes[i] != 0 && sizes[i] != DAOS_REC_ANY) ?
+			   sizes[i] : iod->iod_size;
+		if (rec_size == 0 || rec_size == DAOS_REC_ANY)
+			continue;
+		/* A layout computed while reassembling the request was derived
+		 * from the requested size. Recompute it whenever the server
+		 * replied a different size, otherwise keep the cached value.
+		 */
+		if (singv_lo->cs_bytes != 0 && rec_size == iod->iod_size)
 			continue;
 		/* the case of fetch singv with unknown rec size, now after the
 		 * fetch need to re-calculate the singv_lo again
 		 */
-		if (obj_ec_singv_one_tgt(iod->iod_size, sgl,
-					 reasb_req->orr_oca)) {
+		if (obj_ec_singv_one_tgt(rec_size, sgl, reasb_req->orr_oca)) {
 			singv_lo->cs_even_dist = 0;
 			continue;
 		}
-		singv_lo->cs_bytes = obj_ec_singv_cell_bytes(iod->iod_size,
-							     reasb_req->orr_oca);
+		singv_lo->cs_bytes = obj_ec_singv_cell_bytes(rec_size, reasb_req->orr_oca);
 	}
 	return singv_los;
 }
@@ -188,12 +202,18 @@ iod_sgl_copy(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_t *cp_iod,
 	cp_sgl->sg_nr_out = cp_sgl->sg_nr;
 	for (i = 0; i < cp_sgl->sg_nr; i++)
 		cp_sgl->sg_iovs[i] = sgl->sg_iovs[sgl_idx.iov_idx + i];
-	D_ASSERTF(sgl_idx.iov_offset < cp_sgl->sg_iovs[0].iov_len,
-		  "iov_offset "DF_U64", iov_len "DF_U64"\n",
-		  sgl_idx.iov_offset, cp_sgl->sg_iovs[0].iov_len);
-	cp_sgl->sg_iovs[0].iov_buf += sgl_idx.iov_offset;
-	cp_sgl->sg_iovs[0].iov_len -= sgl_idx.iov_offset;
-	cp_sgl->sg_iovs[0].iov_buf_len = cp_sgl->sg_iovs[0].iov_len;
+	/* A zero-length leading iov is legal (for example a fetch that only
+	 * queries sizes), in which case daos_sgl_processor() consumed nothing
+	 * and there is no offset to trim.
+	 */
+	if (sgl_idx.iov_offset > 0) {
+		D_ASSERTF(sgl_idx.iov_offset < cp_sgl->sg_iovs[0].iov_len,
+			  "iov_offset "DF_U64", iov_len "DF_U64"\n",
+			  sgl_idx.iov_offset, cp_sgl->sg_iovs[0].iov_len);
+		cp_sgl->sg_iovs[0].iov_buf += sgl_idx.iov_offset;
+		cp_sgl->sg_iovs[0].iov_len -= sgl_idx.iov_offset;
+		cp_sgl->sg_iovs[0].iov_buf_len = cp_sgl->sg_iovs[0].iov_len;
+	}
 
 	return 0;
 }
@@ -239,12 +259,12 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 	if (!daos_csummer_initialized(args->csummer) || args->csummer->dcs_skip_data_verify)
 		return 0;
 
-	D_ASSERTF(args->maps_nr == args->iod_nr, "maps_nr(%lu) == iod_nr(%d)",
-		  args->maps_nr, args->iod_nr);
-
 	/** currently don't verify echo classes */
 	if ((daos_obj_is_echo(args->oid.id_pub)) || (args->sgls == NULL))
 		return 0;
+
+	D_ASSERTF(args->maps_nr == args->iod_nr, "maps_nr(%lu) == iod_nr(%d)",
+		  args->maps_nr, args->iod_nr);
 
 	/** Used to do actual checksum calculations. This prevents conflicts
 	 * between tasks
@@ -270,7 +290,8 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 		}
 	}
 
-	singv_los = dc_rw_cb_singv_lo_get(args->iods, args->sgls, args->iod_nr, args->reasb_req);
+	singv_los = dc_rw_cb_singv_lo_get(args->iods, args->sgls, args->iod_nr, args->reasb_req,
+					  args->sizes);
 
 	D_DEBUG(DB_CSUM, DF_C_UOID_DKEY" VERIFY %d iods dkey_hash "DF_U64"\n",
 		DP_C_UOID_DKEY(args->oid, args->dkey), args->iod_nr, args->dkey_hash);
@@ -287,6 +308,17 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 
 		if (!csum_iod_is_supported(iod))
 			continue;
+
+		/* No data landed in the caller's sgl - for example a fetch
+		 * issued with zero-length iovs purely to query record sizes -
+		 * so there is nothing to verify.
+		 */
+		if (daos_sgl_data_len(&args->sgls[i], false) == 0) {
+			D_DEBUG(DB_CSUM,
+				DF_C_UOID_DKEY " SKIP [%d] iod csum verify, no data fetched\n",
+				DP_C_UOID_DKEY(args->oid, args->dkey), i);
+			continue;
+		}
 
 		/* For EC single value degraded fetch, if need data recovery the data is not
 		 * transferred back so need not csum verify. Data will be transferred back and
@@ -329,7 +361,7 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 			/* Single-value csum layout not needed for short single value that only
 			 * stored on one data shard.
 			 */
-			if (obj_ec_singv_one_tgt(iod->iod_size, NULL, args->oc_attr))
+			if (obj_ec_singv_one_tgt(shard_iod.iod_size, NULL, args->oc_attr))
 				singv_lo = NULL;
 			else
 				singv_lo->cs_cell_align = 1;

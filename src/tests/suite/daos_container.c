@@ -437,7 +437,7 @@ co_properties(void **state)
 	}
 	/* not set properties should get default value */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM);
-	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_OFF) {
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_CRC32) {
 		fail_msg("csum verification failed.\n");
 	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
@@ -446,7 +446,7 @@ co_properties(void **state)
 	}
 	entry = daos_prop_entry_get(prop_query,
 				    DAOS_PROP_CO_CSUM_SERVER_VERIFY);
-	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_SV_OFF) {
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_SV_ON) {
 		fail_msg("csum server verify verification failed.\n");
 	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ENCRYPT);
