@@ -861,7 +861,7 @@ extend_test_pool_map(struct pool_map *map, uint32_t nnodes,
 	map_version = pool_map_get_version(map) + 1;
 
 	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes, ntargets, domains,
-			  dss_tgt_nr);
+			  dss_tgt_nr, NULL /* downout_ranks */);
 	assert_success(rc);
 
 	D_ASSERT(map_buf != NULL);

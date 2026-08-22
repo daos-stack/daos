@@ -1172,8 +1172,9 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 					return -DER_NO_PERM;
 				}
 
-			} else if (dc->co_status & (PO_COMP_ST_UPIN | PO_COMP_ST_UP |
-						    PO_COMP_ST_DOWN)) {
+			} else if (dc->co_status &
+				   (PO_COMP_ST_UPIN | PO_COMP_ST_UP | PO_COMP_ST_DOWN |
+				    PO_COMP_ST_DRAIN | PO_COMP_ST_DOWNOUT)) {
 				if (!existed) {
 					D_ERROR("status [%u] not valid for new comp\n",
 						dc->co_status);
@@ -1496,7 +1497,7 @@ fill_rank_comp(uint32_t rank, int idx, int map_version, uint8_t new_status, uint
 static int
 add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int map_version,
 			    uint32_t nr_tgts, int ndomains, const uint32_t *domains,
-			    d_rank_list_t *ordered_ranks)
+			    d_rank_list_t *ordered_ranks, d_rank_list_t *downout_ranks)
 {
 	int			rc;
 	uint32_t                num_node_comps;
@@ -1594,6 +1595,7 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int 
 		case D_FD_NODE_TYPE_RANK:
 		{
 			uint32_t rank = node.fdn_val.rank;
+			uint8_t  rank_status;
 
 			if (map) {
 				struct pool_domain *found_dom;
@@ -1609,8 +1611,12 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int 
 			}
 
 			updated = true;
-			fill_rank_comp(node.fdn_val.rank, num_rank_comps, map_version,
-				       new_status, nr_tgts, &map_comp);
+			rank_status = new_status;
+			if (map == NULL && downout_ranks != NULL &&
+			    d_rank_in_rank_list(downout_ranks, rank))
+				rank_status = PO_COMP_ST_DOWNOUT;
+			fill_rank_comp(node.fdn_val.rank, num_rank_comps, map_version, rank_status,
+				       nr_tgts, &map_comp);
 
 			D_ASSERT(i < ordered_ranks->rl_nr);
 			ordered_ranks->rl_ranks[i++] = node.fdn_val.rank;
@@ -1670,12 +1676,14 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int 
  */
 int
 gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
-	     int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr)
+	     int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr,
+	     d_rank_list_t *downout_ranks)
 {
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
 	uint32_t		num_comps;
 	uint8_t			new_status;
+	uint8_t                  target_status;
 	int			i, rc;
 	uint32_t		num_domain_comps = 0;
 	d_rank_list_t		*ordered_ranks;
@@ -1700,7 +1708,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 		D_GOTO(out_ranks, rc = -DER_NOMEM);
 
 	rc = add_domain_tree_to_pool_buf(map, map_buf, map_version, dss_tgt_nr, ndomains, domains,
-					 ordered_ranks);
+					 ordered_ranks, downout_ranks);
 	if (rc != 0) {
 		/* Do not need update the pool map anymore */
 		if (rc == -DER_EXIST)
@@ -1720,9 +1728,20 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	for (i = 0; i < ordered_ranks->rl_nr; i++) {
 		int j;
 
+		/*
+		 * Asymmetric pool create: for a fresh pool (map == NULL), if the rank
+		 * is already excluded / admin-excluded in system membership, all its
+		 * targets are inserted as DOWNOUT so that a subsequent reint can bring
+		 * them back naturally without extending the pool map.
+		 */
+		target_status = new_status;
+		if (map == NULL && downout_ranks != NULL &&
+		    d_rank_in_rank_list(downout_ranks, ordered_ranks->rl_ranks[i]))
+			target_status = PO_COMP_ST_DOWNOUT;
+
 		for (j = 0; j < dss_tgt_nr; j++) {
 			map_comp.co_type = PO_COMP_TP_TARGET;
-			map_comp.co_status = new_status;
+			map_comp.co_status  = target_status;
 			map_comp.co_index = j;
 			map_comp.co_padding = 0;
 			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
@@ -1730,7 +1749,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 			map_comp.co_ver = map_version;
 			map_comp.co_in_ver = map_version;
 			map_comp.co_fseq = 1;
-			map_comp.co_flags = PO_COMPF_NONE;
+			map_comp.co_flags   = PO_COMPF_NONE;
 			map_comp.co_nr = 1;
 
 			D_DEBUG(DB_TRACE, "adding target: type=0x%hhx, status=%hhu, idx=%d, id=%d, "
@@ -1743,6 +1762,45 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 			rc = pool_buf_attach(map_buf, &map_comp, 1);
 			if (rc != 0)
 				D_GOTO(out_map_buf, rc);
+		}
+	}
+
+	/*
+	 * Asymmetric pool create: propagate DOWNOUT up the domain tree so a
+	 * parent whose entire subtree is DOWNOUT is marked DOWNOUT too. Only
+	 * runs on fresh pools with downout_ranks; the regular exclude flow
+	 * handles propagation via update_dom_status_by_tgt_id.
+	 *
+	 * pb_comps stores higher-typed comps first (PERF > FAULT > NODE > RANK)
+	 * and preserves BFS order within each type, so a parent's children form
+	 * a contiguous slice of co_nr entries in the immediately lower level.
+	 * Sweeping from the last domain backward with a sliding child cursor
+	 * gives each parent exactly its own children.
+	 */
+	if (map == NULL && downout_ranks != NULL && downout_ranks->rl_nr > 0) {
+		struct pool_component *comps = map_buf->pb_comps;
+		uint32_t               child_start;
+		int                    d;
+
+		child_start = map_buf->pb_domain_nr + map_buf->pb_node_nr;
+		for (d = map_buf->pb_domain_nr - 1; d >= 0; d--) {
+			struct pool_component *dom     = &comps[d];
+			uint32_t               cn      = dom->co_nr;
+			bool                   all_out = true;
+			uint32_t               k;
+
+			D_ASSERT(child_start >= cn);
+			child_start -= cn;
+			if (cn == 0)
+				continue;
+			for (k = 0; k < cn; k++) {
+				if (comps[child_start + k].co_status != PO_COMP_ST_DOWNOUT) {
+					all_out = false;
+					break;
+				}
+			}
+			if (all_out)
+				dom->co_status = PO_COMP_ST_DOWNOUT;
 		}
 	}
 
@@ -2594,18 +2652,15 @@ pmap_fail_stat_fini(struct pmap_fail_stat *stat)
 static bool
 pmap_comp_failed(struct pool_component *comp)
 {
-	return (comp->co_status == PO_COMP_ST_DOWN) ||
-	       (comp->co_status == PO_COMP_ST_DOWNOUT &&
-		comp->co_flags & PO_COMPF_DOWN2OUT);
+	return (comp->co_status == PO_COMP_ST_DOWN) || pool_comp_is_failed_downout(comp);
 }
 
 static bool
 pmap_comp_failed_earlier(struct pool_component *comp, uint32_t ver)
 {
-	return ((comp->co_status == PO_COMP_ST_DOWNOUT &&
+	return (((pool_comp_is_failed_downout(comp) || pool_comp_is_drain_downout(comp)) &&
 		 comp->co_out_ver <= ver) ||
-		(comp->co_status == PO_COMP_ST_DOWN &&
-		 comp->co_fseq <= ver));
+		(comp->co_status == PO_COMP_ST_DOWN && comp->co_fseq <= ver));
 }
 
 static int

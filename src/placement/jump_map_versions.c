@@ -15,8 +15,22 @@
 #include <daos/pool_map.h>
 #include <isa-l.h>
 
-/* NB: this function checks if the component should be skipped in jump hash layout generation
- * process, those components which are in NEW status or being added afterwards should be skipped.
+/*
+ * NB: this function checks if the component should be skipped in jump hash layout generation
+ * process. Components that are not yet a stable member at \a allow_version should be skipped.
+ *
+ * "Stable member at allow_version" means: co_status is UPIN/DOWN/DRAIN/DOWNOUT at that map
+ * version. NEW is never stable.
+ *
+ * UP needs to distinguish between "no prior data" and "reintegrating prior data":
+ * - co_fseq <  co_ver: fresh MAP_EXTEND target (NEW->UP), no prior data.
+ * - co_fseq == co_ver: creation-time DOWNOUT target being brought in, no prior data.
+ * - co_fseq >  co_ver: real reintegration of a target that previously failed or drained.
+ *
+ * Only the no-prior-data UP targets are skipped until POST_REBUILD and until their
+ * co_in_ver is visible at allow_version. Real reintegration targets must remain visible
+ * in PRE_REBUILD/CURRENT layouts so they can be marked rebuilding/reintegrating by
+ * comp_need_remap().
  */
 static bool
 comp_is_skipped(struct pool_component *comp, uint32_t allow_version, enum layout_gen_mode gen_mode)
@@ -24,12 +38,12 @@ comp_is_skipped(struct pool_component *comp, uint32_t allow_version, enum layout
 	if (comp->co_status == PO_COMP_ST_NEW)
 		return true;
 
-	if (comp->co_status == PO_COMP_ST_UP && comp->co_fseq <= 1) { /* new added target */
-		/* if the target is added after the rebuild, then ignore it */
+	if (comp->co_status == PO_COMP_ST_UP && comp->co_fseq <= comp->co_ver) {
+		/* Join/addition happened after this layout's version -- not yet part of it. */
 		if (comp->co_in_ver > allow_version)
 			return true;
 
-		/* Only counted in for post rebuild */
+		/* No-prior-data UP is only treated as UPIN for POST_REBUILD layouts. */
 		if (gen_mode != POST_REBUILD)
 			return true;
 	}
