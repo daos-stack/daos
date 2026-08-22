@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -150,6 +150,30 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			nil,
 		},
 		{
+			"Generate with allow-numa-imbalance flag",
+			"config generate -r foo --allow-numa-imbalance",
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.MgmtSvcReplicas = "foo"
+				cmd.NetClass = "infiniband"
+				cmd.AllowNumaImbalance = true
+				return cmd
+			}()),
+			nil,
+		},
+		{
+			"Generate with allow-numa-imbalance short flag",
+			"config generate -r foo -n",
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.MgmtSvcReplicas = "foo"
+				cmd.NetClass = "infiniband"
+				cmd.AllowNumaImbalance = true
+				return cmd
+			}()),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"network quack",
 			"",
@@ -174,6 +198,7 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 	cmd.UseTmpfsSCM = true
 	cmd.ExtMetadataPath = "/opt/daos_md"
 	cmd.FabricPorts = "12345,13345"
+	cmd.AllowNumaImbalance = true
 
 	req := new(control.ConfGenerateReq)
 	if err := convert.Types(cmd, req); err != nil {
@@ -181,14 +206,15 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 	}
 
 	expReq := &control.ConfGenerateReq{
-		NrEngines:       1,
-		NetProvider:     "ofi+tcp",
-		SCMOnly:         true,
-		MgmtSvcReplicas: []string{"foo", "bar"},
-		NetClass:        hardware.Infiniband,
-		UseTmpfsSCM:     true,
-		ExtMetadataPath: "/opt/daos_md",
-		FabricPorts:     []int{12345, 13345},
+		NrEngines:          1,
+		NetProvider:        "ofi+tcp",
+		SCMOnly:            true,
+		MgmtSvcReplicas:    []string{"foo", "bar"},
+		NetClass:           hardware.Infiniband,
+		UseTmpfsSCM:        true,
+		ExtMetadataPath:    "/opt/daos_md",
+		FabricPorts:        []int{12345, 13345},
+		AllowNumaImbalance: true,
 	}
 
 	if diff := cmp.Diff(expReq, req); diff != "" {
