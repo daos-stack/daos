@@ -113,10 +113,11 @@ class PoolCreateAllTestBase(TestWithServers):
         pool_idx = len(self.pool) - pool_count
 
         # pylint: disable-next=logging-format-truncated
-        self.log.info("Creating a pool with all the available storage: size=100%")
-        self.pool[pool_idx].size.update("100%", "pool[{}].size".format(pool_idx))
+        self.log_step(
+            f"Creating a TestPool_{pool_idx + 1} with all the available storage: size=100%")
+        self.pool[pool_idx].size.update("100%", f"pool[{pool_idx}].size")
         if ranks is not None:
-            self.pool[pool_idx].target_list.update(ranks, "pool[{}].target_list".format(pool_idx))
+            self.pool[pool_idx].target_list.update(ranks, f"pool[{pool_idx}].target_list")
         self.pool[pool_idx].create()
         self.pool[pool_idx].get_info()
         tier_bytes = self.pool[pool_idx].info.pi_space.ps_space.s_total
@@ -127,8 +128,11 @@ class PoolCreateAllTestBase(TestWithServers):
             self.assertListEqual(
                 wait_ranks,
                 got_ranks,
-                "Pool with invalid ranks: wait={} got={}".format(wait_ranks, got_ranks))
+                f"Pool with invalid ranks: wait={wait_ranks} got={got_ranks}")
         self.log.info("Pool created: scm_size=%d, nvme_size=%d", *tier_bytes)
+        self.log_step(f"Verifying TestPool_{pool_idx + 1} default attributes")
+        self.pool[pool_idx].verify_props()
+        self.log_step(f"Destroying TestPool_{pool_idx + 1}")
         self.pool[pool_idx].destroy()
         pool_idx += 1
 
@@ -140,32 +144,33 @@ class PoolCreateAllTestBase(TestWithServers):
             nvme_delta_bytes is None,
             "Invalid function call: no NVME delta with usable NVMe storage")
 
-        self.log.info(
-            "Creating a pool with all the available storage: scm_size=%d, nvme_size=%d",
-            dmg_scm_size,
-            dmg_nvme_size)
-        self.pool[pool_idx].scm_size.update(dmg_scm_size, "pool[{}].scm_size", pool_idx)
+        self.log_step(
+            f"Creating a pool with all the available storage: scm_size={dmg_scm_size}, "
+            f"nvme_size={dmg_nvme_size}")
+        self.pool[pool_idx].scm_size.update(dmg_scm_size, f"pool[{pool_idx}].scm_size")
         if dmg_nvme_size > 0:
-            self.pool[pool_idx].nvme_size.update(dmg_nvme_size, "pool[{}].nvme_size", pool_idx)
+            self.pool[pool_idx].nvme_size.update(dmg_nvme_size, f"pool[{pool_idx}].nvme_size")
         if ranks is not None:
-            self.pool[pool_idx].target_list.update(ranks, "pool[{}].target_list".format(pool_idx))
+            self.pool[pool_idx].target_list.update(ranks, f"pool[{pool_idx}].target_list")
         self.pool[pool_idx].create()
+        self.log_step(f"Verifying TestPool_{pool_idx + 1} default attributes")
+        self.pool[pool_idx].verify_props()
+        self.log_step(f"Destroying TestPool_{pool_idx + 1}")
         self.pool[pool_idx].destroy()
         pool_idx += 1
 
-        self.log.info(
-            "Creating a pool with SCM oversubscription: scm_size=%d nvme_size=%d",
-            dmg_scm_size + scm_delta_bytes,
-            dmg_nvme_size)
+        self.log_step(
+            f"Creating a pool with SCM oversubscription: scm_size={dmg_scm_size}, "
+            f"nvme_size={dmg_nvme_size}")
         self.pool[pool_idx].scm_size.update(
             dmg_scm_size + scm_delta_bytes,
-            "pool[{}].scm_size".format(pool_idx))
+            f"pool[{pool_idx}].scm_size")
         if dmg_nvme_size > 0:
             self.pool[pool_idx].nvme_size.update(
                 dmg_nvme_size,
-                "pool[{}].nvme_size".format(pool_idx))
+                f"pool[{pool_idx}].nvme_size")
         if ranks is not None:
-            self.pool[pool_idx].target_list.update(ranks, "pool[{}].target_list".format(pool_idx))
+            self.pool[pool_idx].target_list.update(ranks, f"pool[{pool_idx}].target_list")
         error_msg = r"Pool should not be created: SCM oversubscription"
         with self.assertRaises(TestFail, msg=error_msg) as context_manager:
             self.pool[pool_idx].create()
@@ -176,18 +181,17 @@ class PoolCreateAllTestBase(TestWithServers):
         pool_idx += 1
 
         if dmg_nvme_size > 0:
-            self.log.info(
-                "Creating a pool with NVME oversubscription: scm_size=%d, nvme_size=%d",
-                dmg_scm_size,
-                dmg_nvme_size + nvme_delta_bytes)
-            self.pool[pool_idx].scm_size.update(dmg_scm_size, "pool[{}].scm_size".format(pool_idx))
+            self.log_step(
+                f"Creating a pool with NVME oversubscription: scm_size={dmg_scm_size}, "
+                f"nvme_size={dmg_nvme_size + nvme_delta_bytes}")
+            self.pool[pool_idx].scm_size.update(dmg_scm_size, f"pool[{pool_idx}].scm_size")
             self.pool[pool_idx].nvme_size.update(
                 dmg_nvme_size + nvme_delta_bytes,
-                "pool[{}].nvme_size".format(pool_idx))
+                f"pool[{pool_idx}].nvme_size")
             if ranks is not None:
                 self.pool[pool_idx].target_list.update(
                     ranks,
-                    "pool[{}].target_list".format(pool_idx))
+                    f"pool[{pool_idx}].target_list")
             error_msg = r"Pool should not be created: NVME oversubscription"
             with self.assertRaises(TestFail, msg=error_msg) as context_manager:
                 self.pool[pool_idx].create()
@@ -197,18 +201,20 @@ class PoolCreateAllTestBase(TestWithServers):
                 "Pool creation failed with invalid error message")
             pool_idx += 1
 
-        self.log.info(
-            "Creating a pool with 100%% of the available storage: scm_size=%d, nvme_size=%d",
-            dmg_scm_size,
-            dmg_nvme_size)
-        self.pool[pool_idx].scm_size.update(dmg_scm_size, "pool[{}].scm_size".format(pool_idx))
+        self.log_step(
+            f"Creating a pool with 100%% of the available storage: scm_size={dmg_scm_size}, "
+            f"nvme_size={dmg_nvme_size}")
+        self.pool[pool_idx].scm_size.update(dmg_scm_size, f"pool[{pool_idx}].scm_size")
         if dmg_nvme_size > 0:
             self.pool[pool_idx].nvme_size.update(
                 dmg_nvme_size,
-                "pool[{}].nvme_size".format(pool_idx))
+                f"pool[{pool_idx}].nvme_size")
         if ranks is not None:
-            self.pool[pool_idx].target_list.update(ranks, "pool[{}].target_list".format(pool_idx))
+            self.pool[pool_idx].target_list.update(ranks, f"pool[{pool_idx}].target_list")
         self.pool[pool_idx].create()
+        self.log_step(f"Verifying TestPool_{pool_idx + 1} default attributes")
+        self.pool[pool_idx].verify_props()
+        self.log_step(f"Destroying TestPool_{pool_idx + 1}")
         self.pool[pool_idx].destroy()
 
     def check_pool_recycling(self, pool_count, scm_delta_bytes, nvme_delta_bytes=None):
