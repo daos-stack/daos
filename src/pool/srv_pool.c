@@ -8112,6 +8112,12 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 	ptdi_in->ptdi_addrs.ca_count  = valid_list.pta_number;
 	uuid_copy(ptdi_in->ptdi_uuid, svc->ps_pool->sp_uuid);
 	rc = dss_rpc_send(rpc);
+	/* No corpc aggregation callback is registered, so ptdo_rc cannot report a send error. */
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": dss_rpc_send POOL_TGT_DISCARD",
+			 DP_UUID(svc->ps_pool->sp_uuid));
+		D_GOTO(decref, rc);
+	}
 
 	ptdi_out = crt_reply_get(rpc);
 	D_ASSERT(ptdi_out != NULL);
@@ -8120,6 +8126,7 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 		D_ERROR(DF_UUID": pool discard failed: rc: %d\n",
 			DP_UUID(svc->ps_pool->sp_uuid), rc);
 
+decref:
 	crt_req_decref(rpc);
 
 out:
