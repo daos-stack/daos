@@ -1,0 +1,39 @@
+#  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+hosts:
+  test_servers: 3
+  test_clients: 1
+timeout: 1200
+server_config:
+  name: daos_server
+  port: 10001
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage: auto
+  system_ram_reserved: 1
+pool: !mux
+  default:
+    size: 25%
+    svc_redun_fac: 1
+    transport_config:
+      allow_insecure: False
+  md_on_ssd_p2:
+    size: 25%
+    mem_ratio: 25
+    svc_redun_fac: 1
+    transport_config:
+      allow_insecure: False
+agent_config:
+  transport_config:
+    allow_insecure: False
+  credential_config:
+    pool_auth_enabled: True
+dmg:
+  transport_config:
+    allow_insecure: False
+container:
+  control_method: daos
