@@ -18,7 +18,6 @@ server_config:
   system_ram_reserved: 1
 container:
   type: POSIX
-  control_method: daos
 dfuse: !mux
   writeback:
     # File metadata is incorrect after write with writeback caching and IL.
