@@ -28,6 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/metadata"
 )
 
 const (
@@ -803,6 +804,12 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 }
 
 func (cs *ControlService) formatMetadata(instances []Engine, reformat, replace bool) (bool, error) {
+	// Exit early if not using MD-on-SSD mode (legacy PMem mode)
+	if !cs.storage.ControlMetadataPathConfigured() {
+		cs.log.Debug("control metadata path not configured, skipping metadata format (legacy PMem mode)")
+		return false, nil
+	}
+
 	// Format control metadata first, if needed
 	if needs, err := cs.storage.ControlMetadataNeedsFormat(); err != nil {
 		return false, errors.Wrap(err, "detecting if metadata format is needed")
@@ -819,34 +826,36 @@ func (cs *ControlService) formatMetadata(instances []Engine, reformat, replace b
 		}
 
 		return true, nil
-	} else if replace {
-		// Selective format: only format engines with missing metadata directories
-		var needFormatIdxs []uint
-		for _, eng := range instances {
-			engIdx := uint(eng.Index())
+	}
 
-			// Check if engine's metadata directory is missing
-			needsFormat, err := eng.GetStorage().ControlMetadataEngineNeedsFormat()
-			if err != nil {
-				return false, errors.Wrapf(err, "checking if engine %d metadata needs format", engIdx)
+	// Check for engines with missing metadata directories
+	var needFormatIdxs []uint
+	for _, eng := range instances {
+		engIdx := uint(eng.Index())
+
+		// Check if engine's metadata directory is missing
+		needsFormat, err := eng.GetStorage().ControlMetadataEngineNeedsFormat()
+		if err != nil {
+			return false, errors.Wrapf(err, "checking if engine %d metadata needs format", engIdx)
+		}
+
+		if needsFormat {
+			cs.log.Debugf("engine %d metadata needs format", engIdx)
+			needFormatIdxs = append(needFormatIdxs, engIdx)
+		}
+	}
+
+	if len(needFormatIdxs) > 0 {
+		if replace {
+			// In replace mode, format only the engines that need it
+			cs.log.Debugf("formatting control metadata storage for engines %v (--replace)", needFormatIdxs)
+			if err := cs.storage.FormatControlMetadata(needFormatIdxs); err != nil {
+				return false, errors.Wrap(err, "formatting control metadata storage")
 			}
-
-			if needsFormat {
-				cs.log.Debugf("engine %d metadata needs format", engIdx)
-				needFormatIdxs = append(needFormatIdxs, engIdx)
-			}
+			return true, nil
 		}
-
-		if len(needFormatIdxs) == 0 {
-			return false, errors.New("format replace option only valid if at least one " +
-				"engine requires metadata format but currently no engines need metadata format")
-		}
-
-		cs.log.Debugf("formatting control metadata storage for engines %v (--replace)", needFormatIdxs)
-		if err := cs.storage.FormatControlMetadata(needFormatIdxs); err != nil {
-			return false, errors.Wrap(err, "formatting control metadata storage")
-		}
-		return true, nil
+		// Not in replace mode, but some engines need format - return fault
+		return false, metadata.FaultIncompleteFormat(needFormatIdxs)
 	}
 
 	cs.log.Debug("no control metadata format needed")
