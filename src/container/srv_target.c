@@ -63,10 +63,11 @@ agg_rate_ctl(void *arg)
 		return -1;
 
 	/*
-	 * XXX temporary workaround: EC aggregation needs to be paused during rebuilding
-	 * to avoid the race between EC rebuild and EC aggregation.
+	 * EC aggregation needs to be paused by the rebuild EC agg barrier to avoid
+	 * the race between EC rebuild and EC aggregation.
 	 **/
-	if (ds_pool_is_rebuilding(pool) && cont->sc_ec_agg_active && !param->ap_vos_agg)
+	if (!param->ap_vos_agg && cont->sc_ec_agg_active &&
+	    ds_pool_child_ec_agg_paused(cont->sc_pool))
 		return -1;
 
 	/* When system is idle or under space pressure, let aggregation run in tight mode */
@@ -207,10 +208,10 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
-	if (ds_pool_is_rebuilding(pool) && !vos_agg) {
-		D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation during rebuild %d, %d.\n",
+	if (ds_pool_child_ec_agg_paused(cont->sc_pool) && !vos_agg) {
+		D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation during pause gate %u.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			atomic_load(&pool->sp_rebuilding), atomic_load(&pool->sp_rebuild_enum));
+			atomic_load(&cont->sc_pool->spc_ec_agg_pause_gate));
 		return false;
 	}
 
@@ -511,10 +512,8 @@ next:
 		if (dss_ult_exiting(req))
 			break;
 
-		/* sleep 18 seconds for EC aggregation ULT if the pool is in rebuilding,
-		 * if no space pressure.
-		 */
-		if (ds_pool_is_rebuilding(cont->sc_pool->spc_pool) && !param->ap_vos_agg &&
+		/* Sleep longer while the rebuild EC agg barrier is active if no space pressure. */
+		if (ds_pool_child_ec_agg_paused(cont->sc_pool) && !param->ap_vos_agg &&
 		    msecs != 200)
 			msecs = 18000;
 
@@ -964,11 +963,11 @@ ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child)
 
 #define WAIT_EC_PAUSE_MAX 600
 
-void
+int
 ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeout)
 {
 	uint64_t start_time = daos_wallclock_secs();
-	int      wait_intv  = 10;
+	int      next_warn  = 60;
 	int      waited     = 0;
 
 	D_DEBUG(DB_MD, DF_UUID "[%d]: wait for pausing EC aggregation\n",
@@ -981,35 +980,31 @@ ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeo
 		struct ds_cont_child *coc;
 		bool                  paused = true;
 
-		/* Wait for pausing aggregation
-		 * XXX: There is no global barrier so we always wait for at least 10 seconds to
-		 * lower the chance that remote targets are still running EC aggregation.
-		 */
-		if (wait_intv > wait_timeout - waited)
-			wait_intv = wait_timeout - waited;
+		if (!ds_pool_child_ec_agg_paused(pool_child))
+			return -DER_OP_CANCELED;
 
-		dss_sleep(wait_intv * 1000);
 		d_list_for_each_entry(coc, &pool_child->spc_cont_list, sc_link) {
 			if (ds_cont_child_ec_aggregating(coc)) {
-				/* Aggregation is active on this container */
 				paused = false;
 				break;
 			}
 		}
 		if (paused)
-			return;
+			return 0;
 
 		waited = daos_wallclock_secs() - start_time;
 		if (waited >= wait_timeout) {
 			D_WARN("can't pause EC aggregation after %d seconds\n", waited);
-			return; /* XXX what can I do? */
+			return -DER_TIMEDOUT;
 		}
 
-		if (waited % 60 == 0) {
+		if (waited >= next_warn) {
 			D_WARN(DF_UUID "[%d]: waited %d secs for EC aggregation to pause\n",
 			       DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id,
 			       waited);
+			next_warn += 60;
 		}
+		dss_sleep(1000);
 	}
 }
 

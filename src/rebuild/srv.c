@@ -228,6 +228,17 @@ is_rebuild_global_scan_done(struct rebuild_global_pool_tracker *rgt)
 }
 
 static bool
+is_rebuild_global_ec_agg_paused(struct rebuild_global_pool_tracker *rgt)
+{
+	int i;
+
+	for (i = 0; i < rgt->rgt_servers_number; i++)
+		if (!rgt->rgt_servers[i].ec_agg_paused)
+			return false;
+	return true;
+}
+
+static bool
 is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt)
 {
 	return is_rebuild_global_scan_done(rgt) &&
@@ -254,6 +265,7 @@ is_rebuild_phase_mostly_done(int engines_done_ct, int engines_total_ct)
 
 #define SCAN_DONE	0x1
 #define PULL_DONE	0x2
+#define EC_AGG_PAUSED   0x4
 
 static void
 servers_sop_swap(void *array, int a, int b)
@@ -334,6 +346,10 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 	if ((flags & PULL_DONE) && !status->pull_done) {
 		D_DEBUG(DB_REBUILD, DF_RB " rank %d is pull_done", DP_RB_RGT(rgt), rank);
 		status->pull_done = 1;
+	}
+	if ((flags & EC_AGG_PAUSED) && !status->ec_agg_paused) {
+		D_DEBUG(DB_REBUILD, DF_RB " rank %d paused EC aggregation", DP_RB_RGT(rgt), rank);
+		status->ec_agg_paused = 1;
 	}
 }
 
@@ -525,6 +541,24 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 			     struct rebuild_iv *iv)
 {
 	rebuild_leader_set_update_time(rgt, iv->riv_rank);
+	if (iv->riv_stable_epoch != 0) {
+		if (rgt->rgt_stable_epoch == 0) {
+			rgt->rgt_stable_epoch = iv->riv_stable_epoch;
+			D_INFO(DF_RB ": recovered stable epoch " DF_X64 " from rank %u\n",
+			       DP_RB_RGT(rgt), rgt->rgt_stable_epoch, iv->riv_rank);
+		} else if (rgt->rgt_stable_epoch != iv->riv_stable_epoch) {
+			D_ERROR(DF_RB ": stable epoch mismatch " DF_X64 "/" DF_X64
+				      " from rank %u\n",
+				DP_RB_RGT(rgt), rgt->rgt_stable_epoch, iv->riv_stable_epoch,
+				iv->riv_rank);
+			rgt->rgt_status.rs_errno     = -DER_STALE;
+			rgt->rgt_status.rs_fail_rank = iv->riv_rank;
+			rgt->rgt_abort               = 1;
+		}
+	}
+	if (iv->riv_ec_agg_paused)
+		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version,
+					  EC_AGG_PAUSED);
 
 	D_DEBUG(DB_REBUILD, DF_RB ": iv rank %d scan_done %d pull_done %d resync dtx %u\n",
 		DP_RB_RGT(rgt), iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
@@ -1152,7 +1186,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			if (rgt_up_dom_included(rgt, dom) == false)
 				rebuild_leader_set_status(rgt, dom->do_comp.co_rank,
 							  RB_DTX_RESYNC_VER_SKIP,
-							  SCAN_DONE | PULL_DONE);
+							  EC_AGG_PAUSED | SCAN_DONE | PULL_DONE);
 		}
 		ABT_rwlock_unlock(pool->sp_lock);
 		map_ranks_fini(&rank_list);
@@ -1173,6 +1207,13 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			rgt->rgt_abort = 1;
 			rgt->rgt_status.rs_errno = -DER_STALE;
 			goto done;
+		}
+
+		if (rgt->rgt_opc == RB_OP_REBUILD && rgt->rgt_stable_epoch == 0 &&
+		    is_rebuild_global_ec_agg_paused(rgt)) {
+			rgt->rgt_stable_epoch = d_hlc_get();
+			D_INFO(DF_RB " EC aggregation paused globally at " DF_X64 "\n",
+			       DP_RB_RGT(rgt), rgt->rgt_stable_epoch);
 		}
 
 		/* leader send status to target engines if still running */
@@ -1491,7 +1532,6 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 		DL_ERROR(rc, DF_RB " failed to create scan broadcast request", DP_RB_RGT(rgt));
 		D_GOTO(out, rc);
 	}
-
 	rsi = crt_req_get(rpc);
 	uuid_copy(rsi->rsi_pool_uuid, pool->sp_uuid);
 	rsi->rsi_ns_id = pool->sp_iv_ns->iv_ns_id;
@@ -1515,7 +1555,8 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 		DL_ERROR(rc, DF_RB " scan broadcast send failed.", DP_RB_RGT(rgt));
 
 	rgt->rgt_init_scan = 1;
-	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
+	if (rebuild_op != RB_OP_REBUILD)
+		rgt->rgt_stable_epoch = rso->rso_stable_epoch;
 	DL_INFO(rc, DF_RB " got stable/reclaim epoch " DF_X64 "/" DF_X64, DP_RB_RGT(rgt),
 		rgt->rgt_stable_epoch, rgt->rgt_reclaim_epoch);
 	crt_req_decref(rpc);
@@ -2971,8 +3012,7 @@ static int
 rebuild_fini_one(void *arg)
 {
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
-	struct rebuild_pool_tls		*pool_tls;
-	struct ds_pool_child		*dpc;
+	struct rebuild_pool_tls         *pool_tls;
 
 	pool_tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 					   rpt->rt_rebuild_gen);
@@ -2982,14 +3022,24 @@ rebuild_fini_one(void *arg)
 	rebuild_pool_tls_destroy(pool_tls);
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
+	return 0;
+}
+
+static int
+rebuild_ec_agg_fini_one(void *arg)
+{
+	struct rebuild_tgt_pool_tracker *rpt = arg;
+	struct ds_pool_child            *dpc;
 
 	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
-	/* The ds_pool_child is already stopped */
 	if (dpc == NULL)
 		return 0;
 
-	D_DEBUG(DB_REBUILD, DF_RB ": rebuild fini for stable epoch " DF_U64 "\n", DP_RB_RPT(rpt),
-		rpt->rt_stable_epoch);
+	if (ds_pool_child_ec_agg_token_match(dpc, rpt->rt_leader_term, rpt->rt_rebuild_gen)) {
+		atomic_store(&dpc->spc_ec_agg_pause_gate, 0);
+		atomic_store(&dpc->spc_ec_agg_pause_term, 0);
+		atomic_store(&dpc->spc_rebuild_ec_agg_paused_hlc, 0);
+	}
 	ds_pool_child_put(dpc);
 	return 0;
 }
@@ -3035,7 +3085,10 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		DL_WARN(rc, DF_RB " rebuild fini one failed", DP_RB_RPT(rpt));
 	/* destroy the migrate_tls of 0-xstream */
 	ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
-	/* No one should access rpt after rebuild_fini_one. */
+	rc = dss_task_collective(rebuild_ec_agg_fini_one, rpt, 0);
+	if (rc != 0)
+		DL_WARN(rc, DF_RB " EC aggregation gate fini failed", DP_RB_RPT(rpt));
+	/* No one should access rpt after the final gate cleanup. */
 	D_INFO(DF_RB " Finalized rebuild\n", DP_RB_RPT(rpt));
 	rpt_delete(rpt);
 }
@@ -3106,6 +3159,8 @@ rebuild_tgt_status_check_ult(void *arg)
 					   rpt->rt_reported_size;
 		}
 		iv.riv_status = status.status;
+		iv.riv_ec_agg_paused = rpt->rt_ec_agg_paused;
+		iv.riv_stable_epoch  = rpt->rt_stable_epoch;
 		if (status.scanning == 0 || rpt->rt_abort ||
 		    status.status != 0) {
 			iv.riv_scan_done = 1;

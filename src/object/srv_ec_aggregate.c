@@ -1340,7 +1340,7 @@ agg_peer_check_avail(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	int                    i;
 	int                    rc;
 
-	if (ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool)) {
+	if (ds_pool_child_ec_agg_paused(agg_param->ap_cont->sc_pool)) {
 		rc = -DER_OP_CANCELED;
 		/* We currently pause EC aggregation for rebuild, so just cancel the
 		 * aggregation for the current stripe. It means the following peer status
@@ -1426,8 +1426,15 @@ agg_peer_update_ult(void *arg)
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
 		D_GOTO(out, rc = -DER_TIMEDOUT);
-
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	D_ASSERTF(!ds_pool_child_rebuild_started(agg_param->ap_cont->sc_pool),
+		  DF_UUID " EC aggregation peer update after rebuild START: "
+			  "rank %u tgt %d " DF_UOID " stripe " DF_U64 " global_pause_done " DF_X64
+			  "\n",
+		  DP_UUID(agg_param->ap_pool_info.api_pool_uuid), dss_self_rank(),
+		  dss_get_module_info()->dmi_tgt_id, DP_UOID(entry->ae_oid),
+		  entry->ae_cur_stripe.as_stripenum,
+		  atomic_load(&agg_param->ap_cont->sc_pool->spc_rebuild_ec_agg_paused_hlc));
 	rc        = agg_peer_check_avail(agg_param, entry);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -1939,9 +1946,10 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 
 	/* avoid race between EC aggregation and rebuild scanner */
 	agg_param->ap_cont->sc_ec_agg_updates++;
-	if (ds_pool_is_rebuilding(agg_param->ap_cont->sc_pool->spc_pool)) {
+	if (ds_pool_child_ec_agg_paused(agg_param->ap_cont->sc_pool)) {
 		rc = -DER_OP_CANCELED;
-		DL_INFO(rc, DF_UOID " abort as rebuild started", DP_UOID(entry->ae_oid));
+		DL_INFO(rc, DF_UOID " abort as EC aggregation pause gate is set",
+			DP_UOID(entry->ae_oid));
 		update_vos = false;
 		goto out;
 	}
@@ -2366,10 +2374,10 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 {
 	int	rc;
 
-	if (ds_pool_is_rebuilding(agg_param->ap_pool_info.api_pool)) {
-		D_INFO(DF_UUID ": abort ec aggregation, sp_rebuilding %d\n",
+	if (ds_pool_child_ec_agg_paused(agg_param->ap_cont->sc_pool)) {
+		D_INFO(DF_UUID ": abort EC aggregation, pause gate %u\n",
 		       DP_UUID(agg_param->ap_pool_info.api_pool->sp_uuid),
-		       atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
+		       atomic_load(&agg_param->ap_cont->sc_pool->spc_ec_agg_pause_gate));
 		return true;
 	}
 
@@ -2578,15 +2586,15 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	D_ASSERT(agg_param->ap_initialized);
 
-	/* If rebuild started, abort it to save conflict window with rebuild
+	/* If the rebuild EC agg barrier is active, abort to save conflict window with rebuild
 	 * (see obj_inflight_io_check()).
 	 */
-	if (ds_pool_is_rebuilding(agg_param->ap_pool_info.api_pool)) {
+	if (ds_pool_child_ec_agg_paused(agg_param->ap_cont->sc_pool)) {
 		rc = -DER_OP_CANCELED;
-		DL_INFO(rc, DF_CONT " abort as rebuild started, sp_rebuilding %d.",
+		DL_INFO(rc, DF_CONT " abort as EC aggregation pause gate %u is set.",
 			DP_CONT(agg_param->ap_pool_info.api_pool_uuid,
 				agg_param->ap_pool_info.api_cont_uuid),
-			atomic_load(&agg_param->ap_pool_info.api_pool->sp_rebuilding));
+			atomic_load(&agg_param->ap_cont->sc_pool->spc_ec_agg_pause_gate));
 		return rc;
 	}
 
@@ -2887,7 +2895,7 @@ update_hae:
 	/* clear the flag before next turn's cont_aggregate_runnable(), to save conflict
 	 * window with rebuild (see obj_inflight_io_check()).
 	 */
-	if (ds_pool_is_rebuilding(cont->sc_pool->spc_pool))
+	if (ds_pool_child_ec_agg_paused(cont->sc_pool))
 		cont->sc_ec_agg_active = 0;
 
 	if (rc == 0) {

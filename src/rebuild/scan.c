@@ -281,17 +281,18 @@ rebuild_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 static int
 rpt_wait_rebuild_epoch(struct rebuild_tgt_pool_tracker *rpt)
 {
-	int wait_cnt     = 0;
-	int wait_intv    = 200; /* milliseconds */
-	int wait_cnt_max = 180;
+	int wait_cnt = 0;
 
-	while (rpt->rt_stable_epoch == 0 && wait_cnt++ < wait_cnt_max)
-		dss_sleep(wait_intv);
+	while (rpt->rt_stable_epoch == 0 && !rpt->rt_abort && !rpt->rt_finishing &&
+	       !rpt->rt_global_done && wait_cnt++ < 180)
+		dss_sleep(200);
 
 	if (rpt->rt_stable_epoch != 0)
 		return 0;
+	if (!rpt->rt_abort && !rpt->rt_finishing && !rpt->rt_global_done)
+		return -DER_TIMEDOUT;
 
-	return -DER_TIMEDOUT;
+	return -DER_SHUTDOWN;
 }
 
 static void
@@ -1162,8 +1163,10 @@ rebuild_scanner(void *data)
 	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
-
-	ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
+	if (rpt->rt_rebuild_op == RB_OP_REBUILD) {
+		D_ASSERT(rpt->rt_stable_epoch != 0);
+		atomic_store(&child->spc_rebuild_ec_agg_paused_hlc, rpt->rt_stable_epoch);
+	}
 
 	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
 	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
@@ -1228,6 +1231,34 @@ out:
 	return rc;
 }
 
+static int
+rebuild_ec_agg_pause_one(void *data)
+{
+	struct rebuild_tgt_pool_tracker *rpt = data;
+	struct ds_pool_child            *child;
+	uint64_t                         current_term;
+	uint32_t                         current_gen;
+	int                              rc;
+
+	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	if (child == NULL)
+		return -DER_NONEXIST;
+
+	current_term = atomic_load(&child->spc_ec_agg_pause_term);
+	current_gen  = atomic_load(&child->spc_ec_agg_pause_gate);
+	if (current_term > rpt->rt_leader_term ||
+	    (current_term == rpt->rt_leader_term && current_gen > rpt->rt_rebuild_gen)) {
+		ds_pool_child_put(child);
+		return -DER_STALE;
+	}
+
+	atomic_store(&child->spc_ec_agg_pause_term, rpt->rt_leader_term);
+	atomic_store(&child->spc_ec_agg_pause_gate, rpt->rt_rebuild_gen);
+	rc = ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
+	ds_pool_child_put(child);
+	return rc;
+}
+
 /**
  * Wait for pool map and setup global status, then spawn scanners for all
  * service xsteams
@@ -1275,6 +1306,19 @@ rebuild_scan_leader(void *data)
 	}
 
 do_scan:
+	if (rpt->rt_rebuild_op == RB_OP_REBUILD) {
+		rc = ds_pool_thread_collective(
+		    rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+		    rebuild_ec_agg_pause_one, rpt, 0);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		rpt->rt_ec_agg_paused = 1;
+		rc                    = rpt_wait_rebuild_epoch(rpt);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+
 	D_INFO(DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, rebuild_scanner, rpt,
@@ -1303,7 +1347,6 @@ out:
 	DL_INFO(rc, DF_RB " scan leader done", DP_RB_RPT(rpt));
 	rpt_put(rpt);
 }
-
 /* Scan the local target and generate rebuild object list */
 void
 rebuild_tgt_scan_handler(crt_rpc_t *rpc)
@@ -1326,7 +1369,14 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		DL_ERROR(rc, DF_RB " cannot find pool", DP_RB_RSI(rsi));
 		D_GOTO(out_put, rc);
 	}
+
 	atomic_fetch_add(&pool->sp_rebuilding, 1);
+
+	if (rsi->rsi_leader_term < pool->sp_iv_ns->iv_master_term ||
+	    (rsi->rsi_leader_term == pool->sp_iv_ns->iv_master_term &&
+	     rsi->rsi_master_rank != pool->sp_iv_ns->iv_master_rank))
+		D_GOTO(out_put, rc = -DER_STALE);
+	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank, rsi->rsi_leader_term);
 
 	/* If PS leader has been changed, and rebuild version is also increased
 	 * due to adding new failure targets for rebuild, let's abort previous
