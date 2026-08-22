@@ -52,7 +52,7 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code.
 
         :avocado: tags=all
-        :avocado: tags=hw,cb,hw_vmd,medium,large
+        :avocado: tags=hw,hw_vmd,medium,large
         :avocado: tags=harness,harness_basic_test,always_passes
         :avocado: tags=HarnessBasicTest,test_always_passes_hw
         """
@@ -65,6 +65,26 @@ class HarnessBasicTest(TestWithoutServers):
         :avocado: tags=hw,medium,large,provider
         :avocado: tags=harness,harness_basic_test,always_passes
         :avocado: tags=HarnessBasicTest,test_always_passes_hw_provider
+        """
+        self.test_always_passes()
+
+    def test_always_passes_cb(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=cb,medium
+        :avocado: tags=harness,harness_basic_test,always_passes
+        :avocado: tags=HarnessBasicTest,test_always_passes_cb
+        """
+        self.test_always_passes()
+
+    def test_always_passes_cb_provider(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=cb,medium,provider
+        :avocado: tags=harness,harness_basic_test,always_passes
+        :avocado: tags=HarnessBasicTest,test_always_passes_cb_provider
         """
         self.test_always_passes()
 
