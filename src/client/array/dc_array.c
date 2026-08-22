@@ -66,11 +66,15 @@ struct io_params {
 	daos_size_t		array_size;
 	tse_task_t		*task;
 	struct io_params	*next;
+	tse_task_t              *io_task;
+	struct io_params        *io_next; /** later split of the same dkey, issued when this ends */
+	bool                     io_defer; /** held back behind an earlier split of the same dkey */
 	bool			user_sgl_used;
 	char			akey_val;
 };
 
 unsigned int array_list_io_limit;
+unsigned int array_rg_len_thd;
 
 void
 daos_array_env_init()
@@ -80,12 +84,12 @@ daos_array_env_init()
 	if (array_list_io_limit == 0) {
 		array_list_io_limit = UINT_MAX;
 	}
-	if (array_list_io_limit > DAOS_ARRAY_LIST_IO_LIMIT) {
-		D_WARN("Setting a high limit for list io descriptors (%u) is not recommended\n",
-		       array_list_io_limit);
-	} else {
-		D_DEBUG(DB_TRACE, "ARRAY List IO limit = %u\n", array_list_io_limit);
-	}
+
+	array_rg_len_thd = DAOS_ARRAY_RG_LEN_THD;
+	d_getenv_uint("DAOS_ARRAY_RG_LEN_THD", &array_rg_len_thd);
+
+	D_DEBUG(DB_TRACE, "ARRAY list IO: %u tiny extents (<= %u B) per RPC\n", array_list_io_limit,
+		array_rg_len_thd);
 }
 
 static void
@@ -1428,6 +1432,39 @@ out:
 	return rc;
 }
 
+/**
+ * A dkey IOD that had to be split issues its successor only once it completes, so that a tiny
+ * extent workload cannot pile an unbounded amount of work on a single target.
+ */
+static int
+array_io_split_cb(tse_task_t *task, void *data)
+{
+	struct io_params *params = *((struct io_params **)data);
+	struct io_params *next   = params->io_next;
+	int               rc     = task->dt_result;
+
+	if (next == NULL)
+		return rc;
+	params->io_next = NULL;
+
+	if (rc == 0) {
+		tse_task_schedule(next->io_task, true);
+		return rc;
+	}
+
+	/* drain the rest of the chain so every parent dependency gets resolved */
+	while (next != NULL) {
+		struct io_params *tmp = next->io_next;
+
+		/* unlink first: the nested completion callback must not walk the chain again */
+		next->io_next = NULL;
+		tse_task_complete(next->io_task, rc);
+		next = tmp;
+	}
+
+	return rc;
+}
+
 static int
 dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	    daos_array_iod_t *rg_iod, d_sg_list_t *user_sgl,
@@ -1443,9 +1480,10 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	daos_size_t	num_records;
 	daos_off_t	record_i;
 	struct io_params *head = NULL;
+	struct io_params *cursor;
+	struct io_params *last_params        = NULL;
 	bool		head_cb_registered = false;
-	daos_size_t	num_ios;
-	d_list_t	io_task_list;
+	daos_size_t       num_ios;
 	daos_size_t	tot_num_records = 0;
 	tse_task_t	*stask; /* task for short read and hole mgmt */
 	int		rc;
@@ -1453,38 +1491,6 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	if (rg_iod == NULL) {
 		D_ERROR("NULL iod passed\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
-	}
-
-	/*
-	 * If we are above the limit, check for small recx size. Just a best effort check for
-	 * extreme cases to reject.
-	 */
-	if (rg_iod->arr_nr > array_list_io_limit) {
-		daos_size_t i;
-		daos_size_t tiny_count = 0;
-
-		/* quick shortcut check */
-		for (i = 0; i < rg_iod->arr_nr; i = i * 2) {
-			if (rg_iod->arr_rgs[i].rg_len > DAOS_ARRAY_RG_LEN_THD)
-				break;
-			if (i == 0)
-				i++;
-		}
-
-		/** Full check if quick check fails */
-		if (i >= rg_iod->arr_nr) {
-			for (i = 0; i < rg_iod->arr_nr; i++) {
-				if (rg_iod->arr_rgs[i].rg_len <= DAOS_ARRAY_RG_LEN_THD)
-					tiny_count++;
-				if (tiny_count > array_list_io_limit)
-					break;
-			}
-			if (tiny_count > array_list_io_limit) {
-				D_ERROR("List io supports a max of %u offsets (using %zu)",
-					array_list_io_limit, rg_iod->arr_nr);
-				D_GOTO(err_task, rc = -DER_NOTSUPPORTED);
-			}
-		}
 	}
 
 	array = array_hdl2ptr(array_oh);
@@ -1514,7 +1520,6 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	array_idx = rg_iod->arr_rgs[0].rg_idx;
 
 	head = NULL;
-	D_INIT_LIST_HEAD(&io_task_list);
 
 	/*
 	 * for a read on a byte array, create a get_size task for short read
@@ -1545,6 +1550,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		daos_size_t	dkey_records;
 		tse_task_t	*io_task = NULL;
 		struct io_params *params;
+		daos_size_t       tiny_nr; /* extents in this IOD that are expensive to serve */
 		daos_size_t	i; /* index for iod recx */
 
 		/** In some cases, users can pass an empty range, so skip it. */
@@ -1634,6 +1640,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 		i = 0;
 		dkey_records = 0;
+		tiny_nr      = 0;
 
 		/*
 		 * Create the IO descriptor for this dkey. If the entire range fits in the dkey,
@@ -1655,6 +1662,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			/** set the record access for this range */
 			iod->iod_recxs[i].rx_idx = record_i;
 			iod->iod_recxs[i].rx_nr = (num_records > records) ? records : num_records;
+			if (iod->iod_recxs[i].rx_nr * array->cell_size <= array_rg_len_thd)
+				tiny_nr++;
 
 			D_DEBUG(DB_IO, "%zu: index = "DF_U64", size = %zu\n",
 				u, iod->iod_recxs[i].rx_idx, iod->iod_recxs[i].rx_nr);
@@ -1683,6 +1692,20 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			old_array_idx = array_idx;
 			records = rg_iod->arr_rgs[u].rg_len;
 			array_idx = rg_iod->arr_rgs[u].rg_idx;
+
+			/*
+			 * Only a run of tiny extents is expensive enough to be worth splitting:
+			 * cap them per IOD and let the outer loop issue the rest of this dkey as
+			 * a separate IO. Larger extents are packed as before.
+			 */
+			if (tiny_nr >= array_list_io_limit) {
+				D_DEBUG(DB_IO,
+					"DKEY " DF_U64
+					": IOD full at %zu tiny extents, rest of the "
+					"dkey goes to another RPC\n",
+					dkey_val, tiny_nr);
+				break;
+			}
 
 			/*
 			 * Boundary case where number of records align with the end boundary of the
@@ -1798,7 +1821,24 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		} else {
 			D_ASSERTF(0, "Invalid array operation.\n");
 		}
-		tse_task_list_add(io_task, &io_task_list);
+
+		params->io_task = io_task;
+		rc = tse_task_register_comp_cb(io_task, array_io_split_cb, &params, sizeof(params));
+		if (rc) {
+			tse_task_complete(io_task, rc);
+			D_GOTO(err_iotask, rc);
+		}
+
+		/*
+		 * A dkey that had to be split shows up as consecutive IODs on the same dkey. Chain
+		 * them so only one is ever outstanding against that dkey. Everything else is
+		 * issued right away.
+		 */
+		if (last_params != NULL && last_params->dkey_val == params->dkey_val) {
+			last_params->io_next = params;
+			params->io_defer     = true;
+		}
+		last_params = params;
 	} /* end while */
 
 	rc = tse_task_register_comp_cb(task, free_io_params_cb, &head, sizeof(head));
@@ -1839,18 +1879,42 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				D_FREE(sparams);
 				D_GOTO(err_iotask, rc);
 			}
-			tse_task_list_add(stask, &io_task_list);
+			tse_task_schedule(stask, true);
 		}
 	}
 
-	tse_task_list_sched(&io_task_list, true);
+	/*
+	 * Issue everything that is not held back behind an earlier split of its dkey. Read the
+	 * next entry before scheduling: completing the last outstanding task also completes the
+	 * parent task, which frees this list.
+	 */
+	cursor = head;
+	while (cursor != NULL) {
+		struct io_params *params = cursor;
+
+		cursor = params->next;
+		if (!params->io_defer)
+			tse_task_schedule(params->io_task, true);
+	}
+
 	array_decref(array);
 	return 0;
 
 err_iotask:
+	/* nothing was scheduled yet, so resolve every dependency that has been registered */
+	cursor = head;
+	while (cursor != NULL) {
+		struct io_params *params = cursor;
+
+		cursor = params->next;
+		if (params->io_task == NULL)
+			continue;
+		/* unlink first: the completion callback must not walk the chain again */
+		params->io_next = NULL;
+		tse_task_complete(params->io_task, rc);
+	}
 	if (head && !head_cb_registered)
 		free_io_params(head);
-	tse_task_list_abort(&io_task_list, rc);
 	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array)
 		tse_task_complete(stask, rc);
 err_task:

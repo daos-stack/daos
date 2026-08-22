@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,10 +24,10 @@ extern "C" {
 #include <daos_obj.h>
 #include <daos_obj_class.h>
 
-/** limit of arr_nr (list-io entries) for file offsets in a single update */
-#define DAOS_ARRAY_LIST_IO_LIMIT 16384
-/** Tiny recx limit (in bytes) in the array IODs where the list limit is high */
-#define DAOS_ARRAY_RG_LEN_THD    16
+/** max number of tiny (see below) extents packed in a single list-io RPC */
+#define DAOS_ARRAY_LIST_IO_LIMIT 128
+/** extents (in bytes) at or below this size are the ones that are expensive to serve */
+#define DAOS_ARRAY_RG_LEN_THD    128
 
 /** Range of contiguous records */
 typedef struct {
@@ -266,8 +266,10 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  * \param[in]	oh	Array object open handle.
  * \param[in]	th	Transaction handle.
  * \param[in]	iod	IO descriptor of ranges to read from the array.
- *			There is a limit on the number of descriptors (DAOS_ARRAY_LIST_IO_LIMIT) if
- *			the length on the ranges are under DAOS_ARRAY_RG_LEN_THD.
+ *			A long run of extents at or below DAOS_ARRAY_RG_LEN_THD bytes landing on
+ *			the same dkey is split into several RPCs of at most
+ *			DAOS_ARRAY_LIST_IO_LIMIT such extents, throttled per dkey. Ranges above
+ *			that size are issued as before.
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the individual range
  *			sizes as long as the total size does. User allocates the
@@ -294,8 +296,10 @@ daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  * \param[in]	oh	Array object open handle.
  * \param[in]	th	Transaction handle.
  * \param[in]	iod	IO descriptor of ranges to write to the array.
- *			There is a limit on the number of descriptors (DAOS_ARRAY_LIST_IO_LIMIT) if
- *			the length on the ranges are under DAOS_ARRAY_RG_LEN_THD.
+ *			A long run of extents at or below DAOS_ARRAY_RG_LEN_THD bytes landing on
+ *			the same dkey is split into several RPCs of at most
+ *			DAOS_ARRAY_LIST_IO_LIMIT such extents, throttled per dkey. Ranges above
+ *			that size are issued as before.
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the individual range
  *			sizes as long as the total size does.
