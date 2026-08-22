@@ -1,8 +1,9 @@
-#  (C) Copyright 2023-2024 Intel Corporation.
-#  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
+#  Copyright 2023-2024 Intel Corporation.
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 - name: common
+  tsan: True
   base: "BUILD_DIR"
   tests:
     - cmd: ["src/common/tests/umem_test"]
@@ -23,6 +24,8 @@
     - cmd: ["src/common/tests/umem_test_bmem"]
 - name: btree_stress
   memcheck: False
+  asan: False
+  gha: False
   tests:
     - cmd: ["src/common/tests/btree.sh", "perf"]
     - cmd: ["src/common/tests/btree.sh", "perf", "direct"]
@@ -41,6 +44,7 @@
     - cmd: ["src/common/tests/btree.sh", "dyn"]
     - cmd: ["src/common/tests/btree.sh", "dyn", "emb"]
 - name: drpc
+  tsan: True
   base: "BUILD_DIR"
   tests:
     - cmd: ["src/common/tests/drpc_tests"]
@@ -51,12 +55,14 @@
     - cmd: ["src/engine/tests/drpc_comm_tests"]
     - cmd: ["src/mgmt/tests/srv_drpc_tests"]
 - name: gurt
+  tsan: True
   base: "BUILD_DIR"
   tests:
     - cmd: ["src/gurt/tests/d_log_memory_ut"]
     - cmd: ["src/gurt/tests/test_gurt"]
     - cmd: ["src/gurt/tests/test_gurt_telem_producer"]
 - name: DTX
+  tsan: True
   base: "PREFIX"
   tests:
     - cmd: ["bin/dtx_tests"]
@@ -67,6 +73,8 @@
     - cmd: ["bin/jump_pl_map"]
 - name: rdb
   memcheck: False
+  asan: False
+  gha: False
   tests:
     - cmd: ["src/rdb/raft_tests/raft_tests.py"]
 - name: rsvc
@@ -119,6 +127,8 @@
     - cmd: ["src/vos/tests/evt_ctl.sh"]
 - name: VOS_evtree_stress
   memcheck: False
+  asan: False
+  gha: False
   tests:
     - cmd: ["src/vos/tests/evt_stress.py"]
     - cmd: ["src/vos/tests/evt_stress.py", "--algo", "soff"]
@@ -166,6 +176,7 @@
     - cmd: ["bin/agent_tests"]
     - cmd: ["bin/job_tests"]
 - name: cart
+  tsan: True
   base: "BUILD_DIR"
   tests:
     - cmd: ["src/tests/ftest/cart/utest/test_linkage"]
@@ -175,15 +186,21 @@
 - name: storage_estimator
   base: "DAOS_BASE"
   memcheck: False
+  asan: False
+  gha: False
   tests:
     - cmd: ["src/vos/storage_estimator/common/tests/storage_estimator.sh"]
 - name: control
   memcheck: False
+  asan: False
+  gha: False
   tests:
     - cmd: ["src/control/run_go_tests.sh"]
 - name: spdk
   base: "PREFIX"
   memcheck: False
+  asan: False
+  gha: False
   tests:
     - cmd: ["bin/nvme_control_ctests"]
       warn_if_missing: "bin/nvme_control_ctests is missing, SPDK_SRC not available when built?"
@@ -197,13 +214,15 @@
   tests:
     - cmd: ["src/utils/dlck/tests/dlck_args_ut"]
 - name: Source metadata testing
-  gha: True
   memcheck: False
+  asan: False
   tests:
     - cmd: ["src/tests/ftest/tags.py", "unit"]
     - cmd: ["utils/unit/include_test.py"]
 - name: Argobot performance testing
   base: "BUILD_DIR"
+  asan: False
+  gha: False
   tests:
     - cmd: ["src/engine/tests/abt_perf", "--test=c", "--sec=10", "--num=100", "--stack=16"]
     - cmd: ["src/engine/tests/abt_perf", "--test=s", "--sec=10", "--num=100"]
@@ -214,6 +233,8 @@
 - name: Argobot stack overflow testing
   base: "BUILD_DIR"
   memcheck: False
+  asan: False
+  gha: False
   tests:
     - cmd: ["src/engine/tests/abt_stack", "--check-overflow"]
       env_vars:
