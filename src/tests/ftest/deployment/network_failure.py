@@ -6,6 +6,7 @@
 """
 import os
 import time
+import threading
 from collections import defaultdict
 
 from ClusterShell.NodeSet import NodeSet
@@ -152,9 +153,42 @@ class NetworkFailureTest(IorTestBase):
             self.log.info("One or more servers crashed. Check system query again.")
 
         return False
+    
+    def bring_network_interface_up(self, test_env):
+        """Bring the network interface up.
+        """
+        errors = []
+        if test_env == "ci":
+            # wolf
+            update_network_interface(
+                interface=self.interface, state="up", hosts=self.network_down_host,
+                errors=errors)
+        else:
+            # Aurora. Manually run the command.
+            command = f"sudo ip link set {self.interface} up"
+            self.log.debug("## Call %s on %s", command, self.network_down_host)
+            time.sleep(60)
+        return errors
+        
+    def bring_network_interface_down(self, test_env):
+        """Bring the network interface down.
+        """
+        errors = []
+        if test_env == "ci":
+            # wolf
+            update_network_interface(
+                interface=self.interface, state="down", hosts=self.network_down_host,
+                errors=errors)
+        else:
+            # Aurora. Manually run the command.
+            command = f"sudo ip link set {self.interface} up"
+            self.log.debug("## Call %s on %s", command, self.network_down_host)
+            time.sleep(60)
+        return errors
 
-    def verify_network_failure(self, ior_namespace, container_namespace):
-        """Verify network failure can be recovered with some user interventions with DAOS.
+    def verify_network_failure(self, ior_namespace, container_namespace, with_io=False):
+        """Verify network failure can be recovered with some user interventions with
+        DAOS.
 
         1. Create a pool and a container. Create a container with or without redundancy
         factor based on container_namespace.
@@ -195,24 +229,57 @@ class NetworkFailureTest(IorTestBase):
         self.interface = NetworkInterface(
             self.server_managers[0].get_config_value("fabric_iface"), self.network_down_host,
             self.update_nic)
+
+        # Test code 
+        # Create IP address - Hostname mapping by calling "hostname -i" on every server
+        # node.
+        ip_to_host = self.create_ip_to_host()
+        # Using dmg system query output and ip_to_host, create Hostname - Ranks mapping.
+        host_to_ranks = self.create_host_to_ranks(
+            ip_to_host=ip_to_host, system_query_members=members)
+        rank_value = {i for i in host_to_ranks if host_to_ranks[i]==self.network_down_host}
         self.register_cleanup(self.interface.restore, logger=self.log)
         self.log.info("interface to update = %s", self.interface)
-        errors.extend(self.interface.bring_down(self.log))
+
+        # 3. Run IOR with given object class. It should fail.
+        threads = []
+        # For non-IO testing, bring the network interface down now.
+        if with_io is False:
+            errors.extend(self.interface.bring_down(self.log))
 
         # 3. Run IOR with given object class. It should fail.
         self.log_step("Expect IOR to fail with the down network interface.")
         job_num = 1
         ior_results = {}
+        file_name = "test_file_1"
         # IOR will not work, so we'll be waiting for the Mpirun timeout.
-        self.run_ior_report_error(
-            job_num=job_num, results=ior_results, file_name="test_file_1",
-            pool=self.pool, container=self.container[0], namespace=ior_namespace,
-            timeout=10)
+        threads.append(threading.Thread(target=self.run_ior_report_error,
+                                        kwargs={"job_num": job_num,
+                                                "results": ior_results,
+                                                "file_name": file_name,
+                                                "pool": self.pool,
+                                                "container": self.container[0],
+                                                "namespace": ior_namespace}))
+        # Launch the IOR threads and wait for IOR to write some data
+        for thrd in threads:
+            self.log.info("Thread : %s", thrd)
+            thrd.start()
+            time.sleep(5)
+
+        # For I/O testing, bring the network interface after starting IOR.
+        if with_io is True:
+            errors = self.bring_network_interface_down(self.test_env)
+
+        # Wait to finish the threads
+        for thrd in threads:
+            thrd.join()
         self.log.info(ior_results)
 
         # 4. Bring up the network interface.
         self.log_step("Bring up the network interface.")
         errors.extend(self.interface.bring_up(self.log))
+        self.log.info("Sleeping for 20 seconds after network is up")
+        time.sleep(20)
 
         # 5. Restart DAOS with dmg.
         self.log_step("Restart DAOS with dmg.")
@@ -221,8 +288,9 @@ class NetworkFailureTest(IorTestBase):
         dmg_cmd = self.get_dmg_command()
         # For debugging.
         dmg_cmd.system_query()
+        stop_rank = rank_value
         self.log.info("Call dmg system stop")
-        dmg_cmd.system_stop()
+        dmg_cmd.system_stop(ranks=stop_rank, force=True)
         self.log.info("Call dmg system start")
         dmg_cmd.system_start()
 
@@ -294,6 +362,22 @@ class NetworkFailureTest(IorTestBase):
             ior_namespace="/run/ior_with_rp/*",
             container_namespace="/run/container_with_rf/*")
 
+    def test_network_failure_with_rp_io(self):
+        """Jira ID: DAOS-10003
+
+        Test rank failure with redundancy factor and RP_2G1 object class. See
+        verify_rank_failure() for test steps.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,network_failure
+        :avocado: tags=network_failure_with_rp_io
+        """
+        self.verify_network_failure(
+            ior_namespace="/run/ior_with_rp/*",
+            container_namespace="/run/container_with_rf/*",
+            with_io=True)
+
     def test_network_failure_with_ec(self):
         """Jira ID: DAOS-10003.
 
@@ -308,6 +392,22 @@ class NetworkFailureTest(IorTestBase):
         self.verify_network_failure(
             ior_namespace="/run/ior_with_ec/*",
             container_namespace="/run/container_with_rf/*")
+
+    def test_network_failure_with_ec_io(self):
+        """Jira ID: DAOS-10003.
+
+        Test rank failure with redundancy factor and EC_8P2 object class. See
+        verify_rank_failure() for test steps.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,network_failure,rebuild
+        :avocado: tags=NetworkFailureTest,test_network_failure_with_ec_io
+        """
+        self.verify_network_failure(
+            ior_namespace="/run/ior_with_ec/*",
+            container_namespace="/run/container_with_rf/*",
+            with_io=True)
 
     def test_network_failure_isolation(self):
         """Jira ID: DAOS-10003.
