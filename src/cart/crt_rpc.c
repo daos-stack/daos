@@ -1180,6 +1180,10 @@ crt_req_is_self(struct crt_rpc_priv *rpc_priv)
 	bool			 same_rank;
 
 	D_ASSERT(rpc_priv != NULL);
+
+	if (!crt_is_service())
+		return false;
+
 	grp_priv_self = crt_grp_pub2priv(NULL);
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	same_group = (tgt_ep->ep_grp == NULL) ||
