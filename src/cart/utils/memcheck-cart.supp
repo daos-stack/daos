@@ -802,3 +802,114 @@
    ...
    fun:__tz_convert
 }
+
+{
+   setenv()-calloc() at process startup leak in release version
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:__add_to_environ
+   fun:setenv
+   fun:x_cgo_setenv
+   fun:runtime.asmcgocall.abi0
+   obj:*
+   fun:runtime.systemstack.abi0
+   obj:*
+   fun:runtime.newproc.abi0
+   fun:runtime.mstart.abi0
+   fun:runtime.rt0_go.abi0
+   obj:*
+}
+
+{
+   setenv()-malloc() at process startup leak in release version
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:__add_to_environ
+   fun:setenv
+   fun:d_setenv
+   fun:dc_mgmt_net_cfg_init
+   fun:daos_init
+   fun:_cgo_d5bb150e00a2_Cfunc_daos_init
+   fun:runtime.asmcgocall.abi0
+   obj:*
+   fun:runtime.systemstack.abi0
+   obj:*
+   fun:runtime.newproc.abi0
+}
+
+{
+   getpwuid_r()-__nss_action_allocate() at process startup leak in release version
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:__nss_action_allocate
+   fun:__nss_action_parse
+   fun:nss_database_check_reload_and_get
+   fun:__nss_passwd_lookup2
+   fun:getpwuid_r@@GLIBC_2.2.5
+   fun:daos_acl_uid_to_principal
+   fun:dup_cont_create_props
+   fun:dc_cont_create
+   fun:tse_task_schedule_with_delay
+   fun:dc_task_schedule
+   fun:cont_create
+   fun:dfs_cont_create
+}
+
+{
+   getpwuid_r()-__nss_module_allocate() at process startup leak in release version
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:__nss_module_allocate
+   fun:__nss_action_parse
+   fun:nss_database_check_reload_and_get
+   fun:__nss_passwd_lookup2
+   fun:getpwuid_r@@GLIBC_2.2.5
+   fun:daos_acl_uid_to_principal
+   fun:dup_cont_create_props
+   fun:dc_cont_create
+   fun:tse_task_schedule_with_delay
+   fun:dc_task_schedule
+   fun:cont_create
+   fun:dfs_cont_create
+}
+
+{
+   getpwuid_r()-global_state_allocate() at process startup leak in release version
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:global_state_allocate
+   fun:__libc_allocate_once_slow
+   fun:__nss_database_get
+   fun:__nss_passwd_lookup2
+   fun:getpwuid_r@@GLIBC_2.2.5
+   fun:daos_acl_uid_to_principal
+   fun:dup_cont_create_props
+   fun:dc_cont_create
+   fun:tse_task_schedule_with_delay
+   fun:dc_task_schedule
+   fun:cont_create
+   fun:dfs_cont_create
+}
+
+{
+   setenv()-tsearch()-malloc() at process startup leak in release version
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:tsearch
+   fun:__add_to_environ
+   fun:setenv
+   fun:d_setenv
+   fun:dc_mgmt_net_cfg_init
+   fun:daos_init
+   fun:_cgo_d5bb150e00a2_Cfunc_daos_init
+   fun:runtime.asmcgocall.abi0
+   obj:*
+   fun:runtime.systemstack.abi0
+   obj:*
+}
