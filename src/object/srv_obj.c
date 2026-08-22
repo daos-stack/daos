@@ -642,19 +642,6 @@ done:
 	if (rc == 0 && p_arg->result != 0)
 		rc = p_arg->result;
 
-	/* After RDMA is done, corrupt the server data */
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
-		struct bio_sglist	*fbsgl;
-		d_sg_list_t		 fsgl;
-		int			*fbuffer;
-
-		D_ERROR("csum: Corrupting data after RDMA\n");
-		fbsgl = vos_iod_sgl_at(ioh, 0);
-		bio_sgl_convert(fbsgl, &fsgl);
-		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
-		*fbuffer += 0x2;
-		d_sgl_fini(&fsgl, false);
-	}
 	return rc;
 }
 
@@ -1807,10 +1794,22 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		/** CSUM Verified on update, now corrupt to fake corruption
 		 * on disk
 		 */
-		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK) && !rma) {
+		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 			D_ERROR("csum: Corrupting data (DISK)\n");
-			dcf_corrupt(orw->orw_sgls.ca_arrays,
-				    orw->orw_sgls.ca_count);
+			if (rma) {
+				struct bio_sglist	*fbsgl;
+				d_sg_list_t		 fsgl;
+				int			*fbuffer;
+
+				fbsgl = vos_iod_sgl_at(ioh, 0);
+				bio_sgl_convert(fbsgl, &fsgl);
+				fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
+				*fbuffer += 0x2;
+				d_sgl_fini(&fsgl, false);
+			} else {
+				dcf_corrupt(orw->orw_sgls.ca_arrays,
+					    orw->orw_sgls.ca_count);
+			}
 		}
 	}
 	if (obj_rpc_is_fetch(rpc) && create_map) {
