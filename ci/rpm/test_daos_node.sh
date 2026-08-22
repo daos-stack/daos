@@ -224,7 +224,7 @@ while [[ "$line" != *listening\ on\ * ]]; do
   echo "Agent stdout: $line"
 done
 echo "Agent started!"
-if ! OFI_INTERFACE=eth0 timeout -k 30 300 daos_test -m; then
+if ! OFI_INTERFACE=eth0 timeout -k 30 300 daos_test -m -s 1; then
     rc=${PIPESTATUS[0]}
     if [ "$rc" = "124" ]; then
         echo "daos_test -m was killed after running for 5 minutes"
