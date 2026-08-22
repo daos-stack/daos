@@ -42,6 +42,11 @@ const (
 	MgmtSvc_PoolQueryTarget_FullMethodName          = "/mgmt.MgmtSvc/PoolQueryTarget"
 	MgmtSvc_PoolSetProp_FullMethodName              = "/mgmt.MgmtSvc/PoolSetProp"
 	MgmtSvc_PoolGetProp_FullMethodName              = "/mgmt.MgmtSvc/PoolGetProp"
+	MgmtSvc_PoolGetCA_FullMethodName                = "/mgmt.MgmtSvc/PoolGetCA"
+	MgmtSvc_PoolAddCA_FullMethodName                = "/mgmt.MgmtSvc/PoolAddCA"
+	MgmtSvc_PoolRemoveCA_FullMethodName             = "/mgmt.MgmtSvc/PoolRemoveCA"
+	MgmtSvc_PoolGetCertWatermarks_FullMethodName    = "/mgmt.MgmtSvc/PoolGetCertWatermarks"
+	MgmtSvc_PoolRevokeClient_FullMethodName         = "/mgmt.MgmtSvc/PoolRevokeClient"
 	MgmtSvc_PoolGetACL_FullMethodName               = "/mgmt.MgmtSvc/PoolGetACL"
 	MgmtSvc_PoolOverwriteACL_FullMethodName         = "/mgmt.MgmtSvc/PoolOverwriteACL"
 	MgmtSvc_PoolUpdateACL_FullMethodName            = "/mgmt.MgmtSvc/PoolUpdateACL"
@@ -121,6 +126,16 @@ type MgmtSvcClient interface {
 	PoolSetProp(ctx context.Context, in *PoolSetPropReq, opts ...grpc.CallOption) (*PoolSetPropResp, error)
 	// Get a DAOS pool property list.
 	PoolGetProp(ctx context.Context, in *PoolGetPropReq, opts ...grpc.CallOption) (*PoolGetPropResp, error)
+	// Read the pool's CA bundle.
+	PoolGetCA(ctx context.Context, in *PoolGetCAReq, opts ...grpc.CallOption) (*PoolGetCAResp, error)
+	// Append a CA certificate to the pool's CA bundle.
+	PoolAddCA(ctx context.Context, in *PoolAddCAReq, opts ...grpc.CallOption) (*PoolAddCAResp, error)
+	// Remove one or all CA certificates from the pool's CA bundle.
+	PoolRemoveCA(ctx context.Context, in *PoolRemoveCAReq, opts ...grpc.CallOption) (*PoolRemoveCAResp, error)
+	// Read the per-CN revocation watermarks for the pool.
+	PoolGetCertWatermarks(ctx context.Context, in *PoolGetCertWatermarksReq, opts ...grpc.CallOption) (*PoolGetCertWatermarksResp, error)
+	// Advance the cert revocation watermark for a given CN.
+	PoolRevokeClient(ctx context.Context, in *PoolRevokeClientReq, opts ...grpc.CallOption) (*PoolRevokeClientResp, error)
 	// Fetch the Access Control List for a DAOS pool.
 	PoolGetACL(ctx context.Context, in *GetACLReq, opts ...grpc.CallOption) (*ACLResp, error)
 	// Overwrite the Access Control List for a DAOS pool with a new one.
@@ -339,6 +354,56 @@ func (c *mgmtSvcClient) PoolGetProp(ctx context.Context, in *PoolGetPropReq, opt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PoolGetPropResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_PoolGetProp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolGetCA(ctx context.Context, in *PoolGetCAReq, opts ...grpc.CallOption) (*PoolGetCAResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PoolGetCAResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_PoolGetCA_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolAddCA(ctx context.Context, in *PoolAddCAReq, opts ...grpc.CallOption) (*PoolAddCAResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PoolAddCAResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_PoolAddCA_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolRemoveCA(ctx context.Context, in *PoolRemoveCAReq, opts ...grpc.CallOption) (*PoolRemoveCAResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PoolRemoveCAResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_PoolRemoveCA_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolGetCertWatermarks(ctx context.Context, in *PoolGetCertWatermarksReq, opts ...grpc.CallOption) (*PoolGetCertWatermarksResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PoolGetCertWatermarksResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_PoolGetCertWatermarks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolRevokeClient(ctx context.Context, in *PoolRevokeClientReq, opts ...grpc.CallOption) (*PoolRevokeClientResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PoolRevokeClientResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_PoolRevokeClient_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -755,6 +820,16 @@ type MgmtSvcServer interface {
 	PoolSetProp(context.Context, *PoolSetPropReq) (*PoolSetPropResp, error)
 	// Get a DAOS pool property list.
 	PoolGetProp(context.Context, *PoolGetPropReq) (*PoolGetPropResp, error)
+	// Read the pool's CA bundle.
+	PoolGetCA(context.Context, *PoolGetCAReq) (*PoolGetCAResp, error)
+	// Append a CA certificate to the pool's CA bundle.
+	PoolAddCA(context.Context, *PoolAddCAReq) (*PoolAddCAResp, error)
+	// Remove one or all CA certificates from the pool's CA bundle.
+	PoolRemoveCA(context.Context, *PoolRemoveCAReq) (*PoolRemoveCAResp, error)
+	// Read the per-CN revocation watermarks for the pool.
+	PoolGetCertWatermarks(context.Context, *PoolGetCertWatermarksReq) (*PoolGetCertWatermarksResp, error)
+	// Advance the cert revocation watermark for a given CN.
+	PoolRevokeClient(context.Context, *PoolRevokeClientReq) (*PoolRevokeClientResp, error)
 	// Fetch the Access Control List for a DAOS pool.
 	PoolGetACL(context.Context, *GetACLReq) (*ACLResp, error)
 	// Overwrite the Access Control List for a DAOS pool with a new one.
@@ -880,6 +955,21 @@ func (UnimplementedMgmtSvcServer) PoolSetProp(context.Context, *PoolSetPropReq) 
 }
 func (UnimplementedMgmtSvcServer) PoolGetProp(context.Context, *PoolGetPropReq) (*PoolGetPropResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method PoolGetProp not implemented")
+}
+func (UnimplementedMgmtSvcServer) PoolGetCA(context.Context, *PoolGetCAReq) (*PoolGetCAResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method PoolGetCA not implemented")
+}
+func (UnimplementedMgmtSvcServer) PoolAddCA(context.Context, *PoolAddCAReq) (*PoolAddCAResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method PoolAddCA not implemented")
+}
+func (UnimplementedMgmtSvcServer) PoolRemoveCA(context.Context, *PoolRemoveCAReq) (*PoolRemoveCAResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method PoolRemoveCA not implemented")
+}
+func (UnimplementedMgmtSvcServer) PoolGetCertWatermarks(context.Context, *PoolGetCertWatermarksReq) (*PoolGetCertWatermarksResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method PoolGetCertWatermarks not implemented")
+}
+func (UnimplementedMgmtSvcServer) PoolRevokeClient(context.Context, *PoolRevokeClientReq) (*PoolRevokeClientResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method PoolRevokeClient not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolGetACL(context.Context, *GetACLReq) (*ACLResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method PoolGetACL not implemented")
@@ -1261,6 +1351,96 @@ func _MgmtSvc_PoolGetProp_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MgmtSvcServer).PoolGetProp(ctx, req.(*PoolGetPropReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PoolGetCA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolGetCAReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolGetCA(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_PoolGetCA_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolGetCA(ctx, req.(*PoolGetCAReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PoolAddCA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolAddCAReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolAddCA(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_PoolAddCA_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolAddCA(ctx, req.(*PoolAddCAReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PoolRemoveCA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolRemoveCAReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolRemoveCA(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_PoolRemoveCA_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolRemoveCA(ctx, req.(*PoolRemoveCAReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PoolGetCertWatermarks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolGetCertWatermarksReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolGetCertWatermarks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_PoolGetCertWatermarks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolGetCertWatermarks(ctx, req.(*PoolGetCertWatermarksReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PoolRevokeClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolRevokeClientReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolRevokeClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_PoolRevokeClient_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolRevokeClient(ctx, req.(*PoolRevokeClientReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1993,6 +2173,26 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PoolGetProp",
 			Handler:    _MgmtSvc_PoolGetProp_Handler,
+		},
+		{
+			MethodName: "PoolGetCA",
+			Handler:    _MgmtSvc_PoolGetCA_Handler,
+		},
+		{
+			MethodName: "PoolAddCA",
+			Handler:    _MgmtSvc_PoolAddCA_Handler,
+		},
+		{
+			MethodName: "PoolRemoveCA",
+			Handler:    _MgmtSvc_PoolRemoveCA_Handler,
+		},
+		{
+			MethodName: "PoolGetCertWatermarks",
+			Handler:    _MgmtSvc_PoolGetCertWatermarks_Handler,
+		},
+		{
+			MethodName: "PoolRevokeClient",
+			Handler:    _MgmtSvc_PoolRevokeClient_Handler,
 		},
 		{
 			MethodName: "PoolGetACL",

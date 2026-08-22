@@ -380,3 +380,90 @@ message PoolSelfHealEvalReq
 }
 
 // PoolSelfHealEval uses DaosResp
+
+// PoolGetCAReq fetches the pool's CA bundle.
+message PoolGetCAReq
+{
+	string          sys       = 1;
+	string          id        = 2;
+	repeated uint32 svc_ranks = 3;
+}
+
+message PoolGetCAResp
+{
+	int32  status    = 1;
+	bytes  ca_bundle = 2;
+	string pool_uuid = 3;
+}
+
+// PoolAddCAReq appends a CA certificate to the pool's CA bundle.
+message PoolAddCAReq
+{
+	string          sys       = 1;
+	string          id        = 2;
+	bytes           cert_pem  = 3;
+	repeated uint32 svc_ranks = 4;
+	bool            replace   = 5; // clear existing bundle before append
+}
+
+message PoolAddCAResp
+{
+	int32  status    = 1;
+	string pool_uuid = 2;
+}
+
+// PoolRemoveCAReq removes one or all CAs from the pool's CA bundle.
+message PoolRemoveCAReq
+{
+	string          sys         = 1;
+	string          id          = 2;
+	string          fingerprint = 3; // SHA-256 hex of the CA cert to remove
+	bool            all         = 4; // remove every CA in the bundle
+	repeated uint32 svc_ranks   = 5;
+}
+
+message PoolRemoveCAResp
+{
+	int32  status        = 1;
+	int32  certs_removed = 2;
+	string pool_uuid     = 3;
+}
+
+// PoolGetCertWatermarksReq fetches the per-CN revocation watermarks blob.
+message PoolGetCertWatermarksReq
+{
+	string          sys       = 1;
+	string          id        = 2;
+	repeated uint32 svc_ranks = 3;
+}
+
+message PoolGetCertWatermarksResp
+{
+	int32  status     = 1;
+	bytes  watermarks = 2; // JSON blob, may be empty
+	string pool_uuid  = 3;
+}
+
+// PoolRevokeClientReq advances the pool's revocation watermark for a CN.
+message PoolRevokeClientReq
+{
+	enum EvictMode {
+		EVICT_DEFAULT   = 0; // per-CN for node:, pool-wide for tenant:
+		EVICT_POOL_WIDE = 1; // always evict all handles on the pool
+		EVICT_NONE      = 2; // advance watermark, leave handles alive
+	}
+	string          sys        = 1;
+	string          id         = 2;
+	string          cn         = 3;
+	repeated uint32 svc_ranks  = 4;
+	EvictMode       evict_mode = 5;
+}
+
+message PoolRevokeClientResp
+{
+	int32  status                = 1;
+	string watermark_rfc3339     = 2; // committed watermark in RFC3339 UTC
+	string pool_uuid             = 3;
+	int32  handles_evicted_count = 4;
+	string evict_scope           = 5; // "machine" | "pool" | "none"
+}
