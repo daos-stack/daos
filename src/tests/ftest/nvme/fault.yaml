@@ -7,8 +7,12 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      log_mask: ERR
+      log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
       storage: auto
+      env_vars:
+        - DD_MASK=all
+        - D_LOG_MASK=INFO
   transport_config:
     allow_insecure: True
 agent_config:
@@ -36,3 +40,8 @@ faulttests:
   pool_capacity: 15
   no_of_servers: 1
   no_of_drives: 1
+
+client:
+  env_vars:
+    - DD_MASK=all
+    - D_LOG_MASK=INFO
