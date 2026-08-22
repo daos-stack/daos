@@ -92,7 +92,7 @@ jobs:
             with: rockylinux/rockylinux:9
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.5
+            with: opensuse/leap:15.7
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
