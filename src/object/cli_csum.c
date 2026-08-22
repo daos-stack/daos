@@ -147,16 +147,22 @@ dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
 		singv_lo = &singv_los[i];
 		iod = &iods[i];
 		sgl = &sgls[i];
-		if (singv_lo->cs_even_dist == 0 || singv_lo->cs_bytes != 0 ||
-		    iod->iod_size == DAOS_REC_ANY)
+		if (singv_lo->cs_even_dist == 0)
 			continue;
 		/* The stored single-value layout is derived from the actual
 		 * record size, which the caller may have over-estimated in the
 		 * request. Use the size replied by the server so the checksum
 		 * layout matches the one used when the record was written.
 		 */
-		rec_size = (sizes != NULL) ? sizes[i] : iod->iod_size;
+		rec_size = (sizes != NULL && sizes[i] != 0 && sizes[i] != DAOS_REC_ANY) ?
+			   sizes[i] : iod->iod_size;
 		if (rec_size == 0 || rec_size == DAOS_REC_ANY)
+			continue;
+		/* A layout computed while reassembling the request was derived
+		 * from the requested size. Recompute it whenever the server
+		 * replied a different size, otherwise keep the cached value.
+		 */
+		if (singv_lo->cs_bytes != 0 && rec_size == iod->iod_size)
 			continue;
 		/* the case of fetch singv with unknown rec size, now after the
 		 * fetch need to re-calculate the singv_lo again
@@ -302,6 +308,17 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 
 		if (!csum_iod_is_supported(iod))
 			continue;
+
+		/* No data landed in the caller's sgl - for example a fetch
+		 * issued with zero-length iovs purely to query record sizes -
+		 * so there is nothing to verify.
+		 */
+		if (daos_sgl_data_len(&args->sgls[i], false) == 0) {
+			D_DEBUG(DB_CSUM,
+				DF_C_UOID_DKEY " SKIP [%d] iod csum verify, no data fetched\n",
+				DP_C_UOID_DKEY(args->oid, args->dkey), i);
+			continue;
+		}
 
 		/* For EC single value degraded fetch, if need data recovery the data is not
 		 * transferred back so need not csum verify. Data will be transferred back and
