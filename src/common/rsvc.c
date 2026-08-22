@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -275,6 +276,10 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 	} else if (rc_crt == -DER_UNREG) {
 		D_DEBUG(DB_MD, "rank %u RPC or protocol version not registered\n",
 			ep->ep_rank);
+		rsvc_client_process_error(client, rc_crt, ep);
+		return RSVC_CLIENT_PROCEED;
+	} else if (rc_crt == -DER_BAD_TARGET) {
+		D_DEBUG(DB_MD, "rank %u RPC to wrong target\n", ep->ep_rank);
 		rsvc_client_process_error(client, rc_crt, ep);
 		return RSVC_CLIENT_PROCEED;
 	} else if (rc_crt != 0) {
