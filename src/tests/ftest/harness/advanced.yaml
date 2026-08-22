@@ -3,6 +3,7 @@ hosts:
   test_clients: 1
 timeout: 120
 server_config:
+  disable_hugepages: true
   engines_per_host: 1
   engines:
     0:
@@ -10,7 +11,7 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-  system_ram_reserved: 2
+  system_ram_reserved: 5
 pool:
   size: 2G
 container:

@@ -38,7 +38,7 @@ const (
 
 	// ScanMinHugepageCount is the minimum number of hugepages to allocate in order to satisfy
 	// SPDK memory requirements when performing a NVMe device scan.
-	ScanMinHugepageCount = 128
+	ScanMinHugepageCount = 1024
 
 	msgAPsMSReps = "access_points is deprecated; please use mgmt_svc_replicas instead"
 )

@@ -2,6 +2,7 @@ hosts:
   test_servers: 1
 timeout: 250
 server_config:
+  disable_hugepages: true
   transport_config:
     allow_insecure: False
   engines_per_host: 1

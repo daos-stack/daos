@@ -7,6 +7,7 @@ timeouts:
   test_container_label_duplicate: 60
   test_container_label_update: 60
 server_config:
+  disable_hugepages: true
   name: daos_server
   engines_per_host: 1
   engines:
