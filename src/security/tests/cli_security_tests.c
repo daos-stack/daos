@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -348,6 +349,100 @@ test_request_credentials_returns_raw_bytes(void **state)
 
 	D_FREE(expected_data);
 	daos_iov_free(&creds);
+}
+
+static void
+test_request_pool_credentials_fails_with_null_creds(void **state)
+{
+	uuid_t pool_uuid;
+	uuid_t handle_uuid;
+
+	uuid_parse("12345678-1234-1234-1234-123456789abc", pool_uuid);
+	uuid_parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", handle_uuid);
+
+	assert_rc_equal(dc_sec_request_pool_creds(NULL, pool_uuid, handle_uuid, NULL, NULL, NULL),
+			-DER_INVAL);
+}
+
+static void
+test_request_pool_credentials_sends_pool_uuid(void **state)
+{
+	d_iov_t           creds;
+	d_iov_t           node_cert    = {0};
+	d_iov_t           node_pop     = {0};
+	d_iov_t           node_payload = {0};
+	uuid_t            pool_uuid;
+	uuid_t            handle_uuid;
+	Auth__GetCredReq *req;
+
+	memset(&creds, 0, sizeof(d_iov_t));
+	uuid_parse("12345678-1234-1234-1234-123456789abc", pool_uuid);
+	uuid_parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", handle_uuid);
+
+	assert_rc_equal(dc_sec_request_pool_creds(&creds, pool_uuid, handle_uuid, &node_cert,
+						  &node_pop, &node_payload),
+			DER_SUCCESS);
+
+	/* Request body carries the pool and handle UUIDs */
+	req = auth__get_cred_req__unpack(NULL, drpc_call_msg_content.body.len,
+					 drpc_call_msg_content.body.data);
+	assert_non_null(req);
+	assert_int_equal(req->pool_uuid.len, sizeof(uuid_t));
+	assert_memory_equal(req->pool_uuid.data, pool_uuid, sizeof(uuid_t));
+	assert_int_equal(req->handle_uuid.len, sizeof(uuid_t));
+	assert_memory_equal(req->handle_uuid.data, handle_uuid, sizeof(uuid_t));
+	auth__get_cred_req__free_unpacked(req, NULL);
+
+	/* Default mock response has no node cert */
+	assert_int_equal(node_cert.iov_len, 0);
+	assert_int_equal(node_pop.iov_len, 0);
+	assert_int_equal(node_payload.iov_len, 0);
+
+	daos_iov_free(&creds);
+}
+
+static void
+test_request_pool_credentials_returns_node_cert(void **state)
+{
+	d_iov_t           creds;
+	d_iov_t           node_cert    = {0};
+	d_iov_t           node_pop     = {0};
+	d_iov_t           node_payload = {0};
+	uuid_t            pool_uuid;
+	uuid_t            handle_uuid;
+	uint8_t           cert_bytes[]    = "FAKE CERT PEM";
+	uint8_t           pop_bytes[]     = "FAKE POP SIG";
+	uint8_t           payload_bytes[] = "FAKE POP PAYLOAD";
+	Auth__GetCredResp resp            = AUTH__GET_CRED_RESP__INIT;
+
+	memset(&creds, 0, sizeof(d_iov_t));
+	uuid_parse("12345678-1234-1234-1234-123456789abc", pool_uuid);
+	uuid_parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", handle_uuid);
+
+	resp.cred             = drpc_call_resp_return_auth_cred;
+	resp.node_cert.data   = cert_bytes;
+	resp.node_cert.len    = sizeof(cert_bytes);
+	resp.pop_sig.data     = pop_bytes;
+	resp.pop_sig.len      = sizeof(pop_bytes);
+	resp.pop_payload.data = payload_bytes;
+	resp.pop_payload.len  = sizeof(payload_bytes);
+	pack_get_cred_resp_in_drpc_call_resp_body(&resp);
+
+	assert_rc_equal(dc_sec_request_pool_creds(&creds, pool_uuid, handle_uuid, &node_cert,
+						  &node_pop, &node_payload),
+			DER_SUCCESS);
+
+	assert_int_equal(node_cert.iov_len, sizeof(cert_bytes));
+	assert_memory_equal(node_cert.iov_buf, cert_bytes, sizeof(cert_bytes));
+	assert_int_equal(node_pop.iov_len, sizeof(pop_bytes));
+	assert_memory_equal(node_pop.iov_buf, pop_bytes, sizeof(pop_bytes));
+	assert_int_equal(node_payload.iov_len, sizeof(payload_bytes));
+	assert_memory_equal(node_payload.iov_buf, payload_bytes, sizeof(payload_bytes));
+
+	daos_iov_free(&creds);
+	daos_iov_free(&node_cert);
+	daos_iov_free(&node_pop);
+	daos_iov_free(&node_payload);
 }
 
 static daos_prop_t *
@@ -723,42 +818,29 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		SECURITY_UTEST(
-			test_request_credentials_fails_with_null_creds),
-		SECURITY_UTEST(
-			test_request_credentials_succeeds_with_good_values),
-		SECURITY_UTEST(
-			test_request_credentials_fails_if_drpc_connect_fails),
-		SECURITY_UTEST(
-			test_request_credentials_connects_to_default_socket),
-		SECURITY_UTEST(
-			test_request_credentials_fails_if_drpc_call_fails),
-		SECURITY_UTEST(
-			test_request_credentials_calls_drpc_call),
-		SECURITY_UTEST(
-			test_request_credentials_closes_socket_when_call_ok),
-		SECURITY_UTEST(
-			test_request_credentials_closes_socket_when_call_fails),
-		SECURITY_UTEST(
-			test_request_credentials_fails_if_reply_null),
-		SECURITY_UTEST(
-			test_request_credentials_fails_if_reply_status_failure),
-		SECURITY_UTEST(
-			test_request_credentials_fails_if_reply_body_malformed),
-		SECURITY_UTEST(
-			test_request_credentials_fails_if_reply_token_missing),
-		SECURITY_UTEST(
-			test_request_credentials_fails_if_reply_cred_missing),
-		SECURITY_UTEST(
-			test_request_cred_fails_if_reply_verifier_missing),
-		SECURITY_UTEST(
-			test_request_credentials_fails_if_reply_cred_status),
-		SECURITY_UTEST(
-			test_request_credentials_returns_raw_bytes),
-		cmocka_unit_test(test_get_pool_perms_invalid_input),
-		cmocka_unit_test(test_get_cont_perms_invalid_input),
-		cmocka_unit_test(test_get_pool_perms_valid),
-		cmocka_unit_test(test_get_cont_perms_valid),
+	    SECURITY_UTEST(test_request_credentials_fails_with_null_creds),
+	    SECURITY_UTEST(test_request_credentials_succeeds_with_good_values),
+	    SECURITY_UTEST(test_request_credentials_fails_if_drpc_connect_fails),
+	    SECURITY_UTEST(test_request_credentials_connects_to_default_socket),
+	    SECURITY_UTEST(test_request_credentials_fails_if_drpc_call_fails),
+	    SECURITY_UTEST(test_request_credentials_calls_drpc_call),
+	    SECURITY_UTEST(test_request_credentials_closes_socket_when_call_ok),
+	    SECURITY_UTEST(test_request_credentials_closes_socket_when_call_fails),
+	    SECURITY_UTEST(test_request_credentials_fails_if_reply_null),
+	    SECURITY_UTEST(test_request_credentials_fails_if_reply_status_failure),
+	    SECURITY_UTEST(test_request_credentials_fails_if_reply_body_malformed),
+	    SECURITY_UTEST(test_request_credentials_fails_if_reply_token_missing),
+	    SECURITY_UTEST(test_request_credentials_fails_if_reply_cred_missing),
+	    SECURITY_UTEST(test_request_cred_fails_if_reply_verifier_missing),
+	    SECURITY_UTEST(test_request_credentials_fails_if_reply_cred_status),
+	    SECURITY_UTEST(test_request_credentials_returns_raw_bytes),
+	    SECURITY_UTEST(test_request_pool_credentials_fails_with_null_creds),
+	    SECURITY_UTEST(test_request_pool_credentials_sends_pool_uuid),
+	    SECURITY_UTEST(test_request_pool_credentials_returns_node_cert),
+	    cmocka_unit_test(test_get_pool_perms_invalid_input),
+	    cmocka_unit_test(test_get_cont_perms_invalid_input),
+	    cmocka_unit_test(test_get_pool_perms_valid),
+	    cmocka_unit_test(test_get_cont_perms_valid),
 	};
 
 	return cmocka_run_group_tests_name("security_cli_security",
