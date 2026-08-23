@@ -2323,6 +2323,9 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		struct dtx_cos_key	 *dcks = NULL;
 		struct dtx_coll_entry	 *dce = NULL;
 
+		if (unlikely(cont->sc_pool->spc_pool->sp_stop_dtx_resync))
+			return -DER_SHUTDOWN;
+
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, oid,
 					    epoch, true, &dtes, &dcks, &dce);
 		if (cnt <= 0) {
