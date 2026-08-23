@@ -95,7 +95,7 @@ class DlckBasicFaultTest(TestWithServers):
         # Remove the fault injection file from all remote hosts as well
         result = run_remote(self.log, self.hostlist_servers,
                             command_as_user(f'rm -fr {fault_inject_file}',
-                                            self.root))
+                                            "root"))
         if not result.passed:
             self.log.error(f'Error removing {fault_inject_file} on {result.failed_hosts}')
 
