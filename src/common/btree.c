@@ -4872,6 +4872,7 @@ btr_nodes_check(struct btr_context *tcx, btr_report_fn_t report_fn, void *report
 		ni     = d_list_pop_entry(&node_list, struct node_info, link);
 		nd_off = ni->nd_off;
 		nd     = btr_off2ptr(tcx, nd_off);
+		D_FREE(ni);
 
 		/** check the node */
 		rc = btr_node_check(nd, nd_off, report_fn, report_arg, error_on_non_zero_padding);
