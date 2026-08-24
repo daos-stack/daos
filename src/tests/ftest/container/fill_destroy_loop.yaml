@@ -24,8 +24,8 @@ test_config:
     - "time"
 
 container:
-  type: POSIX
   oclass: SX
+  type: POSIX
 
 pool: !mux
   default:
