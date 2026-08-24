@@ -97,7 +97,7 @@ class DlckBasicFaultTest(TestWithServers):
                             command_as_user(f'rm -fr {fault_inject_file}',
                                             "root"))
         if not result.passed:
-            self.log.error(f'Error removing {fault_inject_file} on {result.failed_hosts}')
+            self.log.info("Error removing %s on %s", fault_inject_file, result.failed_hosts)
 
         if not errors:
             self.fail(f"dlck basic faulttest failed with errors: {errors}")

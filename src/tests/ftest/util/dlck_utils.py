@@ -63,7 +63,7 @@ class DlckCommand:
         Returns:
             str: the command with all the defined parameters
         """
-        return self.command.with_exports
+        return str(self.command)
 
     def run(self):
         """Run the dlck command.
