@@ -145,7 +145,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
             free_scm_space_init - free_scm_space_after_destroy)
 
         # Check the SCM/NVME space is reclaimed after container deletion
-        if not self.pool.check_free_space(
+        if not pool.check_free_space(
             expected_scm=f">={int(free_scm_space_init - delta_bytes)}",
             expected_nvme=f">={int(free_nvme_space_init - delta_bytes)}",
             timeout=60, interval=15):
