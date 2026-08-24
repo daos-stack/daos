@@ -404,7 +404,8 @@ if [ "$ib_count" -ge 2 ] ; then
         _slot=""
         while IFS= read -r _line; do
             if [[ "$_line" == Slot:* ]]; then
-                _slot="${_line#Slot: }"
+                # lspci -vmm uses tabs; strip key and all leading whitespace.
+                _slot="$(awk '{print $2}' <<< "$_line")"
             elif [[ "$_line" == Device:*88NR2241* ]]; then
                 boot_nvme_slots+=("$_slot")
                 for _blk in /sys/bus/pci/devices/"$_slot"/nvme/*/block/*/; do
@@ -420,14 +421,14 @@ if [ "$ib_count" -ge 2 ] ; then
             fi
             ((nvme_count++)) || true
         done < <(printf %s "$nvme_devices")
-        nvme_count=4
+        nvme_count=$((nvme_count - ${#boot_nvme_slots[@]}))
 
         ((testruns++)) || true
         testcases+="  <testcase name=\"NVMe Count Node $mynodenum\">${nl}"
         if [ $((nvme_count%2)) -ne 0 ]; then
             nvme_message="Fail: Odd number ($nvme_count) of NVMe devices seen."
             mail_message+="$nl$nvme_message$nl$nvme_devices$nl"
-            #((testfails++)) || true
+            ((testfails++)) || true
             testcases+="    <error message=\"Bad Count\" type=\"error\">
       <![CDATA[ $nvme_message$nl$nvme_devices ]]>
     </error>$nl"
