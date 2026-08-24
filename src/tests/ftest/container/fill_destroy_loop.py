@@ -75,10 +75,11 @@ class BoundaryPoolContainerSpace(TestWithServers):
         self.log.info("==> Set pool delta to %s (%i bytes)", delta, delta_bytes)
 
         # Create a container and get pool free space before write
-        free_space_init = pool.get_pool_free_space()
+        free_scm_space_init = pool.get_pool_free_space()
+        free_nvme_space_init = pool.get_pool_free_space("nvme")
         container = self.get_container(pool)
         self.log.info("--%i.(3)Pool free space before writing data to container %s (%i bytes)",
-                      test_loop, bytes_to_human(free_space_init), free_space_init)
+                      test_loop, bytes_to_human(free_scm_space_init), free_scm_space_init)
 
         # Write random data to container until pool out of space
         base_data_size = int(self.params.get("block_size", "/run/ior/*"))
@@ -97,52 +98,58 @@ class BoundaryPoolContainerSpace(TestWithServers):
             data_written += (base_data_size * num_of_processes)
 
         # display free space and data written
-        free_space_before_destroy = pool.get_pool_free_space()
+        free_scm_space_before_destroy = pool.get_pool_free_space()
         self.log.info(
             "--%i.(5) %s (%i bytes) written when pool is full.",
             test_loop, bytes_to_human(data_written), data_written)
 
         # display free space stats after destroy
         container.destroy()
-        free_space_after_destroy = pool.get_pool_free_space()
+        free_scm_space_after_destroy = pool.get_pool_free_space()
+
         self.log.info(
             "--%i.(6)Pool full, free space before container delete %s (%i bytes)",
-            test_loop, bytes_to_human(free_space_before_destroy), free_space_before_destroy)
+            test_loop, bytes_to_human(free_scm_space_before_destroy), free_scm_space_before_destroy)
         self.log.info(
             "--%i.(7)Pool full, free space after container deleted %s (%i bytes)",
-            test_loop, bytes_to_human(free_space_after_destroy), free_space_after_destroy)
+            test_loop, bytes_to_human(free_scm_space_after_destroy), free_scm_space_after_destroy)
 
         # sanity checks on free space
         self.assertGreater(
-            free_space_after_destroy, free_space_before_destroy,
+            free_scm_space_after_destroy, free_scm_space_before_destroy,
             "Deleting container did not free up pool space: "
             "loop={}, before={} ({} bytes), end={} ({} bytes)".format(
-                test_loop, bytes_to_human(free_space_before_destroy), free_space_before_destroy,
-                bytes_to_human(free_space_after_destroy), free_space_after_destroy))
-        # Wait for 30 seconds for aggregation task to release some NVME space.
-        # Without it IOR command will fail with no space issue.
-        time.sleep(30)
+                test_loop, bytes_to_human(free_scm_space_before_destroy), free_scm_space_before_destroy,
+                bytes_to_human(free_scm_space_after_destroy), free_scm_space_after_destroy))
+
         for _ in range(10):
-            if (free_space_after_destroy - free_space_init) < delta_bytes:
+            if (free_scm_space_after_destroy - free_scm_space_init) < delta_bytes:
                 break
             self.log.info(
                 "--%i.(8)Waiting for free space to be restored: %s (%i bytes) < %s (%i bytes)",
-                test_loop, bytes_to_human(free_space_after_destroy), free_space_after_destroy,
-                bytes_to_human(free_space_init - delta_bytes),
-                free_space_init - delta_bytes)
+                test_loop, bytes_to_human(free_scm_space_after_destroy), free_scm_space_after_destroy,
+                bytes_to_human(free_scm_space_init - delta_bytes),
+                free_scm_space_init - delta_bytes)
             time.sleep(6)
-            free_space_after_destroy = pool.get_pool_free_space()
+            free_scm_space_after_destroy = pool.get_pool_free_space()
 
         self.assertAlmostEqual(
-            free_space_init, free_space_after_destroy, delta=delta_bytes,
+            free_scm_space_init, free_scm_space_after_destroy, delta=delta_bytes,
             msg="Deleting container did not restore all free pool space: "
             "loop={}, init={} ({} bytes), end={} ({} bytes)".format(
-                test_loop, bytes_to_human(free_space_init), free_space_init,
-                bytes_to_human(free_space_after_destroy), free_space_after_destroy))
+                test_loop, bytes_to_human(free_scm_space_init), free_scm_space_init,
+                bytes_to_human(free_scm_space_after_destroy), free_scm_space_after_destroy))
         self.log.debug(
             "Storage space leaked %s (%i bytes)",
-            bytes_to_human(abs(free_space_init - free_space_after_destroy)),
-            free_space_init - free_space_after_destroy)
+            bytes_to_human(abs(free_scm_space_init - free_scm_space_after_destroy)),
+            free_scm_space_init - free_scm_space_after_destroy)
+
+        # Check the SCM/NVME space is reclaimed after container deletion
+        if not self.pool.check_free_space(
+            expected_scm=f">={int(free_scm_space_init - delta_bytes)}",
+            expected_nvme=f">={int(free_nvme_space_init - delta_bytes)}",
+            timeout=60, interval=15):
+            self.log.error("Pool space not reclaimed after deleting all containers")
 
     def test_fill_destroy_cont_loop(self):
         """JIRA ID: DAOS-8465
