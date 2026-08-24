@@ -32,9 +32,29 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code.
 
         :avocado: tags=all
-        :avocado: tags=hw,cb,large,medium,small
+        :avocado: tags=hw,large,medium
         :avocado: tags=harness,harness_basic_test
         :avocado: tags=HarnessBasicTest,always_fails,test_always_fails_hw
+        """
+        self.test_always_fails()
+
+    def test_always_fails_cb(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=cb,medium
+        :avocado: tags=harness,harness_basic_test
+        :avocado: tags=HarnessBasicTest,always_fails,test_always_fails_cb
+        """
+        self.test_always_fails()
+
+    def test_always_fails_cb_provider(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=cb,medium,provider
+        :avocado: tags=harness,harness_basic_test
+        :avocado: tags=HarnessBasicTest,always_fails,test_always_fails_cb_provider
         """
         self.test_always_fails()
 
