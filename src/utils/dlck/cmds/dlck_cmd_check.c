@@ -8,8 +8,6 @@
 #include <daos_srv/mgmt_tgt_common.h>
 #include <daos_srv/vos.h>
 
-#include <limits.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 #include "../dlck_args.h"
@@ -151,32 +149,31 @@ dlck_cmd_check(struct dlck_control *ctrl)
 
 	struct checker     *ck                 = &ctrl->checker;
 	const char         *log_root           = ctrl->common.log_dir;
-	char                log_dir_template[PATH_MAX];
+	char               *log_dir_template   = NULL;
 	struct dlck_engine *engine             = NULL;
 	int                *rcs;
-	int                 len;
 	int                 rc;
 
 	if (log_root == NULL || log_root[0] == '\0')
 		log_root = "/tmp";
-
-	len = snprintf(log_dir_template, sizeof(log_dir_template), "%s/dlck_check_XXXXXX", log_root);
-	if (len < 0 || len >= sizeof(log_dir_template)) {
-		rc = -DER_INVAL;
-		CK_PRINTL_RC(ck, rc, "Invalid log directory path");
-		return rc;
-	}
 
 	/** create a log directory */
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_LOG_DIR)) { /** fault injection */
 		ctrl->log_dir = NULL;
 		errno         = daos_fail_value_get();
 	} else {
+		D_ASPRINTF(log_dir_template, "%s/dlck_check_XXXXXX", log_root);
+		if (log_dir_template == NULL) {
+			rc = -DER_NOMEM;
+			CK_PRINTL_RC(ck, rc, "Cannot allocate log directory path");
+			return rc;
+		}
 		ctrl->log_dir = mkdtemp(log_dir_template);
 	}
 	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
 		CK_PRINTL_RC(ck, rc, "Cannot create log directory");
+		D_FREE(log_dir_template);
 		return rc;
 	}
 	CK_PRINTF(ck, "Log directory: %s\n", ctrl->log_dir);
@@ -185,7 +182,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	rc = dlck_engine_start(&ctrl->engine, &engine);
 	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
-		return rc;
+		goto err_log_dir_template;
 	}
 
 	if (d_list_empty(&ctrl->files.list)) {
@@ -231,6 +228,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	/** Ignore an error for now to print the collected results. */
 	dlck_report_results(rcs, ctrl->engine.targets, ctrl->warnings_num, ck);
 	D_FREE(rcs);
+	D_FREE(log_dir_template);
 
 	/** Return the first encountered error. */
 	return rc;
@@ -239,6 +237,8 @@ err_free_rcs:
 	D_FREE(rcs);
 err_stop_engine:
 	(void)dlck_engine_stop(engine);
+err_log_dir_template:
+	D_FREE(log_dir_template);
 
 	return rc;
 }
