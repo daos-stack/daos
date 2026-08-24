@@ -8,6 +8,10 @@
 #include <daos_srv/mgmt_tgt_common.h>
 #include <daos_srv/vos.h>
 
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "../dlck_args.h"
 #include "../dlck_bitmap.h"
 #include "../dlck_checker.h"
@@ -146,10 +150,22 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	D_ASSERT(ctrl != NULL);
 
 	struct checker     *ck                 = &ctrl->checker;
-	char                log_dir_template[] = "/tmp/dlck_check_XXXXXX";
+	const char         *log_root           = ctrl->common.log_dir;
+	char                log_dir_template[PATH_MAX];
 	struct dlck_engine *engine             = NULL;
 	int                *rcs;
+	int                 len;
 	int                 rc;
+
+	if (log_root == NULL || log_root[0] == '\0')
+		log_root = "/tmp";
+
+	len = snprintf(log_dir_template, sizeof(log_dir_template), "%s/dlck_check_XXXXXX", log_root);
+	if (len < 0 || len >= sizeof(log_dir_template)) {
+		rc = -DER_INVAL;
+		CK_PRINTL_RC(ck, rc, "Invalid log directory path");
+		return rc;
+	}
 
 	/** create a log directory */
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_LOG_DIR)) { /** fault injection */

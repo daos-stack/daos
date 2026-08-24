@@ -16,6 +16,8 @@ static struct argp_option args_common_options[] = {
     OPT_HEADER("Options:", GROUP_OPTIONS),
     /** entries below inherits the group number of the header entry */
     {"write_mode", KEY_COMMON_WRITE_MODE, 0, 0, "Make changes persistent."},
+	{"log_dir", KEY_COMMON_LOG_DIR, "PATH", 0,
+	 "Directory where per-run dlck checker logs are created. Defaults to /tmp."},
     {"options", KEY_COMMON_OPTIONS, "OPTIONS", 0,
      "Set options. Options are comma-separated and may include arguments using the equals sign "
      "('='). Please see available options below."},
@@ -43,6 +45,7 @@ args_common_init(struct dlck_args_common *args)
 	/** set defaults */
 	args->write_mode = false; /** dry run */
 	args->verbose                      = false;
+	args->log_dir                      = NULL;
 	args->options.cko_non_zero_padding = CHECKER_EVENT_WARNING;
 }
 
@@ -94,6 +97,9 @@ args_common_parser(int key, char *arg, struct argp_state *state)
 		break;
 	case KEY_COMMON_VERBOSE:
 		args->verbose = true;
+		break;
+	case KEY_COMMON_LOG_DIR:
+		args->log_dir = arg;
 		break;
 	case KEY_COMMON_OPTIONS:
 		rc = args_common_options_parse(arg, &args->options, state);

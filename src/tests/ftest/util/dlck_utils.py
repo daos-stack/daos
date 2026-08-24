@@ -15,7 +15,7 @@ class DlckCommand:
     """Defines the basic structures of dlck command."""
 
     def __init__(self, server_host, path, pool_uuid=None, nvme_conf=None, storage_mount=None,
-                 verbose=True, timeout=None, sudo=True):
+                 log_dir=None, verbose=True, timeout=None, sudo=True):
         """Constructor that sets the common variables for sub-commands.
 
         Args:
@@ -24,6 +24,7 @@ class DlckCommand:
             pool_uuid (str, optional): Pool UUID. Defaults to None.
             nvme_conf (str, optional): NVMe config file path. Defaults to None.
             storage_mount (str, optional): Storage mount point. Defaults to None.
+            log_dir (str, optional): Log directory. Defaults to None.
             verbose (bool, optional): Display command output in run.
                 Defaults to True.
             timeout (int, optional): Command timeout (sec) used in run. Defaults to
@@ -56,6 +57,10 @@ class DlckCommand:
         # Storage mount point. (--storage storage_mount)
         if storage_mount:
             self.command.storage_mount = FormattedParameter("--storage={}", storage_mount)
+
+        # log dir. (--log_dir log_dir)
+        if log_dir:
+            self.command.log_dir = FormattedParameter("--log_dir={}", log_dir)
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
