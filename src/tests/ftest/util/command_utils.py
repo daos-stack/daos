@@ -1635,8 +1635,9 @@ class RunCommand(ExecutableCommand):
         if raise_exception or (raise_exception is None and self.exit_status_exception):
             if not result.passed:
                 raise CommandFailure(f"Error running {self.command} on: {result.failed_hosts}")
-            if not result.search(self.log, fr"({'|'.join(self.check_results_list)})"):
-                raise CommandFailure(f"Error running {self.command}: check results failed")
+            keywords = '|'.join(self.check_results_list)
+            if not result.search(self.log, fr"({keywords})", full_command=self.full_command_regex):
+                raise CommandFailure(f"Error running {self.command}: {keywords} detected in output")
         return result
 
     def _result_stdout(self):

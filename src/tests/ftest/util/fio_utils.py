@@ -45,6 +45,7 @@ class FioCommand(RunCommand):
             namespace (str, optional): path to yaml parameters. Defaults to "/run/fio/*".
         """
         super().__init__(namespace, "fio", path)
+        self.full_command_regex = True      # Avoid matching vfio
 
         # fio command-line options
         self.debug = FormattedParameter("--debug={}")

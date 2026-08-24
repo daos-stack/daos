@@ -346,6 +346,9 @@ class CommandResult():
             return False
 
         status = True
+        if not regex:
+            log.debug("No regex pattern provided for searching keywords.")
+            return status
         log.debug("Searching the command output for any keywords: %s", regex)
         for output in (self.joined_stdout, self.joined_stderr):
             match = re.findall(regex, output)
