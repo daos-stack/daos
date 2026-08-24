@@ -35,7 +35,7 @@ class TestScrubberEvictWithAggregation(TestWithScrubber, TestWithTelemetry):
         self.pool = self.get_pool()
         # Disable the aggregation on the pool.
         self.pool.set_property("reclaim", "disabled")
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
         # Pool and Containers are already created. Just run the IOR.
         # Run the initial IOR with a small block size.
         self.ior_cmd.namespace = "/run/ior_small_block_size/*"
