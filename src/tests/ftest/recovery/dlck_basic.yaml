@@ -9,9 +9,11 @@ server_config:
   engines:
     0:
       targets: 4
+      log_file: daos_server0.log
       storage: auto
     1:
       targets: 4
+      log_file: daos_server1.log
       storage: auto
 
 pool:
