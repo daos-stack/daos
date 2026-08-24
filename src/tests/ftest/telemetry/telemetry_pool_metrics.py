@@ -138,7 +138,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         """
 
         # create pool and container
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         self.pool.set_property("reclaim", "disabled")
         self.add_container(pool=self.pool)
 
@@ -210,7 +210,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         :avocado: tags=TelemetryPoolMetrics,test_telemetry_pool_metrics_sanity_check
         """
         # Create a Pool
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         # Get all the default Pool Metrics and check for any errors.
         # If errors are noticed, get_pool_metrics will report them and
         # fail the test.

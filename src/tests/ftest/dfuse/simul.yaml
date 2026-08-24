@@ -16,7 +16,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 mpi:
   mpi_type: mpich
