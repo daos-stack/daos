@@ -3659,7 +3659,7 @@ vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck)
 
 		for (i = 0; i < dbd->dbd_index; i++) {
 			struct vos_dtx_act_ent_df	*dae_df;
-			struct vos_dtx_act_ent		*dae = NULL;
+			struct vos_dtx_act_ent          *dae = NULL;
 
 			dae_df = &dbd->dbd_active_data[i];
 
