@@ -10,6 +10,7 @@
 #define D_LOGFAC DD_FAC(dfs)
 
 #include <daos/common.h>
+#include <daos/object.h>
 
 #include "dfs_internal.h"
 
@@ -194,6 +195,15 @@ restart:
 			D_GOTO(out, rc = EEXIST);
 #endif
 
+		/*
+		 * POSIX: if source and destination are existing hardlinks referring to the
+		 * same inode, rename() is a no-op and returns success without clobbering
+		 * either name.
+		 */
+		if (DFS_IS_HARDLINK(entry.mode) && DFS_IS_HARDLINK(new_entry.mode) &&
+		    daos_oid_cmp(entry.oid, new_entry.oid) == 0)
+			D_GOTO(out, rc = 0);
+
 		if (S_ISDIR(new_entry.mode)) {
 			uint32_t      nr = 0;
 			daos_handle_t oh;
@@ -261,6 +271,13 @@ restart:
 	entry.mtime = entry.ctime = now.tv_sec;
 	entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
 
+	/*
+	 * For a hardlink the authoritative inode/xattrs live in GIT keyed by the unchanged
+	 * OID; validate the GIT handle before we start mutating dentries.
+	 */
+	if (DFS_IS_HARDLINK(entry.mode) && !daos_handle_is_valid(dfs->git_oh))
+		D_GOTO(out, rc = EIO);
+
 	/** insert old entry in new parent object */
 	rc = insert_entry(dfs->layout_v, new_parent->oh, th, new_name, new_len,
 			  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry);
@@ -269,13 +286,24 @@ restart:
 		D_GOTO(out, rc);
 	}
 
-	/** cp the extended attributes if they exist */
-	rc = xattr_copy(parent->oh, name, new_parent->oh, new_name, th);
-	if (rc == ERESTART) {
-		D_GOTO(out, rc);
-	} else if (rc) {
-		D_ERROR("Failed to copy extended attributes (%d)\n", rc);
-		D_GOTO(out, rc);
+	if (DFS_IS_HARDLINK(entry.mode)) {
+		/*
+		 * For a hardlink the authoritative inode (and xattrs) live in GIT keyed by the
+		 * unchanged OID, so the dentry times written above are ignored on read. Update
+		 * the times in GIT and skip the xattr copy (xattrs travel with the OID).
+		 */
+		rc = git_update_times(dfs->git_oh, th, &entry.oid, &now, &now);
+		if (rc)
+			D_GOTO(out, rc);
+	} else {
+		/** cp the extended attributes if they exist */
+		rc = xattr_copy(parent->oh, name, new_parent->oh, new_name, th);
+		if (rc == ERESTART) {
+			D_GOTO(out, rc);
+		} else if (rc) {
+			D_ERROR("Failed to copy extended attributes (%d)\n", rc);
+			D_GOTO(out, rc);
+		}
 	}
 
 	/** remove the old entry from the old parent (just the dkey) */
@@ -382,6 +410,14 @@ restart:
 	if (exists == false)
 		D_GOTO(out, rc = EINVAL);
 
+	/*
+	 * For a hardlink the authoritative inode/xattrs live in GIT keyed by OID; validate the
+	 * GIT handle before we start mutating dentries.
+	 */
+	if ((DFS_IS_HARDLINK(entry1.mode) || DFS_IS_HARDLINK(entry2.mode)) &&
+	    !daos_handle_is_valid(dfs->git_oh))
+		D_GOTO(out, rc = EIO);
+
 	/** remove the first entry from parent1 (just the dkey) */
 	d_iov_set(&dkey, (void *)name1, len1);
 	rc = daos_obj_punch_dkeys(parent1->oh, th, 0, 1, &dkey, NULL);
@@ -414,6 +450,13 @@ restart:
 		D_GOTO(out, rc);
 	}
 
+	/** hardlink inode/times live in GIT keyed by OID; dentry times are ignored on read */
+	if (DFS_IS_HARDLINK(entry1.mode)) {
+		rc = git_update_times(dfs->git_oh, th, &entry1.oid, &now, &now);
+		if (rc)
+			D_GOTO(out, rc);
+	}
+
 	entry2.mtime = entry2.ctime = now.tv_sec;
 	entry2.mtime_nano = entry2.ctime_nano = now.tv_nsec;
 
@@ -423,6 +466,12 @@ restart:
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", name1, rc);
 		D_GOTO(out, rc);
+	}
+
+	if (DFS_IS_HARDLINK(entry2.mode)) {
+		rc = git_update_times(dfs->git_oh, th, &entry2.oid, &now, &now);
+		if (rc)
+			D_GOTO(out, rc);
 	}
 
 	if (dfs->use_dtx) {
