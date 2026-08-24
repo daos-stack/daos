@@ -1626,18 +1626,23 @@ class RunCommand(ExecutableCommand):
         Returns:
             CommandResult: result from running the command
         """
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
         self.result = None
         if not self.hosts:
             result = run_local(self.log, self.with_exports, self.verbose, self.timeout)
         else:
             result = run_remote(self.log, self.hosts, self.with_exports, self.verbose, self.timeout)
         self.result = result
-        if raise_exception or (raise_exception is None and self.exit_status_exception):
-            if not result.passed:
-                raise CommandFailure(f"Error running {self.command} on: {result.failed_hosts}")
-            keywords = '|'.join(self.check_results_list)
-            if not result.search(self.log, fr"({keywords})"):
-                raise CommandFailure(f"Error running {self.command}: {keywords} detected in output")
+
+        if raise_exception and not result.passed:
+            raise CommandFailure(f"Error running {self.command} on: {result.failed_hosts}")
+
+        if raise_exception and not self.check_results():
+            raise CommandFailure(
+                f"Error running {self.command}: a {self.check_results_list} keyword was detected")
+
         return result
 
     def _result_stdout(self):
