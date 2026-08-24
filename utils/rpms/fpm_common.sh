@@ -159,11 +159,12 @@ build_package() {
   output_type="${OUTPUT_TYPE:-rpm}"
   if [ "${output_type}" = "rpm" ]; then
     EXTRA_OPTS+=("--rpm-autoprov")
-    EXTRA_OPTS+=("--rpm-autoreq")
-  fi
-
-  if [ -n "${RPM_CHANGELOG:-}" ]; then
-    EXTRA_OPTS+=("--rpm-changelog" "${root}/utils/rpms/${RPM_CHANGELOG}")
+    if [ "${1-}" != "noautoreq" ]; then
+      EXTRA_OPTS+=("--rpm-autoreq")
+    fi
+    if [ -n "${RPM_CHANGELOG:-}" ]; then
+      EXTRA_OPTS+=("--rpm-changelog" "${root}/utils/rpms/${RPM_CHANGELOG}")
+    fi
   fi
 
   depends=()

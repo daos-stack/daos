@@ -14,6 +14,7 @@ ARG DAOS_DEPS_BUILD=yes
 ARG DAOS_KEEP_BUILD=no
 ARG DAOS_PACKAGES_BUILD=yes
 ARG DEPS_JOBS=32
+ARG DAOS_PACKAGES_VERIFY=no
 
 # Pull base image
 ARG POINT_RELEASE=
@@ -141,16 +142,24 @@ RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
 
 # Build DAOS dependencies RPMs
 ARG DAOS_PACKAGES_BUILD
+ARG DAOS_PACKAGES_VERIFY
 RUN --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
     --mount=type=bind,source=utils/sl/setup_local.sh,target=/home/daos/pre/utils/sl/setup_local.sh \
     --mount=type=bind,source=utils/build.config,target=/home/daos/pre/utils/build.config \
     [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { \
         export DISTRO="el9" && \
-	    /home/daos/pre/utils/rpms/build_packages.sh deps && \
+	    /home/daos/pre/utils/rpms/build_packages.sh deps "$DAOS_PACKAGES_VERIFY" && \
         mkdir -p /home/daos/rpms/deps && \
         find . -maxdepth 1 -type f -name '*.rpm' \
              -exec mv -t /home/daos/rpms/deps {} + ; \
+    }
+
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    { \
+        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || { \
+            utils/rpms/verify_rpms.sh deps /home/daos/rpms/deps || true; \
+        } \
     }
 
 FROM build-ci AS build-local
@@ -242,7 +251,7 @@ USER daos_server:daos_server
 
 # Build DAOS RPMs
 ARG DAOS_PACKAGES_BUILD
-ARG POINT_RELEASE
+ARG DAOS_PACKAGES_VERIFY
 RUN --mount=type=bind,source=utils/rpms,target=/home/daos/daos/utils/rpms \
     --mount=type=bind,source=utils/sl,target=/home/daos/daos/utils/sl \
     --mount=type=bind,source=utils/systemd,target=/home/daos/daos/utils/systemd \
@@ -250,13 +259,18 @@ RUN --mount=type=bind,source=utils/rpms,target=/home/daos/daos/utils/rpms \
     --mount=type=bind,source=utils/rpms/build_packages.sh,target=/home/daos/daos/utils/rpms/build_packages.sh \
     [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
 	    export DISTRO="el9" && \
-	    /home/daos/daos/utils/rpms/build_packages.sh daos && \
+	    /home/daos/daos/utils/rpms/build_packages.sh daos "$DAOS_PACKAGES_VERIFY" && \
 	    mkdir -p /home/daos/rpms/daos && \
         find . -maxdepth 1 -type f -name '*.rpm' \
              -exec mv -t /home/daos/rpms/daos {} + ; \
     }
 
-# Disable Java build for now since it fails
+RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
+        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || { \
+            utils/rpms/verify_rpms.sh deps /home/daos/rpms/daos || true; \
+        } \
+    }
+
 # Build java and hadoop bindings
 #USER daos_server:daos_server
 #RUN     [ "$DAOS_JAVA_BUILD" != "yes" ] || { \

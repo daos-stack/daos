@@ -459,7 +459,9 @@ DEPENDS+=("${openmpi_lib}")
 list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
-build_package "daos-client-tests-openmpi"
+# OpenMPI on EL provides qualified libmpi capabilities that do not satisfy
+# FPM's unqualified automatic Requires; the package dependency is explicit.
+build_package "daos-client-tests-openmpi" "noautoreq"
 
 #shim packages
 PACKAGE_TYPE="empty"
