@@ -53,7 +53,7 @@ class DlckBasicFaultTest(TestWithServers):
                                    storage_mount=scm_mount, log_dir=self.log_dir)
         else:
             dlck_cmd = DlckCommand(host, self.bin, pool.uuid, storage_mount=scm_mount,
-                                   log_dir=self.log_dir )
+                                   log_dir=self.log_dir)
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
         self.log_step("Run dlck command after injecting the first fault")
