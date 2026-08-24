@@ -48,8 +48,6 @@ class NvmeIoVerification(IorTestBase):
         ior_flag_read = self.params.get("read", '/run/ior/*/')
         job_manager = self.get_ior_job_manager_command()
 
-        md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
-
         # Loop for every pool size.
         for index in range(num_pools):
             self.log_step("Create a pool: pool_{}".format(index))
@@ -91,11 +89,11 @@ class NvmeIoVerification(IorTestBase):
                 self.run_ior(job_manager, ior_processes)
 
                 self.log_step("Verify IOR consumed the expected amount from the pool.")
-                # Data in SCM are moved to NVMe in MD-on-SSD after restart, so we need to compare
-                # the original and current pool usage on NVMe. verify_pool_size determines which
-                # storage to use by checking whether self.ior_cmd.transfer_size is above 4096.
-                if md_on_ssd and tsize < 4096:
-                    self.log.info("MD-on-SSD with SCM - Update transfer size to >4096.")
+                # Data in SCM are moved to NVMe after restart, so we need to compare the original
+                # and current pool usage on NVMe. verify_pool_size determines which storage to use
+                # by checking whether self.ior_cmd.transfer_size is above 4096.
+                if tsize < 4096:
+                    self.log.info("Data written to SCM - Update transfer size to >4096.")
                     self.ior_cmd.transfer_size.update(10000)
                 self.verify_pool_size(size_before_ior, self.processes)
 
