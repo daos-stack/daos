@@ -52,8 +52,8 @@ ior:
   repetitions: 10
   dfs_destroy: false
   iorflags:
-    ior_flags:
-      - "-w -r -R -k -G 1"
+    write_flags:
+      - "-w -F -k -G 1"
     read_flags:
       - "-r -R -k -G 1"
     obj_class:

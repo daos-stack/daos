@@ -30,9 +30,8 @@ class OSAOnlineParallelTest(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
+        self.ior_write_flags = self.params.get("write_flags", '/run/ior/iorflags/*')
         self.ior_read_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
-        self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.ior_dfs_oclass = self.params.get("obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
@@ -81,8 +80,7 @@ class OSAOnlineParallelTest(OSAUtils):
 
         Args:
             num_pool (int) : total pools to create for testing purposes.
-            data (bool) : whether pool has no data or to create
-                          some data in pool. Defaults to False.
+            racer (bool) : whether to start the daos_racer thread. Defaults to False.
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
@@ -123,9 +121,9 @@ class OSAOnlineParallelTest(OSAUtils):
             self.log.info("Pool Version at the beginning %s", pver_begin)
             ior_threads = []
             dmg_threads = []
-            for oclass, test, flags in product(self.ior_dfs_oclass,
-                                               self.ior_test_sequence,
-                                               self.ior_flags):
+            test_seq = self.ior_test_sequence[0]
+            for oclass, test in product(self.ior_dfs_oclass,
+                                        test_seq):
                 # Action dictionary with OSA dmg command parameters
                 action_args = {
                     "drain": {"pool": self.pool.identifier, "ranks": rank,
@@ -141,12 +139,11 @@ class OSAOnlineParallelTest(OSAUtils):
                 }
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
-                    ior_threads.append(threading.Thread(target=self.ior_thread,
+                    ior_threads.append(threading.Thread(target=self.run_ior_thread,
                                                         kwargs={
-                                                            "pool": self.pool.identifier,
+                                                            "action": "Write",
                                                             "oclass": oclass,
-                                                            "test": test,
-                                                            "flags": flags}))
+                                                            "test": test_seq}))
                 # Launch the IOR threads
                 for ior_thrd in ior_threads:
                     self.log.info("Thread : %s", ior_thrd)
@@ -200,8 +197,7 @@ class OSAOnlineParallelTest(OSAUtils):
             # Perform a data consistency check for all containers in the pool
             for val in range(0, num_pool):
                 self.pool = pool[val]
-                self.ior_thread(self.pool, self.ior_dfs_oclass,
-                                self.ior_test_sequence, self.ior_read_flags)
+                self.run_ior_thread("Read", oclass, test_seq)
                 self.container = self.pool_cont_dict[self.pool][0]
                 self.container.check()
 
