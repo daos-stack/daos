@@ -3,12 +3,15 @@ hosts:
   test_clients: 1
 
 timeout: 600
-
+system_ram_reserved: 16
 server_config:
   name: daos_server
-  engines_per_host: 1
+  engines_per_host: 2
   engines:
     0:
+      targets: 4
+      storage: auto
+    1:
       targets: 4
       storage: auto
 

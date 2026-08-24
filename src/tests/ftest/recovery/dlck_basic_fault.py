@@ -9,7 +9,7 @@ from apricot import TestWithServers
 from dlck_utils import DlckCommand
 from fault_config_utils import FaultInjection
 from file_utils import distribute_files
-from run_utils import command_as_user, run_remote
+from run_utils import run_remote
 from test_utils_pool import add_pool
 
 
@@ -89,15 +89,6 @@ class DlckBasicFaultTest(TestWithServers):
                 errors.append(f"dlck failed on {result.failed_hosts}")
         self.log_step("Run the dmg start command")
         dmg.system_start()
-        # Make sure to delete the fi.yaml file after the test
-        if os.path.exists(fault_inject_file):
-            os.remove(fault_inject_file)
-        # Remove the fault injection file from all remote hosts as well
-        result = run_remote(self.log, self.hostlist_servers,
-                            command_as_user(f'rm -fr {fault_inject_file}',
-                                            "root"))
-        if not result.passed:
-            self.log.info("Error removing %s on %s", fault_inject_file, result.failed_hosts)
 
         if not errors:
             self.fail(f"dlck basic faulttest failed with errors: {errors}")
