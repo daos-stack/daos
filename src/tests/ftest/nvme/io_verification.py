@@ -32,8 +32,9 @@ class NvmeIoVerification(IorTestBase):
         yaml for detail.
         3. Restart servers and verify that all servers restarted.
         4. Run IOR read to verify that reading the data written before the restart works.
-        5. Destroy container and go to step 2. After all transfer sizes are tested, go to next.
-        6. Destroy pool and go to step 1.
+        5. Verify IOR consumed the expected amount of space from the pool.
+        6. Destroy container and go to step 2. After all transfer sizes are tested, go to next.
+        7. Destroy pool and go to step 1.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
@@ -88,7 +89,7 @@ class NvmeIoVerification(IorTestBase):
                 self.ior_cmd.flags.update(ior_flag_read)
                 self.run_ior(job_manager, ior_processes)
 
-                self.log_step("Verify IOR consumed the expected amount from the pool.")
+                self.log_step("Verify IOR consumed the expected amount of space from the pool.")
                 # Data in SCM are moved to NVMe after restart, so we need to compare the original
                 # and current pool usage on NVMe. verify_pool_size determines which storage to use
                 # by checking whether self.ior_cmd.transfer_size is above 4096.
