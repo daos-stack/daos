@@ -453,7 +453,7 @@ if [ "$ib_count" -ge 2 ] ; then
             ((lsblk_nvme++)) || true
         fi
     done < <(lsblk -d -o NAME --noheadings | grep nvme)
-    lsblk_pmem=$(lsblk | grep pmem -c)
+    lsblk_pmem=$(lsblk | grep pmem -c) || true
 
     if [ "$DAOS_NVME" -gt 0 ]; then
         ((testruns++)) || true
