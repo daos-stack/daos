@@ -49,8 +49,8 @@ All commands except the `daos` command should be run as root.
 
 - As the server log continues to print these "no engines ready" messages,
   it may be useful to run `tail -f` on one of the engine logs to ensure
-  that the engine initialisation is progressing. After the engine
-  initialisation completes, the `daos_server.log` should report the
+  that the engine initialization is progressing. After the engine
+  initialization completes, the `daos_server.log` should report the
   successful engine start with log entries like this:
 
 ```
