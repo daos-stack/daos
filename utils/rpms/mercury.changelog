@@ -1,4 +1,8 @@
 %changelog
+* Mon Aug 24 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 2.4.1-4
+- Rebuild to force update of defective packages.
+- Restore missing auto-generated runtime dependencies.
+
 * Fri May 29 2026 Joseph Moore <joseph.moore@hpe.com> - 2.4.1-3
 - Add NA UCX patch to prevent reconnection on accepted addresses
 - Add NA UCX patch to flush RMA puts
