@@ -41,8 +41,8 @@ $ cat /proc/meminfo | grep -e "^Huge"
 The platform was tested and validated with the following dependencies:
 - [Docker CE](https://docs.docker.com/engine/install/centos/) latest
   [RPMs](https://download.docker.com/linux/centos/docker-ce.repo)
-- [DAOS 2.6](https://docs.daos.io/v2.6/) local RPMS builds from [DAOS master
-  branch](https://github.com/daos-stack/daos/tree/master)
+- [DAOS 2.6](https://docs.daos.io/v2.6/) local RPMS builds from the [DAOS release/2.6
+  branch](https://github.com/daos-stack/daos/tree/release/2.6)
 - [rockylinux/rockylinux:8.9](https://hub.docker.com/r/rockylinux/rockylinux/) official docker
   images.
 

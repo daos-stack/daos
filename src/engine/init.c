@@ -31,12 +31,8 @@
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 
-#define MAX_MODULE_OPTIONS	64
-#if BUILD_PIPELINE
-#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,pipeline"
-#else
-#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
-#endif
+#define MAX_MODULE_OPTIONS 64
+#define MODULE_LIST        "vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
 #define MODS_LIST_CHK	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,chk"
 
 /** List of modules to load */
@@ -62,7 +58,7 @@ const char	       *dss_nvme_conf;
 /** Socket Directory */
 const char	       *dss_socket_dir = "/var/run/daos_server";
 
-/** NVMe mem_size for SPDK memory allocation */
+/** NVMe mem_size for SPDK memory allocation (MiB) */
 unsigned int		dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation */
@@ -1115,6 +1111,21 @@ parse(int argc, char **argv)
 		}
 		if (rc)
 			exit(EXIT_FAILURE);
+	}
+
+	/*
+	 * Load the pipeline module only if the feature is explicitly enabled (disabled by
+	 * default). Skip when a specific module list was requested or under check mode.
+	 */
+	if (!spec_mod && !dss_check_mode) {
+		bool pipeline_enabled = false;
+
+		d_getenv_bool("DAOS_PIPELINE", &pipeline_enabled);
+		if (pipeline_enabled) {
+			size_t len = strlen(modules);
+
+			snprintf(modules + len, sizeof(modules) - len, "%s", ",pipeline");
+		}
 	}
 }
 
