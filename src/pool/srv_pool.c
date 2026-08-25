@@ -5672,10 +5672,8 @@ out_lock:
 
 	/* See comment above, rebuild doesn't connect the pool */
 	if (query_bits & DAOS_PO_QUERY_SPACE) {
-		uint64_t *mem_file_bytes = handler_version >= 7 ? &out->pqo_mem_file_bytes : NULL;
-
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl, &out->pqo_space,
-					    mem_file_bytes);
+					    &out->pqo_mem_file_bytes);
 		if (unlikely(rc))
 			goto out_svc;
 
@@ -5697,12 +5695,6 @@ out:
 	crt_reply_send(rpc);
 	if (prop)
 		daos_prop_free(prop);
-}
-
-void
-ds_pool_query_handler_v6(crt_rpc_t *rpc)
-{
-	pool_query_handler(rpc, 6);
 }
 
 void
@@ -5821,10 +5813,8 @@ pool_query_info_handler(crt_rpc_t *rpc, int handler_version)
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 
 	if (tgt_state == PO_COMP_ST_UPIN) {
-		uint64_t *mem_file_bytes = handler_version >= 7 ? &out->pqio_mem_file_bytes : NULL;
-
 		rc = pool_query_tgt_space(rpc->cr_ctx, svc, in->pqii_op.pi_hdl, rank, tgt,
-					  &out->pqio_space, mem_file_bytes);
+					  &out->pqio_space, &out->pqio_mem_file_bytes);
 		if (rc)
 			DL_ERROR(rc, DF_UUID ": Failed to query rank:%u, tgt:%d",
 				 DP_UUID(in->pqii_op.pi_uuid), rank, tgt);
@@ -5842,12 +5832,6 @@ out:
 	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pqii_op.pi_uuid), rpc,
 		DP_RC(rc));
 	crt_reply_send(rpc);
-}
-
-void
-ds_pool_query_info_handler_v6(crt_rpc_t *rpc)
-{
-	pool_query_info_handler(rpc, 6);
 }
 
 void
