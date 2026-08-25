@@ -606,9 +606,9 @@ pipeline {
         booleanParam(name: bashName('Test'),
                      defaultValue: true,
                      description: 'Run the Test stage.')
-        booleanParam(name: bashName('Functional on EL 9.7 with Valgrind'),
+        booleanParam(name: bashName('Functional on EL 9 with Valgrind'),
                      defaultValue: false,
-                     description: 'Run the Functional on EL 9.7 with Valgrind stage.')
+                     description: 'Run the Functional on EL 9 with Valgrind stage.')
         booleanParam(name: bashName('Functional on EL 9'),
                      defaultValue: true,
                      description: 'Run the Functional on EL 9 stage.')
