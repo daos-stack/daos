@@ -11,8 +11,8 @@ import socket
 from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
 from ClusterShell.NodeSet import NodeSet
 from command_utils import CommandWithSubCommand, SubprocessManager, YamlCommand
-from command_utils_base import (CommandWithParameters, CommonConfig, EnvironmentVariables,
-                                FormattedParameter)
+from command_utils_base import (BasicParameter, CommandWithParameters, CommonConfig,
+                                EnvironmentVariables, FormattedParameter)
 from exception_utils import CommandFailure
 from general_utils import get_default_config_file, get_log_file
 from run_utils import run_remote
@@ -117,6 +117,8 @@ class DaosAgentCommand(YamlCommand):
         """Get the daos_agent sub command object based on the sub-command."""
         if self.sub_command.value == "dump-attachinfo":
             self.sub_command_class = self.DumpAttachInfoSubCommand()
+        elif self.sub_command.value == "check-node-cert":
+            self.sub_command_class = self.CheckNodeCertSubCommand()
         elif self.sub_command.value == "support":
             self.sub_command_class = self.SupportSubCommand()
         else:
@@ -131,6 +133,15 @@ class DaosAgentCommand(YamlCommand):
                 "/run/daos_agent/dump-attachinfo/*", "dump-attachinfo")
 
             self.output = FormattedParameter("--output {}", None)
+
+    class CheckNodeCertSubCommand(CommandWithParameters):
+        """Defines an object for the daos_agent check-node-cert sub command."""
+
+        def __init__(self):
+            """Create a daos_agent check-node-cert subcommand object."""
+            super().__init__("/run/daos_agent/check-node-cert/*", "check-node-cert")
+            self.pool = BasicParameter(None, position=1)
+            self.json = FormattedParameter("--json", False)
 
     class SupportSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_agent support sub command."""
@@ -305,6 +316,21 @@ class DaosAgentManager(SubprocessManager):
         cmd = self.manager.job.copy()
         cmd.set_sub_command("dump-attachinfo")
         return run_remote(self.log, self.hosts, cmd.with_exports)
+
+    def check_node_cert(self, pool, hosts=None):
+        """Run check-node-cert on the daos_agent for the given pool.
+
+        Args:
+            pool (str): pool UUID or label
+            hosts (NodeSet, optional): hosts to run on. Defaults to all agent hosts.
+
+        Returns:
+            CommandResult: groups of command results from the same hosts with the same return status
+        """
+        cmd = self.manager.job.copy()
+        cmd.logfile.update("/dev/null")
+        cmd.set_command(["check-node-cert"], pool=pool)
+        return run_remote(self.log, hosts or self.hosts, cmd.with_exports, timeout=30, stderr=True)
 
     def server_version(self):
         """Run server-version on the daos_agent.
