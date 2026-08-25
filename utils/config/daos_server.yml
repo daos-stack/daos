@@ -83,6 +83,11 @@
 #  # Key portion of Server Certificate
 #  key: /etc/daos/certs/server.key
 #
+#  # Clock skew tolerance for per-pool node cert proof-of-possession
+#  # freshness checks. Requires a unit suffix.
+#  # Default: 5m
+#  pool_cert_max_clock_skew: 5m
+#
 #
 ## Fault domain path
 ## Immutable after running "dmg storage format".
