@@ -59,7 +59,7 @@ void updateRunStage() {
         'Unit Test with memcheck',
         'Unit Test bdev with memcheck',
         'Test',
-        'Functional on EL 9.7 with Valgrind',
+        'Functional on EL 9 with Valgrind',
         'Functional on EL 9',
         'Functional on Leap 15',
         'Functional on Ubuntu 20.04',
@@ -1083,6 +1083,19 @@ pipeline {
             steps {
                 script {
                     parallel(
+                        'Functional on EL 9 with Valgrind': getFunctionalTestStage(
+                            name: 'Functional on EL 9 with Valgrind',
+                            runStage: shouldStageRun('Functional on EL 9 with Valgrind'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('EL9'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: 'memcheck',
+                            nvme: 'auto',
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
                         'Functional on EL 9': getFunctionalTestStage(
                             name: 'Functional on EL 9',
                             runStage: shouldStageRun('Functional on EL 9'),
