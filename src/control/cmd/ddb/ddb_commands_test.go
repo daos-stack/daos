@@ -33,11 +33,106 @@ func TestDdb_HelpCmds(t *testing.T) {
 			cmdStr:     "open",
 			helpSubStr: "Usage:\n  open [flags] path\n",
 		},
+		"help for 'version' command": {
+			cmdStr:     "version",
+			helpSubStr: "Usage:\n  version [flags]\n",
+		},
+		"help for 'close' command": {
+			cmdStr:     "close",
+			helpSubStr: "Usage:\n  close [flags]\n",
+		},
+		"help for 'superblock_dump' command": {
+			cmdStr:     "superblock_dump",
+			helpSubStr: "Usage:\n  superblock_dump [flags]\n",
+		},
+		"help for 'value_dump' command": {
+			cmdStr:     "value_dump",
+			helpSubStr: "Usage:\n  value_dump [flags] path [dst]\n",
+		},
+		"help for 'rm' command": {
+			cmdStr:     "rm",
+			helpSubStr: "Usage:\n  rm [flags] path\n",
+		},
+		"help for 'value_load' command": {
+			cmdStr:     "value_load",
+			helpSubStr: "Usage:\n  value_load [flags] src dst\n",
+		},
+		"help for 'ilog_dump' command": {
+			cmdStr:     "ilog_dump",
+			helpSubStr: "Usage:\n  ilog_dump [flags] path\n",
+		},
+		"help for 'ilog_commit' command": {
+			cmdStr:     "ilog_commit",
+			helpSubStr: "Usage:\n  ilog_commit [flags] path\n",
+		},
+		"help for 'ilog_clear' command": {
+			cmdStr:     "ilog_clear",
+			helpSubStr: "Usage:\n  ilog_clear [flags] path\n",
+		},
+		"help for 'dtx_dump' command": {
+			cmdStr:     "dtx_dump",
+			helpSubStr: "Usage:\n  dtx_dump [flags] path\n",
+		},
+		"help for 'dtx_cmt_clear' command": {
+			cmdStr:     "dtx_cmt_clear",
+			helpSubStr: "Usage:\n  dtx_cmt_clear [flags] path\n",
+		},
+		"help for 'smd_sync' command": {
+			cmdStr:     "smd_sync",
+			helpSubStr: "Usage:\n  smd_sync [flags] [nvme_conf] [db_path]\n",
+		},
+		"help for 'vea_dump' command": {
+			cmdStr:     "vea_dump",
+			helpSubStr: "Usage:\n  vea_dump [flags]\n",
+		},
+		"help for 'vea_update' command": {
+			cmdStr:     "vea_update",
+			helpSubStr: "Usage:\n  vea_update [flags] offset blk_cnt\n",
+		},
+		"help for 'dtx_act_commit' command": {
+			cmdStr:     "dtx_act_commit",
+			helpSubStr: "Usage:\n  dtx_act_commit [flags] path dtx_id\n",
+		},
+		"help for 'dtx_act_abort' command": {
+			cmdStr:     "dtx_act_abort",
+			helpSubStr: "Usage:\n  dtx_act_abort [flags] path dtx_id\n",
+		},
+		"help for 'feature' command": {
+			cmdStr:     "feature",
+			helpSubStr: "Usage:\n  feature [flags] [path]\n",
+		},
+		"help for 'rm_pool' command": {
+			cmdStr:     "rm_pool",
+			helpSubStr: "Usage:\n  rm_pool [flags] path\n",
+		},
+		"help for 'dtx_act_discard_invalid' command": {
+			cmdStr:     "dtx_act_discard_invalid",
+			helpSubStr: "Usage:\n  dtx_act_discard_invalid [flags] path dtx_id\n",
+		},
+		"help for 'dev_list' command": {
+			cmdStr:     "dev_list",
+			helpSubStr: "Usage:\n  dev_list [flags] db_path\n",
+		},
+		"help for 'dev_replace' command": {
+			cmdStr:     "dev_replace",
+			helpSubStr: "Usage:\n  dev_replace [flags] db_path old_dev new_dev\n",
+		},
+		"help for 'dtx_stat' command": {
+			cmdStr:     "dtx_stat",
+			helpSubStr: "Usage:\n  dtx_stat [flags] [path]\n",
+		},
+		"help for 'prov_mem' command": {
+			cmdStr:     "prov_mem",
+			helpSubStr: "Usage:\n  prov_mem [flags] db_path tmpfs_mount\n",
+		},
+		"help for 'dtx_aggr' command": {
+			cmdStr:     "dtx_aggr",
+			helpSubStr: "Usage:\n  dtx_aggr [flags] [path]\n",
+		},
 		"help for 'csum_dump' command": {
 			cmdStr:     "csum_dump",
 			helpSubStr: "Usage:\n  csum_dump [flags] path [dst]\n",
 		},
-		// TODO(follow-up PR): Add help tests for the remaining commands.
 	} {
 		t.Run(name, func(t *testing.T) {
 			ctx := newTestContext(t)
@@ -131,6 +226,43 @@ func TestDdb_Cmds(t *testing.T) {
 			test.CmpAny(t, "path", wantPath, path)
 			test.CmpAny(t, "cmtTime", wantCmtTime, cmtTime)
 			test.CmpAny(t, "cmtDate", wantCmtDate, cmtDate)
+			return nil
+		}
+	}
+
+	valueDumpFnChecking := func(t *testing.T, wantPath, wantDst string) func(string, string) error {
+		return func(path, dst string) error {
+			fmt.Println("value_dump called")
+			test.CmpAny(t, "path", wantPath, path)
+			test.CmpAny(t, "dst", wantDst, dst)
+			return nil
+		}
+	}
+
+	smdSyncFnChecking := func(t *testing.T, wantNvmeConf, wantDbPath string) func(string, string) error {
+		return func(nvmeConf, dbPath string) error {
+			fmt.Println("smd_sync called")
+			test.CmpAny(t, "nvmeConf", wantNvmeConf, nvmeConf)
+			test.CmpAny(t, "dbPath", wantDbPath, dbPath)
+			return nil
+		}
+	}
+
+	dtxStatFnChecking := func(t *testing.T, wantPath string, wantDetails bool) func(string, bool) error {
+		return func(path string, details bool) error {
+			fmt.Println("dtx_stat called")
+			test.CmpAny(t, "path", wantPath, path)
+			test.CmpAny(t, "details", wantDetails, details)
+			return nil
+		}
+	}
+
+	dtxDumpFnChecking := func(t *testing.T, wantPath string, wantActive, wantCommitted bool) func(string, bool, bool) error {
+		return func(path string, active, committed bool) error {
+			fmt.Println("dtx_dump called")
+			test.CmpAny(t, "path", wantPath, path)
+			test.CmpAny(t, "active", wantActive, active)
+			test.CmpAny(t, "committed", wantCommitted, committed)
 			return nil
 		}
 	}
@@ -406,6 +538,277 @@ func TestDdb_Cmds(t *testing.T) {
 			},
 			expStdout: []string{"prov_mem called"},
 		},
+		"prov_mem default (no flag)": {
+			args: []string{"prov_mem", "/db", "/mnt"},
+			setup: func(t *testing.T) {
+				ddb_run_prov_mem_Fn = func(dbPath, tmpfsMount string, tmpfsMountSize uint) error {
+					fmt.Println("prov_mem called")
+					test.CmpAny(t, "dbPath", "/db", dbPath)
+					test.CmpAny(t, "tmpfsMount", "/mnt", tmpfsMount)
+					test.CmpAny(t, "tmpfsMountSize", uint(0), tmpfsMountSize)
+					return nil
+				}
+			},
+			expStdout: []string{"prov_mem called"},
+		},
+
+		// --- superblock_dump command ---
+		"superblock_dump default": {
+			args: []string{"superblock_dump"},
+			setup: func(t *testing.T) {
+				ddb_run_superblock_dump_Fn = func() error {
+					fmt.Println("superblock_dump called")
+					return nil
+				}
+			},
+			expStdout: []string{"superblock_dump called"},
+		},
+
+		// --- value_dump command ---
+		"value_dump path only": {
+			args: []string{"value_dump", "[0]/[0]/[0]/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_value_dump_Fn = valueDumpFnChecking(t, "[0]/[0]/[0]/[0]", "")
+			},
+			expStdout: []string{"value_dump called"},
+		},
+		"value_dump with dst": {
+			args: []string{"value_dump", "[0]/[0]/[0]/[0]", "/tmp/value.out"},
+			setup: func(t *testing.T) {
+				ddb_run_value_dump_Fn = valueDumpFnChecking(t, "[0]/[0]/[0]/[0]", "/tmp/value.out")
+			},
+			expStdout: []string{"value_dump called"},
+		},
+
+		// --- rm command ---
+		"rm default": {
+			args: []string{"rm", "[0]/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_rm_Fn = func(path string) error {
+					fmt.Println("rm called")
+					test.CmpAny(t, "path", "[0]/[0]", path)
+					return nil
+				}
+			},
+			expStdout: []string{"rm called"},
+		},
+
+		// --- value_load command ---
+		"value_load default": {
+			args: []string{"value_load", "/tmp/value.in", "[0]/[0]/[0]/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_value_load_Fn = func(src, dst string) error {
+					fmt.Println("value_load called")
+					test.CmpAny(t, "src", "/tmp/value.in", src)
+					test.CmpAny(t, "dst", "[0]/[0]/[0]/[0]", dst)
+					return nil
+				}
+			},
+			expStdout: []string{"value_load called"},
+		},
+
+		// --- ilog_dump command ---
+		"ilog_dump default": {
+			args: []string{"ilog_dump", "[0]/[0]/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_ilog_dump_Fn = func(path string) error {
+					fmt.Println("ilog_dump called")
+					test.CmpAny(t, "path", "[0]/[0]/[0]", path)
+					return nil
+				}
+			},
+			expStdout: []string{"ilog_dump called"},
+		},
+
+		// --- ilog_commit command ---
+		"ilog_commit default": {
+			args: []string{"ilog_commit", "[0]/[0]/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_ilog_commit_Fn = func(path string) error {
+					fmt.Println("ilog_commit called")
+					test.CmpAny(t, "path", "[0]/[0]/[0]", path)
+					return nil
+				}
+			},
+			expStdout: []string{"ilog_commit called"},
+		},
+
+		// --- ilog_clear command ---
+		"ilog_clear default": {
+			args: []string{"ilog_clear", "[0]/[0]/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_ilog_clear_Fn = func(path string) error {
+					fmt.Println("ilog_clear called")
+					test.CmpAny(t, "path", "[0]/[0]/[0]", path)
+					return nil
+				}
+			},
+			expStdout: []string{"ilog_clear called"},
+		},
+
+		// --- dtx_dump command ---
+		"dtx_dump default": {
+			args: []string{"dtx_dump", "[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_dtx_dump_Fn = dtxDumpFnChecking(t, "[0]", false, false)
+			},
+			expStdout: []string{"dtx_dump called"},
+		},
+		"dtx_dump with active flag": {
+			args: []string{"dtx_dump", "-a", "[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_dtx_dump_Fn = dtxDumpFnChecking(t, "[0]", true, false)
+			},
+			expStdout: []string{"dtx_dump called"},
+		},
+		"dtx_dump with committed flag": {
+			args: []string{"dtx_dump", "--committed", "[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_dtx_dump_Fn = dtxDumpFnChecking(t, "[0]", false, true)
+			},
+			expStdout: []string{"dtx_dump called"},
+		},
+
+		// --- dtx_cmt_clear command ---
+		"dtx_cmt_clear default": {
+			args: []string{"dtx_cmt_clear", "[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_dtx_cmt_clear_Fn = func(path string) error {
+					fmt.Println("dtx_cmt_clear called")
+					test.CmpAny(t, "path", "[0]", path)
+					return nil
+				}
+			},
+			expStdout: []string{"dtx_cmt_clear called"},
+		},
+
+		// --- smd_sync command ---
+		"smd_sync default": {
+			args: []string{"smd_sync"},
+			setup: func(t *testing.T) {
+				ddb_run_smd_sync_Fn = smdSyncFnChecking(t, "", "")
+			},
+			expStdout: []string{"smd_sync called"},
+		},
+		"smd_sync with args": {
+			args: []string{"smd_sync", "/mnt/daos/daos_nvme.conf", "/mnt/daos"},
+			setup: func(t *testing.T) {
+				ddb_run_smd_sync_Fn = smdSyncFnChecking(t, "/mnt/daos/daos_nvme.conf", "/mnt/daos")
+			},
+			expStdout: []string{"smd_sync called"},
+		},
+
+		// --- vea_dump command ---
+		"vea_dump default": {
+			args: []string{"vea_dump"},
+			setup: func(t *testing.T) {
+				ddb_run_vea_dump_Fn = func() error {
+					fmt.Println("vea_dump called")
+					return nil
+				}
+			},
+			expStdout: []string{"vea_dump called"},
+		},
+
+		// --- vea_update command ---
+		"vea_update default": {
+			args: []string{"vea_update", "1024", "8"},
+			setup: func(t *testing.T) {
+				ddb_run_vea_update_Fn = func(offset, blkCnt string) error {
+					fmt.Println("vea_update called")
+					test.CmpAny(t, "offset", "1024", offset)
+					test.CmpAny(t, "blkCnt", "8", blkCnt)
+					return nil
+				}
+			},
+			expStdout: []string{"vea_update called"},
+		},
+
+		// --- dtx_act_commit command ---
+		"dtx_act_commit default": {
+			args: []string{"dtx_act_commit", "[0]", "1.2.3"},
+			setup: func(t *testing.T) {
+				ddb_run_dtx_act_commit_Fn = func(path, dtxID string) error {
+					fmt.Println("dtx_act_commit called")
+					test.CmpAny(t, "path", "[0]", path)
+					test.CmpAny(t, "dtxID", "1.2.3", dtxID)
+					return nil
+				}
+			},
+			expStdout: []string{"dtx_act_commit called"},
+		},
+
+		// --- dtx_act_abort command ---
+		"dtx_act_abort default": {
+			args: []string{"dtx_act_abort", "[0]", "1.2.3"},
+			setup: func(t *testing.T) {
+				ddb_run_dtx_act_abort_Fn = func(path, dtxID string) error {
+					fmt.Println("dtx_act_abort called")
+					test.CmpAny(t, "path", "[0]", path)
+					test.CmpAny(t, "dtxID", "1.2.3", dtxID)
+					return nil
+				}
+			},
+			expStdout: []string{"dtx_act_abort called"},
+		},
+
+		// --- dtx_act_discard_invalid command ---
+		"dtx_act_discard_invalid default": {
+			args: []string{"dtx_act_discard_invalid", "[0]", "all"},
+			setup: func(t *testing.T) {
+				ddb_run_dtx_act_discard_invalid_Fn = func(path, dtxID string) error {
+					fmt.Println("dtx_act_discard_invalid called")
+					test.CmpAny(t, "path", "[0]", path)
+					test.CmpAny(t, "dtxID", "all", dtxID)
+					return nil
+				}
+			},
+			expStdout: []string{"dtx_act_discard_invalid called"},
+		},
+
+		// --- dev_list command ---
+		"dev_list default": {
+			args: []string{"dev_list", "/mnt/daos"},
+			setup: func(t *testing.T) {
+				ddb_run_dev_list_Fn = func(dbPath string) error {
+					fmt.Println("dev_list called")
+					test.CmpAny(t, "dbPath", "/mnt/daos", dbPath)
+					return nil
+				}
+			},
+			expStdout: []string{"dev_list called"},
+		},
+
+		// --- dev_replace command ---
+		"dev_replace default": {
+			args: []string{"dev_replace", "/mnt/daos", "old-devid", "new-devid"},
+			setup: func(t *testing.T) {
+				ddb_run_dev_replace_Fn = func(dbPath, oldDevID, newDevID string) error {
+					fmt.Println("dev_replace called")
+					test.CmpAny(t, "dbPath", "/mnt/daos", dbPath)
+					test.CmpAny(t, "oldDevID", "old-devid", oldDevID)
+					test.CmpAny(t, "newDevID", "new-devid", newDevID)
+					return nil
+				}
+			},
+			expStdout: []string{"dev_replace called"},
+		},
+
+		// --- dtx_stat command ---
+		"dtx_stat default": {
+			args: []string{"dtx_stat"},
+			setup: func(t *testing.T) {
+				ddb_run_dtx_stat_Fn = dtxStatFnChecking(t, "", false)
+			},
+			expStdout: []string{"dtx_stat called"},
+		},
+		"dtx_stat with details flag": {
+			args: []string{"dtx_stat", "--details", "[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_dtx_stat_Fn = dtxStatFnChecking(t, "[0]", true)
+			},
+			expStdout: []string{"dtx_stat called"},
+		},
 
 		// --- csum_dump command ---
 		"csum_dump missing path": {
@@ -451,16 +854,6 @@ func TestDdb_Cmds(t *testing.T) {
 			},
 			expStdout: []string{"csum_dump called"},
 		},
-
-		// TODO(follow-up PR): Add TestCmds cases for the remaining commands.
-		// Each new test case follows the same pattern as the cases above: set the
-		// corresponding ddb_run_<cmd>_Fn hook in setup() to verify argument passing,
-		// then add the case to this table.
-		// Commands still to be covered: superblock_dump, value_dump, rm,
-		// value_load, ilog_dump, ilog_commit, ilog_clear, dtx_dump, dtx_cmt_clear,
-		// smd_sync, vea_dump, vea_update, dtx_act_commit, dtx_act_abort,
-		// dtx_act_discard_invalid, dev_list, dev_replace, dtx_stat,
-		// prov_mem (default, no flag).
 	} {
 		t.Run(name, func(t *testing.T) {
 			checkCmd := func(t *testing.T, stdout string, err error) {

@@ -2524,7 +2524,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			}
 			if (rc)
 				goto out;
-		} else if (dkey_val == props->dkey_val && props->record_i) {
+		} else if (dkey_val == props->dkey_val) {
 			props->update_dkey = false;
 
 			if (props->record_i + 1 != props->chunk_size) {

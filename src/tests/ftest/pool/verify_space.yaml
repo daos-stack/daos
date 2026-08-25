@@ -37,7 +37,6 @@ pool_rank_0_1_2:
 
 container:
   type: POSIX
-  control_method: daos
   register_cleanup: False
 
 ior:
