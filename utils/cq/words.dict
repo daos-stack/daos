@@ -514,6 +514,7 @@ util
 utils
 uuid
 uuidstr
+uv
 valgrind
 vendored
 ver
