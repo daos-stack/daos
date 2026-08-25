@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,9 +9,12 @@ package main
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -19,6 +22,9 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
+	sectest "github.com/daos-stack/daos/src/control/security/test"
+	"github.com/google/uuid"
 )
 
 func walkStruct(v reflect.Value, prefix []string, visit func([]string)) {
@@ -63,13 +69,47 @@ func TestDmg_JsonOutput(t *testing.T) {
 	aclContent := "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n"
 	aclPath := test.CreateTestFile(t, testDir, aclContent)
 
+	caCertPath, caKeyPath := sectest.WriteCAFiles(t, testDir)
+	// issue and generate-cert find the pool CA certificate beside its key
+	// under the pool's own file names.
+	poolCAPEM, poolCAKey := sectest.NewCA(t, "Pool CA", nil, nil)
+	poolCAKeyDER, err := x509.MarshalPKCS8PrivateKey(poolCAKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	poolCACertPath, poolCAKeyPath := security.PoolCAPaths(filepath.Join(testDir, "pools"), uuid.MustParse(test.MockUUID()))
+	if err := os.MkdirAll(filepath.Dir(poolCAKeyPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	sectest.WriteCertFiles(t, poolCACertPath, poolCAKeyPath, poolCAPEM,
+		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: poolCAKeyDER}))
+
 	for _, args := range cmdArgs {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
+			var caBundle []byte
 			switch strings.Join(args, " ") {
 			case "version", "telemetry config", "telemetry run", "config generate",
 				"manpage", "system set-prop", "support collect-log", "check repair":
 				return
+			case "pool node-auth enable", "pool node-auth add-ca":
+				testArgs = append(testArgs, test.MockUUID(),
+					"--cert", caCertPath)
+			case "pool node-auth generate-ca":
+				testArgs = append(testArgs, test.MockUUID(),
+					"--daos-ca-cert", caCertPath, "--daos-ca-key", caKeyPath,
+					"--output", filepath.Join(testDir, "pool_ca"))
+			case "pool node-auth generate-cert":
+				testArgs = append(testArgs, test.MockUUID(),
+					"--pool-ca-key", poolCAKeyPath,
+					"--node", "testnode",
+					"--output", filepath.Join(testDir, "offline_certs"))
+			case "pool node-auth issue":
+				caBundle = poolCAPEM
+				testArgs = append(testArgs, test.MockUUID(),
+					"--pool-ca-key", poolCAKeyPath,
+					"--node", "testnode",
+					"--output", filepath.Join(testDir, "client_certs"))
 			case "storage nvme-rebind":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
 					test.MockPCIAddr())
@@ -87,8 +127,13 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "pool create":
 				testArgs = append(testArgs, "-s", "1TB", "label")
 			case "pool destroy", "pool evict", "pool query", "pool get-acl", "pool upgrade",
-				"pool rebuild start", "pool rebuild stop":
+				"pool rebuild start", "pool rebuild stop",
+				"pool node-auth status", "pool node-auth disable":
 				testArgs = append(testArgs, test.MockUUID())
+			case "pool node-auth remove-ca":
+				testArgs = append(testArgs, test.MockUUID(), "--fingerprint", "abc123")
+			case "pool node-auth revoke":
+				testArgs = append(testArgs, test.MockUUID(), "--node", "testnode")
 			case "pool overwrite-acl", "pool update-acl":
 				testArgs = append(testArgs, test.MockUUID(), "-a", aclPath)
 			case "pool delete-acl":
@@ -141,6 +186,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 				MockInvoker: *ctlClient,
 				t:           t,
 				conn:        conn,
+				caBundle:    caBundle,
 			}
 
 			err := parseOpts(testArgs, &cliOptions{}, bridge, log)

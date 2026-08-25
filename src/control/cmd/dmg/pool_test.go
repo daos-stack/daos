@@ -31,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	sectest "github.com/daos-stack/daos/src/control/security/test"
 )
 
 func Test_Dmg_PoolTierRatioFlag(t *testing.T) {
@@ -164,6 +165,11 @@ func TestDmg_PoolCommands(t *testing.T) {
 
 	// An existing file with contents for tests that need to verify overwrite
 	testExistingFile := createACLFile(t, tmpDir, testACL)
+	poolCAPEM, _ := sectest.NewCA(t, "Pool CA", nil, nil)
+	poolCAFile := filepath.Join(tmpDir, "pool_ca.crt")
+	if err := os.WriteFile(poolCAFile, poolCAPEM, 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// An existing file with write-only perms
 	testWriteOnlyFile := createACLFile(t, tmpDir, testACL)
@@ -1447,6 +1453,96 @@ func TestDmg_PoolCommands(t *testing.T) {
 			"pool quack",
 			"",
 			errors.New("Unknown command"),
+		},
+		{
+			"Node-auth status",
+			"pool node-auth status 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolGetCAReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Node-auth enable with an imported CA",
+			fmt.Sprintf("pool node-auth enable 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --cert %s", poolCAFile),
+			strings.Join([]string{
+				printRequest(t, &control.PoolGetCAReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+				printRequest(t, &control.PoolAddCAReq{
+					ID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					CertPEM: poolCAPEM,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Node-auth add-ca with an imported CA",
+			fmt.Sprintf("pool node-auth add-ca 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --cert %s", poolCAFile),
+			strings.Join([]string{
+				printRequest(t, &control.PoolGetCAReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+				printRequest(t, &control.PoolAddCAReq{
+					ID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					CertPEM: poolCAPEM,
+					Append:  true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Node-auth remove-ca",
+			"pool node-auth remove-ca 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --fingerprint abc123",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRemoveCAReq{
+					ID:          "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Fingerprint: "abc123",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Node-auth disable",
+			"pool node-auth disable 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRemoveCAReq{
+					ID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					All: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Node-auth revoke a node",
+			"pool node-auth revoke 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --node client01",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRevokeClientReq{
+					ID:   "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Node: "client01",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Node-auth revoke a tenant without eviction",
+			"pool node-auth revoke 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --tenant teamA --no-evict",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRevokeClientReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Tenant:    "teamA",
+					EvictMode: daos.PoolRevokeEvictNone,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Node-auth revoke refuses node and tenant together",
+			"pool node-auth revoke 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --node a --tenant b",
+			"",
+			errors.New("mutually exclusive"),
 		},
 	})
 }

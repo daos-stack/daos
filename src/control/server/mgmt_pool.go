@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -1235,6 +1236,13 @@ func (svc *mgmtSvc) PoolSetProp(parent context.Context, req *mgmtpb.PoolSetPropR
 		return nil, errors.New("PoolSetProp() request with 0 properties")
 	}
 
+	for _, prop := range req.GetProperties() {
+		switch prop.GetNumber() {
+		case daos.PoolPropertyCACert, daos.PoolPropertyCertWatermarks:
+			return nil, errors.New("node authentication properties are managed by dmg pool node-auth")
+		}
+	}
+
 	miscProps := make([]*mgmtpb.PoolProperty, 0, len(req.GetProperties()))
 	for _, prop := range req.GetProperties() {
 		// Label is a special case, in that we need to ensure that it's unique
@@ -1298,6 +1306,325 @@ func (svc *mgmtSvc) PoolGetProp(ctx context.Context, req *mgmtpb.PoolGetPropReq)
 	}
 
 	return resp, nil
+}
+
+// readPoolByteProperty reads a byteval pool property; returns nil if unset.
+// The caller is responsible for ensuring that the property being read is a byteval
+// property, and for managing any necessary locking.
+func (svc *mgmtSvc) readPoolByteProperty(ctx context.Context, sys, id string, propNum uint32) ([]byte, error) {
+	getReq := &mgmtpb.PoolGetPropReq{
+		Sys: sys,
+		Id:  id,
+		Properties: []*mgmtpb.PoolProperty{
+			{Number: propNum},
+		},
+	}
+	dResp, err := svc.makePoolServiceCall(ctx, daos.MethodPoolGetProp, getReq)
+	if err != nil {
+		return nil, err
+	}
+	getResp := new(mgmtpb.PoolGetPropResp)
+	if err := svc.unmarshalPB(dResp.Body, getResp); err != nil {
+		return nil, err
+	}
+	if getResp.GetStatus() != 0 {
+		return nil, daos.Status(getResp.GetStatus())
+	}
+	for _, prop := range getResp.GetProperties() {
+		if prop.GetNumber() != propNum {
+			continue
+		}
+		return prop.GetByteval(), nil
+	}
+	return nil, nil
+}
+
+// writePoolByteProperty writes a byteval pool property. The caller is responsible
+// for ensuring that the property being written is a byteval property, and for managing
+// any necessary locking.
+func (svc *mgmtSvc) writePoolByteProperty(ctx context.Context, sys, id string, propNum uint32, value []byte) error {
+	setReq := &mgmtpb.PoolSetPropReq{
+		Sys: sys,
+		Id:  id,
+		Properties: []*mgmtpb.PoolProperty{
+			{
+				Number: propNum,
+				Value:  &mgmtpb.PoolProperty_Byteval{Byteval: value},
+			},
+		},
+	}
+	dResp, err := svc.makePoolServiceCall(ctx, daos.MethodPoolSetProp, setReq)
+	if err != nil {
+		return err
+	}
+	setResp := new(mgmtpb.PoolSetPropResp)
+	if err := svc.unmarshalPB(dResp.Body, setResp); err != nil {
+		return err
+	}
+	if setResp.GetStatus() != 0 {
+		return daos.Status(setResp.GetStatus())
+	}
+	return nil
+}
+
+// PoolGetCA returns the pool's CA bundle.
+func (svc *mgmtSvc) PoolGetCA(ctx context.Context, req *mgmtpb.PoolGetCAReq) (*mgmtpb.PoolGetCAResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
+	poolUUID, err := svc.resolvePoolID(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	bundle, err := svc.readPoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCACert)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading pool CA bundle")
+	}
+	return &mgmtpb.PoolGetCAResp{CaBundle: bundle, PoolUuid: poolUUID.String()}, nil
+}
+
+// PoolGetCertWatermarks returns the pool's per-CN revocation watermarks blob.
+func (svc *mgmtSvc) PoolGetCertWatermarks(ctx context.Context, req *mgmtpb.PoolGetCertWatermarksReq) (*mgmtpb.PoolGetCertWatermarksResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
+	poolUUID, err := svc.resolvePoolID(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	watermarks, err := svc.readPoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCertWatermarks)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading cert watermarks")
+	}
+	return &mgmtpb.PoolGetCertWatermarksResp{Watermarks: watermarks, PoolUuid: poolUUID.String()}, nil
+}
+
+// PoolAddCA adds a CA certificate to the pool's CA bundle.
+func (svc *mgmtSvc) PoolAddCA(parent context.Context, req *mgmtpb.PoolAddCAReq) (*mgmtpb.PoolAddCAResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	if len(req.GetCertPem()) == 0 {
+		return nil, errors.New("PoolAddCA: cert_pem is empty")
+	}
+	// Without transport security the machine-name binding is unsigned.
+	if svc.transportConfig.AllowInsecure {
+		return nil, errors.New("node authentication cannot be enabled with insecure transport")
+	}
+
+	poolUUID, err := svc.resolvePoolID(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	cert, err := security.ParsePoolCACert(req.GetCertPem())
+	if err != nil {
+		return nil, errors.Wrap(err, "validating CA certificate")
+	}
+	daosCA, err := svc.transportConfig.CACert()
+	if err != nil {
+		return nil, errors.Wrap(err, "loading DAOS CA")
+	}
+
+	// Verify that the CA to be added was issued by the DAOS CA in this system. Without this check, a
+	// misconfigured CA could be added and then clients would be mysteriously unable to connect.
+	if err := security.VerifyPoolCAChain(cert, daosCA); err != nil {
+		return nil, errors.Wrap(err, "cannot verify pool CA against the DAOS CA; "+
+			"node authentication requires the cluster's certificate infrastructure")
+	}
+	if err := security.CheckPoolCAIdentity(cert, poolUUID); err != nil {
+		return nil, err
+	}
+
+	curPropBytes, err := svc.readPoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCACert)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading current pool CA bundle")
+	}
+	curCAList, err := security.ParseCABundle(curPropBytes)
+	if err != nil {
+		return nil, errors.Wrap(err, "current pool CA bundle")
+	}
+	fingerprint := security.CertFingerprint(cert)
+	for _, e := range curCAList {
+		if e.Fingerprint == fingerprint {
+			return nil, errors.Errorf("pool CA %s is already installed", fingerprint)
+		}
+	}
+	if len(curCAList) >= security.PoolCABundleMaxCerts {
+		return nil, errors.Errorf("pool CA bundle is full (%d CAs installed)", len(curCAList))
+	}
+
+	newPropBytes := make([]byte, 0, len(curPropBytes)+len(req.GetCertPem()))
+	newPropBytes = append(newPropBytes, curPropBytes...)
+	newPropBytes = append(newPropBytes, req.GetCertPem()...)
+
+	if err := svc.writePoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCACert, newPropBytes); err != nil {
+		return nil, errors.Wrap(err, "writing pool CA bundle")
+	}
+
+	resp := &mgmtpb.PoolAddCAResp{PoolUuid: poolUUID.String()}
+	// If we're enabling node authentication for the first time on this pool, evict any
+	// existing handles so that clients will be forced to re-authenticate.
+	if len(curPropBytes) == 0 && !req.GetNoEvict() {
+		evResp, err := svc.evictPoolConnections(ctx, &mgmtpb.PoolEvictReq{Sys: req.GetSys(), Id: req.GetId()})
+		if err != nil {
+			return nil, errors.Wrap(err, "node authentication enabled; evicting existing handles failed")
+		}
+		if evResp.GetStatus() != 0 {
+			return nil, errors.Errorf("node authentication enabled; evicting existing handles failed: status %d", evResp.GetStatus())
+		}
+		resp.HandlesEvicted = evResp.GetCount()
+	}
+	return resp, nil
+}
+
+// PoolRemoveCA removes a CA cert from the pool's CA bundle.
+func (svc *mgmtSvc) PoolRemoveCA(parent context.Context, req *mgmtpb.PoolRemoveCAReq) (*mgmtpb.PoolRemoveCAResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	if req.GetAll() && req.GetFingerprint() != "" {
+		return nil, errors.New("PoolRemoveCA: specify all or fingerprint, not both")
+	}
+	if !req.GetAll() && req.GetFingerprint() == "" {
+		return nil, errors.New("PoolRemoveCA: specify fingerprint or all")
+	}
+
+	poolUUID, err := svc.resolvePoolID(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	curPropBytes, err := svc.readPoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCACert)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading current pool CA bundle")
+	}
+	curCAList, err := security.ParseCABundle(curPropBytes)
+	if err != nil {
+		return nil, errors.Wrap(err, "current pool CA bundle")
+	}
+
+	if req.GetAll() {
+		if err := svc.writePoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCACert, nil); err != nil {
+			return nil, errors.Wrap(err, "clearing pool CA bundle")
+		}
+		return &mgmtpb.PoolRemoveCAResp{CertsRemoved: int32(len(curCAList)), PoolUuid: poolUUID.String()}, nil
+	}
+
+	if len(curCAList) == 0 {
+		return nil, errors.New("no pool CA configured")
+	}
+	remaining, removed, err := security.RemoveCertByFingerprint(curPropBytes, req.GetFingerprint())
+	if err != nil {
+		return nil, err
+	}
+	if removed == len(curCAList) {
+		return nil, errors.New("removing the last CA would disable node authentication; use disable")
+	}
+
+	if err := svc.writePoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCACert, remaining); err != nil {
+		return nil, errors.Wrap(err, "writing updated pool CA bundle")
+	}
+
+	return &mgmtpb.PoolRemoveCAResp{CertsRemoved: int32(removed), PoolUuid: poolUUID.String()}, nil
+}
+
+// PoolRevokeClient revokes a client certificate by updating the pool's revocation watermarks
+// and evicting any handles that are now invalid.
+func (svc *mgmtSvc) PoolRevokeClient(parent context.Context, req *mgmtpb.PoolRevokeClientReq) (*mgmtpb.PoolRevokeClientResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	cn := req.GetCn()
+	prefix, suffix, err := security.ParsePoolCertCN(cn)
+	if err != nil {
+		return nil, errors.Wrap(err, "PoolRevokeClient")
+	}
+
+	poolUUID, err := svc.resolvePoolID(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	caBundle, err := svc.readPoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCACert)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading pool CA bundle")
+	}
+	if len(caBundle) == 0 {
+		return nil, errors.New("pool has no CA configured; cannot revoke a client cert")
+	}
+
+	curWatermarks, err := svc.readPoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCertWatermarks)
+	if err != nil {
+		return nil, errors.Wrap(err, "reading current watermarks")
+	}
+
+	// The watermark is a timestamp, so we add the max clock skew to the current time
+	// to ensure that the watermark is always in the past relative to any valid client cert.
+	now := time.Now().Add(svc.transportConfig.CertMaxClockSkew)
+	newWatermarks, committed, err := security.RevokeCertWatermark(curWatermarks, caBundle, cn, now)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := svc.writePoolByteProperty(ctx, req.GetSys(), req.GetId(), daos.PoolPropertyCertWatermarks, newWatermarks); err != nil {
+		return nil, errors.Wrap(err, "writing updated watermarks")
+	}
+
+	evictedCount, evictScope, err := svc.evictForRevoke(ctx, req, prefix, suffix)
+	if err != nil {
+		return nil, err
+	}
+
+	return &mgmtpb.PoolRevokeClientResp{
+		WatermarkRfc3339:    committed.UTC().Format(time.RFC3339),
+		PoolUuid:            poolUUID.String(),
+		HandlesEvictedCount: evictedCount,
+		EvictScope:          string(evictScope),
+	}, nil
+}
+
+// evictForRevoke evicts pool handles after a client cert has been revoked. The eviction
+// scope is determined by the request's EvictMode and the CN prefix.
+func (svc *mgmtSvc) evictForRevoke(ctx context.Context, req *mgmtpb.PoolRevokeClientReq, prefix, suffix string) (int32, daos.PoolRevokeEvictScope, error) {
+	mode := req.GetEvictMode()
+	if mode == mgmtpb.PoolRevokeClientReq_EVICT_NONE {
+		return 0, daos.PoolRevokeEvictScopeNone, nil
+	}
+
+	evictReq := &mgmtpb.PoolEvictReq{Sys: req.GetSys(), Id: req.GetId()}
+	scope := daos.PoolRevokeEvictScopePool
+	if mode == mgmtpb.PoolRevokeClientReq_EVICT_DEFAULT && prefix == security.PoolCertCNPrefixNode {
+		evictReq.Machine = suffix
+		scope = daos.PoolRevokeEvictScopeMachine
+	}
+
+	resp, err := svc.evictPoolConnections(ctx, evictReq)
+	if err != nil {
+		return 0, "", errors.Wrap(err, "evicting after revoke")
+	}
+	if resp.GetStatus() != 0 {
+		return 0, "", errors.Errorf("PoolEvict returned status %d", resp.GetStatus())
+	}
+	return resp.GetCount(), scope, nil
 }
 
 // PoolGetACL forwards a request to the I/O Engine to fetch a pool's Access Control List
