@@ -1037,6 +1037,58 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("pool", "upgrade"), pool=pool)
 
+    def pool_node_auth_enable(self, pool, daos_ca_key=None, output=None, cert=None,
+                              no_evict=False):
+        """Enable node authentication (generate or import a pool CA)."""
+        return self._get_json_result(
+            ("pool", "node-auth", "enable"), pool=pool,
+            daos_ca_key=daos_ca_key, output=output, cert=cert, no_evict=no_evict)
+
+    def pool_node_auth_generate_ca(self, pool, daos_ca_cert=None, daos_ca_key=None,
+                                   output=None):
+        """Generate a pool CA key pair without contacting the system."""
+        return self._get_json_result(
+            ("pool", "node-auth", "generate-ca"), pool=pool,
+            daos_ca_cert=daos_ca_cert, daos_ca_key=daos_ca_key, output=output)
+
+    def pool_node_auth_add_ca(self, pool, daos_ca_key=None, output=None, cert=None):
+        """Add a CA to the pool's bundle (rotation)."""
+        return self._get_json_result(
+            ("pool", "node-auth", "add-ca"), pool=pool,
+            daos_ca_key=daos_ca_key, output=output, cert=cert)
+
+    def pool_node_auth_remove_ca(self, pool, fingerprint):
+        """Remove a CA from the pool's bundle by fingerprint."""
+        return self._get_json_result(
+            ("pool", "node-auth", "remove-ca"), pool=pool, fingerprint=fingerprint)
+
+    def pool_node_auth_disable(self, pool):
+        """Disable node authentication (remove all pool CAs)."""
+        return self._get_json_result(("pool", "node-auth", "disable"), pool=pool)
+
+    def pool_node_auth_status(self, pool):
+        """Show the pool's CA bundle and revocation watermarks."""
+        return self._get_json_result(("pool", "node-auth", "status"), pool=pool)
+
+    def pool_node_auth_generate_cert(self, pool, pool_ca_key, output, node=None, tenant=None):
+        """Mint client certs signed by the pool CA without contacting the system."""
+        return self._get_json_result(
+            ("pool", "node-auth", "generate-cert"), pool=pool, pool_ca_key=pool_ca_key,
+            output=output, node=node, tenant=tenant)
+
+    def pool_node_auth_issue(self, pool, pool_ca_key, output, node=None, tenant=None):
+        """Mint client certs signed by the pool CA, postdated past any watermark."""
+        return self._get_json_result(
+            ("pool", "node-auth", "issue"), pool=pool, pool_ca_key=pool_ca_key,
+            output=output, node=node, tenant=tenant)
+
+    def pool_node_auth_revoke(self, pool, node=None, tenant=None,
+                              evict_all_handles=False, no_evict=False):
+        """Advance the revocation watermark for an identity (no CA key needed)."""
+        return self._get_json_result(
+            ("pool", "node-auth", "revoke"), pool=pool, node=node, tenant=tenant,
+            evict_all_handles=evict_all_handles, no_evict=no_evict)
+
     def cont_set_owner(self, pool, cont, user=None, group=None):
         """Dmg container set-owner to the specified new user/group.
 
