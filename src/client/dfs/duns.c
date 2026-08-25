@@ -1167,7 +1167,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		 */
 		rc = duns_wait_for_resolution(path, attrp->da_cuuid);
 		if (rc)
-			goto err_verify;
+			goto err_cont;
 	}
 
 	return rc;
@@ -1180,13 +1180,6 @@ err_link:
 		rmdir(path);
 	else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN)
 		unlink(path);
-	return rc;
-err_verify:
-	/* clean up the path before destroying the linked container */
-	rmdir(path);
-	rc2 = daos_cont_destroy(poh, attrp->da_cont, 1, NULL);
-	if (rc2)
-		D_ERROR("Failed to cleanup created container %s (%d)\n", attrp->da_cont, rc2);
 	return rc;
 }
 
