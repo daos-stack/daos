@@ -55,3 +55,4 @@ class DlckCommand(RunCommand):
         fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
         if fault_inject_file != "None set for now":
             self.env["D_FI_CONFIG"] = fault_inject_file
+            self.exit_status_exception = False

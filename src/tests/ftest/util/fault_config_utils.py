@@ -236,28 +236,48 @@ FAULTS = {
         'probability_y': '100',
         'interval': '1',
         'max_faults': '1'},
-    'DLCK_FAULT_CREATE_LOG_DIR': {
+    'DLCK_MOCK_ROOT': {
         'id': '131328',
         'interval': '1',
         'max_faults': '1'},
-    'DLCK_FAULT_CREATE_POOL_DIR': {
+    'DLCK_FAULT_GETGRNAM': {
         'id': '131329',
         'interval': '1',
         'max_faults': '1'},
-    'DLCK_FAULT_ENGINE_START': {
+    'DLCK_MOCK_NO_DAOS_SERVER_GROUP': {
         'id': '131330',
         'interval': '1',
         'max_faults': '1'},
-    'DLCK_FAULT_ENGINE_EXEC': {
+    'DLCK_FAULT_GETGROUPS': {
         'id': '131331',
         'interval': '1',
         'max_faults': '1'},
-    'DLCK_FAULT_ENGINE_JOIN': {
+    'DLCK_MOCK_NOT_IN_DAOS_SERVER_GROUP': {
         'id': '131332',
         'interval': '1',
         'max_faults': '1'},
-    'DLCK_FAULT_ENGINE_STOP': {
+    'DLCK_FAULT_CREATE_LOG_DIR': {
         'id': '131333',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_CREATE_POOL_DIR': {
+        'id': '131334',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_START': {
+        'id': '131335',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_EXEC': {
+        'id': '131336',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_JOIN': {
+        'id': '131337',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_STOP': {
+        'id': '131338',
         'interval': '1',
         'max_faults': '1'},
     'DAOS_FAULT_POOL_NVME_HEALTH': {
