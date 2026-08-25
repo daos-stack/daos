@@ -57,7 +57,7 @@ class TestWithScrubberBasic(TestWithScrubber):
             if prop_val is not None:
                 value = prop_val.split(":")
                 self.pool.set_property(value[0], value[1])
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         self.run_scrubber_basic()
 
@@ -80,6 +80,6 @@ class TestWithScrubberBasic(TestWithScrubber):
         other_properties = self.params.get("other_properties", '/run/pool/*')
 
         self.pool = self.get_pool(properties=f"{pool_properties},{other_properties}")
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         self.run_scrubber_basic()

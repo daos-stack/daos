@@ -14,8 +14,13 @@ python3 -m pip install -r /path/to/daos-stack/daos/requirements-ftest.txt
 export PYTHONPATH=/path/to/daos/install/lib/daos/TESTING/ftest:$PYTHONPATH;
 ```
 Fake a `pydaos` install by linking to the `pydaos` RPM install.  
+The version of python depends on the distro python and/or the version of DAOS.
 TODO: `pydaos` should be properly installed with the version of python being used.  
-For example:
+To see where pydaos is installed:
+```
+ls -d /usr/lib64/python*/site-packages/pydaos
+```
+Then, for example, to link it:
 ```
 ln -s /usr/lib64/python3.6/site-packages/pydaos ~/venv_interop/lib/python3.6/site-packages/pydaos
 ```
