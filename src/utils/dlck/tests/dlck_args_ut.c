@@ -173,7 +173,7 @@ static const struct CMUnitTest dlck_args_tests[] = {
     {"DLCK_ARGS100: parser - children connection", test_parser_children_connection, NULL, NULL},
     {"DLCK_ARGS200: engine parser + ARGP_KEY_END + no storage path",
      test_engine_parser_END_no_storage_path_fail, setup_engine_args_default, NULL},
-	{"DLCK_ARGS300: parser --log_dir option", test_parser_log_dir_option, NULL, NULL},
+    {"DLCK_ARGS300: parser --log_dir option", test_parser_log_dir_option, NULL, NULL},
 };
 
 int
