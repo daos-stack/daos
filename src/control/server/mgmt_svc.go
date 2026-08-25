@@ -25,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
@@ -91,7 +92,8 @@ type mgmtSvc struct {
 	// signaling cancellation and returning immediately. This avoids racing
 	// with goroutine-leak checks (e.g. goleak) that run shortly after a
 	// test's cleanup completes.
-	loopWg sync.WaitGroup
+	loopWg          sync.WaitGroup
+	transportConfig *security.TransportConfig
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
@@ -108,6 +110,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		batchReqs:         make(batchReqChan),
 		serialReqs:        make(batchReqChan),
 		groupUpdateReqs:   make(chan bool),
+		transportConfig:   security.DefaultServerTransportConfig(), // TODO: make this configurable
 	}
 }
 

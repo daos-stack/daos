@@ -38,6 +38,34 @@ func DefaultDAOSCAKeyPath(caCertPath string) string {
 // CertWatermarks maps a pool cert CN to the NotBefore at or below which its certs are revoked.
 type CertWatermarks map[string]time.Time
 
+// watermarkCutoff returns the earliest NotBefore among the CAs in bundle.
+// This is the cutoff for pruning watermarks: any watermark before this
+// cutoff is for a CA that is no longer in the bundle and can be dropped.
+func watermarkCutoff(bundle []byte) (time.Time, error) {
+	entries, err := ParseCABundle(bundle)
+	if err != nil {
+		return time.Time{}, err
+	}
+	var cutoff time.Time
+	for _, e := range entries {
+		if cutoff.IsZero() || e.Cert.NotBefore.Before(cutoff) {
+			cutoff = e.Cert.NotBefore
+		}
+	}
+	return cutoff, nil
+}
+
+// pruneCertWatermarks returns wm minus entries with watermark before cutoff.
+func pruneCertWatermarks(wm CertWatermarks, cutoff time.Time) CertWatermarks {
+	out := make(CertWatermarks, len(wm))
+	for cn, t := range wm {
+		if !t.Before(cutoff) {
+			out[cn] = t
+		}
+	}
+	return out
+}
+
 // EncodeCertWatermarks encodes an empty map as nil so the property is cleared, not written empty.
 func EncodeCertWatermarks(wm CertWatermarks) ([]byte, error) {
 	if len(wm) == 0 {
@@ -74,6 +102,30 @@ func advanceCertWatermark(existing CertWatermarks, cn string, now time.Time) tim
 		return prev.Add(time.Second)
 	}
 	return now
+}
+
+// RevokeCertWatermark returns the pool's watermarks with cn revoked as of
+// now, dropping any that no CA in bundle can still enforce, and the
+// committed watermark for the reply.
+func RevokeCertWatermark(watermarks, bundle []byte, cn string, now time.Time) ([]byte, time.Time, error) {
+	wm := CertWatermarks{}
+	if len(watermarks) > 0 {
+		var err error
+		if wm, err = DecodeCertWatermarks(watermarks); err != nil {
+			return nil, time.Time{}, errors.Wrap(err, "current watermarks")
+		}
+	}
+	committed := advanceCertWatermark(wm, cn, now)
+	wm[cn] = committed
+	cutoff, err := watermarkCutoff(bundle)
+	if err != nil {
+		return nil, time.Time{}, errors.Wrap(err, "pool CA bundle")
+	}
+	encoded, err := EncodeCertWatermarks(pruneCertWatermarks(wm, cutoff))
+	if err != nil {
+		return nil, time.Time{}, errors.Wrap(err, "updated watermarks")
+	}
+	return encoded, committed, nil
 }
 
 // RemoveCertByFingerprint drops the certificate with the SHA-256 hex fingerprint from a PEM bundle.
@@ -147,6 +199,9 @@ func VerifyPoolCAChain(cert, root *x509.Certificate) error {
 	}
 	return nil
 }
+
+// PoolCABundleMaxCerts is the most CAs a pool's bundle may hold.
+const PoolCABundleMaxCerts = 3
 
 // CABundleEntry is one certificate of a pool CA bundle.
 type CABundleEntry struct {

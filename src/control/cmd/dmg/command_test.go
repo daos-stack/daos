@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"gopkg.in/yaml.v2"
@@ -107,8 +108,9 @@ func printRequest(t *testing.T, req control.UnaryRequest) string {
 // to the new control API without requiring a complete rewrite of all tests.
 type bridgeConnInvoker struct {
 	control.MockInvoker
-	t    *testing.T
-	conn *testConn
+	t        *testing.T
+	conn     *testConn
+	caBundle []byte // what PoolGetCA reports
 }
 
 func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.UnaryRequest) (*control.UnaryResponse, error) {
@@ -182,6 +184,19 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
 		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
+	case *control.PoolGetCAReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolGetCAResp{PoolUuid: test.MockUUID(), CaBundle: bci.caBundle})
+	case *control.PoolAddCAReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolAddCAResp{PoolUuid: test.MockUUID()})
+	case *control.PoolRemoveCAReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolRemoveCAResp{PoolUuid: test.MockUUID()})
+	case *control.PoolGetCertWatermarksReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolGetCertWatermarksResp{PoolUuid: test.MockUUID()})
+	case *control.PoolRevokeClientReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolRevokeClientResp{
+			PoolUuid:         test.MockUUID(),
+			WatermarkRfc3339: time.Now().UTC().Format(time.RFC3339),
+		})
 	case *control.PoolRanksReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolRanksResp{})
 	case *control.PoolExtendReq:
