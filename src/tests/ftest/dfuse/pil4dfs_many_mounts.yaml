@@ -2,8 +2,6 @@ hosts:
   test_servers: 1
   test_clients: 1
 timeout: 900
-timeouts:
-  test_dfuse_pre_read_stale_eof: 1200
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -17,9 +15,15 @@ server_config:
           scm_mount: /mnt/daos
   system_ram_reserved: 1
 pool:
-  size: 1G
+  size: 1GiB
 container:
   type: POSIX
   control_method: daos
-dfuse:
-  disable_wb_cache: false
+test:
+  # Mount counts at/below MAX_DAOS_MT for which libpil4dfs enables interception.
+  intercept_mount_counts:
+    - 10
+    - 32
+  # Mount count above MAX_DAOS_MT for which libpil4dfs must gracefully disable
+  # interception (no abort, no core file).
+  no_intercept_mount_count: 33

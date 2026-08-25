@@ -1,5 +1,6 @@
 """
   (C) Copyright 2017-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -61,7 +62,7 @@ class MultiServerCreateDeleteTest(TestWithServers):
 
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
 
-        self.add_pool(create=False)
+        self.pool = self.get_pool(create=False)
         self.pool.uid = user
         self.pool.gid = group
         self.pool.target_list.update(tgtlist)
