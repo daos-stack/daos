@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -93,6 +93,17 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 	D_ASSERT(prop->dpp_nr == DAOS_PROP_PO_NUM);
 	for (i = 0; i < DAOS_PROP_PO_NUM; i++) {
 		prop_entry = &prop->dpp_entries[i];
+		if (daos_prop_has_byteval(prop_entry)) {
+			/* NB: For now, we omit these byteval props from IV because they're
+			 * only needed by the PS leader (pool connect), and adding IV support
+			 * requires a format change. Future features that need IV-distributed
+			 * bytevals will need to handle the implementation and format changes.
+			 */
+			D_ASSERTF(prop_entry->dpe_type == DAOS_PROP_PO_POOL_CA ||
+				      prop_entry->dpe_type == DAOS_PROP_PO_CERT_WATERMARKS,
+				  "byteval prop %u needs IV support\n", prop_entry->dpe_type);
+			continue;
+		}
 		switch (prop_entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			D_ASSERT(strlen(prop_entry->dpe_str) <=
@@ -227,6 +238,14 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 	for (i = 0; i < DAOS_PROP_PO_NUM; i++) {
 		prop_entry = &prop->dpp_entries[i];
 		prop_entry->dpe_type = DAOS_PROP_PO_MIN + i + 1;
+		if (daos_prop_has_byteval(prop_entry)) {
+			/* See the note in l2g; skip byteval props for now. */
+			D_ASSERTF(prop_entry->dpe_type == DAOS_PROP_PO_POOL_CA ||
+				      prop_entry->dpe_type == DAOS_PROP_PO_CERT_WATERMARKS,
+				  "byteval prop %u needs IV support\n", prop_entry->dpe_type);
+			prop_entry->dpe_val_ptr = NULL;
+			continue;
+		}
 		switch (prop_entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			D_ASSERT(strlen(iv_prop->pip_label) <=
