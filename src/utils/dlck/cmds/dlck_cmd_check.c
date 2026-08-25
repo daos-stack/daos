@@ -158,7 +158,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		ctrl->log_dir = NULL;
 		errno         = daos_fail_value_get();
 	} else {
-		D_ASPRINTF(log_dir_template, "%s/dlck_check_XXXXXX", ctrl->common.log_dir)
+		D_ASPRINTF(log_dir_template, "%s/dlck_check_XXXXXX", ctrl->common.log_dir);
 		if (log_dir_template == NULL) {
 			rc = -DER_NOMEM;
 			CK_PRINTL_RC(ck, rc, "Cannot allocate log directory path");
