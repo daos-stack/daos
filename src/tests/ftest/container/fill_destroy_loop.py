@@ -109,25 +109,30 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
         self.log.info(
             "--%i.(6)Pool full, free space before container delete %s (%i bytes)",
-            test_loop, bytes_to_human(free_scm_space_before_destroy), free_scm_space_before_destroy)
+            test_loop, bytes_to_human(free_scm_space_before_destroy),
+            free_scm_space_before_destroy)
         self.log.info(
             "--%i.(7)Pool full, free space after container deleted %s (%i bytes)",
-            test_loop, bytes_to_human(free_scm_space_after_destroy), free_scm_space_after_destroy)
+            test_loop, bytes_to_human(free_scm_space_after_destroy),
+            free_scm_space_after_destroy)
 
         # sanity checks on free space
         self.assertGreater(
             free_scm_space_after_destroy, free_scm_space_before_destroy,
             "Deleting container did not free up pool space: "
             "loop={}, before={} ({} bytes), end={} ({} bytes)".format(
-                test_loop, bytes_to_human(free_scm_space_before_destroy), free_scm_space_before_destroy,
-                bytes_to_human(free_scm_space_after_destroy), free_scm_space_after_destroy))
+                test_loop, bytes_to_human(free_scm_space_before_destroy),
+                free_scm_space_before_destroy,
+                bytes_to_human(free_scm_space_after_destroy),
+                free_scm_space_after_destroy))
 
         for _ in range(10):
             if (free_scm_space_after_destroy - free_scm_space_init) < delta_bytes:
                 break
             self.log.info(
                 "--%i.(8)Waiting for free space to be restored: %s (%i bytes) < %s (%i bytes)",
-                test_loop, bytes_to_human(free_scm_space_after_destroy), free_scm_space_after_destroy,
+                test_loop, bytes_to_human(free_scm_space_after_destroy),
+                free_scm_space_after_destroy,
                 bytes_to_human(free_scm_space_init - delta_bytes),
                 free_scm_space_init - delta_bytes)
             time.sleep(6)
@@ -144,8 +149,10 @@ class BoundaryPoolContainerSpace(TestWithServers):
             free_scm_space_init, free_scm_space_after_destroy, delta=delta_bytes,
             msg="Deleting container did not restore all free pool space: "
             "loop={}, init={} ({} bytes), end={} ({} bytes)".format(
-                test_loop, bytes_to_human(free_scm_space_init), free_scm_space_init,
-                bytes_to_human(free_scm_space_after_destroy), free_scm_space_after_destroy))
+                test_loop, bytes_to_human(free_scm_space_init),
+                free_scm_space_init,
+                bytes_to_human(free_scm_space_after_destroy),
+                free_scm_space_after_destroy))
         self.log.debug(
             "Storage space leaked %s (%i bytes)",
             bytes_to_human(abs(free_scm_space_init - free_scm_space_after_destroy)),
