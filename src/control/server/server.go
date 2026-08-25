@@ -260,6 +260,9 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 		network.DefaultFabricScanner(srv.log))
 	srv.ctlSvc.restartMgr = srv.restartMgr
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, srv.sysdb, rpcClient, srv.pubSub)
+	srv.mgmtSvc.daosCARootPath = srv.cfg.TransportConfig.CARootPath
+	srv.mgmtSvc.allowInsecure = srv.cfg.TransportConfig.AllowInsecure
+	srv.mgmtSvc.poolCertMaxClockSkew = srv.cfg.TransportConfig.PoolCertMaxClockSkew
 
 	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
 		return srv.cfg.SystemName
