@@ -83,6 +83,10 @@
 #  # Key portion of Server Certificate
 #  key: /etc/daos/certs/server.key
 #
+#  # Clock skew tolerance for certificate validation: how far ahead of this
+#  # host's clock a certificate's NotBefore or a proof-of-possession timestamp
+#  # may be. Revocations are dated this far ahead. Requires a unit suffix.
+#  cert_max_clock_skew: 5m
 #
 ## Fault domain path
 ## Immutable after running "dmg storage format".

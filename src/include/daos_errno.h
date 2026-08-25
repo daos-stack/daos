@@ -215,7 +215,8 @@ extern "C" {
 	ACTION(DER_NOT_RESUME, Cannot resume former DAOS check instance)			   \
 	ACTION(DER_CONT_NONEXIST, The specified container does not exist) \
 	ACTION(DER_CONT_DESTROYING, The specified container is being destroyed) \
-	ACTION(DER_IGNORE, current item for iteration or something else should be ignored)
+	ACTION(DER_IGNORE, current item for iteration or something else should be ignored) \
+	ACTION(DER_NO_NODE_CERT, Pool requires a node certificate but none is configured)
 
 /* clang-format on */
 

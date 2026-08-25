@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,10 @@ import (
 	"crypto"
 	"fmt"
 	"path/filepath"
+	"time"
 
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -84,11 +87,14 @@ func (m *SecurityModule) validateRespWithStatus(status daos.Status) ([]byte, err
 
 // HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
-	if method != daos.MethodValidateCredentials {
+	switch method {
+	case daos.MethodValidateCredentials:
+		return m.processValidateCredentials(body)
+	case daos.MethodValidateNodeCert:
+		return m.processValidateNodeCert(body)
+	default:
 		return nil, drpc.UnknownMethodFailure()
 	}
-
-	return m.processValidateCredentials(body)
 }
 
 // ID will return Security module ID
@@ -105,7 +111,79 @@ func (m *SecurityModule) GetMethod(id int32) (drpc.Method, error) {
 	switch id {
 	case daos.MethodValidateCredentials.ID():
 		return daos.MethodValidateCredentials, nil
+	case daos.MethodValidateNodeCert.ID():
+		return daos.MethodValidateNodeCert, nil
 	default:
 		return nil, fmt.Errorf("invalid method ID %d for module %s", id, m.String())
 	}
+}
+
+func (m *SecurityModule) processValidateNodeCert(body []byte) ([]byte, error) {
+	req := &auth.ValidateNodeCertReq{}
+	if err := proto.Unmarshal(body, req); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	poolUUID, err := uuid.FromBytes(req.GetPoolUuid())
+	if err != nil {
+		return m.rejectNodeCert(req, daos.InvalidInput,
+			fmt.Sprintf("invalid pool UUID (%d bytes)", len(req.GetPoolUuid())))
+	}
+
+	daosCA, err := m.config.CACert()
+	if err != nil {
+		return m.rejectNodeCert(req, daos.NoCert,
+			fmt.Sprintf("failed to load DAOS CA: %v", err))
+	}
+	if daosCA == nil {
+		return m.rejectNodeCert(req, daos.NoCert, "no DAOS CA without transport security")
+	}
+
+	p := &security.NodeCertPresentation{
+		Root:        daosCA,
+		PoolCA:      req.PoolCa,
+		Cert:        req.NodeCert,
+		PoPSig:      req.PopSig,
+		PoPPayload:  req.PopPayload,
+		PoolUUID:    poolUUID,
+		MachineName: req.MachineName,
+		Watermarks:  req.CertWatermarks,
+		MaxSkew:     m.config.CertMaxClockSkew,
+		Now:         time.Now(),
+	}
+	payload, err := p.Validate()
+	if err != nil {
+		return m.rejectNodeCert(req, validationStatus(err), err.Error())
+	}
+
+	m.log.Debugf("node cert validated: pool=%s, handle=%s", poolUUID, payload.HandleID())
+
+	return drpc.Marshal(&auth.ValidateNodeCertResp{Status: 0})
+}
+
+// validationStatus maps the security package's sentinel errors to wire statuses.
+func validationStatus(err error) daos.Status {
+	switch {
+	case errors.Is(err, security.ErrInvalidInput):
+		return daos.InvalidInput
+	case errors.Is(err, security.ErrCertInvalid), errors.Is(err, security.ErrCertNotYetValid),
+		errors.Is(err, security.ErrCertRevoked):
+		return daos.BadCert
+	case errors.Is(err, security.ErrPoPInvalid), errors.Is(err, security.ErrPoPStale):
+		return daos.NoPermission
+	case errors.Is(err, security.ErrBadWatermarks):
+		return daos.IOError
+	default:
+		return daos.MiscError
+	}
+}
+
+// rejectNodeCert logs and returns a ValidateNodeCertResp carrying status + detail.
+func (m *SecurityModule) rejectNodeCert(req *auth.ValidateNodeCertReq, status daos.Status, detail string) ([]byte, error) {
+	m.log.Errorf("node cert rejected (pool=%x, status=%s): %s",
+		req.GetPoolUuid(), status, detail)
+	return drpc.Marshal(&auth.ValidateNodeCertResp{
+		Status: int32(status),
+		Detail: detail,
+	})
 }

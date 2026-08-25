@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -2390,4 +2391,49 @@ func TestConfig_HasPMem(t *testing.T) {
 			test.AssertEqual(t, tc.expHasPMem, tc.cfg.HasPMem(), "unexpected")
 		})
 	}
+}
+
+func TestServerConfig_TransportMaxClockSkew(t *testing.T) {
+	testDir, cleanup := test.CreateTestDir(t)
+	defer cleanup()
+	testFile := filepath.Join(testDir, sConfigUncomment)
+	uncommentServerConfig(t, testFile)
+
+	for name, tc := range map[string]struct {
+		skew   time.Duration
+		expErr error
+	}{
+		"zero":                 {0, nil},
+		"positive":             {time.Minute, nil},
+		"one second boundary":  {time.Second, nil},
+		"negative":             {-time.Second, errors.New("must not be negative")},
+		"sub-second (bare ns)": {300 * time.Nanosecond, errors.New("below 1s")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			cfg := baseCfg(t, log, testFile)
+			cfg.TransportConfig.CertMaxClockSkew = tc.skew
+			test.CmpErr(t, tc.expErr, cfg.Validate(log))
+		})
+	}
+}
+
+// A transport_config block that omits cert_max_clock_skew keeps the default.
+func TestServerConfig_TransportMaxClockSkewDefault(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+	testDir, cleanup := test.CreateTestDir(t)
+	defer cleanup()
+
+	path := filepath.Join(testDir, "daos_server.yml")
+	if err := os.WriteFile(path, []byte("transport_config:\n  allow_insecure: true\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := mockConfigFromFile(t, log, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	test.AssertEqual(t, security.DefaultCertMaxClockSkew, cfg.TransportConfig.CertMaxClockSkew, "cert_max_clock_skew")
 }
