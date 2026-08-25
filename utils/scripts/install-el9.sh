@@ -30,7 +30,6 @@ dnf --nodocs install ${dnf_install_args} \
     diffutils \
     e2fsprogs \
     fdupes \
-    file \
     flex \
     gcc \
     gcc-c++ \

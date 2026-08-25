@@ -27,7 +27,6 @@ dnf --nodocs install ${dnf_install_args} \
     cpio \
     createrepo_c \
     cunit-devel \
-    file \
     fdupes \
     flex \
     gcc \
