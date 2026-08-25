@@ -5292,7 +5292,17 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 	if (obj_auxi->io_retry) {
 		if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+			daos_obj_fetch_t *f_args = dc_task_get_args(task);
+
+			/* The IOM merge restarts from scratch on retry. */
 			obj_auxi->reasb_req.orr_iom_tgt_nr = 0;
+			obj_auxi->reasb_req.orr_iom_nr     = 0;
+			if (f_args->ioms != NULL) {
+				uint32_t j;
+
+				for (j = 0; j < obj_auxi->iod_nr; j++)
+					f_args->ioms[j].iom_nr_out = 0;
+			}
 			obj_io_set_new_shard_task(obj_auxi);
 		}
 

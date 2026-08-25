@@ -232,9 +232,10 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 	daos_recx_t		 hi, lo, recx, tmpr;
 	daos_recx_t		 recov_hi = { 0 };
 	daos_recx_t		 recov_lo = { 0 };
+	uint64_t                 iom_nr;
 	uint32_t		 tgt_off;
-	uint32_t		 iom_nr, i;
-	bool			 done;
+	uint32_t                 i;
+	bool                     first, done;
 	int			 rc = 0;
 
 	tgt_off = obj_ec_shard_off(obj, dkey_hash, tgt_idx);
@@ -245,6 +246,17 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 		daos_recx_ep_list_hilo(recov_list, &recov_hi, &recov_lo);
 
 	D_MUTEX_LOCK(&reasb_req->orr_mutex);
+
+	reasb_req->orr_iom_tgt_nr++;
+	D_ASSERTF(reasb_req->orr_iom_tgt_nr <= reasb_req->orr_tgt_nr,
+		  "orr_iom_tgt_nr %d, orr_tgt_nr %d.\n", reasb_req->orr_iom_tgt_nr,
+		  reasb_req->orr_tgt_nr);
+	first = (reasb_req->orr_iom_tgt_nr == 1);
+	done  = (reasb_req->orr_iom_tgt_nr == reasb_req->orr_tgt_nr);
+	if (first) {
+		dst->iom_type = src->iom_type;
+		dst->iom_size = src->iom_size;
+	}
 
 	/* merge iom_recx_hi */
 	hi = src->iom_recx_hi;
@@ -258,13 +270,21 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 	if (recov_list != NULL &&
 	    DAOS_RECX_END(recov_hi) > DAOS_RECX_END(hi))
 		hi = recov_hi;
-	if (reasb_req->orr_iom_tgt_nr == 0)
+	/* An empty contribution must not be merged, it would otherwise pull
+	 * dst->iom_recx_hi down to index 0 (a zero-length recx is "adjacent"
+	 * to any recx starting at 0).
+	 */
+	if (hi.rx_nr == 0) {
+		if (first)
+			dst->iom_recx_hi = hi;
+	} else if (first || dst->iom_recx_hi.rx_nr == 0) {
 		dst->iom_recx_hi = hi;
-	else if (DAOS_RECX_OVERLAP(dst->iom_recx_hi, hi) ||
-		 DAOS_RECX_ADJACENT(dst->iom_recx_hi, hi))
+	} else if (DAOS_RECX_OVERLAP(dst->iom_recx_hi, hi) ||
+		   DAOS_RECX_ADJACENT(dst->iom_recx_hi, hi)) {
 		daos_recx_merge(&hi, &dst->iom_recx_hi);
-	else if (hi.rx_idx > dst->iom_recx_hi.rx_idx)
+	} else if (hi.rx_idx > dst->iom_recx_hi.rx_idx) {
 		dst->iom_recx_hi = hi;
+	}
 
 	/* merge iom_recx_lo */
 	lo = src->iom_recx_lo;
@@ -278,13 +298,17 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 	if (recov_list != NULL && (end == 0 ||
 	    DAOS_RECX_END(recov_lo) < DAOS_RECX_END(lo)))
 		lo = recov_lo;
-	if (reasb_req->orr_iom_tgt_nr == 0)
+	if (lo.rx_nr == 0) {
+		if (first)
+			dst->iom_recx_lo = lo;
+	} else if (first || dst->iom_recx_lo.rx_nr == 0) {
 		dst->iom_recx_lo = lo;
-	else if (DAOS_RECX_OVERLAP(dst->iom_recx_lo, lo) ||
-		 DAOS_RECX_ADJACENT(dst->iom_recx_lo, lo))
+	} else if (DAOS_RECX_OVERLAP(dst->iom_recx_lo, lo) ||
+		   DAOS_RECX_ADJACENT(dst->iom_recx_lo, lo)) {
 		daos_recx_merge(&lo, &dst->iom_recx_lo);
-	else if (lo.rx_idx < dst->iom_recx_lo.rx_idx)
+	} else if (lo.rx_idx < dst->iom_recx_lo.rx_idx) {
 		dst->iom_recx_lo = lo;
+	}
 
 	if ((dst->iom_flags & DAOS_IOMF_DETAIL) == 0) {
 		dst->iom_nr_out = 0;
@@ -292,11 +316,12 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 		return 0;
 	}
 
-	/* If user provides NULL iom_recxs an requires DAOS_IOMF_DETAIL,
+	/* If user provides NULL iom_recxs and requires DAOS_IOMF_DETAIL,
 	 * DAOS internally allocates the buffer and user should free it.
 	 */
 	if (dst->iom_recxs == NULL) {
-		iom_nr = src->iom_nr * reasb_req->orr_tgt_nr;
+		iom_nr = (uint64_t)src->iom_nr * reasb_req->orr_tgt_nr;
+		iom_nr = min(max(iom_nr, 8), (uint64_t)(UINT32_MAX - 7));
 		iom_nr = roundup(iom_nr, 8);
 		D_ALLOC_ARRAY(dst->iom_recxs, iom_nr);
 		if (dst->iom_recxs == NULL) {
@@ -308,12 +333,6 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 	}
 
 	/* merge iom_recxs */
-	reasb_req->orr_iom_tgt_nr++;
-	D_ASSERTF(reasb_req->orr_iom_tgt_nr <= reasb_req->orr_tgt_nr,
-		  "orr_iom_tgt_nr %d, orr_tgt_nr %d.\n",
-		  reasb_req->orr_iom_tgt_nr, reasb_req->orr_tgt_nr);
-	done = (reasb_req->orr_iom_tgt_nr == reasb_req->orr_tgt_nr);
-	reasb_req->orr_iom_nr += src->iom_nr;
 	for (i = 0; i < src->iom_nr; i++) {
 		recx = src->iom_recxs[i];
 		D_ASSERT(recx.rx_nr > 0);
@@ -333,9 +352,12 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 			if (rc == -DER_NOMEM)
 				break;
 			if (rc == -DER_REC2BIG) {
-				if (done)
-					dst->iom_nr_out = reasb_req->orr_iom_nr
-						+ reasb_req->orr_tgt_nr;
+				/* The extent cannot be stored in the
+				 * caller's buffer, just account it so that
+				 * the needed number of extents can be
+				 * reported through iom_nr_out.
+				 */
+				reasb_req->orr_iom_nr++;
 				rc = 0;
 			}
 		}
@@ -352,8 +374,7 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 			if (rc == -DER_NOMEM)
 				break;
 			if (rc == -DER_REC2BIG) {
-				if (done)
-					dst->iom_nr_out += recov_list->re_nr;
+				reasb_req->orr_iom_nr++;
 				rc = 0;
 			}
 		}
@@ -363,9 +384,9 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 		daos_recx_t	*r1, *r2;
 		daos_size_t	 move_len;
 
+		D_ASSERTF(dst->iom_nr_out <= dst->iom_nr, "iom_nr_out %d, iom_nr %d\n",
+			  dst->iom_nr_out, dst->iom_nr);
 		daos_iom_sort(dst);
-		if (dst->iom_nr_out > dst->iom_nr)
-			goto out;
 		for (i = 1; i < dst->iom_nr_out; i++) {
 			r1 = &dst->iom_recxs[i - 1];
 			r2 = &dst->iom_recxs[i];
@@ -381,9 +402,13 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 				i--;
 			}
 		}
+		/* Report the number of extents needed to hold the whole iom,
+		 * so that the caller can re-allocate iom_recxs and fetch
+		 * again. iom_nr_out > iom_nr means the iom is truncated.
+		 */
+		dst->iom_nr_out += reasb_req->orr_iom_nr;
 	}
 
-out:
 	D_MUTEX_UNLOCK(&reasb_req->orr_mutex);
 	return rc;
 }

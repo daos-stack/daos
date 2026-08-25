@@ -174,7 +174,9 @@ struct obj_reasb_req {
 	uint32_t			 orr_tgt_nr;
 	/* number of targets that with IOM handled */
 	uint32_t			 orr_iom_tgt_nr;
-	/* number of iom extends */
+	/* number of iom extents that could not be stored in the caller
+	 * provided iom_recxs buffer (used to report the needed iom_nr).
+	 */
 	uint32_t			 orr_iom_nr;
 	/* #iods of IO req */
 	uint32_t			 orr_iod_nr;
