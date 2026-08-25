@@ -23,6 +23,46 @@ import (
 // cert with NotBefore strictly past the watermark.
 type CertWatermarks map[string]time.Time
 
+// WatermarkCutoff returns the earliest NotBefore among the CAs in bundle.
+// A certificate dated before it cannot chain to any current CA, so
+// watermarks older than it no longer reject anything; an empty bundle
+// yields the zero time (prune nothing).
+func WatermarkCutoff(bundle []byte) (time.Time, error) {
+	var cutoff time.Time
+	for rest := bundle; ; {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			return cutoff, nil
+		}
+		ca, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return time.Time{}, errors.Wrap(err, "parsing pool CA bundle")
+		}
+		if cutoff.IsZero() || ca.NotBefore.Before(cutoff) {
+			cutoff = ca.NotBefore
+		}
+	}
+}
+
+// PruneCertWatermarks returns wm minus entries with watermark before cutoff,
+// along with the number of entries dropped.
+func PruneCertWatermarks(wm CertWatermarks, cutoff time.Time) (CertWatermarks, int) {
+	if len(wm) == 0 {
+		return wm, 0
+	}
+	out := make(CertWatermarks, len(wm))
+	pruned := 0
+	for cn, t := range wm {
+		if t.Before(cutoff) {
+			pruned++
+			continue
+		}
+		out[cn] = t
+	}
+	return out, pruned
+}
+
 // EncodeCertWatermarks serializes wm as JSON. An empty map encodes to nil
 // so the prop layer can distinguish "no revocations" from an empty blob.
 func EncodeCertWatermarks(wm CertWatermarks) ([]byte, error) {
