@@ -266,10 +266,6 @@ class RbldInteractive(TestWithServers):
         else:
             self.fail(f'Unsupported exclude_method: {exclude_method}')
 
-        # self.log_step(f'{exclude_method} - Wait for rebuild to start')
-        # for pool in pools:
-        #     pool.wait_for_rebuild_to_start(interval=1)
-
         self.log_step(f'{exclude_method} - Manually stop rebuild with {stop_method}')
         if stop_method == 'dmg pool rebuild stop':
             for pool in pools:
@@ -326,7 +322,7 @@ class RbldInteractive(TestWithServers):
             self.log_step(f'{exclude_method} - Start previously admin-excluded ranks')
             dmg.system_start(ranks_to_exclude)
 
-        self.log_step(f'{reint_method} - Reintegrate excluded ranks')
+        self.log_step(f'{reint_method} - Manually stop rebuild with {stop_method}')
         if reint_method == 'dmg pool reintegrate':
             for pool in pools:
                 pool.reintegrate(ranks_to_exclude)
@@ -334,10 +330,6 @@ class RbldInteractive(TestWithServers):
             dmg.system_reintegrate(ranks_to_exclude)
         else:
             self.fail(f'Unsupported reint_method: {reint_method}')
-
-        # self.log_step(f'{reint_method} - Wait for rebuild to start')
-        # for pool in pools:
-        #     pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{reint_method} - Manually stop rebuild with {stop_method}')
         if stop_method == 'dmg pool rebuild stop':
