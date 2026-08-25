@@ -218,9 +218,7 @@ int dv_process_key_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key
 				daos_key_t *akey, enum ddb_ilog_op op);
 
 struct dv_dtx_committed_entry {
-	struct dtx_id	ddtx_id;
-	daos_epoch_t	ddtx_cmt_time;
-	daos_epoch_t	ddtx_epoch;
+	struct dtx_id ddtx_id;
 };
 
 struct dv_dtx_active_entry {

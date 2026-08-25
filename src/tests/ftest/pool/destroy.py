@@ -543,7 +543,7 @@ class DestroyTests(TestWithServers):
         self.pool = self.get_pool()
 
         # Create pool container
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         # Destroy pool with recursive unset
         self.log.info("Attempting to destroy a pool with containers")
@@ -588,7 +588,7 @@ class DestroyTests(TestWithServers):
         self.pool = self.get_pool()
 
         # Create pool container
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         # Destroy pool with recursive set
         self.log.info("Attempting to recursively destroy a pool with containers")

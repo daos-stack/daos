@@ -1,4 +1,5 @@
 #!/usr/bin/groovy
+/* groovylint-disable DuplicateListLiteral */
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
@@ -831,13 +832,12 @@ pipeline {
                                                 ' --target build-ci' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
-                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
+                                                " --build-arg DAOS_DEPS_INSTALL=yes"
                         }
                     }
                     steps {
                         script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -849,12 +849,9 @@ pipeline {
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
-                            // For non-release builds, create a separate build with the valgrind
-                            // tag for NLT memcheck testing.  This is necessary to avoid problems
-                            // caused by valgrind being confused by the Go runtime. We don't want
-                            // to use the valgrind build for normal testing because it is much slower.
-                            // BUILD_TYPE=dev is set for PR/dev builds in sconsArgs(), and
-                            // TARGET_TYPE=release is used to select pre-built cached prerequisites.
+                            // Go binaries need to be instrumented in order to work reliably
+                            // with valgrind. We do this in a separate build because we don't
+                            // want to ship the instrumented binaries.
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            build_deps: 'no',
@@ -897,13 +894,12 @@ pipeline {
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +
-                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
+                                                " --build-arg DAOS_DEPS_INSTALL=yes"
                         }
                     }
                     steps {
                         script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
                             job_step_update(
@@ -1179,7 +1175,9 @@ pipeline {
                         ),
                         'Fault injection testing': scriptedUnitTestStage(
                             name: 'Fault injection testing',
-                            runStage: shouldStageRun('Fault injection testing'),
+                            // Release builds compile out fault injection
+                            runStage: shouldStageRun('Fault injection testing') &&
+                                      !sconsArgs().contains('BUILD_TYPE=release'),
                             label: params.CI_FI_1_LABEL,
                             jobStatus: job_status_internal,
                             distro: 'el9',
@@ -1239,7 +1237,7 @@ pipeline {
                 }
             }
         } // stage('Test')
-        stage('Test Storage Prep on EL 8.8') {
+        stage('Test Storage Prep on EL 9') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
@@ -1420,6 +1418,11 @@ pipeline {
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
+        }
+        cleanup {
+            // Need to clean the workspace to reduce disk space usage on
+            // Jenkins build agents
+            cleanWs()
         }
     } // post
 }
