@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -272,19 +273,72 @@ func (x *Credential) GetOrigin() string {
 	return ""
 }
 
-// GetCredResp represents the result of a request to fetch authentication
-// credentials.
+type GetCredReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PoolUuid      []byte                 `protobuf:"bytes,1,opt,name=pool_uuid,json=poolUuid,proto3" json:"pool_uuid,omitempty"`       // resolved pool UUID (16 bytes)
+	HandleUuid    []byte                 `protobuf:"bytes,2,opt,name=handle_uuid,json=handleUuid,proto3" json:"handle_uuid,omitempty"` // pool handle UUID (16 bytes)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCredReq) Reset() {
+	*x = GetCredReq{}
+	mi := &file_auth_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCredReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCredReq) ProtoMessage() {}
+
+func (x *GetCredReq) ProtoReflect() protoreflect.Message {
+	mi := &file_auth_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCredReq.ProtoReflect.Descriptor instead.
+func (*GetCredReq) Descriptor() ([]byte, []int) {
+	return file_auth_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetCredReq) GetPoolUuid() []byte {
+	if x != nil {
+		return x.PoolUuid
+	}
+	return nil
+}
+
+func (x *GetCredReq) GetHandleUuid() []byte {
+	if x != nil {
+		return x.HandleUuid
+	}
+	return nil
+}
+
 type GetCredResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Status        int32                  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"` // Status of the request
-	Cred          *Credential            `protobuf:"bytes,2,opt,name=cred,proto3" json:"cred,omitempty"`      // Caller's authentication credential
+	Status        int32                  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	Cred          *Credential            `protobuf:"bytes,2,opt,name=cred,proto3" json:"cred,omitempty"`
+	NodeCert      []byte                 `protobuf:"bytes,3,opt,name=node_cert,json=nodeCert,proto3" json:"node_cert,omitempty"`
+	PopSig        []byte                 `protobuf:"bytes,4,opt,name=pop_sig,json=popSig,proto3" json:"pop_sig,omitempty"`
+	PopPayload    []byte                 `protobuf:"bytes,5,opt,name=pop_payload,json=popPayload,proto3" json:"pop_payload,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetCredResp) Reset() {
 	*x = GetCredResp{}
-	mi := &file_auth_proto_msgTypes[3]
+	mi := &file_auth_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -296,7 +350,7 @@ func (x *GetCredResp) String() string {
 func (*GetCredResp) ProtoMessage() {}
 
 func (x *GetCredResp) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_proto_msgTypes[3]
+	mi := &file_auth_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -309,7 +363,7 @@ func (x *GetCredResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCredResp.ProtoReflect.Descriptor instead.
 func (*GetCredResp) Descriptor() ([]byte, []int) {
-	return file_auth_proto_rawDescGZIP(), []int{3}
+	return file_auth_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GetCredResp) GetStatus() int32 {
@@ -326,6 +380,27 @@ func (x *GetCredResp) GetCred() *Credential {
 	return nil
 }
 
+func (x *GetCredResp) GetNodeCert() []byte {
+	if x != nil {
+		return x.NodeCert
+	}
+	return nil
+}
+
+func (x *GetCredResp) GetPopSig() []byte {
+	if x != nil {
+		return x.PopSig
+	}
+	return nil
+}
+
+func (x *GetCredResp) GetPopPayload() []byte {
+	if x != nil {
+		return x.PopPayload
+	}
+	return nil
+}
+
 // ValidateCredReq represents a request to verify a set of authentication
 // credentials.
 type ValidateCredReq struct {
@@ -337,7 +412,7 @@ type ValidateCredReq struct {
 
 func (x *ValidateCredReq) Reset() {
 	*x = ValidateCredReq{}
-	mi := &file_auth_proto_msgTypes[4]
+	mi := &file_auth_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -349,7 +424,7 @@ func (x *ValidateCredReq) String() string {
 func (*ValidateCredReq) ProtoMessage() {}
 
 func (x *ValidateCredReq) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_proto_msgTypes[4]
+	mi := &file_auth_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -362,7 +437,7 @@ func (x *ValidateCredReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateCredReq.ProtoReflect.Descriptor instead.
 func (*ValidateCredReq) Descriptor() ([]byte, []int) {
-	return file_auth_proto_rawDescGZIP(), []int{4}
+	return file_auth_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ValidateCredReq) GetCred() *Credential {
@@ -384,7 +459,7 @@ type ValidateCredResp struct {
 
 func (x *ValidateCredResp) Reset() {
 	*x = ValidateCredResp{}
-	mi := &file_auth_proto_msgTypes[5]
+	mi := &file_auth_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -396,7 +471,7 @@ func (x *ValidateCredResp) String() string {
 func (*ValidateCredResp) ProtoMessage() {}
 
 func (x *ValidateCredResp) ProtoReflect() protoreflect.Message {
-	mi := &file_auth_proto_msgTypes[5]
+	mi := &file_auth_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -409,7 +484,7 @@ func (x *ValidateCredResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateCredResp.ProtoReflect.Descriptor instead.
 func (*ValidateCredResp) Descriptor() ([]byte, []int) {
-	return file_auth_proto_rawDescGZIP(), []int{5}
+	return file_auth_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ValidateCredResp) GetStatus() int32 {
@@ -424,6 +499,150 @@ func (x *ValidateCredResp) GetToken() *Token {
 		return x.Token
 	}
 	return nil
+}
+
+type ValidateNodeCertReq struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PoolCa         []byte                 `protobuf:"bytes,1,opt,name=pool_ca,json=poolCa,proto3" json:"pool_ca,omitempty"`
+	NodeCert       []byte                 `protobuf:"bytes,2,opt,name=node_cert,json=nodeCert,proto3" json:"node_cert,omitempty"`
+	PopSig         []byte                 `protobuf:"bytes,3,opt,name=pop_sig,json=popSig,proto3" json:"pop_sig,omitempty"`
+	PopPayload     []byte                 `protobuf:"bytes,4,opt,name=pop_payload,json=popPayload,proto3" json:"pop_payload,omitempty"`
+	PoolUuid       []byte                 `protobuf:"bytes,5,opt,name=pool_uuid,json=poolUuid,proto3" json:"pool_uuid,omitempty"`
+	MachineName    string                 `protobuf:"bytes,6,opt,name=machine_name,json=machineName,proto3" json:"machine_name,omitempty"`
+	CertWatermarks []byte                 `protobuf:"bytes,7,opt,name=cert_watermarks,json=certWatermarks,proto3" json:"cert_watermarks,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ValidateNodeCertReq) Reset() {
+	*x = ValidateNodeCertReq{}
+	mi := &file_auth_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidateNodeCertReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateNodeCertReq) ProtoMessage() {}
+
+func (x *ValidateNodeCertReq) ProtoReflect() protoreflect.Message {
+	mi := &file_auth_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateNodeCertReq.ProtoReflect.Descriptor instead.
+func (*ValidateNodeCertReq) Descriptor() ([]byte, []int) {
+	return file_auth_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ValidateNodeCertReq) GetPoolCa() []byte {
+	if x != nil {
+		return x.PoolCa
+	}
+	return nil
+}
+
+func (x *ValidateNodeCertReq) GetNodeCert() []byte {
+	if x != nil {
+		return x.NodeCert
+	}
+	return nil
+}
+
+func (x *ValidateNodeCertReq) GetPopSig() []byte {
+	if x != nil {
+		return x.PopSig
+	}
+	return nil
+}
+
+func (x *ValidateNodeCertReq) GetPopPayload() []byte {
+	if x != nil {
+		return x.PopPayload
+	}
+	return nil
+}
+
+func (x *ValidateNodeCertReq) GetPoolUuid() []byte {
+	if x != nil {
+		return x.PoolUuid
+	}
+	return nil
+}
+
+func (x *ValidateNodeCertReq) GetMachineName() string {
+	if x != nil {
+		return x.MachineName
+	}
+	return ""
+}
+
+func (x *ValidateNodeCertReq) GetCertWatermarks() []byte {
+	if x != nil {
+		return x.CertWatermarks
+	}
+	return nil
+}
+
+type ValidateNodeCertResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        int32                  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	Detail        string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ValidateNodeCertResp) Reset() {
+	*x = ValidateNodeCertResp{}
+	mi := &file_auth_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValidateNodeCertResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateNodeCertResp) ProtoMessage() {}
+
+func (x *ValidateNodeCertResp) ProtoReflect() protoreflect.Message {
+	mi := &file_auth_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateNodeCertResp.ProtoReflect.Descriptor instead.
+func (*ValidateNodeCertResp) Descriptor() ([]byte, []int) {
+	return file_auth_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ValidateNodeCertResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *ValidateNodeCertResp) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
 }
 
 var File_auth_proto protoreflect.FileDescriptor
@@ -446,15 +665,36 @@ const file_auth_proto_rawDesc = "" +
 	"Credential\x12!\n" +
 	"\x05token\x18\x01 \x01(\v2\v.auth.TokenR\x05token\x12'\n" +
 	"\bverifier\x18\x02 \x01(\v2\v.auth.TokenR\bverifier\x12\x16\n" +
-	"\x06origin\x18\x03 \x01(\tR\x06origin\"K\n" +
+	"\x06origin\x18\x03 \x01(\tR\x06origin\"J\n" +
+	"\n" +
+	"GetCredReq\x12\x1b\n" +
+	"\tpool_uuid\x18\x01 \x01(\fR\bpoolUuid\x12\x1f\n" +
+	"\vhandle_uuid\x18\x02 \x01(\fR\n" +
+	"handleUuid\"\xa2\x01\n" +
 	"\vGetCredResp\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\x05R\x06status\x12$\n" +
-	"\x04cred\x18\x02 \x01(\v2\x10.auth.CredentialR\x04cred\"7\n" +
+	"\x04cred\x18\x02 \x01(\v2\x10.auth.CredentialR\x04cred\x12\x1b\n" +
+	"\tnode_cert\x18\x03 \x01(\fR\bnodeCert\x12\x17\n" +
+	"\apop_sig\x18\x04 \x01(\fR\x06popSig\x12\x1f\n" +
+	"\vpop_payload\x18\x05 \x01(\fR\n" +
+	"popPayload\"7\n" +
 	"\x0fValidateCredReq\x12$\n" +
 	"\x04cred\x18\x01 \x01(\v2\x10.auth.CredentialR\x04cred\"M\n" +
 	"\x10ValidateCredResp\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\x05R\x06status\x12!\n" +
-	"\x05token\x18\x02 \x01(\v2\v.auth.TokenR\x05token*%\n" +
+	"\x05token\x18\x02 \x01(\v2\v.auth.TokenR\x05token\"\xee\x01\n" +
+	"\x13ValidateNodeCertReq\x12\x17\n" +
+	"\apool_ca\x18\x01 \x01(\fR\x06poolCa\x12\x1b\n" +
+	"\tnode_cert\x18\x02 \x01(\fR\bnodeCert\x12\x17\n" +
+	"\apop_sig\x18\x03 \x01(\fR\x06popSig\x12\x1f\n" +
+	"\vpop_payload\x18\x04 \x01(\fR\n" +
+	"popPayload\x12\x1b\n" +
+	"\tpool_uuid\x18\x05 \x01(\fR\bpoolUuid\x12!\n" +
+	"\fmachine_name\x18\x06 \x01(\tR\vmachineName\x12'\n" +
+	"\x0fcert_watermarks\x18\a \x01(\fR\x0ecertWatermarks\"F\n" +
+	"\x14ValidateNodeCertResp\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\x05R\x06status\x12\x16\n" +
+	"\x06detail\x18\x02 \x01(\tR\x06detail*%\n" +
 	"\x06Flavor\x12\r\n" +
 	"\tAUTH_NONE\x10\x00\x12\f\n" +
 	"\bAUTH_SYS\x10\x01B;Z9github.com/daos-stack/daos/src/control/security/auth;authb\x06proto3"
@@ -472,15 +712,18 @@ func file_auth_proto_rawDescGZIP() []byte {
 }
 
 var file_auth_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_auth_proto_goTypes = []any{
-	(Flavor)(0),              // 0: auth.Flavor
-	(*Token)(nil),            // 1: auth.Token
-	(*Sys)(nil),              // 2: auth.Sys
-	(*Credential)(nil),       // 3: auth.Credential
-	(*GetCredResp)(nil),      // 4: auth.GetCredResp
-	(*ValidateCredReq)(nil),  // 5: auth.ValidateCredReq
-	(*ValidateCredResp)(nil), // 6: auth.ValidateCredResp
+	(Flavor)(0),                  // 0: auth.Flavor
+	(*Token)(nil),                // 1: auth.Token
+	(*Sys)(nil),                  // 2: auth.Sys
+	(*Credential)(nil),           // 3: auth.Credential
+	(*GetCredReq)(nil),           // 4: auth.GetCredReq
+	(*GetCredResp)(nil),          // 5: auth.GetCredResp
+	(*ValidateCredReq)(nil),      // 6: auth.ValidateCredReq
+	(*ValidateCredResp)(nil),     // 7: auth.ValidateCredResp
+	(*ValidateNodeCertReq)(nil),  // 8: auth.ValidateNodeCertReq
+	(*ValidateNodeCertResp)(nil), // 9: auth.ValidateNodeCertResp
 }
 var file_auth_proto_depIdxs = []int32{
 	0, // 0: auth.Token.flavor:type_name -> auth.Flavor
@@ -507,7 +750,7 @@ func file_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_auth_proto_rawDesc), len(file_auth_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
