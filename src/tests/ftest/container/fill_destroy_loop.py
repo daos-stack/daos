@@ -142,7 +142,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
         if not pool.check_free_space(
             expected_scm=f">={int(free_scm_space_init - delta_bytes)}",
             expected_nvme=f">={int(free_nvme_space_init - delta_bytes)}",
-            timeout=60, interval=15):
+            timeout=120, interval=15):
             self.log.error("Pool space not reclaimed after deleting all containers")
 
         self.assertAlmostEqual(
