@@ -50,6 +50,7 @@ type PoolCmd struct {
 	GetProp      poolGetPropCmd      `command:"get-prop" description:"Get pool properties"`
 	Upgrade      poolUpgradeCmd      `command:"upgrade" description:"Upgrade pool to latest format"`
 	Rebuild      poolRebuildCmd      `command:"rebuild" description:"Manage interactive rebuild process for pools"`
+	NodeAuth     poolNodeAuthCmd     `command:"node-auth" description:"Manage per-pool node authentication"`
 }
 
 var (
