@@ -2254,7 +2254,7 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 
 		rc = dfs_pl_punch_op(dfs, obj, false, offset, len);
 		if (rc) {
-			D_ERROR("dfs_pl_punch_hole() failed (%d)\n", rc);
+			D_ERROR("dfs_pl_punch_op() failed (%d)\n", rc);
 			return rc;
 		}
 
