@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -40,7 +40,7 @@ class PoolRedunFacProperty(IorTestBase):
         """
         for cont_rf in cont_rfs:
             # Create container
-            self.add_container(pool, create=False)
+            self.container = self.get_container(pool, create=False)
 
             # Use the default pool property for container and do not update
             if cont_rf != pool_prop_expected:

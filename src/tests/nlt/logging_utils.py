@@ -21,8 +21,9 @@ class NltStdoutWrapper():
 
     def __init__(self):
         self._stdout = sys.stdout
-        self._outputs = {}
+        self._original_stdout = sys.stdout
         sys.stdout = self
+        self._outputs = {}
 
     def write(self, value):
         """Print to stdout.  If this is the main thread then print it, always save it"""
@@ -49,7 +50,8 @@ class NltStdoutWrapper():
         self._stdout.flush()
 
     def __del__(self):
-        sys.stdout = self._stdout
+        """Restore original stream."""
+        sys.stdout = self._original_stdout
 
 
 class NltStderrWrapper():
@@ -57,8 +59,9 @@ class NltStderrWrapper():
 
     def __init__(self):
         self._stderr = sys.stderr
+        self._original_stderr = sys.stderr
+        sys.stdout = self
         self._outputs = {}
-        sys.stderr = self
 
     def write(self, value):
         """Print to stderr.  Always print it, always save it"""
@@ -80,7 +83,8 @@ class NltStderrWrapper():
         self._stderr.flush()
 
     def __del__(self):
-        sys.stderr = self._stderr
+        """Restore original stream."""
+        sys.stderr = self._original_stderr
 
 
 nlt_lp = None  # pylint: disable=invalid-name
