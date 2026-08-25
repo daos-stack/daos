@@ -40,10 +40,13 @@ server_config:
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   size: 90%
+  properties: "scrub:timed,scrub_freq:120,space_rb:8"
 pool_reserved:
   size: 5%
+  properties: "scrub:timed,scrub_freq:120,space_rb:8"
 pool_racer:
   size: 5%
+  properties: "scrub:timed,scrub_freq:120,space_rb:8"
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -79,6 +82,7 @@ smoke:
     - lammps_smoke
     - macsio_smoke
     - datamover_smoke
+    - e3smio_smoke
   # num of bytes to write to reserved container
   resv_bytes: 500
   enable_intercept_lib: true
@@ -191,6 +195,23 @@ lammps_smoke:
   workdir: "/tmp/soak_dfuse_lammps/"
   dfuse:
     mount_dir: "/tmp/soak_dfuse_lammps/"
+    disable_caching: true
+    thread_count: 8
+    cores: '0-7'
+  oclass:
+    - ["EC_2P1GX", "RP_2GX"]
+e3smio_smoke:
+  job_timeout: 20
+  nodesperjob:
+    - 4
+  taskspernode:
+    - 32
+  cmdline: "e3sm_io -r 10 -o can_I_out.h5 -a hdf5 -x canonical -k "
+  api:
+    - POSIX-LIBPIL4DFS
+  workdir: "/tmp/soak_dfuse_e3smio/"
+  dfuse:
+    mount_dir: "/tmp/soak_dfuse_e3smio/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
