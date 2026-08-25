@@ -27,7 +27,7 @@ class TestFio(TestWithServers):
             FioCommand: a FioCommand object with parameters from the test yaml file
         """
         fio = FioCommand(path, namespace)
-        self.register_cleanup(fio.cleanup_command)
+        fio.register_cleanup_method = self.register_cleanup
         fio.hosts = self.hostlist_clients
         fio.get_params(self)
         return fio
