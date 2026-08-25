@@ -46,6 +46,9 @@ class DlckCommand:
         self.verbose = verbose
         self.timeout = timeout
 
+        if self.verbose:
+            self.command.dlck_verbose = FormattedParameter("--verbose", verbose)
+
         # Pool UUID. (--file pool_uuid[,target_id])
         if pool_uuid:
             self.command.pool_uuid = FormattedParameter("--file={}", pool_uuid)
