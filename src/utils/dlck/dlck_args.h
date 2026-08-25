@@ -41,6 +41,7 @@
 #define DLCK_DEFAULT_MAX_DMA_BUF_SIZE   5120
 #define DLCK_DEFAULT_NVME_HUGEPAGE_SIZE 2
 #define DLCK_DEFAULT_TARGETS            4
+#define DLCK_DEFAULT_LOG_DIR            "/tmp"
 
 #define DLCK_TARGET_MAX                 31
 
@@ -48,9 +49,9 @@
 
 struct dlck_args_common {
 	struct checker_options options;
-	bool                   write_mode; /** false by default (dry run) */
-	bool                   verbose;    /** false by default */
-	char                  *log_dir;    /** NULL by default -> /tmp */
+	bool                   write_mode;
+	bool                   verbose;
+	char                  *log_dir;
 };
 
 /**

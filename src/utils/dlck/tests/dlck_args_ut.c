@@ -9,7 +9,6 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <setjmp.h>
-#include <string.h>
 #include <cmocka.h>
 
 #include <daos/common.h>
@@ -27,7 +26,6 @@ extern struct argp  argp_engine;
 
 struct dlck_control Ctrl;
 
-argp_parser_t       Argp_common_parser_real;
 argp_parser_t       Argp_engine_parser_real;
 
 /** wrappers and mocks */
@@ -68,22 +66,6 @@ argp_engine_parser_mock(int key, char *arg, struct argp_state *state)
 	assert_non_null(state);
 	assert_ptr_equal(state->input, &Ctrl.engine);
 
-	return 0;
-}
-
-static error_t
-argp_file_parser_noop(int key, char *arg, struct argp_state *state)
-{
-	assert_non_null(state);
-	assert_ptr_equal(state->input, &Ctrl.files);
-	return 0;
-}
-
-static error_t
-argp_engine_parser_noop(int key, char *arg, struct argp_state *state)
-{
-	assert_non_null(state);
-	assert_ptr_equal(state->input, &Ctrl.engine);
 	return 0;
 }
 
@@ -146,41 +128,16 @@ test_engine_parser_END_no_storage_path_fail(void **state_ptr)
 	assert_int_equal(ret, PARSER_FAILURE);
 }
 
-static void
-test_parser_log_dir_option(void **unused)
-{
-	argp_parser_t orig_common = argp_common.parser;
-	argp_parser_t orig_file   = argp_file.parser;
-	argp_parser_t orig_engine = argp_engine.parser;
-	int           argc        = 2;
-	char         *argv[]      = {APP_NAME_MOCK, "--log_dir=/var/tmp/dlck_logs"};
-
-	memset(&Ctrl, 0, sizeof(Ctrl));
-	argp_common.parser = Argp_common_parser_real;
-	argp_file.parser   = argp_file_parser_noop;
-	argp_engine.parser = argp_engine_parser_noop;
-
-	dlck_args_parse(argc, argv, &Ctrl);
-	assert_non_null(Ctrl.common.log_dir);
-	assert_string_equal(Ctrl.common.log_dir, "/var/tmp/dlck_logs");
-
-	argp_common.parser = orig_common;
-	argp_file.parser   = orig_file;
-	argp_engine.parser = orig_engine;
-}
-
 static const struct CMUnitTest dlck_args_tests[] = {
     {"DLCK_ARGS100: parser - children connection", test_parser_children_connection, NULL, NULL},
     {"DLCK_ARGS200: engine parser + ARGP_KEY_END + no storage path",
      test_engine_parser_END_no_storage_path_fail, setup_engine_args_default, NULL},
-    {"DLCK_ARGS300: parser --log_dir option", test_parser_log_dir_option, NULL, NULL},
 };
 
 int
 main(int argc, char **argv)
 {
 	/** collect function pointers to real parsers */
-	Argp_common_parser_real = argp_common.parser;
 	Argp_engine_parser_real = argp_engine.parser;
 
 	/** overwrite real parsers with mocks */

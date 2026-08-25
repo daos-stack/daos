@@ -4,87 +4,54 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-from logging import getLogger
 
-from command_utils import ExecutableCommand
+from apricot import TestWithServers
+from command_utils import RunCommand
 from command_utils_base import FormattedParameter
-from run_utils import run_remote
 
 
-class DlckCommand:
-    """Defines the basic structures of dlck command."""
+class TestDlck(TestWithServers):
+    # pylint: disable=too-few-public-methods
+    """Base class for Dlck tests.
 
-    def __init__(self, server_host, path, pool_uuid=None, nvme_conf=None, storage_mount=None,
-                 log_dir=None, verbose=True, timeout=None, sudo=True):
-        """Constructor that sets the common variables for sub-commands.
+    :avocado: recursive
+    """
+
+    def get_dlck_command(self, path="", namespace="/run/dlck/*"):
+        """Get a DlckCommand object with parameters from the test yaml file.
 
         Args:
-            server_host (NodeSet): Server host to run the command.
-            path (str): path to the dlck command.
-            pool_uuid (str, optional): Pool UUID. Defaults to None.
-            nvme_conf (str, optional): NVMe config file path. Defaults to None.
-            storage_mount (str, optional): Storage mount point. Defaults to None.
-            log_dir (str, optional): Log directory. Defaults to None.
-            verbose (bool, optional): Display command output in run.
-                Defaults to True.
-            timeout (int, optional): Command timeout (sec) used in run. Defaults to
-                None.
-            sudo (bool, optional): Whether to run dlck with sudo. Defaults to True.
-        """
-        self.command = ExecutableCommand("/run/dlck/*", "dlck", path)
-        self._logger = getLogger(__name__)
+            path (str, optional): path to location of command binary file.  Defaults to "".
+            namespace (str, optional): path to yaml parameters. Defaults to "/run/dlck/*".
 
-        # Add the fault injection file to the environment of the remote command.
+        Returns:
+            DlckCommand: a DlckCommand object with parameters from the test yaml file
+        """
+        dlck = DlckCommand(path, namespace)
+        self.register_cleanup(dlck.cleanup_command)
+        dlck.hosts = self.server_managers[0].hosts[0:1]
+        dlck.log_file = self.log_dir
+        dlck.get_params(self)
+        return dlck
+
+
+class DlckCommand(RunCommand):
+    """Defines a object representing a dlck command."""
+
+    def __init__(self, path="", namespace="/run/dlck/*"):
+        """Create a DlckCommand object.
+
+        Args:
+            path (str, optional): path to location of command binary file.  Defaults to "".
+            namespace (str, optional): path to yaml parameters. Defaults to "/run/dlck/*".
+        """
+        super().__init__(namespace, "dlck", path)
+        self.pool_uuid = FormattedParameter("--file={}", None)
+        self.nvme = FormattedParameter("--nvme={}", None)
+        self.storage_mount = FormattedParameter("--storage={}", None)
+        self.log_dir = FormattedParameter("--log_dir={}", None)
+
+        # Add the fault injection file to the environment.
         fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
         if fault_inject_file != "None set for now":
-            self.command.env["D_FI_CONFIG"] = fault_inject_file
-        self.command.sudo = sudo
-
-        self.host = server_host
-
-        # Members needed for run().
-        self.verbose = verbose
-        self.timeout = timeout
-
-        if self.verbose:
-            self.command.dlck_verbose = FormattedParameter("--verbose", verbose)
-
-        # Pool UUID. (--file pool_uuid[,target_id])
-        if pool_uuid:
-            self.command.pool_uuid = FormattedParameter("--file={}", pool_uuid)
-
-        # NVMe config file path. (--nvme nvme_conf)
-        if nvme_conf:
-            self.command.nvme = FormattedParameter("--nvme={}", nvme_conf)
-
-        # Storage mount point. (--storage storage_mount)
-        if storage_mount:
-            self.command.storage_mount = FormattedParameter("--storage={}", storage_mount)
-
-        # log dir. (--log_dir log_dir)
-        if log_dir:
-            self.command.log_dir = FormattedParameter("--log_dir={}", log_dir)
-
-    def __str__(self):
-        """Return the command with all of its defined parameters as a string.
-
-        Returns:
-            str: the command with all the defined parameters
-        """
-        return self.command.with_exports
-
-    def run(self):
-        """Run the dlck command.
-        Args:
-            host (NodeSet): Host(s) on which to run the command.
-            command (str): Environment Variable string + dlck sub-command to run.
-            verbose (bool, optional): Display command output in run.
-                Defaults to True.
-            timeout (int, optional): Command timeout (sec) used in run. Defaults to
-                None.
-
-        Returns:
-            CommandResult: groups of command results from the same hosts with the same return status
-        """
-        return run_remote(
-            self._logger, self.host, command=str(self), verbose=self.verbose, timeout=self.timeout)
+            self.env["D_FI_CONFIG"] = fault_inject_file

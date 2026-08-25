@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -148,21 +148,17 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	D_ASSERT(ctrl != NULL);
 
 	struct checker     *ck                 = &ctrl->checker;
-	const char         *log_root           = ctrl->common.log_dir;
 	char               *log_dir_template   = NULL;
 	struct dlck_engine *engine             = NULL;
 	int                *rcs;
 	int                 rc;
-
-	if (log_root == NULL || log_root[0] == '\0')
-		log_root = "/tmp";
 
 	/** create a log directory */
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_LOG_DIR)) { /** fault injection */
 		ctrl->log_dir = NULL;
 		errno         = daos_fail_value_get();
 	} else {
-		D_ASPRINTF(log_dir_template, "%s/dlck_check_XXXXXX", log_root);
+		D_ASPRINTF(log_dir_template, "%s/dlck_check_XXXXXX", ctrl->common.log_dir)
 		if (log_dir_template == NULL) {
 			rc = -DER_NOMEM;
 			CK_PRINTL_RC(ck, rc, "Cannot allocate log directory path");
@@ -173,8 +169,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
 		CK_PRINTL_RC(ck, rc, "Cannot create log directory");
-		D_FREE(log_dir_template);
-		return rc;
+        goto err_free_template;
 	}
 	CK_PRINTF(ck, "Log directory: %s\n", ctrl->log_dir);
 
@@ -182,7 +177,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	rc = dlck_engine_start(&ctrl->engine, &engine);
 	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
-		goto err_log_dir_template;
+		goto err_free_template;
 	}
 
 	if (d_list_empty(&ctrl->files.list)) {
@@ -237,7 +232,7 @@ err_free_rcs:
 	D_FREE(rcs);
 err_stop_engine:
 	(void)dlck_engine_stop(engine);
-err_log_dir_template:
+err_free_template:
 	D_FREE(log_dir_template);
 
 	return rc;

@@ -5,15 +5,14 @@
 """
 import os
 
-from apricot import TestWithServers
-from dlck_utils import DlckCommand
+from dlck_utils import TestDlck
 from fault_config_utils import FaultInjection
 from file_utils import distribute_files
 from run_utils import run_remote
 from test_utils_pool import add_pool
 
 
-class DlckBasicFaultTest(TestWithServers):
+class DlckBasicFaultTest(TestDlck):
     """Test class for dlck command line utility.
 
     :avocado: recursive
@@ -33,31 +32,25 @@ class DlckBasicFaultTest(TestWithServers):
         fault_list = self.params.get("fault_list", '/run/dlck_test_additional_faults/*')
         dmg = self.get_dmg_command()
         pool = add_pool(self)
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        dlck = self.get_dlck_command()
+        dlck.pool_uuid.value = pool.uuid
+        dlck.storage_mount.value = self.server_managers[0].get_config_value("scm_mount")
         fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
         if fault_inject_file == "None set for now":
             self.fail("D_FI_CONFIG environment variable not set")
         self.log.info("Fault injection file contents")
         cmd = "cat {}".format(fault_inject_file)
-        host = self.server_managers[0].hosts[0:1]
         self.log_step("Run the command to read the fault injection file contents")
         run_remote(self.log, self.hostlist_clients[0], cmd, timeout=30)
         # Run the testing with the first fault which is injected at the beginning of the test.
         if self.server_managers[0].manager.job.using_control_metadata:
-            log_dir = os.path.dirname(self.server_managers[0].get_config_value("log_file"))
-            control_metadata_dir = os.path.join(log_dir, "control_metadata")
-            daos_control_dir = os.path.join(control_metadata_dir, "daos_control")
-            engine_path_dir = os.path.join(daos_control_dir, "engine0")
-            nvme_conf = os.path.join(engine_path_dir, "daos_nvme.conf")
-            dlck_cmd = DlckCommand(host, self.bin, pool.uuid, nvme_conf=nvme_conf,
-                                   storage_mount=scm_mount, log_dir=self.log_dir)
-        else:
-            dlck_cmd = DlckCommand(host, self.bin, pool.uuid, storage_mount=scm_mount,
-                                   log_dir=self.log_dir)
+            dlck.nvme.value = os.path.join(
+                self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
+                "daos_nvme.conf")
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
         self.log_step("Run dlck command after injecting the first fault")
-        result = dlck_cmd.run()
+        result = dlck.run()
         if not result.passed:
             errors.append(f"dlck failed on {result.failed_hosts}")
         # Now, run the other fault injection flags without rebooting or creating any new pools.
@@ -79,19 +72,13 @@ class DlckBasicFaultTest(TestWithServers):
                 self.log.info("\n %s", file_data)
             distribute_files(self.log, self.hostlist_servers, fault_inject_file,
                              fault_inject_file)
-            if self.server_managers[0].manager.job.using_control_metadata:
-                dlck_cmd = DlckCommand(host, self.bin, pool.uuid, nvme_conf=nvme_conf,
-                                       storage_mount=scm_mount, log_dir=self.log_dir)
-            else:
-                dlck_cmd = DlckCommand(host, self.bin, pool.uuid, storage_mount=scm_mount,
-                                       log_dir=self.log_dir)
             self.log_step("Run dlck command after injecting fault")
-            result = dlck_cmd.run()
+            result = dlck.run()
             if not result.passed:
                 errors.append(f"dlck failed on {result.failed_hosts}")
         self.log_step("Run the dmg start command")
         dmg.system_start()
 
         if not errors:
-            self.fail(f"dlck basic faulttest failed with errors: {errors}")
+            self.fail(f"dlck basic fault test failed with errors: {errors}")
         self.log.info("dlck basic fault test passed with no errors")

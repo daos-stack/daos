@@ -6,11 +6,11 @@
 import os
 
 from apricot import TestWithServers
-from dlck_utils import DlckCommand
+from dlck_utils import TestDlck
 from test_utils_pool import add_pool
 
 
-class DlckBasicTest(TestWithServers):
+class DlckBasicTest(TestDlck):
     """Test class for dlck command line utility.
 
     :avocado: recursive
@@ -27,23 +27,17 @@ class DlckBasicTest(TestWithServers):
         dmg = self.get_dmg_command()
         self.log_step("Create a pool to run dlck")
         pool = add_pool(self)
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        host = self.server_managers[0].hosts[0:1]
+        dlck = self.get_dlck_command()
+        dlck.pool_uuid.value = pool.uuid
+        dlck.storage_mount.value = self.server_managers[0].get_config_value("scm_mount")
         if self.server_managers[0].manager.job.using_control_metadata:
-            log_dir = os.path.dirname(self.server_managers[0].get_config_value("log_file"))
-            control_metadata_dir = os.path.join(log_dir, "control_metadata")
-            daos_control_dir = os.path.join(control_metadata_dir, "daos_control")
-            engine_path_dir = os.path.join(daos_control_dir, "engine0")
-            nvme_conf = os.path.join(engine_path_dir, "daos_nvme.conf")
-            dlck_cmd = DlckCommand(host, self.bin, pool.uuid, nvme_conf=nvme_conf,
-                                   storage_mount=scm_mount, log_dir=self.log_dir)
-        else:
-            dlck_cmd = DlckCommand(host, self.bin, pool.uuid, storage_mount=scm_mount,
-                                   log_dir=self.log_dir)
+            dlck.nvme.value = os.path.join(
+                self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
+                "daos_nvme.conf")
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
         self.log_step("Run dlck command to check the health of the pool and storage")
-        result = dlck_cmd.run()
+        result = dlck.run()
         if not result.passed:
             errors.append(f"dlck failed on {result.failed_hosts}")
         dmg.system_start()
