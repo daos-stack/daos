@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,8 +30,10 @@ const (
 	defaultAgentCert     = certDir + "agent.crt"
 	defaultAgentKey      = certDir + "agent.key"
 	defaultClientCertDir = certDir + "clients"
-	defaultServer        = "server"
-	defaultInsecure      = false
+	// DefaultNodeCertDir is where the agent looks for per-pool node certificates.
+	DefaultNodeCertDir = certDir + "node_certs"
+	defaultServer      = "server"
+	defaultInsecure    = false
 )
 
 // MappedClientUser represents a client user that is mapped to a uid.
@@ -96,6 +99,7 @@ func (cm ClientUserMap) Lookup(uid uint32) *MappedClientUser {
 type CredentialConfig struct {
 	CacheExpiration time.Duration `yaml:"cache_expiration,omitempty"`
 	ClientUserMap   ClientUserMap `yaml:"client_user_map,omitempty"`
+	NodeCertDir     string        `yaml:"node_cert_dir,omitempty"`
 }
 
 // TransportConfig contains all the information on whether or not to use
@@ -113,15 +117,33 @@ func (tc *TransportConfig) String() string {
 // component. ServerName is only needed if the config is being used as a
 // transport credential for a gRPC tls client.
 type CertificateConfig struct {
-	ServerName      string           `yaml:"-"`
-	ClientCertDir   string           `yaml:"client_cert_dir,omitempty"`
-	CARootPath      string           `yaml:"ca_cert"`
-	CertificatePath string           `yaml:"cert"`
-	PrivateKeyPath  string           `yaml:"key"`
-	tlsKeypair      *tls.Certificate `yaml:"-"`
-	caPool          *x509.CertPool   `yaml:"-"`
-	maxKeyPerms     fs.FileMode      `yaml:"-"`
-	verifyTime      time.Time        `yaml:"-"` // for testing
+	ServerName       string            `yaml:"-"`
+	ClientCertDir    string            `yaml:"client_cert_dir,omitempty"`
+	CARootPath       string            `yaml:"ca_cert"`
+	CertificatePath  string            `yaml:"cert"`
+	PrivateKeyPath   string            `yaml:"key"`
+	CertMaxClockSkew time.Duration     `yaml:"cert_max_clock_skew,omitempty"`
+	tlsKeypair       *tls.Certificate  `yaml:"-"`
+	caPool           *x509.CertPool    `yaml:"-"`
+	caCert           *x509.Certificate `yaml:"-"`
+	maxKeyPerms      fs.FileMode       `yaml:"-"`
+	verifyTime       time.Time         `yaml:"-"` // for testing
+}
+
+// Validate checks the TransportConfig for valid values.
+func (tc *TransportConfig) Validate() error {
+	if tc == nil {
+		return errors.New("nil TransportConfig")
+	}
+	if tc.CertMaxClockSkew < 0 {
+		return errors.Errorf("cert_max_clock_skew must not be negative (got %s)",
+			tc.CertMaxClockSkew)
+	}
+	if s := tc.CertMaxClockSkew; s > 0 && s < time.Second {
+		return errors.Errorf("cert_max_clock_skew %s is below 1s; bare integers "+
+			"parse as nanoseconds, use a unit suffix (e.g. 300s)", s)
+	}
+	return nil
 }
 
 // DefaultAgentTransportConfig provides a default transport config disabling
@@ -130,14 +152,15 @@ func DefaultAgentTransportConfig() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: defaultInsecure,
 		CertificateConfig: CertificateConfig{
-			ServerName:      defaultServer,
-			ClientCertDir:   "",
-			CARootPath:      defaultCACert,
-			CertificatePath: defaultAgentCert,
-			PrivateKeyPath:  defaultAgentKey,
-			tlsKeypair:      nil,
-			caPool:          nil,
-			maxKeyPerms:     MaxUserOnlyKeyPerm,
+			ServerName:       defaultServer,
+			ClientCertDir:    "",
+			CARootPath:       defaultCACert,
+			CertificatePath:  defaultAgentCert,
+			PrivateKeyPath:   defaultAgentKey,
+			CertMaxClockSkew: DefaultCertMaxClockSkew,
+			tlsKeypair:       nil,
+			caPool:           nil,
+			maxKeyPerms:      MaxUserOnlyKeyPerm,
 		},
 	}
 }
@@ -150,14 +173,15 @@ func DefaultClientTransportConfig() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: defaultInsecure,
 		CertificateConfig: CertificateConfig{
-			ServerName:      defaultServer,
-			ClientCertDir:   "",
-			CARootPath:      defaultCACert,
-			CertificatePath: defaultAdminCert,
-			PrivateKeyPath:  defaultAdminKey,
-			tlsKeypair:      nil,
-			caPool:          nil,
-			maxKeyPerms:     MaxGroupKeyPerm,
+			ServerName:       defaultServer,
+			ClientCertDir:    "",
+			CARootPath:       defaultCACert,
+			CertificatePath:  defaultAdminCert,
+			PrivateKeyPath:   defaultAdminKey,
+			CertMaxClockSkew: DefaultCertMaxClockSkew,
+			tlsKeypair:       nil,
+			caPool:           nil,
+			maxKeyPerms:      MaxGroupKeyPerm,
 		},
 	}
 }
@@ -168,21 +192,20 @@ func DefaultServerTransportConfig() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: defaultInsecure,
 		CertificateConfig: CertificateConfig{
-			ServerName:      defaultServer,
-			CARootPath:      defaultCACert,
-			ClientCertDir:   defaultClientCertDir,
-			CertificatePath: defaultServerCert,
-			PrivateKeyPath:  defaultServerKey,
-			tlsKeypair:      nil,
-			caPool:          nil,
-			maxKeyPerms:     MaxUserOnlyKeyPerm,
+			ServerName:       defaultServer,
+			CARootPath:       defaultCACert,
+			ClientCertDir:    defaultClientCertDir,
+			CertificatePath:  defaultServerCert,
+			PrivateKeyPath:   defaultServerKey,
+			CertMaxClockSkew: DefaultCertMaxClockSkew,
+			tlsKeypair:       nil,
+			caPool:           nil,
+			maxKeyPerms:      MaxUserOnlyKeyPerm,
 		},
 	}
 }
 
-// PreLoadCertData reads the certificate files in and parses them into TLS key
-// pair and Certificate pool to provide a mechanism for detecting certificate
-// error before first use.
+// PreLoadCertData loads and stores the certificate data in the TransportConfig.
 func (tc *TransportConfig) PreLoadCertData() error {
 	if tc == nil {
 		return errors.New("nil TransportConfig")
@@ -208,8 +231,10 @@ func (tc *TransportConfig) PreLoadCertData() error {
 
 	tc.tlsKeypair = certificate
 	tc.caPool = certPool
+	if tc.caCert, err = LoadCertificate(tc.CARootPath); err != nil {
+		return err
+	}
 
-	// Pre-parse the Leaf Certificate
 	tc.tlsKeypair.Leaf, err = x509.ParseCertificate(tc.tlsKeypair.Certificate[0])
 	if err != nil {
 		return err
@@ -233,10 +258,26 @@ func (tc *TransportConfig) PreLoadCertData() error {
 func (tc *TransportConfig) ReloadCertData() error {
 	tc.tlsKeypair = nil
 	tc.caPool = nil
+	tc.caCert = nil
 	return tc.PreLoadCertData()
 }
 
-// PrivateKey returns the private key stored in the certificates loaded into the TransportConfig
+// CACert returns the DAOS CA certificate.
+func (tc *TransportConfig) CACert() (*x509.Certificate, error) {
+	if tc.AllowInsecure {
+		return nil, nil
+	}
+	if tc.caCert == nil {
+		cert, err := LoadCertificate(tc.CARootPath)
+		if err != nil {
+			return nil, err
+		}
+		tc.caCert = cert
+	}
+	return tc.caCert, nil
+}
+
+// PrivateKey returns the private key stored in the certificates loaded into the TransportConfig.
 func (tc *TransportConfig) PrivateKey() (crypto.PrivateKey, error) {
 	if tc.AllowInsecure {
 		return nil, nil
@@ -251,7 +292,7 @@ func (tc *TransportConfig) PrivateKey() (crypto.PrivateKey, error) {
 	return tc.tlsKeypair.PrivateKey, nil
 }
 
-// PublicKey returns the private key stored in the certificates loaded into the TransportConfig
+// PublicKey returns the private key stored in the certificates loaded into the TransportConfig.
 func (tc *TransportConfig) PublicKey() (crypto.PublicKey, error) {
 	if tc.AllowInsecure {
 		return nil, nil

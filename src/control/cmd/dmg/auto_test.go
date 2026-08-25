@@ -597,6 +597,7 @@ transport_config:
   ca_cert: /etc/daos/certs/daosCA.crt
   cert: /etc/daos/certs/server.crt
   key: /etc/daos/certs/server.key
+  cert_max_clock_skew: 5m0s
 engines:
 - targets: 12
   nr_xs_helpers: 2
