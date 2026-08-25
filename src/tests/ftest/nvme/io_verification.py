@@ -54,7 +54,7 @@ class NvmeIoVerification(IorTestBase):
             self.log_step("Create a pool: pool_{}".format(index))
             self.pool = self.get_pool(namespace="/run/pool_{}/*".format(index))
 
-            self.log_step("Query the pool for information.")
+            self.log_step("Query the pool.")
             self.pool.get_info()
 
             for tsize in ior_transfer_size:
@@ -73,6 +73,10 @@ class NvmeIoVerification(IorTestBase):
                 container = self.get_container(self.pool)
                 self.ior_cmd.set_daos_params(self.pool, container.identifier)
                 self.run_ior(job_manager, ior_processes)
+
+                if tsize < 4096:
+                    self.log_step("Data written to SCM. Verify pool space usage before restart.")
+                    self.verify_pool_size(size_before_ior, self.processes)
 
                 self.log_step("Stop all servers.")
                 self.get_dmg_command().system_stop(True)
@@ -94,7 +98,9 @@ class NvmeIoVerification(IorTestBase):
                 # and current pool usage on NVMe. verify_pool_size determines which storage to use
                 # by checking whether self.ior_cmd.transfer_size is above 4096.
                 if tsize < 4096:
-                    self.log.info("Data written to SCM - Update transfer size to >4096.")
+                    self.log.info(
+                        "Data written to SCM, but moved to NVMe after restart. Update transfer "
+                        "size to >4096.")
                     self.ior_cmd.transfer_size.update(10000)
                 self.verify_pool_size(size_before_ior, self.processes)
 
