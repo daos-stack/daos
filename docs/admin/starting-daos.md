@@ -70,9 +70,12 @@ All commands except the `daos` command should be run as root.
 - Verify that DAOS is working as expected on the clients, for example
   by running the `daos system query` and `daos pool list` commands
   in a parallel shell.
-  The `daos` command is a user command that does not need to be run as root.
-  Note that only those pools to which a user has access will be reported by
-  the `daos pool list` command.
+
+!!! note
+    The `daos` command is a user command that does not need to be run as root.
+    Note that only those pools to which a user has access will be reported by
+    the `daos pool list` command. The `root` user has no special privileges
+    in DAOS and will also only see pools to which it has access.
 
 - If the DAOS servers' systemd services have been disabled during a preceding
   stop of the DAOS system, those services should eventually be re-enabled

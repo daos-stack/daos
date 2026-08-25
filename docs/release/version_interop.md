@@ -61,13 +61,8 @@ The following rules apply for the DAOS software versions:
   that run parallel applications have the same DAOS version.
   But different client clusters can run different DAOS versions.
 
-* DAOS _admin_ nodes must have the same `MAJOR.MINOR` version
-  as the DAOS servers they are managing,
-  but they may differ in their `PATCH` level.
-
-!!! warning
-    TODO: Do we really support `daos-admin`
-    at a lower `PATCH` level than the servers??
+* DAOS _admin_ nodes must have the same DAOS version
+  as the DAOS servers they are managing.
 
 * The `MAJOR.MINOR` version of DAOS _client_ nodes can differ from
   the `MAJOR.MINOR` version of the DAOS _servers_ by one minor release.
@@ -263,4 +258,4 @@ dmg pool get-prop -j pool01 upgrade_status
 The `dmg pool upgrade` command has to be run for each pool individually,
 there is no option to upgrade all pools with a single command invocation.
 Invoking a pool upgrade for a pool that is already at the latest layout
-version is a no-op: Like most `dmg` commands, the operation is idempotent.
+version is a no-op.

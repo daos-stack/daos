@@ -22,7 +22,7 @@ are interoperable and plan the sequence of upgrades accordingly.
 
 ### Stop the DAOS system
 
-Follow the steps in [Stopping a DAOS system)](../admin/stopping-daos.md)
+Follow the steps in [Stopping a DAOS system](../admin/stopping-daos.md)
 to completely stop the running DAOS system.
 
 ### Perform all necessary software updates
@@ -86,7 +86,7 @@ to completely stop the running DAOS system.
 Follow the steps in [Starting a DAOS system](../admin/starting-daos.md)
 to start DAOS after the upgrade.
 
-### Updating DAOS pool versions to newest version
+### Update DAOS pool versions to newest version
 
 New DAOS software versions may introduce new DAOS pool versions,
 and newly created pools will automatically use the newest pool version.
