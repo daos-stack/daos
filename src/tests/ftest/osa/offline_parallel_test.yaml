@@ -39,7 +39,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   oclass: EC_2P2GX
   properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rd_fac:2
 

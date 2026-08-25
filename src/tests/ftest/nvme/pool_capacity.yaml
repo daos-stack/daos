@@ -34,7 +34,6 @@ pool_qty_10:
 
 container:
   type: POSIX
-  control_method: daos
 
 ior:
   no_parallel_job: 10
