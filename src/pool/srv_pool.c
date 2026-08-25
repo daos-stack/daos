@@ -8051,6 +8051,10 @@ out:
 	return rc;
 }
 
+/* Retry once, with a shortened RPC timeout, if the POOL_TGT_DISCARD corpc is lost. */
+#define POOL_DISCARD_RPC_NTRIES      2
+#define POOL_DISCARD_MIN_RPC_TIMEOUT 15 /* seconds */
+
 static int
 pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_list *list,
 	     bool reint)
@@ -8061,6 +8065,7 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 	d_rank_list_t			*rank_list = NULL;
 	struct pool_target_addr_list     valid_list = {0};
 	crt_opcode_t                     opc       = POOL_TGT_DISCARD;
+	uint32_t                         try;
 	int				i;
 	int				rc;
 
@@ -8101,33 +8106,55 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 		D_GOTO(out, rc = 0);
 	}
 
-	rc = crt_corpc_req_create(ctx, NULL, rank_list, opc, NULL,
-				  NULL, CRT_RPC_FLAG_FILTER_INVERT,
-				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
-	if (rc)
-		D_GOTO(out, rc);
+	for (try = 0; try < POOL_DISCARD_RPC_NTRIES; try++) {
+		uint32_t default_timeout;
 
-	ptdi_in = crt_req_get(rpc);
-	ptdi_in->ptdi_addrs.ca_arrays = valid_list.pta_addrs;
-	ptdi_in->ptdi_addrs.ca_count  = valid_list.pta_number;
-	uuid_copy(ptdi_in->ptdi_uuid, svc->ps_pool->sp_uuid);
-	rc = dss_rpc_send(rpc);
-	/* No corpc aggregation callback is registered, so ptdo_rc cannot report a send error. */
-	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": dss_rpc_send POOL_TGT_DISCARD",
-			 DP_UUID(svc->ps_pool->sp_uuid));
-		D_GOTO(decref, rc);
+		rc = crt_corpc_req_create(ctx, NULL, rank_list, opc, NULL, NULL,
+					  CRT_RPC_FLAG_FILTER_INVERT,
+					  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
+		if (rc)
+			D_GOTO(out, rc);
+
+		/*
+		 * Shorten the timeout (but not lower than POOL_DISCARD_MIN_RPC_TIMEOUT
+		 * seconds) so that a lost POOL_TGT_DISCARD RPC to an unresponsive engine
+		 * can be retried instead of blocking the reintegration for the full
+		 * default RPC timeout on every try.
+		 */
+		rc = crt_req_get_timeout(rpc, &default_timeout);
+		D_ASSERTF(rc == 0, "crt_req_get_timeout: " DF_RC "\n", DP_RC(rc));
+		rc = crt_req_set_timeout(rpc,
+					 max(POOL_DISCARD_MIN_RPC_TIMEOUT, default_timeout / 4));
+		D_ASSERTF(rc == 0, "crt_req_set_timeout: " DF_RC "\n", DP_RC(rc));
+
+		ptdi_in                       = crt_req_get(rpc);
+		ptdi_in->ptdi_addrs.ca_arrays = valid_list.pta_addrs;
+		ptdi_in->ptdi_addrs.ca_count  = valid_list.pta_number;
+		uuid_copy(ptdi_in->ptdi_uuid, svc->ps_pool->sp_uuid);
+		rc = dss_rpc_send(rpc);
+		/* No corpc aggregation callback is registered, so ptdo_rc cannot report
+		 * a send error.
+		 */
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": dss_rpc_send POOL_TGT_DISCARD try %u/%u",
+				 DP_UUID(svc->ps_pool->sp_uuid), try + 1, POOL_DISCARD_RPC_NTRIES);
+			crt_req_decref(rpc);
+			if (try + 1 < POOL_DISCARD_RPC_NTRIES &&
+			    (daos_crt_network_error(rc) || rc == -DER_TIMEDOUT))
+				continue;
+			D_GOTO(out, rc);
+		}
+
+		ptdi_out = crt_reply_get(rpc);
+		D_ASSERT(ptdi_out != NULL);
+		rc = ptdi_out->ptdo_rc;
+		if (rc != 0)
+			DL_ERROR(rc, DF_UUID ": pool discard failed",
+				 DP_UUID(svc->ps_pool->sp_uuid));
+
+		crt_req_decref(rpc);
+		break;
 	}
-
-	ptdi_out = crt_reply_get(rpc);
-	D_ASSERT(ptdi_out != NULL);
-	rc = ptdi_out->ptdo_rc;
-	if (rc != 0)
-		D_ERROR(DF_UUID": pool discard failed: rc: %d\n",
-			DP_UUID(svc->ps_pool->sp_uuid), rc);
-
-decref:
-	crt_req_decref(rpc);
 
 out:
 	if (rank_list)
