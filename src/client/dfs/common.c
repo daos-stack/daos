@@ -666,7 +666,8 @@ git_update_times(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, str
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs   = sg_iovs;
 
-	rc = daos_obj_update(git_oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(git_oh, th, daos_handle_is_valid(th) ? 0 : DAOS_COND_DKEY_UPDATE,
+			     &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to update times in GIT " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);

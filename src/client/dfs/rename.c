@@ -189,6 +189,14 @@ restart:
 		D_GOTO(out, rc);
 	}
 
+	/*
+	 * For a hardlink the authoritative inode/xattrs live in GIT keyed by the unchanged
+	 * OID; validate the GIT handle before we start mutating dentries.
+	 */
+	if ((DFS_IS_HARDLINK(entry.mode) || DFS_IS_HARDLINK(new_entry.mode)) &&
+	    !daos_handle_is_valid(dfs->git_oh))
+		D_GOTO(out, rc = ENOTSUP);
+
 	if (exists) {
 #ifdef RENAME_NOREPLACE
 		if (flags & RENAME_NOREPLACE)
@@ -270,13 +278,6 @@ restart:
 		D_GOTO(out, rc = errno);
 	entry.mtime = entry.ctime = now.tv_sec;
 	entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
-
-	/*
-	 * For a hardlink the authoritative inode/xattrs live in GIT keyed by the unchanged
-	 * OID; validate the GIT handle before we start mutating dentries.
-	 */
-	if (DFS_IS_HARDLINK(entry.mode) && !daos_handle_is_valid(dfs->git_oh))
-		D_GOTO(out, rc = EIO);
 
 	/** insert old entry in new parent object */
 	rc = insert_entry(dfs->layout_v, new_parent->oh, th, new_name, new_len,
