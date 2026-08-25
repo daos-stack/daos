@@ -133,6 +133,13 @@ class BoundaryPoolContainerSpace(TestWithServers):
             time.sleep(6)
             free_scm_space_after_destroy = pool.get_pool_free_space()
 
+        # Check the SCM/NVME space is reclaimed after container deletion
+        if not pool.check_free_space(
+            expected_scm=f">={int(free_scm_space_init - delta_bytes)}",
+            expected_nvme=f">={int(free_nvme_space_init - delta_bytes)}",
+            timeout=60, interval=15):
+            self.log.error("Pool space not reclaimed after deleting all containers")
+
         self.assertAlmostEqual(
             free_scm_space_init, free_scm_space_after_destroy, delta=delta_bytes,
             msg="Deleting container did not restore all free pool space: "
@@ -143,13 +150,6 @@ class BoundaryPoolContainerSpace(TestWithServers):
             "Storage space leaked %s (%i bytes)",
             bytes_to_human(abs(free_scm_space_init - free_scm_space_after_destroy)),
             free_scm_space_init - free_scm_space_after_destroy)
-
-        # Check the SCM/NVME space is reclaimed after container deletion
-        if not pool.check_free_space(
-            expected_scm=f">={int(free_scm_space_init - delta_bytes)}",
-            expected_nvme=f">={int(free_nvme_space_init - delta_bytes)}",
-            timeout=60, interval=15):
-            self.log.error("Pool space not reclaimed after deleting all containers")
 
     def test_fill_destroy_cont_loop(self):
         """JIRA ID: DAOS-8465
