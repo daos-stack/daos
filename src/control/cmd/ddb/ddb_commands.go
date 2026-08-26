@@ -507,4 +507,34 @@ select`,
 		},
 		Completer: nil,
 	})
+	// Command csum_check
+	app.AddCommand(&grumble.Command{
+		Name:    "csum_check",
+		Aliases: nil,
+		Help:    "Check visible checksum(s) against the stored data",
+		LongHelp: `Recompute the visible checksum(s) at the vos path from the currently
+stored data and compare them against the checksum(s) already stored on disk. The vos
+path should be a complete path, including the akey and if the value is an array
+value it should include the extent. This command is read-only: no data or
+checksums are modified. The --epoch flag selects which version of the checksum
+to check: for a single value akey it selects the value visible at or before
+that epoch, and for an array value it defines the maximal epoch of the visible
+record extent to select. By default, nothing is printed unless corruption is
+detected: only corrupted entries are printed, followed by a final error
+summary; a clean result (matching or no checksum stored) produces no output
+at all. Pass --verbose to print every entry regardless of outcome (matching,
+no checksum stored, or corrupted), plus a final summary line even on success`,
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to check.")
+		},
+		Flags: func(f *grumble.Flags) {
+			f.Uint64("e", "epoch", math.MaxUint64, "Maximal epoch of the checksum value to select (default EPOCH_MAX).")
+			f.Bool("v", "verbose", false, "Print every checksum entry, not just corrupted ones.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ctx.CsumCheck(c.Args.String("path"), c.Flags.Uint64("epoch"), c.Flags.Bool("verbose"))
+		},
+		Completer: nil,
+	})
 }

@@ -133,6 +133,10 @@ func TestDdb_HelpCmds(t *testing.T) {
 			cmdStr:     "csum_dump",
 			helpSubStr: "Usage:\n  csum_dump [flags] path [dst]\n",
 		},
+		"help for 'csum_check' command": {
+			cmdStr:     "csum_check",
+			helpSubStr: "Usage:\n  csum_check [flags] path\n",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			ctx := newTestContext(t)
@@ -273,6 +277,16 @@ func TestDdb_Cmds(t *testing.T) {
 			test.CmpAny(t, "path", wantPath, path)
 			test.CmpAny(t, "dst", wantDst, dst)
 			test.CmpAny(t, "epoch", wantEpoch, epoch)
+			return nil
+		}
+	}
+
+	csumCheckFnChecking := func(t *testing.T, wantPath string, wantEpoch uint64, wantVerbose bool) func(string, uint64, bool) error {
+		return func(path string, epoch uint64, verbose bool) error {
+			fmt.Println("csum_check called")
+			test.CmpAny(t, "path", wantPath, path)
+			test.CmpAny(t, "epoch", wantEpoch, epoch)
+			test.CmpAny(t, "verbose", wantVerbose, verbose)
 			return nil
 		}
 	}
@@ -853,6 +867,58 @@ func TestDdb_Cmds(t *testing.T) {
 				ddb_run_csum_dump_Fn = csumDumpFnChecking(t, "/[0]", "/tmp/csum_dump.out", 500)
 			},
 			expStdout: []string{"csum_dump called"},
+		},
+
+		// --- csum_check command ---
+		"csum_check missing path": {
+			args:   []string{"csum_check"},
+			expErr: ddbTestErr("missing argument 'path'"),
+		},
+		"csum_check invalid options": {
+			args:   []string{"csum_check", "--bar"},
+			expErr: ddbTestErr("invalid flag: --bar"),
+		},
+		"csum_check default": {
+			args: []string{"csum_check", "/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_csum_check_Fn = csumCheckFnChecking(t, "/[0]", math.MaxUint64, false)
+			},
+			expStdout: []string{"csum_check called"},
+		},
+		"csum_check epoch short": {
+			args: []string{"csum_check", "-e", "999", "/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_csum_check_Fn = csumCheckFnChecking(t, "/[0]", 999, false)
+			},
+			expStdout: []string{"csum_check called"},
+		},
+		"csum_check epoch long": {
+			args: []string{"csum_check", "--epoch=666", "/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_csum_check_Fn = csumCheckFnChecking(t, "/[0]", 666, false)
+			},
+			expStdout: []string{"csum_check called"},
+		},
+		"csum_check verbose short": {
+			args: []string{"csum_check", "-v", "/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_csum_check_Fn = csumCheckFnChecking(t, "/[0]", math.MaxUint64, true)
+			},
+			expStdout: []string{"csum_check called"},
+		},
+		"csum_check verbose long": {
+			args: []string{"csum_check", "--verbose", "/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_csum_check_Fn = csumCheckFnChecking(t, "/[0]", math.MaxUint64, true)
+			},
+			expStdout: []string{"csum_check called"},
+		},
+		"csum_check verbose and epoch": {
+			args: []string{"csum_check", "-e", "999", "-v", "/[0]"},
+			setup: func(t *testing.T) {
+				ddb_run_csum_check_Fn = csumCheckFnChecking(t, "/[0]", 999, true)
+			},
+			expStdout: []string{"csum_check called"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
