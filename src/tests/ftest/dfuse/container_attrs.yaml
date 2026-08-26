@@ -27,21 +27,16 @@ pool:
 container_01:
   type: POSIX
   attrs: dfuse-attr-time:666,dfuse-dentry-time:999
-  control_method: daos
 
 container_02:
   type: POSIX
-  control_method: daos
 
 container_03:
   type: POSIX
   attrs: dfuse-attr-time:42,dfuse-dentry-time:404
-  control_method: daos
 
 container_04:
   type: POSIX
-  control_method: daos
 
 container_05:
   type: POSIX
-  control_method: daos

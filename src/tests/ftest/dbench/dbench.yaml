@@ -17,7 +17,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 dbench:
   loadfile: /usr/share/dbench/client.txt  # writes about 25M and perform 500 thousand operations

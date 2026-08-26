@@ -523,15 +523,6 @@ struct vos_dtx_act_ent {
 #define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
-struct vos_dtx_cmt_ent {
-	struct vos_dtx_cmt_ent_df dce_base;
-	uint32_t                  dce_invalid : 1;
-};
-
-#define DCE_XID(dce)		((dce)->dce_base.dce_xid)
-#define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
-#define DCE_CMT_TIME(dce)	((dce)->dce_base.dce_cmt_time)
-
 #define EVT_DESC_MAGIC          0xbeefdead
 
 extern uint64_t vos_evt_feats;
@@ -725,13 +716,13 @@ vos_obj_tab_register();
  * DTX table destroy
  * Called from vos_cont_destroy
  *
- * \param umm		[IN]	Instance of an unified memory class.
+ * \param pool		[IN]	The pool that holds the container.
  * \param cont_df	[IN]	Pointer to the on-disk VOS container.
  *
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
+vos_dtx_table_destroy(struct vos_pool *pool, struct vos_cont_df *cont_df);
 
 /**
  * Register dbtree class for DTX table.
@@ -836,20 +827,18 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p);
+vos_dtx_prepared(struct dtx_handle *dth, bool *cmt);
 
 int
-vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
-			int count, daos_epoch_t epoch, bool keep_act, bool rm_cos[],
-			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
+vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[], int count,
+			daos_epoch_t epoch, bool keep_act, bool rm_cos[],
+			struct vos_dtx_act_ent **daes, bool cmts[]);
 
 int
 vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force);
 
 void
-vos_dtx_post_handle(struct vos_container *cont,
-		    struct vos_dtx_act_ent **daes,
-		    struct vos_dtx_cmt_ent **dces,
+vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes, bool cmts[],
 		    int count, bool abort, bool rollback, bool keep_act);
 
 /**
