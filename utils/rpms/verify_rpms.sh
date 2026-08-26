@@ -82,7 +82,7 @@ case "${DISTRO}" in
             [argobots-devel]=argobots
             [daos-spdk-devel]=daos-spdk
             [isa-l-devel]=libisal
-            [isa-l_crypto-devel]=libisal_crypto
+            [isa-l_crypto-devel]=libisa-l_crypto
             [libfabric-devel]=libfabric
             [mercury-devel]=mercury
             [libpmem-devel]=libpmem
@@ -95,7 +95,7 @@ case "${DISTRO}" in
             [libabt-devel]=libabt0
             [daos-spdk-devel]=daos-spdk
             [libisal-devel]=libisal2
-            [libisal_crypto-devel]=libisal-crypto2
+            [libisal_crypto-devel]=libisal_crypto2
             [libfabric-devel]=libfabric1
             [mercury-devel]=mercury
             [libpmem-devel]=libpmem1
