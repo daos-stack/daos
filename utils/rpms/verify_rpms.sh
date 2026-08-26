@@ -165,6 +165,11 @@ check_devel_runtime_dependency() {
 
     runtime_pkg="${pkg_name%-devel}"
 
+    # Handle cases like isa-l_crypto-devel -> libisa-l_crypto
+    if [ -z "${pkg_present["${runtime_pkg}"]+x}" ] && [ -n "${pkg_present["lib${runtime_pkg}"]+x}" ]; then
+        runtime_pkg="lib${runtime_pkg}"
+    fi
+
     # Primary rule: if base runtime package exists in generated RPM set,
     # require exact version dependency on that package.
     if [ -n "${pkg_present["${runtime_pkg}"]+x}" ]; then
