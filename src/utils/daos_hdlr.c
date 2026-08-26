@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1314,8 +1314,11 @@ dm_serialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *pro
 	}
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
+		const char *dl_err = dlerror();
+
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
+		DH_PERROR_DER(ap, rc, "failed to load %s: %s", LIBSERIALIZE,
+			      dl_err ? dl_err : "unknown dynamic loader error");
 		D_GOTO(out, rc);
 	}
 	daos_cont_serialize_md = dlsym(handle, "daos_cont_serialize_md");
@@ -1342,8 +1345,11 @@ dm_deserialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, char *preserve
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
+		const char *dl_err = dlerror();
+
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
+		DH_PERROR_DER(ap, rc, "failed to load %s: %s", LIBSERIALIZE,
+			      dl_err ? dl_err : "unknown dynamic loader error");
 		D_GOTO(out, rc);
 	}
 	daos_cont_deserialize_props = dlsym(handle, "daos_cont_deserialize_props");
@@ -1370,8 +1376,11 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
+		const char *dl_err = dlerror();
+
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
+		DH_PERROR_DER(ap, rc, "failed to load %s: %s", LIBSERIALIZE,
+			      dl_err ? dl_err : "unknown dynamic loader error");
 		D_GOTO(out, rc);
 	}
 	daos_cont_deserialize_attrs = dlsym(handle, "daos_cont_deserialize_attrs");
