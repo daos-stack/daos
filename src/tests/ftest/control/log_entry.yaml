@@ -22,5 +22,4 @@ pool:
   svcn: 5
 
 container:
-  control_method: daos
   type: POSIX
