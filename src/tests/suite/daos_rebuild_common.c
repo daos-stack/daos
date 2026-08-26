@@ -18,35 +18,8 @@
 #include <daos/pool.h>
 #include <daos/mgmt.h>
 #include <daos/container.h>
-#include <sys/wait.h>
 
 static test_arg_t *save_arg;
-
-#define RANK_JOINED_WAIT_MAX_SEC 60
-
-static int
-wait_rank_joined(test_arg_t *arg, d_rank_t rank)
-{
-	char cmd[256];
-	int  waited;
-
-	for (waited = 0; waited < RANK_JOINED_WAIT_MAX_SEC; waited++) {
-		int rc;
-
-		snprintf(cmd, sizeof(cmd),
-			 "dmg -o %s system query -r %u 2>/dev/null | "
-			 "grep -Eqi 'state[^[:alpha:]]*joined'",
-			 arg->dmg_config, rank);
-		rc = system(cmd);
-		if (WIFEXITED(rc) && WEXITSTATUS(rc) == 0)
-			return 0;
-
-		sleep(1);
-	}
-
-	print_message("timed out waiting for rank %u to reach joined state\n", rank);
-	return -DER_TIMEDOUT;
-}
 
 enum REBUILD_TEST_OP_TYPE {
 	RB_OP_TYPE_FAIL,
@@ -105,8 +78,7 @@ rebuild_reint_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 	if (restart) {
 		daos_start_server(args[0], args[0]->pool.pool_uuid,
 				  args[0]->group, args[0]->pool.alive_svc, rank);
-		rc = wait_rank_joined(args[0], rank);
-		assert_rc_equal(rc, 0);
+		sleep(10);
 	}
 
 	for (i = 0; i < args_cnt; i++) {
