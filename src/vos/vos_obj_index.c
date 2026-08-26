@@ -217,16 +217,30 @@ oi_node_alloc(struct btr_instance *tins, int size)
 	return umem_zalloc(&tins->ti_umm, size);
 }
 
+static int
+oi_rec_check(struct btr_instance *tins, d_iov_t *val_iov)
+{
+	struct vos_obj_df *obj = val_iov->iov_buf;
+
+	D_ASSERT(obj != NULL);
+	D_ASSERT(val_iov->iov_len == vos_obj_df_size((struct vos_pool *)tins->ti_priv));
+
+	/** WIP */
+
+	return 0;
+}
+
 static btr_ops_t oi_btr_ops = {
-	.to_rec_msize		= oi_rec_msize,
-	.to_hkey_size		= oi_hkey_size,
-	.to_hkey_gen		= oi_hkey_gen,
-	.to_hkey_cmp		= oi_hkey_cmp,
-	.to_rec_alloc		= oi_rec_alloc,
-	.to_rec_free		= oi_rec_free,
-	.to_rec_fetch		= oi_rec_fetch,
-	.to_rec_update		= oi_rec_update,
-	.to_node_alloc		= oi_node_alloc,
+    .to_rec_msize  = oi_rec_msize,
+    .to_hkey_size  = oi_hkey_size,
+    .to_hkey_gen   = oi_hkey_gen,
+    .to_hkey_cmp   = oi_hkey_cmp,
+    .to_rec_alloc  = oi_rec_alloc,
+    .to_rec_free   = oi_rec_free,
+    .to_rec_fetch  = oi_rec_fetch,
+    .to_rec_update = oi_rec_update,
+    .to_node_alloc = oi_node_alloc,
+    .to_rec_check  = oi_rec_check,
 };
 
 bool

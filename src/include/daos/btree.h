@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -409,7 +409,18 @@ typedef struct {
 	 * \a return		Allocated node address (offset within the pool)
 	 */
 	umem_off_t	(*to_node_alloc)(struct btr_instance *tins, int size);
-
+	/**
+	 * Optional:
+	 * Check the consistency of the given record.
+	 *
+	 * \param tins	[IN]	Tree instance which contains the root umem
+	 *			offset and memory class etc.
+	 * \param val	[IN]	Value to be checked.
+	 *
+	 * \retval DER_SUCCESS	Success.
+	 * \retval -DER_*	Errors returned by the tree checking logic.
+	 */
+	int (*to_rec_check)(struct btr_instance *tins, d_iov_t *val);
 } btr_ops_t;
 
 /**
@@ -550,8 +561,8 @@ enum btr_report_type {
 };
 typedef void (*btr_report_fn_t)(void *arg, enum btr_report_type type, const char *fmt, ...);
 int
-     dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, btr_report_fn_t report_fn,
-			  void *report_arg, bool error_on_non_zero_padding);
+     dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, void *priv,
+			  btr_report_fn_t report_fn, void *report_arg, bool error_on_non_zero_padding);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh, void *args);
 int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);

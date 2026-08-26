@@ -450,9 +450,9 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 		CK_APPENDL_OK(ck);
 
 		CK_PRINT(ck, CK_OBJ_TREE_STR "...\n");
-		CK_INDENT(ck,
-			  rc = dbtree_check_inplace(&args.ca_cont_df->cd_obj_root, &pool->vp_uma,
-						    ck_report, ck, error_on_non_zero_padding));
+		CK_INDENT(ck, rc = dbtree_check_inplace(&args.ca_cont_df->cd_obj_root,
+							&pool->vp_uma, pool, ck_report, ck,
+							error_on_non_zero_padding));
 		CK_PRINTL_RC(ck, rc, CK_OBJ_TREE_STR);
 		if (rc != DER_SUCCESS) {
 			D_GOTO(exit, rc);

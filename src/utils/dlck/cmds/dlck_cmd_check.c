@@ -39,6 +39,42 @@ struct bundle {
 	struct checker     *ck;
 };
 
+static int
+obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct bundle      *bndl    = cb_arg;
+	// struct xstream_arg *xa      = bndl->xa;
+	// struct checker     *main_ck = &xa->ctrl->checker;
+	struct checker     *ck      = bndl->ck;
+
+	CK_PRINTF(ck, "oid: "DF_UOID"\n", DP_UOID(entry->ie_oid));
+
+	return 0;
+}
+
+/**
+ * Target thread (worker). Check trees of a single container.
+ *
+ * \param[in]	ck	Checker.
+ * \param[in]	cont	Container to check.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Errors returned by the tree checking logic.
+ */
+static int
+trees_process(daos_handle_t coh, struct bundle *bndl)
+{
+	vos_iter_param_t        param   = {0};
+	struct vos_iter_anchors anchors = {0};
+
+	param.ip_hdl        = coh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
+
+	return vos_iterate(&param, VOS_ITER_OBJ, false, &anchors, obj_process, NULL, bndl, NULL);
+}
+
 /**
  * Target thread (worker). VOS iterator callback. Check a single container.
  *
@@ -65,10 +101,12 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 
 	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, ck, &coh);
 	if (rc == DER_SUCCESS) {
+		CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc, ck->ck_warnings_num);
+
+		trees_process(coh, bndl);
+
 		(void)vos_cont_close(coh);
 	}
-
-	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc, ck->ck_warnings_num);
 
 	/** continue checking other containers even if this one failed */
 	return 0;

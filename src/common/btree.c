@@ -4761,6 +4761,22 @@ done:
 	return 0;
 }
 
+static int
+btr_rec_check(struct btr_context *tcx, struct btr_record *rec)
+{
+	d_iov_t val;
+	int     rc;
+
+	if (!btr_ops(tcx)->to_rec_check) {
+		return -DER_NOSYS;
+	}
+
+	rc = btr_rec_fetch(tcx, rec, NULL, &val);
+	D_ASSERT(rc == DER_SUCCESS);
+
+	return btr_ops(tcx)->to_rec_check(&tcx->tc_tins, &val);
+}
+
 #define CK_BTREE_NODE_FMT             "Node (off=%#lx)... "
 #define CK_BTREE_NODE_MALFORMED_STR   "malformed - "
 #define CK_BTREE_NON_ZERO_PADDING_FMT CK_BTREE_NODE_MALFORMED_STR "tn_pad_32 != 0 (%#" PRIx32 ")"
@@ -4851,6 +4867,7 @@ btr_nodes_check(struct btr_context *tcx, btr_report_fn_t report_fn, void *report
 	struct node_info *ni_tmp;
 	umem_off_t        nd_off;
 	struct btr_node  *nd;
+	struct btr_record *rec;
 	int               rc = DER_SUCCESS;
 
 	D_ASSERT(report_fn != NULL);
@@ -4885,13 +4902,20 @@ btr_nodes_check(struct btr_context *tcx, btr_report_fn_t report_fn, void *report
 			continue;
 		}
 
-		/**
-		 * append the node's children to the front of the nodes' list
-		 *
-		 * Note: This makes the traversal depth-first. Given the limited depth of a typical
-		 * DAOS tree, this approach should help reduce resource usage.
-		 */
 		for (int at = 0; at < nd->tn_keyn; ++at) {
+			/** check the record's consistency */
+			rec = btr_node_rec_at(tcx, nd_off, at);
+			rc  = btr_rec_check(tcx, rec);
+			if (rc != DER_SUCCESS) {
+				break;
+			}
+
+			/**
+			 * Append the node's children to the front of the nodes' list.
+			 *
+			 * Note: This makes the traversal depth-first. Given the limited depth of a
+			 * typical DAOS tree, this approach should help reduce resource usage.
+			 */
 			D_ALLOC_PTR(ni);
 			ni->nd_off = btr_node_child_at(tcx, nd_off, at);
 			d_list_add(&ni->link, &node_list);
@@ -4913,11 +4937,14 @@ btr_nodes_check(struct btr_context *tcx, btr_report_fn_t report_fn, void *report
  *
  * \param[in] root	Address of the tree root.
  * \param[in] uma	Memory class attributes.
- * \param[in] ck	Checker.
+ * \param[in] priv	Private data for the tree class.
+ * \param[in] report_fn	Report function.
+ * \param[in] report_arg	Argument for the report function.
+ * \param[in] error_on_non_zero_padding	Trigger an error on non-zero padding.
  */
 int
-dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, btr_report_fn_t report_fn,
-		     void *report_arg, bool error_on_non_zero_padding)
+dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, void *priv,
+		     btr_report_fn_t report_fn, void *report_arg, bool error_on_non_zero_padding)
 {
 	struct btr_context tcx        = {0};
 	uint64_t           tree_feats = -1;
@@ -4927,7 +4954,7 @@ dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, btr_report_fn
 	D_ASSERT(uma != NULL);
 	D_ASSERT(report_fn != NULL);
 
-	rc = btr_class_init(UMOFF_NULL, root, -1, &tree_feats, uma, DAOS_HDL_INVAL, NULL, report_fn,
+	rc = btr_class_init(UMOFF_NULL, root, -1, &tree_feats, uma, DAOS_HDL_INVAL, priv, report_fn,
 			    report_arg, &tcx.tc_tins);
 	if (rc != DER_SUCCESS) {
 		return rc;
