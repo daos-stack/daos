@@ -20,10 +20,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common/proto/chk"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -114,11 +112,11 @@ func mergeTestPolicies(current, merge []*mgmtpb.CheckInconsistPolicy) []*mgmtpb.
 func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 	specificPolicies := []*mgmtpb.CheckInconsistPolicy{
 		{
-			InconsistCas: chk.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
+			InconsistCas: chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
 			InconsistAct: chkpb.CheckInconsistAction_CIA_IGNORE,
 		},
 		{
-			InconsistCas: chk.CheckInconsistClass_CIC_CONT_BAD_LABEL,
+			InconsistCas: chkpb.CheckInconsistClass_CIC_CONT_BAD_LABEL,
 			InconsistAct: chkpb.CheckInconsistAction_CIA_INTERACT,
 		},
 	}
@@ -226,14 +224,14 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 		},
 		"request failed": {
 			mic: &control.MockInvokerConfig{
-				UnaryResponse: control.MockMSResponse("", nil, &mgmt.CheckLeaderResp{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
 					Resp: &mgmtpb.CheckLeaderResp_StartResp{StartResp: &mgmtpb.CheckStartResp{Status: int32(daos.MiscError)}},
 				}),
 			},
 			req: &mgmtpb.CheckStartReq{
 				Sys: "daos_server",
 			},
-			expResp:     &mgmt.CheckStartResp{Status: int32(daos.MiscError)},
+			expResp:     &mgmtpb.CheckStartResp{Status: int32(daos.MiscError)},
 			expFindings: defaultTestFindings(),
 			expPolicies: testPolicies,
 		},
@@ -251,7 +249,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				Flags: uint32(chkpb.CheckFlag_CF_RESET),
 			},
 			mic: &control.MockInvokerConfig{
-				UnaryResponse: control.MockMSResponse("", nil, &mgmt.CheckLeaderResp{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
 					Resp: &mgmtpb.CheckLeaderResp_StartResp{StartResp: &mgmtpb.CheckStartResp{
 						Status: 1,
 					}},
@@ -268,7 +266,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				Uuids: []string{uuids[0], uuids[2]},
 			},
 			mic: &control.MockInvokerConfig{
-				UnaryResponse: control.MockMSResponse("", nil, &mgmt.CheckLeaderResp{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
 					Resp: &mgmtpb.CheckLeaderResp_StartResp{StartResp: &mgmtpb.CheckStartResp{
 						Status: 1,
 					}},
@@ -369,7 +367,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 
 			if tc.mic == nil {
 				tc.mic = &control.MockInvokerConfig{
-					UnaryResponse: control.MockMSResponse("", nil, &mgmt.CheckLeaderResp{
+					UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
 						Resp: &mgmtpb.CheckLeaderResp_StartResp{StartResp: &mgmtpb.CheckStartResp{}},
 					}),
 				}
@@ -406,6 +404,84 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 			}
 			lastPol := lastPM.ToSlice()
 			if diff := cmp.Diff(tc.expPolicies, lastPol, cmpopts.IgnoreUnexported(mgmtpb.CheckInconsistPolicy{})); diff != "" {
+				t.Fatalf("want-, got+:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_SystemCheckStop(t *testing.T) {
+	for name, tc := range map[string]struct {
+		createMS func(*testing.T, logging.Logger) *mgmtSvc
+		mic      *control.MockInvokerConfig
+		req      *mgmtpb.CheckStopReq
+		expResp  *mgmtpb.CheckStopResp
+		expErr   error
+	}{
+		"checker is not enabled": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return testSvcWithMemberState(t, log, system.MemberStateStopped, testPoolUUIDs(3))
+			},
+			req: &mgmtpb.CheckStopReq{
+				Sys: "daos_server",
+			},
+			expErr: checker.FaultCheckerNotEnabled,
+		},
+		"bad member states": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return testSvcCheckerEnabled(t, log, system.MemberStateJoined, testPoolUUIDs(3))
+			},
+			req: &mgmtpb.CheckStopReq{
+				Sys: "daos_server",
+			},
+			expErr: errors.New("expected states"),
+		},
+		"gRPC fails": {
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("mock gRPC"),
+			},
+			req: &mgmtpb.CheckStopReq{
+				Sys: "daos_server",
+			},
+			expErr: errors.New("mock gRPC"),
+		},
+		"response returned": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StopResp{StopResp: &mgmtpb.CheckStopResp{Status: int32(daos.MiscError)}},
+				}),
+			},
+			req: &mgmtpb.CheckStopReq{
+				Sys: "daos_server",
+			},
+			expResp: &mgmtpb.CheckStopResp{Status: int32(daos.MiscError)},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			if tc.createMS == nil {
+				tc.createMS = func(t *testing.T, log logging.Logger) *mgmtSvc {
+					return createMSMultiInCheckerMode(t, log, 3)
+				}
+			}
+			svc := tc.createMS(t, log)
+
+			if tc.mic == nil {
+				tc.mic = &control.MockInvokerConfig{
+					UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+						Resp: &mgmtpb.CheckLeaderResp_StopResp{StopResp: &mgmtpb.CheckStopResp{}},
+					}),
+				}
+			}
+			svc.rpcClient = control.NewMockInvoker(log, tc.mic)
+
+			resp, err := svc.SystemCheckStop(test.Context(t), tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+
+			if diff := cmp.Diff(tc.expResp, resp, cmpopts.IgnoreUnexported(mgmtpb.CheckStopResp{})); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
 		})
@@ -682,7 +758,7 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 		"bad gRPC status": {
 			req: interactReq,
 			mic: &control.MockInvokerConfig{
-				UnaryResponse: control.MockMSResponse("", nil, &mgmt.CheckLeaderResp{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
 					Resp: &mgmtpb.CheckLeaderResp_DaosResp{DaosResp: &mgmtpb.DaosResp{Status: int32(daos.IOError)}},
 				}),
 			},
@@ -702,7 +778,7 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 
 			if tc.mic == nil {
 				tc.mic = &control.MockInvokerConfig{
-					UnaryResponse: control.MockMSResponse("", nil, &mgmt.CheckLeaderResp{
+					UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
 						Resp: &mgmtpb.CheckLeaderResp_DaosResp{DaosResp: &mgmtpb.DaosResp{}},
 					}),
 				}
@@ -944,7 +1020,7 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 
 			if tc.mic == nil {
 				tc.mic = &control.MockInvokerConfig{
-					UnaryResponse: control.MockMSResponse("", nil, &mgmt.CheckLeaderResp{
+					UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
 						Resp: &mgmtpb.CheckLeaderResp_QueryResp{QueryResp: defaultLeaderResp()},
 					}),
 				}

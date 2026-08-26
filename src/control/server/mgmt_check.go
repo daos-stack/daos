@@ -653,6 +653,10 @@ func (svc *mgmtSvc) SystemCheckStop(ctx context.Context, req *mgmtpb.CheckStopRe
 		return nil, err
 	}
 
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
 	dResp, err := svc.makePoolCheckLeaderCall(ctx, req)
 	if err != nil {
 		return nil, err
