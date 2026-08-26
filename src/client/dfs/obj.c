@@ -2102,26 +2102,26 @@ out_obj:
  * shrinks the head and empties the tail, otherwise only the tail extent changes.
  */
 static int
-dfs_pl_truncate(dfs_obj_t *obj, daos_off_t offset)
+dfs_pl_truncate(dfs_obj_t *obj, daos_handle_t th, daos_off_t offset)
 {
 	daos_size_t split = obj->f.split_off;
 	int         rc;
 
 	if (offset <= split) {
-		rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, offset, NULL);
+		rc = daos_array_set_size(obj->oh, th, offset, NULL);
 		if (rc)
 			return rc;
-		return daos_array_set_size(obj->f.tail_oh, DAOS_TX_NONE, 0, NULL);
+		return daos_array_set_size(obj->f.tail_oh, th, 0, NULL);
 	}
 
 	/* head retains all of [0, split_off); only the tail extent changes */
-	return daos_array_set_size(obj->f.tail_oh, DAOS_TX_NONE, offset - split, NULL);
+	return daos_array_set_size(obj->f.tail_oh, th, offset - split, NULL);
 }
 
 /* Punch the logical hole [offset, offset + len) of a progressive-layout file across head and tail.
  */
 static int
-dfs_pl_punch_hole(dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
+dfs_pl_punch_hole(dfs_obj_t *obj, daos_handle_t th, daos_off_t offset, daos_size_t len)
 {
 	daos_size_t      split = obj->f.split_off;
 	daos_off_t       end   = offset + len;
@@ -2135,7 +2135,7 @@ dfs_pl_punch_hole(dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 	if (offset < split) {
 		rg.rg_idx = offset;
 		rg.rg_len = (end < split ? end : split) - offset;
-		rc        = daos_array_punch(obj->oh, DAOS_TX_NONE, &iod, NULL);
+		rc        = daos_array_punch(obj->oh, th, &iod, NULL);
 		if (rc)
 			return rc;
 	}
@@ -2144,11 +2144,60 @@ dfs_pl_punch_hole(dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 
 		rg.rg_idx = tstart - split;
 		rg.rg_len = end - tstart;
-		rc        = daos_array_punch(obj->f.tail_oh, DAOS_TX_NONE, &iod, NULL);
+		rc        = daos_array_punch(obj->f.tail_oh, th, &iod, NULL);
 		if (rc)
 			return rc;
 	}
 	return 0;
+}
+
+/*
+ * Apply the chosen PL truncate/punch. In balanced mode the head and tail updates are wrapped in a
+ * DTX only when the operation touches both arrays; a single-array update is already atomic.
+ */
+static int
+dfs_pl_punch_op(dfs_t *dfs, dfs_obj_t *obj, bool truncate, daos_off_t offset, daos_size_t len)
+{
+	daos_handle_t th = DAOS_TX_NONE;
+	bool          span_both;
+	int           rc;
+
+	if (truncate)
+		span_both = offset <= obj->f.split_off;
+	else
+		span_both = offset < obj->f.split_off && (offset + len) > obj->f.split_off;
+
+	if (dfs->use_dtx && span_both) {
+		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
+		if (rc) {
+			D_ERROR("daos_tx_open() failed (%d)\n", rc);
+			return daos_der2errno(rc);
+		}
+	}
+
+restart:
+	if (truncate)
+		rc = dfs_pl_truncate(obj, th, offset);
+	else
+		rc = dfs_pl_punch_hole(obj, th, offset, len);
+	rc = daos_der2errno(rc);
+	if (rc)
+		D_GOTO(out, rc);
+
+	if (daos_handle_is_valid(th)) {
+		rc = daos_tx_commit(th, NULL);
+		if (rc) {
+			if (rc != -DER_TX_RESTART)
+				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
+			D_GOTO(out, rc = daos_der2errno(rc));
+		}
+	}
+
+out:
+	rc = check_tx(th, rc);
+	if (rc == ERESTART)
+		goto restart;
+	return rc;
 }
 
 int
@@ -2175,10 +2224,8 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 		daos_size_t tsize = 0;
 
 		/** simple truncate */
-		if (len == DFS_MAX_FSIZE) {
-			rc = dfs_pl_truncate(obj, offset);
-			return daos_der2errno(rc);
-		}
+		if (len == DFS_MAX_FSIZE)
+			return dfs_pl_punch_op(dfs, obj, true, offset, len);
 
 		/** logical size = split + tail extent when the tail has data, else the head extent
 		 */
@@ -2200,17 +2247,15 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 			hi = offset + len;
 
 		/** if fsize is between the range to punch, just truncate to offset */
-		if (offset < size && size <= hi) {
-			rc = dfs_pl_truncate(obj, offset);
-			return daos_der2errno(rc);
-		}
+		if (offset < size && size <= hi)
+			return dfs_pl_punch_op(dfs, obj, true, offset, len);
 
 		D_ASSERT(size > hi);
 
-		rc = dfs_pl_punch_hole(obj, offset, len);
+		rc = dfs_pl_punch_op(dfs, obj, false, offset, len);
 		if (rc) {
-			D_ERROR("dfs_pl_punch_hole() failed (%d)\n", rc);
-			return daos_der2errno(rc);
+			D_ERROR("dfs_pl_punch_op() failed (%d)\n", rc);
+			return rc;
 		}
 
 		DFS_OP_STAT_INCR(dfs, DOS_TRUNCATE);
