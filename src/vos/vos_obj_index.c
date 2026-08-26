@@ -149,7 +149,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	daos_handle_t		 coh = { 0 };
 	int			 rc;
 	struct vos_pool		*pool;
-	uint32_t		*bkt_ids = NULL;
+	uint32_t                *bkt_id = NULL;
 
 	obj = umem_off2ptr(umm, rec->rec_off);
 
@@ -182,10 +182,10 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (vos_pool_is_evictable(pool)) {
 		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj;
 
-		bkt_ids = &p2->p2_bkt_ids[0];
+		bkt_id = &p2->p2_bkt_id0;
 	}
 
-	return gc_add_item(tins->ti_priv, coh, GC_OBJ, rec->rec_off, bkt_ids);
+	return gc_add_item(tins->ti_priv, coh, GC_OBJ, rec->rec_off, bkt_id);
 }
 
 static int
@@ -665,7 +665,7 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 			if (vos_pool_is_evictable(oiter->oit_cont->vc_pool)) {
 				struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj;
 
-				desc.id_bkt = p2->p2_bkt_ids[0];
+				desc.id_bkt = p2->p2_bkt_id0;
 			}
 
 			feats = dbtree_feats_get(&obj->vo_tree);

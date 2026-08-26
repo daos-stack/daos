@@ -82,7 +82,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	struct vos_container	 dummy_cont = { 0 };
 	daos_handle_t		 toh;
 	void			*priv;
-	int			 rc, i;
+	int                      rc;
 
 	if (gc->gc_type == GC_CONT) {
 		priv = pool;
@@ -90,8 +90,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 		dummy_cont.vc_pool = pool;
 		dummy_obj.obj_cont = &dummy_cont;
 		dummy_obj.obj_bkt_alloted = 1;
-		for (i = 0; i < VOS_GC_BKTS_MAX; i++)
-			dummy_obj.obj_bkt_ids[i] = item->it_bkt_ids[i];
+		dummy_obj.obj_bkt_id0     = item->it_bkt_id0;
 		priv = &dummy_obj;
 	}
 
@@ -217,7 +216,7 @@ gc_free_dkey(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct
 
 	D_ASSERT(krec->kr_bmap & KREC_BF_DKEY);
 	if (krec->kr_bmap & KREC_BF_NO_AKEY)
-		return gc_add_item(pool, coh, GC_AKEY, item->it_addr, &item->it_bkt_ids[0]);
+		return gc_add_item(pool, coh, GC_AKEY, item->it_addr, &item->it_bkt_id0);
 	else
 		return umem_free(&pool->vp_umm, item->it_addr);
 }
@@ -709,7 +708,7 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool, struct vos_container *con
 		/* it's going to be a empty bag */
 		D_ASSERT(bag->bag_item_nr == 1);
 		rc = gc_bin_free_bag(&pool->vp_umm, bin, bin->bin_bag_first,
-				     (cont != NULL || item->it_bkt_ids[0] != UMEM_DEFAULT_MBKT_ID));
+				     (cont != NULL || item->it_bkt_id0 != UMEM_DEFAULT_MBKT_ID));
 		if (rc)
 			goto failed;
 	} else {
@@ -759,13 +758,13 @@ failed:
  * NB: this function must be called within pmdk transaction.
  */
 int
-gc_add_item(struct vos_pool *pool, daos_handle_t coh,
-	    enum vos_gc_type type, umem_off_t item_off, uint32_t *bkt_ids)
+gc_add_item(struct vos_pool *pool, daos_handle_t coh, enum vos_gc_type type, umem_off_t item_off,
+	    uint32_t *bkt_id)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct vos_gc_bin_df	*bin;
 	struct vos_gc_item	 item;
-	int			 rc, i;
+	int                      rc;
 
 	D_DEBUG(DB_TRACE, "Add %s addr="DF_X64"\n",
 		gc_type2name(type), item_off);
@@ -774,13 +773,11 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 		return 0; /* OK to ignore because the pool is being deleted */
 
 	item.it_addr = item_off;
-	for (i = 0; i < VOS_GC_BKTS_MAX; i++)
-		item.it_bkt_ids[i] = bkt_ids ? bkt_ids[i] : UMEM_DEFAULT_MBKT_ID;
+	item.it_bkt_id0 = bkt_id != NULL ? *bkt_id : UMEM_DEFAULT_MBKT_ID;
 
-	rc = gc_get_bin(pool, cont, type, item.it_bkt_ids[0], &bin);
+	rc = gc_get_bin(pool, cont, type, item.it_bkt_id0, &bin);
 	if (rc) {
-		DL_ERROR(rc, "Failed to get GC bin for type:%d, bkt_id:%u",
-			 type, item.it_bkt_ids[0]);
+		DL_ERROR(rc, "Failed to get GC bin for type:%d, bkt_id:%u", type, item.it_bkt_id0);
 		return rc;
 	}
 

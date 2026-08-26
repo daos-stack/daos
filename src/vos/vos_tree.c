@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -289,7 +289,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	int			 rc;
 	struct vos_pool		*pool;
 	struct vos_object	*obj;
-	uint32_t		*bkt_ids = NULL;
+	uint32_t                *bkt_id = NULL;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -314,10 +314,10 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	if (vos_pool_is_evictable(pool)) {
 		D_ASSERT(obj->obj_bkt_alloted == 1);
-		bkt_ids = &obj->obj_bkt_ids[0];
+		bkt_id = &obj->obj_bkt_id0;
 	}
 
-	return gc_add_item(pool, coh, gc, rec->rec_off, bkt_ids);
+	return gc_add_item(pool, coh, gc, rec->rec_off, bkt_id);
 }
 
 static int

@@ -1448,8 +1448,8 @@ gc_init_cont(struct umem_instance *umm, struct vos_cont_df *cd);
 void
 gc_check_cont(struct vos_container *cont);
 int
-gc_add_item(struct vos_pool *pool, daos_handle_t coh,
-	    enum vos_gc_type type, umem_off_t item_off, uint32_t *bkt_ids);
+gc_add_item(struct vos_pool *pool, daos_handle_t coh, enum vos_gc_type type, umem_off_t item_off,
+	    uint32_t *bkt_id);
 int
 vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
@@ -1956,9 +1956,9 @@ vos_obj_alloc(struct umem_instance *umm, struct vos_object *obj, size_t size, bo
 	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
 		D_ASSERT(obj->obj_bkt_alloted == 1);
 		if (zeroing)
-			return umem_zalloc_from_bucket(umm, size, obj->obj_bkt_ids[0]);
+			return umem_zalloc_from_bucket(umm, size, obj->obj_bkt_id0);
 
-		return umem_alloc_from_bucket(umm, size, obj->obj_bkt_ids[0]);
+		return umem_alloc_from_bucket(umm, size, obj->obj_bkt_id0);
 	}
 
 	if (zeroing)
@@ -1973,7 +1973,7 @@ vos_obj_reserve(struct umem_instance *umm, struct vos_object *obj,
 {
 	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
 		D_ASSERT(obj->obj_bkt_alloted == 1);
-		return umem_reserve_from_bucket(umm, rsrvd_scm, size, obj->obj_bkt_ids[0]);
+		return umem_reserve_from_bucket(umm, rsrvd_scm, size, obj->obj_bkt_id0);
 	}
 
 	return umem_reserve(umm, rsrvd_scm, size);
