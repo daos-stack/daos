@@ -1225,6 +1225,24 @@ surviving engine.
     rebuild process is configured to consume up to 30% of the CPU cycles,
     leaving the other 70% for regular I/O operations.
 
+### Waiting for Rebuild Completion
+
+By default, `dmg pool exclude`, `drain`, `reintegrate` and `extend` commands
+return as soon as the pool map has been updated; the rebuild they trigger runs
+asynchronously and the pool must be monitored in order to determine success or
+failure of the operation. Rather than polling `dmg pool query` in a loop, pass
+`--wait` (with an optional timeout) to block until that rebuild reaches a terminal
+state. The command then exits non-zero if the rebuild failed or was stopped
+before completing.
+
+```bash
+# Block until the rebuild triggered by the exclusion completes
+$ dmg pool exclude --ranks=${rank} --wait <pool_label>
+
+# Give up waiting after 30 minutes
+$ dmg pool drain --ranks=${rank} --wait=30m <pool_label>
+```
+
 ### Manual Exclusion
 
 An operator can exclude one or more engines or targets from a specific DAOS pool using the rank(s)
@@ -1442,7 +1460,10 @@ $ dmg pool extend $DAOS_POOL --ranks=${rank1},${rank2}...
 ```
 
 The pool extend command accepts one required parameter which is a comma
-separated list of engine ranks to include in the pool.
+separated list of engine ranks to include in the pool. As with the other
+rebuild-triggering commands, `--wait[=TIMEOUT]` blocks until the resulting
+rebalance completes (see [Waiting for Rebuild
+Completion](#waiting-for-rebuild-completion)).
 
 The pool rebalance operation will work most efficiently when the pool is
 extended to its desired size in a single operation, as opposed to multiple,

@@ -371,7 +371,8 @@ def load_local(env_script, env):
 
 
 # Environment variables that are kept when SCONS_ENV=minimal (the default).
-MINIMAL_ENV = ('HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy', 'PKG_CONFIG_PATH',
+MINIMAL_ENV = ('HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy',
+               'no_proxy', 'NO_PROXY', 'PKG_CONFIG_PATH',
                'MODULEPATH', 'MODULESHOME', 'MODULESLOADED', 'I_MPI_ROOT', 'COVFILE')
 
 # Environment variables that are also kept when LD_PRELOAD is set.

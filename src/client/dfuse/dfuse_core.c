@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025-2026 Google LLC.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -11,12 +11,45 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+#define DFUSE_EQ_BACKOFF_START  64
+#define DFUSE_EQ_BACKOFF_MIN_US 50
+#define DFUSE_EQ_BACKOFF_MAX_US 5000
+
+static int64_t
+dfuse_eq_backoff_us(uint32_t empty_polls)
+{
+	uint32_t backoff = DFUSE_EQ_BACKOFF_MIN_US;
+	uint32_t steps;
+
+	if (empty_polls < DFUSE_EQ_BACKOFF_START)
+		return 0;
+
+	steps = (empty_polls - DFUSE_EQ_BACKOFF_START) / DFUSE_EQ_BACKOFF_START;
+	while (steps-- > 0 && backoff < DFUSE_EQ_BACKOFF_MAX_US)
+		backoff *= 2;
+
+	if (backoff > DFUSE_EQ_BACKOFF_MAX_US)
+		backoff = DFUSE_EQ_BACKOFF_MAX_US;
+
+	return backoff;
+}
+
+static void
+dfuse_eq_empty_poll(struct dfuse_eq *eqt)
+{
+	uint32_t empty_polls = atomic_load_relaxed(&eqt->de_empty_polls);
+
+	if (empty_polls < UINT32_MAX)
+		atomic_store_relaxed(&eqt->de_empty_polls, empty_polls + 1);
+}
+
 /* Async progress thread.
  *
  * A number of threads are created at launch, each thread having its own event queue with a
  * semaphore to wakeup, posted for each entry added to the event queue and once for shutdown.
  * When there are no entries on the eq then the thread will yield in the semaphore, when there
- * are pending events it'll spin in eq_poll() for completion.  All pending events should be
+ * are pending events it'll poll for completion. Repeated empty polls use a bounded timeout in
+ * daos_eq_poll() so CRT progress continues without busy polling. All pending events should be
  * completed before thread exit, should exit be called with pending events.
  */
 static void *
@@ -29,6 +62,7 @@ dfuse_progress_thread(void *arg)
 	while (1) {
 		int rc;
 		int i;
+		int64_t poll_timeout;
 
 		for (i = 0; i < to_consume; i++) {
 cont:
@@ -55,8 +89,11 @@ cont:
 				return NULL;
 		}
 
-		rc = daos_eq_poll(eqt->de_eq, 1, DAOS_EQ_NOWAIT, 128, &dev[0]);
+		poll_timeout = dfuse_eq_backoff_us(atomic_load_relaxed(&eqt->de_empty_polls));
+		rc           = daos_eq_poll(eqt->de_eq, 1, poll_timeout, 128, &dev[0]);
 		if (rc >= 1) {
+			atomic_store_relaxed(&eqt->de_empty_polls, 0);
+
 			for (i = 0; i < rc; i++) {
 				struct dfuse_event *ev;
 
@@ -67,8 +104,10 @@ cont:
 		} else if (rc < 0) {
 			DFUSE_TRA_WARNING(eqt, "Error from daos_eq_poll, " DF_RC, DP_RC(rc));
 			to_consume = 0;
+			dfuse_eq_empty_poll(eqt);
 		} else {
 			to_consume = 0;
+			dfuse_eq_empty_poll(eqt);
 		}
 	}
 	return NULL;
@@ -1207,6 +1246,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 
 		eqt->de_handle = dfuse_info;
 
+		atomic_store_relaxed(&eqt->de_empty_polls, 0);
 		DFUSE_TRA_UP(eqt, dfuse_info, "event_queue");
 
 		/* Create the semaphore before the eq as there's no way to check if sem_init()

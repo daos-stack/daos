@@ -73,15 +73,10 @@ readahead_actual_reply(struct active_inode *active, struct read_req *rr)
 	 * In this case do not dereference beyond the pre-read buffer.
 	 */
 	if (rr->position >= readahead_len) {
-		rr->oh->doh_linear_read_eof = true;
 		DFUSE_TRA_DEBUG(rr->oh, "%#zx-%#zx requested (EOF)", rr->position,
 				rr->position + rr->len - 1);
 		DFUSE_REPLY_BUFQ(rr->oh, rr->req, NULL, 0);
 		return;
-	}
-
-	if (rr->len >= readahead_len - rr->position) {
-		rr->oh->doh_linear_read_eof = true;
 	}
 
 	/* At this point there is a buffer of known length that contains the data, and a read
@@ -153,6 +148,14 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 	} else {
 		oh->doh_linear_read_pos = position + len;
 	}
+
+	size_t readahead_len = active->readahead->dra_ev->de_readahead_len;
+
+	/* eof pairs with the position just advanced; must agree with readahead_actual_reply's
+	 * truncation split.  The first arm guards the unsigned subtraction.
+	 */
+	if (position >= (off_t)readahead_len || len >= readahead_len - position)
+		oh->doh_linear_read_eof = true;
 
 	struct read_req rr;
 
@@ -352,7 +355,7 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 		goto err;
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	dfuse_eq_wakeup(eqt);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_read_slab);
@@ -486,7 +489,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ);
 
-	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
+	/* The cached EOF is only valid while the handle is still linear */
+	if (oh->doh_linear_read && oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
 		oh->doh_linear_read_eof = false;
 		oh->doh_linear_read     = false;
@@ -556,7 +560,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	}
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	dfuse_eq_wakeup(eqt);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_read_slab);
@@ -663,7 +667,7 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 		goto err;
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&eqt->de_sem);
+	dfuse_eq_wakeup(eqt);
 
 	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(eqt->de_pre_read_slab);

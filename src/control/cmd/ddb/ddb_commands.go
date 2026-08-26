@@ -15,6 +15,21 @@ import (
 	"github.com/desertbit/grumble"
 )
 
+const vosPathMissErr = "Cannot use sys db path without a VOS path"
+const dtxAggrMutuallyExclusiveErr = "'--cmt_time' and '--cmt_date' options are mutually exclusive"
+const dtxAggrRequiredOptErr = "'--cmt_time' or '--cmt_date' option has to be defined"
+const featureOnlyOneOptErr = "exactly one of --enable, --disable, --show must be provided"
+
+func onlyOne(bools ...bool) bool {
+	count := 0
+	for _, b := range bools {
+		if b {
+			count++
+		}
+	}
+	return count == 1
+}
+
 func addAppCommands(app *grumble.App, ctx *DdbContext) {
 	// Command: ls
 	app.AddCommand(&grumble.Command{
@@ -305,10 +320,11 @@ the path must include the extent, otherwise, it must not.`,
 	})
 	// Command: feature
 	app.AddCommand(&grumble.Command{
-		Name:      "feature",
-		Aliases:   nil,
-		Help:      "Manage VOS pool features",
-		LongHelp:  "",
+		Name:    "feature",
+		Aliases: nil,
+		Help:    "Manage VOS pool features",
+		LongHelp: `Manage VOS pool features. Exactly one of --enable, --disable, or --show must be provided.
+If --db_path is provided, a VOS file path must also be given as a positional argument.`,
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
 			f.String("e", "enable", "", "Enable VOS pool features")
@@ -320,7 +336,18 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "Optional, Path to the VOS file", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ctx.Feature(c.Args.String("path"), c.Flags.String("db_path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
+			path := c.Args.String("path")
+			dbPath := c.Flags.String("db_path")
+			enable := c.Flags.String("enable")
+			disable := c.Flags.String("disable")
+			show := c.Flags.Bool("show")
+			if path == "" && dbPath != "" {
+				return fmt.Errorf(vosPathMissErr)
+			}
+			if !onlyOne(enable != "", disable != "", show) {
+				return fmt.Errorf(featureOnlyOneOptErr)
+			}
+			return ctx.Feature(path, dbPath, enable, disable, show)
 		},
 		Completer: featureCompleter,
 	})
@@ -445,12 +472,38 @@ the path must include the extent, otherwise, it must not.`,
 			cmtTime := c.Flags.Uint64("cmt_time")
 			cmtDate := c.Flags.String("cmt_date")
 			if cmtTime != math.MaxUint64 && cmtDate != "" {
-				return fmt.Errorf("'--cmt_time' and '--cmt_date' options are mutually exclusive")
+				return fmt.Errorf(dtxAggrMutuallyExclusiveErr)
 			}
 			if cmtTime == math.MaxUint64 && cmtDate == "" {
-				return fmt.Errorf("'--cmt_time' or '--cmt_date' option has to be defined")
+				return fmt.Errorf(dtxAggrRequiredOptErr)
 			}
 			return ctx.DtxAggr(c.Args.String("path"), cmtTime, cmtDate)
+		},
+		Completer: nil,
+	})
+	// Command csum_dump
+	app.AddCommand(&grumble.Command{
+		Name:    "csum_dump",
+		Aliases: nil,
+		Help:    "Dump visible checksum(s)",
+		LongHelp: `Dump visible checksum(s) to the screen or in a file.  The vos
+path should be a complete path, including the akey and if the value is an array
+value it should include the extent. If a path to a file was provided then the
+value(s) will be written to the file, else it will be printed to the screen.
+The --epoch flag selects which version of the checksum to dump: for a single
+value akey it selects the value visible at or before that epoch, and for an
+array value it defines the maximal epoch of the visible record extent to
+select`,
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to dump.")
+			a.String("dst", "Optional, file path to dump the value to.", grumble.Default(""))
+		},
+		Flags: func(f *grumble.Flags) {
+			f.Uint64("e", "epoch", math.MaxUint64, "Maximal epoch of the checksum value to select (default EPOCH_MAX).")
+		},
+		Run: func(c *grumble.Context) error {
+			return ctx.CsumDump(c.Args.String("path"), c.Args.String("dst"), c.Flags.Uint64("epoch"))
 		},
 		Completer: nil,
 	})

@@ -1183,3 +1183,19 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         """
         return self.daos.container_update_acl(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def del_attr(self, *args, **kwargs):
+        """Call daos container del-attr.
+
+        Args:
+            args (tuple, optional): args to pass to container_del_attr
+            kwargs (dict, optional): keyword args to pass to container_del_attr
+
+        Returns:
+            str: JSON output of daos container get-attr.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+        """
+        return self.daos.container_del_attr(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)

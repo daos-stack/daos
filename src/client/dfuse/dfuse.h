@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -91,7 +91,21 @@ struct dfuse_eq {
 	struct d_slab_type *de_read_slab;
 	struct d_slab_type *de_pre_read_slab;
 	struct d_slab_type *de_write_slab;
+
+	ATOMIC uint32_t     de_empty_polls;
 };
+
+/*
+ * Wake up the EQ progress thread for newly queued work.  Reset de_empty_polls
+ * first so any inherited backoff is cleared before the sem_post, otherwise
+ * the freshly submitted event could be delayed by a stale backoff window.
+ */
+static inline void
+dfuse_eq_wakeup(struct dfuse_eq *eqt)
+{
+	atomic_store_relaxed(&eqt->de_empty_polls, 0);
+	sem_post(&eqt->de_sem);
+}
 
 /* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected
  * This is the maximum size expected from the kernel, increasing this without changing kernel
@@ -1174,6 +1188,12 @@ ival_drop_inode(struct dfuse_inode_entry *inode);
 
 int
 ival_update_inode(struct dfuse_inode_entry *inode, double timeout);
+
+/* Queue an on-demand dentry invalidation (parent/name) to be issued from the invalidation thread.
+ * ie_drop, if non-NULL, is a reference that is released after the invalidation has been issued.
+ */
+int
+dfuse_mark_inval_entry(fuse_ino_t parent, const char *name, struct dfuse_inode_entry *ie_drop);
 
 int
 ival_init(struct dfuse_info *dfuse_info);

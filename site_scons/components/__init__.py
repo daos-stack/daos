@@ -265,7 +265,7 @@ def define_common(reqs):
     if ARM_PLATFORM:
         reqs.define('ipmctl', skip_arch=True)
     else:
-        reqs.define('ipmctl', headers=['nvm_management.h'], package='libipmctl-devel')
+        reqs.define('ipmctl', package='ipmctl')
 
 
 def define_ompi(reqs):
@@ -421,6 +421,12 @@ def define_components(reqs):
                 patch_rpath=['lib64/daos_srv', 'bin'],
                 patch_rpath_exclusions=['libspdk.so', 'spdk-cli', 'spdk-rpc', 'spdk-mcp',
                                         'spdk-sma'],
+                # SPDK's python-based build path should use the toolchain already present
+                # in the build environment (uv/hatchling from the active virtual env)
+                # instead of creating isolated build environments.
+                # This is required in CI, where installation of additional
+                # tools/packages into the image during the build phase is not allowed.
+                build_env={'UV_NO_BUILD_ISOLATION': '1'},
                 requires=spdk_reqs)
 
     reqs.define('protobufc',
