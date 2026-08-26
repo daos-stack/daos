@@ -299,7 +299,8 @@ daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *			A long run of extents at or below DAOS_ARRAY_RG_LEN_THD bytes landing on
  *			the same dkey is split into several RPCs of at most
  *			DAOS_ARRAY_LIST_IO_LIMIT such extents, throttled per dkey. Ranges above
- *			that size are issued as before.
+ *			that size are issued as before. A dkey can therefore be updated by more
+ *			than one RPC, so a failed write may leave that dkey partially updated.
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the individual range
  *			sizes as long as the total size does.

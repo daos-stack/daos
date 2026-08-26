@@ -65,10 +65,7 @@ struct io_params {
 	daos_size_t		num_records;
 	daos_size_t		array_size;
 	tse_task_t		*task;
-	struct io_params	*next;
-	tse_task_t              *io_task;
-	struct io_params        *io_next; /** later split of the same dkey, issued when this ends */
-	bool                     io_defer; /** held back behind an earlier split of the same dkey */
+	struct io_params        *next;
 	bool			user_sgl_used;
 	char			akey_val;
 };
@@ -87,6 +84,12 @@ daos_array_env_init()
 
 	array_rg_len_thd = DAOS_ARRAY_RG_LEN_THD;
 	d_getenv_uint("DAOS_ARRAY_RG_LEN_THD", &array_rg_len_thd);
+
+	if (array_list_io_limit > DAOS_ARRAY_LIST_IO_LIMIT)
+		D_WARN("Setting a high limit for list io descriptors (%u) is not recommended\n",
+		       array_list_io_limit);
+	if (array_rg_len_thd == 0)
+		D_WARN("Tiny extent threshold of 0 disables list io splitting\n");
 
 	D_DEBUG(DB_TRACE, "ARRAY list IO: %u tiny extents (<= %u B) per RPC\n", array_list_io_limit,
 		array_rg_len_thd);
@@ -1432,39 +1435,6 @@ out:
 	return rc;
 }
 
-/**
- * A dkey IOD that had to be split issues its successor only once it completes, so that a tiny
- * extent workload cannot pile an unbounded amount of work on a single target.
- */
-static int
-array_io_split_cb(tse_task_t *task, void *data)
-{
-	struct io_params *params = *((struct io_params **)data);
-	struct io_params *next   = params->io_next;
-	int               rc     = task->dt_result;
-
-	if (next == NULL)
-		return rc;
-	params->io_next = NULL;
-
-	if (rc == 0) {
-		tse_task_schedule(next->io_task, true);
-		return rc;
-	}
-
-	/* drain the rest of the chain so every parent dependency gets resolved */
-	while (next != NULL) {
-		struct io_params *tmp = next->io_next;
-
-		/* unlink first: the nested completion callback must not walk the chain again */
-		next->io_next = NULL;
-		tse_task_complete(next->io_task, rc);
-		next = tmp;
-	}
-
-	return rc;
-}
-
 static int
 dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	    daos_array_iod_t *rg_iod, d_sg_list_t *user_sgl,
@@ -1480,10 +1450,11 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	daos_size_t	num_records;
 	daos_off_t	record_i;
 	struct io_params *head = NULL;
-	struct io_params *cursor;
-	struct io_params *last_params        = NULL;
+	tse_task_t       *split_task         = NULL; /** previous split of the dkey being split */
+	uint64_t          split_dkey         = 0;    /** dkey that \a split_task is a split of */
 	bool		head_cb_registered = false;
 	daos_size_t       num_ios;
+	d_list_t          io_task_list;
 	daos_size_t	tot_num_records = 0;
 	tse_task_t	*stask; /* task for short read and hole mgmt */
 	int		rc;
@@ -1520,6 +1491,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	array_idx = rg_iod->arr_rgs[0].rg_idx;
 
 	head = NULL;
+	D_INIT_LIST_HEAD(&io_task_list);
 
 	/*
 	 * for a read on a byte array, create a get_size task for short read
@@ -1551,6 +1523,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		tse_task_t	*io_task = NULL;
 		struct io_params *params;
 		daos_size_t       tiny_nr; /* extents in this IOD that are expensive to serve */
+		bool              iod_split; /* IOD was cut short by the tiny extent cap */
 		daos_size_t	i; /* index for iod recx */
 
 		/** In some cases, users can pass an empty range, so skip it. */
@@ -1641,6 +1614,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		i = 0;
 		dkey_records = 0;
 		tiny_nr      = 0;
+		iod_split    = false;
 
 		/*
 		 * Create the IO descriptor for this dkey. If the entire range fits in the dkey,
@@ -1704,6 +1678,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 					": IOD full at %zu tiny extents, rest of the "
 					"dkey goes to another RPC\n",
 					dkey_val, tiny_nr);
+				iod_split = true;
 				break;
 			}
 
@@ -1822,23 +1797,29 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			D_ASSERTF(0, "Invalid array operation.\n");
 		}
 
-		params->io_task = io_task;
-		rc = tse_task_register_comp_cb(io_task, array_io_split_cb, &params, sizeof(params));
-		if (rc) {
-			tse_task_complete(io_task, rc);
-			D_GOTO(err_iotask, rc);
-		}
-
 		/*
-		 * A dkey that had to be split shows up as consecutive IODs on the same dkey. Chain
-		 * them so only one is ever outstanding against that dkey. Everything else is
-		 * issued right away.
+		 * A dkey IOD that had to be split shows up as consecutive IODs on the same dkey.
+		 * Make each split depend on the previous one so that only a single RPC is ever
+		 * outstanding against that dkey, and a tiny extent workload cannot pile an
+		 * unbounded amount of work on a single target. IODs that were not cut short by the
+		 * tiny extent cap, and every other dkey, remain fully parallel.
+		 *
+		 * The throttling is a scheduler dependency rather than a private chain issued from
+		 * a completion callback: every task stays visible to the scheduler (so abort and
+		 * cancellation reach it), and no split runs nested inside the completion of its
+		 * predecessor.
 		 */
-		if (last_params != NULL && last_params->dkey_val == params->dkey_val) {
-			last_params->io_next = params;
-			params->io_defer     = true;
+		if (split_task != NULL && split_dkey == params->dkey_val) {
+			rc = tse_task_register_deps(io_task, 1, &split_task);
+			if (rc) {
+				tse_task_complete(io_task, rc);
+				D_GOTO(err_iotask, rc);
+			}
 		}
-		last_params = params;
+		split_task = iod_split ? io_task : NULL;
+		split_dkey = params->dkey_val;
+
+		tse_task_list_add(io_task, &io_task_list);
 	} /* end while */
 
 	rc = tse_task_register_comp_cb(task, free_io_params_cb, &head, sizeof(head));
@@ -1879,40 +1860,25 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				D_FREE(sparams);
 				D_GOTO(err_iotask, rc);
 			}
-			tse_task_schedule(stask, true);
+			tse_task_list_add(stask, &io_task_list);
 		}
 	}
 
 	/*
-	 * Issue everything that is not held back behind an earlier split of its dkey. Read the
-	 * next entry before scheduling: completing the last outstanding task also completes the
-	 * parent task, which frees this list.
+	 * Schedule every IO task. A task that was chained behind an earlier split of its dkey has
+	 * a non-zero dependency count, so the scheduler parks it on the init list and runs it once
+	 * its predecessor completes.
 	 */
-	cursor = head;
-	while (cursor != NULL) {
-		struct io_params *params = cursor;
-
-		cursor = params->next;
-		if (!params->io_defer)
-			tse_task_schedule(params->io_task, true);
-	}
-
+	tse_task_list_sched(&io_task_list, true);
 	array_decref(array);
 	return 0;
 
 err_iotask:
-	/* nothing was scheduled yet, so resolve every dependency that has been registered */
-	cursor = head;
-	while (cursor != NULL) {
-		struct io_params *params = cursor;
-
-		cursor = params->next;
-		if (params->io_task == NULL)
-			continue;
-		/* unlink first: the completion callback must not walk the chain again */
-		params->io_next = NULL;
-		tse_task_complete(params->io_task, rc);
-	}
+	/*
+	 * Abort before freeing the params: completing a task runs its completion callbacks, which
+	 * may still dereference the iod/sgl owned by the params list.
+	 */
+	tse_task_list_abort(&io_task_list, rc);
 	if (head && !head_cb_registered)
 		free_io_params(head);
 	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array)

@@ -988,6 +988,7 @@ dfs_test_io_error_code(void **state)
 	assert_int_equal(rc, 0);
 	D_FREE(buf);
 	D_FREE(iod_rgs);
+#undef LIST_IO_NR
 }
 
 int dfs_test_rc[DFS_TEST_MAX_THREAD_NR];
