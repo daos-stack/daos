@@ -1641,6 +1641,17 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEvent
 	return resp, nil
 }
 
+func awaitSync() {
+	// Sync filesystem to ensure all deletions are committed to disk before restart.
+	// In MD-on-SSD mode, this ensures the control metadata device has all changes
+	// committed so they persist across the server restart and remount.
+	unix.Sync()
+
+	// Give the kernel time to complete pending I/O operations to the control metadata
+	// device before restarting. This is especially important for MD-on-SSD mode.
+	time.Sleep(100 * time.Millisecond)
+}
+
 // eraseAndRestart is called on MS replicas to shut down the raft DB and
 // remove its files before restarting the control plane server.
 func (svc *mgmtSvc) eraseAndRestart() error {
@@ -1654,14 +1665,7 @@ func (svc *mgmtSvc) eraseAndRestart() error {
 		return errors.Wrap(err, "failed to remove system database")
 	}
 
-	// Sync filesystem to ensure all deletions are committed to disk before restart.
-	// In MD-on-SSD mode, this ensures the control metadata device has all changes
-	// committed so they persist across the server restart and remount.
-	unix.Sync()
-
-	// Give the kernel time to complete pending I/O operations to the control metadata
-	// device before restarting. This is especially important for MD-on-SSD mode.
-	time.Sleep(100 * time.Millisecond)
+	awaitSync()
 
 	myPath, err := os.Readlink("/proc/self/exe")
 	if err != nil {
@@ -1786,6 +1790,36 @@ func (svc *mgmtSvc) waitForReplicasReady(ctx context.Context, peers []*net.TCPAd
 	}
 }
 
+func (svc *mgmtSvc) stopLocalEngines() error {
+	svc.log.Trace("SystemErase: REPLICA - Step 1: Stopping local engines")
+
+	for _, engine := range svc.harness.Instances() {
+		svc.log.Tracef("SystemErase: REPLICA - Stopping engine instance %d", engine.Index())
+		if err := engine.Stop(unix.SIGKILL); err != nil {
+			svc.log.Errorf("instance %d failed to stop: %s", engine.Index(), err)
+		}
+		svc.log.Tracef("SystemErase: REPLICA - Removing superblock for instance %d", engine.Index())
+		if err := engine.RemoveSuperblock(); err != nil {
+			svc.log.Errorf("instance %d failed to remove superblock: %s", engine.Index(), err)
+		}
+	}
+
+	// Sync filesystem to commit superblock deletions before proceeding
+	svc.log.Trace("SystemErase: REPLICA - Step 2: Syncing filesystem")
+
+	awaitSync()
+
+	// Erase and restart control plane. Engines will be restarted later by
+	// ResetFormatRanks after all MS replicas are ready.
+	svc.log.Trace("SystemErase: REPLICA - Step 3: Erasing raft DB and restarting control plane")
+	if err := svc.eraseAndRestart(); err != nil {
+		return errors.Wrap(err, "erasing and restarting non-leader")
+	}
+
+	// Never reaches here - process is exec'd
+	panic()
+}
+
 // SystemErase implements the gRPC handler for erasing system metadata.
 //
 // SAFETY WARNINGS:
@@ -1821,40 +1855,20 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 	// ResetFormatRanks (which is idempotent for already-started engines) followed
 	// by StorageFormat to complete the format process.
 	if !isLeader {
-		svc.log.Trace("SystemErase: REPLICA - Step 1: Stopping local engines")
-
-		for _, engine := range svc.harness.Instances() {
-			svc.log.Tracef("SystemErase: REPLICA - Stopping engine instance %d", engine.Index())
-			if err := engine.Stop(unix.SIGKILL); err != nil {
-				svc.log.Errorf("instance %d failed to stop: %s", engine.Index(), err)
-			}
-			svc.log.Tracef("SystemErase: REPLICA - Removing superblock for instance %d", engine.Index())
-			if err := engine.RemoveSuperblock(); err != nil {
-				svc.log.Errorf("instance %d failed to remove superblock: %s", engine.Index(), err)
-			}
-		}
-
-		// Sync filesystem to commit superblock deletions before proceeding
-		svc.log.Trace("SystemErase: REPLICA - Step 2: Syncing filesystem")
-
-		unix.Sync()
-		// Give the kernel time to complete pending I/O operations
-		time.Sleep(100 * time.Millisecond)
-
-		// Erase and restart control plane. Engines will be restarted later by
-		// ResetFormatRanks after all MS replicas are ready.
-		svc.log.Trace("SystemErase: REPLICA - Step 3: Erasing raft DB and restarting control plane")
-		if err := svc.eraseAndRestart(); err != nil {
-			return nil, errors.Wrap(err, "erasing and restarting non-leader")
-		}
-		// Never reaches here - process is exec'd
+		svc.stopLocalEngines()
 	}
-
-	svc.log.Trace("SystemErase: LEADER - Step 1: Gathering MS replica peer addresses")
 
 	// On the leader, we need to coordinate the erase operation across replicas and engines.
 	// CRITICAL: Get peer addresses and prepare fanout request BEFORE stopping the database,
 	// as these operations require access to the membership/raft data.
+	getPeerFanoutReq()
+	rmLeaderSysdb()
+	rmReplicaSysdbs()
+	awaitLeaderElection()
+	wipeEngineSuperblocks()
+	restartLeader()
+
+	svc.log.Trace("SystemErase: LEADER - Step 1: Gathering MS replica peer addresses")
 
 	// Get MS replica peer addresses before stopping the database
 	peers, err := svc.sysdb.PeerAddrs()
@@ -1899,8 +1913,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 	}
 	svc.log.Debug("SystemErase: LEADER - Raft database files removed")
 
-	unix.Sync()
-	time.Sleep(100 * time.Millisecond)
+	awaitSync()
 
 	svc.log.Trace("SystemErase: LEADER - Step 4: Sending erase request to MS replica peers")
 
