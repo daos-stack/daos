@@ -52,7 +52,8 @@ void updateRunStage() {
         'Functional Hardware Medium UCX Provider',
         'Functional Hardware Large',
         'Functional Hardware Large MD on SSD',
-        'Functional Cluster Box Medium MD on SSD'
+        'Functional Cluster Box Medium MD on SSD',
+        'Functional Cluster Box Medium Verbs Provider MD on SSD'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
@@ -371,6 +372,9 @@ pipeline {
         booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Cluster Box Medium MD on SSD stage')
+        booleanParam(name: bashName('Functional Cluster Box Medium Verbs Provider MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box Medium Verbs Provider MD on SSD stage')
         string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
@@ -524,7 +528,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
-                            stage_tags: 'hw,medium,-provider',
+                            stage_tags: 'hw,medium,-provider,-cb',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal
@@ -549,7 +553,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
-                            stage_tags: 'hw,medium,provider',
+                            stage_tags: 'hw,medium,provider,-cb',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
@@ -593,15 +597,31 @@ pipeline {
                             job_status: job_status_internal
                         ),
                         'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
-                            name: "Functional Cluster Box Medium MD on SSD",
+                            name: 'Functional Cluster Box Medium MD on SSD',
                             runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
                             pragma_suffix:'-cb-md-on-ssd',
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
-                            next_version: params.BaseBranch,,
-                            stage_tags: "cb,medium",
+                            next_version: params.BaseBranch,
+                            stage_tags: 'cb,medium,-provider',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto_md_on_ssd',
+                            node_count: 5,
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Cluster Box Medium Verbs Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium Verbs Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium Verbs Provider MD on SSD'),
+                            pragma_suffix:'-cb-verbs-provider-md-on-ssd',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
+                            next_version: params.BaseBranch,
+                            stage_tags: 'cb,medium,provider',
+                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
+                            nvme: 'auto_md_on_ssd',
+                            provider: 'ofi+verbs;ofi_rxm',
                             node_count: 5,
                             run_if_pr: true,
                             run_if_landing: false,
