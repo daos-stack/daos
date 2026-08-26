@@ -400,7 +400,6 @@ if [ "$ib_count" -ge 2 ] ; then
         # Identify OS boot controller PCI slots to exclude from data NVMe counts.
         # HPE NS204i (88NR2241) is a boot-only controller, not a DAOS data drive.
         boot_nvme_slots=()
-        boot_nvme_devs=()
         _slot=""
         while IFS= read -r _line; do
             if [[ "$_line" == Slot:* ]]; then
@@ -408,11 +407,13 @@ if [ "$ib_count" -ge 2 ] ; then
                 _slot="$(awk '{print $2}' <<< "$_line")"
             elif [[ "$_line" == Device:*88NR2241* ]]; then
                 boot_nvme_slots+=("$_slot")
-                for _blk in /sys/bus/pci/devices/"$_slot"/nvme/*/block/*/; do
-                    [[ -d "$_blk" ]] && boot_nvme_devs+=("$(basename "$_blk")")
-                done
             fi
         done < <(lspci -vmm -D | grep -E '^(Slot|Device):')
+
+        # Find the NVMe block device hosting the root filesystem.
+        # The sysfs path via PCI slot is unreliable when Intel VMD is active.
+        _root_src="$(findmnt -n -o SOURCE /)"
+        _root_nvme="$(basename "${_root_src%%p[0-9]*}")"
 
         nvme_count=0
         while IFS= read -r line; do
@@ -439,19 +440,11 @@ if [ "$ib_count" -ge 2 ] ; then
         testcases+="  </testcase>$nl"
     fi
     # All storage found by lspci should also be in lsblk report.
-    # Count only top-level NVMe block devices, excluding boot controllers.
+    # Count only data NVMe block devices, excluding the OS boot device.
     lsblk_nvme=0
     while IFS= read -r _dev; do
-        _is_boot=false
-        for _boot in "${boot_nvme_devs[@]}"; do
-            if [[ "$_dev" == "$_boot" ]]; then
-                _is_boot=true
-                break
-            fi
-        done
-        if ! $_is_boot; then
-            ((lsblk_nvme++)) || true
-        fi
+        [[ "$_dev" == "$_root_nvme" ]] && continue
+        ((lsblk_nvme++)) || true
     done < <(lsblk -d -o NAME --noheadings | grep nvme)
     lsblk_pmem=$(lsblk | grep pmem -c) || true
 
