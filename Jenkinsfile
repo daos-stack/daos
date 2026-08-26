@@ -272,11 +272,6 @@ String defaultTags(String timedTags, String prTags = 'always_passes') {
 pipeline {
     agent { label 'lightweight' }
 
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'weekly-testing' ? 'TZ=UTC\n0 0 * * 6' : '')
-    }
-
     environment {
         BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
