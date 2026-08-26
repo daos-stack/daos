@@ -70,7 +70,8 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 
 	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc, ck->ck_warnings_num);
 
-	return rc;
+	/** continue checking other containers even if this one failed */
+	return 0;
 }
 
 /**
