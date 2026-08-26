@@ -189,6 +189,52 @@ int
 dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
 	     dv_dump_csum_cb dump_cb, void *cb_arg);
 
+/**
+ * Callback invoked by dv_check_csum() with the fetched checksum information and, for each
+ * checksum entry, whether the checksum recomputed from the currently stored data matches.
+ *
+ * @param cb_arg      User-provided argument passed through from dv_check_csum().
+ * @param recx_rel    Recx/epoch list describing the stored extents. Non-NULL for array akeys;
+ *                    NULL for single-value akeys. The caller must not free this pointer.
+ * @param sv_epoch    Actual stored epoch of the single value. Non-zero for single-value akeys
+ *                    when an SV was found within the requested epoch range; 0 for array akeys
+ *                    or when no SV was found (hole or -DER_NONEXIST).
+ * @param cil         Checksum info list. Valid only for the duration of the callback.
+ * @param got_csums   Array of cil->dcl_csum_infos_nr struct dcs_csum_info pointers. got_csums[i]
+ *                    holds the checksum recomputed from the currently stored data when entry i
+ *                    failed verification against the stored data, and is NULL when entry i
+ *                    matched -- got_csums[i] != NULL therefore also serves as the mismatch flag
+ *                    for entry i. NULL (the whole array) when cil has 0 entries (nothing to
+ *                    verify). Valid only for the duration of the callback; the caller must not
+ *                    free it.
+ * @return            0 on success; a negative error code is propagated back to the caller of
+ *                    dv_check_csum().
+ */
+typedef int (*dv_check_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel,
+				daos_epoch_t sv_epoch, struct dcs_ci_list *cil,
+				struct dcs_csum_info **got_csums);
+
+/**
+ * Fetch the checksum information for the akey identified by \a path, recompute the checksum(s)
+ * from the currently stored data, and compare them against what is stored on disk.
+ *
+ * @param poh       Open pool handle.
+ * @param path      VOS tree path identifying the container, object, dkey, and akey.
+ *                  For array akeys, path->vtp_recx selects the extent to inspect.
+ * @param epoch     Epoch for the fetch. For single-value akeys, controls which version is
+ *                  checked — pass DAOS_EPOCH_MAX to check the latest, or a snapshot epoch to
+ *                  check an earlier version. For array akeys, selects the visible extent set.
+ * @param check_cb  Callback invoked with the result. If NULL, the function returns 0 without
+ *                  opening the container or calling VOS.
+ * @param cb_arg    Opaque argument forwarded to \a check_cb.
+ * @return          0 on success (no checksum found, or all checksum(s) matched); -DER_CSUM if
+ *                  at least one checksum entry did not match the stored data; another negative
+ *                  error code on I/O or system errors.
+ */
+int
+dv_check_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	      dv_check_csum_cb check_cb, void *cb_arg);
+
 struct ddb_ilog_entry {
 	uint32_t	die_idx;
 	int32_t		die_status;
