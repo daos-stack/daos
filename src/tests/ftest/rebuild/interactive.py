@@ -322,7 +322,7 @@ class RbldInteractive(TestWithServers):
             self.log_step(f'{exclude_method} - Start previously admin-excluded ranks')
             dmg.system_start(ranks_to_exclude)
 
-        self.log_step(f'{reint_method} - Manually stop rebuild with {stop_method}')
+        self.log_step(f'{reint_method} - Reintegrate excluded ranks')
         if reint_method == 'dmg pool reintegrate':
             for pool in pools:
                 pool.reintegrate(ranks_to_exclude)
