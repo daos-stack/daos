@@ -36,7 +36,6 @@ pool_3:
 
 container:
   type: POSIX
-  control_method: daos
 
 ior:
   client_processes:

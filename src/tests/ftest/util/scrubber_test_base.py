@@ -82,7 +82,7 @@ class TestWithScrubber(IorTestBase):
                 self.pool.set_property(value[0], value[1])
         if cont_prop is None:
             cont_prop = "cksum:crc16"
-        self.add_container(pool=self.pool, properties=cont_prop)
+        self.container = self.get_container(self.pool, properties=cont_prop)
 
     def run_ior_and_check_scrubber_status(self, pool, cont):
         """Run IOR and get scrubber metrics

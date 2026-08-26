@@ -26,7 +26,7 @@ class DaosPerfBase(TestWithServers):
         # Create pool
         self.pool = self.get_pool(connect=False)
         # Create container
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
         # Obtain the number of processes listed with the daos_perf options
         processes = self.params.get("processes", "/run/daos_perf/*")
         # Use the dmg_control yaml
