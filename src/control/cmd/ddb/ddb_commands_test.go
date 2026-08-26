@@ -79,7 +79,7 @@ func TestDdb_HelpCmds(t *testing.T) {
 		},
 		"help for 'smd_sync' command": {
 			cmdStr:     "smd_sync",
-			helpSubStr: "Usage:\n  smd_sync [flags] [nvme_conf] [db_path]\n",
+			helpSubStr: "Usage:\n  smd_sync [flags] [nvme_conf]\n",
 		},
 		"help for 'vea_dump' command": {
 			cmdStr:     "vea_dump",
@@ -111,11 +111,11 @@ func TestDdb_HelpCmds(t *testing.T) {
 		},
 		"help for 'dev_list' command": {
 			cmdStr:     "dev_list",
-			helpSubStr: "Usage:\n  dev_list [flags] db_path\n",
+			helpSubStr: "Usage:\n  dev_list [flags]\n",
 		},
 		"help for 'dev_replace' command": {
 			cmdStr:     "dev_replace",
-			helpSubStr: "Usage:\n  dev_replace [flags] db_path old_dev new_dev\n",
+			helpSubStr: "Usage:\n  dev_replace [flags] old_dev new_dev\n",
 		},
 		"help for 'dtx_stat' command": {
 			cmdStr:     "dtx_stat",
@@ -123,7 +123,7 @@ func TestDdb_HelpCmds(t *testing.T) {
 		},
 		"help for 'prov_mem' command": {
 			cmdStr:     "prov_mem",
-			helpSubStr: "Usage:\n  prov_mem [flags] db_path tmpfs_mount\n",
+			helpSubStr: "Usage:\n  prov_mem [flags] tmpfs_mount\n",
 		},
 		"help for 'dtx_aggr' command": {
 			cmdStr:     "dtx_aggr",
@@ -691,7 +691,7 @@ func TestDdb_Cmds(t *testing.T) {
 			expStdout: []string{"smd_sync called"},
 		},
 		"smd_sync with args": {
-			args: []string{"smd_sync", "/mnt/daos/daos_nvme.conf", "/mnt/daos"},
+			args: []string{"smd_sync", "--db_path", "/mnt/daos", "/mnt/daos/daos_nvme.conf"},
 			setup: func(t *testing.T) {
 				ddb_run_smd_sync_Fn = smdSyncFnChecking(t, "/mnt/daos/daos_nvme.conf", "/mnt/daos")
 			},
