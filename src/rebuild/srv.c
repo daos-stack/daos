@@ -935,7 +935,7 @@ rebuild_leader_status_notify(struct rebuild_global_pool_tracker *rgt, struct ds_
 	iv.riv_sync = 1;
 	rgt->rgt_dtx_resync_version = iv.riv_global_dtx_resyc_version =
 				rebuild_get_global_dtx_resync_ver(rgt);
-	iv.riv_dtx_resyc_version = pool->sp_dtx_resync_version;
+	iv.riv_dtx_resyc_version = RB_DTX_RESYNC_VER_SKIP;
 
 	D_DEBUG(DB_REBUILD, DF_RB " dtx %u scan_gd/gd/abort %u/%u/%u: %d\n", DP_RB_RGT(rgt),
 		iv.riv_global_dtx_resyc_version, iv.riv_global_scan_done, iv.riv_global_done,
