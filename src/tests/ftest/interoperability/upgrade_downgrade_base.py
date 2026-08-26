@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -619,8 +619,18 @@ class UpgradeDowngradeBase(IorTestBase):
             self.verify_write_read(hosts_client, tmp_cont, write=True, read=True)
             tmp_cont.destroy()
 
+            # TODO This is less about the DAOS version and more about the pool layout version.
+            # For now, just put some fuzzy requirements in until we have a better understanding of
+            # the layout versioning and compatibility.
+            expect_old_client_access_new_pool = True
             if self.current_server_version.major > self.current_client_version.major:
-                # Across major versions, old client should not be able to access a new server pool
+                # Major DAOS versions likely bumped the pool layout version
+                expect_old_client_access_new_pool = False
+            elif self.current_server_version >= "2.8.0" > self.current_client_version:
+                # 2.8.0 did bump the layout version
+                expect_old_client_access_new_pool = False
+
+            if not expect_old_client_access_new_pool:
                 self.log_step("Verify old client cannot access new pool")
                 tmp_pool = self.get_pool(connect=False)
                 try:
@@ -639,7 +649,6 @@ class UpgradeDowngradeBase(IorTestBase):
                 finally:
                     tmp_pool.destroy()
             else:
-                # On the same major version, old client should be able to access a new server pool
                 self.log_step("Verify old client can access new pool")
                 self.log.info("Verify IOR write/read - old client, new server, new pool, new data")
                 tmp_pool = self.get_pool(connect=False)
