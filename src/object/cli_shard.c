@@ -223,7 +223,7 @@ iom_recx_merge(daos_iom_t *dst, daos_recx_t *recx, bool iom_realloc)
 static int
 obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_t dkey_hash,
 		 uint32_t shard, uint32_t tgt_idx, const daos_iom_t *src, daos_iom_t *dst,
-		 struct daos_recx_ep_list *recov_list)
+		 struct obj_iom_merge_state *state, struct daos_recx_ep_list *recov_list)
 {
 	struct daos_oclass_attr	*oca = reasb_req->orr_oca;
 	uint64_t		 stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
@@ -231,7 +231,7 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 	uint64_t		 end, rec_nr;
 	daos_recx_t		 hi, lo, recx, tmpr;
 	daos_recx_t		 recov_hi = { 0 };
-	daos_recx_t		 recov_lo = { 0 };
+	daos_recx_t              recov_lo = {0};
 	uint64_t                 iom_nr;
 	uint32_t		 tgt_off;
 	uint32_t                 i;
@@ -247,16 +247,17 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 
 	D_MUTEX_LOCK(&reasb_req->orr_mutex);
 
-	reasb_req->orr_iom_tgt_nr++;
-	D_ASSERTF(reasb_req->orr_iom_tgt_nr <= reasb_req->orr_tgt_nr,
-		  "orr_iom_tgt_nr %d, orr_tgt_nr %d.\n", reasb_req->orr_iom_tgt_nr,
-		  reasb_req->orr_tgt_nr);
-	first = (reasb_req->orr_iom_tgt_nr == 1);
-	done  = (reasb_req->orr_iom_tgt_nr == reasb_req->orr_tgt_nr);
+	state->oims_tgt_nr++;
+	D_ASSERTF(state->oims_tgt_nr <= reasb_req->orr_tgt_nr, "oims_tgt_nr %d, orr_tgt_nr %d.\n",
+		  state->oims_tgt_nr, reasb_req->orr_tgt_nr);
+	first = (state->oims_tgt_nr == 1);
+	done  = (state->oims_tgt_nr == reasb_req->orr_tgt_nr);
 	if (first) {
-		dst->iom_type = src->iom_type;
-		dst->iom_size = src->iom_size;
+		dst->iom_type   = src->iom_type;
+		dst->iom_nr_out = 0;
 	}
+	if (dst->iom_size == 0)
+		dst->iom_size = src->iom_size;
 
 	/* merge iom_recx_hi */
 	hi = src->iom_recx_hi;
@@ -329,7 +330,7 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 			return -DER_NOMEM;
 		}
 		dst->iom_nr = iom_nr;
-		reasb_req->orr_iom_realloc = 1;
+		state->oims_realloc = 1;
 	}
 
 	/* merge iom_recxs */
@@ -347,8 +348,7 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 							  stripe_rec_nr,
 							  cell_rec_nr,
 							  tgt_off);
-			rc = iom_recx_merge(dst, &tmpr,
-					    reasb_req->orr_iom_realloc);
+			rc          = iom_recx_merge(dst, &tmpr, state->oims_realloc);
 			if (rc == -DER_NOMEM)
 				break;
 			if (rc == -DER_REC2BIG) {
@@ -357,7 +357,7 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 				 * the needed number of extents can be
 				 * reported through iom_nr_out.
 				 */
-				reasb_req->orr_iom_nr++;
+				state->oims_extra_nr++;
 				rc = 0;
 			}
 		}
@@ -368,13 +368,12 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 	/* merge recov list */
 	if (recov_list != NULL && rc == 0) {
 		for (i = 0; i < recov_list->re_nr; i++) {
-			rc = iom_recx_merge(dst,
-					    &recov_list->re_items[i].re_recx,
-					    reasb_req->orr_iom_realloc);
+			rc = iom_recx_merge(dst, &recov_list->re_items[i].re_recx,
+					    state->oims_realloc);
 			if (rc == -DER_NOMEM)
 				break;
 			if (rc == -DER_REC2BIG) {
-				reasb_req->orr_iom_nr++;
+				state->oims_extra_nr++;
 				rc = 0;
 			}
 		}
@@ -406,7 +405,7 @@ obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_
 		 * so that the caller can re-allocate iom_recxs and fetch
 		 * again. iom_nr_out > iom_nr means the iom is truncated.
 		 */
-		dst->iom_nr_out += reasb_req->orr_iom_nr;
+		dst->iom_nr_out += state->oims_extra_nr;
 	}
 
 	D_MUTEX_UNLOCK(&reasb_req->orr_mutex);
@@ -1066,11 +1065,13 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					struct obj_auxi_args	*obj_auxi;
 
 					obj_auxi = rw_args->shard_args->auxi.obj_auxi;
-					rc = obj_ec_iom_merge(obj_auxi->obj, reasb_req,
-							      obj_auxi->dkey_hash,
-							      orw->orw_oid.id_shard,
-							      orw->orw_tgt_idx, reply_maps,
-							      &rw_args->maps[i], recov_list);
+					D_ASSERT(obj_auxi->iom_state != NULL);
+					D_ASSERTF(i < obj_auxi->iod_nr, "iod_idx %d, iod_nr %d.\n",
+						  i, obj_auxi->iod_nr);
+					rc = obj_ec_iom_merge(
+					    obj_auxi->obj, reasb_req, obj_auxi->dkey_hash,
+					    orw->orw_oid.id_shard, orw->orw_tgt_idx, reply_maps,
+					    &rw_args->maps[i], &obj_auxi->iom_state[i], recov_list);
 				} else {
 					rc = daos_iom_copy(reply_maps, &rw_args->maps[i]);
 				}
@@ -1293,9 +1294,18 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			orw->orw_flags |= (ORF_CREATE_MAP |
 					   ORF_CREATE_MAP_DETAIL);
 		} else if (rw_args.maps != NULL) {
+			uint32_t j;
+
 			orw->orw_flags |= ORF_CREATE_MAP;
-			if (rw_args.maps->iom_flags & DAOS_IOMF_DETAIL)
-				orw->orw_flags |= ORF_CREATE_MAP_DETAIL;
+			/* one IOM per IOD, detailed map is needed if any of
+			 * them asks for it.
+			 */
+			for (j = 0; j < nr; j++) {
+				if (rw_args.maps[j].iom_flags & DAOS_IOMF_DETAIL) {
+					orw->orw_flags |= ORF_CREATE_MAP_DETAIL;
+					break;
+				}
+			}
 		}
 	}
 

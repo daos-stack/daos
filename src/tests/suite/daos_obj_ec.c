@@ -2872,6 +2872,129 @@ ec_fetch_iom(void **state)
 	D_FREE(buf);
 }
 
+/*
+ * Verify the client side IOM merge of EC array fetch with multiple IODs, one
+ * IOM per IOD. Each IOM must be merged independently: the per-IOM merge state
+ * (number of shards merged, number of extents that did not fit, and whether
+ * the iom_recxs buffer was internally allocated by DAOS) must not be shared
+ * between the IOMs.
+ */
+static void
+ec_fetch_multi_iom(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	d_iov_t       dkey;
+	d_sg_list_t   sgls[2];
+	d_iov_t       sg_iovs[2];
+	daos_iod_t    iods[2];
+	daos_iom_t    ioms[2];
+	daos_recx_t   iom_recxs[EC_IOM_BUF_NR];
+	daos_recx_t   recxs[EC_IOM_EXT_NR];
+	daos_size_t   cell_size = ec_cell_size;
+	daos_size_t   buf_len;
+	char         *buf;
+	int           i, rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	buf_len = EC_IOM_EXT_NR * EC_IOM_EXT_SIZE;
+	D_ALLOC(buf, buf_len);
+	assert_non_null(buf);
+	dts_buf_render(buf, buf_len);
+
+	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
+	rc  = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, "miom_dkey", strlen("miom_dkey"));
+	for (i = 0; i < EC_IOM_EXT_NR; i++) {
+		recxs[i].rx_idx = i * cell_size;
+		recxs[i].rx_nr  = EC_IOM_EXT_SIZE;
+	}
+
+	for (i = 0; i < 2; i++) {
+		d_iov_set(&sg_iovs[i], buf, buf_len);
+		sgls[i].sg_nr     = 1;
+		sgls[i].sg_nr_out = 0;
+		sgls[i].sg_iovs   = &sg_iovs[i];
+
+		memset(&iods[i], 0, sizeof(iods[i]));
+		d_iov_set(&iods[i].iod_name, i == 0 ? "miom_akey0" : "miom_akey1",
+			  strlen("miom_akey0"));
+		iods[i].iod_size  = 1;
+		iods[i].iod_recxs = recxs;
+		iods[i].iod_type  = DAOS_IOD_ARRAY;
+		iods[i].iod_nr    = EC_IOM_EXT_NR;
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 2, iods, sgls, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("fetch 2 IODs, caller provided iom_recxs for both IOMs\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(ioms, 0, sizeof(ioms));
+	ioms[0].iom_recxs = iom_recxs;
+	ioms[0].iom_nr    = EC_IOM_BUF_NR;
+	ioms[0].iom_flags = DAOS_IOMF_DETAIL;
+	/* the 2nd IOM asks DAOS to allocate the iom_recxs buffer */
+	ioms[1].iom_recxs = NULL;
+	ioms[1].iom_flags = DAOS_IOMF_DETAIL;
+	rc                = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 2, iods, sgls, ioms, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 2; i++) {
+		assert_int_equal(ioms[i].iom_type, DAOS_IOD_ARRAY);
+		assert_int_equal(ioms[i].iom_size, 1);
+		assert_int_equal(ioms[i].iom_nr_out, EC_IOM_EXT_NR);
+		assert_true(ioms[i].iom_nr_out <= ioms[i].iom_nr);
+		assert_int_equal(ioms[i].iom_recx_lo.rx_idx, 0);
+		assert_int_equal(ioms[i].iom_recx_lo.rx_nr, EC_IOM_EXT_SIZE);
+		assert_int_equal(ioms[i].iom_recx_hi.rx_idx, (EC_IOM_EXT_NR - 1) * cell_size);
+		assert_int_equal(ioms[i].iom_recx_hi.rx_nr, EC_IOM_EXT_SIZE);
+	}
+	/* the caller provided buffer must not have been re-allocated */
+	assert_ptr_equal(ioms[0].iom_recxs, iom_recxs);
+	assert_int_equal(ioms[0].iom_nr, EC_IOM_BUF_NR);
+	assert_non_null(ioms[1].iom_recxs);
+	assert_ptr_not_equal(ioms[1].iom_recxs, iom_recxs);
+	for (i = 0; i < EC_IOM_EXT_NR; i++) {
+		assert_int_equal(ioms[0].iom_recxs[i].rx_idx, i * cell_size);
+		assert_int_equal(ioms[0].iom_recxs[i].rx_nr, EC_IOM_EXT_SIZE);
+		assert_int_equal(ioms[1].iom_recxs[i].rx_idx, i * cell_size);
+		assert_int_equal(ioms[1].iom_recxs[i].rx_nr, EC_IOM_EXT_SIZE);
+	}
+	D_FREE(ioms[1].iom_recxs);
+
+	print_message("fetch 2 IODs, the 1st IOM buffer is too small\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(ioms, 0, sizeof(ioms));
+	ioms[0].iom_recxs = iom_recxs;
+	ioms[0].iom_nr    = EC_IOM_SMALL_NR;
+	ioms[0].iom_flags = DAOS_IOMF_DETAIL;
+	ioms[1].iom_recxs = NULL;
+	ioms[1].iom_flags = DAOS_IOMF_DETAIL;
+	rc                = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 2, iods, sgls, ioms, NULL);
+	assert_rc_equal(rc, 0);
+	/* the truncation of the 1st IOM must not be accounted in the 2nd one */
+	assert_int_equal(ioms[0].iom_nr, EC_IOM_SMALL_NR);
+	assert_int_equal(ioms[0].iom_nr_out, EC_IOM_EXT_NR);
+	assert_int_equal(ioms[1].iom_nr_out, EC_IOM_EXT_NR);
+	assert_true(ioms[1].iom_nr_out <= ioms[1].iom_nr);
+	/* nothing beyond iom_nr should have been read or written */
+	for (i = EC_IOM_SMALL_NR; i < EC_IOM_BUF_NR; i++) {
+		assert_int_equal(iom_recxs[i].rx_idx, 0);
+		assert_int_equal(iom_recxs[i].rx_nr, 0);
+	}
+	D_FREE(ioms[1].iom_recxs);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(buf);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
     {"EC0: ec dkey list and punch test", ec_dkey_list_punch, async_disable, test_case_teardown},
@@ -2919,6 +3042,7 @@ static const struct CMUnitTest ec_tests[] = {
     {"EC29: ec full and partial punch then aggregation", ec_full_partial_punch_agg, async_disable,
      test_case_teardown},
     {"EC30: ec fetch iom merge", ec_fetch_iom, async_disable, test_case_teardown},
+    {"EC31: ec fetch multiple iom merge", ec_fetch_multi_iom, async_disable, test_case_teardown},
 };
 
 int
