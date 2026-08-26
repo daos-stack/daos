@@ -197,6 +197,31 @@ src/client/dfuse/:
 src/client/pydaos/torch/:
   test-tag: pytorch
 
+# Packaging
+ci/rpm/:
+  test-tag: build
+
+# Packaging
+utils/rpms/:
+  test-tag: build
+
+# Build files
+deps/:
+  test-tag: build
+
+# Build files
+SConscript:
+  test-tag: build
+
+# Build files
+SConstruct:
+  test-tag: build
+
+# Build files
+site_scons/:
+  test-tag: build
+
+
 # Everything runs pr unless a previous entry was matched with stop_on_match
 .*:
   test-tag: pr

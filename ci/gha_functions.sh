@@ -1,5 +1,11 @@
 #!/bin/bash
 
+#
+#  Copyright 2026 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+
 # TODO: this should produce a JUnit result
 error_exit() {
     echo "$1"
