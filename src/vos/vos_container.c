@@ -339,7 +339,7 @@ static const struct lru_callbacks lru_cont_cbs = {
 
 #define CK_NON_ZERO_FMT(PRIXX) "non-zero (%#" PRIXX ")"
 #define CK_OBJ_TREE_STR        "Object index tree"
-#define CK_DBD_LIST_STR        "DTX blob list"
+#define CK_ACT_DBD_LIST_STR    "Active DTX blob list"
 
 /**
  * Open a container within a VOSP with a checker.
@@ -560,9 +560,9 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 	 */
 	cont->vc_mod_epoch_bound = d_hlc_get();
 
-	CK_PRINT(ck, CK_DBD_LIST_STR "...\n");
+	CK_PRINT(ck, CK_ACT_DBD_LIST_STR "...\n");
 	CK_INDENT(ck, rc = vos_dtx_act_reindex(cont, ck));
-	CK_PRINTL_RC(ck, rc, CK_DBD_LIST_STR);
+	CK_PRINTL_RC(ck, rc, CK_ACT_DBD_LIST_STR);
 	if (rc != 0) {
 		D_ERROR("Fail to reindex active DTX entries: %d\n", rc);
 		goto exit;
