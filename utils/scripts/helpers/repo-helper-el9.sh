@@ -41,6 +41,33 @@ disable_repos () {
     fi
 }
 
+# dnf5 dropped wildcard repo name support in the config-manager plugin.
+# Where dnf5 is the default (fedora now, possibly el-11) "dnf4" is the
+# supported workaround, so make sure a "dnf4" always exists and use it for
+# repo name matching.
+ensure_dnf4 () {
+    if command -v dnf4 > /dev/null; then
+        return
+    fi
+    mkdir -p /usr/local/bin
+    ln -s "$(command -v dnf)" /usr/local/bin/dnf4
+}
+
+# Enable the daos deps repos.  The only naming rule that can be relied on
+# across sites is that the repo id contains "daos" followed by "deps".
+enable_deps_repos () {
+    local repo
+    local deps_repos
+    mapfile -t deps_repos < <(dnf4 repolist --all -q 2>/dev/null |
+                              awk '{print $1}' | grep -i 'daos.*deps' || true)
+    for repo in "${deps_repos[@]:-}"; do
+        if [ -z "$repo" ]; then
+            continue
+        fi
+        dnf4 config-manager --enable "$repo"
+    done
+}
+
 # Use local repo server if present
 install_curl() {
     :
@@ -81,6 +108,7 @@ if [ -n "$REPO_FILE_URL" ]; then
     popd
 fi
 dnf -y --disablerepo \*epel\* install dnf-plugins-core
+ensure_dnf4
 dnf -y config-manager --save --setopt=assumeyes=True
 dnf config-manager --save --setopt=install_weak_deps=False
 dnf --disablerepo \*epel\* install epel-release
@@ -126,6 +154,7 @@ module_hotfixes=true\n" >> "$repos_dir$repo:$branch:$build_number".repo
 done
 
 disable_repos "$repos_dir" "${save_repos[@]}"
+enable_deps_repos
 
 if [ -n "$REPO_FILE_URL" ]; then
 # Calculate trusted-host and trusted_base_url for artifactory/repository
