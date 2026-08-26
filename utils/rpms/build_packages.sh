@@ -46,7 +46,7 @@ fi
 case "${DISTRO:-el9}" in
   el*|suse.lp15*)
     if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ] && [ "${verify_rpms}" = "yes" ]; then
-      "${script_dir}/verify_rpms.sh" "$PWD"
+      "${script_dir}/verify_rpms.sh" "$PWD" "${DISTRO:-el9}"
     fi
     ;;
 esac

@@ -175,7 +175,7 @@ RUN --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { \
         [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || { \
-            utils/rpms/verify_rpms.sh deps /home/daos/rpms/deps || true; \
+            utils/rpms/verify_rpms.sh /home/daos/rpms/deps "suse.lp15${POINT_RELEASE#\.}" || true; \
         } \
     }
 
@@ -285,7 +285,7 @@ RUN --mount=type=bind,source=utils/rpms,target=/home/daos/daos/utils/rpms \
 
 RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
         [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || { \
-            utils/rpms/verify_rpms.sh deps /home/daos/rpms/daos || true; \
+            utils/rpms/verify_rpms.sh /home/daos/rpms/daos "suse.lp15${POINT_RELEASE#\.}" || true; \
         } \
     }
 
