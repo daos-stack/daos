@@ -126,24 +126,21 @@ class BoundaryPoolContainerSpace(TestWithServers):
                 bytes_to_human(free_scm_space_after_destroy),
                 free_scm_space_after_destroy))
 
-        for _ in range(10):
-            if (free_scm_space_after_destroy - free_scm_space_init) < delta_bytes:
-                break
-            self.log.info(
-                "--%i.(8)Waiting for free space to be restored: %s (%i bytes) < %s (%i bytes)",
-                test_loop, bytes_to_human(free_scm_space_after_destroy),
-                free_scm_space_after_destroy,
-                bytes_to_human(free_scm_space_init - delta_bytes),
-                free_scm_space_init - delta_bytes)
-            time.sleep(6)
-            free_scm_space_after_destroy = pool.get_pool_free_space()
+        self.log.info(
+            "--%i.(8)Waiting for free space to be restored: %s (%i bytes) < %s (%i bytes)",
+            test_loop, bytes_to_human(free_scm_space_after_destroy),
+            free_scm_space_after_destroy,
+            bytes_to_human(free_scm_space_init - delta_bytes),
+            free_scm_space_init - delta_bytes)
 
         # Check the SCM/NVME space is reclaimed after container deletion
         if not pool.check_free_space(
                 expected_scm=f">={int(free_scm_space_init - delta_bytes)}",
-                expected_nvme=f">={int(free_nvme_space_init - delta_bytes)}", timeout=120,
-                interval=15):
+                expected_nvme=f">={int(free_nvme_space_init - delta_bytes)}",
+                timeout=120, interval=15):
             self.log.error("Pool space not reclaimed after deleting all containers")
+
+        free_scm_space_after_destroy = pool.get_pool_free_space()
 
         self.assertAlmostEqual(
             free_scm_space_init, free_scm_space_after_destroy, delta=delta_bytes,
