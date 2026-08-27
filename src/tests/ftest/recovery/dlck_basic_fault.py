@@ -63,8 +63,7 @@ class DlckBasicFaultTest(TestDlck):
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
         self.log_step("Run dlck command after injecting the first fault")
-        with dlck.no_exception():
-            result = dlck.run()
+        result = dlck.run()
         error = self.check_dlck_result(result, "Initial fault")
         if error:
             errors.append(error)
@@ -88,8 +87,7 @@ class DlckBasicFaultTest(TestDlck):
             distribute_files(self.log, self.hostlist_servers, fault_inject_file,
                              fault_inject_file)
             self.log_step("Run dlck command after injecting fault")
-            with dlck.no_exception():
-                result = dlck.run()
+            result = dlck.run()
             error = self.check_dlck_result(result, test_fault)
             if error:
                 errors.append(error)

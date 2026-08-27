@@ -37,11 +37,9 @@ class DlckBasicTest(TestDlck):
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
         self.log_step("Run dlck command to check the health of the pool and storage")
-        with dlck.no_exception():
-            result = dlck.run()
+        result = dlck.run()
+        dmg.system_start()
         if not result.passed:
             errors.append(f"dlck failed on {result.failed_hosts}")
-        dmg.system_start()
-        if errors:
             self.fail(f"dlck basic test failed with errors: {errors}")
         self.log.info("dlck basic test passed with no errors")
