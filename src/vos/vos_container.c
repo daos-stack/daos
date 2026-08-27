@@ -150,24 +150,7 @@ cont_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static int
 cont_df_rec_check(struct btr_instance *tins, struct btr_record *rec)
 {
-	struct cont_df_args args;
-	d_iov_t             val_iov;
-	struct vos_cont_df *cont_df;
-	int                 rc;
-
-	d_iov_set(&val_iov, &args, sizeof(struct cont_df_args));
-
-	rc = tins->ti_ops->to_rec_fetch(tins, rec, NULL, &val_iov);
-	D_ASSERT(rc == 0);
-
-	D_ASSERT(val_iov.iov_buf == &args);
-	D_ASSERT(val_iov.iov_len == sizeof(struct cont_df_args));
-
-	cont_df = args.ca_cont_df;
-	D_ASSERT(cont_df != 0);
-
-	/** WIP */
-
+	/** NOP. The container is checked on open. */
 	return 0;
 }
 
