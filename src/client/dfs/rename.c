@@ -202,14 +202,12 @@ restart:
 		if (flags & RENAME_NOREPLACE)
 			D_GOTO(out, rc = EEXIST);
 #endif
-
 		/*
-		 * POSIX: if source and destination are existing hardlinks referring to the
-		 * same inode, rename() is a no-op and returns success without clobbering
-		 * either name.
+		 * POSIX: if source and destination is the same file or existing hardlinks
+		 * referring to the same inode, rename() is a no-op and returns success
+		 * without clobbering either name.
 		 */
-		if (DFS_IS_HARDLINK(entry.mode) && DFS_IS_HARDLINK(new_entry.mode) &&
-		    daos_oid_cmp(entry.oid, new_entry.oid) == 0)
+		if (daos_oid_cmp(entry.oid, new_entry.oid) == 0)
 			D_GOTO(out, rc = 0);
 
 		if (S_ISDIR(new_entry.mode)) {
@@ -418,6 +416,13 @@ restart:
 	if ((DFS_IS_HARDLINK(entry1.mode) || DFS_IS_HARDLINK(entry2.mode)) &&
 	    !daos_handle_is_valid(dfs->git_oh))
 		D_GOTO(out, rc = EIO);
+
+	/*
+	 * Exchanging an entry with itself or exchanging hardlinks pointing to same inode is a
+	 * no-op
+	 */
+	if (daos_oid_cmp(entry1.oid, entry2.oid) == 0)
+		D_GOTO(out, rc = 0);
 
 	/** remove the first entry from parent1 (just the dkey) */
 	d_iov_set(&dkey, (void *)name1, len1);
