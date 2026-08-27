@@ -159,31 +159,30 @@ def define_mercury(reqs):
                 patch_rpath=['lib64'],
                 build_env={'CFLAGS': "-fstack-usage -fPIC"})
 
-    ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
-                     '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
-                     '--libdir=$UCX_PREFIX/lib64', '--enable-cma', '--without-cuda',
-                     '--without-gdrcopy', '--with-verbs', '--without-knem', '--without-rocm',
-                     '--without-xpmem', '--without-fuse3', '--without-ugni']
+    # UCX is no longer built from source, the distribution provided packages are used instead.
+    ucx_packages = {
+        'ucs': 'ucx-devel',
+        'ucp': 'ucx-devel',
+        'uct': 'ucx-devel',
+    }
+    if distro.linux_distribution()[0].split()[0] == 'openSUSE':
+        ucx_packages = {
+            'ucs': 'libucs-devel',
+            'ucp': 'libucp-devel',
+            'uct': 'libuct-devel',
+        }
 
-    if reqs.target_type == 'debug':
-        ucx_configure.extend(['--enable-debug'])
-    else:
-        ucx_configure.extend(['--disable-debug', '--disable-logging'])
-
-    reqs.define('ucx',
-                retriever=GitRepoRetriever(),
-                libs=['ucs', 'ucp', 'uct'],
+    reqs.define('ucx_ucs',
+                libs=['ucs'],
                 functions={'ucs': ['ucs_debug_disable_signal']},
+                package=ucx_packages['ucs'])
+    reqs.define('ucx_ucp',
+                libs=['ucp'],
+                package=ucx_packages['ucp'])
+    reqs.define('ucx_uct',
+                libs=['uct'],
                 headers=['uct/api/uct.h'],
-                pkgconfig='ucx',
-                commands=[['./autogen.sh'],
-                          ucx_configure,
-                          ['make'],
-                          ['make', 'install'],
-                          ['mkdir', '-p', '$UCX_PREFIX/lib64/pkgconfig'],
-                          ['cp', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
-                build_env={'CFLAGS': '-Wno-error'},
-                package='ucx-devel' if inst(reqs, 'ucx') else None)
+                package=ucx_packages['uct'])
 
     mercury_build = ['cmake',
                      '-DBUILD_SHARED_LIBS:BOOL=ON',
@@ -230,7 +229,7 @@ def define_mercury(reqs):
                           ['make', 'install']],
                 libs=['mercury'],
                 pkgconfig='mercury',
-                requires=['boost', 'ofi', 'ucx'] + libs,
+                requires=['boost', 'ofi', 'ucx_ucs', 'ucx_ucp', 'ucx_uct'] + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 build_env={'CFLAGS': '-fstack-usage'})
