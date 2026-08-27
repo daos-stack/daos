@@ -23,13 +23,13 @@ server_config:
 pool:
   size: 1G
   pool_query_timeout: 30
-  properties: rd_fac:2
+  properties: rd_fac:2,space_rb:0
 
 container:
   akey_size: 5
   dkey_size: 5
   debug: true
-  properties: rd_fac:2
+  properties: rd_fac:2,cksum:off,srv_cksum:off
 
 testparams:
   num_pools: 2

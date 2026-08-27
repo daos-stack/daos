@@ -29,12 +29,12 @@ server_config:
 
 pool:
   scm_size: 6G
-  properties: rd_fac:1
+  properties: rd_fac:1,space_rb:0
   pool_query_timeout: 30
 
 container:
   type: POSIX
-  properties: rd_fac:1
+  properties: rd_fac:1,cksum:off,srv_cksum:off
 
 ior:
   ior_timeout: 120
