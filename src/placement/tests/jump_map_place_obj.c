@@ -2341,7 +2341,14 @@ placement_test_teardown(void **state)
  *     pool create.
  *   - pool_map_compat accepts an extend against a pool whose targets are
  *     all DOWNOUT (asymmetric-create followed by extend).
+ *   - reintegrating a creation-time DOWNOUT rank does not move the layout of
+ *     objects that were already placed.
  */
+
+/* Number of objects used by creation_downout_reint_layout_stable(). */
+#define JTC_STABILITY_OBJ_NR  200
+/* Upper bound on targets per rank / shards per object in that test. */
+#define JTC_STABILITY_TGT_MAX 16
 
 static void
 creation_downout_classifier(void **state)
@@ -2631,6 +2638,183 @@ pool_map_compat_all_downout_extend(void **state)
 	free_pool_and_placement_map(po_map, pl_map);
 }
 
+/*
+ * Mark \a rank, its RANK domain, its parent NODE domain and all of its targets as a
+ * creation-time DOWNOUT component, i.e. exactly what gen_pool_buf() produces for a rank
+ * passed in via downout_ranks (co_fseq == co_ver == pool creation map version, no flags).
+ */
+static void
+jtc_set_creation_downout_rank(struct pool_map *po_map, uint32_t rank)
+{
+	struct pool_domain *dom;
+	struct pool_target *tgts;
+	int                 tgt_nr;
+	int                 i;
+
+	tgt_nr = pool_map_find_target_by_rank_idx(po_map, rank, -1 /* all targets */, &tgts);
+	assert_true(tgt_nr > 0);
+	for (i = 0; i < tgt_nr; i++) {
+		tgts[i].ta_comp.co_status = PO_COMP_ST_DOWNOUT;
+		tgts[i].ta_comp.co_fseq   = tgts[i].ta_comp.co_ver;
+		tgts[i].ta_comp.co_flags  = PO_COMPF_NONE;
+		assert_true(pool_comp_is_creation_downout(&tgts[i].ta_comp));
+	}
+
+	assert_true(pool_map_find_ranks(po_map, rank, &dom) > 0);
+	dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
+	dom->do_comp.co_fseq   = dom->do_comp.co_ver;
+	dom->do_comp.co_flags  = PO_COMPF_NONE;
+
+	/*
+	 * gen_pool_buf() propagates DOWNOUT up the domain tree when every child is DOWNOUT.
+	 * The standard test pool has one rank per NODE domain, so the NODE goes DOWNOUT too.
+	 */
+	assert_true(pool_map_find_domain(po_map, PO_COMP_TP_NODE, rank, &dom) > 0);
+	dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
+	dom->do_comp.co_fseq   = dom->do_comp.co_ver;
+	dom->do_comp.co_flags  = PO_COMPF_NONE;
+}
+
+static struct pl_map *
+jtc_pl_map_new(struct pool_map *po_map)
+{
+	struct pl_map_init_attr mia = {0};
+	struct pl_map          *pl_map;
+
+	mia.ia_type        = PL_TYPE_JUMP_MAP;
+	mia.ia_ring.domain = PO_COMP_TP_RANK;
+	assert_success(pl_map_create(po_map, &mia, &pl_map));
+
+	return pl_map;
+}
+
+static int
+jtc_place_at_ver(struct pl_map *pl_map, daos_obj_id_t oid, uint32_t allow_ver,
+		 struct pl_obj_layout **layout)
+{
+	struct daos_obj_md md = {0};
+
+	md.omd_id  = oid;
+	md.omd_ver = allow_ver;
+
+	return pl_obj_place(pl_map, PLT_LAYOUT_VERSION, &md, 0 /* mode */, NULL /* shard_md */,
+			    layout);
+}
+
+/*
+ * Reintegrating a creation-time DOWNOUT rank must not change the layout of objects that were
+ * already placed.
+ *
+ * A creation-time DOWNOUT component (co_fseq == co_ver) has been part of the pool map since
+ * the pool was created, and sits at its natural position in the fault domain tree rather than
+ * at the tail. If comp_is_skipped() treats it like a MAP_EXTEND addition once MAP_REINT flips
+ * it to UP, dom_avail_children() trims it off the end of its parent's child array and the jump
+ * hash modulus drops from N to N-1. That silently rewrites the layout of every object -- both
+ * for the current version and, worse, for historical map versions -- so previously written
+ * data can no longer be found.
+ *
+ * This test pins the invariant: for a fixed allow_version, the layout before and after the
+ * MAP_REINT must be identical, while the reint scan must still report shards to migrate onto
+ * the reintegrated rank.
+ */
+static void
+creation_downout_reint_layout_stable(void **state)
+{
+	struct pool_map           *po_map;
+	struct pl_map             *pl_map;
+	struct pl_map             *reint_pl_map;
+	struct pl_obj_layout      *layouts[JTC_STABILITY_OBJ_NR] = {0};
+	daos_obj_id_t              oids[JTC_STABILITY_OBJ_NR];
+	struct pool_target        *tgts;
+	struct pool_target_id      ids[JTC_STABILITY_TGT_MAX];
+	struct pool_target_id_list tgt_list;
+	uint32_t                   tgt_ranks[JTC_STABILITY_TGT_MAX];
+	uint32_t                   shard_ids[JTC_STABILITY_TGT_MAX];
+	uint32_t                   base_ver;
+	uint32_t                   reint_ver;
+	/*
+	 * The last fault domain is the interesting one: dom_avail_children() trims skipped
+	 * children from the tail, so a DOWNOUT rank in the last domain is what actually shrinks
+	 * the modulus.
+	 */
+	const uint32_t             downout_rank = 3;
+	int                        migrate_nr   = 0;
+	int                        mismatch_nr  = 0;
+	int                        tgt_nr;
+	int                        i;
+	int                        rc;
+
+	/* 1 pd, 4 fault domains, 1 rank each, 2 targets each: 8 targets. */
+	gen_maps(1, 4, 1, 2, &po_map, &pl_map);
+	pl_map_decref(pl_map);
+
+	jtc_set_creation_downout_rank(po_map, downout_rank);
+	base_ver = pool_map_get_version(po_map);
+	pl_map   = jtc_pl_map_new(po_map);
+
+	/* Place objects while the rank is still a creation-time DOWNOUT. */
+	for (i = 0; i < JTC_STABILITY_OBJ_NR; i++) {
+		gen_oid(&oids[i], i + 1, UINT64_MAX, OC_RP_2G1);
+		assert_success(jtc_place_at_ver(pl_map, oids[i], base_ver, &layouts[i]));
+	}
+
+	/* Reintegrate the rank: DOWNOUT -> UP, co_fseq and co_ver are left untouched. */
+	tgt_nr = pool_map_find_target_by_rank_idx(po_map, downout_rank, -1, &tgts);
+	assert_true(tgt_nr > 0 && tgt_nr <= JTC_STABILITY_TGT_MAX);
+	for (i = 0; i < tgt_nr; i++)
+		ids[i].pti_id = tgts[i].ta_comp.co_id;
+	tgt_list.pti_ids    = ids;
+	tgt_list.pti_number = tgt_nr;
+
+	reint_ver = base_ver;
+	rc        = ds_pool_map_tgts_update(NULL /* pool_uuid */, po_map, &tgt_list, MAP_REINT,
+					    false /* exclude_rank */, &reint_ver, false /* print */);
+	assert_success(rc);
+	reint_ver = pool_map_get_version(po_map);
+	assert_true(reint_ver > base_ver);
+	assert_int_equal(tgts[0].ta_comp.co_status, PO_COMP_ST_UP);
+	assert_int_equal(tgts[0].ta_comp.co_fseq, tgts[0].ta_comp.co_ver);
+
+	reint_pl_map = jtc_pl_map_new(po_map);
+
+	/* Same object, same allow_version -> the layout must not have moved. */
+	for (i = 0; i < JTC_STABILITY_OBJ_NR; i++) {
+		struct pl_obj_layout *after = NULL;
+
+		assert_success(jtc_place_at_ver(reint_pl_map, oids[i], base_ver, &after));
+		if (!plt_obj_layout_match(layouts[i], after)) {
+			if (mismatch_nr < 3) {
+				print_message("layout of " DF_OID " changed at version %u\n",
+					      DP_OID(oids[i]), base_ver);
+				print_message("  before reint: ");
+				print_layout(layouts[i]);
+				print_message("  after reint : ");
+				print_layout(after);
+			}
+			mismatch_nr++;
+		}
+		pl_obj_layout_free(after);
+	}
+
+	/* The reint rebuild must still have work to do, otherwise nothing is ever migrated. */
+	for (i = 0; i < JTC_STABILITY_OBJ_NR; i++) {
+		struct daos_obj_md md = {.omd_id = oids[i], .omd_ver = reint_ver};
+
+		rc = pl_obj_find_rebuild(reint_pl_map, PLT_LAYOUT_VERSION, &md, NULL /* shard_md */,
+					 reint_ver, tgt_ranks, shard_ids, JTC_STABILITY_TGT_MAX);
+		assert_true(rc >= 0);
+		migrate_nr += rc;
+	}
+
+	for (i = 0; i < JTC_STABILITY_OBJ_NR; i++)
+		pl_obj_layout_free(layouts[i]);
+	pl_map_decref(reint_pl_map);
+	free_pool_and_placement_map(po_map, pl_map);
+
+	assert_int_equal(mismatch_nr, 0);
+	assert_true(migrate_nr > 0);
+}
+
 static void
 basic_down2up_test_oid(daos_obj_id_t oid, bool print_lo)
 {
@@ -2912,6 +3096,8 @@ static const struct CMUnitTest tests[] = {
       gen_pool_buf_baseline_domain_propagation),
     T("pool_map_compat accepts extending under an existing DOWNOUT parent domain",
       pool_map_compat_all_downout_extend),
+    T("reintegrating a creation-time DOWNOUT rank keeps existing layouts stable",
+      creation_downout_reint_layout_stable),
 };
 
 int
