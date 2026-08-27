@@ -169,7 +169,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
 		CK_PRINTL_RC(ck, rc, "Cannot create log directory");
-        goto err_free_template;
+		goto err_free_template;
 	}
 	CK_PRINTF(ck, "Log directory: %s\n", ctrl->log_dir);
 
