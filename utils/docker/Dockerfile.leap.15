@@ -31,26 +31,35 @@ ARG JENKINS_URL
 ARG REPOS
 ARG DAOS_LAB_CA_FILE_URL
 
-# Accept DAOS_HTTP_PROXY, DAOS_HTTPS_PROXY, and DAOS_NO_PROXY at build time
-ARG DAOS_HTTP_PROXY
+# Accept DAOS_HTTPS_PROXY, and DAOS_NO_PROXY at build time
+# DAOS_HTTPS_PROXY is used safely pass a PROXY to the build environment with
+# out making everything use it, which can cause problems.
+# DAOS_HTTPS_PROXY is used when you do not have a local artifact server
+# and you need to use a proxy server that is not a smart proxy.
+#
+# HTTPS_PROXY is an automatic ARG, that will be global to the build environment
+# if it is passed.   If HTTPS_PROXY is passed, normally the DAOS_HTTPS_PROXY
+# should not be passed.  HTTPS_PROXY should be a smart proxy that can
+# can pass through to URLs that resolve to local IP addresses.
+#
+# DAOS_NO_PROXY is used to safely pass a NO_PROXY list to the build
+# environment without making everything use it, which can cause problems.
+# The no_proxy/NO_PROXY environment variables are risky to use as there are
+# conflicts in how they should be defined for different applications.
 ARG DAOS_HTTPS_PROXY
 ARG DAOS_NO_PROXY
 # Propagate into the build environment
-ENV http_proxy=${DAOS_HTTP_PROXY} \
-    HTTP_PROXY=${DAOS_HTTP_PROXY} \
-    https_proxy=${DAOS_HTTPS_PROXY} \
-    HTTPS_PROXY=${DAOS_HTTPS_PROXY} \
-    no_proxy=${DAOS_NO_PROXY} \
+ENV no_proxy=${DAOS_NO_PROXY} \
     NO_PROXY=${DAOS_NO_PROXY}
 # Persist into /etc/environment for use by shells and services
 RUN set -e; \
-    if [ -n "$DAOS_HTTP_PROXY" ]; then \
-        echo "http_proxy=$DAOS_HTTP_PROXY" >> /etc/environment; \
-        echo "HTTP_PROXY=$DAOS_HTTP_PROXY" >> /etc/environment; \
-    fi; \
     if [ -n "$DAOS_HTTPS_PROXY" ]; then \
-        echo "https_proxy=$DAOS_HTTPS_PROXY" >> /etc/environment; \
-        echo "HTTPS_PROXY=$DAOS_HTTPS_PROXY" >> /etc/environment; \
+        echo "daos_https_proxy=$DAOS_HTTPS_PROXY" >> /etc/environment; \
+        echo "DAOS_HTTPS_PROXY=$DAOS_HTTPS_PROXY" >> /etc/environment; \
+    fi; \
+    if [ -n "$HTTPS_PROXY" ]; then \
+        echo "https_proxy=$HTTPS_PROXY" >> /etc/environment; \
+        echo "HTTPS_PROXY=$HTTPS_PROXY" >> /etc/environment; \
     fi; \
     if [ -n "$DAOS_NO_PROXY" ]; then \
         echo "no_proxy=$DAOS_NO_PROXY" >> /etc/environment; \
@@ -75,29 +84,14 @@ RUN dnf remove -y $DNF_UPGRADE_EXCLUDES || true && \
 # Setup docker image for gcc build only. This is done in a separate stage
 # to allow for a smaller image for CI building only.
 FROM basic AS build-ci
+ARG JENKINS_URL
 
 # Install minimal set of packages for building DAOS with gcc compiler and
 # no Java support.
 RUN --mount=type=bind,source=utils/scripts/install-leap15.sh,target=/tmp/daos/install.sh \
-    INSTALL_BUILD_CI_ONLY="true" /tmp/daos/install.sh && \
+    JENKINS_URL="$JENKINS_URL" INSTALL_BUILD_CI_ONLY="true" /tmp/daos/install.sh && \
     dnf clean all
 
-# According to https://pkgs.org/search/?q=lua-lmod, Leap 15.6 only has lua-lmod-8.7.34.
-# This version has a problem with loading modules, as described in https://github.com/TACC/Lmod/issues/687.
-# This affects MPI detection in scons, so DAOS cannot be built with MPI support.
-# A custom source of the package is required in CI to install a valid version
-# of lua-lmod and its dependencies:
-# opensuse-network-cluster for lua-lmod (>=8.7.55)
-# opensuse-oss for lua53, lua53-luaterm,, sqlite3-tcl, tcl
-# opensuse-devel-languages-lua for lua53-luafilesystem, lua53-luaposix
-ARG JENKINS_URL
-RUN if [ -n "$JENKINS_URL" ]; then \
-    dnf -y remove lua-lmod; \
-    dnf -y --nogpgcheck install lua-lmod --repo '*lua*' \
-        --repo '*network-cluster*' --repo '*oss-proxy*' && \
-        dnf clean all; \
-    fi
-    
 # Add DAOS users
 ARG UID=1000
 RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos/daos-server-user-setup.sh \
