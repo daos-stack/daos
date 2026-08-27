@@ -309,6 +309,10 @@ void pool_buf_free(struct pool_buf *buf);
 int  pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
+uint32_t
+pool_buf_avail_domain_nr(struct pool_buf *buf);
+int
+pool_buf_rf_check(struct pool_buf *buf, uint64_t *rd_fac, bool clamp);
 int
     gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
 		 int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr,

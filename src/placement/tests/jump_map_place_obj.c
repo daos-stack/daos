@@ -2569,6 +2569,70 @@ gen_pool_buf_baseline_domain_propagation(void **state)
 	pool_buf_free(buf);
 }
 
+/*
+ * A partially excluded domain must stay usable, and each fully excluded domain must drop out
+ * of the usable count exactly once.
+ */
+static void
+gen_pool_buf_avail_domain_nr(void **state)
+{
+	/* clang-format off */
+	uint32_t         domains[] = {
+		0,               /* metadata flags: NODE-above-rank only */
+		2,    1,  3,     /* root: level=2, ROOT_ID=1, 3 children */
+		1,  100,  2,     /* node A: level=1, id=100, 2 children */
+		1,  101,  2,     /* node B: level=1, id=101, 2 children */
+		1,  102,  2,     /* node C: level=1, id=102, 2 children */
+		10, 11,          /* node A's ranks */
+		20, 21,          /* node B's ranks */
+		30, 31           /* node C's ranks */
+	};
+	/* clang-format on */
+	const uint32_t   ndomains     = ARRAY_SIZE(domains);
+	const uint32_t   nnodes       = 6;
+	const uint32_t   tgt_per_rank = 1;
+	const uint32_t   ntargets     = nnodes * tgt_per_rank;
+	struct pool_buf *buf          = NULL;
+	uint32_t         all_dom_nr;
+	int              rc;
+
+	/* No excluded rank: every domain is usable. */
+	rc = gen_pool_buf(NULL /* map */, &buf, 1 /* map_version */, ndomains, nnodes, ntargets,
+			  domains, tgt_per_rank, NULL /* downout_ranks */);
+	assert_success(rc);
+	all_dom_nr = buf->pb_domain_nr;
+	assert_int_equal(pool_buf_avail_domain_nr(buf), all_dom_nr);
+	pool_buf_free(buf);
+
+	/*
+	 * Exclude all of node A and one rank of node B. Node A becomes DOWNOUT and must not
+	 * be counted; node B is only partially out and stays usable.
+	 */
+	{
+		d_rank_t      downout_arr[3] = {10, 11, 20};
+		d_rank_list_t downout_ranks  = {.rl_nr = 3, .rl_ranks = downout_arr};
+
+		rc = gen_pool_buf(NULL /* map */, &buf, 1 /* map_version */, ndomains, nnodes,
+				  ntargets, domains, tgt_per_rank, &downout_ranks);
+		assert_success(rc);
+		assert_int_equal(buf->pb_domain_nr, all_dom_nr);
+		assert_int_equal(pool_buf_avail_domain_nr(buf), all_dom_nr - 1);
+		pool_buf_free(buf);
+	}
+
+	/* Exclude both of node A's and node C's ranks: two domains drop out. */
+	{
+		d_rank_t      downout_arr[4] = {10, 11, 30, 31};
+		d_rank_list_t downout_ranks  = {.rl_nr = 4, .rl_ranks = downout_arr};
+
+		rc = gen_pool_buf(NULL /* map */, &buf, 1 /* map_version */, ndomains, nnodes,
+				  ntargets, domains, tgt_per_rank, &downout_ranks);
+		assert_success(rc);
+		assert_int_equal(pool_buf_avail_domain_nr(buf), all_dom_nr - 2);
+		pool_buf_free(buf);
+	}
+}
+
 static void
 pool_map_compat_all_downout_extend(void **state)
 {
@@ -2699,6 +2763,160 @@ jtc_place_at_ver(struct pl_map *pl_map, daos_obj_id_t oid, uint32_t allow_ver,
 
 	return pl_obj_place(pl_map, PLT_LAYOUT_VERSION, &md, 0 /* mode */, NULL /* shard_md */,
 			    layout);
+}
+
+/* Number of distinct ranks a layout lands on. Test maps below put one rank per fault
+ * domain, so this is also the number of distinct fault domains the layout spans.
+ */
+static uint32_t
+jtc_layout_distinct_ranks(struct pl_obj_layout *layout)
+{
+	uint32_t nr = 0;
+	int      i, j;
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		bool dup = false;
+
+		for (j = 0; j < i; j++) {
+			if (layout->ol_shards[j].po_rank == layout->ol_shards[i].po_rank)
+				dup = true;
+		}
+		if (!dup)
+			nr++;
+	}
+
+	return nr;
+}
+
+/* Ask placement how many distinct fault domains this map can really spread the replicas
+ * of \a oclass over. Whatever it lands on is the map's real redundancy capability for
+ * that class, regardless of how many domains the map buffer claims to have.
+ */
+static uint32_t
+jtc_measure_deliverable_domains(struct pl_map *pl_map, daos_oclass_id_t oclass, uint32_t *shard_nr)
+{
+	struct pl_obj_layout *layout = NULL;
+	daos_obj_id_t         oid;
+	uint32_t              nr;
+
+	gen_oid(&oid, 1, UINT_MAX, oclass);
+	assert_success(jtc_place_at_ver(pl_map, oid, 1 /* allow_ver */, &layout));
+	nr = jtc_layout_distinct_ranks(layout);
+	if (shard_nr != NULL)
+		*shard_nr = layout->ol_nr;
+	pl_obj_layout_free(layout);
+
+	return nr;
+}
+
+/*
+ * Pool create must not advertise a redundancy factor that the pool map cannot deliver.
+ *
+ * Asymmetric pool create marks the whole subtree of an excluded rank DOWNOUT, and
+ * gen_pool_buf() propagates that up to the parent domain. A fully excluded domain therefore
+ * still occupies an entry in pb_comps and is still counted by pb_domain_nr, even though it
+ * cannot hold a single shard.
+ *
+ * init_pool_metadata() admits/clamps rd_fac by requiring rd_fac + 1 domains. This test
+ * builds a map with 3 domains of which 1 is fully excluded, and asserts two things:
+ *
+ *  1. The pre-fix admission quantity, pb_domain_nr, is unsound: the rd_fac it admits is
+ *     strictly more than placement can deliver on this map. This half uses only the
+ *     pb_domain_nr counter that predates the fix, and is what makes this a regression
+ *     test rather than a restatement of the new helper.
+ *
+ *  2. The rd_fac that pool_buf_rf_check() actually admits -- both on the explicit path and
+ *     on the default-clamp path -- is deliverable by placement.
+ *
+ * Note that init_pool_metadata() itself needs an rdb transaction and cannot be reached from
+ * a unit test; this covers the decision it delegates to, not the call site.
+ */
+static void
+pool_create_rf_excludes_downout_domains(void **state)
+{
+	/* clang-format off */
+	uint32_t         domains[] = {
+		0,               /* metadata flags: NODE-above-rank only */
+		2,    1,  3,     /* root: level=2, ROOT_ID=1, 3 children */
+		1,  100,  1,     /* node A: level=1, id=100, 1 child */
+		1,  101,  1,     /* node B: level=1, id=101, 1 child */
+		1,  102,  1,     /* node C: level=1, id=102, 1 child */
+		10,              /* node A's rank */
+		20,              /* node B's rank */
+		30               /* node C's rank */
+	};
+	/* clang-format on */
+	const uint32_t        ndomains       = ARRAY_SIZE(domains);
+	const uint32_t        nnodes         = 3;
+	const uint32_t        tgt_per_rank   = 2;
+	const uint32_t        ntargets       = nnodes * tgt_per_rank;
+	d_rank_t              downout_arr[1] = {10}; /* all of node A */
+	d_rank_list_t         downout_ranks  = {.rl_nr = 1, .rl_ranks = downout_arr};
+	struct pool_buf      *buf            = NULL;
+	struct pool_map      *po_map         = NULL;
+	struct pl_map        *pl_map         = NULL;
+	struct pl_obj_layout *layout         = NULL;
+	daos_obj_id_t         oid;
+	uint64_t              rd_fac;
+	uint32_t              deliverable;
+	uint32_t              prefix_rd_fac;
+	uint32_t              shard_nr;
+	int                   rc;
+
+	rc = gen_pool_buf(NULL /* map */, &buf, 1 /* map_version */, ndomains, nnodes, ntargets,
+			  domains, tgt_per_rank, &downout_ranks);
+	assert_success(rc);
+	assert_non_null(buf);
+
+	assert_success(pool_map_create(buf, 1 /* version */, &po_map));
+	pl_map = jtc_pl_map_new(po_map);
+
+	/*
+	 * (1) The bug. Admitting rd_fac against pb_domain_nr -- the counter the code used
+	 * before the fix -- promises more redundancy than placement can deliver. Probe with
+	 * the replicated class that pre-fix rd_fac licenses and see where its replicas
+	 * really land.
+	 */
+	assert_true(buf->pb_domain_nr > 0);
+	prefix_rd_fac = buf->pb_domain_nr - 1;
+	assert_int_equal(prefix_rd_fac, 2); /* OC_RP_3G1 is the class rd_fac=2 licenses */
+
+	deliverable = jtc_measure_deliverable_domains(pl_map, OC_RP_3G1, &shard_nr);
+	assert_int_equal(shard_nr, prefix_rd_fac + 1);
+	assert_true(deliverable > 0);
+	/* Two of the three replicas share a fault domain: rd_fac=2 is not honored. */
+	assert_true(prefix_rd_fac + 1 > deliverable);
+
+	/*
+	 * (2) The contract. Whatever rd_fac pool create admits must be deliverable, on both
+	 * the explicit and the default-clamp path, and anything above that must be refused.
+	 */
+	rd_fac = prefix_rd_fac;
+	assert_int_equal(pool_buf_rf_check(buf, &rd_fac, false /* clamp */), -DER_INVAL);
+
+	rd_fac = prefix_rd_fac;
+	assert_success(pool_buf_rf_check(buf, &rd_fac, true /* clamp */));
+	assert_true(rd_fac + 1 <= deliverable);
+
+	rd_fac = deliverable - 1;
+	assert_success(pool_buf_rf_check(buf, &rd_fac, false /* clamp */));
+	assert_int_equal(rd_fac, deliverable - 1);
+
+	/*
+	 * Cross-check the admitted value concretely: rd_fac=1 licenses OC_RP_2G1, whose two
+	 * replicas do land on the 2 usable domains.
+	 */
+	assert_int_equal(deliverable, 2);
+
+	gen_oid(&oid, 3, UINT_MAX, OC_RP_2G1);
+	assert_success(jtc_place_at_ver(pl_map, oid, 1 /* allow_ver */, &layout));
+	assert_int_equal(layout->ol_nr, 2);
+	assert_int_equal(jtc_layout_distinct_ranks(layout), 2);
+	pl_obj_layout_free(layout);
+
+	pl_map_decref(pl_map);
+	pool_map_decref(po_map);
+	pool_buf_free(buf);
 }
 
 /*
@@ -3094,6 +3312,10 @@ static const struct CMUnitTest tests[] = {
       revert_rebuild_three_way),
     T("gen_pool_buf propagates DOWNOUT up to parent domains when all children are excluded",
       gen_pool_buf_baseline_domain_propagation),
+    T("gen_pool_buf excludes fully-DOWNOUT domains from the usable domain count",
+      gen_pool_buf_avail_domain_nr),
+    T("pool create rd_fac is admitted against usable domains only",
+      pool_create_rf_excludes_downout_domains),
     T("pool_map_compat accepts extending under an existing DOWNOUT parent domain",
       pool_map_compat_all_downout_extend),
     T("reintegrating a creation-time DOWNOUT rank keeps existing layouts stable",

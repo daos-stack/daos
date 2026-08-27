@@ -794,6 +794,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	d_iov_t			value;
 	struct rdb_kvs_attr	attr;
 	uint32_t                map_nnodes;
+	uint32_t                avail_domain_nr;
 	int                     ntargets;
 	uint32_t		upgrade_global_version = DAOS_POOL_GLOBAL_VERSION;
 	uint32_t                svc_ops_enabled        = 1;
@@ -841,23 +842,41 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 		goto out_prop;
 	}
 
+	/*
+	 * Only domains that are not entirely DOWNOUT can hold data, so the redundancy factor
+	 * must be admitted against those rather than against every domain in the map buffer.
+	 */
+	avail_domain_nr = pool_buf_avail_domain_nr(map_buf);
+
 	entry = daos_prop_entry_get(prop_orig, DAOS_PROP_PO_REDUN_FAC);
 	if (entry) {
 		/** if the user provided an explicit incompatible rd_fac, then fail gracefully */
-		if (entry->dpe_val + 1 > map_buf->pb_domain_nr) {
-			D_ERROR("ndomains(%u) could not meet specified redunc factor(%lu)\n",
-				map_buf->pb_domain_nr, entry->dpe_val);
-			D_GOTO(out_map_buf, rc = -DER_INVAL);
+		rc = pool_buf_rf_check(map_buf, &entry->dpe_val, false /* clamp */);
+		if (rc != 0) {
+			D_ERROR("usable ndomains(%u of %u) could not meet specified redunc "
+				"factor(%lu)\n",
+				avail_domain_nr, map_buf->pb_domain_nr, entry->dpe_val);
+			D_GOTO(out_map_buf, rc);
 		}
 	} else {
 		/** if the default rd_fac cannot be satisfied, adjust it on the fly */
 		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC);
 		if (entry) {
-			if (entry->dpe_val + 1 > map_buf->pb_domain_nr) {
-				D_DEBUG(DB_MD, "ndomains(%u) could not meet default redunc factor(%lu)\n",
-					map_buf->pb_domain_nr, entry->dpe_val);
-				entry->dpe_val = (uint64_t) map_buf->pb_domain_nr - 1;
+			uint64_t req_rd_fac = entry->dpe_val;
+
+			rc = pool_buf_rf_check(map_buf, &entry->dpe_val, true /* clamp */);
+			if (rc != 0) {
+				D_ERROR("usable ndomains(%u of %u) could not meet any redunc "
+					"factor\n",
+					avail_domain_nr, map_buf->pb_domain_nr);
+				D_GOTO(out_map_buf, rc);
 			}
+			if (entry->dpe_val != req_rd_fac)
+				D_DEBUG(DB_MD,
+					"usable ndomains(%u of %u) could not meet default redunc "
+					"factor(%lu), clamped to %lu\n",
+					avail_domain_nr, map_buf->pb_domain_nr, req_rd_fac,
+					entry->dpe_val);
 		}
 	}
 
