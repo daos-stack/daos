@@ -415,7 +415,7 @@ restart:
 	 */
 	if ((DFS_IS_HARDLINK(entry1.mode) || DFS_IS_HARDLINK(entry2.mode)) &&
 	    !daos_handle_is_valid(dfs->git_oh))
-		D_GOTO(out, rc = EIO);
+		D_GOTO(out, rc = ENOTSUP);
 
 	/*
 	 * Exchanging an entry with itself or exchanging hardlinks pointing to same inode is a

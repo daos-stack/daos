@@ -348,7 +348,7 @@ remove_hardlink(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const cha
 restart:
 	if (!daos_handle_is_valid(dfs->git_oh)) {
 		D_ERROR("GIT handle is not valid\n");
-		D_GOTO(out, rc = EIO);
+		D_GOTO(out, rc = ENOTSUP);
 	}
 
 	rc = git_fetch_entry(dfs->git_oh, th, &entry.oid, &git_entry, 0, NULL, NULL, NULL);
