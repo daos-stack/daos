@@ -23,120 +23,6 @@ POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
-def add_pools(dmg, add_pool_kwargs, error_handler=None):
-    """Add multiple TestPool objects to the test.
-
-    Args:
-        dmg (DmgCommand): dmg command used to update the server log mask before creating the first
-            pool and reset it after creating the last pool. Not used if no pools are created.
-        add_pool_args (list): list of kwargs (dict) for add_pool() method to use when creating each
-            pool. Must at least include the 'test' kwargs. See add_pool() for other options.
-        error_handler (method, optional): optional method to call when a pool create fails. Defaults
-            to None.
-
-    Returns:
-        list: a list of new pool objects
-    """
-    _any_create = any(kwargs.get("create", True) is True for kwargs in add_pool_kwargs)
-
-    if _any_create:
-        # Set the DEBUG log mask before the first pool create
-        dmg.server_set_logmasks("DEBUG", raise_exception=False)
-
-    # Add the requested pools
-    pools = []
-    try:
-        for kwargs in add_pool_kwargs:
-            # Disable setting/resetting log masks for each individual pool create
-            _restore = kwargs.get("set_logmasks", True)
-            kwargs["set_logmasks"] = False
-            try:
-                pools.append(add_pool(**kwargs))
-                pools[-1].set_logmasks.value = _restore
-            except TestFail as error:
-                if not error_handler:
-                    raise
-                error_handler(error)
-    finally:
-        if _any_create:
-            # Reset the log mask after the last pool create
-            dmg.server_set_logmasks(raise_exception=False)
-
-    return pools
-
-
-def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
-    """Add a new TestPool object to the test.
-
-    Args:
-        test (Test): the test to which the pool will be added
-        namespace (str, optional): TestPool parameters path in the test yaml file. Defaults to
-            POOL_NAMESPACE.
-        create (bool, optional): should the pool be created. Defaults to True.
-        connect (bool, optional): should the pool be connected. Defaults to True.
-        dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
-            calls test.get_dmg_command().
-
-    Returns:
-        TestPool: the new pool object
-
-    """
-    if not dmg:
-        dmg = test.get_dmg_command()
-    pool = TestPool(
-        namespace=namespace, context=test.context, dmg_command=dmg,
-        label_generator=test.label_generator)
-    pool.get_params(test)
-    if params:
-        pool.update_params(**params)
-    if create:
-        pool.create()
-    if create and connect:
-        pool.connect()
-
-    # Add a step to remove this pool when the test completes and ensure their is enough time for the
-    # pool destroy to be attempted - accounting for a possible dmg command timeout
-    if pool.register_cleanup.value is True:
-        test.increment_timeout(POOL_TIMEOUT_INCREMENT)
-        test.register_cleanup(remove_pool, test=test, pool=pool)
-
-    return pool
-
-
-def remove_pool(test, pool):
-    """Remove the requested pool from the test.
-
-    Args:
-        test (Test): the test from which to destroy the pool
-        pool (TestPool): the pool to destroy
-
-    Returns:
-        list: a list of any errors detected when removing the pool
-
-    """
-    error_list = []
-    test.log.info("Destroying pool %s", pool.identifier)
-
-    # Ensure exceptions are raised for any failed command
-    exit_status_exception = None
-    if pool.dmg is not None:
-        exit_status_exception = pool.dmg.exit_status_exception
-        pool.dmg.exit_status_exception = True
-
-    # Attempt to destroy the pool
-    try:
-        pool.destroy(force=1, disconnect=1, recursive=1)
-    except (DaosApiError, TestFail) as error:
-        test.log.info("  {}".format(error))
-        error_list.append("Error destroying pool {}: {}".format(pool.identifier, error))
-
-    # Restore raising exceptions for any failed command
-    if exit_status_exception is False:
-        pool.dmg.exit_status_exception = exit_status_exception
-
-    return error_list
-
-
 def get_size_params(pool):
     """Get the TestPool params that can be used to create a pool of the same size.
 
@@ -148,7 +34,7 @@ def get_size_params(pool):
         pool (TestPool): pool whose size is being replicated.
 
     Returns:
-        dict: size params argument for an add_pool() method
+        dict: size params argument for an self.get_pool() method
 
     """
     return {"size": None,
@@ -422,6 +308,15 @@ class TestPool(TestDaosApiBase):
         if not isinstance(value, DmgCommand):
             raise TypeError("Invalid 'dmg' object type: {}".format(type(value)))
         self._dmg = value
+
+    def temp_exit_status_exception(self, value):
+        """Temporarily set the exit_status_exception attribute.
+
+        Args:
+            value (bool): the temporary value for exit_status_exception
+
+        """
+        return self.dmg.temp_exit_status_exception(value)
 
     def no_exception(self):
         """Temporarily disable raising exceptions for failed commands."""

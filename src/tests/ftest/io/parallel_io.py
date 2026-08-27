@@ -35,7 +35,7 @@ class ParallelIo(FioBase, IorTestBase):
         self.pool = []
         self.container = []
 
-    def create_pool(self):
+    def __create_pool(self):
         """Create a thread safe TestPool object."""
         # Use a dedicated DmgCommand copy per thread; sharing self.get_dmg_command()'s
         # single instance across threads races on its parameters and causes partial commands.
@@ -135,7 +135,7 @@ class ParallelIo(FioBase, IorTestBase):
         threads = []
 
         # Create a pool and start dfuse.
-        self.create_pool()
+        self.__create_pool()
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, self.pool[0])
 
@@ -215,7 +215,7 @@ class ParallelIo(FioBase, IorTestBase):
 
         self.log_step("Create pools in parallel.")
         for _ in range(self.pool_count):
-            pool_thread = threading.Thread(target=self.create_pool)
+            pool_thread = threading.Thread(target=self.__create_pool)
             pool_threads.append(pool_thread)
             pool_thread.start()
         # Wait for pool create to finish

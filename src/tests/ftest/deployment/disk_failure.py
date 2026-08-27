@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +12,6 @@ from dmg_utils import get_dmg_response, get_storage_query_device_info
 from exception_utils import CommandFailure
 from general_utils import list_to_str
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 
 
 class DiskFailureTest(OSAUtils):
@@ -48,7 +47,7 @@ class DiskFailureTest(OSAUtils):
                 self.log.info("  %s: %s", key, entry[key])
 
         for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
+            pool[val] = self.get_pool(connect=False)
             threads = []
             self.pool = pool[val]
             # The following thread runs while raising disk faults

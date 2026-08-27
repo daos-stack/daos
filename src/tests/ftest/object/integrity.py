@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +12,6 @@ from apricot import TestWithServers
 from general_utils import create_string_buffer
 from pydaos.raw import DaosApiError, DaosObj, IORequest
 from test_utils_container import add_container
-from test_utils_pool import add_pool
 
 
 class ObjectDataValidation(TestWithServers):
@@ -93,7 +92,7 @@ class ObjectDataValidation(TestWithServers):
         """
         record_length = self.params.get("length", '/run/record/*')
 
-        pool = add_pool(self)
+        pool = self.get_pool()
         container = add_container(self, pool)
         obj = self.get_object(container)
         ioreq = self.get_io_request(obj)
@@ -192,7 +191,7 @@ class ObjectDataValidation(TestWithServers):
         no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         record_length = self.params.get("length", '/run/record/*')
 
-        pool = add_pool(self)
+        pool = self.get_pool()
         container = add_container(self, pool)
         obj = self.get_object(container)
         ioreq = self.get_io_request(obj)
@@ -251,7 +250,7 @@ class ObjectDataValidation(TestWithServers):
         array_size = self.params.get("size", '/array_size/')
         record_length = self.params.get("length", '/run/record/*')
 
-        pool = add_pool(self)
+        pool = self.get_pool()
         container = add_container(self, pool)
         obj = self.get_object(container)
         ioreq = self.get_io_request(obj)
