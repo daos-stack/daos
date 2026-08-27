@@ -80,7 +80,7 @@ case "${DISTRO}" in
         devel_runtime=(
             [argobots-devel]=argobots
             [daos-spdk-devel]=daos-spdk
-            [isa-l-devel]=libisal
+            [isa-l-devel]=libisa-l
             [isa-l_crypto-devel]=libisa-l_crypto
             [libfabric-devel]=libfabric
             [mercury-devel]=mercury
