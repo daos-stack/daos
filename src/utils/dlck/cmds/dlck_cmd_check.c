@@ -158,14 +158,15 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		ctrl->log_dir = NULL;
 		errno         = daos_fail_value_get();
 	} else {
-		D_ASPRINTF(log_dir_template, "%s/dlck_check_XXXXXX", ctrl->common.log_dir);
-		if (log_dir_template == NULL) {
-			rc = -DER_NOMEM;
-			CK_PRINTL_RC(ck, rc, "Cannot allocate log directory path");
-			return rc;
-		}
 		ctrl->log_dir = mkdtemp(log_dir_template);
 	}
+	/** generate the log directory path template */
+    D_ASPRINTF(log_dir_template, "%s/dlck_check_XXXXXX", ctrl->common.log_dir);
+    if (log_dir_template == NULL) {
+        rc = -DER_NOMEM;
+        CK_PRINTL_RC(ck, rc, "Cannot allocate log directory path");
+        return rc;
+    }
 	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
 		CK_PRINTL_RC(ck, rc, "Cannot create log directory");

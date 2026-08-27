@@ -312,7 +312,7 @@ FAULTS = {
         'max_faults': '1'},
     'DAOS_FAULT_BTREE_OPEN_UNREG_CLASS_29': {
         'id': '131591',
-        'interval': '29',  #  gc tree fine-tuned
+        'interval': '29',  # gc tree fine-tuned
         'max_faults': '1'},
     'DAOS_FAULT_BTREE_FEATURES_28': {
         'id': '131592',

@@ -5,7 +5,6 @@
 """
 import os
 
-from apricot import TestWithServers
 from dlck_utils import TestDlck
 from test_utils_pool import add_pool
 
@@ -29,6 +28,7 @@ class DlckBasicTest(TestDlck):
         pool = add_pool(self)
         dlck = self.get_dlck_command()
         dlck.pool_uuid.value = pool.uuid
+        dlck.log_dir = self.test_env.log_dir
         dlck.storage_mount.value = self.server_managers[0].get_config_value("scm_mount")
         if self.server_managers[0].manager.job.using_control_metadata:
             dlck.nvme.value = os.path.join(
@@ -37,7 +37,8 @@ class DlckBasicTest(TestDlck):
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
         self.log_step("Run dlck command to check the health of the pool and storage")
-        result = dlck.run()
+        with dlck.no_exception():
+            result = dlck.run()
         if not result.passed:
             errors.append(f"dlck failed on {result.failed_hosts}")
         dmg.system_start()

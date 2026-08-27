@@ -397,10 +397,14 @@ class ExecutableCommand(CommandWithParameters):
             self._process = None
 
     def cleanup_command(self):
-        """Cleanup the command."""
+        """Cleanup the command.
+
+        Returns:
+            list: a list of errors encountered during cleanup.
+        """
         if not self.__cleanup_needed:
             self.log.info("No cleanup needed for %s", self.command)
-            return
+            return []
 
         self.log.info("Cleaning up %s", self.command)
         regex = self.command_regex
@@ -424,6 +428,7 @@ class ExecutableCommand(CommandWithParameters):
                 "***At least one remote %s process needed to be killed on %s! Please investigate/"
                 "report.***", regex, detected)
         self.__cleanup_needed = False
+        return []
 
     def wait(self):
         """Wait for the sub process to complete.
@@ -1585,6 +1590,7 @@ class RunCommand(ExecutableCommand):
         """
         super().__init__(namespace, command, path, False, check_results, run_user)
         self._hosts = None
+        self.register_cleanup_method = None
 
     @property
     def hosts(self):
@@ -1628,6 +1634,11 @@ class RunCommand(ExecutableCommand):
         """
         if raise_exception is None:
             raise_exception = self.exit_status_exception
+
+        if callable(self.register_cleanup_method):
+            # Stop any running processes started by this job manager when the test completes
+            # pylint: disable=not-callable
+            self.register_cleanup_method(self.cleanup_command)
 
         self.result = None
         if not self.hosts:
