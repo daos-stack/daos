@@ -110,10 +110,10 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
 
     if il_lib is not None:
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
-        remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
+        remote_env['D_LOG_FILE'] = f'/var/tmp/daos_testing/daos-{il_lib.rstrip(".so")}.log'
         remote_env['DD_MASK'] = 'all'
         remote_env['DD_SUBSYS'] = 'all'
-        remote_env['D_LOG_MASK'] = 'WARN,IL=WARN'
+        remote_env['D_LOG_MASK'] = 'INFO,IL=INFO'
         if il_lib == 'libpil4dfs.so':
             remote_env['D_IL_NO_BYPASS'] = '1'
             remote_env['D_IL_COMPATIBLE'] = '1'
