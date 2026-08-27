@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -19,7 +19,7 @@ from process_core_files import CoreFileException, CoreFileProcessing
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host
 from util.run_utils import find_command, run_local, run_remote, stop_processes
-from util.storage_utils import find_pci_address
+from util.storage_utils import find_pci_address, get_nvme_diagnostics_command
 from util.systemctl_utils import stop_service
 from util.user_utils import get_chown_command
 from util.yaml_utils import get_test_category
@@ -73,9 +73,9 @@ def stop_daos_server_service(logger, test):
 def reset_server_storage(logger, test):
     """Reset the server storage for the hosts that ran servers in the test.
 
-    This is a workaround to enable binding devices back to nvme or vfio-pci after they are
-    unbound from vfio-pci to nvme.  This should resolve the "NVMe not found" error seen when
-    attempting to start daos engines in the test.
+    This is a workaround to enable binding devices back to the SPDK driver after they are
+    unbound to nvme. This should resolve the "NVMe not found" error seen when attempting to
+    start daos engines in the test.
 
     Args:
         logger (Logger): logger for the messages produced by this method
@@ -92,9 +92,22 @@ def reset_server_storage(logger, test):
         test_env = TestEnvironment()
         commands = [
             "if lspci | grep -i nvme",
-            f"then export COVFILE={test_env.bullseye_file} && "
-            "daos_server nvme reset && "
-            "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
+            "then",
+            get_nvme_diagnostics_command('before cleanup reset'),
+            f"export COVFILE={test_env.bullseye_file}",
+            "daos_server nvme reset",
+            "reset_rc=$?",
+            "if [ \"$reset_rc\" -eq 0 ]",
+            "then sudo -n rmmod vfio_pci",
+            "reset_rc=$?",
+            "fi",
+            "if [ \"$reset_rc\" -eq 0 ]",
+            "then",
+            "sudo -n modprobe vfio_pci",
+            "reset_rc=$?",
+            "fi",
+            get_nvme_diagnostics_command('after cleanup reset'),
+            "exit $reset_rc",
             "fi"]
         logger.info("Resetting server storage on %s after running '%s'", hosts, test)
         result = run_remote(logger, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
