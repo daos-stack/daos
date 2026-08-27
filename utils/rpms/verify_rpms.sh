@@ -66,12 +66,11 @@ fi
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "${tmpdir}"' EXIT
 
+DISTRO="${2:-${DISTRO:-el9}}"
+
 declare -i errors=0
 declare -A pkg_names
-DISTRO="${2:-${DISTRO:-el9}}"
 declare -A pkg_present
-declare -A pkg_files
-
 declare -A devel_runtime
 
 # Explicit devel to runtime package dependencies. These names are kept
@@ -174,7 +173,6 @@ check_rpm_basic() {
 
     pkg_names["${rpm_file}"]="${pkg_name}"
     pkg_present["${pkg_name}"]=1
-    pkg_files["${pkg_name}"]="${rpm_file}"
 
     if ! rpm -qpl "${rpm_file}" >/dev/null; then
         echo "ERROR: cannot list payload for ${rpm_file}"
