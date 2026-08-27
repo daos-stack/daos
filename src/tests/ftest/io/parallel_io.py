@@ -140,7 +140,7 @@ class ParallelIo(FioBase, IorTestBase):
         start_dfuse(self, dfuse, self.pool[0])
 
         # create multiple containers
-        self.add_container_qty(self.cont_count, self.pool[0])
+        self.container = [self.get_container(self.pool[0]) for _ in range(self.cont_count)]
 
         # check if all the created containers can be accessed and perform
         # io on each container using fio in parallel
@@ -234,8 +234,9 @@ class ParallelIo(FioBase, IorTestBase):
         # different times and get appended in the self.container variable in
         # unordered manner, causing problems during the write process.
         self.log_step("Create 10 containers for each pool.")
+        self.container = []
         for _, pool in enumerate(self.pool):
-            self.add_container_qty(self.cont_count, pool)
+            self.container.extend([self.get_container(pool) for _ in range(self.cont_count)])
 
         # Try to access each dfuse mounted container using ls. Once it is
         # accessed successfully, go ahead and perform io on that location

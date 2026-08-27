@@ -1,4 +1,5 @@
 #!/usr/bin/groovy
+/* groovylint-disable DuplicateListLiteral */
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
@@ -70,7 +71,8 @@ void updateRunStage() {
         'Functional Hardware Medium UCX Provider',
         'Functional Hardware Large',
         'Functional Hardware Large MD on SSD',
-        'Functional Cluster Box Medium MD on SSD'
+        'Functional Cluster Box Medium MD on SSD',
+        'Functional Cluster Box Medium Verbs Provider MD on SSD'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
@@ -221,6 +223,7 @@ void updateRunStage() {
             'Functional Hardware Large': hwBuildStage,
             'Functional Hardware Large MD on SSD': hwBuildStage,
             'Functional Cluster Box Medium MD on SSD': hwBuildStage,
+            'Functional Cluster Box Medium Verbs Provider MD on SSD': hwBuildStage,
             ]
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
@@ -662,6 +665,9 @@ pipeline {
         booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Cluster Box test stage')
+        booleanParam(name: bashName('Functional Cluster Box Medium Verbs Provider MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box Verbs Provider test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -820,7 +826,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.9'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
+                                                                deps_build: true,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
                                                 ' --target build-ci' +
@@ -832,8 +838,6 @@ pipeline {
                     }
                     steps {
                         script {
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -843,12 +847,9 @@ pipeline {
                                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
                                 script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
-                            // For non-release builds, create a separate build with the valgrind
-                            // tag for NLT memcheck testing.  This is necessary to avoid problems
-                            // caused by valgrind being confused by the Go runtime. We don't want
-                            // to use the valgrind build for normal testing because it is much slower.
-                            // BUILD_TYPE=dev is set for PR/dev builds in sconsArgs(), and
-                            // TARGET_TYPE=release is used to select pre-built cached prerequisites.
+                            // Go binaries need to be instrumented in order to work reliably
+                            // with valgrind. We do this in a separate build because we don't
+                            // want to ship the instrumented binaries.
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            build_deps: 'no',
@@ -887,7 +888,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: false) +
+                                                                deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +
@@ -897,8 +898,6 @@ pipeline {
                     }
                     steps {
                         script {
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -1172,7 +1171,9 @@ pipeline {
                         ),
                         'Fault injection testing': scriptedUnitTestStage(
                             name: 'Fault injection testing',
-                            runStage: shouldStageRun('Fault injection testing'),
+                            // Release builds compile out fault injection
+                            runStage: shouldStageRun('Fault injection testing') &&
+                                      !sconsArgs().contains('BUILD_TYPE=release'),
                             label: params.CI_FI_1_LABEL,
                             jobStatus: job_status_internal,
                             distro: 'el9',
@@ -1232,7 +1233,7 @@ pipeline {
                 }
             }
         } // stage('Test')
-        stage('Test Storage Prep on EL 8.8') {
+        stage('Test Storage Prep on EL 9') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
@@ -1278,7 +1279,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
-                            stage_tags: 'hw,medium,-provider',
+                            stage_tags: 'hw,medium,-provider,-cb',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal,
@@ -1316,7 +1317,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
+                            stage_tags: 'hw,medium,provider,-cb',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
@@ -1366,9 +1367,25 @@ pipeline {
                             pragma_suffix:'-cb-medium-md-on-ssd',
                             label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
                             next_version: next_version(),
-                            stage_tags: 'cb,medium',
+                            stage_tags: 'cb,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
+                            node_count: 5,
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional Cluster Box Medium Verbs Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium Verbs Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium Verbs Provider MD on SSD'),
+                            pragma_suffix:'-cb-medium-verbs-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                            next_version: next_version(),
+                            stage_tags: 'cb,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            provider: 'ofi+verbs;ofi_rxm',
                             node_count: 5,
                             run_if_pr: true,
                             run_if_landing: false,
@@ -1389,6 +1406,11 @@ pipeline {
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
+        }
+        cleanup {
+            // Need to clean the workspace to reduce disk space usage on
+            // Jenkins build agents
+            cleanWs()
         }
     } // post
 }

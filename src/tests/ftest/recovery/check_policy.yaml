@@ -18,6 +18,3 @@ server_config:
 
 pool:
   size: 60G
-
-container:
-  control_method: daos
