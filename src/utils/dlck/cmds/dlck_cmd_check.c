@@ -157,8 +157,6 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_LOG_DIR)) { /** fault injection */
 		ctrl->log_dir = NULL;
 		errno         = daos_fail_value_get();
-	} else {
-		ctrl->log_dir = mkdtemp(log_dir_template);
 	}
 	/** generate the log directory path template */
     D_ASPRINTF(log_dir_template, "%s/dlck_check_XXXXXX", ctrl->common.log_dir);
@@ -167,6 +165,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
         CK_PRINTL_RC(ck, rc, "Cannot allocate log directory path");
         return rc;
     }
+	ctrl->log_dir = mkdtemp(log_dir_template);
 	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
 		CK_PRINTL_RC(ck, rc, "Cannot create log directory");
