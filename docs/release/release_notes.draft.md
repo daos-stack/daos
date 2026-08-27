@@ -68,13 +68,13 @@ Matrix](https://docs.daos.io/v3.0/release/support_matrix/)
 
 ##### MD-on-SSD Phase 2
 
-##### Incremental Reintegration Technology Preview
-
 ##### Hardlink support
+
+##### Incremental Reintegration Technology Preview
 
 #### Other notable changes
 
-##### Catastrphic Recovery tools
+##### Catastrophic Recovery tools
 
 ##### Protocol changes for multi-provider support
 
