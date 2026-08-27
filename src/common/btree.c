@@ -4764,17 +4764,11 @@ done:
 static int
 btr_rec_check(struct btr_context *tcx, struct btr_record *rec)
 {
-	d_iov_t val;
-	int     rc;
-
 	if (!btr_ops(tcx)->to_rec_check) {
 		return -DER_NOSYS;
 	}
 
-	rc = btr_rec_fetch(tcx, rec, NULL, &val);
-	D_ASSERT(rc == DER_SUCCESS);
-
-	return btr_ops(tcx)->to_rec_check(&tcx->tc_tins, &val);
+	return btr_ops(tcx)->to_rec_check(&tcx->tc_tins, rec);
 }
 
 #define CK_BTREE_NODE_FMT             "Node (off=%#lx)... "
@@ -4897,25 +4891,27 @@ btr_nodes_check(struct btr_context *tcx, btr_report_fn_t report_fn, void *report
 			break;
 		}
 
-		/** a leaf has no child nodes */
-		if (btr_node_is_leaf(tcx, nd_off)) {
-			continue;
-		}
-
+		/** check records' consistency */
 		for (int at = 0; at < nd->tn_keyn; ++at) {
-			/** check the record's consistency */
 			rec = btr_node_rec_at(tcx, nd_off, at);
 			rc  = btr_rec_check(tcx, rec);
 			if (rc != DER_SUCCESS) {
 				break;
 			}
+		}
 
-			/**
-			 * Append the node's children to the front of the nodes' list.
-			 *
-			 * Note: This makes the traversal depth-first. Given the limited depth of a
-			 * typical DAOS tree, this approach should help reduce resource usage.
-			 */
+		/** a leaf has no child nodes */
+		if (btr_node_is_leaf(tcx, nd_off)) {
+			continue;
+		}
+
+		/**
+		 * Append the node's children to the front of the nodes' list.
+		 *
+		 * Note: This makes the traversal depth-first. Given the limited depth of a
+		 * typical DAOS tree, this approach should help reduce resource usage.
+		 */
+		for (int at = 0; at < nd->tn_keyn; ++at) {
 			D_ALLOC_PTR(ni);
 			ni->nd_off = btr_node_child_at(tcx, nd_off, at);
 			d_list_add(&ni->link, &node_list);

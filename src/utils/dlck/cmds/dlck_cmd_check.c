@@ -41,14 +41,14 @@ struct bundle {
 
 static int
 obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
-	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
-	struct bundle      *bndl    = cb_arg;
+	struct bundle  *bndl = cb_arg;
 	// struct xstream_arg *xa      = bndl->xa;
 	// struct checker     *main_ck = &xa->ctrl->checker;
-	struct checker     *ck      = bndl->ck;
+	struct checker *ck = bndl->ck;
 
-	CK_PRINTF(ck, "oid: "DF_UOID"\n", DP_UOID(entry->ie_oid));
+	CK_PRINTF(ck, "oid: " DF_UOID "\n", DP_UOID(entry->ie_oid));
 
 	return 0;
 }
@@ -101,7 +101,8 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 
 	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, ck, &coh);
 	if (rc == DER_SUCCESS) {
-		CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc, ck->ck_warnings_num);
+		CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc,
+				   ck->ck_warnings_num);
 
 		trees_process(coh, bndl);
 

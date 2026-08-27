@@ -415,12 +415,12 @@ typedef struct {
 	 *
 	 * \param tins	[IN]	Tree instance which contains the root umem
 	 *			offset and memory class etc.
-	 * \param val	[IN]	Value to be checked.
+	 * \param rec	[IN]	Record to be checked.
 	 *
 	 * \retval DER_SUCCESS	Success.
 	 * \retval -DER_*	Errors returned by the tree checking logic.
 	 */
-	int (*to_rec_check)(struct btr_instance *tins, d_iov_t *val);
+	int (*to_rec_check)(struct btr_instance *tins, struct btr_record *rec);
 } btr_ops_t;
 
 /**

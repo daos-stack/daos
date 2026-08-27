@@ -147,14 +147,39 @@ cont_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static int
+cont_df_rec_check(struct btr_instance *tins, struct btr_record *rec)
+{
+	struct cont_df_args args;
+	d_iov_t             val_iov;
+	struct vos_cont_df *cont_df;
+	int                 rc;
+
+	d_iov_set(&val_iov, &args, sizeof(struct cont_df_args));
+
+	rc = tins->ti_ops->to_rec_fetch(tins, rec, NULL, &val_iov);
+	D_ASSERT(rc == 0);
+
+	D_ASSERT(val_iov.iov_buf == &args);
+	D_ASSERT(val_iov.iov_len == sizeof(struct cont_df_args));
+
+	cont_df = args.ca_cont_df;
+	D_ASSERT(cont_df != 0);
+
+	/** WIP */
+
+	return 0;
+}
+
 static btr_ops_t vct_ops = {
-	.to_rec_msize	= cont_df_rec_msize,
-	.to_hkey_size	= cont_df_hkey_size,
-	.to_hkey_gen	= cont_df_hkey_gen,
-	.to_rec_alloc	= cont_df_rec_alloc,
-	.to_rec_free	= cont_df_rec_free,
-	.to_rec_fetch	= cont_df_rec_fetch,
-	.to_rec_update  = cont_df_rec_update,
+    .to_rec_msize  = cont_df_rec_msize,
+    .to_hkey_size  = cont_df_hkey_size,
+    .to_hkey_gen   = cont_df_hkey_gen,
+    .to_rec_alloc  = cont_df_rec_alloc,
+    .to_rec_free   = cont_df_rec_free,
+    .to_rec_fetch  = cont_df_rec_fetch,
+    .to_rec_update = cont_df_rec_update,
+    .to_rec_check  = cont_df_rec_check,
 };
 
 static int

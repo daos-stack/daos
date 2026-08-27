@@ -218,12 +218,20 @@ oi_node_alloc(struct btr_instance *tins, int size)
 }
 
 static int
-oi_rec_check(struct btr_instance *tins, d_iov_t *val_iov)
+oi_rec_check(struct btr_instance *tins, struct btr_record *rec)
 {
-	struct vos_obj_df *obj = val_iov->iov_buf;
+	d_iov_t            val_iov;
+	struct vos_obj_df *obj;
+	int                rc;
 
+	rc = tins->ti_ops->to_rec_fetch(tins, rec, NULL, &val_iov);
+	D_ASSERT(rc == 0);
+
+	D_ASSERT(val_iov.iov_buf != NULL);
+	D_ASSERT(val_iov.iov_len == vos_obj_df_size((struct vos_pool *)tins->ti_priv));
+
+	obj = val_iov.iov_buf;
 	D_ASSERT(obj != NULL);
-	D_ASSERT(val_iov->iov_len == vos_obj_df_size((struct vos_pool *)tins->ti_priv));
 
 	/** WIP */
 

@@ -94,7 +94,7 @@ user_belongs_to_group(const char *group_name, struct checker *ck)
 	}
 	if (rc < 0) {
 		rc = daos_errno2der(errno);
-		CK_PRINTFL_RC(ck, rc, "getgroups() failed", group_name);
+		CK_PRINTL_RC(ck, rc, "getgroups() failed");
 		return false;
 	}
 
