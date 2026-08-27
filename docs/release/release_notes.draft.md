@@ -1,6 +1,8 @@
 # DAOS Version 3.0 Release Notes
 
-## DAOS Version 3.0.0 (2026-08-12)
+THIS IS A DRAFT DOCUMENT, NOT VALID UNTIL DAOS 3.0 GA
+
+## DAOS Version 3.0.0 (YYYY-MM-DD)
 
 We are pleased to announce the release of DAOS version 3.0.
 
@@ -62,41 +64,19 @@ Matrix](https://docs.daos.io/v3.0/release/support_matrix/)
 * The following prerequisite software packages used by the DAOS build have been
   updated:
 
-    - Libfabric has been updated to 1.22.0
-    - UCX (in DOCA-OFED) has been updated to 1.20.0
-    - Mercury has been updated to 2.4.1
-    - SPDK has been updated to 26.01
-    - PMDK has been updated to 2.1.3
-    - ISA-L has been updated to 2.31.1
-    - ISA-L Crypto has been updated to 2.26
-    - Argobots has been updated to 1.2
-    - Protobuf-C remains at 1.3.3
-    - Fused remains at 1.0.0
-
-* The Go module and RPM build metadata require Go 1.21.
-
 #### New Features and Usability Improvements
 
 ##### MD-on-SSD Phase 2
 
-* In DAOS 3.0, `dmg pool create` now supports metadata sizing
-  with a memory-to-metadata ratio smaller than 100%
-  (for example, using `--mem-ratio 25%`) for production usage
-  (it was a technology preview in DAOS 2.8).
-
 ##### Incremental Reintegration Technology Preview
 
-* In DAOS 2.8,
-  incremental reintegration is available as an opt-in Technology Preview through
-  the `reintegration:incremental` pool property. It is disabled by default and
-  is not production ready.
-
-* In DAOS 2.8,
-  incremental reintegration is not functionally complete. Punches occurring
-  after rebuild and before reintegration are not fully handled and may not be
-  reproduced correctly on the reintegrated target.
+##### Hardlink support
 
 #### Other notable changes
+
+##### Catastrphic Recovery tools
+
+##### Protocol changes for multi-provider support
 
 ### Known Issues and Limitations
 

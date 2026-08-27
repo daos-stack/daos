@@ -1,4 +1,6 @@
-# DAOS Version 2.8 Support Matrix
+# DAOS Version 3.0 Support Matrix
+
+THIS IS A DRAFT DOCUMENT, NOT VALID UNTIL DAOS 3.0 GA
 
 ## Community Support and Commercial Support
 
@@ -16,7 +18,7 @@ Please refer to the [DAOS Foundation landing page](https://daos.io/)
 for information on the DAOS partner ecosystem.
 
 This document describes the supported environments for Level-3 support
-at the DAOS Version 2.8 level.
+at the DAOS Version 3.0 level.
 Partner support offerings may impose further constraints, for example if they
 include DAOS support as part of a more general cluster support offering
 with its own release cycle.
@@ -30,7 +32,7 @@ DAOS engineering team in a production environment.
 
 ## Hardware platforms supported for DAOS Servers
 
-DAOS Version 2.8 supports the x86\_64 architecture.
+DAOS Version 3.0 supports the x86\_64 architecture.
 
 DAOS servers require byte-addressable Storage Class Memory (SCM)
 for the DAOS metadata. There are two different ways to
@@ -41,7 +43,7 @@ or using DRAM combined with logging to NVMe SSDs
 ### DAOS Servers with Persistent Memory
 
 All DAOS versions support Intel Optane Persistent Memory (PMem)
-as its SCM layer. DAOS Version 2.8 has been validated with
+as its SCM layer. DAOS Version 3.0 has been validated with
 [Intel Optane Persistent Memory 100 Series](https://ark.intel.com/content/www/us/en/ark/products/series/190349/intel-optane-persistent-memory-100-series.html)
 on 2nd gen Intel Xeon Scalable Processors, and with
 [Intel Optane Persistent Memory 200 Series](https://ark.intel.com/content/www/us/en/ark/products/series/203877/intel-optane-persistent-memory-200-series.html)
@@ -58,12 +60,12 @@ for SCM when using Optane Persistent Memory.
 
 ### DAOS Servers without Persistent Memory
 
-DAOS Version 2.8 supports the _Metadata-on-SSD (phase 1)_ feature
+DAOS Version 3.0 supports the _Metadata-on-SSD (phase 1)_ feature
 for production environments.  This code path uses DRAM memory to hold the
 DAOS metadata, and persists changes to the DAOS metadata on NVMe SSDs through
 a write-ahead log (WAL) and asynchronous metadata checkpointing.
 
-DAOS Version 2.8 also contains a technology preview of _Metadata-on-SSD
+DAOS Version 3.0 also contains a technology preview of _Metadata-on-SSD
 (phase 2)_, which reduces the required DRAM capacity on the servers.
 
 More details on the Metadata-on-SSD functionality can be found in the
@@ -100,14 +102,14 @@ NVMe disks with different `bdev_role`s can have different capacities.
 For example, a higher-endurance but lower-capacity NVMe disk model
 may be assigned for the `wal` and `meta` roles.
 
-DAOS Version 2.8 supports Intel Volume Management Devices (VMD) to manage the
+DAOS Version 3.0 supports Intel Volume Management Devices (VMD) to manage the
 NVMe disks on the DAOS servers, in particular LED control and hot-plug. Enabling
 VMD is platform-dependent; details are provided in the Administration Guide.
 
 ### High-Speed Networking Cards in DAOS Servers
 
 Each DAOS engine needs one high-speed network port for communication in the
-DAOS data plane. DAOS Version 2.8 does not support more than one
+DAOS data plane. DAOS Version 3.0 does not support more than one
 high-speed network port per DAOS engine. If multiple high-speed network ports
 per CPU sockets are deployed, it is recommended to run multiple engines per
 CPU socket (one per high-speed network port).
@@ -125,7 +127,7 @@ Please refer to "High-Speed Fabric Support" below for more details.
 
 ## Hardware platforms supported for DAOS Clients
 
-DAOS Version 2.8 supports the x86\_64 architecture.
+DAOS Version 3.0 supports the x86\_64 architecture.
 
 DAOS clients have no specific hardware dependencies.
 
@@ -142,16 +144,16 @@ ports to different tasks/processes.
 The DAOS software stack is built and supported on
 Linux for the x86\_64 architecture.
 
-DAOS Version 2.8 has been validated on
-[Rocky Linux 9.6](https://docs.rockylinux.org/release_notes/9.6/),
+DAOS Version 3.0 has been validated on
 [Rocky Linux 9.7](https://docs.rockylinux.org/release_notes/9.7/),
+[Rocky Linux 9.8](https://docs.rockylinux.org/release_notes/9.8/),
 [openSUSE Leap 15.6](https://en.opensuse.org/openSUSE:Roadmap),
 and [SLES 15 SP7](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP7/).
 (Note that an
 [openSUSE Leap 15.7](https://en.opensuse.org/openSUSE:Roadmap)
 release does not exist.)
 The following subsections provide details on the Linux distributions
-which DAOS Version 2.8 supports on DAOS servers.
+which DAOS Version 3.0 supports on DAOS servers.
 
 All DAOS servers in a DAOS server cluster (also called _DAOS system_)
 must run the same Linux distribution. DAOS clients that access a DAOS server
@@ -159,12 +161,12 @@ cluster can run the same or different Linux distributions.
 
 ### SUSE Linux Enterprise Server 15 and openSUSE Leap 15
 
-DAOS Version 2.8.0 is supported on SLES 15 SP6, SLES 15 SP7,
+DAOS Version 3.0.0 is supported on SLES 15 SP6, SLES 15 SP7,
 and openSUSE Leap 15.6.
 (An openSUSE Leap 15.7 release does not exist.)
 
 DAOS nodes running unsupported SLES 15 or openSUSE Leap 15 levels should be
-updated to a supported OS level when updating DAOS to Version 2.8.
+updated to a supported OS level when updating DAOS to Version 3.0.
 
 Links to SLES 15 Release Notes:
 
@@ -180,29 +182,32 @@ description on the SUSE support website for information on SLES support phases.
 
 ### Enterprise Linux 8 (EL8): RHEL 8, Rocky Linux 8, AlmaLinux 8
 
-DAOS Version 2.8 has not been validated with EL8 (EL 8.10 was the last EL8 release).
+DAOS Version 3.0 has not been validated with EL8 (EL 8.10 was the last EL8 release).
 It is recommended that EL8 environments are updated to EL9
-when installing DAOS Version 2.8.
+when installing DAOS Version 3.0.
 
 ### Enterprise Linux 9 (EL9): RHEL 9, Rocky Linux 9, AlmaLinux 9
 
-DAOS Version 2.8 is supported on EL 9.6 and EL 9.7.
+DAOS Version 3.0 is supported on EL 9.6 and EL 9.7.
 Validation on EL 9.8 is planned for a future maintenance release.
 
 Links to RHEL 9 Release Notes:
 
 * [RHEL 9.6](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/9.6_release_notes/index)
 * [RHEL 9.7](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/9.7_release_notes/index)
+* [RHEL 9.8](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/9.8_release_notes/index)
 
 Links to Rocky Linux Release Notes:
 
 * [Rocky Linux 9.6](https://docs.rockylinux.org/release_notes/9_6/)
 * [Rocky Linux 9.7](https://docs.rockylinux.org/release_notes/9_7/)
+* [Rocky Linux 9.8](https://docs.rockylinux.org/release_notes/9_8/)
 
 Links to AlmaLinux Release Notes:
 
 * [AlmaLinux 9.6](https://wiki.almalinux.org/release-notes/9.6.html)
 * [AlmaLinux 9.7](https://wiki.almalinux.org/release-notes/9.7.html)
+* [AlmaLinux 9.8](https://wiki.almalinux.org/release-notes/9.8.html)
 
 Refer to the
 [RHEL Life Cycle](https://access.redhat.com/support/policy/updates/errata/)
@@ -211,7 +216,7 @@ for information on RHEL support phases.
 
 ### Unsupported Linux Distributions
 
-DAOS 2.8 does not support
+DAOS 3.0 does not support
 openSUSE Tumbleweed,
 Fedora,
 RHEL 7,
@@ -222,7 +227,7 @@ CentOS Stream,
 Ubuntu, or
 Oracle Linux.
 
-DAOS Version 2.8 has not yet been validated on RHEL 10 (and clones),
+DAOS Version 3.0 has not yet been validated on RHEL 10 (and clones),
 or on SLES/openSUSE Leap 16.
 
 ## Operating Systems supported for DAOS Clients
@@ -230,7 +235,7 @@ or on SLES/openSUSE Leap 16.
 The DAOS software stack is built and supported on
 Linux for the x86\_64 architecture.
 
-In DAOS Version 2.8, the supported Linux distributions and versions
+In DAOS Version 3.0, the supported Linux distributions and versions
 for DAOS clients are identical to those for DAOS servers.
 Please refer to the
 [previous section](#Operating-Systems-supported-for-DAOS-Servers) for details.
@@ -240,7 +245,7 @@ Linux distributions and/or versions.
 
 ## High-Speed Fabric Support
 
-DAOS Version 2.8 supports both
+DAOS Version 3.0 supports both
 OFI [libfabric](https://ofiwg.github.io/libfabric/)
 and UCF [UCX](https://openucx.org/) for communication in the DAOS data plane.
 This section describes the supported network providers and contains references
@@ -250,9 +255,9 @@ to vendor-specific information for the supported networking hardware.
 
 With the exception of UCX for NVIDIA InfiniBand and RoCE networks,
 OFI libfabric is the recommended networking stack for DAOS.
-DAOS Version 2.8.0 ships with libfabric version 1.22.0.
+DAOS Version 3.0.0 ships with libfabric version 1.22.0.
 It is strongly recommended to use the libfabric version that is included in the
-[DAOS Version 2.8 RPM repository](https://packages.daos.io/v2.8/)
+[DAOS Version 3.0 RPM repository](https://packages.daos.io/v3.0/)
 on all DAOS servers and all DAOS clients.
 The only exception is Slingshot, which provides its own libfabric version
 as part of the Slingshot Host Stack (SHS).
@@ -279,8 +284,8 @@ are supported by DAOS. The following providers are supported:
 
 !!! note
     Starting with libfabric 1.18.0, libfabric has support for TCP without
-    `rxm`. To support this, DAOS 2.8 does not automatically add `rxm`
-    to the `ofi+tcp` provider string. To use `rxm` with DAOS 2.8,
+    `rxm`. To support this, DAOS 3.0 does not automatically add `rxm`
+    to the `ofi+tcp` provider string. To use `rxm` with DAOS 3.0,
     it has to be explicitly added as `ofi+tcp;ofi_rxm`.
 
 !!! note
@@ -291,31 +296,23 @@ are supported by DAOS. The following providers are supported:
 
 For [NVIDIA InfiniBand](https://www.nvidia.com/en-us/networking/products/infiniband/)
 fabrics and NVIDIA-based RoCE networks,
-DAOS 2.8 supports [UCX](https://openucx.org/)
+DAOS 3.0 supports [UCX](https://openucx.org/)
 which is maintained by the Unified Communication Framework (UCF) consortium.
 
 When using UCX, DAOS requires that the NVIDIA-provided DOCA-OFED stack
 is installed on the DAOS servers and DAOS clients.
 DAOS has not been validated and is not supported with Linux in-box OFED.
 
-DAOS Version 2.8 has been validated with the following DOCA-OFED and UCX Versions,
+DAOS Version 3.0 has been validated with the following DOCA-OFED and UCX Versions,
 which can be downloaded from the
 [https://developer.nvidia.com/doca-archive](DOCA archive) page:
-
-* [DOCA-OFED-3.1.0](https://developer.nvidia.com/doca-3-1-0-download-archive?deployment_platform=Host-Server&deployment_package=DOCA-Host&target_os=Linux&Architecture=x86_64&Profile=doca-ofed)
-  (OFED-internal-25.07-0.9.7) with UCX 1.20.0
-  (Git branch 'master', revision 03898fe)
-
-* [DOCA-OFED-3.2.0](https://developer.nvidia.com/doca-3-2-0-download-archive?deployment_platform=Host-Server&deployment_package=DOCA-Host&target_os=Linux&Architecture=x86_64&Profile=doca-ofed)
-  (OFED-internal-25.10-1.2.8) with UCX 1.20.0
-  (Git branch 'master', revision 03898fe)
 
 * [DOCA-OFED-3.2.1](https://developer.nvidia.com/doca-3-2-1-download-archive?deployment_platform=Host-Server&deployment_package=DOCA-Host&target_os=Linux&Architecture=x86_64&Profile=doca-ofed)
   (OFED-internal-25.10-1.7.1) with UCX 1.20.0
   (Git branch 'master', revision 03898fe)
 
-The recommended DOCA-OFED level for DAOS 2.8 is DOCA-OFED-3.2.1.
-MLNX\_OFED and DOCA-OFED versions older than 3.1 are not supported with DAOS 2.8.
+The recommended DOCA-OFED level for DAOS 3.0 is DOCA-OFED-3.2.1.
+MLNX\_OFED and DOCA-OFED versions older than 3.2.1 are not supported with DAOS 3.0.
 
 The recommended UCX fabric provider is `ucx+dc_x`.
 
@@ -323,11 +320,11 @@ The recommended UCX fabric provider is `ucx+dc_x`.
   instabilities on large InfiniBand fabrics under heavy I/O load.
   To avoid these issues, the recommendation is to use `ucx+dc_x`
   in conjunction with the `mercury-2.4.1` release that is included in
-  the DAOS Version 2.8 packages.
+  the DAOS Version 3.0 packages.
 
 * The `ucx+tcp`, `ucx+rc_x` and `ucx+ud_x` providers
   can be used for evaluation and testing purposes,
-  but they have not been validated and are not supported with DAOS Version 2.8.
+  but they have not been validated and are not supported with DAOS Version 3.0.
 
 It is strongly recommended that all DAOS servers and all DAOS clients
 run the same version of DOCA-OFED, and that the InfiniBand adapters are
@@ -336,7 +333,7 @@ distribution.
 
 It is also strongly recommended that the same model of
 InfiniBand fabric adapter is used in all DAOS servers.
-DAOS Version 2.8 has **not** been tested and is not supported with
+DAOS Version 3.0 has **not** been tested and is not supported with
 heterogeneous InfiniBand adapter configurations on the DAOS servers.
 The only exception to this recommendation is the mix of single-port
 and dual-port adapters of the same generation, where only one of the ports
@@ -344,21 +341,21 @@ of the dual-port adapter(s) is used by DAOS.
 
 ### HPE Slingshot with libfabric CXI
 
-DAOS Version 2.8 supports
+DAOS Version 3.0 supports
 [HPE Slingshot](https://www.hpe.com/us/en/compute/hpc/slingshot-interconnect.html)
 fabrics with the libfabric `ofi+cxi` provider.
 
-DAOS Version 2.8 has been validated with the following
+DAOS Version 3.0 has been validated with the following
 Slingshot Host Stack (SHS) releases:
-
-* [https://support.hpe.com/hpesc/public/swd/detail?swItemId=MTX_d064d0ca8d92462cb710b0d2a6](13.0.0 (24 Sep 2025))
 
 * [https://support.hpe.com/hpesc/public/swd/detail?swItemId=MTX_43f240ba620b473f91dc9b5a45](13.1.0 (02 Feb 2026)),
   see also the
   [https://support.hpe.com/hpesc/public/docDisplay?docId=dp00007409en_us](HPE Slingshot Host Software Release 13.1.0)
   document.
 
-The recommended Slingshot Host Stack (SHS) level for DAOS 2.8 is SHS 13.1 or higher.
+* SHS 14
+
+The recommended Slingshot Host Stack (SHS) level for DAOS 3.0 is SHS 13.1 or higher.
 
 !!! note
     The Slingshot Host Software (SHS) stack includes its own libfabric
@@ -372,13 +369,13 @@ updated to the firmware levels that are included in that SHS distribution.
 
 It is also strongly recommended that the same model of
 Slingshot fabric adapter is used in all DAOS servers.
-DAOS Version 2.8 has **not** been tested and is not supported with
+DAOS Version 3.0 has **not** been tested and is not supported with
 heterogeneous Slingshot adapter configurations on the DAOS servers.
 
 
 ### Omni-Path with libfabric TCP or VERBS
 
-DAOS Version 2.8 should work over
+DAOS Version 3.0 should work over
 [Cornelis Omni-Path](https://www.cornelis.com/products/cn5000/family)
 fabrics with the libfabric `ofi+tcp` or `ofi+verbs` provider.
 For optimal verbs performance, it is recommended to enable
@@ -386,9 +383,10 @@ CN5000 bulk service optimization in the HFI1 driver (`use_bulksvc=Y`).
 For optimal TCP performance, it is recommended to configure
 the Omni-Path fabric manager with an MTU of 10240 byte.
 
-The recommended CN5000 Software level is 12.1.1 or higher:
+The recommended CN5000 Software level is 12.3 or higher:
 
-* [https://customercenter.cornelis.com/?product=cn5000&release=12-1%2C12-1-1](CN5000 OPX Software Version 12.1.1)
+
+* [https://customercenter.cornelis.com/?product=cn5000&release=12-3%2C12-3-0](CN5000 OPX Software Version 12.3.0)
 
 Customers interested in running DAOS in an Omni-Path environment
 should contact their Cornelis representative regarding DAOS support.
@@ -401,7 +399,7 @@ should contact their Cornelis representative regarding DAOS support.
 
 DAOS is a scale-out storage solution that is designed for extreme scale.
 This section summarizes the DAOS scaling targets, some DAOS architectural
-limits, and the current testing limits of DAOS Version 2.8.
+limits, and the current testing limits of DAOS Version 3.0.
 
 Note: Scaling characteristics depend on the properties of the high-performance
 interconnect, and the libfaric provider that is used. The DAOS scaling targets
@@ -411,7 +409,7 @@ and on InfiniBand fabrics with the UCX `ucx+dc_x` provider.
 
 DAOS scaling targets
 (these are order of magnitude figures that indicate what the DAOS architecture
-should support - see below for the scales at which DAOS 2.8 has been validated):
+should support - see below for the scales at which DAOS 3.0 has been validated):
 
 * DAOS client nodes in a DAOS system:   10<sup>5</sup> (hundreds of thousands)
 * DAOS servers in a DAOS system:        10<sup>3</sup> (thousands)
@@ -430,7 +428,7 @@ storage targets in a DAOS system, because the number of storage targets
 is encoded in 16 of the 32 "DAOS internal bits" within the
 128-bit DAOS Object ID.
 
-DAOS Version 2.8 has been validated at the following scales:
+DAOS Version 3.0 has been validated at the following scales:
 
 * DAOS client nodes in a DAOS system:   8000
 * DAOS servers in a DAOS system:        800
