@@ -10,6 +10,9 @@ timeouts:
   test_two_pools_hw: 320
   test_recycle_pools_hw: 1500
 
+pool:
+  properties: rd_fac:0,space_rb:0
+
 test_one_pool_hw:
   deltas:
     scm: 18874368       # 18MiB

@@ -1,7 +1,9 @@
 hosts:
   test_servers: 1
   test_clients: 1
+
 timeout: 90
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -14,15 +16,22 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
+
 pool:
   scm_size: 1G
+  properties: rd_fac:0,space_rb:0
+
 pool_1:
   scm_size: 1G
   properties: rd_fac:0,space_rb:0,ec_pda:2,rp_pda:4
+
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
+
 container_1:
   type: POSIX
   pda_properties:
     - 3       # ec_pda
     - 5       # rp_pda
+  properties: cksum:off,srv_cksum:off

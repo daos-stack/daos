@@ -1,8 +1,8 @@
-# Note that stuff that is commented out represents tests that presently
-# fail and will be uncommented as the daos code is fixed
 hosts:
   test_servers: 1
+
 timeout: 150
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -15,8 +15,11 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
+
 pool:
   scm_size: 1GB
+  properties: rd_fac:0,space_rb:0
+
 querytests:
   handles: !mux
     goodhandle:

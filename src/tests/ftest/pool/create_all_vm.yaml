@@ -1,12 +1,17 @@
 setup:
   start_servers_once: False
+
 hosts:
   test_servers: 5
+
 timeouts:
   test_one_pool_vm: 240
   test_rank_filter: 240
   test_two_pools_vm: 160
   test_recycle_pools_vm: 800
+
+pool:
+  properties: rd_fac:0,space_rb:0
 
 # DAOS-12750 NOTE External tools used by DAOS are creating sparse files (e.g. daos_system.db) which
 # could eventually be compacted when a pool is created.  To manage this, we add 9 MiB to the 17MiB

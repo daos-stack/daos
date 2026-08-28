@@ -24,3 +24,4 @@ server_config:
 
 pool:
   size: 100%
+  properties: rd_fac:0,space_rb:0

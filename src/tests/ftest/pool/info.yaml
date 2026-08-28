@@ -1,6 +1,8 @@
 hosts:
   test_servers: 1
+
 timeout: 90
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -13,12 +15,16 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
+
 pool:
   createsize: !mux
     size1gb:
       scm_size: 1073741824
+      properties: rd_fac:0,space_rb:0
     size3gb:
       scm_size: 3221225472
+      properties: rd_fac:0,space_rb:0
+
 test:
   poolconnect: !mux
     ro:
