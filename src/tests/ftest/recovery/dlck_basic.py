@@ -7,7 +7,6 @@ import os
 import re
 
 from dlck_utils import TestDlck
-from test_utils_pool import add_pool
 from fault_config_utils import FaultInjection
 from file_utils import distribute_files
 
