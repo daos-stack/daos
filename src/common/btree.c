@@ -4762,13 +4762,14 @@ done:
 }
 
 static int
-btr_rec_check(struct btr_context *tcx, struct btr_record *rec)
+btr_rec_check(struct btr_context *tcx, struct btr_record *rec, btr_report_fn_t report_fn,
+	      void *report_arg)
 {
 	if (!btr_ops(tcx)->to_rec_check) {
 		return -DER_NOSYS;
 	}
 
-	return btr_ops(tcx)->to_rec_check(&tcx->tc_tins, rec);
+	return btr_ops(tcx)->to_rec_check(&tcx->tc_tins, rec, report_fn, report_arg);
 }
 
 #define CK_BTREE_NODE_FMT             "Node (off=%#lx)... "
@@ -4781,7 +4782,8 @@ btr_rec_check(struct btr_context *tcx, struct btr_record *rec)
  *
  * \param[in] nd	Node to check.
  * \param[in] nd_off	Node's offset.
- * \param[in] ck	Checker.
+ * \param[in] report_fn	Report function.
+ * \param[in] report_arg	Argument for the report function.
  *
  * \retval DER_SUCCESS	The node is correct.
  * \retval -DER_NOTYPE	The node is malformed.
@@ -4845,7 +4847,8 @@ struct node_info {
  * Validate the integrity of a btree.
  *
  * \param[in] tcx		Btree context.
- * \param[in] ck		Checker.
+ * \param[in] report_fn	Report function.
+ * \param[in] report_arg	Argument for the report function.
  *
  * \retval DER_SUCCESS		The tree is correct.
  * \retval -DER_NOTYPE		The tree is malformed.
@@ -4892,13 +4895,15 @@ btr_nodes_check(struct btr_context *tcx, btr_report_fn_t report_fn, void *report
 		}
 
 		/** check records' consistency */
+		report_fn(report_arg, BTR_REPORT_INDENT_INC, NULL);
 		for (int at = 0; at < nd->tn_keyn; ++at) {
 			rec = btr_node_rec_at(tcx, nd_off, at);
-			rc  = btr_rec_check(tcx, rec);
+			rc  = btr_rec_check(tcx, rec, report_fn, report_arg);
 			if (rc != DER_SUCCESS) {
 				break;
 			}
 		}
+		report_fn(report_arg, BTR_REPORT_INDENT_DEC, NULL);
 
 		/** a leaf has no child nodes */
 		if (btr_node_is_leaf(tcx, nd_off)) {

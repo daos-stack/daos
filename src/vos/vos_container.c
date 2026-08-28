@@ -148,7 +148,8 @@ cont_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static int
-cont_df_rec_check(struct btr_instance *tins, struct btr_record *rec)
+cont_df_rec_check(struct btr_instance *tins, struct btr_record *rec, btr_report_fn_t report_fn,
+		  void *report_arg)
 {
 	/** NOP. The container is checked on open. */
 	return 0;

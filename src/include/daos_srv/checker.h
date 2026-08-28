@@ -92,23 +92,40 @@ ck_common_printf(struct checker *ck, const char *fmt, ...)
 static inline void
 ck_report(void *arg, enum btr_report_type type, const char *fmt, ...)
 {
-	struct checker *ck = arg;
+	struct checker *ck     = arg;
+	const char     *prefix = (type & BTR_REPORT_NO_PREFIX) ? "" : ck->ck_prefix;
 	va_list         args;
+
+	if (fmt == NULL) {
+		switch (type) {
+		case BTR_REPORT_INDENT_INC:
+			ck->ck_level++;
+			ck->ck_indent_set(ck);
+			return;
+		case BTR_REPORT_INDENT_DEC:
+			ck->ck_level--;
+			ck->ck_indent_set(ck);
+			return;
+		default:
+			D_ASSERTF(0, "Unknown report type: %x\n", type);
+		}
+		return;
+	}
 
 	va_start(args, fmt);
 
-	switch (type) {
+	switch (type & ~BTR_REPORT_FLAGS_MASK) {
 	case BTR_REPORT_ERROR:
-		ck_common_printf(ck, "%s%s", ck->ck_prefix, CHECKER_ERROR_INFIX);
+		ck_common_printf(ck, "%s%s", prefix, CHECKER_ERROR_INFIX);
 		ck->ck_vprintf(ck, fmt, args);
 		break;
 	case BTR_REPORT_WARNING:
-		ck_common_printf(ck, "%s%s", ck->ck_prefix, CHECKER_WARNING_INFIX);
+		ck_common_printf(ck, "%s%s", prefix, CHECKER_WARNING_INFIX);
 		ck->ck_vprintf(ck, fmt, args);
 		ck->ck_warnings_num++;
 		break;
 	case BTR_REPORT_MSG:
-		ck_common_printf(ck, "%s", ck->ck_prefix);
+		ck_common_printf(ck, "%s", prefix);
 		ck->ck_vprintf(ck, fmt, args);
 		break;
 	default:

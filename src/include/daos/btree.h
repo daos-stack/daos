@@ -191,6 +191,19 @@ enum btr_key_cmp_rc {
 	BTR_CMP_ERR	= (1 << 3),	/* error */
 };
 
+enum btr_report_type {
+	BTR_REPORT_ERROR,
+	BTR_REPORT_WARNING,
+	BTR_REPORT_MSG,
+	/** flags occupy the highest bits */
+	BTR_REPORT_NO_PREFIX  = (1 << 29),
+	BTR_REPORT_INDENT_INC = (1 << 30),
+	BTR_REPORT_INDENT_DEC = (1 << 31),
+	BTR_REPORT_FLAGS_MASK =
+	    (BTR_REPORT_NO_PREFIX | BTR_REPORT_INDENT_INC | BTR_REPORT_INDENT_DEC),
+};
+typedef void (*btr_report_fn_t)(void *arg, enum btr_report_type type, const char *fmt, ...);
+
 /**
  * Customized tree function table.
  */
@@ -413,14 +426,17 @@ typedef struct {
 	 * Optional:
 	 * Check the consistency of the given record.
 	 *
-	 * \param tins	[IN]	Tree instance which contains the root umem
-	 *			offset and memory class etc.
-	 * \param rec	[IN]	Record to be checked.
+	 * \param tins		[IN]	Tree instance which contains the root umem
+	 *				offset and memory class etc.
+	 * \param rec		[IN]	Record to be checked.
+	 * \param report_fn	[IN]	Report function.
+	 * \param report_arg	[IN]	Argument for the report function.
 	 *
 	 * \retval DER_SUCCESS	Success.
-	 * \retval -DER_*	Errors returned by the tree checking logic.
+	 * \retval -DER_*	Errors returned by the fetch callback.
 	 */
-	int (*to_rec_check)(struct btr_instance *tins, struct btr_record *rec);
+	int (*to_rec_check)(struct btr_instance *tins, struct btr_record *rec,
+			    btr_report_fn_t report_fn, void *report_arg);
 } btr_ops_t;
 
 /**
@@ -552,14 +568,9 @@ int  dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 		 daos_handle_t *toh);
 int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
-int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
-			    daos_handle_t coh, void *priv, daos_handle_t *toh);
-enum btr_report_type {
-	BTR_REPORT_ERROR,
-	BTR_REPORT_WARNING,
-	BTR_REPORT_MSG,
-};
-typedef void (*btr_report_fn_t)(void *arg, enum btr_report_type type, const char *fmt, ...);
+int
+dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
+		       daos_handle_t *toh);
 int
      dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, void *priv,
 			  btr_report_fn_t report_fn, void *report_arg, bool error_on_non_zero_padding);
