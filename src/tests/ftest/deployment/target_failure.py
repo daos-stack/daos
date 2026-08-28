@@ -88,8 +88,8 @@ class TargetFailure(IorTestBase):
                 IOR.
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio_80/*")
-        self.add_container(pool=self.pool, namespace="/run/container_with_rf/*")
+        self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
+        self.container = self.get_container(self.pool, namespace="/run/container_with_rf/*")
 
         # 2. Run IOR with oclass RP_2G1 or EC_2P1G1.
         ior_results = {}
@@ -162,7 +162,7 @@ class TargetFailure(IorTestBase):
         self.container.destroy()
 
         # 10. Create a new container and run IOR.
-        self.add_container(pool=self.pool, namespace="/run/container_with_rf/*")
+        self.container = self.get_container(self.pool, namespace="/run/container_with_rf/*")
         ior_results = {}
         self.run_ior_report_error(
             job_num=job_num, results=ior_results, file_name="test_file_3", pool=self.pool,
@@ -202,8 +202,8 @@ class TargetFailure(IorTestBase):
         :avocado: tags=TargetFailure,test_target_failure_wo_rf
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio_80/*")
-        self.add_container(pool=self.pool, namespace="/run/container_wo_rf/*")
+        self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
+        self.container = self.get_container(self.pool, namespace="/run/container_wo_rf/*")
 
         # 2. Run IOR with oclass SX so that excluding one target will result in a failure.
         ior_results = {}
@@ -329,7 +329,7 @@ class TargetFailure(IorTestBase):
         self.pool.append(self.get_pool(namespace="/run/pool_size_ratio_66/*"))
         for idx in range(2):
             self.container.append(
-                self.get_container(pool=self.pool[idx], namespace="/run/container_wo_rf/*"))
+                self.get_container(self.pool[idx], namespace="/run/container_wo_rf/*"))
 
         # 2. Run IOR with oclass SX on all containers at the same time.
         ior_results = {}

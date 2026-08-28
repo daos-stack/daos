@@ -1,5 +1,6 @@
 """
 (C) Copyright 2018-2024 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -96,7 +97,7 @@ class DestroyTests(TestWithServers):
         """
         # Create a pool
         self.log.info("Create a pool")
-        self.add_pool(create=False)
+        self.pool = self.get_pool(create=False)
         self.pool.create()
 
         # Check that the pool was created.
@@ -389,7 +390,7 @@ class DestroyTests(TestWithServers):
         # dictionary, first item is added to server_managers first, so we use index 0.
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
 
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
         # Get dmg_c instance that uses daos_control_c.yml. Server group is b.
         cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
@@ -539,10 +540,10 @@ class DestroyTests(TestWithServers):
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
 
         # Create the pool
-        self.add_pool()
+        self.pool = self.get_pool()
 
         # Create pool container
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         # Destroy pool with recursive unset
         self.log.info("Attempting to destroy a pool with containers")
@@ -584,10 +585,10 @@ class DestroyTests(TestWithServers):
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
         # Create the pool
-        self.add_pool()
+        self.pool = self.get_pool()
 
         # Create pool container
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         # Destroy pool with recursive set
         self.log.info("Attempting to recursively destroy a pool with containers")
