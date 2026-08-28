@@ -2070,6 +2070,16 @@ out_readlink:
 	return (-1);
 }
 
+/* dfs dereferences symlinks inside the container, so it fails with EINVAL on a symlink whose value
+ * is an absolute path. POSIX resolves such a value from the process root, which only the kernel can
+ * do, so the path has to be handled by dfuse instead of by dfs.
+ */
+static inline bool
+need_kernel_to_resolve(int rc)
+{
+	return rc == EINVAL;
+}
+
 static int
 open_common(int (*real_open)(const char *pathname, int oflags, ...), const char *caller_name,
 	    const char *pathname, int oflags, ...)
@@ -2272,6 +2282,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				    &dfs_obj, &mode_query, NULL);
 	}
 
+	if (need_kernel_to_resolve(rc))
+		goto org_func;
 	if (rc)
 		D_GOTO(out_error, rc);
 
@@ -3147,7 +3159,7 @@ out_err:
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if ((rc == EIO || rc == EINVAL) && d_compatible_mode)
+	if (need_kernel_to_resolve(rc) || (rc == EIO && d_compatible_mode))
 		return next_xstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -3199,7 +3211,7 @@ out_err:
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if ((rc == EIO || rc == EINVAL) && d_compatible_mode)
+	if (need_kernel_to_resolve(rc) || (rc == EIO && d_compatible_mode))
 		return libc_lxstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -5217,6 +5229,8 @@ out_org:
 	return next_access(path, mode);
 
 out_err:
+	if (need_kernel_to_resolve(rc))
+		goto out_org;
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);

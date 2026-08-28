@@ -19,8 +19,13 @@ from distro_utils import detect
 from run_utils import run_remote
 
 
-def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
-    """Run an actual test from above."""
+def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False, build_time_override=None):
+    """Run an actual test from above.
+
+    Args:
+        build_time_override (int, optional): scons command timeout in minutes, replacing the value
+            derived from cache_mode. Defaults to None.
+    """
     # Create a pool, container and start dfuse.
     self.log_step('Creating a single pool and container')
     pool = self.get_pool(connect=False)
@@ -94,6 +99,9 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         dfuse.disable_caching.value = True
     else:
         self.fail(f'Invalid cache_mode: {cache_mode}')
+
+    if build_time_override is not None:
+        build_time = build_time_override
 
     self.log_step('Starting dfuse')
     container.set_attr(attrs=cont_attrs)
