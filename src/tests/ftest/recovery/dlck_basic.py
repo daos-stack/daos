@@ -36,7 +36,6 @@ class DlckBasicTest(TestDlck):
         :avocado: tags=recovery,dlck_cmd
         :avocado: tags=DlckBasicTest,test_dlck_basic
         """
-        errors = []
         dmg = self.get_dmg_command()
         self.log_step("Create a pool to run dlck")
         pool = self.get_pool(self)
