@@ -42,7 +42,6 @@ class DlckBasicFaultTest(TestDlck):
         faults_dict = faults_object.get_faults_dict()
         fault_list = self.params.get("fault_list", '/run/dlck_test_faults/*')
         self.log.info("Test log dir %s", self.test_env.log_dir)
-        # /var/tmp/daos_testing/test_dlck_basic_fault/fi.yaml
         fault_inject_file = os.path.join(self.test_env.log_dir, "fi.yaml")
         self.log.info("Fault injection file: %s", fault_inject_file)
         self.log.info("Faults: %s", fault_list)
