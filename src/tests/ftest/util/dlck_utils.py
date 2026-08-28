@@ -46,5 +46,5 @@ class DlckCommand(RunCommand):
         super().__init__(namespace, "dlck", path)
         self.pool_uuid = FormattedParameter("--file={}", None)
         self.nvme = FormattedParameter("--nvme={}", None)
-        self.storage_mount = FormattedParameter("--storage={}", None)
+        self.storage = FormattedParameter("--storage={}", None)
         self.log_dir = FormattedParameter("--log_dir={}", None)
