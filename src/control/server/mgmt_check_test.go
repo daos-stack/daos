@@ -1457,7 +1457,7 @@ func TestServer_mgmtSvc_SystemCheckRegPool(t *testing.T) {
 				lock, badCtx := getPoolLockCtx(t, ctx, ms.sysdb, uuid.New())
 				return badCtx, lock.Release
 			},
-			expErr: daos.MiscError,
+			expErr: errors.New("failed to take pool lock"),
 		},
 		"register existing pool svc": {
 			req:     validReq,
@@ -1618,7 +1618,7 @@ func TestServer_mgmtSvc_SystemCheckDeregPool(t *testing.T) {
 				lock, badCtx := getPoolLockCtx(t, ctx, ms.sysdb, uuid.New())
 				return badCtx, lock.Release
 			},
-			expErr: daos.MiscError,
+			expErr: errors.New("failed to take pool lock"),
 		},
 		"pool svc doesn't exist": {
 			req: &sharedpb.CheckDeregPoolReq{
