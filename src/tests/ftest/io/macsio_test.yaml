@@ -24,7 +24,6 @@ pool:
   nvme_size: 10G
 
 container:
-  control_method: daos
   type: POSIX
 
 macsio:

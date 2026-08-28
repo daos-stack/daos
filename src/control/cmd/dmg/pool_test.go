@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,12 +9,15 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -782,6 +785,86 @@ func TestDmg_PoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Exclude with --wait issues a follow-up pool query",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Exclude with --wait=TIMEOUT issues a follow-up pool query",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait=30m",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Exclude with invalid --wait timeout",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait=soon",
+			"",
+			errors.New("invalid wait timeout"),
+		},
+		{
+			"Drain with --wait issues a follow-up pool query",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Extend with --wait issues a follow-up pool query",
+			"pool extend 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolExtendReq{
+					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks: []ranklist.Rank{1},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reintegrate with --wait issues a follow-up pool query",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Destroy pool with force",
 			"pool destroy 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
@@ -1412,6 +1495,153 @@ func TestPoolGetACLToFile_Success(t *testing.T) {
 	}
 }
 
+// TestDmg_PoolRanksCmds_WaitFailure covers the --wait error path for the
+// rank-op commands that return a populated response: in JSON mode the
+// response must still be emitted alongside the wait error rather than
+// falling through to the top-level null-response fallback.
+func TestDmg_PoolRanksCmds_WaitFailure(t *testing.T) {
+	poolUUID := test.MockUUID(1)
+	ranksResp := &mgmtpb.PoolRanksResp{}
+	failedQuery := &mgmtpb.PoolQueryResp{
+		Uuid: poolUUID,
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State:  mgmtpb.PoolRebuildStatus_DONE,
+			Status: int32(daos.IOError),
+		},
+	}
+	busyQuery := &mgmtpb.PoolQueryResp{
+		Uuid: poolUUID,
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State: mgmtpb.PoolRebuildStatus_BUSY,
+		},
+	}
+
+	mkCmd := func(t *testing.T, name string) (*poolRanksCmd, func() error) {
+		t.Helper()
+		var base *poolRanksCmd
+		var exec func() error
+		switch name {
+		case "exclude":
+			c := new(poolExcludeCmd)
+			base, exec = &c.poolRanksCmd, func() error { return c.Execute(nil) }
+		case "drain":
+			c := new(poolDrainCmd)
+			base, exec = &c.poolRanksCmd, func() error { return c.Execute(nil) }
+		case "reintegrate":
+			c := new(poolReintegrateCmd)
+			base, exec = &c.poolRanksCmd, func() error { return c.Execute(nil) }
+		default:
+			t.Fatalf("unknown command %q", name)
+		}
+		if err := base.Args.Pool.UnmarshalFlag(poolUUID); err != nil {
+			t.Fatal(err)
+		}
+		if err := base.RankList.UnmarshalFlag("0"); err != nil {
+			t.Fatal(err)
+		}
+		return base, exec
+	}
+
+	for name, tc := range map[string]struct {
+		cmdName   string
+		wait      waitFlag
+		json      bool
+		queryResp *mgmtpb.PoolQueryResp
+		expErr    error
+		expJSON   bool
+	}{
+		"exclude: rebuild failed, json": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true},
+			json:      true,
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+			expJSON:   true,
+		},
+		"drain: rebuild failed, json": {
+			cmdName:   "drain",
+			wait:      waitFlag{Set: true},
+			json:      true,
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+			expJSON:   true,
+		},
+		"reintegrate: rebuild failed, json": {
+			cmdName:   "reintegrate",
+			wait:      waitFlag{Set: true},
+			json:      true,
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+			expJSON:   true,
+		},
+		"exclude: rebuild failed, text": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true},
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+		},
+		"exclude: timeout expires, json": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true, Timeout: 10 * time.Millisecond},
+			json:      true,
+			queryResp: busyQuery,
+			expErr:    errors.New("did not complete within 10ms"),
+			expJSON:   true,
+		},
+		"exclude: timeout expires, text": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true, Timeout: 10 * time.Millisecond},
+			queryResp: busyQuery,
+			expErr:    errors.New("did not complete within 10ms"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("10.0.0.1:10001", nil, ranksResp),
+					control.MockMSResponse("10.0.0.1:10001", nil, tc.queryResp),
+				},
+			})
+
+			cmd, exec := mkCmd(t, tc.cmdName)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+			cmd.Wait = tc.wait
+			var out bytes.Buffer
+			if tc.json {
+				cmd.EnableJSONOutput(&out, nil)
+			}
+
+			gotErr := exec()
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if !tc.expJSON {
+				if out.Len() != 0 {
+					t.Fatalf("unexpected JSON output: %s", out.String())
+				}
+				return
+			}
+
+			var got struct {
+				Response *control.PoolRanksResp `json:"response"`
+				Error    *string                `json:"error"`
+			}
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatalf("unmarshal JSON output %q: %s", out.String(), err)
+			}
+			if got.Response == nil {
+				t.Fatalf("JSON response is null: %s", out.String())
+			}
+			if got.Error == nil || !strings.Contains(*got.Error, tc.expErr.Error()) {
+				t.Fatalf("JSON error %v does not contain %q", got.Error, tc.expErr)
+			}
+		})
+	}
+}
+
 func TestDmg_PoolListCmd_Errors(t *testing.T) {
 	for name, tc := range map[string]struct {
 		ctlCfg    *control.Config
@@ -1489,6 +1719,106 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 
 			gotErr := cmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func Test_checkPoolCreateTierRatioWarning(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp       *control.PoolCreateResp
+		expWarning string
+	}{
+		"PMem mode with low tier ratio - warning expected": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TiByte}, // 0.98% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "storage tier ratio is less than 1.00%, DAOS performance may suffer!",
+		},
+		"PMem mode with acceptable tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{600 * humanize.GiByte, 9400 * humanize.GiByte}, // 6% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"PMem mode at minimum threshold - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{100 * humanize.GiByte, 9900 * humanize.GiByte}, // 1.0% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"PMem mode just below threshold - warning expected": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{99 * humanize.GiByte, 9901 * humanize.GiByte}, // 0.99% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "storage tier ratio is less than 1.00%, DAOS performance may suffer!",
+		},
+		"MD-on-SSD mode with low tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{142 * humanize.GiByte, 20 * humanize.TiByte}, // ~0.7% ratio
+				MdOnSsdActive: true,
+			},
+			expWarning: "",
+		},
+		"MD-on-SSD mode with very low tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{10 * humanize.GiByte, 10 * humanize.TiByte}, // ~0.1% ratio
+				MdOnSsdActive: true,
+			},
+			expWarning: "",
+		},
+		"MD-on-SSD mode with normal tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{1200 * humanize.GiByte, 18800 * humanize.GiByte}, // 6% ratio
+				MdOnSsdActive: true,
+			},
+			expWarning: "",
+		},
+		"single tier configuration - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{1000 * humanize.GiByte},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"no second tier - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{1000 * humanize.GiByte, 0},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"three tier configuration - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{100 * humanize.GiByte, 1000 * humanize.GiByte, 10000 * humanize.GiByte},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"empty response - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"nil tier bytes - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     nil,
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotWarning := checkPoolCreateTierRatioWarning(tc.resp)
+
+			if diff := cmp.Diff(tc.expWarning, gotWarning); diff != "" {
+				t.Fatalf("unexpected warning (-want, +got):\n%s", diff)
+			}
 		})
 	}
 }

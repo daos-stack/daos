@@ -103,12 +103,12 @@ class RbldInteractive(TestWithServers):
         pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{exclude_method} - Manually stop rebuild')
-        for i in range(3):
+        for i in range(4):
             try:
                 pool.rebuild_stop()
                 break
             except CommandFailure as error:
-                if i == 2 or 'DER_NONEXIST' not in str(error):
+                if i == 3 or 'DER_NONEXIST' not in str(error):
                     raise
                 self.log.info('Assuming rebuild is not started yet. Retrying in 3 seconds...')
                 time.sleep(3)
@@ -161,12 +161,12 @@ class RbldInteractive(TestWithServers):
         pool.wait_for_rebuild_to_start(interval=1)
 
         self.log_step(f'{reint_method} - Manually stop rebuild')
-        for i in range(3):
+        for i in range(4):
             try:
                 pool.rebuild_stop()
                 break
             except CommandFailure as error:
-                if i == 2 or 'DER_NONEXIST' not in str(error):
+                if i == 3 or 'DER_NONEXIST' not in str(error):
                     raise
                 self.log.info('Assuming rebuild is not started yet. Retrying in 3 seconds...')
                 time.sleep(3)

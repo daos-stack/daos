@@ -8,9 +8,6 @@
 ## Name associated with the DAOS system.
 ## Immutable after running "dmg storage format".
 #
-## NOTE: Changing the DAOS system name is not supported yet.
-##       It must not be changed from the default "daos_server".
-#
 ## default: daos_server
 #name: daos_server
 #
@@ -295,12 +292,6 @@
 #
 ## default: disabled (errors only to control_log_file)
 #helper_log_file: /var/log/daos/daos_server_helper.log
-#
-#
-## Enable daos_firmware_helper (privileged helper) logging.
-#
-## default: disabled (errors only to control_log_file)
-#firmware_helper_log_file: /var/log/daos/daos_firmware_helper.log
 #
 #
 ## Enable HTTP endpoint for remote telemetry collection.

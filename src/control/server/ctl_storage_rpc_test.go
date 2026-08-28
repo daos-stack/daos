@@ -2345,7 +2345,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"dcpm already mounted no reformat; replace fails": {
+		"dcpm already mounted no reformat; replace succeeds": {
 			scmMounted: true,
 			sMounts:    []string{"/mnt/daos"},
 			sClass:     storage.ClassDcpm,
@@ -2360,7 +2360,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("only valid if at least one engine requires format"),
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{

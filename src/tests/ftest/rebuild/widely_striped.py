@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
     SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -52,7 +52,7 @@ class RbldWidelyStriped(MdtestBase):
 
         # create pool
         self.log.info(">> Creating a pool")
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
         # make sure pool looks good before we start
         checks = {
@@ -70,7 +70,7 @@ class RbldWidelyStriped(MdtestBase):
 
         # create 1st container
         self.log.info(">> Creating the first container")
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
         # start 1st mdtest run and let it complete
         self.log.info(">> Running mdtest to completion")
@@ -86,7 +86,7 @@ class RbldWidelyStriped(MdtestBase):
 
         # create 2nd container
         self.log.info(">> Creating the second container")
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
         # start 2nd mdtest job in the background
         self.log.info(">> Running the first mdtest job in the background")
@@ -110,7 +110,7 @@ class RbldWidelyStriped(MdtestBase):
 
         # create 3rd container
         self.log.info(">> Creating the third container")
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
         # start 3rd mdtest job in the background
         self.log.info(">> Running a second mdtest job in the background")

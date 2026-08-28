@@ -73,6 +73,12 @@ enum {
 };
 #define MIGRATE_DATA_MB_ENV "D_MIGRATE_DATA_MB"
 
+static inline bool
+migrate_cont_gone(int rc)
+{
+	return rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING;
+}
+
 struct migr_res_manager;
 
 /* resource consumed by migration */
@@ -646,7 +652,7 @@ migrate_pool_tls_create(uuid_t pool_uuid, unsigned int version, unsigned int gen
 	} else if (unlikely(pool_child->spc_no_storage)) {
 		D_DEBUG(DB_REBUILD, DF_UUID " " DF_UUID " lost pool shard, ver %d, skip.\n",
 			DP_UUID(pool_uuid), DP_UUID(pool_hdl_uuid), version);
-		D_GOTO(out, rc = 0);
+		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	D_ALLOC_PTR(pool_tls);
@@ -953,6 +959,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	d_iov_t			*p_csum_iov = NULL;
 	d_iov_t			 csum_iov = {0};
 	d_iov_t                  packed_csum_iov = {0};
+	uint64_t                 ts              = daos_gettime_coarse();
 
 	D_ASSERT(mrone->mo_iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -1038,10 +1045,14 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			break;
 		}
 
+again1:
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_min_epoch, mrone->mo_version,
 				    VOS_OF_REBUILD, &mrone->mo_dkey, iod_cnt, &iods[start],
 				    iod_csums, &sgls[start]);
+
+		OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update (1)", mrone->mo_oid, again1);
+
 		daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
 			DL_ERROR(rc, DF_RB ": migrate failed", DP_RB_MRO(mrone));
@@ -1059,11 +1070,15 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			D_GOTO(out, rc);
 		}
 
+again2:
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_min_epoch, mrone->mo_version,
 				    VOS_OF_REBUILD, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], iod_csums,
 				    &sgls[start]);
+
+		OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update (2)", mrone->mo_oid, again2);
+
 		daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
 			DL_ERROR(rc, DF_RB ": migrate failed", DP_RB_MRO(mrone));
@@ -1093,7 +1108,8 @@ migrate_update_parity(struct migrate_one *mrone, daos_epoch_t parity_eph,
 	d_sg_list_t		 tmp_sgl;
 	daos_size_t		 write_nr;
 	struct dcs_iod_csums	*iod_csums = NULL;
-	int			rc = 0;
+	int                      rc        = 0;
+	uint64_t                 ts        = daos_gettime_coarse();
 
 	split_size = encode ? stride_nr : cell_nr;
 	tmp_sgl.sg_nr = tmp_sgl.sg_nr_out = 1;
@@ -1144,10 +1160,14 @@ migrate_update_parity(struct migrate_one *mrone, daos_epoch_t parity_eph,
 			D_GOTO(out, rc);
 		}
 
+again:
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    parity_eph, mrone->mo_version,
 				    VOS_OF_REBUILD, &mrone->mo_dkey, 1, iod, iod_csums,
 				    &tmp_sgl);
+
+		OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update", mrone->mo_oid, again);
+
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -1356,6 +1376,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	uint32_t		tgt_off = 0;
 	int			 i;
 	int			 rc;
+	uint64_t                 ts = daos_gettime_coarse();
 
 	D_ASSERT(mrone->mo_iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -1487,10 +1508,12 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		update_flags |= VOS_OF_EC;
 
+again:
 	rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 			    mrone->mo_min_epoch, mrone->mo_version,
 			    update_flags, &mrone->mo_dkey, mrone->mo_iod_num,
 			    mrone->mo_iods, iod_csums, sgls);
+	OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update", mrone->mo_oid, again);
 out:
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		if (iov[i].iov_buf)
@@ -1524,11 +1547,14 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	struct dcs_iod_csums *iod_csums  = NULL;
 	d_iov_t              *p_csum_iov = NULL;
 	int                   rc, rc1, i;
+	uint64_t              ts = daos_gettime_coarse();
 
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
 
 	D_ASSERT(iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
+
+again:
 	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid, update_eph, VOS_OF_REBUILD,
 			      &mrone->mo_dkey, iod_num, iods, mrone->mo_iods_csums,
 			      0, &ioh, NULL);
@@ -1646,6 +1672,8 @@ end:
 	if (rc == 0)
 		rc = rc1;
 
+	OBJ_CHECK_EAGAIN(rc, ts, "vos_update_end", mrone->mo_oid, again);
+
 	if (rc)
 		DL_ERROR(rc, DF_RB ": " DF_UOID " migrate error", DP_RB_MRO(mrone),
 			 DP_UOID(mrone->mo_oid));
@@ -1758,8 +1786,9 @@ static int
 migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	      struct ds_cont_child *cont)
 {
-	int	rc = 0;
-	int	i;
+	uint64_t ts = daos_gettime_coarse();
+	int      rc = 0;
+	int      i;
 
 	/* Punch dkey */
 	if (mrone->mo_dkey_punch_eph != 0 && mrone->mo_dkey_punch_eph <= tls->mpt_max_eph) {
@@ -1818,9 +1847,13 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 						      mrone->mo_oid.id_shard))
 			mrone_recx_daos2_vos(mrone, mrone->mo_punch_iods, mrone->mo_punch_iod_num);
 
+again:
 		rc = vos_obj_update(cont->sc_hdl, mrone->mo_oid, mrone->mo_rec_punch_eph,
 				    mrone->mo_version, VOS_OF_REBUILD, &mrone->mo_dkey,
 				    mrone->mo_punch_iod_num, mrone->mo_punch_iods, NULL, NULL);
+
+		OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update", mrone->mo_oid, again);
+
 		D_DEBUG(DB_REBUILD,
 			DF_RB ": " DF_UOID " mrone %p punch %d eph " DF_U64 "records: " DF_RC "\n",
 			DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), mrone, mrone->mo_punch_iod_num,
@@ -3020,6 +3053,8 @@ out:
 		DL_ERROR(rc, DF_RB ": " DF_UOID " migrate punch failed", DP_RB_MPT(tls),
 			 DP_UOID(arg->oid));
 
+	if (migrate_cont_gone(rc))
+		rc = 0;
 	if (tls->mpt_status == 0 && rc != 0)
 		tls->mpt_status = rc;
 
@@ -3536,23 +3571,13 @@ free:
 	if (arg->epoch == DAOS_EPOCH_MAX)
 		tls->mpt_obj_count++;
 
-	if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING) {
-		struct ds_cont_child *cont_child = NULL;
-
-		/* check again to see if the container is being destroyed. */
-		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child, false);
-		if (cont_child == NULL || cont_child->sc_stopping)
-			rc = 0;
-
-		if (cont_child)
-			ds_cont_child_put(cont_child);
-	}
-
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_OBJ_FAIL) &&
 	    tls->mpt_obj_count >= daos_fail_value_get())
 		rc = -DER_IO;
 
 out:
+	if (migrate_cont_gone(rc))
+		rc = 0;
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
 
@@ -3738,7 +3763,8 @@ cont_fetch_start_ult(void *arg)
 	rc = ds_cont_fetch_snaps(fetch_arg->pool->sp_iv_ns, fetch_arg->cont_uuid,
 				 &fetch_arg->snapshots, &fetch_arg->snap_cnt);
 	if (rc) {
-		D_ERROR("ds_cont_fetch_snaps failed: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": ds_cont_fetch_snaps failed",
+			 DP_CONT(fetch_arg->pool_uuid, fetch_arg->cont_uuid));
 		return rc;
 	}
 
@@ -3793,9 +3819,16 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	rc = dss_ult_execute(cont_fetch_start_ult, &fetch_arg, NULL, NULL, DSS_XS_SYS, 0,
 			     MIGRATE_STACK_SIZE);
 	if (rc) {
-		DL_ERROR(rc, DF_RB ": ds_pool_lookup failed", DP_RB_MPT(tls));
-		if (rc == -DER_SHUTDOWN)
-			rc = 0;
+		DL_ERROR(rc, DF_RB ": cont_fetch_start_ult failed", DP_RB_MPT(tls));
+		if (migrate_cont_gone(rc)) {
+			DL_ERROR(rc, DF_RB ": " DF_CONT " skip orphan container", DP_RB_MPT(tls),
+				 DP_CONT(tls->mpt_pool_uuid, cont_uuid));
+			D_GOTO(cont_done, rc = 0);
+		}
+		if (rc == -DER_SHUTDOWN) {
+			tls->mpt_fini = 1;
+			DL_ERROR(rc, DF_RB ": set mpt_fini", DP_RB_MPT(tls));
+		}
 		D_GOTO(free, rc);
 	}
 
@@ -3826,6 +3859,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 		}
 	}
 
+cont_done:
 	D_DEBUG(DB_REBUILD, DF_RB ": iter cont " DF_UUID "/%" PRIx64 " finish.\n", DP_RB_MPT(tls),
 		DP_UUID(cont_uuid), ih.cookie);
 

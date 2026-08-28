@@ -23,89 +23,91 @@ D_LIST_HEAD(crt_grp_list);
 pthread_rwlock_t crt_grp_list_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 
 static void
-crt_li_destroy(struct crt_lookup_item *li)
+crt_hg_cache_entry_destroy(struct crt_hg_cache_entry *entry)
 {
-	int	i;
+	D_ASSERT(entry != NULL);
+	D_ASSERT(entry->ref == 0);
+	D_ASSERT(entry->initialized == 1);
 
-	D_ASSERT(li != NULL);
-	D_ASSERT(li->li_ref == 0);
-	D_ASSERT(li->li_initialized == 1);
+	if (entry->hg_addr != NULL)
+		D_ERROR("hg_addr not freed for rank=%d tag=%u.\n", entry->rank, entry->tag);
 
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		if (li->li_tag_addr[i] != NULL)
-			D_ERROR("tag %d, li_tag_addr not freed.\n", i);
-	}
-
-	D_MUTEX_DESTROY(&li->li_mutex);
-	D_FREE(li);
+	D_MUTEX_DESTROY(&entry->mutex);
+	D_FREE(entry);
 }
 
-struct crt_lookup_item *
-crt_li_link2ptr(d_list_t *rlink)
+struct crt_hg_cache_entry *
+crt_hg_cache_link2ptr(d_list_t *rlink)
 {
 	D_ASSERT(rlink != NULL);
-	return container_of(rlink, struct crt_lookup_item, li_link);
+	return container_of(rlink, struct crt_hg_cache_entry, link);
+}
+
+static inline uint32_t
+crt_hg_cache_lookup_key(d_rank_t rank, uint32_t tag)
+{
+	return (((uint32_t)rank & 0x00FFFFFFU) << 8) | (tag & 0xFFU);
 }
 
 static uint32_t
-li_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
+hg_cache_op_key_hash(struct d_hash_table *hhtab, const void *key, unsigned int ksize)
 {
-	D_ASSERT(ksize == sizeof(d_rank_t));
+	D_ASSERT(ksize == sizeof(uint32_t));
 
 	return (uint32_t)(*(const uint32_t *)key
 			  & ((1U << CRT_LOOKUP_CACHE_BITS) - 1));
 }
 
 static bool
-li_op_key_cmp(struct d_hash_table *hhtab, d_list_t *rlink,
-	      const void *key, unsigned int ksize)
+hg_cache_op_key_cmp(struct d_hash_table *hhtab, d_list_t *rlink, const void *key,
+		    unsigned int ksize)
 {
-	struct crt_lookup_item *li = crt_li_link2ptr(rlink);
+	struct crt_hg_cache_entry *entry = crt_hg_cache_link2ptr(rlink);
 
-	D_ASSERT(ksize == sizeof(d_rank_t));
+	D_ASSERT(ksize == sizeof(uint32_t));
 
-	return li->li_rank == *(d_rank_t *)key;
+	return entry->key == *(uint32_t *)key;
 }
 
 static uint32_t
-li_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
+hg_cache_op_rec_hash(struct d_hash_table *htable, d_list_t *link)
 {
-	struct crt_lookup_item *li = crt_li_link2ptr(link);
+	struct crt_hg_cache_entry *entry = crt_hg_cache_link2ptr(link);
 
-	return (uint32_t)li->li_rank & ((1U << CRT_LOOKUP_CACHE_BITS) - 1);
+	return (uint32_t)entry->key & ((1U << CRT_LOOKUP_CACHE_BITS) - 1);
 }
 
 static void
-li_op_rec_addref(struct d_hash_table *hhtab, d_list_t *rlink)
+hg_cache_op_rec_addref(struct d_hash_table *hhtab, d_list_t *rlink)
 {
-	struct crt_lookup_item *li = crt_li_link2ptr(rlink);
+	struct crt_hg_cache_entry *entry = crt_hg_cache_link2ptr(rlink);
 
-	D_ASSERT(li->li_initialized);
-	atomic_fetch_add(&li->li_ref, 1);
+	D_ASSERT(entry->initialized);
+	atomic_fetch_add(&entry->ref, 1);
 }
 
 static bool
-li_op_rec_decref(struct d_hash_table *hhtab, d_list_t *rlink)
+hg_cache_op_rec_decref(struct d_hash_table *hhtab, d_list_t *rlink)
 {
-	struct crt_lookup_item *li = crt_li_link2ptr(rlink);
+	struct crt_hg_cache_entry *entry = crt_hg_cache_link2ptr(rlink);
 
-	D_ASSERT(li->li_initialized);
-	return atomic_fetch_sub(&li->li_ref, 1) == 1;
+	D_ASSERT(entry->initialized);
+	return atomic_fetch_sub(&entry->ref, 1) == 1;
 }
 
 static void
-li_op_rec_free(struct d_hash_table *hhtab, d_list_t *rlink)
+hg_cache_op_rec_free(struct d_hash_table *hhtab, d_list_t *rlink)
 {
-	crt_li_destroy(crt_li_link2ptr(rlink));
+	crt_hg_cache_entry_destroy(crt_hg_cache_link2ptr(rlink));
 }
 
-static d_hash_table_ops_t lookup_table_ops = {
-	.hop_key_hash		= li_op_key_hash,
-	.hop_key_cmp		= li_op_key_cmp,
-	.hop_rec_hash		= li_op_rec_hash,
-	.hop_rec_addref		= li_op_rec_addref,
-	.hop_rec_decref		= li_op_rec_decref,
-	.hop_rec_free		= li_op_rec_free,
+static d_hash_table_ops_t hg_addr_lookup_table_ops = {
+    .hop_key_hash   = hg_cache_op_key_hash,
+    .hop_key_cmp    = hg_cache_op_key_cmp,
+    .hop_rec_hash   = hg_cache_op_rec_hash,
+    .hop_rec_addref = hg_cache_op_rec_addref,
+    .hop_rec_decref = hg_cache_op_rec_decref,
+    .hop_rec_free   = hg_cache_op_rec_free,
 };
 
 struct crt_rank_mapping *
@@ -245,35 +247,6 @@ crt_ui_destroy(struct crt_uri_item *ui)
 	D_FREE(ui);
 }
 
-static inline char *
-grp_li_uri_get(struct crt_lookup_item *li, int tag)
-{
-	struct crt_uri_item	*ui;
-	d_list_t		*rlink;
-	struct crt_grp_priv	*grp_priv;
-	d_rank_t		rank;
-
-	rank = li->li_rank;
-	grp_priv = li->li_grp_priv;
-
-	rlink = d_hash_rec_find(&grp_priv->gp_uri_lookup_cache,
-				(void *)&rank, sizeof(rank));
-	/* It's possible to have crt_lookup_item for which uri
-	 * info has not been populated yet
-	 */
-	if (rlink == NULL) {
-		D_DEBUG(DB_TRACE,
-			"Failed to find uri_info for %d:%d\n",
-			rank, tag);
-		return NULL;
-	}
-
-	ui = crt_ui_link2ptr(rlink);
-	d_hash_rec_decref(&grp_priv->gp_uri_lookup_cache, rlink);
-
-	return atomic_load_relaxed(&ui->ui_uri[tag]);
-}
-
 static int
 generate_cxi_uris(int prov_type, char *addr, int tag, struct crt_uri_item *ui)
 {
@@ -372,21 +345,16 @@ exit:
 }
 
 static inline int
-grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
+grp_uri_cache_set(struct crt_grp_priv *grp_priv, d_rank_t rank, int tag, const char *uri)
 {
 	char			base_addr[CRT_ADDR_STR_MAX_LEN];
 	struct crt_uri_item	*ui;
-	d_list_t		*rlink;
-	struct crt_grp_priv	*grp_priv;
+	d_list_t                *rlink;
 	char                    *nul_str = NULL;
 	char                    *uri_dup;
-	d_rank_t		rank;
 	int			rc = 0;
 	int			i;
 	crt_provider_t		provider;
-
-	rank = li->li_rank;
-	grp_priv = li->li_grp_priv;
 
 	rlink = d_hash_rec_find(&grp_priv->gp_uri_lookup_cache,
 				(void *)&rank, sizeof(rank));
@@ -398,7 +366,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		D_INIT_LIST_HEAD(&ui->ui_link);
 		ui->ui_ref = 0;
 		ui->ui_initialized = 1;
-		ui->ui_rank = li->li_rank;
+		ui->ui_rank        = rank;
 
 		rc = crt_hg_parse_uri(uri, &provider, base_addr);
 		if (rc)
@@ -436,7 +404,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 				       &ui->ui_link,
 				       true /* exclusive */);
 		if (rc != 0) {
-			D_ERROR("Entry already present\n");
+			D_ERROR("Entry for rank=%d already present\n", rank);
 
 			if (crt_provider_is_contig_ep(provider)) {
 				for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
@@ -509,17 +477,15 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
-						 CRT_LOOKUP_CACHE_BITS,
-						 NULL, &lookup_table_ops,
-						 &htables[i]);
+		rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, CRT_LOOKUP_CACHE_BITS, NULL,
+						 &hg_addr_lookup_table_ops, &htables[i]);
 		if (rc != 0) {
 			D_ERROR("d_hash_table_create() failed, " DF_RC "\n",
 				DP_RC(rc));
 			D_GOTO(free_htables, rc);
 		}
 	}
-	grp_priv->gp_lookup_cache = htables;
+	grp_priv->gp_hg_addr_cache = htables;
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
 					 CRT_LOOKUP_CACHE_BITS,
@@ -541,7 +507,7 @@ free_htables:
 				DP_RC(rc2));
 	}
 	D_FREE(htables);
-	grp_priv->gp_lookup_cache = NULL;
+	grp_priv->gp_hg_addr_cache = NULL;
 
 out:
 	if (rc != 0)
@@ -557,20 +523,19 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 
 	D_ASSERT(grp_priv != NULL);
 
-	if (grp_priv->gp_lookup_cache == NULL)
+	if (grp_priv->gp_hg_addr_cache == NULL)
 		return 0;
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc2 = d_hash_table_destroy_inplace(
-					&grp_priv->gp_lookup_cache[i],
-					true /* force */);
+		rc2 =
+		    d_hash_table_destroy_inplace(&grp_priv->gp_hg_addr_cache[i], true /* force */);
 		if (rc2 != 0) {
 			D_ERROR("d_hash_table_destroy() failed, " DF_RC "\n",
 				DP_RC(rc2));
 			rc = rc ? rc : rc2;
 		}
 	}
-	D_FREE(grp_priv->gp_lookup_cache);
+	D_FREE(grp_priv->gp_hg_addr_cache);
 
 	rc2 = d_hash_table_destroy_inplace(&grp_priv->gp_uri_lookup_cache,
 					   true /* force */);
@@ -588,8 +553,9 @@ crt_grp_lc_uri_remove(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 		      d_rank_t rank)
 {
 	d_list_t		*rlink;
-	struct crt_lookup_item	*li;
-	int			i;
+	struct crt_hg_cache_entry *entry;
+	uint32_t                 key;
+	uint32_t                 tag;
 	struct crt_context	*ctx;
 	struct crt_grp_priv	*grp_priv;
 
@@ -601,110 +567,18 @@ crt_grp_lc_uri_remove(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 	}
 
 	ctx = crt_context_lookup(ctx_idx);
-	rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[ctx_idx],
-				&rank, sizeof(rank));
-	if (rlink == NULL) {
-		D_ERROR("Record for rank %d is not found\n", rank);
-		return;
+	for (tag = 0; tag < CRT_SRV_CONTEXT_NUM; tag++) {
+		key   = crt_hg_cache_lookup_key(rank, tag);
+		rlink = d_hash_rec_find(&grp_priv->gp_hg_addr_cache[ctx_idx], &key, sizeof(key));
+		if (rlink == NULL)
+			continue;
+
+		entry = crt_hg_cache_link2ptr(rlink);
+		if (entry->hg_addr)
+			crt_hg_addr_free(&ctx->cc_hg_ctx, entry->hg_addr);
+
+		d_hash_rec_delete_at(&grp_priv->gp_hg_addr_cache[ctx_idx], rlink);
 	}
-
-	li = crt_li_link2ptr(rlink);
-
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		if (li->li_tag_addr[i]) {
-			crt_hg_addr_free(&ctx->cc_hg_ctx, li->li_tag_addr[i]);
-		}
-	}
-
-	d_hash_rec_delete_at(&grp_priv->gp_lookup_cache[ctx_idx], rlink);
-}
-
-static int
-grp_lc_uri_insert_internal_locked(struct crt_grp_priv *grp_priv,
-				  int ctx_idx, d_rank_t rank,
-				  uint32_t tag,	const char *uri)
-{
-	struct crt_lookup_item	*li;
-	int			 rc = 0;
-	d_list_t		*rlink;
-
-	rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[ctx_idx],
-				(void *)&rank, sizeof(rank));
-	if (rlink == NULL) {
-		/* target rank not in cache */
-		D_ALLOC_PTR(li);
-		if (li == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-
-		rc = D_MUTEX_INIT(&li->li_mutex, NULL);
-		if (rc != 0)
-			D_GOTO(err_free_li, rc);
-
-		D_INIT_LIST_HEAD(&li->li_link);
-		li->li_grp_priv = grp_priv;
-		li->li_rank = rank;
-
-		if (uri) {
-			rc = grp_li_uri_set(li, tag, uri);
-			if (rc != DER_SUCCESS)
-				D_GOTO(err_destroy_mutex, rc);
-		}
-
-		li->li_initialized = 1;
-
-		rc = d_hash_rec_insert(&grp_priv->gp_lookup_cache[ctx_idx],
-				       &rank, sizeof(rank), &li->li_link,
-				       true /* exclusive */);
-		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "entry already exists in lookup "
-				"table, grp_priv %p ctx_idx %d, rank: %d.\n",
-				grp_priv, ctx_idx, rank);
-			crt_li_destroy(li);
-			rc = 0;
-		} else {
-			D_DEBUG(DB_TRACE, "Filling in URI in lookup table. "
-				" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
-				grp_priv, ctx_idx, rank, &li->li_link);
-		}
-		D_GOTO(out, rc);
-	}
-
-	if (!uri)
-		D_GOTO(decref, rc);
-
-	li = crt_li_link2ptr(rlink);
-	D_ASSERT(li->li_grp_priv == grp_priv);
-	D_ASSERT(li->li_rank == rank);
-	D_ASSERT(li->li_initialized != 0);
-	D_MUTEX_LOCK(&li->li_mutex);
-
-	if (grp_li_uri_get(li, tag) == NULL) {
-		rc = grp_li_uri_set(li, tag, uri);
-
-		if (rc != DER_SUCCESS) {
-			D_ERROR("Failed to set uri for %d:%d, uri=%s\n",
-				li->li_rank, tag, uri);
-			rc = -DER_NOMEM;
-		}
-
-		D_DEBUG(DB_TRACE, "Filling in URI in lookup table. "
-			"grp_priv %p ctx_idx %d, rank: %d, tag: %u rlink %p\n",
-			grp_priv, ctx_idx, rank, tag, &li->li_link);
-	}
-	D_MUTEX_UNLOCK(&li->li_mutex);
-
-decref:
-	d_hash_rec_decref(&grp_priv->gp_lookup_cache[ctx_idx], rlink);
-	return rc;
-
-err_destroy_mutex:
-	D_MUTEX_DESTROY(&li->li_mutex);
-
-err_free_li:
-	D_FREE(li);
-
-out:
-	return rc;
 }
 
 /*
@@ -715,8 +589,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv,
 		      d_rank_t rank, uint32_t tag, const char *uri)
 {
 	struct crt_grp_priv	*grp_priv;
-	int			 rc = 0;
-	int			 i;
+	int                      rc = 0;
 
 	if (tag >= CRT_SRV_CONTEXT_NUM) {
 		D_ERROR("tag %d out of range [0, %d].\n",
@@ -732,16 +605,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv,
 	}
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc = grp_lc_uri_insert_internal_locked(grp_priv, i, rank,
-						       tag, uri);
-		if (rc != 0) {
-			D_ERROR("Insertion failed, " DF_RC "\n", DP_RC(rc));
-			D_GOTO(unlock, rc);
-		}
-	}
-
-unlock:
+	rc = grp_uri_cache_set(grp_priv, rank, tag, uri);
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	return rc;
@@ -750,31 +614,29 @@ unlock:
 int
 crt_grp_lc_addr_invalid(d_list_t *rlink, void *arg)
 {
-	struct crt_lookup_item	*li;
-	struct crt_context	*ctx;
-	int			 i;
+	struct crt_hg_cache_entry *entry;
+	struct crt_context      *ctx;
 	int			 rc = 0;
 
 	D_ASSERT(rlink != NULL);
 	D_ASSERT(arg != NULL);
-	li = crt_li_link2ptr(rlink);
+	entry = crt_hg_cache_link2ptr(rlink);
 	ctx = (struct crt_context *)arg;
 
-	D_MUTEX_LOCK(&li->li_mutex);
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		if (li->li_tag_addr[i] == NULL)
-			continue;
-		rc = crt_hg_addr_free(&ctx->cc_hg_ctx, li->li_tag_addr[i]);
+	D_MUTEX_LOCK(&entry->mutex);
+	if (entry->hg_addr != NULL) {
+		rc = crt_hg_addr_free(&ctx->cc_hg_ctx, entry->hg_addr);
 		if (rc != 0) {
-			D_ERROR("crt_hg_addr_free failed, ctx_idx %d, tag %d, "
-				"rc: %d.\n", ctx->cc_idx, i, rc);
+			D_ERROR("crt_hg_addr_free failed, ctx_idx %d, tag %u, "
+				"rc: %d.\n",
+				ctx->cc_idx, entry->tag, rc);
 			D_GOTO(out, rc);
 		}
-		li->li_tag_addr[i] = NULL;
+		entry->hg_addr = NULL;
 	}
 
 out:
-	D_MUTEX_UNLOCK(&li->li_mutex);
+	D_MUTEX_UNLOCK(&entry->mutex);
 	return rc;
 }
 
@@ -793,8 +655,8 @@ crt_grp_lc_ctx_invalid(struct crt_grp_priv *grp_priv, struct crt_context *ctx)
 	ctx_idx = ctx->cc_idx;
 	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
-	rc = d_hash_table_traverse(&grp_priv->gp_lookup_cache[ctx_idx],
-				   crt_grp_lc_addr_invalid, ctx);
+	rc = d_hash_table_traverse(&grp_priv->gp_hg_addr_cache[ctx_idx], crt_grp_lc_addr_invalid,
+				   ctx);
 	if (rc != 0)
 		D_ERROR("d_hash_table_traverse failed, ctx_idx %d, rc: %d.\n",
 			ctx_idx, rc);
@@ -857,15 +719,16 @@ out:
  * routine.
  */
 int
-crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
-		       struct crt_context *crt_ctx,
-		       d_rank_t rank, uint32_t tag, hg_addr_t *hg_addr)
+crt_grp_hg_addr_cache_insert(struct crt_grp_priv *passed_grp_priv, struct crt_context *crt_ctx,
+			     d_rank_t rank, uint32_t tag, hg_addr_t *hg_addr)
 {
-	d_list_t		*rlink;
-	struct crt_lookup_item	*li;
-	struct crt_grp_priv	*grp_priv;
-	int			 ctx_idx;
-	int			 rc = 0;
+	d_list_t                  *rlink;
+	struct crt_hg_cache_entry *entry;
+	struct crt_grp_priv       *grp_priv;
+	int                        ctx_idx;
+	int                        rc          = 0;
+	bool                       need_decref = false;
+	uint32_t                   key;
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -879,57 +742,100 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 		rank = crt_grp_priv_get_primary_rank(passed_grp_priv, rank);
 	}
 
+	key     = crt_hg_cache_lookup_key(rank, tag);
 	ctx_idx = crt_ctx->cc_idx;
+
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 
-	rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[ctx_idx],
-				(void *)&rank, sizeof(rank));
-	D_ASSERT(rlink != NULL);
-	li = crt_li_link2ptr(rlink);
-	D_ASSERT(li->li_grp_priv == grp_priv);
-	D_ASSERT(li->li_rank == rank);
-	D_ASSERT(li->li_initialized != 0);
+	rlink = d_hash_rec_find(&grp_priv->gp_hg_addr_cache[ctx_idx], (void *)&key, sizeof(key));
+	if (rlink == NULL) {
+		/* target rank not in cache */
+		D_ALLOC_PTR(entry);
+		if (entry == NULL)
+			D_GOTO(grp_unlock, rc = -DER_NOMEM);
 
-	D_MUTEX_LOCK(&li->li_mutex);
-	if (li->li_tag_addr[tag] == NULL) {
-		li->li_tag_addr[tag] = *hg_addr;
+		rc = D_MUTEX_INIT(&entry->mutex, NULL);
+		if (rc != 0)
+			D_GOTO(err_free_entry, rc);
+
+		D_INIT_LIST_HEAD(&entry->link);
+		entry->grp_priv    = grp_priv;
+		entry->key         = key;
+		entry->rank        = rank;
+		entry->tag         = tag;
+		entry->initialized = 1;
+
+		rc = d_hash_rec_insert(&grp_priv->gp_hg_addr_cache[ctx_idx], &key, sizeof(key),
+				       &entry->link, true /* exclusive */);
+		if (rc != 0) {
+			D_DEBUG(DB_TRACE,
+				"entry already exists in lookup "
+				"table, grp_priv %p ctx_idx %d, rank: %d.\n",
+				grp_priv, ctx_idx, rank);
+			crt_hg_cache_entry_destroy(entry);
+			rc = 0;
+		} else {
+			D_DEBUG(DB_TRACE,
+				"Filling in URI in lookup table. "
+				" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
+				grp_priv, ctx_idx, rank, &entry->link);
+		}
 	} else {
-		D_INFO("NA address already exits. "
+		entry = crt_hg_cache_link2ptr(rlink);
+		D_ASSERT(entry->rank == rank);
+		D_ASSERT(entry->tag == tag);
+		D_ASSERT(entry->initialized != 0);
+
+		need_decref = true;
+	}
+
+	D_MUTEX_LOCK(&entry->mutex);
+	if (entry->hg_addr == NULL) {
+		entry->hg_addr = *hg_addr;
+	} else {
+		D_INFO("HG address already exits. "
 		       " grp_priv %p ctx_idx %d, rank: %d, tag %d, rlink %p\n",
-		       grp_priv, ctx_idx, rank, tag, &li->li_link);
+		       grp_priv, ctx_idx, rank, tag, &entry->link);
 		rc = crt_hg_addr_free(&crt_ctx->cc_hg_ctx, *hg_addr);
 		if (rc != 0) {
 			D_ERROR("crt_hg_addr_free failed, crt_idx %d, *hg_addr"
 				" 0x%p, rc %d\n", ctx_idx, *hg_addr, rc);
 			D_GOTO(out, rc);
 		}
-		*hg_addr = li->li_tag_addr[tag];
+		*hg_addr = entry->hg_addr;
 	}
-out:
-	D_MUTEX_UNLOCK(&li->li_mutex);
-	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-	d_hash_rec_decref(&grp_priv->gp_lookup_cache[ctx_idx], rlink);
 
+out:
+	D_MUTEX_UNLOCK(&entry->mutex);
+grp_unlock:
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+	/* decref needed if we looked up item, not if we inserted it */
+	if (need_decref)
+		d_hash_rec_decref(&grp_priv->gp_hg_addr_cache[ctx_idx], rlink);
+	return rc;
+
+err_free_entry:
+	D_FREE(entry);
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 	return rc;
 }
 
 /*
- * Lookup the URI and NA address of a (rank, tag) combination in the addr cache.
- * This function only looks into the address cache. If the requested (rank, tag)
- * pair doesn't exist in the address cache, *hg_addr will be NULL on return, and
- * an empty record for the requested rank with NULL values will be inserted to
- * the cache. For input parameters, base_addr and hg_addr can not be both NULL.
- * (hg_addr == NULL) means the caller only want to lookup the base_addr.
- * (base_addr == NULL) means the caller only want to lookup the hg_addr.
+ * Lookup URI and HG Address based on passed rank:tag combination
+ *
+ * URIs are looked up from URI cache based on rank key
+ * HG Addresses are looked up from HG Address cache basedon rank:tag key
  */
 void
 crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uint32_t tag,
 		  char **uri, hg_addr_t *hg_addr)
 {
-	struct crt_lookup_item	*li;
-	d_list_t		*rlink;
-	struct crt_grp_priv	*default_grp_priv;
-	crt_provider_t		provider;
+	struct crt_hg_cache_entry *entry;
+	d_list_t                  *rlink;
+	struct crt_grp_priv       *default_grp_priv;
+	crt_provider_t             provider;
+	uint32_t                   key;
 
 	D_ASSERT(grp_priv != NULL);
 
@@ -937,14 +843,13 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uin
 	D_ASSERT(uri != NULL || hg_addr != NULL);
 	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
-	if (rank == CRT_NO_RANK) {
-		if (uri)
-			*uri = NULL;
+	if (uri)
+		*uri = NULL;
+	if (hg_addr)
+		*hg_addr = NULL;
 
-		if (hg_addr)
-			*hg_addr = NULL;
+	if (rank == CRT_NO_RANK)
 		return;
-	}
 
 	provider = crt_gdata.cg_primary_prov;
 
@@ -960,39 +865,55 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx, d_rank_t rank, uin
 		rank = crt_grp_priv_get_primary_rank(grp_priv, rank);
 	}
 
+	if (uri == NULL)
+		D_GOTO(skip_uri_lookup, 0);
+
+	/* Get URI from uri lookup cache */
+	if (uri != NULL) {
+		struct crt_uri_item *ui;
+
+		D_RWLOCK_RDLOCK(&default_grp_priv->gp_rwlock);
+		rlink = d_hash_rec_find(&default_grp_priv->gp_uri_lookup_cache, (void *)&rank,
+					sizeof(rank));
+		if (rlink != NULL) {
+			ui   = crt_ui_link2ptr(rlink);
+			*uri = atomic_load_relaxed(&ui->ui_uri[tag]);
+			d_hash_rec_decref(&default_grp_priv->gp_uri_lookup_cache, rlink);
+		} else {
+			D_DEBUG(DB_ALL, "URI entry for rank=%d not found\n", rank);
+		}
+
+		D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
+	}
+
+skip_uri_lookup:
+
+	if (hg_addr == NULL)
+		D_GOTO(skip_hg_addr_lookup, 0);
+
+	/* Get HG handle from HG lookup cache */
+	key = crt_hg_cache_lookup_key(rank, tag);
+
 	D_RWLOCK_RDLOCK(&default_grp_priv->gp_rwlock);
-	rlink = d_hash_rec_find(&default_grp_priv->gp_lookup_cache[ctx_idx],
-				(void *)&rank, sizeof(rank));
+	rlink = d_hash_rec_find(&default_grp_priv->gp_hg_addr_cache[ctx_idx], (void *)&key,
+				sizeof(key));
 	if (rlink != NULL) {
-		li = crt_li_link2ptr(rlink);
-		D_ASSERT(li->li_grp_priv == default_grp_priv);
-		D_ASSERT(li->li_rank == rank);
-		D_ASSERT(li->li_initialized != 0);
+		entry = crt_hg_cache_link2ptr(rlink);
+		D_ASSERT(entry->grp_priv == default_grp_priv);
+		D_ASSERT(entry->rank == rank);
+		D_ASSERT(entry->tag == tag);
+		D_ASSERT(entry->initialized != 0);
 
-		if (uri != NULL)
-			*uri = grp_li_uri_get(li, tag);
+		*hg_addr = entry->hg_addr;
 
-		if (hg_addr == NULL)
-			D_ASSERT(uri != NULL);
-		else if (li->li_tag_addr[tag] != NULL)
-			*hg_addr = li->li_tag_addr[tag];
-		d_hash_rec_decref(&default_grp_priv->gp_lookup_cache[ctx_idx],
-				  rlink);
-		D_GOTO(out, 0);
+		d_hash_rec_decref(&default_grp_priv->gp_hg_addr_cache[ctx_idx], rlink);
 	} else {
-		D_DEBUG(DB_ALL, "Entry for rank=%d not found\n", rank);
+		D_DEBUG(DB_ALL, "HG entry for rank=%d:%d not found\n", rank, tag);
 	}
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
 
-	if (uri)
-		*uri = NULL;
-	if (hg_addr)
-		*hg_addr = NULL;
+skip_hg_addr_lookup:
 
-	return;
-
-out:
-	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
 	return;
 }
 
@@ -1464,14 +1385,12 @@ crt_primary_grp_init(crt_group_id_t grpid)
 {
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_grp_priv	*grp_priv = NULL;
-	crt_group_id_t		 pri_grpid;
-	bool			 is_service;
+	crt_group_id_t           pri_grpid;
 	int			 rc = 0;
 
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
 
-	is_service = crt_is_service();
 	pri_grpid = (grpid != NULL) ? grpid : CRT_DEFAULT_GRPID;
 
 	rc = crt_grp_priv_create(&grp_priv, pri_grpid, true);
@@ -1481,13 +1400,8 @@ crt_primary_grp_init(crt_group_id_t grpid)
 	}
 	D_ASSERT(grp_priv != NULL);
 
-	if (is_service) {
-		grp_priv->gp_self = CRT_NO_RANK;
-		grp_priv->gp_size = 0;
-	} else {
-		grp_priv->gp_size = 1;
-		grp_priv->gp_self = 0;
-	}
+	grp_priv->gp_self = CRT_NO_RANK;
+	grp_priv->gp_size = 0;
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
@@ -1536,9 +1450,10 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	struct crt_grp_priv		*grp_priv;
 	struct crt_grp_priv		*default_grp_priv;
 	struct crt_grp_priv		*grp_priv_primary;
-	struct crt_context		*crt_ctx;
+	struct crt_uri_item             *ui;
 	struct crt_uri_lookup_in	*ul_in;
 	struct crt_uri_lookup_out	*ul_out;
+	d_list_t                        *rlink;
 	d_rank_t			 g_rank;
 	char				*tmp_uri = NULL;
 	char				*cached_uri = NULL;
@@ -1580,8 +1495,6 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc);
 	}
 
-	crt_ctx = rpc_req->cr_ctx;
-
 	if (unlikely(ul_in->ul_tag >= CRT_SRV_CONTEXT_NUM)) {
 		D_WARN("Looking up invalid tag %d of rank %d "
 		       "in group %s (%d)\n",
@@ -1616,30 +1529,34 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc);
 	}
 
-	/* step 1, lookup the URI in the local cache */
-	crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx, g_rank,
-			  ul_in->ul_tag, &cached_uri, NULL);
-	ul_out->ul_uri = cached_uri;
+	/* step 1, lookup URI directly from URI cache by rank:tag */
+	ul_out->ul_uri = NULL;
 	ul_out->ul_tag = ul_in->ul_tag;
 
-	if (ul_out->ul_uri != NULL) {
-		if (crt_gdata.cg_use_sensors)
-			d_tm_inc_counter(crt_gdata.cg_uri_other, 1);
-		D_GOTO(out, rc);
+	D_RWLOCK_RDLOCK(&grp_priv_primary->gp_rwlock);
+	rlink = d_hash_rec_find(&grp_priv_primary->gp_uri_lookup_cache, (void *)&g_rank,
+				sizeof(g_rank));
+	if (rlink != NULL) {
+		ui         = crt_ui_link2ptr(rlink);
+		cached_uri = atomic_load_relaxed(&ui->ui_uri[ul_in->ul_tag]);
+
+		/* Fallback to tag 0 only when requested tag URI is absent */
+		if (cached_uri == NULL && ul_in->ul_tag != 0) {
+			cached_uri = atomic_load_relaxed(&ui->ui_uri[0]);
+			if (cached_uri != NULL)
+				ul_out->ul_tag = 0;
+		}
+
+		d_hash_rec_decref(&grp_priv_primary->gp_uri_lookup_cache, rlink);
 	}
+	D_RWLOCK_UNLOCK(&grp_priv_primary->gp_rwlock);
 
-	/* If this server does not know rank:0 then return error */
-	if (ul_in->ul_tag == 0)
-		D_GOTO(out, rc = -DER_OOG);
-
-	/**
-	 * step 2, if rank:tag is not found, lookup rank:tag=0
-	 */
-	ul_out->ul_tag = 0;
-	crt_grp_lc_lookup(grp_priv_primary, crt_ctx->cc_idx, g_rank, 0, &cached_uri, NULL);
 	ul_out->ul_uri = cached_uri;
 	if (ul_out->ul_uri == NULL)
 		D_GOTO(out, rc = -DER_OOG);
+
+	if (crt_gdata.cg_use_sensors)
+		d_tm_inc_counter(crt_gdata.cg_uri_other, 1);
 
 out:
 	ul_out->ul_rc = rc;
@@ -3300,6 +3217,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 	void				*cb_args;
 	struct crt_event_cb_priv	*cbs_event;
 	size_t				cbs_size;
+	int                              num_ranks_added = 0;
 
 	grp_priv = crt_grp_pub2priv(grp);
 
@@ -3352,6 +3270,8 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 	cbs_size = crt_plugin_gdata.cpg_event_size;
 	cbs_event = crt_plugin_gdata.cpg_event_cbs;
 
+	num_ranks_added = 0;
+
 	/* Add ranks based on idx_to_add list */
 	for (i = 0; i < n_idx_to_add; i++) {
 		uint32_t	idx = idx_to_add[i];
@@ -3366,13 +3286,11 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 			D_GOTO(cleanup, rc);
 		}
 
-		/* TODO: Change for multi-provider support */
-		for (k = 0; k < CRT_SRV_CONTEXT_NUM; k++) {
-			rc = grp_lc_uri_insert_internal_locked(grp_priv, k, rank, 0, uris[idx]);
+		num_ranks_added++;
 
-			if (rc != 0)
-				D_GOTO(cleanup, rc);
-		}
+		rc = grp_uri_cache_set(grp_priv, rank, 0, uris[idx]);
+		if (rc != 0)
+			D_GOTO(cleanup, rc);
 
 		/* Notify about members being added */
 		for (cb_idx = 0; cb_idx < cbs_size; cb_idx++) {
@@ -3438,7 +3356,7 @@ cleanup:
 
 	D_ERROR("Failure when adding node %d, rc=%d\n", ranks->rl_ranks[idx_to_add[i]], rc);
 
-	for (k = 0; k < i; k++)
+	for (k = 0; k < num_ranks_added; k++)
 		crt_group_rank_remove_internal(grp_priv, ranks->rl_ranks[idx_to_add[k]]);
 
 	D_FREE(idx_to_add);

@@ -193,19 +193,46 @@ type poolCreateCmd struct {
 
 func ratio2Percentage(log logging.Logger, tier1, tier2 float64) (p float64) {
 	p = 100.00
-	min := storage.MinScmToNVMeRatio * p
 
 	if tier2 > 0 {
 		p *= tier1 / (tier1 + tier2)
-		if p < min {
-			log.Noticef("storage tier ratio is less than %0.2f%%, DAOS performance "+
-				"will suffer!", min)
-		}
 		return
 	}
 
 	log.Notice("Creating DAOS pool with only a single tier of storage")
 	return
+}
+
+// checkPoolCreateTierRatioWarning examines the pool create response and returns a warning
+// message if the tier ratio is below the minimum threshold for PMem mode. Returns empty
+// string if no warning is needed (MD-on-SSD mode or acceptable ratio).
+func checkPoolCreateTierRatioWarning(resp *control.PoolCreateResp) string {
+	// Only check for two-tier configurations (SCM/NVMe or metadata/data)
+	if len(resp.TierBytes) != 2 {
+		return ""
+	}
+
+	// Skip if second tier is not configured
+	if resp.TierBytes[1] == 0 {
+		return ""
+	}
+
+	// Skip warning for MD-on-SSD mode - low metadata ratios are normal
+	if resp.MdOnSsdActive {
+		return ""
+	}
+
+	// Calculate actual tier ratio from allocated bytes
+	percentage := 100.00 * float64(resp.TierBytes[0]) / float64(resp.TierBytes[0]+resp.TierBytes[1])
+	minPercentage := storage.MinScmToNVMeRatio * 100.00
+
+	// Warn if ratio is below minimum for PMem mode (SCM:NVMe)
+	if percentage < minPercentage {
+		return fmt.Sprintf("storage tier ratio is less than %0.2f%%, DAOS performance may suffer!",
+			minPercentage)
+	}
+
+	return ""
 }
 
 // MemRatio can be supplied as two fractions that make up 1 or a single fraction less than 1.
@@ -396,6 +423,11 @@ func (cmd *poolCreateCmd) Execute(args []string) error {
 		return err
 	}
 
+	// Check if low tier ratio warning should be shown
+	if warning := checkPoolCreateTierRatioWarning(resp); warning != "" {
+		cmd.Notice(warning)
+	}
+
 	var bld strings.Builder
 	if err := pretty.PrintPoolCreateResponse(resp, &bld); err != nil {
 		return err
@@ -538,7 +570,29 @@ func (cmd *poolEvictCmd) Execute(args []string) error {
 // processed.
 type poolRanksCmd struct {
 	poolCmd
+	waitCmd
 	RankList ui.RankSetFlag `long:"ranks" required:"1" description:"Comma-separated list of rank-range strings to operate on for a single pool"`
+}
+
+// maybeWaitForRebuild blocks until the rebuild triggered by this command
+// completes, when --wait was supplied and rebuildTriggered is true.
+func (cmd *poolRanksCmd) maybeWaitForRebuild(rebuildTriggered bool) error {
+	if !cmd.Wait.Set || !rebuildTriggered {
+		return nil
+	}
+	ctx := cmd.MustLogCtx()
+	if cmd.Wait.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cmd.Wait.Timeout)
+		defer cancel()
+	}
+	if err := control.WaitForPoolRebuild(ctx, cmd.ctlInvoker, cmd.PoolID().String()); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return errors.Errorf("pool %s rebuild did not complete within %s", cmd.PoolID(), cmd.Wait.Timeout)
+		}
+		return errors.Wrap(err, "waiting for rebuild")
+	}
+	return nil
 }
 
 // poolExcludeCmd is the struct representing the command to exclude a DAOS target.
@@ -564,6 +618,13 @@ func (cmd *poolExcludeCmd) Execute(args []string) error {
 
 	resp, err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
+		return err
+	}
+
+	if err := cmd.maybeWaitForRebuild(resp.HasSuccess()); err != nil {
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp, err)
+		}
 		return err
 	}
 
@@ -606,6 +667,13 @@ func (cmd *poolDrainCmd) Execute(args []string) error {
 		return err
 	}
 
+	if err := cmd.maybeWaitForRebuild(resp.HasSuccess()); err != nil {
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp, err)
+		}
+		return err
+	}
+
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
@@ -628,21 +696,20 @@ type poolExtendCmd struct {
 
 // Execute is run when PoolExtendCmd subcommand is activated
 func (cmd *poolExtendCmd) Execute(args []string) error {
-	msg := "succeeded"
-
 	req := &control.PoolExtendReq{
 		ID:    cmd.PoolID().String(),
 		Ranks: cmd.RankList.Ranks(),
 	}
 
-	err := control.PoolExtend(cmd.MustLogCtx(), cmd.ctlInvoker, req)
-	if err != nil {
-		msg = errors.WithMessage(err, "failed").Error()
+	if err := control.PoolExtend(cmd.MustLogCtx(), cmd.ctlInvoker, req); err != nil {
+		return errors.Wrap(err, "Pool-extend")
+	}
+	if err := cmd.maybeWaitForRebuild(true); err != nil {
+		return err
 	}
 
-	cmd.Infof("Extend command %s\n", msg)
-
-	return err
+	cmd.Info("Pool-extend command succeeded")
+	return nil
 }
 
 // poolReintegrateCmd is the struct representing the command to Add a DAOS target.
@@ -666,6 +733,13 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 
 	resp, err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
+		return err
+	}
+
+	if err := cmd.maybeWaitForRebuild(resp.HasSuccess()); err != nil {
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp, err)
+		}
 		return err
 	}
 

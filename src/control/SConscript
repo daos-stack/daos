@@ -9,17 +9,11 @@ from os import urandom
 from os.path import join
 
 
-def is_firmware_mgmt_build(benv):
-    "Check whether this build has firmware management enabled."
-    return benv["FIRMWARE_MGMT"] == 1
-
-
 def get_build_tags(benv):
     "Get custom go build tags."
     tags = ["spdk"]
-    if is_firmware_mgmt_build(benv):
-        tags.append("firmware")
-    if not is_release_build(benv):
+    # The memcheck build always uses the non-release tags
+    if not is_release_build(benv) or benv.d_is_valgrind_build():
         tags.append("fault_injection")
         tags.append("pprof")
     else:
@@ -27,6 +21,8 @@ def get_build_tags(benv):
     if is_server_build(benv):
         print("Building server go binary: adding 'server' build tag")
         tags.append("server")
+    if benv.d_is_valgrind_build():
+        tags.append("valgrind")
     return f"-tags {','.join(tags)}"
 
 
@@ -48,10 +44,14 @@ def is_release_build(benv):
 
 def get_build_flags(benv):
     """Return string of build flags"""
-    if is_release_build(benv):
+    # The memcheck build always uses non-release flags
+    if is_release_build(benv) and not benv.d_is_valgrind_build():
         return '-buildmode=pie'
     # Disable optimizations and inlining for debugger support
     flags = '-gcflags "all=-N -l"'
+    # Leave the race detector off because it does not stack with memcheck.
+    if benv.d_is_valgrind_build():
+        return flags
     # enable AddressSanitizer to detect memory safety issues at runtime
     if 'SANITIZERS' in benv and benv['SANITIZERS'] != "":
         return f'-asan {flags}'
@@ -221,10 +221,6 @@ def scons():
     # Sets CGO_LDFLAGS for rpath
     aenv.d_add_rpaths(None, True, True)
     install_go_bin(aenv, 'daos_server_helper', libs=['nvme_control'])
-
-    if is_firmware_mgmt_build(aenv):
-        print("(EXPERIMENTAL) Building DAOS firmware tools")
-        install_go_bin(aenv, "daos_firmware_helper", libs=['nvme_control'])
 
     ddb_env = aenv.Clone()
     ddb_env.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
