@@ -22,11 +22,13 @@ pool: !mux
   md_on_ssd_p2:
     size: 10G
     mem_ratio: 25
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
   oclass: S1
   dir_oclass: SX
+  properties: cksum:off,srv_cksum:off
 
 mdtest:
   dfs_oclass: S1

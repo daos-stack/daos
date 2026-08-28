@@ -19,9 +19,11 @@ server_config:
 
 pool:
   scm_size: 1000000000
+  properties: rd_fac:0,space_rb:0
 
 container:
   control_method: API
+  properties: cksum:off,srv_cksum:off
 
 createtests:
   permissions: !mux

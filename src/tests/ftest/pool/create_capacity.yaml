@@ -43,3 +43,4 @@ pool:
   quantity: [150, 200]
   create_duration: 30
   set_logmasks: False
+  properties: rd_fac:0,space_rb:0
