@@ -717,10 +717,9 @@ rebuild_obj_ult(void *data)
 {
 	struct rebuild_obj_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
+	int                              rc;
 
 	if (rpt->rt_stable_epoch == 0) {
-		int rc;
-
 		rc = rpt_wait_rebuild_epoch(rpt);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed, abort the rebuild",
@@ -728,14 +727,20 @@ rebuild_obj_ult(void *data)
 			if (rpt->rt_errno == 0)
 				rpt->rt_errno = rc;
 			rpt->rt_abort = 1;
+			goto out;
 		}
-		goto out;
 	}
 
-	ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
-			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
-			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
-			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
+	rc = ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
+			       rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
+			       rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
+			       &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_RB " ds_migrate_object failed", DP_RB_RPT(rpt));
+		if (rpt->rt_errno == 0)
+			rpt->rt_errno = rc;
+		rpt->rt_abort = 1;
+	}
 out:
 	rpt_put(rpt);
 	D_FREE(arg);
