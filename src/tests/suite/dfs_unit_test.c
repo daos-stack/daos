@@ -10,6 +10,7 @@
 #include <daos/dfs_lib_int.h>
 #include <daos/array.h>
 #include <daos_types.h>
+#include <daos/object.h>
 #include <daos/placement.h>
 #include <pthread.h>
 #include <sys/xattr.h>
@@ -3722,6 +3723,9 @@ dfs_test_pipeline_find(void **state)
 	test_pipeline_find(state, OC_RP_3GX);
 }
 
+static void
+rh_get_oid(dfs_obj_t *dir, const char *name, daos_obj_id_t *oid);
+
 /**
  * Test dfs_link and dfs_remove covering the following steps:
  *
@@ -3777,6 +3781,7 @@ dfs_test_link_remove(void **state)
 	struct stat statbuf1, statbuf2, statbuf3, statbuf4, statbuf5, statbuf6;
 	struct stat statbuf_same_dir;
 	struct stat statbuf_open_stat;
+	daos_obj_id_t oid1, oidx;
 
 	daos_size_t read_size;
 	int         rc;
@@ -3808,6 +3813,8 @@ dfs_test_link_remove(void **state)
 	sgl.sg_nr_out = 1;
 	sgl.sg_iovs   = &iov;
 	rc            = dfs_write(dfs_mt, file1_obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(file1_obj, &oid1);
 	assert_int_equal(rc, 0);
 	print_message("Step 1a: Add 3 xattrs to dir1/file1\n");
 	rc = dfs_setxattr(dfs_mt, file1_obj, xnames[0], xvals[0], strlen(xvals[0]) + 1, 0);
@@ -3911,7 +3918,9 @@ dfs_test_link_remove(void **state)
 	assert_int_equal(rc, 0);
 	assert_non_null(same_dir_link_obj);
 	assert_int_equal(statbuf1.st_mode, statbuf_same_dir.st_mode);
-	assert_int_equal(statbuf1.st_ino, statbuf_same_dir.st_ino);
+	rc = dfs_obj2id(same_dir_link_obj, &oidx);
+	assert_int_equal(rc, 0);
+	assert_int_equal(daos_oid_cmp(oidx, oid1), 0);
 	assert_int_equal(statbuf1.st_size, statbuf_same_dir.st_size);
 	assert_int_equal((int)statbuf_same_dir.st_nlink, 2);
 	assert_true(
@@ -3959,7 +3968,8 @@ dfs_test_link_remove(void **state)
 	 */
 	print_message("Step 5: Verify statbuf2 vs statbuf1 (nlink=2)\n");
 	assert_int_equal(statbuf1.st_mode, statbuf2.st_mode);
-	assert_int_equal(statbuf1.st_ino, statbuf2.st_ino);
+	rh_get_oid(dir2, "file2", &oidx);
+	assert_int_equal(daos_oid_cmp(oidx, oid1), 0);
 	assert_int_equal(statbuf1.st_size, statbuf2.st_size);
 	assert_int_equal((int)statbuf2.st_nlink, 2);
 	assert_true(
@@ -3984,7 +3994,9 @@ dfs_test_link_remove(void **state)
 	 */
 	print_message("Step 7: Verify statbuf3 vs statbuf1 (nlink=3)\n");
 	assert_int_equal(statbuf1.st_mode, statbuf3.st_mode);
-	assert_int_equal(statbuf1.st_ino, statbuf3.st_ino);
+	rc = dfs_obj2id(newobj3, &oidx);
+	assert_int_equal(rc, 0);
+	assert_int_equal(daos_oid_cmp(oidx, oid1), 0);
 	assert_int_equal(statbuf1.st_size, statbuf3.st_size);
 	assert_int_equal((int)statbuf3.st_nlink, 3);
 	assert_true((statbuf3.st_ctim.tv_sec * 1000000000LL + statbuf3.st_ctim.tv_nsec) >
@@ -4024,7 +4036,9 @@ dfs_test_link_remove(void **state)
 	 */
 	print_message("Step 10: Verify statbuf4 vs statbuf1 (nlink=4) and read via newobj4\n");
 	assert_int_equal(statbuf1.st_mode, statbuf4.st_mode);
-	assert_int_equal(statbuf1.st_ino, statbuf4.st_ino);
+	rc = dfs_obj2id(newobj4, &oidx);
+	assert_int_equal(rc, 0);
+	assert_int_equal(daos_oid_cmp(oidx, oid1), 0);
 	assert_int_equal(statbuf1.st_size, statbuf4.st_size);
 	assert_int_equal((int)statbuf4.st_nlink, 4);
 
@@ -4073,7 +4087,9 @@ dfs_test_link_remove(void **state)
 	 */
 	print_message("Step 14: Verify statbuf5 vs statbuf4 (nlink=4)\n");
 	assert_int_equal(statbuf4.st_mode, statbuf5.st_mode);
-	assert_int_equal(statbuf4.st_ino, statbuf5.st_ino);
+	rc = dfs_obj2id(newobj5, &oidx);
+	assert_int_equal(rc, 0);
+	assert_int_equal(daos_oid_cmp(oidx, oid1), 0);
 	assert_int_equal((int)statbuf5.st_nlink, 4);
 
 	/**
@@ -4115,7 +4131,9 @@ dfs_test_link_remove(void **state)
 	 */
 	print_message("Step 17: Verify statbuf6 vs statbuf2 (nlink=2)\n");
 	assert_int_equal(statbuf2.st_mode, statbuf6.st_mode);
-	assert_int_equal(statbuf2.st_ino, statbuf6.st_ino);
+	rc = dfs_obj2id(newobj6, &oidx);
+	assert_int_equal(rc, 0);
+	assert_int_equal(daos_oid_cmp(oidx, oid1), 0);
 	assert_int_equal((int)statbuf6.st_nlink, 2);
 
 	/**
@@ -4980,6 +4998,595 @@ dfs_test_setattr_hardlink(void **state)
 	assert_int_equal(rc, 0);
 }
 
+/** Write @len bytes of @buf into a new regular file @dir/@name. */
+static void
+rh_write_file(dfs_obj_t *dir, const char *name, const char *buf, size_t len)
+{
+	dfs_obj_t  *obj;
+	d_sg_list_t sgl;
+	d_iov_t     iov;
+	int         rc;
+
+	rc = dfs_open(dfs_mt, dir, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	d_iov_set(&iov, (void *)buf, len);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+}
+
+/** Open @dir/@name and verify its first @len bytes match @expected. */
+static void
+rh_verify_content(dfs_obj_t *dir, const char *name, const char *expected, size_t len)
+{
+	dfs_obj_t  *obj;
+	d_sg_list_t sgl;
+	d_iov_t     iov;
+	char        rbuf[128];
+	daos_size_t read_size;
+	int         rc;
+
+	assert_true(len <= sizeof(rbuf));
+	rc = dfs_open(dfs_mt, dir, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDONLY, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	memset(rbuf, 0, sizeof(rbuf));
+	d_iov_set(&iov, rbuf, len);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_read(dfs_mt, obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)read_size, (int)len);
+	assert_memory_equal(expected, rbuf, len);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+}
+
+/**
+ * Return the DAOS object ID (the inode identity) of the entry @dir/@name. dfs_stat() does not
+ * populate st_ino, so tests compare OIDs obtained here to check that two names refer to the same
+ * inode. dfs_lookup_rel() does not follow symlinks, so the returned OID is that of the entry
+ * itself.
+ */
+static void
+rh_get_oid(dfs_obj_t *dir, const char *name, daos_obj_id_t *oid)
+{
+	dfs_obj_t *obj;
+	int        rc;
+
+	rc = dfs_lookup_rel(dfs_mt, dir, name, O_RDONLY, &obj, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(obj, oid);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+}
+
+/**
+ * Create a regular file @dir/@name with content @buf, then link it to @link_dir/@link_name so
+ * both names become hardlinks to the same inode (link_cnt == 2, tracked in GIT). @dir and
+ * @link_dir may be different directories to exercise the cross-parent path.
+ */
+static void
+rh_make_hardlink_pair_x(dfs_obj_t *dir, const char *name, dfs_obj_t *link_dir,
+			const char *link_name, const char *buf, size_t len)
+{
+	dfs_obj_t  *obj, *link_obj = NULL;
+	d_sg_list_t sgl;
+	d_iov_t     iov;
+	struct stat stbuf;
+	int         rc;
+
+	rc = dfs_open(dfs_mt, dir, name, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	d_iov_set(&iov, (void *)buf, len);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_link(dfs_mt, obj, link_dir, link_name, &link_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	rc = dfs_release(link_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+}
+
+/**
+ * Create a regular file @dir/@name with content @buf, then link it to @dir/@link_name so
+ * both names become hardlinks to the same inode (link_cnt == 2, tracked in GIT).
+ */
+static void
+rh_make_hardlink_pair(dfs_obj_t *dir, const char *name, const char *link_name, const char *buf,
+		      size_t len)
+{
+	rh_make_hardlink_pair_x(dir, name, dir, link_name, buf, len);
+}
+
+/**
+ * Test dfs_move / rename behavior with hardlinks across two different parent directories.
+ * Covers:
+ *  1. Hardlink renamed, destination does not exist.
+ *  2. Regular file renamed over an existing hardlink destination.
+ *  3. Hardlink renamed over an existing regular file destination.
+ *  4. Hardlink renamed over an existing hardlink destination (different inodes).
+ *  5. Hardlink renamed over an existing hardlink destination that is the same inode (no-op).
+ */
+static void
+dfs_test_rename_hardlink(void **state)
+{
+	test_arg_t   *arg = *state;
+	dfs_obj_t    *dir;
+	dfs_obj_t    *dir2;
+	dfs_obj_t    *obj;
+	struct stat   stbuf, stbuf2;
+	daos_obj_id_t oid_src, oid_dst;
+	char          bufA[64], bufB[64];
+	char          xval[16];
+	daos_size_t   xsize;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, "rh_dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, NULL, "rh_dir2", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir2);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Case 1: hardlink renamed to another directory, destination does not exist.
+	 * After the move the source name is gone, the destination resolves to the same inode
+	 * (link_cnt unchanged at 2), content and GIT-resident xattrs are preserved, and the
+	 * move refreshes the times stored in GIT.
+	 */
+	print_message("Case 1: hardlink renamed to another dir, destination does not exist\n");
+	dts_buf_render(bufA, sizeof(bufA));
+	rh_make_hardlink_pair(dir, "c1_src", "c1_keep", bufA, sizeof(bufA));
+	/** set an xattr; for a hardlink it is stored in GIT keyed by OID. */
+	rc = dfs_open(dfs_mt, dir, "c1_src", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_setxattr(dfs_mt, obj, "user.k", "v", 2, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs_mt, dir, "c1_src", &stbuf);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir, "c1_src", &oid_src);
+
+	/** sleep so the clock advances and post-move times are strictly newer. */
+	usleep(10000);
+	rc = dfs_move(dfs_mt, dir, "c1_src", dir2, "c1_dst", NULL);
+	assert_int_equal(rc, 0);
+
+	/** source name is gone. */
+	rc = dfs_stat(dfs_mt, dir, "c1_src", &stbuf2);
+	assert_int_equal(rc, ENOENT);
+
+	/** destination resolves to the same inode, link_cnt still 2, content preserved. */
+	rc = dfs_stat(dfs_mt, dir2, "c1_dst", &stbuf2);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir2, "c1_dst", &oid_dst);
+	assert_int_equal(daos_oid_cmp(oid_dst, oid_src), 0);
+	assert_int_equal((int)stbuf2.st_nlink, 2);
+	rh_verify_content(dir2, "c1_dst", bufA, sizeof(bufA));
+
+	/** move refreshed the ctime stored in GIT. */
+	assert_true((stbuf2.st_ctim.tv_sec * 1000000000LL + stbuf2.st_ctim.tv_nsec) >
+		    (stbuf.st_ctim.tv_sec * 1000000000LL + stbuf.st_ctim.tv_nsec));
+
+	/** xattr survived the move (still in GIT under the unchanged OID). */
+	rc =
+	    dfs_open(dfs_mt, dir2, "c1_dst", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	memset(xval, 0, sizeof(xval));
+	xsize = sizeof(xval);
+	rc    = dfs_getxattr(dfs_mt, obj, "user.k", xval, &xsize);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)xsize, 2);
+	assert_memory_equal(xval, "v", 2);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** the other link still reports link_cnt 2. */
+	rc = dfs_stat(dfs_mt, dir, "c1_keep", &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf2.st_nlink, 2);
+
+	rc = dfs_remove(dfs_mt, dir2, "c1_dst", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir, "c1_keep", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Case 2: regular file renamed over an existing hardlink destination in another dir.
+	 * The clobbered destination is a hardlink, so its inode's link_cnt drops from 2 to 1;
+	 * the destination name now holds the (regular) source file's content.
+	 */
+	print_message("Case 2: regular file renamed over an existing hardlink destination\n");
+	dts_buf_render(bufA, sizeof(bufA));
+	dts_buf_render(bufB, sizeof(bufB));
+	rh_write_file(dir, "c2_src", bufA, sizeof(bufA));
+	rh_make_hardlink_pair(dir2, "c2_hl", "c2_dst", bufB, sizeof(bufB));
+
+	rc = dfs_move(dfs_mt, dir, "c2_src", dir2, "c2_dst", NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs_mt, dir, "c2_src", &stbuf2);
+	assert_int_equal(rc, ENOENT);
+
+	/** destination now holds the source (regular) file: link_cnt 1, source content. */
+	rc = dfs_stat(dfs_mt, dir2, "c2_dst", &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf2.st_nlink, 1);
+	rh_verify_content(dir2, "c2_dst", bufA, sizeof(bufA));
+
+	/** the surviving link of the clobbered inode drops to link_cnt 1. */
+	rc = dfs_stat(dfs_mt, dir2, "c2_hl", &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf2.st_nlink, 1);
+	rh_verify_content(dir2, "c2_hl", bufB, sizeof(bufB));
+
+	rc = dfs_remove(dfs_mt, dir2, "c2_dst", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "c2_hl", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Case 3: hardlink renamed over an existing regular file destination in another dir.
+	 * The clobbered regular file is removed; the destination name now resolves to the
+	 * hardlink inode (link_cnt stays 2 across the two surviving links).
+	 */
+	print_message("Case 3: hardlink renamed over an existing regular file destination\n");
+	dts_buf_render(bufA, sizeof(bufA));
+	dts_buf_render(bufB, sizeof(bufB));
+	rh_make_hardlink_pair(dir, "c3_src", "c3_keep", bufA, sizeof(bufA));
+	rh_write_file(dir2, "c3_dst", bufB, sizeof(bufB));
+
+	rh_get_oid(dir, "c3_keep", &oid_src);
+
+	rc = dfs_move(dfs_mt, dir, "c3_src", dir2, "c3_dst", NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs_mt, dir, "c3_src", &stbuf2);
+	assert_int_equal(rc, ENOENT);
+
+	/** destination now resolves to the hardlink inode; link_cnt stays 2. */
+	rc = dfs_stat(dfs_mt, dir2, "c3_dst", &stbuf2);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir2, "c3_dst", &oid_dst);
+	assert_int_equal(daos_oid_cmp(oid_dst, oid_src), 0);
+	assert_int_equal((int)stbuf2.st_nlink, 2);
+	rh_verify_content(dir2, "c3_dst", bufA, sizeof(bufA));
+
+	rc = dfs_stat(dfs_mt, dir, "c3_keep", &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf2.st_nlink, 2);
+
+	rc = dfs_remove(dfs_mt, dir2, "c3_dst", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir, "c3_keep", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Case 4: hardlink renamed over an existing hardlink destination (different inodes)
+	 * in another dir. The source inode gains the destination name (its two links:
+	 * source-keep + dst), while the clobbered destination inode's link_cnt drops from 2 to 1.
+	 */
+	print_message("Case 4: hardlink renamed over a different-inode hardlink destination\n");
+	dts_buf_render(bufA, sizeof(bufA));
+	dts_buf_render(bufB, sizeof(bufB));
+	rh_make_hardlink_pair(dir, "c4_src", "c4_keep", bufA, sizeof(bufA));
+	rh_make_hardlink_pair(dir2, "c4_dhl", "c4_dst", bufB, sizeof(bufB));
+
+	rh_get_oid(dir, "c4_keep", &oid_src);
+
+	rc = dfs_move(dfs_mt, dir, "c4_src", dir2, "c4_dst", NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs_mt, dir, "c4_src", &stbuf2);
+	assert_int_equal(rc, ENOENT);
+
+	/** destination now points at the source inode; link_cnt stays 2. */
+	rc = dfs_stat(dfs_mt, dir2, "c4_dst", &stbuf2);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir2, "c4_dst", &oid_dst);
+	assert_int_equal(daos_oid_cmp(oid_dst, oid_src), 0);
+	assert_int_equal((int)stbuf2.st_nlink, 2);
+	rh_verify_content(dir2, "c4_dst", bufA, sizeof(bufA));
+
+	/** source-side surviving link is unchanged at link_cnt 2. */
+	rc = dfs_stat(dfs_mt, dir, "c4_keep", &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf2.st_nlink, 2);
+
+	/** clobbered destination inode's surviving link drops to link_cnt 1. */
+	rc = dfs_stat(dfs_mt, dir2, "c4_dhl", &stbuf2);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf2.st_nlink, 1);
+	rh_verify_content(dir2, "c4_dhl", bufB, sizeof(bufB));
+
+	rc = dfs_remove(dfs_mt, dir2, "c4_dst", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir, "c4_keep", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "c4_dhl", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Case 5: hardlink renamed over an existing hardlink destination that is the same inode,
+	 * with the two links living in different directories.
+	 * POSIX: renaming a link onto another link of the same file is a no-op; both names
+	 * survive with link_cnt unchanged.
+	 */
+	print_message("Case 5: hardlink renamed over a same-inode hardlink destination (no-op)\n");
+	dts_buf_render(bufA, sizeof(bufA));
+	rh_make_hardlink_pair_x(dir, "c5_src", dir2, "c5_dst", bufA, sizeof(bufA));
+
+	rh_get_oid(dir, "c5_src", &oid_src);
+
+	rc = dfs_move(dfs_mt, dir, "c5_src", dir2, "c5_dst", NULL);
+	assert_int_equal(rc, 0);
+
+	/** both names still exist and refer to the same inode; link_cnt still 2. */
+	rc = dfs_stat(dfs_mt, dir, "c5_src", &stbuf2);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir, "c5_src", &oid_dst);
+	assert_int_equal(daos_oid_cmp(oid_dst, oid_src), 0);
+	assert_int_equal((int)stbuf2.st_nlink, 2);
+	rh_verify_content(dir, "c5_src", bufA, sizeof(bufA));
+
+	rc = dfs_stat(dfs_mt, dir2, "c5_dst", &stbuf2);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir2, "c5_dst", &oid_dst);
+	assert_int_equal(daos_oid_cmp(oid_dst, oid_src), 0);
+	assert_int_equal((int)stbuf2.st_nlink, 2);
+	rh_verify_content(dir2, "c5_dst", bufA, sizeof(bufA));
+
+	rc = dfs_remove(dfs_mt, dir, "c5_src", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "c5_dst", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir2);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "rh_dir", true, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "rh_dir2", true, NULL);
+	assert_int_equal(rc, 0);
+}
+
+/**
+ * Test dfs_exchange behavior with hardlinks across two different parent directories. Covers:
+ *  1. Exchange two hardlinks referring to different inodes.
+ *  2. Exchange a hardlink with a regular file.
+ *  3. Exchange two hardlinks referring to the same inode.
+ */
+static void
+dfs_test_exchange_hardlink(void **state)
+{
+	test_arg_t   *arg = *state;
+	dfs_obj_t    *dir;
+	dfs_obj_t    *dir2;
+	dfs_obj_t    *obj;
+	struct stat   inoA, inoB, stbuf;
+	daos_obj_id_t oidA, oidB, oid;
+	char          bufA[64], bufB[64];
+	char          xval[16];
+	daos_size_t   xsize;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, "eh_dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, NULL, "eh_dir2", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir2);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Case 1: exchange two hardlinks in different dirs referring to different inodes.
+	 * Each name ends up pointing at the other inode; both link counts stay 2 and the
+	 * exchange refreshes the times stored in GIT.
+	 */
+	print_message("Case 1: exchange two different-inode hardlinks across dirs\n");
+	dts_buf_render(bufA, sizeof(bufA));
+	dts_buf_render(bufB, sizeof(bufB));
+	rh_make_hardlink_pair(dir, "e1_a", "e1_a_keep", bufA, sizeof(bufA));
+	rh_make_hardlink_pair(dir2, "e1_b", "e1_b_keep", bufB, sizeof(bufB));
+
+	/** set a distinct xattr on each inode; for a hardlink it is stored in GIT keyed by OID. */
+	rc = dfs_open(dfs_mt, dir, "e1_a", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_setxattr(dfs_mt, obj, "user.k", "A", 2, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir2, "e1_b", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_setxattr(dfs_mt, obj, "user.k", "B", 2, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs_mt, dir, "e1_a", &inoA);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir, "e1_a", &oidA);
+	rc = dfs_stat(dfs_mt, dir2, "e1_b", &inoB);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir2, "e1_b", &oidB);
+
+	/** sleep so post-exchange times are strictly newer. */
+	usleep(10000);
+	rc = dfs_exchange(dfs_mt, dir, "e1_a", dir2, "e1_b");
+	assert_int_equal(rc, 0);
+
+	/** e1_a now refers to inode B; e1_b now refers to inode A. */
+	rc = dfs_stat(dfs_mt, dir, "e1_a", &stbuf);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir, "e1_a", &oid);
+	assert_int_equal(daos_oid_cmp(oid, oidB), 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	rh_verify_content(dir, "e1_a", bufB, sizeof(bufB));
+	/** exchange refreshed the ctime stored in GIT. */
+	assert_true((stbuf.st_ctim.tv_sec * 1000000000LL + stbuf.st_ctim.tv_nsec) >
+		    (inoB.st_ctim.tv_sec * 1000000000LL + inoB.st_ctim.tv_nsec));
+
+	rc = dfs_stat(dfs_mt, dir2, "e1_b", &stbuf);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir2, "e1_b", &oid);
+	assert_int_equal(daos_oid_cmp(oid, oidA), 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	rh_verify_content(dir2, "e1_b", bufA, sizeof(bufA));
+	assert_true((stbuf.st_ctim.tv_sec * 1000000000LL + stbuf.st_ctim.tv_nsec) >
+		    (inoA.st_ctim.tv_sec * 1000000000LL + inoA.st_ctim.tv_nsec));
+
+	/** xattrs live in GIT keyed by OID, so they follow the inode across the exchange. */
+	rc = dfs_open(dfs_mt, dir, "e1_a", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	memset(xval, 0, sizeof(xval));
+	xsize = sizeof(xval);
+	rc    = dfs_getxattr(dfs_mt, obj, "user.k", xval, &xsize);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)xsize, 2);
+	assert_memory_equal(xval, "B", 2);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir2, "e1_b", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	memset(xval, 0, sizeof(xval));
+	xsize = sizeof(xval);
+	rc    = dfs_getxattr(dfs_mt, obj, "user.k", xval, &xsize);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)xsize, 2);
+	assert_memory_equal(xval, "A", 2);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** the untouched links still resolve to their original inodes with link_cnt 2. */
+	rc = dfs_stat(dfs_mt, dir, "e1_a_keep", &stbuf);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir, "e1_a_keep", &oid);
+	assert_int_equal(daos_oid_cmp(oid, oidA), 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	rc = dfs_stat(dfs_mt, dir2, "e1_b_keep", &stbuf);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir2, "e1_b_keep", &oid);
+	assert_int_equal(daos_oid_cmp(oid, oidB), 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	rc = dfs_remove(dfs_mt, dir, "e1_a", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "e1_b", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir, "e1_a_keep", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "e1_b_keep", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Case 2: exchange a hardlink (in dir) with a regular file (in dir2).
+	 * The names swap inodes; the hardlink inode keeps link_cnt 2, the regular file keeps
+	 * link_cnt 1, and both contents follow their inodes.
+	 */
+	print_message("Case 2: exchange a hardlink with a regular file across dirs\n");
+	dts_buf_render(bufA, sizeof(bufA));
+	dts_buf_render(bufB, sizeof(bufB));
+	rh_make_hardlink_pair(dir, "e2_hl", "e2_keep", bufA, sizeof(bufA));
+	rh_write_file(dir2, "e2_reg", bufB, sizeof(bufB));
+
+	rh_get_oid(dir, "e2_hl", &oidA);
+
+	rc = dfs_exchange(dfs_mt, dir, "e2_hl", dir2, "e2_reg");
+	assert_int_equal(rc, 0);
+
+	/** e2_hl now holds the regular file (link_cnt 1, regular content). */
+	rc = dfs_stat(dfs_mt, dir, "e2_hl", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 1);
+	rh_verify_content(dir, "e2_hl", bufB, sizeof(bufB));
+
+	/** e2_reg now resolves to the hardlink inode (link_cnt 2, hardlink content). */
+	rc = dfs_stat(dfs_mt, dir2, "e2_reg", &stbuf);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir2, "e2_reg", &oid);
+	assert_int_equal(daos_oid_cmp(oid, oidA), 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	rh_verify_content(dir2, "e2_reg", bufA, sizeof(bufA));
+
+	/** the surviving link of the hardlink inode still reports link_cnt 2. */
+	rc = dfs_stat(dfs_mt, dir, "e2_keep", &stbuf);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir, "e2_keep", &oid);
+	assert_int_equal(daos_oid_cmp(oid, oidA), 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	rc = dfs_remove(dfs_mt, dir, "e2_hl", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "e2_reg", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir, "e2_keep", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/**
+	 * Case 3: exchange two hardlinks referring to the same inode, one name in each dir.
+	 * Both names survive and still refer to the same inode with link_cnt unchanged.
+	 */
+	print_message("Case 3: exchange two same-inode hardlinks across dirs\n");
+	dts_buf_render(bufA, sizeof(bufA));
+	rh_make_hardlink_pair_x(dir, "e3_s1", dir2, "e3_s2", bufA, sizeof(bufA));
+
+	rh_get_oid(dir, "e3_s1", &oidA);
+
+	rc = dfs_exchange(dfs_mt, dir, "e3_s1", dir2, "e3_s2");
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs_mt, dir, "e3_s1", &stbuf);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir, "e3_s1", &oid);
+	assert_int_equal(daos_oid_cmp(oid, oidA), 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	rh_verify_content(dir, "e3_s1", bufA, sizeof(bufA));
+
+	rc = dfs_stat(dfs_mt, dir2, "e3_s2", &stbuf);
+	assert_int_equal(rc, 0);
+	rh_get_oid(dir2, "e3_s2", &oid);
+	assert_int_equal(daos_oid_cmp(oid, oidA), 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	rh_verify_content(dir2, "e3_s2", bufA, sizeof(bufA));
+
+	rc = dfs_remove(dfs_mt, dir, "e3_s1", 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir2, "e3_s2", 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir2);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "eh_dir", true, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "eh_dir2", true, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
     {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
@@ -5025,6 +5632,10 @@ static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST30: dfs xattr hardlink", dfs_test_xattr_hardlink, async_disable,
      test_case_teardown},
     {"DFS_UNIT_TEST31: dfs setattr hardlink", dfs_test_setattr_hardlink, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST32: dfs rename hardlink", dfs_test_rename_hardlink, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST33: dfs exchange hardlink", dfs_test_exchange_hardlink, async_disable,
      test_case_teardown},
 };
 

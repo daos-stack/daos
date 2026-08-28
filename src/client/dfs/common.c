@@ -348,7 +348,7 @@ remove_hardlink(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const cha
 restart:
 	if (!daos_handle_is_valid(dfs->git_oh)) {
 		D_ERROR("GIT handle is not valid\n");
-		D_GOTO(out, rc = EIO);
+		D_GOTO(out, rc = ENOTSUP);
 	}
 
 	rc = git_fetch_entry(dfs->git_oh, th, &entry.oid, &git_entry, 0, NULL, NULL, NULL);
@@ -626,6 +626,52 @@ git_update_link_cnt(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, 
 	}
 	if (ctime)
 		*ctime = now;
+	return 0;
+}
+
+int
+git_update_times(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, struct timespec *mtime,
+		 struct timespec *ctime)
+{
+	daos_key_t  dkey;
+	d_sg_list_t sgl;
+	d_iov_t     sg_iovs[4];
+	daos_iod_t  iod;
+	daos_recx_t recxs[4];
+	int         rc;
+
+	if (oid == NULL || mtime == NULL || ctime == NULL)
+		return EINVAL;
+
+	d_iov_set(&dkey, oid, sizeof(daos_obj_id_t));
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	iod.iod_nr      = 4;
+	recxs[0].rx_idx = MTIME_IDX;
+	recxs[0].rx_nr  = sizeof(uint64_t);
+	recxs[1].rx_idx = MTIME_NSEC_IDX;
+	recxs[1].rx_nr  = sizeof(uint64_t);
+	recxs[2].rx_idx = CTIME_IDX;
+	recxs[2].rx_nr  = sizeof(uint64_t);
+	recxs[3].rx_idx = CTIME_NSEC_IDX;
+	recxs[3].rx_nr  = sizeof(uint64_t);
+	iod.iod_recxs   = recxs;
+	iod.iod_type    = DAOS_IOD_ARRAY;
+	iod.iod_size    = 1;
+
+	d_iov_set(&sg_iovs[0], &mtime->tv_sec, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[1], &mtime->tv_nsec, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[2], &ctime->tv_sec, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[3], &ctime->tv_nsec, sizeof(uint64_t));
+	sgl.sg_nr     = 4;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = sg_iovs;
+
+	rc = daos_obj_update(git_oh, th, daos_handle_is_valid(th) ? 0 : DAOS_COND_DKEY_UPDATE,
+			     &dkey, 1, &iod, &sgl, NULL);
+	if (rc) {
+		D_ERROR("Failed to update times in GIT " DF_RC "\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
 	return 0;
 }
 
