@@ -3090,6 +3090,15 @@ fstat64(int fd, struct stat64 *buf) __attribute__((alias("fstat"), leaf, nonnull
 int
 __fstat64(int fd, struct stat64 *buf) __attribute__((alias("fstat"), leaf, nonnull, nothrow));
 
+/* libc declares the path parameters nonnull; a direct compare is a build error. */
+static inline bool
+is_null_path(const char *path)
+{
+	const char *volatile p = path;
+
+	return p == NULL;
+}
+
 static int
 new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
@@ -3102,7 +3111,7 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
 
-	if (!d_hook_enabled)
+	if (!d_hook_enabled || is_null_path(path))
 		return next_xstat(ver, path, stat_buf);
 	if (path[0] == 0) {
 		errno = ENOENT;
@@ -3163,7 +3172,7 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
 
-	if (!d_hook_enabled)
+	if (!d_hook_enabled || is_null_path(path))
 		return libc_lxstat(ver, path, stat_buf);
 	if (path[0] == 0) {
 		errno = ENOENT;
@@ -3211,7 +3220,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
-	if (!d_hook_enabled)
+	if (!d_hook_enabled || is_null_path(path))
 		return libc_fxstatat(ver, dirfd, path, stat_buf, flags);
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
 		errno = ENOENT;
@@ -3357,6 +3366,9 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 		next_statx = dlsym(RTLD_NEXT, "statx");
 		D_ASSERT(next_statx != NULL);
 	}
+	/* Let libc answer EFAULT; callers probe statx() availability this way. */
+	if (is_null_path(path))
+		return next_statx(dirfd, path, flags, mask, statx_buf);
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
 		errno = ENOENT;
 		return (-1);
