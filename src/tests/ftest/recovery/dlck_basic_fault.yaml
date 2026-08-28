@@ -14,21 +14,15 @@ server_config:
 pool:
   size: 10%
 
-faults:
-  create_log_dir:
-    fault_list:
-      - DLCK_FAULT_CREATE_LOG_DIR
-
-dlck_test_additional_faults:
+dlck_test_faults:
   fault_list:
     - DLCK_MOCK_ROOT
     - DLCK_FAULT_GETGRNAM
     - DLCK_MOCK_NO_DAOS_SERVER_GROUP
-    - DLCK_FAULT_GETGROUPS
     - DLCK_MOCK_NOT_IN_DAOS_SERVER_GROUP
     - DLCK_FAULT_CREATE_POOL_DIR
+    - DLCK_FAULT_CREATE_LOG_DIR
     - DLCK_FAULT_ENGINE_START
-    - DLCK_FAULT_ENGINE_EXEC
     - DLCK_FAULT_ENGINE_JOIN
     - DLCK_FAULT_ENGINE_STOP
     - DAOS_FAULT_POOL_NVME_HEALTH

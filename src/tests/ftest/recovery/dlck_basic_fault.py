@@ -9,7 +9,6 @@ import re
 from dlck_utils import TestDlck
 from fault_config_utils import FaultInjection
 from file_utils import distribute_files
-from run_utils import run_remote
 from test_utils_pool import add_pool
 
 
@@ -35,26 +34,27 @@ class DlckBasicFaultTest(TestDlck):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,dlck_cmd
+        :avocado: tags=recovery,dlck_cmd,faults
         :avocado: tags=DlckBasicFaultTest,test_dlck_basic_fault
         """
         errors = []
         faults_object = FaultInjection()
         faults_dict = faults_object.get_faults_dict()
-        fault_list = self.params.get("fault_list", '/run/dlck_test_additional_faults/*')
+        fault_list = self.params.get("fault_list", '/run/dlck_test_faults/*')
+        self.log.info("Test log dir %s", self.test_env.log_dir)
+        # /var/tmp/daos_testing/test_dlck_basic_fault/fi.yaml
+        fault_inject_file = os.path.join(self.test_env.log_dir, "fi.yaml")
+        self.log.info("Fault injection file: %s", fault_inject_file)
+        self.log.info("Faults: %s", fault_list)
+        self.log.info("Faults dict: %s", faults_dict)
         dmg = self.get_dmg_command()
         pool = add_pool(self)
         dlck = self.get_dlck_command()
         dlck.pool_uuid.value = pool.uuid
         dlck.log_dir = self.test_env.log_dir
+        dlck.exit_status_exception = False
+        dlck.env["D_FI_CONFIG"] = fault_inject_file
         dlck.storage_mount.value = self.server_managers[0].get_config_value("scm_mount")
-        fault_inject_file = os.getenv("D_FI_CONFIG", "None set for now")
-        if fault_inject_file == "None set for now":
-            self.fail("D_FI_CONFIG environment variable not set")
-        self.log.info("Fault injection file contents")
-        cmd = f"cat {fault_inject_file}"
-        self.log_step("Run the command to read the fault injection file contents")
-        run_remote(self.log, self.hostlist_clients[0], cmd, timeout=30)
         # Run the testing with the first fault which is injected at the beginning of the test.
         if self.server_managers[0].manager.job.using_control_metadata:
             dlck.nvme.value = os.path.join(
@@ -62,11 +62,6 @@ class DlckBasicFaultTest(TestDlck):
                 "daos_nvme.conf")
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
-        self.log_step("Run dlck command after injecting the first fault")
-        result = dlck.run()
-        error = self.check_dlck_result(result, "Initial fault")
-        if error:
-            errors.append(error)
         # Now, run the other fault injection flags without rebooting or creating any new pools.
         # Rebooting the servers or creating the new pools will result in injecting fault in
         # the wrong test code. Fault injections should be done only for the dlck alone.
