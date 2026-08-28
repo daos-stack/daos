@@ -20,7 +20,6 @@ pool:
   svcn: 7  # To match number of servers
   pool_query_timeout: 30
 container:
-  control_method: daos
   cont_prop: !mux
     rf_1:
       properties: rd_fac:1
