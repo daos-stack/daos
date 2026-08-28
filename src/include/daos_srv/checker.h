@@ -122,7 +122,7 @@ ck_report(void *arg, enum btr_report_type type, const char *fmt, ...)
 
 #define IS_CHECKER(ck)     (unlikely((ck) != NULL))
 
-#define IS_NOT_CHECKER(dp) (likely((ck) == NULL))
+#define IS_NOT_CHECKER(ck) (likely((ck) == NULL))
 
 #define YES_NO_STR(cond)   ((cond) ? "yes" : "no")
 
@@ -174,14 +174,18 @@ ck_report(void *arg, enum btr_report_type type, const char *fmt, ...)
 
 #define CK_APPENDFL_WARN(ck, fmt, ...)                                                             \
 	do {                                                                                       \
-		CK_PRINTF_WO_PREFIX(ck, CHECKER_WARNING_INFIX fmt "\n", __VA_ARGS__);              \
-		++(ck)->ck_warnings_num;                                                           \
+		if (IS_CHECKER(ck)) {                                                              \
+			CK_PRINTF_WO_PREFIX(ck, CHECKER_WARNING_INFIX fmt "\n", __VA_ARGS__);      \
+			++(ck)->ck_warnings_num;                                                   \
+		}                                                                                  \
 	} while (0)
 
 #define CK_APPENDL_WARN(ck, msg)                                                                   \
 	do {                                                                                       \
-		CK_PRINT_WO_PREFIX(ck, CHECKER_WARNING_INFIX msg "\n");                            \
-		++(ck)->ck_warnings_num;                                                           \
+		if (IS_CHECKER(ck)) {                                                              \
+			CK_PRINT_WO_PREFIX(ck, CHECKER_WARNING_INFIX msg "\n");                    \
+			++(ck)->ck_warnings_num;                                                   \
+		}                                                                                  \
 	} while (0)
 
 #define CK_APPENDL(ck, msg) CK_PRINT_WO_PREFIX(ck, msg "\n")
