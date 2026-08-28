@@ -3600,7 +3600,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	return 0;
 }
 
-#define CK_DBD_FMT "DTX blob (off=%#lx)... "
+#define CK_DBD_FMT "DTX blob (off=%#" PRIx64 ")... "
 
 int
 vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck)
