@@ -3,8 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
-
 from apricot import TestWithServers
 from command_utils import RunCommand
 from command_utils_base import FormattedParameter
