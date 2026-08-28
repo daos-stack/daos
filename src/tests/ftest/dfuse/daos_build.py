@@ -110,13 +110,14 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     remote_env['NO_PROXY'] = os.environ.get('NO_PROXY', '')
 
     if il_lib is not None:
+        il_lib_short = il_lib.rstrip('.so')
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
-        remote_env['D_LOG_FILE'] = f'/var/tmp/daos_testing/daos-{il_lib.rstrip(".so")}.log'
+        remote_env['D_LOG_FILE'] = f'/var/tmp/daos_testing/daos-{il_lib_short}.log'
         remote_env['DD_MASK'] = 'all'
         remote_env['DD_SUBSYS'] = 'all'
-        remote_env['D_LOG_MASK'] = 'INFO,IL=INFO'
+        remote_env['D_LOG_MASK'] = 'WARN,IL=WARN'
         if il_lib == 'libpil4dfs.so':
-            remote_env['D_IL_NO_BYPASS'] = '1'
+            # remote_env['D_IL_NO_BYPASS'] = '1'
             remote_env['D_IL_COMPATIBLE'] = '1'
             remote_env['D_IL_MAX_EQ'] = '0'
 
