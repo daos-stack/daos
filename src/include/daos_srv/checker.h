@@ -120,8 +120,16 @@ ck_report(void *arg, enum btr_report_type type, const char *fmt, ...)
 
 /** basic helpers */
 
+/**
+ * The IS_CHECKER and IS_NOT_CHECKER macros do two things:
+ * 1. Check whether the checker is present (non-NULL) or absent (NULL).
+ * 2. Provide branch-prediction hints.
+ *
+ * The checker code resides in the same binaries as the main execution code. It is essential that
+ * adding the checker code does not slow down the main execution path. Therefore, branch-prediction
+ * hints are necessary to avoid degrading performance on the main execution path.
+ */
 #define IS_CHECKER(ck)     (unlikely((ck) != NULL))
-
 #define IS_NOT_CHECKER(ck) (likely((ck) == NULL))
 
 #define YES_NO_STR(cond)   ((cond) ? "yes" : "no")
