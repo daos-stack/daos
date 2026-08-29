@@ -5475,6 +5475,8 @@ chdir(const char *path)
 	}
 
 	/* assuming the path exists and it is backed by dfuse */
+	if (strncmp(full_path, "/", 2) == 0)
+		full_path[0] = 0;
 	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);
 	if (len_str >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
