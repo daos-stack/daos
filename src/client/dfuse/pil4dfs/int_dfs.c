@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <sys/sendfile.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/statfs.h>
@@ -350,6 +351,9 @@ static ssize_t (*libc_write)(int fd, const void *buf, size_t count);
 static ssize_t (*pthread_write)(int fd, const void *buf, size_t count);
 
 static ssize_t (*next_pwrite)(int fd, const void *buf, size_t size, off_t offset);
+static ssize_t (*next_copy_file_range)(int fd_in, off64_t *off_in, int fd_out, off64_t *off_out,
+				       size_t len, unsigned int flags);
+static ssize_t (*next_sendfile)(int out_fd, int in_fd, off_t *offset, size_t count);
 
 static ssize_t (*next_readv)(int fd, const struct iovec *iov, int iovcnt);
 static ssize_t (*next_writev)(int fd, const struct iovec *iov, int iovcnt);
@@ -2847,6 +2851,91 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 
 ssize_t
 pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alias("pwrite")));
+
+#define COPY_BUF_SIZE (1 << 20)
+
+/* The kernel cannot see a pil4dfs fd; a NULL offset means the file position, as for read(). */
+static ssize_t
+copy_over_dfs(int fd_in, off64_t *off_in, int fd_out, off64_t *off_out, size_t len)
+{
+	char   *buf;
+	size_t  done = 0, bufsize = min(len, COPY_BUF_SIZE);
+	ssize_t got, put;
+	int     error = 0;
+
+	D_ALLOC(buf, bufsize);
+	if (buf == NULL) {
+		errno = ENOMEM;
+		return (-1);
+	}
+	while (done < len) {
+		got = off_in ? pread(fd_in, buf, min(len - done, bufsize), *off_in)
+			     : read(fd_in, buf, min(len - done, bufsize));
+		if (got < 0) {
+			error = errno;
+			break;
+		}
+		if (got == 0)
+			break;
+		put = off_out ? pwrite(fd_out, buf, got, *off_out) : write(fd_out, buf, got);
+		if (put < 0) {
+			error = errno;
+			break;
+		}
+		if (off_in)
+			*off_in += put;
+		if (off_out)
+			*off_out += put;
+		done += put;
+		if (put < got) {
+			/* short write: rewind the input to what was consumed */
+			if (off_in == NULL && lseek(fd_in, put - got, SEEK_CUR) < 0) {
+				error = errno;
+				break;
+			}
+		}
+	}
+	D_FREE(buf);
+	if (done == 0 && error) {
+		errno = error;
+		return (-1);
+	}
+	return done;
+}
+
+ssize_t
+copy_file_range(int fd_in, off64_t *off_in, int fd_out, off64_t *off_out, size_t len,
+		unsigned int flags)
+{
+	if (next_copy_file_range == NULL) {
+		next_copy_file_range = dlsym(RTLD_NEXT, "copy_file_range");
+		D_ASSERT(next_copy_file_range != NULL);
+	}
+	if (!d_hook_enabled || (d_get_fd_redirected(fd_in) < FD_FILE_BASE &&
+				d_get_fd_redirected(fd_out) < FD_FILE_BASE))
+		return next_copy_file_range(fd_in, off_in, fd_out, off_out, len, flags);
+	if (flags != 0) {
+		errno = EINVAL;
+		return (-1);
+	}
+	return copy_over_dfs(fd_in, off_in, fd_out, off_out, len);
+}
+
+ssize_t
+sendfile(int out_fd, int in_fd, off_t *offset, size_t count)
+{
+	if (next_sendfile == NULL) {
+		next_sendfile = dlsym(RTLD_NEXT, "sendfile");
+		D_ASSERT(next_sendfile != NULL);
+	}
+	if (!d_hook_enabled || (d_get_fd_redirected(in_fd) < FD_FILE_BASE &&
+				d_get_fd_redirected(out_fd) < FD_FILE_BASE))
+		return next_sendfile(out_fd, in_fd, offset, count);
+	return copy_over_dfs(in_fd, (off64_t *)offset, out_fd, NULL, count);
+}
+
+ssize_t
+sendfile64(int out_fd, int in_fd, off64_t *offset, size_t count) __attribute__((alias("sendfile")));
 
 ssize_t
 __pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alias("pwrite")));
