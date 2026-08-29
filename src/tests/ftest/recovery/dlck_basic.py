@@ -38,11 +38,11 @@ class DlckBasicTest(TestDlck):
         """
         dmg = self.get_dmg_command()
         self.log_step("Create a pool to run dlck")
-        pool = self.get_pool(self)
+        pool = self.get_pool()
         dlck = self.get_dlck_command()
         dlck.pool_uuid.value = pool.uuid
         dlck.log_dir = self.test_env.log_dir
-        dlck.storage = self.server_managers[0].get_config_value("scm_mount")
+        dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
         if self.server_managers[0].manager.job.using_control_metadata:
             dlck.nvme.value = os.path.join(
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
@@ -74,13 +74,13 @@ class DlckBasicTest(TestDlck):
         self.log.info("Faults: %s", fault_list)
         self.log.info("Faults dict: %s", faults_dict)
         dmg = self.get_dmg_command()
-        pool = self.get_pool(self)
+        pool = self.get_pool()
         dlck = self.get_dlck_command()
         dlck.pool_uuid.value = pool.uuid
         dlck.log_dir = self.test_env.log_dir
         dlck.exit_status_exception = False
         dlck.env["D_FI_CONFIG"] = fault_inject_file
-        dlck.storage_mount.value = self.server_managers[0].get_config_value("scm_mount")
+        dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
         if self.server_managers[0].manager.job.using_control_metadata:
             dlck.nvme.value = os.path.join(
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
