@@ -271,8 +271,8 @@ destroy_all_eqs(void);
 
 static void
 free_fd(int idx, bool closing_dup_fd);
-static void
-free_dirfd(int idx);
+static int
+		     free_dirfd(int idx);
 
 /* Hash table entry for kernel fd.
  */
@@ -1740,7 +1740,7 @@ free_fd(int idx, bool closing_dup_fd)
 	}
 }
 
-static void
+static int
 free_dirfd(int idx)
 {
 	int             i, rc;
@@ -1748,6 +1748,10 @@ free_dirfd(int idx)
 
 	D_MUTEX_LOCK(&lock_dirfd);
 
+	if (dir_list[idx] == NULL) {
+		D_MUTEX_UNLOCK(&lock_dirfd);
+		return EBADF;
+	}
 	dir_list[idx]->ref_count--;
 	if (dir_list[idx]->ref_count == 0)
 		saved_obj = dir_list[idx];
@@ -1772,9 +1776,11 @@ free_dirfd(int idx)
 		/* free memory for path and ents. */
 		D_FREE(saved_obj->path);
 		D_FREE(saved_obj->ents);
-		rc = dfs_release(saved_obj->dir);
-		if (rc)
-			DS_ERROR(rc, "dfs_release() failed");
+		if (saved_obj->dir) {
+			rc = dfs_release(saved_obj->dir);
+			if (rc)
+				DS_ERROR(rc, "dfs_release() failed");
+		}
 		/** This memset() is not necessary. It is left here intended. In case of duplicated
 		 *  fd exists, multiple fd could point to same struct dir_obj. struct dir_obj is
 		 *  supposed to be freed only when reference count reaches zero. With zeroing out
@@ -1786,6 +1792,45 @@ free_dirfd(int idx)
 		memset(saved_obj, 0, sizeof(struct dir_obj));
 		D_FREE(saved_obj);
 	}
+	return 0;
+}
+
+/* closedir() finds its slot through dir_obj->fd, so a dup'ed dir fd needs its own dir_obj. */
+static int
+dup_dirfd(int idx_src, int *idx_new)
+{
+	struct dir_obj *src = dir_list[idx_src];
+	struct dir_obj *obj;
+	int             rc;
+
+	if (src == NULL)
+		return EBADF;
+	rc = find_next_available_dirfd(NULL, idx_new);
+	if (rc)
+		return rc;
+	obj            = dir_list[*idx_new];
+	obj->fd        = *idx_new + FD_DIR_BASE;
+	obj->dfs_mt    = src->dfs_mt;
+	obj->offset    = src->offset;
+	obj->open_flag = src->open_flag;
+	obj->st_ino    = src->st_ino;
+	obj->anchor    = src->anchor;
+	obj->num_ents  = src->num_ents;
+	rc             = dfs_dup(src->dfs_mt->dfs, src->dir, O_RDONLY, &obj->dir);
+	if (rc)
+		goto err;
+	D_STRNDUP(obj->path, src->path, DFS_MAX_PATH);
+	if (obj->path == NULL)
+		D_GOTO(err, rc = ENOMEM);
+	D_ALLOC_ARRAY(obj->ents, READ_DIR_BATCH_SIZE);
+	if (obj->ents == NULL)
+		D_GOTO(err, rc = ENOMEM);
+	memcpy(obj->ents, src->ents, sizeof(struct dirent) * READ_DIR_BATCH_SIZE);
+	return 0;
+
+err:
+	free_dirfd(*idx_new);
+	return rc;
 }
 
 static void
@@ -2010,12 +2055,19 @@ check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int
 	dirfd_directed = d_get_fd_redirected(dirfd);
 
 	if (dirfd_directed >= FD_DIR_BASE) {
+		if (dir_list[dirfd_directed - FD_DIR_BASE] == NULL) {
+			*error = EBADF;
+			return (-1);
+		}
 		len_str = asprintf(full_path_out, "%s/%s",
 				   dir_list[dirfd_directed - FD_DIR_BASE]->path, rel_path);
 		if (len_str >= DFS_MAX_PATH)
 			goto out_toolong;
 		else if (len_str < 0)
 			goto out_oom;
+	} else if (dirfd_directed >= FD_FILE_BASE) {
+		*error = ENOTDIR;
+		return (-1);
 	} else if (dirfd_directed == AT_FDCWD) {
 		len_str = asprintf(full_path_out, "%s/%s", cur_dir, rel_path);
 		if (len_str >= DFS_MAX_PATH)
@@ -2477,7 +2529,11 @@ new_close_common(int (*next_close)(int fd), int fd)
 	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed >= FD_DIR_BASE) {
 		/* directory */
-		free_dirfd(fd_directed - FD_DIR_BASE);
+		rc = free_dirfd(fd_directed - FD_DIR_BASE);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		}
 		return 0;
 	} else if (fd_directed >= FD_FILE_BASE) {
 		/* This fd is a kernel fd. There was a duplicate fd created. */
@@ -3358,7 +3414,7 @@ copy_stat_to_statx(const struct stat *stat_buf, struct statx *statx_buf)
 int
 statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *statx_buf)
 {
-	int         rc, idx_dfs, error = 0;
+	int          rc, idx_dfs, fd_directed, error = 0;
 	struct stat stat_buf;
 	char        *full_path = NULL;
 
@@ -3384,6 +3440,18 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 		else
 			rc = new_xstat(1, path, &stat_buf);
 		copy_stat_to_statx(&stat_buf, statx_buf);
+		return rc;
+	}
+
+	fd_directed = d_get_fd_redirected(dirfd);
+	if (fd_directed >= FD_FILE_BASE && fd_directed < FD_DIR_BASE) {
+		if (path[0] != 0) {
+			errno = ENOTDIR;
+			return (-1);
+		}
+		rc = new_fxstat(1, dirfd, &stat_buf);
+		if (rc == 0)
+			copy_stat_to_statx(&stat_buf, statx_buf);
 		return rc;
 	}
 
@@ -3922,7 +3990,7 @@ out_err:
 int
 closedir(DIR *dirp)
 {
-	int fd;
+	int fd, rc;
 
 	if (next_closedir == NULL) {
 		next_closedir = dlsym(RTLD_NEXT, "closedir");
@@ -3956,7 +4024,11 @@ closedir(DIR *dirp)
 	}
 
 	if (fd >= FD_DIR_BASE) {
-		free_dirfd(fd - FD_DIR_BASE);
+		rc = free_dirfd(fd - FD_DIR_BASE);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		}
 		return 0;
 	} else {
 		return next_closedir(dirp);
@@ -6290,8 +6362,7 @@ new_fcntl(int fd, int cmd, ...)
 
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC)) {
 			if (fd_directed >= FD_DIR_BASE) {
-				rc = find_next_available_dirfd(
-					dir_list[fd_directed - FD_DIR_BASE], &next_dirfd);
+				rc = dup_dirfd(fd_directed - FD_DIR_BASE, &next_dirfd);
 				if (rc) {
 					errno = rc;
 					return (-1);
@@ -6427,8 +6498,7 @@ dup2(int oldfd, int newfd)
 				return fd_kernel;
 			fd_fake = next_fd + FD_FILE_BASE;
 		} else {
-			rc = find_next_available_dirfd(dir_list[fd_directed - FD_DIR_BASE],
-						       &next_dirfd);
+			rc = dup_dirfd(fd_directed - FD_DIR_BASE, &next_dirfd);
 			if (rc)
 				/* still return the fd dup from kernel in
 				 * compatible mode
