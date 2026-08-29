@@ -42,8 +42,7 @@ class DaosBuildVM(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=build,daosio,dfuse,pil4dfs
+        :avocado: tags=build,daosio,pil4dfs
         :avocado: tags=DaosBuildVM,test_dfuse_daos_build_wt_pil4dfs
         """
-        run_build_test(self, "nocache", il_lib='libpil4dfs.so', run_on_vms=True,
-                       build_time_override=360)
+        run_build_test(self, "nocache", il_lib='libpil4dfs.so', run_on_vms=True)

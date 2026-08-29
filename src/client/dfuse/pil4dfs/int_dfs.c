@@ -5047,13 +5047,25 @@ rename(const char *old_name, const char *new_name)
 	/* Both old and new are on DAOS */
 	rc = dfs_move(dfs_mt1->dfs, drec2obj(parent_old), item_name_old, drec2obj(parent_new),
 		      item_name_new, NULL);
-	if (rc)
-		D_GOTO(out_err, rc);
 
 	if (parent_old != NULL) {
-		rc = drec_del(dfs_mt1->dcache, full_path_old, parent_old);
-		if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-			DL_ERROR(rc, "DAOS directory cache cleanup failed");
+		int rc_dcache;
+
+		rc_dcache = drec_del(dfs_mt1->dcache, full_path_old, parent_old);
+		if (rc_dcache != -DER_SUCCESS && rc_dcache != -DER_NONEXIST)
+			DL_ERROR(rc_dcache, "DAOS directory cache cleanup failed");
+	}
+
+	if (rc) {
+		/* dfs and dfuse can resolve a path differently. The kernel is authoritative here
+		 * and reports the same error if the entry is really missing.
+		 */
+		DS_WARN(rc,
+			"dfs_move(%s -> %s) failed, resolved to (%s%s -> %s%s), falling back to "
+			"dfuse",
+			old_name, new_name, dfs_mt1->fs_root, full_path_old, dfs_mt2->fs_root,
+			full_path_new);
+		D_GOTO(out_org, rc);
 	}
 
 	drec_decref(dfs_mt1->dcache, parent_old);
@@ -5293,14 +5305,19 @@ chdir(const char *path)
 	if (!d_hook_enabled)
 		return next_chdir(path);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
-			&full_path, &dfs_mt);
-	if (rc)
-		D_GOTO(out_err, rc);
-
 	rc = next_chdir(path);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		return (-1);
+
+	rc =
+	    query_path(path, &is_target_path, &parent, item_name, &parent_dir, &full_path, &dfs_mt);
+	if (rc) {
+		/* The kernel already moved cwd, so chdir() must succeed. dfs may be unusable here,
+		 * e.g. between fork() and exec() when the caller passes cwd to posix_spawn().
+		 */
+		update_cwd();
+		return 0;
+	}
 
 	if (!is_target_path) {
 		len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s", full_path);
@@ -5348,8 +5365,12 @@ fchdir(int dirfd)
 		return next_fchdir(dirfd);
 
 	fd_directed = d_get_fd_redirected(dirfd);
-	if (fd_directed < FD_DIR_BASE)
-		return next_fchdir(dirfd);
+	if (fd_directed < FD_DIR_BASE) {
+		rc = next_fchdir(dirfd);
+		if (rc == 0)
+			update_cwd();
+		return rc;
+	}
 
 	/* assume dfuse is running. call chdir() to update cwd. */
 	if (next_chdir == NULL) {
@@ -6867,12 +6888,18 @@ update_cwd(void)
 	char *cwd = NULL;
 	char *pt_end = NULL;
 
-	/* daos_init() may be not called yet. */
-	cwd = get_current_dir_name();
+	if (next_getcwd == NULL) {
+		next_getcwd = dlsym(RTLD_NEXT, "getcwd");
+		D_ASSERT(next_getcwd != NULL);
+	}
+
+	/* get_current_dir_name() returns $PWD when stat($PWD) and stat(".") match, but both go
+	 * through the intercepted stat() and so agree with the stale cur_dir we need to refresh.
+	 */
+	cwd = next_getcwd(NULL, 0);
 
 	if (cwd == NULL) {
-		D_FATAL("fatal error to get CWD with get_current_dir_name(): %d (%s)\n", errno,
-			strerror(errno));
+		D_FATAL("fatal error to get CWD with getcwd(): %d (%s)\n", errno, strerror(errno));
 		abort();
 	} else {
 		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH - 1);
