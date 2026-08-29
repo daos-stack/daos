@@ -53,6 +53,7 @@ pool_reserved:
   size: 5%
   rebuild_timeout: 600
   pool_query_timeout: 120
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
