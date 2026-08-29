@@ -481,6 +481,8 @@ static int (*next_execvpe)(const char *filename, char *const argv[], char *const
 static int (*next_fexecve)(int fd, char *const argv[], char *const envp[]);
 
 static pid_t (*next_fork)(void);
+/* pid that owns this address space; a vfork child shares it until exec */
+static pid_t d_pid;
 
 static int (*next_fchown)(int fd, uid_t uid, gid_t gid);
 static ssize_t (*next_fgetxattr)(int fd, char *name, void *value, size_t size);
@@ -978,6 +980,7 @@ child_hdlr(void)
 {
 	int rc;
 
+	d_pid = getpid();
 	/* daos is not initialized yet */
 	if (atomic_load_relaxed(&d_daos_inited) == false)
 		return;
@@ -5449,7 +5452,7 @@ chdir(const char *path)
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
 		D_ASSERT(next_chdir != NULL);
 	}
-	if (!d_hook_enabled)
+	if (!d_hook_enabled || getpid() != d_pid)
 		return next_chdir(path);
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
@@ -5503,7 +5506,7 @@ fchdir(int dirfd)
 		next_fchdir = dlsym(RTLD_NEXT, "fchdir");
 		D_ASSERT(next_fchdir != NULL);
 	}
-	if (!d_hook_enabled)
+	if (!d_hook_enabled || getpid() != d_pid)
 		return next_fchdir(dirfd);
 
 	fd_directed = d_get_fd_redirected(dirfd);
@@ -7368,6 +7371,7 @@ init_myhook(void)
 	uint64_t eq_count_loc = 0;
 	float    libc_version;
 
+	d_pid = getpid();
 	/* D_IL_NO_BYPASS is ONLY for testing. It always keeps function interception enabled in
 	 * current process and children processes. This is needed to thoroughly test interception
 	 * related code in CI. The code related to interception disabled is tested by a few tests in
