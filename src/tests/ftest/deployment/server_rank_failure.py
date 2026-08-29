@@ -189,19 +189,20 @@ class ServerRankFailure(IorTestBase):
         self.log.info("Disabled ranks = %s", disabled_ranks)
 
         # 10. Call dmg pool reintegrate one rank at a time to enable all ranks.
+        # --wait blocks each reintegrate until its rebuild completes.
         for disabled_rank in disabled_ranks:
             while True:
                 try:
-                    self.pool.reintegrate(ranks=disabled_rank)
+                    self.pool.reintegrate(ranks=disabled_rank, wait=True)
                     break
                 except CommandFailure as error:
                     self.log.debug("## pool reintegrate error: %s", error)
 
-            # Wait for rebuild to finish
-            self.log.info("Wait for rebuild to start.")
-            self.pool.wait_for_rebuild_to_start(interval=10)
-            self.log.info("Wait for rebuild to finish.")
-            self.pool.wait_for_rebuild_to_end(interval=10)
+        # 10.5 Verify that no ranks are disabled after reintegration.
+        output = self.get_dmg_command().pool_query(pool=self.pool.identifier)
+        disabled_ranks = output["response"].get("disabled_ranks")
+        if disabled_ranks:
+            self.fail(f"Ranks are still disabled after reintegration: {disabled_ranks}")
 
         # 11. Verify that the container Health is HEALTHY.
         if not self.container.verify_prop({"status": "HEALTHY"}):
