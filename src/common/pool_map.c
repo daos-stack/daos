@@ -2725,8 +2725,7 @@ pmap_comp_failed(struct pool_component *comp)
 static bool
 pmap_comp_failed_earlier(struct pool_component *comp, uint32_t ver)
 {
-	return (((pool_comp_is_failed_downout(comp) || pool_comp_is_drain_downout(comp)) &&
-		 comp->co_out_ver <= ver) ||
+	return ((pool_comp_is_failed_downout(comp) && comp->co_out_ver <= ver) ||
 		(comp->co_status == PO_COMP_ST_DOWN && comp->co_fseq <= ver));
 }
 

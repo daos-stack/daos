@@ -3011,6 +3011,111 @@ pool_map_rf_verify_counts_downout_domains(void **state)
 	pool_buf_free(buf);
 }
 
+/* Force every target of \a rank into DOWNOUT, mimicking exactly what
+ * update_tgt_down_drain_to_downout() leaves behind: PO_COMPF_DOWN2OUT is set only when the
+ * target went through DOWN, i.e. for a real failure, and never for a drain.
+ */
+static void
+jtc_force_rank_downout(struct pool_map *po_map, d_rank_t rank, bool from_failure, uint32_t fseq,
+		       uint32_t out_ver)
+{
+	struct pool_domain *dom;
+	int                 i;
+
+	dom = pool_map_find_dom_by_rank(po_map, rank);
+	assert_non_null(dom);
+	assert_true(dom->do_target_nr > 0);
+
+	for (i = 0; i < dom->do_target_nr; i++) {
+		struct pool_component *comp = &dom->do_targets[i].ta_comp;
+
+		comp->co_status  = PO_COMP_ST_DOWNOUT;
+		comp->co_flags   = from_failure ? PO_COMPF_DOWN2OUT : 0;
+		comp->co_fseq    = fseq;
+		comp->co_out_ver = out_ver;
+	}
+	dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
+}
+
+/*
+ * A drained DOWNOUT target must never be counted as a failed domain by the RF check, while a
+ * genuinely failed one must be.
+ *
+ * This is the invariant pmap_comp_failed() / pmap_comp_failed_earlier() exist to enforce. The
+ * two DOWNOUT flavors are distinguished purely by PO_COMPF_DOWN2OUT, which
+ * update_tgt_down_drain_to_downout() sets only when the previous status was DOWN:
+ *
+ *   drain:   UPIN -> DRAIN -> DOWNOUT, no DOWN2OUT  -> not a failure, data was moved off
+ *   failure: UPIN -> DOWN  -> DOWNOUT, DOWN2OUT set -> a failure, data was lost
+ *
+ * Draining is a deliberate admin operation that relocates the data first, so it must not
+ * consume any part of the pool's failure budget. The test pins both halves, so it cannot pass
+ * vacuously: with rf=0 the drained domain must still verify clean, while the failed domain
+ * must produce -DER_RF.
+ */
+static void
+pool_map_rf_verify_ignores_drain_downout(void **state)
+{
+	/* clang-format off */
+	uint32_t         domains[] = {
+		0,               /* metadata flags: NODE-above-rank only */
+		2,    1,  4,     /* root: level=2, ROOT_ID=1, 4 children */
+		1,  100,  1,     /* node A */
+		1,  101,  1,     /* node B */
+		1,  102,  1,     /* node C */
+		1,  103,  1,     /* node D */
+		10, 20, 30, 40   /* the four ranks */
+	};
+	/* clang-format on */
+	const uint32_t   ndomains     = ARRAY_SIZE(domains);
+	const uint32_t   nnodes       = 4;
+	const uint32_t   tgt_per_rank = 2;
+	const uint32_t   ntargets     = nnodes * tgt_per_rank;
+	/*
+	 * out_ver is ahead of last_ver so that pmap_comp_failed_earlier() does not discard the
+	 * failure as old news -- the drain/failure distinction is what has to decide the outcome.
+	 */
+	const uint32_t   last_ver = 5;
+	const uint32_t   fseq     = 6;
+	const uint32_t   out_ver  = 7;
+	struct pool_buf *buf      = NULL;
+	struct pool_map *po_map   = NULL;
+	int              rc;
+
+	/* A drained domain is not a failure: even with no failure budget at all, rf=0 holds. */
+	rc = gen_pool_buf(NULL /* map */, &buf, 1 /* map_version */, ndomains, nnodes, ntargets,
+			  domains, tgt_per_rank, NULL /* downout_ranks */);
+	assert_success(rc);
+	assert_success(pool_map_create(buf, 1 /* version */, &po_map));
+
+	jtc_force_rank_downout(po_map, 10, false /* from_failure */, fseq, out_ver);
+	assert_success(pool_map_rf_verify(po_map, last_ver, DAOS_PROP_CO_REDUN_RANK, 0 /* rf */));
+	assert_success(pool_map_rf_verify(po_map, last_ver, DAOS_PROP_CO_REDUN_NODE, 0 /* rf */));
+
+	pool_map_decref(po_map);
+	pool_buf_free(buf);
+	buf    = NULL;
+	po_map = NULL;
+
+	/*
+	 * The same domain in the same DOWNOUT state, reached through a failure instead, must be
+	 * counted -- otherwise the assertions above would pass for the wrong reason.
+	 */
+	rc = gen_pool_buf(NULL /* map */, &buf, 1 /* map_version */, ndomains, nnodes, ntargets,
+			  domains, tgt_per_rank, NULL /* downout_ranks */);
+	assert_success(rc);
+	assert_success(pool_map_create(buf, 1 /* version */, &po_map));
+
+	jtc_force_rank_downout(po_map, 10, true /* from_failure */, fseq, out_ver);
+	assert_int_equal(pool_map_rf_verify(po_map, last_ver, DAOS_PROP_CO_REDUN_RANK, 0 /* rf */),
+			 -DER_RF);
+	/* One failure is within an rf=1 budget, so that must still verify clean. */
+	assert_success(pool_map_rf_verify(po_map, last_ver, DAOS_PROP_CO_REDUN_RANK, 1 /* rf */));
+
+	pool_map_decref(po_map);
+	pool_buf_free(buf);
+}
+
 /*
  * Reintegrating a creation-time DOWNOUT rank must not change the layout of objects that were
  * already placed.
@@ -3410,6 +3515,8 @@ static const struct CMUnitTest tests[] = {
       pool_create_rf_excludes_downout_domains),
     T("pool_map_rf_verify accounts for creation-time DOWNOUT fault domains",
       pool_map_rf_verify_counts_downout_domains),
+    T("RF check ignores drained DOWNOUT but counts failed DOWNOUT",
+      pool_map_rf_verify_ignores_drain_downout),
     T("pool_map_compat accepts extending under an existing DOWNOUT parent domain",
       pool_map_compat_all_downout_extend),
     T("reintegrating a creation-time DOWNOUT rank keeps existing layouts stable",
