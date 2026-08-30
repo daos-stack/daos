@@ -131,7 +131,7 @@ class OSAOnlineParallelTest(OSAUtils):
             # Action dictionary with OSA dmg command parameters
             action_args = {
                 "drain": {"pool": self.pool.identifier, "ranks": rank,
-                            "tgt_idx": None},
+                          "tgt_idx": None},
                 "exclude": {"pool": self.pool.identifier,
                             "ranks": (rank + 1),
                             "tgt_idx": t_string},
@@ -139,7 +139,7 @@ class OSAOnlineParallelTest(OSAUtils):
                                 "ranks": (rank + 1),
                                 "tgt_idx": t_string},
                 "extend": {"pool": self.pool.identifier,
-                            "ranks": (total_ranks)}
+                           "ranks": (total_ranks)}
             }
             # Add a thread for IOR
             threads[val] = []
@@ -152,10 +152,9 @@ class OSAOnlineParallelTest(OSAUtils):
             for action in sorted(action_args):
                 # Add dmg threads
                 threads[val].append(threading.Thread(target=self.dmg_thread,
-                                                kwargs={
-                                                    "action": action,
-                                                    "action_args": action_args,
-                                                    "results": self.out_queue}))
+                                                     kwargs={"action": action,
+                                                             "action_args": action_args,
+                                                             "results": self.out_queue}))
             # Launch the threads
             for thrd in threads[val]:
                 thrd.start()

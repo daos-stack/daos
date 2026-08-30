@@ -54,7 +54,7 @@ ior:
     write_flags:
       - "-w -F -k -G 1"
     read_flags:
-      - "-r -R -k -G 1"
+      - "-F -r -R -k -G 1"
     obj_class:
       - "EC_2P2GX"
   ior_test_sequence:
