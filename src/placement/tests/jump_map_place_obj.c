@@ -2920,6 +2920,98 @@ pool_create_rf_excludes_downout_domains(void **state)
 }
 
 /*
+ * pool_map_rf_verify() must not report a redundancy factor as satisfied when the pool map
+ * does not have enough usable fault domains to deliver it.
+ *
+ * This is the same root cause as the pool-create rd_fac admission check, on a second and
+ * completely independent path: cont_status_check() -> ds_pool_rf_verify() ->
+ * pool_map_rf_verify() is what decides whether a container is flagged unclean for broken RF.
+ *
+ * pmap_node_check() only visits components for which pmap_comp_failed() is true, and
+ * pmap_comp_failed() deliberately matches only PO_COMP_ST_DOWN and *failed* DOWNOUT. A
+ * creation-time DOWNOUT domain -- the kind asymmetric pool create produces -- is neither, so
+ * it is invisible to the entire scan: pf_node_nr stays 0, pmap_fail_stat_check() takes its
+ * "pf_newfail_nr == 0" early return, and every rf is reported as satisfied. A pool with two
+ * usable fault domains therefore certifies rf=2, and even rf=5.
+ *
+ * Unlike a runtime failure, a creation-time exclusion is not a transient condition that
+ * rebuild will heal, so ignoring it is not conservative -- the domains are simply not there.
+ * This test asks placement what the map can really deliver and requires pool_map_rf_verify()
+ * to agree with it.
+ *
+ * Written entirely against API that predates the fix, so it compiles, runs and fails on the
+ * unfixed tree.
+ */
+static void
+pool_map_rf_verify_counts_downout_domains(void **state)
+{
+	/* clang-format off */
+	uint32_t         domains[] = {
+		0,               /* metadata flags: NODE-above-rank only */
+		2,    1,  3,     /* root: level=2, ROOT_ID=1, 3 children */
+		1,  100,  1,     /* node A: level=1, id=100, 1 child */
+		1,  101,  1,     /* node B: level=1, id=101, 1 child */
+		1,  102,  1,     /* node C: level=1, id=102, 1 child */
+		10,              /* node A's rank */
+		20,              /* node B's rank */
+		30               /* node C's rank */
+	};
+	/* clang-format on */
+	const uint32_t   ndomains       = ARRAY_SIZE(domains);
+	const uint32_t   nnodes         = 3;
+	const uint32_t   tgt_per_rank   = 2;
+	const uint32_t   ntargets       = nnodes * tgt_per_rank;
+	d_rank_t         downout_arr[1] = {10}; /* all of node A */
+	d_rank_list_t    downout_ranks  = {.rl_nr = 1, .rl_ranks = downout_arr};
+	struct pool_buf *buf            = NULL;
+	struct pool_map *po_map         = NULL;
+	struct pl_map   *pl_map         = NULL;
+	uint32_t         deliverable;
+	uint32_t         shard_nr;
+	int              rc;
+
+	rc = gen_pool_buf(NULL /* map */, &buf, 1 /* map_version */, ndomains, nnodes, ntargets,
+			  domains, tgt_per_rank, &downout_ranks);
+	assert_success(rc);
+	assert_non_null(buf);
+
+	assert_success(pool_map_create(buf, 1 /* version */, &po_map));
+	pl_map = jtc_pl_map_new(po_map);
+
+	/* Ground truth: how many distinct fault domains can this map really spread over? */
+	deliverable = jtc_measure_deliverable_domains(pl_map, OC_RP_3G1, &shard_nr);
+	assert_int_equal(shard_nr, 3);
+	assert_int_equal(deliverable, 2); /* node A is excluded, so only B and C are usable */
+
+	/*
+	 * Everything up to rf == deliverable - 1 is genuinely satisfiable and must be accepted,
+	 * at both redundancy levels this tree expresses.
+	 */
+	assert_success(
+	    pool_map_rf_verify(po_map, 1 /* last_ver */, DAOS_PROP_CO_REDUN_RANK, deliverable - 1));
+	assert_success(
+	    pool_map_rf_verify(po_map, 1 /* last_ver */, DAOS_PROP_CO_REDUN_NODE, deliverable - 1));
+
+	/*
+	 * Anything beyond it is not deliverable and must be reported as broken. Without the fix
+	 * these all return 0, certifying redundancy the pool does not have.
+	 */
+	assert_int_equal(
+	    pool_map_rf_verify(po_map, 1 /* last_ver */, DAOS_PROP_CO_REDUN_RANK, deliverable),
+	    -DER_RF);
+	assert_int_equal(
+	    pool_map_rf_verify(po_map, 1 /* last_ver */, DAOS_PROP_CO_REDUN_NODE, deliverable),
+	    -DER_RF);
+	assert_int_equal(
+	    pool_map_rf_verify(po_map, 1 /* last_ver */, DAOS_PROP_CO_REDUN_RANK, deliverable + 3),
+	    -DER_RF);
+
+	pl_map_decref(pl_map);
+	pool_map_decref(po_map);
+	pool_buf_free(buf);
+}
+
+/*
  * Reintegrating a creation-time DOWNOUT rank must not change the layout of objects that were
  * already placed.
  *
@@ -3316,6 +3408,8 @@ static const struct CMUnitTest tests[] = {
       gen_pool_buf_avail_domain_nr),
     T("pool create rd_fac is admitted against usable domains only",
       pool_create_rf_excludes_downout_domains),
+    T("pool_map_rf_verify accounts for creation-time DOWNOUT fault domains",
+      pool_map_rf_verify_counts_downout_domains),
     T("pool_map_compat accepts extending under an existing DOWNOUT parent domain",
       pool_map_compat_all_downout_extend),
     T("reintegrating a creation-time DOWNOUT rank keeps existing layouts stable",
