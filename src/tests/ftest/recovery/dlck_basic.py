@@ -17,8 +17,7 @@ class DlckBasicTest(DlckTestBase):
     :avocado: recursive
     """
     def check_dlck_result(self, result, fault_name):
-        """Check that dlck reported the expected error for an injected fault."""
-        """
+        """Check that dlck reported the expected error for an injected fault.
         Args:
             result (dict): The result object returned by the dlck command.
             fault_name (str): The name of the injected fault.
