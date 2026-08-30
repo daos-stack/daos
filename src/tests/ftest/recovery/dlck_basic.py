@@ -6,18 +6,23 @@
 import os
 import re
 
-from dlck_utils import TestDlck
+from dlck_test_base import DlckTestBase
 from fault_config_utils import FaultInjection
 from file_utils import distribute_files
 
 
-class DlckBasicTest(TestDlck):
+class DlckBasicTest(DlckTestBase):
     """Test class for dlck command line utility.
 
     :avocado: recursive
     """
     def check_dlck_result(self, result, fault_name):
-        """Check that dlck reports the expected error for an injected fault."""
+        """Check that dlck reported the expected error for an injected fault."""
+        """
+        Args:
+            result (dict): The result object returned by the dlck command.
+            fault_name (str): The name of the injected fault.
+        """
         expected_errors = ("DER_INVAL", "DER_NONEXIST", "DER_ID_MISMATCH",
                            "DER_DF_INCOMPT", "DER_DF_INVAL", "WARNING:")
         warning_pattern = r"\b\d+\s+warning(?:\(s\)|s?)\b"
@@ -42,15 +47,20 @@ class DlckBasicTest(TestDlck):
         dlck = self.get_dlck_command()
         dlck.pool_uuid.value = pool.uuid
         dlck.log_dir = self.test_env.log_dir
+        dlck.run_user = 'daos_server'
         dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
         if self.server_managers[0].manager.job.using_control_metadata:
             dlck.nvme.value = os.path.join(
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
+
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
+
         self.log_step("Run dlck command to check the health of the pool and storage")
         result = dlck.run()
+
+        self.log_step("Perform dmg system start after running dlck command")
         dmg.system_start()
         if not result.passed:
             self.fail(f"dlck failed on {result.failed_hosts}")
@@ -78,6 +88,7 @@ class DlckBasicTest(TestDlck):
         dlck = self.get_dlck_command()
         dlck.pool_uuid.value = pool.uuid
         dlck.log_dir = self.test_env.log_dir
+        dlck.run_user = 'daos_server'
         dlck.exit_status_exception = False
         dlck.env["D_FI_CONFIG"] = fault_inject_file
         dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
@@ -85,8 +96,10 @@ class DlckBasicTest(TestDlck):
             dlck.nvme.value = os.path.join(
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
+
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
+
         for test_fault in fault_list:
             with open(fault_inject_file, 'w') as f:
                 f.write("fault_config:\n")
@@ -106,7 +119,8 @@ class DlckBasicTest(TestDlck):
             error = self.check_dlck_result(result, test_fault)
             if error:
                 errors.append(error)
-        self.log_step("Run the dmg start command")
+
+        self.log_step("Perform dmg system start after running dlck command")
         dmg.system_start()
 
         if errors:

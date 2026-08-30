@@ -8,7 +8,7 @@ from command_utils import RunCommand
 from command_utils_base import FormattedParameter
 
 
-class TestDlck(TestWithServers):
+class DlckTestBase(TestWithServers):
     # pylint: disable=too-few-public-methods
     """Base class for Dlck tests.
 
