@@ -42,7 +42,7 @@
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismdlkfecx";
+static const char *all_tests = "ismdlkfecxp";
 
 static void
 print_usage()
@@ -63,6 +63,7 @@ print_usage()
 	/* print_message("dfuse_test    --verifyenv\n");                       */
 	print_message("dfuse_test -c|--cache\n");
 	print_message("dfuse_test -x|--fdcalls\n");
+	print_message("dfuse_test -p|--path\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -1385,6 +1386,213 @@ do_cache_read_eof(void **state)
 	free(write_buf);
 }
 
+static void
+check_symlink_outside(const char *dir, const char *target)
+{
+	struct stat stbuf;
+	char        link_path[512];
+	size_t      len;
+	int         fd;
+	int         rc;
+
+	len = snprintf(link_path, sizeof(link_path) - 1, "%s/symlink_outside", dir);
+	assert_true(len < (sizeof(link_path) - 1));
+
+	rc = symlink(target, link_path);
+	assert_return_code(rc, errno);
+
+	rc = lstat(link_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_true(S_ISLNK(stbuf.st_mode));
+
+	rc = stat(link_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_true(S_ISREG(stbuf.st_mode));
+	assert_int_equal(stbuf.st_size, 6);
+
+	rc = access(link_path, R_OK | W_OK | X_OK);
+	assert_return_code(rc, errno);
+
+	rc = faccessat(AT_FDCWD, link_path, R_OK, 0);
+	assert_return_code(rc, errno);
+
+	fd = open(link_path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(link_path);
+	assert_return_code(rc, errno);
+}
+
+/* A symlink stored in a container may point outside of it. dfs resolves a link value within the
+ * container, so an absolute value is only resolvable by the kernel. dfs reports EINVAL for a link
+ * below the container root but ENOENT for a link in the root itself, so cover both positions.
+ */
+void
+do_symlink_outside(void **state)
+{
+	char   target[256];
+	char   sub_dir[512];
+	size_t len;
+	int    fd;
+	int    rc;
+
+	len = snprintf(target, sizeof(target) - 1, "/tmp/dfuse_test_target_%d", getpid());
+	assert_true(len < (sizeof(target) - 1));
+
+	len = snprintf(sub_dir, sizeof(sub_dir) - 1, "%s/symlink_dir_%d", test_dir, getpid());
+	assert_true(len < (sizeof(sub_dir) - 1));
+
+	fd = open(target, O_RDWR | O_CREAT | O_EXCL, S_IRWXU);
+	assert_return_code(fd, errno);
+	rc = write(fd, "hello", 6);
+	assert_return_code(rc, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	check_symlink_outside(test_dir, target);
+
+	/* one level down, as the python3 symlink of a venv is */
+	rc = mkdir(sub_dir, S_IRWXU);
+	assert_return_code(rc, errno);
+	check_symlink_outside(sub_dir, target);
+	rc = rmdir(sub_dir);
+	assert_return_code(rc, errno);
+
+	rc = unlink(target);
+	assert_return_code(rc, errno);
+}
+
+/* fchdir() to a directory outside of the container has to move the cwd that relative paths are
+ * resolved against.
+ */
+void
+do_fchdir(void **state)
+{
+	struct stat stbuf;
+	char        start_dir[512];
+	char        cwd[512];
+	char        name_old[64];
+	char        name_new[64];
+	char        path[512];
+	size_t      len;
+	int         fd;
+	int         rc;
+
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+
+	rc = chdir(test_dir);
+	assert_return_code(rc, errno);
+
+	/* get_current_dir_name() returns $PWD when it looks valid, so a stale $PWD is what lets a
+	 * wrong cwd survive into relative path resolution.
+	 */
+	assert_non_null(getcwd(cwd, sizeof(cwd)));
+	rc = setenv("PWD", cwd, 1);
+	assert_return_code(rc, errno);
+
+	fd = open("/tmp", O_RDONLY | O_DIRECTORY);
+	assert_return_code(fd, errno);
+	rc = fchdir(fd);
+	assert_return_code(rc, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	assert_non_null(getcwd(cwd, sizeof(cwd)));
+	assert_string_equal(cwd, "/tmp");
+
+	len = snprintf(name_old, sizeof(name_old) - 1, "dfuse_test_fchdir_%d.tmp", getpid());
+	assert_true(len < (sizeof(name_old) - 1));
+
+	len = snprintf(name_new, sizeof(name_new) - 1, "dfuse_test_fchdir_%d.new", getpid());
+	assert_true(len < (sizeof(name_new) - 1));
+
+	create_a_file(name_old);
+
+	rc = rename(name_old, name_new);
+	assert_return_code(rc, errno);
+
+	/* the entry has to exist under /tmp, not under the container */
+	len = snprintf(path, sizeof(path) - 1, "/tmp/%s", name_new);
+	assert_true(len < (sizeof(path) - 1));
+
+	rc = stat(path, &stbuf);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+
+	rc = chdir(start_dir);
+	assert_return_code(rc, errno);
+
+	rc = setenv("PWD", start_dir, 1);
+	assert_return_code(rc, errno);
+}
+
+/* Passing a cwd to posix_spawn()/subprocess() makes chdir() run between fork() and exec(), where
+ * dfs is not usable. chdir() has to succeed there anyway.
+ */
+void
+do_chdir_fork(void **state)
+{
+	char  *argv[3] = {"cat", "marker", NULL};
+	char   start_dir[512];
+	char   sub_dir[64];
+	char   marker[128];
+	char   path[512];
+	size_t len;
+	pid_t  pid;
+	int    status;
+	int    rc;
+
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+
+	rc = chdir(test_dir);
+	assert_return_code(rc, errno);
+
+	/* a name reused across runs can hit a stale dentry cached by dfuse */
+	len = snprintf(sub_dir, sizeof(sub_dir) - 1, "chdir_fork_dir_%d", getpid());
+	assert_true(len < (sizeof(sub_dir) - 1));
+
+	len = snprintf(marker, sizeof(marker) - 1, "%s/marker", sub_dir);
+	assert_true(len < (sizeof(marker) - 1));
+
+	rc = mkdir(sub_dir, S_IRWXU);
+	assert_return_code(rc, errno);
+
+	create_a_file(marker);
+
+	pid = fork();
+	assert_return_code(pid, errno);
+	if (pid == 0) {
+		/* cmocka macros are not usable in the child, report through the exit code */
+		if (chdir(sub_dir) != 0)
+			_exit(10);
+		execv("/bin/cat", argv);
+		_exit(11);
+	}
+
+	rc = waitpid(pid, &status, 0);
+	assert_return_code(rc, errno);
+
+	len = snprintf(path, sizeof(path) - 1, "%s/%s", test_dir, marker);
+	assert_true(len < (sizeof(path) - 1));
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+
+	len = snprintf(path, sizeof(path) - 1, "%s/%s", test_dir, sub_dir);
+	assert_true(len < (sizeof(path) - 1));
+	rc = rmdir(path);
+	assert_return_code(rc, errno);
+
+	rc = chdir(start_dir);
+	assert_return_code(rc, errno);
+
+	assert_true(WIFEXITED(status));
+	assert_int_equal(WEXITSTATUS(status), 0);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -1500,6 +1708,19 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(fdcalls_tests, NULL, NULL);
 			break;
 
+		case 'p': {
+			const struct CMUnitTest path_tests[] = {
+			    cmocka_unit_test(do_symlink_outside),
+			    cmocka_unit_test(do_fchdir),
+			    cmocka_unit_test(do_chdir_fork),
+			};
+			printf("\n\n=================");
+			printf("dfuse path resolution tests");
+			printf("=====================\n");
+			nr_failed += cmocka_run_group_tests(path_tests, NULL, NULL);
+			break;
+		}
+
 		default:
 			assert_true(0);
 		}
@@ -1531,9 +1752,10 @@ main(int argc, char **argv)
 					       {"verifyenv", no_argument, NULL, 't'},
 					       {"cache", no_argument, NULL, 'c'},
 					       {"fdcalls", no_argument, NULL, 'x'},
+					       {"path", no_argument, NULL, 'p'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdlkfetcx", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlkfetcxp", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;

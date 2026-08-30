@@ -2070,14 +2070,40 @@ out_readlink:
 	return (-1);
 }
 
-/* dfs dereferences symlinks inside the container, so it fails with EINVAL on a symlink whose value
- * is an absolute path. POSIX resolves such a value from the process root, which only the kernel can
- * do, so the path has to be handled by dfuse instead of by dfs.
+/* dfs dereferences symlinks inside the container, so it cannot handle a symlink whose value is an
+ * absolute path: POSIX resolves such a value from the process root, which only the kernel can do.
+ * dfs reports EINVAL for it, except when the link sits in the container root, where it resolves the
+ * value from that root and reports ENOENT instead. Probing for the latter is restricted to the
+ * container root so that an ordinary lookup miss stays cheap.
+ *
+ * An absolute symlink in a non-leaf position of the path is not detected here.
  */
-static inline bool
-need_kernel_to_resolve(int rc)
+static bool
+need_kernel_to_resolve(int rc, struct dfs_mt *dfs_mt, struct dcache_rec *parent,
+		       const char *item_name, const char *parent_dir)
 {
-	return rc == EINVAL;
+	dfs_obj_t  *obj           = NULL;
+	mode_t      mode          = 0;
+	bool        absolute_link = false;
+	/* dfs_get_symlink_value() truncates, and only the first character is of interest here */
+	char        value[2];
+	daos_size_t str_len = sizeof(value);
+
+	if (rc == EINVAL)
+		return true;
+	if (rc != ENOENT || parent == NULL || parent_dir == NULL)
+		return false;
+	if (strncmp(parent_dir, "/", 2) != 0)
+		return false;
+
+	if (dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), item_name, O_RDONLY | O_NOFOLLOW, &obj,
+			   &mode, NULL) != 0)
+		return false;
+	if (S_ISLNK(mode) && dfs_get_symlink_value(obj, value, &str_len) == 0)
+		absolute_link = (value[0] == '/');
+	dfs_release(obj);
+
+	return absolute_link;
 }
 
 static int
@@ -2282,7 +2308,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				    &dfs_obj, &mode_query, NULL);
 	}
 
-	if (need_kernel_to_resolve(rc))
+	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir))
 		goto org_func;
 	if (rc)
 		D_GOTO(out_error, rc);
@@ -3106,6 +3132,7 @@ static int
 new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int                is_target_path, rc;
+	bool               use_kernel;
 	dfs_obj_t         *obj;
 	mode_t             mode;
 	char               item_name[DFS_MAX_NAME];
@@ -3156,10 +3183,12 @@ out_org:
 	return next_xstat(ver, path, stat_buf);
 
 out_err:
+	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
+		     (rc == EIO && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if (need_kernel_to_resolve(rc) || (rc == EIO && d_compatible_mode))
+	if (use_kernel)
 		return next_xstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -3169,6 +3198,7 @@ static int
 new_lxstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int                is_target_path, rc;
+	bool               use_kernel;
 	char               item_name[DFS_MAX_NAME];
 	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
@@ -3208,10 +3238,12 @@ out_org:
 	return libc_lxstat(ver, path, stat_buf);
 
 out_err:
+	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
+		     (rc == EIO && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if (need_kernel_to_resolve(rc) || (rc == EIO && d_compatible_mode))
+	if (use_kernel)
 		return libc_lxstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -5241,7 +5273,7 @@ out_org:
 	return next_access(path, mode);
 
 out_err:
-	if (need_kernel_to_resolve(rc))
+	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir))
 		goto out_org;
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
