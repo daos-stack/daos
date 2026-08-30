@@ -3417,14 +3417,16 @@ static const struct CMUnitTest tests[] = {
 };
 
 int
-placement_tests_run(bool verbose)
+placement_tests_run(bool verbose, int *sub_tests, int sub_tests_nr, bool list_only)
 {
-	int rc = 0;
+	const char *name = "Jump Map Placement Tests";
 
 	g_verbose = verbose;
 
-	rc += cmocka_run_group_tests_name("Jump Map Placement Tests", tests,
-					  NULL, NULL);
+	if (list_only) {
+		plt_list_tests(name, tests, ARRAY_SIZE(tests));
+		return 0;
+	}
 
-	return rc;
+	return plt_run_tests(name, tests, ARRAY_SIZE(tests), sub_tests, sub_tests_nr);
 }
