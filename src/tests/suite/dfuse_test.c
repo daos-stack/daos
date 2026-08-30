@@ -1395,8 +1395,11 @@ check_symlink_outside(const char *dir, const char *target)
 	int         fd;
 	int         rc;
 
-	len = snprintf(link_path, sizeof(link_path) - 1, "%s/symlink_outside", dir);
+	len = snprintf(link_path, sizeof(link_path) - 1, "%s/symlink_outside_%d", dir, getpid());
 	assert_true(len < (sizeof(link_path) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave the link behind */
+	unlink(link_path);
 
 	rc = symlink(target, link_path);
 	assert_return_code(rc, errno);
@@ -1443,6 +1446,10 @@ do_symlink_outside(void **state)
 
 	len = snprintf(sub_dir, sizeof(sub_dir) - 1, "%s/symlink_dir_%d", test_dir, getpid());
 	assert_true(len < (sizeof(sub_dir) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave these behind */
+	unlink(target);
+	rmdir(sub_dir);
 
 	fd = open(target, O_RDWR | O_CREAT | O_EXCL, S_IRWXU);
 	assert_return_code(fd, errno);
@@ -1508,6 +1515,10 @@ do_fchdir(void **state)
 	len = snprintf(name_new, sizeof(name_new) - 1, "dfuse_test_fchdir_%d.new", getpid());
 	assert_true(len < (sizeof(name_new) - 1));
 
+	/* cmocka has no teardown here, so an aborted run can leave these behind */
+	unlink(name_old);
+	unlink(name_new);
+
 	create_a_file(name_old);
 
 	rc = rename(name_old, name_new);
@@ -1557,6 +1568,10 @@ do_chdir_fork(void **state)
 
 	len = snprintf(marker, sizeof(marker) - 1, "%s/marker", sub_dir);
 	assert_true(len < (sizeof(marker) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave these behind */
+	unlink(marker);
+	rmdir(sub_dir);
 
 	rc = mkdir(sub_dir, S_IRWXU);
 	assert_return_code(rc, errno);

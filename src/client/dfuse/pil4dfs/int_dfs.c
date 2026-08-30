@@ -3148,6 +3148,8 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 		return (-1);
 	}
 
+	item_name[0] = '\0';
+
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
@@ -3211,6 +3213,8 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 		errno = ENOENT;
 		return (-1);
 	}
+
+	item_name[0] = '\0';
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -5079,25 +5083,13 @@ rename(const char *old_name, const char *new_name)
 	/* Both old and new are on DAOS */
 	rc = dfs_move(dfs_mt1->dfs, drec2obj(parent_old), item_name_old, drec2obj(parent_new),
 		      item_name_new, NULL);
+	if (rc)
+		D_GOTO(out_err, rc);
 
 	if (parent_old != NULL) {
-		int rc_dcache;
-
-		rc_dcache = drec_del(dfs_mt1->dcache, full_path_old, parent_old);
-		if (rc_dcache != -DER_SUCCESS && rc_dcache != -DER_NONEXIST)
-			DL_ERROR(rc_dcache, "DAOS directory cache cleanup failed");
-	}
-
-	if (rc) {
-		/* dfs and dfuse can resolve a path differently. The kernel is authoritative here
-		 * and reports the same error if the entry is really missing.
-		 */
-		DS_WARN(rc,
-			"dfs_move(%s -> %s) failed, resolved to (%s%s -> %s%s), falling back to "
-			"dfuse",
-			old_name, new_name, dfs_mt1->fs_root, full_path_old, dfs_mt2->fs_root,
-			full_path_new);
-		D_GOTO(out_org, rc);
+		rc = drec_del(dfs_mt1->dcache, full_path_old, parent_old);
+		if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
+			DL_ERROR(rc, "DAOS directory cache cleanup failed");
 	}
 
 	drec_decref(dfs_mt1->dcache, parent_old);
@@ -5248,6 +5240,8 @@ access(const char *path, int mode)
 	if (!d_hook_enabled)
 		return next_access(path, mode);
 
+	item_name[0] = '\0';
+
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
@@ -5344,8 +5338,9 @@ chdir(const char *path)
 	rc =
 	    query_path(path, &is_target_path, &parent, item_name, &parent_dir, &full_path, &dfs_mt);
 	if (rc) {
-		/* The kernel already moved cwd, so chdir() must succeed. dfs may be unusable here,
-		 * e.g. between fork() and exec() when the caller passes cwd to posix_spawn().
+		/* The kernel already moved cwd, so chdir() has to report success. Only cur_dir
+		 * cannot be derived from path here. query_path() above allocates and takes locks,
+		 * so a chdir() between fork() and exec() is still not safe in general.
 		 */
 		update_cwd();
 		return 0;
@@ -6917,8 +6912,7 @@ new_exit(int rc)
 static void
 update_cwd(void)
 {
-	char *cwd = NULL;
-	char *pt_end = NULL;
+	int saved_errno = errno;
 
 	if (next_getcwd == NULL) {
 		next_getcwd = dlsym(RTLD_NEXT, "getcwd");
@@ -6926,22 +6920,18 @@ update_cwd(void)
 	}
 
 	/* get_current_dir_name() returns $PWD when stat($PWD) and stat(".") match, but both go
-	 * through the intercepted stat() and so agree with the stale cur_dir we need to refresh.
+	 * through the intercepted stat() and so agree with the stale cur_dir to be refreshed.
+	 * cur_dir is filled directly to stay allocation free between fork() and exec().
 	 */
-	cwd = next_getcwd(NULL, 0);
-
-	if (cwd == NULL) {
-		D_FATAL("fatal error to get CWD with getcwd(): %d (%s)\n", errno, strerror(errno));
-		abort();
-	} else {
-		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH - 1);
-		if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
-			D_FATAL("fatal error, cwd path is too long:  %d (%s)\n", ENAMETOOLONG,
-				strerror(ENAMETOOLONG));
-			abort();
-		}
-		free(cwd);
+	if (next_getcwd(cur_dir, DFS_MAX_PATH) == NULL) {
+		/* e.g. cwd was removed or is too long. Relative paths are left to libc until the
+		 * cwd is known again.
+		 */
+		D_DEBUG(DB_ANY, "getcwd() failed: %d (%s)\n", errno, strerror(errno));
+		cur_dir[0] = '\0';
 	}
+
+	errno = saved_errno;
 }
 
 static int
