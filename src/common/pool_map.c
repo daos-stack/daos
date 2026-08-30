@@ -2986,7 +2986,34 @@ fail:
 }
 
 /**
+ * True if \a dom cannot hold data at all and never will, because every target below it was
+ * excluded when the pool was created. Such a domain is not a failure that rebuild will heal,
+ * it is capacity the pool never had.
+ */
+static bool
+pmap_dom_creation_excluded(struct pool_domain *dom)
+{
+	int i;
+
+	if (dom->do_target_nr == 0)
+		return true;
+
+	for (i = 0; i < dom->do_target_nr; i++) {
+		if (!pool_comp_is_creation_downout(&dom->do_targets[i].ta_comp))
+			return false;
+	}
+
+	return true;
+}
+
+/**
  * Check if #concurrent_failures exceeds RF since pool map version \a last_ver.
+ *
+ * Also checks the pool's absolute capability: sustaining \a rf needs rf + 1 fault domains
+ * that can hold data. Domains excluded at pool creation time are permanently empty, and
+ * pmap_node_check() cannot see them -- pmap_comp_failed() matches only DOWN and *failed*
+ * DOWNOUT -- so without an explicit check a pool whose usable domains number rf or fewer
+ * would still be certified as satisfying rf.
  */
 int
 pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint32_t rf)
@@ -2995,6 +3022,7 @@ pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint3
 	struct pool_domain	*node_dom;
 	struct pmap_fail_stat	 fstat;
 	int			 node_nr, i;
+	int                      usable_nr = 0;
 	int			 com_type;
 	int			 rc = 0;
 
@@ -3016,6 +3044,18 @@ pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint3
 	D_ASSERT(node_nr >= 0);
 	if (node_nr == 0)
 		return -DER_INVAL;
+
+	for (i = 0; i < node_nr; i++) {
+		if (!pmap_dom_creation_excluded(&node_doms[i]))
+			usable_nr++;
+	}
+	if ((uint32_t)usable_nr <= rf) {
+		rc = -DER_RF;
+		D_ERROR("RF broken, only %d of %d domains at rlvl %u are usable, rf %u, " DF_RC
+			"\n",
+			usable_nr, node_nr, rlvl, rf, DP_RC(rc));
+		goto out;
+	}
 
 	for (i = 0; i < node_nr; i++) {
 		node_dom = &node_doms[i];
