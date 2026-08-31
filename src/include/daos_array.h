@@ -268,8 +268,8 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev);
  * \param[in]	iod	IO descriptor of ranges to read from the array.
  *			A long run of extents at or below DAOS_ARRAY_RG_LEN_THD bytes landing on
  *			the same dkey is split into several RPCs of at most
- *			DAOS_ARRAY_LIST_IO_LIMIT such extents, throttled per dkey. Ranges above
- *			that size are issued as before.
+ *			DAOS_ARRAY_LIST_IO_LIMIT such extents, and consecutive splits of a dkey
+ *			are issued one at a time. Ranges above that size are issued as before.
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the individual range
  *			sizes as long as the total size does. User allocates the
@@ -298,9 +298,11 @@ daos_array_read(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  * \param[in]	iod	IO descriptor of ranges to write to the array.
  *			A long run of extents at or below DAOS_ARRAY_RG_LEN_THD bytes landing on
  *			the same dkey is split into several RPCs of at most
- *			DAOS_ARRAY_LIST_IO_LIMIT such extents, throttled per dkey. Ranges above
- *			that size are issued as before. A dkey can therefore be updated by more
- *			than one RPC, so a failed write may leave that dkey partially updated.
+ *			DAOS_ARRAY_LIST_IO_LIMIT such extents, and consecutive splits of a dkey
+ *			are issued one at a time. Ranges above that size are issued as before,
+ *			and no splitting is done under a transaction handle. A dkey can
+ *			therefore be updated by more than one RPC, so a failure can leave it with
+ *			some ranges applied and earlier ones missing.
  * \param[in]	sgl	A scatter/gather list (sgl) to the store array data.
  *			Buffer sizes do not have to match the individual range
  *			sizes as long as the total size does.

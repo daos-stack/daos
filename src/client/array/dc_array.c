@@ -1450,8 +1450,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	daos_size_t	num_records;
 	daos_off_t	record_i;
 	struct io_params *head = NULL;
-	tse_task_t       *split_task         = NULL; /** previous split of the dkey being split */
-	uint64_t          split_dkey         = 0;    /** dkey that \a split_task is a split of */
+	tse_task_t       *split_task = NULL; /** previous split of the dkey being split */
+	uint64_t          split_dkey = 0;    /** dkey that \a split_task is a split of */
+	bool              split_tiny;        /** split long runs of tiny extents */
 	bool		head_cb_registered = false;
 	daos_size_t       num_ios;
 	d_list_t          io_task_list;
@@ -1482,6 +1483,13 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	}
 
 	oh = array->daos_oh;
+
+	/*
+	 * A modification under a transaction handle is attached to the DTX and shipped in a single
+	 * commit RPC, so splitting it throttles nothing and only multiplies the entries in the
+	 * transaction. Fetches still go out as RPCs and are split as usual.
+	 */
+	split_tiny = op_type == DAOS_OPC_ARRAY_READ || !daos_handle_is_valid(th);
 
 	cur_off = 0;
 	cur_i = 0;
@@ -1522,7 +1530,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		daos_size_t	dkey_records;
 		tse_task_t	*io_task = NULL;
 		struct io_params *params;
-		daos_size_t       tiny_nr; /* extents in this IOD that are expensive to serve */
+		daos_size_t       tiny_nr;   /* extents in this IOD that are expensive to serve */
 		bool              iod_split; /* IOD was cut short by the tiny extent cap */
 		daos_size_t	i; /* index for iod recx */
 
@@ -1672,7 +1680,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			 * cap them per IOD and let the outer loop issue the rest of this dkey as
 			 * a separate IO. Larger extents are packed as before.
 			 */
-			if (tiny_nr >= array_list_io_limit) {
+			if (split_tiny && tiny_nr >= array_list_io_limit) {
 				D_DEBUG(DB_IO,
 					"DKEY " DF_U64
 					": IOD full at %zu tiny extents, rest of the "
@@ -1799,10 +1807,12 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 		/*
 		 * A dkey IOD that had to be split shows up as consecutive IODs on the same dkey.
-		 * Make each split depend on the previous one so that only a single RPC is ever
-		 * outstanding against that dkey, and a tiny extent workload cannot pile an
-		 * unbounded amount of work on a single target. IODs that were not cut short by the
-		 * tiny extent cap, and every other dkey, remain fully parallel.
+		 * Make each split depend on the previous one so that a run of splits issues one
+		 * RPC at a time instead of piling an unbounded amount of work on a single target.
+		 * Ranges that come back to a dkey out of order start a new run and are not
+		 * serialized against the earlier one, so the guarantee is the per RPC extent cap
+		 * rather than a single RPC per dkey. IODs that were not cut short by the tiny
+		 * extent cap, and every other dkey, remain fully parallel.
 		 *
 		 * The throttling is a scheduler dependency rather than a private chain issued from
 		 * a completion callback: every task stays visible to the scheduler (so abort and

@@ -629,8 +629,8 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  * \param[in]	iod	IO descriptor for list-io.
  *			A long run of extents at or below DAOS_ARRAY_RG_LEN_THD bytes landing on
  *			the same dkey is split into several RPCs of at most
- *			DAOS_ARRAY_LIST_IO_LIMIT such extents, throttled per dkey. Ranges above
- *			that size are issued as before.
+ *			DAOS_ARRAY_LIST_IO_LIMIT such extents, and consecutive splits of a dkey
+ *			are issued one at a time. Ranges above that size are issued as before.
  * \param[in]	sgl	Scatter/Gather list for data buffer.
  * \param[out]	read_size
  *			How much data is actually read.
@@ -667,9 +667,10 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  * \param[in]	iod	IO descriptor for list-io.
  *			A long run of extents at or below DAOS_ARRAY_RG_LEN_THD bytes landing on
  *			the same dkey is split into several RPCs of at most
- *			DAOS_ARRAY_LIST_IO_LIMIT such extents, throttled per dkey. Ranges above
- *			that size are issued as before. A dkey can therefore be updated by more
- *			than one RPC, so a failed write may leave that dkey partially updated.
+ *			DAOS_ARRAY_LIST_IO_LIMIT such extents, and consecutive splits of a dkey
+ *			are issued one at a time. Ranges above that size are issued as before. A
+ *			dkey can therefore be updated by more than one RPC, so a failure can
+ *			leave it with some ranges applied and earlier ones missing.
  * \param[in]	sgl	Scatter/Gather list for data buffer.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
