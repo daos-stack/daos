@@ -6,8 +6,14 @@
 #
 # Sets C_INCLUDE_PATH, CPATH, and PKG_CONFIG_PATH from the paths
 # provided by .build_vars.sh and the DAOS source tree.
+#
+# DAOS_SRC_DIR defaults to this script's own directory (not a fixed path),
+# so the same script works unmodified from any checkout -- the main
+# ~/work/daos repo or a per-ticket `git worktree` checkout -- as long as it
+# is sourced by relative (./setup-c.sh) or absolute in-tree path. Explicit
+# override still works: DAOS_SRC_DIR=~/work/daos-alt source setup-c.sh
 
-DAOS_SRC_DIR="${DAOS_SRC_DIR:-$HOME/work/daos}"
+DAOS_SRC_DIR="${DAOS_SRC_DIR:-$(realpath "$(dirname "${BASH_SOURCE[0]}")")}"
 
 # ── Validate ──────────────────────────────────────────────────────────────────
 if [[ ! -d "$DAOS_SRC_DIR" ]]; then
