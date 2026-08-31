@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -320,16 +320,26 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	if (p_buf_len != NULL)
 		*p_buf_len = 0;
 
+	/**
+	 * Skip over exhausted iovs. A zero-length iov carries no data and is
+	 * legal, so it must be stepped over rather than indexed into.
+	 */
+	while (idx->iov_idx < sgl->sg_nr) {
+		len = check_buf ? sgl->sg_iovs[idx->iov_idx].iov_buf_len :
+			sgl->sg_iovs[idx->iov_idx].iov_len;
+		if (idx->iov_offset < len)
+			break;
+		D_ASSERTF(idx->iov_offset == len, "iov_offset "DF_U64", len "DF_U64"\n",
+			  idx->iov_offset, len);
+		idx->iov_idx++;
+		idx->iov_offset = 0;
+	}
+
 	if (idx->iov_idx >= sgl->sg_nr) {
 		if (p_buf != NULL)
 			*p_buf = NULL;
 		return true; /** no data in sgl to get bytes from */
 	}
-
-	len = check_buf ? sgl->sg_iovs[idx->iov_idx].iov_buf_len :
-		sgl->sg_iovs[idx->iov_idx].iov_len;
-
-	D_ASSERT(idx->iov_offset < len);
 	/** Point to current idx */
 	if (p_buf != NULL)
 		*p_buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;

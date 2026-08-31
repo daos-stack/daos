@@ -579,8 +579,15 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				goto unlock;
 			}
 
+			/* A -DER_REC2BIG from another shard is the long-singv-overwritten-by-
+			 * short-singv case, which is ignored below when the short singv lives
+			 * on a single target. The size conflict is still real in that case, so
+			 * it must be evaluated or a torn read reaches checksum verification
+			 * with a stale singv layout.
+			 */
 			if (fetch_stat->sfs_size_other != 0 && fetch_rc == 0 &&
-			    fetch_stat->sfs_rc_other == 0) {
+			    (fetch_stat->sfs_rc_other == 0 ||
+			     fetch_stat->sfs_rc_other == -DER_REC2BIG)) {
 				conflict = dc_shard_singv_size_conflict(oca,
 						fetch_stat->sfs_size_other, fetch_stat->sfs_size);
 			}
@@ -624,6 +631,18 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				conflict = dc_shard_singv_size_conflict(oca,
 					fetch_stat->sfs_size_other, fetch_stat->sfs_size);
 		}
+
+		/* The size conflict is a property of the whole fetch, not of whichever
+		 * shard reply happens to be in hand - both sizes live in the shared
+		 * fetch_stat. Re-check it here so that any callback observing the
+		 * conflict fails the fetch. Without this a callback whose branch did not
+		 * compute the conflict proceeds to checksum verification against a stale
+		 * singv layout and wrongly burns an EC shard.
+		 */
+		if (!conflict && fetch_rc == 0 && fetch_stat->sfs_size != 0 &&
+		    fetch_stat->sfs_size_other != 0)
+			conflict = dc_shard_singv_size_conflict(oca, fetch_stat->sfs_size_other,
+								fetch_stat->sfs_size);
 
 		if (conflict && !reasb_req->orr_size_fetch && rc == 0)
 			fetch_again = true;
@@ -1661,8 +1680,8 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 
 		rc = daos_csummer_verify_key(args->csummer, &enum_type_val, ci_to_compare);
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for %s: %d\n",
-				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", rc);
+			D_ERROR("daos_csummer_verify_key error for %s: "DF_RC"\n",
+				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", DP_RC(rc));
 			return rc;
 		}
 		break;
