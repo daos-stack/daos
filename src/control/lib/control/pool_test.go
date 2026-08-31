@@ -3788,7 +3788,21 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			},
 			expError: errors.New("No SCM storage space available"),
 		},
-		"all requested ranks non-joined": {
+		"all requested ranks excluded": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateExcluded,
+			},
+			expError: errors.New("none of the requested ranks"),
+		},
+		"requested rank in a transient state is not a known member": {
 			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName:   "foo",
@@ -3800,7 +3814,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			memberStates: map[ranklist.Rank]system.MemberState{
 				0: system.MemberStateStopped,
 			},
-			expError: errors.New("none of the requested ranks"),
+			expError: errors.New("are not known system members"),
 		},
 		"multiple requested ranks with downout retained but not scanned": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3818,7 +3832,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			tgtRanks: []ranklist.Rank{0, 1, 2},
 			memberStates: map[ranklist.Rank]system.MemberState{
 				0: system.MemberStateJoined,
-				1: system.MemberStateStopped,
+				1: system.MemberStateAdminExcluded,
 				2: system.MemberStateExcluded,
 			},
 			expCreateReqRanks: ranklist.RankList{0, 1, 2},
@@ -3869,7 +3883,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			expScmBytes:  100 * humanize.GByte,
 			expNvmeBytes: humanize.TByte,
 		},
-		"no requested ranks; records joined ranks and all non-joined as downout": {
+		"no requested ranks; records available ranks and only excluded as downout": {
 			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName:   "foo",
@@ -3897,8 +3911,8 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 				3: system.MemberStateExcluded,
 				4: system.MemberStateReady,
 			},
-			expCreateReqRanks:   ranklist.RankList{0, 1},
-			expUnavailableRanks: ranklist.RankList{2, 3, 4},
+			expCreateReqRanks:   ranklist.RankList{0, 1, 4},
+			expUnavailableRanks: ranklist.RankList{3},
 			expScmBytes:         100 * humanize.GByte,
 			expNvmeBytes:        humanize.TByte,
 		},

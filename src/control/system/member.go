@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -59,6 +59,15 @@ const (
 	// AvailableMemberFilter defines the state(s) to be used when determining
 	// whether or not a member is available for the purposes of pool creation, etc.
 	AvailableMemberFilter = MemberStateReady | MemberStateJoined
+	// DownOutMemberFilter defines the state(s) that cause a member to be recorded in a new
+	// pool's map as DOWNOUT at creation time instead of as a live storage target.
+	//
+	// Only states that mean "administratively or permanently out" qualify. Transient states
+	// (Starting/Stopping/Stopped/Errored/Unresponsive/AwaitFormat) must NOT be captured here:
+	// a DOWNOUT pool map entry can only be brought back by an explicit reintegration, so a
+	// rank that merely happened to be restarting at pool create time would otherwise be
+	// frozen out of the pool for its entire lifetime.
+	DownOutMemberFilter = MemberStateExcluded | MemberStateAdminExcluded
 	// AllMemberFilter will match all valid member states.
 	AllMemberFilter = MemberState(0xFFFF)
 	// NonExcludedMemberFilter matches all members that don't match the ExcludedMemberFilter.

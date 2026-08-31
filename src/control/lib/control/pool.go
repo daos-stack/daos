@@ -1368,46 +1368,47 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "getMaxPoolSize: SystemQuery")
 	}
-	joinedRanks := ranklist.RankList{}
+	availableRanks := ranklist.RankList{}
 	downoutRanks := ranklist.RankList{}
 	for _, member := range queryResp.Members {
-		switch member.State {
-		case system.MemberStateJoined:
-			// Joined ranks are eligible target-create candidates.
-			joinedRanks = append(joinedRanks, member.Rank)
-		case system.MemberStateUnknown:
-			// Not a real membership state; nothing to encode.
-		default:
-			// Every other known state (Ready/Excluded/AdminExcluded/Stopped/
-			// Stopping/Errored/Unresponsive/AwaitFormat/Starting/...) is
-			// treated as pool-map DOWNOUT. This mirrors the server-side use
-			// of `AllMemberFilter ^ MemberStateJoined` so client and
-			// management service agree on the DOWNOUT candidate set.
+		switch {
+		case member.State&system.AvailableMemberFilter != 0:
+			// Available ranks are eligible target-create candidates.
+			availableRanks = append(availableRanks, member.Rank)
+		case member.State&system.DownOutMemberFilter != 0:
+			// Excluded / admin-excluded ranks become pool-map-only DOWNOUT
+			// entries. This mirrors the server-side use of
+			// system.DownOutMemberFilter so that client and management
+			// service agree on the DOWNOUT candidate set.
 			downoutRanks = append(downoutRanks, member.Rank)
+		default:
+			// Any other state (Unknown/Starting/Stopping/Stopped/Errored/
+			// Unresponsive/AwaitFormat/...) is transient and is not encoded
+			// into the pool map at all.
 		}
 	}
 
 	// Determine which ranks the storage scan should be restricted to. Only
-	// Joined ranks host storage; DOWNOUT ranks are pool-map-only entries.
+	// available ranks host storage; DOWNOUT ranks are pool-map-only entries.
 	//
 	// For an explicit rank request:
 	//   - Deduplicate via RankSet (natural ordering).
-	//   - Reject any rank that is neither joined nor known non-joined.
-	//   - Fail early if every requested rank is currently non-joined; the create
-	//     will fail anyway and this gives the caller a clear message.
-	//   - Scan storage on the subset of requested ranks that are joined.
+	//   - Reject any rank that is neither available nor excluded.
+	//   - Fail early if every requested rank is excluded; the create will fail
+	//     anyway and this gives the caller a clear message.
+	//   - Scan storage on the subset of requested ranks that are available.
 	//   - Do not overwrite any caller-supplied createReq.UnavailableRanks; the
-	//     management service will merge them with the non-joined ranks it
+	//     management service will merge them with the excluded ranks it
 	//     splits out of createReq.Ranks.
 	// For an implicit request (no Ranks): populate createReq.Ranks with the
-	// full joined set and createReq.UnavailableRanks with the full non-joined
+	// full available set and createReq.UnavailableRanks with the full excluded
 	// set, so the management service has a complete rank plan and does not
 	// need any auto-inclusion hint.
 	filterRanks := ranklist.RankList{}
 	if len(createReq.Ranks) == 0 {
-		// Copy so downstream slices.Sort does not mutate joinedRanks.
-		filterRanks = append(ranklist.RankList{}, joinedRanks...)
-		createReq.Ranks = append(ranklist.RankList{}, joinedRanks...)
+		// Copy so downstream slices.Sort does not mutate availableRanks.
+		filterRanks = append(ranklist.RankList{}, availableRanks...)
+		createReq.Ranks = append(ranklist.RankList{}, availableRanks...)
 		createReq.UnavailableRanks = append(ranklist.RankList{}, downoutRanks...)
 		// Only the implicit path derives Ranks/UnavailableRanks from the
 		// system membership snapshot and needs sorting. The explicit path
@@ -1419,8 +1420,8 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		// Use RankSet from the start for natural deduplication.
 		requestedSet := ranklist.RankSetFromRanks(createReq.Ranks)
 
-		// Build the set of all known ranks (joined + any non-joined).
-		knownSet := ranklist.RankSetFromRanks(joinedRanks)
+		// Build the set of all known ranks (available + excluded).
+		knownSet := ranklist.RankSetFromRanks(availableRanks)
 		for _, rank := range downoutRanks {
 			knownSet.Add(rank)
 		}
@@ -1433,25 +1434,25 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 				ranklist.RankSetFromRanks(invalid).String())
 		}
 
-		// filterRanks = joined ∩ requested. Iterate joinedRanks so the
+		// filterRanks = available ∩ requested. Iterate availableRanks so the
 		// storage scan order stays deterministic w.r.t. membership.
-		for _, rank := range joinedRanks {
+		for _, rank := range availableRanks {
 			if requestedSet.Contains(rank) {
 				filterRanks = append(filterRanks, rank)
 			}
 		}
 		if len(filterRanks) == 0 {
 			return 0, 0, errors.Errorf(
-				"pool create requires at least one joined target rank; "+
-					"none of the requested ranks (%s) are currently joined",
+				"pool create requires at least one available target rank; "+
+					"none of the requested ranks (%s) are currently available",
 				requestedSet.String())
 		}
 		// requestedSet.Ranks() deduplicates the explicit request.
 		createReq.Ranks = requestedSet.Ranks()
 	}
 	slices.Sort(filterRanks)
-	rpcClient.Debugf("requested/joined/downout/filter ranks: %v/%v/%v/%v", createReq.Ranks,
-		joinedRanks, downoutRanks, filterRanks)
+	rpcClient.Debugf("requested/available/downout/filter ranks: %v/%v/%v/%v", createReq.Ranks,
+		availableRanks, downoutRanks, filterRanks)
 
 	scanReq := &StorageScanReq{
 		Usage:    true,

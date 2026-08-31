@@ -782,14 +782,9 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// We should only be trying to create on the Joined ranks.
+	// We should only be trying to create on the available ranks. The Stopped rank is
+	// transient, so it is neither a target nor a pool-map DOWNOUT entry.
 	wantReq.Ranks = []uint32{0, 2, 3}
-	wantReq.UnavailableRanks = []uint32{1}
-	fdTree, err = mgmtSvc.membership.CompressedFaultDomainTree(0, 1, 2, 3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantReq.FaultDomains = fdTree
 
 	// These properties are automatically added by PoolCreate
 	wantReq.Properties = append(wantReq.Properties, &mgmtpb.PoolProperty{
@@ -862,7 +857,7 @@ func TestServer_MgmtSvc_PoolCreateAsymmetricRanks(t *testing.T) {
 		Uuid:       test.MockUUID(),
 		TotalBytes: totalBytes,
 		TierRatio:  []float64{0.06, 0.94},
-		Ranks:      []uint32{0, 1, 2, 3, 4, 5},
+		Ranks:      []uint32{0, 1, 2, 3, 5},
 		Properties: testPoolLabelProp(),
 	}
 
@@ -871,8 +866,8 @@ func TestServer_MgmtSvc_PoolCreateAsymmetricRanks(t *testing.T) {
 	wantReq.Properties = append([]*mgmtpb.PoolProperty(nil), req.Properties...)
 	wantReq.TotalBytes = 0
 	wantReq.TierBytes = []uint64{
-		uint64(float64(totalBytes)*DefaultPoolScmRatio) / 3,
-		uint64(float64(totalBytes)*DefaultPoolNvmeRatio) / 3,
+		uint64(float64(totalBytes)*DefaultPoolScmRatio) / 4,
+		uint64(float64(totalBytes)*DefaultPoolNvmeRatio) / 4,
 	}
 	wantReq.TierRatio = nil
 
@@ -881,10 +876,11 @@ func TestServer_MgmtSvc_PoolCreateAsymmetricRanks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Only Joined ranks should end up in Ranks; all other states go to UnavailableRanks.
-	wantReq.Ranks = []uint32{0, 2, 3}
-	wantReq.UnavailableRanks = []uint32{1, 4, 5}
-	fdTree, err := mgmtSvc.membership.CompressedFaultDomainTree(0, 1, 2, 3, 4, 5)
+	// Only excluded ranks become pool-map DOWNOUT entries. The Ready rank (5) is available
+	// so it stays a real target, and the Stopped rank (4) was not requested at all.
+	wantReq.Ranks = []uint32{0, 2, 3, 5}
+	wantReq.UnavailableRanks = []uint32{1}
+	fdTree, err := mgmtSvc.membership.CompressedFaultDomainTree(0, 1, 2, 3, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -919,7 +915,7 @@ func TestServer_MgmtSvc_PoolCreateAsymmetricRanks(t *testing.T) {
 	}
 }
 
-func TestServer_MgmtSvc_PoolCreateAllRequestedRanksNonJoined(t *testing.T) {
+func TestServer_MgmtSvc_PoolCreateAllRequestedRanksExcluded(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -944,7 +940,7 @@ func TestServer_MgmtSvc_PoolCreateAllRequestedRanksNonJoined(t *testing.T) {
 	for _, m := range []*system.Member{
 		system.MockMember(t, 0, system.MemberStateJoined),
 		system.MockMember(t, 1, system.MemberStateExcluded),
-		system.MockMember(t, 2, system.MemberStateStopped),
+		system.MockMember(t, 2, system.MemberStateAdminExcluded),
 	} {
 		if err := mgmtSvc.sysdb.AddMember(m); err != nil {
 			t.Fatal(err)
@@ -961,9 +957,78 @@ func TestServer_MgmtSvc_PoolCreateAllRequestedRanksNonJoined(t *testing.T) {
 	}
 
 	_, err := mgmtSvc.PoolCreate(test.Context(t), req)
-	test.CmpErr(t, errors.New("none of the requested ranks"), err)
+	test.CmpErr(t, errors.New("all of the requested ranks"), err)
 	if len(dc.calls.get()) != 0 {
 		t.Fatalf("expected no dRPC call on error, got %d", len(dc.calls.get()))
+	}
+}
+
+// TestServer_MgmtSvc_PoolCreateTransientRanksNotDownOut verifies that ranks in transient
+// states are never frozen into a new pool map as DOWNOUT. A DOWNOUT entry can only be
+// brought back by an explicit reintegration, so a rank that merely happened to be
+// restarting at pool create time must simply be left out of the pool entirely.
+func TestServer_MgmtSvc_PoolCreateTransientRanksNotDownOut(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	mgmtSvc := newTestMgmtSvc(t, log)
+	ec := engine.MockConfig().
+		WithTargetCount(1).
+		WithStorage(
+			storage.NewTierConfig().
+				WithStorageClass("ram").
+				WithScmMountPoint("/foo/bar"),
+			storage.NewTierConfig().
+				WithStorageClass("nvme").
+				WithBdevDeviceList("foo", "bar"),
+		)
+	sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil, nil)
+	mgmtSvc.harness.instances[0] = newTestEngine(log, false, sp, ec)
+
+	dc := newMockDrpcClient(&mockDrpcClientConfig{IsConnectedBool: true})
+	dc.cfg.setSendMsgResponse(drpc.Status_SUCCESS, nil, nil)
+	mgmtSvc.harness.instances[0].(*EngineInstance).getDrpcClientFn = func(s string) drpc.DomainSocketClient { return dc }
+
+	for _, m := range []*system.Member{
+		system.MockMember(t, 0, system.MemberStateJoined),
+		system.MockMember(t, 1, system.MemberStateReady),
+		system.MockMember(t, 2, system.MemberStateStarting),
+		system.MockMember(t, 3, system.MemberStateStopping),
+		system.MockMember(t, 4, system.MemberStateStopped),
+		system.MockMember(t, 5, system.MemberStateErrored),
+		system.MockMember(t, 6, system.MemberStateUnresponsive),
+		system.MockMember(t, 7, system.MemberStateAwaitFormat),
+		system.MockMember(t, 8, system.MemberStateAdminExcluded),
+	} {
+		if err := mgmtSvc.sysdb.AddMember(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	req := &mgmtpb.PoolCreateReq{
+		Sys:        build.DefaultSystemName,
+		Uuid:       test.MockUUID(),
+		TotalBytes: uint64(100 * humanize.GiByte),
+		TierRatio:  []float64{0.06, 0.94},
+		Properties: testPoolLabelProp(),
+	}
+
+	if _, err := mgmtSvc.PoolCreate(test.Context(t), req); err != nil {
+		t.Fatal(err)
+	}
+
+	gotReq := new(mgmtpb.PoolCreateReq)
+	if err := proto.Unmarshal(dc.calls.get()[0].Body, gotReq); err != nil {
+		t.Fatal(err)
+	}
+
+	// Joined (0) and Ready (1) are available targets; only the AdminExcluded rank (8)
+	// becomes a pool-map DOWNOUT entry. Everything else is transient and omitted.
+	if diff := cmp.Diff([]uint32{0, 1}, gotReq.GetRanks()); diff != "" {
+		t.Fatalf("unexpected target ranks (-want, +got):\n%s\n", diff)
+	}
+	if diff := cmp.Diff([]uint32{8}, gotReq.GetUnavailableRanks()); diff != "" {
+		t.Fatalf("unexpected DOWNOUT ranks (-want, +got):\n%s\n", diff)
 	}
 }
 
