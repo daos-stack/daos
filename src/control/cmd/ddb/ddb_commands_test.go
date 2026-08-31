@@ -906,6 +906,7 @@ func TestDdb_ManPage(t *testing.T) {
 		manCmdsHeader,
 		manPathSection[:20],
 		manMdOnSsdSection[:20],
+		manSpdkReinitSection[:20],
 		manLoggingSection[:20],
 		".B ls\n",
 		".B open\n",

@@ -22,6 +22,7 @@
 #include "ddb_mgmt.h"
 #include "ddb_vos.h"
 #include "ddb_spdk.h"
+#include "ddb_spdk_reinit_wa.h"
 
 #define ddb_vos_iterate(param, iter_type, recursive, anchors, cb, args) \
 				vos_iterate(param, iter_type, recursive, \
@@ -53,19 +54,25 @@ out:
 	return rc;
 }
 
-bool
-vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path);
-
 int
-dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
-	     bool write_mode)
+dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, daos_handle_t *poh,
+	     uint32_t flags, bool write_mode)
 {
 	int                    rc;
 	struct vos_file_parts *vf;
+	bool                   can_proceed;
 
 	rc = create_vos_file_parts(path, db_path, &vf);
 	if (!SUCCESS(rc))
 		goto out;
+
+	rc = dwa_can_proceed(ctx, vf->vf_db_path, &can_proceed);
+	if (!SUCCESS(rc))
+		goto out_vf;
+	if (!can_proceed) {
+		rc = -DER_NO_SERVICE;
+		goto out_vf;
+	}
 
 	/**
 	 * When the user requests read‑only mode (write_mode == false), DDB itself will not attempt
@@ -122,12 +129,16 @@ dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx)
 	struct vos_file_parts *vf;
 	int                    flags = 0;
 	int                    rc;
+	bool                   can_proceed;
 
 	rc = create_vos_file_parts(path, db_path, &vf);
 	if (!SUCCESS(rc))
 		goto out;
 
-	if (!vmd_wa_can_proceed(ctx, vf->vf_db_path)) {
+	rc = dwa_can_proceed(ctx, vf->vf_db_path, &can_proceed);
+	if (!SUCCESS(rc))
+		goto out_vf;
+	if (!can_proceed) {
 		rc = -DER_NO_SERVICE;
 		goto out_vf;
 	}
@@ -2046,11 +2057,12 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 }
 
 int
-dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete complete_cb,
-	    void *cb_args)
+dv_sync_smd(const char *nvme_conf, const char *db_path, struct ddb_ctx *ctx,
+	    dv_smd_sync_complete complete_cb, void *cb_args)
 {
 	struct dv_sync_cb_args	 sync_cb_args = {0};
 	int			 rc;
+	bool                     can_proceed;
 
 	/* don't initialize NVMe(spdk) within VOS. Will happen in ddb_spdk module */
 	rc = vos_self_init_ext(db_path, true, 0, false);
@@ -2065,6 +2077,25 @@ dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete com
 		D_ERROR("SMD failed to initialize: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
 		return rc;
+	}
+
+	/*
+	 * vos_self_init_ext() above deliberately skips SPDK init (see the comment on that call).
+	 * ddbs_for_each_bio_blob_hdr() is the call that actually starts an SPDK app
+	 * (spdk_app_start()), initialized from nvme_conf -- not db_path (used only for VOS's own
+	 * sys db above) -- so the guard is checked unconditionally (NULL) here rather than by
+	 * probing <db_path>/daos_nvme.conf, which may have no relationship to nvme_conf.
+	 */
+	rc = dwa_can_proceed(ctx, NULL, &can_proceed);
+	if (!SUCCESS(rc)) {
+		smd_fini();
+		vos_self_fini();
+		return rc;
+	}
+	if (!can_proceed) {
+		smd_fini();
+		vos_self_fini();
+		return -DER_NO_SERVICE;
 	}
 
 	sync_cb_args.sync_complete_cb = complete_cb;
@@ -2205,9 +2236,16 @@ dv_pool_get_flags(daos_handle_t poh, uint64_t *compat_flags, uint64_t *incompat_
 }
 
 int
-dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt)
+dv_dev_list(const char *db_path, struct ddb_ctx *ctx, d_list_t *dev_list, int *dev_cnt)
 {
-	int rc;
+	int  rc;
+	bool can_proceed;
+
+	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
+	if (rc != 0)
+		return rc;
+	if (!can_proceed)
+		return -DER_NO_SERVICE;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {
@@ -2238,11 +2276,18 @@ find_dev_info(d_list_t *dev_list, uuid_t dev_id)
 }
 
 int
-dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid)
+dv_dev_replace(const char *db_path, struct ddb_ctx *ctx, uuid_t old_devid, uuid_t new_devid)
 {
 	struct bio_dev_info *old_dev_info, *new_dev_info, *dev_info, *tmp;
 	d_list_t             dev_list;
 	int                  rc, dev_cnt = 0;
+	bool                 can_proceed;
+
+	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
+	if (rc != 0)
+		return rc;
+	if (!can_proceed)
+		return -DER_NO_SERVICE;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {
@@ -2291,11 +2336,19 @@ out:
 }
 
 int
-dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs_mount_size)
+dv_run_prov_mem(const char *db_path, struct ddb_ctx *ctx, const char *tmpfs_mount,
+		unsigned int tmpfs_mount_size)
 {
 	int          rc;
 	bool         md_on_ssd;
+	bool         can_proceed;
 	unsigned int sz = tmpfs_mount_size;
+
+	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
+	if (rc != 0)
+		return rc;
+	if (!can_proceed)
+		return -DER_NO_SERVICE;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {

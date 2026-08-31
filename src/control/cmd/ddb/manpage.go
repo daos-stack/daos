@@ -163,6 +163,29 @@ all VOS files.
 .IP "*" 4
 This command requires the system to be configured for MD-on-SSD mode.`
 
+const manSpdkReinitSection = `.SH SPDK RE-INITIALIZATION
+.SS Overview
+Unlike \fBdaos_engine\fR, which initializes SPDK only once during the lifetime of the process,
+ddb allows several pool-lifecycle commands to run within the same interactive or \fI-f\fR
+command-file session, each potentially performing its own SPDK/VOS initialization. SPDK does
+not fully support being re-initialized within the same process: this is unsafe for any pool
+backed by an NVMe device (i.e. whose \fIdb_path\fR has a \fBdaos_nvme.conf\fR), whether or not
+it uses the VMD subsystem. \fBsmd_sync\fR is always treated as NVMe-backed, since its SPDK
+config comes from a separate \fInvme_conf\fR argument rather than \fIdb_path\fR.
+.PP
+To avoid crashing, ddb allows only one such initialization per process: once an NVMe-backed pool
+has been used by one of \fBopen\fR, \fBrm_pool\fR, \fBfeature\fR, \fBdev_list\fR,
+\fBdev_replace\fR, \fBprov_mem\fR, or \fBsmd_sync\fR, any later attempt by one of these commands
+to initialize SPDK again for another NVMe-backed pool is refused with an error. Pools with no
+\fBdaos_nvme.conf\fR (pure PMEM) never touch SPDK and are unaffected by this limitation.
+.SS Notes
+.IP "*" 4
+If you hit this error, restart the ddb process and run the remaining operation as a separate
+invocation.
+.IP "*" 4
+This limitation does not apply across separate ddb process invocations, only within the same
+one.`
+
 func fprintManPage(dest io.Writer, app *grumble.App, parser *flags.Parser) {
 	fmt.Fprintln(dest, manMacroSection)
 
@@ -191,6 +214,8 @@ func fprintManPage(dest io.Writer, app *grumble.App, parser *flags.Parser) {
 	fmt.Fprintln(dest, manPathSection)
 
 	fmt.Fprintln(dest, manMdOnSsdSection)
+
+	fmt.Fprintln(dest, manSpdkReinitSection)
 
 	fmt.Fprint(dest, manLoggingSection)
 }
