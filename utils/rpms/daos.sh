@@ -479,8 +479,6 @@ DEPENDS+=("romio-tests")
 DEPENDS+=("python3-mpi4py-tests >= 3.1.6")
 build_package "daos-tests"
 
-build_package "daos-client-tests-mpich"
-
 DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-client-tests-openmpi = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-client-tests-mpich = ${VERSION}-${RELEASE}")
