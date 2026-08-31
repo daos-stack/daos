@@ -1815,6 +1815,73 @@ out_ranks:
 	return rc;
 }
 
+/**
+ * Count the domains of \a buf that can actually host data.
+ *
+ * Asymmetric pool create inserts the targets of every excluded rank as DOWNOUT, and
+ * gen_pool_buf() then propagates DOWNOUT up the domain tree so a domain whose entire
+ * subtree is DOWNOUT is itself DOWNOUT. Such a domain provides no redundancy at all, so
+ * it must not be counted when the pool redundancy factor is admitted or clamped;
+ * otherwise a pool could be created advertising an rd_fac that its usable domains
+ * cannot sustain.
+ *
+ * pb_comps stores the domain components first, so the first pb_domain_nr entries are
+ * exactly the (non-rank) domains.
+ *
+ * @param[in] buf	Pool map buffer
+ *
+ * @return		Number of domains that are not DOWNOUT
+ */
+uint32_t
+pool_buf_avail_domain_nr(struct pool_buf *buf)
+{
+	uint32_t nr = 0;
+	uint32_t i;
+
+	for (i = 0; i < buf->pb_domain_nr; i++) {
+		if (buf->pb_comps[i].co_status != PO_COMP_ST_DOWNOUT)
+			nr++;
+	}
+
+	return nr;
+}
+
+/**
+ * Check whether \a buf can sustain the pool redundancy factor \a rd_fac, and optionally
+ * clamp it down to the largest value the buffer can sustain.
+ *
+ * Sustaining rd_fac requires rd_fac + 1 domains that can actually hold data, so the check
+ * is made against pool_buf_avail_domain_nr() rather than against pb_domain_nr. Counting the
+ * fully-DOWNOUT domains produced by an asymmetric pool create would let a pool be created
+ * advertising a redundancy factor that its usable domains cannot deliver.
+ *
+ * @param[in]		buf	Pool map buffer
+ * @param[in,out]	rd_fac	Requested redundancy factor. Lowered to the largest
+ *				sustainable value when it is too high and \a clamp is set.
+ * @param[in]		clamp	Clamp an unsustainable \a rd_fac instead of rejecting it.
+ *
+ * @return			0		\a rd_fac is (now) sustainable
+ *				-DER_INVAL	\a rd_fac is unsustainable and \a clamp is not
+ *						set, or \a buf has no usable domain at all
+ */
+int
+pool_buf_rf_check(struct pool_buf *buf, uint64_t *rd_fac, bool clamp)
+{
+	uint32_t avail = pool_buf_avail_domain_nr(buf);
+
+	if (avail == 0)
+		return -DER_INVAL;
+
+	if (*rd_fac + 1 <= avail)
+		return 0;
+
+	if (!clamp)
+		return -DER_INVAL;
+
+	*rd_fac = avail - 1;
+
+	return 0;
+}
 
 int
 pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
