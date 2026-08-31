@@ -54,7 +54,10 @@ void updateRunStage() {
         'Functional Hardware Medium TCP Provider MD on SSD',
         'Functional Hardware Large TCP MD on SSD',
         'Functional Hardware Medium Verbs MD on SSD',
-        'Functional Hardware Large Verbs MD on SSD'
+        'Functional Hardware Large Verbs MD on SSD',
+        'Functional Cluster Box Medium MD on SSD',
+        'Functional Cluster Box Medium TCP MD on SSD',
+        'Functional Cluster Box Medium Verbs MD on SSD'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
@@ -384,6 +387,15 @@ pipeline {
         booleanParam(name: bashName('Functional Hardware Large Verbs MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large Verbs MD on SSD stage.')
+        booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box Medium MD on SSD stage.')
+        booleanParam(name: bashName('Functional Cluster Box Medium TCP MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box Medium TCP MD on SSD stage.')
+        booleanParam(name: bashName('Functional Cluster Box Medium Verbs MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box Medium Verbs MD on SSD stage.')
         string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
@@ -417,6 +429,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_VERBS_MD_ON_SSD_LABEL',
                defaultValue: 'ci_ofed9',
                description: 'Label to use for 9 node Functional Hardware Large Verbs MD on SSD stage')
+        string(name: 'FUNCTIONAL_CLUSTER_BOX_LABEL',
+               defaultValue: 'cluster_box',
+               description: 'Label to use for the Functional Cluster Box Medium MD on SSD stages')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
@@ -545,7 +560,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric mercury-ucx',
-                            stage_tags: 'hw,medium,-provider',
+                            stage_tags: 'hw,medium,-provider,-cb',
                             default_tags: defaultTags('full_regression'),
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal
@@ -598,7 +613,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric',
-                            stage_tags: 'hw,medium,-provider',
+                            stage_tags: 'hw,medium,-provider,-cb',
                             default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             provider: 'ofi+tcp',
@@ -612,7 +627,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric',
-                            stage_tags: 'hw,medium,provider',
+                            stage_tags: 'hw,medium,provider,-cb',
                             default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             provider: 'ofi+tcp',
@@ -640,7 +655,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric',
-                            stage_tags: 'hw,medium,-provider',
+                            stage_tags: 'hw,medium,-provider,-cb',
                             default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
@@ -658,6 +673,50 @@ pipeline {
                             default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
+                            job_status: job_status_internal
+                        ),
+                        'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
+                            pragma_suffix: '-cb-medium-md-on-ssd',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
+                            next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric mercury-ucx',
+                            stage_tags: 'cb,medium,-provider',
+                            default_tags: defaultTags('pr daily_regression'),
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Cluster Box Medium TCP MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium TCP MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium TCP MD on SSD'),
+                            pragma_suffix: '-cb-medium-tcp-md-on-ssd',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
+                            next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'cb,medium',
+                            default_tags: defaultTags('pr daily_regression'),
+                            nvme: 'auto_md_on_ssd',
+                            provider: 'ofi+tcp',
+                            node_count: 5,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Cluster Box Medium Verbs MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium Verbs MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium Verbs MD on SSD'),
+                            pragma_suffix: '-cb-medium-verbs-md-on-ssd',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
+                            next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'cb,medium,-provider',
+                            default_tags: defaultTags('pr daily_regression'),
+                            nvme: 'auto_md_on_ssd',
+                            provider: 'ofi+verbs;ofi_rxm',
+                            node_count: 5,
                             job_status: job_status_internal
                         )
                     )
