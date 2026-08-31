@@ -95,7 +95,7 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
             TelemetryUtils.ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
         loop = 0
         self.pool = self.get_pool(connect=False)
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
         metrics_data = {}
         for block_size in block_sizes:
             for transfer_size in transfer_sizes:
