@@ -23,6 +23,7 @@
 #define VOS_POOL_DF_2_4 25
 #define VOS_POOL_DF_2_6 26
 #define VOS_POOL_DF_2_8 28
+#define VOS_POOL_DF_3_0 30
 
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
@@ -320,6 +321,8 @@ enum {
 	VOS_POOL_FEAT_FLAT_DKEY = (1ULL << 4),
 	/** Gang address for SV support */
 	VOS_POOL_FEAT_GANG_SV = (1ULL << 5),
+	/** Multi-E-bucket per object support */
+	VOS_POOL_FEAT_MULTI_EBKT = (1ULL << 6),
 };
 
 /** Mask for any conditionals passed to to the fetch */

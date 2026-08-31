@@ -1682,6 +1682,8 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 		pool->vp_feats |= VOS_POOL_FEAT_2_6;
 	if (pool_df->pd_version >= VOS_POOL_DF_2_8)
 		pool->vp_feats |= VOS_POOL_FEAT_2_8;
+	if (pool_df->pd_version >= VOS_POOL_DF_3_0)
+		pool->vp_feats |= VOS_POOL_FEAT_3_0;
 	pool->vp_pool_df = pool_df;
 
 	/* Initialize dummy data I/O context */
@@ -1953,6 +1955,8 @@ end:
 		pool->vp_feats |= VOS_POOL_FEAT_2_6;
 	if (version >= VOS_POOL_DF_2_8)
 		pool->vp_feats |= VOS_POOL_FEAT_2_8;
+	if (version >= VOS_POOL_DF_3_0)
+		pool->vp_feats |= VOS_POOL_FEAT_3_0;
 
 	return 0;
 }

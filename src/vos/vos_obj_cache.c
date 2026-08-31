@@ -307,12 +307,13 @@ obj_allot_bkt(struct vos_pool *pool, struct vos_object *obj)
 
 	if (!obj->obj_df) {
 		cur_dth = clear_cur_dth(pool);
-		obj->obj_bkt_ids[0] = umem_allot_mb_evictable(vos_pool2umm(pool), 0);
+		obj->obj_bkt_id0 = umem_allot_mb_evictable(vos_pool2umm(pool), 0);
+		obj->obj_bkt_cnt = 1;
 		restore_cur_dth(pool, cur_dth);
 	} else {
 		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
 
-		obj->obj_bkt_ids[0] = p2->p2_bkt_ids[0];
+		obj->obj_bkt_id0 = p2->p2_bkt_id0;
 	}
 
 	obj->obj_bkt_alloted = 1;
@@ -331,7 +332,7 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 	struct umem_cache_range	 rg;
 	int			 rc;
 
-	if (obj->obj_bkt_ids[0] == UMEM_DEFAULT_MBKT_ID) {
+	if (obj->obj_bkt_id0 == UMEM_DEFAULT_MBKT_ID) {
 		D_ASSERT(obj->obj_pin_hdl == NULL);
 		D_ASSERT(!obj->obj_bkt_loading);
 		return 0;
@@ -362,7 +363,7 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 
 	obj->obj_bkt_loading = 1;
 
-	rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), obj->obj_bkt_ids[0]);
+	rg.cr_off  = umem_get_mb_base_offset(vos_pool2umm(pool), obj->obj_bkt_id0);
 	rg.cr_size = store->cache->ca_page_sz;
 
 	rc = vos_cache_pin(pool, &rg, 1, false, &obj->obj_pin_hdl);
@@ -586,22 +587,30 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 		return -DER_TX_RESTART;
 	}
 
-	if (obj->obj_bkt_ids[0] != UMEM_DEFAULT_MBKT_ID) {
+	if (obj->obj_bkt_id0 != UMEM_DEFAULT_MBKT_ID) {
 		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
 
 		D_ASSERT(vos_pool_is_evictable(vos_obj2pool(obj)));
 		D_ASSERT(obj->obj_bkt_alloted);
 
-		if (p2->p2_bkt_ids[0] == UMEM_DEFAULT_MBKT_ID) {
-			p2->p2_bkt_ids[0] = obj->obj_bkt_ids[0];
-			rc = umem_tx_add_ptr(vos_cont2umm(cont), &p2->p2_bkt_ids[0],
-					     sizeof(p2->p2_bkt_ids[0]));
+		if (p2->p2_bkt_id0 == UMEM_DEFAULT_MBKT_ID) {
+			rc = umem_tx_add_ptr(vos_cont2umm(cont), &p2->p2_bkt_id0,
+					     sizeof(p2->p2_bkt_id0));
 			if (rc) {
 				DL_ERROR(rc, "Add bucket ID failed.");
 				return rc;
 			}
+			p2->p2_bkt_id0 = obj->obj_bkt_id0;
+
+			rc = umem_tx_add_ptr(vos_cont2umm(cont), &p2->p2_bkt_cnt,
+					     sizeof(p2->p2_bkt_cnt));
+			if (rc) {
+				DL_ERROR(rc, "Add bucket count failed.");
+				return rc;
+			}
+			p2->p2_bkt_cnt = 1;
 		} else {
-			D_ASSERT(p2->p2_bkt_ids[0] == obj->obj_bkt_ids[0]);
+			D_ASSERT(p2->p2_bkt_id0 == obj->obj_bkt_id0);
 		}
 	}
 
@@ -1069,11 +1078,10 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
 
 		obj = vos_hdl->vph_objs[i];
 		D_ASSERT(obj->obj_bkt_alloted == 1);
-		if (obj->obj_bkt_ids[0] != UMEM_DEFAULT_MBKT_ID) {
-			rc = vos_bkt_array_add(&bkts, obj->obj_bkt_ids[0]);
+		if (obj->obj_bkt_id0 != UMEM_DEFAULT_MBKT_ID) {
+			rc = vos_bkt_array_add(&bkts, obj->obj_bkt_id0);
 			if (rc) {
-				DL_ERROR(rc, "Failed to add bucket:%u to array",
-					 obj->obj_bkt_ids[0]);
+				DL_ERROR(rc, "Failed to add bucket:%u to array", obj->obj_bkt_id0);
 				goto error;
 			}
 		}

@@ -55,6 +55,8 @@
 uint32_t
 ds_pool_get_vos_df_version(uint32_t pool_global_version)
 {
+	if (pool_global_version == 5)
+		return VOS_POOL_DF_3_0;
 	if (pool_global_version == 4)
 		return VOS_POOL_DF_2_8;
 	if (pool_global_version == 3)

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -85,8 +85,9 @@
  * Version 2 corresponds to 2.4 (dynamic evtree, checksum scrubbing)
  * Version 3 corresponds to 2.6 (root embedded values, pool service operations tracking KVS)
  * Version 4 corresponds to 2.8 (SV gang allocation, server pool/cont hdls)
+ * Version 5 corresponds to 3.0 (multiple buckets per object)
  */
-#define DAOS_POOL_GLOBAL_VERSION 4
+#define DAOS_POOL_GLOBAL_VERSION 5
 
 /**
  * Each individual object layout format, like oid layout, dkey to group,

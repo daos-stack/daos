@@ -44,16 +44,6 @@ struct vos_gc_bin_df {
 	uint16_t		bin_pad16;
 };
 
-/*
- * This is smaller than the VOS_OBJ_BKTS_MAX for object durable format, because
- * I don't want to increase each GC item size (the amount of GC item is massive)
- * for an imagined requirement.
- *
- * If we really need to support more than 2 evict-able buckets per object in the
- * futhure, we can enlarge the GC item then.
- */
-#define VOS_GC_BKTS_MAX		2
-
 struct vos_gc_bag_df {
 	/** index of the first item in FIFO */
 	uint16_t		bag_item_first;
@@ -66,10 +56,15 @@ struct vos_gc_bag_df {
 	/** next GC bag chained on vos_gc_bin_df */
 	umem_off_t		bag_next;
 	struct vos_gc_item {
-		/* address of the item to be freed */
+		/* address of the item to be freed (vos_obj_p2_df offset for GC_OBJ) */
 		umem_off_t		it_addr;
-		/* object buckets for GC_AKEY/DKEY/OBJ of the md-on-ssd p2 pool */
-		uint32_t		it_bkt_ids[VOS_GC_BKTS_MAX];
+		/*
+		 * dkey/akey E-bucket ID for GC_DKEY/GC_AKEY items in the phase2
+		 * pool. For GC_OBJ items pointing to multiple E-bucket objects,
+		 * bucket IDs are read from the vos_obj_p2_df chain at drain time.
+		 */
+		uint32_t                it_bkt_id0;
+		uint32_t                it_pad;
 	}			bag_items[0];
 };
 
@@ -100,7 +95,7 @@ struct vos_gc_bkt_df {
  */
 
 /** Current durable format version */
-#define POOL_DF_VERSION                         VOS_POOL_DF_2_8
+#define POOL_DF_VERSION                         VOS_POOL_DF_3_0
 
 /** 2.2 features.  Until we have an upgrade path for RDB, we need to support more than one old
  *  version.
@@ -115,6 +110,9 @@ struct vos_gc_bkt_df {
 
 /** 2.8 features */
 #define VOS_POOL_FEAT_2_8			(VOS_POOL_FEAT_GANG_SV)
+
+/** 3.0 features */
+#define VOS_POOL_FEAT_3_0                       (VOS_POOL_FEAT_MULTI_EBKT)
 
 #define VOS_POOL_EXT_DF_PADDING_SIZE            52
 
@@ -351,6 +349,8 @@ enum vos_krec_bf {
 	KREC_BF_DKEY = (1 << 2),
 	/* Value is stored in DKEY */
 	KREC_BF_NO_AKEY = (1 << 3),
+	/* Bucket ID precedes the csum in the key body */
+	KREC_BF_BKT_ID = (1 << 4),
 };
 
 /**
@@ -433,16 +433,35 @@ struct vos_obj_df {
 	struct btr_root			vo_tree;
 };
 
-#define	VOS_OBJ_BKTS_MAX	4
-D_CASSERT(VOS_GC_BKTS_MAX <= VOS_OBJ_BKTS_MAX);
+/* Maximum bucket IDs stored inline in a single vos_obj_bkt_node_df */
+#define VOS_OBJ_BKT_NODE_CAP 15 /* fits in a 128-byte slab */
+
+/**
+ * An overflow node in the per-object E-bucket linked list.
+ * Allocated in the NE zone so the chain is always resident after pool load.
+ */
+struct vos_obj_bkt_node_df {
+	uint32_t   bn_bkt_ids[VOS_OBJ_BKT_NODE_CAP];
+	uint8_t    bn_bkt_cnt; /* valid entries in bn_bkt_ids[] */
+	uint8_t    bn_pad[3];
+	umem_off_t bn_next; /* next node, or UMOFF_NULL */
+};
 
 /*
  * VOS object durable format for md-on-ssd phase2. The size is fit to the 128 bytes
  * slab (see slab_map[] defined in mem.c).
+ *
+ * p2_bkt_id0 holds the first (and usually only) E-bucket ID.  When an object
+ * spans more than one E-bucket, additional IDs are stored in a singly-linked
+ * list of vos_obj_bkt_node_df nodes rooted at p2_bkt_extra.  The list is
+ * allocated in the NE zone so it is always resident after pool load.
+ * p2_bkt_cnt caches the total count to avoid traversing the chain.
  */
 struct vos_obj_p2_df {
 	struct vos_obj_df	p2_obj_df;
-	uint32_t		p2_bkt_ids[VOS_OBJ_BKTS_MAX];
+	uint32_t                p2_bkt_id0;   /* first bucket ID */
+	uint32_t                p2_bkt_cnt;   /* total bucket count */
+	umem_off_t              p2_bkt_extra; /* head of overflow node chain */
 	uint64_t		p2_reserved;
 };
 D_CASSERT(sizeof(struct vos_obj_p2_df) == D_ALIGNUP(sizeof(struct vos_obj_df), 32));

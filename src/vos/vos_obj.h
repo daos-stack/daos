@@ -28,6 +28,50 @@
 /* Internal container handle structure */
 struct vos_container;
 
+/*
+ * Bucket IDs stored in the object's durable chain use the highest bit
+ * to mark whether the bucket holds "object shared data" (dkey tree nodes,
+ * dkey records) as opposed to a specific dkey's own data (akey/value trees,
+ * records). Object-level pinning only needs the shared-tagged buckets; a
+ * dkey's own bucket is pinned separately, on demand, before its data is
+ * accessed. obj_bkt_id0 is always shared and is never tagged.
+ */
+#define VOS_BKT_ID_SHARED_FLAG (1U << 31)
+
+static inline uint32_t
+vos_bkt_id_encode(uint32_t bkt_id, bool shared)
+{
+	D_ASSERT((bkt_id & VOS_BKT_ID_SHARED_FLAG) == 0);
+	return shared ? (bkt_id | VOS_BKT_ID_SHARED_FLAG) : bkt_id;
+}
+
+static inline uint32_t
+vos_bkt_id_raw(uint32_t bkt_id)
+{
+	return bkt_id & ~VOS_BKT_ID_SHARED_FLAG;
+}
+
+static inline bool
+vos_bkt_id_is_shared(uint32_t bkt_id)
+{
+	return (bkt_id & VOS_BKT_ID_SHARED_FLAG) != 0;
+}
+
+enum {
+	/** The bucket node is newly created */
+	VOS_BKT_NODE_FL_CREATE = (1 << 0),
+	/** The bucket node change is not committed */
+	VOS_BKT_NODE_FL_DIRTY = (1 << 1),
+};
+
+/* In-memory bucket node for the on-disk vos_obj_bkt_node_df */
+struct vos_obj_bkt_node {
+	uint32_t bn_bkt_ids[VOS_OBJ_BKT_NODE_CAP];
+	uint8_t  bn_bkt_cnt; /* valid entries in bn_bkt_ids[] */
+	uint8_t  bn_flags;
+	uint16_t bn_pad;
+};
+
 /**
  * A cached object (DRAM data structure).
  */
@@ -50,8 +94,12 @@ struct vos_object {
 	struct vos_container		*obj_cont;
 	/* Handle for the pinned object */
 	struct umem_pin_handle		*obj_pin_hdl;
-	/** Bucket IDs for the object */
-	uint32_t			obj_bkt_ids[VOS_OBJ_BKTS_MAX];
+	/** Primary bucket ID for the object */
+	uint32_t                         obj_bkt_id0;
+	/** Total bucket count including the primary bucket */
+	uint32_t                         obj_bkt_cnt;
+	/** Bucket node array */
+	struct vos_obj_bkt_node         *obj_bkt_nodes;
 	ABT_mutex			obj_mutex;
 	ABT_cond			obj_wait_alloting;
 	ABT_cond			obj_wait_loading;

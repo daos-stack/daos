@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
  * (C) Copyright 2026 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2697,7 +2697,7 @@ p2_basic_test(void **state)
 	rc = vos_obj_acquire(cont, oid, false, &obj);
 	assert_rc_equal(rc, 0);
 
-	assert_int_equal(obj->obj_bkt_ids[0], bkt_id);
+	assert_int_equal(obj->obj_bkt_id0, bkt_id);
 
 	vos_obj_release(obj, 0, true);
 
@@ -2721,7 +2721,7 @@ p2_basic_test(void **state)
 	rc = vos_obj_acquire(cont, oid, false, &obj);
 	assert_rc_equal(rc, 0);
 
-	assert_int_equal(obj->obj_bkt_ids[0], bkt_id);
+	assert_int_equal(obj->obj_bkt_id0, bkt_id);
 
 	/* Verify space usage */
 	used[0] = verify_space(pool, UMEM_DEFAULT_MBKT_ID, used[0], 1, "Object2.1");
@@ -2734,7 +2734,7 @@ p2_basic_test(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Verify object2 bucket ID */
-	assert_int_equal(obj->obj_bkt_ids[0], bkt_id);
+	assert_int_equal(obj->obj_bkt_id0, bkt_id);
 
 	vos_obj_release(obj, 0, true);
 
@@ -2772,7 +2772,7 @@ p2_basic_test(void **state)
 	rc = vos_obj_acquire(cont, oid, false, &obj);
 	assert_rc_equal(rc, 0);
 
-	assert_int_equal(obj->obj_bkt_ids[0], bkt_id);
+	assert_int_equal(obj->obj_bkt_id0, bkt_id);
 	vos_obj_release(obj, 0, true);
 
 	/* Reclaim object2 */
@@ -2807,7 +2807,7 @@ fill_one(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey, char *akey,
 			rc = vos_obj_acquire(cont, oid, false, &obj);
 			assert_rc_equal(rc, 0);
 
-			bkt_id = obj->obj_bkt_ids[0];
+			bkt_id = obj->obj_bkt_id0;
 			vos_obj_release(obj, 0, false);
 			/* All evictable buckets are used up */
 			if (bkt_id == UMEM_DEFAULT_MBKT_ID) {
@@ -3016,7 +3016,7 @@ p2_fill_single(void **state)
 			rc = vos_obj_acquire(cont, oid, false, &obj);
 			assert_rc_equal(rc, 0);
 
-			bkt_id = obj->obj_bkt_ids[0];
+			bkt_id = obj->obj_bkt_id0;
 			vos_obj_release(obj, 0, false);
 			assert_true(bkt_id != UMEM_DEFAULT_MBKT_ID);
 		}
