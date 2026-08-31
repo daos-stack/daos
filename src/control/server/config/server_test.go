@@ -252,7 +252,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/var/log/daos/daos_server.log").
 		WithHelperLogFile("/var/log/daos/daos_server_helper.log").
-		WithFirmwareHelperLogFile("/var/log/daos/daos_firmware_helper.log").
 		WithTelemetryPort(9191).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
@@ -266,7 +265,10 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithHyperthreads(true). // hyper-threads disabled by default
 		WithSystemRamReserved(5).
 		WithAllowNumaImbalance(true).
-		WithAllowTHP(true)
+		WithAllowTHP(true).
+		WithDisableEngineAutoRestart(true).
+		WithEngineAutoRestartMinDelay(120).
+		WithKernelConfigPath("/host/boot/config")
 
 	// add engines explicitly to test functionality applied in WithEngines()
 	constructed.Engines = []*engine.Config{
@@ -744,6 +746,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorageVosEnv("NVME").
 						WithStorageControlMetadataPath(testMetadataDir).
 						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageKernelConfigPath("/host/boot/config").
 						WithStorageConfigOutputPath(filepath.Join(
 							testMetadataDir,
 							storage.ControlMetadataSubdir,
@@ -767,6 +770,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorageVosEnv("NVME").
 						WithStorageControlMetadataPath(testMetadataDir).
 						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageKernelConfigPath("/host/boot/config").
 						WithStorageConfigOutputPath(filepath.Join(
 							testMetadataDir,
 							storage.ControlMetadataSubdir,
@@ -818,6 +822,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorageVosEnv("NVME").
 						WithStorageControlMetadataPath(testMetadataDir).
 						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageKernelConfigPath("/host/boot/config").
 						WithStorageConfigOutputPath(filepath.Join(
 							testMetadataDir,
 							storage.ControlMetadataSubdir,
@@ -901,6 +906,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					WithStorageVosEnv("NVME").
 					WithStorageControlMetadataPath(testMetadataDir).
 					WithStorageControlMetadataDevice("").
+					WithStorageKernelConfigPath("/host/boot/config").
 					WithStorageConfigOutputPath(filepath.Join(
 						testMetadataDir,
 						storage.ControlMetadataSubdir,

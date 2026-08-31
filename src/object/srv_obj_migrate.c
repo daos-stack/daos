@@ -73,6 +73,12 @@ enum {
 };
 #define MIGRATE_DATA_MB_ENV "D_MIGRATE_DATA_MB"
 
+static inline bool
+migrate_cont_gone(int rc)
+{
+	return rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING;
+}
+
 struct migr_res_manager;
 
 /* resource consumed by migration */
@@ -646,7 +652,7 @@ migrate_pool_tls_create(uuid_t pool_uuid, unsigned int version, unsigned int gen
 	} else if (unlikely(pool_child->spc_no_storage)) {
 		D_DEBUG(DB_REBUILD, DF_UUID " " DF_UUID " lost pool shard, ver %d, skip.\n",
 			DP_UUID(pool_uuid), DP_UUID(pool_hdl_uuid), version);
-		D_GOTO(out, rc = 0);
+		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	D_ALLOC_PTR(pool_tls);
@@ -828,7 +834,7 @@ retry:
 			res->res_data.mem_ser_err++; /* counted as serious error */
 			DL_ERROR(rc,
 				 DF_RB " waited for 10 minutes, total memory errors: %lu/%lu,"
-				       " total waiters: %lu, total revived: %lu\n",
+				       " total waiters: %lu, total revived: %lu",
 				 DP_RB_MRO(mrone), res->res_data.mem_ser_err, res->res_data.mem_err,
 				 res->res_data.mem_waiting, res->res_data.mem_revived);
 		}
@@ -902,8 +908,6 @@ migrate_csum_calc(struct daos_csummer *csummer, struct migrate_one *mrone, daos_
 		  int iod_num, d_sg_list_t *sgls, d_iov_t *csum_iov,
 		  struct dcs_iod_csums **iod_csums)
 {
-	d_iov_t		tmp_csum_iov;
-	d_iov_t		*p_csum_iov;
 	int		rc;
 
 	if (daos_oclass_is_ec(&mrone->mo_oca)) {
@@ -916,14 +920,12 @@ migrate_csum_calc(struct daos_csummer *csummer, struct migrate_one *mrone, daos_
 
 	D_DEBUG(DB_CSUM, DF_RB ": " DF_C_UOID_DKEY ": Using packed csums\n", DP_RB_MRO(mrone),
 		DP_C_UOID_DKEY(mrone->mo_oid, &mrone->mo_dkey));
-	/** make a copy of the iov because it will be modified while
-	 * iterating over the csums
+	/*
+	 * The packed checksum iov is consumed as iod csums are unpacked, so
+	 * callers that need to preserve the original iov must pass a mutable copy.
 	 */
 	D_ASSERT(csum_iov != NULL);
-	tmp_csum_iov = *csum_iov;
-	p_csum_iov = &tmp_csum_iov;
-	rc = daos_csummer_alloc_iods_csums_with_packed(csummer, iods, iod_num,
-						       p_csum_iov, iod_csums);
+	rc = daos_csummer_alloc_iods_csums_with_packed(csummer, iods, iod_num, csum_iov, iod_csums);
 	if (rc != 0)
 		DL_ERROR(rc, DF_RB ": failed to alloc iod csums", DP_RB_MRO(mrone));
 
@@ -956,6 +958,8 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	int			 rc = 0;
 	d_iov_t			*p_csum_iov = NULL;
 	d_iov_t			 csum_iov = {0};
+	d_iov_t                  packed_csum_iov = {0};
+	uint64_t                 ts              = daos_gettime_coarse();
 
 	D_ASSERT(mrone->mo_iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -1012,6 +1016,9 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 					      &mrone->mo_oca, mrone->mo_oid.id_shard))
 		mrone_recx_daos2_vos(mrone, mrone->mo_iods, mrone->mo_iod_num);
 
+	if (!daos_oclass_is_ec(&mrone->mo_oca))
+		packed_csum_iov = fetch ? csum_iov : mrone->mo_csum_iov;
+
 	csummer = dsc_cont2csummer(dc_obj_hdl2cont_hdl(oh));
 	for (i = 0, start = 0; i < mrone->mo_iod_num; i++) {
 		daos_iod_t *iods = mrone->mo_iods;
@@ -1024,6 +1031,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		/* skip empty record */
 		if (iod_cnt == 0) {
 			D_DEBUG(DB_TRACE, DF_RB ": i %d iod_size = 0\n", DP_RB_MRO(mrone), i);
+			start = i + 1;
 			continue;
 		}
 
@@ -1031,16 +1039,20 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			iod_cnt);
 
 		rc = migrate_csum_calc(csummer, mrone, &iods[start], iod_cnt, &sgls[start],
-				       fetch ? &csum_iov : &mrone->mo_csum_iov,  &iod_csums);
+				       &packed_csum_iov, &iod_csums);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_RB ": error calculating checksums", DP_RB_MRO(mrone));
 			break;
 		}
 
+again1:
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_min_epoch, mrone->mo_version,
 				    VOS_OF_REBUILD, &mrone->mo_dkey, iod_cnt, &iods[start],
 				    iod_csums, &sgls[start]);
+
+		OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update (1)", mrone->mo_oid, again1);
+
 		daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
 			DL_ERROR(rc, DF_RB ": migrate failed", DP_RB_MRO(mrone));
@@ -1052,23 +1064,26 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 
 	if (iod_cnt > 0) {
 		rc = migrate_csum_calc(csummer, mrone, &mrone->mo_iods[start], iod_cnt,
-				       &sgls[start], fetch ? &csum_iov : &mrone->mo_csum_iov,
-				       &iod_csums);
+				       &sgls[start], &packed_csum_iov, &iod_csums);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_RB ": error calculating checksums", DP_RB_MRO(mrone));
 			D_GOTO(out, rc);
 		}
 
+again2:
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    mrone->mo_min_epoch, mrone->mo_version,
 				    VOS_OF_REBUILD, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], iod_csums,
 				    &sgls[start]);
+
+		OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update (2)", mrone->mo_oid, again2);
+
+		daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
 			DL_ERROR(rc, DF_RB ": migrate failed", DP_RB_MRO(mrone));
 			D_GOTO(out, rc);
 		}
-		daos_csummer_free_ic(csummer, &iod_csums);
 	}
 
 out:
@@ -1093,7 +1108,8 @@ migrate_update_parity(struct migrate_one *mrone, daos_epoch_t parity_eph,
 	d_sg_list_t		 tmp_sgl;
 	daos_size_t		 write_nr;
 	struct dcs_iod_csums	*iod_csums = NULL;
-	int			rc = 0;
+	int                      rc        = 0;
+	uint64_t                 ts        = daos_gettime_coarse();
 
 	split_size = encode ? stride_nr : cell_nr;
 	tmp_sgl.sg_nr = tmp_sgl.sg_nr_out = 1;
@@ -1144,10 +1160,14 @@ migrate_update_parity(struct migrate_one *mrone, daos_epoch_t parity_eph,
 			D_GOTO(out, rc);
 		}
 
+again:
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 				    parity_eph, mrone->mo_version,
 				    VOS_OF_REBUILD, &mrone->mo_dkey, 1, iod, iod_csums,
 				    &tmp_sgl);
+
+		OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update", mrone->mo_oid, again);
+
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -1348,6 +1368,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	char			*data;
 	daos_size_t		 size;
 	d_iov_t			 csum_iov = {0};
+	d_iov_t                  packed_csum_iov = {0};
 	d_iov_t			*p_csum_iov = NULL;
 	struct daos_csummer	*csummer = NULL;
 	struct dcs_iod_csums	*iod_csums = NULL;
@@ -1355,6 +1376,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	uint32_t		tgt_off = 0;
 	int			 i;
 	int			 rc;
+	uint64_t                 ts = daos_gettime_coarse();
 
 	D_ASSERT(mrone->mo_iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -1385,6 +1407,10 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 
 	rc = mrone_obj_fetch(mrone, oh, sgls, mrone->mo_iods, mrone->mo_iod_num,
 			     mrone->mo_epoch, DIOF_FOR_MIGRATION, p_csum_iov);
+	/* migrate_csum_calc() may change csum_iov->iov_buf, so make a copy as original csum_iov
+	 * will be freed by daos_iov_free() below.
+	 */
+	packed_csum_iov = csum_iov;
 	if (rc == -DER_CSUM) {
 		DL_ERROR(rc,
 			 DF_RB ": migrate dkey " DF_KEY " failed because of checksum error. "
@@ -1472,8 +1498,8 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	}
 
 	csummer = dsc_cont2csummer(dc_obj_hdl2cont_hdl(oh));
-	rc = migrate_csum_calc(csummer, mrone, mrone->mo_iods, mrone->mo_iod_num, sgls,
-			       p_csum_iov, &iod_csums);
+	rc      = migrate_csum_calc(csummer, mrone, mrone->mo_iods, mrone->mo_iod_num, sgls,
+				    &packed_csum_iov, &iod_csums);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_RB ": unable to calculate iod csums", DP_RB_MRO(mrone));
 		goto out;
@@ -1482,10 +1508,12 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		update_flags |= VOS_OF_EC;
 
+again:
 	rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 			    mrone->mo_min_epoch, mrone->mo_version,
 			    update_flags, &mrone->mo_dkey, mrone->mo_iod_num,
 			    mrone->mo_iods, iod_csums, sgls);
+	OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update", mrone->mo_oid, again);
 out:
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		if (iov[i].iov_buf)
@@ -1514,15 +1542,19 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	daos_handle_t         ioh;
 	int                   sgl_cnt    = 0;
 	d_iov_t               csum_iov   = {0};
+	d_iov_t               packed_csum_iov = {0};
 	struct daos_csummer  *csummer    = NULL;
 	struct dcs_iod_csums *iod_csums  = NULL;
 	d_iov_t              *p_csum_iov = NULL;
 	int                   rc, rc1, i;
+	uint64_t              ts = daos_gettime_coarse();
 
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
 
 	D_ASSERT(iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
+
+again:
 	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid, update_eph, VOS_OF_REBUILD,
 			      &mrone->mo_dkey, iod_num, iods, mrone->mo_iods_csums,
 			      0, &ioh, NULL);
@@ -1568,14 +1600,27 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	}
 
 	rc = mrone_obj_fetch(mrone, oh, sgls, iods, iod_num, fetch_eph, flags, p_csum_iov);
+	/* migrate_csum_calc() may change csum_iov->iov_buf, so make a copy as original csum_iov
+	 * will be freed by daos_iov_free() below.
+	 */
+	packed_csum_iov = csum_iov;
 	if (rc) {
 		DL_ERROR(rc, DF_RB ": migrate dkey " DF_KEY " failed", DP_RB_MRO(mrone),
 			 DP_KEY(&mrone->mo_dkey));
 		D_GOTO(post, rc);
 	}
 
+	/*
+	 * Convert recxs back to VOS-space before computing checksums, so that
+	 * csum chunk boundaries match the VOS offsets where data and csums will
+	 * be stored. Must happen after fetch (needs DAOS-space) and before
+	 * migrate_csum_calc().
+	 */
+	if (daos_oclass_is_ec(&mrone->mo_oca))
+		mrone_recx_daos2_vos(mrone, iods, iod_num);
+
 	csummer = dsc_cont2csummer(dc_obj_hdl2cont_hdl(oh));
-	rc = migrate_csum_calc(csummer, mrone, iods, iod_num, sgls, p_csum_iov, &iod_csums);
+	rc = migrate_csum_calc(csummer, mrone, iods, iod_num, sgls, &packed_csum_iov, &iod_csums);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_RB ": failed to calculate iod csums", DP_RB_MRO(mrone));
 		D_GOTO(post, rc);
@@ -1585,9 +1630,6 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 post:
 	for (i = 0; i < sgl_cnt; i++)
 		d_sgl_fini(&sgls[i], false);
-
-	if (daos_oclass_is_ec(&mrone->mo_oca))
-		mrone_recx_daos2_vos(mrone, iods, iod_num);
 
 	rc = bio_iod_post(vos_ioh2desc(ioh), rc);
 	if (rc)
@@ -1629,6 +1671,8 @@ end:
 	daos_iov_free(&csum_iov);
 	if (rc == 0)
 		rc = rc1;
+
+	OBJ_CHECK_EAGAIN(rc, ts, "vos_update_end", mrone->mo_oid, again);
 
 	if (rc)
 		DL_ERROR(rc, DF_RB ": " DF_UOID " migrate error", DP_RB_MRO(mrone),
@@ -1742,8 +1786,9 @@ static int
 migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	      struct ds_cont_child *cont)
 {
-	int	rc = 0;
-	int	i;
+	uint64_t ts = daos_gettime_coarse();
+	int      rc = 0;
+	int      i;
 
 	/* Punch dkey */
 	if (mrone->mo_dkey_punch_eph != 0 && mrone->mo_dkey_punch_eph <= tls->mpt_max_eph) {
@@ -1802,9 +1847,13 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 						      mrone->mo_oid.id_shard))
 			mrone_recx_daos2_vos(mrone, mrone->mo_punch_iods, mrone->mo_punch_iod_num);
 
+again:
 		rc = vos_obj_update(cont->sc_hdl, mrone->mo_oid, mrone->mo_rec_punch_eph,
 				    mrone->mo_version, VOS_OF_REBUILD, &mrone->mo_dkey,
 				    mrone->mo_punch_iod_num, mrone->mo_punch_iods, NULL, NULL);
+
+		OBJ_CHECK_EAGAIN(rc, ts, "vos_obj_update", mrone->mo_oid, again);
+
 		D_DEBUG(DB_REBUILD,
 			DF_RB ": " DF_UOID " mrone %p punch %d eph " DF_U64 "records: " DF_RC "\n",
 			DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), mrone, mrone->mo_punch_iod_num,
@@ -1834,30 +1883,23 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 		 */
 		rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, false, &cont_child);
 		if (rc != 0) {
-			if (rc == -DER_SHUTDOWN || (cont_child && cont_child->sc_stopping)) {
+			if (rc == -DER_CONT_DESTROYING)
 				D_DEBUG(DB_REBUILD,
-					DF_RB ": container " DF_UUID " is being "
-					      "destroyed\n",
+					DF_RB ": container " DF_UUID
+					      "already destroyed or destroying\n",
 					DP_RB_MPT(tls), DP_UUID(cont_uuid));
-				rc = 0;
-			}
-			if (cont_child)
-				ds_cont_child_put(cont_child);
+			D_ASSERT(cont_child == NULL);
 			return rc;
 		}
 	} else {
 		rc = ds_cont_child_lookup(tls->mpt_pool_uuid, cont_uuid, &cont_child);
-		if (rc != 0 || (cont_child && cont_child->sc_stopping)) {
-			if (rc == -DER_NONEXIST || (cont_child && cont_child->sc_stopping)) {
+		if (rc != 0) {
+			if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING)
 				D_DEBUG(DB_REBUILD,
-					DF_RB ": container " DF_UUID " is being "
-					      "destroyed\n",
+					DF_RB ": container " DF_UUID
+					      "already destroyed or destroying\n",
 					DP_RB_MPT(tls), DP_UUID(cont_uuid));
-				rc = 0;
-			}
-
-			if (cont_child)
-				ds_cont_child_put(cont_child);
+			D_ASSERT(cont_child == NULL);
 			return rc;
 		}
 	}
@@ -2231,7 +2273,7 @@ migrate_one_ult(void *arg)
 
 	data_units = data_size * ioa->ioa_fanout;
 	if (migr_res_is_hulk(data_units))
-		rc = migrate_res_hold(tls, MIGR_HULK, data_units, &mrone->mo_data_rsh);
+		rc = migrate_res_hold(tls, MIGR_HULK, 1, &mrone->mo_data_rsh);
 	else
 		rc = migrate_res_hold(tls, MIGR_DATA, data_units, &mrone->mo_data_rsh);
 	if (rc)
@@ -2255,7 +2297,8 @@ migrate_one_ult(void *arg)
 	 *   (nonexistent)
 	 * This is just a workaround...
 	 */
-	if (rc != 0 && rc != -DER_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0) {
+	if (rc != 0 && rc != -DER_CONT_NONEXIST && rc != -DER_CONT_DESTROYING &&
+	    rc != -DER_DATA_LOSS && tls->mpt_status == 0) {
 		DL_ERROR(rc, DF_RB ": " DF_UOID " rebuild failed, set mpt_fini for tgt %d.",
 			 DP_RB_MPT(tls), DP_UOID(mrone->mo_oid), dss_get_module_info()->dmi_tgt_id);
 		tls->mpt_status = rc;
@@ -3010,6 +3053,8 @@ out:
 		DL_ERROR(rc, DF_RB ": " DF_UOID " migrate punch failed", DP_RB_MPT(tls),
 			 DP_UOID(arg->oid));
 
+	if (migrate_cont_gone(rc))
+		rc = 0;
 	if (tls->mpt_status == 0 && rc != 0)
 		tls->mpt_status = rc;
 
@@ -3267,9 +3312,10 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 			 * to rebuild the data, see obj_list_common.
 			 */
 			/* If the container is being destroyed, it may return
-			 * -DER_NONEXIST, see obj_ioc_init().
+			 * -DER_CONT_NONEXIST or -DER_CONT_DESTROYING, see obj_ioc_init().
 			 */
-			if (rc == -DER_DATA_LOSS || rc == -DER_NONEXIST) {
+			if (rc == -DER_DATA_LOSS || rc == -DER_CONT_NONEXIST ||
+			    rc == -DER_CONT_DESTROYING) {
 				D_WARN(DF_RB ": mo replicas for " DF_UOID " %d\n", DP_RB_MPT(tls),
 				       DP_UOID(arg->oid), rc);
 				num = 0;
@@ -3405,7 +3451,8 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	atomic_fetch_sub(&pool->sp_rebuilding, arg.tls_stopped);
 	ABT_mutex_free(&arg.stop_lock);
 
-	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
+	D_INFO(DF_UUID " ver %d, gen %d migrate stopped\n", DP_UUID(pool->sp_uuid), version,
+	       generation);
 }
 
 static int
@@ -3524,23 +3571,13 @@ free:
 	if (arg->epoch == DAOS_EPOCH_MAX)
 		tls->mpt_obj_count++;
 
-	if (rc == -DER_NONEXIST) {
-		struct ds_cont_child *cont_child = NULL;
-
-		/* check again to see if the container is being destroyed. */
-		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child, false);
-		if (cont_child == NULL || cont_child->sc_stopping)
-			rc = 0;
-
-		if (cont_child)
-			ds_cont_child_put(cont_child);
-	}
-
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_OBJ_FAIL) &&
 	    tls->mpt_obj_count >= daos_fail_value_get())
 		rc = -DER_IO;
 
 out:
+	if (migrate_cont_gone(rc))
+		rc = 0;
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
 
@@ -3726,7 +3763,8 @@ cont_fetch_start_ult(void *arg)
 	rc = ds_cont_fetch_snaps(fetch_arg->pool->sp_iv_ns, fetch_arg->cont_uuid,
 				 &fetch_arg->snapshots, &fetch_arg->snap_cnt);
 	if (rc) {
-		D_ERROR("ds_cont_fetch_snaps failed: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": ds_cont_fetch_snaps failed",
+			 DP_CONT(fetch_arg->pool_uuid, fetch_arg->cont_uuid));
 		return rc;
 	}
 
@@ -3781,9 +3819,16 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	rc = dss_ult_execute(cont_fetch_start_ult, &fetch_arg, NULL, NULL, DSS_XS_SYS, 0,
 			     MIGRATE_STACK_SIZE);
 	if (rc) {
-		DL_ERROR(rc, DF_RB ": ds_pool_lookup failed", DP_RB_MPT(tls));
-		if (rc == -DER_SHUTDOWN)
-			rc = 0;
+		DL_ERROR(rc, DF_RB ": cont_fetch_start_ult failed", DP_RB_MPT(tls));
+		if (migrate_cont_gone(rc)) {
+			DL_ERROR(rc, DF_RB ": " DF_CONT " skip orphan container", DP_RB_MPT(tls),
+				 DP_CONT(tls->mpt_pool_uuid, cont_uuid));
+			D_GOTO(cont_done, rc = 0);
+		}
+		if (rc == -DER_SHUTDOWN) {
+			tls->mpt_fini = 1;
+			DL_ERROR(rc, DF_RB ": set mpt_fini", DP_RB_MPT(tls));
+		}
 		D_GOTO(free, rc);
 	}
 
@@ -3814,6 +3859,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 		}
 	}
 
+cont_done:
 	D_DEBUG(DB_REBUILD, DF_RB ": iter cont " DF_UUID "/%" PRIx64 " finish.\n", DP_RB_MPT(tls),
 		DP_UUID(cont_uuid), ih.cookie);
 
@@ -3870,24 +3916,21 @@ migrate_ult(void *arg)
 
 	D_ASSERT(pool_tls != NULL);
 	pool = pool_tls->mpt_pool;
-	/* Only reintegrating targets/pool needs to discard the object, if sp_need_discard is 0,
-	 * either the target does not need to discard, or discard has been done.
-	 * spc_discard_done means discarding has been done in the current VOS target.
-	 */
-	if (pool->spc_pool->sp_need_discard) {
-		while (!pool->spc_discard_done) {
-			D_DEBUG(DB_REBUILD, DF_RB " wait for discard to finish.\n",
-				DP_RB_MPT(pool_tls));
-			dss_sleep(2 * 1000);
-			if (pool_tls->mpt_fini)
-				D_GOTO(out, rc);
-		}
+	while (atomic_load(&pool->spc_pool->sp_discarding) != 0) {
+		D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n", DP_RB_MPT(pool_tls));
+		dss_sleep(2 * 1000);
+		if (pool_tls->mpt_fini)
+			D_GOTO(out, rc);
+
+		ABT_mutex_lock(pool->spc_pool->sp_mutex);
 		if (pool->spc_pool->sp_discard_status) {
 			rc = pool->spc_pool->sp_discard_status;
-			D_DEBUG(DB_REBUILD, DF_RB " discard failure: " DF_RC, DP_RB_MPT(pool_tls),
-				DP_RC(rc));
+			ABT_mutex_unlock(pool->spc_pool->sp_mutex);
+			D_DEBUG(DB_REBUILD, DF_RB ": discard failure: " DF_RC "\n",
+				DP_RB_MPT(pool_tls), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
+		ABT_mutex_unlock(pool->spc_pool->sp_mutex);
 	}
 
 	rc =
@@ -4373,7 +4416,7 @@ reint_post_cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(daos_handle_is_valid(cont_toh));
 
 	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, entry->ie_couuid, &cont_child);
-	if (rc == -DER_NONEXIST || rc == -DER_SHUTDOWN) {
+	if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING) {
 		D_DEBUG(DB_REBUILD, DF_RB" co_uuid "DF_UUID" already destroyed or destroying, "
 			DF_RC"\n", DP_RB_MPT(tls), DP_UUID(entry->ie_couuid), DP_RC(rc));
 		rc = 0;
@@ -4544,8 +4587,9 @@ migr_res_watchdog(void)
 
 			ABT_mutex_lock(res->res_mutex);
 			if (d_list_empty(&res->res_waitq)) {
-				D_WARN(" bucket=%d: limit=%lu, used=0, waiter=<NULL>\n", j,
-				       res->res_limit);
+				D_WARN(" bucket=%d: limit=" DF_U64 ", used=" DF_U64
+				       ", waiter=<NULL>\n",
+				       j, res->res_limit, res->res_used);
 				ABT_mutex_unlock(res->res_mutex);
 				continue;
 			}
@@ -4618,8 +4662,10 @@ migrate_check_one(void *data)
 		migrate_pool_tls_get(tls);
 		tls->mpt_post_process_started = 1;
 		D_ALLOC_PTR(ult_arg);
-		if (ult_arg == NULL)
+		if (ult_arg == NULL) {
+			migrate_pool_tls_put(tls);
 			D_GOTO(out, rc = -DER_NOMEM);
+		}
 
 		ult_arg->rpa_tls = tls;
 		ult_arg->rpa_migrated_root = &tls->mpt_migrated_root;
@@ -4760,10 +4806,6 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 		return -DER_NONEXIST;
 	}
 
-	/* NB: let's send object list to 0 xstream to simplify the migrate
-	 * object handling process for now, for example avoid lock to insert
-	 * objects in the object tree.
-	 */
 	tgt_ep.ep_rank = target->ta_comp.co_rank;
 	index = target->ta_comp.co_index;
 	ABT_rwlock_unlock(pool->sp_lock);

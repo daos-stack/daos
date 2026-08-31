@@ -417,7 +417,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent **daes = NULL;
-	struct vos_dtx_cmt_ent **dces = NULL;
+	bool                    *cmts = NULL;
 	struct vos_ts_set       *ts_set;
 	struct vos_container    *cont;
 	struct vos_object       *obj        = NULL;
@@ -490,9 +490,19 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	hold_flags = (flags & VOS_OF_COND_PUNCH) ? 0 : VOS_OBJ_CREATE;
 	hold_flags |= VOS_OBJ_VISIBLE;
 
-	rc = vos_obj_hold(cont, oid, &epr, bound, hold_flags, DAOS_INTENT_PUNCH, &obj, ts_set);
+	rc = vos_obj_acquire(cont, oid, true, &obj);
 	if (rc != 0)
 		goto reset;
+
+	if (!(hold_flags & VOS_OBJ_CREATE) && (obj->obj_df == NULL)) {
+		rc = vos_ilog_ts_add(ts_set, NULL, &oid, sizeof(oid));
+		D_ASSERT(rc == 0);
+
+		rc = -DER_NONEXIST;
+		vos_obj_release(obj, 0, true);
+		obj = NULL;
+		goto reset;
+	}
 
 	rc = vos_tx_begin(dth, vos_cont2umm(cont), cont->vc_pool->vp_sysdb, obj);
 	if (rc != 0)
@@ -510,12 +520,12 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (daes == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
-		if (dces == NULL)
+		D_ALLOC_ARRAY(cmts, dth->dth_dti_cos_count);
+		if (cmts == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
 
-		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					     dth->dth_dti_cos_count, 0, false, NULL, daes, dces);
+		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos, dth->dth_dti_cos_count, 0,
+					     false, NULL, daes, cmts);
 		if (rc < 0)
 			goto reset;
 		if (rc == 0)
@@ -585,15 +595,15 @@ reset:
 			dth->dth_cos_done = 0;
 
 		if (daes != NULL)
-			vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
-					    false, rc != 0, false);
+			vos_dtx_post_handle(cont, daes, cmts, dth->dth_dti_cos_count, false,
+					    rc != 0, false);
 	}
 
 	if (obj != NULL)
 		vos_obj_release(obj, 0, rc != 0 && tx_started);
 
 	D_FREE(daes);
-	D_FREE(dces);
+	D_FREE(cmts);
 	vos_ts_set_free(ts_set);
 
 	if (rc == 0) {
@@ -842,8 +852,7 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
 	}
 
 restart:
-	rc = vos_obj_hold(cont, oid, &epr, epoch, VOS_OBJ_VISIBLE | VOS_OBJ_CREATE,
-			  DAOS_INTENT_MARK, &obj, NULL);
+	rc = vos_obj_acquire(cont, oid, true, &obj);
 	if (rc != 0)
 		goto log;
 
@@ -1753,10 +1762,17 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_minor_epc	 = entry.en_minor_epc;
 	it_entry->ie_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_recx.rx_nr	 = evt_extent_width(ext);
+	D_ASSERTF(it_entry->ie_recx.rx_nr != 0, "sel_ext_lo:" DF_U64 ", epoch:" DF_U64 "/%u\n",
+		  ext->ex_lo, entry.en_epoch, entry.en_minor_epc);
+
 	ext = &entry.en_ext;
 	/* Also export the original extent and the visibility flags */
 	it_entry->ie_orig_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_orig_recx.rx_nr	 = evt_extent_width(ext);
+	D_ASSERTF(it_entry->ie_orig_recx.rx_nr != 0,
+		  "orig_ext_lo:" DF_U64 ", epoch:" DF_U64 "/%u\n", ext->ex_lo, entry.en_epoch,
+		  entry.en_minor_epc);
+
 	it_entry->ie_vis_flags = entry.en_visibility;
 	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;

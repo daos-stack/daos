@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package raft
 
 import "fmt"
@@ -172,6 +175,17 @@ func hasVote(configuration Configuration, id ServerID) bool {
 	for _, server := range configuration.Servers {
 		if server.ID == id {
 			return server.Suffrage == Voter
+		}
+	}
+	return false
+}
+
+// inConfiguration returns true if the server identified by 'id' is in in the
+// provided Configuration.
+func inConfiguration(configuration Configuration, id ServerID) bool {
+	for _, server := range configuration.Servers {
+		if server.ID == id {
+			return true
 		}
 	}
 	return false

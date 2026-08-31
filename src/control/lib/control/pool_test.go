@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -772,6 +773,108 @@ func TestControl_PoolReintegrate(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_WaitForPoolRebuild(t *testing.T) {
+	doneResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{State: mgmtpb.PoolRebuildStatus_DONE},
+	})
+	busyResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{State: mgmtpb.PoolRebuildStatus_BUSY},
+	})
+	idleResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{State: mgmtpb.PoolRebuildStatus_IDLE},
+	})
+	failedResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State:  mgmtpb.PoolRebuildStatus_DONE,
+			Status: int32(daos.MiscError),
+		},
+	})
+	stoppedResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State:  mgmtpb.PoolRebuildStatus_IDLE,
+			Status: int32(daos.OpCanceled),
+		},
+	})
+	missingRebuildResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{})
+
+	for name, tc := range map[string]struct {
+		mic        *MockInvokerConfig
+		cancelCtx  bool
+		expErr     error
+		expQueries int
+	}{
+		"already done": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: doneResp,
+			},
+			expQueries: 1,
+		},
+		"transitions to done": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{idleResp, busyResp, doneResp},
+			},
+			expQueries: 3,
+		},
+		"done with nonzero error is a failure": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: failedResp,
+			},
+			expErr: errors.New("rebuild failed"),
+		},
+		"transitions to failed": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{idleResp, busyResp, failedResp},
+			},
+			expErr: errors.New("rebuild failed"),
+		},
+		"stopped before completing is a failure": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: stoppedResp,
+			},
+			expErr: errors.New("rebuild stopped before completing"),
+		},
+		"query error propagates": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("network down"),
+			},
+			expErr: errors.New("pool query while waiting for pool state: network down"),
+		},
+		"missing rebuild status is an error": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: missingRebuildResp,
+			},
+			expErr: errors.New("pool rebuild status missing from query response"),
+		},
+		"context cancellation aborts wait": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: idleResp,
+			},
+			cancelCtx: true,
+			expErr:    context.Canceled,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+			mi := NewMockInvoker(log, mic)
+
+			ctx, cancel := context.WithCancel(test.Context(t))
+			defer cancel()
+			if tc.cancelCtx {
+				cancel()
+			}
+
+			gotErr := WaitForPoolRebuild(ctx, mi, test.MockUUID(), time.Microsecond)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -2299,6 +2402,16 @@ func TestControl_PoolSetProp(t *testing.T) {
 				},
 			},
 		},
+		"success with byte value": {
+			req: &PoolSetPropReq{
+				ID: test.MockUUID(),
+				Properties: func() []*daos.PoolProperty {
+					p := propWithVal("label", "ok")
+					p.Value.SetBytes([]byte("test-byte-data"))
+					return []*daos.PoolProperty{p}
+				}(),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -2556,6 +2669,31 @@ func TestControl_PoolGetProp(t *testing.T) {
 			expResp: []*daos.PoolProperty{
 				propWithVal("label", "foo"),
 				propWithVal("space_rb", "42"),
+			},
+		},
+		"byte value in response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Byteval{Byteval: []byte("test-cert-data")},
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				ID: test.MockUUID(),
+				Properties: []*daos.PoolProperty{
+					propWithVal("label", ""),
+				},
+			},
+			expResp: []*daos.PoolProperty{
+				func() *daos.PoolProperty {
+					p := propWithVal("label", "")
+					p.Value.SetBytes([]byte("test-cert-data"))
+					return p
+				}(),
 			},
 		},
 		"missing props in response; compatibility with old pool": {

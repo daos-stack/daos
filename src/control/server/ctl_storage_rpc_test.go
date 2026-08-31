@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -2345,7 +2345,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"dcpm already mounted no reformat; replace fails": {
+		"dcpm already mounted no reformat; replace succeeds": {
 			scmMounted: true,
 			sMounts:    []string{"/mnt/daos"},
 			sClass:     storage.ClassDcpm,
@@ -2360,7 +2360,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("only valid if at least one engine requires format"),
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
@@ -2604,7 +2603,11 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			}
 			sysProv := system.NewMockSysProvider(log, smsc)
 			mounter := mount.NewProvider(log, sysProv)
-			scmProv := scm.NewProvider(log, nil, sysProv, mounter)
+			scmProv := scm.NewProvider(&scm.ProviderConfig{
+				Log:     log,
+				Sys:     sysProv,
+				Mounter: mounter,
+			})
 			bdevProv := bdev.NewMockProvider(log, nil)
 			if tc.getSysMemInfo == nil {
 				tc.getSysMemInfo = func() (*common.SysMemInfo, error) {

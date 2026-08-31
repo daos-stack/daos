@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -127,42 +127,7 @@ type (
 
 	// ScmNamespaces is a type alias for a slice of ScmNamespace references.
 	ScmNamespaces []*ScmNamespace
-
-	// ScmFirmwareUpdateStatus represents the status of a firmware update on the module.
-	ScmFirmwareUpdateStatus uint32
-
-	// ScmFirmwareInfo describes the firmware information of an PMem module.
-	ScmFirmwareInfo struct {
-		ActiveVersion     string
-		StagedVersion     string
-		ImageMaxSizeBytes uint32
-		UpdateStatus      ScmFirmwareUpdateStatus
-	}
 )
-
-const (
-	// ScmUpdateStatusUnknown indicates that the firmware update status is unknown.
-	ScmUpdateStatusUnknown ScmFirmwareUpdateStatus = iota
-	// ScmUpdateStatusStaged indicates that a new firmware version has been staged.
-	ScmUpdateStatusStaged
-	// ScmUpdateStatusSuccess indicates that the firmware update was successfully applied.
-	ScmUpdateStatusSuccess
-	// ScmUpdateStatusFailed indicates that the firmware update failed.
-	ScmUpdateStatusFailed
-)
-
-// String translates the update status to a string
-func (s ScmFirmwareUpdateStatus) String() string {
-	switch s {
-	case ScmUpdateStatusStaged:
-		return "Staged"
-	case ScmUpdateStatusSuccess:
-		return "Success"
-	case ScmUpdateStatusFailed:
-		return "Failed"
-	}
-	return "Unknown"
-}
 
 func (sm *ScmModule) String() string {
 	health := ""
@@ -319,8 +284,6 @@ type (
 		CheckFormat(ScmFormatRequest) (*ScmFormatResponse, error)
 		Scan(ScmScanRequest) (*ScmScanResponse, error)
 		Prepare(ScmPrepareRequest) (*ScmPrepareResponse, error)
-		QueryFirmware(ScmFirmwareQueryRequest) (*ScmFirmwareQueryResponse, error)
-		UpdateFirmware(ScmFirmwareUpdateRequest) (*ScmFirmwareUpdateResponse, error)
 	}
 
 	// ScmPrepareRequest defines the parameters for a Prepare operation.
@@ -362,12 +325,13 @@ type (
 	// ScmFormatRequest defines the parameters for a Format operation or query.
 	ScmFormatRequest struct {
 		pbin.ForwardableRequest
-		Force      bool
-		Mountpoint string
-		OwnerUID   int
-		OwnerGID   int
-		Ramdisk    *RamdiskParams
-		Dcpm       *DeviceParams
+		Force            bool
+		Mountpoint       string
+		OwnerUID         int
+		OwnerGID         int
+		Ramdisk          *RamdiskParams
+		Dcpm             *DeviceParams
+		KernelConfigPath string
 	}
 
 	// ScmFormatResponse contains the results of a successful Format operation or query.
@@ -381,64 +345,21 @@ type (
 	// ScmMountRequest represents an SCM mount request.
 	ScmMountRequest struct {
 		pbin.ForwardableRequest
-		Class   Class
-		Device  string
-		Target  string
-		Ramdisk *RamdiskParams
-	}
-
-	// ScmFirmwareQueryRequest defines the parameters for a firmware query.
-	ScmFirmwareQueryRequest struct {
-		pbin.ForwardableRequest
-		DeviceUIDs  []string // requested device UIDs, empty for all
-		ModelID     string   // filter by model ID
-		FirmwareRev string   // filter by current FW revision
-	}
-
-	// ScmModuleFirmware represents the results of a firmware query for a specific
-	// PMem module.
-	ScmModuleFirmware struct {
-		Module ScmModule
-		Info   *ScmFirmwareInfo
-		Error  string
-	}
-
-	// ScmFirmwareQueryResponse contains the results of a successful firmware query.
-	ScmFirmwareQueryResponse struct {
-		Results []ScmModuleFirmware
-	}
-
-	// ScmFirmwareUpdateRequest defines the parameters for a firmware update.
-	ScmFirmwareUpdateRequest struct {
-		pbin.ForwardableRequest
-		DeviceUIDs   []string // requested device UIDs, empty for all
-		FirmwarePath string   // location of the firmware binary
-		ModelID      string   // filter devices by model ID
-		FirmwareRev  string   // filter devices by current FW revision
-	}
-
-	// ScmFirmwareUpdateResult represents the result of a firmware update for
-	// a specific PMem module.
-	ScmFirmwareUpdateResult struct {
-		Module ScmModule
-		Error  string
-	}
-
-	// ScmFirmwareUpdateResponse contains the results of the firmware update.
-	ScmFirmwareUpdateResponse struct {
-		Results []ScmFirmwareUpdateResult
+		Class            Class
+		Device           string
+		Target           string
+		Ramdisk          *RamdiskParams
+		KernelConfigPath string
 	}
 )
 
 type ScmForwarder struct {
 	ScmAdminForwarder
-	ScmFwForwarder
 }
 
 func NewScmForwarder(log logging.Logger) *ScmForwarder {
 	return &ScmForwarder{
 		ScmAdminForwarder: *NewScmAdminForwarder(log),
-		ScmFwForwarder:    *NewScmFwForwarder(log),
 	}
 }
 
@@ -522,68 +443,6 @@ func (f *ScmAdminForwarder) Prepare(req ScmPrepareRequest) (*ScmPrepareResponse,
 
 	res := new(ScmPrepareResponse)
 	if err := f.SendReq("ScmPrepare", req, res); err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-const (
-	// ScmFirmwareQueryMethod is the method name used when forwarding the request
-	// to query SCM firmware.
-	ScmFirmwareQueryMethod = "ScmFirmwareQuery"
-	// ScmFirmwareUpdateMethod is the method name used when forwarding the request
-	// to update SCM firmware.
-	ScmFirmwareUpdateMethod = "ScmFirmwareUpdate"
-)
-
-// ScmFwForwarder forwards firmware requests to a privileged binary.
-type ScmFwForwarder struct {
-	pbin.Forwarder
-}
-
-// NewScmFwForwarder returns a new ScmFwForwarder.
-func NewScmFwForwarder(log logging.Logger) *ScmFwForwarder {
-	pf := pbin.NewForwarder(log, pbin.DaosFWName)
-
-	return &ScmFwForwarder{
-		Forwarder: *pf,
-	}
-}
-
-// checkSupport verifies that the firmware support binary is installed.
-func (f *ScmFwForwarder) checkSupport() error {
-	if f.Forwarder.CanForward() {
-		return nil
-	}
-
-	return errors.Errorf("SCM firmware operations are not supported on this system")
-}
-
-// Query forwards an SCM firmware query request.
-func (f *ScmFwForwarder) QueryFirmware(req ScmFirmwareQueryRequest) (*ScmFirmwareQueryResponse, error) {
-	if err := f.checkSupport(); err != nil {
-		return nil, err
-	}
-	req.Forwarded = true
-
-	res := new(ScmFirmwareQueryResponse)
-	if err := f.SendReq(ScmFirmwareQueryMethod, req, res); err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-// Update forwards a request to update firmware on the SCM.
-func (f *ScmFwForwarder) UpdateFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmwareUpdateResponse, error) {
-	if err := f.checkSupport(); err != nil {
-		return nil, err
-	}
-	req.Forwarded = true
-
-	res := new(ScmFirmwareUpdateResponse)
-	if err := f.SendReq(ScmFirmwareUpdateMethod, req, res); err != nil {
 		return nil, err
 	}
 

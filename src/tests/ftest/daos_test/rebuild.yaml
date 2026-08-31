@@ -7,7 +7,9 @@ timeout: 800
 timeouts:
   test_rebuild_0to10: 2000
   test_rebuild_12to15: 1500
+  test_rebuild_25: 1500
   test_rebuild_27: 1500
+  test_rebuild_28: 1500
   test_rebuild_31: 400
   test_rebuild_32: 400
   test_rebuild_33: 200
@@ -126,7 +128,7 @@ daos_tests:
     test_rebuild_29: -s5 -u subtests="29"
     test_rebuild_30: -s5 -u subtests="30"
     test_rebuild_31: -s5 -u subtests="31"
-    test_rebuild_32: -s5 -u subtests="32"
+    test_rebuild_32: -s7 -u subtests="32"
     test_rebuild_33: -s5 -u subtests="33"
     test_rebuild_34: -s5 -u subtests="34"
     test_rebuild_35: -s5 -u subtests="35"

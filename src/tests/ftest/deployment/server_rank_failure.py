@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -134,8 +134,8 @@ class ServerRankFailure(IorTestBase):
             ior_namespace (str): Yaml namespace that defines the object class used for IOR.
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio_80/*")
-        self.add_container(pool=self.pool)
+        self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
+        self.container = self.get_container(self.pool)
 
         # 2. Run IOR with given object class and let it run through step 7.
         ior_results = {}
@@ -189,19 +189,20 @@ class ServerRankFailure(IorTestBase):
         self.log.info("Disabled ranks = %s", disabled_ranks)
 
         # 10. Call dmg pool reintegrate one rank at a time to enable all ranks.
+        # --wait blocks each reintegrate until its rebuild completes.
         for disabled_rank in disabled_ranks:
             while True:
                 try:
-                    self.pool.reintegrate(ranks=disabled_rank)
+                    self.pool.reintegrate(ranks=disabled_rank, wait=True)
                     break
                 except CommandFailure as error:
                     self.log.debug("## pool reintegrate error: %s", error)
 
-            # Wait for rebuild to finish
-            self.log.info("Wait for rebuild to start.")
-            self.pool.wait_for_rebuild_to_start(interval=10)
-            self.log.info("Wait for rebuild to finish.")
-            self.pool.wait_for_rebuild_to_end(interval=10)
+        # 10.5 Verify that no ranks are disabled after reintegration.
+        output = self.get_dmg_command().pool_query(pool=self.pool.identifier)
+        disabled_ranks = output["response"].get("disabled_ranks")
+        if disabled_ranks:
+            self.fail(f"Ranks are still disabled after reintegration: {disabled_ranks}")
 
         # 11. Verify that the container Health is HEALTHY.
         if not self.container.verify_prop({"status": "HEALTHY"}):
@@ -302,12 +303,12 @@ class ServerRankFailure(IorTestBase):
         self.log.info("engine_kill_host = %s", engine_kill_host)
 
         # 2. Create a pool across two ranks on the same node; 0 and rank_r.
-        self.add_pool(namespace="/run/pool_size_value/*", target_list=[0, rank_r])
+        self.pool = self.get_pool(namespace="/run/pool_size_value/*", target_list=[0, rank_r])
 
         # 3. Create a container without redundancy factor.
         self.container = []
         self.container.append(
-            self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
+            self.get_container(self.pool, namespace="/run/container_wo_rf/*"))
 
         # 4. Run IOR with oclass SX.
         ior_results = {}
@@ -341,7 +342,7 @@ class ServerRankFailure(IorTestBase):
 
         # 8. Create a new container on the pool and run IOR.
         self.container.append(
-            self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
+            self.get_container(self.pool, namespace="/run/container_wo_rf/*"))
 
         # Run IOR and verify that it works.
         job_num = 2

@@ -240,9 +240,8 @@ struct d_ulink_ops   co_hdl_uh_ops = {
 	.uop_cmp	= cont_cmp,
 };
 
-int
-cont_insert(struct vos_container *cont, struct d_uuid *key, struct d_uuid *pkey,
-	    daos_handle_t *coh)
+static int
+cont_insert(struct vos_container *cont, struct d_uuid *key, struct d_uuid *pkey, daos_handle_t *coh)
 {
 	int	rc	= 0;
 
@@ -497,6 +496,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		goto exit;
 	}
 
+	d_list_add_tail(&cont->vc_pool_link, &pool->vp_cont_list);
+
 	cont->vc_open_count = 1;
 	D_DEBUG(DB_TRACE, "Inert cont "DF_UUID" into hash table.\n",
 		DP_UUID(cont->vc_id));
@@ -527,8 +528,10 @@ vos_cont_close(daos_handle_t coh)
 		  DP_UUID(cont->vc_id), cont->vc_open_count);
 
 	cont->vc_open_count--;
-	if (cont->vc_open_count == 0)
+	if (cont->vc_open_count == 0) {
+		d_list_del_init(&cont->vc_pool_link);
 		vos_obj_cache_evict(cont);
+	}
 
 	D_DEBUG(DB_TRACE, "Close cont "DF_UUID", open count: %d\n",
 		DP_UUID(cont->vc_id), cont->vc_open_count);
@@ -654,8 +657,23 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc);
 	}
 
-	d_iov_set(&iov, &key, sizeof(struct d_uuid));
-	rc = dbtree_delete(pool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
+	/*
+	 * Temporary workaround: Re-check if the container is re-opened by rebuild
+	 * when this function yield on flushing header or starting local tx.
+	 *
+	 * This additional check should be removed once rebuild no longer do on-demand
+	 * container open/create.
+	 */
+	rc = cont_lookup(&key, &pkey, &cont, pool->vp_sysdb);
+	if (rc == 0) {
+		D_ERROR(DF_CONT " Container is re-opened (%d)!\n", DP_CONT(pool->vp_id, co_uuid),
+			cont->vc_open_count);
+		cont_decref(cont);
+		rc = -DER_BUSY;
+	} else {
+		d_iov_set(&iov, &key, sizeof(struct d_uuid));
+		rc = dbtree_delete(pool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
+	}
 
 	rc = umem_tx_end(vos_pool2umm(pool), rc);
 	if (rc) {

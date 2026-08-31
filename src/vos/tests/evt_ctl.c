@@ -1,6 +1,7 @@
 /**
- * Copyright 2017-2023 Intel Corporation.
- * Copyright 2026 Google LLC
+ * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2026 Google LLC
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -76,8 +77,7 @@ static daos_handle_t		ts_toh;
 #define D_1M_SIZE		(1024 * 1024)
 #define D_256M_SIZE		(256 * 1024 * 1024)
 
-#define POOL_NAME "/mnt/daos/evtree-utest"
-#define POOL_SIZE ((1024 * 1024  * 1024ULL))
+#define POOL_NAME               "/mnt/daos/evtree-utest"
 
 struct test_arg {
 	struct utest_context	*ta_utx;

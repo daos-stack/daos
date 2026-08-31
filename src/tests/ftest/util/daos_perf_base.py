@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,9 +24,9 @@ class DaosPerfBase(TestWithServers):
     def run_daos_perf(self):
         """Run the daos_perf command."""
         # Create pool
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         # Create container
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
         # Obtain the number of processes listed with the daos_perf options
         processes = self.params.get("processes", "/run/daos_perf/*")
         # Use the dmg_control yaml

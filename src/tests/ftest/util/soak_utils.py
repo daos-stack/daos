@@ -1,10 +1,11 @@
 """
 (C) Copyright 2019-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
+# pylint: disable=too-many-locals
 
 import getpass
 import os
@@ -1111,10 +1112,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
             ior_cmd.transfer_size.update(t_size)
             if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 ior_cmd.dfs_oclass.update(None)
-                ior_cmd.dfs_dir_oclass.update(None)
             else:
                 ior_cmd.dfs_oclass.update(file_dir_oclass[0])
-                ior_cmd.dfs_dir_oclass.update(file_dir_oclass[1])
             if ior_cmd.api.value == "DFS":
                 ior_cmd.test_file.update(os.path.join("/", "testfile"))
             if not cont:
@@ -1348,10 +1347,8 @@ def create_racer_cmdline(self, job_spec):
     # daos_racer needs its own pool; does not run using jobs pool
     add_pools(self, ["pool_racer"])
     add_containers(self, self.pool[-1], "SX")
-    racer_namespace = os.path.join(os.sep, "run", job_spec, "*")
     daos_racer = DaosRacerCommand(
-        self.bin, self.hostlist_clients[0])
-    daos_racer.namespace = racer_namespace
+        self.bin, self.hostlist_clients[0], namespace=os.path.join(os.sep, "run", job_spec, "*"))
     daos_racer.get_params(self)
     daos_racer.pool_uuid.update(self.pool[-1].uuid)
     daos_racer.cont_uuid.update(self.container[-1].uuid)
@@ -1486,8 +1483,30 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     # ${DAOS_TEST_APP_SRC}/suse             =>  apps built with suse and gnu-mpich
     # pylint: disable-next=wrong-spelling-in-comment,fixme
     # ${DAOS_TEST_APP_SRC}/suse/intelmpi    =>  apps built with suse and intelmpi
-    if "suse" in detect().name.lower() and os.environ.get("DAOS_TEST_MODE") is None:
-        os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "suse")
+    os_info = detect()
+    os_name = (os_info.name or "").lower()
+    os_version = str(os_info.version or "").strip()
+
+    # Fallback for cases where avocado detect() returns unknown/0.
+    if (not os_name or os_name == "unknown" or not os_version or os_version == "0") \
+            and os.path.exists("/etc/os-release"):
+        os_release = {}
+        with open("/etc/os-release", "r", encoding="utf-8") as fd:
+            for line in fd:
+                if "=" not in line:
+                    continue
+                key, value = line.rstrip().split("=", 1)
+                os_release[key] = value.strip().strip('"')
+        os_name = (os_release.get("NAME") or os_release.get("ID") or os_name).lower()
+        os_version = (os_release.get("VERSION_ID") or os_version).strip()
+
+    if os.environ.get("DAOS_TEST_MODE") is None:
+        if "suse" in os_name:
+            os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "suse")
+        elif os_version == "9":
+            os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "el9")
+        elif os_version == "8":
+            os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "el8")
     if "mpi/latest" in mpi_module and os.environ.get("DAOS_TEST_MODE") is None:
         os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "intelmpi")
         os.environ["I_MPI_OFI_LIBRARY_INTERNAL"] = "0"

@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,7 +32,6 @@ class TargetFailure(IorTestBase):
             results (dict): A dictionary object to store the ior metrics
             job_num (int): Assigned job number
             file_name (str): File name used for self.ior_cmd.test_file.
-            oclass (str): Value for dfs_oclass and dfs_dir_oclass.
             pool (TestPool): Pool to run IOR.
             container (TestContainer): Container to run IOR.
         """
@@ -73,7 +72,7 @@ class TargetFailure(IorTestBase):
         reintegrating the excluded target will bring back the system to the usable state.
 
         1. Run two server ranks and create a pool and a container with --properties=rd_fac:1.
-        2. Run IOR with --dfs.oclass RP_2G1/EC_2P1G1 --dfs.dir_oclass RP_2G1/EC_2P1G1
+        2. Run IOR with --dfs.oclass RP_2G1/EC_2P1G1
         3. While the IOR is running, exclude one target from each server rank so that IO
         fails even with replication.
         4. Verify the IOR failed.
@@ -89,8 +88,8 @@ class TargetFailure(IorTestBase):
                 IOR.
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio_80/*")
-        self.add_container(pool=self.pool, namespace="/run/container_with_rf/*")
+        self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
+        self.container = self.get_container(self.pool, namespace="/run/container_with_rf/*")
 
         # 2. Run IOR with oclass RP_2G1 or EC_2P1G1.
         ior_results = {}
@@ -163,7 +162,7 @@ class TargetFailure(IorTestBase):
         self.container.destroy()
 
         # 10. Create a new container and run IOR.
-        self.add_container(pool=self.pool, namespace="/run/container_with_rf/*")
+        self.container = self.get_container(self.pool, namespace="/run/container_with_rf/*")
         ior_results = {}
         self.run_ior_report_error(
             job_num=job_num, results=ior_results, file_name="test_file_3", pool=self.pool,
@@ -203,8 +202,8 @@ class TargetFailure(IorTestBase):
         :avocado: tags=TargetFailure,test_target_failure_wo_rf
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio_80/*")
-        self.add_container(pool=self.pool, namespace="/run/container_wo_rf/*")
+        self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
+        self.container = self.get_container(self.pool, namespace="/run/container_wo_rf/*")
 
         # 2. Run IOR with oclass SX so that excluding one target will result in a failure.
         ior_results = {}
@@ -330,7 +329,7 @@ class TargetFailure(IorTestBase):
         self.pool.append(self.get_pool(namespace="/run/pool_size_ratio_66/*"))
         for idx in range(2):
             self.container.append(
-                self.get_container(pool=self.pool[idx], namespace="/run/container_wo_rf/*"))
+                self.get_container(self.pool[idx], namespace="/run/container_wo_rf/*"))
 
         # 2. Run IOR with oclass SX on all containers at the same time.
         ior_results = {}

@@ -37,7 +37,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:2
 
 ior_flags_common: &ior_flags_common
@@ -62,15 +61,12 @@ ior:
     rp_3g6:
       <<: *ior_flags_common
       dfs_oclass: RP_3G6
-      dfs_dir_oclass: RP_3G6
     ec_4p2gx:
       <<: *ior_flags_common
       dfs_oclass: EC_4P2GX
-      dfs_dir_oclass: EC_4P2GX
     ec_8p2gx:
       <<: *ior_flags_common
       dfs_oclass: EC_8P2GX
-      dfs_dir_oclass: EC_8P2GX
 
 loop_test:
   iterations: 2

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -247,8 +247,17 @@ extend_cb_internal(void *arg)
 	int                   rc;
 	int                   i;
 
-	print_message("Extending, sleep 10, %s another rank %u, and start op %d (%s)\n", pre_op,
-		      cb_arg->rank, opc, extend_opstrs[opc]);
+	/* Wait for first extend to start (immediate return expected since it's running).
+	 * We want a post-effect: test_arg->pool.pool_info.pi_rebuild_st has the first rs_version.
+	 * Then later we can wait for the second rebuild to start with another similar call.
+	 */
+	print_message("before waiting for rebuild to start, pmap_ver=%u, rs_version=%u\n",
+		      test_arg->pool.pool_info.pi_map_ver,
+		      test_arg->pool.pool_info.pi_rebuild_st.rs_version);
+	test_rebuild_wait_to_start_next(&test_arg, 1);
+	print_message("Extending (rs_version=%u), sleep 10, %s rank %u, and start op %d (%s)\n",
+		      test_arg->pool.pool_info.pi_rebuild_st.rs_version, pre_op, cb_arg->rank, opc,
+		      extend_opstrs[opc]);
 
 	sleep(10);
 
@@ -314,7 +323,15 @@ extend_cb_internal(void *arg)
 		break;
 	}
 
-	daos_debug_set_params(test_arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	if (cb_arg->kill) {
+		print_message(
+		    "extend_cb_internal: waiting for next rebuild start before clearing FI\n");
+		test_rebuild_wait_to_start_next(&test_arg, 1);
+	}
+
+	print_message("extend_cb_internal: clear FI via daos_debug_set_params()\n");
+	rc = daos_debug_set_params(test_arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	assert_success(rc);
 
 	return 0;
 }
@@ -505,9 +522,9 @@ static const struct CMUnitTest extend_tests[] = {
     {"EXTEND13: read object during extend and extend", dfs_extend_fetch_extend,
      rebuild_sub_3nodes_rf0_setup, test_teardown},
     {"EXTEND14: write object during extend and kill", dfs_extend_write_kill,
-     rebuild_sub_3nodes_rf0_setup, test_teardown},
+     rebuild_sub_3nodes_rf0_setup_rebuild_pool_size, test_teardown},
     {"EXTEND15: write object during extend and extend", dfs_extend_write_extend,
-     rebuild_sub_3nodes_rf0_setup, test_teardown},
+     rebuild_sub_3nodes_rf0_setup_rebuild_pool_size, test_teardown},
     {"EXTEND16: extend fail then retry", dfs_extend_fail_retry, rebuild_sub_3nodes_rf0_setup,
      test_teardown},
 };

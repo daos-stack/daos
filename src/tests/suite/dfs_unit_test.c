@@ -43,6 +43,8 @@ dfs_test_mount(void **state)
 	daos_handle_t		poh_tmp, coh_tmp;
 	dfs_t			*dfs;
 	int			rc;
+	dfs_attr_t               attr = {0};
+	daos_oclass_id_t         exp_doc, exp_foc;
 
 	if (arg->myrank != 0)
 		return;
@@ -84,6 +86,17 @@ dfs_test_mount(void **state)
 	assert_rc_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
+
+	/** check if dir/file oclass is what is expected*/
+	rc = dfs_query(dfs, &attr);
+	assert_rc_equal(rc, 0);
+	rc = daos_obj_get_oclass(coh, DAOS_OT_MULTI_HASHED, 0, 0, &exp_doc);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(attr.da_dir_oclass_id, exp_doc);
+	rc = daos_obj_get_oclass(coh, DAOS_OT_ARRAY_BYTE, 0, 0, &exp_foc);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(attr.da_file_oclass_id, exp_foc);
+
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
@@ -1049,12 +1062,14 @@ static void
 dfs_test_rename(void **state)
 {
 	test_arg_t		*arg = *state;
-	dfs_obj_t		*obj1, *obj2;
+	dfs_obj_t               *obj1, *obj2, *root;
 	char			*f1 = "f1";
 	char			*f2 = "f2";
 	d_sg_list_t		sgl;
 	d_iov_t			iov;
 	char			buf[64];
+	char                     rbuf[64];
+	daos_size_t              read_size;
 	struct stat		stbuf;
 	struct timespec		prev_ts;
 	int			rc;
@@ -1128,6 +1143,36 @@ dfs_test_rename(void **state)
 	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
 	assert_int_equal(rc, 0);
+
+	/** renaming / exchanging an entry with itself must succeed and not destroy the file */
+	rc = dfs_move(dfs_mt, NULL, f2, NULL, f2, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_exchange(dfs_mt, NULL, f2, NULL, f2);
+	assert_int_equal(rc, 0);
+	/** same parent dir, but through a different open handle */
+	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &root, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_move(dfs_mt, root, f2, NULL, f2, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_exchange(dfs_mt, root, f2, NULL, f2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(root);
+	assert_int_equal(rc, 0);
+
+	/** the entry, its metadata and its data should all be intact */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 128);
+	memset(rbuf, 0, 64);
+	d_iov_set(&iov, rbuf, 64);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_read(dfs_mt, obj2, &sgl, 64, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 64);
+	assert_int_equal(memcmp(buf, rbuf, 64), 0);
 
 	rc = dfs_move(dfs_mt, NULL, f2, NULL, f1, NULL);
 	assert_int_equal(rc, 0);
@@ -2233,6 +2278,7 @@ compare_oclass(daos_handle_t coh, daos_oclass_id_t acid, daos_oclass_id_t ecid)
 {
 	int		rc;
 	daos_obj_id_t	oid = {};
+	daos_oclass_id_t normalized_ecid;
 
 	/*
 	 * get the expected oclass - this is needed to convert things with GX to fit them in current
@@ -2240,12 +2286,33 @@ compare_oclass(daos_handle_t coh, daos_oclass_id_t acid, daos_oclass_id_t ecid)
 	 */
 	rc = daos_obj_generate_oid(coh, &oid, 0, ecid, 0, 0);
 	assert_rc_equal(rc, 0);
-	ecid = daos_obj_id2class(oid);
+	normalized_ecid = daos_obj_id2class(oid);
 
-	if (acid == ecid)
+	if (acid == ecid || acid == normalized_ecid)
 		return 0;
-	else
-		return 1;
+
+	{
+		char aname[24] = "?";
+		char ename[24] = "?";
+		char nname[24] = "?";
+
+		daos_oclass_id2name(acid, aname);
+		daos_oclass_id2name(ecid, ename);
+		daos_oclass_id2name(normalized_ecid, nname);
+		print_message(
+		    "oclass mismatch: actual=%s(%u) expected=%s(%u) GX-normalized=%s(%u)\n", aname,
+		    acid, ename, ecid, nname, normalized_ecid);
+	}
+	return 1;
+}
+
+static daos_oclass_id_t
+expected_dir_oclass(daos_oclass_id_t cid, daos_oclass_id_t fallback)
+{
+	if (daos_cid_is_ec(cid))
+		return fallback;
+
+	return cid;
 }
 
 static void
@@ -2426,7 +2493,7 @@ dfs_test_oclass_hints(void **state)
 	/** get the dir info to query what oclass will be used */
 	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
 	assert_int_equal(rc, 0);
-	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, OC_RP_2G1);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, expected_dir_oclass(ecidx, OC_RP_2G1));
 	assert_int_equal(rc, 0);
 	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
 	assert_int_equal(rc, 0);
@@ -2446,12 +2513,12 @@ dfs_test_oclass_hints(void **state)
 	rc = dfs_cont_create_with_label(arg->pool.poh, "oc_cont2", &dattr, NULL, &coh, &dfs_l);
 	assert_int_equal(rc, 0);
 
-	/** set the expect EC object class ID based on domain nr */
-	if (attr.pa_domain_nr >= 18)
+	/** expected max EC class per domain count; thresholds must match dc_set_oclass() RF2 */
+	if (attr.pa_domain_nr >= 20)
 		ecidx = OC_EC_16P2GX;
-	else if (attr.pa_domain_nr >= 10)
+	else if (attr.pa_domain_nr >= 12)
 		ecidx = OC_EC_8P2GX;
-	else if (attr.pa_domain_nr >= 6)
+	else if (attr.pa_domain_nr >= 8)
 		ecidx = OC_EC_4P2GX;
 	else
 		ecidx = OC_EC_2P2GX;
@@ -2493,7 +2560,7 @@ dfs_test_oclass_hints(void **state)
 	/** get the dir info to query what oclass will be used */
 	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
 	assert_int_equal(rc, 0);
-	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, OC_RP_3G1);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, expected_dir_oclass(ecidx, OC_RP_3G1));
 	assert_int_equal(rc, 0);
 	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
 	assert_int_equal(rc, 0);
@@ -2560,7 +2627,7 @@ dfs_test_oclass_hints(void **state)
 	/** get the dir info to query what oclass will be used */
 	rc = dfs_obj_get_info(dfs_l, dir, &oinfo);
 	assert_int_equal(rc, 0);
-	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, OC_RP_4G1);
+	rc = compare_oclass(coh, oinfo.doi_dir_oclass_id, expected_dir_oclass(ecidx, OC_RP_4G1));
 	assert_int_equal(rc, 0);
 	rc = compare_oclass(coh, oinfo.doi_file_oclass_id, ecidx);
 	assert_int_equal(rc, 0);
@@ -3407,9 +3474,7 @@ dfs_test_oflags(void **state)
 static void
 test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 {
-#ifndef BUILD_PIPELINE
-	skip();
-#endif
+	bool             pipeline_enabled = false;
 	dfs_obj_t	*dir1, *f1;
 	int		i;
 	time_t		ts = 0;
@@ -3417,6 +3482,10 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
 	char		*dirname = "pipeline_dir";
 	int		rc;
+
+	d_getenv_bool("DAOS_PIPELINE", &pipeline_enabled);
+	if (!pipeline_enabled)
+		skip();
 
 	rc = dfs_open(dfs_mt, NULL, dirname, create_mode | S_IFDIR, create_flags, dir_oclass, 0,
 		      NULL, &dir1);
@@ -3675,21 +3744,29 @@ dfs_teardown(void **state)
 }
 
 int
-run_dfs_unit_test(int rank, int size)
+run_dfs_unit_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
+	int selected = sub_tests_size;
+
+	if (sub_tests_size == 0) {
+		sub_tests = NULL;
+		selected  = ARRAY_SIZE(dfs_unit_tests);
+	}
 
 	par_barrier(PAR_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit", dfs_unit_tests, dfs_setup,
-					 dfs_teardown);
+	rc = run_daos_sub_tests("DAOS_FileSystem_DFS_Unit", dfs_unit_tests,
+				ARRAY_SIZE(dfs_unit_tests), sub_tests, selected, dfs_setup,
+				dfs_teardown);
 	par_barrier(PAR_COMM_WORLD);
 
 	/** run tests again with DTX */
 	d_setenv("DFS_USE_DTX", "1", 1);
 
 	par_barrier(PAR_COMM_WORLD);
-	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
-					  dfs_setup, dfs_teardown);
+	rc += run_daos_sub_tests("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
+				 ARRAY_SIZE(dfs_unit_tests), sub_tests, selected, dfs_setup,
+				 dfs_teardown);
 	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

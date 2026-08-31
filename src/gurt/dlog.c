@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -551,6 +551,9 @@ d_log_disable_logging(void)
 	mst.log_old_fd = -1;
 }
 
+static __thread uint32_t dlog_tid = -1;
+static __thread uint32_t dlog_pid = -1;
+
 /**
  * d_vlog: core log function, front-ended by d_log
  * we vsnprintf the message into a holding buffer to format it.  then we
@@ -568,16 +571,13 @@ d_log_disable_logging(void)
 void d_vlog(int flags, const char *fmt, va_list ap)
 {
 #define DLOG_TBSIZ    1024	/* bigger than any line should be */
-	static __thread char b[DLOG_TBSIZ];
-	static __thread uint32_t tid = -1;
-	static __thread uint32_t pid = -1;
+	static __thread char buf[DLOG_TBSIZ];
 	static uint64_t	last_flush;
 
 	uint64_t uid = 0;
 	int fac, lvl, pri;
 	bool flush;
-	char *b_nopt1hdr;
-	char facstore[16], *facstr;
+	char                *buf_nopt1hdr, facstore[16], *facstr;
 	struct timeval tv;
 	struct tm *tm;
 	unsigned int hlen_pt1, hlen, mlen, tlen;
@@ -608,14 +608,14 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	if ((mst.oflags & DLOG_FLV_TAG) && (mst.oflags & DLOG_FLV_LOGPID)) {
 		/* Init static members in ahead of lock */
-		if (pid == (uint32_t)(-1))
-			pid = (uint32_t)getpid();
+		if (unlikely(dlog_pid == (uint32_t)(-1)))
+			dlog_pid = (uint32_t)getpid();
 
-		if (tid == (uint32_t)(-1)) {
+		if (unlikely(dlog_tid == (uint32_t)(-1))) {
 			if (mst.log_id_cb)
-				mst.log_id_cb(&tid, NULL);
+				mst.log_id_cb(&dlog_tid, NULL);
 			else
-				tid = (uint32_t)syscall(SYS_gettid);
+				dlog_tid = (uint32_t)syscall(SYS_gettid);
 		}
 
 		if (mst.log_id_cb)
@@ -644,68 +644,60 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * ok, first, put the header into b[]
 	 */
 	hlen = 0;
+	hlen += snprintf(buf, sizeof(buf), "%s ", clog_pristr(lvl));
 	if (mst.oflags & DLOG_FLV_YEAR)
-		hlen = snprintf(b, sizeof(b), "%04d/", tm->tm_year + 1900);
+		hlen += snprintf(buf + hlen, sizeof(buf) - hlen, "%04d/", tm->tm_year + 1900);
 
-	hlen += snprintf(b + hlen, sizeof(b) - hlen, "%02d/%02d %02d:%02d:%02d.%06ld %s ",
+	hlen += snprintf(buf + hlen, sizeof(buf) - hlen, "%02d/%02d %02d:%02d:%02d.%06ld %s ",
 			 tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec,
 			 (long int)tv.tv_usec, mst.uts.nodename);
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
-			hlen += snprintf(b + hlen, sizeof(b) - hlen,
-					 "%s%d/%d/"DF_U64"] ", d_log_xst.tag,
-					 pid, tid, uid);
+			hlen += snprintf(buf + hlen, sizeof(buf) - hlen, "%s%d/%d/" DF_U64 "] ",
+					 d_log_xst.tag, dlog_pid, dlog_tid, uid);
 		} else {
-			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
-					 d_log_xst.tag);
+			hlen += snprintf(buf + hlen, sizeof(buf) - hlen, "%s ", d_log_xst.tag);
 		}
 	}
 
 	hlen_pt1 = hlen;	/* save part 1 length */
-	if (hlen < sizeof(b)) {
-		if (mst.oflags & DLOG_FLV_FAC)
-			hlen += snprintf(b + hlen, sizeof(b) - hlen,
-					 "%-4s ", facstr);
-
-		hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
-				 clog_pristr(lvl));
-	}
+	if (hlen < sizeof(buf) && mst.oflags & DLOG_FLV_FAC)
+		hlen += snprintf(buf + hlen, sizeof(buf) - hlen, "%-4s ", facstr);
 	/*
 	 * we expect there is still room (i.e. at least one byte) for a
 	 * message, so this overflow check should never happen, but let's
 	 * check for it anyway.
 	 */
-	if (hlen + 1 >= sizeof(b)) {
+	if (hlen + 1 >= sizeof(buf)) {
 		clog_unlock();	/* drop lock, this is the only early exit */
-		dlog_print_err(E2BIG,
-			       "header overflowed %zd byte buffer (%d)\n",
-			       sizeof(b), hlen + 1);
+		dlog_print_err(E2BIG, "header overflowed %zd byte buffer (%d)\n", sizeof(buf),
+			       hlen + 1);
 		errno = save_errno;
 		return;
 	}
 	/*
 	 * now slap in the user's data at the end of the buffer
 	 */
-	mlen = vsnprintf(b + hlen, sizeof(b) - hlen, fmt, ap);
+	mlen = vsnprintf(buf + hlen, sizeof(buf) - hlen, fmt, ap);
 	/*
 	 * compute total length, check for overflows...  make sure the string
 	 * ends in a newline.
 	 */
 	tlen = hlen + mlen;
 	/* after condition, tlen will point at index of null byte */
-	if (unlikely(tlen >= (sizeof(b) - 1))) {
+	if (unlikely(tlen >= (sizeof(buf) - 1))) {
 		/* Either the string was truncated or the buffer is full. */
-		tlen = sizeof(b) - 1;
+		tlen = sizeof(buf) - 1;
 	} else {
 		/* it fits with a byte to spare, make sure it ends in newline */
-		if (unlikely(b[tlen - 1] != '\n'))
+		if (unlikely(buf[tlen - 1] != '\n'))
 			tlen++;
 	}
 	/* Ensure it ends with '\n' and '\0' */
-	b[tlen - 1] = '\n';
-	b[tlen] = '\0';
-	b_nopt1hdr = b + hlen_pt1;
+	buf[tlen - 1] = '\n';
+	buf[tlen]     = '\0';
+	buf_nopt1hdr  = buf + hlen_pt1;
 	if (mst.oflags & DLOG_FLV_STDOUT)
 		flags |= DLOG_STDOUT;
 
@@ -723,7 +715,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	if (flush)
 		last_flush = tv.tv_sec;
 
-	rc = d_log_write(b, tlen, flush);
+	rc = d_log_write(buf, tlen, flush);
 	if (rc < 0)
 		errno = save_errno;
 
@@ -734,15 +726,15 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 */
 	if ((flags & DLOG_STDERR) && (pri != DLOG_EMIT)) {
 		if (mst.stderr_isatty)
-			fprintf(stderr, "%s", b_nopt1hdr);
+			fprintf(stderr, "%s", buf_nopt1hdr);
 		else
-			fprintf(stderr, "%s", b);
+			fprintf(stderr, "%s", buf);
 	}
 	if ((flags & DLOG_STDOUT) &&  (pri != DLOG_EMIT)) {
 		if (mst.stderr_isatty)
-			printf("%s", b_nopt1hdr);
+			printf("%s", buf_nopt1hdr);
 		else
-			printf("%s", b);
+			printf("%s", buf);
 		fflush(stdout);
 	}
 	/* done! */
@@ -1404,4 +1396,14 @@ int d_log_getmasks(char *buf, int discard, int len, int unterm)
 		clog_bput(&bp, &skipcnt, &resid, &total, NULL);
 	/* buf == NULL means probe for length ... */
 	return ((buf == NULL) ? total : len - resid);
+}
+
+void
+d_log_reset(void)
+{
+	dlog_tid     = -1;
+	dlog_pid     = -1;
+	pre_err      = 0;
+	pre_err_line = 0;
+	pre_err_time = 0;
 }

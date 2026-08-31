@@ -96,9 +96,6 @@ test_run()
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
-	rc = crt_group_rank(NULL, &test.tg_my_rank);
-	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
-
 	rc = crt_proto_register(&my_proto_fmt);
 	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n", rc);
 
@@ -228,6 +225,13 @@ test_run()
 		}
 	}
 
+	crtu_progress_stop();
+
+	for (i = 0; i < test.tg_num_ctx; i++) {
+		rc = pthread_join(test.tg_tid[i], NULL);
+		D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
+	}
+	D_DEBUG(DB_TRACE, "joined progress threads.\n");
 	d_rank_list_free(rank_list);
 	rank_list = NULL;
 
@@ -238,14 +242,6 @@ test_run()
 		rc = crt_group_view_destroy(grp);
 		D_ASSERTF(rc == 0, "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
-
-	crtu_progress_stop();
-
-	for (i = 0; i < test.tg_num_ctx; i++) {
-		rc = pthread_join(test.tg_tid[i], NULL);
-		D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
-	}
-	D_DEBUG(DB_TRACE, "joined progress threads.\n");
 
 	rc = sem_destroy(&test.tg_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");

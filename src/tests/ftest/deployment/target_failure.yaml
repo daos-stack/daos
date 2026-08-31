@@ -28,10 +28,8 @@ pool_size_ratio_66:
 
 container_wo_rf:
   type: POSIX
-  control_method: daos
 container_with_rf:
   type: POSIX
-  control_method: daos
   properties: rd_fac:1
 
 ior: &ior_base
@@ -50,12 +48,9 @@ ior: &ior_base
 ior_wo_rf:
   <<: *ior_base
   dfs_oclass: "SX"
-  dfs_dir_oclass: "SX"
 ior_with_rp:
   <<: *ior_base
   dfs_oclass: "RP_2G1"
-  dfs_dir_oclass: "RP_2G1"
 ior_with_ec:
   <<: *ior_base
   dfs_oclass: "EC_2P1G1"
-  dfs_dir_oclass: "EC_2P1G1"

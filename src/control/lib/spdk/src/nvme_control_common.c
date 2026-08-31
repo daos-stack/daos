@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -138,6 +138,8 @@ free_ctrlr_fields(struct nvme_ctrlr_t *ctrlr)
 		free(ctrlr->vendor_id);
 	if (ctrlr->pci_type != NULL)
 		free(ctrlr->pci_type);
+	if (ctrlr->pci_addr != NULL)
+		free(ctrlr->pci_addr);
 }
 
 void
@@ -350,6 +352,7 @@ populate_dev_health(struct nvme_stats *stats,
 	stats->read_only_warn = cw.bits.read_only ? true : false;
 	stats->volatile_mem_warn = cw.bits.volatile_memory_backup ?
 				   true : false;
+	stats->percentage_used      = hp->percentage_used;
 
 	/* Intel Smart Information Attributes */
 	if ((cdata == NULL) || (cdata->vid != SPDK_PCI_VID_INTEL))
@@ -555,7 +558,7 @@ collect(void)
 
 	ret = init_ret();
 	_collect(ret, &copy_ctrlr_data, &spdk_nvme_ctrlr_get_pci_device,
-		 &spdk_pci_device_get_socket_id, &spdk_pci_device_get_type);
+		 &spdk_pci_device_get_numa_id, &spdk_pci_device_get_type);
 
 	return ret;
 }

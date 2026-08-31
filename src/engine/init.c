@@ -31,12 +31,8 @@
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 
-#define MAX_MODULE_OPTIONS	64
-#if BUILD_PIPELINE
-#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,pipeline"
-#else
-#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
-#endif
+#define MAX_MODULE_OPTIONS 64
+#define MODULE_LIST        "vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
 #define MODS_LIST_CHK	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,chk"
 
 /** List of modules to load */
@@ -62,7 +58,7 @@ const char	       *dss_nvme_conf;
 /** Socket Directory */
 const char	       *dss_socket_dir = "/var/run/daos_server";
 
-/** NVMe mem_size for SPDK memory allocation */
+/** NVMe mem_size for SPDK memory allocation (MiB) */
 unsigned int		dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation */
@@ -597,17 +593,21 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		if (rank == dss_self_rank()) {
 			D_WARN("raising SIGKILL: exclusion of this engine (rank %u) detected\n",
 			       self_rank);
-			/*
-			 * For now, we just raise a SIGKILL to ourselves; we could
-			 * inform daos_server, who would initiate a termination and
-			 * decide whether to restart us.
+
+			/**
+			 * Send RAS event to inform local server of intentional self termination
+			 * before raising a SIGKILL to ourselves. Local daos_server can then decide
+			 * whether to restart rank.
 			 */
+			rc = ds_notify_rank_self_terminated(rank, incarnation);
+			if (rc)
+				D_ERROR("failed to handle %u/%u event: " DF_RC "\n", src, type,
+					DP_RC(rc));
+
 			rc = kill(getpid(), SIGKILL);
 			if (rc != 0)
 				D_ERROR("failed to raise SIGKILL: %d\n", errno);
-			return;
 		}
-
 	}
 }
 
@@ -669,6 +669,13 @@ server_init(int argc, char *argv[])
 	unsigned int		ctx_nr;
 	int			rc;
 	struct engine_metrics	*metrics;
+
+	/**
+	 * The typical umask is 022. The group portion is cleared, which allows the group
+	 * permissions to be set freely. This setting is intended to remain in effect for the entire
+	 * lifetime of the process.
+	 */
+	(void)umask(002);
 
 	/*
 	 * Begin the HLC recovery as early as possible. Do not read the HLC
@@ -1104,6 +1111,21 @@ parse(int argc, char **argv)
 		}
 		if (rc)
 			exit(EXIT_FAILURE);
+	}
+
+	/*
+	 * Load the pipeline module only if the feature is explicitly enabled (disabled by
+	 * default). Skip when a specific module list was requested or under check mode.
+	 */
+	if (!spec_mod && !dss_check_mode) {
+		bool pipeline_enabled = false;
+
+		d_getenv_bool("DAOS_PIPELINE", &pipeline_enabled);
+		if (pipeline_enabled) {
+			size_t len = strlen(modules);
+
+			snprintf(modules + len, sizeof(modules) - len, "%s", ",pipeline");
+		}
 	}
 }
 

@@ -1,14 +1,17 @@
 #
-# Copyright 2018-2022, Intel Corporation
+# Copyright 2018-2022 Intel Corporation.
+# Copyright 2026 Hewlett Packard Enterprise Development LP
 #
 # 'recipe' for Docker for code scanning.
 #
 
-ARG FVERSION=latest
-FROM fedora:$FVERSION
-# Needed for later use of FVERSION
-ARG FVERSION
+# Pull base image
+ARG POINT_RELEASE=
+ARG BASE_DISTRO=rockylinux:9$POINT_RELEASE
+FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
+# Needed for later use of BASE_DISTRO
+ARG BASE_DISTRO
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
@@ -16,22 +19,31 @@ ARG CB0
 # Use local repo server if present
 ARG REPO_FILE_URL
 ARG DAOS_LAB_CA_FILE_URL
-# script to install OS updates basic tools and daos dependencies
-# COPY ./utils/scripts/install-fedora.sh /tmp/install.sh
-# script to setup local repo if available
-COPY ./utils/scripts/helpers/repo-helper-fedora.sh /tmp/repo-helper.sh
 
-RUN chmod +x /tmp/repo-helper.sh &&                 \
-    /tmp/repo-helper.sh &&                          \
+# Accept DAOS_NO_PROXY at build time
+ARG DAOS_NO_PROXY
+# Propagate into the build environment
+ENV no_proxy=${DAOS_NO_PROXY}
+ENV NO_PROXY=${DAOS_NO_PROXY}
+# Persist into /etc/environment for use by shells and services
+RUN echo "no_proxy=${DAOS_NO_PROXY}" >> /etc/environment && \
+    echo "NO_PROXY=${DAOS_NO_PROXY}" >> /etc/environment
+
+# Script to setup local repo if available
+COPY ./utils/scripts/helpers/repo-helper-el9.sh /tmp/repo-helper.sh
+RUN chmod +x /tmp/repo-helper.sh && \
+    /tmp/repo-helper.sh &&          \
     rm -f /tmp/repo-helper.sh
 
-# Install Python Bandit scanner.
-# The unset commands are currently needed for the combination of running
-# with a local repository, yet needing a proxy to reach outside repositories.
-# This needs to be moved to a shell script like above in the future to
-# properly only remove the proxy variables only when they need to be removed
-RUN unset HTTPS_PROXY && unset https_proxy && \
-    dnf -y upgrade && dnf -y install bandit && dnf clean all
-
-ARG CB1
-RUN unset HTTPS_PROXY && unset https_proxy && dnf -y upgrade && dnf clean all
+# Script to install OS packages needed for code scanning, including python and bandit.
+ARG PYTHON_VERSION
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+COPY ./utils/scripts/install-el-bandit.sh /tmp/install.sh
+FROM basic
+# Install OS packages
+RUN dnf upgrade &&              \
+    chmod +x /tmp/install.sh && \
+    /tmp/install.sh &&          \
+    dnf clean all &&            \
+    rm -f /tmp/install.sh

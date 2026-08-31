@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -95,6 +95,7 @@ type (
 		raftTransport      raft.Transport
 		raft               syncRaft
 		raftLeaderNotifyCh chan bool
+		cbMutex            sync.RWMutex
 		onLeadershipGained []onLeadershipGainedFn
 		onLeadershipLost   []onLeadershipLostFn
 		onRaftShutdown     []onRaftShutdownFn
@@ -246,11 +247,14 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 	repAddr, _ := cfg.LocalReplicaAddr()
 
 	db := &Database{
-		log:                log,
-		cfg:                cfg,
-		replicaAddr:        repAddr,
-		shutdownErrCh:      make(chan error),
-		raftLeaderNotifyCh: make(chan bool),
+		log:           log,
+		cfg:           cfg,
+		replicaAddr:   repAddr,
+		shutdownErrCh: make(chan error),
+		// Buffered so hashicorp/raft can post a leadership
+		// transition without blocking if the monitor goroutine
+		// is momentarily busy running callbacks.
+		raftLeaderNotifyCh: make(chan bool, 1),
 
 		data: &dbData{
 			log: log,
@@ -416,19 +420,45 @@ func (db *Database) IsLeader() bool {
 // OnLeadershipGained registers callbacks to be run when this instance
 // gains the leadership role.
 func (db *Database) OnLeadershipGained(fns ...onLeadershipGainedFn) {
+	db.cbMutex.Lock()
+	defer db.cbMutex.Unlock()
 	db.onLeadershipGained = append(db.onLeadershipGained, fns...)
 }
 
 // OnLeadershipLost registers callbacks to be run when this instance
 // loses the leadership role.
 func (db *Database) OnLeadershipLost(fns ...onLeadershipLostFn) {
+	db.cbMutex.Lock()
+	defer db.cbMutex.Unlock()
 	db.onLeadershipLost = append(db.onLeadershipLost, fns...)
 }
 
 // OnRaftShutdown registers callbacks to be run when this instance
 // shuts down.
 func (db *Database) OnRaftShutdown(fns ...onRaftShutdownFn) {
+	db.cbMutex.Lock()
+	defer db.cbMutex.Unlock()
 	db.onRaftShutdown = append(db.onRaftShutdown, fns...)
+}
+
+// Return copies of the registered callbacks under a lock, so that they
+// can be safely retrieved and executed without holding the lock.
+func (db *Database) onLeadershipGainedCbs() []onLeadershipGainedFn {
+	db.cbMutex.RLock()
+	defer db.cbMutex.RUnlock()
+	return append([]onLeadershipGainedFn(nil), db.onLeadershipGained...)
+}
+
+func (db *Database) onLeadershipLostCbs() []onLeadershipLostFn {
+	db.cbMutex.RLock()
+	defer db.cbMutex.RUnlock()
+	return append([]onLeadershipLostFn(nil), db.onLeadershipLost...)
+}
+
+func (db *Database) onRaftShutdownCbs() []onRaftShutdownFn {
+	db.cbMutex.RLock()
+	defer db.cbMutex.RUnlock()
+	return append([]onRaftShutdownFn(nil), db.onRaftShutdown...)
 }
 
 // Start checks to see if the system is configured as a MS replica. If
@@ -490,7 +520,7 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 	var cancelGainedCtx context.CancelFunc
 
 	runOnLeadershipLost := func() {
-		for _, fn := range db.onLeadershipLost {
+		for _, fn := range db.onLeadershipLostCbs() {
 			if err := fn(); err != nil {
 				db.log.Errorf("failure in onLeadershipLost callback: %s", err)
 			}
@@ -544,7 +574,7 @@ func (db *Database) stepUp(ctx context.Context, cancel context.CancelFunc) {
 		return // restart the monitoring loop
 	}
 
-	for i, fn := range db.onLeadershipGained {
+	for i, fn := range db.onLeadershipGainedCbs() {
 		db.log.Tracef("executing onLeadershipGained[%d]", i)
 
 		if err := fn(ctx); err != nil {

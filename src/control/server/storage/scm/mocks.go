@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,13 +13,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/lib/ipmctl"
+	"github.com/dustin/go-humanize"
+
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/mount"
-	"github.com/dustin/go-humanize"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -60,9 +60,9 @@ func mockXMLRegions(t *testing.T, variant string) string {
 		rl.Regions[0].ISetID++
 		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
 	case "unhealthy":
-		rl.Regions[0].Health = regionHealth(ipmctl.RegionHealthError)
+		rl.Regions[0].Health = regionHealth(RegionHealthError)
 	case "not-interleaved":
-		rl.Regions[0].PersistentMemoryType = regionType(ipmctl.RegionTypeNotInterleaved)
+		rl.Regions[0].PersistentMemoryType = regionType(RegionTypeNotInterleaved)
 	case "unknown-memtype":
 		rl.Regions[0].PersistentMemoryType = regionType(math.MaxInt32)
 	case "part-free":
@@ -100,7 +100,7 @@ func mockXMLRegions(t *testing.T, variant string) string {
 		rl.Regions = append(rl.Regions, rl.Regions[0])
 		rl.Regions[1].ID = 2
 		rl.Regions[1].SocketID = 1
-		rl.Regions[1].Health = regionHealth(ipmctl.RegionHealthError)
+		rl.Regions[1].Health = regionHealth(RegionHealthError)
 	case "full-free-2nd-sock":
 		rl.Regions = append(rl.Regions, rl.Regions[0])
 		rl.Regions[1].ID = 2
@@ -314,56 +314,6 @@ const (
 `
 )
 
-type (
-	mockIpmctlCfg struct {
-		initErr           error
-		delGoalsErr       error
-		getRegionsErr     error
-		regions           []ipmctl.PMemRegion
-		getFWInfoRet      error
-		fwInfo            ipmctl.DeviceFirmwareInfo
-		updateFirmwareRet error
-	}
-
-	mockIpmctl struct {
-		cfg mockIpmctlCfg
-	}
-)
-
-func (m *mockIpmctl) Init(_ logging.Logger) error {
-	return m.cfg.initErr
-}
-
-func (m *mockIpmctl) GetModules(_ logging.Logger) ([]ipmctl.DeviceDiscovery, error) {
-	return nil, errors.New("GetModules ipmctl library call not used")
-}
-
-func (m *mockIpmctl) DeleteConfigGoals(_ logging.Logger) error {
-	return m.cfg.delGoalsErr
-}
-
-func (m *mockIpmctl) GetRegions(_ logging.Logger) ([]ipmctl.PMemRegion, error) {
-	return m.cfg.regions, m.cfg.getRegionsErr
-}
-
-func (m *mockIpmctl) GetFirmwareInfo(uid ipmctl.DeviceUID) (ipmctl.DeviceFirmwareInfo, error) {
-	return m.cfg.fwInfo, m.cfg.getFWInfoRet
-}
-
-func (m *mockIpmctl) UpdateFirmware(uid ipmctl.DeviceUID, fwPath string, force bool) error {
-	return m.cfg.updateFirmwareRet
-}
-
-func newMockIpmctl(cfg *mockIpmctlCfg) *mockIpmctl {
-	if cfg == nil {
-		cfg = &mockIpmctlCfg{}
-	}
-
-	return &mockIpmctl{
-		cfg: *cfg,
-	}
-}
-
 func mustParseBytes(s string) uint64 {
 	sz, err := humanize.ParseBytes(s)
 	if err != nil {
@@ -391,17 +341,14 @@ func mockModule(uid string, pi, si, ci, chi, chp uint32) *storage.ScmModule {
 // implementation providing capability to access and configure
 // SCM modules and namespaces.
 type MockBackendConfig struct {
-	GetModulesRes        storage.ScmModules
-	GetModulesErr        error
-	GetNamespacesRes     storage.ScmNamespaces
-	GetNamespacesErr     error
-	PrepRes              *storage.ScmPrepareResponse
-	PrepErr              error
-	PrepResetRes         *storage.ScmPrepareResponse
-	PrepResetErr         error
-	GetFirmwareStatusErr error
-	GetFirmwareStatusRes *storage.ScmFirmwareInfo
-	UpdateFirmwareErr    error
+	GetModulesRes    storage.ScmModules
+	GetModulesErr    error
+	GetNamespacesRes storage.ScmNamespaces
+	GetNamespacesErr error
+	PrepRes          *storage.ScmPrepareResponse
+	PrepErr          error
+	PrepResetRes     *storage.ScmPrepareResponse
+	PrepResetErr     error
 }
 
 type MockBackend struct {
@@ -457,14 +404,6 @@ func (mb *MockBackend) prepReset(req storage.ScmPrepareRequest, _ *storage.ScmSc
 	return mb.cfg.PrepResetRes, mb.cfg.PrepResetErr
 }
 
-func (mb *MockBackend) GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error) {
-	return mb.cfg.GetFirmwareStatusRes, mb.cfg.GetFirmwareStatusErr
-}
-
-func (mb *MockBackend) UpdateFirmware(deviceUID string, firmwarePath string) error {
-	return mb.cfg.UpdateFirmwareErr
-}
-
 func NewMockBackend(cfg *MockBackendConfig) *MockBackend {
 	if cfg == nil {
 		cfg = &MockBackendConfig{}
@@ -483,7 +422,12 @@ func DefaultMockBackend() *MockBackend {
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *system.MockSysConfig) *Provider {
 	sysProv := system.NewMockSysProvider(log, msc)
 	mountProv := mount.NewProvider(log, sysProv)
-	return NewProvider(log, NewMockBackend(mbc), sysProv, mountProv)
+	return NewProvider(&ProviderConfig{
+		Log:     log,
+		Backend: NewMockBackend(mbc),
+		Sys:     sysProv,
+		Mounter: mountProv,
+	})
 }
 
 // DefaultMockProvider stubs os calls by mocking system and mount providers. scm provider functions
@@ -491,5 +435,10 @@ func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *system.Moc
 func DefaultMockProvider(log logging.Logger) *Provider {
 	sysProv := system.DefaultMockSysProvider(log)
 	mountProv := mount.NewProvider(log, sysProv)
-	return NewProvider(log, DefaultMockBackend(), sysProv, mountProv)
+	return NewProvider(&ProviderConfig{
+		Log:     log,
+		Backend: DefaultMockBackend(),
+		Sys:     sysProv,
+		Mounter: mountProv,
+	})
 }

@@ -182,17 +182,15 @@ __assert_ddb_iterate(daos_handle_t poh, uuid_t *cont_uuid, daos_unit_oid_t *oid,
 static void
 open_pool_test(void **state)
 {
-	daos_handle_t		 poh;
-	struct dt_vos_pool_ctx	*tctx = *state;
+	struct ddb_ctx          ctx  = {0};
+	struct dt_vos_pool_ctx *tctx = *state;
 
-	assert_rc_equal(-DER_INVAL, dv_pool_open("/bad/path", NULL, &poh, 0, false));
-
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &poh, 0, false));
-	assert_success(dv_pool_close(poh));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
+	assert_success(dv_pool_close(ctx.dc_poh));
 
 	/* should be able to open again after closing */
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &poh, 0, false));
-	assert_success(dv_pool_close(poh));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
+	assert_success(dv_pool_close(ctx.dc_poh));
 }
 
 static void
@@ -1086,11 +1084,14 @@ dv_suit_teardown(void **state)
 static int
 dv_test_setup(void **state)
 {
+	struct ddb_ctx          ctx  = {0};
 	struct dt_vos_pool_ctx *tctx = *state;
 
+	ctx.dc_write_mode              = true;
 	active_entry_handler_called = 0;
 	committed_entry_handler_called = 0;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &tctx->dvt_poh, 0, true));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
+	tctx->dvt_poh = ctx.dc_poh;
 	return 0;
 }
 
@@ -1103,25 +1104,44 @@ dv_test_teardown(void **state)
 	return 0;
 }
 
+static int
+dv_test_csum_setup(void **state)
+{
+	assert_success(dv_test_setup(state));
+	assert_success(ddb_test_csum_setup(state));
+
+	return 0;
+}
+
+static int
+dv_test_csum_teardown(void **state)
+{
+	ddb_test_csum_teardown(state);
+	assert_success(dv_test_teardown(state));
+
+	return 0;
+}
+
 static void
 pool_flags_tests(void **state)
 {
-	daos_handle_t           poh;
+	struct ddb_ctx          ctx  = {0};
 	struct dt_vos_pool_ctx *tctx = *state;
 	uint64_t                compat_flags;
 	uint64_t                incompat_flags;
 
-	assert_success(
-	    dv_pool_open(tctx->dvt_pmem_file, NULL, &poh, VOS_POF_FOR_FEATURE_FLAG, true));
-	assert_success(dv_pool_get_flags(poh, &compat_flags, &incompat_flags));
+	ctx.dc_write_mode = true;
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh,
+				    VOS_POF_FOR_FEATURE_FLAG, ctx.dc_write_mode));
+	assert_success(dv_pool_get_flags(ctx.dc_poh, &compat_flags, &incompat_flags));
 	assert(compat_flags == 0);
 	assert(incompat_flags == 0);
-	assert_success(
-	    dv_pool_update_flags(poh, VOS_POOL_COMPAT_FLAG_SUPP, VOS_POOL_INCOMPAT_FLAG_SUPP));
-	assert_success(dv_pool_get_flags(poh, &compat_flags, &incompat_flags));
+	assert_success(dv_pool_update_flags(ctx.dc_poh, VOS_POOL_COMPAT_FLAG_SUPP,
+					    VOS_POOL_INCOMPAT_FLAG_SUPP));
+	assert_success(dv_pool_get_flags(ctx.dc_poh, &compat_flags, &incompat_flags));
 	assert(compat_flags == VOS_POOL_COMPAT_FLAG_SUPP);
 	assert(incompat_flags == VOS_POOL_INCOMPAT_FLAG_SUPP);
-	assert_success(dv_pool_close(poh));
+	assert_success(dv_pool_close(ctx.dc_poh));
 }
 
 #define SHA256_DIGEST_LEN 64
@@ -1170,14 +1190,19 @@ static void
 helper_stat_open_modify_close_stat(struct dt_vos_pool_ctx *tctx, struct file_state fs[2],
 				   bool write_mode)
 {
-	const char *path = tctx->dvt_pmem_file;
+	struct ddb_ctx ctx       = {0};
+	const char    *path      = tctx->dvt_pmem_file;
+	daos_handle_t  saved_poh = tctx->dvt_poh;
 
 	assert_int_equal(stat(path, &fs[FILE_STATE_PRE].stat), 0);
 	sha256sum(path, fs[FILE_STATE_PRE].digest);
 
-	assert_success(dv_pool_open(path, NULL, &tctx->dvt_poh, 0, write_mode));
+	ctx.dc_write_mode = write_mode;
+	assert_success(dv_pool_open(path, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
+	tctx->dvt_poh = ctx.dc_poh;
 	update_value_to_modify_tests((void **)&tctx);
 	assert_success(dv_pool_close(tctx->dvt_poh));
+	tctx->dvt_poh = saved_poh;
 
 	assert_int_equal(stat(path, &fs[FILE_STATE_POST].stat), 0);
 	sha256sum(path, fs[FILE_STATE_POST].digest);
@@ -1192,7 +1217,7 @@ read_only_vs_write_mode_test(void **state)
 	/** In read‑only mode, the pool contents remain unchanged, and its mtime stays the same. */
 	helper_stat_open_modify_close_stat(tctx, fs, false /** read-only */);
 	assert_int_equal(fs[FILE_STATE_PRE].stat.st_mtime, fs[FILE_STATE_POST].stat.st_mtime);
-	assert_memory_equal(fs[FILE_STATE_PRE].digest, fs[FILE_STATE_PRE].digest,
+	assert_memory_equal(fs[FILE_STATE_PRE].digest, fs[FILE_STATE_POST].digest,
 			    SHA256_DIGEST_LEN);
 
 	/** In write mode, the pool contents will change and its mtime will increase. */
@@ -1202,11 +1227,266 @@ read_only_vs_write_mode_test(void **state)
 				SHA256_DIGEST_LEN);
 }
 
+/* Callback that returns *(int *)cb_args, or 0 if cb_args is NULL. */
+static int
+csum_cb_return_rc(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		  struct dcs_ci_list *cil)
+{
+	return (cb_args != NULL) ? (*(int *)cb_args) : (0);
+}
+
+static void
+dump_csum_error_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	struct dv_tree_path     path     = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
+	path.vtp_dkey    = g_dkeys[0];
+	path.vtp_akey    = g_akeys[0]; /* single value type */
+	path.vtp_is_recx = false;
+
+	/* invalid poh: error comes from vos_cont_open, not the callback (which would return 0) */
+	rc = dv_dump_csum(DAOS_HDL_INVAL, &path, DAOS_EPOCH_MAX, csum_cb_return_rc, NULL);
+	assert_rc_equal(-DER_INVAL, rc);
+}
+
+/*
+ * g_oids[0]: SV stored at epoch 1 without checksum.
+ * Fetching at EPOCH_MAX finds the SV (sv_epoch=1) but cil is empty (no checksum stored).
+ */
+static int
+check_csum_sv_cb_001(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		     struct dcs_ci_list *cil)
+{
+	assert_null(cb_args);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 1);
+	assert_non_null(cil);
+
+	assert_int_equal(cil->dcl_csum_infos_nr, 0);
+
+	return 0;
+}
+
+/*
+ * g_oids[1]: SV stored at epoch 1 with checksum dct_sv_ics[0].
+ * Fetching at epoch=1 returns that exact version.
+ */
+static int
+check_csum_sv_cb_002(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		     struct dcs_ci_list *cil)
+{
+	struct dt_csum_ctx   *csum_ctx;
+	struct dcs_csum_info *ci;
+
+	assert_non_null(cb_args);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 1);
+	assert_non_null(cil);
+
+	csum_ctx = cb_args;
+	assert_int_equal(csum_ctx->dct_sv_size, DVT_FAKE_SV_SIZE);
+	assert_int_equal(csum_ctx->dct_chunk_size, DVT_FAKE_CHUNK_SIZE);
+	assert_int_equal(csum_ctx->dct_csum_type, DVT_FAKE_CSUM_TYPE);
+
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+
+	ci = dcs_csum_info_get(cil, 0);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 1);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, ci,
+						   csum_ctx->dct_sv_ics[0]->ic_data));
+
+	return 0;
+}
+
+/*
+ * g_oids[1]: SV stored at epoch 2 with checksum dct_sv_ics[1] (latest version).
+ * Fetching at EPOCH_MAX returns the most recent version.
+ */
+static int
+check_csum_sv_cb_003(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		     struct dcs_ci_list *cil)
+{
+	struct dt_csum_ctx   *csum_ctx;
+	struct dcs_csum_info *ci;
+
+	assert_non_null(cb_args);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 2);
+	assert_non_null(cil);
+
+	csum_ctx = cb_args;
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+
+	ci = dcs_csum_info_get(cil, 0);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 1);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, ci,
+						   csum_ctx->dct_sv_ics[1]->ic_data));
+
+	return 0;
+}
+
+static void
+dump_csum_sv_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	struct dv_tree_path     path     = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
+	path.vtp_dkey    = g_dkeys[0];
+	path.vtp_akey    = g_akeys[0]; /* single value type */
+	path.vtp_is_recx = false;
+
+	/* no csum info */
+	path.vtp_oid = g_oids[0];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_sv_cb_001, NULL);
+	assert_success(rc);
+
+	/* with csum info, epoch 1 returns the epoch-1 checksum */
+	path.vtp_oid = g_oids[1];
+	rc           = dv_dump_csum(tctx->dvt_poh, &path, 1, check_csum_sv_cb_002, csum_ctx);
+	assert_success(rc);
+
+	/* with csum info, EPOCH_MAX returns the epoch-2 (latest) checksum */
+	path.vtp_oid = g_oids[1];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_sv_cb_003, csum_ctx);
+	assert_success(rc);
+
+	/* with csum info, without callback */
+	path.vtp_oid = g_oids[1];
+	rc           = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, NULL, csum_ctx);
+	assert_success(rc);
+
+	/* callback failure is propagated */
+	path.vtp_oid = g_oids[1];
+	rc           = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, csum_cb_return_rc,
+				    &(int){-DER_INVAL});
+	assert_rc_equal(-DER_INVAL, rc);
+}
+
+static int
+check_csum_recx_cb_001(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil)
+{
+	assert_null(cb_args);
+	assert_non_null(recx_rel);
+	assert_int_equal(sv_epoch, 0);
+	assert_non_null(cil);
+
+	assert_int_equal(recx_rel->re_nr, DVT_FAKE_RECX_COUNT);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(recx_rel->re_items[0].re_ep, 1);
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_idx, DVT_FAKE_RECX_SIZE / 2);
+	/*
+	 * VOS_OF_FETCH_CSUM records the full stored extent, not the IOD intersection:
+	 * recx 1 starts at rx_idx=DVT_FAKE_RECX_SIZE/2 but its rx_nr is DVT_FAKE_RECX_SIZE.
+	 */
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(recx_rel->re_items[1].re_ep, 2);
+
+	/* No csum was stored for g_oids[0], so the checksum info list is empty. */
+	assert_int_equal(cil->dcl_csum_infos_nr, 0);
+
+	return 0;
+}
+
+static int
+check_csum_recx_cb_002(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil)
+{
+	struct dt_csum_ctx   *csum_ctx;
+	struct dcs_csum_info *ci;
+
+	assert_non_null(cb_args);
+	assert_non_null(recx_rel);
+	assert_int_equal(sv_epoch, 0);
+	assert_non_null(cil);
+
+	csum_ctx = cb_args;
+	assert_int_equal(csum_ctx->dct_recx_size, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(csum_ctx->dct_chunk_size, DVT_FAKE_CHUNK_SIZE);
+	assert_int_equal(csum_ctx->dct_csum_type, DVT_FAKE_CSUM_TYPE);
+
+	assert_int_equal(recx_rel->re_nr, DVT_FAKE_RECX_COUNT);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(recx_rel->re_items[0].re_ep, 1);
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_idx, DVT_FAKE_RECX_SIZE / 2);
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(recx_rel->re_items[1].re_ep, 2);
+
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, DVT_FAKE_RECX_COUNT);
+
+	ci = dcs_csum_info_get(cil, 0);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 2);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, ci,
+						   csum_ctx->dct_recx_ics[0]->ic_data));
+
+	ci = dcs_csum_info_get(cil, 1);
+	assert_true(ci_is_valid(ci));
+	assert_int_equal(ci->cs_nr, 2);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, ci,
+						   csum_ctx->dct_recx_ics[1]->ic_data));
+
+	return 0;
+}
+
+static void
+dump_csum_recx_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	struct dv_tree_path     path     = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
+	path.vtp_dkey        = g_dkeys[0];
+	path.vtp_akey        = g_akeys[1]; /* array value type */
+	path.vtp_is_recx     = true;
+	path.vtp_recx.rx_idx = 0;
+	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
+
+	/* no csum info */
+	path.vtp_oid = g_oids[0];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_001, NULL);
+	assert_success(rc);
+
+	/* with csum info */
+	path.vtp_oid = g_oids[1];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_002, csum_ctx);
+	assert_success(rc);
+
+	/* with csum info, without callback */
+	path.vtp_oid = g_oids[1];
+	rc           = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, NULL, csum_ctx);
+	assert_success(rc);
+
+	/* callback failure is propagated */
+	path.vtp_oid = g_oids[1];
+	rc           = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, csum_cb_return_rc,
+				    &(int){-DER_INVAL});
+	assert_rc_equal(-DER_INVAL, rc);
+}
+
 /*
  * All these tests use the same VOS tree that is created at suit_setup. Therefore, tests
  * that modify the state of the tree (delete, add, etc) should be run after all others.
  */
 #define TEST(x) { #x, x, dv_test_setup, dv_test_teardown }
+
+/* Checksum tests need special setup/teardown */
+#define TEST_CSUM(test) {#test, test, dv_test_csum_setup, dv_test_csum_teardown}
+
 const struct CMUnitTest dv_test_cases[] = {
     {"open_pool", open_pool_test, NULL, NULL}, /* don't want this test to run with setup */
     TEST(list_items_test),
@@ -1233,6 +1513,9 @@ const struct CMUnitTest dv_test_cases[] = {
     {"pool_flag_update", pool_flags_tests, NULL, NULL},
     {"read_only_vs_write_mode", read_only_vs_write_mode_test, NULL,
      NULL}, /* don't want this test to run with setup */
+    TEST_CSUM(dump_csum_error_tests),
+    TEST_CSUM(dump_csum_sv_tests),
+    TEST_CSUM(dump_csum_recx_tests),
 };
 
 int

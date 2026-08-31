@@ -1,7 +1,7 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
- * (C) Copyright 2025 Google LLC
+ * Copyright 2016-2023 Intel Corporation.
+ * Copyright 2025 Google LLC
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -236,14 +236,12 @@ obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout)
 		DP_OID(oid), layout->ol_ver);
 
 	for (i = 0; i < layout->ol_nr; i++)
-		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s %s\n",
-			i, layout->ol_shards[i].po_shard,
-			layout->ol_shards[i].po_target,
+		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d (rank %d vos %d), f_seq %d, %s %s\n", i,
+			layout->ol_shards[i].po_shard, layout->ol_shards[i].po_target,
+			layout->ol_shards[i].po_rank, layout->ol_shards[i].po_index,
 			layout->ol_shards[i].po_fseq,
-			layout->ol_shards[i].po_rebuilding ?
-			"rebuilding" : "healthy",
-			layout->ol_shards[i].po_reintegrating ?
-			"reintegrating" : "healthy");
+			layout->ol_shards[i].po_rebuilding ? "rebuilding" : "healthy",
+			layout->ol_shards[i].po_reintegrating ? "reintegrating" : "healthy");
 }
 
 /**

@@ -58,7 +58,12 @@ def _base_setup(env):
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
-    if 'SANITIZERS' in env and env['SANITIZERS'] != "":
+    if env.get('SANITIZERS'):
+
+        if env.get('HEAP_PROFILER'):
+            print('Google Sanitizers and Gperftools.Heap.Profiler can not be mixed')
+            Exit(2)
+
         cc = 'gcc'
         if 'COMPILER' in env:
             cc = env['COMPILER']
@@ -87,6 +92,10 @@ def _base_setup(env):
                 env.AppendUnique(LINKFLAGS=flag)
                 print(f"Enabling {flag.split('=')[1]} sanitizer for C code")
 
+    if env.get('HEAP_PROFILER'):
+        env.AppendUnique(LINKFLAGS="-ltcmalloc")
+        print("Enabling Gperftools Heap Profiler")
+
     if '-Wmismatched-dealloc' in env['CCFLAGS']:
         env.AppendUnique(CPPDEFINES={'HAVE_DEALLOC': '1'})
 
@@ -105,7 +114,6 @@ def _base_setup(env):
 
     if build_type != 'release':
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
-        env.AppendUnique(CPPDEFINES={'BUILD_PIPELINE': '1'})
 
     if env['CMOCKA_FILTER_SUPPORTED']:
         env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '1'})
@@ -214,13 +222,17 @@ def _check_func(env, func_name):
     """Check if a function is usable"""
     denv = env.Clone()
     # NOTE Remove sanitizers to not scramble the test output
-    if 'SANITIZERS' in denv and denv['SANITIZERS'] != "":
+    if denv.get('SANITIZERS'):
         for sanitizer in denv['SANITIZERS'].split(','):
             flag = f"-fsanitize={sanitizer}"
             if flag not in denv["CCFLAGS"]:
                 continue
             denv["CCFLAGS"].remove(flag)
             denv["LINKFLAGS"].remove(flag)
+
+    # NOTE Remove Heap Profiler to not scramble the test output
+    if denv.get('HEAP_PROFILER'):
+        denv["LINKFLAGS"].remove("-ltcmalloc")
 
     config = Configure(denv)
     res = config.CheckFunc(func_name)
