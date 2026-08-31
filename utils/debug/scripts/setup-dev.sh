@@ -13,9 +13,13 @@
 # Override DAOS_SRC_DIR before sourcing to use a different checkout:
 #
 #   DAOS_SRC_DIR=~/work/daos-alt source setup-dev.sh
+#
+# When not overridden, DAOS_SRC_DIR defaults to this script's own directory
+# (not a fixed path), so the same script works unmodified from any checkout
+# -- the main ~/work/daos repo or a per-ticket `git worktree` checkout.
 
-export DAOS_SRC_DIR="${DAOS_SRC_DIR:-$HOME/work/daos}"
 _SETUP_DEV_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
+export DAOS_SRC_DIR="${DAOS_SRC_DIR:-$_SETUP_DEV_DIR}"
 
 _daos_source() {
 local script="$_SETUP_DEV_DIR/$1"
