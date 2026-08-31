@@ -45,7 +45,7 @@ class DlckBasicTest(DlckTestBase):
         pool = self.get_pool()
         dlck = self.get_dlck_command()
         dlck.pool_uuid.value = pool.uuid
-        dlck.log_dir = self.test_env.log_dir
+        dlck.log_dir.value = self.test_env.log_dir
         dlck.run_user = 'daos_server'
         dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
         if self.server_managers[0].manager.job.using_control_metadata:
@@ -86,7 +86,7 @@ class DlckBasicTest(DlckTestBase):
         pool = self.get_pool()
         dlck = self.get_dlck_command()
         dlck.pool_uuid.value = pool.uuid
-        dlck.log_dir = self.test_env.log_dir
+        dlck.log_dir.value = self.test_env.log_dir
         dlck.run_user = 'daos_server'
         dlck.exit_status_exception = False
         dlck.env["D_FI_CONFIG"] = fault_inject_file

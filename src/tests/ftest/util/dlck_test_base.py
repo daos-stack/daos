@@ -48,3 +48,4 @@ class DlckCommand(RunCommand):
         self.nvme = FormattedParameter("--nvme={}", None)
         self.storage = FormattedParameter("--storage={}", None)
         self.log_dir = FormattedParameter("--log_dir={}", None)
+        self.verbose = FormattedParameter("--verbose={}", True)
