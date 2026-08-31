@@ -24,7 +24,7 @@ class DlckBasicTest(DlckTestBase):
         """
         expected_errors = ("DER_INVAL", "DER_NONEXIST", "DER_ID_MISMATCH",
                            "DER_DF_INCOMPT", "DER_DF_INVAL", "WARNING:")
-        warning_pattern = r"\b\d+\s+warning(?:\(s\)|s?)\b"
+        warning_pattern = r"\b[1-9]\d*\s+warning(?:\(s\)|s?)\b"
         output = f"{result.joined_stdout}\n{result.joined_stderr}"
         expected_error_found = any(error in output for error in expected_errors)
         warning_found = re.search(warning_pattern, output)
