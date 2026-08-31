@@ -7,8 +7,15 @@
 # Builds PYTHONPATH from all top-level Python packages in the DAOS source
 # tree, then adds installed Python extensions from SL_PREFIX.
 # Sources .build_vars.sh directly — does NOT rely on setup_local.sh.
+#
+# DAOS_SRC_DIR defaults to this script's own directory (not a fixed path),
+# so the same script works unmodified from any checkout -- the main
+# ~/work/daos repo or a per-ticket `git worktree` checkout -- as long as it
+# is sourced by relative (./setup-python.sh) or absolute in-tree path.
+# Explicit override still works:
+#   DAOS_SRC_DIR=~/work/daos-alt source setup-python.sh
 
-DAOS_SRC_DIR="${DAOS_SRC_DIR:-$HOME/work/daos}"
+DAOS_SRC_DIR="${DAOS_SRC_DIR:-$(realpath "$(dirname "${BASH_SOURCE[0]}")")}"
 
 # ── Validate ──────────────────────────────────────────────────────────────────
 if [[ ! -d "$DAOS_SRC_DIR" ]]; then
