@@ -9,7 +9,9 @@
 package storage
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -468,6 +470,94 @@ func TestStorage_ControlMetadataNeedsFormat(t *testing.T) {
 	}
 }
 
+func TestStorage_ControlMetadataEngineNeedsFormat(t *testing.T) {
+	for name, tc := range map[string]struct {
+		eIdx         int
+		noPath       bool
+		noParentDir  bool
+		noEngineDir  bool
+		noSuperblock bool
+		nilProv      bool
+		expResult    bool
+		expErr       error
+	}{
+		"nil": {
+			nilProv: true,
+			expErr:  errors.New("nil"),
+		},
+		"no control metadata cfg": {
+			noPath:    true,
+			expResult: false, // metadata on SCM, not separate device
+		},
+		"no control metadata directory": {
+			noParentDir: true,
+			expResult:   true,
+		},
+		"no control metadata engine directory": {
+			noEngineDir:  true,
+			noSuperblock: true,
+			expResult:    true,
+		},
+		"engine directory exists; no superblock": {
+			noSuperblock: true,
+			expResult:    true,
+		},
+		"engine directory exists": {},
+		"engine 1 directory exists": {
+			eIdx: 1,
+		},
+		"engine 2 directory exists": {
+			eIdx: 2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			testDir := t.TempDir()
+			if tc.noParentDir {
+				os.RemoveAll(testDir)
+			} else {
+				engineDir := filepath.Join(testDir, "daos_control", fmt.Sprintf("engine%d", tc.eIdx))
+				if !tc.noEngineDir {
+					if err := os.MkdirAll(engineDir, 0755); err != nil {
+						t.Fatal(err)
+					}
+					if !tc.noSuperblock {
+						t.Logf("writing %s", engineDir)
+						if _, err := os.Create(filepath.Join(engineDir, "superblock")); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+			}
+
+			cfg := &Config{}
+			if !tc.noPath {
+				cfg.ControlMetadata = ControlMetadata{
+					Path: testDir,
+				}
+			}
+
+			// The storage package SystemProvider exposes ReadFile but not Stat
+			var p *Provider
+			if !tc.nilProv {
+				msc := &system.MockSysConfig{
+					RealReadFile: true,
+				}
+				sp := system.NewMockSysProvider(log, msc)
+				p = NewProvider(log, 0, cfg, sp, nil, nil, nil)
+				p.engineIndex = tc.eIdx
+			}
+
+			result, err := p.ControlMetadataEngineNeedsFormat()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
+		})
+	}
+}
+
 func TestStorage_MountControlMetadata(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilProv      bool
@@ -763,6 +853,91 @@ func TestStorage_ControlMetadataEnginePath(t *testing.T) {
 			}
 
 			test.AssertEqual(t, tc.expResult, p.ControlMetadataEnginePath(), "")
+		})
+	}
+}
+
+func TestStorage_UnmountTmpfs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilProv bool
+		cfg     *Config
+		scmProv *MockScmProvider
+		expErr  error
+	}{
+		"nil provider": {
+			nilProv: true,
+			expErr:  errors.New("nil"),
+		},
+		"no scm config": {
+			cfg:    &Config{},
+			expErr: errors.New("expected exactly 1 SCM tier"),
+		},
+		"RAM class success": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					{
+						Class: ClassRam,
+						Scm: ScmConfig{
+							MountPoint: "/mnt/daos0",
+						},
+					},
+				},
+			},
+			scmProv: &MockScmProvider{
+				UnmountRes: &MountResponse{
+					Target:  "/mnt/daos0",
+					Mounted: false,
+				},
+			},
+		},
+		"RAM class failure": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					{
+						Class: ClassRam,
+						Scm: ScmConfig{
+							MountPoint: "/mnt/daos0",
+						},
+					},
+				},
+			},
+			scmProv: &MockScmProvider{
+				UnmountErr: errors.New("unmount fail"),
+			},
+			expErr: errors.New("unmount fail"),
+		},
+		"DCPM class skips failure": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					{
+						Class: ClassDcpm,
+						Scm: ScmConfig{
+							MountPoint: "/mnt/daos0",
+							DeviceList: []string{"/dev/pmem0"},
+						},
+					},
+				},
+			},
+			scmProv: &MockScmProvider{
+				UnmountErr: errors.New("unmount fail"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var p *Provider
+			if !tc.nilProv {
+				if tc.scmProv == nil {
+					tc.scmProv = &MockScmProvider{}
+				}
+				p = NewProvider(log, 0, tc.cfg, nil, tc.scmProv, nil, nil)
+			}
+
+			err := p.UnmountTmpfs()
+
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
