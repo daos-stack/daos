@@ -114,36 +114,55 @@ def define_mercury(reqs):
     else:
         reqs.define('rt', libs=['rt'])
 
+    fabrics = (
+        "cxi",
+        "efa",
+        "gni",
+        "lnx",
+        "mlx",
+        "mrail",
+        "opx",
+        "psm",
+        "psm2",
+        "psm3",
+        "rxm",
+        "rxd",
+        "shm",
+        "sockets",
+        "tcp",
+        "ucx",
+        "udp",
+        "usnic",
+        "verbs",
+        "xpmem",
+    )
+
+    enabled_default_fabrics = (
+        "opx",
+        "rxm",
+        "shm",
+        "tcp",
+        "verbs",
+    )
+
     # pylint: disable-next=wrong-spelling-in-comment,fixme
-    # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
                  '--libdir=$OFI_PREFIX/lib64',
                  '--with-dlopen',
                  '--disable-static',
-                 '--disable-silent-rules',
-                 '--enable-sockets',
-                 '--enable-tcp',
-                 '--enable-verbs',
-                 '--enable-rxm',
-                 '--enable-shm',
-                 '--enable-psm2',
-                 '--enable-opx',
-                 '--disable-efa',
-                 '--disable-dmabuf_peer_mem',
-                 '--disable-hook_hmem',
-                 '--disable-hook_debug',
-                 '--disable-trace',
-                 '--disable-perf',
-                 '--disable-rxd',
-                 '--disable-mrail',
-                 '--disable-udp',
-                 '--disable-psm3']
+                 '--disable-silent-rules']
 
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
     else:
         ofi_build.append('--disable-debug')
+
+    for fabric in fabrics:
+        if fabric not in enabled_default_fabrics:
+            ofi_build.append(f'--disable-{fabric}')
+        else:
+            ofi_build.append(f'--enable-{fabric}')
 
     reqs.define('ofi',
                 retriever=GitRepoRetriever(),
