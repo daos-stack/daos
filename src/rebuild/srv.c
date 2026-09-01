@@ -340,12 +340,11 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 static void
 rebuild_leader_set_update_time(struct rebuild_global_pool_tracker *rgt, d_rank_t rank)
 {
-	int i;
+	struct rebuild_server_status *status;
 
-	i = daos_array_find(rgt->rgt_servers_sorted, rgt->rgt_servers_number, rank,
-			    &servers_sort_ops);
-	if (i >= 0) {
-		rgt->rgt_servers[i].last_update = ABT_get_wtime();
+	status = rebuild_server_get_status(rgt, rank);
+	if (status != NULL) {
+		status->last_update = ABT_get_wtime();
 		return;
 	}
 	D_INFO("rank %u is not included in this rebuild.\n", rank);
