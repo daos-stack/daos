@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1310,12 +1310,11 @@ cond_test(void **state)
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "a", "b",
 		      0, 0, sgl, "xxxx", 'x');
 	/** Conditional update of non-existent key should fail */
-	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 1, "a", "b",
-		       VOS_OF_COND_DKEY_UPDATE,
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b", VOS_OF_COND_DKEY_UPDATE,
 		       -DER_NONEXIST, sgl, "foo");
 	/** Conditional punch of non-existent akey should fail */
-	cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
-			   VOS_OF_COND_PUNCH, -DER_NONEXIST);
+	cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b", VOS_OF_COND_PUNCH,
+			   -DER_NONEXIST);
 	/** Key doesn't exist still, that supersedes read conflict */
 	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a",
 			   VOS_OF_COND_PUNCH, -DER_NONEXIST);
