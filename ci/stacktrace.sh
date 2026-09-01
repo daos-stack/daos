@@ -10,12 +10,11 @@ stacktrace() {
     local msg=${1:-"Unchecked error condition at"}
     local i=${2:-0}
 
-    # caller returns 1 once the outermost frame is reached.
-    trap '' ERR
-
     while true; do
-        read -r line func file < <(caller "$i") || true
+        read -r line func file < <(caller "$i")
         if [ -z "$line" ]; then
+            # prevent cascading ERRs
+            trap '' ERR
             break
         fi
         if [ "$i" -eq 0 ]; then
