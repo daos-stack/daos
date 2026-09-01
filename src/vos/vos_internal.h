@@ -280,8 +280,10 @@ struct vos_pool_metrics {
 };
 
 struct vos_gc_info {
-	daos_handle_t	gi_bins_btr;
-	uint32_t	gi_last_pinned;
+	daos_handle_t           gi_bins_btr;
+	uint32_t                gi_last_pinned;
+	struct umem_pin_handle *gi_pinned_hdl;
+	bool                    gi_tx_started;
 };
 
 /* Inline checkpointing context */
@@ -960,6 +962,14 @@ static inline void *
 vos_krec2payload(struct vos_krec_df *krec)
 {
 	return (void *)&krec[1];
+}
+
+/* Only valid when KREC_BF_BKT_ID is set in krec->kr_bmap */
+static inline uint32_t *
+vos_krec2bkt_id(struct vos_krec_df *krec)
+{
+	D_ASSERT(krec->kr_bmap & KREC_BF_BKT_ID);
+	return (uint32_t *)&krec[1];
 }
 
 static inline char *

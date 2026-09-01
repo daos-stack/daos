@@ -166,6 +166,14 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	int                 creds = *credits;
 	int		    rc;
 
+	/*
+	 * GC_DKEY/GC_AKEY items are binned by their own it_bkt_id0 (see gc_add_item()), and
+	 * gc_reclaim_pool_p2() only drains bins belonging to the bucket it already pinned, so
+	 * this item's bucket is always that bucket already pinned in gc_reclaim_pool_p2().
+	 */
+	D_ASSERT(item->it_bkt_id0 == UMEM_DEFAULT_MBKT_ID ||
+		 item->it_bkt_id0 == pool->vp_gc_info.gi_last_pinned);
+
 	/**
 	 * Since the key's structure does not have a magic value and the ilog root (which has
 	 * a magic value) is already destroyed at this stage there is no way to verify the pointer
@@ -221,6 +229,137 @@ gc_free_dkey(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct
 		return umem_free(&pool->vp_umm, item->it_addr);
 }
 
+/* Collect the object's shared (non-dkey-owned) E bucket IDs from its durable chain */
+static int
+gc_obj_shared_bkts(struct vos_pool *pool, struct vos_obj_p2_df *p2, struct vos_bkt_array *bkts)
+{
+	struct vos_obj_bkt_node_df *node_df;
+	umem_off_t                  next;
+	int                         i, rc;
+
+	/* Add primary bucket */
+	if (p2->p2_bkt_id0 != UMEM_DEFAULT_MBKT_ID) {
+		D_ASSERT(vos_bkt_id_is_shared(p2->p2_bkt_id0));
+		rc = vos_bkt_array_add(bkts, vos_bkt_id_raw(p2->p2_bkt_id0));
+		if (rc)
+			return rc;
+	}
+
+	next = p2->p2_bkt_extra;
+	while (!UMOFF_IS_NULL(next) && rc == 0) {
+		node_df = umem_off2ptr(&pool->vp_umm, next);
+		for (i = 0; i < node_df->bn_bkt_cnt && rc == 0; i++) {
+			if (node_df->bn_bkt_ids[i] == UMEM_DEFAULT_MBKT_ID)
+				continue;
+			if (!vos_bkt_id_is_shared(node_df->bn_bkt_ids[i]))
+				continue;
+			rc = vos_bkt_array_add(bkts, vos_bkt_id_raw(node_df->bn_bkt_ids[i]));
+		}
+		next = node_df->bn_next;
+	}
+	return rc;
+}
+
+/*
+ * gc_reclaim_pool_p2() holds a pin on gc_info->gi_last_pinned across many
+ * drain calls. Drop it and pin everything needed for this drain together as
+ * one temporary handle, sorted by bucket ID.
+ */
+static int
+gc_extra_pin(struct vos_pool *pool, struct vos_obj_p2_df *p2, struct umem_pin_handle **pin_hdl)
+{
+	struct vos_gc_info  *gc_info = &pool->vp_gc_info;
+	struct vos_bkt_array bkts;
+	int                  rc;
+
+	*pin_hdl = NULL;
+	if (!vos_pool_is_evictable(pool))
+		return 0;
+
+	D_ASSERT(p2->p2_bkt_cnt > 0);
+	/* Single bucket object, the primary bucket is already pinned in gc_reclaim_pool_p2() */
+	if (p2->p2_bkt_cnt == 1)
+		return 0;
+
+	vos_bkt_array_init(&bkts);
+	rc = gc_obj_shared_bkts(pool, p2, &bkts);
+	if (rc != 0)
+		goto out;
+
+	/* The object doesn't have E bucket */
+	if (bkts.vba_cnt == 0)
+		return 0;
+
+	/* Only one shared E bucket, it must be the primary bucket which has been pinned */
+	if (bkts.vba_cnt == 1) {
+		D_ASSERT(bkts.vba_bkts[0] == gc_info->gi_last_pinned);
+		return 0;
+	}
+
+	rc = umem_tx_end(&pool->vp_umm, 0);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to commit GC tx before re-pin.");
+		goto out;
+	}
+	gc_info->gi_tx_started = false;
+
+	/*
+	 * To avoid deadlock, unpin the pinned primary bucket then pin all the
+	 * required bucket in bucket ID order.
+	 */
+	if (gc_info->gi_pinned_hdl != NULL) {
+		umem_cache_unpin(vos_pool2store(pool), gc_info->gi_pinned_hdl);
+		gc_info->gi_pinned_hdl = NULL;
+	}
+
+	rc = vos_bkt_array_pin(pool, &bkts, pin_hdl);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to re-pin required buckets.");
+		goto out;
+	}
+
+	rc = umem_tx_begin(&pool->vp_umm, NULL);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to restart GC tx after re-pin.");
+		/* Transaction & gi_pinned_hdl is handled in gc_reclaim_pool_p2() */
+		umem_cache_unpin(vos_pool2store(pool), *pin_hdl);
+		*pin_hdl = NULL;
+		goto out;
+	}
+	gc_info->gi_tx_started = true;
+out:
+	vos_bkt_array_fini(&bkts);
+	return rc;
+}
+
+/*
+ * Re-establish gi_pinned_hdl on the primary bucket, then drop the temporary
+ * handle from gc_extra_pin().
+ */
+static int
+gc_extra_unpin(struct vos_pool *pool, struct umem_pin_handle *pin_hdl)
+{
+	struct vos_gc_info     *gc_info = &pool->vp_gc_info;
+	struct umem_cache_range rg;
+	int                     rc = 0;
+
+	if (pin_hdl == NULL)
+		return 0;
+
+	if (gc_info->gi_last_pinned != UMEM_DEFAULT_MBKT_ID) {
+		rg.cr_off  = umem_get_mb_base_offset(vos_pool2umm(pool), gc_info->gi_last_pinned);
+		rg.cr_size = vos_pool2store(pool)->cache->ca_page_sz;
+		/* The primary bucket is already pinned, it only adds reference */
+		rc = vos_cache_pin(pool, &rg, 1, false, &gc_info->gi_pinned_hdl);
+		if (rc != 0)
+			DL_ERROR(rc, "Failed to restore pin for bucket %u.",
+				 gc_info->gi_last_pinned);
+	}
+
+	umem_cache_unpin(vos_pool2store(pool), pin_hdl);
+	return rc;
+}
+
 /**
  * drain all keys stored in an object, it returns when the key tree is empty,
  * or all credits are consumed (releasing a key consumes one credit)
@@ -229,9 +368,21 @@ static int
 gc_drain_obj(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	     struct vos_gc_item *item, int *credits, bool *empty)
 {
-	struct vos_obj_df *obj = umem_off2ptr(&pool->vp_umm, item->it_addr);
+	struct vos_obj_df      *obj     = umem_off2ptr(&pool->vp_umm, item->it_addr);
+	struct umem_pin_handle *pin_hdl = NULL;
+	int                     rc, rc2;
 
-	return gc_drain_btr(gc, pool, coh, item, &obj->vo_tree, credits, empty);
+	rc = gc_extra_pin(pool, (struct vos_obj_p2_df *)obj, &pin_hdl);
+	if (rc != 0)
+		return rc;
+
+	rc = gc_drain_btr(gc, pool, coh, item, &obj->vo_tree, credits, empty);
+
+	rc2 = gc_extra_unpin(pool, pin_hdl);
+	if (rc == 0)
+		rc = rc2;
+
+	return rc;
 }
 
 static int
@@ -1373,10 +1524,8 @@ gc_reclaim_pool_p2(struct vos_pool *pool, int *credits, bool *empty_ret)
 	struct vos_container	*cont = NULL;
 	struct vos_gc_bin_df	*bins = NULL;
 	struct vos_gc_info	*gc_info = &pool->vp_gc_info;
-	uint32_t		 bkt = gc_info->gi_last_pinned, pinned_bkt = UMEM_DEFAULT_MBKT_ID;
-	struct umem_pin_handle	*pin_hdl = NULL;
-	struct umem_cache_range	 rg;
-	bool			 tx_started = false;
+	uint32_t                 bkt = gc_info->gi_last_pinned, pinned_bkt = UMEM_DEFAULT_MBKT_ID;
+	struct umem_cache_range  rg;
 	int			 creds = *credits, rc = 0;
 
 	if (pool->vp_dying) {
@@ -1387,8 +1536,8 @@ gc_reclaim_pool_p2(struct vos_pool *pool, int *credits, bool *empty_ret)
 	*empty_ret = false;
 	while(creds > 0) {
 		if (bkt != UMEM_DEFAULT_MBKT_ID && bkt != pinned_bkt) {
-			if (tx_started) {
-				tx_started = false;
+			if (gc_info->gi_tx_started) {
+				gc_info->gi_tx_started = false;
 				rc = umem_tx_end(&pool->vp_umm, 0);
 				if (rc) {
 					DL_ERROR(rc, "Failed to commit GC tx.");
@@ -1396,15 +1545,15 @@ gc_reclaim_pool_p2(struct vos_pool *pool, int *credits, bool *empty_ret)
 				}
 			}
 
-			if (pin_hdl != NULL) {
-				umem_cache_unpin(vos_pool2store(pool), pin_hdl);
-				pin_hdl = NULL;
+			if (gc_info->gi_pinned_hdl != NULL) {
+				umem_cache_unpin(vos_pool2store(pool), gc_info->gi_pinned_hdl);
+				gc_info->gi_pinned_hdl = NULL;
 			}
 
 			rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), bkt);
 			rg.cr_size = vos_pool2store(pool)->cache->ca_page_sz;
 
-			rc = vos_cache_pin(pool, &rg, 1, false, &pin_hdl);
+			rc = vos_cache_pin(pool, &rg, 1, false, &gc_info->gi_pinned_hdl);
 			if (rc) {
 				DL_ERROR(rc, "Failed to pin bucket %u.", bkt);
 				break;
@@ -1413,14 +1562,14 @@ gc_reclaim_pool_p2(struct vos_pool *pool, int *credits, bool *empty_ret)
 			gc_info->gi_last_pinned = pinned_bkt;
 		}
 
-		if (!tx_started) {
+		if (!gc_info->gi_tx_started) {
 			rc = umem_tx_begin(&pool->vp_umm, NULL);
 			if (rc) {
 				DL_ERROR(rc, "Failed to start tx for pool:"DF_UUID".",
 					 DP_UUID(pool->vp_id));
 				break;
 			}
-			tx_started = true;
+			gc_info->gi_tx_started = true;
 		}
 
 		/* Flatten all containers first */
@@ -1468,15 +1617,16 @@ gc_reclaim_pool_p2(struct vos_pool *pool, int *credits, bool *empty_ret)
 		}
 	}
 
-	if (tx_started) {
+	if (gc_info->gi_tx_started) {
 		rc = umem_tx_end(&pool->vp_umm, rc);
 		if (rc)
 			DL_ERROR(rc, "Failed to commit GC tx.");
+		gc_info->gi_tx_started = false;
 	}
 
-	if (pin_hdl != NULL) {
-		umem_cache_unpin(vos_pool2store(pool), pin_hdl);
-		pin_hdl = NULL;
+	if (gc_info->gi_pinned_hdl != NULL) {
+		umem_cache_unpin(vos_pool2store(pool), gc_info->gi_pinned_hdl);
+		gc_info->gi_pinned_hdl = NULL;
 	}
 
 	if (cont != NULL)
