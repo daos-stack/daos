@@ -132,8 +132,8 @@ class OSAOnlineExtend(OSAUtils):
             pver_extend = self.pool.get_version(True)
             self.log.info("Pool Version after extend %s", pver_extend)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_extend > pver_begin, "Pool Version Error:  After extend")
-            self.assertTrue(free_space_after_extend > initial_free_space,
+            self.assertGreater(pver_extend, pver_begin, "Pool Version Error:  After extend")
+            self.assertGreater(free_space_after_extend, initial_free_space,
                             "Expected free space after extend is less than initial")
             # Wait to finish the threads
             for thrd in threads:
