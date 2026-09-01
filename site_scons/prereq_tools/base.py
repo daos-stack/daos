@@ -522,6 +522,7 @@ class PreReqComponent():
         opts.Add(BoolVariable('CRT_PP', 'Preprocess CaRT sources', False))
         opts.Add(BoolVariable('HEAP_PROFILER', 'Instrument C code with Gperftools Heap Profiler',
                               False))
+        opts.Add(ListVariable('PROVIDERS', "List of providers to build", 'all', ['all', 'ofi', 'ucx']))
 
         opts.Update(self.__env)
 
@@ -595,8 +596,13 @@ class PreReqComponent():
 
     def run_build(self, opts):
         """Build and dependencies"""
-        common_reqs = ['ofi', 'ucx', 'hwloc', 'mercury', 'uuid', 'crypto', 'protobufc',
+        common_reqs = ['hwloc', 'mercury', 'uuid', 'crypto', 'protobufc',
                        'lz4', 'isal', 'isal_crypto', 'argobots']
+        providers = self.__env.get('PROVIDERS')
+        if 'all' in providers:
+            common_reqs += ['ofi', 'ucx']
+        else:
+            common_reqs += providers
         client_reqs = ['fused', 'json-c', 'capstone', 'aio']
         server_reqs = ['pmdk', 'spdk', 'ipmctl']
         test_reqs = ['cmocka']
