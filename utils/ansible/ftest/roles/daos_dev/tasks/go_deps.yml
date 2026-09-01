@@ -1,4 +1,26 @@
 # yamllint disable rule:line-length
+- name: Check current Go GOFLAGS setting
+  command: go env GOFLAGS
+  changed_when: false
+  register: daos_go_goflags_current
+
+- name: Disable Go automatic VCS stamping (git-worktree .git file is not recognized)
+  command: go env -w GOFLAGS=-buildvcs=false
+  when: "'-buildvcs=false' not in daos_go_goflags_current.stdout"
+  # Go's VCS auto-stamping (default since Go 1.18) walks up from the module directory
+  # looking for a *directory* named .git to record commit/build info. A git worktree
+  # checkout (as used by per-ticket source trees, see new-ticket-worktree.sh) has a
+  # .git *file* (a "gitdir:" pointer) instead, which this walk does not recognize, so
+  # it keeps walking upward past the real repo and can land on an unrelated, broken
+  # .git directory further up the tree, causing
+  # "error obtaining VCS status: exit status 128" when building src/control from any
+  # ticket worktree. DAOS already stamps its own version via explicit -X ldflags (see
+  # daos-make.sh.j2 / SConstruct's build.BuildInfo), so Go's separate auto-stamping
+  # isn't needed and disabling it here is safe. This is a persistent per-user `go env`
+  # setting (~/.config/go/env), so it only needs to be applied once per dev node.
+  # Alternative fix: remove/relocate whatever stray .git directory Go is picking up
+  # instead of the worktree's.
+
 - name: Read go.mod before pre-downloading Go module dependencies
   slurp:
     src: "{{ daos_source_dir }}/src/control/go.mod"
