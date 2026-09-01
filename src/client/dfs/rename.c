@@ -175,16 +175,8 @@ restart:
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
 		D_GOTO(out, rc);
 	}
-	if (exists == false) {
-		/* DAOS-19005 diagnostics. Temporary: the parent oid identifies which directory
-		 * object was searched, which distinguishes a genuinely missing entry from a name
-		 * resolved against the wrong parent.
-		 */
-		D_ERROR("DAOS-19005 dfs_move: source '%s' (len=%zu) not found in parent oid=" DF_OID
-			", new_name='%s' new_parent oid=" DF_OID "\n",
-			name, len, DP_OID(parent->oid), new_name, DP_OID(new_parent->oid));
+	if (exists == false)
 		D_GOTO(out, rc = ENOENT);
-	}
 
 	if (moid)
 		oid_cp(moid, entry.oid);
