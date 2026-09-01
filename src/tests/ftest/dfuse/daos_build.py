@@ -101,6 +101,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
 
     mount_dir = dfuse.mount_dir.value
     build_dir = os.path.join(mount_dir, 'daos')
+    diag_file = '/var/tmp/daos_testing/pil4dfs-diag.log'
 
     remote_env['PATH'] = f"{os.path.join(mount_dir, 'venv', 'bin')}:$PATH"
     remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
@@ -118,6 +119,9 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
             remote_env['D_IL_NO_BYPASS'] = '1'
             remote_env['D_IL_COMPATIBLE'] = '1'
             remote_env['D_IL_MAX_EQ'] = '0'
+            # DAOS-19005: scons writes .sconsign from a forked child whose D_LOG_FILE writes are
+            # lost, so these diagnostics go to a file written with raw syscalls instead.
+            remote_env['D_IL_DIAG_FILE'] = diag_file
 
     preload_cmd = remote_env.to_export_str()
 
@@ -129,7 +133,8 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
 
-    cmds = [f'{sys.executable} -m venv {mount_dir}/venv',
+    cmds = [f'rm -f {diag_file}',
+            f'{sys.executable} -m venv {mount_dir}/venv',
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
@@ -175,6 +180,14 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         if cmd.startswith('scons'):
             run_remote(
                 self.log, self.hostlist_clients, 'cat {}/config.log'.format(build_dir), timeout=30)
+        if il_lib == 'libpil4dfs.so':
+            # DAOS-19005 diagnostics. Temporary, along with the DIAG code in int_dfs.c.
+            run_remote(
+                self.log, self.hostlist_clients,
+                f'grep -a sconsign {diag_file} | tail -n 200', timeout=60)
+            run_remote(
+                self.log, self.hostlist_clients,
+                f'grep -aE "dfs_move FAILED|probe |EXDEV" {diag_file} | tail -n 100', timeout=60)
         if il_lib is not None:
             self.fail(f'{fail_type} over dfuse with il in mode {cache_mode}')
         else:

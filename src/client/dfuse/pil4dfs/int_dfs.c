@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <sys/syscall.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/statfs.h>
@@ -266,6 +267,32 @@ static void
 update_cwd(void);
 static int
 get_eqh(daos_handle_t *eqh);
+
+/* DAOS-19005 diagnostics. Temporary: revert the DIAG/diag_* code once the
+ * '.sconsign.tmp' -> '.sconsign.dblite' ENOENT is understood.
+ *
+ * DIAG_W goes to the IL log and to a raw-syscall diagnostic file. DIAG also writes to stderr and
+ * must therefore be used only on '.sconsign' paths: pil4dfs is preloaded into every process in the
+ * build, including gcc, cmake and configure scripts that parse stderr.
+ */
+#define DIAG_W(fmt, ...)                                                                           \
+	do {                                                                                       \
+		D_WARN("DAOS-19005 " fmt "\n", ##__VA_ARGS__);                                     \
+		diag_raw("DAOS-19005 " fmt, ##__VA_ARGS__);                                        \
+	} while (0)
+
+#define DIAG(fmt, ...)                                                                             \
+	do {                                                                                       \
+		DIAG_W(fmt, ##__VA_ARGS__);                                                        \
+		dprintf(STDERR_FILENO, "DAOS-19005 pid=%d " fmt "\n", getpid(), ##__VA_ARGS__);    \
+	} while (0)
+
+static void
+diag_raw(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static bool
+diag_is_sconsign(const char *name);
+static void
+diag_cwd(const char *tag);
 static void
 destroy_all_eqs(void);
 
@@ -1184,6 +1211,10 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
 	}
+
+	if (diag_is_sconsign(szInput))
+		DIAG("query_path input='%s' cur_dir='%s' -> parse='%s'", szInput, cur_dir,
+		     full_path_parse);
 
 	/* Remove '/./'; Replace '//' with '/'; Remove '/' at the end of path. */
 	len = remove_dot_and_cleanup(full_path_parse, len);
@@ -2135,6 +2166,12 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		two_args = 0;
 	}
 
+	/* Logged before the d_hook_enabled check so a disabled hook is visible rather than silent.
+	 */
+	if (diag_is_sconsign(pathname))
+		DIAG("open enter '%s' oflags=0%o hook_enabled=%d compat=%d", pathname, oflags,
+		     d_hook_enabled, d_compatible_mode);
+
 	if (!d_hook_enabled)
 		goto org_func;
 
@@ -2388,9 +2425,17 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		d_file_list[idx_fd]->offset = fstat.st_size;
 	}
 
+	if (diag_is_sconsign(pathname))
+		DIAG("open '%s' oflags=0%o -> dfs fd=%d", pathname, oflags, idx_fd + FD_FILE_BASE);
+
 	return (idx_fd + FD_FILE_BASE);
 
 org_func:
+	if (diag_is_sconsign(pathname)) {
+		DIAG("open '%s' oflags=0%o -> KERNEL (real_open, resolved by libc cwd)", pathname,
+		     oflags);
+		diag_cwd("open org_func");
+	}
 	if (dfs_mt != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -2400,6 +2445,10 @@ org_func:
 		return real_open(pathname, oflags, mode);
 
 out_error:
+	if (diag_is_sconsign(pathname)) {
+		DIAG("open '%s' oflags=0%o FAILED rc=%d (%s)", pathname, oflags, rc, strerror(rc));
+		diag_cwd("open out_error");
+	}
 	if (dfs_mt != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -2411,6 +2460,10 @@ out_compatible_release:
 		dfs_release(dfs_obj);
 
 out_compatible:
+	if (diag_is_sconsign(pathname)) {
+		DIAG("open '%s' oflags=0%o -> COMPAT kernel fd=%d", pathname, oflags, fd_kernel);
+		diag_cwd("open out_compatible");
+	}
 	if (dfs_mt != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -5041,6 +5094,118 @@ out_err:
 	return (-1);
 }
 
+/* DAOS-19005 diagnostics. Temporary. */
+
+/* SCons writes .sconsign during interpreter shutdown, by which point the DAOS log may already be
+ * finalized and D_WARN silently discarded. Raw syscalls keep this independent of the DAOS log, of
+ * stdio, and of pil4dfs's own hooks. stderr is deliberately not used: cmake and configure scripts
+ * parse it, and pil4dfs is preloaded into all of them.
+ */
+static int diag_fd = -1;
+
+static void
+diag_raw(const char *fmt, ...)
+{
+	char    buf[1024];
+	int     len, rc;
+	va_list ap;
+	int     saved_errno = errno;
+
+	if (diag_fd < 0) {
+		const char *path = getenv("D_IL_DIAG_FILE");
+
+		if (path == NULL)
+			path = "/tmp/pil4dfs-diag.log";
+		diag_fd = (int)syscall(SYS_openat, AT_FDCWD, path,
+				       O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+		if (diag_fd < 0) {
+			errno = saved_errno;
+			return;
+		}
+	}
+
+	len = snprintf(buf, sizeof(buf), "pid=%d ", getpid());
+	if (len < 0 || len >= (int)sizeof(buf))
+		len = 0;
+
+	va_start(ap, fmt);
+	rc = vsnprintf(buf + len, sizeof(buf) - len, fmt, ap);
+	va_end(ap);
+	if (rc > 0)
+		len += rc;
+	if (len >= (int)sizeof(buf))
+		len = sizeof(buf) - 1;
+	buf[len++] = '\n';
+
+	syscall(SYS_write, diag_fd, buf, (size_t)len);
+	errno = saved_errno;
+}
+
+static bool
+diag_is_sconsign(const char *name)
+{
+	const char *base;
+
+	if (name == NULL)
+		return false;
+	base = strrchr(name, '/');
+	base = (base == NULL) ? name : base + 1;
+	return strncmp(base, ".sconsign", 9) == 0;
+}
+
+/* Compare what pil4dfs believes the cwd is against what the kernel believes. Relative paths are
+ * resolved against cur_dir by pil4dfs but against the kernel cwd by any call that reaches libc.
+ */
+static void
+diag_cwd(const char *tag)
+{
+	char kern[1024];
+	int  saved_errno = errno;
+
+	if (next_getcwd == NULL)
+		next_getcwd = dlsym(RTLD_NEXT, "getcwd");
+
+	if (next_getcwd != NULL && next_getcwd(kern, sizeof(kern)) != NULL)
+		DIAG_W("%s cur_dir='%s' kernel_cwd='%s' agree=%d", tag, cur_dir, kern,
+		       strcmp(cur_dir, kern) == 0);
+	else
+		DIAG_W("%s cur_dir='%s' kernel_cwd=<getcwd failed errno=%d>", tag, cur_dir, errno);
+
+	errno = saved_errno;
+}
+
+/* Called when dfs_move() fails: distinguishes "the entry is really gone" from "pil4dfs resolved
+ * the name against the wrong directory".
+ */
+static void
+diag_rename_probe(const char *old_name, const char *new_name, struct dfs_mt *dfs_mt,
+		  struct dcache_rec *parent_old, const char *item_name_old,
+		  const char *full_path_old, int move_rc)
+{
+	dfs_obj_t  *obj = NULL;
+	mode_t      mode;
+	struct stat st;
+	int         rc;
+	int         saved_errno = errno;
+
+	DIAG_W("dfs_move FAILED rc=%d (%s) old='%s' new='%s' item_old='%s' full_old='%s'", move_rc,
+	       strerror(move_rc), old_name, new_name, item_name_old, full_path_old);
+
+	rc = dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent_old), item_name_old, O_RDONLY | O_NOFOLLOW,
+			    &obj, &mode, NULL);
+	DIAG_W("  probe dfs_lookup_rel(parent_old, '%s') rc=%d (%s)", item_name_old, rc,
+	       strerror(rc));
+	if (rc == 0)
+		dfs_release(obj);
+
+	/* Raw syscall so pil4dfs cannot intercept it: this is the kernel/dfuse view. */
+	rc = syscall(SYS_newfstatat, AT_FDCWD, old_name, &st, AT_SYMLINK_NOFOLLOW);
+	DIAG_W("  probe kernel stat('%s') rc=%d (%s)", old_name, (int)rc,
+	       rc ? strerror(errno) : "ok");
+
+	errno = saved_errno;
+}
+
 int
 rename(const char *old_name, const char *new_name)
 {
@@ -5054,37 +5219,82 @@ rename(const char *old_name, const char *new_name)
 	struct dcache_rec *parent_new     = NULL;
 	char              *parent_dir_new = NULL;
 	char              *full_path_new  = NULL;
+	bool               diag           = false;
 
 	if (next_rename == NULL) {
 		next_rename = dlsym(RTLD_NEXT, "rename");
 		D_ASSERT(next_rename != NULL);
 	}
-	if (!d_hook_enabled)
+
+	/* Logged before the d_hook_enabled check: a disabled hook is itself a candidate
+	 * explanation for the rename never appearing in the log.
+	 */
+	DIAG_W("rename enter old='%s' new='%s' hook_enabled=%d compat=%d", old_name, new_name,
+	       d_hook_enabled, d_compatible_mode);
+
+	if (!d_hook_enabled) {
+		DIAG_W("rename hook DISABLED, going straight to libc rename()");
 		D_GOTO(out_org, rc);
+	}
+
+	diag = diag_is_sconsign(old_name) || diag_is_sconsign(new_name);
+	if (diag) {
+		DIAG("rename enter old='%s' new='%s' compat=%d", old_name, new_name,
+		     d_compatible_mode);
+		diag_cwd("rename");
+	}
 
 	rc = query_path(old_name, &is_target_path1, &parent_old, item_name_old,
 			&parent_dir_old, &full_path_old, &dfs_mt1);
-	if (rc)
+	if (rc) {
+		if (diag)
+			DIAG("rename query_path(old='%s') failed rc=%d (%s)", old_name, rc,
+			     strerror(rc));
 		D_GOTO(out_err, rc);
+	}
+	if (diag)
+		DIAG("rename old is_target=%d parent_dir='%s' item='%s' full='%s'", is_target_path1,
+		     parent_dir_old, item_name_old, full_path_old);
 
 	rc = query_path(new_name, &is_target_path2, &parent_new, item_name_new,
 			&parent_dir_new, &full_path_new, &dfs_mt2);
-	if (rc)
+	if (rc) {
+		if (diag)
+			DIAG("rename query_path(new='%s') failed rc=%d (%s)", new_name, rc,
+			     strerror(rc));
 		D_GOTO(out_err, rc);
+	}
+	if (diag)
+		DIAG("rename new is_target=%d parent_dir='%s' item='%s' full='%s'", is_target_path2,
+		     parent_dir_new, item_name_new, full_path_new);
 
-	if (is_target_path1 == 0 && is_target_path2 == 0)
+	if (is_target_path1 == 0 && is_target_path2 == 0) {
+		if (diag)
+			DIAG("rename both off-dfs, falling back to libc rename()");
 		D_GOTO(out_org, rc);
+	}
 
-	if (is_target_path1 != is_target_path2 || dfs_mt1 != dfs_mt2)
+	if (is_target_path1 != is_target_path2 || dfs_mt1 != dfs_mt2) {
+		DIAG_W("rename EXDEV old='%s' new='%s' is_target1=%d is_target2=%d mt1=%p mt2=%p",
+		       old_name, new_name, is_target_path1, is_target_path2, dfs_mt1, dfs_mt2);
+		diag_cwd("rename EXDEV");
 		D_GOTO(out_err, rc = EXDEV);
+	}
 
 	atomic_fetch_add_relaxed(&num_rename, 1);
 
 	/* Both old and new are on DAOS */
 	rc = dfs_move(dfs_mt1->dfs, drec2obj(parent_old), item_name_old, drec2obj(parent_new),
 		      item_name_new, NULL);
-	if (rc)
+	if (rc) {
+		diag_rename_probe(old_name, new_name, dfs_mt1, parent_old, item_name_old,
+				  full_path_old, rc);
+		diag_cwd("rename dfs_move failure");
 		D_GOTO(out_err, rc);
+	}
+
+	if (diag)
+		DIAG("rename OK old='%s' new='%s'", old_name, new_name);
 
 	if (parent_old != NULL) {
 		rc = drec_del(dfs_mt1->dcache, full_path_old, parent_old);
@@ -5334,6 +5544,8 @@ chdir(const char *path)
 	rc = next_chdir(path);
 	if (rc)
 		return (-1);
+
+	DIAG_W("chdir('%s') kernel ok, cur_dir was '%s'", path, cur_dir);
 
 	rc =
 	    query_path(path, &is_target_path, &parent, item_name, &parent_dir, &full_path, &dfs_mt);
@@ -6928,7 +7140,11 @@ update_cwd(void)
 		 * cwd is known again.
 		 */
 		D_DEBUG(DB_ANY, "getcwd() failed: %d (%s)\n", errno, strerror(errno));
+		DIAG_W("update_cwd: getcwd() FAILED errno=%d (%s), cur_dir cleared", errno,
+		       strerror(errno));
 		cur_dir[0] = '\0';
+	} else {
+		DIAG_W("update_cwd -> '%s'", cur_dir);
 	}
 
 	errno = saved_errno;
