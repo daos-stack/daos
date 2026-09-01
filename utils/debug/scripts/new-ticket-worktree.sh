@@ -1,8 +1,12 @@
 #!/bin/bash
 # Creates (or re-syncs) a per-ticket DAOS git-worktree checkout for dev/fix
 # work, deploys the shared env-setup files into it (see deploy-daos-env.sh),
-# and optionally seeds it from an existing ticket's skeleton of
-# build/deploy/test scripts. See README-worktrees.md for the full workflow.
+# generates a ticket-specific env.sh/inventory.yml/README.md with isolated
+# build/install paths (see generate-daos-env.sh), symlinks in the generic
+# build/test scripts (finalize-daos-dev.sh, cleanup.sh/start-daos.sh/
+# stop-daos.sh, run-*_tests.sh), and optionally seeds it from an existing
+# ticket's skeleton of genuinely ticket-specific scripts. See
+# README-worktrees.md for the full workflow.
 #
 # Usage:
 #   new-ticket-worktree.sh --ticket DAOS-NNNNN [--type dev|fix] [--base NAME]
@@ -23,6 +27,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 DEPLOY_ENV="$SCRIPT_DIR/deploy-daos-env.sh"
+GENERATE_ENV="$SCRIPT_DIR/generate-daos-env.sh"
+
+# Generic per-ticket scripts symlinked into every ticket dir (bug fixes here
+# propagate to every past and future ticket immediately, same rationale as
+# the setup-*.sh symlinks in deploy-daos-env.sh).
+GENERIC_TICKET_SCRIPTS=(
+finalize-daos-dev.sh
+cleanup.sh start-daos.sh stop-daos.sh
+run-vos_tests.sh run-ddb_ut.sh run-ddb_tests.sh run-dtx_ut.sh run-dtx_tests.sh run-go_unit.sh
+)
 
 DAOS_MAIN_REPO="${DAOS_MAIN_REPO:-$HOME/work/daos}"
 DAOS_TOOLS_DIR="${DAOS_TOOLS_DIR:-$HOME/work/daos-tools}"
@@ -50,12 +64,14 @@ Flags:
   --base NAME             Base branch to fork from, e.g. master, release/2.8 (default: master)
   --patch NNN             Patch number (default: auto-incremented from existing
                           local+origin branches for this ticket/type/base, else 001)
-  --skeleton-from TICKET  Seed the new ticket dir from an existing ticket's
-                          build/deploy/test script skeleton (env.sh, install/
-                          update-daos.sh, run-*.sh, check-*.sh, inventory.yml,
-                          files/, setup/, tests/*.c). Rewrites DAOS_SRC/
-                          daos_source_dir to the new worktree path and
-                          DAOS_BUILD/daos_build_dir to a ticket-unique suffix.
+  --skeleton-from TICKET  Seed the new ticket dir with an existing ticket's
+                          genuinely ticket-specific scripts (run-*.sh,
+                          check-*.sh not already part of the generic set,
+                          files/, setup/, tests/*.c). env.sh/inventory.yml/
+                          README.md and the generic build/test scripts are
+                          already generated/symlinked by default (see above)
+                          -- this only adds what's unique to TICKET's own
+                          investigation.
                           Does NOT run ansible-playbook -- prints the command.
   --dry-run               Print planned actions without executing them
   --list                  List all ticket worktrees under DAOS_TICKETS_DIR
@@ -140,6 +156,11 @@ echo "  Set up the tools worktree first: git -C \"$DAOS_MAIN_REPO\" worktree add
 exit 1
 fi
 
+if [[ ! -x "$GENERATE_ENV" ]]; then
+echo "new-ticket-worktree.sh: [ERROR] generate-daos-env.sh not found/executable at $GENERATE_ENV" >&2
+exit 1
+fi
+
 BRANCH_PREFIX="ckochhof/$TYPE/$BASE/$TICKET_LC/patch-"
 
 if [[ -z "$PATCH" ]]; then
@@ -211,6 +232,8 @@ echo "new-ticket-worktree.sh: [INFO] (dry-run) would run: git -C $DAOS_MAIN_REPO
 echo "new-ticket-worktree.sh: [INFO] (dry-run) would run: git -C $WORKTREE_DIR submodule update --init --recursive"
 echo "new-ticket-worktree.sh: [INFO] (dry-run) would run: $DEPLOY_ENV $WORKTREE_DIR"
 fi
+echo "new-ticket-worktree.sh: [INFO] (dry-run) would run: $GENERATE_ENV --ticket $TICKET --worktree $WORKTREE_DIR"
+echo "new-ticket-worktree.sh: [INFO] (dry-run) would symlink into $TICKET_DIR: ${GENERIC_TICKET_SCRIPTS[*]}"
 if [[ -n "$SKELETON_FROM" ]]; then
 echo "new-ticket-worktree.sh: [INFO] (dry-run) would seed skeleton from $(normalize_ticket "$SKELETON_FROM")"
 fi
@@ -227,6 +250,13 @@ git -C "$DAOS_MAIN_REPO" worktree add "${WORKTREE_ADD_ARGS[@]}"
 git -C "$WORKTREE_DIR" submodule update --init --recursive
 "$DEPLOY_ENV" "$WORKTREE_DIR"
 fi
+
+"$GENERATE_ENV" --ticket "$TICKET" --worktree "$WORKTREE_DIR"
+
+for script in "${GENERIC_TICKET_SCRIPTS[@]}"; do
+ln -fs "$SCRIPT_DIR/$script" "$TICKET_DIR/$script"
+done
+echo "new-ticket-worktree.sh: [INFO] symlinked generic scripts into $TICKET_DIR: ${GENERIC_TICKET_SCRIPTS[*]}"
 
 if [[ -n "$SKELETON_FROM" ]]; then
 SRC_TICKET="$(normalize_ticket "$SKELETON_FROM")"
@@ -246,14 +276,23 @@ echo "new-ticket-worktree.sh: [INFO] seeding skeleton from $SRC_DIR into $TICKET
 
 COPIED_FILES=()
 
+# env.sh/inventory.yml/README.md (generate-daos-env.sh) and the generic
+# cleanup.sh/start-daos.sh/stop-daos.sh/finalize-daos-dev.sh/run-*.sh scripts
+# (symlinked above) are already handled by default -- --skeleton-from now only
+# copies genuinely ticket-specific scripts (e.g. a prior ticket's own
+# check-*.sh reproduction scripts, or one-off run-*.sh not part of the
+# generic set).
 SKELETON_GLOBS=(
-"env.sh" "install-daos.sh" "update-daos.sh" "cleanup.sh"
-"start-daos.sh" "stop-daos.sh" "inventory.yml" "run-*.sh" "check-*.sh"
+"run-*.sh" "check-*.sh"
 )
 for pattern in "${SKELETON_GLOBS[@]}"; do
 for f in "$SRC_DIR"/$pattern; do
 [[ -e "$f" ]] || continue
 dest="$TICKET_DIR/$(basename "$f")"
+if [[ -L "$dest" ]]; then
+echo "new-ticket-worktree.sh: [INFO] skipping $(basename "$f") -- already a symlink to a generic script, not overwriting"
+continue
+fi
 cp "$f" "$dest"
 COPIED_FILES+=("$dest")
 echo "new-ticket-worktree.sh: [INFO] copied $(basename "$f")"
@@ -288,26 +327,12 @@ echo "new-ticket-worktree.sh: [INFO] substituted ticket ID in ${f#"$TICKET_DIR"/
 fi
 done
 
-if [[ -f "$TICKET_DIR/env.sh" ]]; then
-sed -i \
--e "s#^DAOS_SRC=.*#DAOS_SRC=\"$WORKTREE_DIR\"#" \
--e "s#^DAOS_BUILD=.*#DAOS_BUILD=/var/tmp/daos-build-$TICKET_LC#" \
-"$TICKET_DIR/env.sh"
-echo "new-ticket-worktree.sh: [INFO] rewrote env.sh: DAOS_SRC=$WORKTREE_DIR DAOS_BUILD=/var/tmp/daos-build-$TICKET_LC"
-fi
-
-if [[ -f "$TICKET_DIR/inventory.yml" ]]; then
-sed -i \
--e "s#^\([[:space:]]*daos_source_dir:\).*#\1 $WORKTREE_DIR#" \
--e "s#^\([[:space:]]*daos_build_dir:\).*#\1 /var/tmp/daos-build-$TICKET_LC#" \
-"$TICKET_DIR/inventory.yml"
-echo "new-ticket-worktree.sh: [INFO] rewrote inventory.yml: daos_source_dir=$WORKTREE_DIR daos_build_dir=/var/tmp/daos-build-$TICKET_LC"
-fi
-
 echo "new-ticket-worktree.sh: [INFO] skeleton seeded from $SRC_TICKET -- REVIEW THE DIFF before trusting it (substitution is textual, not semantic)"
-echo "new-ticket-worktree.sh: [INFO] to regenerate ansible-templated scripts (daos-make.sh, etc.) from the rewritten inventory.yml, run manually:"
-echo "new-ticket-worktree.sh: [INFO]   cd <ansible/ftest checkout> && ansible-playbook -i $TICKET_DIR/inventory.yml ftest.yml --tags dev"
+echo "new-ticket-worktree.sh: [INFO] env.sh/inventory.yml were already generated with this ticket's own DAOS_SRC/DAOS_BUILD/daos_alt_prefix by generate-daos-env.sh -- not touched here"
+echo "new-ticket-worktree.sh: [INFO] to (re)provision the cluster and generate this ticket's own daos-make.sh, run manually:"
+echo "new-ticket-worktree.sh: [INFO]   cd $DAOS_TOOLS_DIR/utils/ansible/ftest && ansible-playbook -i $TICKET_DIR/inventory.yml ftest.yml"
 fi
 
 echo "new-ticket-worktree.sh: [INFO] ready -- cd $WORKTREE_DIR && direnv allow"
+echo "new-ticket-worktree.sh: [INFO] see $TICKET_DIR/README.md for the full dev/build/test workflow"
 echo "$WORKTREE_DIR"

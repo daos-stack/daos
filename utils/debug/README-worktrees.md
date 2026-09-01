@@ -16,6 +16,41 @@ PR review is a **different** mechanism entirely (`git clone --reference` +
 of `daos/`) — not something these scripts manage.
 
 
+### The branch tree
+
+Personal branches in this repo (`daos-stack/daos`, this user's fork/remote)
+follow a fixed naming convention:
+
+```
+ckochhof/{dev,fix}/{base}/{ticket-lc}/{patch-NNN}
+```
+
+e.g. `ckochhof/fix/master/daos-19299/patch-001` — `dev` vs `fix` is the
+work-type segment, `{base}` is the branch forked from (`master`,
+`release/2.8`, ...), `{ticket-lc}` is the lowercased ticket ID,
+`patch-NNN` an auto-incrementing counter (see `new-ticket-worktree.sh
+--patch`). `new-ticket-worktree.sh` creates/reuses exactly these branches
+for the per-ticket `daos/` worktrees above.
+
+Two branches sit outside that per-ticket convention:
+
+- **`ckochhof/dbg/master`** — the permanent personal tools branch, checked
+  out at `~/work/daos-tools` (this whole `utils/debug/` tree, plus
+  `utils/ansible/ftest/`, lives here). Not tied to any single ticket;
+  accumulates reusable tooling over time.
+- **`ansible/ftest`** — a `git symbolic-ref`, *not* a real branch: it
+  points at whatever ticket branch currently holds the actively-developed
+  ansible ftest tooling (at the time of writing,
+  `ckochhof/dev/master/daos-17397`). Ticket branches carry real, often
+  substantial, unrelated DAOS source changes for that ticket alongside
+  any tooling work, so `utils/ansible/ftest/` is pulled from there into
+  `ckochhof/dbg/master` with a **surgical subtree copy**
+  (`git checkout ansible/ftest -- utils/ansible/ftest`), never a full
+  branch merge — merging would also pull in everything else on that
+  ticket branch. Check `git symbolic-ref refs/heads/ansible/ftest` if
+  this pointer ever needs to move to a newer ticket branch.
+
+
 ### Why not just `git clone --reference` for dev/fix too?
 
 A linked worktree shares the *same* `.git` (objects, refs, config) as
@@ -83,7 +118,37 @@ Run `--help` on either script for the full flag list, or `--dry-run` to
 preview without touching anything.
 
 
-### The `DAOS_BUILD` collision this also avoids
+### Building and testing a ticket in isolation
+
+`new-ticket-worktree.sh` also renders a ticket-specific `env.sh`,
+`inventory.yml` and `README.md` (via `generate-daos-env.sh`, see the
+generated `README.md` for the full walkthrough) so a ticket's build never
+collides with another's:
+
+```
+# 1. generate env.sh/inventory.yml/README.md (done automatically for new tickets)
+~/work/daos-tools/utils/debug/scripts/generate-daos-env.sh --ticket DAOS-17321 --worktree ~/work/tickets/daos-jira/DAOS-17321/daos
+
+# 2. provision the cluster for this ticket (manual, deliberate -- see the
+#    ticket's README.md for what this changes on the shared cluster)
+cd ~/work/daos-tools/utils/ansible/ftest && ansible-playbook -i ~/work/tickets/daos-jira/DAOS-17321/inventory.yml ftest.yml
+
+# 3. build/install into this ticket's own isolated prefix, reusing shared prereqs
+cd ~/work/tickets/daos-jira/DAOS-17321 && ./finalize-daos-dev.sh --force --deps
+
+# 4. run standalone unit tests (isolated, safe regardless of what's "live")
+./run-vos_tests.sh
+```
+
+Only the build/install (steps 1 and 3) and unit tests (step 4) are truly
+isolated per ticket. Step 2's playbook run, and running a *live*
+`start-daos.sh` multi-node cluster, remain exclusive across tickets — see
+the generated `README.md`'s "Isolation model" section for exactly why
+(shared systemd units, `ld.so.conf.d`, and ultimately the physical
+PMEM/NVMe/network hardware on `brd-216..219`).
+
+
+### The `DAOS_BUILD`/`DAOS_INSTALL` collision this also avoids
 
 `check-ddb_build_freshness.sh` (see `DAOS-17321/README.md`) documented a
 real bug: scons's `.sconsign.dblite` build-signature database is keyed by
@@ -92,9 +157,12 @@ absolute path *strings*. Two sandboxes building from the same
 on the same build node caused scons to silently skip recompiling a
 changed file, because the signature looked identical even though the
 underlying content differed. Separate worktrees already fix the
-`DAOS_SRC` half (different absolute path per ticket); `--skeleton-from`
-also gives each ticket its own `DAOS_BUILD=/var/tmp/daos-build-<ticket>`,
-closing the other half.
+`DAOS_SRC` half (different absolute path per ticket); `generate-daos-env.sh`
+(used by default for every new ticket, see previous section) gives each
+ticket its own `DAOS_BUILD=/var/tmp/daos-build-<ticket>` **and**
+`DAOS_INSTALL`/`daos_runtime_dir=/scratch/$USER/daos-install-<ticket>`,
+closing both halves — previously only `--skeleton-from` gave a ticket its
+own `DAOS_BUILD`, and `DAOS_INSTALL` was always the one shared location.
 
 
 ### Files
@@ -109,3 +177,8 @@ closing the other half.
 | `scripts/deploy-daos-env.sh` | Symlinks the 4 `setup-*.sh` + copies `envrc` -> `.envrc` into any target directory. |
 | `scripts/new-ticket-worktree.sh` | Create/re-sync a per-ticket `git worktree`, optionally seeded from another ticket's skeleton. |
 | `scripts/remove-ticket-worktree.sh` | Symmetric teardown, refuses on uncommitted/unpushed changes unless `--force`. |
+| `scripts/generate-daos-env.sh` | Renders a ticket-specific `env.sh`/`inventory.yml`/`README.md` with isolated `DAOS_BUILD`/`DAOS_INSTALL` paths. Skips files that already exist unless `--force`. |
+| `scripts/compute-daos-alt-prefix.sh` | Computes the colon-separated scons `ALT_PREFIX` list from a shared install's `.build_vars.sh`, used by `generate-daos-env.sh`. |
+| `scripts/finalize-daos-dev.sh` | Deployed into each ticket dir; ssh + invokes that ticket's ansible-generated `daos-make.sh`, `--build-only` by default (see `--activate`). |
+| `scripts/run-vos_tests.sh`, `run-ddb_ut.sh`, `run-ddb_tests.sh`, `run-dtx_ut.sh`, `run-dtx_tests.sh`, `run-go_unit.sh` | Deployed into each ticket dir; generic standalone unit-test-suite runners. |
+| `ansible/ftest/` | The DAOS functional-test-platform Ansible playbook/roles (imported from the `ansible/ftest` branch — see "The branch tree" above), extended with `daos_alt_prefix`/`ALT_PREFIX` reuse and `daos-make.sh --build-only` for per-ticket isolated builds. |
