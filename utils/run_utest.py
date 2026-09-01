@@ -136,14 +136,33 @@ class ValgrindHelper():
         return os.path.join(base, 'utils', 'test_memcheck.supp')
 
     @staticmethod
+    def get_go_supp(base):
+        """Get Go-runtime suppression file (shared with NLT)"""
+        return os.path.join(base, 'src', 'cart', 'utils', 'memcheck-go.supp')
+
+    @staticmethod
     def setup_cmd(base, cmd, name):
         """Return a new command using valgrind"""
         cmd_prefix = ["valgrind", "--leak-check=full", "--show-reachable=yes", "--num-callers=20",
                       "--error-limit=no", "--fair-sched=try",
                       f"--suppressions={ValgrindHelper.get_supp(base)}",
+                      f"--suppressions={ValgrindHelper.get_go_supp(base)}",
                       "--gen-suppressions=all", "--error-exitcode=42", "--xml=yes",
                       f"--xml-file={ValgrindHelper.get_xml_name(name)}"]
         return cmd_prefix + cmd
+
+    @staticmethod
+    def set_memcheck_env(env):
+        """Adjust the Go runtime for memcheck runs.
+
+        Async preemption signals can write to goroutine stacks mid-instruction,
+        producing spurious Memcheck:Addr/Cond reports that the valgrind tag
+        alone does not eliminate.
+        """
+        godebug = env.get('GODEBUG')
+        env['GODEBUG'] = f'{godebug},asyncpreemptoff=1' if godebug else 'asyncpreemptoff=1'
+        # disable GC, as it wastes time and interacts poorly with valgrind
+        env['GOGC'] = 'off'
 
 
 def run_cmd(cmd, output_log=None, env=None):
@@ -440,9 +459,11 @@ class Test():
         """Run the test"""
         cmd = [os.path.join(base, self.cmd[0])] + self.cmd[1:]
         if memcheck:
+            ValgrindHelper.set_memcheck_env(self.env)
             if os.path.splitext(cmd[0])[-1] in [".sh", ".py"]:
                 self.env.update({"USE_VALGRIND": "memcheck",
-                                 "VALGRIND_SUPP": ValgrindHelper.get_supp(self.root_dir())})
+                                 "VALGRIND_SUPP": ValgrindHelper.get_supp(self.root_dir()),
+                                 "VALGRIND_GO_SUPP": ValgrindHelper.get_go_supp(self.root_dir())})
             else:
                 cmd = ValgrindHelper.setup_cmd(self.root_dir(), cmd, self.name)
         if sudo:

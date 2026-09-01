@@ -6,7 +6,6 @@
 """
 
 import os
-import shutil
 
 from apricot import TestWithServers
 from cmocka_utils import CmockaUtils, get_cmocka_command
@@ -112,13 +111,3 @@ class DaosCoreBase(TestWithServers):
                         rank, ["Stopped", "Excluded"])
 
         cmocka_utils.run_cmocka_test(self, job)
-
-        try:
-            tmp_log_path = "/tmp/suite_dmg.log"
-            log_path = os.path.join(self.outputdir, f"{self.subtest_name}_dmg.log")
-            shutil.move(tmp_log_path, log_path)
-        except FileNotFoundError:
-            # if dmg wasn't called, there will not be a dmg log file
-            self.log.info("dmg log file not found")
-        except IOError as error:
-            self.log.error("unable to move dmg log: %s", error)
