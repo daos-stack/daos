@@ -15,7 +15,7 @@ server_config:
 pool:
   scm_size: 200MB
   nvme_size: 1GiB  # Minimum for 1 target
-  properties: "rd_fac:0,space_rb:0"
+  properties: "space_rb:0"
 
 container:
   type: POSIX
