@@ -56,6 +56,14 @@
 #         # http_proxy and https_proxy in the generated daos-make.sh script.
 #         #  default: None
 #         # daos_http_proxy: http://proxy.example.net:8080
+#         #
+#         # Optional variable defining a colon-separated list of already-built prereq install
+#         # prefixes (e.g. ofi/ucx/mercury/pmdk/spdk/argobots/isal/isal_crypto/protobufc/fused)
+#         # to reuse via scons's ALT_PREFIX mechanism (see daos docs/dev/development.md), instead
+#         # of rebuilding them for this daos_runtime_dir. Used for per-ticket isolated builds that
+#         # share one cluster's prereqs but keep their own DAOS build/install output separate.
+#         #  default: None (prereqs are built into this daos_runtime_dir as usual)
+#         # daos_alt_prefix: /scratch/foo/daos-install/install/prereq/debug/ofi
 #       hosts:
 #         node1:
 #     daos_servers:

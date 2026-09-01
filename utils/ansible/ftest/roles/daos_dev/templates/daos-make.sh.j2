@@ -14,6 +14,11 @@ DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
 DAOS_VENV_DIR="{{ daos_runtime_dir }}/virtualenvs"
 DAOS_SOURCE_DIR="{{ daos_source_dir }}"
 DAOS_BUILD_DIR="{{ daos_build_dir }}"
+# Colon-separated list of already-built prereq prefixes to reuse (scons ALT_PREFIX,
+# see docs/dev/development.md) instead of rebuilding ofi/ucx/mercury/pmdk/spdk/etc.
+# per ticket. Empty by default (unchanged behavior) unless the inventory sets
+# daos_alt_prefix -- used by the per-ticket isolated build workflow.
+DAOS_ALT_PREFIX="{{ daos_alt_prefix | default('') }}"
 DEV_LIST="{{ groups["daos_dev"] | join(',') }}"
 SERVERS_LIST="{{ groups["daos_servers"] | join(',') }}"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
@@ -85,6 +90,7 @@ DAOS_BUILD_DEPS=false
 DAOS_BUILD_TYPE=debug
 JOBS_NB=1
 FORCE_INSTALL=false
+BUILD_ONLY=false
 
 function debug
 {
@@ -155,6 +161,11 @@ function usage
 		   -d, --deps                   Build DAOS dependencies
 		   -j, --jobs <job>             Allow N jobs at once; one job with no arg
 		   -f, --force                  Overwrite the current install of DAOS and deps
+		       --build-only             Build/install into the isolated prefix only; skip
+		                                system-wide activation (daos_server_helper, dfuse,
+		                                ld.so.conf.d, spdk udev rules). Use when several
+		                                tickets share this cluster and you don't want this
+		                                build to become the live system-wide one.
 		   -h, --help                   Show this help message and exit
 		   -V, --version                Show version number
 		   -q, --quiet                  Quiet mode
@@ -173,7 +184,7 @@ function run
 	fi
 }
 
-OPTIONS=$(getopt -o "b:dj:fhVvDq" --long "mpich:,hdf5:,vol-daos:,mpifileutils:,ior:,fio:,build-type:,deps,jobs:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
+OPTIONS=$(getopt -o "b:dj:fhVvDq" --long "mpich:,hdf5:,vol-daos:,mpifileutils:,ior:,fio:,build-type:,deps,jobs:,force,build-only,help,version,verbose,debug,quiet" -- "$@") || exit 1
 eval set -- "$OPTIONS"
 while true
 do
@@ -188,6 +199,7 @@ do
 		-d|--deps) DAOS_BUILD_DEPS=true ; shift 1 ;;
 		-j|--jobs) JOBS_NB="$2" ; shift 2 ;;
 		-f|--force) FORCE_INSTALL=true ; shift 1;;
+		--build-only) BUILD_ONLY=true ; shift 1;;
 		-h|--help) usage ; exit 0;;
 		-V|--version) echo "daos-make.sh version=$VERSION" ; exit 0 ;;
 		-v|--verbose) TRACE_LEVEL=$TRACE_LEVEL_VERBOSE ; shift 1 ;;
@@ -244,7 +256,7 @@ fi
 
 if "$DAOS_BUILD_DEPS" ; then
 	info "Building DAOS dependencies from source tree $DAOS_SOURCE_DIR"
-	if ! run "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR/daos" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS --build-deps=only ; then
+	if ! run "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR/daos" PREFIX="$DAOS_INSTALL_DIR" ${DAOS_ALT_PREFIX:+ALT_PREFIX="$DAOS_ALT_PREFIX"} "${args[@]}" $SCONS_OPTS --build-deps=only ; then
 		fatal "DAOS dependencies could not be properly build"
 	fi
 fi
@@ -252,11 +264,11 @@ fi
 info "Building DAOS from source tree $DAOS_SOURCE_DIR"
 # NOTE Dependencies will not be build as 'no' is default value of the --build-deps option
 if [[ ${BEAR_EXE:+x} ]] ; then
-	if ! run env --unset=http_proxy --unset=https_proxy --unset=HTTP_PROXY --unset=HTTPS_PROXY MPI_PKG=any "$BEAR_EXE" --append --output "$DAOS_SOURCE_DIR/compile_commands.json" -- "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR/daos" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS ; then
+	if ! run env --unset=http_proxy --unset=https_proxy --unset=HTTP_PROXY --unset=HTTPS_PROXY MPI_PKG=any "$BEAR_EXE" --append --output "$DAOS_SOURCE_DIR/compile_commands.json" -- "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR/daos" PREFIX="$DAOS_INSTALL_DIR" ${DAOS_ALT_PREFIX:+ALT_PREFIX="$DAOS_ALT_PREFIX"} "${args[@]}" $SCONS_OPTS ; then
 		fatal "DAOS could not be properly build"
 	fi
 else
-	if ! run env --unset=http_proxy --unset=https_proxy --unset=HTTP_PROXY --unset=HTTPS_PROXY MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR/daos" PREFIX="$DAOS_INSTALL_DIR" "${args[@]}" $SCONS_OPTS ; then
+	if ! run env --unset=http_proxy --unset=https_proxy --unset=HTTP_PROXY --unset=HTTPS_PROXY MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" BUILD_ROOT="$DAOS_BUILD_DIR/daos" PREFIX="$DAOS_INSTALL_DIR" ${DAOS_ALT_PREFIX:+ALT_PREFIX="$DAOS_ALT_PREFIX"} "${args[@]}" $SCONS_OPTS ; then
 		fatal "DAOS could not be properly build"
 	fi
 fi
@@ -277,6 +289,12 @@ do
 	run cp -av "$file_path" "$DAOS_INSTALL_DIR/lib/daos/$file_name"
 done
 
+if "$BUILD_ONLY" ; then
+	info "Skipping system-wide activation (--build-only): daos_server_helper," \
+	     "dfuse, spdk udev rules and /etc/ld.so.conf.d are left untouched, so this" \
+	     "build does not take over whichever ticket is currently the live one on" \
+	     "this shared cluster. Run without --build-only to activate it."
+else
 info "Finalizing spdk install"
 for item in $(find "$DAOS_INSTALL_DIR/share/daos" -type f)
 do
@@ -316,6 +334,7 @@ cat > "$DAOS_INSTALL_DIR/share/ld.so.conf.d/daos-x86_64.conf" <<<"$DAOS_INSTALL_
 {% else %}
 } | run $CLUSH_EXE $CLUSH_OPTS -w $DEV_LIST -w $SERVERS_LIST sudo bash -s
 {% endif %}
+fi
 
 if [[ ${MPICH_PATH:+x} ]] ; then
 	info "Building and installing MPICH from source tree $MPICH_PATH to $DAOS_INSTALL_DIR"
