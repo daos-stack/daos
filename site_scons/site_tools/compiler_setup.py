@@ -5,6 +5,13 @@ from SCons.Script import Configure, Exit, GetOption
 FRAME_SIZE_MAX = 4096
 ASAN_FRAME_SIZE_MAX = {'gcc': 8192,
                        'clang': 10240}
+# SANITIZERS accepts a clearer, human-readable token for UBSan than the
+# compiler's own fixed -fsanitize= name: gcc/clang call it 'undefined'
+# (easily misread as "value not set"), so SANITIZERS instead uses
+# 'undefined_behavior' and this map translates a SANITIZERS token back to
+# the compiler's real -fsanitize=<name> identifier wherever one is built.
+# https://github.com/daos-stack/daos/pull/18613#discussion_r3883325337
+SANITIZER_FLAG_NAMES = {'undefined_behavior': 'undefined'}
 DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-sign-compare',
                  '-Wno-missing-attributes',
@@ -85,9 +92,9 @@ def _base_setup(env):
         san_libs = []
         # Sanitizer runtime libraries that must be linked explicitly.
         # GCC injects them for pure-C targets but CGO bypasses that path.
-        _sanitizer_libs = {'undefined': '-lubsan', 'thread': '-ltsan'}
+        _sanitizer_libs = {'undefined_behavior': '-lubsan', 'thread': '-ltsan'}
         for sanitizer in env['SANITIZERS'].split(','):
-            asan_flags.append(f"-fsanitize={sanitizer}")
+            asan_flags.append(f"-fsanitize={SANITIZER_FLAG_NAMES.get(sanitizer, sanitizer)}")
             if sanitizer in _sanitizer_libs:
                 san_libs.append(_sanitizer_libs[sanitizer])
 
@@ -236,7 +243,7 @@ def _check_func(env, func_name):
     # NOTE Remove sanitizers to not scramble the test output
     if denv.get('SANITIZERS'):
         for sanitizer in denv['SANITIZERS'].split(','):
-            flag = f"-fsanitize={sanitizer}"
+            flag = f"-fsanitize={SANITIZER_FLAG_NAMES.get(sanitizer, sanitizer)}"
             if flag not in denv["CCFLAGS"]:
                 continue
             denv["CCFLAGS"].remove(flag)
