@@ -96,7 +96,7 @@ while IFS= read -r line; do
     if [ "$mlnx_type" -ge 6 ]; then
         ((hdr_count++)) || true
     fi
-done < <(lspci -mm | grep "ConnectX" | grep -i "infiniband" || true)
+done < <(lspci -mm | grep "ConnectX" | grep -i "infiniband" )
 echo "Found $hdr_count Mellanox HDR adapters."
 if [ "$hdr_count" -gt 0 ]; then
     ((ib_count=hdr_count)) || true
