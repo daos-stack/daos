@@ -26,8 +26,14 @@
  * #define CR_ACCURATE_QUERY_RESULT	1
  */
 
-/* Start pool service may take sometime, let's wait for at most CR_WAIT_MAX * 2 seconds. */
-#define CR_WAIT_MAX	(45)
+/*
+ * Wall-clock budget for checker-progress waits. The pre-bindings dmg helpers
+ * fork/exec'd dmg for every query (~1-2s each), so the historical
+ * 45-iteration polls implied roughly three minutes of wall time; the
+ * bindings answer in milliseconds, which silently halved the wait. Budget
+ * time, not iterations.
+ */
+#define CR_WAIT_SECS    300
 /* 256MB for CR pool size. */
 #define CR_POOL_SIZE	(1 << 28)
 
@@ -233,8 +239,15 @@ cr_fault_inject(uuid_t uuid, bool mgmt, const char *fault)
 static inline int
 cr_mode_switch(bool enable)
 {
+	time_t deadline = time(NULL) + CR_WAIT_SECS;
+	int    rc;
+
 	print_message("CR: %s check mode\n", enable ? "enable" : "disable");
-	return dmg_check_switch(dmg_config_file, enable);
+	/* member states may not have settled yet after a system stop/start */
+	while ((rc = dmg_check_switch(dmg_config_file, enable)) == -DER_AGAIN &&
+	       time(NULL) < deadline)
+		sleep(1);
+	return rc;
 }
 
 static inline int
@@ -356,11 +369,11 @@ cr_check_query(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci)
 }
 
 static inline int
-cr_check_repair(uint64_t seq, uint32_t opt)
+cr_check_repair(uint64_t seq, uint32_t action)
 {
-	print_message("CR: handle check interaction for seq %lu, option %u ...\n",
-		      (unsigned long)seq, opt);
-	return dmg_check_repair(dmg_config_file, seq, opt);
+	print_message("CR: handle check interaction for seq %lu, action %u ...\n",
+		      (unsigned long)seq, action);
+	return dmg_check_repair(dmg_config_file, seq, action);
 }
 
 static inline int
@@ -374,9 +387,12 @@ cr_check_set_policy(uint32_t flags, const char *policies)
 static struct daos_check_report_info *
 cr_locate_dcri(struct daos_check_info *dci, struct daos_check_report_info *base, uuid_t uuid)
 {
-	struct daos_check_report_info	*last = &dci->dci_reports[dci->dci_report_nr - 1];
+	struct daos_check_report_info   *last;
 	struct daos_check_report_info	*dcri = NULL;
 	bool				 found = false;
+
+	D_ASSERTF(dci->dci_report_nr > 0, "no check reports for pool " DF_UUID "\n", DP_UUID(uuid));
+	last = &dci->dci_reports[dci->dci_report_nr - 1];
 
 	if (base != NULL)
 		dcri = base + 1;
@@ -442,7 +458,7 @@ cr_cleanup(test_arg_t *arg, struct test_pool *pools, uint32_t nr)
 		}
 
 		rc = dmg_pool_destroy(dmg_config_file, pools[i].pool_uuid, arg->group, 1);
-		if (rc != 0 && rc != -DER_NONEXIST && rc != -DER_MISC)
+		if (rc != 0 && rc != -DER_NONEXIST)
 			print_message("CR: dmg_pool_destroy failed: "DF_RC"\n", DP_RC(rc));
 	}
 }
@@ -451,18 +467,26 @@ static void
 cr_ins_wait(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci)
 {
 	int	rc;
-	int	i;
+
+	time_t  deadline = time(NULL) + CR_WAIT_SECS;
 
 	print_message("CR: waiting check instance ...\n");
 
-	for (i = 0; i < CR_WAIT_MAX; i++) {
+	for (;;) {
 		cr_dci_fini(dci);
 
 		rc = dmg_check_query(dmg_config_file, pool_nr, uuids, dci);
-		assert_rc_equal(rc, 0);
-
-		if (!cr_ins_status_init(dci->dci_status) && !cr_ins_status_running(dci->dci_status))
+		if (rc != 0)
+			print_message("CR: check query failed (" DF_RC "), retrying\n", DP_RC(rc));
+		else if (!cr_ins_status_init(dci->dci_status) &&
+			 !cr_ins_status_running(dci->dci_status))
 			break;
+
+		if (time(NULL) >= deadline) {
+			/* tolerate transient query failures, not persistent ones */
+			assert_rc_equal(rc, 0);
+			break;
+		}
 
 		sleep(2);
 	}
@@ -471,21 +495,27 @@ cr_ins_wait(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci)
 static void
 cr_pool_wait(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci)
 {
-	int	rc;
-	int	i;
+	time_t deadline = time(NULL) + CR_WAIT_SECS;
+	int    rc;
 
 	print_message("CR: waiting check pool ...\n");
 	cr_dump_pools(pool_nr, uuids);
 
-	for (i = 0; i < CR_WAIT_MAX; i++) {
+	for (;;) {
 		cr_dci_fini(dci);
 
 		rc = dmg_check_query(dmg_config_file, pool_nr, uuids, dci);
-		assert_rc_equal(rc, 0);
-
-		if (!cr_ins_status_init(dci->dci_status) && dci->dci_pools != NULL &&
-		    !cr_pool_status_checking(dci->dci_pools[0].dcpi_status))
+		if (rc != 0)
+			print_message("CR: check query failed (" DF_RC "), retrying\n", DP_RC(rc));
+		else if (!cr_ins_status_init(dci->dci_status) && dci->dci_pools != NULL &&
+			 !cr_pool_status_checking(dci->dci_pools[0].dcpi_status))
 			break;
+
+		if (time(NULL) >= deadline) {
+			/* tolerate transient query failures, not persistent ones */
+			assert_rc_equal(rc, 0);
+			break;
+		}
 
 		sleep(2);
 	}
@@ -1244,7 +1274,7 @@ cr_leader_interaction(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i);
+			rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[i]);
 			break;
 		}
 	}
@@ -1335,7 +1365,7 @@ cr_engine_interaction(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i);
+			rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[i]);
 			break;
 		}
 	}
@@ -1433,7 +1463,7 @@ cr_repair_forall_leader(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i);
+			rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[i]);
 			break;
 		}
 	}
@@ -1550,7 +1580,7 @@ cr_repair_forall_engine(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i);
+			rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[i]);
 			break;
 		}
 	}
@@ -1837,7 +1867,7 @@ cr_stop_specified(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i);
+			rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[i]);
 			break;
 		}
 	}
@@ -1950,7 +1980,7 @@ cr_auto_reset(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i);
+			rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[i]);
 			break;
 		}
 	}
@@ -2003,8 +2033,8 @@ cr_pause(void **state, bool force)
 	struct daos_check_info		 dci = { 0 };
 	uint32_t			 class = TCC_POOL_BAD_LABEL;
 	uint32_t			 action = TCA_INTERACT;
-	int				 rc;
-	int				 i;
+	time_t                           deadline;
+	int                              rc;
 
 	rc = cr_pool_create(state, &pool, false, class);
 	assert_rc_equal(rc, 0);
@@ -2032,7 +2062,8 @@ cr_pause(void **state, bool force)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	for (i = 0; i < CR_WAIT_MAX; i++) {
+	deadline = time(NULL) + CR_WAIT_SECS;
+	do {
 		/* Sleep for a while after system re-started under check mode. */
 		sleep(2);
 
@@ -2042,7 +2073,7 @@ cr_pause(void **state, bool force)
 			break;
 
 		assert_rc_equal(rc, -DER_INVAL);
-	}
+	} while (time(NULL) < deadline);
 
 	rc = cr_ins_verify(&dci, TCIS_PAUSED);
 	assert_rc_equal(rc, 0);
@@ -2925,7 +2956,7 @@ cr_engine_death(void **state)
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
 			/* Repair the pool label with the lost rank. */
-			rc = cr_check_repair(dcri->dcri_seq, i);
+			rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[i]);
 			break;
 		}
 	}
@@ -3041,7 +3072,7 @@ cr_engine_rejoin_succ(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
-			rc = cr_check_repair(dcri->dcri_seq, i);
+			rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[i]);
 			break;
 		}
 	}
@@ -3146,7 +3177,7 @@ cr_engine_rejoin_fail(void **state)
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == action) {
 			/* Repair the inconsistency with the lost rank. */
-			rc = cr_check_repair(dcri->dcri_seq, i);
+			rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[i]);
 			break;
 		}
 	}
@@ -3291,7 +3322,7 @@ cr_multiple_pools(void **state)
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == actions[1]) {
-			rc = cr_check_repair(dcri->dcri_seq, i);
+			rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[i]);
 			break;
 		}
 	}
@@ -3348,7 +3379,7 @@ again:
 		dcri = cr_locate_dcri(&dci, dcri, uuids[i]);
 		for (j = 0; j < dcri->dcri_option_nr; j++) {
 			if (dcri->dcri_options[j] == actions[0]) {
-				rc = cr_check_repair(dcri->dcri_seq, j);
+				rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[j]);
 				break;
 			}
 		}
@@ -3389,7 +3420,7 @@ again:
 
 	for (i = 0; i < dcri->dcri_option_nr; i++) {
 		if (dcri->dcri_options[i] == actions[1]) {
-			rc = cr_check_repair(dcri->dcri_seq, i);
+			rc = cr_check_repair(dcri->dcri_seq, dcri->dcri_options[i]);
 			break;
 		}
 	}
