@@ -1,0 +1,46 @@
+# Molecule proxy configuration — copy to molecule-proxy.yml and customize.
+# molecule-proxy.yml is NOT version-controlled (it is listed in .gitignore).
+#
+# ── How it works ──────────────────────────────────────────────────────────────
+#
+# This file mirrors the proxy configuration available in the Ansible inventory
+# (daos_http_proxy, daos_proxy_bypass, daos_proxy_nofwd) but applies only to
+# Molecule test runs.  Two propagation paths are used:
+#
+#   molecule_http_proxy   →  Docker container level
+#                            molecule-test.sh reads this file and exports
+#                            HTTP_PROXY / HTTPS_PROXY into the shell before
+#                            launching molecule.  molecule.yml then injects
+#                            them into every Docker container via
+#                            lookup('env', 'HTTP_PROXY').  Tools such as dnf,
+#                            pip, gem, and curl inside the container will use
+#                            the proxy automatically.
+#
+#   molecule_proxy_bypass →  Docker container level (same path as above).
+#                            Exported as no_proxy / NO_PROXY.
+#
+#   molecule_proxy_nofwd  →  Ansible task level (daos_dev scenario only).
+#                            Loaded by scripts/molecule-load-proxy.yml, which
+#                            is included at the start of daos_dev/converge.yml.
+#                            Maps to daos_proxy_nofwd inside the play, so task
+#                            files that match an entry bypass the proxy env vars.
+#                            Defaults to [] (no exceptions) — all tools receive
+#                            the proxy via their Ansible task environment.
+#                            Add a tool here only when it can reach its repos
+#                            without the proxy (e.g. via an internal mirror that
+#                            is already accessible directly from the container).
+#
+# ── Proxy URL ─────────────────────────────────────────────────────────────────
+# molecule_http_proxy: "http://proxy.example.com:8080"
+
+# ── Bypass list ───────────────────────────────────────────────────────────────
+# molecule_proxy_bypass: "localhost,127.0.0.1,.corp.example.com"
+
+# ── Tool-level bypass ─────────────────────────────────────────────────────────
+# List of package managers whose Ansible task invocations bypass the proxy env
+# vars.  Mirrors daos_proxy_nofwd in the Ansible inventory.  Leave empty (or
+# omit) when the container uses standard external repos that require the proxy.
+# Only add tools here when they have direct repo access (internal mirrors, etc).
+# Defaults to [] when not set.
+#
+# molecule_proxy_nofwd: []

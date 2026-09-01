@@ -1,0 +1,27 @@
+# yamllint disable rule:line-length
+- name: Copy Python build requirements to host
+  copy:
+    src: "{{ daos_repo_dir }}/requirements-build.txt"
+    dest: /tmp/daos-requirements-build.txt
+
+# Install system-wide (become: true) so executables (meson, ninja, scons…)
+# land in /usr/local/bin, which is in PATH on all cluster nodes.
+# A --user install would place them in ~/.local/bin, which is NOT in PATH.
+- name: Install Python build requirements
+  become: true
+  pip:
+    requirements: /tmp/daos-requirements-build.txt
+    executable: "pip{{ daos_python_version | regex_replace('^python', '') }}"
+  environment: "{{ daos_proxy_env }}"
+
+- name: Copy Python unit-test requirements to host
+  copy:
+    src: "{{ daos_repo_dir }}/requirements-utest.txt"
+    dest: /tmp/daos-requirements-utest.txt
+
+- name: Install Python unit-test requirements
+  become: true
+  pip:
+    requirements: /tmp/daos-requirements-utest.txt
+    executable: "pip{{ daos_python_version | regex_replace('^python', '') }}"
+  environment: "{{ daos_proxy_env }}"

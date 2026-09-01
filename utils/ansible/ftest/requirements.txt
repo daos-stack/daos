@@ -1,7 +1,16 @@
-# pip requirements file allowing to use ansible scripts
+# pip requirements file for the DAOS ftest Ansible playbook.
 #
-# Example of usage:
-# pip install -r requirements.txt
+# Install with:
+#   pip install --user --requirement requirements.txt
+#   ansible-galaxy collection install --upgrade community.general ansible.posix
 
-virtualenv
+# Ansible
 ansible
+
+# Linting
+ansible-lint
+yamllint
+
+# Molecule and Docker driver for unit tests
+molecule
+molecule-plugins[docker]

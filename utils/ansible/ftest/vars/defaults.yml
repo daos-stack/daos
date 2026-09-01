@@ -1,4 +1,44 @@
 # Default variable
 
-daos_ofi_provider_default: ofi+tcp;ofi_rxm
-daos_hugepages_nb_default: 4096
+daos_ofi_provider_default: ofi+tcp
+daos_hugepages_nb_default: 0
+# Hugepages-per-physical-core multiplier used when daos_hugepages_nb is 0.
+# 1024: reserves hugepages for VOS engine targets (512) + sys-xstreams (512),
+#       required for MD-on-SSD.  Set to 512 for PMEM-only setups.
+daos_hugepages_multiplier: 1024
+# Set to false to disable the GRUB/bootloader hugepages update (Phase 2).
+# Useful in CI containers that have no real bootloader (grubby would fail).
+# When false only the sysctl runtime setting (Phase 1) is applied.
+daos_grub_update_enabled: true
+daos_sysctl_reload: true
+daos_repo_dir: "{{ playbook_dir }}/../../.."
+daos_python_version: python3.11
+daos_goproxy: direct
+
+# ─── Proxy settings ───────────────────────────────────────────────────────────
+# Set these in the inventory (or group_vars/host_vars) — NOT in this file.
+# vars_files has higher precedence than inventory vars, so defining them here
+# would permanently override any inventory value.
+#
+#   daos_http_proxy:  ""                        # HTTP/HTTPS proxy URL
+#   daos_proxy_bypass: "localhost,127.0.0.1"    # hosts that skip the proxy
+#   daos_proxy_nofwd: []                        # tools that must bypass proxy
+#                                               # (e.g. [dnf] for local mirrors)
+#
+# Proxy environment dict — set at play level via environment: "{{ daos_proxy_env }}".
+# Evaluates to empty strings when daos_http_proxy is unset, which is harmless.
+daos_proxy_env:
+  http_proxy: "{{ daos_http_proxy | default('') }}"
+  https_proxy: "{{ daos_http_proxy | default('') }}"
+  HTTP_PROXY: "{{ daos_http_proxy | default('') }}"
+  HTTPS_PROXY: "{{ daos_http_proxy | default('') }}"
+  no_proxy: "{{ daos_proxy_bypass | default('localhost,127.0.0.1') }}"
+  NO_PROXY: "{{ daos_proxy_bypass | default('localhost,127.0.0.1') }}"
+# Clear-proxy dict — used via include_tasks apply: to exempt entire task files.
+daos_noproxy_env:
+  http_proxy: ""
+  https_proxy: ""
+  HTTP_PROXY: ""
+  HTTPS_PROXY: ""
+  no_proxy: ""
+  NO_PROXY: ""

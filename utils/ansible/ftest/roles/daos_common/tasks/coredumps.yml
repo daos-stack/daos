@@ -1,0 +1,66 @@
+# yamllint disable rule:line-length
+- name: Set DefaultLimitCORE in systemd configuration
+  become: true
+  lineinfile:
+    path: /etc/systemd/system.conf
+    regexp: '^#?DefaultLimitCORE='
+    line: 'DefaultLimitCORE=infinity:infinity'
+  notify: systemd daemon-reexec
+
+- name: Configure core dump PAM limits
+  become: true
+  copy:
+    dest: /etc/security/limits.d/daos-coredumps.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # /etc/security/limits.d/daos-coredumps.conf
+      # <domain>  <type>  <item>  <value>
+      *           hard    core    unlimited
+      *           soft    core    unlimited
+
+- name: Set suid_dumpable sysctl parameter
+  become: true
+  sysctl:
+    name: fs.suid_dumpable
+    value: '1'
+    sysctl_file: /etc/sysctl.d/daos-coredumps.conf
+    reload: "{{ daos_sysctl_reload | default(true) }}"
+
+- name: Configure core dump shell profile
+  become: true
+  copy:
+    dest: /etc/profile.d/daos-coredumps.sh
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # Enable core dump
+      ulimit -c unlimited
+
+- name: Create systemd coredump configuration directory
+  become: true
+  file:
+    path: /etc/systemd/coredump.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configure systemd coredump settings
+  become: true
+  copy:
+    dest: /etc/systemd/coredump.conf.d/daos-coredumps.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # /etc/systemd/coredump.conf.d/daos-coredumps.conf
+      [Coredump]
+      Storage=external
+      Compress=yes
+      ProcessSizeMax=64G
+      ExternalSizeMax=64G
+      KeepFree=2G
+  notify: systemd daemon-reexec

@@ -1,0 +1,72 @@
+# yamllint disable rule:line-length
+- name: Validate required variables
+  fail:
+    msg: "Variable '{{ item }}' is not defined"
+  when: item not in vars
+  loop:
+    - daos_source_dir
+    - daos_build_dir
+    - daos_launch_username
+
+- name: Create DAOS launch user local entry
+  include_tasks: users_groups.yml
+
+- name: Create DAOS server system users and groups
+  include_role:
+    name: daos_server
+    tasks_from: users_groups.yml
+
+- name: Create DAOS runtime directory
+  file:
+    path: "{{ daos_runtime_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Install DAOS build dependencies
+  include_tasks: build_deps.yml
+
+- name: Install Python and Go dependencies
+  include_tasks: pip_go_deps.yml
+
+- name: Install DAOS make helper script
+  template:
+    src: daos-make.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-make.sh"
+
+- name: Install DAOS launch helper script
+  template:
+    src: daos-launch.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-launch.sh"
+
+- name: Install DAOS NLT launch helper script
+  template:
+    src: daos-launch_nlt.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-launch_nlt.sh"
+
+- name: Check if inventory source is a regular file
+  stat:
+    path: "{{ inventory_file }}"
+  register: _inventory_stat
+  delegate_to: localhost
+
+- name: Save inventory copy to runtime directory
+  copy:
+    src: "{{ inventory_file }}"
+    dest: "{{ daos_runtime_dir }}/inventory.yml"
+    mode: '0640'
+  when: _inventory_stat.stat.exists and _inventory_stat.stat.isreg
+
+- name: Install deployment provenance script
+  template:
+    src: daos-deploy-info.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-deploy-info.sh"
+  vars:
+    _deploy_timestamp: "{{ ansible_date_time.iso8601 }}"
+    _deploy_controller_host: "{{ lookup('pipe', 'hostname -f 2>/dev/null || hostname') }}"
+    _deploy_controller_user: "{{ lookup('env', 'USER') }}"
+    _deploy_ansible_version: "{{ ansible_version.full }}"
+    _deploy_inventory_path: "{{ inventory_file }}"
