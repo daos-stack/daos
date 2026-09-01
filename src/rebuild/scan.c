@@ -712,6 +712,29 @@ struct rebuild_obj_arg {
 	uint32_t			tgt_index;
 };
 
+static bool
+rebuild_obj_record_failure(struct rebuild_tgt_pool_tracker *rpt, int rc)
+{
+	struct rebuild_pool_tls *tls;
+
+	if (rc == 0 || rc == -DER_SHUTDOWN)
+		return false;
+
+	/*
+	 * -DER_SHUTDOWN is the normal teardown status of the migrate TLS (mpt_fini), it does not
+	 * mean the rebuild failed. Report real errors through rebuild_pool_status, which
+	 * rebuild_tgt_query() aggregates into riv_status for the leader, so the rebuild is failed
+	 * and retried instead of being reported as complete. The caller may set rt_abort only
+	 * after this helper returns true; otherwise the target could report scan_done/pull_done
+	 * through the local abort path before the failure is visible in riv_status.
+	 */
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
+	D_ASSERT(tls != NULL);
+	if (tls->rebuild_pool_status == 0)
+		tls->rebuild_pool_status = rc;
+	return true;
+}
+
 static void
 rebuild_obj_ult(void *data)
 {
@@ -724,9 +747,8 @@ rebuild_obj_ult(void *data)
 		if (rc != 0) {
 			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed, abort the rebuild",
 				 DP_RB_RPT(rpt));
-			if (rpt->rt_errno == 0)
-				rpt->rt_errno = rc;
-			rpt->rt_abort = 1;
+			if (rebuild_obj_record_failure(rpt, rc))
+				rpt->rt_abort = 1;
 			goto out;
 		}
 	}
@@ -737,9 +759,8 @@ rebuild_obj_ult(void *data)
 			       &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_RB " ds_migrate_object failed", DP_RB_RPT(rpt));
-		if (rpt->rt_errno == 0)
-			rpt->rt_errno = rc;
-		rpt->rt_abort = 1;
+		if (rebuild_obj_record_failure(rpt, rc))
+			rpt->rt_abort = 1;
 	}
 out:
 	rpt_put(rpt);

@@ -3074,8 +3074,6 @@ rebuild_tgt_status_check_ult(void *arg)
 			DL_ERROR(rc == 0 ? status.status : rc, DF_RB " failed", DP_RB_RPT(rpt));
 			if (status.status == 0)
 				status.status = rc;
-			if (rpt->rt_errno == 0)
-				rpt->rt_errno = status.status;
 		}
 
 		memset(&iv, 0, sizeof(iv));
