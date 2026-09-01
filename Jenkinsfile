@@ -72,7 +72,9 @@ void updateRunStage() {
         'Functional Hardware Medium UCX Provider MD on SSD',
         'Functional Hardware Large',
         'Functional Hardware Large MD on SSD',
-        'Functional Cluster Box Medium MD on SSD'
+        'Functional Cluster Box Medium MD on SSD',
+        'Functional Cluster Box Medium Verbs Provider MD on SSD',
+        'Functional Cluster Box Medium UCX Provider MD on SSD'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
@@ -224,6 +226,8 @@ void updateRunStage() {
             'Functional Hardware Large': hwBuildStage,
             'Functional Hardware Large MD on SSD': hwBuildStage,
             'Functional Cluster Box Medium MD on SSD': hwBuildStage,
+            'Functional Cluster Box Medium Verbs Provider MD on SSD': hwBuildStage,
+            'Functional Cluster Box Medium UCX Provider MD on SSD': hwBuildStage,
             ]
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
@@ -668,6 +672,12 @@ pipeline {
         booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Cluster Box test stage')
+        booleanParam(name: bashName('Functional Cluster Box Medium Verbs Provider MD on SSD'),
+                     defaultValue: false,
+                     description: 'Run the Functional Cluster Box Verbs Provider MD on SSD test stage')
+        booleanParam(name: bashName('Functional Cluster Box Medium UCX Provider MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box Medium UCX Provider MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -826,7 +836,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.9'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
+                                                                deps_build: true,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
                                                 ' --target build-ci' +
@@ -838,8 +848,6 @@ pipeline {
                     }
                     steps {
                         script {
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -890,7 +898,7 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: false) +
+                                                                deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +
@@ -900,8 +908,6 @@ pipeline {
                     }
                     steps {
                         script {
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -1285,7 +1291,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
                             other_packages: 'mercury-libfabric mercury-ucx',
-                            stage_tags: 'hw,medium,-provider',
+                            stage_tags: 'hw,medium,-provider,-cb',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal,
@@ -1326,7 +1332,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
                             other_packages: 'mercury-libfabric',
-                            stage_tags: 'hw,medium,provider',
+                            stage_tags: 'hw,medium,provider,-cb',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
@@ -1349,16 +1355,15 @@ pipeline {
                         ),
                         'Functional Hardware Medium UCX Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Medium UCX Provider MD on SSD'),
                             pragma_suffix: '-hw-medium-ucx-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version(),
                             other_packages: 'mercury-ucx',
-                            stage_tags: 'hw,medium,provider',
+                            stage_tags: 'hw,medium,provider,-cb',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
@@ -1395,12 +1400,38 @@ pipeline {
                             label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
                             next_version: next_version(),
                             other_packages: 'mercury-libfabric mercury-ucx',
-                            stage_tags: 'cb,medium',
+                            stage_tags: 'cb,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             node_count: 5,
-                            run_if_pr: true,
-                            run_if_landing: false,
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional Cluster Box Medium Verbs Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium Verbs Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium Verbs Provider MD on SSD'),
+                            pragma_suffix:'-cb-medium-verbs-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                            next_version: next_version(),
+                            stage_tags: 'cb,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            provider: 'ofi+verbs;ofi_rxm',
+                            node_count: 5,
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional Cluster Box Medium UCX Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium UCX Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium UCX Provider MD on SSD'),
+                            pragma_suffix:'-cb-medium-ucx-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                            next_version: next_version(),
+                            stage_tags: 'cb,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
+                            node_count: 5,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),

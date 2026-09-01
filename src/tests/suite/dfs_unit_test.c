@@ -888,6 +888,8 @@ dfs_test_lookupx(void **state)
 static void
 dfs_test_io_error_code(void **state)
 {
+	/** enough tiny extents that the dkey IOD gets split into several serialized RPCs */
+#define LIST_IO_NR (DAOS_ARRAY_LIST_IO_LIMIT * 16 + 1)
 	test_arg_t	*arg = *state;
 	dfs_obj_t	*file;
 	daos_event_t	ev, *evp;
@@ -904,28 +906,29 @@ dfs_test_io_error_code(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	D_ALLOC_ARRAY(iod_rgs, DAOS_ARRAY_LIST_IO_LIMIT + 1);
-	D_ALLOC_ARRAY(buf, DAOS_ARRAY_LIST_IO_LIMIT + 1);
+	D_ALLOC_ARRAY(iod_rgs, LIST_IO_NR);
+	D_ALLOC_ARRAY(buf, LIST_IO_NR);
 
 	rc = dfs_open(dfs_mt, NULL, "io_error", S_IFREG | S_IWUSR | S_IRUSR,
 		      O_RDWR | O_CREAT, 0, 0, NULL, &file);
 	assert_int_equal(rc, 0);
 
-	/** set an IOD with a large nr count that is not supported */
-	iod.iod_nr = DAOS_ARRAY_LIST_IO_LIMIT + 1;
-	for (i = 0; i < DAOS_ARRAY_LIST_IO_LIMIT + 1; i++) {
+	/** a long run of tiny extents is supported; the array layer splits and throttles it */
+	iod.iod_nr = LIST_IO_NR;
+	for (i = 0; i < LIST_IO_NR; i++) {
 		iod_rgs[i].rg_idx = i + 2;
 		iod_rgs[i].rg_len = 1;
 	}
 	iod.iod_rgs = iod_rgs;
-	d_iov_set(&iov, buf, DAOS_ARRAY_LIST_IO_LIMIT + 1);
+	d_iov_set(&iov, buf, LIST_IO_NR);
 	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 1;
 	sgl.sg_iovs   = &iov;
 	rc            = dfs_writex(dfs_mt, file, &iod, &sgl, NULL);
-	assert_int_equal(rc, ENOTSUP);
+	assert_int_equal(rc, 0);
 	rc = dfs_readx(dfs_mt, file, &iod, &sgl, &read_size, NULL);
-	assert_int_equal(rc, ENOTSUP);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, LIST_IO_NR);
 
 	/*
 	 * set an IOD that has writes more data than sgl to trigger error in
@@ -985,6 +988,7 @@ dfs_test_io_error_code(void **state)
 	assert_int_equal(rc, 0);
 	D_FREE(buf);
 	D_FREE(iod_rgs);
+#undef LIST_IO_NR
 }
 
 int dfs_test_rc[DFS_TEST_MAX_THREAD_NR];
@@ -1062,12 +1066,14 @@ static void
 dfs_test_rename(void **state)
 {
 	test_arg_t		*arg = *state;
-	dfs_obj_t		*obj1, *obj2;
+	dfs_obj_t               *obj1, *obj2, *root;
 	char			*f1 = "f1";
 	char			*f2 = "f2";
 	d_sg_list_t		sgl;
 	d_iov_t			iov;
 	char			buf[64];
+	char                     rbuf[64];
+	daos_size_t              read_size;
 	struct stat		stbuf;
 	struct timespec		prev_ts;
 	int			rc;
@@ -1141,6 +1147,36 @@ dfs_test_rename(void **state)
 	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
 	assert_int_equal(rc, 0);
+
+	/** renaming / exchanging an entry with itself must succeed and not destroy the file */
+	rc = dfs_move(dfs_mt, NULL, f2, NULL, f2, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_exchange(dfs_mt, NULL, f2, NULL, f2);
+	assert_int_equal(rc, 0);
+	/** same parent dir, but through a different open handle */
+	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &root, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_move(dfs_mt, root, f2, NULL, f2, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_exchange(dfs_mt, root, f2, NULL, f2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(root);
+	assert_int_equal(rc, 0);
+
+	/** the entry, its metadata and its data should all be intact */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 128);
+	memset(rbuf, 0, 64);
+	d_iov_set(&iov, rbuf, 64);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_read(dfs_mt, obj2, &sgl, 64, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 64);
+	assert_int_equal(memcmp(buf, rbuf, 64), 0);
 
 	rc = dfs_move(dfs_mt, NULL, f2, NULL, f1, NULL);
 	assert_int_equal(rc, 0);
