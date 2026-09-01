@@ -137,6 +137,7 @@ Nodes can belong to multiple groups (e.g. a node can be both a server and a clie
 | `daos_proxy_nofwd` | `[]` | List of tool names whose task files bypass the proxy. By default the list is empty — all tasks receive the proxy. Add `dnf` if your dnf repositories are hosted on a local Artifactory or mirror that is not reachable through the proxy. Tasks in included task files that match an entry are run with an empty proxy environment. **Must be set in the inventory**. See [Proxy Configuration](#proxy-configuration) for the full explanation. |
 | `daos_python_version` | `python3.11` | Python interpreter used for `pip` tasks on all nodes. |
 | `daos_goproxy` | `direct` | Go module proxy (`GOPROXY`) used when running `go mod download` on the dev node and baked into the generated `daos-make.sh` script. |
+| `daos_alt_prefix` | *(none)* | Colon-separated list of already-built prereq install prefixes (e.g. ofi/ucx/mercury/pmdk/spdk/argobots/isal/isal_crypto/protobufc/fused) to reuse via scons's `ALT_PREFIX` mechanism instead of rebuilding them for this `daos_runtime_dir`. Lets multiple `daos_dev` inventories (e.g. one per ticket) share one cluster's slow-to-build prereqs while keeping their own `daos_build_dir`/`daos_runtime_dir` build/install output separate. See [`docs/dev/development.md`](https://github.com/daos-stack/daos/blob/master/docs/dev/development.md) in the DAOS source tree for background on `ALT_PREFIX`. |
 
 #### Example Inventory
 
@@ -414,6 +415,26 @@ by a `stat` check so dynamic inventories that have no backing file are silently 
 > **DRY pattern**: `daos_dev/tasks/main.yml` reuses server users/groups by calling
 > `include_role: name: daos_server tasks_from: users_groups.yml` instead of duplicating the
 > account definitions.
+
+##### Per-ticket isolated builds (`ALT_PREFIX`, `--build-only`)
+
+Several `daos_dev` inventories can point at different `daos_source_dir`/`daos_build_dir`/
+`daos_runtime_dir` (e.g. one per ticket/worktree) while sharing one cluster. Two features in
+the generated `daos-make.sh` support this:
+
+- **`daos_alt_prefix`** (inventory variable, see [Inventory Variables](#inventory-variables)) —
+  reuses already-built prereqs (ofi, ucx, mercury, pmdk, spdk, ...) from another `daos_runtime_dir`
+  via scons's `ALT_PREFIX`, so each ticket doesn't have to rebuild them from scratch. Only DAOS's
+  own build/install output goes into this ticket's isolated `daos_build_dir`/`daos_runtime_dir`.
+- **`daos-make.sh --build-only`** — skips the system-wide activation steps (`daos_server_helper`
+  setuid install, `dfuse` install, spdk udev rules, `/etc/ld.so.conf.d` update). These steps copy
+  files to fixed, single-instance system paths, so whichever ticket's `daos-make.sh` last ran
+  *without* `--build-only` becomes the live one on the shared cluster — same as today's convention
+  where only one ticket can run a live multi-node DAOS instance at a time (this also can't be fully
+  isolated: the PMEM/NVMe/network hardware itself is physically exclusive). `--build-only` lets you
+  build and run standalone unit tests (`vos_tests`, `ddb_ut`, etc., which resolve their own
+  dependencies via RPATH, not the system `ld.so.cache`) for a ticket without disturbing whichever
+  ticket is currently activated.
 
 #### `daos_post`
 
