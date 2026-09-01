@@ -90,7 +90,7 @@ IP-over-IB over the data plane's high-speed NICs,
 and focuses on data plane configuration.
 
 Please refer to
-[Partition isolation for control plane traffic over InfiniBand)](ib-pkey.md)
+[Partition isolation for control plane traffic over InfiniBand](ib-pkey.md)
 for important control plane configuration information regarding
 InfiniBand networks.
 
@@ -173,7 +173,7 @@ Both DAOS server and DAOC clients may have more than one high-speed NIC,
 with IP addresses in the same network range.
 Some `sysctl` configuration is needed to ensure proper operation in such
 scenarios, in particular around ARP resolution.  This is discussed in the
-[Predeployment checklist](https://docs.daos.io/master/admin/predeployment_check/#multi-railnic-setup).
+[Predeployment checklist](https://docs.daos.io/v2.9/admin/predeployment_check/#multi-railnic-setup).
 
 ## Provider selection and configuration
 
