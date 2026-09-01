@@ -267,7 +267,7 @@ class ExecutableCommand(CommandWithParameters):
         if self.result and self.check_results_list:
             regex = r"({})".format("|".join(self.check_results_list))
             self.log.debug("Checking the command output for any bad keywords: %s", regex)
-            for output in (self._result_stdout(), self._result_stderr()):
+            for output in (self.__result_stdout(), self.__result_stderr()):
                 match = re.findall(regex, output)
                 if match:
                     self.log.info(
@@ -279,24 +279,20 @@ class ExecutableCommand(CommandWithParameters):
                     break
         return status
 
-    def _result_stdout(self):
+    def __result_stdout(self):
         """Get all the stdout from the command result.
 
         Returns:
             str: the command result's stdout as a string
         """
-        if not self.result:
-            raise CommandFailure("No command result available to return stdout")
         return self.result.stdout_text
 
-    def _result_stderr(self):
+    def __result_stderr(self):
         """Get all the stderr from the command result.
 
         Returns:
             str: the command result's stderr as a string
         """
-        if not self.result:
-            raise CommandFailure("No command result available to return stderr")
         return self.result.stderr_text
 
     def _run_subprocess(self):
@@ -410,9 +406,7 @@ class ExecutableCommand(CommandWithParameters):
         regex = self.command_regex
         if self.full_command_regex:
             regex = f"'{str(self)}'"
-        hosts = None
-        if hasattr(self, "hosts"):
-            hosts = self.hosts
+        hosts = getattr(self, "hosts", None)
         detected, running = stop_processes(
             self.log, hosts, regex, full_command=self.full_command_regex)
         if not detected:
@@ -472,40 +466,6 @@ class ExecutableCommand(CommandWithParameters):
             state = re.findall(
                 r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout_text)
         return state
-
-    def get_output(self, method_name, regex_method=None, **kwargs):
-        """Get output from the command issued by the specified method.
-
-        Issue the specified method and return a list of strings that result from
-        searching its standard output for a fixed set of patterns defined for
-        the class method.
-
-        Args:
-            method_name (str): name of the method to execute
-
-        Raises:
-            CommandFailure: if there is an error finding the method, finding the
-                method's regex pattern, or executing the method
-
-        Returns:
-            list: a list of strings obtained from the method's output parsed
-                through its regex
-
-        """
-        # Get the method to call to obtain the CmdResult
-        method = getattr(self, method_name)
-        if method is None:
-            raise CommandFailure("No '{}()' method defined for this class".format(method_name))
-
-        # Run the command
-        result = method(**kwargs)
-        if not isinstance(result, process.CmdResult):
-            raise CommandFailure("{}() did not return a CmdResult".format(method_name))
-
-        # Parse the output and return
-        if not regex_method:
-            regex_method = method_name
-        return self.parse_output(self._result_stdout(), regex_method)
 
     def parse_output(self, stdout, regex_method):
         """Parse output using findall() with supplied 'regex_method' as pattern.
@@ -1642,38 +1602,34 @@ class RunCommand(ExecutableCommand):
 
         self.result = None
         if not self.hosts:
-            result = run_local(self.log, self.with_exports, self.verbose, self.timeout)
+            self.result = run_local(self.log, self.with_exports, self.verbose, self.timeout)
         else:
-            result = run_remote(self.log, self.hosts, self.with_exports, self.verbose, self.timeout)
-        self.result = result
+            self.result = run_remote(
+                self.log, self.hosts, self.with_exports, self.verbose, self.timeout)
 
-        if raise_exception and not result.passed:
-            raise CommandFailure(f"Error running {self.command} on: {result.failed_hosts}")
+        if raise_exception and not self.result.passed:
+            raise CommandFailure(f"Error running {self.command} on: {self.result.failed_hosts}")
 
         if raise_exception and not self.check_results():
             raise CommandFailure(
                 f"Error running {self.command}: a {self.check_results_list} keyword was detected")
 
-        return result
+        return self.result
 
-    def _result_stdout(self):
+    def __result_stdout(self):
         """Get all the stdout from the command result.
 
         Returns:
             str: the command result's stdout as a string
         """
-        if not self.result:
-            raise CommandFailure("No command result available to return stdout")
         return self.result.joined_stdout
 
-    def _result_stderr(self):
+    def __result_stderr(self):
         """Get all the stderr from the command result.
 
         Returns:
             str: the command result's stderr as a string
         """
-        if not self.result:
-            raise CommandFailure("No command result available to return stderr")
         return self.result.joined_stderr
 
     def _get_new(self):
