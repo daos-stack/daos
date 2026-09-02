@@ -9,9 +9,7 @@ import queue
 import threading
 import time
 
-from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 
 
 class OSAOfflineParallelTest(OSAUtils):
@@ -52,7 +50,7 @@ class OSAOfflineParallelTest(OSAUtils):
                 text = "Waiting for rebuild to complete before pool reintegrate"
                 time.sleep(3)
                 self.print_and_assert_on_rebuild_failure(text)
-            if action == "exclude" and self.server_boot == "true":
+            if action == "exclude" and self.server_boot is True:
                 self.log.info("Stop/Start rank %s using system stop/start", kwargs["ranks"])
                 ranks = str(kwargs["ranks"])
                 dmg.system_stop(ranks=ranks)
@@ -77,8 +75,8 @@ class OSAOfflineParallelTest(OSAUtils):
                 False.
             oclass (str) : Daos object class (RP_2G1,etc)
         """
-        # Create a pool
-        pool = {}
+        # Create pools
+        pools = {}
         target_list = []
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
@@ -94,12 +92,14 @@ class OSAOfflineParallelTest(OSAUtils):
 
         test_seq = self.ior_test_sequence[0]
         for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
-            self.pool = pool[val]
+            self.log_step("Step 1 : Create pool")
+            pools[val] = self.get_pool(connect=False)
+            self.pool = pools[val]
             # Use only pool UUID while running the test.
             self.pool.use_label = False
             self.pool.set_property("reclaim", "disabled")
 
+            self.log_step("Step 2 : Create container and write some data if data is True")
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
                 # Read the data back to verify it was written correctly.
@@ -109,39 +109,32 @@ class OSAOfflineParallelTest(OSAUtils):
                 # command using the second container.
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
-        all_ranks = list(self.server_managers[0].ranks.keys())
-        total_ranks = len(all_ranks)
+
         # Start the additional servers and extend the pool
+        self.log_step("Step 3 : Start additional servers")
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
-        # Give sometime for the additional server to come up.
-        for retry in range(0, 10):
-            scan_info = self.get_dmg_command().system_query()
-            if not check_system_query_status(scan_info):
-                if retry == 9:
-                    self.fail("One or more servers not in expected status")
-            else:
-                break
+        extra_ranks = list(self.server_managers[-1].ranks.keys())
 
+        self.log_step("Step 4 : Perform OSA operations in parallel")
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
-            self.pool = pool[val]
-            self.pool.display_pool_daos_space("Pool space: Beginning")
+            threads = []
+            self.pool = pools[val]
+            initial_total_targets = self.pool.get_total_targets(refresh=True)
             pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # If we need to trigger aggregation on pool 1, delete
             # the second container which has IOR data.
             if self.test_during_aggregation is True and val == 0:
                 self.delete_extra_container(self.pool)
-            # Create the threads here
-            threads = []
             # Action dictionary with OSA dmg command parameters
             action_kwargs = {
                 "drain": {"pool": self.pool.identifier, "ranks": rank, "tgt_idx": None},
                 "exclude": {"pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
                 "reintegrate": {
                     "pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
-                "extend": {"pool": self.pool.identifier, "ranks": (total_ranks)}
+                "extend": {"pool": self.pool.identifier, "ranks": extra_ranks}
             }
             for action in sorted(action_kwargs):
                 # Add a dmg thread
@@ -151,42 +144,48 @@ class OSAOfflineParallelTest(OSAUtils):
                 process = threading.Thread(target=self.dmg_thread, kwargs=kwargs)
                 # Wait for a short period before starting the next thread
                 time.sleep(5)
-                self.log.info("Starting pool %s in a thread", action)
+                self.log.info("Pool %s initiated", action)
                 process.start()
                 threads.append(process)
 
-        # Wait to finish the threads
-        for thread in threads:
-            thread.join()
+            # Wait to finish the threads
+            for thread in threads:
+                thread.join()
 
-        # Verify the queue result and make sure test has no failure
-        while not self.out_queue.empty():
-            failure = self.out_queue.get()
-            if "failed" in failure:
-                self.fail("Test failed : {0}".format(failure))
+            # Verify the queue result and make sure test has no failure
+            while not self.out_queue.empty():
+                failure = self.out_queue.get()
+                if "failed" in failure:
+                    self.fail("Test failed : {0}".format(failure))
 
+        self.log_step("Step 5 : Verify pool version and total targets after OSA operations")
         for val in range(0, num_pool):
-            self.pool = pool[val]
-            display_string = "Pool{} space at the End".format(val)
-            self.pool.display_pool_daos_space(display_string)
+            self.pool = pools[val]
             self.pool.wait_for_rebuild_to_end(3)
             self.assert_on_rebuild_failure()
-            pver_end = self.pool.get_version(True)
+            pver_end = self.pool.get_version()
             self.log.info("Pool Version at the End %s", pver_end)
-            if self.server_boot is True:
-                self.assertTrue(
-                    pver_end >= 17, "Pool Version Error: {} at the end < 17".format(pver_end))
-            else:
-                self.assertTrue(
-                    pver_end >= 25, "Pool Version Error: {} at the end < 25".format(pver_end))
+            self.assertGreaterEqual(pver_end, 44,
+                                    "Pool Version Error: {} at the end < 44".format(pver_end))
 
+            # Extend adds targets, so the total should have grown since the beginning
+            final_total_targets = self.pool.get_total_targets(refresh=True)
+            self.assertGreater(final_total_targets, initial_total_targets,
+                               "Pool total_targets did not increase after extend")
+
+        self.log_step("Step 6 : Verify data integrity after OSA operations")
         # Finally run IOR to read the data and perform daos_container_check
         for val in range(0, num_pool):
-            self.pool = pool[val]
+            self.pool = pools[val]
             if data:
-                self.run_ior_thread("Read", oclass, test_seq)
-                self.container = self.pool_cont_dict[self.pool][0]
-                self.container.check()
+                # Presently, we support only two containers per pool.
+                for c_val in range(2):
+                    if self.pool_cont_dict[self.pool][c_val + 1] == "Updated":
+                        self.container = self.pool_cont_dict[self.pool][c_val]
+                        self.run_ior_thread("Read", oclass, test_seq, single_cont_read=False)
+                        self.log.info("Checking data integrity for container %s",
+                                      self.container)
+                        self.container.check()
 
     def test_osa_offline_parallel_test(self):
         """JIRA ID: DAOS-4752.

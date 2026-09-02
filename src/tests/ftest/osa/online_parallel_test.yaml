@@ -51,10 +51,8 @@ ior:
   repetitions: 10
   dfs_destroy: false
   iorflags:
-    write_flags:
-      - "-w -F -k -G 1"
-    read_flags:
-      - "-F -r -R -k -G 1"
+    write_flags: "-w -F -k -G 1"
+    read_flags: "-F -r -R -k -G 1"
     obj_class:
       - "EC_2P2GX"
   ior_test_sequence:
@@ -66,3 +64,6 @@ ior:
 daos_racer:
   runtime: 480
   daos_racer_timeout: 1000
+
+aggregation:
+  test_with_aggregation: true
