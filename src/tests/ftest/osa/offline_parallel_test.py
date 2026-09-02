@@ -131,10 +131,12 @@ class OSAOfflineParallelTest(OSAUtils):
             # Action dictionary with OSA dmg command parameters
             action_kwargs = {
                 "drain": {"pool": self.pool.identifier, "ranks": rank, "tgt_idx": None},
-                "exclude": {"pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
+                "exclude": {
+                    "pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
                 "reintegrate": {
                     "pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
-                "extend": {"pool": self.pool.identifier, "ranks": extra_ranks}
+                "extend": {
+                    "pool": self.pool.identifier, "ranks": ",".join(map(str, extra_ranks))}
             }
             for action in sorted(action_kwargs):
                 # Add a dmg thread
