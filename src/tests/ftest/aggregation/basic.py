@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -89,7 +90,7 @@ class DaosAggregationBasic(IorTestBase):
 
         # Verify the free space after second ior is less at least twice the
         # size of space_used_by_ior from initial_free_space
-        self.assertLessEqual(free_space_after_second_ior, 
+        self.assertLessEqual(free_space_after_second_ior,
                              (initial_free_space - space_used_by_ior * 2),
                              "Running IOR the 2nd time using same file option did not succeed.")
 

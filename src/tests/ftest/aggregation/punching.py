@@ -98,5 +98,5 @@ class AggregationPunching(MdtestBase):
         self.log.info("Checking if space is reclaimed")
         self.log.info("Expect final_free_space >= free_space_after_mdtest + mdtest_data_size")
         self.log.info("%s >= %s", final_free_space, expected_free_space)
-        self.assertGreaterEqual(final_free_space, expected_free_space, 
+        self.assertGreaterEqual(final_free_space, expected_free_space,
                                 'Free space is less than expected')

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -134,7 +135,7 @@ class OSAOnlineExtend(OSAUtils):
             # Check pool version incremented after pool exclude
             self.assertGreater(pver_extend, pver_begin, "Pool Version Error:  After extend")
             self.assertGreater(free_space_after_extend, initial_free_space,
-                            "Expected free space after extend is less than initial")
+                               "Expected free space after extend is less than initial")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()

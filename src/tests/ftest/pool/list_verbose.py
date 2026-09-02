@@ -258,7 +258,7 @@ class ListVerboseTest(IorTestBase):
 
         self.log.info("actual_pools: %s", actual_pools)
         self.log.info("expected_pools: %s", expected_pools)
-        self.assertListEqual(expected_pools, actual_pools, 
+        self.assertListEqual(expected_pools, actual_pools,
                              "List of expected pools and pools returned by 'dmg pool list'")
 
         # For convenience.
