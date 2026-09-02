@@ -20,13 +20,12 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common/proto/chk"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -113,11 +112,11 @@ func mergeTestPolicies(current, merge []*mgmtpb.CheckInconsistPolicy) []*mgmtpb.
 func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 	specificPolicies := []*mgmtpb.CheckInconsistPolicy{
 		{
-			InconsistCas: chk.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
+			InconsistCas: chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
 			InconsistAct: chkpb.CheckInconsistAction_CIA_IGNORE,
 		},
 		{
-			InconsistCas: chk.CheckInconsistClass_CIC_CONT_BAD_LABEL,
+			InconsistCas: chkpb.CheckInconsistClass_CIC_CONT_BAD_LABEL,
 			InconsistAct: chkpb.CheckInconsistAction_CIA_INTERACT,
 		},
 	}
@@ -174,7 +173,7 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		createMS    func(*testing.T, logging.Logger) *mgmtSvc
-		getMockDrpc func() *mockDrpcClient
+		mic         *control.MockInvokerConfig
 		req         *mgmtpb.CheckStartReq
 		expResp     *mgmtpb.CheckStartResp
 		expErr      error
@@ -212,36 +211,27 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 			},
 			expErr: errors.New("unmarshal checker policies"),
 		},
-		"dRPC fails": {
-			getMockDrpc: func() *mockDrpcClient {
-				return getMockDrpcClient(nil, errors.New("mock dRPC"))
+		"gRPC fails": {
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("mock gRPC"),
 			},
 			req: &mgmtpb.CheckStartReq{
 				Sys: "daos_server",
 			},
-			expErr:      errors.New("mock dRPC"),
-			expFindings: defaultTestFindings(),
-			expPolicies: testPolicies,
-		},
-		"bad resp": {
-			getMockDrpc: func() *mockDrpcClient {
-				return getMockDrpcClientBytes([]byte("garbage"), nil)
-			},
-			req: &mgmtpb.CheckStartReq{
-				Sys: "daos_server",
-			},
-			expErr:      errors.New("unmarshal CheckStart response"),
+			expErr:      errors.New("mock gRPC"),
 			expFindings: defaultTestFindings(),
 			expPolicies: testPolicies,
 		},
 		"request failed": {
-			getMockDrpc: func() *mockDrpcClient {
-				return getMockDrpcClient(&mgmt.CheckStartResp{Status: int32(daos.MiscError)}, nil)
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StartResp{StartResp: &mgmtpb.CheckStartResp{Status: int32(daos.MiscError)}},
+				}),
 			},
 			req: &mgmtpb.CheckStartReq{
 				Sys: "daos_server",
 			},
-			expResp:     &mgmt.CheckStartResp{Status: int32(daos.MiscError)},
+			expResp:     &mgmtpb.CheckStartResp{Status: int32(daos.MiscError)},
 			expFindings: defaultTestFindings(),
 			expPolicies: testPolicies,
 		},
@@ -258,9 +248,12 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				Sys:   "daos_server",
 				Flags: uint32(chkpb.CheckFlag_CF_RESET),
 			},
-			getMockDrpc: func() *mockDrpcClient {
-				// engine returns status > 0 to indicate reset
-				return getMockDrpcClient(&mgmt.CheckStartResp{Status: 1}, nil)
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StartResp{StartResp: &mgmtpb.CheckStartResp{
+						Status: 1,
+					}},
+				}),
 			},
 			expResp:     &mgmtpb.CheckStartResp{},
 			expFindings: []*checker.Finding{},
@@ -272,9 +265,12 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				Flags: uint32(chkpb.CheckFlag_CF_RESET),
 				Uuids: []string{uuids[0], uuids[2]},
 			},
-			getMockDrpc: func() *mockDrpcClient {
-				// engine returns status > 0 to indicate reset
-				return getMockDrpcClient(&mgmt.CheckStartResp{Status: 1}, nil)
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StartResp{StartResp: &mgmtpb.CheckStartResp{
+						Status: 1,
+					}},
+				}),
 			},
 			expResp: &mgmtpb.CheckStartResp{},
 			expFindings: []*checker.Finding{
@@ -369,13 +365,14 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 			}
 			svc := tc.createMS(t, log)
 
-			if tc.getMockDrpc == nil {
-				tc.getMockDrpc = func() *mockDrpcClient {
-					return getMockDrpcClient(&mgmtpb.CheckStartResp{}, nil)
+			if tc.mic == nil {
+				tc.mic = &control.MockInvokerConfig{
+					UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+						Resp: &mgmtpb.CheckLeaderResp_StartResp{StartResp: &mgmtpb.CheckStartResp{}},
+					}),
 				}
 			}
-			mockDrpc := tc.getMockDrpc()
-			setupSvcDrpcClient(svc, 0, mockDrpc)
+			svc.rpcClient = control.NewMockInvoker(log, tc.mic)
 
 			resp, err := svc.SystemCheckStart(test.Context(t), tc.req)
 
@@ -396,22 +393,8 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				}
 			}
 
-			// Check contents of drpc payload
-			drpcInput := new(mgmtpb.CheckStartReq)
-			calls := mockDrpc.calls.get()
-			if len(calls) == 0 {
+			if tc.expPolicies == nil {
 				return
-			}
-
-			if err := proto.Unmarshal(mockDrpc.calls.get()[0].Body, drpcInput); err != nil {
-				t.Fatal(err)
-			}
-
-			// ensure the slices are in the same order
-			sort.Slice(tc.expPolicies, func(i, j int) bool { return tc.expPolicies[i].InconsistCas < tc.expPolicies[j].InconsistCas })
-			sort.Slice(drpcInput.Policies, func(i, j int) bool { return drpcInput.Policies[i].InconsistCas < drpcInput.Policies[j].InconsistCas })
-			if diff := cmp.Diff(tc.expPolicies, drpcInput.Policies, cmpopts.IgnoreUnexported(mgmtpb.CheckInconsistPolicy{})); diff != "" {
-				t.Fatalf("want-, got+:\n%s", diff)
 			}
 
 			// last used policies should be set
@@ -421,6 +404,84 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 			}
 			lastPol := lastPM.ToSlice()
 			if diff := cmp.Diff(tc.expPolicies, lastPol, cmpopts.IgnoreUnexported(mgmtpb.CheckInconsistPolicy{})); diff != "" {
+				t.Fatalf("want-, got+:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_SystemCheckStop(t *testing.T) {
+	for name, tc := range map[string]struct {
+		createMS func(*testing.T, logging.Logger) *mgmtSvc
+		mic      *control.MockInvokerConfig
+		req      *mgmtpb.CheckStopReq
+		expResp  *mgmtpb.CheckStopResp
+		expErr   error
+	}{
+		"checker is not enabled": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return testSvcWithMemberState(t, log, system.MemberStateStopped, testPoolUUIDs(3))
+			},
+			req: &mgmtpb.CheckStopReq{
+				Sys: "daos_server",
+			},
+			expErr: checker.FaultCheckerNotEnabled,
+		},
+		"bad member states": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return testSvcCheckerEnabled(t, log, system.MemberStateJoined, testPoolUUIDs(3))
+			},
+			req: &mgmtpb.CheckStopReq{
+				Sys: "daos_server",
+			},
+			expErr: errors.New("expected states"),
+		},
+		"gRPC fails": {
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("mock gRPC"),
+			},
+			req: &mgmtpb.CheckStopReq{
+				Sys: "daos_server",
+			},
+			expErr: errors.New("mock gRPC"),
+		},
+		"response returned": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StopResp{StopResp: &mgmtpb.CheckStopResp{Status: int32(daos.MiscError)}},
+				}),
+			},
+			req: &mgmtpb.CheckStopReq{
+				Sys: "daos_server",
+			},
+			expResp: &mgmtpb.CheckStopResp{Status: int32(daos.MiscError)},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			if tc.createMS == nil {
+				tc.createMS = func(t *testing.T, log logging.Logger) *mgmtSvc {
+					return createMSMultiInCheckerMode(t, log, 3)
+				}
+			}
+			svc := tc.createMS(t, log)
+
+			if tc.mic == nil {
+				tc.mic = &control.MockInvokerConfig{
+					UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+						Resp: &mgmtpb.CheckLeaderResp_StopResp{StopResp: &mgmtpb.CheckStopResp{}},
+					}),
+				}
+			}
+			svc.rpcClient = control.NewMockInvoker(log, tc.mic)
+
+			resp, err := svc.SystemCheckStop(test.Context(t), tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+
+			if diff := cmp.Diff(tc.expResp, resp, cmpopts.IgnoreUnexported(mgmtpb.CheckStopResp{})); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
 		})
@@ -613,7 +674,7 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		createMS    func(*testing.T, logging.Logger) *mgmtSvc
-		getMockDrpc func() *mockDrpcClient
+		mic         *control.MockInvokerConfig
 		req         *mgmtpb.CheckSetPolicyReq
 		expResp     *mgmtpb.DaosResp
 		expErr      error
@@ -687,24 +748,19 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 					},
 				}),
 		},
-		"dRPC fails": {
+		"gRPC fails": {
 			req: interactReq,
-			getMockDrpc: func() *mockDrpcClient {
-				return getMockDrpcClient(nil, errors.New("mock dRPC"))
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("mock gRPC"),
 			},
-			expErr: errors.New("mock dRPC"),
+			expErr: errors.New("mock gRPC"),
 		},
-		"bad dRPC resp": {
+		"bad gRPC status": {
 			req: interactReq,
-			getMockDrpc: func() *mockDrpcClient {
-				return getMockDrpcClientBytes([]byte("garbage"), nil)
-			},
-			expErr: errors.New("unmarshal CheckRepair response"),
-		},
-		"bad dRPC status": {
-			req: interactReq,
-			getMockDrpc: func() *mockDrpcClient {
-				return getMockDrpcClient(&mgmtpb.DaosResp{Status: daos.IOError.Int32()}, nil)
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_DaosResp{DaosResp: &mgmtpb.DaosResp{Status: int32(daos.IOError)}},
+				}),
 			},
 			expErr: daos.IOError,
 		},
@@ -720,13 +776,14 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 			}
 			svc := tc.createMS(t, log)
 
-			if tc.getMockDrpc == nil {
-				tc.getMockDrpc = func() *mockDrpcClient {
-					return getMockDrpcClient(&mgmtpb.CheckStartResp{}, nil)
+			if tc.mic == nil {
+				tc.mic = &control.MockInvokerConfig{
+					UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+						Resp: &mgmtpb.CheckLeaderResp_DaosResp{DaosResp: &mgmtpb.DaosResp{}},
+					}),
 				}
 			}
-			mockDrpc := tc.getMockDrpc()
-			setupSvcDrpcClient(svc, 0, mockDrpc)
+			svc.rpcClient = control.NewMockInvoker(log, tc.mic)
 
 			resp, err := svc.SystemCheckSetPolicy(test.Context(t), tc.req)
 
@@ -753,8 +810,8 @@ func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
 func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 	uuids := testPoolUUIDs(3)
 	testFindingsMS := []*chkpb.CheckReport{}
-	testFindingsDrpc := []*chkpb.CheckReport{}
-	drpcPools := []*mgmtpb.CheckQueryPool{}
+	testFindingsEngine := []*chkpb.CheckReport{}
+	enginePools := []*mgmtpb.CheckQueryPool{}
 	for i, uuid := range uuids {
 		testFindingsMS = append(testFindingsMS, &chkpb.CheckReport{
 			Seq:      uint64(i + 1),
@@ -763,33 +820,38 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 			PoolUuid: uuid,
 		})
 
-		testFindingsDrpc = append(testFindingsDrpc, &chkpb.CheckReport{
+		testFindingsEngine = append(testFindingsEngine, &chkpb.CheckReport{
 			Seq:      uint64(i + 1 + len(uuids)),
 			Class:    chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE,
 			Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
 			PoolUuid: uuid,
 		})
 
-		drpcPools = append(drpcPools, &mgmtpb.CheckQueryPool{
+		enginePools = append(enginePools, &mgmtpb.CheckQueryPool{
 			Uuid:   uuid,
 			Status: chkpb.CheckPoolStatus(i),
 			Phase:  chkpb.CheckScanPhase(i),
 		})
 	}
 
-	drpcResp := &mgmtpb.CheckQueryResp{
-		InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
-		InsPhase:  chkpb.CheckScanPhase_CSP_AGGREGATION,
-		Pools:     drpcPools,
-		Reports:   testFindingsDrpc,
+	checkLeaderRank := ranklist.Rank(0)
+
+	defaultLeaderResp := func() *mgmtpb.CheckQueryResp {
+		return &mgmtpb.CheckQueryResp{
+			InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
+			InsPhase:  chkpb.CheckScanPhase_CSP_AGGREGATION,
+			Pools:     enginePools,
+			Reports:   testFindingsEngine,
+			Leader:    checkLeaderRank.Uint32(),
+		}
 	}
 
 	for name, tc := range map[string]struct {
-		createMS  func(*testing.T, logging.Logger) *mgmtSvc
-		setupDrpc func(*testing.T, *mgmtSvc)
-		req       *mgmtpb.CheckQueryReq
-		expResp   *mgmtpb.CheckQueryResp
-		expErr    error
+		createMS func(*testing.T, logging.Logger) *mgmtSvc
+		mic      *control.MockInvokerConfig
+		req      *mgmtpb.CheckQueryReq
+		expResp  *mgmtpb.CheckQueryResp
+		expErr   error
 	}{
 		"not MS replica": {
 			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
@@ -824,22 +886,13 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 			expErr: errors.New("expected states"),
 		},
 		"dRPC fails": {
-			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
-				setupMockDrpcClient(ms, nil, errors.New("mock dRPC"))
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("mock gRPC"),
 			},
 			req: &mgmtpb.CheckQueryReq{
 				Sys: "daos_server",
 			},
-			expErr: errors.New("mock dRPC"),
-		},
-		"bad resp": {
-			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
-				setupMockDrpcClientBytes(ms, []byte("garbage"), nil)
-			},
-			req: &mgmtpb.CheckQueryReq{
-				Sys: "daos_server",
-			},
-			expErr: errors.New("unmarshal CheckQuery response"),
+			expErr: errors.New("mock gRPC"),
 		},
 		"success": {
 			req: &mgmtpb.CheckQueryReq{
@@ -848,8 +901,9 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 			expResp: &mgmtpb.CheckQueryResp{
 				InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
 				InsPhase:  chkpb.CheckScanPhase_CSP_AGGREGATION,
-				Pools:     drpcPools,
-				Reports:   append(testFindingsMS, testFindingsDrpc...),
+				Pools:     enginePools,
+				Reports:   append(testFindingsMS, testFindingsEngine...),
+				Leader:    checkLeaderRank.Uint32(),
 			},
 		},
 		"shallow": {
@@ -857,11 +911,12 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 				Sys:     "daos_server",
 				Shallow: true,
 			},
-			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
-				setupMockDrpcClient(ms, nil, errors.New("shouldn't call dRPC"))
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("shouldn't call gRPC"),
 			},
 			expResp: &mgmtpb.CheckQueryResp{
 				Reports: testFindingsMS,
+				Leader:  checkLeaderRank.Uint32(),
 			},
 		},
 		"request sequence numbers": {
@@ -869,14 +924,15 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 				Sys:  "daos_server",
 				Seqs: []uint64{2, 3},
 			},
-			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
-				setupMockDrpcClient(ms, nil, errors.New("shouldn't call dRPC"))
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("shouldn't call gRPC"),
 			},
 			expResp: &mgmtpb.CheckQueryResp{
 				Reports: []*chkpb.CheckReport{
 					testFindingsMS[1],
 					testFindingsMS[2],
 				},
+				Leader: checkLeaderRank.Uint32(),
 			},
 		},
 		"request invalid sequence number": {
@@ -884,8 +940,8 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 				Sys:  "daos_server",
 				Seqs: []uint64{2, 3, 25},
 			},
-			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
-				setupMockDrpcClient(ms, nil, errors.New("shouldn't call dRPC"))
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("shouldn't call gRPC"),
 			},
 			expErr: errors.New("not found"),
 		},
@@ -897,8 +953,9 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 			expResp: &mgmtpb.CheckQueryResp{
 				InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
 				InsPhase:  chkpb.CheckScanPhase_CSP_AGGREGATION,
-				Pools:     drpcPools,
-				Reports:   append(testFindingsMS, testFindingsDrpc...),
+				Pools:     enginePools,
+				Reports:   append(testFindingsMS, testFindingsEngine...),
+				Leader:    checkLeaderRank.Uint32(),
 			},
 		},
 		"filter uuids": {
@@ -909,16 +966,17 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 			expResp: &mgmtpb.CheckQueryResp{
 				InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
 				InsPhase:  chkpb.CheckScanPhase_CSP_AGGREGATION,
-				Pools:     drpcPools,
+				Pools:     enginePools,
 				Reports: []*chkpb.CheckReport{
 					testFindingsMS[0],
 					testFindingsMS[2],
-					testFindingsDrpc[0],
-					testFindingsDrpc[2],
+					testFindingsEngine[0],
+					testFindingsEngine[2],
 				},
+				Leader: checkLeaderRank.Uint32(),
 			},
 		},
-		"get check leader rank failed": {
+		"check leader rank not set": {
 			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
 				svc := testSvcCheckerEnabled(t, log, system.MemberStateCheckerStarted, uuids)
 				for _, f := range testFindingsMS {
@@ -926,26 +984,17 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 						t.Fatalf("unable to add finding %+v: %s", f, err.Error())
 					}
 				}
-				for _, e := range svc.harness.instances {
-					ei, ok := e.(*EngineInstance)
-					if !ok {
-						t.Fatalf("engine instance bad type %T", e)
-					}
-
-					// make it impossible to get rank
-					ei._superblock = nil
-				}
 				return svc
 			},
 			req: &mgmtpb.CheckQueryReq{
 				Sys: "daos_server",
 			},
 			expResp: &mgmtpb.CheckQueryResp{
-				Leader:    uint32(ranklist.NilRank),
+				Leader:    0, // selects a local MS leader rank
 				InsStatus: chkpb.CheckInstStatus_CIS_RUNNING,
 				InsPhase:  chkpb.CheckScanPhase_CSP_AGGREGATION,
-				Pools:     drpcPools,
-				Reports:   append(testFindingsMS, testFindingsDrpc...),
+				Pools:     enginePools,
+				Reports:   append(testFindingsMS, testFindingsEngine...),
 			},
 		},
 	} {
@@ -961,17 +1010,22 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 							t.Fatalf("unable to add finding %+v: %s", f, err.Error())
 						}
 					}
+					if err := svc.setCheckerLeaderRank(checkLeaderRank); err != nil {
+						t.Fatalf("unable to set check leader rank: %s", err.Error())
+					}
 					return svc
 				}
 			}
 			svc := tc.createMS(t, log)
 
-			if tc.setupDrpc == nil {
-				tc.setupDrpc = func(t *testing.T, ms *mgmtSvc) {
-					setupMockDrpcClient(ms, drpcResp, nil)
+			if tc.mic == nil {
+				tc.mic = &control.MockInvokerConfig{
+					UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+						Resp: &mgmtpb.CheckLeaderResp_QueryResp{QueryResp: defaultLeaderResp()},
+					}),
 				}
 			}
-			tc.setupDrpc(t, svc)
+			svc.rpcClient = control.NewMockInvoker(log, tc.mic)
 
 			resp, err := svc.SystemCheckQuery(test.Context(t), tc.req)
 
@@ -984,86 +1038,6 @@ func TestServer_mgmtSvc_SystemCheckQuery(t *testing.T) {
 			); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
-		})
-	}
-}
-
-func TestServer_mgmtSvc_getCheckLeader(t *testing.T) {
-	for name, tc := range map[string]struct {
-		createMS func(t *testing.T, l logging.Logger) *mgmtSvc
-		expRank  ranklist.Rank
-		expErr   error
-	}{
-		"can't get rank": {
-			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				svc := newTestMgmtSvc(t, l)
-				for _, e := range svc.harness.instances {
-					ei := e.(*EngineInstance)
-					ei._superblock = nil
-				}
-				return svc
-			},
-			expRank: ranklist.NilRank,
-			expErr:  errors.New("no ranks are usable"),
-		},
-		"rank missing from db": {
-			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				return newTestMgmtSvc(t, l)
-			},
-			expRank: ranklist.NilRank,
-			expErr:  errors.New("no ranks are usable"),
-		},
-		"bad member state": {
-			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				svc := newTestMgmtSvc(t, l)
-				if err := svc.sysdb.AddMember(mockMember(t, 0, 1, "adminexcluded")); err != nil {
-					t.Fatal(err)
-				}
-				return svc
-			},
-			expRank: ranklist.NilRank,
-			expErr:  errors.New("no ranks are usable"),
-		},
-		"first rank success": {
-			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				numEngines := 2
-				svc := newTestMgmtSvcMulti(t, l, numEngines, true)
-				for i := 0; i < numEngines; i++ {
-					if err := svc.sysdb.AddMember(mockMember(t, int32(i), int32(i), "checkerstarted")); err != nil {
-						t.Fatal(err)
-					}
-				}
-				return svc
-			},
-		},
-		"second rank success": {
-			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
-				numEngines := 2
-				svc := newTestMgmtSvcMulti(t, l, numEngines, true)
-				for i := 0; i < numEngines; i++ {
-					state := "checkerstarted"
-					if i == 0 {
-						state = "adminexcluded"
-					}
-					if err := svc.sysdb.AddMember(mockMember(t, int32(i), int32(i), state)); err != nil {
-						t.Fatal(err)
-					}
-				}
-				return svc
-			},
-			expRank: ranklist.Rank(1),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			ctx := test.MustLogContext(t)
-			log := logging.FromContext(ctx)
-
-			svc := tc.createMS(t, log)
-
-			rank, err := svc.getCheckLeader()
-
-			test.CmpErr(t, tc.expErr, err)
-			test.CmpAny(t, "rank", tc.expRank, rank)
 		})
 	}
 }
@@ -1674,6 +1648,733 @@ func TestServer_mgmtSvc_SystemCheckDeregPool(t *testing.T) {
 				}
 			} else if err != nil {
 				t.Fatalf("expected no error, instead got: %v", err)
+			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_getCheckerLeaderRank(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startValue string
+		expResult  ranklist.Rank
+		expErr     error
+	}{
+		"unset": {
+			expResult: ranklist.NilRank,
+			expErr:    system.ErrSystemAttrNotFound("mgmt." + checkerLeaderKey),
+		},
+		"invalid": {
+			startValue: "1234junk",
+			expResult:  ranklist.NilRank,
+			expErr:     errors.New("invalid rank"),
+		},
+		"valid": {
+			startValue: "42",
+			expResult:  ranklist.Rank(42),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.Context(t)
+
+			svc := testSvcWithMemberState(t, logging.FromContext(ctx), system.MemberStateCheckerStarted, []string{})
+
+			if err := system.SetMgmtProperty(svc.sysdb, checkerLeaderKey, tc.startValue); err != nil {
+				t.Fatal(err)
+			}
+
+			result, err := svc.getCheckerLeaderRank()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
+		})
+	}
+}
+
+func TestServer_mgmtSvc_setCheckerLeaderRank(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notLeader  bool
+		startValue string
+		input      ranklist.Rank
+		expErr     error
+		expSaved   string
+	}{
+		"not leader": {
+			notLeader: true,
+			input:     ranklist.Rank(13),
+			expErr:    &system.ErrNotLeader{},
+		},
+		"nil rank": {
+			startValue: "123",
+			input:      ranklist.NilRank,
+			expErr:     errors.New("nil rank"),
+			expSaved:   "123",
+		},
+		"valid initialize": {
+			input:    ranklist.Rank(42),
+			expSaved: "42",
+		},
+		"valid overwrite": {
+			startValue: "123",
+			input:      ranklist.Rank(42),
+			expSaved:   "42",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.Context(t)
+
+			svc := testSvcWithMemberState(t, logging.FromContext(ctx), system.MemberStateCheckerStarted, []string{})
+			if tc.startValue != "" {
+				if err := system.SetMgmtProperty(svc.sysdb, checkerLeaderKey, tc.startValue); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.notLeader {
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			err := svc.setCheckerLeaderRank(tc.input)
+
+			test.CmpErr(t, tc.expErr, err)
+
+			saved, propErr := system.GetMgmtProperty(svc.sysdb, checkerLeaderKey)
+			if tc.expSaved == "" {
+				test.CmpErr(t, system.ErrSystemAttrNotFound("mgmt."+checkerLeaderKey), propErr)
+			} else {
+				test.CmpErr(t, nil, propErr)
+				test.AssertEqual(t, tc.expSaved, saved, "")
+			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_clearCheckerLeader(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notLeader  bool
+		startValue string
+		expErr     error
+		expSaved   string
+	}{
+		"not leader": {
+			notLeader:  true,
+			startValue: "42",
+			expErr:     &system.ErrNotLeader{},
+			expSaved:   "42", // not cleared
+		},
+		"empty": {},
+		"existing value": {
+			startValue: "123",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.Context(t)
+
+			svc := testSvcWithMemberState(t, logging.FromContext(ctx), system.MemberStateCheckerStarted, []string{})
+			if tc.startValue != "" {
+				if err := system.SetMgmtProperty(svc.sysdb, checkerLeaderKey, tc.startValue); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.notLeader {
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			err := svc.clearCheckerLeader()
+
+			test.CmpErr(t, tc.expErr, err)
+
+			saved, propErr := system.GetMgmtProperty(svc.sysdb, checkerLeaderKey)
+			if tc.expSaved == "" {
+				test.CmpErr(t, system.ErrSystemAttrNotFound("mgmt."+checkerLeaderKey), propErr)
+			} else {
+				test.CmpErr(t, nil, propErr)
+				test.AssertEqual(t, tc.expSaved, saved, "")
+			}
+		})
+	}
+}
+
+func TestServer_mgmtSvc_selectLocalCheckLeader(t *testing.T) {
+	for name, tc := range map[string]struct {
+		createMS func(t *testing.T, l logging.Logger) *mgmtSvc
+		expRank  ranklist.Rank
+		expErr   error
+	}{
+		"can't get rank": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvc(t, l)
+				for _, e := range svc.harness.instances {
+					ei := e.(*EngineInstance)
+					ei._superblock = nil
+				}
+				return svc
+			},
+			expRank: ranklist.NilRank,
+			expErr:  errors.New("no ranks are usable"),
+		},
+		"rank missing from db": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				return newTestMgmtSvc(t, l)
+			},
+			expRank: ranklist.NilRank,
+			expErr:  errors.New("no ranks are usable"),
+		},
+		"bad member state": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvc(t, l)
+				if err := svc.sysdb.AddMember(mockMember(t, 0, 1, "adminexcluded")); err != nil {
+					t.Fatal(err)
+				}
+				return svc
+			},
+			expRank: ranklist.NilRank,
+			expErr:  errors.New("no ranks are usable"),
+		},
+		"first rank success": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				numEngines := 2
+				svc := newTestMgmtSvcMulti(t, l, numEngines, true)
+				for i := 0; i < numEngines; i++ {
+					if err := svc.sysdb.AddMember(mockMember(t, int32(i), int32(i), "checkerstarted")); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return svc
+			},
+		},
+		"second rank success": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				numEngines := 2
+				svc := newTestMgmtSvcMulti(t, l, numEngines, true)
+				for i := 0; i < numEngines; i++ {
+					state := "checkerstarted"
+					if i == 0 {
+						state = "adminexcluded"
+					}
+					if err := svc.sysdb.AddMember(mockMember(t, int32(i), int32(i), state)); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return svc
+			},
+			expRank: ranklist.Rank(1),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			svc := tc.createMS(t, log)
+
+			rank, err := svc.selectLocalCheckLeader()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "rank", tc.expRank, rank)
+		})
+	}
+}
+
+func TestServer_mgmtSvc_CheckLeaderDrpc(t *testing.T) {
+	startMsg := &mgmtpb.CheckStartReq{
+		Sys:   "my_daos_sys",
+		Ranks: []uint32{0, 3, 5},
+	}
+	validReq := &mgmtpb.CheckLeaderReq{
+		DrpcMethod: uint32(daos.MethodCheckerStart),
+		Req:        &mgmtpb.CheckLeaderReq_StartReq{StartReq: startMsg},
+	}
+	testNumRanks := 5
+	testCheckLeaderRank := ranklist.Rank(0)
+
+	for name, tc := range map[string]struct {
+		createMS  func(*testing.T, logging.Logger) *mgmtSvc
+		setupDrpc func(*testing.T, *mgmtSvc)
+		req       *mgmtpb.CheckLeaderReq
+		expResp   *mgmtpb.CheckLeaderResp
+		expErr    error
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"not MS replica": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvc(t, log)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+					Replicas:   []*net.TCPAddr{{IP: net.IP{111, 222, 1, 1}}},
+				})
+				return svc
+			},
+			req:    validReq,
+			expErr: errors.New("replica"),
+		},
+		"not checker mode": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, l, testNumRanks, true)
+				return svc
+			},
+			req:    validReq,
+			expErr: checker.FaultCheckerNotEnabled,
+		},
+		"unforwardable dRPC method": {
+			req: &mgmtpb.CheckLeaderReq{
+				DrpcMethod: uint32(daos.MethodGetAttachInfo), // not a check leader method
+			},
+			expErr: errors.New("cannot be forwarded"),
+		},
+		"invalid check leader prop": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := testSvcWithMemberState(t, l, system.MemberStateCheckerStarted, []string{})
+				if err := svc.enableChecker(); err != nil {
+					t.Fatal(err)
+				}
+				if err := system.SetMgmtProperty(svc.sysdb, checkerLeaderKey, "foobar"); err != nil {
+					t.Fatal(err)
+				}
+				return svc
+			},
+			req:    validReq,
+			expErr: errors.New("invalid rank"),
+		},
+		"dRPC fails": {
+			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+				setupMockDrpcClient(ms, nil, errors.New("mock dRPC"))
+			},
+			req:    validReq,
+			expErr: errors.New("mock dRPC"),
+		},
+		"bad dRPC resp": {
+			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+				setupMockDrpcClientBytes(ms, []byte("garbage"), nil)
+			},
+			req:    validReq,
+			expErr: errors.New("unmarshal"),
+		},
+		"CheckStart returns resp": {
+			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+				setupMockDrpcClient(ms, &mgmtpb.CheckStartResp{Status: daos.MiscError.Int32()}, nil)
+			},
+			req: &mgmtpb.CheckLeaderReq{
+				DrpcMethod: uint32(daos.MethodCheckerStart),
+				Req:        &mgmtpb.CheckLeaderReq_StartReq{StartReq: startMsg},
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				DrpcStatus: uint32(drpc.Status_SUCCESS),
+				Resp:       &mgmtpb.CheckLeaderResp_StartResp{StartResp: &mgmtpb.CheckStartResp{Status: daos.MiscError.Int32()}},
+			},
+		},
+		"CheckStop returns resp": {
+			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+				setupMockDrpcClient(ms, &mgmtpb.CheckStopResp{Status: daos.MiscError.Int32()}, nil)
+			},
+			req: &mgmtpb.CheckLeaderReq{
+				DrpcMethod: uint32(daos.MethodCheckerStop),
+				Req:        &mgmtpb.CheckLeaderReq_StopReq{StopReq: &mgmtpb.CheckStopReq{Sys: "daos_sys"}},
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				DrpcStatus: uint32(drpc.Status_SUCCESS),
+				Resp:       &mgmtpb.CheckLeaderResp_StopResp{StopResp: &mgmtpb.CheckStopResp{Status: daos.MiscError.Int32()}},
+			},
+		},
+		"CheckSetPolicy returns resp": {
+			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+				setupMockDrpcClient(ms, &mgmtpb.DaosResp{Status: daos.MiscError.Int32()}, nil)
+			},
+			req: &mgmtpb.CheckLeaderReq{
+				DrpcMethod: uint32(daos.MethodCheckerSetPolicy),
+				Req:        &mgmtpb.CheckLeaderReq_SetPolicyReq{SetPolicyReq: &mgmtpb.CheckSetPolicyReq{Sys: "daos_sys"}},
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				DrpcStatus: uint32(drpc.Status_SUCCESS),
+				Resp:       &mgmtpb.CheckLeaderResp_DaosResp{DaosResp: &mgmtpb.DaosResp{Status: daos.MiscError.Int32()}},
+			},
+		},
+		"CheckQuery returns resp": {
+			setupDrpc: func(t *testing.T, ms *mgmtSvc) {
+				// For simplicity's sake, we mock it returning an error. Just need to show we get the payload.
+				setupMockDrpcClient(ms, &mgmtpb.CheckQueryResp{ReqStatus: daos.MiscError.Int32()}, nil)
+			},
+			req: &mgmtpb.CheckLeaderReq{
+				DrpcMethod: uint32(daos.MethodCheckerQuery),
+				Req:        &mgmtpb.CheckLeaderReq_QueryReq{QueryReq: &mgmtpb.CheckQueryReq{Sys: "daos_sys"}},
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				DrpcStatus: uint32(drpc.Status_SUCCESS),
+				Resp:       &mgmtpb.CheckLeaderResp_QueryResp{QueryResp: &mgmtpb.CheckQueryResp{ReqStatus: daos.MiscError.Int32()}},
+			},
+		},
+		"check leader not local": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := testSvcWithMemberState(t, l, system.MemberStateCheckerStarted, []string{})
+				if err := svc.enableChecker(); err != nil {
+					t.Fatal(err)
+				}
+				if err := svc.setCheckerLeaderRank(ranklist.Rank(15)); err != nil {
+					t.Fatal(err)
+				}
+				return svc
+			},
+			req:    validReq,
+			expErr: errors.New("not managed by this DAOS node"),
+		},
+		"check leader unset": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := testSvcWithMemberState(t, l, system.MemberStateCheckerStarted, []string{})
+				if err := svc.enableChecker(); err != nil {
+					t.Fatal(err)
+				}
+				return svc
+			},
+			req:    validReq,
+			expErr: system.ErrSystemAttrNotFound("mgmt." + checkerLeaderKey),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			if tc.createMS == nil {
+				tc.createMS = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					svc := testSvcWithMemberState(t, logging.FromContext(ctx), system.MemberStateCheckerStarted, []string{})
+					if err := svc.enableChecker(); err != nil {
+						t.Fatal(err)
+					}
+					if err := svc.setCheckerLeaderRank(testCheckLeaderRank); err != nil {
+						t.Fatal(err)
+					}
+					return svc
+				}
+			}
+			svc := tc.createMS(t, log)
+
+			if tc.setupDrpc == nil {
+				tc.setupDrpc = func(t *testing.T, ms *mgmtSvc) {
+					setupMockDrpcClient(ms, nil, errors.New("shouldn't call dRPC"))
+				}
+			}
+			tc.setupDrpc(t, svc)
+
+			resp, err := svc.CheckLeaderDrpc(ctx, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "CheckLeaderResp", tc.expResp, resp, cmpopts.IgnoreUnexported(
+				mgmtpb.CheckLeaderResp{},
+				mgmtpb.CheckStartResp{},
+				mgmtpb.CheckStopResp{},
+				mgmtpb.DaosResp{},
+				mgmtpb.CheckQueryResp{},
+			))
+		})
+	}
+}
+
+func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
+	startReq := &mgmtpb.CheckStartReq{
+		Sys:   "daos_sys",
+		Ranks: []uint32{0, 3},
+	}
+	stopReq := &mgmtpb.CheckStopReq{
+		Sys: "daos_sys",
+	}
+	queryReq := &mgmtpb.CheckQueryReq{
+		Sys: "daos_sys",
+	}
+	setPolicyReq := &mgmtpb.CheckSetPolicyReq{
+		Sys: "daos_sys",
+	}
+
+	testCheckLeaderRank := ranklist.Rank(0)
+
+	for name, tc := range map[string]struct {
+		createMS              func(*testing.T, logging.Logger) *mgmtSvc
+		mic                   *control.MockInvokerConfig
+		req                   proto.Message
+		expResp               *mgmtpb.CheckLeaderResp
+		expErr                error
+		expCheckLeader        *ranklist.Rank
+		expCheckLeaderReqAddr string
+	}{
+		"unforwardable request": {
+			req:            &mgmtpb.GetAttachInfoReq{},
+			expErr:         errors.New("cannot be forwarded"),
+			expCheckLeader: &testCheckLeaderRank,
+		},
+		"check leader invalid": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := createMSMultiInCheckerMode(t, l, 1)
+				if err := svc.setCheckerLeaderString("garbage"); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			req: startReq,
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("shouldn't call gRPC"),
+			},
+			expErr: errors.Errorf("parsing rank from prop %q", checkerLeaderKey),
+		},
+		"check leader rank doesn't exist": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := createMSMultiInCheckerMode(t, l, 1)
+				if err := svc.setCheckerLeaderRank(ranklist.Rank(1234)); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			req: startReq,
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("shouldn't call gRPC"),
+			},
+			expErr:         errors.New("unable to find member with rank 1234"),
+			expCheckLeader: ranklist.NewRankPtr(1234),
+		},
+		"check leader unset (MS leader)": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				return createMSMultiInCheckerMode(t, l, 1)
+			},
+			req: startReq,
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StartResp{
+						StartResp: &mgmtpb.CheckStartResp{
+							Status: int32(daos.MiscError),
+						},
+					},
+				}),
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				Resp: &mgmtpb.CheckLeaderResp_StartResp{
+					StartResp: &mgmtpb.CheckStartResp{
+						Status: int32(daos.MiscError),
+					},
+				},
+			},
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
+		},
+		"check leader unset (MS replica)": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := createMSMultiInCheckerMode(t, l, 2)
+				if err := svc.sysdb.ResignLeadership(nil); err != nil {
+					t.Fatal(err)
+				}
+				return svc
+			},
+			req: startReq,
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("shouldn't call gRPC"),
+			},
+			expErr: &system.ErrNotLeader{},
+		},
+		"check leader down": {
+			createMS: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := createMSMultiInCheckerMode(t, l, 3)
+				leaderRank := ranklist.Rank(2)
+				if err := svc.setCheckerLeaderRank(leaderRank); err != nil {
+					t.Fatal(err)
+				}
+				members, err := svc.membership.Members(ranklist.MustCreateRankSet(leaderRank.String()))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(members) != 1 {
+					t.Fatalf("expected 1 member, got %d: %+v", len(members), members)
+				}
+				members[0].State = system.MemberStateAdminExcluded
+				if err := svc.sysdb.UpdateMember(members[0]); err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("set member %d state to %s", members[0].Rank, members[0].State)
+				return svc
+			},
+			req: startReq,
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StartResp{
+						StartResp: &mgmtpb.CheckStartResp{
+							Status: int32(daos.MiscError),
+						},
+					},
+				}),
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				Resp: &mgmtpb.CheckLeaderResp_StartResp{
+					StartResp: &mgmtpb.CheckStartResp{
+						Status: int32(daos.MiscError),
+					},
+				},
+			},
+			expCheckLeader:        ranklist.NewRankPtr(0),
+			expCheckLeaderReqAddr: system.MockControlAddr(t, 0).String(),
+		},
+		"gRPC fails": {
+			req: startReq,
+			mic: &control.MockInvokerConfig{
+				UnaryError: errors.New("MockInvoker error"),
+			},
+			expErr:         errors.New("MockInvoker error"),
+			expCheckLeader: &testCheckLeaderRank,
+		},
+		"gRPC succeeds after retry": {
+			req: startReq,
+			mic: &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("", errors.New("temporary mock gRPC"), nil),
+					control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+						Resp: &mgmtpb.CheckLeaderResp_StartResp{
+							StartResp: &mgmtpb.CheckStartResp{},
+						},
+					}),
+				},
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				Resp: &mgmtpb.CheckLeaderResp_StartResp{
+					StartResp: &mgmtpb.CheckStartResp{},
+				},
+			},
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
+		},
+		"CheckStartReq returns": {
+			req: startReq,
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StartResp{
+						StartResp: &mgmtpb.CheckStartResp{
+							Status: int32(daos.MiscError),
+						},
+					},
+				}),
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				Resp: &mgmtpb.CheckLeaderResp_StartResp{
+					StartResp: &mgmtpb.CheckStartResp{
+						Status: int32(daos.MiscError),
+					},
+				},
+			},
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
+		},
+		"CheckStopReq returns": {
+			req: stopReq,
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_StopResp{
+						StopResp: &mgmtpb.CheckStopResp{
+							Status: int32(daos.MiscError),
+						},
+					},
+				}),
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				Resp: &mgmtpb.CheckLeaderResp_StopResp{
+					StopResp: &mgmtpb.CheckStopResp{
+						Status: int32(daos.MiscError),
+					},
+				},
+			},
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
+		},
+		"CheckQueryReq returns": {
+			req: queryReq,
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_QueryResp{
+						QueryResp: &mgmtpb.CheckQueryResp{
+							ReqStatus: int32(daos.MiscError),
+						},
+					},
+				}),
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				Resp: &mgmtpb.CheckLeaderResp_QueryResp{
+					QueryResp: &mgmtpb.CheckQueryResp{
+						ReqStatus: int32(daos.MiscError),
+					},
+				},
+			},
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
+		},
+		"CheckSetPolicyReq returns": {
+			req: setPolicyReq,
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("", nil, &mgmtpb.CheckLeaderResp{
+					Resp: &mgmtpb.CheckLeaderResp_DaosResp{
+						DaosResp: &mgmtpb.DaosResp{
+							Status: int32(daos.MiscError),
+						},
+					},
+				}),
+			},
+			expResp: &mgmtpb.CheckLeaderResp{
+				Resp: &mgmtpb.CheckLeaderResp_DaosResp{
+					DaosResp: &mgmtpb.DaosResp{
+						Status: int32(daos.MiscError),
+					},
+				},
+			},
+			expCheckLeader:        &testCheckLeaderRank,
+			expCheckLeaderReqAddr: system.MockControlAddr(t, testCheckLeaderRank.Uint32()).String(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
+
+			if tc.createMS == nil {
+				tc.createMS = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					svc := createMSMultiInCheckerMode(t, l, 2)
+					if err := svc.setCheckerLeaderRank(testCheckLeaderRank); err != nil {
+						t.Fatal(err)
+					}
+					return svc
+				}
+			}
+			svc := tc.createMS(t, log)
+
+			mi := control.NewMockInvoker(log, tc.mic)
+			svc.rpcClient = mi
+
+			resp, err := svc.forwardCheckLeaderDrpc(ctx, tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "CheckLeaderResp", tc.expResp, resp, cmpopts.IgnoreUnexported(
+				mgmtpb.CheckLeaderResp{},
+				mgmtpb.CheckStartResp{},
+				mgmtpb.CheckStopResp{},
+				mgmtpb.DaosResp{},
+				mgmtpb.CheckQueryResp{},
+			))
+
+			finalCheckLeader, err := svc.getCheckerLeaderRank()
+			if tc.expCheckLeader == nil {
+				if err == nil {
+					t.Fatalf("expected error, got rank %d", finalCheckLeader)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("expected rank %d, got error: %v", *tc.expCheckLeader, err)
+				}
+				test.AssertEqual(t, *tc.expCheckLeader, finalCheckLeader, "")
+			}
+
+			if tc.expCheckLeaderReqAddr != "" {
+				if len(mi.SentReqs) == 0 {
+					t.Fatalf("no requests sent by MockInvoker")
+				}
+				lastReq, ok := mi.SentReqs[len(mi.SentReqs)-1].(*control.CheckLeaderReq)
+				if !ok {
+					t.Fatalf("last request sent by MockInvoker is not CheckLeaderReq: %T", mi.SentReqs[len(mi.SentReqs)-1])
+				}
+				test.CmpAny(t, "host address for request", []string{tc.expCheckLeaderReqAddr}, lastReq.HostList)
 			}
 		})
 	}
