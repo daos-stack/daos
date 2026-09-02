@@ -481,6 +481,5 @@ build_package "daos-tests"
 
 DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-client-tests-openmpi = ${VERSION}-${RELEASE}")
-DEPENDS+=("daos-client-tests-mpich = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-serialize = ${VERSION}-${RELEASE}")
 build_package "daos-tests-internal"
