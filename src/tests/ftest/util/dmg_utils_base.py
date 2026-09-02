@@ -409,6 +409,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.GetPropSubCommand()
             elif self.sub_command.value == "list":
                 self.sub_command_class = self.ListSubCommand()
+            elif self.sub_command.value == "node-auth":
+                self.sub_command_class = self.NodeAuthSubCommand()
             elif self.sub_command.value == "overwrite-acl":
                 self.sub_command_class = self.OverwriteAclSubCommand()
             elif self.sub_command.value == "query":
@@ -638,6 +640,132 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool upgrade command object."""
                 super().__init__("/run/dmg/pool/upgrade/*", "upgrade")
                 self.pool = BasicParameter(None, position=1)
+
+        class NodeAuthSubCommand(CommandWithSubCommand):
+            """Defines an object for the dmg pool node-auth command."""
+
+            def __init__(self):
+                """Create a dmg pool node-auth command object."""
+                super().__init__("/run/dmg/pool/node-auth/*", "node-auth")
+
+            def get_sub_command_class(self):
+                # pylint: disable=redefined-variable-type
+                """Get the dmg pool node-auth sub command object."""
+                if self.sub_command.value == "enable":
+                    self.sub_command_class = self.EnableSubCommand()
+                elif self.sub_command.value == "generate-ca":
+                    self.sub_command_class = self.GenerateCASubCommand()
+                elif self.sub_command.value == "disable":
+                    self.sub_command_class = self.DisableSubCommand()
+                elif self.sub_command.value == "status":
+                    self.sub_command_class = self.StatusSubCommand()
+                elif self.sub_command.value == "issue":
+                    self.sub_command_class = self.IssueSubCommand()
+                elif self.sub_command.value == "generate-cert":
+                    self.sub_command_class = self.GenerateCertSubCommand()
+                elif self.sub_command.value == "revoke":
+                    self.sub_command_class = self.RevokeSubCommand()
+                elif self.sub_command.value == "add-ca":
+                    self.sub_command_class = self.AddCASubCommand()
+                elif self.sub_command.value == "remove-ca":
+                    self.sub_command_class = self.RemoveCASubCommand()
+                else:
+                    self.sub_command_class = None
+
+            class EnableSubCommand(CommandWithParameters):
+                """Defines an object for the dmg pool node-auth enable command."""
+
+                def __init__(self):
+                    """Create a dmg pool node-auth enable command object."""
+                    super().__init__("/run/dmg/pool/node-auth/enable/*", "enable")
+                    self.pool = BasicParameter(None, position=1)
+                    self.daos_ca_key = FormattedParameter("--daos-ca-key={}", None)
+                    self.output = FormattedParameter("--output={}", None)
+                    self.cert = FormattedParameter("--cert={}", None)
+                    self.no_evict = FormattedParameter("--no-evict", False)
+
+            class GenerateCASubCommand(CommandWithParameters):
+                """Defines an object for the dmg pool node-auth generate-ca command."""
+
+                def __init__(self):
+                    """Create a dmg pool node-auth generate-ca command object."""
+                    super().__init__("/run/dmg/pool/node-auth/generate-ca/*", "generate-ca")
+                    self.pool = BasicParameter(None, position=1)
+                    self.daos_ca_cert = FormattedParameter("--daos-ca-cert={}", None)
+                    self.daos_ca_key = FormattedParameter("--daos-ca-key={}", None)
+                    self.output = FormattedParameter("--output={}", None)
+
+            class AddCASubCommand(CommandWithParameters):
+                """Defines an object for the dmg pool node-auth add-ca command."""
+
+                def __init__(self):
+                    """Create a dmg pool node-auth add-ca command object."""
+                    super().__init__("/run/dmg/pool/node-auth/add-ca/*", "add-ca")
+                    self.pool = BasicParameter(None, position=1)
+                    self.daos_ca_key = FormattedParameter("--daos-ca-key={}", None)
+                    self.output = FormattedParameter("--output={}", None)
+                    self.cert = FormattedParameter("--cert={}", None)
+
+            class RemoveCASubCommand(CommandWithParameters):
+                """Defines an object for the dmg pool node-auth remove-ca command."""
+
+                def __init__(self):
+                    """Create a dmg pool node-auth remove-ca command object."""
+                    super().__init__("/run/dmg/pool/node-auth/remove-ca/*", "remove-ca")
+                    self.pool = BasicParameter(None, position=1)
+                    self.fingerprint = FormattedParameter("--fingerprint={}", None)
+
+            class DisableSubCommand(CommandWithParameters):
+                """Defines an object for the dmg pool node-auth disable command."""
+
+                def __init__(self):
+                    """Create a dmg pool node-auth disable command object."""
+                    super().__init__("/run/dmg/pool/node-auth/disable/*", "disable")
+                    self.pool = BasicParameter(None, position=1)
+
+            class StatusSubCommand(CommandWithParameters):
+                """Defines an object for the dmg pool node-auth status command."""
+
+                def __init__(self):
+                    """Create a dmg pool node-auth status command object."""
+                    super().__init__("/run/dmg/pool/node-auth/status/*", "status")
+                    self.pool = BasicParameter(None, position=1)
+
+            class GenerateCertSubCommand(CommandWithParameters):
+                """Defines an object for the dmg pool node-auth generate-cert command."""
+
+                def __init__(self):
+                    """Create a dmg pool node-auth generate-cert command object."""
+                    super().__init__("/run/dmg/pool/node-auth/generate-cert/*", "generate-cert")
+                    self.pool = BasicParameter(None, position=1)
+                    self.pool_ca_key = FormattedParameter("--pool-ca-key={}", None)
+                    self.output = FormattedParameter("--output={}", None)
+                    self.node = FormattedParameter("--node={}", None)
+                    self.tenant = FormattedParameter("--tenant={}", None)
+
+            class IssueSubCommand(CommandWithParameters):
+                """Defines an object for the dmg pool node-auth issue command."""
+
+                def __init__(self):
+                    """Create a dmg pool node-auth issue command object."""
+                    super().__init__("/run/dmg/pool/node-auth/issue/*", "issue")
+                    self.pool = BasicParameter(None, position=1)
+                    self.pool_ca_key = FormattedParameter("--pool-ca-key={}", None)
+                    self.output = FormattedParameter("--output={}", None)
+                    self.node = FormattedParameter("--node={}", None)
+                    self.tenant = FormattedParameter("--tenant={}", None)
+
+            class RevokeSubCommand(CommandWithParameters):
+                """Defines an object for the dmg pool node-auth revoke command."""
+
+                def __init__(self):
+                    """Create a dmg pool node-auth revoke command object."""
+                    super().__init__("/run/dmg/pool/node-auth/revoke/*", "revoke")
+                    self.pool = BasicParameter(None, position=1)
+                    self.node = FormattedParameter("--node={}", None)
+                    self.tenant = FormattedParameter("--tenant={}", None)
+                    self.evict_all_handles = FormattedParameter("--evict-all-handles", False)
+                    self.no_evict = FormattedParameter("--no-evict", False)
 
     class ServerSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg server sub command."""
