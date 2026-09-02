@@ -130,7 +130,7 @@ class OSAOfflineParallelTest(OSAUtils):
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # If we need to trigger aggregation on pool 1, delete
             # the second container which has IOR data.
-            if self.test_during_aggregation is True and pool == list(pools.values())[0]:
+            if self.test_during_aggregation is True:
                 self.delete_extra_container(self.pool)
             # Action dictionary with OSA dmg command parameters
             action_kwargs = {
