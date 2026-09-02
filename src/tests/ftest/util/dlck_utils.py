@@ -8,7 +8,7 @@ from command_utils import RunCommand
 from command_utils_base import FormattedParameter
 
 
-class DlckTestBase(TestWithServers):
+class TestDlck(TestWithServers):
     # pylint: disable=too-few-public-methods
     """Base class for Dlck tests.
 
@@ -26,9 +26,9 @@ class DlckTestBase(TestWithServers):
             DlckCommand: a DlckCommand object with parameters from the test yaml file
         """
         dlck = DlckCommand(path, namespace)
-        self.register_cleanup(dlck.cleanup_command)
+        dlck.register_cleanup_method = self.register_cleanup
         dlck.hosts = self.server_managers[0].hosts[0:1]
-        dlck.log_dir = self.log_dir
+        dlck.log_dir.value = self.log_dir
         dlck.get_params(self)
         return dlck
 

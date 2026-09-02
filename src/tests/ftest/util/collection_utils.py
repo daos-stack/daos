@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,7 +30,8 @@ CLEANUP_UNMOUNT_TYPES = ["fuse.daos"]
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 TEST_RESULTS_DIRS = (
-    "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces")
+    "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces",
+    "dlck_check")
 
 
 def stop_daos_agent_services(logger, test):
@@ -1044,6 +1045,14 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[4]),
             "pattern": "valgrind*",
             "hosts": test.host_info.servers.hosts,
+            "depth": 1,
+            "timeout": 900,
+        }
+        remote_files["dlck files"] = {
+            "source": test_env.log_dir,
+            "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[6]),
+            "pattern": "dlck_check*",
+            "hosts": test.host_info.all_hosts,
             "depth": 1,
             "timeout": 900,
         }

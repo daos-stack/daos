@@ -6,12 +6,13 @@
 import os
 import re
 
-from dlck_test_base import DlckTestBase
+import yaml
+from dlck_utils import TestDlck
 from fault_config_utils import FaultInjection
 from file_utils import distribute_files
 
 
-class DlckBasicTest(DlckTestBase):
+class DlckBasicTest(TestDlck):
     """Test class for dlck command line utility.
 
     :avocado: recursive
@@ -45,7 +46,7 @@ class DlckBasicTest(DlckTestBase):
         pool = self.get_pool()
         dlck = self.get_dlck_command()
         dlck.pool_uuid.value = pool.uuid
-        dlck.log_dir.value = self.test_env.log_dir
+        dlck.log_dir = self.test_env.log_dir
         dlck.run_user = 'daos_server'
         dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
         if self.server_managers[0].manager.job.using_control_metadata:
@@ -100,14 +101,13 @@ class DlckBasicTest(DlckTestBase):
         dmg.system_stop()
 
         for test_fault in fault_list:
+            fault_config = {
+                'fault_config': [
+                    {key: str(value) for key, value in faults_dict[test_fault].items()}]}
             with open(fault_inject_file, 'w') as f:
-                f.write("fault_config:\n")
-                for count, (key, value) in enumerate(faults_dict[test_fault].items()):
-                    if count == 0:
-                        f.write(f"- {key}: \'{value}\'\n")
-                    else:
-                        f.write(f"  {key}: \'{value}\'\n")
+                yaml.dump(fault_config, f)
             self.log.info("Reading the updated fault injection file contents")
+
             with open(fault_inject_file, 'r') as f:
                 file_data = f.read()
                 self.log.info("\n %s", file_data)
