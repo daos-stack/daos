@@ -1146,7 +1146,10 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 			cs.log.Errorf("instance %d: %s", idx, msg)
 			continue
 		}
-		engine.NotifyStorageReady(req.Replace)
+		// Only notify engines that were awaiting format
+		if ei, ok := engine.(interface{ isAwaitingFormat() bool }); ok && ei.isAwaitingFormat() {
+			engine.NotifyStorageReady(req.Replace)
+		}
 	}
 
 	return resp, nil
