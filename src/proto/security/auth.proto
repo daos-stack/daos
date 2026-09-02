@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,11 +38,18 @@ message Credential {
 	string origin = 3; // the agent that created this credential
 }
 
-// GetCredResp represents the result of a request to fetch authentication
-// credentials.
+message GetCredReq
+{
+	bytes pool_uuid   = 1; // resolved pool UUID (16 bytes)
+	bytes handle_uuid = 2; // pool handle UUID (16 bytes)
+}
+
 message GetCredResp {
-	int32 status = 1; // Status of the request
-	Credential cred = 2; // Caller's authentication credential
+	int32      status      = 1;
+	Credential cred        = 2;
+	bytes      node_cert   = 3;
+	bytes      pop_sig     = 4;
+	bytes      pop_payload = 5;
 }
 
 // ValidateCredReq represents a request to verify a set of authentication
@@ -55,4 +63,21 @@ message ValidateCredReq {
 message ValidateCredResp {
 	int32 status = 1; // Status of the request
 	Token token = 2; // Validated authentication token from the credential
+}
+
+message ValidateNodeCertReq
+{
+	bytes  pool_ca         = 1;
+	bytes  node_cert       = 2;
+	bytes  pop_sig         = 3;
+	bytes  pop_payload     = 4;
+	bytes  pool_uuid       = 5;
+	string machine_name    = 6;
+	bytes  cert_watermarks = 7;
+}
+
+message ValidateNodeCertResp
+{
+	int32  status = 1;
+	string detail = 2;
 }
