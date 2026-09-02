@@ -1767,6 +1767,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
 			svc.events = ps
 
 			subscriber := newMockSubscriber(1)
@@ -2128,6 +2129,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 
 			ps := events.NewPubSub(ctx, log)
 			svc.events = ps
+			defer ps.Close()
 
 			subscriber := newMockSubscriber(1)
 			svc.events.Subscribe(events.RASTypeInfoOnly, subscriber)
