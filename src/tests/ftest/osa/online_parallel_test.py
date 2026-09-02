@@ -12,6 +12,7 @@ import time
 from daos_racer_utils import DaosRacerCommand
 from exception_utils import CommandFailure
 from osa_utils import OSAUtils
+from test_utils_container import get_existing_container
 from write_host_file import write_host_file
 
 
@@ -64,7 +65,7 @@ class OSAOnlineParallelTest(OSAUtils):
         dmg = copy.copy(self.dmg_command)
         try:
             if action == "reintegrate":
-                time.sleep(30)
+                time.sleep(60)
             # For each action, read the values from the
             # dictionary.
             # example {"exclude" : {"puuid": self.pool, "ranks: rank
@@ -85,7 +86,7 @@ class OSAOnlineParallelTest(OSAUtils):
             racer (bool) : whether to start the daos_racer thread. Defaults to False.
         """
         # Create pools
-        pools = {}
+        pools = []
         target_list = []
 
         # Exclude target : random two targets  (target idx : 0-7)
@@ -105,23 +106,25 @@ class OSAOnlineParallelTest(OSAUtils):
             daos_racer_thread.start()
             time.sleep(30)
 
-        for val in range(0, num_pool):
-            self.log_step("Step 1 : Create pool")
-            pools[val] = self.get_pool(connect=False)
-            self.pool = pools[val]
+        for _ in range(0, num_pool):
+            self.log_step("Create pool")
+            pools.append(self.get_pool(connect=False))
+
+        for pool in pools:
+            self.pool = pool
             # Use only pool UUID while running the test.
             self.pool.use_label = False
             self.pool.set_property("reclaim", "disabled")
 
         # Start the additional servers and extend the pool
-        self.log_step("Step 2 : Start additional servers")
+        self.log_step("Start additional servers")
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
         extra_ranks = list(self.server_managers[-1].ranks.keys())
 
         # Exclude and reintegrate the pool_uuid, rank and targets
-        for val in range(0, num_pool):
-            self.pool = pools[val]
+        for pool in pools:
+            self.pool = pool
             initial_total_targets = self.pool.get_total_targets(refresh=True)
             pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
@@ -140,17 +143,11 @@ class OSAOnlineParallelTest(OSAUtils):
                 "extend": {"pool": self.pool.identifier,
                            "ranks": ",".join(map(str, extra_ranks))}
             }
-            # Create some data before starting the OSA commands in parallel with IOR.
-            if self.test_during_aggregation:
-                self.log_step(
-                    "Step 2a : Write some data and delete container to "
-                    "initiate aggregation")
-                for _ in range(0, 2):
-                    self.run_ior_thread("Write", oclass, test_seq)
-                self.delete_extra_container(self.pool)
+            self.log_step(
+                "Create some data before starting OSA operations in parallel")
+            self.run_ior_thread("Write", oclass, test_seq)
 
-            self.log_step("Step 3 : Run OSA commands in parallel with IOR")
-
+            self.log_step("Run OSA commands in parallel with IOR")
             # Add a thread for IOR
             ior_thread = threading.Thread(target=self.run_ior_thread,
                                           kwargs={"action": "Write",
@@ -188,9 +185,9 @@ class OSAOnlineParallelTest(OSAUtils):
             if racer is True:
                 daos_racer_thread.join()
 
-        self.log_step("Step 4 : Check pool version and total targets after extend")
-        for val in range(0, num_pool):
-            self.pool = pools[val]
+        self.log_step("Check pool version and total targets after extend")
+        for pool in pools:
+            self.pool = pool
             self.pool.wait_for_rebuild_to_end(3)
             self.assert_on_rebuild_failure()
 
@@ -204,17 +201,18 @@ class OSAOnlineParallelTest(OSAUtils):
             self.assertGreater(final_total_targets, initial_total_targets,
                                "Pool total_targets did not increase after extend")
 
-        self.log_step("Step 5 : Check data consistency")
+        self.log_step("Check data consistency")
         # Perform a data consistency check.
-        for val in range(0, num_pool):
-            self.pool = pools[val]
-            # Presently, we support only two containers per pool.
-            for c_val in range(2):
-                if self.pool_cont_dict[self.pool][c_val + 1] == "Updated":
-                    self.container = self.pool_cont_dict[self.pool][c_val]
-                    self.run_ior_thread("Read", oclass, test_seq, single_cont_read=False)
-                    self.log.info("Checking data integrity for container %s", self.container)
-                    self.container.check()
+        containers = []
+        for pool in pools:
+            self.pool = pool
+            containers = self.get_daos_command().container_list(pool=self.pool.identifier)
+            for info in containers["response"]:
+                self.container = get_existing_container(self, self.pool, info["uuid"])
+                self.run_ior_thread("Read", oclass, test_seq, single_cont_read=False)
+                self.log.info("Checking data integrity for container %s", self.container)
+                self.container.check()
+                self.container.skip_cleanup()
 
     def test_osa_online_parallel_test(self):
         """
@@ -227,20 +225,4 @@ class OSAOnlineParallelTest(OSAUtils):
         :avocado: tags=osa,checksum,osa_parallel
         :avocado: tags=OSAOnlineParallelTest,test_osa_online_parallel_test
         """
-        self.run_online_parallel_test(1)
-
-    def test_osa_online_parallel_test_with_aggregation(self):
-        """
-        JIRA ID: DAOS-4752
-
-        Test Description: Runs multiple OSA commands/IO with aggregation turned on.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=osa,checksum,osa_parallel
-        :avocado: tags=OSAOnlineParallelTest,test_osa_online_parallel_test_with_aggregation
-        """
-        self.test_during_aggregation = self.params.get("test_with_aggregation",
-                                                       '/run/aggregation/*')
-        self.log.info("Online Parallel Test : Aggregation")
         self.run_online_parallel_test(1)

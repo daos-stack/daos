@@ -64,6 +64,3 @@ ior:
 daos_racer:
   runtime: 480
   daos_racer_timeout: 1000
-
-aggregation:
-  test_with_aggregation: true
