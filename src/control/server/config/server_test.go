@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -333,6 +334,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithStorageSpdkIobufProps(0, 0),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
+	constructed.TransportConfig.PoolCertMaxClockSkew = 5 * time.Minute
 
 	for i := range constructed.Engines {
 		t.Logf("constructed: %+v", constructed.Engines[i])
