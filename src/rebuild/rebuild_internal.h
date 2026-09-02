@@ -87,22 +87,28 @@ struct rebuild_tgt_pool_tracker {
 	/* new layout version for upgrade rebuild */
 	uint32_t		rt_new_layout_ver;
 
+	/* clang-format off */
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,
 				/* re-report #rebuilt cnt per master change */
 				rt_re_report:1,
 				rt_finishing:1,
+				rt_ec_agg_paused:1,
 				rt_scan_done:1,
 				rt_global_scan_done:1,
 				rt_global_done:1;
+	/* clang-format on */
 };
 
 struct rebuild_server_status {
 	d_rank_t	rank;
 	double          last_update;
 	uint32_t	dtx_resync_version;
-	uint32_t	scan_done:1,
+	/* clang-format off */
+	uint32_t	ec_agg_paused:1,
+			scan_done:1,
 			pull_done:1;
+	/* clang-format on */
 };
 
 /* Track the rebuild status globally */
@@ -325,11 +331,14 @@ struct rebuild_iv {
 	uint32_t        riv_master_rank;
 	uint32_t        riv_ver;
 	uint32_t        riv_rebuild_gen;
+	/* clang-format off */
 	uint32_t	riv_global_done:1,
 			riv_global_scan_done:1,
 			riv_scan_done:1,
 			riv_pull_done:1,
-			riv_sync:1;
+			riv_sync:1,
+			riv_ec_agg_paused:1;
+	/* clang-format on */
 	int32_t  riv_status;
 	uint32_t riv_bukid; /* bucket ID */
 };

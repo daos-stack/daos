@@ -281,16 +281,21 @@ rebuild_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 static int
 rpt_wait_rebuild_epoch(struct rebuild_tgt_pool_tracker *rpt)
 {
-	int wait_cnt     = 0;
-	int wait_intv    = 200; /* milliseconds */
-	int wait_cnt_max = 180;
+	int wait_cnt = 0;
 
-	while (rpt->rt_stable_epoch == 0 && wait_cnt++ < wait_cnt_max)
-		dss_sleep(wait_intv);
+	while (rpt->rt_stable_epoch == 0 && !rpt->rt_abort && !rpt->rt_finishing &&
+	       !rpt->rt_global_done && wait_cnt++ < 180)
+		dss_sleep(200);
 
+	if (rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done)
+		return -DER_SHUTDOWN;
 	if (rpt->rt_stable_epoch != 0)
 		return 0;
 
+	D_ERROR(DF_RB " timed out waiting for stable epoch after EC aggregation paused, "
+		      "ec_agg_paused=%u global_dtx=%u rebuild_ver=%u\n",
+		DP_RB_RPT(rpt), rpt->rt_ec_agg_paused, rpt->rt_global_dtx_resync_version,
+		rpt->rt_rebuild_ver);
 	return -DER_TIMEDOUT;
 }
 
@@ -717,10 +722,9 @@ rebuild_obj_ult(void *data)
 {
 	struct rebuild_obj_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
+	int                              rc;
 
 	if (rpt->rt_stable_epoch == 0) {
-		int rc;
-
 		rc = rpt_wait_rebuild_epoch(rpt);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed, abort the rebuild",
@@ -728,14 +732,20 @@ rebuild_obj_ult(void *data)
 			if (rpt->rt_errno == 0)
 				rpt->rt_errno = rc;
 			rpt->rt_abort = 1;
+			goto out;
 		}
-		goto out;
 	}
 
-	ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
-			  rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
-			  rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
-			  &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
+	rc = ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
+			       rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
+			       rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
+			       &arg->shard, 1, arg->tgt_index, rpt->rt_new_layout_ver);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_RB " ds_migrate_object failed", DP_RB_RPT(rpt));
+		if (rpt->rt_errno == 0)
+			rpt->rt_errno = rc;
+		rpt->rt_abort = 1;
+	}
 out:
 	rpt_put(rpt);
 	D_FREE(arg);
@@ -1071,6 +1081,9 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	/* Rebuild must not migrate updates newer than the stable epoch. */
+	if (rpt->rt_rebuild_op == RB_OP_REBUILD)
+		param.ip_epr.epr_hi = rpt->rt_stable_epoch;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	arg->snapshot_cnt = snapshot_cnt;
@@ -1162,8 +1175,10 @@ rebuild_scanner(void *data)
 	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
-
-	ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
+	if (rpt->rt_rebuild_op == RB_OP_REBUILD) {
+		D_ASSERT(rpt->rt_stable_epoch != 0);
+		atomic_store(&child->spc_rebuild_ec_agg_paused_hlc, rpt->rt_stable_epoch);
+	}
 
 	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
 	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
@@ -1228,6 +1243,36 @@ out:
 	return rc;
 }
 
+static int
+rebuild_ec_agg_pause_one(void *data)
+{
+	struct rebuild_tgt_pool_tracker *rpt = data;
+	struct ds_pool_child            *child;
+	uint64_t                         current_term;
+	uint32_t                         current_gen;
+	int                              rc;
+
+	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	if (child == NULL)
+		return -DER_NONEXIST;
+
+	current_term = atomic_load(&child->spc_ec_agg_pause_term);
+	current_gen  = atomic_load(&child->spc_ec_agg_pause_gate);
+	if (current_term > rpt->rt_leader_term ||
+	    (current_term == rpt->rt_leader_term && current_gen > rpt->rt_rebuild_gen)) {
+		ds_pool_child_put(child);
+		return -DER_STALE;
+	}
+
+	atomic_store(&child->spc_ec_agg_pause_term, rpt->rt_leader_term);
+	atomic_store(&child->spc_ec_agg_pause_gate, rpt->rt_rebuild_gen);
+	rc = ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
+	if (rc != 0)
+		DL_ERROR(rc, DF_RB " failed to pause EC aggregation", DP_RB_RPT(rpt));
+	ds_pool_child_put(child);
+	return rc;
+}
+
 /**
  * Wait for pool map and setup global status, then spawn scanners for all
  * service xsteams
@@ -1275,6 +1320,24 @@ rebuild_scan_leader(void *data)
 	}
 
 do_scan:
+	if (rpt->rt_rebuild_op == RB_OP_REBUILD) {
+		rc = ds_pool_thread_collective(
+		    rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+		    rebuild_ec_agg_pause_one, rpt, 0);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_RB " failed to pause EC aggregation globally",
+				 DP_RB_RPT(rpt));
+			D_GOTO(out, rc);
+		}
+
+		rpt->rt_ec_agg_paused = 1;
+		rc                    = rpt_wait_rebuild_epoch(rpt);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+	if (rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done)
+		D_GOTO(out, rc = -DER_SHUTDOWN);
+
 	D_INFO(DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, rebuild_scanner, rpt,
@@ -1303,7 +1366,6 @@ out:
 	DL_INFO(rc, DF_RB " scan leader done", DP_RB_RPT(rpt));
 	rpt_put(rpt);
 }
-
 /* Scan the local target and generate rebuild object list */
 void
 rebuild_tgt_scan_handler(crt_rpc_t *rpc)
@@ -1326,6 +1388,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		DL_ERROR(rc, DF_RB " cannot find pool", DP_RB_RSI(rsi));
 		D_GOTO(out_put, rc);
 	}
+
 	atomic_fetch_add(&pool->sp_rebuilding, 1);
 
 	/* If PS leader has been changed, and rebuild version is also increased
@@ -1463,7 +1526,12 @@ out_put:
 
 	rout = crt_reply_get(rpc);
 	rout->rso_status = rc;
-	rout->rso_stable_epoch = d_hlc_get();
+	rout->rso_stable_epoch = 0;
+	if (rc == 0) {
+		D_ASSERT(rsi->rsi_rebuild_op != RB_OP_REBUILD || rsi->rsi_stable_epoch != 0);
+		rout->rso_stable_epoch =
+		    rsi->rsi_rebuild_op == RB_OP_REBUILD ? rsi->rsi_stable_epoch : d_hlc_get();
+	}
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
 }
 
@@ -1471,15 +1539,24 @@ int
 rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 			    void *priv)
 {
+	struct rebuild_scan_in  *src_in = crt_req_get(source);
 	struct rebuild_scan_out	*src = crt_reply_get(source);
 	struct rebuild_scan_out *dst = crt_reply_get(result);
 
 	if (dst->rso_status == 0)
 		dst->rso_status = src->rso_status;
 
-	if (src->rso_status == 0 &&
-	    dst->rso_stable_epoch < src->rso_stable_epoch)
-		dst->rso_stable_epoch = src->rso_stable_epoch;
+	if (src->rso_status == 0) {
+		if (src_in->rsi_rebuild_op == RB_OP_REBUILD) {
+			if (src->rso_stable_epoch != 0)
+				D_ASSERTF(src->rso_stable_epoch == src_in->rsi_stable_epoch,
+					  DF_X64 " != " DF_X64 "\n", src->rso_stable_epoch,
+					  src_in->rsi_stable_epoch);
+			dst->rso_stable_epoch = src_in->rsi_stable_epoch;
+		} else if (dst->rso_stable_epoch < src->rso_stable_epoch) {
+			dst->rso_stable_epoch = src->rso_stable_epoch;
+		}
+	}
 
 	return 0;
 }
