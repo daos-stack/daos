@@ -51,9 +51,6 @@ dnf --nodocs install ${dnf_install_args} \
     libopenssl-devel \
     libprotobuf-c-devel \
     libtool \
-    libucp-devel \
-    libucs-devel \
-    libuct-devel \
     libunwind-devel \
     libuuid-devel \
     libyaml-devel \
