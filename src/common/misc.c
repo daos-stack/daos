@@ -867,3 +867,5 @@ daos_count_free_bits(uint64_t *used, int bmap_sz)
 
 	return nr;
 }
+
+/* SRE-4015 stacked PR CI validation layer 2 - do not land */
