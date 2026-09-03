@@ -4904,6 +4904,9 @@ btr_nodes_check(struct btr_context *tcx, btr_report_fn_t report_fn, void *report
 			}
 		}
 		report_fn(report_arg, BTR_REPORT_INDENT_DEC, NULL);
+		if (rc != DER_SUCCESS) {
+			break;
+		}
 
 		/** a leaf has no child nodes */
 		if (btr_node_is_leaf(tcx, nd_off)) {
