@@ -15,8 +15,34 @@
 #include <daos/pool_map.h>
 #include <isa-l.h>
 
-/* NB: this function checks if the component should be skipped in jump hash layout generation
- * process, those components which are in NEW status or being added afterwards should be skipped.
+/*
+ * NB: this function checks if the component should be skipped in jump hash layout generation
+ * process. Only components that were *absent* from the pool map at \a allow_version may be
+ * skipped, because skipping is implemented by dom_avail_children() trimming the child array
+ * from the tail: it relies on the fact that components added after pool creation are always
+ * appended after the existing children of the same parent. Skipping a component that sits at
+ * an interior index would change the jump hash modulus and thus rewrite the layout of objects
+ * that were already placed.
+ *
+ * NEW is never a member, so it is always skipped.
+ *
+ * UP must distinguish a not-yet-joined addition from a reintegration, using the
+ * (co_fseq, co_ver) pair. Neither field is touched by MAP_REINT or MAP_EXTEND on the UP
+ * transition, so the relation is stable:
+ * - co_fseq <  co_ver: fresh MAP_EXTEND target (NEW->UP). gen_pool_buf() initialized co_fseq
+ *                      to 1 while co_ver is the extend map version (> 1). The component did
+ *                      not exist before co_in_ver and is appended at the tail, so it is
+ *                      skipped until POST_REBUILD.
+ * - co_fseq == co_ver: creation-time DOWNOUT target being reintegrated. It has been part of
+ *                      the pool map since the creation map version, at an arbitrary interior
+ *                      index, so it must NOT be skipped. comp_need_remap() handles it exactly
+ *                      like any other DOWNOUT->UP reintegration (remap in PRE_REBUILD, remap
+ *                      with PL_HAS_PEER in CURRENT, keep in POST_REBUILD), which both keeps
+ *                      historical layouts immutable and lets the reint rebuild migrate data
+ *                      onto it.
+ * - co_fseq >  co_ver: real reintegration of a target that previously failed or drained.
+ *                      MAP_EXCLUDE/MAP_DRAIN bumped co_fseq strictly above co_ver. Must remain
+ *                      visible so comp_need_remap() can mark it rebuilding/reintegrating.
  */
 static bool
 comp_is_skipped(struct pool_component *comp, uint32_t allow_version, enum layout_gen_mode gen_mode)
@@ -24,12 +50,12 @@ comp_is_skipped(struct pool_component *comp, uint32_t allow_version, enum layout
 	if (comp->co_status == PO_COMP_ST_NEW)
 		return true;
 
-	if (comp->co_status == PO_COMP_ST_UP && comp->co_fseq <= 1) { /* new added target */
-		/* if the target is added after the rebuild, then ignore it */
+	if (comp->co_status == PO_COMP_ST_UP && comp->co_fseq < comp->co_ver) {
+		/* Join/addition happened after this layout's version -- not yet part of it. */
 		if (comp->co_in_ver > allow_version)
 			return true;
 
-		/* Only counted in for post rebuild */
+		/* No-prior-data UP is only treated as UPIN for POST_REBUILD layouts. */
 		if (gen_mode != POST_REBUILD)
 			return true;
 	}
