@@ -11,19 +11,12 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-: "${TARGET:=centos9}"
-
+: "${TARGET:=el9}"
 artdir="${PWD}/artifacts/${TARGET}"
+rpmdir="${PWD}/rpms"
 rm -rf "$artdir"
 mkdir -p "$artdir"
-mkdir -p "$artdir/daos"
 
-if [ -d /home/daos/rpms/ ]; then
-  if [ -d /home/daos/rpms/deps ]; then
-    mkdir -p "$artdir/deps"
-    cp /home/daos/rpms/deps/*.rpm "${artdir}/deps"
-  fi
-  cp /home/daos/rpms/daos/*.rpm "${artdir}/daos"
+if [ -d "${rpmdir}" ]; then
+  cp -r "${rpmdir}"/* "${artdir}"
 fi
-
-createrepo "$artdir"

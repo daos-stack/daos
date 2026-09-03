@@ -4,9 +4,9 @@
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
-# verify_rpms.sh
+# verify_packages.sh
 #
-# Validate generated RPM packages produced by ci/rpm/gen_rpms.sh.
+# Validate generated RPM packages produced by build_packages.sh.
 #
 # Checks:
 # - RPM metadata and payload listing are readable.
@@ -31,7 +31,7 @@
 #   unrelated system devel packages are outside its scope.
 #
 # Usage:
-#   utils/rpms/verify_rpms.sh [RPM_ROOT] [DISTRO]
+#   utils/build/verify_packages.sh [RPM_ROOT] [DISTRO] [MODE]
 #
 # Arguments:
 #   RPM_ROOT  Root directory containing either:
@@ -40,10 +40,15 @@
 #             Default: .
 #   DISTRO    Distribution identifier used to select the explicit devel to
 #             runtime dependency table. Default: el9.
+#   MODE      ERROR|WARNING. In ERROR mode, validation issues fail the script
+#             (exit 1). In WARNING mode, issues are reported as warnings and
+#             the script exits 0. Missing tooling, no RPM files found, or no
+#             devel dependency table for DISTRO always fail regardless of
+#             MODE. Default: ERROR.
 #
 # Exit codes:
-#   0  Validation passed.
-#   1  Validation failed or required tooling is missing.
+#   0  Validation passed (or MODE=WARNING with no critical errors).
+#   1  Validation failed (MODE=ERROR) or required tooling/setup is missing.
 
 set -euo pipefail
 shopt -s nullglob
@@ -67,6 +72,16 @@ tmpdir="$(mktemp -d)"
 trap 'rm -rf "${tmpdir}"' EXIT
 
 DISTRO="${2:-${DISTRO:-el9}}"
+
+MODE="${3:-ERROR}"
+case "${MODE}" in
+    ERROR|WARNING)
+        ;;
+    *)
+        echo "ERROR: MODE parameter must be 'ERROR' or 'WARNING' (got: ${MODE})"
+        exit 1
+        ;;
+esac
 
 declare -i errors=0
 declare -A pkg_names
@@ -107,6 +122,13 @@ case "${DISTRO}" in
         exit 1
         ;;
 esac
+# Records a validation issue; severity label follows MODE, but the error
+# counter is always incremented so the final exit-code decision can use it.
+report_error() {
+    echo "${MODE}: $*"
+    errors+=1
+}
+
 # Check whether RPM Requires contains a regex pattern.
 # Args:
 #   $1 path to RPM file
@@ -160,14 +182,12 @@ check_rpm_basic() {
     local pkg_name
 
     if ! rpm -K "${rpm_file}" >/dev/null; then
-        echo "ERROR: rpm verification failed for ${rpm_file}"
-        errors+=1
+        report_error "rpm verification failed for ${rpm_file}"
         return
     fi
 
     if ! pkg_name="$(rpm -qp --qf '%{NAME}\n' "${rpm_file}")"; then
-        echo "ERROR: cannot read package name from ${rpm_file}"
-        errors+=1
+        report_error "cannot read package name from ${rpm_file}"
         return
     fi
 
@@ -175,8 +195,7 @@ check_rpm_basic() {
     pkg_present["${pkg_name}"]=1
 
     if ! rpm -qpl "${rpm_file}" >/dev/null; then
-        echo "ERROR: cannot list payload for ${rpm_file}"
-        errors+=1
+        report_error "cannot list payload for ${rpm_file}"
     fi
 
 }
@@ -211,8 +230,7 @@ check_devel_runtime_dependency() {
     local expected_version
 
     if ! expected_version="$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "${rpm_file}")"; then
-        echo "ERROR: cannot determine package version for ${pkg_name} (${rpm_file})"
-        errors+=1
+        report_error "cannot determine package version for ${pkg_name} (${rpm_file})"
         return
     fi
 
@@ -224,20 +242,17 @@ check_devel_runtime_dependency() {
 
     runtime_pkg="${devel_runtime["${pkg_name}"]:-}"
     if [ -z "${runtime_pkg}" ]; then
-        echo "ERROR: no runtime dependency mapping for ${pkg_name} on ${DISTRO}"
-        errors+=1
+        report_error "no runtime dependency mapping for ${pkg_name} on ${DISTRO}"
         return
     fi
 
     if [ -z "${pkg_present["${runtime_pkg}"]+x}" ]; then
-        echo "ERROR: ${pkg_name} requires missing runtime package ${runtime_pkg} in generated RPM set"
-        errors+=1
+        report_error "${pkg_name} requires missing runtime package ${runtime_pkg} in generated RPM set"
         return
     fi
 
     if ! rpm_requires_version_match "${rpm_file}" "${runtime_pkg}" "${expected_version}"; then
-        echo "ERROR: ${pkg_name} must require ${runtime_pkg} = ${expected_version}"
-        errors+=1
+        report_error "${pkg_name} must require ${runtime_pkg} = ${expected_version}"
     fi
 }
 
@@ -271,9 +286,8 @@ check_binary_requires_libc() {
 
     if [ "${has_dynamic_elf_binary}" -eq 1 ] &&
        ! rpm_requires_match "${rpm_file}" '^libc\.so\.6'; then
-        echo "ERROR: ${pkg_name} contains dynamically linked ELF binaries, but RPM"
-        echo "ERROR: requires metadata is missing libc soname dependency (libc.so.6*)"
-        errors+=1
+        report_error "${pkg_name} contains dynamically linked ELF binaries, but RPM" \
+                     "requires metadata is missing libc soname dependency (libc.so.6*)"
     fi
 }
 
@@ -298,6 +312,10 @@ for rpm_file in "${rpms[@]}"; do
 done
 
 if [ "${errors}" -ne 0 ]; then
+    if [ "${MODE}" = "WARNING" ]; then
+        echo "RPM validation completed with ${errors} warning(s)"
+        exit 0
+    fi
     echo "RPM validation failed with ${errors} error(s)"
     exit 1
 fi
