@@ -45,7 +45,6 @@ dnf --nodocs install ${dnf_install_args} \
     libibverbs-devel \
     libiscsi-devel \
     libnl3-devel \
-    libpsm2-devel \
     librdmacm-devel \
     libtool \
     libtool-ltdl-devel \

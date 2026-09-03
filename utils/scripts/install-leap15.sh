@@ -45,7 +45,6 @@ dnf --nodocs install ${dnf_install_args} \
     libndctl-devel \
     libnl3-devel \
     libnuma-devel \
-    libpsm2-devel \
     librdmacm-devel \
     libopenssl-devel \
     libprotobuf-c-devel \
