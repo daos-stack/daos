@@ -18,7 +18,7 @@ import groovy.transform.Field
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@osalyk/SRE-3930_improve-github-notify') _
 
 // Name of branch to be tested
 test_branch = 'release/2.6'
@@ -273,11 +273,6 @@ pipeline {
     agent { label 'lightweight' }
 
     // Timed builds have been disabled
-    // triggers {
-    //     /* groovylint-disable-next-line AddEmptyString */
-    //     cron(env.BRANCH_NAME == 'weekly-2.6-testing' ? 'TZ=UTC\n0 6 * * 6' : '')
-    // }
-
     environment {
         BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
