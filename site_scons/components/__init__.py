@@ -204,6 +204,13 @@ def define_mercury(reqs):
                 build_env={'CFLAGS': '-Wno-error'},
                 package='ucx-devel' if inst(reqs, 'ucx') else None)
 
+    if reqs.get_env('PROVIDERS') == 'all':
+        mercury_plugins = ['ofi', 'ucx']
+    else:
+        mercury_plugins = reqs.get_env('PROVIDERS')
+
+    define_from_plugin = lambda x, y: f'-D{x}:BOOL=' + ('ON' if y in mercury_plugins else 'OFF')
+
     mercury_build = ['cmake',
                      '-DBUILD_SHARED_LIBS:BOOL=ON',
                      '-DCMAKE_CXX_FLAGS:STRING="-std=c++11"',
@@ -223,8 +230,8 @@ def define_mercury(reqs):
                      '-DMERCURY_ENABLE_DEBUG:BOOL=ON',
                      '-DNA_USE_DYNAMIC_PLUGINS:BOOL=ON',
                      '-DNA_USE_SM:BOOL=ON',
-                     '-DNA_USE_OFI:BOOL=ON',
-                     '-DNA_USE_UCX:BOOL=ON',
+                     define_from_plugin('DNA_USE_OFI', 'ofi'),
+                     define_from_plugin('DNA_USE_UCX', 'ucx'),
                      '../mercury']
 
     build_type = "RelWithDebInfo"
@@ -249,7 +256,7 @@ def define_mercury(reqs):
                           ['make', 'install']],
                 libs=['mercury'],
                 pkgconfig='mercury',
-                requires=['ofi', 'ucx'] + libs,
+                requires=mercury_plugins + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 build_env={'CFLAGS': '-fstack-usage'})
