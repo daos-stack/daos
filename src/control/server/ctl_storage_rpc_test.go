@@ -4465,8 +4465,9 @@ func TestStorageFormat_isAwaitingFormat_GuardsNotifyStorageReady(t *testing.T) {
 
 			_, err := cs.StorageFormat(ctx, req)
 
-			if err == nil {
-				t.Fatal("expected error from mock engines")
+			// StorageFormat should succeed with proper mocks
+			if err != nil {
+				t.Fatalf("unexpected error from StorageFormat: %v", err)
 			}
 
 			timeout := time.After(500 * time.Millisecond)
@@ -4572,33 +4573,28 @@ func (m *mockEngineWithNotify) StorageFormatSCM(_ context.Context, _ bool) *ctlp
 }
 
 func (m *mockEngineWithNotify) GetStorage() *storage.Provider {
+	// Create a minimal mock provider with necessary components
 	cfg := engine.MockConfig().WithStorage(
 		storage.NewTierConfig().
 			WithStorageClass("dcpm").
-			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", m.idx)),
+			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", m.idx)).
+			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", m.idx)),
 	)
 
-	mockScm := scm.NewMockProvider(nil, &scm.MockBackendConfig{
-		GetNamespacesRes: storage.ScmNamespaces{
-			storage.MockScmNamespace(int32(m.idx)),
-		},
-	}, nil)
+	// Create logger for mock sys provider
+	log := logging.NewCommandLineLogger()
 
-	if m.awaitingFormat {
-		mockScm.FormatRes = &storage.ScmFormatResponse{
-			Formatted: true,
-		}
-	}
-
-	mockBdev := bdev.NewMockProvider(nil, &bdev.MockBackendConfig{
-		ScanRes: &storage.BdevScanResponse{
-			Controllers: storage.NvmeControllers{
-				storage.MockNvmeController(int32(m.idx)),
-			},
-		},
+	// Create minimal mock sys and SCM providers needed for formatMetadata
+	sysProv := system.NewMockSysProvider(log, nil)
+	mounter := mount.NewProvider(log, sysProv)
+	scmProv := scm.NewProvider(&scm.ProviderConfig{
+		Log:     log,
+		Sys:     sysProv,
+		Mounter: mounter,
 	})
 
-	return storage.MockProvider(nil, int(m.idx), &cfg.Storage, nil, mockScm, mockBdev, nil)
+	// Return minimal mock provider
+	return storage.MockProvider(log, int(m.idx), &cfg.Storage, sysProv, scmProv, nil, nil)
 }
 
 func (m *mockEngineWithNotify) newCret(addr string, err error) *ctlpb.NvmeControllerResult {
