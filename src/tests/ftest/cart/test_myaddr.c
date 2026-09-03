@@ -1,8 +1,3 @@
-#include <cart/api.h>
-#include <cart/iv.h>
-#include <daos_errno.h>
-#include <cart/types.h>
-
 /*
  * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
@@ -15,8 +10,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <cart/api.h>
+#include <daos_errno.h>
 #include <cart/types.h>
 #include <gurt/common.h>
 #include "crt_utils.h"
