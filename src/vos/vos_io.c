@@ -1748,7 +1748,8 @@ out:
 
 	if (rc == -DER_NONEXIST || rc == 0) {
 		vos_fetch_add_missing(ioc->ic_ts_set, dkey, iod_nr, iods);
-		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+		if (!vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
+			rc = -DER_TX_RESTART;
 	}
 
 	if (rc != 0) {
@@ -2690,8 +2691,10 @@ abort:
 	if (err == 0)
 		vos_ts_set_upgrade(ioc->ic_ts_set);
 
-	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0)
-		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0) {
+		if (!vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
+			err = -DER_TX_RESTART;
+	}
 
 	if (err == 0)
 		vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);

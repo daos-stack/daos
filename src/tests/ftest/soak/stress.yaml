@@ -5,8 +5,10 @@ hosts:
   # server_partition: daos_server
   client_partition: daos_client
   # client_reservation: daos-test
+
 orterun:
   allow_run_as_root: true
+
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 48 hour test
 timeouts:
@@ -14,9 +16,11 @@ timeouts:
   test_soak_stress_48h: 48H30M
   test_soak_stress_24h: 24H30M
   test_soak_stress_12h: 12H30M
+
 setup:
   start_servers: true
   start_agents: true
+
 server_config:
   name: daos_server
   control_log_mask: INFO
@@ -42,21 +46,30 @@ server_config:
         - FI_UNIVERSE_SIZE=16383
         - DAOS_MD_CAP=1024
       storage: auto
+
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   size: 90%
+  properties: rd_fac:0,space_rb:0
+
 pool_reserved:
   size: 5%
+  properties: rd_fac:0,space_rb:0
+
 pool_racer:
   size: 5%
+  properties: rd_fac:0,space_rb:0
+
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
   file_oclass: EC_2P1GX
   dir_oclass: RP_2GX
+
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -90,6 +103,7 @@ soak_stress:
   enable_intercept_lib: true
   enable_remote_logging: false
   enable_scrubber: true
+
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -177,8 +191,10 @@ fio_stress:
     disable_caching: true
     thread_count: 8
     cores: '0-7'
+
 daos_racer:
   runtime: 120
+
 vpic_stress:
   # Requires opeapi
   job_timeout: 20
@@ -197,6 +213,7 @@ vpic_stress:
     disable_caching: true
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
+
 lammps_stress:
   job_timeout: 55
   nodesperjob:
@@ -216,6 +233,7 @@ lammps_stress:
     cores: '0-7'
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
+
 mdtest_stress:
   # maximum timeout for a single job in test in minutes
   job_timeout: 40
@@ -255,6 +273,7 @@ mdtest_stress:
     disable_caching: true
     thread_count: 8
     cores: '0-7'
+
 macsio_stress:
   job_timeout: 30
   nodesperjob:
@@ -286,6 +305,7 @@ macsio_stress:
     disable_caching: true
     thread_count: 8
     cores: '0-7'
+
 datamover_stress:
   job_timeout: 10
   nodesperjob:
@@ -324,13 +344,17 @@ datamover_stress:
       - 4G
     test_file: "daos:/testFile"
     dfs_destroy: false
+
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
+
 events:
   - "mce: [Hardware Error]: Machine check events logged"
   - "Package temperature above threshold"
+
 monitor:
   - "/usr/bin/free -h"
   - "/usr/bin/vmstat -w"
   - "ps -C daos_engine -o %mem,%cpu,cmd"
+
 enable_telemetry: true
