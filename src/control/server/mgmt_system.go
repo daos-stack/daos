@@ -1675,12 +1675,13 @@ func (svc *mgmtSvc) eraseAndRestart() error {
 	// Schedule the exec to run after the function returns and any gRPC response completes.
 	// MS replicas use a minimal delay since they don't send responses after this point.
 	delay := 50 * time.Millisecond
+	go func() {
+		time.Sleep(delay)
 
-	time.AfterFunc(delay, func() {
 		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
 			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
 		}
-	})
+	}()
 
 	return nil
 }
@@ -1867,7 +1868,7 @@ func (svc *mgmtSvc) rmLeaderSysdb() error {
 	svc.log.Debug("SystemErase: LEADER - Raft database stopped")
 	if err := svc.sysdb.RemoveFiles(); err != nil {
 		// Critical: DB is stopped but files not removed. Try to log and continue.
-		svc.log.Errorf("CRITICAL: failed to remove leader DB files, continuing: %s", err)
+		svc.log.Errorf("failed to remove leader DB files, continuing: %s", err)
 	}
 	svc.log.Debug("SystemErase: LEADER - Raft database files removed")
 
@@ -1921,7 +1922,7 @@ func (svc *mgmtSvc) awaitLeaderElection(ctx context.Context, peers []*net.TCPAdd
 		hostAddrs = append(hostAddrs, peer.String())
 	}
 
-	// CRITICAL: After replicas restart with clean databases, wait for raft leader election
+	// After replicas restart with clean databases, wait for raft leader election
 	// to complete before allowing engines to join. Without a raft leader, join requests
 	// will fail with "not the DAOS Management Service leader" errors.
 	if err := svc.waitForLeaderElection(ctx, hostAddrs); err != nil {
@@ -1981,16 +1982,18 @@ func (svc *mgmtSvc) restartLeader() error {
 
 	svc.log.Infof("System Erase: scheduling restart of control plane in 3s")
 
-	// Schedule the exec to run after gRPC response is sent
-	// Using time.AfterFunc ensures the restart executes after the function returns
-	// and the gRPC response completes. 3 seconds allows sufficient time for response
-	// serialization and transmission to prevent EOF errors being returned to client.
-	time.AfterFunc(3*time.Second, func() {
-		svc.log.Infof("System Erase: exec'ing %s to restart control plane", myPath)
+	svc.log.Infof("System Erase: exec'ing %s to restart control plane", myPath)
+	go func() {
+		// Schedule the exec to run after gRPC response is sent ensuring the restart executes
+		// after the function returns and the gRPC response completes. 3 seconds allows
+		// sufficient time for response serialization and transmission to prevent EOF errors
+		// being returned to client.
+		time.Sleep(3 * time.Second)
+
 		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
 			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
 		}
-	})
+	}()
 
 	return nil
 }
