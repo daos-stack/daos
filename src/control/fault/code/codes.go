@@ -162,6 +162,7 @@ const (
 	ServerPoolHasContainers
 	ServerPoolMemRatioNoRoles
 	ServerBadFaultDomainLabels
+	ServerPoolTooFewFaultDomains
 	ServerJoinReplaceEnabledPoolRank
 	ServerRankAdminExcluded
 	ServerTransparentHugepageEnabled
@@ -232,6 +233,7 @@ const (
 const (
 	ControlMetadataUnknown Code = iota + 1000
 	ControlMetadataBadFilesystem
+	ControlMetadataIncomplete
 )
 
 // System Checker codes

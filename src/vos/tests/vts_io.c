@@ -3066,6 +3066,7 @@ io_csum_fetch_single(void **state)
 	char                     *update_buf;
 	const size_t              update_buf_size = 2 * csum_chunk_size;
 	daos_handle_t             ioh;
+	daos_epoch_t              epoch;
 	int                       rc;
 
 	arg = *state;
@@ -3099,7 +3100,7 @@ io_csum_fetch_single(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Write/Update and update mocking counters */
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, 0, &dkey, 1, &iod, ic, &sgl);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 42, 0, 0, &dkey, 1, &iod, ic, &sgl);
 	assert_rc_equal(rc, 0);
 	inc_cntr(arg->ta_flags);
 
@@ -3121,6 +3122,8 @@ io_csum_fetch_single(void **state)
 	hf = daos_mhash_type2algo(ci->cs_type);
 	assert_int_equal(hf->cf_type, csum_type);
 	assert_true(daos_csummer_compare_csum_info(csummer, ic->ic_data, ci));
+	epoch = vos_ioh2sv_epoch(ioh);
+	assert_int_equal(epoch, 42);
 
 	/* Cleanup */
 	rc = vos_fetch_end(ioh, NULL, rc);
@@ -3129,6 +3132,138 @@ io_csum_fetch_single(void **state)
 	daos_csummer_destroy(&csummer);
 	d_sgl_fini(&sgl, false);
 	D_FREE(update_buf);
+}
+
+/*
+ * Write two versions of an SV at distinct epochs and verify that vos_ioh2sv_epoch() returns the
+ * actual stored epoch (not the requested fetch epoch) for four cases:
+ *
+ *   1. EPOCH_MAX resolves to the latest version (epoch 20).
+ *   2. An intermediate epoch (15) resolves to the nearest earlier version via the B-tree LE probe
+ *      (epoch 10).
+ *   3. An exact-epoch fetch (10) returns that stored epoch directly.
+ *   4. An epoch before any write (9) yields an empty result and returns 0 because the key is not
+ *      yet visible and akey_fetch_single() is never reached, leaving ic_sv_epoch at its
+ *      zero-initialised value.
+ */
+static void
+io_csum_sv_epoch(void **state)
+{
+	const enum DAOS_HASH_TYPE csum_type       = HASH_TYPE_CRC64;
+	const size_t              csum_chunk_size = 1u << 12;
+
+	struct io_test_args      *arg;
+	daos_key_t                dkey;
+	daos_key_t                akey;
+	daos_iod_t                iod;
+	d_sg_list_t               sgl;
+	struct dcs_ci_list       *cil;
+	struct daos_csummer      *csummer;
+	struct dcs_iod_csums     *ic;
+	char                      dkey_name[UPDATE_DKEY_SIZE];
+	char                      akey_name[UPDATE_AKEY_SIZE];
+	char                     *buf;
+	const size_t              buf_size = csum_chunk_size;
+	daos_handle_t             ioh;
+	int                       rc;
+
+	arg = *state;
+
+	D_ALLOC(buf, buf_size);
+	assert_non_null(buf);
+
+	vts_key_gen(&dkey_name[0], arg->dkey_size, true, arg);
+	set_iov(&dkey, &dkey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	vts_key_gen(&akey_name[0], arg->akey_size, false, arg);
+	set_iov(&akey, &akey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+
+	iod.iod_type  = DAOS_IOD_SINGLE;
+	iod.iod_size  = buf_size;
+	iod.iod_name  = akey;
+	iod.iod_recxs = NULL;
+	iod.iod_nr    = 1;
+
+	rc = daos_csummer_init_with_type(&csummer, csum_type, csum_chunk_size, 0);
+	assert_rc_equal(rc, 0);
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+	d_iov_set(sgl.sg_iovs, buf, buf_size);
+
+	/* Write version 1 at epoch 10 */
+	dts_buf_render(buf, buf_size);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false, NULL, 0, &ic);
+	assert_rc_equal(rc, 0);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 10, 0, 0, &dkey, 1, &iod, ic, &sgl);
+	assert_rc_equal(rc, 0);
+	daos_csummer_free_ic(csummer, &ic);
+
+	/* Write version 2 at epoch 20 */
+	dts_buf_render(buf, buf_size);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false, NULL, 0, &ic);
+	assert_rc_equal(rc, 0);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 20, 0, 0, &dkey, 1, &iod, ic, &sgl);
+	assert_rc_equal(rc, 0);
+	daos_csummer_free_ic(csummer, &ic);
+
+	/*
+	 * Case 1: EPOCH_MAX — the LE probe finds the latest stored epoch (20).
+	 */
+	iod.iod_size = 0;
+	rc           = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, &dkey, 1, &iod,
+				       VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(vos_ioh2sv_epoch(ioh), 20);
+	cil = vos_ioh2ci(ioh);
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+	rc = vos_fetch_end(ioh, NULL, 0);
+	assert_rc_equal(rc, 0);
+
+	/*
+	 * Case 2: intermediate epoch (15) — the LE probe resolves to the nearest earlier version,
+	 * which was stored at epoch 10.
+	 */
+	iod.iod_size = 0;
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, 15, &dkey, 1, &iod, VOS_OF_FETCH_CSUM,
+			     NULL, &ioh, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(vos_ioh2sv_epoch(ioh), 10);
+	cil = vos_ioh2ci(ioh);
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+	rc = vos_fetch_end(ioh, NULL, 0);
+	assert_rc_equal(rc, 0);
+
+	/*
+	 * Case 3: exact stored epoch (10) — the LE probe lands exactly on the stored epoch;
+	 * vos_ioh2sv_epoch() returns 10.
+	 */
+	iod.iod_size = 0;
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, 10, &dkey, 1, &iod, VOS_OF_FETCH_CSUM,
+			     NULL, &ioh, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(vos_ioh2sv_epoch(ioh), 10);
+	cil = vos_ioh2ci(ioh);
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+	rc = vos_fetch_end(ioh, NULL, 0);
+	assert_rc_equal(rc, 0);
+
+	/*
+	 * Case 4: epoch before any write (9) — vos_obj_hold() finds no visible key at epoch 9,
+	 * short-circuits before reaching akey_fetch_single(), and vos_fetch_begin() returns a valid
+	 * ioh with an empty result. vos_ioh2sv_epoch() returns 0 (ic_sv_epoch was never set).
+	 */
+	iod.iod_size = 0;
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, 9, &dkey, 1, &iod, VOS_OF_FETCH_CSUM,
+			     NULL, &ioh, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(vos_ioh2sv_epoch(ioh), 0);
+	cil = vos_ioh2ci(ioh);
+	assert_int_equal(cil->dcl_csum_infos_nr, 0);
+	rc = vos_fetch_end(ioh, NULL, 0);
+	assert_rc_equal(rc, 0);
+
+	daos_csummer_destroy(&csummer);
+	d_sgl_fini(&sgl, false);
+	D_FREE(buf);
 }
 
 static void
@@ -3445,6 +3580,8 @@ static const struct CMUnitTest int_tests[] = {
     {"VOS300.3: Key query negative test", io_query_key_negative, NULL, NULL},
     {"VOS300.4: Gang SV update/fetch test", gang_sv_test, NULL, NULL},
     {"VOS400.1: Fetch checksum of a single value object", io_csum_fetch_single, NULL, NULL},
+    {"VOS400.2: vos_fetch_begin records the stored SV epoch in the fetch handle", io_csum_sv_epoch,
+     NULL, NULL},
 };
 
 static int

@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -772,6 +773,108 @@ func TestControl_PoolReintegrate(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, resp, cmpOpt); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_WaitForPoolRebuild(t *testing.T) {
+	doneResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{State: mgmtpb.PoolRebuildStatus_DONE},
+	})
+	busyResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{State: mgmtpb.PoolRebuildStatus_BUSY},
+	})
+	idleResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{State: mgmtpb.PoolRebuildStatus_IDLE},
+	})
+	failedResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State:  mgmtpb.PoolRebuildStatus_DONE,
+			Status: int32(daos.MiscError),
+		},
+	})
+	stoppedResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State:  mgmtpb.PoolRebuildStatus_IDLE,
+			Status: int32(daos.OpCanceled),
+		},
+	})
+	missingRebuildResp := MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{})
+
+	for name, tc := range map[string]struct {
+		mic        *MockInvokerConfig
+		cancelCtx  bool
+		expErr     error
+		expQueries int
+	}{
+		"already done": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: doneResp,
+			},
+			expQueries: 1,
+		},
+		"transitions to done": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{idleResp, busyResp, doneResp},
+			},
+			expQueries: 3,
+		},
+		"done with nonzero error is a failure": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: failedResp,
+			},
+			expErr: errors.New("rebuild failed"),
+		},
+		"transitions to failed": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{idleResp, busyResp, failedResp},
+			},
+			expErr: errors.New("rebuild failed"),
+		},
+		"stopped before completing is a failure": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: stoppedResp,
+			},
+			expErr: errors.New("rebuild stopped before completing"),
+		},
+		"query error propagates": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("network down"),
+			},
+			expErr: errors.New("pool query while waiting for pool state: network down"),
+		},
+		"missing rebuild status is an error": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: missingRebuildResp,
+			},
+			expErr: errors.New("pool rebuild status missing from query response"),
+		},
+		"context cancellation aborts wait": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: idleResp,
+			},
+			cancelCtx: true,
+			expErr:    context.Canceled,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+			mi := NewMockInvoker(log, mic)
+
+			ctx, cancel := context.WithCancel(test.Context(t))
+			defer cancel()
+			if tc.cancelCtx {
+				cancel()
+			}
+
+			gotErr := WaitForPoolRebuild(ctx, mi, test.MockUUID(), time.Microsecond)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -3172,16 +3275,17 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 	devStateNew := storage.NvmeStateNew
 
 	for name, tc := range map[string]struct {
-		hostsConfigArray  []MockHostStorageConfig
-		tgtRanks          []ranklist.Rank
-		memberStates      map[ranklist.Rank]system.MemberState
-		memRatio          float32
-		queryError        error
-		expCreateReqRanks []ranklist.Rank
-		expScmBytes       uint64
-		expNvmeBytes      uint64
-		expError          error
-		expDebug          string
+		hostsConfigArray    []MockHostStorageConfig
+		tgtRanks            []ranklist.Rank
+		memberStates        map[ranklist.Rank]system.MemberState
+		memRatio            float32
+		queryError          error
+		expCreateReqRanks   []ranklist.Rank
+		expUnavailableRanks []ranklist.Rank
+		expScmBytes         uint64
+		expNvmeBytes        uint64
+		expError            error
+		expDebug            string
 	}{
 		"single server": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3684,7 +3788,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			},
 			expError: errors.New("No SCM storage space available"),
 		},
-		"requested rank not joined": {
+		"all requested ranks non-joined": {
 			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName:   "foo",
@@ -3696,9 +3800,9 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			memberStates: map[ranklist.Rank]system.MemberState{
 				0: system.MemberStateStopped,
 			},
-			expError: errors.New("specified rank 0 is not joined"),
+			expError: errors.New("none of the requested ranks"),
 		},
-		"multiple requested ranks not joined": {
+		"multiple requested ranks with downout retained but not scanned": {
 			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName:   "foo",
@@ -3717,7 +3821,31 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 				1: system.MemberStateStopped,
 				2: system.MemberStateExcluded,
 			},
-			expError: errors.New("specified rank 1 is not joined"),
+			expCreateReqRanks: ranklist.RankList{0, 1, 2},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
+		},
+		"requested excluded rank retained but not scanned": {
+			hostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{newScmCfg(0)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(0, 0)},
+				},
+				{
+					HostName:   "bar",
+					ScmConfig:  []MockScmConfig{newScmCfg(1, 50*humanize.GByte)},
+					NvmeConfig: []MockNvmeConfig{newNvmeCfg(1, 0, 500*humanize.GByte)},
+				},
+			},
+			tgtRanks: []ranklist.Rank{0, 1},
+			memberStates: map[ranklist.Rank]system.MemberState{
+				0: system.MemberStateJoined,
+				1: system.MemberStateExcluded,
+			},
+			expCreateReqRanks: ranklist.RankList{0, 1},
+			expScmBytes:       100 * humanize.GByte,
+			expNvmeBytes:      humanize.TByte,
 		},
 		"all requested ranks joined": {
 			hostsConfigArray: []MockHostStorageConfig{
@@ -3741,7 +3869,7 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			expScmBytes:  100 * humanize.GByte,
 			expNvmeBytes: humanize.TByte,
 		},
-		"no requested ranks; filters to joined ranks only": {
+		"no requested ranks; records joined ranks and all non-joined as downout": {
 			hostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName:   "foo",
@@ -3767,10 +3895,12 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 				1: system.MemberStateJoined,
 				2: system.MemberStateStopped,
 				3: system.MemberStateExcluded,
+				4: system.MemberStateReady,
 			},
-			expCreateReqRanks: ranklist.RankList{0, 1},
-			expScmBytes:       100 * humanize.GByte,
-			expNvmeBytes:      humanize.TByte,
+			expCreateReqRanks:   ranklist.RankList{0, 1},
+			expUnavailableRanks: ranklist.RankList{2, 3, 4},
+			expScmBytes:         100 * humanize.GByte,
+			expNvmeBytes:        humanize.TByte,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -3842,6 +3972,11 @@ func TestControl_getMaxPoolSize(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expCreateReqRanks, createReq.Ranks); diff != "" {
 				t.Fatalf("Unexpected ranks in create request (-want, +got):\n%s\n", diff)
+			}
+			if tc.expUnavailableRanks != nil {
+				if diff := cmp.Diff(tc.expUnavailableRanks, createReq.UnavailableRanks); diff != "" {
+					t.Fatalf("Unexpected unavailable ranks in create request (-want, +got):\n%s\n", diff)
+				}
 			}
 
 			test.AssertEqual(t, tc.expScmBytes, scmBytes,

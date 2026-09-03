@@ -546,9 +546,10 @@ ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 }
 
 int
-ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets, size_t scm_size,
-		    size_t nvme_size, size_t meta_size, daos_prop_t *prop, d_rank_list_t **svcp,
-		    int domains_nr, uint32_t *domains)
+ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
+		    d_rank_list_t *downout_ranks, size_t scm_size, size_t nvme_size,
+		    size_t meta_size, daos_prop_t *prop, d_rank_list_t **svcp, int domains_nr,
+		    uint32_t *domains)
 {
 	return 0;
 }
@@ -562,6 +563,13 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *ranks)
 int
 ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid)
 {
+	/* Populate test data for bio_health query tests */
+	mbh->mb_dev_state.percentage_used  = 49;
+	mbh->mb_dev_state.media_errs       = 100;
+	mbh->mb_dev_state.err_log_entries  = 50;
+	mbh->mb_dev_state.unsafe_shutdowns = 10;
+	mbh->mb_dev_state.power_on_hours   = 1000;
+	uuid_copy(mbh->mb_devid, uuid);
 	return 0;
 }
 

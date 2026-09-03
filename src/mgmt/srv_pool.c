@@ -12,10 +12,58 @@
 
 #define D_LOGFAC	DD_FAC(mgmt)
 
+#include <daos_srv/bio.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/smd.h>
 #include <daos/rpc.h>
 
 #include "srv_internal.h"
+
+static size_t
+pool_destroy_local_scm_size(uuid_t pool_uuid)
+{
+	struct smd_pool_info *pool_info     = NULL;
+	uint64_t              eng_local_scm = 0;
+	int                   rc;
+
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		return 0;
+
+	rc = smd_pool_get_info(pool_uuid, &pool_info);
+	if (rc != 0 || pool_info == NULL)
+		return 0;
+
+	if (pool_info->spi_scm_sz > 0 && dss_tgt_nr > 0)
+		eng_local_scm = pool_info->spi_scm_sz * dss_tgt_nr;
+
+	smd_pool_free_info(pool_info);
+	return eng_local_scm;
+}
+
+static uint32_t
+pool_destroy_rpc_timeout(crt_rpc_t *td_req, uuid_t pool_uuid)
+{
+	uint32_t default_timeout;
+	uint32_t timeout;
+	size_t   gib;
+	size_t   eng_local_scm_size;
+	int      rc;
+
+	rc = crt_req_get_timeout(td_req, &default_timeout);
+	D_ASSERTF(rc == 0, "crt_req_get_timeout: " DF_RC "\n", DP_RC(rc));
+
+	eng_local_scm_size = pool_destroy_local_scm_size(pool_uuid);
+	if (eng_local_scm_size == 0)
+		return default_timeout;
+
+	gib = eng_local_scm_size / ((size_t)1024 * 1024 * 1024);
+	if (gib < 1024)
+		timeout = 90;
+	else
+		timeout = 180;
+
+	return max(timeout, default_timeout);
+}
 
 /** Destroy the pool on the specified ranks. */
 int
@@ -27,6 +75,7 @@ ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 	unsigned int			opc;
 	int				topo;
 	int				rc;
+	uint32_t                         timeout;
 	uint8_t                          mgmt_ver;
 
 	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
@@ -44,6 +93,11 @@ ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 	td_in = crt_req_get(td_req);
 	D_ASSERT(td_in != NULL);
 	uuid_copy(td_in->td_pool_uuid, pool_uuid);
+
+	timeout = pool_destroy_rpc_timeout(td_req, pool_uuid);
+	crt_req_set_timeout(td_req, timeout);
+	D_DEBUG(DB_MGMT, DF_UUID ": setting pool destroy CoRPC timeout: %u sec\n",
+		DP_UUID(pool_uuid), timeout);
 
 	rc = dss_rpc_send(td_req);
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_DESTROY_FAIL_CORPC))
@@ -155,29 +209,32 @@ decref:
 
 static int
 ds_mgmt_pool_svc_create(uuid_t pool_uuid, const char *group, d_rank_list_t *ranks,
-			daos_prop_t *prop, d_rank_list_t **svc_list, size_t domains_nr,
-			uint32_t *domains)
+			daos_prop_t *prop, d_rank_list_t *downout_ranks, d_rank_list_t **svc_list,
+			size_t domains_nr, uint32_t *domains)
 {
 	D_DEBUG(DB_MGMT, DF_UUID": all tgts created, setting up pool "
 		"svc\n", DP_UUID(pool_uuid));
 
 	return ds_pool_svc_dist_create(pool_uuid, ranks->rl_nr, group, ranks, domains_nr, domains,
-				       prop, svc_list);
+				       prop, downout_ranks, svc_list);
 }
 
 int
-ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets, size_t scm_size,
-		    size_t nvme_size, size_t meta_size, daos_prop_t *prop, d_rank_list_t **svcp,
-		    int domains_nr, uint32_t *domains)
+ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
+		    d_rank_list_t *downout_ranks, size_t scm_size, size_t nvme_size,
+		    size_t meta_size, daos_prop_t *prop, d_rank_list_t **svcp, int domains_nr,
+		    uint32_t *domains)
 {
-	d_rank_list_t *pg_ranks   = NULL;
-	d_rank_list_t *pg_targets = NULL;
-	d_rank_list_t *dummy      = NULL;
+	d_rank_list_t *pg_ranks     = NULL;
+	d_rank_list_t *pg_targets   = NULL;
+	d_rank_list_t *dummy        = NULL;
+	d_rank_list_t *create_ranks = NULL; /* active ranks that receive VOS-create */
 	int            rc;
 	int            rc_cleanup;
 
-	D_DEBUG(DB_MGMT, DF_UUID ": create scm/meta/nvme sizes %ld/%ld/%ld\n", DP_UUID(pool_uuid),
-		scm_size, meta_size, nvme_size);
+	D_DEBUG(DB_MGMT, DF_UUID ": create scm/meta/nvme sizes %ld/%ld/%ld downout=%u\n",
+		DP_UUID(pool_uuid), scm_size, meta_size, nvme_size,
+		downout_ranks != NULL ? downout_ranks->rl_nr : 0);
 
 	/* Sanity check targets versus cart's current primary group members.
 	 * If any targets not in PG, flag error before MGMT_TGT_ corpcs fail.
@@ -185,28 +242,39 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 	rc = crt_group_ranks_get(NULL, &pg_ranks);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
-	rc = d_rank_list_dup(&pg_targets, targets);
+	/*
+	 * Build create_ranks from active targets. The control plane should pass
+	 * downout_ranks separately for pool-map creation, but filter defensively so
+	 * any overlap never receives MGMT_TGT_CREATE.
+	 */
+	rc = d_rank_list_dup(&create_ranks, targets);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	if (downout_ranks != NULL && downout_ranks->rl_nr > 0)
+		d_rank_list_filter(downout_ranks, create_ranks, true /* exclude */);
+
+	rc = d_rank_list_dup(&pg_targets, create_ranks);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/* The pg_ranks and targets lists should overlap perfectly.
+	/* The pg_ranks and create_ranks lists should overlap perfectly.
 	 * If not, fail early to avoid expensive corpc failures.
 	 */
 	d_rank_list_filter(pg_ranks, pg_targets, false /* exclude */);
-	if (!d_rank_list_identical(pg_targets, targets)) {
+	if (!d_rank_list_identical(pg_targets, create_ranks)) {
 		char *pg_str, *tgt_str;
 
 		rc = d_rank_list_to_str(pg_ranks, &pg_str);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		rc = d_rank_list_to_str(targets, &tgt_str);
+		rc = d_rank_list_to_str(create_ranks, &tgt_str);
 		if (rc != 0) {
 			D_FREE(pg_str);
 			D_GOTO(out, rc);
 		}
 
-		D_ERROR(DF_UUID": targets (%s) contains ranks not in pg (%s)\n",
+		D_ERROR(DF_UUID ": create_ranks (%s) contains ranks not in pg (%s)\n",
 			DP_UUID(pool_uuid), tgt_str, pg_str);
 
 		D_FREE(pg_str);
@@ -214,33 +282,42 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
-	/* Extend the targets list to simulate orphan pool shard. */
+	/* Extend the create list to simulate orphan pool shard. */
 	if (DAOS_FAIL_CHECK(DAOS_CHK_ORPHAN_POOL_SHARD)) {
 		d_rank_t rank;
 		int      i;
 
 		rank = daos_fail_value_get();
-		if (!d_rank_in_rank_list(targets, rank)) {
-			dummy = d_rank_list_alloc(targets->rl_nr + 1);
+		if (!d_rank_in_rank_list(create_ranks, rank)) {
+			dummy = d_rank_list_alloc(create_ranks->rl_nr + 1);
 			D_ASSERT(dummy != NULL);
 
-			for (i = 0; i < targets->rl_nr; i++)
-				dummy->rl_ranks[i] = targets->rl_ranks[i];
-			dummy->rl_ranks[targets->rl_nr] = rank;
+			for (i = 0; i < create_ranks->rl_nr; i++)
+				dummy->rl_ranks[i] = create_ranks->rl_ranks[i];
+			dummy->rl_ranks[create_ranks->rl_nr] = rank;
 		}
 	}
 
-	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, dummy != NULL ? dummy : targets, scm_size,
-					   nvme_size, meta_size);
+	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, dummy != NULL ? dummy : create_ranks,
+					   scm_size, nvme_size, meta_size);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": creating pool on ranks failed", DP_UUID(pool_uuid));
 		goto out_ranks;
 	}
 
-	D_INFO(DF_UUID ": creating targets on %d ranks succeeded\n", DP_UUID(pool_uuid),
-	       dummy != NULL ? dummy->rl_nr : targets->rl_nr);
+	D_INFO(DF_UUID ": creating targets on %d ranks succeeded (downout=%u)\n",
+	       DP_UUID(pool_uuid), dummy != NULL ? dummy->rl_nr : create_ranks->rl_nr,
+	       downout_ranks != NULL ? downout_ranks->rl_nr : 0);
 
-	rc = ds_mgmt_pool_svc_create(pool_uuid, group, targets, prop, svcp, domains_nr, domains);
+	/*
+	 * Pass the active `targets` plus the explicit `downout_ranks`. The pool
+	 * service derives the complete initial pool map from the fault-domain tree
+	 * and records `downout_ranks` as map-only entries so subsequent
+	 * reintegration/exclusion ops can address them. Only active targets receive
+	 * VOS/blob-store creation above.
+	 */
+	rc = ds_mgmt_pool_svc_create(pool_uuid, group, targets, prop, downout_ranks, svcp,
+				     domains_nr, domains);
 	if (rc) {
 		D_ERROR("create pool "DF_UUID" svc failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -252,7 +329,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 		 */
 out_ranks:
 		rc_cleanup =
-		    ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, dummy != NULL ? dummy : targets);
+		    ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, dummy != NULL ? dummy : create_ranks);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "DF_RC"\n",
 				DP_UUID(pool_uuid), DP_RC(rc_cleanup));
@@ -266,6 +343,7 @@ out_ranks:
 out:
 	d_rank_list_free(pg_targets);
 	d_rank_list_free(pg_ranks);
+	d_rank_list_free(create_ranks);
 	d_rank_list_free(dummy);
 	D_DEBUG(DB_MGMT, "create pool "DF_UUID": "DF_RC"\n", DP_UUID(pool_uuid),
 		DP_RC(rc));
@@ -357,8 +435,7 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 pool_comp_state_t state, size_t scm_size, size_t nvme_size,
 				 size_t meta_size, bool skip_rf_check)
 {
-	uint64_t deadline;
-	int      rc;
+	int rc;
 
 	if (state == PO_COMP_ST_UP) {
 		/* When doing reintegration, need to make sure the pool is created and started on
@@ -382,16 +459,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		}
 	}
 
-	deadline = mgmt_ps_call_deadline();
-
-again:
-	rc = dsc_pool_svc_update_target_state(pool_uuid, svc_ranks, deadline, target_addrs, state,
-					      skip_rf_check);
-	if (rc == -DER_AGAIN && state == PO_COMP_ST_UP && daos_getmtime_coarse() < deadline) {
-		D_WARN("Retry incremental reintegration for pool " DF_UUID " because of race\n",
-		       DP_UUID(pool_uuid));
-		goto again;
-	}
+	rc = dsc_pool_svc_update_target_state(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
+					      target_addrs, state, skip_rf_check);
 
 	return rc;
 }

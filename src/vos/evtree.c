@@ -2791,6 +2791,17 @@ replace_ent:
 			default:
 				D_ASSERTF(0, "%d\n", find_opc);
 			case EVT_FIND_OVERWRITE:
+				/*
+				 * For rebuild overwrites (EVT_REBUILD_MINOR_MIN) we must scan ALL
+				 * overlapping entries at this epoch and keep the one with the
+				 * highest minor_epc.
+				 *
+				 * For non-rebuild exact overwrites the first match is the only
+				 * relevant entry, so we terminate as before.
+				 */
+				if (rect->rc_minor_epc == EVT_REBUILD_MINOR_MIN)
+					break; /* keep scanning for a higher minor_epc */
+					       /* fall through */
 			case EVT_FIND_FIRST:
 			case EVT_FIND_SAME:
 				/* store the trace and return for clip or

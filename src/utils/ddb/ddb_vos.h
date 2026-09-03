@@ -158,15 +158,18 @@ int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb
 /**
  * Callback invoked by dv_dump_csum() with the fetched checksum information.
  *
- * @param cb_arg  User-provided argument passed through from dv_dump_csum().
- * @param rel     Recx/epoch list describing the stored extents. NULL for single-value akeys;
- *                non-NULL for array akeys. The caller must not free this pointer.
- * @param cil     Checksum info list. Valid only for the duration of the callback.
- * @return        0 on success; a negative error code is propagated back to the caller of
- *                dv_dump_csum().
+ * @param cb_arg    User-provided argument passed through from dv_dump_csum().
+ * @param recx_rel  Recx/epoch list describing the stored extents. Non-NULL for array akeys;
+ *                  NULL for single-value akeys. The caller must not free this pointer.
+ * @param sv_epoch  Actual stored epoch of the single value. Non-zero for single-value akeys
+ *                  when an SV was found within the requested epoch range; 0 for array akeys
+ *                  or when no SV was found (hole or -DER_NONEXIST).
+ * @param cil       Checksum info list. Valid only for the duration of the callback.
+ * @return          0 on success; a negative error code is propagated back to the caller of
+ *                  dv_dump_csum().
  */
-typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *rel,
-			       struct dcs_ci_list *cil);
+typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel,
+			       daos_epoch_t sv_epoch, struct dcs_ci_list *cil);
 
 /**
  * Fetch and dump the checksum information for the akey identified by \a path.
@@ -215,9 +218,7 @@ int dv_process_key_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key
 				daos_key_t *akey, enum ddb_ilog_op op);
 
 struct dv_dtx_committed_entry {
-	struct dtx_id	ddtx_id;
-	daos_epoch_t	ddtx_cmt_time;
-	daos_epoch_t	ddtx_epoch;
+	struct dtx_id ddtx_id;
 };
 
 struct dv_dtx_active_entry {

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"time"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -91,30 +93,55 @@ func (cmd *cfgCmd) setConfig(cfg *control.Config) {
 	cmd.config = cfg
 }
 
+// waitFlag is set by --wait[=TIMEOUT]; a zero Timeout means wait indefinitely.
+type waitFlag struct {
+	Set     bool
+	Timeout time.Duration
+}
+
+// UnmarshalFlag implements the flags.Unmarshaler interface.
+func (f *waitFlag) UnmarshalFlag(fv string) error {
+	d, err := time.ParseDuration(fv)
+	if err != nil {
+		return errors.Wrapf(err, "invalid wait timeout %q", fv)
+	}
+	if d < 0 {
+		return errors.Errorf("invalid wait timeout %q: must not be negative", fv)
+	}
+	f.Set = true
+	f.Timeout = d
+	return nil
+}
+
+// waitCmd is embedded in subcommands that kick off a pool rebuild and may
+// optionally block until that rebuild completes.
+type waitCmd struct {
+	Wait waitFlag `long:"wait" optional:"true" optional-value:"0" value-name:"TIMEOUT" description:"Block until the rebuild triggered by this operation completes; optionally give up after TIMEOUT (e.g. --wait=30m), otherwise wait indefinitely"`
+}
+
 type cliOptions struct {
-	AllowProxy     bool             `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList       ui.HostSetFlag   `short:"l" long:"host-list" hidden:"true" description:"DEPRECATED: A comma separated list of addresses <ipv4addr/hostname> to connect to"`
-	Insecure       bool             `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
-	Debug          bool             `short:"d" long:"debug" description:"Enable debug output"`
-	LogFile        string           `long:"log-file" description:"Log command output to the specified file"`
-	JSON           bool             `short:"j" long:"json" description:"Enable JSON output"`
-	JSONLogs       bool             `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
-	ConfigPath     string           `short:"o" long:"config-path" description:"Client config file path"`
-	Server         serverCmd        `command:"server" alias:"srv" description:"Perform tasks related to remote servers"`
-	Storage        storageCmd       `command:"storage" alias:"sto" description:"Perform tasks related to storage attached to remote servers"`
-	Config         configCmd        `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on remote servers"`
-	System         SystemCmd        `command:"system" alias:"sys" description:"Perform distributed tasks related to DAOS system"`
-	Network        NetCmd           `command:"network" alias:"net" description:"Perform tasks related to network devices attached to remote servers"`
-	Support        supportCmd       `command:"support" alias:"supp" description:"Perform debug tasks to help support team"`
-	Pool           PoolCmd          `command:"pool" description:"Perform tasks related to DAOS pools"`
-	Cont           ContCmd          `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
-	Version        versionCmd       `command:"version" description:"Print dmg version"`
-	ServerVersion  serverVersionCmd `command:"server-version" description:"Print server version"`
-	Telemetry      telemCmd         `command:"telemetry" alias:"telem" description:"Perform telemetry operations"`
-	Check          checkCmdRoot     `command:"check" description:"Check system health"`
-	ManPage        cmdutil.ManCmd   `command:"manpage" hidden:"true"`
-	faultsCmdRoot                   // compiled out for release builds
-	firmwareOption                  // build with tag "firmware" to enable
+	AllowProxy    bool             `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	HostList      ui.HostSetFlag   `short:"l" long:"host-list" hidden:"true" description:"DEPRECATED: A comma separated list of addresses <ipv4addr/hostname> to connect to"`
+	Insecure      bool             `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
+	Debug         bool             `short:"d" long:"debug" description:"Enable debug output"`
+	LogFile       string           `long:"log-file" description:"Log command output to the specified file"`
+	JSON          bool             `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLogs      bool             `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	ConfigPath    string           `short:"o" long:"config-path" description:"Client config file path"`
+	Server        serverCmd        `command:"server" alias:"srv" description:"Perform tasks related to remote servers"`
+	Storage       storageCmd       `command:"storage" alias:"sto" description:"Perform tasks related to storage attached to remote servers"`
+	Config        configCmd        `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on remote servers"`
+	System        SystemCmd        `command:"system" alias:"sys" description:"Perform distributed tasks related to DAOS system"`
+	Network       NetCmd           `command:"network" alias:"net" description:"Perform tasks related to network devices attached to remote servers"`
+	Support       supportCmd       `command:"support" alias:"supp" description:"Perform debug tasks to help support team"`
+	Pool          PoolCmd          `command:"pool" description:"Perform tasks related to DAOS pools"`
+	Cont          ContCmd          `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
+	Version       versionCmd       `command:"version" description:"Print dmg version"`
+	ServerVersion serverVersionCmd `command:"server-version" description:"Print server version"`
+	Telemetry     telemCmd         `command:"telemetry" alias:"telem" description:"Perform telemetry operations"`
+	Check         checkCmdRoot     `command:"check" description:"Check system health"`
+	ManPage       cmdutil.ManCmd   `command:"manpage" hidden:"true"`
+	faultsCmdRoot                  // compiled out for release builds
 }
 
 type versionCmd struct {

@@ -1,5 +1,6 @@
 """
 (C) Copyright 2018-2024 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -56,7 +57,7 @@ class IorTestBase(TestWithServers):
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params and create a pool
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
     def create_cont(self):
         """Create a TestContainer object to be used to create container.
@@ -170,7 +171,6 @@ class IorTestBase(TestWithServers):
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
         if create_cont:
-            self.pool.connect()
             self.create_cont()
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.pool, self.container.uuid)

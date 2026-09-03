@@ -49,8 +49,9 @@ type SupportConfig struct {
 }
 
 type deprecatedParams struct {
-	AccessPoints  []string `yaml:"access_points,omitempty"`  // deprecated in 2.8
-	EnableHotplug *bool    `yaml:"enable_hotplug,omitempty"` // deprecated in 2.8
+	AccessPoints    []string `yaml:"access_points,omitempty"`            // deprecated in 2.8
+	EnableHotplug   *bool    `yaml:"enable_hotplug,omitempty"`           // deprecated in 2.8
+	FWHelperLogFile string   `yaml:"firmware_helper_log_file,omitempty"` // deprecated in 3.0
 }
 
 // Server describes configuration options for DAOS control plane.
@@ -74,7 +75,6 @@ type Server struct {
 	ControlLogFile     string                    `yaml:"control_log_file,omitempty"`
 	ControlLogJSON     bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile      string                    `yaml:"helper_log_file,omitempty"`
-	FWHelperLogFile    string                    `yaml:"firmware_helper_log_file,omitempty"`
 	FaultPath          string                    `yaml:"fault_path,omitempty"`
 	TelemetryPort      int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter     uint8                     `yaml:"core_dump_filter,omitempty"`
@@ -349,12 +349,6 @@ func (cfg *Server) WithControlLogJSON(enabled bool) *Server {
 // WithHelperLogFile sets the path to the daos_server_helper logfile.
 func (cfg *Server) WithHelperLogFile(filePath string) *Server {
 	cfg.HelperLogFile = filePath
-	return cfg
-}
-
-// WithFirmwareHelperLogFile sets the path to the daos_firmware_helper logfile.
-func (cfg *Server) WithFirmwareHelperLogFile(filePath string) *Server {
-	cfg.FWHelperLogFile = filePath
 	return cfg
 }
 

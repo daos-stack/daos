@@ -187,7 +187,7 @@ $output
 
 function get_test_runner()
 {
-	test_args="-mod vendor -race -cover -v ./... -tags firmware,fault_injection,test_stubs,spdk"
+	test_args="-mod vendor -race -cover -v ./... -tags fault_injection,test_stubs,spdk"
 	test_runner="go test"
 
 	if which gotestsum >/dev/null; then
@@ -243,7 +243,7 @@ if $DLV_MODE; then
 		echo "Usage: $0 --dlv [--run <TestName>] <package>" >&2
 		exit 1
 	fi
-	DLV_BUILD_FLAGS="-mod vendor -tags firmware,fault_injection,test_stubs,spdk"
+	DLV_BUILD_FLAGS="-mod vendor -tags fault_injection,test_stubs,spdk"
 	DLV_ARGS=()
 	[[ -n "$DLV_TEST_NAME" ]] && DLV_ARGS=(-- -test.run "$DLV_TEST_NAME")
 	echo "Environment:"
@@ -254,11 +254,11 @@ if $DLV_MODE; then
 	echo
 	echo "Starting dlv session for $DLV_PACKAGE..."
 	pushd "$controldir" >/dev/null
+	testrc=0
 	LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 	CGO_LDFLAGS="$CGO_LDFLAGS" \
 	CGO_CFLAGS="$CGO_CFLAGS" \
-		dlv test --build-flags "$DLV_BUILD_FLAGS" "$DLV_PACKAGE" "${DLV_ARGS[@]}"
-	testrc=$?
+		dlv test --build-flags "$DLV_BUILD_FLAGS" "$DLV_PACKAGE" "${DLV_ARGS[@]}" || testrc=$?
 	popd >/dev/null
 	exit $testrc
 fi
@@ -277,12 +277,11 @@ echo
 
 echo "Running all tests under $controldir..."
 pushd "$controldir" >/dev/null
-set +e
+testrc=0
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 CGO_LDFLAGS="$CGO_LDFLAGS" \
 CGO_CFLAGS="$CGO_CFLAGS" \
-	$GO_TEST_RUNNER "$GO_TEST_EXTRA_ARGS"
-testrc=$?
+	$GO_TEST_RUNNER "$GO_TEST_EXTRA_ARGS" || testrc=$?
 popd >/dev/null
 
 if [ -f "$GO_TEST_XML" ]; then

@@ -15,6 +15,33 @@ import (
 	"github.com/desertbit/grumble"
 )
 
+const vosPathMissErr = "Cannot use sys db path without a VOS path"
+const dtxAggrMutuallyExclusiveErr = "'--cmt_time' and '--cmt_date' options are mutually exclusive"
+const dtxAggrRequiredOptErr = "'--cmt_time' or '--cmt_date' option has to be defined"
+const featureOnlyOneOptErr = "exactly one of --enable, --disable, --show must be provided"
+
+func onlyOne(bools ...bool) bool {
+	count := 0
+	for _, b := range bools {
+		if b {
+			count++
+		}
+	}
+	return count == 1
+}
+
+// lifecycleCmdHelpNote is appended to pool-lifecycle commands' LongHelp;
+// see lifecycleCommands in main.go for the full explanation. This text is
+// embedded verbatim into the groff man page (see fprintManPage), so no
+// line may start with a quote character: groff treats a leading "'" as a
+// control character and silently drops the rest of that line.
+const lifecycleCmdHelpNote = `
+
+This command manages its own pool lifecycle: it does not accept the
+top-level --vos_path/--db_path when given as a single bare command
+(see 'ddb --help' or the POOL-CONTENT VS. POOL-LIFECYCLE COMMANDS
+section of the man page for details).`
+
 func addAppCommands(app *grumble.App, ctx *DdbContext) {
 	// Command: ls
 	app.AddCommand(&grumble.Command{
@@ -42,7 +69,7 @@ func addAppCommands(app *grumble.App, ctx *DdbContext) {
 		Help:    "Opens the VOS file at <path>",
 		LongHelp: `Opens the VOS file at <path>. The '-w' option allows for modifying the VOS file
 with the rm, load, commit_ilog, etc commands. The path <path> should be an absolute path to the
-pool shard. Part of the path is used to determine what the pool uuid is.`,
+pool shard. Part of the path is used to determine what the pool uuid is.` + lifecycleCmdHelpNote,
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
 			f.Bool("w", "write_mode", false, "Open the VOS file in write mode.")
@@ -73,7 +100,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		Name:      "close",
 		Aliases:   nil,
 		Help:      "Close the currently opened VOS file",
-		LongHelp:  "",
+		LongHelp:  "Close the currently opened VOS file." + lifecycleCmdHelpNote,
 		HelpGroup: "vos",
 		Run: func(c *grumble.Context) error {
 			return ctx.Close()
@@ -230,16 +257,17 @@ the path must include the extent, otherwise, it must not.`,
 	// Command: smd_sync
 	app.AddCommand(&grumble.Command{
 		Name:      "smd_sync",
-		Aliases:   nil,
 		Help:      "Restore the SMD file with backup from blob",
-		LongHelp:  "",
+		LongHelp:  "Restore the SMD file with backup from blob." + lifecycleCmdHelpNote,
 		HelpGroup: "smd",
+		Flags: func(f *grumble.Flags) {
+			f.String("p", "db_path", "", "Path to the sys db. (default /mnt/daos)")
+		},
 		Args: func(a *grumble.Args) {
 			a.String("nvme_conf", "Path to the nvme conf file. (default /mnt/daos/daos_nvme.conf)", grumble.Default(""))
-			a.String("db_path", "Path to the sys db. (default /mnt/daos)", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ctx.SmdSync(c.Args.String("nvme_conf"), c.Args.String("db_path"))
+			return ctx.SmdSync(c.Args.String("nvme_conf"), c.Flags.String("db_path"))
 		},
 		Completer: nil,
 	})
@@ -305,10 +333,11 @@ the path must include the extent, otherwise, it must not.`,
 	})
 	// Command: feature
 	app.AddCommand(&grumble.Command{
-		Name:      "feature",
-		Aliases:   nil,
-		Help:      "Manage VOS pool features",
-		LongHelp:  "",
+		Name:    "feature",
+		Aliases: nil,
+		Help:    "Manage VOS pool features",
+		LongHelp: `Manage VOS pool features. Exactly one of --enable, --disable, or --show must be provided.
+If --db_path is provided, a VOS file path must also be given as a positional argument.` + lifecycleCmdHelpNote,
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
 			f.String("e", "enable", "", "Enable VOS pool features")
@@ -320,7 +349,18 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "Optional, Path to the VOS file", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ctx.Feature(c.Args.String("path"), c.Flags.String("db_path"), c.Flags.String("enable"), c.Flags.String("disable"), c.Flags.Bool("show"))
+			path := c.Args.String("path")
+			dbPath := c.Flags.String("db_path")
+			enable := c.Flags.String("enable")
+			disable := c.Flags.String("disable")
+			show := c.Flags.Bool("show")
+			if path == "" && dbPath != "" {
+				return fmt.Errorf(vosPathMissErr)
+			}
+			if !onlyOne(enable != "", disable != "", show) {
+				return fmt.Errorf(featureOnlyOneOptErr)
+			}
+			return ctx.Feature(path, dbPath, enable, disable, show)
 		},
 		Completer: featureCompleter,
 	})
@@ -329,7 +369,7 @@ the path must include the extent, otherwise, it must not.`,
 		Name:      "rm_pool",
 		Aliases:   nil,
 		Help:      "Remove a VOS pool file.",
-		LongHelp:  "",
+		LongHelp:  "Remove a VOS pool file." + lifecycleCmdHelpNote,
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
 			f.String("p", "db_path", "", "Path to the sys db")
@@ -361,32 +401,32 @@ the path must include the extent, otherwise, it must not.`,
 	// Command: dev_list
 	app.AddCommand(&grumble.Command{
 		Name:      "dev_list",
-		Aliases:   nil,
 		Help:      "List all devices",
-		LongHelp:  "",
+		LongHelp:  "List all devices." + lifecycleCmdHelpNote,
 		HelpGroup: "vos",
-		Args: func(a *grumble.Args) {
-			a.String("db_path", "Path to the sys db.")
+		Flags: func(f *grumble.Flags) {
+			f.String("p", "db_path", "", "Path to the sys db.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ctx.DevList(c.Args.String("db_path"))
+			return ctx.DevList(c.Flags.String("db_path"))
 		},
 		Completer: nil,
 	})
 	// Command dev_replace
 	app.AddCommand(&grumble.Command{
 		Name:      "dev_replace",
-		Aliases:   nil,
 		Help:      "Replace an old device with a new unused device",
-		LongHelp:  "",
+		LongHelp:  "Replace an old device with a new unused device." + lifecycleCmdHelpNote,
 		HelpGroup: "vos",
+		Flags: func(f *grumble.Flags) {
+			f.String("p", "db_path", "", "Path to the sys db.")
+		},
 		Args: func(a *grumble.Args) {
-			a.String("db_path", "Path to the sys db.")
 			a.String("old_dev", "Old device UUID.")
 			a.String("new_dev", "New device UUID.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ctx.DevReplace(c.Args.String("db_path"), c.Args.String("old_dev"), c.Args.String("new_dev"))
+			return ctx.DevReplace(c.Flags.String("db_path"), c.Args.String("old_dev"), c.Args.String("new_dev"))
 		},
 		Completer: nil,
 	})
@@ -411,19 +451,18 @@ the path must include the extent, otherwise, it must not.`,
 	// Command prov_mem
 	app.AddCommand(&grumble.Command{
 		Name:      "prov_mem",
-		Aliases:   nil,
 		Help:      "Prepare the memory environment for md-on-ssd mode",
-		LongHelp:  "",
+		LongHelp:  "Prepare the memory environment for md-on-ssd mode." + lifecycleCmdHelpNote,
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
+			f.String("p", "db_path", "", "Path to the sys db.")
 			f.Uint("s", "tmpfs_size", 0, "Specify tmpfs size(GiB) for mount. By default, The total size of all VOS files will be used")
 		},
 		Args: func(a *grumble.Args) {
-			a.String("db_path", "Path to the sys db.")
 			a.String("tmpfs_mount", "Path to the tmpfs mountpoint.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ctx.ProvMem(c.Args.String("db_path"), c.Args.String("tmpfs_mount"), c.Flags.Uint("tmpfs_size"))
+			return ctx.ProvMem(c.Flags.String("db_path"), c.Args.String("tmpfs_mount"), c.Flags.Uint("tmpfs_size"))
 		},
 		Completer: nil,
 	})
@@ -445,12 +484,38 @@ the path must include the extent, otherwise, it must not.`,
 			cmtTime := c.Flags.Uint64("cmt_time")
 			cmtDate := c.Flags.String("cmt_date")
 			if cmtTime != math.MaxUint64 && cmtDate != "" {
-				return fmt.Errorf("'--cmt_time' and '--cmt_date' options are mutually exclusive")
+				return fmt.Errorf(dtxAggrMutuallyExclusiveErr)
 			}
 			if cmtTime == math.MaxUint64 && cmtDate == "" {
-				return fmt.Errorf("'--cmt_time' or '--cmt_date' option has to be defined")
+				return fmt.Errorf(dtxAggrRequiredOptErr)
 			}
 			return ctx.DtxAggr(c.Args.String("path"), cmtTime, cmtDate)
+		},
+		Completer: nil,
+	})
+	// Command csum_dump
+	app.AddCommand(&grumble.Command{
+		Name:    "csum_dump",
+		Aliases: nil,
+		Help:    "Dump visible checksum(s)",
+		LongHelp: `Dump visible checksum(s) to the screen or in a file.  The vos
+path should be a complete path, including the akey and if the value is an array
+value it should include the extent. If a path to a file was provided then the
+value(s) will be written to the file, else it will be printed to the screen.
+The --epoch flag selects which version of the checksum to dump: for a single
+value akey it selects the value visible at or before that epoch, and for an
+array value it defines the maximal epoch of the visible record extent to
+select`,
+		HelpGroup: "vos",
+		Args: func(a *grumble.Args) {
+			a.String("path", "VOS tree path to dump.")
+			a.String("dst", "Optional, file path to dump the value to.", grumble.Default(""))
+		},
+		Flags: func(f *grumble.Flags) {
+			f.Uint64("e", "epoch", math.MaxUint64, "Maximal epoch of the checksum value to select (default EPOCH_MAX).")
+		},
+		Run: func(c *grumble.Context) error {
+			return ctx.CsumDump(c.Args.String("path"), c.Args.String("dst"), c.Flags.Uint64("epoch"))
 		},
 		Completer: nil,
 	})

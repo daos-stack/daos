@@ -5,14 +5,18 @@ hosts:
   # server_partition: daos_server
   client_partition: daos_client
   # client_reservation: daos-test
+
 orterun:
   allow_run_as_root: true
+
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 1 hour test
 timeout: 24H15M
+
 setup:
   start_servers: true
   start_agents: true
+
 server_config:
   name: daos_server
   control_log_mask: INFO
@@ -35,21 +39,26 @@ server_config:
       env_vars:
         - FI_UNIVERSE_SIZE=16383
       storage: auto
+
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   size: 75%
+  properties: rd_fac:0,space_rb:0
+
 pool_reserved:
   size: 10%
+  properties: rd_fac:0,space_rb:0
+
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  control_method: daos
+
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
   file_oclass: EC_2P1GX
   dir_oclass: RP_2GX
-  control_method: daos
+
 faults:
   fault_list:
     # - DAOS_DTX_LOST_RPC_REQUEST
@@ -84,6 +93,7 @@ soak_faults:
     test_soak_faults: 24
   joblist:
     - ior_faults
+
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -120,11 +130,14 @@ ior_faults:
   dfuse:
     mount_dir: "/tmp/soak_dfuse_ior/"
     disable_caching: true
+
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
+
 events:
   - "mce: [Hardware Error]: Machine check events logged"
   - "Package temperature above threshold"
+
 monitor:
   - "/usr/bin/free -h"
   - "/usr/bin/vmstat -w"
