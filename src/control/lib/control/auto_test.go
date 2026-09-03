@@ -785,6 +785,23 @@ func TestControl_AutoConfig_fromNVMe(t *testing.T) {
 				1: hardware.MustNewPCIAddressSet("0000:d7:05.5"),
 			},
 		},
+		"allow imbalance with 4 NUMA nodes and heterogeneous drives": {
+			ssds: storage.NvmeControllers{
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(0), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 1},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 2},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 3},
+			},
+			numaCount:      4,
+			allowImbalance: true,
+			expNumaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(2, 3)...),
+				2: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(4)...),
+				3: hardware.MustNewPCIAddressSet(),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

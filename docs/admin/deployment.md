@@ -414,7 +414,11 @@ affinity and balances the number of SSDs assigned to each engine by limiting all
 only the lowest common number of SSDs across NUMA nodes. When this flag is set, all available SSDs
 are collected and distributed equally across all engines, ignoring NUMA node boundaries. If the total
 number of SSDs is not evenly divisible by the number of engines, only the maximum divisible number
-of SSDs are used (e.g., 7 SSDs / 2 engines = 3 per engine, 1 SSD unused). This maximizes device
+of SSDs are used (e.g., 7 SSDs / 2 engines = 3 per engine, 1 SSD unused). For systems with VMD
+enabled, SSDs are first converted to VMD domain addresses (the logical VMD domains themselves, not
+the underlying backing devices). When distributing VMD domains across engines, note that VMD domains
+may contain different numbers of backing devices. This means the resulting per-engine device count
+may still appear imbalanced if VMD domains themselves are heterogeneous. This maximizes device
 utilization in heterogeneous environments but **may result in suboptimal performance** due to
 cross-NUMA memory access. The generated config will include `allow_numa_imbalance: true` to allow
 the server to start with this configuration.

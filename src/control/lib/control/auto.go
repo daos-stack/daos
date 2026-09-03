@@ -524,8 +524,8 @@ func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMa
 	ssdsToUse := ssdsPerNuma * numaCount
 
 	if remainder > 0 {
-		req.Log.Noticef("total SSDs (%d) not evenly divisible by engines (%d); "+
-			"using %d SSDs (%d per engine), %d SSDs will not be used",
+		req.Log.Noticef("total SSDs (%d) not evenly divisible by NUMA nodes (%d); "+
+			"using %d SSDs (%d per node), %d SSDs will not be used",
 			totalSSDs, numaCount, ssdsToUse, ssdsPerNuma, remainder)
 	}
 
