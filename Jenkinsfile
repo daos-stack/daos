@@ -18,7 +18,7 @@ import groovy.transform.Field
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@ryon-jensen/stacked-pr-tip-only') _
 
 // Name of branch to be tested
 test_branch = 'master'
@@ -275,11 +275,6 @@ String defaultTags(String timedTags, String prTags = 'always_passes') {
 
 pipeline {
     agent { label 'lightweight' }
-
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'weekly-testing' ? 'TZ=UTC\n0 0 * * 6' : '')
-    }
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
