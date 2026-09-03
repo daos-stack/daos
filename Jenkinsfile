@@ -44,6 +44,7 @@ void updateRunStage() {
         'Test',
         'Functional on EL 9',
         'Functional on Leap 15',
+        'Functional on SLES 15',
         'Functional on Ubuntu 20.04',
         'Functional Hardware Medium',
         'Functional Hardware Medium MD on SSD',
@@ -345,6 +346,9 @@ pipeline {
         booleanParam(name: bashName('Functional on Leap 15'),
                      defaultValue: true,
                      description: 'Run the Functional on Leap 15 stage.')
+        booleanParam(name: bashName('Functional on SLES 15'),
+                     defaultValue: true,
+                     description: 'Run the Functional on SLES 15 stage.')
         booleanParam(name: bashName('Functional on Ubuntu 20.04'),
                      defaultValue: false,
                      description: 'Run the Functional on Ubuntu 20.04 stage.')
@@ -488,6 +492,20 @@ pipeline {
                             pragma_suffix: '-vm',
                             distro: 'leap15',
                             image_version: 'leap15.6',
+                            base_branch: params.BaseBranch,
+                            label: vm9_label('Leap15'),
+                            next_version: params.BaseBranch,
+                            stage_tags: 'vm',
+                            default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
+                            nvme: 'auto',
+                            job_status: job_status_internal
+                        ),
+                        'Functional on SLES 15': getFunctionalTestStage(
+                            name: 'Functional on SLES 15',
+                            runStage: shouldStageRun('Functional on SLES 15'),
+                            pragma_suffix: '-vm',
+                            distro: 'leap15',
+                            image_version: 'sles15.7',
                             base_branch: params.BaseBranch,
                             label: vm9_label('Leap15'),
                             next_version: params.BaseBranch,
