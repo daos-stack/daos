@@ -1655,7 +1655,7 @@ ilog_root_is_valid(struct ilog_df *ilog_df, btr_report_fn_t report_fn, void *rep
 	D_ASSERT(root != NULL);
 
 	report_fn(report_arg, BTR_REPORT_MSG, "ILOG... ");
-	if (!ILOG_MAGIC_VALID(root->lr_magic)) {
+	if (!ILOG_MAGIC_VALID(root->lr_magic) || DAOS_FAIL_CHECK(DAOS_FAULT_OBJ_ILOG_MAGIC)) {
 		report_fn(report_arg, BTR_REPORT_ERROR | BTR_REPORT_NO_PREFIX,
 			  "invalid magic (%#" PRIx32 ").\n", root->lr_magic);
 		return -DER_DF_INVAL;
