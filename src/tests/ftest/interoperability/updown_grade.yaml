@@ -30,10 +30,11 @@ server_config:
 pool:
   size: 1G
   name: daos_server
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
-  properties: rf:0,rd_lvl:1
+  properties: rf:0,rd_lvl:1,cksum:off,srv_cksum:off
 
 attrtests:
   num_attributes: 20
