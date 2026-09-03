@@ -12,13 +12,11 @@ set -eu
 # quick_build="${2:-false}"
 
 OPENMPI_VER=""
-PY_MINOR_VER=""
 
 DISTRO="${1:?ERROR: Missing distro argument. Usage: $0 <distro>}"
 export DISTRO="${DISTRO%%.*}"
 
-pkgs="boost-python3$PY_MINOR_VER-devel                               \
-      capstone                                                       \
+pkgs="capstone                                                       \
       $(utils/rpms/package_version.sh argobots lib)                  \
       $(utils/rpms/package_version.sh argobots debug)                \
       $(utils/rpms/package_version.sh daos_spdk dev)                 \

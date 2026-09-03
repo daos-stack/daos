@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,6 +19,8 @@
 #include <daos/lru.h>
 #include <daos/rpc.h>
 #include <daos/object.h>
+#include <cart/rpc_gen_macros.h>
+
 #include "rdb_layout.h"
 
 /* rdb_raft.c (parts required by struct rdb) **********************************/
