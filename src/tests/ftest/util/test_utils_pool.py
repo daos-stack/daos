@@ -895,10 +895,16 @@ class TestPool(TestDaosApiBase):
         """
         return self.dmg.pool_rebuild_stop(self.identifier, *args, **kwargs)
 
-    def rebuild_stop_retry(self, timeout=60, interval=3, *args, **kwargs):
+    def rebuild_stop_retry(self, timeout=60, interval=3, force=False):
         """Stop rebuild on this pool with dmg pool rebuild stop.
 
         Retries the command until it succeeds or the timeout is reached.
+
+        Args:
+            timeout (int, optional): Maximum time to wait for rebuild to stop in seconds.
+                Defaults to 60.
+            interval (int, optional): Time to wait between retries in seconds. Defaults to 3.
+            force (bool, optional): Whether to force stop the rebuild. Defaults to False.
 
         Raises:
             CommandFailure: if the command fails for any reason other than
@@ -911,7 +917,7 @@ class TestPool(TestDaosApiBase):
         time_start = time.time()
         while True:
             try:
-                return self.rebuild_stop()
+                return self.rebuild_stop(force=force)
             except CommandFailure as error:
                 # Any error other than DER_NONEXIST is a real error
                 if 'DER_NONEXIST' not in str(error):
