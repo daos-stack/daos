@@ -16,6 +16,7 @@
 #include <daos/common.h>
 #include <daos_types.h>
 #include <daos/mem.h>
+#include <daos/report.h>
 
 /**
  * KV record of the btree.
@@ -190,19 +191,6 @@ enum btr_key_cmp_rc {
 	BTR_CMP_UNKNOWN	= (1 << 2),	/* unset */
 	BTR_CMP_ERR	= (1 << 3),	/* error */
 };
-
-enum btr_report_type {
-	BTR_REPORT_ERROR,
-	BTR_REPORT_WARNING,
-	BTR_REPORT_MSG,
-	/** flags occupy the highest bits */
-	BTR_REPORT_NO_PREFIX  = (1 << 29),
-	BTR_REPORT_INDENT_INC = (1 << 30),
-	BTR_REPORT_INDENT_DEC = (1 << 31),
-	BTR_REPORT_FLAGS_MASK =
-	    (BTR_REPORT_NO_PREFIX | BTR_REPORT_INDENT_INC | BTR_REPORT_INDENT_DEC),
-};
-typedef void (*btr_report_fn_t)(void *arg, enum btr_report_type type, const char *fmt, ...);
 
 /**
  * Customized tree function table.
@@ -436,7 +424,7 @@ typedef struct {
 	 * \retval -DER_*	Errors returned by the fetch callback.
 	 */
 	int (*to_rec_check)(struct btr_instance *tins, struct btr_record *rec,
-			    btr_report_fn_t report_fn, void *report_arg);
+			    report_fn_t report_fn, void *report_arg);
 } btr_ops_t;
 
 /**
@@ -573,7 +561,7 @@ dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma, daos_handle
 		       daos_handle_t *toh);
 int
      dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, void *priv,
-			  btr_report_fn_t report_fn, void *report_arg, bool error_on_non_zero_padding);
+			  report_fn_t report_fn, void *report_arg, bool error_on_non_zero_padding);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh, void *args);
 int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);

@@ -85,51 +85,51 @@ ck_common_printf(struct checker *ck, const char *fmt, ...)
  * Print a btree report as a checker message.
  *
  * \param[in] arg	Checker.
- * \param[in] type	Btree report type.
+ * \param[in] opts	Btree report options.
  * \param[in] fmt	Format.
  * \param[in] ...	Format's arguments.
  */
 static inline void
-ck_report(void *arg, enum btr_report_type type, const char *fmt, ...)
+ck_report(void *arg, enum report_opts opts, const char *fmt, ...)
 {
 	struct checker *ck     = arg;
-	const char     *prefix = (type & BTR_REPORT_NO_PREFIX) ? "" : ck->ck_prefix;
+	const char     *prefix = (opts & REPORT_NO_PREFIX) ? "" : ck->ck_prefix;
 	va_list         args;
 
 	if (fmt == NULL) {
-		switch (type) {
-		case BTR_REPORT_INDENT_INC:
+		switch (opts) {
+		case REPORT_INDENT_INC:
 			ck->ck_level++;
 			ck->ck_indent_set(ck);
 			return;
-		case BTR_REPORT_INDENT_DEC:
+		case REPORT_INDENT_DEC:
 			ck->ck_level--;
 			ck->ck_indent_set(ck);
 			return;
 		default:
-			D_ASSERTF(0, "Unknown report type: %x\n", type);
+			D_ASSERTF(0, "Unknown report options: %x\n", opts);
 		}
 		return;
 	}
 
 	va_start(args, fmt);
 
-	switch (type & ~BTR_REPORT_FLAGS_MASK) {
-	case BTR_REPORT_ERROR:
+	switch (opts & ~REPORT_FLAGS_MASK) {
+	case REPORT_ERROR:
 		ck_common_printf(ck, "%s%s", prefix, CHECKER_ERROR_INFIX);
 		ck->ck_vprintf(ck, fmt, args);
 		break;
-	case BTR_REPORT_WARNING:
+	case REPORT_WARNING:
 		ck_common_printf(ck, "%s%s", prefix, CHECKER_WARNING_INFIX);
 		ck->ck_vprintf(ck, fmt, args);
 		ck->ck_warnings_num++;
 		break;
-	case BTR_REPORT_MSG:
+	case REPORT_MSG:
 		ck_common_printf(ck, "%s", prefix);
 		ck->ck_vprintf(ck, fmt, args);
 		break;
 	default:
-		D_ASSERTF(0, "Unknown report type: %x\n", type);
+		D_ASSERTF(0, "Unknown report type: %x\n", opts);
 	}
 
 	va_end(args);
