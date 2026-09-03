@@ -132,10 +132,7 @@ def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
                 test, manager, log, hosts, path, slots, pool, container, processes, ppn, intercept,
                 plugin_path, dfuse, display_space, fail_on_warning, namespace, ior_params)
     except Exception as error:  # pylint: disable=broad-except
-        try:
-            thread_result["result"] = CmdResult(command="", stdout=str(error), exit_status=1)
-        except Exception as error2:  # pylint: disable=broad-except
-            thread_result["result"] = error2
+        thread_result["result"] = CmdResult(command=str(manager), stdout=str(error), exit_status=1)
     finally:
         thread_queue.put(thread_result)
 
