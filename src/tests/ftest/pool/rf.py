@@ -105,7 +105,13 @@ class PoolRedunFacProperty(IorTestBase):
 
         # 2. Verify pool's rd_fac by calling dmg pool get-prop.
         self.log_step("Verify pool's rd_fac by calling dmg pool get-prop.")
-        pool_prop_expected = int(pool.properties.value.split(":")[1])
+        pool_prop_expected = None
+        # Support multiple properties such as "rd_fac:4,space_rb:0". Split with ",", then ":".
+        pool_props = pool.properties.value.split(",")
+        for pool_prop in pool_props:
+            pool_prop_attr_val = pool_prop.split(":")
+            if pool_prop_attr_val[0] == "rd_fac":
+                pool_prop_expected = int(pool_prop_attr_val[1])
         msg = "Unexpected initial pool rd_fac!"
         self.assertEqual(pool_prop_expected, pool.get_property("rd_fac"), msg)
 
@@ -121,8 +127,7 @@ class PoolRedunFacProperty(IorTestBase):
             dmg_command.pool_set_prop(pool=pool.identifier, properties=properties)
             self.fail(f"Pool rd_fac was changed to invalid value: {invalid_rd_fac}!")
         except CommandFailure as command_failure:
-            self.log.info(
-                "Update pool's rd_fac to %s failed as expected", invalid_rd_fac)
+            self.log.info("Update pool's rd_fac to %s failed as expected", invalid_rd_fac)
             exp_msg = f"invalid redun fac value {invalid_rd_fac}"
             if exp_msg not in str(command_failure):
                 msg = (f"Updating pool's rd_fac to invalid value didn't return expected "
@@ -156,10 +161,8 @@ class PoolRedunFacProperty(IorTestBase):
         self.create_verify_destroy_cont(
             pool=pool, cont_rfs=cont_rfs, pool_prop_expected=new_pool_rd_fac)
 
-        # 8. Verify that while pool's rd_fac was changed, container's rd_fac remained the
-        # same.
-        msg = ("Verify that while pool's rd_fac was changed, container's rd_fac remained "
-               "the same.")
+        # 8. Verify that while pool's rd_fac was changed, container's rd_fac remained the same.
+        msg = ("Verify that while pool's rd_fac was changed, container's rd_fac remained the same.")
         self.log_step(msg)
         msg = "Unexpected container rd_fac after pool rd_fac was changed!"
         self.verify_container_rd_fac(
