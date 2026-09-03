@@ -1,11 +1,11 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers
-from test_utils_container import add_container
+from test_utils_container import DEFAULT_CONT_PROPS, add_container
 from test_utils_pool import add_pool
 
 
@@ -31,9 +31,19 @@ class QueryPropertiesTest(TestWithServers):
         :avocado: tags=container
         :avocado: tags=QueryPropertiesTest,test_query_properties
         """
-        self.log_step("Create pool and container with properties")
+        self.log_step("Create pool")
         pool = add_pool(self)
-        container = add_container(self, pool)
+        containers = []
+
+        self.log_step("Create a container with default properties")
+        containers.append(add_container(self, pool, "/run/container_1/*"))
+
+        self.log_step("Verify container get-prop matches create")
+        if not containers[-1].verify_prop(DEFAULT_CONT_PROPS, exclusive=False):
+            self.fail("Unexpected default properties from daos container get-prop")
+
+        self.log_step("Create a container with specific properties")
+        containers.append(add_container(self, pool, "/run/container_2/*"))
 
         expected_props = {
             "layout_type": self.params.get("layout_type", "/run/expected_get_prop/*"),
@@ -42,5 +52,7 @@ class QueryPropertiesTest(TestWithServers):
             "srv_cksum": self.params.get("srv_cksum", "/run/expected_get_prop/*")}
 
         self.log_step("Verify container get-prop matches create")
-        if not container.verify_prop(expected_props):
-            self.fail("Unexpected properties from daos container get-prop")
+        if not containers[-1].verify_prop(expected_props, exclusive=True):
+            self.fail("Unexpected specific properties from daos container get-prop")
+
+        self.log.info("Test passed")

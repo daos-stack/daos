@@ -18,6 +18,10 @@ from pydaos.raw import DaosApiError, DaosContainer, DaosInputParams, str_to_c_uu
 from test_utils_base import TestDaosApiBase
 
 CONT_NAMESPACE = "/run/container/*"
+DEFAULT_CONT_PROPS = {
+    "cksum:on",
+    "srv_cksum:on"
+}
 
 
 def add_container(test, pool, namespace=CONT_NAMESPACE, create=True, daos=None, **params):
@@ -1022,21 +1026,29 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         return self.daos.container_get_prop(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
 
-    def verify_prop(self, expected_props):
+    def verify_prop(self, expected_props, exclusive=True):
         """Verify daos container get-prop returns expected values.
 
         Args:
             expected_props (dict): expected properties and values
+            exclusive (bool, optional): whether to only check the properties specified in
+                            expected_props. Defaults to True.
 
         Returns:
             bool: whether props from daos container get-prop match expected values
 
         """
-        prop_output = self.get_prop(properties=expected_props.keys())
+        status = True
+        properties = expected_props.keys() if exclusive else None
+        prop_output = self.get_prop(properties=properties)
         for actual_prop in prop_output['response']:
-            if expected_props[actual_prop['name']] != actual_prop['value']:
-                return False
-        return True
+            expected = expected_props.get(actual_prop['name'], "ValueError")
+            is_equal = "==" if expected == actual_prop['value'] else "!="
+            self.log.debug(
+                "%s: %s %s %s", actual_prop['name'], actual_prop['value'], is_equal, expected)
+            if is_equal == "!=":
+                status = False
+        return status
 
     def list_attrs(self, *args, **kwargs):
         """Get container properties by calling daos container list-attrs.

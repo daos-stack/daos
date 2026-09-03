@@ -13,7 +13,7 @@ from pwd import getpwuid
 from dmg_utils_base import DmgCommandBase
 from dmg_utils_params import DmgTransportCredentials, DmgYamlParameters
 from exception_utils import CommandFailure
-from general_utils import dict_to_str, get_numeric_list
+from general_utils import dict_to_str, get_numeric_list, list_to_str
 
 
 class DmgJsonCommandFailure(CommandFailure):
@@ -790,7 +790,8 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool get-prop command fails.
 
         """
-        return self._get_json_result(("pool", "get-prop"), pool=pool, name=name)
+        names = list_to_str(name, ',') if name else None
+        return self._get_json_result(("pool", "get-prop"), pool=pool, name=names)
 
     def pool_list(self, no_query=False, verbose=False):
         """List pools.

@@ -21,6 +21,29 @@ from test_utils_base import LabelGenerator, TestDaosApiBase
 
 POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
+DEFAULT_POOL_PROPS = {
+    "checkpoint": "timed",
+    "checkpoint_freq": 5,
+    "checkpoint_thresh": 50,
+    "data_thresh": 4096,
+    "ec_cell_sz": 131072,   # 128 KiB
+    "ec_pda": 1,
+    "global_version": 4,
+    "perf_domain": "root",
+    "rd_fac": 3,
+    "reclaim": "lazy",
+    "reintegration": "data_sync",
+    "rp_pda": 4294967295,
+    "scrub": "off",
+    "scrub_freq": 604800,
+    "scrub_thresh": 0,
+    "self_heal": "exclude;rebuild",
+    "space_rb": 5,
+    "svc_ops_enabled": 1,
+    "svc_ops_entry_age": 300,
+    "svc_rf": 2,
+    "upgrade_status": "not started"
+}
 
 
 def add_pools(dmg, add_pool_kwargs, error_handler=None):
@@ -763,6 +786,30 @@ class TestPool(TestDaosApiBase):
 
         """
         return self.dmg.pool_get_prop(self.identifier, *args, **kwargs)
+
+    def verify_prop(self, expected_props, exclusive=True):
+        """Verify pool properties match expected values.
+
+        Args:
+            expected_props (dict): expected properties and values
+            exclusive (bool, optional): whether to only check the properties specified in
+                expected_props. Defaults to True.
+
+        Returns:
+            bool: whether props from dmg pool get-prop match expected values
+
+        """
+        status = True
+        name = expected_props.keys() if exclusive else None
+        prop_output = self.get_prop(name=name)
+        for actual_prop in prop_output['response']:
+            expected = expected_props.get(actual_prop['name'], "ValueError")
+            is_equal = "==" if expected == actual_prop['value'] else "!="
+            self.log.debug(
+                "%s: %s %s %s", actual_prop['name'], actual_prop['value'], is_equal, expected)
+            if is_equal == "!=":
+                status = False
+        return status
 
     @fail_on(CommandFailure)
     def get_property(self, prop_name):
