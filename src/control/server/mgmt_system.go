@@ -1803,6 +1803,8 @@ func (svc *mgmtSvc) resetLocalEngines() error {
 		if err := engine.RemoveSuperblock(); err != nil {
 			svc.log.Errorf("instance %d failed to remove superblock: %s", engine.Index(), err)
 		}
+		// Never reaches here - process is exec'd
+		panic("shouldn't reach")
 	}
 
 	// Sync filesystem to commit superblock deletions before proceeding
@@ -2004,7 +2006,7 @@ func (svc *mgmtSvc) restartLeader() error {
 func (svc *mgmtSvc) resetAllEngines(ctx context.Context) (*mgmtpb.SystemEraseResp, error) {
 	peers, fanReq, fanResp, err := svc.getPeersAndFanout(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "unable to determine path to self")
 	}
 
 	if err := svc.rmLeaderSysdb(); err != nil {
