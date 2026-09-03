@@ -233,6 +233,7 @@ build_remote_post_provision_payload() {
            ARTIFACTORY_URL=\"${ARTIFACTORY_URL}\"
            BRANCH_NAME=\"${BRANCH_NAME:-}\"
            CHANGE_TARGET=\"${CHANGE_TARGET:-}\"
+           DAOS_TARGET_BRANCH=\"${DAOS_TARGET_BRANCH:-}\"
            CI_RPM_TEST_VERSION=\"${CI_RPM_TEST_VERSION:-}\"
            DAOS_VERSION=\"${DAOS_VERSION:-}\"
            CI_PR_REPOS=\"${CI_PR_REPOS:-}\"
