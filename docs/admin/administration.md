@@ -575,6 +575,15 @@ boro-11
 
 #### Exclusion and Hotplug
 
+!!! note
+    **SysXS Device Failure**: A SysXS device is a special NVMe SSD region that
+    contains critical system metadata for a DAOS engine. If a SysXS device fails,
+    the engine will terminate immediately. Unlike regular NVMe device faults that
+    can be addressed using online hotplug, SysXS device failures require
+    **offline** device replacement using `dmg storage format --replace`. See
+    [SysXS Device Failure Recovery](#sysxs-device-failure-recovery) for detailed
+    procedures.
+
 - Automatic exclusion of an NVMe SSD:
 
 Automatic exclusion based on faulty criteria is the default behavior in DAOS
@@ -1277,6 +1286,113 @@ An example workflow for SSD failure in MD-on-SSD mode would be:
     the PMEM correctly.  Resolve the configuration issue and re-run `dmg storage format --replace`
     or run `dmg storage format` without `--replace` to create a new rank with a different fabric
     URI (for example).
+
+#### SysXS Device Failure Recovery
+
+SysXS is a special region on NVMe SSDs that stores critical system metadata for DAOS engines.
+In MD-on-SSD mode, each engine will contain a "special" SysXS target on one of it's SSDs.
+Unlike regular NVMe device failures that can often be handled online using hotplug procedures,
+a SysXS device failure causes the engine to terminate immediately.
+
+The command `dmg storage query list-devices` command can be used to identify which device is
+running the SysXS target on a given engine/rank.
+
+**Key Characteristics of SysXS Failure:**
+- The engine will **exit unexpectedly** when the SysXS device fails and `engine_died` RAS event
+will be emitted
+- Engine will transition to "Errored" or "Excluded" state and engine logs show SysXS related
+errors at failure point
+- Online hotplug procedures (see [Exclusion and Hotplug](#exclusion-and-hotplug)) do not apply
+- The engine cannot self-exclude and restart; manual intervention is required
+- The failed SSD must be replaced offline (server powered down)
+- Recovery requires `dmg storage format --replace` to reuse the engine's "old" rank once fixed
+
+**Example Scenario: Engine with SysXS on Data/WAL/Meta SSD**
+
+If a server is configured with engines where a single SSD carries the data, WAL, and meta roles
+(including the SysXS system metadata), and that SSD fails:
+
+1. The engine immediately terminates with an `engine_died` RAS event
+2. The engine becomes excluded from the system
+3. The failed SSD must be physically replaced
+4. `dmg storage format --replace` is used to recover the engine with it's original rank
+5. `dmg system reintegrate -r <rank>` is used to reintegrate rank into it's pools
+
+**Recovery Workflow for SysXS Device Failure:**
+
+1. Verify Failure
+```bash
+dmg system query -v  # Look for "Errored" state
+tail -f /var/log/daos/daos_engine.0.log  # Check for device errors
+```
+
+2. Stop Server
+```bash
+systemctl stop daos_server
+```
+
+3. Physical Replacement
+- Power down the storage server
+- Replace the faulty SSD
+- Power up but don't start daos_server
+
+4. Prepare To Trigger Format Request By Removing Superblock
+```bash
+# Example for engine 0
+rm /mnt/control_metadata/daos_control/engine0/superblock
+```
+
+5. Restart Server
+```bash
+systemctl start daos_server
+```
+
+6. Format with Replace
+```bash
+dmg storage format --replace -l <storage-server-hostname>
+```
+
+7. Verify Recovery
+After waiting for storage format command to complete and engine to start/join.
+```bash
+dmg system query -v  # Check engine is "Joined"
+dmg storage query list-devices --health  # Verify new device health
+```
+
+8. Reintegrate Rank Into Pools
+Reintegrate the replaced rank into it's pools (retrieve rank identifier from
+'dmg system query' output).
+```bash
+dmg system reintegrate -r <engine_rank>
+```
+
+**Differences from Online Hotplug:**
+
+| Aspect | Online Hotplug (Regular NVMe) | Offline Replacement (SysXS) |
+|--------|------|------|
+| Engine Behavior | Engine may report IO and media errors | Engine terminates immediately |
+| Data Availability | System continues running | Engine goes offline |
+| Procedure | `dmg storage set nvme-faulty` + `dmg storage replace nvme` | Power down + hardware replacement + `dmg storage format --replace` |
+| Timing | Can be performed while system is running | Requires system shutdown on affected host |
+| Recovery Time | Minutes (online) | Hours (includes downtime) |
+
+**Common Mistakes to AVOID:**
+
+1. **❌ Do NOT use online hotplug commands for SysXS failures**
+   - `dmg storage set nvme-faulty` - Won't work, engine already died
+   - `dmg storage replace nvme` - Requires online hotplug support
+
+2. **❌ Do NOT restart daos_server without removing superblock**
+   - Engine won't trigger format request
+   - May use wrong rank assignment
+
+3. **❌ Do NOT remove control_metadata for multi-engine hosts**
+   - Only remove the failed engine's superblock
+   - Preserve other engines' metadata
+
+4. **❌ Do NOT use dmg storage format without --replace flag**
+   - Will create a NEW rank instead of reusing the old one
+   - Orphaned ranks are generally considered undesirable
 
 ### System Erase
 
