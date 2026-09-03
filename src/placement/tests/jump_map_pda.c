@@ -310,14 +310,16 @@ static const struct CMUnitTest pda_tests[] = {
 };
 
 int
-pda_tests_run(bool verbose)
+pda_tests_run(bool verbose, int *sub_tests, int sub_tests_nr, bool list_only)
 {
-	int rc = 0;
+	const char *name = "Jump Map Placement PDA Tests";
 
 	g_verbose = verbose;
 
-	rc += cmocka_run_group_tests_name("Jump Map Placement PDA Tests", pda_tests,
-					  NULL, NULL);
+	if (list_only) {
+		plt_list_tests(name, pda_tests, ARRAY_SIZE(pda_tests));
+		return 0;
+	}
 
-	return rc;
+	return plt_run_tests(name, pda_tests, ARRAY_SIZE(pda_tests), sub_tests, sub_tests_nr);
 }

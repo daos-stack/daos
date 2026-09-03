@@ -34,6 +34,13 @@ message PoolCreateReq {
 	repeated uint32 ranks      = 12; // target ranks
 	repeated uint64 tier_bytes = 13; // Size in bytes of storage tier
 	float           mem_ratio = 14; // Fraction of meta-blob-sz to use as mem-file-sz
+	// Ranks that are not currently joined (Ready/Excluded/AdminExcluded/Stopped/
+	// Stopping/Errored/Unresponsive/AwaitFormat/Starting/...).
+	// May be populated by either the client (auto rank-selection paths) or the
+	// management service; if both supply values, they are merged. Listed ranks
+	// enter the initial pool map as DOWNOUT and do NOT receive VOS/blob-store
+	// creation, so subsequent membership changes can address them by rank.
+	repeated uint32       unavailable_ranks = 15;
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
