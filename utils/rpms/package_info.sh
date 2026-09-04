@@ -13,7 +13,7 @@ set_lib_name() {
   suse_lib="$1"; shift
   deb_lib="$1"; shift
   local extension=""
-  local dist="${DISTRO:-el8}"
+  local dist="${DISTRO:-el9}"
   local -n _lib="${comp}_${vartype}"
   if [ "${vartype}" = "dev" ]; then
     if [[ "${dist}" =~ suse|el ]]; then
@@ -33,7 +33,7 @@ set_lib_name() {
   fi
 }
 
-distro_name=".${DISTRO:-el8}"
+distro_name=".${DISTRO:-el9}"
 daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
 export daos_version
 daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
@@ -45,7 +45,7 @@ export libfabric_version="1.22.0"
 export libfabric_release="5${distro_name}"
 export libfabric_full="${libfabric_version}-${libfabric_release}"
 export mercury_version="2.4.1"
-export mercury_release="3${distro_name}"
+export mercury_release="4${distro_name}"
 export mercury_full="${mercury_version}-${mercury_release}"
 export argobots_version="1.2"
 export argobots_release="4${distro_name}"
@@ -134,7 +134,7 @@ set_lib_name hdf5 lib hdf5 hdf5 hdf5
 export hdf5_lib
 
 lmod="Lmod"
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
+if [[ "${DISTRO:-el9}" =~ suse ]]; then
   lmod="lua-lmod"
 fi
 export lmod

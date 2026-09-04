@@ -34,7 +34,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   properties: dedup:memcmp
 
 ior:

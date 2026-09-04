@@ -25,7 +25,6 @@ pool:
   properties: space_rb:5
 
 container:
-  control_method: daos
   type: POSIX
 
 ior:

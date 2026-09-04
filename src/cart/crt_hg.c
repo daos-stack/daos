@@ -846,6 +846,19 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 
 	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
+	/*
+	 * Forward the per-provider address-family preference to Mercury. The
+	 * default (CRT_AF_UNSPEC -> NA_ADDR_UNSPEC) preserves the original
+	 * behavior: Mercury's na_ofi plugin falls back to its per-provider
+	 * preference table (IPv4 for verbs/RoCE). Setting D_ADDR_FORMAT=ipv6
+	 * (or cio_addr_format="ipv6") instead steers libfabric's fabric scan
+	 * to enumerate IPv6 interfaces, which is required for IPv6-only
+	 * fabric NIC deployments. CRT_AF_* values are statically asserted to
+	 * match the corresponding NA_ADDR_* values in crt_init.c, so the
+	 * direct cast is safe.
+	 */
+	init_info.na_init_info.addr_format = (enum na_addr_format)prov_data->cpg_addr_format;
+
 	if (crt_provider_is_block_mode(provider) && !crt_gdata.cg_progress_busy)
 		init_info.na_init_info.progress_mode = 0;
 	else

@@ -53,7 +53,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   oclass: RP_3G6
   properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rd_fac:2
 

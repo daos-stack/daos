@@ -25,6 +25,5 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 usage_limit: 200

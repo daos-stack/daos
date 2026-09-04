@@ -21,7 +21,6 @@ pool:
   size: 96%
 container:
   type: POSIX
-  control_method: daos
   properties: rd_fac:1
 ior:
   api: DFS

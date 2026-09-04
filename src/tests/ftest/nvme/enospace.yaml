@@ -41,7 +41,6 @@ pool:
   usage_min_nvme: 96
 
 container:
-  control_method: daos
   register_cleanup: False  # Skip teardown destroy. Test manually destroys containers.
   type: POSIX
 

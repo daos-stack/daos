@@ -27,7 +27,6 @@ server_config:
       storage: auto
 
 container:
-  control_method: daos
   properties: "rd_fac:1"
 
 pool:

@@ -908,7 +908,7 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj, daos_
 {
 	daos_size_t			 size_iod, size_sgl, size_oiod;
 	daos_size_t			 size_recx, size_tgt_nr, size_singv;
-	daos_size_t			 size_sorter, size_array, size_fetch_stat, buf_size;
+	daos_size_t                      size_sorter, size_array, size_fetch_stat, buf_size;
 	daos_iod_t			*uiod, *riod;
 	struct obj_ec_recx_array	*ec_recx;
 	void				*buf;
@@ -923,12 +923,11 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj, daos_
 	size_sorter = roundup(sizeof(struct obj_ec_seg_sorter) * iod_nr, 8);
 	size_singv = roundup(sizeof(struct dcs_layout) * iod_nr, 8);
 	size_array = sizeof(daos_size_t) * obj_get_grp_size(obj) * iod_nr;
-	size_fetch_stat = sizeof(struct shard_fetch_stat) * iod_nr;
+	size_fetch_stat    = sizeof(struct shard_fetch_stat) * iod_nr;
 	/* for oer_tgt_recx_nrs/_idxs */
 	size_tgt_nr = roundup(sizeof(uint32_t) * obj_get_grp_size(obj), 8);
-	buf_size = size_iod + size_sgl + size_oiod + size_recx + size_sorter +
-		   size_singv + size_array + size_tgt_nr * iod_nr * 2 + OBJ_TGT_BITMAP_LEN +
-		   size_fetch_stat;
+	buf_size    = size_iod + size_sgl + size_oiod + size_recx + size_sorter + size_singv +
+		   size_array + size_tgt_nr * iod_nr * 2 + OBJ_TGT_BITMAP_LEN + size_fetch_stat;
 	D_ALLOC(buf, buf_size);
 	if (buf == NULL)
 		return -DER_NOMEM;
@@ -4999,6 +4998,55 @@ obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 	api_args->sgls              = obj_auxi->reasb_req.orr_usgls;
 }
 
+/* Allocate the per-IOM merge state used by the EC fetch IOM merge. It is kept
+ * across retries of the same task, so that the ownership of the iom_recxs
+ * buffers (oims_realloc) is never lost.
+ */
+static int
+obj_iom_state_init(struct obj_auxi_args *obj_auxi, daos_obj_fetch_t *args)
+{
+	if (!obj_auxi->is_ec_obj || args->ioms == NULL || obj_auxi->iom_state != NULL)
+		return 0;
+
+	D_ALLOC_ARRAY(obj_auxi->iom_state, obj_auxi->iod_nr);
+	if (obj_auxi->iom_state == NULL)
+		return -DER_NOMEM;
+
+	return 0;
+}
+
+static void
+obj_iom_state_fini(struct obj_auxi_args *obj_auxi)
+{
+	D_FREE(obj_auxi->iom_state);
+}
+
+/* The IOM merge restarts from scratch on retry, only the merge progress is
+ * reset - the iom_recxs buffers (and their ownership) are kept, so that a
+ * buffer grown by a previous attempt can be reused by the retry.
+ */
+static void
+obj_iom_retry_reset(struct obj_auxi_args *obj_auxi)
+{
+	daos_obj_fetch_t *args;
+	uint32_t          i;
+
+	if (obj_auxi->opc != DAOS_OBJ_RPC_FETCH || obj_auxi->obj_task == NULL)
+		return;
+
+	args = dc_task_get_args(obj_auxi->obj_task);
+	if (args->ioms == NULL)
+		return;
+
+	for (i = 0; i < obj_auxi->iod_nr; i++) {
+		args->ioms[i].iom_nr_out = 0;
+		if (obj_auxi->iom_state != NULL) {
+			obj_auxi->iom_state[i].oims_tgt_nr   = 0;
+			obj_auxi->iom_state[i].oims_extra_nr = 0;
+		}
+	}
+}
+
 static void
 obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 {
@@ -5020,8 +5068,10 @@ obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 	/* zero it as user might reuse/resched the task, for
 	 * example the usage in dac_array_set_size().
 	 */
-	if (!retry)
+	if (!retry) {
+		obj_iom_state_fini(obj_auxi);
 		memset(obj_auxi, 0, sizeof(*obj_auxi));
+	}
 }
 
 /**
@@ -5274,7 +5324,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 	if (obj_auxi->io_retry) {
 		if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
-			obj_auxi->reasb_req.orr_iom_tgt_nr = 0;
+			obj_iom_retry_reset(obj_auxi);
 			obj_io_set_new_shard_task(obj_auxi);
 		}
 
@@ -6069,6 +6119,10 @@ dc_obj_fetch_task(tse_task_t *task)
 
 	obj_auxi->dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
 	obj_auxi->iod_nr = args->nr;
+
+	rc = obj_iom_state_init(obj_auxi, args);
+	if (rc != 0)
+		D_GOTO(out_task, rc);
 
 	if (obj_auxi->ec_wait_recov)
 		goto out_task;

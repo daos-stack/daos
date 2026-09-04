@@ -17,7 +17,6 @@ server_config:
 pool:
   scm_size: 3G
 container:
-  control_method: daos
   type: POSIX
   class_names: !mux
     oclass_s1:

@@ -50,7 +50,6 @@ void updateRunStage() {
         'Pre-build',
         'Python Bandit check',
         'Build',
-        'Build on EL 8',
         'Build on EL 9',
         'Build on Leap 15',
         'Unit Tests',
@@ -60,8 +59,7 @@ void updateRunStage() {
         'Unit Test with memcheck',
         'Unit Test bdev with memcheck',
         'Test',
-        'Functional on EL 8.8 with Valgrind',
-        'Functional on EL 8',
+        'Functional on EL 9 with Valgrind',
         'Functional on EL 9',
         'Functional on Leap 15',
         'Functional on Ubuntu 20.04',
@@ -215,7 +213,6 @@ void updateRunStage() {
             hwBuildStage += "${distroTarget[0].toUpperCase()} ${distroTarget[1]}"
         }
         Map testBuildStage = [
-            'Functional on EL 8': 'Build on EL 8',
             'Functional on EL 9': 'Build on EL 9',
             'Functional on Leap 15': 'Build on Leap 15',
             'Functional Hardware Medium': hwBuildStage,
@@ -561,9 +558,6 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        string(name: 'CI_EL8_TARGET',
-               defaultValue: '',
-               description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
         string(name: 'CI_EL9_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 9 CI tests.  I.e. el9, el9.1, etc.')
@@ -585,9 +579,6 @@ pipeline {
         booleanParam(name: bashName('Build'),
                      defaultValue: true,
                      description: 'Run the Build stage.')
-        booleanParam(name: bashName('Build on EL 8'),
-                     defaultValue: true,
-                     description: 'Run the Build on EL 8 stage.')
         booleanParam(name: bashName('Build on EL 9'),
                      defaultValue: true,
                      description: 'Run the Build on EL 9 stage.')
@@ -615,12 +606,9 @@ pipeline {
         booleanParam(name: bashName('Test'),
                      defaultValue: true,
                      description: 'Run the Test stage.')
-        booleanParam(name: bashName('Functional on EL 8.8 with Valgrind'),
+        booleanParam(name: bashName('Functional on EL 9 with Valgrind'),
                      defaultValue: false,
-                     description: 'Run the Functional on EL 8.8 with Valgrind stage.')
-        booleanParam(name: bashName('Functional on EL 8'),
-                     defaultValue: false,
-                     description: 'Run the Functional on EL 8 stage.')
+                     description: 'Run the Functional on EL 9 with Valgrind stage.')
         booleanParam(name: bashName('Functional on EL 9'),
                      defaultValue: true,
                      description: 'Run the Functional on EL 9 stage.')
@@ -814,60 +802,6 @@ pipeline {
                 expression { shouldStageRun('Build') }
             }
             parallel {
-                stage('Build on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Build on EL 8') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el8 " +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
-                                                ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg POINT_RELEASE=.10 ' +
-                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
-                        }
-                    }
-                    steps {
-                        script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el8 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                        stash_files: 'ci/test_files_to_stash.txt',
-                                        build_deps: 'no',
-                                        stash_opt: true,
-                                        scons_args: sconsArgs() +
-                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el8 "' + env.DAOS_RELVAL + '"'
-                        }
-                    }
-                    post {
-                        success {
-                            uploadNewRPMs('el8', 'success')
-                        }
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el8-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            uploadNewRPMs('el8', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
                 stage('Build on EL 9') {
                     when {
                         beforeAgent true
@@ -1166,31 +1100,18 @@ pipeline {
             steps {
                 script {
                     parallel(
-                        'Functional on EL 8.8 with Valgrind': getFunctionalTestStage(
-                            name: 'Functional on EL 8.8 with Valgrind',
-                            runStage: shouldStageRun('Functional on EL 8.8 with Valgrind'),
+                        'Functional on EL 9 with Valgrind': getFunctionalTestStage(
+                            name: 'Functional on EL 9 with Valgrind',
+                            runStage: shouldStageRun('Functional on EL 9 with Valgrind'),
                             pragma_suffix: '-vm',
-                            label: vm9_label('EL8'),
+                            label: vm9_label('EL9'),
                             next_version: next_version(),
                             other_packages: 'mercury-libfabric',
                             stage_tags: 'vm',
                             default_tags: 'memcheck',
                             nvme: 'auto',
                             job_status: job_status_internal,
-                            image_version: 'el8.10'
-                        ),
-                        'Functional on EL 8': getFunctionalTestStage(
-                            name: 'Functional on EL 8',
-                            runStage: shouldStageRun('Functional on EL 8'),
-                            pragma_suffix: '-vm',
-                            label: vm9_label('EL8'),
-                            next_version: next_version(),
-                            other_packages: 'mercury-libfabric',
-                            stage_tags: 'vm',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto',
-                            job_status: job_status_internal,
-                            image_version: 'el8.10'
+                            image_version: 'el9.7'
                         ),
                         'Functional on EL 9': getFunctionalTestStage(
                             name: 'Functional on EL 9',
@@ -1307,7 +1228,7 @@ pipeline {
                 }
             }
         } // stage('Test')
-        stage('Test Storage Prep on EL 8.8') {
+        stage('Test Storage Prep on EL 9.7') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }

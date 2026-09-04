@@ -36,21 +36,20 @@ pool_3:
 
 container:
   type: POSIX
-  control_method: daos
 
 ior:
   client_processes:
     np: 16
-  flags: "-w -W -r -R -k -vv"
+  flags: -w -W -r -R -k -vv
   flag_restart:
-    write: "-w -k -G=5"
-    read: "-r -R -k -G=5"
+    write: -w -k -G=5
+    read: -r -R -k -G=5
   repetitions: 1
   api: DFS
-  object_type: 'SX'
+  object_type: SX
   dfs_destroy: False
   test_file: /testFile
-  transfersize: !mux
+  transfer_size: !mux
     case1:
       block_size: 30000000
       tsize:

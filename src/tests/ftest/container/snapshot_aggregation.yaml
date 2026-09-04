@@ -27,7 +27,6 @@ pool:
   target_list: [0, 1]
 
 container:
-  control_method: daos
   type: POSIX
 
 ior:

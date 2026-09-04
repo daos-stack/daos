@@ -15,7 +15,6 @@ pool:
   svcn: 1
 container:
   type: POSIX
-  control_method: daos
 ior:
   env_vars:
     - D_LOG_MASK=INFO

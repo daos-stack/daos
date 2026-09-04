@@ -28,7 +28,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 mdtest: &mdtest_base
   client_processes:

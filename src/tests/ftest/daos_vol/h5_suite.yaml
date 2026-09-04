@@ -16,7 +16,6 @@ pool:
   nvme_size: 100G
 container:
   type: POSIX
-  control_method: daos
 daos_vol_tests: !mux
   test1:
     testname: h5_partest_t_shapesame

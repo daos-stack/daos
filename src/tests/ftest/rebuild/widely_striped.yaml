@@ -26,7 +26,6 @@ pool:
   properties: rd_fac:2
 container:
   type: POSIX
-  control_method: daos
   oclass: RP_3G1
   properties: rd_fac:2
 mdtest:

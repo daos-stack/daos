@@ -28,10 +28,8 @@ pool_size_ratio_66:
 
 container_wo_rf:
   type: POSIX
-  control_method: daos
 container_with_rf:
   type: POSIX
-  control_method: daos
   properties: rd_fac:1
 
 ior: &ior_base

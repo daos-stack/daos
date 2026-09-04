@@ -22,7 +22,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 dfuse:
   cores: '0-17'

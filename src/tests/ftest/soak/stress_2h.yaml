@@ -38,13 +38,11 @@ pool_reserved:
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  control_method: daos
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
   file_oclass: SX
   dir_oclass: SX
-  control_method: daos
   daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
