@@ -23,7 +23,6 @@ server_config:
 
 pool:
   size: 95%
-  svcn: 1
 
 container:
   # the smallest cell size keeps a full stripe at 8KiB for OC_EC_2P1G1

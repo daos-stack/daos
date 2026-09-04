@@ -2996,9 +2996,10 @@ ec_fetch_multi_iom(void **state)
 }
 
 /*
- * The following tests reproduce the "daos container clone" failure where a fetch of the exact
- * extents just returned by daos_obj_list_recx() comes back with sg_nr_out == 0 (or short).
- * See cont_clone_recx_array() in src/utils/daos_hdlr.c.
+ * These cover the DAOS side behavior that "daos container clone" depends on: for an EC object
+ * daos_obj_list_recx() reports a superset of the data, so only the fetch io map says what is
+ * really there. They do not execute the tool - cont_clone_recx_array() in src/utils/daos_hdlr.c
+ * is covered by src/tests/ftest/datamover/obj_ec.py.
  */
 
 /** batch size used by cont_clone_recx_array() */
@@ -3012,8 +3013,8 @@ struct clone_copy_stat {
 };
 
 /*
- * Mirror of cont_clone_recx_array(): enumerate the extents of an akey, fetch them, and copy to
- * the destination object what the io map says was actually returned.
+ * Same sequence as cont_clone_recx_array(), reimplemented because that function is static to the
+ * tool. Editing one does not affect the other.
  */
 static void
 clone_copy_akey(daos_handle_t src_oh, daos_handle_t dst_oh, daos_handle_t th, char *dkey_str,

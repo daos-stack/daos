@@ -1971,31 +1971,39 @@ out:
  * The extents reported by daos_obj_list_recx() are only a superset of the data: for an EC object
  * they are derived from the parity and are therefore stripe granular. The io map returned by the
  * fetch is what actually holds data, so the destination is updated from that.
+ *
+ * Regression test for this function: src/tests/ftest/datamover/obj_ec.py. EC32-EC35 in
+ * src/tests/suite/daos_obj_ec.c cover the io map behavior relied on here but do not run this
+ * code, so they stay green if this function is broken.
  */
 static int
 cont_clone_recx_array(struct cmd_args_s *ap, daos_key_t *dkey, daos_key_t *akey, daos_handle_t th,
-		      daos_handle_t *src_oh, daos_handle_t *dst_oh, daos_iod_t *iod)
+		      daos_handle_t *src_oh, daos_handle_t *dst_oh)
 {
-	int			rc = 0;
-	int			i = 0;
-	int                      j             = 0;
-	daos_size_t		buf_len = 0;
-	daos_size_t		buf_len_alloc = 0;
-	uint32_t		number = 5;
-	daos_anchor_t		recx_anchor = {0};
-	d_sg_list_t		sgl;
-	d_iov_t			iov;
-	daos_epoch_range_t	eprs[5];
-	daos_recx_t		recxs[5];
-	daos_iom_t               iom            = {0};
-	daos_recx_t             *prev_iom_recxs = NULL;
-	uint32_t                 iom_nr_alloc   = 0;
-	d_iov_t                 *iovs           = NULL;
-	d_iov_t                 *prev_iovs      = NULL;
-	uint32_t                 iovs_alloc     = 0;
-	daos_size_t		size;
-	char			*buf = NULL;
-	char			*prev_buf = NULL;
+	int                rc            = 0;
+	int                i             = 0;
+	int                j             = 0;
+	daos_size_t        buf_len       = 0;
+	daos_size_t        buf_len_alloc = 0;
+	daos_size_t        rec_nr        = 0;
+	uint32_t           number        = 5;
+	daos_anchor_t      recx_anchor   = {0};
+	d_sg_list_t        sgl;
+	d_iov_t            iov;
+	daos_epoch_range_t eprs[5];
+	daos_recx_t        recxs[5];
+	daos_iod_t         iod            = {0};
+	daos_iom_t         iom            = {0};
+	daos_recx_t       *prev_iom_recxs = NULL;
+	uint32_t           iom_nr_alloc   = 0;
+	d_iov_t           *iovs           = NULL;
+	d_iov_t           *prev_iovs      = NULL;
+	uint32_t           iovs_alloc     = 0;
+	daos_size_t        size;
+	char              *buf      = NULL;
+	char              *prev_buf = NULL;
+
+	iod.iod_name = *akey;
 
 	while (!daos_anchor_is_eof(&recx_anchor)) {
 		/* list all recx for this dkey/akey */
@@ -2012,10 +2020,10 @@ cont_clone_recx_array(struct cmd_args_s *ap, daos_key_t *dkey, daos_key_t *akey,
 			continue;
 
 		/* set iod values */
-		(*iod).iod_type  = DAOS_IOD_ARRAY;
-		(*iod).iod_nr    = number;
-		(*iod).iod_recxs = recxs;
-		(*iod).iod_size  = size;
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_nr    = number;
+		iod.iod_recxs = recxs;
+		iod.iod_size  = size;
 
 		/* set sgl values */
 		sgl.sg_nr_out = 0;
@@ -2025,10 +2033,10 @@ cont_clone_recx_array(struct cmd_args_s *ap, daos_key_t *dkey, daos_key_t *akey,
 		/* the extents and the record size come from the source, so the buffer size they
 		 * add up to has to be range checked before anything is derived from it
 		 */
-		buf_len = 0;
+		rec_nr = 0;
 		for (i = 0; i < number; i++) {
-			if (__builtin_add_overflow(buf_len, recxs[i].rx_nr, &buf_len)) {
-				rc = -DER_INVAL;
+			if (__builtin_add_overflow(rec_nr, recxs[i].rx_nr, &rec_nr)) {
+				rc = -DER_IO;
 				DH_PERROR_DER(ap, rc,
 					      "Source listed %u extents whose length "
 					      "overflows",
@@ -2036,26 +2044,29 @@ cont_clone_recx_array(struct cmd_args_s *ap, daos_key_t *dkey, daos_key_t *akey,
 				D_GOTO(out, rc);
 			}
 		}
-		if (__builtin_mul_overflow(buf_len, size, &buf_len)) {
-			rc = -DER_INVAL;
+		if (__builtin_mul_overflow(rec_nr, size, &buf_len)) {
+			rc = -DER_IO;
 			DH_PERROR_DER(ap, rc,
 				      "Source listed " DF_U64 " records of size " DF_U64
 				      ", which overflows",
-				      buf_len, size);
+				      rec_nr, size);
 			D_GOTO(out, rc);
 		}
 
 		/* allocate/reallocate a single buffer */
-		prev_buf = buf;
 		if (buf_len > buf_len_alloc) {
+			prev_buf = buf;
 			D_REALLOC_NZ(buf, prev_buf, buf_len);
-			if (buf == NULL)
+			if (buf == NULL) {
+				buf = prev_buf;
 				D_GOTO(out, rc = -DER_NOMEM);
+			}
 			buf_len_alloc = buf_len;
 		}
 		d_iov_set(&iov, buf, buf_len);
 
-		/* a listed extent can be split by the fetch, so allow for more than were listed */
+		/* a listed extent can be split by the fetch, overshoot so the refetch below is rare
+		 */
 		if (iom_nr_alloc < number * 2) {
 			prev_iom_recxs = iom.iom_recxs;
 			D_REALLOC_ARRAY(iom.iom_recxs, prev_iom_recxs, iom_nr_alloc, number * 2);
@@ -2070,14 +2081,14 @@ cont_clone_recx_array(struct cmd_args_s *ap, daos_key_t *dkey, daos_key_t *akey,
 		iom.iom_nr_out = 0;
 
 		/* fetch recx values from source */
-		rc = daos_obj_fetch(*src_oh, th, 0, dkey, 1, iod, &sgl, &iom, NULL);
+		rc = daos_obj_fetch(*src_oh, th, 0, dkey, 1, &iod, &sgl, &iom, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "Failed to fetch source recx");
 			D_GOTO(out, rc);
 		}
 
 		if (iom.iom_nr_out > iom.iom_nr) {
-			/* the map was truncated, grow it and fetch again */
+			/* the map was truncated, iom_nr_out is the exact count needed */
 			prev_iom_recxs = iom.iom_recxs;
 			D_REALLOC_ARRAY(iom.iom_recxs, prev_iom_recxs, iom_nr_alloc,
 					iom.iom_nr_out);
@@ -2090,13 +2101,13 @@ cont_clone_recx_array(struct cmd_args_s *ap, daos_key_t *dkey, daos_key_t *akey,
 			iom.iom_nr_out = 0;
 			sgl.sg_nr_out  = 0;
 
-			rc = daos_obj_fetch(*src_oh, th, 0, dkey, 1, iod, &sgl, &iom, NULL);
+			rc = daos_obj_fetch(*src_oh, th, 0, dkey, 1, &iod, &sgl, &iom, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to fetch source recx");
 				D_GOTO(out, rc);
 			}
 			if (iom.iom_nr_out > iom.iom_nr) {
-				rc = -DER_INVAL;
+				rc = -DER_IO;
 				DH_PERROR_DER(ap, rc, "Source io map grew from %u to %u extents",
 					      iom.iom_nr, iom.iom_nr_out);
 				D_GOTO(out, rc);
@@ -2136,7 +2147,7 @@ cont_clone_recx_array(struct cmd_args_s *ap, daos_key_t *dkey, daos_key_t *akey,
 			if (j == number || __builtin_mul_overflow(map->rx_nr, size, &map_len) ||
 			    __builtin_add_overflow(recx_off, map_len, &map_end) ||
 			    map_end > buf_len) {
-				rc = -DER_INVAL;
+				rc = -DER_IO_INVAL;
 				DH_PERROR_DER(ap, rc,
 					      "Source io map extent " DF_U64 "/" DF_U64
 					      " is not within the listed extents",
@@ -2149,14 +2160,14 @@ cont_clone_recx_array(struct cmd_args_s *ap, daos_key_t *dkey, daos_key_t *akey,
 		/* update fetched recx values and place in
 		 * destination object
 		 */
-		(*iod).iod_nr    = iom.iom_nr_out;
-		(*iod).iod_recxs = iom.iom_recxs;
-		(*iod).iod_size  = size;
-		sgl.sg_nr        = iom.iom_nr_out;
-		sgl.sg_nr_out    = 0;
-		sgl.sg_iovs      = iovs;
+		iod.iod_nr    = iom.iom_nr_out;
+		iod.iod_recxs = iom.iom_recxs;
+		iod.iod_size  = size;
+		sgl.sg_nr     = iom.iom_nr_out;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs   = iovs;
 
-		rc = daos_obj_update(*dst_oh, DAOS_TX_NONE, 0, dkey, 1, iod, &sgl, NULL);
+		rc = daos_obj_update(*dst_oh, DAOS_TX_NONE, 0, dkey, 1, &iod, &sgl, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "Failed to update destination recx");
 			D_GOTO(out, rc);
@@ -2267,8 +2278,7 @@ cont_clone_list_akeys(struct cmd_args_s *ap, daos_handle_t th, daos_handle_t *sr
 			 * type
 			 */
 			if ((int)iod.iod_size == 0) {
-				rc = cont_clone_recx_array(ap, &diov, &aiov, th, src_oh, dst_oh,
-							   &iod);
+				rc = cont_clone_recx_array(ap, &diov, &aiov, th, src_oh, dst_oh);
 				if (rc != 0) {
 					DH_PERROR_DER(ap, rc, "Failed to copy record");
 					D_FREE(akey);
@@ -2389,28 +2399,28 @@ out:
 int
 cont_clone_hdlr(struct cmd_args_s *ap)
 {
-	int			rc = 0;
-	int			rc2 = 0;
-	int			i = 0;
-	daos_cont_info_t	src_cont_info;
-	daos_cont_info_t	dst_cont_info;
-	daos_obj_id_t		oids[OID_ARR_SIZE];
-	daos_anchor_t		anchor;
-	uint32_t		oids_nr;
-	daos_handle_t		toh;
-	daos_handle_t                    th = DAOS_TX_NONE;
-	daos_epoch_t		epoch;
-	struct			dm_args *ca = NULL;
-	bool			is_posix_copy = false;
-	daos_handle_t		oh;
-	daos_handle_t		dst_oh;
-	struct file_dfs		src_cp_type = {0};
-	struct file_dfs		dst_cp_type = {0};
-	char			*src_str = NULL;
-	char			*dst_str = NULL;
-	size_t			src_str_len = 0;
-	size_t			dst_str_len = 0;
-	daos_epoch_range_t	epr;
+	int                rc  = 0;
+	int                rc2 = 0;
+	int                i   = 0;
+	daos_cont_info_t   src_cont_info;
+	daos_cont_info_t   dst_cont_info;
+	daos_obj_id_t      oids[OID_ARR_SIZE];
+	daos_anchor_t      anchor;
+	uint32_t           oids_nr;
+	daos_handle_t      toh;
+	daos_handle_t      th = DAOS_TX_NONE;
+	daos_epoch_t       epoch;
+	struct dm_args    *ca            = NULL;
+	bool               is_posix_copy = false;
+	daos_handle_t      oh;
+	daos_handle_t      dst_oh;
+	struct file_dfs    src_cp_type = {0};
+	struct file_dfs    dst_cp_type = {0};
+	char              *src_str     = NULL;
+	char              *dst_str     = NULL;
+	size_t             src_str_len = 0;
+	size_t             dst_str_len = 0;
+	daos_epoch_range_t epr;
 
 	D_ALLOC(ca, sizeof(struct dm_args));
 	if (ca == NULL)

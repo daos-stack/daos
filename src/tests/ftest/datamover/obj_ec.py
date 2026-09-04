@@ -34,7 +34,8 @@ class DmvrObjEcTest(DataMoverTestBase):
         self.akey_sizes = self.params.get("akey_sizes", "/run/dataset/*")
         self.akey_extents = self.params.get("akey_extents", "/run/dataset/*")
         self.punch_extents = self.params.get("punch_extents", "/run/dataset/*")
-        self.obj_class = self.params.get("obj_class", "/run/dataset/*")
+        # an EC class is required, a replicated one would make the test vacuous
+        self.obj_class = self.params.get("obj_class", "/run/dataset/*", "OC_EC_2P1G1")
 
     def run_dm_obj_ec(self, tool):
         """

@@ -311,7 +311,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         return label_search.group(1).strip()
 
     def dataset_gen(self, cont, num_objs, num_dkeys, num_akeys_single,
-                    num_akeys_array, akey_sizes, akey_extents, oclass=None,
+                    num_akeys_array, akey_sizes, akey_extents, oclass="OC_SX",
                     punch_extents=0):
         """Generate a dataset with some number of objects, dkeys, and akeys.
 
@@ -325,8 +325,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             num_akeys_array (int): number of DAOS_IOD_ARRAY akeys per dkey.
             akey_sizes (list): varying akey sizes to iterate.
             akey_extents (list): varying number of akey extents to iterate.
-            oclass (str, optional): object class for the objects. Defaults to None,
-                which keeps the historical class.
+            oclass (str, optional): object class for the objects. Defaults to "OC_SX".
             punch_extents (int, optional): number of leading records to punch back out of
                 each array akey. Defaults to 0. Always leaves at least one record intact,
                 so the akey keeps a hole followed by data.
@@ -345,7 +344,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             # Open the obj
             obj = DaosObj(cont.pool.context, cont.container)
             obj_list.append(obj)
-            obj.create(rank=obj_idx, objcls=(oclass or 3))
+            obj.create(rank=obj_idx, objcls=oclass)
             obj.open()
 
             ioreq = IORequest(cont.pool.context, cont.container, obj)
