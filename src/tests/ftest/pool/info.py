@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -36,7 +37,7 @@ class InfoTests(TestWithServers):
         # pool_targets = len(self.hostlist_servers) * targets
 
         # Create a pool
-        self.add_pool()
+        self.pool = self.get_pool()
 
         # Connect to the pool
         self.pool.connect(1 << permissions)

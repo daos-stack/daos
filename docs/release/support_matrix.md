@@ -1,12 +1,5 @@
 # DAOS Version 2.8 Support Matrix
 
-DAOS 2.8 is under active development and has not been released yet.
-In the meantime, please refer to the support document for the
-[latest](https://docs.daos.io/latest/release/support_matrix/)
-stable DAOS release.
-
-# **DRAFT** DAOS Version 2.8 Support Matrix
-
 ## Community Support and Commercial Support
 
 Community support for DAOS is available through the
@@ -90,9 +83,10 @@ have identical NVMe storage configurations.
 The number of targets (I/O threads) per DAOS engine must be identical
 for all DAOS engines in a DAOS system.
 
-!!! note For development and testing purposes, NVMe storage can be emulated
-         by files in a filesystem on non-NVMe storage.
-         This is not a supported configuration in a production environment.
+!!! note
+    For development and testing purposes, NVMe storage can be emulated
+    by files in a filesystem on non-NVMe storage.
+    This is not a supported configuration in a production environment.
 
 For DAOS servers _with_ persistent memory,
 all NVMe disks managed by a single DAOS engine must have identical capacity
@@ -118,9 +112,10 @@ high-speed network port per DAOS engine. If multiple high-speed network ports
 per CPU sockets are deployed, it is recommended to run multiple engines per
 CPU socket (one per high-speed network port).
 
-!!! note It is possible that two DAOS engines on a 2-socket server share a
-         single high-speed network port for development and testing purposes,
-         but this configuration is not supported in a production environment.
+!!! note
+    It is possible that two DAOS engines on a 2-socket server share a
+    single high-speed network port for development and testing purposes,
+    but this configuration is not supported in a production environment.
 
 It is strongly recommended that all DAOS engines in a DAOS system use the same
 model of high-speed fabric adapter.
@@ -363,12 +358,13 @@ Slingshot Host Stack (SHS) releases:
   [https://support.hpe.com/hpesc/public/docDisplay?docId=dp00007409en_us](HPE Slingshot Host Software Release 13.1.0)
   document.
 
-The recommended Slingshot Host Stack (SHS) level for DAOS 2.8 is SHS 13.1.
+The recommended Slingshot Host Stack (SHS) level for DAOS 2.8 is SHS 13.1 or higher.
 
-!!! note The Slingshot Host Software (SHS) stack includes its own libfabric
-         version, which gets installed into `/opt/cray/libfabric/<version>/lib64`.
-         For DAOS engines and DAOS clients to use the SHS version of libfabric,
-         `LD_LIBRARY_PATH` needs to be set to point to the correct SHS path.
+!!! note
+    The Slingshot Host Software (SHS) stack includes its own libfabric
+    version, which gets installed into `/opt/cray/libfabric/<version>/lib64`.
+    For DAOS engines and DAOS clients to use the SHS version of libfabric,
+    `LD_LIBRARY_PATH` needs to be set to point to the correct SHS path.
 
 It is strongly recommended that all DAOS servers and all DAOS clients
 run the same version of SHS, and that the Slingshot adapters are
@@ -390,7 +386,7 @@ CN5000 bulk service optimization in the HFI1 driver (`use_bulksvc=Y`).
 For optimal TCP performance, it is recommended to configure
 the Omni-Path fabric manager with an MTU of 10240 byte.
 
-The recommended CN5000 Software level is:
+The recommended CN5000 Software level is 12.1.1 or higher:
 
 * [https://customercenter.cornelis.com/?product=cn5000&release=12-1%2C12-1-1](CN5000 OPX Software Version 12.1.1)
 

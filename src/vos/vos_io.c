@@ -2022,7 +2022,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		else
 			akey_flags = ioc->ic_ts_set->ts_flags;
 
-		switch (akey_flags) {
+		switch (akey_flags & VOS_COND_AKEY_UPDATE_MASK) {
 		case VOS_OF_COND_AKEY_UPDATE:
 			update_cond = VOS_ILOG_COND_UPDATE;
 			break;

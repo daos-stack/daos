@@ -17,7 +17,6 @@ pool:
   size: 8G
 container:
   type: POSIX
-  control_method: daos
   dir_oclass: SX
 
 timeout: 270
