@@ -198,6 +198,7 @@ fio
 formattable
 fpp
 fs
+fsanitize
 fstab
 fstat
 ftest
