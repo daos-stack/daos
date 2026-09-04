@@ -58,7 +58,6 @@ class ExecutableCommand(CommandWithParameters):
         self.run_as_subprocess = subprocess
         self.timeout = None
         self.exit_status_exception = True
-        self.output_check = "both"
         self.verbose = True
         self.env = EnvironmentVariables()
 
@@ -240,8 +239,7 @@ class ExecutableCommand(CommandWithParameters):
             # Block until the command is complete or times out
 
             self.result = run_command(
-                command, self.timeout, self.verbose, raise_exception,
-                self.output_check, env=self.env)
+                command, self.timeout, self.verbose, raise_exception, env=self.env)
 
         except DaosTestError as error:
             # Command failed or possibly timed out
@@ -311,7 +309,6 @@ class ExecutableCommand(CommandWithParameters):
             kwargs = {
                 "cmd": str(self),
                 "verbose": self.verbose,
-                "allow_output_check": "combined",
                 "shell": False,
                 "env": self.env,
                 "sudo": self.sudo,
@@ -723,8 +720,6 @@ class CommandWithSubCommand(ExecutableCommand):
                 f"The {self.command} command doesn't have json option defined!")
         prev_json_val = self.json.value
         self.json.update(True)
-        prev_output_check = self.output_check
-        self.output_check = "both"
         if json_err:
             prev_exit_exception = self.exit_status_exception
             self.exit_status_exception = False
@@ -733,7 +728,6 @@ class CommandWithSubCommand(ExecutableCommand):
             self._get_result(sub_command_list, raise_exception=raise_exception, **kwargs)
         finally:
             self.json.update(prev_json_val)
-            self.output_check = prev_output_check
             if json_err:
                 self.exit_status_exception = prev_exit_exception
         if not self.result.stdout:
