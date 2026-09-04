@@ -19,8 +19,28 @@ from test_utils_base import TestDaosApiBase
 
 CONT_NAMESPACE = "/run/container/*"
 DEFAULT_CONT_PROPS = {
-    "cksum:on",
-    "srv_cksum:on"
+    "acl": ["A::OWNER@:rwdtTaAo", "A:G:GROUP@:rwtT"],
+    "alloc_oid": 0,
+    "cksum": "crc32",
+    "cksum_size": 32768,
+    "compression": "off",
+    "dedup": "off",
+    "dedup_threshold": 4096,
+    "ec_cell_sz": 131072,
+    "ec_pda": 1,
+    "encryption": "off",
+    "global_version": "4",
+    "layout_type": "POSIX",
+    "layout_version": 1,
+    "max_snapshot": 0,
+    "obj_version": "2",
+    "perf_domain": "root (255)",
+    "rd_fac": "0",
+    "rd_lvl": "rank",
+    "rp_pda": "4294967295",
+    "scrub_disabled": "false",
+    "srv_cksum": "on",
+    "status": "HEALTHY",
 }
 
 
@@ -1034,21 +1054,16 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             exclusive (bool, optional): whether to only check the properties specified in
                             expected_props. Defaults to True.
 
-        Returns:
-            bool: whether props from daos container get-prop match expected values
-
+        Raises:
+            AssertionError: If any property does not match the expected value.
         """
-        status = True
+        data = {}
         properties = expected_props.keys() if exclusive else None
         prop_output = self.get_prop(properties=properties)
         for actual_prop in prop_output['response']:
             expected = expected_props.get(actual_prop['name'], "ValueError")
-            is_equal = "==" if expected == actual_prop['value'] else "!="
-            self.log.debug(
-                "%s: %s %s %s", actual_prop['name'], actual_prop['value'], is_equal, expected)
-            if is_equal == "!=":
-                status = False
-        return status
+            data[actual_prop['name']] = (actual_prop['value'], expected)
+        self._check_properties(data)
 
     def list_attrs(self, *args, **kwargs):
         """Get container properties by calling daos container list-attrs.

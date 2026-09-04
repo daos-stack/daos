@@ -795,21 +795,16 @@ class TestPool(TestDaosApiBase):
             exclusive (bool, optional): whether to only check the properties specified in
                 expected_props. Defaults to True.
 
-        Returns:
-            bool: whether props from dmg pool get-prop match expected values
-
+        Raises:
+            AssertionError: If any property does not match the expected value.
         """
-        status = True
+        data = {}
         name = expected_props.keys() if exclusive else None
         prop_output = self.get_prop(name=name)
         for actual_prop in prop_output['response']:
             expected = expected_props.get(actual_prop['name'], "ValueError")
-            is_equal = "==" if expected == actual_prop['value'] else "!="
-            self.log.debug(
-                "%s: %s %s %s", actual_prop['name'], actual_prop['value'], is_equal, expected)
-            if is_equal == "!=":
-                status = False
-        return status
+            data[actual_prop['name']] = (actual_prop['value'], expected)
+        self._check_properties(data)
 
     @fail_on(CommandFailure)
     def get_property(self, prop_name):

@@ -39,7 +39,9 @@ class QueryPropertiesTest(TestWithServers):
         containers.append(add_container(self, pool, "/run/container_1/*"))
 
         self.log_step("Verify container get-prop matches create")
-        if not containers[-1].verify_prop(DEFAULT_CONT_PROPS, exclusive=False):
+        try:
+            containers[-1].verify_prop(DEFAULT_CONT_PROPS, exclusive=False)
+        except AssertionError:
             self.fail("Unexpected default properties from daos container get-prop")
 
         self.log_step("Create a container with specific properties")
@@ -52,7 +54,9 @@ class QueryPropertiesTest(TestWithServers):
             "srv_cksum": self.params.get("srv_cksum", "/run/expected_get_prop/*")}
 
         self.log_step("Verify container get-prop matches create")
-        if not containers[-1].verify_prop(expected_props, exclusive=True):
+        try:
+            containers[-1].verify_prop(expected_props, exclusive=True)
+        except AssertionError:
             self.fail("Unexpected specific properties from daos container get-prop")
 
         self.log.info("Test passed")

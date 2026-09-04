@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,6 +11,42 @@ from time import sleep
 
 from command_utils_base import BasicParameter, ObjectWithParameters
 from pydaos.raw import DaosApiError
+
+
+def check_expected(logger, description, data):
+    """Check if the expected values match the actual values.
+
+    Args:
+        description (str): description of the data being checked
+        data (dict): dictionary containing the actual and expected values
+            in the format {name: (value, expected)}
+
+    Raises:
+        AssertionError: if any of the expected values do not match the actual values
+    """
+    results = {"Passed": [], "Failed": []}
+    logger.debug("Verifying %s:", description)
+    name_width = max(len(name) for name in data.keys()) if data else 0
+    value_width = max(len(str(value)) for value, _ in data.values()) if data else 0
+    for name in sorted(data.keys()):
+        (value, expected) = data[name]
+        if value != expected:
+            results["Failed"].append(name)
+        else:
+            results["Passed"].append(name)
+    for key in ("Passed", "Failed"):
+        if not results[key]:
+            continue
+        logger.debug("  %s:", key)
+        for name in results[key]:
+            (value, expected) = data[name]
+            is_equal = "==" if key == "Passed" else "!="
+            logger.debug(
+                "    %-*s: %-*s %s %s",
+                name_width, name, value_width, value, is_equal, expected)
+    if results["Failed"]:
+        raise AssertionError(
+            f"{description} did not match expected values for {', '.join(results['Failed'])}")
 
 
 class CallbackHandler():
@@ -176,6 +213,18 @@ class TestDaosApiBase(ObjectWithParameters):
                 self.log.error(msg)
                 check_status = False
         return check_status
+
+    def _check_properties(self, data):
+        """Check the properties of a given type against expected values.
+
+        Args:
+            data (dict): Dictionary containing property names as keys and tuples of
+                (actual_value, comparison_operator, expected_value) as values.
+
+        Raises:
+            AssertionError: If any property does not match the expected value.
+        """
+        check_expected(self.log, f"{self.identifier} properties", data)
 
 
 class LabelGenerator():
