@@ -22,6 +22,78 @@
 #include "../object/obj_rpc.h"
 
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
+#define CRT_RX_RPC_POOL_RPC_SIZE 4096
+#define CRT_RX_RPC_POOL_MAX_NUM  64
+
+D_CASSERT(sizeof(struct crt_rpc_priv) <= CRT_RX_RPC_POOL_RPC_SIZE);
+
+static void
+crt_rpc_rx_pool_put(struct crt_context *ctx, struct crt_rpc_priv *rpc_priv)
+{
+	D_ASSERT(ctx != NULL);
+	D_ASSERT(rpc_priv != NULL);
+
+	memset(rpc_priv, 0, CRT_RX_RPC_POOL_RPC_SIZE);
+	D_INIT_LIST_HEAD(&rpc_priv->crp_rx_pool_link);
+
+	D_MUTEX_LOCK(&ctx->cc_rx_rpc_pool_lock);
+	d_list_add_tail(&rpc_priv->crp_rx_pool_link, &ctx->cc_rx_rpc_pool);
+	ctx->cc_rx_rpc_pool_num++;
+	D_MUTEX_UNLOCK(&ctx->cc_rx_rpc_pool_lock);
+}
+
+int
+crt_rpc_rx_pool_init(struct crt_context *ctx)
+{
+	int rc;
+	int i;
+
+	D_ASSERT(ctx != NULL);
+
+	D_INIT_LIST_HEAD(&ctx->cc_rx_rpc_pool);
+	ctx->cc_rx_rpc_pool_inited = false;
+	ctx->cc_rx_rpc_pool_num    = 0;
+
+	rc = D_MUTEX_INIT(&ctx->cc_rx_rpc_pool_lock, NULL);
+	if (rc != 0)
+		return rc;
+	ctx->cc_rx_rpc_pool_inited = true;
+
+	for (i = 0; i < CRT_RX_RPC_POOL_MAX_NUM; i++) {
+		struct crt_rpc_priv *rpc_priv;
+
+		D_ALLOC(rpc_priv, CRT_RX_RPC_POOL_RPC_SIZE);
+		if (rpc_priv == NULL) {
+			break;
+		}
+
+		D_INIT_LIST_HEAD(&rpc_priv->crp_rx_pool_link);
+		d_list_add_tail(&rpc_priv->crp_rx_pool_link, &ctx->cc_rx_rpc_pool);
+		ctx->cc_rx_rpc_pool_num++;
+	}
+
+	return 0;
+}
+
+void
+crt_rpc_rx_pool_fini(struct crt_context *ctx)
+{
+	struct crt_rpc_priv *rpc_priv;
+
+	D_ASSERT(ctx != NULL);
+	if (!ctx->cc_rx_rpc_pool_inited)
+		return;
+
+	D_MUTEX_LOCK(&ctx->cc_rx_rpc_pool_lock);
+	while ((rpc_priv = d_list_pop_entry(&ctx->cc_rx_rpc_pool, struct crt_rpc_priv,
+					    crp_rx_pool_link)) != NULL)
+		D_FREE(rpc_priv);
+	ctx->cc_rx_rpc_pool_num = 0;
+	D_MUTEX_UNLOCK(&ctx->cc_rx_rpc_pool_lock);
+
+	D_MUTEX_DESTROY(&ctx->cc_rx_rpc_pool_lock);
+	ctx->cc_rx_rpc_pool_inited = false;
+}
 
 void
 crt_hdlr_ctl_fi_toggle(crt_rpc_t *rpc_req)
@@ -564,11 +636,90 @@ out:
 	return rc;
 }
 
+int
+crt_rpc_priv_alloc_rx(struct crt_context *ctx, crt_opcode_t opc,
+		      struct crt_rpc_priv **priv_allocated)
+{
+	struct crt_rpc_priv *rpc_priv = NULL;
+	struct crt_opc_info *opc_info;
+	int                  rc = 0;
+
+	D_ASSERT(ctx != NULL);
+	D_ASSERT(priv_allocated != NULL);
+
+	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
+	if (opc_info == NULL) {
+		D_ERROR("opc: %#x, lookup failed.\n", opc);
+		D_GOTO(out, rc = -DER_UNREG);
+	}
+
+	if (opc_info->coi_crf != NULL && (opc_info->coi_crf->crf_size_in > CRT_MAX_INPUT_SIZE ||
+					  opc_info->coi_crf->crf_size_out > CRT_MAX_OUTPUT_SIZE)) {
+		D_ERROR("opc: %#x, input_size " DF_U64 " or output_size " DF_U64 " too large.\n",
+			opc, opc_info->coi_crf->crf_size_in, opc_info->coi_crf->crf_size_out);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (opc_info->coi_rpc_size <= CRT_RX_RPC_POOL_RPC_SIZE) {
+		D_MUTEX_LOCK(&ctx->cc_rx_rpc_pool_lock);
+		rpc_priv =
+		    d_list_pop_entry(&ctx->cc_rx_rpc_pool, struct crt_rpc_priv, crp_rx_pool_link);
+		if (rpc_priv != NULL)
+			ctx->cc_rx_rpc_pool_num--;
+		D_MUTEX_UNLOCK(&ctx->cc_rx_rpc_pool_lock);
+
+		if (rpc_priv != NULL) {
+			memset(rpc_priv, 0, CRT_RX_RPC_POOL_RPC_SIZE);
+			rpc_priv->crp_from_rx_pool = 1;
+		}
+	}
+
+	if (rpc_priv == NULL) {
+		D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
+		if (rpc_priv == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rpc_priv->crp_opc_info   = opc_info;
+	rpc_priv->crp_forward    = false;
+	rpc_priv->crp_pub.cr_opc = opc;
+
+	rc = D_SPIN_INIT(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
+	if (rc != 0) {
+		if (rpc_priv->crp_from_rx_pool)
+			crt_rpc_rx_pool_put(ctx, rpc_priv);
+		else
+			D_FREE(rpc_priv);
+		D_GOTO(out, rc);
+	}
+
+	rc = D_MUTEX_INIT(&rpc_priv->crp_mutex, NULL /* attr */);
+	if (rc != 0) {
+		D_SPIN_DESTROY(&rpc_priv->crp_lock);
+		if (rpc_priv->crp_from_rx_pool)
+			crt_rpc_rx_pool_put(ctx, rpc_priv);
+		else
+			D_FREE(rpc_priv);
+		D_GOTO(out, rc);
+	}
+
+	RPC_TRACE(DB_TRACE, rpc_priv, "(opc: %#x rpc_pub: %p) allocated.\n",
+		  rpc_priv->crp_opc_info->coi_opc, &rpc_priv->crp_pub);
+
+	*priv_allocated = rpc_priv;
+out:
+	return rc;
+}
+
 void
 crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 {
+	struct crt_context *ctx;
+
 	if (rpc_priv == NULL)
 		return;
+
+	ctx = rpc_priv->crp_pub.cr_ctx;
 
 	if (rpc_priv->crp_coll && rpc_priv->crp_corpc_info)
 		crt_corpc_info_fini(rpc_priv);
@@ -582,6 +733,12 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
 
 	D_FREE(rpc_priv->crp_orig_uri);
+
+	if (rpc_priv->crp_from_rx_pool && ctx != NULL) {
+		crt_rpc_rx_pool_put(ctx, rpc_priv);
+		return;
+	}
+
 	D_FREE(rpc_priv);
 }
 
