@@ -397,6 +397,24 @@ if [ "$ib_count" -ge 2 ] ; then
         # DAOS tests do and records it in the console log.
         nvme_devices="$(lspci -vmm -D | grep -E '^(Slot|Class|Device|NUMANode):' |
                         grep -E 'Class:\s+Non-Volatile memory controller' -B 1 -A 2)"
+        # Identify OS boot controller PCI slots to exclude from data NVMe counts.
+        # HPE NS204i (88NR2241) is a boot-only controller, not a DAOS data drive.
+        boot_nvme_slots=()
+        _slot=""
+        while IFS= read -r _line; do
+            if [[ "$_line" == Slot:* ]]; then
+                # lspci -vmm uses tabs; strip key and all leading whitespace.
+                _slot="$(awk '{print $2}' <<< "$_line")"
+            elif [[ "$_line" == Device:*88NR2241* ]]; then
+                boot_nvme_slots+=("$_slot")
+            fi
+        done < <(lspci -vmm -D | grep -E '^(Slot|Device):')
+
+        # Find the NVMe block device hosting the root filesystem.
+        # The sysfs path via PCI slot is unreliable when Intel VMD is active.
+        _root_src="$(findmnt -n -o SOURCE /)"
+        _root_nvme="$(basename "${_root_src%%p[0-9]*}")"
+
         nvme_count=0
         while IFS= read -r line; do
             if [[ "$line" != *"Class:"*"Non-Volatile memory controller"* ]];then
@@ -404,6 +422,7 @@ if [ "$ib_count" -ge 2 ] ; then
             fi
             ((nvme_count++)) || true
         done < <(printf %s "$nvme_devices")
+        nvme_count=$((nvme_count - ${#boot_nvme_slots[@]}))
 
         ((testruns++)) || true
         testcases+="  <testcase name=\"NVMe Count Node $mynodenum\">${nl}"
@@ -420,9 +439,14 @@ if [ "$ib_count" -ge 2 ] ; then
         fi
         testcases+="  </testcase>$nl"
     fi
-    # All storage found by lspci should also be in lsblk report
-    lsblk_nvme=$(lsblk | grep nvme -c)
-    lsblk_pmem=$(lsblk | grep pmem -c)
+    # All storage found by lspci should also be in lsblk report.
+    # Count only data NVMe block devices, excluding the OS boot device.
+    lsblk_nvme=0
+    while IFS= read -r _dev; do
+        [[ "$_dev" == "$_root_nvme" ]] && continue
+        ((lsblk_nvme++)) || true
+    done < <(lsblk -d -o NAME --noheadings | grep nvme)
+    lsblk_pmem=$(lsblk | grep pmem -c) || true
 
     if [ "$DAOS_NVME" -gt 0 ]; then
         ((testruns++)) || true
