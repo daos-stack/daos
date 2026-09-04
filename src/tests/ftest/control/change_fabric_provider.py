@@ -93,8 +93,8 @@ class ChangeFabricProvider(IorTestBase):
         )
 
         if not alternate_providers:
-            self.fail("No alternative provider found; available: %s current: %s",
-                      common_providers, current_provider)
+            self.fail(f"No alternative provider found; available: {common_providers}, "
+                      f"current: {current_provider}")
 
         # Return a random provider
         return self.random.choice(list(alternate_providers))
@@ -136,7 +136,7 @@ class ChangeFabricProvider(IorTestBase):
         try:
             self.run_ior_with_pool(intercept=intercept, fail_on_warning=False)
         except CommandFailure as error:
-            self.fail("IOR write failed: %s", str(error))
+            self.fail(f"IOR write failed: {str(error)}")
 
         self.log.info("IOR write completed successfully with provider %s", provider)
 
@@ -154,7 +154,7 @@ class ChangeFabricProvider(IorTestBase):
             self.ior_cmd.flags.update(ior_read_flags)
             self.run_ior_with_pool(intercept=intercept, create_pool=False, create_cont=False)
         except CommandFailure as error:
-            self.fail("IOR read failed: %s", str(error))
+            self.fail(f"IOR read failed: {str(error)}")
 
         self.log.info("IOR read completed successfully with provider %s", provider)
 
@@ -203,11 +203,11 @@ class ChangeFabricProvider(IorTestBase):
         clients_using_provider, engines_using_provider = self._parse_attachinfo(new_provider)
 
         if clients_using_provider != len(self.hostlist_clients):
-            self.fail("Some DAOS clients not using provider %s; want %d found %d",
-                      new_provider, len(self.hostlist_clients), clients_using_provider)
+            self.fail(f"Some DAOS clients not using provider {new_provider}: "
+                      f"want {len(self.hostlist_clients)} found {clients_using_provider}")
         if engines_using_provider != self.server_managers[0].engines:
-            self.fail("Some DAOS engines not using provider %s; want %d found %d",
-                      new_provider, self.server_managers[0].engines, engines_using_provider)
+            self.fail(f"Some DAOS engines not using provider {new_provider}: "
+                      f"want {self.server_managers[0].engines} found {engines_using_provider}")
 
         self.log.info("All DAOS engines and clients using provider %s", new_provider)
 
@@ -265,11 +265,11 @@ class ChangeFabricProvider(IorTestBase):
         clients_using_provider, engines_using_provider = self._parse_attachinfo(new_provider)
 
         if clients_using_provider != len(self.hostlist_clients):
-            self.fail("Some DAOS clients not using provider %s; want %d found %d",
-                      new_provider, len(self.hostlist_clients), clients_using_provider)
+            self.fail(f"Some DAOS clients not using provider {new_provider}: "
+                      f"want {len(self.hostlist_clients)} found {clients_using_provider}")
         if engines_using_provider != self.server_managers[0].engines:
-            self.fail("Some DAOS engines not using provider %s; want %d found %d",
-                      new_provider, self.server_managers[0].engines, engines_using_provider)
+            self.fail(f"Some DAOS engines not using provider {new_provider}: "
+                      f"want {self.server_managers[0].engines} found {engines_using_provider}")
 
         self.log.info("All DAOS engines and clients using provider %s", new_provider)
 
@@ -302,11 +302,11 @@ class ChangeFabricProvider(IorTestBase):
         clients_using_provider, engines_using_provider = self._parse_attachinfo(original_provider)
 
         if clients_using_provider != len(self.hostlist_clients):
-            self.fail("Some DAOS clients not using provider %s; want %d found %d",
-                      original_provider, len(self.hostlist_clients), clients_using_provider)
+            self.fail(f"Some DAOS clients not using provider {original_provider}: "
+                      f"want {len(self.hostlist_clients)} found {clients_using_provider}")
         if engines_using_provider != self.server_managers[0].engines:
-            self.fail("Some DAOS engines not using provider %s; want %d found %d",
-                      original_provider, self.server_managers[0].engines, engines_using_provider)
+            self.fail(f"Some DAOS engines not using provider {original_provider}: "
+                      f"want {self.server_managers[0].engines} found {engines_using_provider}")
 
         self.log.info("All DAOS engines and clients using provider %s", original_provider)
 
