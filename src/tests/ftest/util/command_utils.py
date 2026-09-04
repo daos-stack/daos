@@ -267,7 +267,7 @@ class ExecutableCommand(CommandWithParameters):
         if self.result and self.check_results_list:
             regex = r"({})".format("|".join(self.check_results_list))
             self.log.debug("Checking the command output for any bad keywords: %s", regex)
-            for output in (self.__result_stdout(), self.__result_stderr()):
+            for output in (self._result_stdout(), self._result_stderr()):
                 match = re.findall(regex, output)
                 if match:
                     self.log.info(
@@ -279,7 +279,7 @@ class ExecutableCommand(CommandWithParameters):
                     break
         return status
 
-    def __result_stdout(self):
+    def _result_stdout(self):
         """Get all the stdout from the command result.
 
         Returns:
@@ -287,7 +287,7 @@ class ExecutableCommand(CommandWithParameters):
         """
         return self.result.stdout_text
 
-    def __result_stderr(self):
+    def _result_stderr(self):
         """Get all the stderr from the command result.
 
         Returns:
@@ -1616,7 +1616,7 @@ class RunCommand(ExecutableCommand):
 
         return self.result
 
-    def __result_stdout(self):
+    def _result_stdout(self):
         """Get all the stdout from the command result.
 
         Returns:
@@ -1624,7 +1624,7 @@ class RunCommand(ExecutableCommand):
         """
         return self.result.joined_stdout
 
-    def __result_stderr(self):
+    def _result_stderr(self):
         """Get all the stderr from the command result.
 
         Returns:
