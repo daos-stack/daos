@@ -1594,7 +1594,7 @@ void   mgmt__pool_self_heal_eval_req__free_unpacked
   assert(message->base.descriptor == &mgmt__pool_self_heal_eval_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[14] =
+static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[15] =
 {
   {
     "uuid",
@@ -1764,6 +1764,18 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "unavailable_ranks",
+    15,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Mgmt__PoolCreateReq, n_unavailable_ranks),
+    offsetof(Mgmt__PoolCreateReq, unavailable_ranks),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_create_req__field_indices_by_name[] = {
   4,   /* field[4] = acl */
@@ -1777,6 +1789,7 @@ static const unsigned mgmt__pool_create_req__field_indices_by_name[] = {
   12,   /* field[12] = tier_bytes */
   9,   /* field[9] = tier_ratio */
   8,   /* field[8] = total_bytes */
+  14,   /* field[14] = unavailable_ranks */
   2,   /* field[2] = user */
   3,   /* field[3] = user_group */
   0,   /* field[0] = uuid */
@@ -1784,7 +1797,7 @@ static const unsigned mgmt__pool_create_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_create_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 14 }
+  { 0, 15 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor =
 {
@@ -1794,7 +1807,7 @@ const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor =
   "Mgmt__PoolCreateReq",
   "mgmt",
   sizeof(Mgmt__PoolCreateReq),
-  14,
+  15,
   mgmt__pool_create_req__field_descriptors,
   mgmt__pool_create_req__field_indices_by_name,
   1,  mgmt__pool_create_req__number_ranges,
