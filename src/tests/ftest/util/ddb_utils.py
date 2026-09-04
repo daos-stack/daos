@@ -287,7 +287,7 @@ class DdbCommand(DdbCommandBase):
         return self.run()
 
     def prov_mem(self, db_path, tmpfs_mount):
-        """Call ddb --vos_path "" prov_mem <db_path> <tmpfs_mount>.
+        """Call ddb --vos_path "" prov_mem --db_path <db_path> <tmpfs_mount>.
 
         Args:
             db_path (str): Path to the system database. e.g.,
@@ -299,7 +299,7 @@ class DdbCommand(DdbCommandBase):
             CommandResult: groups of command results from the same hosts with the same return status
         """
         self.vos_path.value = '""'
-        cmd = ["prov_mem", db_path, tmpfs_mount]
+        cmd = ["prov_mem", "--db_path", db_path, tmpfs_mount]
         self.single_command.value = " ".join(cmd)
 
         return self.run()

@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -84,7 +84,7 @@ class DaosPool():
                        ctypes.byref(self.handle), ctypes.byref(c_info), None)
 
             if ret != 0:
-                self.handle = 0
+                self.handle = ctypes.c_uint64(0)
                 raise DaosApiError("Pool connect returned non-zero. RC: {0}".format(ret))
             self.connected = 1
         else:

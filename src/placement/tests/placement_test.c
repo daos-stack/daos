@@ -16,20 +16,22 @@
 #include <getopt.h>
 #include <daos/tests_lib.h>
 
-
-const char *s_opts = "he:f:vpmdn:l:o";
+const char          *s_opts = "he:f:vpmdn:l:ou:L";
 static int idx;
 static struct option l_opts[] = {
-	{"exclude", required_argument, NULL, 'e'},
-	{"filter",  required_argument, NULL, 'f'},
-	{"nlvl",    no_argument,	NULL, 'o'},
-	{"help",    no_argument,       NULL, 'h'},
-	{"verbose", no_argument,       NULL, 'v'},
-	{"pda",     no_argument,       NULL, 'p'},
-	{"pda_layout", no_argument,      NULL, 'm'},
-	{"distribute", no_argument,    NULL, 'd'},
-	{"num_objs", required_argument, NULL, 'n'},
-	{"obj_class", required_argument, NULL, 'l'},
+    {"exclude", required_argument, NULL, 'e'},
+    {"filter", required_argument, NULL, 'f'},
+    {"nlvl", no_argument, NULL, 'o'},
+    {"help", no_argument, NULL, 'h'},
+    {"verbose", no_argument, NULL, 'v'},
+    {"pda", no_argument, NULL, 'p'},
+    {"pda_layout", no_argument, NULL, 'm'},
+    {"distribute", no_argument, NULL, 'd'},
+    {"num_objs", required_argument, NULL, 'n'},
+    {"obj_class", required_argument, NULL, 'l'},
+    {"subtests", required_argument, NULL, 'u'},
+    {"list", no_argument, NULL, 'L'},
+    {NULL, 0, NULL, 0},
 };
 
 static bool
@@ -65,6 +67,9 @@ print_usage(char *name)
 	print_message("%s -m|--pda_layout <TESTS>\n", name);
 	print_message("%s -d|--distribut [-n num_objs] [-l obj_class] <TESTS>\n", name);
 	print_message("%s -o|--nlvl failure domain as node, engine by default\n", name);
+	print_message("%s -u|--subtests <1,2,3> or <2-8> run only the listed sub tests\n", name);
+	print_message("%s -L|--list list the sub tests of the selected suite with their index\n",
+		      name);
 	print_message("%s -h|--help\n", name);
 	print_message("%s -v|--verbose\n", name);
 }
@@ -77,8 +82,12 @@ int main(int argc, char *argv[])
 	bool		pda_layout = false;
 	bool		dist_test = false;
 	bool		verbose = false;
+	bool            list_only  = false;
 	uint32_t	num_objs = 0;
 	int		obj_class = 0;
+	int             sub_tests[PLT_MAX_SUB_TESTS];
+	int             sub_tests_nr = 0;
+	int             rc;
 
 	assert_success(daos_debug_init(DAOS_LOG_DEFAULT));
 
@@ -135,6 +144,18 @@ int main(int argc, char *argv[])
 				return -1;
 			}
 			break;
+		case 'u':
+			rc = plt_parse_sub_tests(optarg, sub_tests, PLT_MAX_SUB_TESTS,
+						 &sub_tests_nr);
+			if (rc != 0) {
+				print_usage(argv[0]);
+				daos_debug_fini();
+				return -1;
+			}
+			break;
+		case 'L':
+			list_only = true;
+			break;
 		case 'o':
 			fail_domain_node = true;
 			D_PRINT("run test as node failure domain");
@@ -144,15 +165,16 @@ int main(int argc, char *argv[])
 		}
 	}
 	if (pda_layout)
-		pda_layout_run(verbose);
+		rc = pda_layout_run(verbose, sub_tests, sub_tests_nr, list_only);
 	else if (pda_test)
-		pda_tests_run(verbose);
+		rc = pda_tests_run(verbose, sub_tests, sub_tests_nr, list_only);
 	else if (dist_test)
-		dist_tests_run(verbose, num_objs, obj_class);
+		rc = dist_tests_run(verbose, num_objs, obj_class, sub_tests, sub_tests_nr,
+				    list_only);
 	else
-		placement_tests_run(verbose);
+		rc = placement_tests_run(verbose, sub_tests, sub_tests_nr, list_only);
 
 	daos_debug_fini();
 
-	return 0;
+	return rc == 0 ? 0 : 1;
 }
