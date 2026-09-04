@@ -1693,7 +1693,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 
 	if (IS_CHECKER(ck)) {
 		CK_PRINT(ck, CK_CONT_TREE_STR "...\n");
-		CK_INDENT(ck, rc = dbtree_check_inplace(&pool_df->pd_cont_root, &pool->vp_uma,
+		CK_INDENT(ck, rc = dbtree_check_inplace(&pool_df->pd_cont_root, &pool->vp_uma, pool,
 							ck_report, ck, error_on_non_zero_padding));
 		CK_PRINTL_RC(ck, rc, CK_CONT_TREE_STR);
 		if (rc != DER_SUCCESS) {
@@ -1819,6 +1819,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		}
 		pool->vp_opened++;
 		*poh = vos_pool2hdl(pool);
+		checker_print_indent_dec(ck);
 		return 0;
 	}
 

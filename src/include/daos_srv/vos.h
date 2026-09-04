@@ -584,6 +584,19 @@ int
 vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh);
 
 /**
+ * Open a container within a VOSP with a checker.
+ *
+ * \param poh		[IN]	Pool open handle
+ * \param co_uuid	[IN]	Container uuid
+ * \param ck		[IN]	Checker structure
+ * \param coh		[OUT]	Returned container handle
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_handle_t *coh);
+
+/**
  * Release container open handle
  *
  * \param coh	[IN]	container open handle
@@ -1331,6 +1344,16 @@ vos_iter_empty(daos_handle_t ih);
  */
 int
 vos_iter_validate(daos_handle_t ih);
+
+/**
+ * XXX
+ *
+ * \param[in] ih	XXX
+ *
+ * \retval	XXX
+ */
+int
+vos_iter_check(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, struct checker *ck);
 
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a

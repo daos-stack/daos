@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +16,7 @@
 #include <daos/common.h>
 #include <daos_types.h>
 #include <daos/mem.h>
+#include <daos/report.h>
 
 /**
  * KV record of the btree.
@@ -409,7 +410,21 @@ typedef struct {
 	 * \a return		Allocated node address (offset within the pool)
 	 */
 	umem_off_t	(*to_node_alloc)(struct btr_instance *tins, int size);
-
+	/**
+	 * Optional:
+	 * Check the consistency of the given record.
+	 *
+	 * \param tins		[IN]	Tree instance which contains the root umem
+	 *				offset and memory class etc.
+	 * \param rec		[IN]	Record to be checked.
+	 * \param report_fn	[IN]	Report function.
+	 * \param report_arg	[IN]	Argument for the report function.
+	 *
+	 * \retval DER_SUCCESS	Success.
+	 * \retval -DER_*	Errors returned by the fetch callback.
+	 */
+	int (*to_rec_check)(struct btr_instance *tins, struct btr_record *rec,
+			    report_fn_t report_fn, void *report_arg);
 } btr_ops_t;
 
 /**
@@ -541,17 +556,12 @@ int  dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 		 daos_handle_t *toh);
 int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
-int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
-			    daos_handle_t coh, void *priv, daos_handle_t *toh);
-enum btr_report_type {
-	BTR_REPORT_ERROR,
-	BTR_REPORT_WARNING,
-	BTR_REPORT_MSG,
-};
-typedef void (*btr_report_fn_t)(void *arg, enum btr_report_type type, const char *fmt, ...);
 int
-     dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, btr_report_fn_t report_fn,
-			  void *report_arg, bool error_on_non_zero_padding);
+dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma, daos_handle_t coh, void *priv,
+		       daos_handle_t *toh);
+int
+     dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, void *priv,
+			  report_fn_t report_fn, void *report_arg, bool error_on_non_zero_padding);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh, void *args);
 int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);

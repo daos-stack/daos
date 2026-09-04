@@ -1170,3 +1170,9 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	return vos_iterate_internal(param, type, recursive, false, anchors, pre_cb, post_cb, arg,
 				    dth);
 }
+
+int
+vos_iter_check(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, struct checker *ck)
+{
+	return 0;
+}

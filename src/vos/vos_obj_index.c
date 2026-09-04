@@ -217,16 +217,57 @@ oi_node_alloc(struct btr_instance *tins, int size)
 	return umem_zalloc(&tins->ti_umm, size);
 }
 
+#define REP_OBJECT_FMT "Object (oid=" DF_UOID ")... "
+
+static int
+oi_rec_check(struct btr_instance *tins, struct btr_record *rec, report_fn_t report_fn,
+	     void *report_arg)
+{
+	d_iov_t            val_iov;
+	struct vos_obj_df *obj;
+	int                rc;
+
+	report_fn(report_arg, REPORT_MSG, "Record fetch (off=%#lx)... ", rec->rec_off);
+	rc = tins->ti_ops->to_rec_fetch(tins, rec, NULL, &val_iov);
+	if (rc != DER_SUCCESS) {
+		report_fn(report_arg, REPORT_ERROR | REPORT_NO_PREFIX, DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
+	report_fn(report_arg, REPORT_MSG | REPORT_NO_PREFIX, CHECKER_OK_INFIX ".\n");
+
+	D_ASSERT(val_iov.iov_buf != NULL);
+	D_ASSERT(val_iov.iov_len == vos_obj_df_size((struct vos_pool *)tins->ti_priv));
+
+	obj = val_iov.iov_buf;
+
+	report_fn(report_arg, REPORT_INDENT_INC, NULL);
+	report_fn(report_arg, REPORT_MSG, REP_OBJECT_FMT "\n", DP_UOID(obj->vo_id));
+	report_fn(report_arg, REPORT_INDENT_INC, NULL);
+	rc = ilog_root_is_valid(&obj->vo_ilog, report_fn, report_arg);
+	report_fn(report_arg, REPORT_INDENT_DEC, NULL);
+	if (rc == DER_SUCCESS) {
+		report_fn(report_arg, REPORT_MSG, REP_OBJECT_FMT CHECKER_OK_INFIX ".\n",
+			  DP_UOID(obj->vo_id));
+	} else {
+		report_fn(report_arg, REPORT_ERROR, REP_OBJECT_FMT DF_RC ".\n", DP_UOID(obj->vo_id),
+			  DP_RC(rc));
+	}
+	report_fn(report_arg, REPORT_INDENT_DEC, NULL);
+
+	return rc;
+}
+
 static btr_ops_t oi_btr_ops = {
-	.to_rec_msize		= oi_rec_msize,
-	.to_hkey_size		= oi_hkey_size,
-	.to_hkey_gen		= oi_hkey_gen,
-	.to_hkey_cmp		= oi_hkey_cmp,
-	.to_rec_alloc		= oi_rec_alloc,
-	.to_rec_free		= oi_rec_free,
-	.to_rec_fetch		= oi_rec_fetch,
-	.to_rec_update		= oi_rec_update,
-	.to_node_alloc		= oi_node_alloc,
+    .to_rec_msize  = oi_rec_msize,
+    .to_hkey_size  = oi_hkey_size,
+    .to_hkey_gen   = oi_hkey_gen,
+    .to_hkey_cmp   = oi_hkey_cmp,
+    .to_rec_alloc  = oi_rec_alloc,
+    .to_rec_free   = oi_rec_free,
+    .to_rec_fetch  = oi_rec_fetch,
+    .to_rec_update = oi_rec_update,
+    .to_node_alloc = oi_node_alloc,
+    .to_rec_check  = oi_rec_check,
 };
 
 bool
