@@ -13,7 +13,6 @@ from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
 
@@ -63,7 +62,7 @@ class NvmePoolExclude(OSAUtils):
         rank_list = list(range(1, exclude_servers))
 
         for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
+            pool[val] = self.get_pool(connect=False)
             pool[val].set_property("reclaim", "disabled")
 
         job_manager = get_job_manager(self, subprocess=None, timeout=120)

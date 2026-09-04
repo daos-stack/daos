@@ -35,7 +35,7 @@ from run_utils import run_local, run_remote, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
 from test_utils_container import CONT_NAMESPACE, add_container
-from test_utils_pool import POOL_NAMESPACE, LabelGenerator, add_pool
+from test_utils_pool import POOL_NAMESPACE, POOL_TIMEOUT_INCREMENT, LabelGenerator, TestPool
 from write_host_file import write_host_file
 
 
@@ -1723,7 +1723,93 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        return add_pool(self, namespace, create, connect, dmg, **params)
+        if dmg is None:
+            dmg = self.get_dmg_command()
+        pool = TestPool(
+            namespace=namespace, context=self.context, dmg_command=dmg,
+            label_generator=self.label_generator)
+        pool.get_params(self)
+        if params:
+            pool.update_params(**params)
+        if create:
+            pool.create()
+        if create and connect:
+            pool.connect()
+
+        # Add a step to remove this pool when the test completes and ensure there is enough time
+        # for the pool destroy to be attempted - accounting for a possible dmg command timeout
+        if pool.register_cleanup.value is True:
+            self.increment_timeout(POOL_TIMEOUT_INCREMENT)
+            self.register_cleanup(self.remove_pool, pool=pool)
+
+        return pool
+
+    def remove_pool(self, pool):
+        """Destroy and remove the requested pool from the test.
+
+        Args:
+            pool (TestPool): the pool to remove
+
+        Returns:
+            list: a list of any errors detected when removing the pool
+
+        """
+        self.log.info("Destroying pool %s", pool.identifier)
+
+        # Ensure exceptions are raised for any failed command
+        with pool.temp_exit_status_exception(True):
+            try:
+                pool.destroy(force=1, disconnect=1, recursive=1)
+            except (DaosApiError, TestFail) as error:
+                self.log.info("  %s", error)
+                return [f"Error destroying pool {pool.identifier}: {error}"]
+
+        return []
+
+    def get_pools(self, get_pool_kwargs, dmg=None, error_handler=None):
+        """Add multiple TestPool objects to the test.
+
+        Args:
+            get_pool_kwargs (list): list of kwargs (dict) for get_pool() method to use when
+                creating each pool. Must at least include the 'test' kwargs.
+                See self.get_pool() for other options.
+            dmg (DmgCommand, optional): dmg command used to update the server log mask before
+                creating the first pool and reset it after creating the last pool.
+                Not used if no pools are created. Defaults to self.get_dmg_command().
+            error_handler (method, optional): optional method to call when a pool create fails.
+                Defaults to None.
+
+        Returns:
+            list: a list of new pool objects
+        """
+        if dmg is None:
+            dmg = self.get_dmg_command()
+        _any_create = any(kwargs.get("create", True) is True for kwargs in get_pool_kwargs)
+
+        if _any_create:
+            # Set the DEBUG log mask before the first pool create
+            dmg.server_set_logmasks("DEBUG", raise_exception=False)
+
+        # Add the requested pools
+        pools = []
+        try:
+            for kwargs in get_pool_kwargs:
+                # Disable setting/resetting log masks for each individual pool create
+                _restore = kwargs.get("set_logmasks", True)
+                kwargs["set_logmasks"] = False
+                try:
+                    pools.append(self.get_pool(**kwargs))
+                    pools[-1].set_logmasks.value = _restore
+                except TestFail as error:
+                    if not error_handler:
+                        raise
+                    error_handler(error)
+        finally:
+            if _any_create:
+                # Reset the log mask after the last pool create
+                dmg.server_set_logmasks(raise_exception=False)
+
+        return pools
 
     def get_container(self, pool, namespace=CONT_NAMESPACE, create=True, daos=None, **params):
         """Create a TestContainer object.

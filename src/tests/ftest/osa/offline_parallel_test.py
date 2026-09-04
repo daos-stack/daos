@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,7 +11,6 @@ import time
 
 from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 
 
 class OSAOfflineParallelTest(OSAUtils):
@@ -93,7 +92,7 @@ class OSAOfflineParallelTest(OSAUtils):
 
         test_seq = self.ior_test_sequence[0]
         for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
+            pool[val] = self.get_pool(connect=False)
             self.pool = pool[val]
             # Use only pool UUID while running the test.
             self.pool.use_label = False
