@@ -72,6 +72,7 @@ dnf --nodocs install ${dnf_install_args} \
     python${PYTHON_VERSION}-pip \
     rpm-build \
     sudo \
+    ucx-devel \
     valgrind-devel \
     which \
     ncurses-devel \

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -156,9 +157,10 @@ static const struct CMUnitTest dist_tests[] = {
 };
 
 int
-dist_tests_run(bool verbose, uint32_t num_objs, int obj_class)
+dist_tests_run(bool verbose, uint32_t num_objs, int obj_class, int *sub_tests, int sub_tests_nr,
+	       bool list_only)
 {
-	int rc = 0;
+	const char *name = "Obj placement distribution Tests";
 
 	g_verbose = verbose;
 	if (num_objs != 0)
@@ -166,8 +168,10 @@ dist_tests_run(bool verbose, uint32_t num_objs, int obj_class)
 	if (obj_class != 0)
 		test_obj_class = obj_class;
 
-	rc += cmocka_run_group_tests_name("Obj placement distribution Tests",
-					  dist_tests, NULL, NULL);
+	if (list_only) {
+		plt_list_tests(name, dist_tests, ARRAY_SIZE(dist_tests));
+		return 0;
+	}
 
-	return rc;
+	return plt_run_tests(name, dist_tests, ARRAY_SIZE(dist_tests), sub_tests, sub_tests_nr);
 }
