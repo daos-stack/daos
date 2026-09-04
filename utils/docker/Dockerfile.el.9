@@ -159,6 +159,7 @@ FROM build-ci AS build-local
 LABEL DAOS=true
 
 ARG COMPILER=gcc
+ARG SANITIZERS
 ARG DAOS_DEPS_BUILD
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
@@ -218,7 +219,7 @@ RUN --mount=type=bind,source=VERSION,target=/home/daos/daos/VERSION \
         cp -r /tmp/daos-src/. /home/daos/daos/src && \
            scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
               BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE \
-        USE_INSTALLED=all && \
+              USE_INSTALLED=all ${SANITIZERS:+SANITIZERS=$SANITIZERS} && \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || { \
             /bin/rm -rf build; \
         }) && \
