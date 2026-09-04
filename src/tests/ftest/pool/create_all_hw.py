@@ -78,7 +78,7 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
             created pool is always the same.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,hw,medium
         :avocado: tags=pool,pool_create_all
         :avocado: tags=PoolCreateAllHwTests,test_recycle_pools_hw
         """
