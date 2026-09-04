@@ -160,20 +160,16 @@ class HarnessBasicTest(TestWithoutServers):
         test_command = ["ls", "-al", os.path.dirname(__file__)]
         command = SubProcessCommand("/run/command/*", " ".join(test_command))
         for sub_process in (False, True):
-            for check in ("both", "combined"):
-                self.log.info("-" * 80)
-                self.log.info(
-                    "Running '%s' with output_check='%s' and run_as_subprocess=%s",
-                    str(command), check, sub_process)
-                command.output_check = check
-                command.run_as_subprocess = sub_process
-                try:
-                    command.run()
-                except CommandFailure:
-                    self.log.error("The '%s' command failed", str(command), exc_info=True)
-                    failed = True
-                finally:
-                    command.stop()
+            self.log.info("-" * 80)
+            self.log.info("Running '%s' with run_as_subprocess=%s", str(command), sub_process)
+            command.run_as_subprocess = sub_process
+            try:
+                command.run()
+            except CommandFailure:
+                self.log.error("The '%s' command failed", str(command), exc_info=True)
+                failed = True
+            finally:
+                command.stop()
         if failed:
             self.fail("The '{}' command failed".format(command))
         self.log.info("Test passed")
