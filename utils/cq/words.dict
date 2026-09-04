@@ -53,6 +53,7 @@ RawValue
 Romio
 RoCE
 SConstruct
+setuptools
 SGL
 SHA
 SHS

@@ -5,6 +5,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import sys
+import zipfile
 
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
@@ -85,6 +87,28 @@ class DfuseBashCmd(TestWithServers):
             fd.write('#include <stdio.h>\n\nvoid fun_a(void) {\nprintf("fun_a()");\n}\n')
         with open(os.path.join(fuse_root_dir, "src_b.c"), "w", encoding="utf-8") as fd:
             fd.write('#include <stdio.h>\n\nvoid fun_b(void) {\nprintf("fun_b()");\n}\n')
+        # uv (Rust) and a setuptools build drive fd-relative stat and dup'ed dir fds.
+        uv = os.path.join(os.path.dirname(sys.executable), "uv")
+        wheel = os.path.join(fuse_root_dir, "hello-0.0.1-py3-none-any.whl")
+        with zipfile.ZipFile(wheel, "w") as whl:
+            whl.writestr("hello/__init__.py", "VERSION = '0.0.1'\n")
+            whl.writestr("hello-0.0.1.dist-info/METADATA",
+                         "Metadata-Version: 2.1\nName: hello\nVersion: 0.0.1\n")
+            whl.writestr("hello-0.0.1.dist-info/WHEEL",
+                         "Wheel-Version: 1.0\nGenerator: ftest\nRoot-Is-Purelib: true\n"
+                         "Tag: py3-none-any\n")
+            whl.writestr("hello-0.0.1.dist-info/RECORD",
+                         "hello/__init__.py,,\nhello-0.0.1.dist-info/METADATA,,\n"
+                         "hello-0.0.1.dist-info/WHEEL,,\nhello-0.0.1.dist-info/RECORD,,\n")
+        srcpkg = os.path.join(fuse_root_dir, "srcpkg")
+        os.makedirs(os.path.join(srcpkg, "srcpkg"))
+        with open(os.path.join(srcpkg, "pyproject.toml"), "w", encoding="utf-8") as fd:
+            fd.write('[build-system]\nrequires = ["setuptools"]\n'
+                     'build-backend = "setuptools.build_meta"\n\n'
+                     '[project]\nname = "srcpkg"\nversion = "0.0.1"\n')
+        with open(os.path.join(srcpkg, "srcpkg", "__init__.py"), "w", encoding="utf-8") as fd:
+            fd.write("VERSION = '0.0.1'\n")
+        prefix = os.path.join(fuse_root_dir, "prefix")
         # list of commands to be executed.
         commands = [
             f"mkdir -p {abs_dir_path}",
@@ -131,6 +155,13 @@ class DfuseBashCmd(TestWithServers):
             f"bzip2 -z {fuse_root_dir}/lib.a",
             f"chmod u-r {fuse_root_dir}/lib.a.bz2",
             f"sed -i 's/abcd/bbcd/g' {fuse_root_dir}/src.c",
+            f"{uv} venv {fuse_root_dir}/uvenv --python {sys.executable}",
+            f"{uv} pip install --python {fuse_root_dir}/uvenv/bin/python --no-index {wheel}",
+            f"{fuse_root_dir}/uvenv/bin/python -c 'import hello'",
+            f"UV_NO_BUILD_ISOLATION=1 {uv} pip install --python {sys.executable} "
+            f"--prefix {prefix} --no-index {srcpkg}",
+            f"{sys.executable} -c \"import glob, sys; "
+            f"sys.path[:0] = glob.glob('{prefix}/lib/python*/site-packages'); import srcpkg\"",
             'fio --readwrite=randwrite --name=test --size="2M" --directory '
             f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync --thread=0'
             "--group_reporting --exitall_on_error --continue_on_error=none",

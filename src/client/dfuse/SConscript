@@ -84,7 +84,7 @@ def build_client_libs_shared(env, prereqs):
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../../gurt')])
     pil4dfsenv.AppendUnique(CPPPATH=[Dir('../../gurt').srcnode()])
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../api')])
-    pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'duns', 'gurt', 'dl'])
+    pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'duns', 'gurt', 'dl', 'aio'])
     pil4dfsenv.require('capstone')
     pil4dfs_obj = []
     for src in PIL4DFS_SRC:

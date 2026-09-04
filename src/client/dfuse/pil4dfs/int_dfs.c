@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <sys/sendfile.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/statfs.h>
@@ -271,8 +272,8 @@ destroy_all_eqs(void);
 
 static void
 free_fd(int idx, bool closing_dup_fd);
-static void
-free_dirfd(int idx);
+static int
+		     free_dirfd(int idx);
 
 /* Hash table entry for kernel fd.
  */
@@ -350,6 +351,9 @@ static ssize_t (*libc_write)(int fd, const void *buf, size_t count);
 static ssize_t (*pthread_write)(int fd, const void *buf, size_t count);
 
 static ssize_t (*next_pwrite)(int fd, const void *buf, size_t size, off_t offset);
+static ssize_t (*next_copy_file_range)(int fd_in, off64_t *off_in, int fd_out, off64_t *off_out,
+				       size_t len, unsigned int flags);
+static ssize_t (*next_sendfile)(int out_fd, int in_fd, off_t *offset, size_t count);
 
 static ssize_t (*next_readv)(int fd, const struct iovec *iov, int iovcnt);
 static ssize_t (*next_writev)(int fd, const struct iovec *iov, int iovcnt);
@@ -477,6 +481,8 @@ static int (*next_execvpe)(const char *filename, char *const argv[], char *const
 static int (*next_fexecve)(int fd, char *const argv[], char *const envp[]);
 
 static pid_t (*next_fork)(void);
+/* pid that owns this address space; a vfork child shares it until exec */
+static pid_t d_pid;
 
 static int (*next_fchown)(int fd, uid_t uid, gid_t gid);
 static ssize_t (*next_fgetxattr)(int fd, char *name, void *value, size_t size);
@@ -974,6 +980,7 @@ child_hdlr(void)
 {
 	int rc;
 
+	d_pid = getpid();
 	/* daos is not initialized yet */
 	if (atomic_load_relaxed(&d_daos_inited) == false)
 		return;
@@ -1740,7 +1747,7 @@ free_fd(int idx, bool closing_dup_fd)
 	}
 }
 
-static void
+static int
 free_dirfd(int idx)
 {
 	int             i, rc;
@@ -1748,6 +1755,10 @@ free_dirfd(int idx)
 
 	D_MUTEX_LOCK(&lock_dirfd);
 
+	if (dir_list[idx] == NULL) {
+		D_MUTEX_UNLOCK(&lock_dirfd);
+		return EBADF;
+	}
 	dir_list[idx]->ref_count--;
 	if (dir_list[idx]->ref_count == 0)
 		saved_obj = dir_list[idx];
@@ -1772,9 +1783,11 @@ free_dirfd(int idx)
 		/* free memory for path and ents. */
 		D_FREE(saved_obj->path);
 		D_FREE(saved_obj->ents);
-		rc = dfs_release(saved_obj->dir);
-		if (rc)
-			DS_ERROR(rc, "dfs_release() failed");
+		if (saved_obj->dir) {
+			rc = dfs_release(saved_obj->dir);
+			if (rc)
+				DS_ERROR(rc, "dfs_release() failed");
+		}
 		/** This memset() is not necessary. It is left here intended. In case of duplicated
 		 *  fd exists, multiple fd could point to same struct dir_obj. struct dir_obj is
 		 *  supposed to be freed only when reference count reaches zero. With zeroing out
@@ -1786,6 +1799,45 @@ free_dirfd(int idx)
 		memset(saved_obj, 0, sizeof(struct dir_obj));
 		D_FREE(saved_obj);
 	}
+	return 0;
+}
+
+/* closedir() finds its slot through dir_obj->fd, so a dup'ed dir fd needs its own dir_obj. */
+static int
+dup_dirfd(int idx_src, int *idx_new)
+{
+	struct dir_obj *src = dir_list[idx_src];
+	struct dir_obj *obj;
+	int             rc;
+
+	if (src == NULL)
+		return EBADF;
+	rc = find_next_available_dirfd(NULL, idx_new);
+	if (rc)
+		return rc;
+	obj            = dir_list[*idx_new];
+	obj->fd        = *idx_new + FD_DIR_BASE;
+	obj->dfs_mt    = src->dfs_mt;
+	obj->offset    = src->offset;
+	obj->open_flag = src->open_flag;
+	obj->st_ino    = src->st_ino;
+	obj->anchor    = src->anchor;
+	obj->num_ents  = src->num_ents;
+	rc             = dfs_dup(src->dfs_mt->dfs, src->dir, O_RDONLY, &obj->dir);
+	if (rc)
+		goto err;
+	D_STRNDUP(obj->path, src->path, DFS_MAX_PATH);
+	if (obj->path == NULL)
+		D_GOTO(err, rc = ENOMEM);
+	D_ALLOC_ARRAY(obj->ents, READ_DIR_BATCH_SIZE);
+	if (obj->ents == NULL)
+		D_GOTO(err, rc = ENOMEM);
+	memcpy(obj->ents, src->ents, sizeof(struct dirent) * READ_DIR_BATCH_SIZE);
+	return 0;
+
+err:
+	free_dirfd(*idx_new);
+	return rc;
 }
 
 static void
@@ -2010,12 +2062,19 @@ check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int
 	dirfd_directed = d_get_fd_redirected(dirfd);
 
 	if (dirfd_directed >= FD_DIR_BASE) {
+		if (dir_list[dirfd_directed - FD_DIR_BASE] == NULL) {
+			*error = EBADF;
+			return (-1);
+		}
 		len_str = asprintf(full_path_out, "%s/%s",
 				   dir_list[dirfd_directed - FD_DIR_BASE]->path, rel_path);
 		if (len_str >= DFS_MAX_PATH)
 			goto out_toolong;
 		else if (len_str < 0)
 			goto out_oom;
+	} else if (dirfd_directed >= FD_FILE_BASE) {
+		*error = ENOTDIR;
+		return (-1);
 	} else if (dirfd_directed == AT_FDCWD) {
 		len_str = asprintf(full_path_out, "%s/%s", cur_dir, rel_path);
 		if (len_str >= DFS_MAX_PATH)
@@ -2477,7 +2536,11 @@ new_close_common(int (*next_close)(int fd), int fd)
 	fd_directed = d_get_fd_redirected(fd);
 	if (fd_directed >= FD_DIR_BASE) {
 		/* directory */
-		free_dirfd(fd_directed - FD_DIR_BASE);
+		rc = free_dirfd(fd_directed - FD_DIR_BASE);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		}
 		return 0;
 	} else if (fd_directed >= FD_FILE_BASE) {
 		/* This fd is a kernel fd. There was a duplicate fd created. */
@@ -2792,6 +2855,91 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 ssize_t
 pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alias("pwrite")));
 
+#define COPY_BUF_SIZE (1 << 20)
+
+/* The kernel cannot see a pil4dfs fd; a NULL offset means the file position, as for read(). */
+static ssize_t
+copy_over_dfs(int fd_in, off64_t *off_in, int fd_out, off64_t *off_out, size_t len)
+{
+	char   *buf;
+	size_t  done = 0, bufsize = min(len, COPY_BUF_SIZE);
+	ssize_t got, put;
+	int     error = 0;
+
+	D_ALLOC(buf, bufsize);
+	if (buf == NULL) {
+		errno = ENOMEM;
+		return (-1);
+	}
+	while (done < len) {
+		got = off_in ? pread(fd_in, buf, min(len - done, bufsize), *off_in)
+			     : read(fd_in, buf, min(len - done, bufsize));
+		if (got < 0) {
+			error = errno;
+			break;
+		}
+		if (got == 0)
+			break;
+		put = off_out ? pwrite(fd_out, buf, got, *off_out) : write(fd_out, buf, got);
+		if (put < 0) {
+			error = errno;
+			break;
+		}
+		if (off_in)
+			*off_in += put;
+		if (off_out)
+			*off_out += put;
+		done += put;
+		if (put < got) {
+			/* short write: rewind the input to what was consumed */
+			if (off_in == NULL && lseek(fd_in, put - got, SEEK_CUR) < 0) {
+				error = errno;
+				break;
+			}
+		}
+	}
+	D_FREE(buf);
+	if (done == 0 && error) {
+		errno = error;
+		return (-1);
+	}
+	return done;
+}
+
+ssize_t
+copy_file_range(int fd_in, off64_t *off_in, int fd_out, off64_t *off_out, size_t len,
+		unsigned int flags)
+{
+	if (next_copy_file_range == NULL) {
+		next_copy_file_range = dlsym(RTLD_NEXT, "copy_file_range");
+		D_ASSERT(next_copy_file_range != NULL);
+	}
+	if (!d_hook_enabled || (d_get_fd_redirected(fd_in) < FD_FILE_BASE &&
+				d_get_fd_redirected(fd_out) < FD_FILE_BASE))
+		return next_copy_file_range(fd_in, off_in, fd_out, off_out, len, flags);
+	if (flags != 0) {
+		errno = EINVAL;
+		return (-1);
+	}
+	return copy_over_dfs(fd_in, off_in, fd_out, off_out, len);
+}
+
+ssize_t
+sendfile(int out_fd, int in_fd, off_t *offset, size_t count)
+{
+	if (next_sendfile == NULL) {
+		next_sendfile = dlsym(RTLD_NEXT, "sendfile");
+		D_ASSERT(next_sendfile != NULL);
+	}
+	if (!d_hook_enabled || (d_get_fd_redirected(in_fd) < FD_FILE_BASE &&
+				d_get_fd_redirected(out_fd) < FD_FILE_BASE))
+		return next_sendfile(out_fd, in_fd, offset, count);
+	return copy_over_dfs(in_fd, (off64_t *)offset, out_fd, NULL, count);
+}
+
+ssize_t
+sendfile64(int out_fd, int in_fd, off64_t *offset, size_t count) __attribute__((alias("sendfile")));
+
 ssize_t
 __pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alias("pwrite")));
 
@@ -3090,6 +3238,15 @@ fstat64(int fd, struct stat64 *buf) __attribute__((alias("fstat"), leaf, nonnull
 int
 __fstat64(int fd, struct stat64 *buf) __attribute__((alias("fstat"), leaf, nonnull, nothrow));
 
+/* libc declares the path parameters nonnull; a direct compare is a build error. */
+static inline bool
+is_null_path(const char *path)
+{
+	const char *volatile p = path;
+
+	return p == NULL;
+}
+
 static int
 new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
@@ -3102,7 +3259,7 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
 
-	if (!d_hook_enabled)
+	if (!d_hook_enabled || is_null_path(path))
 		return next_xstat(ver, path, stat_buf);
 	if (path[0] == 0) {
 		errno = ENOENT;
@@ -3163,7 +3320,7 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
 
-	if (!d_hook_enabled)
+	if (!d_hook_enabled || is_null_path(path))
 		return libc_lxstat(ver, path, stat_buf);
 	if (path[0] == 0) {
 		errno = ENOENT;
@@ -3211,7 +3368,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
-	if (!d_hook_enabled)
+	if (!d_hook_enabled || is_null_path(path))
 		return libc_fxstatat(ver, dirfd, path, stat_buf, flags);
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
 		errno = ENOENT;
@@ -3349,7 +3506,7 @@ copy_stat_to_statx(const struct stat *stat_buf, struct statx *statx_buf)
 int
 statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *statx_buf)
 {
-	int         rc, idx_dfs, error = 0;
+	int          rc, idx_dfs, fd_directed, error = 0;
 	struct stat stat_buf;
 	char        *full_path = NULL;
 
@@ -3357,6 +3514,9 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 		next_statx = dlsym(RTLD_NEXT, "statx");
 		D_ASSERT(next_statx != NULL);
 	}
+	/* Let libc answer EFAULT; callers probe statx() availability this way. */
+	if (is_null_path(path))
+		return next_statx(dirfd, path, flags, mask, statx_buf);
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
 		errno = ENOENT;
 		return (-1);
@@ -3372,6 +3532,18 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 		else
 			rc = new_xstat(1, path, &stat_buf);
 		copy_stat_to_statx(&stat_buf, statx_buf);
+		return rc;
+	}
+
+	fd_directed = d_get_fd_redirected(dirfd);
+	if (fd_directed >= FD_FILE_BASE && fd_directed < FD_DIR_BASE) {
+		if (path[0] != 0) {
+			errno = ENOTDIR;
+			return (-1);
+		}
+		rc = new_fxstat(1, dirfd, &stat_buf);
+		if (rc == 0)
+			copy_stat_to_statx(&stat_buf, statx_buf);
 		return rc;
 	}
 
@@ -3910,7 +4082,7 @@ out_err:
 int
 closedir(DIR *dirp)
 {
-	int fd;
+	int fd, rc;
 
 	if (next_closedir == NULL) {
 		next_closedir = dlsym(RTLD_NEXT, "closedir");
@@ -3944,7 +4116,11 @@ closedir(DIR *dirp)
 	}
 
 	if (fd >= FD_DIR_BASE) {
-		free_dirfd(fd - FD_DIR_BASE);
+		rc = free_dirfd(fd - FD_DIR_BASE);
+		if (rc) {
+			errno = rc;
+			return (-1);
+		}
 		return 0;
 	} else {
 		return next_closedir(dirp);
@@ -5276,7 +5452,7 @@ chdir(const char *path)
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
 		D_ASSERT(next_chdir != NULL);
 	}
-	if (!d_hook_enabled)
+	if (!d_hook_enabled || getpid() != d_pid)
 		return next_chdir(path);
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
@@ -5299,6 +5475,8 @@ chdir(const char *path)
 	}
 
 	/* assuming the path exists and it is backed by dfuse */
+	if (strncmp(full_path, "/", 2) == 0)
+		full_path[0] = 0;
 	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);
 	if (len_str >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
@@ -5330,7 +5508,7 @@ fchdir(int dirfd)
 		next_fchdir = dlsym(RTLD_NEXT, "fchdir");
 		D_ASSERT(next_fchdir != NULL);
 	}
-	if (!d_hook_enabled)
+	if (!d_hook_enabled || getpid() != d_pid)
 		return next_fchdir(dirfd);
 
 	fd_directed = d_get_fd_redirected(dirfd);
@@ -6278,8 +6456,7 @@ new_fcntl(int fd, int cmd, ...)
 
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC)) {
 			if (fd_directed >= FD_DIR_BASE) {
-				rc = find_next_available_dirfd(
-					dir_list[fd_directed - FD_DIR_BASE], &next_dirfd);
+				rc = dup_dirfd(fd_directed - FD_DIR_BASE, &next_dirfd);
 				if (rc) {
 					errno = rc;
 					return (-1);
@@ -6415,8 +6592,7 @@ dup2(int oldfd, int newfd)
 				return fd_kernel;
 			fd_fake = next_fd + FD_FILE_BASE;
 		} else {
-			rc = find_next_available_dirfd(dir_list[fd_directed - FD_DIR_BASE],
-						       &next_dirfd);
+			rc = dup_dirfd(fd_directed - FD_DIR_BASE, &next_dirfd);
 			if (rc)
 				/* still return the fd dup from kernel in
 				 * compatible mode
@@ -7197,6 +7373,7 @@ init_myhook(void)
 	uint64_t eq_count_loc = 0;
 	float    libc_version;
 
+	d_pid = getpid();
 	/* D_IL_NO_BYPASS is ONLY for testing. It always keeps function interception enabled in
 	 * current process and children processes. This is needed to thoroughly test interception
 	 * related code in CI. The code related to interception disabled is tested by a few tests in
