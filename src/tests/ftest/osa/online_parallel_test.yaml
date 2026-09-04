@@ -1,6 +1,9 @@
 hosts:
-  test_servers: 3
+  test_servers: server-[1-6]
   test_clients: 1
+
+extra_servers:
+  test_servers: server-7
 
 timeout: 1110
 
@@ -37,8 +40,8 @@ pool:
 
 container:
   type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  oclass: RP_2G1
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:2
+  oclass: EC_2P2GX
 
 ior:
   no_parallel_job: 2
@@ -48,12 +51,10 @@ ior:
   repetitions: 10
   dfs_destroy: false
   iorflags:
-    ior_flags:
-      - "-w -r -R -k -G 1"
-    ior_api:
-      - DFS
+    write_flags: "-w -F -k -G 1"
+    read_flags: "-F -r -R -k -G 1"
     obj_class:
-      - "RP_2G1"
+      - "EC_2P2GX"
   ior_test_sequence:
     # - [scmsize, nvmesize, transfersize, blocksize, PASS/FAIL(Expected) ]
     #   The values are set to be in the multiples of 10.

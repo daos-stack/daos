@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,9 +9,8 @@ import queue
 import threading
 import time
 
-from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
+from test_utils_container import get_existing_container
 
 
 class OSAOfflineParallelTest(OSAUtils):
@@ -53,7 +52,8 @@ class OSAOfflineParallelTest(OSAUtils):
                 time.sleep(3)
                 self.print_and_assert_on_rebuild_failure(text)
             if action == "exclude" and self.server_boot is True:
-                ranks = str(kwargs["rank"])
+                self.log.info("Stop/Start rank %s using system stop/start", kwargs["ranks"])
+                ranks = str(kwargs["ranks"])
                 dmg.system_stop(ranks=ranks)
                 self.print_and_assert_on_rebuild_failure("Stopping rank {}".format(ranks))
                 dmg.system_start(ranks=ranks)
@@ -76,8 +76,8 @@ class OSAOfflineParallelTest(OSAUtils):
                 False.
             oclass (str) : Daos object class (RP_2G1,etc)
         """
-        # Create a pool
-        pool = {}
+        # Create pools
+        pools = []
         target_list = []
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
@@ -92,17 +92,22 @@ class OSAOfflineParallelTest(OSAUtils):
         rank = 2
 
         test_seq = self.ior_test_sequence[0]
-        for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
-            self.pool = pool[val]
+
+        for _ in range(0, num_pool):
+            self.log_step("Create pool")
+            pools.append(self.get_pool(connect=False))
+
+        for pool in pools:
+            self.pool = pool
             # Use only pool UUID while running the test.
             self.pool.use_label = False
             self.pool.set_property("reclaim", "disabled")
 
+            self.log_step("Create container and write some data if data is True")
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
-                if oclass != "S1":
-                    self.run_mdtest_thread()
+                # Read the data back to verify it was written correctly.
+                self.run_ior_thread("Read", oclass, test_seq)
                 # if self.test_during_aggregation is set,
                 # Create another container and run the IOR
                 # command using the second container.
@@ -110,36 +115,32 @@ class OSAOfflineParallelTest(OSAUtils):
                     self.run_ior_thread("Write", oclass, test_seq)
 
         # Start the additional servers and extend the pool
+        self.log_step("Start additional servers")
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
-        # Give sometime for the additional server to come up.
-        for retry in range(0, 10):
-            scan_info = self.get_dmg_command().system_query()
-            if not check_system_query_status(scan_info):
-                if retry == 9:
-                    self.fail("One or more servers not in expected status")
-            else:
-                break
+        extra_ranks = list(self.server_managers[-1].ranks.keys())
 
+        self.log_step("Perform OSA operations in parallel")
         # Exclude and reintegrate the pool_uuid, rank and targets
-        for val in range(0, num_pool):
-            self.pool = pool[val]
-            self.pool.display_pool_daos_space("Pool space: Beginning")
+        for pool in pools:
+            threads = []
+            self.pool = pool
+            initial_total_targets = self.pool.get_total_targets(refresh=True)
             pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # If we need to trigger aggregation on pool 1, delete
             # the second container which has IOR data.
-            if self.test_during_aggregation is True and val == 0:
+            if self.test_during_aggregation is True:
                 self.delete_extra_container(self.pool)
-            # Create the threads here
-            threads = []
             # Action dictionary with OSA dmg command parameters
             action_kwargs = {
-                "drain": {"pool": self.pool.identifier, "rank": rank, "tgt_idx": None},
-                "exclude": {"pool": self.pool.identifier, "rank": (rank + 1), "tgt_idx": t_string},
+                "drain": {"pool": self.pool.identifier, "ranks": rank, "tgt_idx": None},
+                "exclude": {
+                    "pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
                 "reintegrate": {
-                    "pool": self.pool.identifier, "rank": (rank + 1), "tgt_idx": t_string},
-                "extend": {"pool": self.pool.identifier, "ranks": (rank + 2)}
+                    "pool": self.pool.identifier, "ranks": (rank + 1), "tgt_idx": t_string},
+                "extend": {
+                    "pool": self.pool.identifier, "ranks": ",".join(map(str, extra_ranks))}
             }
             for action in sorted(action_kwargs):
                 # Add a dmg thread
@@ -147,53 +148,61 @@ class OSAOfflineParallelTest(OSAUtils):
                 kwargs['action'] = action
                 kwargs['results'] = self.out_queue
                 process = threading.Thread(target=self.dmg_thread, kwargs=kwargs)
-                self.log.info("Starting pool %s in a thread", action)
+                # Wait for a short period before starting the next thread
+                time.sleep(5)
+                self.log.info("Pool %s initiated", action)
                 process.start()
                 threads.append(process)
 
-        # Wait to finish the threads
-        for thread in threads:
-            thread.join()
-            time.sleep(5)
+            # Wait to finish the threads
+            for thread in threads:
+                thread.join()
 
-        # Verify the queue result and make sure test has no failure
-        while not self.out_queue.empty():
-            failure = self.out_queue.get()
-            if "failed" in failure:
-                self.fail("Test failed : {0}".format(failure))
+            # Verify the queue result and make sure test has no failure
+            while not self.out_queue.empty():
+                failure = self.out_queue.get()
+                if "failed" in failure:
+                    self.fail("Test failed : {0}".format(failure))
 
-        for val in range(0, num_pool):
-            self.pool = pool[val]
-            display_string = "Pool{} space at the End".format(val)
-            self.pool.display_pool_daos_space(display_string)
+        self.log_step("Verify pool version and total targets after OSA operations")
+        for pool in pools:
+            self.pool = pool
             self.pool.wait_for_rebuild_to_end(3)
             self.assert_on_rebuild_failure()
-            pver_end = self.pool.get_version(True)
+            pver_end = self.pool.get_version()
             self.log.info("Pool Version at the End %s", pver_end)
-            if self.server_boot is True:
-                self.assertTrue(
-                    pver_end >= 17, "Pool Version Error: {} at the end < 17".format(pver_end))
-            else:
-                self.assertTrue(
-                    pver_end >= 25, "Pool Version Error: {} at the end < 25".format(pver_end))
+            self.assertGreaterEqual(pver_end, 44,
+                                    "Pool Version Error: {} at the end < 44".format(pver_end))
 
+            # Extend adds targets, so the total should have grown since the beginning
+            final_total_targets = self.pool.get_total_targets(refresh=True)
+            self.assertGreater(final_total_targets, initial_total_targets,
+                               "Pool total_targets did not increase after extend")
+
+        self.log_step("Verify data integrity after OSA operations")
         # Finally run IOR to read the data and perform daos_container_check
-        for val in range(0, num_pool):
-            self.pool = pool[val]
+        for pool in pools:
+            self.pool = pool
             if data:
-                self.run_ior_thread("Read", oclass, test_seq)
-                if oclass != "S1":
-                    self.run_mdtest_thread()
-                self.container = self.pool_cont_dict[self.pool][0]
-                self.container.check()
+                # Perform a data consistency check.
+                containers = []
+                for pool in pools:
+                    self.pool = pool
+                    containers = self.get_daos_command().container_list(pool=self.pool.identifier)
+                    for info in containers["response"]:
+                        self.container = get_existing_container(self, self.pool, info["uuid"])
+                        self.run_ior_thread("Read", oclass, test_seq, single_cont_read=False)
+                        self.log.info("Checking data integrity for container %s", self.container)
+                        self.container.check()
+                        self.container.skip_cleanup()
 
     def test_osa_offline_parallel_test(self):
         """JIRA ID: DAOS-4752.
 
         Test Description: Runs multiple OSA commands in parallel.
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
         :avocado: tags=osa,checksum,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test
         """
@@ -206,7 +215,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel without enabling checksum.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_without_csum
         """
@@ -222,7 +231,7 @@ class OSAOfflineParallelTest(OSAUtils):
         stop/start.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_rank_boot
         """
@@ -237,7 +246,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel with aggregation turned on.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_with_aggregation
         """
@@ -252,7 +261,7 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel with different object class.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=osa,offline_parallel
         :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_oclass
         """

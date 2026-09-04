@@ -1338,6 +1338,22 @@ class TestPool(TestDaosApiBase):
         """
         return int(self._get_query_data_keys("response", "version", refresh=refresh))
 
+    def get_total_targets(self, refresh=False):
+        """Get the pool total targets from the dmg pool query output.
+
+        Args:
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Raises:
+            CommandFailure: if there was error collecting the dmg pool query data or the keys
+
+        Returns:
+            int: pool total_targets value
+
+        """
+        return int(self._get_query_data_keys("response", "total_targets", refresh=refresh))
+
     def get_rebuild_status(self, refresh=False):
         """Get the pool rebuild status from the dmg pool query output.
 
