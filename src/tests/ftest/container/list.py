@@ -4,6 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+import queue
+import threading
+
 from apricot import TestWithServers
 
 
@@ -20,6 +23,21 @@ class ListContainerTest(TestWithServers):
 
     :avocado: recursive
     """
+    def __container_create(self, pool, result_queue):
+        """
+        Create a container in the given pool and put the result in the result queue.
+
+        Args:
+            pool (TestPool): The pool in which to create the container.
+            result_queue (queue.Queue): Queue to store the result of the container creation.
+        """
+        try:
+            container = self.get_container(pool, create=False)
+            result = container.create()
+            result_queue.put(
+                (result["response"]["container_uuid"], result["response"]["container_label"]))
+        except Exception as error:  # pylint: disable=broad-except
+            result_queue.put(error)
 
     def create_list(self, count, pool, expected_uuids_labels):
         """Create container and call daos pool list-cont to list and verify.
@@ -30,12 +48,24 @@ class ListContainerTest(TestWithServers):
             expected_uuids_labels (list): list of tuples containing expected (uuid, label) for
                 all containers in the pool
         """
-        # Create containers and store the container UUIDs and labels
+        result_queue = queue.Queue()
+
+        # Create containers in parallel and store the container UUIDs and labels
+        threads = []
         for _ in range(count):
-            container = self.get_container(pool, create=False)
-            result = container.create()
-            expected_uuids_labels.append(
-                (result["response"]["container_uuid"], result["response"]["container_label"]))
+            thread = threading.Thread(target=self.__container_create, args=(pool, result_queue))
+            thread.start()
+            threads.append(thread)
+
+        for thread in threads:
+            thread.join()
+
+        while not result_queue.empty():
+            result = result_queue.get()
+            if isinstance(result, Exception):
+                self.fail(f"Container creation failed with error: {result}")
+            expected_uuids_labels.append(result)
+
         expected_uuids_labels.sort()
 
         # Call container list and collect the UUIDs.
