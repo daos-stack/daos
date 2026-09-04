@@ -84,7 +84,7 @@ class DaosPool():
                        ctypes.byref(self.handle), ctypes.byref(c_info), None)
 
             if ret != 0:
-                self.handle = 0
+                self.handle = ctypes.c_uint64(0)
                 raise DaosApiError("Pool connect returned non-zero. RC: {0}".format(ret))
             self.connected = 1
         else:

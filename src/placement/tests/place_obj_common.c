@@ -17,6 +17,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 #include <daos/tests_lib.h>
+#include <ctype.h>
 
 bool fail_domain_node;
 void
@@ -861,7 +862,7 @@ extend_test_pool_map(struct pool_map *map, uint32_t nnodes,
 	map_version = pool_map_get_version(map) + 1;
 
 	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes, ntargets, domains,
-			  dss_tgt_nr);
+			  dss_tgt_nr, NULL /* downout_ranks */);
 	assert_success(rc);
 
 	D_ASSERT(map_buf != NULL);
@@ -979,6 +980,119 @@ plt_obj_place_mode(daos_obj_id_t oid, struct pl_obj_layout **layout, struct pl_m
 	md.omd_ver      = pool_map_get_version(pl_map->pl_poolmap);
 
 	rc = pl_obj_place(pl_map, 2, &md, mode, NULL, layout);
+
+	return rc;
+}
+
+int
+plt_parse_sub_tests(const char *sub_tests_str, int *sub_tests, int max_sub_tests, int *sub_tests_nr)
+{
+	const char *ptr = sub_tests_str;
+	int         nr  = 0;
+
+	*sub_tests_nr = 0;
+	if (sub_tests_str == NULL)
+		return 0;
+
+	/* format: "1,2,3" or "2-8" or "1,3-5,9" */
+	while (*ptr) {
+		const char *tmp;
+		int         start;
+		int         end;
+		int         i;
+
+		while (!isdigit(*ptr) && *ptr)
+			ptr++;
+		if (!*ptr)
+			break;
+
+		tmp = ptr;
+		while (isdigit(*ptr))
+			ptr++;
+		start = atoi(tmp);
+		end   = start;
+
+		if (*ptr == '-') {
+			ptr++;
+			while (!isdigit(*ptr) && *ptr)
+				ptr++;
+			if (!isdigit(*ptr)) {
+				print_message("invalid sub tests string %s\n", sub_tests_str);
+				return -DER_INVAL;
+			}
+			tmp = ptr;
+			while (isdigit(*ptr))
+				ptr++;
+			end = atoi(tmp);
+		}
+
+		if (end < start) {
+			print_message("invalid sub tests string %s\n", sub_tests_str);
+			return -DER_INVAL;
+		}
+
+		for (i = start; i <= end; i++) {
+			if (nr >= max_sub_tests) {
+				print_message("too many sub tests, max %d\n", max_sub_tests);
+				return -DER_INVAL;
+			}
+			sub_tests[nr++] = i;
+		}
+	}
+
+	if (nr == 0) {
+		print_message("invalid sub tests string %s\n", sub_tests_str);
+		return -DER_INVAL;
+	}
+
+	*sub_tests_nr = nr;
+	return 0;
+}
+
+void
+plt_list_tests(const char *name, const struct CMUnitTest *tests, int tests_size)
+{
+	int i;
+
+	print_message("%s - %d tests:\n", name, tests_size);
+	for (i = 0; i < tests_size; i++)
+		print_message("  %3d: %s\n", i, tests[i].name);
+}
+
+int
+plt_run_tests(const char *name, const struct CMUnitTest *tests, int tests_size, int *sub_tests,
+	      int sub_tests_nr)
+{
+	struct CMUnitTest *subtests;
+	int                nr = 0;
+	int                i;
+	int                rc;
+
+	if (sub_tests == NULL || sub_tests_nr == 0)
+		return _cmocka_run_group_tests(name, tests, tests_size, NULL, NULL);
+
+	D_ALLOC_ARRAY(subtests, sub_tests_nr);
+	if (subtests == NULL) {
+		print_message("failed allocating subtests array\n");
+		return -DER_NOMEM;
+	}
+
+	for (i = 0; i < sub_tests_nr; i++) {
+		if (sub_tests[i] >= tests_size || sub_tests[i] < 0) {
+			print_message("No subtest %d\n", sub_tests[i]);
+			continue;
+		}
+		subtests[nr++] = tests[sub_tests[i]];
+	}
+
+	if (nr == 0) {
+		print_message("no valid sub test to run\n");
+		D_FREE(subtests);
+		return -DER_INVAL;
+	}
+
+	rc = _cmocka_run_group_tests(name, subtests, nr, NULL, NULL);
+	D_FREE(subtests);
 
 	return rc;
 }
