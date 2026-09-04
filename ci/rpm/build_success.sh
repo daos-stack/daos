@@ -12,7 +12,8 @@ if [ -e "${ci_envs}" ]; then
 fi
 
 : "${TARGET:=centos9}"
-
+pwd
+ls -la
 artdir="${PWD}/artifacts/${TARGET}"
 rm -rf "$artdir"
 mkdir -p "$artdir"
