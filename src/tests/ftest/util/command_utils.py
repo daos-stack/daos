@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,7 +23,7 @@ from exception_utils import CommandFailure
 from file_utils import change_file_owner, create_directory, distribute_files
 from general_utils import (DaosTestError, check_file_exists, get_file_listing,
                            get_job_manager_class, get_subprocess_stdout, run_command)
-from run_utils import command_as_user, run_remote
+from run_utils import command_as_user, run_local, run_remote, stop_processes
 from user_utils import get_primary_group
 from yaml_utils import get_yaml_data
 
@@ -94,6 +94,9 @@ class ExecutableCommand(CommandWithParameters):
         self.check_results_list = []
         if check_results:
             self.check_results_list = list(check_results)
+
+        # Internal flag used to indicate if cleanup is required for the command.
+        self.__cleanup_needed = False
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -206,6 +209,7 @@ class ExecutableCommand(CommandWithParameters):
             CommandFailure: if there is an error running the command
 
         """
+        self.__cleanup_needed = True
         if self.run_as_subprocess:
             self._run_subprocess()
             return None
@@ -263,7 +267,7 @@ class ExecutableCommand(CommandWithParameters):
         if self.result and self.check_results_list:
             regex = r"({})".format("|".join(self.check_results_list))
             self.log.debug("Checking the command output for any bad keywords: %s", regex)
-            for output in (self.result.stdout_text, self.result.stderr_text):
+            for output in (self.__result_stdout(), self.__result_stderr()):
                 match = re.findall(regex, output)
                 if match:
                     self.log.info(
@@ -274,6 +278,22 @@ class ExecutableCommand(CommandWithParameters):
                     status = False
                     break
         return status
+
+    def __result_stdout(self):
+        """Get all the stdout from the command result.
+
+        Returns:
+            str: the command result's stdout as a string
+        """
+        return self.result.stdout_text
+
+    def __result_stderr(self):
+        """Get all the stderr from the command result.
+
+        Returns:
+            str: the command result's stderr as a string
+        """
+        return self.result.stderr_text
 
     def _run_subprocess(self):
         """Run the command as a sub process.
@@ -372,6 +392,38 @@ class ExecutableCommand(CommandWithParameters):
             self.log.info("%s stopped successfully", self.command)
             self._process = None
 
+    def cleanup_command(self):
+        """Cleanup the command.
+
+        Returns:
+            list: a list of errors encountered during cleanup.
+        """
+        if not self.__cleanup_needed:
+            self.log.info("No cleanup needed for %s", self.command)
+            return []
+
+        self.log.info("Cleaning up %s", self.command)
+        regex = self.command_regex
+        if self.full_command_regex:
+            regex = f"'{str(self)}'"
+        hosts = getattr(self, "hosts", None)
+        detected, running = stop_processes(
+            self.log, hosts, regex, full_command=self.full_command_regex)
+        if not detected:
+            self.log.info(
+                "No remote %s processes killed on %s (none found), done.",
+                regex, "local host" if not hosts else hosts)
+        elif running:
+            self.log.info(
+                "***Unable to kill remote %s process on %s! Please investigate/report.***",
+                regex, running)
+        else:
+            self.log.info(
+                "***At least one remote %s process needed to be killed on %s! Please investigate/"
+                "report.***", regex, detected)
+        self.__cleanup_needed = False
+        return []
+
     def wait(self):
         """Wait for the sub process to complete.
 
@@ -415,40 +467,6 @@ class ExecutableCommand(CommandWithParameters):
                 r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout_text)
         return state
 
-    def get_output(self, method_name, regex_method=None, **kwargs):
-        """Get output from the command issued by the specified method.
-
-        Issue the specified method and return a list of strings that result from
-        searching its standard output for a fixed set of patterns defined for
-        the class method.
-
-        Args:
-            method_name (str): name of the method to execute
-
-        Raises:
-            CommandFailure: if there is an error finding the method, finding the
-                method's regex pattern, or executing the method
-
-        Returns:
-            list: a list of strings obtained from the method's output parsed
-                through its regex
-
-        """
-        # Get the method to call to obtain the CmdResult
-        method = getattr(self, method_name)
-        if method is None:
-            raise CommandFailure("No '{}()' method defined for this class".format(method_name))
-
-        # Run the command
-        result = method(**kwargs)
-        if not isinstance(result, process.CmdResult):
-            raise CommandFailure("{}() did not return a CmdResult".format(method_name))
-
-        # Parse the output and return
-        if not regex_method:
-            regex_method = method_name
-        return self.parse_output(result.stdout_text, regex_method)
-
     def parse_output(self, stdout, regex_method):
         """Parse output using findall() with supplied 'regex_method' as pattern.
 
@@ -464,7 +482,7 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         if regex_method not in self.METHOD_REGEX:
-            raise CommandFailure("No pattern regex defined for '{}()'".format(regex_method))
+            raise CommandFailure(f"No pattern regex defined for '{regex_method}()'")
         return re.findall(self.METHOD_REGEX[regex_method], stdout)
 
     def get_params(self, test):
@@ -1511,3 +1529,114 @@ class SystemctlCommand(ExecutableCommand):
 
         self.unit_command = BasicParameter(None, position=1)
         self.service = BasicParameter(None, position=2)
+
+
+class RunCommand(ExecutableCommand):
+    """A class for command run with run_remote()/run_local()."""
+
+    def __init__(self, namespace, command, path="", check_results=None, run_user=None):
+        """Create a RunCommand object.
+
+        Uses run_remote()/run_local() to run a command str provided.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command (str): string of the command to be executed.
+            path (str, optional): path to location of command binary file. Defaults to "".
+            check_results (list, optional): list of words used to mark the command as failed if
+                any are found in the command output. Defaults to None.
+            run_user (str, optional): user to run as. Defaults to None, which will run commands as
+                the current user.
+        """
+        super().__init__(namespace, command, path, False, check_results, run_user)
+        self._hosts = None
+        self.register_cleanup_method = None
+
+    @property
+    def hosts(self):
+        """Get the host(s) on which to remotely run the command via run().
+
+        Returns:
+            NodeSet: remote host(s) on which the command will run.
+        """
+        return self._hosts
+
+    @hosts.setter
+    def hosts(self, value):
+        """Set the host(s) on which to remotely run the command via run().
+
+        If the specified host is None the command will run locally w/o ssh.
+
+        Args:
+            value (NodeSet): remote host(s) on which to run the command
+
+        Raises:
+            TypeError: if value is not a NodeSet
+        """
+        if not isinstance(value, NodeSet):
+            raise TypeError(f"Invalid {self.command} host NodeSet: {value} ({type(value)})")
+        self._hosts = value.copy()
+
+    def _run_process(self, raise_exception=None):
+        """Run the command as a foreground process.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
+
+        Raises:
+            CommandFailure: if there is an error running the command with raise_exception or
+                self.exit_status_exception (when raise_exception is None) set to True.
+
+        Returns:
+            CommandResult: result from running the command
+        """
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
+        if callable(self.register_cleanup_method):
+            # Stop any running processes started by this job manager when the test completes
+            # pylint: disable=not-callable
+            self.register_cleanup_method(self.cleanup_command)
+
+        self.result = None
+        if not self.hosts:
+            self.result = run_local(self.log, self.with_exports, self.verbose, self.timeout)
+        else:
+            self.result = run_remote(
+                self.log, self.hosts, self.with_exports, self.verbose, self.timeout)
+
+        if raise_exception and not self.result.passed:
+            raise CommandFailure(f"Error running {self.command} on: {self.result.failed_hosts}")
+
+        if raise_exception and not self.check_results():
+            raise CommandFailure(
+                f"Error running {self.command}: a {self.check_results_list} keyword was detected")
+
+        return self.result
+
+    def __result_stdout(self):
+        """Get all the stdout from the command result.
+
+        Returns:
+            str: the command result's stdout as a string
+        """
+        return self.result.joined_stdout
+
+    def __result_stderr(self):
+        """Get all the stderr from the command result.
+
+        Returns:
+            str: the command result's stderr as a string
+        """
+        return self.result.joined_stderr
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            RunCommand: a new RunCommand object
+        """
+        return RunCommand(
+            self.namespace, self._command, self._path, self.check_results_list, self.run_user)

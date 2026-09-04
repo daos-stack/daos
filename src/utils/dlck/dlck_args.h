@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,6 +27,7 @@
 #define KEY_COMMON_OPTIONS              'o'
 #define KEY_COMMON_WRITE_MODE           'w'
 #define KEY_COMMON_VERBOSE              'v'
+#define KEY_COMMON_LOG_DIR              'l'
 #define KEY_FILES                       'f'
 /** the options below follow the daos_engine options */
 #define KEY_ENGINE_NUMA_NODE            'p'
@@ -40,6 +41,7 @@
 #define DLCK_DEFAULT_MAX_DMA_BUF_SIZE   5120
 #define DLCK_DEFAULT_NVME_HUGEPAGE_SIZE 2
 #define DLCK_DEFAULT_TARGETS            4
+#define DLCK_DEFAULT_LOG_DIR            "/tmp"
 
 #define DLCK_TARGET_MAX                 31
 
@@ -47,8 +49,9 @@
 
 struct dlck_args_common {
 	struct checker_options options;
-	bool          write_mode; /** false by default (dry run) */
-	bool                   verbose;    /** false by default */
+	bool                   write_mode;
+	bool                   verbose;
+	char                  *log_dir;
 };
 
 /**
