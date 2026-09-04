@@ -15,7 +15,7 @@ server_config:
           scm_mount: /mnt/daos0
 
 pool:
-  scm_size: 1G
+  scm_size: 134217728
   properties: rd_fac:4
 
 container:
