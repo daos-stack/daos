@@ -32,10 +32,11 @@ server_config:
 pool:
   size: 50%
   pool_query_timeout: 30
+  properties: rd_fac:0,space_rb:0
 
 cont_ior:
   type: POSIX
-  properties: rd_fac:3
+  properties: rd_fac:3,cksum:off,srv_cksum:off
   oclass: EC_8P3GX
 
 ior:

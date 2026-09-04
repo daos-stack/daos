@@ -1,5 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers: 2
   test_clients: 1
@@ -8,8 +6,7 @@ timeout: 360
 
 server_config:
   name: daos_server
-  # reduce cart timeout to make IV update return timeout
-  # quickly to ease test (DAOS-9626)
+  # reduce cart timeout to make IV update return timeout quickly to ease test (DAOS-9626)
   crt_timeout: 10
   engines_per_host: 2
   engines:
@@ -27,7 +24,7 @@ server_config:
       storage: auto
 
 container:
-  properties: "rd_fac:1"
+  properties: rd_fac:1,cksum:off,srv_cksum:off
 
 pool:
   scm_size: 1G
@@ -35,6 +32,7 @@ pool:
   pool_query_interval: 1
   test_data_list: [1048576]
   oclass: "OC_RP_4G1"
+  properties: rd_fac:0,space_rb:0
 
 rebuild:
   rank_to_kill: 1

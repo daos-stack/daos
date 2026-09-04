@@ -1,7 +1,9 @@
 hosts:
   test_servers: 6
   test_clients: 1
+
 timeout: 300
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -14,11 +16,13 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
+
 pool:
   scm_size: 1073741824
   debug: true
   pool_query_timeout: 30
-  properties: rd_fac:2
+  properties: rd_fac:2,space_rb:0
+
 container:
   akey_size: 5
   dkey_size: 5
@@ -32,6 +36,8 @@ container:
       object_qty: 30
       record_qty: 1
   debug: true
+  properties: cksum:off,srv_cksum:off
+
 rebuild:
   rank: 4
   object_class: OC_RP_3G1
