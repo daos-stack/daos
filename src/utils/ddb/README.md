@@ -171,20 +171,51 @@ vos
   vea_update               Alter the VEA tree to mark a region as free.
 ```
 
+### Pool-content commands vs. pool-lifecycle commands
+
+ddb's subcommands fall into two categories:
+
+**Pool-content commands** (`ls`, `rm`, `value_dump`, and most others) operate on the content of an
+already-open VOS pool. When one of these is given as a single command or run from a `-f` command
+file, the VOS file is opened before the command executes, using the top-level `--vos_path`/
+`--db_path`.
+
+**Pool-lifecycle commands** (`open`, `close`, `feature`, `rm_pool`, `dev_list`, `dev_replace`,
+`prov_mem`, `smd_sync`) manage the VOS pool's own open/close/remove/replace lifecycle themselves,
+so ddb does not pre-open a pool for them. When one of these is given as a single bare command
+directly on the command line, `--vos_path`/`--db_path` are **not accepted**: ddb returns an error
+and the path must be provided directly to the command instead (see its own `--help`). For example:
+
+```bash
+# Rejected: rm_pool manages its own pool lifecycle and does not accept the top-level flags
+# as a bare command.
+ddb --db_path /path/to/sys/db --vos_path /path/to/vos-0 rm_pool
+
+# Works: provide rm_pool's own db_path flag and path argument directly.
+ddb rm_pool --db_path /path/to/sys/db /path/to/vos-0
+```
+
+In interactive mode or when running a `-f` command file, `--vos_path`/`--db_path` are accepted: they
+only ever drive the one-time initial auto-open, and it is up to the user to close the pre-opened
+pool (or target a different one) before running a pool-lifecycle command from within that session or
+file that requires it to be closed.
+
 ## `prov_mem` command
 
 ```
 Prepare the memory environment for md-on-ssd mode
 
 Usage:
-  prov_mem [flags] db_path tmpfs_mount
+  prov_mem [flags] tmpfs_mount
 
 Args:
-  db_path      string    Path to the sys db.
   tmpfs_mount  string    Path to the tmpfs mountpoint.
 
 Flags:
   -h, --help               display help
+  -p, --db_path string     Path to the sys db. This command manages its own pool lifecycle and
+                           does not accept the top-level --vos_path/--db_path as a bare command;
+                           see "Pool-content commands vs. pool-lifecycle commands" above.
   -s, --tmpfs_size uint    Specify tmpfs size(GiB) for mount. By default, the total size of all VOS files will be used.
 ```
 
@@ -203,10 +234,10 @@ This command is used when working with DAOS in md-on-ssd (metadata-on-SSD) mode.
 
 ```bash
 # Prepare memory environment with auto-calculated tmpfs size
-ddb prov_mem /path/to/sys/db /mnt/tmpfs
+ddb prov_mem --db_path /path/to/sys/db /mnt/tmpfs
 
 # Prepare memory environment with specific tmpfs size of 16 GiB
-ddb prov_mem -s 16 /path/to/sys/db /mnt/tmpfs
+ddb prov_mem --db_path /path/to/sys/db -s 16 /mnt/tmpfs
 ```
 
 ### Notes
@@ -214,3 +245,6 @@ ddb prov_mem -s 16 /path/to/sys/db /mnt/tmpfs
 - The `tmpfs_mount` path must not already be a mount point; otherwise, the command will fail with a "busy" error. 
 - If `tmpfs_size` is not specified, the size will be automatically calculated based on the total size of all VOS files. 
 - This command requires the system to be configured for MD-on-SSD mode.
+- `db_path` used to be a positional argument (`ddb prov_mem <db_path> <tmpfs_mount>`); it is now
+  a `-p`/`--db_path` flag, consistent with the other pool-lifecycle commands (`open`, `feature`,
+  `rm_pool`, `dev_list`, `dev_replace`, `smd_sync`).

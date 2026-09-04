@@ -79,7 +79,7 @@ func TestDdb_HelpCmds(t *testing.T) {
 		},
 		"help for 'smd_sync' command": {
 			cmdStr:     "smd_sync",
-			helpSubStr: "Usage:\n  smd_sync [flags] [nvme_conf] [db_path]\n",
+			helpSubStr: "Usage:\n  smd_sync [flags] [nvme_conf]\n",
 		},
 		"help for 'vea_dump' command": {
 			cmdStr:     "vea_dump",
@@ -111,11 +111,11 @@ func TestDdb_HelpCmds(t *testing.T) {
 		},
 		"help for 'dev_list' command": {
 			cmdStr:     "dev_list",
-			helpSubStr: "Usage:\n  dev_list [flags] db_path\n",
+			helpSubStr: "Usage:\n  dev_list [flags]\n",
 		},
 		"help for 'dev_replace' command": {
 			cmdStr:     "dev_replace",
-			helpSubStr: "Usage:\n  dev_replace [flags] db_path old_dev new_dev\n",
+			helpSubStr: "Usage:\n  dev_replace [flags] old_dev new_dev\n",
 		},
 		"help for 'dtx_stat' command": {
 			cmdStr:     "dtx_stat",
@@ -123,7 +123,7 @@ func TestDdb_HelpCmds(t *testing.T) {
 		},
 		"help for 'prov_mem' command": {
 			cmdStr:     "prov_mem",
-			helpSubStr: "Usage:\n  prov_mem [flags] db_path tmpfs_mount\n",
+			helpSubStr: "Usage:\n  prov_mem [flags] tmpfs_mount\n",
 		},
 		"help for 'dtx_aggr' command": {
 			cmdStr:     "dtx_aggr",
@@ -526,7 +526,7 @@ func TestDdb_Cmds(t *testing.T) {
 		// --- prov_mem command: flag conflict ---
 		// -s / --tmpfs_size: short flag -s was consumed as global VosPath before PassAfterNonOption.
 		"prov_mem with tmpfs_size short flag": {
-			args: []string{"prov_mem", "-s", "10", "/db", "/mnt"},
+			args: []string{"prov_mem", "-s", "10", "-p", "/db", "/mnt"},
 			setup: func(t *testing.T) {
 				ddb_run_prov_mem_Fn = func(dbPath, tmpfsMount string, tmpfsMountSize uint) error {
 					fmt.Println("prov_mem called")
@@ -538,8 +538,8 @@ func TestDdb_Cmds(t *testing.T) {
 			},
 			expStdout: []string{"prov_mem called"},
 		},
-		"prov_mem default (no flag)": {
-			args: []string{"prov_mem", "/db", "/mnt"},
+		"prov_mem with long db_path flag": {
+			args: []string{"prov_mem", "--db_path", "/db", "/mnt"},
 			setup: func(t *testing.T) {
 				ddb_run_prov_mem_Fn = func(dbPath, tmpfsMount string, tmpfsMountSize uint) error {
 					fmt.Println("prov_mem called")
@@ -691,7 +691,7 @@ func TestDdb_Cmds(t *testing.T) {
 			expStdout: []string{"smd_sync called"},
 		},
 		"smd_sync with args": {
-			args: []string{"smd_sync", "/mnt/daos/daos_nvme.conf", "/mnt/daos"},
+			args: []string{"smd_sync", "--db_path", "/mnt/daos", "/mnt/daos/daos_nvme.conf"},
 			setup: func(t *testing.T) {
 				ddb_run_smd_sync_Fn = smdSyncFnChecking(t, "/mnt/daos/daos_nvme.conf", "/mnt/daos")
 			},
@@ -767,12 +767,23 @@ func TestDdb_Cmds(t *testing.T) {
 		},
 
 		// --- dev_list command ---
-		"dev_list default": {
-			args: []string{"dev_list", "/mnt/daos"},
+		"dev_list with short db_path flag": {
+			args: []string{"dev_list", "-p", "/db"},
 			setup: func(t *testing.T) {
 				ddb_run_dev_list_Fn = func(dbPath string) error {
 					fmt.Println("dev_list called")
-					test.CmpAny(t, "dbPath", "/mnt/daos", dbPath)
+					test.CmpAny(t, "dbPath", "/db", dbPath)
+					return nil
+				}
+			},
+			expStdout: []string{"dev_list called"},
+		},
+		"dev_list with long db_path flag": {
+			args: []string{"dev_list", "--db_path", "/db"},
+			setup: func(t *testing.T) {
+				ddb_run_dev_list_Fn = func(dbPath string) error {
+					fmt.Println("dev_list called")
+					test.CmpAny(t, "dbPath", "/db", dbPath)
 					return nil
 				}
 			},
@@ -780,14 +791,27 @@ func TestDdb_Cmds(t *testing.T) {
 		},
 
 		// --- dev_replace command ---
-		"dev_replace default": {
-			args: []string{"dev_replace", "/mnt/daos", "old-devid", "new-devid"},
+		"dev_replace with short db_path flag": {
+			args: []string{"dev_replace", "-p", "/db", "old-uuid", "new-uuid"},
 			setup: func(t *testing.T) {
-				ddb_run_dev_replace_Fn = func(dbPath, oldDevID, newDevID string) error {
+				ddb_run_dev_replace_Fn = func(dbPath, oldDev, newDev string) error {
 					fmt.Println("dev_replace called")
-					test.CmpAny(t, "dbPath", "/mnt/daos", dbPath)
-					test.CmpAny(t, "oldDevID", "old-devid", oldDevID)
-					test.CmpAny(t, "newDevID", "new-devid", newDevID)
+					test.CmpAny(t, "dbPath", "/db", dbPath)
+					test.CmpAny(t, "oldDev", "old-uuid", oldDev)
+					test.CmpAny(t, "newDev", "new-uuid", newDev)
+					return nil
+				}
+			},
+			expStdout: []string{"dev_replace called"},
+		},
+		"dev_replace with long db_path flag": {
+			args: []string{"dev_replace", "--db_path", "/db", "old-uuid", "new-uuid"},
+			setup: func(t *testing.T) {
+				ddb_run_dev_replace_Fn = func(dbPath, oldDev, newDev string) error {
+					fmt.Println("dev_replace called")
+					test.CmpAny(t, "dbPath", "/db", dbPath)
+					test.CmpAny(t, "oldDev", "old-uuid", oldDev)
+					test.CmpAny(t, "newDev", "new-uuid", newDev)
 					return nil
 				}
 			},
@@ -808,6 +832,44 @@ func TestDdb_Cmds(t *testing.T) {
 				ddb_run_dtx_stat_Fn = dtxStatFnChecking(t, "[0]", true)
 			},
 			expStdout: []string{"dtx_stat called"},
+		},
+
+		// --- smd_sync command ---
+		"smd_sync with short db_path flag": {
+			args: []string{"smd_sync", "-p", "/db"},
+			setup: func(t *testing.T) {
+				ddb_run_smd_sync_Fn = func(nvmeConf, dbPath string) error {
+					fmt.Println("smd_sync called")
+					test.CmpAny(t, "nvmeConf", "", nvmeConf)
+					test.CmpAny(t, "dbPath", "/db", dbPath)
+					return nil
+				}
+			},
+			expStdout: []string{"smd_sync called"},
+		},
+		"smd_sync with long db_path flag": {
+			args: []string{"smd_sync", "--db_path", "/db"},
+			setup: func(t *testing.T) {
+				ddb_run_smd_sync_Fn = func(nvmeConf, dbPath string) error {
+					fmt.Println("smd_sync called")
+					test.CmpAny(t, "nvmeConf", "", nvmeConf)
+					test.CmpAny(t, "dbPath", "/db", dbPath)
+					return nil
+				}
+			},
+			expStdout: []string{"smd_sync called"},
+		},
+		"smd_sync with nvme_conf and db_path flag": {
+			args: []string{"smd_sync", "--db_path", "/db", "/nvme.conf"},
+			setup: func(t *testing.T) {
+				ddb_run_smd_sync_Fn = func(nvmeConf, dbPath string) error {
+					fmt.Println("smd_sync called")
+					test.CmpAny(t, "nvmeConf", "/nvme.conf", nvmeConf)
+					test.CmpAny(t, "dbPath", "/db", dbPath)
+					return nil
+				}
+			},
+			expStdout: []string{"smd_sync called"},
 		},
 
 		// --- csum_dump command ---
