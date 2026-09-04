@@ -36,6 +36,7 @@ jobs_set=false
 prefix_set=false
 use_installed_set=false
 install_set=false
+build_deps_set=false
 for arg in "$@"; do
     case "$arg" in
         -c)
@@ -59,7 +60,7 @@ for arg in "$@"; do
             install_set=true
             ;;
         --build-deps=*)
-            build_set=true
+            build_deps_set=true
             ;;
     esac
 done
@@ -68,7 +69,7 @@ SCONS_ARGS=()
 if ! "$install_set"; then
     SCONS_ARGS+=(install)
 fi
-if ! "$build_set"; then
+if ! "$build_deps_set"; then
     SCONS_ARGS+=(--build-deps=no )
 fi
 if ! "$jobs_set"; then
