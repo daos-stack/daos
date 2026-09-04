@@ -31,10 +31,11 @@ server_config:
 
 pool:
   scm_size: 500G
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
-  properties: dedup:memcmp
+  properties: dedup:memcmp,cksum:off,srv_cksum:off
 
 ior:
   client_processes:

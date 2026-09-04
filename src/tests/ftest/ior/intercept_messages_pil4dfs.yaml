@@ -1,7 +1,9 @@
 hosts:
   test_servers: 1
   test_clients: 1
+
 timeout: 600
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -9,12 +11,17 @@ server_config:
     0:
       log_mask: INFO
       storage: auto
+
 pool:
   scm_size: 8G
   nvme_size: 100G
   svcn: 1
+  properties: rd_fac:0,space_rb:0
+
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
+
 ior:
   env_vars:
     - D_LOG_MASK=INFO
@@ -33,5 +40,6 @@ ior:
   read_x: 1
   objectclass:
     dfs_oclass: "SX"
+
 dfuse:
   disable_caching: true
