@@ -108,10 +108,6 @@ class PoolCreateAllTestBase(TestWithServers):
                 storage.  Defaults to None.
             ranks (list, optional): List of rank used for creating pools.  Defaults to None.
         """
-        default_props = DEFAULT_POOL_PROPS.copy()
-        if ranks is not None and len(ranks) < 4:
-            default_props["rd_fac"] = len(ranks) - 1
-
         pool_count = 4 if nvme_delta_bytes is None else 5
         pools = []
         pools.extend(self.get_pool(create=False) for _ in range(pool_count))
@@ -136,7 +132,7 @@ class PoolCreateAllTestBase(TestWithServers):
             "%s created successfully: scm_size=%d, nvme_size=%d",
             pools[pool_idx].identifier, *tier_bytes)
         self.log_step(f"Verifying {pools[pool_idx].identifier} default attributes")
-        pools[pool_idx].verify_prop(default_props)
+        self.__validate_default_pool_properties(pools[pool_idx])
         self.log_step(f"Destroying {pools[pool_idx].identifier}")
         pools[pool_idx].destroy()
 
@@ -159,9 +155,7 @@ class PoolCreateAllTestBase(TestWithServers):
         pools[pool_idx].create()
         self.log.info("%s created successfully", pools[pool_idx].identifier)
         self.log_step(f"Verifying {pools[pool_idx].identifier} default attributes")
-        result = pools[pool_idx].get_prop()
-        pools[pool_idx].validate_properties(result, default_props)
-        # pools[pool_idx].verify_prop(default_props)
+        self.__validate_default_pool_properties(pools[pool_idx])
         self.log_step(f"Destroying {pools[pool_idx].identifier}")
         pools[pool_idx].destroy()
 
@@ -215,9 +209,25 @@ class PoolCreateAllTestBase(TestWithServers):
         pools[pool_idx].create()
         self.log.info("%s created successfully", pools[pool_idx].identifier)
         self.log_step(f"Verifying {pools[pool_idx].identifier} default attributes")
-        pools[pool_idx].verify_prop(default_props)
+        self.__validate_default_pool_properties(pools[pool_idx])
         self.log_step(f"Destroying {pools[pool_idx].identifier}")
         pools[pool_idx].destroy()
+
+    def __validate_default_pool_properties(self, pool):
+        """Validate the properties of a pool against the default properties.
+
+        Args:
+            pool (TestPool): The pool object to validate.
+
+        Raises:
+            AssertionError: If any property does not match the expected value.
+        """
+        default_props = DEFAULT_POOL_PROPS.copy()
+        if pool.target_list is not None and len(pool.target_list) <= default_props["rd_fac"]:
+            default_props["rd_fac"] = len(pool.target_list) - 1
+        default_props["label"] = pool.label.value
+        default_props["svc_list"] = pool.svc_ranks
+        pool.validate_properties(pool.get_prop(), default_props)
 
     def check_pool_recycling(self, pool_count, scm_delta_bytes, nvme_delta_bytes=None):
         """Check the pool creation and destruction.

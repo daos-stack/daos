@@ -44,7 +44,7 @@ class QueryPropertiesTest(TestWithServers):
 
         self.log_step("Verify container get-prop matches create")
         default_props = DEFAULT_CONT_PROPS.copy()
-        default_props["label"] = containers[-1].label
+        default_props["label"] = containers[-1].label.value
         default_props["owner"] = f"{getuser()}@"
         default_props["group"] = f"{getgrgid(getgid()).gr_name}@"
         try:
