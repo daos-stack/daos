@@ -4,8 +4,7 @@ hosts:
 
 # If we define the server under test_servers, launch.py will convert it to the
 # actual server name passed into --test_servers. If above test_servers is hosts,
-# it'll be used as one of the servers at test startup time, so use something
-# other than hosts.
+# it'll be used as one of the servers at test startup time, so use something other than hosts.
 timeout: 1000
 
 setup:
@@ -29,11 +28,12 @@ server_config:
       storage: auto
 
 pool:
-  scm_size: 50000000000
-  nvme_size: 300000000000
+  scm_size: 50G
+  nvme_size: 300G
   svcn: 4
   rebuild_timeout: 180
   pool_query_timeout: 30
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
