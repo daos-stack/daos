@@ -26,10 +26,11 @@ pool:
   size: 96%
   pool_query_timeout: 330
   pool_query_delay: 20
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
-  properties: rd_fac:1
+  properties: rd_fac:1,cksum:off,srv_cksum:off
 
 ior:
   api: DFS
