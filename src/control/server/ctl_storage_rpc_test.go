@@ -14,6 +14,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,7 +28,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -2620,13 +2620,10 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			mscs := NewMockStorageControlService(log, config.Engines, sysProv, scmProv,
 				bdevProv, tc.getSysMemInfo)
 
-			ctxEvt, cancelEvtCtx := context.WithCancel(context.Background())
-			t.Cleanup(cancelEvtCtx)
-
 			cs := &ControlService{
 				StorageControlService: *mscs,
 				harness:               &EngineHarness{log: log},
-				events:                events.NewPubSub(ctxEvt, log),
+				events:                nil, // No event processing needed for this unit test
 				srvCfg:                config,
 			}
 
@@ -4374,5 +4371,235 @@ func TestServer_CtlSvc_getEngineCfgFromScmNsp(t *testing.T) {
 				strings.Contains(err.Error(), tc.output.msg),
 				fmt.Sprintf("missing message: %q", tc.output.msg))
 		})
+	}
+}
+
+// TestStorageFormat_isAwaitingFormat_GuardsNotifyStorageReady verifies that the
+// isAwaitingFormat() check in StorageFormat() prevents NotifyStorageReady() from
+// being called on engines that are not awaiting format.
+func TestStorageFormat_isAwaitingFormat_GuardsNotifyStorageReady(t *testing.T) {
+	for name, tc := range map[string]struct {
+		engine0AwaitingFormat bool
+		engine1AwaitingFormat bool
+		expNotifyCalls        int
+		replace               bool
+	}{
+		"both awaiting format - both notified": {
+			engine0AwaitingFormat: true,
+			engine1AwaitingFormat: true,
+			expNotifyCalls:        2,
+			replace:               true,
+		},
+		"engine 0 not awaiting - only engine 1 notified": {
+			engine0AwaitingFormat: false,
+			engine1AwaitingFormat: true,
+			expNotifyCalls:        1,
+			replace:               true,
+		},
+		"engine 1 not awaiting - only engine 0 notified": {
+			engine0AwaitingFormat: true,
+			engine1AwaitingFormat: false,
+			expNotifyCalls:        1,
+			replace:               true,
+		},
+		"neither awaiting - none notified": {
+			engine0AwaitingFormat: false,
+			engine1AwaitingFormat: false,
+			expNotifyCalls:        0,
+			replace:               true,
+		},
+		"standard format - both awaiting": {
+			engine0AwaitingFormat: true,
+			engine1AwaitingFormat: true,
+			expNotifyCalls:        2,
+			replace:               false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			notifyChan := make(chan int, 2)
+			var notifyMu sync.Mutex
+			notifyCallCount := 0
+
+			engines := []*mockEngineWithNotify{
+				newMockEngineWithNotify(0, tc.engine0AwaitingFormat, notifyChan, &notifyMu, &notifyCallCount),
+				newMockEngineWithNotify(1, tc.engine1AwaitingFormat, notifyChan, &notifyMu, &notifyCallCount),
+			}
+
+			cfg := config.DefaultServer()
+			for i := 0; i < 2; i++ {
+				engineCfg := engine.MockConfig().
+					WithStorage(
+						storage.NewTierConfig().
+							WithStorageClass("dcpm").
+							WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", i)).
+							WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", i)),
+						storage.NewTierConfig().
+							WithStorageClass("nvme").
+							WithBdevDeviceList(test.MockPCIAddr(int32(i))),
+					)
+				cfg.Engines = append(cfg.Engines, engineCfg)
+			}
+
+			cs := &ControlService{
+				StorageControlService: StorageControlService{
+					log: log,
+				},
+				harness: &EngineHarness{
+					log:       log,
+					instances: []Engine{engines[0], engines[1]},
+				},
+				events: nil,
+				srvCfg: cfg,
+			}
+
+			req := &ctlpb.StorageFormatReq{
+				Reformat: false,
+				Replace:  tc.replace,
+			}
+
+			ctx, cancel := context.WithTimeout(test.Context(t), 2*time.Second)
+			defer cancel()
+
+			_, err := cs.StorageFormat(ctx, req)
+
+			// StorageFormat should succeed with proper mocks
+			if err != nil {
+				t.Fatalf("unexpected error from StorageFormat: %v", err)
+			}
+
+			timeout := time.After(500 * time.Millisecond)
+			receivedCalls := 0
+
+			for receivedCalls < tc.expNotifyCalls {
+				select {
+				case engineIdx := <-notifyChan:
+					receivedCalls++
+					t.Logf("received NotifyStorageReady call for engine %d (call %d/%d)",
+						engineIdx, receivedCalls, tc.expNotifyCalls)
+				case <-timeout:
+					t.Fatalf("timeout waiting for NotifyStorageReady calls: got %d, expected %d",
+						receivedCalls, tc.expNotifyCalls)
+				}
+			}
+
+			select {
+			case engineIdx := <-notifyChan:
+				t.Fatalf("unexpected NotifyStorageReady call for engine %d (expected %d calls total)",
+					engineIdx, tc.expNotifyCalls)
+			case <-time.After(100 * time.Millisecond):
+			}
+
+			notifyMu.Lock()
+			actualCalls := notifyCallCount
+			notifyMu.Unlock()
+
+			test.AssertEqual(t, tc.expNotifyCalls, actualCalls,
+				"NotifyStorageReady call count mismatch")
+
+			t.Logf("✓ Verified: %d NotifyStorageReady calls (engine0 awaiting=%v, engine1 awaiting=%v)",
+				actualCalls, tc.engine0AwaitingFormat, tc.engine1AwaitingFormat)
+		})
+	}
+}
+
+type mockEngineWithNotify struct {
+	MockInstance
+	idx              uint32
+	awaitingFormat   bool
+	notifyChan       chan int
+	notifyMu         *sync.Mutex
+	notifyCallCount  *int
+	storageReady     chan struct{}
+	storageReadyOnce sync.Once
+}
+
+func newMockEngineWithNotify(idx int, awaitingFormat bool, notifyChan chan int, notifyMu *sync.Mutex, notifyCallCount *int) *mockEngineWithNotify {
+	m := &mockEngineWithNotify{
+		MockInstance:    *NewMockInstance(nil),
+		idx:             uint32(idx),
+		awaitingFormat:  awaitingFormat,
+		notifyChan:      notifyChan,
+		notifyMu:        notifyMu,
+		notifyCallCount: notifyCallCount,
+		storageReady:    make(chan struct{}),
+	}
+	m.cfg.Index = uint32(idx)
+	return m
+}
+
+func (m *mockEngineWithNotify) Index() uint32 {
+	return m.idx
+}
+
+func (m *mockEngineWithNotify) isAwaitingFormat() bool {
+	return m.awaitingFormat
+}
+
+func (m *mockEngineWithNotify) NotifyStorageReady(replaceRank bool) {
+	m.notifyMu.Lock()
+	*m.notifyCallCount++
+	m.notifyMu.Unlock()
+
+	select {
+	case m.notifyChan <- int(m.idx):
+	default:
+	}
+
+	m.storageReadyOnce.Do(func() {
+		close(m.storageReady)
+	})
+}
+
+func (m *mockEngineWithNotify) StorageFormatSCM(_ context.Context, _ bool) *ctlpb.ScmMountResult {
+	if m.awaitingFormat {
+		return &ctlpb.ScmMountResult{
+			Instanceidx: m.idx,
+			Mntpoint:    fmt.Sprintf("/mnt/daos%d", m.idx),
+			State:       &ctlpb.ResponseState{Status: ctlpb.ResponseStatus_CTL_SUCCESS},
+		}
+	}
+
+	return &ctlpb.ScmMountResult{
+		Instanceidx: m.idx,
+		Mntpoint:    fmt.Sprintf("/mnt/daos%d", m.idx),
+		State: &ctlpb.ResponseState{
+			Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+			Info:   "SCM is already formatted",
+		},
+	}
+}
+
+func (m *mockEngineWithNotify) GetStorage() *storage.Provider {
+	// Create a minimal mock provider with necessary components
+	cfg := engine.MockConfig().WithStorage(
+		storage.NewTierConfig().
+			WithStorageClass("dcpm").
+			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", m.idx)).
+			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", m.idx)),
+	)
+
+	// Create logger for mock sys provider
+	log := logging.NewCommandLineLogger()
+
+	// Create minimal mock sys and SCM providers needed for formatMetadata
+	sysProv := system.NewMockSysProvider(log, nil)
+	mounter := mount.NewProvider(log, sysProv)
+	scmProv := scm.NewProvider(&scm.ProviderConfig{
+		Log:     log,
+		Sys:     sysProv,
+		Mounter: mounter,
+	})
+
+	// Return minimal mock provider
+	return storage.MockProvider(log, int(m.idx), &cfg.Storage, sysProv, scmProv, nil, nil)
+}
+
+func (m *mockEngineWithNotify) newCret(addr string, err error) *ctlpb.NvmeControllerResult {
+	return &ctlpb.NvmeControllerResult{
+		PciAddr: addr,
+		State:   &ctlpb.ResponseState{},
 	}
 }

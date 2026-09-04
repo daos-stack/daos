@@ -2539,6 +2539,7 @@ func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
+	defer pubSub.Close()
 
 	cfg := &config.Server{
 		DisableEngineAutoRestart: false,
@@ -2691,6 +2692,7 @@ func TestServer_registerSubscriptions_includesSelfTerminated(t *testing.T) {
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
+	defer pubSub.Close()
 
 	cfg := &config.Server{
 		DisableEngineAutoRestart: false,
@@ -2769,6 +2771,7 @@ func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T)
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
+	defer pubSub.Close()
 
 	svc := newTestMgmtSvc(t, log)
 
