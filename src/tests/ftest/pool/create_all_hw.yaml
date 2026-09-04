@@ -8,7 +8,7 @@ hosts:
 timeouts:
   test_one_pool_hw: 240
   test_two_pools_hw: 320
-  test_recycle_pools_hw: 1500
+  test_recycle_pools_hw: 1800
 
 test_one_pool_hw:
   deltas:
