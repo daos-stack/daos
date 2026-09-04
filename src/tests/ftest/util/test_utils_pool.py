@@ -884,13 +884,53 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_rebuild_start(self.identifier, *args, **kwargs)
 
     def rebuild_stop(self, *args, **kwargs):
-        """Use dmg to stop rebuild on this pool.
+        """Stop rebuild on this pool with dmg pool rebuild stop.
+
+        Raises:
+            CommandFailure: if the command fails
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
         return self.dmg.pool_rebuild_stop(self.identifier, *args, **kwargs)
+
+    def rebuild_stop_retry(self, timeout=60, interval=3, force=False):
+        """Stop rebuild on this pool with dmg pool rebuild stop.
+
+        Retries the command until it succeeds or the timeout is reached.
+
+        Args:
+            timeout (int, optional): Maximum time to wait for rebuild to stop in seconds.
+                Defaults to 60.
+            interval (int, optional): Time to wait between retries in seconds. Defaults to 3.
+            force (bool, optional): Whether to force stop the rebuild. Defaults to False.
+
+        Raises:
+            CommandFailure: if the command fails for any reason other than
+                DER_NONEXIST or if the timeout is reached.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        time_start = time.time()
+        while True:
+            try:
+                return self.rebuild_stop(force=force)
+            except CommandFailure as error:
+                # Any error other than DER_NONEXIST is a real error
+                if 'DER_NONEXIST' not in str(error):
+                    raise
+                # If we exceed the max wait time, fail the test
+                if time.time() - time_start > timeout:
+                    raise CommandFailure(
+                        f"Failed to stop rebuild after {timeout} seconds"
+                    ) from error
+                # Otherwise, sleep and retry
+                self.log.info(
+                    'Assuming rebuild is not started yet. Retrying in %s seconds...', interval)
+                time.sleep(interval)
 
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):

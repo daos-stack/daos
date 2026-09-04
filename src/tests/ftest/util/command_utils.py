@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -181,6 +181,18 @@ class ExecutableCommand(CommandWithParameters):
         self.exit_status_exception = False
         yield
         self.exit_status_exception = original_value
+
+    @contextlib.contextmanager
+    def verbosity(self, value):
+        """Temporarily set the verbosity for the command.
+
+        Args:
+            value (bool): whether or not to enable verbose output
+        """
+        original_value = self.verbose
+        self.verbose = value
+        yield
+        self.verbose = original_value
 
     @contextlib.contextmanager
     def as_user(self, user):
