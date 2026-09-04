@@ -187,6 +187,8 @@ RUN --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
         } \
     }
 
+WORKDIR /home/daos
+
 FROM build-ci AS build-local
 # Set a label.  This is useful for searching for DAOS images, but is also used
 # in github-actions to prune elements of the dockerfile below this point.

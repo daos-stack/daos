@@ -23,6 +23,7 @@ command line:
     PREFIX=/opt/daos    installation prefix
 
 Options:
+    -c                  run scons -c command
     -h, --help          show this help and exit
 
 Any other argument is forwarded verbatim to scons, e.g.:
@@ -34,8 +35,13 @@ EOF
 jobs_set=false
 prefix_set=false
 use_installed_set=false
+install_set=false
 for arg in "$@"; do
     case "$arg" in
+        -c)
+            scons -c
+            exit 0
+            ;;
         -h | --help)
             usage
             exit 0
@@ -49,13 +55,24 @@ for arg in "$@"; do
         USE_INSTALLED=*)
             use_installed_set=true
             ;;
+        install)
+            install_set=true
+            ;;
+        --build-deps=*)
+            build_set=true
+            ;;
     esac
 done
 
-SCONS_ARGS=(install --config=force --build-deps=no )
+SCONS_ARGS=()
+if ! "$install_set"; then
+    SCONS_ARGS+=(install)
+fi
+if ! "$build_set"; then
+    SCONS_ARGS+=(--build-deps=no )
+fi
 if ! "$jobs_set"; then
-#    SCONS_ARGS+=(--jobs "$(nproc)")
-    SCONS_ARGS+=(--jobs "133")
+    SCONS_ARGS+=(--jobs "$(nproc)")
 fi
 if ! "$use_installed_set"; then
     SCONS_ARGS+=("USE_INSTALLED=all")

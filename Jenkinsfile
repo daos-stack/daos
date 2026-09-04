@@ -837,16 +837,18 @@ pipeline {
                     }
                     steps {
                         script {
+                            sh label: 'TEST',
+                                script: 'pwd;ls -la'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
                                            build_deps: 'no',
                                            stash_opt: true,
-                                           scons_exe: 'utils/rpms/buil_daos.sh',
+                                           scons_exe: 'utils/rpms/build_daos.sh',
                                            scons_args: sconsArgs() +
                                                       ' TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
+                                script: 'utils/rpms/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
                             // Go binaries need to be instrumented in order to work reliably
                             // with valgrind. We do this in a separate build because we don't
                             // want to ship the instrumented binaries.
@@ -907,7 +909,7 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
+                                script: 'utils/rpms/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {
