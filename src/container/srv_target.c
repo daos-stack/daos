@@ -283,8 +283,9 @@ get_hae(struct ds_cont_child *cont, bool vos_agg)
 		return cont->sc_ec_agg_eph;
 
 	/*
-	 * Query the 'Highest Aggregated Epoch', the HAE will be bumped
-	 * in vos_aggregate()
+	 * Query the 'Highest Aggregated Epoch'. The HAE is bumped by the
+	 * per-object aggregation driver via vos_aggregate_advance_hae() once
+	 * a full pass over the current epoch range completes cleanly.
 	 */
 	rc = vos_cont_query(cont->sc_hdl, &cinfo);
 	if (rc) {
@@ -529,20 +530,156 @@ out:
 		param->ap_vos_agg ? "VOS" : "EC");
 }
 
+/*
+ * Per-object VOS aggregation driver.
+ *
+ * The driver iterates objects in the container itself (via vos_iterate at
+ * VOS_ITER_OBJ level) and dispatches per-object aggregation through the new
+ * vos_aggregate_obj() API. Each per-OID call enters/exits VOS aggregation
+ * independently, so a future change can place each call into its own ULT
+ * without further refactoring of VOS internals.
+ */
+struct cont_vos_agg_drive {
+	struct ds_cont_child	*cvad_cont;
+	daos_epoch_range_t	*cvad_epr;
+	uint32_t		 cvad_flags;
+	daos_epoch_t		 cvad_filter_epoch;
+	struct agg_param	*cvad_param;	/* for agg_rate_ctl yield */
+	unsigned int		 cvad_out_flags; /* OR of per-OID VOS_AGG_OUT_* */
+};
+
+/*
+ * Per-OID skip filter at iteration time. Mirrors the optimization VOS used
+ * to apply internally: skip objects whose recorded aggregatable-write epoch
+ * is at or below the filter epoch (cd_hae) and whose parent punch is also at
+ * or below it - those objects have nothing to aggregate.
+ */
+static int
+cont_vos_agg_filter_cb(daos_handle_t ih, vos_iter_desc_t *desc, void *arg,
+		       unsigned int *acts)
+{
+	struct cont_vos_agg_drive	*drv = arg;
+
+	if (desc->id_type != VOS_ITER_OBJ)
+		return 0;
+
+	if (drv->cvad_flags & VOS_AGG_FL_FORCE_SCAN)
+		return 0;
+
+	if (desc->id_agg_write <= drv->cvad_filter_epoch &&
+	    desc->id_parent_punch <= drv->cvad_filter_epoch)
+		*acts |= VOS_ITER_CB_SKIP;
+
+	return 0;
+}
+
+static int
+cont_vos_agg_obj_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct cont_vos_agg_drive	*drv = cb_arg;
+	unsigned int			 out_flags = 0;
+	int				 rc;
+
+	D_ASSERT(type == VOS_ITER_OBJ);
+
+	rc = vos_aggregate_obj(drv->cvad_cont->sc_hdl, entry->ie_oid, drv->cvad_epr,
+			       agg_rate_ctl, drv->cvad_param, drv->cvad_flags, &out_flags);
+	drv->cvad_out_flags |= out_flags;
+
+	/*
+	 * Suppress checksum errors and continue with the next object: matches
+	 * the legacy behavior in cont_vos_aggregate_cb() where -DER_CSUM was
+	 * suppressed at the container layer to allow other epoch ranges (and,
+	 * now, other objects) to make progress. The container HAE is still
+	 * advanced for the csum-error case, mirroring the comment in the old
+	 * vos_aggregate() implementation.
+	 */
+	if (rc == -DER_CSUM)
+		return 0;
+
+	if (rc != 0)
+		*acts |= VOS_ITER_CB_EXIT;
+
+	return rc;
+}
+
 static int
 cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		      uint32_t flags, struct agg_param *param)
 {
-	int rc;
+	struct cont_vos_agg_drive	drv = { 0 };
+	vos_iter_param_t		iter_param = { 0 };
+	struct vos_iter_anchors		anchors = { 0 };
+	vos_cont_info_t			cinfo = { 0 };
+	int				rc;
 
-	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, flags);
+	rc = vos_cont_query(cont->sc_hdl, &cinfo);
+	if (rc) {
+		DL_ERROR(rc, DF_CONT": cont query failed",
+			 DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		return rc;
+	}
 
-	/* Suppress csum error and continue on other epoch ranges */
-	if (rc == -DER_CSUM)
-		rc = 0;
+	drv.cvad_cont = cont;
+	drv.cvad_epr = epr;
+	drv.cvad_flags = flags;
+	/*
+	 * Use the lower bound of the epoch range as the filter epoch when
+	 * doing a forced scan (e.g. snapshot deletion); otherwise use the
+	 * container's recorded HAE so we can skip objects that haven't been
+	 * touched since the last aggregation.
+	 */
+	drv.cvad_filter_epoch = (flags & VOS_AGG_FL_FORCE_SCAN) ? epr->epr_lo : cinfo.ci_hae;
+	drv.cvad_param = param;
+
+	/*
+	 * Container-level fast path: if the container's recorded last
+	 * aggregatable write is at or below our filter epoch, there is
+	 * nothing for any object to aggregate. Skip iteration entirely
+	 * and just advance the barrier (preserves the optimization that
+	 * the old vos_aggregate() applied via the OBJ root tree feats).
+	 *
+	 * ci_agg_write == 0 is the sentinel for "no info recorded" (the OBJ
+	 * tree feats don't yet carry the agg_write hint, e.g. on freshly
+	 * formatted containers). In that case we MUST scan, so the fast
+	 * path is gated on a non-zero recorded value.
+	 */
+	if (cinfo.ci_agg_write != 0 && cinfo.ci_agg_write <= drv.cvad_filter_epoch &&
+	    !(flags & VOS_AGG_FL_FORCE_SCAN))
+		goto advance;
+
+	iter_param.ip_hdl = cont->sc_hdl;
+	iter_param.ip_epr = *epr;
+	/*
+	 * Iterate in epoch reserve order for SV tree, so that the first
+	 * returned recx in SV tree has highest epoch and can't be aggregated.
+	 */
+	iter_param.ip_epc_expr = VOS_IT_EPC_RR;
+	/* EV tree iterator returns all sorted logical rectangles */
+	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_COVERED |
+			      VOS_IT_FOR_PURGE | VOS_IT_FOR_AGG;
+	iter_param.ip_filter_cb = cont_vos_agg_filter_cb;
+	iter_param.ip_filter_arg = &drv;
+
+	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, false, &anchors,
+			 cont_vos_agg_obj_cb, NULL, &drv, NULL);
 
 	/* Wake up GC ULT */
 	sched_req_wakeup(cont->sc_pool->spc_gc_req);
+
+	if (rc != 0)
+		return rc;
+
+advance:
+	/*
+	 * Only advance cd_hae if every per-OID call completed cleanly: any
+	 * uncommitted DTX on any object means we must leave cd_hae alone so
+	 * those entries get a chance to aggregate next round.
+	 */
+	if (!(drv.cvad_out_flags & VOS_AGG_OUT_IN_PROGRESS))
+		rc = vos_aggregate_advance_hae(cont->sc_hdl, epr->epr_hi);
+
 	return rc;
 }
 
