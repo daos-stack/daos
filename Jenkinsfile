@@ -480,6 +480,36 @@ String sconsArgs() {
     return sconsFaultsArgs() + ' ' + params.CI_SCONS_ARGS
 }
 
+// This is a temporary workaround for a bug in pipeline-lib proxy handling.
+// Because we can not risk failures until we verify that that bug can be
+// fixed, we will use this function to remove the bug for each active branch
+// Proxy rules:
+//    IF jenkins system has an HTTPS_PROXY set then it needs to be passed
+//    to the docker build command.  If the system does not have an HTTPS_PROXY
+//    set then the docker build MUST NOT include an HTTPS_PROXY build argument.
+//
+//    The DAOS_NO_PROXY build argument was put in because the HTTPS_PROXY
+//    build argument was being passed to the docker build when it should not
+//    have been instead of fixing the bug in pipeline-lib.
+//    This function will be removed when the bug is fixed.
+//    The use of no_proxy/NO_PROXY environment variables to avoid a proxy is
+//    unsafe because there is no single standard used for for what is legal to
+//    be in it.
+//
+//    If a local mirror is available via REPOSITORY_URL/ARTIFACTORY_URL it
+//    should always be used instead of a proxy server for reliability.
+//    Applications should where possible always use configuration file to
+//    for any needed proxy or mirror settings instead of environment variables
+//    which will avoid needing no_proxy issues.
+String daosDockerBuildArgs(Map args = [:]) {
+    String buildArgs = dockerBuildArgs(args)
+    if (!env.HTTPS_PROXY) {
+        buildArgs += ' --build-arg HTTPS_PROXY='
+        buildArgs += ' --build-arg DAOS_NO_PROXY='
+    }
+    return buildArgs
+}
+
 /**
  * Update default commit pragmas based on files modified.
  */
@@ -503,7 +533,6 @@ pipeline {
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
-        HTTPS_PROXY = ''
         PYTHON_VERSION = '3.11'
     }
 
@@ -614,15 +643,18 @@ pipeline {
         booleanParam(name: bashName('Functional on EL 9 with Valgrind'),
                      defaultValue: false,
                      description: 'Run the Functional on EL 9 with Valgrind stage.')
+        // >>> TEMP PATCH: shift default functional testing from EL 9 to Leap 15/SLES 15 <<<
+        // >>> REVERT these 3 defaultValue lines back to EL9=true, Leap15=false, SLES15=false <<<
         booleanParam(name: bashName('Functional on EL 9'),
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on EL 9 stage.')
         booleanParam(name: bashName('Functional on Leap 15'),
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the Functional on Leap 15 stage.')
         booleanParam(name: bashName('Functional on SLES 15'),
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the Functional on SLES 15 stage.')
+        // >>> END TEMP PATCH <<<
         booleanParam(name: bashName('Functional on Ubuntu 20.04'),
                      defaultValue: false,
                      description: 'Run the Functional on Ubuntu 20.04 stage.')
@@ -886,9 +918,9 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
+                            additionalBuildArgs daosDockerBuildArgs(repo_type: 'stable',
+                                                                    parallel_build: true,
+                                                                    deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +

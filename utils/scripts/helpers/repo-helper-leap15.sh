@@ -76,7 +76,7 @@ install_dnf() {
 install_optional_ca() {
     ca_storage="/etc/pki/trust/anchors/"
     if [ -n "$DAOS_LAB_CA_FILE_URL" ]; then
-        curl -k --noproxy '*' -sSf -o "${ca_storage}lab_ca_file.crt" \
+        curl -k -sSf -o "${ca_storage}lab_ca_file.crt" \
             "$DAOS_LAB_CA_FILE_URL"
         update-ca-certificates
     fi
@@ -99,7 +99,7 @@ if [ -n "$REPO_FILE_URL" ]; then
     install_optional_ca
     mkdir -p "$repos_dir"
     pushd "$repos_dir"
-    curl -k --noproxy '*' -sSf -o "daos_ci-leap${MAJOR_VER}-${REPOSITORY_NAME}.repo" \
+    curl -sSf -o "daos_ci-leap${MAJOR_VER}-${REPOSITORY_NAME}.repo" \
          "${REPO_FILE_URL}daos_ci-leap${MAJOR_VER}-${REPOSITORY_NAME}.repo"
     disable_repos "$repos_dir"
     popd
@@ -107,15 +107,26 @@ if [ -n "$REPO_FILE_URL" ]; then
     # # when using a local repository.
     # unset HTTPS_PROXY
     # unset https_proxy
-    install_dnf
 else
-    if ! command -v dnf; then
-        zypper --non-interactive --gpg-auto-import-keys install \
-            dnf dnf-plugins-core
+    # shellcheck disable=SC1091
+    . /etc/os-release
+
+    # network:cluster is only published for some Leap versions (e.g. not
+    # 15.4). Probe the GPG key URL first so unsupported versions (such as
+    # GitHub Actions using an older Leap) build without this repo instead
+    # of failing outright.
+    network_cluster_key_url="https://download.opensuse.org/repositories/network:/cluster/${VERSION_ID}/repodata/repomd.xml.key"
+    if curl -fsS --connect-timeout 5 --max-time 10 \
+        "${network_cluster_key_url}" > /dev/null 2>&1; then
+        zypper --non-interactive addrepo --gpgcheck \
+            "https://download.opensuse.org/repositories/network:/cluster/${VERSION_ID}/" \
+            network-cluster
+        rpm --import "${network_cluster_key_url}"
     else
-        install_dnf
+        echo "Skipping network-cluster repo: ${network_cluster_key_url} is unavailable for ${VERSION_ID}"
     fi
 fi
+install_dnf
 if [ ! -d /etc/yum.repos.d/ ]; then
     mkdir -p /etc/yum.repos.d/
     pushd "$repos_dir"
@@ -188,30 +199,51 @@ if [ -n "$REPO_FILE_URL" ]; then
 
 # Setup pip/uv to use the proxy only when the endpoint is reachable.
     pypi_proxy_url="${trusted_base_url}/api/pypi/pypi-proxy/simple"
-    if curl -k --noproxy '*' -fsS --connect-timeout 5 --max-time 10 \
+    if curl -fsS --connect-timeout 5 --max-time 10 \
         "${pypi_proxy_url}" > /dev/null 2>&1; then
-    cat <<EOF > /etc/pip.conf
-[global]
-    trusted-host = ${trusted_host}
-    index-url = ${pypi_proxy_url}
-    progress_bar = off
-    no_color = true
-    quiet = 1
-EOF
+        {
+            echo '[global]'
+            echo "    trusted-host = ${trusted_host}"
+            echo "    index-url = ${pypi_proxy_url}"
+        } > /etc/pip.conf
+    elif [ -n "${DAOS_HTTPS_PROXY:-}" ]; then
+        {
+            echo '[global]'
+            echo "    proxy = ${DAOS_HTTPS_PROXY}"
+        } > /etc/pip.conf
     else
-        echo "Skipping pip proxy setup: ${pypi_proxy_url} is unreachable"
+        echo '[global]' > /etc/pip.conf
     fi
+    # Options common to every /etc/pip.conf variant above.
+    {
+        echo '    progress_bar = off'
+        echo '    no_color = true'
+        echo '    quiet = 1'
+    } >> /etc/pip.conf
 
 # Setup RubyGems to use artifactory/repository as the installation source only
 # when the endpoint is reachable.
     gem_proxy_url="${trusted_base_url}/api/gems/rubygems-proxy/"
-    if curl -k --noproxy '*' -fsS --connect-timeout 5 --max-time 10 \
+    # Remove any stale rpmorig so a later ruby-devel install cannot leave it
+    # behind under a different name, breaking the restore of this gemrc.
+    rm -f /etc/gemrc.rpmorig
+    # Options common to every /etc/gemrc variant below.
+    {
+        echo '---'
+        echo 'gem: --no-document --quiet'
+    } > /etc/gemrc
+    if curl -fsS --connect-timeout 5 --max-time 10 \
         "${gem_proxy_url}" > /dev/null 2>&1; then
-        cat <<EOF > /etc/gemrc
-:sources:
-- ${gem_proxy_url}
-EOF
+        {
+            echo ':sources:'
+            echo "- ${gem_proxy_url}"
+        } >> /etc/gemrc
+    elif [ -n "${DAOS_HTTPS_PROXY:-}" ]; then
+        {
+            echo "http_proxy: ${DAOS_HTTPS_PROXY}"
+            echo "https_proxy: ${DAOS_HTTPS_PROXY}"
+        } >> /etc/gemrc
     else
-        echo "Skipping /etc/gemrc setup: ${gem_proxy_url} is unreachable"
+        echo "Skipping gem source/proxy setup: ${gem_proxy_url} is unreachable"
     fi
 fi
