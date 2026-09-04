@@ -242,6 +242,11 @@ struct statx {
 
 /* working dir of current process */
 static char             cur_dir[DFS_MAX_PATH] = "";
+/* pid cur_dir was last set for. CPython uses vfork() for subprocess with cwd=, and a vfork()ed
+ * child runs in the parent's address space until execve(), so a chdir() there would otherwise
+ * leave the parent resolving relative paths against the child's directory.
+ */
+static pid_t            cur_dir_pid;
 static bool             segv_handler_inited;
 /* Old segv handler */
 struct sigaction        old_segv;
@@ -264,6 +269,8 @@ static void
 finalize_dfs(void);
 static void
 update_cwd(void);
+static void
+cur_dir_check_owner(void);
 static int
 get_eqh(daos_handle_t *eqh);
 static void
@@ -1157,6 +1164,10 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 	if (full_path_parse == NULL)
 		goto out_oom;
 
+	/* Relative paths resolve against cur_dir, which may still belong to a different process. */
+	if (szInput[0] != '/')
+		cur_dir_check_owner();
+
 	if (strncmp(szInput, ".", 2) == 0) {
 		/* special case for current work directory */
 		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH + 1);
@@ -2017,6 +2028,7 @@ check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int
 		else if (len_str < 0)
 			goto out_oom;
 	} else if (dirfd_directed == AT_FDCWD) {
+		cur_dir_check_owner();
 		len_str = asprintf(full_path_out, "%s/%s", cur_dir, rel_path);
 		if (len_str >= DFS_MAX_PATH)
 			goto out_toolong;
@@ -2068,6 +2080,42 @@ out_readlink:
 	}
 	D_DEBUG(DB_ANY, "readlink() failed: %d (%s)\n", errno, strerror(errno));
 	return (-1);
+}
+
+/* dfs dereferences symlinks inside the container, so it cannot handle a symlink whose value is an
+ * absolute path: POSIX resolves such a value from the process root, which only the kernel can do.
+ * dfs reports EINVAL for it, except when the link sits in the container root, where it resolves the
+ * value from that root and reports ENOENT instead. Probing for the latter is restricted to the
+ * container root so that an ordinary lookup miss stays cheap.
+ *
+ * An absolute symlink in a non-leaf position of the path is not detected here.
+ */
+static bool
+need_kernel_to_resolve(int rc, struct dfs_mt *dfs_mt, struct dcache_rec *parent,
+		       const char *item_name, const char *parent_dir)
+{
+	dfs_obj_t  *obj           = NULL;
+	mode_t      mode          = 0;
+	bool        absolute_link = false;
+	/* dfs_get_symlink_value() truncates, and only the first character is of interest here */
+	char        value[2];
+	daos_size_t str_len = sizeof(value);
+
+	if (rc == EINVAL)
+		return true;
+	if (rc != ENOENT || parent == NULL || parent_dir == NULL)
+		return false;
+	if (strncmp(parent_dir, "/", 2) != 0)
+		return false;
+
+	if (dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), item_name, O_RDONLY | O_NOFOLLOW, &obj,
+			   &mode, NULL) != 0)
+		return false;
+	if (S_ISLNK(mode) && dfs_get_symlink_value(obj, value, &str_len) == 0)
+		absolute_link = (value[0] == '/');
+	dfs_release(obj);
+
+	return absolute_link;
 }
 
 static int
@@ -2272,6 +2320,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				    &dfs_obj, &mode_query, NULL);
 	}
 
+	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir))
+		goto org_func;
 	if (rc)
 		D_GOTO(out_error, rc);
 
@@ -3094,6 +3144,7 @@ static int
 new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int                is_target_path, rc;
+	bool               use_kernel;
 	dfs_obj_t         *obj;
 	mode_t             mode;
 	char               item_name[DFS_MAX_NAME];
@@ -3108,6 +3159,8 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 		errno = ENOENT;
 		return (-1);
 	}
+
+	item_name[0] = '\0';
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3144,10 +3197,12 @@ out_org:
 	return next_xstat(ver, path, stat_buf);
 
 out_err:
+	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
+		     (rc == EIO && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if ((rc == EIO || rc == EINVAL) && d_compatible_mode)
+	if (use_kernel)
 		return next_xstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -3157,6 +3212,7 @@ static int
 new_lxstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int                is_target_path, rc;
+	bool               use_kernel;
 	char               item_name[DFS_MAX_NAME];
 	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
@@ -3169,6 +3225,8 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 		errno = ENOENT;
 		return (-1);
 	}
+
+	item_name[0] = '\0';
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3196,10 +3254,12 @@ out_org:
 	return libc_lxstat(ver, path, stat_buf);
 
 out_err:
+	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
+		     (rc == EIO && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if ((rc == EIO || rc == EINVAL) && d_compatible_mode)
+	if (use_kernel)
 		return libc_lxstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -5128,6 +5188,7 @@ getcwd(char *buf, size_t size)
 	if (!d_hook_enabled)
 		return next_getcwd(buf, size);
 
+	cur_dir_check_owner();
 	if (cur_dir[0] != '/')
 		update_cwd();
 
@@ -5192,6 +5253,8 @@ access(const char *path, int mode)
 	if (!d_hook_enabled)
 		return next_access(path, mode);
 
+	item_name[0] = '\0';
+
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
@@ -5217,6 +5280,8 @@ out_org:
 	return next_access(path, mode);
 
 out_err:
+	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir))
+		goto out_org;
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -5279,14 +5344,27 @@ chdir(const char *path)
 	if (!d_hook_enabled)
 		return next_chdir(path);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
-			&full_path, &dfs_mt);
-	if (rc)
-		D_GOTO(out_err, rc);
-
 	rc = next_chdir(path);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		return (-1);
+
+	if (cur_dir_pid != 0 && cur_dir_pid != getpid()) {
+		/* A vfork()ed child shares the parent's memory until execve(): updating cur_dir
+		 * here would redirect the parent's relative paths to this child's directory.
+		 */
+		return 0;
+	}
+
+	rc =
+	    query_path(path, &is_target_path, &parent, item_name, &parent_dir, &full_path, &dfs_mt);
+	if (rc) {
+		/* The kernel already moved cwd, so chdir() has to report success. Only cur_dir
+		 * cannot be derived from path here. query_path() above allocates and takes locks,
+		 * so a chdir() between fork() and exec() is still not safe in general.
+		 */
+		update_cwd();
+		return 0;
+	}
 
 	if (!is_target_path) {
 		len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s", full_path);
@@ -5334,8 +5412,13 @@ fchdir(int dirfd)
 		return next_fchdir(dirfd);
 
 	fd_directed = d_get_fd_redirected(dirfd);
-	if (fd_directed < FD_DIR_BASE)
-		return next_fchdir(dirfd);
+	if (fd_directed < FD_DIR_BASE) {
+		rc = next_fchdir(dirfd);
+		/* as in chdir(), a vfork()ed child must leave the parent's cur_dir alone */
+		if (rc == 0 && (cur_dir_pid == 0 || cur_dir_pid == getpid()))
+			update_cwd();
+		return rc;
+	}
 
 	/* assume dfuse is running. call chdir() to update cwd. */
 	if (next_chdir == NULL) {
@@ -5346,7 +5429,11 @@ fchdir(int dirfd)
 	if (rc)
 		return rc;
 
+	if (cur_dir_pid != 0 && cur_dir_pid != getpid())
+		return 0;
+
 	pt_end = stpncpy(cur_dir, dir_list[fd_directed - FD_DIR_BASE]->path, DFS_MAX_PATH - 1);
+	cur_dir_pid = getpid();
 	if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
 			strerror(ENAMETOOLONG));
@@ -6850,25 +6937,39 @@ new_exit(int rc)
 static void
 update_cwd(void)
 {
-	char *cwd = NULL;
-	char *pt_end = NULL;
+	int saved_errno = errno;
 
-	/* daos_init() may be not called yet. */
-	cwd = get_current_dir_name();
-
-	if (cwd == NULL) {
-		D_FATAL("fatal error to get CWD with get_current_dir_name(): %d (%s)\n", errno,
-			strerror(errno));
-		abort();
-	} else {
-		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH - 1);
-		if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
-			D_FATAL("fatal error, cwd path is too long:  %d (%s)\n", ENAMETOOLONG,
-				strerror(ENAMETOOLONG));
-			abort();
-		}
-		free(cwd);
+	if (next_getcwd == NULL) {
+		next_getcwd = dlsym(RTLD_NEXT, "getcwd");
+		D_ASSERT(next_getcwd != NULL);
 	}
+
+	/* get_current_dir_name() returns $PWD when stat($PWD) and stat(".") match, but both go
+	 * through the intercepted stat() and so agree with the stale cur_dir to be refreshed.
+	 * cur_dir is filled directly to stay allocation free between fork() and exec().
+	 */
+	if (next_getcwd(cur_dir, DFS_MAX_PATH) == NULL) {
+		/* e.g. cwd was removed or is too long. Relative paths are left to libc until the
+		 * cwd is known again.
+		 */
+		D_DEBUG(DB_ANY, "getcwd() failed: %d (%s)\n", errno, strerror(errno));
+		cur_dir[0] = '\0';
+	}
+	cur_dir_pid = getpid();
+
+	errno = saved_errno;
+}
+
+/* Adopt cur_dir for this process when it was last set by another one, e.g. after fork(). By the
+ * time a parent runs again after vfork() the child has already exec'd, so writing here is safe.
+ */
+static void
+cur_dir_check_owner(void)
+{
+	if (cur_dir_pid == getpid())
+		return;
+
+	update_cwd();
 }
 
 static int
