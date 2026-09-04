@@ -287,8 +287,10 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         self.log_step("Disable checker and verify that the fault is actually fixed.")
         dmg_command.check_disable()
         expected_props = {"label": container.label.value}
-        label_verified = container.verify_prop(expected_props=expected_props)
-        self.assertTrue(label_verified, "Container label isn't fixed!")
+        try:
+            container.verify_prop(expected_props=expected_props)
+        except AssertionError:
+            self.fail("Container label isn't fixed!")
 
     def test_two_pools_corrupted(self):
         """Test to pass in two pool labels where one is corrupted pool.
@@ -425,8 +427,10 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         dmg_command.check_disable()
         for container in containers:
             expected_props = {"label": container.label.value}
-            label_verified = container.verify_prop(expected_props=expected_props)
-            self.assertTrue(label_verified, f"{container.label.value} label isn't fixed!")
+            try:
+                container.verify_prop(expected_props=expected_props)
+            except AssertionError:
+                self.fail(f"{container.label.value} label isn't fixed!")
 
     def test_stale_entry(self):
         """Test stale entry doesn't appear in Action Required table.

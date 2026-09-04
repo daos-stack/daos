@@ -18,6 +18,30 @@ from pydaos.raw import DaosApiError, DaosContainer, DaosInputParams, str_to_c_uu
 from test_utils_base import TestDaosApiBase
 
 CONT_NAMESPACE = "/run/container/*"
+DEFAULT_CONT_PROPS = {
+    "acl": ["A::OWNER@:rwdtTaAo", "A:G:GROUP@:rwtT"],
+    "alloc_oid": 0,
+    "cksum": "crc32",
+    "cksum_size": 32768,
+    "compression": "off",
+    "dedup": "off",
+    "dedup_threshold": 4096,
+    "ec_cell_sz": 131072,
+    "ec_pda": "1",
+    "encryption": "off",
+    "global_version": "4",
+    "layout_type": "POSIX",
+    "layout_version": 1,
+    "max_snapshot": 0,
+    "obj_version": "2",
+    "perf_domain": "root (255)",
+    "rd_fac": "0",
+    "rd_lvl": "rank",
+    "rp_pda": "4294967295",
+    "scrub_disabled": "false",
+    "srv_cksum": "on",
+    "status": "HEALTHY",
+}
 
 
 def add_container(test, pool, namespace=CONT_NAMESPACE, create=True, daos=None, **params):
@@ -367,7 +391,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.dir_oclass = BasicParameter(None)
         self.file_oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
-        self.properties = BasicParameter(None, "cksum:off,srv_cksum:off")
+        self.properties = BasicParameter(None)
         self.acl_file = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
         self.label = BasicParameter(None, "TestContainer")
@@ -1028,15 +1052,11 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         Args:
             expected_props (dict): expected properties and values
 
-        Returns:
-            bool: whether props from daos container get-prop match expected values
-
+        Raises:
+            AssertionError: If any property does not match the expected value.
         """
-        prop_output = self.get_prop(properties=expected_props.keys())
-        for actual_prop in prop_output['response']:
-            if expected_props[actual_prop['name']] != actual_prop['value']:
-                return False
-        return True
+        result = self.get_prop(properties=expected_props.keys())
+        self.validate_properties(result, expected_props)
 
     def list_attrs(self, *args, **kwargs):
         """Get container properties by calling daos container list-attrs.
