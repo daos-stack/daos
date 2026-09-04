@@ -1346,6 +1346,16 @@ int
 vos_iter_validate(daos_handle_t ih);
 
 /**
+ * XXX
+ *
+ * \param[in] ih	XXX
+ *
+ * \retval	XXX
+ */
+int
+vos_iter_check(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, struct checker *ck);
+
+/**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
  *

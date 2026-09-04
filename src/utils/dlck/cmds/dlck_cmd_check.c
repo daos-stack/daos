@@ -47,8 +47,11 @@ obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	// struct xstream_arg *xa      = bndl->xa;
 	// struct checker     *main_ck = &xa->ctrl->checker;
 	struct checker *ck = bndl->ck;
+	int             rc;
 
 	CK_PRINTF(ck, "oid: " DF_UOID "\n", DP_UOID(entry->ie_oid));
+
+	rc = vos_iter_check(ih, entry, type, ck);
 
 	return 0;
 }
