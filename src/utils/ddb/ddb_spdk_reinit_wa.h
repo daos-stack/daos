@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2026 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,6 +8,13 @@
 #define DAOS_DDB_SPDK_REINIT_WA_H
 
 #include <stdbool.h>
+
+/**
+ * Boolean environment variable name allowing to disable the workaround for the "single SPDK/VOS
+ * init per process for NVMe-backed pools" limitation.
+ * Note: This variable is only used in non-release builds.
+ */
+#define DDB_ALLOW_SPDK_REINIT_ENV "DAOS_DDB_ALLOW_SPDK_REINIT"
 
 /**
  * "Single SPDK/VOS init per process for NVMe-backed pools" guard -- see ddb_spdk_reinit_wa.c

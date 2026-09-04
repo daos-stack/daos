@@ -1740,8 +1740,8 @@ find_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_ite
 	return 0;
 }
 
-/* Note:
- * This can be improved by verifying the path in a single vos_iterate ... instead of 1 for
+/*
+ * Note: This can be improved by verifying the path in a single vos_iterate ... instead of 1 for
  * path part.
  */
 static bool
@@ -2060,54 +2060,47 @@ int
 dv_sync_smd(const char *nvme_conf, const char *db_path, struct ddb_ctx *ctx,
 	    dv_smd_sync_complete complete_cb, void *cb_args)
 {
-	struct dv_sync_cb_args	 sync_cb_args = {0};
-	int			 rc;
-	bool                     can_proceed;
+	struct dv_sync_cb_args sync_cb_args = {0};
+	int                    rc;
+	bool                   can_proceed;
+
+	/*
+	 * vos_self_init_ext() below deliberately skips SPDK init (see the comment on that call).
+	 * ddbs_for_each_bio_blob_hdr() is the call that actually starts an SPDK app
+	 * (spdk_app_start()), initialized from nvme_conf -- not db_path (used only for VOS's own
+	 * sys db below) -- so the guard is checked unconditionally (NULL) here rather than by
+	 * probing <db_path>/daos_nvme.conf, which may have no relationship to nvme_conf.
+	 */
+	rc = dwa_can_proceed(ctx, NULL, &can_proceed);
+	if (!SUCCESS(rc))
+		goto out;
+	if (!can_proceed)
+		D_GOTO(out, rc = -DER_NO_SERVICE);
 
 	/* don't initialize NVMe(spdk) within VOS. Will happen in ddb_spdk module */
 	rc = vos_self_init_ext(db_path, true, 0, false);
-
 	if (!SUCCESS(rc)) {
-		D_ERROR("VOS failed to initialize: "DF_RC"\n", DP_RC(rc));
-		return rc;
+		D_ERROR("VOS failed to initialize: " DF_RC "\n", DP_RC(rc));
+		goto out;
 	}
 
 	rc = smd_init(vos_db_get());
 	if (!SUCCESS(rc)) {
-		D_ERROR("SMD failed to initialize: "DF_RC"\n", DP_RC(rc));
-		vos_self_fini();
-		return rc;
-	}
-
-	/*
-	 * vos_self_init_ext() above deliberately skips SPDK init (see the comment on that call).
-	 * ddbs_for_each_bio_blob_hdr() is the call that actually starts an SPDK app
-	 * (spdk_app_start()), initialized from nvme_conf -- not db_path (used only for VOS's own
-	 * sys db above) -- so the guard is checked unconditionally (NULL) here rather than by
-	 * probing <db_path>/daos_nvme.conf, which may have no relationship to nvme_conf.
-	 */
-	rc = dwa_can_proceed(ctx, NULL, &can_proceed);
-	if (!SUCCESS(rc)) {
-		smd_fini();
-		vos_self_fini();
-		return rc;
-	}
-	if (!can_proceed) {
-		smd_fini();
-		vos_self_fini();
-		return -DER_NO_SERVICE;
+		D_ERROR("SMD failed to initialize: " DF_RC "\n", DP_RC(rc));
+		goto out_self_fini;
 	}
 
 	sync_cb_args.sync_complete_cb = complete_cb;
-	sync_cb_args.sync_cb_args = cb_args;
+	sync_cb_args.sync_cb_args     = cb_args;
 	rc = ddbs_for_each_bio_blob_hdr(nvme_conf, sync_cb, &sync_cb_args);
 
 	if (rc == 0 && sync_cb_args.sync_rc != 0)
 		rc = sync_cb_args.sync_rc;
 
 	smd_fini();
+out_self_fini:
 	vos_self_fini();
-
+out:
 	return rc;
 }
 
@@ -2242,7 +2235,7 @@ dv_dev_list(const char *db_path, struct ddb_ctx *ctx, d_list_t *dev_list, int *d
 	bool can_proceed;
 
 	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
-	if (rc != 0)
+	if (!SUCCESS(rc))
 		return rc;
 	if (!can_proceed)
 		return -DER_NO_SERVICE;
@@ -2284,7 +2277,7 @@ dv_dev_replace(const char *db_path, struct ddb_ctx *ctx, uuid_t old_devid, uuid_
 	bool                 can_proceed;
 
 	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
-	if (rc != 0)
+	if (!SUCCESS(rc))
 		return rc;
 	if (!can_proceed)
 		return -DER_NO_SERVICE;
@@ -2345,7 +2338,7 @@ dv_run_prov_mem(const char *db_path, struct ddb_ctx *ctx, const char *tmpfs_moun
 	unsigned int sz = tmpfs_mount_size;
 
 	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
-	if (rc != 0)
+	if (!SUCCESS(rc))
 		return rc;
 	if (!can_proceed)
 		return -DER_NO_SERVICE;

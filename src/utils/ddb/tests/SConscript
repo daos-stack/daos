@@ -54,12 +54,6 @@ def scons():
     # Required to test the dwa_can_proceed() guard call sites in ddb_vos.c
     # (dv_pool_open/dv_pool_destroy/dv_sync_smd/dv_dev_list/dv_dev_replace/dv_run_prov_mem).
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dwa_can_proceed'])
-    # Required for smd_sync tests: dv_sync_smd()'s guard check sits after a
-    # real vos_self_init_ext()/smd_init().
-    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_self_init_ext'])
-    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_self_fini'])
-    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=smd_init'])
-    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=smd_fini'])
 
     libs = [
         'uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread', 'pmemobj',

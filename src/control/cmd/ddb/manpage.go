@@ -204,9 +204,10 @@ This command requires the system to be configured for MD-on-SSD mode.`
 const manSpdkReinitSection = `.SH SPDK RE-INITIALIZATION
 .SS Overview
 Unlike \fBdaos_engine\fR, which initializes SPDK only once during the lifetime of the process,
-ddb allows several pool-lifecycle commands to run within the same interactive or \fI-f\fR
-command-file session, each potentially performing its own SPDK/VOS initialization. SPDK does
-not fully support being re-initialized within the same process: this is unsafe for any pool
+ddb allows several pool-lifecycle commands to run within the same interactive
+session or by providing a sequence of commands via \fI-f\fR, each potentially
+performing its own SPDK/VOS initialization. SPDK does not support being
+re-initialized within the same process: this is unsafe for any pool
 backed by an NVMe device (i.e. whose \fIdb_path\fR has a \fBdaos_nvme.conf\fR), whether or not
 it uses the VMD subsystem. \fBsmd_sync\fR is always treated as NVMe-backed, since its SPDK
 config comes from a separate \fInvme_conf\fR argument rather than \fIdb_path\fR.

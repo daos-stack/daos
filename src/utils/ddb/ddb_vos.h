@@ -57,9 +57,7 @@ struct ddb_array {
  * @param path		VOS pool file path in the format "[/dir/]<pool-uuid>/(vos-N|rdb-pool)".
  * @param db_path	Path to the VOS metadata DB directory (SMD/NVMe). If NULL or empty,
  *			the DB directory is derived from the leading path component of path.
- * @param ctx		DDB context, used to enforce the "single SPDK/VOS init per process for
- *			NVMe-backed pools" rule (see dwa_can_proceed()) and to report
- *			an error if that rule would be violated.
+ * @param ctx		DDB context.
  * @param poh		Pool handle set on success.
  * @param flags		Flags forwarded to vos_pool_open() (e.g. VOS_POF_FOR_FEATURE_FLAG to
  *			skip VEA load when only reading/writing pool feature flags).

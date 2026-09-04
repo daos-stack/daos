@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,7 +30,8 @@ nvme_conf_exists(const char *nvme_conf_dir, bool *exists)
 {
 	char *nvme_conf;
 
-	/* Not unit-tested: D_ASPRINTF's vasprintf() is compiled into libgurt.so, which --wrap
+	/*
+	 * Not unit-tested: D_ASPRINTF's vasprintf() is compiled into libgurt.so, which --wrap
 	 * cannot intercept from ddb_ut's own link step (see tests/ddb_spdk_reinit_wa_ut.c).
 	 */
 	D_ASPRINTF(nvme_conf, "%s/%s", nvme_conf_dir, VOS_NVME_CONF);
@@ -45,21 +46,21 @@ nvme_conf_exists(const char *nvme_conf_dir, bool *exists)
 }
 
 #define SPDK_REINIT_MSG                                                                            \
-	"SPDK cannot be re‑initialized for another NVMe-backed pool within the same DDB "          \
+	"SPDK cannot be re-initialized for another NVMe-backed pool within the same DDB "          \
 	"process. Please restart the DDB process and try again.\n"
 
 #ifndef DAOS_BUILD_RELEASE
-#define DDB_ALLOW_SPDK_REINIT_ENV "DAOS_DDB_ALLOW_SPDK_REINIT"
-
-/* Diagnostic-only, non-release escape hatch to re-validate the SPDK/DPDK limitation above
- * against real hardware; not a supported workflow (see README.md).
+/*
+ * Diagnostic-only, non-release escape hatch to re-validate the SPDK/DPDK limitation described
+ * above against specific hardware or software version; not a supported workflow (see README.md).
  */
 static bool
-spdk_reinit_diagnostic_override(void)
+reinit_diagnostic_override(void)
 {
 	bool allow = false;
 
-	d_getenv_bool(DDB_ALLOW_SPDK_REINIT_ENV, &allow);
+	/* The return value is ignored, since the env var is optional. */
+	(void)d_getenv_bool(DDB_ALLOW_SPDK_REINIT_ENV, &allow);
 
 	return allow;
 }
@@ -74,7 +75,7 @@ dwa_can_proceed(struct ddb_ctx *ctx, const char *nvme_conf_dir, bool *can_procee
 	D_ASSERT(can_proceed != NULL);
 
 #ifndef DAOS_BUILD_RELEASE
-	if (spdk_reinit_diagnostic_override()) {
+	if (reinit_diagnostic_override()) {
 		*can_proceed = true;
 		return -DER_SUCCESS;
 	}
