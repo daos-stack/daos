@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -118,11 +119,11 @@ class OSAOfflineExtend(OSAUtils):
             pver_extend = self.pool.get_version(True)
             self.log.info("Pool Version after extend %d", pver_extend)
             # Check pool version incremented after pool extend
-            self.assertTrue(pver_extend > pver_begin, "Pool Version Error:  After extend")
+            self.assertGreater(pver_extend, pver_begin, "Pool Version Error:  After extend")
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
-            self.assertTrue(free_space_after_extend > initial_free_space,
-                            "Expected free space after extend is less than initial")
+            self.assertGreater(free_space_after_extend, initial_free_space,
+                               "Expected free space after extend is less than initial")
 
             if data:
                 # Perform the IOR read using the same

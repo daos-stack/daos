@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -114,9 +114,9 @@ class OSAOnlineReintegration(OSAUtils):
             # Check pool version incremented after pool exclude
             # pver_exclude should be greater than
             # pver_begin + 8 targets.
-            self.assertTrue(pver_exclude > (pver_begin + 8), "Pool Version Error:  After exclude")
-            self.assertTrue(initial_free_space > free_space_after_exclude,
-                            "Expected space after exclude is less than initial")
+            self.assertGreater(pver_exclude, (pver_begin + 8), "Pool Version Error:  After exclude")
+            self.assertGreater(initial_free_space, free_space_after_exclude,
+                               "Expected space after exclude is less than initial")
             output = self.pool.reintegrate(ranks)
             self.print_and_assert_on_rebuild_failure(output)
             free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
@@ -124,10 +124,10 @@ class OSAOnlineReintegration(OSAUtils):
             pver_reint = self.pool.get_version(True)
             self.log.info("Pool Version after reintegrate %d", pver_reint)
             # Check pool version incremented after pool reintegrate
-            self.assertTrue(pver_reint > (pver_exclude + 1),
-                            "Pool Version Error:  After reintegrate")
-            self.assertTrue(free_space_after_reintegration > free_space_after_exclude,
-                            "Expected free space after reintegration is less than exclude")
+            self.assertGreater(pver_reint, (pver_exclude + 1),
+                               "Pool Version Error:  After reintegrate")
+            self.assertGreater(free_space_after_reintegration, free_space_after_exclude,
+                               "Expected free space after reintegration is less than exclude")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()

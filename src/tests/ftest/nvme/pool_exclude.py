@@ -127,7 +127,7 @@ class NvmePoolExclude(OSAUtils):
                 pver_exclude = self.pool.get_version(True)
                 self.log.info("Pool Version after exclude %s", pver_exclude)
                 # Check pool version incremented after pool exclude
-                self.assertTrue(pver_exclude > pver_begin, "Pool Version Error:  After exclude")
+                self.assertGreater(pver_exclude, pver_begin, "Pool Version Error:  After exclude")
 
                 # Wait to finish the threads
                 for thrd in threads:
