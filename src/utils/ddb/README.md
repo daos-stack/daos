@@ -45,6 +45,39 @@ VOS api.
 This layer will adapt the needs of the ddb commands to the current VOS API
 implementation, making the VOS interaction a bit nicer for ddb.
 
+## Limitations
+
+### SPDK re-initialization
+
+Unlike daos_engine, which initializes SPDK only once during the lifetime of the
+process, ddb allows the user to run multiple pool-lifecycle commands (`open`,
+`rm_pool`, `feature`, `dev_list`, `dev_replace`, `prov_mem`, `smd_sync`) in the
+same interactive session or by providing a sequence of commands via `-f`, each
+potentially triggering its own `vos_self_init()` and SPDK initialization. SPDK
+does not support being re-initialized within the same process: its re-init path
+only rescans the PCI bus and never rebuilds the DPDK memory/address-translation
+tables torn down by the previous `vos_self_fini()`. This is unsafe for any pool
+backed by an NVMe device (i.e. whose `db_path` has a `daos_nvme.conf`), with or
+without VMD. `smd_sync` is always treated as NVMe-backed, since its SPDK config
+comes from a separate `nvme_conf` argument rather than `db_path`.
+
+`src/utils/ddb/ddb_spdk_reinit_wa.c` enforces a "single SPDK/VOS init per
+process for NVMe-backed pools" rule to turn that unsafe sequence into a clean,
+actionable error instead of letting ddb crash. Pools with no `daos_nvme.conf`
+(pure PMEM) never touch SPDK and are unaffected. This is a workaround, not a
+fix, for a limitation in SPDK's initialization model; it can be removed once
+the underlying issue is properly resolved.
+
+> **Note (developers only):** in non-release builds (i.e. when
+> `DAOS_BUILD_RELEASE` is not defined), setting `DAOS_DDB_ALLOW_SPDK_REINIT`
+> in the environment unconditionally bypasses this guard. This is a
+> diagnostic-only escape hatch, not a supported workflow, meant to let a
+> developer deliberately retry the unsafe sequence against real hardware to
+> check whether a newer SPDK/DPDK version has actually fixed the underlying
+> re-initialization limitation. It is compiled out of release builds and is
+> intentionally not mentioned in the man page or `ddb`'s interactive/`-h`
+> help output.
+
 ## Help and Usage
 
 ```
