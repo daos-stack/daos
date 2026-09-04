@@ -132,7 +132,8 @@ class PoolCreateAllTestBase(TestWithServers):
             "%s created successfully: scm_size=%d, nvme_size=%d",
             pools[pool_idx].identifier, *tier_bytes)
         self.log_step(f"Verifying {pools[pool_idx].identifier} default attributes")
-        pools[pool_idx].verify_prop(DEFAULT_POOL_PROPS)
+        if not pools[pool_idx].verify_prop(DEFAULT_POOL_PROPS):
+            self.fail(f"Unexpected default properties for {pools[pool_idx].identifier}")
         self.log_step(f"Destroying {pools[pool_idx].identifier}")
         pools[pool_idx].destroy()
 
@@ -155,7 +156,8 @@ class PoolCreateAllTestBase(TestWithServers):
         pools[pool_idx].create()
         self.log.info("%s created successfully", pools[pool_idx].identifier)
         self.log_step(f"Verifying {pools[pool_idx].identifier} default attributes")
-        pools[pool_idx].verify_prop(DEFAULT_POOL_PROPS)
+        if not pools[pool_idx].verify_prop(DEFAULT_POOL_PROPS):
+            self.fail(f"Unexpected default properties for {pools[pool_idx].identifier}")
         self.log_step(f"Destroying {pools[pool_idx].identifier}")
         pools[pool_idx].destroy()
 
@@ -209,7 +211,8 @@ class PoolCreateAllTestBase(TestWithServers):
         pools[pool_idx].create()
         self.log.info("%s created successfully", pools[pool_idx].identifier)
         self.log_step(f"Verifying {pools[pool_idx].identifier} default attributes")
-        pools[pool_idx].verify_prop(DEFAULT_POOL_PROPS)
+        if not pools[pool_idx].verify_prop(DEFAULT_POOL_PROPS):
+            self.fail(f"Unexpected default properties for {pools[pool_idx].identifier}")
         self.log_step(f"Destroying {pools[pool_idx].identifier}")
         pools[pool_idx].destroy()
 
