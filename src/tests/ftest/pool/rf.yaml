@@ -16,7 +16,7 @@ server_config:
 
 pool:
   scm_size: 1G
-  properties: rd_fac:4
+  properties: rd_fac:4,space_rb:0
 
 container:
   type: POSIX
@@ -26,3 +26,4 @@ container:
     - 2
     - 3
     - 4
+  properties: cksum:off,srv_cksum:off

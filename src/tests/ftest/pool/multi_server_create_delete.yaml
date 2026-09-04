@@ -18,6 +18,7 @@ server_config:
 
 pool:
   size: 1GB
+  properties: rd_fac:0,space_rb:0
 
 tests:
   users: !mux
