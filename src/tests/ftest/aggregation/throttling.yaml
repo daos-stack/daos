@@ -16,7 +16,7 @@ pool:
   scm_size: 20000000000
   nvme_size: 50000000000
   svcn: 1
-  properties: "rd_fac:0,space_rb:0"
+  properties: "space_rb:0"
 
 container:
   type: POSIX
