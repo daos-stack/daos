@@ -1,6 +1,5 @@
 #!/bin/bash
-# Copyright 2025 Google LLC
-# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+# Copyright 2026 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -10,11 +9,11 @@ usage() {
     cat <<EOF
 Usage: ${0##*/} [SCONS_OPTION]... [VARIABLE=VALUE]...
 
-Build the DAOS dependencies with scons.
+Build DAOS with scons, assuming the dependencies are already built.
 
 The script always runs:
 
-    scons install --build-deps=only [defaults] "\$@"
+    scons install --config=force --build-deps=no [defaults] "\$@"
 
 and applies these defaults unless the same option or variable is given on the
 command line:
@@ -28,7 +27,7 @@ Options:
 
 Any other argument is forwarded verbatim to scons, e.g.:
 
-    ${0##*/} TARGET_TYPE=debug DEPS=ofi --jobs 8
+    ${0##*/} BUILD_TYPE=debug COMPILER=clang --jobs 8
 EOF
 }
 
@@ -53,9 +52,10 @@ for arg in "$@"; do
     esac
 done
 
-SCONS_ARGS=(install --build-deps=only)
+SCONS_ARGS=(install --config=force --build-deps=no )
 if ! "$jobs_set"; then
-    SCONS_ARGS+=(--jobs "$(nproc)")
+#    SCONS_ARGS+=(--jobs "$(nproc)")
+    SCONS_ARGS+=(--jobs "133")
 fi
 if ! "$use_installed_set"; then
     SCONS_ARGS+=("USE_INSTALLED=all")
@@ -65,7 +65,7 @@ if ! "$prefix_set"; then
 fi
 SCONS_ARGS+=("$@")
 
-echo "Building DAOS dependencies using scons with args:"
+echo "Building DAOS using scons with args:"
 echo "${SCONS_ARGS[*]}"
 
 scons "${SCONS_ARGS[@]}"
