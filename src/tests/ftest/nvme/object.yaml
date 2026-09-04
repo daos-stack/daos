@@ -21,15 +21,21 @@ server_config:
       log_file: daos_server1.log
       storage: auto
 
+pool_base: &pool_base
+  properties: rd_fac:0,space_rb:0
+
 pool_1:
+  <<: *pool_base
   scm_size: 4GB
   nvme_size: 20G
 
 pool_2:
+  <<: *pool_base
   scm_size: 4GB
   nvme_size: 100GB
 
 pool_3:
+  <<: *pool_base
   scm_size: 4GB
   nvme_size: 350GB
 
@@ -44,3 +50,4 @@ container:
   dkey_size: 10
   data_size: 4096
   array_size: 1
+  properties: cksum:off,srv_cksum:off

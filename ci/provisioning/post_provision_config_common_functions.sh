@@ -429,7 +429,7 @@ post_provision_config_nodes() {
             mellanox_drivers=true
             break
         fi
-    done < <(lspci -mm | grep "ConnectX")
+    done < <(lspci -mm | grep "ConnectX" || true)
 
     if "$mellanox_drivers"; then
         # Remove OPA and install MOFED

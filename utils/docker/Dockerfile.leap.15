@@ -14,6 +14,7 @@ ARG DAOS_DEPS_BUILD=yes
 ARG DAOS_KEEP_BUILD=no
 ARG DAOS_PACKAGES_BUILD=yes
 ARG DEPS_JOBS=32
+ARG DAOS_PACKAGES_VERIFY=no
 
 # Pull base image
 ARG POINT_RELEASE=
@@ -129,7 +130,7 @@ RUN --mount=type=bind,source=ci/rpm/install_deps.sh,target=/tmp/daos/ci/rpm/inst
     --mount=type=bind,source=utils/rpms/package_info.sh,target=/tmp/daos/utils/rpms/package_info.sh \
     --mount=type=bind,source=utils/rpms/daos.spec,target=/tmp/daos/utils/rpms/daos.spec \
     [ "$DAOS_DEPS_INSTALL" != "yes" ] || { \
-        /tmp/daos/ci/rpm/install_deps.sh suse.lp156; \
+        /tmp/daos/ci/rpm/install_deps.sh suse.lp15${POINT_RELEASE#\.}; \
         sudo dnf clean all; \
     }
 
@@ -158,16 +159,25 @@ RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
 # Build DAOS dependencies RPMs
 ARG DAOS_PACKAGES_BUILD
 ARG POINT_RELEASE
+ARG DAOS_PACKAGES_VERIFY
 RUN --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
     --mount=type=bind,source=utils/sl/setup_local.sh,target=/home/daos/pre/utils/sl/setup_local.sh \
     --mount=type=bind,source=utils/build.config,target=/home/daos/pre/utils/build.config \
     [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { \
         export DISTRO="suse.lp15${POINT_RELEASE#\.}" && \
-	    /home/daos/pre/utils/rpms/build_packages.sh deps && \
+	    /home/daos/pre/utils/rpms/build_packages.sh deps "$DAOS_PACKAGES_VERIFY" && \
         mkdir -p /home/daos/rpms/deps && \
         find . -maxdepth 1 -type f -name '*.rpm' \
              -exec mv -t /home/daos/rpms/deps {} + ; \
+    }
+
+RUN --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
+    [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    { \
+        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || { \
+            utils/rpms/verify_rpms.sh /home/daos/rpms/deps "suse.lp15${POINT_RELEASE#\.}" || true; \
+        } \
     }
 
 FROM build-ci AS build-local
@@ -260,6 +270,7 @@ USER daos_server:daos_server
 # Build DAOS RPMs
 ARG DAOS_PACKAGES_BUILD
 ARG POINT_RELEASE
+ARG DAOS_PACKAGES_VERIFY
 RUN --mount=type=bind,source=utils/rpms,target=/home/daos/daos/utils/rpms \
     --mount=type=bind,source=utils/sl,target=/home/daos/daos/utils/sl \
     --mount=type=bind,source=utils/systemd,target=/home/daos/daos/utils/systemd \
@@ -267,10 +278,17 @@ RUN --mount=type=bind,source=utils/rpms,target=/home/daos/daos/utils/rpms \
     --mount=type=bind,source=utils/rpms/build_packages.sh,target=/home/daos/daos/utils/rpms/build_packages.sh \
     [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
 	    export DISTRO="suse.lp15${POINT_RELEASE#\.}" && \
-	    /home/daos/daos/utils/rpms/build_packages.sh daos && \
+	    /home/daos/daos/utils/rpms/build_packages.sh daos "$DAOS_PACKAGES_VERIFY" && \
 	    mkdir -p /home/daos/rpms/daos && \
-       find . -maxdepth 1 -type f -name '*.rpm' \
-           -exec mv -t /home/daos/rpms/daos {} + ; \
+        find . -maxdepth 1 -type f -name '*.rpm' \
+            -exec mv -t /home/daos/rpms/daos {} + ; \
+    }
+
+RUN --mount=type=bind,source=utils/rpms,target=/home/daos/daos/utils/rpms \
+    [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
+        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || { \
+            utils/rpms/verify_rpms.sh /home/daos/rpms/daos "suse.lp15${POINT_RELEASE#\.}" || true; \
+        } \
     }
 
 # Build java and hadoop bindings

@@ -40,7 +40,6 @@ cat << EOF  > "${tmp}/post_install_libfabric"
 ldconfig
 EOF
 EXTRA_OPTS+=("--after-install" "${tmp}/post_install_libfabric")
-EXTRA_OPTS+=("--rpm-autoprov")
 ARCH="${isa}"
 build_package libfabric
 
@@ -50,7 +49,6 @@ if [[ ! "${DISTRO:-el9}" =~ el ]]; then
   clean_bin "${files[@]}"
   append_install_list "${files[@]}"
   EXTRA_OPTS+=("--after-install" "${tmp}/post_install_libfabric")
-  EXTRA_OPTS+=("--rpm-autoprov")
   build_package "${libfabric_lib}"
 fi
 

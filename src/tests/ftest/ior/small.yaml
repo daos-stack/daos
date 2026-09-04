@@ -36,10 +36,10 @@ dmg:
 pool: !mux
   default:
     size: 100%
-    properties: rd_fac:0
+    properties: rd_fac:0,space_rb:0
   md_on_ssd_p2:
     size: 100%
-    properties: rd_fac:0
+    properties: rd_fac:0,space_rb:0
     mem_ratio: 50
 
 container:
