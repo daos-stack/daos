@@ -42,7 +42,7 @@ def check_expected(logger, description, data):
             (value, expected) = data[name]
             is_equal = "==" if key == "Passed" else "!="
             logger.debug(
-                "    %-*s: %-*s %s %s",
+                "    %-*s: %*s %s %s",
                 name_width, name, value_width, value, is_equal, expected)
     if results["Failed"]:
         raise AssertionError(
@@ -214,16 +214,20 @@ class TestDaosApiBase(ObjectWithParameters):
                 check_status = False
         return check_status
 
-    def _check_properties(self, data):
-        """Check the properties of a given type against expected values.
+    def validate_properties(self, get_prop_json, expected_props):
+        """Validate the current properties against expected values.
 
         Args:
-            data (dict): Dictionary containing property names as keys and tuples of
-                (actual_value, comparison_operator, expected_value) as values.
+            get_prop_json (dict): get-prop json output with the actual properties of the object.
+            expected_props (dict): expected property values, with property names as keys.
 
         Raises:
             AssertionError: If any property does not match the expected value.
         """
+        data = {}
+        for actual_prop in get_prop_json["response"]:
+            expected = expected_props.get(actual_prop["name"], None)
+            data[actual_prop["name"]] = (actual_prop["value"], expected)
         check_expected(self.log, f"{self.identifier} properties", data)
 
 

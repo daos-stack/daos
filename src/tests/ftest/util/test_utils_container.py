@@ -27,7 +27,7 @@ DEFAULT_CONT_PROPS = {
     "dedup": "off",
     "dedup_threshold": 4096,
     "ec_cell_sz": 131072,
-    "ec_pda": 1,
+    "ec_pda": "1",
     "encryption": "off",
     "global_version": "4",
     "layout_type": "POSIX",
@@ -1046,24 +1046,17 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         return self.daos.container_get_prop(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
 
-    def verify_prop(self, expected_props, exclusive=True):
+    def verify_prop(self, expected_props):
         """Verify daos container get-prop returns expected values.
 
         Args:
             expected_props (dict): expected properties and values
-            exclusive (bool, optional): whether to only check the properties specified in
-                            expected_props. Defaults to True.
 
         Raises:
             AssertionError: If any property does not match the expected value.
         """
-        data = {}
-        properties = expected_props.keys() if exclusive else None
-        prop_output = self.get_prop(properties=properties)
-        for actual_prop in prop_output['response']:
-            expected = expected_props.get(actual_prop['name'], "ValueError")
-            data[actual_prop['name']] = (actual_prop['value'], expected)
-        self._check_properties(data)
+        result = self.get_prop(properties=expected_props.keys())
+        self.validate_properties(result, expected_props)
 
     def list_attrs(self, *args, **kwargs):
         """Get container properties by calling daos container list-attrs.

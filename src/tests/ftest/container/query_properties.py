@@ -4,6 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+from getpass import getuser
+from grp import getgrgid
+from os import getgid
+
 from apricot import TestWithServers
 from test_utils_container import DEFAULT_CONT_PROPS, add_container
 from test_utils_pool import add_pool
@@ -39,8 +43,13 @@ class QueryPropertiesTest(TestWithServers):
         containers.append(add_container(self, pool, "/run/container_1/*"))
 
         self.log_step("Verify container get-prop matches create")
+        default_props = DEFAULT_CONT_PROPS.copy()
+        default_props["label"] = containers[-1].label
+        default_props["owner"] = f"{getuser()}@"
+        default_props["group"] = f"{getgrgid(getgid()).gr_name}@"
         try:
-            containers[-1].verify_prop(DEFAULT_CONT_PROPS, exclusive=False)
+            result = containers[-1].get_prop()
+            containers[-1].validate_properties(result, default_props)
         except AssertionError:
             self.fail("Unexpected default properties from daos container get-prop")
 
@@ -55,7 +64,7 @@ class QueryPropertiesTest(TestWithServers):
 
         self.log_step("Verify container get-prop matches create")
         try:
-            containers[-1].verify_prop(expected_props, exclusive=True)
+            containers[-1].verify_prop(expected_props)
         except AssertionError:
             self.fail("Unexpected specific properties from daos container get-prop")
 

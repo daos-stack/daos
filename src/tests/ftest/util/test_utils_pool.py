@@ -787,24 +787,17 @@ class TestPool(TestDaosApiBase):
         """
         return self.dmg.pool_get_prop(self.identifier, *args, **kwargs)
 
-    def verify_prop(self, expected_props, exclusive=True):
+    def verify_prop(self, expected_props):
         """Verify pool properties match expected values.
 
         Args:
             expected_props (dict): expected properties and values
-            exclusive (bool, optional): whether to only check the properties specified in
-                expected_props. Defaults to True.
 
         Raises:
             AssertionError: If any property does not match the expected value.
         """
-        data = {}
-        name = expected_props.keys() if exclusive else None
-        prop_output = self.get_prop(name=name)
-        for actual_prop in prop_output['response']:
-            expected = expected_props.get(actual_prop['name'], "ValueError")
-            data[actual_prop['name']] = (actual_prop['value'], expected)
-        self._check_properties(data)
+        result = self.get_prop(name=expected_props.keys())
+        self.validate_properties(result, expected_props)
 
     @fail_on(CommandFailure)
     def get_property(self, prop_name):

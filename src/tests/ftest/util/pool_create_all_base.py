@@ -108,9 +108,9 @@ class PoolCreateAllTestBase(TestWithServers):
                 storage.  Defaults to None.
             ranks (list, optional): List of rank used for creating pools.  Defaults to None.
         """
-        default_pool_props = DEFAULT_POOL_PROPS.copy()
+        default_props = DEFAULT_POOL_PROPS.copy()
         if ranks is not None and len(ranks) < 4:
-            default_pool_props["rd_fac"] = len(ranks) - 1
+            default_props["rd_fac"] = len(ranks) - 1
 
         pool_count = 4 if nvme_delta_bytes is None else 5
         pools = []
@@ -136,7 +136,7 @@ class PoolCreateAllTestBase(TestWithServers):
             "%s created successfully: scm_size=%d, nvme_size=%d",
             pools[pool_idx].identifier, *tier_bytes)
         self.log_step(f"Verifying {pools[pool_idx].identifier} default attributes")
-        pools[pool_idx].verify_prop(default_pool_props)
+        pools[pool_idx].verify_prop(default_props)
         self.log_step(f"Destroying {pools[pool_idx].identifier}")
         pools[pool_idx].destroy()
 
@@ -159,7 +159,9 @@ class PoolCreateAllTestBase(TestWithServers):
         pools[pool_idx].create()
         self.log.info("%s created successfully", pools[pool_idx].identifier)
         self.log_step(f"Verifying {pools[pool_idx].identifier} default attributes")
-        pools[pool_idx].verify_prop(default_pool_props)
+        result = pools[pool_idx].get_prop()
+        pools[pool_idx].validate_properties(result, default_props)
+        # pools[pool_idx].verify_prop(default_props)
         self.log_step(f"Destroying {pools[pool_idx].identifier}")
         pools[pool_idx].destroy()
 
@@ -213,7 +215,7 @@ class PoolCreateAllTestBase(TestWithServers):
         pools[pool_idx].create()
         self.log.info("%s created successfully", pools[pool_idx].identifier)
         self.log_step(f"Verifying {pools[pool_idx].identifier} default attributes")
-        pools[pool_idx].verify_prop(default_pool_props)
+        pools[pool_idx].verify_prop(default_props)
         self.log_step(f"Destroying {pools[pool_idx].identifier}")
         pools[pool_idx].destroy()
 
