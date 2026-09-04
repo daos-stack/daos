@@ -1712,10 +1712,12 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	ec_agg->ea_servers_num = rank_nr;
 	ec_agg->ea_current_eph = 0;
 	ec_agg->ea_rdb_eph     = 0;
+	ec_agg->ea_start_ts     = daos_gettime_coarse();
+	ec_agg->ea_warn_slug_ts = ec_agg->ea_start_ts;
 	for (i = 0; i < rank_nr; i++) {
 		ec_agg->ea_server_ephs[i].rank = doms[i].do_comp.co_rank;
 		ec_agg->ea_server_ephs[i].eph = 0;
-		ec_agg->ea_server_ephs[i].ee_update_ts = daos_gettime_coarse();
+		ec_agg->ea_server_ephs[i].ee_update_ts = ec_agg->ea_start_ts;
 	}
 	d_list_add(&ec_agg->ea_list, &cont_svc->cs_ec_agg_list);
 	*ec_aggp = ec_agg;
@@ -1753,7 +1755,9 @@ ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 			      d_rank_t rank, daos_epoch_t eph)
 {
 	struct cont_svc		*svc;
+	struct rdb_tx            tx;
 	struct cont_ec_agg	*ec_agg;
+	struct cont             *cont = NULL;
 	int			rc;
 	bool			retried = false;
 	int			i;
@@ -1766,9 +1770,28 @@ ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 retry:
 	ec_agg = cont_ec_agg_lookup(svc, cont_uuid);
 	if (ec_agg == NULL) {
-		rc = cont_ec_agg_alloc(svc, cont_uuid, &ec_agg);
-		if (rc)
+		/* check container's existence before creating cont_ec_agg */
+		rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+		if (rc != 0)
 			D_GOTO(out_put, rc);
+
+		ABT_rwlock_rdlock(svc->cs_lock);
+		rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+		ABT_rwlock_unlock(svc->cs_lock);
+		rdb_tx_end(&tx);
+		if (rc != 0) {
+			DL_CDEBUG(rc == -DER_NONEXIST, DB_MD, DLOG_ERR, rc,
+				  DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+			D_GOTO(out_put, rc);
+		}
+		cont_put(cont);
+
+		ec_agg = cont_ec_agg_lookup(svc, cont_uuid);
+		if (ec_agg == NULL) {
+			rc = cont_ec_agg_alloc(svc, cont_uuid, &ec_agg);
+			if (rc)
+				D_GOTO(out_put, rc);
+		}
 	}
 
 	for (i = 0; i < ec_agg->ea_servers_num; i++) {
@@ -1801,7 +1824,7 @@ retry:
 
 out_put:
 	cont_svc_put_leader(svc);
-	return 0;
+	return rc;
 }
 
 struct refresh_vos_agg_eph_arg {
@@ -1818,9 +1841,25 @@ cont_refresh_vos_agg_eph_one(void *data)
 	int			rc;
 
 	rc = ds_cont_child_lookup(arg->pool_uuid, arg->cont_uuid, &cont_child);
-	if (rc) {
-		DL_CDEBUG(rc != 0 && rc != -DER_SHUTDOWN, DLOG_ERR, DB_MD, rc,
-			  DF_CONT " lookup cont failed", DP_CONT(arg->pool_uuid, arg->cont_uuid));
+	if (rc == -DER_NONEXIST) {
+		/*
+		 * The VOS container can be absent on this target when the container was
+		 * created while the target was excluded, and the following reintegration
+		 * (or extend) did not migrate any record for it. Create it here, otherwise
+		 * this target never reports EC aggregation epoch to the container service
+		 * leader, and the leader keeps the EC aggregation boundary of the whole
+		 * container pinned. The container service leader only refreshes containers
+		 * that still exist in RDB, so it is safe to create the VOS container here.
+		 */
+		rc = ds_cont_child_open_create(arg->pool_uuid, arg->cont_uuid, &cont_child);
+		DL_CDEBUG(rc != 0 && rc != -DER_SHUTDOWN, DLOG_ERR, DLOG_INFO, rc,
+			  DF_CONT " create missing vos container",
+			  DP_CONT(arg->pool_uuid, arg->cont_uuid));
+		if (rc != 0)
+			return rc;
+	} else if (rc != 0) {
+		DL_CDEBUG(rc != -DER_SHUTDOWN, DLOG_ERR, DB_MD, rc, DF_CONT " lookup cont failed",
+			  DP_CONT(arg->pool_uuid, arg->cont_uuid));
 		return rc;
 	}
 
@@ -1850,12 +1889,17 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.min_eph = eph;
 
-	rc = ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				     PO_COMP_ST_DOWNOUT, cont_refresh_vos_agg_eph_one,
-				     &arg, DSS_ULT_FL_PERIODIC);
+	/*
+	 * NB: cont_refresh_vos_agg_eph_one() may create the VOS container, which can yield
+	 * and needs a deep stack, so a thread (ULT) collective must be used here.
+	 */
+	rc = ds_pool_thread_collective(
+	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+	    cont_refresh_vos_agg_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
 	if (rc) {
-		DL_ERROR(rc, DF_CONT ": refresh ec_agg_eph " DF_X64 " failed.",
-			 DP_CONT(pool_uuid, cont_uuid), eph);
+		DL_CDEBUG(rc != -DER_CONT_NONEXIST && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": refresh ec_agg_eph " DF_X64 " failed.",
+			  DP_CONT(pool_uuid, cont_uuid), eph);
 	} else {
 		if (cnt++ % gap == 0) {
 			D_INFO(DF_CONT ": refresh ec_agg_eph " DF_X64,
@@ -2094,6 +2138,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			ec_agg->ea_warn_slug_ts = cur_ts;
 
 		} else if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600 &&
+			   (cur_ts - ec_agg->ea_start_ts) >= (new_eph - cur_eph) &&
 			   (cur_ts - ec_agg->ea_warn_slug_ts) >= 600) {
 			ec_agg->ea_warn_slug_ts = cur_ts;
 			D_WARN(DF_CONT ": Sluggish EC boundary reporting. "
@@ -2123,8 +2168,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg->ea_cont_uuid, min_eph,
 						svc->cs_ec_leader_ephs_req);
 		if (rc) {
-			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
-				  DF_CONT ": refresh failed",
+			DL_CDEBUG(rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST, DB_MD, DLOG_ERR,
+				  rc, DF_CONT ": refresh failed",
 				  DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
 
 			/* If ULT is exiting, break out */
