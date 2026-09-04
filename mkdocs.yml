@@ -112,6 +112,8 @@ nav:
       - 'Dev Environment': 'dev/development.md'
       - 'Contributing': 'dev/contributing.md'
       - 'Documentation': 'dev/documentation.md'
+      - 'KV-Cache Offload (Index/Array Mapping)': 'dev/kvcache_offload_index_array.md'
+      - 'KV-Cache Offload (Single-Object Mapping)': 'dev/kvcache_offload_single_object.md'
       - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
       - 'DAOS API Documentation': 'https://docs.daos.io/v2.9/doxygen/html/index.html'
       # Attention: Don't change that doxygen path to a relative path, or mkdocs will stumble...
