@@ -4,7 +4,7 @@ hosts:
 server_config:
   name: daos_server
   engines_per_host: 1
-  engine:
+  engines:
     0:
       targets: 4
       nr_xs_helpers: 0
