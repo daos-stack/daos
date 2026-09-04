@@ -36,7 +36,7 @@ class PoolCreateCapacityTests(TestWithServers):
             Verify that all the created pools exists after the restart
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,hw,medium
         :avocado: tags=pool
         :avocado: tags=PoolCreateCapacityTests,test_create_pool_quantity
         """

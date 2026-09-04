@@ -10,6 +10,7 @@ server_config:
   name: daos_server
   engines_per_host: 2
   restart_duration: 140
+  system_ram_reserved: 16
   engines:
     0:
       pinned_numa_node: 0
