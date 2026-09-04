@@ -14,8 +14,10 @@ from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
 try:
     from util.data_utils import dict_extract_values, list_flatten, list_unique
+    from util.host_utils import get_local_host
 except (ImportError, ModuleNotFoundError):
     from data_utils import dict_extract_values, list_flatten, list_unique
+    from host_utils import get_local_host
 
 
 class YamlException(BaseException):
@@ -128,6 +130,7 @@ class YamlUpdater():
             clients (NodeSet): set of hosts to use as clients in the test yaml
             storage (str): updated storage information to apply to the test yaml
             timeout (int): multiplier to apply to any timeouts specified in the test yaml
+            override (bool): whether to override the test yaml values with user-specified values
             verbose (int): verbosity level
         """
         self.log = logger
@@ -178,9 +181,9 @@ class YamlUpdater():
             dict: a dictionary of existing test yaml entry keys and their replacement values
 
         """
-        replacements = {}
+        chosen_replacements = {}
         if not self.placeholder_updates:
-            return replacements
+            return chosen_replacements
 
         # Find the test yaml keys and values that match the replaceable fields
         yaml_data = get_yaml_data(yaml_file)
@@ -194,37 +197,55 @@ class YamlUpdater():
                 placeholder_data[key] = values if len(values) > 1 else values[0]
 
         # Generate a list of values that can be used as replacements
-        replacement_data = OrderedDict()
+        candidate_replacement_data = OrderedDict()
         for key, attr_name, _ in self.YAML_KEYS:
             args_value = getattr(self, attr_name)
             if isinstance(args_value, NodeSet):
-                replacement_data[key] = list(args_value)
+                candidate_replacement_data[key] = list(args_value)
             elif isinstance(args_value, str):
-                replacement_data[key] = args_value.split(",")
+                candidate_replacement_data[key] = args_value.split(",")
             elif args_value:
-                replacement_data[key] = [args_value]
+                candidate_replacement_data[key] = [args_value]
             else:
-                replacement_data[key] = None
+                candidate_replacement_data[key] = None
 
         # Assign replacement values for the test yaml entries to be replaced
         placeholder_keys = [yaml_key[0] for yaml_key in self.YAML_KEYS]
         self.log.debug("Detecting replacements for %s in %s", placeholder_keys, yaml_file)
         self.log.debug("  Placeholder data: %s", placeholder_data)
-        self.log.debug("  Replacement data:  %s", dict(replacement_data))
+        self.log.debug("  Replacement data:  %s", dict(candidate_replacement_data))
 
         node_mapping = {}
-        for key, replacement in replacement_data.items():
-            # If the user did not provide a specific list of replacement test_clients values, use
-            # the remaining test_servers values to replace test_clients placeholder values
-            if key == "test_clients" and not replacement:
-                replacement = replacement_data["test_servers"]
-
+        for key, candidate_replacements in candidate_replacement_data.items():
             if key not in placeholder_data:
                 if self._verbose > 1:
                     self.log.debug("  - No '%s' placeholder specified in the test yaml", key)
                 continue
 
-            if not replacement:
+            # If the user did not provide a specific list of replacement test_clients values, use
+            # the remaining test_servers values to replace test_clients placeholder values
+            if key == "test_clients" and not candidate_replacements:
+                candidate_replacements = candidate_replacement_data["test_servers"]
+
+            # Remove chosen test_servers from the candidate test_clients
+            exclusive_server_client = True
+            if exclusive_server_client and key == "test_clients":
+                candidate_replacements = list(
+                    set(candidate_replacements) - set(chosen_replacements.get("test_servers", [])))
+
+            # localhost is preferred as a client over a server,
+            # so put localhost last for servers and first for clients.
+            # It will only be used as a server if it is the last available node.
+            if key == "test_servers":
+                candidate_replacements.sort(key=lambda x: x == str(get_local_host()))
+                self.log.debug(
+                    "replacing test_servers with sorted list: %s", candidate_replacements)
+            if key == "test_clients":
+                candidate_replacements.sort(key=lambda x: x != str(get_local_host()))
+                self.log.debug(
+                    "replacing test_clients with sorted list: %s", candidate_replacements)
+
+            if not candidate_replacements:
                 if self._verbose > 1:
                     self.log.debug(
                         "  - No replacement value for the '%s' placeholder: %s",
@@ -234,31 +255,34 @@ class YamlUpdater():
             # Replace test yaml keys that were:
             #   - found in the test yaml
             #   - have a user-specified replacement
-            if key.startswith("test_"):
+            if key in ("test_servers", "test_clients"):
                 # The entire server/client test yaml list entry is replaced by a new test yaml list
                 # entry, e.g.
                 #   '  test_servers: server-[1-2]' --> '  test_servers: wolf-[10-11]'
                 #   '  test_servers: 4'            --> '  test_servers: wolf-[10-13]'
                 self._get_host_replacement(
-                    replacements, placeholder_data, key, replacement, node_mapping)
+                    chosen_replacements, placeholder_data, key, candidate_replacements,
+                    node_mapping)
 
             elif key == "bdev_list":
                 # Individual bdev_list NVMe PCI addresses in the test yaml file are replaced with
                 # the new NVMe PCI addresses in the order they are found, e.g.
                 #   0000:81:00.0 --> 0000:12:00.0
-                self._get_storage_replacement(replacements, placeholder_data, key, replacement)
+                self._get_storage_replacement(chosen_replacements, placeholder_data, key,
+                                              candidate_replacements)
 
             else:
                 # Timeouts - replace the entire timeout entry (key + value) with the same key with
                 # its original value multiplied by the user-specified value, e.g.
                 #   timeout: 60 -> timeout: 600
-                self._get_timeout_replacement(replacements, placeholder_data, key, replacement)
+                self._get_timeout_replacement(chosen_replacements, placeholder_data, key,
+                                              candidate_replacements)
 
         # Display the replacement values
-        for value, replacement in list(replacements.items()):
-            self.log.debug("  - Replacement: %s -> %s", value, replacement)
+        for value, chosen_replacement in list(chosen_replacements.items()):
+            self.log.debug("  - Replacement: %s -> %s", value, chosen_replacement)
 
-        return replacements
+        return chosen_replacements
 
     def _get_host_replacement(self, replacements, placeholder_data, key, replacement, node_mapping):
         """Replace the server or client placeholders.
