@@ -832,29 +832,32 @@ pipeline {
                                                 ' --target build-ci' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
-                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
-                                                " --build-arg DAOS_DEPS_INSTALL=yes"
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
                         script {
+                            sh label: 'TEST',
+                                script: 'pwd;ls -la'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
                                            build_deps: 'no',
                                            stash_opt: true,
+                                           scons_exe: 'utils/rpms/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                                                      ' TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
+                                script: 'utils/rpms/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
                             // Go binaries need to be instrumented in order to work reliably
                             // with valgrind. We do this in a separate build because we don't
                             // want to ship the instrumented binaries.
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            build_deps: 'no',
+                                           scons_exe: 'utils/rpms/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' BUILD_GO_VALGRIND=1 PREFIX=/opt/daos TARGET_TYPE=release'))
+                                                      ' BUILD_GO_VALGRIND=1 TARGET_TYPE=release'))
                             sh label: 'Stash valgrind install tree for NLT',
                                 script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
                             stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
@@ -887,13 +890,12 @@ pipeline {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
+                                                                deps_build: true,
+                                                                parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +
-                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
-                                                " --build-arg DAOS_DEPS_INSTALL=yes"
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -903,10 +905,11 @@ pipeline {
                                            stash_files: 'ci/test_files_to_stash.txt',
                                            build_deps: 'no',
                                            stash_opt: true,
+                                           scons_exe: 'utils/rpms/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                                                      ' TARGET_TYPE=release'))
                             sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
+                                script: 'utils/rpms/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                         }
                     }
                     post {

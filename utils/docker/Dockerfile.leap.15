@@ -9,12 +9,14 @@
 # Use --target build-ci to create image with basic build environment for gcc
 
 # Global defaults
-ARG DAOS_TARGET_TYPE=release
 ARG DAOS_DEPS_BUILD=yes
 ARG DAOS_KEEP_BUILD=no
 ARG DAOS_PACKAGES_BUILD=yes
-ARG DEPS_JOBS=32
-ARG DAOS_PACKAGES_VERIFY=no
+ARG DAOS_PACKAGES_VERIFY=yes
+
+# Left empty on purpose: scons and the build scripts provide their own defaults.
+ARG DAOS_TARGET_TYPE=
+ARG DEPS_JOBS=
 
 # Pull base image
 ARG POINT_RELEASE=
@@ -82,6 +84,9 @@ FROM basic AS build-ci
 RUN --mount=type=bind,source=utils/scripts/install-leap15.sh,target=/tmp/daos/install.sh \
     INSTALL_BUILD_CI_ONLY="true" /tmp/daos/install.sh && \
     dnf clean all
+# Local container builds need the OpenMPI wrappers on PATH; Jenkins loads MPI
+# through Lmod before invoking scons.
+# ENV PATH=/usr/lib64/mpi/gcc/openmpi3/bin:$PATH
 
 # According to https://pkgs.org/search/?q=lua-lmod, Leap 15.6 only has lua-lmod-8.7.34.
 # This version has a problem with loading modules, as described in https://github.com/TACC/Lmod/issues/687.
@@ -124,13 +129,12 @@ RUN --mount=type=bind,source=requirements-build.txt,target=/tmp/daos/requirement
 
 # Install DAOS dependencies if available
 ARG DAOS_DEPS_INSTALL=yes
-RUN --mount=type=bind,source=ci/rpm/install_deps.sh,target=/tmp/daos/ci/rpm/install_deps.sh \
-    --mount=type=bind,source=ci/parse_ci_envs.sh,target=/tmp/daos/ci/parse_ci_envs.sh \
+RUN --mount=type=bind,source=utils/rpms/install_deps.sh,target=/tmp/daos/utils/rpms/install_deps.sh \
     --mount=type=bind,source=utils/rpms/package_version.sh,target=/tmp/daos/utils/rpms/package_version.sh \
     --mount=type=bind,source=utils/rpms/package_info.sh,target=/tmp/daos/utils/rpms/package_info.sh \
     --mount=type=bind,source=utils/rpms/daos.spec,target=/tmp/daos/utils/rpms/daos.spec \
     [ "$DAOS_DEPS_INSTALL" != "yes" ] || { \
-        /tmp/daos/ci/rpm/install_deps.sh suse.lp15${POINT_RELEASE#\.}; \
+        /tmp/daos/utils/rpms/install_deps.sh suse.lp15${POINT_RELEASE#\.}; \
         sudo dnf clean all; \
     }
 
@@ -148,12 +152,15 @@ RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
     --mount=type=bind,source=utils/build.config,target=/home/daos/pre/utils/build.config \
     --mount=type=bind,source=utils/scripts/copy_files.sh,target=/home/daos/pre/utils/scripts/copy_files.sh \
     --mount=type=bind,source=utils/scripts/create_spdk_pkgconfig.sh,target=/home/daos/pre/utils/scripts/create_spdk_pkgconfig.sh \
-    --mount=type=bind,source=ci/rpm/build_deps.sh,target=/home/daos/pre/utils/scripts/build_deps.sh \
+    --mount=type=bind,source=utils/rpms/build_deps.sh,target=/home/daos/pre/utils/rpms/build_deps.sh \
     [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
-        DAOS_DEPS_JOBS="$DEPS_JOBS" DAOS_TARGET_TYPE="$DAOS_TARGET_TYPE" \
-        utils/scripts/build_deps.sh && \
-        rm -rf .sconf_temp .sconsign.dblite config.log && \
-        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
+        utils/rpms/build_deps.sh \
+            ${DEPS_JOBS:+--jobs "$DEPS_JOBS"} \
+            ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} && \
+        [ "$DAOS_KEEP_BUILD" != "no" ] || { \
+            rm -rf .sconf_temp .sconsign.dblite config.log && \
+            /bin/rm -rf build *.gz; \
+        } ; \
     }
 
 # Build DAOS dependencies RPMs
@@ -166,7 +173,7 @@ RUN --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
     [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { \
         export DISTRO="suse.lp15${POINT_RELEASE#\.}" && \
-	    /home/daos/pre/utils/rpms/build_packages.sh deps "$DAOS_PACKAGES_VERIFY" && \
+	    utils/rpms/build_packages.sh deps "$DAOS_PACKAGES_VERIFY" && \
         mkdir -p /home/daos/rpms/deps && \
         find . -maxdepth 1 -type f -name '*.rpm' \
              -exec mv -t /home/daos/rpms/deps {} + ; \
@@ -180,6 +187,8 @@ RUN --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
         } \
     }
 
+WORKDIR /home/daos
+
 FROM build-ci AS build-local
 # Set a label.  This is useful for searching for DAOS images, but is also used
 # in github-actions to prune elements of the dockerfile below this point.
@@ -188,7 +197,7 @@ LABEL DAOS=true
 ARG COMPILER=gcc
 ARG DAOS_DEPS_BUILD
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
+ARG DAOS_JAVA_BUILD=no
 
 # Install the rest of components if other than gcc compiler will be used for
 # DAOS or Java build is requested.
@@ -238,14 +247,17 @@ RUN --mount=type=bind,source=VERSION,target=/home/daos/daos/VERSION \
     --mount=type=bind,source=utils/certs,target=/home/daos/daos/utils/certs \
     --mount=type=bind,source=utils/completion,target=/home/daos/daos/utils/completion \
     --mount=type=bind,source=utils/config,target=/home/daos/daos/utils/config \
+    --mount=type=bind,source=utils/rpms/build_daos.sh,target=/home/daos/daos/utils/rpms/build_daos.sh \
     --mount=type=bind,source=src,target=/tmp/daos-src \
     [ "$DAOS_BUILD" != "yes" ] || { \
         export GOCACHE=/tmp/go-cache && \
         mkdir -p /home/daos/daos/src && \
         cp -r /tmp/daos-src/. /home/daos/daos/src && \
-           scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
-               BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE \
-        USE_INSTALLED=all && \
+           utils/rpms/build_daos.sh \
+           ${JOBS:+--jobs "$JOBS"} \
+           ${COMPILER:+COMPILER=$COMPILER} \
+           ${DAOS_BUILD_TYPE:+BUILD_TYPE="$DAOS_BUILD_TYPE"} \
+           ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} && \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || { \
             /bin/rm -rf build; \
         }) && \
@@ -311,6 +323,15 @@ RUN --mount=type=bind,source=utils/scripts/helpers/maven-settings.xml.in,target=
             rm -rf /home/daos/daos/src; \
         }; \
     }
+
+WORKDIR /home/daos/rpms
+RUN createrepo . || echo "createrepo failed"
+
+WORKDIR /home/daos
+USER root:root
+RUN tar -C / -cf /home/daos/opt_daos.tar opt/daos || echo "tar failed"
+RUN chown daos_server.daos_server /home/daos/opt_daos.tar || true
+USER daos_server:daos_server
 
 # Setup docker image for Unit Tests
 FROM build-local AS full

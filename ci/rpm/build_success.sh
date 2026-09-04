@@ -12,18 +12,20 @@ if [ -e "${ci_envs}" ]; then
 fi
 
 : "${TARGET:=centos9}"
-
+pwd
+ls -la
 artdir="${PWD}/artifacts/${TARGET}"
+rpmdir="${PWD}/rpms"
 rm -rf "$artdir"
 mkdir -p "$artdir"
 mkdir -p "$artdir/daos"
 
-if [ -d /home/daos/rpms/ ]; then
-  if [ -d /home/daos/rpms/deps ]; then
+if [ -d "${rpmdir}" ]; then
+  if [ -d "${rpmdir}/deps" ]; then
     mkdir -p "$artdir/deps"
-    cp /home/daos/rpms/deps/*.rpm "${artdir}/deps"
+    cp "${rpmdir}"/deps/*.rpm "${artdir}/deps"
   fi
-  cp /home/daos/rpms/daos/*.rpm "${artdir}/daos"
+  cp "${rpmdir}"/daos/*.rpm "${artdir}/daos"
 fi
 
 createrepo "$artdir"

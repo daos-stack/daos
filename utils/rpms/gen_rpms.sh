@@ -10,11 +10,6 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-ci_envs="$mydir/../parse_ci_envs.sh"
-if [ -e "${ci_envs}" ]; then
-  # shellcheck source=parse_ci_envs.sh disable=SC1091
-  source "${ci_envs}"
-fi
 
 env
 
@@ -22,14 +17,14 @@ pushd "${mydir}/../.." || exit 1
 export DISTRO="${1}"
 export DAOS_RELVAL="${2}"
 rm -f ./*.rpm
-rm -rf /home/daos/rpms/*
+rm -rf ./rpms/*
 utils/rpms/build_packages.sh deps
 if ls -1 ./*.rpm; then
-  mkdir -p /home/daos/rpms/deps
-  cp ./*.rpm /home/daos/rpms/deps
+  mkdir -p ./rpms/deps
+  cp ./*.rpm ./rpms/deps
   rm -f ./*.rpm
 fi
 utils/rpms/build_packages.sh daos
-mkdir -p /home/daos/rpms/daos
-cp ./*.rpm /home/daos/rpms/daos
+mkdir -p ./rpms/daos
+cp ./*.rpm ./rpms/daos
 popd || exit 1
