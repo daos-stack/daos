@@ -34,7 +34,7 @@ pool:
 
 container:
   type: POSIX
-  properties: rf:0,rd_lvl:1,cksum:off,srv_cksum:off
+  properties: cksum:off,srv_cksum:off
 
 attrtests:
   num_attributes: 20
