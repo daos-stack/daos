@@ -64,11 +64,10 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	int                 rc;
 
 	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, ck, &coh);
+	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc, ck->ck_warnings_num);
 	if (rc == DER_SUCCESS) {
 		(void)vos_cont_close(coh);
 	}
-
-	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc, ck->ck_warnings_num);
 
 	/** continue checking other containers even if this one failed */
 	return 0;

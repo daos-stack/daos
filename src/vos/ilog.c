@@ -1648,13 +1648,21 @@ ilog_version_get(daos_handle_t loh)
 	return ilog_mag2ver(lctx->ic_root->lr_magic);
 }
 
-bool
-ilog_root_is_valid(struct ilog_df *ilog_df)
+int
+ilog_root_is_valid(struct ilog_df *ilog_df, report_fn_t report_fn, void *report_arg)
 {
 	struct ilog_root *root = (struct ilog_root *)ilog_df;
 	D_ASSERT(root != NULL);
 
-	return ILOG_MAGIC_VALID(root->lr_magic);
+	report_fn(report_arg, REPORT_MSG, "ILOG... ");
+	if (!ILOG_MAGIC_VALID(root->lr_magic) || DAOS_FAIL_CHECK(DAOS_FAULT_OBJ_ILOG_MAGIC)) {
+		report_fn(report_arg, REPORT_ERROR | REPORT_NO_PREFIX,
+			  "invalid magic (%#" PRIx32 ").\n", root->lr_magic);
+		return -DER_DF_INVAL;
+	}
+	report_fn(report_arg, REPORT_MSG | REPORT_NO_PREFIX, CHECKER_OK_INFIX ".\n");
+
+	return DER_SUCCESS;
 }
 
 bool
