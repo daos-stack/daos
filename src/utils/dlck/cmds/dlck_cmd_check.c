@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +15,129 @@
 #include "../dlck_pool.h"
 #include "../dlck_report.h"
 
+#define DLCK_CHECK_RESULT_PREFIX_FMT(TYPE_STR) "[%d] " TYPE_STR " " DF_UUIDF " check result"
+#define DLCK_WARNINGS_NUM_FMT                  " (%u warning(s))"
+
+#define REPORT_RESULT(CK, PREFIX_FMT, TGT_ID, UUID, RC, WARN_NUM)                                  \
+	do {                                                                                       \
+		if (RC == DER_SUCCESS && WARN_NUM > 0) {                                           \
+			CK_PRINTF(CK, PREFIX_FMT CHECKER_OK_INFIX DLCK_WARNINGS_NUM_FMT ".\n",     \
+				  TGT_ID, DP_UUID(UUID), WARN_NUM);                                \
+		} else {                                                                           \
+			CK_PRINTFL_RC(CK, RC, PREFIX_FMT, TGT_ID, DP_UUID(UUID));                  \
+		}                                                                                  \
+	} while (0)
+
+#define POOL_REPORT_RESULT(CK, TGT_ID, UUID, RC, WARN_NUM)                                         \
+	REPORT_RESULT(CK, DLCK_CHECK_RESULT_PREFIX_FMT("pool     "), TGT_ID, UUID, RC, WARN_NUM)
+
+#define CONT_REPORT_RESULT(CK, TGT_ID, UUID, RC, WARN_NUM)                                         \
+	REPORT_RESULT(CK, DLCK_CHECK_RESULT_PREFIX_FMT("container"), TGT_ID, UUID, RC, WARN_NUM)
+
+struct bundle {
+	struct xstream_arg *xa;
+	struct checker     *ck;
+};
+
+static int
+obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct bundle  *bndl = cb_arg;
+	// struct xstream_arg *xa      = bndl->xa;
+	// struct checker     *main_ck = &xa->ctrl->checker;
+	struct checker *ck = bndl->ck;
+	int             rc;
+
+	CK_PRINTF(ck, "oid: " DF_UOID "\n", DP_UOID(entry->ie_oid));
+
+	rc = vos_iter_check(ih, entry, type, ck);
+
+	return 0;
+}
+
+/**
+ * Target thread (worker). Check trees of a single container.
+ *
+ * \param[in]	ck	Checker.
+ * \param[in]	cont	Container to check.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Errors returned by the tree checking logic.
+ */
+static int
+trees_process(daos_handle_t coh, struct bundle *bndl)
+{
+	vos_iter_param_t        param   = {0};
+	struct vos_iter_anchors anchors = {0};
+
+	param.ip_hdl        = coh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
+
+	return vos_iterate(&param, VOS_ITER_OBJ, false, &anchors, obj_process, NULL, bndl, NULL);
+}
+
+/**
+ * Target thread (worker). VOS iterator callback. Check a single container.
+ *
+ * \param[in]	ih	Iterator handle.
+ * \param[in]	entry	Iterator entry.
+ * \param[in]	type	Iteration type.
+ * \param[in]	param	Iterator parameters.
+ * \param[in]	cb_arg	Callback argument.
+ * \param[in]	acts	Actions.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Errors returned by vos_cont_open_ex().
+ */
+static int
+cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct bundle      *bndl    = cb_arg;
+	struct xstream_arg *xa      = bndl->xa;
+	struct checker     *main_ck = &xa->ctrl->checker;
+	struct checker     *ck      = bndl->ck;
+	daos_handle_t       coh;
+	int                 rc;
+
+	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, ck, &coh);
+	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc, ck->ck_warnings_num);
+	if (rc == DER_SUCCESS) {
+		trees_process(coh, bndl);
+
+		(void)vos_cont_close(coh);
+	}
+
+	/** continue checking other containers even if this one failed */
+	return 0;
+}
+
+/**
+ * Target thread (worker). Check all containers of a single pool.
+ *
+ * \param[in]	poh	Pool handle.
+ * \param[in]	ck	Checker.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Errors either from the VOS iterator or vos_cont_open_ex().
+ */
+static int
+conts_process(struct xstream_arg *xa, daos_handle_t poh, struct checker *ck)
+{
+	vos_iter_param_t        param   = {0};
+	struct vos_iter_anchors anchors = {0};
+	struct bundle           cb_arg  = {.xa = xa, .ck = ck};
+
+	param.ip_hdl        = poh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
+
+	return vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, cont_process, NULL, &cb_arg,
+			   NULL);
+}
+
 /**
  * Target thread (worker). Check a single pool.
  *
@@ -29,6 +152,7 @@
 static int
 pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 {
+	struct checker *main_ck = &xa->ctrl->checker;
 	char         *path;
 	daos_handle_t poh;
 	int           rc;
@@ -50,11 +174,14 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 
 	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, ck, &poh);
 	if (rc == DER_SUCCESS) {
+		POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_warnings_num);
+		rc = conts_process(xa, poh, ck);
+
 		(void)vos_pool_close(poh);
 	}
 	D_FREE(path);
 
-	/** check  */
+	/** check */
 	if (rc != DER_SUCCESS) {
 		/** ignore a possible error from the unlock */
 		return rc;
@@ -62,9 +189,6 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 
 	return DER_SUCCESS;
 }
-
-#define DLCK_POOL_CHECK_RESULT_PREFIX_FMT "[%d] pool " DF_UUIDF " check result"
-#define DLCK_WARNINGS_NUM_FMT             " (%u warning(s))"
 
 /**
  * Target thread (worker).
@@ -106,17 +230,6 @@ exec_one(void *arg)
 
 		/** check the pool */
 		rc = pool_process(xa, file, &ck);
-		/** report the result */
-		if (rc == DER_SUCCESS && ck.ck_warnings_num > 0) {
-			CK_PRINTF(
-			    main_ck,
-			    DLCK_POOL_CHECK_RESULT_PREFIX_FMT CHECKER_OK_INFIX DLCK_WARNINGS_NUM_FMT
-			    ".\n",
-			    xa->xs->tgt_id, DP_UUID(file->po_uuid), ck.ck_warnings_num);
-		} else {
-			CK_PRINTFL_RC(main_ck, rc, DLCK_POOL_CHECK_RESULT_PREFIX_FMT,
-				      xa->xs->tgt_id, DP_UUID(file->po_uuid));
-		}
 		dlck_xstream_set_rc(xa, rc);
 		dlck_uadd_no_overflow(xa->warnings_num, ck.ck_warnings_num, &xa->warnings_num);
 		/** Continue to the next pool regardless of the result. */
