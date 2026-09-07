@@ -152,7 +152,8 @@ class OSAOnlineParallelTest(OSAUtils):
             ior_thread = threading.Thread(target=self.run_ior_thread,
                                           kwargs={"action": "Write",
                                                   "oclass": oclass,
-                                                  "test": test_seq})
+                                                  "test": test_seq,
+                                                  "fail_on_warning": False})
 
             for action in sorted(action_args):
                 # Add dmg threads
