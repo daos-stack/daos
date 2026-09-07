@@ -7,6 +7,7 @@ hosts:
 setup:
   mgmt_svc_replicas_qty: 5
 server_config:
+  disable_hugepages: true
   name: daos_server
   engines_per_host: 1
   engines:

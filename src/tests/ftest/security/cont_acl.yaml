@@ -5,6 +5,7 @@ hosts:
   test_clients: 1
 timeout: 1200
 server_config:
+  disable_hugepages: true
   name: daos_server
   port: 10001
   engines_per_host: 1

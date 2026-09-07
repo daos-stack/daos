@@ -5,6 +5,7 @@ hosts:
 timeout: 80
 
 server_config:
+  disable_hugepages: true
   name: other_dserver  # Use a non-default name
   engines_per_host: 2
   engines:

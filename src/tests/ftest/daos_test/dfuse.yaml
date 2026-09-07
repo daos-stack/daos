@@ -5,6 +5,7 @@ timeout: 120
 pool:
   scm_size: 1G
 server_config:
+  disable_hugepages: true
   name: daos_server
   engines_per_host: 1
   engines:

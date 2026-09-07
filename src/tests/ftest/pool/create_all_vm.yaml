@@ -28,6 +28,7 @@ test_two_pools_vm:
     distribution: 8388608     # 8MiB
 
 server_config:
+  disable_hugepages: true
   name: daos_server
   engines_per_host: 1
   system_ram_reserved: 6

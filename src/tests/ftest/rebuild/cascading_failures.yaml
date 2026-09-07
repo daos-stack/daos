@@ -6,6 +6,7 @@ agent_config:
   #cache_expiration: 1
   disable_caching: true
 server_config:
+  disable_hugepages: true
   name: daos_server
   engines_per_host: 1
   engines:
