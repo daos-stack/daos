@@ -490,6 +490,137 @@ rebuild_iv_tgt_fail(void **state)
 	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
+static int
+rebuild_ec_agg_barrier_setup(test_arg_t *arg, daos_obj_id_t *oids, d_rank_t *blocked_rank)
+{
+	daos_pool_info_t pinfo        = {0};
+	d_rank_list_t   *engine_ranks = NULL;
+	d_rank_t         failed_rank  = ranks_to_kill[0];
+	int              i;
+	int              rc;
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], failed_rank);
+	}
+	rebuild_io(arg, oids, OBJ_NR);
+
+	pinfo.pi_bits = DPI_REBUILD_STATUS | DPI_ENGINES_ENABLED;
+	rc            = test_pool_get_info(arg, &pinfo, &engine_ranks);
+	if (rc != 0)
+		return rc;
+
+	*blocked_rank = -1;
+	for (i = 0; i < engine_ranks->rl_nr; i++) {
+		if (engine_ranks->rl_ranks[i] != failed_rank) {
+			*blocked_rank = engine_ranks->rl_ranks[i];
+			break;
+		}
+	}
+	d_rank_list_free(engine_ranks);
+	if (*blocked_rank == (d_rank_t)-1)
+		return -DER_NONEXIST;
+
+	arg->rebuild_pre_pool_ver = pinfo.pi_map_ver;
+	memcpy(&arg->pool.pool_info, &pinfo, sizeof(pinfo));
+	test_set_engine_fail_loc(arg, *blocked_rank,
+				 DAOS_REBUILD_TGT_IV_UPDATE_FAIL | DAOS_FAIL_ALWAYS);
+
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group, failed_rank, -1);
+	if (rc != 0) {
+		test_set_engine_fail_loc(arg, *blocked_rank, 0);
+		return rc;
+	}
+	test_rebuild_wait_to_start_next(&arg, 1);
+	return 0;
+}
+
+static bool
+rebuild_ec_agg_barrier_holds(test_arg_t *arg, int seconds)
+{
+	daos_pool_info_t pinfo = {0};
+	int              i;
+	int              rc;
+
+	for (i = 0; i < seconds; i++) {
+		pinfo.pi_bits = DPI_REBUILD_STATUS;
+		rc            = test_pool_get_info(arg, &pinfo, NULL);
+		if (rc != 0 || pinfo.pi_rebuild_st.rs_state != DRS_IN_PROGRESS ||
+		    pinfo.pi_rebuild_st.rs_errno != 0 ||
+		    pinfo.pi_rebuild_st.rs_toberb_obj_nr != 0 || pinfo.pi_rebuild_st.rs_obj_nr != 0)
+			return false;
+		sleep(1);
+	}
+	return true;
+}
+
+static void
+rebuild_ec_agg_global_barrier(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oids[OBJ_NR];
+	d_rank_t      blocked_rank;
+	bool          held;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+	if (!test_runable(arg, 6))
+		return;
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank != 0)
+		return;
+
+	rc = rebuild_ec_agg_barrier_setup(arg, oids, &blocked_rank);
+	if (rc != 0)
+		assert_rc_equal(rc, 0);
+
+	held = rebuild_ec_agg_barrier_holds(arg, 10);
+	test_set_engine_fail_loc(arg, blocked_rank, 0);
+	assert_true(held);
+
+	test_rebuild_wait(&arg, 1);
+	assert_int_equal(arg->pool.pool_info.pi_rebuild_st.rs_errno, 0);
+	rebuild_io_verify(arg, oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
+	rebuild_io_verify(arg, oids, OBJ_NR);
+}
+
+static void
+rebuild_stop_before_ec_agg_barrier(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oids[OBJ_NR];
+	d_rank_t      blocked_rank;
+	bool          held;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+	if (!test_runable(arg, 6))
+		return;
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank != 0)
+		return;
+
+	rc = rebuild_ec_agg_barrier_setup(arg, oids, &blocked_rank);
+	if (rc != 0)
+		assert_rc_equal(rc, 0);
+
+	held = rebuild_ec_agg_barrier_holds(arg, 5);
+	rc   = dmg_pool_rebuild_stop(arg->dmg_config, arg->pool.pool_uuid, arg->group, false);
+	test_set_engine_fail_loc(arg, blocked_rank, 0);
+	assert_true(held);
+	assert_rc_equal(rc, 0);
+
+	rebuild_resume_wait(arg);
+	rebuild_io_verify(arg, oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
+	rebuild_io_verify(arg, oids, OBJ_NR);
+}
+
 static void
 rebuild_tgt_start_fail(void **state)
 {
@@ -1736,6 +1867,10 @@ static const struct CMUnitTest rebuild_tests[] = {
      rebuild_sub_6nodes_rf1_setup, rebuild_sub_teardown},
     {"REBUILD37: single engine scan lengthy hang", rebuild_long_scan_hang, rebuild_sub_setup,
      rebuild_sub_teardown},
+    {"REBUILD38: EC aggregation global barrier", rebuild_ec_agg_global_barrier,
+     rebuild_small_sub_setup, rebuild_sub_teardown},
+    {"REBUILD39: stop before EC aggregation barrier", rebuild_stop_before_ec_agg_barrier,
+     rebuild_small_sub_setup, rebuild_sub_teardown},
 };
 
 /* TODO: Enable aggregation once stable view rebuild is done. */

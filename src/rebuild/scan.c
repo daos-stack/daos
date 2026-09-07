@@ -34,6 +34,8 @@
 #define REBUILD_SEND_BATCH_MIN         (REBUILD_SEND_LIMIT / 4)
 /* Maximum seconds to wait for a batch to fill before flushing anyway. */
 #define REBUILD_SEND_BATCH_TIMEOUT_SEC 1
+/* Local EC aggregation pause can take up to 600 seconds. */
+#define REBUILD_EPOCH_WAIT_MAX_SEC     660
 
 struct rebuild_send_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
@@ -284,7 +286,7 @@ rpt_wait_rebuild_epoch(struct rebuild_tgt_pool_tracker *rpt)
 	int wait_cnt = 0;
 
 	while (rpt->rt_stable_epoch == 0 && !rpt->rt_abort && !rpt->rt_finishing &&
-	       !rpt->rt_global_done && wait_cnt++ < 180)
+	       !rpt->rt_global_done && wait_cnt++ < REBUILD_EPOCH_WAIT_MAX_SEC * 5)
 		dss_sleep(200);
 
 	if (rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done)
@@ -1564,16 +1566,13 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	if (dst->rso_status == 0)
 		dst->rso_status = src->rso_status;
 
-	if (src->rso_status == 0) {
-		if (src_in->rsi_rebuild_op == RB_OP_REBUILD) {
-			D_ASSERTF(src->rso_stable_epoch == src_in->rsi_stable_epoch,
-				  DF_X64 " != " DF_X64 "\n", src->rso_stable_epoch,
-				  src_in->rsi_stable_epoch);
-			dst->rso_stable_epoch = src_in->rsi_stable_epoch;
-		} else if (dst->rso_stable_epoch < src->rso_stable_epoch) {
-			dst->rso_stable_epoch = src->rso_stable_epoch;
-		}
-	}
+	/*
+	 * RB_OP_REBUILD uses the stable epoch selected by the leader, so target
+	 * reply epochs do not need to be aggregated.
+	 */
+	if (src->rso_status == 0 && src_in->rsi_rebuild_op != RB_OP_REBUILD &&
+	    dst->rso_stable_epoch < src->rso_stable_epoch)
+		dst->rso_stable_epoch = src->rso_stable_epoch;
 
 	return 0;
 }

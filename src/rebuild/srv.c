@@ -477,7 +477,7 @@ update_and_warn_for_slow_engines(struct rebuild_global_pool_tracker *rgt)
 	}
 
 	ec_paused_gl = (ec_paused_ct == rgt->rgt_servers_number);
-	if (rgt->rgt_opc == RB_OP_REBUILD && rgt->rgt_stable_epoch == 0 && !ec_paused_gl) {
+	if (rgt->rgt_opc == RB_OP_REBUILD && !rgt->rgt_ec_agg_barrier_done && !ec_paused_gl) {
 		if (do_warn) {
 			D_WARN(DF_RB ": EC aggregation pause hung? waiting for %d/%d engines:\n",
 			       DP_RB_RGT(rgt), rgt->rgt_servers_number - ec_paused_ct,
@@ -552,7 +552,12 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 {
 	rebuild_leader_set_update_time(rgt, iv->riv_rank);
 	if (iv->riv_stable_epoch != 0) {
-		if (rgt->rgt_stable_epoch == 0) {
+		if (rgt->rgt_opc == RB_OP_REBUILD && !rgt->rgt_ec_agg_barrier_done) {
+			rgt->rgt_stable_epoch        = iv->riv_stable_epoch;
+			rgt->rgt_ec_agg_barrier_done = 1;
+			D_INFO(DF_RB ": recovered stable epoch " DF_X64 " from rank %u\n",
+			       DP_RB_RGT(rgt), rgt->rgt_stable_epoch, iv->riv_rank);
+		} else if (rgt->rgt_stable_epoch == 0) {
 			rgt->rgt_stable_epoch = iv->riv_stable_epoch;
 			D_INFO(DF_RB ": recovered stable epoch " DF_X64 " from rank %u\n",
 			       DP_RB_RGT(rgt), rgt->rgt_stable_epoch, iv->riv_rank);
@@ -975,7 +980,8 @@ rebuild_leader_status_notify(struct rebuild_global_pool_tracker *rgt, struct ds_
 	iv.riv_leader_term	= rgt->rgt_leader_term;
 	iv.riv_rebuild_gen	= rgt->rgt_rebuild_gen;
 	iv.riv_seconds          = rgt->rgt_status.rs_seconds;
-	iv.riv_stable_epoch	= rgt->rgt_stable_epoch;
+	if (op != RB_OP_REBUILD || rgt->rgt_ec_agg_barrier_done)
+		iv.riv_stable_epoch = rgt->rgt_stable_epoch;
 	iv.riv_sync = 1;
 	rgt->rgt_dtx_resync_version = iv.riv_global_dtx_resyc_version =
 				rebuild_get_global_dtx_resync_ver(rgt);
@@ -1203,6 +1209,25 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 		}
 		ABT_rwlock_unlock(pool->sp_lock);
 		map_ranks_fini(&rank_list);
+
+		if (rgt->rgt_opc == RB_OP_REBUILD && !rgt->rgt_ec_agg_barrier_done &&
+		    !rgt->rgt_abort) {
+			bool ec_agg_paused = true;
+
+			for (i = 0; i < rgt->rgt_servers_number; i++) {
+				if (!rgt->rgt_servers[i].ec_agg_paused) {
+					ec_agg_paused = false;
+					break;
+				}
+			}
+			if (ec_agg_paused) {
+				D_ASSERT(rgt->rgt_stable_epoch != 0);
+				rgt->rgt_ec_agg_barrier_done = 1;
+				D_INFO(DF_RB ": all engines paused EC aggregation, publish stable "
+					     "epoch " DF_X64 "\n",
+				       DP_RB_RGT(rgt), rgt->rgt_stable_epoch);
+			}
+		}
 
 		/* Abort orphaned rgt if the node is no longer the leader.
 		 * After PS leader switch, this rgt becomes orphaned and should be aborted.
@@ -1555,10 +1580,17 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 		/*
 		 * Bound rebuild migration before starting target scan. Target scan waits
 		 * for DTX resync before migration, so IO at or below this cutoff is
-		 * covered by the resync, while later IO is kept outside the migration
-		 * range.
+		 * covered by the resync, while later IO is kept outside the migration range.
+		 * The leader publishes this cutoff through IV only after every participating
+		 * engine reports that EC aggregation is paused.
 		 */
-		rsi->rsi_stable_epoch = d_hlc_get();
+		if (rgt->rgt_ec_agg_barrier_done) {
+			D_ASSERT(rgt->rgt_stable_epoch != 0);
+			rsi->rsi_stable_epoch = rgt->rgt_stable_epoch;
+		} else {
+			rsi->rsi_stable_epoch = d_hlc_get();
+			rgt->rgt_stable_epoch = rsi->rsi_stable_epoch;
+		}
 	}
 	crt_group_rank(pool->sp_group,  &rsi->rsi_master_rank);
 
@@ -1567,14 +1599,14 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 		rso = crt_reply_get(rpc);
 		D_ASSERT(rso != NULL);
 		rc = rso->rso_status;
-		if (rc == 0)
+		if (rc == 0 && rebuild_op != RB_OP_REBUILD)
 			rgt->rgt_stable_epoch = rso->rso_stable_epoch;
 	} else {
 		DL_ERROR(rc, DF_RB " scan broadcast send failed.", DP_RB_RGT(rgt));
 	}
 
 	rgt->rgt_init_scan = 1;
-	DL_INFO(rc, DF_RB " got stable/reclaim epoch " DF_X64 "/" DF_X64, DP_RB_RGT(rgt),
+	DL_INFO(rc, DF_RB " selected stable/reclaim epoch " DF_X64 "/" DF_X64, DP_RB_RGT(rgt),
 		rgt->rgt_stable_epoch, rgt->rgt_reclaim_epoch);
 	crt_req_decref(rpc);
 out:
@@ -2126,7 +2158,8 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		/* Schedule fail_reclaim to clean up current op. After fail_reclaim, we may retry
 		 * original. Scheduling any retry is deferred until fail_reclaim is actually done.
 		 */
-		if (rgt->rgt_init_scan && rgt->rgt_stable_epoch != 0) {
+		if (rgt->rgt_init_scan && rgt->rgt_stable_epoch != 0 &&
+		    (rgt->rgt_opc != RB_OP_REBUILD || rgt->rgt_ec_agg_barrier_done)) {
 			/* NB: dst_reclaim_ver is the minimum rebuild target version, once rebuild
 			 * fails, it will be used to discard all of the previous rebuild data
 			 * (reclaim - 1 see obj_reclaim()), but keep the in-flight I/O data.
@@ -2162,8 +2195,8 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			D_GOTO(complete, rc);
 		}
 		if (rgt->rgt_init_scan)
-			D_INFO(DF_RB ": skip fail_reclaim because rebuild failed before stable "
-				     "epoch was established\n",
+			D_INFO(DF_RB ": skip fail_reclaim because rebuild failed before the EC "
+				     "aggregation barrier was released\n",
 			       DP_RB_RGT(rgt));
 
 		/* With the global EC aggregation barrier, RB_OP_REBUILD publishes its stable
@@ -2174,7 +2207,7 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		 * the normal Fail_reclaim path above must clean up any migrated data.
 		 */
 		if (task->dst_rebuild_op == RB_OP_REBUILD && rgt->rgt_stop_admin &&
-		    rgt->rgt_init_scan && rgt->rgt_stable_epoch == 0) {
+		    rgt->rgt_init_scan && !rgt->rgt_ec_agg_barrier_done) {
 			rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
 			rgt->rgt_status.rs_state = DRS_NOT_STARTED;
 			D_GOTO(complete, rc);
@@ -2188,12 +2221,14 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		if (retry_opc == RB_OP_NONE)
 			D_GOTO(complete, rc);
 
-		retry_reclaim_eph =
-		    rgt->rgt_stable_epoch != 0 ? rgt->rgt_stable_epoch : task->dst_reclaim_eph;
-		rc = ds_rebuild_schedule(
-		    pool, task->dst_map_ver, retry_reclaim_eph, task->dst_new_layout_version,
-		    &task->dst_tgts, retry_opc /* rebuild_op*/, 0 /* retry_rebuild_op */,
-		    0 /* retry_map_ver */, false /* stop_admin */, task, delay_sec);
+		retry_reclaim_eph = rgt->rgt_stable_epoch != 0 && (rgt->rgt_opc != RB_OP_REBUILD ||
+								   rgt->rgt_ec_agg_barrier_done)
+					? rgt->rgt_stable_epoch
+					: task->dst_reclaim_eph;
+		rc                = ds_rebuild_schedule(
+                    pool, task->dst_map_ver, retry_reclaim_eph, task->dst_new_layout_version,
+                    &task->dst_tgts, retry_opc /* rebuild_op*/, 0 /* retry_rebuild_op */,
+                    0 /* retry_map_ver */, false /* stop_admin */, task, delay_sec);
 		DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc,
 			  DF_RB ": errno " DF_RC ", schedule retry of original %u(%s)",
 			  DP_RB_RGT(rgt), DP_RC(rgt->rgt_status.rs_errno), retry_opc,

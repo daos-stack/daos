@@ -149,8 +149,8 @@ struct rebuild_global_pool_tracker {
 
 	uint64_t	rgt_time_start;
 
-	/* Stable epoch of the rebuild, the minimum epoch from
-	 * all rebuilding targets
+	/* Leader-selected rebuild cutoff. For RB_OP_REBUILD it is not published
+	 * until all participating engines have paused EC aggregation.
 	 */
 	uint64_t	rgt_stable_epoch;
 
@@ -168,7 +168,8 @@ struct rebuild_global_pool_tracker {
 	uint32_t	rgt_opc;
 	unsigned int                    rgt_abort : 1, /* abort: kill rebuild */
 	    rgt_init_scan : 1, rgt_stop_admin : 1,     /* stop: admin has asked to kill rebuild */
-	    rgt_include_up : 1;                        /* include UP rank domain for FAIL_RECLAIM */
+	    rgt_include_up          : 1,               /* include UP rank domain for FAIL_RECLAIM */
+	    rgt_ec_agg_barrier_done : 1;
 
 	/* only valid when rgt_include_up is true (FAIL_RECLAIM), the original rebuild version */
 	uint32_t rgt_orig_rb_ver;
