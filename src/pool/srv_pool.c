@@ -8035,6 +8035,7 @@ pool_discard_filter_tgts(struct pool_svc *svc, struct pool_target_addr_list *lis
 {
 	struct pool_map *map;
 	uint32_t         wanted_status, disallow_status;
+	const char      *op_str = reint ? "reintegrate" : "extend";
 	int              i;
 	int              rc = 0;
 
@@ -8055,10 +8056,12 @@ pool_discard_filter_tgts(struct pool_svc *svc, struct pool_target_addr_list *lis
 		    pool_map_find_target_by_rank_idx(map, addr->pta_rank, addr->pta_target, &tgts);
 		if (tgt_nr <= 0) {
 			if (reint) {
-				D_INFO(DF_UUID ": discard skip rank %u target %u: not in pool map.",
-				       DP_UUID(svc->ps_pool->sp_uuid), addr->pta_rank,
-				       addr->pta_target);
-				continue;
+				rc = -DER_NONEXIST;
+				DL_ERROR(rc,
+					 DF_UUID ": %s rank %u target %u: not in pool map %u: %d",
+					 DP_UUID(svc->ps_pool->sp_uuid), op_str, addr->pta_rank,
+					 addr->pta_target, pool_map_get_version(map), tgt_nr);
+				goto out;
 			}
 
 			/* Brand new rank/target not part of the pool map yet, i.e. this
@@ -8075,17 +8078,20 @@ pool_discard_filter_tgts(struct pool_svc *svc, struct pool_target_addr_list *lis
 
 			if (tgts[j].ta_comp.co_status & disallow_status) {
 				rc = -DER_BUSY;
-				DL_ERROR(rc, DF_UUID ": Can't %s rank %u target %u: status %u.",
-					 reint ? "REINT" : "EXTEND", DP_UUID(svc->ps_pool->sp_uuid),
-					 addr->pta_rank, tgts[j].ta_comp.co_id,
-					 tgts[j].ta_comp.co_status);
+				DL_ERROR(rc,
+					 DF_UUID ": %s rank %u target %u: status %u in pool map %u",
+					 DP_UUID(svc->ps_pool->sp_uuid), op_str, addr->pta_rank,
+					 tgts[j].ta_comp.co_id, tgts[j].ta_comp.co_status,
+					 pool_map_get_version(map));
 				goto out;
 			}
 
 			if (!(tgts[j].ta_comp.co_status & wanted_status)) {
-				D_INFO(DF_UUID ": discard skip rank %u target %u: status %u.",
-				       DP_UUID(svc->ps_pool->sp_uuid), addr->pta_rank,
-				       tgts[j].ta_comp.co_id, tgts[j].ta_comp.co_status);
+				D_INFO(DF_UUID
+				       ": %s rank %u target %u: skip: status %u in pool map %u\n",
+				       DP_UUID(svc->ps_pool->sp_uuid), op_str, addr->pta_rank,
+				       tgts[j].ta_comp.co_id, tgts[j].ta_comp.co_status,
+				       pool_map_get_version(map));
 				continue;
 			}
 
