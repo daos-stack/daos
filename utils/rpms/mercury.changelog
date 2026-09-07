@@ -1,4 +1,8 @@
 %changelog
+* Mon Aug 31 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 2.4.1-5
+- Rebuild to force update of defective packages.
+- Restore missing auto-generated runtime dependencies.
+
 * Wed Aug 26 2026 Jerome Soumagne <jerome.soumagne@hpe.com> - 2.4.1-4
 - Fix pkgconfig files destination in devel package
 - Add NA UCX patch to cache deserialized worker addresses
