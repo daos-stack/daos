@@ -293,11 +293,14 @@ func TestServer_Harness_Start(t *testing.T) {
 					UUID: uuid, Rank: rank, ValidRank: isValid,
 				})
 
-				// Write superblock to disk if rank is preset so it can be read back
-				if tc.rankInSuperblock {
-					if err := ei.WriteSuperblock(); err != nil {
-						t.Fatal(err)
-					}
+				// Ensure superblock file exists on disk for ReadSuperblock() calls
+				// since needsSuperblock() now always reads from disk
+				sbDir := filepath.Dir(ei.superblockPath())
+				if err := os.MkdirAll(sbDir, 0700); err != nil {
+					t.Fatalf("failed to create superblock dir: %v", err)
+				}
+				if err := ei.WriteSuperblock(); err != nil {
+					t.Fatalf("failed to write superblock: %v", err)
 				}
 
 				if err := harness.AddInstance(ei); err != nil {
@@ -676,6 +679,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
@@ -696,7 +700,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				newOnDrpcFailureFn(log, db)(ctx, err)
 			})
 
-			ctx, cancel := context.WithTimeout(test.Context(t), 5*time.Second)
+			ctx, cancel := context.WithTimeout(test.Context(t), 1*time.Second)
 			defer cancel()
 
 			startErr := make(chan error)
@@ -706,10 +710,8 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				}
 				close(startErr)
 			}()
-			for {
-				if h.isStarted() {
-					break
-				}
+			for !h.isStarted() {
+				time.Sleep(time.Millisecond)
 			}
 			defer func() {
 				if err := <-startErr; err != nil {
@@ -730,6 +732,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 			test.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
 			test.AssertEqual(t, db.isLeader, !tc.expNotLeader, "unexpected leader state")
 			test.AssertEqual(t, drpcFailureInvoked.Load(), tc.expFailHandler, "unexpected fail handler invocation")
+			cancel()
 		})
 	}
 }
