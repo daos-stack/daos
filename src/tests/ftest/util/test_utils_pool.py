@@ -914,7 +914,7 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        time_start = time.time()
+        time_start = time()
         while True:
             try:
                 return self.rebuild_stop(force=force)
@@ -923,14 +923,14 @@ class TestPool(TestDaosApiBase):
                 if 'DER_NONEXIST' not in str(error):
                     raise
                 # If we exceed the max wait time, fail the test
-                if time.time() - time_start > timeout:
+                if time() - time_start > timeout:
                     raise CommandFailure(
                         f"Failed to stop rebuild after {timeout} seconds"
                     ) from error
                 # Otherwise, sleep and retry
                 self.log.info(
                     'Assuming rebuild is not started yet. Retrying in %s seconds...', interval)
-                time.sleep(interval)
+                sleep(interval)
 
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):
