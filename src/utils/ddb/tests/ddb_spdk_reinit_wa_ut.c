@@ -22,6 +22,7 @@
 #include "ddb_cmocka.h"
 #include "ddb_spdk_reinit_wa.h"
 #include "ddb_fake_print.h"
+#include "ddb_mocks.h"
 
 /*
  * ----------------------------------------------------------------
@@ -46,6 +47,20 @@ can_proceed(struct ddb_ctx *ctx, const char *nvme_conf_dir)
 }
 
 /*
+ * Wrapped d_asprintf2() for mocking the call to nvme_conf_exists() in dwa_can_proceed()'s internal
+ * check.
+ */
+static char *
+d_asprintf2_mock(int *rc, const char *fmt, ...)
+{
+	check_expected_ptr(rc);
+	check_expected_ptr(fmt);
+
+	*rc = mock_type(int);
+	return mock_ptr_type(char *);
+}
+
+/*
  * ----------------------------------------------------------------
  * Test helpers
  * ----------------------------------------------------------------
@@ -65,7 +80,7 @@ create_nvme_conf(char *dir)
 
 	if (mkdtemp(dir) == NULL) {
 		print_error("ERROR: Failed to create temp dir %s: %s\n", dir, strerror(errno));
-		D_GOTO(out, rc = -1);
+		return -1;
 	}
 
 	D_ASPRINTF(path, "%s/daos_nvme.conf", dir);
@@ -82,18 +97,20 @@ create_nvme_conf(char *dir)
 	}
 
 	rc = close(fd);
-	if (rc == 0) {
-		D_FREE(path);
-		return 0;
+	if (rc != 0) {
+		print_error("ERROR: Failed to close daos_nvme.conf file %s: %s\n", path,
+			    strerror(errno));
+		goto out_path;
 	}
-	print_error("ERROR: Failed to close daos_nvme.conf file %s: %s\n", path, strerror(errno));
-	rc = -1;
+
+	D_FREE(path);
+	return 0;
+
 out_path:
 	(void)unlink(path);
 	D_FREE(path);
 out_dir:
 	(void)rmdir(dir);
-out:
 	return rc;
 }
 
@@ -126,13 +143,12 @@ spdk_reinit_setup(void **state)
 	if (mkdtemp(no_nvme_dir) == NULL) {
 		print_error("ERROR: Failed to create temp dir %s: %s\n", no_nvme_dir,
 			    strerror(errno));
-		D_GOTO(out, rc = -1);
+		return -1;
 	}
 
 	rc = create_nvme_conf(nvme_dir);
 	if (rc != 0)
 		(void)rmdir(no_nvme_dir);
-out:
 	return rc;
 }
 
@@ -180,11 +196,97 @@ spdk_reinit_override_teardown(void **state)
 }
 #endif /* !DAOS_BUILD_RELEASE */
 
+static int
+mock_d_asprintf2_setup(void **state)
+{
+	mock_d_asprintf2_set(d_asprintf2_mock);
+
+	return 0;
+}
+
+static int
+mock_d_asprintf2_teardown(void **state)
+{
+	mock_d_asprintf2_set(NULL);
+
+	return 0;
+}
+
 /*
  * ----------------------------------------------------------------
  * Tests
  * ----------------------------------------------------------------
  */
+
+/**
+ * dwa_can_proceed() must assert (not crash or silently misbehave) if ctx is NULL.
+ */
+static void
+test_dwa_can_proceed_001(void **state)
+{
+	bool allowed;
+
+	expect_assert_failure(dwa_can_proceed(NULL, nvme_dir, &allowed));
+}
+
+/**
+ * dwa_can_proceed() must assert (not crash or silently misbehave) if can_proceed is NULL.
+ */
+static void
+test_dwa_can_proceed_002(void **state)
+{
+	struct ddb_ctx ctx = {0};
+
+	expect_assert_failure(dwa_can_proceed(&ctx, nvme_dir, NULL));
+}
+
+#ifndef DAOS_BUILD_RELEASE
+/**
+ * Regression test for the DAOS_DDB_ALLOW_SPDK_REINIT diagnostic override. This feature is
+ * compiled out of release builds (see ddb_spdk_reinit_wa.c), so this test -- along with its
+ * setup/teardown and registration below -- is too: without the guard, its first assertion
+ * would be refused (nvme_used_once is already set by spdk_reinit_wa_sequence_test above) since
+ * there is no compiled-in override to bypass that in a release build.
+ */
+static void
+test_dwa_can_proceed_003(void **state)
+{
+	struct ddb_ctx ctx = {0};
+
+	ctx.dc_io_ft.ddb_print_message = fake_print;
+	ctx.dc_io_ft.ddb_print_error   = fake_print;
+
+	/*
+	 * With the override set, even two calls in a row against the same NVMe-backed dir must
+	 * both be allowed -- the exact sequence that would otherwise be refused.
+	 */
+	fake_print_reset();
+	assert_true(can_proceed(&ctx, nvme_dir));
+	assert_true(can_proceed(&ctx, nvme_dir));
+	assert_string_equal(fake_print_buf, "");
+}
+#endif /* !DAOS_BUILD_RELEASE */
+
+/**
+ * d_asprintf2() fails, dwa_can_proceed() must return that error code instead of silently
+ * misbehaving.
+ */
+static void
+test_dwa_can_proceed_004(void **state)
+{
+	struct ddb_ctx ctx = {0};
+	bool           allowed;
+	int            rc;
+
+	fake_print_reset();
+	expect_any(d_asprintf2_mock, rc);
+	expect_string(d_asprintf2_mock, fmt, "%s/%s");
+	will_return_int(d_asprintf2_mock, -DER_NOMEM);
+	will_return(d_asprintf2_mock, NULL);
+
+	rc = dwa_can_proceed(&ctx, nvme_dir, &allowed);
+	assert_int_equal(rc, -DER_NOMEM);
+}
 
 static const char *SUBSTRING_WARNING_001 = "SPDK cannot be";
 static const char *SUBSTRING_WARNING_002 = "restart the DDB process";
@@ -194,7 +296,7 @@ static const char *SUBSTRING_WARNING_002 = "restart the DDB process";
  * been used once" flag.
  */
 static void
-spdk_reinit_wa_sequence_test(void **state)
+test_dwa_can_proceed_005(void **state)
 {
 	struct ddb_ctx ctx = {0};
 
@@ -232,7 +334,7 @@ spdk_reinit_wa_sequence_test(void **state)
  * used via nvme_dir, so this call must see that same state despite passing NULL.
  */
 static void
-dwa_can_proceed_unconditional_shares_state_test(void **state)
+test_dwa_can_proceed_006(void **state)
 {
 	struct ddb_ctx ctx = {0};
 
@@ -245,71 +347,23 @@ dwa_can_proceed_unconditional_shares_state_test(void **state)
 	assert_string_contains(fake_print_buf, SUBSTRING_WARNING_002);
 }
 
-#ifndef DAOS_BUILD_RELEASE
-/**
- * Regression test for the DAOS_DDB_ALLOW_SPDK_REINIT diagnostic override. This feature is
- * compiled out of release builds (see ddb_spdk_reinit_wa.c), so this test -- along with its
- * setup/teardown and registration below -- is too: without the guard, its first assertion
- * would be refused (nvme_used_once is already set by spdk_reinit_wa_sequence_test above) since
- * there is no compiled-in override to bypass that in a release build.
- */
-static void
-spdk_reinit_wa_disable_test(void **state)
-{
-	struct ddb_ctx ctx = {0};
-
-	ctx.dc_io_ft.ddb_print_message = fake_print;
-	ctx.dc_io_ft.ddb_print_error   = fake_print;
-
-	/*
-	 * With the override set, even two calls in a row against the same NVMe-backed dir must
-	 * both be allowed -- the exact sequence that would otherwise be refused.
-	 */
-	fake_print_reset();
-	assert_true(can_proceed(&ctx, nvme_dir));
-	assert_true(can_proceed(&ctx, nvme_dir));
-	assert_string_equal(fake_print_buf, "");
-}
-#endif /* !DAOS_BUILD_RELEASE */
-
-/**
- * dwa_can_proceed() must assert (not crash or silently misbehave) if ctx is NULL.
- */
-static void
-dwa_can_proceed_asserts_on_null_ctx_test(void **state)
-{
-	bool allowed;
-
-	expect_assert_failure(dwa_can_proceed(NULL, nvme_dir, &allowed));
-}
-
-/**
- * dwa_can_proceed() must assert (not crash or silently misbehave) if can_proceed is NULL.
- */
-static void
-dwa_can_proceed_asserts_on_null_can_proceed_test(void **state)
-{
-	struct ddb_ctx ctx = {0};
-
-	expect_assert_failure(dwa_can_proceed(&ctx, nvme_dir, NULL));
-}
-
 /*
  * ----------------------------------------------------------------
  * Suite registration
  * ----------------------------------------------------------------
  */
-#define TEST(x, y, z) {#x, x##_test, y, z}
+#define TEST(x, y, z) {#x, test_##x, y, z}
 
 /* The order of these tests matters. They share global state which cannot get reset. */
 static const struct CMUnitTest ddb_spdk_reinit_wa_ut_cases[] = {
-    TEST(spdk_reinit_wa_sequence, NULL, NULL),
-    TEST(dwa_can_proceed_unconditional_shares_state, NULL, NULL),
+    TEST(dwa_can_proceed_001, NULL, NULL),
+    TEST(dwa_can_proceed_002, NULL, NULL),
 #ifndef DAOS_BUILD_RELEASE
-    TEST(spdk_reinit_wa_disable, spdk_reinit_override_setup, spdk_reinit_override_teardown),
+    TEST(dwa_can_proceed_003, spdk_reinit_override_setup, spdk_reinit_override_teardown),
 #endif
-    TEST(dwa_can_proceed_asserts_on_null_ctx, NULL, NULL),
-    TEST(dwa_can_proceed_asserts_on_null_can_proceed, NULL, NULL)};
+    TEST(dwa_can_proceed_004, mock_d_asprintf2_setup, mock_d_asprintf2_teardown),
+    TEST(dwa_can_proceed_005, NULL, NULL),
+    TEST(dwa_can_proceed_006, NULL, NULL)};
 
 int
 ddb_spdk_reinit_wa_ut_run(void)

@@ -52,8 +52,10 @@ def scons():
     # This function is validated by its respective unit tests.
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_dtx_discard_invalid'])
     # Required to test the dwa_can_proceed() guard call sites in ddb_vos.c
-    # (dv_pool_open/dv_pool_destroy/dv_sync_smd/dv_dev_list/dv_dev_replace/dv_run_prov_mem).
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dwa_can_proceed'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=ddb_parse_vos_file_parts'])
+    # Required to mock nvme_conf_exists()'s D_ASPRINTF() call for dwa_can_proceed() tests.
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_asprintf2'])
 
     libs = [
         'uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread', 'pmemobj',

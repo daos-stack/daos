@@ -41,7 +41,7 @@ create_vos_file_parts(const char *path, const char *db_path, struct vos_file_par
 		goto out;
 	}
 
-	rc = parse_vos_file_parts(path, db_path, vf);
+	rc = ddb_parse_vos_file_parts(path, db_path, vf);
 	if (SUCCESS(rc)) {
 		*vf_ptr = vf;
 	} else {
@@ -64,18 +64,16 @@ dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, daos_ha
 
 	rc = create_vos_file_parts(path, db_path, &vf);
 	if (!SUCCESS(rc))
-		goto out;
+		return rc;
 
 	rc = dwa_can_proceed(ctx, vf->vf_db_path, &can_proceed);
 	if (!SUCCESS(rc))
 		goto out_vf;
-	if (!can_proceed) {
-		rc = -DER_NO_SERVICE;
-		goto out_vf;
-	}
+	if (!can_proceed)
+		D_GOTO(out_vf, rc = -DER_NO_SERVICE);
 
 	/**
-	 * When the user requests read‑only mode (write_mode == false), DDB itself will not attempt
+	 * When the user requests read-only mode (write_mode == false), DDB itself will not attempt
 	 * to modify the pool. However, PMEMOBJ performs several operations that do modify the pool
 	 * during open and/or close, for example:
 	 * - Internal bookkeeping required to ensure resilience in case of an ADR failure (SDS).
@@ -84,18 +82,16 @@ dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, daos_ha
 	 * the consistency of the pool.
 	 *
 	 * However, since none of these changes need to be persisted when the pool is opened in
-	 * read‑only mode (write_mode == false), we can work around this by mapping the pool using
-	 * copy‑on‑write. Copy‑on‑write allows pages to be read normally, but when a page is
+	 * read-only mode (write_mode == false), we can work around this by mapping the pool using
+	 * copy-on-write. Copy-on-write allows pages to be read normally, but when a page is
 	 * modified, a new private copy is allocated. As a result, any changes made to
 	 * the mapped memory do not propagate to the persistent medium.
 	 */
 	if (!write_mode) {
 		int cow_val = 1;
 		rc          = pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
-		if (rc != 0) {
-			rc = daos_errno2der(errno);
-			goto out_vf;
-		}
+		if (rc != 0)
+			D_GOTO(out_vf, rc = daos_errno2der(errno));
 	}
 
 	rc = vos_self_init(vf->vf_db_path, true, vf->vf_target_idx);
@@ -119,7 +115,6 @@ out_cow:
 	}
 out_vf:
 	D_FREE(vf);
-out:
 	return rc;
 }
 
@@ -133,15 +128,13 @@ dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx)
 
 	rc = create_vos_file_parts(path, db_path, &vf);
 	if (!SUCCESS(rc))
-		goto out;
+		return rc;
 
 	rc = dwa_can_proceed(ctx, vf->vf_db_path, &can_proceed);
 	if (!SUCCESS(rc))
 		goto out_vf;
-	if (!can_proceed) {
-		rc = -DER_NO_SERVICE;
-		goto out_vf;
-	}
+	if (!can_proceed)
+		D_GOTO(out_vf, rc = -DER_NO_SERVICE);
 
 	rc = vos_self_init(vf->vf_db_path, true, vf->vf_target_idx);
 	if (!SUCCESS(rc)) {
@@ -160,7 +153,6 @@ dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx)
 
 out_vf:
 	D_FREE(vf);
-out:
 	return rc;
 }
 
@@ -2073,15 +2065,15 @@ dv_sync_smd(const char *nvme_conf, const char *db_path, struct ddb_ctx *ctx,
 	 */
 	rc = dwa_can_proceed(ctx, NULL, &can_proceed);
 	if (!SUCCESS(rc))
-		goto out;
+		return rc;
 	if (!can_proceed)
-		D_GOTO(out, rc = -DER_NO_SERVICE);
+		return -DER_NO_SERVICE;
 
 	/* don't initialize NVMe(spdk) within VOS. Will happen in ddb_spdk module */
 	rc = vos_self_init_ext(db_path, true, 0, false);
 	if (!SUCCESS(rc)) {
 		D_ERROR("VOS failed to initialize: " DF_RC "\n", DP_RC(rc));
-		goto out;
+		return rc;
 	}
 
 	rc = smd_init(vos_db_get());
@@ -2093,14 +2085,12 @@ dv_sync_smd(const char *nvme_conf, const char *db_path, struct ddb_ctx *ctx,
 	sync_cb_args.sync_complete_cb = complete_cb;
 	sync_cb_args.sync_cb_args     = cb_args;
 	rc = ddbs_for_each_bio_blob_hdr(nvme_conf, sync_cb, &sync_cb_args);
-
 	if (rc == 0 && sync_cb_args.sync_rc != 0)
 		rc = sync_cb_args.sync_rc;
 
 	smd_fini();
 out_self_fini:
 	vos_self_fini();
-out:
 	return rc;
 }
 

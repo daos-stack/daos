@@ -30,10 +30,6 @@ nvme_conf_exists(const char *nvme_conf_dir, bool *exists)
 {
 	char *nvme_conf;
 
-	/*
-	 * Not unit-tested: D_ASPRINTF's vasprintf() is compiled into libgurt.so, which --wrap
-	 * cannot intercept from ddb_ut's own link step (see tests/ddb_spdk_reinit_wa_ut.c).
-	 */
 	D_ASPRINTF(nvme_conf, "%s/%s", nvme_conf_dir, VOS_NVME_CONF);
 	if (nvme_conf == NULL)
 		return -DER_NOMEM;
@@ -42,7 +38,7 @@ nvme_conf_exists(const char *nvme_conf_dir, bool *exists)
 
 	D_FREE(nvme_conf);
 
-	return DER_SUCCESS;
+	return -DER_SUCCESS;
 }
 
 #define SPDK_REINIT_MSG                                                                            \
