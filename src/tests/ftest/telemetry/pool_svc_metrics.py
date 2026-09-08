@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -76,12 +76,12 @@ class PoolServiceMetrics(TestWithTelemetry):
 
         self.log_step("Collect pool service metrics prior to making changes.")
         initial_metrics = self.collect_svc_telemetry(pool.uuid)
-        self.assertTrue(MAP_VERSION_METRIC in initial_metrics,
-                        f"initial metrics don't contain {MAP_VERSION_METRIC} (no leader?)")
-        self.assertTrue(initial_metrics[MAP_VERSION_METRIC] == 1,
-                        "initial pool service map version is not 1")
-        self.assertTrue(initial_metrics[DEGRADED_RANKS_METRIC] == 0,
-                        "initial pool service degraded rank count is not 0")
+        self.assertIn(MAP_VERSION_METRIC, initial_metrics,
+                      f"initial metrics don't contain {MAP_VERSION_METRIC} (no leader?)")
+        self.assertEqual(initial_metrics[MAP_VERSION_METRIC], 1,
+                         "initial pool service map version is not 1")
+        self.assertEqual(initial_metrics[DEGRADED_RANKS_METRIC], 0,
+                         "initial pool service degraded rank count is not 0")
 
         restart_rank = initial_metrics[SVC_LEADER_METRIC]
         self.log_step(f"Stop pool service leader rank: {restart_rank}")
@@ -110,8 +110,8 @@ class PoolServiceMetrics(TestWithTelemetry):
         metrics = _wait_for_telemetry(lambda m: m[MAP_VERSION_METRIC] > 1)
 
         self.log_step("Verify that the pool service telemetry has updated.")
-        self.assertTrue(metrics[DEGRADED_RANKS_METRIC] == 1,
-                        "pool service degraded rank count should be 1")
+        self.assertEqual(metrics[DEGRADED_RANKS_METRIC], 1,
+                         "pool service degraded rank count should be 1")
 
         self.log_step("Restart the stopped rank.")
         self.server_managers[0].start_ranks(ranks=[restart_rank])
