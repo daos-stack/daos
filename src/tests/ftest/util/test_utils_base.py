@@ -113,7 +113,7 @@ class TestDaosApiBase(ObjectWithParameters):
         self.debug = BasicParameter(None, False)
         self.silent = BasicParameter(None, False)
         self.label = BasicParameter(None, self.__class__.__name__)
-        self.uuid = None
+        self.__uuid = None
 
         # Test yaml parameter used to define the control method:
         #   USE_API    - use the API methods to create/destroy containers
@@ -123,6 +123,24 @@ class TestDaosApiBase(ObjectWithParameters):
         # If defined, use container labels for most operations by default.
         # Setting to False will use the UUID where possible.
         self.use_label = True
+
+    @property
+    def uuid(self):
+        """Get the object UUID.
+
+        Returns:
+            str: object UUID
+        """
+        return self.__uuid
+
+    @uuid.setter
+    def uuid(self, value):
+        """Set the object UUID.
+
+        Args:
+            value (str): object UUID
+        """
+        self.__uuid = value
 
     @property
     def identifier(self):
