@@ -1395,23 +1395,20 @@ remove_dot_dot(char path[], int *len)
 	p_Offset_2Dots = strstr(path, "/../");
 again:
 	nNonZero = 0;
-	if (p_Offset_2Dots == path) {
-		D_DEBUG(DB_ANY, "wrong path %s: %d (%s)\n", path, EINVAL, strerror(EINVAL));
-		return EINVAL;
-	}
-
 	while (p_Offset_2Dots != NULL) {
 		pMax = p_Offset_2Dots + 4;
 		for (p_Back = p_Offset_2Dots - 2; p_Back >= path; p_Back--) {
-			if (*p_Back == '/') {
-				for (pTmp = p_Back; pTmp < (pMax - 1); pTmp++)
-					*pTmp = 0;
+			if (*p_Back == '/')
 				break;
-			}
 		}
+		/* No component before "..": POSIX resolves ".." at the root as the root itself, so
+		 * only the ".." is dropped. This also guarantees progress on every pass.
+		 */
+		if (p_Back < path)
+			p_Back = p_Offset_2Dots;
+		for (pTmp = p_Back; pTmp < (pMax - 1); pTmp++)
+			*pTmp = 0;
 		p_Offset_2Dots = strstr(p_Offset_2Dots + 3, "/../");
-		if (p_Offset_2Dots == NULL)
-			break;
 	}
 
 	new_str = path;
@@ -1423,6 +1420,11 @@ again:
 	}
 	new_str[nNonZero] = 0;
 	*len = nNonZero;
+	if (*len == 0) {
+		path[0] = '/';
+		path[1] = '\0';
+		*len    = 1;
+	}
 
 	p_Offset_2Dots = strstr(path, "/../");
 	if (p_Offset_2Dots)
@@ -2085,8 +2087,10 @@ out_readlink:
 /* dfs dereferences symlinks inside the container, so it cannot handle a symlink whose value is an
  * absolute path: POSIX resolves such a value from the process root, which only the kernel can do.
  * dfs reports EINVAL for it, except when the link sits in the container root, where it resolves the
- * value from that root and reports ENOENT instead. Probing for the latter is restricted to the
- * container root so that an ordinary lookup miss stays cheap.
+ * value from that root and reports ENOENT instead. Neither errno is specific to this case, so the
+ * entry is looked up again to confirm that it really is a symlink. The absolute value may sit
+ * anywhere in a chain of links, as with the python3 -> python -> /usr/bin/python3.x layout of a
+ * venv, so the value of the entry itself is not inspected.
  *
  * An absolute symlink in a non-leaf position of the path is not detected here.
  */
@@ -2094,28 +2098,27 @@ static bool
 need_kernel_to_resolve(int rc, struct dfs_mt *dfs_mt, struct dcache_rec *parent,
 		       const char *item_name, const char *parent_dir)
 {
-	dfs_obj_t  *obj           = NULL;
-	mode_t      mode          = 0;
-	bool        absolute_link = false;
-	/* dfs_get_symlink_value() truncates, and only the first character is of interest here */
-	char        value[2];
-	daos_size_t str_len = sizeof(value);
+	dfs_obj_t *obj  = NULL;
+	mode_t     mode = 0;
 
-	if (rc == EINVAL)
-		return true;
-	if (rc != ENOENT || parent == NULL || parent_dir == NULL)
+	if (parent == NULL || item_name[0] == '\0')
 		return false;
-	if (strncmp(parent_dir, "/", 2) != 0)
+	if (rc == ENOENT) {
+		/* A lookup miss is common, so only probe where dfs can report one for such a
+		 * link, and keep it cheap everywhere else.
+		 */
+		if (parent_dir == NULL || strncmp(parent_dir, "/", 2) != 0)
+			return false;
+	} else if (rc != EINVAL) {
 		return false;
+	}
 
 	if (dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), item_name, O_RDONLY | O_NOFOLLOW, &obj,
 			   &mode, NULL) != 0)
 		return false;
-	if (S_ISLNK(mode) && dfs_get_symlink_value(obj, value, &str_len) == 0)
-		absolute_link = (value[0] == '/');
 	dfs_release(obj);
 
-	return absolute_link;
+	return S_ISLNK(mode);
 }
 
 static int
@@ -2149,6 +2152,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	if (!d_hook_enabled)
 		goto org_func;
+
+	item_name[0] = '\0';
 
 	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3198,7 +3203,7 @@ out_org:
 
 out_err:
 	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
-		     (rc == EIO && d_compatible_mode);
+		     ((rc == EIO || rc == EINVAL) && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -3255,7 +3260,7 @@ out_org:
 
 out_err:
 	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
-		     (rc == EIO && d_compatible_mode);
+		     ((rc == EIO || rc == EINVAL) && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -3271,7 +3276,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
-	if (!d_hook_enabled)
+	if (path == NULL || !d_hook_enabled)
 		return libc_fxstatat(ver, dirfd, path, stat_buf, flags);
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
 		errno = ENOENT;
@@ -3328,7 +3333,7 @@ new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
-	if (!d_hook_enabled)
+	if (path == NULL || !d_hook_enabled)
 		return libc_fstatat(dirfd, path, stat_buf, flags);
 
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
@@ -3412,18 +3417,21 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 	int         rc, idx_dfs, error = 0;
 	struct stat stat_buf;
 	char        *full_path = NULL;
+	/* glibc declares path nonnull and gcc folds a direct NULL test away, so read it as
+	 * volatile. Rust's std probes statx() with a NULL path and expects EFAULT from the kernel.
+	 */
+	const char *volatile path_probe = path;
 
 	if (next_statx == NULL) {
 		next_statx = dlsym(RTLD_NEXT, "statx");
 		D_ASSERT(next_statx != NULL);
 	}
+	if (path_probe == NULL || !d_hook_enabled)
+		return next_statx(dirfd, path, flags, mask, statx_buf);
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
 		errno = ENOENT;
 		return (-1);
 	}
-
-	if (!d_hook_enabled)
-		return next_statx(dirfd, path, flags, mask, statx_buf);
 
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/') {

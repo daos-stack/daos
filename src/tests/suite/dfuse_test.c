@@ -1391,6 +1391,8 @@ check_symlink_outside(const char *dir, const char *target)
 {
 	struct stat stbuf;
 	char        link_path[512];
+	char        chain_name[64];
+	char        chain_path[512];
 	size_t      len;
 	int         fd;
 	int         rc;
@@ -1398,8 +1400,15 @@ check_symlink_outside(const char *dir, const char *target)
 	len = snprintf(link_path, sizeof(link_path) - 1, "%s/symlink_outside_%d", dir, getpid());
 	assert_true(len < (sizeof(link_path) - 1));
 
-	/* cmocka has no teardown here, so an aborted run can leave the link behind */
+	len = snprintf(chain_name, sizeof(chain_name) - 1, "symlink_chain_%d", getpid());
+	assert_true(len < (sizeof(chain_name) - 1));
+
+	len = snprintf(chain_path, sizeof(chain_path) - 1, "%s/%s", dir, chain_name);
+	assert_true(len < (sizeof(chain_path) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave the links behind */
 	unlink(link_path);
+	unlink(chain_path);
 
 	rc = symlink(target, link_path);
 	assert_return_code(rc, errno);
@@ -1422,6 +1431,35 @@ check_symlink_outside(const char *dir, const char *target)
 	fd = open(link_path, O_RDONLY);
 	assert_return_code(fd, errno);
 	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* a relative link to the absolute one, as python3 -> python -> /usr/bin/python3.x in a
+	 * venv. Only the last hop has the absolute value, so the entry itself does not reveal it.
+	 */
+	len = strnlen(link_path, sizeof(link_path));
+	while (len > 0 && link_path[len - 1] != '/')
+		len--;
+	rc = symlink(link_path + len, chain_path);
+	assert_return_code(rc, errno);
+
+	rc = lstat(chain_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_true(S_ISLNK(stbuf.st_mode));
+
+	rc = stat(chain_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_true(S_ISREG(stbuf.st_mode));
+	assert_int_equal(stbuf.st_size, 6);
+
+	rc = access(chain_path, R_OK | W_OK | X_OK);
+	assert_return_code(rc, errno);
+
+	fd = open(chain_path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(chain_path);
 	assert_return_code(rc, errno);
 
 	rc = unlink(link_path);
@@ -1608,6 +1646,101 @@ do_chdir_fork(void **state)
 	assert_int_equal(WEXITSTATUS(status), 0);
 }
 
+/* POSIX resolves '..' at the root as the root itself. Such a path leaves the container, so it has
+ * to be handed to the kernel rather than rejected.
+ */
+void
+do_dot_dot_above_root(void **state)
+{
+	struct stat stbuf;
+	char        target[256];
+	char        path[512];
+	char        start_dir[512];
+	size_t      len;
+	int         fd;
+	int         rc;
+
+	len = snprintf(target, sizeof(target) - 1, "/tmp/dfuse_test_dotdot_%d", getpid());
+	assert_true(len < (sizeof(target) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave this behind */
+	unlink(target);
+
+	fd = open(target, O_RDWR | O_CREAT | O_EXCL, S_IRWXU);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* an absolute path starting above the root */
+	len = snprintf(path, sizeof(path) - 1, "/..%s", target);
+	assert_true(len < (sizeof(path) - 1));
+
+	rc = stat(path, &stbuf);
+	assert_return_code(rc, errno);
+	rc = access(path, R_OK);
+	assert_return_code(rc, errno);
+	fd = open(path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* "/./" is erased in place, which hides the following "//" from the cleanup pass, so the
+	 * ".." reaches remove_dot_dot() with no component before it. This used to loop forever.
+	 */
+	len = snprintf(path, sizeof(path) - 1, "/.//..%s", target);
+	assert_true(len < (sizeof(path) - 1));
+
+	rc = stat(path, &stbuf);
+	assert_return_code(rc, errno);
+	rc = access(path, R_OK);
+	assert_return_code(rc, errno);
+	fd = open(path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* a relative path climbing out of the container with more '..' than the cwd has depth */
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+
+	rc = chdir(test_dir);
+	assert_return_code(rc, errno);
+
+	len = snprintf(path, sizeof(path) - 1, "../../../../../../../../../../../..%s", target);
+	assert_true(len < (sizeof(path) - 1));
+
+	rc = stat(path, &stbuf);
+	assert_return_code(rc, errno);
+	rc = access(path, R_OK);
+	assert_return_code(rc, errno);
+	fd = open(path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = chdir(start_dir);
+	assert_return_code(rc, errno);
+
+	rc = unlink(target);
+	assert_return_code(rc, errno);
+}
+
+/* Rust's std checks once per process whether statx() is usable by calling it with a NULL path and
+ * a NULL buffer, expecting EFAULT from the kernel. uv does this at start up when its cache dir is
+ * missing, so the interception must pass a NULL path through rather than dereference it.
+ */
+void
+do_statx_null_probe(void **state)
+{
+	/* glibc declares both nonnull, so the compiler would otherwise reject literal NULLs */
+	const char *volatile null_path  = NULL;
+	struct statx *volatile null_buf = NULL;
+	int rc;
+
+	rc = statx(0, null_path, 0, STATX_BASIC_STATS, null_buf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, EFAULT);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -1728,6 +1861,8 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			    cmocka_unit_test(do_symlink_outside),
 			    cmocka_unit_test(do_fchdir),
 			    cmocka_unit_test(do_chdir_fork),
+			    cmocka_unit_test(do_dot_dot_above_root),
+			    cmocka_unit_test(do_statx_null_probe),
 			};
 			printf("\n\n=================");
 			printf("dfuse path resolution tests");
