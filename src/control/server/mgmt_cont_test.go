@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -85,10 +84,8 @@ func TestMgmt_ListContainers(t *testing.T) {
 			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
 				db := raft.MockDatabase(t, log)
 				ms := system.MockMembership(t, log, db, mockTCPResolver)
-				svc := newMgmtSvc(NewEngineHarness(log), ms, db, nil,
+				return newMgmtSvc(NewEngineHarness(log), ms, db, nil,
 					events.NewPubSub(test.Context(t), log))
-				t.Cleanup(svc.Close)
-				return svc
 			},
 			req:    validListContReq(),
 			expErr: FaultHarnessNotStarted,
@@ -187,10 +184,8 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
 				db := raft.MockDatabase(t, log)
 				ms := system.MockMembership(t, log, db, mockTCPResolver)
-				svc := newMgmtSvc(NewEngineHarness(log), ms, db, nil,
+				return newMgmtSvc(NewEngineHarness(log), ms, db, nil,
 					events.NewPubSub(test.Context(t), log))
-				t.Cleanup(svc.Close)
-				return svc
 			},
 			req:    validContSetOwnerReq(),
 			expErr: FaultHarnessNotStarted,

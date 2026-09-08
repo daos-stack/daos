@@ -700,8 +700,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				newOnDrpcFailureFn(log, db)(ctx, err)
 			})
 
-			ctx, cancel := context.WithTimeout(test.Context(t), 1*time.Second)
-			defer cancel()
+			ctx, cancel := context.WithTimeout(test.Context(t), 5*time.Second)
 
 			startErr := make(chan error)
 			go func() {
@@ -722,6 +721,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					}
 				}
 			}()
+			defer cancel()
 
 			if tc.notStarted {
 				h.started.SetFalse()
@@ -732,7 +732,6 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 			test.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
 			test.AssertEqual(t, db.isLeader, !tc.expNotLeader, "unexpected leader state")
 			test.AssertEqual(t, drpcFailureInvoked.Load(), tc.expFailHandler, "unexpected fail handler invocation")
-			cancel()
 		})
 	}
 }

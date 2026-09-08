@@ -93,6 +93,10 @@ func (ei *EngineInstance) hasSuperblock() bool {
 //
 // Should not be called if SCM format is required.
 func (ei *EngineInstance) needsSuperblock() (bool, error) {
+	if ei.hasSuperblock() {
+		return false, nil
+	}
+
 	// Always read superblock from disk to avoid stale in-memory state preventing format.
 	// The in-memory superblock may exist from a previous operation, but the on-disk
 	// superblock may have been deleted.
