@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2698,66 +2698,351 @@ ec_full_partial_punch_agg(void **state)
 	free(verify_data);
 }
 
+/* number of extents written, one per EC cell so that they land on different
+ * data shards and cannot be merged with each other.
+ */
+#define EC_IOM_EXT_NR   8
+/* size of each extent, much smaller than a cell */
+#define EC_IOM_EXT_SIZE 1024
+/* size of the caller provided iom_recxs buffer */
+#define EC_IOM_BUF_NR   16
+/* size of the intentionally too small iom_recxs buffer */
+#define EC_IOM_SMALL_NR 3
+
+/*
+ * Verify the client side IOM merge of EC array fetch (obj_ec_iom_merge()):
+ *  - the extents returned by the different EC data shards are merged into the
+ *    caller's IOM, sorted and with correct iom_type/iom_size,
+ *  - iom_recx_lo/iom_recx_hi are merged across all the shards, also when
+ *    DAOS_IOMF_DETAIL is not set and when some shards return an empty IOM,
+ *  - when the caller's iom_recxs buffer is too small the number of extents
+ *    needed is reported through iom_nr_out and no memory beyond iom_nr is
+ *    touched.
+ */
+static void
+ec_fetch_iom(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	d_iov_t       dkey;
+	d_sg_list_t   sgl;
+	d_iov_t       sg_iov;
+	daos_iod_t    iod;
+	daos_iom_t    iom = {0};
+	daos_recx_t   iom_recxs[EC_IOM_BUF_NR];
+	daos_recx_t   recxs[EC_IOM_EXT_NR];
+	daos_size_t   cell_size = ec_cell_size;
+	daos_size_t   buf_len;
+	char         *buf;
+	int           i, rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	buf_len = EC_IOM_EXT_NR * EC_IOM_EXT_SIZE;
+	D_ALLOC(buf, buf_len);
+	assert_non_null(buf);
+	dts_buf_render(buf, buf_len);
+
+	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
+	rc  = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, "iom_dkey", strlen("iom_dkey"));
+	d_iov_set(&sg_iov, buf, buf_len);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &sg_iov;
+
+	d_iov_set(&iod.iod_name, "iom_akey", strlen("iom_akey"));
+	iod.iod_size  = 1;
+	iod.iod_recxs = recxs;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_nr    = EC_IOM_EXT_NR;
+
+	for (i = 0; i < EC_IOM_EXT_NR; i++) {
+		recxs[i].rx_idx = i * cell_size;
+		recxs[i].rx_nr  = EC_IOM_EXT_SIZE;
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("fetch IOM with a large enough iom_recxs buffer\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(&iom, 0, sizeof(iom));
+	iom.iom_recxs = iom_recxs;
+	iom.iom_nr    = EC_IOM_BUF_NR;
+	iom.iom_flags = DAOS_IOMF_DETAIL;
+	rc            = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, &iom, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iom.iom_nr_out, EC_IOM_EXT_NR);
+	assert_int_equal(iom.iom_type, DAOS_IOD_ARRAY);
+	assert_int_equal(iom.iom_size, 1);
+	for (i = 0; i < EC_IOM_EXT_NR; i++) {
+		assert_int_equal(iom.iom_recxs[i].rx_idx, i * cell_size);
+		assert_int_equal(iom.iom_recxs[i].rx_nr, EC_IOM_EXT_SIZE);
+	}
+	assert_int_equal(iom.iom_recx_lo.rx_idx, 0);
+	assert_int_equal(iom.iom_recx_lo.rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recx_hi.rx_idx, (EC_IOM_EXT_NR - 1) * cell_size);
+	assert_int_equal(iom.iom_recx_hi.rx_nr, EC_IOM_EXT_SIZE);
+
+	print_message("fetch IOM with a too small iom_recxs buffer\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(&iom, 0, sizeof(iom));
+	iom.iom_recxs = iom_recxs;
+	iom.iom_nr    = EC_IOM_SMALL_NR;
+	iom.iom_flags = DAOS_IOMF_DETAIL;
+	rc            = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, &iom, NULL);
+	assert_rc_equal(rc, 0);
+	/* the number of extents needed to hold the whole IOM */
+	assert_int_equal(iom.iom_nr_out, EC_IOM_EXT_NR);
+	assert_int_equal(iom.iom_nr, EC_IOM_SMALL_NR);
+	/* nothing beyond iom_nr should have been read or written */
+	for (i = EC_IOM_SMALL_NR; i < EC_IOM_BUF_NR; i++) {
+		assert_int_equal(iom_recxs[i].rx_idx, 0);
+		assert_int_equal(iom_recxs[i].rx_nr, 0);
+	}
+	assert_int_equal(iom.iom_recx_lo.rx_idx, 0);
+	assert_int_equal(iom.iom_recx_lo.rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recx_hi.rx_idx, (EC_IOM_EXT_NR - 1) * cell_size);
+	assert_int_equal(iom.iom_recx_hi.rx_nr, EC_IOM_EXT_SIZE);
+
+	print_message("fetch IOM without DAOS_IOMF_DETAIL\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(&iom, 0, sizeof(iom));
+	iom.iom_recxs = iom_recxs;
+	iom.iom_nr    = EC_IOM_BUF_NR;
+	rc            = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, &iom, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iom.iom_nr_out, 0);
+	/* iom_recx_lo/hi must be merged from all the shards, not overwritten
+	 * by the last shard that replied.
+	 */
+	assert_int_equal(iom.iom_recx_lo.rx_idx, 0);
+	assert_int_equal(iom.iom_recx_lo.rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recx_hi.rx_idx, (EC_IOM_EXT_NR - 1) * cell_size);
+	assert_int_equal(iom.iom_recx_hi.rx_nr, EC_IOM_EXT_SIZE);
+
+	print_message("fetch IOM with shards returning an empty IOM\n");
+	/* Only write the extents of the 1st and the 3rd cell, the fetch below
+	 * still spans the first 4 cells so the shards of the 2nd and the 4th
+	 * cell return an empty IOM - which must not drag iom_recx_hi down to
+	 * index 0 nor pin iom_recx_lo to a zero length extent.
+	 */
+	d_iov_set(&dkey, "iom_dkey2", strlen("iom_dkey2"));
+	recxs[0].rx_idx = 0;
+	recxs[0].rx_nr  = EC_IOM_EXT_SIZE;
+	recxs[1].rx_idx = 2 * cell_size;
+	recxs[1].rx_nr  = EC_IOM_EXT_SIZE;
+	iod.iod_nr      = 2;
+	d_iov_set(&sg_iov, buf, 2 * EC_IOM_EXT_SIZE);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	recxs[0].rx_idx = 0;
+	recxs[1].rx_idx = cell_size;
+	recxs[2].rx_idx = 2 * cell_size;
+	recxs[3].rx_idx = 3 * cell_size;
+	for (i = 0; i < 4; i++)
+		recxs[i].rx_nr = EC_IOM_EXT_SIZE;
+	iod.iod_nr = 4;
+	d_iov_set(&sg_iov, buf, 4 * EC_IOM_EXT_SIZE);
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(&iom, 0, sizeof(iom));
+	iom.iom_recxs = iom_recxs;
+	iom.iom_nr    = EC_IOM_BUF_NR;
+	iom.iom_flags = DAOS_IOMF_DETAIL;
+	rc            = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, &iom, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iom.iom_nr_out, 2);
+	assert_int_equal(iom.iom_recxs[0].rx_idx, 0);
+	assert_int_equal(iom.iom_recxs[0].rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recxs[1].rx_idx, 2 * cell_size);
+	assert_int_equal(iom.iom_recxs[1].rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recx_lo.rx_idx, 0);
+	assert_int_equal(iom.iom_recx_lo.rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recx_hi.rx_idx, 2 * cell_size);
+	assert_int_equal(iom.iom_recx_hi.rx_nr, EC_IOM_EXT_SIZE);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(buf);
+}
+
+/*
+ * Verify the client side IOM merge of EC array fetch with multiple IODs, one
+ * IOM per IOD. Each IOM must be merged independently: the per-IOM merge state
+ * (number of shards merged, number of extents that did not fit, and whether
+ * the iom_recxs buffer was internally allocated by DAOS) must not be shared
+ * between the IOMs.
+ */
+static void
+ec_fetch_multi_iom(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	d_iov_t       dkey;
+	d_sg_list_t   sgls[2];
+	d_iov_t       sg_iovs[2];
+	daos_iod_t    iods[2];
+	daos_iom_t    ioms[2];
+	daos_recx_t   iom_recxs[EC_IOM_BUF_NR];
+	daos_recx_t   recxs[EC_IOM_EXT_NR];
+	daos_size_t   cell_size = ec_cell_size;
+	daos_size_t   buf_len;
+	char         *buf;
+	int           i, rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	buf_len = EC_IOM_EXT_NR * EC_IOM_EXT_SIZE;
+	D_ALLOC(buf, buf_len);
+	assert_non_null(buf);
+	dts_buf_render(buf, buf_len);
+
+	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
+	rc  = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, "miom_dkey", strlen("miom_dkey"));
+	for (i = 0; i < EC_IOM_EXT_NR; i++) {
+		recxs[i].rx_idx = i * cell_size;
+		recxs[i].rx_nr  = EC_IOM_EXT_SIZE;
+	}
+
+	for (i = 0; i < 2; i++) {
+		d_iov_set(&sg_iovs[i], buf, buf_len);
+		sgls[i].sg_nr     = 1;
+		sgls[i].sg_nr_out = 0;
+		sgls[i].sg_iovs   = &sg_iovs[i];
+
+		memset(&iods[i], 0, sizeof(iods[i]));
+		d_iov_set(&iods[i].iod_name, i == 0 ? "miom_akey0" : "miom_akey1",
+			  strlen("miom_akey0"));
+		iods[i].iod_size  = 1;
+		iods[i].iod_recxs = recxs;
+		iods[i].iod_type  = DAOS_IOD_ARRAY;
+		iods[i].iod_nr    = EC_IOM_EXT_NR;
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 2, iods, sgls, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("fetch 2 IODs, caller provided iom_recxs for both IOMs\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(ioms, 0, sizeof(ioms));
+	ioms[0].iom_recxs = iom_recxs;
+	ioms[0].iom_nr    = EC_IOM_BUF_NR;
+	ioms[0].iom_flags = DAOS_IOMF_DETAIL;
+	/* the 2nd IOM asks DAOS to allocate the iom_recxs buffer */
+	ioms[1].iom_recxs = NULL;
+	ioms[1].iom_flags = DAOS_IOMF_DETAIL;
+	rc                = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 2, iods, sgls, ioms, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 2; i++) {
+		assert_int_equal(ioms[i].iom_type, DAOS_IOD_ARRAY);
+		assert_int_equal(ioms[i].iom_size, 1);
+		assert_int_equal(ioms[i].iom_nr_out, EC_IOM_EXT_NR);
+		assert_true(ioms[i].iom_nr_out <= ioms[i].iom_nr);
+		assert_int_equal(ioms[i].iom_recx_lo.rx_idx, 0);
+		assert_int_equal(ioms[i].iom_recx_lo.rx_nr, EC_IOM_EXT_SIZE);
+		assert_int_equal(ioms[i].iom_recx_hi.rx_idx, (EC_IOM_EXT_NR - 1) * cell_size);
+		assert_int_equal(ioms[i].iom_recx_hi.rx_nr, EC_IOM_EXT_SIZE);
+	}
+	/* the caller provided buffer must not have been re-allocated */
+	assert_ptr_equal(ioms[0].iom_recxs, iom_recxs);
+	assert_int_equal(ioms[0].iom_nr, EC_IOM_BUF_NR);
+	assert_non_null(ioms[1].iom_recxs);
+	assert_ptr_not_equal(ioms[1].iom_recxs, iom_recxs);
+	for (i = 0; i < EC_IOM_EXT_NR; i++) {
+		assert_int_equal(ioms[0].iom_recxs[i].rx_idx, i * cell_size);
+		assert_int_equal(ioms[0].iom_recxs[i].rx_nr, EC_IOM_EXT_SIZE);
+		assert_int_equal(ioms[1].iom_recxs[i].rx_idx, i * cell_size);
+		assert_int_equal(ioms[1].iom_recxs[i].rx_nr, EC_IOM_EXT_SIZE);
+	}
+	D_FREE(ioms[1].iom_recxs);
+
+	print_message("fetch 2 IODs, the 1st IOM buffer is too small\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(ioms, 0, sizeof(ioms));
+	ioms[0].iom_recxs = iom_recxs;
+	ioms[0].iom_nr    = EC_IOM_SMALL_NR;
+	ioms[0].iom_flags = DAOS_IOMF_DETAIL;
+	ioms[1].iom_recxs = NULL;
+	ioms[1].iom_flags = DAOS_IOMF_DETAIL;
+	rc                = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 2, iods, sgls, ioms, NULL);
+	assert_rc_equal(rc, 0);
+	/* the truncation of the 1st IOM must not be accounted in the 2nd one */
+	assert_int_equal(ioms[0].iom_nr, EC_IOM_SMALL_NR);
+	assert_int_equal(ioms[0].iom_nr_out, EC_IOM_EXT_NR);
+	assert_int_equal(ioms[1].iom_nr_out, EC_IOM_EXT_NR);
+	assert_true(ioms[1].iom_nr_out <= ioms[1].iom_nr);
+	/* nothing beyond iom_nr should have been read or written */
+	for (i = EC_IOM_SMALL_NR; i < EC_IOM_BUF_NR; i++) {
+		assert_int_equal(iom_recxs[i].rx_idx, 0);
+		assert_int_equal(iom_recxs[i].rx_nr, 0);
+	}
+	D_FREE(ioms[1].iom_recxs);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(buf);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
-	{"EC0: ec dkey list and punch test",
-	 ec_dkey_list_punch, async_disable, test_case_teardown},
-	{"EC1: ec akey list and punch test",
-	 ec_akey_list_punch, async_disable, test_case_teardown},
-	{"EC2: ec rec list and punch test",
-	 ec_rec_list_punch, async_disable, test_case_teardown},
-	{"EC3: ec partial update then aggregation",
-	 ec_partial_update_agg, async_disable, test_case_teardown},
-	{"EC4: ec cross cell partial update then aggregation",
-	 ec_cross_cell_partial_update_agg, async_disable, test_case_teardown},
-	{"EC5: ec full and partial update then aggregation",
-	 ec_full_partial_update_agg, async_disable, test_case_teardown},
-	{"EC6: ec partial and full update then aggregation",
-	 ec_partial_full_update_agg, async_disable, test_case_teardown},
-	{"EC7: ec file size check on parity",
-	 dfs_ec_check_size, async_disable, test_case_teardown},
-	{"EC8: ec file size check on non-parity",
-	 dfs_ec_check_size_nonparity, async_disable, test_case_teardown},
-	{"EC9: ec aggregation failed",
-	 ec_agg_fail, async_disable, test_case_teardown},
-	{"EC10: ec aggregation peer update failed",
-	 ec_agg_peer_fail, async_disable, test_case_teardown},
-	{"EC11: ec single-value array mixed IO",
-	 ec_singv_array_mixed_io, async_disable, test_case_teardown},
-	{"EC12: ec full stripe snapshot",
-	 ec_full_stripe_snapshot, async_disable, test_case_teardown},
-	{"EC13: ec partial stripe snapshot",
-	 ec_partial_stripe_snapshot, async_disable, test_case_teardown},
-	{"EC14: ec partial stripe cross boundary snapshot",
-	 ec_partial_stripe_cross_boundry_snapshot, async_disable,
-	 test_case_teardown},
-	{"EC15: ec punch and check_size", ec_punch_check_size, async_disable,
-	 test_case_teardown},
-	{"EC16: ec single-value overwrite", ec_singv_overwrite, async_disable,
-	 test_case_teardown},
-	{"EC17: ec single-value different size fetch", ec_singv_diff_size_fetch, async_disable,
-	 test_case_teardown},
-	{"EC18: ec conditional fetch", ec_cond_fetch, async_disable, test_case_teardown},
-	{"EC19: ec few partial stripe update", ec_few_partial_stripe_aggregation, async_disable,
-	 test_case_teardown},
-	{"EC20: ec recx list from parity", ec_rec_parity_list, async_disable, test_case_teardown},
-	{"EC21: ec update two akeys and parity shards failed", ec_update_2akeys, async_disable,
-	 test_case_teardown},
-	{"EC22: ec data recovery", ec_data_recov, async_disable, test_case_teardown},
-	{"EC23: ec multi-singv overwrite", ec_multi_singv_overwrite, async_disable,
-	test_case_teardown},
-	{"EC24: ec multi-array update", ec_multi_array, async_disable,
-	test_case_teardown},
-	{"EC25: ec dkey enumerate with failure shard", ec_dkey_enum_fail, async_disable,
-	test_case_teardown},
-	{"EC26: ec single nvme io failed", ec_single_stripe_nvme_io, async_disable,
-	test_case_teardown},
-	{"EC27: ec double nvme io failed", ec_two_stripes_nvme_io, async_disable,
-	test_case_teardown},
-	{"EC28: ec three nvme io failed", ec_three_stripes_nvme_io, async_disable,
-	test_case_teardown},
-	{"EC29: ec full and partial punch then aggregation",
-	 ec_full_partial_punch_agg, async_disable, test_case_teardown},
+    {"EC0: ec dkey list and punch test", ec_dkey_list_punch, async_disable, test_case_teardown},
+    {"EC1: ec akey list and punch test", ec_akey_list_punch, async_disable, test_case_teardown},
+    {"EC2: ec rec list and punch test", ec_rec_list_punch, async_disable, test_case_teardown},
+    {"EC3: ec partial update then aggregation", ec_partial_update_agg, async_disable,
+     test_case_teardown},
+    {"EC4: ec cross cell partial update then aggregation", ec_cross_cell_partial_update_agg,
+     async_disable, test_case_teardown},
+    {"EC5: ec full and partial update then aggregation", ec_full_partial_update_agg, async_disable,
+     test_case_teardown},
+    {"EC6: ec partial and full update then aggregation", ec_partial_full_update_agg, async_disable,
+     test_case_teardown},
+    {"EC7: ec file size check on parity", dfs_ec_check_size, async_disable, test_case_teardown},
+    {"EC8: ec file size check on non-parity", dfs_ec_check_size_nonparity, async_disable,
+     test_case_teardown},
+    {"EC9: ec aggregation failed", ec_agg_fail, async_disable, test_case_teardown},
+    {"EC10: ec aggregation peer update failed", ec_agg_peer_fail, async_disable,
+     test_case_teardown},
+    {"EC11: ec single-value array mixed IO", ec_singv_array_mixed_io, async_disable,
+     test_case_teardown},
+    {"EC12: ec full stripe snapshot", ec_full_stripe_snapshot, async_disable, test_case_teardown},
+    {"EC13: ec partial stripe snapshot", ec_partial_stripe_snapshot, async_disable,
+     test_case_teardown},
+    {"EC14: ec partial stripe cross boundary snapshot", ec_partial_stripe_cross_boundry_snapshot,
+     async_disable, test_case_teardown},
+    {"EC15: ec punch and check_size", ec_punch_check_size, async_disable, test_case_teardown},
+    {"EC16: ec single-value overwrite", ec_singv_overwrite, async_disable, test_case_teardown},
+    {"EC17: ec single-value different size fetch", ec_singv_diff_size_fetch, async_disable,
+     test_case_teardown},
+    {"EC18: ec conditional fetch", ec_cond_fetch, async_disable, test_case_teardown},
+    {"EC19: ec few partial stripe update", ec_few_partial_stripe_aggregation, async_disable,
+     test_case_teardown},
+    {"EC20: ec recx list from parity", ec_rec_parity_list, async_disable, test_case_teardown},
+    {"EC21: ec update two akeys and parity shards failed", ec_update_2akeys, async_disable,
+     test_case_teardown},
+    {"EC22: ec data recovery", ec_data_recov, async_disable, test_case_teardown},
+    {"EC23: ec multi-singv overwrite", ec_multi_singv_overwrite, async_disable, test_case_teardown},
+    {"EC24: ec multi-array update", ec_multi_array, async_disable, test_case_teardown},
+    {"EC25: ec dkey enumerate with failure shard", ec_dkey_enum_fail, async_disable,
+     test_case_teardown},
+    {"EC26: ec single nvme io failed", ec_single_stripe_nvme_io, async_disable, test_case_teardown},
+    {"EC27: ec double nvme io failed", ec_two_stripes_nvme_io, async_disable, test_case_teardown},
+    {"EC28: ec three nvme io failed", ec_three_stripes_nvme_io, async_disable, test_case_teardown},
+    {"EC29: ec full and partial punch then aggregation", ec_full_partial_punch_agg, async_disable,
+     test_case_teardown},
+    {"EC30: ec fetch iom merge", ec_fetch_iom, async_disable, test_case_teardown},
+    {"EC31: ec fetch multiple iom merge", ec_fetch_multi_iom, async_disable, test_case_teardown},
 };
 
 int

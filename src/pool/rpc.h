@@ -127,7 +127,8 @@ CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 	((daos_prop_t)		(pri_prop)		CRT_PTR)	\
 	((uint32_t)		(pri_ndomains)		CRT_VAR)	\
 	((uint32_t)		(pri_ntgts)		CRT_VAR)	\
-	((uint32_t)		(pri_domains)		CRT_ARRAY)
+	((uint32_t)		(pri_domains)		CRT_ARRAY)	\
+	((d_rank_list_t)	(pri_downout_ranks)	CRT_PTR)
 
 #define DAOS_OSEQ_POOL_CREATE	/* output fields */		 \
 	((struct pool_op_out)	(pro_op)		CRT_VAR)
@@ -159,10 +160,6 @@ enum map_update_opc {
 enum pool_map_update_flags {
 	POOL_TGT_UPDATE_SKIP_RF_CHECK = (1 << 0),
 	POOL_RESET_RECOV_CONT         = (1 << 1),
-};
-
-enum pool_recov_cont_flags {
-	PRCF_BIND_BULK = (1 << 0),
 };
 
 static inline uint32_t
@@ -199,7 +196,8 @@ pool_opc_2map_opc(uint32_t pool_opc)
 
 static inline void
 pool_create_in_get_data(crt_rpc_t *rpc, d_rank_list_t **pri_tgt_ranksp, daos_prop_t **pri_propp,
-			uint32_t *pri_ndomainsp, uint32_t *pri_ntgtsp, uint32_t **pri_domainsp)
+			uint32_t *pri_ndomainsp, uint32_t *pri_ntgtsp, uint32_t **pri_domainsp,
+			d_rank_list_t **pri_downout_ranksp)
 {
 	struct pool_create_in *in      = crt_req_get(rpc);
 	uint8_t                rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
@@ -210,12 +208,15 @@ pool_create_in_get_data(crt_rpc_t *rpc, d_rank_list_t **pri_tgt_ranksp, daos_pro
 	*pri_ndomainsp  = in->pri_ndomains;
 	*pri_ntgtsp     = in->pri_ntgts;
 	*pri_domainsp   = in->pri_domains.ca_arrays;
+	if (pri_downout_ranksp != NULL)
+		*pri_downout_ranksp = in->pri_downout_ranks;
 	D_ASSERT(*pri_ndomainsp == in->pri_domains.ca_count);
 }
 
 static inline void
 pool_create_in_set_data(crt_rpc_t *rpc, d_rank_list_t *pri_tgt_ranks, daos_prop_t *pri_prop,
-			uint32_t pri_ndomains, uint32_t pri_ntgts, uint32_t *pri_domains)
+			uint32_t pri_ndomains, uint32_t pri_ntgts, uint32_t *pri_domains,
+			d_rank_list_t *pri_downout_ranks)
 {
 	struct pool_create_in *in      = crt_req_get(rpc);
 	uint8_t                rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
@@ -227,6 +228,7 @@ pool_create_in_set_data(crt_rpc_t *rpc, d_rank_list_t *pri_tgt_ranks, daos_prop_
 	in->pri_ntgts             = pri_ntgts;
 	in->pri_domains.ca_arrays = pri_domains;
 	in->pri_domains.ca_count  = pri_ndomains;
+	in->pri_downout_ranks     = pri_downout_ranks;
 }
 
 /* clang-format off */
@@ -942,7 +944,6 @@ CRT_RPC_DECLARE(pool_eval_self_heal, DAOS_ISEQ_POOL_EVAL_SELF_HEAL, DAOS_OSEQ_PO
 	((uint32_t)			(prci_flags)		CRT_VAR) \
 	((uint32_t)			(prci_padding)		CRT_VAR) \
 	((uint64_t)			(prci_cont_nr)		CRT_VAR) \
-	((crt_bulk_t)			(prci_cont_bulk)	CRT_VAR) \
 	((struct pool_target_addr)	(prci_addrs)		CRT_ARRAY)
 
 #define DAOS_OSEQ_POOL_RECOV_CONT	/* output fields */		 \

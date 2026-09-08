@@ -264,16 +264,23 @@ type PoolCreateReq struct {
 	// representing members of the tree in a breadth-first traversal order.
 	// Each domain above rank consists of: (level, id, num children)
 	// Each rank consists of: (rank number)
-	FaultDomains  []uint32  `protobuf:"varint,7,rep,packed,name=fault_domains,json=faultDomains,proto3" json:"fault_domains,omitempty"` // Fault domain tree, minimal format
-	NumSvcReps    uint32    `protobuf:"varint,8,opt,name=num_svc_reps,json=numSvcReps,proto3" json:"num_svc_reps,omitempty"`            // desired number of pool service replicas
-	TotalBytes    uint64    `protobuf:"varint,9,opt,name=total_bytes,json=totalBytes,proto3" json:"total_bytes,omitempty"`              // Total pool size in bytes
-	TierRatio     []float64 `protobuf:"fixed64,10,rep,packed,name=tier_ratio,json=tierRatio,proto3" json:"tier_ratio,omitempty"`        // Ratio of storage tiers expressed as % of totalbytes
-	NumRanks      uint32    `protobuf:"varint,11,opt,name=num_ranks,json=numRanks,proto3" json:"num_ranks,omitempty"`                   // Number of target ranks to use
-	Ranks         []uint32  `protobuf:"varint,12,rep,packed,name=ranks,proto3" json:"ranks,omitempty"`                                  // target ranks
-	TierBytes     []uint64  `protobuf:"varint,13,rep,packed,name=tier_bytes,json=tierBytes,proto3" json:"tier_bytes,omitempty"`         // Size in bytes of storage tier
-	MemRatio      float32   `protobuf:"fixed32,14,opt,name=mem_ratio,json=memRatio,proto3" json:"mem_ratio,omitempty"`                  // Fraction of meta-blob-sz to use as mem-file-sz
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	FaultDomains []uint32  `protobuf:"varint,7,rep,packed,name=fault_domains,json=faultDomains,proto3" json:"fault_domains,omitempty"` // Fault domain tree, minimal format
+	NumSvcReps   uint32    `protobuf:"varint,8,opt,name=num_svc_reps,json=numSvcReps,proto3" json:"num_svc_reps,omitempty"`            // desired number of pool service replicas
+	TotalBytes   uint64    `protobuf:"varint,9,opt,name=total_bytes,json=totalBytes,proto3" json:"total_bytes,omitempty"`              // Total pool size in bytes
+	TierRatio    []float64 `protobuf:"fixed64,10,rep,packed,name=tier_ratio,json=tierRatio,proto3" json:"tier_ratio,omitempty"`        // Ratio of storage tiers expressed as % of totalbytes
+	NumRanks     uint32    `protobuf:"varint,11,opt,name=num_ranks,json=numRanks,proto3" json:"num_ranks,omitempty"`                   // Number of target ranks to use
+	Ranks        []uint32  `protobuf:"varint,12,rep,packed,name=ranks,proto3" json:"ranks,omitempty"`                                  // target ranks
+	TierBytes    []uint64  `protobuf:"varint,13,rep,packed,name=tier_bytes,json=tierBytes,proto3" json:"tier_bytes,omitempty"`         // Size in bytes of storage tier
+	MemRatio     float32   `protobuf:"fixed32,14,opt,name=mem_ratio,json=memRatio,proto3" json:"mem_ratio,omitempty"`                  // Fraction of meta-blob-sz to use as mem-file-sz
+	// Ranks that are not currently joined (Ready/Excluded/AdminExcluded/Stopped/
+	// Stopping/Errored/Unresponsive/AwaitFormat/Starting/...).
+	// May be populated by either the client (auto rank-selection paths) or the
+	// management service; if both supply values, they are merged. Listed ranks
+	// enter the initial pool map as DOWNOUT and do NOT receive VOS/blob-store
+	// creation, so subsequent membership changes can address them by rank.
+	UnavailableRanks []uint32 `protobuf:"varint,15,rep,packed,name=unavailable_ranks,json=unavailableRanks,proto3" json:"unavailable_ranks,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PoolCreateReq) Reset() {
@@ -402,6 +409,13 @@ func (x *PoolCreateReq) GetMemRatio() float32 {
 		return x.MemRatio
 	}
 	return 0
+}
+
+func (x *PoolCreateReq) GetUnavailableRanks() []uint32 {
+	if x != nil {
+		return x.UnavailableRanks
+	}
+	return nil
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
@@ -2983,7 +2997,7 @@ var File_mgmt_pool_proto protoreflect.FileDescriptor
 
 const file_mgmt_pool_proto_rawDesc = "" +
 	"\n" +
-	"\x0fmgmt/pool.proto\x12\x04mgmt\"\xa4\x03\n" +
+	"\x0fmgmt/pool.proto\x12\x04mgmt\"\xd1\x03\n" +
 	"\rPoolCreateReq\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x10\n" +
 	"\x03sys\x18\x02 \x01(\tR\x03sys\x12\x12\n" +
@@ -3006,7 +3020,8 @@ const file_mgmt_pool_proto_rawDesc = "" +
 	"\x05ranks\x18\f \x03(\rR\x05ranks\x12\x1d\n" +
 	"\n" +
 	"tier_bytes\x18\r \x03(\x04R\ttierBytes\x12\x1b\n" +
-	"\tmem_ratio\x18\x0e \x01(\x02R\bmemRatio\"\xe7\x01\n" +
+	"\tmem_ratio\x18\x0e \x01(\x02R\bmemRatio\x12+\n" +
+	"\x11unavailable_ranks\x18\x0f \x03(\rR\x10unavailableRanks\"\xe7\x01\n" +
 	"\x0ePoolCreateResp\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\x05R\x06status\x12\x17\n" +
 	"\asvc_ldr\x18\x02 \x01(\rR\x06svcLdr\x12\x19\n" +
