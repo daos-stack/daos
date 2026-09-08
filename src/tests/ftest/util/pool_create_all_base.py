@@ -223,8 +223,9 @@ class PoolCreateAllTestBase(TestWithServers):
             AssertionError: If any property does not match the expected value.
         """
         default_props = DEFAULT_POOL_PROPS.copy()
-        if pool.target_list is not None and len(pool.target_list) <= default_props["rd_fac"]:
-            default_props["rd_fac"] = len(pool.target_list) - 1
+        target_list = pool.target_list.value
+        if target_list is not None and len(target_list) <= default_props["rd_fac"]:
+            default_props["rd_fac"] = len(target_list) - 1
         default_props["label"] = pool.label.value
         default_props["svc_list"] = pool.svc_ranks
         pool.validate_properties(pool.get_prop(), default_props)

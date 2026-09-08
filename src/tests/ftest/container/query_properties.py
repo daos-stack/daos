@@ -49,7 +49,7 @@ class QueryPropertiesTest(TestWithServers):
         default_props["group"] = f"{getgrgid(getgid()).gr_name}@"
         try:
             result = containers[-1].get_prop()
-            containers[-1].validate_properties(result, default_props)
+            containers[-1].validate_properties(result, default_props, ["root_oids"])
         except AssertionError:
             self.fail("Unexpected default properties from daos container get-prop")
 

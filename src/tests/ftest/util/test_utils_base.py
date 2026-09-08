@@ -12,6 +12,8 @@ from time import sleep
 from command_utils_base import BasicParameter, ObjectWithParameters
 from pydaos.raw import DaosApiError
 
+IGNORE_CHECK = "<IGNORE_CHECK>"
+
 
 def check_expected(logger, description, data):
     """Check if the expected values match the actual values.
@@ -24,23 +26,29 @@ def check_expected(logger, description, data):
     Raises:
         AssertionError: if any of the expected values do not match the actual values
     """
-    results = {"Passed": [], "Failed": []}
+    results = {"Passed": [], "Failed": [], "Ignored": []}
     logger.debug("Verifying %s:", description)
     name_width = max(len(name) for name in data.keys()) if data else 0
     value_width = max(len(str(value)) for value, _ in data.values()) if data else 0
     for name in sorted(data.keys()):
         (value, expected) = data[name]
-        if value != expected:
+        if expected == IGNORE_CHECK:
+            results["Ignored"].append(name)
+        elif value != expected:
             results["Failed"].append(name)
         else:
             results["Passed"].append(name)
-    for key in ("Passed", "Failed"):
+    for key in ("Passed", "Failed", "Ignored"):
         if not results[key]:
             continue
         logger.debug("  %s:", key)
         for name in results[key]:
             (value, expected) = data[name]
-            is_equal = "==" if key == "Passed" else "!="
+            is_equal = "=="
+            if key == "Ignored":
+                is_equal = "--"
+            elif key == "Failed":
+                is_equal = "!="
             logger.debug(
                 "    %-*s: %*s %s %s",
                 name_width, name, value_width, value, is_equal, expected)
@@ -214,20 +222,25 @@ class TestDaosApiBase(ObjectWithParameters):
                 check_status = False
         return check_status
 
-    def validate_properties(self, get_prop_json, expected_props):
+    def validate_properties(self, get_prop_json, expected_props, ignore_props=None):
         """Validate the current properties against expected values.
 
         Args:
             get_prop_json (dict): get-prop json output with the actual properties of the object.
             expected_props (dict): expected property values, with property names as keys.
+            ignore_props (list, optional): list of property names to ignore during validation.
+                Defaults to None.
 
         Raises:
             AssertionError: If any property does not match the expected value.
         """
         data = {}
         for actual_prop in get_prop_json["response"]:
-            expected = expected_props.get(actual_prop["name"], None)
-            data[actual_prop["name"]] = (actual_prop["value"], expected)
+            if ignore_props and actual_prop["name"] in ignore_props:
+                data[actual_prop["name"]] = (actual_prop["value"], IGNORE_CHECK)
+            else:
+                expected = expected_props.get(actual_prop["name"], None)
+                data[actual_prop["name"]] = (actual_prop["value"], expected)
         check_expected(self.log, f"{self.identifier} properties", data)
 
 
