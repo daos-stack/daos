@@ -1385,11 +1385,13 @@ class TestWithServers(TestWithoutServers):
 
     def fail(self, msg=None):
         """Dump engines ULT stacks upon test failure."""
+        # pylint: disable=arguments-renamed
         self.__dump_engines_stacks("Test has failed")
         super().fail(msg)
 
     def error(self, msg=None):
         """Dump engines ULT stacks upon test error."""
+        # pylint: disable=arguments-renamed
         self.__dump_engines_stacks("Test has errored")
         super().error(msg)
 
