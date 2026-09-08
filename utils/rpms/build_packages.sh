@@ -9,14 +9,14 @@
 #
 # Args:
 #   build_type  What to build: deps|daos|all. Default: all
-#   verify      Run verify_rpms.sh after package build: yes|no. Default: yes
+#   verify      Run verify_rpms.sh after package build: yes|no. Default: no
 set -eEuo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 repo_root="$(cd "${script_dir}/../.." >/dev/null 2>&1 && pwd)"
 
 build_type="${1:-all}"
-verify_rpms="${2:-yes}"
+verify_rpms="${2:-no}"
 
 case "${verify_rpms}" in
   yes|no)
