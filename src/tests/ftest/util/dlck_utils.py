@@ -29,6 +29,7 @@ class TestDlck(TestWithServers):
         dlck.register_cleanup_method = self.register_cleanup
         dlck.hosts = self.server_managers[0].hosts[0:1]
         dlck.log_dir.value = self.log_dir
+        dlck.run_user = 'daos_server'
         dlck.get_params(self)
         return dlck
 
