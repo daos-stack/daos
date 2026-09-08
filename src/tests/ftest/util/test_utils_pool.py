@@ -337,9 +337,6 @@ class TestPool(TestDaosApiBase):
         self.svc_ranks = None
         self.svc_leader = None
         self.connected = False
-        # Flag to allow the non-create operations to use UUID. e.g., if you want
-        # to destroy the pool with UUID, set this to False, then call destroy().
-        self.use_label = True
 
         self._dmg = None
         self.dmg = dmg_command
@@ -406,20 +403,6 @@ class TestPool(TestDaosApiBase):
         """
         if self.pool:
             self.pool.set_uuid_str(value)
-
-    @property
-    def identifier(self):
-        """Get the pool uuid or label.
-
-        Returns:
-            str: pool label if using labels and one is defined; otherwise the
-                pool uuid
-
-        """
-        identifier = self.uuid
-        if self.use_label and self.label.value is not None:
-            identifier = self.label.value
-        return identifier
 
     @property
     def dmg(self):

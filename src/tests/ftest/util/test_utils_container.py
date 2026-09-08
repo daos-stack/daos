@@ -401,14 +401,9 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.register_cleanup = BasicParameter(True, True)  # call register_cleanup by default
 
         self.container = None
-        self.uuid = None
         self.opened = False
         self.written_data = []
         self.epoch = None
-
-        # If defined, use container labels for most operations by default.
-        # Setting to False will use the UUID where possible.
-        self.use_label = True
 
     def __str__(self):
         """Return a string representation of this TestContainer object.
@@ -422,18 +417,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 return "{} ({})".format(self.label.value, self.uuid)
             return str(self.uuid)
         return super().__str__()
-
-    @property
-    def identifier(self):
-        """Get the container uuid or label.
-
-        Returns:
-            str: label if using labels and one is defined; otherwise the uuid
-
-        """
-        if self.use_label and self.label.value is not None:
-            return self.label.value
-        return self.uuid
 
     def no_exception(self):
         """Temporarily disable raising exceptions for failed commands."""
