@@ -518,8 +518,12 @@ func TestServer_prepBdevStorage_errors(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
-					mbp, nil),
+					sp, scm.NewProvider(&scm.ProviderConfig{
+						Log:       log,
+						Backend:   scm.NewMockBackend(nil),
+						Sys:       sp,
+						KernelCfg: sysprov.KernelConfig{},
+					}), mbp, nil),
 				srvCfg: cfg,
 			}
 
@@ -1402,8 +1406,12 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
-					mbp, nil),
+					sp, scm.NewProvider(&scm.ProviderConfig{
+						Log:       log,
+						Backend:   scm.NewMockBackend(nil),
+						Sys:       sp,
+						KernelCfg: sysprov.KernelConfig{},
+					}), mbp, nil),
 				srvCfg: cfg,
 			}
 
@@ -1545,8 +1553,12 @@ func TestServer_cleanEngineSpdkResources(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, nil,
-					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
-					mbp, nil),
+					sp, scm.NewProvider(&scm.ProviderConfig{
+						Log:       log,
+						Backend:   scm.NewMockBackend(nil),
+						Sys:       sp,
+						KernelCfg: sysprov.KernelConfig{},
+					}), mbp, nil),
 				srvCfg: cfg,
 			}
 

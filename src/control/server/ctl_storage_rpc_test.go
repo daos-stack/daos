@@ -2603,9 +2603,10 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			sysProv := system.NewMockSysProvider(log, smsc)
 			mounter := mount.NewProvider(log, sysProv)
 			scmProv := scm.NewProvider(&scm.ProviderConfig{
-				Log:     log,
-				Sys:     sysProv,
-				Mounter: mounter,
+				Log:       log,
+				Sys:       sysProv,
+				Mounter:   mounter,
+				KernelCfg: system.KernelConfig{},
 			})
 			bdevProv := bdev.NewMockProvider(log, nil)
 			if tc.getSysMemInfo == nil {

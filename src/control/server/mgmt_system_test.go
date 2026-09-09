@@ -261,8 +261,18 @@ func startSysDB(t *testing.T, ctx context.Context, log logging.Logger, replicas 
 		t.Fatal(err)
 	}
 
-	// wait for the bootstrap to finish
+	// wait for the bootstrap to finish with a 30-second timeout
+	leaderCtx, leaderCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer leaderCancel()
+
 	for {
+		select {
+		case <-leaderCtx.Done():
+			cleanup()
+			t.Fatalf("failed to elect leader: %v", leaderCtx.Err())
+		default:
+		}
+
 		if leader, _, _ := db.LeaderQuery(); leader != "" {
 			break
 		}

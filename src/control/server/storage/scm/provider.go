@@ -57,6 +57,7 @@ type (
 		Sys         SystemProvider
 		Mounter     storage.MountProvider
 		THPDetector hardware.THPDetector
+		KernelCfg   system.KernelConfig
 	}
 
 	// Provider encapsulates configuration and logic for
@@ -111,12 +112,18 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(cfg *ProviderConfig) *Provider {
-	// Parse kernel config once at provider init; it doesn't change at runtime.
-	// NB: If kernel config is needed outside of the scm provider, consider
-	// moving to a sync.Once-based accessor in the system package instead.
-	kernelCfg, err := system.ParseKernelConfig()
-	if err != nil {
-		cfg.Log.Infof("failed to parse kernel config: %s", err)
+	// Use provided kernel config if available (from tests), otherwise parse from system.
+	// This avoids expensive I/O and memory allocations during test mock initialization.
+	kernelCfg := cfg.KernelCfg
+	if kernelCfg == nil {
+		// Parse kernel config once at provider init; it doesn't change at runtime.
+		// NB: If kernel config is needed outside of the scm provider, consider
+		// moving to a sync.Once-based accessor in the system package instead.
+		parsedCfg, err := system.ParseKernelConfig()
+		if err != nil {
+			cfg.Log.Infof("failed to parse kernel config: %s", err)
+		}
+		kernelCfg = parsedCfg
 	}
 
 	return &Provider{

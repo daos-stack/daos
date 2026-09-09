@@ -423,10 +423,11 @@ func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *system.Moc
 	sysProv := system.NewMockSysProvider(log, msc)
 	mountProv := mount.NewProvider(log, sysProv)
 	return NewProvider(&ProviderConfig{
-		Log:     log,
-		Backend: NewMockBackend(mbc),
-		Sys:     sysProv,
-		Mounter: mountProv,
+		Log:       log,
+		Backend:   NewMockBackend(mbc),
+		Sys:       sysProv,
+		Mounter:   mountProv,
+		KernelCfg: system.KernelConfig{},
 	})
 }
 
@@ -436,9 +437,10 @@ func DefaultMockProvider(log logging.Logger) *Provider {
 	sysProv := system.DefaultMockSysProvider(log)
 	mountProv := mount.NewProvider(log, sysProv)
 	return NewProvider(&ProviderConfig{
-		Log:     log,
-		Backend: DefaultMockBackend(),
-		Sys:     sysProv,
-		Mounter: mountProv,
+		Log:       log,
+		Backend:   DefaultMockBackend(),
+		Sys:       sysProv,
+		Mounter:   mountProv,
+		KernelCfg: system.KernelConfig{},
 	})
 }
