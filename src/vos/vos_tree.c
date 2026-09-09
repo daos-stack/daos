@@ -1059,7 +1059,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	struct ilog_df		*ilog = NULL;
 	struct vos_krec_df	*krec = NULL;
 	struct dcs_csum_info	 csum;
-	struct vos_rec_bundle	 rbund;
+	struct vos_rec_bundle    rbund = {0};
 	d_iov_t			 riov;
 	bool			 created = false;
 	int			 rc;

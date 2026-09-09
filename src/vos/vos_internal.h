@@ -924,6 +924,8 @@ struct vos_rec_bundle {
 	enum vos_tree_class	 rb_tclass;
 	/** DTX state */
 	unsigned int		 rb_dtx_state;
+	/** flags */
+	unsigned int             rb_bkt_id : 1; /* Bucket ID is stored in krec */
 };
 
 #define VOS_SIZE_ROUND		8
@@ -955,6 +957,8 @@ vos_krec_size(struct vos_rec_bundle *rbund)
 
 	key = rbund->rb_iov;
 	psize = vos_size_round(rbund->rb_csum->cs_len) + key->iov_len;
+	if (rbund->rb_bkt_id)
+		psize += sizeof(uint32_t);
 	return sizeof(struct vos_krec_df) + psize;
 }
 
@@ -969,21 +973,28 @@ static inline uint32_t *
 vos_krec2bkt_id(struct vos_krec_df *krec)
 {
 	D_ASSERT(krec->kr_bmap & KREC_BF_BKT_ID);
-	return (uint32_t *)&krec[1];
+	return (uint32_t *)vos_krec2payload(krec);
 }
 
 static inline char *
 vos_krec2csum(struct vos_krec_df *krec)
 {
-	return krec->kr_cs_size ? vos_krec2payload(krec) : NULL;
+	if (!krec->kr_cs_size)
+		return NULL;
+
+	if (krec->kr_bmap & KREC_BF_BKT_ID)
+		return vos_krec2payload(krec) + sizeof(uint32_t);
+	else
+		return vos_krec2payload(krec);
 }
 
 static inline char *
 vos_krec2key(struct vos_krec_df *krec)
 {
-	char *payload = vos_krec2payload(krec);
+	char        *payload  = vos_krec2payload(krec);
+	unsigned int bktid_sz = (krec->kr_bmap & KREC_BF_BKT_ID) ? sizeof(uint32_t) : 0;
 
-	return &payload[vos_size_round(krec->kr_cs_size)];
+	return &payload[vos_size_round(krec->kr_cs_size) + bktid_sz];
 }
 
 static inline uint16_t vos_irec2csum_size(struct vos_irec_df *irec)

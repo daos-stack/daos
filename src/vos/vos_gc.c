@@ -235,7 +235,7 @@ gc_obj_shared_bkts(struct vos_pool *pool, struct vos_obj_p2_df *p2, struct vos_b
 {
 	struct vos_obj_bkt_node_df *node_df;
 	umem_off_t                  next;
-	int                         i, rc;
+	int                         i, rc = 0;
 
 	/* Add primary bucket */
 	if (p2->p2_bkt_id0 != UMEM_DEFAULT_MBKT_ID) {
@@ -296,6 +296,7 @@ gc_extra_pin(struct vos_pool *pool, struct vos_obj_p2_df *p2, struct umem_pin_ha
 		return 0;
 	}
 
+	D_ASSERT(gc_info->gi_tx_started);
 	rc = umem_tx_end(&pool->vp_umm, 0);
 	if (rc != 0) {
 		DL_ERROR(rc, "Failed to commit GC tx before re-pin.");
