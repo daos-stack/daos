@@ -69,6 +69,11 @@ struct cont_ec_agg {
 	uuid_t			ea_cont_uuid;
 	daos_epoch_t		ea_current_eph;
 	daos_epoch_t             ea_rdb_eph;
+	/* time when this leader started tracking the container. A boundary jump larger
+	 * than the tracking age cannot have been observed by this leader, it comes from
+	 * the stale epoch loaded from rdb at leader step-up, so it is not a real stall.
+	 */
+	uint64_t                 ea_start_ts;
 	uint64_t                 ea_warn_slug_ts;
 	struct ec_eph		*ea_server_ephs;
 	d_list_t		ea_list;
