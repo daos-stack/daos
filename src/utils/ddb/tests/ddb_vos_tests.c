@@ -16,6 +16,19 @@
 
 #include "../../placement/tests/place_obj_common.h"
 
+/* Tests relying on DAOS fault injection cannot run on builds that compile it out (release) */
+#if FAULT_INJECTION
+#define FAULT_INJECTION_REQUIRED()                                                                 \
+	do {                                                                                       \
+	} while (0)
+#else
+#define FAULT_INJECTION_REQUIRED()                                                                 \
+	do {                                                                                       \
+		print_message("Skip test %s(): Fault injection required\n", __func__);             \
+		skip();                                                                            \
+	} while (0)
+#endif /* FAULT_INJECTION */
+
 /*
  * The tests in this file depend on a VOS instance with a bunch of data written. The tests will
  * verify that different parts of the VOS tree can be navigated/iterated. The way the
@@ -1122,6 +1135,26 @@ dv_test_csum_teardown(void **state)
 	return 0;
 }
 
+static int
+dv_test_csum_fi_setup(void **state)
+{
+	/* start from a disarmed fault, whatever the previous test left behind */
+	daos_fail_value_set(0);
+	daos_fail_loc_reset();
+
+	return dv_test_csum_setup(state);
+}
+
+static int
+dv_test_csum_fi_teardown(void **state)
+{
+	/* disarm any fault left by a failed *_inconsistent_tests() step */
+	daos_fail_value_set(0);
+	daos_fail_loc_reset();
+
+	return dv_test_csum_teardown(state);
+}
+
 static void
 pool_flags_tests(void **state)
 {
@@ -1756,6 +1789,186 @@ check_csum_recx_tests(void **state)
 }
 
 /*
+ * Inconsistent checksum metadata (fault injection).
+ *
+ * A checksum-info count that differs from the number of stored entries cannot be produced
+ * through the VOS API: the checksum configuration is per evtree and a single value stores at
+ * most one checksum.  DDB_CSUM_NR_INJECT makes ddb_vos.c replace the count it read with
+ * daos_fail_value_get() right before its consistency check.  All tests use g_oids[1], whose SV
+ * and DVT_FAKE_RECX_COUNT extents are stored with valid checksums.
+ */
+
+static void
+mock_csum_path_base(struct dv_tree_path *path, struct dt_csum_ctx *csum_ctx)
+{
+	memset(path, 0, sizeof(*path));
+	uuid_copy(path->vtp_cont, csum_ctx->dct_cont_uuid);
+	path->vtp_oid  = g_oids[1];
+	path->vtp_dkey = g_dkeys[0];
+}
+
+static void
+mock_csum_path_sv(struct dv_tree_path *path, struct dt_csum_ctx *csum_ctx)
+{
+	mock_csum_path_base(path, csum_ctx);
+	path->vtp_akey    = g_akeys[0]; /* single value type */
+	path->vtp_is_recx = false;
+}
+
+static void
+mock_csum_path_recx(struct dv_tree_path *path, struct dt_csum_ctx *csum_ctx)
+{
+	mock_csum_path_base(path, csum_ctx);
+	path->vtp_akey        = g_akeys[1]; /* array value type */
+	path->vtp_is_recx     = true;
+	path->vtp_recx.rx_idx = 0;
+	path->vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
+}
+
+/* Arm the fault for the next dv_dump_csum()/dv_check_csum() call only. */
+static void
+csum_nr_inject(uint32_t csum_nr)
+{
+	daos_fail_value_set(csum_nr);
+	daos_fail_loc_set(DDB_CSUM_NR_INJECT | DAOS_FAIL_ONCE);
+}
+
+static int
+dump_cb_unexpected(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		   struct dcs_ci_list *cil)
+{
+	fail_msg("dump callback invoked despite inconsistent checksum metadata");
+	return -1;
+}
+
+static int
+check_cb_unexpected(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		    struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	fail_msg("check callback invoked despite inconsistent checksum metadata");
+	return -1;
+}
+
+/* Count the invocations in *(int *)cb_args. */
+static int
+dump_cb_count(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+	      struct dcs_ci_list *cil)
+{
+	(*(int *)cb_args)++;
+	return 0;
+}
+
+static int
+check_cb_count(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+	       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	(*(int *)cb_args)++;
+	return 0;
+}
+
+static void
+dump_csum_sv_inconsistent_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct dv_tree_path     path;
+	int                     cb_calls = 0;
+	int                     rc;
+
+	FAULT_INJECTION_REQUIRED();
+	mock_csum_path_sv(&path, tctx->dvt_extra);
+
+	/* two checksum infos for a single value: -DER_CSUM, callback not invoked */
+	csum_nr_inject(2);
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* control: the consistent count is accepted */
+	csum_nr_inject(1);
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_count, &cb_calls);
+	assert_success(rc);
+	assert_int_equal(cb_calls, 1);
+}
+
+static void
+dump_csum_recx_inconsistent_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct dv_tree_path     path;
+	int                     cb_calls = 0;
+	int                     rc;
+
+	FAULT_INJECTION_REQUIRED();
+	mock_csum_path_recx(&path, tctx->dvt_extra);
+
+	/* fewer checksum infos than stored extents: -DER_CSUM, callback not invoked */
+	csum_nr_inject(DVT_FAKE_RECX_COUNT - 1);
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* more checksum infos than stored extents: -DER_CSUM, callback not invoked */
+	csum_nr_inject(DVT_FAKE_RECX_COUNT + 1);
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* control: the consistent count is accepted */
+	csum_nr_inject(DVT_FAKE_RECX_COUNT);
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_count, &cb_calls);
+	assert_success(rc);
+	assert_int_equal(cb_calls, 1);
+}
+
+static void
+check_csum_sv_inconsistent_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct dv_tree_path     path;
+	int                     cb_calls = 0;
+	int                     rc;
+
+	FAULT_INJECTION_REQUIRED();
+	mock_csum_path_sv(&path, tctx->dvt_extra);
+
+	/* two checksum infos for a single value: -DER_CSUM, callback not invoked */
+	csum_nr_inject(2);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* control: the consistent count is accepted and the checksum verified */
+	csum_nr_inject(1);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
+	assert_success(rc);
+	assert_int_equal(cb_calls, 1);
+}
+
+static void
+check_csum_recx_inconsistent_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct dv_tree_path     path;
+	int                     cb_calls = 0;
+	int                     rc;
+
+	FAULT_INJECTION_REQUIRED();
+	mock_csum_path_recx(&path, tctx->dvt_extra);
+
+	/* fewer checksum infos than stored extents: -DER_CSUM, callback not invoked */
+	csum_nr_inject(DVT_FAKE_RECX_COUNT - 1);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* more checksum infos than stored extents: -DER_CSUM, callback not invoked */
+	csum_nr_inject(DVT_FAKE_RECX_COUNT + 1);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* control: the consistent count is accepted and the checksums verified */
+	csum_nr_inject(DVT_FAKE_RECX_COUNT);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
+	assert_success(rc);
+	assert_int_equal(cb_calls, 1);
+}
+
+/*
  * All these tests use the same VOS tree that is created at suit_setup. Therefore, tests
  * that modify the state of the tree (delete, add, etc) should be run after all others.
  */
@@ -1763,6 +1976,7 @@ check_csum_recx_tests(void **state)
 
 /* Checksum tests need special setup/teardown */
 #define TEST_CSUM(test) {#test, test, dv_test_csum_setup, dv_test_csum_teardown}
+#define TEST_CSUM_FI(test) {#test, test, dv_test_csum_fi_setup, dv_test_csum_fi_teardown}
 
 const struct CMUnitTest dv_test_cases[] = {
     {"open_pool", open_pool_test, NULL, NULL}, /* don't want this test to run with setup */
@@ -1796,6 +2010,10 @@ const struct CMUnitTest dv_test_cases[] = {
     TEST_CSUM(check_csum_error_tests),
     TEST_CSUM(check_csum_sv_tests),
     TEST_CSUM(check_csum_recx_tests),
+    TEST_CSUM_FI(dump_csum_sv_inconsistent_tests),
+    TEST_CSUM_FI(dump_csum_recx_inconsistent_tests),
+    TEST_CSUM_FI(check_csum_sv_inconsistent_tests),
+    TEST_CSUM_FI(check_csum_recx_inconsistent_tests),
 };
 
 int

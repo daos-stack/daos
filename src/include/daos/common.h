@@ -972,6 +972,9 @@ enum {
 #define DAOS_FAULT_POOL_EXT_PADDING       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x209)
 #define DAOS_FAULT_POOL_EXT_RESERVED      (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x20a)
 
+/** DDB fault injection */
+#define DDB_CSUM_NR_INJECT                 (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x300)
+
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
