@@ -109,7 +109,7 @@ jobs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
@@ -235,7 +235,7 @@ jobs:
       COMMIT_STATUS_DISTRO_VERSION:
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
           fetch-depth: 500
@@ -366,7 +366,7 @@ jobs:
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040  # v2.23.0
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3  # v2.24.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -409,7 +409,7 @@ jobs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
@@ -519,7 +519,7 @@ jobs:
       SIZE:
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
           fetch-depth: 500
@@ -634,7 +634,7 @@ jobs:
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040  # v2.23.0
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3  # v2.24.0
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results
           github_token: ${{ secrets.GITHUB_TOKEN }}
