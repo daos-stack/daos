@@ -225,71 +225,8 @@ def check_server_storage(logger, test, test_result, stage):
     return status
 
 
-def archive_files_in_dir(logger, summary, hosts, source, dir_pattern, file_pattern,
-                         destination, depth, threshold, timeout, test_result,
-                         test=None, dir_chown=False):
-    # pylint: disable=too-many-arguments
-    """
-    Archive files in directories matching the specified pattern on remote hosts.
-
-    Args:
-        logger (logging.Logger): Logger for output messages.
-        summary (str): Summary of the operation.
-        hosts (set): Set of remote hosts.
-        source (str): Source directory on remote hosts.
-        dir_pattern (str): Pattern to match directories.
-        file_pattern (str): Pattern to match files within the directories.
-        destination (str): Destination directory for archived files.
-        depth (int): Depth for archiving files.
-        threshold (int): Threshold for archiving.
-        timeout (int): Timeout for archiving operation.
-        test_result (TestResult): Test result object for reporting failures.
-        test (optional): Test object, if applicable.
-        dir_chown (bool): Whether to change ownership of directories before archiving.
-
-    Returns:
-        int: Return code indicating success or failure of the operation.
-    """
-    if depth is None:
-        depth = 1
-
-    logger.debug("=" * 80)
-    logger.info(
-        "Archiving %s from %s:%s to %s%s,",
-        summary, hosts, os.path.join(source, dir_pattern, file_pattern), destination,
-        f" after running '{str(test)}'" if test else "")
-    logger.debug("  Remote hosts: %s", hosts.difference(get_local_host()))
-    logger.debug("  Local host:   %s", hosts.intersection(get_local_host()))
-
-    # List any remote directories and determine which hosts contain these directories
-    return_code, dir_hosts = list_files(logger, hosts, source, dir_pattern, depth,
-                                        test_result, file_type="d")
-    if not dir_hosts:
-        # If no directories found then there is nothing else to do
-        logger.debug("No %s directories found on %s", os.path.join(source, dir_pattern), hosts)
-        return return_code
-
-    # Change the ownership of matching directories if requested
-    if dir_chown:
-        other = ["-print0", "|", "xargs", "-0", "-r0", "sudo", "-n", get_chown_command()]
-        result = run_remote(logger, hosts, find_command(source, dir_pattern, depth, other,
-                                                        file_type="d"))
-        if not result.passed:
-            message = (f"Error changing {os.path.join(source, dir_pattern)} file permissions on "
-                       f"{result.failed_hosts}")
-            test_result.fail_test(logger, "Process", message)
-            return_code = 16
-            hosts = result.passed_hosts.copy()
-
-    # Now archive the files in each directory
-    return_code |= archive_files(logger, summary, hosts, os.path.join(source, dir_pattern),
-                                 file_pattern, destination, depth, threshold, timeout,
-                                 test_result, test=None, chown=dir_chown)
-    return return_code
-
-
 def archive_files(logger, summary, hosts, source, pattern, destination, depth, threshold, timeout,
-                  test_result, test=None, chown=False):
+                  test_result, test=None):
     # pylint: disable=too-many-arguments
     """Archive the files from the source to the destination.
 
@@ -305,7 +242,6 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
         timeout (int): number of seconds to wait for the command to complete.
         test_result (TestResult): the test result used to update the status of the test
         test (TestInfo, optional): the test information. Defaults to None.
-        chown (bool, optional): whether to change file ownership before moving. Defaults to False.
 
     Returns:
         int: status code: 0 = success, 16 = failure
@@ -318,17 +254,6 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
         f" after running '{str(test)}'" if test else "")
     logger.debug("  Remote hosts: %s", hosts.difference(get_local_host()))
     logger.debug("  Local host:   %s", hosts.intersection(get_local_host()))
-
-    if chown:
-        other = ["-print0", "|", "xargs", "-0", "-r0", "sudo", "-n", get_chown_command()]
-        result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
-        if not result.passed:
-            message = (f"Error changing {os.path.join(source, pattern)} file permissions on "
-                       f"{result.failed_hosts}")
-            test_result.fail_test(logger, "Process", message)
-            return_code = 16
-            hosts = result.passed_hosts.copy()
-            return return_code
 
     # List any remote files and their sizes and determine which hosts contain these files
     return_code, file_hosts = list_files(logger, hosts, source, pattern, depth, test_result)
@@ -357,7 +282,7 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
 
     # Move the test files to the test-results directory on this host
     return_code |= move_files(
-        logger, file_hosts, source, pattern, destination, depth, timeout, test_result, chown=chown)
+        logger, file_hosts, source, pattern, destination, depth, timeout, test_result)
 
     if test and "core files" in summary:
         # Process the core files
@@ -366,7 +291,7 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
     return return_code
 
 
-def list_files(logger, hosts, source, pattern, depth, test_result, file_type='f'):
+def list_files(logger, hosts, source, pattern, depth, test_result):
     """List the files in source with that match the pattern.
 
     Args:
@@ -376,7 +301,6 @@ def list_files(logger, hosts, source, pattern, depth, test_result, file_type='f'
         pattern (str): pattern used to limit which files are processed
         depth (int): max depth for find command
         test_result (TestResult): the test result used to update the status of the test
-        file_type (str): type of files to list, default is 'f' for regular files
 
     Returns:
         tuple: a tuple containing:
@@ -390,7 +314,7 @@ def list_files(logger, hosts, source, pattern, depth, test_result, file_type='f'
     logger.debug("-" * 80)
     logger.debug("Listing any %s files on %s", source_files, hosts)
     other = ["-printf", "'%M %n %-12u %-12g %12k %t %p\n'"]
-    result = run_remote(logger, hosts, find_command(source, pattern, depth, other, file_type))
+    result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
     if not result.passed:
         message = f"Error determining if {source_files} files exist on {result.failed_hosts}"
         test_result.fail_test(logger, "Process", message)
@@ -544,7 +468,7 @@ def compress_files(logger, hosts, source, pattern, depth, test_result):
 
 
 def move_files(logger, hosts, source, pattern, destination, depth,
-               timeout, test_result, chown=False):
+               timeout, test_result):
     """Move files from the source to the destination.
 
     Args:
@@ -556,7 +480,6 @@ def move_files(logger, hosts, source, pattern, destination, depth,
         depth (int): max depth for find command
         timeout (int): number of seconds to wait for the command to complete.
         test_result (TestResult): the test result used to update the status of the test
-        chown (bool, optional): whether to change file ownership before moving. Defaults to False.
 
     Returns:
         int: status code: 0 = success, 16 = failure
@@ -566,9 +489,8 @@ def move_files(logger, hosts, source, pattern, destination, depth,
     logger.debug("Moving files from %s to %s on %s", source, destination, hosts)
     return_code = 0
 
-    # Core, dump and dlck files require a file ownership change before they can be copied
-    if chown is True and ("stacktrace" in destination
-                          or "daos_dumps" in destination or re.search("dlck_check*", destination)):
+    # Core and dump files require a file ownership change before they can be copied
+    if "stacktrace" in destination or "daos_dumps" in destination:
         # pylint: disable=import-outside-toplevel
         other = ["-print0", "|", "xargs", "-0", "-r0", "sudo", "-n", get_chown_command()]
         result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
@@ -1077,6 +999,15 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
     # size exceeding the threshold.
     test_env = TestEnvironment()
     if archive:
+        logger.debug("Making all '%s' files accessible for archiving", test_env.log_dir)
+        result = run_remote(logger, test.host_info.all_hosts,
+                            "sudo -n {}".format(get_chown_command(options="-R",
+                                                                  file=test_env.log_dir)))
+        if not result.passed:
+            message = f"Error making {test_env.log_dir} files accessible for archiving"
+            test_result.fail_test(logger, "Process", message)
+            return_code = 16
+
         remote_files = OrderedDict()
         remote_files["local configuration files"] = {
             "source": test_env.log_dir,
@@ -1085,7 +1016,6 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "hosts": get_local_host(),
             "depth": 1,
             "timeout": 300,
-            "chown": False,
         }
         for index, source in enumerate(test_env.config_file_directories()):
             remote_files[f"remote configuration files ({index})"] = {
@@ -1095,7 +1025,6 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
                 "hosts": test.host_info.all_hosts,
                 "depth": 1,
                 "timeout": 300,
-                "chown": False,
             }
         remote_files["daos log files"] = {
             "source": test_env.log_dir,
@@ -1104,7 +1033,6 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "hosts": test.host_info.all_hosts,
             "depth": 1,
             "timeout": 900,
-            "chown": False,
         }
         remote_files["cart log files"] = {
             "source": test_env.log_dir,
@@ -1113,7 +1041,6 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "hosts": test.host_info.all_hosts,
             "depth": 2,
             "timeout": 900,
-            "chown": False,
         }
         remote_files["ULTs stacks dump files"] = {
             "source": os.path.join(os.sep, "tmp"),
@@ -1122,7 +1049,6 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "hosts": test.host_info.servers.hosts,
             "depth": 1,
             "timeout": 900,
-            "chown": True,
         }
         remote_files["valgrind log files"] = {
             "source": test_env.shared_dir,
@@ -1131,16 +1057,14 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "hosts": test.host_info.servers.hosts,
             "depth": 1,
             "timeout": 900,
-            "chown": False,
         }
         remote_files["dlck files"] = {
             "source": test_env.log_dir,
             "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[6]),
-            "pattern": "dlck_check*/*_vos-*",
+            "pattern": "*_vos-*",
             "hosts": test.host_info.all_hosts,
-            "depth": 1,
+            "depth": 2,
             "timeout": 900,
-            "chown": True,
         }
         for index, hosts in enumerate(core_files):
             remote_files[f"core files {index + 1}/{len(core_files)}"] = {
@@ -1150,23 +1074,14 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
                 "hosts": NodeSet(hosts),
                 "depth": 1,
                 "timeout": 1800,
-                "chown": True,
             }
         for summary, data in remote_files.items():
             if not data["hosts"]:
                 continue
-            if "dlck_check*/*_vos-*" in data["pattern"]:
-                dir_filename = data["pattern"].split("/")
-                return_code |= archive_files_in_dir(
-                    logger, summary, data["hosts"].copy(), data["source"],
-                    dir_filename[0], dir_filename[1], data["destination"],
-                    data["depth"], threshold, data["timeout"],
-                    test_result, test, data["chown"])
-            else:
-                return_code |= archive_files(
-                    logger, summary, data["hosts"].copy(), data["source"], data["pattern"],
-                    data["destination"], data["depth"], threshold, data["timeout"],
-                    test_result, test, data["chown"])
+            return_code |= archive_files(
+                logger, summary, data["hosts"].copy(), data["source"], data["pattern"],
+                data["destination"], data["depth"], threshold, data["timeout"],
+                test_result, test)
 
     # Generate a steps.log file
     return_code |= create_steps_log(logger, job_results_dir, test_result)
