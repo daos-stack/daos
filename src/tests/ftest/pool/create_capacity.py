@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -36,7 +37,7 @@ class PoolCreateCapacityTests(TestWithServers):
             Verify that all the created pools exists after the restart
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,hw,medium
         :avocado: tags=pool
         :avocado: tags=PoolCreateCapacityTests,test_create_pool_quantity
         """
