@@ -22,34 +22,42 @@ server_config:
 pool:
   num_pools: 4
 
+pool_base: &pool_base
+  properties: rd_fac:0,space_rb:0
+
 pool_0:
+  <<: *pool_base
   size: 20%
 
 pool_1:
+  <<: *pool_base
   size: 30%
 
 pool_2:
+  <<: *pool_base
   size: 50%
 
 pool_3:
+  <<: *pool_base
   size: 60%
 
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 
 ior:
   client_processes:
     np: 16
-  flags: "-w -W -r -R -k -vv"
+  flags: -w -W -r -R -k -vv
   flag_restart:
-    write: "-w -k -G=5"
-    read: "-r -R -k -G=5"
+    write: -w -k -G=5
+    read: -r -R -k -G=5
   repetitions: 1
   api: DFS
-  object_type: 'SX'
+  object_type: SX
   dfs_destroy: False
   test_file: /testFile
-  transfersize: !mux
+  transfer_size: !mux
     case1:
       block_size: 30000000
       tsize:

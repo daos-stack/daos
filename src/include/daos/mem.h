@@ -190,11 +190,6 @@ struct umem_pool {
 	struct umem_slab_desc	 up_slabs[0];
 };
 
-enum umem_tx_failure_behavior {
-	TX_FAILURE_ABORT,
-	TX_FAILURE_RETURN,
-};
-
 #ifdef DAOS_PMEM_BUILD
 #define UMEM_CACHE_PAGE_SZ_SHIFT  24 /* 16MB */
 #define UMEM_CACHE_PAGE_SZ        (1 << UMEM_CACHE_PAGE_SZ_SHIFT)
@@ -682,6 +677,13 @@ struct umem_instance;
 #define UMEM_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
 #define UMEM_XADD_NO_SNAPSHOT	(((uint64_t)1) << 2)
 
+/*
+ * Do NOT abort current TX if failed to operate (such as allocation) something under current
+ * transaction context, instead, return some errno# to the caller who can handle the failure
+ * and further use such TX.
+ */
+#define UMEM_FLAG_NO_ABORT      (((uint64_t)1) << 3)
+
 /* Macros associated with Memory buckets */
 #define	UMEM_DEFAULT_MBKT_ID	0
 
@@ -755,11 +757,6 @@ typedef struct {
 	/** commit memory transaction */
 	int		 (*mo_tx_commit)(struct umem_instance *umm, void *data);
 
-	/** set TX_FAILURE_ABORT or TX_FAILURE_RETURN when hit failure during TX. */
-	void (*mo_tx_set_failure_behavior)(enum umem_tx_failure_behavior behavior);
-
-	/** query the failure behavior for current TX. */
-	int (*mo_tx_get_failure_behavior)(void);
 #ifdef DAOS_PMEM_BUILD
 	/** Set emergency buffer for transaction snapshot */
 	int (*mo_tx_set_snapbuf)(struct umem_instance *umm, umem_off_t snap_buf, size_t size);
@@ -1084,23 +1081,6 @@ static inline int
 umem_tx_end(struct umem_instance *umm, int err)
 {
 	return umem_tx_end_ex(umm, err, NULL);
-}
-
-static inline void
-umem_tx_set_failure_behavior(struct umem_instance *umm, enum umem_tx_failure_behavior behavior)
-{
-	if (umm->umm_ops->mo_tx_set_failure_behavior)
-		umm->umm_ops->mo_tx_set_failure_behavior(behavior);
-}
-
-static inline int
-umem_tx_get_failure_behavior(struct umem_instance *umm)
-{
-	if (umm->umm_ops->mo_tx_get_failure_behavior)
-		return umm->umm_ops->mo_tx_get_failure_behavior();
-	else
-		/* Abort TX on failure by default. */
-		return TX_FAILURE_ABORT;
 }
 
 #ifdef DAOS_PMEM_BUILD

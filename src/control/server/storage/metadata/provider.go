@@ -198,26 +198,36 @@ func (p *Provider) isUsableFS(fs *system.FsType, path string) bool {
 func (p *Provider) setupDataDir(req storage.MetadataFormatRequest) error {
 	perms := os.FileMode(0775)
 
-	if err := p.sys.RemoveAll(req.DataPath); err != nil {
-		return errors.Wrap(err, "removing old control metadata subdirectory")
+	// Helper to create directory with ownership
+	createDirWithOwner := func(path string) error {
+		if err := p.sys.Mkdir(path, perms); err != nil {
+			return errors.Wrapf(err, "creating directory %s", path)
+		}
+		if err := p.sys.Chown(path, req.OwnerUID, req.OwnerGID); err != nil {
+			return errors.Wrapf(err, "setting ownership of %s to %d/%d", path, req.OwnerUID, req.OwnerGID)
+		}
+		return nil
 	}
 
-	if err := p.sys.Mkdir(req.DataPath, perms); err != nil {
-		return errors.Wrap(err, "creating control metadata subdirectory")
+	// Ensure DataPath exists
+	if _, err := p.sys.Stat(req.DataPath); os.IsNotExist(err) {
+		p.log.Debugf("creating control metadata subdirectory %q", req.DataPath)
+		if err := createDirWithOwner(req.DataPath); err != nil {
+			return errors.Wrap(err, "creating control metadata subdirectory")
+		}
+	} else if err != nil {
+		return errors.Wrap(err, "checking control metadata subdirectory")
 	}
 
-	if err := p.sys.Chown(req.DataPath, req.OwnerUID, req.OwnerGID); err != nil {
-		return errors.Wrapf(err, "setting ownership of control metadata subdirectory to %d/%d", req.OwnerUID, req.OwnerGID)
-	}
-
+	// Selectively remove and recreate engine directories
+	p.log.Debugf("formatting control metadata for engines %v", req.EngineIdxs)
 	for _, idx := range req.EngineIdxs {
 		engPath := storage.ControlMetadataEngineDir(req.DataPath, idx)
-		if err := p.sys.Mkdir(engPath, perms); err != nil {
-			return errors.Wrapf(err, "creating control metadata engine %d subdirectory", idx)
+		if err := p.sys.RemoveAll(engPath); err != nil {
+			return errors.Wrapf(err, "removing control metadata for engine %d", idx)
 		}
-
-		if err := p.sys.Chown(engPath, req.OwnerUID, req.OwnerGID); err != nil {
-			return errors.Wrapf(err, "setting ownership of control metadata engine %d subdirectory to %d/%d", idx, req.OwnerUID, req.OwnerGID)
+		if err := createDirWithOwner(engPath); err != nil {
+			return errors.Wrapf(err, "control metadata engine %d subdirectory", idx)
 		}
 	}
 

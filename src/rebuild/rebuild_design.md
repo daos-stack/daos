@@ -1,4 +1,4 @@
-# DAOS Rebuild Subsystem — Technical Design Document (v5)
+# DAOS Rebuild Subsystem — Technical Design Document (v6)
 
 **Status:** Living document  
 **Component:** `src/rebuild/`, `src/object/srv_obj_migrate.c`
@@ -12,6 +12,7 @@
 | v3 | Corrected I1 (non-bug, protocol ordering prevents the TOCTOU consequence), removed G5 (prerequisite contradictory), downgraded I2/I3/G3 severity, corrected I4/C3 scope |
 | v4 | Normalized issue IDs to single `RB-nn` namespace. Restored all v2 detail lost in v3 rewrite. Added two-track framing (see `rebuild_refactoring_plan_v4.md`). |
 | v5 | Comprehensive review and revision: corrected pull-phase/generation semantics, expanded pool-map and terminology definitions (rank/engine, xstream/ULT, rebuild task), state-machine figure (added reclaim window, pre-figure state enumeration), generation management rewrite (PR #18358 same-leader retry bump, scan abort on `rt_global_done`), new data-structure sections (§5.6–§5.10), operational-variant state-transition expansion, reintegration modes (§3.3), epoch boundaries clarification (§2.1), btree lifecycle and progress-counter propagation (§10.5, §10.10), pool-map/query lifecycle integration (§9.5), admin-stop outcomes table, successor-scheduling retry-asymmetry documentation, target disambiguation note. 13 editing sequences, ~94 individual edits across 21 sections. |
+| v6 | Updates for DAOS v2.8.0 bug fixes: fail-reclaim broadcast expansion to include reintegrating engines for stopped-reint cleanup (PR #18713/DAOS-19352, new RGT fields `rgt_include_up`, `rgt_orig_rb_ver`); admin-stop latch guard — rejected stops no longer suppress auto-retry (PR #18750/DAOS-19381, `check_to_retry_orig_rebuild()` removed, stop propagation inlined); `pool_discard()` leader-side target validation against authoritative pool map (PR #18643/DAOS-19265). |
 
 ---
 
@@ -176,14 +177,14 @@ The pool's **reintegration mode** property (`DAOS_PROP_PO_REINT_MODE`, values de
 |--------|---------------------|--------------|-------------|
 | **On target exclusion** | Normal rebuild runs: data migrated from surviving replicas/shards to replacement targets | Target immediately marked DOWNOUT — **no rebuild scheduled** (`srv_pool.c:7898–7908`) | Normal rebuild runs (same as DATA_SYNC) |
 | **Client I/O during degraded state** | Reads and writes available (degraded mode) | **Writes blocked** (`-DER_NO_PERM` via `srv_obj.c:2151`); reads available | Reads and writes available (degraded mode) |
-| **Reintegration step 1: data discard?** | Yes — `pool_discard()` wipes the returning target's stale data | No discard (target was never rebuilt, so nothing to discard) | No discard — returning target retains pre-exclusion data; `pool_recov_cont()` performs container-level recovery |
+| **Reintegration step 1: data discard?** | Yes — `pool_discard()` wipes the returning target's stale data. The leader validates/filters the target list against the authoritative pool map before sending `POOL_TGT_DISCARD` RPCs: only targets in `PO_COMP_ST_DOWN` or `PO_COMP_ST_DOWNOUT` are included (PR #18643). | No discard (target was never rebuilt, so nothing to discard) | No discard — returning target retains pre-exclusion data; `pool_recov_cont()` performs container-level recovery |
 | **Reintegration step 2: data movement?** | Full rebuild: all object shards rebuilt from surviving sources | No migration — target rejoins map empty, pool at **reduced redundancy** | Delta migration only: uses `global_stable_epoch` (`srv_obj_migrate.c:3455–3472`) to identify data written after exclusion; `reint_post_process_ult` discards stale objects not present in the migrated tree |
 | **Pool property constant** | `DAOS_REINT_MODE_DATA_SYNC` (0) | `DAOS_REINT_MODE_NO_DATA_SYNC` (1) | `DAOS_REINT_MODE_INCREMENTAL` (2) |
 
 #### Per-Mode Details
 
 **DATA_SYNC (default):**
-Standard lifecycle. On exclusion, a full `RB_OP_REBUILD` runs. On reintegration, the returning target's data is discarded via `pool_discard()`, then a full rebuild copies all required object shards from surviving sources. This is the safest and most thoroughly tested path.
+Standard lifecycle. On exclusion, a full `RB_OP_REBUILD` runs. On reintegration, the returning target's data is discarded via `pool_discard()` (the leader first filters the target list against the authoritative pool map, keeping only DOWN/DOWNOUT targets for REINT and NEW/absent targets for EXTEND — PR #18643), then a full rebuild copies all required object shards from surviving sources. This is the safest and most thoroughly tested path.
 
 **NO_DATA_SYNC:**
 Designed for pools that only serve reads after initial population. On exclusion, the target is immediately marked DOWNOUT and **no rebuild is scheduled** — the pool simply operates at reduced redundancy. A blanket write ban (`-DER_NO_PERM`) is enforced via the object I/O path for all client writes to the pool.
@@ -244,6 +245,7 @@ The rebuild system operates in two planes:
 **Leader plane** responsibilities:
 - Maintain the rebuild task queue and serialize operations per pool.
 - Broadcast `REBUILD_OBJECTS_SCAN` RPCs to all participating targets to start a rebuild.
+- Validate and filter target lists against the authoritative pool map before issuing `POOL_TGT_DISCARD` RPCs (PR #18643).
 - Accumulate per-target status updates arriving via IV.
 - Declare global scan done and global rebuild done.
 - Publish `riv_global_scan_done` / `riv_global_done` IV updates back to all targets.
@@ -304,8 +306,10 @@ Lives on the **leader** only. Created at the start of a rebuild operation and de
 | `rgt_reclaim_epoch` | Saved for use by the subsequent reclaim operation. See §2.1 for derivation and chronology. |
 | `rgt_status` | `daos_rebuild_status`: publicly visible state, progress counters, error code, fail rank. Updated live via the IV reduction callback (`rebuild_iv_ent_update`) as target reports arrive; memcpy'd to the caller at query time. See §5.10 and §10.10. |
 | `rgt_abort` | Set to 1 to abort all ULTs and trigger the failure path. |
-| `rgt_stop_admin` | Set to 1 when an administrator explicitly stops the rebuild. Always set together with `rgt_abort` (§9.4). |
+| `rgt_stop_admin` | Set to 1 when an administrator explicitly stops the rebuild and the stop is honored (`rc == 0`). See §9.4 for the latch conditions. |
 | `rgt_opc` | The `RB_OP_*` for this tracker. |
+| `rgt_include_up` | When true, the scan broadcast and leader status pre-marking include UP-state engines that would normally be excluded (PR #18713). Set for `RB_OP_FAIL_RECLAIM` with `dst_stop_admin` to ensure reintegrating engines receive the discard broadcast. |
+| `rgt_orig_rb_ver` | The original rebuild's map version (`dst_retry_map_ver`). Used with `rgt_include_up` to determine which UP engines to include: engines with `co_in_ver <= rgt_orig_rb_ver` are included (PR #18713). |
 | `rgt_init_scan` | Set after the scan broadcast completes. Indicates that remote scan ULTs are running and must be notified on abort. |
 | `rgt_dtx_resync_version` | Global minimum DTX resync version across all participating ranks. See §8 for the DTX coordination protocol. |
 
@@ -546,7 +550,9 @@ Each rebuild operation transitions through the following states, tracked in `rgt
 
    **Scan abort on completion (PR #18358):** When a rebuild session completes or is interrupted, scan ULTs on each target now check `rpt->rt_global_done` (in addition to `rt_abort` and `rt_finishing`) before sending each migration batch and before processing each scanned object. This allows scan threads to exit promptly when the rebuild is no longer needed, rather than continuing to iterate objects until the next status-aggregation cycle detects completion.
 
-2. **RGT allocation.** Create `rebuild_global_pool_tracker` for `(pool, map_ver, gen, leader_term, reclaim_eph, op)`. Allocate `rgt_servers[]` with one slot per rank in the pool map. Ranks that will not participate (DOWN, DOWNOUT, NEW, or UP with `co_in_ver > rebuild_ver`) are pre-marked `scan_done=1, pull_done=1` by the leader status-check loop.
+2. **RGT allocation.** Create `rebuild_global_pool_tracker` for `(pool, map_ver, gen, leader_term, reclaim_eph, op)`. Allocate `rgt_servers[]` with one slot per rank in the pool map. Ranks that will not participate (DOWN, DOWNOUT, NEW, or UP that is not included per `rgt_up_dom_included()`) are pre-marked `scan_done=1, pull_done=1` by the leader status-check loop.
+
+   **Fail-reclaim broadcast expansion for stopped reintegration (PR #18713):** When the task is an `RB_OP_FAIL_RECLAIM` triggered by an admin-stopped reintegration (`dst_stop_admin == true`), the leader sets `rgt->rgt_include_up = true` and `rgt->rgt_orig_rb_ver = task->dst_retry_map_ver`. This causes `rgt_up_dom_included()` to include reintegrating (UP) engines in the broadcast participant set — engines whose `co_in_ver <= rgt_orig_rb_ver` — so they receive the fail-reclaim scan and discard their partially-migrated data. Without this, a subsequent `rebuild start` would skip `pool_discard()` (since the target is already UP), potentially leaving stale data that causes `-DER_NOSPACE` on the next reintegration attempt.
 
 3. **Scan broadcast.** Send `REBUILD_OBJECTS_SCAN` RPC to all participating ranks (broadcast, aggregated). The RPC payload includes:
    - `rsi_rebuild_ver`, `rsi_rebuild_gen`, `rsi_leader_term`
@@ -892,7 +898,7 @@ This contrasts with leader-switch retries (§9.2), where the RPT on the new lead
 `ds_rebuild_admin_stop()` may be called by a `dmg pool rebuild stop` command:
 
 - Permitted for `RB_OP_REBUILD` and `RB_OP_UPGRADE`.
-- Accepted during `RB_OP_FAIL_RECLAIM` without `force`: returns success, sets `rgt_stop_admin=1`, but does **not** abort the running fail-reclaim. On completion, `check_to_retry_orig_rebuild()` clears `dst_retry_rebuild_op`, so the original rebuild is not retried. Final state: `DRS_NOT_STARTED`.
+- Accepted during `RB_OP_FAIL_RECLAIM` without `force` **and** when the stop is not rejected (`rc == 0`): sets `rgt_stop_admin=1`, but does **not** abort the running fail-reclaim. Final state after fail-reclaim is finished: `DRS_NOT_STARTED`. A **rejected** stop (e.g., `rc = -DER_NO_PERM` because another rebuild is queued) does NOT latch `rgt_stop_admin` (PR #18750). See "Effect of `rgt_stop_admin` on fail-reclaim completion" for further effects of this latching.
 - Permitted for `RB_OP_FAIL_RECLAIM` with `force=1` only if previous fail-reclaim invocations have failed. Aborts the running fail-reclaim immediately.
 - **Not permitted for `RB_OP_RECLAIM`** — returns `-DER_BUSY`. **RB-13:** No log message explains why.
 
@@ -928,13 +934,15 @@ ds_rebuild_admin_stop() called
             │
             ├── If stoppable: rgt_abort=1, rs_errno=-DER_OP_CANCELED
             │
-            └── Unconditionally, if (rgt_abort || opc == RB_OP_FAIL_RECLAIM):
+            └── If stop honored: (rgt_abort || (opc == RB_OP_FAIL_RECLAIM && rc == 0)):
                     rgt_stop_admin = 1
+                    [PR #18750: rejected stops (rc != 0) do NOT latch]
 ```
 
 **Effect of `rgt_stop_admin` on fail-reclaim completion:**
 
-- When fail-reclaim finishes, `check_to_retry_orig_rebuild()` sees `rgt_stop_admin=1` and clears `dst_retry_rebuild_op` — the original rebuild is not retried. Final state: `DRS_NOT_STARTED`, `rs_errno = -DER_OP_CANCELED`.
+- A **successful** fail-reclaim pass with the stop latched parks the original rebuild with `delay=-1` (indefinitely deferred) rather than retrying it. Final state: `DRS_NOT_STARTED`, `rs_errno = -DER_OP_CANCELED`. The separate `check_to_retry_orig_rebuild()` function was removed (PR #18750); stop propagation is now inline in the fail-reclaim retry path.
+- An **unsuccessful** fail-reclaim propagates a latched stop condition in the retry scheduling call (to retry the fail-reclaim itself) via `task->dst_stop_admin || rgt->rgt_stop_admin`.
 
 **Pool map effect of admin stop:** Admin stop does NOT revert the pool map. The code path through `rebuild_task_complete_schedule()` with `rgt_stop_admin=1` sets `opc = RB_OP_NONE` and returns before reaching `retry_rebuild_task()` (which is where pool map revert lives). As a result:
 - Targets that were being drained remain in DRAINING state.
@@ -948,7 +956,8 @@ ds_rebuild_admin_stop() called
 | Running op | force | Condition | Immediate effect | Final outcome |
 |-----------|-------|-----------|-----------------|---------------|
 | RB_OP_REBUILD/UPGRADE | — | — | `rgt_abort=1`, `rgt_stop_admin=1` | Abort, then fail-reclaim, then no retry |
-| RB_OP_FAIL_RECLAIM | 0 | — | `rgt_stop_admin=1` (no abort) | Fail-reclaim continues; on completion, retry cleared |
+| RB_OP_FAIL_RECLAIM | 0 | rc == 0 | `rgt_stop_admin=1` (no abort) | Fail-reclaim continues; on completion, original rebuild suppressed |
+| RB_OP_FAIL_RECLAIM | 0 | rc != 0 (rejected) | no latch (PR #18750) | Fail-reclaim continues; original rebuild retry preserved |
 | RB_OP_FAIL_RECLAIM | 1 | freclaim_fail > 0 | `rgt_abort=1`, `rgt_stop_admin=1` | Abort fail-reclaim immediately |
 | RB_OP_FAIL_RECLAIM | 1 | freclaim_fail == 0 | `rgt_stop_admin=1` (no abort) | Same as force=0 |
 | RB_OP_RECLAIM | — | — | return `-DER_BUSY` | No effect |

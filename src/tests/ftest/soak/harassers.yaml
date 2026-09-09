@@ -5,13 +5,16 @@ hosts:
   # server_partition: daos_server
   client_partition: daos_client
   # client_reservation: daos-test
+
 orterun:
   allow_run_as_root: true
+
 # This timeout must be longer than the test_timeout param (+15minutes)
 timeout: 72H30M
 setup:
   start_servers: true
   start_agents: true
+
 server_config:
   name: daos_server
   control_log_mask: INFO
@@ -37,6 +40,7 @@ server_config:
         - FI_UNIVERSE_SIZE=16383
         - DD_MASK=rebuild
       storage: auto
+
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   size: 90%
@@ -52,12 +56,14 @@ container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   daos_timeout: 30
+
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:2
   file_oclass: EC_2P2GX
   dir_oclass: RP_3GX
   daos_timeout: 30
+
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -112,6 +118,7 @@ soak_harassers:
   enable_remote_logging: false
   enable_scrubber: false
   enable_rebuild_logmasks: false
+
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -148,6 +155,7 @@ ior_harasser:
   dfuse:
     mount_dir: "/tmp/soak_dfuse_ior"
     disable_caching: true
+
 fio_harasser:
   api:
     - POSIX
@@ -337,11 +345,14 @@ datamover_harasser:
     dfs_destroy: false
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
+
 events:
   - "mce: [Hardware Error]: Machine check events logged"
   - "Package temperature above threshold"
+
 monitor:
   - "/usr/bin/free -h"
   - "/usr/bin/vmstat -w"
   - "ps -C daos_engine -o %mem,%cpu,cmd"
+
 enable_telemetry: true

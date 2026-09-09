@@ -818,6 +818,11 @@ class TestPool(TestDaosApiBase):
             end_time = time() + self.pool_query_timeout.value
 
         while True:
+            if self.pool_query_delay.value:
+                self.log.info(
+                    "Waiting %s seconds before issuing next dmg pool query",
+                    self.pool_query_delay.value)
+                sleep(self.pool_query_delay.value)
             try:
                 return self.dmg.pool_query(self.identifier, show_enabled)
 
@@ -832,12 +837,6 @@ class TestPool(TestDaosApiBase):
                         "response. This timeout can be adjusted via the 'pool/pool_query_timeout' "
                         "test yaml parameter.".format(
                             self.pool_query_timeout.value, self.identifier)) from error
-
-                if self.pool_query_delay.value:
-                    self.log.info(
-                        "Waiting %s seconds before issuing next dmg pool query",
-                        self.pool_query_delay.value)
-                    sleep(self.pool_query_delay.value)
 
     @fail_on(CommandFailure)
     def query_targets(self, *args, **kwargs):

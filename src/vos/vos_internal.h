@@ -716,13 +716,13 @@ vos_obj_tab_register();
  * DTX table destroy
  * Called from vos_cont_destroy
  *
- * \param umm		[IN]	Instance of an unified memory class.
+ * \param pool		[IN]	The pool that holds the container.
  * \param cont_df	[IN]	Pointer to the on-disk VOS container.
  *
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
+vos_dtx_table_destroy(struct vos_pool *pool, struct vos_cont_df *cont_df);
 
 /**
  * Register dbtree class for DTX table.
@@ -845,11 +845,12 @@ vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes, b
  * Establish indexed active DTX table in DRAM.
  *
  * \param cont	[IN]	Pointer to the container.
+ * \param ck	[IN]	Checker structure.
  *
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_act_reindex(struct vos_container *cont);
+vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck);
 
 int
 vos_dtx_record_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t oid);

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +17,7 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
 #include <dlfcn.h>
 #include <regex.h>
@@ -899,6 +901,67 @@ duns_link_lustre_path(const char *pool, const char *cont, daos_cont_layout_t typ
 }
 #endif
 
+/* Bounds queued-notification delivery latency, normally microseconds; does not wait out dentry
+ * expiry on mounts with long timeouts.
+ */
+#define DUNS_RESOLVE_TIMEOUT_MS     10000
+#define DUNS_RESOLVE_BACKOFF_MS_MAX 50
+
+/* Poll until dfuse binds the entry point to the new container, or we hit the timeout. */
+static int
+duns_wait_for_resolution(const char *path, uuid_t cont_uuid)
+{
+	struct timespec start, now;
+	int             backoff_ms = 1;
+	int             rc;
+
+	clock_gettime(CLOCK_MONOTONIC, &start);
+
+	while (1) {
+		struct dfuse_il_reply il_reply = {};
+		int                   fd;
+		int64_t               elapsed_ms;
+
+		fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+		if (fd == -1) {
+			rc = errno;
+			/* ENOLINK: dfuse attempted entry-point resolution and the container
+			 * connect failed - expected during rebinding, and terminal here since a
+			 * failed connect will not heal within the poll window.
+			 */
+			if (rc != ENOLINK)
+				D_ERROR("Failed to open %s to verify resolution: %d (%s)\n", path,
+					rc, strerror(rc));
+			return rc;
+		}
+
+		rc = ioctl(fd, DFUSE_IOCTL_IL, &il_reply);
+		close(fd);
+		if (rc == -1) {
+			rc = errno;
+			D_ERROR("Dfuse IL ioctl failed on %s: %d (%s)\n", path, rc, strerror(rc));
+			return rc;
+		}
+
+		if (uuid_compare(il_reply.fir_cont, cont_uuid) == 0)
+			return 0;
+
+		clock_gettime(CLOCK_MONOTONIC, &now);
+		elapsed_ms =
+		    (now.tv_sec - start.tv_sec) * 1000 + (now.tv_nsec - start.tv_nsec) / 1000000;
+		if (elapsed_ms >= DUNS_RESOLVE_TIMEOUT_MS) {
+			D_ERROR("Entry point %s still bound to container " DF_UUIDF " after %dms, "
+				"expected " DF_UUIDF "\n",
+				path, DP_UUID(il_reply.fir_cont), DUNS_RESOLVE_TIMEOUT_MS,
+				DP_UUID(cont_uuid));
+			return ENOLINK;
+		}
+
+		usleep(backoff_ms * 1000);
+		backoff_ms = min(backoff_ms * 2, DUNS_RESOLVE_BACKOFF_MS_MAX);
+	}
+}
+
 int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 {
@@ -1098,21 +1161,13 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 		goto err_cont;
 	}
+
 	if (backend_dfuse) {
-		struct stat finfo;
-		/*
-		 * This next stat will cause dfuse to lookup the entry point and perform a
-		 * container connect, therefore this data will be read from root of the new
-		 * container, not the directory.
-		 *
-		 * TODO: This could call getxattr to verify success.
+		/* Confirm dfuse has looked up the entry point and connected to the new container.
 		 */
-		rc = stat(path, &finfo);
-		if (rc) {
-			rc = errno;
-			D_ERROR("Failed to access new container: %d (%s)\n", rc, strerror(rc));
-			goto err_link;
-		}
+		rc = duns_wait_for_resolution(path, attrp->da_cuuid);
+		if (rc)
+			goto err_cont;
 	}
 
 	return rc;
@@ -1324,20 +1379,11 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 		D_GOTO(err_link, rc);
 	}
 	if (backend_dfuse) {
-		struct stat finfo;
-		/*
-		 * This next stat will cause dfuse to lookup the entry point and perform a
-		 * container connect, therefore this data will be read from root of the new
-		 * container, not the directory.
-		 *
-		 * TODO: This could call getxattr to verify success.
+		/* Confirm dfuse has looked up the entry point and connected to the new container.
 		 */
-		rc = stat(path, &finfo);
-		if (rc) {
-			rc = errno;
-			DS_ERROR(rc, "Failed to access container bind at '%s'", path);
+		rc = duns_wait_for_resolution(path, cinfo.ci_uuid);
+		if (rc)
 			goto err_link;
-		}
 	}
 
 out_cont:

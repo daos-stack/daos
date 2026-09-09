@@ -171,7 +171,6 @@ class IorTestBase(TestWithServers):
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
         if create_cont:
-            self.pool.connect()
             self.create_cont()
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.pool, self.container.uuid)

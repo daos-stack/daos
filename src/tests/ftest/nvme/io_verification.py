@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 from dmg_utils import check_system_query_status
 from ior_test_base import IorTestBase
 
@@ -18,92 +17,24 @@ class NvmeIoVerification(IorTestBase):
     :avocado: recursive
     """
 
-    def test_nvme_io_verification(self):
-        """Jira ID: DAOS-2649.
-
-        Test Description:
-            Test will run IOR with non standard transfer sizes for different
-            set of pool sizes. Purpose is to verify io transaction to scm and
-            nvme for different pool sizes under different situations.
-
-        Use Cases:
-            (1) Running IOR with different set of transfer size where first
-            transfer size is < 4096 and then > 4096. Verify that data goes to
-            scm if transfer size < 4096 and then it goes to nvme if transfer
-            size is > 4096.
-            (2) Repeat the case(1) with maximum nvme pool size that can be
-            created.
-            (3) Running IOR with different set of transfer size where the
-            transfer size is > 4096 throughout. Verify that data goes to nvme
-            as transfer size is > 4096.
-            (4) Repeat the case(3) with maximum nvme pool size that can be
-            created.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=nvme,daosio
-        :avocado: tags=NvmeIoVerification,test_nvme_io_verification
-        """
-        ior_processes = self.params.get("np", '/run/ior/*')
-        ior_transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
-        ior_block_size = self.ior_cmd.block_size.value
-        num_pools = self.params.get("num_pools", '/run/pool/*')
-        job_manager = self.get_ior_job_manager_command()
-
-        # Loop for every pool size
-        for index in range(num_pools):
-            # Create and connect to a pool with namespace
-            self.pool = self.get_pool(namespace=f"/run/pool_{index}/*")
-
-            # get pool info
-            self.pool.get_info()
-
-            for tsize in ior_transfer_size:
-                # Get the current pool sizes
-                size_before_ior = self.pool.info
-
-                # Run ior with the parameters specified for this pass
-                self.ior_cmd.transfer_size.update(tsize)
-                # if transfer size is less thank 1K
-                # update block size to 32K to keep it small
-                if tsize <= 1000:
-                    self.ior_cmd.block_size.update(32000)
-                else:
-                    self.ior_cmd.block_size.update(ior_block_size)
-                container = self.get_container(self.pool)
-                container.open()  # Workaround for pydaos handles
-                self.ior_cmd.set_daos_params(self.pool, container.identifier)
-                self.run_ior(job_manager, ior_processes)
-
-                # Verify IOR consumed the expected amount from the pool
-                self.verify_pool_size(size_before_ior, self.processes)
-
-                # Destroy the container
-                container.destroy()
-
-            # destroy pool
-            self.pool.destroy()
-
     def test_nvme_server_restart(self):
         """Jira ID: DAOS-2650.
 
         Test Description:
-            Test will run IOR with non standard transfer sizes for different
-            set of pool sizes. Purpose is to verify io transaction to scm and
-            nvme for different pool sizes when servers are restarted after
-            write.
+            Test will run IOR with non standard transfer sizes for different set of pool sizes.
+            Purpose is to verify io transaction to scm and nvme for different pool sizes when
+            servers are restarted after write.
 
-        Use Cases:
-            (1) Running IOR with different set of transfer size where first
-            transfer size is < 4096 and then > 4096. Verify the data after
-            servers are restarted.
-            (2) Repeat the case(1) with maximum nvme pool size that can be
-            created.
-            (3) Running IOR with different set of transfer size where the
-            transfer size is > 4096 throughout. Verify the data after
-            servers are restarted.
-            (4) Repeat the case(3) with maximum nvme pool size that can be
-            created.
+        Test Steps:
+        1. Create a pool of specified size percentage.
+        2. Create a container and run IOR write with specified transfer size. Some transfer size
+        is smaller than 4096 and some are larger so that both SCM and NVMe are tested. See the test
+        yaml for detail.
+        3. Restart servers and verify that all servers restarted.
+        4. Run IOR read to verify that reading the data written before the restart works.
+        5. Verify IOR consumed the expected amount of space from the pool.
+        6. Destroy container and go to step 2. After all transfer sizes are tested, go to next.
+        7. Destroy pool and go to step 1.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
@@ -111,27 +42,30 @@ class NvmeIoVerification(IorTestBase):
         :avocado: tags=NvmeIoVerification,test_nvme_server_restart
         """
         ior_processes = self.params.get("np", '/run/ior/*')
-        ior_transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
+        ior_transfer_size = self.params.get("tsize", '/run/ior/transfer_size/*/')
         ior_block_size = self.ior_cmd.block_size.value
         num_pools = self.params.get("num_pools", '/run/pool/*')
         ior_flag_write = self.params.get("write", '/run/ior/*/')
         ior_flag_read = self.params.get("read", '/run/ior/*/')
         job_manager = self.get_ior_job_manager_command()
 
-        # Loop for every pool size
+        # Loop for every pool size.
         for index in range(num_pools):
-            # Create and connect to a pool with namespace
+            self.log_step("Create a pool: pool_{}".format(index))
             self.pool = self.get_pool(namespace="/run/pool_{}/*".format(index))
 
-            # get pool info
+            self.log_step("Query the pool.")
             self.pool.get_info()
 
             for tsize in ior_transfer_size:
-                # Run ior with the parameters specified for this pass
+                self.log_step("Run a test pass with transfer size = {} byte".format(tsize))
+                # Get the current pool size.
+                size_before_ior = self.pool.info
+
+                self.log_step("Run ior write with the parameters specified for this pass.")
                 self.ior_cmd.transfer_size.update(tsize)
                 self.ior_cmd.flags.update(ior_flag_write)
-                # if transfer size is less thank 1K
-                # update block size to 32K to keep it small
+                # If transfer size is less thank 1K update block size to 32K to keep it small
                 if tsize <= 1000:
                     self.ior_cmd.block_size.update(32000)
                 else:
@@ -140,23 +74,38 @@ class NvmeIoVerification(IorTestBase):
                 self.ior_cmd.set_daos_params(self.pool, container.identifier)
                 self.run_ior(job_manager, ior_processes)
 
-                # Stop all servers
+                if tsize < 4096:
+                    self.log_step("Data written to SCM. Verify pool space usage before restart.")
+                    self.verify_pool_size(size_before_ior, self.processes)
+
+                self.log_step("Stop all servers.")
                 self.get_dmg_command().system_stop(True)
 
-                # Start all servers
+                self.log_step("Start all servers")
                 self.get_dmg_command().system_start()
 
-                # check if all servers started as expected
+                self.log_step("Check if all servers started as expected.")
                 scan_info = self.get_dmg_command().system_query()
                 if not check_system_query_status(scan_info):
                     self.fail("One or more servers crashed")
 
-                # read all the data written before server restart
+                self.log_step("Run IOR read to verify data written before server restart.")
                 self.ior_cmd.flags.update(ior_flag_read)
                 self.run_ior(job_manager, ior_processes)
 
-                # destroy the container
+                self.log_step("Verify IOR consumed the expected amount of space from the pool.")
+                # Data in SCM are moved to NVMe after restart, so we need to compare the original
+                # and current pool usage on NVMe. verify_pool_size determines which storage to use
+                # by checking whether self.ior_cmd.transfer_size is above 4096.
+                if tsize < 4096:
+                    self.log.info(
+                        "Data written to SCM, but moved to NVMe after restart. Update transfer "
+                        "size to >4096.")
+                    self.ior_cmd.transfer_size.update(10000)
+                self.verify_pool_size(size_before_ior, self.processes)
+
+                self.log_step("Destroy container.")
                 container.destroy()
 
-            # destroy pool
+            self.log_step("Destroy pool.")
             self.pool.destroy()

@@ -1,8 +1,12 @@
+* Mon Aug 24 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 2.26.1-2
+- Rebuild to force update of defective packages.
+- Restore missing auto-generated runtime dependencies.
+
 * Tue Jun 23 2026 Dalton Bohning <dalton.bohning@hpe.com> - 2.26.1-1
-* Update to 2.26.1
+- Update to 2.26.1
 
 * Fri May 08 2026 Tom Nabarro <thomas.nabarro@hpe.com> - 2.26.0-1
-* Update DAOS to 2.26 release to mirror SPDK v26.01 submodule
+- Update DAOS to 2.26 release to mirror SPDK v26.01 submodule
 
 * Thu Nov 6 2025 Jeff Olivier <jeffolivier@google.com> - 2.25.0-1
 - Update DAOS to 2.25.0 release

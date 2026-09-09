@@ -1044,7 +1044,8 @@ dtx_commit_large(daos_handle_t coh, struct dtx_id *dtis, int cnt, bool keep_act,
 		if (i + step > cnt)
 			step = cnt - i;
 
-		rc = vos_dtx_commit(coh, dtis + i, step, keep_act, rm_cos);
+		rc = vos_dtx_commit(coh, dtis + i, step, keep_act,
+				    rm_cos != NULL ? &rm_cos[i] : NULL);
 		if (rc >= 0) {
 			committed += rc;
 			i += step;

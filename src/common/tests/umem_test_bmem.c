@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2023-2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,7 +28,6 @@
 #include <daos/tests_lib.h>
 #include "utest_common.h"
 
-#define POOL_SIZE  ((256 * 1024 * 1024ULL))
 #define NEMB_RATIO (0.8)
 #define MB_SIZE    (16 * 1024 * 1024)
 
@@ -2669,6 +2668,16 @@ test_umempobj_heap_mb_stats(void **state)
 	D_FREE(name);
 }
 
+static void
+test_tx_fail_no_abort(void **state)
+{
+	struct test_arg *arg = *state;
+	int              rc;
+
+	rc = utest_tx_fail_no_abort(arg->ta_utx);
+	assert_int_equal(rc, 0);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -2702,6 +2711,8 @@ main(int argc, char **argv)
 	     teardown_pmem},
 	    {"BMEM015a: Test tx defer free publish/cancel", test_tx_bucket_dfree_publish_cancel,
 	     setup_pmem, teardown_pmem},
+	    {"BMEM016: Test TX failure with NO_ABORT on bmem", test_tx_fail_no_abort, setup_pmem,
+	     teardown_pmem},
 	    {NULL, NULL, NULL, NULL}};
 
 	static const struct CMUnitTest v2_tests[] = {
@@ -2747,6 +2758,8 @@ main(int argc, char **argv)
 	     NULL},
 	    {"BMEM022: Test umempobj non_evictable MB usage", test_umempobj_nemb_usage, NULL, NULL},
 	    {"BMEM023: Test umempobj get MB stats", test_umempobj_heap_mb_stats, NULL, NULL},
+	    {"BMEM024: Test TX failure with NO_ABORT on bmem_v2", test_tx_fail_no_abort,
+	     setup_pmem_v2, teardown_pmem},
 	    {NULL, NULL, NULL, NULL}};
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
