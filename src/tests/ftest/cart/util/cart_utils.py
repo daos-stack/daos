@@ -15,7 +15,9 @@ import cart_logparse
 import cart_logtest
 from apricot import TestWithoutServers
 from ClusterShell.NodeSet import NodeSet
-from job_manager_utils import Orterun, stop_job_manager
+from host_utils import get_local_host
+from job_manager_utils import Orterun
+from run_utils import stop_processes
 from write_host_file import write_host_file
 
 
@@ -31,6 +33,7 @@ class CartTest(TestWithoutServers):
         self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))))
         self.attach_dir = None
+        self.cleanup_commands = []
 
     def setUp(self):
         """Set up the test case."""
@@ -92,6 +95,7 @@ class CartTest(TestWithoutServers):
     def tearDown(self):
         """Tear down the test case."""
         self.report_timeout()
+        self._teardown_errors.extend(self.cleanup_processes())
         super().tearDown()
 
     @staticmethod
@@ -141,6 +145,25 @@ class CartTest(TestWithoutServers):
             os.unlink(_file)
 
         return found_files
+
+    def cleanup_processes(self):
+        """Clean up cart processes, in case avocado/apricot does not."""
+        error_list = []
+        if not self.cleanup_commands:
+            self.log.info("No cart commands to cleanup.")
+            return error_list
+        cleanup_commands = "|".join(self.cleanup_commands)
+        localhost = get_local_host()
+        processes = rf"'\<({cleanup_commands})\>'"
+        negative_filter = r"'\<(grep|defunct|avocado-runner-avocado-instrumented)\>'"
+        running = True
+        for _ in range(2):
+            _, running = stop_processes(self.log, localhost, processes, exclude=negative_filter)
+            if not running:
+                break
+        if running:
+            error_list.append("Unable to stop cart processes!")
+        return error_list
 
     @staticmethod
     def stop_process(proc):
@@ -253,28 +276,10 @@ class CartTest(TestWithoutServers):
 
         # Write memcheck result file(s) to $HOME or DAOS_TEST_SHARED_DIR.
         daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR', os.getenv('HOME'))
-        memcheck_xml = r"{}/valgrind.%q\{{PMIX_ID\}}_{}.memcheck".format(
-            daos_test_shared_dir,
-            test_name)
+
         tst_cmd = ""
         tst_cont = None
-
         index = kwargs.get('index', None)
-        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR', os.getenv('HOME'))
-
-        # Return 0 on memory leaks while suppression file is completed
-        # (CART-975 and CART-977)
-        memcheck_error_code = 0
-
-        tst_vgd = " valgrind --xml=yes " + \
-                  "--xml-file={}".format(memcheck_xml) + " " + \
-                  "--fair-sched=yes --partial-loads-ok=yes " + \
-                  "--leak-check=full --show-leak-kinds=all " + \
-                  " --gen-suppressions=all " + \
-                  "--suppressions=" + self.supp_file + " " + \
-                  "--track-origins=yes " + \
-                  "--error-exitcode=" + str(memcheck_error_code) + " " \
-                  "--show-reachable=yes --trace-children=yes"
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
         _tst_arg = self.params.get("{}_arg".format(host), "/run/tests/*/")
@@ -321,10 +326,27 @@ class CartTest(TestWithoutServers):
         tst_mod = os.getenv("WITH_VALGRIND", "native")
 
         if tst_mod == "memcheck":
-            tst_cmd += tst_vgd
+            # Return 0 on memory leaks while suppression file is completed (CART-975 and CART-977)
+            memcheck_error_code = 0
+            memcheck_xml = fr"{daos_test_shared_dir}/valgrind.%q\{{PMIX_ID\}}_{test_name}.memcheck"
+            tst_cmd += " ".join([
+                " valgrind",
+                "--xml=yes",
+                f"--xml-file={memcheck_xml}",
+                "--fair-sched=yes",
+                "--partial-loads-ok=yes",
+                "--leak-check=full --show-leak-kinds=all",
+                " --gen-suppressions=all",
+                f"--suppressions={self.supp_file}",
+                "--track-origins=yes",
+                f"--error-exitcode={memcheck_error_code}",
+                "--show-reachable=yes",
+                "--trace-children=yes"])
+            self.cleanup_commands.append("valgrind")
 
         if tst_bin is not None:
             tst_cmd += " " + tst_bin
+            self.cleanup_commands.append(tst_bin)
 
         if tst_arg is not None:
             tst_cmd += " " + tst_arg
@@ -335,9 +357,7 @@ class CartTest(TestWithoutServers):
         job.hostfile.update(hostfile)
         job.pprnode.update(tst_ppn)
         job.processes.update(tst_processes)
-
-        # Add a step to ensure this job is stopped when the test finishes or times out
-        self.register_cleanup(stop_job_manager, job_manager=job)
+        self.cleanup_commands.append("orterun")
 
         return str(job)
 
