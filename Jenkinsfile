@@ -553,7 +553,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.5') {
+                stage('Build RPM on Leap 15') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -977,7 +977,11 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
+                                inst_rpms: functionalPackages(
+                                    clientVersion: 1,
+                                    next_version: next_version(),
+                                    addDaosPkgs: 'tests-internal',
+                                    rpmDistribution: '.suse.lp155'),
                                 test_function: 'runTestFunctionalV2',
                                 image_version: 'leap15.6'))
                     }
@@ -1137,7 +1141,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test RPMs on Leap 15.5')
+                } // stage('Test RPMs on Leap 15.4')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {
