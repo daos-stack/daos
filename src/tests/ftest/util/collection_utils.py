@@ -228,6 +228,7 @@ def check_server_storage(logger, test, test_result, stage):
 def archive_files_in_dir(logger, summary, hosts, source, dir_pattern, file_pattern,
                          destination, depth, threshold, timeout, test_result,
                          test=None, dir_chown=False):
+    # pylint: disable=too-many-arguments
     """
     Archive files in directories matching the specified pattern on remote hosts.
 
@@ -1154,11 +1155,11 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
         for summary, data in remote_files.items():
             if not data["hosts"]:
                 continue
-            elif "dlck_check*/*_vos-*" in data["pattern"]:
-                split_data = data["pattern"].split("/")
+            if "dlck_check*/*_vos-*" in data["pattern"]:
+                dir_filename = data["pattern"].split("/")
                 return_code |= archive_files_in_dir(
                     logger, summary, data["hosts"].copy(), data["source"],
-                    split_data[0], split_data[1], data["destination"],
+                    dir_filename[0], dir_filename[1], data["destination"],
                     data["depth"], threshold, data["timeout"],
                     test_result, test, data["chown"])
             else:
