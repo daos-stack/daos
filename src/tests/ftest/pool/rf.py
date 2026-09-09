@@ -162,8 +162,8 @@ class PoolRedunFacProperty(IorTestBase):
             pool=pool, cont_rfs=cont_rfs, pool_prop_expected=new_pool_rd_fac)
 
         # 8. Verify that while pool's rd_fac was changed, container's rd_fac remained the same.
-        msg = ("Verify that while pool's rd_fac was changed, container's rd_fac remained the same.")
-        self.log_step(msg)
+        self.log_step(
+            "Verify that while pool's rd_fac was changed, container's rd_fac remained the same.")
         msg = "Unexpected container rd_fac after pool rd_fac was changed!"
         self.verify_container_rd_fac(
             container=container, expected_rd_fac=pool_prop_expected, msg=msg)
