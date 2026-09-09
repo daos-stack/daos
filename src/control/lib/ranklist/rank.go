@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,6 +24,9 @@ const (
 	MaxRank Rank = math.MaxUint32 - 1
 	// NilRank is an undefined Rank (0 is a valid Rank).
 	NilRank Rank = math.MaxUint32
+
+	// NilRankStr is a string representing an undefined Rank.
+	NilRankStr string = "NilRank"
 )
 
 // NewRankPtr creates a Rank representation of
@@ -32,12 +36,29 @@ func NewRankPtr(in uint32) *Rank {
 	return &r
 }
 
+// NewRankFromString parses a rank number or "NilRank" and creates a new Rank pointer.
+func NewRankFromString(value string) (*Rank, error) {
+	if value == "" {
+		return nil, errors.New("cannot create rank from empty string")
+	}
+
+	if value == NilRankStr {
+		return NewRankPtr(uint32(NilRank)), nil
+	}
+
+	rankNum, err := strconv.ParseUint(value, 10, 32)
+	if err != nil {
+		return nil, errors.Wrapf(err, "invalid rank %q", value)
+	}
+	return NewRankPtr(uint32(rankNum)), nil
+}
+
 func (r *Rank) String() string {
 	switch {
 	case r == nil:
-		return "NilRank"
+		return NilRankStr
 	case r.Equals(NilRank):
-		return "NilRank"
+		return NilRankStr
 	default:
 		return strconv.FormatUint(uint64(*r), 10)
 	}

@@ -907,6 +907,96 @@ void   mgmt__check_act_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__check_act_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__check_leader_req__init
+                     (Mgmt__CheckLeaderReq         *message)
+{
+  static const Mgmt__CheckLeaderReq init_value = MGMT__CHECK_LEADER_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__check_leader_req__get_packed_size
+                     (const Mgmt__CheckLeaderReq *message)
+{
+  assert(message->base.descriptor == &mgmt__check_leader_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__check_leader_req__pack
+                     (const Mgmt__CheckLeaderReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__check_leader_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__check_leader_req__pack_to_buffer
+                     (const Mgmt__CheckLeaderReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__check_leader_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__CheckLeaderReq *
+       mgmt__check_leader_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__CheckLeaderReq *)
+     protobuf_c_message_unpack (&mgmt__check_leader_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__check_leader_req__free_unpacked
+                     (Mgmt__CheckLeaderReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__check_leader_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__check_leader_resp__init
+                     (Mgmt__CheckLeaderResp         *message)
+{
+  static const Mgmt__CheckLeaderResp init_value = MGMT__CHECK_LEADER_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__check_leader_resp__get_packed_size
+                     (const Mgmt__CheckLeaderResp *message)
+{
+  assert(message->base.descriptor == &mgmt__check_leader_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__check_leader_resp__pack
+                     (const Mgmt__CheckLeaderResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__check_leader_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__check_leader_resp__pack_to_buffer
+                     (const Mgmt__CheckLeaderResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__check_leader_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__CheckLeaderResp *
+       mgmt__check_leader_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__CheckLeaderResp *)
+     protobuf_c_message_unpack (&mgmt__check_leader_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__check_leader_resp__free_unpacked
+                     (Mgmt__CheckLeaderResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__check_leader_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor mgmt__check_inconsist_policy__field_descriptors[2] =
 {
   {
@@ -2172,5 +2262,185 @@ const ProtobufCMessageDescriptor mgmt__check_act_resp__descriptor =
   mgmt__check_act_resp__field_indices_by_name,
   1,  mgmt__check_act_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__check_act_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__check_leader_req__field_descriptors[5] =
+{
+  {
+    "drpc_method",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__CheckLeaderReq, drpc_method),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "start_req",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__CheckLeaderReq, req_case),
+    offsetof(Mgmt__CheckLeaderReq, start_req),
+    &mgmt__check_start_req__descriptor,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "stop_req",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__CheckLeaderReq, req_case),
+    offsetof(Mgmt__CheckLeaderReq, stop_req),
+    &mgmt__check_stop_req__descriptor,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "set_policy_req",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__CheckLeaderReq, req_case),
+    offsetof(Mgmt__CheckLeaderReq, set_policy_req),
+    &mgmt__check_set_policy_req__descriptor,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "query_req",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__CheckLeaderReq, req_case),
+    offsetof(Mgmt__CheckLeaderReq, query_req),
+    &mgmt__check_query_req__descriptor,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__check_leader_req__field_indices_by_name[] = {
+  0,   /* field[0] = drpc_method */
+  4,   /* field[4] = query_req */
+  3,   /* field[3] = set_policy_req */
+  1,   /* field[1] = start_req */
+  2,   /* field[2] = stop_req */
+};
+static const ProtobufCIntRange mgmt__check_leader_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 5 }
+};
+const ProtobufCMessageDescriptor mgmt__check_leader_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.CheckLeaderReq",
+  "CheckLeaderReq",
+  "Mgmt__CheckLeaderReq",
+  "mgmt",
+  sizeof(Mgmt__CheckLeaderReq),
+  5,
+  mgmt__check_leader_req__field_descriptors,
+  mgmt__check_leader_req__field_indices_by_name,
+  1,  mgmt__check_leader_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__check_leader_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__check_leader_resp__field_descriptors[5] =
+{
+  {
+    "drpc_status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__CheckLeaderResp, drpc_status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "daos_resp",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__CheckLeaderResp, resp_case),
+    offsetof(Mgmt__CheckLeaderResp, daos_resp),
+    &mgmt__daos_resp__descriptor,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "start_resp",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__CheckLeaderResp, resp_case),
+    offsetof(Mgmt__CheckLeaderResp, start_resp),
+    &mgmt__check_start_resp__descriptor,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "stop_resp",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__CheckLeaderResp, resp_case),
+    offsetof(Mgmt__CheckLeaderResp, stop_resp),
+    &mgmt__check_stop_resp__descriptor,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "query_resp",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__CheckLeaderResp, resp_case),
+    offsetof(Mgmt__CheckLeaderResp, query_resp),
+    &mgmt__check_query_resp__descriptor,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_ONEOF,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__check_leader_resp__field_indices_by_name[] = {
+  1,   /* field[1] = daos_resp */
+  0,   /* field[0] = drpc_status */
+  4,   /* field[4] = query_resp */
+  2,   /* field[2] = start_resp */
+  3,   /* field[3] = stop_resp */
+};
+static const ProtobufCIntRange mgmt__check_leader_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 5 }
+};
+const ProtobufCMessageDescriptor mgmt__check_leader_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.CheckLeaderResp",
+  "CheckLeaderResp",
+  "Mgmt__CheckLeaderResp",
+  "mgmt",
+  sizeof(Mgmt__CheckLeaderResp),
+  5,
+  mgmt__check_leader_resp__field_descriptors,
+  mgmt__check_leader_resp__field_indices_by_name,
+  1,  mgmt__check_leader_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__check_leader_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
