@@ -17,7 +17,7 @@ from apricot import TestWithoutServers
 from ClusterShell.NodeSet import NodeSet
 from host_utils import get_local_host
 from job_manager_utils import Orterun
-from run_utils import stop_processes
+from run_utils import run_local, stop_processes
 from write_host_file import write_host_file
 
 
@@ -148,6 +148,7 @@ class CartTest(TestWithoutServers):
 
     def cleanup_processes(self):
         """Clean up cart processes, in case avocado/apricot does not."""
+        self.log.info("Cleaning up cart commands: %s", self.cleanup_commands)
         error_list = []
         if not self.cleanup_commands:
             self.log.info("No cart commands to cleanup.")
@@ -418,19 +419,17 @@ class CartTest(TestWithoutServers):
         self.log.info("CMD : %s", cmd)
         self.log.info("ENV : %s", os.environ)
 
-        cmd = shlex.split(cmd)
-        rtn = subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-        if rtn:
+        result = run_local(self.log, cmd)
+        if not result.passed:
             if srv1 is not None:
                 self.stop_process(srv1)
             if srv2 is not None:
                 self.stop_process(srv2)
-            self.fail(f"Failed, return codes {rtn}")
+            self.fail(f"Failed, return codes {result.exit_status}")
 
         self.convert_xml_files()
 
-        return rtn
+        return result.exit_status
 
     def launch_cmd_bg(self, cmd):
         """Launch the given cmd in background."""
