@@ -1422,6 +1422,8 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(opi->opi_co_uuid, shard->do_co->dc_uuid);
 	daos_dti_copy(&opi->opi_dti, &args->pa_dti);
 	opi->opi_flags = args->pa_auxi.flags;
+	if (args->pa_auxi.obj_auxi->rebuilding)
+		opi->opi_flags |= ORF_REBUILDING_IO;
 	opi->opi_dti_cos.ca_count = 0;
 	opi->opi_dti_cos.ca_arrays = NULL;
 	if (opc_get_rpc_ver(req->cr_opc) >= 10) {
