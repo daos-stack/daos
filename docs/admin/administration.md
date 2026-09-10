@@ -1294,8 +1294,25 @@ In MD-on-SSD mode, each engine will contain a "special" SysXS target on one of i
 Unlike regular NVMe device failures that can often be handled online using hotplug procedures,
 a SysXS device failure causes the engine to terminate immediately.
 
-The command `dmg storage query list-devices` command can be used to identify which device is
-running the SysXS target on a given engine/rank.
+The command `dmg storage query list-devices` can be used to identify which device is
+running the SysXS target on a given engine/rank. The output will show "SysXS" in each device that
+contains either a meta or wal role AND hosts target-0 as illustrated in the following example:
+
+```bash
+$ dmg storage query list-devices
+--------
+daos-16
+--------
+  Devices
+    UUID:440a7ce9-849f-440c-befe-017d1cc2072b [TrAddr:0000:5e:00.0 NSID:1]
+      Roles:data,meta,wal SysXS Targets:[0 2 4 6 8 10 12 14] Rank:3 State:NORMAL LED:NA
+    UUID:9ee24bbf-6cd9-40c0-94f3-776056e9ea69 [TrAddr:0000:5f:00.0 NSID:1]
+      Roles:data,meta,wal Targets:[1 3 5 7 9 11 13 15] Rank:3 State:NORMAL LED:NA
+    UUID:67ad6337-c14b-497b-a37d-521e604d17be [TrAddr:0000:8e:00.0 NSID:1]
+      Roles:data,meta,wal SysXS Targets:[0 2 4 6 8 10 12 14] Rank:4 State:NORMAL LED:NA
+    UUID:5a81ca73-c33e-49f2-a31b-fd86ea48669a [TrAddr:0000:8f:00.0 NSID:1]
+      Roles:data,meta,wal Targets:[1 3 5 7 9 11 13 15] Rank:4 State:NORMAL LED:NA
+```
 
 **Key Characteristics of SysXS Failure:**
 - The engine will **exit unexpectedly** when the SysXS device fails and `engine_died` RAS event
@@ -1304,7 +1321,7 @@ will be emitted
 errors at failure point
 - Online hotplug procedures (see [Exclusion and Hotplug](#exclusion-and-hotplug)) do not apply
 - The engine cannot self-exclude and restart; manual intervention is required
-- The failed SSD must be replaced offline (server powered down)
+- The failed SSD must be replaced when `daos_server` process is stopped
 - Recovery requires `dmg storage format --replace` to reuse the engine's "old" rank once fixed
 
 **Example Scenario: Engine with SysXS on Data/WAL/Meta SSD**
@@ -1321,20 +1338,26 @@ If a server is configured with engines where a single SSD carries the data, WAL,
 **Recovery Workflow for SysXS Device Failure:**
 
 1. Verify Failure
+When an engine terminates because of SysXS device failure the following will be logged by the
+engine:
+```bash
+2026/06/25 16:55:18.107687 daos-75 DAOS[12274/0/243] pool ERR  src/pool/srv_util.c:1835 nvme_reaction() SYS target SSD is failed, kill the engine...
+```
+To verify:
 ```bash
 dmg system query -v  # Look for "Errored" state
-tail -f /var/log/daos/daos_engine.0.log  # Check for device errors
+dmg storage query list-devices  # Confirm failure is on SysXS device
+grep -i "SYS target SSD is failed" /var/log/daos/daos_engine.0.log  # Check for SysXS-related errors
 ```
 
 2. Stop Server
 ```bash
 systemctl stop daos_server
+systemctl disable daos_server
 ```
 
-3. Physical Replacement
-- Power down the storage server
+3. Physical Replacement (either online or offline)
 - Replace the faulty SSD
-- Power up but don't start daos_server
 
 4. Prepare To Trigger Format Request By Removing Superblock
 ```bash
@@ -1344,6 +1367,7 @@ rm /mnt/control_metadata/daos_control/engine0/superblock
 
 5. Restart Server
 ```bash
+systemctl enable daos_server
 systemctl start daos_server
 ```
 
@@ -1372,15 +1396,15 @@ dmg system reintegrate -r <engine_rank>
 |--------|------|------|
 | Engine Behavior | Engine may report IO and media errors | Engine terminates immediately |
 | Data Availability | System continues running | Engine goes offline |
-| Procedure | `dmg storage set nvme-faulty` + `dmg storage replace nvme` | Power down + hardware replacement + `dmg storage format --replace` |
-| Timing | Can be performed while system is running | Requires system shutdown on affected host |
+| Procedure | `dmg storage set nvme-faulty` + `dmg storage replace nvme` | Stop `daos_server` + hardware replacement + remove superblock + Start `daos_server` + `dmg storage format --replace` |
+| Timing | Can be performed while system is running | Requires DAOS service stop/start on affected host |
 | Recovery Time | Minutes (online) | Hours (includes downtime) |
 
 **Common Mistakes to AVOID:**
 
 1. **❌ Do NOT use online hotplug commands for SysXS failures**
    - `dmg storage set nvme-faulty` - Won't work, engine already died
-   - `dmg storage replace nvme` - Requires online hotplug support
+   - `dmg storage replace nvme` - Requires online hotplug support, command will fail
 
 2. **❌ Do NOT restart daos_server without removing superblock**
    - Engine won't trigger format request
