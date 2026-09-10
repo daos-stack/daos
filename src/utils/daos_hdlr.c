@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1934,11 +1934,8 @@ out:
 }
 
 static int
-cont_clone_recx_single(struct cmd_args_s *ap,
-		       daos_key_t *dkey,
-		       daos_handle_t *src_oh,
-		       daos_handle_t *dst_oh,
-		       daos_iod_t *iod)
+cont_clone_recx_single(struct cmd_args_s *ap, daos_key_t *dkey, daos_handle_t th,
+		       daos_handle_t *src_oh, daos_handle_t *dst_oh, daos_iod_t *iod)
 {
 	/* if iod_type is single value just fetch iod size from source
 	 * and update in destination object
@@ -1955,8 +1952,7 @@ cont_clone_recx_single(struct cmd_args_s *ap,
 	sgl.sg_iovs   = &iov;
 	d_iov_set(&iov, buf, buf_len);
 
-	rc = daos_obj_fetch(*src_oh, DAOS_TX_NONE, 0, dkey, 1, iod, &sgl,
-			    NULL, NULL);
+	rc = daos_obj_fetch(*src_oh, th, 0, dkey, 1, iod, &sgl, NULL, NULL);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "Failed to fetch source value");
 		D_GOTO(out, rc);
@@ -1971,33 +1967,49 @@ out:
 	return rc;
 }
 
+/*
+ * The extents reported by daos_obj_list_recx() are only a superset of the data: for an EC object
+ * they are derived from the parity and are therefore stripe granular. The io map returned by the
+ * fetch is what actually holds data, so the destination is updated from that.
+ *
+ * Regression test for this function: src/tests/ftest/datamover/obj_ec.py. EC32-EC35 in
+ * src/tests/suite/daos_obj_ec.c cover the io map behavior relied on here but do not run this
+ * code, so they stay green if this function is broken.
+ */
 static int
-cont_clone_recx_array(struct cmd_args_s *ap,
-		      daos_key_t *dkey,
-		      daos_key_t *akey,
-		      daos_handle_t *src_oh,
-		      daos_handle_t *dst_oh,
-		      daos_iod_t *iod)
+cont_clone_recx_array(struct cmd_args_s *ap, daos_key_t *dkey, daos_key_t *akey, daos_handle_t th,
+		      daos_handle_t *src_oh, daos_handle_t *dst_oh)
 {
-	int			rc = 0;
-	int			i = 0;
-	daos_size_t		buf_len = 0;
-	daos_size_t		buf_len_alloc = 0;
-	uint32_t		number = 5;
-	daos_anchor_t		recx_anchor = {0};
-	d_sg_list_t		sgl;
-	d_iov_t			iov;
-	daos_epoch_range_t	eprs[5];
-	daos_recx_t		recxs[5];
-	daos_size_t		size;
-	char			*buf = NULL;
-	char			*prev_buf = NULL;
+	int                rc            = 0;
+	int                i             = 0;
+	int                j             = 0;
+	daos_size_t        buf_len       = 0;
+	daos_size_t        buf_len_alloc = 0;
+	daos_size_t        rec_nr        = 0;
+	uint32_t           number        = 5;
+	daos_anchor_t      recx_anchor   = {0};
+	d_sg_list_t        sgl;
+	d_iov_t            iov;
+	daos_epoch_range_t eprs[5];
+	daos_recx_t        recxs[5];
+	daos_iod_t         iod            = {0};
+	daos_iom_t         iom            = {0};
+	daos_recx_t       *prev_iom_recxs = NULL;
+	uint32_t           iom_nr_alloc   = 0;
+	d_iov_t           *iovs           = NULL;
+	d_iov_t           *prev_iovs      = NULL;
+	uint32_t           iovs_alloc     = 0;
+	daos_size_t        size;
+	char              *buf      = NULL;
+	char              *prev_buf = NULL;
+
+	iod.iod_name = *akey;
 
 	while (!daos_anchor_is_eof(&recx_anchor)) {
 		/* list all recx for this dkey/akey */
 		number = 5;
-		rc = daos_obj_list_recx(*src_oh, DAOS_TX_NONE, dkey, akey, &size, &number, recxs,
-					eprs, &recx_anchor, true, NULL);
+		rc     = daos_obj_list_recx(*src_oh, th, dkey, akey, &size, &number, recxs, eprs,
+					    &recx_anchor, true, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "Failed to list recx");
 			D_GOTO(out, rc);
@@ -2008,63 +2020,169 @@ cont_clone_recx_array(struct cmd_args_s *ap,
 			continue;
 
 		/* set iod values */
-		(*iod).iod_type  = DAOS_IOD_ARRAY;
-		(*iod).iod_nr    = number;
-		(*iod).iod_recxs = recxs;
-		(*iod).iod_size  = size;
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_nr    = number;
+		iod.iod_recxs = recxs;
+		iod.iod_size  = size;
 
 		/* set sgl values */
 		sgl.sg_nr_out = 0;
 		sgl.sg_iovs   = &iov;
 		sgl.sg_nr     = 1;
 
-		/* allocate/reallocate a single buffer */
-		buf_len = 0;
-		prev_buf = buf;
+		/* the extents and the record size come from the source, so the buffer size they
+		 * add up to has to be range checked before anything is derived from it
+		 */
+		rec_nr = 0;
 		for (i = 0; i < number; i++) {
-			buf_len += recxs[i].rx_nr;
+			if (__builtin_add_overflow(rec_nr, recxs[i].rx_nr, &rec_nr)) {
+				rc = -DER_IO;
+				DH_PERROR_DER(ap, rc,
+					      "Source listed %u extents whose length "
+					      "overflows",
+					      number);
+				D_GOTO(out, rc);
+			}
 		}
-		buf_len *= size;
+		if (__builtin_mul_overflow(rec_nr, size, &buf_len)) {
+			rc = -DER_IO;
+			DH_PERROR_DER(ap, rc,
+				      "Source listed " DF_U64 " records of size " DF_U64
+				      ", which overflows",
+				      rec_nr, size);
+			D_GOTO(out, rc);
+		}
+
+		/* allocate/reallocate a single buffer */
 		if (buf_len > buf_len_alloc) {
+			prev_buf = buf;
 			D_REALLOC_NZ(buf, prev_buf, buf_len);
-			if (buf == NULL)
+			if (buf == NULL) {
+				buf = prev_buf;
 				D_GOTO(out, rc = -DER_NOMEM);
+			}
 			buf_len_alloc = buf_len;
 		}
 		d_iov_set(&iov, buf, buf_len);
 
+		/* a listed extent can be split by the fetch, overshoot so the refetch below is rare
+		 */
+		if (iom_nr_alloc < number * 2) {
+			prev_iom_recxs = iom.iom_recxs;
+			D_REALLOC_ARRAY(iom.iom_recxs, prev_iom_recxs, iom_nr_alloc, number * 2);
+			if (iom.iom_recxs == NULL) {
+				iom.iom_recxs = prev_iom_recxs;
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			iom_nr_alloc = number * 2;
+		}
+		iom.iom_flags  = DAOS_IOMF_DETAIL;
+		iom.iom_nr     = iom_nr_alloc;
+		iom.iom_nr_out = 0;
+
 		/* fetch recx values from source */
-		rc = daos_obj_fetch(*src_oh, DAOS_TX_NONE, 0, dkey, 1, iod, &sgl, NULL, NULL);
+		rc = daos_obj_fetch(*src_oh, th, 0, dkey, 1, &iod, &sgl, &iom, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "Failed to fetch source recx");
 			D_GOTO(out, rc);
 		}
 
-		/* Sanity check that fetch returns as expected */
-		if (sgl.sg_nr_out != 1) {
-			DH_PERROR_DER(ap, rc, "Failed to fetch source recx");
-			D_GOTO(out, rc = -DER_INVAL);
+		if (iom.iom_nr_out > iom.iom_nr) {
+			/* the map was truncated, iom_nr_out is the exact count needed */
+			prev_iom_recxs = iom.iom_recxs;
+			D_REALLOC_ARRAY(iom.iom_recxs, prev_iom_recxs, iom_nr_alloc,
+					iom.iom_nr_out);
+			if (iom.iom_recxs == NULL) {
+				iom.iom_recxs = prev_iom_recxs;
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			iom_nr_alloc   = iom.iom_nr_out;
+			iom.iom_nr     = iom_nr_alloc;
+			iom.iom_nr_out = 0;
+			sgl.sg_nr_out  = 0;
+
+			rc = daos_obj_fetch(*src_oh, th, 0, dkey, 1, &iod, &sgl, &iom, NULL);
+			if (rc != 0) {
+				DH_PERROR_DER(ap, rc, "Failed to fetch source recx");
+				D_GOTO(out, rc);
+			}
+			if (iom.iom_nr_out > iom.iom_nr) {
+				rc = -DER_IO;
+				DH_PERROR_DER(ap, rc, "Source io map grew from %u to %u extents",
+					      iom.iom_nr, iom.iom_nr_out);
+				D_GOTO(out, rc);
+			}
+		}
+
+		/* the listed extents hold no data at this epoch, nothing to copy */
+		if (iom.iom_nr_out == 0)
+			continue;
+
+		if (iovs_alloc < iom.iom_nr_out) {
+			prev_iovs = iovs;
+			D_REALLOC_ARRAY(iovs, prev_iovs, iovs_alloc, iom.iom_nr_out);
+			if (iovs == NULL) {
+				iovs = prev_iovs;
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			iovs_alloc = iom.iom_nr_out;
+		}
+
+		/* point each returned extent at its offset in the fetch buffer */
+		for (i = 0; i < iom.iom_nr_out; i++) {
+			daos_recx_t *map      = &iom.iom_recxs[i];
+			daos_size_t  recx_off = 0;
+			daos_size_t  map_len  = 0;
+			daos_size_t  map_end;
+
+			for (j = 0; j < number; j++) {
+				/* subtract rather than add, rx_idx + rx_nr can wrap */
+				if (map->rx_idx >= recxs[j].rx_idx &&
+				    map->rx_idx - recxs[j].rx_idx < recxs[j].rx_nr) {
+					recx_off += (map->rx_idx - recxs[j].rx_idx) * size;
+					break;
+				}
+				recx_off += recxs[j].rx_nr * size;
+			}
+			if (j == number || __builtin_mul_overflow(map->rx_nr, size, &map_len) ||
+			    __builtin_add_overflow(recx_off, map_len, &map_end) ||
+			    map_end > buf_len) {
+				rc = -DER_IO_INVAL;
+				DH_PERROR_DER(ap, rc,
+					      "Source io map extent " DF_U64 "/" DF_U64
+					      " is not within the listed extents",
+					      map->rx_idx, map->rx_nr);
+				D_GOTO(out, rc);
+			}
+			d_iov_set(&iovs[i], buf + recx_off, map_len);
 		}
 
 		/* update fetched recx values and place in
 		 * destination object
 		 */
-		rc = daos_obj_update(*dst_oh, DAOS_TX_NONE, 0, dkey, 1, iod, &sgl, NULL);
+		iod.iod_nr    = iom.iom_nr_out;
+		iod.iod_recxs = iom.iom_recxs;
+		iod.iod_size  = size;
+		sgl.sg_nr     = iom.iom_nr_out;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs   = iovs;
+
+		rc = daos_obj_update(*dst_oh, DAOS_TX_NONE, 0, dkey, 1, &iod, &sgl, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "Failed to update destination recx");
 			D_GOTO(out, rc);
 		}
 	}
 out:
+	D_FREE(iovs);
+	D_FREE(iom.iom_recxs);
 	D_FREE(buf);
 	return rc;
 }
 
 static int
-cont_clone_list_akeys(struct cmd_args_s *ap,
-		      daos_handle_t *src_oh,
-		      daos_handle_t *dst_oh,
-		     daos_key_t diov)
+cont_clone_list_akeys(struct cmd_args_s *ap, daos_handle_t th, daos_handle_t *src_oh,
+		      daos_handle_t *dst_oh, daos_key_t diov)
 {
 	int		rc = 0;
 	int		j = 0;
@@ -2105,15 +2223,15 @@ cont_clone_list_akeys(struct cmd_args_s *ap,
 		d_iov_set(&iov, key_buf, key_buf_len);
 
 		/* get akeys */
-		rc = daos_obj_list_akey(*src_oh, DAOS_TX_NONE, &diov, &akey_number, akey_kds,
-					&sgl, &akey_anchor, NULL);
+		rc = daos_obj_list_akey(*src_oh, th, &diov, &akey_number, akey_kds, &sgl,
+					&akey_anchor, NULL);
 		if (rc == -DER_KEY2BIG) {
 			/* call list dkey again with bigger buffer */
 			key_buf = large_key;
 			key_buf_len = ENUM_LARGE_KEY_BUF;
 			d_iov_set(&iov, key_buf, key_buf_len);
-			rc = daos_obj_list_akey(*src_oh, DAOS_TX_NONE, &diov, &akey_number,
-						akey_kds, &sgl, &akey_anchor, NULL);
+			rc = daos_obj_list_akey(*src_oh, th, &diov, &akey_number, akey_kds, &sgl,
+						&akey_anchor, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to list akeys");
 				D_GOTO(out, rc);
@@ -2149,8 +2267,7 @@ cont_clone_list_akeys(struct cmd_args_s *ap,
 			/* do fetch with sgl == NULL to check if iod type
 			 * (ARRAY OR SINGLE VAL)
 			 */
-			rc = daos_obj_fetch(*src_oh, DAOS_TX_NONE, 0, &diov,
-					    1, &iod, NULL, NULL, NULL);
+			rc = daos_obj_fetch(*src_oh, th, 0, &diov, 1, &iod, NULL, NULL, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to fetch source object");
 				D_FREE(akey);
@@ -2161,14 +2278,14 @@ cont_clone_list_akeys(struct cmd_args_s *ap,
 			 * type
 			 */
 			if ((int)iod.iod_size == 0) {
-				rc = cont_clone_recx_array(ap, &diov, &aiov, src_oh, dst_oh, &iod);
+				rc = cont_clone_recx_array(ap, &diov, &aiov, th, src_oh, dst_oh);
 				if (rc != 0) {
 					DH_PERROR_DER(ap, rc, "Failed to copy record");
 					D_FREE(akey);
 					D_GOTO(out, rc);
 				}
 			} else {
-				rc = cont_clone_recx_single(ap, &diov, src_oh, dst_oh, &iod);
+				rc = cont_clone_recx_single(ap, &diov, th, src_oh, dst_oh, &iod);
 				if (rc != 0) {
 					DH_PERROR_DER(ap, rc, "Failed to copy record");
 					D_FREE(akey);
@@ -2187,8 +2304,7 @@ out:
 }
 
 static int
-cont_clone_list_dkeys(struct cmd_args_s *ap,
-		      daos_handle_t *src_oh,
+cont_clone_list_dkeys(struct cmd_args_s *ap, daos_handle_t th, daos_handle_t *src_oh,
 		      daos_handle_t *dst_oh)
 {
 	int		rc = 0;
@@ -2229,15 +2345,15 @@ cont_clone_list_dkeys(struct cmd_args_s *ap,
 		d_iov_set(&iov, key_buf, key_buf_len);
 
 		/* get dkeys */
-		rc = daos_obj_list_dkey(*src_oh, DAOS_TX_NONE, &dkey_number, dkey_kds,
-					&sgl, &dkey_anchor, NULL);
+		rc = daos_obj_list_dkey(*src_oh, th, &dkey_number, dkey_kds, &sgl, &dkey_anchor,
+					NULL);
 		if (rc == -DER_KEY2BIG) {
 			/* call list dkey again with bigger buffer */
 			key_buf = large_key;
 			key_buf_len = ENUM_LARGE_KEY_BUF;
 			d_iov_set(&iov, key_buf, key_buf_len);
-			rc = daos_obj_list_dkey(*src_oh, DAOS_TX_NONE, &dkey_number, dkey_kds,
-						&sgl, &dkey_anchor, NULL);
+			rc = daos_obj_list_dkey(*src_oh, th, &dkey_number, dkey_kds, &sgl,
+						&dkey_anchor, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to list dkeys");
 				D_GOTO(out, rc);
@@ -2264,7 +2380,7 @@ cont_clone_list_dkeys(struct cmd_args_s *ap,
 			d_iov_set(&diov, (void *)dkey, dkey_kds[j].kd_key_len);
 
 			/* enumerate and parse akeys */
-			rc = cont_clone_list_akeys(ap, src_oh, dst_oh, diov);
+			rc = cont_clone_list_akeys(ap, th, src_oh, dst_oh, diov);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to list akeys");
 				D_FREE(dkey);
@@ -2283,27 +2399,28 @@ out:
 int
 cont_clone_hdlr(struct cmd_args_s *ap)
 {
-	int			rc = 0;
-	int			rc2 = 0;
-	int			i = 0;
-	daos_cont_info_t	src_cont_info;
-	daos_cont_info_t	dst_cont_info;
-	daos_obj_id_t		oids[OID_ARR_SIZE];
-	daos_anchor_t		anchor;
-	uint32_t		oids_nr;
-	daos_handle_t		toh;
-	daos_epoch_t		epoch;
-	struct			dm_args *ca = NULL;
-	bool			is_posix_copy = false;
-	daos_handle_t		oh;
-	daos_handle_t		dst_oh;
-	struct file_dfs		src_cp_type = {0};
-	struct file_dfs		dst_cp_type = {0};
-	char			*src_str = NULL;
-	char			*dst_str = NULL;
-	size_t			src_str_len = 0;
-	size_t			dst_str_len = 0;
-	daos_epoch_range_t	epr;
+	int                rc  = 0;
+	int                rc2 = 0;
+	int                i   = 0;
+	daos_cont_info_t   src_cont_info;
+	daos_cont_info_t   dst_cont_info;
+	daos_obj_id_t      oids[OID_ARR_SIZE];
+	daos_anchor_t      anchor;
+	uint32_t           oids_nr;
+	daos_handle_t      toh;
+	daos_handle_t      th = DAOS_TX_NONE;
+	daos_epoch_t       epoch;
+	struct dm_args    *ca            = NULL;
+	bool               is_posix_copy = false;
+	daos_handle_t      oh;
+	daos_handle_t      dst_oh;
+	struct file_dfs    src_cp_type = {0};
+	struct file_dfs    dst_cp_type = {0};
+	char              *src_str     = NULL;
+	char              *dst_str     = NULL;
+	size_t             src_str_len = 0;
+	size_t             dst_str_len = 0;
+	daos_epoch_range_t epr;
 
 	D_ALLOC(ca, sizeof(struct dm_args));
 	if (ca == NULL)
@@ -2388,10 +2505,18 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 		DH_PERROR_DER(ap, rc, "Failed to create snapshot");
 		D_GOTO(out_disconnect, rc);
 	}
+	/* every read of the source must come from the snapshot, otherwise the enumeration and
+	 * the fetch of what it returned can land on different epochs
+	 */
+	rc = daos_tx_open_snap(ca->src_coh, epoch, &th, NULL);
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "Failed to open snapshot transaction");
+		D_GOTO(out_snap, rc);
+	}
 	rc = daos_oit_open(ca->src_coh, epoch, &toh, NULL);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "Failed to open object iterator");
-		D_GOTO(out_snap, rc);
+		D_GOTO(out_tx, rc);
 	}
 	memset(&anchor, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
@@ -2414,7 +2539,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 				DH_PERROR_DER(ap, rc, "Failed to open destination object");
 				D_GOTO(err_dst, rc);
 			}
-			rc = cont_clone_list_dkeys(ap, &oh, &dst_oh);
+			rc = cont_clone_list_dkeys(ap, th, &oh, &dst_oh);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to list keys");
 				D_GOTO(err_obj, rc);
@@ -2449,7 +2574,15 @@ out_oit:
 	rc2 = daos_oit_close(toh, NULL);
 	if (rc2 != 0) {
 		DH_PERROR_DER(ap, rc2, "Failed to close object iterator");
-		D_GOTO(out, rc2);
+		if (rc == 0)
+			rc = rc2;
+	}
+out_tx:
+	rc2 = daos_tx_close(th, NULL);
+	if (rc2 != 0) {
+		DH_PERROR_DER(ap, rc2, "Failed to close snapshot transaction");
+		if (rc == 0)
+			rc = rc2;
 	}
 out_snap:
 	epr.epr_lo = epoch;
