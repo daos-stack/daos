@@ -3530,6 +3530,175 @@ io_csum_fetch_recx_missing_csum(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+/** Expected recx list entry and checksum info of one physical extent fetched with FETCH_CSUM */
+struct csum_fetch_expect {
+	daos_off_t            cfe_idx;
+	daos_size_t           cfe_nr;
+	daos_epoch_t          cfe_ep;
+	/** checksum computed at write time, covering the whole physical extent */
+	struct dcs_iod_csums *cfe_ic;
+	/** number of csum chunks of the whole physical extent */
+	uint32_t              cfe_cs_nr;
+};
+
+/**
+ * Helper: fetch [recx_idx, recx_idx+recx_size) at DAOS_EPOCH_MAX with VOS_OF_FETCH_CSUM and check
+ * that the recx list and the checksum info list both describe the expected physical extents, in the
+ * expected order.
+ */
+static void
+io_csum_fetch_recx_check(struct io_test_args *arg, daos_key_t *dkey, const daos_key_t *akey,
+			 struct daos_csummer *csummer, uint64_t recx_idx, size_t recx_size,
+			 const struct csum_fetch_expect *cfe, unsigned int cfe_nr)
+{
+	struct daos_recx_ep_list *rel;
+	struct dcs_ci_list       *cil;
+	daos_recx_t               recx;
+	daos_iod_t                iod;
+	daos_handle_t             ioh;
+	unsigned int              i;
+	int                       rc;
+
+	recx.rx_idx   = recx_idx;
+	recx.rx_nr    = recx_size;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_name  = *akey;
+	iod.iod_recxs = &recx;
+	iod.iod_size  = 1;
+	iod.iod_nr    = 1;
+
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, dkey, 1, &iod,
+			     VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	assert_success(rc);
+
+	rel = vos_ioh2recx_list(ioh);
+	assert_non_null(rel);
+	assert_int_equal(rel->re_nr, cfe_nr);
+	cil = vos_ioh2ci(ioh);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, cfe_nr);
+
+	for (i = 0; i < cfe_nr; i++) {
+		struct dcs_csum_info *ci;
+
+		/* the recx list always describes the whole physical extent */
+		assert_int_equal(rel->re_items[i].re_recx.rx_idx, cfe[i].cfe_idx);
+		assert_int_equal(rel->re_items[i].re_recx.rx_nr, cfe[i].cfe_nr);
+		assert_int_equal(rel->re_items[i].re_ep, cfe[i].cfe_ep);
+		/* so must its checksum info: one checksum per chunk of the physical extent */
+		ci = dcs_csum_info_get(cil, i);
+		assert_true(ci_is_valid(ci));
+		assert_int_equal(ci->cs_nr, cfe[i].cfe_cs_nr);
+		assert_true(daos_csummer_compare_csum_info(csummer, cfe[i].cfe_ic->ic_data, ci));
+	}
+
+	daos_recx_ep_list_free(rel, iod.iod_nr);
+	rc = vos_fetch_end(ioh, NULL, 0);
+	assert_rc_equal(rc, 0);
+}
+
+/*
+ * Verify that VOS_OF_FETCH_CSUM reports the checksum of the whole physical extent, paired with the
+ * whole physical extent in the recx list, even when only a part of the extent is visible.
+ *
+ * The following three cases are tested, all with a chunk size of 64 bytes:
+ *	1. leading overwrite: W2 hides the first chunk of W1.
+ *	2. fetch range clip: the fetched range starts in the second chunk of W1.
+ *	3. middle overwrite: W2 splits W1 into two visible parts of the same physical extent.
+ *
+ * Note: A regular fetch trims the checksums of the leading chunks hidden by newer extents or lying
+ * before the fetched range (evt_entry_csum_update()), because they must line up with the bio_iov
+ * which starts at the visible part of the extent.  The csum-only fetch has no bio_iov and records
+ * the physical extent in the recx list, so its checksums must not be trimmed.
+ */
+static void
+io_csum_fetch_recx_partial(void **state)
+{
+	enum { TESTS_NB = 3 };
+	const enum DAOS_HASH_TYPE csum_type  = HASH_TYPE_CRC16;
+	const size_t              chunk_size = 1u << 6; /* 64 bytes, one csum chunk */
+
+	struct io_test_args      *arg;
+	struct daos_csummer      *csummer;
+	struct dcs_iod_csums     *ic[TESTS_NB][2] = {0};
+	daos_key_t                dkey;
+	daos_key_t                akey[TESTS_NB];
+	char                      dkey_name[UPDATE_DKEY_SIZE];
+	char                      akey_name[TESTS_NB][UPDATE_AKEY_SIZE];
+	int                       i;
+	int                       rc;
+
+	arg = *state;
+
+	vts_key_gen(&dkey_name[0], arg->dkey_size, true, arg);
+	set_iov(&dkey, &dkey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	for (i = 0; i < TESTS_NB; i++) {
+		vts_key_gen(&akey_name[i][0], arg->akey_size, false, arg);
+		set_iov(&akey[i], &akey_name[i][0],
+			is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+	}
+
+	rc = daos_csummer_init_with_type(&csummer, csum_type, chunk_size, 0);
+	assert_success(rc);
+
+	/**
+	 * 1. leading overwrite:  W1 [0, 128) @1, W2 [0, 64) @2, fetch [0, 128)
+	 *        -> rel = {W2 [0, 64) @2, W1 [0, 128) @1}, cs_nr = {1, 2}
+	 */
+	io_csum_update_recx(arg, 1, &dkey, &akey[0], 0, 2 * chunk_size, csummer, &ic[0][0]);
+	io_csum_update_recx(arg, 2, &dkey, &akey[0], 0, chunk_size, csummer, &ic[0][1]);
+	{
+		const struct csum_fetch_expect cfe[] = {
+		    {0, chunk_size, 2, ic[0][1], 1},
+		    {0, 2 * chunk_size, 1, ic[0][0], 2},
+		};
+
+		io_csum_fetch_recx_check(arg, &dkey, &akey[0], csummer, 0, 2 * chunk_size, cfe,
+					 ARRAY_SIZE(cfe));
+	}
+
+	/**
+	 * 2. fetch range clip:   W1 [0, 128) @1, fetch [64, 128)
+	 *	-> rel = {W1 [0, 128) @1}, cs_nr = {2}
+	 */
+	io_csum_update_recx(arg, 1, &dkey, &akey[1], 0, 2 * chunk_size, csummer, &ic[1][0]);
+	{
+		const struct csum_fetch_expect cfe[] = {
+		    {0, 2 * chunk_size, 1, ic[1][0], 2},
+		};
+
+		io_csum_fetch_recx_check(arg, &dkey, &akey[1], csummer, chunk_size, chunk_size, cfe,
+					 ARRAY_SIZE(cfe));
+	}
+
+	/**
+	 * 3. middle overwrite:   W1 [0, 192) @1, W2 [64, 128) @2, fetch [0, 192)
+	 *	-> the visible parts of W1 are two entries of the same physical extent
+	 *	-> rel = {W1 [0, 192) @1, W2 [64, 128) @2, W1 [0, 192) @1}, cs_nr = {3, 1, 3}
+	 */
+	io_csum_update_recx(arg, 1, &dkey, &akey[2], 0, 3 * chunk_size, csummer, &ic[2][0]);
+	io_csum_update_recx(arg, 2, &dkey, &akey[2], chunk_size, chunk_size, csummer, &ic[2][1]);
+	{
+		const struct csum_fetch_expect cfe[] = {
+		    {0, 3 * chunk_size, 1, ic[2][0], 3},
+		    {chunk_size, chunk_size, 2, ic[2][1], 1},
+		    {0, 3 * chunk_size, 1, ic[2][0], 3},
+		};
+
+		io_csum_fetch_recx_check(arg, &dkey, &akey[2], csummer, 0, 3 * chunk_size, cfe,
+					 ARRAY_SIZE(cfe));
+	}
+
+	/* Cleanup */
+	for (i = 0; i < TESTS_NB; i++) {
+		if (ic[i][0] != NULL)
+			daos_csummer_free_ic(csummer, &ic[i][0]);
+		if (ic[i][1] != NULL)
+			daos_csummer_free_ic(csummer, &ic[i][1]);
+	}
+	daos_csummer_destroy(&csummer);
+}
+
 static const struct CMUnitTest iterator_tests[] = {
     {"VOS220: 100K update/fetch/verify test", io_multiple_dkey, NULL, NULL},
     {"VOS240.0: KV Iter tests (for dkey)", io_iter_test, NULL, NULL},
@@ -3569,6 +3738,8 @@ static const struct CMUnitTest io_tests[] = {
     {"VOS401.1: Fetch checksum of array value objects", io_csum_fetch_recx, NULL, NULL},
     {"VOS401.2: Fetch checksum with missing csum entries (no-csum entries visible)",
      io_csum_fetch_recx_missing_csum, NULL, NULL},
+    {"VOS401.3: Fetch checksum of partially visible array extents", io_csum_fetch_recx_partial,
+     NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {
