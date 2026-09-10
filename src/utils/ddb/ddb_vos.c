@@ -1140,6 +1140,28 @@ out:
 }
 
 static int
+csum_recx_check_chunks(daos_unit_oid_t *oid, struct daos_recx_ep *rep, struct dcs_csum_info *ci)
+{
+	uint32_t csum_nr = ci->cs_nr;
+	uint32_t chunk_nr;
+
+	chunk_nr = daos_recx_calc_chunks(rep->re_recx, rep->re_rec_size, ci->cs_chunksize);
+
+	/* fault injection: forge a checksum not covering exactly the chunks of its extent */
+	if (DAOS_FAIL_CHECK(DDB_CSUM_CHUNK_NR_INJECT))
+		csum_nr = daos_fail_value_get();
+
+	if (csum_nr != chunk_nr) {
+		D_ERROR("Checksum metadata of RECX " DF_UOID " " DF_RECX " is inconsistent: "
+			"checksum covers %" PRIu32 " chunks, extent has %" PRIu32 "\n",
+			DP_UOID(*oid), DP_RECX(rep->re_recx), csum_nr, chunk_nr);
+		return -DER_CSUM;
+	}
+
+	return -DER_SUCCESS;
+}
+
+static int
 dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
 	       daos_epoch_t epoch, dv_dump_csum_cb dump_cb, void *cb_arg)
 {
@@ -1147,6 +1169,7 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 	struct dcs_ci_list       *cil;
 	struct daos_recx_ep_list *rel;
 	uint32_t                  csum_nr;
+	int                       i;
 	int                       rc;
 
 	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
@@ -1175,6 +1198,13 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 			"(expected 0 or %" PRIu32 ", got %" PRIu32 ")\n",
 			DP_UOID(*oid), rel->re_nr, csum_nr);
 		D_GOTO(out_rel, rc = -DER_CSUM);
+	}
+
+	/* Likewise, each checksum info must cover exactly the chunks of its extent. */
+	for (i = 0; i < csum_nr; i++) {
+		rc = csum_recx_check_chunks(oid, &rel->re_items[i], dcs_csum_info_get(cil, i));
+		if (!SUCCESS(rc))
+			goto out_rel;
 	}
 
 	rc = dump_cb(cb_arg, rel, 0, cil);
@@ -1512,6 +1542,10 @@ check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_
 		ci = dcs_csum_info_get(cil, i);
 		D_ASSERT(ci_is_valid(ci));
 		rep = &rel->re_items[i];
+
+		rc = csum_recx_check_chunks(oid, rep, ci);
+		if (!SUCCESS(rc))
+			goto out_got_csums;
 
 		seg_iod           = *iod;
 		seg_iod.iod_recxs = &rep->re_recx;
