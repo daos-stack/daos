@@ -205,7 +205,9 @@ class ServerRankFailure(IorTestBase):
             self.fail(f"Ranks are still disabled after reintegration: {disabled_ranks}")
 
         # 11. Verify that the container Health is HEALTHY.
-        if not self.container.verify_prop({"status": "HEALTHY"}):
+        try:
+            self.container.verify_prop({"status": "HEALTHY"})
+        except AssertionError:
             errors.append("Container health isn't HEALTHY after server restart!")
 
         # 12. Run IOR and verify that it works.
@@ -337,7 +339,9 @@ class ServerRankFailure(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 7. Verify that the container Health is HEALTHY.
-        if not self.container[0].verify_prop({"status": "HEALTHY"}):
+        try:
+            self.container[0].verify_prop({"status": "HEALTHY"})
+        except AssertionError:
             errors.append("Container health isn't HEALTHY after killing engine on rank 1!")
 
         # 8. Create a new container on the pool and run IOR.

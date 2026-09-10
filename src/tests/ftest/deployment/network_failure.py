@@ -400,7 +400,9 @@ class NetworkFailureTest(IorTestBase):
 
         # 7. Verify that the container Health is HEALTHY.
         self.log_step("Verify that the container Health is HEALTHY.")
-        if not self.container[0].verify_prop({"status": "HEALTHY"}):
+        try:
+            self.container[0].verify_prop({"status": "HEALTHY"})
+        except AssertionError:
             errors.append("Container health isn't HEALTHY after taking ib0 down!")
 
         # 8. Create a new container on the pool and run IOR.
