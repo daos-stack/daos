@@ -336,18 +336,18 @@ To build the Docker image directly from GitHub, run the following command:
 
 ```bash
 $ docker build https://github.com/daos-stack/daos.git#master \
-        -f utils/docker/Dockerfile.el.8 -t daos
+        -f utils/docker/Dockerfile.el.9 -t daos
 ```
 
 or from a local tree:
 
 ```bash
-$ docker build  . -f utils/docker/Dockerfile.el.8 -t daos
+$ docker build  . -f utils/docker/Dockerfile.el.9 -t daos
 ```
 
-This creates a Rocky Linux 8 image, fetches the latest DAOS version from GitHub,
+This creates a Rocky Linux 9 image, fetches the latest DAOS version from GitHub,
 builds it, and installs it in the image.
-For Ubuntu and other Linux distributions, replace Dockerfile.el.8 with
+For Ubuntu and other Linux distributions, replace Dockerfile.el.9 with
 Dockerfile.ubuntu or the appropriate version of interest.
 
 ### Simple Docker Setup
@@ -403,7 +403,7 @@ refer to the next section.
 The DAOS build process now covers building RPMs for both DAOS and dependencies
 specified in [`utils/build.config`](../../utils/build.config) (or those that we
 build regularly with `--build-deps=yes`). The complete list of RPMs  is defined
-in the [`utils/rpms/build_packages.sh`](../../utils/rpms/build_packages.sh)
+in the [`utils/build/build_packages.sh`](../../utils/build/build_packages.sh)
 script. The RPM (and deb) build process uses
 [FPM](https://fpm.readthedocs.io/en/latest/getting-started.html). Essentially,
 it creates rpm packages after a DAOS build. Regardless of how that build is done,
@@ -428,3 +428,49 @@ In order to properly upgrade a 3rd party component, do all of the following:
 1. Update the `utils/rpms/<component>.changelog` file to document the change and
    make sure the file is referenced by the
    `RPM_CHANGELOG="<component>.changelog"` variable in `utils/rpms/<component>.sh`.
+
+## Unified DAOS Build Procedure
+
+The scripts under [`utils/build`](../../utils/build) provide a straightforward,
+four-step workflow from installing pre-built dependencies to producing the
+final RPMs. The same workflow is used by CI, Docker image builds, and bare-host
+builds; none of the scripts are Docker-specific.
+
+For standard builds, the scripts handle the underlying `scons` details.
+Advanced users can still invoke `scons` directly or pass additional options
+and variables through the `build_*` scripts to produce different binary
+variants.
+
+1. **`install_deps.sh [DISTRO]`** installs pre-built dependency RPMs (e.g.
+   `argobots-devel`, `mercury-devel`, `libfabric-devel`) matching the versions
+   expected by the current tree, so that the subsequent build steps can reuse
+   them instead of rebuilding from source (`USE_INSTALLED=all`). `DISTRO` is
+   not the OS distro itself, but the standardized RPM naming suffix used by
+   the DAOS project's own package repos (e.g. `el9`, `suse.lp155`,
+   `suse.lp156`); if omitted, it's auto-detected from `/etc/os-release`.
+   Missing packages are reported but do not fail the script, since
+   dependencies can also be built from source in the next step. Set
+   `DAOS_DEPS_EXT_REPO` to pull in a custom RPM set published by the DAOS
+   project (e.g. from [packages.daos.io](https://packages.daos.io/)) as
+   an extra dnf-format repo, registered only for the duration of the script.
+
+   ```bash
+   $ DAOS_DEPS_EXT_REPO=https://packages.daos.io/v2.8.0/EL9/packages/x86_64/ \
+         utils/build/install_deps.sh el9
+   ```
+1. **`build_deps.sh`** builds any dependency not already satisfied by
+   `install_deps.sh` from source, via `scons install --build-deps=only`.
+1. **`build_daos.sh`** builds and installs DAOS itself with scons
+   (`USE_INSTALLED=all` to reuse the dependencies from the previous steps).
+1. **`build_packages.sh [deps|daos|all] [verify]`** builds RPMs (deps,
+   DAOS, or both) with `fpm`, writing the resulting `*.rpm` files directly
+   under `RPM_OUTPUT_DIR`. The `DISTRO` environment variable selects the target
+   RPM distribution suffix and is auto-detected from `/etc/os-release` when
+   unset. By default (`RPM_OUTPUT_DIR` unset), RPMs land under
+   `<repo_root>/rpms/deps` and `<repo_root>/rpms/daos`. The script also creates
+   repository metadata, producing a complete RPM repository under
+   `RPM_OUTPUT_DIR`. Verification against `verify_packages.sh` is built in and
+   runs automatically after each nonempty package group. With `verify=no`,
+   validation findings are reported as warnings rather than failing the build;
+   critical setup errors remain fatal. `verify_packages.sh` does not need to
+   (and normally should not) be invoked separately.
