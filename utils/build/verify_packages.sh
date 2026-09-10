@@ -91,7 +91,7 @@ declare -A devel_runtime
 # Explicit devel to runtime package dependencies. These names are kept
 # separate by distro because the same library has different RPM names.
 case "${DISTRO}" in
-    el*)
+    el9*)
         devel_runtime=(
             [argobots-devel]=argobots
             [daos-spdk-devel]=daos-spdk

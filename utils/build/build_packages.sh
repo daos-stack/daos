@@ -66,7 +66,7 @@ mkdir -p "${RPM_OUTPUT_DIR}"
 # fpm behavior of writing packages to the current directory.
 prepare_rpms_stage() {
   unset PACKAGE_OUTPUT_DIR
-  if [[ "${DISTRO}" == el* || "${DISTRO}" == suse.lp15* ]]; then
+  if [[ "${DISTRO}" == el9* || "${DISTRO}" == suse.lp15* ]]; then
     PACKAGE_OUTPUT_DIR="${RPM_OUTPUT_DIR}/${1}"
     export PACKAGE_OUTPUT_DIR
     mkdir -p "${PACKAGE_OUTPUT_DIR}"
@@ -76,7 +76,7 @@ prepare_rpms_stage() {
 # Runs verify_packages.sh against $rpm_root/$1 when applicable; failures only
 # fail the build when verify=yes (ERROR mode), otherwise they're warnings.
 verify_stage() {
-  if [[ "${DISTRO}" == el* || "${DISTRO}" == suse.lp15* ]] &&
+  if [[ "${DISTRO}" == el9* || "${DISTRO}" == suse.lp15* ]] &&
      [ "${OUTPUT_TYPE:-rpm}" = "rpm" ] &&
      compgen -G "${RPM_OUTPUT_DIR}/${1}/*.rpm" > /dev/null; then
     local mode="ERROR"
@@ -106,7 +106,7 @@ if [[ "${build_type}" =~ daos|all ]]; then
 fi
 
 if [[ "${build_type}" =~ deps|daos|all ]] && \
-   [[ "${DISTRO}" == el* || "${DISTRO}" == suse.lp15* ]] && \
+   [[ "${DISTRO}" == el9* || "${DISTRO}" == suse.lp15* ]] && \
    [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
   rm -rf "${RPM_OUTPUT_DIR}/repodata"
   createrepo "${RPM_OUTPUT_DIR}"

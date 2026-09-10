@@ -462,15 +462,22 @@ variants.
    `install_deps.sh` from source, via `scons install --build-deps=only`.
 1. **`build_daos.sh`** builds and installs DAOS itself with scons
    (`USE_INSTALLED=all` to reuse the dependencies from the previous steps).
-1. **`build_packages.sh [deps|daos|all] [verify]`** builds RPMs (deps,
-   DAOS, or both) with `fpm`, writing the resulting `*.rpm` files directly
-   under `RPM_OUTPUT_DIR`. The `DISTRO` environment variable selects the target
-   RPM distribution suffix and is auto-detected from `/etc/os-release` when
-   unset. By default (`RPM_OUTPUT_DIR` unset), RPMs land under
-   `<repo_root>/rpms/deps` and `<repo_root>/rpms/daos`. The script also creates
-   repository metadata, producing a complete RPM repository under
-   `RPM_OUTPUT_DIR`. Verification against `verify_packages.sh` is built in and
-   runs automatically after each nonempty package group. With `verify=no`,
-   validation findings are reported as warnings rather than failing the build;
-   critical setup errors remain fatal. `verify_packages.sh` does not need to
-   (and normally should not) be invoked separately.
+1. **`build_packages.sh [deps|daos|all] [yes|no]`** builds dependency
+   RPMs, DAOS RPMs, or both with `fpm`. The build type defaults to `all`,
+   and verification defaults to `yes`.
+
+   RPMs are written to the `deps/` and `daos/` subdirectories under
+   `RPM_OUTPUT_DIR`, which defaults to `<repo_root>/rpms`. For supported RPM
+   distributions, the script also generates repository metadata under
+   `<RPM_OUTPUT_DIR>/repodata`, producing a complete RPM repository.
+
+   After each nonempty package group is built, the script runs
+   `verify_packages.sh`. With the default `yes` setting, validation findings
+   fail the build. With `no`, verification still runs, but noncritical findings
+   are reported as warnings. Missing tools, unsupported configurations, and
+   other critical setup errors remain fatal. `verify_packages.sh` can also be
+   invoked separately.
+
+   `DISTRO` selects the distribution suffix used in package names, such as
+   `el9` or `suse.lp156`. It is detected from `/etc/os-release` when unset.
+   Set `RPM_OUTPUT_DIR` to change the output repository location.

@@ -59,7 +59,7 @@ check_help "$@"
 # The script can be used only on el and leap/sles
 validate_distro() {
     case "${1}" in
-        el* | suse.lp15*)
+        el9* | suse.lp15*)
             ;;
         *)
             echo "ERROR: unsupported DISTRO '${1}' (expected e.g. el9, suse.lp155, suse.lp156)"
