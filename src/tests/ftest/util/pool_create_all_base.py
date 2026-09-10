@@ -223,9 +223,9 @@ class PoolCreateAllTestBase(TestWithServers):
             AssertionError: If any property does not match the expected value.
         """
         default_props = DEFAULT_POOL_PROPS.copy()
-        target_list = pool.target_list.value
-        if target_list is not None and len(target_list) <= default_props["rd_fac"]:
-            default_props["rd_fac"] = len(target_list) - 1
+        # Reduce the expected redundancy factor if the number of fault domains (hosts) is less
+        if len(self.server_managers[0].hosts) <= default_props["rd_fac"]:
+            default_props["rd_fac"] = len(self.server_managers[0].hosts) - 1
         default_props["label"] = pool.label.value
         default_props["svc_list"] = pool.svc_ranks
         pool.validate_properties(pool.get_prop(), default_props)
