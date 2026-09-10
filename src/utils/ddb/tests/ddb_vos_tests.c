@@ -1797,8 +1797,11 @@ check_csum_recx_tests(void **state)
  * A checksum-info count that differs from the number of stored entries cannot be produced
  * through the VOS API: the checksum configuration is per evtree and a single value stores at
  * most one checksum.  DDB_CSUM_NR_INJECT makes ddb_vos.c replace the count it read with
- * daos_fail_value_get() right before its consistency check.  All tests use g_oids[1], whose SV
- * and DVT_FAKE_RECX_COUNT extents are stored with valid checksums.
+ * daos_fail_value_get() right before its consistency check.  Likewise, a stored checksum with
+ * no data behind it cannot be produced either (VOS never records holes or punches in the
+ * checksum-fetch results); DDB_CSUM_NO_DATA_INJECT makes ddb_vos.c treat the data it fetched
+ * for a checksummed segment as empty.  All tests use g_oids[1], whose SV and
+ * DVT_FAKE_RECX_COUNT extents are stored with valid checksums.
  */
 
 static void
@@ -1836,6 +1839,20 @@ csum_nr_inject(uint32_t csum_nr)
 	daos_fail_loc_set(DDB_CSUM_NR_INJECT | DAOS_FAIL_ONCE);
 }
 
+/* Arm the fault for the next checksum snapshot taken by dv_check_csum() only. */
+static void
+csum_snapshot_nomem_inject(void)
+{
+	daos_fail_loc_set(DDB_CSUM_SNAPSHOT_NOMEM_INJECT | DAOS_FAIL_ONCE);
+}
+
+/* Arm the fault for the next checksummed segment verified by dv_check_csum() only. */
+static void
+csum_no_data_inject(void)
+{
+	daos_fail_loc_set(DDB_CSUM_NO_DATA_INJECT | DAOS_FAIL_ONCE);
+}
+
 static int
 dump_cb_unexpected(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
 		   struct dcs_ci_list *cil)
@@ -1848,7 +1865,7 @@ static int
 check_cb_unexpected(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
 		    struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
 {
-	fail_msg("check callback invoked despite inconsistent checksum metadata");
+	fail_msg("check callback unexpectedly invoked");
 	return -1;
 }
 
@@ -1936,6 +1953,11 @@ check_csum_sv_inconsistent_tests(void **state)
 	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
 	assert_rc_equal(-DER_CSUM, rc);
 
+	/* checksum stored for a value without data: -DER_CSUM, callback not invoked */
+	csum_no_data_inject();
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
 	/* control: the consistent count is accepted and the checksum verified */
 	csum_nr_inject(1);
 	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
@@ -1964,11 +1986,57 @@ check_csum_recx_inconsistent_tests(void **state)
 	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
 	assert_rc_equal(-DER_CSUM, rc);
 
+	/* checksum stored for an extent without data (first segment): -DER_CSUM, callback not
+	 * invoked, remaining segments not verified */
+	csum_no_data_inject();
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
 	/* control: the consistent count is accepted and the checksums verified */
 	csum_nr_inject(DVT_FAKE_RECX_COUNT);
 	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
 	assert_success(rc);
 	assert_int_equal(cb_calls, 1);
+}
+
+/*
+ * A mismatch whose recomputed checksum cannot be allocated for the callback is still reported
+ * as -DER_CSUM, without invoking the callback.
+ */
+static void
+check_csum_snapshot_nomem_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct dv_tree_path     path;
+	int                     cb_calls = 0;
+	int                     rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	/* SV with a corrupted checksum info: -DER_CSUM, callback not invoked */
+	mock_csum_path_sv(&path, tctx->dvt_extra);
+	path.vtp_oid = g_oids[2];
+	csum_snapshot_nomem_inject();
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* control: the same mismatch is reported through the callback */
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
+	assert_rc_equal(-DER_CSUM, rc);
+	assert_int_equal(cb_calls, 1);
+
+	/* recx with B's checksum info corrupted (A matches, so the fault fires on B's snapshot):
+	 * -DER_CSUM, callback not invoked */
+	mock_csum_path_recx(&path, tctx->dvt_extra);
+	path.vtp_oid = g_oids[2];
+	csum_snapshot_nomem_inject();
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* control: the same mismatch is reported through the callback */
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
+	assert_rc_equal(-DER_CSUM, rc);
+	assert_int_equal(cb_calls, 2);
 }
 
 /*
@@ -2017,6 +2085,7 @@ const struct CMUnitTest dv_test_cases[] = {
     TEST_CSUM_FI(dump_csum_recx_inconsistent_tests),
     TEST_CSUM_FI(check_csum_sv_inconsistent_tests),
     TEST_CSUM_FI(check_csum_recx_inconsistent_tests),
+    TEST_CSUM_FI(check_csum_snapshot_nomem_tests),
 };
 
 int

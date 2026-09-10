@@ -231,9 +231,13 @@ typedef int (*dv_check_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel
  *                  opening the container or calling VOS.
  * @param cb_arg    Opaque argument forwarded to \a check_cb.
  * @return          0 on success (no checksum found, or all checksum(s) matched); -DER_CSUM if
- *                  at least one checksum entry did not match the stored data, or if the fetched
- *                  checksum metadata is inconsistent (nothing is verified and \a check_cb is not
- *                  invoked); another negative error code on I/O or system errors.
+ *                  at least one checksum entry did not match the stored data, if the fetched
+ *                  checksum metadata is inconsistent (e.g. a checksum-info count that does not
+ *                  match the stored entries, or a stored checksum with no data behind it; nothing
+ *                  is verified and \a check_cb is not invoked), or if a mismatch was detected but
+ *                  the recomputed checksum could not be allocated to report it through
+ *                  \a check_cb (not invoked either; the mismatch is logged); another negative
+ *                  error code on I/O or system errors.
  */
 int
 dv_check_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,

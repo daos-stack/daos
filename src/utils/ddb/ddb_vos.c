@@ -1119,10 +1119,8 @@ dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod
 	if (DAOS_FAIL_CHECK(DDB_CSUM_NR_INJECT))
 		csum_nr = daos_fail_value_get();
 
-	/*
-	 * For a single value, the checksum-info list is either empty or has exactly one entry by
-	 * construction.
-	 */
+	/* For a single value, the checksum-info list is either empty or has exactly one entry by
+	 * construction. */
 	if (csum_nr != 0 && csum_nr != 1) {
 		D_ERROR("Checksum dump of SV entry " DF_UOID " failed: "
 			"inconsistent checksum metadata (expected 0 or 1, got %" PRIu32 ")\n",
@@ -1166,13 +1164,11 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 	if (DAOS_FAIL_CHECK(DDB_CSUM_NR_INJECT))
 		csum_nr = daos_fail_value_get();
 
-	/*
-	 * For an array value, the checksum-info list is either empty or has exactly the same number
+	/* For an array value, the checksum-info list is either empty or has exactly the same number
 	 * of entries as the recx list by construction: the checksum configuration is stored at the
 	 * root of the evtree, so evt_entry_csum_fill() reports a checksum info for every non-hole
 	 * extent of a checksummed akey, while akey_fetch_recx() records one recx per such extent.
-	 * A mismatch can only come from corrupted metadata or a broken VOS invariant.
-	 */
+	 * A mismatch can only come from corrupted metadata or a broken VOS invariant. */
 	if (csum_nr != 0 && csum_nr != rel->re_nr) {
 		D_ERROR("Checksum dump of RECX " DF_UOID " failed: "
 			"inconsistent checksum metadata "
@@ -1238,9 +1234,6 @@ out:
  * value, or one physical recx/epoch segment of an array value) into a freshly allocated
  * buffer in \a sgl. Uses the same 2-pass vos_obj_fetch() pattern as dv_dump_value(): the first
  * pass discovers the record size, the second pass fetches the data.
- *
- * A zero-length result (hole/punch at \a epoch) is not an error; the caller's sgl is left
- * empty in that case.
  */
 static int
 fetch_check_value(daos_handle_t coh, daos_unit_oid_t *oid, daos_key_t *dkey, daos_iod_t *iod,
@@ -1261,8 +1254,16 @@ fetch_check_value(daos_handle_t coh, daos_unit_oid_t *oid, daos_key_t *dkey, dao
 	if (iod->iod_type == DAOS_IOD_ARRAY)
 		data_size *= iod->iod_recxs[0].rx_nr;
 
-	if (data_size == 0) /* hole/punch: nothing to verify */
-		return 0;
+	/* fault injection: forge a checksummed value without data behind it */
+	if (DAOS_FAIL_CHECK(DDB_CSUM_NO_DATA_INJECT))
+		data_size = 0;
+
+	if (data_size == 0) {
+		D_ERROR("Checksum check of " DF_UOID " failed: inconsistent checksum metadata "
+			"(no data stored at epoch " DF_X64 " for a checksummed value)\n",
+			DP_UOID(*oid), epoch);
+		return -DER_NONEXIST;
+	}
 
 	D_ALLOC(sgl->sg_iovs[0].iov_buf, data_size);
 	if (sgl->sg_iovs[0].iov_buf == NULL)
@@ -1274,10 +1275,9 @@ fetch_check_value(daos_handle_t coh, daos_unit_oid_t *oid, daos_key_t *dkey, dao
 		D_ERROR("vos_obj_fetch (data) for csum check of " DF_UOID " failed: " DF_RC "\n",
 			DP_UOID(*oid), DP_RC(rc));
 		D_FREE(sgl->sg_iovs[0].iov_buf);
-		return rc;
 	}
 
-	return 0;
+	return rc;
 }
 
 /*
@@ -1292,6 +1292,10 @@ snapshot_csum_info(struct dcs_csum_info *src, struct dcs_csum_info **snapshot)
 	struct dcs_csum_info *dst;
 	uint8_t              *buf;
 
+	/* fault injection: fail the allocation of the snapshot */
+	if (DAOS_FAIL_CHECK(DDB_CSUM_SNAPSHOT_NOMEM_INJECT))
+		return -DER_NOMEM;
+
 	D_ALLOC(dst, sizeof(*dst) + src->cs_buf_len);
 	if (dst == NULL)
 		return -DER_NOMEM;
@@ -1303,16 +1307,19 @@ snapshot_csum_info(struct dcs_csum_info *src, struct dcs_csum_info **snapshot)
 	ci_set(dst, buf, src->cs_buf_len, src->cs_len, src->cs_nr, src->cs_chunksize, src->cs_type);
 
 	*snapshot = dst;
-	return 0;
+	return -DER_SUCCESS;
 }
 
 /*
  * Recompute the checksum of one segment's currently stored data and compare it against the
  * checksum info already fetched from disk (\a ci). Returns 0 if the checksums match,
- * -DER_CSUM if they differ, or another negative rc on a hard I/O/system error.
+ * -DER_CSUM if they differ, -DER_NONEXIST if no data is stored behind \a ci (inconsistent
+ * checksum metadata, already logged by fetch_check_value()), or another negative rc on a hard
+ * I/O/system error.
  *
  * On a -DER_CSUM mismatch, *got_csum is set to an independent snapshot of the recomputed
- * checksum (to be freed by the caller with D_FREE()); left NULL on a match or a hard error.
+ * checksum (to be freed by the caller with D_FREE()), or left NULL when that snapshot could not
+ * be allocated (the mismatch is then logged); left NULL on a match or any other error.
  */
 static int
 verify_segment_csum(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
@@ -1352,13 +1359,12 @@ verify_segment_csum(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, d
 
 	if (!daos_csummer_compare_csum_info(csummer, &got_iod_csums->ic_data[0], ci)) {
 		rc = snapshot_csum_info(&got_iod_csums->ic_data[0], got_csum);
-		if (SUCCESS(rc))
-			rc = -DER_CSUM;
-		else
-			/* the mismatch cannot be reported through got_csum: fail loudly instead */
-			D_ERROR("Checksum mismatch of " DF_UOID
-				" was detected, but snapshot_csum_info failed: " DF_RC "\n",
+		if (!SUCCESS(rc))
+			/* the mismatch cannot be reported through got_csum: log it instead */
+			D_ERROR("Checksum mismatch of " DF_UOID " detected, but its recomputed "
+				"checksum cannot be reported: " DF_RC "\n",
 				DP_UOID(*oid), DP_RC(rc));
+		rc = -DER_CSUM;
 	}
 
 	daos_csummer_free_ic(csummer, &got_iod_csums);
@@ -1402,10 +1408,8 @@ check_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_io
 		goto out_fetch_end;
 	}
 
-	/*
-	 * For a single value, if the checksum-info list is not empty, it can only have one entry
-	 * by construction.
-	 */
+	/* For a single value, if the checksum-info list is not empty, it can only have one entry
+	 * by construction. */
 	if (csum_nr != 1) {
 		D_ERROR("Checksum check of SV entry " DF_UOID " failed: "
 			"inconsistent checksum metadata (expected 1, got %" PRIu32 ")\n",
@@ -1418,7 +1422,15 @@ check_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_io
 	rc = verify_segment_csum(coh, dkey, oid, iod, sv_epoch, ci, &got_csum);
 	if (rc == -DER_CSUM) {
 		D_DEBUG(DB_IO, "Checksum mismatch of " DF_UOID "\n", DP_UOID(*oid));
-		rc = 0;
+		/* got_csum != NULL is the mismatch signal of the callback: without it, the
+		 * mismatch is only reported by the return code and the callback is not invoked. */
+		if (got_csum == NULL)
+			goto out_fetch_end;
+		rc = -DER_SUCCESS;
+	}
+	if (rc == -DER_NONEXIST) {
+		/* checksum with no data behind it: inconsistent metadata, callback not invoked */
+		D_GOTO(out_fetch_end, rc = -DER_CSUM);
 	}
 	if (!SUCCESS(rc)) {
 		D_ERROR("Checksum verification of " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
@@ -1476,13 +1488,11 @@ check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_
 		goto out_rel;
 	}
 
-	/*
-	 * For an array value, if the checksum-info list is not empty, it can only have the same
+	/* For an array value, if the checksum-info list is not empty, it can only have the same
 	 * number of entries as the recx list by construction: the checksum configuration is stored
 	 * at the root of the evtree, so evt_entry_csum_fill() reports a checksum info for every
 	 * non-hole extent of a checksummed akey, while akey_fetch_recx() records one recx per such
-	 * extent.  A mismatch can only come from corrupted metadata or a broken VOS invariant.
-	 */
+	 * extent.  A mismatch can only come from corrupted metadata or a broken VOS invariant. */
 	if (csum_nr != rel->re_nr) {
 		D_ERROR("Checksum check of RECX " DF_UOID " failed: "
 			"inconsistent checksum metadata (expected %" PRIu32 ", got %" PRIu32 ")\n",
@@ -1510,9 +1520,18 @@ check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_
 		if (rc == -DER_CSUM) {
 			D_DEBUG(DB_IO, "Checksum mismatch of " DF_UOID " " DF_RECX "\n",
 				DP_UOID(*oid), DP_RECX(rep->re_recx));
+			/* got_csums[i] != NULL is the mismatch signal of the callback: without it,
+			 * the mismatch is only reported by the return code and the callback is not
+			 * invoked. */
+			if (got_csums[i] == NULL)
+				goto out_got_csums;
 			csum_error = true;
-			rc         = 0; /* continue checking other segments */
+			rc         = -DER_SUCCESS; /* continue checking other segments */
 			continue;
+		}
+		if (rc == -DER_NONEXIST) {
+			/* checksum with no data behind it: inconsistent metadata, no callback */
+			D_GOTO(out_got_csums, rc = -DER_CSUM);
 		}
 		if (!SUCCESS(rc)) {
 			D_ERROR("Checksum verification of " DF_UOID " " DF_RECX " failed: " DF_RC
@@ -1536,7 +1555,7 @@ out_rel:
 	daos_recx_ep_list_free(rel, iod->iod_nr);
 	rc = vos_fetch_end(ioh, NULL, rc);
 out:
-	if (rc == 0 && csum_error)
+	if (SUCCESS(rc) && csum_error)
 		rc = -DER_CSUM;
 	return rc;
 }
