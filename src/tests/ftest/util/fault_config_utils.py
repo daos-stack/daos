@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -331,4 +332,9 @@ class FaultInjection():
             result = run_local(log, command)
         if not result.passed:
             error_list.append(f"Error removing fault injection file {self.fault_file}")
+
+        # Unset the local and environment reference since the file is gone
+        self.fault_file = None
+        del os.environ["D_FI_CONFIG"]
+
         return error_list
