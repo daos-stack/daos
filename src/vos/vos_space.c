@@ -209,7 +209,7 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 static daos_size_t
 estimate_space_key(struct umem_instance *umm, daos_key_t *key)
 {
-	struct vos_rec_bundle	rbund;
+	struct vos_rec_bundle   rbund = {0};
 	struct dcs_csum_info	csum = { 0 };
 	daos_size_t		size;
 

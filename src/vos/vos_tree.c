@@ -290,6 +290,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	struct vos_pool		*pool;
 	struct vos_object	*obj;
 	uint32_t                *bkt_id = NULL;
+	uint32_t                 bkt_id_val;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -314,7 +315,14 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	if (vos_pool_is_evictable(pool)) {
 		D_ASSERT(obj->obj_bkt_alloted == 1);
-		bkt_id = &obj->obj_bkt_id0;
+		if ((krec->kr_bmap & KREC_BF_DKEY) && (krec->kr_bmap & KREC_BF_BKT_ID)) {
+			/* Individual dkey bucket stored in krec */
+			bkt_id_val = *vos_krec2bkt_id(krec);
+		} else {
+			/* Primary bucket passed down via obj_bkt_id0 */
+			bkt_id_val = obj->obj_bkt_id0;
+		}
+		bkt_id = &bkt_id_val;
 	}
 
 	return gc_add_item(pool, coh, gc, rec->rec_off, bkt_id);
@@ -1051,7 +1059,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	struct ilog_df		*ilog = NULL;
 	struct vos_krec_df	*krec = NULL;
 	struct dcs_csum_info	 csum;
-	struct vos_rec_bundle	 rbund;
+	struct vos_rec_bundle    rbund = {0};
 	d_iov_t			 riov;
 	bool			 created = false;
 	int			 rc;
