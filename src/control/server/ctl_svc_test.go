@@ -50,6 +50,8 @@ func newMockControlServiceFromBackends(t *testing.T, log logging.Logger, cfg *co
 		srvCfg:                cfg,
 	}
 
+	t.Cleanup(func() { cs.Close() })
+
 	started := make([]bool, len(cfg.Engines))
 	for idx := range started {
 		started[idx] = true

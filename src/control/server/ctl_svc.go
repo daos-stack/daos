@@ -27,6 +27,13 @@ type ControlService struct {
 	restartMgr *engineRestartManager
 }
 
+// Close cleanly shuts down the control service, closing the events PubSub if present.
+func (cs *ControlService) Close() {
+	if cs != nil && cs.events != nil {
+		cs.events.Close()
+	}
+}
+
 // NewControlService returns ControlService to be used as gRPC control service
 // datastore. Initialized with sensible defaults and provided components.
 func NewControlService(log logging.Logger, h *EngineHarness,

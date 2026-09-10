@@ -268,6 +268,7 @@ func startSysDB(t *testing.T, ctx context.Context, log logging.Logger, replicas 
 	for {
 		select {
 		case <-leaderCtx.Done():
+			db.Stop()
 			cleanup()
 			t.Fatalf("failed to elect leader: %v", leaderCtx.Err())
 		default:
@@ -279,7 +280,10 @@ func startSysDB(t *testing.T, ctx context.Context, log logging.Logger, replicas 
 		time.Sleep(250 * time.Millisecond)
 	}
 
-	return cleanup
+	return func() {
+		db.Stop()
+		cleanup()
+	}
 }
 
 func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
@@ -395,7 +399,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 				}
 			}
 
-			gotResp, gotErr := svc.ClusterEvent(test.Context(t), pbReq)
+			gotResp, gotErr := svc.ClusterEvent(ctx, pbReq)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1471,7 +1475,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				req = nil
 			}
 
-			gotResp, gotErr := svc.SystemQuery(test.Context(t), req)
+			gotResp, gotErr := svc.SystemQuery(ctx, req)
 			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 			if tc.expErrMsg != "" {
 				return
@@ -1786,7 +1790,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
-			gotResp, gotAPIErr := svc.SystemStart(test.Context(t), tc.req)
+			gotResp, gotAPIErr := svc.SystemStart(ctx, tc.req)
 			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
 			if tc.expAPIErr != nil {
 				return
@@ -2147,7 +2151,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
-			gotResp, gotAPIErr := svc.SystemStop(test.Context(t), tc.req)
+			gotResp, gotAPIErr := svc.SystemStop(ctx, tc.req)
 			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
 			if tc.expAPIErr != nil {
 				return
@@ -2747,7 +2751,7 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 			}
 
 			db := raft.MockDatabaseWithAddr(t, log, tc.replica)
-			ms := system.NewMembership(log, db)
+			ms := system.NewMembership(log, db).WithTCPResolver(mockTCPResolver)
 			svc := newMgmtSvc(harness, ms, db, nil, nil)
 			for _, m := range tc.members {
 				if _, err := svc.membership.Add(m); err != nil {

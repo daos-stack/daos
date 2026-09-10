@@ -2323,7 +2323,11 @@ func TestServer_handleEngineSelfTerminated(t *testing.T) {
 
 			restartMgr := newEngineRestartManager(log, cfg)
 			restartMgr.start(ctx)
-			defer restartMgr.stop()
+			defer func() {
+				restartMgr.stop()
+				// Give the goroutine a moment to exit
+				<-time.After(100 * time.Millisecond)
+			}()
 
 			srv := &server{
 				log:        log,

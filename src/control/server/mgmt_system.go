@@ -1972,7 +1972,7 @@ func (svc *mgmtSvc) wipeEngineSuperblocks(ctx context.Context, fanReq *fanoutReq
 }
 
 // restartLeader schedules a restart of the leader control plane.
-func (svc *mgmtSvc) restartLeader() error {
+func (svc *mgmtSvc) restartLeader(ctx context.Context) error {
 	svc.log.Trace("SystemErase: LEADER - Step 8: Restarting leader control plane")
 
 	// Finally, restart the leader to complete the erase.
@@ -1990,10 +1990,13 @@ func (svc *mgmtSvc) restartLeader() error {
 		// after the function returns and the gRPC response completes. 3 seconds allows
 		// sufficient time for response serialization and transmission to prevent EOF errors
 		// being returned to client.
-		time.Sleep(3 * time.Second)
-
-		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
-			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
+		select {
+		case <-time.After(3 * time.Second):
+			if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
+				svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
+			}
+		case <-ctx.Done():
+			svc.log.Debugf("restartLeader cancelled")
 		}
 	}()
 
@@ -2026,7 +2029,7 @@ func (svc *mgmtSvc) resetAllEngines(ctx context.Context) (*mgmtpb.SystemEraseRes
 		return nil, err
 	}
 
-	if err := svc.restartLeader(); err != nil {
+	if err := svc.restartLeader(ctx); err != nil {
 		return pbResp, err
 	}
 
