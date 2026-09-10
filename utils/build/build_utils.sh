@@ -29,9 +29,9 @@ check_scons() {
 
 # Maps the running OS (from /etc/os-release) to the DISTRO suffix used by
 # DAOS RPMs;
-detect_distro() (
+detect_distro() {
     # shellcheck source=/dev/null
-    . /etc/os-release
+    (. /etc/os-release
     case "${ID:-}" in
         rocky | rhel | centos | almalinux)
             echo "el${VERSION_ID%%.*}"
@@ -41,7 +41,8 @@ detect_distro() (
             ;;
         *)
             echo "ERROR: cannot auto-detect DISTRO for ID=${ID:-unknown}; set it explicitly" >&2
-            exit 1
+            return 1
             ;;
     esac
-)
+    )
+}

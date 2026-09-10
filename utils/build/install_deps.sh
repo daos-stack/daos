@@ -67,7 +67,7 @@ validate_distro() {
             ;;
     esac
 }
-DISTRO="${1:-$(detect_distro)}"
+DISTRO="${1:-$(detect_distro)}" || exit $?
 validate_distro "${DISTRO}"
 
 id

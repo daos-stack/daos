@@ -40,26 +40,7 @@ if [ "$#" -gt 2 ]; then
 fi
 
 RPM_OUTPUT_DIR="${RPM_OUTPUT_DIR:-${repo_root}/rpms}"
-
-# Maps the running OS (from /etc/os-release) to the DISTRO suffix used by
-# DAOS RPMs; used only when DISTRO isn't given/set explicitly.
-detect_distro() (
-    # shellcheck source=/dev/null
-    . /etc/os-release
-    case "${ID:-}" in
-        rocky | rhel | centos | almalinux)
-            echo "el${VERSION_ID%%.*}"
-            ;;
-        opensuse-leap | sles)
-            echo "suse.lp${VERSION_ID//./}"
-            ;;
-        *)
-            echo "ERROR: cannot auto-detect DISTRO for ID=${ID:-unknown}; set it explicitly" >&2
-            exit 1
-            ;;
-    esac
-)
-DISTRO="${DISTRO:-$(detect_distro)}"
+DISTRO="${DISTRO:-$(detect_distro)}" || exit $?
 
 build_type="${1:-all}"
 verify_rpms="${2:-yes}"
