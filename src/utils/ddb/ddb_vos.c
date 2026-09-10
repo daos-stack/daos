@@ -1351,6 +1351,11 @@ verify_segment_csum(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, d
 		rc = snapshot_csum_info(&got_iod_csums->ic_data[0], got_csum);
 		if (SUCCESS(rc))
 			rc = -DER_CSUM;
+		else
+			/* the mismatch cannot be reported through got_csum: fail loudly instead */
+			D_ERROR("Checksum mismatch of " DF_UOID
+				" was detected, but snapshot_csum_info failed: " DF_RC "\n",
+				DP_UOID(*oid), DP_RC(rc));
 	}
 
 	daos_csummer_free_ic(csummer, &got_iod_csums);
