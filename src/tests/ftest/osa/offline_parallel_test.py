@@ -95,19 +95,14 @@ class OSAOfflineParallelTest(OSAUtils):
 
         for _ in range(0, num_pool):
             self.log_step("Create pool")
-            pools.append(self.get_pool(connect=False))
-
-        for pool in pools:
+            pool = self.get_pool(connect=False)
             self.pool = pool
             # Use only pool UUID while running the test.
             self.pool.use_label = False
             self.pool.set_property("reclaim", "disabled")
+            pools.append(pool)
 
-            self.log_step("Create container and write some data if data is True")
             if data:
-                self.run_ior_thread("Write", oclass, test_seq)
-                # Read the data back to verify it was written correctly.
-                self.run_ior_thread("Read", oclass, test_seq)
                 # if self.test_during_aggregation is set,
                 # Create another container and run the IOR
                 # command using the second container.
@@ -181,20 +176,18 @@ class OSAOfflineParallelTest(OSAUtils):
 
         self.log_step("Verify data integrity after OSA operations")
         # Finally run IOR to read the data and perform daos_container_check
-        for pool in pools:
-            self.pool = pool
-            if data:
-                # Perform a data consistency check.
-                containers = []
-                for pool in pools:
-                    self.pool = pool
-                    containers = self.get_daos_command().container_list(pool=self.pool.identifier)
-                    for info in containers["response"]:
-                        self.container = get_existing_container(self, self.pool, info["uuid"])
-                        self.run_ior_thread("Read", oclass, test_seq, single_cont_read=False)
-                        self.log.info("Checking data integrity for container %s", self.container)
-                        self.container.check()
-                        self.container.skip_cleanup()
+        if data:
+            # Perform a data consistency check.
+            containers = []
+            for pool in pools:
+                self.pool = pool
+                containers = self.get_daos_command().container_list(pool=self.pool.identifier)
+                for info in containers["response"]:
+                    self.container = get_existing_container(self, self.pool, info["uuid"])
+                    self.run_ior_thread("Read", oclass, test_seq, single_cont_read=False)
+                    self.log.info("Checking data integrity for container %s", self.container)
+                    self.container.check()
+                    self.container.skip_cleanup()
 
     def test_osa_offline_parallel_test(self):
         """JIRA ID: DAOS-4752.

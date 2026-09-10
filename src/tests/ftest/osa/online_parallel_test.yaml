@@ -36,7 +36,7 @@ server_config:
 pool:
   scm_size: 12000000000
   nvme_size: 108000000000
-  svcn: 4
+  svcn: 3
 
 container:
   type: POSIX

@@ -108,13 +108,12 @@ class OSAOnlineParallelTest(OSAUtils):
 
         for _ in range(0, num_pool):
             self.log_step("Create pool")
-            pools.append(self.get_pool(connect=False))
-
-        for pool in pools:
+            pool = (self.get_pool(connect=False))
             self.pool = pool
             # Use only pool UUID while running the test.
             self.pool.use_label = False
             self.pool.set_property("reclaim", "disabled")
+            pools.append(pool)
 
         # Start the additional servers and extend the pool
         self.log_step("Start additional servers")
