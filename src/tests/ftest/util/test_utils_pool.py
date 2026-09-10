@@ -1689,3 +1689,22 @@ class TestPool(TestDaosApiBase):
                     raise AssertionError(
                         f'Expected target {target} to be in state {expected_target_state}, '
                         f'but current state is {info["target_state"]}')
+
+    def get_fault_domains(self, rank_info):
+        """Get the fault domains for this pool.
+
+        Args:
+            rank_info (dict): The server rank information containing each host (keys) and their
+                associated ranks (values).
+
+        Returns:
+            list: The list of fault domains for this pool.
+
+        """
+        domains = list(rank_info.keys())
+        if self.nranks.value:
+            for pool_rank in self.nranks.value:
+                for host, ranks in rank_info.items():
+                    if pool_rank not in ranks:
+                        domains.remove(host)
+        return domains
