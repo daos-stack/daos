@@ -223,7 +223,7 @@ class PoolCreateAllTestBase(TestWithServers):
             AssertionError: If any property does not match the expected value.
         """
         default_props = DEFAULT_POOL_PROPS.copy()
-        fault_domains = pool.get_fault_domains()
+        fault_domains = pool.get_fault_domains(self.server_managers[0].ranks)
         self.log.debug("Fault domains for %s: %s", pool.identifier, fault_domains)
         default_props["rd_fac"] = min(default_props["rd_fac"], len(fault_domains) - 1)
         default_props["label"] = pool.label.value
