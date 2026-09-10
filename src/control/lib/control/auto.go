@@ -478,10 +478,10 @@ func (nsm numaSSDsMap) keys() (keys []int) {
 	return
 }
 
-// redistributeSsdsIgnNuma allocates all available SSDs equally across engines, ignoring NUMA affinity.
-// Each engine receives the same number of SSDs. If the total number of SSDs is not evenly
-// divisible by the number of engines, only the maximum divisible number of SSDs are used and
-// remainder SSDs are not included in the generated configuration.
+// redistributeSsdsIgnNuma allocates SSDs across engines with preference for NUMA affinity.
+// First assigns SSDs to their native NUMA nodes, then redistributes excess SSDs to balance
+// distribution. If the total number of SSDs is not evenly divisible by the number of engines,
+// only the maximum divisible number of SSDs are used and remainder SSDs are not included.
 func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMap) error {
 	if numaCount == 0 {
 		return errors.New("no numa nodes detected")
@@ -490,11 +490,13 @@ func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMa
 		return errors.New("no ssds detected")
 	}
 
-	req.Log.Debug("allow-numa-imbalance enabled, distributing SSDs equally across engines")
+	req.Log.Debug("allow-numa-imbalance enabled, distributing SSDs with affinity preference")
 
-	// Collect all SSDs from all NUMA nodes in sorted order for deterministic distribution
+	// Convert VMD backing addresses to logical addresses and collect all SSDs
 	var allSSDs []string
 	var numaIDs []int
+	numaToAddrs := make(map[int][]string)
+
 	for numaID := range nsm {
 		numaIDs = append(numaIDs, numaID)
 	}
@@ -513,11 +515,13 @@ func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMa
 			}
 			addrs = newAddrSet.Strings()
 		}
+
+		sort.Strings(addrs)
+		numaToAddrs[numaID] = addrs
 		allSSDs = append(allSSDs, addrs...)
 	}
 
-	// Divide SSDs across NUMA rather than requested number of engines to preserve how the
-	// selection algorithms work when deciding on NUMA-to-engine mappings.
+	// Calculate target SSDs per NUMA node
 	totalSSDs := len(allSSDs)
 	ssdsPerNuma := totalSSDs / numaCount
 	remainder := totalSSDs % numaCount
@@ -529,22 +533,55 @@ func redistributeSsdsIgnNuma(req *ConfGenerateReq, numaCount int, nsm numaSSDsMa
 			totalSSDs, numaCount, ssdsToUse, ssdsPerNuma, remainder)
 	}
 
-	req.Log.Debugf("distributing %d SSDs equally across %d NUMA nodes (%d per node)",
-		ssdsToUse, numaCount, ssdsPerNuma)
+	req.Log.Debugf("distributing %d SSDs with affinity preference across %d NUMA nodes "+
+		"(%d per node)", ssdsToUse, numaCount, ssdsPerNuma)
+
+	// Create new distribution: first assign SSDs to each NUMA node by affinity
+	newNsm := make(map[int][]string)
+	for i := 0; i < numaCount; i++ {
+		newNsm[i] = []string{}
+	}
+
+	// Assign SSDs by affinity to their native NUMA nodes
+	for _, numaID := range numaIDs {
+		newNsm[numaID] = append(newNsm[numaID], numaToAddrs[numaID]...)
+	}
+
+	// Collect excess SSDs from nodes that have more than the target
+	var excessSSDs []string
+	for numaID := 0; numaID < numaCount; numaID++ {
+		if len(newNsm[numaID]) > ssdsPerNuma {
+			excessSSDs = append(excessSSDs, newNsm[numaID][ssdsPerNuma:]...)
+			newNsm[numaID] = newNsm[numaID][:ssdsPerNuma]
+		}
+	}
+
+	sort.Strings(excessSSDs)
+
+	// Distribute excess SSDs to nodes that have less than target
+	excessIdx := 0
+	for numaID := 0; numaID < numaCount; numaID++ {
+		for len(newNsm[numaID]) < ssdsPerNuma && excessIdx < len(excessSSDs) {
+			newNsm[numaID] = append(newNsm[numaID], excessSSDs[excessIdx])
+			excessIdx++
+		}
+	}
 
 	// Clear existing map and repopulate with redistributed SSDs
 	for k := range nsm {
 		delete(nsm, k)
 	}
 
-	// Distribute SSDs equally across engines, using only the divisible portion
-	idx := 0
+	// Populate result map
 	for numaID := 0; numaID < numaCount; numaID++ {
-		numaSSDs := allSSDs[idx : idx+ssdsPerNuma]
-		nsm[numaID] = hardware.MustNewPCIAddressSet(numaSSDs...)
-		req.Log.Debugf("assigned %d SSDs to NUMA-%d: %v", ssdsPerNuma, numaID,
-			numaSSDs)
-		idx += ssdsPerNuma
+		if len(newNsm[numaID]) > 0 {
+			sort.Strings(newNsm[numaID])
+			nsm[numaID] = hardware.MustNewPCIAddressSet(newNsm[numaID]...)
+			req.Log.Debugf("assigned %d SSDs to NUMA-%d: %v", len(newNsm[numaID]), numaID,
+				newNsm[numaID])
+		} else {
+			nsm[numaID] = hardware.MustNewPCIAddressSet()
+		}
 	}
 
 	return nil

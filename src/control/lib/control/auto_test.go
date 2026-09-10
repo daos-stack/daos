@@ -734,7 +734,7 @@ func TestControl_AutoConfig_fromNVMe(t *testing.T) {
 			allowImbalance: true,
 			expNumaSSDs: numaSSDsMap{
 				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
-				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 5, 6)...),
 			},
 		},
 		"allow imbalance with 8 SSDs across 2 engines": {
@@ -781,8 +781,8 @@ func TestControl_AutoConfig_fromNVMe(t *testing.T) {
 			expNumaSSDs: numaSSDsMap{
 				// VMD backing addresses should be converted to VMD domain addresses
 				// and distributed: one VMD endpoint to NUMA-0, one to NUMA-1
-				0: hardware.MustNewPCIAddressSet("0000:5d:05.5"),
-				1: hardware.MustNewPCIAddressSet("0000:d7:05.5"),
+				0: hardware.MustNewPCIAddressSet("0000:d7:05.5"),
+				1: hardware.MustNewPCIAddressSet("0000:5d:05.5"),
 			},
 		},
 		"allow imbalance with 4 NUMA nodes and heterogeneous drives": {
@@ -796,10 +796,27 @@ func TestControl_AutoConfig_fromNVMe(t *testing.T) {
 			numaCount:      4,
 			allowImbalance: true,
 			expNumaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(2)...),
+				2: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3)...),
+				3: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(4)...),
+			},
+		},
+		"no imbalance with 4 NUMA nodes and heterogeneous drives": {
+			ssds: storage.NvmeControllers{
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(0), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 0},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 1},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 2},
+				&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 3},
+			},
+			numaCount:      4,
+			allowImbalance: false,
+			expNumaSSDs: numaSSDsMap{
 				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1)...),
-				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(2, 3)...),
-				2: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(4)...),
-				3: hardware.MustNewPCIAddressSet(),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(2)...),
+				2: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3)...),
+				3: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(4)...),
 			},
 		},
 	} {
