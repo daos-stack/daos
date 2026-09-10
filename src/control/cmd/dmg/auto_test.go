@@ -272,6 +272,12 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Generate with both num-engines and allow-numa-imbalance (should error)",
+			"config generate -a foo -e 4 --allow-numa-imbalance",
+			"",
+			errors.New("--num-engines and --allow-numa-imbalance flags are mutually exclusive"),
+		},
+		{
 			"Nonexistent subcommand",
 			"network quack",
 			"",
