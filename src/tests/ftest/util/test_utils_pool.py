@@ -11,6 +11,7 @@ import os
 from time import sleep, time
 
 from avocado import TestFail, fail_on
+from ClusterShell.NodeSet import NodeSet
 from command_utils import BasicParameter
 from data_utils import assert_dict_subset
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
@@ -336,6 +337,7 @@ class TestPool(TestDaosApiBase):
         self.info = None
         self.svc_ranks = None
         self.svc_leader = None
+        self.__tgt_ranks = None
         self.connected = False
 
         self._dmg = None
@@ -531,6 +533,9 @@ class TestPool(TestDaosApiBase):
             # Set effective size of mediums per rank
             self.scm_per_rank = data["scm_per_rank"]
             self.nvme_per_rank = data["nvme_per_rank"]
+
+            # Set target ranks for the pool
+            self.__tgt_ranks = data["tgt_ranks"]
 
         # Set the TestPool attributes for the created pool
         if self.pool.attached:
@@ -1694,17 +1699,12 @@ class TestPool(TestDaosApiBase):
         """Get the fault domains for this pool.
 
         Args:
-            rank_info (dict): The server rank information containing each host (keys) and their
-                associated ranks (values).
+            rank_info (dict): The server rank information containing each rank (keys) and the host
+                on which it runs (value).
 
         Returns:
-            list: The list of fault domains for this pool.
+            NodeSet: The set of fault domains for this pool.
 
         """
-        domains = list(rank_info.keys())
-        if self.nranks.value:
-            for pool_rank in self.nranks.value:
-                for host, ranks in rank_info.items():
-                    if pool_rank not in ranks:
-                        domains.remove(host)
-        return domains
+        return NodeSet.fromlist(
+            [host for rank, host in rank_info.items() if rank in self.__tgt_ranks])
