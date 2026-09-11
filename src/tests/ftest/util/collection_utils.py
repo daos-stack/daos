@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -622,8 +622,14 @@ def create_steps_log(logger, job_results_dir, test_result):
 
     test_logs_lnk = os.path.join(job_results_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
-    job_log = os.path.join(test_logs_dir, 'job.log')
     step_log = os.path.join(test_logs_dir, 'steps.log')
+    job_log = os.path.join(test_logs_dir, 'full.log')
+    if not os.path.exists(job_log):
+        job_log = os.path.join(test_logs_dir, 'job.log')
+        if not os.path.exists(job_log):
+            message = f"Unable to find a full.log or job.log file for creating {step_log}"
+            test_result.fail_test(logger, "Process", message, sys.exc_info())
+            return 8192
     command = rf"grep -E '(INFO |ERROR)\| (==> Step|START|PASS|FAIL|ERROR)' {job_log}"
     result = run_local(logger, command)
     if not result.passed:
