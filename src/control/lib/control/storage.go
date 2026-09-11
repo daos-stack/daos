@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -389,7 +389,23 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 // system should be erased before allowing a format request for the hosts
 // in the request. The goal is to prevent reformatting a running system while
 // allowing (re-)format of hosts that are not participating as MS replicas.
+// When Replace is true, control_metadata format will be skipped on the engine
+// side, so the MS replica check can be bypassed to allow replacing MS replica
+// ranks after metadata loss.
 func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFormatReq) error {
+	// Skip MS replica checks when replacing a rank, as control_metadata
+	// format is skipped in this case.
+	if req.Replace {
+	    hosts, err := common.ParseHostList(req.HostList, build.DefaultControlPort)
+	    if err != nil {
+	        return err
+	    }
+	    if len(hosts) != 1 {
+	        return errors.New("replace option requires exactly one host in hostlist")
+	    }
+	    return nil
+	}
+
 	reqHosts, err := common.ParseHostList(req.HostList, build.DefaultControlPort)
 	if err != nil {
 		return err
