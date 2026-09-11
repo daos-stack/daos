@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -439,21 +440,17 @@ main(int argc, char **argv)
 
 	/*
 	 * For daos_perf, if pool/cont uuids are supplied as command line
-	 * arguments it's assumed that the pool/cont were created. If only a
-	 * cont uuid is supplied then a pool and container will be created and
-	 * the cont uuid will be used during creation
+	 * arguments it's assumed that the pool/cont were already created and
+	 * will be opened.
 	 */
-	if (!uuid_is_null(ts_ctx.tsc_pool_uuid)) {
+	if (!uuid_is_null(ts_ctx.tsc_pool_uuid))
 		ts_ctx.tsc_skip_pool_create = true;
-		if (!uuid_is_null(ts_ctx.tsc_cont_uuid))
-			ts_ctx.tsc_skip_cont_create = true;
-	}
-
-	if (ts_ctx.tsc_mpi_rank == 0) {
-		if (!ts_ctx.tsc_skip_cont_create)
-			uuid_generate(ts_ctx.tsc_cont_uuid);
-		if (!ts_ctx.tsc_skip_pool_create)
-			uuid_generate(ts_ctx.tsc_pool_uuid);
+	if (!uuid_is_null(ts_ctx.tsc_cont_uuid))
+		ts_ctx.tsc_skip_cont_create = true;
+	if (!ts_ctx.tsc_skip_pool_create && ts_ctx.tsc_skip_cont_create) {
+		if (ts_ctx.tsc_mpi_rank == 0)
+			fprintf(stderr, "Specifying a container must also specify a pool\n");
+		return -1;
 	}
 
 	ts_update_or_fetch_fn = daos_update_or_fetch;

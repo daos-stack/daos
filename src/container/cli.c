@@ -365,10 +365,6 @@ dc_cont_create(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 
-	if (!daos_uuid_valid(args->uuid))
-		/** generate a UUID for the new container */
-		uuid_generate(args->uuid);
-
 	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
 	if (entry != NULL) {
 		rc = -DER_INVAL;
@@ -391,6 +387,9 @@ dc_cont_create(tse_task_t *task)
 		rc = cont_task_create_priv(task, &tpriv);
 		if (rc != 0)
 			goto err_prop;
+
+		/** generate a UUID for the new container */
+		uuid_generate(args->uuid);
 	}
 
 	D_DEBUG(DB_MD, DF_UUID": creating "DF_UUIDF"\n",
