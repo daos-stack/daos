@@ -854,7 +854,7 @@ pipeline {
                                 sconsBuild(parallel_build: true,
                                            build_deps: 'no',
                                            scons_args: sconsArgs() +
-                                                      ' BUILD_GO_VALGRIND=1 PREFIX=/opt/daos TARGET_TYPE=release'))
+                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Stash valgrind install tree for NLT',
                                 script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
                             stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
