@@ -31,6 +31,7 @@ server_config:
         - DD_MASK=group_metadata_only,io,epc,rebuild
         - D_LOG_FILE_APPEND_PID=1
         - D_LOG_FILE_APPEND_RANK=1
+        - D_LOG_STDERR_IN_LOG=1
         - FI_LOG_LEVEL=warn
         - HG_LOG_LEVEL=warn
         - HG_LOG_SUBSYS=hg,na,libfabric
@@ -44,6 +45,7 @@ server_config:
         - DD_MASK=group_metadata_only,io,epc,rebuild
         - D_LOG_FILE_APPEND_PID=1
         - D_LOG_FILE_APPEND_RANK=1
+        - D_LOG_STDERR_IN_LOG=1
         - FI_LOG_LEVEL=warn
         - HG_LOG_LEVEL=warn
         - HG_LOG_SUBSYS=hg,na,libfabric
