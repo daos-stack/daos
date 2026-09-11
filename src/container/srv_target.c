@@ -1635,7 +1635,7 @@ ds_dtx_resync(void *arg)
 	struct ds_cont_child *cont = arg;
 	int                   rc;
 
-	rc = dtx_resync(cont->sc_pool->spc_hdl, cont, cont->sc_pool->spc_map_version, false);
+	rc = dtx_resync_cont(cont->sc_pool->spc_hdl, cont, cont->sc_pool->spc_map_version, false);
 	if (rc != 0)
 		D_WARN("Fail to resync some DTX(s) for the pool/cont " DF_UUID "/" DF_UUID
 		       " that may affect subsequent "

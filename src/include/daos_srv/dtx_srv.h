@@ -285,6 +285,10 @@ enum dtx_flags {
 	DTX_EPOCH_OWNER = (1 << 12),
 };
 
+enum dtx_resync_flags {
+	RESYNC_FOR_ORPHAN = (1 << 0),
+};
+
 void
 dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth);
 int
@@ -427,15 +431,16 @@ dtx_is_real_handle(const struct dtx_handle *dth)
 }
 
 struct dtx_scan_args {
-	uuid_t		pool_uuid;
-	uint32_t	version;
-	bool            for_orphan;
+	struct ds_pool *pool;
+	uint32_t        version;
+	uint32_t        flags;
 };
 
 /* clang-format off */
 int dtx_cleanup_orphan(uuid_t po_uuid, uint32_t pm_ver);
-int dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block);
-void dtx_resync_ult(void *arg);
+int dtx_resync_cont(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block);
+int dtx_resync_start(struct ds_pool *pool, uint32_t pm_ver, uint32_t flags, bool wait);
+void dtx_resync_stop(struct ds_pool *pool, bool wait);
 /* clang-format on */
 
 #endif /* __DAOS_DTX_SRV_H__ */

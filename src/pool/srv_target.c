@@ -1424,6 +1424,8 @@ ds_pool_stop(uuid_t uuid)
 	ds_iv_ns_stop(pool->sp_iv_ns);
 	stop_eph_report_ult(pool);
 
+	dtx_resync_stop(pool, true);
+
 	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
 	ds_migrate_stop(pool, -1, -1);
 
@@ -2192,29 +2194,17 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       DP_UUID(pool->sp_uuid), map_version_before, map_version);
 	}
 
-	if (map_updated && !ds_pool_restricted(pool, false)) {
-		struct dtx_scan_args	*arg;
-		int ret;
-
-		D_ALLOC_PTR(arg);
-		if (arg == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-
-		uuid_copy(arg->pool_uuid, pool->sp_uuid);
-		arg->version = pool->sp_map_version;
-		ret = dss_ult_create(dtx_resync_ult, arg, DSS_XS_SYS,
-				     0, 0, NULL);
-		if (ret) {
-			/* Ignore DTX resync failure that is not fatal. */
-			D_WARN("dtx_resync_ult failure %d\n", ret);
-			D_FREE(arg);
-		}
-	} else {
+	if (!map_updated) {
 		/* This should be a D_DEBUG eventually. */
 		D_INFO(DF_UUID ": ignored pool map update: version=%u->%u cached_version=%u\n",
 		       DP_UUID(pool->sp_uuid), pool_map_get_version(pool->sp_map), map_version,
 		       pool->sp_map_version);
+		goto out;
 	}
+
+	if (!ds_pool_restricted(pool, false))
+		rc = dtx_resync_start(pool, pool->sp_map_version, 0, false);
+
 out:
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (map != NULL)
