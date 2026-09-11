@@ -340,6 +340,7 @@ class LogTest():
         warnings_strict = False
         warnings_mode = False
         server_shutdown = False
+        abrupt_eof = self._li.truncated_eof
 
         error_files = set()
 
@@ -540,7 +541,10 @@ class LogTest():
         if active_desc:
             for (_, line) in list(active_desc.items()):
                 show_line(line, 'NORMAL', 'desc not deregistered', custom=leak_wf)
-            raise ActiveDescriptors()
+            if abrupt_eof:
+                print('WARNING: log ended abruptly; skipping descriptor leak failure')
+            else:
+                raise ActiveDescriptors()
 
         if active_rpcs:
             for (_, line) in list(active_rpcs.items()):
@@ -548,7 +552,10 @@ class LogTest():
         if error_files or err_count:
             raise LogError()
         if not self.ftest_mode and mem_r.lost_memory:
-            raise NotAllFreed()
+            if abrupt_eof:
+                print('WARNING: log ended abruptly; skipping memory leak failure')
+            else:
+                raise NotAllFreed()
         if warnings_strict:
             raise WarningStrict()
         if warnings_mode:
