@@ -126,6 +126,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] ||                           \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
 COPY --chown=daos_server:daos_server utils/rpms utils/rpms
+COPY --chown=daos_server:daos_server utils/build utils/build
 COPY --chown=daos_server:daos_server utils/sl utils/sl
 
 # Build third party RPMs
@@ -133,7 +134,7 @@ RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || { 
 	export DISTRO=ubuntu &&                                                 \
 	export OUTPUT_TYPE=deb &&                                               \
 	export LIBDIR=/usr/lib/x86_64-linux-gnu &&                              \
-	utils/rpms/build_packages.sh deps &&                                    \
+	utils/build/build_packages.sh deps &&                                   \
 	mkdir -p /home/daos/dpkg &&                                             \
 	cp *.deb /home/daos/dpkg;                                               \
     }
@@ -180,7 +181,7 @@ RUN [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
 	export DISTRO=ubuntu &&                                            \
 	export OUTPUT_TYPE=deb &&                                          \
 	export LIBDIR=/usr/lib/x86_64-linux-gnu &&                         \
-	utils/rpms/build_packages.sh daos &&                               \
+	utils/build/build_packages.sh daos &&                               \
 	mkdir -p /home/daos/dpkg &&                                        \
 	cp *.deb /home/daos/dpkg;                                          \
     }
