@@ -22,6 +22,7 @@ FS
 FileHandler
 GHA
 Gopath
+github
 Haswell
 IOF
 IOR
@@ -59,6 +60,7 @@ SHS
 SSF
 SX
 Skylake
+StackFrame
 SubProcess
 Subdirectories
 TestFail
@@ -142,6 +144,7 @@ ddict
 dealloc
 debian
 debuginfo
+deduplicated
 defusedxml
 del
 dentry
@@ -407,6 +410,7 @@ runtime
 runuser
 rw
 sandybridge
+sanitizer's
 sbatch
 sbin
 scalable
