@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,13 @@
 #include "srv_layout.h"
 
 bool		ec_agg_disabled;
+/*
+ * Keep VOS aggregation's force-merge (record coalescing) enabled for EC objects
+ * even when the target xstream is busy. For EC, coalescing the data shards is the
+ * only way partial-stripe writes get defragmented, and it is always bounded to the
+ * EC aggregation epoch boundary, so it cannot merge parity-inconsistent epochs.
+ */
+bool            ec_agg_force_merge = true;
 uint32_t        pw_rf = -1; /* pool wise redundancy factor */
 uint32_t        ps_cache_intvl = 2;  /* pool space cache expiration time, in seconds */
 #define PW_RF_DEFAULT (2)
@@ -72,6 +79,11 @@ init(void)
 	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
+
+	ec_agg_force_merge = true;
+	d_getenv_bool("DAOS_EC_AGG_FORCE_MERGE", &ec_agg_force_merge);
+	if (!ec_agg_force_merge)
+		D_WARN("EC aggregation force-merge (coalescing under load) is disabled.\n");
 
 	pw_rf = -1;
 	if (!check_pool_redundancy_factor("DAOS_POOL_RF"))
