@@ -443,6 +443,24 @@ class DaosServerManager(SubprocessManager):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
+        # On nodes booting from NVMe (not SATA), exclude the boot drive so prepare
+        # does not try to bind it to vfio-pci and fail while the OS is using it.
+        if "pci_block_list" not in kwargs:
+            boot_pci_result = run_remote(
+                self.log, self._hosts,
+                "n=$(basename \"$(findmnt -n -o SOURCE / | sed 's/p[0-9]*$//')\"); "
+                "c=\"${n%n*}\"; "
+                "basename \"$(readlink /sys/class/nvme/$c/device)\" 2>/dev/null || true",
+                timeout=30)
+            boot_pcis = set()
+            for stdout in boot_pci_result.all_stdout.values():
+                for addr in stdout.splitlines():
+                    addr = addr.strip()
+                    if addr and ":" in addr:
+                        boot_pcis.add(addr)
+            if boot_pcis:
+                kwargs["pci_block_list"] = ",".join(sorted(boot_pcis))
+
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
