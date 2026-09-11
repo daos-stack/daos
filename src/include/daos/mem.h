@@ -677,6 +677,13 @@ struct umem_instance;
 #define UMEM_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
 #define UMEM_XADD_NO_SNAPSHOT	(((uint64_t)1) << 2)
 
+/*
+ * Do NOT abort current TX if failed to operate (such as allocation) something under current
+ * transaction context, instead, return some errno# to the caller who can handle the failure
+ * and further use such TX.
+ */
+#define UMEM_FLAG_NO_ABORT      (((uint64_t)1) << 3)
+
 /* Macros associated with Memory buckets */
 #define	UMEM_DEFAULT_MBKT_ID	0
 
@@ -751,6 +758,8 @@ typedef struct {
 	int		 (*mo_tx_commit)(struct umem_instance *umm, void *data);
 
 #ifdef DAOS_PMEM_BUILD
+	/** Set emergency buffer for transaction snapshot */
+	int (*mo_tx_set_snapbuf)(struct umem_instance *umm, umem_off_t snap_buf, size_t size);
 	/** get TX stage */
 	int		 (*mo_tx_stage)(void);
 
@@ -1079,6 +1088,15 @@ bool umem_tx_inprogress(struct umem_instance *umm);
 bool umem_tx_none(struct umem_instance *umm);
 
 int umem_tx_errno(int err);
+
+static inline int
+umem_tx_set_snapbuf(struct umem_instance *umm, umem_off_t snap_buf, size_t size)
+{
+	if (umm->umm_ops->mo_tx_set_snapbuf)
+		return umm->umm_ops->mo_tx_set_snapbuf(umm, snap_buf, size);
+	else
+		return 0;
+}
 
 static inline int
 umem_tx_stage(struct umem_instance *umm)
