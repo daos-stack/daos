@@ -2468,6 +2468,40 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid, bool for_modify)
 	return 0;
 }
 
+/*
+ * The IO targets some rebuilding shard(s). The rebuild scan uses the rebuild stable epoch as
+ * its snapshot boundary, so such an IO has to be stamped with an epoch that is strictly newer
+ * than the stable epoch, otherwise it may be missed by the rebuild and lost on the rebuilding
+ * target. Ask the client to retry (with a newer epoch) until that is the case.
+ *
+ * NOTE: It must be called after the epoch has been fixed, and after the resend (if any) has been
+ *	 resolved, otherwise the checked epoch is not the one that will be used for the write.
+ */
+static int
+obj_rebuilding_io_check(struct ds_cont_child *child, daos_epoch_t epoch, uint32_t flags)
+{
+	struct ds_pool *pool = child->sc_pool->spc_pool;
+	daos_epoch_t    stable_epoch;
+	uint32_t        version;
+
+	if (!(flags & ORF_REBUILDING_IO) || !atomic_load(&pool->sp_rebuilding))
+		return 0;
+
+	ds_rebuild_running_query(child->sc_pool_uuid, RB_OP_REBUILD, &version, &stable_epoch, NULL);
+	if (version == 0)
+		return 0;
+
+	if (stable_epoch == 0 || epoch <= stable_epoch) {
+		D_DEBUG(DB_IO,
+			DF_UUID " retry rebuilding IO epoch " DF_X64
+				", rebuilding %u stable " DF_X64 "\n",
+			DP_UUID(child->sc_pool_uuid), epoch, version, stable_epoch);
+		return -DER_UPDATE_AGAIN;
+	}
+
+	return 0;
+}
+
 static int
 obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		      uint32_t rpc_map_ver, uint32_t flags)
@@ -3059,6 +3093,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	int                              rc;
 	int                              retry      = 0;
 	bool                             need_abort = false;
+	bool                             prepared   = false;
 
 	D_ASSERT(orw != NULL);
 	D_ASSERT(orwo != NULL);
@@ -3193,9 +3228,21 @@ again:
 			goto out;
 		if (rc == ORS_DONE)
 			D_GOTO(out, rc = 0);
+		prepared = (rc == ORS_PREPARED);
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
 		ioc.ioc_lost_reply = 1;
 		D_GOTO(out, rc);
+	}
+
+	/*
+	 * Only gate the modifications that are really going to be executed: an already prepared
+	 * DTX carries a fixed epoch that cannot be advanced by a retry, rejecting it would loop
+	 * forever.
+	 */
+	if (!prepared) {
+		rc = obj_rebuilding_io_check(ioc.ioc_coc, orw->orw_epoch, orw->orw_flags);
+		if (rc != 0)
+			goto out;
 	}
 
 	/* For leader case, we need to find out the potential conflict
@@ -3506,6 +3553,10 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		 */
 		atomic_store(&ioc->ioc_coc->sc_pool->spc_pool->sp_rebuild_enum, 1);
 		flags = DTX_FOR_MIGRATION;
+		if (!(oei->oei_flags & ORF_ENUM_WITHOUT_EPR)) {
+			epoch.oe_value = oei->oei_epr.epr_hi;
+			epoch.oe_first = oei->oei_epr.epr_hi;
+		}
 	}
 
 	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
@@ -4059,6 +4110,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	int                              rc;
 	int                              retry      = 0;
 	bool                             need_abort = false;
+	bool                             prepared   = false;
 
 	opi = crt_req_get(rpc);
 	D_ASSERT(opi != NULL);
@@ -4121,9 +4173,17 @@ again:
 			goto out;
 		if (rc == ORS_DONE)
 			D_GOTO(out, rc = 0);
+		prepared = (rc == ORS_PREPARED);
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST) ||
 		   DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
 		goto cleanup;
+	}
+
+	/* See the comment in ds_obj_rw_handler(). */
+	if (!prepared) {
+		rc = obj_rebuilding_io_check(ioc.ioc_coc, opi->opi_epoch, opi->opi_flags);
+		if (rc != 0)
+			goto out;
 	}
 
 	/* For leader case, we need to find out the potential conflict
@@ -5303,6 +5363,7 @@ ds_obj_dtx_leader(struct daos_cpd_args *dca)
 	int				 req_cnt = 0;
 	int				 rc = 0;
 	bool				 need_abort = false;
+	bool                             prepared   = false;
 
 	dcsh = ds_obj_cpd_get_head(dca->dca_rpc, dca->dca_idx);
 
@@ -5341,8 +5402,17 @@ again:
 			goto out;
 		if (rc == ORS_DONE)
 			D_GOTO(out, rc = 0);
+		prepared = (rc == ORS_PREPARED);
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
 		D_GOTO(out, rc = 0);
+	}
+
+	/* See the comment in ds_obj_rw_handler(). */
+	if (!prepared) {
+		rc = obj_rebuilding_io_check(dca->dca_ioc->ioc_coc, dcsh->dcsh_epoch.oe_value,
+					     oci->oci_flags);
+		if (rc != 0)
+			goto out;
 	}
 
 	dcde = ds_obj_cpd_get_ents(dca->dca_rpc, dca->dca_idx, 0);
@@ -5392,7 +5462,8 @@ again:
 	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coc, rc);
 
 out:
-	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART && rc != -DER_AGAIN,
+	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART && rc != -DER_AGAIN &&
+		      rc != -DER_UPDATE_AGAIN,
 		  DLOG_ERR, DB_IO, rc, "Handled DTX " DF_DTI " on leader, idx %u",
 		  DP_DTI(&dcsh->dcsh_xid), dca->dca_idx);
 
@@ -5872,6 +5943,7 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 	int				 i;
 	bool				 need_abort = false;
 	bool                             leader;
+	bool                             prepared = false;
 
 	if (ocpi->ocpi_flags & ORF_LEADER)
 		leader = true;
@@ -5934,6 +6006,14 @@ again:
 			goto out;
 		if (rc == ORS_DONE)
 			D_GOTO(out, rc = 0);
+		prepared = (rc == ORS_PREPARED);
+	}
+
+	/* See the comment in ds_obj_rw_handler(). */
+	if (leader && !prepared) {
+		rc = obj_rebuilding_io_check(ioc.ioc_coc, ocpi->ocpi_epoch, ocpi->ocpi_flags);
+		if (rc != 0)
+			goto out;
 	}
 
 	epoch.oe_value = ocpi->ocpi_epoch;
