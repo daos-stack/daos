@@ -337,7 +337,7 @@ class TestPool(TestDaosApiBase):
         self.info = None
         self.svc_ranks = None
         self.svc_leader = None
-        self.__target_ranks = None
+        self.__target_ranks = []
         self.connected = False
 
         self._dmg = None
@@ -535,7 +535,7 @@ class TestPool(TestDaosApiBase):
             self.nvme_per_rank = data["nvme_per_rank"]
 
             # Set target ranks for the pool
-            self.__target_ranks = data["ranks"]
+            self.__target_ranks = [int(rank) for rank in data["ranks"].split(",")]
 
         # Set the TestPool attributes for the created pool
         if self.pool.attached:
@@ -622,6 +622,7 @@ class TestPool(TestDaosApiBase):
             self.pool = None
             self.info = None
             self.svc_ranks = None
+            self.__target_ranks = []
 
         return status
 
