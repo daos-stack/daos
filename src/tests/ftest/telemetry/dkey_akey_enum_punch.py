@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -9,7 +10,6 @@ from general_utils import create_string_buffer
 from pydaos.raw import DaosObjClass, IORequest
 from telemetry_test_base import TestWithTelemetry
 from test_utils_container import add_container
-from test_utils_pool import add_pool
 
 
 class DkeyAkeyEnumPunch(TestWithTelemetry):
@@ -232,7 +232,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=DkeyAkeyEnumPunch,test_dkey_akey_enum_punch
         """
         errors = []
-        pool = add_pool(self)
+        pool = self.get_pool()
         container = add_container(self, pool)
         container.open()
         total_targets, targets_per_rank = self.set_num_targets(pool)
@@ -364,7 +364,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=DkeyAkeyEnumPunch,test_pool_tgt_dkey_akey_punch
         """
         errors = []
-        pool = add_pool(self)
+        pool = self.get_pool()
         container = add_container(self, pool)
         container.open()
         obj_count = 100
@@ -442,7 +442,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=DkeyAkeyEnumPunch,test_tgt_dkey_akey_punch
         """
         errors = []
-        pool = add_pool(self)
+        pool = self.get_pool()
         container = add_container(self, pool)
         container.open()
         total_targets, targets_per_rank = self.set_num_targets(pool)

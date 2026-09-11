@@ -1,12 +1,13 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
 from apricot import TestWithServers
-from test_utils_pool import add_pool, check_pool_creation
+from test_utils_pool import check_pool_creation
 
 
 class PoolCreateCapacityTests(TestWithServers):
@@ -48,7 +49,7 @@ class PoolCreateCapacityTests(TestWithServers):
         self.log_step(f"Defining {pool_quantity[1]} pools to create")
         pools = []
         for _ in range(pool_quantity[1]):
-            pools.append(add_pool(self, create=False))
+            pools.append(self.get_pool(create=False))
 
         # Create all the pools
         self.log_step(f"Attempt to create {pool_quantity[1]} pools (dmg pool create)")
