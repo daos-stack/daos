@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -128,38 +128,58 @@ dc_obj_csum_fetch(struct daos_csummer *csummer, daos_key_t *dkey, daos_iod_t *io
 	return 0;
 }
 
-static struct dcs_layout *
-dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
-		      struct obj_reasb_req *reasb_req)
+/* Result of deciding how an EC single value reply must be verified. */
+enum singv_lo_status {
+	/* Verify the reply as a contiguous record, without a layout. */
+	SINGV_LO_NONE,
+	/* Verify using the layout returned through singv_lo. */
+	SINGV_LO_USE,
+	/* The reply does not match the layout this request was built for. */
+	SINGV_LO_STALE,
+};
+
+/* Decide how the single value carried by this shard reply must be verified.
+ *
+ * The layout is returned through singv_lo rather than completed in place in
+ * reasb_req->orr_singv_los. That array is shared by every shard of the request,
+ * while each shard replies its own record size, so completing it in place lets
+ * one shard callback overwrite the layout another one is about to verify with.
+ */
+static enum singv_lo_status
+dc_rw_cb_singv_lo_get(struct obj_reasb_req *reasb_req, uint32_t iod_idx, daos_size_t rec_size,
+		      struct dcs_layout *singv_lo)
 {
-	struct dcs_layout	*singv_lo, *singv_los;
-	daos_iod_t		*iod;
-	d_sg_list_t		*sgl;
-	uint32_t		 i;
+	struct dcs_layout	*reasb_lo;
+	uint64_t		 cell_bytes;
 
-	if (reasb_req == NULL)
-		return NULL;
+	if (reasb_req == NULL || reasb_req->orr_singv_los == NULL)
+		return SINGV_LO_NONE;
 
-	singv_los = reasb_req->orr_singv_los;
-	for (i = 0; i < iod_nr; i++) {
-		singv_lo = &singv_los[i];
-		iod = &iods[i];
-		sgl = &sgls[i];
-		if (singv_lo->cs_even_dist == 0 || singv_lo->cs_bytes != 0 ||
-		    iod->iod_size == DAOS_REC_ANY)
-			continue;
-		/* the case of fetch singv with unknown rec size, now after the
-		 * fetch need to re-calculate the singv_lo again
-		 */
-		if (obj_ec_singv_one_tgt(iod->iod_size, sgl,
-					 reasb_req->orr_oca)) {
-			singv_lo->cs_even_dist = 0;
-			continue;
-		}
-		singv_lo->cs_bytes = obj_ec_singv_cell_bytes(iod->iod_size,
-							     reasb_req->orr_oca);
-	}
-	return singv_los;
+	reasb_lo = &reasb_req->orr_singv_los[iod_idx];
+	if (reasb_lo->cs_even_dist == 0 || rec_size == DAOS_REC_ANY || rec_size == 0)
+		return SINGV_LO_NONE;
+
+	/* On a fetch vos_fetch_begin() overwrites iod_size with the stored record
+	 * size before obj_singv_ec_rw_filter() runs, so the server lays the reply
+	 * out and checksums it according to the size it replies with. The request
+	 * was built from the size the caller asked with, which for DAOS_REC_ANY is
+	 * only a guess taken from the sgl buffer size and may be an over-estimate
+	 * otherwise. When the two sizes imply different layouts the reply does not
+	 * describe the same record this request asked for, so it cannot be
+	 * verified here.
+	 */
+	if (obj_ec_singv_one_tgt(rec_size, NULL, reasb_req->orr_oca))
+		return SINGV_LO_STALE;
+
+	cell_bytes = obj_ec_singv_cell_bytes(rec_size, reasb_req->orr_oca);
+	if (reasb_lo->cs_bytes != 0 && reasb_lo->cs_bytes != cell_bytes)
+		return SINGV_LO_STALE;
+
+	*singv_lo = *reasb_lo;
+	singv_lo->cs_bytes = cell_bytes;
+	singv_lo->cs_cell_align = 1;
+
+	return SINGV_LO_USE;
 }
 
 static int
@@ -188,12 +208,18 @@ iod_sgl_copy(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_t *cp_iod,
 	cp_sgl->sg_nr_out = cp_sgl->sg_nr;
 	for (i = 0; i < cp_sgl->sg_nr; i++)
 		cp_sgl->sg_iovs[i] = sgl->sg_iovs[sgl_idx.iov_idx + i];
-	D_ASSERTF(sgl_idx.iov_offset < cp_sgl->sg_iovs[0].iov_len,
-		  "iov_offset "DF_U64", iov_len "DF_U64"\n",
-		  sgl_idx.iov_offset, cp_sgl->sg_iovs[0].iov_len);
-	cp_sgl->sg_iovs[0].iov_buf += sgl_idx.iov_offset;
-	cp_sgl->sg_iovs[0].iov_len -= sgl_idx.iov_offset;
-	cp_sgl->sg_iovs[0].iov_buf_len = cp_sgl->sg_iovs[0].iov_len;
+	/* A zero-length leading iov is legal (for example a fetch that only
+	 * queries sizes), in which case daos_sgl_processor() consumed nothing
+	 * and there is no offset to trim.
+	 */
+	if (sgl_idx.iov_offset > 0) {
+		D_ASSERTF(sgl_idx.iov_offset < cp_sgl->sg_iovs[0].iov_len,
+			  "iov_offset "DF_U64", iov_len "DF_U64"\n",
+			  sgl_idx.iov_offset, cp_sgl->sg_iovs[0].iov_len);
+		cp_sgl->sg_iovs[0].iov_buf += sgl_idx.iov_offset;
+		cp_sgl->sg_iovs[0].iov_len -= sgl_idx.iov_offset;
+		cp_sgl->sg_iovs[0].iov_buf_len = cp_sgl->sg_iovs[0].iov_len;
+	}
 
 	return 0;
 }
@@ -232,19 +258,19 @@ int
 dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 {
 	struct daos_csummer	*csummer_copy = NULL;
-	struct dcs_layout	*singv_lo, *singv_los;
+	struct dcs_layout	*singv_lo;
 	int			 rc = 0;
 	int			 i;
 
 	if (!daos_csummer_initialized(args->csummer) || args->csummer->dcs_skip_data_verify)
 		return 0;
 
-	D_ASSERTF(args->maps_nr == args->iod_nr, "maps_nr(%lu) == iod_nr(%d)",
-		  args->maps_nr, args->iod_nr);
-
 	/** currently don't verify echo classes */
 	if ((daos_obj_is_echo(args->oid.id_pub)) || (args->sgls == NULL))
 		return 0;
+
+	D_ASSERTF(args->maps_nr == args->iod_nr, "maps_nr(%lu) == iod_nr(%d)",
+		  args->maps_nr, args->iod_nr);
 
 	/** Used to do actual checksum calculations. This prevents conflicts
 	 * between tasks
@@ -270,8 +296,6 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 		}
 	}
 
-	singv_los = dc_rw_cb_singv_lo_get(args->iods, args->sgls, args->iod_nr, args->reasb_req);
-
 	D_DEBUG(DB_CSUM, DF_C_UOID_DKEY" VERIFY %d iods dkey_hash "DF_U64"\n",
 		DP_C_UOID_DKEY(args->oid, args->dkey), args->iod_nr, args->dkey_hash);
 
@@ -282,11 +306,23 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 		d_iov_t			 iovs_inline[IOV_INLINE];
 		d_iov_t			*iovs_alloc = NULL;
 		d_sg_list_t		 shard_sgl = args->sgls[i];
+		struct dcs_layout	 singv_lo_local = { 0 };
 		struct dcs_iod_csums	*iod_csum = &args->iods_csums[i];
 		daos_iom_t		*map = &args->maps[i];
 
 		if (!csum_iod_is_supported(iod))
 			continue;
+
+		/* No data landed in the caller's sgl - for example a fetch
+		 * issued with zero-length iovs purely to query record sizes -
+		 * so there is nothing to verify.
+		 */
+		if (daos_sgl_data_len(&args->sgls[i], false) == 0) {
+			D_DEBUG(DB_CSUM,
+				DF_C_UOID_DKEY " SKIP [%d] iod csum verify, no data fetched\n",
+				DP_C_UOID_DKEY(args->oid, args->dkey), i);
+			continue;
+		}
 
 		/* For EC single value degraded fetch, if need data recovery the data is not
 		 * transferred back so need not csum verify. Data will be transferred back and
@@ -323,16 +359,31 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 			}
 		}
 
-		singv_lo = (singv_los == NULL || iod->iod_type == DAOS_IOD_ARRAY) ?
-			   NULL : &singv_los[i];
-		if (singv_lo != NULL) {
-			/* Single-value csum layout not needed for short single value that only
-			 * stored on one data shard.
+		singv_lo = NULL;
+		if (iod->iod_type != DAOS_IOD_ARRAY) {
+			enum singv_lo_status	 lo_status;
+
+			lo_status = dc_rw_cb_singv_lo_get(args->reasb_req, i, args->sizes[i],
+							  &singv_lo_local);
+			/* Ask the caller to re-assemble the request from the replied
+			 * record size and fetch again. obj_reasb_io_fini() restores the
+			 * user iods for -DER_FETCH_AGAIN, and dc_shard_update_size() has
+			 * already stored the replied size in them, so the retry is built
+			 * for the layout the server actually used and is verified
+			 * normally. Verification is deferred, never skipped.
 			 */
-			if (obj_ec_singv_one_tgt(iod->iod_size, NULL, args->oc_attr))
-				singv_lo = NULL;
-			else
-				singv_lo->cs_cell_align = 1;
+			if (lo_status == SINGV_LO_STALE) {
+				D_DEBUG(DB_CSUM,
+					DF_C_UOID_DKEY " [%d] iod single value replied size "
+					DF_U64 " does not match the requested EC layout, "
+					"fetch again\n",
+					DP_C_UOID_DKEY(args->oid, args->dkey), i, args->sizes[i]);
+				rc = -DER_FETCH_AGAIN;
+				D_FREE(iovs_alloc);
+				break;
+			}
+			if (lo_status == SINGV_LO_USE)
+				singv_lo = &singv_lo_local;
 		}
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod, &shard_sgl, iod_csum,
 					     singv_lo, args->shard_idx, map);

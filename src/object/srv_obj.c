@@ -642,19 +642,6 @@ done:
 	if (rc == 0 && p_arg->result != 0)
 		rc = p_arg->result;
 
-	/* After RDMA is done, corrupt the server data */
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
-		struct bio_sglist	*fbsgl;
-		d_sg_list_t		 fsgl;
-		int			*fbuffer;
-
-		D_ERROR("csum: Corrupting data after RDMA\n");
-		fbsgl = vos_iod_sgl_at(ioh, 0);
-		bio_sgl_convert(fbsgl, &fsgl);
-		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
-		*fbuffer += 0x2;
-		d_sgl_fini(&fsgl, false);
-	}
 	return rc;
 }
 
@@ -1807,10 +1794,22 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		/** CSUM Verified on update, now corrupt to fake corruption
 		 * on disk
 		 */
-		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK) && !rma) {
+		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 			D_ERROR("csum: Corrupting data (DISK)\n");
-			dcf_corrupt(orw->orw_sgls.ca_arrays,
-				    orw->orw_sgls.ca_count);
+			if (rma) {
+				struct bio_sglist	*fbsgl;
+				d_sg_list_t		 fsgl;
+				int			*fbuffer;
+
+				fbsgl = vos_iod_sgl_at(ioh, 0);
+				bio_sgl_convert(fbsgl, &fsgl);
+				fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
+				*fbuffer += 0x2;
+				d_sgl_fini(&fsgl, false);
+			} else {
+				dcf_corrupt(orw->orw_sgls.ca_arrays,
+					    orw->orw_sgls.ca_count);
+			}
 		}
 	}
 	if (obj_rpc_is_fetch(rpc) && create_map) {
@@ -2053,10 +2052,17 @@ obj_get_iods_offs(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 		return 0;
 	}
 
-	if (iod_array->oia_iod_csums != NULL)
-		(*p_csums)->ic_data = csum_info;
-	else
+	if (iod_array->oia_iod_csums != NULL) {
+		/*
+		 * The caller may pass an empty slot (*p_csums == NULL), in which case
+		 * obj_get_iods_offs_by_oid() allocates the csums array and fills in
+		 * ic_data for each entry itself, so there is nothing to seed here.
+		 */
+		if (*p_csums != NULL)
+			(*p_csums)->ic_data = csum_info;
+	} else {
 		*p_csums = NULL;
+	}
 
 	rc = obj_get_iods_offs_by_oid(uoid, iod_array, oca, dkey_hash, layout_ver, iods, offs,
 				      skips, iod_array->oia_iod_csums == NULL ? NULL : p_csums, nr);
@@ -5109,6 +5115,26 @@ out:
 			continue;
 
 		dcu = &dcsr->dcsr_update;
+		if (pcsums != NULL && pcsums[i] != NULL && pcsums[i] != &local_csums[i] &&
+		    pcsums[i] != dcu->dcu_iod_array.oia_iod_csums) {
+			struct dcs_iod_csums	*csum = pcsums[i];
+			int j;
+
+			/* csum[] was compacted alongside piods[i] by
+			 * obj_get_iods_offs_by_oid(), so the iod types have to be read
+			 * from the compacted array. Only single values own ic_data; the
+			 * array entries borrow it from the decoded RPC buffer.
+			 */
+			for (j = 0; piods != NULL && piods[i] != NULL &&
+			     j < dcu->dcu_iod_array.oia_iod_nr; j++) {
+				if (piods[i][j].iod_type == DAOS_IOD_SINGLE &&
+				    csum[j].ic_data != NULL)
+					D_FREE(csum[j].ic_data);
+			}
+
+			D_FREE(csum);
+		}
+
 		if (piods!= NULL && piods[i] != NULL && piods[i] != &local_iods[i] &&
 		    piods[i] != dcu->dcu_iod_array.oia_iods)
 			D_FREE(piods[i]);
@@ -5120,19 +5146,6 @@ out:
 		if (pskips != NULL && pskips[i] != NULL && pskips[i] != (uint8_t *)&local_skips[i])
 			D_FREE(pskips[i]);
 
-		if (pcsums != NULL && pcsums[i] != NULL && pcsums[i] != &local_csums[i] &&
-		    pcsums[i] != dcu->dcu_iod_array.oia_iod_csums) {
-			struct dcs_iod_csums	*csum = pcsums[i];
-			int j;
-
-			for (j = 0; j < dcu->dcu_iod_array.oia_oiod_nr; i++) {
-				if (dcu->dcu_iod_array.oia_iods[j].iod_type == DAOS_IOD_SINGLE &&
-				    csum[j].ic_data != NULL)
-					D_FREE(csum[j].ic_data);
-			}
-
-			D_FREE(csum);
-		}
 	}
 
 	if (piods != local_p_iods && piods != NULL)
