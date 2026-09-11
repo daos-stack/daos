@@ -509,9 +509,9 @@ static void *(*next_dlopen)(const char *filename, int flags);
  */
 
 static int
-remove_dot_dot(char path[], int *len);
+normalize_path(char path[], int len);
 static int
-remove_dot_and_cleanup(char szPath[], int len);
+resolve_dot_dot(struct dfs_mt *dfs_mt, char path[], int *len, bool *use_kernel);
 
 /* reference count of fake fd duplicated by real fd with dup2() */
 static int                dup_ref_count[MAX_OPENED_FILE];
@@ -1127,6 +1127,7 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 {
 	int    pos, len;
 	bool   with_daos_prefix;
+	bool   use_kernel;
 	char   pool[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char   cont[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char  *rel_path = NULL;
@@ -1196,17 +1197,8 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 		}
 	}
 
-	/* Remove '/./'; Replace '//' with '/'; Remove '/' at the end of path. */
-	len = remove_dot_and_cleanup(full_path_parse, len);
-
-	/* standarlize and determine whether a path is a target path or not */
-
-	/* Assume full_path_parse[] = "/A/B/C/../D/E", it will be "/A/B/D/E" after
-	 * remove_dot_dot.
-	 */
-	rc = remove_dot_dot(full_path_parse, &len);
-	if (rc)
-		D_GOTO(out_err, rc);
+	/* e.g. "/A/./B//C/../D/" becomes "/A/B/D" */
+	len = normalize_path(full_path_parse, len);
 
 	/* determine whether the path contains any known dfs mount point */
 	idx_dfs = query_dfs_mount(full_path_parse);
@@ -1312,6 +1304,17 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			}
 			D_MUTEX_UNLOCK(&lock_dfs);
 		}
+
+		rc = resolve_dot_dot(*dfs_mt, full_path_parse, &len, &use_kernel);
+		if (rc)
+			D_GOTO(out_err, rc);
+		if (use_kernel) {
+			/* the path leaves the container through ".." or an absolute symlink */
+			strncpy(*full_path, full_path_parse, len + 1);
+			*is_target_path = 0;
+			item_name[0]    = '\0';
+			goto out_normal;
+		}
 		*is_target_path = 1;
 
 		/* root dir */
@@ -1384,115 +1387,172 @@ out_oom:
 	return ENOMEM;
 }
 
+/* Lexically clean an absolute path in place: drop empty and "." components and strip the trailing
+ * "/". Working on components rather than on substrings keeps a "//" that follows a "/./" from
+ * surviving the pass. ".." is kept: whether it can be collapsed depends on the component in front
+ * of it being a directory rather than a symlink, which resolve_dot_dot() decides with a lookup.
+ * Returns the new length, at least 1 for "/".
+ */
 static int
-remove_dot_dot(char path[], int *len)
+normalize_path(char path[], int len)
 {
-	char *p_Offset_2Dots, *p_Back, *pTmp, *pMax, *new_str;
-	int   i, nNonZero;
+	int r = 0;
+	int w = 0;
 
-	/* the length of path[] is already checked in the caller of this function. */
+	while (r < len) {
+		int start;
+		int comp_len;
 
-	p_Offset_2Dots = strstr(path, "/../");
-again:
-	nNonZero = 0;
-	while (p_Offset_2Dots != NULL) {
-		pMax = p_Offset_2Dots + 4;
-		for (p_Back = p_Offset_2Dots - 2; p_Back >= path; p_Back--) {
-			if (*p_Back == '/')
-				break;
-		}
-		/* No component before "..": POSIX resolves ".." at the root as the root itself, so
-		 * only the ".." is dropped. This also guarantees progress on every pass.
-		 */
-		if (p_Back < path)
-			p_Back = p_Offset_2Dots;
-		for (pTmp = p_Back; pTmp < (pMax - 1); pTmp++)
-			*pTmp = 0;
-		p_Offset_2Dots = strstr(p_Offset_2Dots + 3, "/../");
+		while (r < len && path[r] == '/')
+			r++;
+		start = r;
+		while (r < len && path[r] != '/')
+			r++;
+		comp_len = r - start;
+		if (comp_len == 0 || (comp_len == 1 && path[start] == '.'))
+			continue;
+		/* w < start always holds, as each kept component consumed at least one more '/' */
+		path[w++] = '/';
+		memmove(path + w, path + start, comp_len);
+		w += comp_len;
 	}
+	if (w == 0)
+		path[w++] = '/';
+	path[w] = '\0';
 
-	new_str = path;
-	for (i = 0; i < *len; i++) {
-		if (path[i]) {
-			new_str[nNonZero] = path[i];
-			nNonZero++;
-		}
-	}
-	new_str[nNonZero] = 0;
-	*len = nNonZero;
-	if (*len == 0) {
-		path[0] = '/';
-		path[1] = '\0';
-		*len    = 1;
-	}
-
-	p_Offset_2Dots = strstr(path, "/../");
-	if (p_Offset_2Dots)
-		goto again;
-	p_Offset_2Dots = strstr(path, "/..");
-	if (p_Offset_2Dots && p_Offset_2Dots[3] == '\0')
-		/* /.. at the very end of the path. */
-		goto again;
-
-	return 0;
+	return w;
 }
 
-/* Remove '/./'. Replace '//' with '/'. Remove '/.'. Remove '/' at the end of path. */
+/* Index of the '/' in front of the first ".." component at or after 'from', or -1. The path has
+ * been through normalize_path(), so ".." is always delimited by '/' or the end of the string.
+ */
 static int
-remove_dot_and_cleanup(char path[], int len)
+find_dot_dot(const char *path, int from)
 {
-	char *p_Offset_Dots, *p_Offset_Slash, *new_str;
-	int   i, nNonZero = 0;
+	const char *p = path + from;
 
-	/* the length of path[] is already checked in the caller of this function. */
-
-	p_Offset_Dots = strstr(path, "/./");
-	while ((p_Offset_Dots != NULL)) {
-		p_Offset_Dots[0] = 0;
-		p_Offset_Dots[1] = 0;
-		p_Offset_Dots    = strstr(p_Offset_Dots + 2, "/./");
-		if (p_Offset_Dots == NULL)
-			break;
+	while ((p = strstr(p, "/..")) != NULL) {
+		if (p[3] == '/' || p[3] == '\0')
+			return (int)(p - path);
+		p += 3;
 	}
+	return -1;
+}
 
-	/* replace "//" with "/" */
-	p_Offset_Slash = strstr(path, "//");
-	while (p_Offset_Slash != NULL) {
-		p_Offset_Slash[0] = 0;
-		p_Offset_Slash    = strstr(p_Offset_Slash + 1, "//");
-		if (p_Offset_Slash == NULL)
-			break;
-	}
+/* Resolve the ".." components of a path inside a container the way the kernel does: ".." applies
+ * to the component in front of it after that component has been resolved, so "link/.." with
+ * "link -> c/d" leads to "c", not to the parent of "link". Each such component is looked up with
+ * O_NOFOLLOW: a directory lets "X/.." collapse, a relative symlink value is spliced in place of X
+ * and the scan restarts, anything else is an error as in the kernel. A ".." that reaches the mount
+ * root, or a symlink with an absolute value, leaves the container and is handed to the kernel.
+ * Paths without ".." return at the first scan and pay nothing.
+ */
+static int
+resolve_dot_dot(struct dfs_mt *dfs_mt, char path[], int *len, bool *use_kernel)
+{
+	int hops = 0;
 
-	/* remove '/.' at the end */
-	if (len > 2 && strncmp(path + len - 2, "/.", 3) == 0) {
-		p_Offset_Slash = path + len - 2;
-		p_Offset_Slash[0] = 0;
-		p_Offset_Slash[1] = 0;
-	}
+	*use_kernel = false;
+	for (;;) {
+		struct dcache_rec *parent = NULL;
+		dfs_obj_t         *obj    = NULL;
+		mode_t             mode   = 0;
+		char              *parent_path;
+		char              *value = NULL;
+		daos_size_t        value_len;
+		int                pos, xs, end, parent_len, rc;
+		char               saved;
 
-	new_str = path;
-	for (i = 0; i < len; i++) {
-		if (path[i]) {
-			new_str[nNonZero] = path[i];
-			nNonZero++;
+		pos = find_dot_dot(path, dfs_mt->len_fs_root);
+		if (pos < 0)
+			return 0;
+		/* ".." right after the mount root climbs out of the container */
+		if (pos <= dfs_mt->len_fs_root) {
+			*use_kernel = true;
+			return 0;
 		}
-	}
-	/* remove "/" at the end of path */
-	new_str[nNonZero] = 0;
-	if (new_str[1] == 0 && new_str[0] == '/')
-		/* root dir */
-		return 1;
-	for (i = nNonZero - 1; i >= 0; i--) {
-		if (new_str[i] == '/') {
-			new_str[i] = 0;
-			nNonZero--;
+
+		/* X is the component in front of "..", its parent the container path before it */
+		xs = pos - 1;
+		while (path[xs - 1] != '/')
+			xs--;
+		parent_len = (xs - 1) - dfs_mt->len_fs_root;
+		if (parent_len == 0) {
+			D_STRNDUP(parent_path, "/", 1);
+			parent_len = 1;
 		} else {
-			break;
+			D_STRNDUP(parent_path, path + dfs_mt->len_fs_root, parent_len);
 		}
-	}
+		if (parent_path == NULL)
+			return ENOMEM;
+		rc = dcache_find_insert(dfs_mt->dcache, parent_path, parent_len, &parent);
+		D_FREE(parent_path);
+		if (rc)
+			return daos_der2errno(rc);
 
-	return nNonZero;
+		saved     = path[pos];
+		path[pos] = '\0';
+		rc = dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), path + xs, O_RDONLY | O_NOFOLLOW,
+				    &obj, &mode, NULL);
+		path[pos] = saved;
+		drec_decref(dfs_mt->dcache, parent);
+		if (rc)
+			return rc;
+
+		if (S_ISDIR(mode)) {
+			dfs_release(obj);
+			/* drop "X/.."; the cleanup pass removes the "/" left behind */
+			end = pos + 3;
+			memmove(path + xs, path + end, *len - end + 1);
+			*len -= end - xs;
+			*len = normalize_path(path, *len);
+			continue;
+		}
+		if (!S_ISLNK(mode)) {
+			dfs_release(obj);
+			return ENOTDIR;
+		}
+
+		value_len = 0;
+		rc        = dfs_get_symlink_value(obj, NULL, &value_len);
+		if (rc == 0) {
+			D_ALLOC(value, value_len);
+			if (value == NULL)
+				rc = ENOMEM;
+			else
+				rc = dfs_get_symlink_value(obj, value, &value_len);
+		}
+		dfs_release(obj);
+		if (rc) {
+			D_FREE(value);
+			return rc;
+		}
+		/* value_len includes the terminating NUL */
+		value_len--;
+		if (value_len == 0) {
+			D_FREE(value);
+			return ENOENT;
+		}
+		if (value[0] == '/') {
+			D_FREE(value);
+			*use_kernel = true;
+			return 0;
+		}
+		if (++hops > 40) {
+			D_FREE(value);
+			return ELOOP;
+		}
+		/* splice the value in place of X, then clean up whatever it contained */
+		if (*len - (pos - xs) + (int)value_len >= DFS_MAX_PATH) {
+			D_FREE(value);
+			return ENAMETOOLONG;
+		}
+		memmove(path + xs + value_len, path + pos, *len - pos + 1);
+		memcpy(path + xs, value, value_len);
+		*len += (int)value_len - (pos - xs);
+		D_FREE(value);
+		*len = normalize_path(path, *len);
+	}
 }
 
 static int
@@ -2086,32 +2146,23 @@ out_readlink:
 
 /* dfs dereferences symlinks inside the container, so it cannot handle a symlink whose value is an
  * absolute path: POSIX resolves such a value from the process root, which only the kernel can do.
- * dfs reports EINVAL for it, except when the link sits in the container root, where it resolves the
- * value from that root and reports ENOENT instead. Neither errno is specific to this case, so the
- * entry is looked up again to confirm that it really is a symlink. The absolute value may sit
- * anywhere in a chain of links, as with the python3 -> python -> /usr/bin/python3.x layout of a
- * venv, so the value of the entry itself is not inspected.
+ * dfs reports EINVAL for it, except when the link sits in the container root, which is handled up
+ * front by root_symlink_escapes(). EINVAL is not specific to this case, so the entry is looked up
+ * again to confirm that it really is a symlink. The absolute value may sit anywhere in a chain of
+ * links, as with the python3 -> python -> /usr/bin/python3.x layout of a venv, so the value of the
+ * entry itself is not inspected.
  *
  * An absolute symlink in a non-leaf position of the path is not detected here.
  */
 static bool
 need_kernel_to_resolve(int rc, struct dfs_mt *dfs_mt, struct dcache_rec *parent,
-		       const char *item_name, const char *parent_dir)
+		       const char *item_name)
 {
 	dfs_obj_t *obj  = NULL;
 	mode_t     mode = 0;
 
-	if (parent == NULL || item_name[0] == '\0')
+	if (rc != EINVAL || parent == NULL || item_name[0] == '\0')
 		return false;
-	if (rc == ENOENT) {
-		/* A lookup miss is common, so only probe where dfs can report one for such a
-		 * link, and keep it cheap everywhere else.
-		 */
-		if (parent_dir == NULL || strncmp(parent_dir, "/", 2) != 0)
-			return false;
-	} else if (rc != EINVAL) {
-		return false;
-	}
 
 	if (dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), item_name, O_RDONLY | O_NOFOLLOW, &obj,
 			   &mode, NULL) != 0)
@@ -2119,6 +2170,54 @@ need_kernel_to_resolve(int rc, struct dfs_mt *dfs_mt, struct dcache_rec *parent,
 	dfs_release(obj);
 
 	return S_ISLNK(mode);
+}
+
+/* For a symlink in the container root dfs resolves an absolute value from that root rather than
+ * reporting EINVAL, so the lookup succeeds with the wrong object whenever the same path also exists
+ * inside the container. This cannot be told apart from a genuine hit afterwards, so an entry of the
+ * root is checked before it is dereferenced. Bare relative values are followed within the root so
+ * that a chain such as python3 -> python -> /usr/bin/python3.x is caught as well.
+ */
+static bool
+root_symlink_escapes(struct dfs_mt *dfs_mt, struct dcache_rec *parent, const char *item_name,
+		     const char *parent_dir)
+{
+	/* a bare name is at most DFS_MAX_NAME; a longer value is truncated and has to hold a '/' */
+	char        value[DFS_MAX_NAME + 2];
+	const char *name = item_name;
+	int         hop;
+
+	if (parent == NULL || parent_dir == NULL || strncmp(parent_dir, "/", 2) != 0)
+		return false;
+
+	for (hop = 0; hop < 8; hop++) {
+		dfs_obj_t  *obj     = NULL;
+		mode_t      mode    = 0;
+		daos_size_t str_len = sizeof(value);
+		int         rc;
+
+		if (dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), name, O_RDONLY | O_NOFOLLOW, &obj,
+				   &mode, NULL) != 0)
+			return false;
+		if (!S_ISLNK(mode)) {
+			dfs_release(obj);
+			return false;
+		}
+		rc = dfs_get_symlink_value(obj, value, &str_len);
+		dfs_release(obj);
+		if (rc != 0 || str_len <= 1)
+			return false;
+		if (value[0] == '/')
+			return true;
+		/* a value with a directory part leaves the root, and dfs then reports EINVAL for
+		 * an absolute hop further down the chain
+		 */
+		if (str_len > sizeof(value) || strchr(value, '/') != NULL)
+			return false;
+		name = value;
+	}
+
+	return false;
 }
 
 static int
@@ -2157,8 +2256,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
-	if (rc == ENOENT)
-		D_GOTO(out_error, rc = ENOENT);
+	if (rc)
+		D_GOTO(out_error, rc);
 	parent_dfs = NULL;
 	if (parent != NULL)
 		parent_dfs = drec2obj(parent);
@@ -2311,6 +2410,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		if ((S_IXUSR & mode_parent) == 0 || (S_IWUSR & mode_parent) == 0)
 			D_GOTO(out_error, rc = EACCES);
 	}
+	if (root_symlink_escapes(dfs_mt, parent, item_name, parent_dir))
+		goto org_func;
 	/* file handled by DFS */
 	if (oflags & O_CREAT) {
 		/* clear the bits for types first. mode in open() only contains permission info. */
@@ -2325,7 +2426,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				    &dfs_obj, &mode_query, NULL);
 	}
 
-	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir))
+	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name))
 		goto org_func;
 	if (rc)
 		D_GOTO(out_error, rc);
@@ -3175,6 +3276,8 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 		goto out_org;
 	atomic_fetch_add_relaxed(&num_stat, 1);
 
+	if (root_symlink_escapes(dfs_mt, parent, item_name, parent_dir))
+		goto out_org;
 	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &obj, &mode, stat_buf);
 	} else {
@@ -3202,7 +3305,7 @@ out_org:
 	return next_xstat(ver, path, stat_buf);
 
 out_err:
-	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
+	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name) ||
 		     ((rc == EIO || rc == EINVAL) && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
@@ -3259,7 +3362,7 @@ out_org:
 	return libc_lxstat(ver, path, stat_buf);
 
 out_err:
-	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
+	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name) ||
 		     ((rc == EIO || rc == EINVAL) && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
@@ -5270,6 +5373,8 @@ access(const char *path, int mode)
 	if (!is_target_path)
 		goto out_org;
 
+	if (root_symlink_escapes(dfs_mt, parent, item_name, parent_dir))
+		goto out_org;
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_access(dfs_mt->dfs, NULL, NULL, mode);
 	else
@@ -5288,7 +5393,7 @@ out_org:
 	return next_access(path, mode);
 
 out_err:
-	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir))
+	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name))
 		goto out_org;
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
@@ -5375,12 +5480,10 @@ chdir(const char *path)
 	}
 
 	if (!is_target_path) {
-		len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s", full_path);
-		if (len_str >= DFS_MAX_PATH) {
-			D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
-				strerror(ENAMETOOLONG));
-			D_GOTO(out_err, rc = ENAMETOOLONG);
-		}
+		/* the path is not normalized for ".." outside a container, so take the kernel's
+		 * view of the new cwd
+		 */
+		update_cwd();
 		D_GOTO(out, rc);
 	}
 
