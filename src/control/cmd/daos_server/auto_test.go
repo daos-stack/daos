@@ -224,7 +224,11 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 
 // Test that confGen rejects mutually exclusive --num-engines and --allow-numa-imbalance flags
 func TestDaosServer_Auto_confGen_MutuallyExclusiveFlags(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
 	cmd := &configGenCmd{}
+	cmd.Logger = log
 	cmd.NrEngines = 2
 	cmd.AllowNumaImbalance = true
 
