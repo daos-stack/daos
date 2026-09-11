@@ -222,6 +222,33 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 	}
 }
 
+// Test that confGen rejects mutually exclusive --num-engines and --allow-numa-imbalance flags
+func TestDaosServer_Auto_confGen_MutuallyExclusiveFlags(t *testing.T) {
+	cmd := &configGenCmd{}
+	cmd.NrEngines = 2
+	cmd.AllowNumaImbalance = true
+
+	// This should return an error when calling confGen with both flags set
+	_, err := cmd.confGen(context.Background(),
+		func(_ context.Context, _ logging.Logger, _ string) (*control.HostFabric, error) {
+			return &control.HostFabric{
+				NumaCount:    2,
+				CoresPerNuma: 24,
+			}, nil
+		},
+		func(_ context.Context, _ logging.Logger, _ bool) (*control.HostStorage, error) {
+			return &control.HostStorage{}, nil
+		})
+
+	if err == nil {
+		t.Fatalf("expected error when both NrEngines and AllowNumaImbalance are set")
+	}
+
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("expected error message to mention mutually exclusive, got: %v", err)
+	}
+}
+
 // The Control API calls made in configGenCmd.confGen() are already well tested so just do some
 // sanity checking here to prevent regressions.
 func TestDaosServer_Auto_confGen(t *testing.T) {
