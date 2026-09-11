@@ -133,7 +133,6 @@ RUN --mount=type=bind,source=requirements-build.txt,target=/tmp/daos/requirement
 # Install DAOS dependencies if available
 ARG DAOS_DEPS_INSTALL=yes
 ARG DAOS_DEPS_EXT_REPO=
-ARG POINT_RELEASE
 RUN --mount=type=bind,source=utils/build/install_deps.sh,target=/tmp/daos/utils/build/install_deps.sh \
     --mount=type=bind,source=utils/build/build_utils.sh,target=/tmp/daos/utils/build/build_utils.sh \
     --mount=type=bind,source=utils/rpms/package_version.sh,target=/tmp/daos/utils/rpms/package_version.sh \
@@ -141,7 +140,7 @@ RUN --mount=type=bind,source=utils/build/install_deps.sh,target=/tmp/daos/utils/
     --mount=type=bind,source=utils/rpms/daos.spec,target=/tmp/daos/utils/rpms/daos.spec \
     [ "$DAOS_DEPS_INSTALL" != "yes" ] || { \
         export DAOS_DEPS_EXT_REPO="${DAOS_DEPS_EXT_REPO}" && \
-        /tmp/daos/utils/build/install_deps.sh "suse.lp15${POINT_RELEASE#\.}"; \
+        /tmp/daos/utils/build/install_deps.sh; \
         sudo dnf clean all; \
     }
 
@@ -168,8 +167,7 @@ RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
             ${DAOS_BUILD_TYPE:+BUILD_TYPE="$DAOS_BUILD_TYPE"} \
             ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} && \
         [ "$DAOS_KEEP_BUILD" != "no" ] || { \
-            rm -rf .sconf_temp .sconsign.dblite config.log && \
-            /bin/rm -rf build *.gz; \
+            rm -rf .sconf_temp .sconsign.dblite config.log build *.gz; \
         } ; \
     }
 
@@ -182,9 +180,10 @@ RUN --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
     --mount=type=bind,source=utils/build.config,target=/home/daos/pre/utils/build.config \
     [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { \
-        export DISTRO="suse.lp15${POINT_RELEASE#\.}" && \
-        export RPM_OUTPUT_DIR=/home/daos/rpms && \
-	    utils/build/build_packages.sh deps "$DAOS_PACKAGES_VERIFY" ; \
+        set -- --build-range=deps; \
+        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || set -- "$@" -Wno-error; \
+        set -- "$@" /home/daos/rpms; \
+        utils/build/build_packages.sh "$@"; \
     }
 
 WORKDIR /home/daos
@@ -208,6 +207,7 @@ RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target
         /tmp/daos/install.sh && \
         dnf clean all; \
     }
+RUN chown -R daos_server.daos_server /home/daos
 
 # Create directory for DAOS build storage
 USER daos_server:daos_server
@@ -283,16 +283,15 @@ USER daos_server:daos_server
 # Build DAOS RPMs
 ARG DAOS_PACKAGES_BUILD
 ARG DAOS_PACKAGES_VERIFY
-ARG POINT_RELEASE
 RUN --mount=type=bind,source=utils/rpms,target=/home/daos/daos/utils/rpms \
     --mount=type=bind,source=utils/build,target=/home/daos/daos/utils/build \
     --mount=type=bind,source=utils/sl,target=/home/daos/daos/utils/sl \
     --mount=type=bind,source=utils/systemd,target=/home/daos/daos/utils/systemd \
     --mount=type=bind,source=utils/build.config,target=/home/daos/daos/utils/build.config \
     [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
-	    export DISTRO="suse.lp15${POINT_RELEASE#\.}" && \
-	    export RPM_OUTPUT_DIR=/home/daos/rpms && \
-	    /home/daos/daos/utils/build/build_packages.sh daos "$DAOS_PACKAGES_VERIFY" ; \
+            set -- --build-range=daos /home/daos/rpms; \
+        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || set -- "$@" -Wno-error; \
+        /home/daos/daos/utils/build/build_packages.sh "$@"; \
     }
 
 # Build java and hadoop bindings

@@ -5,29 +5,21 @@
 #
 set -euo pipefail
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-# shellcheck source=utils/build/build_utils.sh
-source "${script_dir}/build_utils.sh"
-
 usage() {
     cat <<EOF
-Usage: ${0##*/} [SCONS_OPTION]... [VARIABLE=VALUE]...
-
+Usage: ${0##*/} [SCONS_OPTIONS] | -c | -h | --help
 Build DAOS with scons, assuming the dependencies are already built.
 
 The script always runs:
-
-    scons install --config=force --build-deps=no [defaults] "\$@"
-
-and applies these defaults unless the same option or variable is given on the
-command line:
-
-    --jobs <nproc>      number of parallel jobs
-    USE_INSTALLED=all   reuse dependencies already installed on the system
-    PREFIX=/opt/daos    installation prefix
+    \`scons install [defaults] "\$@"\` and applies these defaults unless the same
+    option or variable is given on the command line:
+        --build-deps=no
+        --jobs <nproc>      number of parallel jobs
+        USE_INSTALLED=all   use dependencies already installed on the system
+        PREFIX=/opt/daos    installation prefix
 
 Options:
-    -c                  run scons -c command
+    -c                  run 'scons -c' command
     -h, --help          show this help and exit
 
 Any other argument is forwarded verbatim to scons, e.g.:
@@ -35,6 +27,10 @@ Any other argument is forwarded verbatim to scons, e.g.:
     ${0##*/} BUILD_TYPE=debug COMPILER=clang --jobs 8
 EOF
 }
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+# shellcheck source=utils/build/build_utils.sh
+source "${script_dir}/build_utils.sh"
 
 check_help "$@"
 check_scons

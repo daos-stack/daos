@@ -849,8 +849,9 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' TARGET_TYPE=release'))
                             sh label: 'Build DAOS RPMs',
-                                script: 'DISTRO=el9 DAOS_RELVAL="' + env.DAOS_RELVAL +
-                                        '" utils/build/build_packages.sh daos'
+                                script: 'DAOS_RELVAL="' + env.DAOS_RELVAL +
+                                    '" utils/build/build_packages.sh --rpm-suffix=el9 ' +
+                                    '--build-range=daos rpms'
                             // Go binaries need to be instrumented in order to work reliably
                             // with valgrind. We do this in a separate build because we don't
                             // want to ship the instrumented binaries.
@@ -914,8 +915,9 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' TARGET_TYPE=release'))
                             sh label: 'Build DAOS RPMs',
-                                script: 'DISTRO=suse.lp156 DAOS_RELVAL="' + env.DAOS_RELVAL +
-                                        '" utils/build/build_packages.sh daos'
+                                script: 'DAOS_RELVAL="' + env.DAOS_RELVAL +
+                                    '" utils/build/build_packages.sh --rpm-suffix=suse.lp156 ' +
+                                    '--build-range=daos rpms'
                         }
                     }
                     post {

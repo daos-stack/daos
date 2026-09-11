@@ -7,68 +7,54 @@
 #
 # Script for installing DAOS dependencies for the expected version
 #
-# Usage:
-#   install_deps.sh [DISTRO]
-#
-# Args:
-#   DISTRO  Package distro suffix used by DAOS RPMs, e.g. el9, suse.lp155,
-#           suse.lp156. This is not the OS distro itself, but the
-#           standardized RPM naming suffix used by the DAOS project's own
-#           package repos. If omitted, it is auto-detected from
-#           /etc/os-release.
-#
-# Env:
-#   DAOS_DEPS_EXT_REPO Optional dnf-format repo URL with a complete set of
-#                      dependency RPMs, registered as an extra install source
-#                      for the duration of this script only. Requires
-#                      passwordless sudo to write/remove
-#                      /etc/yum.repos.d/daos-deps-extra.repo.
 set -uex
+
+usage() {
+    cat <<EOF
+Usage: ${0##*/} [OPTIONS] [RPM_SUFFIX]
+
+This script can be used only on EL9 and Leap/SLES 15 systems.
+
+Install pre-built DAOS dependency RPMs matching the versions expected by the
+current tree.
+
+Args:
+    RPM_SUFFIX - Package distro suffix used by DAOS RPMs (e.g. el9, suse.lp155,
+                 suse.lp156). If omitted, it is auto-detected from /etc/os-release.
+
+Options:
+    -h, --help - show this help and exit
+
+Environment:
+    DAOS_DEPS_EXT_REPO - Optional dnf repo URL with a set of dependency RPMs,
+                         registered as an extra install source for the duration
+                         of this script only. Requires passwordless sudo to
+                         write/remove /etc/yum.repos.d/daos-deps-extra.repo.
+EOF
+}
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # shellcheck source=utils/build/build_utils.sh
 source "${script_dir}/build_utils.sh"
 rpms_dir="$(cd "${script_dir}/../rpms" >/dev/null 2>&1 && pwd)"
 
-usage() {
-    cat <<EOF
-Usage: ${0##*/} [DISTRO]
-
-Install pre-built DAOS dependency RPMs matching the versions expected by the
-current tree.
-
-Args:
-    DISTRO  Package distro suffix used by DAOS RPMs (e.g. el9, suse.lp155,
-            suse.lp156). If omitted, it is auto-detected from
-            /etc/os-release.
-
-Options:
-    -h, --help  show this help and exit
-
-Env:
-    DAOS_DEPS_EXT_REPO  Optional dnf-format repo URL with a complete set of
-                        dependency RPMs, registered as an extra install
-                        source for the duration of this script only.
-                        Requires passwordless sudo to write/remove
-                        /etc/yum.repos.d/daos-deps-extra.repo.
-EOF
-}
-
 check_help "$@"
 
-# The script can be used only on el and leap/sles
-validate_distro() {
+
+# The script can be used only on EL9 and Leap/SLES 15
+validate_rpm_suffix() {
     case "${1}" in
         el9* | suse.lp15*)
             ;;
         *)
-            echo "ERROR: unsupported DISTRO '${1}' (expected e.g. el9, suse.lp155, suse.lp156)"
+            echo "ERROR: unsupported RPM suffix ${1} \
+(expected e.g. el9, suse.lp155, suse.lp156)"
             exit 1
             ;;
     esac
 }
-DISTRO="${1:-$(detect_distro)}" || exit $?
-validate_distro "${DISTRO}"
+rpm_suffix="${1:-$(detect_rpm_suffix)}" || exit $?
+validate_rpm_suffix "${rpm_suffix}"
 
 id
 if [ "$(id -u)" = "0" ]; then
@@ -76,8 +62,15 @@ if [ "$(id -u)" = "0" ]; then
     exit 1
 fi
 
-env
-if [ -n "${DAOS_DEPS_EXT_REPO:-}" ]; then
+cleanup() {
+    if [ -n "${DAOS_DEPS_EXT_REPO:-}" ] && [ -n "${rpm_suffix:-}" ]; then
+        sudo rm -f /etc/yum.repos.d/daos-deps-extra.repo
+    fi
+    env
+}
+trap cleanup EXIT
+
+if [ -n "${DAOS_DEPS_EXT_REPO:-}" ] && [ -n "${rpm_suffix:-}" ]; then
     sudo tee /etc/yum.repos.d/daos-deps-extra.repo > /dev/null <<-EOF
 	[daos-deps-extra]
 	name=DAOS dependency RPMs extra repo
@@ -85,10 +78,9 @@ if [ -n "${DAOS_DEPS_EXT_REPO:-}" ]; then
 	enabled=1
 	gpgcheck=0
 	EOF
-    trap 'sudo rm -f /etc/yum.repos.d/daos-deps-extra.repo' EXIT
 fi
 
-export DISTRO
+export DISTRO="${rpm_suffix:-}"
 libfabric_pkg="$("${rpms_dir}/package_version.sh" libfabric dev)"
 mercury_pkg="$("${rpms_dir}/package_version.sh" mercury dev)"
 argobots_pkg="$("${rpms_dir}/package_version.sh" argobots dev)"

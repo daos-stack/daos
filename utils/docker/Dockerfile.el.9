@@ -9,8 +9,7 @@
 # Use --target build-ci to create image with basic build environment for gcc
 
 # NOTE
-# Java build is disabled by default on EL9
-# Do not change this line !!!
+# Java build permanently failed on EL9, so it is disabled by default on EL9
 ARG DAOS_JAVA_BUILD=no
 
 # Global defaults
@@ -126,7 +125,7 @@ RUN --mount=type=bind,source=utils/build/install_deps.sh,target=/tmp/daos/utils/
     --mount=type=bind,source=utils/rpms/daos.spec,target=/tmp/daos/utils/rpms/daos.spec \
     [ "$DAOS_DEPS_INSTALL" != "yes" ] || { \
         export DAOS_DEPS_EXT_REPO="${DAOS_DEPS_EXT_REPO}" && \
-        /tmp/daos/utils/build/install_deps.sh "el9"; \
+        /tmp/daos/utils/build/install_deps.sh; \
         sudo dnf clean all; \
     }
 
@@ -153,8 +152,7 @@ RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
             ${DAOS_BUILD_TYPE:+BUILD_TYPE="$DAOS_BUILD_TYPE"} \
             ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} && \
         [ "$DAOS_KEEP_BUILD" != "no" ] || { \
-        rm -rf .sconf_temp .sconsign.dblite config.log && \
-            /bin/rm -rf build *.gz; \
+        rm -rf .sconf_temp .sconsign.dblite config.log build *.gz; \
         } ; \
     }
 
@@ -167,9 +165,10 @@ RUN --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
     --mount=type=bind,source=utils/build.config,target=/home/daos/pre/utils/build.config \
     [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { \
-        export DISTRO="el9" && \
-        export RPM_OUTPUT_DIR=/home/daos/rpms && \
-	    utils/build/build_packages.sh deps "$DAOS_PACKAGES_VERIFY" ; \
+        set -- --build-range=deps; \
+        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || set -- "$@" -Wno-error; \
+        set -- "$@" /home/daos/rpms; \
+        utils/build/build_packages.sh "$@"; \
     }
 
 WORKDIR /home/daos
@@ -193,6 +192,7 @@ RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target
         /tmp/daos/install.sh && \
         dnf clean all; \
     }
+RUN chown -R daos_server.daos_server /home/daos
 
 # Create directory for DAOS build storage
 USER daos_server:daos_server
@@ -274,9 +274,9 @@ RUN --mount=type=bind,source=utils/rpms,target=/home/daos/daos/utils/rpms \
     --mount=type=bind,source=utils/systemd,target=/home/daos/daos/utils/systemd \
     --mount=type=bind,source=utils/build.config,target=/home/daos/daos/utils/build.config \
     [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
-	    export DISTRO="el9" && \
-	    export RPM_OUTPUT_DIR=/home/daos/rpms && \
-	    /home/daos/daos/utils/build/build_packages.sh daos "$DAOS_PACKAGES_VERIFY" ; \
+        set -- --build-range=daos /home/daos/rpms; \
+        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || set -- "$@" -Wno-error; \
+        /home/daos/daos/utils/build/build_packages.sh "$@"; \
     }
 
 # Build java and hadoop bindings
