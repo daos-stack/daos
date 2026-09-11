@@ -1011,8 +1011,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	epoch.oe_value = rpt->rt_stable_epoch;
-	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
-		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
+	rc             = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver, &oid, NULL, 0,
+				   DTX_FOR_MIGRATION | DTX_IGNORE_UNCOMMITTED, NULL, &dth);
 	D_ASSERT(rc == 0);
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl = coh;
