@@ -18,18 +18,19 @@ Build the DAOS dependencies with scons.
 
 The script always runs:
 
-    scons install --build-deps=only [defaults] "\$@"
+    \`scons install --build-deps=only [defaults] "\$@"\` and applies these
+    defaults unless the same option or variable is given on the command line:
 
-and applies these defaults unless the same option or variable is given on the
-command line:
-
+    --build-deps=only   build only the dependencies of DAOS
     --jobs <nproc>      number of parallel jobs
     USE_INSTALLED=all   reuse dependencies already installed on the system
     PREFIX=/opt/daos    installation prefix
 
 Options:
-    -f, --force         wipe \$PREFIX/prereq/release and build/external/release
-                        before building; must be given as the first argument
+    -f, --force         wipe dependency directories before building; use
+                        \`BUILD_TYPE=dev|release|debug\` to select the directories.
+                        If omitted, \`release\` directories are wiped.
+                        Must be given as the first argument.
     -h, --help          show this help and exit
 
 Any other argument is forwarded verbatim to scons, e.g.:
@@ -51,6 +52,7 @@ jobs_set=false
 prefix_set=false
 prefix_value="/opt/daos"
 use_installed_set=false
+build_type=release
 
 for arg in "$@"; do
     case "$arg" in
@@ -64,14 +66,17 @@ for arg in "$@"; do
         USE_INSTALLED=*)
             use_installed_set=true
             ;;
+        BUILD_TYPE=*)
+            build_type="${arg#BUILD_TYPE=}"
+            ;;
     esac
 done
 
 if "$force"; then
-    echo "Removing \"${prefix_value}/prereq/${BUILD_TYPE:-release}\""
-    echo "Removing \"build/external/${BUILD_TYPE:-release}\""
-    rm -rf "${prefix_value}/prereq/${BUILD_TYPE:-release}" \
-        "build/external/${BUILD_TYPE:-release}"
+    echo "Removing \"${prefix_value}/prereq/${build_type}\""
+    rm -rf "${prefix_value}/prereq/${build_type}"
+    echo "Removing \"build/external/${build_type}\""
+    rm -rf "build/external/${build_type}"
 fi
 
 SCONS_ARGS=(install --build-deps=only)

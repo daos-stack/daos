@@ -27,13 +27,12 @@ check_scons() {
     }
 }
 
-# Maps the running OS (from /etc/os-release) to the DISTRO suffix used by
-# DAOS RPMs;
-detect_distro() {
+# Maps the running OS (from /etc/os-release) to the RPM suffix used by DAOS;
+detect_rpm_suffix() {
     # shellcheck source=/dev/null
     (. /etc/os-release
     case "${ID:-}" in
-        rocky | rhel | centos | almalinux)
+        rocky | rhel | almalinux)
             echo "el${VERSION_ID%%.*}"
             ;;
         opensuse-leap | sles)

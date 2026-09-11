@@ -838,8 +838,8 @@ pipeline {
                     steps {
                         script {
                             sh label: 'Collect dependency RPMs built into the image',
-                                script: 'mkdir -p rpms/deps && ' +
-                                        'cp /home/daos/rpms/deps/*.rpm rpms/deps/ 2>/dev/null || true'
+                               script: 'mkdir -p rpms/deps && ' +
+                                       'cp /home/daos/rpms/deps/*.rpm rpms/deps/ || true'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -849,8 +849,9 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' TARGET_TYPE=release'))
                             sh label: 'Build DAOS RPMs',
-                                script: 'DISTRO=el9 DAOS_RELVAL="' + env.DAOS_RELVAL +
-                                        '" utils/build/build_packages.sh daos'
+                                script: 'DAOS_RELVAL="' + env.DAOS_RELVAL +
+                                    '" utils/build/build_packages.sh --rpm-suffix=el9 ' +
+                                    '--build-range=daos rpms'
                             // Go binaries need to be instrumented in order to work reliably
                             // with valgrind. We do this in a separate build because we don't
                             // want to ship the instrumented binaries.
@@ -903,8 +904,8 @@ pipeline {
                     steps {
                         script {
                             sh label: 'Collect dependency RPMs built into the image',
-                                script: 'mkdir -p rpms/deps && ' +
-                                        'cp /home/daos/rpms/deps/*.rpm rpms/deps/ 2>/dev/null || true'
+                               script: 'mkdir -p rpms/deps && ' +
+                                       'cp /home/daos/rpms/deps/*.rpm rpms/deps/ || true'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -914,8 +915,9 @@ pipeline {
                                            scons_args: sconsArgs() +
                                                       ' TARGET_TYPE=release'))
                             sh label: 'Build DAOS RPMs',
-                                script: 'DISTRO=suse.lp156 DAOS_RELVAL="' + env.DAOS_RELVAL +
-                                        '" utils/build/build_packages.sh daos'
+                                script: 'DAOS_RELVAL="' + env.DAOS_RELVAL +
+                                    '" utils/build/build_packages.sh --rpm-suffix=suse.lp156 ' +
+                                    '--build-range=daos rpms'
                         }
                     }
                     post {
