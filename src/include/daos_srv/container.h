@@ -42,7 +42,8 @@ int
 int
     ds_cont_list(uuid_t pool_uuid, bool include_destroying, struct daos_pool_cont_info **conts,
 		 uint64_t *ncont);
-int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
+int
+    ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt, uint8_t cont_proto_ver,
 		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
 int ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc);
 int ds_cont_tgt_close(uuid_t pool_uuid, uuid_t hdl_uuid);
