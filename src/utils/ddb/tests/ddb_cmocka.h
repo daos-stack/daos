@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,6 +67,12 @@
 	do { \
 		if (strstr(str, substr) == NULL) \
 			fail_msg("'%s' not found in '%s'", substr, str); \
+	} while (0)
+
+#define assert_string_not_contains(str, substr)                                                    \
+	do {                                                                                       \
+		if (strstr(str, substr) != NULL)                                                   \
+			fail_msg("'%s' unexpectedly found in '%s'", substr, str);                  \
 	} while (0)
 
 #define assert_invalid(x) assert_rc_equal(-DER_INVAL, (x))

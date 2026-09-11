@@ -113,6 +113,8 @@ smd
 
 vos
   close                    Close the currently opened vos pool shard
+  csum_check               Check visible checksum(s) against the stored data
+  csum_dump                Dump visible checksum(s)
   dev_list                 List all devices
   dev_replace              Replace an old device with a new unused device
   dtx_act_abort            Mark the active dtx entry as aborted

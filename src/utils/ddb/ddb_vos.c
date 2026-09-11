@@ -1099,7 +1099,6 @@ dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod
 {
 	daos_handle_t       ioh;
 	struct dcs_ci_list *cil;
-	int                 cb_rc = 0;
 	int                 rc;
 
 	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
@@ -1110,19 +1109,13 @@ dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod
 	}
 
 	cil = vos_ioh2ci(ioh);
-	cb_rc = dump_cb(cb_arg, NULL, vos_ioh2sv_epoch(ioh), cil);
-	if (!SUCCESS(cb_rc))
+	rc  = dump_cb(cb_arg, NULL, vos_ioh2sv_epoch(ioh), cil);
+	if (!SUCCESS(rc))
 		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(cb_rc));
-
-	rc = vos_fetch_end(ioh, NULL, cb_rc);
-	if (!SUCCESS(rc) && rc != cb_rc)
-		D_ERROR("vos_fetch_end for csum dump of " DF_UOID " failed: " DF_RC "\n",
 			DP_UOID(*oid), DP_RC(rc));
 
+	rc = vos_fetch_end(ioh, NULL, rc);
 out:
-	if (!SUCCESS(cb_rc))
-		rc = cb_rc;
 	return rc;
 }
 
@@ -1133,7 +1126,6 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 	daos_handle_t             ioh;
 	struct dcs_ci_list       *cil;
 	struct daos_recx_ep_list *rel;
-	int                       cb_rc = 0;
 	int                       rc;
 
 	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
@@ -1145,21 +1137,15 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 
 	cil = vos_ioh2ci(ioh);
 	rel = vos_ioh2recx_list(ioh);
-	cb_rc = dump_cb(cb_arg, rel, 0, cil);
-	if (!SUCCESS(cb_rc))
+	rc  = dump_cb(cb_arg, rel, 0, cil);
+	if (!SUCCESS(rc))
 		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(cb_rc));
+			DP_UOID(*oid), DP_RC(rc));
 
 	/* rel ownership is transferred by vos_ioh2recx_list(); free before vos_fetch_end. */
 	daos_recx_ep_list_free(rel, iod->iod_nr);
-	rc = vos_fetch_end(ioh, NULL, cb_rc);
-	if (!SUCCESS(rc) && rc != cb_rc)
-		D_ERROR("vos_fetch_end for csum dump of " DF_UOID " failed: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
-
+	rc = vos_fetch_end(ioh, NULL, rc);
 out:
-	if (!SUCCESS(cb_rc))
-		rc = cb_rc;
 	return rc;
 }
 
@@ -1198,6 +1184,314 @@ dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
 
 	vos_cont_close(coh);
 
+out:
+	return rc;
+}
+
+/*
+ * Fetch the record data for a single checksum-verification segment (either the whole single
+ * value, or one physical recx/epoch segment of an array value) into a freshly allocated
+ * buffer in \a sgl. Uses the same 2-pass vos_obj_fetch() pattern as dv_dump_value(): the first
+ * pass discovers the record size, the second pass fetches the data.
+ *
+ * A zero-length result (hole/punch at \a epoch) is not an error; the caller's sgl is left
+ * empty in that case.
+ */
+static int
+fetch_check_value(daos_handle_t coh, daos_unit_oid_t *oid, daos_key_t *dkey, daos_iod_t *iod,
+		  daos_epoch_t epoch, d_sg_list_t *sgl)
+{
+	size_t data_size;
+	int    rc;
+
+	iod->iod_size = 0;
+	rc            = vos_obj_fetch(coh, *oid, epoch, 0, dkey, 1, iod, NULL);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_obj_fetch (size) for csum check of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+		return rc;
+	}
+
+	data_size = iod->iod_size;
+	if (iod->iod_type == DAOS_IOD_ARRAY)
+		data_size *= iod->iod_recxs[0].rx_nr;
+
+	if (data_size == 0) /* hole/punch: nothing to verify */
+		return 0;
+
+	D_ALLOC(sgl->sg_iovs[0].iov_buf, data_size);
+	if (sgl->sg_iovs[0].iov_buf == NULL)
+		return -DER_NOMEM;
+	sgl->sg_iovs[0].iov_buf_len = data_size;
+
+	rc = vos_obj_fetch(coh, *oid, epoch, 0, dkey, 1, iod, sgl);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_obj_fetch (data) for csum check of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+		D_FREE(sgl->sg_iovs[0].iov_buf);
+		return rc;
+	}
+
+	return 0;
+}
+
+/*
+ * Create an independent copy of \a src (metadata + checksum bytes) in a single D_ALLOC'd
+ * struct+buffer, matching daos_csummer_calc_key()'s allocation pattern. The result is freed by
+ * the caller with a plain D_FREE() -- it is not a daos_csummer-owned allocation, so
+ * daos_csummer_free_ci()/_ic() must not be used on it.
+ */
+static int
+snapshot_csum_info(struct dcs_csum_info *src, struct dcs_csum_info **snapshot)
+{
+	struct dcs_csum_info *dst;
+	uint8_t              *buf;
+
+	D_ALLOC(dst, sizeof(*dst) + src->cs_buf_len);
+	if (dst == NULL)
+		return -DER_NOMEM;
+
+	/* &dst[1] is "one past the struct", i.e. the start of the trailing buffer allocated
+	 * above (struct dcs_csum_info has no flexible array member of its own). */
+	buf = (uint8_t *)&dst[1];
+	memcpy(buf, ci_idx2csum(src, 0), src->cs_buf_len);
+	ci_set(dst, buf, src->cs_buf_len, src->cs_len, src->cs_nr, src->cs_chunksize, src->cs_type);
+
+	*snapshot = dst;
+	return 0;
+}
+
+/*
+ * Recompute the checksum of one segment's currently stored data and compare it against the
+ * checksum info already fetched from disk (\a ci). Returns 0 if the checksums match,
+ * -DER_CSUM if they differ, or another negative rc on a hard I/O/system error.
+ *
+ * On a -DER_CSUM mismatch, *got_csum is set to an independent snapshot of the recomputed
+ * checksum (to be freed by the caller with D_FREE()); left NULL on a match or a hard error.
+ */
+static int
+verify_segment_csum(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+		    daos_epoch_t epoch, struct dcs_csum_info *ci, struct dcs_csum_info **got_csum)
+{
+	struct daos_csummer  *csummer       = NULL;
+	struct dcs_iod_csums *got_iod_csums = NULL;
+	d_sg_list_t           sgl           = {0};
+	int                   rc;
+
+	*got_csum = NULL;
+
+	rc = d_sgl_init(&sgl, 1);
+	if (!SUCCESS(rc))
+		goto out;
+
+	rc = fetch_check_value(coh, oid, dkey, iod, epoch, &sgl);
+	if (!SUCCESS(rc))
+		goto out_sgl;
+
+	rc = daos_csummer_init_with_type(&csummer, ci->cs_type, ci->cs_chunksize, 0);
+	if (!SUCCESS(rc)) {
+		D_ERROR("daos_csummer_init_with_type failed: " DF_RC "\n", DP_RC(rc));
+		goto out_sgl;
+	}
+	/* csummer is local to this call and destroyed below, so no save/restore is needed.
+	 * Only dcs_skip_key_calc is set: it's the only flag daos_csummer_calc_iods() (below)
+	 * consults -- dcs_skip_key_verify/dcs_skip_data_verify belong to other, unused-here
+	 * helpers. */
+	csummer->dcs_skip_key_calc = true;
+
+	rc = daos_csummer_calc_iods(csummer, &sgl, iod, NULL, 1, false, NULL, 0, &got_iod_csums);
+	if (!SUCCESS(rc)) {
+		D_ERROR("daos_csummer_calc_iods failed: " DF_RC "\n", DP_RC(rc));
+		goto out_csummer;
+	}
+
+	if (!daos_csummer_compare_csum_info(csummer, &got_iod_csums->ic_data[0], ci)) {
+		rc = snapshot_csum_info(&got_iod_csums->ic_data[0], got_csum);
+		if (SUCCESS(rc))
+			rc = -DER_CSUM;
+	}
+
+	daos_csummer_free_ic(csummer, &got_iod_csums);
+out_csummer:
+	daos_csummer_destroy(&csummer);
+out_sgl:
+	d_sgl_fini(&sgl, true);
+out:
+	return rc;
+}
+
+static int
+check_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+	      daos_epoch_t epoch, dv_check_csum_cb check_cb, void *cb_arg)
+{
+	daos_handle_t         ioh;
+	struct dcs_ci_list   *cil;
+	struct dcs_csum_info *ci;
+	struct dcs_csum_info *got_csum = NULL;
+	daos_epoch_t          sv_epoch;
+	int                   rc;
+
+	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_fetch_begin for csum check of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+		goto out;
+	}
+
+	cil      = vos_ioh2ci(ioh);
+	sv_epoch = vos_ioh2sv_epoch(ioh);
+
+	if (cil->dcl_csum_infos_nr == 0) {
+		rc = check_cb(cb_arg, NULL, sv_epoch, cil, NULL);
+		goto out_fetch_end;
+	}
+
+	D_ASSERT(cil->dcl_csum_infos_nr == 1);
+	ci = dcs_csum_info_get(cil, 0);
+	D_ASSERT(ci_is_valid(ci));
+
+	rc = verify_segment_csum(coh, dkey, oid, iod, sv_epoch, ci, &got_csum);
+	if (rc == -DER_CSUM) {
+		D_DEBUG(DB_IO, "Checksum mismatch of " DF_UOID "\n", DP_UOID(*oid));
+		rc = 0;
+	}
+	if (!SUCCESS(rc)) {
+		D_ERROR("Checksum verification of " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
+			DP_RC(rc));
+		goto out_fetch_end;
+	}
+
+	rc = check_cb(cb_arg, NULL, sv_epoch, cil, &got_csum);
+	if (!SUCCESS(rc))
+		D_DEBUG(DB_IO, "Csum check callback for " DF_UOID " returned: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+
+out_fetch_end:
+	rc = vos_fetch_end(ioh, NULL, rc);
+out:
+	/* got_csum != NULL is the mismatch signal; check before D_FREE() clears the pointer. */
+	if (SUCCESS(rc) && got_csum != NULL)
+		rc = -DER_CSUM;
+	D_FREE(got_csum);
+	return rc;
+}
+
+static int
+check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+		daos_epoch_t epoch, dv_check_csum_cb check_cb, void *cb_arg)
+{
+	daos_handle_t             ioh;
+	struct dcs_ci_list       *cil;
+	struct daos_recx_ep_list *rel;
+	struct dcs_csum_info    **got_csums  = NULL;
+	bool                      csum_error = false;
+	int                       i;
+	int                       rc;
+
+	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_fetch_begin for csum check of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+		goto out;
+	}
+
+	cil = vos_ioh2ci(ioh);
+	rel = vos_ioh2recx_list(ioh);
+	D_ASSERT(rel != NULL);
+	if (cil->dcl_csum_infos_nr == 0) {
+		/* no checksum stored: got_csums is left NULL, never allocated below */
+		rc = check_cb(cb_arg, rel, 0, cil, got_csums);
+		goto out_rel;
+	}
+	D_ASSERT(cil->dcl_csum_infos_nr == rel->re_nr);
+
+	D_ALLOC_ARRAY(got_csums, cil->dcl_csum_infos_nr);
+	if (got_csums == NULL) {
+		rc = -DER_NOMEM;
+		goto out_rel;
+	}
+
+	for (i = 0; i < cil->dcl_csum_infos_nr; i++) {
+		struct dcs_csum_info *ci;
+		struct daos_recx_ep  *rep;
+		daos_iod_t            seg_iod;
+
+		ci = dcs_csum_info_get(cil, i);
+		D_ASSERT(ci_is_valid(ci));
+		rep = &rel->re_items[i];
+
+		seg_iod           = *iod;
+		seg_iod.iod_recxs = &rep->re_recx;
+
+		rc = verify_segment_csum(coh, dkey, oid, &seg_iod, rep->re_ep, ci, &got_csums[i]);
+		if (rc == -DER_CSUM) {
+			D_DEBUG(DB_IO, "Checksum mismatch of " DF_UOID " " DF_RECX "\n",
+				DP_UOID(*oid), DP_RECX(rep->re_recx));
+			csum_error = true;
+			rc         = 0; /* continue checking other segments */
+			continue;
+		}
+		if (!SUCCESS(rc)) {
+			D_ERROR("Checksum verification of " DF_UOID " " DF_RECX " failed: " DF_RC
+				"\n",
+				DP_UOID(*oid), DP_RECX(rep->re_recx), DP_RC(rc));
+			goto out_got_csums;
+		}
+	}
+
+	rc = check_cb(cb_arg, rel, 0, cil, got_csums);
+	if (!SUCCESS(rc))
+		D_DEBUG(DB_IO, "Csum check callback for " DF_UOID " returned: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+
+out_got_csums:
+	for (i = 0; i < cil->dcl_csum_infos_nr; i++)
+		D_FREE(got_csums[i]);
+	D_FREE(got_csums);
+out_rel:
+	/* rel ownership is transferred by vos_ioh2recx_list(); free before vos_fetch_end. */
+	daos_recx_ep_list_free(rel, iod->iod_nr);
+	rc = vos_fetch_end(ioh, NULL, rc);
+out:
+	if (rc == 0 && csum_error)
+		rc = -DER_CSUM;
+	return rc;
+}
+
+int
+dv_check_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	      dv_check_csum_cb check_cb, void *cb_arg)
+{
+	daos_handle_t coh;
+	daos_iod_t    iod = {0};
+	int           rc  = 0;
+
+	/* No-op when no callback is provided; the caller controls whether to consume results. */
+	if (check_cb == NULL)
+		goto out;
+
+	rc = vos_cont_open(poh, path->vtp_cont, &coh);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Opening container for csum check of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(path->vtp_oid), DP_RC(rc));
+		goto out;
+	}
+
+	iod.iod_name  = path->vtp_akey;
+	iod.iod_recxs = &path->vtp_recx;
+	iod.iod_nr    = 1;
+	iod.iod_size  = 0;
+	if (path->vtp_is_recx) {
+		iod.iod_type = DAOS_IOD_ARRAY;
+		rc = check_csum_recx(coh, &path->vtp_dkey, &path->vtp_oid, &iod, epoch, check_cb,
+				     cb_arg);
+	} else {
+		iod.iod_type = DAOS_IOD_SINGLE;
+		rc = check_csum_sv(coh, &path->vtp_dkey, &path->vtp_oid, &iod, epoch, check_cb,
+				   cb_arg);
+	}
+
+	vos_cont_close(coh);
 out:
 	return rc;
 }
