@@ -80,10 +80,13 @@ export TEST_RPMS
 export DAOS_BASE
 export DAOS_TEST_APP_SRC=${DAOS_TEST_APP_SRC:-"/CIShare/daos_test/apps"}
 export DAOS_TEST_APP_DIR=${DAOS_TEST_APP_DIR:-"${DAOS_TEST_SHARED_DIR}/daos_test/apps"}
-if [ -n "$DAOS_HTTPS_PROXY" ]; then
-    # shellcheck disable=SC2154
-    export HTTPS_PROXY="${DAOS_HTTPS_PROXY:-""}"
-fi
+# HTTPS_PROXY is passed in directly by ftest.sh. A high-level script like this
+# should not be the one assigning HTTPS_PROXY=$DAOS_HTTPS_PROXY; revisit after
+# smoke testing and document proper CI/lab proxy usage.
+# if [ -n "$DAOS_HTTPS_PROXY" ]; then
+#     # shellcheck disable=SC2154
+#     export HTTPS_PROXY="${DAOS_HTTPS_PROXY:-""}"
+# fi
 if [ -n "$DAOS_NO_PROXY" ]; then
     export NO_PROXY="${DAOS_NO_PROXY:-""}"
 fi
