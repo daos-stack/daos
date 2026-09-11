@@ -3,6 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import json
+
 from apricot import TestWithServers
 
 
@@ -50,5 +52,9 @@ class ServerVersionTest(TestWithServers):
         :avocado: tags=daos_agent,control
         :avocado: tags=ServerVersionTest,test_agent_server_version
         """
-        result = self.agent_managers[0].server_version()
-        self._check_version_response(result["response"])
+        result = self.agent_managers[0].server_version(json=True)
+        if not result.passed:
+            self.fail("daos_agent server-version failed")
+        if not result.homogeneous:
+            self.fail("daos_agent server-version result is not homogeneous across clients")
+        self._check_version_response(json.loads(result.joined_stdout)["response"])
