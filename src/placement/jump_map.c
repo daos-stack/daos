@@ -898,7 +898,13 @@ layout_mark_relocated(struct pl_jump_map *jmap, uint32_t layout_ver, struct jm_o
 	int                   i;
 	int                   rc;
 
-	if (!layout_may_relocate(layout))
+	/*
+	 * UPIN and DOWNOUT targets are handled identically in every layout generation mode, see
+	 * comp_need_remap(). So unless some target is DOWN, DRAIN or UP there is nothing to
+	 * compare: all the modes produce the very same layout. This is the steady state of a
+	 * pool, including one which has already been through a rebuild.
+	 */
+	if (!pool_map_has_transient_tgt(jmap->jmp_map.pl_poolmap))
 		return 0;
 
 	/*
@@ -907,6 +913,9 @@ layout_mark_relocated(struct pl_jump_map *jmap, uint32_t layout_ver, struct jm_o
 	 * layouts when the difference can only come from failure remapping.
 	 */
 	if (gen_mode == CURRENT && layout->ol_shard_peers > 0)
+		return 0;
+
+	if (!layout_may_relocate(layout))
 		return 0;
 
 	/* obj_layout_alloc_and_get() resets omd_grp_spec for the CURRENT mode */

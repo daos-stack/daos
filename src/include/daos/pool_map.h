@@ -277,6 +277,8 @@ uint32_t pool_map_get_version(struct pool_map *map);
 uint32_t pool_map_bump_version(struct pool_map *map);
 
 int pool_map_get_failed_cnt(struct pool_map *map, uint32_t domain);
+bool
+pool_map_has_transient_tgt(struct pool_map *map);
 
 #define PO_COMP_ID_ALL		(-1)
 
