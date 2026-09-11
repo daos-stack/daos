@@ -27,7 +27,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -2604,9 +2603,10 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			sysProv := system.NewMockSysProvider(log, smsc)
 			mounter := mount.NewProvider(log, sysProv)
 			scmProv := scm.NewProvider(&scm.ProviderConfig{
-				Log:     log,
-				Sys:     sysProv,
-				Mounter: mounter,
+				Log:       log,
+				Sys:       sysProv,
+				Mounter:   mounter,
+				KernelCfg: system.KernelConfig{},
 			})
 			bdevProv := bdev.NewMockProvider(log, nil)
 			if tc.getSysMemInfo == nil {
@@ -2620,13 +2620,10 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			mscs := NewMockStorageControlService(log, config.Engines, sysProv, scmProv,
 				bdevProv, tc.getSysMemInfo)
 
-			ctxEvt, cancelEvtCtx := context.WithCancel(context.Background())
-			t.Cleanup(cancelEvtCtx)
-
 			cs := &ControlService{
 				StorageControlService: *mscs,
 				harness:               &EngineHarness{log: log},
-				events:                events.NewPubSub(ctxEvt, log),
+				events:                nil, // No event processing needed for this unit test
 				srvCfg:                config,
 			}
 

@@ -250,6 +250,8 @@ func newTestMgmtSvcWithProvider(t *testing.T, log logging.Logger, provider *stor
 	svc.startAsyncLoops(ctx)
 	svc.startLeaderLoops(ctx)
 
+	t.Cleanup(func() { svc.Close() })
+
 	return svc
 }
 
