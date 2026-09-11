@@ -15,7 +15,6 @@
 #include "pl_map.h"
 #include <gurt/hash.h>
 
-extern struct pl_map_ops        ring_map_ops;
 extern struct pl_map_ops        jump_map_ops;
 
 /** dictionary for all unknown placement maps */
@@ -30,23 +29,17 @@ struct pl_map_dict {
 
 /** array of defined placement maps */
 static struct pl_map_dict pl_maps[] = {
-	{
-		.pd_type        = PL_TYPE_RING,
-		.pd_ops         = &ring_map_ops,
-		.pd_name        = "ring",
-	},
-	{
-		.pd_type    = PL_TYPE_JUMP_MAP,
-		.pd_ops     = &jump_map_ops,
-		.pd_name    = "jump",
-	},
-	{
-		.pd_type        = PL_TYPE_UNKNOWN,
-		.pd_ops         = NULL,
-		.pd_name        = "unknown",
-	},
+    {
+	.pd_type = PL_TYPE_JUMP_MAP,
+	.pd_ops  = &jump_map_ops,
+	.pd_name = "jump",
+    },
+    {
+	.pd_type = PL_TYPE_UNKNOWN,
+	.pd_ops  = NULL,
+	.pd_name = "unknown",
+    },
 };
-
 
 static int
 pl_map_create_inited(struct pool_map *pool_map, struct pl_map_init_attr *mia,
