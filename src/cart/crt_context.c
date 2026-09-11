@@ -190,6 +190,12 @@ crt_context_init(struct crt_context *ctx)
 	D_INIT_LIST_HEAD(&ctx->cc_quotas.rpc_waitq);
 	D_INIT_LIST_HEAD(&ctx->cc_link);
 
+	rc = crt_rpc_rx_pool_init(ctx);
+	if (rc != 0) {
+		D_ERROR("crt_rpc_rx_pool_init() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_mutex_destroy, rc);
+	}
+
 	if (crt_gdata.cg_progress_legacy) {
 		ctx->cc_prog_func      = crt_progress_legacy;
 		ctx->cc_prog_cond_func = crt_progress_cond_legacy;
@@ -222,6 +228,7 @@ crt_context_init(struct crt_context *ctx)
 out_binheap_destroy:
 	d_binheap_destroy_inplace(&ctx->cc_bh_timeout);
 out_mutex_destroy:
+	crt_rpc_rx_pool_fini(ctx);
 	D_MUTEX_DESTROY(&ctx->cc_quotas.mutex);
 	D_MUTEX_DESTROY(&ctx->cc_mutex);
 out:
@@ -866,6 +873,8 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	d_list_del(&ctx->cc_link);
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+
+	crt_rpc_rx_pool_fini(ctx);
 
 	D_MUTEX_DESTROY(&ctx->cc_mutex);
 	D_DEBUG(DB_TRACE, "destroyed context (idx %d, force %d)\n", ctx->cc_idx, force);
