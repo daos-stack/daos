@@ -15,10 +15,8 @@ server_config:
 pool: !mux
   default:
     size: 100%
-    properties: rd_fac:0
   md_on_ssd_p2:
     size: 100%
-    properties: rd_fac:0
     mem_ratio: 25
 container:
   type: POSIX
