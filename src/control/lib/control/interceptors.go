@@ -33,7 +33,8 @@ func connErrToFault(st *status.Status, target string) error {
 		strings.Contains(st.Message(), "closed the connection"),
 		strings.Contains(st.Message(), net.ErrClosed.Error()):
 		return FaultConnectionClosed(target)
-	case strings.Contains(st.Message(), "no route to host"):
+	case strings.Contains(st.Message(), "no route to host"),
+		strings.Contains(st.Message(), "network is unreachable"):
 		return FaultConnectionNoRoute(target)
 	case strings.Contains(st.Message(), "no such host"):
 		return FaultConnectionBadHost(target)
