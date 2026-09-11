@@ -19,6 +19,7 @@ timeout: 170
 
 pool:
   scm_size: 1G
+  properties: rd_fac:0,space_rb:0
 
 container:
   akey_size: 5
@@ -26,3 +27,4 @@ container:
   data_size: 32
   object_qty: 1
   record_qty: 1
+  properties: cksum:off,srv_cksum:off

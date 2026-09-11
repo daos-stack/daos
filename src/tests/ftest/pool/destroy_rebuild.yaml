@@ -1,11 +1,12 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 timeout: 360
+
 hosts:
   test_servers: 7
   test_clients: 1
+
 setup:
   mgmt_svc_replicas_qty: 5
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -18,7 +19,9 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
+
 pool:
   scm_size: 134217728
   pool_query_timeout: 30
   svcn: 7
+  properties: rd_fac:0,space_rb:0

@@ -16,24 +16,29 @@ pool_basic_1:
   scm_size: 10000000000  # 10 GB
   nvme_size: 100000000000  # 100 GB
   target_list: [1]
+  properties: rd_fac:0,space_rb:0
 
 pool_basic_2:
   scm_size: 20000000000  # 20 GB
   nvme_size: 200000000000  # 200 GB
   target_list: [0, 1]
+  properties: rd_fac:0,space_rb:0
 
 pool_both:
   scm_size: 10000000000  # 10 GB, arbitrary
   nvme_size: 80000000000  # 80 GB
   target_list: [0]
+  properties: rd_fac:0,space_rb:0
 
 pool_scm_only:
   scm_size: 80000000000  # 80 GB
   target_list: [0]
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
   oclass: S1
+  properties: cksum:off,srv_cksum:off
 
 ior:
   block_size: 1G

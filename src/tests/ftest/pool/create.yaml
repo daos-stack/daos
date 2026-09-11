@@ -25,6 +25,8 @@ server_config:
 
 pool_1:
   scm_size: 1
+  properties: rd_fac:0,space_rb:0
 
 pool_2:
   size: 95%
+  properties: rd_fac:0,space_rb:0
