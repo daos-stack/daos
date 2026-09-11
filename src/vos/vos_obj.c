@@ -578,7 +578,8 @@ reset:
 
 	if (rc == -DER_NONEXIST || rc == 0) {
 		vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
-		vos_ts_set_update(ts_set, epr.epr_hi);
+		if (!vos_ts_set_update(ts_set, epr.epr_hi))
+			rc = -DER_TX_RESTART;
 	}
 
 	if (rc == 0) {
