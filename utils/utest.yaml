@@ -65,6 +65,9 @@
   base: "PREFIX"
   tests:
     - cmd: ["bin/jump_pl_map"]
+- name: placement_layout_test
+  tests:
+    - cmd: ["src/placement/tests/layout_test.py"]
 - name: rdb
   memcheck: False
   tests:
