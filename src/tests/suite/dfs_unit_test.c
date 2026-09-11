@@ -612,6 +612,106 @@ dfs_test_syml_follow(void **state)
 	assert_int_equal(rc, ELOOP);
 }
 
+/* dfs has no notion of the process root, so a symlink with an absolute value cannot be followed
+ * and is rejected with EINVAL wherever the link sits, in the container root or below. The link
+ * itself is still returned with O_NOFOLLOW, and a relative link that walks the same way works.
+ */
+static void
+dfs_test_syml_abs(void **state)
+{
+	test_arg_t *arg = *state;
+	dfs_obj_t  *dir;
+	dfs_obj_t  *obj;
+	mode_t      mode;
+	char        value[64];
+	daos_size_t value_len;
+	int         rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** /abs_dir/target, /abs_root -> /abs_dir/target, /abs_dir/abs_deep -> /abs_dir/target */
+	rc = dfs_open(dfs_mt, NULL, "abs_dir", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir, "target", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, NULL, "abs_root", S_IFLNK, O_RDWR | O_CREAT | O_EXCL, 0, 0,
+		      "/abs_dir/target", &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir, "abs_deep", S_IFLNK, O_RDWR | O_CREAT | O_EXCL, 0, 0,
+		      "/abs_dir/target", &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	/** /abs_dir/rel_deep -> ../abs_dir/target, the same target reached relatively */
+	rc = dfs_open(dfs_mt, dir, "rel_deep", S_IFLNK, O_RDWR | O_CREAT | O_EXCL, 0, 0,
+		      "../abs_dir/target", &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** following an absolute value fails the same way at both depths */
+	rc = dfs_lookup(dfs_mt, "/abs_root", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_lookup(dfs_mt, "/abs_dir/abs_deep", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "abs_root", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_lookup_rel(dfs_mt, dir, "abs_deep", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_access(dfs_mt, NULL, "abs_root", R_OK);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_access(dfs_mt, dir, "abs_deep", R_OK);
+	assert_int_equal(rc, EINVAL);
+	/** and in the middle of a path */
+	rc = dfs_lookup(dfs_mt, "/abs_root/x", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, EINVAL);
+
+	/** the link itself is still accessible */
+	rc = dfs_lookup(dfs_mt, "/abs_root", O_RDONLY | O_NOFOLLOW, &obj, &mode, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(mode));
+	value_len = sizeof(value);
+	rc        = dfs_get_symlink_value(obj, value, &value_len);
+	assert_int_equal(rc, 0);
+	assert_string_equal(value, "/abs_dir/target");
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, dir, "abs_deep", O_RDONLY | O_NOFOLLOW, &obj, &mode, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(mode));
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_chown(dfs_mt, dir, "abs_deep", geteuid(), getegid(), O_NOFOLLOW);
+	assert_int_equal(rc, 0);
+
+	/** a relative value reaching the same target is followed */
+	rc = dfs_lookup_rel(dfs_mt, dir, "rel_deep", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISREG(mode));
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, dir, "rel_deep", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir, "abs_deep", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir, "target", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "abs_root", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "abs_dir", false, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static int
 dfs_test_file_gen(const char *name, daos_size_t chunk_size, daos_oclass_id_t cid,
 		  daos_size_t file_size)
@@ -3632,62 +3732,47 @@ dfs_test_pipeline_find(void **state)
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {
-	{ "DFS_UNIT_TEST1: DFS mount / umount",
-	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST2: DFS container modes",
-	  dfs_test_modes, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST3: DFS lookup / lookup_rel",
-	  dfs_test_lookup, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST4: Simple Symlinks",
-	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW",
-	  dfs_test_syml_follow, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST6: multi-threads read shared file",
-	  dfs_test_read_shared_file, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST7: DFS lookupx",
-	  dfs_test_lookupx, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST8: DFS IO sync error code",
-	  dfs_test_io_error_code, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST9: DFS IO async error code",
-	  dfs_test_io_error_code, async_enable, test_case_teardown},
-	{ "DFS_UNIT_TEST10: multi-threads mkdir same dir",
-	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST11: Simple rename",
-	  dfs_test_rename, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST12: DFS API compat",
-	  dfs_test_compat, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST13: DFS l2g/g2l_all",
-	  dfs_test_handles, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
-	  dfs_test_mt_connect, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST15: DFS chown",
-	  dfs_test_chown, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST16: DFS stat mtime",
-	  dfs_test_mtime, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST17: multi-threads async IO",
-	  dfs_test_async_io_th, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST18: async IO",
-	  dfs_test_async_io, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST19: DFS readdir",
-	  dfs_test_readdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST20: dfs oclass hints",
-	  dfs_test_oclass_hints, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST21: dfs multiple pools",
-	  dfs_test_multiple_pools, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST22: dfs extended attributes",
-	  dfs_test_xattrs, test_case_teardown},
-	{ "DFS_UNIT_TEST23: dfs MWC container checker",
-	  dfs_test_checker, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST24: dfs MWC SB fix",
-	  dfs_test_fix_sb, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST25: dfs MWC root fix",
-	  dfs_test_relink_root, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST26: dfs MWC chunk size fix",
-	  dfs_test_fix_chunk_size, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST27: dfs pipeline find",
-	  dfs_test_pipeline_find, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST28: dfs open/lookup flags",
-	  dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST3: DFS lookup / lookup_rel", dfs_test_lookup, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST4: Simple Symlinks", dfs_test_syml, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW", dfs_test_syml_follow, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST6: multi-threads read shared file", dfs_test_read_shared_file, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST7: DFS lookupx", dfs_test_lookupx, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST8: DFS IO sync error code", dfs_test_io_error_code, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST9: DFS IO async error code", dfs_test_io_error_code, async_enable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST10: multi-threads mkdir same dir", dfs_test_mt_mkdir, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST11: Simple rename", dfs_test_rename, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST12: DFS API compat", dfs_test_compat, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST13: DFS l2g/g2l_all", dfs_test_handles, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST14: multi-threads connect to same container", dfs_test_mt_connect, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST15: DFS chown", dfs_test_chown, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST16: DFS stat mtime", dfs_test_mtime, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST17: multi-threads async IO", dfs_test_async_io_th, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST18: async IO", dfs_test_async_io, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST19: DFS readdir", dfs_test_readdir, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST20: dfs oclass hints", dfs_test_oclass_hints, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST21: dfs multiple pools", dfs_test_multiple_pools, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST22: dfs extended attributes", dfs_test_xattrs, test_case_teardown},
+    {"DFS_UNIT_TEST23: dfs MWC container checker", dfs_test_checker, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST24: dfs MWC SB fix", dfs_test_fix_sb, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST25: dfs MWC root fix", dfs_test_relink_root, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST26: dfs MWC chunk size fix", dfs_test_fix_chunk_size, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST27: dfs pipeline find", dfs_test_pipeline_find, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST29: Symlinks with an absolute value", dfs_test_syml_abs, async_disable,
+     test_case_teardown},
 };
 
 static int
