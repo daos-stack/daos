@@ -1623,6 +1623,20 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 			tmpfsMounted: true,
 			tmpfsSize:    9,
 		},
+		"tmpfs mounted; MD-on-SSD; validate memory": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				mdOnSsdTier := nvmeTier(0).WithBdevDeviceRoles(storage.BdevRoleMeta)
+				mdOnSsdEngine := ramEngine(0, 10)
+				mdOnSsdEngine.Storage.Tiers = append(mdOnSsdEngine.Storage.Tiers, mdOnSsdTier)
+				mdOnSsdEngine.Storage.ControlMetadata = storage.ControlMetadata{
+					Path: "/var/daos/md0",
+				}
+				return sc.WithEngines(mdOnSsdEngine)
+			},
+			tmpfsMounted: true,
+			tmpfsSize:    9,
+			memAvailGiB:  9,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)

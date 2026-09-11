@@ -335,14 +335,6 @@
    ...
 }
 {
-   uninitialized value in MPI_init
-   Memcheck:Value8
-   ...
-   ...
-   fun:ompi_mpi_init
-   ...
-}
-{
    Leak in start thread, mpi
    Memcheck:Leak
    match-leak-kinds: all
