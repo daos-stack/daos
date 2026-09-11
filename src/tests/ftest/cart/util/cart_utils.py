@@ -425,11 +425,11 @@ class CartTest(TestWithoutServers):
                 self.stop_process(srv1)
             if srv2 is not None:
                 self.stop_process(srv2)
-            self.fail(f"Failed, return codes {result.exit_status}")
+            self.fail(f"Failed, return codes {result.return_code}")
 
         self.convert_xml_files()
 
-        return result.exit_status
+        return result.return_code
 
     def launch_cmd_bg(self, cmd):
         """Launch the given cmd in background."""
