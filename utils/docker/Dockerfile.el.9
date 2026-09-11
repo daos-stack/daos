@@ -8,13 +8,21 @@
 #
 # Use --target build-ci to create image with basic build environment for gcc
 
+# NOTE
+# Java build permanently failed on EL9, so it is disabled by default on EL9
+ARG DAOS_JAVA_BUILD=no
+
 # Global defaults
-ARG DAOS_TARGET_TYPE=release
 ARG DAOS_DEPS_BUILD=yes
 ARG DAOS_KEEP_BUILD=no
 ARG DAOS_PACKAGES_BUILD=yes
-ARG DEPS_JOBS=32
-ARG DAOS_PACKAGES_VERIFY=no
+ARG INSTALL_SCRIPT_SUFFIX=el9.sh
+# Left empty on purpose: scons and the build scripts provide their own defaults.
+ARG DAOS_PACKAGES_VERIFY=
+ARG DAOS_TARGET_TYPE=
+ARG DEPS_JOBS=
+
+ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 
 # Pull base image
 ARG POINT_RELEASE=
@@ -23,7 +31,6 @@ FROM $BASE_DISTRO AS basic
 LABEL maintainer="daos@daos.groups.io"
 # Needed for later use of BASE_DISTRO
 ARG BASE_DISTRO
-
 # Intermittent cache-bust. Refresh base image at least once a week.
 ARG CB0
 
@@ -59,7 +66,8 @@ RUN set -e; \
     fi
 
 # Setup local repo if available
-RUN --mount=type=bind,src=./utils/scripts/helpers/repo-helper-el9.sh,target=/tmp/daos/repo-helper.sh \
+ARG INSTALL_SCRIPT_SUFFIX
+RUN --mount=type=bind,src=./utils/scripts/helpers/repo-helper-$INSTALL_SCRIPT_SUFFIX,target=/tmp/daos/repo-helper.sh \
     /tmp/daos/repo-helper.sh
 
 # Remove own DAOS dependencies from the system to avoid conflicts with
@@ -79,7 +87,8 @@ FROM basic AS build-ci
 
 # Install minimal set of packages for building DAOS with gcc compiler and
 # no Java support.
-RUN --mount=type=bind,source=utils/scripts/install-el9.sh,target=/tmp/daos/install.sh \
+ARG INSTALL_SCRIPT_SUFFIX
+RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target=/tmp/daos/install.sh \
     INSTALL_BUILD_CI_ONLY="true" /tmp/daos/install.sh && \
     dnf clean all
 
@@ -108,13 +117,15 @@ RUN --mount=type=bind,source=requirements-build.txt,target=/tmp/daos/requirement
 
 # Install DAOS dependencies if available
 ARG DAOS_DEPS_INSTALL=yes
-RUN --mount=type=bind,source=ci/rpm/install_deps.sh,target=/tmp/daos/ci/rpm/install_deps.sh \
-    --mount=type=bind,source=ci/parse_ci_envs.sh,target=/tmp/daos/ci/parse_ci_envs.sh \
+ARG DAOS_DEPS_EXT_REPO=
+RUN --mount=type=bind,source=utils/build/install_deps.sh,target=/tmp/daos/utils/build/install_deps.sh \
+    --mount=type=bind,source=utils/build/build_utils.sh,target=/tmp/daos/utils/build/build_utils.sh \
     --mount=type=bind,source=utils/rpms/package_version.sh,target=/tmp/daos/utils/rpms/package_version.sh \
     --mount=type=bind,source=utils/rpms/package_info.sh,target=/tmp/daos/utils/rpms/package_info.sh \
     --mount=type=bind,source=utils/rpms/daos.spec,target=/tmp/daos/utils/rpms/daos.spec \
     [ "$DAOS_DEPS_INSTALL" != "yes" ] || { \
-        /tmp/daos/ci/rpm/install_deps.sh el9; \
+        export DAOS_DEPS_EXT_REPO="${DAOS_DEPS_EXT_REPO}" && \
+        /tmp/daos/utils/build/install_deps.sh; \
         sudo dnf clean all; \
     }
 
@@ -124,7 +135,7 @@ ARG DAOS_DEPS_BUILD
 ARG DEPS_JOBS
 ARG DAOS_TARGET_TYPE
 ARG DAOS_KEEP_BUILD
-
+ARG DAOS_BUILD_TYPE
 RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
     --mount=type=bind,source=deps,target=/home/daos/pre/deps \
     --mount=type=bind,source=site_scons/prereq_tools,target=/home/daos/pre/site_scons/prereq_tools \
@@ -132,36 +143,35 @@ RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
     --mount=type=bind,source=utils/build.config,target=/home/daos/pre/utils/build.config \
     --mount=type=bind,source=utils/scripts/copy_files.sh,target=/home/daos/pre/utils/scripts/copy_files.sh \
     --mount=type=bind,source=utils/scripts/create_spdk_pkgconfig.sh,target=/home/daos/pre/utils/scripts/create_spdk_pkgconfig.sh \
-    --mount=type=bind,source=ci/rpm/build_deps.sh,target=/home/daos/pre/utils/scripts/build_deps.sh \
+    --mount=type=bind,source=utils/build/build_deps.sh,target=/home/daos/pre/utils/build/build_deps.sh \
+    --mount=type=bind,source=utils/build/build_utils.sh,target=/home/daos/pre/utils/build/build_utils.sh \
+    --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
     [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
-        DAOS_DEPS_JOBS="$DEPS_JOBS" DAOS_TARGET_TYPE="$DAOS_TARGET_TYPE" \
-        utils/scripts/build_deps.sh && \
-        rm -rf .sconf_temp .sconsign.dblite config.log && \
-        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
+        utils/build/build_deps.sh \
+            ${DEPS_JOBS:+--jobs "$DEPS_JOBS"} \
+            ${DAOS_BUILD_TYPE:+BUILD_TYPE="$DAOS_BUILD_TYPE"} \
+            ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} && \
+        [ "$DAOS_KEEP_BUILD" != "no" ] || { \
+        rm -rf .sconf_temp .sconsign.dblite config.log build *.gz; \
+        } ; \
     }
 
 # Build DAOS dependencies RPMs
 ARG DAOS_PACKAGES_BUILD
 ARG DAOS_PACKAGES_VERIFY
 RUN --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
+    --mount=type=bind,source=utils/build,target=/home/daos/pre/utils/build \
     --mount=type=bind,source=utils/sl/setup_local.sh,target=/home/daos/pre/utils/sl/setup_local.sh \
     --mount=type=bind,source=utils/build.config,target=/home/daos/pre/utils/build.config \
     [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { \
-        export DISTRO="el9" && \
-	    /home/daos/pre/utils/rpms/build_packages.sh deps "$DAOS_PACKAGES_VERIFY" && \
-        mkdir -p /home/daos/rpms/deps && \
-        find . -maxdepth 1 -type f -name '*.rpm' \
-             -exec mv -t /home/daos/rpms/deps {} + ; \
+        set -- --build-range=deps; \
+        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || set -- "$@" -Wno-error; \
+        set -- "$@" /home/daos/rpms; \
+        utils/build/build_packages.sh "$@"; \
     }
 
-RUN --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
-    [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { \
-        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || { \
-            utils/rpms/verify_rpms.sh /home/daos/rpms/deps "el9" || true; \
-        } \
-    }
+WORKDIR /home/daos
 
 FROM build-ci AS build-local
 # Set a label.  This is useful for searching for DAOS images, but is also used
@@ -171,17 +181,18 @@ LABEL DAOS=true
 ARG COMPILER=gcc
 ARG DAOS_DEPS_BUILD
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
+ARG DAOS_JAVA_BUILD=no
 
 # Install the rest of components if other than gcc compiler will be used for
 # DAOS or Java build is requested.
 # This is done in a separate stage to allow for a smaller image for CI building only.
 USER root:root
-RUN --mount=type=bind,source=utils/scripts/install-el9.sh,target=/tmp/daos/install.sh \
+RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target=/tmp/daos/install.sh \
     ([ "$COMPILER" = "gcc" ] && [ "$DAOS_JAVA_BUILD" != "yes" ]) || { \
         /tmp/daos/install.sh && \
         dnf clean all; \
     }
+RUN chown -R daos_server.daos_server /home/daos
 
 # Create directory for DAOS build storage
 USER daos_server:daos_server
@@ -194,7 +205,7 @@ ARG DEPS_JOBS
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_TARGET_TYPE
 ARG DAOS_KEEP_BUILD
-ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
+ARG DAOS_BUILD_TYPE
 ARG DAOS_KEEP_SRC=no
 
 # We need to copy the source code into the image as we need read/write copy 
@@ -221,20 +232,24 @@ RUN --mount=type=bind,source=VERSION,target=/home/daos/daos/VERSION \
     --mount=type=bind,source=utils/certs,target=/home/daos/daos/utils/certs \
     --mount=type=bind,source=utils/completion,target=/home/daos/daos/utils/completion \
     --mount=type=bind,source=utils/config,target=/home/daos/daos/utils/config \
+    --mount=type=bind,source=utils/build/build_daos.sh,target=/home/daos/daos/utils/build/build_daos.sh \
+    --mount=type=bind,source=utils/build/build_utils.sh,target=/home/daos/daos/utils/build/build_utils.sh \
+    --mount=type=bind,source=utils/rpms,target=/home/daos/daos/rpms \
     --mount=type=bind,source=src,target=/tmp/daos-src \
     [ "$DAOS_BUILD" != "yes" ] || { \
         export GOCACHE=/tmp/go-cache && \
         mkdir -p /home/daos/daos/src && \
         cp -r /tmp/daos-src/. /home/daos/daos/src && \
-           scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
-              BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE \
-        USE_INSTALLED=all && \
+           utils/build/build_daos.sh \
+           ${JOBS:+--jobs "$JOBS"} \
+           ${COMPILER:+COMPILER=$COMPILER} \
+           ${DAOS_BUILD_TYPE:+BUILD_TYPE="$DAOS_BUILD_TYPE"} \
+           ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} && \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || { \
-            /bin/rm -rf build; \
+            rm -rf .sconf_temp .sconsign.dblite config.log build; \
         }) && \
         go clean -cache && \
         cp -r utils/config/examples /opt/daos && \
-        rm -rf .sconf_temp .sconsign.dblite config.log && \
         [ "$DAOS_KEEP_SRC" != "no" ] || { \
             rm -rf /home/daos/daos/src; \
         }; \
@@ -254,45 +269,38 @@ USER daos_server:daos_server
 ARG DAOS_PACKAGES_BUILD
 ARG DAOS_PACKAGES_VERIFY
 RUN --mount=type=bind,source=utils/rpms,target=/home/daos/daos/utils/rpms \
+    --mount=type=bind,source=utils/build,target=/home/daos/daos/utils/build \
     --mount=type=bind,source=utils/sl,target=/home/daos/daos/utils/sl \
     --mount=type=bind,source=utils/systemd,target=/home/daos/daos/utils/systemd \
     --mount=type=bind,source=utils/build.config,target=/home/daos/daos/utils/build.config \
-    --mount=type=bind,source=utils/rpms/build_packages.sh,target=/home/daos/daos/utils/rpms/build_packages.sh \
     [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
-	    export DISTRO="el9" && \
-	    /home/daos/daos/utils/rpms/build_packages.sh daos "$DAOS_PACKAGES_VERIFY" && \
-	    mkdir -p /home/daos/rpms/daos && \
-        find . -maxdepth 1 -type f -name '*.rpm' \
-             -exec mv -t /home/daos/rpms/daos {} + ; \
-    }
-
-RUN --mount=type=bind,source=utils/rpms,target=/home/daos/daos/utils/rpms \
-    [ "$DAOS_PACKAGES_BUILD" != "yes" ] || [ "$DAOS_BUILD" != "yes" ] || { \
-        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || { \
-            utils/rpms/verify_rpms.sh /home/daos/rpms/daos "el9" || true; \
-        } \
+        set -- --build-range=daos /home/daos/rpms; \
+        [ "$DAOS_PACKAGES_VERIFY" = "yes" ] || set -- "$@" -Wno-error; \
+        /home/daos/daos/utils/build/build_packages.sh "$@"; \
     }
 
 # Build java and hadoop bindings
-#USER daos_server:daos_server
-#RUN     [ "$DAOS_JAVA_BUILD" != "yes" ] || { \
-#    mkdir -p /home/daos/.m2; \
-#}
+USER daos_server:daos_server
+RUN     [ "$DAOS_JAVA_BUILD" != "yes" ] || { \
+    mkdir -p /home/daos/.m2; \
+}
 
-#RUN --mount=type=bind,source=utils/scripts/helpers/maven-settings.xml.in,target=/home/daos/.m2/settings.xml \
-#    --mount=type=bind,source=src,target=/tmp/daos-src \
-#    [ "$DAOS_BUILD" != "yes" ] || [ "$DAOS_JAVA_BUILD" != "yes" ] || { \
-#        mkdir -p /home/daos/daos/src && \
-#       cp -r /tmp/daos-src/. /home/daos/daos/src && \
-#        pushd /home/daos/daos/src/client/java && \
-#        mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip \
-#            -Ddaos.install.path=/opt/daos && \
-#        popd && \
-#        rm -rf /home/daos/.m2/* && \
-#        [ "$DAOS_KEEP_SRC" != "no" ] || { \
-#            rm -rf /home/daos/daos/src; \
-#        }; \
-#    }
+RUN --mount=type=bind,source=utils/scripts/helpers/maven-settings.xml.in,target=/home/daos/.m2/settings.xml \
+    --mount=type=bind,source=src,target=/tmp/daos-src \
+    [ "$DAOS_BUILD" != "yes" ] || [ "$DAOS_JAVA_BUILD" != "yes" ] || { \
+        mkdir -p /home/daos/daos/src && \
+       cp -r /tmp/daos-src/. /home/daos/daos/src && \
+        pushd /home/daos/daos/src/client/java && \
+        mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip \
+            -Ddaos.install.path=/opt/daos && \
+        popd && \
+        rm -rf /home/daos/.m2/* && \
+        [ "$DAOS_KEEP_SRC" != "no" ] || { \
+            rm -rf /home/daos/daos/src; \
+        }; \
+    }
+
+WORKDIR /home/daos
 
 # Setup docker image for Unit Tests
 FROM build-local AS full
@@ -300,7 +308,8 @@ FROM build-local AS full
 # This is done in a separate stage to allow for a smaller image for CI
 # and local build
 USER root:root
-RUN --mount=type=bind,source=utils/scripts/install-el9.sh,target=/tmp/daos/install.sh \
+ARG INSTALL_SCRIPT_SUFFIX
+RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target=/tmp/daos/install.sh \
     /tmp/daos/install.sh && \
     dnf clean all
 

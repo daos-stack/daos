@@ -336,18 +336,18 @@ To build the Docker image directly from GitHub, run the following command:
 
 ```bash
 $ docker build https://github.com/daos-stack/daos.git#master \
-        -f utils/docker/Dockerfile.el.8 -t daos
+        -f utils/docker/Dockerfile.el.9 -t daos
 ```
 
 or from a local tree:
 
 ```bash
-$ docker build  . -f utils/docker/Dockerfile.el.8 -t daos
+$ docker build  . -f utils/docker/Dockerfile.el.9 -t daos
 ```
 
-This creates a Rocky Linux 8 image, fetches the latest DAOS version from GitHub,
+This creates a Rocky Linux 9 image, fetches the latest DAOS version from GitHub,
 builds it, and installs it in the image.
-For Ubuntu and other Linux distributions, replace Dockerfile.el.8 with
+For Ubuntu and other Linux distributions, replace Dockerfile.el.9 with
 Dockerfile.ubuntu or the appropriate version of interest.
 
 ### Simple Docker Setup
@@ -403,7 +403,7 @@ refer to the next section.
 The DAOS build process now covers building RPMs for both DAOS and dependencies
 specified in [`utils/build.config`](../../utils/build.config) (or those that we
 build regularly with `--build-deps=yes`). The complete list of RPMs  is defined
-in the [`utils/rpms/build_packages.sh`](../../utils/rpms/build_packages.sh)
+in the [`utils/build/build_packages.sh`](../../utils/build/build_packages.sh)
 script. The RPM (and deb) build process uses
 [FPM](https://fpm.readthedocs.io/en/latest/getting-started.html). Essentially,
 it creates rpm packages after a DAOS build. Regardless of how that build is done,
@@ -428,3 +428,96 @@ In order to properly upgrade a 3rd party component, do all of the following:
 1. Update the `utils/rpms/<component>.changelog` file to document the change and
    make sure the file is referenced by the
    `RPM_CHANGELOG="<component>.changelog"` variable in `utils/rpms/<component>.sh`.
+
+## Unified DAOS Build Procedure
+
+The scripts under [`utils/build`](../../utils/build) provide a straightforward,
+four-step workflow from installing pre-built dependencies to producing the
+final RPMs. The same workflow is used by CI, Docker image builds, and bare-host
+builds; none of the scripts are Docker-specific.
+
+For standard builds, the scripts handle the underlying `scons` details.
+Advanced users can still invoke `scons` directly or pass additional options
+and variables through the `build_*` scripts to produce different binary
+variants.
+
+1. **[`utils/build/install_deps.sh [RPM_SUFFIX]`](../../utils/build/install_deps.sh)**
+   installs pre-built dependency RPMs (e.g. `argobots-devel`, `mercury-devel`,
+   `libfabric-devel`) matching the versions expected by the current tree,
+   so that the subsequent build steps can reuse them instead of rebuilding from
+   source (`USE_INSTALLED=all`). `RPM_SUFFIX` is the standardized RPM naming
+   suffix used by the DAOS project's own package repos, not the OS distribution
+   name (for example, `el9`, `suse.lp155`, or `suse.lp156`). If omitted,
+   it is auto-detected from `/etc/os-release`. This script supports EL9 and
+   Leap/SLES 15 systems. Missing packages are reported but do not fail
+   the script, since dependencies can also be built from source in
+   the next step. Set `DAOS_DEPS_EXT_REPO` to pull in a custom RPM set published
+   by the DAOS project (e.g. from [packages.daos.io](https://packages.daos.io/))
+   as an extra, registered only for the duration of the script.
+
+   ```bash
+   $ DAOS_DEPS_EXT_REPO=https://packages.daos.io/v2.8.0/EL9/packages/x86_64/ \
+         utils/build/install_deps.sh el9
+   ```
+   To find out more, use the `install_deps.sh --help` command.
+
+1. **[`utils/build/build_deps.sh`](../../utils/build/build_deps.sh)**
+   builds any dependency not already satisfied by
+   `install_deps.sh` from source, via `scons install --build-deps=only`.
+   Pass the build configuration as a command-line variable, for example
+   `utils/build/build_deps.sh BUILD_TYPE=release`. Supported values are
+   `dev`, `release`, and `debug`; the default is `release`.
+
+   To find out more, use the `build_deps.sh --help` command.
+1. **[`utils/build/build_daos.sh`](../../utils/build/build_daos.sh)**
+   builds and installs DAOS itself with `scons` assuming
+   all dependencies are either installed or built previously
+   (`scons install --build-deps=no USE_INSTALLED=all`).
+
+   To find out more, use the `build_daos.sh --help` command.
+1. **[`utils/build/build_packages.sh [options] [PKG_OUTPUT_DIR]`](../../utils/build/build_packages.sh)**
+   builds dependency packages, DAOS packages, or both (default) using scripts
+   located in the [`utils/rpms`](../../utils/rpms) directory. `PKG_OUTPUT_DIR`
+   is an optional positional argument and is the root under which `deps/` and
+   `daos/` are written. For RPM builds it defaults to `<repo_root>/rpms`; for
+   DEB builds it defaults to `.`.
+
+   For RPM distributions (EL,Leap,SLES), the script also generates repository
+   metadata under `<PKG_OUTPUT_DIR>/repodata`, producing a complete RPM
+   repository.
+
+   After the build step is successfully completed, the RPMs are verified using
+   the [`utils/build/verify_packages.sh`](../../utils/build/verify_packages.sh)
+   script. With the default `-Werror` setting, validation findings fail the
+   build. With `-Wno-error`, verification still runs, but noncritical findings
+   are reported as warnings. Missing tools, unsupported configurations, and
+   other critical setup errors remain fatal.
+
+   Use `--build-range=deps`, `--build-range=daos`, or
+   `--build-range=all` to select the package groups. For RPM builds, use
+   `--rpm-suffix=el9`, `--rpm-suffix=suse.lp155`, or
+   `--rpm-suffix=suse.lp156`; if omitted, the suffix is auto-detected from
+   `/etc/os-release`.
+   Set environment variable `OUTPUT_TYPE=deb` for DEB builds; it defaults to
+   `rpm`.
+
+   Use `-Werror` to fail on verification findings (the default), or
+   `-Wno-error` to report them as warnings. These options are mutually
+   exclusive.
+
+   To find out more, use the `build_packages.sh --help` command.
+
+> [NOTE]
+>
+>The [`utils/build/verify_packages.sh`](../../utils/build/verify_packages.sh)
+>script can also be invoked separately.
+>
+>The verifier accepts the same RPM suffix values and uses the following form:
+>```bash
+> $ utils/build/verify_packages.sh \
+>   [--rpm-suffix=el9] [-Werror|-Wno-error] \
+>   <RPM_ROOT>
+>```
+>`-Werror` is the default. `-Wno-error` reports validation findings as
+>warnings and exits successfully for those findings; missing tools, missing
+>RPMs, and unsupported suffixes remain fatal.
