@@ -5,8 +5,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import re
-from grp import getgrgid
+import time
 # pylint: disable=too-many-lines
+from collections import defaultdict
+from grp import getgrgid
 from logging import getLogger
 from pwd import getpwuid
 
@@ -1287,11 +1289,11 @@ class DmgCommand(DmgCommandBase):
         """Call dmg system rebuild stop.
 
         Args:
-            verbose (str, optional): Print pool identifiers
-            force (str, optional): Forcibly stop interactive rebuild
+            verbose (bool, optional): Print pool identifiers
+            force (bool, optional): Forcibly stop interactive rebuild
 
         Raises:
-            CommandFailure: if the dmg system rebuild start command fails.
+            CommandFailure: if the command fails
 
         Returns:
             dict: the dmg json command output converted to a python dictionary
@@ -1299,6 +1301,59 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(
             ("system", "rebuild", "stop"), verbose=verbose, force=force)
+
+    def system_rebuild_stop_retry(self, timeout=60, interval=3, verbose=False, force=False):
+        """Call dmg system rebuild stop.
+
+        Retries the command until it succeeds or the timeout is reached.
+
+        Args:
+            timeout (int, optional): Maximum time to wait for rebuild to stop
+            interval (int, optional): Time to wait between retries
+            verbose (bool, optional): Print pool identifiers
+            force (bool, optional): Forcibly stop interactive rebuild
+
+        Raises:
+            CommandFailure: if the command fails for any reason other than
+                DER_NONEXIST or if the timeout is reached.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+        """
+        rebuild_stopped = defaultdict(lambda: False)
+        time_start = time.time()
+        while True:
+            with self.no_exception():
+                result = self.system_rebuild_stop(verbose=verbose, force=force)
+
+            # If the command did not error, all is good
+            if result['status'] == 0:
+                return result
+
+            # The command errored, but anything other than DER_NONEXIST is a real error
+            if 'DER_NONEXIST' not in result['error']:
+                raise CommandFailure(
+                    f'Unexpected error stopping rebuild: {result["error"]}')
+
+            # The command failed with DER_NONEXIST,
+            # so keep a running check of which pools have stopped rebuild
+            # Once a pool stops, its entry in rebuild_stopped is latched True,
+            # so a later DER_NONEXIST (post-stop) won't reset it.
+            for pool_result in result['response']['results']:
+                rebuild_stopped[pool_result['id']] |= pool_result['errored'] is False
+
+            # If all pools have stopped rebuild, all is good
+            if all(rebuild_stopped.values()):
+                return result
+
+            # If we exceed the max wait time, fail the test
+            if time.time() - time_start > timeout:
+                raise CommandFailure(f'Failed to stop rebuild after {timeout} seconds')
+
+            # Otherwise, sleep and retry
+            self.log.info(
+                'Assuming rebuild is not started yet. Retrying in %s seconds...', interval)
+            time.sleep(interval)
 
     def system_self_heal_eval(self):
         """Call dmg system self-heal eval.
