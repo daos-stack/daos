@@ -959,7 +959,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 	dth->dth_dkey_hash       = 0;
 
 	if (!(flags & DTX_LOCAL)) {
-		if (daos_is_zero_dti(dti))
+		if (daos_is_zero_dti(dti) && !(flags & DTX_FOR_MIGRATION))
 			return 0;
 
 		if (!dtx_epoch_chosen(epoch)) {
@@ -970,6 +970,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 		}
 		dth->dth_epoch       = epoch->oe_value;
 		dth->dth_epoch_bound = dtx_epoch_bound(epoch);
+		if (daos_is_zero_dti(dti))
+			return 0;
 	}
 
 	rc = vos_dtx_rsrvd_init(dth);
