@@ -93,7 +93,7 @@ class PoolRedunFacProperty(IorTestBase):
         Jira ID: DAOS-9217, DAOS-17768
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=vm
         :avocado: tags=pool,redundancy,redundancy_factor,rf
         :avocado: tags=PoolRedunFacProperty,test_rf_pool_property
         """

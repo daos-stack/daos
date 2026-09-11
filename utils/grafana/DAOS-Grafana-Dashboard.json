@@ -335,7 +335,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": false,
-          "expr": "sum without (rank, pool, target) (rate(engine_pool_xferred_fetch[15s]))",
+          "expr": "sum without (instance, rank, pool, target) (rate(engine_pool_xferred_fetch[15s]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -350,7 +350,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": false,
-          "expr": "sum without (rank, pool, target) (rate(engine_pool_xferred_update[15s]))",
+          "expr": "sum without (instance, rank, pool, target) (rate(engine_pool_xferred_update[15s]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -364,7 +364,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": false,
-          "expr": "sum without (rank, pool, target) (rate(engine_pool_xferred_fetch[15s]) + rate(engine_pool_xferred_update[15s]))",
+          "expr": "sum without (instance, rank, pool, target) (rate(engine_pool_xferred_fetch[15s]) + rate(engine_pool_xferred_update[15s]))",
           "hide": false,
           "interval": "",
           "legendFormat": "Total",
@@ -445,7 +445,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "sum without (rank, pool, target) (rate(engine_pool_ops_fetch[1m]))",
+          "expr": "sum without (instance, rank, pool, target) (rate(engine_pool_ops_fetch[1m]))",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -454,7 +454,7 @@
         },
         {
           "exemplar": false,
-          "expr": "sum without (rank, pool, target) (rate(engine_pool_ops_update[1m]))",
+          "expr": "sum without (instance, rank, pool, target) (rate(engine_pool_ops_update[1m]))",
           "hide": false,
           "interval": "",
           "legendFormat": "Update",
@@ -535,7 +535,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "avg without (rank, target) (engine_io_latency_fetch_mean)",
+          "expr": "avg without (instance, rank, target) (engine_io_latency_fetch_mean)",
           "hide": false,
           "interval": "",
           "legendFormat": "{{size}}",
@@ -626,7 +626,7 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "avg without (rank, target) (engine_io_latency_update_mean)",
+          "expr": "avg without (instance, rank, target) (engine_io_latency_update_mean)",
           "interval": "",
           "legendFormat": "{{size}}",
           "refId": "A"
@@ -720,7 +720,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": false,
-          "expr": "sum without (rank, pool) (engine_pool_ops_pool_connect) - sum without (rank, pool) (engine_pool_ops_pool_disconnect)",
+          "expr": "sum without (instance, rank, pool) (engine_pool_ops_pool_connect) - sum without (instance, rank, pool) (engine_pool_ops_pool_disconnect)",
           "interval": "",
           "legendFormat": "Total",
           "refId": "A"
@@ -801,7 +801,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": false,
-          "expr": "sum without (rank, job, instance, pool) (engine_pool_ops_cont_open) - sum without (rank, job, instance, pool) (engine_pool_ops_cont_close)",
+          "expr": "sum without (instance, rank, job, pool) (engine_pool_ops_cont_open) - sum without (instance, rank, job, pool) (engine_pool_ops_cont_close)",
           "interval": "",
           "legendFormat": "Total",
           "refId": "A"
@@ -882,14 +882,14 @@
       "targets": [
         {
           "exemplar": false,
-          "expr": "sum without (rank, pool) (rate(engine_pool_ops_cont_open[15s]))",
+          "expr": "sum without (instance, rank, pool) (rate(engine_pool_ops_cont_open[15s]))",
           "interval": "",
           "legendFormat": "Open",
           "refId": "open"
         },
         {
           "exemplar": false,
-          "expr": "sum without (rank, pool) (rate(engine_pool_ops_cont_close[15s]))",
+          "expr": "sum without (instance, rank, pool) (rate(engine_pool_ops_cont_close[15s]))",
           "hide": false,
           "interval": "",
           "legendFormat": "Close",
@@ -897,7 +897,7 @@
         },
         {
           "exemplar": false,
-          "expr": "sum without (rank, pool) (rate(engine_pool_ops_cont_destroy[15s]))",
+          "expr": "sum without (instance, rank, pool) (rate(engine_pool_ops_cont_destroy[15s]))",
           "hide": false,
           "interval": "",
           "legendFormat": "Destroy",

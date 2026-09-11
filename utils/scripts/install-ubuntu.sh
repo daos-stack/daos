@@ -53,6 +53,7 @@ apt-get install ${apt_get_install_args} \
     librdmacm-dev \
     libssl-dev \
     libtool-bin \
+    libucx-dev \
     libunwind-dev \
     libyaml-dev \
     locales \
