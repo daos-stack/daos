@@ -178,12 +178,21 @@ class ExecutableCommand(CommandWithParameters):
         return command_as_user(self.with_bind, self.run_user, self.env)
 
     @contextlib.contextmanager
-    def no_exception(self):
-        """Temporarily disable raising exceptions for failed commands."""
+    def temp_exit_status_exception(self, value):
+        """Temporarily set the exit_status_exception attribute.
+
+        Args:
+            value (bool): the temporary value for exit_status_exception
+
+        """
         original_value = self.exit_status_exception
-        self.exit_status_exception = False
+        self.exit_status_exception = value
         yield
         self.exit_status_exception = original_value
+
+    def no_exception(self):
+        """Temporarily disable raising exceptions for failed commands."""
+        return self.temp_exit_status_exception(False)
 
     @contextlib.contextmanager
     def as_user(self, user):
