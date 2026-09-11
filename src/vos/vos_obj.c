@@ -1010,12 +1010,41 @@ fail:
 	return rc;
 }
 
+/* Pin single dkey bucket while holding the object shared buckets, deadlock free. */
+static inline int
+dkey_bkt_iter_pin(struct vos_object *obj, struct vos_krec_df *krec,
+		  struct umem_pin_handle **pin_hdl)
+{
+	struct vos_pool        *pool  = vos_obj2pool(obj);
+	struct umem_store      *store = vos_pool2store(pool);
+	struct umem_cache_range rg;
+	uint32_t                bkt_id;
+	int                     rc;
+
+	D_ASSERT(*pin_hdl == NULL);
+	if (!vos_pool_is_evictable(pool) || !(krec->kr_bmap & KREC_BF_BKT_ID))
+		return 0;
+
+	bkt_id = *vos_krec2bkt_id(krec);
+	if (bkt_id == UMEM_DEFAULT_MBKT_ID)
+		return 0;
+
+	rg.cr_off  = umem_get_mb_base_offset(vos_pool2umm(pool), vos_bkt_id_raw(bkt_id));
+	rg.cr_size = store->cache->ca_page_sz;
+	rc         = vos_cache_pin(pool, &rg, 1, false, pin_hdl);
+	if (rc)
+		DL_ERROR(rc, "Failed to pin dkey bucket:%u for object:" DF_UOID ".", bkt_id,
+			 DP_UOID(obj->obj_id));
+	return rc;
+}
+
 static inline int
 key_ilog_prepare_dkey(struct vos_obj_iter *oiter, daos_key_t *key, daos_handle_t *sub_toh,
 		      struct vos_krec_df **krecp, struct vos_ts_set *ts_set)
 {
-	struct vos_object *obj   = oiter->it_obj;
-	int                flags = 0;
+	struct vos_object  *obj = oiter->it_obj;
+	struct vos_krec_df *krec;
+	int                 rc, flags = 0;
 
 	if (vos_obj_skip_akey_supported(obj->obj_cont, obj->obj_id)) {
 		flags |= SUBTR_FLAT;
@@ -1023,8 +1052,17 @@ key_ilog_prepare_dkey(struct vos_obj_iter *oiter, daos_key_t *key, daos_handle_t
 			flags |= SUBTR_EVT;
 	}
 
-	return key_ilog_prepare(oiter, obj->obj_toh, VOS_BTR_DKEY, key, flags, sub_toh, krecp,
-				&oiter->it_epr, &oiter->it_punched, &oiter->it_ilog_info, ts_set);
+	rc = key_ilog_prepare(oiter, obj->obj_toh, VOS_BTR_DKEY, key, flags, sub_toh, krecp,
+			      &oiter->it_epr, &oiter->it_punched, &oiter->it_ilog_info, ts_set);
+	if (rc)
+		return rc;
+
+	krec = *krecp;
+	rc   = dkey_bkt_iter_pin(obj, krec, &oiter->it_dkey_pin_hdl);
+	if (rc != 0)
+		key_tree_release(*sub_toh, key_tree_is_evt(flags, VOS_BTR_DKEY, krec));
+
+	return rc;
 }
 
 /**
@@ -1168,6 +1206,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	}
 
 	krec = rbund.rb_krec;
+	info->ii_dkey_krec = krec;
 	info->ii_vea_info = obj->obj_cont->vc_pool->vp_vea_info;
 	info->ii_uma = vos_obj2uma(obj);
 
@@ -1226,7 +1265,6 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 			info->ii_fake_akey_flag = VOS_IT_DKEY_SV;
 		}
 		info->ii_ilog_info = &oiter->it_ilog_info;
-		info->ii_dkey_krec = krec;
 	}
 
 	return 0;
@@ -2174,8 +2212,21 @@ vos_obj_akey_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	}
 
 	rc = nested_prep_common_init(obj->obj_cont, &oiter, info);
+	if (rc != 0) {
+		if (info->ii_fake_akey_flag)
+			key_tree_release(info->ii_tree_hdl,
+					 info->ii_fake_akey_flag == VOS_IT_DKEY_EV);
+		return rc;
+	}
 
 	oiter->it_obj = obj;
+	rc            = dkey_bkt_iter_pin(obj, info->ii_dkey_krec, &oiter->it_dkey_pin_hdl);
+	if (rc != 0) {
+		if (info->ii_fake_akey_flag)
+			key_tree_release(info->ii_tree_hdl,
+					 info->ii_fake_akey_flag == VOS_IT_DKEY_EV);
+		goto failed;
+	}
 
 	if (info->ii_fake_akey_flag) {
 		/** In this case, we already opened the subtree so just store it
@@ -2213,6 +2264,8 @@ success:
 	return 0;
 
 failed:
+	if (oiter->it_dkey_pin_hdl != NULL)
+		umem_cache_unpin(vos_pool2store(vos_obj2pool(obj)), oiter->it_dkey_pin_hdl);
 	nested_prep_common_abort(oiter);
 	return rc;
 }
@@ -2374,6 +2427,10 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 		break;
 	}
  out:
+	if (oiter->it_dkey_pin_hdl != NULL)
+		umem_cache_unpin(vos_pool2store(vos_obj2pool(oiter->it_obj)),
+				 oiter->it_dkey_pin_hdl);
+
 	/* Release the object only if we didn't borrow it from the parent
 	 * iterator.   The generic code reference counts the iterators
 	 * to ensure that a parent never gets removed before all nested
