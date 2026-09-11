@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -97,7 +97,7 @@ class DfuseSpaceCheck(IorTestBase):
         self.__block_size = self.params.get('block_size', '/run/dfuse_space_check/*')
 
         # Create a pool, container, and start dfuse
-        self.create_pool()
+        self.pool = self.get_pool(connect=False)
         self.create_cont()
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, self.pool, self.container)

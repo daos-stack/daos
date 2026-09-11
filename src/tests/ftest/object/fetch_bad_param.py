@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,7 +9,6 @@ import traceback
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError
 from test_utils_container import add_container
-from test_utils_pool import add_pool
 
 
 class ObjFetchBadParam(TestWithServers):
@@ -25,7 +25,7 @@ class ObjFetchBadParam(TestWithServers):
             TestContainer: the created container
         """
         self.log_step('Creating a pool')
-        pool = add_pool(self)
+        pool = self.get_pool()
 
         self.log_step('Creating a container')
         return add_container(self, pool)

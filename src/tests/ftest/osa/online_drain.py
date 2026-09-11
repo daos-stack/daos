@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +8,6 @@ import threading
 import time
 
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
 
@@ -52,7 +51,7 @@ class OSAOnlineDrain(OSAUtils):
         t_string = ','.join(map(str, self.random.sample(range(targets), 2)))
 
         for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
+            pool[val] = self.get_pool(connect=False)
             pool[val].set_property("reclaim", "disabled")
 
         # Drain the rank and targets
