@@ -124,6 +124,7 @@ RUN --mount=type=bind,source=requirements-build.txt,target=/tmp/daos/requirement
 
 # Install DAOS dependencies if available
 ARG DAOS_DEPS_INSTALL=yes
+ARG POINT_RELEASE
 RUN --mount=type=bind,source=ci/rpm/install_deps.sh,target=/tmp/daos/ci/rpm/install_deps.sh \
     --mount=type=bind,source=ci/parse_ci_envs.sh,target=/tmp/daos/ci/parse_ci_envs.sh \
     --mount=type=bind,source=utils/rpms/package_version.sh,target=/tmp/daos/utils/rpms/package_version.sh \
