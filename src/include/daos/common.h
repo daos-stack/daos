@@ -983,6 +983,9 @@ enum {
 #define DAOS_FAULT_DAE_ALLOC               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x307)
 #define DAOS_FAULT_DBD_COUNT               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x308)
 
+/** DDB fault injection */
+#define DDB_CSUM_NR_INJECT                 (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x400)
+
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
