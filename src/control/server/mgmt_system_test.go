@@ -261,8 +261,9 @@ func startSysDB(t *testing.T, ctx context.Context, log logging.Logger, replicas 
 		t.Fatal(err)
 	}
 
-	// wait for the bootstrap to finish with a 30-second timeout
-	leaderCtx, leaderCancel := context.WithTimeout(ctx, 30*time.Second)
+	// wait for the bootstrap to finish with a 2-minute timeout
+	// (allows time for Raft leader election and initial setup)
+	leaderCtx, leaderCancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer leaderCancel()
 
 	for {
@@ -2750,8 +2751,19 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				tc.replica = common.LocalhostCtrlAddr()
 			}
 
+			// To test with multiple different IP addresses we need a more relaxed mock
+			// than the existing mockTCPResolver.
+			mockResolver := func(netString string, address string) (*net.TCPAddr, error) {
+				if netString != "tcp" {
+					return nil, errors.Errorf("unexpected network type in test: %s, want 'tcp'",
+						netString)
+				}
+				addr := strings.Split(address, ":")[0]
+				return &net.TCPAddr{IP: net.ParseIP(addr), Port: 10001}, nil
+			}
+
 			db := raft.MockDatabaseWithAddr(t, log, tc.replica)
-			ms := system.NewMembership(log, db).WithTCPResolver(mockTCPResolver)
+			ms := system.NewMembership(log, db).WithTCPResolver(mockResolver)
 			svc := newMgmtSvc(harness, ms, db, nil, nil)
 			for _, m := range tc.members {
 				if _, err := svc.membership.Add(m); err != nil {
