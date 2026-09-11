@@ -116,6 +116,12 @@ A DAOS file system can operate in different modes depending on the available har
 The two primary modes are MD-on-SSD and PMEM. In MD-on-SSD mode (the default), metadata is stored
 on NVMe devices, which requires additional preliminary steps before using ddb. See the MD-on-SSD
 MODE section of the manpage for details.
+
+ddb can only initialize SPDK once per process for pools backed by an NVMe device. If a
+pool-lifecycle command (open, rm_pool, feature, dev_list, dev_replace, prov_mem, smd_sync) needs
+to access another NVMe-backed pool after SPDK has already been initialized once in this process,
+ddb reports an error instead of a crash; restart ddb and run that operation as a separate
+invocation. See the SPDK RE-INITIALIZATION section of the manpage for details.
 `
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"

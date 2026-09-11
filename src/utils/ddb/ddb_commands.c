@@ -43,16 +43,6 @@
 		}                                                                                  \
 	} while (0)
 
-bool
-vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path);
-
-#define DDB_CAN_PROCEED(ctx, db_path)                                                              \
-	do {                                                                                       \
-		if (!vmd_wa_can_proceed(ctx, db_path)) {                                           \
-			return -DER_NO_SERVICE;                                                    \
-		}                                                                                  \
-	} while (0)
-
 int
 ddb_run_version(struct ddb_ctx *ctx)
 {
@@ -76,8 +66,7 @@ ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 	DDB_POOL_SHOULD_CLOSE(ctx);
 
 	ctx->dc_write_mode = opt->write_mode;
-	DDB_CAN_PROCEED(ctx, opt->db_path);
-	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0, opt->write_mode);
+	return dv_pool_open(opt->path, opt->db_path, ctx, &ctx->dc_poh, 0, opt->write_mode);
 }
 
 int
@@ -1109,10 +1098,8 @@ ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
 
-	DDB_CAN_PROCEED(ctx, db_path);
-
 	ddb_printf(ctx, "Using nvme config file: '%s' and smd db path: '%s'\n", nvme_conf, db_path);
-	rc = dv_sync_smd(nvme_conf, db_path, sync_smd_cb, ctx);
+	rc = dv_sync_smd(nvme_conf, db_path, ctx, sync_smd_cb, ctx);
 	ddb_printf(ctx, "Done: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
@@ -1399,8 +1386,7 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (feature_write_action(opt) && !ctx->dc_write_mode)
 		return -DER_NO_PERM;
 
-	DDB_CAN_PROCEED(ctx, opt->db_path);
-	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG,
+	rc = dv_pool_open(opt->path, opt->db_path, ctx, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG,
 			  ctx->dc_write_mode);
 	if (rc) {
 		ddb_errorf(ctx, "Unable to open VOS pool '%s'\n", opt->path);
@@ -1540,11 +1526,9 @@ ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt)
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
 
-	DDB_CAN_PROCEED(ctx, db_path);
-
 	ddb_printf(ctx, "List devices, db_path='%s'\n", db_path);
 	D_INIT_LIST_HEAD(&dev_list);
-	rc = dv_dev_list(db_path, &dev_list, &dev_cnt);
+	rc = dv_dev_list(db_path, ctx, &dev_list, &dev_cnt);
 	if (rc) {
 		ddb_errorf(ctx, "List device failed. " DF_RC "\n", DP_RC(rc));
 		return rc;
@@ -1582,8 +1566,6 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
 
-	DDB_CAN_PROCEED(ctx, db_path);
-
 	if (opt->old_devid == NULL || opt->new_devid == NULL) {
 		ddb_error(ctx, "Must specify both old and new device ID\n");
 		return -DER_INVAL;
@@ -1610,7 +1592,7 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 		   "Replace old device " DF_UUID " with new device " DF_UUID ", db_path='%s'\n",
 		   DP_UUID(old_devid), DP_UUID(new_devid), db_path);
 
-	rc = dv_dev_replace(db_path, old_devid, new_devid);
+	rc = dv_dev_replace(db_path, ctx, old_devid, new_devid);
 	if (rc)
 		ddb_errorf(ctx, "Device replacing failed. " DF_RC "\n", DP_RC(rc));
 	else
@@ -2106,8 +2088,6 @@ ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 		return -DER_INVAL;
 	}
 
-	DDB_CAN_PROCEED(ctx, opt->db_path);
-
 	if (opt->tmpfs_mount == NULL || strlen(opt->tmpfs_mount) == 0 ||
 	    strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {
 		ddb_errorf(ctx, "tmpfs_mount '%s' either too short (==0) or too long (>=%d)\n",
@@ -2116,7 +2096,7 @@ ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 	}
 
 	/** setup tmpfs and prepare the vos file on tmpfs_mount */
-	rc = dv_run_prov_mem(opt->db_path, opt->tmpfs_mount, opt->tmpfs_mount_size);
+	rc = dv_run_prov_mem(opt->db_path, ctx, opt->tmpfs_mount, opt->tmpfs_mount_size);
 	if (rc) {
 		ddb_errorf(ctx, "Failed to prepare memory environment. " DF_RC "\n", DP_RC(rc));
 	} else {
