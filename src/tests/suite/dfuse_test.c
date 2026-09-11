@@ -1741,6 +1741,293 @@ do_statx_null_probe(void **state)
 	assert_int_equal(errno, EFAULT);
 }
 
+static void
+write_file(const char *path, const char *content)
+{
+	int fd;
+	int rc;
+
+	fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+	assert_return_code(fd, errno);
+	rc = write(fd, content, strlen(content));
+	assert_int_equal(rc, strlen(content));
+	rc = close(fd);
+	assert_return_code(rc, errno);
+}
+
+static void
+check_file_content(const char *path, const char *content)
+{
+	char buf[64] = {0};
+	int  fd;
+	int  rc;
+
+	fd = open(path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = read(fd, buf, sizeof(buf) - 1);
+	assert_return_code(rc, errno);
+	assert_string_equal(buf, content);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+}
+
+/* Paths are normalized lexically before the leaf is split from its parent, so "//", "/./" and
+ * ".." in any combination have to resolve like the kernel does. Every probe here used to leave a
+ * component behind and then resolve the leaf in the wrong directory.
+ */
+void
+do_path_normalize(void **state)
+{
+	struct stat stbuf;
+	struct stat stbuf_b;
+	char        base[512];
+	char        path[1024];
+	char        start_dir[512];
+	size_t      len;
+
+	len = snprintf(base, sizeof(base) - 1, "%s/norm_%d", test_dir, getpid());
+	assert_true(len < (sizeof(base) - 1));
+
+	/* fixture: b/c/x, b/c/w and b/w with different contents, b/..c, no b/x */
+	assert_return_code(mkdir(base, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/c", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/..c", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/c/x", base);
+	write_file(path, "b/c/x");
+	snprintf(path, sizeof(path), "%s/b/c/w", base);
+	write_file(path, "b/c/w");
+	snprintf(path, sizeof(path), "%s/b/w", base);
+	write_file(path, "b/w");
+
+	/* "//" after a "/./" */
+	snprintf(path, sizeof(path), "%s/./b//c/x", base);
+	assert_return_code(stat(path, &stbuf), errno);
+	snprintf(path, sizeof(path), "%s/./b//c/w", base);
+	check_file_content(path, "b/c/w");
+
+	/* the same through the implicit "<cwd>/./" of a relative path */
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+	assert_return_code(chdir(base), errno);
+	assert_return_code(stat("./b//c/x", &stbuf), errno);
+	check_file_content("./b//c/w", "b/c/w");
+	check_file_content(".//b/./c//w", "b/c/w");
+	assert_return_code(chdir(start_dir), errno);
+
+	/* trailing ".." after a component that itself starts with ".." */
+	snprintf(path, sizeof(path), "%s/b", base);
+	assert_return_code(stat(path, &stbuf_b), errno);
+	snprintf(path, sizeof(path), "%s/b/..c/..", base);
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_true(S_ISDIR(stbuf.st_mode));
+	assert_int_equal(stbuf.st_ino, stbuf_b.st_ino);
+	snprintf(path, sizeof(path), "%s/b/..c/../c/./x", base);
+	check_file_content(path, "b/c/x");
+
+	/* trailing "/" and "/." */
+	snprintf(path, sizeof(path), "%s/b/c/", base);
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_true(S_ISDIR(stbuf.st_mode));
+	snprintf(path, sizeof(path), "%s/b/c/.", base);
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_true(S_ISDIR(stbuf.st_mode));
+
+	snprintf(path, sizeof(path), "%s/b/c/x", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c/w", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/w", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/..c", base);
+	assert_return_code(rmdir(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c", base);
+	assert_return_code(rmdir(path), errno);
+	snprintf(path, sizeof(path), "%s/b", base);
+	assert_return_code(rmdir(path), errno);
+	assert_return_code(rmdir(base), errno);
+}
+
+/* ".." applies to the resolved component in front of it: with "l2 -> c/d", "l2/../y2" is "c/y2"
+ * and not "y2". A component that is not a directory makes the path fail as it does in the kernel.
+ */
+void
+do_dot_dot_symlink(void **state)
+{
+	struct stat stbuf;
+	struct stat stbuf_c;
+	char        base[512];
+	char        host_dir[256];
+	char        path[1024];
+	char        start_dir[512];
+	size_t      len;
+	int         rc;
+
+	len = snprintf(base, sizeof(base) - 1, "%s/dotdot_%d", test_dir, getpid());
+	assert_true(len < (sizeof(base) - 1));
+	len = snprintf(host_dir, sizeof(host_dir) - 1, "/tmp/dfuse_test_dotdot_%d", getpid());
+	assert_true(len < (sizeof(host_dir) - 1));
+
+	/* fixture: b/c/d, b/c/x, b/c/y2, b/y2, b/l2 -> c/d, b/l3 -> l2, b/labs -> <host_dir> */
+	assert_return_code(mkdir(base, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/c", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/c/d", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/c/x", base);
+	write_file(path, "b/c/x");
+	snprintf(path, sizeof(path), "%s/b/c/y2", base);
+	write_file(path, "b/c/y2");
+	snprintf(path, sizeof(path), "%s/b/y2", base);
+	write_file(path, "b/y2");
+	snprintf(path, sizeof(path), "%s/b/l2", base);
+	assert_return_code(symlink("c/d", path), errno);
+	snprintf(path, sizeof(path), "%s/b/l3", base);
+	assert_return_code(symlink("l2", path), errno);
+	rc = mkdir(host_dir, S_IRWXU);
+	if (rc != 0)
+		assert_int_equal(errno, EEXIST);
+	snprintf(path, sizeof(path), "%s/y3", host_dir);
+	write_file(path, "host");
+	snprintf(path, sizeof(path), "%s/b/labs", base);
+	assert_return_code(symlink(host_dir, path), errno);
+
+	/* through one and two relative links */
+	snprintf(path, sizeof(path), "%s/b/l2/../y2", base);
+	check_file_content(path, "b/c/y2");
+	snprintf(path, sizeof(path), "%s/b/l3/../y2", base);
+	check_file_content(path, "b/c/y2");
+	snprintf(path, sizeof(path), "%s/b/l2/../../y2", base);
+	check_file_content(path, "b/y2");
+
+	/* "l2/.." is "c" */
+	snprintf(path, sizeof(path), "%s/b/c", base);
+	assert_return_code(stat(path, &stbuf_c), errno);
+	snprintf(path, sizeof(path), "%s/b/l2/..", base);
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_true(S_ISDIR(stbuf.st_mode));
+	assert_int_equal(stbuf.st_ino, stbuf_c.st_ino);
+
+	/* the same relative to a cwd reached through the link */
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+	snprintf(path, sizeof(path), "%s/b/l2", base);
+	assert_return_code(chdir(path), errno);
+	check_file_content("../y2", "b/c/y2");
+	check_file_content("./../x", "b/c/x");
+	assert_return_code(chdir(start_dir), errno);
+
+	/* through a link with an absolute value, which only the kernel can resolve */
+	snprintf(path, sizeof(path), "%s/b/labs/../dfuse_test_dotdot_%d/y3", base, getpid());
+	check_file_content(path, "host");
+
+	/* not a directory in front of "..", and a missing one */
+	snprintf(path, sizeof(path), "%s/b/c/x/../y2", base);
+	rc = stat(path, &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOTDIR);
+	snprintf(path, sizeof(path), "%s/b/nonexist/../y2", base);
+	rc = stat(path, &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	snprintf(path, sizeof(path), "%s/y3", host_dir);
+	assert_return_code(unlink(path), errno);
+	assert_return_code(rmdir(host_dir), errno);
+	snprintf(path, sizeof(path), "%s/b/labs", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/l3", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/l2", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/y2", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c/y2", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c/x", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c/d", base);
+	assert_return_code(rmdir(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c", base);
+	assert_return_code(rmdir(path), errno);
+	snprintf(path, sizeof(path), "%s/b", base);
+	assert_return_code(rmdir(path), errno);
+	assert_return_code(rmdir(base), errno);
+}
+
+/* dfs resolves an absolute symlink value in the container root from that root. When the same path
+ * also exists inside the container the lookup succeeds with the wrong file, so such a link has to
+ * be handed to the kernel before it is dereferenced. test_dir is the container root under ftest.
+ */
+void
+do_root_symlink_shadow(void **state)
+{
+	struct stat stbuf;
+	char        target[256];
+	char        shadow_dir[512];
+	char        shadow[512];
+	char        link_path[512];
+	char        chain_path[512];
+	char        chain_name[64];
+	size_t      len;
+	int         rc;
+
+	len = snprintf(target, sizeof(target) - 1, "/tmp/dfuse_test_shadow_%d", getpid());
+	assert_true(len < (sizeof(target) - 1));
+	len = snprintf(shadow_dir, sizeof(shadow_dir) - 1, "%s/tmp", test_dir);
+	assert_true(len < (sizeof(shadow_dir) - 1));
+	len = snprintf(shadow, sizeof(shadow) - 1, "%s%s", test_dir, target);
+	assert_true(len < (sizeof(shadow) - 1));
+	len = snprintf(link_path, sizeof(link_path) - 1, "%s/shadow_link_%d", test_dir, getpid());
+	assert_true(len < (sizeof(link_path) - 1));
+	len = snprintf(chain_name, sizeof(chain_name) - 1, "shadow_chain_%d", getpid());
+	assert_true(len < (sizeof(chain_name) - 1));
+	len = snprintf(chain_path, sizeof(chain_path) - 1, "%s/%s", test_dir, chain_name);
+	assert_true(len < (sizeof(chain_path) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave these behind */
+	unlink(target);
+	unlink(shadow);
+	unlink(link_path);
+	unlink(chain_path);
+
+	write_file(target, "host");
+	rc = mkdir(shadow_dir, S_IRWXU);
+	if (rc != 0)
+		assert_int_equal(errno, EEXIST);
+	write_file(shadow, "container");
+
+	rc = symlink(target, link_path);
+	assert_return_code(rc, errno);
+	/* a bare relative link to the absolute one, as in a venv */
+	rc = symlink(link_path + strlen(test_dir) + 1, chain_path);
+	assert_return_code(rc, errno);
+
+	check_file_content(link_path, "host");
+	check_file_content(chain_path, "host");
+
+	rc = stat(link_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, strlen("host"));
+	rc = stat(chain_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, strlen("host"));
+
+	/* the shadow is not writable through the link: the host file is */
+	assert_return_code(chmod(shadow, S_IRUSR), errno);
+	assert_return_code(access(link_path, W_OK), errno);
+	assert_return_code(access(chain_path, W_OK), errno);
+
+	assert_return_code(unlink(chain_path), errno);
+	assert_return_code(unlink(link_path), errno);
+	assert_return_code(unlink(shadow), errno);
+	rmdir(shadow_dir);
+	assert_return_code(unlink(target), errno);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -1863,6 +2150,9 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			    cmocka_unit_test(do_chdir_fork),
 			    cmocka_unit_test(do_dot_dot_above_root),
 			    cmocka_unit_test(do_statx_null_probe),
+			    cmocka_unit_test(do_path_normalize),
+			    cmocka_unit_test(do_dot_dot_symlink),
+			    cmocka_unit_test(do_root_symlink_shadow),
 			};
 			printf("\n\n=================");
 			printf("dfuse path resolution tests");
