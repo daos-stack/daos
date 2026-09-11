@@ -89,7 +89,7 @@ def _base_setup(env):
 
         for flag in asan_flags:
             if flag in env["CCFLAGS"]:
-                env.AppendUnique(LINKFLAGS=flag)
+                env.Prepend(LINKFLAGS=flag)
                 print(f"Enabling {flag.split('=')[1]} sanitizer for C code")
 
     if env.get('HEAP_PROFILER'):
