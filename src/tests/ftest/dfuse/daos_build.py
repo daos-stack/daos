@@ -101,9 +101,10 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
 
     mount_dir = dfuse.mount_dir.value
     build_dir = os.path.join(mount_dir, 'daos')
+    venv_bin_path = os.path.dirname(sys.executable)
 
-    remote_env['PATH'] = f"{os.path.join(mount_dir, 'venv', 'bin')}:$PATH"
-    remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
+    remote_env['PATH'] = f"{venv_bin_path}:$PATH"
+    remote_env['VIRTUAL_ENV'] = os.path.dirname(venv_bin_path)
     remote_env['COVFILE'] = os.environ['COVFILE']
     remote_env['HTTPS_PROXY'] = os.environ.get('HTTPS_PROXY', '')
     remote_env['NO_PROXY'] = os.environ.get('NO_PROXY', '')
@@ -129,14 +130,11 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
 
-    cmds = [f'{sys.executable} -m venv {mount_dir}/venv',
-            f'git clone https://github.com/daos-stack/daos.git {build_dir}',
+    cmds = [f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
             f'cp {build_dir}/utils/scripts/install-{distro}.sh /tmp/install.sh',
             'sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y',
-            'python3 -m pip install pip --upgrade',
-            f'python3 -m pip install -r {build_dir}/requirements-build.txt',
             f'scons -C {build_dir} --jobs {build_jobs} --build-deps=only',
             f'daos filesystem query {mount_dir}',
             f'daos filesystem evict {build_dir}',
