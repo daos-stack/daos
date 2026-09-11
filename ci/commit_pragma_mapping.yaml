@@ -194,6 +194,12 @@ src/client/dfs/:
 src/client/dfuse/:
   test-tag: dfuse
 
+src/client/dfuse/il/:
+  test-tag: ioil
+
+src/client/dfuse/pil4dfs/:
+  test-tag: pil4dfs
+
 src/client/pydaos/torch/:
   test-tag: pytorch
 
