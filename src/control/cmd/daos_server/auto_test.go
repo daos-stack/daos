@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -150,6 +150,30 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			nil,
 		},
 		{
+			"Generate with allow-numa-imbalance flag",
+			"config generate -r foo --allow-numa-imbalance",
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.MgmtSvcReplicas = "foo"
+				cmd.NetClass = "infiniband"
+				cmd.AllowNumaImbalance = true
+				return cmd
+			}()),
+			nil,
+		},
+		{
+			"Generate with allow-numa-imbalance short flag",
+			"config generate -r foo -n",
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.MgmtSvcReplicas = "foo"
+				cmd.NetClass = "infiniband"
+				cmd.AllowNumaImbalance = true
+				return cmd
+			}()),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"network quack",
 			"",
@@ -174,6 +198,7 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 	cmd.UseTmpfsSCM = true
 	cmd.ExtMetadataPath = "/opt/daos_md"
 	cmd.FabricPorts = "12345,13345"
+	cmd.AllowNumaImbalance = true
 
 	req := new(control.ConfGenerateReq)
 	if err := convert.Types(cmd, req); err != nil {
@@ -181,18 +206,50 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 	}
 
 	expReq := &control.ConfGenerateReq{
-		NrEngines:       1,
-		NetProvider:     "ofi+tcp",
-		SCMOnly:         true,
-		MgmtSvcReplicas: []string{"foo", "bar"},
-		NetClass:        hardware.Infiniband,
-		UseTmpfsSCM:     true,
-		ExtMetadataPath: "/opt/daos_md",
-		FabricPorts:     []int{12345, 13345},
+		NrEngines:          1,
+		NetProvider:        "ofi+tcp",
+		SCMOnly:            true,
+		MgmtSvcReplicas:    []string{"foo", "bar"},
+		NetClass:           hardware.Infiniband,
+		UseTmpfsSCM:        true,
+		ExtMetadataPath:    "/opt/daos_md",
+		FabricPorts:        []int{12345, 13345},
+		AllowNumaImbalance: true,
 	}
 
 	if diff := cmp.Diff(expReq, req); diff != "" {
 		t.Fatalf("unexpected request converted (-want, +got):\n%s\n", diff)
+	}
+}
+
+// Test that confGen rejects mutually exclusive --num-engines and --allow-numa-imbalance flags
+func TestDaosServer_Auto_confGen_MutuallyExclusiveFlags(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	cmd := &configGenCmd{}
+	cmd.Logger = log
+	cmd.NrEngines = 2
+	cmd.AllowNumaImbalance = true
+
+	// This should return an error when calling confGen with both flags set
+	_, err := cmd.confGen(context.Background(),
+		func(_ context.Context, _ logging.Logger, _ string) (*control.HostFabric, error) {
+			return &control.HostFabric{
+				NumaCount:    2,
+				CoresPerNuma: 24,
+			}, nil
+		},
+		func(_ context.Context, _ logging.Logger, _ bool) (*control.HostStorage, error) {
+			return &control.HostStorage{}, nil
+		})
+
+	if err == nil {
+		t.Fatalf("expected error when both NrEngines and AllowNumaImbalance are set")
+	}
+
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("expected error message to mention mutually exclusive, got: %v", err)
 	}
 }
 
