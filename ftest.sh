@@ -117,6 +117,7 @@ args="${1:-quick}"
 shift || true
 args+=" $*"
 
+_HTTPS_PROXY=${HTTPS_PROXY:-}
 _DAOS_HTTPS_PROXY=${DAOS_HTTPS_PROXY:-}
 _DAOS_NO_PROXY=${DAOS_NO_PROXY:-}
 # shellcheck disable=SC2029
@@ -134,7 +135,9 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      LAUNCH_OPT_ARGS=\"$LAUNCH_OPT_ARGS\"
      WITH_VALGRIND=\"$WITH_VALGRIND\"
      STAGE_NAME=\"$STAGE_NAME\"
-     DAOS_HTTPS_PROXY=\"$_DAOS_HTTPS_PROXY\"
+     HTTPS_PROXY=\"$_HTTPS_PROXY\"
+     # TEMP DISABLED escape hatch: uncomment to force DAOS_HTTPS_PROXY through as a quick fix.
+     # DAOS_HTTPS_PROXY=\"$_DAOS_HTTPS_PROXY\"
      DAOS_NO_PROXY=\"$_DAOS_NO_PROXY\"
      DAOS_FTEST_VENV=\"$DAOS_FTEST_VENV\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
