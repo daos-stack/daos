@@ -26,7 +26,6 @@ class DaosCoreBase(TestWithServers):
         """Initialize the DaosCoreBase object."""
         super().__init__(*args, **kwargs)
         self.subtest_name = None
-        self.using_local_host = False
 
     def setUp(self):
         """Set up before each test."""
