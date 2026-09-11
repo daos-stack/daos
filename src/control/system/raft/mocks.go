@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -183,8 +183,10 @@ func TestDatabase(t *testing.T, log logging.Logger, replicas ...*net.TCPAddr) (*
 	}
 
 	db, err := NewDatabase(log, &DatabaseConfig{
-		Replicas: replicas,
-		RaftDir:  testDir + "/raft",
+		Replicas:             replicas,
+		RaftDir:              testDir + "/raft",
+		RaftHeartbeatTimeout: time.Second,
+		RaftElectionTimeout:  time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -261,9 +261,9 @@ func startSysDB(t *testing.T, ctx context.Context, log logging.Logger, replicas 
 		t.Fatal(err)
 	}
 
-	// wait for the bootstrap to finish with a 2-minute timeout
-	// (allows time for Raft leader election and initial setup)
-	leaderCtx, leaderCancel := context.WithTimeout(ctx, 2*time.Minute)
+	// wait for the bootstrap to finish with a 5-second timeout
+	// (test databases use fast election timeouts)
+	leaderCtx, leaderCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer leaderCancel()
 
 	for {
