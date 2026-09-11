@@ -8,7 +8,7 @@
 
 import os
 
-SIMPLE_TEST_SRC = ['threaded_client.c', 'dual_iface_server.c',
+SIMPLE_TEST_SRC = ['test_myaddr.c', 'threaded_client.c', 'dual_iface_server.c',
                    'no_pmix_multi_ctx.c', 'threaded_server.c',
                    'test_corpc_prefwd.c',
                    'test_corpc_exclusive.c', 'test_corpc_bulks.c', 'dump_errnos.c',
