@@ -324,18 +324,53 @@ obj_allot_bkt(struct vos_pool *pool, struct vos_object *obj)
 	ABT_mutex_unlock(obj->obj_mutex);
 }
 
+/* Get all object shared buckets from in-memory vos_object */
+static int
+obj_shared_bkts(struct vos_pool *pool, struct vos_object *obj, struct vos_bkt_array *bkts)
+{
+	struct vos_obj_bkt_node *node, *next = NULL;
+	int                      i, rc;
+
+	if (obj->obj_bkt_id0 != UMEM_DEFAULT_MBKT_ID) {
+		D_ASSERT(vos_bkt_id_is_shared(obj->obj_bkt_id0));
+		rc = vos_bkt_array_add(bkts, vos_bkt_id_raw(obj->obj_bkt_id0));
+		if (rc != 0)
+			return rc;
+	}
+
+	next = obj->obj_bkt_nodes;
+	while (next != NULL) {
+		node = next;
+		for (i = 0; i < node->bn_bkt_cnt; i++) {
+			D_ASSERT(node->bn_bkt_ids[i] != UMEM_DEFAULT_MBKT_ID);
+			if (!vos_bkt_id_is_shared(node->bn_bkt_ids[i]))
+				continue;
+			rc = vos_bkt_array_add(bkts, vos_bkt_id_raw(node->bn_bkt_ids[i]));
+			if (rc != 0)
+				return rc;
+		}
+		next = node->bn_next;
+	}
+	return 0;
+}
+
 static int
 obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 {
 	struct umem_store	*store = vos_pool2store(pool);
 	struct dtx_handle	*cur_dth;
-	struct umem_cache_range	 rg;
+	struct vos_bkt_array     bkts;
 	int			 rc;
 
-	if (obj->obj_bkt_id0 == UMEM_DEFAULT_MBKT_ID) {
+	vos_bkt_array_init(&bkts);
+	rc = obj_shared_bkts(pool, obj, &bkts);
+	if (rc)
+		goto out;
+
+	if (bkts.vba_cnt == 0) {
 		D_ASSERT(obj->obj_pin_hdl == NULL);
 		D_ASSERT(!obj->obj_bkt_loading);
-		return 0;
+		goto out;
 	}
 
 	if (obj->obj_bkt_loading) {
@@ -349,7 +384,8 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 		/* The loader failed on vos_cache_pin() */
 		if (obj->obj_pin_hdl == NULL) {
 			D_ERROR("Object:"DF_UOID" isn't pinned.\n", DP_UOID(obj->obj_id));
-			return -DER_BUSY;
+			rc = -DER_BUSY;
+			goto out;
 		}
 	}
 
@@ -358,15 +394,11 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 
 		if (vcm)
 			d_tm_inc_counter(vcm->vcm_obj_hit, 1);
-		return 0;
+		goto out;
 	}
 
 	obj->obj_bkt_loading = 1;
-
-	rg.cr_off  = umem_get_mb_base_offset(vos_pool2umm(pool), obj->obj_bkt_id0);
-	rg.cr_size = store->cache->ca_page_sz;
-
-	rc = vos_cache_pin(pool, &rg, 1, false, &obj->obj_pin_hdl);
+	rc                   = vos_bkt_array_pin(pool, &bkts, &obj->obj_pin_hdl);
 	if (rc)
 		DL_ERROR(rc, "Failed to pin object:"DF_UOID".", DP_UOID(obj->obj_id));
 
@@ -375,11 +407,11 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 	ABT_mutex_lock(obj->obj_mutex);
 	ABT_cond_broadcast(obj->obj_wait_loading);
 	ABT_mutex_unlock(obj->obj_mutex);
-
+out:
+	vos_bkt_array_fini(&bkts);
 	return rc;
 }
 
-/* Support single evict-able bucket for this moment */
 static inline int
 vos_obj_pin(struct vos_object *obj)
 {
