@@ -257,10 +257,15 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md, struct daos_obj_shar
  *   IS_REBUILDING    → po_rebuilding=1     skip shard on read
  *   IS_REINTEGRATING → po_reintegrating=1  shard is being reintegrated
  *   HAS_PEER         → ol_shard_peers++    triggers extend_layout (dual-write to old+new)
+ *
+ * @mode_dependent, when passed, is set as soon as the answer above depends on @gen_mode, i.e.
+ * for every status but UPIN and DOWNOUT. It lets a caller which would otherwise have to
+ * generate a second layout in another mode and diff it tell upfront that both modes must
+ * agree, see layout_mark_relocated().
  */
 bool
 comp_need_remap(struct pool_component *comp, uint32_t allow_version, enum layout_gen_mode gen_mode,
-		unsigned int *remap_flags)
+		unsigned int *remap_flags, bool *mode_dependent)
 {
 	unsigned int status = comp->co_status;
 	unsigned int flags  = 0;
@@ -271,6 +276,12 @@ comp_need_remap(struct pool_component *comp, uint32_t allow_version, enum layout
 
 	if (status == PO_COMP_ST_DOWNOUT)
 		return true; /* always remap */
+
+	/* Everything below is reached only by DOWN, DRAIN and UP, and every one of those
+	 * branches keys off @gen_mode.
+	 */
+	if (mode_dependent != NULL)
+		*mode_dependent = true;
 
 	/* NB: if @remap is false, @flags is applied to the current shard/target, otherwise
 	 * it's applied to the remapped shard/target.
@@ -338,7 +349,8 @@ comp_need_remap(struct pool_component *comp, uint32_t allow_version, enum layout
 int
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
 		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
-		       struct failed_shard *f_shard, struct pl_obj_layout *layout)
+		       struct failed_shard *f_shard, struct pl_obj_layout *layout,
+		       bool *mode_dependent)
 {
 	struct pl_obj_shard *l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 
@@ -346,8 +358,8 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bo
 		goto next_fail;
 
 	/* The selected spare target is down as well */
-	if (comp_need_remap(&spare_tgt->ta_comp, allow_version, gen_mode,
-			    &f_shard->fs_remap_flags)) {
+	if (comp_need_remap(&spare_tgt->ta_comp, allow_version, gen_mode, &f_shard->fs_remap_flags,
+			    mode_dependent)) {
 		D_DEBUG(DB_PL, "Spare target is also unavailable " DF_TARGET
 			".\n", DP_TARGET(spare_tgt));
 

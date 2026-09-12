@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2026 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2305,12 +2305,153 @@ fail_multiple_ranks(void **state)
 	jtc_fini(&ctx);
 }
 
+/**
+ * Generate the layout of @oid with a specific daos_obj_open() mode. DAOS_OO_RO selects the
+ * PRE_REBUILD layout, which is what the rebuild migration fetch and every read only client
+ * use (see jump_map_obj_place()).
+ */
+static int
+jtc_place_mode(struct jm_test_ctx *ctx, daos_obj_id_t oid, unsigned int mode,
+	       struct pl_obj_layout **layout)
+{
+	struct daos_obj_md md = {0};
+
+	md.omd_id  = oid;
+	md.omd_ver = pool_map_get_version(ctx->po_map);
+	*layout    = NULL;
+
+	return pl_obj_place(ctx->pl_map, PLT_LAYOUT_VERSION, &md, mode, NULL, layout);
+}
+
+/*
+ * A shard which was already remapped by an earlier, completed rebuild can be relocated to a
+ * different spare when a new and otherwise unrelated target fails: the spares are handed out
+ * sequentially over a shared used-target bitmap, and a shard whose spare candidate is
+ * unavailable is requeued with the fseq of that candidate, see determine_valid_spares().
+ *
+ * Neither of the two layouts a client can get was marking such a shard reliably:
+ *
+ * - The PRE_REBUILD layout still points at the old target with no flag at all. That target has
+ *   been out of the write path since the new pool map version, so anything written since then
+ *   is missing there - the migration fetch gets a zero sized iod and reports -DER_DATA_LOSS,
+ *   and a read only client silently misses records.
+ *
+ * - The CURRENT layout points at the new target, which has never been written to. It is only
+ *   flagged by accident, when one of the rejected spare candidates happened to be a target of
+ *   the ongoing rebuild, because comp_need_remap() accumulates the flags of the rejected
+ *   candidates. A shard displaced purely by another shard taking its spare first stays
+ *   unflagged and is offered to readers.
+ *
+ * Both must come back flagged as rebuilding so that they are skipped on read.
+ */
+static bool
+jtc_tgt_is_upin(struct jm_test_ctx *ctx, uint32_t tgt_id)
+{
+	struct pool_target *tgt;
+
+	assert_int_equal(1, pool_map_find_target(ctx->po_map, tgt_id, &tgt));
+
+	return tgt->ta_comp.co_status == PO_COMP_ST_UPIN;
+}
+
+static void
+_no_stale_read_source(uint32_t domain_nr, uint32_t target_nr, daos_oclass_id_t oc,
+		      uint32_t out_domains, uint32_t down_domains, uint32_t obj_nr)
+{
+	struct jm_test_ctx     ctx;
+	struct pl_obj_layout **before;
+	uint32_t               down_lo   = out_domains * target_nr;
+	uint32_t               down_hi   = down_lo + down_domains * target_nr;
+	uint32_t               relocated = 0;
+	uint32_t               i, o;
+
+	jtc_init(&ctx, domain_nr, 1, target_nr, oc, g_verbose);
+
+	/* the first failures, whose rebuild has completed */
+	for (i = 0; i < down_lo; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+	for (i = 0; i < down_lo; i++)
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+
+	/* remember where the data is written before the next, unrelated failure */
+	D_ALLOC_ARRAY(before, obj_nr);
+	assert_non_null(before);
+	for (o = 0; o < obj_nr; o++) {
+		daos_obj_id_t oid;
+
+		gen_oid(&oid, o + 1, UINT64_MAX, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &before[o]));
+	}
+
+	/* the new failure, its rebuild is the one which is ongoing */
+	for (i = down_lo; i < down_hi; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+
+	for (o = 0; o < obj_nr; o++) {
+		struct pl_obj_layout *cur;
+		struct pl_obj_layout *ro;
+		daos_obj_id_t         oid;
+
+		gen_oid(&oid, o + 1, UINT64_MAX, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &cur));
+		assert_success(jtc_place_mode(&ctx, oid, DAOS_OO_RO, &ro));
+		assert_int_equal(cur->ol_nr, ro->ol_nr);
+		assert_int_equal(cur->ol_nr, before[o]->ol_nr);
+
+		for (i = 0; i < cur->ol_nr; i++) {
+			uint32_t cur_tgt = cur->ol_shards[i].po_target;
+			uint32_t ro_tgt  = ro->ol_shards[i].po_target;
+			uint32_t old_tgt = before[o]->ol_shards[i].po_target;
+
+			if (cur_tgt == (uint32_t)-1)
+				continue;
+
+			/* the pre-rebuild layout points at a target which the write path
+			 * does not use anymore, it must not be read from
+			 */
+			if (ro_tgt != (uint32_t)-1 && ro_tgt != cur_tgt)
+				assert_true(ro->ol_shards[i].po_rebuilding);
+
+			/* the shard was moved off a target which is still healthy, so the
+			 * data is there and not on the new target: the current layout must
+			 * not be read from either
+			 */
+			if (old_tgt != (uint32_t)-1 && old_tgt != cur_tgt &&
+			    jtc_tgt_is_upin(&ctx, old_tgt)) {
+				assert_true(cur->ol_shards[i].po_rebuilding);
+				relocated++;
+			}
+		}
+		pl_obj_layout_free(cur);
+		pl_obj_layout_free(ro);
+	}
+
+	/* the scenario has to actually relocate something, otherwise the checks above are
+	 * not testing anything
+	 */
+	print_message("%u shards relocated off a healthy target\n", relocated);
+	assert_true(relocated > 0);
+
+	for (o = 0; o < obj_nr; o++)
+		pl_obj_layout_free(before[o]);
+	D_FREE(before);
+	jtc_fini(&ctx);
+}
+
+static void
+no_stale_read_source(void **state)
+{
+	/* 4 ranks x 4 targets, replicated: the pool shape this was first seen on */
+	_no_stale_read_source(4, 4, OC_RP_4G2, 1, 1, 500);
+	/* EC over a pool with less spare room, where the current layout loses the flag too */
+	_no_stale_read_source(6, 4, OC_EC_4P2G2, 2, 1, 500);
+}
+
 /*
  * ------------------------------------------------
  * End Test Cases
  * ------------------------------------------------
  */
-
 static int
 placement_test_setup(void **state)
 {
@@ -2334,74 +2475,75 @@ placement_test_teardown(void **state)
 			  placement_test_setup, placement_test_teardown }
 
 static const struct CMUnitTest tests[] = {
-	/* Standard configurations */
-	T("Target for first shard continually goes to DOWN state and "
-	  "never finishes rebuild. Should still get new target until no more",
-	  down_continuously),
-	T("Object class is verified appropriately", object_class_is_verified),
-	T("With all healthy targets, can create layout, nothing is in "
-	  "rebuild, and no duplicates.", all_healthy),
-	/* DOWN */
-	T("Take a target down in a system with no servers available, but "
-	  "should still collocate", down_to_target),
-	T("Target for first shard continually goes to DOWN state and "
-	  "never finishes rebuild. Should still get new target until no more",
-	  down_continuously),
-	/* DOWNOUT */
-	T("Rebuild first shard's target repeatedly",
-	  chained_rebuild_completes_first_shard),
-	T("Rebuild all shards' targets", chained_rebuild_completes_all_at_once),
-	/* UP */
-	T("For each shard at a time, take the shard's target "
-	    "DOWN->DOWNOUT->UP. Then verify that the reintegration looks "
-	    "correct", one_is_being_reintegrated),
-	T("With all targets being reintegrated, make sure the correct "
-	    "targets are being rebuilt.", all_are_being_reintegrated),
-	T("Take a single shard's target down, downout, then again with the "
-	  "new target. Then reintegrate the first downed target, "
-	  "then the second.", down_up_sequences),
-	T("Take a single shard's target down, downout, then again with the "
-	  "new target. Then reintegrate the second downed target, "
-	  "then the first (Reverse of previous test).", down_up_sequences1),
-	T("multiple shard targets go down, then are reintegrated in the "
-	  "same order they were brought down",
-	  down_back_to_up_in_same_order),
-	T("multiple targets go down for the same shard, then are reintegrated "
-	  "in reverse order than how they were brought down",
-	  down_back_to_up_in_reverse_order),
-	/* DRAIN */
-	T("Drain all shards with extra domains", drain_all_with_extra_domains),
-	T("Drain all shards with extra targets",
-	  drain_all_with_enough_targets),
-	T("Drain the target of the first shard repeatedly until there is no "
-	    "where to drain to.",
-	    drain_target_same_shard_repeatedly_for_all_shards),
-	/* NEW */
-	T("A server is added and an object id is chosen that requires "
-	  "data movement to the new server",
-	  one_server_is_added),
-	/* Multiple */
-	T("Placement can handle multiple states (excluding addition)",
-	  placement_handles_multiple_states),
-	T("Placement can handle multiple states (including addition)",
-	  placement_handles_multiple_states_with_addition),
-	/* Non-standard system setups*/
-	T("Non-standard system configurations. All healthy",
-	  unbalanced_config),
-	T("shards in the same group not in the same domain",
-	  same_group_shards_not_in_same_domain),
-	T("shards in the same group not in the same domain with multiple objects",
-	  same_group_shards_not_in_same_domain_multiple_objs),
-	T("large shards over limited targets",
-	  large_shards_over_limited_targets),
-	T("multiple shards in the same target", multiple_shards_in_the_same_target),
-	T("shards over xpf", shards_over_xpf),
-	T("same group shards not in the same domain fail",
-	  same_group_shards_not_in_same_domain_with_fail),
-	T("fail shard during reintegration",
-	  fail_shard_during_reintegration),
-	T("fail reintegrate ranks", fail_reintegrate_multiple_ranks),
-	T("fail multiple ranks", fail_multiple_ranks),
+    /* Standard configurations */
+    T("Target for first shard continually goes to DOWN state and "
+      "never finishes rebuild. Should still get new target until no more",
+      down_continuously),
+    T("Object class is verified appropriately", object_class_is_verified),
+    T("With all healthy targets, can create layout, nothing is in "
+      "rebuild, and no duplicates.",
+      all_healthy),
+    /* DOWN */
+    T("Take a target down in a system with no servers available, but "
+      "should still collocate",
+      down_to_target),
+    T("Target for first shard continually goes to DOWN state and "
+      "never finishes rebuild. Should still get new target until no more",
+      down_continuously),
+    /* DOWNOUT */
+    T("Rebuild first shard's target repeatedly", chained_rebuild_completes_first_shard),
+    T("Rebuild all shards' targets", chained_rebuild_completes_all_at_once),
+    /* UP */
+    T("For each shard at a time, take the shard's target "
+      "DOWN->DOWNOUT->UP. Then verify that the reintegration looks "
+      "correct",
+      one_is_being_reintegrated),
+    T("With all targets being reintegrated, make sure the correct "
+      "targets are being rebuilt.",
+      all_are_being_reintegrated),
+    T("Take a single shard's target down, downout, then again with the "
+      "new target. Then reintegrate the first downed target, "
+      "then the second.",
+      down_up_sequences),
+    T("Take a single shard's target down, downout, then again with the "
+      "new target. Then reintegrate the second downed target, "
+      "then the first (Reverse of previous test).",
+      down_up_sequences1),
+    T("multiple shard targets go down, then are reintegrated in the "
+      "same order they were brought down",
+      down_back_to_up_in_same_order),
+    T("multiple targets go down for the same shard, then are reintegrated "
+      "in reverse order than how they were brought down",
+      down_back_to_up_in_reverse_order),
+    /* DRAIN */
+    T("Drain all shards with extra domains", drain_all_with_extra_domains),
+    T("Drain all shards with extra targets", drain_all_with_enough_targets),
+    T("Drain the target of the first shard repeatedly until there is no "
+      "where to drain to.",
+      drain_target_same_shard_repeatedly_for_all_shards),
+    /* NEW */
+    T("A server is added and an object id is chosen that requires "
+      "data movement to the new server",
+      one_server_is_added),
+    /* Multiple */
+    T("Placement can handle multiple states (excluding addition)",
+      placement_handles_multiple_states),
+    T("Placement can handle multiple states (including addition)",
+      placement_handles_multiple_states_with_addition),
+    /* Non-standard system setups*/
+    T("Non-standard system configurations. All healthy", unbalanced_config),
+    T("shards in the same group not in the same domain", same_group_shards_not_in_same_domain),
+    T("shards in the same group not in the same domain with multiple objects",
+      same_group_shards_not_in_same_domain_multiple_objs),
+    T("large shards over limited targets", large_shards_over_limited_targets),
+    T("multiple shards in the same target", multiple_shards_in_the_same_target),
+    T("shards over xpf", shards_over_xpf),
+    T("same group shards not in the same domain fail",
+      same_group_shards_not_in_same_domain_with_fail),
+    T("fail shard during reintegration", fail_shard_during_reintegration),
+    T("fail reintegrate ranks", fail_reintegrate_multiple_ranks),
+    T("fail multiple ranks", fail_multiple_ranks),
+    T("no stale read source", no_stale_read_source),
 };
 
 int
