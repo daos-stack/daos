@@ -1020,7 +1020,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 
 		spare_tgt = &tgts[plts[spare_idx].pt_pos];
 		determine_valid_spares(spare_tgt, md, spare_avail, remap_list, -1, -1, f_shard,
-				       layout);
+				       layout, NULL);
 	}
 
 	remap_dump(remap_list, md, "after remap:");

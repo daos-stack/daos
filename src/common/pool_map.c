@@ -85,8 +85,6 @@ struct pool_map {
 	uint32_t		po_in_ver;
 	/* Current least fseq version from all DOWN targets. */
 	uint32_t		po_fseq;
-	/** # targets in a transient state, i.e. DOWN, DRAIN or UP */
-	uint32_t                 po_transient_nr;
 };
 
 /* clang-format off */
@@ -2454,27 +2452,6 @@ update_failed_cnt_helper(struct pool_domain *dom,
 }
 
 /**
- * Count the targets which are in a transient state, i.e. DOWN, DRAIN or UP - a state which a
- * rebuild, a drain or a reintegration is currently moving the target out of. Placement needs
- * to know whether any such target exists to tell if the layout it generates depends on the
- * layout generation mode.
- */
-static void
-update_transient_cnt(struct pool_map *map, struct pool_domain *root)
-{
-	uint32_t nr = 0;
-	int      i;
-
-	for (i = 0; i < root->do_target_nr; i++) {
-		if (root->do_targets[i].ta_comp.co_status &
-		    (PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN | PO_COMP_ST_UP))
-			nr++;
-	}
-
-	map->po_transient_nr = nr;
-}
-
-/**
  * Update the failed target count for the pool map.
  * This should be called anytime the pool map is updated.
  */
@@ -2492,7 +2469,6 @@ pool_map_update_failed_cnt(struct pool_map *map)
 		return -DER_INVAL;
 
 	update_failed_cnt_helper(root, fail_cnts, 0);
-	update_transient_cnt(map, root);
 	return 0;
 }
 
@@ -3185,16 +3161,6 @@ pool_map_bump_version(struct pool_map *map)
 	D_DEBUG(DB_TRACE, "Bump pool map to version %u\n", map->po_version);
 
 	return map->po_version;
-}
-
-/**
- * Check whether any target is in a transient state, see update_transient_cnt(). This is O(1),
- * the count is refreshed by pool_map_update_failed_cnt() on every pool map change.
- */
-bool
-pool_map_has_transient_tgt(struct pool_map *map)
-{
-	return map->po_transient_nr != 0;
 }
 
 int

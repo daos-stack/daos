@@ -140,7 +140,8 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md, struct daos_obj_shar
 int
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bool spare_avail,
 		       d_list_t *remap_list, uint32_t allow_version, enum layout_gen_mode gen_mode,
-		       struct failed_shard *f_shard, struct pl_obj_layout *layout);
+		       struct failed_shard *f_shard, struct pl_obj_layout *layout,
+		       bool *mode_dependent);
 
 int
 spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
@@ -151,7 +152,7 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
 
 bool
 comp_need_remap(struct pool_component *comp, uint32_t allow_status, enum layout_gen_mode gen_mode,
-		unsigned int *remap_flags);
+		unsigned int *remap_flags, bool *mode_dependent);
 
 enum {
 	/* rebuilding this shard */
