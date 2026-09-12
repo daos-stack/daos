@@ -24,6 +24,7 @@ dnf --nodocs install ${dnf_install_args} \
     capstone-devel \
     cmake \
     cpio \
+    compiler-rt \
     createrepo \
     CUnit-devel \
     daxctl-devel \
@@ -42,6 +43,8 @@ dnf --nodocs install ${dnf_install_args} \
     json-c-devel \
     libaio-devel \
     libasan \
+    libubsan \
+    libtsan \
     libcmocka-devel \
     libevent-devel \
     libibverbs-devel \
