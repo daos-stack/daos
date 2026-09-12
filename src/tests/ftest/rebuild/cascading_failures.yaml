@@ -1,10 +1,13 @@
 hosts:
   test_servers: 6
   test_clients: 1
+
 timeout: 420
+
 agent_config:
   #cache_expiration: 1
   disable_caching: true
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -17,17 +20,20 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
+
 pool:
   size: 1G
   pool_query_timeout: 30
   properties: rd_fac:2,space_rb:0
+
 container:
   akey_size: 5
   dkey_size: 5
   data_size: 5
   object_qty: 50
   record_qty: 50
-  properties: rd_fac:2
+  properties: rd_fac:2,cksum:off,srv_cksum:off
+
 rebuild:
   object_class: OC_RP_3G1
   rank:

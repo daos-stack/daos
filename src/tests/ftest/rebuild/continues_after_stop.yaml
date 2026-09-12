@@ -22,11 +22,14 @@ server_config:
       storage: auto
       env_vars:
         - D_LOG_FLUSH=DEBUG
+
 pool:
   size: 10%
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 
 ior:
   flags: -w

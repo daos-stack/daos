@@ -43,6 +43,7 @@ server_config:
 pool:
   scm_size: 6G
   nvme_size: 80G
+  properties: rd_fac:0,space_rb:0
 
 agent_config:
   transport_config:

@@ -1,7 +1,9 @@
 hosts:
   test_servers: 7
   test_clients: 1
+
 timeout: 480
+
 server_config:
   name: daos_server
   crt_timeout: 10
@@ -15,21 +17,25 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
+
 pool:
   size: 1G
   svcn: 7  # To match number of servers
   pool_query_timeout: 30
+  properties: rd_fac:0,space_rb:0
+
 container:
   cont_prop: !mux
     rf_1:
-      properties: rd_fac:1
+      properties: rd_fac:1,cksum:off,srv_cksum:off
     rf_2:
-      properties: rd_fac:2
+      properties: rd_fac:2,cksum:off,srv_cksum:off
   akey_size: 5
   dkey_size: 5
   data_size: 5
   object_qty: 50
   record_qty: 50
+
 rebuild:
   object_class: OC_RP_3G1
   cont_rf: !mux
