@@ -43,6 +43,7 @@
 		case -DER_BUSY:                                                                    \
 		case -DER_EXIST:                                                                   \
 		case -DER_NONEXIST:                                                                \
+		case -DER_OP_CANCELED:                                                             \
 			__is_err = false;                                                          \
 			break;                                                                     \
 		}                                                                                  \
@@ -62,6 +63,7 @@
 		case -DER_BUSY:                                                                    \
 		case -DER_EXIST:                                                                   \
 		case -DER_NONEXIST:                                                                \
+		case -DER_OP_CANCELED:                                                             \
 			__is_err = false;                                                          \
 			break;                                                                     \
 		}                                                                                  \
