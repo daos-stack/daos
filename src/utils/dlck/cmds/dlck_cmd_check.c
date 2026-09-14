@@ -203,6 +203,16 @@ exec_one(void *arg)
 		++xa->progress;
 	}
 
+	/**
+	 * Xstream cannot be finalized until all of them have been initialized. For example,
+	 * finalizing an xstream that owns NVMe resources may result in asserts or crashes if other
+	 * xstreams still need to use them. In theory, it is enough to wait until all xstreams are
+	 * initialized, but it is simpler and more performant to synchronize all xstreams before
+	 * finalization so that initialized xstreams can begin working immediately. Only
+	 * finalization suffers without this synchronization.
+	 */
+	(void)ABT_barrier_wait(xa->engine->all_targets_ready);
+
 	if (xa->rc != DER_SUCCESS) {
 		(void)dlck_engine_xstream_fini(xa->xs);
 		return;
