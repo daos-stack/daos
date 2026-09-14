@@ -26,16 +26,14 @@ class EcodFioRebuild(TestFio):
             fio_cmd (FioCommand): Fio command object
             rebuild_mode (str): On-line or off-line rebuild mode
         """
-        aggregation_timeout = self.params.get("aggregation_timeout", "/run/pool/*")
-        read_option = self.params.get("rw_read", "/run/fio/test/read_write/*")
+        read_option = self.params.get("rw_read", "/run/fio/test/*")
+        if not read_option:
+            self.fail("read_option not set in config")
 
         num_ranks = len(self.server_managers[0].ranks)
         rank_to_kill = num_ranks - 1
 
-        # 1. Disable aggregation
-        self.log_step("Disable aggregation")
         pool = self.get_pool()
-        pool.disable_aggregation()
 
         # Start dfuse
         self.log_step('Starting dfuse')
@@ -55,40 +53,11 @@ class EcodFioRebuild(TestFio):
 
         # Get initial total free space (scm+nvme)
         self.log_step("Get initial total free space (scm+nvme)")
-        initial_free_space = pool.get_total_free_space(refresh=True)
-
-        # Enable aggregation
-        self.log_step("Enable aggregation")
-        pool.enable_aggregation()
-
-        # Wait for aggregation to be triggered.
-        # Assume an increase in total free space means aggregation is triggered.
-        self.log_step("Verify the Fio write finish without any error")
-        start_time = time.time()
-        self.log_step("Verify and wait until aggregation triggered")
-        while True:
-            # Check if current free space exceeds initial free space
-            current_free_space = pool.get_total_free_space(refresh=True)
-            self.log.debug(
-                "Total Free space: initial=%s, current=%s",
-                "{:,}".format(initial_free_space), "{:,}".format(current_free_space))
-            if current_free_space > initial_free_space:
-                break
-            # Check timeout
-            if (time.time() - start_time) > aggregation_timeout:
-                self.fail(f"Aggregation not observed within {aggregation_timeout} seconds")
-            self.log.debug("Rechecking in 5 seconds")
-            time.sleep(5)
 
         # ec off-line rebuild fio
         if 'off-line' in rebuild_mode:
             self.log_step(f"Stop the last server rank ({rank_to_kill}) for ec off-line rebuild fio")
             self.server_managers[0].stop_ranks([rank_to_kill], force=True)
-
-        # Adding unlink option for final read command
-        self.log_step("Adding unlink option for final read command")
-        if int(container.properties.value.split(":")[1]) == 1:
-            fio_cmd._jobs['test'].unlink.value = 1         # pylint: disable=protected-access
 
         # Read and verify the original data.
         self.log_step("Read and verify the original data.")
@@ -96,16 +65,15 @@ class EcodFioRebuild(TestFio):
         fio_cmd.run()
 
         # If RF is 2 kill one more server and validate the data is not corrupted.
-        if int(container.properties.value.split(":")[1]) == 2:
-            # Kill one more server rank
-            rank_to_kill = num_ranks - 2
-            self.log_step(f"Kill one more server rank {rank_to_kill} when RF=2")
-            fio_cmd._jobs['test'].unlink.value = 1         # pylint: disable=protected-access
-            self.server_managers[0].stop_ranks([rank_to_kill], force=True)
+        # Kill one more server rank
+        rank_to_kill = num_ranks - 2
+        self.log_step(f"Kill one more server rank {rank_to_kill} when RF=2")
+        fio_cmd._jobs['test'].unlink.value = 1         # pylint: disable=protected-access
+        self.server_managers[0].stop_ranks([rank_to_kill], force=True)
 
-            # Read and verify the original data.
-            self.log_step(f"Verify the data is not corrupted after stopping rank {rank_to_kill}.")
-            fio_cmd.run()
+        # Read and verify the original data.
+        self.log_step(f"Verify the data is not corrupted after stopping rank {rank_to_kill}.")
+        fio_cmd.run()
 
         # Pre-teardown: make sure rebuild is done before too-quickly trying to destroy container.
         pool.wait_for_rebuild_to_end()
