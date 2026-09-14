@@ -205,7 +205,7 @@ ARG DAOS_JAVA_BUILD
 # This is done in a separate stage to allow for a smaller image for CI building only.
 USER root:root
 RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target=/tmp/daos/install.sh \
-    ([ "$COMPILER" = "gcc" ] && [ "$DAOS_JAVA_BUILD" != "yes" ]) || { \
+    [ "$COMPILER" = "gcc" ] || { \
         /tmp/daos/install.sh && \
         dnf clean all; \
     }
@@ -297,6 +297,13 @@ RUN --mount=type=bind,source=utils/rpms,target=/home/daos/daos/utils/rpms \
     }
 
 # Build java and hadoop bindings
+USER root:root
+RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target=/tmp/daos/install.sh \
+    [ "$COMPILER" != "gcc" ] || [ "$DAOS_JAVA_BUILD" != "yes" ] || { \
+        /tmp/daos/install.sh && \
+        dnf clean all; \
+    }
+
 USER daos_server:daos_server
 RUN     [ "$DAOS_JAVA_BUILD" != "yes" ] || { \
     mkdir -p /home/daos/.m2; \
