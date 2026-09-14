@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -103,7 +103,7 @@ class RbldContainerCreate(IorTestBase):
         cont_qty = self.params.get("cont_qty", "/run/io/*")
 
         # create pool
-        self.create_pool()
+        self.pool = self.get_pool(connect=False)
 
         # make sure pool looks good before we start
         info_checks = {
