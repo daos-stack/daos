@@ -1038,9 +1038,11 @@ layout_keep_relocated_source(struct pl_jump_map *jmap, uint32_t layout_ver,
 
 	if (!d_list_empty(&peer_list)) {
 		rc = pl_map_extend(layout, &peer_list);
-		if (rc != 0)
+		if (rc != 0) {
 			D_ERROR(DF_OID ": extend layout with relocation peers failed, " DF_RC "\n",
 				DP_OID(md->omd_id), DP_RC(rc));
+			D_GOTO(out, rc);
+		}
 	}
 	rc = 0;
 
