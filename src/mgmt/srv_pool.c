@@ -82,6 +82,39 @@ pool_create_rpc_timeout(crt_rpc_t *tc_req, size_t scm_size)
 	return max(timeout, default_timeout);
 }
 
+static void
+warn_pool_create_timeout_missing_uri(uuid_t pool_uuid, d_rank_list_t *rank_list)
+{
+	int i;
+	int missing = 0;
+
+	if (rank_list == NULL || rank_list->rl_nr == 0)
+		return;
+
+	for (i = 0; i < rank_list->rl_nr; i++) {
+		d_rank_t rank = rank_list->rl_ranks[i];
+		char    *uri  = NULL;
+		int      rc;
+
+		rc = crt_rank_uri_get(NULL /* grp */, rank, 0 /* tag */, &uri);
+		if (rc != 0 || uri == NULL || uri[0] == '\0') {
+			D_WARN(
+			    DF_UUID
+			    ": MGMT_TGT_CREATE timeout: missing target URI rank=%u lookup_rc=" DF_RC
+			    "\n",
+			    DP_UUID(pool_uuid), rank, DP_RC(rc));
+			missing++;
+		}
+
+		D_FREE(uri);
+	}
+
+	if (missing > 0) {
+		D_WARN(DF_UUID ": MGMT_TGT_CREATE timeout: missing URI targets=%d/%u\n",
+		       DP_UUID(pool_uuid), missing, rank_list->rl_nr);
+	}
+}
+
 static int
 ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *rank_list,
 			      size_t scm_size, size_t nvme_size)
@@ -122,6 +155,8 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_CORPC))
 		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
+		if (rc == -DER_TIMEDOUT)
+			warn_pool_create_timeout_missing_uri(pool_uuid, rank_list);
 		D_ERROR(DF_UUID": dss_rpc_send MGMT_TGT_CREATE: rc="DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
 		D_GOTO(decref, rc);
@@ -130,6 +165,8 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 	tc_out = crt_reply_get(tc_req);
 	rc = tc_out->tc_rc;
 	if (rc != 0) {
+		if (rc == -DER_TIMEDOUT)
+			warn_pool_create_timeout_missing_uri(pool_uuid, rank_list);
 		D_ERROR(DF_UUID": failed to create targets: rc="DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
 		D_GOTO(decref, rc);
