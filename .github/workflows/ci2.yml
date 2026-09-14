@@ -90,16 +90,15 @@ jobs:
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
-            deps_repo: "https://packages.daos.io/grom72/master/EL9/packages/x86_64/"
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.5
-            deps_repo: "https://packages.daos.io/grom72/master/Leap15/packages/x86_64/"
+            with: opensuse/leap:15.6
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
+      DAOS_DEPS_EXT_REPO: ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 || matrix.distro == 'rocky' && secrets.DAOS_DEPS_REPO_EL9 || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -121,7 +120,7 @@ jobs:
           skip-save: true
       - name: Build in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg DAOS_JAVA_BUILD=no
@@ -130,7 +129,7 @@ jobs:
                             --tag build-image
       - name: Build Java in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg DAOS_JAVA_BUILD=yes
@@ -138,7 +137,7 @@ jobs:
                             --target build-local
       - name: Build debug in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg DAOS_JAVA_BUILD=no
@@ -147,7 +146,7 @@ jobs:
                             --target build-local
       - name: Build devel in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg DAOS_JAVA_BUILD=no
