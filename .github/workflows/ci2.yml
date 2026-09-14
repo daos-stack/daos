@@ -98,7 +98,10 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
-      DAOS_DEPS_EXT_REPO: ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 || matrix.distro == 'rocky' && secrets.DAOS_DEPS_REPO_EL9 || '' }}
+      DAOS_DEPS_EXT_REPO: >-
+        ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 ||
+            matrix.distro == 'rocky' && secrets.DAOS_DEPS_REPO_EL9 ||
+            '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

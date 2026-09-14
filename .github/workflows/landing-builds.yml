@@ -63,7 +63,10 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       PYTHON_VERSION: ${{ matrix.python }}
-      DAOS_DEPS_EXT_REPO: ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 || (matrix.distro == 'rocky' || matrix.distro == 'rocky.9' || matrix.distro == 'alma.9') && secrets.DAOS_DEPS_REPO_EL9 || '' }}
+      DAOS_DEPS_EXT_REPO: >-
+        ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 ||
+            startsWith(matrix.distro, 'rocky') && secrets.DAOS_DEPS_REPO_EL9 ||
+            '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -191,7 +194,10 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
       PYTHON_VERSION: ${{ matrix.python }}
-      DAOS_DEPS_EXT_REPO: ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 || (matrix.distro == 'rocky' || matrix.distro == 'rocky.9' || matrix.distro == 'alma.9') && secrets.DAOS_DEPS_REPO_EL9 || '' }}
+      DAOS_DEPS_EXT_REPO: >-
+        ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 ||
+            startsWith(matrix.distro, 'rocky') && secrets.DAOS_DEPS_REPO_EL9 ||
+            '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -278,7 +284,11 @@ jobs:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       PYTHON_VERSION: ${{ matrix.python }}
-      DAOS_DEPS_EXT_REPO: ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 || (matrix.distro == 'rocky' || matrix.distro == 'rocky.9' || matrix.distro == 'alma.9') && secrets.DAOS_DEPS_REPO_EL9 || '' }}
+      DAOS_DEPS_EXT_REPO: >-
+        ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 ||
+            ( startsWith(matrix.distro, 'rocky') ||
+              startsWith(matrix.distro, 'alma') ) && secrets.DAOS_DEPS_REPO_EL9 ||
+            '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -395,7 +405,10 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
       PYTHON_VERSION: ${{ matrix.python }}
-      DAOS_DEPS_EXT_REPO: ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 || (matrix.distro == 'rocky' || matrix.distro == 'rocky.9' || matrix.distro == 'alma.9') && secrets.DAOS_DEPS_REPO_EL9 || '' }}
+      DAOS_DEPS_EXT_REPO: >-
+        ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 ||
+            startsWith(matrix.distro, 'alma')) && secrets.DAOS_DEPS_REPO_EL9 ||
+            '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
