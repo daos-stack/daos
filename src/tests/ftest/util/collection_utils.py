@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,7 +30,8 @@ CLEANUP_UNMOUNT_TYPES = ["fuse.daos"]
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 TEST_RESULTS_DIRS = (
-    "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces")
+    "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces",
+    "dlck_check")
 
 
 def stop_daos_agent_services(logger, test):
@@ -225,7 +226,7 @@ def check_server_storage(logger, test, test_result, stage):
 
 
 def archive_files(logger, summary, hosts, source, pattern, destination, depth, threshold, timeout,
-                  test_result, test=None):
+                  test_result, test=None, file_type="f"):
     # pylint: disable=too-many-arguments
     """Archive the files from the source to the destination.
 
@@ -241,6 +242,7 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
         timeout (int): number of seconds to wait for the command to complete.
         test_result (TestResult): the test result used to update the status of the test
         test (TestInfo, optional): the test information. Defaults to None.
+        file_type (str, optional): type of file to search for. Defaults to "f".
 
     Returns:
         int: status code: 0 = success, 16 = failure
@@ -255,7 +257,8 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
     logger.debug("  Local host:   %s", hosts.intersection(get_local_host()))
 
     # List any remote files and their sizes and determine which hosts contain these files
-    return_code, file_hosts = list_files(logger, hosts, source, pattern, depth, test_result)
+    return_code, file_hosts = list_files(logger, hosts, source, pattern, depth,
+                                         test_result, file_type)
     if not file_hosts:
         # If no files are found then there is nothing else to do
         logger.debug("No %s files found on %s", os.path.join(source, pattern), hosts)
@@ -281,7 +284,7 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
 
     # Move the test files to the test-results directory on this host
     return_code |= move_files(
-        logger, file_hosts, source, pattern, destination, depth, timeout, test_result)
+        logger, file_hosts, source, pattern, destination, depth, timeout, test_result, file_type)
 
     if test and "core files" in summary:
         # Process the core files
@@ -290,16 +293,17 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
     return return_code
 
 
-def list_files(logger, hosts, source, pattern, depth, test_result):
+def list_files(logger, hosts, source, pattern, depth, test_result, file_type="f"):
     """List the files in source with that match the pattern.
 
     Args:
         logger (Logger): logger for the messages produced by this method
-        hosts (NodSet): hosts on which the files are located
+        hosts (NodeSet): hosts on which the files are located
         source (str): where the files are currently located
         pattern (str): pattern used to limit which files are processed
         depth (int): max depth for find command
         test_result (TestResult): the test result used to update the status of the test
+        file_type (str, optional): type of file to search for. Defaults to "f".
 
     Returns:
         tuple: a tuple containing:
@@ -313,7 +317,8 @@ def list_files(logger, hosts, source, pattern, depth, test_result):
     logger.debug("-" * 80)
     logger.debug("Listing any %s files on %s", source_files, hosts)
     other = ["-printf", "'%M %n %-12u %-12g %12k %t %p\n'"]
-    result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
+    result = run_remote(logger, hosts, find_command(source, pattern, depth,
+                                                    other, file_type=file_type))
     if not result.passed:
         message = f"Error determining if {source_files} files exist on {result.failed_hosts}"
         test_result.fail_test(logger, "Process", message)
@@ -321,7 +326,7 @@ def list_files(logger, hosts, source, pattern, depth, test_result):
     else:
         for data in result.output:
             for line in data.stdout:
-                if source in line:
+                if (source in line) or re.search(source, line):
                     logger.debug("Found at least one file match on %s: %s", data.hosts, line)
                     hosts_with_files.add(data.hosts)
                     break
@@ -466,18 +471,20 @@ def compress_files(logger, hosts, source, pattern, depth, test_result):
     return 0
 
 
-def move_files(logger, hosts, source, pattern, destination, depth, timeout, test_result):
+def move_files(logger, hosts, source, pattern, destination, depth,
+               timeout, test_result, file_type="f"):
     """Move files from the source to the destination.
 
     Args:
         logger (Logger): logger for the messages produced by this method
-        hosts (NodSet): hosts on which the files are located
+        hosts (NodeSet): hosts on which the files are located
         source (str): where the files are currently located
         pattern (str): pattern used to limit which files are processed
         destination (str): where the files should be moved to on this host
         depth (int): max depth for find command
         timeout (int): number of seconds to wait for the command to complete.
         test_result (TestResult): the test result used to update the status of the test
+        file_type (str, optional): type of file to search for. Defaults to "f".
 
     Returns:
         int: status code: 0 = success, 16 = failure
@@ -491,7 +498,8 @@ def move_files(logger, hosts, source, pattern, destination, depth, timeout, test
     if "stacktrace" in destination or "daos_dumps" in destination:
         # pylint: disable=import-outside-toplevel
         other = ["-print0", "|", "xargs", "-0", "-r0", "sudo", "-n", get_chown_command()]
-        result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
+        result = run_remote(logger, hosts, find_command(source, pattern, depth,
+                                                        other, file_type=file_type))
         if not result.passed:
             message = (f"Error changing {os.path.join(source, pattern)} file permissions on "
                        f"{result.failed_hosts}")
@@ -528,8 +536,8 @@ def move_files(logger, hosts, source, pattern, destination, depth, timeout, test
         return return_code
 
     # Move all the source files matching the pattern into the temporary remote directory
-    other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}mv '{{}}' '{tmp_copy_dir}'/"
-    result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
+    other = (f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command} mv '{{}}' '{tmp_copy_dir}'/")
+    result = run_remote(logger, hosts, find_command(source, pattern, depth, other, file_type))
     if not result.passed:
         message = (f"Error moving files to temporary remote copy directory '{tmp_copy_dir}' on "
                    f"{result.failed_hosts}")
@@ -997,6 +1005,15 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
     # size exceeding the threshold.
     test_env = TestEnvironment()
     if archive:
+        logger.debug("Making all '%s' files accessible for archiving", test_env.log_dir)
+        result = run_remote(logger, test.host_info.all_hosts,
+                            "sudo -n {}".format(get_chown_command(options="-R",
+                                                                  file=test_env.log_dir)))
+        if not result.passed:
+            message = f"Error making {test_env.log_dir} files accessible for archiving"
+            test_result.fail_test(logger, "Process", message)
+            return_code = 16
+
         remote_files = OrderedDict()
         remote_files["local configuration files"] = {
             "source": test_env.log_dir,
@@ -1047,6 +1064,15 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             "depth": 1,
             "timeout": 900,
         }
+        remote_files["dlck files"] = {
+            "source": test_env.log_dir,
+            "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[6]),
+            "pattern": "dlck_check_*",
+            "hosts": test.host_info.all_hosts,
+            "depth": 1,
+            "file_type": "d",
+            "timeout": 900,
+        }
         for index, hosts in enumerate(core_files):
             remote_files[f"core files {index + 1}/{len(core_files)}"] = {
                 "source": core_files[hosts]["path"],
@@ -1062,7 +1088,7 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
             return_code |= archive_files(
                 logger, summary, data["hosts"].copy(), data["source"], data["pattern"],
                 data["destination"], data["depth"], threshold, data["timeout"],
-                test_result, test)
+                test_result, test, file_type=data.get("file_type", "f"))
 
     # Generate a steps.log file
     return_code |= create_steps_log(logger, job_results_dir, test_result)

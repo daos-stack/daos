@@ -770,41 +770,41 @@ pipeline {
                 cancelPreviousBuilds()
             }
         }
-        stage('Pre-build') {
-            when {
-                beforeAgent true
-                expression { shouldStageRun('Pre-build') }
-            }
-            parallel {
-                stage('Python Bandit check') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Python Bandit check') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.code_scanning'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false) +
-                                                ' --build-arg POINT_RELEASE=.7' +
-                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
-                        }
-                    }
-                    steps {
-                        job_step_update(pythonBanditCheck())
-                    }
-                    post {
-                        always {
-                            // Bandit will have empty results if it does not
-                            // find any issues.
-                            junit testResults: 'bandit.xml',
-                                  allowEmptyResults: true
-                            job_status_update()
-                        }
-                    }
-                } // stage('Python Bandit check')
-            }
-        }
+        // stage('Pre-build') {
+        //     when {
+        //         beforeAgent true
+        //         expression { shouldStageRun('Pre-build') }
+        //     }
+        //     parallel {
+        //         stage('Python Bandit check') {
+        //             when {
+        //                 beforeAgent true
+        //                 expression { shouldStageRun('Python Bandit check') }
+        //             }
+        //             agent {
+        //                 dockerfile {
+        //                     filename 'utils/docker/Dockerfile.code_scanning'
+        //                     label 'docker_runner'
+        //                     additionalBuildArgs dockerBuildArgs(add_repos: false) +
+        //                                         ' --build-arg POINT_RELEASE=.7' +
+        //                                         " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
+        //                 }
+        //             }
+        //             steps {
+        //                 job_step_update(pythonBanditCheck())
+        //             }
+        //             post {
+        //                 always {
+        //                     // Bandit will have empty results if it does not
+        //                     // find any issues.
+        //                     junit testResults: 'bandit.xml',
+        //                           allowEmptyResults: true
+        //                     job_status_update()
+        //                 }
+        //             }
+        //         } // stage('Python Bandit check')
+        //     }
+        // }
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
@@ -854,7 +854,7 @@ pipeline {
                                 sconsBuild(parallel_build: true,
                                            build_deps: 'no',
                                            scons_args: sconsArgs() +
-                                                      ' BUILD_GO_VALGRIND=1 PREFIX=/opt/daos TARGET_TYPE=release'))
+                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
                             sh label: 'Stash valgrind install tree for NLT',
                                 script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
                             stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
@@ -877,382 +877,382 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Build on Leap 15') }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --target build-ci' +
-                                                ' --build-arg POINT_RELEASE=.6' +
-                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
-                                                " --build-arg DAOS_DEPS_INSTALL=yes"
-                        }
-                    }
-                    steps {
-                        script {
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                           stash_files: 'ci/test_files_to_stash.txt',
-                                           build_deps: 'no',
-                                           stash_opt: true,
-                                           scons_args: sconsArgs() +
-                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
-                        }
-                    }
-                    post {
-                        success {
-                            uploadNewRPMs('leap15', 'success')
-                        }
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            uploadNewRPMs('leap15', 'cleanup')
-                            job_status_update()
-                        }
-                    }
-                }
+                // stage('Build on Leap 15') {
+                //     when {
+                //         beforeAgent true
+                //         expression { shouldStageRun('Build on Leap 15') }
+                //     }
+                //     agent {
+                //         dockerfile {
+                //             filename 'utils/docker/Dockerfile.leap.15'
+                //             label 'docker_runner'
+                //             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                //                                                 parallel_build: true,
+                //                                                 deps_build: true) +
+                //                                 " -t ${sanitized_JOB_NAME()}-leap15" +
+                //                                 ' --target build-ci' +
+                //                                 ' --build-arg POINT_RELEASE=.6' +
+                //                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
+                //                                 " --build-arg DAOS_DEPS_INSTALL=yes"
+                //         }
+                //     }
+                //     steps {
+                //         script {
+                //             job_step_update(
+                //                 sconsBuild(parallel_build: true,
+                //                            stash_files: 'ci/test_files_to_stash.txt',
+                //                            build_deps: 'no',
+                //                            stash_opt: true,
+                //                            scons_args: sconsArgs() +
+                //                                       ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                //             sh label: 'Generate RPMs',
+                //                 script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
+                //         }
+                //     }
+                //     post {
+                //         success {
+                //             uploadNewRPMs('leap15', 'success')
+                //         }
+                //         unsuccessful {
+                //             sh '''if [ -f config.log ]; then
+                //                       mv config.log config.log-leap15-gcc
+                //                   fi'''
+                //             archiveArtifacts artifacts: 'config.log-leap15-gcc',
+                //                              allowEmptyArchive: true
+                //         }
+                //         cleanup {
+                //             uploadNewRPMs('leap15', 'cleanup')
+                //             job_status_update()
+                //         }
+                //     }
+                // }
             }
         }
-        stage('Unit Tests') {
-            when {
-                beforeAgent true
-                expression { shouldStageRun('Unit Tests') }
-            }
-            parallel {
-                stage('Unit Test') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Unit Test') }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
-                    }
-                    steps {
-                            job_step_update(
-                                unitTest(timeout_time: 60,
-                                        unstash_opt: true,
-                                        inst_repos: daosRepos(),
-                                        inst_rpms: unitPackages(target: 'el9'),
-                                        image_version: 'el9.7',
-                                        )
-                            )
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_logs/']
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Unit Test bdev') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Unit Test bdev') }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_NVME_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     unstash_opt: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(target: 'el9'),
-                                     image_version: 'el9.7'))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_bdev_logs/']
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('NLT') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('NLT') }
-                    }
-                    agent {
-                        label params.CI_NLT_1_LABEL
-                    }
-                    steps {
-                        // NLT memchecks the valgrind-tagged build, not the shared -race one.
-                        unstash 'opt-daos-valgrind'
-                        job_step_update(
-                            unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat',
-                                                                           def_val: '1').toInteger(),
-                                     inst_repos: daosRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh' +
-                                                  ' --system-ram-reserved 4' +
-                                                  ' --max-log-size 1950MiB' +
-                                                  ' --dfuse-dir /localhome/jenkins/' +
-                                                  ' --log-usage-save nltir.xml' +
-                                                  ' --log-usage-export nltr.json' +
-                                                  ' --class-name nlt' +
-                                                  /* groovylint-disable-next-line LineLength */
-                                                  " --repeat ${cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1')}" +
-                                                  /* groovylint-disable-next-line LineLength */
-                                                  (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +
-                                                  ' all',
-                                     with_valgrind: 'memcheck',
-                                     valgrind_pattern: '*memcheck.xml',
-                                     always_script: 'ci/unit/test_nlt_post.sh',
-                                     testResults: 'nlt-junit.xml',
-                                     unstash_opt: true,
-                                     unstash_tests: false,
-                                     inst_rpms: unitPackages(target: 'el9'),
-                                     image_version: 'el9.7',
-                                     prov_env_vars: 'VM_CPUS=14'))
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
-                        //                 skipPublishingChecks: true,
-                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
-                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['nlt_logs/', 'nlt-summary-nlt.md'],
-                                         testResults: 'nlt-junit.xml',
-                                         valgrind_stash: 'nlt-memcheck',
-                                         valgrind_pattern: '*memcheck.xml',
-                                         NLT: true
-                            recordIssues enabledForFailure: true,
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         name: 'NLT server leaks',
-                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
-                                         tool: issues(pattern: 'nlt-server-leaks.json',
-                                           name: 'NLT server results',
-                                           id: 'NLT_server'),
-                                         scm: 'daos-stack/daos'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Unit Test with memcheck') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Unit Test with memcheck') }
-                    }
-                    agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 160,
-                                     unstash_opt: true,
-                                     ignore_failure: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(target: 'el9'),
-                                     image_version: 'el9.7'))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
-                                                     'unit_test_memcheck_logs/**/*.log'],
-                                         valgrind_stash: 'unit-memcheck'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit Test with memcheck')
-                stage('Unit Test bdev with memcheck') {
-                    when {
-                        beforeAgent true
-                        expression { shouldStageRun('Unit Test bdev with memcheck') }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_NVME_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            unitTest(timeout_time: 180,
-                                     unstash_opt: true,
-                                     ignore_failure: true,
-                                     inst_repos: daosRepos(),
-                                     inst_rpms: unitPackages(target: 'el9'),
-                                     image_version: 'el9.7'))
-                    }
-                    post {
-                        always {
-                            unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
-                                                     'unit_test_memcheck_bdev_logs/**/*.log'],
-                                         valgrind_stash: 'unit-bdev-memcheck'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Unit Test bdev with memcheck')
-            }
-        }
-        stage('Test') {
-            when {
-                beforeAgent true
-                expression { shouldStageRun('Test') }
-            }
-            steps {
-                script {
-                    parallel(
-                        'Functional on EL 9 with Valgrind': getFunctionalTestStage(
-                            name: 'Functional on EL 9 with Valgrind',
-                            runStage: shouldStageRun('Functional on EL 9 with Valgrind'),
-                            pragma_suffix: '-vm',
-                            label: vm9_label('EL9'),
-                            next_version: next_version(),
-                            other_packages: 'mercury-libfabric',
-                            stage_tags: 'vm',
-                            default_tags: 'memcheck',
-                            nvme: 'auto',
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional on EL 9': getFunctionalTestStage(
-                            name: 'Functional on EL 9',
-                            runStage: shouldStageRun('Functional on EL 9'),
-                            pragma_suffix: '-vm',
-                            label: vm9_label('EL9'),
-                            next_version: next_version(),
-                            other_packages: 'mercury-libfabric',
-                            stage_tags: 'vm',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto',
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional on Leap 15': getFunctionalTestStage(
-                            name: 'Functional on Leap 15',
-                            runStage: shouldStageRun('Functional on Leap 15'),
-                            pragma_suffix: '-vm',
-                            label: vm9_label('Leap15'),
-                            next_version: next_version(),
-                            other_packages: 'mercury-libfabric',
-                            stage_tags: 'vm',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto',
-                            job_status: job_status_internal,
-                            image_version: 'leap15.6'
-                        ),
-                        'Functional on SLES 15': getFunctionalTestStage(
-                            name: 'Functional on SLES 15',
-                            runStage: shouldStageRun('Functional on SLES 15'),
-                            pragma_suffix: '-vm',
-                            label: vm9_label('Leap15'),
-                            next_version: next_version(),
-                            other_packages: 'mercury-libfabric',
-                            stage_tags: 'vm',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto',
-                            job_status: job_status_internal,
-                            image_version: 'sles15.7'
-                        ),
-                        'Functional on Ubuntu 20.04': getFunctionalTestStage(
-                            name: 'Functional on Ubuntu 20.04',
-                            runStage: shouldStageRun('Functional on Ubuntu 20.04'),
-                            pragma_suffix: '-vm',
-                            label: vm9_label('Ubuntu'),
-                            next_version: next_version(),
-                            other_packages: 'mercury-libfabric',
-                            stage_tags: 'vm',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto',
-                            job_status: job_status_internal
-                        ),
-                        'Fault injection testing': scriptedUnitTestStage(
-                            name: 'Fault injection testing',
-                            // Release builds compile out fault injection
-                            runStage: shouldStageRun('Fault injection testing') &&
-                                      !sconsArgs().contains('BUILD_TYPE=release'),
-                            label: params.CI_FI_1_LABEL,
-                            jobStatus: job_status_internal,
-                            distro: 'el9',
-                            unitTestArgs: [
-                                timeout_time: 240,
-                                test_script: 'ci/unit/test_nlt.sh --memcheck no' +
-                                             ' --system-ram-reserved 4 --server-debug WARN' +
-                                             ' --log-usage-import nltr.json' +
-                                             ' --log-usage-save nltr.xml' +
-                                             ' --class-name fault-injection fi',
-                                always_script: 'ci/unit/test_nlt_post.sh',
-                                testResults: 'nlt-junit.xml',
-                                unstash_opt: true,
-                                unstash_tests: false,
-                                image_version: 'el9.7',
-                                prov_env_vars: 'VM_CPUS=14'
-                            ],
-                            unitTestPostArgs: [
-                                /* groovylint-disable-next-line DuplicateListLiteral */
-                                artifacts: ['nlt_logs/', 'nlt-summary-fault-injection.md'],
-                                testResults: 'nlt-junit.xml',
-                                with_valgrind: '',
-                                FI: true],
-                            archiveArtifactsArgs: [
-                                artifacts: 'nlt_logs/fault-injection/',
-                                allowEmptyArchive: true]
-                        ),
-                        'Test RPMs on EL 9': scriptedTestRpmStage(
-                            name: 'Test RPMs on EL 9',
-                            runStage: shouldStageRun('Test RPMs on EL 9'),
-                            label: params.CI_UNIT_VM1_LABEL,
-                            jobStatus: job_status_internal,
-                            testRpmArgs: [
-                                target: 'el9.6',
-                                inst_rpms: 'mercury-libfabric',
-                                ignoreFailure: false],
-                            nextVersion: next_version(),
-                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
-                            archiveArtifactsArgs: [
-                                artifacts: 'Test RPMs on EL 9/']
-                        ),
-                        'Test RPMs on Leap 15': scriptedTestRpmStage(
-                            name: 'Test RPMs on Leap 15',
-                            runStage: shouldStageRun('Test RPMs on Leap 15'),
-                            label: params.CI_UNIT_VM1_LABEL,
-                            jobStatus: job_status_internal,
-                            testRpmArgs: [
-                                target: 'leap15.6',
-                                inst_rpms: 'mercury-libfabric',
-                                ignoreFailure: false],
-                            nextVersion: next_version(),
-                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
-                            archiveArtifactsArgs: [
-                                artifacts: 'Test RPMs on Leap 15/']
-                        )
-                    )
-                }
-            }
-        } // stage('Test')
-        stage('Test Storage Prep on EL 9') {
-            when {
-                beforeAgent true
-                expression { params.CI_STORAGE_PREP_LABEL != '' }
-            }
-            agent {
-                label params.CI_STORAGE_PREP_LABEL
-            }
-            steps {
-                job_step_update(
-                    storagePrepTest(
-                        inst_repos: daosRepos(),
-                        inst_rpms: functionalPackages(1, next_version(), 'tests-internal')))
-            }
-            post {
-                cleanup {
-                    job_status_update()
-                }
-            }
-        } // stage('Test Storage Prep')
+        // stage('Unit Tests') {
+        //     when {
+        //         beforeAgent true
+        //         expression { shouldStageRun('Unit Tests') }
+        //     }
+        //     parallel {
+        //         stage('Unit Test') {
+        //             when {
+        //                 beforeAgent true
+        //                 expression { shouldStageRun('Unit Test') }
+        //             }
+        //             agent {
+        //                 label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+        //             }
+        //             steps {
+        //                     job_step_update(
+        //                         unitTest(timeout_time: 60,
+        //                                 unstash_opt: true,
+        //                                 inst_repos: daosRepos(),
+        //                                 inst_rpms: unitPackages(target: 'el9'),
+        //                                 image_version: 'el9.7',
+        //                                 )
+        //                     )
+        //             }
+        //             post {
+        //                 always {
+        //                     unitTestPost artifacts: ['unit_test_logs/']
+        //                     job_status_update()
+        //                 }
+        //             }
+        //         }
+        //         stage('Unit Test bdev') {
+        //             when {
+        //                 beforeAgent true
+        //                 expression { shouldStageRun('Unit Test bdev') }
+        //             }
+        //             agent {
+        //                 label params.CI_UNIT_VM1_NVME_LABEL
+        //             }
+        //             steps {
+        //                 job_step_update(
+        //                     unitTest(timeout_time: 60,
+        //                              unstash_opt: true,
+        //                              inst_repos: daosRepos(),
+        //                              inst_rpms: unitPackages(target: 'el9'),
+        //                              image_version: 'el9.7'))
+        //             }
+        //             post {
+        //                 always {
+        //                     unitTestPost artifacts: ['unit_test_bdev_logs/']
+        //                     job_status_update()
+        //                 }
+        //             }
+        //         }
+        //         stage('NLT') {
+        //             when {
+        //                 beforeAgent true
+        //                 expression { shouldStageRun('NLT') }
+        //             }
+        //             agent {
+        //                 label params.CI_NLT_1_LABEL
+        //             }
+        //             steps {
+        //                 // NLT memchecks the valgrind-tagged build, not the shared -race one.
+        //                 unstash 'opt-daos-valgrind'
+        //                 job_step_update(
+        //                     unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat',
+        //                                                                    def_val: '1').toInteger(),
+        //                              inst_repos: daosRepos(),
+        //                              test_script: 'ci/unit/test_nlt.sh' +
+        //                                           ' --system-ram-reserved 4' +
+        //                                           ' --max-log-size 1950MiB' +
+        //                                           ' --dfuse-dir /localhome/jenkins/' +
+        //                                           ' --log-usage-save nltir.xml' +
+        //                                           ' --log-usage-export nltr.json' +
+        //                                           ' --class-name nlt' +
+        //                                           /* groovylint-disable-next-line LineLength */
+        //                                           " --repeat ${cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1')}" +
+        //                                           /* groovylint-disable-next-line LineLength */
+        //                                           (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +
+        //                                           ' all',
+        //                              with_valgrind: 'memcheck',
+        //                              valgrind_pattern: '*memcheck.xml',
+        //                              always_script: 'ci/unit/test_nlt_post.sh',
+        //                              testResults: 'nlt-junit.xml',
+        //                              unstash_opt: true,
+        //                              unstash_tests: false,
+        //                              inst_rpms: unitPackages(target: 'el9'),
+        //                              image_version: 'el9.7',
+        //                              prov_env_vars: 'VM_CPUS=14'))
+        //                 // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
+        //                 //                 skipPublishingChecks: true,
+        //                 //                 id: 'tlc', name: 'Fault Injection Interim Report')
+        //                 stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
+        //             }
+        //             post {
+        //                 always {
+        //                     unitTestPost artifacts: ['nlt_logs/', 'nlt-summary-nlt.md'],
+        //                                  testResults: 'nlt-junit.xml',
+        //                                  valgrind_stash: 'nlt-memcheck',
+        //                                  valgrind_pattern: '*memcheck.xml',
+        //                                  NLT: true
+        //                     recordIssues enabledForFailure: true,
+        //                                  failOnError: false,
+        //                                  ignoreQualityGate: true,
+        //                                  name: 'NLT server leaks',
+        //                                  qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+        //                                  tool: issues(pattern: 'nlt-server-leaks.json',
+        //                                    name: 'NLT server results',
+        //                                    id: 'NLT_server'),
+        //                                  scm: 'daos-stack/daos'
+        //                     job_status_update()
+        //                 }
+        //             }
+        //         }
+        //         stage('Unit Test with memcheck') {
+        //             when {
+        //                 beforeAgent true
+        //                 expression { shouldStageRun('Unit Test with memcheck') }
+        //             }
+        //             agent {
+        //                 label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+        //             }
+        //             steps {
+        //                 job_step_update(
+        //                     unitTest(timeout_time: 160,
+        //                              unstash_opt: true,
+        //                              ignore_failure: true,
+        //                              inst_repos: daosRepos(),
+        //                              inst_rpms: unitPackages(target: 'el9'),
+        //                              image_version: 'el9.7'))
+        //             }
+        //             post {
+        //                 always {
+        //                     unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
+        //                                              'unit_test_memcheck_logs/**/*.log'],
+        //                                  valgrind_stash: 'unit-memcheck'
+        //                     job_status_update()
+        //                 }
+        //             }
+        //         } // stage('Unit Test with memcheck')
+        //         stage('Unit Test bdev with memcheck') {
+        //             when {
+        //                 beforeAgent true
+        //                 expression { shouldStageRun('Unit Test bdev with memcheck') }
+        //             }
+        //             agent {
+        //                 label params.CI_UNIT_VM1_NVME_LABEL
+        //             }
+        //             steps {
+        //                 job_step_update(
+        //                     unitTest(timeout_time: 180,
+        //                              unstash_opt: true,
+        //                              ignore_failure: true,
+        //                              inst_repos: daosRepos(),
+        //                              inst_rpms: unitPackages(target: 'el9'),
+        //                              image_version: 'el9.7'))
+        //             }
+        //             post {
+        //                 always {
+        //                     unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
+        //                                              'unit_test_memcheck_bdev_logs/**/*.log'],
+        //                                  valgrind_stash: 'unit-bdev-memcheck'
+        //                     job_status_update()
+        //                 }
+        //             }
+        //         } // stage('Unit Test bdev with memcheck')
+        //     }
+        // }
+        // stage('Test') {
+        //     when {
+        //         beforeAgent true
+        //         expression { shouldStageRun('Test') }
+        //     }
+        //     steps {
+        //         script {
+        //             parallel(
+        //                 'Functional on EL 9 with Valgrind': getFunctionalTestStage(
+        //                     name: 'Functional on EL 9 with Valgrind',
+        //                     runStage: shouldStageRun('Functional on EL 9 with Valgrind'),
+        //                     pragma_suffix: '-vm',
+        //                     label: vm9_label('EL9'),
+        //                     next_version: next_version(),
+        //                     other_packages: 'mercury-libfabric',
+        //                     stage_tags: 'vm',
+        //                     default_tags: 'memcheck',
+        //                     nvme: 'auto',
+        //                     job_status: job_status_internal,
+        //                     image_version: 'el9.7'
+        //                 ),
+        //                 'Functional on EL 9': getFunctionalTestStage(
+        //                     name: 'Functional on EL 9',
+        //                     runStage: shouldStageRun('Functional on EL 9'),
+        //                     pragma_suffix: '-vm',
+        //                     label: vm9_label('EL9'),
+        //                     next_version: next_version(),
+        //                     other_packages: 'mercury-libfabric',
+        //                     stage_tags: 'vm',
+        //                     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+        //                     nvme: 'auto',
+        //                     job_status: job_status_internal,
+        //                     image_version: 'el9.7'
+        //                 ),
+        //                 'Functional on Leap 15': getFunctionalTestStage(
+        //                     name: 'Functional on Leap 15',
+        //                     runStage: shouldStageRun('Functional on Leap 15'),
+        //                     pragma_suffix: '-vm',
+        //                     label: vm9_label('Leap15'),
+        //                     next_version: next_version(),
+        //                     other_packages: 'mercury-libfabric',
+        //                     stage_tags: 'vm',
+        //                     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+        //                     nvme: 'auto',
+        //                     job_status: job_status_internal,
+        //                     image_version: 'leap15.6'
+        //                 ),
+        //                 'Functional on SLES 15': getFunctionalTestStage(
+        //                     name: 'Functional on SLES 15',
+        //                     runStage: shouldStageRun('Functional on SLES 15'),
+        //                     pragma_suffix: '-vm',
+        //                     label: vm9_label('Leap15'),
+        //                     next_version: next_version(),
+        //                     other_packages: 'mercury-libfabric',
+        //                     stage_tags: 'vm',
+        //                     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+        //                     nvme: 'auto',
+        //                     job_status: job_status_internal,
+        //                     image_version: 'sles15.7'
+        //                 ),
+        //                 'Functional on Ubuntu 20.04': getFunctionalTestStage(
+        //                     name: 'Functional on Ubuntu 20.04',
+        //                     runStage: shouldStageRun('Functional on Ubuntu 20.04'),
+        //                     pragma_suffix: '-vm',
+        //                     label: vm9_label('Ubuntu'),
+        //                     next_version: next_version(),
+        //                     other_packages: 'mercury-libfabric',
+        //                     stage_tags: 'vm',
+        //                     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+        //                     nvme: 'auto',
+        //                     job_status: job_status_internal
+        //                 ),
+        //                 'Fault injection testing': scriptedUnitTestStage(
+        //                     name: 'Fault injection testing',
+        //                     // Release builds compile out fault injection
+        //                     runStage: shouldStageRun('Fault injection testing') &&
+        //                               !sconsArgs().contains('BUILD_TYPE=release'),
+        //                     label: params.CI_FI_1_LABEL,
+        //                     jobStatus: job_status_internal,
+        //                     distro: 'el9',
+        //                     unitTestArgs: [
+        //                         timeout_time: 240,
+        //                         test_script: 'ci/unit/test_nlt.sh --memcheck no' +
+        //                                      ' --system-ram-reserved 4 --server-debug WARN' +
+        //                                      ' --log-usage-import nltr.json' +
+        //                                      ' --log-usage-save nltr.xml' +
+        //                                      ' --class-name fault-injection fi',
+        //                         always_script: 'ci/unit/test_nlt_post.sh',
+        //                         testResults: 'nlt-junit.xml',
+        //                         unstash_opt: true,
+        //                         unstash_tests: false,
+        //                         image_version: 'el9.7',
+        //                         prov_env_vars: 'VM_CPUS=14'
+        //                     ],
+        //                     unitTestPostArgs: [
+        //                         /* groovylint-disable-next-line DuplicateListLiteral */
+        //                         artifacts: ['nlt_logs/', 'nlt-summary-fault-injection.md'],
+        //                         testResults: 'nlt-junit.xml',
+        //                         with_valgrind: '',
+        //                         FI: true],
+        //                     archiveArtifactsArgs: [
+        //                         artifacts: 'nlt_logs/fault-injection/',
+        //                         allowEmptyArchive: true]
+        //                 ),
+        //                 'Test RPMs on EL 9': scriptedTestRpmStage(
+        //                     name: 'Test RPMs on EL 9',
+        //                     runStage: shouldStageRun('Test RPMs on EL 9'),
+        //                     label: params.CI_UNIT_VM1_LABEL,
+        //                     jobStatus: job_status_internal,
+        //                     testRpmArgs: [
+        //                         target: 'el9.6',
+        //                         inst_rpms: 'mercury-libfabric',
+        //                         ignoreFailure: false],
+        //                     nextVersion: next_version(),
+        //                     alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
+        //                     archiveArtifactsArgs: [
+        //                         artifacts: 'Test RPMs on EL 9/']
+        //                 ),
+        //                 'Test RPMs on Leap 15': scriptedTestRpmStage(
+        //                     name: 'Test RPMs on Leap 15',
+        //                     runStage: shouldStageRun('Test RPMs on Leap 15'),
+        //                     label: params.CI_UNIT_VM1_LABEL,
+        //                     jobStatus: job_status_internal,
+        //                     testRpmArgs: [
+        //                         target: 'leap15.6',
+        //                         inst_rpms: 'mercury-libfabric',
+        //                         ignoreFailure: false],
+        //                     nextVersion: next_version(),
+        //                     alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
+        //                     archiveArtifactsArgs: [
+        //                         artifacts: 'Test RPMs on Leap 15/']
+        //                 )
+        //             )
+        //         }
+        //     }
+        // } // stage('Test')
+        // stage('Test Storage Prep on EL 9') {
+        //     when {
+        //         beforeAgent true
+        //         expression { params.CI_STORAGE_PREP_LABEL != '' }
+        //     }
+        //     agent {
+        //         label params.CI_STORAGE_PREP_LABEL
+        //     }
+        //     steps {
+        //         job_step_update(
+        //             storagePrepTest(
+        //                 inst_repos: daosRepos(),
+        //                 inst_rpms: functionalPackages(1, next_version(), 'tests-internal')))
+        //     }
+        //     post {
+        //         cleanup {
+        //             job_status_update()
+        //         }
+        //     }
+        // } // stage('Test Storage Prep')
         stage('Test Hardware') {
             when {
                 beforeAgent true
@@ -1261,18 +1261,18 @@ pipeline {
             steps {
                 script {
                     parallel(
-                        'Functional Hardware Medium': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium',
-                            runStage: shouldStageRun('Functional Hardware Medium'),
-                            pragma_suffix: '-hw-medium',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,-provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto',
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
+                        // 'Functional Hardware Medium': getFunctionalTestStage(
+                        //     name: 'Functional Hardware Medium',
+                        //     runStage: shouldStageRun('Functional Hardware Medium'),
+                        //     pragma_suffix: '-hw-medium',
+                        //     label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                        //     next_version: next_version(),
+                        //     stage_tags: 'hw,medium,-provider',
+                        //     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        //     nvme: 'auto',
+                        //     job_status: job_status_internal,
+                        //     image_version: 'el9.7'
+                        // ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             runStage: shouldStageRun('Functional Hardware Medium MD on SSD'),
@@ -1285,113 +1285,113 @@ pipeline {
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
-                        'Functional Hardware Medium VMD': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium VMD',
-                            runStage: shouldStageRun('Functional Hardware Medium VMD'),
-                            pragma_suffix: '-hw-medium-vmd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw_vmd,medium',
-                            /* groovylint-disable-next-line UnnecessaryGetter */
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto',
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider',
-                            runStage: shouldStageRun('Functional Hardware Medium Verbs Provider'),
-                            pragma_suffix: '-hw-medium-verbs-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider MD on SSD',
-                            runStage: shouldStageRun('Functional Hardware Medium Verbs Provider MD on SSD'),
-                            pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider,-cb',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto_md_on_ssd',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium UCX Provider',
-                            runStage: shouldStageRun('Functional Hardware Medium UCX Provider'),
-                            pragma_suffix: '-hw-medium-ucx-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Large': getFunctionalTestStage(
-                            name: 'Functional Hardware Large',
-                            runStage: shouldStageRun('Functional Hardware Large'),
-                            pragma_suffix: '-hw-large',
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,large',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Large MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Large MD on SSD',
-                            runStage: shouldStageRun('Functional Hardware Large MD on SSD'),
-                            pragma_suffix: '-hw-large-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,large',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto_md_on_ssd',
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Cluster Box Medium MD on SSD',
-                            runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
-                            pragma_suffix:'-cb-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'cb,medium,-provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto_md_on_ssd',
-                            node_count: 5,
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Cluster Box Medium Verbs Provider MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Cluster Box Medium Verbs Provider MD on SSD',
-                            runStage: shouldStageRun('Functional Cluster Box Medium Verbs Provider MD on SSD'),
-                            pragma_suffix:'-cb-medium-verbs-provider-md-on-ssd',
-                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'cb,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            nvme: 'auto_md_on_ssd',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            node_count: 5,
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
+                        // 'Functional Hardware Medium VMD': getFunctionalTestStage(
+                        //     name: 'Functional Hardware Medium VMD',
+                        //     runStage: shouldStageRun('Functional Hardware Medium VMD'),
+                        //     pragma_suffix: '-hw-medium-vmd',
+                        //     label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
+                        //     next_version: next_version(),
+                        //     stage_tags: 'hw_vmd,medium',
+                        //     /* groovylint-disable-next-line UnnecessaryGetter */
+                        //     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        //     nvme: 'auto',
+                        //     job_status: job_status_internal,
+                        //     image_version: 'el9.7'
+                        // ),
+                        // 'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
+                        //     name: 'Functional Hardware Medium Verbs Provider',
+                        //     runStage: shouldStageRun('Functional Hardware Medium Verbs Provider'),
+                        //     pragma_suffix: '-hw-medium-verbs-provider',
+                        //     label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                        //     next_version: next_version(),
+                        //     stage_tags: 'hw,medium,provider',
+                        //     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        //     default_nvme: 'auto',
+                        //     provider: 'ofi+verbs;ofi_rxm',
+                        //     job_status: job_status_internal,
+                        //     image_version: 'el9.7'
+                        // ),
+                        // 'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
+                        //     name: 'Functional Hardware Medium Verbs Provider MD on SSD',
+                        //     runStage: shouldStageRun('Functional Hardware Medium Verbs Provider MD on SSD'),
+                        //     pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
+                        //     label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                        //     next_version: next_version(),
+                        //     stage_tags: 'hw,medium,provider,-cb',
+                        //     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        //     default_nvme: 'auto_md_on_ssd',
+                        //     provider: 'ofi+verbs;ofi_rxm',
+                        //     job_status: job_status_internal,
+                        //     image_version: 'el9.7'
+                        // ),
+                        // 'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
+                        //     name: 'Functional Hardware Medium UCX Provider',
+                        //     runStage: shouldStageRun('Functional Hardware Medium UCX Provider'),
+                        //     pragma_suffix: '-hw-medium-ucx-provider',
+                        //     label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
+                        //     next_version: next_version(),
+                        //     stage_tags: 'hw,medium,provider',
+                        //     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        //     default_nvme: 'auto',
+                        //     provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
+                        //     job_status: job_status_internal,
+                        //     image_version: 'el9.7'
+                        // ),
+                        // 'Functional Hardware Large': getFunctionalTestStage(
+                        //     name: 'Functional Hardware Large',
+                        //     runStage: shouldStageRun('Functional Hardware Large'),
+                        //     pragma_suffix: '-hw-large',
+                        //     label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                        //     next_version: next_version(),
+                        //     stage_tags: 'hw,large',
+                        //     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        //     default_nvme: 'auto',
+                        //     job_status: job_status_internal,
+                        //     image_version: 'el9.7'
+                        // ),
+                        // 'Functional Hardware Large MD on SSD': getFunctionalTestStage(
+                        //     name: 'Functional Hardware Large MD on SSD',
+                        //     runStage: shouldStageRun('Functional Hardware Large MD on SSD'),
+                        //     pragma_suffix: '-hw-large-md-on-ssd',
+                        //     label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                        //     next_version: next_version(),
+                        //     stage_tags: 'hw,large',
+                        //     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        //     default_nvme: 'auto_md_on_ssd',
+                        //     job_status: job_status_internal,
+                        //     image_version: 'el9.7'
+                        // ),
+                        // 'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
+                        //     name: 'Functional Cluster Box Medium MD on SSD',
+                        //     runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
+                        //     pragma_suffix:'-cb-medium-md-on-ssd',
+                        //     label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                        //     next_version: next_version(),
+                        //     stage_tags: 'cb,medium,-provider',
+                        //     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        //     nvme: 'auto_md_on_ssd',
+                        //     node_count: 5,
+                        //     run_if_pr: true,
+                        //     run_if_landing: false,
+                        //     job_status: job_status_internal,
+                        //     image_version: 'el9.7'
+                        // ),
+                        // 'Functional Cluster Box Medium Verbs Provider MD on SSD': getFunctionalTestStage(
+                        //     name: 'Functional Cluster Box Medium Verbs Provider MD on SSD',
+                        //     runStage: shouldStageRun('Functional Cluster Box Medium Verbs Provider MD on SSD'),
+                        //     pragma_suffix:'-cb-medium-verbs-provider-md-on-ssd',
+                        //     label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                        //     next_version: next_version(),
+                        //     stage_tags: 'cb,medium,provider',
+                        //     default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                        //     nvme: 'auto_md_on_ssd',
+                        //     provider: 'ofi+verbs;ofi_rxm',
+                        //     node_count: 5,
+                        //     run_if_pr: true,
+                        //     run_if_landing: false,
+                        //     job_status: job_status_internal,
+                        //     image_version: 'el9.7'
+                        // ),
                     )
                 }
             }

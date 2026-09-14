@@ -16,6 +16,10 @@
 #include "dlck_engine.h"
 #include "dlck_pool.h"
 
+#define MAY_CRASH_MSG                                                                              \
+	"The cleanup procedure did not go according to plan. The process may crash soon. Sorry "   \
+	"for the inconvenience.\n"
+
 int
 			     dss_register_dbtree_classes(void);
 
@@ -35,10 +39,17 @@ static int
 dlck_engine_alloc(unsigned targets, struct dlck_engine **engine_ptr)
 {
 	struct dlck_engine *engine;
+	int                 rc;
 
 	D_ALLOC_PTR(engine);
 	if (engine == NULL) {
 		return -DER_NOMEM;
+	}
+
+	rc = ABT_barrier_create(targets, &engine->all_targets_ready);
+	if (rc != ABT_SUCCESS) {
+		D_FREE(engine);
+		return dss_abterr2der(rc);
 	}
 
 	/** each of the targets will get its own xstream + 1 for daos_sys */
@@ -64,6 +75,7 @@ static void
 dlck_engine_free(struct dlck_engine *engine)
 {
 	D_FREE(engine->xss);
+	(void)ABT_barrier_free(&engine->all_targets_ready);
 	D_FREE(engine);
 }
 
@@ -491,23 +503,17 @@ fail_engine_free:
 }
 
 int
-dlck_engine_stop(struct dlck_engine *engine)
+dlck_engine_stop(struct dlck_engine *engine, struct checker *ck)
 {
 	int rc;
 
-	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_STOP)) { /** fault injection */
-		return daos_errno2der(daos_fail_value_get());
-	}
-
-	if (engine->join_fail) {
-		/** Cannot stop the engine in this case. It will probably crash. */
-		return -DER_BUSY;
-	}
-
 	rc = xstream_stop_all(engine);
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_STOP)) { /** fault injection */
+		rc = daos_errno2der(daos_fail_value_get());
+	}
 	if (rc != DER_SUCCESS) {
-		/** not all execution streams were stopped - can't pull out other resources */
-		return rc;
+		CK_PRINT(ck, MAY_CRASH_MSG);
+		goto fail_vos_db_fini;
 	}
 
 	vos_db_fini();
@@ -518,8 +524,8 @@ dlck_engine_stop(struct dlck_engine *engine)
 
 	rc = vos_srv_module.sm_fini();
 	if (rc != DER_SUCCESS) {
-		/** this is odd - do not free other resources just in case */
-		return rc;
+		CK_PRINT(ck, MAY_CRASH_MSG);
+		goto fail_dss_unregister;
 	}
 
 	dss_unregister_key(&vos_module_key);
@@ -527,6 +533,19 @@ dlck_engine_stop(struct dlck_engine *engine)
 
 	bio_nvme_fini();
 
+	dlck_engine_free(engine);
+
+	return rc;
+
+fail_vos_db_fini:
+	vos_db_fini();
+	vos_standalone_tls_fini();
+	ds_tls_key_delete();
+	(void)vos_srv_module.sm_fini();
+fail_dss_unregister:
+	dss_unregister_key(&vos_module_key);
+	dss_unregister_key(&daos_srv_modkey);
+	bio_nvme_fini();
 	dlck_engine_free(engine);
 
 	return rc;
@@ -556,20 +575,9 @@ struct dlck_exec {
 static void
 dlck_engine_join_all_no_error(struct dlck_engine *engine, struct dlck_exec *de)
 {
-	int rc;
-
 	for (int i = 0; i < engine->targets; ++i) {
 		if (de->ults[i].thread != ABT_THREAD_NULL) {
-			rc = ABT_thread_join(de->ults[i].thread);
-			if (rc != ABT_SUCCESS) {
-				engine->join_fail = true;
-				/**
-				 * the ULT did not join - can't free the thread nor free the
-				 * arguments
-				 */
-				continue;
-			}
-
+			(void)ABT_thread_join(de->ults[i].thread);
 			(void)ABT_thread_free(&de->ults[i].thread);
 		}
 		(void)de->arg_free_fn(de->custom, &de->ult_args[i]);
@@ -644,20 +652,19 @@ fail_join_and_free:
  * \retval -DER_*	Other error.
  */
 static int
-dlck_engine_targets_stop(struct dlck_engine *engine, struct dlck_exec *de)
+dlck_engine_targets_stop(struct dlck_engine *engine, struct dlck_exec *de, struct checker *ck)
 {
 	int rc = DER_SUCCESS;
 
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_JOIN)) { /** fault injection */
-		engine->join_fail = true;
-		return daos_errno2der(daos_fail_value_get());
+		rc = daos_errno2der(daos_fail_value_get());
+		goto fail_join_and_free;
 	}
 
 	for (int i = 0; i < engine->targets; ++i) {
 		rc = ABT_thread_join(de->ults[i].thread);
 		if (rc != ABT_SUCCESS) {
 			rc = dss_abterr2der(rc);
-			engine->join_fail = true;
 			goto fail_join_and_free;
 		}
 
@@ -679,6 +686,7 @@ dlck_engine_targets_stop(struct dlck_engine *engine, struct dlck_exec *de)
 	return rc;
 
 fail_join_and_free:
+	CK_PRINT(ck, MAY_CRASH_MSG);
 	dlck_engine_join_all_no_error(engine, de);
 
 	return rc;
@@ -706,7 +714,7 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 	}
 
 	CK_PRINT(ck, STOP_TGT_STR "...\n");
-	rc = dlck_engine_targets_stop(engine, &de);
+	rc = dlck_engine_targets_stop(engine, &de, ck);
 	CK_PRINTL_RC(ck, rc, STOP_TGT_STR);
 
 	return rc;
