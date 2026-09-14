@@ -2410,7 +2410,8 @@ _no_stale_read_source(uint32_t domain_nr, uint32_t target_nr, daos_oclass_id_t o
 	struct pl_obj_layout **before;
 	uint32_t               down_lo   = out_domains * target_nr;
 	uint32_t               down_hi   = down_lo + down_domains * target_nr;
-	uint32_t               relocated = 0;
+	uint32_t               relocated        = 0;
+	uint32_t               relocated_failed = 0;
 	uint32_t               i, o;
 
 	jtc_init(&ctx, domain_nr, 1, target_nr, oc, g_verbose);
@@ -2460,14 +2461,19 @@ _no_stale_read_source(uint32_t domain_nr, uint32_t target_nr, daos_oclass_id_t o
 			if (ro_tgt != (uint32_t)-1 && ro_tgt != cur_tgt)
 				assert_true(ro->ol_shards[i].po_rebuilding);
 
-			/* the shard was moved off a target which is still healthy, so the
-			 * data is there and not on the new target: the current layout must
-			 * not be read from either
+			/* the shard was moved off the target it was written to, so the data
+			 * is not on the new target: the current layout must not be read from
+			 * either. That holds whether the old target is still healthy (the data
+			 * is there) or has failed as well (the data has to be rebuilt), and
+			 * the latter is where the remap misses the flag most often, since a
+			 * displaced shard never visits its failed spare.
 			 */
-			if (old_tgt != (uint32_t)-1 && old_tgt != cur_tgt &&
-			    jtc_tgt_is_upin(&ctx, old_tgt)) {
+			if (old_tgt != (uint32_t)-1 && old_tgt != cur_tgt) {
 				assert_true(cur->ol_shards[i].po_rebuilding);
-				relocated++;
+				if (jtc_tgt_is_upin(&ctx, old_tgt))
+					relocated++;
+				else
+					relocated_failed++;
 			}
 		}
 		jtc_assert_grp_layout(&ctx, oid, ro);
@@ -2478,8 +2484,10 @@ _no_stale_read_source(uint32_t domain_nr, uint32_t target_nr, daos_oclass_id_t o
 	/* the scenario has to actually relocate something, otherwise the checks above are
 	 * not testing anything
 	 */
-	print_message("%u shards relocated off a healthy target\n", relocated);
+	print_message("%u shards relocated off a healthy target, %u off a failed one\n", relocated,
+		      relocated_failed);
 	assert_true(relocated > 0);
+	assert_true(relocated_failed > 0);
 
 	for (o = 0; o < obj_nr; o++)
 		pl_obj_layout_free(before[o]);

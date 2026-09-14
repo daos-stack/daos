@@ -939,8 +939,9 @@ layout_may_relocate(struct pl_obj_layout *layout)
  * the ongoing rebuild - comp_need_remap() accumulates the flags of the rejected candidates into
  * the remapped shard. When the shard is displaced purely because another shard took its spare
  * first, no flag is accumulated and the new target, which has never been written to, is offered
- * to readers. The data is on the target the PRE_REBUILD layout still points at, so a difference
- * against a healthy PRE_REBUILD target means the CURRENT target has no data yet.
+ * to readers. The data is on the target the PRE_REBUILD layout still points at (or was, when
+ * that target has failed as well), so a difference against the PRE_REBUILD target means the
+ * CURRENT target has no data yet.
  *
  * A drain, a reintegration or an extension running at the same time does not move a shard, it
  * gives the shard a second, "peer" target and has the write path update both of them until the
@@ -1012,19 +1013,15 @@ layout_mark_relocated(struct pl_jump_map *jmap, uint32_t layout_ver, struct jm_o
 				continue;
 		}
 		/*
-		 * The CURRENT layout only has to skip the shard when the data is known to be
-		 * elsewhere, i.e. the PRE_REBUILD target is still a healthy target which the
-		 * ongoing rebuild is not moving away from.
+		 * In the CURRENT direction the shard is skipped whatever the state of the
+		 * PRE_REBUILD target is. That target is where the data was written until the
+		 * new pool map version, so the CURRENT target, which differs from it, has never
+		 * been written to. Whether the PRE_REBUILD target is still healthy (the data is
+		 * elsewhere) or has failed itself (the data has to be rebuilt from the other
+		 * shards) does not change that; in the latter case the remap only flags the
+		 * shard when its walk happens to visit the failed spare, and a shard displaced
+		 * by a neighbor taking its spare never visits it.
 		 */
-		if (gen_mode == CURRENT) {
-			struct pool_target *ref_pot;
-
-			rc = pool_map_find_target(jmap->jmp_map.pl_poolmap, ref_tgt, &ref_pot);
-			D_ASSERT(rc == 1);
-			if (ref_pot->ta_comp.co_status != PO_COMP_ST_UPIN)
-				continue;
-		}
-
 		D_DEBUG(DB_PL,
 			DF_OID " shard %d ver %u relocated from target %u to %u, skip it on read\n",
 			DP_OID(md->omd_id), i, md->omd_ver,
