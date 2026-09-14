@@ -23,7 +23,7 @@ The script always runs:
 
     --build-deps=only   build only the dependencies of DAOS
     --jobs <nproc>      number of parallel jobs
-    USE_INSTALLED=all   reuse dependencies already installed on the system
+    USE_INSTALLED=all   use dependencies already installed on the system
     PREFIX=/opt/daos    installation prefix
 
 Options:
