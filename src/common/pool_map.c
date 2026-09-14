@@ -1172,8 +1172,9 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 					return -DER_NO_PERM;
 				}
 
-			} else if (dc->co_status & (PO_COMP_ST_UPIN | PO_COMP_ST_UP |
-						    PO_COMP_ST_DOWN)) {
+			} else if (dc->co_status &
+				   (PO_COMP_ST_UPIN | PO_COMP_ST_UP | PO_COMP_ST_DOWN |
+				    PO_COMP_ST_DRAIN | PO_COMP_ST_DOWNOUT)) {
 				if (!existed) {
 					D_ERROR("status [%u] not valid for new comp\n",
 						dc->co_status);
@@ -1496,7 +1497,7 @@ fill_rank_comp(uint32_t rank, int idx, int map_version, uint8_t new_status, uint
 static int
 add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int map_version,
 			    uint32_t nr_tgts, int ndomains, const uint32_t *domains,
-			    d_rank_list_t *ordered_ranks)
+			    d_rank_list_t *ordered_ranks, d_rank_list_t *downout_ranks)
 {
 	int			rc;
 	uint32_t                num_node_comps;
@@ -1594,6 +1595,7 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int 
 		case D_FD_NODE_TYPE_RANK:
 		{
 			uint32_t rank = node.fdn_val.rank;
+			uint8_t  rank_status;
 
 			if (map) {
 				struct pool_domain *found_dom;
@@ -1609,8 +1611,12 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int 
 			}
 
 			updated = true;
-			fill_rank_comp(node.fdn_val.rank, num_rank_comps, map_version,
-				       new_status, nr_tgts, &map_comp);
+			rank_status = new_status;
+			if (map == NULL && downout_ranks != NULL &&
+			    d_rank_in_rank_list(downout_ranks, rank))
+				rank_status = PO_COMP_ST_DOWNOUT;
+			fill_rank_comp(node.fdn_val.rank, num_rank_comps, map_version, rank_status,
+				       nr_tgts, &map_comp);
 
 			D_ASSERT(i < ordered_ranks->rl_nr);
 			ordered_ranks->rl_ranks[i++] = node.fdn_val.rank;
@@ -1670,12 +1676,14 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf, int 
  */
 int
 gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
-	     int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr)
+	     int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr,
+	     d_rank_list_t *downout_ranks)
 {
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
 	uint32_t		num_comps;
 	uint8_t			new_status;
+	uint8_t                  target_status;
 	int			i, rc;
 	uint32_t		num_domain_comps = 0;
 	d_rank_list_t		*ordered_ranks;
@@ -1700,7 +1708,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 		D_GOTO(out_ranks, rc = -DER_NOMEM);
 
 	rc = add_domain_tree_to_pool_buf(map, map_buf, map_version, dss_tgt_nr, ndomains, domains,
-					 ordered_ranks);
+					 ordered_ranks, downout_ranks);
 	if (rc != 0) {
 		/* Do not need update the pool map anymore */
 		if (rc == -DER_EXIST)
@@ -1720,9 +1728,20 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	for (i = 0; i < ordered_ranks->rl_nr; i++) {
 		int j;
 
+		/*
+		 * Asymmetric pool create: for a fresh pool (map == NULL), if the rank
+		 * is already excluded / admin-excluded in system membership, all its
+		 * targets are inserted as DOWNOUT so that a subsequent reint can bring
+		 * them back naturally without extending the pool map.
+		 */
+		target_status = new_status;
+		if (map == NULL && downout_ranks != NULL &&
+		    d_rank_in_rank_list(downout_ranks, ordered_ranks->rl_ranks[i]))
+			target_status = PO_COMP_ST_DOWNOUT;
+
 		for (j = 0; j < dss_tgt_nr; j++) {
 			map_comp.co_type = PO_COMP_TP_TARGET;
-			map_comp.co_status = new_status;
+			map_comp.co_status  = target_status;
 			map_comp.co_index = j;
 			map_comp.co_padding = 0;
 			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
@@ -1730,7 +1749,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 			map_comp.co_ver = map_version;
 			map_comp.co_in_ver = map_version;
 			map_comp.co_fseq = 1;
-			map_comp.co_flags = PO_COMPF_NONE;
+			map_comp.co_flags   = PO_COMPF_NONE;
 			map_comp.co_nr = 1;
 
 			D_DEBUG(DB_TRACE, "adding target: type=0x%hhx, status=%hhu, idx=%d, id=%d, "
@@ -1746,6 +1765,45 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 		}
 	}
 
+	/*
+	 * Asymmetric pool create: propagate DOWNOUT up the domain tree so a
+	 * parent whose entire subtree is DOWNOUT is marked DOWNOUT too. Only
+	 * runs on fresh pools with downout_ranks; the regular exclude flow
+	 * handles propagation via update_dom_status_by_tgt_id.
+	 *
+	 * pb_comps stores higher-typed comps first (PERF > FAULT > NODE > RANK)
+	 * and preserves BFS order within each type, so a parent's children form
+	 * a contiguous slice of co_nr entries in the immediately lower level.
+	 * Sweeping from the last domain backward with a sliding child cursor
+	 * gives each parent exactly its own children.
+	 */
+	if (map == NULL && downout_ranks != NULL && downout_ranks->rl_nr > 0) {
+		struct pool_component *comps = map_buf->pb_comps;
+		uint32_t               child_start;
+		int                    d;
+
+		child_start = map_buf->pb_domain_nr + map_buf->pb_node_nr;
+		for (d = map_buf->pb_domain_nr - 1; d >= 0; d--) {
+			struct pool_component *dom     = &comps[d];
+			uint32_t               cn      = dom->co_nr;
+			bool                   all_out = true;
+			uint32_t               k;
+
+			D_ASSERT(child_start >= cn);
+			child_start -= cn;
+			if (cn == 0)
+				continue;
+			for (k = 0; k < cn; k++) {
+				if (comps[child_start + k].co_status != PO_COMP_ST_DOWNOUT) {
+					all_out = false;
+					break;
+				}
+			}
+			if (all_out)
+				dom->co_status = PO_COMP_ST_DOWNOUT;
+		}
+	}
+
 	*map_buf_out = map_buf;
 	d_rank_list_free(ordered_ranks);
 	return 0;
@@ -1757,6 +1815,73 @@ out_ranks:
 	return rc;
 }
 
+/**
+ * Count the domains of \a buf that can actually host data.
+ *
+ * Asymmetric pool create inserts the targets of every excluded rank as DOWNOUT, and
+ * gen_pool_buf() then propagates DOWNOUT up the domain tree so a domain whose entire
+ * subtree is DOWNOUT is itself DOWNOUT. Such a domain provides no redundancy at all, so
+ * it must not be counted when the pool redundancy factor is admitted or clamped;
+ * otherwise a pool could be created advertising an rd_fac that its usable domains
+ * cannot sustain.
+ *
+ * pb_comps stores the domain components first, so the first pb_domain_nr entries are
+ * exactly the (non-rank) domains.
+ *
+ * @param[in] buf	Pool map buffer
+ *
+ * @return		Number of domains that are not DOWNOUT
+ */
+uint32_t
+pool_buf_avail_domain_nr(struct pool_buf *buf)
+{
+	uint32_t nr = 0;
+	uint32_t i;
+
+	for (i = 0; i < buf->pb_domain_nr; i++) {
+		if (buf->pb_comps[i].co_status != PO_COMP_ST_DOWNOUT)
+			nr++;
+	}
+
+	return nr;
+}
+
+/**
+ * Check whether \a buf can sustain the pool redundancy factor \a rd_fac, and optionally
+ * clamp it down to the largest value the buffer can sustain.
+ *
+ * Sustaining rd_fac requires rd_fac + 1 domains that can actually hold data, so the check
+ * is made against pool_buf_avail_domain_nr() rather than against pb_domain_nr. Counting the
+ * fully-DOWNOUT domains produced by an asymmetric pool create would let a pool be created
+ * advertising a redundancy factor that its usable domains cannot deliver.
+ *
+ * @param[in]		buf	Pool map buffer
+ * @param[in,out]	rd_fac	Requested redundancy factor. Lowered to the largest
+ *				sustainable value when it is too high and \a clamp is set.
+ * @param[in]		clamp	Clamp an unsustainable \a rd_fac instead of rejecting it.
+ *
+ * @return			0		\a rd_fac is (now) sustainable
+ *				-DER_INVAL	\a rd_fac is unsustainable and \a clamp is not
+ *						set, or \a buf has no usable domain at all
+ */
+int
+pool_buf_rf_check(struct pool_buf *buf, uint64_t *rd_fac, bool clamp)
+{
+	uint32_t avail = pool_buf_avail_domain_nr(buf);
+
+	if (avail == 0)
+		return -DER_INVAL;
+
+	if (*rd_fac + 1 <= avail)
+		return 0;
+
+	if (!clamp)
+		return -DER_INVAL;
+
+	*rd_fac = avail - 1;
+
+	return 0;
+}
 
 int
 pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
@@ -2594,18 +2719,14 @@ pmap_fail_stat_fini(struct pmap_fail_stat *stat)
 static bool
 pmap_comp_failed(struct pool_component *comp)
 {
-	return (comp->co_status == PO_COMP_ST_DOWN) ||
-	       (comp->co_status == PO_COMP_ST_DOWNOUT &&
-		comp->co_flags & PO_COMPF_DOWN2OUT);
+	return (comp->co_status == PO_COMP_ST_DOWN) || pool_comp_is_failed_downout(comp);
 }
 
 static bool
 pmap_comp_failed_earlier(struct pool_component *comp, uint32_t ver)
 {
-	return ((comp->co_status == PO_COMP_ST_DOWNOUT &&
-		 comp->co_out_ver <= ver) ||
-		(comp->co_status == PO_COMP_ST_DOWN &&
-		 comp->co_fseq <= ver));
+	return ((pool_comp_is_failed_downout(comp) && comp->co_out_ver <= ver) ||
+		(comp->co_status == PO_COMP_ST_DOWN && comp->co_fseq <= ver));
 }
 
 static int
@@ -2864,7 +2985,34 @@ fail:
 }
 
 /**
+ * True if \a dom cannot hold data at all and never will, because every target below it was
+ * excluded when the pool was created. Such a domain is not a failure that rebuild will heal,
+ * it is capacity the pool never had.
+ */
+static bool
+pmap_dom_creation_excluded(struct pool_domain *dom)
+{
+	int i;
+
+	if (dom->do_target_nr == 0)
+		return true;
+
+	for (i = 0; i < dom->do_target_nr; i++) {
+		if (!pool_comp_is_creation_downout(&dom->do_targets[i].ta_comp))
+			return false;
+	}
+
+	return true;
+}
+
+/**
  * Check if #concurrent_failures exceeds RF since pool map version \a last_ver.
+ *
+ * Also checks the pool's absolute capability: sustaining \a rf needs rf + 1 fault domains
+ * that can hold data. Domains excluded at pool creation time are permanently empty, and
+ * pmap_node_check() cannot see them -- pmap_comp_failed() matches only DOWN and *failed*
+ * DOWNOUT -- so without an explicit check a pool whose usable domains number rf or fewer
+ * would still be certified as satisfying rf.
  */
 int
 pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint32_t rf)
@@ -2873,6 +3021,7 @@ pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint3
 	struct pool_domain	*node_dom;
 	struct pmap_fail_stat	 fstat;
 	int			 node_nr, i;
+	int                      usable_nr = 0;
 	int			 com_type;
 	int			 rc = 0;
 
@@ -2894,6 +3043,18 @@ pool_map_rf_verify(struct pool_map *map, uint32_t last_ver, uint32_t rlvl, uint3
 	D_ASSERT(node_nr >= 0);
 	if (node_nr == 0)
 		return -DER_INVAL;
+
+	for (i = 0; i < node_nr; i++) {
+		if (!pmap_dom_creation_excluded(&node_doms[i]))
+			usable_nr++;
+	}
+	if ((uint32_t)usable_nr <= rf) {
+		rc = -DER_RF;
+		D_ERROR("RF broken, only %d of %d domains at rlvl %u are usable, rf %u, " DF_RC
+			"\n",
+			usable_nr, node_nr, rlvl, rf, DP_RC(rc));
+		goto out;
+	}
 
 	for (i = 0; i < node_nr; i++) {
 		node_dom = &node_doms[i];

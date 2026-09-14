@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -627,8 +627,10 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.
  * \param[in]	iod	IO descriptor for list-io.
- *			There is a limit on the number of descriptors (DAOS_ARRAY_LIST_IO_LIMIT) if
- *			the length on the ranges are under DAOS_ARRAY_RG_LEN_THD.
+ *			A long run of extents at or below DAOS_ARRAY_RG_LEN_THD bytes landing on
+ *			the same dkey is split into several RPCs of at most
+ *			DAOS_ARRAY_LIST_IO_LIMIT such extents, and consecutive splits of a dkey
+ *			are issued one at a time. Ranges above that size are issued as before.
  * \param[in]	sgl	Scatter/Gather list for data buffer.
  * \param[out]	read_size
  *			How much data is actually read.
@@ -663,8 +665,12 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.
  * \param[in]	iod	IO descriptor for list-io.
- *			There is a limit on the number of descriptors (DAOS_ARRAY_LIST_IO_LIMIT) if
- *			the length on the ranges are under DAOS_ARRAY_RG_LEN_THD.
+ *			A long run of extents at or below DAOS_ARRAY_RG_LEN_THD bytes landing on
+ *			the same dkey is split into several RPCs of at most
+ *			DAOS_ARRAY_LIST_IO_LIMIT such extents, and consecutive splits of a dkey
+ *			are issued one at a time. Ranges above that size are issued as before. A
+ *			dkey can therefore be updated by more than one RPC, so a failure can
+ *			leave it with some ranges applied and earlier ones missing.
  * \param[in]	sgl	Scatter/Gather list for data buffer.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.

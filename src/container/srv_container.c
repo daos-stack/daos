@@ -1814,14 +1814,15 @@ cont_track_eph_leader_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	eph_ldr->cte_servers_num = rank_nr;
 	eph_ldr->cte_current_ec_agg_eph = 0;
 	eph_ldr->cte_rdb_ec_agg_eph     = 0;
+	eph_ldr->cte_start_ts           = daos_gettime_coarse();
 	for (i = 0; i < rank_nr; i++) {
 		eph_ldr->cte_server_ephs[i].re_rank = doms[i].do_comp.co_rank;
 		eph_ldr->cte_server_ephs[i].re_ec_agg_eph = 0;
 		eph_ldr->cte_server_ephs[i].re_stable_eph = 0;
-		eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts = daos_gettime_coarse();
+		eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts = eph_ldr->cte_start_ts;
 	}
 	d_list_add(&eph_ldr->cte_list, &cont_svc->cs_cont_ephs_leader_list);
-	eph_ldr->cte_ec_agg_warn_slug_ts = daos_gettime_coarse();
+	eph_ldr->cte_ec_agg_warn_slug_ts = eph_ldr->cte_start_ts;
 	*leader_p = eph_ldr;
 out:
 	if (rc) {
@@ -2260,7 +2261,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		cur_eph = d_hlc2sec(eph_ldr->cte_current_ec_agg_eph);
 		new_eph = d_hlc2sec(min_ec_agg_eph);
 		if ((cur_ts > eph_ldr->cte_ec_agg_warn_slug_ts + 600) && cur_eph &&
-		    (new_eph > cur_eph) && (new_eph - cur_eph) >= 600)
+		    (new_eph > cur_eph) && (new_eph - cur_eph) >= 600 &&
+		    (cur_ts - eph_ldr->cte_start_ts) >= (new_eph - cur_eph))
 			D_WARN(DF_CONT ": Sluggish EC boundary reporting. "
 				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 "\n",
 			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), cur_eph, new_eph,

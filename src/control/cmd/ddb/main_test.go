@@ -297,22 +297,12 @@ func openFnCheckingWriteMode(t *testing.T, wantWriteMode bool, called *bool) fun
 	}
 }
 
-// openFnMustNotBeCalled is a ddb_run_open_Fn stub that fails the test if
-// the open function is called at all (used to verify no-auto-open behavior).
-func openFnMustNotBeCalled(_ string, _ string, _ bool) error {
-	return fmt.Errorf("open should not have been called")
-}
-
-// openFnAllowedOnce returns a ddb_run_open_Fn stub that allows the open
-// function to be called exactly once (used to verify the 'open' command
-// itself calls open but the CLI does not pre-open).
-func openFnAllowedOnce() func(string, string, bool) error {
-	count := 0
-	return func(_ string, _ string, _ bool) error {
-		count++
-		if count > 1 {
-			return fmt.Errorf("open pre-opened by CLI (called %d times)", count)
-		}
+// closeFnChecking returns a ddb_run_close_Fn stub. called is set to true
+// when the stub is invoked, allowing the caller to assert that close was
+// called.
+func closeFnChecking(called *bool) func() error {
+	return func() error {
+		*called = true
 		return nil
 	}
 }
@@ -373,58 +363,37 @@ func TestDdb_runDdb(t *testing.T) {
 				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
 			},
 		},
-		"No auto-open for feature command": {
-			// noAutoOpen is keyed on opts.Args.RunCmd which is empty in command-file
-			// mode, so this case only applies to command-line mode.
-			args: []string{"-s", "/foo/vos-0", "feature", "--show"},
-			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnMustNotBeCalled
-			},
+		"Reject top-level flags for feature (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "feature", "--show"},
+			expErr: ddbTestErr(`"feature" manages its own pool lifecycle`),
 		},
-		"No auto-open for open command": {
-			// The CLI should NOT pre-open when the 'open' command is issued; only the
-			// command itself should call ctx.Open (exactly once).
-			// Only valid for command-line mode (see note above).
-			args: []string{"-s", "/foo/vos-0", "open", "/foo/vos-0"},
-			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnAllowedOnce()
-			},
+		"Reject top-level flags for open (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "open", "/foo/vos-0"},
+			expErr: ddbTestErr(`"open" manages its own pool lifecycle`),
 		},
-		"No auto-open for smd_sync": {
-			args: []string{"-s", "/foo/vos-0", "smd_sync"},
-			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnMustNotBeCalled
-			},
+		"Reject top-level flags for smd_sync (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "smd_sync"},
+			expErr: ddbTestErr(`"smd_sync" manages its own pool lifecycle`),
 		},
-		"No auto-open for rm_pool": {
-			args: []string{"-s", "/foo/vos-0", "rm_pool", "/mnt/rdb-pool"},
-			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnMustNotBeCalled
-			},
+		"Reject top-level vos_path and db_path for rm_pool (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "-p", "/sysdb", "rm_pool", "/mnt/rdb-pool"},
+			expErr: ddbTestErr(`"rm_pool" manages its own pool lifecycle`),
 		},
-		"No auto-open for close": {
-			args: []string{"-s", "/foo/vos-0", "close"},
-			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnMustNotBeCalled
-			},
+		"Reject top-level flags for close (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "close"},
+			expErr: ddbTestErr(`"close" manages its own pool lifecycle`),
 		},
-		"No auto-open for prov_mem": {
-			args: []string{"-s", "/foo/vos-0", "prov_mem", "/db", "/mnt"},
-			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnMustNotBeCalled
-			},
+		"Reject top-level flags for prov_mem (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "prov_mem", "-p", "/db", "/mnt"},
+			expErr: ddbTestErr(`"prov_mem" manages its own pool lifecycle`),
 		},
-		"No auto-open for dev_list": {
-			args: []string{"-s", "/foo/vos-0", "dev_list", "/db"},
-			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnMustNotBeCalled
-			},
+		"Reject top-level flags for dev_list (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "dev_list", "-p", "/db"},
+			expErr: ddbTestErr(`"dev_list" manages its own pool lifecycle`),
 		},
-		"No auto-open for dev_replace": {
-			args: []string{"-s", "/foo/vos-0", "dev_replace", "/db", "old-uuid", "new-uuid"},
-			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnMustNotBeCalled
-			},
+		"Reject top-level flags for dev_replace (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "dev_replace", "-p", "/db", "old-uuid", "new-uuid"},
+			expErr: ddbTestErr(`"dev_replace" manages its own pool lifecycle`),
 		},
 		"Init failure": {
 			args:   []string{"ls"},
@@ -502,6 +471,19 @@ func TestDdb_runDdbCommandFile(t *testing.T) {
 				var called bool
 				ddb_run_open_Fn = openFnCheckingWriteMode(t, true, &called)
 				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
+			},
+		},
+		"Top-level flags accepted in -f mode even for a bare pool-lifecycle command": {
+			flags:   []string{"-s", "/foo/vos-0", "-p", "/bar"},
+			cmdLine: "close",
+			setup: func(t *testing.T) {
+				var openCalled, closeCalled bool
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar", &openCalled)
+				ddb_run_close_Fn = closeFnChecking(&closeCalled)
+				t.Cleanup(func() {
+					test.AssertTrue(t, openCalled, "open was not called")
+					test.AssertTrue(t, closeCalled, "close was not called")
+				})
 			},
 		},
 	} {

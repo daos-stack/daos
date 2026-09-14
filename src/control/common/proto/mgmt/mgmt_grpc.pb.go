@@ -72,10 +72,13 @@ const (
 	MgmtSvc_SystemCheckGetPolicy_FullMethodName     = "/mgmt.MgmtSvc/SystemCheckGetPolicy"
 	MgmtSvc_SystemCheckRepair_FullMethodName        = "/mgmt.MgmtSvc/SystemCheckRepair"
 	MgmtSvc_SystemCheckEngineReport_FullMethodName  = "/mgmt.MgmtSvc/SystemCheckEngineReport"
+	MgmtSvc_SystemCheckRegPool_FullMethodName       = "/mgmt.MgmtSvc/SystemCheckRegPool"
+	MgmtSvc_SystemCheckDeregPool_FullMethodName     = "/mgmt.MgmtSvc/SystemCheckDeregPool"
 	MgmtSvc_SystemSetAttr_FullMethodName            = "/mgmt.MgmtSvc/SystemSetAttr"
 	MgmtSvc_SystemGetAttr_FullMethodName            = "/mgmt.MgmtSvc/SystemGetAttr"
 	MgmtSvc_SystemSetProp_FullMethodName            = "/mgmt.MgmtSvc/SystemSetProp"
 	MgmtSvc_SystemGetProp_FullMethodName            = "/mgmt.MgmtSvc/SystemGetProp"
+	MgmtSvc_CheckLeaderDrpc_FullMethodName          = "/mgmt.MgmtSvc/CheckLeaderDrpc"
 	MgmtSvc_FaultInjectReport_FullMethodName        = "/mgmt.MgmtSvc/FaultInjectReport"
 	MgmtSvc_FaultInjectPoolFault_FullMethodName     = "/mgmt.MgmtSvc/FaultInjectPoolFault"
 	MgmtSvc_FaultInjectMgmtPoolFault_FullMethodName = "/mgmt.MgmtSvc/FaultInjectMgmtPoolFault"
@@ -181,6 +184,10 @@ type MgmtSvcClient interface {
 	SystemCheckRepair(ctx context.Context, in *CheckActReq, opts ...grpc.CallOption) (*CheckActResp, error)
 	// Report on checker results for an individual rank.
 	SystemCheckEngineReport(ctx context.Context, in *shared.CheckReportReq, opts ...grpc.CallOption) (*shared.CheckReportResp, error)
+	// Register a pool with the MS from the check leader.
+	SystemCheckRegPool(ctx context.Context, in *shared.CheckRegPoolReq, opts ...grpc.CallOption) (*shared.CheckRegPoolResp, error)
+	// De-register a pool with the MS from the check leader.
+	SystemCheckDeregPool(ctx context.Context, in *shared.CheckDeregPoolReq, opts ...grpc.CallOption) (*shared.CheckDeregPoolResp, error)
 	// Set a system attribute or attributes.
 	SystemSetAttr(ctx context.Context, in *SystemSetAttrReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Get a system attribute or attributes.
@@ -189,6 +196,8 @@ type MgmtSvcClient interface {
 	SystemSetProp(ctx context.Context, in *SystemSetPropReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Get a system property or properties.
 	SystemGetProp(ctx context.Context, in *SystemGetPropReq, opts ...grpc.CallOption) (*SystemGetPropResp, error)
+	// Forward a request to the check leader while in checker mode.
+	CheckLeaderDrpc(ctx context.Context, in *CheckLeaderReq, opts ...grpc.CallOption) (*CheckLeaderResp, error)
 	// Fault injection handlers are only implemented in non-release builds.
 	// FaultInjectReport injects a checker report.
 	FaultInjectReport(ctx context.Context, in *chk.CheckReport, opts ...grpc.CallOption) (*DaosResp, error)
@@ -645,6 +654,26 @@ func (c *mgmtSvcClient) SystemCheckEngineReport(ctx context.Context, in *shared.
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemCheckRegPool(ctx context.Context, in *shared.CheckRegPoolReq, opts ...grpc.CallOption) (*shared.CheckRegPoolResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(shared.CheckRegPoolResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_SystemCheckRegPool_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) SystemCheckDeregPool(ctx context.Context, in *shared.CheckDeregPoolReq, opts ...grpc.CallOption) (*shared.CheckDeregPoolResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(shared.CheckDeregPoolResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_SystemCheckDeregPool_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) SystemSetAttr(ctx context.Context, in *SystemSetAttrReq, opts ...grpc.CallOption) (*DaosResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DaosResp)
@@ -679,6 +708,16 @@ func (c *mgmtSvcClient) SystemGetProp(ctx context.Context, in *SystemGetPropReq,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SystemGetPropResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_SystemGetProp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) CheckLeaderDrpc(ctx context.Context, in *CheckLeaderReq, opts ...grpc.CallOption) (*CheckLeaderResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckLeaderResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_CheckLeaderDrpc_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -815,6 +854,10 @@ type MgmtSvcServer interface {
 	SystemCheckRepair(context.Context, *CheckActReq) (*CheckActResp, error)
 	// Report on checker results for an individual rank.
 	SystemCheckEngineReport(context.Context, *shared.CheckReportReq) (*shared.CheckReportResp, error)
+	// Register a pool with the MS from the check leader.
+	SystemCheckRegPool(context.Context, *shared.CheckRegPoolReq) (*shared.CheckRegPoolResp, error)
+	// De-register a pool with the MS from the check leader.
+	SystemCheckDeregPool(context.Context, *shared.CheckDeregPoolReq) (*shared.CheckDeregPoolResp, error)
 	// Set a system attribute or attributes.
 	SystemSetAttr(context.Context, *SystemSetAttrReq) (*DaosResp, error)
 	// Get a system attribute or attributes.
@@ -823,6 +866,8 @@ type MgmtSvcServer interface {
 	SystemSetProp(context.Context, *SystemSetPropReq) (*DaosResp, error)
 	// Get a system property or properties.
 	SystemGetProp(context.Context, *SystemGetPropReq) (*SystemGetPropResp, error)
+	// Forward a request to the check leader while in checker mode.
+	CheckLeaderDrpc(context.Context, *CheckLeaderReq) (*CheckLeaderResp, error)
 	// Fault injection handlers are only implemented in non-release builds.
 	// FaultInjectReport injects a checker report.
 	FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error)
@@ -971,6 +1016,12 @@ func (UnimplementedMgmtSvcServer) SystemCheckRepair(context.Context, *CheckActRe
 func (UnimplementedMgmtSvcServer) SystemCheckEngineReport(context.Context, *shared.CheckReportReq) (*shared.CheckReportResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method SystemCheckEngineReport not implemented")
 }
+func (UnimplementedMgmtSvcServer) SystemCheckRegPool(context.Context, *shared.CheckRegPoolReq) (*shared.CheckRegPoolResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method SystemCheckRegPool not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemCheckDeregPool(context.Context, *shared.CheckDeregPoolReq) (*shared.CheckDeregPoolResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method SystemCheckDeregPool not implemented")
+}
 func (UnimplementedMgmtSvcServer) SystemSetAttr(context.Context, *SystemSetAttrReq) (*DaosResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method SystemSetAttr not implemented")
 }
@@ -982,6 +1033,9 @@ func (UnimplementedMgmtSvcServer) SystemSetProp(context.Context, *SystemSetPropR
 }
 func (UnimplementedMgmtSvcServer) SystemGetProp(context.Context, *SystemGetPropReq) (*SystemGetPropResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method SystemGetProp not implemented")
+}
+func (UnimplementedMgmtSvcServer) CheckLeaderDrpc(context.Context, *CheckLeaderReq) (*CheckLeaderResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckLeaderDrpc not implemented")
 }
 func (UnimplementedMgmtSvcServer) FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method FaultInjectReport not implemented")
@@ -1805,6 +1859,42 @@ func _MgmtSvc_SystemCheckEngineReport_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemCheckRegPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(shared.CheckRegPoolReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemCheckRegPool(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_SystemCheckRegPool_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemCheckRegPool(ctx, req.(*shared.CheckRegPoolReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_SystemCheckDeregPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(shared.CheckDeregPoolReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemCheckDeregPool(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_SystemCheckDeregPool_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemCheckDeregPool(ctx, req.(*shared.CheckDeregPoolReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_SystemSetAttr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SystemSetAttrReq)
 	if err := dec(in); err != nil {
@@ -1873,6 +1963,24 @@ func _MgmtSvc_SystemGetProp_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MgmtSvcServer).SystemGetProp(ctx, req.(*SystemGetPropReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_CheckLeaderDrpc_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckLeaderReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).CheckLeaderDrpc(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_CheckLeaderDrpc_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).CheckLeaderDrpc(ctx, req.(*CheckLeaderReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2115,6 +2223,14 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtSvc_SystemCheckEngineReport_Handler,
 		},
 		{
+			MethodName: "SystemCheckRegPool",
+			Handler:    _MgmtSvc_SystemCheckRegPool_Handler,
+		},
+		{
+			MethodName: "SystemCheckDeregPool",
+			Handler:    _MgmtSvc_SystemCheckDeregPool_Handler,
+		},
+		{
 			MethodName: "SystemSetAttr",
 			Handler:    _MgmtSvc_SystemSetAttr_Handler,
 		},
@@ -2129,6 +2245,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemGetProp",
 			Handler:    _MgmtSvc_SystemGetProp_Handler,
+		},
+		{
+			MethodName: "CheckLeaderDrpc",
+			Handler:    _MgmtSvc_CheckLeaderDrpc_Handler,
 		},
 		{
 			MethodName: "FaultInjectReport",
