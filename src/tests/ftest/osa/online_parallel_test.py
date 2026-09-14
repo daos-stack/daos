@@ -109,10 +109,10 @@ class OSAOnlineParallelTest(OSAUtils):
         for _ in range(0, num_pool):
             self.log_step("Create pool")
             pool = self.get_pool(connect=False)
-            self.pool = pool
+            pool = pool
             # Use only pool UUID while running the test.
-            self.pool.use_label = False
-            self.pool.set_property("reclaim", "disabled")
+            pool.use_label = False
+            pool.set_property("reclaim", "disabled")
             pools.append(pool)
 
         # Start the additional servers and extend the pool
@@ -142,9 +142,6 @@ class OSAOnlineParallelTest(OSAUtils):
                 "extend": {"pool": self.pool.identifier,
                            "ranks": ",".join(map(str, extra_ranks))}
             }
-            self.log_step(
-                "Create some data before starting OSA operations in parallel")
-            self.run_ior_thread("Write", oclass, test_seq)
 
             self.log_step("Run OSA commands in parallel with IOR")
             # Add a thread for IOR

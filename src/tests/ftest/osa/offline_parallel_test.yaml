@@ -35,7 +35,6 @@ server_config:
 
 pool:
   size: 60%
-  svcn: 3
 
 container:
   type: POSIX
