@@ -109,7 +109,6 @@ class OSAOnlineParallelTest(OSAUtils):
         for _ in range(0, num_pool):
             self.log_step("Create pool")
             pool = self.get_pool(connect=False)
-            pool = pool
             # Use only pool UUID while running the test.
             pool.use_label = False
             pool.set_property("reclaim", "disabled")
