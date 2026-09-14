@@ -2657,6 +2657,84 @@ no_stale_read_source(void **state)
 	_no_stale_read_source(6, 4, OC_EC_4P2G2, 2, 1, 500);
 }
 
+static void
+relocation_peer_alloc_failure(void **state)
+{
+	struct jm_test_ctx    ctx;
+	struct pl_obj_layout *layout = NULL;
+	struct d_fault_attr_t attr   = {
+	      .fa_interval      = UINT32_MAX,
+	      .fa_probability_x = 1,
+	      .fa_probability_y = 1,
+	      .fa_max_faults    = 1,
+        };
+	struct d_fault_attr_t *saved_mem;
+	unsigned int           saved_inject;
+	daos_obj_id_t          oid;
+	uint32_t               i;
+	int                    rc;
+
+	rc = d_fault_inject_init();
+	if (rc == -DER_NOSYS)
+		skip();
+	assert_success(rc);
+	jtc_init(&ctx, 4, 1, 4, OC_RP_4G2, g_verbose);
+	for (i = 0; i < 4; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+	for (i = 0; i < 4; i++)
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+	for (i = 4; i < 8; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+
+	/* With no drain/reintegration, extra entries can only be relocation peers. */
+	for (i = 0; i < 500; i++) {
+		bool extended;
+
+		jtc_wb_gen_oid(&oid, i, OC_RP_4G2);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &layout));
+		extended = layout->ol_grp_size > 4;
+		pl_obj_layout_free(layout);
+		layout = NULL;
+		if (extended)
+			break;
+	}
+	assert_true(i < 500);
+
+	assert_success(D_SPIN_INIT(&attr.fa_lock, PTHREAD_PROCESS_PRIVATE));
+	saved_mem        = d_fault_attr_mem;
+	saved_inject     = d_fault_inject;
+	d_fault_attr_mem = &attr;
+	d_fault_inject   = 1;
+	rc               = jtc_place_mode(&ctx, oid, 0, &layout);
+	d_fault_inject   = saved_inject;
+	d_fault_attr_mem = saved_mem;
+	assert_success(rc);
+	pl_obj_layout_free(layout);
+	layout = NULL;
+	assert_true(attr.fa_num_hits > 0);
+	assert_int_equal(attr.fa_num_faults, 0);
+
+	/*
+	 * The final allocation is pl_map_extend()'s peer array. Count it rather than
+	 * depending on the number of allocations needed to generate the two layouts.
+	 */
+	attr.fa_interval = attr.fa_num_hits;
+	attr.fa_num_hits = 0;
+	d_fault_attr_mem = &attr;
+	d_fault_inject   = 1;
+	rc               = jtc_place_mode(&ctx, oid, 0, &layout);
+	d_fault_inject   = saved_inject;
+	d_fault_attr_mem = saved_mem;
+	D_SPIN_DESTROY(&attr.fa_lock);
+	jtc_fini(&ctx);
+	assert_success(d_fault_inject_fini());
+
+	/* Never return a layout with restored primaries but missing write-only peers. */
+	assert_int_equal(attr.fa_num_faults, 1);
+	assert_int_equal(rc, -DER_NOMEM);
+	assert_null(layout);
+}
+
 /*
  * The same, with a drain, a reintegration or an extension in flight as well, so that the
  * layouts carry peers of their own already and the relocation peer has to come out of the
@@ -2844,6 +2922,7 @@ static const struct CMUnitTest tests[] = {
     T("fail multiple ranks", fail_multiple_ranks),
     T("no stale read source", no_stale_read_source),
     T("no hidden peer source", no_hidden_peer_source),
+    T("relocation peer allocation failure", relocation_peer_alloc_failure),
 };
 
 int
