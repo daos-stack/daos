@@ -1303,6 +1303,8 @@ struct vos_obj_iter {
 	daos_recx_t              it_recx;
 	/** For fake akey, save the dkey krec as well */
 	struct vos_krec_df      *it_dkey_krec;
+	/** Pin held for shared and dkey buckets during nested iteration */
+	struct umem_pin_handle  *it_dkey_pin_hdl;
 	/** Store the fake akey */
 	char                     it_fake_akey;
 };

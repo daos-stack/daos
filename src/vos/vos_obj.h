@@ -70,6 +70,7 @@ struct vos_obj_bkt_node {
 	uint8_t  bn_bkt_cnt; /* valid entries in bn_bkt_ids[] */
 	uint8_t  bn_flags;
 	uint16_t bn_pad;
+	void    *bn_next;
 };
 
 /**
