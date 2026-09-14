@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,6 +38,7 @@ struct dlck_engine {
 	unsigned             targets;
 	struct dlck_xstream *xss;
 	bool                 join_fail;
+	ABT_barrier          all_targets_ready;
 };
 
 typedef void (*dlck_ult_func)(void *arg);

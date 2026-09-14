@@ -35,10 +35,17 @@ static int
 dlck_engine_alloc(unsigned targets, struct dlck_engine **engine_ptr)
 {
 	struct dlck_engine *engine;
+	int                 rc;
 
 	D_ALLOC_PTR(engine);
 	if (engine == NULL) {
 		return -DER_NOMEM;
+	}
+
+	rc = ABT_barrier_create(targets, &engine->all_targets_ready);
+	if (rc != ABT_SUCCESS) {
+		D_FREE(engine);
+		return dss_abterr2der(rc);
 	}
 
 	/** each of the targets will get its own xstream + 1 for daos_sys */
@@ -64,6 +71,7 @@ static void
 dlck_engine_free(struct dlck_engine *engine)
 {
 	D_FREE(engine->xss);
+	(void)ABT_barrier_free(&engine->all_targets_ready);
 	D_FREE(engine);
 }
 
