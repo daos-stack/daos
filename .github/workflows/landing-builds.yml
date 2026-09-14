@@ -50,14 +50,18 @@ jobs:
             base: ubuntu
             with: ubuntu:noble
             python: 3
+            deps_repo: ""
+            deps_repo: ""
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
             python: 3.11
+            deps_repo: "https://packages.daos.io/grom72/master/EL9/packages/x86_64/"
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5
             python: 3.11
+            deps_repo: "https://packages.daos.io/grom72/master/Leap15/packages/x86_64/"
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -80,6 +84,7 @@ jobs:
           concurrency: 1
       - name: Prepare base image in Docker
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DAOS_DEPS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
@@ -87,6 +92,7 @@ jobs:
                             --target build-local
       - name: Build dependencies in Docker
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
@@ -111,6 +117,7 @@ jobs:
             base: ubuntu
             with: ubuntu:noble
             python: 3
+            deps_repo: ""
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -174,14 +181,17 @@ jobs:
             base: ubuntu
             with: ubuntu:noble
             python: 3
+            deps_repo: ""
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
             python: 3.11
+            deps_repo: "https://packages.daos.io/grom72/master/EL9/packages/x86_64/"
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5
             python: 3.11
+            deps_repo: "https://packages.daos.io/grom72/master/Leap15/packages/x86_64/"
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -207,6 +217,7 @@ jobs:
           skip-save: true
       - name: Build in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -216,6 +227,7 @@ jobs:
                             --tag build-image
       - name: Build Java in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -224,6 +236,7 @@ jobs:
                             --target build-local
       - name: Build debug in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -233,6 +246,7 @@ jobs:
                             --target build-local
       - name: Build devel in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -258,14 +272,17 @@ jobs:
             base: el.9
             with: almalinux:9
             python: 3.11
+            deps_repo: "https://packages.daos.io/grom72/master/EL9/packages/x86_64/"
           - distro: rocky.9
             base: el.9
             with: rockylinux/rockylinux:9
             python: 3.11
+            deps_repo: "https://packages.daos.io/grom72/master/EL9/packages/x86_64/"
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:24.04
             python: 3
+            deps_repo: ""
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -278,6 +295,7 @@ jobs:
           fetch-depth: 500
       - name: Build dependencies in image.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -285,6 +303,7 @@ jobs:
                             --target build-local
       - name: Build in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -294,6 +313,7 @@ jobs:
                             --tag build-image
       - name: Build Java in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -302,6 +322,7 @@ jobs:
                             --target build-local
       - name: Build debug in docker with clang.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -311,6 +332,7 @@ jobs:
                             --target build-local
       - name: Build devel in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -320,6 +342,7 @@ jobs:
                             --target build-local
       - name: Build in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -328,6 +351,7 @@ jobs:
                             --target build-local
       - name: Build debug in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -337,6 +361,7 @@ jobs:
                             --target build-local
       - name: Build devel in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -364,14 +389,17 @@ jobs:
             base: ubuntu
             with: ubuntu:noble
             python: 3
+            deps_repo: ""
           - distro: alma.9
             base: el.9
             with: almalinux:9
             python: 3.11
+            deps_repo: "https://packages.daos.io/grom72/master/EL9/packages/x86_64/"
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5
             python: 3.11
+            deps_repo: "https://packages.daos.io/grom72/master/Leap15/packages/x86_64/"
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -386,6 +414,7 @@ jobs:
           fetch-depth: 500
       - name: Build dependencies in image.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -393,6 +422,7 @@ jobs:
                             --target build-local
       - name: Build in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -402,6 +432,7 @@ jobs:
                             --tag build-image
       - name: Build Java in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -410,6 +441,7 @@ jobs:
                             --target build-local
       - name: Build debug in docker with clang.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -419,6 +451,7 @@ jobs:
                             --target build-local
       - name: Build devel in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -428,6 +461,7 @@ jobs:
                             --target build-local
       - name: Build in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -436,6 +470,7 @@ jobs:
                             --target build-local
       - name: Build debug in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -445,6 +480,7 @@ jobs:
                             --target build-local
       - name: Build devel in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO="${{ matrix.deps_repo }}"
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
