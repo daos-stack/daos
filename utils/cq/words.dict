@@ -2,6 +2,7 @@ ABT
 ACL
 AIO
 APs
+ASan
 Ansible
 BW
 Broadwell
@@ -63,9 +64,11 @@ SubProcess
 Subdirectories
 TestFail
 Testcase
+tsan
 UCX
 UNS
 Uncomment
+ubsan
 VMD
 XUnitResult
 acl
@@ -118,6 +121,7 @@ cmdlines
 cmdresult
 cmds
 cmocka
+cmocka's
 cmp
 coh
 committable
@@ -156,6 +160,7 @@ dfs
 dfuse
 dir
 dirname
+disambiguates
 distro
 dkey
 dkeys
