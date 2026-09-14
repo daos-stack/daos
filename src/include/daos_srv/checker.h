@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -104,12 +104,12 @@ ck_report(void *arg, enum btr_report_type type, const char *fmt, ...)
 		break;
 	case BTR_REPORT_WARNING:
 		ck_common_printf(ck, "%s%s", ck->ck_prefix, CHECKER_WARNING_INFIX);
-		ck_common_printf(ck, fmt, args);
+		ck->ck_vprintf(ck, fmt, args);
 		ck->ck_warnings_num++;
 		break;
 	case BTR_REPORT_MSG:
 		ck_common_printf(ck, "%s", ck->ck_prefix);
-		ck_common_printf(ck, fmt, args);
+		ck->ck_vprintf(ck, fmt, args);
 		break;
 	default:
 		D_ASSERTF(0, "Unknown report type: %x\n", type);
@@ -120,9 +120,17 @@ ck_report(void *arg, enum btr_report_type type, const char *fmt, ...)
 
 /** basic helpers */
 
+/**
+ * The IS_CHECKER and IS_NOT_CHECKER macros do two things:
+ * 1. Check whether the checker is present (non-NULL) or absent (NULL).
+ * 2. Provide branch-prediction hints.
+ *
+ * The checker code resides in the same binaries as the main execution code. It is essential that
+ * adding the checker code does not slow down the main execution path. Therefore, branch-prediction
+ * hints are necessary to avoid degrading performance on the main execution path.
+ */
 #define IS_CHECKER(ck)     (unlikely((ck) != NULL))
-
-#define IS_NOT_CHECKER(dp) (likely((ck) == NULL))
+#define IS_NOT_CHECKER(ck) (likely((ck) == NULL))
 
 #define YES_NO_STR(cond)   ((cond) ? "yes" : "no")
 
@@ -174,9 +182,21 @@ ck_report(void *arg, enum btr_report_type type, const char *fmt, ...)
 
 #define CK_APPENDFL_WARN(ck, fmt, ...)                                                             \
 	do {                                                                                       \
-		CK_PRINTF_WO_PREFIX(ck, CHECKER_WARNING_INFIX fmt "\n", __VA_ARGS__);              \
-		++(ck)->ck_warnings_num;                                                           \
+		if (IS_CHECKER(ck)) {                                                              \
+			CK_PRINTF_WO_PREFIX(ck, CHECKER_WARNING_INFIX fmt "\n", __VA_ARGS__);      \
+			++(ck)->ck_warnings_num;                                                   \
+		}                                                                                  \
 	} while (0)
+
+#define CK_APPENDL_WARN(ck, msg)                                                                   \
+	do {                                                                                       \
+		if (IS_CHECKER(ck)) {                                                              \
+			CK_PRINT_WO_PREFIX(ck, CHECKER_WARNING_INFIX msg "\n");                    \
+			++(ck)->ck_warnings_num;                                                   \
+		}                                                                                  \
+	} while (0)
+
+#define CK_APPENDL(ck, msg) CK_PRINT_WO_PREFIX(ck, msg "\n")
 
 /** print(f) + return code  + new line shortcuts */
 

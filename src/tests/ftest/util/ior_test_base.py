@@ -54,11 +54,6 @@ class IorTestBase(TestWithServers):
         if not self.hostlist_clients:
             self.hostlist_clients = get_local_host()
 
-    def create_pool(self):
-        """Create a TestPool object to use with ior."""
-        # Get the pool params and create a pool
-        self.pool = self.get_pool(connect=False)
-
     def create_cont(self):
         """Create a TestContainer object to be used to create container.
 
@@ -166,7 +161,7 @@ class IorTestBase(TestWithServers):
         """
         # Create a pool if one does not already exist
         if self.pool is None:
-            self.create_pool()
+            self.pool = self.get_pool(connect=False)
         # Create a container, if needed.
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
