@@ -972,7 +972,7 @@ layout_keep_relocated_source(struct pl_jump_map *jmap, uint32_t layout_ver,
 	D_ASSERT(ref_layout->ol_grp_size == layout->ol_grp_size);
 	D_ASSERTF(ref_layout->ol_nr == layout->ol_nr, "%u != %u\n", ref_layout->ol_nr,
 		  layout->ol_nr);
-	nr = min(ref_layout->ol_nr, layout->ol_nr);
+	nr = layout->ol_nr;
 	for (i = 0; i < nr; i++) {
 		struct pl_obj_shard *cur = &layout->ol_shards[i];
 		struct pl_obj_shard *ref = &ref_layout->ol_shards[i];
