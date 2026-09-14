@@ -1677,8 +1677,13 @@ placement_handles_multiple_states_with_addition(void **state)
 	jtc_scan(&ctx);
 	rebuilding = jtc_get_layout_rebuild_count(&ctx);
 
-	/* 1 each for down, up, new ... maybe? */
-	assert_true(rebuilding == 2 || rebuilding == 3 || rebuilding == 4);
+	/*
+	 * 1 each for down, up, new ... maybe?  Plus the shards which the new failure
+	 * relocated collaterally: the spare walk is shared, so failing another target
+	 * shifts shards that have nothing to do with it onto targets which hold no data
+	 * yet.  Those are hidden from readers too, see layout_mark_relocated().
+	 */
+	assert_true(rebuilding >= 2 && rebuilding <= 5);
 
 	/* Both DOWN and UP target will be remapped during remap */
 	assert_int_equal(ctx.rebuild.out_nr, 3);
@@ -2323,6 +2328,49 @@ jtc_place_mode(struct jm_test_ctx *ctx, daos_obj_id_t oid, unsigned int mode,
 	return pl_obj_place(ctx->pl_map, PLT_LAYOUT_VERSION, &md, mode, NULL, layout);
 }
 
+/* place the way the rebuild scanner and the EC aggregation do: read only, up to one group */
+static int
+jtc_place_grp(struct jm_test_ctx *ctx, daos_obj_id_t oid, uint32_t grp,
+	      struct pl_obj_layout **layout)
+{
+	struct daos_obj_md md = {0};
+
+	md.omd_id       = oid;
+	md.omd_ver      = pool_map_get_version(ctx->po_map);
+	md.omd_flags    = PL_FL_GRP_SPEC;
+	md.omd_grp_spec = grp;
+	*layout         = NULL;
+
+	return pl_obj_place(ctx->pl_map, PLT_LAYOUT_VERSION, &md, DAOS_OO_RO, NULL, layout);
+}
+
+/*
+ * The layout of a single group, as the rebuild scanner and the EC aggregation ask for it, is
+ * compared against a reference layout truncated the same way. That group has to come out the
+ * same as in the full layout, targets and rebuilding flags alike.
+ */
+static void
+jtc_assert_grp_layout(struct jm_test_ctx *ctx, daos_obj_id_t oid, struct pl_obj_layout *full)
+{
+	uint32_t g;
+
+	for (g = 0; g < full->ol_grp_nr; g++) {
+		struct pl_obj_layout *part;
+		uint32_t              i;
+
+		assert_success(jtc_place_grp(ctx, oid, g, &part));
+		assert_int_equal(part->ol_grp_size, full->ol_grp_size);
+		assert_int_equal(part->ol_grp_nr, g + 1);
+		for (i = g * full->ol_grp_size; i < (g + 1) * full->ol_grp_size; i++) {
+			assert_int_equal(part->ol_shards[i].po_target,
+					 full->ol_shards[i].po_target);
+			assert_int_equal(part->ol_shards[i].po_rebuilding,
+					 full->ol_shards[i].po_rebuilding);
+		}
+		pl_obj_layout_free(part);
+	}
+}
+
 /*
  * A shard which was already remapped by an earlier, completed rebuild can be relocated to a
  * different spare when a new and otherwise unrelated target fails: the spares are handed out
@@ -2422,6 +2470,7 @@ _no_stale_read_source(uint32_t domain_nr, uint32_t target_nr, daos_oclass_id_t o
 				relocated++;
 			}
 		}
+		jtc_assert_grp_layout(&ctx, oid, ro);
 		pl_obj_layout_free(cur);
 		pl_obj_layout_free(ro);
 	}
@@ -2445,6 +2494,185 @@ no_stale_read_source(void **state)
 	_no_stale_read_source(4, 4, OC_RP_4G2, 1, 1, 500);
 	/* EC over a pool with less spare room, where the current layout loses the flag too */
 	_no_stale_read_source(6, 4, OC_EC_4P2G2, 2, 1, 500);
+}
+
+/*
+ * A drain, a reintegration or an extension does not move a shard, it gives the shard a second,
+ * "peer" target and has the write path update both of them until the migration is done. That
+ * peer only exists in the layout after jump_map_obj_extend_layout() has run, and that only
+ * happens for the CURRENT generation mode.
+ *
+ * layout_mark_relocated() compares the two generation modes to find the shards which the
+ * ongoing rebuild displaced, and it has to opt out of that comparison whenever peer targets are
+ * involved, in both directions:
+ *
+ * - CURRENT vs PRE_REBUILD: guarded by the caller, the peer count of @layout is known upfront.
+ *
+ * - PRE_REBUILD vs CURRENT: the peer count belongs to the reference layout, so it is only known
+ *   once that layout has been generated. Without the guard, a shard whose un-extended CURRENT
+ *   entry points at the new target gets flagged as rebuilding in the PRE_REBUILD layout, even
+ *   though the extended CURRENT layout keeps the old target as a peer and therefore keeps
+ *   writing to it. Hiding a target which is still in the write path costs a read source that
+ *   holds the complete, up to date shard.
+ *
+ * The check below is the exact statement of that, in both directions: a target of the
+ * pre-rebuild layout which still serves the same shard in the extended current layout must
+ * never be flagged, and one which does not must always be flagged.
+ */
+static void
+_no_hidden_peer_source(uint32_t domain_nr, uint32_t target_nr, daos_oclass_id_t oc,
+		       uint32_t out_domains, bool drain, uint32_t obj_nr)
+{
+	struct jm_test_ctx ctx;
+	uint32_t           out_hi  = out_domains * target_nr;
+	uint32_t           mid_lo  = out_hi;
+	uint32_t           mid_hi  = mid_lo + target_nr;
+	uint32_t           down_lo = (domain_nr - 1) * target_nr;
+	uint32_t           peered  = 0;
+	uint32_t           relocated = 0;
+	uint32_t           stale     = 0;
+	uint32_t           overhidden = 0;
+	uint32_t           i, o;
+
+	jtc_init(&ctx, domain_nr, 1, target_nr, oc, g_verbose);
+
+	/* a first failure whose rebuild has completed, so shards end up sitting on spares */
+	for (i = 0; i < out_hi; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+	for (i = 0; i < out_hi; i++)
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+
+	/* a drain or a reintegration on another domain, both of which add peer targets */
+	if (drain) {
+		for (i = mid_lo; i < mid_hi; i++)
+			jtc_set_status_on_target(&ctx, DRAIN, i);
+	} else {
+		for (i = mid_lo; i < mid_hi; i++)
+			jtc_set_status_on_target(&ctx, DOWN, i);
+		for (i = mid_lo; i < mid_hi; i++)
+			jtc_set_status_on_target(&ctx, DOWNOUT, i);
+		for (i = mid_lo; i < mid_hi; i++)
+			jtc_set_status_on_target(&ctx, UP, i);
+	}
+
+	/* and a failure on top of it, so that the two generation modes really do differ */
+	for (i = down_lo; i < domain_nr * target_nr; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+
+	for (o = 0; o < obj_nr; o++) {
+		struct pl_obj_layout *cur;
+		struct pl_obj_layout *ro;
+		daos_obj_id_t         oid;
+		int                   j;
+
+		gen_oid(&oid, o + 1, UINT64_MAX, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &cur));
+		assert_success(jtc_place_mode(&ctx, oid, DAOS_OO_RO, &ro));
+
+		for (i = 0; i < ro->ol_nr; i++) {
+			uint32_t ro_tgt = ro->ol_shards[i].po_target;
+			bool     in_cur = false;
+
+			if (ro_tgt == (uint32_t)-1 || !jtc_tgt_is_upin(&ctx, ro_tgt))
+				continue;
+
+			for (j = 0; j < cur->ol_nr; j++) {
+				if (cur->ol_shards[j].po_target != ro_tgt ||
+				    cur->ol_shards[j].po_shard != ro->ol_shards[i].po_shard)
+					continue;
+				in_cur = true;
+				break;
+			}
+
+			if (in_cur) {
+				/*
+				 * The target still serves the same shard in the extended
+				 * current layout, so it is still being written to and holds
+				 * the whole shard. It must stay readable.
+				 */
+				assert_false(ro->ol_shards[i].po_rebuilding);
+				peered++;
+			} else if (ro->ol_shards[i].po_fseq != 0) {
+				/*
+				 * Nothing writes to that target any more, so the shard it used
+				 * to hold is going stale. The exemption above must not have
+				 * swallowed it. po_fseq != 0 is what layout_may_relocate()
+				 * looks for, a shard which never moved cannot be relocated.
+				 */
+				assert_true(ro->ol_shards[i].po_rebuilding);
+				relocated++;
+			}
+		}
+		/*
+		 * Mirror check on the current layout: every entry a reader is allowed to use
+		 * must be the target the data is actually on, which is what the pre-rebuild
+		 * layout names for that shard. A readable entry anywhere else has no data.
+		 */
+		for (i = 0; i < cur->ol_nr; i++) {
+			uint32_t c_tgt = cur->ol_shards[i].po_target;
+			int      sh    = cur->ol_shards[i].po_shard;
+
+			if (c_tgt == (uint32_t)-1 || sh < 0 || cur->ol_shards[i].po_rebuilding)
+				continue;
+			if (sh >= ro->ol_nr || ro->ol_shards[sh].po_target == (uint32_t)-1)
+				continue;
+			if (c_tgt == ro->ol_shards[sh].po_target)
+				continue;
+			if (!jtc_tgt_is_upin(&ctx, ro->ol_shards[sh].po_target))
+				continue; /* data is gone, reader has to reconstruct anyway */
+			stale++;
+			if (stale < 4)
+				print_message("STALE current shard %d: readable on tgt %u but "
+					      "data is on tgt %u\n", sh, c_tgt,
+					      ro->ol_shards[sh].po_target);
+		}
+
+		/*
+		 * Count, but do not fail on, the write-only peers which do sit on the target
+		 * holding the data. pl_map_extend() always marks a peer po_rebuilding, and a
+		 * peer cannot be made readable: the EC and replica readers only scan the first
+		 * K+P positions of the group (cli_obj.c obj_ec_leader_select()), so a readable
+		 * copy has to be a primary. Preserving these as read sources needs a layout
+		 * format which can name a second readable target for a shard.
+		 */
+		for (i = 0; i < cur->ol_nr; i++) {
+			uint32_t c_tgt = cur->ol_shards[i].po_target;
+			int      sh    = cur->ol_shards[i].po_shard;
+
+			if (c_tgt == (uint32_t)-1 || sh < 0 || !cur->ol_shards[i].po_rebuilding)
+				continue;
+			if (sh >= ro->ol_nr || ro->ol_shards[sh].po_target == (uint32_t)-1)
+				continue;
+			if (c_tgt != ro->ol_shards[sh].po_target)
+				continue;
+			if (ro->ol_shards[sh].po_rebuilding)
+				continue; /* legitimately flagged by comp_need_remap() */
+			overhidden++;
+		}
+
+		assert_true(cur->ol_shard_peers > 0);
+		pl_obj_layout_free(cur);
+		pl_obj_layout_free(ro);
+	}
+
+	/* the scenario has to actually produce peer targets, otherwise nothing was tested */
+	print_message("%u shards kept a peer target readable, %u relocated shards hidden, "
+		      "%u write-only peers holding data\n", peered, relocated, overhidden);
+	assert_true(peered > 0);
+	/* no reader may be sent to a target which does not hold the shard */
+	assert_int_equal(stale, 0);
+
+	jtc_fini(&ctx);
+}
+
+static void
+no_hidden_peer_source(void **state)
+{
+	/* drain in flight on top of a completed rebuild, plus a new failure */
+	_no_hidden_peer_source(4, 4, OC_EC_2P2G2, 1, true, 500);
+	/* the same with a reintegration, which adds peers through regular UP targets */
+	_no_hidden_peer_source(4, 4, OC_EC_2P2G2, 1, false, 500);
+	_no_hidden_peer_source(5, 4, OC_EC_2P2G2, 1, false, 500);
 }
 
 /*
@@ -2544,6 +2772,7 @@ static const struct CMUnitTest tests[] = {
     T("fail reintegrate ranks", fail_reintegrate_multiple_ranks),
     T("fail multiple ranks", fail_multiple_ranks),
     T("no stale read source", no_stale_read_source),
+    T("no hidden peer source", no_hidden_peer_source),
 };
 
 int
