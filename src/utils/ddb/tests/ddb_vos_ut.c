@@ -30,7 +30,7 @@
  * pass-through call, verifying the expected arguments are forwarded unchanged.
  */
 static int
-wrap_vos_dtx_discard_invalid_mock(daos_handle_t coh, struct dtx_id *dti, int *discarded)
+vos_dtx_discard_invalid_mock(daos_handle_t coh, struct dtx_id *dti, int *discarded)
 {
 	assert_int_equal(coh.cookie, COH_COOKIE);
 	assert_ptr_equal(dti, DTX_ID_PTR);
@@ -62,9 +62,9 @@ ddb_parse_vos_file_parts_mock(const char *vos_path, const char *db_path,
 	    .vf_target_idx = 0,
 	};
 
-	check_expected_ptr(vos_path);
-	check_expected_ptr(db_path);
-	check_expected_ptr(vos_file_parts);
+	assert_ptr_equal(vos_path, MOCK_VOS_PATH);
+	assert_ptr_equal(db_path, NULL);
+	assert_non_null(vos_file_parts);
 
 	rc = mock_type(int);
 	if (rc == 0)
@@ -84,7 +84,7 @@ dwa_can_proceed_mock(struct ddb_ctx *ctx, const char *nvme_conf_dir, bool *can_p
 
 	check_expected_ptr(ctx);
 	check_expected_ptr(nvme_conf_dir);
-	check_expected_ptr(can_proceed);
+	assert_non_null(can_proceed);
 
 	rc = mock_type(int);
 	if (rc == 0)
@@ -102,7 +102,7 @@ dwa_can_proceed_mock(struct ddb_ctx *ctx, const char *nvme_conf_dir, bool *can_p
 static int
 mock_setup(void **state)
 {
-	mock_vos_dtx_discard_invalid_set(wrap_vos_dtx_discard_invalid_mock);
+	mock_vos_dtx_discard_invalid_set(vos_dtx_discard_invalid_mock);
 	mock_ddb_parse_vos_file_parts_set(ddb_parse_vos_file_parts_mock);
 	mock_dwa_can_proceed_set(dwa_can_proceed_mock);
 
@@ -133,11 +133,11 @@ test_dtx_act_discard_invalid_001(void **state)
 	daos_handle_t coh = {.cookie = COH_COOKIE};
 	int           rc;
 
-	will_return_int(wrap_vos_dtx_discard_invalid_mock, SOME_ERROR);
+	will_return_int(vos_dtx_discard_invalid_mock, SOME_ERROR);
 	rc = dv_dtx_active_entry_discard_invalid(coh, DTX_ID_PTR, DISCARDED_PTR);
 	assert_int_equal(rc, SOME_ERROR);
 
-	will_return_int(wrap_vos_dtx_discard_invalid_mock, 0);
+	will_return_int(vos_dtx_discard_invalid_mock, 0);
 	rc = dv_dtx_active_entry_discard_invalid(coh, DTX_ID_PTR, DISCARDED_PTR);
 	assert_int_equal(rc, 0);
 }
@@ -153,14 +153,10 @@ test_dv_pool_open_001(void **state)
 	daos_handle_t  poh;
 	int            rc;
 
-	expect_string(ddb_parse_vos_file_parts_mock, vos_path, MOCK_VOS_PATH);
-	expect_value(ddb_parse_vos_file_parts_mock, db_path, NULL);
-	expect_any(ddb_parse_vos_file_parts_mock, vos_file_parts);
 	will_return_int(ddb_parse_vos_file_parts_mock, 0);
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_string(dwa_can_proceed_mock, nvme_conf_dir, MOCK_DB_PATH);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, -DER_NOMEM);
 
 	rc = dv_pool_open(MOCK_VOS_PATH, NULL, &ctx, &poh, 0, false);
@@ -177,14 +173,10 @@ test_dv_pool_open_002(void **state)
 	daos_handle_t  poh;
 	int            rc;
 
-	expect_string(ddb_parse_vos_file_parts_mock, vos_path, MOCK_VOS_PATH);
-	expect_value(ddb_parse_vos_file_parts_mock, db_path, NULL);
-	expect_any(ddb_parse_vos_file_parts_mock, vos_file_parts);
 	will_return_int(ddb_parse_vos_file_parts_mock, 0);
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_string(dwa_can_proceed_mock, nvme_conf_dir, MOCK_DB_PATH);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, 0);
 	will_return(dwa_can_proceed_mock, false);
 
@@ -204,14 +196,10 @@ test_dv_pool_open_003(void **state)
 	daos_handle_t  poh;
 	int            rc;
 
-	expect_string(ddb_parse_vos_file_parts_mock, vos_path, MOCK_VOS_PATH);
-	expect_value(ddb_parse_vos_file_parts_mock, db_path, NULL);
-	expect_any(ddb_parse_vos_file_parts_mock, vos_file_parts);
 	will_return_int(ddb_parse_vos_file_parts_mock, 0);
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_string(dwa_can_proceed_mock, nvme_conf_dir, MOCK_DB_PATH);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, 0);
 	will_return(dwa_can_proceed_mock, false);
 
@@ -229,14 +217,10 @@ test_dv_pool_destroy_001(void **state)
 	struct ddb_ctx ctx = {0};
 	int            rc;
 
-	expect_string(ddb_parse_vos_file_parts_mock, vos_path, MOCK_VOS_PATH);
-	expect_value(ddb_parse_vos_file_parts_mock, db_path, NULL);
-	expect_any(ddb_parse_vos_file_parts_mock, vos_file_parts);
 	will_return_int(ddb_parse_vos_file_parts_mock, 0);
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_string(dwa_can_proceed_mock, nvme_conf_dir, MOCK_DB_PATH);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, -DER_NOMEM);
 
 	rc = dv_pool_destroy(MOCK_VOS_PATH, NULL, &ctx);
@@ -252,14 +236,10 @@ test_dv_pool_destroy_002(void **state)
 	struct ddb_ctx ctx = {0};
 	int            rc;
 
-	expect_string(ddb_parse_vos_file_parts_mock, vos_path, MOCK_VOS_PATH);
-	expect_value(ddb_parse_vos_file_parts_mock, db_path, NULL);
-	expect_any(ddb_parse_vos_file_parts_mock, vos_file_parts);
 	will_return_int(ddb_parse_vos_file_parts_mock, 0);
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_string(dwa_can_proceed_mock, nvme_conf_dir, MOCK_DB_PATH);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, 0);
 	will_return(dwa_can_proceed_mock, false);
 
@@ -281,9 +261,8 @@ test_dv_dev_list_001(void **state)
 
 	D_INIT_LIST_HEAD(&dev_list);
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_string(dwa_can_proceed_mock, nvme_conf_dir, MOCK_DB_PATH);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, -DER_NOMEM);
 
 	rc = dv_dev_list(MOCK_DB_PATH, &ctx, &dev_list, &dev_cnt);
@@ -303,9 +282,8 @@ test_dv_dev_list_002(void **state)
 
 	D_INIT_LIST_HEAD(&dev_list);
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_string(dwa_can_proceed_mock, nvme_conf_dir, MOCK_DB_PATH);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, 0);
 	will_return(dwa_can_proceed_mock, false);
 
@@ -327,9 +305,8 @@ test_dv_dev_replace_001(void **state)
 	uuid_parse(MOCK_POOL_UUID_001, old_devid);
 	uuid_parse(MOCK_POOL_UUID_002, new_devid);
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_string(dwa_can_proceed_mock, nvme_conf_dir, MOCK_DB_PATH);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, -DER_NOMEM);
 
 	rc = dv_dev_replace(MOCK_DB_PATH, &ctx, old_devid, new_devid);
@@ -349,9 +326,8 @@ test_dv_dev_replace_002(void **state)
 	uuid_parse(MOCK_POOL_UUID_001, old_devid);
 	uuid_parse(MOCK_POOL_UUID_002, new_devid);
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_string(dwa_can_proceed_mock, nvme_conf_dir, MOCK_DB_PATH);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, 0);
 	will_return(dwa_can_proceed_mock, false);
 
@@ -369,9 +345,8 @@ test_dv_run_prov_mem_001(void **state)
 	struct ddb_ctx ctx = {0};
 	int            rc;
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_string(dwa_can_proceed_mock, nvme_conf_dir, MOCK_DB_PATH);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, -DER_NOMEM);
 
 	rc = dv_run_prov_mem(MOCK_DB_PATH, &ctx, "/mnt/tmpfs", 0);
@@ -387,9 +362,8 @@ test_dv_run_prov_mem_002(void **state)
 	struct ddb_ctx ctx = {0};
 	int            rc;
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_string(dwa_can_proceed_mock, nvme_conf_dir, MOCK_DB_PATH);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, 0);
 	will_return(dwa_can_proceed_mock, false);
 
@@ -407,9 +381,8 @@ test_dv_sync_smd_001(void **state)
 	struct ddb_ctx ctx = {0};
 	int            rc;
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_value(dwa_can_proceed_mock, nvme_conf_dir, NULL);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, -DER_NOMEM);
 
 	rc = dv_sync_smd("/configs/engine.json", "/mnt/daos_without_a_daos_nvme_conf", &ctx, NULL,
@@ -426,9 +399,8 @@ test_dv_sync_smd_002(void **state)
 	struct ddb_ctx ctx = {0};
 	int            rc;
 
-	expect_any(dwa_can_proceed_mock, ctx);
+	expect_value(dwa_can_proceed_mock, ctx, &ctx);
 	expect_value(dwa_can_proceed_mock, nvme_conf_dir, NULL);
-	expect_any(dwa_can_proceed_mock, can_proceed);
 	will_return_int(dwa_can_proceed_mock, 0);
 	will_return(dwa_can_proceed_mock, false);
 

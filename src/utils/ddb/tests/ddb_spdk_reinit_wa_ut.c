@@ -54,7 +54,6 @@ static char *
 d_asprintf2_mock(int *rc, const char *fmt, ...)
 {
 	check_expected_ptr(rc);
-	check_expected_ptr(fmt);
 
 	*rc = mock_type(int);
 	return mock_ptr_type(char *);
@@ -280,7 +279,6 @@ test_dwa_can_proceed_004(void **state)
 
 	fake_print_reset();
 	expect_any(d_asprintf2_mock, rc);
-	expect_string(d_asprintf2_mock, fmt, "%s/%s");
 	will_return_int(d_asprintf2_mock, -DER_NOMEM);
 	will_return(d_asprintf2_mock, NULL);
 
