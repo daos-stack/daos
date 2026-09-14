@@ -59,13 +59,14 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
  * Stop an engine.
  *
  * \param[in]	engine	Engine to stop.
+ * \param[in]	ck	Checker.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_BUSY	Joining ULTs failed. Unrecoverable.
  * \retval -DER_*	Errors.
  */
 int
-dlck_engine_stop(struct dlck_engine *engine);
+dlck_engine_stop(struct dlck_engine *engine, struct checker *ck);
 
 /**
  * Initialize an execution stream.
