@@ -56,11 +56,18 @@ dsm_tls_get()
 	return tls;
 }
 
+enum cont_destroyer_task_state {
+	CONT_DESTROYER_PENDING = 0,	/* queued, ULT not started yet (in-flight limit) */
+	CONT_DESTROYER_RUNNING,		/* ULT running */
+	CONT_DESTROYER_DONE,		/* ULT finished, csdt_rc is valid */
+};
+
 struct cont_destroyer_task {
 	d_list_t         csdt_link;
 	uuid_t           csdt_cont_uuid;
 	ABT_thread       csdt_thread;
 	struct cont_svc *csdt_svc;
+	int              csdt_state;
 	int              csdt_rc;
 	int              csdt_waiters;
 };
@@ -69,6 +76,7 @@ struct cont_destroyer {
 	d_list_t  csd_tasks; /* list of cont_destroyer_task objects */
 	ABT_mutex csd_mutex;
 	ABT_cond  csd_cond;
+	int       csd_inflight; /* number of tasks with a running ULT */
 	bool      csd_stop;
 };
 

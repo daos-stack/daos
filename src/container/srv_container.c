@@ -103,7 +103,8 @@ cont_destroyer_init(struct cont_destroyer *destroyer)
 		ABT_mutex_free(&destroyer->csd_mutex);
 		return dss_abterr2der(rc);
 	}
-	destroyer->csd_stop = false;
+	destroyer->csd_inflight = 0;
+	destroyer->csd_stop     = false;
 	return 0;
 }
 
@@ -1861,50 +1862,102 @@ out:
 }
 
 static void
+cont_destroyer_dispatch(struct cont_svc *svc);
+
+static void
 cont_destroyer_task_ult(void *arg)
 {
-	struct cont_destroyer_task *task = arg;
-	struct cont_svc            *svc  = task->csdt_svc;
+	struct cont_destroyer_task *task      = arg;
+	struct cont_svc            *svc       = task->csdt_svc;
+	struct cont_destroyer      *destroyer = &svc->cs_destroyer;
 
 	task->csdt_rc = cont_destroy_post(svc, task->csdt_cont_uuid);
 
-	ABT_mutex_lock(svc->cs_destroyer.csd_mutex);
-	task->csdt_thread = ABT_THREAD_NULL;
+	ABT_mutex_lock(destroyer->csd_mutex);
+	task->csdt_state = CONT_DESTROYER_DONE;
+	destroyer->csd_inflight--;
+
+	/* A slot just freed up: start any queued tasks. */
+	cont_destroyer_dispatch(svc);
+
 	if (task->csdt_waiters == 0) {
 		d_list_del(&task->csdt_link);
 		D_FREE(task);
-	} else {
-		ABT_cond_broadcast(svc->cs_destroyer.csd_cond);
 	}
-	ABT_mutex_unlock(svc->cs_destroyer.csd_mutex);
+	ABT_cond_broadcast(destroyer->csd_cond);
+	ABT_mutex_unlock(destroyer->csd_mutex);
 }
 
-static int
-cont_destroyer_create_task(struct cont_svc *svc, uuid_t cont_uuid,
-			   struct cont_destroyer_task **taskp)
+/*
+ * Maximum number of container-destroy ULTs running concurrently per cont_svc.
+ * Additional requests are queued and started as running ULTs complete.
+ */
+#define CONT_DESTROYER_MAX_INFLIGHT 16
+
+/*
+ * Start queued (PENDING) tasks as ULTs, up to the in-flight limit. Must be
+ * called with csd_mutex held. Never blocks, so it is safe to call from
+ * contexts holding cs_lock (e.g. the step-up scan).
+ */
+static void
+cont_destroyer_dispatch(struct cont_svc *svc)
 {
+	struct cont_destroyer      *destroyer = &svc->cs_destroyer;
 	struct cont_destroyer_task *task;
 	int                         rc;
 
+	while (!destroyer->csd_stop && destroyer->csd_inflight < CONT_DESTROYER_MAX_INFLIGHT) {
+		struct cont_destroyer_task *next = NULL;
+
+		d_list_for_each_entry(task, &destroyer->csd_tasks, csdt_link) {
+			if (task->csdt_state == CONT_DESTROYER_PENDING) {
+				next = task;
+				break;
+			}
+		}
+		if (next == NULL)
+			break;
+
+		rc = dss_ult_create(cont_destroyer_task_ult, next, DSS_XS_SYS, 0, 0,
+				    &next->csdt_thread);
+		if (rc != 0) {
+			/* Report the failure to any waiter; otherwise drop the task. */
+			DL_ERROR(rc, DF_CONT ": failed to start destroyer ULT",
+				 DP_CONT(svc->cs_pool_uuid, next->csdt_cont_uuid));
+			next->csdt_rc    = rc;
+			next->csdt_state = CONT_DESTROYER_DONE;
+			if (next->csdt_waiters == 0) {
+				d_list_del(&next->csdt_link);
+				D_FREE(next);
+			} else {
+				ABT_cond_broadcast(destroyer->csd_cond);
+			}
+			continue;
+		}
+		next->csdt_state = CONT_DESTROYER_RUNNING;
+		destroyer->csd_inflight++;
+	}
+}
+
+/* Allocate a task and queue it as PENDING. Must be called with csd_mutex held. */
+static struct cont_destroyer_task *
+cont_destroyer_add_task(struct cont_svc *svc, uuid_t cont_uuid)
+{
+	struct cont_destroyer_task *task;
+
 	D_ALLOC_PTR(task);
 	if (task == NULL)
-		return -DER_NOMEM;
+		return NULL;
 
 	uuid_copy(task->csdt_cont_uuid, cont_uuid);
+	task->csdt_state   = CONT_DESTROYER_PENDING;
+	task->csdt_thread  = ABT_THREAD_NULL;
 	task->csdt_rc      = 0;
 	task->csdt_waiters = 0;
 	task->csdt_svc     = svc;
 	d_list_add_tail(&task->csdt_link, &svc->cs_destroyer.csd_tasks);
 
-	rc = dss_ult_create(cont_destroyer_task_ult, task, DSS_XS_SYS, 0, 0, &task->csdt_thread);
-	if (rc != 0) {
-		d_list_del(&task->csdt_link);
-		D_FREE(task);
-		return rc;
-	}
-
-	*taskp = task;
-	return 0;
+	return task;
 }
 
 static struct cont_destroyer_task *
@@ -1922,7 +1975,8 @@ cont_destroyer_find_task(struct cont_destroyer *destroyer, uuid_t cont_uuid)
 /*
  * Request destruction of the container identified by cont_uuid and wait for
  * the task to complete. If a task already exists for this container UUID,
- * simply wait for it. Otherwise, create a new task with a dedicated ULT.
+ * simply wait for it. Otherwise, queue a new task; it starts as soon as the
+ * in-flight limit permits.
  */
 static int
 cont_destroyer_request_and_wait(struct cont_svc *svc, uuid_t cont_uuid)
@@ -1939,19 +1993,21 @@ cont_destroyer_request_and_wait(struct cont_svc *svc, uuid_t cont_uuid)
 	}
 
 	task = cont_destroyer_find_task(destroyer, cont_uuid);
-	if (task != NULL)
-		goto wait;
-
-	rc = cont_destroyer_create_task(svc, cont_uuid, &task);
-	if (rc != 0) {
-		ABT_mutex_unlock(destroyer->csd_mutex);
-		return rc;
+	if (task == NULL) {
+		task = cont_destroyer_add_task(svc, cont_uuid);
+		if (task == NULL) {
+			ABT_mutex_unlock(destroyer->csd_mutex);
+			return -DER_NOMEM;
+		}
 	}
 
-wait:
-	/* Wait for the ULT to finish. */
+	/* Reserve a reference before dispatch so the task is not freed under us. */
 	task->csdt_waiters++;
-	while (task->csdt_thread != ABT_THREAD_NULL) {
+
+	cont_destroyer_dispatch(svc);
+
+	/* Wait for the ULT to finish. */
+	while (task->csdt_state != CONT_DESTROYER_DONE) {
 		ABT_cond_wait(destroyer->csd_cond, destroyer->csd_mutex);
 		if (destroyer->csd_stop) {
 			task->csdt_waiters--;
@@ -1979,7 +2035,6 @@ cont_destroyer_fire(struct cont_svc *svc, uuid_t cont_uuid)
 {
 	struct cont_destroyer      *destroyer = &svc->cs_destroyer;
 	struct cont_destroyer_task *task;
-	int                         rc;
 
 	ABT_mutex_lock(destroyer->csd_mutex);
 
@@ -1995,10 +2050,17 @@ cont_destroyer_fire(struct cont_svc *svc, uuid_t cont_uuid)
 		return 0;
 	}
 
-	rc = cont_destroyer_create_task(svc, cont_uuid, &task);
+	task = cont_destroyer_add_task(svc, cont_uuid);
+	if (task == NULL) {
+		ABT_mutex_unlock(destroyer->csd_mutex);
+		return -DER_NOMEM;
+	}
+
+	/* Start it now if below the in-flight limit; otherwise it stays queued. */
+	cont_destroyer_dispatch(svc);
 
 	ABT_mutex_unlock(destroyer->csd_mutex);
-	return rc;
+	return 0;
 }
 
 struct cont_destroyer_iter_args {
@@ -2113,6 +2175,9 @@ cont_destroyer_stop(struct cont_svc *svc)
 	ABT_mutex_lock(destroyer->csd_mutex);
 	destroyer->csd_stop = true;
 
+	/* Wake any waiters so they can observe the stop. */
+	ABT_cond_broadcast(destroyer->csd_cond);
+
 	/*
 	 * Increment waiters on all tasks so that the ULTs won't free them
 	 * while we're iterating.
@@ -2120,9 +2185,9 @@ cont_destroyer_stop(struct cont_svc *svc)
 	d_list_for_each_entry(task, &destroyer->csd_tasks, csdt_link)
 		task->csdt_waiters++;
 
-	/* Wait for all running ULTs to complete. */
+	/* Wait for all running ULTs to complete. Queued tasks never started. */
 	d_list_for_each_entry(task, &destroyer->csd_tasks, csdt_link) {
-		while (task->csdt_thread != ABT_THREAD_NULL)
+		while (task->csdt_state == CONT_DESTROYER_RUNNING)
 			ABT_cond_wait(destroyer->csd_cond, destroyer->csd_mutex);
 	}
 
