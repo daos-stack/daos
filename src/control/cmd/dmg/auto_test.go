@@ -244,6 +244,40 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Generate with allow-numa-imbalance flag",
+			"config generate -a foo --allow-numa-imbalance",
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.MgmtSvcReplicas = []string{"foo"}
+				req.ConfGenerateReq.AllowNumaImbalance = true
+				return req
+			}()),
+			nil,
+		},
+		{
+			"Generate with allow-numa-imbalance short flag",
+			"config generate -a foo -n",
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.MgmtSvcReplicas = []string{"foo"}
+				req.ConfGenerateReq.AllowNumaImbalance = true
+				return req
+			}()),
+			nil,
+		},
+		{
+			"Generate with both num-engines and allow-numa-imbalance (should error)",
+			"config generate -a foo -e 4 --allow-numa-imbalance",
+			"",
+			errors.New("--num-engines and --allow-numa-imbalance flags are mutually exclusive"),
+		},
+		{
 			"Nonexistent subcommand",
 			"network quack",
 			"",
@@ -262,6 +296,7 @@ func TestAuto_confGenCmd_Convert(t *testing.T) {
 	cmd.UseTmpfsSCM = true
 	cmd.ExtMetadataPath = "/opt/daos_md"
 	cmd.FabricPorts = "12345,13345"
+	cmd.AllowNumaImbalance = true
 
 	req := new(control.ConfGenerateReq)
 	if err := convert.Types(cmd.ConfGenCmd, req); err != nil {
@@ -269,14 +304,15 @@ func TestAuto_confGenCmd_Convert(t *testing.T) {
 	}
 
 	expReq := &control.ConfGenerateReq{
-		NrEngines:       1,
-		NetProvider:     "ofi+tcp",
-		SCMOnly:         true,
-		MgmtSvcReplicas: []string{"foo", "bar"},
-		NetClass:        hardware.Infiniband,
-		UseTmpfsSCM:     true,
-		ExtMetadataPath: "/opt/daos_md",
-		FabricPorts:     []int{12345, 13345},
+		NrEngines:          1,
+		NetProvider:        "ofi+tcp",
+		SCMOnly:            true,
+		MgmtSvcReplicas:    []string{"foo", "bar"},
+		NetClass:           hardware.Infiniband,
+		UseTmpfsSCM:        true,
+		ExtMetadataPath:    "/opt/daos_md",
+		FabricPorts:        []int{12345, 13345},
+		AllowNumaImbalance: true,
 	}
 
 	if diff := cmp.Diff(expReq, req); diff != "" {
