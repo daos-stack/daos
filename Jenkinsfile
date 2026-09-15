@@ -117,12 +117,26 @@ void updateRunStage() {
     /* groovylint-disable-next-line UnnecessaryGetter */
     if (!isStackTip()) {
         println('updateRunStage: Detected mid-stack PR, only building')
+        List<String> skipped = []
         for (stage in runStage.keySet()) {
             runStage[stage] = stage in ['Cancel Previous Builds', 'Pre-build',
                                         'Python Bandit check', 'Build', 'Build on EL 9']
             reasons[stage] = 'mid-stack PR'
+            if (!runStage[stage]) {
+                skipped.add(stage)
+            }
         }
         displayRunStage(reasons)
+        // A skipped stage never publishes its status check context, so GitHub would block this
+        // pull request forever waiting for the stages that are deliberately being run on the tip
+        // of the stack instead.  Publish those contexts here.  Do it before the stages run so
+        // that a stage which does run overwrites this with its real result.
+        Map stack = prStack()
+        notifySkippedRequiredChecks(
+            skipped_stages: skipped,
+            target_branch: target_branch,
+            description: "Runs on the tip of stack ${stack['number']}, " +
+                         "this is layer ${stack['position']} of ${stack['size']}")
         return
     }
 

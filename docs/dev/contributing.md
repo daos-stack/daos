@@ -161,3 +161,20 @@ bisecting a failure to a specific layer, set the following commit pragma:
 Skip-stack-optimization: true
 ```
 
+
+#### Required checks on a stacked pull request
+
+A status check context is published from inside the stage that produces it, so
+a stage that does not run never reports one. Left alone, that would make every
+layer below the top of a stack unmergeable: GitHub would wait forever for the
+ten required contexts whose stages were deliberately skipped.
+
+CI therefore publishes those contexts itself on a mid-stack pull request, as a
+success described as `Runs on the tip of stack N, this is layer X of Y`. A
+green check with that description did not run here; it runs on the top of the
+stack. Checks published by GitHub Actions are untouched and still run in full
+on every layer.
+
+Statuses are last-write-wins, so this is done before the stages start. Any
+stage that does run, such as the EL 9 build, replaces its status with the real
+result, including a failure.
