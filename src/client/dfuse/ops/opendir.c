@@ -54,6 +54,8 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_obj_hdl     *oh         = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_inode_entry *ie         = NULL;
+	struct dfuse_dentry       released   = {0};
+	int                       rc;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -82,13 +84,11 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 
 	DFUSE_REPLY_ZERO_OH(oh, req);
 	if (ie) {
-		int rc;
-
-		rc = dfuse_mark_inval_entry(ie->ie_parent, ie->ie_name, ie);
-		if (rc) {
-			DHS_ERROR(ie, rc, "dfuse_mark_inval_entry() failed");
-			dfuse_inode_decref(dfuse_info, ie);
-		}
+		D_INIT_LIST_HEAD(&released.dd_list);
+		dfuse_ie_dentry_snapshot(ie, &released);
+		rc = dfuse_queue_inval_dentries(&released, ie);
+		if (rc)
+			DHS_ERROR(ie, rc, "dfuse_queue_inval_dentries() failed");
 	}
 	dfuse_oh_free(dfuse_info, oh);
 };

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -180,6 +181,7 @@ create_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent, st
 	     dfs_obj_t *obj, char *name, char *attr, daos_size_t attr_len, d_list_t **rlinkp)
 {
 	struct dfuse_inode_entry *ie;
+	struct dfuse_dentry       released = {0};
 	d_list_t                 *rlink;
 	int                       rc = 0;
 
@@ -240,15 +242,29 @@ create_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent, st
 		/** update the chunk size and oclass of inode entry */
 		dfs_obj_copy_attr(inode->ie_obj, ie->ie_obj);
 
+		D_INIT_LIST_HEAD(&released.dd_list);
+
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
+			/* Container root: its UNS name is fixed, nothing to update. */
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
-		} else {
+		} else if (S_ISREG(ie->ie_stat.st_mode) && ie->ie_stat.st_nlink > 1) {
+			/* Hardlink: track this additional name for the shared inode. */
+			rc = dfuse_ie_dentry_add(inode, ie->ie_parent, ie->ie_name);
+			if (rc != 0)
+				DFUSE_TRA_DEBUG(inode, "dfuse_ie_dentry_add() failed %d", rc);
 			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
 			if (rc != 0)
 				DFUSE_TRA_DEBUG(inode, "dfs_update_parent() failed %d", rc);
+		} else {
+			/* Single link: this is the only valid name, release any stale ones. */
+			dfuse_ie_dentry_set_single(inode, ie->ie_parent, ie->ie_name, &released);
+			if (released.dd_name[0] != '\0') {
+				rc = dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
+				if (rc != 0)
+					DFUSE_TRA_DEBUG(inode, "dfs_update_parent() failed %d", rc);
+			}
 		}
-		inode->ie_parent = ie->ie_parent;
-		strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
+		dfuse_queue_inval_dentries(&released, NULL);
 
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		dfuse_ie_close(dfuse_info, ie);

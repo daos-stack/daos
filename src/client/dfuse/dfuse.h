@@ -400,6 +400,8 @@ struct dfuse_inode_ops {
 		       const char *newname, unsigned int flags);
 	void (*symlink)(fuse_req_t req, const char *link,
 			struct dfuse_inode_entry *parent, const char *name);
+	void (*hardlink)(fuse_req_t req, struct dfuse_inode_entry *inode,
+			 struct dfuse_inode_entry *parent, const char *name);
 	void (*unlink)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
 	void (*setxattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
@@ -486,6 +488,7 @@ struct dfuse_pool {
 	ACTION(UNLINK)                                                                             \
 	ACTION(READDIR)                                                                            \
 	ACTION(SYMLINK)                                                                            \
+	ACTION(LINK)                                                                               \
 	ACTION(READLINK)                                                                           \
 	ACTION(OPENDIR)                                                                            \
 	ACTION(SETXATTR)                                                                           \
@@ -941,6 +944,15 @@ dfuse_loop(struct dfuse_info *dfuse_info);
 
 #define DFUSE_REPLY_IOCTL(desc, req, arg) DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
 
+/* A (parent, name) dentry.  A file may have multiple hardlinks, all sharing one inode entry; the
+ * primary link is stored inline on the inode and any additional links are tracked on ie_dentries.
+ */
+struct dfuse_dentry {
+	fuse_ino_t dd_parent;
+	char       dd_name[NAME_MAX + 1];
+	d_list_t   dd_list;
+};
+
 /**
  * Inode handle.
  *
@@ -976,6 +988,12 @@ struct dfuse_inode_entry {
 	 * a reference on the parent so the inode may not be valid.
 	 */
 	fuse_ino_t                ie_parent;
+
+	/** Additional hardlink dentries beyond the primary ie_parent/ie_name. */
+	d_list_t                  ie_dentries;
+
+	/** Protects ie_parent, ie_name and ie_dentries. */
+	pthread_spinlock_t        ie_dentry_lock;
 
 	struct dfuse_cont        *ie_dfs;
 
@@ -1189,12 +1207,6 @@ ival_drop_inode(struct dfuse_inode_entry *inode);
 int
 ival_update_inode(struct dfuse_inode_entry *inode, double timeout);
 
-/* Queue an on-demand dentry invalidation (parent/name) to be issued from the invalidation thread.
- * ie_drop, if non-NULL, is a reference that is released after the invalidation has been issued.
- */
-int
-dfuse_mark_inval_entry(fuse_ino_t parent, const char *name, struct dfuse_inode_entry *ie_drop);
-
 int
 ival_init(struct dfuse_info *dfuse_info);
 
@@ -1249,6 +1261,52 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
 void
 dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
+
+/* Track an additional hardlink name for a shared inode. */
+int
+dfuse_ie_dentry_add(struct dfuse_inode_entry *ie, fuse_ino_t parent, const char *name);
+
+/* Drop one tracked name; promotes a secondary to primary if the primary was removed. */
+void
+dfuse_ie_dentry_remove(struct dfuse_inode_entry *ie, fuse_ino_t parent, const char *name);
+
+/* Rename a tracked name.  If the old name is unknown, release all tracked names into released and
+ * set the new name as the sole primary.
+ */
+void
+dfuse_ie_dentry_replace(struct dfuse_inode_entry *ie, fuse_ino_t old_parent, const char *old_name,
+			fuse_ino_t new_parent, const char *new_name, struct dfuse_dentry *released);
+
+/* Make (parent, name) the inode's sole tracked name, moving every other name into released.  Used
+ * for a single-link file where all other cached names are stale.
+ */
+void
+dfuse_ie_dentry_set_single(struct dfuse_inode_entry *ie, fuse_ino_t parent, const char *name,
+			   struct dfuse_dentry *released);
+
+/* Snapshot every tracked name into released, moving secondaries out of the inode. */
+void
+dfuse_ie_dentry_snapshot(struct dfuse_inode_entry *ie, struct dfuse_dentry *released);
+
+/* Issue fuse_lowlevel_notify_inval_entry() for every name in released and free secondaries.  Must
+ * only be called from the invalidation thread.  Returns -EBADF if the session is dead.
+ */
+int
+dfuse_ie_dentry_inval(struct dfuse_info *dfuse_info, struct dfuse_dentry *released);
+
+/* Queue every name in released for invalidation on the invalidation thread, consuming released.
+ * ie_drop, if set, is released after the final name is invalidated.
+ */
+int
+dfuse_queue_inval_dentries(struct dfuse_dentry *released, struct dfuse_inode_entry *ie_drop);
+
+/* Invalidate cached data/attrs and delete every name in released, skipping
+ * (exclude_parent, exclude_name) which the kernel already handled.  Consumes released.
+ */
+void
+dfuse_ie_inode_delete(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
+		      struct dfuse_dentry *released, fuse_ino_t exclude_parent,
+		      const char *exclude_name);
 
 /* ops/...c */
 
@@ -1313,6 +1371,9 @@ dfuse_cb_symlink(fuse_req_t, const char *, struct dfuse_inode_entry *,
 		 const char *);
 
 void
+dfuse_cb_link(fuse_req_t, struct dfuse_inode_entry *, struct dfuse_inode_entry *, const char *);
+
+void
 dfuse_cb_setxattr(fuse_req_t, struct dfuse_inode_entry *, const char *,
 		  const char *, size_t, int);
 
@@ -1357,6 +1418,13 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 void
 dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t *oid,
 		   struct dfuse_inode_entry *parent, const char *name);
+
+/* Handle removal of one hardlink where the file still exists (other links remain).  The inode is
+ * left intact; only the fuse reply is issued.
+ */
+void
+dfuse_hardlink_removed(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t *oid,
+		       struct dfuse_inode_entry *parent, const char *name);
 
 /* dfuse_cont.c */
 void

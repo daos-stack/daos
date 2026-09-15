@@ -19,8 +19,11 @@ dfuse_oid_moved(struct dfuse_info *dfuse_info, daos_obj_id_t *oid, struct dfuse_
 		const char *name, struct dfuse_inode_entry *newparent, const char *newname)
 {
 	struct dfuse_inode_entry *ie;
-	int                       rc;
+	struct dfuse_dentry       released = {0};
 	ino_t                     ino;
+	int                       rc;
+
+	D_INIT_LIST_HEAD(&released.dd_list);
 
 	dfuse_compute_inode(parent->ie_dfs, oid, &ino);
 
@@ -30,22 +33,16 @@ dfuse_oid_moved(struct dfuse_info *dfuse_info, daos_obj_id_t *oid, struct dfuse_
 	if (!ie)
 		return;
 
-	/* If the move is not from where we thought the file was then invalidate the old entry */
-	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
-		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
-		DFUSE_TRA_DEBUG(ie, "Invalidating old name");
-
-		rc = dfuse_mark_inval_entry(ie->ie_parent, ie->ie_name, NULL);
-		if (rc)
-			DFUSE_TRA_ERROR(ie, "dfuse_mark_inval_entry() failed: %d", rc);
-	}
-
-	/* Update the inode entry data */
-	ie->ie_parent = newparent->ie_stat.st_ino;
-	strncpy(ie->ie_name, newname, NAME_MAX);
+	/* Replace the moved name; if the old location was unknown, release all stale names. */
+	dfuse_ie_dentry_replace(ie, parent->ie_stat.st_ino, name, newparent->ie_stat.st_ino,
+				newname, &released);
 
 	/* Set the new parent and name */
 	dfs_update_parentfd(ie->ie_obj, newparent->ie_obj, newname);
+
+	rc = dfuse_queue_inval_dentries(&released, NULL);
+	if (rc)
+		DFUSE_TRA_ERROR(ie, "dfuse_queue_inval_dentries() failed: %d", rc);
 
 	/* Drop the ref again */
 	dfuse_inode_decref(dfuse_info, ie);
@@ -59,6 +56,7 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
 	daos_obj_id_t      moid       = {};
 	daos_obj_id_t      oid        = {};
+	bool               deleted    = false;
 	int                rc;
 
 	if (flags != 0) {
@@ -85,7 +83,7 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 
 	rc = dfs_move_internal(parent->ie_dfs->dfs_ns, flags, parent->ie_obj, (char *)name,
-			       newparent->ie_obj, (char *)newname, &moid, &oid);
+			       newparent->ie_obj, (char *)newname, &moid, &oid, &deleted);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -94,11 +92,18 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	/* update moid */
 	dfuse_oid_moved(dfuse_info, &moid, parent, name, newparent, newname);
 
-	/* Check if a file was unlinked and see if anything needs updating */
-	if (oid.lo || oid.hi)
-		dfuse_oid_unlinked(dfuse_info, req, &oid, newparent, newname);
-	else
+	/* Check if a file was unlinked and see if anything needs updating.  A clobbered hardlink
+	 * whose file still exists must keep its inode, so only treat it as fully unlinked when the
+	 * object was actually deleted.
+	 */
+	if (oid.lo || oid.hi) {
+		if (deleted)
+			dfuse_oid_unlinked(dfuse_info, req, &oid, newparent, newname);
+		else
+			dfuse_hardlink_removed(dfuse_info, req, &oid, newparent, newname);
+	} else {
 		DFUSE_REPLY_ZERO(newparent, req);
+	}
 
 	return;
 
