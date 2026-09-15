@@ -708,7 +708,7 @@ pipeline {
                defaultValue: '',
                description: 'The pool of images to provision test nodes from')
         string(name: 'CI_BUILD_DESCRIPTION',
-               defaultValue: 'ci_nvme5',
+               defaultValue: '',
                description: 'A description of the build')
     }
 
