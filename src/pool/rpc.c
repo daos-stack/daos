@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -338,6 +338,12 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
 			bits |= DAOS_PO_QUERY_PROP_SVC_OPS_ENTRY_AGE;
+			break;
+		case DAOS_PROP_PO_POOL_CA:
+			bits |= DAOS_PO_QUERY_PROP_POOL_CA;
+			break;
+		case DAOS_PROP_PO_CERT_WATERMARKS:
+			bits |= DAOS_PO_QUERY_PROP_CERT_WATERMARKS;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
