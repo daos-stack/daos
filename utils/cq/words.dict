@@ -188,7 +188,9 @@ epcrange
 epilog
 errored
 ethernet
+failfast
 fallocate
+faulthandler
 fchmod
 fcntl
 filename
