@@ -110,17 +110,6 @@ struct dfuse_inval_item {
 	struct dfuse_inode_entry *ie_drop;
 };
 
-/* The core data from struct dfuse_inode_entry.  No additional inode references are held on inodes
- * because of there place on invalidate lists, rather inodes are removed from any list on close.
- * Therefore once a decision is made to evict an inode then a copy of the data is needed as once
- * the ival_lock is dropped the inode could be freed.  This is not a problem if this happens as the
- * kernel will simply return ENOENT.
- */
-struct inode_core {
-	char       name[NAME_MAX + 1];
-	fuse_ino_t parent;
-};
-
 /* Number of dentries to invalidate per iteration. This value affects how long the lock is held,
  * after the invalidations happen then another iteration will start immediately.  Invalidation of
  * directories however trigger many forget calls so we want to make use of this where possible so
@@ -145,7 +134,8 @@ static bool
 ival_loop(int *sleep_time)
 {
 	struct dfuse_time_entry *dte, *dtep;
-	struct inode_core        ic[EVICT_COUNT] = {};
+	struct dfuse_dentry      ic[EVICT_COUNT] = {};
+	struct dfuse_dentry     *dd, *ddn;
 	int                      idx             = 0;
 	double                   sleep           = (60 * 1) - 1;
 
@@ -180,9 +170,8 @@ ival_loop(int *sleep_time)
 				continue;
 			}
 
-			ic[idx].parent = inode->ie_parent;
-			strncpy(ic[idx].name, inode->ie_name, NAME_MAX + 1);
-			ic[idx].name[NAME_MAX] = '\0';
+			/* Snapshot every name so all hardlinks of the inode are invalidated. */
+			dfuse_ie_dentry_snapshot(inode, &ic[idx]);
 
 			d_list_del_init(&inode->ie_evict_entry);
 
@@ -198,50 +187,32 @@ out:
 	DFUSE_TRA_DEBUG(&ival_data, "Unlocking, allowing to sleep for %d seconds", *sleep_time);
 	D_MUTEX_UNLOCK(&ival_lock);
 
-	if (idx == 0 || ival_data.session_dead)
+	if (ival_data.session_dead) {
+		/* Session is gone; free the snapshotted names without notifying the kernel. */
+		for (int i = 0; i < idx; i++) {
+			d_list_for_each_entry_safe(dd, ddn, &ic[i].dd_list, dd_list) {
+				d_list_del(&dd->dd_list);
+				D_FREE(dd);
+			}
+		}
+		return false;
+	}
+
+	if (idx == 0)
 		return false;
 
 	for (int i = 0; i < idx; i++) {
 		int rc;
 
-		DFUSE_TRA_DEBUG(&ival_data, "Evicting entry %#lx " DF_DE, ic[i].parent,
-				DP_DE(ic[i].name));
+		DFUSE_TRA_DEBUG(&ival_data, "Evicting entry %#lx " DF_DE, ic[i].dd_parent,
+				DP_DE(ic[i].dd_name));
 
-		rc = fuse_lowlevel_notify_inval_entry(ival_data.session, ic[i].parent, ic[i].name,
-						      strnlen(ic[i].name, NAME_MAX));
-		if (rc && rc != -ENOENT && rc != -EBADF)
-			DHS_ERROR(&ival_data, -rc, "notify_inval_entry() failed");
+		rc = dfuse_ie_dentry_inval(ival_data.dfuse_info, &ic[i]);
 		if (rc == -EBADF)
 			ival_data.session_dead = true;
 	}
 
 	return (idx == EVICT_COUNT);
-}
-
-/* Queue a dentry invalidation for the invalidation thread.  Takes ownership of ie_drop, which is
- * released after the invalidation has been issued.  On failure ie_drop is not touched.
- */
-int
-dfuse_mark_inval_entry(fuse_ino_t parent, const char *name, struct dfuse_inode_entry *ie_drop)
-{
-	struct dfuse_inval_item *item;
-
-	D_ALLOC_PTR(item);
-	if (item == NULL)
-		return ENOMEM;
-
-	item->parent  = parent;
-	item->ie_drop = ie_drop;
-	strncpy(item->name, name, NAME_MAX);
-	item->name[NAME_MAX] = '\0';
-
-	D_MUTEX_LOCK(&ival_lock);
-	d_list_add_tail(&item->link, &ival_queue);
-	D_MUTEX_UNLOCK(&ival_lock);
-
-	sem_post(&ival_sem);
-
-	return 0;
 }
 
 /* Drain the on-demand invalidation queue.  Runs on the invalidation thread so the blocking
@@ -278,6 +249,147 @@ ival_drain_queue(void)
 		if (item->ie_drop)
 			dfuse_inode_decref(ival_data.dfuse_info, item->ie_drop);
 		D_FREE(item);
+	}
+}
+
+int
+dfuse_ie_dentry_inval(struct dfuse_info *dfuse_info, struct dfuse_dentry *released)
+{
+	struct dfuse_dentry *dd, *ddn;
+	int                  rc;
+	int                  ret = 0;
+
+	if (released->dd_name[0] != '\0') {
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, released->dd_parent,
+						      released->dd_name,
+						      strnlen(released->dd_name, NAME_MAX));
+		if (rc == -EBADF)
+			ret = -EBADF;
+		else if (rc != 0 && rc != -ENOENT)
+			DS_ERROR(-rc, "notify_inval_entry() failed");
+	}
+
+	d_list_for_each_entry_safe(dd, ddn, &released->dd_list, dd_list) {
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, dd->dd_parent,
+						      dd->dd_name, strnlen(dd->dd_name, NAME_MAX));
+		if (rc == -EBADF)
+			ret = -EBADF;
+		else if (rc != 0 && rc != -ENOENT)
+			DS_ERROR(-rc, "notify_inval_entry() failed");
+		d_list_del(&dd->dd_list);
+		D_FREE(dd);
+	}
+
+	return ret;
+}
+
+int
+dfuse_queue_inval_dentries(struct dfuse_dentry *released, struct dfuse_inode_entry *ie_drop)
+{
+	struct dfuse_dentry     *dd, *ddn;
+	struct dfuse_inval_item *item;
+	struct dfuse_inval_item *last = NULL;
+	d_list_t                 items;
+	int                      rc = 0;
+
+	D_INIT_LIST_HEAD(&items);
+
+	/* Build one queue item per tracked name, primary first then secondaries. */
+	if (released->dd_name[0] != '\0') {
+		D_ALLOC_PTR(item);
+		if (item == NULL)
+			D_GOTO(fail, rc = ENOMEM);
+		item->parent  = released->dd_parent;
+		item->ie_drop = NULL;
+		strncpy(item->name, released->dd_name, NAME_MAX);
+		item->name[NAME_MAX] = '\0';
+		d_list_add_tail(&item->link, &items);
+		last = item;
+	}
+
+	d_list_for_each_entry_safe(dd, ddn, &released->dd_list, dd_list) {
+		D_ALLOC_PTR(item);
+		if (item == NULL)
+			D_GOTO(fail, rc = ENOMEM);
+		item->parent  = dd->dd_parent;
+		item->ie_drop = NULL;
+		strncpy(item->name, dd->dd_name, NAME_MAX);
+		item->name[NAME_MAX] = '\0';
+		d_list_add_tail(&item->link, &items);
+		last = item;
+		d_list_del(&dd->dd_list);
+		D_FREE(dd);
+	}
+
+	if (last != NULL) {
+		/* Drop the inode reference only after the final name is invalidated. */
+		last->ie_drop = ie_drop;
+		D_MUTEX_LOCK(&ival_lock);
+		while ((item = d_list_pop_entry(&items, struct dfuse_inval_item, link)) != NULL)
+			d_list_add_tail(&item->link, &ival_queue);
+		D_MUTEX_UNLOCK(&ival_lock);
+		sem_post(&ival_sem);
+	} else if (ie_drop != NULL) {
+		/* Nothing to invalidate; release the reference immediately. */
+		dfuse_inode_decref(ival_data.dfuse_info, ie_drop);
+	}
+
+	return 0;
+
+fail:
+	while ((item = d_list_pop_entry(&items, struct dfuse_inval_item, link)) != NULL)
+		D_FREE(item);
+	d_list_for_each_entry_safe(dd, ddn, &released->dd_list, dd_list) {
+		d_list_del(&dd->dd_list);
+		D_FREE(dd);
+	}
+	if (ie_drop != NULL)
+		dfuse_inode_decref(ival_data.dfuse_info, ie_drop);
+
+	return rc;
+}
+
+void
+dfuse_ie_inode_delete(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
+		      struct dfuse_dentry *released, fuse_ino_t exclude_parent,
+		      const char *exclude_name)
+{
+	struct dfuse_dentry *dd, *ddn;
+	fuse_ino_t           ino = ie->ie_stat.st_ino;
+	int                  rc;
+
+	/* Drop cached data and attributes (a no-op if caching is off).  The kernel just did a
+	 * lookup for this unlink/rename and has often destroyed the inode already, so this races
+	 * and usually returns -ENOENT, which is expected and ignored.
+	 */
+	rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session, ino, 0, 0);
+	if (rc && rc != -ENOENT)
+		DHS_ERROR(ie, -rc, "inval_inode() error");
+
+	/* Delete every cached name so the kernel issues a forget for each, except (exclude_parent,
+	 * exclude_name) which the kernel already handled and forgets on its own via this call.
+	 */
+	if (released->dd_name[0] != '\0' &&
+	    (released->dd_parent != exclude_parent ||
+	     strncmp(released->dd_name, exclude_name, NAME_MAX) != 0)) {
+		rc = fuse_lowlevel_notify_delete(dfuse_info->di_session, released->dd_parent, ino,
+						 released->dd_name,
+						 strnlen(released->dd_name, NAME_MAX));
+		if (rc && rc != -ENOENT)
+			DHS_ERROR(ie, -rc, "notify_delete() error");
+	}
+
+	d_list_for_each_entry_safe(dd, ddn, &released->dd_list, dd_list) {
+		if (dd->dd_parent != exclude_parent ||
+		    strncmp(dd->dd_name, exclude_name, NAME_MAX) != 0) {
+			rc = fuse_lowlevel_notify_delete(dfuse_info->di_session, dd->dd_parent, ino,
+							 dd->dd_name,
+							 strnlen(dd->dd_name, NAME_MAX));
+			if (rc && rc != -ENOENT)
+				DHS_ERROR(ie, -rc, "notify_delete() error");
+		}
+		d_list_del(&dd->dd_list);
+		D_FREE(dd);
 	}
 }
 

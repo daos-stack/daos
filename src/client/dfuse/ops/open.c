@@ -153,6 +153,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_obj_hdl     *oh         = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_inode_entry *ie         = NULL;
+	struct dfuse_dentry       released   = {0};
 	int                       rc;
 	uint32_t                  il_calls;
 
@@ -242,11 +243,11 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		dfuse_inode_decref(dfuse_info, oh->doh_parent_dir);
 	}
 	if (ie) {
-		rc = dfuse_mark_inval_entry(ie->ie_parent, ie->ie_name, ie);
-		if (rc) {
-			DHS_ERROR(ie, rc, "dfuse_mark_inval_entry() failed");
-			dfuse_inode_decref(dfuse_info, ie);
-		}
+		D_INIT_LIST_HEAD(&released.dd_list);
+		dfuse_ie_dentry_snapshot(ie, &released);
+		rc = dfuse_queue_inval_dentries(&released, ie);
+		if (rc)
+			DHS_ERROR(ie, rc, "dfuse_queue_inval_dentries() failed");
 	}
 	dfuse_oh_free(dfuse_info, oh);
 }

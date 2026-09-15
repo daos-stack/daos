@@ -5587,6 +5587,219 @@ dfs_test_exchange_hardlink(void **state)
 	assert_int_equal(rc, 0);
 }
 
+/*
+ * Test the "deleted" out-parameter of dfs_remove_internal(), which reports whether the underlying
+ * file object was actually destroyed.  It must be false while other hardlinks remain, and true for
+ * a regular file, the last surviving hardlink, a directory, or a symlink.
+ */
+static void
+dfs_test_remove_deleted_flag(void **state)
+{
+	test_arg_t   *arg = *state;
+	dfs_obj_t    *dir;
+	dfs_obj_t    *reg_obj;
+	dfs_obj_t    *l1_obj, *l2_obj, *l3_obj;
+	dfs_obj_t    *sub_dir;
+	dfs_obj_t    *sym_obj;
+	struct stat   stbuf;
+	daos_obj_id_t oid;
+	bool          deleted;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, "df_dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/* A regular (non-hardlinked) file: removal destroys the object. */
+	print_message("Step 1: remove a regular file -> deleted == true\n");
+	rc = dfs_open(dfs_mt, dir, "reg", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, NULL, &reg_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(reg_obj);
+	assert_int_equal(rc, 0);
+	deleted = false;
+	rc      = dfs_remove_internal(dfs_mt, dir, "reg", false, &oid, &deleted);
+	assert_int_equal(rc, 0);
+	assert_true(deleted);
+
+	/* Build a hardlink chain of three names (link_cnt == 3). */
+	print_message("Step 2: create l1 and hardlinks l2, l3 (link_cnt == 3)\n");
+	rc = dfs_open(dfs_mt, dir, "l1", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, NULL, &l1_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_link(dfs_mt, l1_obj, dir, "l2", &l2_obj, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_link(dfs_mt, l1_obj, dir, "l3", &l3_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 3);
+
+	/* Removing a link while others remain must report deleted == false. */
+	print_message("Step 3: remove l1 -> deleted == false, nlink == 2\n");
+	deleted = true;
+	rc      = dfs_remove_internal(dfs_mt, dir, "l1", false, &oid, &deleted);
+	assert_int_equal(rc, 0);
+	assert_false(deleted);
+	rc = dfs_stat(dfs_mt, dir, "l2", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	print_message("Step 4: remove l2 -> deleted == false, nlink == 1\n");
+	deleted = true;
+	rc      = dfs_remove_internal(dfs_mt, dir, "l2", false, &oid, &deleted);
+	assert_int_equal(rc, 0);
+	assert_false(deleted);
+	rc = dfs_stat(dfs_mt, dir, "l3", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 1);
+
+	/* Removing the last surviving link destroys the object. */
+	print_message("Step 5: remove l3 (last link) -> deleted == true\n");
+	deleted = false;
+	rc      = dfs_remove_internal(dfs_mt, dir, "l3", false, &oid, &deleted);
+	assert_int_equal(rc, 0);
+	assert_true(deleted);
+	rc = dfs_stat(dfs_mt, dir, "l3", &stbuf);
+	assert_int_equal(rc, ENOENT);
+
+	rc = dfs_release(l1_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(l2_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(l3_obj);
+	assert_int_equal(rc, 0);
+
+	/* A directory: removal reports deleted == true. */
+	print_message("Step 6: remove a directory -> deleted == true\n");
+	rc = dfs_open(dfs_mt, dir, "sub", S_IFDIR | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, NULL, &sub_dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(sub_dir);
+	assert_int_equal(rc, 0);
+	deleted = false;
+	rc      = dfs_remove_internal(dfs_mt, dir, "sub", false, &oid, &deleted);
+	assert_int_equal(rc, 0);
+	assert_true(deleted);
+
+	/* A symlink: removal reports deleted == true. */
+	print_message("Step 7: remove a symlink -> deleted == true\n");
+	rc = dfs_open(dfs_mt, dir, "sym", S_IFLNK | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, "target", &sym_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(sym_obj);
+	assert_int_equal(rc, 0);
+	deleted = false;
+	rc      = dfs_remove_internal(dfs_mt, dir, "sym", false, &oid, &deleted);
+	assert_int_equal(rc, 0);
+	assert_true(deleted);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "df_dir", true, NULL);
+	assert_int_equal(rc, 0);
+}
+
+/*
+ * Test the "deleted" out-parameter of dfs_move_internal(), which reports whether the clobbered
+ * rename destination object was actually destroyed.  It stays false when the rename clobbers
+ * nothing, is false when the clobbered destination still has surviving hardlinks, and is true when
+ * a regular destination or the last surviving hardlink is clobbered.
+ */
+static void
+dfs_test_move_deleted_flag(void **state)
+{
+	test_arg_t   *arg = *state;
+	dfs_obj_t    *dir;
+	dfs_obj_t    *obj;
+	dfs_obj_t    *hl_obj;
+	struct stat   stbuf;
+	daos_obj_id_t oid;
+	bool          deleted;
+	int           rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, "mv_dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/* Rename with no existing destination: nothing is clobbered, deleted stays false. */
+	print_message("Step 1: rename with no clobber -> deleted == false\n");
+	rc = dfs_open(dfs_mt, dir, "src", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	deleted = true;
+	oid.lo = oid.hi = 0;
+	rc = dfs_move_internal(dfs_mt, 0, dir, "src", dir, "dst", NULL, &oid, &deleted);
+	assert_int_equal(rc, 0);
+	assert_false(deleted);
+	assert_true(oid.lo == 0 && oid.hi == 0);
+
+	/* Rename clobbering a regular (single-link) file: the destination object is destroyed. */
+	print_message("Step 2: rename clobbering a regular file -> deleted == true\n");
+	rc = dfs_open(dfs_mt, dir, "src2", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir, "victim", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	deleted = false;
+	rc      = dfs_move_internal(dfs_mt, 0, dir, "src2", dir, "victim", NULL, &oid, &deleted);
+	assert_int_equal(rc, 0);
+	assert_true(deleted);
+
+	/* Build a hardlinked destination (hl1, hl2) with link_cnt == 2. */
+	print_message("Step 3: rename clobbering a surviving hardlink -> deleted == false\n");
+	rc = dfs_open(dfs_mt, dir, "hl1", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, NULL, &hl_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_link(dfs_mt, hl_obj, dir, "hl2", NULL, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+	rc = dfs_release(hl_obj);
+	assert_int_equal(rc, 0);
+
+	/* Clobber hl1 by renaming another file onto it: hl2 still refers to the object. */
+	rc = dfs_open(dfs_mt, dir, "mover", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	deleted = true;
+	rc      = dfs_move_internal(dfs_mt, 0, dir, "mover", dir, "hl1", NULL, &oid, &deleted);
+	assert_int_equal(rc, 0);
+	assert_false(deleted);
+	rc = dfs_stat(dfs_mt, dir, "hl2", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 1);
+
+	/* Clobber the last surviving link (hl2): the object is destroyed. */
+	print_message("Step 4: rename clobbering the last hardlink -> deleted == true\n");
+	rc = dfs_open(dfs_mt, dir, "mover2", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	deleted = false;
+	rc      = dfs_move_internal(dfs_mt, 0, dir, "mover2", dir, "hl2", NULL, &oid, &deleted);
+	assert_int_equal(rc, 0);
+	assert_true(deleted);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "mv_dir", true, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
     {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
@@ -5636,6 +5849,10 @@ static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST32: dfs rename hardlink", dfs_test_rename_hardlink, async_disable,
      test_case_teardown},
     {"DFS_UNIT_TEST33: dfs exchange hardlink", dfs_test_exchange_hardlink, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST34: dfs remove deleted flag", dfs_test_remove_deleted_flag, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST35: dfs move deleted flag", dfs_test_move_deleted_flag, async_disable,
      test_case_teardown},
 };
 

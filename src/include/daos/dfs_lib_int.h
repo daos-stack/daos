@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,14 +56,22 @@ dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_obj_
 	    mode_t *mode, struct stat *stbuf, int xnr, char *xnames[], void *xvals[],
 	    daos_size_t *xsizes);
 
-/* moid is moved oid, oid is clobbered file.
- * This isn't yet fully compatible with dfuse because we also want to pass in a flag for if the
- * destination exists.
+/* moid is the moved oid, oid is the clobbered file (if any).  deleted, when non-NULL, reports
+ * whether the clobbered object was actually deleted (true for a regular file or the last hardlink,
+ * false when the clobbered name was one of several hardlinks and the file still exists).
  */
 int
 dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, const char *name,
 		  dfs_obj_t *new_parent, const char *new_name, daos_obj_id_t *moid,
-		  daos_obj_id_t *oid);
+		  daos_obj_id_t *oid, bool *deleted);
+
+/* As dfs_remove() but reports whether the object was actually deleted.  This is true for a regular
+ * file or when the last hardlink is removed, and false when only one of several hardlinks is
+ * removed and the file still exists.
+ */
+int
+dfs_remove_internal(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid,
+		    bool *deleted);
 
 /* Set the in-memory parent, but takes the parent, rather than another file object */
 void
