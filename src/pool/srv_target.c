@@ -2580,8 +2580,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct child_discard_arg *arg = cb_arg;
 	struct ds_cont_child	*cont = NULL;
 	vos_iter_param_t	param = { 0 };
-	struct vos_iter_anchors	anchor = { 0 };
-	daos_handle_t		coh;
+	struct vos_iter_anchors   anchor = {0};
 	struct d_backoff_seq	backoff_seq;
 	int			rc;
 
@@ -2598,18 +2597,11 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
-	if (rc != 0) {
-		D_ERROR("Open container "DF_UUID" failed: "DF_RC"\n",
-			DP_UUID(entry->ie_couuid), DP_RC(rc));
-		D_GOTO(put, rc);
-	}
-
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
 				1 << 10 /* max (ms) */);
 	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
 
-	param.ip_hdl = coh;
+	param.ip_hdl        = cont->sc_hdl;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = arg->ca_epoch;
 	uuid_copy(arg->ca_co_uuid, entry->ie_couuid);
@@ -2627,19 +2619,10 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	} while (1);
 
 	d_backoff_seq_fini(&backoff_seq);
-	vos_cont_close(coh);
 	D_DEBUG(DB_TRACE, DF_UUID "/" DF_UUID " discard cont done: " DF_RC "\n",
 		DP_UUID(arg->ca_po_uuid), DP_UUID(entry->ie_couuid), DP_RC(rc));
 
-put:
 	ds_cont_child_put(cont);
-	/* don't destroy vos container, to avoid ds_cont_tgt_refresh_agg_eph() failure,
-	 * later depend on container recovery process to handle it.
-	 */
-#if 0
-	if (rc == 0)
-		rc = ds_cont_child_destroy(arg->tgt_discard->pool_uuid, entry->ie_couuid);
-#endif
 	return rc;
 }
 
