@@ -20,18 +20,18 @@ Install pre-built DAOS dependency RPMs matching the versions expected by the
 current tree.
 
 Arguments:
-    RPM_SUFFIX          Package distro suffix used by DAOS RPMs (e.g. el9, 
-                        suse.lp155, suse.lp156). If omitted, it is 
-                        auto-detected from /etc/os-release.
+    RPM_SUFFIX           Package distro suffix used by DAOS RPMs (e.g. el9,
+                         suse.lp155, suse.lp156). If omitted, it is
+                         auto-detected from /etc/os-release.
 
 Options:
-    -h, --help          Show this help and exit
+    -h, --help           Show this help and exit
 
 Environment:
-    DAOS_DEPS_EXT_REPO  Optional dnf repo URL with a set of dependency RPMs,
-                        registered as an extra install source for the duration
-                        of this script only. Requires passwordless sudo to
-                        write/remove /etc/yum.repos.d/daos-deps-extra.repo.
+    DAOS_DEPS_EXT_REPO   Optional dnf repo URL with a set of dependency RPMs,
+                         registered as an extra install source for the duration
+                         of this script only. Requires passwordless sudo to
+                         write/remove /etc/yum.repos.d/daos-deps-extra.repo.
 EOF
 }
 

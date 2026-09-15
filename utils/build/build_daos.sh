@@ -9,6 +9,7 @@ usage() {
     cat <<EOF
 Usage: ${0##*/} [SCONS_OPTIONS]
        ${0##*/} -c | --clean
+       ${0##*/} -f | --full-clean
        ${0##*/} -h | --help
 
 Build DAOS with scons, assuming the dependencies are already built. The
@@ -24,6 +25,7 @@ The following defaults apply unless overridden:
 
 Options:
     -c, --clean         Run 'scons -c' and remove generated build state
+    -f, --full-clean    Run 'scons -c' and remove saved build configuration
     -h, --help          Show this help and exit
 
 Any other argument is forwarded verbatim to scons, e.g.:
@@ -45,11 +47,14 @@ install_set=false
 
 clean_scons() {
     scons -c
-    rm -rf .build_vars.json .build_vars.sh config.log daos.conf .sconf_temp \
-           .sconsign.dblite build
-    find site_scons -type d -name __pycache__ -prune -exec rm -rf {} +
+    rm -rf .sconf_temp .sconsign.dblite config.log build
+    find site_scons -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
 }
 
+full_clean_scons() {
+    clean_scons
+    rm -f .build_vars.json .build_vars.sh daos.conf
+}
 
 for arg in "$@"; do
     case "$arg" in
@@ -59,6 +64,10 @@ for arg in "$@"; do
             ;;
         -c | --clean)
             clean_scons
+            exit 0
+            ;;
+        -f | --full-clean)
+            full_clean_scons
             exit 0
             ;;
         -j | --jobs )

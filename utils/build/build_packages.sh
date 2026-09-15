@@ -32,7 +32,7 @@ Options:
     -h, --help       Show this help and exit
 
 Environment:
-    OUTPUT_TYPE  Package format to build: rpm|deb. Default: rpm.
+    OUTPUT_TYPE      Package format to build: rpm|deb. Default: rpm.
 EOF
 }
 

@@ -153,7 +153,7 @@ RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
             ${DAOS_BUILD_TYPE:+BUILD_TYPE="$DAOS_BUILD_TYPE"} \
             ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} && \
         [ "$DAOS_KEEP_BUILD" != "no" ] || { \
-            utils/build/build_daos.sh --clean; \
+            rm -rf .sconf_temp .sconsign.dblite config.log build *.gz; \
         } ; \
     }
 
