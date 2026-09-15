@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,10 +49,10 @@ corpc_post_reply(crt_rpc_t *rpc, void *arg)
 	return 0;
 }
 
-struct crt_corpc_ops corpc_set_ivns_ops = {
-	.co_aggregate = corpc_aggregate,
-	.co_pre_forward = corpc_pre_forward,
-	.co_post_reply = corpc_post_reply,
+struct crt_corpc_ops corpc_ops = {
+    .co_aggregate   = corpc_aggregate,
+    .co_pre_forward = corpc_pre_forward,
+    .co_post_reply  = corpc_post_reply,
 };
 
 static void
@@ -91,14 +92,12 @@ corpc_response_hdlr(const struct crt_cb_info *info)
 	crtu_progress_stop();
 }
 
-static struct crt_proto_rpc_format my_proto_rpc_fmt_basic_corpc[] = {
-	{
-		.prf_flags	= 0,
-		.prf_req_fmt	= &CQF_basic_corpc,
-		.prf_hdlr	= test_basic_corpc_hdlr,
-		.prf_co_ops	= &corpc_set_ivns_ops,
-	}
-};
+static struct crt_proto_rpc_format my_proto_rpc_fmt_basic_corpc[] = {{
+    .prf_flags   = 0,
+    .prf_req_fmt = &CQF_basic_corpc,
+    .prf_hdlr    = test_basic_corpc_hdlr,
+    .prf_co_ops  = &corpc_ops,
+}};
 
 static struct crt_proto_format my_proto_fmt_basic_corpc = {
 	.cpf_name = "my-proto-basic_corpc",
