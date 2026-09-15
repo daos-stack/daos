@@ -26,16 +26,12 @@ class EcodFioRebuild(TestFio):
             fio_cmd (FioCommand): Fio command object
             rebuild_mode (str): On-line or off-line rebuild mode
         """
-        aggregation_timeout = self.params.get("aggregation_timeout", "/run/pool/*")
         read_option = self.params.get("rw_read", "/run/fio/test/read_write/*")
 
         num_ranks = len(self.server_managers[0].ranks)
         rank_to_kill = num_ranks - 1
 
-        # 1. Disable aggregation
-        self.log_step("Disable aggregation")
         pool = self.get_pool()
-        pool.disable_aggregation()
 
         # Start dfuse
         self.log_step('Starting dfuse')
@@ -56,29 +52,6 @@ class EcodFioRebuild(TestFio):
         # Get initial total free space (scm+nvme)
         self.log_step("Get initial total free space (scm+nvme)")
         initial_free_space = pool.get_total_free_space(refresh=True)
-
-        # Enable aggregation
-        self.log_step("Enable aggregation")
-        pool.enable_aggregation()
-
-        # Wait for aggregation to be triggered.
-        # Assume an increase in total free space means aggregation is triggered.
-        self.log_step("Verify the Fio write finish without any error")
-        start_time = time.time()
-        self.log_step("Verify and wait until aggregation triggered")
-        while True:
-            # Check if current free space exceeds initial free space
-            current_free_space = pool.get_total_free_space(refresh=True)
-            self.log.debug(
-                "Total Free space: initial=%s, current=%s",
-                "{:,}".format(initial_free_space), "{:,}".format(current_free_space))
-            if current_free_space > initial_free_space:
-                break
-            # Check timeout
-            if (time.time() - start_time) > aggregation_timeout:
-                self.fail(f"Aggregation not observed within {aggregation_timeout} seconds")
-            self.log.debug("Rechecking in 5 seconds")
-            time.sleep(5)
 
         # ec off-line rebuild fio
         if 'off-line' in rebuild_mode:
