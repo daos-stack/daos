@@ -13,6 +13,7 @@ CompletedProcess
 DArray
 DDict
 DFS
+DSO
 DataLoader
 Datamover
 EL
@@ -65,6 +66,8 @@ Subdirectories
 TestFail
 Testcase
 tsan
+TSan
+UBSan
 UCX
 UNS
 Uncomment
@@ -200,6 +203,7 @@ fio
 formattable
 fpp
 fs
+fsanitize
 fstab
 fstat
 ftest
