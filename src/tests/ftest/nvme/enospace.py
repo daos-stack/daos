@@ -683,7 +683,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                   ran prior system storage was full.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=nvme,der_enospace,enospc_performance
         :avocado: tags=NvmeEnospace,test_performance_storage_full
         """
