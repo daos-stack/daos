@@ -393,7 +393,143 @@ print_csum_bufs(struct ddb_ctx *ctx, struct dcs_csum_info *ci)
 		for (j = 0; j < ci->cs_len; j++)
 			ddb_printf(ctx, "%02" PRIx8, csum_buf[j]);
 	}
+}
+
+/*
+ * Shared body for print_csum_sv() (dump) and print_csum_check_sv() (check). \a got_csums is
+ * NULL for a plain dump; when checking, got_csums[0] is non-NULL if the single value's
+ * checksum failed to match, holding the recomputed value in that case. \a verbose only
+ * matters when checking: when false, only corrupted entries are printed -- matching entries
+ * and "no checksum stored" are both fully suppressed (not even the path/header), so a clean
+ * check produces no output at all.
+ */
+static int
+print_csum_sv_body(struct ddb_ctx *ctx, struct dv_indexed_tree_path *vtp, daos_epoch_t sv_epoch,
+		   struct dcs_ci_list *cil, struct dcs_csum_info **got_csums, bool verbose)
+{
+	struct dcs_csum_info *ci;
+	struct hash_ft       *hf;
+
+	/* non-verbose check mode: only entries that are actually corrupted are printed */
+	if (got_csums != NULL && got_csums[0] == NULL && !verbose)
+		return 0;
+
+	if (cil->dcl_csum_infos_nr == 0) {
+		/* verbose is always true for a dump */
+		if (!verbose)
+			return 0;
+		ddb_print(ctx, "No checksum at ");
+		itp_print_full(ctx, vtp);
+		ddb_print(ctx, "\n");
+		return 0;
+	}
+	D_ASSERT(cil->dcl_csum_infos_nr == 1);
+
+	ci = dcs_csum_info_get(cil, 0);
+	D_ASSERT(ci_is_valid(ci));
+	D_ASSERT(ci->cs_nr == 1);
+
+	hf = daos_mhash_type2algo(ci->cs_type);
+
+	itp_print_full(ctx, vtp);
 	ddb_print(ctx, "\n");
+	ddb_printf(ctx, "Type: %s, Length: %" PRIu16 ", Epoch: %" PRIu64 ", Value: ", hf->cf_name,
+		   ci->cs_len, sv_epoch);
+	print_csum_bufs(ctx, ci);
+
+	if (got_csums == NULL)
+		goto out;
+
+	ddb_printf(ctx, ", State: %s", got_csums[0] ? "NOK" : "OK");
+	if (got_csums[0] != NULL) {
+		ddb_print(ctx, " (got=");
+		print_csum_bufs(ctx, got_csums[0]);
+		ddb_print(ctx, ")");
+	}
+
+out:
+	ddb_print(ctx, "\n");
+	return 0;
+}
+
+/*
+ * Shared body for print_csum_recx() (dump) and print_csum_check_recx() (check). See
+ * print_csum_sv_body() for the meaning of \a got_csums/\a verbose.
+ */
+static int
+print_csum_recx_body(struct ddb_ctx *ctx, struct dv_indexed_tree_path *vtp,
+		     struct daos_recx_ep_list *recx_rel, struct dcs_ci_list *cil,
+		     struct dcs_csum_info **got_csums, bool verbose)
+{
+	struct dcs_csum_info  *ci;
+	struct hash_ft        *hf;
+	uint32_t               chunk_sz;
+	bool                   header_printed = false;
+	int                    i;
+
+	if (cil->dcl_csum_infos_nr == 0) {
+		/* verbose is always true for a dump */
+		if (!verbose)
+			return 0;
+		ddb_print(ctx, "No checksum at ");
+		itp_print_full(ctx, vtp);
+		ddb_print(ctx, "\n");
+		return 0;
+	}
+
+	D_ASSERT(recx_rel != NULL);
+	D_ASSERT(cil->dcl_csum_infos_nr == recx_rel->re_nr);
+
+	ci = dcs_csum_info_get(cil, 0);
+	D_ASSERT(ci_is_valid(ci));
+	hf       = daos_mhash_type2algo(ci->cs_type);
+	chunk_sz = ci->cs_chunksize;
+
+	/* dcl_csum_infos_nr can be > 1 for a single path: e.g. overlapping recx writes at
+	 * different epochs each contribute their own checksummed segment. */
+	for (i = 0; i < cil->dcl_csum_infos_nr; i++) {
+		struct daos_recx_ep *rep;
+
+		/* non-verbose check mode: only entries that are actually corrupted are printed */
+		if (got_csums != NULL && got_csums[i] == NULL && !verbose)
+			continue;
+
+		ci = dcs_csum_info_get(cil, i);
+		D_ASSERT(ci_is_valid(ci));
+		rep = &recx_rel->re_items[i];
+
+		if (!header_printed) {
+			itp_print_full(ctx, vtp);
+			ddb_print(ctx, "\n");
+			ddb_printf(ctx,
+				   "Checksum Type: %s, Checksum Length: %" PRIu16
+				   ", Chunk Size: %" PRIu32 ", Record Extent(s):\n",
+				   hf->cf_name, ci->cs_len, chunk_sz);
+			header_printed = true;
+		}
+
+		ddb_printf(ctx,
+			   "- Record Indexes: {%" PRIu64 "-%" PRIu64 "}, Record Size: %" PRIu32
+			   ", Epoch: %" PRIu64 ", Checksum Value(s): ",
+			   rep->re_recx.rx_idx, rep->re_recx.rx_idx + rep->re_recx.rx_nr - 1,
+			   rep->re_rec_size, rep->re_ep);
+		print_csum_bufs(ctx, ci);
+
+		if (got_csums == NULL) {
+			ddb_print(ctx, "\n");
+			continue;
+		}
+
+		ddb_printf(ctx, ", State: %s", got_csums[i] ? "NOK" : "OK");
+		if (got_csums[i] != NULL) {
+			ddb_print(ctx, " (got=");
+			print_csum_bufs(ctx, got_csums[i]);
+			ddb_print(ctx, ")");
+		}
+		ddb_print(ctx, "\n");
+	}
+
+	return 0;
 }
 
 struct dump_csum_args {
@@ -406,61 +542,9 @@ static int
 print_csum_recx(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
 		struct dcs_ci_list *cil)
 {
-	struct dump_csum_args *args;
-	struct ddb_ctx        *ctx;
-	struct dcs_csum_info  *ci;
-	struct hash_ft        *hf;
-	struct daos_recx_ep   *rep;
-	uint32_t               chunk_sz;
-	int                    i;
+	struct dump_csum_args *args = cb_args;
 
-	args = cb_args;
-	ctx  = args->dca_ctx;
-
-	if (cil->dcl_csum_infos_nr == 0) {
-		ddb_print(ctx, "No checksum at ");
-		itp_print_full(ctx, args->dca_vtp);
-		ddb_print(ctx, "\n");
-		return 0;
-	}
-
-	D_ASSERT(recx_rel != NULL);
-	D_ASSERT(cil->dcl_csum_infos_nr == recx_rel->re_nr);
-
-	ci = dcs_csum_info_get(cil, 0);
-	D_ASSERT(ci_is_valid(ci));
-	rep      = &recx_rel->re_items[0];
-	hf       = daos_mhash_type2algo(ci->cs_type);
-	chunk_sz = ci->cs_chunksize;
-
-	itp_print_full(ctx, args->dca_vtp);
-	ddb_print(ctx, "\n");
-	ddb_printf(ctx,
-		   "Checksum Type: %s, Checksum Length: %" PRIu16 ", Chunk Size: %" PRIu32
-		   ", Record Extent(s):\n",
-		   hf->cf_name, ci->cs_len, chunk_sz);
-
-	ddb_printf(ctx,
-		   "- Record Indexes: {%" PRIu64 "-%" PRIu64 "}, Record Size: %" PRIu32
-		   ", Epoch: %" PRIu64 ", Checksum Value(s): ",
-		   rep->re_recx.rx_idx, rep->re_recx.rx_idx + rep->re_recx.rx_nr - 1,
-		   rep->re_rec_size, rep->re_ep);
-	print_csum_bufs(ctx, ci);
-
-	for (i = 1; i < cil->dcl_csum_infos_nr; i++) {
-		ci = dcs_csum_info_get(cil, i);
-		D_ASSERT(ci_is_valid(ci));
-		rep = &recx_rel->re_items[i];
-
-		ddb_printf(ctx,
-			   "- Record Indexes: {%" PRIu64 "-%" PRIu64 "}, Record Size: %" PRIu32
-			   ", Epoch: %" PRIu64 ", Checksum Value(s): ",
-			   rep->re_recx.rx_idx, rep->re_recx.rx_idx + rep->re_recx.rx_nr - 1,
-			   rep->re_rec_size, rep->re_ep);
-		print_csum_bufs(ctx, ci);
-	}
-
-	return 0;
+	return print_csum_recx_body(args->dca_ctx, args->dca_vtp, recx_rel, cil, NULL, true);
 }
 
 static int
@@ -564,34 +648,9 @@ static int
 print_csum_sv(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
 	      struct dcs_ci_list *cil)
 {
-	struct dump_csum_args *args;
-	struct ddb_ctx        *ctx;
-	struct dcs_csum_info  *ci;
-	struct hash_ft        *hf;
+	struct dump_csum_args *args = cb_args;
 
-	args = cb_args;
-	ctx  = args->dca_ctx;
-
-	if (cil->dcl_csum_infos_nr == 0) {
-		ddb_print(ctx, "No checksum at ");
-		itp_print_full(ctx, args->dca_vtp);
-		ddb_print(ctx, "\n");
-		return 0;
-	}
-	D_ASSERT(cil->dcl_csum_infos_nr == 1);
-
-	ci = dcs_csum_info_get(cil, 0);
-	D_ASSERT(ci_is_valid(ci));
-	D_ASSERT(ci->cs_nr == 1);
-	hf = daos_mhash_type2algo(ci->cs_type);
-
-	itp_print_full(ctx, args->dca_vtp);
-	ddb_print(ctx, "\n");
-	ddb_printf(ctx, "Type: %s, Length: %" PRIu16 ", Epoch: %" PRIu64 ", Value: ", hf->cf_name,
-		   ci->cs_len, sv_epoch);
-	print_csum_bufs(ctx, ci);
-
-	return 0;
+	return print_csum_sv_body(args->dca_ctx, args->dca_vtp, sv_epoch, cil, NULL, true);
 }
 
 static int
@@ -674,6 +733,79 @@ ddb_run_csum_dump(struct ddb_ctx *ctx, struct csum_dump_options *opt)
 	itp_to_vos_path(&itp, &vtp);
 
 	rc = dv_dump_csum(ctx->dc_poh, &vtp, opt->epoch, cb, &dca);
+
+out_itp:
+	itp_free(&itp);
+
+out:
+	return rc;
+}
+
+struct check_csum_args {
+	struct ddb_ctx              *cca_ctx;
+	struct dv_indexed_tree_path *cca_vtp;
+	bool                         cca_verbose;
+};
+
+static int
+print_csum_check_sv(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		    struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	struct check_csum_args *args = cb_args;
+
+	return print_csum_sv_body(args->cca_ctx, args->cca_vtp, sv_epoch, cil, got_csums,
+				  args->cca_verbose);
+}
+
+static int
+print_csum_check_recx(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		      struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	struct check_csum_args *args = cb_args;
+
+	return print_csum_recx_body(args->cca_ctx, args->cca_vtp, recx_rel, cil, got_csums,
+				    args->cca_verbose);
+}
+
+int
+ddb_run_csum_check(struct ddb_ctx *ctx, struct csum_check_options *opt)
+{
+	struct dv_indexed_tree_path itp = {0};
+	struct dv_tree_path         vtp;
+	struct check_csum_args      cca = {0};
+	dv_check_csum_cb            cb;
+	int                         rc;
+
+	if (!opt->path) {
+		ddb_error(ctx, "A VOS path to check is required.\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rc = init_path(ctx, opt->path, &itp);
+	if (!SUCCESS(rc))
+		goto out;
+
+	if (!itp_has_value(&itp)) {
+		ddb_errorf(ctx, "Path [%s] is incomplete.\n", opt->path);
+		rc = -DDBER_INCOMPLETE_PATH_VALUE;
+		goto out_itp;
+	}
+
+	cb = itp_has_recx(&itp) ? print_csum_check_recx : print_csum_check_sv;
+
+	cca.cca_ctx     = ctx;
+	cca.cca_vtp     = &itp;
+	cca.cca_verbose = opt->verbose;
+
+	itp_to_vos_path(&itp, &vtp);
+
+	rc = dv_check_csum(ctx->dc_poh, &vtp, opt->epoch, cb, &cca);
+	if (SUCCESS(rc) && opt->verbose)
+		ddb_print(ctx, "OK: no corruption detected.\n");
+	if (rc == -DER_CSUM)
+		ddb_error(ctx, "Data corruption detected: one or more checksums do not match the "
+			       "stored data.\n");
 
 out_itp:
 	itp_free(&itp);

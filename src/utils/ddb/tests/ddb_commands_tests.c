@@ -874,6 +874,221 @@ write_csum_recx_tests(void **state)
 	dvt_fake_print_reset();
 }
 
+static void
+csum_check_error_tests(void **state)
+{
+	char                     *path_invalid = "foo";
+	struct dt_vos_pool_ctx   *tctx         = *state;
+	struct ddb_ctx            ctx          = {0};
+	struct csum_check_options opt          = {0};
+	char                      path[128];
+	int                       rc;
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_write_mode              = false;
+
+	rc = ddb_run_csum_check(&ctx, &opt);
+	assert_rc_equal(-DER_INVAL, rc);
+	assert_string_contains(dvt_fake_print_buffer, "A VOS path to check is required.");
+	dvt_fake_print_reset();
+
+	opt.path = &path_invalid[0];
+	rc       = ddb_run_csum_check(&ctx, &opt);
+	assert_rc_equal(-DER_INVAL, rc);
+	assert_string_contains(dvt_fake_print_buffer, "Container is invalid");
+	dvt_fake_print_reset();
+
+	/* path must be complete (point to a value): an array akey path with no extent
+	 * resolves to neither a RECX nor an SV value, so it is rejected as incomplete. */
+	opt.path = path;
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[1]);
+	rc = ddb_run_csum_check(&ctx, &opt);
+	assert_rc_equal(-DDBER_INCOMPLETE_PATH_VALUE, rc);
+	assert_string_contains(dvt_fake_print_buffer, "is incomplete");
+	dvt_fake_print_reset();
+}
+
+static void
+check_csum_sv_tests(void **state)
+{
+	const char               *regex_prf = "0x";
+	struct dt_vos_pool_ctx   *tctx      = *state;
+	struct dt_csum_ctx       *csum_ctx  = tctx->dvt_extra;
+	struct ddb_ctx            ctx       = {0};
+	struct csum_check_options opt       = {0};
+	char                      path[128];
+	char                      buf[256];
+	uint8_t                   good_bytes[64];
+	struct dcs_csum_info     *ci;
+	int                       rc;
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_write_mode              = false;
+
+	opt.path  = path;
+	opt.epoch = DAOS_EPOCH_MAX;
+
+	/* no csum info (g_oids[0]: SV at epoch 1, no checksum stored, non-verbose) */
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[0]);
+	assert_success(ddb_run_csum_check(&ctx, &opt));
+	assert_string_equal(dvt_fake_print_buffer, "");
+	dvt_fake_print_reset();
+
+	/* valid, matching checksum, default (non-verbose) */
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[0]);
+	assert_success(ddb_run_csum_check(&ctx, &opt));
+	assert_string_equal(dvt_fake_print_buffer, "");
+	dvt_fake_print_reset();
+
+	/* same, but --verbose: every entry is printed (matching, in this case). */
+	opt.verbose = true;
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[0]);
+	assert_success(ddb_run_csum_check(&ctx, &opt));
+	assert_string_contains(dvt_fake_print_buffer, "Epoch: 2");
+	memcpy(buf, regex_prf, strlen(regex_prf));
+	ci = csum_ctx->dct_sv_ics[1]->ic_data;
+	csumbuf_dump(buf + strlen(regex_prf), ci_idx2csum(ci, 0), ci->cs_len);
+	assert_string_contains(dvt_fake_print_buffer, buf);
+	assert_string_contains(dvt_fake_print_buffer, "State: OK");
+	assert_string_contains(dvt_fake_print_buffer, "OK: no corruption detected.");
+	dvt_fake_print_reset();
+	opt.verbose = false;
+
+	/* deliberately corrupted checksum: reports CORRUPTED and -DER_CSUM, along with the
+	 * want (stored)/got (recomputed) checksum values -- always printed regardless of
+	 * verbose, since corrupted entries are never suppressed. */
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[2], g_akeys_str[0]);
+	rc = ddb_run_csum_check(&ctx, &opt);
+	assert_rc_equal(-DER_CSUM, rc);
+	assert_string_contains(dvt_fake_print_buffer, "State: NOK");
+	assert_string_contains(dvt_fake_print_buffer, "Data corruption detected");
+
+	/* "want" is the stored (corrupted) checksum, shown on the main Value: line; "got" is
+	 * the checksum recomputed from the still-valid data, shown in "(got=...)". The fixture
+	 * only flips the stored checksum's first byte before writing it (see
+	 * csum_test_corrupt_sv_setup()), so "got" is "want" with that flip undone. */
+	ci = csum_ctx->dct_sv_ic_bad->ic_data;
+	strcpy(buf, "Value: 0x");
+	csumbuf_dump(buf + strlen(buf), ci_idx2csum(ci, 0), ci->cs_len);
+	assert_string_contains(dvt_fake_print_buffer, buf);
+
+	memcpy(good_bytes, ci_idx2csum(ci, 0), ci->cs_len);
+	good_bytes[0] ^= 0xff;
+	strcpy(buf, "(got=0x");
+	csumbuf_dump(buf + strlen(buf), good_bytes, ci->cs_len);
+	assert_string_contains(dvt_fake_print_buffer, buf);
+	dvt_fake_print_reset();
+}
+
+static void
+check_csum_recx_tests(void **state)
+{
+	const char               *regex_prf = "0x";
+	struct dt_vos_pool_ctx   *tctx      = *state;
+	struct dt_csum_ctx       *csum_ctx  = tctx->dvt_extra;
+	struct ddb_ctx            ctx       = {0};
+	struct csum_check_options opt       = {0};
+	daos_recx_t               recx      = {.rx_idx = 0, .rx_nr = csum_ctx->dct_recx_size};
+	char                      path[128];
+	char                      buf[256];
+	char                     *buf_csum;
+	uint8_t                   good_bytes[64];
+	char                      got_buf[64];
+	struct dcs_csum_info     *ci;
+	int                       i;
+	int                       rc;
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_write_mode              = false;
+
+	opt.path  = path;
+	opt.epoch = DAOS_EPOCH_MAX;
+
+	/* no csum info, non-verbose: fully silent (no path/header, no summary). */
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[1], &recx);
+	assert_success(ddb_run_csum_check(&ctx, &opt));
+	assert_string_equal(dvt_fake_print_buffer, "");
+	dvt_fake_print_reset();
+
+	/* same, but --verbose: "No checksum at ..." is reported, plus the final "OK" summary
+	 * (still success -- there's simply nothing to check). */
+	opt.verbose = true;
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[1], &recx);
+	assert_success(ddb_run_csum_check(&ctx, &opt));
+	assert_string_contains(dvt_fake_print_buffer, "No checksum at ");
+	assert_string_contains(dvt_fake_print_buffer, "OK: no corruption detected.");
+	dvt_fake_print_reset();
+	opt.verbose = false;
+
+	/* valid, matching checksums, default (non-verbose): fully silent, no per-entry
+	 * detail and no final summary line either. */
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[1], &recx);
+	assert_success(ddb_run_csum_check(&ctx, &opt));
+	assert_string_equal(dvt_fake_print_buffer, "");
+	dvt_fake_print_reset();
+
+	/* same, but --verbose: every entry is printed (matching, for each segment here). */
+	opt.verbose = true;
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[1], &recx);
+	assert_success(ddb_run_csum_check(&ctx, &opt));
+	memcpy(buf, regex_prf, strlen(regex_prf));
+	buf_csum = buf + strlen(regex_prf);
+	for (i = 0; i < DVT_FAKE_RECX_COUNT; i++) {
+		int csum_idx;
+
+		ci = csum_ctx->dct_recx_ics[i]->ic_data;
+		for (csum_idx = 0; csum_idx < ci->cs_nr; ++csum_idx) {
+			csumbuf_dump(buf_csum, ci_idx2csum(ci, csum_idx), ci->cs_len);
+			assert_string_contains(dvt_fake_print_buffer, buf);
+		}
+	}
+	assert_string_contains(dvt_fake_print_buffer, "State: OK");
+	assert_string_contains(dvt_fake_print_buffer, "OK: no corruption detected.");
+	dvt_fake_print_reset();
+	opt.verbose = false;
+
+	/* shared by both the non-verbose and --verbose corrupted-checksum checks below: the
+	 * bad entry's stored (corrupted) checksum ("want") and its recomputed value ("got") */
+	ci = csum_ctx->dct_recx_ics_bad[DVT_FAKE_RECX_BAD_IDX]->ic_data;
+	strcpy(buf, "Checksum Value(s): 0x");
+	csumbuf_dump(buf + strlen(buf), ci_idx2csum(ci, 0), ci->cs_len);
+	memcpy(good_bytes, ci_idx2csum(ci, 0), ci->cs_len);
+	good_bytes[0] ^= 0xff;
+	strcpy(got_buf, " (got=0x");
+	csumbuf_dump(got_buf + strlen(got_buf), good_bytes, ci->cs_len);
+
+	/* g_oids[2]: one of DVT_FAKE_RECX_COUNT segments has a corrupted checksum. Non-verbose
+	 * still reports it (corrupted entries are never suppressed); the good entry is
+	 * suppressed here (see --verbose below). */
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[2], g_akeys_str[1], &recx);
+	rc = ddb_run_csum_check(&ctx, &opt);
+	assert_rc_equal(-DER_CSUM, rc);
+	assert_string_contains(dvt_fake_print_buffer, "State: NOK");
+	assert_string_contains(dvt_fake_print_buffer, "Data corruption detected");
+	assert_string_contains(dvt_fake_print_buffer, buf);
+	assert_string_contains(dvt_fake_print_buffer, got_buf);
+	assert_string_not_contains(dvt_fake_print_buffer, "State: OK");
+	dvt_fake_print_reset();
+
+	/* same, but --verbose: the good entry must report "State: OK\n" (no "(got=...)"),
+	 * proving the bad entry's corruption didn't bleed into it (the bug fixed in
+	 * 65dacd2e4a). */
+	opt.verbose = true;
+	rc          = ddb_run_csum_check(&ctx, &opt);
+	assert_rc_equal(-DER_CSUM, rc);
+	assert_string_contains(dvt_fake_print_buffer, "State: OK\n");
+	assert_string_contains(dvt_fake_print_buffer, "State: NOK");
+	assert_string_contains(dvt_fake_print_buffer, buf);
+	assert_string_contains(dvt_fake_print_buffer, got_buf);
+	dvt_fake_print_reset();
+}
+
 /*
  * --------------------------------------------------------------
  * End test functions
@@ -979,6 +1194,9 @@ ddb_commands_tests_run()
 	    TEST_CSUM(write_csum_sv_tests),
 	    TEST_CSUM(print_csum_recx_tests),
 	    TEST_CSUM(write_csum_recx_tests),
+	    TEST_CSUM(csum_check_error_tests),
+	    TEST_CSUM(check_csum_sv_tests),
+	    TEST_CSUM(check_csum_recx_tests),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands tests", tests,
