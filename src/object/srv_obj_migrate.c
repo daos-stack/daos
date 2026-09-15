@@ -3538,10 +3538,9 @@ migrate_obj_ult(void *data)
 			DF_RB ": punched obj " DF_UOID " epoch " DF_U64 "/" DF_U64 "/" DF_U64 "\n",
 			DP_RB_MPT(tls), DP_UOID(arg->oid), arg->epoch, arg->punched_epoch,
 			epr.epr_hi);
-		arg->epoch = DAOS_EPOCH_MAX;
 	}
 free:
-	if (arg->epoch == DAOS_EPOCH_MAX)
+	if (rc == 0)
 		tls->mpt_obj_count++;
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_OBJ_FAIL) &&
