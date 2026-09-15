@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,7 +18,11 @@ SUPPORTED_PROVIDERS = (
     "ofi+cxi",
     "ofi+verbs;ofi_rxm",
     "ucx+dc_x",
+    "ucx+dc_mlx5",
+    "ucx+dc",
     "ucx+ud_x",
+    "ucx+ud_mlx5",
+    "ucx+ud",
     "ofi+tcp",
     "ofi+tcp;ofi_rxm",
     "ofi+opx"
@@ -281,14 +285,27 @@ def get_hg_info(logger, hosts, filter_provider=None, filter_device=None, verbose
             class_protocol_device = re.findall(
                 r'(\S+) +([\S]+) +([\S]+)$', without_header, re.MULTILINE)
             for _class, protocol, device in class_protocol_device:
+                if ":" in device:
+                    # e.g. convert mlx5_0:1 => mlx5_0
+                    device = device.split(":")[0]
                 if filter_device and device not in filter_device:
                     continue
-                provider = f"{_class}+{protocol}"
-                if filter_provider and provider not in filter_provider:
-                    continue
-                if device not in device_providers:
-                    device_providers[device] = set()
-                device_providers[device].add(provider)
+                _class_protocols = []
+                if "_" in protocol:
+                    _protocol = protocol.split("_")
+                    if _protocol[0] in ("dc", "rc", "ud") and _protocol[1] in ("mlx5"):
+                        # Add ucx synonyms, e.g. convert ud_mlx5 => ud_mlx5, ud_x, ud
+                        for synonym in (f"_{_protocol[1]}", "_x", ""):
+                            _class_protocols.append(f"{_class}+{_protocol[0]}{synonym}")
+                else:
+                    _class_protocols.append(f"{_class}+{protocol}")
+
+                for provider in _class_protocols:
+                    if filter_provider and provider not in filter_provider:
+                        continue
+                    if device not in device_providers:
+                        device_providers[device] = set()
+                    device_providers[device].add(provider)
 
             for device, provider_set in device_providers.items():
                 if device not in providers:
@@ -340,9 +357,8 @@ def get_ucx_info(logger, hosts, supported=None, verbose=True):
                 if not transport or not device:
                     continue
 
-                # Add 'ucx+' to the provider and replace 'mlx[0-9]' with 'x'
-                transport = [
-                    "+".join(["ucx", re.sub(r"mlx[0-9]+", "x", item)]) for item in transport]
+                # Add 'ucx+' to the provider
+                transport = ["+".join(["ucx", item]) for item in transport]
 
                 # Only include supported providers if a supported list is provided
                 if supported and transport[0] not in supported:
@@ -479,6 +495,9 @@ def get_network_information(logger, hosts, supported=None, verbose=True):
     ofi_info = get_hg_info(logger, hosts, filter_provider=supported, verbose=verbose)
     ucx_info = get_ucx_info(logger, hosts, supported, verbose)
 
+    logger.debug("get_network_information(): ofi_info = %s", ofi_info)
+    logger.debug("get_network_information(): ucx_info = %s", ucx_info)
+
     interfaces = get_active_network_interfaces(logger, hosts, verbose)
     for host in hosts:
         for interface, node_set in interfaces.items():
@@ -510,6 +529,8 @@ def get_network_information(logger, hosts, supported=None, verbose=True):
                     these_kwargs = kwargs.copy()
                     these_kwargs["provider"] = item
                     network_devices.append(NetworkDevice(**these_kwargs))
+
+    logger.debug("get_network_information(): network_devices = %s", network_devices)
 
     return network_devices
 
