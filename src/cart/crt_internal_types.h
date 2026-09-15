@@ -576,6 +576,14 @@ struct crt_context {
 
 	/** timeout per-context */
 	uint32_t                 cc_timeout_sec;
+	/** free-list of preallocated receive-side RPC objects */
+	d_list_t                 cc_rx_rpc_pool;
+	/** lock for cc_rx_rpc_pool and cc_rx_rpc_pool_num */
+	pthread_mutex_t          cc_rx_rpc_pool_lock;
+	/** true after cc_rx_rpc_pool_lock has been initialized */
+	bool                     cc_rx_rpc_pool_inited;
+	/** current number of entries in cc_rx_rpc_pool */
+	uint32_t                 cc_rx_rpc_pool_num;
 
 	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
