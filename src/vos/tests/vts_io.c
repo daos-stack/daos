@@ -3629,6 +3629,8 @@ io_csum_fetch_recx_partial(void **state)
 	int                       rc;
 
 	arg = *state;
+	assert_true(arg->dkey_size <= UPDATE_DKEY_SIZE);
+	assert_true(arg->akey_size <= UPDATE_AKEY_SIZE);
 
 	vts_key_gen(&dkey_name[0], arg->dkey_size, true, arg);
 	set_iov(&dkey, &dkey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
