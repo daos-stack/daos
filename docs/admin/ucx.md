@@ -9,22 +9,23 @@ To enable DAOS UCX support on InfiniBand fabrics,
 the following steps are needed:
 
 *  A supported version of DOCA-OFED must be installed _before_
-   DAOS is installed. This is the same for libfabric and for UCX:
+   DAOS is installed. The same applies to both libfabric and UCX:
    DAOS only supports the NVIDIA-provided DOCA-OFED stack,
    not the inbox drivers.
-   Refer to the [DAOS Support Matrix](https://docs.daos.io/v2.9/release/support_matrix)
+   Refer to the [DAOS Support Matrix](../release/support_matrix.md)
    for information about supported DOCA-OFED releases.
 
-*  The `mercury-ucx` RPM package needs to be **manually** selected for
-   installation. The base `mercury` RPM package ships with no plugins.
+*  The `mercury-ucx` RPM package must be **manually** selected for
+   installation. The base `mercury` RPM package ships by default with the
+   `mercury-libfabric` package unless `mercury-ucx` is also installed.
    The `mercury-ucx` RPM contains the UCX plugin that is required for
    enabling UCX support.
-   This RPM **must** be used in InfiniBand environments when the intention
-   is to use UCX. Attempts to install this RPM in non-Infiniband environments
+   This RPM **must** be used in InfiniBand environments when UCX is used.
+   Attempts to install this RPM in non-InfiniBand environments
    will fail, because it has a dependency on UCX packages.
 
-*  At DAOS **installation** time, to enable UCX support the
-   `mercury-ucx` RPM package must be explicitly listed.
+*  When installing DAOS, explicitly list the `mercury-ucx` RPM package
+   if it was not already installed in the previous step.
    For example, using the `dnf` package manager on EL9:
 
 ```bash
@@ -39,9 +40,8 @@ the following steps are needed:
 ```
 
 After UCX support has been enabled by installing the `mercury-ucx`
-package, the network provider must be changed in the DAOS server's
-configuration file (`/etc/daos/daos_server.yml`).
-A sample YML file is available on
-[github](https://github.com/daos-stack/daos/blob/master/utils/config/examples/daos_server_ucx.yml).
+package, the network provider in the DAOS server's
+configuration file (`/etc/daos/daos_server.yml`) should be changed.
+A sample YAML file is available on
+[GitHub](https://github.com/daos-stack/daos/blob/master/utils/config/examples/daos_server_ucx.yml).
 The recommended setting for UCX is `provider: ucx+dc_x`.
-
