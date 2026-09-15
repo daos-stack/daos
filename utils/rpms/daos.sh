@@ -448,7 +448,8 @@ DEPENDS+=("${openmpi_lib}")
 list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
-# Don't do autoreq, we know we need OpenMPI so add it explicitly
+# OpenMPI on EL provides qualified libmpi capabilities that do not satisfy
+# FPM's unqualified automatic Requires; the package dependency is explicit.
 build_package "daos-client-tests-openmpi" "noautoreq"
 
 #shim packages
@@ -467,10 +468,7 @@ DEPENDS+=("romio-tests")
 DEPENDS+=("python3-mpi4py-tests >= 3.1.6")
 build_package "daos-tests"
 
-build_package "daos-client-tests-mpich"
-
 DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-client-tests-openmpi = ${VERSION}-${RELEASE}")
-DEPENDS+=("daos-client-tests-mpich = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-serialize = ${VERSION}-${RELEASE}")
 build_package "daos-tests-internal"
