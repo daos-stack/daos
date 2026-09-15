@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,7 +37,6 @@ struct dlck_xstream {
 struct dlck_engine {
 	unsigned             targets;
 	struct dlck_xstream *xss;
-	bool                 join_fail;
 };
 
 typedef void (*dlck_ult_func)(void *arg);
@@ -59,13 +58,14 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
  * Stop an engine.
  *
  * \param[in]	engine	Engine to stop.
+ * \param[in]	ck	Checker.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_BUSY	Joining ULTs failed. Unrecoverable.
  * \retval -DER_*	Errors.
  */
 int
-dlck_engine_stop(struct dlck_engine *engine);
+dlck_engine_stop(struct dlck_engine *engine, struct checker *ck);
 
 /**
  * Initialize an execution stream.

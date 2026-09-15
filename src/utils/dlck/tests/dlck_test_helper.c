@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -427,7 +427,7 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 	return DER_SUCCESS;
 
 fail_engine_stop:
-	(void)dlck_engine_stop(engine);
+	(void)dlck_engine_stop(engine, NULL);
 	(void)ABT_finalize();
 	return rc;
 }
@@ -442,7 +442,7 @@ teardown(struct bundle *bundle)
 
 	D_FREE(bundle->co_uuids);
 
-	rc = dlck_engine_stop(bundle->engine);
+	rc = dlck_engine_stop(bundle->engine, NULL);
 	if (rc != DER_SUCCESS) {
 		(void)ABT_finalize();
 		return rc;

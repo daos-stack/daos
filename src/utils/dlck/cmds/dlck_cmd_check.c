@@ -210,6 +210,8 @@ exec_one(void *arg)
 	dlck_xstream_set_rc(xa, rc);
 }
 
+#define STOP_ENGINE_STR "Stop the engine"
+
 /**
  * The main thread spawns and waits for other threads to complete their tasks.
  */
@@ -281,9 +283,9 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		goto err_free_rcs;
 	}
 
-	CK_PRINT(ck, "Stop the engine... ");
-	rc = dlck_engine_stop(engine);
-	CK_APPENDL_RC(ck, rc);
+	CK_PRINT(ck, STOP_ENGINE_STR "...\n");
+	rc = dlck_engine_stop(engine, ck);
+	CK_PRINTL_RC(ck, rc, STOP_ENGINE_STR);
 
 	/** Ignore an error for now to print the collected results. */
 	dlck_report_results(rcs, ctrl->engine.targets, ctrl->warnings_num, ck);
@@ -295,7 +297,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 err_free_rcs:
 	D_FREE(rcs);
 err_stop_engine:
-	(void)dlck_engine_stop(engine);
+	(void)dlck_engine_stop(engine, ck);
 
 	return rc;
 }
