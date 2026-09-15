@@ -480,6 +480,36 @@ String sconsArgs() {
     return sconsFaultsArgs() + ' ' + params.CI_SCONS_ARGS
 }
 
+// This is a temporary workaround for a bug in pipeline-lib proxy handling.
+// Because we can not risk failures until we verify that that bug can be
+// fixed, we will use this function to remove the bug for each active branch
+// Proxy rules:
+//    IF jenkins system has an HTTPS_PROXY set then it needs to be passed
+//    to the docker build command.  If the system does not have an HTTPS_PROXY
+//    set then the docker build MUST NOT include an HTTPS_PROXY build argument.
+//
+//    The DAOS_NO_PROXY build argument was put in because the HTTPS_PROXY
+//    build argument was being passed to the docker build when it should not
+//    have been instead of fixing the bug in pipeline-lib.
+//    This function will be removed when the bug is fixed.
+//    The use of no_proxy/NO_PROXY environment variables to avoid a proxy is
+//    unsafe because there is no single standard used for for what is legal to
+//    be in it.
+//
+//    If a local mirror is available via REPOSITORY_URL/ARTIFACTORY_URL it
+//    should always be used instead of a proxy server for reliability.
+//    Applications should where possible always use configuration file to
+//    for any needed proxy or mirror settings instead of environment variables
+//    which will avoid needing no_proxy issues.
+String daosDockerBuildArgs(Map args = [:]) {
+    String buildArgs = dockerBuildArgs(args)
+    if (!env.HTTPS_PROXY) {
+        buildArgs += ' --build-arg HTTPS_PROXY='
+        buildArgs += ' --build-arg DAOS_NO_PROXY='
+    }
+    return buildArgs
+}
+
 /**
  * Update default commit pragmas based on files modified.
  */
@@ -503,7 +533,6 @@ pipeline {
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
-        HTTPS_PROXY = ''
         PYTHON_VERSION = '3.11'
     }
 
@@ -614,14 +643,19 @@ pipeline {
         booleanParam(name: bashName('Functional on EL 9 with Valgrind'),
                      defaultValue: false,
                      description: 'Run the Functional on EL 9 with Valgrind stage.')
+        // >>> TEMP PATCH: shift default functional testing from EL 9 to Leap 15/SLES 15 <<<
+        // >>> REVERT these 3 defaultValue lines back to EL9=true, Leap15=false, SLES15=false <<<
         booleanParam(name: bashName('Functional on EL 9'),
-                     defaultValue: true,
+                     // defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on EL 9 stage.')
         booleanParam(name: bashName('Functional on Leap 15'),
-                     defaultValue: false,
+                     // defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the Functional on Leap 15 stage.')
         booleanParam(name: bashName('Functional on SLES 15'),
-                     defaultValue: false,
+                     // defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the Functional on SLES 15 stage.')
         booleanParam(name: bashName('Functional on Ubuntu 20.04'),
                      defaultValue: false,
@@ -629,6 +663,7 @@ pipeline {
         booleanParam(name: bashName('Fault injection testing'),
                      defaultValue: true,
                      description: 'Run the Fault injection testing stage.')
+        // >>> END TEMP PATCH <<<
         booleanParam(name: bashName('Test RPMs on EL 9'),
                      defaultValue: true,
                      description: 'Run the Test RPMs on EL 9 stage.')
@@ -638,26 +673,33 @@ pipeline {
         booleanParam(name: bashName('Test Hardware'),
                      defaultValue: true,
                      description: 'Run the Test Hardware stage.')
+        // >>> TEMP PATCH: run all hardware stages on SLES 15.7 for PR coverage <<<
+        // >>> REVERT these false->true defaultValue lines after SLES/Leap validation <<<
         booleanParam(name: bashName('Functional Hardware Medium'),
-                     defaultValue: false,
+                 // defaultValue: false,
+                 defaultValue: true,
                      description: 'Run the Functional Hardware Medium stage.')
         booleanParam(name: bashName('Functional Hardware Medium MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD stage.')
         booleanParam(name: bashName('Functional Hardware Medium VMD'),
-                     defaultValue: false,
+                 // defaultValue: false,
+                 defaultValue: true,
                      description: 'Run the Functional Hardware Medium VMD stage.')
         booleanParam(name: bashName('Functional Hardware Medium Verbs Provider'),
-                     defaultValue: false,
+                 // defaultValue: false,
+                 defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider stage.')
         booleanParam(name: bashName('Functional Hardware Medium Verbs Provider MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD stage.')
         booleanParam(name: bashName('Functional Hardware Medium UCX Provider'),
-                     defaultValue: false,
+                 // defaultValue: false,
+                 defaultValue: true,
                      description: 'Run the Functional Hardware Medium UCX Provider stage.')
         booleanParam(name: bashName('Functional Hardware Large'),
-                     defaultValue: false,
+                 // defaultValue: false,
+                 defaultValue: true,
                      description: 'Run the Functional Hardware Large stage.')
         booleanParam(name: bashName('Functional Hardware Large MD on SSD'),
                      defaultValue: true,
@@ -668,6 +710,7 @@ pipeline {
         booleanParam(name: bashName('Functional Cluster Box Medium Verbs Provider MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Cluster Box Verbs Provider test stage')
+        // >>> END TEMP PATCH <<<
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -833,7 +876,7 @@ pipeline {
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
-                                                " --build-arg DAOS_DEPS_INSTALL=yes"
+                                                ' --build-arg DAOS_DEPS_INSTALL=yes'
                         }
                     }
                     steps {
@@ -886,14 +929,14 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
+                            additionalBuildArgs daosDockerBuildArgs(repo_type: 'stable',
+                                                                    parallel_build: true,
+                                                                    deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}" +
-                                                " --build-arg DAOS_DEPS_INSTALL=yes"
+                                                ' --build-arg DAOS_DEPS_INSTALL=yes'
                         }
                     }
                     steps {
@@ -931,7 +974,8 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { shouldStageRun('Unit Tests') }
+                // TEMP PR-18944: skip unit tests to speed up diagnostic reruns.
+                expression { false && shouldStageRun('Unit Tests') }
             }
             parallel {
                 stage('Unit Test') {
@@ -1271,7 +1315,8 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            // image_version: 'el9.7'
+                            image_version: 'sles15.7'
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
@@ -1283,7 +1328,8 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            // image_version: 'el9.7'
+                            image_version: 'sles15.7'
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
@@ -1296,7 +1342,8 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            // image_version: 'el9.7'
+                            image_version: 'sles15.7'
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
@@ -1309,7 +1356,8 @@ pipeline {
                             default_nvme: 'auto',
                             provider: 'ofi+verbs;ofi_rxm',
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            // image_version: 'el9.7'
+                            image_version: 'sles15.7'
                         ),
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
@@ -1322,7 +1370,8 @@ pipeline {
                             default_nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            // image_version: 'el9.7'
+                            image_version: 'sles15.7'
                         ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
@@ -1335,7 +1384,8 @@ pipeline {
                             default_nvme: 'auto',
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            // image_version: 'el9.7'
+                            image_version: 'sles15.7'
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
@@ -1347,7 +1397,8 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            // image_version: 'el9.7'
+                            image_version: 'sles15.7'
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
@@ -1359,7 +1410,8 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            // image_version: 'el9.7'
+                            image_version: 'sles15.7'
                         ),
                         'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Cluster Box Medium MD on SSD',
@@ -1374,7 +1426,8 @@ pipeline {
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            // image_version: 'el9.7'
+                            image_version: 'sles15.7'
                         ),
                         'Functional Cluster Box Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Cluster Box Medium Verbs Provider MD on SSD',
@@ -1390,7 +1443,8 @@ pipeline {
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal,
-                            image_version: 'el9.7'
+                            // image_version: 'el9.7'
+                            image_version: 'sles15.7'
                         ),
                     )
                 }
