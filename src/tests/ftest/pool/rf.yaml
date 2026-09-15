@@ -25,4 +25,3 @@ container:
     - 2
     - 3
     - 4
-  properties: cksum:off,srv_cksum:off

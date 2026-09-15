@@ -1,3 +1,7 @@
+#  (C) Copyright 2022-2024 Intel Corporation.
+#  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
 hosts:
   test_servers: 3
 
@@ -13,7 +17,6 @@ server_config:
 
 pool:
   scm_size: 200M
-  properties: rd_fac:0,space_rb:0
 
 boundary_test:
   num_pools: 20
