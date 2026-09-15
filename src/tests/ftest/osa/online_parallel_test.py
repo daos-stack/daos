@@ -88,6 +88,7 @@ class OSAOnlineParallelTest(OSAUtils):
         # Create pools
         pools = []
         target_list = []
+        expected_disabled_ranks = []
 
         # Exclude target : random two targets  (target idx : 0-7)
         exc = self.random.randint(0, 6)
@@ -124,8 +125,7 @@ class OSAOnlineParallelTest(OSAUtils):
         for pool in pools:
             self.pool = pool
             initial_total_targets = self.pool.get_total_targets(refresh=True)
-            pver_begin = self.pool.get_version(True)
-            self.log.info("Pool Version at the beginning %s", pver_begin)
+
             dmg_threads = []
             test_seq = self.ior_test_sequence[0]
             # Action dictionary with OSA dmg command parameters
@@ -141,7 +141,7 @@ class OSAOnlineParallelTest(OSAUtils):
                 "extend": {"pool": self.pool.identifier,
                            "ranks": ",".join(map(str, extra_ranks))}
             }
-
+            expected_disabled_ranks.append(rank)
             self.log_step("Run OSA commands in parallel with IOR")
             # Add a thread for IOR
             ior_thread = threading.Thread(target=self.run_ior_thread,
@@ -181,17 +181,14 @@ class OSAOnlineParallelTest(OSAUtils):
             if racer is True:
                 daos_racer_thread.join()
 
-        self.log_step("Check pool version and total targets after extend")
+        self.log_step("Check disabled ranks and total targets after extend")
         for pool in pools:
             self.pool = pool
             self.pool.wait_for_rebuild_to_end(3)
             self.assert_on_rebuild_failure()
 
-            pver_end = self.pool.get_version()
-            self.log.info("Pool Version at the End %s", pver_end)
-            self.assertGreaterEqual(pver_end, 44,
-                                    "Pool Version Error: {} at the end < 44".format(pver_end))
-
+            output = self.dmg_command.pool_query(self.pool.identifier)
+            self.check_disabled_ranks(expected_disabled_ranks, output, "disabled_ranks")
             # Extend adds targets, so the total should have grown since the beginning
             final_total_targets = self.pool.get_total_targets(refresh=True)
             self.assertGreater(final_total_targets, initial_total_targets,
