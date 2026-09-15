@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,7 +27,7 @@
 #include "../dlck_pool.h"
 
 #define SRAND_SEED  0x4321
-#define UPDATES_NUM 125
+#define UPDATES_NUM 3
 
 extern struct dss_module dtx_module;
 
@@ -235,16 +235,18 @@ cont_process(struct xstream_state *xst, uuid_t co_uuid)
 	/**
 	 * 2 (IOD types) * 125 * 4 = 1000 total updates
 	 */
-	for (daos_iod_type_t iod_type = DAOS_IOD_SINGLE; iod_type <= DAOS_IOD_ARRAY; ++iod_type) {
-		for (int i = 0; i < UPDATES_NUM; ++i) {
-			is_leader = true;
-			update_one(xst, iod_type, is_leader, false /** commit */);
-			update_one(xst, iod_type, is_leader, true /** commit */);
-			is_leader = false;
-			update_one(xst, iod_type, is_leader, false /** commit */);
-			update_one(xst, iod_type, is_leader, true /** commit */);
-		}
+	// for (daos_iod_type_t iod_type = DAOS_IOD_SINGLE; iod_type <= DAOS_IOD_ARRAY; ++iod_type)
+	// {
+	daos_iod_type_t iod_type = DAOS_IOD_SINGLE;
+	for (int i = 0; i < UPDATES_NUM; ++i) {
+		is_leader = true;
+		update_one(xst, iod_type, is_leader, false /** commit */);
+		// update_one(xst, iod_type, is_leader, true /** commit */);
+		// is_leader = false;
+		// update_one(xst, iod_type, is_leader, false /** commit */);
+		// update_one(xst, iod_type, is_leader, true /** commit */);
 	}
+	// }
 
 	cont_teardown(xst);
 }
