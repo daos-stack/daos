@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,10 +11,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"os/user"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/cache"
@@ -48,6 +51,7 @@ type (
 	securityConfig struct {
 		credentials *security.CredentialConfig
 		transport   *security.TransportConfig
+		nodeCertDir string // resolved path; used when pool auth is enabled
 	}
 
 	// SecurityModule is the security drpc module struct
@@ -55,6 +59,7 @@ type (
 		log            logging.Logger
 		signCredential credSignerFn
 		credCache      *credentialCache
+		nodeCertLoader *security.NodeCertLoader
 
 		config *securityConfig
 	}
@@ -77,12 +82,14 @@ func NewSecurityModule(log logging.Logger, cfg *securityConfig) *SecurityModule 
 		log.Noticef("credential cache enabled (entry lifetime: %s)", cfg.credentials.CacheExpiration)
 	}
 
-	return &SecurityModule{
+	mod := &SecurityModule{
 		log:            log,
 		signCredential: credSigner,
 		credCache:      credCache,
 		config:         cfg,
 	}
+	mod.nodeCertLoader = security.NewNodeCertLoader(cfg.nodeCertDir)
+	return mod
 }
 
 func credReqKey(req *auth.CredentialRequest) string {
@@ -165,12 +172,62 @@ func (m *SecurityModule) HandleCall(ctx context.Context, session *drpc.Session, 
 		return nil, drpc.UnknownMethodFailure()
 	}
 
-	return m.getCredential(ctx, session)
+	// An empty body requests a plain credential.
+	if len(body) == 0 {
+		return m.getCredential(ctx, session)
+	}
+
+	var req auth.GetCredReq
+	if err := proto.Unmarshal(body, &req); err != nil {
+		m.log.Errorf("failed to unmarshal GetCredReq: %s", err)
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+	return m.getPoolCredential(ctx, session, req.GetPoolUuid(), req.GetHandleUuid())
 }
 
-// getCredentials generates a signed user credential based on the data attached to
-// the Unix Domain Socket.
+// getCredential generates a signed user credential from the Unix Domain
+// Socket peer data.
 func (m *SecurityModule) getCredential(ctx context.Context, session *drpc.Session) ([]byte, error) {
+	resp, err := m.buildCredResp(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+	return drpc.Marshal(resp)
+}
+
+// getPoolCredential generates a signed user credential and, when a node
+// certificate is available, attaches the node certificate and proof-of-possession
+// to the response.
+func (m *SecurityModule) getPoolCredential(ctx context.Context, session *drpc.Session, poolBytes, handleBytes []byte) ([]byte, error) {
+	poolUUID, err := uuid.FromBytes(poolBytes)
+	if err != nil {
+		m.log.Errorf("pool credential request with invalid pool UUID (%d bytes)", len(poolBytes))
+		return m.credRespWithStatus(daos.InvalidInput)
+	}
+	handleUUID, err := uuid.FromBytes(handleBytes)
+	if err != nil {
+		m.log.Errorf("pool credential request with invalid handle UUID (%d bytes)", len(handleBytes))
+		return m.credRespWithStatus(daos.InvalidInput)
+	}
+
+	resp, err := m.buildCredResp(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Status == 0 {
+		if err := m.attachNodeCert(resp, poolUUID, handleUUID); err != nil {
+			m.log.Errorf("failed to attach node cert for pool %s: %s", poolUUID, err)
+			return m.credRespWithStatus(daos.BadCert)
+		}
+	}
+
+	return drpc.Marshal(resp)
+}
+
+// buildCredResp signs a credential for the socket peer. Peer, key, and
+// signing failures are reported as a status-only response.
+func (m *SecurityModule) buildCredResp(ctx context.Context, session *drpc.Session) (*auth.GetCredResp, error) {
 	if session == nil {
 		return nil, drpc.NewFailureWithMessage("session is nil")
 	}
@@ -183,14 +240,14 @@ func (m *SecurityModule) getCredential(ctx context.Context, session *drpc.Sessio
 	info, err := security.DomainInfoFromUnixConn(m.log, uConn)
 	if err != nil {
 		m.log.Errorf("Unable to get credentials for client socket: %s", err)
-		return m.credRespWithStatus(daos.MiscError)
+		return &auth.GetCredResp{Status: int32(daos.MiscError)}, nil
 	}
 
 	signingKey, err := m.config.transport.PrivateKey()
 	if err != nil {
 		m.log.Errorf("%s: failed to get signing key: %s", info, err)
 		// something is wrong with the cert config
-		return m.credRespWithStatus(daos.BadCert)
+		return &auth.GetCredResp{Status: int32(daos.BadCert)}, nil
 	}
 
 	req := auth.NewCredentialRequest(info, signingKey)
@@ -215,12 +272,40 @@ func (m *SecurityModule) getCredential(ctx context.Context, session *drpc.Sessio
 			return nil
 		}(); err != nil {
 			m.log.Errorf("%s: failed to get user credential: %s", info, err)
-			return m.credRespWithStatus(daos.MiscError)
+			return &auth.GetCredResp{Status: int32(daos.MiscError)}, nil
 		}
 	}
 
-	resp := &auth.GetCredResp{Cred: cred}
-	return drpc.Marshal(resp)
+	return &auth.GetCredResp{Cred: cred}, nil
+}
+
+// attachNodeCert adds the pool's node cert and proof-of-possession to the
+// response, if the node cert is available. If the node cert is not available,
+// the response is treated as a success, since the pool may not require node certs.
+func (m *SecurityModule) attachNodeCert(resp *auth.GetCredResp, poolUUID, handleUUID uuid.UUID) error {
+	machine, err := auth.GetMachineName()
+	if err != nil {
+		return errors.Wrap(err, "getting machine name")
+	}
+
+	cert, pop, payload, err := m.nodeCertLoader.CertAndPoP(m.log, poolUUID, handleUUID, machine)
+	if errors.Is(err, os.ErrNotExist) {
+		m.log.Tracef("no node cert for pool %s: %s", poolUUID, err)
+		return nil
+	} else if err != nil {
+		// The server decides whether the pool needs a cert; a stale file
+		// must not break pools that do not.
+		m.log.Errorf("node cert for pool %s not attached: %s (run daos_agent check-node-cert)", poolUUID, err)
+		return nil
+	}
+
+	m.log.Tracef("attaching node cert for pool %s (CN=%s, expires=%s, %d bytes PoP)",
+		poolUUID, cert.Cert.Subject.CommonName,
+		cert.Cert.NotAfter.Format("2006-01-02"), len(pop))
+	resp.NodeCert = cert.PEM
+	resp.PopSig = pop
+	resp.PopPayload = payload
+	return nil
 }
 
 func (m *SecurityModule) credRespWithStatus(status daos.Status) ([]byte, error) {
