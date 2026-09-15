@@ -178,3 +178,5 @@ on every layer.
 Statuses are last-write-wins, so this is done before the stages start. Any
 stage that does run, such as the EL 9 build, replaces its status with the real
 result, including a failure.
+
+<!-- Stack tip placeholder for SRE-4015 CI validation. -->
