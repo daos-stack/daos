@@ -98,8 +98,22 @@ class HarnessCoreFilesTest(TestWithServers):
         in launch.py to be tested.
 
         :avocado: tags=all
-        :avocado: tags=hw,medium,large
+        :avocado: tags=hw,cb,medium,large
         :avocado: tags=harness,core_files
         :avocado: tags=HarnessCoreFilesTest,test_core_files_hw
+        """
+        self.test_core_files()
+
+    def test_core_files_hw_provider(self):
+        """Test to verify core file creation.
+
+        This test will send a signal 6 to a random daos_engine process so
+        that it will create a core file, allowing the core file collection code
+        in launch.py to be tested.
+
+        :avocado: tags=all
+        :avocado: tags=hw,medium,large,provider
+        :avocado: tags=harness,core_files
+        :avocado: tags=HarnessCoreFilesTest,test_core_files_hw_provider
         """
         self.test_core_files()
