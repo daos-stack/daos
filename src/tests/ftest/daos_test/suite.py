@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
 from daos_core_base import DaosCoreBase
 
 
