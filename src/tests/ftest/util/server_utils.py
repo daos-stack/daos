@@ -21,6 +21,7 @@ from host_utils import get_local_host
 from run_utils import command_as_user, run_remote, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
+from storage_utils import get_nvme_diagnostics_command
 from user_utils import get_chown_command
 
 
@@ -584,16 +585,22 @@ class DaosServerManager(SubprocessManager):
             ServerFailed: if there was an error resetting the storage
 
         """
-        cmd = DaosServerCommand(self.manager.job.command_path)
-        cmd.sudo = False
-        cmd.debug.value = False
-        cmd.set_sub_command("nvme")
-        cmd.sub_command_class.set_sub_command("reset")
-        cmd.sub_command_class.sub_command_class.ignore_config.value = True
+        reset_cmd = DaosServerCommand(self.manager.job.command_path)
+        reset_cmd.sudo = False
+        reset_cmd.debug.value = False
+        reset_cmd.set_sub_command("nvme")
+        reset_cmd.sub_command_class.set_sub_command("reset")
+        reset_cmd.sub_command_class.sub_command_class.ignore_config.value = True
 
-        self.log.info("Resetting DAOS server storage: %s", str(cmd))
+        run_remote(
+            self.log, self._hosts,
+            get_nvme_diagnostics_command("before manager reset"), timeout=60)
+        self.log.info("Resetting DAOS server storage: %s", str(reset_cmd))
         result = run_remote(
-            self.log, self._hosts, cmd.with_exports, timeout=self.storage_reset_timeout.value)
+            self.log, self._hosts, reset_cmd.with_exports, timeout=self.storage_reset_timeout.value)
+        run_remote(
+            self.log, self._hosts,
+            get_nvme_diagnostics_command("after manager reset"), timeout=60)
         if not result.passed:
             raise ServerFailed("Error resetting NVMe storage")
 
