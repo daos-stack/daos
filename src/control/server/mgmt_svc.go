@@ -102,6 +102,13 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 	}
 }
 
+// Close cleanly shuts down the management service, closing the events PubSub if present.
+func (svc *mgmtSvc) Close() {
+	if svc != nil && svc.events != nil {
+		svc.events.Close()
+	}
+}
+
 // checkSystemRequest sanity checks that a request is not nil and
 // has been sent to the correct system.
 func (svc *mgmtSvc) checkSystemRequest(req proto.Message) error {
