@@ -174,6 +174,10 @@ build_package() {
   config_files=()
   create_opts "--config-files" config_files "${CONFIG_FILES[@]}"
   pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
+  if [ -n "${PACKAGE_OUTPUT_DIR:-}" ]; then
+    mkdir -p "${PACKAGE_OUTPUT_DIR}"
+    pkgname="${PACKAGE_OUTPUT_DIR}/${pkgname}"
+  fi
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
   fpm --verbose -s "${PACKAGE_TYPE}" -t "${output_type}" \
