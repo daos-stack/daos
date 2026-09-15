@@ -1453,15 +1453,21 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		if (mrone->mo_iods[i].iod_size == 0) {
 			static __thread int log_nr;
 
-			/* zero size iod will cause assertion failure
-			 * in VOS, so let's check here.
-			 * So the object is being destroyed between
-			 * object enumeration and object fetch on
-			 * the remote target, which is usually caused
-			 * by container destroy or snapshot deletion.
-			 * Since this is rare, let's simply return
-			 * failure for this rebuild, then reschedule
-			 * the rebuild and retry.
+			/* Do not pass a zero-sized IOD to VOS: it would trigger an assertion.
+			 *
+			 * Enumeration found a record, but the fetch returned iod_size == 0.
+			 * Possible causes include:
+			 * 1. A placement mismatch routes the fetch to a target without the record.
+			 * 2. The fetch epoch precedes the epoch at which the record is visible.
+			 * 3. An in-flight update was not resolved by DTX resync. For example,
+			 *    enumeration may see a committable DTX on a parity shard while the
+			 *    corresponding DTX on a data shard is still prepared and its record
+			 *    is not visible to the migration fetch.
+			 *
+			 * No safe recovery is implemented here. Return -DER_DATA_LOSS to stop
+			 * this migration attempt; migrate_one_ult() does not propagate this
+			 * error to the target's migration status, so it does not fail the
+			 * overall rebuild.
 			 */
 			rc = -DER_DATA_LOSS;
 			DL_INFO(rc,
@@ -1659,15 +1665,21 @@ post:
 		if (iods[i].iod_size == 0) {
 			static __thread int log_nr;
 
-			/* zero size iod will cause assertion failure
-			 * in VOS, so let's check here.
-			 * So the object is being destroyed between
-			 * object enumeration and object fetch on
-			 * the remote target, which is usually caused
-			 * by container destroy or snapshot deletion.
-			 * Since this is rare, let's simply return
-			 * failure for this rebuild, then reschedule
-			 * the rebuild and retry.
+			/* Do not pass a zero-sized IOD to VOS: it would trigger an assertion.
+			 *
+			 * Enumeration found a record, but the fetch returned iod_size == 0.
+			 * Possible causes include:
+			 * 1. A placement mismatch routes the fetch to a target without the record.
+			 * 2. The fetch epoch precedes the epoch at which the record is visible.
+			 * 3. An in-flight update was not resolved by DTX resync. For example,
+			 *    enumeration may see a committable DTX on a parity shard while the
+			 *    corresponding DTX on a data shard is still prepared and its record
+			 *    is not visible to the migration fetch.
+			 *
+			 * No safe recovery is implemented here. Return -DER_DATA_LOSS to stop
+			 * this migration attempt; migrate_one_ult() does not propagate this
+			 * error to the target's migration status, so it does not fail the
+			 * overall rebuild.
 			 */
 			rc = -DER_DATA_LOSS;
 			DL_INFO(rc,
@@ -1677,7 +1689,7 @@ post:
 				DP_UOID(mrone->mo_oid), DP_KEY(&mrone->mo_dkey),
 				DP_KEY(&iods[i].iod_name), iod_num, i, mrone->mo_epoch, fetch_eph);
 			if (log_nr <= 128) {
-				mrone_dump_info(mrone, oh, &mrone->mo_iods[i]);
+				mrone_dump_info(mrone, oh, &iods[i]);
 				log_nr++;
 			}
 			D_GOTO(end, rc);

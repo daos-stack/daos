@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -602,6 +602,8 @@ gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
 		comp->co_rank   = i / vos_per_target;
 		comp->co_index	= i % vos_per_target;
 		comp->co_ver    = 1;
+		/* gen_pool_buf() gives every target of a new pool fseq 1, not 0 */
+		comp->co_fseq   = 1;
 		comp->co_nr     = 1;
 	}
 
@@ -692,6 +694,7 @@ gen_pool_and_placement_map_non_standard(int num_domains,
 		comp->co_rank   = node_idx;
 
 		comp->co_ver    = 1;
+		comp->co_fseq   = 1;
 		comp->co_nr     = 1;
 	}
 

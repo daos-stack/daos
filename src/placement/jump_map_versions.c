@@ -646,7 +646,8 @@ dom_reset_full(struct pool_domain *dom, uint8_t *dom_bits, uint8_t *tgts_used,
 }
 
 static bool
-dom_tgts_are_avaible(struct pool_domain *dom, uint32_t allow_version, enum layout_gen_mode gen_mode)
+dom_tgts_are_avaible(struct pool_domain *dom, uint32_t allow_version, enum layout_gen_mode gen_mode,
+		     bool *mode_dependent)
 {
 	int i;
 
@@ -654,7 +655,7 @@ dom_tgts_are_avaible(struct pool_domain *dom, uint32_t allow_version, enum layou
 		struct pool_target *tgt;
 
 		tgt = &dom->do_targets[i];
-		if (!comp_need_remap(&tgt->ta_comp, allow_version, gen_mode, NULL))
+		if (!comp_need_remap(&tgt->ta_comp, allow_version, gen_mode, NULL, mode_dependent))
 			return true;
 	}
 	return false;
@@ -665,7 +666,7 @@ static void
 reset_dom_cur_grp_v1(struct pool_domain *root, struct pool_domain *curr_pd,
 		     uint8_t *dom_cur_grp_used, uint8_t *dom_cur_grp_real, uint8_t *dom_full,
 		     uint8_t *tgts_used, uint32_t fdom_lvl, uint32_t allow_version,
-		     enum layout_gen_mode gen_mode)
+		     enum layout_gen_mode gen_mode, bool *mode_dependent)
 {
 	struct pool_domain	*tree;
 	uint32_t		dom_nr;
@@ -753,7 +754,7 @@ reset_dom_cur_grp_v1(struct pool_domain *root, struct pool_domain *curr_pd,
 			struct pool_domain *dom = &root[start_dom + i];
 
 			if (!isset(dom_cur_grp_real, start_dom + i) &&
-			    dom_tgts_are_avaible(dom, allow_version, gen_mode)) {
+			    dom_tgts_are_avaible(dom, allow_version, gen_mode, mode_dependent)) {
 				dom_reset_full(dom, dom_full, tgts_used, root,
 					       allow_version, gen_mode, fdom_lvl);
 				dom_reset_bit(dom, dom_cur_grp_used, root,
@@ -790,7 +791,8 @@ get_target_new(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t l
 	       struct pool_target **target, struct pool_domain **dom, uint64_t key,
 	       uint8_t *dom_used, uint8_t *dom_full, uint8_t *dom_cur_grp_used,
 	       uint8_t *dom_cur_grp_real, uint8_t *tgts_used, int shard_num, uint32_t allow_version,
-	       enum layout_gen_mode gen_mode, pool_comp_type_t fdom_lvl, uint32_t grp_size)
+	       enum layout_gen_mode gen_mode, pool_comp_type_t fdom_lvl, uint32_t grp_size,
+	       bool *mode_dependent)
 {
 	struct pool_target	*found = NULL;
 	bool			 pd_ignored;
@@ -819,11 +821,11 @@ get_target_new(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t l
 			if (pd_ignored)
 				reset_dom_cur_grp_v1(root, root, dom_cur_grp_used, dom_cur_grp_real,
 						     dom_full, tgts_used, fdom_lvl, allow_version,
-						     gen_mode);
+						     gen_mode, mode_dependent);
 			else
-				reset_dom_cur_grp_v1(root, curr_pd, dom_cur_grp_used,
-						     dom_cur_grp_real, dom_full, tgts_used,
-						     fdom_lvl, allow_version, gen_mode);
+				reset_dom_cur_grp_v1(
+				    root, curr_pd, dom_cur_grp_used, dom_cur_grp_real, dom_full,
+				    tgts_used, fdom_lvl, allow_version, gen_mode, mode_dependent);
 		}
 	}
 	*target = found;
@@ -1065,7 +1067,8 @@ get_target(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t layou
 	   struct pool_target **target, struct pool_domain **dom, uint64_t key, uint8_t *dom_used,
 	   uint8_t *dom_full, uint8_t *dom_cur_grp_used, uint8_t *dom_cur_grp_real,
 	   uint8_t *tgts_used, int shard_num, uint32_t allow_version, enum layout_gen_mode gen_mode,
-	   pool_comp_type_t fdom_lvl, uint32_t grp_size, uint32_t *spare_left, bool *spare_avail)
+	   pool_comp_type_t fdom_lvl, uint32_t grp_size, uint32_t *spare_left, bool *spare_avail,
+	   bool *mode_dependent)
 {
 	switch(layout_ver) {
 	case 0:
@@ -1098,7 +1101,7 @@ get_target(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t layou
 		 */
 		get_target_new(root, curr_pd, layout_ver, target, dom, key, dom_used, dom_full,
 			       dom_cur_grp_used, dom_cur_grp_real, tgts_used, shard_num,
-			       allow_version, gen_mode, fdom_lvl, grp_size);
+			       allow_version, gen_mode, fdom_lvl, grp_size, mode_dependent);
 		if (spare_avail)
 			*spare_avail = true;
 		break;
