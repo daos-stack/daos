@@ -162,17 +162,20 @@ class OSAOfflineParallelTest(OSAUtils):
                 if "failed" in failure:
                     self.fail("Test failed : {0}".format(failure))
 
-        self.log_step("Verify disabled ranks and total targets after OSA operations")
+        self.log_step("Wait for rebuild to complete")
         for pool in pools:
             self.pool = pool
             self.pool.wait_for_rebuild_to_end(3)
             self.assert_on_rebuild_failure()
-            output = self.dmg_command.pool_query(self.pool.identifier)
-            self.check_disabled_ranks(expected_disabled_ranks, output, "disabled_ranks")
-            # Extend adds targets, so the total should have grown since the beginning
-            final_total_targets = self.pool.get_total_targets(refresh=True)
-            self.assertGreater(final_total_targets, initial_total_targets,
-                               "Pool total_targets did not increase after extend")
+
+        self.log_step("Verify disabled ranks and total targets after rebuild is complete")
+        # Extend adds targets, so the total should have grown since the beginning
+        final_total_targets = self.pool.get_total_targets(refresh=True)
+        self.assertGreater(final_total_targets, initial_total_targets,
+                           "Pool total_targets did not increase after extend")
+
+        output = self.dmg_command.pool_query(self.pool.identifier)
+        self.check_disabled_ranks(expected_disabled_ranks, output, "disabled_ranks")
 
         self.log_step("Verify data integrity after OSA operations")
         # Finally run IOR to read the data and perform daos_container_check
