@@ -115,10 +115,10 @@ static const char *clog_pristr(int);
 static int clog_setnfac(int);
 
 /* static arrays for converting between pri's and strings */
-static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
-				     "CRIT", "ALRT", "EMRG", "EMIT"};
+static const char *const norm[] = {"DEBUG", "INFO ", "NOTE ", "WARN ", "ERR  ",
+				   "CRIT ", "ALRT ", "EMRG ", "EMIT "};
 /**
- * clog_pristr: convert priority to 4 byte symbolic name.
+ * clog_pristr: convert priority to 5 byte symbolic name.
  *
  * \param[in] pri	the priority to convert to a string
  *
