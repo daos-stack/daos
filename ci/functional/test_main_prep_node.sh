@@ -397,32 +397,17 @@ if [ "$ib_count" -ge 2 ] ; then
         # DAOS tests do and records it in the console log.
         nvme_devices="$(lspci -vmm -D | grep -E '^(Slot|Class|Device|NUMANode):' |
                         grep -E 'Class:\s+Non-Volatile memory controller' -B 1 -A 2)"
-        # Identify OS boot controller PCI slots to exclude from data NVMe counts.
-        # HPE NS204i (88NR2241) is a boot-only controller, not a DAOS data drive.
-        boot_nvme_slots=()
-        _slot=""
-        while IFS= read -r _line; do
-            if [[ "$_line" == Slot:* ]]; then
-                # lspci -vmm uses tabs; strip key and all leading whitespace.
-                _slot="$(awk '{print $2}' <<< "$_line")"
-            elif [[ "$_line" == Device:*88NR2241* ]]; then
-                boot_nvme_slots+=("$_slot")
-            fi
-        done < <(lspci -vmm -D | grep -E '^(Slot|Device):')
 
-        # Find the NVMe block device hosting the root filesystem.
-        # The sysfs path via PCI slot is unreliable when Intel VMD is active.
         _root_src="$(findmnt -n -o SOURCE /)"
         _root_nvme="$(basename "${_root_src%%p[0-9]*}")"
+        _root_ctrl="${_root_nvme%%n[0-9]*}"
 
         nvme_count=0
-        while IFS= read -r line; do
-            if [[ "$line" != *"Class:"*"Non-Volatile memory controller"* ]];then
-                continue
-            fi
+        for _ctrl in /sys/class/nvme/nvme*; do
+            [ -e "$_ctrl" ] || continue
+            [ "$(basename "$_ctrl")" == "$_root_ctrl" ] && continue
             ((nvme_count++)) || true
-        done < <(printf %s "$nvme_devices")
-        nvme_count=$((nvme_count - ${#boot_nvme_slots[@]}))
+        done
 
         ((testruns++)) || true
         testcases+="  <testcase name=\"NVMe Count Node $mynodenum\">${nl}"
