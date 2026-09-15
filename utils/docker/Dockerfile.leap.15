@@ -169,7 +169,7 @@ RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
             ${DAOS_BUILD_TYPE:+BUILD_TYPE="$DAOS_BUILD_TYPE"} \
             ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} && \
         [ "$DAOS_KEEP_BUILD" != "no" ] || { \
-            rm -rf .sconf_temp .sconsign.dblite config.log build *.gz; \
+            utils/build/build_daos.sh --clean; \
         } ; \
     }
 
@@ -195,17 +195,18 @@ FROM build-ci AS build-local
 # in github-actions to prune elements of the dockerfile below this point.
 LABEL DAOS=true
 
-ARG COMPILER=gcc
+ARG COMPILER
 ARG DAOS_DEPS_BUILD
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 ARG DAOS_JAVA_BUILD
 
-# Install the rest of components if other than gcc compiler will be used for
-# DAOS or Java build is requested.
+# Install the rest of components when a non-GCC compiler is used for the DAOS
+# build or when a Java build is requested. An empty compiler keeps the minimal
+# gcc (default) build environment from the build-ci stage.
 # This is done in a separate stage to allow for a smaller image for CI building only.
 USER root:root
 RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target=/tmp/daos/install.sh \
-    ([ "$COMPILER" = "gcc" ] && [ "$DAOS_JAVA_BUILD" != "yes" ]) || { \
+    [ -z "$COMPILER" ] || ([ "$COMPILER" = "gcc" ] && [ "$DAOS_JAVA_BUILD" != "yes" ]) || { \
         /tmp/daos/install.sh && \
         dnf clean all; \
     }
@@ -263,7 +264,7 @@ RUN --mount=type=bind,source=VERSION,target=/home/daos/daos/VERSION \
            ${DAOS_BUILD_TYPE:+BUILD_TYPE="$DAOS_BUILD_TYPE"} \
            ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} && \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || { \
-            rm -rf .sconf_temp .sconsign.dblite config.log build; \
+            utils/build/build_daos.sh --clean; \
         }) && \
         go clean -cache && \
         cp -r utils/config/examples /opt/daos && \

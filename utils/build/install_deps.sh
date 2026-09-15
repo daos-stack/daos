@@ -7,29 +7,31 @@
 #
 # Script for installing DAOS dependencies for the expected version
 #
-set -xeuo pipefail
+set -euo pipefail
 
 usage() {
     cat <<EOF
-Usage: ${0##*/} [OPTIONS] [RPM_SUFFIX]
+Usage: ${0##*/} [<RPM_SUFFIX>]
+       ${0##*/} -h | --help
 
 This script can be used only on el9 and leap/sles 15 systems.
 
 Install pre-built DAOS dependency RPMs matching the versions expected by the
 current tree.
 
-Args:
-    RPM_SUFFIX - Package distro suffix used by DAOS RPMs (e.g. el9, suse.lp155,
-                 suse.lp156). If omitted, it is auto-detected from /etc/os-release.
+Arguments:
+    RPM_SUFFIX          Package distro suffix used by DAOS RPMs (e.g. el9, 
+                        suse.lp155, suse.lp156). If omitted, it is 
+                        auto-detected from /etc/os-release.
 
 Options:
-    -h, --help - show this help and exit
+    -h, --help          Show this help and exit
 
 Environment:
-    DAOS_DEPS_EXT_REPO - Optional dnf repo URL with a set of dependency RPMs,
-                         registered as an extra install source for the duration
-                         of this script only. Requires passwordless sudo to
-                         write/remove /etc/yum.repos.d/daos-deps-extra.repo.
+    DAOS_DEPS_EXT_REPO  Optional dnf repo URL with a set of dependency RPMs,
+                        registered as an extra install source for the duration
+                        of this script only. Requires passwordless sudo to
+                        write/remove /etc/yum.repos.d/daos-deps-extra.repo.
 EOF
 }
 
@@ -38,22 +40,13 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 source "${script_dir}/build_utils.sh"
 rpms_dir="$(cd "${script_dir}/../rpms" >/dev/null 2>&1 && pwd)"
 
-check_help "$@"
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+    usage
+    exit 0
+fi
 
-
-# The script can be used only on el9 and leap/sles 15
-validate_rpm_suffix() {
-    case "${1}" in
-        el9 | suse.lp15*)
-            ;;
-        *)
-            echo "ERROR: unsupported RPM suffix ${1} \
-(expected e.g. el9, suse.lp15*)"
-            exit 1
-            ;;
-    esac
-}
 rpm_suffix="${1:-$(detect_rpm_suffix)}" || exit $?
+# The script can be used only on el9 and leap/sles 15
 validate_rpm_suffix "${rpm_suffix}"
 
 id

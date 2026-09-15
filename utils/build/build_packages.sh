@@ -8,24 +8,28 @@ set -euo pipefail
 
 usage() {
   cat <<EOF
-Usage: ${0##*/} [options] [PKG_OUTPUT_DIR]
+Usage: ${0##*/} [options] [<PKG_OUTPUT_DIR>]
+       ${0##*/} -h | --help
 
 Build DAOS/dependency packages with fpm, verifying them afterwards.
 
 Args:
-    PKG_OUTPUT_DIR - Full path under which "deps" and "daos" package dirs are
+    PKG_OUTPUT_DIR   Full path under which "deps" and "daos" package dirs are
                      created and populated.
                      Default for RPM builds: <repo_root>/rpms; for non-RPM
                      builds: .
 
 Options:
-    --build-range=[deps|daos|all] - What to build. Default: all
-    --rpm-suffix=[el9|suse.lp155|suse.lp156] - RPM distribution suffix.
-        Auto-detected from /etc/os-release when omitted.
-    [ -Werror | -Wno-error ] - Select whether validation findings are treated
-        as errors or warnings. The options are mutually exclusive.
-        Default: -Werror.
-    -h, --help - Show this help and exit
+    --build-range=[deps|daos|all]
+                     What to build. Default: all
+    --rpm-suffix=[el9|suse.lp155|suse.lp156]
+                     RPM distribution suffix. Auto-detected from
+                     /etc/os-release when omitted.
+    [ -Werror | -Wno-error ]
+                     Select whether validation findings are treated as errors
+                     or warnings. The options are mutually exclusive.
+                     Default: -Werror.
+    -h, --help       Show this help and exit
 
 Environment:
     OUTPUT_TYPE  Package format to build: rpm|deb. Default: rpm.

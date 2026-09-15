@@ -6,20 +6,6 @@
 # Shared helpers sourced by the other utils/build/*.sh scripts.
 # Not meant to be executed directly.
 
-# Scans "$@" for -h/--help and, if found, calls the sourcing script's usage()
-# function and exits 0. Must be called after usage() is defined by the caller.
-check_help() {
-    local arg
-    for arg in "$@"; do
-        case "${arg}" in
-            -h | --help)
-                usage
-                exit 0
-                ;;
-        esac
-    done
-}
-
 check_scons() {
     [[ -n $(command -v scons 2>/dev/null) ]] || {
         echo "ERROR: 'scons' not found on PATH." >&2
@@ -44,4 +30,16 @@ detect_rpm_suffix() {
             ;;
     esac
     )
+}
+
+validate_rpm_suffix() {
+    case "${1}" in
+        el9 | suse.lp15*)
+            ;;
+        *)
+            echo "ERROR: unsupported RPM suffix ${1} \
+(expected e.g. el9, suse.lp15*)"
+            exit 1
+            ;;
+    esac
 }

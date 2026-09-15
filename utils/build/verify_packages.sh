@@ -36,9 +36,17 @@ shopt -s nullglob
 
 usage() {
     cat <<EOF
-Usage: ${0##*/} [options] RPM_ROOT
+Usage: ${0##*/} [options] <RPM_ROOT>
+       ${0##*/} -h | --help
+
+This script can be used only on el9 and leap/sles 15 systems.
 
 Validate generated RPM packages.
+
+Arguments:
+    RPM_ROOT        Root directory containing the generated RPMs. Packages may
+                    be placed directly in this directory or under its deps/
+                    and daos/ subdirectories.
 
 Options:
     --rpm-suffix=[el9|suse.lp155|suse.lp156]
@@ -50,10 +58,14 @@ Options:
     -h, --help      Show this help and exit
 
 Exit codes:
-    0 - Validation passed (or -Wno-error was used with validation findings).
-    1 - Validation failed in -Werror mode or required tooling/setup is missing.
+    0               Validation passed (or -Wno-error was used with validation findings).
+    1               Validation failed in -Werror mode or required tooling/setup is missing.
 EOF
 }
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+# shellcheck source=utils/build/build_utils.sh
+source "${script_dir}/build_utils.sh"
 
 rpm_suffix=el9
 mode=ERROR
@@ -107,14 +119,7 @@ if ! RPM_ROOT="$(cd "${RPM_ROOT}" 2>/dev/null && pwd)"; then
     exit 1
 fi
 
-case "${rpm_suffix}" in
-    el9 | suse.lp155 | suse.lp156)
-        ;;
-    *)
-        echo "ERROR: --rpm-suffix must be el9, suse.lp155, or suse.lp156 (got: ${rpm_suffix})" >&2
-        exit 1
-        ;;
-esac
+validate_rpm_suffix "${rpm_suffix}"
 
 for tool in rpm rpm2cpio cpio readelf; do
     if ! command -v "${tool}" >/dev/null 2>&1; then

@@ -441,6 +441,13 @@ Advanced users can still invoke `scons` directly or pass additional options
 and variables through the `build_*` scripts to produce different binary
 variants.
 
+The `build_*.sh` scripts are intended to be usable on Linux distributions in
+general, including Debian-based distributions. The distribution-specific
+dependency installation and package verification workflows are narrower:
+`install_deps.sh` and `verify_packages.sh` currently support EL and Leap/SLES
+15 package layouts only. On other distributions, build dependencies from
+source or use the distribution's native package tooling as appropriate.
+
 1. **[`utils/build/install_deps.sh [RPM_SUFFIX]`](../../utils/build/install_deps.sh)**
    installs pre-built dependency RPMs (e.g. `argobots-devel`, `mercury-devel`,
    `libfabric-devel`) matching the versions expected by the current tree,

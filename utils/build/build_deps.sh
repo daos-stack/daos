@@ -12,23 +12,25 @@ source "${script_dir}/build_utils.sh"
 
 usage() {
     cat <<EOF
-Usage: ${0##*/} [-f|--force] [SCONS_OPTION]... [VARIABLE=VALUE]...
+Usage: ${0##*/} [-f|--force] [SCONS_OPTION]
+       ${0##*/} -h | --help
 
-Build the DAOS dependencies with scons.
+Build the DAOS dependencies with scons. The script supplies the defaults
+listed below; all other options use SCons' own defaults unless explicitly
+overridden.
 
-The script always runs:
+For build, the script always runs \`scons install --build-deps=only [defaults] "\$@"\`
 
-    \`scons install --build-deps=only [defaults] "\$@"\` and applies these
-    defaults unless the same option or variable is given on the command line:
-
-    --build-deps=only   build only the dependencies of DAOS
-    --jobs <nproc>      number of parallel jobs
-    USE_INSTALLED=all   use dependencies already installed on the system
-    PREFIX=/opt/daos    installation prefix
+The following defaults apply unless overridden:
+    --build-deps=only   Build only the dependencies of DAOS
+    --jobs \$(nproc)    Use all available cores for parallel jobs
+    USE_INSTALLED=all   Use installed dependencies
+    PREFIX=/opt/daos    Install under /opt/daos
 
 Options:
     -f, --force         wipe dependency directories before building; use
-                        \`BUILD_TYPE=dev|release|debug\` to select the directories.
+                        \`TARGET_TYPE=debug|release|dev\` or
+                        \`BUILD_TYPE=debug|release|dev\` to select the directories.
                         If omitted, \`release\` directories are wiped.
                         Must be given as the first argument.
     -h, --help          show this help and exit
@@ -39,7 +41,6 @@ Any other argument is forwarded verbatim to scons, e.g.:
 EOF
 }
 
-check_help "$@"
 check_scons
 
 force=false
@@ -53,9 +54,14 @@ prefix_set=false
 prefix_value="/opt/daos"
 use_installed_set=false
 build_type=release
+target_type=default
 
 for arg in "$@"; do
     case "$arg" in
+        -h | --help)
+            usage
+            exit 0
+            ;;
         -j | --jobs )
             jobs_set=true
             ;;
@@ -69,14 +75,26 @@ for arg in "$@"; do
         BUILD_TYPE=*)
             build_type="${arg#BUILD_TYPE=}"
             ;;
+        TARGET_TYPE=*)
+            target_type="${arg#TARGET_TYPE=}"
+            ;;
     esac
 done
 
 if "$force"; then
-    echo "Removing \"${prefix_value}/prereq/${build_type}\""
-    rm -rf "${prefix_value}/prereq/${build_type}"
-    echo "Removing \"build/external/${build_type}\""
-    rm -rf "build/external/${build_type}"
+    ttype="$target_type"
+    [ "$ttype" = "debug" ] || [ "$ttype" = "release" ] || [ "$ttype" = "dev" ] || \
+        ttype="$build_type"
+
+    [ "$ttype" = "debug" ] || [ "$ttype" = "release" ] || [ "$ttype" = "dev" ] || {
+        echo "Invalid build type: $ttype" >&2
+        exit 1
+    }
+
+    echo "Removing \"${prefix_value}/prereq/${ttype}\""
+    rm -rf "${prefix_value}/prereq/${ttype}"
+    echo "Removing \"build/external/${ttype}\""
+    rm -rf "build/external/${ttype}"
 fi
 
 SCONS_ARGS=(install --build-deps=only)

@@ -7,20 +7,24 @@ set -euo pipefail
 
 usage() {
     cat <<EOF
-Usage: ${0##*/} [SCONS_OPTIONS] | -c | -h | --help
-Build DAOS with scons, assuming the dependencies are already built.
+Usage: ${0##*/} [SCONS_OPTIONS]
+       ${0##*/} -c | --clean
+       ${0##*/} -h | --help
 
-The script always runs:
-    \`scons install [defaults] "\$@"\` and applies these defaults unless the same
-    option or variable is given on the command line:
-        --build-deps=no
-        --jobs <nproc>      number of parallel jobs
-        USE_INSTALLED=all   use dependencies already installed on the system
-        PREFIX=/opt/daos    installation prefix
+Build DAOS with scons, assuming the dependencies are already built. The
+script supplies the defaults listed below; all other options use SCons' own
+defaults unless explicitly overridden.
+
+For normal build, the script always runs \`scons install [defaults] "\$@"\`
+
+The following defaults apply unless overridden:
+    --jobs \$(nproc)    Use all available cores for parallel jobs
+    USE_INSTALLED=all   Use installed dependencies
+    PREFIX=/opt/daos    Install under /opt/daos
 
 Options:
-    -c                  run 'scons -c' command
-    -h, --help          show this help and exit
+    -c, --clean         Run 'scons -c' and remove generated build state
+    -h, --help          Show this help and exit
 
 Any other argument is forwarded verbatim to scons, e.g.:
 
@@ -32,18 +36,29 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # shellcheck source=utils/build/build_utils.sh
 source "${script_dir}/build_utils.sh"
 
-check_help "$@"
 check_scons
 
 jobs_set=false
 prefix_set=false
 use_installed_set=false
 install_set=false
-build_deps_set=false
+
+clean_scons() {
+    scons -c
+    rm -rf .build_vars.json .build_vars.sh config.log daos.conf .sconf_temp \
+           .sconsign.dblite build
+    find site_scons -type d -name __pycache__ -prune -exec rm -rf {} +
+}
+
+
 for arg in "$@"; do
     case "$arg" in
-        -c)
-            scons -c
+        -h | --help)
+            usage
+            exit 0
+            ;;
+        -c | --clean)
+            clean_scons
             exit 0
             ;;
         -j | --jobs )
@@ -58,18 +73,12 @@ for arg in "$@"; do
         install)
             install_set=true
             ;;
-        --build-deps=*)
-            build_deps_set=true
-            ;;
     esac
 done
 
 SCONS_ARGS=()
 if ! "$install_set"; then
     SCONS_ARGS+=(install)
-fi
-if ! "$build_deps_set"; then
-    SCONS_ARGS+=(--build-deps=no )
 fi
 if ! "$jobs_set"; then
     SCONS_ARGS+=(--jobs "$(nproc)")
