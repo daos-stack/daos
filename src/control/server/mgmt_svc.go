@@ -83,6 +83,8 @@ type mgmtSvc struct {
 	serialReqs        batchReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
+	daosCARootPath    string
+	allowInsecure     bool
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
