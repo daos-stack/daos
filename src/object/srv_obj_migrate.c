@@ -919,6 +919,11 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	}
 
 out:
+	if (rc == -DER_VOS_PARTIAL_UPDATE) {
+		D_WARN(DF_RB ": " DF_UOID " restart rebuild after migration DTX conflict\n",
+		       DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid));
+		rc = -DER_STALE;
+	}
 	return rc;
 }
 
@@ -3286,6 +3291,11 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 				break;
 			}
 			continue;
+		} else if (rc == -DER_VOS_PARTIAL_UPDATE) {
+			D_WARN(DF_RB ": " DF_UOID
+				     " restart rebuild after migration enumeration DTX conflict\n",
+			       DP_RB_MPT(tls), DP_UOID(arg->oid));
+			break;
 		} else if (rc && rc != -DER_SHUTDOWN &&
 			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
 			if (rc != -DER_INPROGRESS) {

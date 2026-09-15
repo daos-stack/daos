@@ -706,6 +706,15 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	if (rc != 0)
 		goto out;
 
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	for (i = 0; i < obj->cob_shards_nr; i++) {
+		if (obj->cob_shards->do_shards[i].do_rebuilding) {
+			auxi->rebuilding = 1;
+			break;
+		}
+	}
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
 	for (i = 0; i < obj->cob_shards_nr; i++) {
 		rc = obj_coll_prep_one(coa, obj, map_ver, i);
 		if (rc != 0)
@@ -801,6 +810,8 @@ gen_mbs:
 		goto out;
 
 	auxi->flags = ORF_LEADER;
+	if (auxi->rebuilding)
+		auxi->flags |= ORF_REBUILDING_IO;
 	if (auxi->io_retry) {
 		auxi->flags |= ORF_RESEND;
 		/* Reset @enqueue_id if resend to new leader. */
