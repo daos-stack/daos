@@ -56,8 +56,8 @@ ior:
     read_flags: "-r -R -F -k -G 1"
   test_file: /testFile
   transfersize_blocksize:
-    128K:
-      transfer_size: 131072  # 128K
+    2k:
+      transfer_size: 2048  # 2K
     16M:
       nvme_transfer_size: 16777216  # 16M
 
