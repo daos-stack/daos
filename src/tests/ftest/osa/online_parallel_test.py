@@ -65,7 +65,7 @@ class OSAOnlineParallelTest(OSAUtils):
         dmg = copy.copy(self.dmg_command)
         try:
             if action == "reintegrate":
-                time.sleep(30)
+                time.sleep(60)
             # For each action, read the values from the
             # dictionary.
             # example {"exclude" : {"puuid": self.pool, "ranks: rank

@@ -48,7 +48,7 @@ class OSAOfflineParallelTest(OSAUtils):
         dmg = copy.copy(self.dmg_command)
         try:
             if action == "reintegrate":
-                time.sleep(30)
+                time.sleep(60)
             if action == "exclude" and self.server_boot is True:
                 self.log.info("Stop/Start rank %s using system stop/start", kwargs["ranks"])
                 ranks = str(kwargs["ranks"])
