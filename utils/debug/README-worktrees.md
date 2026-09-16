@@ -134,7 +134,7 @@ collides with another's:
 cd ~/work/daos-tools/utils/ansible/ftest && ansible-playbook -i ~/work/tickets/daos-jira/DAOS-17321/inventory.yml ftest.yml
 
 # 3. build/install into this ticket's own isolated prefix, reusing shared prereqs
-cd ~/work/tickets/daos-jira/DAOS-17321 && ./finalize-daos-dev.sh --force --deps
+cd ~/work/tickets/daos-jira/DAOS-17321 && ./build-daos.sh --force --deps
 
 # 4. run standalone unit tests (isolated, safe regardless of what's "live")
 ./run-vos_tests.sh
@@ -179,6 +179,6 @@ own `DAOS_BUILD`, and `DAOS_INSTALL` was always the one shared location.
 | `scripts/remove-ticket-worktree.sh` | Symmetric teardown, refuses on uncommitted/unpushed changes unless `--force`. |
 | `scripts/generate-daos-env.sh` | Renders a ticket-specific `env.sh`/`inventory.yml`/`README.md` with isolated `DAOS_BUILD`/`DAOS_INSTALL` paths. Skips files that already exist unless `--force`. |
 | `scripts/compute-daos-alt-prefix.sh` | Computes the colon-separated scons `ALT_PREFIX` list from a shared install's `.build_vars.sh`, used by `generate-daos-env.sh`. |
-| `scripts/finalize-daos-dev.sh` | Deployed into each ticket dir; ssh + invokes that ticket's ansible-generated `daos-make.sh`, `--build-only` by default (see `--activate`). |
+| `scripts/build-daos.sh` | Deployed into each ticket dir; ssh + invokes that ticket's ansible-generated `daos-make.sh`, `--build-only` by default (see `--activate`). |
 | `scripts/run-vos_tests.sh`, `run-ddb_ut.sh`, `run-ddb_tests.sh`, `run-dtx_ut.sh`, `run-dtx_tests.sh`, `run-go_unit.sh` | Deployed into each ticket dir; generic standalone unit-test-suite runners. |
 | `ansible/ftest/` | The DAOS functional-test-platform Ansible playbook/roles (imported from the `ansible/ftest` branch — see "The branch tree" above), extended with `daos_alt_prefix`/`ALT_PREFIX` reuse and `daos-make.sh --build-only` for per-ticket isolated builds. |
