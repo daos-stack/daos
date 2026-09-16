@@ -103,7 +103,7 @@ RUN if [ -n "$JENKINS_URL" ]; then \
 ARG DAOS_SERVER_UID
 RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos/daos-server-user-setup.sh \
     if [ -n "${DAOS_SERVER_UID:-}" ]; then                                                                              \
-        UID="${DAOS_SERVER_UID}" /tmp/daos/daos-server-user-setup.sh;                                                   \
+        TARGET_UID="${DAOS_SERVER_UID}" /tmp/daos/daos-server-user-setup.sh;                                                   \
     else                                                                                                                \
         /tmp/daos/daos-server-user-setup.sh;                                                                            \
     fi
