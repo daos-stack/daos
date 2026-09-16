@@ -1,0 +1,32 @@
+# yamllint disable rule:line-length
+# Makes this node's DAOS install the system-wide default for ad hoc/interactive
+# use: dynamic linker search path and the PAM default PATH. Both are
+# single-instance, fixed-path resources (like the systemd units/`--activate`
+# mechanism in daos-make.sh.j2) -- only the most recently provisioned
+# daos_runtime_dir wins. Set daos_client_manage_system_paths: false (see
+# roles/daos_client/defaults/main.yml) to skip this, e.g. for a per-ticket
+# isolated workflow that manages its own "live" ticket via daos-make.sh
+# --activate instead. The `when:` lives here (not on the include_tasks call
+# in main.yml) so this file is self-gating regardless of how it's included
+# (e.g. Molecule's `include_role: tasks_from:`).
+- name: Update system-wide dynamic linker / PATH configuration
+  when: daos_client_manage_system_paths
+  block:
+    - name: Update dynamic linker configuration
+      become: true
+      template:
+        src: daos-ld.so.conf.j2
+        dest: /etc/ld.so.conf.d/daos-ftest-x86_64.conf
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+
+    - name: Update PATH in PAM environment
+      become: true
+      lineinfile:
+        path: /etc/security/pam_env.conf
+        state: present
+        regexp: '^PATH='
+        line: "PATH={{ daos_runtime_dir }}/install/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/usr/bin/syscfg:/root/bin"
+        backup: true
