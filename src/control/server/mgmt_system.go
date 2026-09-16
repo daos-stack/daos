@@ -1982,21 +1982,20 @@ func (svc *mgmtSvc) restartLeader(ctx context.Context) error {
 		return errors.Wrap(err, "unable to determine path to self")
 	}
 
-	svc.log.Infof("System Erase: scheduling restart of control plane in 3s")
+	svc.log.Infof("System Erase: scheduling restart of control plane in 500ms")
 
 	svc.log.Infof("System Erase: exec'ing %s to restart control plane", myPath)
 	go func() {
-		// Schedule the exec to run after gRPC response is sent ensuring the restart executes
-		// after the function returns and the gRPC response completes. 3 seconds allows
-		// sufficient time for response serialization and transmission to prevent EOF errors
-		// being returned to client.
-		select {
-		case <-time.After(3 * time.Second):
-			if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
-				svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
-			}
-		case <-ctx.Done():
-			svc.log.Debugf("restartLeader cancelled")
+		// Wait for gRPC response to complete transmission before restarting.
+		// Once the handler returns from SystemErase(), gRPC has the response ready to send.
+		// A 500ms delay gives sufficient time for:
+		// - gRPC response serialization (~10ms)
+		// - Network transmission (~100-300ms typical)
+		// - Client to receive and process response
+		// This ensures the client has the response before the process exec's and restarts.
+		time.Sleep(500 * time.Millisecond)
+		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
+			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
 		}
 	}()
 
