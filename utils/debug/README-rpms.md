@@ -8,6 +8,11 @@ file.
 
 ## With FPM
 
+A ready-made wrapper for this exact approach is `scripts/package-daos.sh`
+(Ubuntu 24.04, release build, `DAOS_PACKAGES_BUILD=yes`) — adapt its
+`--build-arg`s (distro, build type, branch) instead of copying the command
+below by hand.
+
 The DAOS RPMs and its direct dependencies can be build into a docker container thanks to the
 following command:
 
