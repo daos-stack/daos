@@ -86,7 +86,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         dfuse.disable_wb_cache.value = True
     elif cache_mode == 'nocache':
         build_time *= 4
-        if run_on_vms:
+        if il_lib is not None:
             build_time += 60
         cont_attrs['dfuse-data-cache'] = 'off'
         cont_attrs['dfuse-attr-time'] = '0'
