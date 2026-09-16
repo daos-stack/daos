@@ -64,12 +64,17 @@ RUN update-alternatives --set \
     java /usr/lib/jvm/java-8-openjdk-*/jre/bin/java
 
 # Add DAOS users
-ARG UID=5000
+ARG DAOS_SERVER_UID
 COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
      /tmp/daos-server-user-setup.sh
-RUN set -e;                                    \
-    chmod +x /tmp/daos-server-user-setup.sh && \
-    /tmp/daos-server-user-setup.sh
+RUN set -e;                                     \
+    chmod +x /tmp/daos-server-user-setup.sh;    \
+    if [ -n "${DAOS_SERVER_UID:-}" ]; then      \
+        UID="${DAOS_SERVER_UID}"                \
+            /tmp/daos-server-user-setup.sh;     \
+    else                                        \
+        /tmp/daos-server-user-setup.sh;         \
+    fi
 RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 

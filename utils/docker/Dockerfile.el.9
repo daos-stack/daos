@@ -84,9 +84,13 @@ RUN --mount=type=bind,source=utils/scripts/install-el9.sh,target=/tmp/daos/insta
     dnf clean all
 
 # Add DAOS user
-ARG UID=1000
+ARG DAOS_SERVER_UID
 RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos/daos-server-user-setup.sh \
-    /tmp/daos/daos-server-user-setup.sh
+    if [ -n "${DAOS_SERVER_UID:-}" ]; then                                                                              \
+        UID="${DAOS_SERVER_UID}" /tmp/daos/daos-server-user-setup.sh;                                                   \
+    else                                                                                                                \
+        /tmp/daos/daos-server-user-setup.sh;                                                                            \
+    fi
 
 # Create directory for DAOS build backend storage
 RUN mkdir -p /home/daos /opt/daos && \
