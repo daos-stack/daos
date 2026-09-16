@@ -2657,6 +2657,104 @@ no_stale_read_source(void **state)
 	_no_stale_read_source(6, 4, OC_EC_4P2G2, 2, 1, 500);
 }
 
+/*
+ * NEW domains count towards the object class limit but are not initial placement candidates.
+ * A five-shard group over four old ranks can therefore reuse a domain during the initial
+ * pass. After a failure, CURRENT and PRE_REBUILD can choose different initial targets even
+ * though no target is DOWNOUT or undergoing ordinary reintegration.
+ */
+static void
+extension_preserves_read_sources(void **state)
+{
+	const struct {
+		daos_oclass_id_t oc;
+		uint32_t         targets;
+	} cases[] = {{OC_RP_5G1, 2}, {OC_RP_5G2, 4}, {OC_EC_4P1G1, 2}, {OC_EC_4P1G2, 4}};
+	uint32_t c, lv, adding, o, i;
+
+	for (c = 0; c < ARRAY_SIZE(cases); c++) {
+		for (lv = 1; lv <= 2; lv++) {
+			for (adding = 0; adding <= 1; adding++) {
+				struct jm_test_ctx      ctx;
+				struct pl_obj_layout   *before[32];
+				daos_obj_id_t           oids[ARRAY_SIZE(before)];
+				struct pl_map_init_attr attr = {
+				    .ia_type            = PL_TYPE_JUMP_MAP,
+				    .ia_jump_map.domain = PO_COMP_TP_RANK,
+				};
+
+				jtc_init(&ctx, 4, 1, cases[c].targets, cases[c].oc, g_verbose);
+				assert_success(jtc_pool_map_extend(&ctx, 1, 1, cases[c].targets));
+				if (adding)
+					for (i = 4 * cases[c].targets; i < 5 * cases[c].targets;
+					     i++)
+						jtc_set_status_on_target(&ctx, POOL_EXTEND, i);
+				pl_map_decref(ctx.pl_map);
+				assert_success(pl_map_create(ctx.po_map, &attr, &ctx.pl_map));
+
+				for (o = 0; o < ARRAY_SIZE(before); o++) {
+					uint64_t           lo = 0x9e3779b97f4a7c15ULL * (o + 1);
+					struct daos_obj_md md = {0};
+
+					gen_oid(&oids[o], lo, lo >> 32, cases[c].oc);
+					oids[o].hi =
+					    (oids[o].hi & ~OID_FMT_TYPE_MASK) |
+					    ((uint64_t)DAOS_OT_AKEY_LEXICAL << OID_FMT_TYPE_SHIFT);
+					md.omd_id  = oids[o];
+					md.omd_ver = pool_map_get_version(ctx.po_map);
+					assert_success(pl_obj_place(ctx.pl_map, lv, &md, DAOS_OO_RW,
+								    NULL, &before[o]));
+				}
+
+				jtc_set_status_on_target(&ctx, DOWN, 4 * cases[c].targets - 1);
+				for (o = 0; o < ARRAY_SIZE(before); o++) {
+					struct daos_obj_md    md = {.omd_id = oids[o]};
+					struct pl_obj_layout *cur;
+					struct pl_obj_layout *pre;
+
+					md.omd_ver = pool_map_get_version(ctx.po_map);
+					assert_success(pl_obj_place(ctx.pl_map, lv, &md, DAOS_OO_RW,
+								    NULL, &cur));
+					assert_success(pl_obj_place(ctx.pl_map, lv, &md, DAOS_OO_RO,
+								    NULL, &pre));
+					for (i = 0; i < pre->ol_nr; i++) {
+						struct pl_obj_shard *s = &pre->ol_shards[i];
+
+						if (s->po_target == (uint32_t)-1 ||
+						    s->po_rebuilding ||
+						    !jtc_tgt_is_serving(&ctx, s->po_target))
+							continue;
+						assert_true(jtc_in_write_set(before[o], s->po_shard,
+									     s->po_target));
+						if (!jtc_in_write_set(cur, s->po_shard,
+								      s->po_target))
+							fail_msg(
+							    "class %u layout v%u adding %u "
+							    "oid " DF_OID
+							    ": shard %u PRE_REBUILD reads "
+							    "tgt %u, CURRENT does not write it",
+							    cases[c].oc, lv, adding,
+							    DP_OID(oids[o]), s->po_shard,
+							    s->po_target);
+					}
+					for (i = 0; i < cur->ol_nr; i++) {
+						struct pl_obj_shard *s = &cur->ol_shards[i];
+
+						if (s->po_target != (uint32_t)-1 &&
+						    !s->po_rebuilding)
+							assert_true(jtc_in_write_set(
+							    before[o], s->po_shard, s->po_target));
+					}
+					pl_obj_layout_free(before[o]);
+					pl_obj_layout_free(cur);
+					pl_obj_layout_free(pre);
+				}
+				jtc_fini(&ctx);
+			}
+		}
+	}
+}
+
 static void
 relocation_peer_alloc_failure(void **state)
 {
@@ -2921,6 +3019,8 @@ static const struct CMUnitTest tests[] = {
     T("fail reintegrate ranks", fail_reintegrate_multiple_ranks),
     T("fail multiple ranks", fail_multiple_ranks),
     T("no stale read source", no_stale_read_source),
+    T("extension preserves read sources without historical spares",
+      extension_preserves_read_sources),
     T("no hidden peer source", no_hidden_peer_source),
     T("relocation peer allocation failure", relocation_peer_alloc_failure),
 };
