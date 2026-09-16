@@ -1,5 +1,7 @@
 - hosts: all
   gather_facts: false
+  vars:
+    daos_runtime_dir: /opt/daos
   tasks:
     - name: Check daos_agent group exists
       getent:
@@ -13,3 +15,37 @@
       getent:
         database: passwd
         key: daos_agent
+
+    # --- daos_client_manage_system_paths: true (default) ---
+    - name: Read /etc/ld.so.conf.d/daos-ftest-x86_64.conf
+      slurp:
+        src: /etc/ld.so.conf.d/daos-ftest-x86_64.conf
+      register: _ld_conf
+
+    - name: Assert ld.so.conf.d file references this daos_runtime_dir
+      vars:
+        _ld_conf_text: "{{ _ld_conf.content | b64decode }}"
+      assert:
+        that:
+          - (daos_runtime_dir ~ "/install/lib64") in _ld_conf_text
+          - (daos_runtime_dir ~ "/install/lib") in _ld_conf_text
+        fail_msg: >-
+          Expected /etc/ld.so.conf.d/daos-ftest-x86_64.conf to reference
+          {{ daos_runtime_dir }}/install/lib64 and .../lib, got:
+          {{ _ld_conf_text }}
+
+    - name: Read /etc/security/pam_env.conf
+      slurp:
+        src: /etc/security/pam_env.conf
+      register: _pam_env
+
+    - name: Assert PAM PATH= line references this daos_runtime_dir's install/bin
+      vars:
+        _pam_env_text: "{{ _pam_env.content | b64decode }}"
+      assert:
+        that:
+          - ("PATH=" ~ daos_runtime_dir ~ "/install/bin") in _pam_env_text
+        fail_msg: >-
+          Expected /etc/security/pam_env.conf's PATH= line to start with
+          {{ daos_runtime_dir }}/install/bin, got:
+          {{ _pam_env_text }}

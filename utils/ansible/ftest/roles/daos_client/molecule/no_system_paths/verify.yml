@@ -1,0 +1,39 @@
+- hosts: all
+  gather_facts: false
+  vars:
+    daos_runtime_dir: /opt/daos
+  tasks:
+    - name: Stat /etc/ld.so.conf.d/daos-ftest-x86_64.conf
+      stat:
+        path: /etc/ld.so.conf.d/daos-ftest-x86_64.conf
+      register: _ld_conf_stat
+
+    - name: Assert ld.so.conf.d file was NOT created when the toggle is disabled
+      assert:
+        that:
+          - not _ld_conf_stat.stat.exists
+        fail_msg: >-
+          Expected /etc/ld.so.conf.d/daos-ftest-x86_64.conf to be absent when
+          daos_client_manage_system_paths is false, but it exists.
+
+    - name: Stat /etc/security/pam_env.conf
+      stat:
+        path: /etc/security/pam_env.conf
+      register: _pam_env_stat
+
+    - name: Read /etc/security/pam_env.conf if present
+      slurp:
+        src: /etc/security/pam_env.conf
+      register: _pam_env
+      when: _pam_env_stat.stat.exists
+
+    - name: Assert PAM PATH= line was NOT set to this daos_runtime_dir when the toggle is disabled
+      vars:
+        _pam_env_text: "{{ (_pam_env.content | b64decode) if _pam_env_stat.stat.exists else '' }}"
+      assert:
+        that:
+          - ("PATH=" ~ daos_runtime_dir ~ "/install/bin") not in _pam_env_text
+        fail_msg: >-
+          Expected /etc/security/pam_env.conf to NOT contain a PATH= line for
+          {{ daos_runtime_dir }}/install/bin when daos_client_manage_system_paths
+          is false, got: {{ _pam_env_text }}

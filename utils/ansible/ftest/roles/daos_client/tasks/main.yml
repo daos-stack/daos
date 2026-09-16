@@ -35,24 +35,8 @@
     - /etc/daos
     - /etc/daos/certs
 
-- name: Update dynamic linker configuration
-  become: true
-  template:
-    src: daos-ld.so.conf.j2
-    dest: /etc/ld.so.conf.d/daos-ftest-x86_64.conf
-    owner: root
-    group: root
-    mode: '0644'
-    backup: true
-
-- name: Update PATH in PAM environment
-  become: true
-  lineinfile:
-    path: /etc/security/pam_env.conf
-    state: present
-    regexp: '^PATH='
-    line: "PATH={{ daos_runtime_dir }}/install/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/usr/bin/syscfg:/root/bin"
-    backup: true
+- name: Update system-wide dynamic linker / PATH configuration
+  include_tasks: manage_system_paths.yml
 
 - name: Create MPI module directory
   become: true

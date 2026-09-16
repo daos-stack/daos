@@ -27,6 +27,11 @@
         name: daos_client
         tasks_from: users_groups.yml
 
+    - name: Test system-wide dynamic linker / PATH configuration (default enabled)
+      include_role:
+        name: daos_client
+        tasks_from: manage_system_paths.yml
+
     # --- Proxy environment sentinel tests ---
     # Verify that daos_proxy_env forwards the proxy to tasks
     - name: "Proxy sentinel: capture http_proxy inside daos_proxy_env"
