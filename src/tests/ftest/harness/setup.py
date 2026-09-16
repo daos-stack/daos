@@ -7,7 +7,27 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from apricot import TestWithServers
 
 
-class HarnessSetupTest(TestWithServers):
+class TestServerTimeouts(TestWithServers):
+    """Test class for verifying server timeouts.
+
+    :avocado: recursive
+    """
+
+    def _verify_server_timeouts(self):
+        """Verify the server prepare and format timeout values.
+
+        Args:
+            test (Test): Test class
+        """
+        for entry in ("storage_prepare_timeout", "storage_format_timeout"):
+            self.log_step(f"Verifying server {entry}")
+            value = self.params.get(entry)
+            if getattr(self.server_managers[0], entry).value != value:
+                self.fail(f"Server {entry} was not set correctly from the test yaml")
+        self.log_step("Test passed!")
+
+
+class HarnessSetupTest(TestServerTimeouts):
     """Harness setup test cases.
 
     Also useful for setting up the /etc/daos/daos_server.yml files on multiple hosts.
@@ -15,61 +35,52 @@ class HarnessSetupTest(TestWithServers):
     :avocado: recursive
     """
 
-    def __setup_test(self):
-        """Run the setup test."""
-        for entry in ("storage_prepare_timeout", "storage_format_timeout"):
-            name = entry.replace('_', ' ')
-            self.log_step(f"Verifying {name}")
-            value = self.params.get(entry)
-            if getattr(self.server_managers[0], entry).value != value:
-                self.fail(f"{name.capitalize()} was not set correctly from the test yaml")
-
     def test_setup_hw(self):
         """Verify the TestWithServers.setUp() method.
 
         :avocado: tags=all
         :avocado: tags=hw,medium,large
-        :avocado: tags=harness
+        :avocado: tags=harness,server_setup
         :avocado: tags=HarnessSetupTest,test_setup_hw
         """
-        self.__setup_test()
+        self._verify_server_timeouts()
 
     def test_setup_hw_provider(self):
         """Verify the TestWithServers.setUp() method.
 
         :avocado: tags=all
         :avocado: tags=hw,medium,large,provider
-        :avocado: tags=harness
+        :avocado: tags=harness,server_setup
         :avocado: tags=HarnessSetupTest,test_setup_hw_provider
         """
-        self.__setup_test()
+        self._verify_server_timeouts()
 
     def test_setup_hw_vmd(self):
         """Verify the TestWithServers.setUp() method.
 
         :avocado: tags=all
         :avocado: tags=hw_vmd,medium,large
-        :avocado: tags=harness
+        :avocado: tags=harness,server_setup
         :avocado: tags=HarnessSetupTest,test_setup_hw_vmd
         """
-        self.__setup_test()
+        self._verify_server_timeouts()
 
     def test_setup_cb(self):
         """Verify the TestWithServers.setUp() method.
 
         :avocado: tags=all
         :avocado: tags=cb,medium,large
-        :avocado: tags=harness
+        :avocado: tags=harness,server_setup
         :avocado: tags=HarnessSetupTest,test_setup_cb
         """
-        self.__setup_test()
+        self._verify_server_timeouts()
 
     def test_setup_cb_provider(self):
         """Verify the TestWithServers.setUp() method.
 
         :avocado: tags=all
         :avocado: tags=cb,medium,large,provider
-        :avocado: tags=harness
+        :avocado: tags=harness,server_setup
         :avocado: tags=HarnessSetupTest,test_setup_cb_provider
         """
-        self.__setup_test()
+        self._verify_server_timeouts()
