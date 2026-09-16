@@ -395,7 +395,8 @@ static int
 obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_md *md,
 		 struct pl_obj_layout *layout, struct jm_obj_placement *jmop, d_list_t *remap_list,
 		 uint32_t allow_version, enum layout_gen_mode gen_mode, uint8_t *tgts_used,
-		 uint8_t *dom_used, uint8_t *dom_full, uint32_t failed_in_layout, uint32_t fdom_lvl)
+		 uint8_t *dom_used, uint8_t *dom_full, uint32_t failed_in_layout, uint32_t fdom_lvl,
+		 bool *mode_dependent)
 {
 	struct failed_shard     *f_shard;
 	struct pool_target      *spare_tgt = NULL;
@@ -452,7 +453,7 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 			get_target(root, curr_pd, layout_ver, &spare_tgt, &spare_dom, rebuild_key,
 				   dom_used, dom_full, dgu->dgu_used, dgu->dgu_real, tgts_used,
 				   shard_id, allow_version, gen_mode, fdom_lvl, jmop->jmop_grp_size,
-				   &spares_left, &spare_avail);
+				   &spares_left, &spare_avail, mode_dependent);
 			if (layout_ver > 0) {
 				/*
 				 * After 2.4 (layout_ver > 0), it will always assign each shard
@@ -468,7 +469,7 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 		}
 
 		rc = determine_valid_spares(spare_tgt, md, spare_avail, remap_list, allow_version,
-					    gen_mode, f_shard, layout);
+					    gen_mode, f_shard, layout, mode_dependent);
 		if (rc == 1) {
 			d_list_del(&f_shard->fs_list);
 			D_FREE(f_shard);
@@ -572,7 +573,7 @@ remap_gpu_alloc_one(d_list_t *remap_list, uint8_t *dom_cur_grp_used,
 static int
 get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_layout *layout,
 		  struct jm_obj_placement *jmop, uint32_t allow_version,
-		  enum layout_gen_mode gen_mode, struct daos_obj_md *md)
+		  enum layout_gen_mode gen_mode, struct daos_obj_md *md, bool *mode_dependent)
 {
 	struct pool_target      *target;
 	struct pool_domain      *domain;
@@ -690,7 +691,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 				get_target(root, curr_pd, layout_ver, &target, &domain, key,
 					   dom_used, dom_full, dom_cur_grp_used, dom_cur_grp_real,
 					   tgts_used, k, allow_version, gen_mode, fdom_lvl,
-					   jmop->jmop_grp_size, NULL, NULL);
+					   jmop->jmop_grp_size, NULL, NULL, mode_dependent);
 			}
 
 			if (target == NULL) {
@@ -708,8 +709,8 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 			layout->ol_shards[k].po_index = target->ta_comp.co_index;
 
 			/** If target is failed queue it for remap*/
-			if (comp_need_remap(&target->ta_comp, allow_version, gen_mode,
-					    &remap_flags)) {
+			if (comp_need_remap(&target->ta_comp, allow_version, gen_mode, &remap_flags,
+					    mode_dependent)) {
 				struct failed_shard *shard;
 
 				fail_tgt_cnt++;
@@ -755,7 +756,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 	if (fail_tgt_cnt > 0)
 		rc = obj_remap_shards(jmap, layout_ver, md, layout, jmop, &remap_list,
 				      allow_version, gen_mode, tgts_used, dom_used, dom_full,
-				      fail_tgt_cnt, fdom_lvl);
+				      fail_tgt_cnt, fdom_lvl, mode_dependent);
 out:
 	if (rc)
 		D_ERROR("jump_map_obj_layout_fill failed, rc "DF_RC"\n", DP_RC(rc));
@@ -803,7 +804,7 @@ static int
 obj_layout_alloc_and_get(struct pl_jump_map *jmap, uint32_t layout_ver,
 			 struct jm_obj_placement *jmop, struct daos_obj_md *md,
 			 uint32_t allow_version, enum layout_gen_mode gen_mode,
-			 struct pl_obj_layout **layout_p)
+			 struct pl_obj_layout **layout_p, bool *mode_dependent)
 {
 	int rc;
 
@@ -822,7 +823,8 @@ obj_layout_alloc_and_get(struct pl_jump_map *jmap, uint32_t layout_ver,
 	if (gen_mode == CURRENT || !(md->omd_flags & PL_FL_GRP_SPEC))
 		md->omd_grp_spec = PL_GRP_MAX;
 
-	rc = get_object_layout(jmap, layout_ver, *layout_p, jmop, allow_version, gen_mode, md);
+	rc = get_object_layout(jmap, layout_ver, *layout_p, jmop, allow_version, gen_mode, md,
+			       mode_dependent);
 	if (rc) {
 		D_ERROR("get object layout failed, rc "DF_RC"\n",
 			DP_RC(rc));
@@ -834,6 +836,211 @@ out:
 			pl_obj_layout_free(*layout_p);
 		*layout_p = NULL;
 	}
+	return rc;
+}
+
+/**
+ * Generate a second layout of @md in @gen_mode, for comparison against @layout, the one being
+ * built.
+ *
+ * Only the groups @layout has are worth generating. A caller which asked for a single group
+ * (PL_FL_GRP_SPEC, e.g. the rebuild scanner and the EC aggregation, which place every object
+ * they walk over) gets a layout truncated after that group, and comparing it against the
+ * full object would cost as many groups as the object has instead of as many as the caller
+ * asked for. The truncation is exact for the group asked for: get_object_layout() falls back
+ * to the full layout when a shard of that group needs remapping, and the initial pass is the
+ * same in both cases otherwise. The groups in front of it may have been remapped differently,
+ * but no caller looks at them, and @layout carries the same inexactness.
+ *
+ * obj_layout_alloc_and_get() cannot be used for this, since it forces md->omd_grp_spec to
+ * PL_GRP_MAX for the CURRENT mode and leaves it that way. That is what the caller of a CURRENT
+ * layout wants, everything it feeds the layout to afterwards expects the full width, but a
+ * comparison layout must neither be widened behind the caller's back nor leave md changed.
+ */
+static int
+layout_gen_for_compare(struct pl_jump_map *jmap, uint32_t layout_ver, struct jm_obj_placement *jmop,
+		       struct daos_obj_md *md, enum layout_gen_mode gen_mode,
+		       struct pl_obj_layout *layout, struct pl_obj_layout **layout_p)
+{
+	uint32_t grp_spec = md->omd_grp_spec;
+	int      rc;
+
+	rc = pl_obj_layout_alloc(jmop->jmop_grp_size, jmop->jmop_grp_nr, layout_p);
+	if (rc != 0) {
+		D_ERROR(DF_OID ": pl_obj_layout_alloc failed, " DF_RC "\n", DP_OID(md->omd_id),
+			DP_RC(rc));
+		return rc;
+	}
+
+	md->omd_grp_spec =
+	    layout->ol_grp_nr < jmop->jmop_grp_nr ? layout->ol_grp_nr - 1 : PL_GRP_MAX;
+	rc = get_object_layout(jmap, layout_ver, *layout_p, jmop, md->omd_ver, gen_mode, md, NULL);
+	md->omd_grp_spec = grp_spec;
+	if (rc != 0) {
+		D_ERROR(DF_OID ": failed to get the %s layout, " DF_RC "\n", DP_OID(md->omd_id),
+			gen_mode == PRE_REBUILD ? "pre-rebuild"
+			: gen_mode == CURRENT   ? "current"
+						: "post-rebuild",
+			DP_RC(rc));
+		pl_obj_layout_free(*layout_p);
+		*layout_p = NULL;
+	}
+	return rc;
+}
+
+/**
+ * Keep the shards which the ongoing rebuild relocated on their old target, and make the new
+ * target a write-only peer, the way a drain or a reintegration is handled.
+ *
+ * A shard which sits on a spare of an earlier rebuild can be handed a different spare by a new
+ * failure which has nothing to do with it: the spare targets are allocated sequentially over
+ * the whole remap list, sharing the used-domain/used-target bookkeeping, and a shard whose
+ * spare candidate is unavailable is requeued with the fseq of that candidate (see
+ * determine_valid_spares()). Left alone, the CURRENT layout then points at the new target,
+ * which has never been written to, while the data is on the old one, which is out of the
+ * write path from the new pool map version on. Everything written after that is missing from
+ * the old target, so the migration, which fetches through the PRE_REBUILD layout, and a
+ * read-only client both read stale or empty data from it, and a read-write client is offered
+ * the new target, which has nothing yet.
+ *
+ * Which shards sit on a spare is told by the PRE_REBUILD layout: it remaps a shard only when
+ * the target of the shard is out (DOWNOUT) or is being reintegrated after having been out
+ * (regular UP), which are the only two states a target reaches after a rebuild has moved the
+ * data of the shard elsewhere. Neither the fseq nor the rebuilding flag of a shard tells it
+ * apart from a shard the ongoing rebuild is handling: a requeued shard inherits the fseq and
+ * the flags of the unavailable spare candidate it passed by, so a displaced shard is usually
+ * flagged rebuilding as well, and so is a shard whose spare did not even change. So the
+ * comparison with PRE_REBUILD identifies the old data location.
+ *
+ * A historical spare is not required: while newly added domains are excluded from initial
+ * placement, a group wider than the old domain set can reuse a domain. Mode-dependent domain
+ * reuse can then relocate an initial target too, so the caller compares every mode-dependent
+ * CURRENT layout.
+ *
+ * The old target is still healthy, so there is no reason to stop using it. Put it back in
+ * place as the readable primary of the shard and append the new target as a rebuilding peer:
+ * writes go to both, reads keep going to the old one, the migration copies the old one to the
+ * new one and finds it complete, and the PRE_REBUILD layout is correct as it stands. Nothing
+ * has to be hidden from anybody and the read-only path needs no second layout.
+ *
+ * The peer is what jump_map_obj_extend_layout() would add for the shard anyway when it diffs
+ * the CURRENT layout against the POST_REBUILD one, since the latter still has the shard on the
+ * new target. So when that function is going to run, because a drain, a reintegration or an
+ * extension is in flight as well, only the primary is put back here and the diff supplies the
+ * peer, which is then the target the migration really goes to. Otherwise the CURRENT and the
+ * POST_REBUILD layouts agree on the new target and it is appended here directly, without
+ * generating a third layout.
+ *
+ * A shard which passed by a newly failed spare candidate on its way to a spare inherits the
+ * rebuilding flag of that candidate (see determine_valid_spares()), which hides the shard from
+ * the readers although the spare still has all its data, even when it is the same spare as
+ * before. The PRE_REBUILD layout tells that as well, and the flag is dropped along the way.
+ *
+ * The new target can already be the primary of another shard of the same group, since that
+ * is how the shard got displaced in the first place. The extended layout then carries one
+ * target twice in a group, once readable and once rebuilding, which is a shape a drain or a
+ * reintegration produces today as well.
+ */
+static int
+layout_keep_relocated_source(struct pl_jump_map *jmap, uint32_t layout_ver,
+			     struct jm_obj_placement *jmop, struct daos_obj_md *md,
+			     struct pl_obj_layout *layout, bool will_extend)
+{
+	struct pl_obj_layout *ref_layout = NULL;
+	d_list_t              peer_list;
+	int                   nr;
+	int                   i;
+	int                   rc;
+
+	rc = layout_gen_for_compare(jmap, layout_ver, jmop, md, PRE_REBUILD, layout, &ref_layout);
+	if (rc != 0)
+		return rc;
+
+	D_INIT_LIST_HEAD(&peer_list);
+
+	/* Both layouts cover the same groups, and none of them has been through
+	 * pl_map_extend() yet, so the group sizes and the shard indexes match.
+	 */
+	D_ASSERT(ref_layout->ol_grp_size == layout->ol_grp_size);
+	D_ASSERTF(ref_layout->ol_nr == layout->ol_nr, "%u != %u\n", ref_layout->ol_nr,
+		  layout->ol_nr);
+	nr = layout->ol_nr;
+	for (i = 0; i < nr; i++) {
+		struct pl_obj_shard *cur = &layout->ol_shards[i];
+		struct pl_obj_shard *ref = &ref_layout->ol_shards[i];
+		struct pool_target  *ref_pot;
+		struct pool_target  *cur_pot;
+
+		if (cur->po_target == (uint32_t)-1 || ref->po_target == (uint32_t)-1)
+			continue;
+		if (cur->po_target == ref->po_target && cur->po_rebuilding == ref->po_rebuilding)
+			continue;
+
+		/*
+		 * The shard is only relocated, rather than rebuilt, when the target it was on is
+		 * still serving I/O. Anything else is a failure the ongoing rebuild is handling,
+		 * and the PRE_REBUILD layout has flagged the shard on it as rebuilding already
+		 * (a reintegrating target is flagged as well but not available).
+		 */
+		rc = pool_map_find_target(jmap->jmp_map.pl_poolmap, ref->po_target, &ref_pot);
+		D_ASSERT(rc == 1);
+		if (ref->po_rebuilding ||
+		    !pool_target_avail(ref_pot, PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)) {
+			/*
+			 * The data is nowhere readable, and the new target is only being written
+			 * to, whether or not the remap flagged it. The remap does not when the
+			 * shard was handed a different spare without passing by its failed one,
+			 * as the spare it sat on is not known to the remap.
+			 */
+			if (cur->po_target != ref->po_target && !cur->po_rebuilding) {
+				D_DEBUG(DB_PL,
+					DF_OID " shard %d ver %u rebuilt on target %u, "
+					       "the data on %u is unavailable\n",
+					DP_OID(md->omd_id), i, md->omd_ver, cur->po_target,
+					ref->po_target);
+				cur->po_rebuilding = 1;
+			}
+			continue;
+		}
+
+		if (cur->po_target == ref->po_target) {
+			/* Same target, the flag alone is stale: see the comment above. */
+			*cur = *ref;
+			continue;
+		}
+
+		if (!will_extend) {
+			struct failed_shard *peer;
+
+			rc = pool_map_find_target(jmap->jmp_map.pl_poolmap, cur->po_target,
+						  &cur_pot);
+			D_ASSERT(rc == 1);
+			peer = remap_alloc_one(i, cur_pot, cur_pot->ta_comp.co_id, 0, NULL);
+			if (peer == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			d_list_add_tail(&peer->fs_list, &peer_list);
+		}
+
+		D_DEBUG(DB_PL,
+			DF_OID
+			" shard %d ver %u relocated from target %u to %u, keep the old one\n",
+			DP_OID(md->omd_id), i, md->omd_ver, ref->po_target, cur->po_target);
+		*cur = *ref;
+	}
+
+	if (!d_list_empty(&peer_list)) {
+		rc = pl_map_extend(layout, &peer_list);
+		if (rc != 0) {
+			D_ERROR(DF_OID ": extend layout with relocation peers failed, " DF_RC "\n",
+				DP_OID(md->omd_id), DP_RC(rc));
+			D_GOTO(out, rc);
+		}
+	}
+	rc = 0;
+
+out:
+	remap_list_free_all(&peer_list);
+	pl_obj_layout_free(ref_layout);
 	return rc;
 }
 
@@ -965,7 +1172,7 @@ jump_map_obj_extend_layout(struct pl_jump_map *jmap, struct jm_obj_placement *jm
 
 	D_INIT_LIST_HEAD(&extend_list);
 	rc = obj_layout_alloc_and_get(jmap, layout_version, jmop, md, md->omd_ver, POST_REBUILD,
-				      &new_layout);
+				      &new_layout, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_OID" get_layout_alloc failed, rc "DF_RC"\n",
 			DP_OID(md->omd_id), DP_RC(rc));
@@ -1022,6 +1229,7 @@ jump_map_obj_place(struct pl_map *map, uint32_t layout_version, struct daos_obj_
 	daos_obj_id_t		oid;
 	struct pool_domain	*root;
 	enum layout_gen_mode	gen_mode = CURRENT;
+	bool                     mode_dependent = false;
 	int			rc;
 
 	jmap = pl_map2jmap(map);
@@ -1046,12 +1254,11 @@ jump_map_obj_place(struct pl_map *map, uint32_t layout_version, struct daos_obj_
 		gen_mode = PRE_REBUILD;
 
 	rc = obj_layout_alloc_and_get(jmap, layout_version, &jmop, md, md->omd_ver, gen_mode,
-				      &layout);
+				      &layout, &mode_dependent);
 	if (rc != 0) {
 		D_ERROR("get_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
-	obj_layout_dump(oid, layout);
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 	D_ASSERT(rc == 1);
@@ -1059,6 +1266,22 @@ jump_map_obj_place(struct pl_map *map, uint32_t layout_version, struct daos_obj_
 
 	if (is_pool_map_adding(jmap->jmp_map.pl_poolmap))
 		layout->ol_shard_peers++; /* may or may not, have to check */
+
+	/*
+	 * Without a mode-dependent decision, CURRENT and PRE_REBUILD agree. Otherwise compare
+	 * them even when no initial target needs PRE_REBUILD remapping: during extension, a
+	 * group can exceed the number of old domains and reuse a domain in the initial pass.
+	 * A new failure can then change initial targets through reset_dom_cur_grp_v1(), moving
+	 * a healthy read source without any shard having been on a historical spare.
+	 */
+	if (gen_mode == CURRENT && mode_dependent) {
+		rc = layout_keep_relocated_source(jmap, layout_version, &jmop, md, layout,
+						  layout->ol_shard_peers > 0);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+
+	obj_layout_dump(oid, layout);
 	/**
 	 * If the layout is being extended or drained, it need recreate the layout
 	 * strictly by rebuild version to make sure both new and old shards being
@@ -1134,13 +1357,14 @@ jump_map_obj_find_diff(struct pl_map *map, uint32_t layout_ver, struct daos_obj_
 	}
 
 	D_INIT_LIST_HEAD(&reint_list);
-	rc = obj_layout_alloc_and_get(jmap, layout_ver, &jop, md, reint_ver, PRE_REBUILD, &layout);
+	rc = obj_layout_alloc_and_get(jmap, layout_ver, &jop, md, reint_ver, PRE_REBUILD, &layout,
+				      NULL);
 	if (rc < 0)
 		D_GOTO(out, rc);
 
 	obj_layout_dump(md->omd_id, layout);
 	rc = obj_layout_alloc_and_get(jmap, layout_ver, &jop, md, reint_ver, POST_REBUILD,
-				      &reint_layout);
+				      &reint_layout, NULL);
 	if (rc < 0)
 		D_GOTO(out, rc);
 
