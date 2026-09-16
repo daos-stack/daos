@@ -23,10 +23,12 @@ source "$CWD/env.sh"
 	sudo mkdir -p "$DTX_TESTS_MNT_PATH"
 	sudo mount $DTX_TESTS_MNT_OPTS tmpfs "$DTX_TESTS_MNT_PATH"
 
-	exec env PMEMOBJ_CONF=sds.at_create=0 "$DTX_TESTS_BIN" "\$@"
-	# exec env PMEMOBJ_CONF=sds.at_create=0 gdb --args "$DTX_TESTS_BIN" "\$@"
+	# -S/--storage defaults to this ticket's isolated mount point; a
+	# user-supplied -S later in "\$@" still wins (getopt keeps the last).
+	exec env PMEMOBJ_CONF=sds.at_create=0 "$DTX_TESTS_BIN" -S "$DTX_TESTS_MNT_PATH" "\$@"
+	# exec env PMEMOBJ_CONF=sds.at_create=0 gdb --args "$DTX_TESTS_BIN" -S "$DTX_TESTS_MNT_PATH" "\$@"
 
 	# ulimit -n 1024
-	# exec env PMEMOBJ_CONF=sds.at_create=0 DAOS_ON_VALGRIND=1 $VALGRIND_BIN $VALGRIND_OPTS "$DTX_TESTS_BIN" "\$@"
+	# exec env PMEMOBJ_CONF=sds.at_create=0 DAOS_ON_VALGRIND=1 $VALGRIND_BIN $VALGRIND_OPTS "$DTX_TESTS_BIN" -S "$DTX_TESTS_MNT_PATH" "\$@"
 	EOF
 } | ssh "$BUILD_NODE" bash -l -s -- "$@" |& tee "$CWD/dtx_tests.log"
