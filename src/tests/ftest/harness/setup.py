@@ -14,11 +14,7 @@ class TestServerTimeouts(TestWithServers):
     """
 
     def _verify_server_timeouts(self):
-        """Verify the server prepare and format timeout values.
-
-        Args:
-            test (Test): Test class
-        """
+        """Verify the server prepare and format timeout values."""
         for entry in ("storage_prepare_timeout", "storage_format_timeout"):
             self.log_step(f"Verifying server {entry}")
             value = self.params.get(entry)
