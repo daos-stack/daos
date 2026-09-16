@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Run Molecule tests for one or all DAOS ftest Ansible roles.
 #
+# Runs every scenario found under roles/<role>/molecule/*/ (not just
+# `default`), e.g. daos_client's `default` and `no_system_paths`.
+#
 # Usage:
 #   scripts/molecule-test.sh [ROLE] [MOLECULE_ARGS...]
 #
 # Examples:
 #   scripts/molecule-test.sh                    # test all roles sequentially
-#   scripts/molecule-test.sh daos_client        # test a single role
+#   scripts/molecule-test.sh daos_client        # test all daos_client scenarios
 #   scripts/molecule-test.sh daos_server --destroy never   # keep container after run
 #
 # Requirements:
@@ -56,16 +59,33 @@ run_role() {
         echo "ERROR: role '${role}' not found under ${ROLES_DIR}" >&2
         exit 1
     fi
-    if [[ ! -f "${role_dir}/molecule/default/molecule.yml" ]]; then
+
+    local scenarios=()
+    for scenario_dir in "${role_dir}"/molecule/*/; do
+        [[ -f "${scenario_dir}/molecule.yml" ]] || continue
+        scenarios+=("$(basename "${scenario_dir}")")
+    done
+
+    if [[ ${#scenarios[@]} -eq 0 ]]; then
         echo "SKIP: ${role} has no Molecule scenario" >&2
         return 0
     fi
 
-    echo ""
-    echo "════════════════════════════════════════════════════════════════"
-    echo "  Testing role: ${role}"
-    echo "════════════════════════════════════════════════════════════════"
-    (cd "${role_dir}" && molecule test "$@")
+    local failed_scenarios=()
+    for scenario in "${scenarios[@]}"; do
+        echo ""
+        echo "════════════════════════════════════════════════════════════════"
+        echo "  Testing role: ${role} (scenario: ${scenario})"
+        echo "════════════════════════════════════════════════════════════════"
+        if ! (cd "${role_dir}" && molecule test --scenario-name "${scenario}" "$@"); then
+            failed_scenarios+=("${scenario}")
+        fi
+    done
+
+    if [[ ${#failed_scenarios[@]} -gt 0 ]]; then
+        echo "✗ ${role}: failed scenario(s): ${failed_scenarios[*]}" >&2
+        return 1
+    fi
 }
 
 # Parse first argument: optional role name (no leading dash)
