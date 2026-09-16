@@ -444,7 +444,7 @@ variants.
 The `build_*.sh` scripts are intended to be usable on Linux distributions in
 general, including Debian-based distributions. The distribution-specific
 dependency installation and package verification workflows are narrower:
-`install_deps.sh` and `verify_packages.sh` currently support EL and Leap/SLES
+`install_deps.sh` and `build_packages_utils.sh` currently support EL and Leap/SLES
 15 package layouts only. On other distributions, build dependencies from
 source or use the distribution's native package tooling as appropriate.
 
@@ -494,8 +494,8 @@ source or use the distribution's native package tooling as appropriate.
    repository.
 
    After the build step is successfully completed, the RPMs are verified using
-   the [`utils/build/verify_packages.sh`](../../utils/build/verify_packages.sh)
-   script. With the default `-Werror` setting, validation findings fail the
+   the [`utils/build/build_packages_utils.sh`](../../utils/build/build_packages_utils.sh)
+   helper. With the default `-Werror` setting, validation findings fail the
    build. With `-Wno-error`, verification still runs, but noncritical findings
    are reported as warnings. Missing tools, unsupported configurations, and
    other critical setup errors remain fatal.
@@ -513,21 +513,6 @@ source or use the distribution's native package tooling as appropriate.
    exclusive.
 
    To find out more, use the `build_packages.sh --help` command.
-
-> [NOTE]
->
->The [`utils/build/verify_packages.sh`](../../utils/build/verify_packages.sh)
->script can also be invoked separately.
->
->The verifier accepts the same RPM suffix values and uses the following form:
->```bash
-> $ utils/build/verify_packages.sh \
->   [--rpm-suffix=el9] [-Werror|-Wno-error] \
->   <RPM_ROOT>
->```
->`-Werror` is the default. `-Wno-error` reports validation findings as
->warnings and exits successfully for those findings; missing tools, missing
->RPMs, and unsupported suffixes remain fatal.
 
 ### Exporting RPMs Directly with Docker BuildKit
 

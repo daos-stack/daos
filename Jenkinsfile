@@ -829,7 +829,7 @@ pipeline {
                                                                 deps_build: true,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --target build-ci' +
+                                                ' --target build-setup' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
@@ -843,9 +843,9 @@ pipeline {
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
-                                           build_deps: 'no',
+                                           build_deps: 'yes',
                                            stash_opt: true,
-                                           scons_exe: 'utils/build/build_daos.sh',
+                                           scons_exe: 'utils/build/build_daos.sh --null-build',
                                            scons_args: sconsArgs() +
                                                       ' TARGET_TYPE=release'))
                             sh label: 'Build DAOS RPMs',

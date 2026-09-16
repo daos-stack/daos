@@ -40,6 +40,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 repo_root="$(cd "${script_dir}/../.." >/dev/null 2>&1 && pwd)"
 # shellcheck source=utils/build/build_utils.sh
 source "${script_dir}/build_utils.sh"
+# shellcheck source=utils/build/build_packages_utils.sh
+source "${script_dir}/build_packages_utils.sh"
 
 build_range=all
 rpm_suffix=
@@ -124,12 +126,11 @@ prepare_rpms_stage() {
   fi
 }
 
-# Runs verify_packages.sh against $pkg_output_dir/$1 when applicable.
+# Runs verify_packages against $pkg_output_dir/$1 when applicable.
 verify_rpm_stage() {
   if [ -n "${rpm_suffix}" ] &&
     compgen -G "${pkg_output_dir}/${1}/*.rpm" > /dev/null; then
-    "${script_dir}/verify_packages.sh" "${verify_mode}" \
-      "--rpm-suffix=${rpm_suffix}" "${pkg_output_dir}/${1}"
+    verify_packages "${verify_mode}" "${rpm_suffix}" "${pkg_output_dir}/${1}"
   fi
 }
 

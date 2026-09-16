@@ -4,7 +4,8 @@
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
-# Validate generated RPM packages produced by build_packages.sh.
+# Helper functions for RPM package verification sourced by build_packages.sh.
+# Not meant to be executed directly.
 #
 # Checks:
 # - RPM metadata and payload listing are readable.
@@ -30,155 +31,11 @@
 #
 # Missing tooling, no RPM files found, or no devel dependency table for the
 # selected suffix always fail regardless of the warning mode.
-#
-set -euo pipefail
-shopt -s nullglob
-
-usage() {
-    cat <<EOF
-Usage: ${0##*/} [options] <RPM_ROOT>
-       ${0##*/} -h | --help
-
-This script can be used only on el9 and leap/sles 15 systems.
-
-Validate generated RPM packages.
-
-Arguments:
-    RPM_ROOT        Root directory containing the generated RPMs. Packages may
-                    be placed directly in this directory or under its deps/
-                    and daos/ subdirectories.
-
-Options:
-    --rpm-suffix=[el9|suse.lp155|suse.lp156]
-                    RPM distribution suffix. Default: el9
-    [ -Werror | -Wno-error ]
-                    Select whether validation findings are treated as errors
-                    or warnings. The options are mutually exclusive;
-                    default: -Werror
-    -h, --help      Show this help and exit
-
-Exit codes:
-    0               Validation passed (or -Wno-error was used with validation findings).
-    1               Validation failed in -Werror mode or required tooling/setup is missing.
-EOF
-}
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # shellcheck source=utils/build/build_utils.sh
 source "${script_dir}/build_utils.sh"
 
-rpm_suffix=el9
-mode=ERROR
-mode_option=
-positional_args=()
-for arg in "$@"; do
-    case "${arg}" in
-        --rpm-suffix=*)
-            rpm_suffix="${arg#*=}"
-            ;;
-        -Werror)
-            [ -z "${mode_option}" ] || {
-                echo "ERROR: -Werror and -Wno-error are mutually exclusive" >&2
-                exit 1
-            }
-            mode_option=-Werror
-            mode=ERROR
-            ;;
-        -Wno-error)
-            [ -z "${mode_option}" ] || {
-                echo "ERROR: -Werror and -Wno-error are mutually exclusive" >&2
-                exit 1
-            }
-            mode_option=-Wno-error
-            mode=WARNING
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        -* )
-            echo "ERROR: unknown option '${arg}'" >&2
-            usage >&2
-            exit 1
-            ;;
-        *)
-            positional_args+=("${arg}")
-            ;;
-    esac
-done
-
-if [ "${#positional_args[@]}" -ne 1 ]; then
-    echo "ERROR: exactly one RPM_ROOT positional argument is required" >&2
-    usage >&2
-    exit 1
-fi
-
-RPM_ROOT="${positional_args[0]}"
-if ! RPM_ROOT="$(cd "${RPM_ROOT}" 2>/dev/null && pwd)"; then
-    echo "ERROR: RPM_ROOT is not an accessible directory: ${positional_args[0]}" >&2
-    exit 1
-fi
-
-validate_rpm_suffix "${rpm_suffix}"
-
-for tool in rpm rpm2cpio cpio readelf; do
-    if ! command -v "${tool}" >/dev/null 2>&1; then
-        echo "ERROR: ${tool} command is required"
-        exit 1
-    fi
-done
-
-rpms=("${RPM_ROOT}"/deps/*.rpm "${RPM_ROOT}"/daos/*.rpm "${RPM_ROOT}"/*.rpm)
-if [ "${#rpms[@]}" -eq 0 ]; then
-    echo "ERROR: no RPM files found under ${RPM_ROOT}/deps, ${RPM_ROOT}/daos, or ${RPM_ROOT}"
-    exit 1
-fi
-
-tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
-
-DISTRO="${rpm_suffix}"
-MODE="${mode}"
-
-declare -i issues=0
-declare -A pkg_names
-declare -A pkg_present
-declare -A devel_runtime
-
-# Explicit devel to runtime package dependencies. These names are kept
-# separate by distro because the same library has different RPM names.
-case "${DISTRO}" in
-    el9*)
-        devel_runtime=(
-            [argobots-devel]=argobots
-            [daos-spdk-devel]=daos-spdk
-            [isa-l-devel]=libisa-l
-            [isa-l_crypto-devel]=libisa-l_crypto
-            [libfabric-devel]=libfabric
-            [mercury-devel]=mercury
-            [libpmem-devel]=libpmem
-            [libpmemobj-devel]=libpmemobj
-            [daos-devel]=daos-client
-        )
-        ;;
-    suse.lp15*)
-        devel_runtime=(
-            [libabt-devel]=libabt0
-            [daos-spdk-devel]=daos-spdk
-            [libisal-devel]=libisal2
-            [libisal_crypto-devel]=libisal_crypto2
-            [libfabric-devel]=libfabric1
-            [mercury-devel]=mercury
-            [libpmem-devel]=libpmem1
-            [libpmemobj-devel]=libpmemobj1
-            [daos-devel]=daos-client
-        )
-        ;;
-    *)
-        echo "ERROR: no devel dependency table for DISTRO=${DISTRO}"
-        exit 1
-        ;;
-esac
 # Records a validation issue; severity label follows MODE, but the error
 # counter is always incremented so the final exit-code decision can use it.
 report_issue() {
@@ -254,7 +111,6 @@ check_rpm_basic() {
     if ! rpm -qpl "${rpm_file}" >/dev/null; then
         report_issue "cannot list payload for ${rpm_file}"
     fi
-
 }
 
 # Extract RPM payload into target directory for local file inspection.
@@ -269,7 +125,7 @@ extract_rpm() {
 
     mkdir -p "${target_dir}"
     (
-        cd "${target_dir}"
+        cd "${target_dir}" || exit 1
         rpm2cpio "${rpm_file}" | cpio -idmu --quiet
     )
 }
@@ -330,7 +186,6 @@ check_binary_requires_libc() {
     extract_rpm "${rpm_file}" "${extract_dir}"
 
     while IFS= read -r file_path; do
-
         # Treat ELF with an interpreter segment as an executable binary
         # (includes PIE binaries) and require dynamic dependencies.
         if readelf -h "${file_path}" >/dev/null 2>&1 &&
@@ -348,33 +203,127 @@ check_binary_requires_libc() {
     fi
 }
 
-echo "Verifying ${#rpms[@]} generated RPM(s) from ${RPM_ROOT} for ${DISTRO}"
+# Verify generated RPM packages.
+# Args:
+#   $1 verify mode (-Werror or -Wno-error)
+#   $2 rpm_suffix (e.g. el9, suse.lp155, suse.lp156)
+#   $3 RPM root directory
+verify_packages() {
+    local verify_mode="${1:--Werror}"
+    local rpm_suffix="${2:-}"
+    local rpm_root_arg="${3:-}"
 
-for rpm_file in "${rpms[@]}"; do
-    check_rpm_basic "${rpm_file}"
-done
-
-for rpm_file in "${rpms[@]}"; do
-    pkg_name="${pkg_names["${rpm_file}"]:-}"
-    [ -n "${pkg_name}" ] || continue
-
-    work_dir="${tmpdir}/$(basename "${rpm_file}" .rpm)"
-    rm -rf "${work_dir}"
-
-    if [[ "${pkg_name}" == *-devel ]]; then
-        check_devel_runtime_dependency "${rpm_file}" "${pkg_name}"
+    local mode=ERROR
+    if [ "${verify_mode}" = "-Wno-error" ]; then
+        mode=WARNING
     fi
 
-    check_binary_requires_libc "${rpm_file}" "${pkg_name}" "${work_dir}"
-done
-
-if [ "${issues}" -ne 0 ]; then
-    if [ "${MODE}" = "WARNING" ]; then
-        echo "RPM validation completed with ${issues} warning(s)"
-        exit 0
+    if [ -z "${rpm_root_arg}" ]; then
+        echo "ERROR: exactly one RPM_ROOT positional argument is required" >&2
+        return 1
     fi
-    echo "RPM validation failed with ${issues} error(s)"
-    exit 1
-fi
 
-echo "RPM validation passed"
+    local RPM_ROOT
+    if ! RPM_ROOT="$(cd "${rpm_root_arg}" 2>/dev/null && pwd)"; then
+        echo "ERROR: RPM_ROOT is not an accessible directory: ${rpm_root_arg}" >&2
+        return 1
+    fi
+
+    validate_rpm_suffix "${rpm_suffix}"
+
+    local tool
+    for tool in rpm rpm2cpio cpio readelf; do
+        if ! command -v "${tool}" >/dev/null 2>&1; then
+            echo "ERROR: ${tool} command is required" >&2
+            return 1
+        fi
+    done
+
+    local rpms=("${RPM_ROOT}"/deps/*.rpm "${RPM_ROOT}"/daos/*.rpm "${RPM_ROOT}"/*.rpm)
+    if [ "${#rpms[@]}" -eq 0 ]; then
+        echo "ERROR: no RPM files found under ${RPM_ROOT}/deps, ${RPM_ROOT}/daos, or ${RPM_ROOT}" >&2
+        return 1
+    fi
+
+    local tmpdir
+    tmpdir="$(mktemp -d)"
+    # shellcheck disable=SC2064
+    trap "rm -rf '${tmpdir}'" RETURN EXIT
+
+    local DISTRO="${rpm_suffix}"
+    local MODE="${mode}"
+
+    local -i issues=0
+    local -A pkg_names
+    local -A pkg_present
+    local -A devel_runtime
+
+    # Explicit devel to runtime package dependencies. These names are kept
+    # separate by distro because the same library has different RPM names.
+    case "${DISTRO}" in
+        el9*)
+            devel_runtime=(
+                [argobots-devel]=argobots
+                [daos-spdk-devel]=daos-spdk
+                [isa-l-devel]=libisa-l
+                [isa-l_crypto-devel]=libisa-l_crypto
+                [libfabric-devel]=libfabric
+                [mercury-devel]=mercury
+                [libpmem-devel]=libpmem
+                [libpmemobj-devel]=libpmemobj
+                [daos-devel]=daos-client
+            )
+            ;;
+        suse.lp15*)
+            devel_runtime=(
+                [libabt-devel]=libabt0
+                [daos-spdk-devel]=daos-spdk
+                [libisal-devel]=libisal2
+                [libisal_crypto-devel]=libisal_crypto2
+                [libfabric-devel]=libfabric1
+                [mercury-devel]=mercury
+                [libpmem-devel]=libpmem1
+                [libpmemobj-devel]=libpmemobj1
+                [daos-devel]=daos-client
+            )
+            ;;
+        *)
+            echo "ERROR: no devel dependency table for DISTRO=${DISTRO}" >&2
+            return 1
+            ;;
+    esac
+
+    echo "Verifying ${#rpms[@]} generated RPM(s) from ${RPM_ROOT} for ${DISTRO}"
+
+    local rpm_file
+    for rpm_file in "${rpms[@]}"; do
+        check_rpm_basic "${rpm_file}"
+    done
+
+    local pkg_name work_dir
+    for rpm_file in "${rpms[@]}"; do
+        pkg_name="${pkg_names["${rpm_file}"]:-}"
+        [ -n "${pkg_name}" ] || continue
+
+        work_dir="${tmpdir}/$(basename "${rpm_file}" .rpm)"
+        rm -rf "${work_dir}"
+
+        if [[ "${pkg_name}" == *-devel ]]; then
+            check_devel_runtime_dependency "${rpm_file}" "${pkg_name}"
+        fi
+
+        check_binary_requires_libc "${rpm_file}" "${pkg_name}" "${work_dir}"
+    done
+
+    if [ "${issues}" -ne 0 ]; then
+        if [ "${MODE}" = "WARNING" ]; then
+            echo "RPM validation completed with ${issues} warning(s)"
+            return 0
+        fi
+        echo "RPM validation failed with ${issues} error(s)" >&2
+        return 1
+    fi
+
+    echo "RPM validation passed"
+    return 0
+}
