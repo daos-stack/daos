@@ -138,6 +138,7 @@ Nodes can belong to multiple groups (e.g. a node can be both a server and a clie
 | `daos_python_version` | `python3.11` | Python interpreter used for `pip` tasks on all nodes. |
 | `daos_goproxy` | `direct` | Go module proxy (`GOPROXY`) used when running `go mod download` on the dev node and baked into the generated `daos-make.sh` script. |
 | `daos_alt_prefix` | *(none)* | Colon-separated list of already-built prereq install prefixes (e.g. ofi/ucx/mercury/pmdk/spdk/argobots/isal/isal_crypto/protobufc/fused) to reuse via scons's `ALT_PREFIX` mechanism instead of rebuilding them for this `daos_runtime_dir`. Lets multiple `daos_dev` inventories (e.g. one per ticket) share one cluster's slow-to-build prereqs while keeping their own `daos_build_dir`/`daos_runtime_dir` build/install output separate. See [`docs/dev/development.md`](https://github.com/daos-stack/daos/blob/master/docs/dev/development.md) in the DAOS source tree for background on `ALT_PREFIX`. |
+| `daos_client_manage_system_paths` | `true` (role default, `roles/daos_client/defaults/main.yml`) | When `true`, `daos_client` makes this node's DAOS install the system-wide default for ad hoc/interactive use: `/etc/ld.so.conf.d/daos-ftest-x86_64.conf` and the PAM `PATH=` line in `/etc/security/pam_env.conf`. Both are single-instance, fixed-path resources (like `daos-make.sh --activate`) — the most recently provisioned `daos_runtime_dir` wins. Set to `false` to skip both tasks entirely, e.g. for a per-ticket isolated workflow that manages its own "live" ticket via `daos-make.sh --activate` instead. |
 
 #### Example Inventory
 
@@ -777,6 +778,7 @@ scripts/test-templates.sh -v      # verbose (one line per test)
 | `TestDaosMakeNoProxy` | `daos-make.sh.j2` | Proxy block is absent for empty-string and undefined `daos_http_proxy` |
 | `TestDaosMakeGoproxy` | `daos-make.sh.j2` | `GOPROXY` is always rendered; falls back to `direct`; custom value is honored |
 | `TestDaosMakeSconsProxyUnset` | `daos-make.sh.j2` | Scons compilation step clears the proxy with `env --unset=…` |
+| `TestDaosMakeAltPrefix` | `daos-make.sh.j2` | `DAOS_ALT_PREFIX` defaults to empty / renders `daos_alt_prefix` verbatim; `ALT_PREFIX` forwarding present on all 3 scons invocations |
 | `TestDaosMakeClientsList` | `daos-make.sh.j2` | `CLIENTS_LIST` is absent/present depending on the `daos_clients` group |
 | `TestDeployInfo` | `daos-deploy-info.sh.j2` | All `DAOS_*` variables are rendered; `DAOS_CLIENT_NODES` is empty/populated based on group; `BASH_SOURCE` guard and `cat` output are present |
 
@@ -850,10 +852,12 @@ molecule_proxy_nofwd:
 
 #### Running Tests
 
-Use the `scripts/molecule-test.sh` wrapper to run Molecule tests:
+Use the `scripts/molecule-test.sh` wrapper to run Molecule tests. It runs
+every scenario found under `roles/<role>/molecule/*/` (not just `default`):
 
 ```bash
-# Test a single role (full lifecycle: destroy → converge → idempotence → verify → destroy)
+# Test a single role -- all of its scenarios (full lifecycle: destroy →
+# converge → idempotence → verify → destroy each)
 scripts/molecule-test.sh daos_common
 
 # Test all roles sequentially
@@ -867,10 +871,12 @@ The script can also be invoked directly via Molecule from inside a role director
 
 ```bash
 cd roles/daos_common
-molecule test             # full lifecycle
+molecule test             # full lifecycle (default scenario)
 molecule converge         # apply tasks only
 molecule verify           # run assertions only
 molecule idempotence      # re-run converge, assert 0 changes
+molecule test --scenario-name <name>   # run a non-default scenario, e.g.
+                                        # daos_client's no_system_paths
 ```
 
 #### Test Scenarios per Role
@@ -878,13 +884,14 @@ molecule idempotence      # re-run converge, assert 0 changes
 Each Molecule scenario runs the full Molecule lifecycle:
 `destroy → syntax → create → converge → idempotence → verify → destroy`
 
-| Role | Container name | What `converge.yml` tests | What `verify.yml` asserts |
-|---|---|---|---|
-| `daos_common` | `daos-rocky9-common` | `coredumps.yml` (file writes, sysctl config) + proxy sentinel tasks: verifies that `daos_proxy_env` forwards the proxy URL and `daos_noproxy_env` clears it, and that the `daos_proxy_nofwd` list drives the correct env dict for dnf tasks | `/etc/sysctl.d/daos_coredumps.conf` exists; core dump dir exists; `/etc/environment` does NOT contain `http_proxy`; `/etc/profile.d/proxy.sh` does NOT exist |
-| `daos_server` | `daos-rocky9-server` | `users_groups.yml` + `limits.yml` + `hugepages.yml` (sysctl only; GRUB disabled via `daos_grub_update_enabled: false`) + Debian GRUB path exercised via `ansible_os_family: Debian` override + proxy sentinel tasks: verifies `daos_proxy_env` / `daos_noproxy_env` and that `daos_proxy_nofwd: [dnf]` drives the correct env for `dependencies.yml` | Groups/user exist; limits files exist; hugepages sysctl file exists; `/etc/default/grub` contains `hugepages=N`, `hugepagesz=2M`, `default_hugepagesz=2M`, each appearing exactly once (idempotency) |
-| `daos_client` | `daos-rocky9-client` | `users_groups.yml` + proxy sentinel tasks: verifies `daos_proxy_env` / `daos_noproxy_env` and that `daos_proxy_nofwd: [dnf]` drives the correct env for `dependencies.yml` | `daos_agent` group and user exist |
-| `daos_dev` | `daos-rocky9-dev` | `users_groups.yml` (with `daos_launch_username: root`) + `build_deps.yml` with a fake repo ID to verify the availability check warns instead of failing; `daos_proxy_nofwd: [dnf]` so the dnf block bypasses the fake test proxy (the gem task outside the block is unaffected — `fpm` is pre-installed in the image) | Task completes without error; `fake-repo-does-not-exist` is not present in `dnf repolist` output |
-| `daos_post` | `daos-rocky9-post` | Full `main.yml` with a mock `requirements-ftest.txt` | `python3 -c "import distro"` succeeds |
+| Role | Scenario | Container name | What `converge.yml` tests | What `verify.yml` asserts |
+|---|---|---|---|---|
+| `daos_common` | `default` | `daos-rocky9-common` | `coredumps.yml` (file writes, sysctl config) + proxy sentinel tasks: verifies that `daos_proxy_env` forwards the proxy URL and `daos_noproxy_env` clears it, and that the `daos_proxy_nofwd` list drives the correct env dict for dnf tasks | `/etc/sysctl.d/daos_coredumps.conf` exists; core dump dir exists; `/etc/environment` does NOT contain `http_proxy`; `/etc/profile.d/proxy.sh` does NOT exist |
+| `daos_server` | `default` | `daos-rocky9-server` | `users_groups.yml` + `limits.yml` + `hugepages.yml` (sysctl only; GRUB disabled via `daos_grub_update_enabled: false`) + Debian GRUB path exercised via `ansible_os_family: Debian` override + proxy sentinel tasks: verifies `daos_proxy_env` / `daos_noproxy_env` and that `daos_proxy_nofwd: [dnf]` drives the correct env for `dependencies.yml` | Groups/user exist; limits files exist; hugepages sysctl file exists; `/etc/default/grub` contains `hugepages=N`, `hugepagesz=2M`, `default_hugepagesz=2M`, each appearing exactly once (idempotency) |
+| `daos_client` | `default` | `daos-rocky9-client` | `users_groups.yml` + `manage_system_paths.yml` (default `daos_client_manage_system_paths: true`) + proxy sentinel tasks: verifies `daos_proxy_env` / `daos_noproxy_env` and that `daos_proxy_nofwd: [dnf]` drives the correct env for `dependencies.yml` | `daos_agent` group and user exist; `/etc/ld.so.conf.d/daos-ftest-x86_64.conf` references `daos_runtime_dir`'s `install/lib64`/`install/lib`; PAM `PATH=` line references `daos_runtime_dir`'s `install/bin` |
+| `daos_client` | `no_system_paths` | `daos-rocky9-client-nosys` | `manage_system_paths.yml` with `daos_client_manage_system_paths: false` | Neither `/etc/ld.so.conf.d/daos-ftest-x86_64.conf` nor a DAOS-specific PAM `PATH=` line is created |
+| `daos_dev` | `default` | `daos-rocky9-dev` | `users_groups.yml` (with `daos_launch_username: root`) + `build_deps.yml` with a fake repo ID to verify the availability check warns instead of failing; `daos_proxy_nofwd: [dnf]` so the dnf block bypasses the fake test proxy (the gem task outside the block is unaffected — `fpm` is pre-installed in the image) | Task completes without error; `fake-repo-does-not-exist` is not present in `dnf repolist` output |
+| `daos_post` | `default` | `daos-rocky9-post` | Full `main.yml` with a mock `requirements-ftest.txt` | `python3 -c "import distro"` succeeds |
 
 > **Why only sub-tasks, not the full role?**
 > Package installs (`dnf`, `pip`, `gem`, `go mod`) require network access and take several

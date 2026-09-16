@@ -1,0 +1,14 @@
+# Proves the daos_client_manage_system_paths: false opt-out path: when
+# disabled, neither the ld.so.conf.d file nor the PAM PATH= line is touched.
+# See ../default/converge.yml + verify.yml for the (default true) behavior,
+# already covered there together with users_groups.yml/proxy sentinels.
+- hosts: all
+  gather_facts: true
+  vars:
+    daos_runtime_dir: /opt/daos
+    daos_client_manage_system_paths: false
+  tasks:
+    - name: Test system-wide dynamic linker / PATH configuration (disabled)
+      include_role:
+        name: daos_client
+        tasks_from: manage_system_paths.yml
