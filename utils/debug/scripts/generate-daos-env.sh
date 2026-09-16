@@ -21,7 +21,7 @@
 #   DAOS_SHARED_WORKSPACE  Shared DAOS_WORKSPACE to reuse prereqs from (default: /scratch/$USER/daos-install)
 #
 # After generating, see the ticket's README.md for the full workflow:
-#   generate-daos-env.sh (this script) -> ansible-playbook (manual) -> finalize-daos-dev.sh -> tests
+#   generate-daos-env.sh (this script) -> ansible-playbook (manual) -> build-daos.sh -> tests
 
 set -euo pipefail
 
@@ -261,8 +261,8 @@ is visible everywhere.
    generates this ticket's own \`daos-make.sh\`/\`daos-launch.sh\` into
    \`daos_runtime_dir\`. Also repoints the shared systemd/ld-cache/PAM state at
    this ticket -- see Isolation model above.
-3. \`finalize-daos-dev.sh --force --deps\` for a full build, or plain
-   \`finalize-daos-dev.sh\` for an incremental rebuild -- builds/installs DAOS
+3. \`build-daos.sh --force --deps\` for a full build, or plain
+   \`build-daos.sh\` for an incremental rebuild -- builds/installs DAOS
    into this ticket's isolated \`DAOS_INSTALL\`. Add \`--activate\` to also make
    this ticket the live one on the shared cluster (see Isolation model above).
 4. Standalone unit tests (isolated, safe to run regardless of what's live):
@@ -278,7 +278,7 @@ is visible everywhere.
 |---|---|
 | \`env.sh\` | Central environment file sourced by every script here: node names, \`DAOS_SRC\`/\`DAOS_BUILD\`/\`DAOS_WORKSPACE\`/\`DAOS_INSTALL\` (ticket-specific), pool/container names+options, binary paths, tmpfs mount options, valgrind/ASAN options. |
 | \`inventory.yml\` | Ansible inventory for \`ansible-playbook ftest.yml\` (see \`daos-tools/utils/ansible/ftest/README.md\`). |
-| \`finalize-daos-dev.sh\` | Builds/installs DAOS remotely via this ticket's generated \`daos-make.sh\`. |
+| \`build-daos.sh\` | Builds/installs DAOS remotely via this ticket's generated \`daos-make.sh\`. |
 | \`run-vos_tests.sh\` / \`run-ddb_ut.sh\` / \`run-ddb_tests.sh\` / \`run-dtx_ut.sh\` / \`run-dtx_tests.sh\` | Standalone cmocka unit-test suite runners. |
 | \`run-go_unit.sh\` | Go control-plane linters + unit tests (\`src/control\`). |
 | \`start-daos.sh\` / \`stop-daos.sh\` / \`cleanup.sh\` | Live cluster lifecycle (bring up/down a pool+container, full reset). |
