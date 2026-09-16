@@ -65,7 +65,7 @@ class OSAOnlineParallelTest(OSAUtils):
         dmg = copy.copy(self.dmg_command)
         try:
             if action == "reintegrate":
-                time.sleep(60)
+                time.sleep(30)
             # For each action, read the values from the
             # dictionary.
             # example {"exclude" : {"puuid": self.pool, "ranks: rank
@@ -181,19 +181,17 @@ class OSAOnlineParallelTest(OSAUtils):
             if racer is True:
                 daos_racer_thread.join()
 
-        self.log_step("Wait for rebuild to complete")
+        self.log_step("Verify disabled ranks and total targets after OSA operations")
         for pool in pools:
             self.pool = pool
             self.pool.wait_for_rebuild_to_end(3)
             self.assert_on_rebuild_failure()
-
-        self.log_step("Verify disabled ranks and total targets after rebuild is complete")
-        # Extend adds targets, so the total should have grown since the beginning
-        final_total_targets = self.pool.get_total_targets(refresh=True)
-        self.assertGreater(final_total_targets, initial_total_targets,
-                           "Pool total_targets did not increase after extend")
-        output = self.dmg_command.pool_query(self.pool.identifier)
-        self.check_disabled_ranks(expected_disabled_ranks, output, "disabled_ranks")
+            # Extend adds targets, so the total should have grown since the beginning
+            final_total_targets = self.pool.get_total_targets(refresh=True)
+            self.assertGreater(final_total_targets, initial_total_targets,
+                               "Pool total_targets did not increase after extend")
+            output = self.dmg_command.pool_query(self.pool.identifier)
+            self.check_disabled_ranks(expected_disabled_ranks, output, "disabled_ranks")
 
         self.log_step("Check data consistency")
         # Perform a data consistency check.
