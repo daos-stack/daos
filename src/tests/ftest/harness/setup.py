@@ -29,7 +29,7 @@ class HarnessSetupTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=hw,medium,large
-        :avocado: tags=harness,test_setup
+        :avocado: tags=harness
         :avocado: tags=HarnessSetupTest,test_setup_hw
         """
         self.__setup_test()
@@ -41,8 +41,20 @@ class HarnessSetupTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=hw,medium,large,provider
-        :avocado: tags=harness,test_setup
+        :avocado: tags=harness
         :avocado: tags=HarnessSetupTest,test_setup_hw_provider
+        """
+        self.__setup_test()
+
+    def test_setup_hw_vmd(self):
+        """Verify the TestWithServers.setUp() method.
+
+        Useful for setting up the /etc/daos/daos_server.yml files on multiple hosts.
+
+        :avocado: tags=all
+        :avocado: tags=hw_vmd,medium,large
+        :avocado: tags=harness
+        :avocado: tags=HarnessSetupTest,test_setup_hw_vmd
         """
         self.__setup_test()
 
@@ -53,7 +65,7 @@ class HarnessSetupTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=cb,medium,large
-        :avocado: tags=harness,test_setup
+        :avocado: tags=harness
         :avocado: tags=HarnessSetupTest,test_setup_cb
         """
         self.__setup_test()
@@ -65,7 +77,7 @@ class HarnessSetupTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=cb,medium,large,provider
-        :avocado: tags=harness,test_setup
+        :avocado: tags=harness
         :avocado: tags=HarnessSetupTest,test_setup_cb_provider
         """
         self.__setup_test()
