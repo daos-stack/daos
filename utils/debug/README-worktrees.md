@@ -139,14 +139,20 @@ cd ~/work/tickets/daos-jira/DAOS-17321 && ./build-daos.sh --force --deps
 
 # 4. run standalone unit tests (isolated, safe regardless of what's "live")
 ./run-vos_tests.sh
+
+# 5. functional tests (exclusive: ftest drives the cluster-wide systemd units,
+#    so make this ticket the live one first); defaults from FTEST_* in env.sh,
+#    ./files/ftest/ overlaid onto the install tree before each run
+./build-daos.sh --activate && ./run-ftest.sh PoolCreateSlowSvc
 ```
 
 Steps 1-4 are all isolated per ticket: `provision-daos.sh` (step 2) doesn't
 repoint the shared `/etc/ld.so.conf.d`/PAM PATH by default
 (`daos_client_manage_system_paths=false`), so it no longer races with
 another ticket's provisioning run the way a bare `ansible-playbook` call
-would. Only running a *live* `start-daos.sh` multi-node cluster (which
-needs `build-daos.sh --activate` first) remains exclusive across tickets —
+would. Only running a *live* `start-daos.sh` multi-node cluster or the
+functional tests (both need `build-daos.sh --activate` first) remains
+exclusive across tickets —
 see the generated `README.md`'s "Isolation model" section for exactly why
 (shared systemd units, the activated `ld.so.conf.d` entry, and ultimately
 the physical PMEM/NVMe/network hardware on `brd-216..219`).
@@ -186,4 +192,5 @@ own `DAOS_BUILD`, and `DAOS_INSTALL` was always the one shared location.
 | `scripts/build-daos.sh` | Deployed into each ticket dir; ssh + invokes that ticket's ansible-generated `daos-make.sh`, `--build-only` by default (see `--activate`). |
 | `scripts/provision-daos.sh` | Deployed into each ticket dir; wraps `ansible-playbook -i inventory.yml ftest.yml`, passing `-e daos_client_manage_system_paths=false` so provisioning this ticket doesn't repoint the shared ld.so.conf.d/PAM PATH (see `build-daos.sh --activate`). |
 | `scripts/run-vos_tests.sh`, `run-ddb_ut.sh`, `run-ddb_tests.sh`, `run-dtx_ut.sh`, `run-dtx_tests.sh`, `run-go_unit.sh` | Deployed into each ticket dir; generic standalone unit-test-suite runners. |
+| `scripts/run-ftest.sh` | Deployed into each ticket dir; runs launch.py test filters through the ticket's ansible-generated `daos-launch.sh` on `$LOGIN_NODE`, after overlaying the ticket's `files/ftest/` onto its install tree. Defaults (test servers/clients, `--nvme`, `--scm_size`, provider, default filters) come from the `FTEST_*` variables of the generated `env.sh`. |
 | `ansible/ftest/` | The DAOS functional-test-platform Ansible playbook/roles (imported from the `ansible/ftest` branch — see "The branch tree" above), extended with `daos_alt_prefix`/`ALT_PREFIX` reuse and `daos-make.sh --build-only` for per-ticket isolated builds. |

@@ -167,6 +167,22 @@ VALGRIND_OPTS="--leak-check=full --show-reachable=yes --num-callers=20 --error-l
 
 ASAN_LIB=/lib64/libasan.so.6
 CLIENT_ASAN_OPTIONS=halt_on_error=1:atexit=1:leak_check_at_exit=1:use_sigaltstack=1:detect_odr_violation=0:disable_coredump=0:handle_segv=2:handle_abort=2:handle_sigfpe=2:handle_sigill=2:handle_sigbus=2:detect_leaks=1:max_leaks=100000:print_stats=1
+
+# Functional tests (run-ftest.sh): launch.py defaults, overridable per run with
+# the script's --servers/--clients/--nvme/--scm-size/--provider options.
+# The usual split of this lab: 3 test servers + 1 test client.
+FTEST_SERVERS="brd-[217-219]"
+FTEST_CLIENTS="brd-216"
+# launch.py --nvme mode (auto, auto_md_on_ssd, auto_nvme, ...); empty = ram
+# only -- the brd-21x nodes have no SPDK setup.sh, "auto" fails there.
+FTEST_NVME=""
+# launch.py --scm_size in GiB; needed by "class: ram" yamls without scm_size,
+# which otherwise auto-size the ramdisk from the whole node memory.
+FTEST_SCM_SIZE=""
+FTEST_PROVIDER="ofi+tcp"
+# Default launch.py test filters, space separated, used when run-ftest.sh is
+# called without tests, e.g. "PoolCreateSlowSvc DmgPoolQueryRanks".
+FTEST_TESTS=""
 EOF
 echo "generate-daos-env.sh: [INFO] wrote $ENV_FILE"
 fi
@@ -278,18 +294,27 @@ is visible everywhere.
 5. Live cluster lifecycle (exclusive across tickets): \`start-daos.sh\` to bring
    up a pool/container, \`stop-daos.sh\` to stop it, \`cleanup.sh\` for a full
    destructive reset. Requires step 3 with \`--activate\` first.
+6. Functional tests (exclusive too): \`run-ftest.sh PoolCreateSlowSvc\` runs
+   launch.py filters through this ticket's \`daos-launch.sh\`; \`FTEST_*\` in
+   \`env.sh\` hold the defaults (test servers/clients, nvme mode, scm size,
+   provider, default filters). Files under \`files/ftest/\` (a test under
+   development, e.g. \`files/ftest/pool/my_test.py\` + \`.yaml\`) are installed on
+   top of the install tree's \`TESTING/ftest/\` before each run, so they can be
+   iterated on without rebuilding.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| \`env.sh\` | Central environment file sourced by every script here: node names, \`DAOS_SRC\`/\`DAOS_BUILD\`/\`DAOS_WORKSPACE\`/\`DAOS_INSTALL\` (ticket-specific), pool/container names+options, binary paths, tmpfs mount options, valgrind/ASAN options. |
+| \`env.sh\` | Central environment file sourced by every script here: node names, \`DAOS_SRC\`/\`DAOS_BUILD\`/\`DAOS_WORKSPACE\`/\`DAOS_INSTALL\` (ticket-specific), pool/container names+options, binary paths, tmpfs mount options, valgrind/ASAN options, \`FTEST_*\` functional-test defaults. |
 | \`inventory.yml\` | Ansible inventory for \`ansible-playbook ftest.yml\` (see \`daos-tools/utils/ansible/ftest/README.md\`). |
 | \`provision-daos.sh\` | Provisions this ticket via ansible-playbook, without repointing the shared ld.so.conf.d/PAM PATH by default (see \`build-daos.sh --activate\`). |
 | \`build-daos.sh\` | Builds/installs DAOS remotely via this ticket's generated \`daos-make.sh\`. |
 | \`run-vos_tests.sh\` / \`run-ddb_ut.sh\` / \`run-ddb_tests.sh\` / \`run-dtx_ut.sh\` / \`run-dtx_tests.sh\` | Standalone cmocka unit-test suite runners. |
 | \`run-go_unit.sh\` | Go control-plane linters + unit tests (\`src/control\`). |
 | \`start-daos.sh\` / \`stop-daos.sh\` / \`cleanup.sh\` | Live cluster lifecycle (bring up/down a pool+container, full reset). |
+| \`run-ftest.sh\` | Functional tests (avocado) through this ticket's \`daos-launch.sh\`, with the \`files/ftest/\` overlay; defaults from \`FTEST_*\` in \`env.sh\`. |
+| \`files/\` | Per-host \`daos_server-<host>.yml\`/\`daos_control-<host>.yml\`/\`daos_agent-<host>.yml\` for \`start-daos.sh\` (not generated -- copy them with \`--skeleton-from\`), and the optional \`ftest/\` overlay for \`run-ftest.sh\`. |
 EOF
 echo "generate-daos-env.sh: [INFO] wrote $README_FILE"
 fi
