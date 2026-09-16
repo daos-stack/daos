@@ -33,9 +33,13 @@ echo "━━━ $1 ━━━━━━━━━━━━━━━━━━━━�
 source "$script"
 }
 
-_daos_source setup-c.sh      || { unset _SETUP_DEV_DIR; unset -f _daos_source; return 1; }
-_daos_source setup-python.sh || { unset _SETUP_DEV_DIR; unset -f _daos_source; return 1; }
-_daos_source setup-golang.sh || { unset _SETUP_DEV_DIR; unset -f _daos_source; return 1; }
+# Attempt all three independently -- one failing (e.g. no build yet) must
+# not prevent the others from being sourced; each is still independently
+# sourceable/useful on its own (see header comment).
+_SETUP_DEV_FAILED=""
+_daos_source setup-c.sh      || _SETUP_DEV_FAILED="${_SETUP_DEV_FAILED:+$_SETUP_DEV_FAILED, }setup-c.sh"
+_daos_source setup-python.sh || _SETUP_DEV_FAILED="${_SETUP_DEV_FAILED:+$_SETUP_DEV_FAILED, }setup-python.sh"
+_daos_source setup-golang.sh || _SETUP_DEV_FAILED="${_SETUP_DEV_FAILED:+$_SETUP_DEV_FAILED, }setup-golang.sh"
 
 # ── Add DAOS tools to PATH ────────────────────────────────────────────────────
 if [[ -d "${SL_PREFIX:-}/bin" ]]; then
@@ -46,7 +50,12 @@ esac
 fi
 
 echo ""
+if [[ -z "$_SETUP_DEV_FAILED" ]]; then
 echo "━━━ DAOS development environment ready ━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+else
+echo "━━━ DAOS development environment partially ready ━━━━━━━━━━━━━━━━━━"
+echo "  Needs a build: $_SETUP_DEV_FAILED (see the hints printed above)"
+fi
 echo "  DAOS_SRC_DIR : $DAOS_SRC_DIR"
 echo "  SL_PREFIX    : ${SL_PREFIX:-<unset>}"
 echo "  PATH         : $PATH"
@@ -54,3 +63,8 @@ echo ""
 
 unset _SETUP_DEV_DIR
 unset -f _daos_source
+if [[ -n "$_SETUP_DEV_FAILED" ]]; then
+unset _SETUP_DEV_FAILED
+return 1
+fi
+unset _SETUP_DEV_FAILED

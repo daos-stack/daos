@@ -17,17 +17,35 @@
 
 DAOS_SRC_DIR="${DAOS_SRC_DIR:-$(realpath "$(dirname "${BASH_SOURCE[0]}")")}"
 
+# Prints how to finish building, tailored to the checkout in use: a
+# per-ticket worktree (sibling env.sh + inventory.yml one level up) builds
+# remotely via ansible-playbook + finalize-daos-dev.sh, not local scons.
+_daos_build_hint() {
+local ticket_dir="$DAOS_SRC_DIR/.."
+if [[ -f "$ticket_dir/env.sh" && -f "$ticket_dir/inventory.yml" ]]; then
+ticket_dir="$(realpath "$ticket_dir")"
+echo "  This is a per-ticket worktree -- finish setting it up:" >&2
+echo "    1. Review $ticket_dir/inventory.yml" >&2
+echo "    2. From \${DAOS_TOOLS_DIR:-~/work/daos-tools}/utils/ansible/ftest/:" >&2
+echo "         ansible-playbook -i $ticket_dir/inventory.yml ftest.yml" >&2
+echo "    3. $ticket_dir/finalize-daos-dev.sh --force --deps" >&2
+echo "    4. direnv reload (or cd out and back in)" >&2
+else
+echo "  Rebuild: cd $DAOS_SRC_DIR && scons --config=force" >&2
+fi
+}
+
 # ── Validate ──────────────────────────────────────────────────────────────────
 if [[ ! -d "$DAOS_SRC_DIR" ]]; then
-echo "setup-golang.sh: [ERROR] DAOS_SRC_DIR not found: $DAOS_SRC_DIR" >&2; return 1
+echo "setup-golang.sh: [ERROR] DAOS_SRC_DIR not found: $DAOS_SRC_DIR" >&2; unset -f _daos_build_hint; return 1
 fi
 if [[ ! -f "$DAOS_SRC_DIR/.build_vars.sh" ]]; then
 echo "setup-golang.sh: [ERROR] .build_vars.sh not found." >&2
-echo "  Rebuild: cd $DAOS_SRC_DIR && scons --config=force" >&2; return 1
+_daos_build_hint; unset -f _daos_build_hint; return 1
 fi
 if [[ ! -f "$DAOS_SRC_DIR/compile_commands.json" ]]; then
 echo "setup-golang.sh: [ERROR] compile_commands.json not found." >&2
-echo "  Rebuild: cd $DAOS_SRC_DIR && scons --config=force" >&2; return 1
+_daos_build_hint; unset -f _daos_build_hint; return 1
 fi
 
 # shellcheck disable=SC1090
@@ -35,8 +53,9 @@ source "$DAOS_SRC_DIR/.build_vars.sh"
 
 if [[ ! -d "${SL_PREFIX:-}" ]]; then
 echo "setup-golang.sh: [ERROR] SL_PREFIX=${SL_PREFIX:-<unset>} does not exist." >&2
-echo "  Rebuild: cd $DAOS_SRC_DIR && scons --config=force" >&2; return 1
+_daos_build_hint; unset -f _daos_build_hint; return 1
 fi
+unset -f _daos_build_hint
 
 
 # ── CGo flags (directly from SL_* vars provided by .build_vars.sh) ───────────

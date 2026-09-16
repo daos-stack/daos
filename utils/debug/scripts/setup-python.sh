@@ -17,29 +17,31 @@
 
 DAOS_SRC_DIR="${DAOS_SRC_DIR:-$(realpath "$(dirname "${BASH_SOURCE[0]}")")}"
 
+# Prints how to finish building, tailored to the checkout in use: a
+# per-ticket worktree (sibling env.sh + inventory.yml one level up) builds
+# remotely via ansible-playbook + finalize-daos-dev.sh, not local scons.
+_daos_build_hint() {
+local ticket_dir="$DAOS_SRC_DIR/.."
+if [[ -f "$ticket_dir/env.sh" && -f "$ticket_dir/inventory.yml" ]]; then
+ticket_dir="$(realpath "$ticket_dir")"
+echo "  This is a per-ticket worktree -- finish setting it up:" >&2
+echo "    1. Review $ticket_dir/inventory.yml" >&2
+echo "    2. From \${DAOS_TOOLS_DIR:-~/work/daos-tools}/utils/ansible/ftest/:" >&2
+echo "         ansible-playbook -i $ticket_dir/inventory.yml ftest.yml" >&2
+echo "    3. $ticket_dir/finalize-daos-dev.sh --force --deps" >&2
+echo "    4. direnv reload (or cd out and back in)" >&2
+else
+echo "  Rebuild: cd $DAOS_SRC_DIR && scons --config=force" >&2
+fi
+}
+
 # ── Validate ──────────────────────────────────────────────────────────────────
 if [[ ! -d "$DAOS_SRC_DIR" ]]; then
-echo "setup-python.sh: [ERROR] DAOS_SRC_DIR not found: $DAOS_SRC_DIR" >&2; return 1
+echo "setup-python.sh: [ERROR] DAOS_SRC_DIR not found: $DAOS_SRC_DIR" >&2; unset -f _daos_build_hint; return 1
 fi
-if [[ ! -f "$DAOS_SRC_DIR/.build_vars.sh" ]]; then
-echo "setup-python.sh: [ERROR] .build_vars.sh not found." >&2
-echo "  Rebuild: cd $DAOS_SRC_DIR && scons --config=force" >&2; return 1
-fi
-if [[ ! -f "$DAOS_SRC_DIR/compile_commands.json" ]]; then
-echo "setup-python.sh: [ERROR] compile_commands.json not found." >&2
-echo "  Rebuild: cd $DAOS_SRC_DIR && scons --config=force" >&2; return 1
-fi
-
-# shellcheck disable=SC1090
-source "$DAOS_SRC_DIR/.build_vars.sh"
-
-if [[ ! -d "${SL_PREFIX:-}" ]]; then
-echo "setup-python.sh: [ERROR] SL_PREFIX=${SL_PREFIX:-<unset>} does not exist." >&2
-echo "  Rebuild: cd $DAOS_SRC_DIR && scons --config=force" >&2; return 1
-fi
-
 
 # ── Build PYTHONPATH from source tree ────────────────────────────────────────
+# Needs no build artifacts at all -- works even before the tree is built.
 # Strategy: find every __init__.py, add its grandparent to PYTHONPATH when the
 # parent is a top-level package (grandparent has no __init__.py).
 # Special case: ftest/ and ftest/util/ are added directly (flat import style).
@@ -97,7 +99,13 @@ _daos_build_pythonpath "$DAOS_SRC_DIR"
 unset -f _daos_build_pythonpath
 
 # ── Install-tree Python paths (compiled extensions from SL_PREFIX) ────────────
-# Provides: pydaos_shim.so and other compiled C extensions not in the source tree.
+# Provides: pydaos_shim.so and other compiled C extensions not in the source
+# tree. Needs a prior build -- skipped (not fatal) until one exists, so
+# PYTHONPATH from the source tree above still works pre-build.
+if [[ -f "$DAOS_SRC_DIR/.build_vars.sh" && -f "$DAOS_SRC_DIR/compile_commands.json" ]]; then
+# shellcheck disable=SC1090
+source "$DAOS_SRC_DIR/.build_vars.sh"
+if [[ -d "${SL_PREFIX:-}" ]]; then
 _py_ver=$(python3 -c "import sys; print(f'python{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
 for _py_path in \
 "${SL_PREFIX}/lib64/${_py_ver}/site-packages" \
@@ -110,8 +118,16 @@ PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}$_py_path"
 fi
 done
 unset _py_ver _py_path
+else
+echo "setup-python.sh: [INFO] SL_PREFIX=${SL_PREFIX:-<unset>} does not exist -- skipping install-tree Python paths." >&2
+fi
+else
+echo "setup-python.sh: [INFO] no build yet -- skipping install-tree Python paths (source-tree PYTHONPATH above is still set)." >&2
+_daos_build_hint
+fi
 export PYTHONPATH
+unset -f _daos_build_hint
 
 echo "[INFO] setup-python.sh: ready"
-echo "  SL_PREFIX  : $SL_PREFIX"
+echo "  SL_PREFIX  : ${SL_PREFIX:-<unset>}"
 echo "  PYTHONPATH : $PYTHONPATH"
