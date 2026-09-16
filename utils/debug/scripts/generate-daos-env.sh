@@ -142,22 +142,22 @@ DMG_OPTS="-o /etc/daos/daos_control.yml"
 DAOS_BIN="\$DAOS_INSTALL/bin/daos"
 
 DDB_BIN="\$DAOS_INSTALL/bin/ddb"
-DAOS_SCM_MNT_PATH="/mnt/daos0"
+DAOS_SCM_MNT_PATH="/mnt/daos0-$TICKET_LC"
 
 DDB_TESTS_BIN="\$DAOS_INSTALL/bin/ddb_tests"
-DDB_TESTS_MNT_PATH="/mnt/daos"
+DDB_TESTS_MNT_PATH="/mnt/daos-$TICKET_LC"
 DDB_TESTS_MNT_OPTS="-t tmpfs -o rw,noatime,size=16777216k,inode64,huge=always,mpol=prefer:0,uid=\$(id -u),gid=\$(id -g)"
 
 DDB_UT_BIN="\$DAOS_INSTALL/bin/ddb_ut"
 
 DTX_TESTS_BIN="\$DAOS_INSTALL/bin/dtx_tests"
-DTX_TESTS_MNT_PATH="/mnt/daos"
+DTX_TESTS_MNT_PATH="/mnt/daos-$TICKET_LC"
 DTX_TESTS_MNT_OPTS="-t tmpfs -o rw,noatime,size=16777216k,inode64,huge=always,mpol=prefer:0,uid=\$(id -u),gid=\$(id -g)"
 
 DTX_UT_BIN="\$DAOS_INSTALL/bin/dtx_ut"
 
 VOS_TESTS_BIN="\$DAOS_INSTALL/bin/vos_tests"
-VOS_TESTS_MNT_PATH="/mnt/daos"
+VOS_TESTS_MNT_PATH="/mnt/daos-$TICKET_LC"
 VOS_TESTS_MNT_OPTS="-t tmpfs -o rw,noatime,size=16777216k,inode64,huge=always,mpol=prefer:0,uid=\$(id -u),gid=\$(id -g)"
 
 DFUSE_MNT_PATH="/tmp/dfuse_mnt"
