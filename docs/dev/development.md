@@ -336,18 +336,18 @@ To build the Docker image directly from GitHub, run the following command:
 
 ```bash
 $ docker build https://github.com/daos-stack/daos.git#master \
-        -f utils/docker/Dockerfile.el.8 -t daos
+        -f utils/docker/Dockerfile.el.9 -t daos
 ```
 
 or from a local tree:
 
 ```bash
-$ docker build  . -f utils/docker/Dockerfile.el.8 -t daos
+$ docker build  . -f utils/docker/Dockerfile.el.9 -t daos
 ```
 
-This creates a Rocky Linux 8 image, fetches the latest DAOS version from GitHub,
+This creates a Rocky Linux 9 image, fetches the latest DAOS version from GitHub,
 builds it, and installs it in the image.
-For Ubuntu and other Linux distributions, replace Dockerfile.el.8 with
+For Ubuntu and other Linux distributions, replace Dockerfile.el.9 with
 Dockerfile.ubuntu or the appropriate version of interest.
 
 ### Simple Docker Setup
@@ -403,7 +403,7 @@ refer to the next section.
 The DAOS build process now covers building RPMs for both DAOS and dependencies
 specified in [`utils/build.config`](../../utils/build.config) (or those that we
 build regularly with `--build-deps=yes`). The complete list of RPMs  is defined
-in the [`utils/rpms/build_packages.sh`](../../utils/rpms/build_packages.sh)
+in the [`utils/build/build_packages.sh`](../../utils/build/build_packages.sh)
 script. The RPM (and deb) build process uses
 [FPM](https://fpm.readthedocs.io/en/latest/getting-started.html). Essentially,
 it creates rpm packages after a DAOS build. Regardless of how that build is done,
@@ -428,3 +428,157 @@ In order to properly upgrade a 3rd party component, do all of the following:
 1. Update the `utils/rpms/<component>.changelog` file to document the change and
    make sure the file is referenced by the
    `RPM_CHANGELOG="<component>.changelog"` variable in `utils/rpms/<component>.sh`.
+
+## Unified DAOS Build Procedure
+
+The scripts under [`utils/build`](../../utils/build) provide a straightforward,
+three-step workflow from installing pre-built dependencies to producing the
+final RPMs. The same workflow is used by CI, Docker image builds, and bare-host
+builds; none of the scripts are Docker-specific.
+
+For standard builds, the scripts handle the underlying `scons` details.
+Advanced users can still invoke `scons` directly or pass additional options
+and variables through the `build_daos.sh` scripts to produce different binary
+variants.
+
+The `build_*.sh` scripts are intended to be usable on Linux distributions in
+general, including Debian-based distributions. The distribution-specific
+dependency installation and package verification workflows are narrower:
+`install_deps.sh` and `build_packages_utils.sh` currently support EL and Leap/SLES
+15 package layouts only. On other distributions, build dependencies from
+source or use the distribution's native package tooling as appropriate.
+
+1. **[`utils/build/install_deps.sh [RPM_SUFFIX]`](../../utils/build/install_deps.sh)**
+   installs pre-built dependency RPMs (e.g. `argobots-devel`, `mercury-devel`,
+   `libfabric-devel`) matching the versions expected by the current tree,
+   so that the subsequent build steps can reuse them instead of rebuilding from
+   source. `RPM_SUFFIX` is the standardized RPM naming
+   suffix used by the DAOS project's own package repos, not the OS distribution
+   name (for example, `el9`, `suse.lp155`, or `suse.lp156`). If omitted,
+   it is auto-detected from `/etc/os-release`. This script supports EL9 and
+   Leap/SLES 15 systems. Missing packages are reported but do not fail
+   the script, since dependencies can also be built from source in
+   the next step. Set `DAOS_DEPS_EXT_REPO` to pull in a custom RPM set published
+   by the DAOS project (e.g. from [packages.daos.io](https://packages.daos.io/))
+   as an extra, registered only for the duration of the script.
+
+   ```bash
+   $ DAOS_DEPS_EXT_REPO=https://packages.daos.io/v2.8.0/EL9/packages/x86_64/ \
+         utils/build/install_deps.sh el9
+   ```
+   To find out more, use the `install_deps.sh --help` command.
+
+1. **[`utils/build/build_deps.sh`](../../utils/build/build_deps.sh)**
+   builds any dependency not already satisfied by
+   `install_deps.sh` from source, via `scons install --build-deps=only`.
+   Pass the build configuration as a command-line variable, for example
+   `utils/build/build_deps.sh BUILD_TYPE=release`. Supported values are
+   `dev`, `release`, and `debug`; the default is `release`.
+
+   Pass `-f` or `--force` to remove the selected prerequisite build directory
+   before rebuilding. `TARGET_TYPE` selects the prerequisite directory when it
+   is `debug`, `release`, or `dev`; otherwise `BUILD_TYPE` is used.
+
+   To find out more, use the `build_deps.sh --help` command.
+1. **[`utils/build/build_daos.sh [options]`](../../utils/build/build_daos.sh)**
+   builds DAOS and/or its dependencies with `scons`.
+   Pass `--build-deps=only` to build only dependencies from source,
+   `--build-deps=no` (default) to build DAOS assuming dependencies are
+   already installed or built, or `--build-deps=yes` to build missing
+   dependencies automatically.
+
+   Pass `-w` or `--wipe` to wipe dependency directories before building
+   (use `TARGET_TYPE=debug|release|dev` or `BUILD_TYPE=debug|release|dev`
+   to select the directory; ignored when `--build-deps=no`).
+   Pass `-c` or `--clean` to run `scons -c` and remove generated build state,
+   including the `build` directory and Python bytecode caches under `site_scons`.
+   Pass `-f` or `--full-clean` to also remove saved configuration files
+   (`.build_vars.*`, `daos.conf`).
+
+   To find out more, use the `build_daos.sh --help` command.
+1. **[`utils/build/build_packages.sh [options] [PKG_OUTPUT_DIR]`](../../utils/build/build_packages.sh)**
+   builds dependency packages, DAOS packages, or both (default) using scripts
+   located in the [`utils/rpms`](../../utils/rpms) directory. `PKG_OUTPUT_DIR`
+   is an optional positional argument and is the root under which `deps/` and
+   `daos/` are written. For RPM builds it defaults to `<repo_root>/rpms`; for
+   DEB builds it defaults to `.`.
+
+   For RPM distributions (EL,Leap,SLES), the script also generates repository
+   metadata under `<PKG_OUTPUT_DIR>/repodata`, producing a complete RPM
+   repository.
+
+   After the build step is successfully completed, the RPMs are verified using
+   the [`utils/build/build_packages_utils.sh`](../../utils/build/build_packages_utils.sh)
+   helper. With the default `-Werror` setting, validation findings fail the
+   build. With `-Wno-error`, verification still runs, but noncritical findings
+   are reported as warnings. Missing tools, unsupported configurations, and
+   other critical setup errors remain fatal.
+
+   Use `--build-range=deps`, `--build-range=daos`, or
+   `--build-range=all` to select the package groups. For RPM builds, use
+   `--rpm-suffix=el9`, `--rpm-suffix=suse.lp155`, or
+   `--rpm-suffix=suse.lp156`; if omitted, the suffix is auto-detected from
+   `/etc/os-release`.
+   Set environment variable `OUTPUT_TYPE=deb` for DEB builds; it defaults to
+   `rpm`.
+
+   Use `-Werror` to fail on verification findings (the default), or
+   `-Wno-error` to report them as warnings. These options are mutually
+   exclusive.
+
+   To find out more, use the `build_packages.sh --help` command.
+
+### Exporting RPMs Directly with Docker BuildKit
+
+Docker BuildKit allows building RPM packages inside a container and exporting
+them directly to a directory on the host filesystem without saving the full
+image or running `docker create` / `docker cp`.
+
+The Dockerfiles provide dedicated target stages for BuildKit:
+- `rpm-output`: Exports all generated RPMs (`daos`, `deps`, and repodata).
+- `deps-rpm-output`: Exports only third-party dependency RPMs.
+
+#### Simple Example
+
+To build DAOS and dependency RPMs for EL 9 and export them to `./rpms/`:
+
+```bash
+$ DOCKER_BUILDKIT=1 docker build \
+    --target rpm-output \
+    --output type=local,dest=./rpms \
+    -f utils/docker/Dockerfile.el.9 .
+```
+
+To export only dependency RPMs:
+
+```bash
+$ DOCKER_BUILDKIT=1 docker build \
+    --target deps-rpm-output \
+    --output type=local,dest=./rpms/deps \
+    -f utils/docker/Dockerfile.el.9 .
+```
+
+#### Extended Example
+
+For customized builds (specifying Python version, build flags, and compiler):
+
+```bash
+DISTRO="el9" # or leap15
+DOCKERFILE="utils/docker/Dockerfile.el.9" # or Dockerfile.leap.15
+
+build_args=(
+    --build-arg PYTHON_VERSION=3.11
+    --build-arg DAOS_DEPS_INSTALL=yes
+    --build-arg DAOS_DEPS_BUILD=yes
+    --build-arg DAOS_BUILD=yes
+    --build-arg DAOS_PACKAGES_BUILD=yes
+    --build-arg DAOS_TARGET_TYPE=dev
+    --build-arg COMPILER=clang
+)
+
+DOCKER_BUILDKIT=1 docker build \
+    --target rpm-output \
+    --output type=local,dest="./rpms/${DISTRO}" \
+    "${build_args[@]}" \
+    -f "${DOCKERFILE}" .
+```
