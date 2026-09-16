@@ -292,8 +292,10 @@ is visible everywhere.
    \`run-vos_tests.sh\`, \`run-ddb_ut.sh\`, \`run-ddb_tests.sh\`, \`run-dtx_ut.sh\`,
    \`run-dtx_tests.sh\`, \`run-go_unit.sh\`.
 5. Live cluster lifecycle (exclusive across tickets): \`start-daos.sh\` to bring
-   up a pool/container, \`stop-daos.sh\` to stop it, \`cleanup.sh\` for a full
-   destructive reset. Requires step 3 with \`--activate\` first.
+   up a pool/container (\`start-daos.sh --no-pool\` for the servers and agents
+   alone, e.g. when the pool creation itself is what is being tested),
+   \`stop-daos.sh\` to stop it, \`cleanup.sh\` for a full destructive reset.
+   Requires step 3 with \`--activate\` first.
 6. Functional tests (exclusive too): \`run-ftest.sh PoolCreateSlowSvc\` runs
    launch.py filters through this ticket's \`daos-launch.sh\`; \`FTEST_*\` in
    \`env.sh\` hold the defaults (test servers/clients, nvme mode, scm size,
@@ -312,7 +314,7 @@ is visible everywhere.
 | \`build-daos.sh\` | Builds/installs DAOS remotely via this ticket's generated \`daos-make.sh\`. |
 | \`run-vos_tests.sh\` / \`run-ddb_ut.sh\` / \`run-ddb_tests.sh\` / \`run-dtx_ut.sh\` / \`run-dtx_tests.sh\` | Standalone cmocka unit-test suite runners. |
 | \`run-go_unit.sh\` | Go control-plane linters + unit tests (\`src/control\`). |
-| \`start-daos.sh\` / \`stop-daos.sh\` / \`cleanup.sh\` | Live cluster lifecycle (bring up/down a pool+container, full reset). |
+| \`start-daos.sh\` / \`stop-daos.sh\` / \`cleanup.sh\` | Live cluster lifecycle (bring up/down a pool+container -- or the bare cluster with \`--no-pool\` -- and full reset). |
 | \`run-ftest.sh\` | Functional tests (avocado) through this ticket's \`daos-launch.sh\`, with the \`files/ftest/\` overlay; defaults from \`FTEST_*\` in \`env.sh\`. |
 | \`files/\` | Per-host \`daos_server-<host>.yml\`/\`daos_control-<host>.yml\`/\`daos_agent-<host>.yml\` for \`start-daos.sh\` (not generated -- copy them with \`--skeleton-from\`), and the optional \`ftest/\` overlay for \`run-ftest.sh\`. |
 EOF
