@@ -169,6 +169,31 @@ class TestDaosMakeSconsProxyUnset(unittest.TestCase):
             self.assertIn(f"--unset={var}", script)
 
 
+class TestDaosMakeAltPrefix(unittest.TestCase):
+    """ALT_PREFIX is threaded through scons invocations when daos_alt_prefix is set."""
+
+    def test_alt_prefix_empty_when_not_defined(self):
+        """DAOS_ALT_PREFIX defaults to an empty string when daos_alt_prefix is absent."""
+        self.assertIn('DAOS_ALT_PREFIX=""', render())
+
+    def test_alt_prefix_rendered_when_set(self):
+        """DAOS_ALT_PREFIX is rendered verbatim when daos_alt_prefix is provided."""
+        script = render(daos_alt_prefix="/scratch/shared/install/prereq/ofi")
+        self.assertIn(
+            'DAOS_ALT_PREFIX="/scratch/shared/install/prereq/ofi"', script
+        )
+
+    def test_alt_prefix_threaded_into_scons_invocations(self):
+        """Every scons build invocation forwards ALT_PREFIX from DAOS_ALT_PREFIX."""
+        script = render()
+        count = script.count('${DAOS_ALT_PREFIX:+ALT_PREFIX="$DAOS_ALT_PREFIX"}')
+        self.assertEqual(
+            count, 3,
+            "expected ALT_PREFIX forwarding on all 3 scons invocations "
+            "(--build-deps=only, bear-wrapped build, plain build)",
+        )
+
+
 class TestDaosMakeClientsList(unittest.TestCase):
     """CLIENTS_LIST is conditionally rendered based on the daos_clients group."""
 
@@ -254,6 +279,7 @@ for cls in (
     TestDaosMakeProxy,
     TestDaosMakeGoproxy,
     TestDaosMakeSconsProxyUnset,
+    TestDaosMakeAltPrefix,
     TestDaosMakeClientsList,
     TestDeployInfo,
 ):

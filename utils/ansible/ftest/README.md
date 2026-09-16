@@ -777,6 +777,7 @@ scripts/test-templates.sh -v      # verbose (one line per test)
 | `TestDaosMakeNoProxy` | `daos-make.sh.j2` | Proxy block is absent for empty-string and undefined `daos_http_proxy` |
 | `TestDaosMakeGoproxy` | `daos-make.sh.j2` | `GOPROXY` is always rendered; falls back to `direct`; custom value is honored |
 | `TestDaosMakeSconsProxyUnset` | `daos-make.sh.j2` | Scons compilation step clears the proxy with `env --unset=…` |
+| `TestDaosMakeAltPrefix` | `daos-make.sh.j2` | `DAOS_ALT_PREFIX` defaults to empty / renders `daos_alt_prefix` verbatim; `ALT_PREFIX` forwarding present on all 3 scons invocations |
 | `TestDaosMakeClientsList` | `daos-make.sh.j2` | `CLIENTS_LIST` is absent/present depending on the `daos_clients` group |
 | `TestDeployInfo` | `daos-deploy-info.sh.j2` | All `DAOS_*` variables are rendered; `DAOS_CLIENT_NODES` is empty/populated based on group; `BASH_SOURCE` guard and `cat` output are present |
 
