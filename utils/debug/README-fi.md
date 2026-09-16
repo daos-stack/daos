@@ -276,7 +276,7 @@ Notes:
 
 ## Pairing the FI point with a C unit test
 
-Use this path when a cmocka test can exercise the branch directly. DAOS test binaries get FI initialised for free because `src/common/debug.c: daos_debug_init()` calls `src/common/fail_loc.c: daos_fail_init()`, which calls `d_fault_inject_init()` and registers the unit-test group attribute.
+Use this path when a cmocka test can exercise the branch directly. DAOS test binaries get FI initialized for free because `src/common/debug.c: daos_debug_init()` calls `src/common/fail_loc.c: daos_fail_init()`, which calls `d_fault_inject_init()` and registers the unit-test group attribute.
 
 Guard each FI-dependent test so release builds skip cleanly. Suites that include `src/vos/tests/vts_common.h: FAULT_INJECTION_REQUIRED()` can reuse it; otherwise use a file-local copy like the ddb tests proposed in PR #18941:
 
