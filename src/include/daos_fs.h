@@ -465,6 +465,11 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
  * Lookup a path in the DFS and return the associated open object and mode.
  * The object must be released with dfs_release().
  *
+ * Symlinks along the path, and the last one unless O_NOFOLLOW is passed, are
+ * followed within the container. DFS has no notion of the process root, so a
+ * symlink with an absolute value cannot be followed and the lookup fails with
+ * EINVAL; the caller has to resolve such a value itself.
+ *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	path	Path to lookup.
  * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
@@ -480,9 +485,11 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
 
 /**
  * Lookup an entry in the parent object and return the associated open object
- * and mode of that entry.  If the entry is a symlink, the symlink value is not
- * resolved and the user can decide what to do to further resolve the value of
- * the symlink. The object must be released with dfs_release().
+ * and mode of that entry.  If the entry is a symlink, it is followed unless
+ * O_NOFOLLOW is passed, in which case the symlink object itself is returned and
+ * the user can decide how to resolve its value. A symlink with an absolute
+ * value cannot be followed, see dfs_lookup().
+ * The object must be released with dfs_release().
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
