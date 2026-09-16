@@ -160,16 +160,16 @@ RUN --mount=type=bind,source=SConstruct,target=/home/daos/pre/SConstruct \
     --mount=type=bind,source=utils/build.config,target=/home/daos/pre/utils/build.config \
     --mount=type=bind,source=utils/scripts/copy_files.sh,target=/home/daos/pre/utils/scripts/copy_files.sh \
     --mount=type=bind,source=utils/scripts/create_spdk_pkgconfig.sh,target=/home/daos/pre/utils/scripts/create_spdk_pkgconfig.sh \
-    --mount=type=bind,source=utils/build/build_deps.sh,target=/home/daos/pre/utils/build/build_deps.sh \
+    --mount=type=bind,source=utils/build/build_daos.sh,target=/home/daos/pre/utils/build/build_daos.sh \
     --mount=type=bind,source=utils/build/build_utils.sh,target=/home/daos/pre/utils/build/build_utils.sh \
     --mount=type=bind,source=utils/rpms,target=/home/daos/pre/utils/rpms \
     [ "$DAOS_DEPS_BUILD" != "yes" ] || { \
-        utils/build/build_deps.sh \
+        utils/build/build_daos.sh --build-deps=only \
             ${DEPS_JOBS:+--jobs "$DEPS_JOBS"} \
             ${DAOS_BUILD_TYPE:+BUILD_TYPE="$DAOS_BUILD_TYPE"} \
             ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} && \
         [ "$DAOS_KEEP_BUILD" != "no" ] || { \
-            rm -rf .sconf_temp .sconsign.dblite config.log build *.gz; \
+            utils/build/build_daos.sh --full-clean; \
         } ; \
     }
 

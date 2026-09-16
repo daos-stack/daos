@@ -432,13 +432,13 @@ In order to properly upgrade a 3rd party component, do all of the following:
 ## Unified DAOS Build Procedure
 
 The scripts under [`utils/build`](../../utils/build) provide a straightforward,
-four-step workflow from installing pre-built dependencies to producing the
+three-step workflow from installing pre-built dependencies to producing the
 final RPMs. The same workflow is used by CI, Docker image builds, and bare-host
 builds; none of the scripts are Docker-specific.
 
 For standard builds, the scripts handle the underlying `scons` details.
 Advanced users can still invoke `scons` directly or pass additional options
-and variables through the `build_*` scripts to produce different binary
+and variables through the `build_daos.sh` scripts to produce different binary
 variants.
 
 The `build_*.sh` scripts are intended to be usable on Linux distributions in
@@ -452,7 +452,7 @@ source or use the distribution's native package tooling as appropriate.
    installs pre-built dependency RPMs (e.g. `argobots-devel`, `mercury-devel`,
    `libfabric-devel`) matching the versions expected by the current tree,
    so that the subsequent build steps can reuse them instead of rebuilding from
-   source (`USE_INSTALLED=all`). `RPM_SUFFIX` is the standardized RPM naming
+   source. `RPM_SUFFIX` is the standardized RPM naming
    suffix used by the DAOS project's own package repos, not the OS distribution
    name (for example, `el9`, `suse.lp155`, or `suse.lp156`). If omitted,
    it is auto-detected from `/etc/os-release`. This script supports EL9 and
@@ -475,11 +475,25 @@ source or use the distribution's native package tooling as appropriate.
    `utils/build/build_deps.sh BUILD_TYPE=release`. Supported values are
    `dev`, `release`, and `debug`; the default is `release`.
 
+   Pass `-f` or `--force` to remove the selected prerequisite build directory
+   before rebuilding. `TARGET_TYPE` selects the prerequisite directory when it
+   is `debug`, `release`, or `dev`; otherwise `BUILD_TYPE` is used.
+
    To find out more, use the `build_deps.sh --help` command.
-1. **[`utils/build/build_daos.sh`](../../utils/build/build_daos.sh)**
-   builds and installs DAOS itself with `scons` assuming
-   all dependencies are either installed or built previously
-   (`scons install --build-deps=no USE_INSTALLED=all`).
+1. **[`utils/build/build_daos.sh [options]`](../../utils/build/build_daos.sh)**
+   builds DAOS and/or its dependencies with `scons`.
+   Pass `--build-deps=only` to build only dependencies from source,
+   `--build-deps=no` (default) to build DAOS assuming dependencies are
+   already installed or built, or `--build-deps=yes` to build missing
+   dependencies automatically.
+
+   Pass `-w` or `--wipe` to wipe dependency directories before building
+   (use `TARGET_TYPE=debug|release|dev` or `BUILD_TYPE=debug|release|dev`
+   to select the directory; ignored when `--build-deps=no`).
+   Pass `-c` or `--clean` to run `scons -c` and remove generated build state,
+   including the `build` directory and Python bytecode caches under `site_scons`.
+   Pass `-f` or `--full-clean` to also remove saved configuration files
+   (`.build_vars.*`, `daos.conf`).
 
    To find out more, use the `build_daos.sh --help` command.
 1. **[`utils/build/build_packages.sh [options] [PKG_OUTPUT_DIR]`](../../utils/build/build_packages.sh)**
