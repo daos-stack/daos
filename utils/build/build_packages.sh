@@ -93,14 +93,7 @@ esac
 
 if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
   rpm_suffix="${rpm_suffix:-$(detect_rpm_suffix)}" || exit $?
-  case "${rpm_suffix}" in
-    el9 | suse.lp155 | suse.lp156)
-      ;;
-    *)
-      echo "ERROR: --rpm-suffix must be el9, suse.lp155, or suse.lp156 (got: ${rpm_suffix})" >&2
-      exit 1
-      ;;
-  esac
+  validate_rpm_suffix "${rpm_suffix}"
   DISTRO="${rpm_suffix}"
 else
   if [ -n "${rpm_suffix}" ]; then
