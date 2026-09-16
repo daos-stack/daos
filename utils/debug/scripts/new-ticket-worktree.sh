@@ -4,8 +4,8 @@
 # generates a ticket-specific env.sh/inventory.yml/README.md with isolated
 # build/install paths (see generate-daos-env.sh), symlinks in the generic
 # build/test scripts (build-daos.sh, provision-daos.sh, cleanup.sh/start-daos.sh/
-# stop-daos.sh, run-*_tests.sh), and optionally seeds it from an existing
-# ticket's skeleton of genuinely ticket-specific scripts. See
+# stop-daos.sh, run-*_tests.sh, run-ftest.sh), and optionally seeds it from an
+# existing ticket's skeleton of genuinely ticket-specific scripts. See
 # README-worktrees.md for the full workflow.
 #
 # Usage:
@@ -31,11 +31,14 @@ GENERATE_ENV="$SCRIPT_DIR/generate-daos-env.sh"
 
 # Generic per-ticket scripts symlinked into every ticket dir (bug fixes here
 # propagate to every past and future ticket immediately, same rationale as
-# the setup-*.sh symlinks in deploy-daos-env.sh).
+# the setup-*.sh symlinks in deploy-daos-env.sh). A ticket that carries its
+# own regular-file copy of one of these (older tickets, or a deliberately
+# customized script) keeps it: the symlink step never overwrites a regular file.
 GENERIC_TICKET_SCRIPTS=(
 build-daos.sh provision-daos.sh
 cleanup.sh start-daos.sh stop-daos.sh
 run-vos_tests.sh run-ddb_ut.sh run-ddb_tests.sh run-dtx_ut.sh run-dtx_tests.sh run-go_unit.sh
+run-ftest.sh
 )
 
 DAOS_MAIN_REPO="${DAOS_MAIN_REPO:-$HOME/work/daos}"
@@ -234,6 +237,11 @@ echo "new-ticket-worktree.sh: [INFO] (dry-run) would run: $DEPLOY_ENV $WORKTREE_
 fi
 echo "new-ticket-worktree.sh: [INFO] (dry-run) would run: $GENERATE_ENV --ticket $TICKET --worktree $WORKTREE_DIR"
 echo "new-ticket-worktree.sh: [INFO] (dry-run) would symlink into $TICKET_DIR: ${GENERIC_TICKET_SCRIPTS[*]}"
+for script in "${GENERIC_TICKET_SCRIPTS[@]}"; do
+if [[ -f "$TICKET_DIR/$script" && ! -L "$TICKET_DIR/$script" ]]; then
+echo "new-ticket-worktree.sh: [INFO] (dry-run) would skip $script -- ticket has its own copy (regular file, not a symlink)"
+fi
+done
 if [[ -n "$SKELETON_FROM" ]]; then
 echo "new-ticket-worktree.sh: [INFO] (dry-run) would seed skeleton from $(normalize_ticket "$SKELETON_FROM")"
 fi
@@ -253,10 +261,17 @@ fi
 
 "$GENERATE_ENV" --ticket "$TICKET" --worktree "$WORKTREE_DIR"
 
+LINKED_SCRIPTS=()
 for script in "${GENERIC_TICKET_SCRIPTS[@]}"; do
-ln -fs "$SCRIPT_DIR/$script" "$TICKET_DIR/$script"
+dest="$TICKET_DIR/$script"
+if [[ -f "$dest" && ! -L "$dest" ]]; then
+echo "new-ticket-worktree.sh: [INFO] skipping $script -- ticket has its own copy (regular file, not a symlink), not overwriting"
+continue
+fi
+ln -fs "$SCRIPT_DIR/$script" "$dest"
+LINKED_SCRIPTS+=("$script")
 done
-echo "new-ticket-worktree.sh: [INFO] symlinked generic scripts into $TICKET_DIR: ${GENERIC_TICKET_SCRIPTS[*]}"
+echo "new-ticket-worktree.sh: [INFO] symlinked generic scripts into $TICKET_DIR: ${LINKED_SCRIPTS[*]}"
 
 if [[ -n "$SKELETON_FROM" ]]; then
 SRC_TICKET="$(normalize_ticket "$SKELETON_FROM")"
