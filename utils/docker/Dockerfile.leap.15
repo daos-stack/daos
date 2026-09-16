@@ -358,3 +358,10 @@ COPY --chown=daos_server:daos_server src/tests/ftest/cart/util/cart_logtest.py /
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
+
+# Output stages for exporting RPM artifacts directly (e.g. via BuildKit --output)
+FROM scratch AS deps-rpm-output
+COPY --from=build-ci /home/daos/rpms/ /
+
+FROM scratch AS rpm-output
+COPY --from=build-local /home/daos/rpms/ /
