@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2024, Intel Corporation */
+/*
+ * Copyright 2015-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
+ */
 
 /*
  * palloc.h -- internal definitions for persistent allocator
@@ -31,18 +34,19 @@ struct palloc_heap {
 
 struct memory_block;
 struct mbrt;
+struct umem_bucket_req;
 
 typedef int (*palloc_constr)(void *base, void *ptr, size_t usable_size, void *arg);
 
 int
 palloc_operation(struct palloc_heap *heap, uint64_t off, uint64_t *dest_off, size_t size,
 		 palloc_constr constructor, void *arg, uint64_t extra_field, uint16_t object_flags,
-		 uint16_t class_id, uint32_t zset_id, struct operation_context *ctx);
+		 uint16_t class_id, struct umem_bucket_req *req, struct operation_context *ctx);
 
 int
 palloc_reserve(struct palloc_heap *heap, size_t size, palloc_constr constructor, void *arg,
-	       uint64_t extra_field, uint16_t object_flags, uint16_t class_id, uint32_t zset_id,
-	       struct dav_action *act);
+	       uint64_t extra_field, uint16_t object_flags, uint16_t class_id,
+	       struct umem_bucket_req *req, struct dav_action *act);
 
 int
 palloc_action_isalloc(struct dav_action *act);

@@ -685,6 +685,19 @@ struct umem_instance;
 /* Macros associated with Memory buckets */
 #define	UMEM_DEFAULT_MBKT_ID	0
 
+/**
+ * Memory bucket allocation request.
+ *
+ * Describes the set of evictable memory buckets an allocation may be served
+ * from, in priority order. A NULL request is equivalent to allocating from the
+ * default (non-evictable) bucket.
+ */
+typedef struct umem_bucket_req {
+	const uint32_t *ubr_bkt_ids; /* Ordered list of bucket IDs (allocation priority) */
+	uint32_t        ubr_bkt_cnt; /* Number of valid entries in ubr_bkt_ids */
+	uint32_t        ubr_bkt_max; /* Max E-buckets allowed for the object */
+} umem_bucket_req_t;
+
 /* type num used by umem ops */
 enum {
 	UMEM_TYPE_ANY,
@@ -707,10 +720,10 @@ typedef struct {
 	 * \param size	   [IN]	size to allocate.
 	 * \param flags	   [IN]	flags like zeroing, noflush (for PMDK and BMEM)
 	 * \param type_num [IN]	struct type (for PMDK and BMEM)
-	 * \param mbkt_id  [IN]	memory bucket id (for BMEM)
+	 * \param req      [IN]	memory bucket request (for BMEM), NULL for default bucket
 	 */
 	umem_off_t (*mo_tx_alloc)(struct umem_instance *umm, size_t size, uint64_t flags,
-				  unsigned int type_num, unsigned int mbkt_id);
+				  unsigned int type_num, struct umem_bucket_req *req);
 	/**
 	 * Add the specified range of umoff to current memory transaction.
 	 *
@@ -773,10 +786,10 @@ typedef struct {
 	 * \param act	[IN|OUT]	action used for later cancel/publish.
 	 * \param size	[IN]		size to be reserved.
 	 * \param type_num [IN]		struct type (for PMDK)
-	 * \param mbkt_id  [IN]		memory bucket id (for BMEM)
+	 * \param req      [IN]		memory bucket request (for BMEM), NULL for default bucket
 	 */
 	umem_off_t (*mo_reserve)(struct umem_instance *umm, void *act, size_t size,
-				 unsigned int type_num, unsigned int mbkt_id);
+				 unsigned int type_num, struct umem_bucket_req *req);
 
 	/**
 	 * Defer free til commit.  For use with reserved extents that are not
@@ -830,10 +843,10 @@ typedef struct {
 	 * \param size	   [IN]	 size to allocate.
 	 * \param flags	   [IN]	 flags like zeroing, noflush (for PMDK)
 	 * \param type_num [IN]	 struct type (for PMDK)
-	 * \param mbkt_id  [IN]	 memory bucket id (for BMEM)
+	 * \param req      [IN]	 memory bucket request (for BMEM), NULL for default bucket
 	 */
 	umem_off_t (*mo_atomic_alloc)(struct umem_instance *umm, size_t size, unsigned int type_num,
-				      unsigned int mbkt_id);
+				      struct umem_bucket_req *req);
 
 	/**
 	 * flush data at specific offset to persistent store.
@@ -956,11 +969,11 @@ umem_has_tx(struct umem_instance *umm)
 	return umm->umm_ops->mo_tx_add != NULL;
 }
 
-#define umem_alloc_verb(umm, flags, size, mbkt_id)                                                 \
+#define umem_alloc_verb(umm, flags, size, req)                                                     \
 	({                                                                                         \
 		umem_off_t __umoff;                                                                \
                                                                                                    \
-		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY, mbkt_id);   \
+		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY, req);       \
 		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
 			  "Invalid assumption about allocnot using flag bits");                    \
 		D_DEBUG(DB_MEM,                                                                    \
@@ -971,17 +984,15 @@ umem_has_tx(struct umem_instance *umm)
 		__umoff;                                                                           \
 	})
 
-#define umem_alloc(umm, size)  umem_alloc_verb(umm, 0, size, UMEM_DEFAULT_MBKT_ID)
+#define umem_alloc(umm, size)                   umem_alloc_verb(umm, 0, size, NULL)
 
-#define umem_alloc_from_bucket(umm, size, mbkt_id)  umem_alloc_verb(umm, 0, size, mbkt_id)
+#define umem_alloc_from_bucket(umm, size, req)  umem_alloc_verb(umm, 0, size, req)
 
-#define umem_zalloc(umm, size) umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, UMEM_DEFAULT_MBKT_ID)
+#define umem_zalloc(umm, size)                  umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, NULL)
 
-#define umem_zalloc_from_bucket(umm, size, mbkt_id)						   \
-	umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, mbkt_id)
+#define umem_zalloc_from_bucket(umm, size, req) umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, req)
 
-#define umem_alloc_noflush(umm, size)								   \
-	umem_alloc_verb(umm, UMEM_FLAG_NO_FLUSH, size, UMEM_DEFAULT_MBKT_ID)
+#define umem_alloc_noflush(umm, size)           umem_alloc_verb(umm, UMEM_FLAG_NO_FLUSH, size, NULL)
 
 #define umem_free(umm, umoff)                                                                      \
 	({                                                                                         \
@@ -1165,11 +1176,10 @@ int umem_rsrvd_act_free(struct umem_rsrvd_act **act);
 
 umem_off_t
 umem_reserve_common(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act, size_t size,
-	     unsigned int mbkt_id);
-#define umem_reserve(umm, rsrvd_act, size)							\
-	umem_reserve_common(umm, rsrvd_act, size, UMEM_DEFAULT_MBKT_ID)
-#define umem_reserve_from_bucket(umm, rsrvd_act, size, mbkt_id)					\
-	umem_reserve_common(umm, rsrvd_act, size, mbkt_id)
+		    struct umem_bucket_req *req);
+#define umem_reserve(umm, rsrvd_act, size) umem_reserve_common(umm, rsrvd_act, size, NULL)
+#define umem_reserve_from_bucket(umm, rsrvd_act, size, req)                                        \
+	umem_reserve_common(umm, rsrvd_act, size, req)
 
 void
 umem_defer_free(struct umem_instance *umm, umem_off_t off, struct umem_rsrvd_act *rsrvd_act);
@@ -1190,15 +1200,15 @@ static inline umem_off_t
 umem_atomic_alloc(struct umem_instance *umm, size_t len, unsigned int type_num)
 {
 	D_ASSERT(umm->umm_ops->mo_atomic_alloc != NULL);
-	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num, UMEM_DEFAULT_MBKT_ID);
+	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num, NULL);
 }
 
 static inline umem_off_t
 umem_atomic_alloc_from_bucket(struct umem_instance *umm, size_t len, unsigned int type_num,
-		  unsigned int mbkt_id)
+			      struct umem_bucket_req *req)
 {
 	D_ASSERT(umm->umm_ops->mo_atomic_alloc != NULL);
-	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num, mbkt_id);
+	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num, req);
 }
 
 static inline int

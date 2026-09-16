@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2024, Intel Corporation */
+/*
+ * Copyright 2015-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
+ */
 
 /*
  * tx.c -- transactions implementation
@@ -335,8 +338,8 @@ tx_ranges_insert_def(dav_obj_t *pop, struct tx *tx,
  * tx_alloc_common -- (internal) common function for alloc and zalloc
  */
 static uint64_t
-tx_alloc_common(struct tx *tx, size_t size, type_num_t type_num,
-		palloc_constr constructor, struct tx_alloc_args args)
+tx_alloc_common(struct tx *tx, size_t size, type_num_t type_num, palloc_constr constructor,
+		struct tx_alloc_args args, struct umem_bucket_req *req)
 {
 	const struct tx_range_def *r;
 	uint64_t off;
@@ -354,8 +357,7 @@ tx_alloc_common(struct tx *tx, size_t size, type_num_t type_num,
 		return obj_tx_fail_null(ENOMEM, args.flags);
 
 	if (palloc_reserve(pop->do_heap, size, constructor, &args, type_num, 0,
-			   CLASS_ID_FROM_FLAG(args.flags), EZONE_ID_FROM_FLAG(args.flags),
-			   action) != 0)
+			   CLASS_ID_FROM_FLAG(args.flags), req, action) != 0)
 		goto err_oom;
 
 	palloc_get_prange(action, &off, &size, 1);
@@ -1272,7 +1274,7 @@ dav_tx_xadd_range_v2(uint64_t hoff, size_t size, uint64_t flags)
  * dav_tx_alloc -- allocates a new object
  */
 DAV_FUNC_EXPORT uint64_t
-dav_tx_alloc_v2(size_t size, uint64_t type_num, uint64_t flags)
+dav_tx_alloc_v2(size_t size, uint64_t type_num, uint64_t flags, struct umem_bucket_req *req)
 {
 	uint64_t off;
 	struct tx *tx = get_tx();
@@ -1299,8 +1301,8 @@ dav_tx_alloc_v2(size_t size, uint64_t type_num, uint64_t flags)
 		return off;
 	}
 
-	off = tx_alloc_common(tx, size, (type_num_t)type_num,
-			constructor_tx_alloc, ALLOC_ARGS(flags));
+	off = tx_alloc_common(tx, size, (type_num_t)type_num, constructor_tx_alloc,
+			      ALLOC_ARGS(flags), req);
 
 	DAV_API_END();
 	return off;
@@ -1506,7 +1508,7 @@ obj_alloc_root(dav_obj_t *pop, size_t size)
 	operation_add_entry(ctx, pop->do_root_sizep, size, ULOG_OPERATION_SET);
 
 	ret = palloc_operation(pop->do_heap, *pop->do_root_offsetp, pop->do_root_offsetp, size,
-			       constructor_zrealloc_root, &carg, 0, 0, 0, 0,
+			       constructor_zrealloc_root, &carg, 0, 0, 0, NULL,
 			       ctx); /* REVISIT: object_flags and type num ignored*/
 
 	lw_tx_end(pop, NULL);
@@ -1579,9 +1581,8 @@ constructor_alloc(void *ctx, void *ptr, size_t usable_size, void *arg)
  * obj_alloc_construct -- (internal) allocates a new object with constructor
  */
 static int
-obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
-	type_num_t type_num, uint64_t flags,
-	dav_constr constructor, void *arg)
+obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size, type_num_t type_num,
+		    uint64_t flags, struct umem_bucket_req *req, dav_constr constructor, void *arg)
 {
 	struct operation_context *ctx;
 	struct constr_args        carg;
@@ -1604,7 +1605,7 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 	operation_start(ctx);
 
 	ret = palloc_operation(pop->do_heap, 0, offp, size, constructor_alloc, &carg, type_num, 0,
-			       CLASS_ID_FROM_FLAG(flags), EZONE_ID_FROM_FLAG(flags), ctx);
+			       CLASS_ID_FROM_FLAG(flags), req, ctx);
 
 	lw_tx_end(pop, NULL);
 	return ret;
@@ -1615,7 +1616,7 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
  */
 DAV_FUNC_EXPORT int
 dav_alloc_v2(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num, uint64_t flags,
-	   dav_constr constructor, void *arg)
+	     struct umem_bucket_req *req, dav_constr constructor, void *arg)
 {
 	DAV_DBG(3, "pop %p offp %p size %zu type_num %llx flags %llx constructor %p arg %p", pop,
 		offp, size, (unsigned long long)type_num, (unsigned long long)flags, constructor,
@@ -1634,7 +1635,7 @@ dav_alloc_v2(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num, uin
 	}
 
 	DAV_API_START();
-	int ret = obj_alloc_construct(pop, offp, size, type_num, flags, constructor, arg);
+	int ret = obj_alloc_construct(pop, offp, size, type_num, flags, req, constructor, arg);
 	if (ret) {
 		errno = ret;
 		ret   = -1;
@@ -1667,8 +1668,7 @@ dav_free_v2(dav_obj_t *pop, uint64_t off)
 	ctx = pop->external;
 	operation_start(ctx);
 
-	palloc_operation(pop->do_heap, off, NULL, 0, NULL, NULL,
-			0, 0, 0, 0, ctx);
+	palloc_operation(pop->do_heap, off, NULL, 0, NULL, NULL, 0, 0, 0, NULL, ctx);
 
 	lw_tx_end(pop, NULL);
 	DAV_API_END();
@@ -1702,7 +1702,7 @@ dav_memcpy_persist_v2(dav_obj_t *pop, void *dest, const void *src,
  */
 DAV_FUNC_EXPORT uint64_t
 dav_reserve_v2(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num,
-		uint64_t flags)
+	       uint64_t flags, struct umem_bucket_req *req)
 {
 	struct constr_args carg;
 	int                tx_inprogress = 0;
@@ -1732,7 +1732,7 @@ dav_reserve_v2(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t typ
 	carg.arg         = NULL;
 
 	if (palloc_reserve(pop->do_heap, size, constructor_alloc, &carg, type_num, 0,
-			   CLASS_ID_FROM_FLAG(flags), EZONE_ID_FROM_FLAG(flags), act) != 0) {
+			   CLASS_ID_FROM_FLAG(flags), req, act) != 0) {
 		if (!tx_inprogress)
 			lw_tx_end(pop, NULL);
 		DAV_API_END();
@@ -1902,7 +1902,7 @@ obj_realloc(dav_obj_t *pop, uint64_t *offp, size_t *sizep, size_t size, uint16_t
 	operation_add_entry(ctx, sizep, size, ULOG_OPERATION_SET);
 
 	ret = palloc_operation(pop->do_heap, *offp, offp, size, constructor_zrealloc_root, &carg, 0,
-			       0, class_id, 0, ctx);
+			       0, class_id, NULL, ctx);
 
 	return ret;
 }

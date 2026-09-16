@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2024, Intel Corporation */
-/* (C) Copyright 2025 Hewlett Packard Enterprise Development LP */
+/*
+ * Copyright 2015-2024 Intel Corporation.
+ */
+/* (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP */
 
 /*
  * dav_flags.h -- Interfaces exported by DAOS internal Allocator for VOS (DAV)
@@ -17,6 +19,7 @@
 
 typedef struct dav_obj dav_obj_t;
 struct umem_store;
+struct umem_bucket_req;
 
 /**
  * Create and initialize a DAV object and return its handle.
@@ -81,7 +84,7 @@ typedef int (*dav_constr)(dav_obj_t *pop, void *ptr, void *arg);
  */
 int
 dav_alloc_v2(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num, uint64_t flags,
-	   dav_constr constructor, void *arg);
+	     struct umem_bucket_req *req, dav_constr constructor, void *arg);
 
 /**
  * Frees the memory at specified offset within the DAV object pointed to by hdl.
@@ -179,13 +182,15 @@ dav_tx_errno_v2(void);
  *  - POBJ_XALLOC_NO_FLUSH - skip flush on commit
  *  - POBJ_XALLOC_NO_ABORT - if the function does not end successfully,
  *  - DAV_CLASS_ID(id)	   - id of allocation class to use.
- *  - DAV_EZONE_ID(id)	   - id of zone to use.
  *  do not abort the transaction and return the error number.
+ *
+ * The memory bucket to allocate from is described by \a req (NULL for the
+ * default bucket).
  *
  * This function must be called during TX_STAGE_WORK.
  */
 uint64_t
-dav_tx_alloc_v2(size_t size, uint64_t type_num, uint64_t flags);
+dav_tx_alloc_v2(size_t size, uint64_t type_num, uint64_t flags, struct umem_bucket_req *req);
 
 /*
  * Transactionally frees an existing object.
@@ -258,7 +263,7 @@ dav_tx_xadd_range_direct_v2(const void *ptr, size_t size, uint64_t flags);
 struct dav_action;
 uint64_t
 dav_reserve_v2(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num,
-	     uint64_t flags);
+	       uint64_t flags, struct umem_bucket_req *req);
 void
 dav_defer_free_v2(dav_obj_t *pop, uint64_t off, struct dav_action *act);
 void
