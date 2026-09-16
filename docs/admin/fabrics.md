@@ -162,6 +162,65 @@ that have been validated with DAOS can be found in the
 which also provides more information and references
 for the supported high-performance fabrics.
 
+### UCX Fabric Support
+
+For NVIDIA InfiniBand and RoCE fabrics, DAOS supports
+[UCX](https://www.openucx.org/) as an alternative to the default
+[libfabric](https://ofiwg.github.io/libfabric/) network stack.
+The UCX provider is fully supported since DAOS 2.4.
+
+To enable DAOS UCX support on NVIDIA InfiniBand or RoCE fabrics,
+the following steps are needed:
+
+* A supported version of DOCA-OFED must be installed _before_
+  DAOS is installed on all DAOS servers and clients. DAOS only supports
+  the NVIDIA-provided DOCA-OFED stack for UCX, not Linux inbox drivers.
+  Refer to the [DAOS Support Matrix](../release/support_matrix.md)
+  for information about supported DOCA-OFED releases.
+
+* The `mercury-ucx` RPM package must be **manually** selected for
+  installation. The base `mercury` RPM package ships by default with the
+  `mercury-libfabric` package unless `mercury-ucx` is also installed.
+  The `mercury-ucx` RPM contains the UCX plugin that is required for
+  enabling UCX support.
+  This RPM **must** be installed when UCX needs to be used. Attempts to
+  install this RPM on systems without the required UCX packages will fail.
+
+* When installing DAOS, explicitly list the `mercury-ucx` RPM package
+  if it was not already installed in the previous step.
+  For example, using the `dnf` package manager on EL9:
+  ```bash
+  # on DAOS_ADMIN nodes:
+  dnf install mercury-ucx daos-admin
+
+  # on DAOS_SERVER nodes:
+  dnf install mercury-ucx daos-server
+
+  # on DAOS_CLIENT nodes:
+  dnf install mercury-ucx daos-client
+  ```
+
+After UCX support has been enabled by installing the `mercury-ucx`
+package, the network provider in the DAOS server's
+configuration file (`/etc/daos/daos_server.yml`) should be changed.
+A sample YAML file is available on [GitHub][daos_server_ucx_yml].
+The recommended setting for UCX is `provider: ucx+dc_x` (see the following
+sections).
+
+Verify the installation and provider configuration before starting the
+system. On each DAOS server, run:
+
+```bash
+daos_server network scan
+```
+
+The output should list `ucx+dc_x` for the configured InfiniBand or RoCE
+interface. On each DAOS client, run `daos_agent net-scan` and verify that
+`ucx+dc_x` is listed for the expected interface. If the provider is missing,
+check that the DOCA-OFED stack and `mercury-ucx` are installed on that node.
+
+[daos_server_ucx_yml]: https://github.com/daos-stack/daos/blob/master/utils/config/examples/daos_server_ucx.yml
+
 ## NIC firmware update
 
 The adapter firmware on the Network Interface Cards (NICs) of the high-speed
