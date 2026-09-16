@@ -81,7 +81,7 @@ RUN dnf remove -y $DNF_UPGRADE_EXCLUDES || true && \
 
 # Setup docker image for gcc build only. This is done in a separate stage
 # to allow for a smaller image for CI building only.
-FROM basic AS build-ci
+FROM basic AS build-ci-setup
 
 # Install minimal set of packages for building DAOS with gcc compiler and
 # no Java support.
@@ -145,7 +145,7 @@ RUN --mount=type=bind,source=utils/build/install_deps.sh,target=/tmp/daos/utils/
         /tmp/daos/utils/build/install_deps.sh; \
         sudo dnf clean all; \
     }
-
+FROM build-ci-setup AS build-ci
 # Build DAOS dependencies
 WORKDIR /home/daos/pre
 ARG DAOS_DEPS_BUILD

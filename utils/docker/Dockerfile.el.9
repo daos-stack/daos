@@ -84,7 +84,7 @@ RUN dnf remove -y $DNF_UPGRADE_EXCLUDES || true && \
 
 # Setup docker image for gcc build only. This is done in a separate stage
 # to allow for a smaller image for CI building only.
-FROM basic AS build-setup
+FROM basic AS build-ci-setup
 
 # Install minimal set of packages for building DAOS with gcc compiler and
 # no Java support.

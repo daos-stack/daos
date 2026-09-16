@@ -829,7 +829,7 @@ pipeline {
                                                                 deps_build: true,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --target build-setup' +
+                                                ' --target build-ci-setup' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
@@ -837,13 +837,9 @@ pipeline {
                     }
                     steps {
                         script {
-                            sh label: 'Collect dependency RPMs built into the image',
-                               script: 'mkdir -p rpms/deps && ' +
-                                       'cp /home/daos/rpms/deps/*.rpm rpms/deps/ || true'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
-                                           build_deps: 'yes',
                                            stash_opt: true,
                                            scons_exe: 'utils/build/build_daos.sh --null-build',
                                            scons_args: sconsArgs() +
@@ -851,7 +847,7 @@ pipeline {
                             sh label: 'Build DAOS RPMs',
                                 script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
                                     ' utils/build/build_packages.sh --rpm-suffix=el9' +
-                                    ' --build-range=daos rpms'
+                                    ' --build-range=all rpms'
                             // Go binaries need to be instrumented in order to work reliably
                             // with valgrind. We do this in a separate build because we don't
                             // want to ship the instrumented binaries.
@@ -896,20 +892,16 @@ pipeline {
                                                                 deps_build: true,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --target build-ci' +
+                                                ' --target build-ci-setup' +
                                                 ' --build-arg POINT_RELEASE=.6' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
                         script {
-                            sh label: 'Collect dependency RPMs built into the image',
-                               script: 'mkdir -p rpms/deps && ' +
-                                       'cp /home/daos/rpms/deps/*.rpm rpms/deps/ || true'
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
-                                           build_deps: 'no',
                                            stash_opt: true,
                                            scons_exe: 'utils/build/build_daos.sh',
                                            scons_args: sconsArgs() +
@@ -917,7 +909,7 @@ pipeline {
                             sh label: 'Build DAOS RPMs',
                                 script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
                                     ' utils/build/build_packages.sh --rpm-suffix=suse.lp156' +
-                                    ' --build-range=daos rpms'
+                                    ' --build-range=all rpms'
                         }
                     }
                     post {
