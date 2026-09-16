@@ -24,8 +24,7 @@ if [[ -f "$ticket_dir/env.sh" && -f "$ticket_dir/inventory.yml" ]]; then
 ticket_dir="$(realpath "$ticket_dir")"
 echo "  This is a per-ticket worktree -- finish setting it up:" >&2
 echo "    1. Review $ticket_dir/inventory.yml" >&2
-echo "    2. From \${DAOS_TOOLS_DIR:-~/work/daos-tools}/utils/ansible/ftest/:" >&2
-echo "         ansible-playbook -i $ticket_dir/inventory.yml ftest.yml" >&2
+echo "    2. $ticket_dir/provision-daos.sh" >&2
 echo "    3. $ticket_dir/build-daos.sh --force --deps" >&2
 echo "    4. direnv reload (or cd out and back in)" >&2
 else

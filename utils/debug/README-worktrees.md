@@ -129,9 +129,10 @@ collides with another's:
 # 1. generate env.sh/inventory.yml/README.md (done automatically for new tickets)
 ~/work/daos-tools/utils/debug/scripts/generate-daos-env.sh --ticket DAOS-17321 --worktree ~/work/tickets/daos-jira/DAOS-17321/daos
 
-# 2. provision the cluster for this ticket (manual, deliberate -- see the
-#    ticket's README.md for what this changes on the shared cluster)
-cd ~/work/daos-tools/utils/ansible/ftest && ansible-playbook -i ~/work/tickets/daos-jira/DAOS-17321/inventory.yml ftest.yml
+# 2. provision the cluster for this ticket (manual, deliberate -- review
+#    inventory.yml first; see the ticket's README.md for what this changes
+#    on the shared cluster)
+cd ~/work/tickets/daos-jira/DAOS-17321 && ./provision-daos.sh
 
 # 3. build/install into this ticket's own isolated prefix, reusing shared prereqs
 cd ~/work/tickets/daos-jira/DAOS-17321 && ./build-daos.sh --force --deps
@@ -140,12 +141,15 @@ cd ~/work/tickets/daos-jira/DAOS-17321 && ./build-daos.sh --force --deps
 ./run-vos_tests.sh
 ```
 
-Only the build/install (steps 1 and 3) and unit tests (step 4) are truly
-isolated per ticket. Step 2's playbook run, and running a *live*
-`start-daos.sh` multi-node cluster, remain exclusive across tickets — see
-the generated `README.md`'s "Isolation model" section for exactly why
-(shared systemd units, `ld.so.conf.d`, and ultimately the physical
-PMEM/NVMe/network hardware on `brd-216..219`).
+Steps 1-4 are all isolated per ticket: `provision-daos.sh` (step 2) doesn't
+repoint the shared `/etc/ld.so.conf.d`/PAM PATH by default
+(`daos_client_manage_system_paths=false`), so it no longer races with
+another ticket's provisioning run the way a bare `ansible-playbook` call
+would. Only running a *live* `start-daos.sh` multi-node cluster (which
+needs `build-daos.sh --activate` first) remains exclusive across tickets —
+see the generated `README.md`'s "Isolation model" section for exactly why
+(shared systemd units, the activated `ld.so.conf.d` entry, and ultimately
+the physical PMEM/NVMe/network hardware on `brd-216..219`).
 
 
 ### The `DAOS_BUILD`/`DAOS_INSTALL` collision this also avoids
@@ -180,5 +184,6 @@ own `DAOS_BUILD`, and `DAOS_INSTALL` was always the one shared location.
 | `scripts/generate-daos-env.sh` | Renders a ticket-specific `env.sh`/`inventory.yml`/`README.md` with isolated `DAOS_BUILD`/`DAOS_INSTALL` paths. Skips files that already exist unless `--force`. |
 | `scripts/compute-daos-alt-prefix.sh` | Computes the colon-separated scons `ALT_PREFIX` list from a shared install's `.build_vars.sh`, used by `generate-daos-env.sh`. |
 | `scripts/build-daos.sh` | Deployed into each ticket dir; ssh + invokes that ticket's ansible-generated `daos-make.sh`, `--build-only` by default (see `--activate`). |
+| `scripts/provision-daos.sh` | Deployed into each ticket dir; wraps `ansible-playbook -i inventory.yml ftest.yml`, passing `-e daos_client_manage_system_paths=false` so provisioning this ticket doesn't repoint the shared ld.so.conf.d/PAM PATH (see `build-daos.sh --activate`). |
 | `scripts/run-vos_tests.sh`, `run-ddb_ut.sh`, `run-ddb_tests.sh`, `run-dtx_ut.sh`, `run-dtx_tests.sh`, `run-go_unit.sh` | Deployed into each ticket dir; generic standalone unit-test-suite runners. |
 | `ansible/ftest/` | The DAOS functional-test-platform Ansible playbook/roles (imported from the `ansible/ftest` branch — see "The branch tree" above), extended with `daos_alt_prefix`/`ALT_PREFIX` reuse and `daos-make.sh --build-only` for per-ticket isolated builds. |
