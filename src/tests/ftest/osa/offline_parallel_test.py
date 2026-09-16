@@ -61,7 +61,18 @@ class OSAOfflineParallelTest(OSAUtils):
                 # kwargs. getattr is used to obtain the method in dmg object.
                 # eg: dmg -> pool_exclude method, then pass arguments like
                 # puuid, rank, target to the pool_exclude method.
-                getattr(dmg, "pool_{}".format(action))(**kwargs)
+                max_attempts = 3
+                for attempt in range(1, max_attempts + 1):
+                    result = getattr(dmg, "pool_{}".format(action))(**kwargs)
+                    # The dmg pool_* methods return a CmdResult; validate the exit status
+                    # here since a non-zero status is not always raised as a CommandFailure.
+                    if result.exit_status == 0:
+                        return
+                    self.log.info(
+                        "%s attempt %s/%s failed: %s", action, attempt, max_attempts,
+                        result.stderr_text)
+                results.put("{} failed after {} attempts: {}".format(
+                    action, max_attempts, result.stderr_text))
         except Exception as error:      # pylint: disable=broad-except
             results.put("pool {} failed: {}".format(action, str(error)))
 

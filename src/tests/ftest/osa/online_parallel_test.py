@@ -74,9 +74,20 @@ class OSAOnlineParallelTest(OSAUtils):
             # eg: dmg -> pool_exclude method, then pass arguments like
             # puuid, rank, target to the pool_exclude method.
             # Add some delay between each dmg command.
-            getattr(dmg, "pool_{}".format(action))(**action_args[action])
-        except CommandFailure:
-            results.put("{} failed".format(action_args[action]))
+            max_attempts = 3
+            for attempt in range(1, max_attempts + 1):
+                result = getattr(dmg, "pool_{}".format(action))(**action_args[action])
+                # The dmg pool_* methods return a CmdResult; validate the exit status
+                # here since a non-zero status is not always raised as a CommandFailure.
+                if result.exit_status == 0:
+                    return
+                self.log.info(
+                    "%s attempt %s/%s failed: %s", action, attempt, max_attempts,
+                    result.stderr_text)
+            results.put("{} failed after {} attempts: {}".format(
+                action, max_attempts, result.stderr_text))
+        except CommandFailure as error:
+            results.put("{} failed: {}".format(action_args[action], error))
 
     def run_online_parallel_test(self, num_pool, racer=False):
         """Run multiple OSA commands / IO in parallel.
@@ -169,6 +180,12 @@ class OSAOnlineParallelTest(OSAUtils):
             # Wait to finish the dmg threads
             for dmg_thrd in dmg_threads:
                 dmg_thrd.join()
+
+            # Fail the test if any dmg command reported a failure via the queue
+            dmg_failures = []
+            while not self.out_queue.empty():
+                dmg_failures.append(self.out_queue.get())
+            self.assertEqual(dmg_failures, [], "dmg command(s) failed: {}".format(dmg_failures))
 
             # Wait to finish the ior thread
             ior_thread.join()
