@@ -2,11 +2,17 @@
 # disabled, neither the ld.so.conf.d file nor the PAM PATH= line is touched.
 # See ../default/converge.yml + verify.yml for the (default true) behavior,
 # already covered there together with users_groups.yml/proxy sentinels.
+#
+# Uses the *string* "false", not the YAML boolean false: this is exactly
+# what `ansible-playbook -e daos_client_manage_system_paths=false` (plain
+# key=value extra-vars, as used by provision-daos.sh) actually produces --
+# a real bug (ansible-core's strict when: rejected the truthy non-empty
+# string) only reproduced this way, not with a YAML-native boolean.
 - hosts: all
   gather_facts: true
   vars:
     daos_runtime_dir: /opt/daos
-    daos_client_manage_system_paths: false
+    daos_client_manage_system_paths: "false"
   tasks:
     - name: Test system-wide dynamic linker / PATH configuration (disabled)
       include_role:

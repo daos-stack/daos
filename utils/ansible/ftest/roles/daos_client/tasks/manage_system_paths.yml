@@ -9,8 +9,17 @@
 # --activate instead. The `when:` lives here (not on the include_tasks call
 # in main.yml) so this file is self-gating regardless of how it's included
 # (e.g. Molecule's `include_role: tasks_from:`).
+#
+# The `| bool` filter is required: `-e daos_client_manage_system_paths=false`
+# on the ansible-playbook command line (the plain key=value extra-vars
+# syntax, as used by provision-daos.sh) sets the variable to the *string*
+# "false", not a boolean -- ansible-core's strict when: conditionals then
+# fail with "Conditional result (True) was derived from value of type
+# 'str'" instead of silently treating the non-empty string as truthy.
+# `| bool` correctly coerces "false"/"no"/"0"/etc. strings (and real
+# booleans, unchanged) to the right boolean either way.
 - name: Update system-wide dynamic linker / PATH configuration
-  when: daos_client_manage_system_paths
+  when: daos_client_manage_system_paths | bool
   block:
     - name: Update dynamic linker configuration
       become: true
