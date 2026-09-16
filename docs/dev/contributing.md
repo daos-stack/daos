@@ -141,9 +141,9 @@ that will land. CI takes advantage of this:
 
 - The **top** pull request of a stack gets the full verification: unit tests,
   functional tests, hardware tests and RPM tests.
-- Every pull request **below** the top only gets the cheap checks and an EL 9
-  build, so each layer is still proven to compile. Its Jenkins build reports
-  success once those pass.
+- Every pull request **below** the top only gets the cheap checks plus the EL 9
+  and Leap 15 builds, so each layer is still proven to compile on both a Red Hat
+  and a SUSE toolchain. Its Jenkins build reports success once those pass.
 
 Two consequences are worth knowing:
 
@@ -176,5 +176,5 @@ stack. Checks published by GitHub Actions are untouched and still run in full
 on every layer.
 
 Statuses are last-write-wins, so this is done before the stages start. Any
-stage that does run, such as the EL 9 build, replaces its status with the real
-result, including a failure.
+stage that does run, such as the EL 9 or Leap 15 build, replaces its status
+with the real result, including a failure.

@@ -120,7 +120,8 @@ void updateRunStage() {
         List<String> skipped = []
         for (stage in runStage.keySet()) {
             runStage[stage] = stage in ['Cancel Previous Builds', 'Pre-build',
-                                        'Python Bandit check', 'Build', 'Build on EL 9']
+                                        'Python Bandit check', 'Build', 'Build on EL 9',
+                                        'Build on Leap 15']
             reasons[stage] = 'mid-stack PR'
             if (!runStage[stage]) {
                 skipped.add(stage)
