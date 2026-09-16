@@ -1,0 +1,5 @@
+# When true (default), this node's DAOS install becomes the system-wide
+# default for ad hoc/interactive use (dynamic linker search path, PAM PATH).
+# Set to false to skip this -- e.g. a per-ticket isolated workflow that
+# manages its own "live" ticket via daos-make.sh --activate instead.
+daos_client_manage_system_paths: true
