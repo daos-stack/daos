@@ -1125,6 +1125,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: 'memcheck',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
@@ -1138,6 +1139,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
@@ -1151,6 +1153,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'leap15.6'
                         ),
@@ -1164,6 +1167,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'sles15.7'
                         ),
@@ -1177,6 +1181,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal
                         ),
                         'Fault injection testing': scriptedUnitTestStage(
@@ -1428,6 +1433,7 @@ pipeline {
                             pragma_suffix:'-cb-medium-ucx-provider-md-on-ssd',
                             label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-ucx',
                             stage_tags: 'cb,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
