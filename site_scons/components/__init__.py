@@ -215,7 +215,7 @@ def define_mercury(reqs):
             build_type = "Asan"
         elif 'thread' in sanitizers:
             build_type = "Tsan"
-        elif 'undefined' in sanitizers:
+        elif 'undefined_behavior' in sanitizers:
             build_type = "Ubsan"
     except KeyError:
         pass
