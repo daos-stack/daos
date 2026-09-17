@@ -118,7 +118,7 @@ crt_proc_struct_daos_prop_byteval(crt_proc_t proc, crt_proc_op_t proc_op,
 			D_FREE(bv);
 			return -DER_NOMEM;
 		}
-		/* freed in crt_proc_daos_prop_t() */
+		/* released by this function's FREEING pass */
 		bv->dpb_len = len;
 		*data       = bv;
 	}

@@ -407,8 +407,6 @@ pool_prop_write_byteval(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key,
 		rc = rdb_tx_update(tx, kvs, key, &value);
 	} else {
 		rc = rdb_tx_delete(tx, kvs, key);
-		if (rc == -DER_NONEXIST)
-			rc = 0;
 	}
 	return rc;
 }
@@ -417,9 +415,8 @@ static int
 pool_prop_read_byteval(struct rdb_tx *tx, const rdb_path_t *root, d_iov_t *key,
 		       struct daos_prop_entry *entry, uint32_t type)
 {
-	struct daos_prop_byteval *bv;
-	d_iov_t                   value;
-	int                       rc;
+	d_iov_t value;
+	int     rc;
 
 	entry->dpe_type    = type;
 	entry->dpe_val_ptr = NULL;
@@ -432,18 +429,7 @@ pool_prop_read_byteval(struct rdb_tx *tx, const rdb_path_t *root, d_iov_t *key,
 		return -DER_IO;
 	}
 
-	D_ALLOC_PTR(bv);
-	if (bv == NULL)
-		return -DER_NOMEM;
-	D_ALLOC(bv->dpb_data, value.iov_len);
-	if (bv->dpb_data == NULL) {
-		D_FREE(bv);
-		return -DER_NOMEM;
-	}
-	memcpy(bv->dpb_data, value.iov_buf, value.iov_len);
-	bv->dpb_len        = value.iov_len;
-	entry->dpe_val_ptr = bv;
-	return 0;
+	return daos_prop_entry_set_byteval(entry, value.iov_buf, value.iov_len);
 }
 
 /* copy \a prop to \a prop_def (duplicated default prop) */
@@ -5941,7 +5927,7 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_MD, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->psi_op.pi_uuid), rpc);
 
-	/* best-effort guard */
+	/* Properties are set through the management service, never by clients. */
 	if (daos_rpc_from_client(rpc)) {
 		D_ERROR(DF_UUID ": pool properties may only be set via the management service\n",
 			DP_UUID(in->psi_op.pi_uuid));
