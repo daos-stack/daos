@@ -110,6 +110,37 @@ void updateRunStage() {
         return
     }
 
+    // Handle a pull request that is not the top of its stack.  A stack merges atomically up to and
+    // including the pull request being merged, so the top pull request holds the complete set of
+    // changes that will land and verifying it verifies the whole stack.  The layers below it only
+    // need to be proven to build.
+    /* groovylint-disable-next-line UnnecessaryGetter */
+    if (!isStackTip()) {
+        println('updateRunStage: Detected mid-stack PR, only building')
+        List<String> skipped = []
+        for (stage in runStage.keySet()) {
+            runStage[stage] = stage in ['Cancel Previous Builds', 'Pre-build',
+                                        'Python Bandit check', 'Build', 'Build on EL 9',
+                                        'Build on Leap 15']
+            reasons[stage] = 'mid-stack PR'
+            if (!runStage[stage]) {
+                skipped.add(stage)
+            }
+        }
+        displayRunStage(reasons)
+        // A skipped stage never publishes its status check context, so GitHub would block this
+        // pull request forever waiting for the stages that are deliberately being run on the tip
+        // of the stack instead.  Publish those contexts here.  Do it before the stages run so
+        // that a stage which does run overwrites this with its real result.
+        Map stack = prStack()
+        notifySkippedRequiredChecks(
+            skipped_stages: skipped,
+            target_branch: target_branch,
+            description: "Runs on the tip of stack ${stack['number']}, " +
+                         "this is layer ${stack['position']} of ${stack['size']}")
+        return
+    }
+
     // Handle doc-only changes: Only run default or selected build stages
     if (docOnlyChange(target_branch)) {
         println('updateRunStage: Detected doc-only change, skipping testing')
@@ -410,7 +441,7 @@ String next_version() {
 }
 
 // Don't define this as a type or it loses it's global scope
-target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
+target_branch = targetBranch()
 String sanitized_JOB_NAME() {
     return JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 }
@@ -720,9 +751,20 @@ pipeline {
                         script {
                             String description = params.CI_BUILD_DESCRIPTION ?:
                                                  cachedCommitPragma('Build-description', '')
+                            Map stack = prStack()
+                            if (stack) {
+                                // Make it obvious why a mid-stack build did so little
+                                description += (description ? ' ' : '') +
+                                               "stack ${stack['number']}, " +
+                                               "layer ${stack['position']} of ${stack['size']} " +
+                                               "onto ${stack['base_ref']}"
+                            }
                             if (description) {
                                 buildDescription description
                             }
+                            // Make the branch this build really lands on available to the shell
+                            // scripts, which cannot use env.CHANGE_TARGET for a stacked PR.
+                            env.DAOS_TARGET_BRANCH = target_branch
                         }
                     }
                 }
@@ -853,27 +895,37 @@ pipeline {
                                            scons_exe: 'utils/build/build_daos.sh',
                                            scons_args: sconsArgs() +
                                                       ' TARGET_TYPE=release'))
-                            sh label: 'Build DAOS RPMs',
-                                script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
-                                    ' utils/build/build_packages.sh --rpm-suffix=el9' +
-                                    ' --build-range=daos rpms'
-                            // Go binaries need to be instrumented in order to work reliably
-                            // with valgrind. We do this in a separate build because we don't
-                            // want to ship the instrumented binaries.
-                            job_step_update(
-                                sconsBuild(parallel_build: true,
-                                           build_deps: 'no',
-                                           scons_exe: 'utils/build/build_daos.sh',
-                                           scons_args: sconsArgs() +
-                                                      ' BUILD_GO_VALGRIND=1 TARGET_TYPE=release'))
-                            sh label: 'Stash valgrind install tree for NLT',
-                                script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
-                            stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
+                            // Package and valgrind builds only feed the test stages, which are
+                            // skipped for a pull request that is not the top of its stack.
+                            /* groovylint-disable-next-line UnnecessaryGetter */
+                            if (isStackTip()) {
+                                sh label: 'Build DAOS RPMs',
+                                    script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
+                                        ' utils/build/build_packages.sh --rpm-suffix=el9' +
+                                        ' --build-range=daos rpms'
+                                // Go binaries need to be instrumented in order to work reliably
+                                // with valgrind. We do this in a separate build because we don't
+                                // want to ship the instrumented binaries.
+                                job_step_update(
+                                    sconsBuild(parallel_build: true,
+                                               build_deps: 'no',
+                                               scons_exe: 'utils/build/build_daos.sh',
+                                               scons_args: sconsArgs() +
+                                                          ' BUILD_GO_VALGRIND=1 TARGET_TYPE=release'))
+                                sh label: 'Stash valgrind install tree for NLT',
+                                    script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
+                                stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
+                            }
                         }
                     }
                     post {
                         success {
-                            uploadNewRPMs('el9', 'success')
+                            script {
+                                /* groovylint-disable-next-line UnnecessaryGetter */
+                                if (isStackTip()) {
+                                    uploadNewRPMs('el9', 'success')
+                                }
+                            }
                         }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
@@ -883,8 +935,13 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
-                            uploadNewRPMs('el9', 'cleanup')
-                            job_status_update()
+                            script {
+                                /* groovylint-disable-next-line UnnecessaryGetter */
+                                if (isStackTip()) {
+                                    uploadNewRPMs('el9', 'cleanup')
+                                }
+                                job_status_update()
+                            }
                         }
                     }
                 }
