@@ -159,11 +159,12 @@ exec_one(void *arg)
 	struct xstream_arg *xa = arg;
 	struct dlck_file   *file;
 	struct checker     *main_ck = &xa->ctrl->checker;
+	struct checker     *verbose_ck = xa->ctrl->common.verbose ? main_ck : NULL;
 	struct checker      ck;
 	int                 rc;
 
 	/** initialize the daos_io_* thread */
-	rc = dlck_engine_xstream_init(xa->xs);
+	rc = dlck_engine_xstream_init(xa->xs, &xa->engine->all_targets_ready, verbose_ck);
 	if (rc != DER_SUCCESS) {
 		xa->rc       = rc;
 		xa->progress = DLCK_XSTREAM_PROGRESS_END;
@@ -220,6 +221,8 @@ exec_one(void *arg)
 	dlck_xstream_set_rc(xa, rc);
 }
 
+#define START_ENGINE_STR "Start the engine"
+
 /**
  * The main thread spawns and waits for other threads to complete their tasks.
  */
@@ -229,6 +232,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	D_ASSERT(ctrl != NULL);
 
 	struct checker     *ck                 = &ctrl->checker;
+	struct checker     *verbose_ck         = ctrl->common.verbose ? ck : NULL;
 	char                log_dir_template[] = "/tmp/dlck_check_XXXXXX";
 	struct dlck_engine *engine             = NULL;
 	int                *rcs;
@@ -248,9 +252,9 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	}
 	CK_PRINTF(ck, "Log directory: %s\n", ctrl->log_dir);
 
-	CK_PRINT(ck, "Start the engine... ");
-	rc = dlck_engine_start(&ctrl->engine, &engine);
-	CK_APPENDL_RC(ck, rc);
+	CK_PRINT(ck, START_ENGINE_STR "...\n");
+	rc = dlck_engine_start(&ctrl->engine, verbose_ck, &engine);
+	CK_PRINTL_RC(ck, rc, START_ENGINE_STR);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}

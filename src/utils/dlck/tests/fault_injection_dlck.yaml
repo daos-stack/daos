@@ -10,6 +10,18 @@ fault_config:
   # - id: 131336 # DLCK_FAULT_ENGINE_EXEC
   # - id: 131337 # DLCK_FAULT_ENGINE_JOIN
   # - id: 131338 # DLCK_FAULT_ENGINE_STOP
+  # - id: 131339 # DLCK_FAULT_TLS_INIT
+  #   interval: 2 # skip daos_sys xstream
+  #   max_faults: 1
+  # - id: 131340 # DLCK_FAULT_BIO_XSCTXT_ALLOC
+  #   interval: 2 # skip daos_sys xstream
+  #   max_faults: 1
+  # - id: 131341 # DLCK_FAULT_ABT_EVENTUAL_CREATE
+  #   interval: 2 # skip daos_sys xstream
+  #   max_faults: 1
+  # - id: 131342 # DLCK_FAULT_ULT_CREATE
+  #   interval: 2 # skip daos_sys xstream
+  #   max_faults: 1
   # - id: 131584 # DAOS_FAULT_POOL_NVME_HEALTH
   #   interval: 2 # skip sys_db
   # - id: 131585 # DAOS_FAULT_POOL_OPEN_BIO

@@ -47,6 +47,7 @@ typedef void (*dlck_ult_func)(void *arg);
  * Start an engine.
  *
  * \param[in]	args		Engine's arguments.
+ * \param[in]	ck		Checker.
  * \param[out]	engine_ptr	Started engine.
  *
  * \retval DER_SUCCESS	Success.
@@ -54,7 +55,8 @@ typedef void (*dlck_ult_func)(void *arg);
  * \retval -DER_*	Other errors.
  */
 int
-dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr);
+dlck_engine_start(struct dlck_args_engine *args, struct checker *ck,
+		  struct dlck_engine **engine_ptr);
 
 /**
  * Stop an engine.
@@ -71,7 +73,9 @@ dlck_engine_stop(struct dlck_engine *engine);
 /**
  * Initialize an execution stream.
  *
- * \param[in,out]	xs	Execution stream to initialize.
+ * \param[in,out]	xs			Execution stream to initialize.
+ * \param[in]		all_targets_ready	Barrier to synchronize all targets before cleanup on
+ * error. \param[in]		ck			Checker.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_INVAL	Thread name generation failed.
@@ -79,7 +83,8 @@ dlck_engine_stop(struct dlck_engine *engine);
  * \retval -DER_*	Other errors.
  */
 int
-dlck_engine_xstream_init(struct dlck_xstream *xs);
+dlck_engine_xstream_init(struct dlck_xstream *xs, ABT_barrier *all_targets_ready,
+			 struct checker *ck);
 
 /**
  * Finalize an execution stream.

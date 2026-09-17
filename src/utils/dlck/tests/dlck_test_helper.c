@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -256,7 +256,7 @@ exec_one(void *arg)
 	struct dlck_file     *file;
 	int                   rc;
 
-	rc = dlck_engine_xstream_init(xst->xs);
+	rc = dlck_engine_xstream_init(xst->xs, NULL, NULL);
 	if (rc != DER_SUCCESS) {
 		xst->rc = rc;
 		return;
@@ -386,7 +386,7 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 	}
 
 	/** start an engine */
-	rc = dlck_engine_start(&args->engine, &engine);
+	rc = dlck_engine_start(&args->engine, NULL, &engine);
 	if (rc != DER_SUCCESS) {
 		(void)ABT_finalize();
 		return rc;

@@ -130,8 +130,16 @@ dlck_engine_xstream_has_nvme(int tgt_id)
 	return false;
 }
 
+#define DLCK_BARRIER_WAIT(barrier)                                                                 \
+	do {                                                                                       \
+		if (barrier != NULL) {                                                             \
+			ABT_barrier_wait(*(barrier));                                              \
+		}                                                                                  \
+	} while (0)
+
 int
-dlck_engine_xstream_init(struct dlck_xstream *xs)
+dlck_engine_xstream_init(struct dlck_xstream *xs, ABT_barrier *all_targets_ready,
+			 struct checker *ck)
 {
 	int                     tag;
 	int                     tgt_id = xs->tgt_id;
@@ -140,6 +148,8 @@ dlck_engine_xstream_init(struct dlck_xstream *xs)
 	void                   *tls;
 	struct dss_module_info *dmi;
 	int                     rc;
+
+	CK_PRINTF(ck, "[%d] initializing xstream...\n", tgt_id);
 
 	if (dlck_engine_xstream_is_sys(tgt_id)) {
 		tag   = DAOS_SERVER_TAG - DAOS_TGT_TAG;
@@ -158,36 +168,63 @@ dlck_engine_xstream_init(struct dlck_xstream *xs)
 	 * < 0			other error
 	 */
 	if (rc < 0 || rc >= DSS_XS_NAME_LEN) {
+		DLCK_BARRIER_WAIT(all_targets_ready);
 		return -DER_INVAL;
 	}
 
 	(void)pthread_setname_np(pthread_self(), name);
+	CK_PRINTF(ck, "[%d] xstream name: %s\n", tgt_id, name);
 
-	tls = dss_tls_init(tag, xs_id, tgt_id);
-	if (tls == NULL) {
-		/** Note:  dss_tls_init() returns NULL also on other issues */
-		return -DER_NOMEM;
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_TLS_INIT)) { /** fault injection */
+		tls = NULL;
+	} else {
+		tls = dss_tls_init(tag, xs_id, tgt_id);
 	}
+	if (tls == NULL) {
+		DLCK_BARRIER_WAIT(all_targets_ready);
+		/** Note:  dss_tls_init() returns NULL also on other issues */
+		rc = -DER_NOMEM;
+		goto fail_print;
+	}
+	CK_PRINTF(ck, "[%d] TLS initialized.\n", tgt_id);
 
 	if (dlck_engine_xstream_has_nvme(tgt_id)) {
 		dmi = dss_get_module_info();
 		D_ASSERT(dmi != NULL);
 
-		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
+		if (DAOS_FAIL_CHECK(DLCK_FAULT_BIO_XSCTXT_ALLOC)) { /** fault injection */
+			rc = daos_errno2der(daos_fail_value_get());
+		} else {
+			rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
+		}
 		if (rc != DER_SUCCESS) {
+			DLCK_BARRIER_WAIT(all_targets_ready);
 			goto fail_tls_fini;
 		}
+		CK_PRINTF(ck, "[%d] BIO XS context allocated.\n", tgt_id);
 
-		rc = ABT_eventual_create(0, &xs->nvme_poll_done);
+		if (DAOS_FAIL_CHECK(DLCK_FAULT_ABT_EVENTUAL_CREATE)) { /** fault injection */
+			rc = dss_der2abterr(daos_errno2der(daos_fail_value_get()));
+		} else {
+			rc = ABT_eventual_create(0, &xs->nvme_poll_done);
+		}
 		if (rc != ABT_SUCCESS) {
 			rc = dss_abterr2der(rc);
+			DLCK_BARRIER_WAIT(all_targets_ready);
 			goto fail_xsctxt_free;
 		}
+		CK_PRINTF(ck, "[%d] ABT eventual created.\n", tgt_id);
 
-		rc = dlck_ult_create(xs->pool, nvme_polling, xs, &xs->nvme_poll);
+		if (DAOS_FAIL_CHECK(DLCK_FAULT_ULT_CREATE)) { /** fault injection */
+			rc = daos_errno2der(daos_fail_value_get());
+		} else {
+			rc = dlck_ult_create(xs->pool, nvme_polling, xs, &xs->nvme_poll);
+		}
 		if (rc != DER_SUCCESS) {
+			DLCK_BARRIER_WAIT(all_targets_ready);
 			goto fail_eventual_free;
 		}
+		CK_PRINTF(ck, "[%d] NVMe polling ULT created.\n", tgt_id);
 	}
 
 	return DER_SUCCESS;
@@ -198,16 +235,23 @@ fail_xsctxt_free:
 	bio_xsctxt_free(dmi->dmi_nvme_ctxt);
 fail_tls_fini:
 	dss_tls_fini(tls);
+fail_print:
+	CK_PRINTFL_RC(ck, rc, "[%d] initializing xstream failed", tgt_id);
 
 	return rc;
 }
 
-static void
-dlck_engine_xstream_init_ult(void *arg)
-{
-	struct dlck_xstream *xs = arg;
+struct init_ult_arg {
+	struct dlck_xstream *xs;
+	struct checker      *ck;
+};
 
-	xs->ult_rc = dlck_engine_xstream_init(xs);
+static void
+dlck_engine_xstream_init_ult(void *argp)
+{
+	struct init_ult_arg *arg = argp;
+
+	arg->xs->ult_rc = dlck_engine_xstream_init(arg->xs, NULL, arg->ck);
 }
 
 int
@@ -271,13 +315,15 @@ dlck_engine_xstream_fini_ult(void *arg)
  * No daos_io_* initialization here yet. They ought to be initialized by the first ULT run in them.
  *
  * \param[in,out]	engine	Engine to start its XSes.
+ * \param[in]		ck	Checker.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Error.
  */
 static int
-xstream_start_all(struct dlck_engine *engine)
+xstream_start_all(struct dlck_engine *engine, struct checker *ck)
 {
+	struct init_ult_arg  init_arg = {.ck = ck};
 	struct dlck_xstream *xs;
 	struct dlck_ult      daos_sys_init;
 	int                  rc;
@@ -290,7 +336,8 @@ xstream_start_all(struct dlck_engine *engine)
 		return rc;
 	}
 
-	rc = dlck_ult_create(xs->pool, dlck_engine_xstream_init_ult, xs, &daos_sys_init);
+	init_arg.xs = xs;
+	rc = dlck_ult_create(xs->pool, dlck_engine_xstream_init_ult, &init_arg, &daos_sys_init);
 	if (rc != DER_SUCCESS) {
 		/** ULT has not been created - the daos_sys_0 XS can be safely freed */
 		(void)dlck_xstream_free(xs);
@@ -420,7 +467,8 @@ xstream_stop_all(struct dlck_engine *engine)
 }
 
 int
-dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr)
+dlck_engine_start(struct dlck_args_engine *args, struct checker *ck,
+		  struct dlck_engine **engine_ptr)
 {
 	struct dlck_engine *engine;
 	const bool          bypass_health_chk = false;
@@ -471,7 +519,7 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 		goto fail_vos_tls_fini;
 	}
 
-	rc = xstream_start_all(engine);
+	rc = xstream_start_all(engine, ck);
 	if (rc != DER_SUCCESS) {
 		goto fail_vos_fini;
 	}
@@ -692,6 +740,7 @@ fail_join_and_free:
 	return rc;
 }
 
+#define START_TGT_STR "Start targets"
 #define STOP_TGT_STR "Wait for targets to stop"
 
 int
@@ -706,9 +755,9 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 	de.arg_free_fn = arg_free_fn;
 	de.custom      = custom;
 
-	CK_PRINT(ck, "Start targets... ");
+	CK_PRINT(ck, START_TGT_STR "...\n");
 	rc = dlck_engine_targets_start(engine, exec_one, arg_alloc_fn, &de);
-	CK_APPENDL_RC(ck, rc);
+	CK_PRINTL_RC(ck, rc, START_TGT_STR);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
