@@ -496,7 +496,7 @@ test_daos_prop_has_byteval_types(void **state)
 {
 	struct daos_prop_entry entry = {0};
 
-	entry.dpe_type = DAOS_PROP_PO_POOL_CA;
+	entry.dpe_type = DAOS_PROP_PO_CA_CERT;
 	assert_true(daos_prop_has_byteval(&entry));
 
 	entry.dpe_type = DAOS_PROP_PO_LABEL;
@@ -513,12 +513,12 @@ test_daos_prop_byteval_set_round_trip(void **state)
 
 	prop = daos_prop_alloc(1);
 	assert_non_null(prop);
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_POOL_CA;
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_CA_CERT;
 
-	assert_rc_equal(daos_prop_set_byteval(prop, DAOS_PROP_PO_POOL_CA, payload, sizeof(payload)),
+	assert_rc_equal(daos_prop_set_byteval(prop, DAOS_PROP_PO_CA_CERT, payload, sizeof(payload)),
 			0);
 
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_POOL_CA);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_CA_CERT);
 	assert_non_null(entry);
 	bv = entry->dpe_val_ptr;
 	assert_non_null(bv);
@@ -532,7 +532,7 @@ static void
 test_daos_prop_byteval_is_valid(void **state)
 {
 	const uint8_t             payload[] = {0xde, 0xad, 0xbe, 0xef};
-	struct daos_prop_entry    entry     = {.dpe_type = DAOS_PROP_PO_POOL_CA};
+	struct daos_prop_entry    entry     = {.dpe_type = DAOS_PROP_PO_CA_CERT};
 	struct daos_prop_byteval *bv;
 
 	/* unset */
@@ -637,13 +637,13 @@ test_daos_prop_byteval_empty_dup(void **state)
 
 	src = daos_prop_alloc(1);
 	assert_non_null(src);
-	src->dpp_entries[0].dpe_type    = DAOS_PROP_PO_POOL_CA;
+	src->dpp_entries[0].dpe_type    = DAOS_PROP_PO_CA_CERT;
 	src->dpp_entries[0].dpe_val_ptr = NULL;
 
 	dst = daos_prop_dup(src, true /* pool */, false /* input */);
 	assert_non_null(dst);
 
-	dst_entry = daos_prop_entry_get(dst, DAOS_PROP_PO_POOL_CA);
+	dst_entry = daos_prop_entry_get(dst, DAOS_PROP_PO_CA_CERT);
 	assert_non_null(dst_entry);
 	assert_null(dst_entry->dpe_val_ptr);
 

@@ -99,7 +99,7 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 			 * requires a format change. Future features that need IV-distributed
 			 * bytevals will need to handle the implementation and format changes.
 			 */
-			D_ASSERTF(prop_entry->dpe_type == DAOS_PROP_PO_POOL_CA ||
+			D_ASSERTF(prop_entry->dpe_type == DAOS_PROP_PO_CA_CERT ||
 				      prop_entry->dpe_type == DAOS_PROP_PO_CERT_WATERMARKS,
 				  "byteval prop %u needs IV support\n", prop_entry->dpe_type);
 			continue;
@@ -240,7 +240,7 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		prop_entry->dpe_type = DAOS_PROP_PO_MIN + i + 1;
 		if (daos_prop_has_byteval(prop_entry)) {
 			/* See the note in l2g; skip byteval props for now. */
-			D_ASSERTF(prop_entry->dpe_type == DAOS_PROP_PO_POOL_CA ||
+			D_ASSERTF(prop_entry->dpe_type == DAOS_PROP_PO_CA_CERT ||
 				      prop_entry->dpe_type == DAOS_PROP_PO_CERT_WATERMARKS,
 				  "byteval prop %u needs IV support\n", prop_entry->dpe_type);
 			prop_entry->dpe_val_ptr = NULL;
