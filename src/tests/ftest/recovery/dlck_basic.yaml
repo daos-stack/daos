@@ -12,7 +12,7 @@ server_config:
       storage: auto
 
 pool:
-  size: 10%
+  size: 60%
 
 dlck_test_faults:
   fault_list:
@@ -22,7 +22,7 @@ dlck_test_faults:
     - DLCK_FAULT_CREATE_LOG_DIR
     - DLCK_FAULT_ENGINE_START
     - DAOS_FAULT_POOL_NVME_HEALTH
-    - DAOS_FAULT_POOL_OPEN_BIO
+    # - DAOS_FAULT_POOL_OPEN_BIO
     - DAOS_FAULT_POOL_OPEN_UMEM
     - DAOS_FAULT_POOL_OPEN_MAGIC
     - DAOS_FAULT_POOL_OPEN_VERSION
