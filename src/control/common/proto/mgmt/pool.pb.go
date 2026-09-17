@@ -3050,8 +3050,7 @@ type PoolAddCAReq struct {
 	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	CertPem       []byte                 `protobuf:"bytes,3,opt,name=cert_pem,json=certPem,proto3" json:"cert_pem,omitempty"`
 	SvcRanks      []uint32               `protobuf:"varint,4,rep,packed,name=svc_ranks,json=svcRanks,proto3" json:"svc_ranks,omitempty"`
-	Replace       bool                   `protobuf:"varint,5,opt,name=replace,proto3" json:"replace,omitempty"`                // clear existing bundle before append
-	NoEvict       bool                   `protobuf:"varint,6,opt,name=no_evict,json=noEvict,proto3" json:"no_evict,omitempty"` // keep existing handles when enabling
+	NoEvict       bool                   `protobuf:"varint,5,opt,name=no_evict,json=noEvict,proto3" json:"no_evict,omitempty"` // keep existing handles when enabling
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3112,13 +3111,6 @@ func (x *PoolAddCAReq) GetSvcRanks() []uint32 {
 		return x.SvcRanks
 	}
 	return nil
-}
-
-func (x *PoolAddCAReq) GetReplace() bool {
-	if x != nil {
-		return x.Replace
-	}
-	return false
 }
 
 func (x *PoolAddCAReq) GetNoEvict() bool {
@@ -3983,14 +3975,13 @@ const file_mgmt_pool_proto_rawDesc = "" +
 	"\rPoolGetCAResp\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\x05R\x06status\x12\x1b\n" +
 	"\tca_bundle\x18\x02 \x01(\fR\bcaBundle\x12\x1b\n" +
-	"\tpool_uuid\x18\x03 \x01(\tR\bpoolUuid\"\x9d\x01\n" +
+	"\tpool_uuid\x18\x03 \x01(\tR\bpoolUuid\"\x83\x01\n" +
 	"\fPoolAddCAReq\x12\x10\n" +
 	"\x03sys\x18\x01 \x01(\tR\x03sys\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x19\n" +
 	"\bcert_pem\x18\x03 \x01(\fR\acertPem\x12\x1b\n" +
-	"\tsvc_ranks\x18\x04 \x03(\rR\bsvcRanks\x12\x18\n" +
-	"\areplace\x18\x05 \x01(\bR\areplace\x12\x19\n" +
-	"\bno_evict\x18\x06 \x01(\bR\anoEvict\"m\n" +
+	"\tsvc_ranks\x18\x04 \x03(\rR\bsvcRanks\x12\x19\n" +
+	"\bno_evict\x18\x05 \x01(\bR\anoEvict\"m\n" +
 	"\rPoolAddCAResp\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\x05R\x06status\x12\x1b\n" +
 	"\tpool_uuid\x18\x02 \x01(\tR\bpoolUuid\x12'\n" +

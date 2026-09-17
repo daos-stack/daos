@@ -5320,7 +5320,7 @@ const ProtobufCMessageDescriptor mgmt__pool_get_caresp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_get_caresp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_add_careq__field_descriptors[6] =
+static const ProtobufCFieldDescriptor mgmt__pool_add_careq__field_descriptors[5] =
 {
   {
     "sys",
@@ -5371,20 +5371,8 @@ static const ProtobufCFieldDescriptor mgmt__pool_add_careq__field_descriptors[6]
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "replace",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolAddCAReq, replace),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "no_evict",
-    6,
+    5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
@@ -5398,15 +5386,14 @@ static const ProtobufCFieldDescriptor mgmt__pool_add_careq__field_descriptors[6]
 static const unsigned mgmt__pool_add_careq__field_indices_by_name[] = {
   2,   /* field[2] = cert_pem */
   1,   /* field[1] = id */
-  5,   /* field[5] = no_evict */
-  4,   /* field[4] = replace */
+  4,   /* field[4] = no_evict */
   3,   /* field[3] = svc_ranks */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__pool_add_careq__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 6 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_add_careq__descriptor =
 {
@@ -5416,7 +5403,7 @@ const ProtobufCMessageDescriptor mgmt__pool_add_careq__descriptor =
   "Mgmt__PoolAddCAReq",
   "mgmt",
   sizeof(Mgmt__PoolAddCAReq),
-  6,
+  5,
   mgmt__pool_add_careq__field_descriptors,
   mgmt__pool_add_careq__field_indices_by_name,
   1,  mgmt__pool_add_careq__number_ranges,

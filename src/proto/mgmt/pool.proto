@@ -410,8 +410,7 @@ message PoolAddCAReq
 	string          id        = 2;
 	bytes           cert_pem  = 3;
 	repeated uint32 svc_ranks = 4;
-	bool            replace   = 5; // clear existing bundle before append
-	bool            no_evict  = 6; // keep existing handles when enabling
+	bool            no_evict  = 5; // keep existing handles when enabling
 }
 
 message PoolAddCAResp

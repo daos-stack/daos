@@ -1315,17 +1315,13 @@ struct  _Mgmt__PoolAddCAReq
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
   /*
-   * clear existing bundle before append
-   */
-  protobuf_c_boolean replace;
-  /*
    * keep existing handles when enabling
    */
   protobuf_c_boolean no_evict;
 };
 #define MGMT__POOL_ADD_CAREQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_add_careq__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, {0,NULL}, 0,NULL, 0, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, {0,NULL}, 0,NULL, 0 }
 
 
 struct  _Mgmt__PoolAddCAResp

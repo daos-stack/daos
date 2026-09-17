@@ -139,8 +139,17 @@ struct  _Auth__GetCredResp
   ProtobufCMessage base;
   int32_t status;
   Auth__Credential *cred;
+  /*
+   * PEM node cert for the pool, if one is deployed
+   */
   ProtobufCBinaryData node_cert;
+  /*
+   * signature over pop_payload
+   */
   ProtobufCBinaryData pop_sig;
+  /*
+   * marshaled PoPPayload; the signature covers these exact bytes
+   */
   ProtobufCBinaryData pop_payload;
 };
 #define AUTH__GET_CRED_RESP__INIT \
@@ -189,12 +198,33 @@ struct  _Auth__ValidateCredResp
 struct  _Auth__ValidateNodeCertReq
 {
   ProtobufCMessage base;
+  /*
+   * PEM CA bundle from the pool property
+   */
   ProtobufCBinaryData pool_ca;
+  /*
+   * PEM node cert as presented by the client
+   */
   ProtobufCBinaryData node_cert;
+  /*
+   * signature over pop_payload
+   */
   ProtobufCBinaryData pop_sig;
+  /*
+   * marshaled PoPPayload, forwarded untouched by the engine
+   */
   ProtobufCBinaryData pop_payload;
+  /*
+   * 16 bytes
+   */
   ProtobufCBinaryData pool_uuid;
+  /*
+   * from the AUTH_SYS credential
+   */
   char *machine_name;
+  /*
+   * cert_watermarks property, opaque to the engine
+   */
   ProtobufCBinaryData cert_watermarks;
 };
 #define AUTH__VALIDATE_NODE_CERT_REQ__INIT \

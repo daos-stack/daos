@@ -329,9 +329,9 @@ type GetCredResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Status        int32                  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
 	Cred          *Credential            `protobuf:"bytes,2,opt,name=cred,proto3" json:"cred,omitempty"`
-	NodeCert      []byte                 `protobuf:"bytes,3,opt,name=node_cert,json=nodeCert,proto3" json:"node_cert,omitempty"`
-	PopSig        []byte                 `protobuf:"bytes,4,opt,name=pop_sig,json=popSig,proto3" json:"pop_sig,omitempty"`
-	PopPayload    []byte                 `protobuf:"bytes,5,opt,name=pop_payload,json=popPayload,proto3" json:"pop_payload,omitempty"`
+	NodeCert      []byte                 `protobuf:"bytes,3,opt,name=node_cert,json=nodeCert,proto3" json:"node_cert,omitempty"`       // PEM node cert for the pool, if one is deployed
+	PopSig        []byte                 `protobuf:"bytes,4,opt,name=pop_sig,json=popSig,proto3" json:"pop_sig,omitempty"`             // signature over pop_payload
+	PopPayload    []byte                 `protobuf:"bytes,5,opt,name=pop_payload,json=popPayload,proto3" json:"pop_payload,omitempty"` // marshaled PoPPayload; the signature covers these exact bytes
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -503,13 +503,13 @@ func (x *ValidateCredResp) GetToken() *Token {
 
 type ValidateNodeCertReq struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	PoolCa         []byte                 `protobuf:"bytes,1,opt,name=pool_ca,json=poolCa,proto3" json:"pool_ca,omitempty"`
-	NodeCert       []byte                 `protobuf:"bytes,2,opt,name=node_cert,json=nodeCert,proto3" json:"node_cert,omitempty"`
-	PopSig         []byte                 `protobuf:"bytes,3,opt,name=pop_sig,json=popSig,proto3" json:"pop_sig,omitempty"`
-	PopPayload     []byte                 `protobuf:"bytes,4,opt,name=pop_payload,json=popPayload,proto3" json:"pop_payload,omitempty"`
-	PoolUuid       []byte                 `protobuf:"bytes,5,opt,name=pool_uuid,json=poolUuid,proto3" json:"pool_uuid,omitempty"`
-	MachineName    string                 `protobuf:"bytes,6,opt,name=machine_name,json=machineName,proto3" json:"machine_name,omitempty"`
-	CertWatermarks []byte                 `protobuf:"bytes,7,opt,name=cert_watermarks,json=certWatermarks,proto3" json:"cert_watermarks,omitempty"`
+	PoolCa         []byte                 `protobuf:"bytes,1,opt,name=pool_ca,json=poolCa,proto3" json:"pool_ca,omitempty"`                         // PEM CA bundle from the pool property
+	NodeCert       []byte                 `protobuf:"bytes,2,opt,name=node_cert,json=nodeCert,proto3" json:"node_cert,omitempty"`                   // PEM node cert as presented by the client
+	PopSig         []byte                 `protobuf:"bytes,3,opt,name=pop_sig,json=popSig,proto3" json:"pop_sig,omitempty"`                         // signature over pop_payload
+	PopPayload     []byte                 `protobuf:"bytes,4,opt,name=pop_payload,json=popPayload,proto3" json:"pop_payload,omitempty"`             // marshaled PoPPayload, forwarded untouched by the engine
+	PoolUuid       []byte                 `protobuf:"bytes,5,opt,name=pool_uuid,json=poolUuid,proto3" json:"pool_uuid,omitempty"`                   // 16 bytes
+	MachineName    string                 `protobuf:"bytes,6,opt,name=machine_name,json=machineName,proto3" json:"machine_name,omitempty"`          // from the AUTH_SYS credential
+	CertWatermarks []byte                 `protobuf:"bytes,7,opt,name=cert_watermarks,json=certWatermarks,proto3" json:"cert_watermarks,omitempty"` // cert_watermarks property, opaque to the engine
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }

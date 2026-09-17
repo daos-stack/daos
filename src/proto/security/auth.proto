@@ -47,9 +47,9 @@ message GetCredReq
 message GetCredResp {
 	int32      status      = 1;
 	Credential cred        = 2;
-	bytes      node_cert   = 3;
-	bytes      pop_sig     = 4;
-	bytes      pop_payload = 5;
+	bytes      node_cert   = 3; // PEM node cert for the pool, if one is deployed
+	bytes      pop_sig     = 4; // signature over pop_payload
+	bytes      pop_payload = 5; // marshaled PoPPayload; the signature covers these exact bytes
 }
 
 // ValidateCredReq represents a request to verify a set of authentication
@@ -67,13 +67,13 @@ message ValidateCredResp {
 
 message ValidateNodeCertReq
 {
-	bytes  pool_ca         = 1;
-	bytes  node_cert       = 2;
-	bytes  pop_sig         = 3;
-	bytes  pop_payload     = 4;
-	bytes  pool_uuid       = 5;
-	string machine_name    = 6;
-	bytes  cert_watermarks = 7;
+	bytes  pool_ca         = 1; // PEM CA bundle from the pool property
+	bytes  node_cert       = 2; // PEM node cert as presented by the client
+	bytes  pop_sig         = 3; // signature over pop_payload
+	bytes  pop_payload     = 4; // marshaled PoPPayload, forwarded untouched by the engine
+	bytes  pool_uuid       = 5; // 16 bytes
+	string machine_name    = 6; // from the AUTH_SYS credential
+	bytes  cert_watermarks = 7; // cert_watermarks property, opaque to the engine
 }
 
 message ValidateNodeCertResp
