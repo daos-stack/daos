@@ -318,7 +318,7 @@ def list_files(logger, hosts, source, pattern, depth, test_result, file_type="f"
     logger.debug("Listing any %s files on %s", source_files, hosts)
     other = ["-printf", "'%M %n %-12u %-12g %12k %t %p\n'"]
     result = run_remote(logger, hosts, find_command(source, pattern, depth,
-                                                    other, file_type=file_type))
+                                                    other, file_type))
     if not result.passed:
         message = f"Error determining if {source_files} files exist on {result.failed_hosts}"
         test_result.fail_test(logger, "Process", message)
@@ -499,7 +499,7 @@ def move_files(logger, hosts, source, pattern, destination, depth,
         # pylint: disable=import-outside-toplevel
         other = ["-print0", "|", "xargs", "-0", "-r0", "sudo", "-n", get_chown_command()]
         result = run_remote(logger, hosts, find_command(source, pattern, depth,
-                                                        other, file_type=file_type))
+                                                        other, file_type))
         if not result.passed:
             message = (f"Error changing {os.path.join(source, pattern)} file permissions on "
                        f"{result.failed_hosts}")
