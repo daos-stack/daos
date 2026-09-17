@@ -24,7 +24,7 @@ The following defaults apply unless overridden:
 
 Options:
     -c, --clean         Run `scons -c` and remove generated build state
-    -f, --full-clean    Same as `--clean` but also remove saved build configuration
+    -f, --full-clean    Do `--clean` and remove saved build configuration
     -h, --help          Show this help and exit
 
 Any other argument is forwarded verbatim to scons, e.g.:
