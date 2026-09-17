@@ -1667,21 +1667,9 @@ func (svc *mgmtSvc) eraseAndRestart() error {
 
 	awaitSync()
 
-	myPath, err := os.Readlink("/proc/self/exe")
-	if err != nil {
-		return errors.Wrap(err, "unable to determine path to self")
-	}
-
-	// Schedule the exec to run after the function returns and any gRPC response completes.
-	// MS replicas use a minimal delay since they don't send responses after this point.
-	delay := 50 * time.Millisecond
-	go func() {
-		time.Sleep(delay)
-
-		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
-			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
-		}
-	}()
+	// Note: Restart is now handled by defer in SystemErase() handler.
+	// The defer ensures the restart happens after all operations complete
+	// but while gRPC is sending the response.
 
 	return nil
 }
@@ -1803,8 +1791,6 @@ func (svc *mgmtSvc) resetLocalEngines() error {
 		if err := engine.RemoveSuperblock(); err != nil {
 			svc.log.Errorf("instance %d failed to remove superblock: %s", engine.Index(), err)
 		}
-		// Never reaches here - process is exec'd
-		panic("expected exec but still here")
 	}
 
 	// Sync filesystem to commit superblock deletions before proceeding
@@ -1819,8 +1805,11 @@ func (svc *mgmtSvc) resetLocalEngines() error {
 		return errors.Wrap(err, "erasing and restarting non-leader")
 	}
 
-	// Never reaches here - process is exec'd
-	panic("expected exec but still here")
+	// Note: Actual restart is handled by defer in SystemErase() handler.
+	// This function returns normally and the defer will trigger the restart
+	// after all operations complete.
+
+	return nil
 }
 
 // getPeersAndFanout gathers MS replica peer addresses and prepares fanout request.
@@ -1971,33 +1960,15 @@ func (svc *mgmtSvc) wipeEngineSuperblocks(ctx context.Context, fanReq *fanoutReq
 	return pbResp, nil
 }
 
-// restartLeader schedules a restart of the leader control plane.
+// restartLeader notifies that the leader should restart.
+// The actual restart is handled by the defer in SystemErase() to ensure
+// it happens after all operations complete.
 func (svc *mgmtSvc) restartLeader(ctx context.Context) error {
 	svc.log.Trace("SystemErase: LEADER - Step 8: Restarting leader control plane")
 
-	// Finally, restart the leader to complete the erase.
-	// The leader's DB was already erased at the start of SystemErase.
-	myPath, err := os.Readlink("/proc/self/exe")
-	if err != nil {
-		return errors.Wrap(err, "unable to determine path to self")
-	}
-
-	svc.log.Infof("System Erase: scheduling restart of control plane in 500ms")
-
-	svc.log.Infof("System Erase: exec'ing %s to restart control plane", myPath)
-	go func() {
-		// Wait for gRPC response to complete transmission before restarting.
-		// Once the handler returns from SystemErase(), gRPC has the response ready to send.
-		// A 500ms delay gives sufficient time for:
-		// - gRPC response serialization (~10ms)
-		// - Network transmission (~100-300ms typical)
-		// - Client to receive and process response
-		// This ensures the client has the response before the process exec's and restarts.
-		time.Sleep(500 * time.Millisecond)
-		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
-			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
-		}
-	}()
+	// The actual restart will be triggered by the defer in SystemErase()
+	// after all erase operations complete. This function is kept for clarity
+	// in the operation sequence.
 
 	return nil
 }
@@ -2035,6 +2006,30 @@ func (svc *mgmtSvc) resetAllEngines(ctx context.Context) (*mgmtpb.SystemEraseRes
 	return pbResp, nil
 }
 
+// scheduleControlPlaneRestart schedules the control plane process to restart after a delay.
+// This is called from a defer to ensure restart happens after the gRPC response is sent.
+func (svc *mgmtSvc) scheduleControlPlaneRestart() error {
+	myPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		return errors.Wrap(err, "unable to determine path to self")
+	}
+
+	svc.log.Infof("System Erase: scheduling control plane restart in 500ms")
+
+	// Spawn goroutine with delay to allow gRPC response to complete transmission.
+	// The defer that calls this has already executed (process is returning), but
+	// gRPC marshalling and network transmission still need ~400-500ms.
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		svc.log.Infof("System Erase: exec'ing %s to restart control plane", myPath)
+		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
+			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
+		}
+	}()
+
+	return nil
+}
+
 // SystemErase implements the gRPC handler for erasing system metadata.
 //
 // SAFETY WARNINGS:
@@ -2063,6 +2058,18 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 		return "REPLICA"
 	}())
 
+	// Schedule restart via defer so it fires after all operations complete but before
+	// the function fully returns. The goroutine spawned by scheduleControlPlaneRestart
+	// will wait 500ms to allow gRPC to send the response before actually restarting.
+	defer func() {
+		if isLeader || !isLeader {
+			// Restart applies to both leader and replicas
+			if err := svc.scheduleControlPlaneRestart(); err != nil {
+				svc.log.Errorf("failed to schedule control plane restart: %s", err)
+			}
+		}
+	}()
+
 	// If this is called on a non-leader replica, stop engines, remove superblocks,
 	// erase the raft DB, and restart the local control plane. When the control plane
 	// restarts, engines will automatically start but enter AwaitFormat state (no
@@ -2073,7 +2080,9 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 		if err := svc.resetLocalEngines(); err != nil {
 			return nil, err
 		}
-		panic("shouldn't reach here")
+		// Return empty response - the defer will schedule the restart
+		// after this response is sent to the client.
+		return &mgmtpb.SystemEraseResp{}, nil
 	}
 
 	return svc.resetAllEngines(ctx)
