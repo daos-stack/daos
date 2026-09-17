@@ -68,8 +68,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 source "${script_dir}/build_utils.sh"
 
 rpm_suffix=el9
-mode=ERROR
-mode_option=
+mode=
 positional_args=()
 for arg in "$@"; do
     case "${arg}" in
@@ -77,19 +76,17 @@ for arg in "$@"; do
             rpm_suffix="${arg#*=}"
             ;;
         -Werror)
-            [ -z "${mode_option}" ] || {
+            [ -z "${mode}" ] || {
                 echo "ERROR: -Werror and -Wno-error are mutually exclusive" >&2
                 exit 1
             }
-            mode_option=-Werror
             mode=ERROR
             ;;
         -Wno-error)
-            [ -z "${mode_option}" ] || {
+            [ -z "${mode}" ] || {
                 echo "ERROR: -Werror and -Wno-error are mutually exclusive" >&2
                 exit 1
             }
-            mode_option=-Wno-error
             mode=WARNING
             ;;
         -h|--help)
@@ -137,8 +134,7 @@ fi
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "${tmpdir}"' EXIT
 
-DISTRO="${rpm_suffix}"
-MODE="${mode}"
+mode="${mode:-ERROR}"
 
 declare -i issues=0
 declare -A pkg_names
@@ -147,7 +143,7 @@ declare -A devel_runtime
 
 # Explicit devel to runtime package dependencies. These names are kept
 # separate by distro because the same library has different RPM names.
-case "${DISTRO}" in
+case "${rpm_suffix}" in
     el9*)
         devel_runtime=(
             [argobots-devel]=argobots
@@ -175,14 +171,14 @@ case "${DISTRO}" in
         )
         ;;
     *)
-        echo "ERROR: no devel dependency table for DISTRO=${DISTRO}"
+        echo "ERROR: no devel dependency table for rpm_suffix=${rpm_suffix}"
         exit 1
         ;;
 esac
 # Records a validation issue; severity label follows MODE, but the error
 # counter is always incremented so the final exit-code decision can use it.
 report_issue() {
-    echo "${MODE}: $*"
+    echo "${mode}: $*"
     issues+=1
 }
 
@@ -299,7 +295,7 @@ check_devel_runtime_dependency() {
 
     runtime_pkg="${devel_runtime["${pkg_name}"]:-}"
     if [ -z "${runtime_pkg}" ]; then
-        report_issue "no runtime dependency mapping for ${pkg_name} on ${DISTRO}"
+        report_issue "no runtime dependency mapping for ${pkg_name} on ${rpm_suffix}"
         return
     fi
 
@@ -348,7 +344,7 @@ check_binary_requires_libc() {
     fi
 }
 
-echo "Verifying ${#rpms[@]} generated RPM(s) from ${RPM_ROOT} for ${DISTRO}"
+echo "Verifying ${#rpms[@]} generated RPM(s) from ${RPM_ROOT} for ${rpm_suffix}"
 
 for rpm_file in "${rpms[@]}"; do
     check_rpm_basic "${rpm_file}"

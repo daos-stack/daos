@@ -8,24 +8,23 @@ set -euo pipefail
 usage() {
     cat <<EOF
 Usage: ${0##*/} [SCONS_OPTIONS]
-       ${0##*/} -c | --clean
-       ${0##*/} -f | --full-clean
+       ${0##*/} -c | --clean | -f | --full-clean
        ${0##*/} -h | --help
 
-Build DAOS with scons, assuming the dependencies are already built. The
-script supplies the defaults listed below; all other options use SCons' own
+Build DAOS with scons, assuming the dependencies are already installed or built.
+The script supplies the defaults listed below; all other options use SCons' own
 defaults unless explicitly overridden.
 
 For normal build, the script always runs \`scons install [defaults] "\$@"\`
 
 The following defaults apply unless overridden:
-    --jobs \$(nproc)    Use all available cores for parallel jobs
+    --jobs \$(nproc)     Use all available cores for parallel jobs
     USE_INSTALLED=all   Use installed dependencies
     PREFIX=/opt/daos    Install under /opt/daos
 
 Options:
-    -c, --clean         Run 'scons -c' and remove generated build state
-    -f, --full-clean    Run 'scons -c' and remove saved build configuration
+    -c, --clean         Run `scons -c` and remove generated build state
+    -f, --full-clean    Same as `--clean` but also remove saved build configuration
     -h, --help          Show this help and exit
 
 Any other argument is forwarded verbatim to scons, e.g.:

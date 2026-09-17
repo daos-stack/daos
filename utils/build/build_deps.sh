@@ -23,7 +23,7 @@ For build, the script always runs \`scons install --build-deps=only [defaults] "
 
 The following defaults apply unless overridden:
     --build-deps=only   Build only the dependencies of DAOS
-    --jobs \$(nproc)    Use all available cores for parallel jobs
+    --jobs \$(nproc)     Use all available cores for parallel jobs
     USE_INSTALLED=all   Use installed dependencies
     PREFIX=/opt/daos    Install under /opt/daos
 

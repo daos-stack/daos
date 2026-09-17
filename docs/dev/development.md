@@ -441,26 +441,24 @@ Advanced users can still invoke `scons` directly or pass additional options
 and variables through the `build_*` scripts to produce different binary
 variants.
 
-The `build_*.sh` scripts are intended to be usable on Linux distributions in
-general, including Debian-based distributions. The distribution-specific
-dependency installation and package verification workflows are narrower:
-`install_deps.sh` and `verify_packages.sh` currently support EL and Leap/SLES
-15 package layouts only. On other distributions, build dependencies from
-source or use the distribution's native package tooling as appropriate.
+The `build_*.sh` scripts are intended for Linux, including Debian-based
+distributions. However, `install_deps.sh` and `verify_packages.sh` support only
+RHEL and SUSE package layouts. On other distributions, build the dependencies
+from source or install them using the appropriate package manager.
 
 1. **[`utils/build/install_deps.sh [RPM_SUFFIX]`](../../utils/build/install_deps.sh)**
    installs pre-built dependency RPMs (e.g. `argobots-devel`, `mercury-devel`,
    `libfabric-devel`) matching the versions expected by the current tree,
    so that the subsequent build steps can reuse them instead of rebuilding from
    source (`USE_INSTALLED=all`). `RPM_SUFFIX` is the standardized RPM naming
-   suffix used by the DAOS project's own package repos, not the OS distribution
-   name (for example, `el9`, `suse.lp155`, or `suse.lp156`). If omitted,
-   it is auto-detected from `/etc/os-release`. This script supports EL9 and
-   Leap/SLES 15 systems. Missing packages are reported but do not fail
-   the script, since dependencies can also be built from source in
-   the next step. Set `DAOS_DEPS_EXT_REPO` to pull in a custom RPM set published
-   by the DAOS project (e.g. from [packages.daos.io](https://packages.daos.io/))
-   as an extra, registered only for the duration of the script.
+   suffix used by the DAOS project's own packages (for example, `el9`,
+   `suse.lp155`, or `suse.lp156`), not the OS distribution name. If omitted,
+   the suffix is auto-detected from `/etc/os-release`.
+   Set `DAOS_DEPS_EXT_REPO` to pull in RPMs from custom dnf repository
+   (e.g. from [packages.daos.io](https://packages.daos.io/)).
+   This script supports EL9 and Leap/SLES 15 systems. Missing packages are
+   reported but do not fail the script, since dependencies can also be built
+   from source in the next step.
 
    ```bash
    $ DAOS_DEPS_EXT_REPO=https://packages.daos.io/v2.8.0/EL9/packages/x86_64/ \
@@ -469,29 +467,25 @@ source or use the distribution's native package tooling as appropriate.
    To find out more, use the `install_deps.sh --help` command.
 
 1. **[`utils/build/build_deps.sh`](../../utils/build/build_deps.sh)**
-   builds any dependency not already satisfied by
-   `install_deps.sh` from source, via `scons install --build-deps=only`.
-   Pass the build configuration as a command-line variable, for example
-   `utils/build/build_deps.sh BUILD_TYPE=release`. Supported values are
-   `dev`, `release`, and `debug`; the default is `release`.
+   builds from source any dependency not already satisfied by
+   `install_deps.sh`, via `scons install --build-deps=only`.
+   Pass the build configuration as a command-line variables, for example
+   `utils/build/build_deps.sh TARGET_TYPE=debug`.
 
    To find out more, use the `build_deps.sh --help` command.
+
 1. **[`utils/build/build_daos.sh`](../../utils/build/build_daos.sh)**
-   builds and installs DAOS itself with `scons` assuming
-   all dependencies are either installed or built previously
-   (`scons install --build-deps=no USE_INSTALLED=all`).
+   builds DAOS itself with `scons` assuming all dependencies are either
+   installed or built previously (`scons install --build-deps=no USE_INSTALLED=all`).
 
    To find out more, use the `build_daos.sh --help` command.
-1. **[`utils/build/build_packages.sh [options] [PKG_OUTPUT_DIR]`](../../utils/build/build_packages.sh)**
-   builds dependency packages, DAOS packages, or both (default) using scripts
-   located in the [`utils/rpms`](../../utils/rpms) directory. `PKG_OUTPUT_DIR`
-   is an optional positional argument and is the root under which `deps/` and
-   `daos/` are written. For RPM builds it defaults to `<repo_root>/rpms`; for
-   DEB builds it defaults to `.`.
 
-   For RPM distributions (EL,Leap,SLES), the script also generates repository
-   metadata under `<PKG_OUTPUT_DIR>/repodata`, producing a complete RPM
-   repository.
+1. **[`utils/build/build_packages.sh [options] [PKG_OUTPUT_DIR]`](../../utils/build/build_packages.sh)**
+   builds DAOS packages, dependency packages, or both (default).
+   `PKG_OUTPUT_DIR` is an optional positional argument and is the root under which `deps/` and `daos/` are written. For RPM builds it defaults to `<repo_root>/rpms`; for DEB builds it defaults to `.`.
+
+   For RPM packages the script also generates repository metadata under
+   `<PKG_OUTPUT_DIR>/repodata`, producing a complete RPM repository.
 
    After the build step is successfully completed, the RPMs are verified using
    the [`utils/build/verify_packages.sh`](../../utils/build/verify_packages.sh)
@@ -508,10 +502,6 @@ source or use the distribution's native package tooling as appropriate.
    Set environment variable `OUTPUT_TYPE=deb` for DEB builds; it defaults to
    `rpm`.
 
-   Use `-Werror` to fail on verification findings (the default), or
-   `-Wno-error` to report them as warnings. These options are mutually
-   exclusive.
-
    To find out more, use the `build_packages.sh --help` command.
 
 > [NOTE]
@@ -525,9 +515,7 @@ source or use the distribution's native package tooling as appropriate.
 >   [--rpm-suffix=el9] [-Werror|-Wno-error] \
 >   <RPM_ROOT>
 >```
->`-Werror` is the default. `-Wno-error` reports validation findings as
->warnings and exits successfully for those findings; missing tools, missing
->RPMs, and unsupported suffixes remain fatal.
+>To find out more, use the `verify_packages.sh --help` command.
 
 ### Exporting RPMs Directly with Docker BuildKit
 
