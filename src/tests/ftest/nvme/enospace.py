@@ -691,18 +691,23 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.log.info(self.pool.pool_percentage_used())
         # Write First
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
+        self.log.info("1. container: %s", self.nvme_local_cont)
         # Read the baseline data set
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
+        self.log.info("2. container: %s", self.nvme_local_cont)
         max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
-        baseline_cont_uuid = self.ior_cmd.dfs_cont.value
+        # baseline_cont_uuid = self.ior_cmd.dfs_cont.value
         self.log.info("IOR Baseline Read MiB %s", max_mib_baseline)
 
         # Run IOR to fill the pool.
         self.run_enospace_with_bg_job(self.client_log)
+        self.log.info("3. container: %s", self.nvme_local_cont)
 
         # Read the same container which was written at the beginning.
-        self.ior_cmd.dfs_cont.update(baseline_cont_uuid)
+        # self.ior_cmd.dfs_cont.update(baseline_cont_uuid)
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
+        self.log.info("4. container: %s", self.nvme_local_cont)
+
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         self.log.info("IOR Latest Read MiB %s", max_mib_latest)
 
