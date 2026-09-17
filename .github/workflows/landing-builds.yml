@@ -292,6 +292,7 @@ jobs:
                             --build-arg COMPILER=clang
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
+                            --target full
       - name: Build Java in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS

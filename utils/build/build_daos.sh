@@ -23,8 +23,8 @@ The following defaults apply unless overridden:
     PREFIX=/opt/daos    Install under /opt/daos
 
 Options:
-    -c, --clean         Run `scons -c` and remove generated build state
-    -f, --full-clean    Do `--clean` and remove saved build configuration
+    -c, --clean         Run \`scons -c\` and remove generated build state
+    -f, --full-clean    Do \`--clean\` and remove saved build configuration
     -h, --help          Show this help and exit
 
 Any other argument is forwarded verbatim to scons, e.g.:

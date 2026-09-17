@@ -365,7 +365,7 @@ for rpm_file in "${rpms[@]}"; do
 done
 
 if [ "${issues}" -ne 0 ]; then
-    if [ "${MODE}" = "WARNING" ]; then
+    if [ "${mode}" = "WARNING" ]; then
         echo "RPM validation completed with ${issues} warning(s)"
         exit 0
     fi
