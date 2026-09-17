@@ -88,6 +88,28 @@ daos_prop_has_byteval(struct daos_prop_entry *entry)
 	return false;
 }
 
+bool
+daos_prop_byteval_is_valid(struct daos_prop_entry *entry)
+{
+	struct daos_prop_byteval *bv = entry->dpe_val_ptr;
+
+	D_ASSERT(daos_prop_has_byteval(entry));
+	/* NULL byteval is valid when the property is unset */
+	if (bv == NULL)
+		return true;
+	/* if the byteval is non-NULL (i.e. set), then it must have data */
+	if (bv->dpb_data == NULL || bv->dpb_len == 0) {
+		D_ERROR("byteval prop %u has an empty non-NULL value\n", entry->dpe_type);
+		return false;
+	}
+	if (bv->dpb_len > DAOS_PROP_BYTEVAL_MAX_LEN) {
+		D_ERROR("byteval prop %u len %zu exceeds max %u\n", entry->dpe_type, bv->dpb_len,
+			DAOS_PROP_BYTEVAL_MAX_LEN);
+		return false;
+	}
+	return true;
+}
+
 static void
 daos_prop_entry_free_value(struct daos_prop_entry *entry)
 {
@@ -328,9 +350,6 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		/* for output parameter need not check entry value */
 		if (!input)
 			continue;
-		/* Byteval payload semantics are validated at the trust boundary above. */
-		if (daos_prop_has_byteval(&prop->dpp_entries[i]))
-			continue;
 		switch (type) {
 		/* pool properties */
 		case DAOS_PROP_PO_LABEL:
@@ -348,6 +367,11 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			if (rc == -DER_NOMEM)
 				rc = daos_acl_validate(acl_ptr);
 			if (rc != 0)
+				return false;
+			break;
+		case DAOS_PROP_PO_POOL_CA:
+		case DAOS_PROP_PO_CERT_WATERMARKS:
+			if (!daos_prop_byteval_is_valid(&prop->dpp_entries[i]))
 				return false;
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
@@ -802,11 +826,6 @@ daos_prop_entry_set_byteval(struct daos_prop_entry *entry, const void *data, siz
 		D_ERROR("Entry type %d does not expect a byteval\n", entry->dpe_type);
 		return -DER_INVAL;
 	}
-	if (len > DAOS_PROP_BYTEVAL_MAX_LEN) {
-		D_ERROR("byteval prop %d len %zu exceeds max %u\n", entry->dpe_type, len,
-			DAOS_PROP_BYTEVAL_MAX_LEN);
-		return -DER_INVAL;
-	}
 
 	if (entry->dpe_val_ptr != NULL) {
 		bv = entry->dpe_val_ptr;
@@ -1106,28 +1125,6 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 		return -DER_MISMATCH;
 	}
 
-	return 0;
-}
-
-int
-daos_prop_entry_cmp_byteval(struct daos_prop_entry *entry1, struct daos_prop_entry *entry2)
-{
-	struct daos_prop_byteval *bv1  = entry1->dpe_val_ptr;
-	struct daos_prop_byteval *bv2  = entry2->dpe_val_ptr;
-	size_t                    len1 = (bv1 == NULL) ? 0 : bv1->dpb_len;
-	size_t                    len2 = (bv2 == NULL) ? 0 : bv2->dpb_len;
-
-	D_ASSERT(daos_prop_has_byteval(entry1));
-	D_ASSERT(daos_prop_has_byteval(entry2));
-
-	if (len1 != len2) {
-		D_ERROR("byteval prop %u len mismatch: %zu != %zu\n", entry1->dpe_type, len1, len2);
-		return -DER_MISMATCH;
-	}
-	if (len1 > 0 && memcmp(bv1->dpb_data, bv2->dpb_data, len1) != 0) {
-		D_ERROR("byteval prop %u content mismatch\n", entry1->dpe_type);
-		return -DER_MISMATCH;
-	}
 	return 0;
 }
 

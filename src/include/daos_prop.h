@@ -878,16 +878,6 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 			struct daos_prop_entry *entry2);
 
 /**
- * Compare a pair of byteval-typed daos_prop_entry. Both must satisfy
- * daos_prop_has_byteval(); empty (NULL or zero-length) values match.
- *
- * \return	0		Entries match
- *		-DER_MISMATCH	Entries do NOT match
- */
-int
-daos_prop_entry_cmp_byteval(struct daos_prop_entry *entry1, struct daos_prop_entry *entry2);
-
-/**
  * Duplicate container roots from one DAOS prop entry to another.
  * Convenience function.
  *
@@ -924,9 +914,7 @@ bool
 daos_prop_has_ptr(struct daos_prop_entry *entry);
 
 /**
- * Check a DAOS prop entry for an opaque byte-array value. When true,
- * dpe_val_ptr is expected to point at a struct daos_prop_byteval owned
- * by the daos_prop_t.
+ * Check a DAOS prop entry for a byte-array value.
  *
  * \param[in]		entry		Entry to be checked.
  *
@@ -935,6 +923,17 @@ daos_prop_has_ptr(struct daos_prop_entry *entry);
  */
 bool
 daos_prop_has_byteval(struct daos_prop_entry *entry);
+
+/**
+ * Check whether a byteval-typed prop entry holds a well-formed value.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Value is valid.
+ *			false		Value is not valid.
+ */
+bool
+daos_prop_byteval_is_valid(struct daos_prop_entry *entry);
 
 /**
  * Check if a DAOS prop entry is set or not.

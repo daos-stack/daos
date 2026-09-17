@@ -529,24 +529,64 @@ test_daos_prop_byteval_set_round_trip(void **state)
 }
 
 static void
-test_daos_prop_byteval_oversize_rejected(void **state)
+test_daos_prop_byteval_is_valid(void **state)
 {
-	struct daos_prop_entry entry = {0};
-	uint8_t               *blob;
-	size_t                 oversize;
-	int                    rc;
+	const uint8_t             payload[] = {0xde, 0xad, 0xbe, 0xef};
+	struct daos_prop_entry    entry     = {.dpe_type = DAOS_PROP_PO_POOL_CA};
+	struct daos_prop_byteval *bv;
 
-	entry.dpe_type = DAOS_PROP_PO_POOL_CA;
+	/* unset */
+	assert_true(daos_prop_byteval_is_valid(&entry));
 
-	oversize = (size_t)DAOS_PROP_BYTEVAL_MAX_LEN + 1;
-	D_ALLOC(blob, 16);
-	assert_non_null(blob);
+	/* well-formed */
+	assert_rc_equal(daos_prop_entry_set_byteval(&entry, payload, sizeof(payload)), 0);
+	assert_true(daos_prop_byteval_is_valid(&entry));
+	bv = entry.dpe_val_ptr;
 
-	rc = daos_prop_entry_set_byteval(&entry, blob, oversize);
-	assert_rc_equal(rc, -DER_INVAL);
+	/* empty must be NULL, not a zero-length blob */
+	bv->dpb_len = 0;
+	assert_false(daos_prop_byteval_is_valid(&entry));
+	bv->dpb_len = sizeof(payload);
+
+	/* length without data */
+	D_FREE(bv->dpb_data);
+	assert_false(daos_prop_byteval_is_valid(&entry));
+	D_ALLOC(bv->dpb_data, sizeof(payload));
+	assert_non_null(bv->dpb_data);
+
+	/* over the cap: the setter does not enforce it, the validator does */
+	bv->dpb_len = (size_t)DAOS_PROP_BYTEVAL_MAX_LEN + 1;
+	assert_false(daos_prop_byteval_is_valid(&entry));
+	bv->dpb_len = sizeof(payload);
+
+	assert_rc_equal(daos_prop_entry_set_byteval(&entry, NULL, 0), 0);
 	assert_null(entry.dpe_val_ptr);
+}
 
-	D_FREE(blob);
+static void
+test_daos_prop_valid_checks_byteval(void **state)
+{
+	const uint8_t             payload[] = {0xde, 0xad, 0xbe, 0xef};
+	daos_prop_t              *prop;
+	struct daos_prop_entry   *entry;
+	struct daos_prop_byteval *bv;
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+	entry           = &prop->dpp_entries[0];
+	entry->dpe_type = DAOS_PROP_PO_CERT_WATERMARKS;
+
+	assert_true(daos_prop_valid(prop, true, true));
+
+	assert_rc_equal(daos_prop_entry_set_byteval(entry, payload, sizeof(payload)), 0);
+	assert_true(daos_prop_valid(prop, true, true));
+
+	bv          = entry->dpe_val_ptr;
+	bv->dpb_len = (size_t)DAOS_PROP_BYTEVAL_MAX_LEN + 1;
+	assert_false(daos_prop_valid(prop, true, true));
+	bv->dpb_len = sizeof(payload);
+
+	daos_prop_free(prop);
 }
 
 static void
@@ -611,37 +651,6 @@ test_daos_prop_byteval_empty_dup(void **state)
 	daos_prop_free(dst);
 }
 
-static void
-test_daos_prop_byteval_cmp(void **state)
-{
-	const uint8_t          a[] = {0x01, 0x02, 0x03, 0x04};
-	const uint8_t          b[] = {0x01, 0x02, 0x03, 0x05}; /* differs in last byte */
-	struct daos_prop_entry e1  = {.dpe_type = DAOS_PROP_PO_POOL_CA};
-	struct daos_prop_entry e2  = {.dpe_type = DAOS_PROP_PO_POOL_CA};
-
-	/* both NULL -> match */
-	assert_rc_equal(daos_prop_entry_cmp_byteval(&e1, &e2), 0);
-
-	/* NULL vs populated -> mismatch */
-	assert_rc_equal(daos_prop_entry_set_byteval(&e1, a, sizeof(a)), 0);
-	assert_rc_equal(daos_prop_entry_cmp_byteval(&e1, &e2), -DER_MISMATCH);
-
-	/* equal payloads -> match */
-	assert_rc_equal(daos_prop_entry_set_byteval(&e2, a, sizeof(a)), 0);
-	assert_rc_equal(daos_prop_entry_cmp_byteval(&e1, &e2), 0);
-
-	/* different content, same length -> mismatch */
-	assert_rc_equal(daos_prop_entry_set_byteval(&e2, b, sizeof(b)), 0);
-	assert_rc_equal(daos_prop_entry_cmp_byteval(&e1, &e2), -DER_MISMATCH);
-
-	/* different length -> mismatch */
-	assert_rc_equal(daos_prop_entry_set_byteval(&e2, a, sizeof(a) - 1), 0);
-	assert_rc_equal(daos_prop_entry_cmp_byteval(&e1, &e2), -DER_MISMATCH);
-
-	daos_prop_entry_set_byteval(&e1, NULL, 0);
-	daos_prop_entry_set_byteval(&e2, NULL, 0);
-}
-
 static int
 suite_setup(void **state)
 {
@@ -674,10 +683,10 @@ main(void)
 	    cmocka_unit_test(test_daos_prop_valid_cont_success_no_val_check),
 	    cmocka_unit_test(test_daos_prop_has_byteval_types),
 	    cmocka_unit_test(test_daos_prop_byteval_set_round_trip),
-	    cmocka_unit_test(test_daos_prop_byteval_oversize_rejected),
+	    cmocka_unit_test(test_daos_prop_byteval_is_valid),
+	    cmocka_unit_test(test_daos_prop_valid_checks_byteval),
 	    cmocka_unit_test(test_daos_prop_byteval_dup_preserves_value),
 	    cmocka_unit_test(test_daos_prop_byteval_empty_dup),
-	    cmocka_unit_test(test_daos_prop_byteval_cmp),
 	};
 
 	return cmocka_run_group_tests_name("common_prop", tests, suite_setup, suite_teardown);
