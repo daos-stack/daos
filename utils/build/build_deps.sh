@@ -28,12 +28,9 @@ The following defaults apply unless overridden:
     PREFIX=/opt/daos    Install under /opt/daos
 
 Options:
-    -f, --force         wipe dependency directories before building; use
-                        \`TARGET_TYPE=debug|release|dev\` or
-                        \`BUILD_TYPE=debug|release|dev\` to select the directories.
-                        If omitted, \`release\` directories are wiped.
-                        Must be given as the first argument.
-    -h, --help          show this help and exit
+    -f, --force         Wipe dependency directories before building;
+                        must be given as the first argument.
+    -h, --help          Show this help and exit
 
 Any other argument is forwarded verbatim to scons, e.g.:
 
@@ -43,9 +40,11 @@ EOF
 
 check_scons
 
-force=false
 if [ "${1:-}" = "-f" ] || [ "${1:-}" = "--force" ]; then
-    force=true
+    echo "Removing \"${prefix_value}/prereq\""
+    rm -rf "${prefix_value}/prereq"
+    echo "Removing \"build/external\""
+    rm -rf "build/external"
     shift
 fi
 
@@ -53,8 +52,6 @@ jobs_set=false
 prefix_set=false
 prefix_value="/opt/daos"
 use_installed_set=false
-build_type=release
-target_type=default
 
 for arg in "$@"; do
     case "$arg" in
@@ -72,30 +69,8 @@ for arg in "$@"; do
         USE_INSTALLED=*)
             use_installed_set=true
             ;;
-        BUILD_TYPE=*)
-            build_type="${arg#BUILD_TYPE=}"
-            ;;
-        TARGET_TYPE=*)
-            target_type="${arg#TARGET_TYPE=}"
-            ;;
     esac
 done
-
-if "$force"; then
-    ttype="$target_type"
-    [ "$ttype" = "debug" ] || [ "$ttype" = "release" ] || [ "$ttype" = "dev" ] || \
-        ttype="$build_type"
-
-    [ "$ttype" = "debug" ] || [ "$ttype" = "release" ] || [ "$ttype" = "dev" ] || {
-        echo "Invalid build type: $ttype" >&2
-        exit 1
-    }
-
-    echo "Removing \"${prefix_value}/prereq/${ttype}\""
-    rm -rf "${prefix_value}/prereq/${ttype}"
-    echo "Removing \"build/external/${ttype}\""
-    rm -rf "build/external/${ttype}"
-fi
 
 SCONS_ARGS=(install --build-deps=only)
 if ! "$jobs_set"; then
