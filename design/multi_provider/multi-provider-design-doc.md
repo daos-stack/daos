@@ -10,16 +10,7 @@ The result is a single DAOS deployment that can serve multiple client population
 
 ## 2. Background
 
-Today, DAOS and CaRT largely assume a single provider per deployment path. That assumption appears in:
-
-- provider configuration
-- interface and domain selection
-- rank-to-URI registration
-- attach-info exchange
-- CaRT context creation
-- bulk transfer handling
-
-That model is too restrictive for deployments that need more than one provider concurrently.
+Today, DAOS and CaRT assume a single fabric provider for the DAOS cluster. All clients are expected to use the same network subnet and fabric provider. However, it can be useful to allow a different client cluster with a different network configuration to access the same DAOS storage used by the high-speed clients.
 
 The main intended configurations are:
 
@@ -37,9 +28,9 @@ The main intended configurations are:
 
 In the initial scope, the deployment still has a clear ordering: one provider is primary and one is secondary. This design does not attempt to make the two paths equivalent at runtime.
 
-## 3. Goals and Non-Goals
+## 3. Requirements and Out of scope
 
-### 3.1 Goals
+### 3.1 Requirements
 
 1. Support one primary provider and one secondary provider in the initial implementation.
 2. Allow providers to use either the same or different interfaces and domains.
@@ -47,7 +38,7 @@ In the initial scope, the deployment still has a clear ordering: one provider is
 4. Minimize client-side changes required to use the secondary provider.
 5. Keep the design extensible so future work can support more than two providers.
 
-### 3.2 Non-Goals
+### 3.2 Out of scope
 
 - No runtime failover from the primary provider to the secondary provider.
 - No automatic load balancing between providers.
@@ -96,7 +87,8 @@ A client running on the secondary path also needs a way to identify itself as su
 CRT_PROVIDER_SECONDARY=1
 ```
 
-That should also be representable through CaRT initialization options so that the role choice is not environment-variable only.
+That should also be representable through CaRT initialization options so that the role choice (primary vs secondary)
+is not environment-variable only.
 
 On the DAOS server side, the configuration needs ordered multi-value support for:
 
@@ -104,6 +96,8 @@ On the DAOS server side, the configuration needs ordered multi-value support for
 - `fabric_iface`
 - `domain`
 - `port`
+
+The future extension to more than two providers would establish one primary and multiple secondary providers.
 
 The configuration should also define the number of secondary ingress endpoints, for example `secondary_provider_endpoints`, with an initial default of `1`.
 
@@ -220,49 +214,28 @@ Expected subsystem behavior in the initial implementation:
 - **Control plane** must understand provider-indexed address registration and attach-info exchange.
 - **Agent** must select one provider and return the matching URI set.
 
-## 5. Implementation Phases
+## 5. Compatibility and Interoperability
 
-### Phase 1: Configuration and Address Model
-
-- Add ordered list support for provider, interface, domain, and port configuration.
-- Add provider-role support to CaRT initialization.
-- Update management storage and control-plane messages to carry multiple URIs per rank.
-
-### Phase 2: Secondary Ingress and RPC Forwarding
-
-- Create secondary shim contexts in the engine.
-- Register shim RPC handlers.
-- Preserve the intended destination target across ingress and forwarding.
-
-### Phase 3: Attach-Info and Agent Selection
-
-- Extend `GetAttachInfo` to return provider-indexed attach data.
-- Add agent-side provider selection logic.
-- Preserve the one-provider-per-session behavior.
-
-### Phase 4: Bulk Transfer Support
-
-- Extend bulk metadata to identify provider type and role.
-- Select the correct transfer context automatically.
-- Validate binding-bulk flows where control and data paths differ.
-
-## 6. Compatibility and Interoperability
-
-### 6.1 Configuration Compatibility
+### 5.1 Configuration Compatibility
 
 Existing single-provider deployments should continue to work unchanged. A single configured provider is treated as the primary provider.
 
-### 6.2 Wire Compatibility
+### 5.2 Wire Compatibility
 
 Any message-layout changes related to multi-URI registration or provider-indexed attach information must be reviewed for compatibility across mixed-version deployments.
 
-### 6.3 Runtime Compatibility
+### 5.3 Runtime Compatibility
 
 The initial implementation assumes that all nodes participating in multi-provider mode understand the new configuration and message formats. Mixed-version behavior should be validated explicitly rather than assumed.
 
-## 7. External Interfaces
+### 5.4 Bulk Compatibility
 
-### 7.1 Environment Variables
+As described in section 4.9, the multi-proivder implementation requires additional metadata to be transferred along with each bulk handle.
+This breaks backwards compatibility with previous DAOS versions.
+
+## 6. External Interfaces
+
+### 6.1 Environment Variables
 
 - `D_PROVIDER`
 - `D_INTERFACE`
@@ -270,7 +243,7 @@ The initial implementation assumes that all nodes participating in multi-provide
 - `D_PORT`
 - `CRT_PROVIDER_SECONDARY`
 
-### 7.2 Server Configuration
+### 6.2 Server Configuration
 
 - `provider`
 - `fabric_iface`
@@ -278,7 +251,7 @@ The initial implementation assumes that all nodes participating in multi-provide
 - `port`
 - `secondary_provider_endpoints`
 
-### 7.3 Proposed CaRT API Changes
+### 6.3 Proposed CaRT API Changes
 
 Potential additions include:
 
@@ -286,16 +259,16 @@ Potential additions include:
 - extended context-creation APIs that describe provider type or role
 - a query API to retrieve the intended target from `crt_rpc_t` when the RPC was received on a secondary ingress context
 
-## 8. Testing and Validation
+## 7. Testing and Validation
 
-### 8.1 Unit Tests
+### 7.1 Unit Tests
 
 - Parse and validate ordered provider, interface, domain, and port lists.
 - Validate provider-role selection during initialization.
 - Validate preservation and retrieval of the intended RPC destination target.
 - Validate bulk metadata encoding for primary and secondary paths.
 
-### 8.2 Integration Tests
+### 7.2 Integration Tests
 
 - Client attach over the primary provider.
 - Client attach over the secondary provider.
@@ -304,7 +277,7 @@ Potential additions include:
 - Binding-bulk flows where control and data paths differ.
 - Restart scenarios that verify provider-address mappings remain stable.
 
-### 8.3 Negative Tests
+### 7.3 Negative Tests
 
 - Missing secondary-provider metadata.
 - Mismatched provider ordering across configuration fields.
@@ -313,16 +286,16 @@ Potential additions include:
 
 The expected result of the last case is failure rather than failover, because failover is out of scope for this design.
 
-## 9. Risks, Open Issues, and Future Work
+## 8. Risks, Open Issues, and Future Work
 
-### 9.1 Risks and Open Issues
+### 8.1 Risks and Open Issues
 
 - **Shared secondary context concurrency**: multiple primary xstreams may depend on a small number of secondary ingress or transfer contexts.
 - **Persistent address consistency**: restart behavior must preserve both provider settings and provider-to-URI mappings.
 - **Wire compatibility**: management and attach-info changes require explicit interoperability review.
 - **Operational clarity**: provider ordering rules must be consistent across all configuration surfaces.
 
-### 9.2 Future Work
+### 8.2 Future Work
 
 - Support more than one secondary provider.
 - Support multiple secondary ingress contexts with load distribution.
