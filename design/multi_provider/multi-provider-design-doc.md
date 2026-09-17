@@ -2,11 +2,11 @@
 
 ## 1. Summary
 
-DAOS and CaRT currently assume a single fabric provider per deployment path. That limitation makes it difficult to run one DAOS deployment across multiple network fabrics or to support separate client populations that must reach the same servers through different providers.
+DAOS and CaRT currently assume a single fabric provider per DAOS system. That limitation makes it impossible to run DAOS across multiple network fabrics or to support separate client populations that must reach the same servers through different providers.
 
 This design adds initial multi-provider support with one **primary** provider and one **secondary** provider. The primary provider remains the normal server execution and server-to-server communication path. The secondary provider is introduced as a client ingress path: requests received on the secondary provider are forwarded to the appropriate primary execution target inside the engine.
 
-The result is a single DAOS deployment that can serve multiple client populations across different providers or network paths without requiring a separate DAOS instance per fabric.
+The result is a single DAOS system that can serve multiple client populations across different providers or network paths without requiring a separate DAOS instance per fabric.
 
 ## 2. Background
 
@@ -218,11 +218,11 @@ Expected subsystem behavior in the initial implementation:
 
 ### 5.1 Configuration Compatibility
 
-Existing single-provider deployments should continue to work unchanged. A single configured provider is treated as the primary provider.
+Existing single-provider systems should continue to work unchanged. A single configured provider is treated as the primary provider.
 
 ### 5.2 Wire Compatibility
 
-Any message-layout changes related to multi-URI registration or provider-indexed attach information must be reviewed for compatibility across mixed-version deployments.
+Any message-layout changes related to multi-URI registration or provider-indexed attach information must be reviewed for compatibility across mixed-version systems.
 
 ### 5.3 Runtime Compatibility
 
