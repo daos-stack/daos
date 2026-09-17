@@ -2,6 +2,7 @@ ABT
 ACL
 AIO
 APs
+ASan
 Ansible
 BW
 Broadwell
@@ -12,6 +13,7 @@ CompletedProcess
 DArray
 DDict
 DFS
+DSO
 DataLoader
 Datamover
 EL
@@ -22,6 +24,7 @@ FS
 FileHandler
 GHA
 Gopath
+github
 Haswell
 IOF
 IOR
@@ -59,13 +62,18 @@ SHS
 SSF
 SX
 Skylake
+StackFrame
 SubProcess
 Subdirectories
 TestFail
 Testcase
+tsan
+TSan
+UBSan
 UCX
 UNS
 Uncomment
+ubsan
 VMD
 XUnitResult
 acl
@@ -118,6 +126,7 @@ cmdlines
 cmdresult
 cmds
 cmocka
+cmocka's
 cmp
 coh
 committable
@@ -142,6 +151,7 @@ ddict
 dealloc
 debian
 debuginfo
+deduplicated
 defusedxml
 del
 dentry
@@ -156,6 +166,7 @@ dfs
 dfuse
 dir
 dirname
+disambiguates
 distro
 dkey
 dkeys
@@ -195,6 +206,7 @@ fio
 formattable
 fpp
 fs
+fsanitize
 fstab
 fstat
 ftest
@@ -407,6 +419,7 @@ runtime
 runuser
 rw
 sandybridge
+sanitizer's
 sbatch
 sbin
 scalable

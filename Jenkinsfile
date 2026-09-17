@@ -1413,6 +1413,7 @@ pipeline {
                             pragma_suffix:'-cb-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'cb,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
