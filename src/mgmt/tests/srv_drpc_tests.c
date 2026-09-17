@@ -992,7 +992,7 @@ test_drpc_pool_set_prop_byteval_success(void **state)
 	req.properties   = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 
-	req.properties[0]->number       = DAOS_PROP_PO_POOL_CA;
+	req.properties[0]->number       = DAOS_PROP_PO_CA_CERT;
 	req.properties[0]->byteval.data = byte_data;
 	req.properties[0]->byteval.len  = sizeof(byte_data);
 	req.properties[0]->value_case   = MGMT__POOL_PROPERTY__VALUE_BYTEVAL;
@@ -1000,7 +1000,7 @@ test_drpc_pool_set_prop_byteval_success(void **state)
 
 	ds_mgmt_drpc_pool_set_prop(&call, &resp);
 
-	expect_drpc_pool_set_prop_resp_success(&resp, DAOS_PROP_PO_POOL_CA, 0);
+	expect_drpc_pool_set_prop_resp_success(&resp, DAOS_PROP_PO_CA_CERT, 0);
 
 	free_prop_msg_list(req.properties, req.n_properties);
 	D_FREE(call.body.data);
@@ -1255,7 +1255,7 @@ test_drpc_pool_get_prop_byteval_empty_success(void **state)
 	Drpc__Response         resp        = DRPC__RESPONSE__INIT;
 	Mgmt__PoolGetPropReq   req         = MGMT__POOL_GET_PROP_REQ__INIT;
 	Mgmt__PoolGetPropResp *get_resp    = NULL;
-	int                    prop_number = DAOS_PROP_PO_POOL_CA;
+	int                    prop_number = DAOS_PROP_PO_CA_CERT;
 
 	ds_mgmt_pool_get_prop_out = daos_prop_alloc(1);
 	assert_non_null(ds_mgmt_pool_get_prop_out);

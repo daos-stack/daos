@@ -141,7 +141,7 @@ enum daos_pool_props {
 	/** Metadata duplicate operations SVC_OPS KVS max entry age (seconds), default 300 */
 	DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
 	/** PEM intermediate CA bundle for per-pool node auth, default empty */
-	DAOS_PROP_PO_POOL_CA,
+	DAOS_PROP_PO_CA_CERT,
 	/** Per-CN cert revocation watermarks, default empty */
 	DAOS_PROP_PO_CERT_WATERMARKS,
 	DAOS_PROP_PO_MAX,

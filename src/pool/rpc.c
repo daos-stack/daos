@@ -339,8 +339,8 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
 			bits |= DAOS_PO_QUERY_PROP_SVC_OPS_ENTRY_AGE;
 			break;
-		case DAOS_PROP_PO_POOL_CA:
-			bits |= DAOS_PO_QUERY_PROP_POOL_CA;
+		case DAOS_PROP_PO_CA_CERT:
+			bits |= DAOS_PO_QUERY_PROP_CA_CERT;
 			break;
 		case DAOS_PROP_PO_CERT_WATERMARKS:
 			bits |= DAOS_PO_QUERY_PROP_CERT_WATERMARKS;

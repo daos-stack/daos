@@ -796,8 +796,8 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			if (rc)
 				return rc;
 			break;
-		case DAOS_PROP_PO_POOL_CA:
-			rc = pool_prop_write_byteval(tx, kvs, &ds_pool_prop_pool_ca, entry);
+		case DAOS_PROP_PO_CA_CERT:
+			rc = pool_prop_write_byteval(tx, kvs, &ds_pool_prop_ca_cert, entry);
 			if (rc)
 				return rc;
 			break;
@@ -3741,10 +3741,10 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		prop->dpp_entries[idx].dpe_val  = val32;
 		idx++;
 	}
-	if (bits & DAOS_PO_QUERY_PROP_POOL_CA) {
+	if (bits & DAOS_PO_QUERY_PROP_CA_CERT) {
 		D_ASSERT(idx < nr);
-		rc = pool_prop_read_byteval(tx, &svc->ps_root, &ds_pool_prop_pool_ca,
-					    &prop->dpp_entries[idx], DAOS_PROP_PO_POOL_CA);
+		rc = pool_prop_read_byteval(tx, &svc->ps_root, &ds_pool_prop_ca_cert,
+					    &prop->dpp_entries[idx], DAOS_PROP_PO_CA_CERT);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		if (rc != 0)

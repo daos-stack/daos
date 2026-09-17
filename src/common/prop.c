@@ -81,7 +81,7 @@ bool
 daos_prop_has_byteval(struct daos_prop_entry *entry)
 {
 	switch (entry->dpe_type) {
-	case DAOS_PROP_PO_POOL_CA:
+	case DAOS_PROP_PO_CA_CERT:
 	case DAOS_PROP_PO_CERT_WATERMARKS:
 		return true;
 	}
@@ -369,7 +369,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			if (rc != 0)
 				return false;
 			break;
-		case DAOS_PROP_PO_POOL_CA:
+		case DAOS_PROP_PO_CA_CERT:
 		case DAOS_PROP_PO_CERT_WATERMARKS:
 			if (!daos_prop_byteval_is_valid(&prop->dpp_entries[i]))
 				return false;

@@ -96,8 +96,8 @@ const (
 	PoolPropertyReintMode      = C.DAOS_PROP_PO_REINT_MODE
 	PoolPropertySvcOpsEnabled  = C.DAOS_PROP_PO_SVC_OPS_ENABLED
 	PoolPropertySvcOpsEntryAge = C.DAOS_PROP_PO_SVC_OPS_ENTRY_AGE
-	// PoolPropertyPoolCA is the PEM intermediate CA for per-pool node auth.
-	PoolPropertyPoolCA = C.DAOS_PROP_PO_POOL_CA
+	// PoolPropertyCACert is the PEM intermediate CA for per-pool node auth.
+	PoolPropertyCACert = C.DAOS_PROP_PO_CA_CERT
 	// PoolPropertyCertWatermarks is an opaque JSON blob of per-CN cert revocation watermarks.
 	PoolPropertyCertWatermarks = C.DAOS_PROP_PO_CERT_WATERMARKS
 )

@@ -57,7 +57,7 @@ RDB_STRING_KEY(ds_pool_prop_, checkpoint_mode);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_freq);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_thresh);
 RDB_STRING_KEY(ds_pool_prop_, reint_mode);
-RDB_STRING_KEY(ds_pool_prop_, pool_ca);
+RDB_STRING_KEY(ds_pool_prop_, ca_cert);
 RDB_STRING_KEY(ds_pool_prop_, cert_watermarks);
 
 /** default properties, should cover all optional pool properties */
@@ -171,7 +171,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	.dpe_val  = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT,
     },
     {
-	.dpe_type    = DAOS_PROP_PO_POOL_CA,
+	.dpe_type    = DAOS_PROP_PO_CA_CERT,
 	.dpe_val_ptr = NULL,
     },
     {

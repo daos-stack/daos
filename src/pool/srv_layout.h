@@ -88,7 +88,7 @@ extern d_iov_t ds_pool_prop_svc_ops_age;        /* uint32_t */
 extern d_iov_t ds_pool_prop_srv_handle;         /* uuid_t */
 extern d_iov_t ds_pool_prop_srv_cont_handle;    /* uuid_t */
 extern d_iov_t ds_pool_prop_recov_cont;         /* uint32_t */
-extern d_iov_t ds_pool_prop_pool_ca;            /* opaque blob */
+extern d_iov_t ds_pool_prop_ca_cert;            /* opaque blob */
 extern d_iov_t ds_pool_prop_cert_watermarks;    /* opaque blob */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
