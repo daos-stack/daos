@@ -2,7 +2,7 @@
 
 -   **Problem**: A legacy MD-on-SSD pool created with a 100% memory ratio operates in phase1 mode. All existing metadata is non-evictable (NE), and the META blob has no evictable capacity for phase2 allocations.
 
--   **Proposal**: Add a `dmg pool convert` operation that makes the pool temporarily unavailable, enlarges every target's META blob, slightly enlarges every VOS memory file, and enables phase2. Existing DAV2 zones remain NE; newly appended META zones provide evictable (E) capacity.
+-   **Proposal**: Add a `dmg pool resize` operation that makes the pool temporarily unavailable, enlarges every target's META blob, slightly enlarges every VOS memory file, and enables phase2. Existing DAV2 zones remain NE; newly appended META zones provide evictable (E) capacity.
 
 -   **Impact**: Conversion preserves existing offsets and requires no metadata relocation or object-tree scan. The pool gains metadata capacity while its memory footprint grows only by a bounded NE reserve. Pool connections and I/O are unavailable for the duration of the operation.
 
@@ -94,13 +94,15 @@ The old DAV2 zones remain NE and preserve all existing offsets. $H_{NE}$ tolerat
 
 ## External Command
 
-Add pool conversion subcommands:
+Add pool resize subcommands:
 
 ```
-dmg pool convert <pool> --mem-ratio <percent> [--ne-reserve <size>] [--dry-run] [--wait[=<timeout>]]
-dmg pool convert-status <pool> [--generation <uuid>]
-dmg pool convert-cancel <pool> --generation <uuid>
+dmg pool resize <pool> --mem-ratio <percent> [--ne-reserve <size>] [--dry-run] [--wait[=<timeout>]]
+dmg pool resize-status <pool>
+dmg pool resize-cancel <pool>
 ```
+
+`resize` is intentionally broader than `convert`. `dmg pool extend` remains the horizontal operation that adds ranks or targets to a pool. `dmg pool resize` is the vertical operation that changes storage geometry on the pool's existing targets. This design implements its first resize mode: expanding META and memory capacity while converting a 100% mem-ratio pool to phase2. Future vertical expansion can add size options to the same command without introducing a second overlapping API.
 
 -   `--mem-ratio` is required and must be greater than 0% and less than 100%.
 
@@ -108,17 +110,19 @@ dmg pool convert-cancel <pool> --generation <uuid>
 
 -   `--dry-run` validates eligibility and reports the proposed per-target geometry without changing pool availability or storage.
 
--   By default, `convert` submits the operation and returns as soon as the durable conversion record and background worker are established. The response contains the generation UUID and initial state; it does not wait for conversion to finish.
+-   By default, `convert` submits the operation and returns as soon as the durable conversion record and background worker are established. The response contains the initial state and an informational generation UUID; it does not wait for conversion to finish.
 
--   `--wait` is client-side convenience. `dmg` polls `convert-status` with short RPCs until the operation reaches a terminal state. `--wait=<timeout>` limits only how long `dmg` polls; expiration does not cancel the server-side operation.
+-   `--wait` is client-side convenience. `dmg` polls `resize-status` with short RPCs until the operation reaches a terminal state. `--wait=<timeout>` limits only how long `dmg` polls; expiration does not cancel the server-side operation.
 
--   `convert-cancel` is accepted only while the operation is still reversible, before any META blob has been expanded. After state `RESIZING`, the operation can only resume forward.
+-   `resize-cancel` is accepted only while the operation is still reversible, before any META blob has been expanded. After state `RESIZING`, the operation can only resume forward.
+
+-   `resize-status` and `resize-cancel` identify the operation by pool only. The pool service permits at most one active resize per pool, so a user-supplied generation is unnecessary. Status returns the active resize, or the most recent terminal result when no resize is active.
 
 The completed status reports old and new META sizes, old and new memory-file sizes, effective ratio, added E capacity, and conversion generation. JSON output exposes per-rank and per-target progress.
 
 The command follows the existing `dmg pool` request path:
 
-1.  `dmg` sends `PoolConvertReq` to the management service.
+1.  `dmg` sends `PoolResizeReq` to the management service.
 
 2.  The management service resolves the pool identifier and serializes conversion with other pool administration operations.
 
@@ -130,7 +134,9 @@ No management, pool-service, collective, or engine RPC remains outstanding for t
 
 ## Asynchronous Execution
 
-The pool-service leader owns a background conversion ULT keyed by pool UUID and generation UUID. RDB state, rather than ULT lifetime, is authoritative. If leadership changes or the process restarts, the new leader detects a non-terminal conversion record and schedules a replacement ULT at the last durable stage.
+The pool-service leader owns a background resize ULT keyed internally by pool UUID and generation UUID. RDB state, rather than ULT lifetime, is authoritative. If leadership changes or the process restarts, the new leader detects a non-terminal resize record and schedules a replacement ULT at the last durable stage.
+
+The generation UUID remains mandatory on internal pool-service and target RPCs. It provides idempotency, rejects delayed RPCs from an earlier attempt, and correlates RDB and SMD recovery records. The management status and cancel handlers resolve the current generation under the pool-service lock before acting, so clients do not supply it.
 
 Each potentially long target operation follows a start/query protocol:
 
@@ -235,7 +241,7 @@ struct pool_md_conversion {
 };
 ```
 
-States are `SUBMITTED`, `PREPARING`, `QUIESCED`, `RESIZING`, `ACTIVATING`, `RESTARTING`, `COMMITTED`, `FAILED`, and `CANCELED`. Per-target progress records make resize and activation idempotent. A terminal `FAILED` state records whether the operation is retryable and the stage from which `dmg pool convert` with the same generation resumes.
+States are `SUBMITTED`, `PREPARING`, `QUIESCED`, `RESIZING`, `ACTIVATING`, `RESTARTING`, `COMMITTED`, `FAILED`, and `CANCELED`. Per-target progress records make resize and activation idempotent. A terminal `FAILED` state records whether the operation is retryable and the stage from which `dmg pool resize` with the same generation resumes.
 
 SMD stores a local generation and state for each shard before its META blob changes. Engine startup and pool-child startup refuse normal service when SMD reports an incomplete conversion. The pool service resumes the operation forward after leadership or engine restart. Progress updates are rate-limited and batched so polling does not create excessive RDB or SMD writes.
 
@@ -341,7 +347,7 @@ The original submission RPC has already returned. A `dmg` process using `--wait`
 
 ## Phase 1: Control Plane and Quiesce
 
--   Add asynchronous `dmg pool convert`, `convert-status`, and reversible `convert-cancel` commands, control API types, protobuf messages, management-service handling, and pool-service serialization.
+-   Add asynchronous `dmg pool resize`, `resize-status`, and reversible `resize-cancel` commands, control API types, protobuf messages, management-service handling, and pool-service serialization.
 
 -   Add pool non-connectable state, connection eviction, bounded target stage start/status RPCs, background workers, and distributed progress reporting.
 
@@ -401,9 +407,9 @@ The implementation may consume reserved fields or introduce versioned extension 
 
 # External Interfaces
 
--   `dmg pool convert <pool> --mem-ratio <percent> [--ne-reserve <size>] [--dry-run] [--wait[=<timeout>]]`.
+-   `dmg pool resize <pool> --mem-ratio <percent> [--ne-reserve <size>] [--dry-run] [--wait[=<timeout>]]`.
 
--   `dmg pool convert-status <pool> [--generation <uuid>]` and reversible `convert-cancel` command.
+-   `dmg pool resize-status <pool>` and reversible `dmg pool resize-cancel <pool>` commands. Neither requires a generation argument because only one resize can be active per pool.
 
 -   New short-lived management-service submit, status, and cancel RPCs and corresponding pool-service RPCs.
 
