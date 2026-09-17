@@ -48,9 +48,16 @@ class OSAOfflineParallelTest(OSAUtils):
         dmg = copy.copy(self.dmg_command)
         try:
             if action == "reintegrate":
-                text = "Waiting for rebuild to complete before pool reintegrate"
-                time.sleep(3)
-                self.print_and_assert_on_rebuild_failure(text)
+                self.log.info("Waiting for rebuild to complete before pool reintegrate")
+                # Make sure the target rank(s) have rejoined before reintegrating.
+                ranks = [int(r) for r in str(kwargs["ranks"]).split(",")]
+                failed_ranks = self.server_managers[0].check_rank_state(
+                    ranks, ["joined"], max_checks=5)
+                if failed_ranks:
+                    results.put(
+                        "reintegrate failed: rank(s) {} not in joined state".format(
+                            failed_ranks))
+                    return
             if action == "exclude" and self.server_boot is True:
                 self.log.info("Stop/Start rank %s using system stop/start", kwargs["ranks"])
                 ranks = str(kwargs["ranks"])

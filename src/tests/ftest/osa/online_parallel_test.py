@@ -66,6 +66,16 @@ class OSAOnlineParallelTest(OSAUtils):
         try:
             if action == "reintegrate":
                 time.sleep(60)
+                self.log.info("Waiting for rebuild to complete before pool reintegrate")
+                # Make sure the target rank(s) have rejoined before reintegrating.
+                ranks = [int(r) for r in str(action_args[action]["ranks"]).split(",")]
+                failed_ranks = self.server_managers[0].check_rank_state(
+                    ranks, ["joined"], max_checks=5)
+                if failed_ranks:
+                    results.put(
+                        "reintegrate failed: rank(s) {} not in joined state".format(
+                            failed_ranks))
+                    return
             # For each action, read the values from the
             # dictionary.
             # example {"exclude" : {"puuid": self.pool, "ranks: rank
