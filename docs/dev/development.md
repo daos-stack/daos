@@ -451,7 +451,7 @@ from source or install them using the appropriate package manager.
    `libfabric-devel`) matching the versions expected by the current tree,
    so that the subsequent build steps can reuse them instead of rebuilding from
    source (`USE_INSTALLED=all`). `RPM_SUFFIX` is the standardized RPM naming
-   suffix used by the DAOS project's own packages (for example, `el9`,
+   suffix used by the DAOS project's own packages (for example: `el9`,
    `suse.lp155`, or `suse.lp156`), not the OS distribution name. If omitted,
    the suffix is auto-detected from `/etc/os-release`.
    Set `DAOS_DEPS_EXT_REPO` to pull in RPMs from custom dnf repository
@@ -482,7 +482,9 @@ from source or install them using the appropriate package manager.
 
 1. **[`utils/build/build_packages.sh [options] [PKG_OUTPUT_DIR]`](../../utils/build/build_packages.sh)**
    builds DAOS packages, dependency packages, or both (default).
-   `PKG_OUTPUT_DIR` is an optional positional argument and is the root under which `deps/` and `daos/` are written. For RPM builds it defaults to `<repo_root>/rpms`; for DEB builds it defaults to `.`.
+   `PKG_OUTPUT_DIR` is an optional positional argument and is the root under
+   which `deps/` and `daos/` are written. For RPM builds it defaults
+   to `<repo_root>/rpms`; for DEB builds it defaults to `.`.
 
    For RPM packages the script also generates repository metadata under
    `<PKG_OUTPUT_DIR>/repodata`, producing a complete RPM repository.

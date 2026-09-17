@@ -57,13 +57,13 @@ fi
 # Configure a temporary dnf repository if DAOS_DEPS_EXT_REPO is set,
 # and clean it up on exit.
 cleanup() {
-    if [ -n "${DAOS_DEPS_EXT_REPO:-}" ] && [ -n "${rpm_suffix:-}" ]; then
+    if [ -n "${DAOS_DEPS_EXT_REPO:-}" ]; then
         sudo rm -f /etc/yum.repos.d/daos-deps-extra.repo
     fi
 }
 
 trap cleanup EXIT
-if [ -n "${DAOS_DEPS_EXT_REPO:-}" ] ; then
+if [ -n "${DAOS_DEPS_EXT_REPO:-}" ]; then
     sudo tee /etc/yum.repos.d/daos-deps-extra.repo > /dev/null <<-EOF
 	[daos-deps-extra]
 	name=DAOS dependency RPMs extra repo

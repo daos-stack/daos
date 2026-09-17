@@ -47,7 +47,6 @@ install_set=false
 clean_scons() {
     scons -c
     rm -rf .sconf_temp .sconsign.dblite config.log build
-    find site_scons -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
 }
 
 full_clean_scons() {
