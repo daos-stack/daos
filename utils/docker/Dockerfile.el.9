@@ -180,6 +180,7 @@ FROM build-ci AS build-local
 LABEL DAOS=true
 
 ARG COMPILER
+ARG SANITIZERS
 ARG DAOS_DEPS_BUILD
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 ARG DAOS_JAVA_BUILD
@@ -246,7 +247,8 @@ RUN --mount=type=bind,source=VERSION,target=/home/daos/daos/VERSION \
            ${JOBS:+--jobs "$JOBS"} \
            ${COMPILER:+COMPILER=$COMPILER} \
            ${DAOS_BUILD_TYPE:+BUILD_TYPE="$DAOS_BUILD_TYPE"} \
-           ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} && \
+           ${DAOS_TARGET_TYPE:+TARGET_TYPE="$DAOS_TARGET_TYPE"} \
+           ${SANITIZERS:+SANITIZERS=$SANITIZERS} && \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || { \
             utils/build/build_daos.sh --clean; \
         }) && \
