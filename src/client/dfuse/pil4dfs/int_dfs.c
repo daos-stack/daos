@@ -98,8 +98,6 @@ static int                    fd_dummy = -1;
  * MAXSYMLINKS
  */
 #define MAX_SYMLINK_HOPS      40
-/* Hops followed within the container root to detect an absolute value in a chain of links */
-#define ROOT_SYMLINK_MAX_HOPS 8
 
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
@@ -519,6 +517,17 @@ static int
 normalize_path(char path[], int len);
 static int
 resolve_dot_dot(struct dfs_mt *dfs_mt, char path[], int *len, bool *use_kernel);
+
+/* dfs cannot follow a symlink whose value is absolute (EINVAL), or one that climbs more than one
+ * level with ".." (ENOTSUP): the first needs the process root, the second the ancestry of the
+ * link, and only the kernel has both. The lookup that hits such a link fails, so a path that fails
+ * this way is handed to the kernel, which resolves it through dfuse.
+ */
+static inline bool
+lookup_needs_kernel(int rc)
+{
+	return rc == EINVAL || rc == ENOTSUP;
+}
 
 /* reference count of fake fd duplicated by real fd with dup2() */
 static int                dup_ref_count[MAX_OPENED_FILE];
@@ -1316,7 +1325,9 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 		if (rc)
 			D_GOTO(out_err, rc);
 		if (use_kernel) {
-			/* the path leaves the container through ".." or an absolute symlink */
+			/* the path leaves the container through "..", or dfs cannot follow a link
+			 * in it
+			 */
 			strncpy(*full_path, full_path_parse, len + 1);
 			*is_target_path = 0;
 			item_name[0]    = '\0';
@@ -1365,9 +1376,18 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			/* look up the dfs object from hash table for the parent dir */
 			rc = dcache_find_insert((*dfs_mt)->dcache, *parent_dir, parent_dir_len,
 						parent);
-			/* parent dir does not exist or something wrong */
-			if (rc)
-				D_GOTO(out_err, rc = daos_der2errno(rc));
+			if (rc) {
+				rc = daos_der2errno(rc);
+				if (!lookup_needs_kernel(rc))
+					/* parent dir does not exist or something wrong */
+					D_GOTO(out_err, rc);
+				/* a symlink in the parent path that only the kernel can follow */
+				full_path_parse[pos] = '/';
+				strncpy(*full_path, full_path_parse, len + 1);
+				*is_target_path = 0;
+				item_name[0]    = '\0';
+				goto out_normal;
+			}
 		}
 	} else {
 		strncpy(*full_path, full_path_parse, len + 1);
@@ -1455,8 +1475,9 @@ find_dot_dot(const char *path, int from)
  * and the scan restarts, anything else is an error as in the kernel. A ".." applied to the mount
  * point itself collapses lexically, the mount path being taken as canonical as query_dfs_mount()
  * does, and the path stays with pil4dfs only if it comes straight back into this mount. A symlink
- * with an absolute value leaves the container and is handed to the kernel. Paths without ".."
- * return at the first scan and pay nothing.
+ * with an absolute value, or one in the path in front of ".." that dfs cannot follow, leaves the
+ * container and is handed to the kernel. Paths without ".." return at the first scan and pay
+ * nothing.
  */
 static int
 resolve_dot_dot(struct dfs_mt *dfs_mt, char path[], int *len, bool *use_kernel)
@@ -1516,8 +1537,13 @@ resolve_dot_dot(struct dfs_mt *dfs_mt, char path[], int *len, bool *use_kernel)
 			return ENOMEM;
 		rc = dcache_find_insert(dfs_mt->dcache, parent_path, parent_len, &parent);
 		D_FREE(parent_path);
-		if (rc)
-			return daos_der2errno(rc);
+		if (rc) {
+			rc = daos_der2errno(rc);
+			if (!lookup_needs_kernel(rc))
+				return rc;
+			*use_kernel = true;
+			return 0;
+		}
 
 		saved     = path[pos];
 		path[pos] = '\0';
@@ -2173,16 +2199,15 @@ out_readlink:
 	return (-1);
 }
 
-/* dfs dereferences symlinks inside the container, so it cannot handle a symlink whose value is an
- * absolute path: POSIX resolves such a value from the process root, which only the kernel can do.
- * dfs reports EINVAL for it, except when the link sits in the container root, where it resolves the
- * value from that root: an absolute value is handled up front by root_symlink_escapes(), and a
- * relative value that climbs out of the container reports ENOENT. Neither errno is specific to this
- * case, so the entry is looked up again to confirm that it really is a symlink. The absolute value
+/* The leaf of the path is a symlink that dfs cannot follow, see lookup_needs_kernel(). A link in
+ * the container root whose relative value climbs out of the container reports ENOENT instead, as
+ * dfs resolves ".." of its root to the root itself. None of these errnos is specific to a symlink,
+ * so the entry is looked up again to confirm that it really is one. The value that dfs rejected
  * may sit anywhere in a chain of links, as with the python3 -> python -> /usr/bin/python3.x layout
  * of a venv, so the value of the entry itself is not inspected.
  *
- * An absolute symlink in a non-leaf position of the path is not detected here.
+ * A symlink of this kind in a non-leaf position fails inside query_path(), which hands the path to
+ * the kernel itself.
  */
 static bool
 need_kernel_to_resolve(int rc, struct dfs_mt *dfs_mt, struct dcache_rec *parent,
@@ -2199,7 +2224,7 @@ need_kernel_to_resolve(int rc, struct dfs_mt *dfs_mt, struct dcache_rec *parent,
 		 */
 		if (parent_dir == NULL || strncmp(parent_dir, "/", 2) != 0)
 			return false;
-	} else if (rc != EINVAL) {
+	} else if (!lookup_needs_kernel(rc)) {
 		return false;
 	}
 
@@ -2209,54 +2234,6 @@ need_kernel_to_resolve(int rc, struct dfs_mt *dfs_mt, struct dcache_rec *parent,
 	dfs_release(obj);
 
 	return S_ISLNK(mode);
-}
-
-/* For a symlink in the container root dfs resolves an absolute value from that root rather than
- * reporting EINVAL, so the lookup succeeds with the wrong object whenever the same path also exists
- * inside the container. This cannot be told apart from a genuine hit afterwards, so an entry of the
- * root is checked before it is dereferenced. Bare relative values are followed within the root so
- * that a chain such as python3 -> python -> /usr/bin/python3.x is caught as well.
- */
-static bool
-root_symlink_escapes(struct dfs_mt *dfs_mt, struct dcache_rec *parent, const char *item_name,
-		     const char *parent_dir)
-{
-	/* a bare name is at most DFS_MAX_NAME; a longer value is truncated and has to hold a '/' */
-	char        value[DFS_MAX_NAME + 2];
-	const char *name = item_name;
-	int         hop;
-
-	if (parent == NULL || parent_dir == NULL || strncmp(parent_dir, "/", 2) != 0)
-		return false;
-
-	for (hop = 0; hop < ROOT_SYMLINK_MAX_HOPS; hop++) {
-		dfs_obj_t  *obj     = NULL;
-		mode_t      mode    = 0;
-		daos_size_t str_len = sizeof(value);
-		int         rc;
-
-		if (dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), name, O_RDONLY | O_NOFOLLOW, &obj,
-				   &mode, NULL) != 0)
-			return false;
-		if (!S_ISLNK(mode)) {
-			dfs_release(obj);
-			return false;
-		}
-		rc = dfs_get_symlink_value(obj, value, &str_len);
-		dfs_release(obj);
-		if (rc != 0 || str_len <= 1)
-			return false;
-		if (value[0] == '/')
-			return true;
-		/* a value with a directory part leaves the root, and dfs then reports EINVAL for
-		 * an absolute hop further down the chain
-		 */
-		if (str_len > sizeof(value) || strchr(value, '/') != NULL)
-			return false;
-		name = value;
-	}
-
-	return false;
 }
 
 static int
@@ -2449,8 +2426,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		if ((S_IXUSR & mode_parent) == 0 || (S_IWUSR & mode_parent) == 0)
 			D_GOTO(out_error, rc = EACCES);
 	}
-	if (root_symlink_escapes(dfs_mt, parent, item_name, parent_dir))
-		goto org_func;
 	/* file handled by DFS */
 	if (oflags & O_CREAT) {
 		/* clear the bits for types first. mode in open() only contains permission info. */
@@ -3315,8 +3290,6 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 		goto out_org;
 	atomic_fetch_add_relaxed(&num_stat, 1);
 
-	if (root_symlink_escapes(dfs_mt, parent, item_name, parent_dir))
-		goto out_org;
 	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &obj, &mode, stat_buf);
 	} else {
@@ -5412,8 +5385,6 @@ access(const char *path, int mode)
 	if (!is_target_path)
 		goto out_org;
 
-	if (root_symlink_escapes(dfs_mt, parent, item_name, parent_dir))
-		goto out_org;
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_access(dfs_mt->dfs, NULL, NULL, mode);
 	else
