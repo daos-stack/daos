@@ -1566,7 +1566,12 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 
 	if (ioc->ic_skip_akey_support) {
 		flags |= SUBTR_FLAT;
-		if (ioc->ic_iods[0].iod_type == DAOS_IOD_ARRAY)
+		/* ic_iods may be NULL/empty for existence-check or set-TS-only fetches
+		 * (iod_nr == 0 is permitted for those in vos_ioc_create()); guard the
+		 * ic_iods[0] deref so a HEAD/existence fetch on a flat-dkey object does
+		 * not crash the engine.
+		 */
+		if (ioc->ic_iod_nr > 0 && ioc->ic_iods[0].iod_type == DAOS_IOD_ARRAY)
 			flags |= SUBTR_EVT;
 	}
 
@@ -1616,8 +1621,16 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 
 fetch_akey:
 	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
-		iod_set_cursor(ioc, 0);
-		rc = fetch_value(ioc, &ioc->ic_iods[0], toh, &ioc->ic_epr, standalone);
+		/* existence-check / set-TS-only fetches carry no iods (iod_nr == 0);
+		 * key existence was already established above, so skip the value fetch
+		 * (the non-flat path is naturally guarded by the ic_iod_nr loop below).
+		 * Without this, iod_set_cursor() asserts (sgl_at < ic_iod_nr) and
+		 * ic_iods[0] is dereferenced NULL, aborting/crashing the engine.
+		 */
+		if (ioc->ic_iod_nr > 0) {
+			iod_set_cursor(ioc, 0);
+			rc = fetch_value(ioc, &ioc->ic_iods[0], toh, &ioc->ic_epr, standalone);
+		}
 	} else {
 		for (i = 0; i < ioc->ic_iod_nr; i++) {
 			iod_set_cursor(ioc, i);
