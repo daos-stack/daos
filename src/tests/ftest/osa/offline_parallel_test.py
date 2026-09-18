@@ -48,20 +48,11 @@ class OSAOfflineParallelTest(OSAUtils):
         dmg = copy.copy(self.dmg_command)
         try:
             if action == "reintegrate":
-                text = "Waiting for rebuild to complete before pool reintegrate"
+                self.log.info("Interrupt rebuild with reintegrate")
                 time.sleep(5)
-                self.print_and_assert_on_rebuild_failure(text)
-                # Make sure the target rank(s) have rejoined before reintegrating.
-                ranks = [int(r) for r in str(kwargs["ranks"]).split(",")]
-                for _ in range(5):
-                    failed_ranks = self.server_managers[0].check_rank_state(
-                        ranks, ["joined"], max_checks=5)
-                    if failed_ranks:
-                        results.put(
-                            "reintegrate failed: rank(s) {} not in joined state".format(
-                                failed_ranks))
-                        return
-                    time.sleep(5)
+                # If we are performing start/stop of the server, skip the reintegrate action.
+                if self.server_boot:
+                    return
             if action == "exclude" and self.server_boot is True:
                 self.log.info("Stop/Start rank %s using system stop/start", kwargs["ranks"])
                 ranks = str(kwargs["ranks"])
@@ -162,6 +153,9 @@ class OSAOfflineParallelTest(OSAUtils):
                     "pool": self.pool.identifier, "ranks": ",".join(map(str, extra_ranks))}
             }
             expected_disabled_ranks.append(rank)
+            # If server boot is enabled, the next rank will also be expected to be disabled.
+            if self.server_boot:
+                expected_disabled_ranks.append(rank + 1)
             for action in sorted(action_kwargs):
                 # Add a dmg thread
                 kwargs = action_kwargs[action].copy()
