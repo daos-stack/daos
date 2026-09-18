@@ -73,6 +73,12 @@ func TestHostList_Create(t *testing.T) {
 			expUniqOut:   "10.5.1.[1-32,42]:10001",
 			expUniqCount: 33,
 		},
+		"IPv6 addresses": {
+			startList:    "[2001:db8::1]:10001,[2001:db8::2]:10001",
+			expRawOut:    "[2001:db8::1]:10001,[2001:db8::2]:10001",
+			expUniqOut:   "[2001:db8::1]:10001,[2001:db8::2]:10001",
+			expUniqCount: 2,
+		},
 		"duplicates removed": {
 			startList:    "node[1-128],node2,node4,node8,node16,node32,node64,node128",
 			expRawOut:    "node[1-128,2,4,8,16,32,64,128]",
