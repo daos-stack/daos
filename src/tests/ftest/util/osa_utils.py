@@ -324,6 +324,22 @@ class OSAUtils(MdtestBase, IorTestBase):
             out_queue.put(exc)
             raise CommandFailure(exc)
 
+    def check_disabled_ranks(self, expect, data, key):
+        """Check the expected and actual rank lists are equal.
+
+        Args:
+            expect (list): list of ranks to expect
+            data (dict): dmg json response containing actual list of ranks
+            key (str): the dmg json response key used to access the actual list of ranks
+        """
+        actual = data["response"].get(key)
+        if expect is None:
+            self.assertIsNone(actual, f"Invalid {key} field: want=None, got={actual}")
+        else:
+            self.assertListEqual(
+                actual, expect, f"Invalid {key} field: want={expect}, got={actual}")
+        self.log.info("Check of %s passed: %s == %s", key, expect, actual)
+
     def cleanup_queue(self, out_queue=None):
         """Cleanup the existing thread queue.
 
