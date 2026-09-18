@@ -88,6 +88,7 @@ d_free(void *ptr)
 
 #else
 
+#if !defined(__SANITIZE_THREAD__)
 static size_t
 _f_get_alloc_size(void *ptr)
 {
@@ -106,13 +107,20 @@ _f_get_alloc_size(void *ptr)
 
 	return size;
 }
+#endif
 
 void
 d_free(void *ptr)
 {
+	/* DAOS-18626: Skip poisoning under TSan
+	 * it turns harmless zero-size-allocation address reuse into a false heap-use-after-free.
+	 */
+#if !defined(__SANITIZE_THREAD__)
 	size_t msize = _f_get_alloc_size(ptr);
 
 	memset(ptr, 0x42, msize);
+#endif
+
 	free(ptr);
 }
 
