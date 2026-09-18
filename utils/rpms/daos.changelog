@@ -1,4 +1,7 @@
 %changelog
+* Thu Sep 17 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.8.1-1
+- First release candidate for 2.8.1
+
 * Thu Aug 07 2026 Dalton Bohning <dalton.bohning@hpe.com> 2.8.0-6
 - Fifth release candidate for 2.8.0
 
