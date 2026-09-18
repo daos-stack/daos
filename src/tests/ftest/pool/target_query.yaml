@@ -25,9 +25,11 @@ pool:
   scm_size: 2G
   nvme_size: 16G
   pool_query_timeout: 30
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 
 ior:
   api: "DFS"

@@ -10,7 +10,6 @@ from os import getgid
 
 from apricot import TestWithServers
 from test_utils_container import DEFAULT_CONT_PROPS, add_container
-from test_utils_pool import add_pool
 
 
 class QueryPropertiesTest(TestWithServers):
@@ -36,7 +35,7 @@ class QueryPropertiesTest(TestWithServers):
         :avocado: tags=QueryPropertiesTest,test_query_properties
         """
         self.log_step("Create pool")
-        pool = add_pool(self)
+        pool = self.get_pool()
         containers = []
 
         self.log_step("Create a container with default properties")
