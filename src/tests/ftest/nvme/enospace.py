@@ -13,7 +13,7 @@ from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure
 from general_utils import get_display_size, get_errors_count
-from ior_utils import IorCommand, IorMetrics
+from ior_utils import IorCommand, IorMetrics, get_ior_metrics, run_ior
 from job_manager_utils import get_job_manager
 from nvme_utils import ServerFillUp
 from telemetry_test_base import TestWithTelemetry
@@ -687,28 +687,45 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         :avocado: tags=nvme,der_enospace,enospc_performance
         :avocado: tags=NvmeEnospace,test_performance_storage_full
         """
+        container = self.get_container(self.pool)
+
         # Write the IOR Baseline and get the Read BW for later comparison.
         self.log.info(self.pool.pool_percentage_used())
+
         # Write First
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
-        self.log.info("1. container: %s", self.nvme_local_cont)
+        # self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1, container=container)
+        self.log_step('Running IOR baseline write')
+        self._get_ior_metrics(
+            container,
+            ior_flags=self.ior_default_flags,
+            transfer_size=self.ior_scm_xfersize,
+            block_size=self.calculate_ior_block_size(1, 'SCM'))
+
         # Read the baseline data set
-        self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
-        self.log.info("2. container: %s", self.nvme_local_cont)
-        max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
+        # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
+        self.log_step('Running IOR baseline read')
+        ior_matrix = self._get_ior_metrics(
+            container,
+            ior_flags=self.ior_read_flags,
+            transfer_size=self.ior_scm_xfersize,
+            block_size=self.calculate_ior_block_size(1, 'SCM'))
+        max_mib_baseline = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
         # baseline_cont_uuid = self.ior_cmd.dfs_cont.value
         self.log.info("IOR Baseline Read MiB %s", max_mib_baseline)
 
         # Run IOR to fill the pool.
+        self.log_step('Running IOR to hit enospace')
         self.run_enospace_with_bg_job(self.client_log)
-        self.log.info("3. container: %s", self.nvme_local_cont)
 
         # Read the same container which was written at the beginning.
-        # self.ior_cmd.dfs_cont.update(baseline_cont_uuid)
-        self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
-        self.log.info("4. container: %s", self.nvme_local_cont)
-
-        max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
+        # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
+        self.log_step('Running IOR read to compare to baseline')
+        ior_matrix = self._get_ior_metrics(
+            container,
+            ior_flags=self.ior_read_flags,
+            transfer_size=self.ior_scm_xfersize,
+            block_size=self.calculate_ior_block_size(1, 'SCM'))
+        max_mib_latest = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
         self.log.info("IOR Latest Read MiB %s", max_mib_latest)
 
         # Check if latest IOR read performance is in Tolerance of 5%, when
@@ -717,6 +734,45 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.fail('Latest IOR read performance is not under 5% Tolerance'
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
+
+    def _get_ior_metrics(self, container, ior_flags, transfer_size, block_size):
+        """_summary_
+
+        Args:
+            container (_type_): _description_
+            ior_flags (_type_): _description_
+            transfer_size (_type_): _description_
+            block_size (_type_): _description_
+
+        Returns:
+            list: ior write and read metrics
+        """
+        manager = get_job_manager(self, "Mpirun", self.ior_local_cmd, mpi_type="mpich")
+        result = run_ior(
+            self,
+            manager,
+            "ior_baseline_write.log",
+            self.hostlist_clients,
+            self.workdir,
+            None,
+            self.pool,
+            container,
+            self.params.get("np", '/run/ior/client_processes/*'),
+            ppn=None,
+            intercept=None,
+            plugin_path=None,
+            dfuse=None,
+            display_space=True,
+            fail_on_warning=False,
+            namespace="/run/ior/*",
+            ior_params={
+                "flags": ior_flags,
+                "transfer_size": transfer_size,
+                "block_size": block_size}
+        )
+        if result["result"].exit_status != 0:
+            self.fail("Errors running ior")
+        return get_ior_metrics(result)
 
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
