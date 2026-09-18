@@ -122,7 +122,17 @@ dlck_engine_xstream_has_nvme(int tgt_id)
 	return false;
 }
 
-int
+/**
+ * Initialize an execution stream.
+ *
+ * \param[in,out]	xs	Execution stream to initialize.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_INVAL	Thread name generation failed.
+ * \retval -DER_NOMEM	Out of memory.
+ * \retval -DER_*	Other errors.
+ */
+static int
 dlck_engine_xstream_init(struct dlck_xstream *xs)
 {
 	int                     tag;
@@ -202,14 +212,24 @@ dlck_engine_xstream_init_ult(void *arg)
 	xs->ult_rc = dlck_engine_xstream_init(xs);
 }
 
-int
+/**
+ * Finalize an execution stream.
+ *
+ * \param[in,out]	xs	Execution stream to finalize.
+ *
+ * \retval DER_SUCCESS	Success. Supposedly it can't fail.
+ */
+static int
 dlck_engine_xstream_fini(struct dlck_xstream *xs)
 {
 	struct dss_module_info *dmi;
 	void                   *tls = dss_tls_get();
 	int                     rc  = DER_SUCCESS;
 
-	D_ASSERT(tls != NULL);
+	if (tls == NULL) {
+		/** Nothing to do here. */
+		return DER_SUCCESS;
+	}
 
 	if (dlck_engine_xstream_has_nvme(xs->tgt_id)) {
 		rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
@@ -258,9 +278,64 @@ dlck_engine_xstream_fini_ult(void *arg)
 	xs->ult_rc = dlck_engine_xstream_fini(xs);
 }
 
+static void
+xstream_stop_all_no_error(struct dlck_engine *engine)
+{
+	struct dlck_xstream *xs;
+	struct dlck_ult      fini_ult;
+	int                  rc;
+	int                  rc_abt;
+
+	for (int i = 0; i <= engine->targets; ++i) {
+		xs = &engine->xss[i];
+
+		rc = dlck_ult_create(xs->pool, dlck_engine_xstream_fini_ult, xs, &fini_ult);
+		if (rc != DER_SUCCESS) {
+			/** Cannot free a thread possibly with running NVMe polling ULT. */
+			continue;
+		}
+
+		/** ABT_thread_free() waits for the ULT to join internally */
+		rc_abt = ABT_thread_free(&fini_ult.thread);
+		D_ASSERT(rc_abt == ABT_SUCCESS);
+
+		(void)dlck_xstream_free(&engine->xss[i]);
+	}
+}
+
+static int
+xstream_init(struct dlck_xstream *xs)
+{
+	struct dlck_ult init_ult;
+	int             rc;
+	int             rc_abt;
+
+	rc = dlck_ult_create(xs->pool, dlck_engine_xstream_init_ult, xs, &init_ult);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	/** ABT_thread_free() waits for the ULT to join internally */
+	rc_abt = ABT_thread_free(&init_ult.thread);
+	/**
+	 * There are two possible issues here:
+	 * 1. Something is wrong with the provided argument. This is an internal error, so an
+	 * assertion is used here.
+	 * 2. The ULT has not joined. In this case, ABT_thread_free() will never return anyway.
+	 */
+	D_ASSERT(rc_abt == ABT_SUCCESS);
+
+	if (xs->ult_rc != DER_SUCCESS) {
+		D_ERROR("[%d] Initialization of XS failed\n", xs->tgt_id);
+	} else {
+		D_EMIT("[%d] Initialization of XS succeeded\n", xs->tgt_id);
+	}
+
+	return xs->ult_rc;
+}
+
 /**
- * Create and initialize daos_sys_0 execution stream (XS) and create all daos_io_* XSes.
- * No daos_io_* initialization here yet. They ought to be initialized by the first ULT run in them.
+ * Create and initialize daos_sys_0 and daos_io_* execution streams (XS).
  *
  * \param[in,out]	engine	Engine to start its XSes.
  *
@@ -270,77 +345,58 @@ dlck_engine_xstream_fini_ult(void *arg)
 static int
 xstream_start_all(struct dlck_engine *engine)
 {
+	const int            daos_sys_idx = engine->targets; /** the last one is daos_sys_0 */
 	struct dlck_xstream *xs;
-	struct dlck_ult      daos_sys_init;
 	int                  rc;
 
-	/** create and initialize daos_sys_0 execution stream (XS) */
-	xs         = &engine->xss[engine->targets]; /** there is one more XS than targets */
-	xs->tgt_id = -1;
-	rc         = dlck_xstream_create(xs);
-	if (rc != 0) {
-		return rc;
+	/** create all daos_io_* and daos_sys_0 XSes */
+	for (int i = 0; i <= engine->targets; ++i) {
+		xs         = &engine->xss[i];
+		xs->tgt_id = (i == daos_sys_idx ? -1 : i);
+		rc         = dlck_xstream_create(xs);
+		if (rc != DER_SUCCESS) {
+			goto xstream_stop_all;
+		}
 	}
 
-	rc = dlck_ult_create(xs->pool, dlck_engine_xstream_init_ult, xs, &daos_sys_init);
+	/** initialize the daos_sys_0 XS */
+	xs = &engine->xss[daos_sys_idx];
+	rc = xstream_init(xs);
 	if (rc != DER_SUCCESS) {
-		/** ULT has not been created - the daos_sys_0 XS can be safely freed */
-		(void)dlck_xstream_free(xs);
-		return dss_abterr2der(rc);
-	}
-
-	/** wait for the daos_sys_0 initialization to conclude */
-	rc = ABT_thread_join(daos_sys_init.thread);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("ULT has not joined - cannot safely free the daos_sys_0 XS\n");
-		return dss_abterr2der(rc);
-	}
-
-	rc = ABT_thread_free(&daos_sys_init.thread);
-	if (rc != ABT_SUCCESS) {
-		/** ULT has joined - the daos_sys_0 XS can be safely freed */
-		(void)dlck_xstream_free(xs);
-		return dss_abterr2der(rc);
-	}
-
-	if (xs->ult_rc != DER_SUCCESS) {
-		/** ULT has joined - the daos_sys_0 XS can be safely freed */
-		(void)dlck_xstream_free(xs);
-		return xs->ult_rc;
+		goto xstream_stop_all;
 	}
 
 	/**
 	 * The daos_sys_0 XS initialization succeeded. It may have spawned a NVMe polling ULT.
 	 */
 
-	/** create all daos_io_* execution streams (XS) */
+	/** initialize all daos_io_* XSes */
 	for (int i = 0; i < engine->targets; ++i) {
-		xs         = &engine->xss[i];
-		xs->tgt_id = i;
-		rc         = dlck_xstream_create(xs);
-		if (rc != 0) {
-			goto fail;
+		rc = xstream_init(&engine->xss[i]);
+		if (rc != DER_SUCCESS) {
+			goto xstream_stop_all;
 		}
 	}
 
-	return 0;
+	return DER_SUCCESS;
 
-fail:
+xstream_stop_all:
 	/** free all daos_io_* and the daos_sys_0 XS */
 	for (int i = 0; i <= engine->targets; ++i) {
-		xs = &engine->xss[i];
-		(void)dlck_xstream_free(xs);
+		(void)dlck_xstream_free(&engine->xss[i]);
 	}
 
 	return rc;
 }
 
+#define ULT_FINI_FAIL_FMT "[%d] ULT finalization failed - cannot safely free the XS: " DF_RC "\n"
+
 /**
- * Stop and free the daos_sys_0 execution stream (XS) and all the daos_io_* XSes belonging to
- * the provided engine.
+ * Stop and free daos_sys_0 and all the daos_io_* execution streams belonging to the provided
+ * engine.
  *
- * Note: All the XSes have to be idle before calling this function. Except for daos_sys_0 which
- * still may have the NMVe polling ULT but no other ULTs present in its pool.
+ * Note: All the XSes have to be idle before calling this function. No other ULTs present except for
+ * the NMVe polling ULT in their pools.
  *
  * \param[in,out]	engine	Engine to stop the xstream of.
  *
@@ -351,62 +407,61 @@ static int
 xstream_stop_all(struct dlck_engine *engine)
 {
 	struct dlck_xstream *xs;
-	struct dlck_ult      daos_sys_fini;
+	struct dlck_ult      fini_ult;
 	ABT_bool             is_empty;
 	int                  rc = DER_SUCCESS;
+	int                  rc_abt;
 
-	/** check on the daos_sys_0 XS */
-	xs = &engine->xss[engine->targets];
-
-	/** Stop the NVMe polling ULT if present. */
-	if (dlck_engine_xstream_has_nvme(xs->tgt_id)) {
-		rc = dlck_ult_create(xs->pool, dlck_engine_xstream_fini_ult, xs, &daos_sys_fini);
-		if (rc != DER_SUCCESS) {
-			/** ULT has not been created - the daos_sys_0 XS can be safely freed */
-			return dss_abterr2der(rc);
-		}
-
-		/** wait for the daos_sys_0 finalization to conclude */
-		rc = ABT_thread_join(daos_sys_fini.thread);
-		if (rc != ABT_SUCCESS) {
-			D_ERROR("ULT has not joined - cannot safely free the daos_sys_0 XS\n");
-			return dss_abterr2der(rc);
-		}
-
-		rc = ABT_thread_free(&daos_sys_fini.thread);
-		/**
-		 * This RC is not so important as long as the finalization RC says the finalization
-		 * has succeeded the procedure should continue undisturbed.
-		 */
-		D_ASSERT(rc == ABT_SUCCESS);
-
-		if (xs->ult_rc != DER_SUCCESS) {
-			D_ERROR("the daos_sys_0 finalization failed - cannot safely free the "
-				"daos_sys_0 XS\n");
-			return xs->ult_rc;
-		}
-	}
-
-	/** free all daos_io_* and the daos_sys_0 XS */
+	/** Note: daos_sys_0 XS is the last and it has to be stopped as the last one. */
 	for (int i = 0; i <= engine->targets; ++i) {
 		xs = &engine->xss[i];
+
+		/** Stop and release all resources hold by the ULT. */
+
+		rc = dlck_ult_create(xs->pool, dlck_engine_xstream_fini_ult, xs, &fini_ult);
+		if (rc != DER_SUCCESS) {
+			D_ERROR(ULT_FINI_FAIL_FMT, xs->tgt_id, DP_RC(rc));
+			goto xstream_free_all;
+		}
+
+		/** ABT_thread_free() waits for the ULT to join internally */
+		rc_abt = ABT_thread_free(&fini_ult.thread);
+		/**
+		 * There are two possible issues here:
+		 * 1. Something is wrong with the provided argument. This is an internal error that
+		 * should never occur, so an assertion is used here.
+		 * 2. The ULT has not joined. In this case, ABT_thread_free() will never return
+		 * anyway.
+		 */
+		D_ASSERT(rc_abt == ABT_SUCCESS);
+
+		if (xs->ult_rc != DER_SUCCESS) {
+			rc = xs->ult_rc;
+			D_ERROR(ULT_FINI_FAIL_FMT, xs->tgt_id, DP_RC(rc));
+			goto xstream_free_all;
+		}
+
 		/** make sure the XS is idle */
-		rc = ABT_pool_is_empty(xs->pool, &is_empty);
-		if (rc != ABT_SUCCESS) {
-			D_ERROR("can't tell whether XS[%d] can be freed or not\n", i);
-			return dss_abterr2der(rc);
-		} else {
-			if (is_empty != ABT_TRUE) {
-				D_ERROR("cannot free XS[%d] - it is busy\n", i);
-				return -DER_BUSY;
-			} else {
-				rc = dlck_xstream_free(xs);
-				if (rc != DER_SUCCESS) {
-					return rc;
-				}
-			}
+		rc_abt = ABT_pool_is_empty(xs->pool, &is_empty);
+		/** Can fail only because of an internal error; hence, an assertion is used. */
+		D_ASSERT(rc_abt == ABT_SUCCESS);
+		if (is_empty != ABT_TRUE) {
+			D_ERROR("[%d] cannot free XS - it is busy\n", xs->tgt_id);
+			rc = -DER_BUSY;
+			goto xstream_free_all;
+		}
+
+		rc = dlck_xstream_free(xs);
+		if (rc != DER_SUCCESS) {
+			D_ERROR("[%d] XS free failed: " DF_RC "\n", xs->tgt_id, DP_RC(rc));
+			goto xstream_free_all;
 		}
 	}
+
+	return DER_SUCCESS;
+
+xstream_free_all:
+	xstream_stop_all_no_error(engine);
 
 	return rc;
 }
