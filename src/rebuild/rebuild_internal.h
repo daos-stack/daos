@@ -86,22 +86,28 @@ struct rebuild_tgt_pool_tracker {
 	/* new layout version for upgrade rebuild */
 	uint32_t		rt_new_layout_ver;
 
+	/* clang-format off */
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,
 				/* re-report #rebuilt cnt per master change */
 				rt_re_report:1,
 				rt_finishing:1,
+				rt_ec_agg_paused:1,
 				rt_scan_done:1,
 				rt_global_scan_done:1,
 				rt_global_done:1;
+	/* clang-format on */
 };
 
 struct rebuild_server_status {
 	d_rank_t	rank;
 	double          last_update;
 	uint32_t	dtx_resync_version;
-	uint32_t	scan_done:1,
+	/* clang-format off */
+	uint32_t	ec_agg_paused:1,
+			scan_done:1,
 			pull_done:1;
+	/* clang-format on */
 };
 
 /* Track the rebuild status globally */
@@ -143,8 +149,8 @@ struct rebuild_global_pool_tracker {
 
 	uint64_t	rgt_time_start;
 
-	/* Stable epoch of the rebuild, the minimum epoch from
-	 * all rebuilding targets
+	/* Leader-selected rebuild cutoff. For RB_OP_REBUILD it is not published
+	 * until all participating engines have paused EC aggregation.
 	 */
 	uint64_t	rgt_stable_epoch;
 
@@ -162,7 +168,8 @@ struct rebuild_global_pool_tracker {
 	uint32_t	rgt_opc;
 	unsigned int                    rgt_abort : 1, /* abort: kill rebuild */
 	    rgt_init_scan : 1, rgt_stop_admin : 1,     /* stop: admin has asked to kill rebuild */
-	    rgt_include_up : 1;                        /* include UP rank domain for FAIL_RECLAIM */
+	    rgt_include_up          : 1,               /* include UP rank domain for FAIL_RECLAIM */
+	    rgt_ec_agg_barrier_done : 1;
 
 	/* only valid when rgt_include_up is true (FAIL_RECLAIM), the original rebuild version */
 	uint32_t rgt_orig_rb_ver;
@@ -324,11 +331,14 @@ struct rebuild_iv {
 	uint32_t        riv_master_rank;
 	uint32_t        riv_ver;
 	uint32_t        riv_rebuild_gen;
+	/* clang-format off */
 	uint32_t	riv_global_done:1,
 			riv_global_scan_done:1,
 			riv_scan_done:1,
 			riv_pull_done:1,
-			riv_sync:1;
+			riv_sync:1,
+			riv_ec_agg_paused:1;
+	/* clang-format on */
 	int32_t  riv_status;
 	uint32_t riv_bukid; /* bucket ID */
 };
