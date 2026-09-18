@@ -117,11 +117,25 @@ class PoolListConsolidationTest(TestWithServers):
 
         Args:
             tmpfs_mounts (list): tmpfs mounts to clean.
+
+        Returns:
+            list: Errors detected during cleanup.
         """
-        self.log_step(f"MD-on-SSD: Clean {tmpfs_mounts} on {self.hostlist_servers}")
+        self.log.info("MD-on-SSD: Clean %s on %s", tmpfs_mounts, self.hostlist_servers)
+        commands = ["rc=0"]
         for tmpfs_mount in tmpfs_mounts:
-            self.run_cmd_check_result(command=f"umount {tmpfs_mount}")
-            self.run_cmd_check_result(command=f"rm -rf {tmpfs_mount}")
+            commands.append(
+                f"if mountpoint -q {tmpfs_mount}; then umount {tmpfs_mount} || rc=1; fi")
+            commands.append(
+                f"if mountpoint -q {tmpfs_mount}; then rc=1; "
+                f"else rm -rf {tmpfs_mount} || rc=1; fi")
+        commands.append("exit $rc")
+        command_str ="; ".join(commands)
+        command = command_as_user(command=f"sh -c '{command_str}'", user="root")
+        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command)
+        if not result.passed:
+            return [f"Failed to clean {tmpfs_mounts} on {result.failed_hosts}"]
+        return []
 
     def test_dangling_pool(self):
         """Test dangling pool.
@@ -386,16 +400,25 @@ class PoolListConsolidationTest(TestWithServers):
 
             self.log_step(
                 "MD-on-SSD: Create a directory to load pool data under /mnt in all servers.")
+            cleanup_errors = self.clean_mounts(tmpfs_mounts)
+            if cleanup_errors:
+                self.fail("\n".join(cleanup_errors))
             command = f"mkdir -p {tmpfs_mounts[0]} {tmpfs_mounts[1]}"
             self.run_cmd_check_result(command=command)
+            # Make sure to clean the mounts even if the test hits an error.
+            self.register_cleanup(self.clean_mounts, tmpfs_mounts=tmpfs_mounts)
 
             self.log_step("MD-on-SSD: Load pool dir to /mnt/daos2 and daos3 for all servers.")
             for host in hosts:
                 # We need to call ddb prov_mem for all servers, so use new DdbCommand object with
                 # each host.
                 ddb_command = DdbCommand(server_host=host, path=self.bin, vos_path='""')
-                ddb_command.prov_mem(db_path=db_path_0, tmpfs_mount=tmpfs_mounts[0])
-                ddb_command.prov_mem(db_path=db_path_1, tmpfs_mount=tmpfs_mounts[1])
+                result = ddb_command.prov_mem(db_path=db_path_0, tmpfs_mount=tmpfs_mounts[0])
+                if not result.passed:
+                    self.fail(f"prov_mem failed for {db_path_0} on {host}! result = {result}")
+                result = ddb_command.prov_mem(db_path=db_path_1, tmpfs_mount=tmpfs_mounts[1])
+                if not result.passed:
+                    self.fail(f"prov_mem failed for {db_path_1} on {host}! result = {result}")
 
             self.log_step("Remove rdb-pool from 2 out of 3 ranks from /mnt/daos2 and /mnt/daos3")
             count = 0
@@ -415,7 +438,10 @@ class PoolListConsolidationTest(TestWithServers):
                         # Get the corresponding db_path from the rdb-pool path we're removing.
                         db_path = new_rdb_to_db_path[rdb_pool_path]
                         self.log.info("Remove %s from %s", rdb_pool_path, str(node))
-                        ddb_command.rm_pool(db_path=db_path, removing_path=rdb_pool_path)
+                        result = ddb_command.rm_pool(db_path=db_path, removing_path=rdb_pool_path)
+                        if not result.passed:
+                            self.fail(
+                                f"rm_pool failed for {rdb_pool_path} on {host}! result = {result}")
                         count += 1
 
         else:
@@ -474,9 +500,6 @@ class PoolListConsolidationTest(TestWithServers):
         self.log.info("rdb-pool count = %d", count)
         if count != 3:
             errors.append(f"Unexpected number of rdb-pool after repair! - {count} ranks")
-
-        if md_on_ssd:
-            self.clean_mounts(tmpfs_mounts=tmpfs_mounts)
 
         report_errors(test=self, errors=errors)
 
