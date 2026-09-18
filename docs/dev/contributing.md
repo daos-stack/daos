@@ -126,3 +126,57 @@ CC: User Name <user@domain.com>
 
 DAOS uses the common fork & merge workflow used by most GitHub-hosted projects.
 Please refer to the [online GitHub documentation](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/proposing-changes-to-your-work-with-pull-requests).
+
+### Stacked pull requests
+
+A large change can be split into a stack of smaller pull requests, where each
+one targets the branch of the pull request below it and the bottom one targets
+`master` or a release branch. GitHub evaluates every pull request in a stack
+against the base of the stack, so each layer is still held to the same review
+and branch protection standard.
+
+Because a stack merges atomically up to and including the pull request being
+merged, the top pull request of a stack contains the complete set of changes
+that will land. CI takes advantage of this:
+
+- The **top** pull request of a stack gets the full verification: unit tests,
+  functional tests, hardware tests and RPM tests.
+- Every pull request **below** the top only gets the cheap checks plus the EL 9
+  and Leap 15 builds, so each layer is still proven to compile on both a Red Hat
+  and a SUSE toolchain. Its Jenkins build reports success once those pass.
+
+Two consequences are worth knowing:
+
+- **Merge a stack from the top.** Merging a lower pull request on its own lands
+  code whose behaviour was only ever verified cumulatively at the top of the
+  stack. Merging the top pull request merges everything below it in order.
+- **Pushing to any layer re-verifies the top.** Restoring the stack's linear
+  history rebases the layers above, which gives the top pull request a new
+  commit and re-runs its full verification.
+
+To force the full verification on every layer of a stack, for example when
+bisecting a failure to a specific layer, set the following commit pragma:
+
+```
+Skip-stack-optimization: true
+```
+
+
+#### Required checks on a stacked pull request
+
+A status check context is published from inside the stage that produces it, so
+a stage that does not run never reports one. Left alone, that would make every
+layer below the top of a stack unmergeable: GitHub would wait forever for the
+ten required contexts whose stages were deliberately skipped.
+
+CI therefore publishes those contexts itself on a mid-stack pull request, as a
+success described as `Runs on the tip of stack N, this is layer X of Y`. A
+green check with that description did not run here; it runs on the top of the
+stack. Checks published by GitHub Actions are untouched and still run in full
+on every layer.
+
+Statuses are last-write-wins, so this is done before the stages start. Any
+stage that does run, such as the EL 9 or Leap 15 build, replaces its status
+with the real result, including a failure.
+
+<!-- Stack tip placeholder for SRE-4015 CI validation. -->
