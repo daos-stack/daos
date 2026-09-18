@@ -94,6 +94,7 @@ def log_environment(logger):
 
 
 class TestEnvironment():
+    # pylint: disable=too-many-public-methods, too-many-instance-attributes
     """Collection of test environment variables."""
 
     __ENV_VAR_MAP = {

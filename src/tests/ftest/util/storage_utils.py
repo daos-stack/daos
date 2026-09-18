@@ -823,7 +823,7 @@ def has_numa_balance(storage_file, logger=None):
             Defaults to None.
 
     Raises:
-        StorageException: if athere is a problem determining the storage NUMA nodes
+        StorageException: if there is a problem determining the storage NUMA nodes
 
     Returns:
         bool: True if the system has storage on more than one NUMA node, False otherwise

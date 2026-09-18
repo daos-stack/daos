@@ -10,7 +10,7 @@ from collections import defaultdict
 import yaml
 from apricot import TestWithServers
 from dmg_utils import DmgCommand
-from exception_utils import CommandFailure
+from exception_utils import CommandFailure, ExpectedFailure
 from storage_utils import has_numa_balance
 
 
@@ -185,6 +185,31 @@ class ConfigGenerateOutput(TestWithServers):
             errors.append(f"dmg command failed when expected to pass!: {result}")
 
         return errors
+
+    def gen_config_with_num_engines(self, num_engines, **kwargs):
+        """Generate a configuration with the specified number of engines.
+
+        Args:
+            num_engines (int): number of engines to generate in the configuration.
+
+        Raises:
+            ExpectedFailure: if the configuration generation fails as expected.
+            CommandFailure: if the configuration generation fails unexpectedly.
+
+        Returns:
+            dict: the generated configuration.
+        """
+        result = self.get_dmg_command().config_generate(
+            num_engines=num_engines, allow_numa_imbalance=self.allow_numa_imbalance, **kwargs)
+        if result.exit_status != 0:
+            expected = ("ERROR: dmg: --num-engines and --allow-numa-imbalance flags are mutually "
+                        "exclusive")
+            if self.allow_numa_imbalance and expected in result.stdout:
+                raise ExpectedFailure(
+                    "Failed to generate config due to mutually exclusive --num-engines and "
+                    "--allow-numa-imbalance flags")
+            raise CommandFailure(f"Failed to generate config for {num_engines} engine(s)!")
+        return yaml.safe_load(result.stdout)
 
     def test_basic_config(self):
         """Test basic configuration.
@@ -453,11 +478,17 @@ class ConfigGenerateOutput(TestWithServers):
         # Call dmg config generate --num-engines=<1 to max_engines>
         for num_engines in range(1, max_engines + 1):
             self.log_step(f"Generating server config for {num_engines} engine(s)")
-            result = dmg.config_generate(
-                mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_provider=self.def_provider,
-                allow_numa_imbalance=self.allow_numa_imbalance)
-            generated_yaml = yaml.safe_load(result.stdout)
-            actual_num_engines = len(generated_yaml["engines"])
+            try:
+                generated_config = self.gen_config_with_num_engines(
+                    num_engines, mgmt_svc_replicas="wolf-a", net_provider=self.def_provider)
+            except ExpectedFailure as e:
+                self.log.info(
+                    "Expected failure generating config for %s engine(s): %s", num_engines, e)
+                continue
+            except CommandFailure as e:
+                errors.append(f"Failed to generate config for {num_engines} engine(s): {e}")
+                continue
+            actual_num_engines = len(generated_config["engines"])
 
             # Verify the number of engine field.
             self.log_step(f"Verifying number of engine field for {num_engines} engine(s)")
@@ -468,11 +499,13 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Verify that max_engines + 1 fails.
         self.log_step(f"Generating server config for {num_engines + 1} engine(s) - should fail")
-        result = dmg.config_generate(
-            mgmt_svc_replicas="wolf-a", num_engines=max_engines + 1, net_provider=self.def_provider,
-            allow_numa_imbalance=self.allow_numa_imbalance)
-        if result.exit_status == 0:
+        try:
+            self.gen_config_with_num_engines(
+                num_engines + 1, mgmt_svc_replicas="wolf-a", net_provider=self.def_provider)
             errors.append(f"Host + invalid num engines succeeded with {max_engines + 1}!")
+        except (ExpectedFailure, CommandFailure) as e:
+            self.log.info(
+                "Expected failure generating config for %s engine(s): %s", num_engines + 1, e)
 
         self.check_errors(errors)
 
@@ -580,42 +613,50 @@ class ConfigGenerateOutput(TestWithServers):
         for num_engines in range(1, ib_count + 1):
             # dmg config generate should pass.
             self.log_step(f"Generating server config for {num_engines} engine(s) with infiniband")
-            result = dmg.config_generate(
-                mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_class="infiniband",
-                net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
-
-            if result.exit_status != 0:
+            try:
+                generated_config = self.gen_config_with_num_engines(
+                    num_engines, mgmt_svc_replicas="wolf-a", net_class="infiniband",
+                    net_provider=self.def_provider)
+            except ExpectedFailure as e:
+                self.log.info(
+                    "Expected failure generating config for %s engine(s): %s", num_engines, e)
+                continue
+            except CommandFailure as e:
                 errors.append(
-                    f"config generate failed with --net-class=infiniband --num-engines "
-                    f"= {num_engines}!")
-            else:
-                generated_config = yaml.safe_load(result.stdout)
-                for index, engine in enumerate(generated_config["engines"]):
-                    self.log_step(f"Verifying fabric configuration for engine {index}")
-                    fabric_iface = engine["fabric_iface"]
-                    provider = engine["provider"]
-                    # Verify fabric_iface field, e.g., ib0 by checking the
-                    # dictionary keys.
-                    if not self.interface_to_providers[fabric_iface]:
-                        errors.append(f"Unexpected fabric_iface! {fabric_iface}")
-                    elif provider not in self.interface_to_providers[fabric_iface]:
-                        # Now check the provider field, e.g., ofi+tcp by
-                        # checking the corresponding list in the dictionary.
-                        errors.append(
-                            f"Unexpected provider in fabric_iface! provider = {provider}; "
-                            f"fabric_iface = {fabric_iface}")
+                    f"Failed to generate config for {num_engines} engine(s) with "
+                    f"--net-class=infiniband: {e}")
+                continue
+
+            for index, engine in enumerate(generated_config["engines"]):
+                self.log_step(f"Verifying fabric configuration for engine {index}")
+                fabric_iface = engine["fabric_iface"]
+                provider = engine["provider"]
+                # Verify fabric_iface field, e.g., ib0 by checking the
+                # dictionary keys.
+                if not self.interface_to_providers[fabric_iface]:
+                    errors.append(f"Unexpected fabric_iface! {fabric_iface}")
+                elif provider not in self.interface_to_providers[fabric_iface]:
+                    # Now check the provider field, e.g., ofi+tcp by
+                    # checking the corresponding list in the dictionary.
+                    errors.append(
+                        f"Unexpected provider in fabric_iface! provider = {provider}; "
+                        f"fabric_iface = {fabric_iface}")
 
         # Call dmg config generate --num-engines=<ib_count + 1>
         # --net-class=infiniband. Too many engines. Should fail.
         self.log_step(
             f"Generating server config for {ib_count + 1} engine(s) with infiniband - should fail")
-        result = dmg.config_generate(
-            mgmt_svc_replicas="wolf-a", num_engines=ib_count + 1, net_class="infiniband",
-            net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
-        if result.exit_status == 0:
+        try:
+            self.gen_config_with_num_engines(
+                ib_count + 1, mgmt_svc_replicas="wolf-a", net_class="infiniband",
+                net_provider=self.def_provider)
             errors.append(
                 f"config generate succeeded with --net-class=infiniband num_engines "
                 f"= {ib_count + 1}!")
+        except (ExpectedFailure, CommandFailure) as e:
+            self.log.info(
+                "Expected failure generating config for %s engine(s) with --net-class=infiniband: "
+                "%s", ib_count + 1, e)
 
         # Get eth_count threshold.
         eth_count = 0
@@ -629,41 +670,49 @@ class ConfigGenerateOutput(TestWithServers):
         for num_engines in range(1, eth_count + 1):
             # dmg config generate should pass.
             self.log_step(f"Generating server config for {num_engines} engine(s) with ethernet")
-            result = dmg.config_generate(
-                mgmt_svc_replicas="wolf-a", num_engines=num_engines, net_class="ethernet",
-                net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
-
-            if result.exit_status != 0:
+            try:
+                generated_config = self.gen_config_with_num_engines(
+                    num_engines, mgmt_svc_replicas="wolf-a", net_class="ethernet",
+                    net_provider=self.def_provider)
+            except ExpectedFailure as e:
+                self.log.info(
+                    "Expected failure generating config for %s engine(s): %s", num_engines, e)
+                continue
+            except CommandFailure as e:
                 errors.append(
-                    f"config generate failed with --net-class=ethernet --num-engines "
-                    f"= {num_engines}!")
-            else:
-                generated_config = yaml.safe_load(result.stdout)
-                for index, engine in enumerate(generated_config["engines"]):
-                    self.log_step(f"Verifying fabric configuration for engine {index}")
-                    fabric_iface = engine["fabric_iface"]
-                    provider = engine["provider"]
-                    # Verify fabric_iface field, e.g., eth0 by checking the
-                    # dictionary keys.
-                    if not self.interface_to_providers[fabric_iface]:
-                        errors.append(f"Unexpected fabric_iface! {fabric_iface}")
-                    elif provider not in self.interface_to_providers[fabric_iface]:
-                        # Now check the provider field, e.g., ofi+tcp by
-                        # checking the corresponding list in the dictionary.
-                        errors.append(
-                            f"Unexpected provider in fabric_iface! provider = {provider}; "
-                            f"fabric_iface = {fabric_iface}")
+                    f"Failed to generate config for {num_engines} engine(s) with "
+                    f"--net-class=ethernet: {e}")
+                continue
+
+            for index, engine in enumerate(generated_config["engines"]):
+                self.log_step(f"Verifying fabric configuration for engine {index}")
+                fabric_iface = engine["fabric_iface"]
+                provider = engine["provider"]
+                # Verify fabric_iface field, e.g., eth0 by checking the
+                # dictionary keys.
+                if not self.interface_to_providers[fabric_iface]:
+                    errors.append(f"Unexpected fabric_iface! {fabric_iface}")
+                elif provider not in self.interface_to_providers[fabric_iface]:
+                    # Now check the provider field, e.g., ofi+tcp by
+                    # checking the corresponding list in the dictionary.
+                    errors.append(
+                        f"Unexpected provider in fabric_iface! provider = {provider}; "
+                        f"fabric_iface = {fabric_iface}")
 
         # Call dmg config generate --num-engines=<eth_count + 1>
         # --net-class=ethernet. Too many engines. Should fail.
         self.log_step(
             f"Generating server config for {eth_count + 1} engine(s) with ethernet - should fail")
-        result = dmg.config_generate(
-            mgmt_svc_replicas="wolf-a", num_engines=eth_count + 1, net_class="ethernet",
-            net_provider=self.def_provider, allow_numa_imbalance=self.allow_numa_imbalance)
-        if result.exit_status == 0:
+        try:
+            self.gen_config_with_num_engines(
+                eth_count + 1, mgmt_svc_replicas="wolf-a", net_class="ethernet",
+                net_provider=self.def_provider)
             errors.append(
-                f"config generate succeeded with --net-class=ethernet, num_engines "
+                f"config generate succeeded with --net-class=ethernet num_engines "
                 f"= {eth_count + 1}!")
+        except (ExpectedFailure, CommandFailure) as e:
+            self.log.info(
+                "Expected failure generating config for %s engine(s) with --net-class=ethernet: "
+                "%s", eth_count + 1, e)
 
         self.check_errors(errors)

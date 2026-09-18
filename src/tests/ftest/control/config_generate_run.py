@@ -62,10 +62,20 @@ class ConfigGenerateRun(TestWithServers):
         # Call dmg config generate. AP is always the first server host.
         self.log_step("Generating server configuration")
         server_host = self.hostlist_servers[0]
-        result = self.get_dmg_command().config_generate(
-            mgmt_svc_replicas=server_host, num_engines=num_engines, scm_only=scm_only,
-            net_class=net_class, net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
-            control_metadata_path=control_metadata, allow_numa_imbalance=self.allow_numa_imbalance)
+        config_gen_args = {
+            "mgmt_svc_replicas": server_host,
+            "scm_only": scm_only,
+            "net_class": net_class,
+            "net_provider": net_provider,
+            "use_tmpfs_scm": use_tmpfs_scm,
+            "control_metadata_path": control_metadata,
+            "allow_numa_imbalance": self.allow_numa_imbalance
+        }
+        if not self.allow_numa_imbalance:
+            # The --num-engines and --allow-numa-imbalance flags are mutually exclusive, so only use
+            # --num-engines when not using --allow-numa-imbalance.
+            config_gen_args["num_engines"] = num_engines
+        result = self.get_dmg_command().config_generate(**config_gen_args)
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)
