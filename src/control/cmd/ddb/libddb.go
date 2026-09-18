@@ -131,3 +131,7 @@ func ddb_run_prov_mem(ctx *C.struct_ddb_ctx, opts *C.struct_prov_mem_options) C.
 func ddb_run_dtx_aggr(ctx *C.struct_ddb_ctx, opts *C.struct_dtx_aggr_options) C.int {
 	return C.ddb_run_dtx_aggr(ctx, opts)
 }
+
+func ddb_run_csum_dump(ctx *C.struct_ddb_ctx, opts *C.struct_csum_dump_options) C.int {
+	return C.ddb_run_csum_dump(ctx, opts)
+}

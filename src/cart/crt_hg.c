@@ -1079,6 +1079,14 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 		D_GOTO(error, rc = crt_hgret_2_der(hg_ret));
 	}
 
+	/* cache self address */
+	hg_ret = HG_Addr_self(hg_ctx->chc_hgcla, &hg_ctx->chc_self_addr);
+	if (hg_ret != HG_SUCCESS) {
+		hg_ctx->chc_self_addr = HG_ADDR_NULL;
+		D_ERROR("HG_Addr_self() failed; hg_ret: %d\n", hg_ret);
+		D_GOTO(error, rc = crt_hgret_2_der(hg_ret));
+	}
+
 	rc = crt_hg_pool_init(hg_ctx);
 	if (rc != 0) {
 		D_ERROR("crt_hg_pool_init() failed, context idx %d hg_ctx %p, "
@@ -1121,6 +1129,17 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	int         rc = DER_SUCCESS;
 
 	crt_hg_pool_fini(hg_ctx);
+
+	/* Free the cached self address while the HG class is still valid */
+	if (hg_ctx->chc_self_addr != HG_ADDR_NULL) {
+		D_ASSERT(hg_ctx->chc_hgcla != NULL);
+
+		hg_ret = HG_Addr_free(hg_ctx->chc_hgcla, hg_ctx->chc_self_addr);
+		if (hg_ret != HG_SUCCESS)
+			D_WARN("HG_Addr_free(self) failed, hg_ret: " DF_HG_RC "\n",
+			       DP_HG_RC(hg_ret));
+		hg_ctx->chc_self_addr = HG_ADDR_NULL;
+	}
 
 	if (hg_ctx->chc_epfd > 0) {
 		rc = close(hg_ctx->chc_epfd);
@@ -2249,15 +2268,38 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 		    hg_ctx->chc_hgctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
 		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
 		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
-	else
-		hg_ret = HG_Bulk_transfer_id(
-		    hg_ctx->chc_hgctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
-		    rpc_priv->crp_hg_addr, HG_Get_info(rpc_priv->crp_hg_hdl)->context_id,
-		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
-		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
+	else {
+		hg_addr_t remote_addr = rpc_priv->crp_hg_addr;
+		int       remote_ctx_idx;
+
+		if (rpc_priv->crp_hg_hdl != HG_HANDLE_NULL) {
+			remote_ctx_idx = HG_Get_info(rpc_priv->crp_hg_hdl)->context_id;
+			remote_addr    = rpc_priv->crp_hg_addr;
+		} else {
+			/*
+			 * CoRPC executing on the root node (self) does not have a mercury handle.
+			 * Use cached self address instead in such cases
+			 **/
+
+			/* regular RPCs must have a valid handle */
+			if (!rpc_priv->crp_coll) {
+				RPC_ERROR(rpc_priv, "Unexpected crp_hg_hdl=NULL\n");
+				D_ASSERT(0);
+			}
+
+			remote_ctx_idx = ctx->cc_idx;
+			remote_addr    = hg_ctx->chc_self_addr;
+		}
+
+		hg_ret = HG_Bulk_transfer_id(hg_ctx->chc_hgctx, crt_hg_bulk_transfer_cb,
+					     bulk_cbinfo, hg_bulk_op, remote_addr, remote_ctx_idx,
+					     remote_bulk, bulk_desc->bd_remote_off, local_bulk,
+					     bulk_desc->bd_local_off, bulk_desc->bd_len,
+					     opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
+	}
+
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: " DF_HG_RC "\n",
-			DP_HG_RC(hg_ret));
+		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
 		D_FREE(bulk_cbinfo);
 		D_FREE(bulk_desc_dup);
 		rc = crt_hgret_2_der(hg_ret);

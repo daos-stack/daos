@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1391,6 +1391,23 @@ cond_ops(void **state)
 	iod[1].iod_flags = DAOS_COND_AKEY_UPDATE;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &dkey, 2, iod, sgl, NULL);
 	assert_rc_equal(rc, -DER_EXIST);
+
+	/**
+	 * Combined global (non per-akey) dkey + akey conditionals. The dkey
+	 * exists and akey_0 exists at this point.
+	 */
+
+	/** akey_0 exists, so COND_DKEY_UPDATE | COND_AKEY_INSERT should fail */
+	d_iov_set(&iod[0].iod_name, akey_str[0], strlen(akey_str[0]));
+	flags = DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_INSERT;
+	rc    = daos_obj_update(oh, DAOS_TX_NONE, flags, &dkey, 1, iod, sgl, NULL);
+	assert_rc_equal(rc, -DER_EXIST);
+
+	/** akey doesn't exist, so COND_DKEY_UPDATE | COND_AKEY_UPDATE should fail */
+	d_iov_set(&iod[0].iod_name, "akey_ne", strlen("akey_ne"));
+	flags = DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE;
+	rc    = daos_obj_update(oh, DAOS_TX_NONE, flags, &dkey, 1, iod, sgl, NULL);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);

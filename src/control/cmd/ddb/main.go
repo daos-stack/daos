@@ -55,6 +55,22 @@ func exitWithError(err error) {
 	os.Exit(1)
 }
 
+// lifecycleCommands lists the pool-lifecycle commands (as opposed to
+// pool-content commands like ls/rm) -- see ddbLongDescription for the full
+// explanation of how --vos_path/--db_path apply to each category. Used to
+// skip auto-open in run() and to reject top-level flags for a bare command
+// in parseOpts() (see vosPathTopLevelLifecycleErr).
+var lifecycleCommands = []string{
+	"feature",
+	"open",
+	"close",
+	"prov_mem",
+	"smd_sync",
+	"rm_pool",
+	"dev_list",
+	"dev_replace",
+}
+
 type cliOptions struct {
 	WriteMode bool   `long:"write_mode" short:"w" description:"Open the VOS file in write mode."`
 	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
@@ -92,19 +108,25 @@ shell mode. If neither a single command or '-f' option is provided, then
 the tool will run in interactive mode. In order to modify the VOS file,
 the '-w' option must be included.
 
-If the command requires it, the VOS file must be provided with the parameter 
---vos-path. The VOS file will be opened before any commands are executed. See
-the command‑specific help for details.
+ddb's subcommands fall into two categories -- pool-content and pool-lifecycle -- which differ
+in how the top-level --vos_path/--db_path options apply to them. See the POOL-CONTENT VS.
+POOL-LIFECYCLE COMMANDS section of the manpage for details.
 
 A DAOS file system can operate in different modes depending on the available hardware resources.
 The two primary modes are MD-on-SSD and PMEM. In MD-on-SSD mode (the default), metadata is stored
 on NVMe devices, which requires additional preliminary steps before using ddb. See the MD-on-SSD
 MODE section of the manpage for details.
+
+ddb can only initialize SPDK once per process for pools backed by an NVMe device. If a
+pool-lifecycle command (open, rm_pool, feature, dev_list, dev_replace, prov_mem, smd_sync) needs
+to access another NVMe-backed pool after SPDK has already been initialized once in this process,
+ddb reports an error instead of a crash; restart ddb and run that operation as a separate
+invocation. See the SPDK RE-INITIALIZATION section of the manpage for details.
 `
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"
 const runCmdArgsErr = "Cannot use both command file and a command string"
-const vosPathMissErr = "Cannot use sys db path without a VOS path"
+const vosPathTopLevelLifecycleErr = "%q manages its own pool lifecycle and does not accept --vos_path/--db_path as a single bare command; provide its path directly to %q (see 'ddb %s --help'), or use --vos_path/--db_path only in interactive or -f command-file mode to pre-open a pool"
 const loggerInitErr = "Logging facilities cannot be initialized"
 const ctxInitErr = "DDB Context cannot be initialized"
 const vosPathOpenErr = "Error opening VOS path '%s'"
@@ -159,7 +181,7 @@ func printCommands(fd io.Writer, app *grumble.App) {
 		row := c.Name + columnize.DefaultConfig().Delim + c.Help
 		output = append(output, row)
 	}
-	fmt.Fprintf(fd, helpCommandsHeader+columnize.SimpleFormat(output)+"\n\n")
+	fmt.Fprintf(fd, "%s%s\n\n", helpCommandsHeader, columnize.SimpleFormat(output))
 }
 
 func printGeneralHelp(app *grumble.App, generalMsg string) {
@@ -286,7 +308,7 @@ func closePoolIfOpen(ctx *DdbContext, log *logging.LeveledLogger) {
 
 func parseOpts(args []string, ctx *DdbContext) (cliOptions, *flags.Parser, error) {
 	var opts cliOptions
-	parser := flags.NewParser(&opts, flags.HelpFlag|flags.IgnoreUnknown)
+	parser := flags.NewParser(&opts, flags.HelpFlag|flags.IgnoreUnknown|flags.PassAfterNonOption)
 	parser.Name = "ddb"
 	parser.Usage = "[OPTIONS]"
 	parser.ShortDescription = "daos debug tool"
@@ -308,6 +330,11 @@ func parseOpts(args []string, ctx *DdbContext) (cliOptions, *flags.Parser, error
 		return opts, nil, errors.New(vosPathMissErr)
 	}
 
+	// Reject --vos_path/--db_path for a bare pool-lifecycle command (see lifecycleCommands).
+	if opts.Args.RunCmd != "" && slices.Contains(lifecycleCommands, opts.Args.RunCmd) && opts.VosPath != "" {
+		return opts, nil, errors.Errorf(vosPathTopLevelLifecycleErr, opts.Args.RunCmd, opts.Args.RunCmd, opts.Args.RunCmd)
+	}
+
 	return opts, parser, nil
 }
 
@@ -319,26 +346,14 @@ func run(ctx *DdbContext, log *logging.LeveledLogger, opts cliOptions, parser *f
 	defer cleanup()
 	app := createGrumbleApp(ctx)
 
-	if opts.VosPath != "" {
-		// Commands that manage the pool open/close lifecycle themselves and must
-		// not have the pool pre-opened by the CLI layer.
-		noAutoOpen := []string{
-			"feature",
-			"open",
-			"close",
-			"prov_mem",
-			"smd_sync",
-			"rm_pool",
-			"dev_list",
-			"dev_replace",
+	// !slices.Contains(...) is always true today (parseOpts rejects this
+	// combo for a bare command); kept as a safe fallback if that ever changes.
+	if opts.VosPath != "" && !slices.Contains(lifecycleCommands, opts.Args.RunCmd) {
+		log.Debugf("Connect to path: %s\n", opts.VosPath)
+		if err := ctx.Open(string(opts.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
+			return errors.Wrapf(err, vosPathOpenErr, opts.VosPath)
 		}
-		if !slices.Contains(noAutoOpen, opts.Args.RunCmd) {
-			log.Debugf("Connect to path: %s\n", opts.VosPath)
-			if err := ctx.Open(string(opts.VosPath), string(opts.SysdbPath), opts.WriteMode); err != nil {
-				return errors.Wrapf(err, vosPathOpenErr, opts.VosPath)
-			}
-			defer closePoolIfOpen(ctx, log)
-		}
+		defer closePoolIfOpen(ctx, log)
 	}
 
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
@@ -383,8 +398,8 @@ func runDdb(ctx *DdbContext, args []string) error {
 		return nil
 	}
 
-	var log *logging.LeveledLogger
-	if log, err = newLogger(opts); err != nil {
+	log, err := newLogger(opts)
+	if err != nil {
 		return errors.Wrap(err, loggerInitErr)
 	}
 	log.Debug("Logging facilities initialized")

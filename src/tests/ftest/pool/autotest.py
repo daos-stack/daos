@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,7 +24,7 @@ class PoolAutotestTest(TestWithServers):
         :avocado: tags=PoolAutotestTest,test_pool_autotest
         """
         self.log_step("Create a pool")
-        self.add_pool()
+        self.pool = self.get_pool()
         self.pool.set_query_data()
         daos_cmd = self.get_daos_command()
         self.log_step("Autotest start")

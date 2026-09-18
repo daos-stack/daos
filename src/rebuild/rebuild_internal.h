@@ -57,8 +57,7 @@ struct rebuild_tgt_pool_tracker {
 	/* number of obj records in rebuilt tree */
 	unsigned int		rt_rebuilt_obj_cnt;
 	d_rank_list_t		*rt_svc_list;
-	d_rank_t		rt_rank;
-	int			rt_errno;
+	d_rank_t                 rt_rank;
 	int			rt_refcount;
 	uint32_t		rt_tgts_num;
 	uint64_t		rt_leader_term;
@@ -162,8 +161,11 @@ struct rebuild_global_pool_tracker {
 
 	uint32_t	rgt_opc;
 	unsigned int                    rgt_abort : 1, /* abort: kill rebuild */
-	    rgt_init_scan : 1, rgt_stop_admin : 1;     /* stop: admin has asked to kill rebuild */
+	    rgt_init_scan : 1, rgt_stop_admin : 1,     /* stop: admin has asked to kill rebuild */
+	    rgt_include_up : 1;                        /* include UP rank domain for FAIL_RECLAIM */
 
+	/* only valid when rgt_include_up is true (FAIL_RECLAIM), the original rebuild version */
+	uint32_t rgt_orig_rb_ver;
 	uint32_t rgt_num_op_rb;            /* count of op:Rebuild attempts */
 	uint32_t rgt_num_op_freclaim;      /* count of op:Fail_reclaim attempts */
 	uint32_t rgt_num_op_rb_fail;       /* count of op:Rebuild failures */

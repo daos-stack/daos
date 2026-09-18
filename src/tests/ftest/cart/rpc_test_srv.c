@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -222,15 +223,15 @@ srv_rpc_finalize(void)
 	rc = crt_group_rank(NULL, &myrank);
 	D_ASSERTF(rc == 0, "crt_group_rank failed %d\n", rc);
 
-	if (rpc_srv.target_multitier_grp != NULL) {
-		rc = crt_group_detach(rpc_srv.target_multitier_grp);
-		D_ASSERTF(rc == 0, "crt_group_detach failed %d\n", rc);
-	}
-
 	dbg("main thread wait progress thread ...\n");
 
 	if (rpc_srv.progress_thid)
 		pthread_join(rpc_srv.progress_thid, NULL);
+
+	if (rpc_srv.target_multitier_grp != NULL) {
+		rc = crt_group_detach(rpc_srv.target_multitier_grp);
+		D_ASSERTF(rc == 0, "crt_group_detach failed %d\n", rc);
+	}
 
 	rc = crt_context_destroy(rpc_srv.crt_ctx, 1);
 	D_ASSERTF(rc == 0, "crt_context_destroy failed %d\n", rc);

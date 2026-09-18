@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -38,7 +39,7 @@ class PoolSecurityTest(TestWithServers):
         user_uid = os.geteuid()
         user_gid = os.getegid()
 
-        self.add_pool(create=False)
+        self.pool = self.get_pool(create=False)
 
         uid, gid, expected = self.params.get("ids", "/run/pool/tests/*")
 

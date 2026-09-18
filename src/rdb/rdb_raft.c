@@ -3675,14 +3675,10 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 	if (lease != NULL) {
 		int adjustment = d_hlc2msec(d_hlc_epsilon_get()) + 1 /* ms margin */;
 
-		if (*lease < adjustment) {
-			D_ERROR(DF_DB ": dropping %s response from " RDB_F_RID
-				      ": invalid lease: %ld\n",
-				DP_DB(db), opc == RDB_APPENDENTRIES ? "AE" : "IS",
-				RDB_P_RID(out_op->ro_from), *lease);
-			return;
-		}
-		*lease -= adjustment;
+		if (*lease > adjustment)
+			*lease -= adjustment;
+		else
+			*lease = 0; /* will effectively be ignored by raft_node_set_lease */
 	}
 
 	ABT_mutex_lock(db->d_raft_mutex);

@@ -14,6 +14,3 @@ timeout: 900
 pool:
   size: 20G
   threshold_percent: 0.1  # 10%
-
-container:
-  control_method: daos

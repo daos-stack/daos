@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -108,10 +109,6 @@ func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepa
 	default:
 		return mb.cfg.ResetRes, nil
 	}
-}
-
-func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {
-	return mb.cfg.UpdateErr
 }
 
 func (mb *MockBackend) WriteConfig(req storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error) {

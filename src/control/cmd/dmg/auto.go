@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -64,6 +65,13 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	if err := convert.Types(&cmd.ConfGenCmd, &req.ConfGenerateReq); err != nil {
 		return nil, err
 	}
+
+	// --num-engines and --allow-numa-imbalance are mutually exclusive
+	if req.ConfGenerateReq.AllowNumaImbalance && req.ConfGenerateReq.NrEngines > 0 {
+		return nil, errors.New("--num-engines and --allow-numa-imbalance flags are mutually exclusive; " +
+			"when --allow-numa-imbalance is set, engine count is determined automatically based on NUMA nodes")
+	}
+
 	cmd.Debugf("control API ConfGenerateRemote called with req: %+v", req)
 
 	// Use a modified commandline logger to send all log messages to stderr in debug mode

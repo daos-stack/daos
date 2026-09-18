@@ -185,11 +185,13 @@ open_pool_test(void **state)
 	struct ddb_ctx          ctx  = {0};
 	struct dt_vos_pool_ctx *tctx = *state;
 
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
+	assert_success(
+	    dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx, &ctx.dc_poh, 0, ctx.dc_write_mode));
 	assert_success(dv_pool_close(ctx.dc_poh));
 
 	/* should be able to open again after closing */
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
+	assert_success(
+	    dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx, &ctx.dc_poh, 0, ctx.dc_write_mode));
 	assert_success(dv_pool_close(ctx.dc_poh));
 }
 
@@ -1090,7 +1092,8 @@ dv_test_setup(void **state)
 	ctx.dc_write_mode              = true;
 	active_entry_handler_called = 0;
 	committed_entry_handler_called = 0;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
+	assert_success(
+	    dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx, &ctx.dc_poh, 0, ctx.dc_write_mode));
 	tctx->dvt_poh = ctx.dc_poh;
 	return 0;
 }
@@ -1131,7 +1134,7 @@ pool_flags_tests(void **state)
 	uint64_t                incompat_flags;
 
 	ctx.dc_write_mode = true;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx.dc_poh,
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, NULL, &ctx, &ctx.dc_poh,
 				    VOS_POF_FOR_FEATURE_FLAG, ctx.dc_write_mode));
 	assert_success(dv_pool_get_flags(ctx.dc_poh, &compat_flags, &incompat_flags));
 	assert(compat_flags == 0);
@@ -1198,7 +1201,7 @@ helper_stat_open_modify_close_stat(struct dt_vos_pool_ctx *tctx, struct file_sta
 	sha256sum(path, fs[FILE_STATE_PRE].digest);
 
 	ctx.dc_write_mode = write_mode;
-	assert_success(dv_pool_open(path, NULL, &ctx.dc_poh, 0, ctx.dc_write_mode));
+	assert_success(dv_pool_open(path, NULL, &ctx, &ctx.dc_poh, 0, ctx.dc_write_mode));
 	tctx->dvt_poh = ctx.dc_poh;
 	update_value_to_modify_tests((void **)&tctx);
 	assert_success(dv_pool_close(tctx->dvt_poh));
@@ -1229,7 +1232,8 @@ read_only_vs_write_mode_test(void **state)
 
 /* Callback that returns *(int *)cb_args, or 0 if cb_args is NULL. */
 static int
-csum_cb_return_rc(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+csum_cb_return_rc(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		  struct dcs_ci_list *cil)
 {
 	return (cb_args != NULL) ? (*(int *)cb_args) : (0);
 }
@@ -1252,11 +1256,17 @@ dump_csum_error_tests(void **state)
 	assert_rc_equal(-DER_INVAL, rc);
 }
 
+/*
+ * g_oids[0]: SV stored at epoch 1 without checksum.
+ * Fetching at EPOCH_MAX finds the SV (sv_epoch=1) but cil is empty (no checksum stored).
+ */
 static int
-check_csum_sv_cb_001(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+check_csum_sv_cb_001(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		     struct dcs_ci_list *cil)
 {
 	assert_null(cb_args);
-	assert_null(rel);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 1);
 	assert_non_null(cil);
 
 	assert_int_equal(cil->dcl_csum_infos_nr, 0);
@@ -1264,14 +1274,20 @@ check_csum_sv_cb_001(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci
 	return 0;
 }
 
+/*
+ * g_oids[1]: SV stored at epoch 1 with checksum dct_sv_ics[0].
+ * Fetching at epoch=1 returns that exact version.
+ */
 static int
-check_csum_sv_cb_002(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+check_csum_sv_cb_002(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		     struct dcs_ci_list *cil)
 {
 	struct dt_csum_ctx   *csum_ctx;
 	struct dcs_csum_info *ci;
 
 	assert_non_null(cb_args);
-	assert_null(rel);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 1);
 	assert_non_null(cil);
 
 	csum_ctx = cb_args;
@@ -1290,14 +1306,20 @@ check_csum_sv_cb_002(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci
 	return 0;
 }
 
+/*
+ * g_oids[1]: SV stored at epoch 2 with checksum dct_sv_ics[1] (latest version).
+ * Fetching at EPOCH_MAX returns the most recent version.
+ */
 static int
-check_csum_sv_cb_003(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+check_csum_sv_cb_003(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		     struct dcs_ci_list *cil)
 {
 	struct dt_csum_ctx   *csum_ctx;
 	struct dcs_csum_info *ci;
 
 	assert_non_null(cb_args);
-	assert_null(rel);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 2);
 	assert_non_null(cil);
 
 	csum_ctx = cb_args;
@@ -1353,23 +1375,25 @@ dump_csum_sv_tests(void **state)
 }
 
 static int
-check_csum_recx_cb_001(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+check_csum_recx_cb_001(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil)
 {
 	assert_null(cb_args);
-	assert_non_null(rel);
+	assert_non_null(recx_rel);
+	assert_int_equal(sv_epoch, 0);
 	assert_non_null(cil);
 
-	assert_int_equal(rel->re_nr, DVT_FAKE_RECX_COUNT);
-	assert_int_equal(rel->re_items[0].re_recx.rx_idx, 0);
-	assert_int_equal(rel->re_items[0].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
-	assert_int_equal(rel->re_items[0].re_ep, 1);
-	assert_int_equal(rel->re_items[1].re_recx.rx_idx, DVT_FAKE_RECX_SIZE / 2);
+	assert_int_equal(recx_rel->re_nr, DVT_FAKE_RECX_COUNT);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(recx_rel->re_items[0].re_ep, 1);
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_idx, DVT_FAKE_RECX_SIZE / 2);
 	/*
 	 * VOS_OF_FETCH_CSUM records the full stored extent, not the IOD intersection:
 	 * recx 1 starts at rx_idx=DVT_FAKE_RECX_SIZE/2 but its rx_nr is DVT_FAKE_RECX_SIZE.
 	 */
-	assert_int_equal(rel->re_items[1].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
-	assert_int_equal(rel->re_items[1].re_ep, 2);
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(recx_rel->re_items[1].re_ep, 2);
 
 	/* No csum was stored for g_oids[0], so the checksum info list is empty. */
 	assert_int_equal(cil->dcl_csum_infos_nr, 0);
@@ -1378,13 +1402,15 @@ check_csum_recx_cb_001(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_
 }
 
 static int
-check_csum_recx_cb_002(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_ci_list *cil)
+check_csum_recx_cb_002(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil)
 {
 	struct dt_csum_ctx   *csum_ctx;
 	struct dcs_csum_info *ci;
 
 	assert_non_null(cb_args);
-	assert_non_null(rel);
+	assert_non_null(recx_rel);
+	assert_int_equal(sv_epoch, 0);
 	assert_non_null(cil);
 
 	csum_ctx = cb_args;
@@ -1392,13 +1418,13 @@ check_csum_recx_cb_002(void *cb_args, struct daos_recx_ep_list *rel, struct dcs_
 	assert_int_equal(csum_ctx->dct_chunk_size, DVT_FAKE_CHUNK_SIZE);
 	assert_int_equal(csum_ctx->dct_csum_type, DVT_FAKE_CSUM_TYPE);
 
-	assert_int_equal(rel->re_nr, DVT_FAKE_RECX_COUNT);
-	assert_int_equal(rel->re_items[0].re_recx.rx_idx, 0);
-	assert_int_equal(rel->re_items[0].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
-	assert_int_equal(rel->re_items[0].re_ep, 1);
-	assert_int_equal(rel->re_items[1].re_recx.rx_idx, DVT_FAKE_RECX_SIZE / 2);
-	assert_int_equal(rel->re_items[1].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
-	assert_int_equal(rel->re_items[1].re_ep, 2);
+	assert_int_equal(recx_rel->re_nr, DVT_FAKE_RECX_COUNT);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(recx_rel->re_items[0].re_ep, 1);
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_idx, DVT_FAKE_RECX_SIZE / 2);
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_nr, DVT_FAKE_RECX_SIZE);
+	assert_int_equal(recx_rel->re_items[1].re_ep, 2);
 
 	assert_non_null(cil);
 	assert_int_equal(cil->dcl_csum_infos_nr, DVT_FAKE_RECX_COUNT);

@@ -146,6 +146,12 @@ test_run()
 		crtu_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 	}
 
+	crtu_progress_stop();
+
+	rc = pthread_join(test.tg_tid, NULL);
+	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
+	DBG_PRINT("joined progress thread.\n");
+
 	d_rank_list_free(rank_list);
 	rank_list = NULL;
 
@@ -157,12 +163,6 @@ test_run()
 		D_ASSERTF(rc == 0,
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
-
-	crtu_progress_stop();
-
-	rc = pthread_join(test.tg_tid, NULL);
-	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
-	DBG_PRINT("joined progress thread.\n");
 
 	rc = sem_destroy(&test.tg_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");

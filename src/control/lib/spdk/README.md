@@ -16,7 +16,6 @@ capabilities tailored to the specific needs of DAOS, the NVMe SSD related
 features are as follows:
 
 * device discovery (SPDK environment initialization and device probing)
-* device firmware update
 * VMD enablement and discovery
 * format (wipe) of device namespaces
 

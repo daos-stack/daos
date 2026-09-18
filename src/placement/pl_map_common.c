@@ -237,19 +237,15 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md, struct daos_obj_shar
  * │ DOWNOUT      │ ANY          │ true   │ —  (always remap, early return)              │
  * ├──────────────┼──────────────┼────────┼──────────────────────────────────────────────┤
  * │ DOWN         │ PRE_REBUILD  │ false  │ IS_REBUILDING  (mark no-read, no migration)  │
- * │ DOWN         │ CURRENT      │ true   │ IS_REBUILDING  (migrate to spare, write-only)│
  * │ DOWN         │ POST_REBUILD │ true   │ -  (rebuild complete, treat as DOWNOUT)      │
  * ├──────────────┼──────────────┼────────┼──────────────────────────────────────────────┤
  * │ DRAIN        │ PRE_REBUILD  │ false  │ —  (still UPIN from pre-drain view)          │
- * │ DRAIN        │ CURRENT      │ false  │ HAS_PEER  (keep in place, extend layout)     │
  * │ DRAIN        │ POST_REBUILD │ true   │ —  (drain complete, treat as DOWNOUT)        │
  * ├──────────────┼──────────────┼────────┼──────────────────────────────────────────────┤
  * │ UP (down2up) │ PRE_REBUILD  │ false  │ IS_REBUILDING | IS_REINTEGRATING             │
- * │ UP (down2up) │ CURRENT      │ false  │ IS_REBUILDING | IS_REINTEGRATING             │
  * │ UP (down2up) │ POST_REBUILD │ false  │ -  (reintegration complete, treat as UPIN)   │
  * ├──────────────┼──────────────┼────────┼──────────────────────────────────────────────┤
  * │ UP (regular) │ PRE_REBUILD  │ true   │ —  (not yet reintegrated, use fallback)      │
- * │ UP (regular) │ CURRENT      │ true   │ HAS_PEER  (migrate + extend layout)          │
  * │ UP (regular) │ POST_REBUILD │ false  │ —  (reintegration complete, treat as UPIN)   │
  * └──────────────┴──────────────┴────────┴──────────────────────────────────────────────┘
  *
@@ -301,10 +297,6 @@ comp_need_remap(struct pool_component *comp, uint32_t allow_version, enum layout
 		} else if (status == PO_COMP_ST_DRAIN) {
 			if (comp->co_fseq > allow_version) {
 				remap = false; /* futuren drain, don't handle it */
-
-			} else if (gen_mode == CURRENT) {
-				flags = PL_HAS_PEER;
-				remap = false;
 			}
 		} else if (status == PO_COMP_ST_UP) {
 			if (comp->co_in_ver > allow_version) {
@@ -316,10 +308,7 @@ comp_need_remap(struct pool_component *comp, uint32_t allow_version, enum layout
 				remap = false;
 
 			} else { /* regular reintegration */
-				if (gen_mode == CURRENT)
-					flags = PL_HAS_PEER; /* remap to fallback for CURRENT */
-				else
-					remap = false;
+				remap = false;
 			}
 		}
 	}
@@ -380,12 +369,22 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md, bo
 		 * try next spare.
 		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN)
+		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
+			if (spare_tgt->ta_comp.co_status == PO_COMP_ST_DOWNOUT)
+				D_ERROR(DF_OID
+					": DOWN/DRAIN failed shard remaps through DOWNOUT spare: "
+					"md_ver=%u allow_ver=%u gen_mode=%d failed=(" DF_FAILEDSHARD
+					") spare=" DF_TARGET " spare_fseq=%u spare_out_ver=%u\n",
+					DP_OID(md->omd_id), md->omd_ver, allow_version, gen_mode,
+					DP_FAILEDSHARD(*f_shard), DP_TARGET(spare_tgt),
+					spare_tgt->ta_comp.co_fseq, spare_tgt->ta_comp.co_out_ver);
+
 			D_ASSERTF(spare_tgt->ta_comp.co_status !=
 				  PO_COMP_ST_DOWNOUT,
 				  "down fseq(%u) < downout fseq(%u)\n",
 				  f_shard->fs_fseq,
 				  spare_tgt->ta_comp.co_fseq);
+		}
 
 		f_shard->fs_fseq = spare_tgt->ta_comp.co_fseq;
 		f_shard->fs_status = spare_tgt->ta_comp.co_status;
@@ -520,4 +519,3 @@ out:
 		D_FREE(grp_count);
 	return rc;
 }
-

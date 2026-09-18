@@ -46,12 +46,37 @@ func TestDdb_parseOpts(t *testing.T) {
 			expErr: errHelpRequested,
 		},
 		"Unknown commands with help": {
-			args:   []string{"foo", "--help"},
-			expErr: errUnknownCmd,
+			// With PassAfterNonOption, --help that appears after the subcommand name is no longer
+			// processed by go-flags. It lands in RunCmdArgs and is forwarded to grumble, which
+			// handles it (and returns an unknown-command error for "foo"). The full flow is
+			// exercised in TestDdb_runDdb.
+			args: []string{"foo", "--help"},
+			checkFunc: func(opts *cliOptions) error {
+				if opts.Args.RunCmd != "foo" {
+					return fmt.Errorf("expected RunCmd to be 'foo', got %q", opts.Args.RunCmd)
+				}
+				if len(opts.Args.RunCmdArgs) == 0 || opts.Args.RunCmdArgs[0] != "--help" {
+					return fmt.Errorf("expected RunCmdArgs[0] to be '--help', got %v", opts.Args.RunCmdArgs)
+				}
+				return nil
+			},
 		},
 		"Unknown commands with help and opt": {
-			args:   []string{"-w", "foo", "--help"},
-			expErr: errUnknownCmd,
+			// Same as above: -w is consumed globally (it appears before the subcommand),
+			// while --help after "foo" goes into RunCmdArgs.
+			args: []string{"-w", "foo", "--help"},
+			checkFunc: func(opts *cliOptions) error {
+				if !opts.WriteMode {
+					return fmt.Errorf("expected WriteMode to be true")
+				}
+				if opts.Args.RunCmd != "foo" {
+					return fmt.Errorf("expected RunCmd to be 'foo', got %q", opts.Args.RunCmd)
+				}
+				if len(opts.Args.RunCmdArgs) == 0 || opts.Args.RunCmdArgs[0] != "--help" {
+					return fmt.Errorf("expected RunCmdArgs[0] to be '--help', got %v", opts.Args.RunCmdArgs)
+				}
+				return nil
+			},
 		},
 		"Default option values": {
 			args: []string{"ls", "-d", "-r"},
@@ -194,6 +219,36 @@ func TestDdb_parseOpts(t *testing.T) {
 				return nil
 			},
 		},
+		// PassAfterNonOption regression: a known global flag (--db_path) that appears AFTER
+		// the subcommand name must NOT be consumed by go-flags.  It should land in RunCmdArgs
+		// so grumble can process it as a command-level flag.
+		"cmd-level --db_path after subcommand not consumed globally": {
+			args: []string{"rm_pool", "--db_path", "/sysdb", "/mnt/pool/rdb-pool"},
+			checkFunc: func(opts *cliOptions) error {
+				if opts.SysdbPath != "" {
+					return fmt.Errorf("SysdbPath should be empty (PassAfterNonOption), got %q", opts.SysdbPath)
+				}
+				if opts.Args.RunCmd != "rm_pool" {
+					return fmt.Errorf("expected RunCmd to be 'rm_pool', got %q", opts.Args.RunCmd)
+				}
+				want := []string{"--db_path", "/sysdb", "/mnt/pool/rdb-pool"}
+				if len(opts.Args.RunCmdArgs) != len(want) {
+					return fmt.Errorf("expected RunCmdArgs %v, got %v", want, opts.Args.RunCmdArgs)
+				}
+				for i, w := range want {
+					if opts.Args.RunCmdArgs[i] != w {
+						return fmt.Errorf("RunCmdArgs[%d]: want %q, got %q", i, w, opts.Args.RunCmdArgs[i])
+					}
+				}
+				return nil
+			},
+		},
+		// PassAfterNonOption does not affect flags that appear BEFORE the subcommand: those
+		// are still consumed globally, so the existing vosPathMissErr validation still fires.
+		"global --db_path before subcommand still consumed and validation fires": {
+			args:   []string{"--db_path=/sysdb", "rm_pool", "/mnt/pool/rdb-pool"},
+			expErr: ddbTestErr(vosPathMissErr),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			ctx := newTestContext(t)
@@ -242,22 +297,12 @@ func openFnCheckingWriteMode(t *testing.T, wantWriteMode bool, called *bool) fun
 	}
 }
 
-// openFnMustNotBeCalled is a ddb_run_open_Fn stub that fails the test if
-// the open function is called at all (used to verify no-auto-open behavior).
-func openFnMustNotBeCalled(_ string, _ string, _ bool) error {
-	return fmt.Errorf("open should not have been called")
-}
-
-// openFnAllowedOnce returns a ddb_run_open_Fn stub that allows the open
-// function to be called exactly once (used to verify the 'open' command
-// itself calls open but the CLI does not pre-open).
-func openFnAllowedOnce() func(string, string, bool) error {
-	count := 0
-	return func(_ string, _ string, _ bool) error {
-		count++
-		if count > 1 {
-			return fmt.Errorf("open pre-opened by CLI (called %d times)", count)
-		}
+// closeFnChecking returns a ddb_run_close_Fn stub. called is set to true
+// when the stub is invoked, allowing the caller to assert that close was
+// called.
+func closeFnChecking(called *bool) func() error {
+	return func() error {
+		*called = true
 		return nil
 	}
 }
@@ -318,28 +363,37 @@ func TestDdb_runDdb(t *testing.T) {
 				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
 			},
 		},
-		"No auto-open for feature command": {
-			// noAutoOpen is keyed on opts.Args.RunCmd which is empty in command-file
-			// mode, so this case only applies to command-line mode.
-			args: []string{"-s", "/foo/vos-0", "feature", "--show"},
-			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnMustNotBeCalled
-			},
+		"Reject top-level flags for feature (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "feature", "--show"},
+			expErr: ddbTestErr(`"feature" manages its own pool lifecycle`),
 		},
-		"No auto-open for open command": {
-			// The CLI should NOT pre-open when the 'open' command is issued; only the
-			// command itself should call ctx.Open (exactly once).
-			// Only valid for command-line mode (see note above).
-			args: []string{"-s", "/foo/vos-0", "open", "/foo/vos-0"},
-			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnAllowedOnce()
-			},
+		"Reject top-level flags for open (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "open", "/foo/vos-0"},
+			expErr: ddbTestErr(`"open" manages its own pool lifecycle`),
 		},
-		"No auto-open for smd_sync": {
-			args: []string{"-s", "/foo/vos-0", "smd_sync"},
-			setup: func(t *testing.T) {
-				ddb_run_open_Fn = openFnMustNotBeCalled
-			},
+		"Reject top-level flags for smd_sync (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "smd_sync"},
+			expErr: ddbTestErr(`"smd_sync" manages its own pool lifecycle`),
+		},
+		"Reject top-level vos_path and db_path for rm_pool (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "-p", "/sysdb", "rm_pool", "/mnt/rdb-pool"},
+			expErr: ddbTestErr(`"rm_pool" manages its own pool lifecycle`),
+		},
+		"Reject top-level flags for close (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "close"},
+			expErr: ddbTestErr(`"close" manages its own pool lifecycle`),
+		},
+		"Reject top-level flags for prov_mem (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "prov_mem", "-p", "/db", "/mnt"},
+			expErr: ddbTestErr(`"prov_mem" manages its own pool lifecycle`),
+		},
+		"Reject top-level flags for dev_list (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "dev_list", "-p", "/db"},
+			expErr: ddbTestErr(`"dev_list" manages its own pool lifecycle`),
+		},
+		"Reject top-level flags for dev_replace (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "dev_replace", "-p", "/db", "old-uuid", "new-uuid"},
+			expErr: ddbTestErr(`"dev_replace" manages its own pool lifecycle`),
 		},
 		"Init failure": {
 			args:   []string{"ls"},
@@ -417,6 +471,19 @@ func TestDdb_runDdbCommandFile(t *testing.T) {
 				var called bool
 				ddb_run_open_Fn = openFnCheckingWriteMode(t, true, &called)
 				t.Cleanup(func() { test.AssertTrue(t, called, "open was not called") })
+			},
+		},
+		"Top-level flags accepted in -f mode even for a bare pool-lifecycle command": {
+			flags:   []string{"-s", "/foo/vos-0", "-p", "/bar"},
+			cmdLine: "close",
+			setup: func(t *testing.T) {
+				var openCalled, closeCalled bool
+				ddb_run_open_Fn = openFnChecking(t, "/foo/vos-0", "/bar", &openCalled)
+				ddb_run_close_Fn = closeFnChecking(&closeCalled)
+				t.Cleanup(func() {
+					test.AssertTrue(t, openCalled, "open was not called")
+					test.AssertTrue(t, closeCalled, "close was not called")
+				})
 			},
 		},
 	} {

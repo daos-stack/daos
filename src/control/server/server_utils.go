@@ -483,12 +483,6 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 		}
 	}
 
-	if cfg.FWHelperLogFile != "" {
-		if err := setenv(pbin.DaosFWLogFileEnvVar, cfg.FWHelperLogFile); err != nil {
-			return errors.Wrap(err, "unable to configure privileged firmware helper logging")
-		}
-	}
-
 	return nil
 }
 
@@ -621,9 +615,17 @@ func checkEngineTmpfsMem(srv *server, ei *EngineInstance, smi *common.SysMemInfo
 		if usage.TotalBytes > memRamdisk {
 			return storage.FaultRamdiskBadSize(usage.TotalBytes, memRamdisk)
 		}
-		// Looks OK, so we can return early and bypass additional checks.
-		srv.log.Debugf("using existing tmpfs of size %s", humanize.IBytes(usage.TotalBytes))
-		return nil
+		// For MD-on-SSD, the ramdisk is always recreated during startup so we should
+		// validate memory rather than assuming the mount is valid and bypass checks.
+		if ei.storage.ControlMetadataPathConfigured() {
+			srv.log.Debugf("MD-on-SSD detected, validating ramdisk (%s) memory "+
+				"requirements", humanize.IBytes(usage.TotalBytes))
+		} else {
+			// Looks OK, so we can return early and bypass additional checks.
+			srv.log.Debugf("using existing tmpfs of size %s",
+				humanize.IBytes(usage.TotalBytes))
+			return nil
+		}
 	} else if err != nil {
 		return errors.Wrap(err, "unable to check for mounted tmpfs")
 	}

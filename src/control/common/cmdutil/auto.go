@@ -16,7 +16,7 @@ type ConfGenCmd struct {
 	UseTmpfsSCM        bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
 	ExtMetadataPath    string `short:"m" long:"control-metadata-path" description:"External storage path to store control metadata. Set this to a persistent location and specify --use-tmpfs-scm to create an MD-on-SSD config"`
 	FabricPorts        string `short:"f" long:"fabric-ports" description:"Allow custom fabric interface ports to be specified for each engine config section. Comma separated port numbers, one per engine"`
-	AllowNumaImbalance bool   `short:"n" long:"allow-numa-imbalance" description:"Allow generation of config with imbalanced NVMe distribution. For non-VMD: redistribute devices equally across engines. For VMD: accept imbalanced VMD domains as-is"`
+	AllowNumaImbalance bool   `short:"n" long:"allow-numa-imbalance" description:"Distribute NVMe devices equally across engines regardless of NUMA affinity (may result in suboptimal performance due to cross-NUMA access)"`
 }
 
 // CheckDeprecated will check for deprecated parameters and update as needed.

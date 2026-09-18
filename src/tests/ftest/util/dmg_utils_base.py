@@ -478,6 +478,7 @@ class DmgCommandBase(YamlCommand):
                 self.pool = BasicParameter(None, position=1)
                 self.ranks = FormattedParameter("--ranks={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
+                self.wait = FormattedParameter("--wait", False)
 
         class EvictSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool evict command."""
@@ -497,6 +498,7 @@ class DmgCommandBase(YamlCommand):
                 self.ranks = FormattedParameter("--ranks={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
                 self.force = FormattedParameter("--force", False)
+                self.wait = FormattedParameter("--wait", False)
 
         class ExtendSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool extend command."""
@@ -506,6 +508,7 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/pool/extend/*", "extend")
                 self.pool = BasicParameter(None, position=1)
                 self.ranks = FormattedParameter("--ranks={}", None)
+                self.wait = FormattedParameter("--wait", False)
 
         class GetAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool get-acl command."""
@@ -608,6 +611,7 @@ class DmgCommandBase(YamlCommand):
                 self.pool = BasicParameter(None, position=1)
                 self.ranks = FormattedParameter("--ranks={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
+                self.wait = FormattedParameter("--wait", False)
 
         class SetPropSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool set-prop command."""

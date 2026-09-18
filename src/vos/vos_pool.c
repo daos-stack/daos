@@ -1819,6 +1819,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		}
 		pool->vp_opened++;
 		*poh = vos_pool2hdl(pool);
+		checker_print_indent_dec(ck);
 		return 0;
 	}
 

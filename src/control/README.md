@@ -181,7 +181,6 @@ The following build tags are applied automatically to include all testable code:
 
 | Tag | What it enables |
 |---|---|
-| `firmware` | Firmware management command and handler |
 | `fault_injection` | Fault injection support in server and client library |
 | `test_stubs` | C library stubs (`libdaos`, `libgurt`) that avoid linking against the real shared libraries during unit tests |
 | `spdk` | SPDK NVMe and BDev bindings |

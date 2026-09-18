@@ -63,6 +63,10 @@ enum dtx_entry_flags {
 	DTE_EPOCH_SORTED	= (1 << 6),
 };
 
+#define DTE_FLAGS_VALID                                                                            \
+	(DTE_LEADER | DTE_INVALID | DTE_BLOCK | DTE_CORRUPTED | DTE_ORPHAN |                       \
+	 DTE_PARTIAL_COMMITTED | DTE_EPOCH_SORTED)
+
 struct dtx_entry {
 	/** The identifier of the DTX. */
 	struct dtx_id			 dte_xid;
@@ -303,7 +307,7 @@ enum {
 	VOS_OF_EC = (1 << 19),
 	/** Update from rebuild */
 	VOS_OF_REBUILD = (1 << 20),
-	/* only query for checksums */
+	/** Only query for checksums: no data fetched, checksums kept whole (see save_csum()) */
 	VOS_OF_FETCH_CSUM = (1 << 21),
 };
 

@@ -73,14 +73,6 @@ Implementation in `auto.go`.
 Provides capability to change the owner of a DAOS container.
 Implementation in `cont.go`.
 
-### Firmware
-
-Firmware related capabilities are selectively compiled and may not
-be present in all builds. Provided capability to query and update
-firmware on NVMe and PMem devices.
-Implementation with firmware enabled in `firmware.go`. When
-disabled: `firmware_disabled.go`.
-
 ### Network
 
 Provides capability to manage and enumerate available network

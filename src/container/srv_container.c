@@ -1814,14 +1814,15 @@ cont_track_eph_leader_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	eph_ldr->cte_servers_num = rank_nr;
 	eph_ldr->cte_current_ec_agg_eph = 0;
 	eph_ldr->cte_rdb_ec_agg_eph     = 0;
+	eph_ldr->cte_start_ts           = daos_gettime_coarse();
 	for (i = 0; i < rank_nr; i++) {
 		eph_ldr->cte_server_ephs[i].re_rank = doms[i].do_comp.co_rank;
 		eph_ldr->cte_server_ephs[i].re_ec_agg_eph = 0;
 		eph_ldr->cte_server_ephs[i].re_stable_eph = 0;
-		eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts = daos_gettime_coarse();
+		eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts = eph_ldr->cte_start_ts;
 	}
 	d_list_add(&eph_ldr->cte_list, &cont_svc->cs_cont_ephs_leader_list);
-	eph_ldr->cte_ec_agg_warn_slug_ts = daos_gettime_coarse();
+	eph_ldr->cte_ec_agg_warn_slug_ts = eph_ldr->cte_start_ts;
 	*leader_p = eph_ldr;
 out:
 	if (rc) {
@@ -1857,7 +1858,9 @@ ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid, d_rank_t ran
 				daos_epoch_t ec_agg_eph, daos_epoch_t stable_eph)
 {
 	struct cont_svc			*svc;
+	struct rdb_tx                    tx;
 	struct cont_track_eph_leader	*eph_ldr;
+	struct cont                     *cont = NULL;
 	int				 rc;
 	bool				 retried = false;
 	int				 i;
@@ -1869,9 +1872,28 @@ ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid, d_rank_t ran
 retry:
 	eph_ldr = cont_track_eph_leader_lookup(svc, cont_uuid);
 	if (eph_ldr == NULL) {
-		rc = cont_track_eph_leader_alloc(svc, cont_uuid, &eph_ldr);
-		if (rc)
+		/* check container's existence before creating cont_track_eph_leader */
+		rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+		if (rc != 0)
 			D_GOTO(out_put, rc);
+
+		ABT_rwlock_rdlock(svc->cs_lock);
+		rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+		ABT_rwlock_unlock(svc->cs_lock);
+		rdb_tx_end(&tx);
+		if (rc != 0) {
+			DL_CDEBUG(rc == -DER_NONEXIST, DB_MD, DLOG_ERR, rc,
+				  DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+			D_GOTO(out_put, rc);
+		}
+		cont_put(cont);
+
+		eph_ldr = cont_track_eph_leader_lookup(svc, cont_uuid);
+		if (eph_ldr == NULL) {
+			rc = cont_track_eph_leader_alloc(svc, cont_uuid, &eph_ldr);
+			if (rc)
+				D_GOTO(out_put, rc);
+		}
 	}
 
 	for (i = 0; i < eph_ldr->cte_servers_num; i++) {
@@ -1908,7 +1930,7 @@ retry:
 
 out_put:
 	cont_svc_put_leader(svc);
-	return 0;
+	return rc;
 }
 
 #define EPH_ARG_TGT_INLINE	(64)
@@ -1999,7 +2021,7 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	rc = ds_pool_thread_collective(
 	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
 	    cont_refresh_track_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
-	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG, rc,
+	DL_CDEBUG(rc != 0 && rc != -DER_CONT_NONEXIST && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
 		  DF_CONT ": refresh ec_agg_eph " DF_X64 ", "
 			  "stable_eph " DF_X64,
 		  DP_CONT(pool_uuid, cont_uuid), ec_agg_eph, stable_eph);
@@ -2239,7 +2261,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		cur_eph = d_hlc2sec(eph_ldr->cte_current_ec_agg_eph);
 		new_eph = d_hlc2sec(min_ec_agg_eph);
 		if ((cur_ts > eph_ldr->cte_ec_agg_warn_slug_ts + 600) && cur_eph &&
-		    (new_eph > cur_eph) && (new_eph - cur_eph) >= 600)
+		    (new_eph > cur_eph) && (new_eph - cur_eph) >= 600 &&
+		    (cur_ts - eph_ldr->cte_start_ts) >= (new_eph - cur_eph))
 			D_WARN(DF_CONT ": Sluggish EC boundary reporting. "
 				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 "\n",
 			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), cur_eph, new_eph,
@@ -2273,8 +2296,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 					       min_ec_agg_eph, min_stable_eph,
 					       svc->cs_cont_ephs_leader_req);
 		if (rc) {
-			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
-				  DF_CONT ": refresh failed",
+			DL_CDEBUG(rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST, DB_MD, DLOG_ERR,
+				  rc, DF_CONT ": refresh failed",
 				  DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
 
 			/* If ULT is exiting, break out */
