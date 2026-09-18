@@ -503,10 +503,11 @@ obj_get_grp_size(struct dc_object *obj)
 }
 
 static unsigned int
-obj_shard2grpidx(struct dc_object *obj, unsigned int shard)
+obj_shard_idx2grpidx(struct dc_object *obj, unsigned int shard_idx)
 {
 	D_ASSERT(obj->cob_grp_size > 0);
-	return shard / obj->cob_grp_size;
+	D_ASSERT(shard_idx < obj->cob_shards_nr);
+	return shard_idx / obj->cob_grp_size;
 }
 
 int
@@ -625,7 +626,7 @@ obj_replica_grp_fetch_valid_shard_get(struct dc_object *obj, int grp_idx,
 }
 
 static int
-obj_shard_find_replica(struct dc_object *obj, unsigned int shard, unsigned int map_ver,
+obj_shard_find_replica(struct dc_object *obj, unsigned int shard_idx, unsigned int map_ver,
 		       struct obj_auxi_tgt_list *tgt_list)
 {
 	int grp_idx;
@@ -634,10 +635,10 @@ obj_shard_find_replica(struct dc_object *obj, unsigned int shard, unsigned int m
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
 	if (obj->cob_version != map_ver)
 		rc = -DER_STALE;
-	else if (shard >= obj->cob_shards_nr)
+	else if (shard_idx >= obj->cob_shards_nr)
 		rc = -DER_NONEXIST;
 	else
-		grp_idx = obj_shard2grpidx(obj, shard);
+		grp_idx = obj_shard_idx2grpidx(obj, shard_idx);
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	if (rc != 0)
@@ -1900,11 +1901,10 @@ recov_task_cb(tse_task_t *task, void *data)
 }
 
 static inline bool
-obj_shard_is_invalid(struct dc_object *obj, uint32_t shard_idx, uint32_t opc)
+obj_shard_is_invalid_locked(struct dc_object *obj, uint32_t shard_idx, uint32_t opc)
 {
 	bool invalid_shard;
 
-	D_RWLOCK_RDLOCK(&obj->cob_lock);
 	if (obj_is_modification_opc(opc))
 		invalid_shard = obj->cob_shards->do_shards[shard_idx].do_target_id == -1 ||
 				obj->cob_shards->do_shards[shard_idx].do_shard == -1;
@@ -1912,10 +1912,21 @@ obj_shard_is_invalid(struct dc_object *obj, uint32_t shard_idx, uint32_t opc)
 		invalid_shard = obj->cob_shards->do_shards[shard_idx].do_rebuilding ||
 				obj->cob_shards->do_shards[shard_idx].do_target_id == -1 ||
 				obj->cob_shards->do_shards[shard_idx].do_shard == -1;
-	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	return invalid_shard || (DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_OPEN) &&
 				 daos_shard_in_fail_value(shard_idx));
+}
+
+static inline bool
+obj_shard_is_invalid(struct dc_object *obj, uint32_t shard_idx, uint32_t opc)
+{
+	bool invalid_shard;
+
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	invalid_shard = obj_shard_is_invalid_locked(obj, shard_idx, opc);
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
+	return invalid_shard;
 }
 
 /**
@@ -1964,10 +1975,8 @@ obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard)
 		D_DEBUG(DB_TRACE, "shard %u %d/%d/%d/%d/%d\n", shard_idx, obj_shard->do_rebuilding,
 			obj_shard->do_reintegrating, obj_shard->do_target_id, obj_shard->do_shard,
 			obj_shard->do_shard_idx);
-		if (!obj_shard->do_rebuilding && !obj_shard->do_reintegrating &&
-		    obj_shard->do_target_id != -1 && obj_shard->do_shard != -1 &&
-		    !(DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_OPEN) &&
-		      daos_shard_in_fail_value(shard_idx))) {
+		if (!obj_shard_is_invalid_locked(obj, shard_idx, DAOS_OBJ_RPC_FETCH) &&
+		    !obj_shard->do_reintegrating) {
 			if (shard != NULL)
 				*shard = p_shard % daos_oclass_grp_size(&obj->cob_oca) +
 					 grp_idx * daos_oclass_grp_size(&obj->cob_oca);
@@ -5275,9 +5284,14 @@ obj_comp_cb(tse_task_t *task, void *data)
 	     (obj_is_modification_opc(obj_auxi->opc) && task->dt_result == 0))) {
 		int	idx;
 
-		D_RWLOCK_WRLOCK(&obj->cob_lock);
-		if (obj->cob_version == obj_auxi->map_ver_req &&
-		    obj->cob_time_fetch_leader != NULL) {
+		D_RWLOCK_RDLOCK(&obj->cob_lock);
+		if (obj->cob_version != obj_auxi->map_ver_req) {
+			D_DEBUG(DB_IO,
+				DF_OID " skip leader fetch timestamp update: "
+				       "current map version %u differs from request version %u\n",
+				DP_OID(obj->cob_md.omd_id), obj->cob_version,
+				obj_auxi->map_ver_req);
+		} else if (obj->cob_time_fetch_leader != NULL) {
 			idx = obj_auxi->req_tgts.ort_shard_tgts->st_shard / obj_get_grp_size(obj);
 			if (idx < obj->cob_grp_nr)
 				obj->cob_time_fetch_leader[idx] = daos_gettime_coarse();
@@ -7038,7 +7052,7 @@ obj_list_shards_get(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 			D_RWLOCK_UNLOCK(&obj->cob_lock);
 			D_GOTO(out, rc = -DER_STALE);
 		}
-		grp_idx = obj_shard2grpidx(obj, *shard);
+		grp_idx = *shard / obj_get_replicas(obj);
 		D_RWLOCK_UNLOCK(&obj->cob_lock);
 	} else {
 		if (args->dkey != NULL) {
