@@ -100,7 +100,7 @@ class DdbCommand(DdbCommandBase):
         """Clear self.ddb_command.
 
         This method is needed to handle the inconsistent ddb command (or subcommand) pattern between
-        the folloing two groups:
+        the following two groups:
 
         1. prov_mem and rm_pool.
         * Subcommand comes near the beginning. e.g.,

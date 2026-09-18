@@ -130,7 +130,7 @@ class PoolListConsolidationTest(TestWithServers):
                 f"if mountpoint -q {tmpfs_mount}; then rc=1; "
                 f"else rm -rf {tmpfs_mount} || rc=1; fi")
         commands.append("exit $rc")
-        command_str ="; ".join(commands)
+        command_str = "; ".join(commands)
         command = command_as_user(command=f"sh -c '{command_str}'", user="root")
         result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command)
         if not result.passed:
