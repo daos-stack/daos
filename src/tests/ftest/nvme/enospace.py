@@ -770,7 +770,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                 "transfer_size": transfer_size,
                 "block_size": block_size}
         )
-        if result["result"].exit_status != 0:
+        if result.exit_status != 0:
             self.fail("Errors running ior")
         return get_ior_metrics(result)
 
