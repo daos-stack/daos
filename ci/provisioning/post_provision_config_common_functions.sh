@@ -11,14 +11,26 @@ set -eux
 : "${DAOS_STACK_RETRY_DELAY_SECONDS:=60}"
 : "${DAOS_STACK_RETRY_COUNT:=3}"
 : "${DAOS_STACK_MONITOR_SECONDS:=600}"
+: "${DAOS_STACK_NON_RETRY_EXIT_CODES:=2 126 127}"
 : "${BUILD_URL:=Not_in_jenkins}"
-: "${STAGE_NAME:=Unknown_Stage}"
+: "${STAGE_NAME:=post_provision_config}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
 : "${JENKINS_URL:=https://jenkins.example.com}"
 domain1="${JENKINS_URL#https://}"
 mail_domain="${domain1%%/*}"
 : "${EMAIL_DOMAIN:=$mail_domain}"
 : "${DAOS_DEVOPS_EMAIL:="$HOSTNAME"@"$EMAIL_DOMAIN"}"
+: "${DAOS_SMTP_RELAY:=}"
+
+# Global error-code constants used by provisioning scripts.
+# These are used for to for nested retry loops to be aborted when
+# a fatal error is encountered.
+ERROR_FATAL=2
+ERROR_RETRY=1
+
+# Needed to keep the shellcheck happy.
+export ERROR_FATAL
+export ERROR_RETRY
 
 # functions common to more than one distro specific provisioning
 url_to_repo() {
@@ -80,6 +92,58 @@ dump_repos() {
         cat "$file"
     done
 }
+
+configure_postfix_relay() {
+    # Enable and start postfix on all distros that have it.
+    # This is done unconditionally so mail delivery works on LEAP/SLES as
+    # well as EL without requiring distro-specific bootstrap hooks.
+    local postfix_start_exit=0
+    if command -v systemctl >/dev/null 2>&1 && command -v postfix >/dev/null 2>&1; then
+        systemctl enable postfix.service 2>/dev/null || true
+        systemctl start postfix.service 2>/dev/null || postfix_start_exit=$?
+        if [ $postfix_start_exit -ne 0 ]; then
+            echo "WARNING: Postfix not started: $postfix_start_exit"
+            systemctl status postfix.service || true
+        fi
+    fi
+
+    # Apply optional site-specific relay override.
+    local relay="${DAOS_SMTP_RELAY:-}"
+    local normalized=""
+    local host=""
+    local port=""
+
+    relay="${relay//[[:space:]]/}"
+    if [ -z "$relay" ]; then
+        return 0
+    fi
+
+    if ! command -v postconf >/dev/null 2>&1; then
+        echo "WARNING: DAOS_SMTP_RELAY is set, but postconf is not available"
+        return 0
+    fi
+
+    # Normalize relayhost format for Postfix direct host relay.
+    if [[ "$relay" == \[*\] ]] || [[ "$relay" == \[*\]:* ]]; then
+        normalized="$relay"
+    elif [[ "$relay" == *:* ]] && [[ "$relay" != *:*:* ]] && [[ "${relay#*:}" =~ ^[0-9]+$ ]]; then
+        host="${relay%%:*}"
+        port="${relay##*:}"
+        normalized="[$host]:$port"
+    else
+        normalized="[$relay]"
+    fi
+
+    echo "INFO: Setting postfix relayhost from DAOS_SMTP_RELAY to '$normalized'"
+    postconf -e "relayhost = $normalized"
+    # Reload so the running daemon picks up the new relayhost.
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl reload postfix.service 2>/dev/null || \
+            systemctl restart postfix.service 2>/dev/null || true
+    fi
+    postconf -nh relayhost || true
+}
+
 retry_dnf() {
     local monitor_threshold="$1"
     shift
@@ -88,7 +152,9 @@ retry_dnf() {
     local attempt=0
     local rc=0
     while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
-        if monitor_cmd "$monitor_threshold" "${args[@]}"; then
+        rc=0
+        monitor_cmd "$monitor_threshold" "${args[@]}" || rc=$?
+        if [ "$rc" -eq 0 ]; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
                 # shellcheck disable=SC2154
@@ -107,7 +173,6 @@ retry_dnf() {
             return 0
         fi
         # Command failed, retry
-        rc=${PIPESTATUS[0]}
         (( attempt++ )) || true
         if [ "$attempt" -gt 0 ]; then
             # shellcheck disable=SC2154
@@ -177,8 +242,11 @@ retry_cmd() {
 
     local attempt=0
     local rc=0
+    local non_retry_codes=" ${DAOS_STACK_NON_RETRY_EXIT_CODES} "
     while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
-        if monitor_cmd "$monitor_threshold" "$@"; then
+        rc=0
+        monitor_cmd "$monitor_threshold" "$@" || rc=$?
+        if [ "$rc" -eq 0 ]; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
                 send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
@@ -186,8 +254,10 @@ retry_cmd() {
             fi
             return 0
         fi
-        # Command failed, retry
-        rc=${PIPESTATUS[0]}
+        if [[ "$non_retry_codes" == *" $rc "* ]]; then
+            echo "Command retry aborted for non-retryable exit status: $rc"
+            break
+        fi
         (( attempt++ )) || true
         if [ "$attempt" -gt 0 ]; then
             sleep "${RETRY_DELAY_SECONDS:-$DAOS_STACK_RETRY_DELAY_SECONDS}"
@@ -211,7 +281,9 @@ timeout_cmd() {
     local attempt=0
     local rc=1
     while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
-        if monitor_cmd "$DAOS_STACK_MONITOR_SECONDS" timeout "$timeout" "$@"; then
+        rc=0
+        monitor_cmd "$DAOS_STACK_MONITOR_SECONDS" timeout "$timeout" "$@" || rc=$?
+        if [ "$rc" -eq 0 ]; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
                 send_mail "Command timeout successful in $STAGE_NAME after $attempt attempts" \
@@ -219,7 +291,6 @@ timeout_cmd() {
             fi
             return 0
         fi
-        rc=${PIPESTATUS[0]}
         if [ "$rc" = "124" ]; then
             # Command timed out, try again
             (( attempt++ )) || true
