@@ -14,7 +14,7 @@ server_config:
 pool:
   size: 50%
   svcn: 1
-  properties: "rd_fac:0,space_rb:0"
+  properties: "space_rb:0"
 
 container:
   type: POSIX
