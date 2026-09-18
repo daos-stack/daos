@@ -102,7 +102,7 @@ RUN if [ -n "$JENKINS_URL" ]; then \
 # Add DAOS users
 ARG DAOS_SERVER_UID
 RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos/daos-server-user-setup.sh \
-    TARGET_UID="${DAOS_SERVER_UID:-1000}" /tmp/daos/daos-server-user-setup.sh;
+    UID="${DAOS_SERVER_UID:-1000}" /tmp/daos/daos-server-user-setup.sh;
 
 # Create directory for DAOS build backend storage
 RUN mkdir -p /home/daos /opt/daos && \
