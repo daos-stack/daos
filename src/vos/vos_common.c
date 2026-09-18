@@ -284,15 +284,15 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts,
 	   bool started, struct bio_desc *biod, int err)
 {
-	struct vos_pool         	*pool;
-	struct umem_instance		*umm;
-	struct dtx_handle		*dth = dth_in;
-	struct vos_dtx_act_ent		*dae;
-	struct vos_dtx_act_ent_df	*dae_df;
-	struct dtx_rsrvd_uint		*dru;
-	struct vos_dtx_cmt_ent		*dce = NULL;
-	struct dtx_handle		 tmp = {0};
-	int				 rc = 0;
+	struct vos_pool           *pool;
+	struct umem_instance      *umm;
+	struct dtx_handle         *dth = dth_in;
+	struct vos_dtx_act_ent    *dae;
+	struct vos_dtx_act_ent_df *dae_df;
+	struct dtx_rsrvd_uint     *dru;
+	struct dtx_handle          tmp = {0};
+	int                        rc  = 0;
+	bool                       cmt = false;
 
 	if (!dtx_is_valid_handle(dth)) {
 		/** Created a dummy dth handle for publishing extents */
@@ -350,7 +350,7 @@ commit:
 	dth->dth_local_tx_started = 0;
 
 	if (dtx_is_valid_handle(dth_in) && err == 0 && !dth->dth_local)
-		err = vos_dtx_prepared(dth, &dce);
+		err = vos_dtx_prepared(dth, &cmt);
 
 	if (err == 0)
 		err = vos_tx_publish(dth, true);
@@ -395,9 +395,9 @@ cancel:
 				    cont->vc_solo_dtx_epoch < dth->dth_epoch)
 					cont->vc_solo_dtx_epoch = dth->dth_epoch;
 
-				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0, false);
+				vos_dtx_post_handle(cont, &dae, &cmt, 1, false, err != 0, false);
 			} else {
-				D_ASSERT(dce == NULL);
+				D_ASSERT(!cmt);
 				if (err == 0 && dth->dth_active) {
 					D_ASSERTF(!UMOFF_IS_NULL(dae->dae_df_off),
 						  "Non-prepared DTX " DF_DTI "\n",

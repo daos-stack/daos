@@ -20,16 +20,6 @@
 
 static bool corpc_hdlr_called = false;
 
-static int
-corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
-{
-	return 0;
-}
-
-struct crt_corpc_ops corpc_set_ivns_ops = {
-	.co_aggregate = corpc_aggregate,
-};
-
 static void
 corpc_hdlr(crt_rpc_t *rpc)
 {
@@ -101,7 +91,7 @@ static struct crt_proto_rpc_format proto_rpc_fmt[] = {{
 							  .prf_flags   = 0,
 							  .prf_req_fmt = &CQF_basic_corpc,
 							  .prf_hdlr    = corpc_hdlr,
-							  .prf_co_ops  = &corpc_set_ivns_ops,
+							  .prf_co_ops  = NULL,
 						      },
 						      {
 							  .prf_flags   = 0,

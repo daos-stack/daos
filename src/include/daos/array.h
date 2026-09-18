@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +16,7 @@
 
 /** limits for list io write/read */
 extern unsigned int array_list_io_limit;
+extern unsigned int array_rg_len_thd;
 void
     daos_array_env_init();
 

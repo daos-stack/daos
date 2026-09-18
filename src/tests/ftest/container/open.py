@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -90,7 +91,7 @@ class OpenContainerTest(TestWithServers):
         container_uuids = []
         for _ in range(2):
             self.pool.append(self.get_pool())
-            self.container.append(self.get_container(pool=self.pool[-1]))
+            self.container.append(self.get_container(self.pool[-1]))
             container_uuids.append(uuid.UUID(self.container[-1].uuid))
 
         # Decide which pool handle and container UUID to use. The PASS/FAIL

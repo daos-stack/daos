@@ -232,8 +232,7 @@ ddb_print_ilog_entry(struct ddb_ctx *ctx, struct ddb_ilog_entry *entry)
 void
 ddb_print_dtx_committed(struct ddb_ctx *ctx, struct dv_dtx_committed_entry *entry)
 {
-	ddb_printf(ctx, "ID: "DF_DTIF"\n", DP_DTI(&entry->ddtx_id));
-	ddb_printf(ctx, "\tEpoch: "DF_U64"\n", entry->ddtx_epoch);
+	ddb_printf(ctx, "ID: " DF_DTIF "\n", DP_DTI(&entry->ddtx_id));
 }
 
 void

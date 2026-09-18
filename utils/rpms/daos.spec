@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.9.100
-Release:       5%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 Obsoletes:     daos-firmware
 

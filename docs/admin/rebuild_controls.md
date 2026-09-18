@@ -175,7 +175,9 @@ $ dmg pool reintegrate --ranks=3 p1
 ```
 
 Run `dmg pool query` a few times, possibly with the `--health-only` option, and not too
-frequently.
+frequently. (Alternatively, `dmg pool reintegrate --wait[=TIMEOUT] ...` blocks until the
+rebuild it triggers reaches a terminal state, which avoids the polling loop entirely; the
+same option is accepted by `dmg pool exclude`, `drain` and `extend`.)
 
 First, it may be seen that the pool map has been updated for the reintegrating engine rank 3
 (pool map `version=85` instead of 77, and targets `disabled=0` instead of 8). And it could be

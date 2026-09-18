@@ -1189,6 +1189,12 @@ ival_drop_inode(struct dfuse_inode_entry *inode);
 int
 ival_update_inode(struct dfuse_inode_entry *inode, double timeout);
 
+/* Queue an on-demand dentry invalidation (parent/name) to be issued from the invalidation thread.
+ * ie_drop, if non-NULL, is a reference that is released after the invalidation has been issued.
+ */
+int
+dfuse_mark_inval_entry(fuse_ino_t parent, const char *name, struct dfuse_inode_entry *ie_drop);
+
 int
 ival_init(struct dfuse_info *dfuse_info);
 

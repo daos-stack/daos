@@ -26,6 +26,3 @@ setup:
 
 pool:
   size: 100G
-
-container:
-  control_method: daos

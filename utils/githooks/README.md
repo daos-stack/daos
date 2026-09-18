@@ -1,3 +1,9 @@
+<!--
+   Copyright 2026 Hewlett Packard Enterprise Development LP
+
+   SPDX-License-Identifier: BSD-2-Clause-Patent
+-->
+
 # About DAOS Git hooks
 
 Githooks are a [well documented](https://git-scm.com/docs/githooks) feature
@@ -14,7 +20,8 @@ Installing is a two-step process:
 
 ### 1. Install the hooks
 
-Configure your `core.hookspath`.  
+Configure your `core.hookspath`.
+
 Any new githooks added to the repository will automatically run,
 but possibly require additional software to produce the desired effect.
 Additionally, as the branch changes, the githooks change with it.
@@ -32,25 +39,36 @@ The Githooks framework in DAOS is such that the hooks will all run.
 However, some hooks will simply check for required software and are
 effectively a noop if such is not installed.
 
-Requirements come from a combination of `pip` and system packages and can usually be installed through standard means.  
+Requirements come from a combination of `pip` and system packages and can usually be installed
+through standard means.
 
 #### Install pip packages
-To install `pip` packages specified in [utils/cq/requirements.txt](../../utils/cq/requirements.txt) it is recommended to setup a virtual environment and install with pip.  
-It is recommended to use python 3.11, but you need at least 3.10 to get the latest version of each package.  
+
+To install `pip` packages specified in [utils/cq/requirements.txt](../../utils/cq/requirements.txt)
+it is recommended to setup a virtual environment and install with pip.
+It is recommended to use python 3.11, but you need at least 3.10 to get the latest version of each
+package.
+
 You can setup a virtual environment with:
+
 ```sh
 python3.11 -m venv /path/to/my_env
 ```
+
 Then, to use it:
+
 ```sh
 source /path/to/my_env/bin/activate
 ```
+
 Then, to install the requirements:
+
 ```sh
 python3 -m pip install -r utils/cq/requirements.txt
 ```
 
 #### Install System Packages
+
 Install system packages with your package manager - for example:
 
 ```sh
@@ -108,7 +126,8 @@ allowing the user to inspect the changes and retry the commit.
 7. isort - Linter for python imports on modified python files
 8. flake - Linter for python files
 9. pylint - Additional linter for modified python files
-   - See [daos_pylint.py](../../utils/cq/daos_pylint.py) for a custom wrapper around `pylint` which manages `PYTHONPATH` setup internally.
+   - See [daos_pylint.py](../../utils/cq/daos_pylint.py) for a custom wrapper around `pylint` which
+     manages `PYTHONPATH` setup internally.
 10. ftest - Custom linter for modified ftest files
 
 ### prepare-commit-msg

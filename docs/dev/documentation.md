@@ -125,7 +125,7 @@ Depending on the operation system and Python environment,
 prerequisite software and the mkdocs plugins may have to be explicitly
 installed. For example, on a Windows laptop running Cygwin:
 
-```
+```sh
 pip3 install alabaster sphinxcontrib-applehelp sphinxcontrib-devhelp sphinxcontrib-htmlhelp sphinxcontrib-jsmath sphinxcontrib-qthelp
 
 pip3 install --user mkdocs
@@ -141,7 +141,7 @@ To create the DAOS documentation webpages, it is recommended to work
 on a clone of the DAOS project on github that is **separate** from any
 checked out version that may be used for code development work.
 
-```
+```sh
 cd ~/dev
 git clone git@github.com:daos-stack/daos.git daos-website
 cd daos-website
@@ -170,14 +170,14 @@ For each DAOS release branch that should get included on the website:
    and optional alias name(s) for this release.
    These will be used in the multi-versioned website's navigation system.
 
-  - `mike` first uses `mkdocs` to create a temporary copy of the
+  * `mike` first uses `mkdocs` to create a temporary copy of the
     static webpages for this release in the `site/` subdirectory.
 
-  - `mike` will then copy that `site/` contents into the temporary `gh-pages`
+  * `mike` will then copy that `site/` contents into the temporary `gh-pages`
     branch, with a directory name that matches the release name
     specified on the `mike deploy` invocation.
 
-  - Any aliases for that release will be created as symlinks in the
+  * Any aliases for that release will be created as symlinks in the
     `gh-pages` branch, pointing to the directory with the main release name.
 
 This process is repeated for each release. After all versions have been
@@ -190,7 +190,7 @@ A complete example for a website where DAOS 2.6 is the current "latest"
 version, and the master branch is the "2.7" development branch for what
 will eventually become DAOS 2.8:
 
-```
+```sh
 mike delete --all
 
 git checkout master
@@ -218,7 +218,7 @@ mike list
 After `release/2.8` has been branched, but before it becomes generally
 available (GA), the website version structure should be updated like this:
 
-```
+```sh
 mike delete master # will also delete the v2.7 v2.8 aliases
 
 git checkout master
@@ -239,7 +239,7 @@ mike list
 And finally, when DAOS version 2.8 is released this will be set
 as the new `latest` release:
 
-```
+```sh
 mike delete rc
 mike delete latest
 
@@ -273,7 +273,7 @@ As a best practice, a new website version is first deployed in a
 staging area so it can be validated in the same webserver environment
 in which the live website is running:
 
-```
+```sh
 export WEBSERVER="docs.daos.io"
 export TARFILE="docs-daos-io.tgz"
 
@@ -299,7 +299,7 @@ To make the website in the staging area the active website, there's a small
 `go-live.sh` script on the webserver that will archive the current live
 version and replace it with the one in the staging area:
 
-```
+```sh
 $ cat go-live.sh
 D=`date "+%Y-%m-%d"`
 mv docs.daos.io old-docs.daos.io.$D
@@ -337,13 +337,61 @@ If the spell checker reports an error for a legitimate word
 (or acronym), the error can be resolved by adding the term to the
 wordlist that is maintained in the `utils/cq/words.dict` file.
 
+### VS Code cSpell Setup
+
+Visual Studio Code CodeSpell plugin works differently than the Daos CI
+spell checker because it uses cSpell.
+
+To align local VS Code spell checking with DAOS word lists,
+configure the workspace to load the same files used by repository checks.
+
+What this helps you with is that the VS Code IDE will not flag words known
+to DAOS as spelling errors.
+
+As VS CODE will flag many more false positives than DAOS CI, you should use
+the add words to workspace or user settings for what the IDE detects.
+
+Use a workspace settings file at `.vscode/settings.json`
+and include dictionary entries for:
+
+* `ci/codespell.ignores`
+* `utils/cq/words.dict`
+
+Example:
+
+```json
+{
+  "cSpell.customDictionaries": {
+    "daosCodespellIgnores": {
+      "name": "daosCodespellIgnores",
+      "path": "${workspaceFolder}/ci/codespell.ignores",
+      "addWords": false,
+      "scope": "workspace"
+    },
+    "daosWordsDict": {
+      "name": "daosWordsDict",
+      "path": "${workspaceFolder}/utils/cq/words.dict",
+      "addWords": false,
+      "scope": "workspace"
+    }
+  },
+  "cSpell.dictionaries": [
+    "daosCodespellIgnores",
+    "daosWordsDict"
+  ]
+}
+```
+
+This keeps personal word lists separate while preserving behavior
+consistent with DAOS spell-check inputs.
+
 ### Always call mike on a release branch, not gh-pages
 
 You must be in an actual DAOS release branch,
 not in the `gh-pages` branch, to run mike commands.
 Otherwise  the tool will report errors like this:
 
-```
+```sh
 $ git branch
 * gh-pages
   master
@@ -351,4 +399,3 @@ $ git branch
 $ mike list
 error: [Errno 2] No such file or directory: 'mkdocs.yml'; pass --config-file or set --remote/--branch explicitly
 ```
-

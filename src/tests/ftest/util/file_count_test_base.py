@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -78,7 +79,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         mdtest_oclass = self.params.get("mdtest_oclass", '/run/largefilecount/object_class/*')
 
         # create pool
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
         for api in apis:
             self.ior_cmd.api.update(api)

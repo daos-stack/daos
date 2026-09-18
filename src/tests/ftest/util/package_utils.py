@@ -1,6 +1,6 @@
 """
 (C) Copyright 2023-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -94,9 +94,9 @@ class Version():
 
         try:
             version_match = re.match(r'^v?([0-9]+)\.([0-9]+)\.([0-9]+)', self.__version)
-            self.major = version_match.group(1)
-            self.minor = version_match.group(2)
-            self.patch = version_match.group(3)
+            self.major = int(version_match.group(1))
+            self.minor = int(version_match.group(2))
+            self.patch = int(version_match.group(3))
         except (AttributeError, IndexError) as error:
             raise ValueError(f'Invalid version string {self.__version}') from error
 

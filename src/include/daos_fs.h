@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -465,6 +465,11 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid);
  * Lookup a path in the DFS and return the associated open object and mode.
  * The object must be released with dfs_release().
  *
+ * Symlinks along the path, and the last one unless O_NOFOLLOW is passed, are
+ * followed within the container. DFS has no notion of the process root, so a
+ * symlink with an absolute value cannot be followed and the lookup fails with
+ * EINVAL; the caller has to resolve such a value itself.
+ *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	path	Path to lookup.
  * \param[in]	flags	Access flags to open with (O_RDONLY or O_RDWR).
@@ -480,9 +485,11 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
 
 /**
  * Lookup an entry in the parent object and return the associated open object
- * and mode of that entry.  If the entry is a symlink, the symlink value is not
- * resolved and the user can decide what to do to further resolve the value of
- * the symlink. The object must be released with dfs_release().
+ * and mode of that entry.  If the entry is a symlink, it is followed unless
+ * O_NOFOLLOW is passed, in which case the symlink object itself is returned and
+ * the user can decide how to resolve its value. A symlink with an absolute
+ * value cannot be followed, see dfs_lookup().
+ * The object must be released with dfs_release().
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
@@ -627,8 +634,10 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.
  * \param[in]	iod	IO descriptor for list-io.
- *			There is a limit on the number of descriptors (DAOS_ARRAY_LIST_IO_LIMIT) if
- *			the length on the ranges are under DAOS_ARRAY_RG_LEN_THD.
+ *			A long run of extents at or below DAOS_ARRAY_RG_LEN_THD bytes landing on
+ *			the same dkey is split into several RPCs of at most
+ *			DAOS_ARRAY_LIST_IO_LIMIT such extents, and consecutive splits of a dkey
+ *			are issued one at a time. Ranges above that size are issued as before.
  * \param[in]	sgl	Scatter/Gather list for data buffer.
  * \param[out]	read_size
  *			How much data is actually read.
@@ -663,8 +672,12 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.
  * \param[in]	iod	IO descriptor for list-io.
- *			There is a limit on the number of descriptors (DAOS_ARRAY_LIST_IO_LIMIT) if
- *			the length on the ranges are under DAOS_ARRAY_RG_LEN_THD.
+ *			A long run of extents at or below DAOS_ARRAY_RG_LEN_THD bytes landing on
+ *			the same dkey is split into several RPCs of at most
+ *			DAOS_ARRAY_LIST_IO_LIMIT such extents, and consecutive splits of a dkey
+ *			are issued one at a time. Ranges above that size are issued as before. A
+ *			dkey can therefore be updated by more than one RPC, so a failure can
+ *			leave it with some ranges applied and earlier ones missing.
  * \param[in]	sgl	Scatter/Gather list for data buffer.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
