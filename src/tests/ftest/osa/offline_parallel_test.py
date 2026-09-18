@@ -49,7 +49,7 @@ class OSAOfflineParallelTest(OSAUtils):
         try:
             if action == "reintegrate":
                 self.log.info("Interrupt rebuild with reintegrate")
-                time.sleep(5)
+                time.sleep(45)
                 # If we are performing start/stop of the server, skip the reintegrate action.
                 if self.server_boot:
                     return
