@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var errNoRanks = errors.New("no ranks or hosts specified")
@@ -178,7 +179,19 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 		return err
 	}
 
-	return resp.Errors()
+	// After successful erase, the system is uninitialized (as expected).
+	// Check if the error is just the expected uninitialized state.
+	if respErr := resp.Errors(); respErr != nil {
+		if system.IsUninitialized(respErr) {
+			// System erase successful - system is now ready for format
+			cmd.Printf("System erase successful. System is now uninitialized and ready for 'dmg storage format'.\n")
+			return nil
+		}
+		return respErr
+	}
+
+	cmd.Printf("System erase successful. System is now ready for 'dmg storage format'.\n")
+	return nil
 }
 
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
