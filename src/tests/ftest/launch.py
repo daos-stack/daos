@@ -269,8 +269,13 @@ class Launch():
         # A list of server hosts is required
         if not args.test_servers and not args.list:
             return self.get_exit_status(1, "Missing required '--test_servers' argument", "Setup")
-        logger.info("Testing with hosts:       %s", args.test_servers.union(args.test_clients))
-        self.details["test hosts"] = str(args.test_servers.union(args.test_clients))
+        all_hosts = args.test_servers.union(args.test_clients)
+        logger.info("Testing with hosts:       %s", all_hosts)
+        self.details["test hosts"] = str(all_hosts)
+        if not args.list and self.local_host not in all_hosts:
+            return self.get_exit_status(
+                1, f"Local host {self.local_host} required in --test_servers or --test_clients",
+                "Setup")
 
         # Add the installed packages to the details json
         # pylint: disable=unsupported-binary-operation
@@ -359,7 +364,7 @@ class Launch():
         try:
             group.update_test_yaml(
                 logger, args.scm_size, args.scm_mount, args.extra_yaml,
-                args.timeout_multiplier, args.override, args.verbose, args.include_localhost)
+                args.timeout_multiplier, args.override, args.verbose)
         except (RunException, YamlException) as e:
             message = f"Error modifying the test yaml files: {e}"
             status |= self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -565,10 +570,6 @@ def main():
         action="store_true",
         help="stop the test suite after the first failure")
     parser.add_argument(
-        "-i", "--include_localhost",
-        action="store_true",
-        help="include the local host when cleaning and archiving")
-    parser.add_argument(
         "-ins", "--insecure_mode",
         action="store_true",
         help="Launch test with insecure-mode")
@@ -735,7 +736,6 @@ def main():
     # Override arguments via the mode
     if args.mode == "ci":
         args.archive = True
-        args.include_localhost = True
         args.jenkinslog = True
         args.overwrite_config = True    # to ensure CI expected path is used for test results
         args.process_cores = True
