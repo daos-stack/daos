@@ -219,7 +219,7 @@ func (a *Args) BoolList(name, help string, opts ...ArgOption) {
 func (a *Args) Int(name, help string, opts ...ArgOption) {
 	a.register(name, help, "int", false,
 		func(args []string, res ArgMap) ([]string, error) {
-			i, err := strconv.Atoi(args[0])
+			i, err := strToInt(args[0])
 			if err != nil {
 				return nil, fmt.Errorf("invalid int value '%s' for argument: %s", args[0], name)
 			}
@@ -240,7 +240,7 @@ func (a *Args) IntList(name, help string, opts ...ArgOption) {
 				is  = make([]int, len(args))
 			)
 			for i, a := range args {
-				is[i], err = strconv.Atoi(a)
+				is[i], err = strToInt(a)
 				if err != nil {
 					return nil, fmt.Errorf("invalid int value '%s' for argument: %s", a, name)
 				}
@@ -257,7 +257,7 @@ func (a *Args) IntList(name, help string, opts ...ArgOption) {
 func (a *Args) Int64(name, help string, opts ...ArgOption) {
 	a.register(name, help, "int64", false,
 		func(args []string, res ArgMap) ([]string, error) {
-			i, err := strconv.ParseInt(args[0], 10, 64)
+			i, err := strToInt64(args[0])
 			if err != nil {
 				return nil, fmt.Errorf("invalid int64 value '%s' for argument: %s", args[0], name)
 			}
@@ -278,7 +278,7 @@ func (a *Args) Int64List(name, help string, opts ...ArgOption) {
 				is  = make([]int64, len(args))
 			)
 			for i, a := range args {
-				is[i], err = strconv.ParseInt(a, 10, 64)
+				is[i], err = strToInt64(a)
 				if err != nil {
 					return nil, fmt.Errorf("invalid int64 value '%s' for argument: %s", a, name)
 				}
@@ -295,7 +295,7 @@ func (a *Args) Int64List(name, help string, opts ...ArgOption) {
 func (a *Args) Uint(name, help string, opts ...ArgOption) {
 	a.register(name, help, "uint", false,
 		func(args []string, res ArgMap) ([]string, error) {
-			u, err := strconv.ParseUint(args[0], 10, 64)
+			u, err := strToUint(args[0])
 			if err != nil {
 				return nil, fmt.Errorf("invalid uint value '%s' for argument: %s", args[0], name)
 			}
@@ -313,15 +313,13 @@ func (a *Args) UintList(name, help string, opts ...ArgOption) {
 		func(args []string, res ArgMap) ([]string, error) {
 			var (
 				err error
-				u   uint64
 				is  = make([]uint, len(args))
 			)
 			for i, a := range args {
-				u, err = strconv.ParseUint(a, 10, 64)
+				is[i], err = strToUint(a)
 				if err != nil {
 					return nil, fmt.Errorf("invalid uint value '%s' for argument: %s", a, name)
 				}
-				is[i] = uint(u)
 			}
 
 			res[name] = &ArgMapItem{Value: is}
@@ -335,7 +333,7 @@ func (a *Args) UintList(name, help string, opts ...ArgOption) {
 func (a *Args) Uint64(name, help string, opts ...ArgOption) {
 	a.register(name, help, "uint64", false,
 		func(args []string, res ArgMap) ([]string, error) {
-			u, err := strconv.ParseUint(args[0], 10, 64)
+			u, err := strToUint64(args[0])
 			if err != nil {
 				return nil, fmt.Errorf("invalid uint64 value '%s' for argument: %s", args[0], name)
 			}
@@ -356,7 +354,7 @@ func (a *Args) Uint64List(name, help string, opts ...ArgOption) {
 				us  = make([]uint64, len(args))
 			)
 			for i, a := range args {
-				us[i], err = strconv.ParseUint(a, 10, 64)
+				us[i], err = strToUint64(a)
 				if err != nil {
 					return nil, fmt.Errorf("invalid uint64 value '%s' for argument: %s", a, name)
 				}
