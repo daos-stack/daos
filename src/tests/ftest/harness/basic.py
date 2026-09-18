@@ -97,6 +97,16 @@ class HarnessBasicTest(TestWithoutServers):
         """
         self.test_load_mpi()
 
+    def test_load_mpi_hw_provider(self):
+        """Simple test of apricot test code to load the openmpi module.
+
+        :avocado: tags=all
+        :avocado: tags=hw,medium,large,provider
+        :avocado: tags=harness,harness_basic_test,load_mpi
+        :avocado: tags=HarnessBasicTest,test_load_mpi_hw_provider
+        """
+        self.test_load_mpi()
+
     def test_sub_process_command(self):
         """Simple test of the SubProcessCommand object.
 
