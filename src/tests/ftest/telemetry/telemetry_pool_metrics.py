@@ -186,10 +186,14 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         for name in expected_values:
             val = metrics[name]
             min_val, max_val = expected_values[name]
-            self.assertTrue(
-                min_val <= val <= max_val,
+            self.assertLessEqual(
+                min_val, val,
                 "Aggregated value of the metric {} for oclass {} is invalid: "
-                "got={}, wait_in=[{}, {}]".format(name, self.dfs_oclass, val, min_val, max_val))
+                "got={} > wait_in min{}".format(name, self.dfs_oclass, val, min_val))
+            self.assertLessEqual(
+                val, max_val,
+                "Aggregated value of the metric {} for oclass {} is invalid: "
+                "got={} > wait_in max{}".format(name, self.dfs_oclass, val, max_val))
             self.log.debug(
                 "Successfully check the metric %s for oclass %s: "
                 "got=%d, wait_in=[%d, %d]", name, self.dfs_oclass, val, min_val, max_val)
