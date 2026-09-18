@@ -1449,16 +1449,22 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_UNAVAILABLE;
 	}
 
-	/*
-	 * Up layer rebuild logic guarantees that the rebuild scan will not be
-	 * triggered until DTX resync has been done on all related targets. So
-	 * here, if rebuild logic hits non-committed DTX entry, it must be for
-	 * new IO that version is not older than rebuild, then it is invisible
-	 * to rebuild. Related new IO corresponding to such non-committed DTX
-	 * has already been sent to the in-rebuilding target.
-	 */
-	if (intent == DAOS_INTENT_MIGRATION)
+	if (intent == DAOS_INTENT_MIGRATION) {
+		/*
+		 * A non-ready DTX inside the migration snapshot may still be modifying the
+		 * rebuilding shard. Restart rebuild with a new stable epoch rather than
+		 * migrating a view that can change after this check.
+		 */
+		if (dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch) {
+			D_WARN("Non-ready DTX " DF_DTI " at " DF_X64 " (version %u)"
+			       " conflicts with migration boundary " DF_X64 " (version %u)\n",
+			       DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae), dth->dth_epoch,
+			       dth->dth_ver);
+			return -DER_VOS_PARTIAL_UPDATE;
+		}
+
 		return ALB_UNAVAILABLE;
+	}
 
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))

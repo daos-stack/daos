@@ -84,7 +84,7 @@ struct dc_tx {
 	uint32_t                 tx_fixed_epoch : 1,                      /** epoch is specified. */
 	    tx_retry : 1, /** Retry the commit RPC. */ tx_set_resend : 1, /** Set 'resend' flag. */
 	    tx_for_convert : 1, tx_has_cond : 1, tx_renew : 1, tx_closed : 1, tx_reintegrating : 1,
-	    tx_maybe_starve : 1;
+	    tx_rebuilding : 1, tx_maybe_starve : 1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
 	/** The rank for the server on which the TX leader resides. */
@@ -1348,6 +1348,8 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		if (shard->do_reintegrating)
 			tx->tx_reintegrating = 1;
+		if (!read && shard->do_rebuilding)
+			tx->tx_rebuilding = 1;
 		/*
 		 * NOTE: It is possible that more than one shards locate on the same DAOS target
 		 *	 under OSA mode, then the shard_idx may be not equal to "shard->do_shard".
@@ -2320,6 +2322,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	tx->tx_renew = 0;
 	if (tx->tx_reintegrating)
 		oci->oci_flags |= ORF_REINTEGRATING_IO;
+	if (tx->tx_rebuilding)
+		oci->oci_flags |= ORF_REBUILDING_IO;
 	if (tx->tx_write_cnt == 0)
 		oci->oci_flags |= ORF_CPD_RDONLY;
 
@@ -2601,6 +2605,7 @@ dc_tx_restart_end(struct dc_tx *tx)
 	tx->tx_status = TX_OPEN;
 	tx->tx_pm_ver = 0;
 	tx->tx_epoch.oe_value = 0;
+	tx->tx_rebuilding     = 0;
 }
 
 /**
