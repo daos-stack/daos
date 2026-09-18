@@ -353,6 +353,7 @@ post_provision_config_nodes() {
         last_pci_bus="$pci_bus"
         mlnx_type="${line##*ConnectX-}"
         mlnx_type="${mlnx_type%]*}"
+        mlnx_type="${mlnx_type%% *}"
         if [ "$mlnx_type" -ge 5 ]; then
             mellanox_drivers=true
             break
