@@ -216,6 +216,35 @@ def read_data(test, ior, container, namespace='/run/ior_read/*', **ior_run_param
     ior.run(container.pool, container, **ior_run_params)
 
 
+def get_ior_metrics(result):
+    """Get the ior command read and write metrics.
+
+    Parse the CmdResult (output of the test) and look for the ior stdout
+    and get the read and write metrics.
+
+    Args:
+        result (CmdResult/str): output of job manager, or str output
+
+    Returns:
+        metrics (tuple) : list of write and read metrics from ior run
+
+    """
+    ior_metric_summary = "Summary of all tests:"
+    if isinstance(result, str):
+        messages = result.splitlines()
+    else:
+        messages = result.stdout_text.splitlines()
+    # Get the index where the summary starts and add one to
+    # get to the header.
+    idx = messages.index(ior_metric_summary)
+    # idx + 1 is header.
+    # idx +2 and idx + 3 will give the write and read metrics.
+    write_metrics = (" ".join(messages[idx + 2].split())).split()
+    read_metrics = (" ".join(messages[idx + 3].split())).split()
+
+    return (write_metrics, read_metrics)
+
+
 class IorCommand(SubProcessCommand):
     # pylint: disable=too-many-instance-attributes
     # pylint: disable=wrong-spelling-in-docstring
@@ -571,34 +600,6 @@ class Ior:
         if flags and '-r' in flags.lower():
             parts.append('read')
         return '.'.join(['_'.join(parts), 'log'])
-
-    def get_ior_metrics(result):
-        """Get the ior command read and write metrics.
-
-        Parse the CmdResult (output of the test) and look for the ior stdout
-        and get the read and write metrics.
-
-        Args:
-            result (CmdResult/str): output of job manager, or str output
-
-        Returns:
-            metrics (tuple) : list of write and read metrics from ior run
-
-        """
-        ior_metric_summary = "Summary of all tests:"
-        if isinstance(result, str):
-            messages = result.splitlines()
-        else:
-            messages = result.stdout_text.splitlines()
-        # Get the index where the summary starts and add one to
-        # get to the header.
-        idx = messages.index(ior_metric_summary)
-        # idx + 1 is header.
-        # idx +2 and idx + 3 will give the write and read metrics.
-        write_metrics = (" ".join(messages[idx + 2].split())).split()
-        read_metrics = (" ".join(messages[idx + 3].split())).split()
-
-        return (write_metrics, read_metrics)
 
     def run(self, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
             dfuse=None, display_space=True, fail_on_warning=False, unique_log=True, il_report=None):
