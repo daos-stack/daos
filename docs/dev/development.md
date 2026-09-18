@@ -508,13 +508,13 @@ from source or install them using the appropriate package manager.
 
 > [NOTE]
 >
->The [`utils/build/verify_packages.sh`](../../utils/build/verify_packages.sh)
->script can also be invoked separately.
+> The [`utils/build/verify_packages.sh`](../../utils/build/verify_packages.sh)
+> script can also be invoked separately.
 >
->The verifier accepts the same RPM suffix values and uses the following form:
->```bash
+> The verifier accepts the same RPM suffix values and uses the following form:
+> ```bash
 > $ utils/build/verify_packages.sh \
 >   [--rpm-suffix=el9] [-Werror|-Wno-error] \
 >   <RPM_ROOT>
->```
->To find out more, use the `verify_packages.sh --help` command.
+> ```
+> To find out more, use the `verify_packages.sh --help` command.

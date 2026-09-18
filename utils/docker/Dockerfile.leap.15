@@ -89,9 +89,6 @@ ARG INSTALL_SCRIPT_SUFFIX
 RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target=/tmp/daos/install.sh \
     INSTALL_BUILD_CI_ONLY="true" /tmp/daos/install.sh && \
     dnf clean all
-# Local container builds need the OpenMPI wrappers on PATH; Jenkins loads MPI
-# through Lmod before invoking scons.
-# ENV PATH=/usr/lib64/mpi/gcc/openmpi3/bin:$PATH
 
 # According to https://pkgs.org/search/?q=lua-lmod, Leap 15.6 only has lua-lmod-8.7.34.
 # This version has a problem with loading modules, as described in https://github.com/TACC/Lmod/issues/687.

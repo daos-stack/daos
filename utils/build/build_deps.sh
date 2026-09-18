@@ -40,18 +40,15 @@ EOF
 
 check_scons
 
-if [ "${1:-}" = "-f" ] || [ "${1:-}" = "--force" ]; then
-    echo "Removing \"${prefix_value}/prereq\""
-    rm -rf "${prefix_value}/prereq"
-    echo "Removing \"build/external\""
-    rm -rf "build/external"
-    shift
-fi
-
 jobs_set=false
 prefix_set=false
 prefix_value="/opt/daos"
 use_installed_set=false
+force=false
+
+if [ "${1:-}" = "-f" ] || [ "${1:-}" = "--force" ]; then
+    force=true
+fi
 
 for arg in "$@"; do
     case "$arg" in
@@ -71,6 +68,13 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+if [ "$force" = true ]; then
+    echo "Removing \"${prefix_value}/prereq\""
+    rm -rf "${prefix_value}/prereq"
+    echo "Removing \"build/external\""
+    rm -rf "build/external"
+fi
 
 SCONS_ARGS=(install --build-deps=only)
 if ! "$jobs_set"; then
