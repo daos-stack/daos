@@ -10,6 +10,7 @@ import yaml
 from dlck_utils import TestDlck
 from fault_config_utils import FaultInjection
 from file_utils import distribute_files
+from run_utils import run_remote
 
 
 class DlckBasicTest(TestDlck):
@@ -55,6 +56,8 @@ class DlckBasicTest(TestDlck):
 
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
+        run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
+        run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
 
         self.log_step("Run dlck command to check the health of the pool and storage")
         result = dlck.run()
@@ -97,6 +100,8 @@ class DlckBasicTest(TestDlck):
 
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
+        run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
+        run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
 
         for test_fault in fault_list:
             fault_config = {

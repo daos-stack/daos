@@ -12,7 +12,7 @@ server_config:
       storage: auto
 
 pool:
-  size: 60%
+  size: 30%
 
 dlck_test_faults:
   fault_list:
