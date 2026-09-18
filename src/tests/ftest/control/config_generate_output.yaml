@@ -1,6 +1,8 @@
 hosts:
   test_servers: 1
+
 timeout: 120
+
 server_config:
   engines_per_host: 1
   engines:
@@ -9,5 +11,9 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
+
 pool:
   scm_size: 1G
+
+test_params:
+  max_engines: 2
