@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -39,6 +39,7 @@ type cliOptions struct {
 	Version       versionCmd              `command:"version" description:"Print daos_agent version"`
 	ServerVersion serverVersionCmd        `command:"server-version" description:"Print daos_server version"`
 	DumpInfo      dumpAttachInfoCmd       `command:"dump-attachinfo" description:"Dump system attachinfo"`
+	CheckNodeCert checkNodeCertCmd        `command:"check-node-cert" description:"Check per-pool node certificate deployment on this node"`
 	DumpTopo      cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 	NetScan       netScanCmd              `command:"net-scan" description:"Perform local network fabric scan"`
 	Support       supportCmd              `command:"support" description:"Perform debug tasks to help support team"`
@@ -290,6 +291,14 @@ func configureLogging(log logging.Logger, cmd flags.Commander, cfg *Config, opts
 			LogFile:  cfg.LogFile,
 			LogLevel: cfg.LogLevel,
 			JSON:     opts.JSONLogs,
+		}
+		// Diagnostic commands log to stdout unless -d is given.
+		if _, ok := cmd.(*checkNodeCertCmd); ok && !opts.Debug {
+			logCfg.LogFile = ""
+			logCfg.LogLevel = common.ControlLogLevelError
+			if ll, ok := log.(*logging.LeveledLogger); ok {
+				ll.SetLevel(logging.LogLevelError)
+			}
 		}
 		if err := cmdutil.ConfigureLogger(log, logCfg); err != nil {
 			return err
