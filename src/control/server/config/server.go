@@ -822,6 +822,12 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
 		!(*cfg.DisableHotplug), !(*cfg.DisableVMD))
 
+	if cfg.TransportConfig != nil {
+		if err := cfg.TransportConfig.Validate(); err != nil {
+			return errors.Wrap(err, "transport_config")
+		}
+	}
+
 	// Update MS replica addresses with control port if port is not supplied.
 	newReps := make([]string, 0, len(cfg.MgmtSvcReplicas))
 	for _, rep := range cfg.MgmtSvcReplicas {
