@@ -89,6 +89,10 @@ func startInstanceConsumer(ctx context.Context, instance *EngineInstance) {
 
 func waitForPendingRestart(ctx context.Context, t *testing.T, mgr *engineRestartManager, rank ranklist.Rank) bool {
 	t.Helper()
+	// Add 5-second timeout to prevent indefinite waiting
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	pending := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(50 * time.Millisecond)
@@ -120,6 +124,11 @@ func waitForPendingRestart(ctx context.Context, t *testing.T, mgr *engineRestart
 }
 
 func waitForRestartRecorded(ctx context.Context, t *testing.T, mgr *engineRestartManager, rank ranklist.Rank) bool {
+	t.Helper()
+	// Add 5-second timeout to prevent indefinite waiting
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	recorded := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond)

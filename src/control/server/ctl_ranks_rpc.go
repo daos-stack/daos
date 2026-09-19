@@ -9,6 +9,7 @@ package server
 
 import (
 	"context"
+	"os"
 	"syscall"
 	"time"
 
@@ -253,6 +254,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	}
 
 	savedRanks := make(map[uint32]ranklist.Rank) // instance idx to system rank
+
 	for _, ei := range instances {
 		rank, err := ei.GetRank()
 		if err != nil {
@@ -263,9 +265,31 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		if ei.IsStarted() {
 			return nil, FaultInstancesNotStopped("reset format", rank)
 		}
-		if err := ei.RemoveSuperblock(); err != nil {
-			return nil, err
+	}
+
+	// In MD-on-SSD mode, remove the entire control metadata directory once
+	// (not per-engine). Ignore failures as multiple ranks on same host may
+	// attempt this operation, causing "directory not found" errors on subsequent
+	// attempts.
+	if svc.storage.ControlMetadataPathConfigured() {
+		mdPath := svc.storage.ControlMetadataPath()
+		svc.log.Debugf("Removing entire control metadata directory: %s", mdPath)
+		if err := os.RemoveAll(mdPath); err != nil {
+			return nil, errors.Wrap(err, "removing control metadata directory")
 		}
+
+		svc.log.Debugf("Control metadata directory removed successfully")
+	}
+
+	for _, ei := range instances {
+		if !svc.storage.ControlMetadataPathConfigured() {
+			// In PMem mode just remove superblock and rely on format flow to clear
+			// metadata.
+			if err := ei.RemoveSuperblock(); err != nil {
+				return nil, err
+			}
+		}
+
 		ei.requestStart(ctx)
 	}
 
