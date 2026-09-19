@@ -81,12 +81,33 @@ bool
 daos_prop_has_byteval(struct daos_prop_entry *entry)
 {
 	switch (entry->dpe_type) {
-	/*
-	 * e.g. DAOS_PROP_PO_POOL_CA (DAOS-18783)
-	 */
-	default:
+	case DAOS_PROP_PO_CA_CERT:
+	case DAOS_PROP_PO_CERT_WATERMARKS:
+		return true;
+	}
+	return false;
+}
+
+bool
+daos_prop_byteval_is_valid(struct daos_prop_entry *entry)
+{
+	struct daos_prop_byteval *bv = entry->dpe_val_ptr;
+
+	D_ASSERT(daos_prop_has_byteval(entry));
+	/* NULL byteval is valid when the property is unset */
+	if (bv == NULL)
+		return true;
+	/* if the byteval is non-NULL (i.e. set), then it must have data */
+	if (bv->dpb_data == NULL || bv->dpb_len == 0) {
+		D_ERROR("byteval prop %u has an empty non-NULL value\n", entry->dpe_type);
 		return false;
 	}
+	if (bv->dpb_len > DAOS_PROP_BYTEVAL_MAX_LEN) {
+		D_ERROR("byteval prop %u len %zu exceeds max %u\n", entry->dpe_type, bv->dpb_len,
+			DAOS_PROP_BYTEVAL_MAX_LEN);
+		return false;
+	}
+	return true;
 }
 
 static void
@@ -346,6 +367,11 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			if (rc == -DER_NOMEM)
 				rc = daos_acl_validate(acl_ptr);
 			if (rc != 0)
+				return false;
+			break;
+		case DAOS_PROP_PO_CA_CERT:
+		case DAOS_PROP_PO_CERT_WATERMARKS:
+			if (!daos_prop_byteval_is_valid(&prop->dpp_entries[i]))
 				return false;
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
@@ -970,6 +996,10 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 				D_GOTO(out, rc);
 
 			roots_alloc = true;
+		} else if (daos_prop_has_byteval(entry_reply)) {
+			rc = daos_prop_entry_copy(entry_reply, entry_req);
+			if (rc)
+				D_GOTO(out, rc);
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
