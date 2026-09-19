@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,6 +32,49 @@ def find_pci_address(value, *flags):
     digit = '0-9a-fA-F'
     pattern = rf'[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]'
     return re.findall(pattern, str(value), *flags)
+
+
+def get_nvme_diagnostics_command(label):
+    """Get a shell command to report NVMe PCI and IOMMU state.
+
+    Args:
+        label (str): label to include in the diagnostic output
+
+    Returns:
+        str: shell command to collect NVMe diagnostics
+
+    """
+    safe_label = str(label).replace('"', '\\"')
+    pci_devices = (
+        'for dev in $(lspci -Dnn | '
+        'awk "/Non-Volatile memory controller/ {print \\$1}"); do '
+        'echo "## $dev"; '
+        'lspci -Dnnk -s "$dev"; '
+        'readlink -f "/sys/bus/pci/devices/$dev/driver" 2>&1 || true; '
+        'readlink -f "/sys/bus/pci/devices/$dev/iommu_group" 2>&1 || true; '
+        'done')
+    commands = [
+        f'echo "--- NVMe diagnostics: {safe_label} ---"',
+        'date -Ins',
+        'echo "# lspci NVMe/VMD devices"',
+        'lspci -Dnnk | grep -Ei "Non-Volatile|NVMe|VMD|Kernel driver" || true',
+        'echo "# NVMe PCI device driver and IOMMU links"',
+        pci_devices,
+        'echo "# /sys/class/iommu"',
+        'ls -la /sys/class/iommu 2>&1 || true',
+        'echo "# /sys/kernel/iommu_groups"',
+        'find /sys/kernel/iommu_groups -maxdepth 2 -type l -print '
+        '-exec readlink -f {} \\; 2>/dev/null || true',
+        'echo "# nvme list"',
+        'command -v nvme >/dev/null && nvme list || true',
+        'echo "# lsblk NVMe devices"',
+        'lsblk -o NAME,KNAME,PATH,MAJ:MIN,SIZE,TYPE,MODEL,SERIAL,STATE,TRAN '
+        '| grep -i nvme || true',
+        'echo "# recent NVMe/IOMMU/PCI kernel messages"',
+        'dmesg -T | grep -Ei '
+        '"DMAR|IOMMU|AER|PCIe|pcie|nvme|uio|vfio|reset|fault|error|timeout|'
+        'surprise|link|vmd" | tail -n 120 || true']
+    return '; '.join(commands)
 
 
 def get_tier_roles(tier, total_tiers):
