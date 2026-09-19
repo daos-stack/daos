@@ -17,6 +17,7 @@ set -uex
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
 : "${DAOS_LAB_CA_FILE_URL:=}"
+: "${ZSCALER_CA_FILE:=}"
 : "${REPOSITORY_NAME:=artifactory}"
 
 # shellcheck disable=SC2120
@@ -55,6 +56,17 @@ install_optional_ca() {
         update-ca-trust
     fi
 }
+
+install_zscaler_ca() {
+    ca_storage="/etc/pki/ca-trust/source/anchors/"
+    if [ -n "$ZSCALER_CA_FILE" ]; then
+        echo "$ZSCALER_CA_FILE" >> "${ca_storage}ZscalerRootCertificate-2048-SHA256.crt"
+        update-ca-trust
+    fi
+}
+
+# Install Zscaler CA if provided
+install_zscaler_ca
 
 # installs/upgrades of epel-release add repos
 # Disable mirrorlist check when using local repos.
