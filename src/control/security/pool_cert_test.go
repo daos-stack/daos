@@ -123,6 +123,59 @@ func TestAdvanceCertWatermark(t *testing.T) {
 	}
 }
 
+func TestWatermarkCutoff(t *testing.T) {
+	older, _, olderPEM := generateTestCA(t, "older")
+	_, _, newerPEM := generateTestCA(t, "newer")
+	for name, tc := range map[string]struct {
+		bundle []byte
+		exp    time.Time
+		expErr bool
+	}{
+		"empty bundle prunes nothing": {bundle: nil, exp: time.Time{}},
+		"single CA":                   {bundle: olderPEM, exp: older.NotBefore},
+		"earliest of two":             {bundle: append(append([]byte{}, newerPEM...), olderPEM...), exp: older.NotBefore},
+		"malformed CA":                {bundle: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("junk")}), expErr: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := WatermarkCutoff(tc.bundle)
+			if tc.expErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !got.Equal(tc.exp) {
+				t.Fatalf("got %s, want %s", got, tc.exp)
+			}
+		})
+	}
+}
+
+func TestPruneCertWatermarks(t *testing.T) {
+	t0 := time.Date(2026, 4, 15, 14, 0, 0, 0, time.UTC)
+	wm := CertWatermarks{
+		"node:fresh":    t0,
+		"node:stale":    t0.Add(-25 * time.Hour),
+		"node:boundary": t0.Add(-24 * time.Hour), // exactly at cutoff stays
+	}
+	out, pruned := PruneCertWatermarks(wm, t0.Add(-24*time.Hour))
+	if pruned != 1 {
+		t.Fatalf("pruned=%d, want 1", pruned)
+	}
+	if _, ok := out["node:stale"]; ok {
+		t.Errorf("stale entry survived prune")
+	}
+	if _, ok := out["node:fresh"]; !ok {
+		t.Errorf("fresh entry was pruned")
+	}
+	if _, ok := out["node:boundary"]; !ok {
+		t.Errorf("boundary entry (==cutoff) was pruned")
+	}
+}
+
 // generateTestCA produces a self-signed CA cert + key.
 func generateTestCA(t *testing.T, cn string) (*x509.Certificate, *ecdsa.PrivateKey, []byte) {
 	t.Helper()
