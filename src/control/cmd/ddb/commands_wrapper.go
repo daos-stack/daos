@@ -399,3 +399,22 @@ func (ctx *DdbContext) CsumDump(path string, dst string, epoch uint64) error {
 	/* Run the c code command */
 	return daosError(ddb_run_csum_dump(&ctx.ctx, &options))
 }
+
+// CsumCheck recomputes the checksum(s) of the currently stored data at the VOS tree path and
+// compares them against the checksum(s) already stored on disk, reporting a match/corruption
+// verdict. It is read-only: no data or checksums are modified. epoch selects which version to
+// check: for a single value akey it is the epoch at or before which the value is fetched, and
+// for an array akey it is the maximal epoch of the visible record extent(s) to select. Pass
+// math.MaxUint64 (EPOCH_MAX) to check the latest. By default, only corrupted entries are
+// printed (plus a final summary); pass verbose to print every entry (matching, corrupted, and
+// "no checksum").
+func (ctx *DdbContext) CsumCheck(path string, epoch uint64, verbose bool) error {
+	/* Set up the options */
+	options := C.struct_csum_check_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	options.epoch = C.uint64_t(epoch)
+	options.verbose = C.bool(verbose)
+	/* Run the c code command */
+	return daosError(ddb_run_csum_check(&ctx.ctx, &options))
+}
