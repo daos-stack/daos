@@ -32,8 +32,8 @@ dmg:
     allow_insecure: true
 
 pool:
-  scm_size: 5G
-  nvme_size: 5G
+  scm_size: 20G
+  nvme_size: 20G
   # SCM usage will not be 100% because some space (<1%) is used for the system and data
   # distribution is not fully uniform.
   usage_min_scm: 92
@@ -49,7 +49,7 @@ container:
 ior:
   api: "DFS"
   client_processes:
-    np: 32
+    np: 64
   daos_destroy: false
   iorflags:
     flags: "-w -F -k -G 1"
