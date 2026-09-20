@@ -97,7 +97,7 @@ The old DAV2 zones remain NE and preserve all existing offsets. $H_{NE}$ tolerat
 Add pool resize subcommands:
 
 ```
-dmg pool resize <pool> --mem-ratio <percent> [--ne-reserve <size>] [--dry-run] [--wait[=<timeout>]]
+dmg pool resize <pool> --mem-ratio <percent> [--ne-reserve <size>] [--dry-run]
 dmg pool resize-status <pool>
 dmg pool resize-cancel <pool>
 ```
@@ -110,11 +110,9 @@ dmg pool resize-cancel <pool>
 
 -   `--dry-run` validates eligibility and reports the proposed per-target geometry without changing pool availability or storage.
 
--   By default, `convert` submits the operation and returns as soon as the durable conversion record and background worker are established. The response contains the initial state and an informational generation UUID; it does not wait for conversion to finish.
+-   `resize` submits the operation and returns as soon as the durable resize record and background worker are established. The response contains the initial state and an informational generation UUID; callers use `resize-status` to observe completion.
 
--   `--wait` is client-side convenience. `dmg` polls `resize-status` with short RPCs until the operation reaches a terminal state. `--wait=<timeout>` limits only how long `dmg` polls; expiration does not cancel the server-side operation.
-
--   `resize-cancel` is accepted only while the operation is still reversible, before any META blob has been expanded. After state `RESIZING`, the operation can only resume forward.
+-   `resize-cancel` is accepted only in `PREPARING`, before any local storage mutation. After the operation enters `RESIZING`, it can only resume forward.
 
 -   `resize-status` and `resize-cancel` identify the operation by pool only. The pool service permits at most one active resize per pool, so a user-supplied generation is unnecessary. Status returns the active resize, or the most recent terminal result when no resize is active.
 
@@ -126,7 +124,7 @@ The command follows the existing `dmg pool` request path:
 
 2.  The management service resolves the pool identifier and serializes conversion with other pool administration operations.
 
-3.  The pool service creates and commits the durable conversion record, starts a background conversion ULT, and immediately returns the generation UUID.
+3.  The pool service creates and commits the durable resize record, starts a background resize ULT, and immediately returns the generation UUID.
 
 4.  The background ULT fences connections and advances the durable state machine. Each engine performs storage resize and DAV2/VOS activation for its local target shards.
 
@@ -208,26 +206,24 @@ Offline applies to the pool, not to the entire DAOS system. Engines remain runni
 
 The pool service performs these steps:
 
-1.  Write a durable pool conversion record with state `PREPARING` and a new generation UUID.
+1.  Write a durable pool resize record with state `PREPARING` and a new generation UUID.
 
 2.  Mark the pool non-connectable. New pool connects fail with `-DER_BUSY` and identify conversion as the reason.
 
 3.  Evict all pool connections using the existing pool-evict mechanism.
 
-4.  Wait until open pool and container handles are gone and all target I/O has drained.
+4.  Broadcast a target resize-prepare RPC. Each target records the generation and intended geometry as `PREPARED` in SMD, stops the pool child, drains its I/O, and reports that it is quiesced. It does not mutate storage geometry yet.
 
-5.  Broadcast a target quiesce RPC. Each target stops container children, aggregation, GC, scrubber, checkpoint, rebuild-related work, and DTX resync, performs a final checkpoint, then closes its VOS pool and BIO metadata context.
+5.  Confirm that every target is quiesced, then atomically advance the RDB resize record from `PREPARING` to `RESIZING` before dispatching the target resize-start RPC that performs the remaining local steps.
 
-6.  Confirm that every target has reached `QUIESCED` before any blob is resized.
+If quiescing fails, targets already quiesced are restarted with the old geometry, the resize record is marked `FAILED`, and the pool is made connectable again.
 
-If quiescing fails, targets already quiesced are restarted with the old geometry, the conversion record is marked failed, and the pool is made connectable again.
-
-## Durable Conversion Record
+## Durable Resize Record
 
 The pool service stores the authoritative distributed state in RDB:
 
 ```
-struct pool_md_conversion {
+struct pool_md_resize {
     uuid_t   generation;
     uint32_t state;
     uint32_t target_count;
@@ -241,39 +237,37 @@ struct pool_md_conversion {
 };
 ```
 
-States are `SUBMITTED`, `PREPARING`, `QUIESCED`, `RESIZING`, `ACTIVATING`, `RESTARTING`, `COMMITTED`, `FAILED`, and `CANCELED`. Per-target progress records make resize and activation idempotent. A terminal `FAILED` state records whether the operation is retryable and the stage from which `dmg pool resize` with the same generation resumes.
+The pool-level state deliberately has only five values:
 
-SMD stores a local generation and state for each shard before its META blob changes. Engine startup and pool-child startup refuse normal service when SMD reports an incomplete conversion. The pool service resumes the operation forward after leadership or engine restart. Progress updates are rate-limited and batched so polling does not create excessive RDB or SMD writes.
+-   `PREPARING`: The request and geometry are durable. The pool service validates capacity, fences connections, and quiesces every target. No storage geometry has changed, so cancellation and rollback to normal phase1 service are allowed.
 
-## META Blob Expansion
+-   `RESIZING`: Every target is quiesced and the operation has crossed the no-rollback boundary. Target-local workers may be at different durable stages, but the pool remains non-connectable and all failures resume forward with the same generation.
 
-BIO adds an idempotent META resize operation. For each target shard it:
+-   `COMPLETED`: Every target has committed and validated the new geometry, normal target activity has restarted, and the pool is connectable. This is terminal.
 
-1.  Opens the META blob exclusively and reads its current cluster count.
+-   `FAILED`: Preparation failed before entering `RESIZING`; no storage mutation occurred and the old geometry has been restored. This is terminal.
 
-2.  If it is smaller than $B_{new}$, calls the SPDK blob resize operation and synchronizes blob metadata.
+-   `CANCELED`: An administrator canceled the operation while it was in `PREPARING`; no storage mutation occurred and the old geometry has been restored. This is terminal.
 
-3.  Updates `meta_header.mh_tot_blks` and its checksum.
+Submission creates `PREPARING` in the same RDB transaction that claims the single active-resize slot. After all targets report quiesced and capacity reservations are confirmed, the pool service commits `PREPARING -> RESIZING` before sending the first storage-resize RPC. `PREPARING -> FAILED` and `PREPARING -> CANCELED` restart any quiesced targets and restore connectivity. `RESIZING` never transitions backward or to `FAILED`; a recoverable error is recorded in `last_error` and leaves the operation in `RESIZING` for forward retry. After every target has started its pool child and reports `READY`, the pool service atomically sets the pool connectable and commits `RESIZING -> COMPLETED` in RDB.
 
-4.  Updates the SMD `sp_blob_sz` record only after SPDK reports the new durable size.
+Detailed progress is target-local rather than represented by more pool-level states. Each shard stores the generation, intended geometry, `last_error`, and one of `PREPARED`, `CAPACITY_PUBLISHED`, or `HEAP_EXTENDED` in SMD. A stage is recorded only after its corresponding writes are durable. Repeating a completed stage is a no-op. `READY` is a volatile worker/status result, not an SMD state.
 
-5.  Reopens and verifies the blob capacity before reporting success.
+SMD stores `PREPARED` before the pool child is stopped. Engine startup refuses normal pool-child startup when SMD contains a resize record, except when the matching resize worker explicitly starts the child as the final operation. The engine may otherwise open the shard only through a restricted recovery path that runs no client I/O or background maintenance. The pool service resumes the operation forward after leadership or engine restart. Progress updates are rate-limited and batched so polling does not create excessive RDB or SMD writes.
 
-Blob expansion is monotonic. A retry observes either the old size and repeats the resize, or the new size and continues. Conversion never attempts to shrink a META blob during rollback.
+## Local Storage Resize Ordering
 
-The control plane reserves capacity for every participating blob before resizing the first one. This reduces the chance of a partially expanded pool due to device ENOSPC. If a later target still fails, the pool remains fenced and conversion resumes after the storage problem is corrected.
+The local storage resize begins only after the resize-prepare RPC has recorded `PREPARED`, stopped the pool child, drained its I/O, and closed VOS and BIO. The resize-start RPC performs the following steps after the pool-level state is durably `RESIZING`. The physical allocations are grown before any persistent header advertises the new capacity, so a failure during either growth step leaves the old phase1 geometry usable by recovery code.
 
-## VOS Memory-File Expansion
+1.  Enlarge the existing VOS file from $M_{old}$ to $M_{new}$ with `fallocate`, clear the new pages, and synchronize the file. The file is never truncated; while all headers retain the old sizes, the extra tail is ignored. Recovery in `PREPARED` checks the physical file length and repeats this operation if necessary.
 
-After META expansion, each engine enlarges the existing VOS file from $M_{old}$ to $M_{new}$ with `fallocate`. The file is never truncated by conversion.
+2.  Open the META blob exclusively, grow it to $B_{new}$ with the SPDK blob resize operation, synchronize SPDK metadata, and verify the physical cluster count. Until the capacity metadata is published, the extra physical clusters remain invisible to VOS. Recovery in `PREPARED` reads the physical cluster count and repeats this operation if necessary.
 
-Growing the existing file preserves its contents and all old offsets. Newly added pages are cleared before use. The operation verifies available tmpfs capacity before mutation and is idempotent when the file already has the requested size.
+3.  Update `meta_header.mh_tot_blks`, set `META_HDR_FL_EVICTABLE`, update the header checksum, and synchronize the BIO metadata header. Then update SMD `sp_blob_sz` and record `CAPACITY_PUBLISHED`. Publishing `mh_tot_blks` before heap extension is required because BIO supplies this value as the metadata-store capacity when VOS opens DAV2.
 
-Unlike `ddb prov_mem`, this step runs inside the coordinated engine RPC while the pool shard is quiesced. It does not recreate the VOS file or require an engine restart.
+At this point the BIO header advertises phase2 and $B_{new}$ while `heap_header.heap_size` still describes $B_{old}$, so an ordinary VOS open would fail DAV2's exact size validation. The evictable flag expresses the intended mode but does not indicate that the shard is ready. The nonterminal SMD record is the authoritative startup fence. The resize worker therefore uses a dedicated offline open mode. It requires the matching nonterminal SMD generation, validates the old heap and VOS geometry, opens DAV2 with $B_{old}$ as its current logical size, and separately exposes the verified $B_{new}$ physical capacity to the extension API. This mode starts no pool child, client I/O, or background maintenance and is unavailable without an active resize record.
 
-## DAV2 Heap Extension
-
-DAV2 gains an offline heap-extension API that accepts the new META and cache sizes. It performs these updates while the pool remains non-evictable:
+4.  Through the offline resize handle, extend the DAV2 heap and VOS geometry using a recoverable metadata transaction, then record `HEAP_EXTENDED`. The transaction performs these updates:
 
 -   Validate the existing heap header and old sizes.
 
@@ -287,59 +281,55 @@ DAV2 gains an offline heap-extension API that accepts the new META and cache siz
 
 -   Keep all previously allocated zones marked allocated and NE.
 
--   Leave appended zones unallocated so phase2 can allot them as E buckets after activation.
+-   Leave appended zones unallocated so phase2 can allot them as E buckets after the resize completes.
 
 -   Set `heap_header.nemb_pct` so the NE limit covers all old NE zones plus $H_{NE}$ and the remaining $C_E$ portion of the memory file remains available to cache E zones.
 
-The heap header checksum is updated after all extension metadata is durable. Since old zone boundaries and offsets do not change, no VOS allocation graph rewrite is required.
+-   Set `vos_pool_df.pd_scm_sz` to $B_{new}$ and `vos_pool_ext_df.ped_mem_sz` to $M_{new}$.
 
-## VOS and Phase2 Activation
+The heap header checksum and VOS transaction are made durable before the stage is advanced. Since old zone boundaries and offsets do not change, no VOS allocation graph rewrite is required. A retry validates each field and completes any missing update.
+
+5.  Close the offline resize handle and start the pool child normally while the pool remains globally non-connectable. Pool-child startup reopens BIO and VOS with the new geometry and starts normal local background activities. Validate the physical file and blob sizes, BIO capacity, SMD size, DAV2 heap geometry, VOS size fields, and all checksums, then perform a small allocation/free cycle in a newly allotted E bucket. Only after startup and validation succeed does the worker remove the local SMD resize record and report `READY` to the pool service.
+
+If the engine fails after the child starts but before the SMD record is removed, recovery observes `HEAP_EXTENDED` and repeats the final startup operation. If it fails after removing the record but before reporting `READY`, the next status query verifies that the child is running with the intended geometry and reports `READY`. Thus readiness need not be persisted as a separate SMD state.
+
+The control plane reserves capacity for every participating blob and VOS file before the pool enters `RESIZING`. This reduces the chance of ENOSPC after the no-rollback boundary.
+
+There is no atomic transaction spanning the VOS file, SPDK blob metadata, SMD, BIO header, and DAV2/VOS metadata. Consequently, the design guarantees that existing allocations remain recoverable, but it does not permit an ordinary VOS open at every intermediate write. Any nonterminal SMD stage fences normal pool-child startup and selects the restricted, idempotent recovery path. In particular, `CAPACITY_PUBLISHED` tells recovery to use the offline open mode rather than treating the temporary BIO/DAV2 size mismatch as corruption. Recovery compares physical sizes and checksummed headers instead of assuming that the last SMD stage write completed. It either observes the old value and reapplies the current step or observes the new value and advances the stage. It never shrinks storage or exposes the shard to clients.
+
+Unlike `ddb prov_mem`, these steps run inside the coordinated engine worker while the pool shard is quiesced. They do not recreate the VOS file or require an engine restart.
+
+## VOS Phase2 Behavior
 
 Existing objects require no conversion. Their `vos_obj_p2_df` fields continue to identify the default NE bucket. When an existing or new object first needs phase2 object-private space, the normal `umem_allot_mb_evictable()` path allocates a bucket from an appended free zone and records it in the object.
 
-After heap extension succeeds, each target atomically prepares these mode fields:
-
--   Set `vos_pool_df.pd_scm_sz` to $B_{new}$.
-
--   Set `vos_pool_ext_df.ped_mem_sz` to $M_{new}$.
-
--   Keep the BIO backend type as `DAOS_MD_BMEM_V2`.
-
--   Set `META_HDR_FL_EVICTABLE` in the BIO metadata header last and update its checksum.
-
-The BIO evictable flag is the activation point because it controls `store_evictable` and `vos_pool_is_evictable()`. Once set, the shard must only be opened with the new geometry.
+The BIO backend type remains `DAOS_MD_BMEM_V2`. The BIO evictable flag controls `store_evictable` and `vos_pool_is_evictable()`, but it is not a readiness marker. Once it is set in `CAPACITY_PUBLISHED`, only the offline resize path may open the shard until DAV2/VOS geometry is extended and the matching resize worker starts the pool child.
 
 ## Restart and Commit
 
-Each target reopens its BIO metadata context and VOS pool using the enlarged VOS file. The phase2 open must load every old NE zone and leave appended zones unloaded until allotted.
+The final local resize step starts each pool child, reopens its BIO metadata context and VOS pool using the enlarged VOS file, and validates phase2 operation. The pool remains globally non-connectable while this occurs. If all targets report `READY`, the pool service:
 
-The target then validates the heap and performs a small allocation/free cycle in a newly allotted E bucket. If all targets report ready, the pool service:
+1.  Atomically marks the pool connectable and the distributed resize record `COMPLETED` in one RDB transaction.
 
-1.  Marks the distributed conversion record `COMMITTED`.
-
-2.  Restarts normal pool target background activity.
-
-3.  Marks the pool connectable.
-
-4.  Exposes terminal success through conversion status.
+2.  Exposes terminal success through resize status.
 
 Clients must reconnect after conversion; evicted handles are not restored.
 
-The original submission RPC has already returned. A `dmg` process using `--wait` observes completion through polling; conversion continues if that process exits, loses connectivity, or reaches its wait timeout.
+The original submission RPC has already returned. Administrators observe completion with `resize-status`; conversion continues if the submitting process exits or loses connectivity.
 
 ## Failure Handling
 
 -   **Before quiesce completes**: Restart quiesced targets with old geometry and make the pool connectable.
 
--   **After any META blob grows**: Keep the pool fenced and resume forward. Expanded blobs are not shrunk.
+-   **After entering `RESIZING`**: Keep the pool fenced and resume forward. Expanded files and blobs are not shrunk.
 
--   **Before the evictable flag is set**: A shard remains phase1-compatible with larger storage. Resume heap/VOS preparation.
+-   **Before `CAPACITY_PUBLISHED`**: Existing allocations and offsets remain intact. Recovery verifies and completes the physical VOS-file and META-blob growth.
 
--   **After the evictable flag is set**: The shard is phase2 and must roll forward. Startup uses the SMD generation to resume instead of opening the pool for service.
+-   **At or after `CAPACITY_PUBLISHED`**: The BIO header advertises phase2, but the shard is not ready until the resize worker has completed the geometry update and successfully started the pool child. Startup uses the SMD generation and offline resize path to roll forward instead of opening the pool child normally.
 
 -   **Insufficient tmpfs after META expansion**: Keep the pool fenced. The administrator must free memory capacity or increase the tmpfs allocation before resume.
 
--   **Management leader change**: The new leader reads the RDB conversion record, queries per-target SMD state, and resumes from the first incomplete stage.
+-   **Pool-service leader change**: The new leader reads the RDB resize record, queries per-target SMD state, and resumes from the first incomplete stage.
 
 -   **Client or RPC timeout**: A submission timeout is ambiguous, so retrying the same request token returns the existing generation instead of creating another operation. A status timeout has no effect on conversion. Long-running work is never tied to the lifetime of an initiating RPC.
 
@@ -365,7 +355,7 @@ The original submission RPC has already returned. A `dmg` process using `--wait`
 
 -   Update VOS and BIO size fields and activate `META_HDR_FL_EVICTABLE`.
 
--   Add RDB/SMD conversion records, startup fencing, forward recovery, and cross-target consistency checks.
+-   Add RDB/SMD resize records, startup fencing, forward recovery, and cross-target consistency checks.
 
 -   Reopen targets in phase2 and restore pool availability after validation.
 
@@ -383,7 +373,7 @@ No existing allocation layout changes. Conversion updates:
 
 -   VOS pool META and memory sizes.
 
--   Pool-service RDB conversion state.
+-   Pool-service RDB resize state.
 
 The implementation may consume reserved fields or introduce versioned extension records for conversion state. Any new persistent field requires the corresponding compatibility bit and version checks.
 
@@ -391,7 +381,7 @@ The implementation may consume reserved fields or introduce versioned extension 
 
 -   Unconverted DAV2 phase1 pools continue to operate unchanged.
 
--   Software without this feature can read neither an in-progress conversion marker nor a committed phase2 geometry safely and must reject the pool.
+-   Software without this feature can read neither an in-progress resize marker nor a committed phase2 geometry safely and must reject the pool.
 
 -   Existing objects remain valid because `vos_obj_p2_df` is already present and their metadata remains in NE zones.
 
@@ -407,13 +397,13 @@ The implementation may consume reserved fields or introduce versioned extension 
 
 # External Interfaces
 
--   `dmg pool resize <pool> --mem-ratio <percent> [--ne-reserve <size>] [--dry-run] [--wait[=<timeout>]]`.
+-   `dmg pool resize <pool> --mem-ratio <percent> [--ne-reserve <size>] [--dry-run]`.
 
 -   `dmg pool resize-status <pool>` and reversible `dmg pool resize-cancel <pool>` commands. Neither requires a generation argument because only one resize can be active per pool.
 
 -   New short-lived management-service submit, status, and cancel RPCs and corresponding pool-service RPCs.
 
--   New bounded target stage start/status RPCs for quiesce, capacity validation, resize/activate, and restart. Long work runs in local durable workers.
+-   New bounded target stage start/status RPCs for quiesce, capacity validation, resize, and restart. Long work runs in local durable workers.
 
 -   New BIO API for monotonic META blob expansion.
 
@@ -429,13 +419,13 @@ The implementation may consume reserved fields or introduce versioned extension 
 
     -   `dmg` parsing and control/management/pool-service request forwarding.
 
-    -   `--wait` polling, wait timeout without cancellation, duplicate submission tokens, and status formatting.
+    -   Duplicate submission tokens and status formatting.
 
-    -   BIO blob-resize idempotency, SMD ordering, and capacity failures.
+    -   VOS-file and BIO blob-growth idempotency, SMD ordering, and capacity failures.
 
     -   DAV2 heap extension with old zones unchanged and appended zones unused.
 
-    -   Conversion state-machine resume from every durable state.
+    -   Resize state-machine resume from every pool-level state and target-local stage.
 
     -   Pool-service leadership change and engine restart while no initiating RPC exists.
 
@@ -457,7 +447,7 @@ The implementation may consume reserved fields or introduce versioned extension 
 
     -   Verify client reconnect and data integrity after conversion.
 
-    -   Inject failures before and after blob resize, VOS-file growth, heap extension, activation, and target restart.
+    -   Inject failures before and after VOS-file growth, blob growth, BIO/SMD capacity publication, heap/VOS extension, and target restart.
 
     -   Use stage durations longer than all configured RPC timeouts and verify conversion completes through asynchronous status polling.
 
@@ -487,7 +477,7 @@ The implementation may consume reserved fields or introduce versioned extension 
 
 ### 3. Partial Distributed Conversion
 
-* **Risk:** Failures can leave targets at different resize or activation stages.
+* **Risk:** Failures can leave targets at different resize stages.
 * **Mitigation:** Fence the pool with an RDB generation, journal per-target progress in SMD, make every storage operation idempotent, and recover forward.
 
 ### 4. Memory Overcommit
