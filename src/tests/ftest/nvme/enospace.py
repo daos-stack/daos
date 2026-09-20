@@ -699,7 +699,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             container,
             ior_flags=self.ior_default_flags,
             transfer_size=self.ior_scm_xfersize,
-            block_size=self.calculate_ior_block_size(10, 'SCM'))
+            block_size=self.calculate_ior_block_size(1, 'SCM'))
 
         # Read the baseline data set
         # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
@@ -708,7 +708,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             container,
             ior_flags=self.ior_read_flags,
             transfer_size=self.ior_scm_xfersize,
-            block_size=self.calculate_ior_block_size(10, 'SCM'))
+            block_size=self.calculate_ior_block_size(1, 'SCM'))
         max_mib_baseline = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
         # baseline_cont_uuid = self.ior_cmd.dfs_cont.value
         self.log.info("IOR Baseline Read MiB %s", max_mib_baseline)
@@ -724,7 +724,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             container,
             ior_flags=self.ior_read_flags,
             transfer_size=self.ior_scm_xfersize,
-            block_size=self.calculate_ior_block_size(10, 'SCM'))
+            block_size=self.calculate_ior_block_size(1, 'SCM'))
         max_mib_latest = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
         self.log.info("IOR Latest Read MiB %s", max_mib_latest)
 
