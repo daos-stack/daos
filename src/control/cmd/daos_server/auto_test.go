@@ -223,7 +223,10 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 }
 
 // The Control API calls made in configGenCmd.confGen() are already well tested so just do some
-// sanity checking here to prevent regressions.
+// sanity checking here to prevent regressions. Test cases include verification that:
+// - PMem scan is skipped when using tmpfs SCM mode (--use-tmpfs-scm flag)
+// - PMem scan is skipped when using MD-on-SSD mode (--control-metadata-path flag)
+// - PMem scan is performed in normal mode (backward compatibility - DAOS-18835)
 func TestDaosServer_Auto_confGen(t *testing.T) {
 	eth0 := &control.HostFabricInterface{
 		Provider: "ofi+tcp", Device: "eth0", NumaNode: 0, NetDevClass: 1, Priority: 2,
@@ -403,8 +406,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			expErr:   errors.New("unrecognized net-class"),
 		},
 		"tmpfs scm; no control_metadata path": {
-			tmpfsSCM: true,
-			hf:       defHostFabric,
+			hf: defHostFabric,
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{
 					storage.MockScmNamespace(0),
@@ -429,9 +431,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			expErr:          errors.New("only supported with scm class ram"),
 		},
 		"tmpfs scm; md-on-ssd": {
-			tmpfsSCM:        true,
-			extMetadataPath: metadataMountPath,
-			hf:              defHostFabric,
+			hf: defHostFabric,
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{
 					storage.MockScmNamespace(0),
@@ -451,9 +451,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				WithControlMetadata(controlMetadata),
 		},
 		"tmpfs scm; md-on-ssd; no logging to stdout": {
-			tmpfsSCM:        true,
-			extMetadataPath: metadataMountPath,
-			hf:              defHostFabric,
+			hf: defHostFabric,
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{
 					storage.MockScmNamespace(0),
@@ -565,16 +563,19 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			log.SetLevel(logging.LogLevelInfo)
 			cmd.Logger = log
 
-			gf := func(_ context.Context, _ logging.Logger, _ string) (*control.HostFabric, error) {
+			getFabric := func(_ context.Context, _ logging.Logger, _ string) (*control.HostFabric, error) {
 				return tc.hf, tc.hfErr
 			}
 
-			gs := func(_ context.Context, _ logging.Logger, _ bool) (*control.HostStorage, error) {
+			getStorage := func(_ context.Context, _ logging.Logger, _ bool, _ bool, _ string) (*control.HostStorage, error) {
+				if (tmpfsSCM || cmd.ExtMetadataPath != "") && tc.expPMemScan {
+					return nil, errors.New("PMem scan was not skipped")
+				}
 				return tc.hs, tc.hsErr
 			}
 
 			if tc.expOutPrefix != "" {
-				gotErr := cmd.confGenPrint(test.Context(t), gf, gs)
+				gotErr := cmd.confGenPrint(test.Context(t), getFabric, getStorage)
 				if gotErr != nil {
 					t.Fatal(gotErr)
 				}

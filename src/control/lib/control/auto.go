@@ -395,7 +395,12 @@ func getNetworkDetails(req ConfGenerateReq, hf *HostFabric) (*networkDetails, er
 func getStorageSet(ctx context.Context, req ConfGenerateRemoteReq) (*HostStorageSet, error) {
 	req.Log.Debugf("fetching host storage info on hosts %v", req.HostList)
 
-	scanReq := &StorageScanReq{NvmeBasic: true}
+	// DAOS-18835: Pass deployment mode flags to server so it can skip PMem scan when not needed
+	scanReq := &StorageScanReq{
+		NvmeBasic:       true,
+		UseTmpfsSCM:     req.UseTmpfsSCM,
+		ExtMetadataPath: req.ExtMetadataPath,
+	}
 	scanReq.SetHostList(req.HostList)
 
 	scanResp, err := StorageScan(ctx, req.Client, scanReq)

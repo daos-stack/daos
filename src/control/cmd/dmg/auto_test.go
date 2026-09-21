@@ -321,7 +321,10 @@ func TestAuto_confGenCmd_Convert(t *testing.T) {
 }
 
 // The Control API calls made in ConfigGenCmd.confGen() are already well tested so just do some
-// sanity checking here to prevent regressions.
+// sanity checking here to prevent regressions. Test cases include verification that:
+// - PMem scan is skipped when using tmpfs SCM mode (--use-tmpfs-scm flag)
+// - PMem scan is skipped when using MD-on-SSD mode (--control-metadata-path flag)
+// - PMem scan is performed in normal mode (backward compatibility - DAOS-18835)
 func TestAuto_confGen(t *testing.T) {
 	ib0 := &ctlpb.FabricInterface{
 		Provider: "ofi+psm2", Device: "ib0", Numanode: 0, Netdevclass: 32, Priority: 0,
@@ -386,6 +389,8 @@ func TestAuto_confGen(t *testing.T) {
 		expCfg           *config.Server
 		expErr           error
 		expOutPrefix     string
+		// failIfPMemScanned: If true, mock will return error if PMem scan is attempted (DAOS-18835)
+		failIfPMemScanned bool
 	}{
 		"no host responses": {
 			expErr: errors.New("no host responses"),
@@ -455,7 +460,8 @@ func TestAuto_confGen(t *testing.T) {
 			expErr: errors.New("unrecognized net-class"),
 		},
 		"tmpfs scm; no control_metadata path": {
-			tmpfsSCM: true,
+			tmpfsSCM:          true,
+			failIfPMemScanned: true, // DAOS-18835: Verify PMem scan is skipped
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostResp},
@@ -472,8 +478,9 @@ func TestAuto_confGen(t *testing.T) {
 			expErr: errors.New("only supported with scm class ram"),
 		},
 		"tmpfs scm; md-on-ssd": {
-			tmpfsSCM:        true,
-			extMetadataPath: metadataMountPath,
+			tmpfsSCM:          true,
+			extMetadataPath:   metadataMountPath,
+			failIfPMemScanned: true, // DAOS-18835: Verify PMem scan is skipped
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostResp},
@@ -483,8 +490,9 @@ func TestAuto_confGen(t *testing.T) {
 				WithControlMetadata(controlMetadata),
 		},
 		"tmpfs scm; md-on-ssd; no logging to stdout": {
-			tmpfsSCM:        true,
-			extMetadataPath: metadataMountPath,
+			tmpfsSCM:          true,
+			extMetadataPath:   metadataMountPath,
+			failIfPMemScanned: true, // DAOS-18835: Verify PMem scan is skipped
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostResp},
