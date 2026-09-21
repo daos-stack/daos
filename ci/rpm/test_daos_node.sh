@@ -44,7 +44,7 @@ dnf_install_retry() {
     for ((attempt = 1; attempt <= retries; attempt++)); do
         if (
             set -o pipefail
-            sudo dnf "$@" 2>&1 | tee "$log"
+            sudo dnf -y "$@" 2>&1 | tee "$log"
         ); then
             ret=0
             break
