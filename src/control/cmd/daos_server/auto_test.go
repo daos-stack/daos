@@ -310,10 +310,52 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		expErr          error
 		expOutPrefix    string
 	}{
-		"incompatible flags; allow imbalance and nr engines": {
-			nrEngines:      2,
+		"single engine requested; all ssds on numa 1": {
+			nrEngines: 1,
+			hf:        defHostFabric,
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				SysMemInfo: defSysMemInfo(),
+				NvmeDevices: storage.NvmeControllers{
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 1},
+				},
+			},
+			expCfg: control.MockServerCfg("ofi+psm2", []*engine.Config{
+				control.MockEngineCfg(1, 1, 2, 3, 4).
+					WithTargetCount(16).WithHelperStreamCount(4),
+			}).
+				WithMgmtSvcReplicas("localhost:10001").
+				WithControlLogFile("/var/log/daos/daos_server.log"),
+		},
+		"single engine requested with allow-numa-imbalance; all ssds on numa 1": {
+			nrEngines:      1,
 			allowImbalance: true,
-			expErr:         errors.New("mutually exclusive"),
+			hf:             defHostFabric,
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				SysMemInfo: defSysMemInfo(),
+				NvmeDevices: storage.NvmeControllers{
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 1},
+				},
+			},
+			expCfg: control.MockServerCfg("ofi+psm2", []*engine.Config{
+				control.MockEngineCfg(1, 1, 2, 3, 4).
+					WithTargetCount(16).WithHelperStreamCount(4),
+			}).
+				WithMgmtSvcReplicas("localhost:10001").
+				WithControlLogFile("/var/log/daos/daos_server.log"),
 		},
 		"fetching host fabric fails": {
 			hfErr:  errors.New("bad fetch"),
