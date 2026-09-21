@@ -2385,6 +2385,84 @@ do_symlink_dot_dot_value(void **state)
 	assert_return_code(unlink(target), errno);
 }
 
+/* open() with O_NOFOLLOW on a symlink fails with ELOOP whatever the link points to and wherever it
+ * sits; with O_PATH it yields an fd on the link itself. Without O_NOFOLLOW the link is followed.
+ */
+void
+do_open_nofollow(void **state)
+{
+	struct stat stbuf;
+	char        base[512];
+	char        host_file[256];
+	char        value[64];
+	char        path[1024];
+	const char *links[4];
+	size_t      len;
+	int         fd;
+	int         i;
+
+	len = snprintf(base, sizeof(base) - 1, "%s/nofollow_%d", test_dir, getpid());
+	assert_true(len < (sizeof(base) - 1));
+	len = snprintf(host_file, sizeof(host_file) - 1, "/tmp/dfuse_test_nofollow_%d", getpid());
+	assert_true(len < (sizeof(host_file) - 1));
+
+	/* fixture: links in the container root and in a subdirectory, each with an absolute value
+	 * to a host file and a relative one to a container file
+	 */
+	unlink(host_file);
+	write_file(host_file, "host");
+	assert_return_code(mkdir(base, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/t", base);
+	write_file(path, "container");
+	snprintf(path, sizeof(path), "%s/nofollow_root_abs_%d", test_dir, getpid());
+	unlink(path);
+	assert_return_code(symlink(host_file, path), errno);
+	snprintf(path, sizeof(path), "%s/nofollow_root_rel_%d", test_dir, getpid());
+	unlink(path);
+	len = snprintf(value, sizeof(value) - 1, "nofollow_%d/t", getpid());
+	assert_true(len < (sizeof(value) - 1));
+	assert_return_code(symlink(value, path), errno);
+	snprintf(path, sizeof(path), "%s/sub_abs", base);
+	assert_return_code(symlink(host_file, path), errno);
+	snprintf(path, sizeof(path), "%s/sub_rel", base);
+	assert_return_code(symlink("t", path), errno);
+
+	links[0] = "%s/nofollow_root_abs_%d";
+	links[1] = "%s/nofollow_root_rel_%d";
+	links[2] = "%s/nofollow_%d/sub_abs";
+	links[3] = "%s/nofollow_%d/sub_rel";
+	for (i = 0; i < 4; i++) {
+		snprintf(path, sizeof(path), links[i], test_dir, getpid());
+
+		fd = open(path, O_RDONLY | O_NOFOLLOW);
+		assert_int_equal(fd, -1);
+		assert_int_equal(errno, ELOOP);
+
+		fd = open(path, O_PATH | O_NOFOLLOW);
+		assert_return_code(fd, errno);
+		assert_return_code(fstat(fd, &stbuf), errno);
+		assert_true(S_ISLNK(stbuf.st_mode));
+		assert_return_code(close(fd), errno);
+
+		check_file_content(path, (i % 2 == 0) ? "host" : "container");
+	}
+
+	/* a regular file is unaffected by the flag */
+	snprintf(path, sizeof(path), "%s/t", base);
+	fd = open(path, O_RDONLY | O_NOFOLLOW);
+	assert_return_code(fd, errno);
+	assert_return_code(close(fd), errno);
+
+	for (i = 0; i < 4; i++) {
+		snprintf(path, sizeof(path), links[i], test_dir, getpid());
+		assert_return_code(unlink(path), errno);
+	}
+	snprintf(path, sizeof(path), "%s/t", base);
+	assert_return_code(unlink(path), errno);
+	assert_return_code(rmdir(base), errno);
+	assert_return_code(unlink(host_file), errno);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -2514,6 +2592,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			    cmocka_unit_test(do_dot_dot_mount_root),
 			    cmocka_unit_test(do_symlink_abs_nonleaf),
 			    cmocka_unit_test(do_symlink_dot_dot_value),
+			    cmocka_unit_test(do_open_nofollow),
 			};
 			printf("\n\n=================");
 			printf("dfuse path resolution tests");

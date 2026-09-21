@@ -2445,6 +2445,16 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	if (rc)
 		D_GOTO(out_error, rc);
 
+	/* O_NOFOLLOW on a symlink: ELOOP, or with O_PATH an fd on the link that only the kernel can
+	 * provide. A fake fd on the link object would only fail later, at read().
+	 */
+	if (S_ISLNK(mode_query)) {
+		dfs_release(dfs_obj);
+		if (oflags & O_PATH)
+			goto org_func;
+		D_GOTO(out_error, rc = ELOOP);
+	}
+
 	if (S_ISDIR(mode_query)) {
 		rc = find_next_available_dirfd(NULL, &idx_dirfd);
 		if (rc)
