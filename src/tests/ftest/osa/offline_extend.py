@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,7 +8,6 @@ from time import sleep
 
 from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 
 
 class OSAOfflineExtend(OSAUtils):
@@ -56,7 +56,7 @@ class OSAOfflineExtend(OSAUtils):
                 index = val
             else:
                 index = 0
-            pool[val] = add_pool(self, connect=False)
+            pool[val] = self.get_pool(connect=False)
             self.pool = pool[val]
             test_seq = self.ior_test_sequence[0]
             self.pool.set_property("reclaim", "disabled")

@@ -57,6 +57,7 @@ struct ddb_array {
  * @param path		VOS pool file path in the format "[/dir/]<pool-uuid>/(vos-N|rdb-pool)".
  * @param db_path	Path to the VOS metadata DB directory (SMD/NVMe). If NULL or empty,
  *			the DB directory is derived from the leading path component of path.
+ * @param ctx		DDB context.
  * @param poh		Pool handle set on success.
  * @param flags		Flags forwarded to vos_pool_open() (e.g. VOS_POF_FOR_FEATURE_FLAG to
  *			skip VEA load when only reading/writing pool feature flags).
@@ -65,8 +66,8 @@ struct ddb_array {
  * @return		0 on success, negative DER error code otherwise.
  */
 int
-dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
-	     bool write_mode);
+dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, daos_handle_t *poh,
+	     uint32_t flags, bool write_mode);
 int
 dv_pool_close(daos_handle_t poh);
 int
@@ -247,8 +248,9 @@ dv_dtx_active_entry_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *
 typedef int (*dv_smd_sync_complete)(void *cb_args, uuid_t pool_id, uint32_t vos_id,
 				    uint64_t blob_id, daos_size_t blob_size, uuid_t dev_id,
 				    enum smd_dev_type st);
-int dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete complete_cb,
-		void *cb_args);
+int
+dv_sync_smd(const char *nvme_conf, const char *db_path, struct ddb_ctx *ctx,
+	    dv_smd_sync_complete complete_cb, void *cb_args);
 
 typedef int (*dv_vea_extent_handler)(void *cb_arg, struct vea_free_extent *free_extent);
 int dv_enumerate_vea(daos_handle_t poh, dv_vea_extent_handler cb, void *cb_arg);
@@ -261,10 +263,11 @@ void dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj);
 int ddb_vtp_verify(daos_handle_t poh, struct dv_tree_path *vtp);
 
 int
-dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt);
+dv_dev_list(const char *db_path, struct ddb_ctx *ctx, d_list_t *dev_list, int *dev_cnt);
 int
-dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid);
+dv_dev_replace(const char *db_path, struct ddb_ctx *ctx, uuid_t old_devid, uuid_t new_devid);
 int
-dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mount_size);
+dv_run_prov_mem(const char *db_path, struct ddb_ctx *ctx, const char *scm_mount,
+		unsigned int scm_mount_size);
 
 #endif /* DAOS_DDB_VOS_H */

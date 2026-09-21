@@ -1,6 +1,5 @@
 # Uncomment a fault you would like to trigger
 fault_config:
-  # - id: 131328 # DLCK_MOCK_ROOT
   # - id: 131329 # DLCK_FAULT_GETGRNAM
   # - id: 131330 # DLCK_MOCK_NO_DAOS_SERVER_GROUP
   # - id: 131331 # DLCK_FAULT_GETGROUPS
