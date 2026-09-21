@@ -97,6 +97,10 @@ class OSAOfflineParallelTest(OSAUtils):
         target_list.append(exc)
         target_list.append(exc + 1)
         t_string = "{},{}".format(target_list[0], target_list[1])
+        # If server is restarted, enable all targets
+        if self.server_boot:
+            targets_per_rank = self.server_managers[0].get_config_value("targets")
+            t_string = "0-{}".format(targets_per_rank - 1)
 
         # Exclude rank 2.
         rank = 2
