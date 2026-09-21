@@ -470,9 +470,6 @@ def scons():
     # This will add a final 'DEPS' value to opts but it will not be persistent.
     prereqs.run_build(opts)
 
-    if GetOption('clean') and GetOption('build_deps') != 'no':
-        prereqs.clean()
-
     if GetOption('build_deps') == 'only':
         if not GetOption('clean'):
             prereqs.save_build_info()

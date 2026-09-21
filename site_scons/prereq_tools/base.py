@@ -623,6 +623,9 @@ class PreReqComponent():
             raise BadScript("components", traceback.format_exc()) from old
 
         if GetOption('clean'):
+            if GetOption('build_deps') != 'no':
+                self.__env.Execute(Delete(self.__build_dir))
+                self.__env.Execute(Delete(self.prereq_prefix))
             return
 
         # Go ahead and prebuild some components
@@ -635,11 +638,6 @@ class PreReqComponent():
         if self.fetch_only:
             print("--build-deps=fetch was set, so exiting...")
             sys.exit(0)
-
-    def clean(self):
-        """Remove build and installation directories for selected prerequisites."""
-        self.__env.Execute(Delete(self.__build_dir))
-        self.__env.Execute(Delete(self.prereq_prefix))
 
     def _setup_build_type(self):
         """Set build type"""
