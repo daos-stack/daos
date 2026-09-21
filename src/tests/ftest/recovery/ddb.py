@@ -137,6 +137,24 @@ class DdbTest(TestWithServers):
         if not result.passed:
             self.fail(f"{command} failed on {result.failed_hosts}!")
 
+    def clean_daos_load(self):
+        """Unmount and remove the MD-on-SSD pool data directory.
+
+        Returns:
+            list: Errors detected during cleanup.
+        """
+        self.log.info("MD-on-SSD: Clean %s on %s", self.daos_load_path, self.hostlist_servers)
+        cleanup_command = (
+            f"rc=0; if mountpoint -q {self.daos_load_path}; then "
+            f"umount {self.daos_load_path} || rc=1; fi; "
+            f"if mountpoint -q {self.daos_load_path}; then rc=1; "
+            f"else rm -rf {self.daos_load_path} || rc=1; fi; exit $rc")
+        command = command_as_user(command=f"sh -c '{cleanup_command}'", user="root")
+        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command)
+        if not result.passed:
+            return [f"Failed to clean {self.daos_load_path} on {result.failed_hosts}"]
+        return []
+
     def prepare_ddb_command(self, md_on_ssd, pool):
         """Create DdbCommand object, load pool dir, and update db_path and vos_path.
 
@@ -162,17 +180,20 @@ class DdbTest(TestWithServers):
 
         if md_on_ssd:
             self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
-            self.run_cmd_check_result(command=f"mkdir -p {self.daos_load_path}")
+            cleanup_errors = self.clean_daos_load()
+            if cleanup_errors:
+                self.fail("\n".join(cleanup_errors))
+            self.run_cmd_check_result(command=f"mkdir {self.daos_load_path}")
+            self.register_cleanup(self.clean_daos_load)
 
             self.log_step(f"MD-on-SSD: Load pool dir to {self.daos_load_path}")
             db_path = os.path.join(self.log_dir, "control_metadata", "daos_control", "engine0")
             ddb_command.prov_mem(db_path=db_path, tmpfs_mount=self.daos_load_path)
 
-            # prov_mem and other subcommands take different arguments, so update.
-            # Add --db_path for MD-on-SSD and set appropriate vos_path. Add -w for rm and load.
-            # e.g., ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control/engine0
+            # Add --db_path for MD-on-SSD and set appropriate vos_path. e.g.,
+            # ddb --db_path=/var/tmp/daos_testing/control_metadata/daos_control/engine0
             # --vos_path /mnt/daos_load/<pool_uuid>/vos-0 value_dump <component_path> <file_path>
-            ddb_command.db_path.update(value=" ".join(["--db_path", db_path]))
+            ddb_command.db_path.update(db_path)
             ddb_command.vos_path.update(
                 value=os.path.join(self.daos_load_path, pool.uuid.lower(), "vos-0"))
 
@@ -332,8 +353,9 @@ class DdbTest(TestWithServers):
 
         if md_on_ssd:
             self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
-            self.run_cmd_check_result(command=f"umount {self.daos_load_path}")
-            self.run_cmd_check_result(command=f"rm -rf {self.daos_load_path}")
+            cleanup_errors = self.clean_daos_load()
+            if cleanup_errors:
+                errors.extend(cleanup_errors)
 
         self.log_step("Restart the server for the cleanup.")
         self.get_dmg_command().system_start()
@@ -496,8 +518,9 @@ class DdbTest(TestWithServers):
 
         if md_on_ssd:
             self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
-            self.run_cmd_check_result(command=f"umount {self.daos_load_path}")
-            self.run_cmd_check_result(command=f"rm -rf {self.daos_load_path}")
+            cleanup_errors = self.clean_daos_load()
+            if cleanup_errors:
+                errors.extend(cleanup_errors)
 
         report_errors(test=self, errors=errors)
 
@@ -590,8 +613,9 @@ class DdbTest(TestWithServers):
 
         if md_on_ssd:
             self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
-            self.run_cmd_check_result(command=f"umount {self.daos_load_path}")
-            self.run_cmd_check_result(command=f"rm -rf {self.daos_load_path}")
+            cleanup_errors = self.clean_daos_load()
+            if cleanup_errors:
+                errors.extend(cleanup_errors)
 
         report_errors(test=self, errors=errors)
 
@@ -675,8 +699,9 @@ class DdbTest(TestWithServers):
 
         if md_on_ssd:
             self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
-            self.run_cmd_check_result(command=f"umount {self.daos_load_path}")
-            self.run_cmd_check_result(command=f"rm -rf {self.daos_load_path}")
+            cleanup_errors = self.clean_daos_load()
+            if cleanup_errors:
+                errors.extend(cleanup_errors)
 
         self.log_step("Restart the server for the cleanup.")
         dmg_command.system_start()
