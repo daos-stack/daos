@@ -142,6 +142,27 @@ struct shard_fetch_stat {
 	int32_t			sfs_rc_other;
 };
 
+/* Per-IOM state for the client side EC IOM merge (obj_ec_iom_merge()).
+ * A fetch request can carry multiple IODs and one IOM per IOD, so this
+ * state must be tracked per IOM rather than per request. It is anchored in
+ * struct obj_auxi_args (rather than in struct obj_reasb_req) so that it
+ * survives the request re-assembly teardown/re-init that some retry paths
+ * perform, keeping the oims_realloc flag consistent with the iom_recxs
+ * buffer ownership across retries.
+ */
+struct obj_iom_merge_state {
+	/* number of targets that with this IOM handled */
+	uint32_t oims_tgt_nr;
+	/* number of iom extents that could not be stored in the caller
+	 * provided iom_recxs buffer (used to report the needed iom_nr).
+	 */
+	uint32_t oims_extra_nr;
+	/* the flag of this IOM's iom_recxs internally allocated by DAOS
+	 * (and so re-allocable).
+	 */
+	uint32_t oims_realloc : 1;
+};
+
 /**
  * Reassembled obj request.
  * User input iod/sgl possibly need to be reassembled at client before sending
@@ -171,13 +192,9 @@ struct obj_reasb_req {
 	/* to record returned data size from each targets */
 	daos_size_t			*orr_data_sizes;
 	/* number of targets this IO req involves */
-	uint32_t			 orr_tgt_nr;
-	/* number of targets that with IOM handled */
-	uint32_t			 orr_iom_tgt_nr;
-	/* number of iom extends */
-	uint32_t			 orr_iom_nr;
+	uint32_t                         orr_tgt_nr;
 	/* #iods of IO req */
-	uint32_t			 orr_iod_nr;
+	uint32_t                         orr_iod_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
 	pthread_mutex_t			 orr_mutex;
@@ -192,23 +209,21 @@ struct obj_reasb_req {
 	struct daos_recx_ep_list	*orr_parity_lists;
 	uint32_t			 orr_parity_list_nr;
 	/* for data recovery flag */
-	uint32_t			 orr_recov:1,
-	/* for snapshot data recovery flag */
-					 orr_recov_snap:1,
-	/* for iod_size fetching flag */
-					 orr_size_fetch:1,
-	/* for iod_size fetched flag */
-					 orr_size_fetched:1,
-	/* only with single data target flag */
-					 orr_single_tgt:1,
-	/* only for single-value IO flag */
-					 orr_singv_only:1,
-	/* the flag of IOM re-allocable (used for EC IOM merge) */
-					 orr_iom_realloc:1,
-	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
-					 orr_fail_alloc:1,
-	/* The fetch data/sgl is rebuilt by EC parity rebuild */
-					 orr_recov_data:1;
+	uint32_t                         orr_recov : 1,
+	    /* for snapshot data recovery flag */
+	    orr_recov_snap                         : 1,
+	    /* for iod_size fetching flag */
+	    orr_size_fetch                         : 1,
+	    /* for iod_size fetched flag */
+	    orr_size_fetched                       : 1,
+	    /* only with single data target flag */
+	    orr_single_tgt                         : 1,
+	    /* only for single-value IO flag */
+	    orr_singv_only                         : 1,
+	    /* orr_fail allocated flag, recovery task's orr_fail is inherited */
+	    orr_fail_alloc                         : 1,
+	    /* The fetch data/sgl is rebuilt by EC parity rebuild */
+	    orr_recov_data                         : 1;
 };
 
 static inline void
@@ -484,6 +499,10 @@ struct obj_auxi_args {
 	uint32_t			 initial_shard;
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
+	/* per-IOM merge state for EC fetch, one per iod, allocated on demand
+	 * and kept across retries.
+	 */
+	struct obj_iom_merge_state      *iom_state;
 	struct obj_auxi_tgt_list	*failed_tgt_list;
 	uint64_t			 dkey_hash;
 	/* one shard_args embedded to save one memory allocation if the obj
