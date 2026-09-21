@@ -53,7 +53,7 @@ dnf_install_retry() {
         fi
 
         if [ "$attempt" -eq "$retries" ]; then
-            echo "dnf $@ failed after $attempt attempts"
+            echo "dnf $* failed after $attempt attempts"
             ret=$rc
             break
         fi
