@@ -208,7 +208,7 @@ class OSAOnlineParallelTest(OSAUtils):
             self.assertGreater(final_total_targets, initial_total_targets,
                                "Pool total_targets did not increase after extend")
             output = self.dmg_command.pool_query(self.pool.identifier)
-            self.check_disabled_ranks(expected_disabled_ranks, output, "disabled_ranks")
+            self.check_ranks(expected_disabled_ranks, output, "disabled_ranks")
 
         self.log_step("Check data consistency")
         # Perform a data consistency check.

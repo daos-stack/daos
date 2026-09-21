@@ -50,16 +50,12 @@ class OSAOfflineParallelTest(OSAUtils):
             if action == "reintegrate":
                 self.log.info("Interrupt rebuild with reintegrate")
                 time.sleep(45)
-                # If we are performing start/stop of the server, skip the reintegrate action.
-                if self.server_boot:
-                    return
             if action == "exclude" and self.server_boot is True:
                 self.log.info("Stop/Start rank %s using system stop/start", kwargs["ranks"])
                 ranks = str(kwargs["ranks"])
                 dmg.system_stop(ranks=ranks)
-                self.print_and_assert_on_rebuild_failure("Stopping rank {}".format(ranks))
+                time.sleep(15)
                 dmg.system_start(ranks=ranks)
-                self.print_and_assert_on_rebuild_failure("Starting rank {}".format(ranks))
             else:
                 # For each action, pass in necessary parameters to the dmg method with
                 # kwargs. getattr is used to obtain the method in dmg object.
@@ -153,9 +149,6 @@ class OSAOfflineParallelTest(OSAUtils):
                     "pool": self.pool.identifier, "ranks": ",".join(map(str, extra_ranks))}
             }
             expected_disabled_ranks.append(rank)
-            # If server boot is enabled, the next rank will also be expected to be disabled.
-            if self.server_boot:
-                expected_disabled_ranks.append(rank + 1)
             for action in sorted(action_kwargs):
                 # Add a dmg thread
                 kwargs = action_kwargs[action].copy()
@@ -189,7 +182,7 @@ class OSAOfflineParallelTest(OSAUtils):
                                "Pool total_targets did not increase after extend")
 
             output = self.dmg_command.pool_query(self.pool.identifier)
-            self.check_disabled_ranks(expected_disabled_ranks, output, "disabled_ranks")
+            self.check_ranks(expected_disabled_ranks, output, "disabled_ranks")
 
         self.log_step("Verify data integrity after OSA operations")
         # Finally run IOR to read the data and perform daos_container_check

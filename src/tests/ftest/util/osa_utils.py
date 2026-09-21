@@ -324,7 +324,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             out_queue.put(exc)
             raise CommandFailure(exc)
 
-    def check_disabled_ranks(self, expect, data, key):
+    def check_ranks(self, expect, data, key):
         """Check the expected and actual rank lists are equal.
 
         Args:
