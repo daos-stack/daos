@@ -691,11 +691,21 @@ struct umem_instance;
  * Describes the set of evictable memory buckets an allocation may be served
  * from, in priority order. A NULL request is equivalent to allocating from the
  * default (non-evictable) bucket.
+ *
+ * The buckets listed in ubr_bkt_ids are tried first, in order. Once they are
+ * all full, the allocation spills over to the active spill-over evictable (SOE)
+ * buckets as long as the object occupies fewer than ubr_bkt_max evictable
+ * buckets, and falls back to the non-evictable bucket after that.
+ *
+ * TEMP FIX: ubr_bkt_max == 0 permits unbounded spill-over to SOE buckets,
+ * preserving the legacy single-bucket behavior. This will not be allowed in the
+ * future.
  */
 typedef struct umem_bucket_req {
-	const uint32_t *ubr_bkt_ids; /* Ordered list of bucket IDs (allocation priority) */
-	uint32_t        ubr_bkt_cnt; /* Number of valid entries in ubr_bkt_ids */
-	uint32_t        ubr_bkt_max; /* Max E-buckets allowed for the object */
+	const uint32_t *ubr_bkt_ids;   /* Ordered list of bucket IDs (allocation priority) */
+	uint16_t        ubr_bkt_cnt;   /* Number of valid entries in ubr_bkt_ids */
+	uint16_t        ubr_bkt_max;   /* Max E-buckets allowed for the object */
+	uint32_t        ubr_bkt_flags; /* Reserved for future use */
 } umem_bucket_req_t;
 
 /* type num used by umem ops */

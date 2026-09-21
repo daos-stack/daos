@@ -1972,7 +1972,7 @@ test_atomic_alloc_spill_two_mb(void **state)
 	umem_off_t            umoff, prev_umoff = UMOFF_NULL, *ptr = NULL;
 	uint32_t              mb_id1, mb_id2, ret_id;
 	uint32_t              bkt_ids[2];
-	umem_bucket_req_t     req;
+	umem_bucket_req_t     req        = {0};
 	size_t                alloc_size = 2048;
 	uint64_t              allocated1, maxsz1;
 	uint64_t              allocated2, maxsz2;
