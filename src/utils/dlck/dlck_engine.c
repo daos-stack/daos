@@ -381,10 +381,7 @@ xstream_start_all(struct dlck_engine *engine)
 	return DER_SUCCESS;
 
 xstream_stop_all:
-	/** free all daos_io_* and the daos_sys_0 XS */
-	for (int i = 0; i <= engine->targets; ++i) {
-		(void)dlck_xstream_free(&engine->xss[i]);
-	}
+	xstream_stop_all_no_error(engine);
 
 	return rc;
 }
