@@ -34,7 +34,7 @@ import sys
 import traceback
 from copy import deepcopy
 
-from SCons.Script import BUILD_TARGETS, Dir, Exit, GetOption, SetOption, WhereIs
+from SCons.Script import BUILD_TARGETS, Delete, Dir, Exit, GetOption, SetOption, WhereIs
 from SCons.Variables import BoolVariable, EnumVariable, ListVariable, PathVariable
 
 
@@ -622,6 +622,9 @@ class PreReqComponent():
         except Exception as old:
             raise BadScript("components", traceback.format_exc()) from old
 
+        if GetOption('clean'):
+            return
+
         # Go ahead and prebuild some components
         for comp in reqs:
             if self.fetch_only:
@@ -632,6 +635,11 @@ class PreReqComponent():
         if self.fetch_only:
             print("--build-deps=fetch was set, so exiting...")
             sys.exit(0)
+
+    def clean(self):
+        """Remove build and installation directories for selected prerequisites."""
+        self.__env.Execute(Delete(self.__build_dir))
+        self.__env.Execute(Delete(self.prereq_prefix))
 
     def _setup_build_type(self):
         """Set build type"""
