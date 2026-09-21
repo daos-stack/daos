@@ -845,6 +845,8 @@ class PreReqComponent():
                 raise MissingDefinition(comp)
             if comp in self.__errors:
                 raise self.__errors[comp]
+            if GetOption('clean'):
+                continue
             comp_def = self.__defined[comp]
             if headers_only:
                 needed_libs = None
@@ -855,8 +857,6 @@ class PreReqComponent():
                     continue
                 # checkout and build done previously
                 comp_def.set_environment(env, needed_libs)
-                if GetOption('clean'):
-                    continue
                 if self.__required[comp]:
                     changes = True
                 continue
