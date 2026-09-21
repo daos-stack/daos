@@ -94,6 +94,13 @@ static int                    fd_dummy = -1;
 /* Default dir cache garbage collector time-out in seconds */
 #define DCACHE_GC_PERIOD      120
 
+/* Symlink hops followed while resolving ".." before giving up with ELOOP, as the kernel's
+ * MAXSYMLINKS
+ */
+#define MAX_SYMLINK_HOPS      40
+/* Hops followed within the container root to detect an absolute value in a chain of links */
+#define ROOT_SYMLINK_MAX_HOPS 8
+
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
 /* the list of low fd reserved */
@@ -242,6 +249,11 @@ struct statx {
 
 /* working dir of current process */
 static char             cur_dir[DFS_MAX_PATH] = "";
+/* pid cur_dir was last set for. CPython uses vfork() for subprocess with cwd=, and a vfork()ed
+ * child runs in the parent's address space until execve(), so a chdir() there would otherwise
+ * leave the parent resolving relative paths against the child's directory.
+ */
+static pid_t            cur_dir_pid;
 static bool             segv_handler_inited;
 /* Old segv handler */
 struct sigaction        old_segv;
@@ -264,6 +276,8 @@ static void
 finalize_dfs(void);
 static void
 update_cwd(void);
+static void
+cur_dir_check_owner(void);
 static int
 get_eqh(daos_handle_t *eqh);
 static void
@@ -502,9 +516,9 @@ static void *(*next_dlopen)(const char *filename, int flags);
  */
 
 static int
-remove_dot_dot(char path[], int *len);
+normalize_path(char path[], int len);
 static int
-remove_dot_and_cleanup(char szPath[], int len);
+resolve_dot_dot(struct dfs_mt *dfs_mt, char path[], int *len, bool *use_kernel);
 
 /* reference count of fake fd duplicated by real fd with dup2() */
 static int                dup_ref_count[MAX_OPENED_FILE];
@@ -1120,6 +1134,7 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 {
 	int    pos, len;
 	bool   with_daos_prefix;
+	bool   use_kernel;
 	char   pool[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char   cont[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char  *rel_path = NULL;
@@ -1157,6 +1172,10 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 	if (full_path_parse == NULL)
 		goto out_oom;
 
+	/* Relative paths resolve against cur_dir, which may still belong to a different process. */
+	if (szInput[0] != '/')
+		cur_dir_check_owner();
+
 	if (strncmp(szInput, ".", 2) == 0) {
 		/* special case for current work directory */
 		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH + 1);
@@ -1185,17 +1204,8 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 		}
 	}
 
-	/* Remove '/./'; Replace '//' with '/'; Remove '/' at the end of path. */
-	len = remove_dot_and_cleanup(full_path_parse, len);
-
-	/* standarlize and determine whether a path is a target path or not */
-
-	/* Assume full_path_parse[] = "/A/B/C/../D/E", it will be "/A/B/D/E" after
-	 * remove_dot_dot.
-	 */
-	rc = remove_dot_dot(full_path_parse, &len);
-	if (rc)
-		D_GOTO(out_err, rc);
+	/* e.g. "/A/./B//C/../D/" becomes "/A/B/C/../D"; ".." is left to resolve_dot_dot() */
+	len = normalize_path(full_path_parse, len);
 
 	/* determine whether the path contains any known dfs mount point */
 	idx_dfs = query_dfs_mount(full_path_parse);
@@ -1301,6 +1311,17 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			}
 			D_MUTEX_UNLOCK(&lock_dfs);
 		}
+
+		rc = resolve_dot_dot(*dfs_mt, full_path_parse, &len, &use_kernel);
+		if (rc)
+			D_GOTO(out_err, rc);
+		if (use_kernel) {
+			/* the path leaves the container through ".." or an absolute symlink */
+			strncpy(*full_path, full_path_parse, len + 1);
+			*is_target_path = 0;
+			item_name[0]    = '\0';
+			goto out_normal;
+		}
 		*is_target_path = 1;
 
 		/* root dir */
@@ -1373,113 +1394,194 @@ out_oom:
 	return ENOMEM;
 }
 
+/* Lexically clean an absolute path in place: drop empty and "." components and strip the trailing
+ * "/". Working on components rather than on substrings keeps a "//" that follows a "/./" from
+ * surviving the pass. ".." is kept: whether it can be collapsed depends on the component in front
+ * of it being a directory rather than a symlink, which resolve_dot_dot() decides with a lookup.
+ * Returns the new length, at least 1 for "/".
+ */
 static int
-remove_dot_dot(char path[], int *len)
+normalize_path(char path[], int len)
 {
-	char *p_Offset_2Dots, *p_Back, *pTmp, *pMax, *new_str;
-	int   i, nNonZero;
+	int r = 0;
+	int w = 0;
 
-	/* the length of path[] is already checked in the caller of this function. */
+	D_ASSERT(len == 0 || path[0] == '/');
 
-	p_Offset_2Dots = strstr(path, "/../");
-again:
-	nNonZero = 0;
-	if (p_Offset_2Dots == path) {
-		D_DEBUG(DB_ANY, "wrong path %s: %d (%s)\n", path, EINVAL, strerror(EINVAL));
-		return EINVAL;
+	while (r < len) {
+		int start;
+		int comp_len;
+
+		while (r < len && path[r] == '/')
+			r++;
+		start = r;
+		while (r < len && path[r] != '/')
+			r++;
+		comp_len = r - start;
+		if (comp_len == 0 || (comp_len == 1 && path[start] == '.'))
+			continue;
+		/* w < start always holds, as each kept component consumed at least one more '/' */
+		path[w++] = '/';
+		memmove(path + w, path + start, comp_len);
+		w += comp_len;
 	}
+	if (w == 0)
+		path[w++] = '/';
+	path[w] = '\0';
 
-	while (p_Offset_2Dots != NULL) {
-		pMax = p_Offset_2Dots + 4;
-		for (p_Back = p_Offset_2Dots - 2; p_Back >= path; p_Back--) {
-			if (*p_Back == '/') {
-				for (pTmp = p_Back; pTmp < (pMax - 1); pTmp++)
-					*pTmp = 0;
-				break;
-			}
-		}
-		p_Offset_2Dots = strstr(p_Offset_2Dots + 3, "/../");
-		if (p_Offset_2Dots == NULL)
-			break;
-	}
-
-	new_str = path;
-	for (i = 0; i < *len; i++) {
-		if (path[i]) {
-			new_str[nNonZero] = path[i];
-			nNonZero++;
-		}
-	}
-	new_str[nNonZero] = 0;
-	*len = nNonZero;
-
-	p_Offset_2Dots = strstr(path, "/../");
-	if (p_Offset_2Dots)
-		goto again;
-	p_Offset_2Dots = strstr(path, "/..");
-	if (p_Offset_2Dots && p_Offset_2Dots[3] == '\0')
-		/* /.. at the very end of the path. */
-		goto again;
-
-	return 0;
+	return w;
 }
 
-/* Remove '/./'. Replace '//' with '/'. Remove '/.'. Remove '/' at the end of path. */
+/* Index of the '/' in front of the first ".." component at or after 'from', or -1. The path has
+ * been through normalize_path(), so ".." is always delimited by '/' or the end of the string.
+ */
 static int
-remove_dot_and_cleanup(char path[], int len)
+find_dot_dot(const char *path, int from)
 {
-	char *p_Offset_Dots, *p_Offset_Slash, *new_str;
-	int   i, nNonZero = 0;
+	const char *p = path + from;
 
-	/* the length of path[] is already checked in the caller of this function. */
-
-	p_Offset_Dots = strstr(path, "/./");
-	while ((p_Offset_Dots != NULL)) {
-		p_Offset_Dots[0] = 0;
-		p_Offset_Dots[1] = 0;
-		p_Offset_Dots    = strstr(p_Offset_Dots + 2, "/./");
-		if (p_Offset_Dots == NULL)
-			break;
+	while ((p = strstr(p, "/..")) != NULL) {
+		if (p[3] == '/' || p[3] == '\0')
+			return (int)(p - path);
+		p += 3;
 	}
+	return -1;
+}
 
-	/* replace "//" with "/" */
-	p_Offset_Slash = strstr(path, "//");
-	while (p_Offset_Slash != NULL) {
-		p_Offset_Slash[0] = 0;
-		p_Offset_Slash    = strstr(p_Offset_Slash + 1, "//");
-		if (p_Offset_Slash == NULL)
-			break;
-	}
+/* Resolve the ".." components of a path inside a container the way the kernel does: ".." applies
+ * to the component in front of it after that component has been resolved, so "link/.." with
+ * "link -> c/d" leads to "c", not to the parent of "link". Each such component is looked up with
+ * O_NOFOLLOW: a directory lets "X/.." collapse, a relative symlink value is spliced in place of X
+ * and the scan restarts, anything else is an error as in the kernel. A ".." applied to the mount
+ * point itself collapses lexically, the mount path being taken as canonical as query_dfs_mount()
+ * does, and the path stays with pil4dfs only if it comes straight back into this mount. A symlink
+ * with an absolute value leaves the container and is handed to the kernel. Paths without ".."
+ * return at the first scan and pay nothing.
+ */
+static int
+resolve_dot_dot(struct dfs_mt *dfs_mt, char path[], int *len, bool *use_kernel)
+{
+	int hops = 0;
 
-	/* remove '/.' at the end */
-	if (len > 2 && strncmp(path + len - 2, "/.", 3) == 0) {
-		p_Offset_Slash = path + len - 2;
-		p_Offset_Slash[0] = 0;
-		p_Offset_Slash[1] = 0;
-	}
+	*use_kernel = false;
+	for (;;) {
+		struct dcache_rec *parent = NULL;
+		dfs_obj_t         *obj    = NULL;
+		mode_t             mode   = 0;
+		char              *parent_path;
+		char              *value = NULL;
+		daos_size_t        value_len;
+		int                pos, xs, end, parent_len, rc;
+		char               saved;
 
-	new_str = path;
-	for (i = 0; i < len; i++) {
-		if (path[i]) {
-			new_str[nNonZero] = path[i];
-			nNonZero++;
+		pos = find_dot_dot(path, dfs_mt->len_fs_root);
+		if (pos < 0)
+			return 0;
+		if (pos <= dfs_mt->len_fs_root) {
+			/* ".." right after the mount root: its parent is on the host, so only a
+			 * path that re-enters this very mount can be served here
+			 */
+			if (dfs_mt->len_fs_root <= 1) {
+				*use_kernel = true;
+				return 0;
+			}
+			xs = dfs_mt->len_fs_root;
+			while (xs > 0 && path[xs - 1] != '/')
+				xs--;
+			end = pos + 3;
+			memmove(path + xs, path + end, *len - end + 1);
+			*len -= end - xs;
+			*len = normalize_path(path, *len);
+			if (strncmp(path, dfs_mt->fs_root, dfs_mt->len_fs_root) != 0 ||
+			    (path[dfs_mt->len_fs_root] != '/' &&
+			     path[dfs_mt->len_fs_root] != '\0')) {
+				*use_kernel = true;
+				return 0;
+			}
+			continue;
 		}
-	}
-	/* remove "/" at the end of path */
-	new_str[nNonZero] = 0;
-	if (new_str[1] == 0 && new_str[0] == '/')
-		/* root dir */
-		return 1;
-	for (i = nNonZero - 1; i >= 0; i--) {
-		if (new_str[i] == '/') {
-			new_str[i] = 0;
-			nNonZero--;
+
+		/* X is the component in front of "..", its parent the container path before it */
+		xs = pos - 1;
+		while (path[xs - 1] != '/')
+			xs--;
+		parent_len = (xs - 1) - dfs_mt->len_fs_root;
+		if (parent_len == 0) {
+			D_STRNDUP(parent_path, "/", 1);
+			parent_len = 1;
 		} else {
-			break;
+			D_STRNDUP(parent_path, path + dfs_mt->len_fs_root, parent_len);
 		}
-	}
+		if (parent_path == NULL)
+			return ENOMEM;
+		rc = dcache_find_insert(dfs_mt->dcache, parent_path, parent_len, &parent);
+		D_FREE(parent_path);
+		if (rc)
+			return daos_der2errno(rc);
 
-	return nNonZero;
+		saved     = path[pos];
+		path[pos] = '\0';
+		rc = dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), path + xs, O_RDONLY | O_NOFOLLOW,
+				    &obj, &mode, NULL);
+		path[pos] = saved;
+		drec_decref(dfs_mt->dcache, parent);
+		if (rc)
+			return rc;
+
+		if (S_ISDIR(mode)) {
+			dfs_release(obj);
+			/* drop "X/.."; the cleanup pass removes the "/" left behind */
+			end = pos + 3;
+			memmove(path + xs, path + end, *len - end + 1);
+			*len -= end - xs;
+			*len = normalize_path(path, *len);
+			continue;
+		}
+		if (!S_ISLNK(mode)) {
+			dfs_release(obj);
+			return ENOTDIR;
+		}
+
+		value_len = 0;
+		rc        = dfs_get_symlink_value(obj, NULL, &value_len);
+		if (rc == 0) {
+			D_ALLOC(value, value_len);
+			if (value == NULL)
+				rc = ENOMEM;
+			else
+				rc = dfs_get_symlink_value(obj, value, &value_len);
+		}
+		dfs_release(obj);
+		if (rc) {
+			D_FREE(value);
+			return rc;
+		}
+		/* value_len includes the terminating NUL */
+		value_len--;
+		if (value_len == 0) {
+			D_FREE(value);
+			return ENOENT;
+		}
+		if (value[0] == '/') {
+			D_FREE(value);
+			*use_kernel = true;
+			return 0;
+		}
+		if (++hops > MAX_SYMLINK_HOPS) {
+			D_FREE(value);
+			return ELOOP;
+		}
+		/* splice the value in place of X, then clean up whatever it contained */
+		if (*len - (pos - xs) + (int)value_len >= DFS_MAX_PATH) {
+			D_FREE(value);
+			return ENAMETOOLONG;
+		}
+		memmove(path + xs + value_len, path + pos, *len - pos + 1);
+		memcpy(path + xs, value, value_len);
+		*len += (int)value_len - (pos - xs);
+		D_FREE(value);
+		*len = normalize_path(path, *len);
+	}
 }
 
 static int
@@ -2017,6 +2119,7 @@ check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int
 		else if (len_str < 0)
 			goto out_oom;
 	} else if (dirfd_directed == AT_FDCWD) {
+		cur_dir_check_owner();
 		len_str = asprintf(full_path_out, "%s/%s", cur_dir, rel_path);
 		if (len_str >= DFS_MAX_PATH)
 			goto out_toolong;
@@ -2070,6 +2173,92 @@ out_readlink:
 	return (-1);
 }
 
+/* dfs dereferences symlinks inside the container, so it cannot handle a symlink whose value is an
+ * absolute path: POSIX resolves such a value from the process root, which only the kernel can do.
+ * dfs reports EINVAL for it, except when the link sits in the container root, where it resolves the
+ * value from that root: an absolute value is handled up front by root_symlink_escapes(), and a
+ * relative value that climbs out of the container reports ENOENT. Neither errno is specific to this
+ * case, so the entry is looked up again to confirm that it really is a symlink. The absolute value
+ * may sit anywhere in a chain of links, as with the python3 -> python -> /usr/bin/python3.x layout
+ * of a venv, so the value of the entry itself is not inspected.
+ *
+ * An absolute symlink in a non-leaf position of the path is not detected here.
+ */
+static bool
+need_kernel_to_resolve(int rc, struct dfs_mt *dfs_mt, struct dcache_rec *parent,
+		       const char *item_name, const char *parent_dir)
+{
+	dfs_obj_t *obj  = NULL;
+	mode_t     mode = 0;
+
+	if (parent == NULL || item_name[0] == '\0')
+		return false;
+	if (rc == ENOENT) {
+		/* A lookup miss is common, so only probe where dfs can report one for such a
+		 * link, and keep it cheap everywhere else.
+		 */
+		if (parent_dir == NULL || strncmp(parent_dir, "/", 2) != 0)
+			return false;
+	} else if (rc != EINVAL) {
+		return false;
+	}
+
+	if (dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), item_name, O_RDONLY | O_NOFOLLOW, &obj,
+			   &mode, NULL) != 0)
+		return false;
+	dfs_release(obj);
+
+	return S_ISLNK(mode);
+}
+
+/* For a symlink in the container root dfs resolves an absolute value from that root rather than
+ * reporting EINVAL, so the lookup succeeds with the wrong object whenever the same path also exists
+ * inside the container. This cannot be told apart from a genuine hit afterwards, so an entry of the
+ * root is checked before it is dereferenced. Bare relative values are followed within the root so
+ * that a chain such as python3 -> python -> /usr/bin/python3.x is caught as well.
+ */
+static bool
+root_symlink_escapes(struct dfs_mt *dfs_mt, struct dcache_rec *parent, const char *item_name,
+		     const char *parent_dir)
+{
+	/* a bare name is at most DFS_MAX_NAME; a longer value is truncated and has to hold a '/' */
+	char        value[DFS_MAX_NAME + 2];
+	const char *name = item_name;
+	int         hop;
+
+	if (parent == NULL || parent_dir == NULL || strncmp(parent_dir, "/", 2) != 0)
+		return false;
+
+	for (hop = 0; hop < ROOT_SYMLINK_MAX_HOPS; hop++) {
+		dfs_obj_t  *obj     = NULL;
+		mode_t      mode    = 0;
+		daos_size_t str_len = sizeof(value);
+		int         rc;
+
+		if (dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), name, O_RDONLY | O_NOFOLLOW, &obj,
+				   &mode, NULL) != 0)
+			return false;
+		if (!S_ISLNK(mode)) {
+			dfs_release(obj);
+			return false;
+		}
+		rc = dfs_get_symlink_value(obj, value, &str_len);
+		dfs_release(obj);
+		if (rc != 0 || str_len <= 1)
+			return false;
+		if (value[0] == '/')
+			return true;
+		/* a value with a directory part leaves the root, and dfs then reports EINVAL for
+		 * an absolute hop further down the chain
+		 */
+		if (str_len > sizeof(value) || strchr(value, '/') != NULL)
+			return false;
+		name = value;
+	}
+
+	return false;
+}
+
 static int
 open_common(int (*real_open)(const char *pathname, int oflags, ...), const char *caller_name,
 	    const char *pathname, int oflags, ...)
@@ -2102,10 +2291,12 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	if (!d_hook_enabled)
 		goto org_func;
 
+	item_name[0] = '\0';
+
 	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
-	if (rc == ENOENT)
-		D_GOTO(out_error, rc = ENOENT);
+	if (rc)
+		D_GOTO(out_error, rc);
 	parent_dfs = NULL;
 	if (parent != NULL)
 		parent_dfs = drec2obj(parent);
@@ -2258,6 +2449,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		if ((S_IXUSR & mode_parent) == 0 || (S_IWUSR & mode_parent) == 0)
 			D_GOTO(out_error, rc = EACCES);
 	}
+	if (root_symlink_escapes(dfs_mt, parent, item_name, parent_dir))
+		goto org_func;
 	/* file handled by DFS */
 	if (oflags & O_CREAT) {
 		/* clear the bits for types first. mode in open() only contains permission info. */
@@ -2272,6 +2465,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				    &dfs_obj, &mode_query, NULL);
 	}
 
+	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir))
+		goto org_func;
 	if (rc)
 		D_GOTO(out_error, rc);
 
@@ -3094,6 +3289,7 @@ static int
 new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int                is_target_path, rc;
+	bool               use_kernel;
 	dfs_obj_t         *obj;
 	mode_t             mode;
 	char               item_name[DFS_MAX_NAME];
@@ -3109,6 +3305,8 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 		return (-1);
 	}
 
+	item_name[0] = '\0';
+
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
@@ -3117,6 +3315,8 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 		goto out_org;
 	atomic_fetch_add_relaxed(&num_stat, 1);
 
+	if (root_symlink_escapes(dfs_mt, parent, item_name, parent_dir))
+		goto out_org;
 	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &obj, &mode, stat_buf);
 	} else {
@@ -3144,10 +3344,12 @@ out_org:
 	return next_xstat(ver, path, stat_buf);
 
 out_err:
+	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
+		     ((rc == EIO || rc == EINVAL) && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if ((rc == EIO || rc == EINVAL) && d_compatible_mode)
+	if (use_kernel)
 		return next_xstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -3157,6 +3359,7 @@ static int
 new_lxstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int                is_target_path, rc;
+	bool               use_kernel;
 	char               item_name[DFS_MAX_NAME];
 	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
@@ -3169,6 +3372,8 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 		errno = ENOENT;
 		return (-1);
 	}
+
+	item_name[0] = '\0';
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3196,10 +3401,12 @@ out_org:
 	return libc_lxstat(ver, path, stat_buf);
 
 out_err:
+	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
+		     ((rc == EIO || rc == EINVAL) && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if ((rc == EIO || rc == EINVAL) && d_compatible_mode)
+	if (use_kernel)
 		return libc_lxstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -3211,7 +3418,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
-	if (!d_hook_enabled)
+	if (path == NULL || !d_hook_enabled)
 		return libc_fxstatat(ver, dirfd, path, stat_buf, flags);
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
 		errno = ENOENT;
@@ -3268,7 +3475,7 @@ new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
-	if (!d_hook_enabled)
+	if (path == NULL || !d_hook_enabled)
 		return libc_fstatat(dirfd, path, stat_buf, flags);
 
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
@@ -3352,18 +3559,21 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 	int         rc, idx_dfs, error = 0;
 	struct stat stat_buf;
 	char        *full_path = NULL;
+	/* glibc declares path nonnull and gcc folds a direct NULL test away, so read it as
+	 * volatile. Rust's std probes statx() with a NULL path and expects EFAULT from the kernel.
+	 */
+	const char *volatile path_probe = path;
 
 	if (next_statx == NULL) {
 		next_statx = dlsym(RTLD_NEXT, "statx");
 		D_ASSERT(next_statx != NULL);
 	}
+	if (path_probe == NULL || !d_hook_enabled)
+		return next_statx(dirfd, path, flags, mask, statx_buf);
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
 		errno = ENOENT;
 		return (-1);
 	}
-
-	if (!d_hook_enabled)
-		return next_statx(dirfd, path, flags, mask, statx_buf);
 
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/') {
@@ -5128,6 +5338,7 @@ getcwd(char *buf, size_t size)
 	if (!d_hook_enabled)
 		return next_getcwd(buf, size);
 
+	cur_dir_check_owner();
 	if (cur_dir[0] != '/')
 		update_cwd();
 
@@ -5192,6 +5403,8 @@ access(const char *path, int mode)
 	if (!d_hook_enabled)
 		return next_access(path, mode);
 
+	item_name[0] = '\0';
+
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
@@ -5199,6 +5412,8 @@ access(const char *path, int mode)
 	if (!is_target_path)
 		goto out_org;
 
+	if (root_symlink_escapes(dfs_mt, parent, item_name, parent_dir))
+		goto out_org;
 	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_access(dfs_mt->dfs, NULL, NULL, mode);
 	else
@@ -5217,6 +5432,8 @@ out_org:
 	return next_access(path, mode);
 
 out_err:
+	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir))
+		goto out_org;
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -5279,22 +5496,33 @@ chdir(const char *path)
 	if (!d_hook_enabled)
 		return next_chdir(path);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
-			&full_path, &dfs_mt);
-	if (rc)
-		D_GOTO(out_err, rc);
-
 	rc = next_chdir(path);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		return (-1);
+
+	if (cur_dir_pid != 0 && cur_dir_pid != getpid()) {
+		/* A vfork()ed child shares the parent's memory until execve(): updating cur_dir
+		 * here would redirect the parent's relative paths to this child's directory.
+		 */
+		return 0;
+	}
+
+	rc =
+	    query_path(path, &is_target_path, &parent, item_name, &parent_dir, &full_path, &dfs_mt);
+	if (rc) {
+		/* The kernel already moved cwd, so chdir() has to report success. Only cur_dir
+		 * cannot be derived from path here. query_path() above allocates and takes locks,
+		 * so a chdir() between fork() and exec() is still not safe in general.
+		 */
+		update_cwd();
+		return 0;
+	}
 
 	if (!is_target_path) {
-		len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s", full_path);
-		if (len_str >= DFS_MAX_PATH) {
-			D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
-				strerror(ENAMETOOLONG));
-			D_GOTO(out_err, rc = ENAMETOOLONG);
-		}
+		/* the path is not normalized for ".." outside a container, so take the kernel's
+		 * view of the new cwd
+		 */
+		update_cwd();
 		D_GOTO(out, rc);
 	}
 
@@ -5334,8 +5562,13 @@ fchdir(int dirfd)
 		return next_fchdir(dirfd);
 
 	fd_directed = d_get_fd_redirected(dirfd);
-	if (fd_directed < FD_DIR_BASE)
-		return next_fchdir(dirfd);
+	if (fd_directed < FD_DIR_BASE) {
+		rc = next_fchdir(dirfd);
+		/* as in chdir(), a vfork()ed child must leave the parent's cur_dir alone */
+		if (rc == 0 && (cur_dir_pid == 0 || cur_dir_pid == getpid()))
+			update_cwd();
+		return rc;
+	}
 
 	/* assume dfuse is running. call chdir() to update cwd. */
 	if (next_chdir == NULL) {
@@ -5346,7 +5579,11 @@ fchdir(int dirfd)
 	if (rc)
 		return rc;
 
+	if (cur_dir_pid != 0 && cur_dir_pid != getpid())
+		return 0;
+
 	pt_end = stpncpy(cur_dir, dir_list[fd_directed - FD_DIR_BASE]->path, DFS_MAX_PATH - 1);
+	cur_dir_pid = getpid();
 	if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
 			strerror(ENAMETOOLONG));
@@ -6850,25 +7087,39 @@ new_exit(int rc)
 static void
 update_cwd(void)
 {
-	char *cwd = NULL;
-	char *pt_end = NULL;
+	int saved_errno = errno;
 
-	/* daos_init() may be not called yet. */
-	cwd = get_current_dir_name();
-
-	if (cwd == NULL) {
-		D_FATAL("fatal error to get CWD with get_current_dir_name(): %d (%s)\n", errno,
-			strerror(errno));
-		abort();
-	} else {
-		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH - 1);
-		if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
-			D_FATAL("fatal error, cwd path is too long:  %d (%s)\n", ENAMETOOLONG,
-				strerror(ENAMETOOLONG));
-			abort();
-		}
-		free(cwd);
+	if (next_getcwd == NULL) {
+		next_getcwd = dlsym(RTLD_NEXT, "getcwd");
+		D_ASSERT(next_getcwd != NULL);
 	}
+
+	/* get_current_dir_name() returns $PWD when stat($PWD) and stat(".") match, but both go
+	 * through the intercepted stat() and so agree with the stale cur_dir to be refreshed.
+	 * cur_dir is filled directly to stay allocation free between fork() and exec().
+	 */
+	if (next_getcwd(cur_dir, DFS_MAX_PATH) == NULL) {
+		/* e.g. cwd was removed or is too long. Relative paths are left to libc until the
+		 * cwd is known again.
+		 */
+		D_DEBUG(DB_ANY, "getcwd() failed: %d (%s)\n", errno, strerror(errno));
+		cur_dir[0] = '\0';
+	}
+	cur_dir_pid = getpid();
+
+	errno = saved_errno;
+}
+
+/* Adopt cur_dir for this process when it was last set by another one, e.g. after fork(). By the
+ * time a parent runs again after vfork() the child has already exec'd, so writing here is safe.
+ */
+static void
+cur_dir_check_owner(void)
+{
+	if (cur_dir_pid == getpid())
+		return;
+
+	update_cwd();
 }
 
 static int

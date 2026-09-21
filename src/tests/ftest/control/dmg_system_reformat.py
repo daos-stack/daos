@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +10,7 @@ from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from exception_utils import CommandFailure
 from general_utils import journalctl_time
-from test_utils_pool import add_pool, get_size_params
+from test_utils_pool import get_size_params
 
 
 class DmgSystemReformatTest(TestWithServers):
@@ -41,11 +42,11 @@ class DmgSystemReformatTest(TestWithServers):
         dmg = self.get_dmg_command().copy()
 
         # Create pool using 90% of the available NVMe capacity
-        pools = [add_pool(self, dmg=dmg)]
+        pools = [self.get_pool(dmg=dmg)]
 
         self.log.info("Check that new pool will fail with DER_NOSPACE")
         dmg.exit_status_exception = False
-        pools.append(add_pool(self, create=False, **get_size_params(pools[0])))
+        pools.append(self.get_pool(create=False, **get_size_params(pools[0])))
         try:
             pools[-1].create()
         except TestFail as error:
@@ -101,7 +102,7 @@ class DmgSystemReformatTest(TestWithServers):
                 dmg.result.stdout_text))
 
         # Create last pool now that memory has been wiped.
-        pools.append(add_pool(self, connect=False, dmg=dmg))
+        pools.append(self.get_pool(connect=False, dmg=dmg))
 
         # Lastly, verify that last created pool is in the list
         pool_uuids = dmg.get_pool_list_uuids()

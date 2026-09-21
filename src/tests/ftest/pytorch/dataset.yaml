@@ -1,6 +1,7 @@
 hosts:
   test_servers: 2
   test_clients: 1
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -13,11 +14,15 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
   system_ram_reserved: 1
+
 pool:
   size: 8G
+  properties: rd_fac:0,space_rb:0
+
 container:
   type: POSIX
   dir_oclass: SX
+  properties: cksum:off,srv_cksum:off
 
 timeout: 270
 

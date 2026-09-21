@@ -307,7 +307,7 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	 * Then destroy DTX table firstly to avoid dangling DXT records during drain
 	 * the container (that may yield).
 	 */
-	rc = vos_dtx_table_destroy(&pool->vp_umm, cont);
+	rc = vos_dtx_table_destroy(pool, cont);
 	if (rc != 0) {
 		DL_ERROR(rc, "Failed to destroy DTX table.");
 		return rc;

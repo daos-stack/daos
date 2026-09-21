@@ -619,6 +619,106 @@ dfs_test_syml_follow(void **state)
 	assert_int_equal(rc, ELOOP);
 }
 
+/* dfs has no notion of the process root, so a symlink with an absolute value cannot be followed
+ * and is rejected with EINVAL wherever the link sits, in the container root or below. The link
+ * itself is still returned with O_NOFOLLOW, and a relative link that walks the same way works.
+ */
+static void
+dfs_test_syml_abs(void **state)
+{
+	test_arg_t *arg = *state;
+	dfs_obj_t  *dir;
+	dfs_obj_t  *obj;
+	mode_t      mode;
+	char        value[64];
+	daos_size_t value_len;
+	int         rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** /abs_dir/target, /abs_root -> /abs_dir/target, /abs_dir/abs_deep -> /abs_dir/target */
+	rc = dfs_open(dfs_mt, NULL, "abs_dir", S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir, "target", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, NULL, "abs_root", S_IFLNK, O_RDWR | O_CREAT | O_EXCL, 0, 0,
+		      "/abs_dir/target", &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, dir, "abs_deep", S_IFLNK, O_RDWR | O_CREAT | O_EXCL, 0, 0,
+		      "/abs_dir/target", &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	/** /abs_dir/rel_deep -> ../abs_dir/target, the same target reached relatively */
+	rc = dfs_open(dfs_mt, dir, "rel_deep", S_IFLNK, O_RDWR | O_CREAT | O_EXCL, 0, 0,
+		      "../abs_dir/target", &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** following an absolute value fails the same way at both depths */
+	rc = dfs_lookup(dfs_mt, "/abs_root", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_lookup(dfs_mt, "/abs_dir/abs_deep", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_lookup_rel(dfs_mt, NULL, "abs_root", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_lookup_rel(dfs_mt, dir, "abs_deep", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_access(dfs_mt, NULL, "abs_root", R_OK);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_access(dfs_mt, dir, "abs_deep", R_OK);
+	assert_int_equal(rc, EINVAL);
+	/** and in the middle of a path */
+	rc = dfs_lookup(dfs_mt, "/abs_root/x", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, EINVAL);
+
+	/** the link itself is still accessible */
+	rc = dfs_lookup(dfs_mt, "/abs_root", O_RDONLY | O_NOFOLLOW, &obj, &mode, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(mode));
+	value_len = sizeof(value);
+	rc        = dfs_get_symlink_value(obj, value, &value_len);
+	assert_int_equal(rc, 0);
+	assert_string_equal(value, "/abs_dir/target");
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_lookup_rel(dfs_mt, dir, "abs_deep", O_RDONLY | O_NOFOLLOW, &obj, &mode, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(mode));
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_chown(dfs_mt, dir, "abs_deep", geteuid(), getegid(), O_NOFOLLOW);
+	assert_int_equal(rc, 0);
+
+	/** a relative value reaching the same target is followed */
+	rc = dfs_lookup_rel(dfs_mt, dir, "rel_deep", O_RDONLY, &obj, &mode, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISREG(mode));
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, dir, "rel_deep", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir, "abs_deep", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, dir, "target", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "abs_root", false, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "abs_dir", false, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static int
 dfs_test_file_gen(const char *name, daos_size_t chunk_size, daos_oclass_id_t cid,
 		  daos_size_t file_size)
@@ -895,6 +995,8 @@ dfs_test_lookupx(void **state)
 static void
 dfs_test_io_error_code(void **state)
 {
+	/** enough tiny extents that the dkey IOD gets split into several serialized RPCs */
+#define LIST_IO_NR (DAOS_ARRAY_LIST_IO_LIMIT * 16 + 1)
 	test_arg_t	*arg = *state;
 	dfs_obj_t	*file;
 	daos_event_t	ev, *evp;
@@ -911,28 +1013,29 @@ dfs_test_io_error_code(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	D_ALLOC_ARRAY(iod_rgs, DAOS_ARRAY_LIST_IO_LIMIT + 1);
-	D_ALLOC_ARRAY(buf, DAOS_ARRAY_LIST_IO_LIMIT + 1);
+	D_ALLOC_ARRAY(iod_rgs, LIST_IO_NR);
+	D_ALLOC_ARRAY(buf, LIST_IO_NR);
 
 	rc = dfs_open(dfs_mt, NULL, "io_error", S_IFREG | S_IWUSR | S_IRUSR,
 		      O_RDWR | O_CREAT, 0, 0, NULL, &file);
 	assert_int_equal(rc, 0);
 
-	/** set an IOD with a large nr count that is not supported */
-	iod.iod_nr = DAOS_ARRAY_LIST_IO_LIMIT + 1;
-	for (i = 0; i < DAOS_ARRAY_LIST_IO_LIMIT + 1; i++) {
+	/** a long run of tiny extents is supported; the array layer splits and throttles it */
+	iod.iod_nr = LIST_IO_NR;
+	for (i = 0; i < LIST_IO_NR; i++) {
 		iod_rgs[i].rg_idx = i + 2;
 		iod_rgs[i].rg_len = 1;
 	}
 	iod.iod_rgs = iod_rgs;
-	d_iov_set(&iov, buf, DAOS_ARRAY_LIST_IO_LIMIT + 1);
+	d_iov_set(&iov, buf, LIST_IO_NR);
 	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 1;
 	sgl.sg_iovs   = &iov;
 	rc            = dfs_writex(dfs_mt, file, &iod, &sgl, NULL);
-	assert_int_equal(rc, ENOTSUP);
+	assert_int_equal(rc, 0);
 	rc = dfs_readx(dfs_mt, file, &iod, &sgl, &read_size, NULL);
-	assert_int_equal(rc, ENOTSUP);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, LIST_IO_NR);
 
 	/*
 	 * set an IOD that has writes more data than sgl to trigger error in
@@ -992,6 +1095,7 @@ dfs_test_io_error_code(void **state)
 	assert_int_equal(rc, 0);
 	D_FREE(buf);
 	D_FREE(iod_rgs);
+#undef LIST_IO_NR
 }
 
 int dfs_test_rc[DFS_TEST_MAX_THREAD_NR];
@@ -4941,11 +5045,13 @@ static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST27: dfs pipeline find", dfs_test_pipeline_find, async_disable,
      test_case_teardown},
     {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
-    {"DFS_UNIT_TEST29: dfs progressive layout oclass selection", dfs_test_pl_oclass_selection,
-     async_disable, test_case_teardown},
-    {"DFS_UNIT_TEST30: dfs progressive layout IO paths", dfs_test_pl_io, async_disable,
+    {"DFS_UNIT_TEST29: Symlinks with an absolute value", dfs_test_syml_abs, async_disable,
      test_case_teardown},
-    {"DFS_UNIT_TEST31: dfs MWC container checker with progressive layout", dfs_test_checker_pl,
+    {"DFS_UNIT_TEST30: dfs progressive layout oclass selection", dfs_test_pl_oclass_selection,
+     async_disable, test_case_teardown},
+    {"DFS_UNIT_TEST31: dfs progressive layout IO paths", dfs_test_pl_io, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST32: dfs MWC container checker with progressive layout", dfs_test_checker_pl,
      async_disable, test_case_teardown},
 };
 

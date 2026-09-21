@@ -2580,8 +2580,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct child_discard_arg *arg = cb_arg;
 	struct ds_cont_child	*cont = NULL;
 	vos_iter_param_t	param = { 0 };
-	struct vos_iter_anchors	anchor = { 0 };
-	daos_handle_t		coh;
+	struct vos_iter_anchors   anchor = {0};
 	struct d_backoff_seq	backoff_seq;
 	int			rc;
 
@@ -2598,18 +2597,11 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
-	if (rc != 0) {
-		D_ERROR("Open container "DF_UUID" failed: "DF_RC"\n",
-			DP_UUID(entry->ie_couuid), DP_RC(rc));
-		D_GOTO(put, rc);
-	}
-
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
 				1 << 10 /* max (ms) */);
 	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
 
-	param.ip_hdl = coh;
+	param.ip_hdl        = cont->sc_hdl;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = arg->ca_epoch;
 	uuid_copy(arg->ca_co_uuid, entry->ie_couuid);
@@ -2627,19 +2619,10 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	} while (1);
 
 	d_backoff_seq_fini(&backoff_seq);
-	vos_cont_close(coh);
 	D_DEBUG(DB_TRACE, DF_UUID "/" DF_UUID " discard cont done: " DF_RC "\n",
 		DP_UUID(arg->ca_po_uuid), DP_UUID(entry->ie_couuid), DP_RC(rc));
 
-put:
 	ds_cont_child_put(cont);
-	/* don't destroy vos container, to avoid ds_cont_tgt_refresh_agg_eph() failure,
-	 * later depend on container recovery process to handle it.
-	 */
-#if 0
-	if (rc == 0)
-		rc = ds_cont_child_destroy(arg->tgt_discard->pool_uuid, entry->ie_couuid);
-#endif
 	return rc;
 }
 
@@ -2817,6 +2800,8 @@ ds_pool_tgt_discard_ult(void *data)
 		D_GOTO(free, rc = 0);
 	}
 
+	/* Serialize against container recovery (see ds_pool_recov_cont_handler). */
+	ABT_rwlock_rdlock(pool->sp_recov_lock);
 	/*
 	 * arg->tgt_list has already been validated and filtered by the pool service
 	 * leader against the authoritative pool map (see pool_discard() in srv_pool.c),
@@ -2826,6 +2811,7 @@ ds_pool_tgt_discard_ult(void *data)
 	 */
 	rc = ds_pool_thread_collective(arg->pool_uuid, 0 /* exclude_status */, pool_child_discard,
 				       arg, DSS_ULT_DEEP_STACK);
+	ABT_rwlock_unlock(pool->sp_recov_lock);
 
 	ABT_mutex_lock(pool->sp_mutex);
 	pool->sp_discard_status = rc;
@@ -3123,44 +3109,19 @@ out:
 	return rc;
 }
 
-struct recov_cont_bulk_args {
-	ABT_eventual rcba_eventual;
-	int          rcba_result;
-};
-
-static int
-recov_cont_bulk_cp(const struct crt_bulk_cb_info *cb_info)
-{
-	struct recov_cont_bulk_args *rcba = cb_info->bci_arg;
-	int                          rc;
-
-	rcba->rcba_result = cb_info->bci_rc;
-	rc                = ABT_eventual_set(rcba->rcba_eventual, NULL, 0);
-	D_ASSERTF(rc == ABT_SUCCESS, "Failed to ABT_eventual_set: %d\n", rc);
-
-	return 0;
-}
-
 void
 ds_pool_recov_cont_handler(crt_rpc_t *rpc)
 {
 	struct pool_recov_cont_in  *prci      = crt_req_get(rpc);
 	struct pool_recov_cont_out *prco      = crt_reply_get(rpc);
 	struct ds_pool             *pool      = NULL;
-	struct recov_cont_bulk_args rcba      = {0};
 	struct pool_recov_cont_args prca      = {0};
-	struct crt_bulk_desc        bulk_desc = {0};
-	crt_bulk_opid_t             bulk_opid = {0};
-	crt_bulk_t                  bulk      = CRT_BULK_NULL;
 	d_sg_list_t                 sgl;
-	d_iov_t                     cont_iov;
-	uint32_t                    ex_status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
+	d_iov_t                     cont_iov = {0};
 	int                         rc;
 
 	D_DEBUG(DB_REBUILD, "Try to recover ( " DF_U64 ") containers for the pool " DF_UUID "\n",
 		prci->prci_cont_nr, DP_UUID(prci->prci_uuid));
-
-	rcba.rcba_eventual = ABT_EVENTUAL_NULL;
 
 	if (DAOS_FAIL_CHECK(DAOS_POOL_REINT_SLOW))
 		dss_sleep(6000);
@@ -3177,46 +3138,15 @@ ds_pool_recov_cont_handler(crt_rpc_t *rpc)
 	if (prci->prci_cont_nr == 0)
 		goto lock;
 
-	D_ALLOC_ARRAY(prca.prca_conts, prci->prci_cont_nr);
-	if (prca.prca_conts == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	cont_iov.iov_buf     = prca.prca_conts;
-	cont_iov.iov_buf_len = sizeof(*prca.prca_conts) * prci->prci_cont_nr;
-	cont_iov.iov_len     = cont_iov.iov_buf_len;
-
 	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs   = &cont_iov;
 
-	rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &bulk);
+	rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
 	if (rc != 0)
 		goto out;
 
-	rc = ABT_eventual_create(0, &rcba.rcba_eventual);
-	if (rc != 0)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	bulk_desc.bd_rpc        = rpc;
-	bulk_desc.bd_bulk_op    = CRT_BULK_GET;
-	bulk_desc.bd_remote_hdl = prci->prci_cont_bulk;
-	bulk_desc.bd_local_hdl  = bulk;
-	bulk_desc.bd_len        = cont_iov.iov_buf_len;
-
-	rcba.rcba_result = 0;
-	if (prci->prci_flags & PRCF_BIND_BULK)
-		rc = crt_bulk_bind_transfer(&bulk_desc, recov_cont_bulk_cp, &rcba, &bulk_opid);
-	else
-		rc = crt_bulk_transfer(&bulk_desc, recov_cont_bulk_cp, &rcba, &bulk_opid);
-	if (rc != 0)
-		goto out;
-
-	rc = ABT_eventual_wait(rcba.rcba_eventual, NULL);
-	if (rc != 0)
-		goto out;
-
-	if (rcba.rcba_result != 0)
-		D_GOTO(out, rc = rcba.rcba_result);
+	prca.prca_conts = cont_iov.iov_buf;
 
 lock:
 	/*
@@ -3228,7 +3158,8 @@ lock:
 	 * aware that easily. So here, holding sp_recov_lock to prevent such race.
 	 */
 	ABT_rwlock_wrlock(pool->sp_recov_lock);
-	rc = ds_pool_thread_collective(prci->prci_uuid, ex_status, pool_tgt_recov_cont, &prca, 0);
+	rc = ds_pool_thread_collective(prci->prci_uuid, 0 /* ex_status */, pool_tgt_recov_cont,
+				       &prca, 0);
 	ABT_rwlock_unlock(pool->sp_recov_lock);
 
 	if (rc == 0)
@@ -3244,9 +3175,4 @@ out:
 
 	if (pool != NULL)
 		ds_pool_put(pool);
-	if (rcba.rcba_eventual != ABT_EVENTUAL_NULL)
-		ABT_eventual_free(&rcba.rcba_eventual);
-	if (bulk != CRT_BULK_NULL)
-		crt_bulk_free(bulk);
-	D_FREE(prca.prca_conts);
 }

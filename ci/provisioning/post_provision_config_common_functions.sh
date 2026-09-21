@@ -424,11 +424,12 @@ post_provision_config_nodes() {
         last_pci_bus="$pci_bus"
         mlnx_type="${line##*ConnectX-}"
         mlnx_type="${mlnx_type%]*}"
+        mlnx_type="${mlnx_type%% *}"
         if [ "$mlnx_type" -ge 5 ]; then
             mellanox_drivers=true
             break
         fi
-    done < <(lspci -mm | grep "ConnectX")
+    done < <(lspci -mm | grep "ConnectX" || true)
 
     if "$mellanox_drivers"; then
         # Remove OPA and install MOFED

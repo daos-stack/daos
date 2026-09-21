@@ -51,14 +51,18 @@ def scons():
     # Required for dtx_act_discard_invalid tests.
     # This function is validated by its respective unit tests.
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vos_dtx_discard_invalid'])
-    # Required for DDB_CAN_PROCEED tests (vmd_wa_can_proceed failure path).
-    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vmd_wa_can_proceed'])
+    # Required to test the dwa_can_proceed() guard call sites in ddb_vos.c
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dwa_can_proceed'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=ddb_parse_vos_file_parts'])
+    # Required to mock nvme_conf_exists()'s D_ASPRINTF() call for dwa_can_proceed() tests.
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_asprintf2'])
 
     libs = [
         'uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread', 'pmemobj',
         'json-c',
     ]
-    src = ['ddb_ut.c', 'ddb_vos_ut.c', 'ddb_commands_ut.c']
+    src = ['ddb_ut.c', 'ddb_vos_ut.c', 'ddb_commands_ut.c', 'ddb_spdk_reinit_wa_ut.c',
+           'ddb_mocks.c', 'ddb_fake_print.c']
     # vos and mock object files to wrap vos symbols
     vos_obj = tenv.Object(Glob('../../../vos/*.c'))
     mock_obj = tenv.Object(Glob('../../../dtx/tests/*_mock.c'))

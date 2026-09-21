@@ -16,7 +16,7 @@ source "$mydir/distro_info.sh"
 # compatibility.
 # maldet uses find and which internally
 if command -v dnf; then
-  dnf install clamav clamav-devel findutils git gzip hostname sudo which
+  dnf install clamav clamav-devel findutils git gzip hostname sudo which file
   # Some Dockerfiles missing the md5sum command by not having
   # coreutils installed.   Rocky 8 pre-installs coreutils-single which
   # blocks coreutils from being installed.
