@@ -19,7 +19,8 @@ from process_core_files import CoreFileException, CoreFileProcessing
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host
 from util.run_utils import find_command, run_local, run_remote, stop_processes
-from util.storage_utils import find_pci_address, get_nvme_diagnostics_command
+from util.storage_utils import (FORCE_NVME_FAILURE, find_pci_address, get_nvme_diagnostics_command,
+                                report_missing_nvme_devices)
 from util.systemctl_utils import stop_service
 from util.user_utils import get_chown_command
 from util.yaml_utils import get_test_category
@@ -93,7 +94,6 @@ def reset_server_storage(logger, test):
         commands = [
             "if lspci | grep -i nvme",
             "then",
-            get_nvme_diagnostics_command('before cleanup reset'),
             f"export COVFILE={test_env.bullseye_file}",
             "daos_server nvme reset",
             "reset_rc=$?",
@@ -106,14 +106,24 @@ def reset_server_storage(logger, test):
             "sudo -n modprobe vfio_pci",
             "reset_rc=$?",
             "fi",
-            get_nvme_diagnostics_command('after cleanup reset'),
             "exit $reset_rc",
             "fi"]
+        # Collect the NVMe state before the reset, but only report it if the reset fails
+        before = run_remote(
+            logger, hosts, get_nvme_diagnostics_command('before cleanup reset'), verbose=False,
+            timeout=600)
         logger.info("Resetting server storage on %s after running '%s'", hosts, test)
         result = run_remote(logger, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
-        if not result.passed:
+        if not result.passed or FORCE_NVME_FAILURE:
+            logger.debug("NVMe diagnostics collected before the failed storage reset:")
+            before.log_output(logger)
+            run_remote(
+                logger, hosts, get_nvme_diagnostics_command('after cleanup reset'), timeout=600)
             logger.debug("Ignoring any errors from these workaround commands")
             # return False
+
+        # Detect any NVMe devices present before the test that the reset did not restore
+        report_missing_nvme_devices(logger, hosts, test.nvme_devices)
     else:
         logger.debug("  Skipping resetting server storage - no server hosts")
     return True
