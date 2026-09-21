@@ -95,6 +95,10 @@ def record_nvme_devices(logger, hosts):
     """
     command = 'lspci -Dnn | grep -i "Non-Volatile memory controller" || true'
     devices = {}
+    if not hosts:
+        # run_remote() with no hosts runs the command locally on the test control node
+        logger.debug('Skipping NVMe device detection - no hosts specified')
+        return devices
     result = run_remote(logger, hosts, command, verbose=False, timeout=60)
     for data in result.output:
         addresses = set(find_pci_address('\n'.join(data.stdout)))
