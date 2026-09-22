@@ -370,7 +370,7 @@ static int
 ktr_df_rec_check(struct btr_instance *tins, struct btr_record *rec, report_fn_t report_fn,
 		 void *report_arg)
 {
-	/** NOP. The key is checked on open. */
+	/** NOP. TBD. */
 	return 0;
 }
 

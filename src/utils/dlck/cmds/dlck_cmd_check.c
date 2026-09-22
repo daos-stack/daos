@@ -71,7 +71,7 @@ obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 }
 
 /**
- * Target thread (worker). Check trees of a single container.
+ * Target thread (worker). Check objects of a single container.
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	bndl	Bundle of arguments.
@@ -80,7 +80,7 @@ obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
  * \retval -DER_*	Errors returned by the tree checking logic.
  */
 static int
-trees_process(daos_handle_t coh, struct bundle *bndl)
+objs_process(daos_handle_t coh, struct bundle *bndl)
 {
 	vos_iter_param_t        param   = {0};
 	struct vos_iter_anchors anchors = {0};
@@ -119,7 +119,7 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, ck, &coh);
 	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc, ck->ck_warnings_num);
 	if (rc == DER_SUCCESS) {
-		trees_process(coh, bndl);
+		objs_process(coh, bndl);
 		(void)vos_cont_close(coh);
 	}
 

@@ -233,10 +233,18 @@ oi_rec_check(struct btr_instance *tins, struct btr_record *rec, report_fn_t repo
 		report_fn(report_arg, REPORT_ERROR | REPORT_NO_PREFIX, DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
+	if (val_iov.iov_buf == NULL) {
+		report_fn(report_arg, REPORT_ERROR | REPORT_NO_PREFIX,
+			  "Invalid record: buffer is NULL\n");
+		return -DER_IO_INVAL;
+	}
+	if (val_iov.iov_len != vos_obj_df_size((struct vos_pool *)tins->ti_priv)) {
+		report_fn(report_arg, REPORT_ERROR | REPORT_NO_PREFIX,
+			  "Invalid record size: expected %zu, got %zu\n",
+			  vos_obj_df_size((struct vos_pool *)tins->ti_priv), val_iov.iov_len);
+		return -DER_IO_INVAL;
+	}
 	report_fn(report_arg, REPORT_MSG | REPORT_NO_PREFIX, CHECKER_OK_INFIX ".\n");
-
-	D_ASSERT(val_iov.iov_buf != NULL);
-	D_ASSERT(val_iov.iov_len == vos_obj_df_size((struct vos_pool *)tins->ti_priv));
 
 	obj = val_iov.iov_buf;
 
