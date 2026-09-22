@@ -42,7 +42,7 @@
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismdlkfecx";
+static const char *all_tests = "ismdlkfecxp";
 
 static void
 print_usage()
@@ -63,6 +63,7 @@ print_usage()
 	/* print_message("dfuse_test    --verifyenv\n");                       */
 	print_message("dfuse_test -c|--cache\n");
 	print_message("dfuse_test -x|--fdcalls\n");
+	print_message("dfuse_test -p|--path\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -1385,6 +1386,768 @@ do_cache_read_eof(void **state)
 	free(write_buf);
 }
 
+static void
+check_symlink_outside(const char *dir, const char *target)
+{
+	struct stat stbuf;
+	char        link_path[512];
+	char        chain_name[64];
+	char        chain_path[512];
+	size_t      len;
+	int         fd;
+	int         rc;
+
+	len = snprintf(link_path, sizeof(link_path) - 1, "%s/symlink_outside_%d", dir, getpid());
+	assert_true(len < (sizeof(link_path) - 1));
+
+	len = snprintf(chain_name, sizeof(chain_name) - 1, "symlink_chain_%d", getpid());
+	assert_true(len < (sizeof(chain_name) - 1));
+
+	len = snprintf(chain_path, sizeof(chain_path) - 1, "%s/%s", dir, chain_name);
+	assert_true(len < (sizeof(chain_path) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave the links behind */
+	unlink(link_path);
+	unlink(chain_path);
+
+	rc = symlink(target, link_path);
+	assert_return_code(rc, errno);
+
+	rc = lstat(link_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_true(S_ISLNK(stbuf.st_mode));
+
+	rc = stat(link_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_true(S_ISREG(stbuf.st_mode));
+	assert_int_equal(stbuf.st_size, 6);
+
+	rc = access(link_path, R_OK | W_OK | X_OK);
+	assert_return_code(rc, errno);
+
+	rc = faccessat(AT_FDCWD, link_path, R_OK, 0);
+	assert_return_code(rc, errno);
+
+	fd = open(link_path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* a relative link to the absolute one, as python3 -> python -> /usr/bin/python3.x in a
+	 * venv. Only the last hop has the absolute value, so the entry itself does not reveal it.
+	 */
+	len = strnlen(link_path, sizeof(link_path));
+	while (len > 0 && link_path[len - 1] != '/')
+		len--;
+	rc = symlink(link_path + len, chain_path);
+	assert_return_code(rc, errno);
+
+	rc = lstat(chain_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_true(S_ISLNK(stbuf.st_mode));
+
+	rc = stat(chain_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_true(S_ISREG(stbuf.st_mode));
+	assert_int_equal(stbuf.st_size, 6);
+
+	rc = access(chain_path, R_OK | W_OK | X_OK);
+	assert_return_code(rc, errno);
+
+	fd = open(chain_path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(chain_path);
+	assert_return_code(rc, errno);
+
+	rc = unlink(link_path);
+	assert_return_code(rc, errno);
+}
+
+/* A symlink stored in a container may point outside of it. dfs resolves a link value within the
+ * container, so an absolute value is only resolvable by the kernel. dfs reports EINVAL for a link
+ * below the container root but ENOENT for a link in the root itself, so cover both positions.
+ */
+void
+do_symlink_outside(void **state)
+{
+	char   target[256];
+	char   sub_dir[512];
+	size_t len;
+	int    fd;
+	int    rc;
+
+	len = snprintf(target, sizeof(target) - 1, "/tmp/dfuse_test_target_%d", getpid());
+	assert_true(len < (sizeof(target) - 1));
+
+	len = snprintf(sub_dir, sizeof(sub_dir) - 1, "%s/symlink_dir_%d", test_dir, getpid());
+	assert_true(len < (sizeof(sub_dir) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave these behind */
+	unlink(target);
+	rmdir(sub_dir);
+
+	fd = open(target, O_RDWR | O_CREAT | O_EXCL, S_IRWXU);
+	assert_return_code(fd, errno);
+	rc = write(fd, "hello", 6);
+	assert_return_code(rc, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	check_symlink_outside(test_dir, target);
+
+	/* one level down, as the python3 symlink of a venv is */
+	rc = mkdir(sub_dir, S_IRWXU);
+	assert_return_code(rc, errno);
+	check_symlink_outside(sub_dir, target);
+	rc = rmdir(sub_dir);
+	assert_return_code(rc, errno);
+
+	rc = unlink(target);
+	assert_return_code(rc, errno);
+}
+
+/* fchdir() to a directory outside of the container has to move the cwd that relative paths are
+ * resolved against.
+ */
+void
+do_fchdir(void **state)
+{
+	struct stat stbuf;
+	char        start_dir[512];
+	char        cwd[512];
+	char        name_old[64];
+	char        name_new[64];
+	char        path[512];
+	size_t      len;
+	int         fd;
+	int         rc;
+
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+
+	rc = chdir(test_dir);
+	assert_return_code(rc, errno);
+
+	/* get_current_dir_name() returns $PWD when it looks valid, so a stale $PWD is what lets a
+	 * wrong cwd survive into relative path resolution.
+	 */
+	assert_non_null(getcwd(cwd, sizeof(cwd)));
+	rc = setenv("PWD", cwd, 1);
+	assert_return_code(rc, errno);
+
+	fd = open("/tmp", O_RDONLY | O_DIRECTORY);
+	assert_return_code(fd, errno);
+	rc = fchdir(fd);
+	assert_return_code(rc, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	assert_non_null(getcwd(cwd, sizeof(cwd)));
+	assert_string_equal(cwd, "/tmp");
+
+	len = snprintf(name_old, sizeof(name_old) - 1, "dfuse_test_fchdir_%d.tmp", getpid());
+	assert_true(len < (sizeof(name_old) - 1));
+
+	len = snprintf(name_new, sizeof(name_new) - 1, "dfuse_test_fchdir_%d.new", getpid());
+	assert_true(len < (sizeof(name_new) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave these behind */
+	unlink(name_old);
+	unlink(name_new);
+
+	create_a_file(name_old);
+
+	rc = rename(name_old, name_new);
+	assert_return_code(rc, errno);
+
+	/* the entry has to exist under /tmp, not under the container */
+	len = snprintf(path, sizeof(path) - 1, "/tmp/%s", name_new);
+	assert_true(len < (sizeof(path) - 1));
+
+	rc = stat(path, &stbuf);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+
+	rc = chdir(start_dir);
+	assert_return_code(rc, errno);
+
+	rc = setenv("PWD", start_dir, 1);
+	assert_return_code(rc, errno);
+}
+
+/* Passing a cwd to posix_spawn()/subprocess() makes chdir() run between fork() and exec(), where
+ * dfs is not usable. chdir() has to succeed there anyway.
+ */
+void
+do_chdir_fork(void **state)
+{
+	char  *argv[3] = {"cat", "marker", NULL};
+	char   start_dir[512];
+	char   sub_dir[64];
+	char   marker[128];
+	char   path[512];
+	size_t len;
+	pid_t  pid;
+	int    status;
+	int    rc;
+
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+
+	rc = chdir(test_dir);
+	assert_return_code(rc, errno);
+
+	/* a name reused across runs can hit a stale dentry cached by dfuse */
+	len = snprintf(sub_dir, sizeof(sub_dir) - 1, "chdir_fork_dir_%d", getpid());
+	assert_true(len < (sizeof(sub_dir) - 1));
+
+	len = snprintf(marker, sizeof(marker) - 1, "%s/marker", sub_dir);
+	assert_true(len < (sizeof(marker) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave these behind */
+	unlink(marker);
+	rmdir(sub_dir);
+
+	rc = mkdir(sub_dir, S_IRWXU);
+	assert_return_code(rc, errno);
+
+	create_a_file(marker);
+
+	pid = fork();
+	assert_return_code(pid, errno);
+	if (pid == 0) {
+		/* cmocka macros are not usable in the child, report through the exit code */
+		if (chdir(sub_dir) != 0)
+			_exit(10);
+		execv("/bin/cat", argv);
+		_exit(11);
+	}
+
+	rc = waitpid(pid, &status, 0);
+	assert_return_code(rc, errno);
+
+	len = snprintf(path, sizeof(path) - 1, "%s/%s", test_dir, marker);
+	assert_true(len < (sizeof(path) - 1));
+	rc = unlink(path);
+	assert_return_code(rc, errno);
+
+	len = snprintf(path, sizeof(path) - 1, "%s/%s", test_dir, sub_dir);
+	assert_true(len < (sizeof(path) - 1));
+	rc = rmdir(path);
+	assert_return_code(rc, errno);
+
+	rc = chdir(start_dir);
+	assert_return_code(rc, errno);
+
+	assert_true(WIFEXITED(status));
+	assert_int_equal(WEXITSTATUS(status), 0);
+}
+
+/* POSIX resolves '..' at the root as the root itself. Such a path leaves the container, so it has
+ * to be handed to the kernel rather than rejected.
+ */
+void
+do_dot_dot_above_root(void **state)
+{
+	struct stat stbuf;
+	char        target[256];
+	char        path[512];
+	char        start_dir[512];
+	size_t      len;
+	int         fd;
+	int         rc;
+
+	len = snprintf(target, sizeof(target) - 1, "/tmp/dfuse_test_dotdot_%d", getpid());
+	assert_true(len < (sizeof(target) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave this behind */
+	unlink(target);
+
+	fd = open(target, O_RDWR | O_CREAT | O_EXCL, S_IRWXU);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* an absolute path starting above the root */
+	len = snprintf(path, sizeof(path) - 1, "/..%s", target);
+	assert_true(len < (sizeof(path) - 1));
+
+	rc = stat(path, &stbuf);
+	assert_return_code(rc, errno);
+	rc = access(path, R_OK);
+	assert_return_code(rc, errno);
+	fd = open(path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* "/./" is erased in place, which hides the following "//" from the cleanup pass, so the
+	 * ".." reaches remove_dot_dot() with no component before it. This used to loop forever.
+	 */
+	len = snprintf(path, sizeof(path) - 1, "/.//..%s", target);
+	assert_true(len < (sizeof(path) - 1));
+
+	rc = stat(path, &stbuf);
+	assert_return_code(rc, errno);
+	rc = access(path, R_OK);
+	assert_return_code(rc, errno);
+	fd = open(path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* a relative path climbing out of the container with more '..' than the cwd has depth */
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+
+	rc = chdir(test_dir);
+	assert_return_code(rc, errno);
+
+	len = snprintf(path, sizeof(path) - 1, "../../../../../../../../../../../..%s", target);
+	assert_true(len < (sizeof(path) - 1));
+
+	rc = stat(path, &stbuf);
+	assert_return_code(rc, errno);
+	rc = access(path, R_OK);
+	assert_return_code(rc, errno);
+	fd = open(path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = chdir(start_dir);
+	assert_return_code(rc, errno);
+
+	rc = unlink(target);
+	assert_return_code(rc, errno);
+}
+
+/* Rust's std checks once per process whether statx() is usable by calling it with a NULL path and
+ * a NULL buffer, expecting EFAULT from the kernel. uv does this at start up when its cache dir is
+ * missing, so the interception must pass a NULL path through rather than dereference it.
+ */
+void
+do_statx_null_probe(void **state)
+{
+	/* glibc declares both nonnull, so the compiler would otherwise reject literal NULLs */
+	const char *volatile null_path  = NULL;
+	struct statx *volatile null_buf = NULL;
+	int rc;
+
+	rc = statx(0, null_path, 0, STATX_BASIC_STATS, null_buf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, EFAULT);
+}
+
+static void
+write_file(const char *path, const char *content)
+{
+	int fd;
+	int rc;
+
+	fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
+	assert_return_code(fd, errno);
+	rc = write(fd, content, strlen(content));
+	assert_int_equal(rc, strlen(content));
+	rc = close(fd);
+	assert_return_code(rc, errno);
+}
+
+static void
+check_file_content(const char *path, const char *content)
+{
+	char buf[64] = {0};
+	int  fd;
+	int  rc;
+
+	fd = open(path, O_RDONLY);
+	assert_return_code(fd, errno);
+	rc = read(fd, buf, sizeof(buf) - 1);
+	assert_return_code(rc, errno);
+	assert_string_equal(buf, content);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+}
+
+/* Paths are normalized lexically before the leaf is split from its parent, so "//", "/./" and
+ * ".." in any combination have to resolve like the kernel does. Every probe here used to leave a
+ * component behind and then resolve the leaf in the wrong directory.
+ */
+void
+do_path_normalize(void **state)
+{
+	struct stat stbuf;
+	struct stat stbuf_b;
+	char        base[512];
+	char        path[1024];
+	char        start_dir[512];
+	size_t      len;
+
+	len = snprintf(base, sizeof(base) - 1, "%s/norm_%d", test_dir, getpid());
+	assert_true(len < (sizeof(base) - 1));
+
+	/* fixture: b/c/x, b/c/w and b/w with different contents, b/..c, no b/x */
+	assert_return_code(mkdir(base, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/c", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/..c", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/c/x", base);
+	write_file(path, "b/c/x");
+	snprintf(path, sizeof(path), "%s/b/c/w", base);
+	write_file(path, "b/c/w");
+	snprintf(path, sizeof(path), "%s/b/w", base);
+	write_file(path, "b/w");
+
+	/* "//" after a "/./" */
+	snprintf(path, sizeof(path), "%s/./b//c/x", base);
+	assert_return_code(stat(path, &stbuf), errno);
+	snprintf(path, sizeof(path), "%s/./b//c/w", base);
+	check_file_content(path, "b/c/w");
+
+	/* the same through the implicit "<cwd>/./" of a relative path */
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+	assert_return_code(chdir(base), errno);
+	assert_return_code(stat("./b//c/x", &stbuf), errno);
+	check_file_content("./b//c/w", "b/c/w");
+	check_file_content(".//b/./c//w", "b/c/w");
+	assert_return_code(chdir(start_dir), errno);
+
+	/* trailing ".." after a component that itself starts with ".." */
+	snprintf(path, sizeof(path), "%s/b", base);
+	assert_return_code(stat(path, &stbuf_b), errno);
+	snprintf(path, sizeof(path), "%s/b/..c/..", base);
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_true(S_ISDIR(stbuf.st_mode));
+	assert_int_equal(stbuf.st_ino, stbuf_b.st_ino);
+	snprintf(path, sizeof(path), "%s/b/..c/../c/./x", base);
+	check_file_content(path, "b/c/x");
+
+	/* trailing "/" and "/." */
+	snprintf(path, sizeof(path), "%s/b/c/", base);
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_true(S_ISDIR(stbuf.st_mode));
+	snprintf(path, sizeof(path), "%s/b/c/.", base);
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_true(S_ISDIR(stbuf.st_mode));
+
+	snprintf(path, sizeof(path), "%s/b/c/x", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c/w", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/w", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/..c", base);
+	assert_return_code(rmdir(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c", base);
+	assert_return_code(rmdir(path), errno);
+	snprintf(path, sizeof(path), "%s/b", base);
+	assert_return_code(rmdir(path), errno);
+	assert_return_code(rmdir(base), errno);
+}
+
+/* ".." applies to the resolved component in front of it: with "l2 -> c/d", "l2/../y2" is "c/y2"
+ * and not "y2". A component that is not a directory makes the path fail as it does in the kernel.
+ */
+void
+do_dot_dot_symlink(void **state)
+{
+	struct stat stbuf;
+	struct stat stbuf_c;
+	char        base[512];
+	char        host_dir[256];
+	char        path[1024];
+	char        start_dir[512];
+	size_t      len;
+	int         rc;
+
+	len = snprintf(base, sizeof(base) - 1, "%s/dotdot_%d", test_dir, getpid());
+	assert_true(len < (sizeof(base) - 1));
+	len = snprintf(host_dir, sizeof(host_dir) - 1, "/tmp/dfuse_test_dotdot_%d", getpid());
+	assert_true(len < (sizeof(host_dir) - 1));
+
+	/* fixture: b/c/d, b/c/x, b/c/y2, b/y2, b/l2 -> c/d, b/l3 -> l2, b/labs -> <host_dir> */
+	assert_return_code(mkdir(base, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/c", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/c/d", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/b/c/x", base);
+	write_file(path, "b/c/x");
+	snprintf(path, sizeof(path), "%s/b/c/y2", base);
+	write_file(path, "b/c/y2");
+	snprintf(path, sizeof(path), "%s/b/y2", base);
+	write_file(path, "b/y2");
+	snprintf(path, sizeof(path), "%s/b/l2", base);
+	assert_return_code(symlink("c/d", path), errno);
+	snprintf(path, sizeof(path), "%s/b/l3", base);
+	assert_return_code(symlink("l2", path), errno);
+	rc = mkdir(host_dir, S_IRWXU);
+	if (rc != 0)
+		assert_int_equal(errno, EEXIST);
+	snprintf(path, sizeof(path), "%s/y3", host_dir);
+	write_file(path, "host");
+	snprintf(path, sizeof(path), "%s/b/labs", base);
+	assert_return_code(symlink(host_dir, path), errno);
+
+	/* through one and two relative links */
+	snprintf(path, sizeof(path), "%s/b/l2/../y2", base);
+	check_file_content(path, "b/c/y2");
+	snprintf(path, sizeof(path), "%s/b/l3/../y2", base);
+	check_file_content(path, "b/c/y2");
+	snprintf(path, sizeof(path), "%s/b/l2/../../y2", base);
+	check_file_content(path, "b/y2");
+
+	/* "l2/.." is "c" */
+	snprintf(path, sizeof(path), "%s/b/c", base);
+	assert_return_code(stat(path, &stbuf_c), errno);
+	snprintf(path, sizeof(path), "%s/b/l2/..", base);
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_true(S_ISDIR(stbuf.st_mode));
+	assert_int_equal(stbuf.st_ino, stbuf_c.st_ino);
+
+	/* the same relative to a cwd reached through the link */
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+	snprintf(path, sizeof(path), "%s/b/l2", base);
+	assert_return_code(chdir(path), errno);
+	check_file_content("../y2", "b/c/y2");
+	check_file_content("./../x", "b/c/x");
+	assert_return_code(chdir(start_dir), errno);
+
+	/* through a link with an absolute value, which only the kernel can resolve */
+	snprintf(path, sizeof(path), "%s/b/labs/../dfuse_test_dotdot_%d/y3", base, getpid());
+	check_file_content(path, "host");
+
+	/* not a directory in front of "..", and a missing one */
+	snprintf(path, sizeof(path), "%s/b/c/x/../y2", base);
+	rc = stat(path, &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOTDIR);
+	snprintf(path, sizeof(path), "%s/b/nonexist/../y2", base);
+	rc = stat(path, &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	snprintf(path, sizeof(path), "%s/y3", host_dir);
+	assert_return_code(unlink(path), errno);
+	assert_return_code(rmdir(host_dir), errno);
+	snprintf(path, sizeof(path), "%s/b/labs", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/l3", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/l2", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/y2", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c/y2", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c/x", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c/d", base);
+	assert_return_code(rmdir(path), errno);
+	snprintf(path, sizeof(path), "%s/b/c", base);
+	assert_return_code(rmdir(path), errno);
+	snprintf(path, sizeof(path), "%s/b", base);
+	assert_return_code(rmdir(path), errno);
+	assert_return_code(rmdir(base), errno);
+}
+
+/* dfs resolves an absolute symlink value in the container root from that root. When the same path
+ * also exists inside the container the lookup succeeds with the wrong file, so such a link has to
+ * be handed to the kernel before it is dereferenced. test_dir is the container root under ftest.
+ */
+void
+do_root_symlink_shadow(void **state)
+{
+	struct stat stbuf;
+	char        target[256];
+	char        shadow_dir[512];
+	char        shadow[512];
+	char        link_path[512];
+	char        chain_path[512];
+	char        chain_name[64];
+	size_t      len;
+	int         rc;
+
+	len = snprintf(target, sizeof(target) - 1, "/tmp/dfuse_test_shadow_%d", getpid());
+	assert_true(len < (sizeof(target) - 1));
+	len = snprintf(shadow_dir, sizeof(shadow_dir) - 1, "%s/tmp", test_dir);
+	assert_true(len < (sizeof(shadow_dir) - 1));
+	len = snprintf(shadow, sizeof(shadow) - 1, "%s%s", test_dir, target);
+	assert_true(len < (sizeof(shadow) - 1));
+	len = snprintf(link_path, sizeof(link_path) - 1, "%s/shadow_link_%d", test_dir, getpid());
+	assert_true(len < (sizeof(link_path) - 1));
+	len = snprintf(chain_name, sizeof(chain_name) - 1, "shadow_chain_%d", getpid());
+	assert_true(len < (sizeof(chain_name) - 1));
+	len = snprintf(chain_path, sizeof(chain_path) - 1, "%s/%s", test_dir, chain_name);
+	assert_true(len < (sizeof(chain_path) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave these behind */
+	unlink(target);
+	unlink(shadow);
+	unlink(link_path);
+	unlink(chain_path);
+
+	write_file(target, "host");
+	rc = mkdir(shadow_dir, S_IRWXU);
+	if (rc != 0)
+		assert_int_equal(errno, EEXIST);
+	write_file(shadow, "container");
+
+	rc = symlink(target, link_path);
+	assert_return_code(rc, errno);
+	/* a bare relative link to the absolute one, as in a venv */
+	rc = symlink(link_path + strlen(test_dir) + 1, chain_path);
+	assert_return_code(rc, errno);
+
+	check_file_content(link_path, "host");
+	check_file_content(chain_path, "host");
+
+	rc = stat(link_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, strlen("host"));
+	rc = stat(chain_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, strlen("host"));
+
+	/* the shadow is not writable through the link: the host file is */
+	assert_return_code(chmod(shadow, S_IRUSR), errno);
+	assert_return_code(access(link_path, W_OK), errno);
+	assert_return_code(access(chain_path, W_OK), errno);
+
+	assert_return_code(unlink(chain_path), errno);
+	assert_return_code(unlink(link_path), errno);
+	assert_return_code(unlink(shadow), errno);
+	rmdir(shadow_dir);
+	assert_return_code(unlink(target), errno);
+}
+
+/* Split test_dir, the container root, into the host directory that holds it and its name */
+static void
+split_test_dir(char *parent, size_t parent_size, char *name, size_t name_size)
+{
+	size_t len = strlen(test_dir);
+	char  *sep;
+
+	assert_true(len > 1 && len < parent_size);
+	strncpy(parent, test_dir, parent_size);
+	parent[parent_size - 1] = '\0';
+	while (len > 1 && parent[len - 1] == '/')
+		parent[--len] = '\0';
+	sep = strrchr(parent, '/');
+	assert_non_null(sep);
+	assert_true(sep > parent);
+	*sep = '\0';
+	assert_true(strlen(sep + 1) < name_size);
+	strncpy(name, sep + 1, name_size);
+	name[name_size - 1] = '\0';
+}
+
+/* A symlink in the container root whose relative value climbs out of the container, as in
+ * "foo -> ../bar" for a file beside the mount point. dfs resolves ".." of its root to the root
+ * itself and reports ENOENT, so the link has to be handed to the kernel.
+ */
+void
+do_root_symlink_up(void **state)
+{
+	struct stat stbuf;
+	char        parent[512];
+	char        name[256];
+	char        target[512];
+	char        value[256];
+	char        link_path[512];
+	size_t      len;
+	int         rc;
+
+	split_test_dir(parent, sizeof(parent), name, sizeof(name));
+	len = snprintf(target, sizeof(target) - 1, "%s/dfuse_test_up_%d", parent, getpid());
+	assert_true(len < (sizeof(target) - 1));
+	len = snprintf(value, sizeof(value) - 1, "../dfuse_test_up_%d", getpid());
+	assert_true(len < (sizeof(value) - 1));
+	len = snprintf(link_path, sizeof(link_path) - 1, "%s/up_link_%d", test_dir, getpid());
+	assert_true(len < (sizeof(link_path) - 1));
+
+	/* cmocka has no teardown here, so an aborted run can leave these behind */
+	unlink(target);
+	unlink(link_path);
+
+	write_file(target, "host");
+	rc = symlink(value, link_path);
+	assert_return_code(rc, errno);
+
+	check_file_content(link_path, "host");
+	rc = stat(link_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, strlen("host"));
+	assert_return_code(access(link_path, R_OK), errno);
+
+	/* the link itself is in the container */
+	rc = lstat(link_path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_true(S_ISLNK(stbuf.st_mode));
+
+	/* a dangling one still reports ENOENT */
+	assert_return_code(unlink(target), errno);
+	rc = stat(link_path, &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	assert_return_code(unlink(link_path), errno);
+}
+
+/* ".." applied to the mount point itself leads to the host directory that holds it. A path that
+ * comes straight back into the mount, as a relative path from a cwd at the container root does with
+ * "../<mount>/x", is served from the container; one that stays outside is left to the kernel.
+ */
+void
+do_dot_dot_mount_root(void **state)
+{
+	struct stat stbuf;
+	struct stat stbuf_parent;
+	char        parent[512];
+	char        name[256];
+	char        file_path[512];
+	char        path[1024];
+	char        start_dir[512];
+	size_t      len;
+
+	split_test_dir(parent, sizeof(parent), name, sizeof(name));
+	len = snprintf(file_path, sizeof(file_path) - 1, "%s/mount_up_%d", test_dir, getpid());
+	assert_true(len < (sizeof(file_path) - 1));
+	write_file(file_path, "container");
+
+	/* back into the mount, absolute and relative to a cwd at the container root */
+	snprintf(path, sizeof(path), "%s/../%s/mount_up_%d", test_dir, name, getpid());
+	check_file_content(path, "container");
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+	assert_return_code(chdir(test_dir), errno);
+	snprintf(path, sizeof(path), "../%s/mount_up_%d", name, getpid());
+	check_file_content(path, "container");
+	snprintf(path, sizeof(path), "../%s/./mount_up_%d", name, getpid());
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_int_equal(stbuf.st_size, strlen("container"));
+	assert_return_code(chdir(start_dir), errno);
+
+	/* out of the mount, with and without a return trip first */
+	assert_return_code(stat(parent, &stbuf_parent), errno);
+	snprintf(path, sizeof(path), "%s/..", test_dir);
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_true(S_ISDIR(stbuf.st_mode));
+	assert_int_equal(stbuf.st_ino, stbuf_parent.st_ino);
+	snprintf(path, sizeof(path), "%s/../%s/..", test_dir, name);
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_true(S_ISDIR(stbuf.st_mode));
+	assert_int_equal(stbuf.st_ino, stbuf_parent.st_ino);
+
+	assert_return_code(unlink(file_path), errno);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -1500,6 +2263,26 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(fdcalls_tests, NULL, NULL);
 			break;
 
+		case 'p': {
+			const struct CMUnitTest path_tests[] = {
+			    cmocka_unit_test(do_symlink_outside),
+			    cmocka_unit_test(do_fchdir),
+			    cmocka_unit_test(do_chdir_fork),
+			    cmocka_unit_test(do_dot_dot_above_root),
+			    cmocka_unit_test(do_statx_null_probe),
+			    cmocka_unit_test(do_path_normalize),
+			    cmocka_unit_test(do_dot_dot_symlink),
+			    cmocka_unit_test(do_root_symlink_shadow),
+			    cmocka_unit_test(do_root_symlink_up),
+			    cmocka_unit_test(do_dot_dot_mount_root),
+			};
+			printf("\n\n=================");
+			printf("dfuse path resolution tests");
+			printf("=====================\n");
+			nr_failed += cmocka_run_group_tests(path_tests, NULL, NULL);
+			break;
+		}
+
 		default:
 			assert_true(0);
 		}
@@ -1531,9 +2314,10 @@ main(int argc, char **argv)
 					       {"verifyenv", no_argument, NULL, 't'},
 					       {"cache", no_argument, NULL, 'c'},
 					       {"fdcalls", no_argument, NULL, 'x'},
+					       {"path", no_argument, NULL, 'p'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdlkfetcx", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlkfetcxp", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;

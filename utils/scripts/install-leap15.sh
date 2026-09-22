@@ -20,9 +20,11 @@ dnf_install_args="${1:-}"
 
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
+    binutils \
     boost-devel \
     bzip2 \
     cmake \
+    cpio \
     createrepo_c \
     cunit-devel \
     fdupes \

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -495,10 +495,6 @@ dlck_engine_stop(struct dlck_engine *engine)
 {
 	int rc;
 
-	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_STOP)) { /** fault injection */
-		return daos_errno2der(daos_fail_value_get());
-	}
-
 	if (engine->join_fail) {
 		/** Cannot stop the engine in this case. It will probably crash. */
 		return -DER_BUSY;
@@ -650,7 +646,8 @@ dlck_engine_targets_stop(struct dlck_engine *engine, struct dlck_exec *de)
 
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_JOIN)) { /** fault injection */
 		engine->join_fail = true;
-		return daos_errno2der(daos_fail_value_get());
+		rc                = daos_errno2der(daos_fail_value_get());
+		goto fail_join_and_free;
 	}
 
 	for (int i = 0; i < engine->targets; ++i) {
@@ -700,7 +697,7 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 
 	CK_PRINT(ck, "Start targets... ");
 	rc = dlck_engine_targets_start(engine, exec_one, arg_alloc_fn, &de);
-	CK_APPENDL_OK(ck);
+	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
