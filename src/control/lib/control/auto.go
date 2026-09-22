@@ -610,9 +610,16 @@ func (nsm numaSSDsMap) fromNVMe(req *ConfGenerateReq, ssds storage.NvmeControlle
 	}
 
 	if req.AllowNumaImbalance {
-		// Pretend NVMe devices are distributed equally across NUMA nodes
-		if err := redistributeSsdsIgnNuma(req, numaCount, nsm); err != nil {
-			return errors.Wrap(err, "redistributing numa-imbalanced ssds")
+		// Skip the artificial redistribution if the SSDs' native NUMA affinity
+		// already provides at least as many distinct NUMA groups as the number
+		// of engines explicitly requested; there's nothing to balance in that
+		// case, and spreading devices onto NUMA nodes that won't host an engine
+		// would only discard real affinity information.
+		if !(req.NrEngines > 0 && len(nsm) >= req.NrEngines) {
+			// Pretend NVMe devices are distributed equally across NUMA nodes
+			if err := redistributeSsdsIgnNuma(req, numaCount, nsm); err != nil {
+				return errors.Wrap(err, "redistributing numa-imbalanced ssds")
+			}
 		}
 	}
 

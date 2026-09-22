@@ -326,9 +326,16 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 1},
 				},
 			},
+			// Engine is pinned to NUMA-1 (where the SSDs are) but is still the
+			// first (and only) engine created, so engine-ordinal fields (log
+			// file, fabric port, nvme config output path) use position 0 while
+			// NUMA-affine fields (mount point, device list, pinned numa) use 1.
 			expCfg: control.MockServerCfg("ofi+psm2", []*engine.Config{
 				control.MockEngineCfg(1, 1, 2, 3, 4).
-					WithTargetCount(16).WithHelperStreamCount(4),
+					WithTargetCount(16).WithHelperStreamCount(4).
+					WithLogFile("/var/log/daos/daos_engine.0.log").
+					WithFabricInterfacePort(31416).
+					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf"),
 			}).
 				WithMgmtSvcReplicas("localhost:10001").
 				WithControlLogFile("/var/log/daos/daos_server.log"),
@@ -350,9 +357,63 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 1},
 				},
 			},
+			// With only 1 engine requested, the native NUMA affinity of the SSDs
+			// (all on NUMA-1) already provides a single satisfied NUMA grouping,
+			// so allow-numa-imbalance has nothing to redistribute and the result
+			// matches the non-imbalance case above, other than the flag itself
+			// being persisted to the generated config.
 			expCfg: control.MockServerCfg("ofi+psm2", []*engine.Config{
 				control.MockEngineCfg(1, 1, 2, 3, 4).
-					WithTargetCount(16).WithHelperStreamCount(4),
+					WithTargetCount(16).WithHelperStreamCount(4).
+					WithLogFile("/var/log/daos/daos_engine.0.log").
+					WithFabricInterfacePort(31416).
+					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf"),
+			}).
+				WithMgmtSvcReplicas("localhost:10001").
+				WithControlLogFile("/var/log/daos/daos_server.log").
+				WithAllowNumaImbalance(true),
+		},
+		"single engine requested; two suitable numa nodes; more ssds on numa 1": {
+			nrEngines: 1,
+			// Equal-priority fabric interfaces on both numa nodes so that the
+			// choice between them is decided purely by ssd count.
+			hf: &control.HostFabric{
+				Interfaces: []*control.HostFabricInterface{
+					{
+						Provider: "ofi+psm2", Device: "ib0", NumaNode: 0,
+						NetDevClass: 32, Priority: 0,
+					},
+					{
+						Provider: "ofi+psm2", Device: "ib1", NumaNode: 1,
+						NetDevClass: 32, Priority: 0,
+					},
+				},
+				NumaCount:    2,
+				CoresPerNuma: 26,
+			},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				SysMemInfo: defSysMemInfo(),
+				NvmeDevices: storage.NvmeControllers{
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 0},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 0},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(5), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(6), SocketID: 1},
+				},
+			},
+			// With fabric priority tied between numa 0 and numa 1, the engine
+			// should be placed on numa 1, which has more ssds (4 vs 2).
+			expCfg: control.MockServerCfg("ofi+psm2", []*engine.Config{
+				control.MockEngineCfg(1, 3, 4, 5, 6).
+					WithTargetCount(16).WithHelperStreamCount(4).
+					WithLogFile("/var/log/daos/daos_engine.0.log").
+					WithFabricInterfacePort(31416).
+					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf"),
 			}).
 				WithMgmtSvcReplicas("localhost:10001").
 				WithControlLogFile("/var/log/daos/daos_server.log"),
