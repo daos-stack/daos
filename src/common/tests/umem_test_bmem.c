@@ -342,7 +342,7 @@ test_atomic_alloc_from_bucket(void **state)
 
 	utest_get_scm_used_space(arg->ta_utx, &initial_mem_used);
 	snap_persist_activity();
-	off = umem_atomic_alloc_from_bucket(umm, 1024, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+	off = umem_atomic_alloc_from_bucket(umm, 1024, UMEM_TYPE_ANY, NULL);
 	assert_false(UMOFF_IS_NULL(off));
 	validate_persist_activity(1, 1);
 
@@ -354,7 +354,7 @@ test_atomic_alloc_from_bucket(void **state)
 
 	/* Negative test: Incorrect size test */
 	snap_persist_activity();
-	off = umem_atomic_alloc_from_bucket(umm, 0, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+	off = umem_atomic_alloc_from_bucket(umm, 0, UMEM_TYPE_ANY, NULL);
 	assert_true(UMOFF_IS_NULL(off));
 	validate_persist_activity(0, 0);
 
@@ -363,8 +363,7 @@ test_atomic_alloc_from_bucket(void **state)
 	for (i = 1; i < 16; i++) {
 		size = (1ul<<i) - 1;
 		total_size += size;
-		off_arr[i] = umem_atomic_alloc_from_bucket(umm, size, UMEM_TYPE_ANY,
-							   UMEM_DEFAULT_MBKT_ID);
+		off_arr[i] = umem_atomic_alloc_from_bucket(umm, size, UMEM_TYPE_ANY, NULL);
 		assert_false(UMOFF_IS_NULL(off_arr[i]));
 	}
 	validate_persist_activity(15, 15);
@@ -971,7 +970,7 @@ test_alloc_from_bucket(void **state)
 	rc = utest_tx_begin(arg->ta_utx);
 	assert_int_equal(rc, 0);
 
-	umoff = umem_zalloc_from_bucket(umm, 4, UMEM_DEFAULT_MBKT_ID);
+	umoff = umem_zalloc_from_bucket(umm, 4, NULL);
 	assert_false(UMOFF_IS_NULL(umoff));
 
 	value1 = umem_off2ptr(umm, umoff);
@@ -1128,7 +1127,7 @@ test_tx_alloc_from_bucket(void **state)
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
 
-	umoff1 = umem_zalloc_from_bucket(umm, 4, UMEM_DEFAULT_MBKT_ID);
+	umoff1 = umem_zalloc_from_bucket(umm, 4, NULL);
 	assert_false(UMOFF_IS_NULL(umoff1));
 	allotted_size += 4;
 
@@ -1147,7 +1146,7 @@ test_tx_alloc_from_bucket(void **state)
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
 
-	umoff2 = umem_alloc_from_bucket(umm, 4, UMEM_DEFAULT_MBKT_ID);
+	umoff2 = umem_alloc_from_bucket(umm, 4, NULL);
 	allotted_size += 4;
 	assert_false(UMOFF_IS_NULL(umoff2));
 
@@ -1183,15 +1182,15 @@ test_tx_alloc_from_bucket(void **state)
 
 	/* Negative Tests */
 	/* Outside of TX */
-	expect_assert_failure(umem_alloc_from_bucket(umm, 100, UMEM_DEFAULT_MBKT_ID));
-	expect_assert_failure(umem_zalloc_from_bucket(umm, 100, UMEM_DEFAULT_MBKT_ID));
+	expect_assert_failure(umem_alloc_from_bucket(umm, 100, NULL));
+	expect_assert_failure(umem_zalloc_from_bucket(umm, 100, NULL));
 
 	/* alloc of size zero */
 	snap_persist_activity();
 	utest_get_scm_used_space(arg->ta_utx, &initial_mem_used);
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
-	umoff1 = umem_alloc_from_bucket(umm, 0, UMEM_DEFAULT_MBKT_ID);
+	umoff1 = umem_alloc_from_bucket(umm, 0, NULL);
 	assert_true(UMOFF_IS_NULL(umoff1));
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_ONABORT);
 	rc = umem_tx_end(umm, 1);
@@ -1204,7 +1203,7 @@ test_tx_alloc_from_bucket(void **state)
 	utest_get_scm_used_space(arg->ta_utx, &initial_mem_used);
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
-	umoff1 = umem_zalloc_from_bucket(umm, 0, UMEM_DEFAULT_MBKT_ID);
+	umoff1 = umem_zalloc_from_bucket(umm, 0, NULL);
 	assert_true(UMOFF_IS_NULL(umoff1));
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_ONABORT);
 	rc = umem_tx_end(umm, 1);
@@ -1216,7 +1215,7 @@ test_tx_alloc_from_bucket(void **state)
 	/* free outside of tx */
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
-	umoff1 = umem_zalloc_from_bucket(umm, 4, UMEM_DEFAULT_MBKT_ID);
+	umoff1 = umem_zalloc_from_bucket(umm, 4, NULL);
 	assert_false(UMOFF_IS_NULL(umoff1));
 	rc = umem_tx_end(umm, 0);
 	assert_int_equal(rc, 0);
@@ -1227,9 +1226,9 @@ test_tx_alloc_from_bucket(void **state)
 	utest_get_scm_used_space(arg->ta_utx, &initial_mem_used);
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
-	umoff1 = umem_alloc_from_bucket(umm, 16, UMEM_DEFAULT_MBKT_ID);
+	umoff1 = umem_alloc_from_bucket(umm, 16, NULL);
 	assert_false(UMOFF_IS_NULL(umoff1));
-	umoff1 = umem_zalloc_from_bucket(umm, 32, UMEM_DEFAULT_MBKT_ID);
+	umoff1 = umem_zalloc_from_bucket(umm, 32, NULL);
 	assert_false(UMOFF_IS_NULL(umoff2));
 	rc = umem_tx_abort(umm, 1);
 	assert_false(rc == 0);
@@ -1563,7 +1562,7 @@ test_tx_bucket_reserve_publish_cancel(void **state)
 	/* Reserve/Publish */
 	rc = umem_rsrvd_act_alloc(umm, &rsrvd_act, 2);
 	assert_int_equal(rc, 0);
-	umoff = umem_reserve_from_bucket(umm, rsrvd_act, 980, UMEM_DEFAULT_MBKT_ID);
+	umoff = umem_reserve_from_bucket(umm, rsrvd_act, 980, NULL);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr1 = umem_off2ptr(umm, umoff);
 	memset(rsrv_ptr1, 0, 980);
@@ -1571,7 +1570,7 @@ test_tx_bucket_reserve_publish_cancel(void **state)
 	memcpy(rsrv_ptr1+128, data, strlen(data));
 	memcpy(local_buf+128, data, strlen(data));
 
-	umoff = umem_reserve_from_bucket(umm, rsrvd_act, 128, UMEM_DEFAULT_MBKT_ID);
+	umoff = umem_reserve_from_bucket(umm, rsrvd_act, 128, NULL);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr2 = umem_off2ptr(umm, umoff);
 	memset(rsrv_ptr2, 0, 128);
@@ -1604,13 +1603,13 @@ test_tx_bucket_reserve_publish_cancel(void **state)
 	/* Reserve/Cancel */
 	rc = umem_rsrvd_act_alloc(umm, &rsrvd_act, 2);
 	assert_int_equal(rc, 0);
-	umoff = umem_reserve_from_bucket(umm, rsrvd_act, 980, UMEM_DEFAULT_MBKT_ID);
+	umoff = umem_reserve_from_bucket(umm, rsrvd_act, 980, NULL);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr1 = umem_off2ptr(umm, umoff);
 	memset(rsrv_ptr1, 1, 980);
 	memset(local_buf, 1, 980);
 
-	umoff = umem_reserve_from_bucket(umm, rsrvd_act, 128, UMEM_DEFAULT_MBKT_ID);
+	umoff = umem_reserve_from_bucket(umm, rsrvd_act, 128, NULL);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr2 = umem_off2ptr(umm, umoff);
 	memset(rsrv_ptr2, 1, 128);
@@ -1635,11 +1634,11 @@ test_tx_bucket_reserve_publish_cancel(void **state)
 	validate_persist_activity(2, 0);
 	utest_get_scm_used_space(arg->ta_utx, &cur_mem_used);
 	assert_true(cur_mem_used >= initial_mem_used);
-	umoff = umem_atomic_alloc_from_bucket(umm, 980, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+	umoff = umem_atomic_alloc_from_bucket(umm, 980, UMEM_TYPE_ANY, NULL);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr3 = umem_off2ptr(umm, umoff);
 	assert_ptr_equal(rsrv_ptr1, rsrv_ptr3);
-	umoff = umem_atomic_alloc_from_bucket(umm, 128, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+	umoff = umem_atomic_alloc_from_bucket(umm, 128, UMEM_TYPE_ANY, NULL);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr4 = umem_off2ptr(umm, umoff);
 	assert_ptr_equal(rsrv_ptr2, rsrv_ptr4);
@@ -1648,7 +1647,7 @@ test_tx_bucket_reserve_publish_cancel(void **state)
 	/* reserve - atomic_copy - cancel */
 	rc = umem_rsrvd_act_alloc(umm, &rsrvd_act, 2);
 	assert_int_equal(rc, 0);
-	umoff = umem_reserve_from_bucket(umm, rsrvd_act, 980, UMEM_DEFAULT_MBKT_ID);
+	umoff = umem_reserve_from_bucket(umm, rsrvd_act, 980, NULL);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr1 = umem_off2ptr(umm, umoff);
 	memset(local_buf, 1, 980);
@@ -1746,9 +1745,9 @@ test_tx_bucket_dfree_publish_cancel(void **state)
 	uint64_t		 initial_mem_used, cur_mem_used;
 
 	/* Defer Free/Publish */
-	umoff1 = umem_atomic_alloc_from_bucket(umm, 2048, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+	umoff1 = umem_atomic_alloc_from_bucket(umm, 2048, UMEM_TYPE_ANY, NULL);
 	assert_false(UMOFF_IS_NULL(umoff1));
-	umoff2 = umem_atomic_alloc_from_bucket(umm, 1024, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+	umoff2 = umem_atomic_alloc_from_bucket(umm, 1024, UMEM_TYPE_ANY, NULL);
 	assert_false(UMOFF_IS_NULL(umoff2));
 
 	rc = umem_rsrvd_act_alloc(umm, &rsrvd_act, 2);
@@ -1773,9 +1772,9 @@ test_tx_bucket_dfree_publish_cancel(void **state)
 
 
 	/* Defer Free/Cancel */
-	umoff1 = umem_atomic_alloc_from_bucket(umm, 2048, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+	umoff1 = umem_atomic_alloc_from_bucket(umm, 2048, UMEM_TYPE_ANY, NULL);
 	assert_false(UMOFF_IS_NULL(umoff1));
-	umoff2 = umem_atomic_alloc_from_bucket(umm, 1024, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+	umoff2 = umem_atomic_alloc_from_bucket(umm, 1024, UMEM_TYPE_ANY, NULL);
 	assert_false(UMOFF_IS_NULL(umoff2));
 
 	rc = umem_rsrvd_act_alloc(umm, &rsrvd_act, 2);
@@ -1812,10 +1811,10 @@ test_atomic_alloc_mb(void **state)
 	assert_true(umem_get_mb_from_offset(umm, umoff2) == mb_id);
 
 	/* Allocate from non-evictable memory bucket */
-	umoff3 = umem_atomic_alloc_from_bucket(umm, 2048, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+	umoff3 = umem_atomic_alloc_from_bucket(umm, 2048, UMEM_TYPE_ANY, NULL);
 	assert_false(UMOFF_IS_NULL(umoff3));
 	assert_true(umem_get_mb_from_offset(umm, umoff3) == UMEM_DEFAULT_MBKT_ID);
-	umoff4 = umem_atomic_alloc_from_bucket(umm, 1024, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+	umoff4 = umem_atomic_alloc_from_bucket(umm, 1024, UMEM_TYPE_ANY, NULL);
 	assert_false(UMOFF_IS_NULL(umoff4));
 	assert_true(umem_get_mb_from_offset(umm, umoff4) == UMEM_DEFAULT_MBKT_ID);
 
@@ -1846,8 +1845,7 @@ test_atomic_alloc_mb(void **state)
 
 	found = 0;
 	for (i = 0; i < 16 * 1024; i++) {
-		umoff =
-		    umem_atomic_alloc_from_bucket(umm, 2048, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+		umoff = umem_atomic_alloc_from_bucket(umm, 2048, UMEM_TYPE_ANY, NULL);
 		assert_false(UMOFF_IS_NULL(umoff));
 		assert_true(umem_get_mb_from_offset(umm, umoff) == UMEM_DEFAULT_MBKT_ID);
 		umem_atomic_free(umm, umoff);
@@ -1873,8 +1871,7 @@ test_atomic_alloc_mb(void **state)
 
 	found = 0;
 	for (i = 0; i < 16 * 1024; i++) {
-		umoff =
-		    umem_atomic_alloc_from_bucket(umm, 1024, UMEM_TYPE_ANY, UMEM_DEFAULT_MBKT_ID);
+		umoff = umem_atomic_alloc_from_bucket(umm, 1024, UMEM_TYPE_ANY, NULL);
 		assert_false(UMOFF_IS_NULL(umoff));
 		assert_true(umem_get_mb_from_offset(umm, umoff) == UMEM_DEFAULT_MBKT_ID);
 		umem_atomic_free(umm, umoff);

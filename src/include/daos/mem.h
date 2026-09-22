@@ -730,7 +730,7 @@ typedef struct {
 	 * \param size	   [IN]	size to allocate.
 	 * \param flags	   [IN]	flags like zeroing, noflush (for PMDK and BMEM)
 	 * \param type_num [IN]	struct type (for PMDK and BMEM)
-	 * \param req      [IN]	memory bucket request (for BMEM), NULL for default bucket
+	 * \param req      [IN]	memory bucket request (for BMEM), NULL for the default bucket
 	 */
 	umem_off_t (*mo_tx_alloc)(struct umem_instance *umm, size_t size, uint64_t flags,
 				  unsigned int type_num, struct umem_bucket_req *req);
@@ -796,7 +796,8 @@ typedef struct {
 	 * \param act	[IN|OUT]	action used for later cancel/publish.
 	 * \param size	[IN]		size to be reserved.
 	 * \param type_num [IN]		struct type (for PMDK)
-	 * \param req      [IN]		memory bucket request (for BMEM), NULL for default bucket
+	 * \param req      [IN]		memory bucket request (for BMEM), NULL for the default
+	 *                              bucket
 	 */
 	umem_off_t (*mo_reserve)(struct umem_instance *umm, void *act, size_t size,
 				 unsigned int type_num, struct umem_bucket_req *req);
@@ -853,7 +854,7 @@ typedef struct {
 	 * \param size	   [IN]	 size to allocate.
 	 * \param flags	   [IN]	 flags like zeroing, noflush (for PMDK)
 	 * \param type_num [IN]	 struct type (for PMDK)
-	 * \param req      [IN]	 memory bucket request (for BMEM), NULL for default bucket
+	 * \param req      [IN]	 memory bucket request (for BMEM), NULL for the default bucket
 	 */
 	umem_off_t (*mo_atomic_alloc)(struct umem_instance *umm, size_t size, unsigned int type_num,
 				      struct umem_bucket_req *req);

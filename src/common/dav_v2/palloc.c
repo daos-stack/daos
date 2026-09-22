@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/*
- * Copyright 2015-2024 Intel Corporation.
+/**
+ * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  */
-/* (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP */
 
 /*
  * palloc.c -- implementation of pmalloc POSIX-like API
