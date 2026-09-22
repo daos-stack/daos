@@ -60,7 +60,7 @@ obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
 	struct bundle  *bndl = cb_arg;
-	struct checker *ck = bndl->ck;
+	struct checker *ck   = bndl->ck;
 	int             rc;
 
 	CK_PRINTF(ck, CK_OID_FMT "...\n", DP_UOID(entry->ie_oid));
