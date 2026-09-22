@@ -148,7 +148,11 @@ if [[ "${build_range}" =~ deps|all ]]; then
   utils/rpms/mercury.sh
   utils/rpms/pmdk.sh
   utils/rpms/daos-spdk.sh
-  verify_rpm_stage deps
+  if ! compgen -G "${pkg_output_dir}/deps/*.rpm" > /dev/null; then
+    rm -rf "${pkg_output_dir}/deps"
+  else
+    verify_rpm_stage deps
+  fi
 fi
 
 if [[ "${build_range}" =~ daos|all ]]; then
@@ -159,5 +163,7 @@ fi
 
 if [ -n "${rpm_suffix}" ]; then
   rm -rf "${pkg_output_dir}/repodata"
-  createrepo "${pkg_output_dir}"
+  if compgen -G "${pkg_output_dir}/*/*.rpm" > /dev/null; then
+    createrepo "${pkg_output_dir}"
+  fi
 fi
