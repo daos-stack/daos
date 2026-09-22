@@ -71,7 +71,7 @@ ior_new:
   read_flags: "-r -R -F -k -G 1"
   test_file: /testFile
   transfer_size: 10240
-  block_size: 15MiB
+  block_size: 1G
   iterations: 10
 
 aggregation:

@@ -20,6 +20,7 @@ from telemetry_test_base import TestWithTelemetry
 
 
 class NvmeEnospace(ServerFillUp, TestWithTelemetry):
+    # pylint: disable=too-many-public-methods
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate DER_NOSPACE for SCM and NVMe
@@ -470,7 +471,8 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         # Fill 50% of current SCM free space. Aggregation is Enabled so NVMe space will
         # continue to fill up.
         try:
-            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50)
+            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50,
+                                log_file=log_file)
         finally:
             self.display_stats()
 
@@ -724,7 +726,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                 block_size=block_size,
                 namespace='/run/ior_new/*')
             max_mib_baseline.append(float(ior_matrix[0][int(IorMetrics.MAX_MIB)]))
-            self.log.info("IOR Baseline Read MiB %s", max_mib_baseline[-1])
+            self.log.info("IOR Baseline Read MiB %d: %s", i, max_mib_baseline[-1])
 
         # Run IOR to fill the pool.
         self.log_step('Running IOR to fill ~90% of the pool')
@@ -743,7 +745,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                 block_size=block_size,
                 namespace='/run/ior_new/*')
             max_mib_latest.append(float(ior_matrix[0][int(IorMetrics.MAX_MIB)]))
-            self.log.info("IOR Latest Read MiB %s", max_mib_latest[-1])
+            self.log.info("IOR Latest Read MiB %d: %s", i, max_mib_latest[-1])
 
         # Check if latest IOR read performance is in Tolerance of 5%, when
         # Storage space is full.
@@ -781,18 +783,21 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.log_step('Running IOR baseline write')
         self._get_ior_metrics(
             container,
+            processes=64,
             ior_flags=self.ior_default_flags,
             transfer_size=self.ior_scm_xfersize,
-            block_size=self.calculate_ior_block_size(5, 'SCM'))
-
+            block_size=self.calculate_ior_block_size(5, 'SCM'),
+            namespace='/run/ior_new/*')
         # Read the baseline data set
         # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
         self.log_step('Running IOR baseline read')
         ior_matrix = self._get_ior_metrics(
             container,
+            processes=64,
             ior_flags=self.ior_read_flags,
             transfer_size=self.ior_scm_xfersize,
-            block_size=self.calculate_ior_block_size(5, 'SCM'))
+            block_size=self.calculate_ior_block_size(5, 'SCM'),
+            namespace='/run/ior_new/*')
         max_mib_baseline = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
         # baseline_cont_uuid = self.ior_cmd.dfs_cont.value
         self.log.info("IOR Baseline Read MiB %s", max_mib_baseline)
@@ -806,9 +811,11 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.log_step('Running IOR read to compare to baseline')
         ior_matrix = self._get_ior_metrics(
             container,
+            processes=64,
             ior_flags=self.ior_read_flags,
             transfer_size=self.ior_scm_xfersize,
-            block_size=self.calculate_ior_block_size(5, 'SCM'))
+            block_size=self.calculate_ior_block_size(5, 'SCM'),
+            namespace='/run/ior_new/*')
         max_mib_latest = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
         self.log.info("IOR Latest Read MiB %s", max_mib_latest)
 
