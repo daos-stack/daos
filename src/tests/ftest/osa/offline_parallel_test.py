@@ -100,8 +100,7 @@ class OSAOfflineParallelTest(OSAUtils):
         # If server is restarted, enable all targets
         if self.server_boot:
             targets_per_rank = self.server_managers[0].get_config_value("targets")
-            t_string = "0-{}".format(targets_per_rank - 1)
-
+            t_string = ",".join(str(target) for target in range(targets_per_rank))
         # Exclude rank 2.
         rank = 2
 
