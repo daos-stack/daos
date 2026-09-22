@@ -428,4 +428,7 @@ update_stbuf_times(struct dfs_entry entry, daos_epoch_t max_epoch, struct stat *
 int
 lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_obj_t **_obj,
 		mode_t *mode, struct stat *stbuf, size_t depth);
+int
+follow_symlink(dfs_t *dfs, dfs_obj_t *parent, const char *value, int flags, dfs_obj_t **_obj,
+	       mode_t *mode, struct stat *stbuf, size_t depth);
 #endif /* __DFS_INTERNAL_H__ */
