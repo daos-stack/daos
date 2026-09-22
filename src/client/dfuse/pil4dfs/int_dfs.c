@@ -2397,7 +2397,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		return fd_kernel;
 	}
 
-	if (oflags & __O_TMPFILE) {
+	/* __O_TMPFILE includes O_DIRECTORY, so the whole mask has to match */
+	if ((oflags & __O_TMPFILE) == __O_TMPFILE) {
 		if (!parent && (strncmp(item_name, "/", 2) == 0))
 			rc = dfs_access(dfs_mt->dfs, NULL, NULL, X_OK | W_OK);
 		else
@@ -2445,14 +2446,19 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	if (rc)
 		D_GOTO(out_error, rc);
 
-	/* O_NOFOLLOW on a symlink: ELOOP, or with O_PATH an fd on the link that only the kernel can
-	 * provide. A fake fd on the link object would only fail later, at read().
+	/* O_NOFOLLOW on a symlink: ELOOP, or ENOTDIR with O_DIRECTORY as the kernel checks that
+	 * first, or with O_PATH an fd on the link that only the kernel can provide. A fake fd on
+	 * the link object would only fail later, at read().
 	 */
 	if (S_ISLNK(mode_query)) {
 		dfs_release(dfs_obj);
 		if (oflags & O_PATH)
 			goto org_func;
-		D_GOTO(out_error, rc = ELOOP);
+		D_GOTO(out_error, rc = (oflags & O_DIRECTORY) ? ENOTDIR : ELOOP);
+	}
+	if ((oflags & O_DIRECTORY) && !S_ISDIR(mode_query)) {
+		dfs_release(dfs_obj);
+		D_GOTO(out_error, rc = ENOTDIR);
 	}
 
 	if (S_ISDIR(mode_query)) {

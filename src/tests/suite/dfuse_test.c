@@ -2438,6 +2438,14 @@ do_open_nofollow(void **state)
 		assert_int_equal(fd, -1);
 		assert_int_equal(errno, ELOOP);
 
+		/* as fts() and nftw() open directories: the directory check comes first */
+		fd = open(path, O_RDONLY | O_NOFOLLOW | O_DIRECTORY);
+		assert_int_equal(fd, -1);
+		assert_int_equal(errno, ENOTDIR);
+		fd = open(path, O_PATH | O_NOFOLLOW | O_DIRECTORY);
+		assert_int_equal(fd, -1);
+		assert_int_equal(errno, ENOTDIR);
+
 		fd = open(path, O_PATH | O_NOFOLLOW);
 		assert_return_code(fd, errno);
 		assert_return_code(fstat(fd, &stbuf), errno);
@@ -2452,6 +2460,16 @@ do_open_nofollow(void **state)
 	fd = open(path, O_RDONLY | O_NOFOLLOW);
 	assert_return_code(fd, errno);
 	assert_return_code(close(fd), errno);
+
+	/* O_DIRECTORY: ENOTDIR for a file, and no write access needed on the directory */
+	fd = open(path, O_RDONLY | O_DIRECTORY);
+	assert_int_equal(fd, -1);
+	assert_int_equal(errno, ENOTDIR);
+	assert_return_code(chmod(base, S_IRUSR | S_IXUSR), errno);
+	fd = open(base, O_RDONLY | O_DIRECTORY);
+	assert_return_code(fd, errno);
+	assert_return_code(close(fd), errno);
+	assert_return_code(chmod(base, S_IRWXU), errno);
 
 	for (i = 0; i < 4; i++) {
 		snprintf(path, sizeof(path), links[i], test_dir, getpid());
