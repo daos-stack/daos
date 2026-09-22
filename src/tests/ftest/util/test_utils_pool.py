@@ -817,7 +817,7 @@ class TestPool(TestDaosApiBase):
                 # Any error other than DER_NONEXIST is a real error
                 if 'DER_NONEXIST' not in str(error):
                     raise
-                # Raise a failure we exceed the max wait time
+                # Raise a failure if we exceed the max wait time
                 if time() - time_start > timeout:
                     raise CommandFailure(
                         f"Failed to stop rebuild after {timeout} seconds"
