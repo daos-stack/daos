@@ -396,7 +396,14 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 	// Skip MS replica checks when replacing a rank, as control_metadata
 	// format is skipped in this case.
 	if req.Replace {
-		return nil
+	    hosts, err := common.ParseHostList(req.HostList, build.DefaultControlPort)
+	    if err != nil {
+	        return err
+	    }
+	    if len(hosts) != 1 {
+	        return errors.New("replace option requires exactly one host in hostlist")
+	    }
+	    return nil
 	}
 
 	reqHosts, err := common.ParseHostList(req.HostList, build.DefaultControlPort)
