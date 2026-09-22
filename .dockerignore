@@ -6,6 +6,7 @@
 *
 !src
 !deps
+!utils/build
 !utils/build.config
 !utils/certs
 !utils/ci
