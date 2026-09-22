@@ -1351,8 +1351,10 @@ class DmgCommand(DmgCommandBase):
                 raise CommandFailure(f'Failed to stop rebuild after {timeout} seconds')
 
             # Otherwise, sleep and retry
+            pools_not_stopped = [pool for pool in rebuild_stopped if not rebuild_stopped[pool]]
             self.log.info(
-                'Assuming rebuild is not started yet. Retrying in %s seconds...', interval)
+                'Waiting for rebuild to stop on %d pools: %s. Retrying in %s seconds...',
+                len(pools_not_stopped), ', '.join(pools_not_stopped), interval)
             time.sleep(interval)
 
     def system_self_heal_eval(self):
