@@ -29,3 +29,5 @@ stacktrace() {
 }
 
 trap 'stacktrace' ERR
+
+# SRE-4015: stack layer 3 marker, no functional effect.  Remove with the stack.
