@@ -32,8 +32,8 @@ dmg:
     allow_insecure: true
 
 pool:
-  scm_size: 5G
-  nvme_size: 5G
+  scm_size: 10G
+  nvme_size: 10G
   # SCM usage will not be 100% because some space (<1%) is used for the system and data
   # distribution is not fully uniform.
   usage_min_scm: 92
@@ -53,13 +53,26 @@ ior:
   daos_destroy: false
   iorflags:
     flags: "-w -F -k -G 1"
+    write_flags: "-w -W -F -k -G 1"
     read_flags: "-r -R -F -k -G 1"
+    rw_flags: "-r -R -w -W -F -k -G 1"
   test_file: /testFile
   transfersize_blocksize:
     2K:
       transfer_size: 2048  # 2K
     16M:
       nvme_transfer_size: 16777216  # 16M
+
+ior_new:
+  api: "DFS"
+  processes: 64
+  daos_destroy: false
+  write_flags: "-w -W -F -k -G 1"
+  read_flags: "-r -R -F -k -G 1"
+  test_file: /testFile
+  transfer_size: 10240
+  block_size: 15MiB
+  iterations: 10
 
 aggregation:
   scm_threshold_percent: 99  # percent of scm expected to be reclaimed after aggregation
