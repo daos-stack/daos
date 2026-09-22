@@ -20,7 +20,7 @@ from util.yaml_utils import write_yaml_file
 # TEMPORARY - revert to False before merging: forces the NVMe reset/missing
 # device failure paths so they can be exercised in a PR run.
 # Referenced by collection_utils and server_utils.
-FORCE_NVME_FAILURE = True
+FORCE_NVME_FAILURE = False
 
 
 def find_pci_address(value, *flags):
