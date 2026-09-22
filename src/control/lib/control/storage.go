@@ -389,21 +389,22 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 // system should be erased before allowing a format request for the hosts
 // in the request. The goal is to prevent reformatting a running system while
 // allowing (re-)format of hosts that are not participating as MS replicas.
-// When Replace is true, control_metadata format will be skipped on the engine
-// side, so the MS replica check can be bypassed to allow replacing MS replica
-// ranks after metadata loss.
+// When Replace is true, the request targets a single rank being replaced
+// after metadata loss, so the MS replica check is bypassed; control_metadata
+// is still (re-)formatted on the control plane for that rank if needed.
 func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFormatReq) error {
-	// Skip MS replica checks when replacing a rank, as control_metadata
-	// format is skipped in this case.
+	// Skip MS replica checks when replacing a single rank; the request is
+	// restricted to exactly one host and control_metadata format for that
+	// rank is handled separately by the control plane.
 	if req.Replace {
-	    hosts, err := common.ParseHostList(req.HostList, build.DefaultControlPort)
-	    if err != nil {
-	        return err
-	    }
-	    if len(hosts) != 1 {
-	        return errors.New("replace option requires exactly one host in hostlist")
-	    }
-	    return nil
+		hosts, err := common.ParseHostList(req.HostList, build.DefaultControlPort)
+		if err != nil {
+			return err
+		}
+		if len(hosts) != 1 {
+			return errors.New("replace option requires exactly one host in hostlist")
+		}
+		return nil
 	}
 
 	reqHosts, err := common.ParseHostList(req.HostList, build.DefaultControlPort)
