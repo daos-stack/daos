@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -978,7 +978,7 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in, const daos_epoch_ran
 	}
 done:
 	rc = ilog_tx_end(lctx, rc);
-	DL_CDEBUG(rc == 0 || rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR, rc,
+	DL_CDEBUG(rc == 0 || rc == -DER_NONEXIST, DB_TRACE, DLOG_ERR, rc,
 		  "%s in incarnation log " DF_X64 " flags %x, tree_version: %d", opc_str[opc],
 		  id_in->id_epoch, flags, ilog_mag2ver(lctx->ic_root->lr_magic));
 

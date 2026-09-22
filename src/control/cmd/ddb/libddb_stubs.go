@@ -59,6 +59,7 @@ func resetDdbStubs() {
 	ddb_run_dtx_stat_RC, ddb_run_dtx_stat_Fn = 0, nil
 	ddb_run_prov_mem_RC, ddb_run_prov_mem_Fn = 0, nil
 	ddb_run_dtx_aggr_RC, ddb_run_dtx_aggr_Fn = 0, nil
+	ddb_run_csum_dump_RC, ddb_run_csum_dump_Fn = 0, nil
 }
 
 var ddb_init_RC C.int = 0
@@ -457,4 +458,20 @@ func ddb_run_dtx_aggr(_ *C.struct_ddb_ctx, opts *C.struct_dtx_aggr_options) C.in
 		))
 	}
 	return ddb_run_dtx_aggr_RC
+}
+
+var (
+	ddb_run_csum_dump_RC C.int = 0
+	ddb_run_csum_dump_Fn func(path string, dst string, epoch uint64) error
+)
+
+func ddb_run_csum_dump(_ *C.struct_ddb_ctx, opts *C.struct_csum_dump_options) C.int {
+	if ddb_run_csum_dump_Fn != nil {
+		return fromGoErr(ddb_run_csum_dump_Fn(
+			C.GoString(opts.path),
+			C.GoString(opts.dst),
+			uint64(opts.epoch),
+		))
+	}
+	return ddb_run_csum_dump_RC
 }

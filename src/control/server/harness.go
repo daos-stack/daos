@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -256,7 +256,7 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 	}
 
 	// Now we want to block any RPCs that might try to mess with storage
-	// (format, firmware update, etc) before attempting to start I/O Engines
+	// (format, etc) before attempting to start I/O Engines
 	// which are using the storage.
 	h.started.SetTrue()
 	defer h.started.SetFalse()

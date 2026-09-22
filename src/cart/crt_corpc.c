@@ -684,16 +684,18 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 					   &co_info->co_replied_rpcs,
 					   crp_parent_link) {
 			D_ASSERT(tmp_rpc_priv != parent_rpc_priv);
-			D_ASSERT(co_ops->co_aggregate != NULL);
-			rc = co_ops->co_aggregate(&tmp_rpc_priv->crp_pub,
-						  &parent_rpc_priv->crp_pub,
-						  co_info->co_priv);
-			if (rc != 0) {
-				D_ERROR("co_ops->co_aggregate(opc: %#x) "
-					"failed: "DF_RC"\n",
-					child_req->cr_opc, DP_RC(rc));
-				if (co_info->co_rc == 0)
-					co_info->co_rc = rc;
+
+			if (co_ops && co_ops->co_aggregate) {
+				rc = co_ops->co_aggregate(&tmp_rpc_priv->crp_pub,
+							  &parent_rpc_priv->crp_pub,
+							  co_info->co_priv);
+				if (rc != 0) {
+					D_ERROR("co_ops->co_aggregate(opc: %#x) "
+						"failed: " DF_RC "\n",
+						child_req->cr_opc, DP_RC(rc));
+					if (co_info->co_rc == 0)
+						co_info->co_rc = rc;
+				}
 			}
 			co_info->co_child_ack_num++;
 			D_DEBUG(DB_NET, "parent rpc %p, child rpc %p, "
@@ -723,16 +725,16 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 				memset(child_rpc_priv->crp_pub.cr_output, 0,
 				       child_rpc_priv->crp_pub.cr_output_size);
 			} else {
-				D_ASSERT(co_ops->co_aggregate != NULL);
-				rc = co_ops->co_aggregate(child_req,
-					&parent_rpc_priv->crp_pub,
-					co_info->co_priv);
-				if (rc != 0) {
-					D_ERROR("co_ops->co_aggregate(opc: %#x)"
-						" failed: "DF_RC"\n",
-						child_req->cr_opc, DP_RC(rc));
-					if (co_info->co_rc == 0)
-						co_info->co_rc = rc;
+				if (co_ops && co_ops->co_aggregate) {
+					rc = co_ops->co_aggregate(
+					    child_req, &parent_rpc_priv->crp_pub, co_info->co_priv);
+					if (rc != 0) {
+						D_ERROR("co_ops->co_aggregate(opc: %#x)"
+							" failed: " DF_RC "\n",
+							child_req->cr_opc, DP_RC(rc));
+						if (co_info->co_rc == 0)
+							co_info->co_rc = rc;
+					}
 				}
 			}
 		}

@@ -380,3 +380,22 @@ func (ctx *DdbContext) DtxAggr(path string, cmtTime uint64, cmtDate string) erro
 	/* Run the c code command */
 	return daosError(ddb_run_dtx_aggr(&ctx.ctx, &options))
 }
+
+// CsumDump dumps the visible checksum(s) at the VOS tree path to the screen, or to the
+// file at dst if provided. epoch selects which version to dump: for a single value akey
+// it is the epoch at or before which the value is fetched, and for an array akey it is the
+// maximal epoch of the visible record extent(s) to select. Pass math.MaxUint64 (EPOCH_MAX)
+// to select the latest.
+func (ctx *DdbContext) CsumDump(path string, dst string, epoch uint64) error {
+	/* Set up the options */
+	options := C.struct_csum_dump_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	if dst != "" {
+		options.dst = C.CString(dst)
+		defer freeString(options.dst)
+	}
+	options.epoch = C.uint64_t(epoch)
+	/* Run the c code command */
+	return daosError(ddb_run_csum_dump(&ctx.ctx, &options))
+}

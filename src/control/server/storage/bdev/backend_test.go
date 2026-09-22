@@ -701,47 +701,6 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 	}
 }
 
-func TestBackend_Update(t *testing.T) {
-	numCtrlrs := 4
-	controllers := make(storage.NvmeControllers, 0, numCtrlrs)
-	for i := 0; i < numCtrlrs; i++ {
-		c := mockSpdkController(int32(i))
-		controllers = append(controllers, &c)
-	}
-
-	for name, tc := range map[string]struct {
-		pciAddr string
-		mec     spdk.MockEnvCfg
-		mnc     spdk.MockNvmeCfg
-		expErr  error
-	}{
-		"no PCI addr": {
-			expErr: FaultBadPCIAddr(""),
-		},
-		"binding update fail": {
-			pciAddr: controllers[0].PciAddr,
-			mnc: spdk.MockNvmeCfg{
-				UpdateErr: errors.New("spdk says no"),
-			},
-			expErr: errors.New("spdk says no"),
-		},
-		"binding update success": {
-			pciAddr: controllers[0].PciAddr,
-			expErr:  nil,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
-
-			b := backendWithMockBinding(log, tc.mec, tc.mnc)
-
-			gotErr := b.UpdateFirmware(tc.pciAddr, "/some/path", 0)
-			test.CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
 type mockFileInfo struct {
 	name    string
 	size    int64

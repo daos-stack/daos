@@ -14,7 +14,6 @@ if [ -z "${SL_PREFIX:-}" ]; then
   echo "daos is not built"
   exit 1
 fi
-
 daoshome="${prefix}/lib/daos"
 server_svc_name="daos_server.service"
 agent_svc_name="daos_agent.service"
@@ -22,6 +21,12 @@ sysctl_script_name="10-daos_server.conf"
 daos_sys_dir="/var/daos"
 daos_log_dir="/var/log/daos"
 
+distro_name=".${DISTRO:-el9}"
+daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | \
+                sed 's/^Version: *//')"
+daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
+                sed 's/^Release: *//' | \
+                sed 's/%.*//')${DAOS_RELVAL:-}${distro_name}"
 VERSION=${daos_version}
 RELEASE=${daos_release}
 LICENSE="BSD-2-Clause-Patent"
@@ -199,7 +204,7 @@ EOF
   chmod +x "${tmp}/pre_uninstall_server"
   EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_server")
 
-  if [[ "${DISTRO:-el8}" =~ suse ]]; then
+  if [[ "${DISTRO:-el9}" =~ suse ]]; then
     cat << EOF  > "${tmp}/post_uninstall_server"
 #!/bin/bash
 ldconfig
@@ -335,7 +340,7 @@ EOF
 chmod +x "${tmp}/pre_uninstall_client"
 EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
 
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
+if [[ "${DISTRO:-el9}" =~ suse ]]; then
   cat << EOF  > "${tmp}/post_uninstall_client"
 #!/bin/bash
 set -x
@@ -410,7 +415,7 @@ fi
 EXTERNAL_DEPENDS+=("${capstone_lib}")
 EXTERNAL_DEPENDS+=("pciutils")
 EXTERNAL_DEPENDS+=("${ndctl_dev}")
-if [[ "${DISTRO:-el8}" =~ el ]]; then
+if [[ "${DISTRO:-el9}" =~ el ]]; then
   EXTERNAL_DEPENDS+=("daxctl-devel")
 fi
 DEPENDS=( "daos-client = ${VERSION}-${RELEASE}" "daos-admin = ${VERSION}-${RELEASE}")
@@ -444,23 +449,6 @@ if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
   build_package "daos-serialize"
 fi
 
-if [ -f "${SL_PREFIX}/bin/daos_firmware_helper" ]; then
-  TARGET_PATH="${bindir}/daos_firmware_helper"
-  list_files files "${SL_PREFIX}/bin/daos_firmware_helper"
-  append_install_list "${files[@]}"
-
-cat << EOF > "${tmp}/post_install_firmware"
-#!/bin/bash
-chown root:daos_server ${bindir}/daos_firmware_helper
-chmod 4750 ${bindir}/daos_firmware_helper
-EOF
-  chmod +x "${tmp}/post_install_firmware"
-  EXTRA_OPTS+=("--after-install" "${tmp}/post_install_firmware")
-
-  DEPENDS=("daos-server = ${VERSION}-${RELEASE}")
-  build_package "daos-firmware"
-fi
-
 TARGET_PATH="${libdir}"
 DEPENDS=("daos-client-tests = ${VERSION}-${RELEASE}")
 DEPENDS+=("hdf5-${openmpi_lib}")
@@ -471,7 +459,9 @@ DEPENDS+=("${openmpi_lib}")
 list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
-build_package "daos-client-tests-openmpi"
+# OpenMPI on EL provides qualified libmpi capabilities that do not satisfy
+# FPM's unqualified automatic Requires; the package dependency is explicit.
+build_package "daos-client-tests-openmpi" "noautoreq"
 
 #shim packages
 PACKAGE_TYPE="empty"
@@ -489,10 +479,14 @@ DEPENDS+=("romio-tests")
 DEPENDS+=("python3-mpi4py-tests >= 3.1.6")
 build_package "daos-tests"
 
-build_package "daos-client-tests-mpich"
-
 DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-client-tests-openmpi = ${VERSION}-${RELEASE}")
-DEPENDS+=("daos-client-tests-mpich = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-serialize = ${VERSION}-${RELEASE}")
 build_package "daos-tests-internal"
+
+# A shim to bridge MOFED's openmpi to distribution dependency tags
+EXTERNAL_DEPENDS=("libmpi.so.40()(64bit)")
+PROVIDES=("libmpi.so.40()(64bit)(openmpi-x86_64)")
+PROVIDES+=("libmpi_cxx.so.40()(64bit)")
+PROVIDES+=("libmpi_cxx.so.40()(64bit)(openmpi-x86_64)")
+build_package "daos-mofed-shim"

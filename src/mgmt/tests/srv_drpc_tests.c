@@ -3337,6 +3337,63 @@ test_drpc_dev_set_faulty_success(void **state)
 }
 
 /*
+ * dRPC bio health query tests
+ */
+
+static void
+setup_bio_health_drpc_call(Drpc__Call *call, const char *uuid_str)
+{
+	Ctl__BioHealthReq req = CTL__BIO_HEALTH_REQ__INIT;
+	size_t            len;
+	uint8_t          *body;
+
+	req.dev_uuid = (char *)uuid_str;
+
+	len = ctl__bio_health_req__get_packed_size(&req);
+	D_ALLOC(body, len);
+	ctl__bio_health_req__pack(&req, body);
+
+	call->body.data = body;
+	call->body.len  = len;
+}
+
+static void
+expect_bio_health_resp_with_fields(Drpc__Response *resp, uint8_t exp_percentage)
+{
+	Ctl__BioHealthResp *bh_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	bh_resp = ctl__bio_health_resp__unpack(NULL, resp->body.len, resp->body.data);
+	assert_non_null(bh_resp);
+	assert_int_equal(bh_resp->status, 0);
+	assert_int_equal(bh_resp->percentage_used, exp_percentage);
+
+	ctl__bio_health_resp__free_unpacked(bh_resp, NULL);
+}
+
+static void
+test_drpc_bio_health_query_success(void **state)
+{
+	Drpc__Call     call            = DRPC__CALL__INIT;
+	Drpc__Response resp            = DRPC__RESPONSE__INIT;
+	uint8_t        test_percentage = 49;
+
+	/* Mock will populate response with test data including percentage_used=49 */
+	setup_bio_health_drpc_call(&call, TEST_UUID);
+
+	/* Call the handler */
+	ds_mgmt_drpc_bio_health_query(&call, &resp);
+
+	/* Verify percentage_used is properly copied to response */
+	expect_bio_health_resp_with_fields(&resp, test_percentage);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
  * dRPC check start tests
  */
 
@@ -3443,6 +3500,8 @@ test_drpc_check_act_success(void **state)
 
 #define SET_FAULTY_TEST(x)	cmocka_unit_test_setup(x, drpc_dev_set_faulty_setup)
 
+#define BIO_HEALTH_TEST(x)      cmocka_unit_test(x)
+
 #define CHECK_START_TEST(x)	cmocka_unit_test(x)
 
 #define CHECK_STOP_TEST(x)	cmocka_unit_test(x)
@@ -3541,6 +3600,7 @@ main(void)
 	    SET_FAULTY_TEST(test_drpc_dev_set_faulty_bad_uuid),
 	    SET_FAULTY_TEST(test_drpc_dev_set_faulty_fails),
 	    SET_FAULTY_TEST(test_drpc_dev_set_faulty_success),
+	    BIO_HEALTH_TEST(test_drpc_bio_health_query_success),
 	    CHECK_START_TEST(test_drpc_check_start_success),
 	    CHECK_STOP_TEST(test_drpc_check_stop_success),
 	    CHECK_QUERY_TEST(test_drpc_check_query_success),

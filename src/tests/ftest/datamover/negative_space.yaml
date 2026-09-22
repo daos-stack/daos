@@ -20,7 +20,6 @@ pool_small:
   size: 64M
 container:
   type: POSIX
-  control_method: daos
 ior:
   client_processes:
     np: 1

@@ -19,162 +19,162 @@ ftest-only: &ftest-only
   need-unit-test: False
 
 # Run only cart ftest for cart ftest C utilities
-src/tests/ftest/cart/*.[ch]:
+src/tests/ftest/cart/.*\.[ch]$:
   test-tag: cart
   <<: *ftest-only
 
 # Special handling for ftest, defaulting to pr
-src/tests/ftest*:
+src/tests/ftest/:
   <<: *ftest-only
   test-tag:
     handler: FtestTagMap
     tags: pr
 
-src/tests/suite/daos_aggregate_ec.c:
+src/tests/suite/daos_aggregate_ec\.c$:
   test-tag: test_daos_aggregate_ec
   <<: *ftest-only
 
-src/tests/suite/daos_array.c:
+src/tests/suite/daos_array\.c$:
   test-tag: test_daos_array
   <<: *ftest-only
 
-src/tests/suite/daos_base_tx.c:
+src/tests/suite/daos_base_tx\.c$:
   test-tag: test_daos_single_rdg_tx
   <<: *ftest-only
 
-src/tests/suite/daos_capa.c:
+src/tests/suite/daos_capa\.c$:
   test-tag: test_daos_capability
   <<: *ftest-only
 
-src/tests/suite/daos_checksum.c:
+src/tests/suite/daos_checksum\.c$:
   test-tag: test_daos_checksum
   <<: *ftest-only
 
-src/tests/suite/daos_container.c:
+src/tests/suite/daos_container\.c$:
   test-tag: test_daos_container
   <<: *ftest-only
 
-src/tests/suite/daos_cr.c:
+src/tests/suite/daos_cr\.c$:
   test-tag: test_daos_cat_recov_core
   <<: *ftest-only
 
-src/tests/suite/daos_dedup.c:
+src/tests/suite/daos_dedup\.c$:
   test-tag: test_daos_dedup
   <<: *ftest-only
 
-src/tests/suite/daos_degraded.c:
+src/tests/suite/daos_degraded\.c$:
   test-tag: test_daos_degraded_mode
   <<: *ftest-only
 
-src/tests/suite/daos_degrade_ec.c:
+src/tests/suite/daos_degrade_ec\.c$:
   test-tag: test_daos_degraded_ec
   <<: *ftest-only
 
-src/tests/suite/daos_dist_tx.c:
+src/tests/suite/daos_dist_tx\.c$:
   test-tag: test_daos_distributed_tx
   <<: *ftest-only
 
-src/tests/suite/daos_drain_simple.c:
+src/tests/suite/daos_drain_simple\.c$:
   test-tag: test_daos_drain_simple
   <<: *ftest-only
 
-src/tests/suite/daos_epoch.c:
+src/tests/suite/daos_epoch\.c$:
   test-tag: test_daos_epoch
   <<: *ftest-only
 
-src/tests/suite/daos_epoch_recovery.c:
+src/tests/suite/daos_epoch_recovery\.c$:
   test-tag: test_daos_epoch_recovery
   <<: *ftest-only
 
-src/tests/suite/daos_extend_simple.c:
+src/tests/suite/daos_extend_simple\.c$:
   test-tag: test_daos_extend_simple
   <<: *ftest-only
 
-src/tests/suite/daos_inc_reint.c:
+src/tests/suite/daos_inc_reint\.c$:
   test-tag: test_daos_inc_reint_cont_recov
   <<: *ftest-only
 
-src/tests/suite/daos_kv.c:
+src/tests/suite/daos_kv\.c$:
   test-tag: test_daos_kv
   <<: *ftest-only
 
-src/tests/suite/daos_md_replication.c:
+src/tests/suite/daos_md_replication\.c$:
   test-tag: test_daos_md_replication
   <<: *ftest-only
 
-src/tests/suite/daos_mgmt.c:
+src/tests/suite/daos_mgmt\.c$:
   test-tag: test_daos_management
   <<: *ftest-only
 
-src/tests/suite/daos_nvme_recovery.c:
+src/tests/suite/daos_nvme_recovery\.c$:
   test-tag: DaosCoreTestNvme
   <<: *ftest-only
 
-src/tests/suite/daos_obj_array.c:
+src/tests/suite/daos_obj_array\.c$:
   test-tag: test_daos_object_array
   <<: *ftest-only
 
-src/tests/suite/daos_obj.c:
+src/tests/suite/daos_obj\.c$:
   test-tag: test_daos_io test_daos_ec_io
   <<: *ftest-only
 
-src/tests/suite/daos_obj_ec.c:
+src/tests/suite/daos_obj_ec\.c$:
   test-tag: test_daos_ec_obj
   <<: *ftest-only
 
-src/tests/suite/daos_oid_alloc.c:
+src/tests/suite/daos_oid_alloc\.c$:
   test-tag: test_daos_oid_allocator
   <<: *ftest-only
 
-src/tests/suite/daos_pipeline.c:
+src/tests/suite/daos_pipeline\.c$:
   test-tag: test_daos_pipeline
   <<: *ftest-only
 
-src/tests/suite/daos_pool.c:
+src/tests/suite/daos_pool\.c$:
   test-tag: test_daos_pool
   <<: *ftest-only
 
-src/tests/suite/daos_rebuild.c:
+src/tests/suite/daos_rebuild\.c$:
   test-tag: DaosCoreTestRebuild
   <<: *ftest-only
 
-src/tests/suite/daos_rebuild_ec.c:
+src/tests/suite/daos_rebuild_ec\.c$:
   test-tag: test_daos_rebuild_ec
   <<: *ftest-only
 
-src/tests/suite/daos_rebuild_interactive.c:
+src/tests/suite/daos_rebuild_interactive\.c$:
   test-tag: test_daos_rebuild_interactive
   <<: *ftest-only
 
-src/tests/suite/daos_rebuild_simple.c:
+src/tests/suite/daos_rebuild_simple\.c$:
   test-tag: test_daos_rebuild_simple
   <<: *ftest-only
 
-src/tests/suite/daos_upgrade.c:
+src/tests/suite/daos_upgrade\.c$:
   test-tag: test_daos_upgrade
   <<: *ftest-only
 
-src/tests/suite/daos_verify_consistency.c:
+src/tests/suite/daos_verify_consistency\.c$:
   test-tag: test_daos_verify_consistency
   <<: *ftest-only
 
-src/tests/suite/dfs_par_test.c:
+src/tests/suite/dfs_par_test\.c$:
   test-tag: test_daos_dfs_parallel
   <<: *ftest-only
 
-src/tests/suite/dfs_sys_unit_test.c:
+src/tests/suite/dfs_sys_unit_test\.c$:
   test-tag: test_daos_dfs_sys
   <<: *ftest-only
 
-src/tests/suite/dfs_test.c:
+src/tests/suite/dfs_test\.c$:
   test-tag: dfs_test
   <<: *ftest-only
 
-src/tests/suite/dfs_unit_test.c:
+src/tests/suite/dfs_unit_test\.c$:
   test-tag: test_daos_dfs_unit
   <<: *ftest-only
 
-src/tests/suite/dfuse_test.c:
+src/tests/suite/dfuse_test\.c$:
   test-tag: DaosCoreTestDfuse
   <<: *ftest-only
 
@@ -185,14 +185,42 @@ src/tests/suite/:
 
 
 # Individual code areas
-src/cart:
+src/cart/:
   test-tag: cart
 
 src/client/dfs/:
   test-tag: dfs
 
+src/client/dfuse/:
+  test-tag: dfuse
+
 src/client/pydaos/torch/:
   test-tag: pytorch
+
+# Packaging
+ci/rpm/:
+  test-tag: build
+
+# Packaging
+utils/rpms/:
+  test-tag: build
+
+# Build files
+deps/:
+  test-tag: build
+
+# Build files
+SConscript:
+  test-tag: build
+
+# Build files
+SConstruct:
+  test-tag: build
+
+# Build files
+site_scons/:
+  test-tag: build
+
 
 # Everything runs pr unless a previous entry was matched with stop_on_match
 .*:

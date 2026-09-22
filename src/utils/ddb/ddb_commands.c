@@ -43,16 +43,6 @@
 		}                                                                                  \
 	} while (0)
 
-bool
-vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path);
-
-#define DDB_CAN_PROCEED(ctx, db_path)                                                              \
-	do {                                                                                       \
-		if (!vmd_wa_can_proceed(ctx, db_path)) {                                           \
-			return -DER_NO_SERVICE;                                                    \
-		}                                                                                  \
-	} while (0)
-
 int
 ddb_run_version(struct ddb_ctx *ctx)
 {
@@ -76,8 +66,7 @@ ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 	DDB_POOL_SHOULD_CLOSE(ctx);
 
 	ctx->dc_write_mode = opt->write_mode;
-	DDB_CAN_PROCEED(ctx, opt->db_path);
-	return dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, 0, opt->write_mode);
+	return dv_pool_open(opt->path, opt->db_path, ctx, &ctx->dc_poh, 0, opt->write_mode);
 }
 
 int
@@ -371,6 +360,314 @@ ddb_run_value_dump(struct ddb_ctx *ctx, struct value_dump_options *opt)
 	rc = dv_dump_value(ctx->dc_poh, &vtp, cb, &dva);
 	itp_free(&itp);
 
+	return rc;
+}
+
+static void
+print_csum_bufs(struct ddb_ctx *ctx, struct dcs_csum_info *ci)
+{
+	uint8_t *csum_buf;
+	int      i;
+
+	ddb_print(ctx, "0x");
+	csum_buf = ci_idx2csum(ci, 0);
+	for (i = 0; i < ci->cs_len; i++)
+		ddb_printf(ctx, "%02" PRIx8, csum_buf[i]);
+
+	for (i = 1; i < ci->cs_nr; i++) {
+		int j;
+
+		csum_buf = ci_idx2csum(ci, i);
+		ddb_print(ctx, ", 0x");
+		for (j = 0; j < ci->cs_len; j++)
+			ddb_printf(ctx, "%02" PRIx8, csum_buf[j]);
+	}
+	ddb_print(ctx, "\n");
+}
+
+struct dump_csum_args {
+	struct ddb_ctx              *dca_ctx;
+	struct dv_indexed_tree_path *dca_vtp;
+	char                        *dca_dst_path;
+};
+
+static int
+print_csum_recx(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		struct dcs_ci_list *cil)
+{
+	struct dump_csum_args *args;
+	struct ddb_ctx        *ctx;
+	struct dcs_csum_info  *ci;
+	struct hash_ft        *hf;
+	struct daos_recx_ep   *rep;
+	uint32_t               chunk_sz;
+	int                    i;
+
+	args = cb_args;
+	ctx  = args->dca_ctx;
+
+	if (cil->dcl_csum_infos_nr == 0) {
+		ddb_print(ctx, "No checksum at ");
+		itp_print_full(ctx, args->dca_vtp);
+		ddb_print(ctx, "\n");
+		return 0;
+	}
+
+	D_ASSERT(recx_rel != NULL);
+	D_ASSERT(cil->dcl_csum_infos_nr == recx_rel->re_nr);
+
+	ci = dcs_csum_info_get(cil, 0);
+	D_ASSERT(ci_is_valid(ci));
+	rep      = &recx_rel->re_items[0];
+	hf       = daos_mhash_type2algo(ci->cs_type);
+	chunk_sz = ci->cs_chunksize;
+
+	itp_print_full(ctx, args->dca_vtp);
+	ddb_print(ctx, "\n");
+	ddb_printf(ctx,
+		   "Checksum Type: %s, Checksum Length: %" PRIu16 ", Chunk Size: %" PRIu32
+		   ", Record Extent(s):\n",
+		   hf->cf_name, ci->cs_len, chunk_sz);
+
+	ddb_printf(ctx,
+		   "- Record Indexes: {%" PRIu64 "-%" PRIu64 "}, Record Size: %" PRIu32
+		   ", Epoch: %" PRIu64 ", Checksum Value(s): ",
+		   rep->re_recx.rx_idx, rep->re_recx.rx_idx + rep->re_recx.rx_nr - 1,
+		   rep->re_rec_size, rep->re_ep);
+	print_csum_bufs(ctx, ci);
+
+	for (i = 1; i < cil->dcl_csum_infos_nr; i++) {
+		ci = dcs_csum_info_get(cil, i);
+		D_ASSERT(ci_is_valid(ci));
+		rep = &recx_rel->re_items[i];
+
+		ddb_printf(ctx,
+			   "- Record Indexes: {%" PRIu64 "-%" PRIu64 "}, Record Size: %" PRIu32
+			   ", Epoch: %" PRIu64 ", Checksum Value(s): ",
+			   rep->re_recx.rx_idx, rep->re_recx.rx_idx + rep->re_recx.rx_nr - 1,
+			   rep->re_rec_size, rep->re_ep);
+		print_csum_bufs(ctx, ci);
+	}
+
+	return 0;
+}
+
+static int
+append_csums2value(d_iov_t *value, struct dcs_csum_info *ci)
+{
+	uint8_t *buf;
+	size_t   new_len;
+	int      i;
+
+	new_len = value->iov_len + (ci->cs_nr * ci->cs_len);
+	D_REALLOC(buf, value->iov_buf, value->iov_buf_len, new_len);
+	if (buf == NULL)
+		return -DER_NOMEM;
+	value->iov_buf     = buf;
+	value->iov_buf_len = new_len;
+
+	for (i = 0; i < ci->cs_nr; i++) {
+		uint8_t *csum_buf = ci_idx2csum(ci, i);
+
+		memcpy((uint8_t *)value->iov_buf + value->iov_len, csum_buf, ci->cs_len);
+		value->iov_len += ci->cs_len;
+	}
+
+	return 0;
+}
+
+static int
+write_file_csum_recx(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		     struct dcs_ci_list *cil)
+{
+	struct dump_csum_args *args;
+	struct ddb_ctx        *ctx;
+	struct dcs_csum_info  *ci;
+	struct hash_ft        *hf;
+	struct daos_recx_ep   *rep;
+	uint32_t               chunk_sz;
+	d_iov_t                value = {0};
+	int                    i;
+	int                    rc;
+
+	args = cb_args;
+	ctx  = args->dca_ctx;
+
+	if (cil->dcl_csum_infos_nr == 0) {
+		ddb_print(ctx, "No checksum at ");
+		itp_print_full(ctx, args->dca_vtp);
+		ddb_print(ctx, "\n");
+		rc = 0;
+		goto out;
+	}
+
+	D_ASSERT(recx_rel != NULL);
+	D_ASSERT(cil->dcl_csum_infos_nr == recx_rel->re_nr);
+
+	ci = dcs_csum_info_get(cil, 0);
+	D_ASSERT(ci_is_valid(ci));
+	rep      = &recx_rel->re_items[0];
+	hf       = daos_mhash_type2algo(ci->cs_type);
+	chunk_sz = ci->cs_chunksize;
+
+	itp_print_full(ctx, args->dca_vtp);
+	ddb_print(ctx, "\n");
+	ddb_printf(ctx,
+		   "Dumping checksum(s) (Type: %s, Length: %" PRIu16 ", Chunk Size: %" PRIu32
+		   ") at %s\n",
+		   hf->cf_name, ci->cs_len, chunk_sz, args->dca_dst_path);
+
+	ddb_printf(ctx,
+		   "- Record Indexes: {%" PRIu64 "-%" PRIu64 "}, Record Size: %" PRIu32
+		   ", Epoch: %" PRIu64 "\n",
+		   rep->re_recx.rx_idx, rep->re_recx.rx_idx + rep->re_recx.rx_nr - 1,
+		   rep->re_rec_size, rep->re_ep);
+	rc = append_csums2value(&value, ci);
+	if (!SUCCESS(rc))
+		goto out_buf;
+
+	for (i = 1; i < cil->dcl_csum_infos_nr; i++) {
+		ci = dcs_csum_info_get(cil, i);
+		D_ASSERT(ci_is_valid(ci));
+		rep = &recx_rel->re_items[i];
+
+		ddb_printf(ctx,
+			   "- Record Indexes: {%" PRIu64 "-%" PRIu64 "}, Record Size: %" PRIu32
+			   ", Epoch: %" PRIu64 "\n",
+			   rep->re_recx.rx_idx, rep->re_recx.rx_idx + rep->re_recx.rx_nr - 1,
+			   rep->re_rec_size, rep->re_ep);
+		rc = append_csums2value(&value, ci);
+		if (!SUCCESS(rc))
+			goto out_buf;
+	}
+
+	rc = ctx->dc_io_ft.ddb_write_file(args->dca_dst_path, &value);
+
+out_buf:
+	D_FREE(value.iov_buf);
+out:
+	return rc;
+}
+
+static int
+print_csum_sv(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+	      struct dcs_ci_list *cil)
+{
+	struct dump_csum_args *args;
+	struct ddb_ctx        *ctx;
+	struct dcs_csum_info  *ci;
+	struct hash_ft        *hf;
+
+	args = cb_args;
+	ctx  = args->dca_ctx;
+
+	if (cil->dcl_csum_infos_nr == 0) {
+		ddb_print(ctx, "No checksum at ");
+		itp_print_full(ctx, args->dca_vtp);
+		ddb_print(ctx, "\n");
+		return 0;
+	}
+	D_ASSERT(cil->dcl_csum_infos_nr == 1);
+
+	ci = dcs_csum_info_get(cil, 0);
+	D_ASSERT(ci_is_valid(ci));
+	D_ASSERT(ci->cs_nr == 1);
+	hf = daos_mhash_type2algo(ci->cs_type);
+
+	itp_print_full(ctx, args->dca_vtp);
+	ddb_print(ctx, "\n");
+	ddb_printf(ctx, "Type: %s, Length: %" PRIu16 ", Epoch: %" PRIu64 ", Value: ", hf->cf_name,
+		   ci->cs_len, sv_epoch);
+	print_csum_bufs(ctx, ci);
+
+	return 0;
+}
+
+static int
+write_file_csum_sv(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		   struct dcs_ci_list *cil)
+{
+	struct dump_csum_args *args;
+	struct ddb_ctx        *ctx;
+	struct dcs_csum_info  *ci;
+	struct hash_ft        *hf;
+	d_iov_t                value;
+	int                    rc;
+
+	args = cb_args;
+	ctx  = args->dca_ctx;
+
+	D_ASSERT(ctx->dc_io_ft.ddb_write_file);
+
+	if (cil->dcl_csum_infos_nr == 0) {
+		ddb_print(ctx, "No checksum at ");
+		itp_print_full(ctx, args->dca_vtp);
+		ddb_print(ctx, "\n");
+		rc = 0;
+		goto out;
+	}
+	D_ASSERT(cil->dcl_csum_infos_nr == 1);
+
+	ci = dcs_csum_info_get(cil, 0);
+	D_ASSERT(ci_is_valid(ci));
+	D_ASSERT(ci->cs_nr == 1);
+	hf = daos_mhash_type2algo(ci->cs_type);
+
+	value.iov_buf     = ci_idx2csum(ci, 0);
+	value.iov_len     = ci->cs_len;
+	value.iov_buf_len = ci->cs_buf_len;
+
+	ddb_printf(ctx,
+		   "Dumping checksum (type: %s, length: %" PRIu16 ", epoch: %" PRIu64 ") to %s\n",
+		   hf->cf_name, ci->cs_len, sv_epoch, args->dca_dst_path);
+	rc = ctx->dc_io_ft.ddb_write_file(args->dca_dst_path, &value);
+
+out:
+	return rc;
+}
+
+int
+ddb_run_csum_dump(struct ddb_ctx *ctx, struct csum_dump_options *opt)
+{
+	struct dv_indexed_tree_path itp = {0};
+	struct dv_tree_path         vtp;
+	struct dump_csum_args       dca = {0};
+	dv_dump_csum_cb             cb  = NULL;
+	int                         rc;
+
+	if (!opt->path) {
+		ddb_error(ctx, "A VOS path to dump is required.\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rc = init_path(ctx, opt->path, &itp);
+	if (!SUCCESS(rc))
+		goto out;
+
+	if (!itp_has_value(&itp)) {
+		ddb_errorf(ctx, "Path [%s] is incomplete.\n", opt->path);
+		rc = -DDBER_INCOMPLETE_PATH_VALUE;
+		goto out_itp;
+	}
+
+	if (opt->dst && opt->dst[0] != '\0')
+		cb = (itp_has_recx(&itp)) ? write_file_csum_recx : write_file_csum_sv;
+	else
+		cb = (itp_has_recx(&itp)) ? print_csum_recx : print_csum_sv;
+
+	dca.dca_dst_path = opt->dst;
+	dca.dca_ctx      = ctx;
+	dca.dca_vtp      = &itp;
+
+	itp_to_vos_path(&itp, &vtp);
+
+	rc = dv_dump_csum(ctx->dc_poh, &vtp, opt->epoch, cb, &dca);
+
+out_itp:
+	itp_free(&itp);
+
+out:
 	return rc;
 }
 
@@ -801,10 +1098,8 @@ ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
 
-	DDB_CAN_PROCEED(ctx, db_path);
-
 	ddb_printf(ctx, "Using nvme config file: '%s' and smd db path: '%s'\n", nvme_conf, db_path);
-	rc = dv_sync_smd(nvme_conf, db_path, sync_smd_cb, ctx);
+	rc = dv_sync_smd(nvme_conf, db_path, ctx, sync_smd_cb, ctx);
 	ddb_printf(ctx, "Done: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
@@ -1091,8 +1386,7 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 	if (feature_write_action(opt) && !ctx->dc_write_mode)
 		return -DER_NO_PERM;
 
-	DDB_CAN_PROCEED(ctx, opt->db_path);
-	rc = dv_pool_open(opt->path, opt->db_path, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG,
+	rc = dv_pool_open(opt->path, opt->db_path, ctx, &ctx->dc_poh, VOS_POF_FOR_FEATURE_FLAG,
 			  ctx->dc_write_mode);
 	if (rc) {
 		ddb_errorf(ctx, "Unable to open VOS pool '%s'\n", opt->path);
@@ -1232,11 +1526,9 @@ ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt)
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
 
-	DDB_CAN_PROCEED(ctx, db_path);
-
 	ddb_printf(ctx, "List devices, db_path='%s'\n", db_path);
 	D_INIT_LIST_HEAD(&dev_list);
-	rc = dv_dev_list(db_path, &dev_list, &dev_cnt);
+	rc = dv_dev_list(db_path, ctx, &dev_list, &dev_cnt);
 	if (rc) {
 		ddb_errorf(ctx, "List device failed. " DF_RC "\n", DP_RC(rc));
 		return rc;
@@ -1274,8 +1566,6 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 	}
 
-	DDB_CAN_PROCEED(ctx, db_path);
-
 	if (opt->old_devid == NULL || opt->new_devid == NULL) {
 		ddb_error(ctx, "Must specify both old and new device ID\n");
 		return -DER_INVAL;
@@ -1302,7 +1592,7 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 		   "Replace old device " DF_UUID " with new device " DF_UUID ", db_path='%s'\n",
 		   DP_UUID(old_devid), DP_UUID(new_devid), db_path);
 
-	rc = dv_dev_replace(db_path, old_devid, new_devid);
+	rc = dv_dev_replace(db_path, ctx, old_devid, new_devid);
 	if (rc)
 		ddb_errorf(ctx, "Device replacing failed. " DF_RC "\n", DP_RC(rc));
 	else
@@ -1798,8 +2088,6 @@ ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 		return -DER_INVAL;
 	}
 
-	DDB_CAN_PROCEED(ctx, opt->db_path);
-
 	if (opt->tmpfs_mount == NULL || strlen(opt->tmpfs_mount) == 0 ||
 	    strlen(opt->tmpfs_mount) >= DDB_PATH_MAX) {
 		ddb_errorf(ctx, "tmpfs_mount '%s' either too short (==0) or too long (>=%d)\n",
@@ -1808,7 +2096,7 @@ ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 	}
 
 	/** setup tmpfs and prepare the vos file on tmpfs_mount */
-	rc = dv_run_prov_mem(opt->db_path, opt->tmpfs_mount, opt->tmpfs_mount_size);
+	rc = dv_run_prov_mem(opt->db_path, ctx, opt->tmpfs_mount, opt->tmpfs_mount_size);
 	if (rc) {
 		ddb_errorf(ctx, "Failed to prepare memory environment. " DF_RC "\n", DP_RC(rc));
 	} else {

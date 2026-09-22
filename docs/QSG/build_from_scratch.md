@@ -45,11 +45,11 @@ distribution.
 
 ### RHEL and Clones
 
-For RHEL8-compatible distributions (e.g. Rocky Linux 8 or AlmaLinux 8), please
+For RHEL9-compatible distributions (e.g. Rocky Linux 9 or AlmaLinux 9), please
 run the following command from the DAOS tree as root or via sudo:
 
 ```bash
-$ sudo ./utils/scripts/install-el8.sh
+$ sudo ./utils/scripts/install-el9.sh
 ```
 
 ### openSUSE
@@ -80,12 +80,12 @@ Alternatively the packages can be installed via pip as root which will install o
 the user outside of a virtual environment, in which case `~/.local/bin` will need to be added to
 PATH.
 
- ```bash
- $ python3 -m venv venv
- $ source venv/bin/activate
- $ python3 -m pip --no-cache-dir install --upgrade pip
- $ python3 -m pip install -r requirements-build.txt
- ```
+```bash
+$ python3 -m venv venv
+$ source venv/bin/activate
+$ python3 -m pip --no-cache-dir install --upgrade pip
+$ python3 -m pip install -r requirements-build.txt
+```
 
 ## Build DAOS
 

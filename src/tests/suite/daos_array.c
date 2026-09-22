@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -266,6 +267,79 @@ small_io(void **state)
 	assert_rc_equal(rc, 0);
 	par_barrier(PAR_COMM_WORLD);
 } /* End small_io */
+
+#define BOUNDARY_CHUNK_SIZE (1024 * 1024)
+
+static void
+array_size_chunk_boundary_helper(void **state, daos_size_t target_size)
+{
+	test_arg_t      *arg = *state;
+	daos_obj_id_t    oid;
+	daos_handle_t    oh;
+	daos_array_iod_t iod = {};
+	daos_range_t     rg  = {};
+	d_sg_list_t      sgl = {};
+	d_iov_t          iov = {};
+	char             buf[BUFLEN];
+	daos_size_t      array_size;
+	daos_size_t      cell_size;
+	daos_size_t      chunk_size_actual;
+	int              rc;
+
+	par_barrier(PAR_COMM_WORLD);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
+
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, BOUNDARY_CHUNK_SIZE, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	memset(buf, 'A', sizeof(buf));
+	iod.arr_nr  = 1;
+	iod.arr_rgs = &rg;
+	rg.rg_idx   = target_size - 1;
+	rg.rg_len   = ARRAY_SIZE(buf);
+	sgl.sg_nr   = 1;
+	sgl.sg_iovs = &iov;
+	d_iov_set(&iov, buf, sizeof(buf));
+
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(array_size, rg.rg_idx + rg.rg_len);
+
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, target_size, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(array_size, target_size);
+
+	rc = daos_array_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_array_open(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW, &cell_size,
+			     &chunk_size_actual, &oh, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cell_size, 1);
+	assert_int_equal(chunk_size_actual, BOUNDARY_CHUNK_SIZE);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(array_size, target_size);
+
+	rc = daos_array_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	par_barrier(PAR_COMM_WORLD);
+}
+
+static void
+array_size_first_record(void **state)
+{
+	array_size_chunk_boundary_helper(state, 1);
+}
+
+static void
+array_size_first_record_next_chunk(void **state)
+{
+	array_size_chunk_boundary_helper(state, BOUNDARY_CHUNK_SIZE + 1);
+}
 
 static int
 change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size)
@@ -811,7 +885,7 @@ str_mem_str_arr_io(void **state) {
 }
 
 static void
-read_empty_records(void **state)
+read_empty_records_helper(void **state, daos_size_t arr_chunk_size, daos_size_t nr)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -833,45 +907,44 @@ read_empty_records(void **state)
 	}
 
 	/** create the array */
-	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, chunk_size,
-			       &oh, NULL);
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, arr_chunk_size, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** Allocate and set buffer */
-	D_ALLOC_ARRAY(wbuf, NUM_ELEMS);
+	D_ALLOC_ARRAY(wbuf, nr);
 	assert_non_null(wbuf);
-	D_ALLOC_ARRAY(rbuf, NUM_ELEMS);
+	D_ALLOC_ARRAY(rbuf, nr);
 	assert_non_null(rbuf);
-	for (i = 0; i < NUM_ELEMS; i++) {
+	for (i = 0; i < nr; i++) {
 		wbuf[i] = i+1;
 		rbuf[i] = -1;
 	}
 
 	/** set memory location */
 	sgl.sg_nr = 1;
-	d_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
+	d_iov_set(&iov, wbuf, nr * sizeof(int));
 	sgl.sg_iovs = &iov;
 
 	/** set array location */
-	iod.arr_nr = NUM_ELEMS;
-	D_ALLOC_ARRAY(iod.arr_rgs, NUM_ELEMS);
+	iod.arr_nr = nr;
+	D_ALLOC_ARRAY(iod.arr_rgs, nr);
 	assert_non_null(iod.arr_rgs);
 
 	/** Read from empty array */
-	for (i = 0; i < NUM_ELEMS; i++) {
+	for (i = 0; i < nr; i++) {
 		iod.arr_rgs[i].rg_len = sizeof(int);
 		iod.arr_rgs[i].rg_idx = i * arg->rank_size * sizeof(int) +
 			arg->myrank * sizeof(int);
 	}
-	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
+	d_iov_set(&iov, rbuf, nr * sizeof(int));
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(iod.arr_nr_short_read, NUM_ELEMS * sizeof(int));
+	assert_int_equal(iod.arr_nr_short_read, nr * sizeof(int));
 
 	par_barrier(PAR_COMM_WORLD);
 
 	/** Verify data - rbuf should not be touched */
-	for (i = 0; i < NUM_ELEMS; i++) {
+	for (i = 0; i < nr; i++) {
 		if (rbuf[i] != -1) {
 			printf("Data verification failed\n");
 			printf("%zu: expected %d != read %d\n",
@@ -881,32 +954,31 @@ read_empty_records(void **state)
 	}
 
 	/** Write segmented */
-	for (i = 0; i < NUM_ELEMS; i++) {
+	for (i = 0; i < nr; i++) {
 		iod.arr_rgs[i].rg_idx = i * arg->rank_size * sizeof(int) +
-			arg->myrank * sizeof(int) +
-			i * NUM_ELEMS * sizeof(int);
+					arg->myrank * sizeof(int) + i * nr * sizeof(int);
 	}
-	d_iov_set(&iov, wbuf, NUM_ELEMS * sizeof(int));
+	d_iov_set(&iov, wbuf, nr * sizeof(int));
 	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
 
 	par_barrier(PAR_COMM_WORLD);
 
 	/** Read from empty records */
-	for (i = 0; i < NUM_ELEMS; i++) {
+	for (i = 0; i < nr; i++) {
 		iod.arr_rgs[i].rg_idx = i * sizeof(int) +
 			arg->myrank * sizeof(int);
 	}
-	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
+	d_iov_set(&iov, rbuf, nr * sizeof(int));
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
 
 	assert_int_equal(iod.arr_nr_short_read, 0);
-	assert_int_equal(iod.arr_nr_read, sizeof(int) * NUM_ELEMS);
+	assert_int_equal(iod.arr_nr_read, sizeof(int) * nr);
 
 	/** Verify data */
 	assert_int_equal(wbuf[0], rbuf[0]);
-	for (i = 1; i < NUM_ELEMS; i++)
+	for (i = 1; i < nr; i++)
 		assert_int_equal(rbuf[i], 0);
 
 	D_FREE(rbuf);
@@ -921,12 +993,27 @@ read_empty_records(void **state)
 		assert_rc_equal(rc, 0);
 	}
 	par_barrier(PAR_COMM_WORLD);
-} /* End read_empty_records */
+} /* End read_empty_records_helper */
+
+static void
+read_empty_records(void **state)
+{
+	print_message("Testing with %d ranges spread over multiple dkeys\n", NUM_ELEMS);
+	read_empty_records_helper(state, chunk_size, NUM_ELEMS);
+
+	/*
+	 * Same short read and hole handling, but with enough tiny ranges on a single dkey that
+	 * the IOD gets split into several RPCs.
+	 */
+	print_message("Testing with %d tiny ranges on a single dkey\n",
+		      DAOS_ARRAY_LIST_IO_LIMIT * 4 + 1);
+	read_empty_records_helper(state, 1048576, DAOS_ARRAY_LIST_IO_LIMIT * 4 + 1);
+}
 
 #define NUM 5000
 
 static void
-strided_array(void **state)
+strided_array_helper(void **state, daos_size_t arr_chunk_size)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -941,8 +1028,7 @@ strided_array(void **state)
 	oid = daos_test_oid_gen(arg->coh, OC_SX, typeb, 0, arg->myrank);
 
 	/** create the array */
-	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
-			       NULL);
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, arr_chunk_size, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** Allocate and set buffer */
@@ -1003,6 +1089,10 @@ strided_array(void **state)
 	if (nerrors)
 		print_message("Data verification found %zu errors\n", nerrors);
 
+	/** Punch the same ranges; the dkey IOD is split into several RPCs here too */
+	rc = daos_array_punch(oh, DAOS_TX_NONE, &iod, NULL);
+	assert_rc_equal(rc, 0);
+
 	D_FREE(buf);
 	D_FREE(iod.arr_rgs);
 	D_FREE(sgl.sg_iovs);
@@ -1012,7 +1102,22 @@ strided_array(void **state)
 
 	assert_int_equal(nerrors, 0);
 	par_barrier(PAR_COMM_WORLD);
-} /* End str_mem_str_arr_io */
+} /* End strided_array_helper */
+
+static void
+strided_array(void **state)
+{
+	/** all the ranges land on one dkey, which splits into many RPCs */
+	print_message("Testing %d strided ranges on a single dkey\n", NUM);
+	strided_array_helper(state, 1048576);
+
+	/*
+	 * NUM ranges of sizeof(int) on a 2 * sizeof(int) stride, so a 4K chunk holds 512 of them:
+	 * every dkey splits into several RPCs and the dkeys have to progress in parallel.
+	 */
+	print_message("Testing %d strided ranges over several split dkeys\n", NUM);
+	strided_array_helper(state, 4096);
+}
 
 static void
 truncate_array(void **state)
@@ -1210,6 +1315,7 @@ ec_array_key_query(void **state)
 	par_barrier(PAR_COMM_WORLD);
 } /* End ec_array_key_query */
 
+/* clang-format off */
 static const struct CMUnitTest array_api_tests[] = {
 	{"Array 0 API: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
@@ -1235,7 +1341,12 @@ static const struct CMUnitTest array_api_tests[] = {
 	 truncate_array, async_disable, NULL},
 	{"Array 11: EC Array Key Query",
 	 ec_array_key_query, async_disable, NULL},
+	{"Array 12 API: shrink to first record",
+	 array_size_first_record, async_disable, NULL},
+	{"Array 13 API: shrink to first record of next chunk",
+	 array_size_first_record_next_chunk, async_disable, NULL},
 };
+/* clang-format on */
 
 static int
 daos_array_setup(void **state)

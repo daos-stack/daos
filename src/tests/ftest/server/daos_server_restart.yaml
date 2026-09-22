@@ -29,6 +29,3 @@ server:
 
 pool:
   size: 100GB
-
-container:
-  control_method: daos

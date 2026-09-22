@@ -26,10 +26,10 @@ server_config:
 pool:
   size: 93%
   set_logmasks: False
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
-  control_method: daos
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 
 ior:

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -374,4 +375,63 @@ utest_check_mem_initial_status(struct utest_context *utx)
 		return 1;
 	}
 	return 0;
+}
+
+/*
+ * A failed allocation with UMEM_FLAG_NO_ABORT must leave the transaction
+ * alive so in-tx fallbacks (e.g. vos_dtx_reuse_cmt_blob) keep working;
+ * if without the flag, the failure aborts the TX and any further tx_add
+ * is a fatal usage error in the allocator.
+ */
+int
+utest_tx_fail_no_abort(struct utest_context *utx)
+{
+	struct umem_instance *umm = utest_utx2umm(utx);
+	int                  *value;
+	umem_off_t            umoff = UMOFF_NULL;
+	umem_off_t            huge;
+	int                   rc;
+
+	rc = utest_tx_begin(utx);
+	if (rc != 0)
+		goto done;
+
+	/* Larger than the pool: must fail, but must NOT abort the TX */
+	huge = umem_alloc_verb(umm, UMEM_FLAG_ZERO | UMEM_FLAG_NO_ABORT, POOL_SIZE,
+			       UMEM_DEFAULT_MBKT_ID);
+	if (!UMOFF_IS_NULL(huge)) {
+		D_ERROR("huge allocation unexpectedly succeeded\n");
+		D_GOTO(end, rc = 1);
+	}
+
+	/* TX still alive: alloc + snapshot + write must all work */
+	umoff = umem_zalloc(umm, 4);
+	if (UMOFF_IS_NULL(umoff)) {
+		D_ERROR("small alloc failed after NO_ABORT failure\n");
+		D_GOTO(end, rc = 2);
+	}
+
+	value = umem_off2ptr(umm, umoff);
+
+	rc = umem_tx_xadd_ptr(umm, value, (uint64_t)(-2), UMEM_FLAG_NO_ABORT);
+	if (rc == 0) {
+		D_ERROR("large sized add_ptr() should fail\n");
+		D_GOTO(end, rc = 3);
+	}
+
+	rc = umem_tx_add_ptr(umm, value, 4);
+	if (rc != 0) {
+		D_ERROR("tx_add_ptr failed after NO_ABORT failure\n");
+		D_GOTO(end, rc = 4);
+	}
+
+	*value = 42;
+
+	rc = umem_free(umm, umoff);
+
+end:
+	rc = utest_tx_end(utx, rc);
+
+done:
+	return rc;
 }

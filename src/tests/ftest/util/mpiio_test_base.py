@@ -1,5 +1,6 @@
 """
     (C) Copyright 2020-2023 Intel Corporation.
+    (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
     SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -43,10 +44,10 @@ class MpiioTests(TestWithServers):
         client_processes = self.params.get("np", '/run/client_processes/')
 
         # Create pool
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
         # create container
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
         # Pass pool and container information to the commands
         env = EnvironmentVariables()

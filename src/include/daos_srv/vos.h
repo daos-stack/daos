@@ -584,6 +584,19 @@ int
 vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh);
 
 /**
+ * Open a container within a VOSP with a checker.
+ *
+ * \param poh		[IN]	Pool open handle
+ * \param co_uuid	[IN]	Container uuid
+ * \param ck		[IN]	Checker structure
+ * \param coh		[OUT]	Returned container handle
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_handle_t *coh);
+
+/**
  * Release container open handle
  *
  * \param coh	[IN]	container open handle
@@ -1099,6 +1112,18 @@ vos_ioh2ci(daos_handle_t ioh);
 
 uint32_t
 vos_ioh2ci_nr(daos_handle_t ioh);
+
+/**
+ * Get the actual stored epoch of the single value fetched by vos_fetch_begin().
+ * Only meaningful for DAOS_IOD_SINGLE akeys after a successful fetch; returns 0
+ * if no single value was found (hole, -DER_NONEXIST, or array akey fetch).
+ *
+ * \param ioh	[IN]	The I/O handle.
+ *
+ * \return		Actual stored epoch, or 0 if no SV was found.
+ */
+daos_epoch_t
+vos_ioh2sv_epoch(daos_handle_t ioh);
 
 /**
  * Get the scatter/gather list associated with a given I/O descriptor.

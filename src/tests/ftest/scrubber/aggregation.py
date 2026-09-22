@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -31,10 +32,10 @@ class TestScrubberEvictWithAggregation(TestWithScrubber, TestWithTelemetry):
         """
         initial_metrics = {}
         final_metrics = {}
-        self.add_pool()
+        self.pool = self.get_pool()
         # Disable the aggregation on the pool.
         self.pool.set_property("reclaim", "disabled")
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
         # Pool and Containers are already created. Just run the IOR.
         # Run the initial IOR with a small block size.
         self.ior_cmd.namespace = "/run/ior_small_block_size/*"

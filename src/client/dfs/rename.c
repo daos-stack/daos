@@ -181,6 +181,11 @@ restart:
 	if (moid)
 		oid_cp(moid, entry.oid);
 
+	/** source and target are the same entry: POSIX requires success with no other action */
+	if (flags == 0 && parent->oid.hi == new_parent->oid.hi &&
+	    parent->oid.lo == new_parent->oid.lo && strcmp(name, new_name) == 0)
+		D_GOTO(out, rc = 0);
+
 	rc = fetch_entry(dfs->layout_v, new_parent->oh, th, new_name, new_len, true, &exists,
 			 &new_entry, 0, NULL, NULL, NULL);
 	if (rc) {
@@ -381,6 +386,11 @@ restart:
 
 	if (exists == false)
 		D_GOTO(out, rc = EINVAL);
+
+	/** exchanging an entry with itself is a no-op */
+	if (parent1->oid.hi == parent2->oid.hi && parent1->oid.lo == parent2->oid.lo &&
+	    strcmp(name1, name2) == 0)
+		D_GOTO(out, rc = 0);
 
 	/** remove the first entry from parent1 (just the dkey) */
 	d_iov_set(&dkey, (void *)name1, len1);

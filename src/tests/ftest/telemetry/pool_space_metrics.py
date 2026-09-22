@@ -94,7 +94,7 @@ class TelemetryPoolSpaceMetrics(IorTestBase, TestWithTelemetry):
             self.log_step(f"Starting test {test_name} with pool namespace {namespace}")
             self.pool = self.get_pool(namespace=namespace, connect=False)
             self.pool.disable_aggregation()
-            self.container = self.get_container(pool=self.pool)
+            self.container = self.get_container(self.pool)
 
             self.log_step("Run IOR to write data to the container")
             self.update_ior_cmd_with_pool(create_cont=False)

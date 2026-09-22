@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,7 +35,7 @@ class IorPerRank(IorTestBase):
 
         self.log.info("Running Test on rank: %s", rank)
         # create the pool on specified rank.
-        self.add_pool(connect=False, target_list=[rank])
+        self.pool = self.get_pool(connect=False, target_list=[rank])
         self.container = self.get_container(self.pool)
 
         host = self.server_managers[0].get_host(rank)

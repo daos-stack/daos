@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -66,9 +67,9 @@ class ManagementServiceResilience(TestWithServers):
                 return pool_uuid
         return None
 
-    def create_pool(self):
+    def __create_pool(self):
         """Create a pool on the server group."""
-        self.add_pool(create=False)
+        self.pool = self.get_pool(create=False)
         self.pool.name.value = self.server_group
         self.log.info("*** creating pool")
         self.pool.create()
@@ -248,7 +249,7 @@ class ManagementServiceResilience(TestWithServers):
 
         # Finally, verify that quorum has been retained by performing
         # write operations.
-        self.create_pool()
+        self.__create_pool()
         self.pool = None
 
     def verify_regained_quorum(self, num_hosts):
@@ -265,7 +266,7 @@ class ManagementServiceResilience(TestWithServers):
         leader = self.verify_leader(replicas)
 
         # First, create a pool.
-        self.create_pool()
+        self.__create_pool()
 
         # Next, kill the leader plus enough other replicas to
         # lose quorum.
@@ -289,7 +290,7 @@ class ManagementServiceResilience(TestWithServers):
         # Dump the current system state.
         self.get_dmg_command().system_query()
 
-        self.create_pool()
+        self.__create_pool()
         self.pool = None
 
     def test_ms_resilience_1(self):

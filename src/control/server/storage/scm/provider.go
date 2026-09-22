@@ -41,8 +41,6 @@ type (
 		getNamespaces(int) (storage.ScmNamespaces, error)
 		prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
 		prepReset(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
-		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
-		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
 
 	// SystemProvider provides operating system capabilities.

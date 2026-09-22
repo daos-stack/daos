@@ -1235,6 +1235,16 @@ dtx_base_rf1_setup(void **state)
 	return rc;
 }
 
+static inline int
+dtx_base_teardown(void **state)
+{
+	test_arg_t *arg = *state;
+
+	dtx_set_fail_loc(arg, 0);
+	assert_rc_equal(daos_event_priv_reset(), 0);
+	return 0;
+}
+
 /* clang-format off */
 static const struct CMUnitTest dtx_tests[] = {
 	{"DTX1: update/punch single value with DTX successfully",
@@ -1284,9 +1294,9 @@ static const struct CMUnitTest dtx_tests[] = {
 	{"DTX23: Resend with lost reply from non-leader",
 	 dtx_23, NULL, test_case_teardown},
 	{"DTX24: DTX under space pressure with single container",
-	 dtx_24, NULL, test_case_teardown},
+	 dtx_24, NULL, dtx_base_teardown},
 	{"DTX25: DTX under space pressure with multiple containers",
-	 dtx_25, NULL, test_case_teardown},
+	 dtx_25, NULL, dtx_base_teardown},
 };
 /* clang-format on */
 

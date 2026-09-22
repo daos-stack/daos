@@ -10,7 +10,6 @@ package server
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
@@ -56,145 +55,67 @@ func (mod *srvModule) handleCheckerListPools(_ context.Context, reqb []byte) (ou
 	return
 }
 
-func (mod *srvModule) handleCheckerRegisterPool(parent context.Context, reqb []byte) (out []byte, outErr error) {
+func (mod *srvModule) handleCheckerRegisterPool(ctx context.Context, reqb []byte) (out []byte, outErr error) {
 	req := new(sharedpb.CheckRegPoolReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 	mod.log.Debugf("handling CheckerRegisterPool: %+v", req)
 
-	resp := new(sharedpb.CheckRegPoolResp)
-	defer func() {
-		mod.log.Debugf("CheckerRegisterPool resp: %+v", resp)
-		out, outErr = proto.Marshal(resp)
-	}()
+	// Forward the report to the MS
+	msReq := &control.SystemCheckRegPoolReq{
+		CheckRegPoolReq: *req,
+	}
+	msReq.SetHostList(mod.msReplicas)
 
-	poolUUID, err := uuid.Parse(req.Uuid)
+	mod.log.Debugf("forwarding check register pool req to MS: %+v", msReq)
+	resp, err := control.SystemCheckRegPool(ctx, mod.rpcClient, msReq)
+
+	var drpcResp *sharedpb.CheckRegPoolResp
 	if err != nil {
-		mod.log.Errorf("invalid pool UUID %q: %s", req.Uuid, err)
-		resp.Status = int32(daos.InvalidInput)
-		return
-	}
-	if !daos.LabelIsValid(req.Label) {
-		mod.log.Errorf("bad pool label %q", req.Label)
-		resp.Status = int32(daos.InvalidInput)
-		return
-	}
-	if len(req.Svcreps) == 0 {
-		mod.log.Errorf("pool %q has zero svcreps", req.Uuid)
-		resp.Status = int32(daos.InvalidInput)
-		return
-	}
-
-	lock, err := mod.poolDB.TakePoolLock(parent, poolUUID)
-	if err != nil {
-		mod.log.Errorf("failed to take pool lock: %s", err)
-		resp.Status = int32(daos.MiscError)
-		return
-	}
-	defer lock.Release()
-	ctx := lock.InContext(parent)
-
-	ps, err := mod.poolDB.FindPoolServiceByUUID(poolUUID)
-	if err == nil {
-		// We're updating an existing pool service.
-		if ps.PoolLabel != req.Label {
-			if _, err := mod.poolDB.FindPoolServiceByLabel(req.Label); err == nil {
-				mod.log.Errorf("pool with label %q already exists", req.Label)
-				resp.Status = int32(daos.Exists)
-				return
-			}
+		mod.log.Errorf("SystemCheckRegPool failed: %s", err)
+		drpcResp = &sharedpb.CheckRegPoolResp{
+			Status: grpcErrToDaosStatus(err).Int32(),
 		}
-		ps.PoolLabel = req.Label
-		ps.Replicas = ranklist.RanksFromUint32(req.Svcreps)
-
-		mod.log.Debugf("updating pool service from req: %+v", req)
-		if err := mod.poolDB.UpdatePoolService(ctx, ps); err != nil {
-			mod.log.Errorf("failed to update pool: %s", err)
-			resp.Status = int32(daos.MiscError)
-			return
-		}
-
-		return
-	} else if !system.IsPoolNotFound(err) {
-		mod.log.Errorf("failed to find pool: %s", err)
-		resp.Status = int32(daos.MiscError)
-		return
+	} else {
+		drpcResp = &resp.CheckRegPoolResp
 	}
 
-	if _, err := mod.poolDB.FindPoolServiceByLabel(req.Label); err == nil {
-		mod.log.Errorf("pool with label %q already exists", req.Label)
-		resp.Status = int32(daos.Exists)
-		return
-	}
-
-	ps = &system.PoolService{
-		PoolUUID:  poolUUID,
-		PoolLabel: req.Label,
-		State:     system.PoolServiceStateReady,
-		Replicas:  ranklist.RanksFromUint32(req.Svcreps),
-	}
-
-	mod.log.Debugf("adding pool service from req: %+v", req)
-	if err := mod.poolDB.AddPoolService(ctx, ps); err != nil {
-		mod.log.Errorf("failed to register pool: %s", err)
-		resp.Status = int32(daos.MiscError)
-		return
-	}
-
-	return
+	mod.log.Debugf("CheckerRegPool resp: %+v", drpcResp)
+	return proto.Marshal(drpcResp)
 }
 
-func (mod *srvModule) handleCheckerDeregisterPool(parent context.Context, reqb []byte) (out []byte, outErr error) {
+func (mod *srvModule) handleCheckerDeregisterPool(ctx context.Context, reqb []byte) (out []byte, outErr error) {
 	req := new(sharedpb.CheckDeregPoolReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
 	mod.log.Debugf("handling CheckerDeregisterPool: %+v", req)
 
-	resp := new(sharedpb.CheckDeregPoolResp)
-	defer func() {
-		mod.log.Debugf("CheckerDeregisterPool resp: %+v", resp)
-		out, outErr = proto.Marshal(resp)
-	}()
-
-	poolUUID, err := uuid.Parse(req.Uuid)
-	if err != nil {
-		mod.log.Errorf("invalid pool UUID %q: %s", req.Uuid, err)
-		resp.Status = int32(daos.InvalidInput)
-		return
+	// Forward the report to the MS
+	msReq := &control.SystemCheckDeregPoolReq{
+		CheckDeregPoolReq: *req,
 	}
+	msReq.SetHostList(mod.msReplicas)
 
-	lock, err := mod.poolDB.TakePoolLock(parent, poolUUID)
+	mod.log.Debugf("forwarding check deregister pool req to MS: %+v", msReq)
+	resp, err := control.SystemCheckDeregPool(ctx, mod.rpcClient, msReq)
+
+	var drpcResp *sharedpb.CheckDeregPoolResp
 	if err != nil {
-		mod.log.Errorf("failed to take pool lock: %s", err)
-		resp.Status = int32(daos.MiscError)
-		return
-	}
-	defer lock.Release()
-	ctx := lock.InContext(parent)
-
-	if _, err := mod.poolDB.FindPoolServiceByUUID(poolUUID); err != nil {
-		if system.IsPoolNotFound(err) {
-			mod.log.Errorf("pool with uuid %q does not exist", req.Uuid)
-			resp.Status = int32(daos.Nonexistent)
-		} else {
-			mod.log.Errorf("failed to check pool uuid: %s", err)
-			resp.Status = int32(daos.MiscError)
+		mod.log.Errorf("SystemCheckDeregPool failed: %s", err)
+		drpcResp = &sharedpb.CheckDeregPoolResp{
+			Status: grpcErrToDaosStatus(err).Int32(),
 		}
-		return
+	} else {
+		drpcResp = &resp.CheckDeregPoolResp
 	}
 
-	if err := mod.poolDB.RemovePoolService(ctx, poolUUID); err != nil {
-		mod.log.Errorf("failed to remove pool: %s", err)
-		resp.Status = int32(daos.MiscError)
-		return
-	}
-
-	return
+	mod.log.Debugf("CheckerDeregPool resp: %+v", drpcResp)
+	return proto.Marshal(drpcResp)
 }
 
-func chkReportErrToDaosStatus(err error) daos.Status {
+func grpcErrToDaosStatus(err error) daos.Status {
 	err = errors.Cause(err) // Fully unwrap before attempting comparisons
 
 	if status, ok := err.(daos.Status); ok {
@@ -211,6 +132,7 @@ func chkReportErrToDaosStatus(err error) daos.Status {
 		fault.IsFaultCode(err, code.SystemCheckerInvalidMemberStates):
 		return daos.NotApplicable
 	default:
+		// The dreaded DER_MISC error. Who knows what happened? We don't!
 		return daos.MiscError
 	}
 }
@@ -235,7 +157,7 @@ func (mod *srvModule) handleCheckerReport(ctx context.Context, reqb []byte) (out
 	if err != nil {
 		mod.log.Errorf("SystemCheckEngineReport failed: %s", err)
 		drpcResp = &sharedpb.CheckReportResp{
-			Status: chkReportErrToDaosStatus(err).Int32(),
+			Status: grpcErrToDaosStatus(err).Int32(),
 		}
 	} else {
 		drpcResp = &resp.CheckReportResp

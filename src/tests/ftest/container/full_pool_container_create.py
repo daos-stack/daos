@@ -48,7 +48,7 @@ class FullPoolContainerCreate(TestWithServers):
 
         # create pool and connect
         self.log_step("Create a pool and container")
-        self.add_pool()
+        self.pool = self.get_pool()
 
         # query the pool
         self.log.info("Pool Query before write")
@@ -56,7 +56,7 @@ class FullPoolContainerCreate(TestWithServers):
         self.log.info("%s query data: %s\n", str(self.pool), self.pool.query_data)
 
         # create a container
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
         self.container.open()
 
         # get free space before write

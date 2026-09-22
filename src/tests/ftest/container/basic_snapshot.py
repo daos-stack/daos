@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,7 +8,6 @@ from apricot import TestWithServers
 from general_utils import get_random_bytes
 from pydaos.raw import DaosApiError, DaosSnapshot
 from test_utils_container import add_container
-from test_utils_pool import add_pool
 
 
 class BasicSnapshot(TestWithServers):
@@ -45,7 +45,7 @@ class BasicSnapshot(TestWithServers):
         :avocado: tags=BasicSnapshot,test_basic_snapshot
         """
         # Set up the pool and container.
-        pool = add_pool(self)
+        pool = self.get_pool()
         container = add_container(self, pool)
         container.open()
 

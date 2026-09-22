@@ -44,6 +44,10 @@ const (
 	DefaultPoolTimeout = 5 * time.Minute
 )
 
+// defaultPoolWaitRetry is the interval between PoolQuery polls while waiting
+// for a pool to reach a target state. Overridable for testing.
+const defaultPoolWaitRetry = 1 * time.Second
+
 // Pool create error conditions.
 var (
 	errPoolCreateFirstTierZeroBytes = errors.New("can't create pool with 0 byte first tier")
@@ -223,18 +227,19 @@ type (
 	// PoolCreateReq contains the parameters for a pool create request.
 	PoolCreateReq struct {
 		poolRequest
-		UUID       uuid.UUID            `json:"uuid,omitempty"` // Optional UUID; auto-generate if not supplied
-		User       string               `json:"user"`
-		UserGroup  string               `json:"user_group"`
-		ACL        *AccessControlList   `json:"-"`
-		NumSvcReps uint32               `json:"num_svc_reps"`
-		Properties []*daos.PoolProperty `json:"-"`
-		TotalBytes uint64               `json:"total_bytes"` // Auto-sizing param
-		TierRatio  []float64            `json:"tier_ratio"`  // Auto-sizing param
-		NumRanks   uint32               `json:"num_ranks"`   // Auto-sizing param
-		Ranks      []ranklist.Rank      `json:"ranks"`       // Manual-sizing param
-		TierBytes  []uint64             `json:"tier_bytes"`  // Per-rank values
-		MemRatio   float32              `json:"mem_ratio"`   // mem_file_size:meta_blob_size
+		UUID             uuid.UUID            `json:"uuid,omitempty"` // Optional UUID; auto-generate if not supplied
+		User             string               `json:"user"`
+		UserGroup        string               `json:"user_group"`
+		ACL              *AccessControlList   `json:"-"`
+		NumSvcReps       uint32               `json:"num_svc_reps"`
+		Properties       []*daos.PoolProperty `json:"-"`
+		TotalBytes       uint64               `json:"total_bytes"`       // Auto-sizing param
+		TierRatio        []float64            `json:"tier_ratio"`        // Auto-sizing param
+		NumRanks         uint32               `json:"num_ranks"`         // Auto-sizing param
+		Ranks            []ranklist.Rank      `json:"ranks"`             // Manual-sizing param
+		UnavailableRanks []ranklist.Rank      `json:"unavailable_ranks"` // Pool-map-only DOWNOUT entries; merged with MS-populated set
+		TierBytes        []uint64             `json:"tier_bytes"`        // Per-rank values
+		MemRatio         float32              `json:"mem_ratio"`         // mem_file_size:meta_blob_size
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -609,6 +614,59 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	return poolQueryInt(ctx, rpcClient, req, nil)
 }
 
+// waitForPoolState polls PoolQuery on the named pool until one of the following
+// conditions is met: chkFn returns true, an error occurs, or the retry context is cancelled.
+func waitForPoolState(ctx context.Context, rpcClient UnaryInvoker, poolID string, retryInterval time.Duration, chkFn func(*PoolQueryResp) (bool, error)) error {
+	startedAt := time.Now()
+	for {
+		pqr, err := PoolQuery(ctx, rpcClient, &PoolQueryReq{ID: poolID})
+		if err != nil {
+			return errors.Wrap(err, "pool query while waiting for pool state")
+		}
+		ok, err := chkFn(pqr)
+		if err != nil {
+			return err
+		}
+		if ok {
+			rpcClient.Debugf("pool %s reached expected state after %s", poolID, time.Since(startedAt))
+			return nil
+		}
+		rpcClient.Debugf("pool %s not yet in expected state, waiting...", poolID)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryInterval):
+		}
+	}
+}
+
+// WaitForPoolRebuild blocks until the named pool's rebuild reaches a terminal
+// state, polling PoolQuery on the supplied invoker. It returns nil only when the
+// rebuild completed successfully; a rebuild that finished with a nonzero error
+// (derived state failed) or was stopped before completing is reported as an error.
+func WaitForPoolRebuild(ctx context.Context, rpcClient UnaryInvoker, poolID string, retryInterval ...time.Duration) error {
+	if len(retryInterval) == 0 {
+		retryInterval = []time.Duration{defaultPoolWaitRetry}
+	}
+	return waitForPoolState(ctx, rpcClient, poolID, retryInterval[0], func(pqr *PoolQueryResp) (bool, error) {
+		if pqr.Rebuild == nil {
+			return false, errors.New("pool rebuild status missing from query response")
+		}
+		// DerivedState folds the rebuild error (Status) into the reported
+		// state, so a raw "done" with a nonzero error surfaces as failed.
+		switch pqr.Rebuild.DerivedState {
+		case daos.PoolRebuildStateDone:
+			return true, nil
+		case daos.PoolRebuildStateFailed:
+			return false, errors.Wrapf(daos.Status(pqr.Rebuild.Status), "pool %s rebuild failed", poolID)
+		case daos.PoolRebuildStateStopped:
+			return false, errors.Errorf("pool %s rebuild stopped before completing", poolID)
+		default:
+			return false, nil
+		}
+	})
+}
+
 // PoolQueryTargets performs a pool query targets operation on a DAOS Management Server instance,
 // for the specified pool ID, pool engine rank, and target indices.
 func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryTargetReq) (*PoolQueryTargetResp, error) {
@@ -860,6 +918,21 @@ func (resp *PoolRanksResp) Errors() error {
 	}
 
 	return nil
+}
+
+// HasSuccess reports whether at least one rank's operation succeeded. Useful
+// for gating a follow-up wait-for-rebuild: if every rank failed, no rebuild
+// was started and there is nothing to wait for.
+func (resp *PoolRanksResp) HasSuccess() bool {
+	if resp == nil {
+		return false
+	}
+	for _, res := range resp.Results {
+		if !res.Errored {
+			return true
+		}
+	}
+	return false
 }
 
 type poolRankOpSig func(context.Context, UnaryInvoker, *PoolRanksReq, ranklist.Rank) (*PoolRankResult, error)
@@ -1296,28 +1369,89 @@ func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, createReq *Pool
 		return 0, 0, errors.Wrap(err, "getMaxPoolSize: SystemQuery")
 	}
 	joinedRanks := ranklist.RankList{}
+	downoutRanks := ranklist.RankList{}
 	for _, member := range queryResp.Members {
-		if member.State == system.MemberStateJoined {
+		switch member.State {
+		case system.MemberStateJoined:
+			// Joined ranks are eligible target-create candidates.
 			joinedRanks = append(joinedRanks, member.Rank)
+		case system.MemberStateUnknown:
+			// Not a real membership state; nothing to encode.
+		default:
+			// Every other known state (Ready/Excluded/AdminExcluded/Stopped/
+			// Stopping/Errored/Unresponsive/AwaitFormat/Starting/...) is
+			// treated as pool-map DOWNOUT. This mirrors the server-side use
+			// of `AllMemberFilter ^ MemberStateJoined` so client and
+			// management service agree on the DOWNOUT candidate set.
+			downoutRanks = append(downoutRanks, member.Rank)
 		}
 	}
 
-	// Refuse if any requested ranks are not joined, update ranklist to contain only joined ranks.
+	// Determine which ranks the storage scan should be restricted to. Only
+	// Joined ranks host storage; DOWNOUT ranks are pool-map-only entries.
+	//
+	// For an explicit rank request:
+	//   - Deduplicate via RankSet (natural ordering).
+	//   - Reject any rank that is neither joined nor known non-joined.
+	//   - Fail early if every requested rank is currently non-joined; the create
+	//     will fail anyway and this gives the caller a clear message.
+	//   - Scan storage on the subset of requested ranks that are joined.
+	//   - Do not overwrite any caller-supplied createReq.UnavailableRanks; the
+	//     management service will merge them with the non-joined ranks it
+	//     splits out of createReq.Ranks.
+	// For an implicit request (no Ranks): populate createReq.Ranks with the
+	// full joined set and createReq.UnavailableRanks with the full non-joined
+	// set, so the management service has a complete rank plan and does not
+	// need any auto-inclusion hint.
 	filterRanks := ranklist.RankList{}
 	if len(createReq.Ranks) == 0 {
-		filterRanks = joinedRanks
+		// Copy so downstream slices.Sort does not mutate joinedRanks.
+		filterRanks = append(ranklist.RankList{}, joinedRanks...)
+		createReq.Ranks = append(ranklist.RankList{}, joinedRanks...)
+		createReq.UnavailableRanks = append(ranklist.RankList{}, downoutRanks...)
+		// Only the implicit path derives Ranks/UnavailableRanks from the
+		// system membership snapshot and needs sorting. The explicit path
+		// obtains Ranks via requestedSet.Ranks() (already sorted) and must
+		// not mutate the caller-supplied UnavailableRanks.
+		slices.Sort(createReq.Ranks)
+		slices.Sort(createReq.UnavailableRanks)
 	} else {
-		for _, rank := range createReq.Ranks {
-			if !rank.InList(joinedRanks) {
-				return 0, 0, errors.Errorf("specified rank %d is not joined", rank)
-			}
-			filterRanks = append(filterRanks, rank)
+		// Use RankSet from the start for natural deduplication.
+		requestedSet := ranklist.RankSetFromRanks(createReq.Ranks)
+
+		// Build the set of all known ranks (joined + any non-joined).
+		knownSet := ranklist.RankSetFromRanks(joinedRanks)
+		for _, rank := range downoutRanks {
+			knownSet.Add(rank)
 		}
+
+		// Refuse anything the system does not know about. Report every
+		// unknown rank in a single error to match the server-side pattern
+		// used by CheckRankMembership / FaultPoolInvalidRanks.
+		if invalid := ranklist.CheckRankMembership(knownSet.Ranks(), requestedSet.Ranks()); len(invalid) > 0 {
+			return 0, 0, errors.Errorf("specified ranks (%s) are not known system members",
+				ranklist.RankSetFromRanks(invalid).String())
+		}
+
+		// filterRanks = joined ∩ requested. Iterate joinedRanks so the
+		// storage scan order stays deterministic w.r.t. membership.
+		for _, rank := range joinedRanks {
+			if requestedSet.Contains(rank) {
+				filterRanks = append(filterRanks, rank)
+			}
+		}
+		if len(filterRanks) == 0 {
+			return 0, 0, errors.Errorf(
+				"pool create requires at least one joined target rank; "+
+					"none of the requested ranks (%s) are currently joined",
+				requestedSet.String())
+		}
+		// requestedSet.Ranks() deduplicates the explicit request.
+		createReq.Ranks = requestedSet.Ranks()
 	}
 	slices.Sort(filterRanks)
-	rpcClient.Debugf("requested/joined/filter ranks: %v/%v/%v", createReq.Ranks, joinedRanks,
-		filterRanks)
-	createReq.Ranks = filterRanks
+	rpcClient.Debugf("requested/joined/downout/filter ranks: %v/%v/%v/%v", createReq.Ranks,
+		joinedRanks, downoutRanks, filterRanks)
 
 	scanReq := &StorageScanReq{
 		Usage:    true,

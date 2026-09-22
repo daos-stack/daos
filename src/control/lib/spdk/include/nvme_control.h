@@ -1,5 +1,6 @@
 /**
 * (C) Copyright 2018-2021 Intel Corporation.
+* (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 *
 * SPDX-License-Identifier: BSD-2-Clause-Patent
 */
@@ -37,18 +38,6 @@ nvme_wipe_namespaces(void);
  */
 struct ret_t *
 nvme_format(char *ctrlr_pci_addr);
-
-/**
- * Update NVMe controller firmware.
- *
- * \param ctrlr_pci_addr PCI address of NVMe controller.
- * \param path Local filepath where firmware image is stored.
- * \param slot Identifier of software slot/register to upload to.
- *
- * \return a pointer to a return struct (ret_t).
- */
-struct ret_t *
-nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot);
 
 /**
  * Initialize SPDK environment.
