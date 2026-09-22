@@ -1097,14 +1097,16 @@ pipeline {
                 } // stage('Unit Test bdev with memcheck')
             }
         }
-        stage('Test') {
-            when {
-                beforeAgent true
-                expression { shouldStageRun('Test') }
-            }
-            steps {
-                script {
-                    parallel(
+        stage('Functional Test') {
+            parallel {
+                stage('Test VM') {
+                    when {
+                        beforeAgent true
+                        expression { shouldStageRun('Test') }
+                    }
+                    steps {
+                        script {
+                            parallel(
                         'Functional on EL 9 with Valgrind': getFunctionalTestStage(
                             name: 'Functional on EL 9 with Valgrind',
                             runStage: shouldStageRun('Functional on EL 9 with Valgrind'),
@@ -1229,11 +1231,11 @@ pipeline {
                             archiveArtifactsArgs: [
                                 artifacts: 'Test RPMs on Leap 15/']
                         )
-                    )
+                            )
+                        }
+                    }
                 }
-            }
-        } // stage('Test')
-        stage('Test Storage Prep on EL 9') {
+                stage('Test Storage Prep on EL 9') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
@@ -1405,6 +1407,8 @@ pipeline {
                 }
             }
         } // stage('Test Hardware')
+            }
+        } // stage('Functional Test')
     } // stages
     post {
         always {
