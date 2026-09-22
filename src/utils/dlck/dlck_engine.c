@@ -495,10 +495,6 @@ dlck_engine_stop(struct dlck_engine *engine)
 {
 	int rc;
 
-	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_STOP)) { /** fault injection */
-		return daos_errno2der(daos_fail_value_get());
-	}
-
 	if (engine->join_fail) {
 		/** Cannot stop the engine in this case. It will probably crash. */
 		return -DER_BUSY;
@@ -650,7 +646,8 @@ dlck_engine_targets_stop(struct dlck_engine *engine, struct dlck_exec *de)
 
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_JOIN)) { /** fault injection */
 		engine->join_fail = true;
-		return daos_errno2der(daos_fail_value_get());
+		rc                = daos_errno2der(daos_fail_value_get());
+		goto fail_join_and_free;
 	}
 
 	for (int i = 0; i < engine->targets; ++i) {
