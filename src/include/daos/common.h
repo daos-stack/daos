@@ -609,6 +609,8 @@ daos_errno2der(int err)
 	case EINVAL:		return -DER_INVAL;
 	case ENOTDIR:		return -DER_NOTDIR;
 	case EIO:		return -DER_IO;
+	case EINPROGRESS:
+		return -DER_INPROGRESS;
 	case ENOTSUP:
 		return -DER_NOTSUPPORTED;
 	case EFAULT:
@@ -669,6 +671,8 @@ daos_der2errno(int err)
 	case -DER_NOTDIR:	return ENOTDIR;
 	case -DER_STALE:	return ESTALE;
 	case -DER_TX_RESTART:	return ERESTART;
+	case -DER_INPROGRESS:
+		return EINPROGRESS;
 	case -DER_NOTSUPPORTED:
 		return ENOTSUP;
 	default:		return EIO;
