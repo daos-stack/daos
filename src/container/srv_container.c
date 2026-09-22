@@ -2050,9 +2050,9 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 	}
 
 	ABT_rwlock_rdlock(svc->cs_lock);
-	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	rc = cont_lookup_active(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+		DL_CDEBUG(rc != -DER_NONEXIST && rc != -DER_CONT_DESTROYING, DLOG_ERR, DB_MD, rc,
 			  DF_CONT ": Failed to look container",
 			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
@@ -2459,7 +2459,7 @@ cont_lookup_internal(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t
 		if (flags & CONTAINER_F_DESTROYING) {
 			D_DEBUG(DB_MD, DF_CONT ": ignore destroying\n",
 				DP_CONT(svc->cs_pool_uuid, p->c_uuid));
-			rc = -DER_NONEXIST;
+			rc = -DER_CONT_DESTROYING;
 			goto err_prop;
 		}
 	}
@@ -2519,6 +2519,13 @@ int
 cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 {
 	return cont_lookup_internal(tx, svc, uuid, true /* include_destroying */, cont);
+}
+
+int
+cont_lookup_active(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
+		   struct cont **cont)
+{
+	return cont_lookup_internal(tx, svc, uuid, false /* include_destroying */, cont);
 }
 
 static int
@@ -4623,7 +4630,7 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	 * Isn't val the container properties KVS? Can it be used directly?
 	 */
 	rc = cont_lookup_internal(ap->tx, ap->svc, cont_uuid, ap->include_destroying, &cont);
-	if (rc == -DER_NONEXIST && !ap->include_destroying) {
+	if (rc == -DER_CONT_DESTROYING && !ap->include_destroying) {
 		/* Continue iterating. */
 		return 0;
 	} else if (rc != 0) {
@@ -6388,10 +6395,10 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 		D_GOTO(out_put, rc);
 
 	ABT_rwlock_rdlock(svc->cs_lock);
-	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	rc = cont_lookup_active(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		DL_CDEBUG(rc == -DER_NONEXIST, DB_MD, DLOG_ERR, rc, DF_CONT " cont_lookup failed",
-			  DP_CONT(pool_uuid, cont_uuid));
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_CONT_DESTROYING, DB_MD, DLOG_ERR, rc,
+			  DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
