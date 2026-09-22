@@ -796,7 +796,7 @@ pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 
 static umem_off_t
 pmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num,
-	      unsigned int unused)
+	      struct umem_bucket_req *req)
 {
 	uint64_t pflags = 0;
 
@@ -1048,7 +1048,7 @@ pmem_tx_stage(void)
 
 static umem_off_t
 pmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num,
-	     unsigned int unused)
+	     struct umem_bucket_req *req)
 {
 	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
@@ -1083,7 +1083,7 @@ pmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
 
 static umem_off_t
 pmem_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num,
-		  unsigned int unused)
+		  struct umem_bucket_req *req)
 {
 	PMEMoid oid;
 	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
@@ -1234,7 +1234,7 @@ bmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 
 static umem_off_t
 bmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num,
-	      unsigned int mbkt_id)
+	      struct umem_bucket_req *req)
 {
 	uint64_t pflags = 0;
 
@@ -1348,7 +1348,7 @@ bmem_defer_free(struct umem_instance *umm, umem_off_t off, void *act)
 
 static umem_off_t
 bmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num,
-	     unsigned int mbkt_id)
+	     struct umem_bucket_req *req)
 {
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 
@@ -1388,7 +1388,7 @@ bmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
 
 static umem_off_t
 bmem_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num,
-		  unsigned int mbkt_id)
+		  struct umem_bucket_req *req)
 {
 	uint64_t off;
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
@@ -1473,7 +1473,7 @@ bmem_tx_free_v2(struct umem_instance *umm, umem_off_t umoff)
 
 static umem_off_t
 bmem_tx_alloc_v2(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num,
-	      unsigned int mbkt_id)
+		 struct umem_bucket_req *req)
 {
 	uint64_t pflags = 0;
 
@@ -1483,9 +1483,7 @@ bmem_tx_alloc_v2(struct umem_instance *umm, size_t size, uint64_t flags, unsigne
 		pflags |= DAV_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= DAV_FLAG_NO_FLUSH;
-	if (mbkt_id != 0)
-		pflags |= DAV_EZONE_ID(mbkt_id);
-	return dav_tx_alloc_v2(size, type_num, pflags);
+	return dav_tx_alloc_v2(size, type_num, pflags, req);
 }
 
 static int
@@ -1589,12 +1587,11 @@ bmem_defer_free_v2(struct umem_instance *umm, umem_off_t off, void *act)
 
 static umem_off_t
 bmem_reserve_v2(struct umem_instance *umm, void *act, size_t size, unsigned int type_num,
-	     unsigned int mbkt_id)
+		struct umem_bucket_req *req)
 {
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
-	uint64_t   flags = DAV_EZONE_ID(mbkt_id);
 
-	return dav_reserve_v2(pop, (struct dav_action *)act, size, type_num, flags);
+	return dav_reserve_v2(pop, (struct dav_action *)act, size, type_num, 0, req);
 }
 
 static void
@@ -1630,14 +1627,13 @@ bmem_atomic_copy_v2(struct umem_instance *umm, void *dest, const void *src,
 
 static umem_off_t
 bmem_atomic_alloc_v2(struct umem_instance *umm, size_t size, unsigned int type_num,
-		  unsigned int mbkt_id)
+		     struct umem_bucket_req *req)
 {
 	uint64_t off;
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
-	int rc;
-	uint64_t   flags = DAV_EZONE_ID(mbkt_id);
+	int        rc;
 
-	rc = dav_alloc_v2(pop, &off, size, type_num, flags, NULL, NULL);
+	rc = dav_alloc_v2(pop, &off, size, type_num, 0, req, NULL, NULL);
 	if (rc)
 		return UMOFF_NULL;
 	return off;
@@ -1719,7 +1715,7 @@ vmem_free(struct umem_instance *umm, umem_off_t umoff)
 
 umem_off_t
 vmem_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num,
-	   unsigned int unused)
+	   struct umem_bucket_req *req)
 {
 	return (uint64_t)((flags & UMEM_FLAG_ZERO) ?
 			  calloc(1, size) : malloc(size));
@@ -2049,7 +2045,7 @@ umem_rsrvd_act_free(struct umem_rsrvd_act **rsrvd_act)
 
 umem_off_t
 umem_reserve_common(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act, size_t size,
-		    unsigned int mbkt_id)
+		    struct umem_bucket_req *req)
 {
 	if (umm->umm_ops->mo_reserve) {
 		void			*act;
@@ -2060,7 +2056,7 @@ umem_reserve_common(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act,
 		D_ASSERT(rsrvd_act->rs_actv_cnt > rsrvd_act->rs_actv_at);
 
 		act = rsrvd_act->rs_actv + act_size * rsrvd_act->rs_actv_at;
-		off = umm->umm_ops->mo_reserve(umm, act, size, UMEM_TYPE_ANY, mbkt_id);
+		off = umm->umm_ops->mo_reserve(umm, act, size, UMEM_TYPE_ANY, req);
 		if (!UMOFF_IS_NULL(off))
 			rsrvd_act->rs_actv_at++;
 		D_ASSERTF(umem_off2flags(off) == 0,

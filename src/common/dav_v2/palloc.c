@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2024, Intel Corporation */
-/* (C) Copyright 2025 Hewlett Packard Enterprise Development LP */
+/**
+ * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ */
 
 /*
  * palloc.c -- implementation of pmalloc POSIX-like API
@@ -175,54 +177,31 @@ alloc_prep_block(struct palloc_heap *heap, const struct memory_block *m,
 }
 
 /*
- * palloc_reservation_create -- creates a volatile reservation of a
- *	memory block.
+ * palloc_reservation_try_mb -- (internal) attempts a single reservation from a
+ *	specific memory bucket.
  *
- * The first step in the allocation of a new block is reserving it in
- * the transient heap - which is represented by the bucket abstraction.
- *
- * To provide optimal scaling for multi-threaded applications and reduce
- * fragmentation the appropriate bucket is chosen depending on the
- * current thread context and to which allocation class the requested
- * size falls into.
- *
- * Once the bucket is selected, just enough memory is reserved for the
- * requested size. The underlying block allocation algorithm
- * (best-fit, next-fit, ...) varies depending on the bucket container.
+ * Returns 0 on success or an errno value on failure. ENOMEM indicates the
+ * bucket has no suitable free space and the caller may retry from a different
+ * bucket; any other value is a hard failure.
  */
 static int
-palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr constructor,
-			  void *arg, uint64_t extra_field, uint16_t object_flags, uint16_t class_id,
-			  uint32_t mb_id, struct dav_action_internal *out)
+palloc_reservation_try_mb(struct palloc_heap *heap, struct mbrt *mb, size_t size,
+			  palloc_constr constructor, void *arg, uint64_t extra_field,
+			  uint16_t object_flags, uint16_t class_id, struct dav_action_internal *out)
 {
-	int                  err       = 0;
 	struct memory_block *new_block = &out->m;
-	struct mbrt         *mb;
+	struct alloc_class  *c;
+	struct bucket       *b;
 	ssize_t              size_idx;
+	int                  err;
 
-	out->type = DAV_ACTION_TYPE_HEAP;
-
-	ASSERT(class_id < UINT8_MAX);
-
-	mb = heap_mbrt_get_mb(heap, mb_id);
-	if (mb == NULL) {
-		ERR("Invalid mb_id %u", mb_id);
-		errno = EINVAL;
-		return -1;
-	}
-	struct alloc_class *c = class_id == 0
-				    ? mbrt_get_best_class(mb, size)
-				    : alloc_class_by_id(mbrt_alloc_classes(mb), (uint8_t)class_id);
-
+	c = class_id == 0 ? mbrt_get_best_class(mb, size)
+			  : alloc_class_by_id(mbrt_alloc_classes(mb), (uint8_t)class_id);
 	if (c == NULL) {
 		ERR("no allocation class for size %lu bytes", size);
-		errno = EINVAL;
-		return -1;
+		return EINVAL;
 	}
 
-	heap_soemb_active_iter_init(heap);
-
-retry:
 	/*
 	 * The caller provided size in bytes, but buckets operate in
 	 * 'size indexes' which are multiples of the block size in the
@@ -232,24 +211,19 @@ retry:
 	 * provides 256 byte blocks two memory 'units' are required.
 	 */
 	size_idx = alloc_class_calc_size_idx(c, size);
-
 	if (size_idx < 0) {
-		ERR("allocation class not suitable for size %lu bytes",
-			size);
-		errno = EINVAL;
-		return -1;
+		ERR("allocation class not suitable for size %lu bytes", size);
+		return EINVAL;
 	}
 	ASSERT(size_idx <= UINT32_MAX);
-	*new_block = MEMORY_BLOCK_NONE;
+	*new_block          = MEMORY_BLOCK_NONE;
 	new_block->size_idx = (uint32_t)size_idx;
 
 	err = heap_mbrt_update_alloc_class_buckets(heap, mb, c);
-	if (err != 0) {
-		errno = err;
-		return -1;
-	}
+	if (err != 0)
+		return err;
 
-	struct bucket *b = mbrt_bucket_acquire(mb, c->id);
+	b = mbrt_bucket_acquire(mb, c->id);
 
 	err = heap_get_bestfit_block(heap, b, new_block);
 	if (err != 0)
@@ -282,35 +256,110 @@ retry:
 
 out:
 	mbrt_bucket_release(b);
+	return err;
+}
 
-	if (err == 0)
-		return 0;
+/*
+ * palloc_reservation_create -- creates a volatile reservation of a
+ *	memory block.
+ *
+ * The requested evictable buckets are tried first in priority order, then the
+ * spill-over evictable buckets (when the object may grow beyond the requested
+ * set, or ubr_bkt_max == 0 as a temporary fix), and finally the non-evictable
+ * bucket.
+ */
+static int
+palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr constructor,
+			  void *arg, uint64_t extra_field, uint16_t object_flags, uint16_t class_id,
+			  struct umem_bucket_req *req, struct dav_action_internal *out)
+{
+	struct mbrt *mb;
+	uint32_t     bkt_cnt = (req != NULL) ? req->ubr_bkt_cnt : 0;
+	uint32_t     bkt_max = (req != NULL) ? req->ubr_bkt_max : 0;
+	uint32_t     mb_id;
+	uint32_t     i;
+	int          err = ENOMEM;
+
+	out->type = DAV_ACTION_TYPE_HEAP;
+
+	ASSERT(class_id < UINT8_MAX);
+
+	heap_soemb_active_iter_init(heap);
 
 	/*
-	 * If there is no memory in evictable zone then do the allocation
-	 * from non-evictable zone.
+	 * Try the explicitly requested evictable buckets in priority order,
+	 * stopping at the first success or when a zero (terminator) id is seen.
 	 */
-	if ((mb_id != 0) && (err == ENOMEM)) {
-		heap_mbrt_log_alloc_failure(heap, mb_id);
-		mb_id = heap_soemb_active_get(heap);
-		mb    = heap_mbrt_get_mb(heap, mb_id);
+	for (i = 0; i < bkt_cnt; i++) {
+		mb_id = req->ubr_bkt_ids[i];
+		if (mb_id == UMEM_DEFAULT_MBKT_ID)
+			break;
+
+		mb = heap_mbrt_get_mb(heap, mb_id);
 		if (mb == NULL) {
 			ERR("Invalid mb_id %u", mb_id);
 			errno = EINVAL;
 			return -1;
 		}
-		if (mb_id == 0) {
-			c = class_id == 0
-				? mbrt_get_best_class(mb, size)
-				: alloc_class_by_id(mbrt_alloc_classes(mb), (uint8_t)class_id);
-			if (c == NULL) {
-				ERR("no allocation class for size %lu bytes", size);
+
+		err = palloc_reservation_try_mb(heap, mb, size, constructor, arg, extra_field,
+						object_flags, class_id, out);
+		if (err == 0)
+			return 0;
+		if (err != ENOMEM) {
+			errno = err;
+			return -1;
+		}
+		heap_mbrt_log_alloc_failure(heap, mb_id);
+	}
+
+	/*
+	 * All requested E-buckets are full. If the object is allowed to spill
+	 * into more evictable buckets, try the active spill-over evictable
+	 * (SOE) buckets next. (i > 0) ensures that at least one E-bucket
+	 * allocation was attempted.
+	 *
+	 * TEMP FIX: ubr_bkt_max == 0 means unbounded spill-over to SOE buckets,
+	 * restoring the legacy single-bucket behavior that always spilled to SOE
+	 * buckets. This is temporary; unbounded spill-over to SOE buckets will
+	 * not be allowed in the future.
+	 */
+	if (i > 0 && (bkt_max == 0 || i < bkt_max)) {
+		while ((mb_id = heap_soemb_active_get(heap)) != 0) {
+			mb = heap_mbrt_get_mb(heap, mb_id);
+			if (mb == NULL) {
+				ERR("Invalid mb_id %u", mb_id);
 				errno = EINVAL;
 				return -1;
 			}
+
+			err = palloc_reservation_try_mb(heap, mb, size, constructor, arg,
+							extra_field, object_flags, class_id, out);
+			if (err == 0)
+				return 0;
+			if (err != ENOMEM) {
+				errno = err;
+				return -1;
+			}
+			heap_mbrt_log_alloc_failure(heap, mb_id);
 		}
-		goto retry;
 	}
+
+	/*
+	 * Fall back to the non-evictable bucket when no evictable bucket could
+	 * satisfy the request or the spill-over limit has been reached.
+	 */
+	mb = heap_mbrt_get_mb(heap, UMEM_DEFAULT_MBKT_ID);
+	if (mb == NULL) {
+		ERR("Invalid mb_id %u", UMEM_DEFAULT_MBKT_ID);
+		errno = EINVAL;
+		return -1;
+	}
+
+	err = palloc_reservation_try_mb(heap, mb, size, constructor, arg, extra_field, object_flags,
+					class_id, out);
+	if (err == 0)
+		return 0;
 
 	errno = err;
 	return -1;
@@ -654,14 +703,14 @@ palloc_exec_actions(struct palloc_heap *heap,
  */
 int
 palloc_reserve(struct palloc_heap *heap, size_t size, palloc_constr constructor, void *arg,
-	       uint64_t extra_field, uint16_t object_flags, uint16_t class_id, uint32_t mb_id,
-	       struct dav_action *act)
+	       uint64_t extra_field, uint16_t object_flags, uint16_t class_id,
+	       struct umem_bucket_req *req, struct dav_action *act)
 {
 	COMPILE_ERROR_ON(sizeof(struct dav_action) !=
 		sizeof(struct dav_action_internal));
 
 	return palloc_reservation_create(heap, size, constructor, arg, extra_field, object_flags,
-					 class_id, mb_id, (struct dav_action_internal *)act);
+					 class_id, req, (struct dav_action_internal *)act);
 }
 
 /*
@@ -805,7 +854,7 @@ palloc_publish(struct palloc_heap *heap, struct dav_action *actv, size_t actvcnt
 int
 palloc_operation(struct palloc_heap *heap, uint64_t off, uint64_t *dest_off, size_t size,
 		 palloc_constr constructor, void *arg, uint64_t extra_field, uint16_t object_flags,
-		 uint16_t class_id, uint32_t mb_id, struct operation_context *ctx)
+		 uint16_t class_id, struct umem_bucket_req *req, struct operation_context *ctx)
 {
 	size_t user_size = 0;
 
@@ -836,7 +885,7 @@ palloc_operation(struct palloc_heap *heap, uint64_t off, uint64_t *dest_off, siz
 	if (size != 0) {
 		alloc = &ops[nops++];
 		if (palloc_reservation_create(heap, size, constructor, arg, extra_field,
-					      object_flags, class_id, mb_id, alloc) != 0) {
+					      object_flags, class_id, req, alloc) != 0) {
 			operation_cancel(ctx);
 			return -1;
 		}

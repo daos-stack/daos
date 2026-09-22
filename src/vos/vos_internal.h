@@ -1977,11 +1977,19 @@ vos_obj_alloc(struct umem_instance *umm, struct vos_object *obj, size_t size, bo
 {
 
 	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
+		/* TEMP FIX: ubr_bkt_max = 0 allows unbounded spill-over to SOE buckets. */
+		umem_bucket_req_t req = {
+		    .ubr_bkt_ids   = &obj->obj_bkt_id0,
+		    .ubr_bkt_cnt   = 1,
+		    .ubr_bkt_max   = 0,
+		    .ubr_bkt_flags = 0,
+		};
+
 		D_ASSERT(obj->obj_bkt_alloted == 1);
 		if (zeroing)
-			return umem_zalloc_from_bucket(umm, size, obj->obj_bkt_id0);
+			return umem_zalloc_from_bucket(umm, size, &req);
 
-		return umem_alloc_from_bucket(umm, size, obj->obj_bkt_id0);
+		return umem_alloc_from_bucket(umm, size, &req);
 	}
 
 	if (zeroing)
@@ -1995,8 +2003,16 @@ vos_obj_reserve(struct umem_instance *umm, struct vos_object *obj,
 		struct umem_rsrvd_act *rsrvd_scm, daos_size_t size)
 {
 	if (obj != NULL && vos_pool_is_evictable(vos_obj2pool(obj))) {
+		/* TEMP FIX: ubr_bkt_max = 0 allows unbounded spill-over to SOE buckets. */
+		umem_bucket_req_t req = {
+		    .ubr_bkt_ids   = &obj->obj_bkt_id0,
+		    .ubr_bkt_cnt   = 1,
+		    .ubr_bkt_max   = 0,
+		    .ubr_bkt_flags = 0,
+		};
+
 		D_ASSERT(obj->obj_bkt_alloted == 1);
-		return umem_reserve_from_bucket(umm, rsrvd_scm, size, obj->obj_bkt_id0);
+		return umem_reserve_from_bucket(umm, rsrvd_scm, size, &req);
 	}
 
 	return umem_reserve(umm, rsrvd_scm, size);

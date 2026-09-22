@@ -23,6 +23,10 @@
 #define WAL_IO_MULTI_KEYS	10000
 #define WAL_OBJ_KEYS		31
 
+/** Build a single-bucket allocation request for the given bucket id. */
+#define BKT_REQ(id)                                                                                \
+	(&(umem_bucket_req_t){.ubr_bkt_ids = &(uint32_t){id}, .ubr_bkt_cnt = 1, .ubr_bkt_max = 0})
+
 /* Define WAL_IO_EXTRA_CHK to one for comprehensive type checking */
 #define WAL_IO_EXTRA_CHK	0
 
@@ -1344,7 +1348,7 @@ wal_mb_tests(void **state)
 	mb_id = umem_allot_mb_evictable(umm, 0);
 	assert_true(mb_id != 0);
 	umem_tx_begin(umm, NULL);
-	umoff = umem_alloc_from_bucket(umm, 1024, mb_id);
+	umoff = umem_alloc_from_bucket(umm, 1024, BKT_REQ(mb_id));
 	assert_false(UMOFF_IS_NULL(umoff));
 	assert_true(umem_get_mb_from_offset(umm, umoff) == mb_id);
 	ptr  = umem_off2ptr(umm, umoff);
@@ -1407,7 +1411,7 @@ alloc_bucket_to_full(struct umem_instance *umm, struct bucket_alloc_info *ainfo,
 
 	if (UMOFF_IS_NULL(ainfo->start_umoff)) {
 		umem_tx_begin(umm, NULL);
-		ainfo->start_umoff = umem_alloc_from_bucket(umm, alloc_size, id);
+		ainfo->start_umoff = umem_alloc_from_bucket(umm, alloc_size, BKT_REQ(id));
 		assert_false(UMOFF_IS_NULL(ainfo->start_umoff));
 		ainfo->num_allocs++;
 		if (!ainfo->allow_spill)
@@ -1429,7 +1433,7 @@ alloc_bucket_to_full(struct umem_instance *umm, struct bucket_alloc_info *ainfo,
 
 	while (1) {
 		umem_tx_begin(umm, NULL);
-		umoff = umem_alloc_from_bucket(umm, alloc_size, id);
+		umoff = umem_alloc_from_bucket(umm, alloc_size, BKT_REQ(id));
 
 		if (UMOFF_IS_NULL(umoff) ||
 		    (!ainfo->allow_spill && (umem_get_mb_from_offset(umm, umoff) != id))) {
@@ -2386,7 +2390,8 @@ wal_umempobj_block_reuse_internal(void **state, int restart)
 
 		for (j = 0; j < free_num[i]; j++) {
 			umem_tx_begin(umm, NULL);
-			umoff = umem_alloc_from_bucket(umm, ainfo[i].alloc_size, ainfo[i].mb_id);
+			umoff = umem_alloc_from_bucket(umm, ainfo[i].alloc_size,
+						       BKT_REQ(ainfo[i].mb_id));
 			assert_true(!UMOFF_IS_NULL(umoff));
 			umem_tx_commit(umm);
 			assert_true(umoff_in_freelist(free_list[i], free_num[i], umoff, true));
