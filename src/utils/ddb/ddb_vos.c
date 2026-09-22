@@ -1490,7 +1490,7 @@ check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_
 	daos_handle_t             ioh;
 	struct dcs_ci_list       *cil;
 	struct daos_recx_ep_list *rel;
-	struct dcs_csum_info    **got_csums  = NULL;
+	struct dcs_csum_info    **got_csums = NULL;
 	uint32_t                  csum_nr;
 	bool                      csum_error = false;
 	int                       i;

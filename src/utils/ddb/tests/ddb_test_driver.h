@@ -46,13 +46,13 @@ struct dt_vos_pool_ctx {
 	void         *dvt_extra;
 };
 
-#define DVT_FAKE_SV_COUNT   (2)
-#define DVT_FAKE_RECX_COUNT (2)
-#define DVT_FAKE_SV_SIZE    (1u << 10)
-#define DVT_FAKE_RECX_SIZE  (1u << 13)
-#define DVT_FAKE_CHUNK_SIZE (1u << 12)
-#define DVT_FAKE_CSUM_TYPE    (HASH_TYPE_CRC64)
-#define DVT_FAKE_RECX_BAD_IDX (1)
+#define DVT_FAKE_SV_COUNT                    (2)
+#define DVT_FAKE_RECX_COUNT                  (2)
+#define DVT_FAKE_SV_SIZE                     (1u << 10)
+#define DVT_FAKE_RECX_SIZE                   (1u << 13)
+#define DVT_FAKE_CHUNK_SIZE                  (1u << 12)
+#define DVT_FAKE_CSUM_TYPE                   (HASH_TYPE_CRC64)
+#define DVT_FAKE_RECX_BAD_IDX                (1)
 
 /* Checksum fixture objects: SV under g_akeys_str[0] and recxs A=[0, S)@1, B=[S/2, 3S/2)@2 under
  * g_akeys_str[1].  The *_FILLER constants are the data byte of the first version/extent, the next
