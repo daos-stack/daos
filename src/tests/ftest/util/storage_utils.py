@@ -625,7 +625,7 @@ class StorageInfo():
             ['find /dev/disk/by-path/ -type l -printf \'%f -> %l\n\'',
              f'grep -w \'{device}\'',
              'sort'])
-        result = run_remote(self._log, self._hosts, command)
+        result = run_remote(self._log, hosts, command)
         self._log.debug('  Detected addresses for %s:', device)
         for data in result.output:
             if not data.passed:
