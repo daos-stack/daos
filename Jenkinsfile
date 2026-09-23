@@ -847,8 +847,13 @@ pipeline {
                     steps {
                         script {
                             sh label: 'Collect dependency RPMs built into the image',
-                               script: 'mkdir -p rpms/deps && ' +
-                                       'cp /home/daos/rpms/deps/*.rpm rpms/deps/ || true'
+                               script: ''' 
+                                       set -- /home/daos/rpms/deps/*.rpm
+                                       if [ -e "$1" ]; then
+                                           mkdir -p rpms/deps
+                                           cp -- "$@" rpms/deps/
+                                       fi
+                               '''
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -913,8 +918,13 @@ pipeline {
                     steps {
                         script {
                             sh label: 'Collect dependency RPMs built into the image',
-                               script: 'mkdir -p rpms/deps && ' +
-                                       'cp /home/daos/rpms/deps/*.rpm rpms/deps/ || true'
+                               script: ''' 
+                                       set -- /home/daos/rpms/deps/*.rpm
+                                       if [ -e "$1" ]; then
+                                           mkdir -p rpms/deps
+                                           cp -- "$@" rpms/deps/
+                                       fi
+                               '''
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
