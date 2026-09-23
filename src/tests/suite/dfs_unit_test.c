@@ -3625,8 +3625,11 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 		}
 	}
 
-	/** sleep to avoid DER_INPROGRESS errors since pipeline currently does not retry */
-	sleep(10);
+	/**
+	 * sleep past DTX_COMMIT_THRESHOLD_AGE to avoid DER_INPROGRESS errors since pipeline
+	 * currently does not retry.
+	 */
+	sleep(15);
 
 	dfs_predicate_t pred = {0};
 	dfs_pipeline_t *dpipe = NULL;
@@ -3671,8 +3674,8 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 			 * It is still possible to get INPROGRESS even with the sleep, so let's just
 			 * skip the test in this case.
 			 */
-			if (rc == -DER_INPROGRESS) {
-				print_message("dfs_readdir_with_filter() returned -DER_INPROGRESS; "
+			if (rc == EINPROGRESS) {
+				print_message("dfs_readdir_with_filter() returned EINPROGRESS; "
 					      "skipping test!\n");
 				free(dents);
 				free(anchors);
