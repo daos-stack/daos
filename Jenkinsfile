@@ -929,7 +929,7 @@ pipeline {
                 }
             }
         }
-        stage('Unit Tests') {
+        stage('Quick Tests') {
             when {
                 beforeAgent true
                 expression { shouldStageRun('Unit Tests') }
@@ -1096,9 +1096,51 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test bdev with memcheck')
+                stage('Test RPMs') {
+                    when {
+                        expression {
+                            shouldStageRun('Test RPMs on EL 9') ||
+                            shouldStageRun('Test RPMs on Leap 15')
+                        }
+                    }
+                    steps {
+                        script {
+                            parallel(
+                                'Test RPMs on EL 9': scriptedTestRpmStage(
+                                    name: 'Test RPMs on EL 9',
+                                    runStage: shouldStageRun('Test RPMs on EL 9'),
+                                    label: params.CI_UNIT_VM1_LABEL,
+                                    jobStatus: job_status_internal,
+                                    testRpmArgs: [
+                                        target: 'el9.6',
+                                        inst_rpms: 'mercury-libfabric',
+                                        ignoreFailure: false],
+                                    nextVersion: next_version(),
+                                    alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
+                                    archiveArtifactsArgs: [
+                                        artifacts: 'Test RPMs on EL 9/']
+                                ),
+                                'Test RPMs on Leap 15': scriptedTestRpmStage(
+                                    name: 'Test RPMs on Leap 15',
+                                    runStage: shouldStageRun('Test RPMs on Leap 15'),
+                                    label: params.CI_UNIT_VM1_LABEL,
+                                    jobStatus: job_status_internal,
+                                    testRpmArgs: [
+                                        target: 'leap15.6',
+                                        inst_rpms: 'mercury-libfabric',
+                                        ignoreFailure: false],
+                                    nextVersion: next_version(),
+                                    alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
+                                    archiveArtifactsArgs: [
+                                        artifacts: 'Test RPMs on Leap 15/']
+                                ),
+                            )
+                        }
+                    }
+                } // stage('Test RPMs')
             }
         }
-        stage('Functional Test') {
+        stage('Tests') {
             steps {
                 script {
                     Boolean runVmTests = shouldStageRun('Test')
@@ -1199,34 +1241,6 @@ pipeline {
                             archiveArtifactsArgs: [
                                 artifacts: 'nlt_logs/fault-injection/',
                                 allowEmptyArchive: true]
-                        ),
-                        'Test RPMs on EL 9': scriptedTestRpmStage(
-                            name: 'Test RPMs on EL 9',
-                            runStage: runVmTests && shouldStageRun('Test RPMs on EL 9'),
-                            label: params.CI_UNIT_VM1_LABEL,
-                            jobStatus: job_status_internal,
-                            testRpmArgs: [
-                                target: 'el9.6',
-                                inst_rpms: 'mercury-libfabric',
-                                ignoreFailure: false],
-                            nextVersion: next_version(),
-                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
-                            archiveArtifactsArgs: [
-                                artifacts: 'Test RPMs on EL 9/']
-                        ),
-                        'Test RPMs on Leap 15': scriptedTestRpmStage(
-                            name: 'Test RPMs on Leap 15',
-                            runStage: runVmTests && shouldStageRun('Test RPMs on Leap 15'),
-                            label: params.CI_UNIT_VM1_LABEL,
-                            jobStatus: job_status_internal,
-                            testRpmArgs: [
-                                target: 'leap15.6',
-                                inst_rpms: 'mercury-libfabric',
-                                ignoreFailure: false],
-                            nextVersion: next_version(),
-                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
-                            archiveArtifactsArgs: [
-                                artifacts: 'Test RPMs on Leap 15/']
                         ),
                         'Test Storage Prep on EL 9': {
                             stage('Test Storage Prep on EL 9') {
@@ -1404,7 +1418,7 @@ pipeline {
                     )
                 }
             }
-        } // stage('Functional Test')
+        } // stage('Tests')
     } // stages
     post {
         always {
