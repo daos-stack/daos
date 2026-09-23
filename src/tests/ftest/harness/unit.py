@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023-2024 Intel Corporation.
+  (C) Copyright 2023-2026 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -407,7 +407,10 @@ class HarnessUnitTest(TestWithoutServers):
             "find /dev/disk/by-path/ -type l -printf '%f -> %l\\n' | "
             "grep -w 'nvme0n1' | sort")
         self.log_step('Verify StorageInfo mounted-address host scope')
-        with patch("storage_utils.run_remote", return_value=MagicMock(output=[])) as run_remote_mock:
+        with patch(
+                "storage_utils.run_remote",
+                return_value=MagicMock(output=[])) as run_remote_mock:
+            # pylint: disable=protected-access
             StorageInfo(self.log, hosts)._get_addresses(mounted_hosts, "nvme0n1")
         run_remote_mock.assert_called_once_with(self.log, mounted_hosts, command)
         self.log_step('Unit Test Passed')
