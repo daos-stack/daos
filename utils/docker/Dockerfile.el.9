@@ -96,7 +96,7 @@ RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target
 # Add DAOS user
 ARG DAOS_SERVER_UID=1000
 RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos/daos-server-user-setup.sh \
-    UID="${DAOS_SERVER_UID}" /tmp/daos/daos-server-user-setup.sh;
+    /tmp/daos/daos-server-user-setup.sh;
 
 # Create directory for DAOS build backend storage
 RUN mkdir -p /home/daos /opt/daos && \
