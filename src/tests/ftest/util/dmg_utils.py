@@ -6,7 +6,6 @@
 """
 # pylint: disable=too-many-lines
 import re
-from collections.abc import Iterable
 from grp import getgrgid
 from logging import getLogger
 from pwd import getpwuid
@@ -793,7 +792,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         names = None
-        if isinstance(name, Iterable):
+        if isinstance(name, (list, tuple)):
             names = list_to_str(name, ',')
         elif name is not None:
             names = str(name)
