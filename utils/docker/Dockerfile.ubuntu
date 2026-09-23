@@ -68,8 +68,8 @@ ARG DAOS_SERVER_UID=5000
 COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
      /tmp/daos-server-user-setup.sh
 RUN set -e;                                     \
-    chmod +x /tmp/daos-server-user-setup.sh;    \
-        /tmp/daos-server-user-setup.sh;
+    chmod +x /tmp/daos-server-user-setup.sh; && \
+        UID="${DAOS_SERVER_UID}" /tmp/daos-server-user-setup.sh;
 
 RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
