@@ -32,8 +32,8 @@ dmg:
     allow_insecure: true
 
 pool:
-  scm_size: 10G
-  nvme_size: 10G
+  scm_size: 15G
+  nvme_size: 15G
   # SCM usage will not be 100% because some space (<1%) is used for the system and data
   # distribution is not fully uniform.
   usage_min_scm: 92
@@ -70,8 +70,8 @@ ior_new:
   write_flags: "-w -W -F -k -G 1"
   read_flags: "-r -R -F -k -G 1"
   test_file: /testFile
-  transfer_size: 2048    # 2K
-  block_size: 655360000  # 320M
+  transfer_size: 10240  # 10K
+  block_size: 491520000  # 480M
   iterations: 10
 
 aggregation:
