@@ -694,7 +694,7 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 	rc = cont_lookup_active(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
 		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_CONT_DESTROYING, DB_MD, DLOG_ERR, rc,
-			  DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+			  DF_CONT " cont_lookup_active failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 

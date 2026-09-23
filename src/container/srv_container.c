@@ -2053,7 +2053,7 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 	rc = cont_lookup_active(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
 		DL_CDEBUG(rc != -DER_NONEXIST && rc != -DER_CONT_DESTROYING, DLOG_ERR, DB_MD, rc,
-			  DF_CONT ": Failed to look container",
+			  DF_CONT ": cont_lookup_active failed",
 			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
