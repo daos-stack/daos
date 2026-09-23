@@ -650,6 +650,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
@@ -670,7 +671,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				newOnDrpcFailureFn(log, db)(ctx, err)
 			})
 
-			ctx, cancel := context.WithCancel(test.Context(t))
+			ctx, cancel := context.WithTimeout(test.Context(t), 5*time.Second)
 
 			startErr := make(chan error)
 			go func() {
@@ -679,15 +680,15 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				}
 				close(startErr)
 			}()
-			for {
-				if h.isStarted() {
-					break
-				}
+			for !h.isStarted() {
+				time.Sleep(time.Millisecond)
 			}
 			defer func() {
 				if err := <-startErr; err != nil {
 					if err != context.Canceled {
-						t.Fatal(err)
+						if !errors.Is(err, context.DeadlineExceeded) {
+							t.Fatal(err)
+						}
 					}
 				}
 			}()

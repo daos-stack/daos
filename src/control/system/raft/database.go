@@ -114,6 +114,8 @@ type (
 		RaftSnapshotInterval  time.Duration
 		SystemName            string
 		ReadOnly              bool
+		RaftHeartbeatTimeout  time.Duration
+		RaftElectionTimeout   time.Duration
 	}
 
 	// GroupMap represents a version of the system membership map.
