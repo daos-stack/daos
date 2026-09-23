@@ -23,7 +23,8 @@
 
   Objects, dkeys, akeys and records may be punched while a target is excluded, and the evidence
   of a punch may be removed by normal VOS aggregation. The rebuild path is extended to discover
-  and replay such punches, and aggregation is extended to retain the evidence they need.
+  and replay such punches, and aggregation is extended to retain the evidence they need for as
+  long as an excluded target may need it, within a bound set by space pressure.
 
   For the common case in which no update has occurred since the exclusion, a fast mode
   recognizes the situation from one persistent value per container shard and lets the healthy
@@ -72,9 +73,10 @@ objects and keys is kept consistent with the rest of the system.
 
 - **Replacing full reintegration.** The full-reintegration mode remains available and remains
   the fallback whenever incremental reintegration cannot be applied: pools created before the
-  required durable-format version, targets whose local data is missing or unusable, and objects
-  whose punch evidence has been discarded by aggregation. Incremental reintegration is an
-  optimization for the common transient-failure case, not a guarantee for every object.
+  required durable-format version, targets whose local data is missing or unusable, objects
+  whose punch evidence has been discarded by aggregation, and targets whose stored stable epoch
+  lies below a container-level punch watermark. Incremental reintegration is an optimization for
+  the common transient-failure case, not a guarantee for every object.
 - **Zero data movement.** Every update above the global stable epoch is migrated, and the data
   between a target's own local stable epoch and the global stable epoch is treated as
   potentially divergent and pulled again. Minimizing that window is not an objective of this
@@ -171,7 +173,9 @@ epochs reported by all engines, ignores the ranks known to have failed, and pick
 
 Because the value is a minimum over all healthy shards, it is by construction an epoch below
 which every shard has already stabilized its data. The leader then broadcasts it to all
-engines in the system through a new IV class, `IV_CONT_TRACK_EPOCH`.
+engines in the system through a new IV class, `IV_CONT_TRACK_EPOCH`. The same broadcast carries
+the punch evidence release bit specified in the punch section, which the leader sets only when
+every target of the pool is `UPIN` and no report was missing from the round.
 
 #### Persisting the Global Stable Epoch on Each Target
 
@@ -283,8 +287,12 @@ target in parallel. Each target performs a two-way reconciliation:
    Shards created in step 2 are marked as such and excluded from the minimum.
 
 The engine returns the minimum over its reintegrating targets in its reply. Once all targets are
-reconciled, the engine also cleans up its IV cache, so that no stale
-container metadata cached before the exclusion can be reused after the target rejoins.
+reconciled, the engine also cleans up its IV cache, so that no stale container metadata cached
+before the exclusion can be reused after the target rejoins.
+
+A request flag selects a *query-only* variant of the RPC that performs step 4 alone, without
+creating or destroying any shard. The fast reintegration mode section describes when the leader
+uses it.
 
 #### Races Against Concurrent Container Create and Destroy
 
@@ -476,8 +484,10 @@ subsections that follow.
 | Rebuild puller | Replay reported punches at their real epochs before applying records |
 | VOS aggregation, tier 1 | Never remove the most recent committed punch entry of an ilog |
 | VOS aggregation, tier 2 | Under space pressure, discard punches but record per-object watermarks |
-| Rebuild fallback | Migrate in full any object whose watermark exceeds the target's `S` |
+| VOS aggregation, tier 3 | Under severe pressure, record a single container-level watermark |
+| Rebuild fallback | Migrate in full any object whose watermark exceeds the target's `S`; re-schedule the reintegration in full mode when a container-level watermark does |
 | Policy | Tier transition driven by the existing pool space pressure levels, with hysteresis |
+| Release | Leader-decided release epoch, carried with the stable epoch broadcast, after which evidence below it is discarded |
 
 ##### Discovering Punches Inside the Migrated Range
 
@@ -532,9 +542,10 @@ time, a punch that occurred after a target's exclusion must remain discoverable 
 has been reintegrated, or until the system gives up on it.
 
 Neither requirement can be dropped, so the design resolves the conflict in time rather than
-absolutely: punch evidence is retained in full while it is affordable, and is downgraded to a
-cheaper, lossier form when it is not. This yields two retention tiers and a fallback path for
-the objects whose evidence has been downgraded.
+absolutely: punch evidence is retained in full while it is affordable, is downgraded to cheaper,
+lossier forms when it is not, and is released once no target can need it. This yields three
+retention tiers, a fallback path for the objects or targets whose evidence has been downgraded,
+and a release mechanism.
 
 ##### Tier 1: Retain the Punched Entry and Its Last Punch
 
@@ -579,19 +590,33 @@ dkey or akey was punched:
 | --- | --- |
 | Tree class | Compact ordered key-value btree in the container durable format |
 | Key | `daos_unit_oid_t` of the object whose punch evidence was discarded |
-| Value | One `daos_epoch_t`: the highest epoch of any punch discarded for the object |
+| Value | The *watermark*, a `daos_epoch_t`: the highest epoch of any punch discarded for the object; and a flag word, of which one bit records that a punch at object level was among the discarded ones |
 
-Recording only the highest discarded epoch (the *watermark*) is sufficient. A reintegrating
-target with global stable epoch `S` needs every punch above `S`, so evidence it needs is missing
-if and only if some discarded punch had an epoch greater than `S`, which is exactly the condition
-`watermark > S`. Updating an existing entry is a simple maximum, so an object never occupies more
-than one entry, however many times it is punched and aggregated.
+Recording only the highest discarded epoch is sufficient. A reintegrating target with global
+stable epoch `S` needs every punch above `S`, so evidence it needs is missing if and only if some
+discarded punch had an epoch greater than `S`, which is exactly the condition `watermark > S`.
+Updating an existing entry is a maximum on the watermark and a bitwise or on the flags, so an
+object never occupies more than one entry, however many times it is punched and aggregated.
+
+The object-level flag is a hint only. It tells the scan which entries may refer to objects that
+no longer exist in the object index, so that the lookup described in the fallback below can be
+skipped for the others. It does not by itself say that the object is absent: an object punched
+and re-created keeps its index entry while its flag is set. No correctness argument depends on
+the flag.
+
+Alongside the tree, the extension record keeps the **tree high watermark**: the highest
+watermark ever inserted into the current tree. It is maintained in the same transaction as the
+insert or update that raises it, with a compare and a single field write, so it is always exact
+and durable together with the entries it summarizes. It lets the release of the whole tree
+described below be decided without walking the tree, and it is reset when the tree is detached.
 
 The tree requires no durable format version bump. The container durable format already reserves
-unused space at the end of its extension block, sufficient for a btree root, and already carries
-valid bits describing which optional extension fields are initialized. A new valid bit is added
-for the punch tree, and the tree is created lazily the first time an entry is recorded.
-Containers written by older versions have the bit clear and behave as today.
+unused space at the end of its extension block and already carries valid bits describing which
+optional extension fields are initialized. The tree root is allocated separately and referenced
+from the extension record by offset, so that a tree can be detached in one step and drained
+afterwards; a second offset holds a detached tree until its space has been reclaimed. A new
+valid bit is added for the tree, and the tree is created lazily the first time an entry is
+recorded. Containers written by older versions have the bits clear and behave as today.
 
 Recording the watermark and discarding the punch must be atomic with respect to failure; if the
 punch were removed without the watermark being durable, the punch would be lost silently and a
@@ -624,8 +649,19 @@ Two paths must consult the punch tree; both are required.
 - **Scanning for objects that no longer exist locally.** If the punched entity was the object
   itself, its entry may be gone from the object index entirely; no enumeration will mention it and
   the check above never fires, leaving the stale object on the reintegrating target. The scan
-  phase therefore also iterates the punch tree and pushes every object whose watermark is above
-  the target's global stable epoch to the puller as an explicit discard-and-rebuild instruction.
+  phase therefore also iterates the punch tree. For every entry whose watermark is above the
+  reintegrating target stable epoch carried in the scan request, and whose object-level flag is
+  set, it looks the object up in the object index; if the object is absent, it pushes the object
+  to the puller as an explicit discard-and-rebuild instruction. Objects still present in the
+  index are left to the regular scan and the enumeration check above.
+
+The two cases the punch tree records, an object some of whose keys were punched and an object
+that was punched itself, require no distinction on the puller. Both result in the same action:
+the local shard of the object is discarded and the object is pulled from epoch 0. For an object
+that still exists on the source this reproduces its current content; for an object that was
+punched and not re-created the pull returns nothing, and the object is deleted, which is the
+correct final state. The two cases differ only in which path detects the object, and that is
+determined from the object index at scan time rather than from the punch tree.
 
 The cost of the fallback differs by object class. For a replicated object a rebuild from epoch 0
 is a copy from a surviving replica; for an erasure coded object it may require reading a full
@@ -634,34 +670,154 @@ tier 1 as the normal operating mode and to treat tier 2 as an exceptional state.
 
 ##### Tier Transition Policy
 
-The transition from tier 1 to tier 2 reuses the space pressure gauge that the engine scheduler
-already maintains per pool, rather than introducing separate accounting of retained entries. The
-gauge rates a pool by its free space ratio, with no pressure above 40% free and escalating levels
-at 30%, 20%, 10% and 5%.
+The transitions between tiers reuse the space pressure gauge that the engine scheduler already
+maintains per pool, rather than introducing separate accounting of retained entries. The levels
+of that gauge are defined by the scheduler and are not changed by this design; it rates a pool by
+its free space ratio as follows: no pressure above 40% free, level 1 from 30% to 40%, level 2
+from 20% to 30%, level 3 from 10% to 20%, level 4 from 5% to 10%, and level 5 below 5%. At each
+level the scheduler delays client updates for longer and grants aggregation and garbage
+collection a larger share of the CPU. The retention tiers are mapped onto these levels as
+follows.
 
 | Free space | Pressure level | Tier |
 | --- | --- | --- |
-| 30% or more | None, or level 1 | Tier 1: punch evidence fully retained |
-| Less than 20% | Level 2 or above | Tier 2: retained punches reclaimed, watermarks recorded |
-| 20% to 30% | Level 1 to 2 | Hysteresis band: current tier is kept |
+| More than 30% | None, or 1 | Tier 1: punch evidence fully retained |
+| 20% to 30% | 2 | Tier 1, or tier 2 if already entered: hysteresis band |
+| 10% to 20% | 3 | Tier 2: retained punches reclaimed, per-object watermarks recorded, or tier 3 if already entered |
+| Less than 10% | 4 or above | Tier 3: container punch watermark only |
 
-Level 2 is chosen as the switch point because it is the first level at which the scheduler
-already throttles updates, so metadata retained purely for a possible future reintegration is no
-longer the best use of the remaining space. The threshold is exposed as a tunable so that it can
-be adjusted once real workloads have been measured.
+Tier 2 is entered at level 3, where the scheduler already favors space reclamation over client
+updates, so metadata retained purely for a possible future reintegration is no longer the best
+use of the remaining space. Tier 3, specified below, is entered at level 4, where the scheduler
+treats reclamation as urgent. Both levels are exposed as tunables so that they can be adjusted
+once real workloads have been measured.
 
-The two thresholds are deliberately different. Leaving tier 1 is irreversible for the objects
-whose evidence has already been discarded, so a pool hovering around a single threshold must not
-cross it repeatedly and lose evidence for a new set of objects each time. Once a pool has entered
-tier 2 it remains there until free space recovers to 30%, the level at which the scheduler no
-longer throttles updates, and only then resumes retaining punch evidence.
+Each tier is left only when pressure has receded below the level at which the tier before it is
+entered: tier 2 is left when the gauge reports level 1 or below, tier 3 when it reports level 2
+or below. Leaving tier 1 is irreversible for the objects whose evidence has already been discarded,
+and leaving tier 2 is irreversible for the objects whose entries were folded into the container
+watermark, so a pool hovering around a single threshold must not cross it repeatedly and lose
+evidence for a new set of objects each time.
 
-Space pressure is the safety valve but not the only trigger. Retention serves no purpose when
-nothing remains to be reintegrated, so tier 1 retention is also released, regardless of space,
-once the pool has no target that could still be reintegrated. Likewise, punch tree entries are
-meaningful only while some excluded target has a global stable epoch below their watermark; the
-tree is truncated when that no longer holds, and cleared entirely when the pool has no excluded
-targets.
+Space pressure decides how much evidence is retained; it does not decide when evidence may be
+discarded. That is the subject of the next two subsections: the release of evidence that no
+target can need any more, and the bound applied while some target remains excluded indefinitely.
+
+##### Releasing Punch Evidence
+
+**Requirement.** A retained punch entry or punch tree record with epoch `W` on a healthy shard of
+container `c` is needed by a target `T` only if `T` is not fully integrated and `W > S_T`, where
+`S_T` is the global stable epoch stored on `T` for `c`. While `T` is excluded, `S_T` is known only
+to `T`; no healthy target can evaluate the second condition on its behalf, so no release rule may
+depend on it. The presence of a `DOWNOUT` target in particular does not permit a release: such a
+target can be reintegrated and, in incremental mode, retains its data. A release rule must
+therefore establish, from information available to the healthy side alone, that no current or
+future excluded target can need the evidence being released.
+
+**Release epoch.** The release is decided by the pool service leader, from the pool map it holds,
+and disseminated with the global stable epoch itself. The per-container global stable epoch
+broadcast carries a *release* bit. The leader sets the bit on a round for container `c` if and
+only if every target in its pool map is `UPIN` and the epoch `S_c` of that round was computed
+from the reports of all engines, with none skipped as failed or missing. When the bit is set, the
+broadcast epoch is also the *release epoch* `E_c` of the container. On receiving such a
+broadcast, each target:
+
+- permits aggregation to remove retained punch entries of `c` whose epoch is below `E_c`, lifting
+  the tier 1 rule for those entries; and
+- removes punch tree entries of `c` whose watermark is below `E_c`.
+
+Entries at or above `E_c` are retained.
+
+**Execution.** Entries are recorded from punches that were already committed and aggregated, so
+`E_c` normally lies above every entry and the whole tree is released. The target compares the
+tree high watermark kept in the extension record with `E_c`. If it is below `E_c`, the tree is
+detached from the extension record in one transaction and subsequently drained in credit-bounded
+transactions on the target's own execution stream, in the same manner as garbage collection
+drains the trees of a destroyed container. A detached tree occupies its own slot in the extension
+record until drained, so that a crash during the drain loses no space; the drain resumes when the
+container is next opened. Only when the tree high watermark is at or above `E_c` does the release
+walk the tree and delete the entries below `E_c` in batches. After a release the tree is created
+again lazily by the next tier 2 record, and tier 1 retention applies again to every punch at or
+above `E_c`, and to all punches as soon as a broadcast without the bit is received. Incremental
+reintegration of targets excluded after a release is therefore unaffected by it.
+
+**Correctness.** The release must remain correct under concurrent pool map changes and in-flight
+modifications. Let `T` be any target excluded after the leader's check. `T` can lack a punch `P`
+only if `P` committed without it, and hence after its exclusion. At the time of the round, every
+shard reported a local stable epoch of at least `E_c`, and a local stable epoch is by definition
+below the epoch of every prepared and uncommitted modification on the shard. Suppose `P` had an
+epoch below `E_c`. Either `P` was already prepared on some shard at report time, in which case
+that shard would have reported an epoch below `E_c`, contradicting the definition of `E_c` as the
+minimum over all reports; or `P` arrived after the report, in which case it was rejected and
+restarted with an epoch above the reported stable epoch, as the global stable epoch section
+requires. Every punch that a target excluded after the check can lack therefore has an epoch of
+at least `E_c`, and no entry below `E_c` is needed by such a target. Targets excluded before the
+check do not exist, by the first condition on the bit. The same argument applies to retained
+tier 1 entries below `E_c`.
+
+**Why the decision is not local.** A target's own copy of the pool map is not a safe basis for
+release, because it can lag the leader's. A punch may be prepared on a healthy shard while every
+target is still `UPIN` in that shard's map and committed after one target's exclusion, without
+any pool map refresh being forced on the shard. The shard then aggregates and records the punch
+and, under a rule of the form "no excluded target in my map, hence release", would discard the
+record while the excluded target still needs it. The release epoch avoids this hazard because its
+correctness argument depends on epochs only, not on the releasing target's knowledge of the pool
+map.
+
+##### Tier 3: Container-Level Punch Watermark
+
+If an excluded target is never reintegrated, the release bit is never set and the punch tree of
+every container can only grow. Its growth is slow, one small entry per punched object, but it
+must be bounded. When space pressure reaches level 4, or when a shard's punch tree exceeds a
+configurable size cap, the shard downgrades once more. In one transaction it records the tree high
+watermark as a single **container punch watermark** in the extension record and detaches the
+tree, which is then drained as described above. The tree may be created again afterwards, so the
+container punch watermark is the maximum over every tree the shard has dropped.
+
+A shard whose container punch watermark exceeds `S` cannot serve any incremental pull of that
+container: objects punched wholesale and reclaimed are no longer enumerable, so no procedure
+short of replacing the container shard on the reintegrating target can be shown complete. The
+design does not attempt a per-container recovery for this exceptional state. Instead, before
+reporting any object, every scanning target compares its container punch watermarks with the
+reintegrating target stable epoch carried in the scan request, and if any exceeds it, reports in
+its scan status that a full rebuild is required. The leader then aborts the incremental
+operation and re-schedules the reintegration of the same targets in full-reintegration mode, in
+which local data is discarded as today. For pulls already in flight, the enumeration check of the
+fallback also fires when the container punch watermark exceeds the requested lower bound.
+
+**Operating in tier 3.** While the shard is in tier 3, it does not create a new punch tree:
+aggregation raises the container punch watermark directly whenever it discards a punch, at
+constant cost. The shard returns to tier 2 recording when pressure has receded to level 2 or
+below, and to tier 1 when it has receded to level 1 or below, as the tier transition policy
+specifies.
+A tree dropped because of the size cap is likewise not re-created until the next release has
+cleared the container punch watermark. The container punch watermark itself persists until it is
+released.
+
+**Resuming incremental mode.** Tier 3 is not a terminal state, and the container punch watermark
+disqualifies only targets whose stored stable epoch lies below it. Incremental reintegration is
+available again along three paths.
+
+- *Targets excluded later.* The watermark is the epoch of a punch that was already committed and
+  aggregated when it was recorded, so the global stable epoch of the container passes it within a
+  few broadcast rounds. Any target excluded after that point stores a stable epoch above the
+  watermark, and the checks described above never fire for it; it is reintegrated incrementally
+  even while the watermark is still recorded.
+- *Release.* When a broadcast carries the release bit with a release epoch `E_c` above the
+  container punch watermark, the shard clears the watermark. The correctness argument of the
+  release applies unchanged: no punch below `E_c` can be needed by any target excluded afterwards.
+  A release with `E_c` at or below the watermark leaves it in place until a later round.
+- *Recovery of space.* As described above, the shard resumes per-object and then full retention
+  as space pressure recedes, so evidence for new punches is again retained in the finer forms.
+
+The targets that do not recover incremental mode for the container are those already excluded
+with a stored stable epoch below the watermark. They are reintegrated in full-reintegration mode
+once, after which they are `UPIN` and subject to none of the above.
+
+An administrator can also give up on an excluded target explicitly. Changing the pool's
+`reintegration` property away from `incremental` releases all punch evidence on the next
+broadcast round, irrespective of the pool map; a later reintegration of that target runs in
+full-reintegration mode.
 
 ### Fast Reintegration Mode
 
@@ -846,10 +1002,11 @@ earliest exclusion among the targets being reintegrated. Two sources are consult
   that moment take the regular path.
 
 The leader sets a *fast mode eligible* flag in the scan request accordingly and carries `M` in the
-same request, so that every scanning target has both inputs before it starts. Targets never make
-this determination themselves; the leader is the single authority on the pool map and the pool
-properties, which avoids any inconsistency between engines that hold pool maps of different
-versions.
+same request, so that every scanning target has both inputs before it starts. `M` is carried
+whether or not the flag is set, because the punch fallback of the scan also uses it. Targets
+never make this determination themselves; the leader is the single authority on the pool map and
+the pool properties, which avoids any inconsistency between engines that hold pool maps of
+different versions.
 
 **Deciding whether to scan.** A healthy target that sees the eligibility flag iterates its local
 VOS container shards and takes the maximum of their container maximum write epochs. If that
@@ -930,7 +1087,11 @@ would have removed.
 - The lease makes the container maximum write epoch imprecise by up to one lease period.
   Modifications in the last minute before an exclusion may therefore disable fast mode for a
   reintegration that would otherwise have qualified. The lease length is a tunable trade-off
-  between this imprecision and persistent write amortization.
+  between this imprecision and persistent write amortization. More generally, fast mode requires
+  that no client modification of the pool lies at or above `M`, which the stable epoch itself
+  trails by the reporting interval and the aggregation gap; fast mode therefore applies to pools
+  that were quiescent for some tens of seconds before the exclusion and remained so during it,
+  which is the intended target case of a planned or idle-time outage.
 - The layout precondition is deliberately strict. Reintegrations that follow an extension, a
   drain, or the earlier reintegration of a different target always take the regular path, even
   when the affected data is small, because proving the layout equivalent in those cases would
@@ -944,25 +1105,43 @@ would have removed.
 
 ## Implementation Phases
 
-The design is delivered in the following phases:
+The design is delivered in four phases. Each phase yields a working system: phase 1 alone
+provides incremental reintegration for pools without container changes or punches during the
+exclusion, and every later phase removes one restriction or adds one optimization without
+altering the on-disk state or protocols introduced by the phases before it.
 
-1. **Phase 1: Global stable epoch reporting and synchronization.** Implement the local stable
-   epoch calculation, the IV-based reporting to the PS leader, the global stable epoch
-   calculation on the leader, and its broadcast and persistent storage on each target.
-2. **Phase 2: Incremental migration from the stable epoch.** Change reintegration to enumerate
-   and migrate data starting from the stored global stable epoch instead of from epoch 0.
-3. **Phase 3: Container recovery process.** Implement the container list distribution and the
-   two-way reconciliation of the container shards on the reintegrating targets.
-4. **Phase 4: Object, key and record punch process.** Extend the scan, the migration
-   enumeration and the puller to discover and replay punches inside the migrated range; add
-   tier-1 punch retention to VOS aggregation; add the punch tree, the tier-2 downgrade and the
-   full-migration fallback; implement the tier transition policy.
-5. **Phase 5: Fast reintegration mode.** Add the container maximum write epoch and the container
-   maximum migration version to the VOS container extension record and maintain them from the
-   update, punch and migration paths; collect the reintegrating target stable epoch in the
-   container recovery reply and carry it into the scan request; persist the map version of the
-   last object layout version change; implement the layout precondition check on the leader and
-   the per-target scan and reclaim skips.
+1. **Phase 1: Global stable epoch and incremental migration.**
+   1. Implement the local stable epoch calculation, the IV-based reporting to the PS leader, the
+      global stable epoch calculation on the leader, and its broadcast and persistent storage on
+      each target.
+   2. Change reintegration to enumerate and migrate data starting from the stored global stable
+      epoch instead of from epoch 0.
+2. **Phase 2: Container recovery process.**
+   1. Implement the container list distribution through the `POOL_RECOV_CONT` collective RPC and
+      the two-way reconciliation of the container shards on the reintegrating targets.
+   2. Implement the `recov_cont` pool property and the retry on a container create or destroy
+      that races with recovery.
+3. **Phase 3: Object, key and record punch process.**
+   1. Extend the scan, the migration enumeration and the puller to discover and replay punches
+      inside the migrated range.
+   2. Add tier 1 punch retention to VOS aggregation.
+   3. Add the punch tree, the tier 2 downgrade and the full-migration fallback of the affected
+      objects.
+   4. Add the tier 3 container punch watermark, the full rebuild required scan status and the
+      re-scheduling of the reintegration in full-reintegration mode.
+   5. Implement the tier transition policy driven by the pool space pressure levels, with
+      hysteresis.
+   6. Add the leader-driven release of punch evidence through the release bit of the stable epoch
+      broadcast.
+4. **Phase 4: Fast reintegration mode.**
+   1. Add the container maximum write epoch and the container maximum migration version to the
+      VOS container extension record and maintain them from the update, punch and migration
+      paths.
+   2. Collect the reintegrating target stable epoch in the container recovery reply, add the
+      query-only variant of the recovery RPC, and carry the value in the scan request.
+   3. Persist the map version of the last object layout version change in the pool service.
+   4. Implement the layout precondition check on the leader and the per-target scan and reclaim
+      skips.
 
 ## Compatibility and On-Disk Impact
 
@@ -978,16 +1157,17 @@ opened by software that implements this design.
 | VOS container extension record | Container maximum write epoch, with a validity bit | Fast mode scan decision |
 | VOS container extension record | Container maximum migration version, with a validity bit | Fast mode reclaim decision |
 | VOS container extension record | Recovery-created marker bit | Exclude shards created by container recovery from the stable epoch minimum |
-| VOS container extension record | Punch tree root | Tier-2 per-object punch watermarks |
+| VOS container extension record | Punch tree offset, detached tree offset, tree high watermark, container punch watermark | Tier 2 per-object punch watermarks, their release, and the tier 3 downgrade |
 | Pool service (RDB) | `recov_cont` property | Detect container create/destroy racing with recovery |
 | Pool service (RDB) | Map version of the last object layout version change | Layout precondition of fast mode |
 
-The incremental log (ilog) format is unchanged; tier-1 retention only alters which entries
+The incremental log (ilog) format is unchanged; tier 1 retention only alters which entries
 aggregation is allowed to remove, and every retained entry is a valid entry of the existing
 format. The only space effect is that an ilog which would previously have been emptied keeps one
 punch entry, and the object, dkey or akey record that owns it is kept alive as a result. The
-punch tree occupies space proportional to the number of punched objects recorded under tier 2 and
-is truncated when it can no longer matter, as described in the punch section.
+punch tree occupies space proportional to the number of punched objects recorded under tier 2, is
+released when no target can need it any more, and is replaced by a single container watermark
+under severe pressure, as described in the punch section.
 
 Incremental reintegration is gated on the pool durable-format version that introduces the
 container extension record. Pools created at an earlier version have no extension to hold the
@@ -998,9 +1178,10 @@ proceeds in the full-reintegration mode, exactly as today.
 
 | Protocol | Change |
 | --- | --- |
-| Container IV | Two new IV classes: the engine-to-leader stable epoch report, carried with the existing EC aggregation boundary report, and the leader-to-engine global stable epoch broadcast |
+| Container IV | Two new IV classes: the engine-to-leader stable epoch report, carried with the existing EC aggregation boundary report, and the leader-to-engine global stable epoch broadcast, which also carries the punch evidence release bit |
 | Pool service, `POOL_RECOV_CONT` | New collective RPC carrying the authoritative container list by bulk transfer; its reply carries the minimum stored stable epoch of the reintegrating targets; a request flag selects the query-only variant |
 | Rebuild scan request | New fields: reintegrating target stable epoch, fast-mode eligibility flag, exclusion map version for reclaim |
+| Rebuild scan status | New flag: full rebuild required, raised by a scanning target whose container punch watermark exceeds the reintegrating target stable epoch; the leader re-schedules the operation in full-reintegration mode |
 | Object enumeration | New request flag asking for covering punch epochs; new key descriptor kinds carrying an object, dkey or akey covering punch epoch |
 | Rebuild puller error path | New return code `-DER_NEED_FULL_REBUILD` from a migration source to request full migration of an object |
 
@@ -1027,7 +1208,7 @@ an incorrect one.
 - **Old pools on new software.** Handled by the durable-format gate above: no extension record,
   stable epoch zero, full reintegration.
 - **New pools on old software.** All additions live in reserved fields and unused validity bits,
-  which old software ignores. Retained tier-1 punch entries and punch tree records are valid data
+  which old software ignores. Retained tier 1 punch entries and punch tree records are valid data
   that old software simply never consults. A downgrade does not corrupt the pool; it only loses
   the ability to reintegrate incrementally until the software is upgraded again.
 - **Rolling upgrade.** Fast mode and covering punch epochs are enabled by the protocol
@@ -1045,16 +1226,18 @@ No client-visible API changes. The externally visible surface is administrative:
 
 - **Pool property `reintegration`.** The value `incremental` selects the mode described in this
   document. The existing values retain their meaning. The property may be changed at any time; it
-  is evaluated when a reintegration is started.
+  is evaluated when a reintegration is started. Changing it away from `incremental` also releases
+  all retained punch evidence on the next stable epoch broadcast round.
 - **Reintegration commands.** `dmg pool reintegrate` and the automatic reintegration triggered by
   system self-healing are unchanged in syntax and semantics.
 - **Rebuild status.** The rebuild status returned by pool query is extended with an indication of
   the mode in which the current or last reintegration ran (full, incremental or fast) and, for
   incremental reintegration, the number of objects that were migrated in full because of the
   punch fallback. Both are informational.
-- **Server tunables.** The lease length of the container maximum write epoch and the two space
-  pressure thresholds of the punch retention policy are exposed as server-side tunables with the
-  defaults given in this document. They do not need to be changed in normal operation.
+- **Server tunables.** The lease length of the container maximum write epoch, the space pressure
+  levels at which the punch retention policy enters tier 2 and tier 3, and the punch tree size
+  cap are exposed as server-side tunables with the defaults given in this document. They do not
+  need to be changed in normal operation.
 - **Telemetry.** New engine metrics count, per pool, the targets that skipped the scan and the
   reclaim scan in fast mode, the objects migrated in full because of the punch fallback, and the
   transitions between punch retention tiers. Existing rebuild metrics apply unchanged.
@@ -1084,7 +1267,9 @@ VOS:
 - Aggregation tier 1: the most recent committed punch of an ilog is never removed, including the
   create-punch-re-create sequence inside one aggregation window; everything else is aggregated
   as before.
-- Punch tree: insertion, watermark update, truncation by epoch, clearing, and space accounting.
+- Punch tree: insertion, watermark and flag update, release by epoch including the whole-tree
+  detach-and-drain path and its resumption after a simulated crash, tier 3 downgrade to the
+  container punch watermark, and space accounting.
 
 Rebuild and pool service:
 
@@ -1116,9 +1301,17 @@ the container namespace against the pool service:
   exclusion, including punch followed by re-creation, with and without snapshots inside the
   window, with aggregation running; verify that the reintegrated target reports the same
   visibility as the healthy shards.
-- **Space pressure.** Fill the pool past the tier-2 threshold during the exclusion; verify the
+- **Space pressure.** Fill the pool past the tier 2 threshold during the exclusion; verify the
   transition, the fallback to full migration of the affected objects, the hysteresis on the way
-  back, and the release of retention once the pool has no excluded targets.
+  back, and the release of retention after the target is reintegrated and the release bit is
+  set. Fill past the tier 3 threshold; verify the container punch watermark, the full rebuild
+  required status and the re-scheduling of the reintegration in full-reintegration mode. After
+  the full-mode reintegration, exclude and reintegrate a target again; verify that the container
+  punch watermark no longer disqualifies it and that incremental mode resumes.
+- **Punch evidence release.** Punch objects at object and key level during an exclusion, let
+  aggregation run in tier 1 and in tier 2, reintegrate, verify that the evidence is released on
+  the next broadcast round and that a subsequent exclusion, punch and reintegration cycle is
+  again handled incrementally.
 - **Fast mode preconditions.** Exclude two targets and reintegrate one; extend or drain during
   the exclusion; upgrade the object layout version during the exclusion; write within the lease
   period before the exclusion. Each must take the regular path and produce a correct result.
@@ -1148,7 +1341,7 @@ the container namespace against the pool service:
   maximum write epoch maintenance enabled and disabled. The expected difference is within
   measurement noise, since the added work is a comparison per update and a persistent write per
   container shard per lease period.
-- **Aggregation overhead.** Measure aggregation throughput and reclaimed space with tier-1
+- **Aggregation overhead.** Measure aggregation throughput and reclaimed space with tier 1
   retention enabled for workloads with a high punch rate, and the space held by the punch tree
   under tier 2.
 - **Reporting overhead.** Confirm that the stable epoch reporting adds no measurable load to the
@@ -1162,8 +1355,9 @@ the container namespace against the pool service:
 | --- | --- |
 | A path that modifies shard content at an epoch below the container maximum write epoch without raising it would make fast mode skip a needed scan | The correctness argument identifies EC aggregation as the only such path today and shows it is safe; the invariant is documented at the VOS update entry points and covered by unit tests; any new path must raise the bound or be shown to preserve the property |
 | The stable epoch reported by a shard is later than its true stable point, because of a defect in the local stable epoch derivation | The boundary-raising side effect makes a reported epoch self-enforcing: later modifications below it are rejected rather than applied, so the failure mode is a rejected write, not silent divergence |
-| Punch evidence is aggregated away before an object can be reintegrated | Tier-1 retention keeps the last punch by default; tier 2 records watermarks when space is short; the fallback migrates the object in full; the object is never left with stale content |
-| Space consumed by retained punches or the punch tree under sustained punch-heavy workloads | Retention is bounded by the tier policy, released when no target can be reintegrated, and the tree is truncated by watermark; metrics expose the space held |
+| Punch evidence is aggregated away before an object can be reintegrated | Tier 1 retention keeps the last punch by default; tier 2 records watermarks when space is short; the fallback migrates the object in full; the object is never left with stale content |
+| Space consumed by retained punches or the punch tree under sustained punch-heavy workloads | Retention is bounded by the tier policy; evidence is released by the leader-driven release epoch when no target can need it; the tree is replaced by a single container watermark under severe pressure; metrics expose the space held |
+| Punch evidence released while a target still needs it, because of a stale pool map on the releasing target | The release is decided by the leader and carried as an epoch with the stable epoch broadcast; its safety argument depends on epochs only, not on the releasing target's view of the pool map |
 | Container recovery races with container create or destroy | The `recov_cont` property detects the race and the operation is retried from the beginning; the per-pool lock prevents interleaving on an engine |
 | Leader change during reintegration loses in-memory state | Every in-memory value is either re-collectable (reintegrating target stable epoch) or regenerated from persistent state (rebuild operations from the pool map) |
 | Layout change undetected by the fast-mode precondition | Both the pool map and the persisted layout version change record are checked; the precondition is deliberately strict and any doubt selects the regular path |
@@ -1211,6 +1405,16 @@ the container namespace against the pool service:
   any target is excluded. Rejected: an exclusion may last indefinitely and space reclamation is a
   first-class requirement; the tiered policy retains only the last punch by default and degrades
   to watermarks under pressure.
+- **Releasing punch evidence from the target's own pool map.** Letting each target discard its
+  retained punches and punch tree when its copy of the pool map shows no excluded target.
+  Rejected: the copy can lag the leader's, and a punch committed after an exclusion the target
+  has not yet learned of could be discarded while still needed. The leader-decided release epoch
+  carried with the stable epoch broadcast has a correctness argument that depends on epochs only.
+- **Per-container recovery after a tier 3 downgrade.** Wiping and rebuilding only the affected
+  container shard on the reintegrating target. Rejected for the tech preview: it requires the
+  scan to report every object of one container from epoch 0 while the others are handled
+  incrementally, and the puller to wipe the shard before any pulled data for it arrives;
+  re-scheduling the whole reintegration in full mode is simpler and the state is exceptional.
 - **Maximum instead of minimum of the stored stable epochs** for the fast-mode threshold.
   Rejected: a container with a lower stable epoch may have modifications between its epoch and
   the maximum, which the comparison against the maximum would fail to detect.
