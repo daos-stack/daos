@@ -2092,7 +2092,8 @@ ds_cont_ec_agg_eph_rdb_lookup(uuid_t pool_uuid, uuid_t cont_uuid, uint64_t *ec_a
 	rc = cont_agg_eph_load(svc, cont_uuid, ec_agg_eph);
 	cont_svc_put_leader(svc);
 	if (rc)
-		DL_ERROR(rc, DF_CONT ": cont_agg_eph_load failed.", DP_CONT(pool_uuid, cont_uuid));
+		DL_CDEBUG(rc != -DER_NONEXIST && rc != -DER_CONT_DESTROYING, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": cont_agg_eph_load failed", DP_CONT(pool_uuid, cont_uuid));
 	return rc;
 }
 
@@ -2192,7 +2193,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			rc = cont_agg_eph_load(svc, eph_ldr->cte_cont_uuid,
 					       &eph_ldr->cte_rdb_ec_agg_eph);
 			if (rc) {
-				if (rc == -DER_NONEXIST) {
+				if (rc == -DER_NONEXIST || rc == -DER_CONT_DESTROYING) {
 					DL_INFO(rc, DF_CONT " container skipped",
 						DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
 					continue;
