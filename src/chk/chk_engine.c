@@ -2783,6 +2783,12 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 	chk_uuid_unparse(cqpa->cqpa_ins, uuid, uuid_str);
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
 	if (rc == -DER_NONEXIST) {
+		rc = ds_mgmt_pool_exist(uuid);
+		if (rc <= 0) {
+			cqpa->cqpa_idx--;
+			goto out;
+		}
+
 		shard->cqps_status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
 		shard->cqps_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
 		memset(&shard->cqps_statistics, 0, sizeof(shard->cqps_statistics));
@@ -3158,7 +3164,7 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 		}
 
 		rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid, dss_self_rank(),
-					false, &new, ins, NULL, NULL, NULL, &cpr);
+					0 /* useless status */, &new, ins, NULL, NULL, NULL, &cpr);
 		if (rc != 0)
 			goto out;
 	} else {

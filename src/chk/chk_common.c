@@ -23,7 +23,7 @@ struct chk_pool_bundle {
 	uuid_t               cpb_uuid;
 	uint32_t            *cpb_shard_nr;
 	d_rank_t             cpb_rank;
-	bool                 cpd_has_dending;
+	uint32_t             cpb_status;
 	struct chk_instance *cpb_ins;
 	/* Pointer to the pool bookmark. */
 	struct chk_bookmark *cpb_bk;
@@ -85,9 +85,6 @@ chk_pool_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 		memcpy(&cpr->cpr_bk, cpb->cpb_bk, sizeof(cpr->cpr_bk));
 	cpr->cpr_ins = cpb->cpb_ins;
 
-	if (cpb->cpd_has_dending)
-		cpr->cpr_has_pending = 1;
-
 	rec->rec_off = umem_ptr2off(&tins->ti_umm, cpr);
 	d_list_add_tail(&cpr->cpr_link, cpb->cpb_head);
 
@@ -96,7 +93,21 @@ chk_pool_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 		cps->cps_data = cpb->cpb_data;
 		cps->cps_free_cb = cpb->cpb_free_cb;
 
-		d_list_add_tail(&cps->cps_link, &cpr->cpr_shard_list);
+		if (cpr->cpr_has_pending == 0) {
+			if (cpb->cpb_status == CHK__CHECK_POOL_STATUS__CPS_PENDING) {
+				/* Add the first item with pending status at the head. */
+				d_list_add(&cps->cps_link, &cpr->cpr_shard_list);
+				cpr->cpr_has_pending = 1;
+			} else if (cpb->cpb_status == CHK__CHECK_POOL_STATUS__CPS_CHECKING) {
+				/* Add item with checking status at the head if no known pending. */
+				d_list_add(&cps->cps_link, &cpr->cpr_shard_list);
+			} else {
+				d_list_add_tail(&cps->cps_link, &cpr->cpr_shard_list);
+			}
+		} else {
+			d_list_add_tail(&cps->cps_link, &cpr->cpr_shard_list);
+		}
+
 		cpr->cpr_shard_nr++;
 		if (cpb->cpb_shard_nr != NULL)
 			(*cpb->cpb_shard_nr)++;
@@ -166,10 +177,21 @@ chk_pool_update(struct btr_instance *tins, struct btr_record *rec,
 	cps->cps_data = cpb->cpb_data;
 	cps->cps_free_cb = cpb->cpb_free_cb;
 
-	if (cpb->cpd_has_dending)
-		cpr->cpr_has_pending = 1;
+	if (cpr->cpr_has_pending == 0) {
+		if (cpb->cpb_status == CHK__CHECK_POOL_STATUS__CPS_PENDING) {
+			/* Add the first item with pending status at the head. */
+			d_list_add(&cps->cps_link, &cpr->cpr_shard_list);
+			cpr->cpr_has_pending = 1;
+		} else if (cpb->cpb_status == CHK__CHECK_POOL_STATUS__CPS_CHECKING) {
+			/* Add item with checking status at the head if no known pending. */
+			d_list_add(&cps->cps_link, &cpr->cpr_shard_list);
+		} else {
+			d_list_add_tail(&cps->cps_link, &cpr->cpr_shard_list);
+		}
+	} else {
+		d_list_add_tail(&cps->cps_link, &cpr->cpr_shard_list);
+	}
 
-	d_list_add_tail(&cps->cps_link, &cpr->cpr_shard_list);
 	cpr->cpr_shard_nr++;
 	if (cpb->cpb_shard_nr != NULL)
 		(*cpb->cpb_shard_nr)++;
@@ -617,8 +639,9 @@ chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen)
 	}
 
 	cbk.cb_gen = gen;
-	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid, dss_self_rank(), false,
-				&cbk, ins, NULL, NULL, NULL, NULL);
+
+	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid, dss_self_rank(),
+				0 /* useless status */, &cbk, ins, NULL, NULL, NULL, NULL);
 
 out:
 	return rc;
@@ -702,8 +725,9 @@ chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 		 * persistently sometime later.
 		 */
 		cbk.cb_gen = gen;
+
 		rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, pools[i], myrank,
-					false, &cbk, ins, NULL, NULL, NULL, NULL);
+					0 /* useless status */, &cbk, ins, NULL, NULL, NULL, NULL);
 		if (rc != 0)
 			break;
 
@@ -765,8 +789,9 @@ chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args,
 	 * persistently sometime later.
 	 */
 	cbk.cb_gen = ctpa->ctpa_gen;
-	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid, dss_self_rank(), false,
-				&cbk, ins, NULL, NULL, NULL, NULL);
+
+	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid, dss_self_rank(),
+				0 /* useless status */, &cbk, ins, NULL, NULL, NULL, NULL);
 	if (rc == 0 && ctpa->ctpa_phase > cbk.cb_phase)
 		ctpa->ctpa_phase = cbk.cb_phase;
 
@@ -849,6 +874,10 @@ chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv)
 	}
 
 	if (iv->ci_phase != cbk->cb_phase || iv->ci_pool_status != cbk->cb_pool_status) {
+		if (iv->ci_pool_status != CHK__CHECK_POOL_STATUS__CPS_CHECKING &&
+		    cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKING)
+			cbk->cb_time.ct_stop_time = time(NULL);
+
 		cbk->cb_phase = iv->ci_phase;
 		cbk->cb_pool_status = iv->ci_pool_status;
 		chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
@@ -873,7 +902,7 @@ out:
 }
 
 int
-chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank, bool has_pending,
+chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank, uint32_t status,
 		   struct chk_bookmark *bk, struct chk_instance *ins, uint32_t *shard_nr,
 		   void *data, chk_pool_free_data_t free_cb, struct chk_pool_rec **cpr)
 {
@@ -887,7 +916,7 @@ chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank
 	rbund.cpb_shard_nr = shard_nr;
 	uuid_copy(rbund.cpb_uuid, uuid);
 	rbund.cpb_rank        = rank;
-	rbund.cpd_has_dending = has_pending;
+	rbund.cpb_status      = status;
 	rbund.cpb_bk          = bk;
 	rbund.cpb_ins         = ins;
 	rbund.cpb_data        = data;
@@ -1289,44 +1318,6 @@ chk_prop_prepare(d_rank_t leader, uint32_t flags, uint32_t policy_nr, struct chk
 		rc = chk_prop_update(prop, ranks);
 
 	return rc;
-}
-
-uint32_t
-chk_pool_merge_status(uint32_t status_a, uint32_t status_b)
-{
-	if (status_a == CHK__CHECK_POOL_STATUS__CPS_PENDING ||
-	    status_b == CHK__CHECK_POOL_STATUS__CPS_PENDING)
-		return CHK__CHECK_POOL_STATUS__CPS_PENDING;
-
-	if (status_a == CHK__CHECK_POOL_STATUS__CPS_CHECKING ||
-	    status_b == CHK__CHECK_POOL_STATUS__CPS_CHECKING)
-		return CHK__CHECK_POOL_STATUS__CPS_CHECKING;
-
-	if (status_a == CHK__CHECK_POOL_STATUS__CPS_FAILED ||
-	    status_b == CHK__CHECK_POOL_STATUS__CPS_FAILED)
-		return CHK__CHECK_POOL_STATUS__CPS_FAILED;
-
-	if (status_a == CHK__CHECK_POOL_STATUS__CPS_STOPPED ||
-	    status_b == CHK__CHECK_POOL_STATUS__CPS_STOPPED)
-		return CHK__CHECK_POOL_STATUS__CPS_STOPPED;
-
-	if (status_a == CHK__CHECK_POOL_STATUS__CPS_IMPLICATED ||
-	    status_b == CHK__CHECK_POOL_STATUS__CPS_IMPLICATED)
-		return CHK__CHECK_POOL_STATUS__CPS_IMPLICATED;
-
-	if (status_a == CHK__CHECK_POOL_STATUS__CPS_CHECKED ||
-	    status_b == CHK__CHECK_POOL_STATUS__CPS_CHECKED)
-		return CHK__CHECK_POOL_STATUS__CPS_CHECKED;
-
-	if (status_a == CHK__CHECK_POOL_STATUS__CPS_PAUSED ||
-	    status_b == CHK__CHECK_POOL_STATUS__CPS_PAUSED)
-		return CHK__CHECK_POOL_STATUS__CPS_PAUSED;
-
-	D_ASSERTF(status_a == CHK__CHECK_POOL_STATUS__CPS_UNCHECKED &&
-		  status_b == CHK__CHECK_POOL_STATUS__CPS_UNCHECKED,
-		  "Invalid pool status: %u/%u\n", status_a, status_b);
-
-	return CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
 }
 
 void
