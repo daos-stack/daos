@@ -588,10 +588,10 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Build on EL 9 stage.')
         booleanParam(name: bashName('Build on Leap 15'),
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Build on Leap 15 stage.')
         booleanParam(name: bashName('Unit Tests'),
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Unit Tests stage.')
         booleanParam(name: bashName('Unit Test'),
                      defaultValue: true,
@@ -609,7 +609,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Unit Test bdev with memcheck stage.')
         booleanParam(name: bashName('Test'),
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Test stage.')
         booleanParam(name: bashName('Functional on EL 9 with Valgrind'),
                      defaultValue: false,
@@ -651,7 +651,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider stage.')
         booleanParam(name: bashName('Functional Hardware Medium Verbs Provider MD on SSD'),
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD stage.')
         booleanParam(name: bashName('Functional Hardware Medium UCX Provider'),
                      defaultValue: false,
@@ -660,13 +660,13 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional Hardware Large stage.')
         booleanParam(name: bashName('Functional Hardware Large MD on SSD'),
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Large MD on SSD stage.')
         booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Cluster Box test stage')
         booleanParam(name: bashName('Functional Cluster Box Medium Verbs Provider MD on SSD'),
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Cluster Box Verbs Provider test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
@@ -1302,7 +1302,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
                             other_packages: 'mercury-libfabric mercury-ucx',
-                            stage_tags: 'hw,medium,-provider,-cb',
+                            // stage_tags: 'hw,medium,-provider,-cb',
+                            stage_tags: 'hw,medium',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal,
@@ -1396,7 +1397,8 @@ pipeline {
                             label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
                             next_version: next_version(),
                             other_packages: 'mercury-libfabric mercury-ucx',
-                            stage_tags: 'cb,medium,-provider',
+                            // stage_tags: 'cb,medium,-provider',
+                            stage_tags: 'cb,medium',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             node_count: 5,
