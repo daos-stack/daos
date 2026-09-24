@@ -96,7 +96,7 @@ class DdbCommand(DdbCommandBase):
         super().__init__(server_host, path)
         self.vos_path.update(vos_path, "vos_path")
 
-    def clear_ddb_command(self):
+    def _clear_ddb_command(self):
         """Clear self.ddb_command.
 
         This method is needed to handle the inconsistent ddb command (or subcommand) pattern between
@@ -130,7 +130,7 @@ class DdbCommand(DdbCommandBase):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
-        self.clear_ddb_command()
+        self._clear_ddb_command()
         self.path.value = "ls"
         if component_path:
             self.path.value += f" {component_path}"
@@ -155,7 +155,7 @@ class DdbCommand(DdbCommandBase):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
-        self.clear_ddb_command()
+        self._clear_ddb_command()
         self.write_mode.value = False
         self.path.value = " ".join(["value_dump", component_path, out_file_path])
 
@@ -177,7 +177,7 @@ class DdbCommand(DdbCommandBase):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
-        self.clear_ddb_command()
+        self._clear_ddb_command()
         self.write_mode.value = True
         self.path.value = " ".join(["value_load", load_file_path, component_path])
 
@@ -193,7 +193,7 @@ class DdbCommand(DdbCommandBase):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
-        self.clear_ddb_command()
+        self._clear_ddb_command()
         self.write_mode.value = True
         self.path.value = f"rm {component_path}"
 
@@ -209,7 +209,7 @@ class DdbCommand(DdbCommandBase):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
-        self.clear_ddb_command()
+        self._clear_ddb_command()
         self.write_mode.value = False
         self.path.value = f"ilog_dump {component_path}"
 
@@ -225,7 +225,7 @@ class DdbCommand(DdbCommandBase):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
-        self.clear_ddb_command()
+        self._clear_ddb_command()
         self.write_mode.value = False
         self.path.value = f"ilog_commit {component_path}"
 
@@ -241,7 +241,7 @@ class DdbCommand(DdbCommandBase):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
-        self.clear_ddb_command()
+        self._clear_ddb_command()
         self.write_mode.value = False
         self.path.value = f"ilog_clear {component_path}"
 
@@ -257,7 +257,7 @@ class DdbCommand(DdbCommandBase):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
-        self.clear_ddb_command()
+        self._clear_ddb_command()
         self.write_mode.value = False
         self.path.value = f"superblock_dump {component_path}"
 
@@ -283,7 +283,7 @@ class DdbCommand(DdbCommandBase):
         if committed and active:
             raise ValueError("committed and active can't be set at the same time!")
 
-        self.clear_ddb_command()
+        self._clear_ddb_command()
         self.write_mode.value = False
         commands = ["dtx_dump"]
         if committed:
@@ -306,7 +306,7 @@ class DdbCommand(DdbCommandBase):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
-        self.clear_ddb_command()
+        self._clear_ddb_command()
         self.write_mode.value = True
         self.path.value = f"dtx_cmt_clear {component_path}"
 

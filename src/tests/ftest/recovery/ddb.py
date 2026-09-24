@@ -613,9 +613,7 @@ class DdbTest(TestWithServers):
 
         if md_on_ssd:
             self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
-            cleanup_errors = self.clean_daos_load()
-            if cleanup_errors:
-                errors.extend(cleanup_errors)
+            errors.extend(self.clean_daos_load())
 
         report_errors(test=self, errors=errors)
 

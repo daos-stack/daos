@@ -41,7 +41,6 @@ class PoolListConsolidationTest(TestWithServers):
 
         Returns:
             list: Errors.
-
         """
         errors = []
 
@@ -472,7 +471,7 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
-        hosts = list(set(self.server_managers[0].ranks.values()))
+        hosts = list(self.hostlist_servers)
         md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
         tmpfs_mounts = ["/mnt/daos2", "/mnt/daos3"]
 
@@ -495,7 +494,6 @@ class PoolListConsolidationTest(TestWithServers):
             orig_rdb_pool_paths = self.remove_rdb_pool_replicas_pmem(pool=pool, hosts=hosts)
 
         self.log_step("Run DAOS checker under kinds of mode.")
-        errors = []
         errors = self.chk_dist_checker(inconsistency="corrupted pool without quorum")
 
         self.log_step("Try creating a container. It should succeed.")
