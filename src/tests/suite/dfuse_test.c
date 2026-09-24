@@ -2148,6 +2148,339 @@ do_dot_dot_mount_root(void **state)
 	assert_return_code(unlink(file_path), errno);
 }
 
+/* A directory symlink with an absolute value in a non-leaf position, in a subdirectory and in the
+ * container root. dfs cannot follow it and the path has to be handed to the kernel; an in-container
+ * copy of the same path proves that the host file is the one reached. test_dir is the container
+ * root under ftest.
+ */
+void
+do_symlink_abs_nonleaf(void **state)
+{
+	struct stat stbuf;
+	char        base[512];
+	char        host_dir[256];
+	char        shadow_dir[512];
+	char        path[1024];
+	char        start_dir[512];
+	size_t      len;
+	int         rc;
+
+	len = snprintf(base, sizeof(base) - 1, "%s/absnl_%d", test_dir, getpid());
+	assert_true(len < (sizeof(base) - 1));
+	len = snprintf(host_dir, sizeof(host_dir) - 1, "/tmp/dfuse_test_absnl_%d", getpid());
+	assert_true(len < (sizeof(host_dir) - 1));
+	len = snprintf(shadow_dir, sizeof(shadow_dir) - 1, "%s%s", test_dir, host_dir);
+	assert_true(len < (sizeof(shadow_dir) - 1));
+
+	/* fixture: <host_dir>/f on the host, <test_dir><host_dir>/f as its in-container shadow,
+	 * sub/hlink and <test_dir>/absnl_root_<pid> -> <host_dir>, sub/back -> <base>/d, d/g
+	 */
+	rc = mkdir(host_dir, S_IRWXU);
+	if (rc != 0)
+		assert_int_equal(errno, EEXIST);
+	snprintf(path, sizeof(path), "%s/f", host_dir);
+	write_file(path, "host");
+	snprintf(path, sizeof(path), "%s/tmp", test_dir);
+	rc = mkdir(path, S_IRWXU);
+	if (rc != 0)
+		assert_int_equal(errno, EEXIST);
+	rc = mkdir(shadow_dir, S_IRWXU);
+	if (rc != 0)
+		assert_int_equal(errno, EEXIST);
+	snprintf(path, sizeof(path), "%s/f", shadow_dir);
+	write_file(path, "container");
+	assert_return_code(mkdir(base, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/sub", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/d", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/d/g", base);
+	write_file(path, "in-d");
+	snprintf(path, sizeof(path), "%s/sub/hlink", base);
+	assert_return_code(symlink(host_dir, path), errno);
+	snprintf(path, sizeof(path), "%s/absnl_root_%d", test_dir, getpid());
+	unlink(path);
+	assert_return_code(symlink(host_dir, path), errno);
+	snprintf(path, sizeof(path), "%s/sub/back", base);
+	len = snprintf(start_dir, sizeof(start_dir) - 1, "%s/d", base);
+	assert_true(len < (sizeof(start_dir) - 1));
+	assert_return_code(symlink(start_dir, path), errno);
+
+	/* through the link in a subdirectory, absolute and relative to a cwd */
+	snprintf(path, sizeof(path), "%s/sub/hlink/f", base);
+	check_file_content(path, "host");
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_int_equal(stbuf.st_size, strlen("host"));
+	assert_return_code(access(path, R_OK), errno);
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+	snprintf(path, sizeof(path), "%s/sub", base);
+	assert_return_code(chdir(path), errno);
+	check_file_content("hlink/f", "host");
+	check_file_content("./hlink//f", "host");
+	assert_return_code(chdir(start_dir), errno);
+
+	/* through the link in the container root */
+	snprintf(path, sizeof(path), "%s/absnl_root_%d/f", test_dir, getpid());
+	check_file_content(path, "host");
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_int_equal(stbuf.st_size, strlen("host"));
+
+	/* an absolute value that points back into the container */
+	snprintf(path, sizeof(path), "%s/sub/back/g", base);
+	check_file_content(path, "in-d");
+
+	/* a missing leaf behind the link is still ENOENT */
+	snprintf(path, sizeof(path), "%s/sub/hlink/nonexist", base);
+	rc = stat(path, &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	snprintf(path, sizeof(path), "%s/sub/back", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/absnl_root_%d", test_dir, getpid());
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/sub/hlink", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/d/g", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/d", base);
+	assert_return_code(rmdir(path), errno);
+	snprintf(path, sizeof(path), "%s/sub", base);
+	assert_return_code(rmdir(path), errno);
+	assert_return_code(rmdir(base), errno);
+	snprintf(path, sizeof(path), "%s/f", shadow_dir);
+	assert_return_code(unlink(path), errno);
+	assert_return_code(rmdir(shadow_dir), errno);
+	snprintf(path, sizeof(path), "%s/tmp", test_dir);
+	rmdir(path);
+	snprintf(path, sizeof(path), "%s/f", host_dir);
+	assert_return_code(unlink(path), errno);
+	assert_return_code(rmdir(host_dir), errno);
+}
+
+/* A symlink whose relative value climbs more than one level with "..", as a leaf and in front of
+ * other components, inside the container and out of it. dfs only knows the parent of the link, so
+ * it cannot follow such a value and the path has to be handed to the kernel.
+ */
+void
+do_symlink_dot_dot_value(void **state)
+{
+	struct stat stbuf;
+	char        base[512];
+	char        parent[512];
+	char        name[64];
+	char        target[512];
+	char        value[128];
+	char        path[1024];
+	char        start_dir[512];
+	size_t      len;
+	int         rc;
+
+	len = snprintf(base, sizeof(base) - 1, "%s/ddv_%d", test_dir, getpid());
+	assert_true(len < (sizeof(base) - 1));
+	split_test_dir(parent, sizeof(parent), name, sizeof(name));
+	len = snprintf(target, sizeof(target) - 1, "%s/dfuse_test_ddv_%d", parent, getpid());
+	assert_true(len < (sizeof(target) - 1));
+
+	/* fixture: a/b, d/f, a/one_up -> ../d/f, a/b/two_up -> ../../d/f, a/b/dotdot -> ..,
+	 * a/b/two_up_dir -> ../../d, a/b/esc -> ../../../../<file beside the mount point>,
+	 * a/b/dangling -> ../../nonexist
+	 */
+	unlink(target);
+	write_file(target, "host");
+	assert_return_code(mkdir(base, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/a", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/a/b", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/d", base);
+	assert_return_code(mkdir(path, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/d/f", base);
+	write_file(path, "in-d");
+	snprintf(path, sizeof(path), "%s/a/one_up", base);
+	assert_return_code(symlink("../d/f", path), errno);
+	snprintf(path, sizeof(path), "%s/a/b/two_up", base);
+	assert_return_code(symlink("../../d/f", path), errno);
+	snprintf(path, sizeof(path), "%s/a/b/dotdot", base);
+	assert_return_code(symlink("..", path), errno);
+	snprintf(path, sizeof(path), "%s/a/b/two_up_dir", base);
+	assert_return_code(symlink("../../d", path), errno);
+	snprintf(path, sizeof(path), "%s/a/b/esc", base);
+	len = snprintf(value, sizeof(value) - 1, "../../../../dfuse_test_ddv_%d", getpid());
+	assert_true(len < (sizeof(value) - 1));
+	assert_return_code(symlink(value, path), errno);
+	snprintf(path, sizeof(path), "%s/a/b/dangling", base);
+	assert_return_code(symlink("../../nonexist", path), errno);
+
+	/* leaf links */
+	snprintf(path, sizeof(path), "%s/a/one_up", base);
+	check_file_content(path, "in-d");
+	snprintf(path, sizeof(path), "%s/a/b/two_up", base);
+	check_file_content(path, "in-d");
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_int_equal(stbuf.st_size, strlen("in-d"));
+	assert_return_code(access(path, R_OK), errno);
+	rc = lstat(path, &stbuf);
+	assert_return_code(rc, errno);
+	assert_true(S_ISLNK(stbuf.st_mode));
+	/* no inode comparison: pil4dfs fakes st_ino, the kernel that serves this link does not */
+	snprintf(path, sizeof(path), "%s/a/b/dotdot", base);
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_true(S_ISDIR(stbuf.st_mode));
+
+	/* the same in front of other components */
+	snprintf(path, sizeof(path), "%s/a/b/two_up_dir/f", base);
+	check_file_content(path, "in-d");
+	snprintf(path, sizeof(path), "%s/a/b/dotdot/one_up", base);
+	check_file_content(path, "in-d");
+	snprintf(path, sizeof(path), "%s/a/b/two_up_dir/../d/f", base);
+	check_file_content(path, "in-d");
+
+	/* relative to a cwd next to the links */
+	assert_non_null(getcwd(start_dir, sizeof(start_dir)));
+	snprintf(path, sizeof(path), "%s/a/b", base);
+	assert_return_code(chdir(path), errno);
+	check_file_content("two_up", "in-d");
+	check_file_content("two_up_dir/f", "in-d");
+	check_file_content("./dotdot/one_up", "in-d");
+	assert_return_code(chdir(start_dir), errno);
+
+	/* out of the container */
+	snprintf(path, sizeof(path), "%s/a/b/esc", base);
+	check_file_content(path, "host");
+	assert_return_code(stat(path, &stbuf), errno);
+	assert_int_equal(stbuf.st_size, strlen("host"));
+
+	/* a dangling one still reports ENOENT */
+	snprintf(path, sizeof(path), "%s/a/b/dangling", base);
+	rc = stat(path, &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+	snprintf(path, sizeof(path), "%s/a/b/dangling/x", base);
+	rc = stat(path, &stbuf);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	snprintf(path, sizeof(path), "%s/a/b/dangling", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/a/b/esc", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/a/b/two_up_dir", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/a/b/dotdot", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/a/b/two_up", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/a/one_up", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/d/f", base);
+	assert_return_code(unlink(path), errno);
+	snprintf(path, sizeof(path), "%s/d", base);
+	assert_return_code(rmdir(path), errno);
+	snprintf(path, sizeof(path), "%s/a/b", base);
+	assert_return_code(rmdir(path), errno);
+	snprintf(path, sizeof(path), "%s/a", base);
+	assert_return_code(rmdir(path), errno);
+	assert_return_code(rmdir(base), errno);
+	assert_return_code(unlink(target), errno);
+}
+
+/* open() with O_NOFOLLOW on a symlink fails with ELOOP whatever the link points to and wherever it
+ * sits; with O_PATH it yields an fd on the link itself. Without O_NOFOLLOW the link is followed.
+ */
+void
+do_open_nofollow(void **state)
+{
+	struct stat stbuf;
+	char        base[512];
+	char        host_file[256];
+	char        value[64];
+	char        path[1024];
+	const char *links[4];
+	size_t      len;
+	int         fd;
+	int         i;
+
+	len = snprintf(base, sizeof(base) - 1, "%s/nofollow_%d", test_dir, getpid());
+	assert_true(len < (sizeof(base) - 1));
+	len = snprintf(host_file, sizeof(host_file) - 1, "/tmp/dfuse_test_nofollow_%d", getpid());
+	assert_true(len < (sizeof(host_file) - 1));
+
+	/* fixture: links in the container root and in a subdirectory, each with an absolute value
+	 * to a host file and a relative one to a container file
+	 */
+	unlink(host_file);
+	write_file(host_file, "host");
+	assert_return_code(mkdir(base, S_IRWXU), errno);
+	snprintf(path, sizeof(path), "%s/t", base);
+	write_file(path, "container");
+	snprintf(path, sizeof(path), "%s/nofollow_root_abs_%d", test_dir, getpid());
+	unlink(path);
+	assert_return_code(symlink(host_file, path), errno);
+	snprintf(path, sizeof(path), "%s/nofollow_root_rel_%d", test_dir, getpid());
+	unlink(path);
+	len = snprintf(value, sizeof(value) - 1, "nofollow_%d/t", getpid());
+	assert_true(len < (sizeof(value) - 1));
+	assert_return_code(symlink(value, path), errno);
+	snprintf(path, sizeof(path), "%s/sub_abs", base);
+	assert_return_code(symlink(host_file, path), errno);
+	snprintf(path, sizeof(path), "%s/sub_rel", base);
+	assert_return_code(symlink("t", path), errno);
+
+	links[0] = "%s/nofollow_root_abs_%d";
+	links[1] = "%s/nofollow_root_rel_%d";
+	links[2] = "%s/nofollow_%d/sub_abs";
+	links[3] = "%s/nofollow_%d/sub_rel";
+	for (i = 0; i < 4; i++) {
+		snprintf(path, sizeof(path), links[i], test_dir, getpid());
+
+		fd = open(path, O_RDONLY | O_NOFOLLOW);
+		assert_int_equal(fd, -1);
+		assert_int_equal(errno, ELOOP);
+
+		/* as fts() and nftw() open directories: the directory check comes first */
+		fd = open(path, O_RDONLY | O_NOFOLLOW | O_DIRECTORY);
+		assert_int_equal(fd, -1);
+		assert_int_equal(errno, ENOTDIR);
+		fd = open(path, O_PATH | O_NOFOLLOW | O_DIRECTORY);
+		assert_int_equal(fd, -1);
+		assert_int_equal(errno, ENOTDIR);
+
+		fd = open(path, O_PATH | O_NOFOLLOW);
+		assert_return_code(fd, errno);
+		assert_return_code(fstat(fd, &stbuf), errno);
+		assert_true(S_ISLNK(stbuf.st_mode));
+		assert_return_code(close(fd), errno);
+
+		check_file_content(path, (i % 2 == 0) ? "host" : "container");
+	}
+
+	/* a regular file is unaffected by the flag */
+	snprintf(path, sizeof(path), "%s/t", base);
+	fd = open(path, O_RDONLY | O_NOFOLLOW);
+	assert_return_code(fd, errno);
+	assert_return_code(close(fd), errno);
+
+	/* O_DIRECTORY: ENOTDIR for a file, and no write access needed on the directory */
+	fd = open(path, O_RDONLY | O_DIRECTORY);
+	assert_int_equal(fd, -1);
+	assert_int_equal(errno, ENOTDIR);
+	assert_return_code(chmod(base, S_IRUSR | S_IXUSR), errno);
+	fd = open(base, O_RDONLY | O_DIRECTORY);
+	assert_return_code(fd, errno);
+	assert_return_code(close(fd), errno);
+	assert_return_code(chmod(base, S_IRWXU), errno);
+
+	for (i = 0; i < 4; i++) {
+		snprintf(path, sizeof(path), links[i], test_dir, getpid());
+		assert_return_code(unlink(path), errno);
+	}
+	snprintf(path, sizeof(path), "%s/t", base);
+	assert_return_code(unlink(path), errno);
+	assert_return_code(rmdir(base), errno);
+	assert_return_code(unlink(host_file), errno);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -2275,6 +2608,9 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			    cmocka_unit_test(do_root_symlink_shadow),
 			    cmocka_unit_test(do_root_symlink_up),
 			    cmocka_unit_test(do_dot_dot_mount_root),
+			    cmocka_unit_test(do_symlink_abs_nonleaf),
+			    cmocka_unit_test(do_symlink_dot_dot_value),
+			    cmocka_unit_test(do_open_nofollow),
 			};
 			printf("\n\n=================");
 			printf("dfuse path resolution tests");

@@ -19,10 +19,14 @@ fi
 cat <<EOF > /etc/sysctl.d/10-dmesg-for-all.conf
 kernel.dmesg_restrict=0
 EOF
-# For verbs enable servers in dual-nic setups to talk to each other; no adverse effect for tcp
+# For verbs/ucx enable servers in dual-nic setups to talk to each other; no adverse effect for tcp.
+# arp_announce=2 stops ARP requests sent out one ib interface from advertising another ib
+# interface's IP, which otherwise makes peers map that IP to the wrong HCA port and librdmacm
+# connections to it get rejected.
 cat <<EOF > /etc/sysctl.d/10-daos-verbs.conf
 net.ipv4.conf.all.accept_local=1
 net.ipv4.conf.all.arp_ignore=2
+net.ipv4.conf.all.arp_announce=2
 net.ipv4.conf.all.rp_filter=2
 EOF
 for x in \$(cd /sys/class/net/ && ls -d ib*); do
