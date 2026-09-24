@@ -6,6 +6,7 @@
 """
 import re
 import traceback
+from collections.abc import Iterable
 
 from daos_utils_base import DaosCommandBase
 from general_utils import dict_to_str, list_to_str
@@ -518,7 +519,8 @@ class DaosCommand(DaosCommandBase):
         Args:
             pool (str): pool UUID or label
             cont (str): container UUID or label
-            properties (list): "name" field(s). Defaults to None.
+            properties (str or list, optional): name(s) of specific properties to get. Defaults to
+                None, which will get all properties.
 
         Returns:
             str: JSON that contains the command output.
@@ -647,8 +649,11 @@ class DaosCommand(DaosCommandBase):
         #   "error": null,
         #   "status": 0
         # }
-        props = list_to_str(properties, ',') if properties else None
-
+        props = None
+        if isinstance(properties, Iterable):
+            props = list_to_str(properties, ',')
+        elif properties is not None:
+            props = str(properties)
         return self._get_json_result(("container", "get-prop"), pool=pool, cont=cont, prop=props)
 
     def container_set_owner(self, pool, cont, user=None, group=None, uid=None, gid=None,
