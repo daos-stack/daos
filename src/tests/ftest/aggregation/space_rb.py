@@ -54,6 +54,7 @@ class SpaceRb(IorTestBase):
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", namespace)
         manager.assign_processes(ppn=ppn)
+        manager.assign_environment(ior_cmd.env)
         error_msg = None
         exception_detected = False
 
@@ -66,7 +67,7 @@ class SpaceRb(IorTestBase):
             error_msg = str(error)
         if not exception_detected:
             errors.append(f"IOR {job_num} didn't cause an error!")
-        exp_msg = "No space left on device"
+        exp_msg = "DER_NOSPACE"
         if exp_msg not in error_msg:
             errors.append(f"'{exp_msg}' is not in the error message of IOR {job_num}!")
 
