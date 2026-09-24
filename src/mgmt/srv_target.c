@@ -1170,6 +1170,20 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	if (rc != 0)
 		goto out;
 
+	/*
+	 * Emulate a slow rank whose pool is stopped but whose target files are not removed yet
+	 * (the window in which a retried create of the same UUID used to hit DER_EXIST).
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_MGMT_TGT_DESTROY_SLOW)) {
+		uint64_t delay_ms = daos_fail_value_get();
+
+		if (delay_ms == 0)
+			delay_ms = DAOS_FAIL_DELAY_DEFAULT_MS;
+		D_INFO(DF_UUID ": fault injection: delaying target destroy by " DF_U64 " ms\n",
+		       DP_UUID(td_in->td_pool_uuid), delay_ms);
+		dss_sleep(delay_ms);
+	}
+
 	/** generate path to the target directory */
 	rc = ds_mgmt_file(dss_storage_path, td_in->td_pool_uuid, NULL, NULL, &path);
 	if (rc != 0)

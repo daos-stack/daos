@@ -830,6 +830,16 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t term,
 	if (rc != 0)
 		goto err_svc;
 
+	if (mode == DS_RSVC_CREATE && DAOS_FAIL_CHECK(DAOS_RSVC_CREATE_SLOW)) {
+		uint64_t delay_ms = daos_fail_value_get();
+
+		if (delay_ms == 0)
+			delay_ms = DAOS_FAIL_DELAY_DEFAULT_MS;
+		D_INFO("%s: fault injection: delaying replica creation by " DF_U64 " ms\n",
+		       svc->s_name, delay_ms);
+		dss_sleep(delay_ms);
+	}
+
 	if (mode == DS_RSVC_DICTATE) {
 		rc = rdb_dictate(storage);
 		if (rc != 0)
