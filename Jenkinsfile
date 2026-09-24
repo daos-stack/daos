@@ -21,7 +21,7 @@ import groovy.transform.Field
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@ryon-jensen/detached-ftest') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -421,6 +421,7 @@ if (!env.CHANGE_ID &&
      !env.BRANCH_NAME.startsWith('release/') &&
      !env.BRANCH_NAME.startsWith('feature/') &&
      !env.BRANCH_NAME.startsWith('ci-') &&
+     !env.BRANCH_NAME.startsWith('ryon-jensen/') &&
      env.BRANCH_NAME != 'master')) {
     currentBuild.result = 'SUCCESS'
     return
