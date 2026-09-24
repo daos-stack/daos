@@ -2166,6 +2166,7 @@ label_strings_test(void **state)
 					     "a-b-cde",
 					     "thiswoul-dntp-arse-asau-uidsoitsfine",
 					     "g006b637-c63a-4734-99bc-a71298597de1",
+					     "0006b637-c63a-4734-99bc-a71298597de1-clone",
 	};
 	const char	*invalid_labels[] = {
 					     "",

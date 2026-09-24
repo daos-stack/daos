@@ -253,7 +253,7 @@ daos_is_valid_uuid_string(const char *uuid, int sensitive)
 	int		 len = DAOS_UUID_STR_SIZE - 1; /* Not include the terminated '\0' */
 	int		 i;
 
-	if (strnlen(uuid, len) != len)
+	if (strnlen(uuid, len + 1) != len)
 		return false;
 
 	for (i = 0, p = uuid; i < len; i++, p++) {
