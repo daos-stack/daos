@@ -9,6 +9,10 @@
 ## Unit Tests
 
 - Use the CMocka framework.
+- Always add command-line CMocka filtering in each test binary's `main(int argc, char **argv)`.
+  Guard filtering with `#if CMOCKA_FILTER_SUPPORTED`. When `argc > 1`, wrap `argv[1]` in `*`
+  wildcards and call `cmocka_set_test_filter()` before running tests. With no argument, run the
+  full suite.
 - Don't reproduce the production algorithm in assertions.
 - Choose the smallest suitable suite and dependency boundary.
 - Separate module and header-macro tests.

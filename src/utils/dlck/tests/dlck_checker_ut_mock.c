@@ -190,6 +190,12 @@ __wrap___vfprintf_chk(FILE *stream, int flag, const char *fmt, va_list args)
 	return __wrap_vfprintf(stream, fmt, args);
 }
 
+void
+__wrap_d_log_sync(void)
+{
+	function_called();
+}
+
 int
 __wrap_fflush(FILE *stream)
 {
