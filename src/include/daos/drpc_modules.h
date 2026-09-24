@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -100,9 +100,10 @@ enum drpc_srv_method {
 };
 
 enum drpc_sec_method {
-	DRPC_METHOD_SEC_VALIDATE_CREDS		= 401,
+	DRPC_METHOD_SEC_VALIDATE_CREDS     = 401,
+	DRPC_METHOD_SEC_VALIDATE_NODE_CERT = 402,
 
-	NUM_DRPC_SEC_METHODS			/* Must be last */
+	NUM_DRPC_SEC_METHODS /* Must be last */
 };
 
 #endif /* __DAOS_DRPC_MODULES_H__ */
