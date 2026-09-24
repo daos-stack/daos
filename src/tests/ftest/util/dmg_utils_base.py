@@ -258,6 +258,7 @@ class DmgCommandBase(YamlCommand):
                 self.use_tmpfs_scm = FormattedParameter("--use-tmpfs-scm", False)
                 self.control_metadata_path = FormattedParameter(
                     "--control-metadata-path={}", None)
+                self.allow_numa_imbalance = FormattedParameter("--allow-numa-imbalance", False)
 
     class ContSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg cont sub command."""
