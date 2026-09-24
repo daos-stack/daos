@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2021-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -170,14 +170,17 @@ static const struct CMUnitTest pda_layout_tests[] = {
 };
 
 int
-pda_layout_run(bool verbose)
+pda_layout_run(bool verbose, int *sub_tests, int sub_tests_nr, bool list_only)
 {
-	int rc = 0;
+	const char *name = "Jump Map Placement PDA demo";
 
 	g_verbose = verbose;
 
-	rc += cmocka_run_group_tests_name("Jump Map Placement PDA demo", pda_layout_tests,
-					  NULL, NULL);
+	if (list_only) {
+		plt_list_tests(name, pda_layout_tests, ARRAY_SIZE(pda_layout_tests));
+		return 0;
+	}
 
-	return rc;
+	return plt_run_tests(name, pda_layout_tests, ARRAY_SIZE(pda_layout_tests), sub_tests,
+			     sub_tests_nr);
 }

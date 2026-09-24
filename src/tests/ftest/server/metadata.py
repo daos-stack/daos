@@ -70,7 +70,7 @@ class ObjectMetadata(TestWithServers):
         # Number of created containers that should not be possible
         self.created_containers_limit = self.params.get("created_cont_max", "/run/metadata/*")
 
-    def create_pool(self, svc_ops_enabled=True):
+    def __create_pool(self, svc_ops_enabled=True):
         """Create a pool and display the svc ranks.
 
         Args:
@@ -238,7 +238,7 @@ class ObjectMetadata(TestWithServers):
 
         """
         self.log_step("Create pool with properties svc_ops_enabled: {}".format(svc_ops_enabled))
-        self.create_pool(svc_ops_enabled=svc_ops_enabled)
+        self.__create_pool(svc_ops_enabled=svc_ops_enabled)
         # Run dummy_metadata_workload when feature is enabled
         if svc_ops_enabled:
             self.log.info("svc_ops_enabled enabled, run dummy_metadata_workload")
@@ -369,7 +369,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=server,metadata,nvme
         :avocado: tags=ObjectMetadata,test_metadata_addremove
         """
-        self.create_pool()
+        self.__create_pool()
         svc_ops_enabled = self.pool.get_property("svc_ops_enabled")
         if svc_ops_enabled:
             svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
@@ -447,7 +447,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=server,metadata,nvme,ior
         :avocado: tags=ObjectMetadata,test_metadata_server_restart
         """
-        self.create_pool()
+        self.__create_pool()
         files_per_thread = 400
         total_ior_threads = 5
         ior_managers = []

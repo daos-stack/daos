@@ -21,9 +21,11 @@ server_config:
 
 pool:
   size: 95%
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 
 ior:
   client_processes: !mux

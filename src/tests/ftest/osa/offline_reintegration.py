@@ -6,7 +6,6 @@
 """
 from nvme_utils import ServerFillUp
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
 
@@ -60,7 +59,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             oclass = self.ior_cmd.dfs_oclass.value
         self.log.info("==> Creating %s pools with oclass: %s", num_pool, oclass)
         for index in range(0, num_pool):
-            pools.append(add_pool(self, connect=False))
+            pools.append(self.get_pool(connect=False))
             self.pool = pools[-1]
             self.pool.set_property("reclaim", "disabled")
             test_seq = self.ior_test_sequence[0]

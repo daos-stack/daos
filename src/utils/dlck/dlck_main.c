@@ -33,12 +33,6 @@ static bool
 user_is_root(struct checker *ck)
 {
 	uid_t euid = geteuid();
-
-	if (DAOS_FAIL_CHECK(DLCK_MOCK_ROOT)) { /** fault injection */
-		/** it does not have ANY effect on the actual privileges of the user */
-		euid = 0;
-	}
-
 	if (euid == 0) {
 		/** The root user is not always named "root" but its uid is always 0. */
 		CK_PRINT(ck, EFFECTIVE_USER_STR "root\n");
@@ -94,7 +88,7 @@ user_belongs_to_group(const char *group_name, struct checker *ck)
 	}
 	if (rc < 0) {
 		rc = daos_errno2der(errno);
-		CK_PRINTFL_RC(ck, rc, "getgroups() failed", group_name);
+		CK_PRINTL_RC(ck, rc, "getgroups() failed");
 		return false;
 	}
 

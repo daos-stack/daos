@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/dustin/go-humanize"
@@ -27,7 +28,8 @@ import (
 
 const defaultMetadataPath = "/mnt/daos"
 
-// SystemProvider provides operating system capabilities.
+// SystemProvider provides a limited set of operating system capabilities. Not all of the
+// capabilities in src/control/provider/system are exposed via the storage provider.
 type SystemProvider interface {
 	system.IsMountedProvider
 	GetfsUsage(string) (uint64, uint64, error)
@@ -113,6 +115,30 @@ func (p *Provider) ControlMetadataPathConfigured() bool {
 		return true
 	}
 	return false
+}
+
+// ControlMetadataEngineNeedsFormat checks if this engine's superblock exists.
+// This is distinct from ControlMetadataNeedsFormat which checks the host-level DataPath.
+func (p *Provider) ControlMetadataEngineNeedsFormat() (bool, error) {
+	if p == nil {
+		return false, errors.New("nil provider")
+	}
+
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		// No metadata section defined, metadata stored on SCM
+		return false, nil
+	}
+
+	superblockPath := filepath.Join(p.ControlMetadataEnginePath(), "superblock")
+
+	if _, err := p.Sys.ReadFile(superblockPath); os.IsNotExist(err) {
+		p.log.Debugf("engine %d superblock missing: %s", p.engineIndex, superblockPath)
+		return true, nil
+	} else if err != nil {
+		return false, errors.Wrapf(err, "checking engine %d superblock", p.engineIndex)
+	}
+
+	return false, nil
 }
 
 // ControlMetadataPath returns the path where control plane metadata is stored.
@@ -316,6 +342,10 @@ func (p *Provider) MountScm() error {
 
 // UnmountTmpfs unmounts SCM based on provider config.
 func (p *Provider) UnmountTmpfs() error {
+	if p == nil {
+		return errors.New("nil provider")
+	}
+
 	cfg, err := p.GetScmConfig()
 	if err != nil {
 		return err

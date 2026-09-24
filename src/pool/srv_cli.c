@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -960,12 +960,18 @@ pool_extend_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 static int
 pool_extend_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 {
+	struct pool_extend_arg *arg = varg;
 	struct pool_extend_out *out = crt_reply_get(rpc);
 	int                     rc  = out->peo_op.po_rc;
 
-	if (rc != 0)
-		DL_ERROR(rc, DF_UUID ": Failed to set targets to UP state for reintegration",
-			 DP_UUID(pool_uuid));
+	if (rc == -DER_AGAIN) {
+		D_DEBUG(DB_MGMT, DF_UUID ": extend to %d ranks: " DF_RC "\n", DP_UUID(pool_uuid),
+			arg->pea_ntargets, DP_RC(rc));
+		rc = DSC_POOL_SVC_CALL_AGAIN;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to extend to %d ranks", DP_UUID(pool_uuid),
+			 arg->pea_ntargets);
+	}
 	return rc;
 }
 
@@ -1016,11 +1022,14 @@ pool_update_target_state_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	struct pool_tgt_update_out          *out = crt_reply_get(rpc);
 	int                                  rc  = out->pto_op.po_rc;
 
-	if (rc != 0)
+	if (rc == -DER_AGAIN) {
+		D_DEBUG(DB_MGMT, DF_UUID ": set targets to state %s: " DF_RC "\n",
+			DP_UUID(pool_uuid), pool_map_status2name(arg->puta_state), DP_RC(rc));
+		rc = DSC_POOL_SVC_CALL_AGAIN;
+	} else if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": Failed to set targets to %s state", DP_UUID(pool_uuid),
-			 arg->puta_state == PO_COMP_ST_DOWN ? "DOWN"
-			 : arg->puta_state == PO_COMP_ST_UP ? "UP"
-							    : "UNKNOWN");
+			 pool_map_status2name(arg->puta_state));
+	}
 	return rc;
 }
 

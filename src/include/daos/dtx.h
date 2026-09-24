@@ -258,7 +258,7 @@ daos_is_zero_dti(const struct dtx_id *dti)
 }
 
 static inline bool
-daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
+daos_dti_equal(const struct dtx_id *dti0, const struct dtx_id *dti1)
 {
 	return memcmp(dti0, dti1, sizeof(*dti0)) == 0;
 }

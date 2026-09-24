@@ -61,6 +61,9 @@ dfs_obj_copy_attr(dfs_obj_t *obj, dfs_obj_t *src_obj)
 	if (S_ISDIR(obj->mode)) {
 		obj->d.oclass     = src_obj->d.oclass;
 		obj->d.chunk_size = src_obj->d.chunk_size;
+	} else if (S_ISREG(obj->mode) && DFS_IS_HARDLINK(src_obj->mode)) {
+		/** the bit is never cleared, so a stale handle can only be missing it */
+		dfs_set_hardlink(&obj->mode);
 	}
 }
 
@@ -847,7 +850,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 int
 dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 {
-	daos_handle_t oh;
+	daos_handle_t oh = DAOS_HDL_INVAL;
 	int           rc;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -855,17 +858,18 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (obj == NULL)
 		return EINVAL;
 
-	/** Open parent object and fetch entry of obj from it */
-	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
-	if (rc)
-		return daos_der2errno(rc);
+	/** A hardlink inode is read from GIT by OID, so no parent dentry is involved. */
+	if (!DFS_IS_HARDLINK(obj->mode)) {
+		/** Open parent object and fetch entry of obj from it */
+		rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+		if (rc)
+			return daos_der2errno(rc);
+	}
 
 	rc = entry_stat(dfs, dfs->th, oh, obj->name, strlen(obj->name), obj, true, stbuf, NULL);
-	if (rc)
-		D_GOTO(out, rc);
 
-out:
-	daos_obj_close(oh, NULL);
+	if (daos_handle_is_valid(oh))
+		daos_obj_close(oh, NULL);
 	return rc;
 }
 
@@ -1219,7 +1223,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 
 	D_ASSERT(entry.value);
 
-	rc = lookup_rel_path(dfs, parent, entry.value, O_RDONLY, &sym, NULL, NULL, 0);
+	rc = follow_symlink(dfs, parent, entry.value, O_RDONLY, &sym, NULL, NULL, 0);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n", entry.value);
 		D_GOTO(out, rc);
@@ -1313,7 +1317,7 @@ restart:
 	if (S_ISLNK(entry.mode)) {
 		D_ASSERT(entry.value);
 
-		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
+		rc = follow_symlink(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
 		if (rc) {
 			D_ERROR("Failed to lookup symlink %s\n", entry.value);
 			D_FREE(entry.value);
@@ -1498,7 +1502,7 @@ restart:
 	/** resolve symlink */
 	if (!(flags & O_NOFOLLOW) && S_ISLNK(entry.mode)) {
 		D_ASSERT(entry.value);
-		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
+		rc = follow_symlink(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to lookup symlink '%s': %d (%s)\n", entry.value,
 				rc, strerror(rc));
@@ -1616,7 +1620,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 {
 	daos_handle_t      th = DAOS_TX_NONE;
 	daos_key_t         dkey;
-	daos_handle_t      oh;
+	daos_handle_t      oh = DAOS_HDL_INVAL;
 	daos_handle_t      upd_oh;
 	d_sg_list_t        sgl;
 	d_iov_t            sg_iovs[10];
@@ -1653,10 +1657,15 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		}
 	}
 
-	/** Open parent object; entry_stat reads the dentry and resolves GIT for hardlinks. */
-	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
-	if (rc)
-		return daos_der2errno(rc);
+	/**
+	 * A hardlink inode lives in GIT keyed by OID; the parent handle is only needed to read and
+	 * update the dentry of a regular file.
+	 */
+	if (!DFS_IS_HARDLINK(obj->mode)) {
+		rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
+		if (rc)
+			return daos_der2errno(rc);
+	}
 
 	len         = strlen(obj->name);
 	saved_flags = flags;
@@ -1882,7 +1891,8 @@ out_tx:
 	}
 	if (rc == 0)
 		*stbuf = rstat;
-	daos_obj_close(oh, NULL);
+	if (daos_handle_is_valid(oh))
+		daos_obj_close(oh, NULL);
 	return rc;
 }
 
@@ -2033,6 +2043,7 @@ dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *new_name, df
 	daos_handle_t     src_parent_oh;
 	struct timespec   now;
 	bool              exists;
+	bool              is_hardlink;
 	size_t            len;
 	uint64_t          new_link_cnt;
 	int               daos_mode;
@@ -2066,22 +2077,33 @@ dfs_link(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_t *parent, const char *new_name, df
 		return daos_der2errno(rc);
 
 restart:
-	/** Re-read source entry under this TX attempt to avoid stale assumptions. */
-	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &src_parent_oh, NULL);
-	if (rc) {
-		rc = daos_der2errno(rc);
-		D_GOTO(out, rc);
-	}
+	/*
+	 * An already hardlinked source is resolved from GIT by OID: the name/parent cached in the
+	 * object handle is only one of its links and may no longer exist.
+	 */
+	is_hardlink = DFS_IS_HARDLINK(obj->mode);
 
-	rc = fetch_entry(dfs->layout_v, src_parent_oh, th, obj->name, strlen(obj->name), false,
-			 &exists, &src_entry, 0, NULL, NULL, NULL);
-	daos_obj_close(src_parent_oh, NULL);
-	if (rc)
-		D_GOTO(out, rc);
-	if (!exists)
-		D_GOTO(out, rc = ENOENT);
-	if (src_entry.oid.hi != obj->oid.hi || src_entry.oid.lo != obj->oid.lo)
-		D_GOTO(out, rc = ENOENT);
+	if (!is_hardlink) {
+		/** Re-read source entry under this TX attempt to avoid stale assumptions. */
+		rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &src_parent_oh, NULL);
+		if (rc) {
+			rc = daos_der2errno(rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = fetch_entry(dfs->layout_v, src_parent_oh, th, obj->name, strlen(obj->name),
+				 false, &exists, &src_entry, 0, NULL, NULL, NULL);
+		daos_obj_close(src_parent_oh, NULL);
+		if (rc)
+			D_GOTO(out, rc);
+		if (!exists)
+			D_GOTO(out, rc = ENOENT);
+		if (src_entry.oid.hi != obj->oid.hi || src_entry.oid.lo != obj->oid.lo)
+			D_GOTO(out, rc = ENOENT);
+
+		/** another client may have converted the file to a hardlink in the meantime */
+		is_hardlink = DFS_IS_HARDLINK(src_entry.mode);
+	}
 
 	/** Make sure that the new_name entry does not exist */
 	rc = fetch_entry(dfs->layout_v, parent->oh, th, new_name, len, false, &exists, &new_entry,
@@ -2092,7 +2114,7 @@ restart:
 		D_GOTO(out, rc = EEXIST);
 
 	/** Update existing GIT link count, or create/initialize GIT state on first hardlink. */
-	if (DFS_IS_HARDLINK(src_entry.mode)) {
+	if (is_hardlink) {
 		rc = git_fetch_entry(dfs->git_oh, th, &obj->oid, &git_entry, 0, NULL, NULL, NULL);
 		if (rc)
 			D_GOTO(out, rc);

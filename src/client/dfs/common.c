@@ -937,30 +937,44 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 
 	memset(stbuf, 0, sizeof(struct stat));
 
-	/** Check if parent has the entry. */
-	rc = fetch_entry(dfs->layout_v, oh, th, name, len, false, &exists, &entry, 0, NULL, NULL,
-			 NULL);
-	if (rc)
-		return rc;
-
-	if (!exists)
-		return ENOENT;
-
-	if (obj && (obj->oid.hi != entry.oid.hi || obj->oid.lo != entry.oid.lo))
-		return ENOENT;
-
 	/*
-	 * If the entry is a hardlink, its authoritative inode metadata (times, uid, gid, and
-	 * link count) lives in the GIT object keyed by the file OID.
+	 * An open object keeps only one of the names a hardlinked inode is reachable by, and that
+	 * name may have been removed while the inode is still alive. Read the inode straight from
+	 * GIT by OID instead of resolving the (possibly stale) parent dentry.
 	 */
-	if (DFS_IS_HARDLINK(entry.mode)) {
+	if (obj && DFS_IS_HARDLINK(obj->mode)) {
 		if (!daos_handle_is_valid(dfs->git_oh))
 			return ENOTSUP;
-		rc = git_fetch_entry(dfs->git_oh, th, &entry.oid, &entry, 0, NULL, NULL, NULL);
+		rc = git_fetch_entry(dfs->git_oh, th, &obj->oid, &entry, 0, NULL, NULL, NULL);
 		if (rc)
 			return rc;
-		if (obj)
-			dfs_set_hardlink(&obj->mode);
+	} else {
+		/** Check if parent has the entry. */
+		rc = fetch_entry(dfs->layout_v, oh, th, name, len, false, &exists, &entry, 0, NULL,
+				 NULL, NULL);
+		if (rc)
+			return rc;
+
+		if (!exists)
+			return ENOENT;
+
+		if (obj && (obj->oid.hi != entry.oid.hi || obj->oid.lo != entry.oid.lo))
+			return ENOENT;
+
+		/*
+		 * If the entry is a hardlink, its authoritative inode metadata (times, uid, gid,
+		 * and link count) lives in the GIT object keyed by the file OID.
+		 */
+		if (DFS_IS_HARDLINK(entry.mode)) {
+			if (!daos_handle_is_valid(dfs->git_oh))
+				return ENOTSUP;
+			rc = git_fetch_entry(dfs->git_oh, th, &entry.oid, &entry, 0, NULL, NULL,
+					     NULL);
+			if (rc)
+				return rc;
+			if (obj)
+				dfs_set_hardlink(&obj->mode);
+		}
 	}
 
 	switch (entry.mode & S_IFMT) {

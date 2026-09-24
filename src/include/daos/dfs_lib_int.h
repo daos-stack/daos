@@ -77,7 +77,7 @@ dfs_remove_internal(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 void
 dfs_update_parentfd(dfs_obj_t *obj, dfs_obj_t *new_parent, const char *name);
 
-/** update chunk size and oclass of obj with the ones from new_obj */
+/** update chunk size and oclass of obj with the ones from new_obj, and adopt its hardlink bit */
 void
 dfs_obj_copy_attr(dfs_obj_t *dst_obj, dfs_obj_t *src_obj);
 
