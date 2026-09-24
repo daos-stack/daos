@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
@@ -83,6 +84,18 @@ type mgmtSvc struct {
 	serialReqs        batchReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
+	daosCARootPath    string
+	allowInsecure     bool
+	// poolCertMaxClockSkew mirrors transport_config.pool_cert_max_clock_skew.
+	poolCertMaxClockSkew time.Duration
+}
+
+// poolCertSkew returns the NotBefore tolerance node cert validation applies.
+func (svc *mgmtSvc) poolCertSkew() time.Duration {
+	if svc.poolCertMaxClockSkew > 0 {
+		return svc.poolCertMaxClockSkew
+	}
+	return security.NotBeforeSkewTolerance
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
