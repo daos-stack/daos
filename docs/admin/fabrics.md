@@ -17,7 +17,7 @@ DAOS uses two types of network communication between nodes:
   RPC framework, which provides RDMA transfer capabilities if the underlying
   high-performance fabric supports it.
 
-When designing a DAOS solution, one question that needs to be decided
+When planning the deployment of a DAOS system, one question that needs to be decided
 early on is whether the control plane traffic will use the same physical
 network as the data plane (for example, an IP-over-IB interface on the
 InfiniBand NIC in an InfiniBand network), or whether the control plane will use
@@ -174,7 +174,8 @@ the following steps are needed:
 
 * A supported version of DOCA-OFED must be installed _before_
   DAOS is installed on all DAOS servers and clients. DAOS only supports
-  the NVIDIA-provided DOCA-OFED stack for UCX, not Linux inbox drivers.
+  the NVIDIA-provided DOCA-OFED stack for UCX, not Linux inbox drivers
+  or distribution packages.
   Refer to the [DAOS Support Matrix](../release/support_matrix.md)
   for information about supported DOCA-OFED releases.
 
