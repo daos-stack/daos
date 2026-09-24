@@ -512,7 +512,7 @@ engines:
 
 The recommended provider for Slingshot fabrics is `ofi+cxi`,
 and a current level of the [HPE Slingshot Host Software (SHS) stack][hpe_shs]
-has to be installed on all hosts.
+has to be installed on all hosts. The settings below apply to SHS 14.0 and later.
 
 The SHS stack includes its own version of libfabric,
 which gets installed into `/opt/cray/libfabric/<version>/lib64/`.
@@ -521,48 +521,37 @@ the `LD_LIBRARY_PATH` needs to be set to point to this path.
 On the DAOS servers, this is done in the `env_vars` section of the engines.
 
 The following example of the network-related configuration settings for Slingshot
-in `daos_server.yml` also includes several libfabric and Mercury tunables.
+in `daos_server.yml` also includes libfabric and Mercury tunables.
 While the detailed settings depend on the size of the system,
 this is a good starting point for Slingshot environments.
 
 ```yaml
 provider: ofi+cxi
+fabric_auth_key: "4:64512:65535" # Client VNI range to accept <svc_id:vni_min:vni_max>
 
 engines:
 -
-  fabric_iface: hsn0
+  fabric_iface: hsn0 
+  fabric_iface_port: 128 # Valid CXI PIDs are in the range [0-510] (see fi_cxi manpage)
 
   env_vars:
-  - D_MRECV_BUF=16
-  - D_MRECV_BUF_COPY=4
-  - FI_CXI_OFLOW_BUF_SIZE=8388608
-  - FI_CXI_OPTIMIZED_MRS=0
-  - FI_CXI_RDZV_THRESHOLD=20480
-  - FI_CXI_REQ_BUF_MIN_POSTED=8
-  - FI_CXI_REQ_BUF_SIZE=8388608
-  - FI_CXI_RX_MATCH_MODE=hybrid
-  - FI_MR_CACHE_MONITOR=disabled
-  - FI_CXI_DEFAULT_CQ_SIZE=131072
-  - LD_LIBRARY_PATH=/opt/cray/libfabric/2.3.1/lib64
-  - NA_OFI_SKIP_DOMAIN_OPS=1
-  - SWIM_TRAFFIC_CLASS=low_latency
+  - D_MRECV_BUF=16     # Number of preposted multi-recv buffers
+  - D_MRECV_BUF_COPY=4 # Remaining buffer threshold until start of payload copy
+  - FI_CXI_RDZV_THRESHOLD=20480   # Needed when CXI RNR is disabled
+  - FI_CXI_OFLOW_BUF_SIZE=8388608 # Needed when CXI RNR is disabled
+  - FI_CXI_REQ_BUF_MIN_POSTED=8   # Needed when CXI RNR is disabled
+  - FI_CXI_REQ_BUF_SIZE=8388608   # Needed when CXI RNR is disabled
+  - FI_CXI_RX_MATCH_MODE=hybrid   # Needed when CXI RNR is disabled
+  - LD_LIBRARY_PATH=/opt/cray/libfabric/2.3.1/lib64 # Path to the SHS version of libfabric
+  - FI_CXI_OPTIMIZED_MRS=0         # Needed with mercury <= v2.4.1
+  - NA_OFI_SKIP_DOMAIN_OPS=1       # Needed with mercury <= v2.4.1
+  - SWIM_TRAFFIC_CLASS=low_latency # Separate traffic for SWIM messages
 -
   fabric_iface: hsn1
+  fabric_iface_port: 256
 
   env_vars:
-  - D_MRECV_BUF=16
-  - D_MRECV_BUF_COPY=4
-  - FI_CXI_OFLOW_BUF_SIZE=8388608
-  - FI_CXI_OPTIMIZED_MRS=0
-  - FI_CXI_RDZV_THRESHOLD=20480
-  - FI_CXI_REQ_BUF_MIN_POSTED=8
-  - FI_CXI_REQ_BUF_SIZE=8388608
-  - FI_CXI_RX_MATCH_MODE=hybrid
-  - FI_MR_CACHE_MONITOR=disabled
-  - FI_CXI_DEFAULT_CQ_SIZE=131072
-  - LD_LIBRARY_PATH=/opt/cray/libfabric/2.3.1/lib64
-  - NA_OFI_SKIP_DOMAIN_OPS=1
-  - SWIM_TRAFFIC_CLASS=low_latency
+  - [...] # Identical to settings above
 ```
 
 The cache monitor for the memory registration (MR) cache for RDMA transfers
@@ -571,7 +560,7 @@ Refer to the "kdreg2" sections in the HPE Slingshot
 [Host Software Installation and Configuration Guide][hpe_shs_kdreg2]
 and [Host Software Administration Guide][hpe_shs_admin_kdreg2].
 
-On the DAOS servers, the recommendation is to disable `FI_MR_CACHE_MONITOR`.
+On the DAOS servers, the MR cache monitor is disabled by default (`FI_MR_CACHE_MONITOR=disabled`).
 On the DAOS clients, the recommendation is to use the `kdreg2` cache monitor.
 The following tunables should be set in the user environment
 on all DAOS client nodes
@@ -579,15 +568,15 @@ on all DAOS client nodes
 See the `DAOS` section in the [Host Software User Guide][hpe_shs_daos]:
 
 ```
-LD_LIBRARY_PATH=/opt/cray/libfabric/2.3.1/lib64
 FI_CXI_RX_MATCH_MODE=hybrid
 FI_MR_CACHE_MONITOR=kdreg2
-FI_CXI_DEFAULT_CQ_SIZE=131072
 ```
 
-It may also be beneficial to adjust the
-`FI_MR_CACHE_MAX_SIZE` and `FI_MR_CACHE_MAX_COUNT`
-tunables.
+Note that setting `FI_CXI_RX_MATCH_MODE=hybrid` globally (when RNR is disabled) may affect
+performance of all client applications (including MPI applications). In this particular case,
+a more fine-grained alternative is to rely on custom modulefiles that can be loaded when DAOS
+must be used. It may also be beneficial to adjust the `FI_MR_CACHE_MAX_SIZE` and 
+`FI_MR_CACHE_MAX_COUNT` tunables.
 
 General TCP and Ethernet tuning recommendations for Slingshot can be found
 in the _TCP performance tuning_ and _Ethernet tuning_ sections of the
@@ -595,11 +584,68 @@ in the _TCP performance tuning_ and _Ethernet tuning_ sections of the
 The tuning script referenced therein is located in
 `/opt/slingshot/utils/<version>/bin/slingshot-eth-tuning`.
 
+#### VNI Configuration
+
+!!! note
+    The following section currently only applies to PBS environments.
+
+To isolate RDMA traffic between DAOS clients, it is highly recommended for security to enable VNIs 
+(Virtual Network Identifiers). A VNI is a protection key used by the Slingshot network to
+provide isolation between applications. Because VNIs define an isolated PID space for a given NIC,
+endpoints must use the same VNI in order to communicate. To allow this type of communication between
+DAOS clients and servers, a VNI range must be properly configured on servers and client nodes
+must be configured to only select a VNI within that specified range.
+
+This is done in multiple steps:
+- A CXI service ([see documentation][hpe_shs_cxi_service]) that accepts a
+  range of VNIs must first be configured on DAOS server nodes. This is done by
+  using the `cxi_service` command. This command has been augmented in SHS 14.0 to specify
+  VNI ranges in its yaml configuration file:
+  ```yaml
+  vnis:
+    vni_min: 64512
+    vni_max: 65535
+  ```
+  One can then create a CXI service by running `cxi_service create -y <service_yaml_file>`, which produces a new CXI service identifier.
+- The second step is to configure DAOS servers to use the specified VNI range and CXI service.
+  This is controlled by the `fabric_auth_key` parameter in the `daos_server.yml` file. For example:
+  ```yaml
+  fabric_auth_key: "4:64512:65535" # Client VNI range to accept <svc_id:vni_min:vni_max>
+  ```
+  where 4 is the CXI service identifier, and 64512 and 65535 are the minimum and maximum VNIs, respectively.
+- The third step is to configure the `vnid` service (see [VNI range documentation][hpe_vnid_range] 
+  for additional details) that interacts with the PBS scheduler and the PALS daemons running on the 
+  compute nodes. One must first resize the default application pool to accommodate the desired VNI 
+  range (which usually spans the entire VNI range) and create a new pool by running the following
+  command:
+  ```bash
+  vnidctrl --url <vnid_url> pool update "applications" 1024 64511 "applications"
+  vnidctrl --url <vnid_url> pool create "daos" 64512 65535 "jobs"
+  ```
+  Effectively, this command creates a new pool named "daos" with the specified VNI range, `"jobs"` 
+  meaning that the VNIs allocated from that pool are per job.
+- Finally, one can test the configuration by running the following command within a PBS job:
+  ```bash
+  mpiexec --daos env | grep SLIN
+  SLINGSHOT_VNIS=1116,1115,64529
+  SLINGSHOT_DEVICES=cxi0
+  SLINGSHOT_SVC_IDS=5
+  ```
+  Note the `--daos` flag passed to the `mpiexec` command, which ensures that the DAOS VNI (the third VNI in the `SLINGSHOT_VNIS` list) is set.
+
+!!! warning
+  Through this method, all `daos` commands and applications that interact with DAOS can only be
+  run within a PBS job and mpiexec must be used with the `--daos` flag to ensure proper DAOS VNI 
+  configuration.
+
 [hpe_shs]: https://support.hpe.com/km/search#tab=All&q=slingshot%2014.0.1
+[hpe_shs_cxi_service]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008089en_us&page=operations/cxi_services.html
+[hpe_shs_params]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008090en_us&page=user/libfabric_runtime_configurable_parameters.html
 [hpe_shs_kdreg2]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008086en_us&page=install/kdreg2_introduction.html
 [hpe_shs_admin_kdreg2]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008089en_us&page=operations/kdreg2_configuration.html
 [hpe_shs_daos]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008090en_us&page=user/daos.html
 [hpe_shs_tcp]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008089en_us&page=performance/slingshot-eth-tuning.html
+[hpe_vnid_range]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00007635en_us&page=common/wlm/VNI_range_overlap_risk.html
 
 ### Cornelis Omni-Path with libfabric TCP or VERBS
 
