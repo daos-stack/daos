@@ -1454,6 +1454,41 @@ bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks, 
 				    crt_tree_topo(CRT_TREE_KNOMIAL, 2), rpc);
 }
 
+/*
+ * Raise the timeout of the RSVC_START corpc creating replicas of \a size bytes to the time
+ * needed to allocate and format an RDB VOS pool of that size on a slow engine, since the
+ * generic cart RPC timeout (crt_timeout) may be configured much lower. The handler returns
+ * without waiting for a leader election, and the child RPCs of the corpc inherit its deadline.
+ */
+static int
+dist_start_set_create_timeout(crt_rpc_t *rpc, const uuid_t dbid, size_t size)
+{
+	uint32_t timeout;
+	uint32_t floor;
+	int      rc;
+
+	rc = crt_req_get_timeout(rpc, &timeout);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to get create RPC timeout", DP_UUID(dbid));
+		return rc;
+	}
+
+	floor = ds_rsvc_create_timeout_by_size(size);
+	if (timeout >= floor)
+		return 0;
+
+	rc = crt_req_set_timeout(rpc, floor);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to set create RPC timeout to %u s", DP_UUID(dbid),
+			 floor);
+		return rc;
+	}
+	D_DEBUG(DB_MD, DF_UUID ": raised create RPC timeout from %u to %u s\n", DP_UUID(dbid),
+		timeout, floor);
+
+	return 0;
+}
+
 /**
  * Perform a distributed start operation in \a mode on all replicas of a
  * database with \a dbid spanning \a ranks. This method can be called on any
@@ -1502,6 +1537,10 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 		in->sai_layout_version     = create_params->scp_layout_version;
 		in->sai_replicas.ca_arrays = create_params->scp_replicas;
 		in->sai_replicas.ca_count  = create_params->scp_replicas_len;
+
+		rc = dist_start_set_create_timeout(rpc, dbid, create_params->scp_size);
+		if (rc != 0)
+			goto out_rpc;
 	}
 
 	rc = dss_rpc_send(rpc);
