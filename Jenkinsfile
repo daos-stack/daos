@@ -1096,12 +1096,10 @@ pipeline {
                         }
                     }
                 } // stage('Unit Test bdev with memcheck')
-                stage('Test RPMs') {
+                stage('Test RPMs on EL 9') {
                     when {
-                        expression {
-                            shouldStageRun('Test RPMs on EL 9') ||
-                            shouldStageRun('Test RPMs on Leap 15')
-                        }
+                        beforeAgent true
+                        expression { shouldStageRun('Test RPMs on EL 9') }
                     }
                     steps {
                         script {
@@ -1120,6 +1118,18 @@ pipeline {
                                     archiveArtifactsArgs: [
                                         artifacts: 'Test RPMs on EL 9/']
                                 ),
+                            )
+                        }
+                    }
+                } // stage('Test RPMs on EL 9')
+                stage('Test RPMs on Leap 15') {
+                    when {
+                        beforeAgent true
+                        expression { shouldStageRun('Test RPMs on Leap 15') }
+                    }
+                    steps {
+                        script {
+                            parallel(
                                 'Test RPMs on Leap 15': scriptedTestRpmStage(
                                     name: 'Test RPMs on Leap 15',
                                     runStage: shouldStageRun('Test RPMs on Leap 15'),
@@ -1137,7 +1147,7 @@ pipeline {
                             )
                         }
                     }
-                } // stage('Test RPMs')
+                } // stage('Test RPMs on Leap 15')
             }
         }
         stage('Tests') {
