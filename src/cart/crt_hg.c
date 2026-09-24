@@ -600,8 +600,8 @@ crt_provider_get_ctx_idx(bool primary, crt_provider_t provider)
 		}
 	}
 
-	D_DEBUG(DB_ALL, "provider:%d allowed context limit = %d exceeded\n",
-		provider, CRT_SRV_CONTEXT_NUM);
+	D_DEBUG(DB_ALL, "provider:%d allowed context limit = %u exceeded\n", provider,
+		prov_data->cpg_ctx_max_num);
 
 	return -1;
 }
