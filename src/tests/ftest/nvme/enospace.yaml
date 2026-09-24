@@ -74,7 +74,7 @@ ior_new:
   test_file: /testFile
   transfer_size: 10240  # 10K
   block_size: 491520000  # 480M
-  iterations: 3
+  iterations: 10
 
 aggregation:
   scm_threshold_percent: 99  # percent of scm expected to be reclaimed after aggregation

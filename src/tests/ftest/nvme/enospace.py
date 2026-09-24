@@ -22,6 +22,7 @@ from telemetry_test_base import TestWithTelemetry
 class NvmeEnospace(ServerFillUp, TestWithTelemetry):
     # pylint: disable=too-many-public-methods
     # pylint: disable=too-many-ancestors
+    # pylint: disable=too-many-lines
     """
     Test Class Description: To validate DER_NOSPACE for SCM and NVMe
     :avocado: recursive
@@ -320,9 +321,9 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         pool_space = self.pool.info.pi_space
         pool_space_metrics = self.get_pool_space_metrics(self.pool, metrics)
-        self.display_pool_space(pool_space, pool_space_metrics)
-
         pool_aggr_metrics = self.get_pool_aggr_metrics(self.pool, metrics)
+
+        self.display_pool_space(pool_space, pool_space_metrics)
         self.display_pool_aggregation(pool_aggr_metrics)
         self.log.debug("")
 
@@ -824,6 +825,8 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             transfer_size=transfer_size,
             block_size=block_size,
             namespace='/run/ior_new/*')
+        max_wr_mib_baseline = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
+        self.log.info("IOR Write MiB: %s", max_wr_mib_baseline)
 
         # Read the baseline data set
         self.log_step('Running IOR baseline read')
@@ -841,7 +844,9 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Run IOR to fill the pool.
         self.log_step('Running IOR to fill ~90% of the pool')
-        self.run_enospace_with_bg_job(self.client_log)
+        # self.run_enospace_with_bg_job(self.client_log)
+        container_fill = self.get_container(self.pool)
+        self.fill_pool(container_fill, 90)
 
         # Read the same container which was written at the beginning.
         # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
@@ -936,6 +941,25 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.fail('Latest IOR read performance is not under 5% Tolerance'
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
+
+    def fill_pool(self, container, percentage):
+        """Fill the container to the specified SCM and NVMe percentages.
+
+        Args:
+            container (obj): The container to fill.
+            percentage (int): The target usage percentage for SCM.
+        """
+        # Implementation to fill the pool goes here
+        self.log.info("Filling container %s to SCM %d%%", container, percentage)
+        ior_metrics = self._get_ior_metrics(
+            container,
+            processes=64,
+            ior_flags=self.ior_default_flags,
+            transfer_size=self.ior_scm_xfersize,
+            block_size=self.calculate_ior_block_size(percentage, 'SCM'),
+            namespace='/run/ior_new/*')
+        self.display_stats()
+        self.log.info("IOR metrics for container %s: %s", container, float(ior_metrics))
 
     def _get_ior_metrics(self, container, processes, ior_flags, transfer_size, block_size,
                          namespace="/run/ior/*"):
