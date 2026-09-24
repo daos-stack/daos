@@ -1038,8 +1038,10 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 		return EINVAL;
 
 	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
-	/* Progressive layout is only reported for the default file class; clear until confirmed. */
-	attr->da_file_pl_nr = 0;
+	/* report the resolved PL layout (below) rather than the stored configuration */
+	attr->da_pl_nr          = 0;
+	attr->da_pl_head_oclass = 0;
+	memset(attr->da_pl_segs, 0, sizeof(attr->da_pl_segs));
 
 	if (!dfs->attr.da_dir_oclass_id) {
 		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_MULTI_HASHED, 0, 0,
@@ -1051,11 +1053,9 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 	}
 
 	/*
-	 * A non-zero da_file_oclass_id means the container has an explicit default file class, so
-	 * the default layout is NOT progressive. Only when it is unset (0) do we resolve the
-	 * default byte-array class and the progressive-layout head/tail segment(s) it would
-	 * produce: da_file_oclass_id becomes the compact head class and da_file_pl_segs[] the wider
-	 * tail segment(s); da_file_pl_nr stays 0 when PL does not apply.
+	 * An unset da_file_oclass_id means files get the DAOS default byte-array class; resolve it
+	 * for reporting, and, if the container enables progressive layout, the head/tail/split
+	 * that default files would receive (da_pl_nr stays 0 when PL does not apply).
 	 */
 	if (!dfs->attr.da_file_oclass_id) {
 		daos_oclass_id_t head_cid  = OC_UNKNOWN;
@@ -1080,11 +1080,11 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 			return rc;
 		}
 		if (has_tail) {
-			attr->da_file_oclass_id                = head_cid;
-			attr->da_file_pl_nr                    = 1;
-			attr->da_file_pl_segs[0].pls_oclass_id = tail_cid;
-			attr->da_file_pl_segs[0].pls_split_off = split_off;
-			attr->da_file_pl_segs[0].pls_oid       = DAOS_OBJ_NIL;
+			attr->da_pl_nr                    = 1;
+			attr->da_pl_head_oclass           = head_cid;
+			attr->da_pl_segs[0].pls_oclass_id = tail_cid;
+			attr->da_pl_segs[0].pls_split_off = split_off;
+			attr->da_pl_segs[0].pls_oid       = DAOS_OBJ_NIL;
 		}
 	}
 
@@ -1112,11 +1112,18 @@ struct dfs_glob {
 	uint32_t         pl_target_nr;
 	uint64_t         pl_total_scm;
 	uint64_t         pl_total_nvme;
+	/** progressive layout configuration; the SB is not re-read on global2local */
+	uint32_t         pl_nr;
+	daos_oclass_id_t pl_head_oclass;
+	daos_oclass_id_t pl_seg_oclass[DFS_PL_MAX_SEGMENTS];
+	daos_size_t      pl_seg_split_off[DFS_PL_MAX_SEGMENTS];
 };
 
 static inline void
 swap_dfs_glob(struct dfs_glob *dfs_params)
 {
+	int i;
+
 	D_ASSERT(dfs_params != NULL);
 
 	D_SWAP32S(&dfs_params->magic);
@@ -1133,6 +1140,12 @@ swap_dfs_glob(struct dfs_glob *dfs_params)
 	D_SWAP32S(&dfs_params->pl_target_nr);
 	D_SWAP64S(&dfs_params->pl_total_scm);
 	D_SWAP64S(&dfs_params->pl_total_nvme);
+	D_SWAP32S(&dfs_params->pl_nr);
+	D_SWAP16S(&dfs_params->pl_head_oclass);
+	for (i = 0; i < DFS_PL_MAX_SEGMENTS; i++) {
+		D_SWAP16S(&dfs_params->pl_seg_oclass[i]);
+		D_SWAP64S(&dfs_params->pl_seg_split_off[i]);
+	}
 	/* skip cont_uuid */
 	/* skip coh_uuid */
 }
@@ -1150,6 +1163,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	uuid_t           coh_uuid;
 	uuid_t           cont_uuid;
 	daos_size_t      glob_buf_size;
+	int              i;
 	int              rc = 0;
 
 	if (dfs == NULL || !dfs->mounted)
@@ -1208,6 +1222,12 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	dfs_params->pl_target_nr  = dfs->pl_target_nr;
 	dfs_params->pl_total_scm  = dfs->pl_total_scm;
 	dfs_params->pl_total_nvme = dfs->pl_total_nvme;
+	dfs_params->pl_nr          = dfs->attr.da_pl_nr;
+	dfs_params->pl_head_oclass = dfs->attr.da_pl_head_oclass;
+	for (i = 0; i < DFS_PL_MAX_SEGMENTS; i++) {
+		dfs_params->pl_seg_oclass[i]    = dfs->attr.da_pl_segs[i].pls_oclass_id;
+		dfs_params->pl_seg_split_off[i] = dfs->attr.da_pl_segs[i].pls_split_off;
+	}
 	uuid_copy(dfs_params->coh_uuid, coh_uuid);
 	uuid_copy(dfs_params->cont_uuid, cont_uuid);
 
@@ -1222,6 +1242,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 	int              obj_mode;
 	uuid_t           coh_uuid;
 	uuid_t           cont_uuid;
+	int              i;
 	int              rc = 0;
 
 	if (_dfs == NULL)
@@ -1278,6 +1299,13 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 	dfs->pl_target_nr           = dfs_params->pl_target_nr;
 	dfs->pl_total_scm           = dfs_params->pl_total_scm;
 	dfs->pl_total_nvme          = dfs_params->pl_total_nvme;
+	dfs->attr.da_pl_nr          = dfs_params->pl_nr;
+	dfs->attr.da_pl_head_oclass = dfs_params->pl_head_oclass;
+	for (i = 0; i < DFS_PL_MAX_SEGMENTS; i++) {
+		dfs->attr.da_pl_segs[i].pls_oclass_id = dfs_params->pl_seg_oclass[i];
+		dfs->attr.da_pl_segs[i].pls_split_off = dfs_params->pl_seg_split_off[i];
+		dfs->attr.da_pl_segs[i].pls_oid       = DAOS_OBJ_NIL;
+	}
 
 	dfs->super_oid       = dfs_params->super_oid;
 	dfs->root.oid        = dfs_params->root_oid;

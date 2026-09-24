@@ -95,14 +95,9 @@ dfs_test_mount(void **state)
 	assert_int_equal(attr.da_dir_oclass_id, exp_doc);
 	rc = daos_obj_get_oclass(coh, DAOS_OT_ARRAY_BYTE, 0, 0, &exp_foc);
 	assert_rc_equal(rc, 0);
-	if (attr.da_file_pl_nr > 0)
-		/*
-		 * Progressive layout: da_file_oclass_id is the compact head class and the wide
-		 * default class  for arrays is what is used for the tail segment.
-		 */
-		assert_int_equal(attr.da_file_pl_segs[0].pls_oclass_id, exp_foc);
-	else
-		assert_int_equal(attr.da_file_oclass_id, exp_foc);
+	assert_int_equal(attr.da_file_oclass_id, exp_foc);
+	/** progressive layout is opt-in and must be off for a default container */
+	assert_int_equal(attr.da_pl_nr, 0);
 
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
@@ -3893,6 +3888,9 @@ dfs_test_pl_oclass_selection(void **state)
 	bool                     bypass_target_limit                       = false;
 	bool                     has_tail;
 	dfs_attr_t               dattr = {0};
+	dfs_attr_t               qattr = {0};
+	dfs_obj_t               *obj;
+	dfs_obj_info_t           info = {0};
 	int                      rc;
 
 	if (arg->myrank != 0)
@@ -3903,18 +3901,69 @@ dfs_test_pl_oclass_selection(void **state)
 	assert_int_equal(rc, 0);
 	daos_oclass_id2name(explicit_cid, explicit_name);
 
-	/* Start from a container with default file-class selection enabled. */
-	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_oclass_sel", &dattr, NULL, &coh, &dfs_l);
-	assert_int_equal(rc, 0);
-
 	/* Query the pool and resolve the default wide file class through the public hint API. */
 	rc = daos_pool_query(arg->pool.poh, NULL, &pool_info, NULL, NULL);
 	assert_rc_equal(rc, 0);
-	rc = dfs_suggest_oclass(dfs_l, "file:max", &default_tail);
+	rc = dfs_suggest_oclass(dfs_mt, "file:max", &default_tail);
 	assert_int_equal(rc, 0);
 	tail_attr = daos_oclass_id2attr(default_tail, &max_groups);
 	assert_non_null(tail_attr);
 	d_getenv_bool("DFS_PL_BYPASS_TARGET_LIMIT", &bypass_target_limit);
+
+	/* PL is opt-in: a default container must create plain single-object files. */
+	print_message("PL stage: disabled by default\n");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_oclass_off", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+	rc = dfs_query(dfs_l, &qattr);
+	assert_int_equal(rc, 0);
+	assert_int_equal(qattr.da_pl_nr, 0);
+	assert_file_oclass_selection(dfs_l, coh, &pool_info, NULL, "pl_off", 0, default_tail,
+				     OC_UNKNOWN, false);
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_success(rc);
+	rc = daos_cont_destroy(arg->pool.poh, "pl_oclass_off", 0, NULL);
+	assert_success(rc);
+
+	/* Invalid PL configurations must be rejected at container create. */
+	print_message("PL stage: create-time validation\n");
+	memset(&dattr, 0, sizeof(dattr));
+	dattr.da_pl_nr = 2;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_bad", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, ENOTSUP);
+	memset(&dattr, 0, sizeof(dattr));
+	dattr.da_pl_nr          = 1;
+	dattr.da_file_oclass_id = explicit_cid;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_bad", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	memset(&dattr, 0, sizeof(dattr));
+	dattr.da_pl_nr = 1;
+	strcpy(dattr.da_hints, "file:max");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_bad", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	memset(&dattr, 0, sizeof(dattr));
+	dattr.da_pl_nr          = 1;
+	dattr.da_pl_head_oclass = explicit_cid;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_bad", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	memset(&dattr, 0, sizeof(dattr));
+	dattr.da_pl_nr                    = 1;
+	dattr.da_pl_segs[0].pls_oclass_id = default_tail;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_bad", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	memset(&dattr, 0, sizeof(dattr));
+	dattr.da_pl_nr                    = 1;
+	dattr.da_pl_head_oclass           = 0xffff;
+	dattr.da_pl_segs[0].pls_oclass_id = default_tail;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_bad", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+
+	/* Start from a container with PL enabled in auto mode. */
+	memset(&dattr, 0, sizeof(dattr));
+	dattr.da_pl_nr = 1;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_oclass_sel", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
 
 	/*
 	 * PL should create a tail on the default-selection path when the tail class has a valid
@@ -3972,6 +4021,7 @@ dfs_test_pl_oclass_selection(void **state)
 
 	/* Recreate the container with an explicit file oclass and confirm that PL stays disabled.
 	 */
+	memset(&dattr, 0, sizeof(dattr));
 	dattr.da_file_oclass_id = explicit_cid;
 	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_oclass_sel_exp", &dattr, NULL, &coh,
 					&dfs_l);
@@ -3987,6 +4037,77 @@ dfs_test_pl_oclass_selection(void **state)
 	assert_success(rc);
 	rc = daos_cont_destroy(arg->pool.poh, "pl_oclass_sel_exp", 0, NULL);
 	assert_success(rc);
+
+	/*
+	 * Explicit mode: pin the head and tail classes (swapped from the auto choice so the pinned
+	 * values are distinguishable) and a split offset, and verify they are used verbatim and
+	 * reported back through dfs_query(), including across a global2local round trip.
+	 */
+	if (has_tail) {
+		dfs_t      *dfs_g;
+		d_iov_t     ghdl      = {NULL, 0, 0};
+		daos_size_t exp_split = 3 * 1048576 + 512;
+
+		print_message("PL stage: explicit head=%s tail=%s split_off=%zu\n",
+			      default_head_name, default_tail_name, exp_split);
+		memset(&dattr, 0, sizeof(dattr));
+		dattr.da_pl_nr                    = 1;
+		dattr.da_pl_head_oclass           = default_head;
+		dattr.da_pl_segs[0].pls_oclass_id = default_tail;
+		dattr.da_pl_segs[0].pls_split_off = exp_split;
+		rc = dfs_cont_create_with_label(arg->pool.poh, "pl_oclass_explicit", &dattr, NULL,
+						&coh, &dfs_l);
+		assert_int_equal(rc, 0);
+
+		rc = dfs_query(dfs_l, &qattr);
+		assert_int_equal(rc, 0);
+		assert_int_equal(qattr.da_pl_nr, 1);
+		assert_int_equal(compare_oclass(coh, qattr.da_pl_head_oclass, default_head), 0);
+		assert_int_equal(
+		    compare_oclass(coh, qattr.da_pl_segs[0].pls_oclass_id, default_tail), 0);
+		assert_int_equal(qattr.da_pl_segs[0].pls_split_off, exp_split);
+
+		/* the pinned, unaligned split must be used as given on file create */
+		rc = dfs_open(dfs_l, NULL, "pl_explicit", S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
+		assert_int_equal(rc, 0);
+		rc = dfs_obj_get_info(dfs_l, obj, &info);
+		assert_int_equal(rc, 0);
+		assert_int_equal(info.doi_pl_nr, 1);
+		assert_int_equal(compare_oclass(coh, info.doi_pl_head_oclass_id, default_head), 0);
+		assert_int_equal(compare_oclass(coh, daos_obj_id2class(info.doi_pl_segs[0].pls_oid),
+						default_tail),
+				 0);
+		assert_int_equal(info.doi_pl_segs[0].pls_split_off, exp_split);
+		rc = dfs_release(obj);
+		assert_int_equal(rc, 0);
+
+		/* the configuration must survive handle serialization */
+		rc = dfs_local2global(dfs_l, &ghdl);
+		assert_int_equal(rc, 0);
+		D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
+		assert_non_null(ghdl.iov_buf);
+		ghdl.iov_len = ghdl.iov_buf_len;
+		rc           = dfs_local2global(dfs_l, &ghdl);
+		assert_int_equal(rc, 0);
+		rc = dfs_global2local(arg->pool.poh, coh, O_RDWR, ghdl, &dfs_g);
+		assert_int_equal(rc, 0);
+		D_FREE(ghdl.iov_buf);
+		rc = dfs_query(dfs_g, &qattr);
+		assert_int_equal(rc, 0);
+		assert_int_equal(qattr.da_pl_nr, 1);
+		assert_int_equal(compare_oclass(coh, qattr.da_pl_head_oclass, default_head), 0);
+		assert_int_equal(qattr.da_pl_segs[0].pls_split_off, exp_split);
+		rc = dfs_umount(dfs_g);
+		assert_int_equal(rc, 0);
+
+		rc = dfs_umount(dfs_l);
+		assert_int_equal(rc, 0);
+		rc = daos_cont_close(coh, NULL);
+		assert_success(rc);
+		rc = daos_cont_destroy(arg->pool.poh, "pl_oclass_explicit", 0, NULL);
+		assert_success(rc);
+	}
 }
 
 /*
@@ -4523,6 +4644,8 @@ dfs_test_pl_io(void **state)
 	rc          = d_setenv("DFS_PL_BYPASS_TARGET_LIMIT", "1", 1);
 	assert_int_equal(rc, 0);
 
+	/* PL is opt-in per container; enable it in auto mode */
+	dattr.da_pl_nr = 1;
 	rc = dfs_cont_create_with_label(arg->pool.poh, "pl_io", &dattr, NULL, &coh, &dfs_l);
 	assert_int_equal(rc, 0);
 
@@ -4786,6 +4909,7 @@ dfs_test_checker_pl(void **state)
 	char          *cname    = "cont_chkr_pl";
 	char          *prev_env = NULL;
 	bool           env_was_set;
+	dfs_attr_t     dattr = {0};
 	d_sg_list_t    sgl;
 	d_iov_t        iov;
 	d_iov_t        dkey;
@@ -4813,7 +4937,9 @@ dfs_test_checker_pl(void **state)
 
 	rc = dfs_init();
 	assert_int_equal(rc, 0);
-	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
+	/* PL is opt-in per container; enable it in auto mode on create */
+	dattr.da_pl_nr = 1;
+	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, &dattr, &dfs);
 	assert_int_equal(rc, 0);
 
 	/* save the root object ID for later */

@@ -26,12 +26,20 @@ By default, DFS tends to choose classes suitable for large files because DAOS do
 
 ## High-Level Approach
 
-Represent a file as up to two underlying DAOS array objects:
+Progressive layout is an opt-in, per-container feature (see "Enablement and Container
+Configuration" below). It is disabled by default; a container that does not enable it behaves
+exactly as before: every regular file is one DAOS array object.
+
+When enabled, represent a file as up to two underlying DAOS array objects:
 
 - Head object: compact class (G1, G2, G4, or G32), logical range [0, split_off)
 - Tail object: wide class (GX), logical range [split_off, EOF)
 
-split_off is defined once per container and applies to all progressive-layout files in that container. In the future we can consider making that per file like the chunk size if there is a need. Alternatively we can add an option to modify that default per container.
+The head class, tail class and split_off are defined once per container and apply to all
+progressive-layout files in that container. By default they are derived automatically from the
+pool and the container's default file class (policy below); advanced users may pin them explicitly
+at container create time. In the future we can consider making split_off per file like the chunk
+size if there is a need.
 
 At file creation time, both head and tail object IDs are allocated and persisted in metadata.
 Before crossing split_off, effective data placement is head-only.
@@ -45,18 +53,162 @@ Logical mapping:
 
 Metadata operations like punch/remove/size query must operate on both objects for correctness. Even if tail bytes were later removed/punched, tail_state remains a one-way transition.
 
+## Enablement and Container Configuration
+
+Progressive layout is **off by default** and is enabled per container at create time. This keeps
+the feature defensive while it is new: no existing workload changes behavior unless a user asks for
+it. Container defaults are fixed at create time; consistent with the rest of DFS, they are not
+changed later via `set-attr`.
+
+### Two modes
+
+- **Auto (the common case).** The user only enables the feature. The head class, tail class and
+  split_off are all derived by the selection policy in the next section (tail = the container's
+  default file class, head = a compact variant of it, split_off = the per-target capacity budget).
+- **Explicit (advanced).** The user pins **both** the head and the tail object class. The
+  split_off may additionally be pinned or left automatic.
+
+In both modes the small-pool gate applies.
+
+### Independence from the explicit file class
+
+The existing default file class (`da_file_oclass_id`, `--file-oclass`, `--oclass`, and `file:`
+hints) keeps exactly its current meaning in every direction: "create regular files as a single
+object of this class". Progressive layout has its own fields, its own superblock record and its
+own CLI flags, so the two never share state. Combining an explicit file class with progressive
+layout is a conflict and is rejected at container create.
+
+Per-file and per-directory overrides are unchanged: an explicit class passed to `dfs_open()`, or a
+directory with a class set through `dfs_obj_set_oclass()`, still yields a plain single-object file
+for that create, without error. Those are per-object choices, not container defaults.
+
+### C API (`dfs_attr_t`)
+
+```c
+/** Progressive layout configuration; ignored unless da_pl_nr > 0 (default off). */
+uint32_t         da_pl_nr;           /* number of tail segments: 0 = off, 1 = enabled */
+daos_oclass_id_t da_pl_head_oclass;  /* head class; 0 = auto */
+dfs_pl_seg_t     da_pl_segs[DFS_PL_MAX_SEGMENTS];
+                                     /* tails: pls_oclass_id 0 = auto, pls_split_off 0 = auto,
+                                      * pls_oid ignored on input */
+```
+
+| `da_pl_nr` | head | tail class | meaning |
+|---|---|---|---|
+| 0 | - | - | PL off (default); regular files are single objects |
+| 1 | 0 | 0 | PL on, auto mode |
+| 1 | X | Y | PL on, explicit head X and tail Y (split_off 0 = auto, else as given) |
+| 1 | X | 0 | `EINVAL` (head and tail must be pinned together) |
+| 1 | 0 | Y | `EINVAL` (head and tail must be pinned together) |
+| > 1 | - | - | `ENOTSUP` today (the inode holds one tail; format is multi-tail ready) |
+
+`dfs_query()` reports the *resolved* configuration back through the same `da_pl_*` fields and
+leaves `da_file_oclass_id` untouched. `dfs_obj_info_t` mirrors this with `doi_pl_head_oclass_id`
+next to the existing `doi_pl_nr`/`doi_pl_segs[]`.
+
+### Validation at container create
+
+| condition | result |
+|---|---|
+| `da_pl_nr > DFS_PL_MAX_SEGMENTS` | `EINVAL` |
+| `da_pl_nr > 1` | `ENOTSUP` |
+| `da_pl_nr > 0` with an explicit file class (`da_file_oclass_id`, `da_oclass_id` or a `file:` hint) | `EINVAL` |
+| exactly one of head / tail class set | `EINVAL` |
+| head or tail class not a known object class | `EINVAL` |
+| `pls_split_off` | accepted as given (0 = auto); no alignment check |
+| `pls_oid` | ignored |
+
+An explicit split_off is used verbatim. The auto path rounds split_off up to the file's chunk size
+for tail I/O alignment; a pinned value is an advanced knob and is not adjusted, even for files
+created with a non-default chunk size.
+
+### Command line
+
+A single option, `--dfs-pl=off|auto|<head>,<tail>[@<split_off>]`, selects the mode; `off` is the
+default.
+
+```
+# enable, auto mode (expected common case)
+daos cont create <pool> <cont> --type POSIX --dfs-pl auto
+
+# explicit head and tail, auto split_off
+daos cont create <pool> <cont> --type POSIX --dfs-pl EC_16P2G2,EC_16P2GX
+
+# explicit head, tail and split_off
+daos cont create <pool> <cont> --type POSIX --dfs-pl EC_16P2G2,EC_16P2GX@8GiB
+
+# rejected
+daos cont create ... --dfs-pl EC_16P2G2                           # tail missing        -> EINVAL
+daos cont create ... --dfs-pl auto --file-oclass EC_16P2GX        # explicit file class -> EINVAL
+daos cont create ... --dfs-pl auto --hints file:max               # explicit file hint  -> EINVAL
+daos cont create ... --dfs-pl A,B@2GiB,C@32GiB                    # two tails           -> ENOTSUP
+```
+
+The split_off accepts the same size syntax as `--chunk-size` (`8GiB`, `8GB`, `512MiB`, plain
+bytes, ...); note that `GB` (10^9) and `GiB` (2^30) differ, as for the chunk size. `dir:` hints
+and `--dir-oclass` are unaffected by progressive layout.
+
+`daos cont query` and `daos fs get-attr` print the resolved head, tail and split_off, each tagged
+`auto` or `explicit` so the configured and derived values can be told apart.
+
+### Persistence
+
+The configuration is stored in a new superblock a-key, `DFS_PL`, alongside the existing DFS
+defaults, as a small record:
+
+```
+struct dfs_sb_pl {
+	uint32_t         nr;     /* number of tail segments */
+	daos_oclass_id_t head;   /* 0 = auto */
+	struct { daos_oclass_id_t oclass; daos_size_t split_off; } seg[nr];  /* 0 = auto */
+};
+```
+
+The record stores the values the user supplied, zeros included, rather than the resolved ones.
+That is what makes the pool-map refresh meaningful: automatic fields are re-derived after a pool
+extend, pinned fields stay fixed. `dfs_query()` reports the resolved values. An absent `DFS_PL`
+key means PL is off. The record is carried through `dfs_local2global()`/`dfs_global2local()`, which
+never re-read the superblock.
+
+The record carries no version of its own: the superblock as a whole is versioned by
+`DFS_SB_VERSION`, which defines the set of a-keys a superblock may contain. Adding `DFS_PL` is
+therefore a superblock format change and bumps `DFS_SB_VERSION` to 3; the key is only read from
+superblocks of that version or later. Older clients refuse to mount a v3 superblock (they reject
+`sb_ver > DFS_SB_VERSION`, as today), while a v3 client still mounts v1/v2 superblocks, where the
+key is simply absent and PL is off. `nr > 1` in a record is rejected at mount with `ENOTSUP`
+(belt-and-braces alongside the layout-version check) so a record written by a future multi-tail
+client is not misread.
+
+### Resolution at file create
+
+`file_oclasses()` applies, in order:
+
+1. an explicit class from `dfs_open()` or the parent directory -> single object, no PL (unchanged);
+2. `da_pl_nr == 0` -> no PL (the opt-in gate);
+3. layout version < 4 -> no PL (unchanged);
+4. the small-pool gate (target_nr < 1000) -> no PL (unchanged);
+5. explicit mode -> head and tail as pinned; split_off as pinned, or derived if 0;
+   auto mode -> today's derivation (tail from the default file class, compact head, capacity
+   split_off).
+
+The cached pool information (and its pool-map-version refresh) is only consulted for fields that
+are automatic; a fully pinned configuration never queries the pool on file create.
+
 ## Head Oclass and split_off Selection Policy (Initial Proposal)
 
-This section defines an initial policy for when progressive layout should be enabled and how to select the head object class and container split_off.
+This section defines the policy used in auto mode: when progressive layout (once enabled for the
+container) should actually apply, and how the head object class and container split_off are
+derived. In explicit mode the head and tail classes come from the container configuration and only
+the small-pool gate and, if not pinned, the split_off derivation apply.
 
 ### 1) Disable condition for small pools
 
-Progressive layout is disabled when the pool does not have enough targets to benefit from a non-GX head class.
+Progressive layout is disabled when the pool does not have enough targets to benefit from a non-GX head class, even if it is enabled for the container.
 
 - If target_nr < 1000, disable progressive layout.
 - In this case, use the default DFS file class behavior (GX-style sharding selected by existing DAOS logic).
-- For testing only, set `DFS_PL_BYPASS_TARGET_LIMIT=1` to bypass the 1000-target gate while keeping the
-  default-selection requirement unchanged.
+- For testing only, set `DFS_PL_BYPASS_TARGET_LIMIT=1` to bypass the 1000-target gate; the
+  container must still have progressive layout enabled.
 
 The 1000-target threshold is an initial value and should be validated with performance and rebuild benchmarks.
 
@@ -181,9 +333,13 @@ Worked examples:
 
 ### 5) Persistence and update timing
 
-- Persist chosen head class and split_off as container defaults at container create/update time.
-- Do not recompute split_off per file or per I/O.
-- Existing files keep the policy effective at their creation time (unless a future explicit migration feature is added).
+- The user-supplied configuration (enable, and any pinned head/tail class or split_off) is
+  persisted in the container superblock at create time (see "Enablement and Container
+  Configuration").
+- Automatic values are derived at file create from the cached pool information and are
+  re-derived only when the pool map changes; they are not recomputed per I/O.
+- Existing files keep the values effective at their creation time, recorded in their own inode
+  (unless a future explicit migration feature is added).
 
 ### 6) Tuning constants and rationale
 
@@ -415,6 +571,15 @@ Orphan (leaked) handling and its limitation:
 
 Unit and integration coverage should include:
 
+0. Enablement and configuration:
+  - PL off by default: a plain POSIX container creates single-object files and `dfs_query()`
+    reports `da_pl_nr == 0`.
+  - Auto mode: `da_pl_nr = 1` yields head/tail/split_off matching the selection policy.
+  - Explicit mode: pinned head and tail (and split_off) are used verbatim on file create and
+    reported back by `dfs_query()`/`dfs_obj_get_info()`.
+  - Rejections at create: head without tail (and vice versa), unknown class, `nr > 1`, and PL
+    combined with `da_file_oclass_id`/`da_oclass_id`/a `file:` hint.
+  - The configuration survives `dfs_local2global()`/`dfs_global2local()` and container remount.
 1. Head-only baseline behavior unchanged.
 2. Tail activation at boundary:
   - split_off - 1
