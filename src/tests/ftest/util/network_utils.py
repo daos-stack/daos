@@ -16,8 +16,8 @@ from util.run_utils import run_remote
 # Order here is used to select default provider in environment_utils
 SUPPORTED_PROVIDERS = (
     "ofi+cxi",
-    "ucx+ud_x",
     "ucx+dc_x",
+    "ucx+ud_x",
     "ofi+verbs;ofi_rxm",
     "ofi+tcp",
     "ofi+tcp;ofi_rxm",
