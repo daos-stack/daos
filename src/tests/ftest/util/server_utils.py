@@ -21,6 +21,7 @@ from host_utils import get_local_host
 from run_utils import command_as_user, run_remote, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
+from storage_utils import StorageInfo
 from user_utils import get_chown_command
 
 
@@ -446,20 +447,9 @@ class DaosServerManager(SubprocessManager):
         # On nodes booting from NVMe (not SATA), exclude the boot drive so prepare
         # does not try to bind it to vfio-pci and fail while the OS is using it.
         if "pci_block_list" not in kwargs:
-            boot_pci_result = run_remote(
-                self.log, self._hosts,
-                "n=$(basename \"$(findmnt -n -o SOURCE / | sed 's/p[0-9]*$//')\"); "
-                "c=\"${n%n*}\"; "
-                "basename \"$(readlink /sys/class/nvme/$c/device)\" 2>/dev/null || true",
-                timeout=30)
-            boot_pcis = set()
-            for stdout in boot_pci_result.all_stdout.values():
-                for addr in stdout.splitlines():
-                    addr = addr.strip()
-                    if addr and ":" in addr:
-                        boot_pcis.add(addr)
-            if boot_pcis:
-                kwargs["pci_block_list"] = ",".join(sorted(boot_pcis))
+            mounted_addresses = StorageInfo(self.log, self._hosts).get_mounted_addresses()
+            if mounted_addresses:
+                kwargs["pci_block_list"] = ",".join(sorted(mounted_addresses))
 
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
