@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,7 +17,7 @@ from pathlib import Path
 THIS_FILE = os.path.realpath(__file__)
 FTEST_DIR = os.path.dirname(THIS_FILE)
 MANUAL_TAG = ('manual',)
-STAGE_TYPE_TAGS = ('vm', 'hw', 'hw_vmd')
+STAGE_TYPE_TAGS = ('vm', 'cb', 'hw', 'hw_vmd')
 STAGE_SIZE_TAGS = ('medium', 'large')
 STAGE_FREQUENCY_TAGS = ('all', 'pr', 'daily_regression', 'full_regression')
 
