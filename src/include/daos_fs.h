@@ -105,19 +105,26 @@ typedef struct {
 	 */
 	char			da_hints[DAOS_CONT_HINT_MAX_LEN];
 	/**
-	 * Output-only (populated by dfs_query()): number of progressive-layout tail segments of the
-	 * default regular-file layout. When > 0, da_file_oclass_id is the compact HEAD class and
-	 * da_file_pl_segs[0..nr-1] describe the wider tail segment(s). 0 when progressive layout
-	 * does not apply to default files (an explicit file class is set, the layout version
-	 * predates PL, or the pool is too small).
+	 * Progressive layout (PL) for regular files, off by default. On create, the number of tail
+	 * segments: 0 disables PL; 1 enables it (>1 is not supported yet). PL cannot be combined
+	 * with an explicit default file class (da_file_oclass_id, da_oclass_id or a "file:" hint).
+	 * On dfs_query(), the number of tail segments in the resolved default file layout (0 when
+	 * PL does not apply, e.g. disabled, an explicit file class is set, or the pool is too
+	 * small).
 	 */
-	uint32_t                 da_file_pl_nr;
+	uint32_t                 da_pl_nr;
 	/**
-	 * Tail segment(s) of the default regular-file layout in increasing split-offset order
-	 * (valid for indices [0, da_file_pl_nr); pls_oid is nil for this container-default
-	 * template).
+	 * PL head (compact) object class. On create: 0 derives it from the tail class; when set,
+	 * every tail class in da_pl_segs must be set too. On dfs_query(): the resolved head class.
 	 */
-	dfs_pl_seg_t             da_file_pl_segs[DFS_PL_MAX_SEGMENTS];
+	daos_oclass_id_t         da_pl_head_oclass;
+	/**
+	 * PL tail segment(s) in increasing split-offset order (valid for indices [0, da_pl_nr)). On
+	 * create, pls_oclass_id 0 derives the tail from the default file class and pls_split_off 0
+	 * derives the split from the pool capacity; a non-zero split is used as given. pls_oid is
+	 * ignored on input and nil on dfs_query() (container-default template).
+	 */
+	dfs_pl_seg_t             da_pl_segs[DFS_PL_MAX_SEGMENTS];
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */
@@ -143,9 +150,15 @@ typedef struct {
 	/**
 	 * Number of progressive-layout segments beyond the head. For a regular FILE the head is
 	 * doi_oid / doi_oclass_id; for a DIRECTORY this describes the file-creation default (head
-	 * is doi_file_oclass_id). 0 when progressive layout does not apply.
+	 * is doi_pl_head_oclass_id). 0 when progressive layout does not apply.
 	 */
 	uint32_t                doi_pl_nr;
+	/**
+	 * Progressive-layout head object class. For a regular FILE this equals doi_oclass_id; for a
+	 * DIRECTORY it is the head class files created in it would get. Only valid when
+	 * doi_pl_nr > 0.
+	 */
+	daos_oclass_id_t        doi_pl_head_oclass_id;
 	/**
 	 * Progressive-layout segments beyond the head, ordered by increasing split offset (valid
 	 * for indices [0, doi_pl_nr)). Each entry carries the segment's object class, split offset,

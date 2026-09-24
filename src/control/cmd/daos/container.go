@@ -162,6 +162,7 @@ type containerCreateCmd struct {
 	DirObjectClass  ObjClassFlag         `long:"dir-oclass" short:"d" description:"default directory object class"`
 	FileObjectClass ObjClassFlag         `long:"file-oclass" short:"f" description:"default file object class"`
 	CHints          string               `long:"hints" short:"H" description:"container hints"`
+	DFSPL           DFSPLFlag            `long:"dfs-pl" default:"off" description:"DFS progressive file layout (POSIX only): off, auto (derive head/tail classes and split offset) or explicit <head>,<tail>[@<split_off>]; split_off accepts the --chunk-size size syntax"`
 	Properties      CreatePropertiesFlag `long:"properties" description:"container properties"`
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile         string               `long:"acl-file" short:"A" description:"input file containing ACL"`
@@ -174,6 +175,10 @@ type containerCreateCmd struct {
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	defer cmd.Properties.Cleanup()
+
+	if err := cmd.validatePLFlags(); err != nil {
+		return err
+	}
 
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
@@ -253,6 +258,27 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	return nil
 }
 
+// validatePLFlags rejects progressive-layout flag combinations up front with a clear message;
+// the DFS library re-validates the same rules on create.
+func (cmd *containerCreateCmd) validatePLFlags() error {
+	if !cmd.DFSPL.Enabled {
+		return nil
+	}
+	if cmd.Type.Type != C.DAOS_PROP_CO_LAYOUT_POSIX {
+		return errors.New("--dfs-pl is only supported for POSIX containers")
+	}
+	if cmd.FileObjectClass.Set || cmd.ObjectClass.Set {
+		return errors.New("--dfs-pl cannot be combined with --file-oclass or --oclass")
+	}
+	if strings.Contains(strings.ToLower(cmd.CHints), "file:") {
+		return errors.New("--dfs-pl cannot be combined with a file: hint")
+	}
+	if len(cmd.DFSPL.Tails) > 1 {
+		return errors.New("progressive layout with more than one tail is not supported")
+	}
+	return nil
+}
+
 func (cmd *containerCreateCmd) contCreate() (string, error) {
 	createProps, err := cmd.getCreateProps()
 	if err != nil {
@@ -289,6 +315,16 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 			hint := C.CString(cmd.CHints)
 			defer freeString(hint)
 			C.strncpy(&attr.da_hints[0], hint, C.DAOS_CONT_HINT_MAX_LEN-1)
+		}
+		if cmd.DFSPL.Explicit() {
+			attr.da_pl_nr = C.uint32_t(len(cmd.DFSPL.Tails))
+			attr.da_pl_head_oclass = cmd.DFSPL.Head
+			for i, tail := range cmd.DFSPL.Tails {
+				attr.da_pl_segs[i].pls_oclass_id = tail.Class
+				attr.da_pl_segs[i].pls_split_off = tail.SplitOff
+			}
+		} else if cmd.DFSPL.Enabled {
+			attr.da_pl_nr = 1
 		}
 		attr.da_props = cProps
 

@@ -138,8 +138,10 @@ type (
 		ObjectClass     ObjectClass `json:"object_class,omitempty"`
 		DirObjectClass  ObjectClass `json:"dir_object_class,omitempty"`
 		FileObjectClass ObjectClass `json:"file_object_class,omitempty"`
+		// Progressive-layout head class of the default file layout (0 when PL does not apply).
+		FilePLHeadClass ObjectClass `json:"file_pl_head_class,omitempty"`
 		// Progressive-layout tail segment(s) of the default file layout, ordered by split
-		// offset (empty when PL does not apply). The head class is FileObjectClass.
+		// offset (empty when PL does not apply).
 		FilePLTails     []PLSegment `json:"file_pl_tails,omitempty"`
 		ConsistencyMode uint32      `json:"cons_mode,omitempty"`
 		Hints           string      `json:"hints,omitempty"`
