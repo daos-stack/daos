@@ -686,9 +686,15 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_nvme5 || ci_nvme5_only',
+               description: 'Label to use for the Functional Hardware Medium MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_ofed5 || ci_nvme5_only',
+               description: 'Label to use for the Functional Hardware Medium Verbs Provider MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',
                description: 'Label to use for the Functional Hardware Medium VMD stage')
@@ -1277,7 +1283,7 @@ pipeline {
                             name: 'Functional Hardware Medium MD on SSD',
                             runStage: shouldStageRun('Functional Hardware Medium MD on SSD'),
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,-provider,-cb',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1315,7 +1321,7 @@ pipeline {
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             runStage: shouldStageRun('Functional Hardware Medium Verbs Provider MD on SSD'),
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: next_version(),
                             stage_tags: 'hw,medium,provider,-cb',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
