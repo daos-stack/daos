@@ -120,22 +120,14 @@ fini_ranks:
 static uint32_t
 pool_create_rpc_timeout(crt_rpc_t *tc_req, size_t scm_size)
 {
-	uint32_t	timeout;
-	uint32_t	default_timeout;
-	size_t		gib;
-	int		rc;
-	rc = crt_req_get_timeout(tc_req, &default_timeout);
-	D_ASSERTF(rc == 0, "crt_req_get_timeout: "DF_RC"\n", DP_RC(rc));
+	uint32_t timeout;
+	uint32_t default_timeout;
+	int      rc;
 
-	gib = scm_size / ((size_t)1024 * 1024 * 1024);
-	if (gib < 32)
-		timeout = 15;
-	else if (gib < 64)
-		timeout = 30;
-	else if (gib < 128)
-		timeout = 60;
-	else
-		timeout = 90;
+	rc = crt_req_get_timeout(tc_req, &default_timeout);
+	D_ASSERTF(rc == 0, "crt_req_get_timeout: " DF_RC "\n", DP_RC(rc));
+
+	timeout = ds_rsvc_create_timeout_by_size(scm_size);
 
 	return max(timeout, default_timeout);
 }
