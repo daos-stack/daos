@@ -186,8 +186,8 @@ void
 chk_iv_ns_destroy(struct chk_instance *ins)
 {
 	if (ins->ci_iv_ns != NULL) {
-		if (ins->ci_iv_ns->iv_refcount == 1)
-			ds_iv_ns_cleanup(ins->ci_iv_ns);
+		if (ins->ci_iv_group != NULL)
+			ds_iv_ns_stop(ins->ci_iv_ns, true);
 		ds_iv_ns_put(ins->ci_iv_ns);
 		ins->ci_iv_ns = NULL;
 	}
@@ -207,22 +207,31 @@ chk_iv_ns_create(struct chk_instance *ins, uuid_t uuid, d_rank_t leader, uint32_
 	uuid_unparse_lower(uuid, uuid_str);
 	rc = crt_group_secondary_create(uuid_str, NULL, NULL, &ins->ci_iv_group);
 	if (rc != 0)
-		goto out;
+		return rc;
 
 	rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, uuid, ins->ci_iv_group, &ins->ci_iv_id,
 			     &ins->ci_iv_ns);
 	if (rc != 0)
-		goto out;
+		goto out_grp;
 
 	rc = chk_iv_ns_update(ins, ns_ver);
-	if (rc == 0) {
-		ds_iv_ns_update(ins->ci_iv_ns, leader, ins->ci_iv_ns->iv_master_term + 1);
-		ins->ci_skip_oog = 0;
-	}
-
-out:
 	if (rc != 0)
-		chk_iv_ns_destroy(ins);
+		goto out_ns;
+
+	ds_iv_ns_update(ins->ci_iv_ns, leader, ins->ci_iv_ns->iv_master_term + 1);
+	ins->ci_skip_oog = 0;
+	ds_iv_ns_start(ins->ci_iv_ns);
+
+	return 0;
+
+out_ns:
+	ds_iv_ns_put(ins->ci_iv_ns);
+	ins->ci_iv_ns = NULL;
+
+out_grp:
+	crt_group_secondary_destroy(ins->ci_iv_group);
+	ins->ci_iv_group = NULL;
+
 	return rc;
 }
 

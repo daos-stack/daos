@@ -1421,7 +1421,7 @@ ds_pool_stop(uuid_t uuid)
 
 	pool_tgt_disconnect_all(pool);
 
-	ds_iv_ns_stop(pool->sp_iv_ns);
+	ds_iv_ns_stop(pool->sp_iv_ns, false);
 	stop_eph_report_ult(pool);
 
 	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
