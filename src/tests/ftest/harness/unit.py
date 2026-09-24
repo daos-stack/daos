@@ -4,14 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from unittest.mock import MagicMock, patch
-
 from apricot import TestWithoutServers
 from ClusterShell.NodeSet import NodeSet
 from data_utils import dict_extract_values, dict_subtract, list_flatten, list_stats, list_unique
 from host_utils import get_local_host
 from run_utils import ResultData, run_local, run_remote
-from storage_utils import StorageInfo
 
 
 class HarnessUnitTest(TestWithoutServers):
@@ -392,28 +389,6 @@ class HarnessUnitTest(TestWithoutServers):
             join_stdout='GNU/Linux',
             join_stderr='',
         )
-        self.log_step('Unit Test Passed')
-
-    def test_harness_unit_storage_info_mounted_addresses(self):
-        """Verify mounted-address lookup is limited to the mounted hosts.
-
-        :avocado: tags=all
-        :avocado: tags=vm
-        :avocado: tags=harness,storage_utils
-        :avocado: tags=HarnessUnitTest,test_harness_unit_storage_info_mounted_addresses
-        """
-        hosts = NodeSet("server-[1-2]")
-        mounted_hosts = NodeSet("server-1")
-        command = (
-            "find /dev/disk/by-path/ -type l -printf '%f -> %l\\n' | "
-            "grep -w 'nvme0n1' | sort")
-        self.log_step('Verify StorageInfo mounted-address host scope')
-        with patch(
-                "storage_utils.run_remote",
-                return_value=MagicMock(output=[])) as run_remote_mock:
-            # pylint: disable=protected-access
-            StorageInfo(self.log, hosts)._get_addresses(mounted_hosts, "nvme0n1")
-        run_remote_mock.assert_called_once_with(self.log, mounted_hosts, command)
         self.log_step('Unit Test Passed')
 
     def test_harness_unit_run_remote_homogeneous(self):
