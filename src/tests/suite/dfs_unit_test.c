@@ -5691,6 +5691,271 @@ dfs_test_exchange_hardlink(void **state)
 	assert_int_equal(rc, 0);
 }
 
+/**
+ * Test that an open handle keeps working after the name it was opened by is removed or renamed,
+ * as long as the inode survives through another hardlink. An object handle caches only one of the
+ * names an inode is reachable by, so every operation that would resolve that (parent_oid, name)
+ * pair has to go to GIT by OID instead.
+ *
+ * Steps:
+ *  1. Create dir1/file1 with content and an xattr, then hardlink it to dir1/file1_l2.
+ *  2. Remove file1 and verify that the now nameless handle still serves stat (sync and async),
+ *     read, write and all four xattr operations.
+ *  3. dfs_osetattr through the nameless handle for mode/uid/gid, mtime and size; each update must
+ *     be visible through the surviving link, proving it landed in GIT.
+ *  4. Repeat the stat/setattr checks for a handle whose name was renamed away instead of removed.
+ *  5. Remove the last link and verify every operation on the handle now returns ENOENT.
+ */
+static void
+dfs_test_orphan_name_hardlink(void **state)
+{
+	test_arg_t  *arg = *state;
+	dfs_obj_t   *dir1, *dir2;
+	dfs_obj_t   *hA, *hB;
+	dfs_obj_t   *l2_obj = NULL, *l2b_obj = NULL, *tmp_obj = NULL;
+	d_sg_list_t  sgl;
+	d_iov_t      iov;
+	char         buf[64];
+	char         buf2[64];
+	char         rbuf[64];
+	char         xbuf[64];
+	char         list[128];
+	const char  *k1 = "user.ohl1", *k2 = "user.ohl2";
+	const char  *v1 = "ohl_v1", *v2 = "ohl_v2";
+	daos_size_t  read_size;
+	daos_size_t  size;
+	struct stat  stbuf;
+	daos_event_t ev, *evp;
+	int          rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** Step 1: dir1/file1 with content and an xattr, plus a second link dir1/file1_l2. */
+	print_message("Step 1: create file1, write content, set k1, link to file1_l2\n");
+	rc = dfs_open(dfs_mt, NULL, "ohl_dir1", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, NULL, "ohl_dir2", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir2);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs_mt, dir1, "file1", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &hA);
+	assert_int_equal(rc, 0);
+	dts_buf_render(buf, sizeof(buf));
+	d_iov_set(&iov, buf, sizeof(buf));
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_write(dfs_mt, hA, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_setxattr(dfs_mt, hA, k1, v1, strlen(v1) + 1, 0);
+	assert_int_equal(rc, 0);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_link(dfs_mt, hA, dir1, "file1_l2", &l2_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_non_null(l2_obj);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/**
+	 * Step 2: drop the name hA was opened by. The inode stays alive through file1_l2, so every
+	 * operation on hA has to resolve through GIT rather than the dentry that no longer exists.
+	 */
+	print_message("Step 2: remove file1, verify stat/read/write/xattr through hA\n");
+	rc = dfs_remove(dfs_mt, dir1, "file1", false, NULL);
+	assert_int_equal(rc, 0);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, hA, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 1);
+	assert_int_equal((int)stbuf.st_size, (int)sizeof(buf));
+
+	/** the nameless handle and the surviving link must agree */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, dir1, "file1_l2", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 1);
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IWUSR | S_IRUSR));
+
+	/** sync dfs_ostatx() falls back to dfs_ostat() */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostatx(dfs_mt, hA, &stbuf, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 1);
+
+	/** async dfs_ostatx() never opens a parent handle for a hardlink */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_ostatx(dfs_mt, hA, &stbuf, &ev);
+	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 1);
+	assert_int_equal((int)stbuf.st_size, (int)sizeof(buf));
+
+	/** data is still reachable through the nameless handle */
+	memset(rbuf, 0, sizeof(rbuf));
+	d_iov_set(&iov, rbuf, sizeof(rbuf));
+	rc = dfs_read(dfs_mt, hA, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)read_size, (int)sizeof(buf));
+	assert_memory_equal(buf, rbuf, sizeof(buf));
+
+	/** write through the nameless handle, read it back through the surviving link */
+	dts_buf_render(buf2, sizeof(buf2));
+	d_iov_set(&iov, buf2, sizeof(buf2));
+	rc = dfs_write(dfs_mt, hA, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	memset(rbuf, 0, sizeof(rbuf));
+	d_iov_set(&iov, rbuf, sizeof(rbuf));
+	rc = dfs_read(dfs_mt, l2_obj, &sgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)read_size, (int)sizeof(buf2));
+	assert_memory_equal(buf2, rbuf, sizeof(buf2));
+
+	/** xattrs are keyed by OID in GIT, so they survive the name going away */
+	size = sizeof(xbuf);
+	memset(xbuf, 0, sizeof(xbuf));
+	rc = dfs_getxattr(dfs_mt, hA, k1, xbuf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(xbuf, v1);
+	rc = dfs_setxattr(dfs_mt, hA, k2, v2, strlen(v2) + 1, 0);
+	assert_int_equal(rc, 0);
+	size = sizeof(xbuf);
+	memset(xbuf, 0, sizeof(xbuf));
+	rc = dfs_getxattr(dfs_mt, l2_obj, k2, xbuf, &size);
+	assert_int_equal(rc, 0);
+	assert_string_equal(xbuf, v2);
+	size = sizeof(list);
+	memset(list, 0, sizeof(list));
+	rc = dfs_listxattr(dfs_mt, hA, list, &size);
+	assert_int_equal(rc, 0);
+	assert_true(xattr_name_in_list(list, size, k1));
+	assert_true(xattr_name_in_list(list, size, k2));
+	rc = dfs_removexattr(dfs_mt, hA, k2);
+	assert_int_equal(rc, 0);
+	size = sizeof(xbuf);
+	rc   = dfs_getxattr(dfs_mt, l2_obj, k2, xbuf, &size);
+	assert_int_equal(rc, ENODATA);
+
+	/** Step 3: attribute updates through the nameless handle must land in GIT. */
+	print_message("Step 3: dfs_osetattr through hA, verify through file1_l2\n");
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mode = S_IFREG | S_IRWXU;
+	stbuf.st_uid  = 11;
+	stbuf.st_gid  = 12;
+	rc            = dfs_osetattr(dfs_mt, hA, &stbuf,
+				     DFS_SET_ATTR_MODE | DFS_SET_ATTR_UID | DFS_SET_ATTR_GID);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRWXU));
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, dir1, "file1_l2", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRWXU));
+	assert_int_equal(stbuf.st_uid, 11);
+	assert_int_equal(stbuf.st_gid, 12);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mtim.tv_sec  = 1000000;
+	stbuf.st_mtim.tv_nsec = 500;
+	rc                    = dfs_osetattr(dfs_mt, hA, &stbuf, DFS_SET_ATTR_MTIME);
+	assert_int_equal(rc, 0);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, l2_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mtim.tv_sec, 1000000);
+	assert_int_equal(stbuf.st_mtim.tv_nsec, 500);
+	/** the mode set above is intact -> the internal hardlink bit survived the mode write */
+	assert_int_equal(stbuf.st_mode, (mode_t)(S_IFREG | S_IRWXU));
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_size = 4096;
+	rc            = dfs_osetattr(dfs_mt, hA, &stbuf, DFS_SET_ATTR_SIZE);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_size, 4096);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, dir1, "file1_l2", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_size, 4096);
+
+	/** Step 4: same checks for a handle whose name was renamed away rather than removed. */
+	print_message("Step 4: rename file2 to dir2/file2_moved, verify through hB\n");
+	rc = dfs_open(dfs_mt, dir1, "file2", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &hB);
+	assert_int_equal(rc, 0);
+	rc = dfs_link(dfs_mt, hB, dir1, "file2_l2", &l2b_obj, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_move(dfs_mt, dir1, "file2", dir2, "file2_moved", NULL);
+	assert_int_equal(rc, 0);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, hB, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_uid = 21;
+	stbuf.st_gid = 22;
+	rc           = dfs_osetattr(dfs_mt, hB, &stbuf, DFS_SET_ATTR_UID | DFS_SET_ATTR_GID);
+	assert_int_equal(rc, 0);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, dir2, "file2_moved", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 21);
+	assert_int_equal(stbuf.st_gid, 22);
+	assert_int_equal((int)stbuf.st_nlink, 2);
+
+	/** linking from the renamed-away handle keeps working and bumps the count */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_link(dfs_mt, hB, dir2, "file2_l3", &tmp_obj, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal((int)stbuf.st_nlink, 3);
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
+	/** Step 5: once the last link is gone the handle must report ENOENT again. */
+	print_message("Step 5: remove the last link of file1, expect ENOENT through hA\n");
+	rc = dfs_remove(dfs_mt, dir1, "file1_l2", false, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_ostat(dfs_mt, hA, &stbuf);
+	assert_int_equal(rc, ENOENT);
+	rc = dfs_ostatx(dfs_mt, hA, &stbuf, NULL);
+	assert_int_equal(rc, ENOENT);
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_uid = 31;
+	rc           = dfs_osetattr(dfs_mt, hA, &stbuf, DFS_SET_ATTR_UID);
+	assert_int_equal(rc, ENOENT);
+	rc = dfs_link(dfs_mt, hA, dir1, "file1_l3", NULL, NULL);
+	assert_int_equal(rc, ENOENT);
+
+	rc = dfs_release(l2_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(l2b_obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(hA);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(hB);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir2);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "ohl_dir1", true, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, "ohl_dir2", true, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST1: DFS mount / umount", dfs_test_mount, async_disable, test_case_teardown},
     {"DFS_UNIT_TEST2: DFS container modes", dfs_test_modes, async_disable, test_case_teardown},
@@ -5742,6 +6007,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
     {"DFS_UNIT_TEST33: dfs rename hardlink", dfs_test_rename_hardlink, async_disable,
      test_case_teardown},
     {"DFS_UNIT_TEST34: dfs exchange hardlink", dfs_test_exchange_hardlink, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST35: dfs hardlink orphaned name", dfs_test_orphan_name_hardlink, async_disable,
      test_case_teardown},
 };
 

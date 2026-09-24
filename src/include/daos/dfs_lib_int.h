@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,7 +69,7 @@ dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, const char 
 void
 dfs_update_parentfd(dfs_obj_t *obj, dfs_obj_t *new_parent, const char *name);
 
-/** update chunk size and oclass of obj with the ones from new_obj */
+/** update chunk size and oclass of obj with the ones from new_obj, and adopt its hardlink bit */
 void
 dfs_obj_copy_attr(dfs_obj_t *dst_obj, dfs_obj_t *src_obj);
 
