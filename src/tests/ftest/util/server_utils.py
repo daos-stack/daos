@@ -21,6 +21,7 @@ from host_utils import get_local_host
 from run_utils import command_as_user, run_remote, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
+from storage_utils import StorageInfo
 from user_utils import get_chown_command
 
 
@@ -443,6 +444,13 @@ class DaosServerManager(SubprocessManager):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
+        # On nodes booting from NVMe (not SATA), exclude the boot drive so prepare
+        # does not try to bind it to vfio-pci and fail while the OS is using it.
+        if "pci_block_list" not in kwargs:
+            mounted_addresses = StorageInfo(self.log, self._hosts).get_mounted_addresses()
+            if mounted_addresses:
+                kwargs["pci_block_list"] = ",".join(sorted(mounted_addresses))
+
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
