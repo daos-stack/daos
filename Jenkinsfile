@@ -69,10 +69,12 @@ void updateRunStage() {
         'Functional Hardware Medium Verbs Provider',
         'Functional Hardware Medium Verbs Provider MD on SSD',
         'Functional Hardware Medium UCX Provider',
+        'Functional Hardware Medium UCX Provider MD on SSD',
         'Functional Hardware Large',
         'Functional Hardware Large MD on SSD',
         'Functional Cluster Box Medium MD on SSD',
-        'Functional Cluster Box Medium Verbs Provider MD on SSD'
+        'Functional Cluster Box Medium Verbs Provider MD on SSD',
+        'Functional Cluster Box Medium UCX Provider MD on SSD'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
@@ -220,10 +222,12 @@ void updateRunStage() {
             'Functional Hardware Medium Verbs Provider': hwBuildStage,
             'Functional Hardware Medium Verbs Provider MD on SSD': hwBuildStage,
             'Functional Hardware Medium UCX Provider': hwBuildStage,
+            'Functional Hardware Medium UCX Provider MD on SSD': hwBuildStage,
             'Functional Hardware Large': hwBuildStage,
             'Functional Hardware Large MD on SSD': hwBuildStage,
             'Functional Cluster Box Medium MD on SSD': hwBuildStage,
             'Functional Cluster Box Medium Verbs Provider MD on SSD': hwBuildStage,
+            'Functional Cluster Box Medium UCX Provider MD on SSD': hwBuildStage,
             ]
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
@@ -651,11 +655,14 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider stage.')
         booleanParam(name: bashName('Functional Hardware Medium Verbs Provider MD on SSD'),
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD stage.')
         booleanParam(name: bashName('Functional Hardware Medium UCX Provider'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium UCX Provider stage.')
+        booleanParam(name: bashName('Functional Hardware Medium UCX Provider MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium UCX Provider MD on SSD stage.')
         booleanParam(name: bashName('Functional Hardware Large'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Large stage.')
@@ -666,8 +673,11 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Functional Cluster Box test stage')
         booleanParam(name: bashName('Functional Cluster Box Medium Verbs Provider MD on SSD'),
+                     defaultValue: false,
+                     description: 'Run the Functional Cluster Box Verbs Provider MD on SSD test stage')
+        booleanParam(name: bashName('Functional Cluster Box Medium UCX Provider MD on SSD'),
                      defaultValue: true,
-                     description: 'Run the Functional Cluster Box Verbs Provider test stage')
+                     description: 'Run the Functional Cluster Box Medium UCX Provider MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -1136,6 +1146,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: 'memcheck',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
@@ -1149,6 +1160,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
@@ -1162,6 +1174,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'leap15.6'
                         ),
@@ -1175,6 +1188,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'sles15.7'
                         ),
@@ -1188,6 +1202,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal
                         ),
                         'Fault injection testing': scriptedUnitTestStage(
@@ -1356,9 +1371,24 @@ pipeline {
                             pragma_suffix: '-hw-medium-ucx-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-ucx',
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
+                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional Hardware Medium UCX Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium UCX Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Medium UCX Provider MD on SSD'),
+                            pragma_suffix: '-hw-medium-ucx-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
+                            next_version: next_version(),
+                            other_packages: 'mercury-ucx',
+                            stage_tags: 'hw,medium,provider,-cb',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            default_nvme: 'auto_md_on_ssd',
                             provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             job_status: job_status_internal,
                             image_version: 'el9.7'
@@ -1400,8 +1430,6 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             node_count: 5,
-                            run_if_pr: true,
-                            run_if_landing: false,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
@@ -1417,8 +1445,21 @@ pipeline {
                             nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
                             node_count: 5,
-                            run_if_pr: true,
-                            run_if_landing: false,
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional Cluster Box Medium UCX Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium UCX Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium UCX Provider MD on SSD'),
+                            pragma_suffix:'-cb-medium-ucx-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                            next_version: next_version(),
+                            other_packages: 'mercury-ucx',
+                            stage_tags: 'cb,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
+                            node_count: 5,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
