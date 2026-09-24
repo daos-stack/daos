@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -321,7 +321,7 @@ void ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank, uint64_t ter
 void ds_iv_ns_cleanup(struct ds_iv_ns *ns);
 int
 	     ds_iv_ns_reint_prep(struct ds_iv_ns *ns);
-void ds_iv_ns_stop(struct ds_iv_ns *ns);
+void ds_iv_ns_stop(struct ds_iv_ns *ns, bool async);
 void ds_iv_ns_leader_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_start(struct ds_iv_ns *ns);
 void ds_iv_ns_put(struct ds_iv_ns *ns);
