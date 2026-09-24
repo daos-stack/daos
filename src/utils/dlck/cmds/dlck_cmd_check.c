@@ -161,14 +161,6 @@ exec_one(void *arg)
 	struct checker      ck;
 	int                 rc;
 
-	/** initialize the daos_io_* thread */
-	rc = dlck_engine_xstream_init(xa->xs);
-	if (rc != DER_SUCCESS) {
-		xa->rc       = rc;
-		xa->progress = DLCK_XSTREAM_PROGRESS_END;
-		return;
-	}
-
 	d_list_for_each_entry(file, &xa->ctrl->files.list, link) {
 		/** do not process the given file if the target is not requested */
 		if (dlck_bitmap_isclr32(file->targets_bitmap, xa->xs->tgt_id)) {
@@ -199,14 +191,6 @@ exec_one(void *arg)
 		/** report the progress to the main thread */
 		++xa->progress;
 	}
-
-	if (xa->rc != DER_SUCCESS) {
-		(void)dlck_engine_xstream_fini(xa->xs);
-		return;
-	}
-
-	rc = dlck_engine_xstream_fini(xa->xs);
-	dlck_xstream_set_rc(xa, rc);
 }
 
 /**
