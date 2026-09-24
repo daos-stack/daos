@@ -79,6 +79,7 @@ dlck_checker_main_vprintf(struct checker *ck, const char *fmt, va_list args)
 static int
 dlck_checker_core_indent_set(struct dlck_checker_worker *dwc, int level)
 {
+	D_ASSERTF((level >= 0 && level <= CHECKER_INDENT_MAX), "Invalid indent level: %d\n", level);
 	if (level < 0 || level > CHECKER_INDENT_MAX)
 		return DER_INVAL;
 
