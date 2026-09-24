@@ -1264,6 +1264,9 @@ out:
  * value, or one physical recx/epoch segment of an array value) into a freshly allocated
  * buffer in \a sgl. Uses the same 2-pass vos_obj_fetch() pattern as dv_dump_value(): the first
  * pass discovers the record size, the second pass fetches the data.
+ *
+ * Returns -DER_CSUM, like csum_recx_check_chunks(), when the checksummed value has no data
+ * behind it (inconsistent checksum metadata).
  */
 static int
 fetch_check_value(daos_handle_t coh, daos_unit_oid_t *oid, daos_key_t *dkey, daos_iod_t *iod,
@@ -1292,7 +1295,7 @@ fetch_check_value(daos_handle_t coh, daos_unit_oid_t *oid, daos_key_t *dkey, dao
 		D_ERROR("Checksum check of " DF_UOID " failed: inconsistent checksum metadata "
 			"(no data stored at epoch " DF_X64 " for a checksummed value)\n",
 			DP_UOID(*oid), epoch);
-		return -DER_NONEXIST;
+		return -DER_CSUM;
 	}
 
 	D_ALLOC(sgl->sg_iovs[0].iov_buf, data_size);
@@ -1342,14 +1345,14 @@ snapshot_csum_info(struct dcs_csum_info *src, struct dcs_csum_info **snapshot)
 
 /*
  * Recompute the checksum of one segment's currently stored data and compare it against the
- * checksum info already fetched from disk (\a ci). Returns 0 if the checksums match,
- * -DER_CSUM if they differ, -DER_NONEXIST if no data is stored behind \a ci (inconsistent
- * checksum metadata, already logged by fetch_check_value()), or another negative rc on a hard
- * I/O/system error.
+ * checksum info already fetched from disk (\a ci). Returns 0 if the checksums match, -DER_CSUM
+ * if they differ or if no data is stored behind \a ci (inconsistent checksum metadata, already
+ * logged by fetch_check_value()), or another negative rc on a hard I/O/system error.
  *
  * On a -DER_CSUM mismatch, *got_csum is set to an independent snapshot of the recomputed
  * checksum (to be freed by the caller with D_FREE()), or left NULL when that snapshot could not
- * be allocated (the mismatch is then logged); left NULL on a match or any other error.
+ * be allocated (the mismatch is then logged) or when no data was found behind \a ci in the first
+ * place; left NULL on a match or any other error.
  */
 static int
 verify_segment_csum(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
@@ -1458,10 +1461,6 @@ check_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_io
 			goto out_fetch_end;
 		rc = -DER_SUCCESS;
 	}
-	if (rc == -DER_NONEXIST) {
-		/* checksum with no data behind it: inconsistent metadata, callback not invoked */
-		D_GOTO(out_fetch_end, rc = -DER_CSUM);
-	}
 	if (!SUCCESS(rc)) {
 		D_ERROR("Checksum verification of " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
 			DP_RC(rc));
@@ -1562,10 +1561,6 @@ check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_
 			csum_error = true;
 			rc         = -DER_SUCCESS; /* continue checking other segments */
 			continue;
-		}
-		if (rc == -DER_NONEXIST) {
-			/* checksum with no data behind it: inconsistent metadata, no callback */
-			D_GOTO(out_got_csums, rc = -DER_CSUM);
 		}
 		if (!SUCCESS(rc)) {
 			D_ERROR("Checksum verification of " DF_UOID " " DF_RECX " failed: " DF_RC
