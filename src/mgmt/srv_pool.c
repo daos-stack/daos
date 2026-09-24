@@ -41,7 +41,7 @@ pool_destroy_local_scm_size(uuid_t pool_uuid)
 }
 
 static uint32_t
-pool_destroy_rpc_timeout(crt_rpc_t *td_req, uuid_t pool_uuid)
+pool_destroy_rpc_timeout(crt_rpc_t *td_req, uuid_t pool_uuid, uint32_t min_timeout)
 {
 	uint32_t default_timeout;
 	uint32_t timeout;
@@ -54,7 +54,7 @@ pool_destroy_rpc_timeout(crt_rpc_t *td_req, uuid_t pool_uuid)
 
 	eng_local_scm_size = pool_destroy_local_scm_size(pool_uuid);
 	if (eng_local_scm_size == 0)
-		return default_timeout;
+		return max(min_timeout, default_timeout);
 
 	gib = eng_local_scm_size / ((size_t)1024 * 1024 * 1024);
 	if (gib < 1024)
@@ -62,12 +62,16 @@ pool_destroy_rpc_timeout(crt_rpc_t *td_req, uuid_t pool_uuid)
 	else
 		timeout = 180;
 
+	timeout = max(timeout, min_timeout);
 	return max(timeout, default_timeout);
 }
 
-/** Destroy the pool on the specified ranks. */
-int
-ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
+/**
+ * Destroy the pool on the specified ranks. The destroy CoRPC timeout is never below
+ * \a min_timeout seconds (0 for no minimum).
+ */
+static int
+pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks, uint32_t min_timeout)
 {
 	crt_rpc_t			*td_req;
 	struct mgmt_tgt_destroy_in	*td_in;
@@ -94,7 +98,7 @@ ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 	D_ASSERT(td_in != NULL);
 	uuid_copy(td_in->td_pool_uuid, pool_uuid);
 
-	timeout = pool_destroy_rpc_timeout(td_req, pool_uuid);
+	timeout = pool_destroy_rpc_timeout(td_req, pool_uuid, min_timeout);
 	crt_req_set_timeout(td_req, timeout);
 	D_DEBUG(DB_MGMT, DF_UUID ": setting pool destroy CoRPC timeout: %u sec\n",
 		DP_UUID(pool_uuid), timeout);
@@ -115,6 +119,13 @@ out_rpc:
 
 fini_ranks:
 	return rc;
+}
+
+/** Destroy the pool on the specified ranks. */
+int
+ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
+{
+	return pool_destroy_ranks(pool_uuid, filter_ranks, 0);
 }
 
 static uint32_t
@@ -221,6 +232,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 	d_rank_list_t *pg_targets   = NULL;
 	d_rank_list_t *dummy        = NULL;
 	d_rank_list_t *create_ranks = NULL; /* active ranks that receive VOS-create */
+	uint32_t       rollback_timeout;
 	int            rc;
 	int            rc_cleanup;
 
@@ -320,8 +332,19 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
 		 * round of RPCs.
 		 */
 out_ranks:
-		rc_cleanup =
-		    ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, dummy != NULL ? dummy : create_ranks);
+		/*
+		 * The rollback destroy is serialized on each rank behind the MGMT_TGT_CREATE and
+		 * RSVC_START handlers of this pool that it cancels or drains, and the SMD record
+		 * of the pool may not exist yet, so its size tier is unknown. Grant it at least
+		 * the size-tiered timeouts granted to those creates (see
+		 * pool_create_rpc_timeout() and ds_pool_svc_dist_create()); a bare crt_timeout of a
+		 * few seconds times out the rollback and leaves remnants behind for the retry of
+		 * the same pool UUID (DAOS-19608).
+		 */
+		rollback_timeout = max(ds_rsvc_create_timeout_by_size(scm_size),
+				       ds_rsvc_create_timeout_by_size(ds_rsvc_get_md_cap()));
+		rc_cleanup = pool_destroy_ranks(pool_uuid, dummy != NULL ? dummy : create_ranks,
+						rollback_timeout);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "DF_RC"\n",
 				DP_UUID(pool_uuid), DP_RC(rc_cleanup));
