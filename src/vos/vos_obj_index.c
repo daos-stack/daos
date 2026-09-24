@@ -233,10 +233,18 @@ oi_rec_check(struct btr_instance *tins, struct btr_record *rec, report_fn_t repo
 		report_fn(report_arg, REPORT_ERROR | REPORT_NO_PREFIX, DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
+	if (val_iov.iov_buf == NULL) {
+		report_fn(report_arg, REPORT_ERROR | REPORT_NO_PREFIX,
+			  "Invalid record: buffer is NULL\n");
+		return -DER_IO_INVAL;
+	}
+	if (val_iov.iov_len != vos_obj_df_size((struct vos_pool *)tins->ti_priv)) {
+		report_fn(report_arg, REPORT_ERROR | REPORT_NO_PREFIX,
+			  "Invalid record size: expected %zu, got %zu\n",
+			  vos_obj_df_size((struct vos_pool *)tins->ti_priv), val_iov.iov_len);
+		return -DER_IO_INVAL;
+	}
 	report_fn(report_arg, REPORT_MSG | REPORT_NO_PREFIX, CHECKER_OK_INFIX ".\n");
-
-	D_ASSERT(val_iov.iov_buf != NULL);
-	D_ASSERT(val_iov.iov_len == vos_obj_df_size((struct vos_pool *)tins->ti_priv));
 
 	obj = val_iov.iov_buf;
 
@@ -890,6 +898,34 @@ exit:
 	return rc;
 }
 
+#define CK_DKEY_TREE_STR "Dkey tree"
+
+static int
+oi_iter_check(struct vos_iterator *iter, report_fn_t report_fn, void *report_arg,
+	      bool error_on_non_zero_padding)
+{
+	struct vos_oi_iter *oiter = iter2oiter(iter);
+	d_iov_t             iov;
+	struct vos_obj_df  *obj;
+	int                 rc;
+
+	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, NULL);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	obj = (struct vos_obj_df *)iov.iov_buf;
+
+	report_fn(report_arg, REPORT_MSG, CK_DKEY_TREE_STR "...\n");
+	report_fn(report_arg, REPORT_INDENT_INC, NULL);
+	rc = dbtree_check_inplace(&obj->vo_tree, &oiter->oit_cont->vc_pool->vp_uma, NULL, report_fn,
+				  report_arg, error_on_non_zero_padding);
+	report_fn(report_arg, REPORT_INDENT_DEC, NULL);
+	report_fn(report_arg, REPORT_RC, CK_DKEY_TREE_STR, rc);
+
+	return rc;
+}
+
 int
 oi_iter_check_punch(daos_handle_t ih)
 {
@@ -1030,13 +1066,14 @@ exit:
 }
 
 struct vos_iter_ops vos_oi_iter_ops = {
-	.iop_prepare		= oi_iter_prep,
-	.iop_nested_tree_fetch	= oi_iter_nested_tree_fetch,
-	.iop_finish		= oi_iter_fini,
-	.iop_probe		= oi_iter_probe,
-	.iop_next		= oi_iter_next,
-	.iop_fetch		= oi_iter_fetch,
-	.iop_process		= oi_iter_process,
+    .iop_prepare           = oi_iter_prep,
+    .iop_nested_tree_fetch = oi_iter_nested_tree_fetch,
+    .iop_finish            = oi_iter_fini,
+    .iop_probe             = oi_iter_probe,
+    .iop_next              = oi_iter_next,
+    .iop_fetch             = oi_iter_fetch,
+    .iop_process           = oi_iter_process,
+    .iop_check             = oi_iter_check,
 };
 
 bool

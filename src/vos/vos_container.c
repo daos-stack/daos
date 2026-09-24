@@ -151,7 +151,10 @@ static int
 cont_df_rec_check(struct btr_instance *tins, struct btr_record *rec, report_fn_t report_fn,
 		  void *report_arg)
 {
-	/** NOP. The container is checked on open. */
+	/**
+	 * NOP. The container is checked during the vos_cont_open_ex() call using with a checker
+	 * provided.
+	 */
 	return 0;
 }
 
