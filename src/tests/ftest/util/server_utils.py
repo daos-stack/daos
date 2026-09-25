@@ -665,16 +665,12 @@ class DaosServerManager(SubprocessManager):
         # Start the servers and wait for them to be ready for storage format
         self.detect_format_ready()
 
+        # Wait for all the engines to start
+        self.detect_engine_start()
+
         # Collect storage and network information from the servers.
         self.information.collect_storage_information()
         self.information.collect_network_information()
-
-        # Format storage and wait for server to change ownership
-        self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        self.storage_format()
-
-        # Wait for all the engines to start
-        self.detect_engine_start()
 
         return True
 
