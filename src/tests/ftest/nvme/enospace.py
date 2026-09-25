@@ -958,7 +958,6 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             transfer_size=self.ior_scm_xfersize,
             block_size=self.calculate_ior_block_size(percentage, 'SCM'),
             namespace='/run/ior_new/*')
-        self.display_stats()
         self.log.info("IOR metrics for container %s: %s", container, ior_metrics)
         max_mib = float(ior_metrics[0][int(IorMetrics.MAX_MIB)])
         self.log.info("IOR Latest Write MiB to fill container %s: %s", container, max_mib)
@@ -999,6 +998,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                 "transfer_size": transfer_size,
                 "block_size": block_size}
         )
+        self.display_stats()
         if result.exit_status != 0:
             self.fail("Errors running ior")
         return get_ior_metrics(result)

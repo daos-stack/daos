@@ -32,8 +32,8 @@ dmg:
     allow_insecure: true
 
 pool:
-  scm_size: 15G
-  nvme_size: 15G
+  scm_size: 20G
+  nvme_size: 20G
   # SCM usage will not be 100% because some space (<1%) is used for the system and data
   # distribution is not fully uniform.
   usage_min_scm: 92
