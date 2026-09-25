@@ -354,7 +354,7 @@ class DFuse():
                 rc = self.check_usage(inode, qpath=qpath)
                 print(rc)
                 found = rc['resident']
-                if not found:
+                if found:
                     sleeps += 1
                     assert sleeps < 10, 'Path still present 10 seconds after eviction'
                     time.sleep(1)
