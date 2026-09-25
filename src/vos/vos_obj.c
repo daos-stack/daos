@@ -2824,6 +2824,38 @@ vos_obj_iter_empty(struct vos_iterator *iter)
 	}
 }
 
+static int
+vos_obj_dkey_iter_check(struct vos_iterator *iter, report_fn_t report_fn, void *report_arg,
+			bool error_on_non_zero_padding)
+{
+	struct vos_obj_iter  *oiter = vos_iter2oiter(iter);
+	struct vos_rec_bundle rbund = {0};
+	struct vos_krec_df   *krec;
+	d_iov_t               riov;
+	int                   rc;
+
+	D_ASSERTF(iter->it_type == VOS_ITER_DKEY, "type is %d\n", iter->it_type);
+
+	tree_rec_bundle2iov(&rbund, &riov);
+
+	rc = dbtree_iter_fetch(oiter->it_hdl, NULL, &riov, NULL);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	krec = rbund.rb_krec;
+	(void)krec;
+
+	// report_fn(report_arg, REPORT_MSG, CK_DKEY_TREE_STR "...\n");
+	// report_fn(report_arg, REPORT_INDENT_INC, NULL);
+	// rc = dbtree_check_inplace(&obj->vo_tree, &oiter->oit_cont->vc_pool->vp_uma, NULL,
+	// report_fn, 			  report_arg, error_on_non_zero_padding);
+	// report_fn(report_arg, REPORT_INDENT_DEC, NULL); report_fn(report_arg, REPORT_RC,
+	// CK_DKEY_TREE_STR, rc);
+
+	return 0;
+}
+
 struct vos_iter_ops vos_obj_dkey_iter_ops = {
     .iop_prepare           = vos_obj_iter_prep,
     .iop_nested_tree_fetch = vos_obj_dkey_iter_nested_tree_fetch,
@@ -2835,6 +2867,7 @@ struct vos_iter_ops vos_obj_dkey_iter_ops = {
     .iop_copy              = vos_obj_iter_copy,
     .iop_process           = vos_obj_iter_process,
     .iop_empty             = vos_obj_iter_empty,
+    .iop_check             = vos_obj_dkey_iter_check,
 };
 
 struct vos_iter_ops vos_obj_akey_iter_ops = {

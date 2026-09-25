@@ -353,6 +353,8 @@ enum vos_krec_bf {
 	KREC_BF_NO_AKEY = (1 << 3),
 };
 
+#define KREC_BF_VALID (KREC_BF_EVT | KREC_BF_BTR | KREC_BF_DKEY | KREC_BF_NO_AKEY)
+
 /**
  * Persisted VOS (d/a)key record, it is referenced by btr_record::rec_off
  * of btree VOS_BTR_DKEY/VOS_BTR_AKEY.

@@ -37,7 +37,94 @@
 struct bundle {
 	struct xstream_arg *xa;
 	struct checker     *ck;
+	bool                error_on_non_zero_padding;
 };
+
+#define CK_DKEY_PRINT_FMT "Check dkey: " CK_DKEY_FMT
+
+static int
+dkey_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct bundle  *bndl = cb_arg;
+	struct checker *ck   = bndl->ck;
+	int             rc;
+
+	CK_PRINTF(ck, CK_DKEY_PRINT_FMT "...\n", CK_DKEY_PRINT(&entry->ie_key));
+	CK_INDENT(ck, rc = vos_iter_check(ih, ck_report, ck, bndl->error_on_non_zero_padding));
+	CK_PRINTFL_RC(ck, rc, CK_DKEY_PRINT_FMT, CK_DKEY_PRINT(&entry->ie_key));
+
+	return 0;
+}
+
+static int
+dkeys_process(daos_handle_t coh, daos_unit_oid_t oid, struct bundle *bndl)
+{
+	vos_iter_param_t        param   = {0};
+	struct vos_iter_anchors anchors = {0};
+
+	param.ip_hdl        = coh;
+	param.ip_oid        = oid;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
+
+	return vos_iterate(&param, VOS_ITER_DKEY, false, &anchors, dkey_process, NULL, bndl, NULL);
+}
+
+#define CK_OID_FMT "Check oid: " DF_UOID
+
+/**
+ * Target thread (worker). Check a single object.
+ *
+ * \param[in]	ih	Iterator handle.
+ * \param[in]	entry	Iterator entry.
+ * \param[in]	type	Iteration type.
+ * \param[in]	param	Unused.
+ * \param[in]	cb_arg	Bundle of arguments.
+ * \param[in]	acts	Unused.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Errors returned by vos_iter_check().
+ */
+static int
+obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct bundle  *bndl = cb_arg;
+	struct checker *ck   = bndl->ck;
+	int             rc;
+
+	CK_PRINTF(ck, CK_OID_FMT "...\n", DP_UOID(entry->ie_oid));
+	CK_INDENT(ck, rc = vos_iter_check(ih, ck_report, ck, bndl->error_on_non_zero_padding));
+	CK_PRINTFL_RC(ck, rc, CK_OID_FMT, DP_UOID(entry->ie_oid));
+	if (rc == DER_SUCCESS) {
+		dkeys_process(param->ip_hdl, entry->ie_oid, bndl);
+	}
+
+	return rc;
+}
+
+/**
+ * Target thread (worker). Check objects of a single container.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	bndl	Bundle of arguments.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Errors returned by the tree checking logic.
+ */
+static int
+objs_process(daos_handle_t coh, struct bundle *bndl)
+{
+	vos_iter_param_t        param   = {0};
+	struct vos_iter_anchors anchors = {0};
+
+	param.ip_hdl        = coh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
+
+	return vos_iterate(&param, VOS_ITER_OBJ, false, &anchors, obj_process, NULL, bndl, NULL);
+}
 
 /**
  * Target thread (worker). VOS iterator callback. Check a single container.
@@ -66,6 +153,7 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, ck, &coh);
 	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc, ck->ck_warnings_num);
 	if (rc == DER_SUCCESS) {
+		objs_process(coh, bndl);
 		(void)vos_cont_close(coh);
 	}
 
@@ -87,7 +175,10 @@ conts_process(struct xstream_arg *xa, daos_handle_t poh, struct checker *ck)
 {
 	vos_iter_param_t        param   = {0};
 	struct vos_iter_anchors anchors = {0};
-	struct bundle           cb_arg  = {.xa = xa, .ck = ck};
+	struct bundle           cb_arg  = {.xa = xa,
+					   .ck = ck,
+					   .error_on_non_zero_padding =
+					       (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR)};
 
 	param.ip_hdl        = poh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
