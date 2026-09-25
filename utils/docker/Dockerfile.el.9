@@ -94,7 +94,7 @@ RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target
     dnf clean all
 
 # Add DAOS user
-ARG DAOS_SERVER_UID=1000
+ARG UID=1000
 RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos/daos-server-user-setup.sh \
     /tmp/daos/daos-server-user-setup.sh
 
