@@ -366,12 +366,54 @@ ktr_node_alloc(struct btr_instance *tins, int size)
 	return vos_obj_alloc(&tins->ti_umm, tins->ti_priv, size, true);
 }
 
+#define REP_DKEY_FMT "DKEY: " CK_DKEY_FMT "... "
+
 static int
 ktr_df_rec_check(struct btr_instance *tins, struct btr_record *rec, report_fn_t report_fn,
 		 void *report_arg)
 {
-	/** NOP. TBD. */
-	return 0;
+	d_iov_t               key_iov;
+	d_iov_t               val_iov;
+	struct vos_rec_bundle rbund;
+	d_iov_t               dkey = {0};
+	struct dcs_csum_info  csum = {0};
+	struct vos_krec_df   *krec;
+	int                   rc;
+
+	tree_rec_bundle2iov(&rbund, &val_iov);
+	rbund.rb_iov  = &dkey;
+	rbund.rb_csum = &csum;
+
+	report_fn(report_arg, REPORT_MSG, "Record fetch (off=%#lx)... ", rec->rec_off);
+	rc = tins->ti_ops->to_rec_fetch(tins, rec, &key_iov, &val_iov);
+	if (rc != DER_SUCCESS) {
+		report_fn(report_arg, REPORT_ERROR | REPORT_NO_PREFIX, DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
+	if (rbund.rb_krec == NULL) {
+		report_fn(report_arg, REPORT_ERROR | REPORT_NO_PREFIX,
+			  "Invalid record: buffer is NULL\n");
+		return -DER_IO_INVAL;
+	}
+	report_fn(report_arg, REPORT_MSG | REPORT_NO_PREFIX, CHECKER_OK_INFIX ".\n");
+
+	krec = rbund.rb_krec;
+
+	report_fn(report_arg, REPORT_INDENT_INC, NULL);
+	report_fn(report_arg, REPORT_MSG, REP_DKEY_FMT "\n", CK_DKEY_PRINT(&dkey));
+	report_fn(report_arg, REPORT_INDENT_INC, NULL);
+	rc = ilog_root_is_valid(&krec->kr_ilog, report_fn, report_arg);
+	report_fn(report_arg, REPORT_INDENT_DEC, NULL);
+	if (rc == DER_SUCCESS) {
+		report_fn(report_arg, REPORT_MSG, REP_DKEY_FMT CHECKER_OK_INFIX ".\n",
+			  CK_DKEY_PRINT(&dkey));
+	} else {
+		report_fn(report_arg, REPORT_ERROR, REP_DKEY_FMT DF_RC ".\n", CK_DKEY_PRINT(&dkey),
+			  DP_RC(rc));
+	}
+	report_fn(report_arg, REPORT_INDENT_DEC, NULL);
+
+	return rc;
 }
 
 static btr_ops_t key_btr_ops = {

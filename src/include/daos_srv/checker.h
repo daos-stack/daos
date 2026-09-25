@@ -12,6 +12,14 @@
 #include <daos/common.h>
 #include <daos/mem.h>
 
+/**
+ * Do NOT use the following format to print DKEYs outside code paths dedicated SOLELY to local
+ * consistency checks. Regular code paths use a less verbose format for security reasons.
+ * See daos-stack/daos#2932.
+ */
+#define CK_DKEY_FMT         "[%d] '%s'"
+#define CK_DKEY_PRINT(DKEY) (int)(DKEY)->iov_len, daos_key2str(DKEY)
+
 #define CHECKER_INDENT_MAX 10
 
 /**
