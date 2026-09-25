@@ -82,9 +82,6 @@ test_run()
 	rc = sem_init(&test.tg_queue_front_token, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
-	rc = crt_group_rank(NULL, &test.tg_my_rank);
-	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
-
 	rc = crt_proto_register(&my_proto_fmt_0);
 	D_ASSERTF(rc == 0, "registration failed with rc: %d\n", rc);
 
