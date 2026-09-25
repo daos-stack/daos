@@ -312,7 +312,7 @@ check_name(const char *name, size_t *_len)
 
 	len = strnlen(name, DFS_MAX_NAME + 1);
 	if (len > DFS_MAX_NAME)
-		return EINVAL;
+		return ENAMETOOLONG;
 
 	*_len = len;
 	return 0;
