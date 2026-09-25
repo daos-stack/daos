@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // configCmd is the struct representing the top-level config subcommand.
@@ -56,9 +57,9 @@ func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*
 	return hf, nil
 }
 
-type getStorageFn func(context.Context, logging.Logger, bool) (*control.HostStorage, error)
+type getStorageFn func(context.Context, logging.Logger, bool, bool, string) (*control.HostStorage, error)
 
-func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*control.HostStorage, error) {
+func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool, useTmpfsSCM bool, extMetadataPath string) (*control.HostStorage, error) {
 	var err error
 	snc := &scanNVMeCmd{
 		SkipPrep: skipPrep,
@@ -80,18 +81,30 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		return nil, errors.Wrap(errNvme, "nvme scan")
 	}
 
-	ssc := &scanSCMCmd{
-		scmCmd: scmCmd{},
-	}
-	ssc.Logger = log
+	// Skip PMem scanning when using tmpfs for SCM or MD-on-SSD (metadata on external path)
+	// since PMem (ipmctl) is only needed for PMem mode, not for tmpfs or MD-on-SSD mode
+	var scmResp *storage.ScmScanResponse
+	if useTmpfsSCM || extMetadataPath != "" {
+		log.Debugf("skipping PMem scan, using %s instead", map[bool]string{true: "tmpfs"}[useTmpfsSCM])
+		scmResp = &storage.ScmScanResponse{
+			Modules:    storage.ScmModules{},
+			Namespaces: storage.ScmNamespaces{},
+		}
+	} else {
+		ssc := &scanSCMCmd{
+			scmCmd: scmCmd{},
+		}
+		ssc.Logger = log
 
-	if err := ssc.initWith(initScmCmd); err != nil {
-		return nil, errors.Wrap(err, "scm init")
-	}
+		if err := ssc.initWith(initScmCmd); err != nil {
+			return nil, errors.Wrap(err, "scm init")
+		}
 
-	scmResp, errScm := scanPMem(ssc)
-	if errScm != nil {
-		return nil, errors.Wrap(errScm, "scm scan")
+		var errScm error
+		scmResp, errScm = scanPMem(ssc)
+		if errScm != nil {
+			return nil, errors.Wrap(errScm, "scm scan")
+		}
 	}
 
 	// Reload to pick up any changes after scanNVMe (which may implicitly call prepNVMe).
@@ -123,7 +136,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 
 	cmd.Debugf("fetched host fabric info on localhost: %+v", hf)
 
-	hs, err := getStorage(ctx, cmd.Logger, cmd.SkipPrep)
+	hs, err := getStorage(ctx, cmd.Logger, cmd.SkipPrep, cmd.UseTmpfsSCM, cmd.ExtMetadataPath)
 	if err != nil {
 		return nil, err
 	}
@@ -193,5 +206,8 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		return err
 	}
 
-	return cmd.confGenPrint(cmd.MustLogCtx(), getLocalFabric, getLocalStorage)
+	return cmd.confGenPrint(cmd.MustLogCtx(), getLocalFabric,
+		func(ctx context.Context, log logging.Logger, skipPrep bool, useTmpfsSCM bool, extMetadataPath string) (*control.HostStorage, error) {
+			return getLocalStorage(ctx, log, skipPrep, useTmpfsSCM, extMetadataPath)
+		})
 }
