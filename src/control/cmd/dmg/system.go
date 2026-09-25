@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var errNoRanks = errors.New("no ranks or hosts specified")
@@ -170,15 +171,42 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 type systemEraseCmd struct {
 	baseCmd
 	ctlInvokerCmd
+	cmdutil.JSONOutputCmd
 }
 
 func (cmd *systemEraseCmd) Execute(_ []string) error {
 	resp, err := control.SystemErase(cmd.MustLogCtx(), cmd.ctlInvoker, new(control.SystemEraseReq))
 	if err != nil {
+		// The erase RPC itself may fail with an uninitialized error (e.g. if the
+		// raft/system DB is torn down mid-call), rather than surfacing it via the
+		// response's rank results. Treat that the same as the expected
+		// post-erase uninitialized state.
+		if system.IsUninitialized(err) {
+			if cmd.JSONOutputEnabled() {
+				return cmd.OutputJSON(resp, nil)
+			}
+			cmd.Infof("System erase successful. System is now uninitialized and ready for 'dmg storage format'.\n")
+			return nil
+		}
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(nil, err)
+		}
 		return err
 	}
 
-	return resp.Errors()
+	if respErr := resp.Errors(); respErr != nil {
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp, respErr)
+		}
+		return respErr
+	}
+
+	err = errors.New("erase unsuccessful as system is not in uninitialized state")
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
+	}
+	cmd.Debugf("SystemErase resp %+v", resp)
+	return err
 }
 
 // systemStopCmd is the struct representing the command to shutdown DAOS system.

@@ -83,6 +83,7 @@ type mgmtSvc struct {
 	serialReqs        batchReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
+	cancel            context.CancelFunc
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
@@ -102,10 +103,16 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 	}
 }
 
-// Close cleanly shuts down the management service, closing the events PubSub if present.
+// Close cleanly shuts down the management service, canceling the context
+// and closing the events PubSub if present.
 func (svc *mgmtSvc) Close() {
-	if svc != nil && svc.events != nil {
-		svc.events.Close()
+	if svc != nil {
+		if svc.cancel != nil {
+			svc.cancel()
+		}
+		if svc.events != nil {
+			svc.events.Close()
+		}
 	}
 }
 

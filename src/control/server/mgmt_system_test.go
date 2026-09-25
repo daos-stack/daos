@@ -3582,6 +3582,21 @@ func TestServer_MgmtSvc_SystemSelfHealEval(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemErase(t *testing.T) {
+	// SystemErase() unconditionally schedules a real process restart via execRestart()
+	// (unix.Exec()) from a background goroutine after a short (500ms) delay. Stub it out
+	// for the lifetime of this test function so that running these subtests does not
+	// replace the test binary's process image mid-suite.
+	//
+	// NB: this is intentionally NOT restored (e.g. via defer/t.Cleanup) once the test
+	// function returns. execRestart is invoked asynchronously ~500ms after each subtest's
+	// SystemErase() call returns, which is often after the subtest (or even the whole
+	// top-level test) has already finished; restoring the real unix.Exec() before that
+	// delayed goroutine fires would defeat the mock and trigger a genuine self-exec of the
+	// test binary, silently restarting (and replaying) the entire suite.
+	execRestart = func(argv0 string, argv []string, envv []string) error {
+		return nil
+	}
+
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
 		return &control.HostResponse{
 			Addr:    test.MockHostAddr(a).String(),
@@ -3591,6 +3606,8 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		nilReq         bool
+		forwarded      bool
+		notLeader      bool
 		ranks          string
 		hosts          string
 		members        system.Members
@@ -3600,10 +3617,32 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 		expAbsentRanks string
 		expAbsentHosts string
 		expErrMsg      string
+		expErr         error
 	}{
 		"nil req": {
 			nilReq:    true,
 			expErrMsg: "nil request",
+		},
+		"external request on non-leader replica is redirected": {
+			// Simulates an external (e.g. dmg) request landing on a non-leader
+			// replica; the request context carries no "server" component, so
+			// leader-only enforcement kicks in and the client-redirectable
+			// ErrNotLeader is returned rather than silently erasing only the
+			// local replica's engines.
+			notLeader: true,
+			expErr:    &system.ErrNotLeader{},
+		},
+		"forwarded request from leader succeeds on non-leader replica": {
+			// Simulates the MS leader forwarding a per-replica erase request
+			// (see eraseReplicas()) directly to a non-leader peer; the request
+			// context carries the "server" component, so it is allowed to run
+			// locally (resetLocalEngines()) instead of being redirected back to
+			// the leader. This path erases local engines/DB directly and does
+			// not perform any host fanout or membership updates, so the
+			// response has no results.
+			forwarded: true,
+			notLeader: true,
+			mResps:    []*control.HostResponse{},
 		},
 		"unfiltered rank results": {
 			members: system.Members{
@@ -3678,6 +3717,21 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 
 			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
 
+			if tc.notLeader {
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			ctx := test.Context(t)
+			if tc.forwarded {
+				var err error
+				ctx, err = build.ToContext(ctx, build.ComponentServer, "1.0.0")
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
 			req := &mgmtpb.SystemEraseReq{
 				Sys: build.DefaultSystemName,
 			}
@@ -3685,7 +3739,11 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 				req = nil
 			}
 
-			gotResp, gotErr := svc.SystemErase(test.Context(t), req)
+			gotResp, gotErr := svc.SystemErase(ctx, req)
+			if tc.expErr != nil {
+				test.CmpErr(t, tc.expErr, gotErr)
+				return
+			}
 			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 			if tc.expErrMsg != "" {
 				return
