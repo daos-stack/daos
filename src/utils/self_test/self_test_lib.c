@@ -77,7 +77,7 @@ self_test_dump_info(crt_group_t *grp, crt_context_t ctx, char *dest_name, char *
 		rank = rank_list->rl_ranks[i];
 		rc   = crt_rank_uri_get(grp, rank, 0, &uri);
 		if (rc != 0) {
-			DL_ERROR(rc, "crt_rank_uri_get() failed for rank=%d\n", rank);
+			DL_ERROR(rc, "crt_rank_uri_get() failed for rank=%d", rank);
 			continue;
 		}
 
