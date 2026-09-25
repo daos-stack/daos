@@ -2037,9 +2037,34 @@ func (svc *mgmtSvc) scheduleControlPlaneRestart(leaderStr string) error {
 // - Non-leader replicas: erase local engines + DB, restart immediately
 // - Leader: erase its own DB first, coordinate replica/engine erase, restart last
 func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseReq) (*mgmtpb.SystemEraseResp, error) {
-	// At a minimum, ensure that this only runs on MS replicas.
-	if err := svc.checkReplicaRequest(pbReq); err != nil {
-		return nil, err
+	// Distinguish an externally-initiated request (e.g. from the dmg admin tool) from
+	// an internally-forwarded request sent by the MS leader directly to a specific
+	// non-leader replica peer (see eraseReplicas()). Only external requests must be
+	// routed to the current leader so it can coordinate DB/engine erasure across all
+	// replicas and ranks; forwarded per-replica requests are explicitly targeted at a
+	// non-leader host by the leader and must be allowed to run locally there.
+	//
+	// If the caller's component can't be determined (e.g. missing header in an
+	// insecure/no-TLS deployment, or an unexpected error), fail safe by treating the
+	// request as external so that leader-only enforcement still applies.
+	isForwarded := false
+	if comp, err := build.FromContext(ctx); err == nil && comp.Component == build.ComponentServer {
+		isForwarded = true
+	}
+
+	if isForwarded {
+		// At a minimum, ensure that this only runs on MS replicas.
+		if err := svc.checkReplicaRequest(pbReq); err != nil {
+			return nil, err
+		}
+	} else {
+		// External (admin) request: must be serviced by the current leader. If this
+		// replica isn't the leader, checkLeaderRequest() returns *system.ErrNotLeader,
+		// which the dmg/control client automatically retries against the leader hint
+		// (see lib/control/rpc.go's *system.ErrNotLeader handling).
+		if err := svc.checkLeaderRequest(pbReq); err != nil {
+			return nil, err
+		}
 	}
 
 	isLeader := svc.sysdb.IsLeader()
