@@ -848,31 +848,49 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         container_fill = self.get_container(self.pool)
         self.fill_pool(container_fill, 90)
 
+        # Write after 90% of the pool is filled
+        self.log_step('Running IOR write with ~90% of the pool filled')
+        container_wr = self.get_container(self.pool)
+        ior_matrix = self._get_ior_metrics(
+            container_wr,
+            processes=processes,
+            ior_flags=w_flags,
+            transfer_size=transfer_size,
+            block_size=block_size,
+            namespace='/run/ior_new/*')
+        max_wr_mib_last = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
+        self.log.info("IOR Write to fill ~90% container MiB: %s", max_wr_mib_last)
+
         # Read the same container which was written at the beginning.
         # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
         self.log_step('Running IOR read with ~90% of the pool filled')
         max_rd_mib_latest = []
         for i in range(iterations):
             ior_matrix = self._get_ior_metrics(
-                container,
+                container_wr,
                 processes=processes,
                 ior_flags=r_flags,
                 transfer_size=transfer_size,
                 block_size=block_size,
                 namespace='/run/ior_new/*')
             max_rd_mib_latest.append(float(ior_matrix[0][int(IorMetrics.MAX_MIB)]))
-            self.log.info("IOR Latest Read MiB %d: %s", i, max_rd_mib_latest[-1])
+            self.log.info("90% filled IOR Latest Read MiB %d: %s", i, max_rd_mib_latest[-1])
 
         # Check if latest IOR read performance is in Tolerance of 5%, when
         # Storage space is full.
+        self.log.info("Initial IOR Write MiB: %s", max_wr_mib_baseline)
+        self.log.info("After 90% filled IOR Write MiB: %s", max_wr_mib_last)
+
         avg_rd_baseline = sum(max_rd_mib_baseline) / len(max_rd_mib_baseline)
         avg_rd_latest = sum(max_rd_mib_latest) / len(max_rd_mib_latest)
-        self.log.info("Average IOR Baseline Read MiB %s", avg_rd_baseline)
-        self.log.info("Average IOR Latest Read MiB %s", avg_rd_latest)
-        if abs(avg_rd_baseline - avg_rd_latest) > (avg_rd_baseline / 100 * 5):
+        self.log.info("Average IOR Baseline Read MiB: %s", avg_rd_baseline)
+        self.log.info("Average IOR Latest Read MiB: %s", avg_rd_latest)
+        if abs(avg_rd_baseline - avg_rd_latest) > (avg_rd_baseline / 100 * 5) or \
+           abs(max_wr_mib_baseline - max_wr_mib_last) > (max_wr_mib_baseline / 100 * 5):
             self.fail('Latest IOR performance is not under 5% Tolerance'
-                      ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
-                      .format(max_rd_mib_baseline, max_rd_mib_latest))
+                      ' Average baseline Read MiB  = {} and Average after 90% fill Read MiB = {}'
+                      ' Baseline Write MiB = {} and after 90% fill Write MiB = {}'
+                      .format(avg_rd_baseline, avg_rd_latest, max_wr_mib_baseline, max_wr_mib_last))
 
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
@@ -916,7 +934,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             namespace='/run/ior_new/*')
         max_mib_baseline = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
         # baseline_cont_uuid = self.ior_cmd.dfs_cont.value
-        self.log.info("IOR Baseline Read MiB %s", max_mib_baseline)
+        self.log.info("IOR Baseline Read MiB: %s", max_mib_baseline)
 
         # Run IOR to fill the pool.
         self.log_step('Running IOR to hit enospace')
@@ -933,7 +951,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             block_size=self.calculate_ior_block_size(5, 'SCM'),
             namespace='/run/ior_new/*')
         max_mib_latest = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
-        self.log.info("IOR Latest Read MiB %s", max_mib_latest)
+        self.log.info("IOR Latest Read MiB: %s", max_mib_latest)
 
         # Check if latest IOR read performance is in Tolerance of 5%, when
         # Storage space is full.
@@ -960,7 +978,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             namespace='/run/ior_new/*')
         self.log.info("IOR metrics for container %s: %s", container, ior_metrics)
         max_mib = float(ior_metrics[0][int(IorMetrics.MAX_MIB)])
-        self.log.info("IOR Latest Write MiB to fill container %s: %s", container, max_mib)
+        self.log.info("IOR Write to fill container %s: MiB: %s", container, max_mib)
 
     def _get_ior_metrics(self, container, processes, ior_flags, transfer_size, block_size,
                          namespace="/run/ior/*"):
