@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
 from run_utils import run_remote
 
@@ -34,14 +33,17 @@ class DdbCommandBase(CommandWithParameters):
         # Write mode that's necessary for the commands that alters the data such as load.
         self.write_mode = FormattedParameter("-w", default=False, position=1)
 
+        # Used for ddb subcommand.
+        self.ddb_command = BasicParameter(None, position=2)
+
         # Path to the system database. Used for MD-on-SSD.
-        self.db_path = BasicParameter(None, position=2)
+        self.db_path = FormattedParameter("--db_path {}", position=3)
 
         # VOS file path.
-        self.vos_path = FormattedParameter("--vos_path {}", position=3)
+        self.vos_path = FormattedParameter("--vos_path {}", position=4)
 
-        # Command to run on the VOS file that contains container, object info, etc.
-        self.single_command = BasicParameter(None, position=4)
+        # Path for various ddb subcommands.
+        self.path = BasicParameter(None, position=5)
 
         # Members needed for run().
         self.verbose = verbose
@@ -94,31 +96,51 @@ class DdbCommand(DdbCommandBase):
         super().__init__(server_host, path)
         self.vos_path.update(vos_path, "vos_path")
 
+    def _clear_ddb_command(self):
+        """Clear self.ddb_command.
+
+        This method is needed to handle the inconsistent ddb command (or subcommand) pattern between
+        the following two groups:
+
+        1. prov_mem and rm_pool.
+        * Subcommand comes near the beginning. e.g.,
+        ddb prov_mem --db_path <db_path> <tmpfs_mount>.
+
+        2. ls, value_dump, value_load, rm, and the rest.
+        * Subcommand comes near the end. e.g.,
+        ddb --db_path <db_path> --vos_path <vos_path> ls <component_path>
+
+        After calling prov_mem or rm_pool, self.ddb_subcomand would contain the subcommand string,
+        but we don't need that for the other subcommands, so clear it. This way, the caller can call
+        the commands in any order without worrying about the subcommand string left from previous
+        call.
+        """
+        self.ddb_command.value = None
+
     def list_component(self, component_path=None):
-        """Call ddb ls <component_path>
+        """Call ddb --db_path <db_path> --vos_path <vos_path> ls <component_path>
 
         ls is similar to the Linux ls command. It lists objects inside the container,
         dkeys inside the object, and so on.
 
         Args:
             component_path (str): Component that comes after ls. e.g., [0]/[1] for first
-                container, second object. Defaults to None, in which case "ls" will be
-                called.
+                container, second object. Defaults to None, in which case "ls" will be called.
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
-
         """
-        cmd = ["ls"]
+        self._clear_ddb_command()
+        self.path.value = "ls"
         if component_path:
-            cmd.append(component_path)
+            self.path.value += f" {component_path}"
         self.write_mode.value = False
-        self.single_command.value = " ".join(cmd)
 
         return self.run()
 
     def value_dump(self, component_path, out_file_path):
-        """Call ddb -R "value_dump <component_path> <out_file_path>"
+        """Call ddb --db_path <db_path> --vos_path <vos_path> value_dump <component_path>
+        <out_file_path>
 
         dump_value writes the contents to the file. e.g., if akey is specified, its data
         will be dumped.
@@ -132,16 +154,16 @@ class DdbCommand(DdbCommandBase):
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
-
         """
+        self._clear_ddb_command()
         self.write_mode.value = False
-        self.single_command.value = " ".join(
-            ["value_dump", component_path, out_file_path])
+        self.path.value = " ".join(["value_dump", component_path, out_file_path])
 
         return self.run()
 
     def value_load(self, component_path, load_file_path):
-        """Call ddb -w -R "value_load <load_file_path> <component_path>"
+        """Call ddb -w --db_path <db_path> --vos_path <vos_path> value_load <load_file_path>
+        <component_path>
 
         load writes the given data into the container. e.g.,
         load new_data.txt [0]/[1]/[1]/[0]
@@ -154,16 +176,15 @@ class DdbCommand(DdbCommandBase):
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
-
         """
+        self._clear_ddb_command()
         self.write_mode.value = True
-        self.single_command.value = " ".join(
-            ["value_load", load_file_path, component_path])
+        self.path.value = " ".join(["value_load", load_file_path, component_path])
 
         return self.run()
 
     def remove_component(self, component_path):
-        """Call ddb -w rm <component_path>
+        """Call ddb -w --db_path <db_path> --vos_path <vos_path> rm <component_path>
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1] for first container,
@@ -171,15 +192,15 @@ class DdbCommand(DdbCommandBase):
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
-
         """
+        self._clear_ddb_command()
         self.write_mode.value = True
-        self.single_command.value = " ".join(["rm", component_path])
+        self.path.value = f"rm {component_path}"
 
         return self.run()
 
     def ilog_dump(self, component_path):
-        """Call ddb -R "ilog_dump <component_path>"
+        """Call ddb ilog_dump <component_path>
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -187,15 +208,15 @@ class DdbCommand(DdbCommandBase):
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
-
         """
+        self._clear_ddb_command()
         self.write_mode.value = False
-        self.single_command.value = " ".join(["ilog_dump", component_path])
+        self.path.value = f"ilog_dump {component_path}"
 
         return self.run()
 
     def ilog_commit(self, component_path):
-        """Call ddb -R "ilog_commit <component_path>"
+        """Call ddb ilog_commit <component_path>
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -203,15 +224,15 @@ class DdbCommand(DdbCommandBase):
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
-
         """
+        self._clear_ddb_command()
         self.write_mode.value = False
-        self.single_command.value = " ".join(["ilog_commit", component_path])
+        self.path.value = f"ilog_commit {component_path}"
 
         return self.run()
 
     def ilog_clear(self, component_path):
-        """Call ddb -R "ilog_clear <component_path>"
+        """Call ddb ilog_clear <component_path>
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -219,15 +240,15 @@ class DdbCommand(DdbCommandBase):
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
-
         """
+        self._clear_ddb_command()
         self.write_mode.value = False
-        self.single_command.value = " ".join(["ilog_clear", component_path])
+        self.path.value = f"ilog_clear {component_path}"
 
         return self.run()
 
     def superblock_dump(self, component_path):
-        """Call ddb -R "superblock_dump <component_path>"
+        """Call ddb superblock_dump <component_path>
 
         Args:
             component_path (str): Component that comes after dump_superblock.
@@ -235,30 +256,35 @@ class DdbCommand(DdbCommandBase):
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
-
         """
+        self._clear_ddb_command()
         self.write_mode.value = False
-        self.single_command.value = " ".join(["superblock_dump", component_path])
+        self.path.value = f"superblock_dump {component_path}"
 
         return self.run()
 
     def dtx_dump(self, component_path="[0]", committed=False, active=False):
-        """Call ddb -R "dtx_dump <component_path>"
+        """Call ddb dtx_dump <component_path>
 
         committed and active can't be set at the same time.
 
         Args:
             component_path (str): Component that comes after dump_dtx. It doesn't matter
                 as long as it's valid. Defaults to [0].
-            committed (str): -c flag. Defaults to False.
-            active (str): -a flag. Defaults to False.
+            committed (bool): -c flag. Defaults to False.
+            active (bool): -a flag. Defaults to False.
+
+        Raises:
+            ValueError: if both committed and active are set, since they're mutually exclusive.
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
-
         """
-        self.write_mode.value = False
+        if committed and active:
+            raise ValueError("committed and active can't be set at the same time!")
 
+        self._clear_ddb_command()
+        self.write_mode.value = False
         commands = ["dtx_dump"]
         if committed:
             commands.append("-c")
@@ -266,12 +292,12 @@ class DdbCommand(DdbCommandBase):
             commands.append("-a")
         commands.append(component_path)
 
-        self.single_command.value = " ".join(commands)
+        self.path.value = " ".join(commands)
 
         return self.run()
 
     def dtx_cmt_clear(self, component_path="[0]"):
-        """Call ddb -R "dtx_cmt_clear <component_path>"
+        """Call ddb -w dtx_cmt_clear <component_path>
 
         Args:
             component_path (str): Component that comes after clear_cmt_dtx. It doesn't
@@ -279,15 +305,15 @@ class DdbCommand(DdbCommandBase):
 
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
-
         """
+        self._clear_ddb_command()
         self.write_mode.value = True
-        self.single_command.value = " ".join(["dtx_cmt_clear", component_path])
+        self.path.value = f"dtx_cmt_clear {component_path}"
 
         return self.run()
 
     def prov_mem(self, db_path, tmpfs_mount):
-        """Call ddb --vos_path "" prov_mem --db_path <db_path> <tmpfs_mount>.
+        """Call ddb prov_mem --db_path <db_path> <tmpfs_mount>.
 
         Args:
             db_path (str): Path to the system database. e.g.,
@@ -298,8 +324,31 @@ class DdbCommand(DdbCommandBase):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
-        self.vos_path.value = '""'
-        cmd = ["prov_mem", "--db_path", db_path, tmpfs_mount]
-        self.single_command.value = " ".join(cmd)
+        self.vos_path.value = None
+        self.ddb_command.value = "prov_mem"
+        self.db_path.value = db_path
+        self.path.value = tmpfs_mount
+
+        return self.run()
+
+    def rm_pool(self, db_path, removing_path):
+        """Call ddb rm_pool --db_path <db_path> <removing_path>
+
+        Example:
+        ddb rm_pool --db_path /var/tmp/daos_testing/control_metadata/daos_control/engine1
+        /mnt/daos3/$POOL/rdb-pool
+
+        Args:
+            db_path (str): Path to the system database. e.g.,
+                /var/tmp/daos_testing/control_metadata/daos_control/engine0
+            removing_path (str): File path to remove.
+
+        Returns:
+            CommandResult: groups of command results from the same hosts with the same return status
+        """
+        self.vos_path.value = None
+        self.ddb_command.value = "rm_pool"
+        self.db_path.value = db_path
+        self.path.value = removing_path
 
         return self.run()
