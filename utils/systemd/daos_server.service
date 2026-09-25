@@ -1,8 +1,10 @@
 [Unit]
 Description=DAOS Server
-StartLimitIntervalSec=60
 Wants=network-online.target
 After=network-online.target
+
+StartLimitIntervalSec=60
+StartLimitBurst=1
 
 [Service]
 Type=simple
@@ -11,14 +13,27 @@ Group=daos_server
 RuntimeDirectory=daos_server
 RuntimeDirectoryMode=0755
 ExecStart=/usr/bin/daos_server start
+
 StandardOutput=journal
 StandardError=journal
+
+# Restart once with 5s delay
+# If service needs to be restarted more than
+# once every 60s, just give up
 Restart=on-failure
-RestartSec=10
+RestartSec=5
+
+# bump limits
 LimitMEMLOCK=infinity
 LimitCORE=infinity
 LimitNOFILE=infinity
-StartLimitBurst=5
+
+# dump pmem content by default
+CoredumpFilter=default private-dax
+# reduce OOM killer score
+OOMScoreAdjust=-900
+# increase priority
+Nice=-10
 
 [Install]
 WantedBy = multi-user.target
