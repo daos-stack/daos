@@ -744,7 +744,7 @@ obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, uint64_t 
 		if (shard->po_target == -1) {
 			D_ERROR(DF_OID" grp_size 1, obj_get_shard failed\n",
 				DP_OID(obj->cob_md.omd_id));
-			return -DER_IO;
+			D_GOTO(unlock, rc = -DER_IO);
 		}
 
 		/*
