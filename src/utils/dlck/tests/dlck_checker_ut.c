@@ -63,6 +63,7 @@ __wrap_vfprintf(FILE *stream, const char *fmt, va_list args)
 		(void)stream;
 		(void)fmt;
 		(void)args;
+		mock_vfprintf_enabled = 0;
 		if (mock_vfprintf_rc < 0)
 			errno = EIO;
 		return mock_vfprintf_rc;
