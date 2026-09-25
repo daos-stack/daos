@@ -188,6 +188,12 @@ struct csum_dump_options {
 	daos_epoch_t epoch;
 };
 
+struct csum_check_options {
+	char        *path;
+	daos_epoch_t epoch;
+	bool         verbose;
+};
+
 /* Run commands ... */
 int
 ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt);
@@ -248,5 +254,7 @@ int
 ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt);
 int
 ddb_run_csum_dump(struct ddb_ctx *ctx, struct csum_dump_options *opt);
+int
+ddb_run_csum_check(struct ddb_ctx *ctx, struct csum_check_options *opt);
 
 #endif /* __DDB_RUN_CMDS_H */
