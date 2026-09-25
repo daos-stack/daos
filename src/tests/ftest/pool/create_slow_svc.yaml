@@ -1,0 +1,39 @@
+hosts:
+  # The faults are armed from the local host; at least 3 servers are needed.
+  test_servers: 3
+timeouts:
+  test_pool_create_slow_svc: 180
+  # Lower: these reuse the agents/servers started by the test above (start_*_once default True).
+  test_pool_create_slow_svc_retry: 150
+  test_pool_create_slow_svc_slow_destroy: 150
+server_config:
+  name: daos_server
+  # Tight generic RPC timeout, shorter than the fault delays below.
+  crt_timeout: 5
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      env_vars:
+        - DD_MASK=mgmt,md
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          # Enough for the 4GB pool and its 1GiB service replica on 3 engines.
+          scm_size: 6
+  system_ram_reserved: 1
+# The pool is created on an odd number of ranks with as many service replicas.
+pool:
+  size: 4GB
+# Fault delays, in milliseconds. For this pool size the RSVC_START create RPC timeout is the
+# 15 seconds minimum (DS_RSVC_CREATE_TIMEOUT_MIN) and the rollback destroy RPC is granted at
+# least the same 15 seconds. The normal pool destroy keeps the generic crt_timeout (i.e. 5s).
+slow_svc:
+  create_rsvc_delay_ms: 8000
+slow_svc_retry:
+  create_rsvc_delay_ms: 20000
+slow_svc_slow_destroy:
+  create_rsvc_delay_ms: 20000
+  destroy_tgt_delay_ms: 20000

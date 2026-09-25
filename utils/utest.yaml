@@ -81,6 +81,7 @@
   base: "BUILD_DIR"
   tests:
     - cmd: ["src/common/tests/rsvc_tests"]
+    - cmd: ["src/rsvc/tests/rsvc_srv_tests"]
 - name: security
   base: "BUILD_DIR"
   tests:
