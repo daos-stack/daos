@@ -1400,6 +1400,9 @@ dfuse_ie_dentry_replace(struct dfuse_inode_entry *ie, fuse_ino_t old_parent, con
 			fuse_ino_t new_parent, const char *new_name, struct dfuse_dentry *released)
 {
 	struct dfuse_dentry *dd;
+	struct dfuse_dentry *dd_old  = NULL;
+	struct dfuse_dentry *dd_new  = NULL;
+	struct dfuse_dentry *free_dd = NULL;
 
 	released->dd_parent  = 0;
 	released->dd_name[0] = '\0';
@@ -1411,16 +1414,41 @@ dfuse_ie_dentry_replace(struct dfuse_inode_entry *ie, fuse_ino_t old_parent, con
 		ie->ie_parent = new_parent;
 		strncpy(ie->ie_name, new_name, NAME_MAX);
 		ie->ie_name[NAME_MAX] = '\0';
+		/* If the new name was already a secondary, collapse it into this primary. */
+		d_list_for_each_entry(dd, &ie->ie_dentries, dd_list) {
+			if (dd->dd_parent == new_parent &&
+			    strncmp(dd->dd_name, new_name, NAME_MAX) == 0) {
+				d_list_del(&dd->dd_list);
+				free_dd = dd;
+				break;
+			}
+		}
 		goto out;
 	}
 
+	/* Locate the secondary being renamed and any secondary that already holds the new name. */
 	d_list_for_each_entry(dd, &ie->ie_dentries, dd_list) {
-		if (dd->dd_parent == old_parent && strncmp(dd->dd_name, old_name, NAME_MAX) == 0) {
-			dd->dd_parent = new_parent;
-			strncpy(dd->dd_name, new_name, NAME_MAX);
-			dd->dd_name[NAME_MAX] = '\0';
-			goto out;
+		if (dd->dd_parent == old_parent && strncmp(dd->dd_name, old_name, NAME_MAX) == 0)
+			dd_old = dd;
+		else if (dd->dd_parent == new_parent &&
+			 strncmp(dd->dd_name, new_name, NAME_MAX) == 0)
+			dd_new = dd;
+	}
+
+	if (dd_old != NULL) {
+		/* Drop the renamed entry if the new name is already tracked (primary or a
+		 * secondary), otherwise rename it in place.
+		 */
+		if (dd_new != NULL || (ie->ie_parent == new_parent &&
+				       strncmp(ie->ie_name, new_name, NAME_MAX) == 0)) {
+			d_list_del(&dd_old->dd_list);
+			free_dd = dd_old;
+		} else {
+			dd_old->dd_parent = new_parent;
+			strncpy(dd_old->dd_name, new_name, NAME_MAX);
+			dd_old->dd_name[NAME_MAX] = '\0';
 		}
+		goto out;
 	}
 
 	/* Old name unknown: release every tracked name and set the new one as the sole primary. */
@@ -1435,6 +1463,8 @@ dfuse_ie_dentry_replace(struct dfuse_inode_entry *ie, fuse_ino_t old_parent, con
 
 out:
 	D_SPIN_UNLOCK(&ie->ie_dentry_lock);
+	if (free_dd != NULL)
+		D_FREE(free_dd);
 }
 
 void
@@ -1442,7 +1472,8 @@ dfuse_ie_dentry_set_single(struct dfuse_inode_entry *ie, fuse_ino_t parent, cons
 			   struct dfuse_dentry *released)
 {
 	struct dfuse_dentry *dd, *ddn;
-	bool                 kept = false;
+	struct dfuse_dentry *free_dd = NULL;
+	bool                 kept    = false;
 
 	released->dd_parent  = 0;
 	released->dd_name[0] = '\0';
@@ -1465,8 +1496,8 @@ dfuse_ie_dentry_set_single(struct dfuse_inode_entry *ie, fuse_ino_t parent, cons
 	d_list_for_each_entry_safe(dd, ddn, &ie->ie_dentries, dd_list) {
 		if (!kept && dd->dd_parent == parent && strncmp(dd->dd_name, name, NAME_MAX) == 0) {
 			d_list_del(&dd->dd_list);
-			D_FREE(dd);
-			kept = true;
+			free_dd = dd;
+			kept    = true;
 			continue;
 		}
 		d_list_del(&dd->dd_list);
@@ -1478,6 +1509,8 @@ dfuse_ie_dentry_set_single(struct dfuse_inode_entry *ie, fuse_ino_t parent, cons
 	ie->ie_name[NAME_MAX] = '\0';
 
 	D_SPIN_UNLOCK(&ie->ie_dentry_lock);
+	if (free_dd != NULL)
+		D_FREE(free_dd);
 }
 
 void

@@ -409,6 +409,9 @@ df_ll_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, const char *new
 	inode        = dfuse_inode_lookup_nf(dfuse_info, ino);
 	parent_inode = dfuse_inode_lookup_nf(dfuse_info, newparent);
 
+	if (inode->ie_dfs != parent_inode->ie_dfs)
+		D_GOTO(err, rc = EXDEV);
+
 	if (!parent_inode->ie_dfs->dfs_ops->hardlink)
 		D_GOTO(err, rc = ENOTSUP);
 

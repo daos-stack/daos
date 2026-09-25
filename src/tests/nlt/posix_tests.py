@@ -990,6 +990,99 @@ class PosixTests():
         if dfuse0.stop():
             self.fatal_errors = True
 
+    def test_hardlink_stale_notify_delete(self):
+        """Remove hardlink names out-of-band, then the last name locally, all in one directory.
+
+        Two mounts share a container.  Three hardlink names are created in the same directory on
+        the first mount and looked up so dfuse tracks them as a primary plus two secondaries.  The
+        two secondary names are then removed out-of-band via the second mount, so the first mount
+        still holds stale dentries for names that no longer exist.  Removing the surviving name
+        locally drives the final-removal path (dfuse_oid_unlinked -> dfuse_ie_inode_delete), which
+        must issue notify_delete for the stale secondary names in the same parent the kernel is
+        unlinking - a path the other hardlink tests do not reach.
+
+        A long dentry cache is used so the stale names can only disappear from the first mount
+        because dfuse invalidated them, not because the cache timed out.
+        """
+        cache_time = 30
+        cont_attrs = {'dfuse-data-cache': False,
+                      'dfuse-attr-time': cache_time,
+                      'dfuse-dentry-time': cache_time,
+                      'dfuse-ndentry-time': cache_time}
+        self.container.set_attrs(cont_attrs)
+
+        dfuse0 = DFuse(self.server, self.conf, caching=True, wbcache=False,
+                       container=self.container)
+        dfuse0.start(v_hint='hardlink_stale_notify_0')
+
+        dfuse1 = DFuse(self.server, self.conf, caching=False, container=self.container)
+        dfuse1.start(v_hint='hardlink_stale_notify_1')
+
+        try:
+            names = ['file', 'link1', 'link2']
+            paths0 = [join(dfuse0.dir, name) for name in names]
+            paths1 = [join(dfuse1.dir, name) for name in names]
+
+            with open(paths0[0], 'w') as fd:
+                fd.write('data')
+            os.link(paths0[0], paths0[1])
+            os.link(paths0[0], paths0[2])
+
+            # Look up every name on the first mount so the kernel caches the primary plus two
+            # secondaries and dfuse tracks them, all in the same parent directory.
+            assert len({os.stat(p).st_ino for p in paths0}) == 1, \
+                'hardlink names should share one inode'
+            assert os.stat(paths0[0]).st_nlink == 3
+
+            # Pin the shared inode with an open fd so the stale dentries stay resident on the
+            # first mount after the out-of-band removals below.
+            pin = os.open(paths0[0], os.O_RDONLY)
+            try:
+                # Remove the two secondary names out-of-band via the second mount.  The first
+                # mount is not notified, so it keeps stale cached dentries for link1 and link2 -
+                # confirm they still resolve there from cache before the final unlink, otherwise
+                # the invalidation check below would prove nothing.
+                os.unlink(paths1[1])
+                os.unlink(paths1[2])
+                assert os.path.exists(paths0[1]), 'link1 should still be cached on the first mount'
+                assert os.path.exists(paths0[2]), 'link2 should still be cached on the first mount'
+
+                # Remove the last surviving name locally.  This is the final on-disk link, so it
+                # drives dfuse_oid_unlinked -> dfuse_ie_inode_delete, which issues notify_delete
+                # for the stale link1/link2 dentries in the same parent.
+                os.unlink(paths0[0])
+                try:
+                    os.stat(paths0[0])
+                    assert False, 'file should be gone after last link removed'
+                except FileNotFoundError:
+                    pass
+
+                # notify_delete is issued after the unlink reply, so poll briefly.  The dentry
+                # cache is still well within its timeout, so the stale names can only become
+                # ENOENT because dfuse invalidated their cached dentries.
+                deadline = time.perf_counter() + 10
+                while time.perf_counter() < deadline:
+                    if not os.path.exists(paths0[1]) and not os.path.exists(paths0[2]):
+                        break
+                    time.sleep(0.5)
+                for stale in (paths0[1], paths0[2]):
+                    try:
+                        os.stat(stale)
+                        assert False, f'stale dentry {stale} not invalidated by notify_delete'
+                    except FileNotFoundError:
+                        pass
+            finally:
+                os.close(pin)
+
+            # The directory is empty on both mounts and dfuse survived the stale notify_delete.
+            assert os.listdir(dfuse0.dir) == []
+            assert os.listdir(dfuse1.dir) == []
+        finally:
+            if dfuse1.stop():
+                self.fatal_errors = True
+            if dfuse0.stop():
+                self.fatal_errors = True
+
     def test_hardlink_cache_expire(self):
         """Check the invalidation thread drops every name of a hardlink inode on timeout.
 
@@ -1202,9 +1295,6 @@ class PosixTests():
         exercising the snapshot-and-invalidate paths (dfuse_ie_dentry_snapshot ->
         dfuse_queue_inval_dentries) that only run when caching keeps the extra names resident.
 
-        st_nlink is a cached attribute of the shared inode that a peer-name unlink/rename does not
-        refresh under caching, so the link count is only asserted where it is authoritative: right
-        after creation and after an eviction forces a fresh lookup.
         """
         cache_time = 5
         cont_attrs = {'dfuse-data-cache': False,
@@ -1242,15 +1332,15 @@ class PosixTests():
                 assert fd.read() == 'con'
 
             # unlink one cached name: the removed name is gone and the file survives via the
-            # others.  Under caching, st_nlink is a cached attribute of the shared inode that a
-            # peer-name unlink does not refresh (unlike setattr, which refreshes it via the reply),
-            # so it is only asserted below after an eviction forces a fresh lookup.
+            # others.  The peer-name unlink evicts the metadata cache of the shared inode, so
+            # the follow-up GETATTR reports the refreshed link count.
             os.unlink(names[0])
             try:
                 os.stat(names[0])
                 assert False, 'unlinked name should be gone'
             except FileNotFoundError:
                 pass
+            assert os.stat(names[1]).st_nlink == 2, 'stale nlink after peer-name unlink'
             with open(names[1], 'r') as fd:
                 assert fd.read() == 'con'
             with open(names[2], 'r') as fd:
@@ -1271,15 +1361,18 @@ class PosixTests():
             # Still a single shared inode after all the cached-state mutations.
             dfuse.check_usage(inodes=base + 1)
 
-            # Remove one of the two surviving names, then evict the last one.  The shared inode
-            # drains to the baseline only if every cached name was invalidated.
+            # Remove one of the two surviving names.  The peer-name unlink evicts the metadata
+            # cache of the shared inode, so the survivor link count refreshes to 1 on the next
+            # GETATTR without needing an eviction.
             os.unlink(renamed)
+            assert os.stat(names[2]).st_nlink == 1, 'stale nlink after peer-name unlink'
+
+            # Evict the last name so the shared inode drains to the baseline, confirming every
+            # cached name was invalidated.
             dfuse.evict_and_wait([names[2]])
             dfuse.check_usage(inodes=base)
 
-            # Eviction forced the inode to be forgotten, so the next lookup is authoritative: the
-            # link count is now 1 and the final unlink removes the file for good.
-            assert os.stat(names[2]).st_nlink == 1
+            # The final unlink removes the file for good.
             os.unlink(names[2])
             try:
                 os.stat(names[2])
@@ -1289,6 +1382,172 @@ class PosixTests():
         finally:
             if dfuse.stop():
                 self.fatal_errors = True
+
+    def test_hardlink_stale_name(self):
+        """Operate on the surviving name of a hardlink after the other name is removed.
+
+        A dfuse inode holds a single dfs_obj whose (parent, name) is refreshed on every lookup.
+        Several DFS calls (dfs_osetattr, dfs_link, dfs_ostatx) still resolve that object by its
+        cached name, so if the object is left pointing at a name that has just been removed those
+        calls fail with ENOENT on an inode that is still perfectly alive.  This reproduces the
+        regression where 'ln a b; rm b; <op on a>' returned ENOENT.
+
+        Every operation is run twice: once removing the secondary name and operating on the
+        primary survivor, and once removing the primary name and operating on the secondary
+        survivor.  The whole matrix runs under two mounts: caching off (every stat is a fresh
+        lookup, so the lookup of the doomed name just before it is removed points the shared
+        object at the stale name) and caching on (looked-up names stay resident, so the shared
+        object is not re-allocated and reliably retains the stale name).
+        """
+        cache_time = 30
+        cont_attrs = {'dfuse-data-cache': False,
+                      'dfuse-attr-time': cache_time,
+                      'dfuse-dentry-time': cache_time,
+                      'dfuse-ndentry-time': cache_time}
+        self.container.set_attrs(cont_attrs)
+
+        for caching in (False, True):
+            dfuse = DFuse(self.server, self.conf, caching=caching, wbcache=False,
+                          container=self.container)
+            dfuse.start(v_hint=f'hardlink_stale_{"on" if caching else "off"}')
+            try:
+                self._hardlink_stale_name(dfuse.dir)
+            finally:
+                if dfuse.stop():
+                    self.fatal_errors = True
+
+    @staticmethod
+    def _hardlink_stale_name(root):
+        """Run the stale-name matrix (chmod/truncate/ln/mv x both removal patterns) under root."""
+        def op_chmod(target):
+            os.chmod(target, 0o600)
+            assert stat.S_IMODE(os.stat(target).st_mode) == 0o600, 'chmod not applied to survivor'
+            return target
+
+        def op_truncate(target):
+            os.truncate(target, 1)
+            assert os.stat(target).st_size == 1, 'truncate not applied to survivor'
+            return target
+
+        def op_link(target):
+            extra = f'{target}_c'
+            os.link(target, extra)
+            assert os.stat(target).st_ino == os.stat(extra).st_ino, 'new link does not share inode'
+            os.unlink(extra)
+            return target
+
+        def run_rename_over(label):
+            # Renaming a fresh file over one hardlink name must drop that name and leave the
+            # survivor with an accurate link count.
+
+            # Pattern 1: echo hi > file1; ln file1 file2; echo bye > file3; mv file3 file2;
+            #            stat file1
+            file1 = join(root, f'{label}_1_file1')
+            file2 = join(root, f'{label}_1_file2')
+            file3 = join(root, f'{label}_1_file3')
+            with open(file1, 'w') as fd:
+                fd.write('hi')
+            os.link(file1, file2)
+            assert os.stat(file1).st_nlink == 2, 'link count wrong after creating hardlink'
+            with open(file3, 'w') as fd:
+                fd.write('bye')
+            # Look up the doomed name last so the shared object caches 'file2' as its name.
+            os.stat(file1)
+            os.stat(file2)
+            # Renaming file3 onto file2 removes the old file2, so file1 drops back to one name.
+            os.rename(file3, file2)
+            assert os.stat(file1).st_nlink == 1, 'stale nlink on survivor after rename removed name'
+            os.unlink(file1)
+            os.unlink(file2)
+
+            # Pattern 2: echo hi > file1; ln file1 file2; echo bye > file3; mv file3 file1;
+            #            stat file2
+            file1 = join(root, f'{label}_2_file1')
+            file2 = join(root, f'{label}_2_file2')
+            file3 = join(root, f'{label}_2_file3')
+            with open(file1, 'w') as fd:
+                fd.write('hi')
+            os.link(file1, file2)
+            assert os.stat(file2).st_nlink == 2, 'link count wrong after creating hardlink'
+            with open(file3, 'w') as fd:
+                fd.write('bye')
+            # Look up the doomed name last so the shared object caches 'file1' as its name.
+            os.stat(file2)
+            os.stat(file1)
+            # Renaming file3 onto file1 removes the old file1, so file2 drops back to one name.
+            os.rename(file3, file1)
+            assert os.stat(file2).st_nlink == 1, 'stale nlink on survivor after rename removed name'
+            os.unlink(file1)
+            os.unlink(file2)
+
+        def run(op, label):
+            # Pattern 1: echo hi > a; ln a b; rm b; <op on a>; rm a
+            a = join(root, f'{label}_1_a')
+            b = join(root, f'{label}_1_b')
+            with open(a, 'w') as fd:
+                fd.write('hi')
+            os.link(a, b)
+            # Look up the doomed name last so the shared object caches 'b' as its name.
+            os.stat(a)
+            assert os.stat(b).st_ino == os.stat(a).st_ino, 'hardlink inode mismatch'
+            os.unlink(b)
+            os.unlink(op(a))
+
+            # Pattern 2: echo hi > a; ln a b; rm a; <op on b>; rm b
+            a = join(root, f'{label}_2_a')
+            b = join(root, f'{label}_2_b')
+            with open(a, 'w') as fd:
+                fd.write('hi')
+            os.link(a, b)
+            # Look up the doomed name last so the shared object caches 'a' as its name.
+            os.stat(b)
+            assert os.stat(a).st_ino == os.stat(b).st_ino, 'hardlink inode mismatch'
+            os.unlink(a)
+            os.unlink(op(b))
+
+        run(op_chmod, 'chmod')
+        run(op_truncate, 'truncate')
+        run(op_link, 'link')
+        run_rename_over('rename')
+
+    def test_hardlink_cross_container(self):
+        """Reject a hardlink whose two names live in different containers with EXDEV.
+
+        A pool-level dfuse mount (no container) exposes every container in the pool as a
+        top-level directory, each backed by its own dfs mount (a distinct ie_dfs).  df_ll_link()
+        must reject a hardlink whose source and destination resolve to different containers with
+        EXDEV before ever calling into DFS: object ids are container-scoped, so a cross-container
+        link is meaningless and would otherwise fail later with a misleading ENOENT.
+        """
+        cont0 = create_cont(self.conf, self.pool, ctype="POSIX", label='hardlink_xcont_0')
+        cont1 = create_cont(self.conf, self.pool, ctype="POSIX", label='hardlink_xcont_1')
+
+        dfuse = DFuse(self.server, self.conf, caching=False, pool=self.pool)
+        dfuse.start(v_hint='hardlink_cross_cont')
+
+        try:
+            # A pool-level mount resolves container sub-directories by UUID only (dfuse_cont.c
+            # rejects non-UUID names), so address the containers by uuid rather than label.
+            fname = join(dfuse.dir, cont0.uuid, 'file')
+            lname = join(dfuse.dir, cont1.uuid, 'link')
+            with open(fname, 'w') as fd:
+                fd.write('data')
+
+            # Linking across two containers must fail with EXDEV and must not create the target.
+            try:
+                os.link(fname, lname)
+                assert False, 'cross-container link should fail with EXDEV'
+            except OSError as error:
+                assert error.errno == errno.EXDEV, \
+                    f'cross-container link failed with {os.strerror(error.errno)}, expected EXDEV'
+
+            assert not os.path.exists(lname), 'cross-container link target should not exist'
+            assert os.stat(fname).st_nlink == 1, 'source link count changed after failed link'
+        finally:
+            if dfuse.stop():
+                self.fatal_errors = True
+            cont0.destroy()
+            cont1.destroy()
 
     @needs_dfuse
     def test_chown_self(self):

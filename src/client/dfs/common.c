@@ -378,7 +378,8 @@ restart:
 			*deleted = false;
 		D_GOTO(out,
 		       rc = git_update_link_cnt(dfs->git_oh, th, &entry.oid, new_link_cnt, NULL));
-	}
+	} else if (deleted)
+		*deleted = true;
 
 	d_iov_set(&git_dkey, &entry.oid, sizeof(daos_obj_id_t));
 	rc = daos_obj_punch_dkeys(dfs->git_oh, th, 0, 1, &git_dkey, NULL);

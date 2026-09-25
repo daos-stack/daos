@@ -25,6 +25,7 @@ dfuse_hardlink_removed(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_i
 	if (ie) {
 		DFUSE_TRA_DEBUG(ie, "Hardlink " DF_DE " removed, file still exists", DP_DE(name));
 		dfuse_ie_dentry_remove(ie, parent->ie_stat.st_ino, name);
+		dfuse_mcache_evict(ie);
 		dfuse_inode_decref(dfuse_info, ie);
 	}
 
