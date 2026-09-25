@@ -401,28 +401,28 @@ refer to the next section.
 ## DAOS RPMs build process
 
 The DAOS build process now covers building RPMs for both DAOS and dependencies
-specified in [`utils/build.config`](../../utils/build.config) (or those that we
+specified in [`utils/build.config`](https://github.com/daos-stack/daos/blob/master/utils/build.config) (or those that we
 build regularly with `--build-deps=yes`). The complete list of RPMs  is defined
-in the [`utils/build/build_packages.sh`](../../utils/build/build_packages.sh)
+in the [`utils/build/build_packages.sh`](https://github.com/daos-stack/daos/blob/master/utils/rpms/build_packages.sh)
 script. The RPM (and deb) build process uses
 [FPM](https://fpm.readthedocs.io/en/latest/getting-started.html). Essentially,
 it creates rpm packages after a DAOS build. Regardless of how that build is done,
 it will put files in the right places in the final packages.  Most of the magic
-is in [`utils/rpms/fpm_common.sh`](../../utils/rpms/fpm_common.sh) with
+is in [`utils/rpms/fpm_common.sh`](https://github.com/daos-stack/daos/blob/master/utils/rpms/fpm_common.sh) with
 component specific code in `utils/rpms/<component>.sh`.
 
 ### Updating a 3rd party component
 
 In order to properly upgrade a 3rd party component, do all of the following:
 
-1. Change the [`utils/build.config`](../../utils/build.config) to point to
+1. Change the [`utils/build.config`](https://github.com/daos-stack/daos/blob/master/utils/build.config) to point to
    the new version or to add a new patch. Patches should be stored in
    `deps/patches/<component>`.
-1. Update (increase) the `Release` variable in [`utils/rpms/daos.spec`](../../utils/rpms/daos.spec).
-1. Update [`utils/rpms/daos.changelog`](../../utils/rpms/daos.changelog)
+1. Update (increase) the `Release` variable in [`utils/rpms/daos.spec`](https://github.com/daos-stack/daos/blob/master/utils/rpms/daos.spec).
+1. Update [`utils/rpms/daos.changelog`](https://github.com/daos-stack/daos/blob/master/utils/rpms/daos.changelog)
    changelog and release iteration. This is important to document the change.
 1. Update the `<component>_release` and/or `<component>_version` in
-   [`utils/rpms/package_info.sh`](../../utils/rpms/package_info.sh)
+   [`utils/rpms/package_info.sh`](https://github.com/daos-stack/daos/blob/master/utils/rpms/package_info.sh)
 1. Make any necessary changes to `utils/rpms/<component>.sh` such as adding new
    files to various packages.
 1. Update the `utils/rpms/<component>.changelog` file to document the change and
@@ -431,7 +431,7 @@ In order to properly upgrade a 3rd party component, do all of the following:
 
 ## Unified DAOS Build Procedure
 
-The scripts under [`utils/build`](../../utils/build) provide a straightforward,
+The scripts under [`utils/build`](https://github.com/daos-stack/daos/tree/master/utils/build) provide a straightforward,
 four-step workflow from installing pre-built dependencies to producing the
 final RPMs. The same workflow is used by CI, Docker image builds, and bare-host
 builds; none of the scripts are Docker-specific.
@@ -446,7 +446,7 @@ distributions. However, `install_deps.sh` and `verify_packages.sh` support only
 RHEL and SUSE package layouts. On other distributions, build the dependencies
 from source or install them using the appropriate package manager.
 
-1. **[`utils/build/install_deps.sh [RPM_SUFFIX]`](../../utils/build/install_deps.sh)**
+1. **[`utils/build/install_deps.sh [RPM_SUFFIX]`](https://github.com/daos-stack/daos/blob/master/utils/build/install_deps.sh)**
    installs pre-built dependency RPMs (e.g. `argobots-devel`, `mercury-devel`,
    `libfabric-devel`) matching the versions expected by the current tree,
    so that the subsequent build steps can reuse them instead of rebuilding from
@@ -466,7 +466,7 @@ from source or install them using the appropriate package manager.
    ```
    To find out more, use the `install_deps.sh --help` command.
 
-1. **[`utils/build/build_deps.sh`](../../utils/build/build_deps.sh)**
+1. **[`utils/build/build_deps.sh`](https://github.com/daos-stack/daos/blob/master/utils/build/build_deps.sh)**
    builds from source any dependency not already satisfied by
    `install_deps.sh`, via `scons install --build-deps=only`.
    Pass the build configuration as a command-line variables, for example
@@ -474,13 +474,13 @@ from source or install them using the appropriate package manager.
 
    To find out more, use the `build_deps.sh --help` command.
 
-1. **[`utils/build/build_daos.sh`](../../utils/build/build_daos.sh)**
+1. **[`utils/build/build_daos.sh`](https://github.com/daos-stack/daos/blob/master/utils/build/build_daos.sh)**
    builds DAOS itself with `scons` assuming all dependencies are either
    installed or built previously (`scons install --build-deps=no USE_INSTALLED=all`).
 
    To find out more, use the `build_daos.sh --help` command.
 
-1. **[`utils/build/build_packages.sh [options] [PKG_OUTPUT_DIR]`](../../utils/build/build_packages.sh)**
+1. **[`utils/build/build_packages.sh [options] [PKG_OUTPUT_DIR]`](https://github.com/daos-stack/daos/blob/master/utils/build/build_packages.sh)**
    builds DAOS packages, dependency packages, or both (default).
    `PKG_OUTPUT_DIR` is an optional positional argument and is the root under
    which `deps/` and `daos/` are written. For RPM builds it defaults
@@ -490,7 +490,7 @@ from source or install them using the appropriate package manager.
    `<PKG_OUTPUT_DIR>/repodata`, producing a complete RPM repository.
 
    After the build step is successfully completed, the RPMs are verified using
-   the [`utils/build/verify_packages.sh`](../../utils/build/verify_packages.sh)
+   the [`utils/build/verify_packages.sh`](https://github.com/daos-stack/daos/blob/master/utils/build/verify_packages.sh)
    script. With the default `-Werror` setting, validation findings fail the
    build. With `-Wno-error`, verification still runs, but noncritical findings
    are reported as warnings. Missing tools, unsupported configurations, and
@@ -508,7 +508,7 @@ from source or install them using the appropriate package manager.
 
 > [NOTE]
 >
-> The [`utils/build/verify_packages.sh`](../../utils/build/verify_packages.sh)
+> The [`utils/build/verify_packages.sh`](https://github.com/daos-stack/daos/blob/master/utils/build/verify_packages.sh)
 > script can also be invoked separately.
 >
 > The verifier accepts the same RPM suffix values and uses the following form:
