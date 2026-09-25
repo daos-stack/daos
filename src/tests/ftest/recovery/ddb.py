@@ -353,9 +353,7 @@ class DdbTest(TestWithServers):
 
         if md_on_ssd:
             self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
-            cleanup_errors = self.clean_daos_load()
-            if cleanup_errors:
-                errors.extend(cleanup_errors)
+            errors.extend(self.clean_daos_load())
 
         self.log_step("Restart the server for the cleanup.")
         self.get_dmg_command().system_start()
@@ -518,9 +516,7 @@ class DdbTest(TestWithServers):
 
         if md_on_ssd:
             self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
-            cleanup_errors = self.clean_daos_load()
-            if cleanup_errors:
-                errors.extend(cleanup_errors)
+            errors.extend(self.clean_daos_load())
 
         report_errors(test=self, errors=errors)
 
@@ -697,9 +693,7 @@ class DdbTest(TestWithServers):
 
         if md_on_ssd:
             self.log_step(f"MD-on-SSD: Clean {self.daos_load_path}")
-            cleanup_errors = self.clean_daos_load()
-            if cleanup_errors:
-                errors.extend(cleanup_errors)
+            errors.extend(self.clean_daos_load())
 
         self.log_step("Restart the server for the cleanup.")
         dmg_command.system_start()
