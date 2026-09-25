@@ -171,6 +171,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 type systemEraseCmd struct {
 	baseCmd
 	ctlInvokerCmd
+	cmdutil.JSONOutputCmd
 }
 
 func (cmd *systemEraseCmd) Execute(_ []string) error {
@@ -181,25 +182,31 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 		// response's rank results. Treat that the same as the expected
 		// post-erase uninitialized state.
 		if system.IsUninitialized(err) {
+			if cmd.JSONOutputEnabled() {
+				return cmd.OutputJSON(resp, nil)
+			}
 			cmd.Infof("System erase successful. System is now uninitialized and ready for 'dmg storage format'.\n")
 			return nil
+		}
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(nil, err)
 		}
 		return err
 	}
 
-	// After successful erase, the system is uninitialized (as expected).
-	// Check if the error is just the expected uninitialized state.
 	if respErr := resp.Errors(); respErr != nil {
-		if system.IsUninitialized(respErr) {
-			// System erase successful - system is now ready for format
-			cmd.Infof("System erase successful. System is now uninitialized and ready for 'dmg storage format'.\n")
-			return nil
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp, respErr)
 		}
 		return respErr
 	}
 
-	cmd.Infof("System erase successful. System is now ready for 'dmg storage format'.\n")
-	return nil
+	err = errors.New("erase unsuccessful as system is not in uninitialized state")
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
+	}
+	cmd.Debugf("SystemErase resp %+v", resp)
+	return err
 }
 
 // systemStopCmd is the struct representing the command to shutdown DAOS system.

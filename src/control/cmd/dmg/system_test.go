@@ -967,267 +967,177 @@ func TestDmg_systemSelfHealEvalCmd_execute(t *testing.T) {
 	}
 }
 
-//// TestDmg_systemEraseCmd_execute tests the execution behavior of system erase command
-//func TestDmg_systemEraseCmd_execute(t *testing.T) {
-//	for name, tc := range map[string]struct {
-//		resp    *mgmtpb.SystemEraseResp
-//		msErr   error
-//		expErr  error
-//		expInfo string
-//	}{
-//		"ms rpc failure": {
-//			msErr:  errors.New("rpc failed"),
-//			expErr: errors.New("rpc failed"),
-//		},
-//		"success with no errors": {
-//			resp:    &mgmtpb.SystemEraseResp{},
-//			expInfo: "System erase successful. System is now ready for 'dmg storage format'",
-//		},
-//		"success with uninitialized error (expected after erase)": {
-//			resp:    &mgmtpb.SystemEraseResp{},
-//			msErr:   system.ErrUninitialized,
-//			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
-//		},
-//		"success with rank results in await-format state": {
-//			resp: &mgmtpb.SystemEraseResp{
-//				Results: []*sharedpb.RankResult{
-//					{
-//						Rank:   0,
-//						Action: "reset-format",
-//						State:  system.MemberStateAwaitFormat.String(),
-//					},
-//					{
-//						Rank:   1,
-//						Action: "reset-format",
-//						State:  system.MemberStateAwaitFormat.String(),
-//					},
-//				},
-//			},
-//			expInfo: "System erase successful. System is now ready for 'dmg storage format'",
-//		},
-//		"failure with rank errors": {
-//			resp: &mgmtpb.SystemEraseResp{
-//				Results: []*sharedpb.RankResult{
-//					{
-//						Rank:    0,
-//						Action:  "reset-format",
-//						Errored: true,
-//						Msg:     "failed to reset rank",
-//						State:   system.MemberStateErrored.String(),
-//					},
-//				},
-//			},
-//			expErr: errors.New("failed to reset rank"),
-//		},
-//		"failure with multiple rank errors": {
-//			resp: &mgmtpb.SystemEraseResp{
-//				Results: []*sharedpb.RankResult{
-//					{
-//						Rank:    0,
-//						Action:  "reset-format",
-//						Errored: true,
-//						Msg:     "error on rank 0",
-//						State:   system.MemberStateErrored.String(),
-//					},
-//					{
-//						Rank:    1,
-//						Action:  "reset-format",
-//						Errored: true,
-//						Msg:     "error on rank 1",
-//						State:   system.MemberStateErrored.String(),
-//					},
-//				},
-//			},
-//			expErr: errors.New("error on rank 0"),
-//		},
-//		"failure with other error (not uninitialized)": {
-//			resp:   &mgmtpb.SystemEraseResp{},
-//			msErr:  errors.New("some other error"),
-//			expErr: errors.New("some other error"),
-//		},
-//		"nil response": {
-//			resp:    nil,
-//			expInfo: "System erase successful. System is now ready for 'dmg storage format'",
-//		},
-//	} {
-//		t.Run(name, func(t *testing.T) {
-//			log, buf := logging.NewTestLogger(t.Name())
-//			defer test.ShowBufferOnFailure(t, buf)
-//
-//			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
-//				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
-//					tc.msErr, tc.resp),
-//			})
-//
-//			cmd := new(systemEraseCmd)
-//			cmd.setInvoker(mi)
-//			cmd.SetLog(log)
-//
-//			gotErr := cmd.Execute(nil)
-//			test.CmpErr(t, tc.expErr, gotErr)
-//
-//			if tc.expInfo == "" {
-//				if strings.Contains(buf.String(), "successful") {
-//					t.Fatalf("unexpected success message printed, got:\n%s", buf.String())
-//				}
-//				return
-//			}
-//
-//			// Check if the success message is printed
-//			output := buf.String()
-//			if !strings.Contains(output, tc.expInfo) {
-//				t.Fatalf("expected info message not found:\nexpected substring:\n%s\ngot:\n%s",
-//					tc.expInfo, output)
-//			}
-//		})
-//	}
-//}
-//
-//// TestDmg_systemEraseCmd_uninitialized_error_handling tests that uninitialized state
-//// is properly recognized as a success condition after erase
-//func TestDmg_systemEraseCmd_uninitialized_error_handling(t *testing.T) {
-//	for name, tc := range map[string]struct {
-//		errorMsg      string
-//		shouldSucceed bool
-//	}{
-//		"exact uninitialized error": {
-//			errorMsg:      "system is uninitialized (storage format required?)",
-//			shouldSucceed: true,
-//		},
-//		"uninitialized wrapped error": {
-//			errorMsg:      "wrapped: system is uninitialized (storage format required?)",
-//			shouldSucceed: true,
-//		},
-//		"other error": {
-//			errorMsg:      "some other error",
-//			shouldSucceed: false,
-//		},
-//		"unavailable error": {
-//			errorMsg:      "raft service unavailable",
-//			shouldSucceed: false,
-//		},
-//	} {
-//		t.Run(name, func(t *testing.T) {
-//			log, buf := logging.NewTestLogger(t.Name())
-//			defer test.ShowBufferOnFailure(t, buf)
-//
-//			testErr := errors.New(tc.errorMsg)
-//
-//			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
-//				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
-//					testErr, &mgmtpb.SystemEraseResp{}),
-//			})
-//
-//			cmd := new(systemEraseCmd)
-//			cmd.setInvoker(mi)
-//			cmd.SetLog(log)
-//
-//			gotErr := cmd.Execute(nil)
-//
-//			if tc.shouldSucceed {
-//				if gotErr != nil {
-//					t.Fatalf("expected success for error %q, but got error: %v", tc.errorMsg, gotErr)
-//				}
-//			} else {
-//				if gotErr == nil {
-//					t.Fatalf("expected error for %q, but got success", tc.errorMsg)
-//				}
-//			}
-//		})
-//	}
-//}
-//
-//// TestDmg_systemEraseCmd_workflow_complete tests the complete erase workflow
-//// including the uninitialized state at the end
-//func TestDmg_systemEraseCmd_workflow_complete(t *testing.T) {
-//	for name, tc := range map[string]struct {
-//		description       string
-//		rankResults       []*sharedpb.RankResult
-//		responseError     error
-//		expectedSuccess   bool
-//	}{
-//		"successful erase with all ranks in await-format": {
-//			description: "Complete successful erase workflow",
-//			rankResults: []*sharedpb.RankResult{
-//				{
-//					Rank:   0,
-//					Action: "reset-format",
-//					State:  system.MemberStateAwaitFormat.String(),
-//				},
-//				{
-//					Rank:   1,
-//					Action: "reset-format",
-//					State:  system.MemberStateAwaitFormat.String(),
-//				},
-//				{
-//					Rank:   2,
-//					Action: "reset-format",
-//					State:  system.MemberStateAwaitFormat.String(),
-//				},
-//				{
-//					Rank:   3,
-//					Action: "reset-format",
-//					State:  system.MemberStateAwaitFormat.String(),
-//				},
-//			},
-//			responseError:   nil,
-//			expectedSuccess: true,
-//		},
-//		"successful erase followed by system uninitialized": {
-//			description: "Erase succeeds, system query returns uninitialized",
-//			rankResults: []*sharedpb.RankResult{
-//				{
-//					Rank:   0,
-//					Action: "reset-format",
-//					State:  system.MemberStateAwaitFormat.String(),
-//				},
-//			},
-//			responseError:   system.ErrUninitialized,
-//			expectedSuccess: true,
-//		},
-//		"erase fails with rank errors": {
-//			description: "Erase operation fails on engine ranks",
-//			rankResults: []*sharedpb.RankResult{
-//				{
-//					Rank:    0,
-//					Action:  "reset-format",
-//					Errored: true,
-//					Msg:     "engine failed to reset",
-//					State:   system.MemberStateErrored.String(),
-//				},
-//			},
-//			responseError:   nil,
-//			expectedSuccess: false,
-//		},
-//	} {
-//		t.Run(name, func(t *testing.T) {
-//			log, buf := logging.NewTestLogger(t.Name())
-//			defer test.ShowBufferOnFailure(t, buf)
-//
-//			resp := &mgmtpb.SystemEraseResp{
-//				Results: tc.rankResults,
-//			}
-//
-//			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
-//				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
-//					tc.responseError, resp),
-//			})
-//
-//			cmd := new(systemEraseCmd)
-//			cmd.setInvoker(mi)
-//			cmd.SetLog(log)
-//
-//			gotErr := cmd.Execute(nil)
-//
-//			if tc.expectedSuccess {
-//				if gotErr != nil {
-//					t.Fatalf("test %q: expected success but got error: %v", tc.description, gotErr)
-//				}
-//			} else {
-//				if gotErr == nil {
-//					t.Fatalf("test %q: expected error but got success", tc.description)
-//				}
-//			}
-//		})
-//	}
-//}
+// TestDmg_systemEraseCmd_execute tests the execution behavior of system erase command
+func TestDmg_systemEraseCmd_execute(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp    *mgmtpb.SystemEraseResp
+		msErr   error
+		expErr  error
+		expInfo string
+	}{
+		"ms rpc failure": {
+			msErr:  errors.New("rpc failed"),
+			expErr: errors.New("rpc failed"),
+		},
+		"success with no errors": {
+			resp:   &mgmtpb.SystemEraseResp{},
+			expErr: errors.New("not in uninitialized state"),
+		},
+		"success with uninitialized error (expected after erase)": {
+			resp:    &mgmtpb.SystemEraseResp{},
+			msErr:   system.ErrUninitialized,
+			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
+		},
+		"success with rank results in await-format state but no ms err": {
+			resp: &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:   0,
+						Addr:   "10.0.0.1:10001",
+						Action: "reset-format",
+						State:  system.MemberStateAwaitFormat.String(),
+					},
+					{
+						Rank:   1,
+						Addr:   "10.0.0.1:10001",
+						Action: "reset-format",
+						State:  system.MemberStateAwaitFormat.String(),
+					},
+				},
+			},
+			expErr: errors.New("not in uninitialized state"),
+		},
+		"failure with rank errors": {
+			resp: &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:    0,
+						Addr:    "10.0.0.1:10001",
+						Action:  "reset-format",
+						Errored: true,
+						Msg:     "failed to reset rank",
+						State:   system.MemberStateErrored.String(),
+					},
+				},
+			},
+			expErr: errors.New("failed rank 0"),
+		},
+		"failure with multiple rank errors": {
+			resp: &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:    0,
+						Addr:    "10.0.0.1:10001",
+						Action:  "reset-format",
+						Errored: true,
+						Msg:     "error on rank 0",
+						State:   system.MemberStateErrored.String(),
+					},
+					{
+						Rank:    1,
+						Addr:    "10.0.0.1:10001",
+						Action:  "reset-format",
+						Errored: true,
+						Msg:     "error on rank 1",
+						State:   system.MemberStateErrored.String(),
+					},
+				},
+			},
+			expErr: errors.New("failed ranks 0-1"),
+		},
+		"failure with other error (not uninitialized)": {
+			resp:   &mgmtpb.SystemEraseResp{},
+			msErr:  errors.New("some other error"),
+			expErr: errors.New("some other error"),
+		},
+		"nil response": {
+			resp:   nil,
+			expErr: errors.New("not in uninitialized state"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			cmd := new(systemEraseCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+
+			gotErr := cmd.Execute(nil)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if tc.expInfo == "" {
+				if strings.Contains(buf.String(), "successful") {
+					t.Fatalf("unexpected success message printed, got:\n%s", buf.String())
+				}
+				return
+			}
+
+			// Check if the success message is printed
+			output := buf.String()
+			if !strings.Contains(output, tc.expInfo) {
+				t.Fatalf("expected info message not found:\nexpected substring:\n%s\ngot:\n%s",
+					tc.expInfo, output)
+			}
+		})
+	}
+}
+
+// TestDmg_systemEraseCmd_uninitialized_error_handling tests that uninitialized state
+// is properly recognized as a success condition after erase
+func TestDmg_systemEraseCmd_uninitialized_error_handling(t *testing.T) {
+	for name, tc := range map[string]struct {
+		errorMsg      string
+		shouldSucceed bool
+	}{
+		"exact uninitialized error": {
+			errorMsg:      "system is uninitialized (storage format required?)",
+			shouldSucceed: true,
+		},
+		"uninitialized wrapped error": {
+			errorMsg:      "wrapped: system is uninitialized (storage format required?)",
+			shouldSucceed: true,
+		},
+		"other error": {
+			errorMsg:      "some other error",
+			shouldSucceed: false,
+		},
+		"unavailable error": {
+			errorMsg:      "raft service unavailable",
+			shouldSucceed: false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			testErr := errors.New(tc.errorMsg)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					testErr, &mgmtpb.SystemEraseResp{}),
+			})
+
+			cmd := new(systemEraseCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+
+			gotErr := cmd.Execute(nil)
+
+			if tc.shouldSucceed {
+				if gotErr != nil {
+					t.Fatalf("expected success for error %q, but got error: %v", tc.errorMsg, gotErr)
+				}
+			} else {
+				if gotErr == nil {
+					t.Fatalf("expected error for %q, but got success", tc.errorMsg)
+				}
+			}
+		})
+	}
+}
