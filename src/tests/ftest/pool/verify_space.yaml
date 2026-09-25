@@ -11,7 +11,6 @@ server_config:
     0:
       storage: auto
 
-# Base to add pool properties.
 pool_base: &pool_base
   properties: rd_fac:0,space_rb:0
 
