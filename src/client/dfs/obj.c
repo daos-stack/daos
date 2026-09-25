@@ -392,6 +392,8 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 	if (rc)
 		return rc;
 
+	mode = DFS_EXTERNAL_MODE(mode);
+
 	/** default for newly created entries; fetch_entry/git_fetch_entry overwrite for existing */
 	entry.link_cnt = 1;
 
@@ -1757,7 +1759,7 @@ restart:
 		i++;
 
 		flags &= ~DFS_SET_ATTR_MODE;
-		rstat.st_mode = stbuf->st_mode;
+		rstat.st_mode = DFS_EXTERNAL_MODE(stbuf->st_mode);
 	}
 	if (flags & DFS_SET_ATTR_ATIME) {
 		flags &= ~DFS_SET_ATTR_ATIME;

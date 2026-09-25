@@ -37,6 +37,8 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, daos_ocl
 	if (rc)
 		return rc;
 
+	mode = DFS_EXTERNAL_MODE(mode);
+
 	strncpy(new_dir.name, name, len + 1);
 
 	rc = create_dir(dfs, parent, cid, &new_dir);
