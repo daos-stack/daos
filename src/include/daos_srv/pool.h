@@ -416,6 +416,7 @@ int
 	    ds_pool_rebuild_stop(uuid_t pool_uuid, uint32_t force, struct rsvc_hint *hint);
 
 extern bool ec_agg_disabled;
+extern bool ec_agg_force_merge;
 
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,
