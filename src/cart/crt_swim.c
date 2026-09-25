@@ -955,23 +955,6 @@ static int crt_swim_get_member_state(struct swim_context *ctx,
 	return rc;
 }
 
-/*
- * Diagnostic only (no behavior change): when a peer's incarnation increases
- * (it restarted), warn if a cached address for it is still present, since RPCs
- * may reuse a possibly-stale endpoint from the peer's previous incarnation.
- */
-static void
-crt_swim_warn_stale_addr(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation)
-{
-	hg_addr_t stale_addr = NULL;
-
-	crt_grp_lc_lookup(grp_priv, 0, rank, 0, NULL, &stale_addr);
-	if (stale_addr != NULL)
-		D_WARN("rank %u restarted (incarnation " DF_X64 "); cached address still "
-		       "present for ctx0/tag0, RPCs may reuse a stale endpoint\n",
-		       rank, incarnation);
-}
-
 static int crt_swim_set_member_state(struct swim_context *ctx,
 				     swim_id_t id,
 				     struct swim_member_state *state)
@@ -1003,10 +986,6 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 
 	if (rc == 0)
 		crt_swim_notify_rank_state((d_rank_t)id, &state_prev, state);
-
-	if (rc == 0 && state->sms_incarnation > state_prev.sms_incarnation &&
-	    state->sms_status == SWIM_MEMBER_ALIVE)
-		crt_swim_warn_stale_addr(grp_priv, (d_rank_t)id, state->sms_incarnation);
 
 	return rc;
 }
@@ -1666,7 +1645,6 @@ crt_swim_rank_check(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incar
 	if (updated) {
 		swim_member_reset(csm->csm_ctx, rank);
 		crt_swim_notify_rank_state(rank, &state_prev, &state);
-		crt_swim_warn_stale_addr(grp_priv, rank, incarnation);
 	}
 
 	return rc;
