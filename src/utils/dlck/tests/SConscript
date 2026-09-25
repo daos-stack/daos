@@ -54,12 +54,35 @@ def build_dlck_args_ut(henv):
     henv.d_test_program('dlck_args_ut', srcs, LIBS=libs)
 
 
+def build_dlck_main_ut(henv):
+    """Build dlck_checker_ut"""
+    henv.Append(OBJPREFIX="dlck_checker_ut_")
+    henv.Append(CPPPATH=[Dir('../../../').srcnode()])
+    henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=ABT_mutex_create', '-Wl,--wrap=ABT_mutex_free',
+                                 '-Wl,--wrap=ABT_mutex_lock', '-Wl,--wrap=ABT_mutex_unlock',
+                                 '-Wl,--wrap=fopen', '-Wl,--wrap=d_asprintf2',
+                                 '-Wl,--wrap=vfprintf', '-Wl,--wrap=fflush', '-Wl,--wrap=d_calloc'])
+    henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    henv.require('argobots', 'cmocka')
+
+    libs = [
+        'gurt', 'daos_common_pmem', 'cmocka', 'uuid', 'abt', 'pthread'
+    ]
+
+    srcs = [
+        'dlck_checker_ut.c',
+        '../dlck_checker.c',
+    ]
+    henv.d_test_program('dlck_checker_ut', srcs, LIBS=libs)
+
+
 def scons():
     """Execute build"""
     Import('env')
 
     build_dlck_test_helper(env.Clone())
     build_dlck_args_ut(env.Clone())
+    build_dlck_main_ut(env.Clone())
 
 
 if __name__ == "SCons.Script":
