@@ -598,13 +598,18 @@ static const struct CMUnitTest dlck_checker_tests[] = {
 	{"DLCK_CHECKER_MAIN_100: init - success", test_main_init_success, setup, teardown},
 	{"DLCK_CHECKER_MAIN_101: init - mutex create failure", test_main_init_mutex_create_failure, setup, teardown},
 	{"DLCK_CHECKER_MAIN_111: init - allocation failure", test_main_init_alloc_failure, setup, teardown},
+	{"DLCK_CHECKER_MAIN_104: fini - success", test_main_fini_success, setup, teardown},
+	{"DLCK_CHECKER_MAIN_105: fini - mutex free failure", test_main_fini_mutex_free_failure, setup, teardown},
 	{"DLCK_CHECKER_MAIN_107: vprintf - vfprintf positive", test_vprintf_vfprintf_positive, setup, teardown},
 	{"DLCK_CHECKER_MAIN_108: vprintf - vfprintf failure", test_vprintf_vfprintf_failure, setup, teardown},
 	{"DLCK_CHECKER_MAIN_109: vprintf - fflush failure", test_vprintf_fflush_failure, setup, teardown},
 	{"DLCK_CHECKER_MAIN_112: vprintf - lock failure", test_main_vprintf_lock_failure, setup, teardown},
 	{"DLCK_CHECKER_MAIN_113: vprintf - unlock failure", test_main_vprintf_unlock_failure, setup, teardown},
-	{"DLCK_CHECKER_MAIN_104: fini - success", test_main_fini_success, setup, teardown},
-	{"DLCK_CHECKER_MAIN_105: fini - mutex free failure", test_main_fini_mutex_free_failure, setup, teardown},
+	{"DLCK_CHECKER_MAIN_106: invalid magic", test_main_invalid_magic, setup, teardown},
+	{"DLCK_CHECKER_MAIN_102: indent - levels zero to max", test_main_indent_set_levels_zero_to_max, setup,
+	 teardown},
+	{"DLCK_CHECKER_MAIN_103: indent - out of range", test_main_indent_set_out_of_range, setup, teardown},
+
 	{"DLCK_CHECKER_WORKER_100: init - success", test_worker_init_success, setup, teardown},
 	{"DLCK_CHECKER_WORKER_101: init - log open failure", test_worker_init_log_open_failure, setup, teardown},
 	{"DLCK_CHECKER_WORKER_104: init - log open failure with main checker",
@@ -616,10 +621,6 @@ static const struct CMUnitTest dlck_checker_tests[] = {
 	 test_worker_init_alloc_failure_with_main_checker, setup, teardown},
 	{"DLCK_CHECKER_WORKER_106: callbacks - success", test_worker_callbacks_success, setup, teardown},
 	{"DLCK_CHECKER_WORKER_103: invalid magic", test_worker_invalid_magic, setup, teardown},
-	{"DLCK_CHECKER_MAIN_106: invalid magic", test_main_invalid_magic, setup, teardown},
-	{"DLCK_CHECKER_MAIN_102: indent - levels zero to max", test_main_indent_set_levels_zero_to_max, setup,
-	 teardown},
-	{"DLCK_CHECKER_MAIN_103: indent - out of range", test_main_indent_set_out_of_range, setup, teardown},
 };
 
 int

@@ -6,7 +6,7 @@
 # for testing.
 # Docker containers use this user for some testing and for malware scanning.
 
-: "${UID=1000}"
+: "$UID{=1000}"
 
 useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bash \
             --home /home/daos daos_server
