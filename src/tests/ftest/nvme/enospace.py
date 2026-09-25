@@ -849,7 +849,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.fill_pool(container_fill, 90)
 
         # Write after 90% of the pool is filled
-        self.log_step('Running IOR write with ~90% of the pool filled')
+        self.log_step('Running IOR write after ~90% of the pool filled')
         container_wr = self.get_container(self.pool)
         ior_matrix = self._get_ior_metrics(
             container_wr,
@@ -863,7 +863,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Read the same container which was written at the beginning.
         # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
-        self.log_step('Running IOR read with ~90% of the pool filled')
+        self.log_step('Running IOR read after ~90% of the pool filled')
         max_rd_mib_latest = []
         for i in range(iterations):
             ior_matrix = self._get_ior_metrics(
