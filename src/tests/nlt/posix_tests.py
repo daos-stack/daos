@@ -1946,17 +1946,21 @@ class PosixTests():
         data = run_fs_get_attr(self.conf, '--path', file2)
         assert check_file_attr(data, 'S1', 16)
 
-        # Progressive-layout (PL) coverage.  PL is gated behind a large target-count minimum which
-        # a single NLT server does not meet, so bypass the gate with DFS_PL_BYPASS_TARGET_LIMIT.
-        # A dfuse and daos command started while this is set inherit it via get_base_env().  With
-        # this server's 4 targets the default byte-array class (SX) resolves to S4, so a
-        # default-class file gets a compact S1 head object plus an S4 tail segment.  The small NLT
-        # pool makes the computed split point fall below DFS_PL_SPLIT_OFF_MIN, so it is clamped to
-        # that minimum of 64 MiB.
+        # Progressive-layout (PL) coverage.  PL is opt-in per container, so create a dedicated
+        # container with --dfs-pl auto; a plain container (like uns_container above) must
+        # keep reporting single-object defaults.  PL is also gated behind a large target-count
+        # minimum which a single NLT server does not meet, so bypass the gate with
+        # DFS_PL_BYPASS_TARGET_LIMIT.  A dfuse and daos command started while this is set inherit
+        # it via get_base_env().  With this server's 4 targets the default byte-array class (SX)
+        # resolves to S4, so a default-class file gets a compact S1 head object plus an S4 tail
+        # segment.  The small NLT pool makes the computed split point fall below
+        # DFS_PL_SPLIT_OFF_MIN, so it is clamped to that minimum of 64 MiB.
         pl_split_off = 64 * 1024 * 1024
+        pl_container = create_cont(conf, pool=self.pool, ctype='POSIX', label='pl_cont',
+                                   progressive=True)
         os.environ['DFS_PL_BYPASS_TARGET_LIMIT'] = '1'
         try:
-            pl_dfuse = DFuse(self.server, self.conf, container=uns_container, caching=False)
+            pl_dfuse = DFuse(self.server, self.conf, container=pl_container, caching=False)
             pl_dfuse.use_valgrind = False
             pl_dfuse.start(v_hint='daos_fs_tool_pl')
             try:
@@ -1966,9 +1970,10 @@ class PosixTests():
                 with open(pl_file, 'w'):
                     pass
 
-                # The directory template advertises the S1 head and S4 tail for default files.
+                # The directory template keeps S4 as the plain default file class and advertises
+                # the S1 head and S4 tail that default files will actually get.
                 data = run_fs_get_attr(self.conf, '--path', pl_dir)
-                assert check_dir_pl_attr(data, 'S1', 'S4', pl_split_off), data
+                assert check_dir_pl_attr(data, 'S1', 'S4', pl_split_off, file_oclass='S4'), data
 
                 # The default-class file is created with an S1 head and an S4 tail segment.
                 data = run_fs_get_attr(self.conf, '--path', pl_file)
@@ -1978,6 +1983,7 @@ class PosixTests():
                     self.fatal_errors = True
         finally:
             del os.environ['DFS_PL_BYPASS_TARGET_LIMIT']
+            pl_container.destroy()
 
     def test_cont_copy(self):
         """Verify that copying into a container works"""

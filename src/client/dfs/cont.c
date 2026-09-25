@@ -120,6 +120,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 	struct dfs_entry          entry           = {0};
 	daos_prop_t              *prop            = NULL;
 	daos_oclass_hints_t       dir_oclass_hint = 0;
+	daos_oclass_hints_t       file_hints      = 0;
 	uint64_t                  rf;
 	daos_cont_info_t          co_info;
 	dfs_t                    *dfs;
@@ -127,6 +128,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 	char                      str[37];
 	struct daos_prop_co_roots roots;
 	int                       rc, rc2;
+	int                       i;
 	struct daos_prop_entry   *dpe;
 	struct daos_prop_entry   *roots_entry  = NULL;
 	struct daos_prop_entry   *layout_entry = NULL;
@@ -221,6 +223,23 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 			strncpy(dattr.da_hints, attr->da_hints, DAOS_CONT_HINT_MAX_LEN - 1);
 			dattr.da_hints[DAOS_CONT_HINT_MAX_LEN - 1] = '\0';
 		}
+
+		if (attr->da_pl_nr > DFS_PL_MAX_SEGMENTS) {
+			D_ERROR("Progressive layout tail count %u exceeds %u\n", attr->da_pl_nr,
+				DFS_PL_MAX_SEGMENTS);
+			D_GOTO(err_prop, rc = EINVAL);
+		}
+		if (attr->da_pl_nr > 1) {
+			D_ERROR("Progressive layout with more than one tail is not supported\n");
+			D_GOTO(err_prop, rc = ENOTSUP);
+		}
+		dattr.da_pl_nr          = attr->da_pl_nr;
+		dattr.da_pl_head_oclass = attr->da_pl_head_oclass;
+		for (i = 0; i < attr->da_pl_nr; i++) {
+			dattr.da_pl_segs[i].pls_oclass_id = attr->da_pl_segs[i].pls_oclass_id;
+			dattr.da_pl_segs[i].pls_split_off = attr->da_pl_segs[i].pls_split_off;
+			dattr.da_pl_segs[i].pls_oid       = DAOS_OBJ_NIL;
+		}
 	} else {
 		dattr.da_oclass_id      = 0;
 		dattr.da_dir_oclass_id  = 0;
@@ -263,11 +282,50 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 
 	/** check hints for SB and Root Dir */
 	if (dattr.da_hints[0] != 0) {
-		daos_oclass_hints_t file_hints;
-
 		rc = get_oclass_hints(dattr.da_hints, &dir_oclass_hint, &file_hints, rf);
 		if (rc)
 			D_GOTO(err_prop, rc);
+	}
+
+	/** verify the progressive layout configuration */
+	if (dattr.da_pl_nr != 0) {
+		daos_oclass_id_t head = dattr.da_pl_head_oclass;
+		daos_oclass_id_t tail = dattr.da_pl_segs[0].pls_oclass_id;
+
+		/* an explicit default file class means single-object files; the two conflict */
+		if (dattr.da_file_oclass_id != 0 || file_hints != 0) {
+			D_ERROR(
+			    "Progressive layout cannot be combined with an explicit file object "
+			    "class or file hint\n");
+			D_GOTO(err_prop, rc = EINVAL);
+		}
+		if ((head == 0) != (tail == 0)) {
+			D_ERROR("Progressive layout head and tail object classes must be set "
+				"together\n");
+			D_GOTO(err_prop, rc = EINVAL);
+		}
+		if (head != 0) {
+			rc = daos_oclass_cid2allowedfailures(head, &cid_tf);
+			if (rc) {
+				D_ERROR("Invalid progressive layout head object class %u\n", head);
+				D_GOTO(err_prop, rc = EINVAL);
+			}
+			if (cid_tf < cont_tf) {
+				D_ERROR("Progressive layout head object class cannot tolerate RF "
+					"failures\n");
+				D_GOTO(err_prop, rc = EINVAL);
+			}
+			rc = daos_oclass_cid2allowedfailures(tail, &cid_tf);
+			if (rc) {
+				D_ERROR("Invalid progressive layout tail object class %u\n", tail);
+				D_GOTO(err_prop, rc = EINVAL);
+			}
+			if (cid_tf < cont_tf) {
+				D_ERROR("Progressive layout tail object class cannot tolerate RF "
+					"failures\n");
+				D_GOTO(err_prop, rc = EINVAL);
+			}
+		}
 	}
 
 	/* select oclass and generate SB OID */

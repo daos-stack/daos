@@ -69,11 +69,12 @@ func dfs_query(dfs *C.dfs_t, attrs *C.dfs_attr_t) C.int {
 	if plNr > int(C.DFS_PL_MAX_SEGMENTS) {
 		plNr = int(C.DFS_PL_MAX_SEGMENTS)
 	}
-	attrs.da_file_pl_nr = C.uint32_t(plNr)
+	attrs.da_pl_nr = C.uint32_t(plNr)
+	attrs.da_pl_head_oclass = C.uint32_t(dfs_query_Attrs.FilePLHeadClass)
 	for i := 0; i < plNr; i++ {
 		seg := dfs_query_Attrs.FilePLTails[i]
-		attrs.da_file_pl_segs[i].pls_oclass_id = C.uint32_t(seg.ObjectClass)
-		attrs.da_file_pl_segs[i].pls_split_off = C.uint64_t(seg.SplitOffset)
+		attrs.da_pl_segs[i].pls_oclass_id = C.uint32_t(seg.ObjectClass)
+		attrs.da_pl_segs[i].pls_split_off = C.uint64_t(seg.SplitOffset)
 	}
 	attrs.da_oclass_id = C.uint32_t(dfs_query_Attrs.ObjectClass)
 	attrs.da_mode = C.uint32_t(dfs_query_Attrs.ConsistencyMode)

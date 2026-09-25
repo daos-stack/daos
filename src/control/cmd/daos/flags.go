@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -141,6 +142,105 @@ func (f *ObjClassFlag) String() string {
 
 	C.daos_oclass_id2name(f.Class, &oclass[0])
 	return C.GoString(&oclass[0])
+}
+
+// PLTail is one explicit progressive-layout tail segment: its object class and, optionally,
+// the logical offset at which it starts (0 = derive from the pool).
+type PLTail struct {
+	Class    C.uint
+	SplitOff C.uint64_t
+}
+
+// DFSPLFlag selects the DFS progressive layout for a POSIX container:
+// "off" (default), "auto" (derive head/tail classes and split offset), or an explicit
+// "<head>,<tail>[@<split_off>]" where the split offset accepts the --chunk-size size syntax.
+type DFSPLFlag struct {
+	Enabled bool
+	Head    C.uint   // 0 in auto mode
+	Tails   []PLTail // empty in auto mode
+}
+
+// Explicit reports whether head/tail classes were pinned rather than derived.
+func (f *DFSPLFlag) Explicit() bool {
+	return f.Enabled && len(f.Tails) > 0
+}
+
+func parseOclassName(name string) (C.uint, error) {
+	if name == "" {
+		return 0, errors.New("empty object class")
+	}
+	cName := C.CString(name)
+	defer freeString(cName)
+
+	class := (C.uint)(C.daos_oclass_name2id(cName))
+	if class == C.OC_UNKNOWN {
+		return 0, errors.Errorf("unknown object class %q", name)
+	}
+	return class, nil
+}
+
+func (f *DFSPLFlag) UnmarshalFlag(fv string) error {
+	switch strings.ToLower(strings.TrimSpace(fv)) {
+	case "off":
+		*f = DFSPLFlag{}
+		return nil
+	case "auto":
+		*f = DFSPLFlag{Enabled: true}
+		return nil
+	}
+
+	parts := strings.Split(fv, ",")
+	if len(parts) < 2 {
+		return errors.Errorf("invalid --dfs-pl value %q: expected off, auto or <head>,<tail>[@<split_off>]", fv)
+	}
+
+	head, err := parseOclassName(strings.TrimSpace(parts[0]))
+	if err != nil {
+		return errors.Wrap(err, "progressive-layout head")
+	}
+
+	tails := make([]PLTail, 0, len(parts)-1)
+	for _, spec := range parts[1:] {
+		name, splitStr, _ := strings.Cut(strings.TrimSpace(spec), "@")
+		class, err := parseOclassName(name)
+		if err != nil {
+			return errors.Wrap(err, "progressive-layout tail")
+		}
+		tail := PLTail{Class: class}
+		if splitStr != "" && splitStr != "auto" {
+			size, err := humanize.ParseBytes(splitStr)
+			if err != nil {
+				return errors.Errorf("invalid progressive-layout split offset %q", splitStr)
+			}
+			tail.SplitOff = C.uint64_t(size)
+		}
+		tails = append(tails, tail)
+	}
+
+	*f = DFSPLFlag{Enabled: true, Head: head, Tails: tails}
+	return nil
+}
+
+func (f *DFSPLFlag) String() string {
+	var buf [10]C.char
+
+	if !f.Enabled {
+		return "off"
+	}
+	if !f.Explicit() {
+		return "auto"
+	}
+
+	C.daos_oclass_id2name(f.Head, &buf[0])
+	out := C.GoString(&buf[0])
+	for _, tail := range f.Tails {
+		C.daos_oclass_id2name(tail.Class, &buf[0])
+		out += "," + C.GoString(&buf[0])
+		if tail.SplitOff != 0 {
+			out += "@" + humanize.IBytes(uint64(tail.SplitOff))
+		}
+	}
+	return out
 }
 
 func makeOid(hi, lo uint64) C.daos_obj_id_t {
