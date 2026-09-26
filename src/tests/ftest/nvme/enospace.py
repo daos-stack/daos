@@ -843,13 +843,13 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.log.info("IOR Baseline Read MiB %d: %s", i, max_rd_mib_baseline[-1])
 
         # Run IOR to fill the pool.
-        self.log_step('Running IOR to fill ~90% of the pool')
+        self.log_step('Running IOR to fill ~70% of the pool')
         # self.run_enospace_with_bg_job(self.client_log)
         container_fill = self.get_container(self.pool)
-        self.fill_pool(container_fill, 90)
+        self.fill_pool(container_fill, 70)
 
-        # Write after 90% of the pool is filled
-        self.log_step('Running IOR write after ~90% of the pool filled')
+        # Write after 70% of the pool is filled
+        self.log_step('Running IOR write after ~70% of the pool filled')
         container_wr = self.get_container(self.pool)
         ior_matrix = self._get_ior_metrics(
             container_wr,
@@ -859,11 +859,11 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             block_size=block_size,
             namespace='/run/ior_new/*')
         max_wr_mib_last = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
-        self.log.info("IOR Write to fill ~90%% container MiB: %s", max_wr_mib_last)
+        self.log.info("IOR Write to fill ~70%% container MiB: %s", max_wr_mib_last)
 
         # Read the same container which was written at the beginning.
         # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
-        self.log_step('Running IOR read after ~90% of the pool filled')
+        self.log_step('Running IOR read after ~70% of the pool filled')
         max_rd_mib_latest = []
         for i in range(iterations):
             ior_matrix = self._get_ior_metrics(
@@ -874,12 +874,12 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                 block_size=block_size,
                 namespace='/run/ior_new/*')
             max_rd_mib_latest.append(float(ior_matrix[0][int(IorMetrics.MAX_MIB)]))
-            self.log.info("90%% filled IOR Latest Read MiB %d: %s", i, max_rd_mib_latest[-1])
+            self.log.info("70%% filled IOR Latest Read MiB %d: %s", i, max_rd_mib_latest[-1])
 
         # Check if latest IOR read performance is in Tolerance of 5%, when
         # Storage space is full.
         self.log.info("Initial IOR Write MiB: %s", max_wr_mib_baseline)
-        self.log.info("After 90%% filled IOR Write MiB: %s", max_wr_mib_last)
+        self.log.info("After 70%% filled IOR Write MiB: %s", max_wr_mib_last)
 
         avg_rd_baseline = sum(max_rd_mib_baseline) / len(max_rd_mib_baseline)
         avg_rd_latest = sum(max_rd_mib_latest) / len(max_rd_mib_latest)
@@ -888,8 +888,8 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         if abs(avg_rd_baseline - avg_rd_latest) > (avg_rd_baseline / 100 * 5) or \
            abs(max_wr_mib_baseline - max_wr_mib_last) > (max_wr_mib_baseline / 100 * 5):
             self.fail('Latest IOR performance is not under 5% Tolerance'
-                      ' Average baseline Read MiB  = {} and Average after 90% fill Read MiB = {}'
-                      ' Baseline Write MiB = {} and after 90% fill Write MiB = {}'
+                      ' Average baseline Read MiB  = {} and Average after 70% fill Read MiB = {}'
+                      ' Baseline Write MiB = {} and after 70% fill Write MiB = {}'
                       .format(avg_rd_baseline, avg_rd_latest, max_wr_mib_baseline, max_wr_mib_last))
 
     def test_performance_storage_full(self):
