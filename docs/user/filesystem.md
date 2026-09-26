@@ -233,6 +233,33 @@ Multi-user mode requires the fuse package to be reconfigured as it's disabled by
 setting `user_allow_other` needs to be set in `/etc/fuse.conf` or `/etc/fuse3.conf`, which will need
 to be done as root and takes effect for all users on that node.
 
+### Idmapped mounts
+
+Container runtimes use idmapped mounts to make a host directory available to a container that runs
+in a user namespace, such as a Kubernetes pod with `hostUsers: false`: the mount maps the user and
+group IDs of the container to those stored in the filesystem.  For a DFuse mount this requires Linux
+6.12 or later, a fuse library that supports it and the `--allow-idmap` option, otherwise the runtime
+fails with an error such as `failed to set MOUNT_ATTR_IDMAP on <path>: invalid argument`.  DFuse
+logs an error if the kernel or the fuse library does not support them, and at INFO level that they
+are allowed.  The processes of such a container do not run as the user running DFuse, so DFuse also
+has to run in multi-user mode.
+
+When idmapped mounts are allowed, the kernel only tells DFuse the user and group of the caller for
+requests that create files, directories or symbolic links.  The interception libraries ask DFuse for
+its pool and container handles, which DFuse only shares with processes running as its own user and
+group, so it reads the user and group of the process from `/proc` instead.  This only works for
+processes in the PID namespace of DFuse or in one nested in it, for example in any container if
+DFuse runs in the PID namespace of the host.  It does not work if DFuse is given a mounted FUSE
+device as `/dev/fd/N`, because the kernel then identifies processes in the PID namespace of the
+process that mounted it.  Other processes do not get the handles of DFuse: `libioil` then connects
+to the pool and container itself, and `libpil4dfs` leaves their I/O to DFuse.  Why a process did not
+get them is logged at DEBUG level.
+
+The option does not change who gets the handles of DFuse or who may access the files: the user and
+group that the kernel used to send are read from `/proc` instead, and the kernel keeps checking the
+permissions of the files.  DFuse should not run as the overflow user (`nobody`) with this option,
+because a process whose IDs are not mapped in the user namespace of DFuse appears as that user.
+
 ### Launching
 
 #### Via dfuse command
@@ -257,6 +284,7 @@ Additionally, there are several optional command-line options:
 | --max-background=<count\>       | Hard limit on outstanding background requests     |
 | --congestion-threshold=<count\> | Background requests at which the kernel throttles |
 | --multi-user                    | Run in multi user mode                            |
+| --allow-idmap                   | Allow idmapped mounts                             |
 | --read-only                     | Mount in read-only mode                           |
 
 The `--pool` and `--container` options can also be passed as the second and third positional

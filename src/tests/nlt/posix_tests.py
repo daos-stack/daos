@@ -1095,6 +1095,37 @@ class PosixTests():
                            'bs=128k'],
                           check_fstat=False)
 
+    @needs_dfuse_with_opt(caching_variants=[False], allow_idmap=True)
+    def test_il_allow_idmap(self):
+        """Check that the interception libraries get the handles of dfuse with --allow-idmap
+
+        When idmapped mounts are allowed, Linux 6.12 and later no longer send the uid and gid of
+        the caller with ioctl requests, so dfuse has to identify it before sharing its handles.
+        libpil4dfs only intercepts calls on a dfuse mount with these handles, whereas libioil
+        would open its own.  Without a kernel and a fuse library that support idmapped mounts
+        the ids are sent as before, and this is a plain interception test.
+        """
+        with open(self.dfuse.log_file, 'r') as log:
+            if 'Idmapped mounts allowed' not in log.read():
+                print('Idmapped mounts are not allowed by the kernel or the fuse library, '
+                      'dfuse identifies callers as before')
+
+        create_and_read_via_il(self.dfuse, self.dfuse.dir)
+
+        # dfuse logs at DEBUG level why it refused a caller. There must be no such line: the
+        # caller runs as the user of dfuse and in its pid namespace.
+        refusals = ('does not run as', 'outside the pid namespace',
+                    'belongs to another pid namespace', 'cannot be identified', 'Cannot read /proc')
+        with open(self.dfuse.log_file, 'r') as log:
+            for line in log:
+                if any(reason in line for reason in refusals):
+                    raise NLTestFail(f'dfuse did not share its handles: {line.strip()}')
+
+        fname = join(self.dfuse.dir, 'file')
+        with open(fname, 'w') as fd:
+            fd.write('Hello')
+        self.server.run_daos_client_cmd_pil4dfs(['cat', fname])
+
     @needs_dfuse
     def test_xattr(self):
         """Perform basic tests with extended attributes"""
