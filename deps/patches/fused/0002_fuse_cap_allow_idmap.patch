@@ -1,0 +1,83 @@
+From 1edc31599ebea58f28a9b289c2656739f51fe992 Mon Sep 17 00:00:00 2001
+From: Renzheng Wang <renzheng.wang@ucloud.cn>
+Date: Sun, 15 Mar 2026 19:55:32 +0800
+Subject: [PATCH 2/2] add FUSE_CAP_ALLOW_IDMAP (#1446)
+
+* fuse: add FUSE_CAP_ALLOW_IDMAP support
+
+Add FUSE_CAP_ALLOW_IDMAP capability flag to indicate that creation of
+idmapped mounts is allowed. This maps to the kernel's FUSE_ALLOW_IDMAP
+flag.
+
+- Define FUSE_CAP_ALLOW_IDMAP in fuse_common.h using (1ULL << 32) to
+  ensure correct behavior on both 32-bit and 64-bit platforms.
+- Set the capability in capable_ext when kernel reports FUSE_ALLOW_IDMAP.
+- Send FUSE_ALLOW_IDMAP to kernel when userspace sets it in want_ext.
+- Add the new FUSE_CAP_ALLOW_IDMAP capability to the printcap example
+so it is printed when supported by the kernel.
+
+Signed-off-by: Renzheng Wang <wangrzneu@gmail.com>
+
+[Backported to libfuse 3.17.4 (fused v1.1.0): the context of both lib/fuse_lowlevel.c hunks
+differs. The FUSE_CAP_OVER_IO_URING lines around the first hunk are not part of this change and
+were left out (3.17 has no io-uring support); the second hunk is placed before FUSE_INIT_EXT is
+handled, as upstream, so that the flag reaches flags2.]
+
+(cherry picked from commit 1f4c0608e7c6202f88db791c19cc4bfe60d40edd)
+---
+ example/printcap.c    | 1 +
+ include/fuse_common.h | 5 +++++
+ lib/fuse_lowlevel.c   | 5 +++++
+ 3 files changed, 11 insertions(+)
+
+diff --git a/example/printcap.c b/example/printcap.c
+index 74d22e1c..69827778 100644
+--- a/example/printcap.c
++++ b/example/printcap.c
+@@ -65,6 +65,7 @@ static const struct cap_info capabilities[] = {
+     {FUSE_CAP_DIRECT_IO_ALLOW_MMAP,	"FUSE_CAP_DIRECT_IO_ALLOW_MMAP"},
+     {FUSE_CAP_NO_EXPORT_SUPPORT,	"FUSE_CAP_NO_EXPORT_SUPPORT"},
+     {FUSE_CAP_PASSTHROUGH,		"FUSE_CAP_PASSTHROUGH"},
++    {FUSE_CAP_ALLOW_IDMAP,		"FUSE_CAP_ALLOW_IDMAP"},
+     // Add any new capabilities here
+     {0, NULL} // Sentinel to mark the end of the array
+ };
+diff --git a/include/fuse_common.h b/include/fuse_common.h
+index 7e53483f..2e441b8d 100644
+--- a/include/fuse_common.h
++++ b/include/fuse_common.h
+@@ -512,6 +512,11 @@ struct fuse_loop_config_v1 {
+  */
+ #define FUSE_CAP_OVER_IO_URING (1 << 31)
+ 
++/**
++ * Indicates that creation of idmapped mounts is allowed
++ */
++#define FUSE_CAP_ALLOW_IDMAP (1ULL << 32)
++
+ /**
+  * Ioctl flags
+  *
+diff --git a/lib/fuse_lowlevel.c b/lib/fuse_lowlevel.c
+index 2164ba5b..63a7ff5f 100644
+--- a/lib/fuse_lowlevel.c
++++ b/lib/fuse_lowlevel.c
+@@ -2172,6 +2172,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+ 			se->conn.capable_ext |= FUSE_CAP_PASSTHROUGH;
+ 		if (inargflags & FUSE_NO_EXPORT_SUPPORT)
+ 			se->conn.capable_ext |= FUSE_CAP_NO_EXPORT_SUPPORT;
++		if (inargflags & FUSE_ALLOW_IDMAP)
++			se->conn.capable_ext |= FUSE_CAP_ALLOW_IDMAP;
+ 	} else {
+ 		se->conn.max_readahead = 0;
+ 	}
+@@ -2326,6 +2328,9 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+ 	if (se->conn.want_ext & FUSE_CAP_NO_EXPORT_SUPPORT)
+ 		outargflags |= FUSE_NO_EXPORT_SUPPORT;
+ 
++	if (se->conn.want_ext & FUSE_CAP_ALLOW_IDMAP)
++		outargflags |= FUSE_ALLOW_IDMAP;
++
+ 	if (inargflags & FUSE_INIT_EXT) {
+ 		outargflags |= FUSE_INIT_EXT;
+ 		outarg.flags2 = outargflags >> 32;

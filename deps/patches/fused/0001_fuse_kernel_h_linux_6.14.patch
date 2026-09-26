@@ -1,0 +1,186 @@
+From 3cfc16cb819aca18f4d54d4414a78f37ddd2b232 Mon Sep 17 00:00:00 2001
+From: Bernd Schubert <bschubert@ddn.com>
+Date: Mon, 24 Mar 2025 17:53:01 +0100
+Subject: [PATCH 1/2] Synchronize fuse_kernel.h with linux-6.14
+
+Also add FUSE_CAP_OVER_IO_URING
+
+Signed-off-by: Bernd Schubert <bschubert@ddn.com>
+(cherry picked from commit d393ffa85b0926374c8df543a9ffc81b1d0ce232)
+---
+ include/fuse_common.h |  7 +++-
+ include/fuse_kernel.h | 96 ++++++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 101 insertions(+), 2 deletions(-)
+
+diff --git a/include/fuse_common.h b/include/fuse_common.h
+index f9689907..7e53483f 100644
+--- a/include/fuse_common.h
++++ b/include/fuse_common.h
+@@ -7,7 +7,6 @@
+ 
+ /** @file */
+ 
+-#include <stdbool.h>
+ #if !defined(FUSE_H_) && !defined(FUSE_LOWLEVEL_H_)
+ #error "Never include <fuse_common.h> directly; use <fuse.h> or <fuse_lowlevel.h> instead."
+ #endif
+@@ -24,6 +23,7 @@
+ #include "fuse_opt.h"
+ #include "fuse_log.h"
+ #include <stdint.h>
++#include <stdbool.h>
+ #include <sys/types.h>
+ #include <assert.h>
+ 
+@@ -507,6 +507,11 @@ struct fuse_loop_config_v1 {
+  */
+ #define FUSE_CAP_NO_EXPORT_SUPPORT (1 << 30)
+ 
++/**
++ * Indicates support for io-uring between fuse-server and fuse-client
++ */
++#define FUSE_CAP_OVER_IO_URING (1 << 31)
++
+ /**
+  * Ioctl flags
+  *
+diff --git a/include/fuse_kernel.h b/include/fuse_kernel.h
+index d08b99d6..5e0eb41d 100644
+--- a/include/fuse_kernel.h
++++ b/include/fuse_kernel.h
+@@ -217,6 +217,18 @@
+  *  - add backing_id to fuse_open_out, add FOPEN_PASSTHROUGH open flag
+  *  - add FUSE_NO_EXPORT_SUPPORT init flag
+  *  - add FUSE_NOTIFY_RESEND, add FUSE_HAS_RESEND init flag
++ *
++ *  7.41
++ *  - add FUSE_ALLOW_IDMAP
++ *  7.42
++ *  - Add FUSE_OVER_IO_URING and all other io-uring related flags and data
++ *    structures:
++ *    - struct fuse_uring_ent_in_out
++ *    - struct fuse_uring_req_header
++ *    - struct fuse_uring_cmd_req
++ *    - FUSE_URING_IN_OUT_HEADER_SZ
++ *    - FUSE_URING_OP_IN_OUT_SZ
++ *    - enum fuse_uring_cmd
+  */
+ 
+ #ifndef _LINUX_FUSE_H
+@@ -252,7 +264,7 @@
+ #define FUSE_KERNEL_VERSION 7
+ 
+ /** Minor version number of this interface */
+-#define FUSE_KERNEL_MINOR_VERSION 40
++#define FUSE_KERNEL_MINOR_VERSION 42
+ 
+ /** The node ID of the root inode */
+ #define FUSE_ROOT_ID 1
+@@ -421,6 +433,8 @@ struct fuse_file_lock {
+  * FUSE_NO_EXPORT_SUPPORT: explicitly disable export support
+  * FUSE_HAS_RESEND: kernel supports resending pending requests, and the high bit
+  *		    of the request ID indicates resend requests
++ * FUSE_ALLOW_IDMAP: allow creation of idmapped mounts
++ * FUSE_OVER_IO_URING: Indicate that client supports io-uring
+  */
+ #define FUSE_ASYNC_READ		(1 << 0)
+ #define FUSE_POSIX_LOCKS	(1 << 1)
+@@ -466,6 +480,8 @@ struct fuse_file_lock {
+ 
+ /* Obsolete alias for FUSE_DIRECT_IO_ALLOW_MMAP */
+ #define FUSE_DIRECT_IO_RELAX	FUSE_DIRECT_IO_ALLOW_MMAP
++#define FUSE_ALLOW_IDMAP	(1ULL << 40)
++#define FUSE_OVER_IO_URING	(1ULL << 41)
+ 
+ /**
+  * CUSE INIT request/reply flags
+@@ -984,6 +1000,21 @@ struct fuse_fallocate_in {
+  */
+ #define FUSE_UNIQUE_RESEND (1ULL << 63)
+ 
++/**
++ * This value will be set by the kernel to
++ * (struct fuse_in_header).{uid,gid} fields in
++ * case when:
++ * - fuse daemon enabled FUSE_ALLOW_IDMAP
++ * - idmapping information is not available and uid/gid
++ *   can not be mapped in accordance with an idmapping.
++ *
++ * Note: an idmapping information always available
++ * for inode creation operations like:
++ * FUSE_MKNOD, FUSE_SYMLINK, FUSE_MKDIR, FUSE_TMPFILE,
++ * FUSE_CREATE and FUSE_RENAME2 (with RENAME_WHITEOUT).
++ */
++#define FUSE_INVALID_UIDGID ((uint32_t)(-1))
++
+ struct fuse_in_header {
+ 	uint32_t	len;
+ 	uint32_t	opcode;
+@@ -1186,4 +1217,67 @@ struct fuse_supp_groups {
+ 	uint32_t	groups[];
+ };
+ 
++/**
++ * Size of the ring buffer header
++ */
++#define FUSE_URING_IN_OUT_HEADER_SZ 128
++#define FUSE_URING_OP_IN_OUT_SZ 128
++
++/* Used as part of the fuse_uring_req_header */
++struct fuse_uring_ent_in_out {
++	uint64_t flags;
++
++	/*
++	 * commit ID to be used in a reply to a ring request (see also
++	 * struct fuse_uring_cmd_req)
++	 */
++	uint64_t commit_id;
++
++	/* size of user payload buffer */
++	uint32_t payload_sz;
++	uint32_t padding;
++
++	uint64_t reserved;
++};
++
++/**
++ * Header for all fuse-io-uring requests
++ */
++struct fuse_uring_req_header {
++	/* struct fuse_in_header / struct fuse_out_header */
++	char in_out[FUSE_URING_IN_OUT_HEADER_SZ];
++
++	/* per op code header */
++	char op_in[FUSE_URING_OP_IN_OUT_SZ];
++
++	struct fuse_uring_ent_in_out ring_ent_in_out;
++};
++
++/**
++ * sqe commands to the kernel
++ */
++enum fuse_uring_cmd {
++	FUSE_IO_URING_CMD_INVALID = 0,
++
++	/* register the request buffer and fetch a fuse request */
++	FUSE_IO_URING_CMD_REGISTER = 1,
++
++	/* commit fuse request result and fetch next request */
++	FUSE_IO_URING_CMD_COMMIT_AND_FETCH = 2,
++};
++
++/**
++ * In the 80B command area of the SQE.
++ */
++struct fuse_uring_cmd_req {
++	uint64_t flags;
++
++	/* entry identifier for commits */
++	uint64_t commit_id;
++
++	/* queue the command is for (queue index) */
++	uint16_t qid;
++	uint8_t padding[6];
++};
++
+ #endif /* _LINUX_FUSE_H */
