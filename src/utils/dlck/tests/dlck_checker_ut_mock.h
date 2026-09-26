@@ -16,6 +16,8 @@ extern struct dlck_checker_worker Dcw;
 extern const ABT_mutex Mock_mutex_handle;
 extern void *last_freed_payload;
 extern int mock_vfprintf_enabled;
+extern int mock_vfprintf_check_args;
 extern int mock_fflush_enabled;
+extern int mock_fopen_fake_stream;
 
 #endif /* __DLCK_CHECKER_UT_MOCK_H__ */

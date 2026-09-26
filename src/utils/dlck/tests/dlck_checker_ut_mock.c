@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <setjmp.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -20,11 +21,15 @@ struct dlck_checker_worker Dcw;
 const ABT_mutex Mock_mutex_handle = (ABT_mutex)(uintptr_t)0x1234;
 void *last_freed_payload;
 int mock_vfprintf_enabled;
+int mock_vfprintf_check_args;
 int mock_fflush_enabled;
+int mock_fopen_fake_stream;
+static FILE *const Mock_file_stream = (FILE *)(uintptr_t)0x5678;
 
 void *__real_d_calloc(size_t nmemb, size_t size);
 void __real_d_free(void *ptr);
 FILE *__real_fopen(const char *path, const char *mode);
+int __real_fclose(FILE *stream);
 int __real_vfprintf(FILE *stream, const char *fmt, va_list args);
 int __real_fflush(FILE *stream);
 
@@ -86,6 +91,10 @@ __wrap_fopen(const char *path, const char *mode)
 {
 	int error = mock_type(int);
 
+	if (mock_fopen_fake_stream != 0) {
+		mock_fopen_fake_stream = 0;
+		return Mock_file_stream;
+	}
 	if (error != 0) {
 		errno = error;
 		return NULL;
@@ -94,10 +103,19 @@ __wrap_fopen(const char *path, const char *mode)
 }
 
 int
+__wrap_fclose(FILE *stream)
+{
+	if (stream == Mock_file_stream)
+		return 0;
+	return __real_fclose(stream);
+}
+
+int
 __wrap_ABT_mutex_create(ABT_mutex *newmutex)
 {
 	int rc = mock_type(int);
 
+	check_expected_ptr(newmutex);
 	assert_non_null(newmutex);
 	if (rc == ABT_SUCCESS)
 		*newmutex = Mock_mutex_handle;
@@ -109,6 +127,7 @@ __wrap_ABT_mutex_free(ABT_mutex *mutex)
 {
 	int rc = mock_type(int);
 
+	check_expected_ptr(mutex);
 	assert_non_null(mutex);
 	assert_ptr_equal(*mutex, Mock_mutex_handle);
 	if (rc == ABT_SUCCESS)
@@ -121,7 +140,7 @@ __wrap_ABT_mutex_lock(ABT_mutex mutex)
 {
 	int rc = mock_type(int);
 
-	assert_ptr_equal(mutex, Mock_mutex_handle);
+	check_expected_ptr(mutex);
 	return rc;
 }
 
@@ -130,7 +149,7 @@ __wrap_ABT_mutex_unlock(ABT_mutex mutex)
 {
 	int rc = mock_type(int);
 
-	assert_ptr_equal(mutex, Mock_mutex_handle);
+	check_expected_ptr(mutex);
 	return rc;
 }
 
@@ -141,8 +160,19 @@ __wrap_vfprintf(FILE *stream, const char *fmt, va_list args)
 		int rc = mock_type(int);
 
 		(void)stream;
-		(void)fmt;
-		(void)args;
+		if (mock_vfprintf_check_args != 0) {
+			char    output[128];
+			va_list copy;
+			int     length;
+
+			mock_vfprintf_check_args = 0;
+			check_expected(fmt);
+			va_copy(copy, args);
+			length = vsnprintf(output, sizeof(output), fmt, copy);
+			va_end(copy);
+			assert_true(length >= 0 && length < sizeof(output));
+			check_expected(output);
+		}
 		mock_vfprintf_enabled = 0;
 		if (rc < 0)
 			errno = EIO;

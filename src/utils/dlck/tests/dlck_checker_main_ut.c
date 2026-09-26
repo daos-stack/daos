@@ -37,6 +37,7 @@ static void
 init_checker(struct checker *ck)
 {
 	will_return(__wrap_d_calloc, 0);
+	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
 	assert_non_null(ck->ck_private);
@@ -49,6 +50,7 @@ test_main_init_success(void **state)
 	struct checker *ck = *state;
 
 	will_return(__wrap_d_calloc, 0);
+	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
 	assert_ptr_equal(ck->ck_private, dlck_checker_main_get_custom(ck));
@@ -60,13 +62,7 @@ test_main_init_success(void **state)
 	assert_non_null(ck->ck_indent_set);
 	assert_ptr_equal(ck->ck_prefix, Dcm.core.prefix);
 
-	ck->ck_level = 2;
-	assert_int_equal(ck->ck_indent_set(ck), DER_SUCCESS);
-	assert_string_equal(ck->ck_prefix, "-- ");
-	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
-	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
-	assert_int_equal(ck_common_printf(ck, ""), DER_SUCCESS);
-
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 	assert_ptr_equal(Dcm.stream_mutex, ABT_MUTEX_NULL);
@@ -80,6 +76,7 @@ test_main_init_mutex_create_failure(void **state)
 	struct checker *ck = *state;
 
 	will_return(__wrap_d_calloc, 0);
+	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_ERR_OTHER);
 	assert_int_equal(dlck_checker_main_init(ck), dss_abterr2der(ABT_ERR_OTHER));
 	assert_null(ck->ck_private);
@@ -94,12 +91,18 @@ test_vprintf_vfprintf_positive(void **state)
 
 	init_checker(ck);
 	mock_vfprintf_enabled = 1;
+	mock_vfprintf_check_args = 1;
 	mock_fflush_enabled = 1;
+	expect_string(__wrap_vfprintf, fmt, "main %d: %s");
+	expect_string(__wrap_vfprintf, output, "main 42: ready");
 	will_return(__wrap_vfprintf, 1);
 	will_return(__wrap_fflush, 0);
+	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
+	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
-	assert_int_equal(ck_common_printf(ck, "test"), DER_SUCCESS);
+	assert_int_equal(ck_common_printf(ck, "main %d: %s", 42, "ready"), DER_SUCCESS);
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
@@ -113,9 +116,12 @@ test_vprintf_vfprintf_failure(void **state)
 	init_checker(ck);
 	mock_vfprintf_enabled = 1;
 	will_return(__wrap_vfprintf, -1);
+	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
+	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
 	assert_int_equal(ck_common_printf(ck, "test"), daos_errno2der(EIO));
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
@@ -131,9 +137,12 @@ test_vprintf_fflush_failure(void **state)
 	mock_fflush_enabled = 1;
 	will_return(__wrap_vfprintf, 1);
 	will_return(__wrap_fflush, EIO);
+	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
+	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
 	assert_int_equal(ck_common_printf(ck, "test"), daos_errno2der(EIO));
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
@@ -145,8 +154,10 @@ test_main_vprintf_lock_failure(void **state)
 	struct checker *ck = *state;
 
 	init_checker(ck);
+	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_ERR_OTHER);
 	assert_int_equal(ck_common_printf(ck, "test"), dss_abterr2der(ABT_ERR_OTHER));
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
@@ -162,9 +173,12 @@ test_main_vprintf_unlock_failure(void **state)
 	mock_fflush_enabled = 1;
 	will_return(__wrap_vfprintf, 1);
 	will_return(__wrap_fflush, 0);
+	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
+	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_unlock, ABT_ERR_OTHER);
 	assert_int_equal(ck_common_printf(ck, "test"), dss_abterr2der(ABT_ERR_OTHER));
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
@@ -177,6 +191,7 @@ test_main_fini_success(void **state)
 
 	init_checker(ck);
 
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 	assert_ptr_equal(Dcm.stream_mutex, ABT_MUTEX_NULL);
@@ -195,6 +210,7 @@ test_main_get_custom_invalid_magic(void **state)
 	Dcm.core.magic = ~DLCK_CHECKER_MAIN_MAGIC;
 	expect_assert_failure(dlck_checker_main_get_custom(ck));
 	Dcm.core.magic = DLCK_CHECKER_MAIN_MAGIC;
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 	assert_ptr_equal(last_freed_payload, &Dcm);
@@ -207,6 +223,7 @@ test_main_fini_mutex_free_failure(void **state)
 	struct checker *ck = *state;
 
 	init_checker(ck);
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_ERR_OTHER);
 	assert_int_equal(dlck_checker_main_fini(ck), dss_abterr2der(ABT_ERR_OTHER));
 	assert_ptr_equal(Dcm.stream_mutex, Mock_mutex_handle);
@@ -245,6 +262,7 @@ test_main_indent_set_levels_zero_to_max(void **state)
 		assert_int_equal(ck->ck_prefix[ck->ck_level], ' ');
 	}
 
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
@@ -265,6 +283,7 @@ test_main_indent_set_out_of_range(void **state)
 	expect_assert_failure(ck->ck_indent_set(ck));
 	ck->ck_level = CHECKER_INDENT_MAX + 1;
 	expect_assert_failure(checker_print_indent_inc(ck));
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
