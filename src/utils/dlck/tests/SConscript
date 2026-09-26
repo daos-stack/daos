@@ -60,7 +60,7 @@ def build_dlck_checker_main_ut(henv):
     henv.Append(CPPPATH=[Dir('../../../').srcnode()])
     henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=ABT_mutex_create', '-Wl,--wrap=ABT_mutex_free',
                                  '-Wl,--wrap=ABT_mutex_lock', '-Wl,--wrap=ABT_mutex_unlock',
-                                 '-Wl,--wrap=fopen', '-Wl,--wrap=d_asprintf2',
+                                 '-Wl,--wrap=fopen', '-Wl,--wrap=fclose', '-Wl,--wrap=d_asprintf2',
                                  '-Wl,--wrap=vfprintf', '-Wl,--wrap=fflush', '-Wl,--wrap=d_calloc',
                                  '-Wl,--wrap=d_free'])
     henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
@@ -83,7 +83,7 @@ def build_dlck_checker_worker_ut(henv):
     henv.Append(CPPPATH=[Dir('../../../').srcnode()])
     henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=ABT_mutex_create', '-Wl,--wrap=ABT_mutex_free',
                                  '-Wl,--wrap=ABT_mutex_lock', '-Wl,--wrap=ABT_mutex_unlock',
-                                 '-Wl,--wrap=fopen', '-Wl,--wrap=d_asprintf2',
+                                 '-Wl,--wrap=fopen', '-Wl,--wrap=fclose', '-Wl,--wrap=d_asprintf2',
                                  '-Wl,--wrap=vfprintf', '-Wl,--wrap=fflush',
                                  '-Wl,--wrap=d_calloc', '-Wl,--wrap=d_free'])
     henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
@@ -94,6 +94,16 @@ def build_dlck_checker_worker_ut(henv):
     henv.d_test_program('dlck_checker_worker_ut', srcs, LIBS=libs)
 
 
+def build_dlck_checker_macros_ut(henv):
+    """Build dlck_checker_macros_ut"""
+    henv.Append(OBJPREFIX="dlck_checker_macros_ut_")
+    henv.Append(CPPPATH=[Dir('../../../').srcnode()])
+    henv.require('cmocka')
+
+    henv.d_test_program('dlck_checker_macros_ut', ['dlck_checker_macros_ut.c'],
+                        LIBS=['gurt', 'cmocka'])
+
+
 def scons():
     """Execute build"""
     Import('env')
@@ -102,6 +112,7 @@ def scons():
     build_dlck_args_ut(env.Clone())
     build_dlck_checker_main_ut(env.Clone())
     build_dlck_checker_worker_ut(env.Clone())
+    build_dlck_checker_macros_ut(env.Clone())
 
 
 if __name__ == "SCons.Script":

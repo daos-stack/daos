@@ -215,6 +215,7 @@
     - cmd: ["src/utils/dlck/tests/dlck_args_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_checker_main_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_checker_worker_ut"]
+    - cmd: ["src/utils/dlck/tests/dlck_checker_macros_ut"]
 - name: Source metadata testing
   memcheck: False
   asan: False
