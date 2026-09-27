@@ -9,12 +9,10 @@ package system
 import (
 	"bufio"
 	"compress/gzip"
-	"context"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
@@ -56,49 +54,33 @@ func parseKernelConfig(r io.Reader) (KernelConfig, error) {
 
 // parseKernelConfigFile opens and parses a kernel config file at the given path.
 // If the path ends in .gz, the file is decompressed before parsing.
-// Uses a timeout to prevent hanging on systems where file I/O may block indefinitely.
 func parseKernelConfigFile(path string) (KernelConfig, error) {
-	// Use a timeout to prevent hanging on inaccessible paths
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	done := make(chan struct{})
-	var f *os.File
-	var openErr error
-
-	go func() {
-		f, openErr = os.Open(path)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		if openErr != nil {
-			return nil, errors.Wrapf(openErr, "opening kernel config %s", path)
-		}
-		defer f.Close()
-
-		if strings.HasSuffix(path, ".gz") {
-			gr, err := gzip.NewReader(f)
-			if err != nil {
-				return nil, errors.Wrapf(err, "creating gzip reader for %s", path)
-			}
-			defer gr.Close()
-
-			return parseKernelConfig(gr)
-		}
-
-		return parseKernelConfig(f)
-	case <-ctx.Done():
-		return nil, errors.Wrapf(ctx.Err(), "timeout opening kernel config %s", path)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, errors.Wrapf(err, "opening kernel config %s", path)
 	}
+	defer f.Close()
+
+	if strings.HasSuffix(path, ".gz") {
+		gr, err := gzip.NewReader(f)
+		if err != nil {
+			return nil, errors.Wrapf(err, "creating gzip reader for %s", path)
+		}
+		defer gr.Close()
+
+		return parseKernelConfig(gr)
+	}
+
+	return parseKernelConfig(f)
 }
 
 // ParseKernelConfig loads and parses the running kernel's configuration.
 // If overridePath is non-empty, only that path is tried. Otherwise, it
 // tries /proc/config.gz (if CONFIG_IKCONFIG_PROC is enabled), then falls
-// back to /boot/config-<kernel-release>. Returns an empty config if all
-// attempts fail (graceful degradation for test environments).
+// back to /boot/config-<kernel-release>. If neither is available, an empty
+// config is returned alongside a non-nil error describing the failure so
+// callers can log the reason while still gracefully degrading (e.g. in test
+// environments).
 func ParseKernelConfig(overridePath ...string) (KernelConfig, error) {
 	if len(overridePath) > 0 && overridePath[0] != "" {
 		return parseKernelConfigFile(overridePath[0])
@@ -120,8 +102,10 @@ func ParseKernelConfig(overridePath ...string) (KernelConfig, error) {
 
 	cfg, err := parseKernelConfigFile(bootConfig)
 	if err != nil {
-		// Return empty config instead of error to gracefully degrade in test environments
-		return make(KernelConfig), nil
+		// Return empty config alongside the error so callers can gracefully
+		// degrade (e.g. in test environments) while still being able to log
+		// or diagnose why the kernel config was unavailable.
+		return make(KernelConfig), err
 	}
 	return cfg, nil
 }

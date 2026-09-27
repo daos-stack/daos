@@ -21,16 +21,21 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m,
 		// Background goroutines owned by imported packages that are not
 		// expected to be torn down synchronously within a single test.
-		goleak.IgnoreTopFunction("github.com/hashicorp/raft.(*raft).run"),
-		goleak.IgnoreTopFunction("github.com/hashicorp/raft.(*raft).runFSM"),
-		goleak.IgnoreTopFunction("github.com/hashicorp/raft.(*raft).runSnapshots"),
+		// IgnoreAnyFunction (rather than IgnoreTopFunction) is required here
+		// because once a raft node is elected leader (which happens almost
+		// immediately for a single-node mock DB), run() dispatches into
+		// runFollower()/runCandidate()/runLeader(), and the leader path further
+		// enters leaderLoop(). From then on the goroutine's top-of-stack frame
+		// is leaderLoop, not run, so IgnoreTopFunction("...run") would no
+		// longer match.
+		goleak.IgnoreAnyFunction("github.com/hashicorp/raft.(*Raft).run"),
+		goleak.IgnoreTopFunction("github.com/hashicorp/raft.(*Raft).runFSM"),
+		goleak.IgnoreTopFunction("github.com/hashicorp/raft.(*Raft).runSnapshots"),
+		// runLeader() unconditionally spawns a periodic metrics goroutine the
+		// moment a node becomes leader. It is an independent goroutine (only
+		// "created by" runLeader, not called from it), so it needs its own
+		// entry.
+		goleak.IgnoreTopFunction("github.com/hashicorp/raft.emitLogStoreMetrics"),
 		goleak.IgnoreTopFunction("google.golang.org/grpc.(*Server).Serve"),
-		// scheduleControlPlaneRestart() intentionally spawns a fire-and-forget
-		// goroutine that outlives the gRPC handler by design (it waits 500ms for
-		// the response to be sent before restarting the control plane process).
-		// execRestart is stubbed out in unit tests that exercise this path, so
-		// the goroutine is harmless but is expected to still be sleeping when
-		// the test binary exits.
-		goleak.IgnoreAnyFunction("github.com/daos-stack/daos/src/control/server.(*mgmtSvc).scheduleControlPlaneRestart.func1"),
 	)
 }
