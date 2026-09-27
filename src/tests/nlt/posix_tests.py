@@ -2267,6 +2267,56 @@ class PosixTests():
 
         destroy_container(self.conf, self.pool.id(), data['response']['dst_cont'])
 
+    def test_bg_limits(self):
+        """Check that --max-background and --congestion-threshold reach the kernel"""
+        conn_root = '/sys/fs/fuse/connections'
+        if not os.path.isdir(conn_root):
+            print(f'{conn_root} not mounted, skipping')
+            return
+
+        def applied(param, want):
+            # Without CAP_SYS_ADMIN the kernel caps both at a fuse module parameter.
+            if os.geteuid() == 0:
+                return want
+            with open(join('/sys/module/fuse/parameters', param), 'r') as fd:
+                return min(want, int(fd.read()))
+
+        cases = [([], 256, 192),
+                 (['--max-background=64', '--congestion-threshold=40'], 64, 40),
+                 (['--max-background=10'], 10, 7)]
+        for args, max_bg, cong in cases:
+            dfuse = DFuse(self.server, self.conf, container=self.container, extra_args=args)
+            dfuse.start(v_hint='bg_limits')
+            conn = join(conn_root, str(os.minor(os.stat(dfuse.dir).st_dev)))
+            with open(join(conn, 'max_background'), 'r') as fd:
+                got_bg = int(fd.read())
+            with open(join(conn, 'congestion_threshold'), 'r') as fd:
+                got_cong = int(fd.read())
+            if dfuse.stop():
+                self.fatal_errors = True
+            print(f'{args}: max_background {got_bg}, congestion_threshold {got_cong}')
+            assert got_bg == applied('max_user_bgreq', max_bg)
+            assert got_cong == applied('max_user_congthresh', cong)
+
+    def test_bg_limits_invalid(self):
+        """Check that dfuse rejects bad --max-background and --congestion-threshold values"""
+        dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
+        cases = [['--max-background=0'],
+                 ['--max-background=65536'],
+                 ['--max-background=abc'],
+                 ['--congestion-threshold=-1'],
+                 ['--max-background=64', '--congestion-threshold=65']]
+        with tempfile.TemporaryDirectory(dir=self.conf.dfuse_parent_dir,
+                                         prefix='bg_limits.') as mount_point:
+            for args in cases:
+                cmd = [dfuse_bin, '--mountpoint', mount_point, '--foreground'] + args
+                rc = subprocess.run(cmd, env=get_base_env(), capture_output=True,  # nosec
+                                    check=False, timeout=60)
+                print(rc)
+                assert rc.returncode != 0, rc
+                assert b'Invalid --' in rc.stdout or b'cannot exceed' in rc.stdout, rc
+                assert not os.path.ismount(mount_point)
+
     def test_dfuse_perms(self):
         """Test permissions caching for DAOS-12577"""
         cache_time = 10
