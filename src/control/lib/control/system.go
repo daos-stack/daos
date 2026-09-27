@@ -747,8 +747,17 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemErase(ctx, pbReq)
 	})
+	// SystemErase deliberately tears down the raft DB and exec-restarts the control
+	// plane process on both the leader and any replicas (see mgmt_system.go). During
+	// that window callers can see a mix of transient errors: "not leader"/"not
+	// replica" responses while raft re-elects, and connection-refused/reset errors
+	// while the process is mid-exec and its listener is briefly down. All of these
+	// must be retried until the restarted process comes back up and a new leader is
+	// elected, matching the retry behavior used by SystemQuery/SystemJoin/
+	// SystemSelfHealEval for the same MS-unavailability windows.
 	req.retryTestFn = func(err error, _ uint) bool {
-		return system.IsUnavailable(err)
+		return system.IsUnavailable(err) || IsRetryableConnErr(err) ||
+			system.IsNotLeader(err) || system.IsNotReplica(err)
 	}
 	req.retryFn = func(_ context.Context, _ uint) error {
 		return system.ErrRaftUnavail
