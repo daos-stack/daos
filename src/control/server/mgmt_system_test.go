@@ -22,6 +22,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -3632,17 +3633,21 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			notLeader: true,
 			expErr:    &system.ErrNotLeader{},
 		},
-		"forwarded request from leader succeeds on non-leader replica": {
+		"forwarded request from leader takes replica-only path on non-leader replica": {
 			// Simulates the MS leader forwarding a per-replica erase request
 			// (see eraseReplicas()) directly to a non-leader peer; the request
 			// context carries the "server" component, so it is allowed to run
 			// locally (resetLocalEngines()) instead of being redirected back to
-			// the leader. This path erases local engines/DB directly and does
-			// not perform any host fanout or membership updates, so the
-			// response has no results.
+			// the leader (which would occur if checkLeaderRequest were used).
+			// The mock system database doesn't support a full Start()/Stop()
+			// lifecycle, so the local erase itself fails deeper in the call
+			// chain (after passing the replica-only check) - proving that the
+			// "server" component correctly bypassed leader-only enforcement
+			// rather than returning *system.ErrNotLeader.
 			forwarded: true,
 			notLeader: true,
 			mResps:    []*control.HostResponse{},
+			expErrMsg: "erasing non-leader ms-replica db: failed to stop system database: no shutdown callback set",
 		},
 		"unfiltered rank results": {
 			members: system.Members{
@@ -3725,11 +3730,11 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 
 			ctx := test.Context(t)
 			if tc.forwarded {
-				var err error
-				ctx, err = build.ToContext(ctx, build.ComponentServer, "1.0.0")
-				if err != nil {
-					t.Fatal(err)
-				}
+				md := metadata.Pairs(
+					build.DaosComponentHeader, build.ComponentServer.String(),
+					build.DaosVersionHeader, "1.0.0",
+				)
+				ctx = metadata.NewIncomingContext(ctx, md)
 			}
 
 			req := &mgmtpb.SystemEraseReq{
