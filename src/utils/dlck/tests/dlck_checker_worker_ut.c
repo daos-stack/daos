@@ -36,25 +36,6 @@ setup(void **state)
 	return 0;
 }
 
-static int
-setup_main_checker(struct checker *ck)
-{
-	expect_checker_d_calloc(sizeof(Dcm), &Dcm);
-	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
-	assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
-	return 0;
-}
-
-static int
-fini_main_checker(struct checker *ck)
-{
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	return dlck_checker_main_fini(ck);
-}
-
 /* worker init: valid options create a logfile and install callbacks. */
 static void
 test_worker_init_success(void **state)
@@ -128,30 +109,6 @@ test_worker_init_log_path_alloc_failure(void **state)
 	assert_null(ck->ck_private);
 }
 
-/* worker init: path allocation failure is reported using main checker. */
-static void
-test_worker_init_log_path_alloc_failure_with_main_checker(void **state)
-{
-	struct checker         *ck = *state;
-	struct checker          main_ck = {0};
-	struct checker_options  options = {0};
-	uuid_t                  pool_uuid;
-
-	setup_main_checker(&main_ck);
-	uuid_generate(pool_uuid);
-	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
-	will_return(__wrap_d_asprintf2, ENOMEM);
-	expect_value(__wrap_d_free, ptr, &Dcw);
-	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
-	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
-	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
-	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
-	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, &main_ck, ck),
-			 -DER_NOMEM);
-	assert_null(ck->ck_private);
-	assert_int_equal(fini_main_checker(&main_ck), DER_SUCCESS);
-}
-
 /* worker init: payload allocation returns NULL. */
 static void
 test_worker_init_alloc_failure(void **state)
@@ -165,49 +122,6 @@ test_worker_init_alloc_failure(void **state)
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 			 -DER_NOMEM);
 	assert_null(ck->ck_private);
-}
-
-/* worker init: payload allocation failure returns before main checker reporting. */
-static void
-test_worker_init_alloc_failure_with_main_checker(void **state)
-{
-	struct checker         *ck = *state;
-	struct checker          main_ck = {0};
-	struct checker_options  options = {0};
-	uuid_t                  pool_uuid;
-
-	setup_main_checker(&main_ck);
-	uuid_generate(pool_uuid);
-	expect_checker_d_calloc(sizeof(Dcw), NULL);
-	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, &main_ck, ck),
-			 -DER_NOMEM);
-	assert_null(ck->ck_private);
-	assert_int_equal(fini_main_checker(&main_ck), DER_SUCCESS);
-}
-
-/* worker init: fopen failure is reported using main checker. */
-static void
-test_worker_init_log_open_failure_with_main_checker(void **state)
-{
-	struct checker         *ck = *state;
-	struct checker          main_ck = {0};
-	struct checker_options  options = {0};
-	uuid_t                  pool_uuid;
-
-	setup_main_checker(&main_ck);
-	uuid_generate(pool_uuid);
-	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
-	will_return(__wrap_d_asprintf2, 0);
-	will_return(__wrap_fopen, EIO);
-	expect_value(__wrap_d_free, ptr, &Dcw);
-	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
-	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
-	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
-	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
-	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, &main_ck, ck),
-			 daos_errno2der(EIO));
-	assert_null(ck->ck_private);
-	assert_int_equal(fini_main_checker(&main_ck), DER_SUCCESS);
 }
 
 /* worker callbacks: indentation and printing use the initialized payload. */
@@ -387,22 +301,16 @@ static const struct CMUnitTest dlck_checker_worker_tests[] = {
 	{"DLCK_CHECKER_WORKER_101: init - log open failure", test_worker_init_log_open_failure, setup, teardown},
 	{"DLCK_CHECKER_WORKER_102: init - log path allocation failure", test_worker_init_log_path_alloc_failure, setup,
 	 teardown},
-	{"DLCK_CHECKER_WORKER_103: init - log path allocation failure with main checker",
-	 test_worker_init_log_path_alloc_failure_with_main_checker, setup, teardown},
-	{"DLCK_CHECKER_WORKER_104: init - allocation failure", test_worker_init_alloc_failure, setup, teardown},
-	{"DLCK_CHECKER_WORKER_105: init - allocation failure with main checker",
-	 test_worker_init_alloc_failure_with_main_checker, setup, teardown},
-	{"DLCK_CHECKER_WORKER_106: init - log open failure with main checker",
-	 test_worker_init_log_open_failure_with_main_checker, setup, teardown},
-	{"DLCK_CHECKER_WORKER_107: callbacks - success", test_worker_callbacks_success, setup, teardown},
-	{"DLCK_CHECKER_WORKER_108: printf - indentation", test_worker_printf_with_indent, setup, teardown},
-	{"DLCK_CHECKER_WORKER_109: get_custom - invalid magic", test_worker_get_custom_invalid_magic, setup,
+	{"DLCK_CHECKER_WORKER_103: init - allocation failure", test_worker_init_alloc_failure, setup, teardown},
+	{"DLCK_CHECKER_WORKER_104: callbacks - success", test_worker_callbacks_success, setup, teardown},
+	{"DLCK_CHECKER_WORKER_105: printf - indentation", test_worker_printf_with_indent, setup, teardown},
+	{"DLCK_CHECKER_WORKER_106: get_custom - invalid magic", test_worker_get_custom_invalid_magic, setup,
 	 teardown},
-	{"DLCK_CHECKER_WORKER_110: vprintf - vfprintf failure",
+	{"DLCK_CHECKER_WORKER_107: vprintf - vfprintf failure",
 	 test_worker_vprintf_vfprintf_failure, setup, teardown},
-	{"DLCK_CHECKER_WORKER_111: vprintf - fflush failure", test_worker_vprintf_fflush_failure, setup,
+	{"DLCK_CHECKER_WORKER_108: vprintf - fflush failure", test_worker_vprintf_fflush_failure, setup,
 	 teardown},
-	{"DLCK_CHECKER_WORKER_112: indent - out of range", test_worker_indent_set_out_of_range, setup,
+	{"DLCK_CHECKER_WORKER_109: indent - out of range", test_worker_indent_set_out_of_range, setup,
 	 teardown},
 };
 
