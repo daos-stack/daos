@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,7 +9,7 @@
 
 #include <stdio.h>
 
-#include <daos_srv/checker.h>
+#include <daos/checker.h>
 
 #define DLCK_PRINT_INDENT         '-'
 #define DLCK_CHECKER_MAIN_MAGIC   0x17A28DC5626110A5
