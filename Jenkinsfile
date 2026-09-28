@@ -54,7 +54,7 @@ void updateRunStage() {
         'NLT',
         'Unit Test with memcheck',
         'Unit Test bdev with memcheck',
-        'Test',
+        'Test VM',
         'Functional on EL 9 with Valgrind',
         'Functional on EL 9',
         'Functional on Leap 15',
@@ -85,6 +85,13 @@ void updateRunStage() {
         }
     }
 
+    // Compatibility with the previous 'Test' parameter name, which is still what Jenkins has
+    // defined until the first build after this rename lands.
+    if (!runStage.containsKey('Test VM')) {
+        runStage['Test VM'] = params.get('Test', true)
+        reasons['Test VM'] = 'renamed Test parameter'
+    }
+
     // Debug
     List buildCauses = currentBuild.buildCauses
     println("updateRunStage: Build cause: ${buildCauses}")
@@ -94,7 +101,7 @@ void updateRunStage() {
     if (startedByLanding()) {
         println('updateRunStage: Detected landing build, overwriting defaults')
         for (stage in runStage.keySet()) {
-            if (stage in ['Pre-build', 'Python Bandit check', 'Build', 'Unit Tests', 'Test']
+            if (stage in ['Pre-build', 'Python Bandit check', 'Build', 'Unit Tests', 'Test VM']
                     || stage.contains('Build on')
                     || stage.contains('Unit Test')
                     || stage.contains('NLT')
@@ -115,7 +122,7 @@ void updateRunStage() {
     if (docOnlyChange(target_branch)) {
         println('updateRunStage: Detected doc-only change, skipping testing')
         for (stage in runStage.keySet()) {
-            if (stage in ['Unit Tests', 'Test', 'Test Hardware']) {
+            if (stage in ['Unit Tests', 'Test VM', 'Test Hardware']) {
                 runStage[stage] = false
                 reasons[stage] = 'doc-only change'
             }
@@ -293,10 +300,12 @@ List<String> getStageNameSkipPragmas(String stageName) {
         if (stagePragma.contains('-with-')) {
             pragmas.add(stagePragma.replace('-with-', '-'))
         }
-    } else if (stageName == 'Test' || stageName.contains('Functional on')
+    } else if (stageName == 'Test VM' || stageName.contains('Functional on')
             || stageName.contains('Fault injection') || stageName.contains('Test RPMs')) {
         // Add skip pragma for parent stage
-        if (stageName != 'Test') {
+        if (stageName != 'Test VM') {
+            pragmas.add('skip-test-vm')
+            // Compatibility with existing commit pragmas
             pragmas.add('skip-test')
         }
         if (stageName.contains('Functional on')) {
@@ -317,6 +326,10 @@ List<String> getStageNameSkipPragmas(String stageName) {
         }
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
+        if (stageName == 'Test VM') {
+            // Compatibility with existing commit pragmas
+            pragmas.add('skip-test')
+        }
     } else if (stageName.contains('Hardware') || stageName.contains('Cluster Box')) {
         // Add skip pragma for parent stage
         if (stageName != 'Test Hardware') {
@@ -377,6 +390,10 @@ void setupRunStage() {
 Boolean shouldStageRun(String name) {
     if (!runStage) {
         setupRunStage()
+    }
+    if (!runStage.containsKey(name)) {
+        echo("shouldStageRun: '${name}' is not a known stage run state, treating as false")
+        return false
     }
     return runStage[name]
 }
@@ -609,9 +626,9 @@ pipeline {
         booleanParam(name: bashName('Unit Test bdev with memcheck'),
                      defaultValue: false,
                      description: 'Run the Unit Test bdev with memcheck stage.')
-        booleanParam(name: bashName('Test'),
+        booleanParam(name: bashName('Test VM'),
                      defaultValue: true,
-                     description: 'Run the Test stage.')
+                     description: 'Run the VM test stages under the Tests stage.')
         booleanParam(name: bashName('Functional on EL 9 with Valgrind'),
                      defaultValue: false,
                      description: 'Run the Functional on EL 9 with Valgrind stage.')
@@ -638,7 +655,7 @@ pipeline {
                      description: 'Run the Test RPMs on Leap 15 stage.')
         booleanParam(name: bashName('Test Hardware'),
                      defaultValue: true,
-                     description: 'Run the Test Hardware stage.')
+                     description: 'Run the hardware test stages under the Tests stage.')
         booleanParam(name: bashName('Functional Hardware Medium'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium stage.')
@@ -1101,12 +1118,12 @@ pipeline {
         stage('Tests') {
             steps {
                 script {
-                    Boolean runVmTests = shouldStageRun('Test')
+                    Boolean runVmTests = shouldStageRun('Test VM')
                     Boolean runHardwareTests = shouldStageRun('Test Hardware')
                     parallel(
                         'Test RPMs on EL 9': scriptedTestRpmStage(
                             name: 'Test RPMs on EL 9',
-                            runStage: shouldStageRun('Test RPMs on EL 9'),
+                            runStage: runVmTests && shouldStageRun('Test RPMs on EL 9'),
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
                             testRpmArgs: [
@@ -1120,7 +1137,7 @@ pipeline {
                         ),
                         'Test RPMs on Leap 15': scriptedTestRpmStage(
                             name: 'Test RPMs on Leap 15',
-                            runStage: shouldStageRun('Test RPMs on Leap 15'),
+                            runStage: runVmTests && shouldStageRun('Test RPMs on Leap 15'),
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
                             testRpmArgs: [
