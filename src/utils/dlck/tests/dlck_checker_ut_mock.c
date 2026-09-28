@@ -19,10 +19,11 @@
 struct dlck_checker_main Dcm;
 struct dlck_checker_worker Dcw;
 const ABT_mutex Mock_mutex_handle = (ABT_mutex)(uintptr_t)0x1234;
+int mock_d_calloc_enabled;
 int mock_vfprintf_enabled;
 int mock_vfprintf_check_args;
 int mock_fflush_enabled;
-int mock_fopen_fake_stream;
+int mock_fopen_fake_stream_enable;
 static FILE *const Mock_file_stream = (FILE *)(uintptr_t)0x5678;
 
 void *__real_d_calloc(size_t nmemb, size_t size);
@@ -32,24 +33,31 @@ int __real_fclose(FILE *stream);
 int __real_vfprintf(FILE *stream, const char *fmt, va_list args);
 int __real_fflush(FILE *stream);
 
+void
+expect_checker_d_calloc(size_t size, void *payload)
+{
+	mock_d_calloc_enabled = 1;
+	expect_value(__wrap_d_calloc, nmemb, 1);
+	expect_value(__wrap_d_calloc, size, size);
+	will_return(__wrap_d_calloc, payload);
+}
+
 void *
 __wrap_d_calloc(size_t nmemb, size_t size)
 {
-	if (size == sizeof(Dcm)) {
-		int rc = mock_type(int);
+	if (mock_d_calloc_enabled != 0) {
+		void *payload;
 
-		if (rc != 0)
+		mock_d_calloc_enabled = 0;
+		check_expected(nmemb);
+		check_expected(size);
+		payload = mock_ptr_type(void *);
+		if (payload == NULL)
 			return NULL;
-		memset(&Dcm, 0, sizeof(Dcm));
-		return &Dcm;
-	}
-	if (size == sizeof(Dcw)) {
-		int rc = mock_type(int);
-
-		if (rc != 0)
-			return NULL;
-		memset(&Dcw, 0, sizeof(Dcw));
-		return &Dcw;
+		assert_true((payload == &Dcm && size == sizeof(Dcm)) ||
+			    (payload == &Dcw && size == sizeof(Dcw)));
+		memset(payload, 0, size);
+		return payload;
 	}
 
 	return __real_d_calloc(nmemb, size);
@@ -90,8 +98,8 @@ __wrap_fopen(const char *path, const char *mode)
 {
 	int error = mock_type(int);
 
-	if (mock_fopen_fake_stream != 0) {
-		mock_fopen_fake_stream = 0;
+	if (mock_fopen_fake_stream_enable != 0) {
+		mock_fopen_fake_stream_enable = 0;
 		return Mock_file_stream;
 	}
 	if (error != 0) {

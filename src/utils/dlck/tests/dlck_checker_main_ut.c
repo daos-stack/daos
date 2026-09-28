@@ -28,14 +28,17 @@
 static void
 test_setup(void)
 {
+	mock_d_calloc_enabled = 0;
+	mock_fopen_fake_stream_enable = 0;
 	mock_vfprintf_enabled = 0;
+	mock_vfprintf_check_args = 0;
 	mock_fflush_enabled = 0;
 }
 
 static void
 init_checker(struct checker *ck)
 {
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcm), &Dcm);
 	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
@@ -48,7 +51,7 @@ test_main_init_success(void **state)
 {
 	struct checker *ck = *state;
 
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcm), &Dcm);
 	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
@@ -74,7 +77,7 @@ test_main_init_mutex_create_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcm), &Dcm);
 	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_ERR_OTHER);
 	expect_value(__wrap_d_free, ptr, &Dcm);
@@ -242,7 +245,7 @@ test_main_init_alloc_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	will_return(__wrap_d_calloc, ENOMEM);
+	expect_checker_d_calloc(sizeof(Dcm), NULL);
 	assert_int_equal(dlck_checker_main_init(ck), -DER_NOMEM);
 	assert_null(ck->ck_private);
 }

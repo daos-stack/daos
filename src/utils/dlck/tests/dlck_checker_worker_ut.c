@@ -28,14 +28,18 @@ setup(void **state)
 {
 	*state = calloc(1, sizeof(struct checker));
 	assert_non_null(*state);
-	mock_fopen_fake_stream = 0;
+	mock_d_calloc_enabled = 0;
+	mock_vfprintf_enabled = 0;
+	mock_vfprintf_check_args = 0;
+	mock_fflush_enabled = 0;
+	mock_fopen_fake_stream_enable = 0;
 	return 0;
 }
 
 static int
 setup_main_checker(struct checker *ck)
 {
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcm), &Dcm);
 	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
@@ -64,7 +68,7 @@ test_worker_init_success(void **state)
 
 	assert_non_null(mkdtemp(log_dir));
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, 0);
 	assert_int_equal(dlck_checker_worker_init(&options, log_dir, pool_uuid, 3, NULL, ck), DER_SUCCESS);
@@ -98,7 +102,7 @@ test_worker_init_log_open_failure(void **state)
 	uuid_t                  pool_uuid;
 
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, EIO);
 	expect_value(__wrap_d_free, ptr, &Dcw);
@@ -116,7 +120,7 @@ test_worker_init_log_path_alloc_failure(void **state)
 	uuid_t                  pool_uuid;
 
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, ENOMEM);
 	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
@@ -135,7 +139,7 @@ test_worker_init_log_path_alloc_failure_with_main_checker(void **state)
 
 	setup_main_checker(&main_ck);
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, ENOMEM);
 	expect_value(__wrap_d_free, ptr, &Dcw);
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
@@ -157,7 +161,7 @@ test_worker_init_alloc_failure(void **state)
 	uuid_t                  pool_uuid;
 
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, ENOMEM);
+	expect_checker_d_calloc(sizeof(Dcw), NULL);
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 			 -DER_NOMEM);
 	assert_null(ck->ck_private);
@@ -174,7 +178,7 @@ test_worker_init_alloc_failure_with_main_checker(void **state)
 
 	setup_main_checker(&main_ck);
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, ENOMEM);
+	expect_checker_d_calloc(sizeof(Dcw), NULL);
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, &main_ck, ck),
 			 -DER_NOMEM);
 	assert_null(ck->ck_private);
@@ -192,7 +196,7 @@ test_worker_init_log_open_failure_with_main_checker(void **state)
 
 	setup_main_checker(&main_ck);
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, EIO);
 	expect_value(__wrap_d_free, ptr, &Dcw);
@@ -215,10 +219,10 @@ test_worker_callbacks_success(void **state)
 	uuid_t                  pool_uuid;
 
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, 0);
-	mock_fopen_fake_stream = 1;
+	mock_fopen_fake_stream_enable = 1;
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 			 DER_SUCCESS);
 	ck->ck_level = 2;
@@ -245,10 +249,10 @@ test_worker_printf_with_indent(void **state)
 	uuid_t                  pool_uuid;
 
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, 0);
-	mock_fopen_fake_stream = 1;
+	mock_fopen_fake_stream_enable = 1;
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 			 DER_SUCCESS);
 	ck->ck_level = 2;
@@ -276,10 +280,10 @@ test_worker_vprintf_vfprintf_failure(void **state)
 	uuid_t                  pool_uuid;
 
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, 0);
-	mock_fopen_fake_stream = 1;
+	mock_fopen_fake_stream_enable = 1;
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 			 DER_SUCCESS);
 
@@ -304,7 +308,7 @@ test_worker_vprintf_fflush_failure(void **state)
 
 	uuid_generate(pool_uuid);
 	assert_non_null(mkdtemp(log_dir));
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, 0);
 	assert_int_equal(dlck_checker_worker_init(&options, log_dir, pool_uuid, 0, NULL, ck), DER_SUCCESS);
@@ -333,10 +337,10 @@ test_worker_get_custom_invalid_magic(void **state)
 	uuid_t                  pool_uuid;
 
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, 0);
-	mock_fopen_fake_stream = 1;
+	mock_fopen_fake_stream_enable = 1;
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck), DER_SUCCESS);
 	Dcw.magic = ~DLCK_CHECKER_WORKER_MAGIC;
 	expect_assert_failure(dlck_checker_worker_fini(ck));
@@ -354,10 +358,10 @@ test_worker_indent_set_out_of_range(void **state)
 	uuid_t                  pool_uuid;
 
 	uuid_generate(pool_uuid);
-	will_return(__wrap_d_calloc, 0);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, 0);
-	mock_fopen_fake_stream = 1;
+	mock_fopen_fake_stream_enable = 1;
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 			 DER_SUCCESS);
 

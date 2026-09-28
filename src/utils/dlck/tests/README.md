@@ -47,7 +47,7 @@ For each case, arrange the inputs and CMocka expectations, call the production
 entry point once, then assert its return, outputs, state, and resource ownership.
 Queue only values that the path will consume; extra `will_return()` values or
 unchecked expectations fail the test. Use `setup`/`teardown` for common fixtures
-and reset mock flags and tracked pointers before each case. Register cases in a
+and reset mock flags before each case. Register cases in a
 `CMUnitTest` array with `cmocka_run_group_tests_name()`. Keep descriptive IDs
 sequential in execution order if the suite uses them; `cmocka_unit_test()` without
 numbered IDs is also valid.
@@ -60,11 +60,13 @@ numbered IDs is also valid.
   the wrapper delegates. Keep the production source in the same test target;
   linker wrapping does not replace calls already compiled into another binary.
 2. Model a return with `will_return(__wrap_<symbol>, value)` in the test and
-  `mock_type(type)` in the wrapper. Queue one result per wrapper invocation,
-  including those in initialization and cleanup. Use distinct return values
-  for success and failure paths, and set `errno` in an I/O wrapper when the
-  code under test reads it. Do not use global flags in place of CMocka return
-  queues unless a wrapper needs to switch between real and mocked behavior.
+  `mock_type(type)` in the wrapper. For pointer-returning mocks, use
+  `mock_ptr_type(type)` and queue the exact pointer (or `NULL`) from the test.
+  Queue one result per wrapper invocation, including initialization and
+  cleanup calls. Use distinct returns for success and failure paths, and set
+  `errno` in an I/O wrapper when the code under test reads it. Do not use
+  global flags instead of CMocka queues unless a wrapper must switch between
+  real and mocked behavior.
 3. Check an argument with `expect_value(__wrap_<symbol>, parameter, expected)`
   and `check_expected_ptr(parameter)` in the wrapper for pointer-like values.
   For strings, use `expect_string()` and `check_expected()`; for numeric values,
@@ -98,7 +100,7 @@ numbered IDs is also valid.
      causes an unexpected or missing free to fail the case:
 
   ```c
-  will_return(__wrap_d_calloc, 0);
+  expect_checker_d_calloc(sizeof(Dcm), &Dcm);
   expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
   will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
   assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
@@ -111,15 +113,40 @@ numbered IDs is also valid.
   assert_null(ck->ck_private);
   ```
 
-  Queue the free expectation for failure paths that release an allocated
-  payload as well. If the operation should not free a payload, do not queue an
-  expectation; an unexpected tracked-payload free then fails in the wrapper.
-  This verifies the free call and pointer, not general leak freedom.
+  `expect_checker_d_calloc()` is a shared test helper: it expects `nmemb == 1`
+  and the requested size, then queues the pointer returned by the calloc
+  wrapper. Pass `NULL` to test allocation failure. Queue the free expectation
+  for failure paths that release an allocated payload as well. If the
+  operation should not free a payload, do not queue an expectation; an
+  unexpected tracked-payload free then fails in the wrapper. This verifies
+  the free call and pointer, not general leak freedom.
 5. For pass-through wrappers such as `d_calloc`, delegate unrelated calls to
   `__real_d_calloc`; otherwise a broad wrapper can break library setup. Share
   wrappers between suites only if they have the same contract, as in
   `dlck_checker_ut_mock.c`. Keep special fake-resource modes opt-in and reset
   them for each test.
+
+  The checker calloc wrapper is armed explicitly by `expect_checker_d_calloc()`
+  through `mock_d_calloc_enabled`. It intercepts exactly the next `d_calloc`
+  call, checks the queued arguments, and returns the queued payload; all other
+  calls go to `__real_d_calloc` regardless of allocation size. The fopen fake
+  stream uses the same one-shot pattern through `mock_fopen_fake_stream_enable`.
+  Reset these flags in suite setup, and queue the wrapper return expected by
+  each call even when the fake stream is selected.
+
+The shared checker mock flags control these behaviors:
+
+- `mock_d_calloc_enabled` arms `expect_checker_d_calloc()` for one allocation.
+- `mock_fopen_fake_stream_enable` makes the next `fopen` return the sentinel
+  stream; `__wrap_fclose` recognizes that sentinel.
+- `mock_vfprintf_enabled` makes the next `vfprintf` consume its queued result.
+- `mock_vfprintf_check_args` additionally checks the expected format string and
+  formatted arguments during that mocked `vfprintf` call.
+- `mock_fflush_enabled` makes the next `fflush` consume its queued result.
+
+The one-shot flags clear when their corresponding wrapper path runs. Reset all
+flags in each suite's setup as well, so a failed or interrupted case cannot
+affect the next test.
 
 For error injection, the checker mocks demonstrate `fopen` setting `errno`,
 `vfprintf`/`fflush` controlling print failures, and ABT mutex functions returning
