@@ -18,7 +18,7 @@
 #include <daos/common.h>
 #include <daos_types.h>
 #include <daos/placement.h>
-#include <daos_srv/checker.h>
+#include <daos/checker.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
@@ -1348,17 +1348,14 @@ vos_iter_validate(daos_handle_t ih);
 /**
  * Check an iterator.
  *
- * \param[in] ih			Iterator handle.
- * \param[in] report_fn			Report function.
- * \param[in] report_arg		Argument for the report function.
- * \param[in] error_on_non_zero_padding	Trigger an error on non-zero padding.
+ * \param[in] ih	Iterator handle.
+ * \param[in] ck	Checker.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Errors returned by the iterator check.
  */
 int
-vos_iter_check(daos_handle_t ih, report_fn_t report_fn, void *report_arg,
-	       bool error_on_non_zero_padding);
+vos_iter_check(daos_handle_t ih, struct checker *ck);
 
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
