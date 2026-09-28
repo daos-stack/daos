@@ -261,15 +261,30 @@ func startSysDB(t *testing.T, ctx context.Context, log logging.Logger, replicas 
 		t.Fatal(err)
 	}
 
-	// wait for the bootstrap to finish
+	// wait for the bootstrap to finish with a 5-second timeout
+	// (test databases use fast election timeouts)
+	leaderCtx, leaderCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer leaderCancel()
+
 	for {
+		select {
+		case <-leaderCtx.Done():
+			db.Stop()
+			cleanup()
+			t.Fatalf("failed to elect leader: %v", leaderCtx.Err())
+		default:
+		}
+
 		if leader, _, _ := db.LeaderQuery(); leader != "" {
 			break
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
 
-	return cleanup
+	return func() {
+		db.Stop()
+		cleanup()
+	}
 }
 
 func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
@@ -385,7 +400,7 @@ func TestServer_MgmtSvc_ClusterEvent(t *testing.T) {
 				}
 			}
 
-			gotResp, gotErr := svc.ClusterEvent(test.Context(t), pbReq)
+			gotResp, gotErr := svc.ClusterEvent(ctx, pbReq)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1461,7 +1476,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				req = nil
 			}
 
-			gotResp, gotErr := svc.SystemQuery(test.Context(t), req)
+			gotResp, gotErr := svc.SystemQuery(ctx, req)
 			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 			if tc.expErrMsg != "" {
 				return
@@ -1767,6 +1782,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
+			defer ps.Close()
 			svc.events = ps
 
 			subscriber := newMockSubscriber(1)
@@ -1775,7 +1791,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
-			gotResp, gotAPIErr := svc.SystemStart(test.Context(t), tc.req)
+			gotResp, gotAPIErr := svc.SystemStart(ctx, tc.req)
 			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
 			if tc.expAPIErr != nil {
 				return
@@ -2128,6 +2144,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 
 			ps := events.NewPubSub(ctx, log)
 			svc.events = ps
+			defer ps.Close()
 
 			subscriber := newMockSubscriber(1)
 			svc.events.Subscribe(events.RASTypeInfoOnly, subscriber)
@@ -2135,7 +2152,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
-			gotResp, gotAPIErr := svc.SystemStop(test.Context(t), tc.req)
+			gotResp, gotAPIErr := svc.SystemStop(ctx, tc.req)
 			test.CmpErr(t, tc.expAPIErr, gotAPIErr)
 			if tc.expAPIErr != nil {
 				return
@@ -2734,8 +2751,19 @@ func TestServer_MgmtSvc_SystemDrain(t *testing.T) {
 				tc.replica = common.LocalhostCtrlAddr()
 			}
 
+			// To test with multiple different IP addresses we need a more relaxed mock
+			// than the existing mockTCPResolver.
+			mockResolver := func(netString string, address string) (*net.TCPAddr, error) {
+				if netString != "tcp" {
+					return nil, errors.Errorf("unexpected network type in test: %s, want 'tcp'",
+						netString)
+				}
+				addr := strings.Split(address, ":")[0]
+				return &net.TCPAddr{IP: net.ParseIP(addr), Port: 10001}, nil
+			}
+
 			db := raft.MockDatabaseWithAddr(t, log, tc.replica)
-			ms := system.NewMembership(log, db)
+			ms := system.NewMembership(log, db).WithTCPResolver(mockResolver)
 			svc := newMgmtSvc(harness, ms, db, nil, nil)
 			for _, m := range tc.members {
 				if _, err := svc.membership.Add(m); err != nil {
