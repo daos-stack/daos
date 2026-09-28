@@ -28,17 +28,13 @@
 static void
 test_setup(void)
 {
-	mock_d_calloc_enabled = 0;
-	mock_fopen_fake_stream_enable = 0;
-	mock_vfprintf_enabled = 0;
 	mock_vfprintf_check_args = 0;
-	mock_fflush_enabled = 0;
 }
 
 static void
 init_checker(struct checker *ck)
 {
-	expect_checker_d_calloc(sizeof(Dcm), &Dcm);
+	EXPECT_CHECKER_D_CALLOC(Dcm);
 	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
@@ -51,7 +47,7 @@ test_main_init_success(void **state)
 {
 	struct checker *ck = *state;
 
-	expect_checker_d_calloc(sizeof(Dcm), &Dcm);
+	EXPECT_CHECKER_D_CALLOC(Dcm);
 	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
@@ -77,7 +73,7 @@ test_main_init_mutex_create_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	expect_checker_d_calloc(sizeof(Dcm), &Dcm);
+	EXPECT_CHECKER_D_CALLOC(Dcm);
 	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_ERR_OTHER);
 	expect_value(__wrap_d_free, ptr, &Dcm);
@@ -91,9 +87,7 @@ test_vprintf_vfprintf_positive(void **state)
 {
 	struct checker *ck = *state;
 
-	mock_vfprintf_enabled = 1;
 	mock_vfprintf_check_args = 1;
-	mock_fflush_enabled = 1;
 	expect_string(__wrap_vfprintf, fmt, "main %d: %s");
 	expect_string(__wrap_vfprintf, output, "main 42: ready");
 	will_return(__wrap_vfprintf, 1);
@@ -111,7 +105,6 @@ test_vprintf_vfprintf_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	mock_vfprintf_enabled = 1;
 	will_return(__wrap_vfprintf, -1);
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
@@ -126,8 +119,6 @@ test_vprintf_fflush_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	mock_vfprintf_enabled = 1;
-	mock_fflush_enabled = 1;
 	will_return(__wrap_vfprintf, 1);
 	will_return(__wrap_fflush, EIO);
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
@@ -154,8 +145,6 @@ test_main_vprintf_unlock_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	mock_vfprintf_enabled = 1;
-	mock_fflush_enabled = 1;
 	will_return(__wrap_vfprintf, 1);
 	will_return(__wrap_fflush, 0);
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);

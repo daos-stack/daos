@@ -17,19 +17,12 @@ extern struct dlck_checker_main Dcm;
 extern struct dlck_checker_worker Dcw;
 /* Sentinel handle installed and checked by the ABT mutex mocks. */
 extern const ABT_mutex Mock_mutex_handle;
-/* Arms the next d_calloc call to return the payload queued by expect_checker_d_calloc(). */
-extern int mock_d_calloc_enabled;
-/* Makes the next vfprintf call consume its queued mock result. */
-extern int mock_vfprintf_enabled;
+extern FILE *const                Mock_file_stream;
 /* Checks format and rendered arguments during the next mocked vfprintf call. */
-extern int mock_vfprintf_check_args;
-/* Makes the next fflush call consume its queued mock result. */
-extern int mock_fflush_enabled;
-/* Makes the next fopen call return the fake stream instead of opening a file. */
-extern int mock_fopen_fake_stream_enable;
+extern int                        mock_vfprintf_check_args;
 
 /* Queue expectations for a checker payload allocation; NULL simulates failure. */
 void expect_checker_d_calloc(size_t size, void *payload);
-
+#define EXPECT_CHECKER_D_CALLOC(payload) expect_checker_d_calloc(sizeof(payload), &(payload))
 
 #endif /* __DLCK_CHECKER_UT_MOCK_H__ */

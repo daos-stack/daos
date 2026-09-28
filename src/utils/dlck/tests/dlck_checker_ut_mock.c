@@ -19,25 +19,14 @@
 struct dlck_checker_main Dcm;
 struct dlck_checker_worker Dcw;
 const ABT_mutex Mock_mutex_handle = (ABT_mutex)0x1234;
-int mock_d_calloc_enabled;
-int mock_vfprintf_enabled;
+FILE *const                Mock_file_stream  = (FILE *)0x5678;
 int mock_vfprintf_check_args;
-int mock_fflush_enabled;
-int mock_fopen_fake_stream_enable;
-static FILE *const Mock_file_stream = (FILE *)0x5678;
-
-void *__real_d_calloc(size_t nmemb, size_t size);
-void __real_d_free(void *ptr);
-FILE *__real_fopen(const char *path, const char *mode);
-int __real_fclose(FILE *stream);
-int __real_vfprintf(FILE *stream, const char *fmt, va_list args);
-int __real_fflush(FILE *stream);
+static char                Mock_log_file[] = "mock-vos-log";
 
 /* helper functions for setting up and handling mocked checker allocations */
 void
 expect_checker_d_calloc(size_t size, void *payload)
 {
-	mock_d_calloc_enabled = 1;
 	expect_value(__wrap_d_calloc, nmemb, 1);
 	expect_value(__wrap_d_calloc, size, size);
 	will_return(__wrap_d_calloc, payload);
@@ -47,22 +36,17 @@ expect_checker_d_calloc(size_t size, void *payload)
 void *
 __wrap_d_calloc(size_t nmemb, size_t size)
 {
-	if (mock_d_calloc_enabled != 0) {
-		void *payload;
+	void *payload;
 
-		mock_d_calloc_enabled = 0;
-		check_expected(nmemb);
-		check_expected(size);
-		payload = mock_ptr_type(void *);
-		if (payload == NULL)
-			return NULL;
-		assert_true((payload == &Dcm && size == sizeof(Dcm)) ||
-			    (payload == &Dcw && size == sizeof(Dcw)));
-		memset(payload, 0, size);
-		return payload;
-	}
-
-	return __real_d_calloc(nmemb, size);
+	check_expected(nmemb);
+	check_expected(size);
+	payload = mock_ptr_type(void *);
+	if (payload == NULL)
+		return NULL;
+	assert_true((payload == &Dcm && size == sizeof(Dcm)) ||
+		    (payload == &Dcw && size == sizeof(Dcw)));
+	memset(payload, 0, size);
+	return payload;
 }
 
 void
@@ -72,27 +56,24 @@ __wrap_d_free(void *ptr)
 		check_expected_ptr(ptr);
 		return;
 	}
-	__real_d_free(ptr);
+	if (ptr == Mock_log_file)
+		return;
+	fail_msg("Unexpected d_free(%p)", ptr);
 }
 
 char *
 __wrap_d_asprintf2(int *rc, const char *fmt, ...)
 {
-	char   *buf = NULL;
-	va_list args;
-	int     mock_rc = mock_type(int);
+	int mock_rc = mock_type(int);
 
-	if (mock_rc != 0) {
+	(void)fmt;
+	if (mock_rc == -1) {
 		*rc = -1;
 		return NULL;
 	}
 
-	va_start(args, fmt);
-	*rc = vasprintf(&buf, fmt, args);
-	va_end(args);
-	if (*rc == -1)
-		buf = NULL;
-	return buf;
+	*rc = sizeof(Mock_log_file) - 1;
+	return Mock_log_file;
 }
 
 FILE *
@@ -100,23 +81,25 @@ __wrap_fopen(const char *path, const char *mode)
 {
 	int error = mock_type(int);
 
-	if (mock_fopen_fake_stream_enable != 0) {
-		mock_fopen_fake_stream_enable = 0;
-		return Mock_file_stream;
-	}
 	if (error != 0) {
 		errno = error;
 		return NULL;
 	}
-	return __real_fopen(path, mode);
+	assert_string_equal(path, Mock_log_file);
+	assert_string_equal(mode, "w");
+	return Mock_file_stream;
 }
 
 int
 __wrap_fclose(FILE *stream)
 {
-	if (stream == Mock_file_stream)
-		return 0;
-	return __real_fclose(stream);
+	int rc = mock_type(int);
+
+	assert_ptr_equal(stream, Mock_file_stream);
+	function_called();
+	if (rc == EOF)
+		errno = EIO;
+	return rc;
 }
 
 int
@@ -165,46 +148,34 @@ __wrap_ABT_mutex_unlock(ABT_mutex mutex)
 int
 __wrap_vfprintf(FILE *stream, const char *fmt, va_list args)
 {
-	if (mock_vfprintf_enabled != 0) {
-		int rc = mock_type(int);
+	int rc = mock_type(int);
 
-		(void)stream;
-		if (mock_vfprintf_check_args != 0) {
-			char    output[128];
-			va_list copy;
-			int     length;
+	(void)stream;
+	if (mock_vfprintf_check_args != 0) {
+		char    output[128];
+		va_list copy;
+		int     length;
 
-			mock_vfprintf_check_args = 0;
-			check_expected(fmt);
-			va_copy(copy, args);
-			length = vsnprintf(output, sizeof(output), fmt, copy);
-			va_end(copy);
-			assert_true(length >= 0 && length < sizeof(output));
-			check_expected(output);
-		}
-		mock_vfprintf_enabled = 0;
-		if (rc < 0)
-			errno = EIO;
-		return rc;
+		mock_vfprintf_check_args = 0;
+		check_expected(fmt);
+		va_copy(copy, args);
+		length = vsnprintf(output, sizeof(output), fmt, copy);
+		va_end(copy);
+		assert_true(length >= 0 && length < sizeof(output));
+		check_expected(output);
 	}
 
-	return __real_vfprintf(stream, fmt, args);
+	if (rc < 0)
+		errno = EIO;
+	return rc;
 }
 
 int
 __wrap_fflush(FILE *stream)
 {
-	if (mock_fflush_enabled != 0) {
-		int error = mock_type(int);
+	int error = mock_type(int);
 
-		(void)stream;
-		mock_fflush_enabled = 0;
-		if (error != 0) {
-			errno = error;
-			return EOF;
-		}
-		return 0;
-	}
-
-	return __real_fflush(stream);
+	(void)stream;
+	errno = error;
+	return error != 0 ? EOF : 0;
 }
