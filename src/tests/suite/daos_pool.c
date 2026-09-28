@@ -2148,27 +2148,29 @@ label_strings_test(void **state)
 {
 	int		 i;
 	test_arg_t	*arg = *state;
-	const char      *valid_labels[] = {
-            "mypool",
-            "my_pool",
-            "MyPool",
-            "MyPool_2",
-            "cae61c0752f54874ad213c0ec43005cb",
-            "bash",
-            "Pool_ProjectA:Team42",
-            "ProjectA.TeamOne",
-            "server42.fictionaldomaincae61c07.org",
-            "0ABC",
-            "0xDA0S1234",
-            "0b101010",
-            /* len=DAOS_PROP_LABEL_MAX_LEN */
-            "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF012345"
-		 "6789ABCDEF0123456789ABCDEF0123456789ABCDE",
-            "a-b-cde",
-            "thiswoul-dntp-arse-asau-uidsoitsfine",
-            "g006b637-c63a-4734-99bc-a71298597de1",
-            "0006b637-c63a-4734-99bc-a71298597de1-clone",
-        };
+	/* clang-format would split the long literal, tripping clang -Wstring-concatenation */
+	/* clang-format off */
+	const char	*valid_labels[] = {
+					   "mypool",
+					   "my_pool",
+					   "MyPool",
+					   "MyPool_2",
+					   "cae61c0752f54874ad213c0ec43005cb",
+					   "bash",
+					   "Pool_ProjectA:Team42",
+					   "ProjectA.TeamOne",
+					   "server42.fictionaldomaincae61c07.org",
+					     "0ABC",
+					     "0xDA0S1234",
+					     "0b101010",
+					     /* len=DAOS_PROP_LABEL_MAX_LEN */
+					     "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDE",
+					     "a-b-cde",
+					     "thiswoul-dntp-arse-asau-uidsoitsfine",
+					     "g006b637-c63a-4734-99bc-a71298597de1",
+					     "0006b637-c63a-4734-99bc-a71298597de1-clone",
+	};
+	/* clang-format on */
 	const char	*invalid_labels[] = {
 					     "",
 					     "no/slashes\\at\\all",
