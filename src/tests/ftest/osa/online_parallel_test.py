@@ -66,6 +66,9 @@ class OSAOnlineParallelTest(OSAUtils):
         try:
             if action == "reintegrate":
                 time.sleep(60)
+                if self.pool.get_rebuild_state() != "busy":
+                    self.log.info("Rebuild is not busy yet; waiting for it to start")
+                    self.pool.wait_for_rebuild_to_start(interval=5)
             # For each action, read the values from the
             # dictionary.
             # example {"exclude" : {"puuid": self.pool, "ranks: rank
