@@ -209,6 +209,9 @@ int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
 			   struct cont_svc **svcp, struct rsvc_hint *hint);
 int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
 		const uuid_t uuid, struct cont **cont);
+int
+     cont_lookup_active(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
+			struct cont **cont);
 void cont_put(struct cont *cont);
 void cont_svc_put_leader(struct cont_svc *svc);
 int
