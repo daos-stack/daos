@@ -3617,12 +3617,11 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 		expResults     []*sharedpb.RankResult
 		expAbsentRanks string
 		expAbsentHosts string
-		expErrMsg      string
 		expErr         error
 	}{
 		"nil req": {
-			nilReq:    true,
-			expErrMsg: "nil request",
+			nilReq: true,
+			expErr: errers.New("nil request"),
 		},
 		"external request on non-leader replica is redirected": {
 			// Simulates an external (e.g. dmg) request landing on a non-leader
@@ -3647,7 +3646,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			forwarded: true,
 			notLeader: true,
 			mResps:    []*control.HostResponse{},
-			expErrMsg: "erasing non-leader ms-replica db: failed to stop system database: no shutdown callback set",
+			expErr:    errors.New("erasing non-leader ms-replica db: failed to stop system database: no shutdown callback set"),
 		},
 		"unfiltered rank results": {
 			members: system.Members{
@@ -3745,12 +3744,8 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.SystemErase(ctx, req)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
-				test.CmpErr(t, tc.expErr, gotErr)
-				return
-			}
-			test.ExpectError(t, gotErr, tc.expErrMsg, name)
-			if tc.expErrMsg != "" {
 				return
 			}
 

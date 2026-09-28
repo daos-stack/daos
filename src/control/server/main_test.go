@@ -37,5 +37,9 @@ func TestMain(m *testing.M) {
 		// entry.
 		goleak.IgnoreTopFunction("github.com/hashicorp/raft.emitLogStoreMetrics"),
 		goleak.IgnoreTopFunction("google.golang.org/grpc.(*Server).Serve"),
+		// execRestart is stubbed out in unit tests that exercise this path, so
+		// the goroutine is harmless but is expected to still be sleeping when
+		// the test binary exits.
+		goleak.IgnoreAnyFunction("github.com/daos-stack/daos/src/control/server.(*mgmtSvc).scheduleControlPlaneRestart.func1"),
 	)
 }

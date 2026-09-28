@@ -752,15 +752,19 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 	// that window callers can see a mix of transient errors: "not leader"/"not
 	// replica" responses while raft re-elects, and connection-refused/reset errors
 	// while the process is mid-exec and its listener is briefly down. All of these
-	// must be retried until the restarted process comes back up and a new leader is
-	// elected, matching the retry behavior used by SystemQuery/SystemJoin/
-	// SystemSelfHealEval for the same MS-unavailability windows.
+	// must be retried (with backoff, via the generic MS retry loop in rpc.go) until
+	// the restarted process comes back up and a new leader is elected, matching the
+	// retry behavior used by SystemQuery/SystemJoin/SystemSelfHealEval for the same
+	// MS-unavailability windows.
+	//
+	// NB: Deliberately no retryFn is set here. Setting one causes rpc.go's retry loop to treat
+	// the very first retryable error as terminal: canRetry() is consulted before the loop's
+	// per-error-type handling, so a non-nil retryFn return aborts immediately instead of
+	// allowing exponential backoff and a resend. Leaving retryFn nil lets onRetry() fall
+	// through (errNoRetryHandler) to that normal backoff-and-retry handling.
 	req.retryTestFn = func(err error, _ uint) bool {
 		return system.IsUnavailable(err) || IsRetryableConnErr(err) ||
 			system.IsNotLeader(err) || system.IsNotReplica(err)
-	}
-	req.retryFn = func(_ context.Context, _ uint) error {
-		return system.ErrRaftUnavail
 	}
 
 	rpcClient.Debugf("DAOS system-erase request: %s", pbUtil.Debug(pbReq))
