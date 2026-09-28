@@ -18,13 +18,13 @@
 
 struct dlck_checker_main Dcm;
 struct dlck_checker_worker Dcw;
-const ABT_mutex Mock_mutex_handle = (ABT_mutex)(uintptr_t)0x1234;
+const ABT_mutex Mock_mutex_handle = (ABT_mutex)0x1234;
 int mock_d_calloc_enabled;
 int mock_vfprintf_enabled;
 int mock_vfprintf_check_args;
 int mock_fflush_enabled;
 int mock_fopen_fake_stream_enable;
-static FILE *const Mock_file_stream = (FILE *)(uintptr_t)0x5678;
+static FILE *const Mock_file_stream = (FILE *)0x5678;
 
 void *__real_d_calloc(size_t nmemb, size_t size);
 void __real_d_free(void *ptr);
@@ -33,6 +33,7 @@ int __real_fclose(FILE *stream);
 int __real_vfprintf(FILE *stream, const char *fmt, va_list args);
 int __real_fflush(FILE *stream);
 
+/* helper functions for setting up and handling mocked checker allocations */
 void
 expect_checker_d_calloc(size_t size, void *payload)
 {
@@ -42,6 +43,7 @@ expect_checker_d_calloc(size_t size, void *payload)
 	will_return(__wrap_d_calloc, payload);
 }
 
+/* mocks */
 void *
 __wrap_d_calloc(size_t nmemb, size_t size)
 {

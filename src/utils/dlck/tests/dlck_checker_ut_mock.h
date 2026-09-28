@@ -31,4 +31,5 @@ extern int mock_fopen_fake_stream_enable;
 /* Queue expectations for a checker payload allocation; NULL simulates failure. */
 void expect_checker_d_calloc(size_t size, void *payload);
 
+
 #endif /* __DLCK_CHECKER_UT_MOCK_H__ */
