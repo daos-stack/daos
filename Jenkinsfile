@@ -40,7 +40,10 @@ String bashName(String name) {
 void updateRunStage() {
     Map reasons = [:]
 
-    // Ordered list of stage names as params.keySet() does not guarantee order
+    // Ordered list of stage names as params.keySet() does not guarantee order.
+    // 'Test VM' and 'Test Hardware' are no longer stages in the pipeline - their children now run
+    // together under the 'Tests' stage - but they are kept here as group names so that the build
+    // parameters and skip commit pragmas can still target the VM and hardware tests separately.
     List<String> stageOrder = [
         'Cancel Previous Builds',
         'Pre-build',
@@ -83,13 +86,6 @@ void updateRunStage() {
             runStage[name] = value
             reasons[name] = 'parameter selection or default'
         }
-    }
-
-    // Compatibility with the previous 'Test' parameter name, which is still what Jenkins has
-    // defined until the first build after this rename lands.
-    if (!runStage.containsKey('Test VM')) {
-        runStage['Test VM'] = params.get('Test', true)
-        reasons['Test VM'] = 'renamed Test parameter'
     }
 
     // Debug
