@@ -28,7 +28,6 @@ setup(void **state)
 {
 	*state = calloc(1, sizeof(struct checker));
 	assert_non_null(*state);
-	last_freed_payload = NULL;
 	mock_fopen_fake_stream = 0;
 	return 0;
 }
@@ -48,6 +47,7 @@ fini_main_checker(struct checker *ck)
 {
 	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
+	expect_value(__wrap_d_free, ptr, &Dcm);
 	return dlck_checker_main_fini(ck);
 }
 
@@ -82,9 +82,9 @@ test_worker_init_success(void **state)
 	assert_int_equal(stat(log_file, &log_stat), 0);
 	assert_int_equal(ck->ck_level, 0);
 
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	dlck_checker_worker_fini(ck);
 	assert_null(ck->ck_private);
-	assert_ptr_equal(last_freed_payload, &Dcw);
 	assert_int_equal(unlink(log_file), 0);
 	assert_int_equal(rmdir(log_dir), 0);
 }
@@ -101,10 +101,10 @@ test_worker_init_log_open_failure(void **state)
 	will_return(__wrap_d_calloc, 0);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, EIO);
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 			 daos_errno2der(EIO));
 	assert_null(ck->ck_private);
-	assert_ptr_equal(last_freed_payload, &Dcw);
 }
 
 /* worker init: logfile path formatting returns an allocation error. */
@@ -118,10 +118,10 @@ test_worker_init_log_path_alloc_failure(void **state)
 	uuid_generate(pool_uuid);
 	will_return(__wrap_d_calloc, 0);
 	will_return(__wrap_d_asprintf2, ENOMEM);
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 			 -DER_NOMEM);
 	assert_null(ck->ck_private);
-	assert_ptr_equal(last_freed_payload, &Dcw);
 }
 
 /* worker init: path allocation failure is reported using main checker. */
@@ -137,6 +137,7 @@ test_worker_init_log_path_alloc_failure_with_main_checker(void **state)
 	uuid_generate(pool_uuid);
 	will_return(__wrap_d_calloc, 0);
 	will_return(__wrap_d_asprintf2, ENOMEM);
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
 	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
@@ -144,7 +145,6 @@ test_worker_init_log_path_alloc_failure_with_main_checker(void **state)
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, &main_ck, ck),
 			 -DER_NOMEM);
 	assert_null(ck->ck_private);
-	assert_ptr_equal(last_freed_payload, &Dcw);
 	assert_int_equal(fini_main_checker(&main_ck), DER_SUCCESS);
 }
 
@@ -161,7 +161,6 @@ test_worker_init_alloc_failure(void **state)
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 			 -DER_NOMEM);
 	assert_null(ck->ck_private);
-	assert_null(last_freed_payload);
 }
 
 /* worker init: payload allocation failure returns before main checker reporting. */
@@ -179,7 +178,6 @@ test_worker_init_alloc_failure_with_main_checker(void **state)
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, &main_ck, ck),
 			 -DER_NOMEM);
 	assert_null(ck->ck_private);
-	assert_ptr_equal(last_freed_payload, NULL);
 	assert_int_equal(fini_main_checker(&main_ck), DER_SUCCESS);
 }
 
@@ -197,6 +195,7 @@ test_worker_init_log_open_failure_with_main_checker(void **state)
 	will_return(__wrap_d_calloc, 0);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, EIO);
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
 	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
@@ -204,7 +203,6 @@ test_worker_init_log_open_failure_with_main_checker(void **state)
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, &main_ck, ck),
 			 daos_errno2der(EIO));
 	assert_null(ck->ck_private);
-	assert_ptr_equal(last_freed_payload, &Dcw);
 	assert_int_equal(fini_main_checker(&main_ck), DER_SUCCESS);
 }
 
@@ -235,8 +233,8 @@ test_worker_callbacks_success(void **state)
 	will_return(__wrap_fflush, 0);
 	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"), DER_SUCCESS);
 
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	dlck_checker_worker_fini(ck);
-	assert_ptr_equal(last_freed_payload, &Dcw);
 }
 
 static void
@@ -265,6 +263,7 @@ test_worker_printf_with_indent(void **state)
 	will_return(__wrap_fflush, 0);
 	CK_PRINTF(ck, "worker %d", 42);
 
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	dlck_checker_worker_fini(ck);
 }
 
@@ -288,6 +287,7 @@ test_worker_vprintf_vfprintf_failure(void **state)
 	will_return(__wrap_vfprintf, -1);
 	assert_int_equal(ck_common_printf(ck, "worker"), daos_errno2der(EIO));
 
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	dlck_checker_worker_fini(ck);
 }
 
@@ -317,6 +317,7 @@ test_worker_vprintf_fflush_failure(void **state)
 
 	snprintf(log_file, sizeof(log_file), "%s/" DF_UUIDF "_%s%d", log_dir, DP_UUID(pool_uuid),
 		 VOS_FILE, 0);
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	dlck_checker_worker_fini(ck);
 	assert_int_equal(stat(log_file, &log_stat), 0);
 	assert_int_equal(unlink(log_file), 0);
@@ -340,8 +341,8 @@ test_worker_get_custom_invalid_magic(void **state)
 	Dcw.magic = ~DLCK_CHECKER_WORKER_MAGIC;
 	expect_assert_failure(dlck_checker_worker_fini(ck));
 	Dcw.magic = DLCK_CHECKER_WORKER_MAGIC;
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	dlck_checker_worker_fini(ck);
-	assert_ptr_equal(last_freed_payload, &Dcw);
 }
 
 /* worker indent callback: negative and above-maximum levels assert. */
@@ -366,8 +367,8 @@ test_worker_indent_set_out_of_range(void **state)
 	expect_assert_failure(ck->ck_indent_set(ck));
 
 	ck->ck_level = 0;
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	dlck_checker_worker_fini(ck);
-	assert_ptr_equal(last_freed_payload, &Dcw);
 }
 
 static int

@@ -19,7 +19,6 @@
 struct dlck_checker_main Dcm;
 struct dlck_checker_worker Dcw;
 const ABT_mutex Mock_mutex_handle = (ABT_mutex)(uintptr_t)0x1234;
-void *last_freed_payload;
 int mock_vfprintf_enabled;
 int mock_vfprintf_check_args;
 int mock_fflush_enabled;
@@ -60,7 +59,7 @@ void
 __wrap_d_free(void *ptr)
 {
 	if (ptr == &Dcm || ptr == &Dcw) {
-		last_freed_payload = ptr;
+		check_expected_ptr(ptr);
 		return;
 	}
 	__real_d_free(ptr);

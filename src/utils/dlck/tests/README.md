@@ -91,11 +91,11 @@ numbered IDs is also valid.
      The test queues `expect_value(__wrap_ABT_mutex_create, newmutex,
      &Dcm.stream_mutex)` and `will_return(__wrap_ABT_mutex_create, ABT_SUCCESS)`
      before invoking the code under test. Queue an error instead to exercise
-     creation failure; assert the mapped error, unchanged checker state, and
-     `assert_ptr_equal(last_freed_payload, &Dcm)` after cleanup.
-4. Track cleanup explicitly. For example, the checker allocation wrapper
-  returns `&Dcm` on success and its free wrapper stores the pointer in
-  `last_freed_payload`. A test can then assert the payload was released:
+    creation failure; assert the mapped error and unchanged checker state.
+  4. Verify cleanup at the call boundary. Have the tracked-payload free wrapper
+     call `check_expected_ptr(ptr)`, then queue the expected pointer before the
+     operation that should free it. This checks the actual free argument and
+     causes an unexpected or missing free to fail the case:
 
   ```c
   will_return(__wrap_d_calloc, 0);
@@ -106,14 +106,15 @@ numbered IDs is also valid.
 
   expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
   will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
+  expect_value(__wrap_d_free, ptr, &Dcm);
   assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
   assert_null(ck->ck_private);
-  assert_ptr_equal(last_freed_payload, &Dcm);
   ```
 
-  Reset `last_freed_payload` before the test. For an allocation-failure path,
-  assert it stays `NULL` if no payload was allocated. This pointer check
-  proves that the tracked free happened; it is not a general leak detector.
+  Queue the free expectation for failure paths that release an allocated
+  payload as well. If the operation should not free a payload, do not queue an
+  expectation; an unexpected tracked-payload free then fails in the wrapper.
+  This verifies the free call and pointer, not general leak freedom.
 5. For pass-through wrappers such as `d_calloc`, delegate unrelated calls to
   `__real_d_calloc`; otherwise a broad wrapper can break library setup. Share
   wrappers between suites only if they have the same contract, as in
