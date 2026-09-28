@@ -36,6 +36,46 @@ setup(void **state)
 	return 0;
 }
 
+static int
+setup_worker_checker(void **state)
+{
+	struct checker         *ck;
+	struct checker_options  options = {0};
+	uuid_t                  pool_uuid;
+	int                     rc;
+
+	rc = setup(state);
+	if (rc != 0)
+		return rc;
+
+	ck = *state;
+	uuid_generate(pool_uuid);
+	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
+	will_return(__wrap_d_asprintf2, 0);
+	will_return(__wrap_fopen, 0);
+	mock_fopen_fake_stream_enable = 1;
+	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
+			 DER_SUCCESS);
+	return 0;
+}
+
+static int
+teardown(void **state)
+{
+	free(*state);
+	return 0;
+}
+
+static int
+teardown_worker_checker(void **state)
+{
+	struct checker *ck = *state;
+
+	expect_value(__wrap_d_free, ptr, &Dcw);
+	dlck_checker_worker_fini(ck);
+	return teardown(state);
+}
+
 /* worker init: valid options create a logfile and install callbacks. */
 static void
 test_worker_init_success(void **state)
@@ -128,17 +168,8 @@ test_worker_init_alloc_failure(void **state)
 static void
 test_worker_callbacks_success(void **state)
 {
-	struct checker         *ck = *state;
-	struct checker_options  options = {0};
-	uuid_t                  pool_uuid;
+	struct checker *ck = *state;
 
-	uuid_generate(pool_uuid);
-	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
-	will_return(__wrap_d_asprintf2, 0);
-	will_return(__wrap_fopen, 0);
-	mock_fopen_fake_stream_enable = 1;
-	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
-			 DER_SUCCESS);
 	ck->ck_level = 2;
 	assert_int_equal(ck->ck_indent_set(ck), DER_SUCCESS);
 	assert_string_equal(ck->ck_prefix, "-- ");
@@ -150,25 +181,13 @@ test_worker_callbacks_success(void **state)
 	will_return(__wrap_vfprintf, 16);
 	will_return(__wrap_fflush, 0);
 	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"), DER_SUCCESS);
-
-	expect_value(__wrap_d_free, ptr, &Dcw);
-	dlck_checker_worker_fini(ck);
 }
 
 static void
 test_worker_printf_with_indent(void **state)
 {
-	struct checker         *ck = *state;
-	struct checker_options  options = {0};
-	uuid_t                  pool_uuid;
+	struct checker *ck = *state;
 
-	uuid_generate(pool_uuid);
-	expect_checker_d_calloc(sizeof(Dcw), &Dcw);
-	will_return(__wrap_d_asprintf2, 0);
-	will_return(__wrap_fopen, 0);
-	mock_fopen_fake_stream_enable = 1;
-	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
-			 DER_SUCCESS);
 	ck->ck_level = 2;
 	assert_int_equal(ck->ck_indent_set(ck), DER_SUCCESS);
 
@@ -180,9 +199,6 @@ test_worker_printf_with_indent(void **state)
 	will_return(__wrap_vfprintf, 12);
 	will_return(__wrap_fflush, 0);
 	CK_PRINTF(ck, "worker %d", 42);
-
-	expect_value(__wrap_d_free, ptr, &Dcw);
-	dlck_checker_worker_fini(ck);
 }
 
 /* worker vprintf: vfprintf failure is propagated from its logfile stream. */
@@ -289,21 +305,16 @@ test_worker_indent_set_out_of_range(void **state)
 	dlck_checker_worker_fini(ck);
 }
 
-static int
-teardown(void **state)
-{
-	free(*state);
-	return 0;
-}
-
 static const struct CMUnitTest dlck_checker_worker_tests[] = {
 	{"DLCK_CHECKER_WORKER_100: init - success", test_worker_init_success, setup, teardown},
 	{"DLCK_CHECKER_WORKER_101: init - log open failure", test_worker_init_log_open_failure, setup, teardown},
 	{"DLCK_CHECKER_WORKER_102: init - log path allocation failure", test_worker_init_log_path_alloc_failure, setup,
 	 teardown},
 	{"DLCK_CHECKER_WORKER_103: init - allocation failure", test_worker_init_alloc_failure, setup, teardown},
-	{"DLCK_CHECKER_WORKER_104: callbacks - success", test_worker_callbacks_success, setup, teardown},
-	{"DLCK_CHECKER_WORKER_105: printf - indentation", test_worker_printf_with_indent, setup, teardown},
+	{"DLCK_CHECKER_WORKER_104: callbacks - success", test_worker_callbacks_success,
+	 setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_105: printf - indentation", test_worker_printf_with_indent,
+	 setup_worker_checker, teardown_worker_checker},
 	{"DLCK_CHECKER_WORKER_106: get_custom - invalid magic", test_worker_get_custom_invalid_magic, setup,
 	 teardown},
 	{"DLCK_CHECKER_WORKER_107: vprintf - vfprintf failure",

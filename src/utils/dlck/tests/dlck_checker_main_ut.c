@@ -91,7 +91,6 @@ test_vprintf_vfprintf_positive(void **state)
 {
 	struct checker *ck = *state;
 
-	init_checker(ck);
 	mock_vfprintf_enabled = 1;
 	mock_vfprintf_check_args = 1;
 	mock_fflush_enabled = 1;
@@ -104,10 +103,6 @@ test_vprintf_vfprintf_positive(void **state)
 	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
 	assert_int_equal(ck_common_printf(ck, "main %d: %s", 42, "ready"), DER_SUCCESS);
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
 
 /* main vprintf: vfprintf returns an I/O error. */
@@ -116,7 +111,6 @@ test_vprintf_vfprintf_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	init_checker(ck);
 	mock_vfprintf_enabled = 1;
 	will_return(__wrap_vfprintf, -1);
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
@@ -124,10 +118,6 @@ test_vprintf_vfprintf_failure(void **state)
 	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
 	assert_int_equal(ck_common_printf(ck, "test"), daos_errno2der(EIO));
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
 
 /* main vprintf: fflush returns EOF with errno set. */
@@ -136,7 +126,6 @@ test_vprintf_fflush_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	init_checker(ck);
 	mock_vfprintf_enabled = 1;
 	mock_fflush_enabled = 1;
 	will_return(__wrap_vfprintf, 1);
@@ -146,10 +135,6 @@ test_vprintf_fflush_failure(void **state)
 	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
 	assert_int_equal(ck_common_printf(ck, "test"), daos_errno2der(EIO));
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
 
 /* main vprintf: mutex lock returns an Argobots error. */
@@ -158,14 +143,9 @@ test_main_vprintf_lock_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	init_checker(ck);
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_ERR_OTHER);
 	assert_int_equal(ck_common_printf(ck, "test"), dss_abterr2der(ABT_ERR_OTHER));
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
 
 /* main vprintf: mutex unlock returns an Argobots error. */
@@ -174,7 +154,6 @@ test_main_vprintf_unlock_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	init_checker(ck);
 	mock_vfprintf_enabled = 1;
 	mock_fflush_enabled = 1;
 	will_return(__wrap_vfprintf, 1);
@@ -184,10 +163,6 @@ test_main_vprintf_unlock_failure(void **state)
 	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_unlock, ABT_ERR_OTHER);
 	assert_int_equal(ck_common_printf(ck, "test"), dss_abterr2der(ABT_ERR_OTHER));
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
 
 /* main fini: successful mutex destruction clears checker state. */
@@ -196,17 +171,8 @@ test_main_fini_success(void **state)
 {
 	struct checker *ck = *state;
 
-	init_checker(ck);
-
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
-	assert_ptr_equal(Dcm.stream_mutex, ABT_MUTEX_NULL);
-	assert_null(ck->ck_private);
-	assert_null(ck->ck_vprintf);
-	assert_null(ck->ck_indent_set);
-	assert_null(ck->ck_prefix);
+	assert_ptr_equal(ck->ck_private, &Dcm);
+	assert_ptr_equal(Dcm.stream_mutex, Mock_mutex_handle);
 }
 
 /* main get_custom: invalid magic triggers an assertion. */
@@ -218,10 +184,6 @@ test_main_get_custom_invalid_magic(void **state)
 	Dcm.core.magic = ~DLCK_CHECKER_MAIN_MAGIC;
 	expect_assert_failure(dlck_checker_main_get_custom(ck));
 	Dcm.core.magic = DLCK_CHECKER_MAIN_MAGIC;
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
 
 /* main fini: mutex destruction returns an Argobots error. */
@@ -256,7 +218,6 @@ test_main_indent_set_levels_zero_to_max(void **state)
 {
 	struct checker *ck = *state;
 
-	init_checker(ck);
 	for (ck->ck_level = 0; ck->ck_level <= CHECKER_INDENT_MAX; ck->ck_level++) {
 		assert_int_equal(ck->ck_indent_set(ck), DER_SUCCESS);
 		if (ck->ck_level == 0) {
@@ -270,10 +231,6 @@ test_main_indent_set_levels_zero_to_max(void **state)
 		assert_int_equal(ck->ck_prefix[ck->ck_level], ' ');
 	}
 
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
 
 /* main and indent helpers: invalid levels trigger assertions. */
@@ -282,7 +239,6 @@ test_main_indent_set_out_of_range(void **state)
 {
 	struct checker *ck = *state;
 
-	init_checker(ck);
 	ck->ck_level = -1;
 	expect_assert_failure(ck->ck_indent_set(ck));
 	ck->ck_level = -1;
@@ -292,10 +248,6 @@ test_main_indent_set_out_of_range(void **state)
 	expect_assert_failure(ck->ck_indent_set(ck));
 	ck->ck_level = CHECKER_INDENT_MAX + 1;
 	expect_assert_failure(checker_print_indent_inc(ck));
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
 }
 
 static int
@@ -325,22 +277,41 @@ teardown(void **state)
 	return 0;
 }
 
+static int
+teardown_main_checker(void **state)
+{
+	struct checker *ck = *state;
+
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
+	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
+	expect_value(__wrap_d_free, ptr, &Dcm);
+	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
+	return teardown(state);
+}
+
 static const struct CMUnitTest dlck_checker_tests[] = {
 	{"DLCK_CHECKER_MAIN_100: init - success", test_main_init_success, setup, teardown},
 	{"DLCK_CHECKER_MAIN_101: init - allocation failure", test_main_init_alloc_failure, setup, teardown},
 	{"DLCK_CHECKER_MAIN_102: init - mutex create failure", test_main_init_mutex_create_failure, setup, teardown},
-	{"DLCK_CHECKER_MAIN_103: fini - success", test_main_fini_success, setup, teardown},
+	{"DLCK_CHECKER_MAIN_103: fini - success", test_main_fini_success, setup_main_checker,
+	 teardown_main_checker},
 	{"DLCK_CHECKER_MAIN_104: fini - mutex free failure", test_main_fini_mutex_free_failure, setup, teardown},
 	{"DLCK_CHECKER_MAIN_105: get_custom - invalid magic", test_main_get_custom_invalid_magic,
-	 setup_main_checker, teardown},
-	{"DLCK_CHECKER_MAIN_106: vprintf - vfprintf positive", test_vprintf_vfprintf_positive, setup, teardown},
-	{"DLCK_CHECKER_MAIN_107: vprintf - vfprintf failure", test_vprintf_vfprintf_failure, setup, teardown},
-	{"DLCK_CHECKER_MAIN_108: vprintf - fflush failure", test_vprintf_fflush_failure, setup, teardown},
-	{"DLCK_CHECKER_MAIN_109: vprintf - lock failure", test_main_vprintf_lock_failure, setup, teardown},
-	{"DLCK_CHECKER_MAIN_110: vprintf - unlock failure", test_main_vprintf_unlock_failure, setup, teardown},
-	{"DLCK_CHECKER_MAIN_111: indent - levels zero to max", test_main_indent_set_levels_zero_to_max, setup,
-	 teardown},
-	{"DLCK_CHECKER_MAIN_112: indent - out of range", test_main_indent_set_out_of_range, setup, teardown},
+	 setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_106: vprintf - vfprintf positive", test_vprintf_vfprintf_positive,
+	 setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_107: vprintf - vfprintf failure", test_vprintf_vfprintf_failure,
+	 setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_108: vprintf - fflush failure", test_vprintf_fflush_failure,
+	 setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_109: vprintf - lock failure", test_main_vprintf_lock_failure,
+	 setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_110: vprintf - unlock failure", test_main_vprintf_unlock_failure,
+	 setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_111: indent - levels zero to max", test_main_indent_set_levels_zero_to_max,
+	 setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_112: indent - out of range", test_main_indent_set_out_of_range,
+	 setup_main_checker, teardown_main_checker},
 };
 
 int
