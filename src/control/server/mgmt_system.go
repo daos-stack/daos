@@ -1692,8 +1692,14 @@ func (svc *mgmtSvc) waitForLeaderElection(ctx context.Context, hostAddrs []strin
 
 	svc.log.Tracef("waitForLeaderElection: polling %d replica(s) for leader election", len(hostAddrs))
 
-	maxWait := 30 * time.Second
-	pollInterval := 500 * time.Millisecond
+	maxWait := svc.eraseWaitMaxWait
+	if maxWait <= 0 {
+		maxWait = defaultEraseWaitMaxWait
+	}
+	pollInterval := svc.eraseWaitPollInterval
+	if pollInterval <= 0 {
+		pollInterval = defaultEraseWaitPollInterval
+	}
 	deadline := time.Now().Add(maxWait)
 	attempts := 0
 
@@ -1747,8 +1753,14 @@ func (svc *mgmtSvc) waitForReplicasReady(ctx context.Context, peers []*net.TCPAd
 		hostAddrs = append(hostAddrs, peer.String())
 	}
 
-	maxWait := 30 * time.Second
-	pollInterval := 500 * time.Millisecond
+	maxWait := svc.eraseWaitMaxWait
+	if maxWait <= 0 {
+		maxWait = defaultEraseWaitMaxWait
+	}
+	pollInterval := svc.eraseWaitPollInterval
+	if pollInterval <= 0 {
+		pollInterval = defaultEraseWaitPollInterval
+	}
 	deadline := time.Now().Add(maxWait)
 	attempts := 0
 

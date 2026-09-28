@@ -3621,7 +3621,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	}{
 		"nil req": {
 			nilReq: true,
-			expErr: errers.New("nil request"),
+			expErr: errors.New("nil request"),
 		},
 		"external request on non-leader replica is redirected": {
 			// Simulates an external (e.g. dmg) request landing on a non-leader
@@ -3751,6 +3751,186 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 
 			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
+		})
+	}
+}
+
+func TestServer_MgmtSvc_eraseSysedb(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(t, log)
+
+	t.Run("no shutdown callback set", func(t *testing.T) {
+		// sysdb (a bare raft.MockDatabase) was never Start()ed, so it has no
+		// shutdown callback and Stop() must fail cleanly rather than panic.
+		if err := svc.eraseSysedb(); err == nil {
+			t.Fatal("expected error erasing a never-started system database")
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		ctx := test.Context(t)
+		replicas := []*net.TCPAddr{common.LocalhostCtrlAddr()}
+		cleanup := startSysDB(t, ctx, log, replicas, svc)
+		defer cleanup()
+
+		// Success path: sysdb is a real, started, single-replica database, so
+		// Stop()/RemoveFiles() should both succeed and the trailing
+		// awaitSync() should return without blocking indefinitely.
+		if err := svc.eraseSysedb(); err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+	})
+}
+
+func TestServer_MgmtSvc_waitForLeaderElection(t *testing.T) {
+	for name, tc := range map[string]struct {
+		hostAddrs []string
+		uErr      error
+		uResp     *control.UnaryResponse
+		cancelCtx bool
+		expErr    error
+	}{
+		"no hosts": {
+			hostAddrs: nil,
+			expErr:    nil,
+		},
+		"leader found immediately": {
+			hostAddrs: []string{"10.0.0.1:10001"},
+			uResp: control.MockMSResponse("10.0.0.1:10001", nil,
+				&mgmtpb.LeaderQueryResp{CurrentLeader: "10.0.0.1:10001"}),
+		},
+		"context canceled while polling": {
+			hostAddrs: []string{"10.0.0.1:10001"},
+			uErr:      errors.New("mock rpc error"),
+			cancelCtx: true,
+			expErr:    context.Canceled,
+		},
+		"deadline exceeded while polling": {
+			// Never returns a leader, so waitForLeaderElection must keep
+			// polling until svc.eraseWaitMaxWait elapses and return a
+			// timeout error. svc.eraseWaitMaxWait/eraseWaitPollInterval are
+			// overridden to small values by newTestMgmtSvc() so this
+			// exercises the real deadline logic without a slow test.
+			hostAddrs: []string{"10.0.0.1:10001"},
+			uResp: control.MockMSResponse("10.0.0.1:10001", nil,
+				&mgmtpb.LeaderQueryResp{CurrentLeader: ""}),
+			expErr: errors.New("timeout waiting for raft leader election after erase"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			svc := newTestMgmtSvc(t, log)
+			svc.rpcClient = control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			ctx, cancel := context.WithCancel(test.Context(t))
+			defer cancel()
+			if tc.cancelCtx {
+				cancel()
+			}
+
+			gotErr := svc.waitForLeaderElection(ctx, tc.hostAddrs)
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestServer_MgmtSvc_waitForReplicasReady(t *testing.T) {
+	mockAddr := func(a int32) *net.TCPAddr {
+		return test.MockHostAddr(a)
+	}
+
+	for name, tc := range map[string]struct {
+		peers     []*net.TCPAddr
+		uErr      error
+		uResp     *control.UnaryResponse
+		cancelCtx bool
+		expErr    error
+	}{
+		"no peers": {
+			peers:  nil,
+			expErr: nil,
+		},
+		"replicas ready immediately": {
+			peers: []*net.TCPAddr{mockAddr(1)},
+			uResp: control.MockMSResponse(mockAddr(1).String(), nil,
+				&mgmtpb.SystemQueryResp{}),
+		},
+		"context canceled while polling": {
+			peers:     []*net.TCPAddr{mockAddr(1)},
+			uErr:      errors.New("mock rpc error"),
+			cancelCtx: true,
+			expErr:    context.Canceled,
+		},
+		"deadline exceeded while polling": {
+			// Never succeeds, so waitForReplicasReady must keep polling
+			// until svc.eraseWaitMaxWait elapses and return a timeout
+			// error. svc.eraseWaitMaxWait/eraseWaitPollInterval are
+			// overridden to small values by newTestMgmtSvc() so this
+			// exercises the real deadline logic without a slow test.
+			peers:  []*net.TCPAddr{mockAddr(1)},
+			uErr:   errors.New("mock rpc error"),
+			expErr: errors.New("timeout waiting for MS replicas to become ready after erase"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			svc := newTestMgmtSvc(t, log)
+			svc.rpcClient = control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			ctx, cancel := context.WithCancel(test.Context(t))
+			defer cancel()
+			if tc.cancelCtx {
+				cancel()
+			}
+
+			gotErr := svc.waitForReplicasReady(ctx, tc.peers)
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {
+	mockAddr := func(a int32) *net.TCPAddr {
+		return test.MockHostAddr(a)
+	}
+
+	for name, tc := range map[string]struct {
+		peers     []*net.TCPAddr
+		uErr      error
+		expErrMsg string
+	}{
+		"no peers": {
+			peers: nil,
+		},
+		"peer erase request fails": {
+			peers:     []*net.TCPAddr{mockAddr(1)},
+			uErr:      errors.New("mock rpc error"),
+			expErrMsg: "System-Query command failed: mock rpc error",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			svc := newTestMgmtSvc(t, log)
+			svc.rpcClient = control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryError: tc.uErr,
+			})
+
+			gotErr := svc.eraseReplicas(test.Context(t), tc.peers)
+			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 		})
 	}
 }
