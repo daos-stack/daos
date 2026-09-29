@@ -59,7 +59,6 @@ def build_dlck_checker_main_ut(henv):
     henv.Append(OBJPREFIX="dlck_checker_main_ut_")
     henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=ABT_mutex_create', '-Wl,--wrap=ABT_mutex_free',
                                  '-Wl,--wrap=ABT_mutex_lock', '-Wl,--wrap=ABT_mutex_unlock',
-                                 '-Wl,--wrap=fopen', '-Wl,--wrap=fclose', '-Wl,--wrap=d_asprintf2',
                                  '-Wl,--wrap=vfprintf', '-Wl,--wrap=fflush', '-Wl,--wrap=d_calloc',
                                  '-Wl,--wrap=d_free'])
     henv.require('argobots', 'cmocka')

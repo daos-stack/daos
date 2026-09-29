@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <abt.h>
 #include <stdio.h>
+#include <uuid/uuid.h>
 
 #include "../dlck_checker.h"
 
@@ -19,6 +20,7 @@ extern struct dlck_checker_worker       Dcw;
 extern const ABT_mutex 		        Mock_mutex_handle;
 extern FILE *const                      Mock_file_stream;
 extern char                       	Mock_log_file[];
+extern uuid_t                           Mock_pool_uuid;
 /* Checks rendered output during the next mocked vfprintf call. */
 extern int                              mock_vfprintf_check_output;
 

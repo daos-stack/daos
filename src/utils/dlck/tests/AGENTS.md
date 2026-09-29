@@ -3,8 +3,7 @@
 Use `git commit --signoff` for every commit created for this work, including
 amended commits, so each commit has a `Signed-off-by` trailer.
 
-Follow [README.md](README.md) for rationale and examples. Apply these rules
-when adding or changing DLCK unit tests:
+Apply these rules when adding or changing DLCK unit tests:
 
 - Keep source lines to at most 80 columns; count each tab as 8 columns. Wrap
   comments, calls, and test-table entries as needed.
@@ -60,16 +59,15 @@ when adding or changing DLCK unit tests:
   correct mapping (`daos_errno2der()` or `dss_abterr2der()`) and cleanup.
 - For DAOS assertions, call `d_register_alt_assert(mock_assert)` in `main()` before
   using `expect_assert_failure()`.
-- When testing formatted output or forwarding a `va_list`, check the format and
+??? When testing formatted output or forwarding a `va_list`, check the format and
   rendered result. Use `va_copy()` before formatting the received list and
   `va_end()` on the copy.
 - Use fake streams only when real file contents are irrelevant, and ensure fake
   `FILE *` values never reach real stdio. Use real filesystem I/O when the test
   verifies file creation or contents, then clean up.
-- Keep case IDs sequential in execution order in suites that use descriptive
-  numbered IDs. `cmocka_unit_test()` without IDs is appropriate for suites that
-  do not use that convention.
-- When adding a test binary, register it in `SConscript`, `utils/utest.yaml`, and
+- Keep case IDs sequential (Starting from 101) in execution order in suites
+  that use descriptive numbered IDs.
+  - When adding a test binary, register it in `SConscript`, `utils/utest.yaml`, and
   `ci/test_files_to_stash.txt`. Use `env.Clone()`, a unique `OBJPREFIX`, and only
   the required sources, libraries, dependencies, include paths, and linker wraps.
 - Build and run the affected binary. If shared checker mocks change, run both

@@ -11,7 +11,6 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uuid/uuid.h>
 #include <abt.h>
 #include <cmocka.h>
 
@@ -56,7 +55,6 @@ setup_worker_checker(void **state)
 	struct checker_options  options = {
 		.cko_non_zero_padding = CHECKER_EVENT_WARNING,
 	};
-	uuid_t                  pool_uuid = {0};
 	int                     rc;
 
 	rc = setup(state);
@@ -69,7 +67,7 @@ setup_worker_checker(void **state)
 	expect_worker_fopen(0);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	assert_int_equal(
-	    dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
+	    dlck_checker_worker_init(&options, "/tmp", Mock_pool_uuid, 0, NULL, ck),
 	    DER_SUCCESS);
 	return 0;
 }
@@ -117,7 +115,6 @@ test_worker_init_log_open_failure(void **state)
 {
 	struct checker         *ck = *state;
 	struct checker_options  options = {0};
-	uuid_t                  pool_uuid = {0};
 
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, 0);
@@ -125,7 +122,7 @@ test_worker_init_log_open_failure(void **state)
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(
-	    dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
+	    dlck_checker_worker_init(&options, "/tmp", Mock_pool_uuid, 0, NULL, ck),
 	    daos_errno2der(EIO));
 	assert_null(ck->ck_private);
 }
@@ -136,13 +133,12 @@ test_worker_init_log_path_alloc_failure(void **state)
 {
 	struct checker         *ck = *state;
 	struct checker_options  options = {0};
-	uuid_t                  pool_uuid = {0};
 
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, -1);
 	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(
-	    dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
+	    dlck_checker_worker_init(&options, "/tmp", Mock_pool_uuid, 0, NULL, ck),
 	    -DER_NOMEM);
 	assert_null(ck->ck_private);
 }
@@ -153,11 +149,10 @@ test_worker_init_alloc_failure(void **state)
 {
 	struct checker         *ck = *state;
 	struct checker_options  options = {0};
-	uuid_t                  pool_uuid = {0};
 
 	expect_checker_d_calloc(sizeof(Dcw), NULL);
 	assert_int_equal(
-	    dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
+	    dlck_checker_worker_init(&options, "/tmp", Mock_pool_uuid, 0, NULL, ck),
 	    -DER_NOMEM);
 	assert_null(ck->ck_private);
 }
