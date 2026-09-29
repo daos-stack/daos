@@ -536,8 +536,12 @@ func getQueryPoolRank(pool *mgmtpb.CheckQueryPool) ranklist.Rank {
 	return ranklist.Rank(pool.Targets[0].Rank)
 }
 
+func isPoolCheckInProgress(status chkpb.CheckPoolStatus) bool {
+	return status == chkpb.CheckPoolStatus_CPS_CHECKING || status == chkpb.CheckPoolStatus_CPS_PENDING
+}
+
 func remainingDuration(status chkpb.CheckPoolStatus, seconds uint64) time.Duration {
-	if status != chkpb.CheckPoolStatus_CPS_CHECKING {
+	if !isPoolCheckInProgress(status) {
 		// Done - no time remaining
 		return 0
 	}
@@ -545,7 +549,7 @@ func remainingDuration(status chkpb.CheckPoolStatus, seconds uint64) time.Durati
 }
 
 func stopTime(status chkpb.CheckPoolStatus, timestamp uint64) time.Time {
-	if status == chkpb.CheckPoolStatus_CPS_CHECKING {
+	if isPoolCheckInProgress(status) {
 		// Hasn't stopped yet
 		return time.Time{}
 	}
