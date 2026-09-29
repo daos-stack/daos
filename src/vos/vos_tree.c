@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -366,19 +366,28 @@ ktr_node_alloc(struct btr_instance *tins, int size)
 	return vos_obj_alloc(&tins->ti_umm, tins->ti_priv, size, true);
 }
 
+static int
+ktr_df_rec_check(struct btr_instance *tins, struct btr_record *rec, report_fn_t report_fn,
+		 void *report_arg)
+{
+	/** NOP. TBD. */
+	return 0;
+}
+
 static btr_ops_t key_btr_ops = {
-	.to_rec_msize		= ktr_rec_msize,
-	.to_hkey_size		= ktr_hkey_size,
-	.to_hkey_gen		= ktr_hkey_gen,
-	.to_hkey_cmp		= ktr_hkey_cmp,
-	.to_key_cmp		= ktr_key_cmp,
-	.to_key_encode		= ktr_key_encode,
-	.to_key_decode		= ktr_key_decode,
-	.to_rec_alloc		= ktr_rec_alloc,
-	.to_rec_free		= ktr_rec_free,
-	.to_rec_fetch		= ktr_rec_fetch,
-	.to_rec_update		= ktr_rec_update,
-	.to_node_alloc		= ktr_node_alloc,
+    .to_rec_msize  = ktr_rec_msize,
+    .to_hkey_size  = ktr_hkey_size,
+    .to_hkey_gen   = ktr_hkey_gen,
+    .to_hkey_cmp   = ktr_hkey_cmp,
+    .to_key_cmp    = ktr_key_cmp,
+    .to_key_encode = ktr_key_encode,
+    .to_key_decode = ktr_key_decode,
+    .to_rec_alloc  = ktr_rec_alloc,
+    .to_rec_free   = ktr_rec_free,
+    .to_rec_fetch  = ktr_rec_fetch,
+    .to_rec_update = ktr_rec_update,
+    .to_node_alloc = ktr_node_alloc,
+    .to_rec_check  = ktr_df_rec_check,
 };
 
 /**

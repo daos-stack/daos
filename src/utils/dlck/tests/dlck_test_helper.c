@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -256,12 +256,6 @@ exec_one(void *arg)
 	struct dlck_file     *file;
 	int                   rc;
 
-	rc = dlck_engine_xstream_init(xst->xs);
-	if (rc != DER_SUCCESS) {
-		xst->rc = rc;
-		return;
-	}
-
 	d_list_for_each_entry(file, &xst->args_files->list, link) {
 		/** do not process the given file if the target is not requested */
 		if (dlck_bitmap_isclr32(file->targets_bitmap, xst->xs->tgt_id)) {
@@ -284,19 +278,7 @@ exec_one(void *arg)
 		}
 	}
 
-	if (xst->rc != DER_SUCCESS) {
-		goto fail_xstream_fini;
-	}
-
-	rc = dlck_engine_xstream_fini(xst->xs);
-	if (rc != DER_SUCCESS) {
-		xst->rc = rc;
-	}
-
 	return;
-
-fail_xstream_fini:
-	(void)dlck_engine_xstream_fini(xst->xs);
 }
 
 /**
