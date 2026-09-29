@@ -40,11 +40,14 @@ teardown(void **state)
 	return 0;
 }
 
+/* Start a worker test with DLCK defaults and an initialized checker. */
 static int
 setup_worker_checker(void **state)
 {
 	struct checker         *ck;
-	struct checker_options  options = {0};
+	struct checker_options  options = {
+		.cko_non_zero_padding = CHECKER_EVENT_WARNING,
+	};
 	uuid_t                  pool_uuid = {0};
 	int                     rc;
 
@@ -56,11 +59,14 @@ setup_worker_checker(void **state)
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, 0);
-	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
-			 DER_SUCCESS);
+	assert_int_equal(
+	    dlck_checker_worker_init(&options, "/tmp", pool_uuid,
+			     0, NULL, ck),
+	    DER_SUCCESS);
 	return 0;
 }
 
+/* Finalize the worker checker and verify teardown clears all checker state. */
 static int
 teardown_worker_checker(void **state)
 {
@@ -76,38 +82,24 @@ teardown_worker_checker(void **state)
 	return teardown(state);
 }
 
-/* worker init: valid options install checker state and a logfile stream. */
 static void
 test_worker_init_success(void **state)
 {
-	struct checker         *ck = *state;
-	struct checker          ck_zeroed;
-	struct checker_options  options = {.cko_non_zero_padding = CHECKER_EVENT_WARNING};
-	uuid_t                  pool_uuid = {0};
+	struct checker *ck = *state;
 
-	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
-	EXPECT_CHECKER_D_CALLOC(Dcw);
-	will_return(__wrap_d_asprintf2, 0);
-	will_return(__wrap_fopen, 0);
-	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 3, NULL, ck),
-			 DER_SUCCESS);
-
+	/* setup_worker_checker() is an integral part of this test. */
 	assert_ptr_equal(ck->ck_private, &Dcw);
 	assert_int_equal(Dcw.magic, DLCK_CHECKER_WORKER_MAGIC);
 	assert_non_null(Dcw.stream);
 	assert_non_null(ck->ck_vprintf);
 	assert_non_null(ck->ck_indent_set);
 	assert_ptr_equal(ck->ck_prefix, Dcw.prefix);
-	assert_int_equal(ck->ck_options.cko_non_zero_padding, options.cko_non_zero_padding);
+	assert_int_equal(ck->ck_options.cko_non_zero_padding,
+			 CHECKER_EVENT_WARNING);
 
 	assert_ptr_equal(Dcw.stream, Mock_file_stream);
 	assert_int_equal(ck->ck_level, 0);
-
-	expect_value(__wrap_d_free, ptr, &Dcw);
-	expect_function_call(__wrap_fclose);
-	will_return(__wrap_fclose, 0);
-	dlck_checker_worker_fini(ck);
-	assert_memory_equal(ck, &ck_zeroed, sizeof(*ck));
+	/* teardown_worker_checker() is an integral part of this test. */
 }
 
 /* worker init: fopen fails and returns the mapped I/O error. */
@@ -122,8 +114,10 @@ test_worker_init_log_open_failure(void **state)
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, EIO);
 	expect_value(__wrap_d_free, ptr, &Dcw);
-	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
-			 daos_errno2der(EIO));
+	assert_int_equal(
+	    dlck_checker_worker_init(&options, "/tmp", pool_uuid,
+			     0, NULL, ck),
+	    daos_errno2der(EIO));
 	assert_null(ck->ck_private);
 }
 
@@ -138,8 +132,10 @@ test_worker_init_log_path_alloc_failure(void **state)
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, -1);
 	expect_value(__wrap_d_free, ptr, &Dcw);
-	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
-			 -DER_NOMEM);
+	assert_int_equal(
+	    dlck_checker_worker_init(&options, "/tmp", pool_uuid,
+			     0, NULL, ck),
+	    -DER_NOMEM);
 	assert_null(ck->ck_private);
 }
 
@@ -152,30 +148,30 @@ test_worker_init_alloc_failure(void **state)
 	uuid_t                  pool_uuid = {0};
 
 	expect_checker_d_calloc(sizeof(Dcw), NULL);
-	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
-			 -DER_NOMEM);
+	assert_int_equal(
+	    dlck_checker_worker_init(&options, "/tmp", pool_uuid,
+			     0, NULL, ck),
+	    -DER_NOMEM);
 	assert_null(ck->ck_private);
 }
 
-/* worker callbacks: indentation and printing use the initialized payload. */
+/* worker vprintf: successful output is written to the initialized stream. */
 static void
-test_worker_callbacks_success(void **state)
+test_worker_vprintf_success(void **state)
 {
 	struct checker *ck = *state;
 
-	ck->ck_level = 2;
-	assert_int_equal(ck->ck_indent_set(ck), DER_SUCCESS);
-	assert_string_equal(ck->ck_prefix, "-- ");
 	mock_vfprintf_check_args = 1;
 	expect_string(__wrap_vfprintf, fmt, "worker %d: %s");
 	expect_string(__wrap_vfprintf, output, "worker 42: ready");
 	will_return(__wrap_vfprintf, 16);
 	will_return(__wrap_fflush, 0);
-	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"), DER_SUCCESS);
+	assert_int_equal(
+	    ck_common_printf(ck, "worker %d: %s", 42, "ready"), DER_SUCCESS);
 }
 
 static void
-test_worker_printf_with_indent(void **state)
+test_worker_CK_PRINTF_with_indent(void **state)
 {
 	struct checker *ck = *state;
 
@@ -218,6 +214,7 @@ test_worker_get_custom_invalid_magic(void **state)
 
 	Dcw.magic = ~DLCK_CHECKER_WORKER_MAGIC;
 	expect_assert_failure(dlck_checker_worker_fini(ck));
+	/* Restore magic so teardown_worker_checker() can clean up. */
 	Dcw.magic = DLCK_CHECKER_WORKER_MAGIC;
 }
 
@@ -226,6 +223,7 @@ static void
 test_worker_fini_fclose_failure(void **state)
 {
 	(void)state;
+	/* teardown_worker_checker() checks cleanup after fclose fails. */
 	mock_worker_fclose_rc = EOF;
 }
 
@@ -243,33 +241,42 @@ test_worker_indent_set_out_of_range(void **state)
 }
 
 static const struct CMUnitTest dlck_checker_worker_tests[] = {
-    {"DLCK_CHECKER_WORKER_100: init - success", test_worker_init_success, setup, teardown},
-    {"DLCK_CHECKER_WORKER_101: init - log open failure", test_worker_init_log_open_failure, setup,
-     teardown},
-    {"DLCK_CHECKER_WORKER_102: init - log path allocation failure",
-     test_worker_init_log_path_alloc_failure, setup, teardown},
-    {"DLCK_CHECKER_WORKER_103: init - allocation failure", test_worker_init_alloc_failure, setup,
-     teardown},
-    {"DLCK_CHECKER_WORKER_104: callbacks - success", test_worker_callbacks_success,
-     setup_worker_checker, teardown_worker_checker},
-    {"DLCK_CHECKER_WORKER_105: printf - indentation", test_worker_printf_with_indent,
-     setup_worker_checker, teardown_worker_checker},
-    {"DLCK_CHECKER_WORKER_106: get_custom - invalid magic", test_worker_get_custom_invalid_magic,
-     setup_worker_checker, teardown_worker_checker},
-    {"DLCK_CHECKER_WORKER_107: vprintf - vfprintf failure", test_worker_vprintf_vfprintf_failure,
-     setup_worker_checker, teardown_worker_checker},
-    {"DLCK_CHECKER_WORKER_108: vprintf - fflush failure", test_worker_vprintf_fflush_failure,
-     setup_worker_checker, teardown_worker_checker},
-    {"DLCK_CHECKER_WORKER_109: fini - fclose failure", test_worker_fini_fclose_failure,
-     setup_worker_checker, teardown_worker_checker},
-    {"DLCK_CHECKER_WORKER_110: indent - out of range", test_worker_indent_set_out_of_range,
-     setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_100: init - success",
+	 test_worker_init_success,
+	 setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_101: init - log open failure",
+	 test_worker_init_log_open_failure, setup, teardown},
+	{"DLCK_CHECKER_WORKER_102: init - log path allocation failure",
+	 test_worker_init_log_path_alloc_failure, setup, teardown},
+	{"DLCK_CHECKER_WORKER_103: init - allocation failure",
+	 test_worker_init_alloc_failure, setup, teardown},
+	{"DLCK_CHECKER_WORKER_104: vprintf - success",
+	 test_worker_vprintf_success,
+	 setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_105: CK_PRINTF - indentation",
+	 test_worker_CK_PRINTF_with_indent,
+	 setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_106: get_custom - invalid magic",
+	 test_worker_get_custom_invalid_magic,
+	 setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_107: vprintf - vfprintf failure",
+	 test_worker_vprintf_vfprintf_failure,
+	 setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_108: vprintf - fflush failure",
+	 test_worker_vprintf_fflush_failure,
+	 setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_109: fini - fclose failure",
+	 test_worker_fini_fclose_failure,
+	 setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_110: indent - out of range",
+	 test_worker_indent_set_out_of_range,
+	 setup_worker_checker, teardown_worker_checker},
 };
 
 int
 main(void)
 {
 	d_register_alt_assert(mock_assert);
-	return cmocka_run_group_tests_name("dlck_checker_worker_ut", dlck_checker_worker_tests, NULL,
-					   NULL);
+	return cmocka_run_group_tests_name(
+	    "dlck_checker_worker_ut", dlck_checker_worker_tests, NULL, NULL);
 }
