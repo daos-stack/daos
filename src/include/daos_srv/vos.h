@@ -1346,6 +1346,21 @@ int
 vos_iter_validate(daos_handle_t ih);
 
 /**
+ * Check an iterator.
+ *
+ * \param[in] ih			Iterator handle.
+ * \param[in] report_fn			Report function.
+ * \param[in] report_arg		Argument for the report function.
+ * \param[in] error_on_non_zero_padding	Trigger an error on non-zero padding.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Errors returned by the iterator check.
+ */
+int
+vos_iter_check(daos_handle_t ih, report_fn_t report_fn, void *report_arg,
+	       bool error_on_non_zero_padding);
+
+/**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
  *
