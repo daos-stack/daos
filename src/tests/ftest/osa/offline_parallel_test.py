@@ -49,7 +49,7 @@ class OSAOfflineParallelTest(OSAUtils):
         try:
             if action == "reintegrate":
                 self.log.info("Interrupt rebuild with reintegrate")
-                time.sleep(20)
+                time.sleep(10)
                 if self.pool.get_rebuild_state() != "busy":
                     self.log.info("Rebuild is not busy yet; waiting for it to start")
                     self.pool.wait_for_rebuild_to_start(interval=5)

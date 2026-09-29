@@ -65,7 +65,7 @@ class OSAOnlineParallelTest(OSAUtils):
         dmg = copy.copy(self.dmg_command)
         try:
             if action == "reintegrate":
-                time.sleep(20)
+                time.sleep(10)
                 if self.pool.get_rebuild_state() != "busy":
                     self.log.info("Rebuild is not busy yet; waiting for it to start")
                     self.pool.wait_for_rebuild_to_start(interval=5)
