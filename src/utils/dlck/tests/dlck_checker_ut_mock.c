@@ -166,6 +166,17 @@ __wrap_vfprintf(FILE *stream, const char *fmt, va_list args)
 	return rc;
 }
 
+/*
+ * Fortified builds may emit __vfprintf_chk() instead of vfprintf(). Route it
+ * through the same mock so the sentinel FILE stream never reaches libc.
+ */
+int
+__wrap___vfprintf_chk(FILE *stream, int flag, const char *fmt, va_list args)
+{
+	(void)flag;
+	return __wrap_vfprintf(stream, fmt, args);
+}
+
 int
 __wrap_fflush(FILE *stream)
 {
