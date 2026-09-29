@@ -30,7 +30,7 @@ static struct checker main_checker_state;
 static int
 setup(void **state)
 {
-	*state = &main_checker_state;
+	*state                     = &main_checker_state;
 	mock_vfprintf_check_output = 0;
 	return 0;
 }
@@ -246,8 +246,7 @@ test_main_indent_set_levels_zero_to_max(void **state)
 	struct checker *ck = *state;
 	int             indent_index;
 
-	for (ck->ck_level = 0; ck->ck_level <= CHECKER_INDENT_MAX;
-	     ck->ck_level++) {
+	for (ck->ck_level = 0; ck->ck_level <= CHECKER_INDENT_MAX; ck->ck_level++) {
 		assert_int_equal(ck->ck_indent_set(ck), DER_SUCCESS);
 		if (ck->ck_level == 0) {
 			assert_string_equal(ck->ck_prefix, "");
@@ -255,13 +254,10 @@ test_main_indent_set_levels_zero_to_max(void **state)
 		}
 
 		assert_int_equal(strlen(ck->ck_prefix), ck->ck_level + 1);
-		for (indent_index = 0; indent_index < ck->ck_level;
-		     indent_index++)
-			assert_int_equal(ck->ck_prefix[indent_index],
-					 DLCK_PRINT_INDENT);
+		for (indent_index = 0; indent_index < ck->ck_level; indent_index++)
+			assert_int_equal(ck->ck_prefix[indent_index], DLCK_PRINT_INDENT);
 		assert_int_equal(ck->ck_prefix[ck->ck_level], ' ');
 	}
-
 }
 
 /* main and indent helpers: invalid levels trigger assertions. */
@@ -293,48 +289,34 @@ test_main_indent_set_invalid_magic(void **state)
 }
 
 static const struct CMUnitTest dlck_checker_tests[] = {
-	{"DLCK_CHECKER_MAIN_101: init - success",
-		test_main_init_success,
-		setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_102: init - allocation failure",
-		test_main_init_alloc_failure,
-		setup, teardown},
-	{"DLCK_CHECKER_MAIN_103: init - mutex create failure",
-		test_main_init_mutex_create_failure,
-		setup, teardown},
-	{"DLCK_CHECKER_MAIN_104: fini - success",
-		test_main_fini_success,
-		setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_105: fini - mutex free failure",
-		test_main_fini_mutex_free_failure,
-		setup_main_checker, teardown},
-	{"DLCK_CHECKER_MAIN_106: get_custom - invalid magic",
-		test_main_get_custom_invalid_magic,
-		setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_107: indent - levels zero to max",
-		test_main_indent_set_levels_zero_to_max,
-		setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_108: indent - out of range",
-		test_main_indent_set_out_of_range,
-		setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_109: indent - invalid magic",
-		test_main_indent_set_invalid_magic,
-		setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_110: vprintf - vfprintf positive",
-		test_vprintf_vfprintf_positive,
-		setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_111: vprintf - vfprintf failure",
-		test_vprintf_vfprintf_failure,
-		setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_112: vprintf - fflush failure",
-		test_vprintf_fflush_failure,
-		setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_113: vprintf - lock failure",
-		test_main_vprintf_lock_failure,
-		setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_114: vprintf - unlock failure",
-		test_main_vprintf_unlock_failure,
-		setup_main_checker, teardown_main_checker},
+    {"DLCK_CHECKER_MAIN_101: init - success", test_main_init_success, setup_main_checker,
+     teardown_main_checker},
+    {"DLCK_CHECKER_MAIN_102: init - allocation failure", test_main_init_alloc_failure, setup,
+     teardown},
+    {"DLCK_CHECKER_MAIN_103: init - mutex create failure", test_main_init_mutex_create_failure,
+     setup, teardown},
+    {"DLCK_CHECKER_MAIN_104: fini - success", test_main_fini_success, setup_main_checker,
+     teardown_main_checker},
+    {"DLCK_CHECKER_MAIN_105: fini - mutex free failure", test_main_fini_mutex_free_failure,
+     setup_main_checker, teardown},
+    {"DLCK_CHECKER_MAIN_106: get_custom - invalid magic", test_main_get_custom_invalid_magic,
+     setup_main_checker, teardown_main_checker},
+    {"DLCK_CHECKER_MAIN_107: indent - levels zero to max", test_main_indent_set_levels_zero_to_max,
+     setup_main_checker, teardown_main_checker},
+    {"DLCK_CHECKER_MAIN_108: indent - out of range", test_main_indent_set_out_of_range,
+     setup_main_checker, teardown_main_checker},
+    {"DLCK_CHECKER_MAIN_109: indent - invalid magic", test_main_indent_set_invalid_magic,
+     setup_main_checker, teardown_main_checker},
+    {"DLCK_CHECKER_MAIN_110: vprintf - vfprintf positive", test_vprintf_vfprintf_positive,
+     setup_main_checker, teardown_main_checker},
+    {"DLCK_CHECKER_MAIN_111: vprintf - vfprintf failure", test_vprintf_vfprintf_failure,
+     setup_main_checker, teardown_main_checker},
+    {"DLCK_CHECKER_MAIN_112: vprintf - fflush failure", test_vprintf_fflush_failure,
+     setup_main_checker, teardown_main_checker},
+    {"DLCK_CHECKER_MAIN_113: vprintf - lock failure", test_main_vprintf_lock_failure,
+     setup_main_checker, teardown_main_checker},
+    {"DLCK_CHECKER_MAIN_114: vprintf - unlock failure", test_main_vprintf_unlock_failure,
+     setup_main_checker, teardown_main_checker},
 };
 
 int

@@ -41,7 +41,7 @@ static int
 setup_checker(void **state)
 {
 	checker_state.ck_vprintf = mock_checker_vprintf;
-	*state = &checker_state;
+	*state                   = &checker_state;
 	return 0;
 }
 
@@ -52,8 +52,7 @@ test_ck_common_vprintf_dispatches_arguments(void **state)
 
 	expect_callback_arguments(ck);
 	will_return(mock_checker_vprintf, DER_SUCCESS);
-	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"),
-			 DER_SUCCESS);
+	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"), DER_SUCCESS);
 }
 
 static void
@@ -63,22 +62,19 @@ test_ck_common_vprintf_returns_callback_error(void **state)
 
 	expect_callback_arguments(ck);
 	will_return(mock_checker_vprintf, -DER_IO);
-	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"),
-			 -DER_IO);
+	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"), -DER_IO);
 }
 
 static const struct CMUnitTest dlck_checker_common_tests[] = {
-	{"DLCK_CHECKER_COMMON_101: vprintf dispaches arguments",
-		test_ck_common_vprintf_dispatches_arguments,
-		setup_checker},
-	{"DLCK_CHECKER_COMMON_102: vprintf returns callback error",
-		test_ck_common_vprintf_returns_callback_error,
-		setup_checker},
+    {"DLCK_CHECKER_COMMON_101: vprintf dispatches arguments",
+     test_ck_common_vprintf_dispatches_arguments, setup_checker},
+    {"DLCK_CHECKER_COMMON_102: vprintf returns callback error",
+     test_ck_common_vprintf_returns_callback_error, setup_checker},
 };
 
 int
 main(void)
 {
-	return cmocka_run_group_tests_name(
-	    "dlck_checker_common_ut", dlck_checker_common_tests, NULL, NULL);
+	return cmocka_run_group_tests_name("dlck_checker_common_ut", dlck_checker_common_tests,
+					   NULL, NULL);
 }
