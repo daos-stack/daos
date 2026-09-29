@@ -984,9 +984,7 @@ func TestDmg_systemEraseCmd_execute(t *testing.T) {
 			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
 		},
 		"uninitialized error from ms is now a genuine failure": {
-			// Previously the erase RPC could race its own restart and return
-			// system.ErrUninitialized as a substitute "success" signal; now that
-			// the server drains its response before restarting (see
+			// The server drains its response before restarting (see
 			// scheduleControlPlaneRestart()), the RPC is expected to always
 			// return a clean response, so an uninitialized error is treated the
 			// same as any other unexpected RPC failure.
@@ -1095,12 +1093,10 @@ func TestDmg_systemEraseCmd_execute(t *testing.T) {
 }
 
 // TestDmg_systemEraseCmd_uninitialized_error_handling verifies that an uninitialized
-// (or any other) error from the erase RPC is now surfaced as a genuine failure rather
-// than a disguised success. This previously existed because the erase RPC could race
-// its own control-plane restart and return system.ErrUninitialized in place of a clean
-// response; now that scheduleControlPlaneRestart() drains the response before
-// restarting (see mgmt_system.go), the RPC is expected to always return cleanly, so no
-// error from it should ever be treated as success.
+// (or any other) error from the erase RPC is surfaced as a genuine failure.
+// scheduleControlPlaneRestart() drains the response before restarting (see mgmt_system.go), the
+// RPC is expected to always return cleanly, so no error from it should ever be treated as success.
+// This is a regression test.
 func TestDmg_systemEraseCmd_uninitialized_error_handling(t *testing.T) {
 	for name, errorMsg := range map[string]string{
 		"exact uninitialized error":   "system is uninitialized (storage format required?)",
