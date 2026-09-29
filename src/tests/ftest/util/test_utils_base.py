@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,6 +11,42 @@ from time import sleep
 
 from command_utils_base import BasicParameter, ObjectWithParameters
 from pydaos.raw import DaosApiError
+
+
+def check_expected(logger, description, data):
+    """Check if the expected values match the actual values.
+
+    Args:
+        description (str): description of the data being checked
+        data (dict): dictionary containing the actual and expected values
+            in the format {name: (value, expected)}
+
+    Raises:
+        AssertionError: if any of the expected values do not match the actual values
+    """
+    results = {"Passed": [], "Failed": []}
+    logger.debug("Verifying %s:", description)
+    name_width = max(len(name) for name in data.keys()) if data else 0
+    value_width = max(len(str(value)) for value, _ in data.values()) if data else 0
+    for name in sorted(data.keys()):
+        (value, expected) = data[name]
+        if value != expected:
+            results["Failed"].append(name)
+        else:
+            results["Passed"].append(name)
+    for key in ("Passed", "Failed"):
+        if not results[key]:
+            continue
+        logger.debug("  %s:", key)
+        for name in results[key]:
+            (value, expected) = data[name]
+            is_equal = "==" if key == "Passed" else "!="
+            logger.debug(
+                "    %-*s: %*s %s %s",
+                name_width, name, value_width, value, is_equal, expected)
+    if results["Failed"]:
+        raise AssertionError(
+            f"{description} did not match expected values for {', '.join(results['Failed'])}")
 
 
 class CallbackHandler():
@@ -75,11 +112,47 @@ class TestDaosApiBase(ObjectWithParameters):
         super().__init__(namespace)
         self.debug = BasicParameter(None, False)
         self.silent = BasicParameter(None, False)
+        self.label = BasicParameter(None, self.__class__.__name__)
+        self.__uuid = None
 
         # Test yaml parameter used to define the control method:
         #   USE_API    - use the API methods to create/destroy containers
         #   USE_DAOS   - use the daos command to create/destroy pools/containers
         self.control_method = BasicParameter(self.USE_DAOS, self.USE_DAOS)
+
+        # If defined, use container labels for most operations by default.
+        # Setting to False will use the UUID where possible.
+        self.use_label = True
+
+    @property
+    def uuid(self):
+        """Get the object UUID.
+
+        Returns:
+            str: object UUID
+        """
+        return self.__uuid
+
+    @uuid.setter
+    def uuid(self, value):
+        """Set the object UUID.
+
+        Args:
+            value (str): object UUID
+        """
+        self.__uuid = value
+
+    @property
+    def identifier(self):
+        """Get the container uuid or label.
+
+        Returns:
+            str: label if using labels and one is defined; otherwise the uuid
+
+        """
+        if self.use_label and self.label.value is not None:
+            return self.label.value
+        return self.uuid
 
     def _log_method(self, name, kwargs):
         """Log the method call with its arguments.
@@ -176,6 +249,29 @@ class TestDaosApiBase(ObjectWithParameters):
                 self.log.error(msg)
                 check_status = False
         return check_status
+
+    def validate_properties(self, get_prop_json, expected_props, ignore_props=None):
+        """Validate the current properties against expected values.
+
+        Args:
+            get_prop_json (dict): get-prop json output with the actual properties of the object.
+            expected_props (dict): expected property values, with property names as keys.
+            ignore_props (list, optional): list of property names to ignore during validation.
+                Defaults to None.
+
+        Raises:
+            AssertionError: If any property does not match the expected value.
+        """
+        data = {}
+        for actual_prop in get_prop_json["response"]:
+            if ignore_props and actual_prop["name"] in ignore_props:
+                self.log.debug(
+                    "Ignoring %s property %s during validation",
+                    self.identifier, actual_prop["name"])
+                continue
+            expected = expected_props.get(actual_prop["name"], None)
+            data[actual_prop["name"]] = (actual_prop["value"], expected)
+        check_expected(self.log, f"{self.identifier} properties", data)
 
 
 class LabelGenerator():

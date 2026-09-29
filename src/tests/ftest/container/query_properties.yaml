@@ -20,7 +20,10 @@ server_config:
 pool:
   scm_size: 1G
 
-container:
+container_1:
+  type: POSIX
+
+container_2:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 
