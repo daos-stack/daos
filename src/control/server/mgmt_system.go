@@ -1680,62 +1680,6 @@ func (svc *mgmtSvc) eraseSysedb() error {
 	return nil
 }
 
-// waitForLeaderElection polls MS replicas after an erase operation to ensure that
-// raft leader election has completed. This is critical because after erasing the raft
-// databases, the cluster needs time to bootstrap and elect a new leader before engines
-// can successfully join.
-func (svc *mgmtSvc) waitForLeaderElection(ctx context.Context, hostAddrs []string) error {
-	if len(hostAddrs) == 0 {
-		svc.log.Debug("waitForLeaderElection: no peers to check, skipping")
-		return nil
-	}
-
-	svc.log.Tracef("waitForLeaderElection: polling %d replica(s) for leader election", len(hostAddrs))
-
-	maxWait := svc.eraseWaitMaxWait
-	if maxWait <= 0 {
-		maxWait = defaultEraseWaitMaxWait
-	}
-	pollInterval := svc.eraseWaitPollInterval
-	if pollInterval <= 0 {
-		pollInterval = defaultEraseWaitPollInterval
-	}
-	deadline := time.Now().Add(maxWait)
-	attempts := 0
-
-	for {
-		attempts++
-		if time.Now().After(deadline) {
-			return errors.Errorf("timeout waiting for raft leader election after erase (%d attempts)", attempts)
-		}
-
-		// Query each replica for leader information
-		leaderReq := &control.LeaderQueryReq{}
-		leaderReq.SetHostList(hostAddrs)
-
-		resp, err := control.LeaderQuery(ctx, svc.rpcClient, leaderReq)
-		if err == nil && resp != nil && resp.Leader != "" {
-			// Leader elected successfully
-			svc.log.Tracef("waitForLeaderElection: SUCCESS - raft leader elected: %s (after %d attempts)", resp.Leader, attempts)
-			return nil
-		}
-
-		// Log the status and retry
-		if err != nil {
-			svc.log.Debugf("waitForLeaderElection: attempt %d - error: %s", attempts, err)
-		} else if resp != nil && resp.Leader == "" {
-			svc.log.Debugf("waitForLeaderElection: attempt %d - no leader yet (replicas=%v)", attempts, resp.Replicas)
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(pollInterval):
-			// Continue polling
-		}
-	}
-}
-
 // waitForReplicasReady polls MS replicas to ensure they have restarted and are ready
 // to accept join requests after an erase operation. This prevents engines from trying
 // to join before replicas have finished restarting with clean databases.
@@ -1922,30 +1866,26 @@ func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) err
 	return nil
 }
 
-// awaitLeaderElection waits for raft leader election to complete after replicas restart.
-func (svc *mgmtSvc) awaitLeaderElection(ctx context.Context, peers []*net.TCPAddr) error {
-	svc.log.Trace("SystemErase: LEADER - Step 6: Waiting for raft leader election")
-
-	// Build host address list from peer addresses for leader election check
-	var hostAddrs []string
-	for _, peer := range peers {
-		hostAddrs = append(hostAddrs, peer.String())
-	}
-
-	// After replicas restart with clean databases, wait for raft leader election
-	// to complete before allowing engines to join. Without a raft leader, join requests
-	// will fail with "not the DAOS Management Service leader" errors.
-	if err := svc.waitForLeaderElection(ctx, hostAddrs); err != nil {
-		svc.log.Errorf("replicas ready but leader not elected: %s", err)
-		return errors.Wrap(err, "waiting for raft leader election after erase")
-	}
-
-	return nil
-}
-
 // wipeEngineSuperblocks calls ResetFormatRanks on all engines to prepare them for reformat.
+//
+// This intentionally does NOT wait for a new raft leader to be elected among the
+// replicas first. Only the bootstrap MS replica is capable of forming a brand new
+// single-node raft cluster after an erase (see bootstrapRaft() in system/raft), and
+// that replica cannot become leader until *it* restarts -- but it can't restart until
+// this very function (running on whichever replica happened to be leader before the
+// erase) returns. Waiting here for "a new leader" therefore creates an unresolvable
+// circular wait that always times out: no other replica is able to self-elect, and
+// the one replica that could hasn't restarted yet.
+//
+// It's safe to proceed without that wait because eraseReplicas() (Step 4/5, above)
+// already gives a synchronous, per-replica guarantee that every non-leader replica's
+// own engines are stopped and its own raft DB/superblocks are erased -- each replica's
+// SystemErase() RPC handler performs that work itself, synchronously, before it even
+// sends its RPC response back to the leader. So by the time eraseReplicas() returns
+// without error, every peer is provably inactive (engines stopped) with a wiped sysdb,
+// regardless of whether any of them have restarted or rejoined raft yet.
 func (svc *mgmtSvc) wipeEngineSuperblocks(ctx context.Context, fanReq *fanoutRequest, fanResp *fanoutResponse) (*mgmtpb.SystemEraseResp, error) {
-	svc.log.Trace("SystemErase: LEADER - Step 7: Calling ResetFormatRanks on all engines")
+	svc.log.Trace("SystemErase: LEADER - Step 6: Calling ResetFormatRanks on all engines")
 
 	// Set fanout method to ResetFormatRanks to wipe engine superblocks and restart engines into
 	// AwaitFormat state. By doing this after erasing MS replicas, the replicas have clean sysdb
@@ -1993,10 +1933,6 @@ func (svc *mgmtSvc) resetAllEngines(ctx context.Context) (*mgmtpb.SystemEraseRes
 	}
 
 	if err := svc.eraseReplicas(ctx, peers); err != nil {
-		return nil, err
-	}
-
-	if err := svc.awaitLeaderElection(ctx, peers); err != nil {
 		return nil, err
 	}
 

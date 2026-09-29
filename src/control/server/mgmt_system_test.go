@@ -3784,63 +3784,6 @@ func TestServer_MgmtSvc_eraseSysedb(t *testing.T) {
 	})
 }
 
-func TestServer_MgmtSvc_waitForLeaderElection(t *testing.T) {
-	for name, tc := range map[string]struct {
-		hostAddrs []string
-		uErr      error
-		uResp     *control.UnaryResponse
-		cancelCtx bool
-		expErr    error
-	}{
-		"no hosts": {
-			hostAddrs: nil,
-			expErr:    nil,
-		},
-		"leader found immediately": {
-			hostAddrs: []string{"10.0.0.1:10001"},
-			uResp: control.MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.LeaderQueryResp{CurrentLeader: "10.0.0.1:10001"}),
-		},
-		"context canceled while polling": {
-			hostAddrs: []string{"10.0.0.1:10001"},
-			uErr:      errors.New("mock rpc error"),
-			cancelCtx: true,
-			expErr:    context.Canceled,
-		},
-		"deadline exceeded while polling": {
-			// Never returns a leader, so waitForLeaderElection must keep
-			// polling until svc.eraseWaitMaxWait elapses and return a
-			// timeout error. svc.eraseWaitMaxWait/eraseWaitPollInterval are
-			// overridden to small values by newTestMgmtSvc() so this
-			// exercises the real deadline logic without a slow test.
-			hostAddrs: []string{"10.0.0.1:10001"},
-			uResp: control.MockMSResponse("10.0.0.1:10001", nil,
-				&mgmtpb.LeaderQueryResp{CurrentLeader: ""}),
-			expErr: errors.New("timeout waiting for raft leader election after erase"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			svc := newTestMgmtSvc(t, log)
-			svc.rpcClient = control.NewMockInvoker(log, &control.MockInvokerConfig{
-				UnaryError:    tc.uErr,
-				UnaryResponse: tc.uResp,
-			})
-
-			ctx, cancel := context.WithCancel(test.Context(t))
-			defer cancel()
-			if tc.cancelCtx {
-				cancel()
-			}
-
-			gotErr := svc.waitForLeaderElection(ctx, tc.hostAddrs)
-			test.CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
 func TestServer_MgmtSvc_waitForReplicasReady(t *testing.T) {
 	mockAddr := func(a int32) *net.TCPAddr {
 		return test.MockHostAddr(a)
