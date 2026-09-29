@@ -112,6 +112,84 @@ suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id
 	return 0;
 }
 
+/*
+ * Validate a progressive layout configuration before it is persisted. Shared by container
+ * create and superblock recreate so neither path can write an unsupported or out-of-bounds record.
+ */
+static int
+dfs_pl_attr_verify(const dfs_attr_t *attr, uint64_t rf)
+{
+	daos_oclass_id_t    head;
+	daos_oclass_id_t    tail;
+	daos_oclass_hints_t dir_hints;
+	daos_oclass_hints_t file_hints;
+	uint32_t            cid_tf;
+	int                 cont_tf;
+	int                 rc;
+
+	if (attr->da_pl_nr == 0)
+		return 0;
+	if (attr->da_pl_nr > DFS_PL_MAX_SEGMENTS) {
+		D_ERROR("Progressive layout tail count %u exceeds %u\n", attr->da_pl_nr,
+			DFS_PL_MAX_SEGMENTS);
+		return EINVAL;
+	}
+	if (attr->da_pl_nr > 1) {
+		D_ERROR("Progressive layout with more than one tail is not supported\n");
+		return ENOTSUP;
+	}
+
+	/* an explicit default file class (da_oclass_id seeds it) means single-object files */
+	if (attr->da_oclass_id != 0 || attr->da_file_oclass_id != 0) {
+		D_ERROR(
+		    "Progressive layout cannot be combined with an explicit file object class\n");
+		return EINVAL;
+	}
+	if (attr->da_hints[0] != '\0') {
+		rc = get_oclass_hints(attr->da_hints, &dir_hints, &file_hints, rf);
+		if (rc)
+			return rc;
+		if (file_hints != 0) {
+			D_ERROR("Progressive layout cannot be combined with a file object class "
+				"hint\n");
+			return EINVAL;
+		}
+	}
+
+	head = attr->da_pl_head_oclass;
+	tail = attr->da_pl_segs[0].pls_oclass_id;
+	if ((head == 0) != (tail == 0)) {
+		D_ERROR("Progressive layout head and tail object classes must be set together\n");
+		return EINVAL;
+	}
+	if (head == 0)
+		return 0;
+
+	cont_tf = daos_cont_rf2allowedfailures(rf);
+	if (cont_tf < 0)
+		return EINVAL;
+	rc = daos_oclass_cid2allowedfailures(head, &cid_tf);
+	if (rc) {
+		D_ERROR("Invalid progressive layout head object class %u\n", head);
+		return EINVAL;
+	}
+	if (cid_tf < cont_tf) {
+		D_ERROR("Progressive layout head object class cannot tolerate RF failures\n");
+		return EINVAL;
+	}
+	rc = daos_oclass_cid2allowedfailures(tail, &cid_tf);
+	if (rc) {
+		D_ERROR("Invalid progressive layout tail object class %u\n", tail);
+		return EINVAL;
+	}
+	if (cid_tf < cont_tf) {
+		D_ERROR("Progressive layout tail object class cannot tolerate RF failures\n");
+		return EINVAL;
+	}
+
+	return 0;
+}
+
 int
 dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *_coh,
 		dfs_t **_dfs)
@@ -120,6 +198,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 	struct dfs_entry          entry           = {0};
 	daos_prop_t              *prop            = NULL;
 	daos_oclass_hints_t       dir_oclass_hint = 0;
+	daos_oclass_hints_t       file_hints      = 0;
 	uint64_t                  rf;
 	daos_cont_info_t          co_info;
 	dfs_t                    *dfs;
@@ -127,6 +206,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 	char                      str[37];
 	struct daos_prop_co_roots roots;
 	int                       rc, rc2;
+	int                       i;
 	struct daos_prop_entry   *dpe;
 	struct daos_prop_entry   *roots_entry  = NULL;
 	struct daos_prop_entry   *layout_entry = NULL;
@@ -221,6 +301,18 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 			strncpy(dattr.da_hints, attr->da_hints, DAOS_CONT_HINT_MAX_LEN - 1);
 			dattr.da_hints[DAOS_CONT_HINT_MAX_LEN - 1] = '\0';
 		}
+
+		/* bounds are enforced here, before the segments are copied into dattr */
+		rc = dfs_pl_attr_verify(attr, rf);
+		if (rc)
+			D_GOTO(err_prop, rc);
+		dattr.da_pl_nr          = attr->da_pl_nr;
+		dattr.da_pl_head_oclass = attr->da_pl_head_oclass;
+		for (i = 0; i < attr->da_pl_nr; i++) {
+			dattr.da_pl_segs[i].pls_oclass_id = attr->da_pl_segs[i].pls_oclass_id;
+			dattr.da_pl_segs[i].pls_split_off = attr->da_pl_segs[i].pls_split_off;
+			dattr.da_pl_segs[i].pls_oid       = DAOS_OBJ_NIL;
+		}
 	} else {
 		dattr.da_oclass_id      = 0;
 		dattr.da_dir_oclass_id  = 0;
@@ -263,8 +355,6 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 
 	/** check hints for SB and Root Dir */
 	if (dattr.da_hints[0] != 0) {
-		daos_oclass_hints_t file_hints;
-
 		rc = get_oclass_hints(dattr.da_hints, &dir_oclass_hint, &file_hints, rf);
 		if (rc)
 			D_GOTO(err_prop, rc);
@@ -1227,6 +1317,7 @@ dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr)
 	daos_handle_t              super_oh;
 	struct dfs_entry           rentry = {0};
 	struct timespec            now;
+	uint32_t                   rf;
 	int                        i;
 	int                        rc, rc2;
 
@@ -1259,6 +1350,16 @@ dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr)
 		D_ERROR("Invalid superblock or root object ID\n");
 		D_GOTO(out_prop, rc = EIO);
 	}
+
+	/* validate the PL config before open_sb() punches the existing SB */
+	rc = dc_cont_hdl2redunfac(coh, &rf);
+	if (rc) {
+		D_ERROR("dc_cont_hdl2redunfac() failed " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+	rc = dfs_pl_attr_verify(attr, rf);
+	if (rc)
+		D_GOTO(out_prop, rc);
 
 	/** Recreate SB */
 	rc = open_sb(coh, true, true, DAOS_OO_RW, roots->cr_oids[0], attr, &super_oh, NULL);

@@ -799,6 +799,7 @@ set_sb_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
 	set_daos_iod(for_update, &iods[DIR_OC_IDX], DIR_OC_NAME, sizeof(daos_oclass_id_t));
 	set_daos_iod(for_update, &iods[CONT_MODE_IDX], CONT_MODE_NAME, sizeof(uint32_t));
 	set_daos_iod(for_update, &iods[CONT_HINT_IDX], CONT_HINT_NAME, DAOS_CONT_HINT_MAX_LEN);
+	set_daos_iod(for_update, &iods[CONT_PL_IDX], CONT_PL_NAME, sizeof(struct dfs_sb_pl));
 }
 
 int
@@ -818,6 +819,7 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 	daos_oclass_id_t file_oclass = OC_UNKNOWN;
 	uint32_t         mode;
 	char             hints[DAOS_CONT_HINT_MAX_LEN];
+	struct dfs_sb_pl pl = {0};
 	int              i, rc;
 
 	D_ASSERT(attr);
@@ -837,6 +839,7 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 	d_iov_set(&sg_iovs[FILE_OC_IDX], &file_oclass, sizeof(daos_oclass_id_t));
 	d_iov_set(&sg_iovs[DIR_OC_IDX], &dir_oclass, sizeof(daos_oclass_id_t));
 	d_iov_set(&sg_iovs[CONT_MODE_IDX], &mode, sizeof(uint32_t));
+	d_iov_set(&sg_iovs[CONT_PL_IDX], &pl, sizeof(pl));
 
 	for (i = 0; i < SB_AKEYS; i++) {
 		sgls[i].sg_nr     = 1;
@@ -856,15 +859,39 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 
 	/** create the SB and exit */
 	if (create) {
-		int    num_iods = SB_AKEYS;
-		size_t hint_len = strlen(attr->da_hints);
+		daos_iod_t  w_iods[SB_AKEYS];
+		d_sg_list_t w_sgls[SB_AKEYS];
+		int         w_nr     = 0;
+		size_t      hint_len = strlen(attr->da_hints);
 
-		/** adjust the IOD for the hints string to the actual size */
+		/* size the optional keys to their contents */
 		if (hint_len) {
 			set_daos_iod(true, &iods[CONT_HINT_IDX], CONT_HINT_NAME, hint_len + 1);
 			d_iov_set(&sg_iovs[CONT_HINT_IDX], attr->da_hints, hint_len + 1);
-		} else {
-			num_iods--;
+		}
+		if (attr->da_pl_nr != 0) {
+			pl.nr   = attr->da_pl_nr;
+			pl.head = attr->da_pl_head_oclass;
+			for (i = 0; i < attr->da_pl_nr; i++) {
+				pl.seg[i].oclass    = attr->da_pl_segs[i].pls_oclass_id;
+				pl.seg[i].split_off = attr->da_pl_segs[i].pls_split_off;
+			}
+			set_daos_iod(true, &iods[CONT_PL_IDX], CONT_PL_NAME, DFS_SB_PL_SIZE(pl.nr));
+			d_iov_set(&sg_iovs[CONT_PL_IDX], &pl, DFS_SB_PL_SIZE(pl.nr));
+		}
+
+		/*
+		 * daos_obj_update() takes a contiguous IOD array, so gather the fixed keys plus
+		 * whichever optional keys are present; iods/sgls keep their fixed indices.
+		 */
+		for (i = 0; i < SB_AKEYS; i++) {
+			if (i == CONT_HINT_IDX && hint_len == 0)
+				continue;
+			if (i == CONT_PL_IDX && attr->da_pl_nr == 0)
+				continue;
+			w_iods[w_nr] = iods[i];
+			w_sgls[w_nr] = sgls[i];
+			w_nr++;
 		}
 
 		magic      = DFS_SB_MAGIC;
@@ -881,8 +908,8 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 		file_oclass = attr->da_file_oclass_id;
 		mode        = attr->da_mode;
 
-		rc = daos_obj_update(*oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT, &dkey, num_iods,
-				     iods, sgls, NULL);
+		rc = daos_obj_update(*oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT, &dkey, w_nr, w_iods,
+				     w_sgls, NULL);
 		if (rc) {
 			D_ERROR("Failed to create DFS superblock " DF_RC "\n", DP_RC(rc));
 			D_GOTO(err, rc = daos_der2errno(rc));
@@ -945,6 +972,32 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 
 		memcpy(attr->da_hints, hints, hint_len);
 		attr->da_hints[hint_len] = '\0';
+	}
+
+	/** an absent PL a-key (always the case before SB v3) means progressive layout is off */
+	attr->da_pl_nr = 0;
+	if (iods[CONT_PL_IDX].iod_size != 0) {
+		if (iods[CONT_PL_IDX].iod_size < DFS_SB_PL_SIZE(0) ||
+		    iods[CONT_PL_IDX].iod_size != DFS_SB_PL_SIZE(pl.nr)) {
+			rc = EINVAL;
+			D_ERROR("Invalid progressive layout record in SB: %d (%s)\n", rc,
+				strerror(rc));
+			D_GOTO(err, rc);
+		}
+		if (pl.nr > 1) {
+			rc = ENOTSUP;
+			D_ERROR(
+			    "Progressive layout with %u tail segments is not supported: %d (%s)\n",
+			    pl.nr, rc, strerror(rc));
+			D_GOTO(err, rc);
+		}
+		attr->da_pl_nr          = pl.nr;
+		attr->da_pl_head_oclass = pl.head;
+		for (i = 0; i < pl.nr; i++) {
+			attr->da_pl_segs[i].pls_oclass_id = pl.seg[i].oclass;
+			attr->da_pl_segs[i].pls_split_off = pl.seg[i].split_off;
+			attr->da_pl_segs[i].pls_oid       = DAOS_OBJ_NIL;
+		}
 	}
 
 	return 0;

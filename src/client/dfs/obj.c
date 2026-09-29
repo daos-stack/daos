@@ -179,7 +179,9 @@ file_oclasses(dfs_t *dfs, daos_oclass_id_t parent_oclass, daos_oclass_id_t cid,
 	*split_off = 0;
 	*has_tail  = false;
 
-	if (cid != 0 || !dfs_file_layout_has_tail(dfs->layout_v, S_IFREG))
+	/* explicit class => single object; PL is per-container opt-in and needs layout v4 */
+	if (cid != 0 || dfs->attr.da_pl_nr == 0 ||
+	    !dfs_file_layout_has_tail(dfs->layout_v, S_IFREG))
 		return 0;
 
 	/* Pick up target/space growth (e.g. a pool extend) without querying the pool every create.
@@ -192,24 +194,37 @@ file_oclasses(dfs_t *dfs, daos_oclass_id_t parent_oclass, daos_oclass_id_t cid,
 	if (dfs->pl_target_nr < DFS_PL_MIN_TARGETS && !pl_bypass_target_limit())
 		return 0;
 
-	/* Use the default DAOS file class as the wide tail and derive the compact head from it. */
-	rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_ARRAY_BYTE, dfs->file_oclass_hint, 0, tail_cid);
-	if (rc != 0) {
-		D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
-		return daos_der2errno(rc);
+	if (dfs->attr.da_pl_head_oclass != 0) {
+		/* explicit mode: head and tail are pinned together at container create */
+		*head_cid = dfs->attr.da_pl_head_oclass;
+		*tail_cid = dfs->attr.da_pl_segs[0].pls_oclass_id;
+	} else {
+		/* auto mode: the default DAOS file class is the wide tail, derive the compact head
+		 */
+		rc = daos_obj_get_oclass(dfs->coh, DAOS_OT_ARRAY_BYTE, dfs->file_oclass_hint, 0,
+					 tail_cid);
+		if (rc != 0) {
+			D_ERROR("daos_obj_get_oclass() failed " DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+
+		tail_attr = daos_oclass_id2attr(*tail_cid, &max_groups);
+		if (tail_attr == NULL)
+			return EINVAL;
+
+		/* Keep the tail redundancy family and only compact the head by reducing its group
+		 * count. */
+		*head_cid = file_head_oclass(*tail_cid, max_groups);
+		if (*head_cid == OC_UNKNOWN)
+			goto out;
 	}
 
-	tail_attr = daos_oclass_id2attr(*tail_cid, &max_groups);
-	if (tail_attr == NULL)
-		return EINVAL;
-
-	/* Keep the tail redundancy family and only compact the head by reducing its group count. */
-	*head_cid = file_head_oclass(*tail_cid, max_groups);
-	if (*head_cid == OC_UNKNOWN)
-		goto out;
-
-	local_split_off = file_split_off(dfs->pl_target_nr, dfs->pl_total_scm, dfs->pl_total_nvme,
-					 *head_cid, *tail_cid, chunk_size);
+	/* a pinned split_off is used as given; otherwise derive it from the pool capacity */
+	local_split_off = dfs->attr.da_pl_segs[0].pls_split_off;
+	if (local_split_off == 0)
+		local_split_off =
+		    file_split_off(dfs->pl_target_nr, dfs->pl_total_scm, dfs->pl_total_nvme,
+				   *head_cid, *tail_cid, chunk_size);
 	if (local_split_off == 0)
 		goto out;
 
@@ -314,6 +329,7 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 
 	info->doi_oid = obj->oid;
 	info->doi_pl_nr = 0;
+	info->doi_pl_head_oclass_id = 0;
 
 	switch (obj->mode & S_IFMT) {
 	case S_IFDIR: {
@@ -374,20 +390,19 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 				}
 
 				/*
-				 * Files created here use the default class, so they may be
-				 * progressive: report the head/tail classes and split offset a file
-				 * created in this directory would receive. doi_file_oclass_id
-				 * becomes the compact head class and doi_pl_segs[] the wider tail
-				 * segment(s); left as no PL when the pool is too small or the
-				 * layout predates PL.
+				 * Files created here use the default class, so if the container
+				 * enables progressive layout report the head/tail classes and split
+				 * offset a file created in this directory would receive; left as no
+				 * PL when disabled, the pool is too small or the layout predates
+				 * PL.
 				 */
 				rc = file_oclasses(dfs, 0, 0, info->doi_chunk_size, &pl_head,
 						   &pl_tail, &pl_split, &pl_has_tail);
 				if (rc)
 					return rc;
 				if (pl_has_tail) {
-					info->doi_file_oclass_id           = pl_head;
 					info->doi_pl_nr                    = 1;
+					info->doi_pl_head_oclass_id        = pl_head;
 					info->doi_pl_segs[0].pls_oclass_id = pl_tail;
 					info->doi_pl_segs[0].pls_split_off = pl_split;
 					info->doi_pl_segs[0].pls_oid       = DAOS_OBJ_NIL;
@@ -407,6 +422,7 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 		info->doi_oclass_id = daos_obj_id2class(obj->oid);
 		if (obj->f.has_tail) {
 			info->doi_pl_nr                    = 1;
+			info->doi_pl_head_oclass_id        = info->doi_oclass_id;
 			info->doi_pl_segs[0].pls_oclass_id = daos_obj_id2class(obj->f.tail_oid);
 			info->doi_pl_segs[0].pls_split_off = obj->f.split_off;
 			info->doi_pl_segs[0].pls_oid       = obj->f.tail_oid;
