@@ -28,7 +28,7 @@ static int
 setup(void **state)
 {
 	*state = &worker_checker_state;
-	mock_vfprintf_check_args = 0;
+	mock_vfprintf_check_output = 0;
 	mock_worker_fclose_rc    = 0;
 	return 0;
 }
@@ -38,6 +38,14 @@ teardown(void **state)
 {
 	(void)state;
 	return 0;
+}
+
+static void
+expect_worker_fopen(int error)
+{
+	expect_string(__wrap_fopen, path, Mock_log_file);
+	expect_string(__wrap_fopen, mode, "w");
+	will_return(__wrap_fopen, error);
 }
 
 /* Start a worker test with DLCK defaults and an initialized checker. */
@@ -58,7 +66,8 @@ setup_worker_checker(void **state)
 	ck = *state;
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, 0);
-	will_return(__wrap_fopen, 0);
+	expect_worker_fopen(0);
+	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	assert_int_equal(
 	    dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 	    DER_SUCCESS);
@@ -74,6 +83,7 @@ teardown_worker_checker(void **state)
 
 	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
 	expect_value(__wrap_d_free, ptr, &Dcw);
+	expect_value(__wrap_fclose, stream, Mock_file_stream);
 	expect_function_call(__wrap_fclose);
 	will_return(__wrap_fclose, mock_worker_fclose_rc);
 	dlck_checker_worker_fini(ck);
@@ -111,7 +121,8 @@ test_worker_init_log_open_failure(void **state)
 
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, 0);
-	will_return(__wrap_fopen, EIO);
+	expect_worker_fopen(EIO);
+	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(
 	    dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
@@ -157,10 +168,12 @@ test_worker_vprintf_success(void **state)
 {
 	struct checker *ck = *state;
 
-	mock_vfprintf_check_args = 1;
+	mock_vfprintf_check_output = 1;
+	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
 	expect_string(__wrap_vfprintf, fmt, "worker %d: %s");
 	expect_string(__wrap_vfprintf, output, "worker 42: ready");
 	will_return(__wrap_vfprintf, 16);
+	expect_value(__wrap_fflush, stream, Mock_file_stream);
 	will_return(__wrap_fflush, 0);
 	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"),
 			 DER_SUCCESS);
@@ -173,10 +186,12 @@ test_worker_CK_PRINTF_with_indent(void **state)
 
 	ck->ck_level = 2;
 	assert_int_equal(ck->ck_indent_set(ck), DER_SUCCESS);
-	mock_vfprintf_check_args = 1;
+	mock_vfprintf_check_output = 1;
+	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
 	expect_string(__wrap_vfprintf, fmt, "%sworker %d");
 	expect_string(__wrap_vfprintf, output, "-- worker 42");
 	will_return(__wrap_vfprintf, 12);
+	expect_value(__wrap_fflush, stream, Mock_file_stream);
 	will_return(__wrap_fflush, 0);
 	CK_PRINTF(ck, "worker %d", 42);
 }
@@ -187,6 +202,8 @@ test_worker_vprintf_vfprintf_failure(void **state)
 {
 	struct checker *ck = *state;
 
+	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
+	expect_string(__wrap_vfprintf, fmt, "worker");
 	will_return(__wrap_vfprintf, -1);
 	assert_int_equal(ck_common_printf(ck, "worker"), daos_errno2der(EIO));
 }
@@ -197,7 +214,10 @@ test_worker_vprintf_fflush_failure(void **state)
 {
 	struct checker *ck = *state;
 
+	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
+	expect_string(__wrap_vfprintf, fmt, "worker");
 	will_return(__wrap_vfprintf, 1);
+	expect_value(__wrap_fflush, stream, Mock_file_stream);
 	will_return(__wrap_fflush, EIO);
 	assert_int_equal(ck_common_printf(ck, "worker"), daos_errno2der(EIO));
 }

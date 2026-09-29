@@ -16,12 +16,12 @@
 
 #include "dlck_checker_ut_mock.h"
 
-struct dlck_checker_main Dcm;
-struct dlck_checker_worker Dcw;
-const ABT_mutex Mock_mutex_handle = (ABT_mutex)0x1234;
-FILE *const                Mock_file_stream  = (FILE *)0x5678;
-int mock_vfprintf_check_args;
-static char                Mock_log_file[] = "mock-vos-log";
+struct dlck_checker_main 	Dcm;
+struct dlck_checker_worker 	Dcw;
+const ABT_mutex 		Mock_mutex_handle = (ABT_mutex)0x1234;
+FILE *const                	Mock_file_stream  = (FILE *)0x5678;
+int				mock_vfprintf_check_output;
+char                       	Mock_log_file[] = "mock-vos-log";
 
 /* helper functions for setting up and handling mocked checker allocations */
 void
@@ -52,13 +52,7 @@ __wrap_d_calloc(size_t nmemb, size_t size)
 void
 __wrap_d_free(void *ptr)
 {
-	if (ptr == &Dcm || ptr == &Dcw) {
-		check_expected_ptr(ptr);
-		return;
-	}
-	if (ptr == Mock_log_file)
-		return;
-	fail_msg("Unexpected d_free(%p)", ptr);
+	check_expected_ptr(ptr);
 }
 
 char *
@@ -81,12 +75,12 @@ __wrap_fopen(const char *path, const char *mode)
 {
 	int error = mock_type(int);
 
+	check_expected(path);
+	check_expected(mode);
 	if (error != 0) {
 		errno = error;
 		return NULL;
 	}
-	assert_string_equal(path, Mock_log_file);
-	assert_string_equal(mode, "w");
 	return Mock_file_stream;
 }
 
@@ -95,7 +89,7 @@ __wrap_fclose(FILE *stream)
 {
 	int rc = mock_type(int);
 
-	assert_ptr_equal(stream, Mock_file_stream);
+	check_expected_ptr(stream);
 	function_called();
 	if (rc == EOF)
 		errno = EIO;
@@ -150,14 +144,14 @@ __wrap_vfprintf(FILE *stream, const char *fmt, va_list args)
 {
 	int rc = mock_type(int);
 
-	(void)stream;
-	if (mock_vfprintf_check_args != 0) {
+	check_expected_ptr(stream);
+	check_expected(fmt);
+	if (mock_vfprintf_check_output != 0) {
 		char    output[128];
 		va_list copy;
 		int     length;
 
-		mock_vfprintf_check_args = 0;
-		check_expected(fmt);
+		mock_vfprintf_check_output = 0;
 		va_copy(copy, args);
 		length = vsnprintf(output, sizeof(output), fmt, copy);
 		va_end(copy);
@@ -175,7 +169,7 @@ __wrap_fflush(FILE *stream)
 {
 	int error = mock_type(int);
 
-	(void)stream;
+	check_expected_ptr(stream);
 	errno = error;
 	return error != 0 ? EOF : 0;
 }

@@ -35,25 +35,27 @@ when adding or changing DLCK unit tests:
   `check_expected()`, `expect_string()` with `check_expected()`, and pointer
   expectations with `expect_value()` plus `check_expected_ptr()`. This CMocka
   version does not provide `expect_ptr()`.
-- Use `assert_ptr_equal()` to verify resulting pointer state. To verify checker
-  cleanup, have the payload-specific `__wrap_d_free` path call
-  `check_expected_ptr(ptr)` and queue `expect_value(__wrap_d_free, ptr, &Dcm)`
-  or `&Dcw` before the operation that frees it. Queue expectations for failure
-  paths that release an allocated payload too. Leave them absent when no free
-  should occur; an unexpected tracked-payload free then fails in the wrapper.
-  This checks the free call and pointer, not general leak freedom.
+- Strict mocks must validate every behavior-relevant argument on every call,
+  including failure paths. Queue matching expectations per call; do not use
+  allowlists or silently accept unexpected calls. Document intentionally ignored
+  arguments.
+- In particular, make `__wrap_d_free` call `check_expected_ptr(ptr)`
+  unconditionally. Queue `expect_value(__wrap_d_free, ptr, expected_ptr)` before
+  each free, including failure cleanup and temporary allocations such as
+  `Mock_log_file`. This checks the argument, not general leak freedom.
+- Use `assert_ptr_equal()` to verify resulting pointer state.
 - Wrap only external calls whose results or arguments need control. Add the
   corresponding `-Wl,--wrap=<symbol>` and implement the exact
   `__wrap_<symbol>` signature. Use `__real_<symbol>` only for intentional
   pass-through behavior; strict unit-test wrappers must fail on unexpected
   calls rather than reaching real functions.
 - Keep mocks local unless multiple suites need the same contract. Reset
-  `mock_vfprintf_check_args` in per-test setup. The checker mock has no
+  `mock_vfprintf_check_output` in per-test setup. The checker mock has no
   real-function fallbacks: `expect_checker_d_calloc()` queues the payload for
-  an expected allocation, `__wrap_fopen` returns a sentinel stream on queued
-  success, `__wrap_fclose` requires that sentinel, and the print/flush wrappers
-  always consume queued results. `mock_vfprintf_check_args` enables format and
-  rendered-argument checks for the mocked `vfprintf` call.
+  an expected allocation, `__wrap_fopen` checks path and mode on every result,
+  and the I/O wrappers check their stream arguments. `__wrap_vfprintf` always
+  checks its format; `mock_vfprintf_check_output` enables rendered-output
+  checking for that call.
 - When an error path reads `errno`, set it in the relevant wrapper. Assert the
   correct mapping (`daos_errno2der()` or `dss_abterr2der()`) and cleanup.
 - For DAOS assertions, call `d_register_alt_assert(mock_assert)` in `main()` before
