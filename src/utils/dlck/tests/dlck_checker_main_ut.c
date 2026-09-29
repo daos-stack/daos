@@ -25,35 +25,64 @@
 #include "../dlck_checker.h"
 #include "dlck_checker_ut_mock.h"
 
-static void
-test_setup(void)
+static struct checker main_checker_state;
+
+static int
+setup(void **state)
 {
+	*state = &main_checker_state;
 	mock_vfprintf_check_args = 0;
+	return 0;
 }
 
-static void
-init_checker(struct checker *ck)
+static int
+setup_main_checker(void **state)
 {
+	struct checker *ck;
+	int             rc;
+
+	rc = setup(state);
+	if (rc != 0)
+		return rc;
+
+	ck = *state;
 	EXPECT_CHECKER_D_CALLOC(Dcm);
 	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
 	assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
 	assert_non_null(ck->ck_private);
+	return 0;
+}
+
+static int
+teardown(void **state)
+{
+	(void)state;
+	return 0;
+}
+
+static int
+teardown_main_checker(void **state)
+{
+	struct checker  ck_zeroed;
+	struct checker *ck = *state;
+
+	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
+	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
+	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
+	expect_value(__wrap_d_free, ptr, &Dcm);
+	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
+	assert_memory_equal(ck, &ck_zeroed, sizeof(*ck));
+	return teardown(state);
 }
 
 /* main init: success initializes the checker and its callbacks. */
 static void
 test_main_init_success(void **state)
 {
-	struct checker  ck_zeroed;
 	struct checker *ck = *state;
 
-	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
-
-	EXPECT_CHECKER_D_CALLOC(Dcm);
-	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
-	assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
+	/* setup_main_checker() initializes this test's checker. */
 	assert_ptr_equal(ck->ck_private, dlck_checker_main_get_custom(ck));
 
 	assert_int_equal(Dcm.core.magic, DLCK_CHECKER_MAIN_MAGIC);
@@ -62,12 +91,7 @@ test_main_init_success(void **state)
 	assert_non_null(ck->ck_vprintf);
 	assert_non_null(ck->ck_indent_set);
 	assert_ptr_equal(ck->ck_prefix, Dcm.core.prefix);
-
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
-	assert_memory_equal(ck, &ck_zeroed, sizeof(*ck));
+	/* teardown_main_checker() finalizes the checker and verifies cleanup. */
 }
 
 /* main init: mutex creation returns an Argobots error. */
@@ -186,7 +210,6 @@ test_main_fini_mutex_free_failure(void **state)
 	struct checker *ck = *state;
 
 	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
-	init_checker(ck);
 	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_ERR_OTHER);
 	expect_value(__wrap_d_free, ptr, &Dcm);
@@ -211,8 +234,10 @@ static void
 test_main_indent_set_levels_zero_to_max(void **state)
 {
 	struct checker *ck = *state;
+	int             indent_index;
 
-	for (ck->ck_level = 0; ck->ck_level <= CHECKER_INDENT_MAX; ck->ck_level++) {
+	for (ck->ck_level = 0; ck->ck_level <= CHECKER_INDENT_MAX;
+	     ck->ck_level++) {
 		assert_int_equal(ck->ck_indent_set(ck), DER_SUCCESS);
 		if (ck->ck_level == 0) {
 			assert_string_equal(ck->ck_prefix, "");
@@ -220,8 +245,10 @@ test_main_indent_set_levels_zero_to_max(void **state)
 		}
 
 		assert_int_equal(strlen(ck->ck_prefix), ck->ck_level + 1);
-		assert_int_equal(ck->ck_prefix[0], DLCK_PRINT_INDENT);
-		assert_int_equal(ck->ck_prefix[ck->ck_level - 1], DLCK_PRINT_INDENT);
+		for (indent_index = 0; indent_index < ck->ck_level;
+		     indent_index++)
+			assert_int_equal(ck->ck_prefix[indent_index],
+					 DLCK_PRINT_INDENT);
 		assert_int_equal(ck->ck_prefix[ck->ck_level], ' ');
 	}
 
@@ -244,71 +271,60 @@ test_main_indent_set_out_of_range(void **state)
 	expect_assert_failure(checker_print_indent_inc(ck));
 }
 
-static int
-setup(void **state)
+/* main indent callback: invalid magic triggers an assertion. */
+static void
+test_main_indent_set_invalid_magic(void **state)
 {
-	*state = calloc(1, sizeof(struct checker));
-	assert_non_null(*state);
-	test_setup();
-	return 0;
-}
-
-static int
-setup_main_checker(void **state)
-{
-	int rc = setup(state);
-
-	if (rc != 0)
-		return rc;
-	init_checker(*state);
-	return 0;
-}
-
-static int
-teardown(void **state)
-{
-	free(*state);
-	return 0;
-}
-
-static int
-teardown_main_checker(void **state)
-{
-	struct checker  ck_zeroed;
 	struct checker *ck = *state;
 
-	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
-	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
-	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
-	expect_value(__wrap_d_free, ptr, &Dcm);
-	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
-	assert_memory_equal(ck, &ck_zeroed, sizeof(*ck));
-	return teardown(state);
+	Dcm.core.magic = ~DLCK_CHECKER_MAIN_MAGIC;
+	expect_assert_failure(ck->ck_indent_set(ck));
+	Dcm.core.magic = DLCK_CHECKER_MAIN_MAGIC;
 }
 
 static const struct CMUnitTest dlck_checker_tests[] = {
-	{"DLCK_CHECKER_MAIN_100: init - success", test_main_init_success, setup, teardown},
-	{"DLCK_CHECKER_MAIN_101: init - allocation failure", test_main_init_alloc_failure, setup, teardown},
-	{"DLCK_CHECKER_MAIN_102: init - mutex create failure", test_main_init_mutex_create_failure, setup, teardown},
-	{"DLCK_CHECKER_MAIN_103: fini - success", test_main_fini_success, setup_main_checker,
-	 teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_104: fini - mutex free failure", test_main_fini_mutex_free_failure, setup, teardown},
-	{"DLCK_CHECKER_MAIN_105: get_custom - invalid magic", test_main_get_custom_invalid_magic,
-	 setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_106: vprintf - vfprintf positive", test_vprintf_vfprintf_positive,
-	 setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_107: vprintf - vfprintf failure", test_vprintf_vfprintf_failure,
-	 setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_108: vprintf - fflush failure", test_vprintf_fflush_failure,
-	 setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_109: vprintf - lock failure", test_main_vprintf_lock_failure,
-	 setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_110: vprintf - unlock failure", test_main_vprintf_unlock_failure,
-	 setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_111: indent - levels zero to max", test_main_indent_set_levels_zero_to_max,
-	 setup_main_checker, teardown_main_checker},
-	{"DLCK_CHECKER_MAIN_112: indent - out of range", test_main_indent_set_out_of_range,
-	 setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_101: init - success",
+		test_main_init_success,
+		setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_102: init - allocation failure",
+		test_main_init_alloc_failure,
+		setup, teardown},
+	{"DLCK_CHECKER_MAIN_103: init - mutex create failure",
+		test_main_init_mutex_create_failure,
+		setup, teardown},
+	{"DLCK_CHECKER_MAIN_104: fini - success",
+		test_main_fini_success,
+		setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_105: fini - mutex free failure",
+		test_main_fini_mutex_free_failure,
+		setup_main_checker, teardown},
+	{"DLCK_CHECKER_MAIN_106: get_custom - invalid magic",
+		test_main_get_custom_invalid_magic,
+		setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_107: indent - levels zero to max",
+		test_main_indent_set_levels_zero_to_max,
+		setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_108: indent - out of range",
+		test_main_indent_set_out_of_range,
+		setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_109: indent - invalid magic",
+		test_main_indent_set_invalid_magic,
+		setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_110: vprintf - vfprintf positive",
+		test_vprintf_vfprintf_positive,
+		setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_111: vprintf - vfprintf failure",
+		test_vprintf_vfprintf_failure,
+		setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_112: vprintf - fflush failure",
+		test_vprintf_fflush_failure,
+		setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_113: vprintf - lock failure",
+		test_main_vprintf_lock_failure,
+		setup_main_checker, teardown_main_checker},
+	{"DLCK_CHECKER_MAIN_114: vprintf - unlock failure",
+		test_main_vprintf_unlock_failure,
+		setup_main_checker, teardown_main_checker},
 };
 
 int

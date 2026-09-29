@@ -8,6 +8,9 @@ when adding or changing DLCK unit tests:
 
 - Keep source lines to at most 80 columns; count each tab as 8 columns. Wrap
   comments, calls, and test-table entries as needed.
+- Format each CMocka test record on three lines: description on line one,
+  test function on line two, and setup/teardown callbacks on line three.
+  Indent lines two and three by one additional tab; limit lines to 80 columns.
 - Test observable behavior: return codes, output, state transitions, boundary
   behavior, and resource cleanup. Do not reproduce the production algorithm in
   test assertions.

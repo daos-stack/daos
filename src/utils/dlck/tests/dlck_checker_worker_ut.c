@@ -22,12 +22,12 @@
 #include "dlck_checker_ut_mock.h"
 
 static int mock_worker_fclose_rc;
+static struct checker worker_checker_state;
 
 static int
 setup(void **state)
 {
-	*state = calloc(1, sizeof(struct checker));
-	assert_non_null(*state);
+	*state = &worker_checker_state;
 	mock_vfprintf_check_args = 0;
 	mock_worker_fclose_rc    = 0;
 	return 0;
@@ -36,7 +36,7 @@ setup(void **state)
 static int
 teardown(void **state)
 {
-	free(*state);
+	(void)state;
 	return 0;
 }
 
@@ -60,8 +60,7 @@ setup_worker_checker(void **state)
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, 0);
 	assert_int_equal(
-	    dlck_checker_worker_init(&options, "/tmp", pool_uuid,
-			     0, NULL, ck),
+	    dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 	    DER_SUCCESS);
 	return 0;
 }
@@ -115,8 +114,7 @@ test_worker_init_log_open_failure(void **state)
 	will_return(__wrap_fopen, EIO);
 	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(
-	    dlck_checker_worker_init(&options, "/tmp", pool_uuid,
-			     0, NULL, ck),
+	    dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 	    daos_errno2der(EIO));
 	assert_null(ck->ck_private);
 }
@@ -133,8 +131,7 @@ test_worker_init_log_path_alloc_failure(void **state)
 	will_return(__wrap_d_asprintf2, -1);
 	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(
-	    dlck_checker_worker_init(&options, "/tmp", pool_uuid,
-			     0, NULL, ck),
+	    dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 	    -DER_NOMEM);
 	assert_null(ck->ck_private);
 }
@@ -149,8 +146,7 @@ test_worker_init_alloc_failure(void **state)
 
 	expect_checker_d_calloc(sizeof(Dcw), NULL);
 	assert_int_equal(
-	    dlck_checker_worker_init(&options, "/tmp", pool_uuid,
-			     0, NULL, ck),
+	    dlck_checker_worker_init(&options, "/tmp", pool_uuid, 0, NULL, ck),
 	    -DER_NOMEM);
 	assert_null(ck->ck_private);
 }
@@ -166,8 +162,8 @@ test_worker_vprintf_success(void **state)
 	expect_string(__wrap_vfprintf, output, "worker 42: ready");
 	will_return(__wrap_vfprintf, 16);
 	will_return(__wrap_fflush, 0);
-	assert_int_equal(
-	    ck_common_printf(ck, "worker %d: %s", 42, "ready"), DER_SUCCESS);
+	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"),
+			 DER_SUCCESS);
 }
 
 static void
@@ -223,7 +219,8 @@ static void
 test_worker_fini_fclose_failure(void **state)
 {
 	(void)state;
-	/* teardown_worker_checker() checks cleanup after fclose fails. */
+	/* teardown_worker_checker() continues this test to check cleanup after
+	   fclose fails. */
 	mock_worker_fclose_rc = EOF;
 }
 
@@ -240,37 +237,55 @@ test_worker_indent_set_out_of_range(void **state)
 	ck->ck_level = 0;
 }
 
+/* worker indent callback: invalid magic triggers an assertion. */
+static void
+test_worker_indent_set_invalid_magic(void **state)
+{
+	struct checker *ck = *state;
+
+	Dcw.magic = ~DLCK_CHECKER_WORKER_MAGIC;
+	expect_assert_failure(ck->ck_indent_set(ck));
+	Dcw.magic = DLCK_CHECKER_WORKER_MAGIC;
+}
+
 static const struct CMUnitTest dlck_checker_worker_tests[] = {
-	{"DLCK_CHECKER_WORKER_100: init - success",
-	 test_worker_init_success,
-	 setup_worker_checker, teardown_worker_checker},
-	{"DLCK_CHECKER_WORKER_101: init - log open failure",
-	 test_worker_init_log_open_failure, setup, teardown},
-	{"DLCK_CHECKER_WORKER_102: init - log path allocation failure",
-	 test_worker_init_log_path_alloc_failure, setup, teardown},
-	{"DLCK_CHECKER_WORKER_103: init - allocation failure",
-	 test_worker_init_alloc_failure, setup, teardown},
-	{"DLCK_CHECKER_WORKER_104: vprintf - success",
-	 test_worker_vprintf_success,
-	 setup_worker_checker, teardown_worker_checker},
-	{"DLCK_CHECKER_WORKER_105: CK_PRINTF - indentation",
-	 test_worker_CK_PRINTF_with_indent,
-	 setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_101: init - success",
+		test_worker_init_success,
+		setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_102: init - log open failure",
+		test_worker_init_log_open_failure,
+		setup, teardown},
+	{"DLCK_CHECKER_WORKER_103: init - log path allocation failure",
+		test_worker_init_log_path_alloc_failure,
+		setup, teardown},
+	{"DLCK_CHECKER_WORKER_104: init - allocation failure",
+		test_worker_init_alloc_failure,
+		setup, teardown},
+	{"DLCK_CHECKER_WORKER_105: fini - fclose failure",
+		test_worker_fini_fclose_failure,
+		setup_worker_checker, teardown_worker_checker},
 	{"DLCK_CHECKER_WORKER_106: get_custom - invalid magic",
-	 test_worker_get_custom_invalid_magic,
-	 setup_worker_checker, teardown_worker_checker},
-	{"DLCK_CHECKER_WORKER_107: vprintf - vfprintf failure",
-	 test_worker_vprintf_vfprintf_failure,
-	 setup_worker_checker, teardown_worker_checker},
-	{"DLCK_CHECKER_WORKER_108: vprintf - fflush failure",
-	 test_worker_vprintf_fflush_failure,
-	 setup_worker_checker, teardown_worker_checker},
-	{"DLCK_CHECKER_WORKER_109: fini - fclose failure",
-	 test_worker_fini_fclose_failure,
-	 setup_worker_checker, teardown_worker_checker},
-	{"DLCK_CHECKER_WORKER_110: indent - out of range",
-	 test_worker_indent_set_out_of_range,
-	 setup_worker_checker, teardown_worker_checker},
+		test_worker_get_custom_invalid_magic,
+		setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_107: indent - out of range",
+		test_worker_indent_set_out_of_range,
+		setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_108: indent - invalid magic",
+		test_worker_indent_set_invalid_magic,
+		setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_109: vprintf - success",
+		test_worker_vprintf_success,
+		setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_110: vprintf - vfprintf failure",
+		test_worker_vprintf_vfprintf_failure,
+		setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_111: vprintf - fflush failure",
+		test_worker_vprintf_fflush_failure,
+		setup_worker_checker, teardown_worker_checker},
+	{"DLCK_CHECKER_WORKER_112: CK_PRINTF - indentation",
+		test_worker_CK_PRINTF_with_indent,
+		setup_worker_checker, teardown_worker_checker},
+
 };
 
 int
