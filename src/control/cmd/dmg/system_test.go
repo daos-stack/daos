@@ -980,13 +980,19 @@ func TestDmg_systemEraseCmd_execute(t *testing.T) {
 			expErr: errors.New("rpc failed"),
 		},
 		"success with no errors": {
-			resp:   &mgmtpb.SystemEraseResp{},
-			expErr: errors.New("not in uninitialized state"),
-		},
-		"success with uninitialized error (expected after erase)": {
 			resp:    &mgmtpb.SystemEraseResp{},
-			msErr:   system.ErrUninitialized,
 			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
+		},
+		"uninitialized error from ms is now a genuine failure": {
+			// Previously the erase RPC could race its own restart and return
+			// system.ErrUninitialized as a substitute "success" signal; now that
+			// the server drains its response before restarting (see
+			// scheduleControlPlaneRestart()), the RPC is expected to always
+			// return a clean response, so an uninitialized error is treated the
+			// same as any other unexpected RPC failure.
+			resp:   &mgmtpb.SystemEraseResp{},
+			msErr:  system.ErrUninitialized,
+			expErr: system.ErrUninitialized,
 		},
 		"success with rank results in await-format state but no ms err": {
 			resp: &mgmtpb.SystemEraseResp{
@@ -1005,7 +1011,7 @@ func TestDmg_systemEraseCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("not in uninitialized state"),
+			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
 		},
 		"failure with rank errors": {
 			resp: &mgmtpb.SystemEraseResp{
@@ -1045,14 +1051,14 @@ func TestDmg_systemEraseCmd_execute(t *testing.T) {
 			},
 			expErr: errors.New("failed ranks 0-1"),
 		},
-		"failure with other error (not uninitialized)": {
+		"failure with other error": {
 			resp:   &mgmtpb.SystemEraseResp{},
 			msErr:  errors.New("some other error"),
 			expErr: errors.New("some other error"),
 		},
 		"nil response": {
-			resp:   nil,
-			expErr: errors.New("not in uninitialized state"),
+			resp:    nil,
+			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1088,35 +1094,25 @@ func TestDmg_systemEraseCmd_execute(t *testing.T) {
 	}
 }
 
-// TestDmg_systemEraseCmd_uninitialized_error_handling tests that uninitialized state
-// is properly recognized as a success condition after erase
+// TestDmg_systemEraseCmd_uninitialized_error_handling verifies that an uninitialized
+// (or any other) error from the erase RPC is now surfaced as a genuine failure rather
+// than a disguised success. This previously existed because the erase RPC could race
+// its own control-plane restart and return system.ErrUninitialized in place of a clean
+// response; now that scheduleControlPlaneRestart() drains the response before
+// restarting (see mgmt_system.go), the RPC is expected to always return cleanly, so no
+// error from it should ever be treated as success.
 func TestDmg_systemEraseCmd_uninitialized_error_handling(t *testing.T) {
-	for name, tc := range map[string]struct {
-		errorMsg      string
-		shouldSucceed bool
-	}{
-		"exact uninitialized error": {
-			errorMsg:      "system is uninitialized (storage format required?)",
-			shouldSucceed: true,
-		},
-		"uninitialized wrapped error": {
-			errorMsg:      "wrapped: system is uninitialized (storage format required?)",
-			shouldSucceed: true,
-		},
-		"other error": {
-			errorMsg:      "some other error",
-			shouldSucceed: false,
-		},
-		"unavailable error": {
-			errorMsg:      "raft service unavailable",
-			shouldSucceed: false,
-		},
+	for name, errorMsg := range map[string]string{
+		"exact uninitialized error":   "system is uninitialized (storage format required?)",
+		"uninitialized wrapped error": "wrapped: system is uninitialized (storage format required?)",
+		"other error":                 "some other error",
+		"unavailable error":           "raft service unavailable",
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			testErr := errors.New(tc.errorMsg)
+			testErr := errors.New(errorMsg)
 
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
 				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
@@ -1128,15 +1124,8 @@ func TestDmg_systemEraseCmd_uninitialized_error_handling(t *testing.T) {
 			cmd.SetLog(log)
 
 			gotErr := cmd.Execute(nil)
-
-			if tc.shouldSucceed {
-				if gotErr != nil {
-					t.Fatalf("expected success for error %q, but got error: %v", tc.errorMsg, gotErr)
-				}
-			} else {
-				if gotErr == nil {
-					t.Fatalf("expected error for %q, but got success", tc.errorMsg)
-				}
+			if gotErr == nil {
+				t.Fatalf("expected error for %q, but got success", errorMsg)
 			}
 		})
 	}

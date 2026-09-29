@@ -148,9 +148,10 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.SystemStartReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStartResp{})
 	case *control.SystemEraseReq:
-		// For a successful system erase, MS has been erased so system uninitialized error
-		// is returned.
-		return control.MockMSResponse("", nil, &mgmtpb.SystemEraseResp{}), system.ErrUninitialized
+		// The MS drains/sends its response before restarting the control plane
+		// (see mgmt_system.go's scheduleControlPlaneRestart()), so a successful
+		// erase now returns a clean response rather than an uninitialized error.
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemEraseResp{})
 	case *control.SystemExcludeReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemExcludeResp{})
 	case *control.SystemDrainReq:
