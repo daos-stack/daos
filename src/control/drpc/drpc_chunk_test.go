@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,11 +7,28 @@
 package drpc
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/pkg/errors"
 )
+
+// cmpByteSlices compares two slices of byte slices efficiently without using cmp.Diff
+// which is too slow for large byte arrays.
+func cmpByteSlices(t *testing.T, desc string, want, got [][]byte) {
+	t.Helper()
+
+	if len(want) != len(got) {
+		t.Fatalf("unexpected %s: want %d chunks, got %d chunks", desc, len(want), len(got))
+	}
+
+	for i, wantChunk := range want {
+		if !bytes.Equal(wantChunk, got[i]) {
+			t.Fatalf("unexpected %s: chunk %d mismatch (size: want %d, got %d)", desc, i, len(wantChunk), len(got[i]))
+		}
+	}
+}
 
 func genTestData(len int) []byte {
 	data := make([]byte, len)
@@ -162,8 +179,9 @@ func TestDrpc_sendMsg(t *testing.T) {
 			expChunks: testChunks(genTestData(maxDataSize)),
 		},
 		"multi chunk": {
-			input:     genTestData(2 * maxDataSize),
-			expChunks: testChunks(genTestData(maxDataSize), genTestData(2 * maxDataSize)[maxDataSize:]),
+			// Use 1.5x maxDataSize to test multi-chunk without excessive memory usage
+			input:     genTestData(maxDataSize + maxDataSize/2),
+			expChunks: testChunks(genTestData(maxDataSize), genTestData(maxDataSize + maxDataSize/2)[maxDataSize:]),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -176,7 +194,8 @@ func TestDrpc_sendMsg(t *testing.T) {
 			err := sendMsg(ctx, tc.conn, tc.input)
 
 			test.CmpErr(t, tc.expErr, err)
-			test.CmpAny(t, "chunks sent", tc.expChunks, tc.conn.WriteInputBytes)
+			// Use fast byte slice comparison to avoid expensive cmp.Diff on large arrays
+			cmpByteSlices(t, "chunks sent", tc.expChunks, tc.conn.WriteInputBytes)
 		})
 	}
 }

@@ -5,6 +5,7 @@ module github.com/daos-stack/daos/src/control
 // - debian packaging version checks: debian/control
 // Scons uses this file to extract the minimum version.
 go 1.21
+
 toolchain go1.25.0
 
 require (
@@ -25,6 +26,7 @@ require (
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.66.1
 	go.etcd.io/bbolt v1.4.3
+	go.uber.org/goleak v1.3.0
 	golang.org/x/net v0.58.0
 	golang.org/x/sys v0.47.0
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1

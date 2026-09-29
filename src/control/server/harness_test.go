@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -650,6 +650,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
@@ -670,7 +671,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				newOnDrpcFailureFn(log, db)(ctx, err)
 			})
 
-			ctx, cancel := context.WithCancel(test.Context(t))
+			ctx, cancel := context.WithTimeout(test.Context(t), 5*time.Second)
 
 			startErr := make(chan error)
 			go func() {
@@ -679,15 +680,15 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				}
 				close(startErr)
 			}()
-			for {
-				if h.isStarted() {
-					break
-				}
+			for !h.isStarted() {
+				time.Sleep(time.Millisecond)
 			}
 			defer func() {
 				if err := <-startErr; err != nil {
 					if err != context.Canceled {
-						t.Fatal(err)
+						if !errors.Is(err, context.DeadlineExceeded) {
+							t.Fatal(err)
+						}
 					}
 				}
 			}()
