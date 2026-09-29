@@ -168,7 +168,8 @@ The record stores the values the user supplied, zeros included, rather than the 
 That is what makes the pool-map refresh meaningful: automatic fields are re-derived after a pool
 extend, pinned fields stay fixed. `dfs_query()` reports the resolved values. An absent `DFS_PL`
 key means PL is off. The record is carried through `dfs_local2global()`/`dfs_global2local()`, which
-never re-read the superblock.
+never re-read the superblock. The cached pool values and the pool map version they were queried at
+travel with it, so a restored handle does not re-query the pool on its first PL create.
 
 The record carries no version of its own: the superblock as a whole is versioned by
 `DFS_SB_VERSION`, which defines the set of a-keys a superblock may contain. Adding `DFS_PL` is

@@ -119,11 +119,13 @@ suggest_dfs_cs(daos_handle_t poh, daos_prop_t *prop, uint64_t rf, daos_oclass_id
 static int
 dfs_pl_attr_verify(const dfs_attr_t *attr, uint64_t rf)
 {
-	daos_oclass_id_t head;
-	daos_oclass_id_t tail;
-	uint32_t         cid_tf;
-	int              cont_tf;
-	int              rc;
+	daos_oclass_id_t    head;
+	daos_oclass_id_t    tail;
+	daos_oclass_hints_t dir_hints;
+	daos_oclass_hints_t file_hints;
+	uint32_t            cid_tf;
+	int                 cont_tf;
+	int                 rc;
 
 	if (attr->da_pl_nr == 0)
 		return 0;
@@ -135,6 +137,23 @@ dfs_pl_attr_verify(const dfs_attr_t *attr, uint64_t rf)
 	if (attr->da_pl_nr > 1) {
 		D_ERROR("Progressive layout with more than one tail is not supported\n");
 		return ENOTSUP;
+	}
+
+	/* an explicit default file class (da_oclass_id seeds it) means single-object files */
+	if (attr->da_oclass_id != 0 || attr->da_file_oclass_id != 0) {
+		D_ERROR(
+		    "Progressive layout cannot be combined with an explicit file object class\n");
+		return EINVAL;
+	}
+	if (attr->da_hints[0] != '\0') {
+		rc = get_oclass_hints(attr->da_hints, &dir_hints, &file_hints, rf);
+		if (rc)
+			return rc;
+		if (file_hints != 0) {
+			D_ERROR("Progressive layout cannot be combined with a file object class "
+				"hint\n");
+			return EINVAL;
+		}
 	}
 
 	head = attr->da_pl_head_oclass;
@@ -339,14 +358,6 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		rc = get_oclass_hints(dattr.da_hints, &dir_oclass_hint, &file_hints, rf);
 		if (rc)
 			D_GOTO(err_prop, rc);
-	}
-
-	/** the progressive layout conflicts with an explicit default file class or file hint */
-	if (dattr.da_pl_nr != 0 && (dattr.da_file_oclass_id != 0 || file_hints != 0)) {
-		D_ERROR(
-		    "Progressive layout cannot be combined with an explicit file object class or "
-		    "file hint\n");
-		D_GOTO(err_prop, rc = EINVAL);
 	}
 
 	/* select oclass and generate SB OID */
@@ -1349,11 +1360,6 @@ dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr)
 	rc = dfs_pl_attr_verify(attr, rf);
 	if (rc)
 		D_GOTO(out_prop, rc);
-	if (attr->da_pl_nr != 0 && attr->da_file_oclass_id != 0) {
-		D_ERROR(
-		    "Progressive layout cannot be combined with an explicit file object class\n");
-		D_GOTO(out_prop, rc = EINVAL);
-	}
 
 	/** Recreate SB */
 	rc = open_sb(coh, true, true, DAOS_OO_RW, roots->cr_oids[0], attr, &super_oh, NULL);

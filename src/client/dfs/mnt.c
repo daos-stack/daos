@@ -1112,6 +1112,8 @@ struct dfs_glob {
 	uint32_t         pl_target_nr;
 	uint64_t         pl_total_scm;
 	uint64_t         pl_total_nvme;
+	/** pool map version the cached PL pool values were queried at */
+	uint32_t         pl_map_ver;
 	/** progressive layout configuration; the SB is not re-read on global2local */
 	uint32_t         pl_nr;
 	daos_oclass_id_t pl_head_oclass;
@@ -1140,6 +1142,7 @@ swap_dfs_glob(struct dfs_glob *dfs_params)
 	D_SWAP32S(&dfs_params->pl_target_nr);
 	D_SWAP64S(&dfs_params->pl_total_scm);
 	D_SWAP64S(&dfs_params->pl_total_nvme);
+	D_SWAP32S(&dfs_params->pl_map_ver);
 	D_SWAP32S(&dfs_params->pl_nr);
 	D_SWAP32S(&dfs_params->pl_head_oclass);
 	for (i = 0; i < DFS_PL_MAX_SEGMENTS; i++) {
@@ -1222,6 +1225,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	dfs_params->pl_target_nr  = dfs->pl_target_nr;
 	dfs_params->pl_total_scm  = dfs->pl_total_scm;
 	dfs_params->pl_total_nvme = dfs->pl_total_nvme;
+	dfs_params->pl_map_ver     = dfs->pl_map_ver;
 	dfs_params->pl_nr          = dfs->attr.da_pl_nr;
 	dfs_params->pl_head_oclass = dfs->attr.da_pl_head_oclass;
 	for (i = 0; i < DFS_PL_MAX_SEGMENTS; i++) {
@@ -1299,6 +1303,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob, 
 	dfs->pl_target_nr           = dfs_params->pl_target_nr;
 	dfs->pl_total_scm           = dfs_params->pl_total_scm;
 	dfs->pl_total_nvme          = dfs_params->pl_total_nvme;
+	dfs->pl_map_ver             = dfs_params->pl_map_ver;
 	dfs->attr.da_pl_nr          = dfs_params->pl_nr;
 	dfs->attr.da_pl_head_oclass = dfs_params->pl_head_oclass;
 	for (i = 0; i < DFS_PL_MAX_SEGMENTS; i++) {
