@@ -1300,6 +1300,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		crt_hg_reply_error_send(&rpc_tmp, -DER_TIMEDOUT);
 		crt_hg_unpack_cleanup(proc);
 		HG_Destroy(rpc_tmp.crp_hg_hdl);
+		/* not initialized yet, so freed rather than released */
+		crt_rpc_priv_free(rpc_priv);
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 
@@ -1341,12 +1343,14 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 
 	if (unlikely(opc_info->coi_rpc_cb == NULL)) {
 		D_ERROR("NULL crp_hg_hdl, opc: %#x.\n", opc);
-		crt_hg_reply_error_send(rpc_priv, -DER_UNREG);
+		rc = -DER_UNREG;
+		crt_hg_reply_error_send(rpc_priv, rc);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
 	if (unlikely(rpc_priv->crp_fail_hlc)) {
-		crt_hg_reply_error_send(rpc_priv, -DER_HLC_SYNC);
+		rc = -DER_HLC_SYNC;
+		crt_hg_reply_error_send(rpc_priv, rc);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
