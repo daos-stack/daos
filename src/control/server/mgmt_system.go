@@ -2016,14 +2016,51 @@ func (svc *mgmtSvc) scheduleControlPlaneRestart(leaderStr string) error {
 		return errors.Wrap(err, "unable to determine path to self")
 	}
 
-	svc.log.Infof("System Erase: scheduling control plane restart in 500ms [role=%s]",
-		leaderStr)
+	svc.log.Infof("System Erase: scheduling control plane restart [role=%s]", leaderStr)
 
-	// Spawn goroutine with delay to allow gRPC response to complete transmission.
-	// The defer that calls this has already executed (process is returning), but
-	// gRPC marshalling and network transmission still need ~400-500ms.
+	// Spawn a goroutine to drain in-flight gRPC calls -- in particular, this very
+	// SystemErase call's own response -- before restarting. execRestart() (unix.Exec)
+	// replaces the process image via execve(), which immediately closes every
+	// FD_CLOEXEC file descriptor (Go sets this on all of its network sockets), with
+	// no guarantee that any response bytes queued for transmission have actually
+	// been written to the wire. A fixed sleep here cannot reliably bound that: it
+	// has no way to know whether marshaling/writing has even started, let alone
+	// completed, so under scheduler/GC/network jitter a "generous" delay can still
+	// race the exec and truncate the in-flight response.
+	//
+	// grpcServer.GracefulStop() gives a real synchronization point instead: it
+	// stops accepting new connections and blocks until every active RPC handler
+	// (this one included) has returned and its response has been fully handed off
+	// to the transport. Once GracefulStop() returns, it's safe to exec. A bounded
+	// fallback timeout guards against other long-lived RPCs (e.g. event
+	// subscriptions) preventing the drain from ever completing.
 	go func() {
-		time.Sleep(500 * time.Millisecond)
+		if svc.grpcServer != nil {
+			done := make(chan struct{})
+			go func() {
+				svc.grpcServer.GracefulStop()
+				close(done)
+			}()
+
+			timeout := svc.gracefulStopTimeout
+			if timeout <= 0 {
+				timeout = defaultGracefulStopTimeout
+			}
+
+			select {
+			case <-done:
+				svc.log.Debugf("System Erase: gRPC server drained cleanly [role=%s]", leaderStr)
+			case <-time.After(timeout):
+				svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, forcing stop [role=%s]",
+					timeout, leaderStr)
+				svc.grpcServer.Stop()
+			}
+		} else {
+			// No grpcServer wired up (e.g. unit tests); fall back to a short
+			// delay as a best-effort substitute.
+			time.Sleep(500 * time.Millisecond)
+		}
+
 		svc.log.Infof("System Erase: exec'ing %s to restart control plane [role=%s]",
 			myPath, leaderStr)
 		if err := execRestart(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {

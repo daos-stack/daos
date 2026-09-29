@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -39,6 +40,14 @@ const (
 	// of waiting out the real timeout/poll-interval.
 	defaultEraseWaitMaxWait      = 30 * time.Second
 	defaultEraseWaitPollInterval = 500 * time.Millisecond
+
+	// defaultGracefulStopTimeout bounds how long scheduleControlPlaneRestart()
+	// will wait for grpcServer.GracefulStop() to drain in-flight RPCs (i.e.
+	// ensure the SystemErase response itself has been fully written to the
+	// wire) before falling back to a hard Stop() and proceeding with the
+	// restart regardless. Exposed as an mgmtSvc field so it can be overridden
+	// (e.g. in unit tests).
+	defaultGracefulStopTimeout = 5 * time.Second
 )
 
 type (
@@ -99,6 +108,17 @@ type mgmtSvc struct {
 	// timeout.
 	eraseWaitMaxWait      time.Duration
 	eraseWaitPollInterval time.Duration
+	// grpcServer is a reference to the server's gRPC server, wired up once it's
+	// created (see server.go's setupGrpc()). It is used by
+	// scheduleControlPlaneRestart() to drain in-flight RPCs (in particular, this
+	// SystemErase call's own response) before restarting the control plane. It
+	// is nil in unit tests, where scheduleControlPlaneRestart() falls back to a
+	// short sleep instead.
+	grpcServer *grpc.Server
+	// gracefulStopTimeout bounds how long scheduleControlPlaneRestart() waits
+	// for grpcServer.GracefulStop() before forcing a hard Stop(). Defaults to
+	// defaultGracefulStopTimeout but may be overridden (e.g. in unit tests).
+	gracefulStopTimeout time.Duration
 	// loopWg tracks background processing loops (batchReqLoop, serialReqLoop,
 	// leaderTaskLoop) started by startAsyncLoops/startLeaderLoops, so that
 	// Close() can block until they have actually exited rather than merely
@@ -124,6 +144,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		groupUpdateReqs:       make(chan bool),
 		eraseWaitMaxWait:      defaultEraseWaitMaxWait,
 		eraseWaitPollInterval: defaultEraseWaitPollInterval,
+		gracefulStopTimeout:   defaultGracefulStopTimeout,
 	}
 }
 
