@@ -45,7 +45,10 @@ init_checker(struct checker *ck)
 static void
 test_main_init_success(void **state)
 {
+	struct checker  ck_zeroed;
 	struct checker *ck = *state;
+
+	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
 
 	EXPECT_CHECKER_D_CALLOC(Dcm);
 	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
@@ -64,7 +67,7 @@ test_main_init_success(void **state)
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	expect_value(__wrap_d_free, ptr, &Dcm);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
-	assert_ptr_equal(Dcm.stream_mutex, ABT_MUTEX_NULL);
+	assert_memory_equal(ck, &ck_zeroed, sizeof(*ck));
 }
 
 /* main init: mutex creation returns an Argobots error. */
@@ -179,15 +182,17 @@ test_main_get_custom_invalid_magic(void **state)
 static void
 test_main_fini_mutex_free_failure(void **state)
 {
+	struct checker  ck_zeroed;
 	struct checker *ck = *state;
 
+	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
 	init_checker(ck);
 	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_ERR_OTHER);
 	expect_value(__wrap_d_free, ptr, &Dcm);
 	assert_int_equal(dlck_checker_main_fini(ck), dss_abterr2der(ABT_ERR_OTHER));
 	assert_ptr_equal(Dcm.stream_mutex, Mock_mutex_handle);
-	assert_null(ck->ck_private);
+	assert_memory_equal(ck, &ck_zeroed, sizeof(*ck));
 }
 
 /* main init: dcm allocation returns NULL. */
@@ -269,12 +274,15 @@ teardown(void **state)
 static int
 teardown_main_checker(void **state)
 {
+	struct checker  ck_zeroed;
 	struct checker *ck = *state;
 
+	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
 	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	expect_value(__wrap_d_free, ptr, &Dcm);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
+	assert_memory_equal(ck, &ck_zeroed, sizeof(*ck));
 	return teardown(state);
 }
 

@@ -10,6 +10,7 @@
 #include <setjmp.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <string.h>
 #include <uuid/uuid.h>
 #include <abt.h>
 #include <cmocka.h>
@@ -20,12 +21,15 @@
 #include "../dlck_checker.h"
 #include "dlck_checker_ut_mock.h"
 
+static int mock_worker_fclose_rc;
+
 static int
 setup(void **state)
 {
 	*state = calloc(1, sizeof(struct checker));
 	assert_non_null(*state);
 	mock_vfprintf_check_args = 0;
+	mock_worker_fclose_rc    = 0;
 	return 0;
 }
 
@@ -60,12 +64,15 @@ setup_worker_checker(void **state)
 static int
 teardown_worker_checker(void **state)
 {
+	struct checker  ck_zeroed;
 	struct checker *ck = *state;
 
+	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
 	expect_value(__wrap_d_free, ptr, &Dcw);
 	expect_function_call(__wrap_fclose);
-	will_return(__wrap_fclose, 0);
+	will_return(__wrap_fclose, mock_worker_fclose_rc);
 	dlck_checker_worker_fini(ck);
+	assert_memory_equal(ck, &ck_zeroed, sizeof(*ck));
 	return teardown(state);
 }
 
@@ -74,9 +81,11 @@ static void
 test_worker_init_success(void **state)
 {
 	struct checker         *ck = *state;
+	struct checker          ck_zeroed;
 	struct checker_options  options = {.cko_non_zero_padding = CHECKER_EVENT_WARNING};
 	uuid_t                  pool_uuid = {0};
 
+	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, 0);
 	will_return(__wrap_fopen, 0);
@@ -98,7 +107,7 @@ test_worker_init_success(void **state)
 	expect_function_call(__wrap_fclose);
 	will_return(__wrap_fclose, 0);
 	dlck_checker_worker_fini(ck);
-	assert_null(ck->ck_private);
+	assert_memory_equal(ck, &ck_zeroed, sizeof(*ck));
 }
 
 /* worker init: fopen fails and returns the mapped I/O error. */
@@ -216,14 +225,8 @@ test_worker_get_custom_invalid_magic(void **state)
 static void
 test_worker_fini_fclose_failure(void **state)
 {
-	struct checker *ck            = *state;
-	struct checker  empty_checker = {0};
-
-	expect_value(__wrap_d_free, ptr, &Dcw);
-	expect_function_call(__wrap_fclose);
-	will_return(__wrap_fclose, EOF);
-	dlck_checker_worker_fini(ck);
-	assert_memory_equal(ck, &empty_checker, sizeof(*ck));
+	(void)state;
+	mock_worker_fclose_rc = EOF;
 }
 
 /* worker indent callback: negative and above-maximum levels assert. */
@@ -258,7 +261,7 @@ static const struct CMUnitTest dlck_checker_worker_tests[] = {
     {"DLCK_CHECKER_WORKER_108: vprintf - fflush failure", test_worker_vprintf_fflush_failure,
      setup_worker_checker, teardown_worker_checker},
     {"DLCK_CHECKER_WORKER_109: fini - fclose failure", test_worker_fini_fclose_failure,
-     setup_worker_checker, teardown},
+     setup_worker_checker, teardown_worker_checker},
     {"DLCK_CHECKER_WORKER_110: indent - out of range", test_worker_indent_set_out_of_range,
      setup_worker_checker, teardown_worker_checker},
 };
