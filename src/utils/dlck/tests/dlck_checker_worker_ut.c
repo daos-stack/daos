@@ -47,6 +47,16 @@ expect_worker_fopen(int error)
 	will_return(__wrap_fopen, error);
 }
 
+static int
+mock_main_ck_vprintf(struct checker *ck, const char *fmt, va_list args)
+{
+	(void)ck;
+	(void)fmt;
+	(void)args;
+	function_called();
+	return DER_SUCCESS;
+}
+
 /* Start a worker test with DLCK defaults and an initialized checker. */
 static int
 setup_worker_checker(void **state)
@@ -114,6 +124,7 @@ static void
 test_worker_init_log_open_failure(void **state)
 {
 	struct checker         *ck = *state;
+	struct checker          main_ck = {.ck_vprintf = mock_main_ck_vprintf};
 	struct checker_options  options = {0};
 
 	EXPECT_CHECKER_D_CALLOC(Dcw);
@@ -121,8 +132,10 @@ test_worker_init_log_open_failure(void **state)
 	expect_worker_fopen(EIO);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	expect_value(__wrap_d_free, ptr, &Dcw);
+	expect_function_call(mock_main_ck_vprintf);
 	assert_int_equal(
-	    dlck_checker_worker_init(&options, "/tmp", Mock_pool_uuid, 0, NULL, ck),
+	    dlck_checker_worker_init(&options, "/tmp", Mock_pool_uuid,
+			     0, &main_ck, ck),
 	    daos_errno2der(EIO));
 	assert_null(ck->ck_private);
 }
@@ -132,13 +145,16 @@ static void
 test_worker_init_log_path_alloc_failure(void **state)
 {
 	struct checker         *ck = *state;
+	struct checker          main_ck = {.ck_vprintf = mock_main_ck_vprintf};
 	struct checker_options  options = {0};
 
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, -1);
 	expect_value(__wrap_d_free, ptr, &Dcw);
+	expect_function_call(mock_main_ck_vprintf);
 	assert_int_equal(
-	    dlck_checker_worker_init(&options, "/tmp", Mock_pool_uuid, 0, NULL, ck),
+	    dlck_checker_worker_init(&options, "/tmp", Mock_pool_uuid,
+			     0, &main_ck, ck),
 	    -DER_NOMEM);
 	assert_null(ck->ck_private);
 }

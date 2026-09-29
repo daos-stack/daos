@@ -59,9 +59,6 @@ Apply these rules when adding or changing DLCK unit tests:
   correct mapping (`daos_errno2der()` or `dss_abterr2der()`) and cleanup.
 - For DAOS assertions, call `d_register_alt_assert(mock_assert)` in `main()` before
   using `expect_assert_failure()`.
-??? When testing formatted output or forwarding a `va_list`, check the format and
-  rendered result. Use `va_copy()` before formatting the received list and
-  `va_end()` on the copy.
 - Use fake streams only when real file contents are irrelevant, and ensure fake
   `FILE *` values never reach real stdio. Use real filesystem I/O when the test
   verifies file creation or contents, then clean up.
