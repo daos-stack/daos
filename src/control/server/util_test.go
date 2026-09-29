@@ -251,11 +251,6 @@ func newTestMgmtSvcWithProvider(t *testing.T, log logging.Logger, provider *stor
 	svc := newMgmtSvc(harness, ms, db, nil, events.NewPubSub(ctx, log))
 	svc.cancel = cancel
 	svc.batchInterval = 100 * time.Microsecond // Speed up tests
-	// Speed up waitForLeaderElection/waitForReplicasReady polling so that
-	// tests exercising their timeout path don't have to wait out the real
-	// 30s/500ms production defaults.
-	svc.eraseWaitMaxWait = 50 * time.Millisecond
-	svc.eraseWaitPollInterval = 5 * time.Millisecond
 	svc.startAsyncLoops(ctx)
 	svc.startLeaderLoops(ctx)
 

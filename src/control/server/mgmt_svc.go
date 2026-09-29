@@ -34,13 +34,6 @@ const (
 	groupUpdateInterval = 500 * time.Millisecond
 	batchLoopInterval   = 250 * time.Millisecond
 
-	// Default timing for waitForLeaderElection/waitForReplicasReady polling
-	// after a SystemErase operation. Exposed as mgmtSvc fields (rather than
-	// local constants) so that unit tests can inject shorter values instead
-	// of waiting out the real timeout/poll-interval.
-	defaultEraseWaitMaxWait      = 30 * time.Second
-	defaultEraseWaitPollInterval = 500 * time.Millisecond
-
 	// defaultGracefulStopTimeout bounds how long scheduleControlPlaneRestart()
 	// will wait for grpcServer.GracefulStop() to drain in-flight RPCs (i.e.
 	// ensure the SystemErase response itself has been fully written to the
@@ -101,13 +94,6 @@ type mgmtSvc struct {
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
 	cancel            context.CancelFunc
-	// eraseWaitMaxWait/eraseWaitPollInterval configure the timeout and poll
-	// interval used by waitForLeaderElection/waitForReplicasReady after a
-	// SystemErase. They default to defaultEraseWaitMaxWait/defaultEraseWaitPollInterval but
-	// may be overridden (e.g. in unit tests) to avoid waiting out the real
-	// timeout.
-	eraseWaitMaxWait      time.Duration
-	eraseWaitPollInterval time.Duration
 	// grpcServer is a reference to the server's gRPC server, wired up once it's
 	// created (see server.go's setupGrpc()). It is used by
 	// scheduleControlPlaneRestart() to drain in-flight RPCs (in particular, this
@@ -130,21 +116,19 @@ type mgmtSvc struct {
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
 	return &mgmtSvc{
-		log:                   h.log,
-		harness:               h,
-		membership:            m,
-		sysdb:                 s,
-		rpcClient:             c,
-		events:                p,
-		systemProps:           daos.SystemProperties(),
-		clientNetworkHint:     []*mgmtpb.ClientNetHint{new(mgmtpb.ClientNetHint)},
-		batchInterval:         batchLoopInterval,
-		batchReqs:             make(batchReqChan),
-		serialReqs:            make(batchReqChan),
-		groupUpdateReqs:       make(chan bool),
-		eraseWaitMaxWait:      defaultEraseWaitMaxWait,
-		eraseWaitPollInterval: defaultEraseWaitPollInterval,
-		gracefulStopTimeout:   defaultGracefulStopTimeout,
+		log:                 h.log,
+		harness:             h,
+		membership:          m,
+		sysdb:               s,
+		rpcClient:           c,
+		events:              p,
+		systemProps:         daos.SystemProperties(),
+		clientNetworkHint:   []*mgmtpb.ClientNetHint{new(mgmtpb.ClientNetHint)},
+		batchInterval:       batchLoopInterval,
+		batchReqs:           make(batchReqChan),
+		serialReqs:          make(batchReqChan),
+		groupUpdateReqs:     make(chan bool),
+		gracefulStopTimeout: defaultGracefulStopTimeout,
 	}
 }
 

@@ -1680,67 +1680,6 @@ func (svc *mgmtSvc) eraseSysedb() error {
 	return nil
 }
 
-// waitForReplicasReady polls MS replicas to ensure they have restarted and are ready
-// to accept join requests after an erase operation. This prevents engines from trying
-// to join before replicas have finished restarting with clean databases.
-func (svc *mgmtSvc) waitForReplicasReady(ctx context.Context, peers []*net.TCPAddr) error {
-	if len(peers) == 0 {
-		svc.log.Debug("waitForReplicasReady: no peers to check, skipping")
-		return nil
-	}
-
-	svc.log.Tracef("waitForReplicasReady: polling %d MS replica(s) to confirm restart", len(peers))
-
-	// Build hostlist from peer addresses
-	var hostAddrs []string
-	for _, peer := range peers {
-		hostAddrs = append(hostAddrs, peer.String())
-	}
-
-	maxWait := svc.eraseWaitMaxWait
-	if maxWait <= 0 {
-		maxWait = defaultEraseWaitMaxWait
-	}
-	pollInterval := svc.eraseWaitPollInterval
-	if pollInterval <= 0 {
-		pollInterval = defaultEraseWaitPollInterval
-	}
-	deadline := time.Now().Add(maxWait)
-	attempts := 0
-
-	for {
-		attempts++
-		if time.Now().After(deadline) {
-			return errors.Errorf("timeout waiting for MS replicas to become ready after erase (%d attempts)", attempts)
-		}
-
-		// Try to query each replica - if successful, it's restarted and ready
-		queryReq := &control.SystemQueryReq{
-			FailOnUnavailable: true,
-		}
-		queryReq.SetHostList(hostAddrs)
-
-		resp, err := control.SystemQuery(ctx, svc.rpcClient, queryReq)
-		if err == nil && resp != nil {
-			// All replicas responded successfully
-			svc.log.Tracef("waitForReplicasReady: SUCCESS - all MS replicas ready (after %d attempts)", attempts)
-			return nil
-		}
-
-		// Log the error and retry
-		if err != nil {
-			svc.log.Debugf("waitForReplicasReady: attempt %d - error: %s", attempts, err)
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(pollInterval):
-			// Continue polling
-		}
-	}
-}
-
 func (svc *mgmtSvc) resetLocalEngines() error {
 	svc.log.Trace("SystemErase: REPLICA - Step 1: Stopping local engines")
 
@@ -1853,15 +1792,16 @@ func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) err
 		svc.log.Tracef("SystemErase: LEADER - Peer %s acknowledged erase request", peer.String())
 	}
 
-	svc.log.Trace("SystemErase: LEADER - Step 5: Waiting for MS replicas to restart")
-
-	// Wait for MS replicas to restart and become ready to accept join requests.
-	// This polls the replicas with SystemQuery until they respond successfully.
-	// If this fails, the system is in an inconsistent state (leader DB erased,
-	// replica state unknown) and requires manual recovery.
-	if err := svc.waitForReplicasReady(ctx, peers); err != nil {
-		return errors.Wrap(err, "waiting for MS replicas to restart (system in inconsistent state)")
-	}
+	// Note: We deliberately do not poll replicas here to confirm they've restarted.
+	// Each replica's own SystemErase() RPC handler stops its engines and erases its
+	// own raft DB/superblocks synchronously, before it even sends its RPC response
+	// back to the leader above. So by the time the loop above completes without
+	// error, every peer is already provably inactive with a wiped sysdb -- no
+	// further confirmation is needed or possible. (A SystemQuery-based poll was
+	// tried previously but is unreliable: it only requires a single peer to answer
+	// successfully to be considered "ready", and a peer's in-memory "initialized"
+	// state persists across erase until the process actually restarts, so it can
+	// return a stale success from the very process that is about to be replaced.)
 
 	return nil
 }
@@ -1877,7 +1817,7 @@ func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) err
 // circular wait that always times out: no other replica is able to self-elect, and
 // the one replica that could hasn't restarted yet.
 //
-// It's safe to proceed without that wait because eraseReplicas() (Step 4/5, above)
+// It's safe to proceed without that wait because eraseReplicas() (Step 4, above)
 // already gives a synchronous, per-replica guarantee that every non-leader replica's
 // own engines are stopped and its own raft DB/superblocks are erased -- each replica's
 // SystemErase() RPC handler performs that work itself, synchronously, before it even
@@ -1885,7 +1825,7 @@ func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) err
 // without error, every peer is provably inactive (engines stopped) with a wiped sysdb,
 // regardless of whether any of them have restarted or rejoined raft yet.
 func (svc *mgmtSvc) wipeEngineSuperblocks(ctx context.Context, fanReq *fanoutRequest, fanResp *fanoutResponse) (*mgmtpb.SystemEraseResp, error) {
-	svc.log.Trace("SystemErase: LEADER - Step 6: Calling ResetFormatRanks on all engines")
+	svc.log.Trace("SystemErase: LEADER - Step 5: Calling ResetFormatRanks on all engines")
 
 	// Set fanout method to ResetFormatRanks to wipe engine superblocks and restart engines into
 	// AwaitFormat state. By doing this after erasing MS replicas, the replicas have clean sysdb

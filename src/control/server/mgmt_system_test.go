@@ -3784,66 +3784,6 @@ func TestServer_MgmtSvc_eraseSysedb(t *testing.T) {
 	})
 }
 
-func TestServer_MgmtSvc_waitForReplicasReady(t *testing.T) {
-	mockAddr := func(a int32) *net.TCPAddr {
-		return test.MockHostAddr(a)
-	}
-
-	for name, tc := range map[string]struct {
-		peers     []*net.TCPAddr
-		uErr      error
-		uResp     *control.UnaryResponse
-		cancelCtx bool
-		expErr    error
-	}{
-		"no peers": {
-			peers:  nil,
-			expErr: nil,
-		},
-		"replicas ready immediately": {
-			peers: []*net.TCPAddr{mockAddr(1)},
-			uResp: control.MockMSResponse(mockAddr(1).String(), nil,
-				&mgmtpb.SystemQueryResp{}),
-		},
-		"context canceled while polling": {
-			peers:     []*net.TCPAddr{mockAddr(1)},
-			uErr:      errors.New("mock rpc error"),
-			cancelCtx: true,
-			expErr:    context.Canceled,
-		},
-		"deadline exceeded while polling": {
-			// Never succeeds, so waitForReplicasReady must keep polling
-			// until svc.eraseWaitMaxWait elapses and return a timeout
-			// error. svc.eraseWaitMaxWait/eraseWaitPollInterval are
-			// overridden to small values by newTestMgmtSvc() so this
-			// exercises the real deadline logic without a slow test.
-			peers:  []*net.TCPAddr{mockAddr(1)},
-			uErr:   errors.New("mock rpc error"),
-			expErr: errors.New("timeout waiting for MS replicas to become ready after erase"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			svc := newTestMgmtSvc(t, log)
-			svc.rpcClient = control.NewMockInvoker(log, &control.MockInvokerConfig{
-				UnaryError:    tc.uErr,
-				UnaryResponse: tc.uResp,
-			})
-
-			ctx, cancel := context.WithCancel(test.Context(t))
-			defer cancel()
-			if tc.cancelCtx {
-				cancel()
-			}
-
-			gotErr := svc.waitForReplicasReady(ctx, tc.peers)
-			test.CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
 func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {
 	mockAddr := func(a int32) *net.TCPAddr {
 		return test.MockHostAddr(a)
