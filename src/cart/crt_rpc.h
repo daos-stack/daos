@@ -152,6 +152,8 @@ struct crt_corpc_info {
 
 struct crt_rpc_priv {
 	crt_rpc_t		crp_pub; /* public part */
+	/* link to crt_context::cc_rx_rpc_pool free-list */
+	d_list_t                 crp_rx_pool_link;
 	/* link to crt_ep_inflight::epi_req_q/::epi_req_waitq */
 	d_list_t		crp_epi_link;
 	/* link for temp list used during timeout processing */
@@ -218,7 +220,9 @@ struct crt_rpc_priv {
 	    /* release input buffer early */
 	    crp_release_input_early : 1,
 	    /* rpc expired */
-	    crp_expired             : 1;
+	    crp_expired             : 1,
+	    /* allocated from per-context receive RPC pool */
+	    crp_from_rx_pool        : 1;
 
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
@@ -664,6 +668,13 @@ crt_rpc_cb_customized(struct crt_context *crt_ctx,
 /* crt_rpc.c */
 int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		       bool forward);
+int
+crt_rpc_priv_alloc_rx(struct crt_context *ctx, crt_opcode_t opc,
+		      struct crt_rpc_priv **priv_allocated);
+int
+crt_rpc_rx_pool_init(struct crt_context *ctx);
+void
+     crt_rpc_rx_pool_fini(struct crt_context *ctx);
 void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
 void
      crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag);
