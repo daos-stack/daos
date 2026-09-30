@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,29 +66,6 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
  */
 int
 dlck_engine_stop(struct dlck_engine *engine);
-
-/**
- * Initialize an execution stream.
- *
- * \param[in,out]	xs	Execution stream to initialize.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_INVAL	Thread name generation failed.
- * \retval -DER_NOMEM	Out of memory.
- * \retval -DER_*	Other errors.
- */
-int
-dlck_engine_xstream_init(struct dlck_xstream *xs);
-
-/**
- * Finalize an execution stream.
- *
- * \param[in,out]	xs	Execution stream to finalize.
- *
- * \retval DER_SUCCESS	Success. Supposedly it can't fail.
- */
-int
-dlck_engine_xstream_fini(struct dlck_xstream *xs);
 
 /** dlck_abt.c */
 
