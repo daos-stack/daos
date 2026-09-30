@@ -3646,7 +3646,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			forwarded: true,
 			notLeader: true,
 			mResps:    []*control.HostResponse{},
-			expErr:    errors.New("erasing non-leader ms-replica db: failed to stop system database: no shutdown callback set"),
+			expErr:    errors.New("no shutdown callback set"),
 		},
 		"unfiltered rank results": {
 			members: system.Members{
@@ -3755,7 +3755,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	}
 }
 
-func TestServer_MgmtSvc_eraseSysedb(t *testing.T) {
+func TestServer_MgmtSvc_eraseSysdb(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
@@ -3764,7 +3764,7 @@ func TestServer_MgmtSvc_eraseSysedb(t *testing.T) {
 	t.Run("no shutdown callback set", func(t *testing.T) {
 		// sysdb (a bare raft.MockDatabase) was never Start()ed, so it has no
 		// shutdown callback and Stop() must fail cleanly rather than panic.
-		if err := svc.eraseSysedb(); err == nil {
+		if err := svc.eraseSysdb(true, ""); err == nil {
 			t.Fatal("expected error erasing a never-started system database")
 		}
 	})
@@ -3778,7 +3778,7 @@ func TestServer_MgmtSvc_eraseSysedb(t *testing.T) {
 		// Success path: sysdb is a real, started, single-replica database, so
 		// Stop()/RemoveFiles() should both succeed and the trailing
 		// awaitSync() should return without blocking indefinitely.
-		if err := svc.eraseSysedb(); err != nil {
+		if err := svc.eraseSysdb(true, ""); err != nil {
 			t.Fatalf("unexpected error: %s", err)
 		}
 	})

@@ -792,8 +792,17 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 			req.Ranks.Count(), len(resp.Results))
 	}
 
-	if err = svc.membership.UpdateMemberStates(resp.Results, updateOnFail); err != nil {
-		return nil, nil, err
+	// Only persist member state updates via raft if this node is still the raft leader.
+	// FIXME: Losing leadership mid-fanout is rare and and if actions have already been
+	// performed then we should find some way of persisting state change with the new leader.
+	// In that case, preserving the RPC results is preferable to discarding them because the
+	// state can no longer be durably recorded.
+	if svc.sysdb.IsLeader() {
+		if err = svc.membership.UpdateMemberStates(resp.Results, updateOnFail); err != nil {
+			return nil, nil, err
+		}
+	} else {
+		svc.log.Debugf("rpcFanout: not raft leader, skipping membership state update for %s", funcName(req.Method))
 	}
 
 	return resp, req.Ranks, nil
@@ -1659,16 +1668,24 @@ func awaitSync() {
 	time.Sleep(100 * time.Millisecond)
 }
 
-// eraseSysedb is called on MS replicas to shut down the raft DB and remove its files.
-func (svc *mgmtSvc) eraseSysedb() error {
-	svc.log.Infof("%s pid %d: erasing system db", build.ControlPlaneName, os.Getpid())
+// eraseSysdb is called on MS replicas to shut down the raft DB and remove its files.
+func (svc *mgmtSvc) eraseSysdb(errOnFail bool, leaderStr string) error {
+	pid := os.Getpid()
+	svc.log.Infof("[%s] pid %d: erasing system db", leaderStr, pid)
 
 	if err := svc.sysdb.Stop(); err != nil {
-		return errors.Wrap(err, "failed to stop system database")
+		if errOnFail {
+			return errors.Wrapf(err, "failed to stop system database on pid %d [role=%s]",
+				pid, leaderStr)
+		}
+		// Log but continue - RemoveFiles may still work after subsequent process restart
+		svc.log.Errorf("stop system database: %s (continuing with erase), pid %d [role=%s]",
+			err, pid, leaderStr)
 	}
 
 	if err := svc.sysdb.RemoveFiles(); err != nil {
-		return errors.Wrap(err, "failed to remove system database")
+		return errors.Wrapf(err, "failed to remove system database on pid %d [role=%s]",
+			pid, leaderStr)
 	}
 
 	awaitSync()
@@ -1683,7 +1700,8 @@ func (svc *mgmtSvc) eraseSysedb() error {
 func (svc *mgmtSvc) resetLocalEngines() error {
 	svc.log.Trace("SystemErase: REPLICA - Step 1: Stopping local engines")
 
-	for _, engine := range svc.harness.Instances() {
+	instances := svc.harness.Instances()
+	for _, engine := range instances {
 		svc.log.Tracef("SystemErase: REPLICA - Stopping engine instance %d", engine.Index())
 		if err := engine.Stop(unix.SIGKILL); err != nil {
 			svc.log.Errorf("instance %d failed to stop: %s", engine.Index(), err)
@@ -1699,11 +1717,24 @@ func (svc *mgmtSvc) resetLocalEngines() error {
 
 	awaitSync()
 
-	// Erase and restart control plane. Engines will be formatted/started later by
-	// ResetFormatRanks after all MS replicas are ready.
-	svc.log.Trace("SystemErase: REPLICA - Step 3: Erasing raft DB")
-	if err := svc.eraseSysedb(); err != nil {
-		return errors.Wrap(err, "erasing non-leader ms-replica db")
+	// In MD-on-SSD mode, also remove the entire control metadata directory, mirroring
+	// what ResetFormatRanks does for the leader's own local ranks (ctl_ranks_rpc.go).
+	// Without this, a replica that restarts is left with a stale-but-present metadata
+	// directory, causing NeedsFormat() to report "Metadata format required" instead of
+	// the expected "SCM format required" after a full erase. Do this after the raft DB
+	// has been stopped and its own files removed (above), same ordering as the
+	// leader's rmLeaderSysdb()-before-wipeEngineSuperblocks() sequence. Remove once
+	// (not per-engine); ignore failures since multiple engines on the same host may
+	// attempt this concurrently, causing "directory not found" errors on subsequent
+	// attempts.
+	if len(instances) > 0 {
+		if storage := instances[0].GetStorage(); storage != nil && storage.ControlMetadataPathConfigured() {
+			mdPath := storage.ControlMetadataPath()
+			svc.log.Tracef("SystemErase: REPLICA - Removing entire control metadata directory: %s", mdPath)
+			if err := os.RemoveAll(mdPath); err != nil {
+				svc.log.Errorf("failed to remove control metadata directory %q: %s", mdPath, err)
+			}
+		}
 	}
 
 	// Note: Actual restart is handled by defer in SystemErase() handler.
@@ -1730,44 +1761,33 @@ func (svc *mgmtSvc) getPeersAndFanout(ctx context.Context) ([]*net.TCPAddr, *fan
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	svc.log.Tracef("SystemErase: LEADER - Fanout request prepared for ranks: %s", fanReq.Ranks)
+
+	// The leader and its MS replica peers erase and restart themselves (see
+	// resetLocalEngines()/eraseReplicas()); ResetFormatRanks only needs to be fanned
+	// out to the remaining non-leader, non-replica hosts. Resolve the leader's own
+	// address plus its peers to a set of ranks to exclude from the fanout.
+	selfAddr, err := svc.sysdb.ReplicaAddr()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	selfAndPeerHosts := make([]string, 0, len(peers)+1)
+	selfAndPeerHosts = append(selfAndPeerHosts, selfAddr.String())
+	for _, peer := range peers {
+		selfAndPeerHosts = append(selfAndPeerHosts, peer.String())
+	}
+
+	excludeRanks, _, err := svc.membership.CheckHosts(strings.Join(selfAndPeerHosts, ","),
+		build.DefaultControlPort)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for _, rank := range excludeRanks.Ranks() {
+		fanReq.Ranks.Delete(rank)
+	}
+	svc.log.Tracef("SystemErase: LEADER - Fanout request prepared for non-leader, non-replica ranks: %s",
+		fanReq.Ranks)
 
 	return peers, fanReq, fanResp, nil
-}
-
-// rmLeaderSysdb erases the leader's raft database.
-// This is the POINT OF NO RETURN - after this, manual intervention may be required if operation fails.
-func (svc *mgmtSvc) rmLeaderSysdb() error {
-	svc.log.Trace("SystemErase: LEADER - Step 3: Erasing leader's raft DB (POINT OF NO RETURN)")
-
-	// NOW erase the leader's database. This must happen before telling replicas to erase,
-	// to prevent a race where replicas restart with clean DBs, rejoin the cluster,
-	// and sync the leader's OLD database entries before the leader erases itself.
-	// We erase the leader's DB but DON'T restart yet - the leader needs to stay
-	// up to coordinate the erase operation on replicas and engines.
-	//
-	// SAFETY WARNING: After stopping raft, the leader cannot handle leadership changes.
-	// If the leader crashes or becomes unavailable after this point, manual intervention
-	// will be required.
-
-	// Stop the database and remove files
-	pid := os.Getpid()
-	svc.log.Infof("%s pid %d: erasing system db on leader", build.ControlPlaneName, pid)
-	if err := svc.sysdb.Stop(); err != nil {
-		// Log but continue - RemoveFiles may still work if subsequent process restarts
-		// succeeds.
-		svc.log.Debugf("stop system database: %s (continuing with erase)", err)
-	}
-	svc.log.Debug("SystemErase: LEADER - Raft database stopped")
-	if err := svc.sysdb.RemoveFiles(); err != nil {
-		// Critical: DB is stopped but files not removed.
-		return errors.Errorf("failed to remove leader DB filesi on pid %d: %s", pid, err)
-	}
-	svc.log.Debug("SystemErase: LEADER - Raft database files removed")
-
-	awaitSync()
-
-	return nil
 }
 
 // eraseReplicas sends erase requests to all MS replica peers.
@@ -1825,7 +1845,7 @@ func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) err
 // without error, every peer is provably inactive (engines stopped) with a wiped sysdb,
 // regardless of whether any of them have restarted or rejoined raft yet.
 func (svc *mgmtSvc) wipeEngineSuperblocks(ctx context.Context, fanReq *fanoutRequest, fanResp *fanoutResponse) (*mgmtpb.SystemEraseResp, error) {
-	svc.log.Trace("SystemErase: LEADER - Step 5: Calling ResetFormatRanks on all engines")
+	svc.log.Trace("SystemErase: LEADER - Step 5: Calling ResetFormatRanks on non-replica engines")
 
 	// Set fanout method to ResetFormatRanks to wipe engine superblocks and restart engines into
 	// AwaitFormat state. By doing this after erasing MS replicas, the replicas have clean sysdb
@@ -1868,7 +1888,18 @@ func (svc *mgmtSvc) resetAllEngines(ctx context.Context) (*mgmtpb.SystemEraseRes
 		return nil, errors.Wrap(err, "unable to determine path to self")
 	}
 
-	if err := svc.rmLeaderSysdb(); err != nil {
+	// NOW erase the leader's database. This must happen before telling replicas to erase,
+	// to prevent a race where replicas restart with clean DBs, rejoin the cluster,
+	// and sync the leader's OLD database entries before the leader erases itself.
+	// We erase the leader's DB but DON'T restart yet - the leader needs to stay
+	// up to coordinate the erase operation on replicas and engines.
+	//
+	// SAFETY WARNING: After stopping raft, the leader cannot handle leadership changes.
+	// If the leader crashes or becomes unavailable after this point, manual intervention
+	// will be required.
+	svc.log.Trace("SystemErase: LEADER - Step 3: Erasing leader's raft DB (POINT OF NO RETURN)")
+
+	if err := svc.eraseSysdb(false, "LEADER"); err != nil {
 		return nil, err
 	}
 
@@ -1876,6 +1907,11 @@ func (svc *mgmtSvc) resetAllEngines(ctx context.Context) (*mgmtpb.SystemEraseRes
 		return nil, err
 	}
 
+	if err := svc.resetLocalEngines(); err != nil {
+		return nil, err
+	}
+
+	// MS-leader and replicas have been handled, now non-MS hosts
 	pbResp, err := svc.wipeEngineSuperblocks(ctx, fanReq, fanResp)
 	if err != nil {
 		return nil, err
@@ -1883,6 +1919,27 @@ func (svc *mgmtSvc) resetAllEngines(ctx context.Context) (*mgmtpb.SystemEraseRes
 
 	return pbResp, nil
 }
+
+// postGracefulStopSettleDelay is a mandatory pause inserted between grpcServer.GracefulStop()
+// returning and the process exec'ing itself, in scheduleControlPlaneRestart().
+//
+// GracefulStop() blocking until it returns is documented to mean every active RPC handler
+// has returned and its response has been "handed off to the transport" -- but that handoff
+// is to grpc-go's own internal per-connection write goroutine (the "loopy writer"), which
+// dequeues and physically writes response frames to the underlying TCP socket
+// *asynchronously*. There is no further synchronization point exposed by grpc-go to confirm
+// that write() syscall has actually happened before GracefulStop() unblocks: it tracks
+// stream/handler completion, not writer-goroutine scheduling. Under load (as is typical here,
+// right after heavy raft/file-erase I/O), that goroutine may not have been scheduled by the Go
+// runtime yet when GracefulStop() returns. exec() then immediately closes every FD_CLOEXEC
+// socket via execve(), which can race ahead of that still-pending write and truncate the
+// response the client was waiting for -- causing the client to see a broken connection (or,
+// worse, transparently reconnect and query a not-yet-elected restarted process) instead of
+// the success response this handler already computed.
+//
+// This delay is a pragmatic mitigation, not a hard guarantee: it gives the writer goroutine a
+// generous window to actually run and flush before the process image is replaced.
+const postGracefulStopSettleDelay = 250 * time.Millisecond
 
 // scheduleControlPlaneRestart schedules the control plane process to restart after a delay.
 // This is called from a defer to ensure restart happens after the gRPC response is sent.
@@ -1910,7 +1967,12 @@ func (svc *mgmtSvc) scheduleControlPlaneRestart(leaderStr string) error {
 	// to the transport. Once GracefulStop() returns, it's safe to exec. A bounded
 	// fallback timeout guards against other long-lived RPCs (e.g. event
 	// subscriptions) preventing the drain from ever completing.
+	//
+	// NB: GracefulStop() returning is NOT a hard guarantee that the response bytes
+	// have hit the wire (see postGracefulStopSettleDelay's doc comment above), so an
+	// additional bounded settle delay is applied afterwards as a pragmatic mitigation.
 	go func() {
+		scheduledAt := time.Now()
 		if svc.grpcServer != nil {
 			done := make(chan struct{})
 			go func() {
@@ -1925,20 +1987,25 @@ func (svc *mgmtSvc) scheduleControlPlaneRestart(leaderStr string) error {
 
 			select {
 			case <-done:
-				svc.log.Debugf("System Erase: gRPC server drained cleanly [role=%s]", leaderStr)
+				svc.log.Debugf("System Erase: gRPC server drained cleanly after %s [role=%s]",
+					time.Since(scheduledAt), leaderStr)
 			case <-time.After(timeout):
 				svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, forcing stop [role=%s]",
 					timeout, leaderStr)
 				svc.grpcServer.Stop()
 			}
+
+			svc.log.Debugf("System Erase: applying %s post-drain settle delay before exec [role=%s]",
+				postGracefulStopSettleDelay, leaderStr)
+			time.Sleep(postGracefulStopSettleDelay)
 		} else {
 			// No grpcServer wired up (e.g. unit tests); fall back to a short
 			// delay as a best-effort substitute.
 			time.Sleep(500 * time.Millisecond)
 		}
 
-		svc.log.Infof("System Erase: exec'ing %s to restart control plane [role=%s]",
-			myPath, leaderStr)
+		svc.log.Infof("System Erase: exec'ing %s to restart control plane after %s total drain [role=%s]",
+			myPath, time.Since(scheduledAt), leaderStr)
 		if err := execRestart(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
 			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
 		}
@@ -2001,7 +2068,8 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 
 	// Schedule restart via defer so it fires after all operations complete but before
 	// the function fully returns. The goroutine spawned by scheduleControlPlaneRestart
-	// will wait 500ms to allow gRPC to send the response before actually restarting.
+	// drains the gRPC server (GracefulStop + settle delay) to allow this handler's
+	// response to reach the client before actually restarting.
 	defer func() {
 		// Restart applies to both leader and replicas
 		if err := svc.scheduleControlPlaneRestart(leaderStr); err != nil {
@@ -2014,15 +2082,28 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 	// restarts, engines will automatically start but enter AwaitFormat state (no
 	// superblock).
 	if !isLeader {
-		if err := svc.resetLocalEngines(); err != nil {
-			return nil, err
+		// Erase sysdb from replica so stale data isn't restored later.
+		svc.log.Trace("SystemErase: REPLICA - Step 3: Erasing raft DB")
+		if err := svc.eraseSysdb(true, leaderStr); err != nil {
+			return nil, errors.Wrap(err, "erasing non-leader ms-replica db")
 		}
+
+		if err := svc.resetLocalEngines(); err != nil {
+		}
+
 		// Return empty response - the defer will schedule the restart
 		// after this response is sent to the client.
+		svc.log.Tracef("SystemErase: REPLICA - returning success to caller [isForwarded=%v]", isForwarded)
 		return &mgmtpb.SystemEraseResp{}, nil
 	}
 
-	return svc.resetAllEngines(ctx)
+	pbResp, err := svc.resetAllEngines(ctx)
+	if err != nil {
+		svc.log.Errorf("SystemErase: LEADER - returning error to caller: %s", err)
+	} else {
+		svc.log.Tracef("SystemErase: LEADER - returning success to caller: %#v", pbResp)
+	}
+	return pbResp, err
 }
 
 // SystemCleanup implements the method defined for the Management Service.
