@@ -29,48 +29,33 @@ fi
 
 set -uex
 
-dnf_install_retry() {
-    retries=$1
+dnf_retry() {
+    local retries=3
     shift
 
-    if ! [[ "$retries" =~ ^[1-9][0-9]*$ ]]; then
-        echo "dnf_install_retry: retry count must be a positive integer" >&2
-        return 2
-    fi
-
-    log=$(mktemp) || return 1
-
-    ret=1
+    local rc=0
     for ((attempt = 1; attempt <= retries; attempt++)); do
-        if (
-            set -o pipefail
-            sudo dnf -y "$@" 2>&1 | tee "$log"
-        ); then
-            ret=0
-            break
-        else
-            rc=$?
+        if ((rc != 0)); then
+            echo "dnf $* failed on attempt $((attempt - 1)) of $retries" \
+                 "(exit code: $rc); clearing metadata before retry" >&2
+            sudo dnf clean metadata || true
+            sleep $(((attempt - 1) * 15))
+        fi
+        if sudo dnf -y "$@"; then
+            return 0
         fi
 
-        if [ "$attempt" -eq "$retries" ]; then
-            echo "dnf $* failed after $attempt attempts"
-            ret=$rc
-            break
-        fi
-
-        echo "dnf $* failed after $attempt attempts (last exit code: $rc); clearing metadata before retry"
-
-        sudo dnf clean metadata || true
-        sleep $((attempt * 15))
+        rc=$?
     done
 
-    rm -f "$log"
-    return "$ret"
+    echo "dnf $* failed after $retries attempts (last exit code: $rc)" >&2
+
+    return "$rc"
 }
 
 echo "${PRETTY_NAME:-Unknown OS}"
 
-dnf_install_retry 3 install daos-client"$DAOS_PKG_VERSION"
+dnf_retry install daos-client"$DAOS_PKG_VERSION"
 if rpm -q daos-server; then
   echo "daos-server RPM should not be installed as a dependency of daos-client"
   exit 1
@@ -82,7 +67,7 @@ if ! sudo dnf -y history undo last; then
     exit 1
 fi
 sudo dnf -y erase "$OPENMPI_RPM"
-dnf_install_retry 3 install daos-client-tests"$DAOS_PKG_VERSION"
+dnf_retry install daos-client-tests"$DAOS_PKG_VERSION"
 if rpm -q "$OPENMPI_RPM"; then
   echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-client-tests"
   exit 1
@@ -96,7 +81,7 @@ if ! sudo dnf -y history undo last; then
     dnf history
     exit 1
 fi
-dnf_install_retry 3 install daos-server-tests"$DAOS_PKG_VERSION"
+dnf_retry install daos-server-tests"$DAOS_PKG_VERSION"
 if rpm -q "$OPENMPI_RPM"; then
   echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-server-tests"
   exit 1
@@ -110,7 +95,7 @@ if ! sudo dnf -y history undo last; then
     dnf history
     exit 1
 fi
-dnf_install_retry 3 install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
+dnf_retry install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
 if ! rpm -q daos-client; then
   echo "daos-client RPM should be installed as a dependency of daos-client-tests-openmpi"
   exit 1
@@ -143,7 +128,7 @@ fi
 sudo touch "${SERVER_CONFIG}"
 sudo touch "${AGENT_CONFIG}"
 
-dnf_install_retry 3 install daos-server"$DAOS_PKG_VERSION"
+dnf_retry install daos-server"$DAOS_PKG_VERSION"
 if rpm -q daos-client; then
   echo "daos-client RPM should not be installed as a dependency of daos-server"
   exit 1
@@ -154,7 +139,7 @@ if [ ! -f "${SERVER_CONFIG}.rpmnew" ]; then
   exit 1
 fi
 
-dnf_install_retry 3 install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
+dnf_retry install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
 if [ ! -f "${AGENT_CONFIG}.rpmnew" ]; then
   echo "A ${AGENT_CONFIG}.rpmnew file should exist after the daos-client-tests-openmpi install"
   ls -al /etc/daos/daos*
