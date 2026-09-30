@@ -325,7 +325,7 @@ class PoolMembershipTest(IorTestBase):
 
         self.log_step("Create a pool and a container.")
         self.pool = self.get_pool(connect=False)
-        self.container = self.get_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         self.log_step("Write some data with IOR.")
         self.ior_cmd.set_daos_params(self.pool, self.container.identifier)

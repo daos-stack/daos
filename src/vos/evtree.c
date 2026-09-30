@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -939,6 +939,15 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 			continue;
 		}
 
+		/* Two overlapped extents won't have same epoch */
+		D_ASSERTF(this_ent->en_epoch != next_ent->en_epoch ||
+			      this_ent->en_minor_epc != next_ent->en_minor_epc,
+			  "this_ent: epoch[" DF_U64 "/%u], ext[" DF_U64 "," DF_U64 "] "
+			  "next_ent: epoch[" DF_U64 "/%u], ext[" DF_U64 "," DF_U64 "]\n",
+			  this_ent->en_epoch, this_ent->en_minor_epc, this_ext->ex_lo,
+			  this_ext->ex_hi, next_ent->en_epoch, next_ent->en_minor_epc,
+			  next_ext->ex_lo, next_ext->ex_hi);
+
 		if (evt_ent_is_later(this_ent, next_ent)) {
 			/* Case #2, next rect is partially under this rect,
 			 * Truncate left end of next_ent, reinsert.
@@ -970,6 +979,13 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 		rc = ent_array_alloc(tcx, ent_array, &temp_ent, true);
 		if (rc != 0)
 			return rc;
+
+		D_ASSERTF(next_ext->ex_lo > this_ext->ex_lo,
+			  "this: epoch[" DF_U64 "/%u], ext[" DF_U64 "," DF_U64 "] "
+			  "next: epoch[" DF_U64 "/%u], ext[" DF_U64 "," DF_U64 "]\n",
+			  this_ent->en_epoch, this_ent->en_minor_epc, this_ext->ex_lo,
+			  this_ext->ex_hi, next_ent->en_epoch, next_ent->en_minor_epc,
+			  next_ext->ex_lo, next_ext->ex_hi);
 
 		if (next_ext->ex_hi >= this_ext->ex_hi) {
 			/* Case #3, truncate this_ent */
@@ -2298,12 +2314,21 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 
 	evt_ent_array_init(ent_array, 1);
 
+	/*
+	 * MD-on-SSD may yield while starting the outermost transaction.
+	 * Start it before generating any trace that will be consumed by
+	 * the update.
+	 */
+	rc = evt_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+
 	/* For evt_remove_all, we only insert removals for things that
 	 * are visible, so we shouldn't need to check for overwrite at
 	 * all.
 	 */
 	if (entry->ei_rect.rc_minor_epc == EVT_MINOR_EPC_MAX)
-		goto run_tx;
+		goto update;
 
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
@@ -2316,7 +2341,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 				&filter, &entry->ei_rect, ent_array);
 	alt_rc = rc;
 	if (rc < 0)
-		return rc;
+		goto out;
 
 	if (ent_array->ea_ent_nr == 1) {
 		ent = evt_ent_array_get(ent_array, 0);
@@ -2331,16 +2356,12 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 			D_ASSERTF(ent_cpy.ei_rect.rc_minor_epc > EVT_REBUILD_MINOR_MIN,
 				  "minor_epc=%d\n", ent_cpy.ei_rect.rc_minor_epc);
 			entryp = &ent_cpy;
-			goto run_tx;
+			goto update;
 		}
 		overwrite = true;
 	}
 
-run_tx:
-	rc = evt_tx_begin(tcx);
-	if (rc != 0)
-		return rc;
-
+update:
 	if (tcx->tc_depth == 0) { /* empty tree */
 		rc = evt_root_activate(tcx, entryp);
 		if (rc != 0)
@@ -2775,6 +2796,17 @@ replace_ent:
 			default:
 				D_ASSERTF(0, "%d\n", find_opc);
 			case EVT_FIND_OVERWRITE:
+				/*
+				 * For rebuild overwrites (EVT_REBUILD_MINOR_MIN) we must scan ALL
+				 * overlapping entries at this epoch and keep the one with the
+				 * highest minor_epc.
+				 *
+				 * For non-rebuild exact overwrites the first match is the only
+				 * relevant entry, so we terminate as before.
+				 */
+				if (rect->rc_minor_epc == EVT_REBUILD_MINOR_MIN)
+					break; /* keep scanning for a higher minor_epc */
+					       /* fall through */
 			case EVT_FIND_FIRST:
 			case EVT_FIND_SAME:
 				/* store the trace and return for clip or
@@ -3754,6 +3786,18 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 	/* NB: This function presently only supports exact match on extent. */
 	evt_ent_array_init(ent_array, 1);
 
+	/*
+	 * Start the transaction before populating tc_trace.  The outermost
+	 * transaction begin can yield with MD-on-SSD while reserving WAL
+	 * space, allowing another ULT to modify the tree and invalidate a
+	 * trace populated before the yield.
+	 */
+	if (!in_tx) {
+		rc = evt_tx_begin(tcx);
+		if (rc != 0)
+			return rc;
+	}
+
 	filter.fr_ex = rect->rc_ex;
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
@@ -3761,20 +3805,16 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PURGE,
 				&filter, rect, ent_array);
 	if (rc != 0)
-		return rc;
+		goto out;
 
-	if (ent_array->ea_ent_nr == 0)
-		return -DER_ENOENT;
+	if (ent_array->ea_ent_nr == 0) {
+		rc = -DER_ENOENT;
+		goto out;
+	}
 
 	D_ASSERT(ent_array->ea_ent_nr == 1);
 	if (ent != NULL)
 		*ent = *evt_ent_array_get(ent_array, 0);
-
-	if (!in_tx) {
-		rc = evt_tx_begin(tcx);
-		if (rc != 0)
-			return rc;
-	}
 
 	rc = evt_node_delete(tcx);
 
@@ -3785,6 +3825,7 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 	if (rc == -DER_NONEXIST)
 		rc = 0;
 
+out:
 	/* No need for evt_ent_array_fini as there will be no allocations
 	 * with 1 entry in the list
 	 */
@@ -3831,18 +3872,17 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 
 	evt_ent_array_init(ent_array, 0);
 
-	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE,
-				&filter, &rect, ent_array);
-	if (rc != 0)
-		goto done;
-
-	rc = evt_ent_array_sort(tcx, ent_array, &filter, EVT_ITER_REMOVALS);
-	if (rc != 0)
-		goto done;
-
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
 		goto done;
+
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE, &filter, &rect, ent_array);
+	if (rc != 0)
+		goto out;
+
+	rc = evt_ent_array_sort(tcx, ent_array, &filter, EVT_ITER_REMOVALS);
+	if (rc != 0)
+		goto out;
 
 	evt_ent_array_for_each(ent, ent_array) {
 		D_ASSERT(ent->en_minor_epc != EVT_MINOR_EPC_MAX);
@@ -3862,6 +3902,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 		if (rc < 0)
 			break;
 	}
+out:
 	rc = evt_tx_end(tcx, rc);
 done:
 	evt_ent_array_fini(ent_array);

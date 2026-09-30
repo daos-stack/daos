@@ -86,6 +86,8 @@ const (
 	ScmRamdiskLowMem
 	ScmRamdiskBadSize
 	ScmConfigTierMissing
+	ScmKernelConfigUnavailable
+	ScmHugepagesNotSupported
 )
 
 // Bdev fault codes
@@ -118,6 +120,7 @@ const (
 	SystemBadFaultDomainDepth
 	SystemPoolLocked
 	SystemJoinReplaceRankNotFound
+	SystemJoinMemberExists
 )
 
 // client fault codes
@@ -159,6 +162,7 @@ const (
 	ServerPoolHasContainers
 	ServerPoolMemRatioNoRoles
 	ServerBadFaultDomainLabels
+	ServerPoolTooFewFaultDomains
 	ServerJoinReplaceEnabledPoolRank
 	ServerRankAdminExcluded
 	ServerTransparentHugepageEnabled
@@ -229,6 +233,7 @@ const (
 const (
 	ControlMetadataUnknown Code = iota + 1000
 	ControlMetadataBadFilesystem
+	ControlMetadataIncomplete
 )
 
 // System Checker codes

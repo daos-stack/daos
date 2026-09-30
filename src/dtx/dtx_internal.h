@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -101,7 +101,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
 CRT_RPC_DECLARE(dtx_coll, DAOS_ISEQ_COLL_DTX, DAOS_OSEQ_COLL_DTX);
 
-#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
+#define DTX_YIELD_CYCLE         DTX_PIGGYBACK_COUNT
 
 /* The count threshold (per pool) for triggering DTX aggregation. */
 #define DTX_AGG_THD_CNT_MAX	(1 << 24)
@@ -263,6 +263,7 @@ extern btr_ops_t dtx_btr_cos_ops;
 /* dtx_common.c */
 int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
+int dtx_commit_large(daos_handle_t coh, struct dtx_id *dtis, int cnt, bool keep_act, bool *rm_cos);
 void dtx_aggregation_main(void *arg);
 int start_dtx_reindex_ult(struct ds_cont_child *cont);
 void dtx_merge_check_result(int *tgt, int src);
@@ -303,7 +304,8 @@ int dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid,
 		  struct dtx_memberships *mbs, uint32_t my_tgtid, uint32_t dtx_ver,
 		  uint32_t pm_ver, bool for_check, bool need_hint, struct dtx_coll_entry **p_dce);
 int dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epoch_t epoch,
-			uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap, int **p_results);
+			uint32_t version, uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap,
+			int **p_results);
 /* clang-format on */
 
 enum dtx_status_handle_result {

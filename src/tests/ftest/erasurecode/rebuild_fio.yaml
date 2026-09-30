@@ -40,7 +40,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   rf_properties: !mux
     rf1:
       properties: rd_fac:1
@@ -53,7 +52,6 @@ fio:
   api: POSIX
   test:
     numjobs: 10
-    directory: "/tmp/daos_dfuse"
     verify: 'crc32'
     verify_pattern: '0xabcdabcd'
     do_verify: 1
@@ -68,5 +66,4 @@ fio:
         rw_read: 'randrw'
 
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
   disable_caching: True

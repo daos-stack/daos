@@ -15,10 +15,11 @@ server_config:
 pool:
   scm_size: 200MB
   nvme_size: 1GiB  # Minimum for 1 target
+  properties: "rd_fac:0,space_rb:0"
 
 container:
   type: POSIX
-  control_method: daos
+  properties: "cksum:off,srv_cksum:off"
 
 dfuse_space_check:
   block_size: 2097152  # 2M

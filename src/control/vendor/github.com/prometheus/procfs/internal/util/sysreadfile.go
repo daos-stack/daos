@@ -11,17 +11,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build linux,!appengine
+//go:build (linux || darwin) && !appengine
+// +build linux darwin
+// +build !appengine
 
 package util
 
 import (
 	"bytes"
 	"os"
+	"strconv"
+	"strings"
 	"syscall"
 )
 
-// SysReadFile is a simplified ioutil.ReadFile that invokes syscall.Read directly.
+// SysReadFile is a simplified os.ReadFile that invokes syscall.Read directly.
 // https://github.com/prometheus/node_exporter/pull/728/files
 //
 // Note that this function will not read files larger than 128 bytes.
@@ -33,7 +37,7 @@ func SysReadFile(file string) (string, error) {
 	defer f.Close()
 
 	// On some machines, hwmon drivers are broken and return EAGAIN.  This causes
-	// Go's ioutil.ReadFile implementation to poll forever.
+	// Go's os.ReadFile implementation to poll forever.
 	//
 	// Since we either want to read data or bail immediately, do the simplest
 	// possible read using syscall directly.
@@ -45,4 +49,22 @@ func SysReadFile(file string) (string, error) {
 	}
 
 	return string(bytes.TrimSpace(b[:n])), nil
+}
+
+// SysReadUintFromFile reads a file using SysReadFile and attempts to parse a uint64 from it.
+func SysReadUintFromFile(path string) (uint64, error) {
+	data, err := SysReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
+}
+
+// SysReadIntFromFile reads a file using SysReadFile and attempts to parse a int64 from it.
+func SysReadIntFromFile(path string) (int64, error) {
+	data, err := SysReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
 }

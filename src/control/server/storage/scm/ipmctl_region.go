@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +16,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -23,9 +23,9 @@ import (
 type (
 	regionID       uint32
 	regionSocketID uint32
-	regionType     ipmctl.PMemRegionType
+	regionType     PMemRegionType
 	regionCapacity uint64
-	regionHealth   ipmctl.PMemRegionHealth
+	regionHealth   PMemRegionHealth
 	regionISetID   uint64
 
 	// RegionList struct contains all the PMemRegions.
@@ -98,13 +98,13 @@ func (rt *regionType) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error
 		return err
 	}
 
-	*rt = regionType(ipmctl.PMemRegionTypeFromString(s))
+	*rt = regionType(PMemRegionTypeFromString(s))
 
 	return nil
 }
 
 func (rt regionType) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	return e.EncodeElement(ipmctl.PMemRegionType(rt).String(), start)
+	return e.EncodeElement(PMemRegionType(rt).String(), start)
 }
 
 func (rc *regionCapacity) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
@@ -129,13 +129,13 @@ func (rh *regionHealth) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 		return err
 	}
 
-	*rh = regionHealth(ipmctl.PMemRegionHealthFromString(s))
+	*rh = regionHealth(PMemRegionHealthFromString(s))
 
 	return nil
 }
 
 func (rh regionHealth) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	return e.EncodeElement(ipmctl.PMemRegionHealth(rh).String(), start)
+	return e.EncodeElement(PMemRegionHealth(rh).String(), start)
 }
 
 const (
@@ -228,20 +228,20 @@ func (cr *cmdRunner) getRegions(sockID int) (Regions, error) {
 }
 
 func getRegionState(region Region) storage.ScmState {
-	rt := ipmctl.PMemRegionType(region.PersistentMemoryType)
+	rt := PMemRegionType(region.PersistentMemoryType)
 
 	switch rt {
-	case ipmctl.RegionTypeNotInterleaved:
+	case RegionTypeNotInterleaved:
 		return storage.ScmNotInterleaved
-	case ipmctl.RegionTypeAppDirect:
+	case RegionTypeAppDirect:
 		// Fall-through
 	default:
 		return storage.ScmUnknownMode
 	}
 
-	rh := ipmctl.PMemRegionHealth(region.Health)
+	rh := PMemRegionHealth(region.Health)
 
-	if rh == ipmctl.RegionHealthError {
+	if rh == RegionHealthError {
 		return storage.ScmNotHealthy
 	}
 

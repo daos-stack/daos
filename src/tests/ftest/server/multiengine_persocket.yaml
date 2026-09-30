@@ -88,7 +88,6 @@ pool:
   name: daos_server
 
 container:
-  control_method: daos
   type: POSIX
   properties: rf:0
   num_attributes: 20

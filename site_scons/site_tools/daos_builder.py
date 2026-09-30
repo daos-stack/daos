@@ -61,7 +61,10 @@ def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
 
 def _add_build_rpath(env, pathin="."):
     """Add a build directory to rpath"""
-    path = Dir(pathin).path
+    # Use absolute path rather than path (relative): the Go toolchain invokes the linker from
+    # a temporary directory, so relative -rpath-link entries would not be resolved correctly. All
+    # other -L flags in CGO_LDFLAGS are also absolute.
+    path = Dir(pathin).abspath
     env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
     env.AppendENVPath('CGO_LDFLAGS', f'-Wl,-rpath-link={path}', sep=' ')
 

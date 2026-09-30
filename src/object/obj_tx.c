@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3548,7 +3548,11 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc, tse_
 		daos_key_t		*dkey;
 		uint32_t		 nr;
 
-		if (qu->flags & DAOS_GET_DKEY) {
+		if (qu->flags == 0) {
+			/* Query max epoch only, neither dkey nor akey is given. */
+			dkey = NULL;
+			nr   = 0;
+		} else if (qu->flags & DAOS_GET_DKEY) {
 			dkey = NULL;
 			nr = 0;
 		} else if (qu->flags & DAOS_GET_AKEY) {

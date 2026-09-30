@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -225,16 +225,26 @@ dfs_pipeline_create(dfs_t *dfs, dfs_predicate_t pred, uint64_t flags, dfs_pipeli
 	*_dpipe = dpipe;
 	return 0;
 err:
-	printf("failed to create pipeline. rc = %d\n", rc);
-	D_FREE(dpipe);
+	dfs_pipeline_destroy(dpipe);
 	return rc;
 }
 
 int
 dfs_pipeline_destroy(dfs_pipeline_t *dpipe)
 {
-	if (dpipe->pipeline.num_filters)
-		D_FREE(dpipe->pipeline.filters);
+	if (dpipe == NULL)
+		return 0;
+
+	/*
+	 * Ownership invariant: daos_pipeline_add() stores a pointer to dpipe->pipef
+	 * inside pipeline.filters[].  Once that succeeds (num_filters > 0),
+	 * daos_pipeline_free() is responsible for freeing pipef.parts via free_filters().
+	 * Before that point pipef.parts must be freed directly.
+	 */
+	if (dpipe->pipeline.num_filters || dpipe->pipeline.num_aggr_filters)
+		daos_pipeline_free(&dpipe->pipeline);
+	else if (dpipe->pipef.num_parts)
+		D_FREE(dpipe->pipef.parts);
 	D_FREE(dpipe);
 	return 0;
 }
@@ -293,7 +303,7 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 
 	D_ALLOC_ARRAY(kds, nr_kds);
 	if (kds == NULL)
-		return ENOMEM;
+		D_GOTO(out, rc = ENOMEM);
 
 	/** alloc buffer to store dkeys enumerated */
 	sgl_keys.sg_nr     = 1;

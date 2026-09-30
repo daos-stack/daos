@@ -1,0 +1,658 @@
+From ed44b3d75bb49c3db2949fe5ea67011ea456dcea Mon Sep 17 00:00:00 2001
+From: Jerome Soumagne <jerome.soumagne@hpe.com>
+Date: Wed, 26 Aug 2026 12:51:12 -0500
+Subject: [PATCH 1/2] HG perf: add -D option to test bulk binding
+
+---
+ Testing/common/mercury_test.c   |  4 ++++
+ Testing/common/mercury_test.h   |  1 +
+ Testing/common/na_test_getopt.c |  3 ++-
+ Testing/perf/hg/hg_bw_read.c    |  6 ++++++
+ Testing/perf/hg/hg_bw_write.c   |  6 ++++++
+ Testing/perf/hg/mercury_perf.c  | 36 ++++++++++++++++++++++++---------
+ 6 files changed, 45 insertions(+), 11 deletions(-)
+
+diff --git a/Testing/common/mercury_test.c b/Testing/common/mercury_test.c
+index 95ed914f..1321ae45 100644
+--- a/Testing/common/mercury_test.c
++++ b/Testing/common/mercury_test.c
+@@ -69,6 +69,7 @@ hg_test_usage(const char *execname)
+     printf("    -B, --barrier       Use barriers for perf measurements\n");
+     printf("    -u, --mrecv-ops     Number of multi-recv ops (server only)\n");
+     printf("    -i, --post-init     Number of handles posted (server only)\n");
++    printf("    -D, --bulk-bind     Bind bulk handles (force register only)\n");
+ }
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -111,6 +112,9 @@ hg_test_parse_options(int argc, char *argv[], struct hg_test_info *hg_test_info)
+                 hg_test_info->request_post_init =
+                     (unsigned int) atoi(na_test_opt_arg_g);
+                 break;
++            case 'D': /* bulk_bind */
++                hg_test_info->bulk_bind = true;
++                break;
+             default:
+                 break;
+         }
+diff --git a/Testing/common/mercury_test.h b/Testing/common/mercury_test.h
+index 8a09d823..a3d33d50 100644
+--- a/Testing/common/mercury_test.h
++++ b/Testing/common/mercury_test.h
+@@ -28,6 +28,7 @@ struct hg_test_info {
+     bool auto_sm;                     /* Use shared-memory */
+     bool bidirectional;               /* Bidirectional tests */
+     bool barrier;                     /* Use barriers for perf measurements */
++    bool bulk_bind; /* Bind bulk handles (combine with force register) */
+ };
+ 
+ /*****************/
+diff --git a/Testing/common/na_test_getopt.c b/Testing/common/na_test_getopt.c
+index d72b59a9..a0b9b1cf 100644
+--- a/Testing/common/na_test_getopt.c
++++ b/Testing/common/na_test_getopt.c
+@@ -16,7 +16,7 @@
+ int na_test_opt_ind_g = 1;            /* token pointer */
+ const char *na_test_opt_arg_g = NULL; /* flag argument (or value) */
+ const char *na_test_short_opt_g =
+-    "hc:d:p:H:P:sSk:l:bC:X:VZ:y:z:w:x:mt:BRvMUf:T:u:i:NK";
++    "hc:d:p:H:P:sSk:l:bC:X:VZ:y:z:w:x:mt:BRvMUf:T:u:i:NKD";
+ /* clang-format off */
+ const struct na_test_opt na_test_opt_g[] = {
+     {"help", no_arg, 'h'},
+@@ -51,6 +51,7 @@ const struct na_test_opt na_test_opt_g[] = {
+     {"post-init", require_arg, 'i'},
+     {"no-shutdown", no_arg, 'N'},
+     {"key-rank", no_arg, 'K'},
++    {"bulk-bind", no_arg, 'D'},
+     {NULL, 0, '\0'} /* Must add this at the end */
+ };
+ /* clang-format on */
+diff --git a/Testing/perf/hg/hg_bw_read.c b/Testing/perf/hg/hg_bw_read.c
+index f6204014..b83ec8f0 100644
+--- a/Testing/perf/hg/hg_bw_read.c
++++ b/Testing/perf/hg/hg_bw_read.c
+@@ -73,6 +73,12 @@ hg_perf_run(const struct hg_test_info *hg_test_info,
+                     &info->local_bulk_handles[j]);
+                 HG_TEST_CHECK_HG_ERROR(error, ret,
+                     "HG_Bulk_create() failed (%s)", HG_Error_to_string(ret));
++                if (hg_test_info->bulk_bind) {
++                    ret = HG_Bulk_bind(
++                        info->local_bulk_handles[j], info->context);
++                    HG_TEST_CHECK_HG_ERROR(error, ret,
++                        "HG_Bulk_bind() failed (%s)", HG_Error_to_string(ret));
++                }
+             }
+             if (i >= skip) {
+                 hg_time_get_current(&t4);
+diff --git a/Testing/perf/hg/hg_bw_write.c b/Testing/perf/hg/hg_bw_write.c
+index 17941f97..e3ab2a64 100644
+--- a/Testing/perf/hg/hg_bw_write.c
++++ b/Testing/perf/hg/hg_bw_write.c
+@@ -66,6 +66,12 @@ hg_perf_run(const struct hg_test_info *hg_test_info,
+                     &info->local_bulk_handles[j]);
+                 HG_TEST_CHECK_HG_ERROR(error, ret,
+                     "HG_Bulk_create() failed (%s)", HG_Error_to_string(ret));
++                if (hg_test_info->bulk_bind) {
++                    ret = HG_Bulk_bind(
++                        info->local_bulk_handles[j], info->context);
++                    HG_TEST_CHECK_HG_ERROR(error, ret,
++                        "HG_Bulk_bind() failed (%s)", HG_Error_to_string(ret));
++                }
+             }
+             if (i >= skip) {
+                 hg_time_get_current(&t4);
+diff --git a/Testing/perf/hg/mercury_perf.c b/Testing/perf/hg/mercury_perf.c
+index d27d9594..3875bdcf 100644
+--- a/Testing/perf/hg/mercury_perf.c
++++ b/Testing/perf/hg/mercury_perf.c
+@@ -968,6 +968,8 @@ hg_perf_print_header_bw(const struct hg_test_info *hg_test_info,
+         printf("# WARNING verifying data, output will be slower\n");
+     if (hg_test_info->na_test_info.force_register)
+         printf("# WARNING forcing registration on every iteration\n");
++    if (hg_test_info->bulk_bind)
++        printf("# WARNING binding bulk handles\n");
+     if (!info->barrier && comm_size > 1) {
+         const char *bw_rank_label = (hg_test_info->na_test_info.mbps)
+                                         ? "\"BW/rank (MB/s)\""
+@@ -1474,15 +1476,18 @@ hg_perf_bulk_common(hg_handle_t handle, hg_bulk_op_t op)
+     struct hg_perf_bulk_info bulk_info;
+     hg_bulk_t remote_bulk;
+     hg_return_t ret;
++    bool bulk_bind = false;
+     size_t i;
+ 
+     /* Get input struct */
+     ret = HG_Get_input(handle, &bulk_info);
+     HG_TEST_CHECK_HG_ERROR(
+         error, ret, "HG_Get_input() failed (%s)", HG_Error_to_string(ret));
+-    remote_bulk = bulk_info.bulk != HG_BULK_NULL
+-                      ? bulk_info.bulk
+-                      : info->remote_bulk_handles[bulk_info.handle_id];
++    if (bulk_info.bulk != HG_BULK_NULL) {
++        remote_bulk = bulk_info.bulk;
++        bulk_bind = HG_Bulk_get_addr(remote_bulk) != HG_ADDR_NULL;
++    } else
++        remote_bulk = info->remote_bulk_handles[bulk_info.handle_id];
+ 
+     /* Initialize request */
+     *request = (struct hg_perf_request) {.complete_count = 0,
+@@ -1497,13 +1502,24 @@ hg_perf_bulk_common(hg_handle_t handle, hg_bulk_op_t op)
+     }
+ 
+     /* Post bulk push */
+-    for (i = 0; i < info->bulk_count; i++) {
+-        ret = HG_Bulk_transfer(info->context, hg_perf_bulk_transfer_cb, handle,
+-            op, hg_info->addr, remote_bulk, i * info->buf_size_max,
+-            info->local_bulk_handles[bulk_info.handle_id],
+-            i * info->buf_size_max, bulk_info.size, HG_OP_ID_IGNORE);
+-        HG_TEST_CHECK_HG_ERROR(error_free, ret,
+-            "HG_Bulk_transfer() failed (%s)", HG_Error_to_string(ret));
++    if (bulk_bind) {
++        for (i = 0; i < info->bulk_count; i++) {
++            ret = HG_Bulk_bind_transfer(info->context, hg_perf_bulk_transfer_cb,
++                handle, op, remote_bulk, i * info->buf_size_max,
++                info->local_bulk_handles[bulk_info.handle_id],
++                i * info->buf_size_max, bulk_info.size, HG_OP_ID_IGNORE);
++            HG_TEST_CHECK_HG_ERROR(error_free, ret,
++                "HG_Bulk_bind_transfer() failed (%s)", HG_Error_to_string(ret));
++        }
++    } else {
++        for (i = 0; i < info->bulk_count; i++) {
++            ret = HG_Bulk_transfer(info->context, hg_perf_bulk_transfer_cb,
++                handle, op, hg_info->addr, remote_bulk, i * info->buf_size_max,
++                info->local_bulk_handles[bulk_info.handle_id],
++                i * info->buf_size_max, bulk_info.size, HG_OP_ID_IGNORE);
++            HG_TEST_CHECK_HG_ERROR(error_free, ret,
++                "HG_Bulk_transfer() failed (%s)", HG_Error_to_string(ret));
++        }
+     }
+ 
+     (void) HG_Free_input(handle, &bulk_info);
+
+From 7b83aea6395c2d29d1d37a6b53e365fea39a9646 Mon Sep 17 00:00:00 2001
+From: Jerome Soumagne <jerome.soumagne@hpe.com>
+Date: Wed, 26 Aug 2026 18:47:44 -0500
+Subject: [PATCH 2/2] NA UCX: add caching of deserialized addresses / endpoints
+
+Cache addresses by their packed worker address (the only identity available at
+deserialization time) so a single endpoint is reused per peer worker.
+
+Since ucp_ep_close_nbx() rarely completes inline, released addresses
+would otherwise accumulate on the close list and progress cost would
+grow linearly.
+
+Co-authored-by: Mohamad Chaarawi <mohamad.chaarawi@hpe.com>
+---
+ src/na/na_ucx.c | 313 +++++++++++++++++++++++++++++++++++++++---------
+ 1 file changed, 254 insertions(+), 59 deletions(-)
+
+diff --git a/src/na/na_ucx.c b/src/na/na_ucx.c
+index 0836fec7..255be761 100644
+--- a/src/na/na_ucx.c
++++ b/src/na/na_ucx.c
+@@ -130,16 +130,22 @@
+ /* Local Type and Struct Definition */
+ /************************************/
+ 
++/* Worker address key */
++struct na_ucx_worker_addr_key {
++    ucp_address_t *addr; /* Worker address */
++    size_t addrlen;      /* Worker address length */
++};
++
+ /* Address */
+ struct na_ucx_addr {
+-    STAILQ_ENTRY(na_ucx_addr) entry;          /* Entry in addr pool */
+-    LIST_ENTRY(na_ucx_addr) close_list_entry; /* Entry in close list */
+-    struct sockaddr_storage ss_addr;          /* Sock addr */
+-    ucs_sock_addr_t addr_key;                 /* Address key */
+-    struct na_ucx_class *na_ucx_class;        /* NA UCX class */
+-    ucp_address_t *worker_addr;               /* Worker addr */
+-    size_t worker_addr_len;                   /* Worker addr len */
++    STAILQ_ENTRY(na_ucx_addr) entry;               /* Entry in addr pool */
++    LIST_ENTRY(na_ucx_addr) close_list_entry;      /* Entry in close list */
++    struct sockaddr_storage ss_addr;               /* Sock addr */
++    ucs_sock_addr_t addr_key;                      /* Address key */
++    struct na_ucx_worker_addr_key worker_addr_key; /* Worker addr key */
++    struct na_ucx_class *na_ucx_class;             /* NA UCX class */
+     bool worker_addr_alloc;     /* Worker addr was allocated by us */
++    bool worker_addr_cached;    /* Addr is referenced by worker_map */
+     ucp_ep_h ucp_ep;            /* Currently only one EP per address */
+     void *close_request;        /* Close request */
+     hg_atomic_int32_t refcount; /* Reference counter */
+@@ -152,6 +158,7 @@ struct na_ucx_map {
+     hg_thread_rwlock_t lock;
+     hg_hash_table_t *key_map;
+     hg_hash_table_t *ep_map;
++    hg_hash_table_t *worker_map;
+ };
+ 
+ /* Connnection request */
+@@ -394,7 +401,7 @@ na_ucp_context_destroy(ucp_context_h context);
+ static na_return_t
+ na_ucp_worker_create(ucp_context_h context, ucs_thread_mode_t thread_mode,
+     ucp_worker_h *worker_p, ucp_address_t **worker_addr_p,
+-    size_t *worker_addr_len_p);
++    size_t *worker_addrlen_p);
+ 
+ /**
+  * Destroy worker.
+@@ -663,6 +670,42 @@ static na_return_t
+ na_ucx_addr_map_remove(
+     struct na_ucx_map *na_ucx_map, ucs_sock_addr_t *addr_key, ucp_ep_h ep);
+ 
++/**
++ * Hash packed worker address key.
++ */
++static NA_INLINE unsigned int
++na_ucx_worker_addr_key_hash(hg_hash_table_key_t key);
++
++/**
++ * Compare packed worker address keys.
++ */
++static NA_INLINE int
++na_ucx_worker_addr_key_equal(
++    hg_hash_table_key_t key1, hg_hash_table_key_t key2);
++
++/**
++ * Lookup addr from addr_key.
++ */
++static NA_INLINE struct na_ucx_addr *
++na_ucx_worker_addr_map_lookup(
++    struct na_ucx_map *na_ucx_map, struct na_ucx_worker_addr_key *addr_key);
++
++/**
++ * Lookup addr from a packed worker address, creating it if it does not
++ * exist. Returns NA_EXIST if a cached address was returned.
++ */
++static na_return_t
++na_ucx_worker_addr_map_insert(struct na_ucx_class *na_ucx_class,
++    struct na_ucx_map *na_ucx_map, struct na_ucx_worker_addr_key *addr_key,
++    struct na_ucx_addr **na_ucx_addr_p);
++
++/**
++ * Remove addr from worker address map.
++ */
++static void
++na_ucx_worker_addr_map_remove(
++    struct na_ucx_map *na_ucx_map, struct na_ucx_worker_addr_key *addr_key);
++
+ /**
+  * Hash connection ID.
+  */
+@@ -1569,7 +1612,7 @@ na_ucp_context_destroy(ucp_context_h context)
+ static na_return_t
+ na_ucp_worker_create(ucp_context_h context, ucs_thread_mode_t thread_mode,
+     ucp_worker_h *worker_p, ucp_address_t **worker_addr_p,
+-    size_t *worker_addr_len_p)
++    size_t *worker_addrlen_p)
+ {
+     ucp_worker_h worker = NULL;
+     ucp_worker_params_t worker_params = {
+@@ -1629,7 +1672,7 @@ na_ucp_worker_create(ucp_context_h context, ucs_thread_mode_t thread_mode,
+     NA_CHECK_SUBSYS_ERROR(cls, worker_attrs.address == NULL, error, ret,
+         NA_PROTONOSUPPORT, "worker address is NULL");
+     *worker_addr_p = worker_attrs.address;
+-    *worker_addr_len_p = worker_attrs.address_length;
++    *worker_addrlen_p = worker_attrs.address_length;
+ 
+     *worker_p = worker;
+ 
+@@ -2645,6 +2688,12 @@ na_ucx_class_alloc(void)
+     NA_CHECK_SUBSYS_ERROR_NORET(cls, na_ucx_class->addr_map.ep_map == NULL,
+         error, "Could not allocate EP handle map");
+ 
++    /* Create worker address map */
++    na_ucx_class->addr_map.worker_map = hg_hash_table_new(
++        na_ucx_worker_addr_key_hash, na_ucx_worker_addr_key_equal);
++    NA_CHECK_SUBSYS_ERROR_NORET(cls, na_ucx_class->addr_map.worker_map == NULL,
++        error, "Could not allocate worker map");
++
+     return na_ucx_class;
+ 
+ error:
+@@ -2675,6 +2724,8 @@ na_ucx_class_free(struct na_ucx_class *na_ucx_class)
+         hg_hash_table_free(na_ucx_class->addr_map.key_map);
+     if (na_ucx_class->addr_map.ep_map)
+         hg_hash_table_free(na_ucx_class->addr_map.ep_map);
++    if (na_ucx_class->addr_map.worker_map)
++        hg_hash_table_free(na_ucx_class->addr_map.worker_map);
+     (void) hg_thread_rwlock_destroy(&na_ucx_class->addr_map.lock);
+ 
+     (void) hg_thread_spin_destroy(&na_ucx_class->unexpected_op_queue.lock);
+@@ -2979,6 +3030,133 @@ na_ucx_addr_map_remove(
+     return ret;
+ }
+ 
++/*---------------------------------------------------------------------------*/
++static NA_INLINE unsigned int
++na_ucx_worker_addr_key_hash(hg_hash_table_key_t key)
++{
++    const struct na_ucx_worker_addr_key *addr_key =
++        (const struct na_ucx_worker_addr_key *) key;
++    const uint8_t *bytes = (const uint8_t *) addr_key->addr;
++    unsigned int hash = 2166136261u; /* FNV-1a */
++    size_t i;
++
++    for (i = 0; i < addr_key->addrlen; i++) {
++        hash ^= (unsigned int) bytes[i];
++        hash *= 16777619u;
++    }
++
++    return hash;
++}
++
++/*---------------------------------------------------------------------------*/
++static NA_INLINE int
++na_ucx_worker_addr_key_equal(hg_hash_table_key_t key1, hg_hash_table_key_t key2)
++{
++    const struct na_ucx_worker_addr_key
++        *addr_key1 = (const struct na_ucx_worker_addr_key *) key1,
++        *addr_key2 = (const struct na_ucx_worker_addr_key *) key2;
++
++    return (addr_key1->addrlen == addr_key2->addrlen) &&
++           (memcmp(addr_key1->addr, addr_key2->addr, addr_key1->addrlen) == 0);
++}
++
++/*---------------------------------------------------------------------------*/
++static NA_INLINE struct na_ucx_addr *
++na_ucx_worker_addr_map_lookup(
++    struct na_ucx_map *na_ucx_map, struct na_ucx_worker_addr_key *addr_key)
++{
++    hg_hash_table_value_t value = NULL;
++
++    /* Lookup key */
++    hg_thread_rwlock_rdlock(&na_ucx_map->lock);
++    value = hg_hash_table_lookup(
++        na_ucx_map->worker_map, (hg_hash_table_key_t) addr_key);
++    hg_thread_rwlock_release_rdlock(&na_ucx_map->lock);
++
++    return (value == HG_HASH_TABLE_NULL) ? NULL : (struct na_ucx_addr *) value;
++}
++
++/*---------------------------------------------------------------------------*/
++static na_return_t
++na_ucx_worker_addr_map_insert(struct na_ucx_class *na_ucx_class,
++    struct na_ucx_map *na_ucx_map, struct na_ucx_worker_addr_key *addr_key,
++    struct na_ucx_addr **na_ucx_addr_p)
++{
++    struct na_ucx_addr *na_ucx_addr = NULL;
++    na_return_t ret = NA_SUCCESS;
++    int rc;
++
++    hg_thread_rwlock_wrlock(&na_ucx_map->lock);
++
++    /* Look up again to prevent race between lock release/acquire */
++    na_ucx_addr = (struct na_ucx_addr *) hg_hash_table_lookup(
++        na_ucx_map->worker_map, (hg_hash_table_key_t) addr_key);
++    if (na_ucx_addr != NULL) {
++        ret = NA_EXIST; /* Entry already exists */
++        goto done;
++    }
++
++    /* Allocate address, it is not keyed by sockaddr */
++    ret = na_ucx_addr_create(na_ucx_class, NULL, &na_ucx_addr);
++    NA_CHECK_SUBSYS_NA_ERROR(
++        addr, error, ret, "Could not allocate NA UCX addr");
++
++    /* Copy worker address */
++    na_ucx_addr->worker_addr_key.addr = malloc(addr_key->addrlen);
++    NA_CHECK_SUBSYS_ERROR(addr, na_ucx_addr->worker_addr_key.addr == NULL,
++        error, ret, NA_NOMEM, "Could not allocate worker_addr_key addr");
++    memcpy(
++        na_ucx_addr->worker_addr_key.addr, addr_key->addr, addr_key->addrlen);
++    na_ucx_addr->worker_addr_key.addrlen = addr_key->addrlen;
++    na_ucx_addr->worker_addr_alloc = true;
++
++    /* Create EP */
++    ret = na_ucp_connect_worker(na_ucx_class->ucp_worker, addr_key->addr,
++        na_ucp_ep_error_cb, na_ucx_addr, &na_ucx_addr->ucp_ep);
++    NA_CHECK_SUBSYS_NA_ERROR(
++        addr, error, ret, "Could not connect to remote worker");
++
++    /* Insert new value to worker map */
++    rc = hg_hash_table_insert(na_ucx_map->worker_map,
++        (hg_hash_table_key_t) &na_ucx_addr->worker_addr_key,
++        (hg_hash_table_value_t) na_ucx_addr);
++    NA_CHECK_SUBSYS_ERROR(
++        addr, rc == 0, error, ret, NA_NOMEM, "hg_hash_table_insert() failed");
++
++    na_ucx_addr->worker_addr_cached = true;
++
++    hg_atomic_or32(&na_ucx_addr->status, NA_UCX_ADDR_RESOLVED);
++
++done:
++    hg_thread_rwlock_release_wrlock(&na_ucx_map->lock);
++
++    *na_ucx_addr_p = na_ucx_addr;
++
++    return ret;
++
++error:
++    hg_thread_rwlock_release_wrlock(&na_ucx_map->lock);
++    if (na_ucx_addr != NULL)
++        na_ucx_addr_destroy(na_ucx_addr);
++
++    return ret;
++}
++
++/*---------------------------------------------------------------------------*/
++static void
++na_ucx_worker_addr_map_remove(
++    struct na_ucx_map *na_ucx_map, struct na_ucx_worker_addr_key *addr_key)
++{
++    hg_thread_rwlock_wrlock(&na_ucx_map->lock);
++
++    if (hg_hash_table_lookup(na_ucx_map->worker_map,
++            (hg_hash_table_key_t) addr_key) != HG_HASH_TABLE_NULL)
++        (void) hg_hash_table_remove(
++            na_ucx_map->worker_map, (hg_hash_table_key_t) addr_key);
++
++    hg_thread_rwlock_release_wrlock(&na_ucx_map->lock);
++}
++
+ /*---------------------------------------------------------------------------*/
+ static NA_INLINE unsigned int
+ na_ucx_addr_ep_hash(hg_hash_table_key_t key)
+@@ -3071,14 +3249,21 @@ na_ucx_addr_release(struct na_ucx_addr *na_ucx_addr, bool force,
+             &na_ucx_addr->addr_key, na_ucx_addr->ucp_ep);
+     }
+ 
+-    if (na_ucx_addr->worker_addr != NULL) {
++    /* Must be removed before worker_addr is released, the key points to it */
++    if (na_ucx_addr->worker_addr_cached) {
++        na_ucx_addr->worker_addr_cached = false;
++        na_ucx_worker_addr_map_remove(&na_ucx_addr->na_ucx_class->addr_map,
++            &na_ucx_addr->worker_addr_key);
++    }
++
++    if (na_ucx_addr->worker_addr_key.addr != NULL) {
+         if (na_ucx_addr->worker_addr_alloc)
+-            free(na_ucx_addr->worker_addr);
++            free(na_ucx_addr->worker_addr_key.addr);
+         else
+             ucp_worker_release_address(na_ucx_addr->na_ucx_class->ucp_worker,
+-                na_ucx_addr->worker_addr);
+-        na_ucx_addr->worker_addr = NULL;
+-        na_ucx_addr->worker_addr_len = 0;
++                na_ucx_addr->worker_addr_key.addr);
++        na_ucx_addr->worker_addr_key =
++            (struct na_ucx_worker_addr_key) {.addr = NULL, .addrlen = 0};
+     }
+ 
+     if (na_ucx_addr->ucp_ep != NULL) {
+@@ -3213,6 +3398,9 @@ na_ucx_addr_reset(struct na_ucx_addr *na_ucx_addr, ucs_sock_addr_t *addr_key)
+     hg_atomic_init32(&na_ucx_addr->refcount, 1);
+     hg_atomic_init32(&na_ucx_addr->status, 0);
+     na_ucx_addr->connect = false;
++    na_ucx_addr->worker_addr_cached = false;
++    na_ucx_addr->worker_addr_key =
++        (struct na_ucx_worker_addr_key) {.addr = NULL, .addrlen = 0};
+ 
+     if (addr_key && addr_key->addr) {
+         memcpy(&na_ucx_addr->ss_addr, addr_key->addr, addr_key->addrlen);
+@@ -3592,7 +3780,7 @@ na_ucx_initialize(
+     socklen_t src_addrlen = 0;
+     struct sockaddr_storage ucp_listener_ss_addr;
+     ucp_address_t *worker_addr = NULL;
+-    size_t worker_addr_len = 0;
++    size_t worker_addrlen = 0;
+     ucs_sock_addr_t addr_key = {.addr = NULL, .addrlen = 0};
+     ucp_config_t *config = NULL;
+     bool no_wait = false;
+@@ -3697,7 +3885,7 @@ na_ucx_initialize(
+ 
+     /* Create single worker */
+     ret = na_ucp_worker_create(na_ucx_class->ucp_context, worker_thread_mode,
+-        &na_ucx_class->ucp_worker, &worker_addr, &worker_addr_len);
++        &na_ucx_class->ucp_worker, &worker_addr, &worker_addrlen);
+     NA_CHECK_SUBSYS_NA_ERROR(cls, error, ret, "Could not create UCX worker");
+ 
+     /* Set AM handler for unexpected messages */
+@@ -3732,10 +3920,10 @@ na_ucx_initialize(
+     /* Create self address */
+     ret = na_ucx_addr_create(na_ucx_class, &addr_key, &na_ucx_class->self_addr);
+     NA_CHECK_SUBSYS_NA_ERROR(cls, error, ret, "Could not create self address");
+-    na_ucx_class->self_addr->worker_addr = worker_addr;
+-    na_ucx_class->self_addr->worker_addr_len = worker_addr_len;
++    na_ucx_class->self_addr->worker_addr_key = (struct na_ucx_worker_addr_key) {
++        .addr = worker_addr, .addrlen = worker_addrlen};
+     worker_addr = NULL;
+-    worker_addr_len = 0;
++    worker_addrlen = 0;
+ 
+     /* Register initial mempool */
+ #ifdef NA_UCX_HAS_MEM_POOL
+@@ -3792,6 +3980,14 @@ na_ucx_finalize(na_class_t *na_class)
+         na_ucx_addr_destroy(na_ucx_addr);
+     }
+ 
++    /* Same for addresses that were cached by packed worker address */
++    hg_hash_table_iterate(na_ucx_class->addr_map.worker_map, &addr_table_iter);
++    while (hg_hash_table_iter_has_more(&addr_table_iter)) {
++        struct na_ucx_addr *na_ucx_addr =
++            (struct na_ucx_addr *) hg_hash_table_iter_next(&addr_table_iter);
++        na_ucx_addr_destroy(na_ucx_addr);
++    }
++
+ #ifdef NA_UCX_HAS_ADDR_POOL
+     /* Free address pool */
+     while (!STAILQ_EMPTY(&na_ucx_class->addr_pool.queue)) {
+@@ -4022,7 +4218,8 @@ na_ucx_addr_to_string(
+ static NA_INLINE size_t
+ na_ucx_addr_get_serialize_size(na_class_t NA_UNUSED *na_class, na_addr_t *addr)
+ {
+-    return ((struct na_ucx_addr *) addr)->worker_addr_len + sizeof(uint64_t);
++    return ((struct na_ucx_addr *) addr)->worker_addr_key.addrlen +
++           sizeof(uint64_t);
+ }
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -4036,18 +4233,19 @@ na_ucx_addr_serialize(
+     uint64_t len;
+     na_return_t ret = NA_SUCCESS;
+ 
+-    NA_CHECK_SUBSYS_ERROR(addr, na_ucx_addr->worker_addr == NULL, done, ret,
+-        NA_PROTONOSUPPORT,
++    NA_CHECK_SUBSYS_ERROR(addr, na_ucx_addr->worker_addr_key.addr == NULL, done,
++        ret, NA_PROTONOSUPPORT,
+         "Serialization of addresses can only be done if worker address is "
+         "available");
+-    NA_CHECK_SUBSYS_ERROR(addr, na_ucx_addr->worker_addr_len > buf_size, done,
+-        ret, NA_OVERFLOW,
++    NA_CHECK_SUBSYS_ERROR(addr, na_ucx_addr->worker_addr_key.addrlen > buf_size,
++        done, ret, NA_OVERFLOW,
+         "Space left to encode worker address is not sufficient");
+ 
+-    /* Encode worker_addr_len and worker_addr */
+-    len = (uint64_t) na_ucx_addr->worker_addr_len;
++    /* Encode worker_addrlen and worker_addr */
++    len = (uint64_t) na_ucx_addr->worker_addr_key.addrlen;
+     NA_ENCODE(done, ret, buf_ptr, buf_size_left, &len, uint64_t);
+-    memcpy(buf_ptr, na_ucx_addr->worker_addr, na_ucx_addr->worker_addr_len);
++    memcpy(buf_ptr, na_ucx_addr->worker_addr_key.addr,
++        na_ucx_addr->worker_addr_key.addrlen);
+ 
+ done:
+     return ret;
+@@ -4060,52 +4258,49 @@ na_ucx_addr_deserialize(na_class_t *na_class, na_addr_t **addr_p,
+ {
+     struct na_ucx_class *na_ucx_class = NA_UCX_CLASS(na_class);
+     struct na_ucx_addr *na_ucx_addr = NULL;
++    struct na_ucx_worker_addr_key addr_key = {.addr = NULL, .addrlen = 0};
+     const char *buf_ptr = (const char *) buf;
+     size_t buf_size_left = buf_size;
+-    ucp_address_t *worker_addr = NULL;
+-    size_t worker_addr_len = 0;
+     uint64_t len = 0;
+     na_return_t ret;
+ 
+-    /* Encode worker_addr_len and worker_addr */
++    /* Decode worker_addrlen and assign worker_addr (will make a copy) */
+     NA_DECODE(error, ret, buf_ptr, buf_size_left, &len, uint64_t);
+-    worker_addr_len = (size_t) len;
+-
+-    NA_CHECK_SUBSYS_ERROR(addr, buf_size_left < worker_addr_len, error, ret,
+-        NA_OVERFLOW, "Space left to decode worker address is not sufficient");
+-
+-    worker_addr = (ucp_address_t *) malloc(worker_addr_len);
+-    NA_CHECK_SUBSYS_ERROR(addr, worker_addr == NULL, error, ret, NA_NOMEM,
+-        "Could not allocate worker_addr");
+-    memcpy(worker_addr, buf_ptr, worker_addr_len);
+-
+-    /* Create new address */
+-    ret = na_ucx_addr_create(na_ucx_class, NULL, &na_ucx_addr);
+-    NA_CHECK_SUBSYS_NA_ERROR(addr, error, ret, "Could not create address");
++    NA_CHECK_SUBSYS_ERROR(addr, buf_size_left < (size_t) len, error, ret,
++        NA_OVERFLOW,
++        "Space left (%zu) to decode worker address is not sufficient",
++        buf_size_left);
++
++    addr_key = (struct na_ucx_worker_addr_key) {
++        .addr = (ucp_address_t *) buf_ptr, .addrlen = (size_t) len};
++    na_ucx_addr =
++        na_ucx_worker_addr_map_lookup(&na_ucx_class->addr_map, &addr_key);
++
++    /* Reuse cached address when one already exists for this worker, so that
++     * repeated deserializations do not create a new EP for every operation */
++    if (!na_ucx_addr) {
++        na_return_t na_ret;
+ 
+-    /* Attach worker address */
+-    na_ucx_addr->worker_addr = worker_addr;
+-    na_ucx_addr->worker_addr_len = worker_addr_len;
+-    na_ucx_addr->worker_addr_alloc = true;
++        /* Insert new entry and create new address if needed */
++        na_ret = na_ucx_worker_addr_map_insert(
++            na_ucx_class, &na_ucx_class->addr_map, &addr_key, &na_ucx_addr);
++        NA_CHECK_SUBSYS_ERROR(addr, na_ret != NA_SUCCESS && na_ret != NA_EXIST,
++            error, ret, na_ret, "Could not insert new address");
+ 
+-    /* Create EP */
+-    ret = na_ucp_connect_worker(na_ucx_class->ucp_worker, worker_addr,
+-        na_ucp_ep_error_cb, na_ucx_addr, &na_ucx_addr->ucp_ep);
+-    NA_CHECK_SUBSYS_NA_ERROR(
+-        addr, error, ret, "Could not connect to remote worker");
++        NA_LOG_SUBSYS_DEBUG(addr, "Inserted new deserialized address (%p)",
++            (void *) na_ucx_addr);
++    } else {
++        NA_LOG_SUBSYS_DEBUG(
++            addr, "Address (%p) was found", (void *) na_ucx_addr);
++    }
+ 
+-    hg_atomic_or32(&na_ucx_addr->status, NA_UCX_ADDR_RESOLVED);
++    na_ucx_addr_ref_incr(na_ucx_addr);
+ 
+     *addr_p = (na_addr_t *) na_ucx_addr;
+ 
+     return NA_SUCCESS;
+ 
+ error:
+-    if (na_ucx_addr)
+-        na_ucx_addr_destroy(na_ucx_addr);
+-    else if (worker_addr)
+-        free(worker_addr);
+-
+     return ret;
+ }
+ 

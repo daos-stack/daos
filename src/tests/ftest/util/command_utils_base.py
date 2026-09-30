@@ -1,12 +1,12 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import sys
 from logging import getLogger
-from sys import version_info
 
 import yaml
 from exception_utils import CommandFailure
@@ -503,7 +503,7 @@ class CommandWithParameters(ObjectWithParameters):
         self._python = None
         if self.command.endswith('.py'):
             # Run python scripts with the python command
-            self._python = f'python{version_info.major}.{version_info.minor}'
+            self._python = sys.executable
 
     @property
     def command(self):

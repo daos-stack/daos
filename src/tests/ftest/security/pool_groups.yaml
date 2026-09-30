@@ -16,8 +16,6 @@ server_config:
           scm_mount: /mnt/daos
           scm_size: 4
   system_ram_reserved: 1
-container:
-  control_method: daos
 pool_acl:
   scm_size: 134217728
   user_prefix: daos_ci

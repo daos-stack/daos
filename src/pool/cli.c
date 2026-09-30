@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -721,13 +721,12 @@ out_unlock:
  * Returns:
  *
  *   < 0			error; end the operation
- *   RSVC_CLIENT_RECHOOSE	task reinited; return 0 from completion cb
+ *   RSVC_CLIENT_RECHOOSE	retriable error; retry the operation
  *   RSVC_CLIENT_PROCEED	OK; proceed to process the reply
  */
 static int
-pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
-			      int rc_crt, struct pool_op_out *out,
-			      tse_task_t *task)
+pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep, int rc_crt,
+			      struct pool_op_out *out)
 {
 	int rc;
 
@@ -899,18 +898,12 @@ pool_connect_cp(tse_task_t *task, void *data)
 	int			   rc = task->dt_result;
 	struct daos_rebuild_status *rs;
 
-	rc = pool_rsvc_client_complete_rpc(tpriv->pool, &arg->rpc->cr_ep, rc, &pco->pco_op, task);
+	rc = pool_rsvc_client_complete_rpc(tpriv->pool, &arg->rpc->cr_ep, rc, &pco->pco_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc) {
-		D_ERROR("RPC error while connecting to pool: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = pco->pco_op.po_rc;
@@ -1184,19 +1177,12 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &pdo->pdo_op, task);
+	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc, &pdo->pdo_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc) {
-		D_ERROR("RPC error while disconnecting from pool: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = pdo->pdo_op.po_rc;
@@ -1867,8 +1853,7 @@ pool_query_cb(tse_task_t *task, void *data)
 	bool                            reinit = false;
 	int				rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
-					   &out_v5->pqo_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc, &out_v5->pqo_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -1878,11 +1863,6 @@ pool_query_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DB_MD, DF_UUID": query rpc done: %d\n",
 		DP_UUID(arg->dqa_pool->dp_pool), rc);
-
-	if (rc) {
-		D_ERROR("RPC error while querying pool: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
-	}
 
 	rc = out_v5->pqo_op.po_rc;
 	if (rc == -DER_TRUNC) {
@@ -2589,8 +2569,7 @@ pool_list_cont_cb(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->lca_pool, &arg->rpc->cr_ep, rc,
-					   &out->plco_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->lca_pool, &arg->rpc->cr_ep, rc, &out->plco_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -2600,11 +2579,6 @@ pool_list_cont_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DB_MD, DF_UUID": list cont rpc done: %d\n",
 		DP_UUID(arg->lca_pool->dp_pool), rc);
-
-	if (rc) {
-		D_ERROR("RPC error while listing containers: %d\n", rc);
-		D_GOTO(out, rc);
-	}
 
 	rc = out->plco_op.po_rc;
 	*arg->lca_ncont = out->plco_ncont;
@@ -2755,8 +2729,7 @@ pool_filter_cont_cb(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->fca_pool, &arg->rpc->cr_ep, rc,
-					   &out->pfco_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->fca_pool, &arg->rpc->cr_ep, rc, &out->pfco_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -2766,11 +2739,6 @@ pool_filter_cont_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DB_MD, DF_UUID": filter cont rpc done: %d\n",
 		DP_UUID(arg->fca_pool->dp_pool), rc);
-
-	if (rc) {
-		D_ERROR("RPC error while filtering containers: %d\n", rc);
-		D_GOTO(out, rc);
-	}
 
 	rc = out->pfco_op.po_rc;
 	*arg->fca_ncont = out->pfco_ncont;
@@ -2949,8 +2917,7 @@ pool_query_target_cb(tse_task_t *task, void *data)
 	out = crt_reply_get(arg->rpc);
 	rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
-					   &out->pqio_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc, &out->pqio_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -2960,12 +2927,6 @@ pool_query_target_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DB_MD, DF_UUID": target query rpc done: %d\n",
 		DP_UUID(arg->dqa_pool->dp_pool), rc);
-
-	if (rc) {
-		D_ERROR("RPC error while querying pool target: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
-	}
 
 	rc = out->pqio_op.po_rc;
 
@@ -3115,18 +3076,12 @@ pool_req_complete(tse_task_t *task, void *data)
 	bool                     reinit  = false;
 	int			 rc	 = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(pool, &args->pra_rpc->cr_ep,
-					   rc, op_out, task);
+	rc = pool_rsvc_client_complete_rpc(pool, &args->pra_rpc->cr_ep, rc, op_out);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while querying pool: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = op_out->po_rc;
@@ -3646,8 +3601,7 @@ pool_svc_stop_cb(tse_task_t *task, void *data)
 	bool                            reinit = false;
 	int				rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->dsa_pool, &arg->rpc->cr_ep, rc,
-					   &out->pso_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->dsa_pool, &arg->rpc->cr_ep, rc, &out->pso_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -3657,9 +3611,6 @@ pool_svc_stop_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DB_MD, DF_UUID": stop rpc done: %d\n",
 		DP_UUID(arg->dsa_pool->dp_pool), rc);
-
-	if (rc != 0)
-		D_GOTO(out, rc);
 
 	rc = out->pso_op.po_rc;
 	if (rc)

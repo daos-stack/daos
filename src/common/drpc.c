@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -573,7 +573,9 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg, Drpc__Response **resp)
 		return ret;
 
 	if (!(flags & R_SYNC)) {
-		response         = drpc_response_create(msg);
+		response = drpc_response_create(msg);
+		if (response == NULL)
+			return -DER_NOMEM;
 		response->status = DRPC__STATUS__SUBMITTED;
 		*resp            = response;
 		return 0;

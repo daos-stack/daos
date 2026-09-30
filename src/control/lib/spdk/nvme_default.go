@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -99,28 +99,6 @@ func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	return results, wrapCleanError(errCollect, errRemLocks)
 }
 
-// Update updates the firmware image via SPDK in a given slot on the device.
-//
-// Afterwards remove lockfile for the updated device.
-func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
-	if n == nil {
-		return errors.New("nil NvmeImpl")
-	}
-
-	csPath := C.CString(path)
-	defer C.free(unsafe.Pointer(csPath))
-
-	csPci := C.CString(ctrlrPciAddr)
-	defer C.free(unsafe.Pointer(csPci))
-
-	_, errCollect := collectCtrlrs(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
-		"NVMe Update(): C.nvme_fwupdate")
-
-	errRemLocks := cleanKnownLockfiles(log, n, ctrlrPciAddr)
-
-	return wrapCleanError(errCollect, errRemLocks)
-}
-
 // c2GoController is a private translation function.
 func c2GoController(ctrlr *C.struct_nvme_ctrlr_t) *storage.NvmeController {
 	return &storage.NvmeController{
@@ -143,6 +121,7 @@ func c2GoDeviceHealth(hs *C.struct_nvme_stats) *storage.NvmeHealth {
 		UnsafeShutdowns:         uint64(hs.unsafe_shutdowns),
 		MediaErrors:             uint64(hs.media_errs),
 		ErrorLogEntries:         uint64(hs.err_log_entries),
+		PercentageUsed:          uint32(hs.percentage_used),
 		Temperature:             uint32(hs.temperature),
 		TempWarn:                bool(hs.temp_warn),
 		AvailSpareWarn:          bool(hs.avail_spare_warn),

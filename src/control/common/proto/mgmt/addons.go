@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@
 package mgmt
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -18,8 +19,9 @@ func (p *PoolProperty) UnmarshalJSON(b []byte) error {
 	type fromJSON PoolProperty
 	from := struct {
 		Value struct {
-			Strval string `json:"strval"`
-			Numval uint64 `json:"numval"`
+			Strval  string `json:"strval"`
+			Numval  uint64 `json:"numval"`
+			Byteval string `json:"byteval"`
 		}
 		*fromJSON
 	}{
@@ -30,7 +32,13 @@ func (p *PoolProperty) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	if from.Value.Strval != "" {
+	if from.Value.Byteval != "" {
+		decoded, err := base64.StdEncoding.DecodeString(from.Value.Byteval)
+		if err != nil {
+			return err
+		}
+		p.SetValueBytes(decoded)
+	} else if from.Value.Strval != "" {
 		p.SetValueString(from.Value.Strval)
 	} else {
 		p.SetValueNumber(from.Value.Numval)
@@ -50,6 +58,13 @@ func (p *PoolProperty) SetValueString(strVal string) {
 func (p *PoolProperty) SetValueNumber(numVal uint64) {
 	p.Value = &PoolProperty_Numval{
 		Numval: numVal,
+	}
+}
+
+// SetValueBytes sets the Value field to a byte array.
+func (p *PoolProperty) SetValueBytes(byteVal []byte) {
+	p.Value = &PoolProperty_Byteval{
+		Byteval: byteVal,
 	}
 }
 

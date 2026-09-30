@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -199,22 +199,24 @@ struct daos_check_pool_info {
 };
 
 struct daos_check_report_info {
-	uuid_t		dcri_uuid;
-	uint64_t	dcri_seq;
-	uint32_t	dcri_class;
-	uint32_t	dcri_act;
-	int		dcri_result;
-	int		dcri_option_nr;
-	int		dcri_options[4];
+	uuid_t   dcri_uuid;
+	uint64_t dcri_seq;
+	uint32_t dcri_class;
+	uint32_t dcri_act;
+	int      dcri_rank;
+	int      dcri_result;
+	int      dcri_option_nr;
+	int      dcri_options[3];
 };
 
 struct daos_check_info {
-	char				*dci_status;
-	char				*dci_phase;
-	int				 dci_pool_nr;
-	int				 dci_report_nr;
-	struct daos_check_pool_info	*dci_pools;
-	struct daos_check_report_info	*dci_reports;
+	char                          *dci_status;
+	char                          *dci_phase;
+	int                            dci_leader;
+	int                            dci_pool_nr;
+	int                            dci_report_nr;
+	struct daos_check_pool_info   *dci_pools;
+	struct daos_check_report_info *dci_reports;
 };
 
 /** Initialize an SGL with a variable number of IOVs and set the IOV buffers

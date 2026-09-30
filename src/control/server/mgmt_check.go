@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -14,13 +14,17 @@ import (
 	"sort"
 	"strings"
 
+	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
@@ -31,7 +35,47 @@ const (
 	checkerEnabledKey      = "checker_enabled"
 	checkerPoliciesKey     = "checker_policies"
 	checkerLatestPolicyKey = "checker_latest_policy"
+	checkerLeaderKey       = "checker_leader"
+
+	// numCheckLeaderRetries is the number of times to retry sending to the check leader before
+	// returning an error.
+	numCheckLeaderRetries = 3
 )
+
+func errRankNotLocal(rank ranklist.Rank) error {
+	return errors.Errorf("rank %s is not managed by this DAOS node", rank.String())
+}
+
+func (svc *mgmtSvc) getCheckerLeaderRank() (ranklist.Rank, error) {
+	value, err := system.GetMgmtProperty(svc.sysdb, checkerLeaderKey)
+	if err != nil {
+		return ranklist.NilRank, errors.Wrap(err, "get checker leader")
+	}
+
+	r, err := ranklist.NewRankFromString(value)
+	if err != nil {
+		return ranklist.NilRank, errors.Wrapf(err, "parsing rank from prop %q", checkerLeaderKey)
+	}
+	return *r, nil
+}
+
+func (svc *mgmtSvc) setCheckerLeaderString(val string) error {
+	if err := system.SetMgmtProperty(svc.sysdb, checkerLeaderKey, val); err != nil {
+		return errors.Wrapf(err, "failed to set checker leader to %q", val)
+	}
+	return nil
+}
+
+func (svc *mgmtSvc) setCheckerLeaderRank(rank ranklist.Rank) error {
+	if rank == ranklist.NilRank {
+		return errors.New("cannot set checker leader to nil rank")
+	}
+	return svc.setCheckerLeaderString(rank.String())
+}
+
+func (svc *mgmtSvc) clearCheckerLeader() error {
+	return svc.setCheckerLeaderString("")
+}
 
 var errNoSavedPolicies = errors.New("no previous policies have been saved")
 
@@ -87,16 +131,120 @@ func (svc *mgmtSvc) unwrapCheckerReq(req proto.Message) (proto.Message, error) {
 	return req, nil
 }
 
-func (svc *mgmtSvc) makeCheckerCall(ctx context.Context, method drpc.Method, req proto.Message) (*drpc.Response, error) {
-	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
-		return nil, err
+// selectLocalCheckLeader returns a local rank that can be used as the check leader.
+func (svc *mgmtSvc) selectLocalCheckLeader() (ranklist.Rank, error) {
+	// Only the MS leader can select a new checker leader.
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return ranklist.NilRank, err
 	}
 
-	if err := svc.verifyCheckerReady(); err != nil {
-		return nil, err
+	for i, ei := range svc.harness.instances {
+		r, err := ei.GetRank()
+		if err != nil {
+			svc.log.Debugf("unable to use rank at index %d: %s", i, err)
+			continue
+		}
+
+		m, err := svc.sysdb.FindMemberByRank(r)
+		if err != nil {
+			svc.log.Debugf("unable to get member for rank %d (index %d): %s", r, i, err)
+			continue
+		}
+
+		if m.State != system.MemberStateCheckerStarted {
+			svc.log.Tracef("unable use rank %d as check leader (state: %s)", r, m.State)
+			continue
+		}
+
+		if err := svc.setCheckerLeaderRank(r); err != nil {
+			return ranklist.NilRank, errors.Wrapf(err, "set checker leader to rank %d", r)
+		}
+		svc.log.Tracef("selected rank %d as check leader", r)
+		return r, nil
 	}
 
-	return svc.harness.CallDrpc(ctx, method, req)
+	return ranklist.NilRank, errors.New("no ranks are usable as the check leader")
+}
+
+func (svc *mgmtSvc) getCheckerLeaderControlAddr() (string, error) {
+	r, err := svc.getCheckerLeaderRank()
+	if system.IsErrSystemAttrNotFound(err) {
+		r, err = svc.selectLocalCheckLeader()
+		if err != nil {
+			return "", errors.Wrap(err, "select local check leader")
+		}
+	} else if err != nil {
+		return "", errors.Wrap(err, "get check leader rank")
+	}
+
+	m, err := svc.sysdb.FindMemberByRank(r)
+	if err != nil {
+		return "", errors.Wrapf(err, "look up member for check leader rank %d", r)
+	}
+
+	if m.State != system.MemberStateCheckerStarted {
+		r, err = svc.selectLocalCheckLeader()
+		if err != nil {
+			return "", errors.Wrap(err, "select local check leader")
+		}
+		m, err = svc.sysdb.FindMemberByRank(r)
+		if err != nil {
+			return "", errors.Wrapf(err, "look up member for local check leader rank %d", r)
+		}
+	}
+
+	return m.Addr.String(), nil
+}
+
+func (svc *mgmtSvc) sendToCheckLeader(ctx context.Context, fwdReq *mgmtpb.CheckLeaderReq) (*mgmtpb.CheckLeaderResp, error) {
+	hostAddr, err := svc.getCheckerLeaderControlAddr()
+	if err != nil {
+		return nil, errors.Wrap(err, "get check leader control address")
+	}
+
+	ctlReq := &control.CheckLeaderReq{
+		CheckLeaderReq: *fwdReq,
+	}
+	ctlReq.HostList = []string{hostAddr}
+	resp, err := control.CheckLeaderForward(ctx, svc.rpcClient, ctlReq)
+	if err != nil {
+		return nil, errors.Wrap(err, "forwarding request to check leader")
+	}
+
+	return &resp.CheckLeaderResp, nil
+}
+
+func (svc *mgmtSvc) forwardCheckLeaderDrpc(ctx context.Context, req proto.Message) (*mgmtpb.CheckLeaderResp, error) {
+	fwdReq := new(mgmtpb.CheckLeaderReq)
+
+	switch r := req.(type) {
+	case *mgmtpb.CheckStartReq:
+		fwdReq.DrpcMethod = uint32(daos.MethodCheckerStart)
+		fwdReq.Req = &mgmtpb.CheckLeaderReq_StartReq{StartReq: r}
+	case *mgmtpb.CheckStopReq:
+		fwdReq.DrpcMethod = uint32(daos.MethodCheckerStop)
+		fwdReq.Req = &mgmtpb.CheckLeaderReq_StopReq{StopReq: r}
+	case *mgmtpb.CheckQueryReq:
+		fwdReq.DrpcMethod = uint32(daos.MethodCheckerQuery)
+		fwdReq.Req = &mgmtpb.CheckLeaderReq_QueryReq{QueryReq: r}
+	case *mgmtpb.CheckSetPolicyReq:
+		fwdReq.DrpcMethod = uint32(daos.MethodCheckerSetPolicy)
+		fwdReq.Req = &mgmtpb.CheckLeaderReq_SetPolicyReq{SetPolicyReq: r}
+	default:
+		return nil, errors.Errorf("request %T cannot be forwarded to the check leader", req)
+	}
+
+	var err error
+	for i := 0; i < numCheckLeaderRetries; i++ {
+		resp, tryErr := svc.sendToCheckLeader(ctx, fwdReq)
+		if tryErr == nil {
+			return resp, nil
+		}
+		svc.log.Debugf("CheckLeaderdRPC failed (retries left: %d): %s", numCheckLeaderRetries-(i+1), tryErr.Error())
+		err = tryErr
+	}
+
+	return nil, err
 }
 
 func (svc *mgmtSvc) verifyCheckerReady() error {
@@ -119,7 +267,7 @@ type poolCheckerReq interface {
 	GetUuids() []string
 }
 
-func (svc *mgmtSvc) makePoolCheckerCall(ctx context.Context, method drpc.Method, req poolCheckerReq) (*drpc.Response, error) {
+func (svc *mgmtSvc) makePoolCheckLeaderCall(ctx context.Context, req poolCheckerReq) (*mgmtpb.CheckLeaderResp, error) {
 	poolUuids := make([]string, len(req.GetUuids()))
 	for i, id := range req.GetUuids() {
 		uuid, err := svc.resolvePoolID(id)
@@ -146,7 +294,7 @@ func (svc *mgmtSvc) makePoolCheckerCall(ctx context.Context, method drpc.Method,
 		return nil, errors.Errorf("unexpected request type %T", req)
 	}
 
-	return svc.makeCheckerCall(ctx, method, req)
+	return svc.forwardCheckLeaderDrpc(ctx, req)
 }
 
 func (svc *mgmtSvc) startSystemRanks(ctx context.Context, sys string) error {
@@ -173,6 +321,153 @@ func (svc *mgmtSvc) startSystemRanks(ctx context.Context, sys string) error {
 	}
 
 	return nil
+}
+
+func (svc *mgmtSvc) getLocalCheckLeaderEngine() (Engine, error) {
+	// Fetch check leader and verify if it is local to this node.
+	r, err := svc.getCheckerLeaderRank()
+	if err != nil {
+		return nil, errors.Wrapf(err, "get check leader rank")
+	}
+
+	engList, err := svc.harness.FilterInstancesByRankSet(r.String())
+	if err != nil {
+		return nil, errors.Wrapf(err, "filter local engines by check leader rank %d", r)
+	}
+	if len(engList) == 0 {
+		return nil, errRankNotLocal(r)
+	}
+
+	return engList[0], nil
+}
+
+func (svc *mgmtSvc) makeLocalCheckLeaderDrpcCall(ctx context.Context, method drpc.Method, req proto.Message) (*drpc.Response, error) {
+	ei, err := svc.getLocalCheckLeaderEngine()
+	if err != nil {
+		return nil, errors.Wrapf(err, "get local check leader engine")
+	}
+
+	dResp, err := ei.CallDrpc(ctx, method, req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "dRPC to check leader")
+	}
+
+	return dResp, err
+}
+
+// checkLeaderDrpcConfig contains the functions needed to handle the forwarding of a specific check
+// leader dRPC method. Each method uses a different request and response type.
+type checkLeaderDrpcConfig struct {
+	getReq             func(*mgmtpb.CheckLeaderReq) proto.Message
+	newResp            func() proto.Message
+	newCheckLeaderResp func(uint32, proto.Message) *mgmtpb.CheckLeaderResp
+}
+
+func getCheckLeaderDrpcConfig(method daos.MgmtMethod) (*checkLeaderDrpcConfig, error) {
+	var methodConfigs = map[daos.MgmtMethod]*checkLeaderDrpcConfig{
+		daos.MethodCheckerStart: {
+			getReq: func(req *mgmtpb.CheckLeaderReq) proto.Message {
+				return req.GetStartReq()
+			},
+			newResp: func() proto.Message {
+				return &mgmtpb.CheckStartResp{}
+			},
+			newCheckLeaderResp: func(status uint32, msg proto.Message) *mgmtpb.CheckLeaderResp {
+				return &mgmtpb.CheckLeaderResp{
+					DrpcStatus: status,
+					Resp:       &mgmtpb.CheckLeaderResp_StartResp{StartResp: msg.(*mgmtpb.CheckStartResp)},
+				}
+			},
+		},
+		daos.MethodCheckerStop: {
+			getReq: func(req *mgmtpb.CheckLeaderReq) proto.Message {
+				return req.GetStopReq()
+			},
+			newResp: func() proto.Message {
+				return &mgmtpb.CheckStopResp{}
+			},
+			newCheckLeaderResp: func(status uint32, msg proto.Message) *mgmtpb.CheckLeaderResp {
+				return &mgmtpb.CheckLeaderResp{
+					DrpcStatus: status,
+					Resp:       &mgmtpb.CheckLeaderResp_StopResp{StopResp: msg.(*mgmtpb.CheckStopResp)},
+				}
+			},
+		},
+		daos.MethodCheckerSetPolicy: {
+			getReq: func(req *mgmtpb.CheckLeaderReq) proto.Message {
+				return req.GetSetPolicyReq()
+			},
+			newResp: func() proto.Message {
+				return &mgmtpb.DaosResp{}
+			},
+			newCheckLeaderResp: func(status uint32, msg proto.Message) *mgmtpb.CheckLeaderResp {
+				return &mgmtpb.CheckLeaderResp{
+					DrpcStatus: status,
+					Resp:       &mgmtpb.CheckLeaderResp_DaosResp{DaosResp: msg.(*mgmtpb.DaosResp)},
+				}
+			},
+		},
+		daos.MethodCheckerQuery: {
+			getReq: func(req *mgmtpb.CheckLeaderReq) proto.Message {
+				return req.GetQueryReq()
+			},
+			newResp: func() proto.Message {
+				return &mgmtpb.CheckQueryResp{}
+			},
+			newCheckLeaderResp: func(status uint32, msg proto.Message) *mgmtpb.CheckLeaderResp {
+				return &mgmtpb.CheckLeaderResp{
+					DrpcStatus: status,
+					Resp:       &mgmtpb.CheckLeaderResp_QueryResp{QueryResp: msg.(*mgmtpb.CheckQueryResp)},
+				}
+			},
+		},
+		// NB: Add any new check leader dRPC methods here.
+	}
+
+	methodCfg, ok := methodConfigs[method]
+	if !ok {
+		return nil, errors.Errorf("dRPC method %s (%d) cannot be forwarded to the check leader", method, method)
+	}
+
+	return methodCfg, nil
+}
+
+// CheckLeaderDrpc allows the MS leader to forward a checker leader dRPC request to the node where
+// check leader rank is co-located.
+// NB: The check leader is always on an MS replica node, but it may not be the MS leader, since
+// leadership can change during a checker run.
+func (svc *mgmtSvc) CheckLeaderDrpc(ctx context.Context, req *mgmtpb.CheckLeaderReq) (*mgmtpb.CheckLeaderResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if err := svc.sysdb.CheckReplica(); err != nil {
+		return nil, err
+	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	dMethod := daos.MgmtMethod(req.DrpcMethod)
+	methodCfg, err := getCheckLeaderDrpcConfig(dMethod)
+	if err != nil {
+		return nil, err
+	}
+
+	fwdReq := methodCfg.getReq(req)
+	fwdResp := methodCfg.newResp()
+
+	drpcResp, err := svc.makeLocalCheckLeaderDrpcCall(ctx, dMethod, fwdReq)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := proto.Unmarshal(drpcResp.Body, fwdResp); err != nil {
+		return nil, errors.Wrapf(err, "unmarshal %T", fwdResp)
+	}
+
+	return methodCfg.newCheckLeaderResp(uint32(drpcResp.Status), fwdResp), nil
 }
 
 // SystemCheckEnable puts the system in checker mode.
@@ -242,6 +537,10 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 		return nil, err
 	}
 
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
 	policies, err := svc.mergePoliciesWithCurrent(req.Policies)
 	if err != nil {
 		return nil, err
@@ -252,15 +551,12 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 		svc.log.Errorf("failed to save the policies used: %s", err.Error())
 	}
 
-	dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerStart, req)
+	dResp, err := svc.makePoolCheckLeaderCall(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := new(mgmtpb.CheckStartResp)
-	if err := proto.Unmarshal(dResp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal CheckStart response")
-	}
+	resp := dResp.GetStartResp()
 
 	if resp.Status > 0 {
 		// Checker instance was reset. We can safely clear all findings related to any pools
@@ -357,17 +653,16 @@ func (svc *mgmtSvc) SystemCheckStop(ctx context.Context, req *mgmtpb.CheckStopRe
 		return nil, err
 	}
 
-	dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerStop, req)
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	dResp, err := svc.makePoolCheckLeaderCall(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := new(mgmtpb.CheckStopResp)
-	if err := proto.Unmarshal(dResp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal CheckStop response")
-	}
-
-	return resp, nil
+	return dResp.GetStopResp(), nil
 }
 
 // SystemCheckQuery queries the state of the checker. This will indicate all known findings, as
@@ -377,7 +672,10 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 		return nil, err
 	}
 
-	resp := new(mgmtpb.CheckQueryResp)
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
 	if len(req.GetSeqs()) > 0 {
 		req.Shallow = true
 	}
@@ -389,21 +687,28 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 
 	reports := []*chkpb.CheckReport{}
 
+	resp := new(mgmtpb.CheckQueryResp)
 	if !req.Shallow {
-		dResp, err := svc.makePoolCheckerCall(ctx, daos.MethodCheckerQuery, req)
+		leaderResp, err := svc.makePoolCheckLeaderCall(ctx, req)
 		if err != nil {
 			return nil, err
 		}
 
-		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-			return nil, errors.Wrap(err, "unmarshal CheckQuery response")
-		}
-
-		for _, r := range resp.Reports {
+		queryResp := leaderResp.GetQueryResp()
+		for _, r := range queryResp.Reports {
 			if wantUUID(r.PoolUuid) {
 				reports = append(reports, r)
 			}
 		}
+		resp = queryResp
+	}
+
+	leader, err := svc.getCheckerLeaderRank()
+	if err != nil {
+		svc.log.Errorf("can't get the check leader rank: %s", err)
+		resp.Leader = uint32(ranklist.NilRank)
+	} else {
+		resp.Leader = leader.Uint32()
 	}
 
 	// Collect saved older reports
@@ -559,16 +864,12 @@ func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckS
 		return nil, err
 	}
 
-	dResp, err := svc.makeCheckerCall(ctx, daos.MethodCheckerSetPolicy, req)
+	leaderResp, err := svc.forwardCheckLeaderDrpc(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := new(mgmtpb.DaosResp)
-	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal CheckRepair response")
-	}
-
+	resp := leaderResp.GetDaosResp()
 	if resp.Status != 0 {
 		return nil, errors.Wrap(daos.ErrorFromRC(int(resp.Status)), "checker set-policy failed")
 	}
@@ -587,7 +888,15 @@ func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckS
 
 // SystemCheckRepair repairs a previous checker finding.
 func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActReq) (*mgmtpb.CheckActResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
 		return nil, err
 	}
 
@@ -600,22 +909,202 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 		return nil, errors.Errorf("invalid action %s (must be one of %s)", req.Act, f.ValidChoicesString())
 	}
 
-	dResp, err := svc.makeCheckerCall(ctx, daos.MethodCheckerAction, req)
+	// Repair must be sent to the rank associated with the finding
+	r := ranklist.Rank(f.Rank)
+	m, err := svc.sysdb.FindMemberByRank(r)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "looking up rank %d for finding 0x%x", r, f.Seq)
 	}
 
-	resp := new(mgmtpb.CheckActResp)
-	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal CheckRepair response")
+	// Send to rank's control address
+	engReq := &control.CheckEngineRepairReq{
+		CheckEngineActReq: ctlpb.CheckEngineActReq{
+			Rank: r.Uint32(),
+			Req:  req,
+		},
+	}
+	engReq.HostList = []string{m.Addr.String()}
+	engResp, err := control.CheckEngineRepair(ctx, svc.rpcClient, engReq)
+	if err != nil {
+		return nil, errors.Wrapf(err, "send repair request to rank %d", r)
 	}
 
-	if resp.Status == 0 {
+	if engResp.Resp.Status == 0 {
 		if err := svc.sysdb.SetCheckerFindingAction(req.Seq, int32(req.Act)); err != nil {
 			return nil, err
 		}
 		svc.log.Debugf("Set action %s for finding %d", req.Act, req.Seq)
 	}
 
-	return resp, nil
+	return engResp.Resp, nil
+}
+
+// SystemCheckEngineReport registers a checker report with the management service.
+func (svc *mgmtSvc) SystemCheckEngineReport(ctx context.Context, req *sharedpb.CheckReportReq) (*sharedpb.CheckReportResp, error) {
+	if req == nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "nil %T", req)
+	}
+
+	if req.Report == nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "no report in request")
+	}
+
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	if req.Report.PoolLabel == "" && req.Report.PoolUuid != "" {
+		svc.log.Tracef("looking up pool label for UUID %s, check report 0x%x", req.Report.PoolUuid, req.Report.Seq)
+		poolUUID, err := uuid.Parse(req.Report.PoolUuid)
+		if err != nil {
+			svc.log.Errorf("unable to parse pool UUID %q: %s", req.Report.PoolUuid, err)
+			return nil, errors.Wrapf(daos.InvalidInput, "parse pool UUID %q", req.Report.PoolUuid)
+		}
+
+		if ps, err := svc.sysdb.FindPoolServiceByUUID(poolUUID); err == nil {
+			// Annotate the report with the pool label for the user.
+			// NB: In some cases this label may be incorrect, in which
+			// case the user will want to use the verbose or JSON output
+			// modes of the checker in order to get the UUID.
+			req.Report.PoolLabel = ps.PoolLabel
+		}
+	}
+
+	finding := checker.AnnotateFinding(checker.NewFinding(req.Report))
+	svc.log.Debugf("annotated finding: %+v", finding)
+
+	if err := svc.sysdb.AddOrUpdateCheckerFinding(finding); err != nil {
+		svc.log.Errorf("AddOrUpdateCheckerFinding %+v: %s", finding, err)
+		return nil, err
+	}
+	return new(sharedpb.CheckReportResp), nil
+}
+
+// SystemCheckRegPool registers a pool with the management service for the checker.
+//
+// NB: The final result of this function is delivered to the check leader as a dRPC response.
+//
+//	The daos.Status error codes make it possible to translate errors to meaningful error codes.
+func (svc *mgmtSvc) SystemCheckRegPool(parent context.Context, req *sharedpb.CheckRegPoolReq) (*sharedpb.CheckRegPoolResp, error) {
+	if req == nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "nil %T", req)
+	}
+
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	poolUUID, err := uuid.Parse(req.Uuid)
+	if err != nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "invalid pool UUID %q: %s", req.Uuid, err)
+	}
+
+	if !daos.LabelIsValid(req.Label) {
+		return nil, errors.Wrapf(daos.InvalidInput, "bad pool label %q", req.Label)
+	}
+
+	if len(req.Svcreps) == 0 {
+		return nil, errors.Wrapf(daos.InvalidInput, "request for pool %q has zero svcreps", req.Uuid)
+	}
+
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to take pool lock")
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	ps, err := svc.sysdb.FindPoolServiceByUUID(poolUUID)
+	if err == nil {
+		// We're updating an existing pool service.
+		if ps.PoolLabel != req.Label {
+			if _, err := svc.sysdb.FindPoolServiceByLabel(req.Label); err == nil {
+				return nil, errors.Wrapf(daos.Exists, "pool with label %q already exists", req.Label)
+			}
+		}
+		ps.PoolLabel = req.Label
+		ps.Replicas = ranklist.RanksFromUint32(req.Svcreps)
+
+		svc.log.Debugf("updating pool service from req: %+v", req)
+		if err := svc.sysdb.UpdatePoolService(ctx, ps); err != nil {
+			return nil, errors.Wrapf(err, "failed to update pool")
+		}
+
+		return &sharedpb.CheckRegPoolResp{}, nil
+	}
+
+	if !system.IsPoolNotFound(err) {
+		// Any error besides PoolNotFound is not expected.
+		return nil, errors.Wrapf(err, "failed to look up pool %s", poolUUID)
+	}
+
+	if _, err := svc.sysdb.FindPoolServiceByLabel(req.Label); err == nil {
+		return nil, errors.Wrapf(daos.Exists, "pool with label %q already exists", req.Label)
+	}
+
+	ps = &system.PoolService{
+		PoolUUID:  poolUUID,
+		PoolLabel: req.Label,
+		State:     system.PoolServiceStateReady,
+		Replicas:  ranklist.RanksFromUint32(req.Svcreps),
+	}
+
+	svc.log.Debugf("adding pool service from req: %+v", req)
+	if err := svc.sysdb.AddPoolService(ctx, ps); err != nil {
+		return nil, errors.Wrapf(err, "failed to add pool")
+	}
+	return &sharedpb.CheckRegPoolResp{}, nil
+}
+
+// SystemCheckDeregPool de-registers a pool with the management service for the checker.
+//
+// NB: The final result of this function is delivered to the check leader as a dRPC response.
+//
+//	The daos.Status error codes make it possible to translate errors to meaningful error codes.
+func (svc *mgmtSvc) SystemCheckDeregPool(parent context.Context, req *sharedpb.CheckDeregPoolReq) (*sharedpb.CheckDeregPoolResp, error) {
+	if req == nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "nil %T", req)
+	}
+
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	poolUUID, err := uuid.Parse(req.Uuid)
+	if err != nil {
+		return nil, errors.Wrapf(daos.InvalidInput, "invalid pool UUID %q: %s", req.Uuid, err)
+	}
+
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to take pool lock")
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	if _, err := svc.sysdb.FindPoolServiceByUUID(poolUUID); err != nil {
+		if system.IsPoolNotFound(err) {
+			return nil, errors.Wrapf(daos.Nonexistent, "pool with uuid %q does not exist", req.Uuid)
+		}
+
+		return nil, errors.Wrapf(err, "failed to look up pool %s", req.Uuid)
+	}
+
+	if err := svc.sysdb.RemovePoolService(ctx, poolUUID); err != nil {
+		return nil, errors.Wrapf(err, "failed to remove pool %s", req.Uuid)
+	}
+
+	return &sharedpb.CheckDeregPoolResp{}, nil
 }

@@ -27,11 +27,21 @@ first_node=${NODELIST%%,*}
 hardware_ok=false
 
 cluster_reboot () {
-    # shellcheck disable=SC2029,SC2089
-    clush -B -S -o '-i ci_key' -l root -w "${tnodes}" reboot || true
+    if [ -z "$tnodes" ]; then
+        echo "ERROR: cluster_reboot called without reboot targets"
+        return 1
+    fi
+
+    if [ "$tnodes" = "localhost" ]; then
+        echo "WARNING: localhost is the only reboot target; skipping reboot"
+        return 0
+    fi
 
     # shellcheck disable=SC2029,SC2089
-    poll_cmd=( clush -B -S -o "-i ci_key" -l root -w "${tnodes}" )
+    clush -B -S -o '-i ci_key' -l root -w "$tnodes" reboot || true
+
+    # shellcheck disable=SC2029,SC2089
+    poll_cmd=( clush -B -S -o "-i ci_key" -l root -w "$tnodes" )
     poll_cmd+=( cat /etc/os-release )
     # 20 minutes, HPE systems may take more than 15 minutes.
     reboot_timeout=1200
@@ -99,8 +109,15 @@ trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 # Setup the Jenkins build artifacts directory before running the tests to ensure
 # there is enough disk space to report the results.
 # Even though STAGE_NAME forced to be set, shellcheck wants this syntax.
-rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
-mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+mkdir -p "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+stage_dir="${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+
+find "$stage_dir" -mindepth 1 -maxdepth 2 \
+    ! -wholename "*/framework/*.xml" \
+    ! -name "framework" \
+    -exec rm -rf {} +
+# The framework directory holds JUnit results from the post-provisioning script
+# and must be preserved when the workspace is reused across stages.
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
@@ -118,6 +135,7 @@ if "$hardware_ok"; then
            WITH_VALGRIND=\"${WITH_VALGRIND:-}\"       \
            STAGE_NAME=\"${STAGE_NAME}\"               \
            DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
+           DAOS_NO_PROXY=\"${DAOS_NO_PROXY:-}\"       \
            $(cat ci/functional/test_main_node.sh)"
     else
         ./ftest.sh "$test_tag" "$tnodes" "${FTEST_ARG:-}"
@@ -135,4 +153,5 @@ for node in ${tnodes//,/ }; do
         mv "$old_name" "$new_name"
     fi
 done
+
 "$hardware_ok"

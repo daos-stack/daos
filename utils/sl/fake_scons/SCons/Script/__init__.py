@@ -1,6 +1,12 @@
-"""Fake scons environment shutting up pylint on SCons files"""
+"""Fake scons environment shutting up pylint on SCons files
+
+WARNING: This is a pylint-only shim. It must NOT be added to PYTHONPATH outside
+of a pylint run. If it is, runtime scripts importing SCons.Script (e.g.
+site_scons/site_tools/extra/extra.py) will pick up these no-op stubs instead of
+real SCons, causing silent failures or crashes. See README.md for details.
+"""
 # Copyright 2016-2023 Intel Corporation
-# Copyright 2025 Hewlett Packard Enterprise Development LP
+# Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal

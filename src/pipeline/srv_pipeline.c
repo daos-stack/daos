@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,8 +54,10 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		D_ASSERTF(false, "unknown/unsupported type %d\n", type);
 		return -DER_INVAL;
 	}
-	if (d_key->iov_len != 0) /** one dkey at a time */
-		return 1;
+	if (d_key->iov_len != 0) { /** one dkey at a time */
+		*acts |= VOS_ITER_CB_EXIT;
+		return 0;
+	}
 	if (entry->ie_key.iov_len > 0)
 		*d_key = entry->ie_key;
 
@@ -91,7 +94,10 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 
 	/** iterating over dkeys only */
 	rc = vos_iterate(&param, type, false, anchors, enum_pack_cb, NULL, d_key, NULL);
-	D_DEBUG(DB_IO, "enum type %d rc " DF_RC "\n", type, DP_RC(rc));
+	if (rc < 0)
+		D_DEBUG(DB_IO, "enum type %d rc " DF_RC "\n", type, DP_RC(rc));
+	else if (rc > 0)
+		D_DEBUG(DB_IO, "enum type %d rc %d\n", type, rc);
 	if (rc < 0)
 		return rc;
 	if (d_key->iov_len == 0) /** d_key not found */
@@ -870,6 +876,11 @@ exit:
 
 		/** handle any data that has to be transferred in bulk (RDMA) */
 		rc = pipeline_bulk_transfer(rpc);
+		/** pipeline_bulk_transfer already freed kds/recx_size via the reply arrays */
+		if (pri->pri_kds_bulk != NULL && nr_kds_out > 0)
+			kds = NULL;
+		if (pri->pri_iods_bulk != NULL && nr_iods_out > 0)
+			recx_size = NULL;
 	}
 
 	/** -- send RPC */

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024-2025 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -26,7 +27,7 @@ import "C"
 
 var (
 	objClass2String objClassIDStringer = func(oc ObjectClass) string {
-		return fmt.Sprintf("0x%x", oc)
+		return fmt.Sprintf("0x%x", int(oc))
 	}
 	objClassName2Class objClassNameResolver = func(name string) (ObjectClass, error) {
 		return ObjectClass(0), errors.Wrap(NotImpl, "no object class resolver set; can't resolve class name")

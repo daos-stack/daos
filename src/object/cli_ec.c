@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2783,6 +2783,12 @@ again:
 					obj_ec_sgl_copy(sgl, iod_off,
 							stripe_buf + tmp_off,
 							rec_nr * iod_size);
+					/* Just for code integrity add the iod_off as it consumed
+					 * some buffers. In reality as recov_recx/ovl will not cross
+					 * multiple stripes so ovl will only overlap with one
+					 * stripe, so it actually will not affect correctness.
+					 */
+					iod_off += rec_nr * iod_size;
 					ovl.rx_idx += rec_nr;
 					ovl.rx_nr -= rec_nr;
 					if (ovl.rx_nr == 0)

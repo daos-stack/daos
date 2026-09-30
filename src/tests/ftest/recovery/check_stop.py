@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -52,7 +52,7 @@ class DMGCheckStopTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStopTest,test_stop_during_repair
         """
         # 1. Create two pools 1 and 2. Create a container in 2.
@@ -144,7 +144,7 @@ class DMGCheckStopTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStopTest,test_disable_during_repair
         """
         # 1. Create a pool and inject fault.

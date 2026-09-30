@@ -22,7 +22,6 @@ pool:
   size: 100G
 
 container:
-  control_method: daos
   type: POSIX
 
 ior:
@@ -33,4 +32,3 @@ ior:
   transfer_size: 1M
   block_size: 10G
   dfs_oclass: SX
-  dfs_dir_oclass: SX

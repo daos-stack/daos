@@ -39,11 +39,9 @@ pool_size_value:
 
 container:
   type: POSIX
-  control_method: daos
   properties: rd_fac:2
 container_wo_rf:
   type: POSIX
-  control_method: daos
 
 ior: &ior_base
   client_processes:
@@ -61,14 +59,11 @@ ior_wo_rf:
   # Total size is block_size * ppn.
   block_size: 1G
   dfs_oclass: SX
-  dfs_dir_oclass: SX
 ior_with_rp:
   <<: *ior_base
   block_size: 150G
   dfs_oclass: RP_3GX
-  dfs_dir_oclass: RP_3GX
 ior_with_ec:
   <<: *ior_base
   block_size: 150G
   dfs_oclass: EC_4P2GX
-  dfs_dir_oclass: EC_4P2GX

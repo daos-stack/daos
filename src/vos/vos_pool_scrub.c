@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -162,6 +162,12 @@ sc_cont_is_stopping(struct scrub_ctx *ctx)
 }
 
 static inline bool
+sc_pool_is_stopping(const struct scrub_ctx *ctx)
+{
+	return ctx->sc_pool != NULL && ctx->sc_pool->sp_stopping;
+}
+
+static inline bool
 sc_scrub_enabled(struct scrub_ctx *ctx)
 {
 	return sc_mode(ctx) != DAOS_SCRUB_MODE_OFF && sc_freq(ctx) > 0;
@@ -230,6 +236,9 @@ sc_should_start(struct scrub_ctx *ctx)
 {
 	D_ASSERT(ctx->sc_status == SCRUB_STATUS_NOT_RUNNING);
 	if (!sc_scrub_enabled(ctx))
+		return false;
+
+	if (sc_pool_is_stopping(ctx))
 		return false;
 
 	if (ctx->sc_pool_scrub_count == 0 || sc_frequency_time_over(ctx)) {
@@ -717,6 +726,31 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return 0;
 }
 
+/* Yield if scrubber consecutively skips too many objects */
+#define SCRUB_FILTER_CREDITS 64
+
+static int
+sc_obj_filter_cb(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *acts)
+{
+	struct scrub_ctx *ctx = cb_arg;
+
+	if (desc->id_type == VOS_ITER_OBJ) {
+		if (vos_bkt_iter_skip(ih, desc)) {
+			*acts |= VOS_ITER_CB_SKIP;
+
+			D_ASSERT(ctx->sc_filter_credits > 0);
+			if (--ctx->sc_filter_credits == 0) {
+				ctx->sc_filter_credits = SCRUB_FILTER_CREDITS;
+				sc_sleep(ctx, 0);
+			}
+		} else {
+			ctx->sc_filter_credits = SCRUB_FILTER_CREDITS;
+		}
+	}
+
+	return 0;
+}
+
 static int
 sc_scrub_cont(struct scrub_ctx *ctx)
 {
@@ -728,10 +762,15 @@ sc_scrub_cont(struct scrub_ctx *ctx)
 	if (!daos_csummer_initialized(sc_csummer(ctx)))
 		return 0;
 
+	ctx->sc_filter_credits = SCRUB_FILTER_CREDITS;
+
 	param.ip_hdl = sc_cont_hdl(ctx);
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epc_expr = VOS_IT_EPC_RE;
+	param.ip_filter_cb  = sc_obj_filter_cb;
+	param.ip_filter_arg = ctx;
+
 	/*
 	 * FIXME: Improve iteration by only iterating over visible
 	 * recxs (set param.ip_flags = VOS_IT_RECX_VISIBLE). Will have to be
@@ -803,8 +842,17 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	} else {
 		rc = sc_cont_setup(ctx, entry);
 		if (rc != 0) {
-			/* log error for container, but then keep going */
-			D_ERROR("Unable to setup the container. "DF_RC"\n", DP_RC(rc));
+			/* DER_CONT_NONEXIST is expected when a container is deleted;
+			 * log at debug level and skip it.  Use error level for any
+			 * other unexpected failure.
+			 */
+			if (rc == -DER_CONT_NONEXIST)
+				D_DEBUG(DB_CSUM,
+					"Container " DF_UUIDF " removed, skipping: " DF_RC "\n",
+					DP_UUID(entry->ie_couuid), DP_RC(rc));
+			else
+				D_ERROR("Unable to setup the container " DF_UUIDF ": " DF_RC "\n",
+					DP_UUID(entry->ie_couuid), DP_RC(rc));
 			return 0;
 		}
 
@@ -868,10 +916,19 @@ cont_iter_is_loaded_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(type == VOS_ITER_COUUID);
 
 	rc = sc_cont_setup(ctx, entry);
-	if (rc != 0)
-		return rc;
-	if (sc_cont_is_stopping(ctx))
+	if (rc != 0) {
+		if (rc == -DER_CONT_NONEXIST)
+			D_DEBUG(DB_CSUM, "Container " DF_UUIDF " removed, skipping: " DF_RC "\n",
+				DP_UUID(entry->ie_couuid), DP_RC(rc));
+		else
+			D_ERROR("Unable to setup container " DF_UUIDF ": " DF_RC "\n",
+				DP_UUID(entry->ie_couuid), DP_RC(rc));
 		return 0;
+	}
+	if (sc_cont_is_stopping(ctx)) {
+		sc_cont_teardown(ctx);
+		return 0;
+	}
 
 	/*
 	 * Is loaded when the properties have been fetched. That way the csummer has been
@@ -908,6 +965,8 @@ sc_ensure_containers_are_loaded(struct scrub_ctx *ctx)
 		args.args_found_unloaded_container = false;
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL,
 				 cont_iter_is_loaded_cb, &args, NULL);
+		if (sc_pool_is_stopping(ctx))
+			return 0;
 		sc_sleep(ctx, 500);
 	} while (args.args_found_unloaded_container || rc != 0);
 	ctx->sc_cont_loaded = true;

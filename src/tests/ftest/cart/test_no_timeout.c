@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -91,9 +91,6 @@ test_run(void)
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
-	rc = crt_group_rank(NULL, &test_g.t_my_rank);
-	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
-
 	/* register RPCs */
 	rc = crt_proto_register(&my_proto_fmt_test_group1);
 	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n", rc);
@@ -132,20 +129,16 @@ test_run(void)
 			server_ep.ep_grp = grp;
 			server_ep.ep_rank = rank;
 
-			rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-					    TEST_OPC_SHUTDOWN, &rpc_req);
-			D_ASSERTF(rc == 0 && rpc_req != NULL,
-				  "crt_req_create() failed. "
-				  "rc: %d, rpc_req: %p\n", rc, rpc_req);
-			rc = crt_req_send(rpc_req, client_cb_common, NULL);
-			D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
-				  rc);
-
-			crtu_sem_timedwait(&test_g.t_token_to_proceed, 61,
-					   __LINE__);
 			send_rpc_shutdown(server_ep, rpc_req);
 		}
 	}
+
+	crtu_progress_stop();
+
+	rc = pthread_join(test_g.t_tid[0], NULL);
+	if (rc != 0)
+		fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
+	D_DEBUG(DB_TEST, "joined progress thread.\n");
 
 	d_rank_list_free(rank_list);
 	rank_list = NULL;
@@ -158,13 +151,6 @@ test_run(void)
 		D_ASSERTF(rc == 0,
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
-
-	crtu_progress_stop();
-
-	rc = pthread_join(test_g.t_tid[0], NULL);
-	if (rc != 0)
-		fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
-	D_DEBUG(DB_TEST, "joined progress thread.\n");
 
 	rc = sem_destroy(&test_g.t_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");

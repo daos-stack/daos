@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,12 +38,13 @@
  */
 
 struct dtx_coll_local_args {
-	uuid_t			 dcla_po_uuid;
-	uuid_t			 dcla_co_uuid;
-	struct dtx_id		 dcla_xid;
-	daos_epoch_t		 dcla_epoch;
-	uint32_t		 dcla_opc;
-	int			*dcla_results;
+	uuid_t        dcla_po_uuid;
+	uuid_t        dcla_co_uuid;
+	struct dtx_id dcla_xid;
+	daos_epoch_t  dcla_epoch;
+	uint32_t      dcla_ver;
+	uint32_t      dcla_opc;
+	int          *dcla_results;
 };
 
 void
@@ -58,17 +59,10 @@ dtx_coll_prep_ult(void *arg)
 
 	dcpa->dcpa_result = ds_cont_child_lookup(dci->dci_po_uuid, dci->dci_co_uuid, &cont);
 	if (dcpa->dcpa_result != 0) {
-		D_ERROR("Failed to locate pool="DF_UUID" cont="DF_UUID" for DTX "
-			DF_DTI" with opc %u: "DF_RC"\n",
-			DP_UUID(dci->dci_po_uuid), DP_UUID(dci->dci_co_uuid),
-			DP_DTI(&dci->dci_xid), opc, DP_RC(dcpa->dcpa_result));
-		/*
-		 * Convert the case of container non-exist as -DER_IO to distinguish
-		 * the case of DTX entry does not exist. The latter one is normal.
-		 */
-		if (dcpa->dcpa_result == -DER_NONEXIST)
-			dcpa->dcpa_result = -DER_IO;
-
+		D_ERROR("Failed to locate pool=" DF_UUID " cont=" DF_UUID " for DTX " DF_DTI
+			" with opc %u: " DF_RC "\n",
+			DP_UUID(dci->dci_po_uuid), DP_UUID(dci->dci_co_uuid), DP_DTI(&dci->dci_xid),
+			opc, DP_RC(dcpa->dcpa_result));
 		goto out;
 	}
 
@@ -368,7 +362,7 @@ dtx_coll_local_one(void *args)
 		rc = vos_dtx_commit(cont->sc_hdl, &dcla->dcla_xid, 1, false, NULL);
 		break;
 	case DTX_COLL_ABORT:
-		rc = vos_dtx_abort(cont->sc_hdl, &dcla->dcla_xid, dcla->dcla_epoch);
+		rc = vos_dtx_abort(cont->sc_hdl, &dcla->dcla_xid, dcla->dcla_epoch, dcla->dcla_ver);
 		break;
 	case DTX_COLL_CHECK:
 		rc = vos_dtx_check(cont->sc_hdl, &dcla->dcla_xid, NULL, NULL, NULL, false);
@@ -404,7 +398,8 @@ out:
 
 int
 dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epoch_t epoch,
-		    uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap, int **p_results)
+		    uint32_t version, uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap,
+		    int **p_results)
 {
 	struct dtx_coll_local_args	 dcla = { 0 };
 	struct dss_coll_ops		 coll_ops = { 0 };
@@ -417,9 +412,10 @@ dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epo
 
 	uuid_copy(dcla.dcla_po_uuid, po_uuid);
 	uuid_copy(dcla.dcla_co_uuid, co_uuid);
-	dcla.dcla_xid = *xid;
+	dcla.dcla_xid   = *xid;
 	dcla.dcla_epoch = epoch;
-	dcla.dcla_opc = opc;
+	dcla.dcla_ver   = version;
+	dcla.dcla_opc   = opc;
 
 	coll_ops.co_func = dtx_coll_local_one;
 	coll_args.ca_func_args = &dcla;

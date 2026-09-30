@@ -199,10 +199,20 @@ struct  _Mgmt__PoolCreateReq
    * Fraction of meta-blob-sz to use as mem-file-sz
    */
   float mem_ratio;
+  /*
+   * Ranks that are not currently joined (Ready/Excluded/AdminExcluded/Stopped/
+   * Stopping/Errored/Unresponsive/AwaitFormat/Starting/...).
+   * May be populated by either the client (auto rank-selection paths) or the
+   * management service; if both supply values, they are merged. Listed ranks
+   * enter the initial pool map as DOWNOUT and do NOT receive VOS/blob-store
+   * creation, so subsequent membership changes can address them by rank.
+   */
+  size_t n_unavailable_ranks;
+  uint32_t *unavailable_ranks;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0,NULL, 0, 0,NULL, 0,NULL, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0,NULL, 0, 0,NULL, 0,NULL, 0, 0,NULL }
 
 
 /*
@@ -898,7 +908,8 @@ struct  _Mgmt__PoolQueryResp
 typedef enum {
   MGMT__POOL_PROPERTY__VALUE__NOT_SET = 0,
   MGMT__POOL_PROPERTY__VALUE_STRVAL = 2,
-  MGMT__POOL_PROPERTY__VALUE_NUMVAL = 3
+  MGMT__POOL_PROPERTY__VALUE_NUMVAL = 3,
+  MGMT__POOL_PROPERTY__VALUE_BYTEVAL = 4
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_PROPERTY__VALUE)
 } Mgmt__PoolProperty__ValueCase;
 
@@ -919,6 +930,10 @@ struct  _Mgmt__PoolProperty
      * pool property numeric value
      */
     uint64_t numval;
+    /*
+     * pool property byte array value
+     */
+    ProtobufCBinaryData byteval;
   };
 };
 #define MGMT__POOL_PROPERTY__INIT \

@@ -43,6 +43,7 @@
 		case -DER_BUSY:                                                                    \
 		case -DER_EXIST:                                                                   \
 		case -DER_NONEXIST:                                                                \
+		case -DER_OP_CANCELED:                                                             \
 			__is_err = false;                                                          \
 			break;                                                                     \
 		}                                                                                  \
@@ -62,6 +63,7 @@
 		case -DER_BUSY:                                                                    \
 		case -DER_EXIST:                                                                   \
 		case -DER_NONEXIST:                                                                \
+		case -DER_OP_CANCELED:                                                             \
 			__is_err = false;                                                          \
 			break;                                                                     \
 		}                                                                                  \
@@ -300,7 +302,8 @@ struct vos_pool {
 	uint32_t                vp_dying:1,
 				vp_opening:1,
 	/** exclusive handle (see VOS_POF_EXCL) */
-				vp_excl:1;
+				vp_excl:1,
+				vp_gc_nospc:1;
 	ABT_mutex		vp_mutex;
 	ABT_cond		vp_cond;
 	/* this pool is for sysdb */
@@ -316,9 +319,7 @@ struct vos_pool {
 	/** memory attribute of the @vp_umm */
 	struct umem_attr	vp_uma;
 	/** memory class instance of the pool */
-	struct umem_instance	vp_umm;
-	/** Size of pool file */
-	uint64_t		vp_size;
+	struct umem_instance     vp_umm;
 	/** Features enabled for this pool */
 	uint64_t		vp_feats;
 	/** btr handle for the container table */
@@ -331,6 +332,10 @@ struct vos_pool {
 	d_list_t		vp_gc_link;
 	/** List of open containers with objects in gc pool */
 	d_list_t		vp_gc_cont;
+
+	/** List of open containers */
+	d_list_t                 vp_cont_list;
+
 	/** address of durable-format pool in SCM */
 	struct vos_pool_df	*vp_pool_df;
 	/** Dummy data I/O context */
@@ -389,6 +394,10 @@ struct vos_container {
 	d_list_t		vc_dtx_unsorted_list;
 	/* The list for the active DTX entries that are re-indexed when open the container. */
 	d_list_t		vc_dtx_reindex_list;
+
+	/* Link into vos_pool::vp_cont_list */
+	d_list_t                 vc_pool_link;
+
 	/* The largest epoch difference for re-indexed DTX entries max/min pairs. */
 	uint64_t		vc_dtx_reindex_eph_diff;
 	/* The latest calculated local stable epoch. */
@@ -513,15 +522,6 @@ struct vos_dtx_act_ent {
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
-
-struct vos_dtx_cmt_ent {
-	struct vos_dtx_cmt_ent_df dce_base;
-	uint32_t                  dce_invalid : 1;
-};
-
-#define DCE_XID(dce)		((dce)->dce_base.dce_xid)
-#define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
-#define DCE_CMT_TIME(dce)	((dce)->dce_base.dce_cmt_time)
 
 #define EVT_DESC_MAGIC          0xbeefdead
 
@@ -716,13 +716,13 @@ vos_obj_tab_register();
  * DTX table destroy
  * Called from vos_cont_destroy
  *
- * \param umm		[IN]	Instance of an unified memory class.
+ * \param pool		[IN]	The pool that holds the container.
  * \param cont_df	[IN]	Pointer to the on-disk VOS container.
  *
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
+vos_dtx_table_destroy(struct vos_pool *pool, struct vos_cont_df *cont_df);
 
 /**
  * Register dbtree class for DTX table.
@@ -827,31 +827,30 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p);
+vos_dtx_prepared(struct dtx_handle *dth, bool *cmt);
 
 int
-vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
-			int count, daos_epoch_t epoch, bool keep_act, bool rm_cos[],
-			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
+vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[], int count,
+			daos_epoch_t epoch, bool keep_act, bool rm_cos[],
+			struct vos_dtx_act_ent **daes, bool cmts[]);
 
 int
 vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force);
 
 void
-vos_dtx_post_handle(struct vos_container *cont,
-		    struct vos_dtx_act_ent **daes,
-		    struct vos_dtx_cmt_ent **dces,
+vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes, bool cmts[],
 		    int count, bool abort, bool rollback, bool keep_act);
 
 /**
  * Establish indexed active DTX table in DRAM.
  *
  * \param cont	[IN]	Pointer to the container.
+ * \param ck	[IN]	Checker structure.
  *
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_act_reindex(struct vos_container *cont);
+vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck);
 
 int
 vos_dtx_record_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t oid);
@@ -1223,6 +1222,9 @@ struct vos_iter_ops {
 	/** Delete the record that the cursor points to */
 	int	(*iop_process)(struct vos_iterator *iter, vos_iter_proc_op_t op,
 			       void *args);
+	/** Check the current record */
+	int (*iop_check)(struct vos_iterator *iter, report_fn_t report_fn, void *report_arg,
+			 bool error_on_non_zero_padding);
 	/**
 	 * Optional, the iterator has no element.
 	 *
@@ -1426,10 +1428,10 @@ vos_iter_intent(struct vos_iterator *iter)
 		return DAOS_INTENT_PURGE;
 	if (iter->it_for_discard)
 		return DAOS_INTENT_DISCARD;
-	if (iter->it_ignore_uncommitted)
-		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
 		return DAOS_INTENT_MIGRATION;
+	if (iter->it_ignore_uncommitted)
+		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_check)
 		return DAOS_INTENT_CHECK;
 	return DAOS_INTENT_DEFAULT;

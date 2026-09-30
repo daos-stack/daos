@@ -33,10 +33,11 @@ server_config:
 pool:
   size: 40%
   svcn: 1
+  properties: "rd_fac:0,space_rb:0"
 
 container:
   type: POSIX
-  control_method: daos
+  properties: "cksum:off,srv_cksum:off"
 
 ior:
   client_processes:
@@ -48,7 +49,6 @@ ior:
   transfer_size: '1M'
   block_size: '512M'
   dfs_oclass: "EC_2P1G1"
-  dfs_dir_oclass: "EC_2P1G1"
 
 runtime:
   total_runtime: 800  # total seconds to run

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -488,6 +488,7 @@ kv_put(daos_handle_t oh, daos_size_t size)
 			 * Max request in flight reached, wait for one i/o to
 			 * complete to reuse the slot
 			 */
+			evp = NULL;
 			while (1) {
 				rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
 				if (rc > 0)
@@ -497,6 +498,11 @@ kv_put(daos_handle_t oh, daos_size_t size)
 					break;
 				}
 			}
+			/* Poll failure: evp is stale, do not dereference it */
+			if (rc < 0)
+				break;
+			/* Verify evp is valid to catch stale pointer bugs */
+			D_ASSERT(evp != NULL);
 
 			/** Check if completed operation failed */
 			if (evp->ev_error != DER_SUCCESS) {
@@ -551,8 +557,11 @@ kv_put(daos_handle_t oh, daos_size_t size)
 	num_events = daos_eq_query(eq, DAOS_EQR_ALL, 0, NULL);
 	while (1) {
 		eq_rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
-		if (eq_rc > 0)
+		if (eq_rc > 0) {
 			completions += eq_rc;
+			if (rc == 0 && evp->ev_error != DER_SUCCESS)
+				rc = evp->ev_error;
+		}
 		if (eq_rc < 0) {
 			rc = eq_rc;
 			break;
@@ -628,6 +637,7 @@ kv_get(daos_handle_t oh, daos_size_t size)
 			 * Max request in flight reached, wait for one i/o to
 			 * complete to reuse the slot
 			 */
+			evp = NULL;
 			while (1) {
 				rc = daos_eq_poll(eq, 1, DAOS_EQ_NOWAIT, 1, &evp);
 				if (rc > 0)
@@ -637,6 +647,11 @@ kv_get(daos_handle_t oh, daos_size_t size)
 					break;
 				}
 			}
+			/* Poll failure: evp is stale, do not dereference it */
+			if (rc < 0)
+				break;
+			/* Verify evp is valid to catch stale pointer bugs */
+			D_ASSERT(evp != NULL);
 
 			/** Check if completed operation failed */
 			if (evp->ev_error != DER_SUCCESS) {

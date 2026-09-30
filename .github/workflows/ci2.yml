@@ -27,14 +27,16 @@ jobs:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
+            python: 3
     env:
       DEPS_JOBS: 10
       COMPILER: clang
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: true
           fetch-depth: 500
@@ -57,6 +59,7 @@ jobs:
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg DAOS_KEEP_SRC=yes
+                            --build-arg PYTHON_VERSION
                             --tag build-image
       - name: Build and Test
         run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
@@ -68,7 +71,7 @@ jobs:
       - name: Publish NLT test results
         if: always()
         # yamllint disable-line rule:line-length
-        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040  # v2.23.0
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3  # v2.24.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           files: nlt-junit.xml
@@ -81,15 +84,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [rocky, fedora, leap.15]
+        distro: [rocky, leap.15]
         compiler: [clang, gcc]
         include:
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
-          - distro: fedora
-            base: el.8
-            with: fedora:38
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.5
@@ -100,7 +100,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: true
           fetch-depth: 500
@@ -131,6 +131,7 @@ jobs:
                             --build-arg BASE_DISTRO
                             --build-arg DAOS_JAVA_BUILD=yes
                             --build-arg COMPILER
+                            --target build-local
       - name: Build debug in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -138,6 +139,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=debug
                             --build-arg COMPILER
+                            --target build-local
       - name: Build devel in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -145,6 +147,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER
+                            --target build-local
 
 # Should work, but enable on master only for now.
 #    - name: Run NLT

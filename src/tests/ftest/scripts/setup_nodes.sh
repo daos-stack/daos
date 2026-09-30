@@ -2,6 +2,7 @@
 # shellcheck disable=SC1113
 # /*
 #  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -18,10 +19,14 @@ fi
 cat <<EOF > /etc/sysctl.d/10-dmesg-for-all.conf
 kernel.dmesg_restrict=0
 EOF
-# For verbs enable servers in dual-nic setups to talk to each other; no adverse effect for tcp
+# For verbs/ucx enable servers in dual-nic setups to talk to each other; no adverse effect for tcp.
+# arp_announce=2 stops ARP requests sent out one ib interface from advertising another ib
+# interface's IP, which otherwise makes peers map that IP to the wrong HCA port and librdmacm
+# connections to it get rejected.
 cat <<EOF > /etc/sysctl.d/10-daos-verbs.conf
 net.ipv4.conf.all.accept_local=1
 net.ipv4.conf.all.arp_ignore=2
+net.ipv4.conf.all.arp_announce=2
 net.ipv4.conf.all.rp_filter=2
 EOF
 for x in \$(cd /sys/class/net/ && ls -d ib*); do
@@ -95,6 +100,28 @@ if ! $TEST_RPMS; then
 	    sudo chown root /usr/bin/daos_server_helper && \
 	    sudo chmod 4755 /usr/bin/daos_server_helper
 fi
+
+# Setup a python virtual environment for functional testing
+"python${PYTHON_VERSION}" -m venv "${DAOS_FTEST_VENV}"
+# shellcheck disable=SC1091
+source "${DAOS_FTEST_VENV}"/bin/activate
+
+cat <<EOF > "${DAOS_FTEST_VENV}"/pip.conf
+[global]
+    progress_bar = off
+    no_color = true
+    quiet = 1
+EOF
+
+pip install --upgrade pip
+pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
+# Copy the pydaos source locally and install it, in an ideal world this would install
+# from the read-only tree directly but for now that isn't working.
+# https://github.com/pypa/setuptools/issues/3237
+cp -a "$PREFIX"/lib/daos/python pydaos
+pip install ./pydaos
+rm -rf pydaos
+deactivate
 
 rm -rf "${TEST_TAG_DIR:?}/"
 mkdir -p "$TEST_TAG_DIR/"

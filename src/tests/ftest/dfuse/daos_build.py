@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
   (C) Copyright 2025 Google LLC
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -8,6 +8,7 @@
 
 import os
 import re
+import sys
 import time
 
 from apricot import TestWithServers
@@ -18,7 +19,7 @@ from distro_utils import detect
 from run_utils import run_remote
 
 
-def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
+def run_build_test(self, cache_mode, il_lib=None):
     """Run an actual test from above."""
     # Create a pool, container and start dfuse.
     self.log_step('Creating a single pool and container')
@@ -33,29 +34,12 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     # scons commands which can both take a long time.
     build_time = 60
 
-    dfuse_namespace = None
+    build_jobs = 6 * 2
 
-    with_pil4dfs = False
-    if il_lib is not None:
-        if il_lib == 'libpil4dfs.so':
-            with_pil4dfs = True
-
-    # Run the deps build in parallel for speed/coverage however the daos build itself does
-    # not yet work under the interception library so run this part in serial.
-    build_jobs = 6 * 5
-
-    # Note that run_on_vms does not tell ftest where to run, this should be set according to
-    # the test tags so the test can run with appropriate settings.
     remote_env = EnvironmentVariables()
-    if run_on_vms:
-        dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
-        build_jobs = 6 * 2
-        if with_pil4dfs:
-            # crashed previously with 6 * 2
-            build_jobs = 5 * 2
-        remote_env['D_IL_MAX_EQ'] = '0'
+    remote_env['D_IL_MAX_EQ'] = '0'
 
-    dfuse = get_dfuse(self, self.hostlist_clients, dfuse_namespace)
+    dfuse = get_dfuse(self, self.hostlist_clients)
 
     if cache_mode == 'writeback':
         cont_attrs['dfuse-data-cache'] = '1m'
@@ -63,8 +47,6 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         cont_attrs['dfuse-dentry-time'] = cache_time
         cont_attrs['dfuse-ndentry-time'] = cache_time
     elif cache_mode == 'writethrough':
-        if il_lib is not None:
-            build_time *= 2
         cont_attrs['dfuse-data-cache'] = '1m'
         cont_attrs['dfuse-attr-time'] = cache_time
         cont_attrs['dfuse-dentry-time'] = cache_time
@@ -94,6 +76,9 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     else:
         self.fail(f'Invalid cache_mode: {cache_mode}')
 
+    if il_lib is not None:
+        build_time = 5 * 60
+
     self.log_step('Starting dfuse')
     container.set_attr(attrs=cont_attrs)
     start_dfuse(self, dfuse, pool, container)
@@ -104,7 +89,8 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     remote_env['PATH'] = f"{os.path.join(mount_dir, 'venv', 'bin')}:$PATH"
     remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
     remote_env['COVFILE'] = os.environ['COVFILE']
-    remote_env['HTTPS_PROXY'] = os.environ['HTTPS_PROXY']
+    remote_env['HTTPS_PROXY'] = os.environ.get('HTTPS_PROXY', '')
+    remote_env['NO_PROXY'] = os.environ.get('NO_PROXY', '')
 
     if il_lib is not None:
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
@@ -127,7 +113,7 @@ def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
 
-    cmds = ['python3 -m venv {}/venv'.format(mount_dir),
+    cmds = [f'{sys.executable} -m venv {mount_dir}/venv',
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
@@ -237,8 +223,8 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,daos_cmd
+        :avocado: tags=vm
+        :avocado: tags=build,daosio,dfs,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
         """
         run_build_test(self, "writeback")
@@ -253,8 +239,8 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=vm
+        :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt
         """
         run_build_test(self, "writethrough")
@@ -269,8 +255,8 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=vm
+        :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_metadata
         """
         run_build_test(self, "metadata")
@@ -285,8 +271,8 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=vm
+        :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_data
         """
         run_build_test(self, "data")
@@ -301,8 +287,40 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=vm
+        :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_nocache
         """
         run_build_test(self, "nocache")
+
+    def test_dfuse_daos_build_wt_il(self):
+        """This test builds DAOS on a dfuse filesystem.
+
+        Use cases:
+            Create Pool
+            Create Posix container
+            Mount dfuse
+            Checkout and build DAOS sources.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=build,daosio,dfuse,ioil
+        :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
+        """
+        run_build_test(self, "writethrough", il_lib='libioil.so')
+
+    def test_dfuse_daos_build_wt_pil4dfs(self):
+        """This test builds DAOS on a dfuse filesystem.
+
+        Use cases:
+            Create Pool
+            Create Posix container
+            Mount dfuse
+            Checkout and build DAOS sources.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=build,daosio,pil4dfs
+        :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_pil4dfs
+        """
+        run_build_test(self, "nocache", il_lib='libpil4dfs.so')

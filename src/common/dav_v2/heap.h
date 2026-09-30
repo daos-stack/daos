@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2024, Intel Corporation */
-/* (C) Copyright 2025 Hewlett Packard Enterprise Development LP */
+/*
+ * Copyright 2015-2024 Intel Corporation.
+ */
+/* (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP */
 
 /*
  * heap.h -- internal definitions for heap
@@ -70,7 +72,7 @@ int
 heap_update_mbrt_zinfo(struct palloc_heap *heap);
 void
 heap_zinfo_get_size(uint64_t *alloc_size, uint64_t *capacity);
-void
+int
 heap_zinfo_init(struct palloc_heap *heap, bool is_create);
 
 struct alloc_class *

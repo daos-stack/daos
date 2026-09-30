@@ -1,6 +1,6 @@
 # /*
 #  * (C) Copyright 2016-2023 Intel Corporation.
-#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+#  * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -79,12 +79,14 @@ class LogLine():
         return (
             # pylint: disable=too-many-boolean-expressions
             # CaRT log line contains at least 7 fields:
-            # <date> <time> <node_name> <TAG+PIDs> <FAC> <level> <message>
+            # <level> <date> <time> <node_name> DAOS[<PIDs>] <FAC> <message>
             len(fields) == 7
-            # Valid date at the beginning: YYYY/MM/DD
-            and len(fields[0]) == 10 and fields[0][4] == '/' and fields[0][7] == '/'
-            # Valid time at the second position: hh:mm:ss.micros
-            and len(fields[1]) == 15 and fields[1][2] == ':' and fields[1][8] == '.'
+            # Valid level
+            and fields[0] in LOG_LEVELS
+            # Valid date: YYYY/MM/DD
+            and len(fields[1]) == 10 and fields[1][4] == '/' and fields[1][7] == '/'
+            # Valid time: hh:mm:ss.micros
+            and len(fields[2]) == 15 and fields[2][2] == ':' and fields[2][8] == '.'
             # pylint: enable=too-many-boolean-expressions
         )
 
@@ -112,31 +114,20 @@ class LogLine():
         # assumptions.
 
         fields = line.split()
-        # Work out the end of the fixed-width portion, and the beginning of the
-        # message. The hostname, pid, fac and level fields are all variable width.
-        idx = 0
-        for i in range(4):
-            idx += len(fields[i]) + 1
-        # Assuming DLOG_FLV_FAC is set in src/gurt/dlog.c - d_vlog()
-        # pylint: disable=wrong-spelling-in-comment
-        # snprintf(..., "%-4s ", facstr)
-        # pylint: enable=wrong-spelling-in-comment
-        idx += max(len(fields[4]), 4) + 1
-        idx += max(len(fields[5]), 4)
+        # Verify valid level string
+        try:
+            self.level = LOG_LEVELS[fields[0]]
+        except KeyError as error:
+            raise InvalidLogFile(fields[0]) from error
+        self.time_stamp = ' '.join(fields[1:3])
+        self.hostname = fields[3]
         # Assuming DLOG_FLV_TAG and DLOG_FLV_LOGPID are set in src/gurt/dlog.c - d_vlog()
-        pidtid = fields[3][5:-1]
+        pidtid = fields[4][5:-1]
         pid = pidtid.split("/")
         self.pid = int(pid[0])
-        self._preamble = line[:idx]
-        self.fac = fields[4]
         # Assuming DLOG_FLV_FAC is set in src/gurt/dlog.c - d_vlog()
-        try:
-            self.level = LOG_LEVELS[fields[5]]
-        except KeyError as error:
-            raise InvalidLogFile(fields[5]) from error
+        self.fac = fields[5]
 
-        self.time_stamp = fields[0] + ' ' + fields[1]
-        self.hostname = fields[2]
         self._fields = fields[6:]
         try:
             if self._fields[1][-2:] == '()':
@@ -166,8 +157,7 @@ class LogLine():
 
     def to_str(self, mark=False):
         """Convert the object to a string"""
-        pre = self._preamble.split(' ', 4)
-        preamble = ' '.join([pre[0], pre[1], pre[4]])
+        preamble = self.time_stamp + ' ' + self.fac
         if mark:
             return '{} ** {}'.format(preamble, self._msg)
         return '{}    {}'.format(preamble, self._msg)
@@ -586,8 +576,8 @@ class LogIter():
             if not LogLine.is_valid(line):
                 position += len(line)
                 continue
-            fields = line.split(None, 3)
-            pidtid = fields[3][5:-1]
+            fields = line.split(None, 4)
+            pidtid = fields[4][5:-1]
             pid = pidtid.split("/")
             l_pid = int(pid[0])
             if l_pid in pids:

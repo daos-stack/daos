@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,6 +52,35 @@ extern "C" {
 #else  /* !defined(__has_warning) */
 #define D_HAS_WARNING(gcc_version, warning) ((gcc_version) <= __GNUC__)
 #endif /* defined(__has_warning) */
+
+/* for backwards compatibility if using older cmocka */
+#ifndef assert_int_in_range
+#define assert_int_in_range assert_in_range
+#endif
+#ifndef assert_uint_in_range
+#define assert_uint_in_range assert_in_range
+#endif
+#ifndef will_return_int
+#define will_return_int will_return
+#endif
+#ifndef will_return_ptr
+#define will_return_ptr will_return
+#endif
+#ifndef expect_uint_value
+#define expect_uint_value expect_value
+#endif
+#ifndef expect_int_value
+#define expect_int_value expect_value
+#endif
+#ifndef check_expected_int
+#define check_expected_int check_expected
+#endif
+#ifndef check_expected_uint
+#define check_expected_uint check_expected
+#endif
+#ifndef check_expected_ptr
+#define check_expected_ptr check_expected
+#endif
 
 /**
  * hide the dark secret that uuid_t is an array not a structure.

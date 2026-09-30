@@ -962,7 +962,8 @@ testu_create_pool_map(d_rank_t *ranks, int n_ranks, d_rank_t *down_ranks, int n_
 	testu_create_domain_buf(ranks, n_ranks, &domain_buf, &domain_buf_len);
 
 	rc = gen_pool_buf(NULL /* map */, &map_buf, 1 /* map_version */, domain_buf_len,
-			  n_ranks, n_ranks * 1 /* ntargets */, domain_buf, 1 /* dss_tgt_nr */);
+			  n_ranks, n_ranks * 1 /* ntargets */, domain_buf, 1 /* dss_tgt_nr */,
+			  NULL /* downout_ranks */);
 	D_ASSERT(rc == 0);
 
 	rc = pool_map_create(map_buf, 1, &map);

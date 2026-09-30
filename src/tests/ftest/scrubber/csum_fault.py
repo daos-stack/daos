@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -37,7 +38,6 @@ class TestWithScrubberFault(TestWithScrubber):
         self.ior_cmd.api.update(apis[0])
         self.ior_cmd.flags.update(flags[0], "ior.flags")
         self.ior_cmd.dfs_oclass.update(obj_class[0])
-        self.ior_cmd.dfs_dir_oclass.update(obj_class[0])
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
         for test in transfer_block_size:

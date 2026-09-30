@@ -96,9 +96,17 @@ daos_rpc_send_wait(crt_rpc_t *rpc)
 	return rc;
 }
 
+/*
+ * Minimum number of proto query attempts. Decoupled from the number of engines
+ * so that single-engine systems still retry transient timeouts instead of
+ * aborting after a single try.
+ */
+#define DAOS_PROTO_QUERY_MIN_ATTEMPTS 4
+
 struct rpc_proto {
 	int            rank_idx;
 	int            num_retries_left;
+	int            max_attempts;
 	crt_endpoint_t ep;
 	int            version;
 	int            rc;
@@ -125,10 +133,12 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 		rproto->rank_idx = (rproto->rank_idx + 1) % nr_ranks;
 		rproto->num_retries_left--;
 
-		/** We tried all engines and found none alive */
+		/** Exhausted the retry budget */
 		if (rproto->num_retries_left <= 0) {
-			D_ERROR("crt_proto_query_with_ctx() failed -- All %d targets tried\n",
-				nr_ranks);
+			D_ERROR("proto query for base opc %#x failed after %d attempts across %d "
+				"rank(s): " DF_RC "\n",
+				rproto->base_opc, rproto->max_attempts, nr_ranks,
+				DP_RC(cb_info->pq_rc));
 			rproto->rc        = cb_info->pq_rc;
 			rproto->completed = true;
 			return;
@@ -139,6 +149,10 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 		rproto->ep.ep_rank = rank;
 
 		rproto->timeout += 3;
+		D_INFO("proto query for base opc %#x: retrying on rank %u (attempt %d/%d, timeout "
+		       "%us) after " DF_RC "\n",
+		       rproto->base_opc, rank, rproto->max_attempts - rproto->num_retries_left + 1,
+		       rproto->max_attempts, rproto->timeout, DP_RC(cb_info->pq_rc));
 		rc = crt_proto_query_with_ctx(&rproto->ep, rproto->base_opc, rproto->ver_array,
 					      rproto->array_size, rproto->timeout, query_cb, rproto,
 					      daos_get_crt_ctx());
@@ -182,7 +196,9 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 		D_GOTO(out_free, -DER_NONEXIST);
 	}
 	rproto->rank_idx = d_rand() % nr_ranks;
-	rproto->num_retries_left = nr_ranks;
+	/** Retry a minimum number of times even with a single engine */
+	rproto->max_attempts     = max(nr_ranks, DAOS_PROTO_QUERY_MIN_ATTEMPTS);
+	rproto->num_retries_left = rproto->max_attempts;
 	rank             = dc_mgmt_net_get_srv_rank(rproto->rank_idx);
 	D_ASSERT(rank != CRT_NO_RANK);
 	rproto->ep.ep_rank = rank;

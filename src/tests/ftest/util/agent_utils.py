@@ -1,9 +1,10 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import json
 import os
 import socket
 
@@ -304,6 +305,25 @@ class DaosAgentManager(SubprocessManager):
         cmd = self.manager.job.copy()
         cmd.set_sub_command("dump-attachinfo")
         return run_remote(self.log, self.hosts, cmd.with_exports)
+
+    def server_version(self):
+        """Run server-version on the daos_agent.
+
+        Raises:
+            CommandFailure: if the daos_agent command fails.
+
+        Returns:
+            dict: the JSON command output converted to a python dictionary
+        """
+        config = self.manager.job.yaml.filename
+        agent_bin = os.path.join(self.manager.job.command_path, "daos_agent")
+        run_user = self.manager.job.certificate_owner
+        cmd = (f"sudo -u {run_user} {agent_bin} -j --config-path={config}"
+               f" --logfile=/dev/null server-version 2>/dev/null")
+        result = run_remote(self.log, self.hosts, cmd)
+        if not result.passed:
+            raise CommandFailure("daos_agent server-version failed")
+        return json.loads(result.joined_stdout)
 
     def support_collect_log(self, **kwargs):
         """Collect logs for debug purpose.

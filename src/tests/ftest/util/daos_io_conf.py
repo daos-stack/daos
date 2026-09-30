@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -136,7 +136,7 @@ class IoConfTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.add_pool(create=False)
+        self.pool = self.get_pool(create=False)
         avocado_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
         self.testfile = os.path.join(avocado_tmp_dir, 'testfile')
         self.dmg = self.get_dmg_command()

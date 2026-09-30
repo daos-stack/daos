@@ -19,17 +19,13 @@ jobs:
     strategy:
       matrix:
         # TODO: figure out how to determine this matrix
-        distro: ['el8', 'el9', 'leap15']
+        distro: ['el9', 'leap15']
     env:
       STAGE_NAME:
     steps:
       - name: Set variables
         run: |
             case ${{ matrix.distro }} in
-                'el8')
-                    DISTRO_NAME="EL"
-                    DISTRO_VERSION="8"
-                    ;;
                 'el9')
                     DISTRO_NAME="EL"
                     DISTRO_VERSION="9"
@@ -41,7 +37,7 @@ jobs:
             esac
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
       - name: Test Report
-        uses: phoenix-actions/test-reporting@f957cd93fc2d848d556fa0d03c57bc79127b6b5e  # v15
+        uses: phoenix-actions/test-reporting@7317eea6e13c47348dd0bb318669485157c518d6  # v16
         with:
           artifact: ${{ env.STAGE_NAME }} test-results
           name: ${{ env.STAGE_NAME }} Test Results (phoenix-actions)
@@ -60,7 +56,7 @@ jobs:
       - name: Set variables
         run: echo "STAGE_NAME=Functional Hardware ${{ matrix.stage }}" >> $GITHUB_ENV
       - name: Test Report
-        uses: phoenix-actions/test-reporting@f957cd93fc2d848d556fa0d03c57bc79127b6b5e  # v15
+        uses: phoenix-actions/test-reporting@7317eea6e13c47348dd0bb318669485157c518d6  # v16
         with:
           artifact: ${{ env.STAGE_NAME }} test-results
           name: ${{ env.STAGE_NAME }} Test Results (phoenix-actions)
@@ -71,17 +67,13 @@ jobs:
     runs-on: [self-hosted, docker]
     strategy:
       matrix:
-        distro: ['el8', 'el9', 'leap15']
+        distro: ['el9', 'leap15']
     env:
       STAGE_NAME:
     steps:
       - name: Set variables
         run: |
             case ${{ matrix.distro }} in
-                'el8')
-                    DISTRO_NAME="EL"
-                    DISTRO_VERSION="8"
-                    ;;
                 'el9')
                     DISTRO_NAME="EL"
                     DISTRO_VERSION="9"
@@ -93,7 +85,7 @@ jobs:
             esac
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
       - name: Test Report
-        uses: dorny/test-reporter@b082adf0eced0765477756c2a610396589b8c637  # v2.5.0
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         with:
           artifact: ${{ env.STAGE_NAME }} test-results
           name: ${{ env.STAGE_NAME }} Test Results (dorny)
@@ -112,7 +104,7 @@ jobs:
       - name: Set variables
         run: echo "STAGE_NAME=Functional Hardware ${{ matrix.stage }}" >> $GITHUB_ENV
       - name: Test Report
-        uses: dorny/test-reporter@b082adf0eced0765477756c2a610396589b8c637  # v2.5.0
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
         with:
           artifact: ${{ env.STAGE_NAME }} test-results
           name: ${{ env.STAGE_NAME }} Test Results (dorny)

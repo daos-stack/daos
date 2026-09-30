@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -40,16 +40,22 @@ import (
 
 func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool) {
 	t.Helper()
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
+		if db.IsLeader() == gained {
+			return
+		}
 		select {
 		case <-ctx.Done():
-			t.Fatal(ctx.Err())
+			t.Fatalf("timed out waiting for leadership gained=%t: %s", gained, ctx.Err())
 			return
-		default:
-			if db.IsLeader() == gained {
-				return
-			}
-			time.Sleep(1 * time.Second)
+		case <-ticker.C:
 		}
 	}
 }
@@ -131,10 +137,9 @@ func TestSystem_Database_LeadershipCallbacks(t *testing.T) {
 
 	db, cleanup := TestDatabase(t, log, localhost)
 	defer cleanup()
-	if err := db.Start(dbCtx); err != nil {
-		t.Fatal(err)
-	}
 
+	// Register callbacks before Start() so the monitor goroutine
+	// cannot race ahead and iterate an empty slice under load.
 	var onGainedCalled, onLostCalled uint32
 	db.OnLeadershipGained(func(_ context.Context) error {
 		atomic.StoreUint32(&onGainedCalled, 1)
@@ -144,6 +149,10 @@ func TestSystem_Database_LeadershipCallbacks(t *testing.T) {
 		atomic.StoreUint32(&onLostCalled, 1)
 		return nil
 	})
+
+	if err := db.Start(dbCtx); err != nil {
+		t.Fatal(err)
+	}
 
 	waitForLeadership(ctx, t, db, true)
 	dbCancel()

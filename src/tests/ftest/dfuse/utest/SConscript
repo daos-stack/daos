@@ -1,5 +1,6 @@
 # /*
 #  * (C) Copyright 2024 Intel Corporation.
+#  * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -23,6 +24,11 @@ def scons():
     for test in PIL4DFS_TEST_SRC:
         test_exe = test_env.d_test_program(test)
         test_env.Install(tests_dir, test_exe)
+
+    preread_env = test_env.Clone()
+    preread_env.AppendUnique(LINKFLAGS=['-pthread'])
+    test_exe = preread_env.d_test_program('preread_stale_eof.c')
+    test_env.Install(tests_dir, test_exe)
 
 
 if __name__ == "SCons.Script":

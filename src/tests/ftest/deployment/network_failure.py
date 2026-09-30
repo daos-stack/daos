@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -183,9 +183,9 @@ class NetworkFailureTest(IorTestBase):
         # 1. Create a pool and a container.
         self.log_step("Create a pool and a container.")
         self.container = []
-        self.add_pool(namespace="/run/pool_size_ratio_80/*")
+        self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
         self.container.append(
-            self.get_container(pool=self.pool, namespace=container_namespace))
+            self.get_container(self.pool, namespace=container_namespace))
 
         # 2. Take down network interface of one of the engines. Use the first host.
         self.log_step("Take down network interface of one of the engines.")
@@ -233,11 +233,16 @@ class NetworkFailureTest(IorTestBase):
         self.log.info("Disabled ranks = %s", disabled_ranks)
 
         # 7. Call dmg pool reintegrate one rank at a time to enable all ranks.
+        # --wait blocks each reintegrate until its rebuild completes.
         self.log_step("Reintegrate one rank at a time to enable all ranks.")
         for disabled_rank in disabled_ranks:
-            self.pool.reintegrate(ranks=disabled_rank)
-            self.pool.wait_for_rebuild_to_start(interval=5)
-            self.pool.wait_for_rebuild_to_end(interval=10)
+            self.pool.reintegrate(ranks=disabled_rank, wait=True)
+
+        # 7.5 Verify that no ranks are disabled after reintegration.
+        output = dmg_cmd.pool_query(pool=self.pool.identifier)
+        disabled_ranks = output["response"].get("disabled_ranks")
+        if disabled_ranks:
+            self.fail(f"Ranks are still disabled after reintegration: {disabled_ranks}")
 
         # 8. Run IOR again. It should work this time.
         self.log_step("Expect IOR to pass with the network interface back up.")
@@ -250,7 +255,7 @@ class NetworkFailureTest(IorTestBase):
         # 6. To further verify the system, create another container.
         self.log_step("Create another container.")
         self.container.append(
-            self.get_container(pool=self.pool, namespace=container_namespace))
+            self.get_container(self.pool, namespace=container_namespace))
 
         # 7. Run IOR to the new container. Should work.
         self.log_step("Expect IOR to pass on the new container.")
@@ -363,13 +368,13 @@ class NetworkFailureTest(IorTestBase):
         # 2. Create a pool across the four ranks on the two nodes. Use --nsvc=3. We have
         # to provide the size because we're using --ranks.
         self.log_step("Create a pool across the four ranks on the two nodes.")
-        self.add_pool(namespace="/run/pool_size_value/*", target_list=target_list)
+        self.pool = self.get_pool(namespace="/run/pool_size_value/*", target_list=target_list)
 
         # 3. Create a container without redundancy factor.
         self.log_step("Create a container without redundancy factor.")
         self.container = []
         self.container.append(
-            self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
+            self.get_container(self.pool, namespace="/run/container_wo_rf/*"))
 
         # 4. Take down the interface where the pool isn't created.
         self.log_step("Take down the interface where the pool isn't created.")
@@ -401,7 +406,7 @@ class NetworkFailureTest(IorTestBase):
         # 8. Create a new container on the pool and run IOR.
         self.log_step("Create a new container on the pool")
         self.container.append(
-            self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
+            self.get_container(self.pool, namespace="/run/container_wo_rf/*"))
 
         # Run IOR.
         self.log_step("Run IOR on the new pool/container.")

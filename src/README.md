@@ -112,14 +112,14 @@ The `libdfs` library emulates POSIX file and directory abstractions over
 a POSIX namespace. For further reading on `libdaos`, bindings for different
 programming languages and `libdfs`:
 - <a href="client/api/README.md">DAOS Library (`libdaos`)</a> and <a href="client/array/README.md">array interface</a> and <a href="client/kv/README.md">KV interface</a> built on top of the native DAOS API</a>
-- <a href="src/client/pydaos/raw/README.md">Python API bindings</a>
+- <a href="client/pydaos/raw/README.md">Python API bindings</a>
 - <a href="https://github.com/daos-stack/go-daos">Go bindings</a> and <a href="https://godoc.org/github.com/daos-stack/go-daos/pkg/daos">API documentation</a>
 - <a href="client/dfs/README.md">POSIX File & Directory Emulation (`libdfs`)</a>
 
 The `libdaos` and `libdfs` libraries provide the foundation to support
 domain-specific data formats like HDF5 and Apache Arrow. For further reading
 on I/O middleware integration, please check the following external references:
-- <a href="https://bitbucket.hdfgroup.org/projects/HDFFV/repos/hdf5/browse?at=refs%2Fheads%2Fhdf5_daosm">DAOS VOL connector for HDF5</a>
+- <a href="https://github.com/HDFGroup/vol-daos/blob/master/docs/users_guide.pdf">DAOS VOL connector for HDF5</a>
 - <a href="https://github.com/daos-stack/mpich/tree/daos_adio">ROMIO DAOS ADIO driver for MPI-IO</a>
 
 <a id="13"></a>

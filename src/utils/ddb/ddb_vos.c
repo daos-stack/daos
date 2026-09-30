@@ -11,6 +11,7 @@
 #include <string.h>
 #include <sys/vfs.h>
 
+#include <libpmemobj.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/smd.h>
 #include <vos_internal.h>
@@ -21,79 +22,137 @@
 #include "ddb_mgmt.h"
 #include "ddb_vos.h"
 #include "ddb_spdk.h"
+#include "ddb_spdk_reinit_wa.h"
 
 #define ddb_vos_iterate(param, iter_type, recursive, anchors, cb, args) \
 				vos_iterate(param, iter_type, recursive, \
 						anchors, cb, NULL, args, NULL)
 
-int
-dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags)
+static int
+create_vos_file_parts(const char *path, const char *db_path, struct vos_file_parts **vf_ptr)
 {
-	struct vos_file_parts   path_parts = {0};
-	int			rc;
+	struct vos_file_parts *vf;
+	int                    rc;
 
-	/*
-	 * Currently the vos file is required to be in the same path daos_engine created it in.
-	 * This is so that the sys_db file exists and the pool uuid and target id can be obtained
-	 * from the path. It should be considered in the future how to get these from another
-	 * source.
-	 */
-	rc = vos_path_parse(path, &path_parts);
+	D_ALLOC_PTR(vf);
+	if (vf == NULL) {
+		D_ERROR("Unable to allocate memory for pool path\n");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	rc = ddb_parse_vos_file_parts(path, db_path, vf);
+	if (SUCCESS(rc)) {
+		*vf_ptr = vf;
+	} else {
+		D_ERROR("Unable to parse VOS pool path '%s' and DB path '%s'\n", path,
+			db_path ? db_path : "(null)");
+		D_FREE(vf);
+	}
+
+out:
+	return rc;
+}
+
+int
+dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, daos_handle_t *poh,
+	     uint32_t flags, bool write_mode)
+{
+	int                    rc;
+	struct vos_file_parts *vf;
+	bool                   can_proceed;
+
+	rc = create_vos_file_parts(path, db_path, &vf);
 	if (!SUCCESS(rc))
 		return rc;
 
-	if (db_path != NULL && strnlen(db_path, PATH_MAX) != 0) {
-		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
-		strncpy(path_parts.vf_db_path, db_path, sizeof(path_parts.vf_db_path) - 1);
+	rc = dwa_can_proceed(ctx, vf->vf_db_path, &can_proceed);
+	if (!SUCCESS(rc))
+		goto out_vf;
+	if (!can_proceed)
+		D_GOTO(out_vf, rc = -DER_NO_SERVICE);
+
+	/**
+	 * When the user requests read-only mode (write_mode == false), DDB itself will not attempt
+	 * to modify the pool. However, PMEMOBJ performs several operations that do modify the pool
+	 * during open and/or close, for example:
+	 * - Internal bookkeeping required to ensure resilience in case of an ADR failure (SDS).
+	 * - ULOG replay, which restores the pool to a consistent state.
+	 * These mechanisms cannot be disabled because they are essential for PMEMOBJ to maintain
+	 * the consistency of the pool.
+	 *
+	 * However, since none of these changes need to be persisted when the pool is opened in
+	 * read-only mode (write_mode == false), we can work around this by mapping the pool using
+	 * copy-on-write. Copy-on-write allows pages to be read normally, but when a page is
+	 * modified, a new private copy is allocated. As a result, any changes made to
+	 * the mapped memory do not propagate to the persistent medium.
+	 */
+	if (!write_mode) {
+		int cow_val = 1;
+		rc          = pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
+		if (rc != 0)
+			D_GOTO(out_vf, rc = daos_errno2der(errno));
 	}
 
-	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
+	rc = vos_self_init(vf->vf_db_path, true, vf->vf_target_idx);
 	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to initialize VOS with path '%s': "DF_RC"\n",
-			path_parts.vf_db_path, DP_RC(rc));
-		return rc;
+		D_ERROR("Failed to initialize VOS with DB path '%s': " DF_RC "\n", vf->vf_db_path,
+			DP_RC(rc));
+		goto out_cow;
 	}
 
-	rc = vos_pool_open(path, path_parts.vf_pool_uuid, flags, poh);
+	rc = vos_pool_open(vf->vf_vos_file_path, vf->vf_pool_uuid, flags, poh);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
 	}
 
+out_cow:
+	if (!write_mode) {
+		/** Restore the default value. */
+		int cow_val = 0;
+		pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
+	}
+out_vf:
+	D_FREE(vf);
 	return rc;
 }
 
 int
-dv_pool_destroy(const char *path, const char *db_path)
+dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx)
 {
-	struct vos_file_parts path_parts = {0};
-	int                   rc, flags = 0;
+	struct vos_file_parts *vf;
+	int                    flags = 0;
+	int                    rc;
+	bool                   can_proceed;
 
-	rc = vos_path_parse(path, &path_parts);
+	rc = create_vos_file_parts(path, db_path, &vf);
 	if (!SUCCESS(rc))
 		return rc;
 
-	if (db_path != NULL && strnlen(db_path, PATH_MAX) != 0) {
-		memset(path_parts.vf_db_path, 0, sizeof(path_parts.vf_db_path));
-		strncpy(path_parts.vf_db_path, db_path, sizeof(path_parts.vf_db_path) - 1);
-	}
+	rc = dwa_can_proceed(ctx, vf->vf_db_path, &can_proceed);
+	if (!SUCCESS(rc))
+		goto out_vf;
+	if (!can_proceed)
+		D_GOTO(out_vf, rc = -DER_NO_SERVICE);
 
-	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
+	rc = vos_self_init(vf->vf_db_path, true, vf->vf_target_idx);
 	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to initialize VOS with path '%s': " DF_RC "\n",
-			path_parts.vf_db_path, DP_RC(rc));
-		return rc;
+		D_ERROR("Failed to initialize VOS with DB path '%s': " DF_RC "\n", vf->vf_db_path,
+			DP_RC(rc));
+		goto out_vf;
 	}
 
-	if (strncmp(path_parts.vf_vos_file, "rdb", 3) == 0)
+	if (strncmp(vf->vf_vos_file_name, "rdb", 3) == 0)
 		flags |= VOS_POF_RDB;
 
-	rc = vos_pool_destroy_ex(path, path_parts.vf_pool_uuid, flags);
+	rc = vos_pool_destroy_ex(vf->vf_vos_file_path, vf->vf_pool_uuid, flags);
 	if (!SUCCESS(rc))
 		D_ERROR("Failed to destroy pool: " DF_RC "\n", DP_RC(rc));
-
 	vos_self_fini();
 
+out_vf:
+	D_FREE(vf);
 	return rc;
 }
 
@@ -371,19 +430,19 @@ vos_vtp_compare(struct dv_indexed_tree_path *vtp, vos_iter_entry_t *entry, enum 
 }
 
 static void
-set_oid(vos_iter_entry_t *entry, union itp_part_type *part)
+set_oid(vos_iter_entry_t *entry, struct indexed_tree_path_part *part)
 {
 	itp_part_set_obj(part, &entry->ie_oid);
 }
 
 static void
-set_key(vos_iter_entry_t *entry, union itp_part_type *part)
+set_key(vos_iter_entry_t *entry, struct indexed_tree_path_part *part)
 {
 	itp_part_set_key(part, &entry->ie_key);
 }
 
 static void
-set_recx(vos_iter_entry_t *entry, union itp_part_type *part)
+set_recx(vos_iter_entry_t *entry, struct indexed_tree_path_part *part)
 {
 	itp_part_set_recx(part, &entry->ie_orig_recx);
 }
@@ -391,18 +450,16 @@ set_recx(vos_iter_entry_t *entry, union itp_part_type *part)
 static void
 vos_itp_set(struct dv_indexed_tree_path *itp, vos_iter_entry_t *entry, enum path_parts part_key)
 {
-	void (*set_fn[PATH_PART_END])(vos_iter_entry_t *entry, union itp_part_type *part) = {
+	void (*set_fn[PATH_PART_END])(vos_iter_entry_t              *entry,
+				      struct indexed_tree_path_part *part) = {
 	    NULL, /* Won't set containers */
-	    set_oid,
-	    set_key,
-	    set_key,
-	    set_recx,
+	    set_oid, set_key, set_key, set_recx,
 	};
 
 	D_ASSERT(part_key < PATH_PART_END);
 	D_ASSERT(set_fn[part_key] != NULL);
 
-	set_fn[part_key](entry, &itp->itp_parts[part_key].itp_part_value);
+	set_fn[part_key](entry, &itp->itp_parts[part_key]);
 	itp->itp_parts[part_key].itp_has_part_value = true;
 }
 
@@ -702,8 +759,7 @@ dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj)
 	 * obj_class_fini();
 	*/
 
-	obj->ddbo_otype = daos_obj_id2type(oid);
-	get_object_type(obj->ddbo_otype, obj->ddbo_otype_str);
+	get_object_type(daos_obj_id2type(oid), obj->ddbo_otype_str);
 }
 
 static int
@@ -739,9 +795,10 @@ handle_dkey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	itp_unset_dkey(&ctx->itp); /* make sure dkey is freed from any previous handle */
 	itp_set_dkey(&ctx->itp, &entry->ie_key, ctx->dkey_seen);
 
-	dkey.ddbk_path = &ctx->itp;
-	dkey.ddbk_idx = ctx->dkey_seen++;
-	dkey.ddbk_key = entry->ie_key;
+	dkey.ddbk_path       = &ctx->itp;
+	dkey.ddbk_idx        = ctx->dkey_seen++;
+	dkey.ddbk_key        = entry->ie_key;
+	dkey.ddbk_otype      = daos_obj_id2type(ctx->current_obj.id_pub);
 	dkey.ddbk_child_type = entry->ie_child_type;
 
 	ctx->current_dkey = entry->ie_key;
@@ -765,9 +822,10 @@ handle_akey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	itp_set_akey(&ctx->itp, &entry->ie_key, ctx->akey_seen);
 	itp_unset_recx(&ctx->itp);
 
-	akey.ddbk_path = &ctx->itp;
-	akey.ddbk_idx = ctx->akey_seen++;
-	akey.ddbk_key = entry->ie_key;
+	akey.ddbk_path       = &ctx->itp;
+	akey.ddbk_idx        = ctx->akey_seen++;
+	akey.ddbk_key        = entry->ie_key;
+	akey.ddbk_otype      = daos_obj_id2type(ctx->current_obj.id_pub);
 	akey.ddbk_child_type = entry->ie_child_type;
 
 	ctx->current_akey = entry->ie_key;
@@ -888,9 +946,10 @@ dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
 	vos_iter_type_t		type;
 	struct ddb_iter_ctx	ctx = {0};
 
-	ctx.handlers = handlers;
+	ctx.handlers     = handlers;
 	ctx.handler_args = handler_args;
-	ctx.poh = poh;
+	ctx.poh          = poh;
+	ctx.current_obj  = path->vtp_oid;
 	itp_copy(&ctx.itp, itp);
 
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
@@ -1034,6 +1093,115 @@ dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dum
 	d_sgl_fini(&sgl, true);
 	vos_cont_close(coh);
 
+	return rc;
+}
+
+static int
+dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+	     daos_epoch_t epoch, dv_dump_csum_cb dump_cb, void *cb_arg)
+{
+	daos_handle_t       ioh;
+	struct dcs_ci_list *cil;
+	int                 cb_rc = 0;
+	int                 rc;
+
+	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_fetch_begin for csum dump of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+		goto out;
+	}
+
+	cil = vos_ioh2ci(ioh);
+	cb_rc = dump_cb(cb_arg, NULL, vos_ioh2sv_epoch(ioh), cil);
+	if (!SUCCESS(cb_rc))
+		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(cb_rc));
+
+	rc = vos_fetch_end(ioh, NULL, cb_rc);
+	if (!SUCCESS(rc) && rc != cb_rc)
+		D_ERROR("vos_fetch_end for csum dump of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+
+out:
+	if (!SUCCESS(cb_rc))
+		rc = cb_rc;
+	return rc;
+}
+
+static int
+dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+	       daos_epoch_t epoch, dv_dump_csum_cb dump_cb, void *cb_arg)
+{
+	daos_handle_t             ioh;
+	struct dcs_ci_list       *cil;
+	struct daos_recx_ep_list *rel;
+	int                       cb_rc = 0;
+	int                       rc;
+
+	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_fetch_begin for csum dump of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+		goto out;
+	}
+
+	cil = vos_ioh2ci(ioh);
+	rel = vos_ioh2recx_list(ioh);
+	cb_rc = dump_cb(cb_arg, rel, 0, cil);
+	if (!SUCCESS(cb_rc))
+		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(cb_rc));
+
+	/* rel ownership is transferred by vos_ioh2recx_list(); free before vos_fetch_end. */
+	daos_recx_ep_list_free(rel, iod->iod_nr);
+	rc = vos_fetch_end(ioh, NULL, cb_rc);
+	if (!SUCCESS(rc) && rc != cb_rc)
+		D_ERROR("vos_fetch_end for csum dump of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(*oid), DP_RC(rc));
+
+out:
+	if (!SUCCESS(cb_rc))
+		rc = cb_rc;
+	return rc;
+}
+
+int
+dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	     dv_dump_csum_cb dump_cb, void *cb_arg)
+{
+	daos_handle_t coh;
+	daos_iod_t    iod = {0};
+	int           rc  = 0;
+
+	/* No-op when no callback is provided; the caller controls whether to consume results. */
+	if (dump_cb == NULL)
+		goto out;
+
+	rc = vos_cont_open(poh, path->vtp_cont, &coh);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Opening container for csum dump of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(path->vtp_oid), DP_RC(rc));
+		goto out;
+	}
+
+	iod.iod_name  = path->vtp_akey;
+	iod.iod_recxs = &path->vtp_recx;
+	iod.iod_nr    = 1;
+	iod.iod_size  = 0;
+	if (path->vtp_is_recx) {
+		iod.iod_type = DAOS_IOD_ARRAY;
+		rc = dump_csum_recx(coh, &path->vtp_dkey, &path->vtp_oid, &iod, epoch, dump_cb,
+				    cb_arg);
+	} else {
+		iod.iod_type = DAOS_IOD_SINGLE;
+		rc = dump_csum_sv(coh, &path->vtp_dkey, &path->vtp_oid, &iod, epoch, dump_cb,
+				  cb_arg);
+	}
+
+	vos_cont_close(coh);
+
+out:
 	return rc;
 }
 
@@ -1347,15 +1515,11 @@ struct active_dtx_cb_arg {
 static int
 committed_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
 {
-	struct committed_dtx_cb_arg	*arg = cb_arg;
-	struct dv_dtx_committed_entry	 entry;
-	struct vos_dtx_cmt_ent		*ent = val->iov_buf;
-	int				 rc;
+	struct committed_dtx_cb_arg  *arg = cb_arg;
+	struct dv_dtx_committed_entry entry;
+	int                           rc;
 
-	entry.ddtx_id = ent->dce_base.dce_xid;
-	entry.ddtx_cmt_time = ent->dce_base.dce_cmt_time;
-	entry.ddtx_epoch = ent->dce_base.dce_epoch;
-
+	memcpy(&entry.ddtx_id, key->iov_buf, sizeof(struct dtx_id));
 	rc = arg->handler(&entry, arg->handler_arg);
 
 	return rc;
@@ -1443,7 +1607,7 @@ dv_dtx_commit_active_entry(daos_handle_t coh, struct dtx_id *dti)
 int
 dv_dtx_abort_active_entry(daos_handle_t coh, struct dtx_id *dti)
 {
-	return vos_dtx_abort(coh, dti, DAOS_EPOCH_MAX);
+	return vos_dtx_abort(coh, dti, DAOS_EPOCH_MAX, 0);
 }
 
 int
@@ -1568,8 +1732,8 @@ find_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_ite
 	return 0;
 }
 
-/* Note:
- * This can be improved by verifying the path in a single vos_iterate ... instead of 1 for
+/*
+ * Note: This can be improved by verifying the path in a single vos_iterate ... instead of 1 for
  * path part.
  */
 static bool
@@ -1885,37 +2049,48 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 }
 
 int
-dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete complete_cb,
-	    void *cb_args)
+dv_sync_smd(const char *nvme_conf, const char *db_path, struct ddb_ctx *ctx,
+	    dv_smd_sync_complete complete_cb, void *cb_args)
 {
-	struct dv_sync_cb_args	 sync_cb_args = {0};
-	int			 rc;
+	struct dv_sync_cb_args sync_cb_args = {0};
+	int                    rc;
+	bool                   can_proceed;
+
+	/*
+	 * vos_self_init_ext() below deliberately skips SPDK init (see the comment on that call).
+	 * ddbs_for_each_bio_blob_hdr() is the call that actually starts an SPDK app
+	 * (spdk_app_start()), initialized from nvme_conf -- not db_path (used only for VOS's own
+	 * sys db below) -- so the guard is checked unconditionally (NULL) here rather than by
+	 * probing <db_path>/daos_nvme.conf, which may have no relationship to nvme_conf.
+	 */
+	rc = dwa_can_proceed(ctx, NULL, &can_proceed);
+	if (!SUCCESS(rc))
+		return rc;
+	if (!can_proceed)
+		return -DER_NO_SERVICE;
 
 	/* don't initialize NVMe(spdk) within VOS. Will happen in ddb_spdk module */
 	rc = vos_self_init_ext(db_path, true, 0, false);
-
 	if (!SUCCESS(rc)) {
-		D_ERROR("VOS failed to initialize: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("VOS failed to initialize: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
 	rc = smd_init(vos_db_get());
 	if (!SUCCESS(rc)) {
-		D_ERROR("SMD failed to initialize: "DF_RC"\n", DP_RC(rc));
-		vos_self_fini();
-		return rc;
+		D_ERROR("SMD failed to initialize: " DF_RC "\n", DP_RC(rc));
+		goto out_self_fini;
 	}
 
 	sync_cb_args.sync_complete_cb = complete_cb;
-	sync_cb_args.sync_cb_args = cb_args;
+	sync_cb_args.sync_cb_args     = cb_args;
 	rc = ddbs_for_each_bio_blob_hdr(nvme_conf, sync_cb, &sync_cb_args);
-
 	if (rc == 0 && sync_cb_args.sync_rc != 0)
 		rc = sync_cb_args.sync_rc;
 
 	smd_fini();
+out_self_fini:
 	vos_self_fini();
-
 	return rc;
 }
 
@@ -2044,9 +2219,16 @@ dv_pool_get_flags(daos_handle_t poh, uint64_t *compat_flags, uint64_t *incompat_
 }
 
 int
-dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt)
+dv_dev_list(const char *db_path, struct ddb_ctx *ctx, d_list_t *dev_list, int *dev_cnt)
 {
-	int rc;
+	int  rc;
+	bool can_proceed;
+
+	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
+	if (!SUCCESS(rc))
+		return rc;
+	if (!can_proceed)
+		return -DER_NO_SERVICE;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {
@@ -2077,11 +2259,18 @@ find_dev_info(d_list_t *dev_list, uuid_t dev_id)
 }
 
 int
-dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid)
+dv_dev_replace(const char *db_path, struct ddb_ctx *ctx, uuid_t old_devid, uuid_t new_devid)
 {
 	struct bio_dev_info *old_dev_info, *new_dev_info, *dev_info, *tmp;
 	d_list_t             dev_list;
 	int                  rc, dev_cnt = 0;
+	bool                 can_proceed;
+
+	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
+	if (!SUCCESS(rc))
+		return rc;
+	if (!can_proceed)
+		return -DER_NO_SERVICE;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {
@@ -2130,11 +2319,19 @@ out:
 }
 
 int
-dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs_mount_size)
+dv_run_prov_mem(const char *db_path, struct ddb_ctx *ctx, const char *tmpfs_mount,
+		unsigned int tmpfs_mount_size)
 {
 	int          rc;
 	bool         md_on_ssd;
+	bool         can_proceed;
 	unsigned int sz = tmpfs_mount_size;
+
+	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
+	if (!SUCCESS(rc))
+		return rc;
+	if (!can_proceed)
+		return -DER_NO_SERVICE;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {
@@ -2144,7 +2341,8 @@ dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs
 
 	md_on_ssd = bio_nvme_configured(SMD_DEV_TYPE_META);
 	if (!md_on_ssd) {
-		D_ERROR("Not in MD-on-SSD mode; skipping memory environment provisioning.");
+		D_ERROR("Provided db_path is not configured in MD-on-SSD mode.");
+		rc = -DER_INVAL;
 		goto out;
 	}
 

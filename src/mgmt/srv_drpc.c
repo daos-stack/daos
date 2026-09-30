@@ -282,6 +282,12 @@ conv_req_props(daos_prop_t **out_prop, bool set_props,
 		case MGMT__POOL_PROPERTY__VALUE_NUMVAL:
 			entry->dpe_val = req_props[i]->numval;
 			break;
+		case MGMT__POOL_PROPERTY__VALUE_BYTEVAL:
+			rc = daos_prop_entry_set_byteval(entry, req_props[i]->byteval.data,
+							 req_props[i]->byteval.len);
+			if (rc != 0)
+				D_GOTO(out, rc);
+			break;
 		default:
 			D_ERROR("Pool property request with no value (%d)\n",
 				req_props[i]->value_case);
@@ -454,6 +460,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolCreateReq	*req = NULL;
 	Mgmt__PoolCreateResp	 resp = MGMT__POOL_CREATE_RESP__INIT;
 	d_rank_list_t		*targets = NULL;
+	d_rank_list_t           *downout_ranks = NULL;
 	d_rank_list_t		*svc = NULL;
 	uuid_t			 pool_uuid;
 	daos_prop_t		*prop = NULL;
@@ -493,6 +500,13 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
+	if (req->n_unavailable_ranks > 0) {
+		downout_ranks =
+		    uint32_array_to_rank_list(req->unavailable_ranks, req->n_unavailable_ranks);
+		if (downout_ranks == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
 	if (uuid_parse(req->uuid, pool_uuid) != 0) {
 		rc = -DER_INVAL;
 		DL_ERROR(rc, "Pool UUID is invalid");
@@ -526,7 +540,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (req->mem_ratio)
 		scm_bytes *= (double)req->mem_ratio;
 
-	rc = ds_mgmt_create_pool(pool_uuid, req->sys, targets, scm_bytes,
+	rc = ds_mgmt_create_pool(pool_uuid, req->sys, targets, downout_ranks, scm_bytes,
 				 req->tier_bytes[DAOS_MEDIA_NVME] /* nvme_size */,
 				 req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, prop, &svc,
 				 req->n_fault_domains, req->fault_domains);
@@ -567,6 +581,8 @@ out:
 
 	if (targets != NULL)
 		d_rank_list_free(targets);
+	if (downout_ranks != NULL)
+		d_rank_list_free(downout_ranks);
 
 	D_FREE(resp.tier_bytes);
 	D_FREE(resp.tgt_ranks);
@@ -1149,6 +1165,8 @@ free_response_props(Mgmt__PoolProperty **props, size_t n_props)
 	for (i = 0; i < n_props; i++) {
 		if (props[i]->value_case == MGMT__POOL_PROPERTY__VALUE_STRVAL)
 			D_FREE(props[i]->strval);
+		else if (props[i]->value_case == MGMT__POOL_PROPERTY__VALUE_BYTEVAL)
+			D_FREE(props[i]->byteval.data);
 		D_FREE(props[i]);
 	}
 
@@ -2482,6 +2500,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->pll_lock_loss_cnt = stats.pll_lock_loss_cnt;
 	resp->nand_bytes_written = stats.nand_bytes_written;
 	resp->host_bytes_written = stats.host_bytes_written;
+	resp->percentage_used            = stats.percentage_used;
 
 out:
 	resp->status = rc;
@@ -2496,6 +2515,7 @@ out:
 	}
 
 	ctl__bio_health_req__free_unpacked(req, &alloc.alloc);
+	D_FREE(resp->dev_uuid);
 	D_FREE(resp);
 
 	if (bio_health != NULL)

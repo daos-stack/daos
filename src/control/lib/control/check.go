@@ -22,7 +22,9 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pbutil "github.com/daos-stack/daos/src/control/common/proto"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -401,6 +403,17 @@ type SystemCheckReport struct {
 	chkpb.CheckReport
 }
 
+func (r *SystemCheckReport) MarshalJSON() ([]byte, error) {
+	type toJSON SystemCheckReport
+	return json.Marshal(struct {
+		Rank uint32 `json:"rank"`
+		*toJSON
+	}{
+		Rank:   r.Rank,
+		toJSON: (*toJSON)(r),
+	})
+}
+
 // RepairChoices lists all possible repair options for this particular report.
 func (r *SystemCheckReport) RepairChoices() []*SystemCheckRepairChoice {
 	if r == nil {
@@ -555,6 +568,7 @@ type SystemCheckQueryResp struct {
 	Status    SystemCheckStatus    `json:"status"`
 	ScanPhase SystemCheckScanPhase `json:"scan_phase"`
 	StartTime time.Time            `json:"start_time"`
+	Leader    ranklist.Rank        `json:"leader"`
 
 	Pools   map[string]*SystemCheckPoolInfo `json:"pools"`
 	Reports []*SystemCheckReport            `json:"reports"`
@@ -597,6 +611,7 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 		ScanPhase: SystemCheckScanPhase(pbResp.GetInsPhase()),
 		StartTime: time.Unix(int64(pbResp.GetTime().GetStartTime()), 0),
 		Pools:     getPoolCheckInfo(pbResp.GetPools()),
+		Leader:    ranklist.Rank(pbResp.Leader),
 	}
 	for _, pbReport := range pbResp.GetReports() {
 		rpt := new(SystemCheckReport)
@@ -751,4 +766,253 @@ func SystemCheckRepair(ctx context.Context, rpcClient UnaryInvoker, req *SystemC
 	}
 
 	return ur.getMSError()
+}
+
+// CheckEngineRepairReq contains a repair request for a specific engine.
+type CheckEngineRepairReq struct {
+	unaryRequest
+
+	ctlpb.CheckEngineActReq
+}
+
+// CheckEngineRepairResp contains the engine response for a repair request.
+type CheckEngineRepairResp struct {
+	ctlpb.CheckEngineActResp
+}
+
+// CheckEngineRepair directs a repair request to a specific engine.
+//
+// NB: This is an inter-server RPC.
+func CheckEngineRepair(ctx context.Context, rpcClient UnaryInvoker, req *CheckEngineRepairReq) (*CheckEngineRepairResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if req.Req == nil {
+		return nil, errors.Errorf("no action request included in %T", req)
+	}
+
+	if len(req.HostList) != 1 {
+		return nil, errors.Errorf("CheckEngineRepair requires exactly one host")
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).CheckEngineRepair(ctx, &req.CheckEngineActReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	if len(ur.Responses) == 0 {
+		return nil, errors.New("no host responses")
+	}
+
+	pbResp, ok := ur.Responses[0].Message.(*ctlpb.CheckEngineActResp)
+	if !ok {
+		return nil, errors.Errorf("bad response type %T", ur.Responses[0].Message)
+	}
+
+	return &CheckEngineRepairResp{
+		CheckEngineActResp: *pbResp,
+	}, nil
+}
+
+// SystemCheckEngineReportReq contains parameters to be passed to SystemCheckEngineReport.
+type SystemCheckEngineReportReq struct {
+	unaryRequest
+	msRequest
+
+	sharedpb.CheckReportReq
+}
+
+// SystemCheckEngineReportResp contains the response from the SystemCheckEngineReport RPC.
+type SystemCheckEngineReportResp struct {
+	sharedpb.CheckReportResp
+}
+
+// SystemCheckEngineReport registers a checker report for an individual rank with the management service.
+//
+// NB: This is an inter-server RPC.
+func SystemCheckEngineReport(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckEngineReportReq) (*SystemCheckEngineReportResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if req.Report == nil {
+		return nil, errors.Errorf("no check report in %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckEngineReport(ctx, &req.CheckReportReq)
+	})
+
+	rpcClient.Debugf("DAOS system check report request: %s", pbutil.Debug(&req.CheckReportReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	if err := ur.getMSError(); err != nil {
+		return nil, errors.Wrap(err, "MS error")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*sharedpb.CheckReportResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+
+	resp := new(SystemCheckEngineReportResp)
+	resp.CheckReportResp = *pbResp
+
+	return resp, nil
+}
+
+// SystemCheckRegPoolReq contains parameters to be passed to SystemCheckRegPool.
+type SystemCheckRegPoolReq struct {
+	unaryRequest
+	msRequest
+
+	sharedpb.CheckRegPoolReq
+}
+
+// SystemCheckRegPoolResp contains the response from the SystemCheckRegPool RPC.
+type SystemCheckRegPoolResp struct {
+	sharedpb.CheckRegPoolResp
+}
+
+// SystemCheckRegPool registers a pool with the management service for the checker.
+//
+// NB: This is an inter-server RPC.
+func SystemCheckRegPool(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckRegPoolReq) (*SystemCheckRegPoolResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckRegPool(ctx, &req.CheckRegPoolReq)
+	})
+
+	rpcClient.Debugf("DAOS system check register pool request: %s", pbutil.Debug(&req.CheckRegPoolReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*sharedpb.CheckRegPoolResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+
+	resp := new(SystemCheckRegPoolResp)
+	resp.CheckRegPoolResp = *pbResp
+
+	return resp, nil
+}
+
+// SystemCheckDeregPoolReq contains parameters to be passed to SystemCheckDeregPool.
+type SystemCheckDeregPoolReq struct {
+	unaryRequest
+	msRequest
+
+	sharedpb.CheckDeregPoolReq
+}
+
+// SystemCheckDeregPoolResp contains the response from the SystemCheckDeregPool RPC.
+type SystemCheckDeregPoolResp struct {
+	sharedpb.CheckDeregPoolResp
+}
+
+// SystemCheckDeregPool de-registers a pool with the management service for the checker.
+//
+// NB: This is an inter-server RPC.
+func SystemCheckDeregPool(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckDeregPoolReq) (*SystemCheckDeregPoolResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckDeregPool(ctx, &req.CheckDeregPoolReq)
+	})
+
+	rpcClient.Debugf("DAOS system check de-register pool request: %s", pbutil.Debug(&req.CheckDeregPoolReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*sharedpb.CheckDeregPoolResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+
+	resp := new(SystemCheckDeregPoolResp)
+	resp.CheckDeregPoolResp = *pbResp
+
+	return resp, nil
+}
+
+// CheckLeaderReq is a request for a message to be sent to the checker leader.
+type CheckLeaderReq struct {
+	unaryRequest
+	msRequest
+
+	mgmtpb.CheckLeaderReq
+}
+
+// CheckLeaderResp contains the response from the checker leader.
+type CheckLeaderResp struct {
+	mgmtpb.CheckLeaderResp
+}
+
+// CheckLeaderForward forwards a request to the checker leader.
+//
+// NB: This is an inter-server RPC. It will only be successful when it is sent to the checker leader.
+func CheckLeaderForward(ctx context.Context, rpcClient UnaryInvoker, req *CheckLeaderReq) (*CheckLeaderResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if req.Req == nil {
+		return nil, errors.Errorf("no forwarded request included in %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).CheckLeaderDrpc(ctx, &req.CheckLeaderReq)
+	})
+
+	rpcClient.Debugf("DAOS check leader forward request: %s", pbutil.Debug(&req.CheckLeaderReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*mgmtpb.CheckLeaderResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+	return &CheckLeaderResp{
+		CheckLeaderResp: *pbResp,
+	}, nil
 }

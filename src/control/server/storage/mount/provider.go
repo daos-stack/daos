@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,7 +20,7 @@ import (
 )
 
 const (
-	defaultMountPointPerms = 0755
+	defaultMountPointPerms = 0775
 	defaultUnmountFlags    = 0
 )
 

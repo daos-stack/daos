@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -43,6 +43,9 @@ class LaunchError(Exception):
 class Launch():
     """Class to launch avocado tests."""
 
+    FIND_PACKAGES = ("daos", "argobots", "libabt", "dpdk", "fuse", "libfabric", "libisa-l",
+                     "libisal", "isa-l", "libpmem", "pmempool", "mercury", "spdk", "mpifileutils",
+                     "mlnx-ofed-basic", "doca-ofed", "openmpi", "mpich", "ior", "mpich", "bullseye")
     RESULTS_DIRS = (
         "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces")
 
@@ -273,8 +276,7 @@ class Launch():
         # pylint: disable=unsupported-binary-operation
         all_hosts = args.test_servers | args.test_clients | self.local_host
         self.details["installed packages"] = find_packages(
-            logger, all_hosts,
-            "'^(daos|libfabric|mercury|ior|openmpi|mpich|mpifileutils|mlnx-ofed-basic)-'")
+            logger, all_hosts, f"'^({'|'.join(self.FIND_PACKAGES)})-'")
 
         # Setup the test environment
         test_env = TestEnvironment()

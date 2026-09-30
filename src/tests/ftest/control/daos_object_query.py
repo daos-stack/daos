@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -47,8 +48,8 @@ class DaosObjectQuery(TestWithServers):
 
         # Create a pool and a container. Specify --oclass, which will be used
         # when writing object.
-        self.add_pool()
-        self.add_container(self.pool)
+        self.pool = self.get_pool()
+        self.container = self.get_container(self.pool)
         self.pool.connect()
         self.container.open(pool_handle=self.pool.pool.handle.value)
 

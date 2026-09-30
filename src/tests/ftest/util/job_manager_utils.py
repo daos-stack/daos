@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -392,13 +392,18 @@ class Orterun(JobManager):
         super().assign_hosts(hosts, path, slots, hostfile)
         self.hostfile.value = self._setup_hostfile(path, slots, hostfile)
 
-    def assign_processes(self, processes):
-        """Assign the number of processes (-np).
+    def assign_processes(self, processes=None, ppn=None):
+        """Assign the number of processes (-np) and processes per node (-ppn).
 
         Args:
-            processes (int): number of processes
+            processes (int, optional): number of processes. Defaults to None.
+                if not specified, auto-calculated from ppn.
+            ppn (int, optional): number of processes per node. Defaults to None.
         """
-        self.processes.value = processes
+        if ppn is not None and processes is None:
+            processes = ppn * len(self._hosts)
+        self.processes.update(processes, "mpirun.np")
+        self.pprnode.update(ppn, "mpirun.ppn")
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.

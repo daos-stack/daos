@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,8 +16,8 @@
 static inline bool
 crt_sgl_valid(d_sg_list_t *sgl)
 {
-	d_iov_t	*iov;
-	int		i;
+	d_iov_t *iov;
+	int      i;
 
 	if (sgl == NULL || sgl->sg_nr == 0) {
 		if (sgl == NULL)
@@ -106,6 +106,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	D_ALLOC_PTR(ret_hdl);
 	if (ret_hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	ret_hdl->refcount = 1;
 
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
 	if (quota_rc == -DER_QUOTA_LIMIT) {
@@ -129,6 +130,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		ret_hdl->hg_bulk_hdl = HG_BULK_NULL;
 		ret_hdl->crt_ctx     = crt_ctx;
 		ret_hdl->deferred    = true;
+
 		D_GOTO(out, rc = DER_SUCCESS);
 	}
 
@@ -137,6 +139,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 
 	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, &ret_hdl->hg_bulk_hdl);
 	if (rc != 0) {
+		CRT_METRIC_INC(ctx, CM_BULK_CREATE_FAILED);
 		D_ERROR("crt_hg_bulk_create() failed, rc: " DF_RC "\n", DP_RC(rc));
 		if (ret_hdl->iovs != NULL)
 			D_FREE(ret_hdl->iovs);
@@ -144,6 +147,8 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		D_FREE(ret_hdl);
 		D_GOTO(out, rc);
 	}
+
+	CRT_METRIC_INC(ctx, CM_BULK_CREATE);
 
 out:
 	if (rc == 0 && bulk_hdl)
@@ -175,6 +180,8 @@ crt_bulk_bind(crt_bulk_t crt_bulk, crt_context_t crt_ctx)
 	}
 
 out:
+	if (rc == 0)
+		CRT_METRIC_INC(ctx, CM_BULK_BOUND);
 	return rc;
 }
 
@@ -182,20 +189,14 @@ int
 crt_bulk_addref(crt_bulk_t crt_bulk)
 {
 	struct crt_bulk *bulk = crt_bulk;
-	int              rc   = -DER_SUCCESS;
-	hg_return_t      hg_ret;
+	int              rc   = DER_SUCCESS;
 
 	if (bulk == NULL) {
 		D_ERROR("invalid parameter, NULL bulk\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	hg_ret = HG_Bulk_ref_incr(bulk->hg_bulk_hdl);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_ref_incr failed, hg_ret: %d.\n", hg_ret);
-		rc = crt_hgret_2_der(hg_ret);
-	}
-
+	atomic_fetch_add(&bulk->refcount, 1);
 out:
 	return rc;
 }
@@ -204,40 +205,48 @@ int
 crt_bulk_free(crt_bulk_t crt_bulk)
 {
 	struct crt_bulk *bulk = crt_bulk;
-	int              rc   = -DER_SUCCESS;
-	hg_return_t      hg_ret;
 
 	if (bulk == NULL) {
 		D_ERROR("invalid parameter, NULL bulk\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		return -DER_INVAL;
 	}
 
-	/* This can happen if D_QUOTA_BULKS is enabled on a client */
-	if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
-		if (bulk->deferred) {
-			/* Treat as success */
-			D_GOTO(out, rc = DER_SUCCESS);
-		} else {
-			D_ASSERTF(0, "Bulk handle should not be NULL\n");
+	if (atomic_fetch_sub(&bulk->refcount, 1) > 1)
+		return DER_SUCCESS;
+
+	crt_bulk_free_common(bulk);
+
+	return DER_SUCCESS;
+}
+
+void
+crt_bulk_free_common(struct crt_bulk *bulk)
+{
+	struct crt_context *ctx;
+	hg_return_t         hg_ret;
+
+	D_ASSERT(bulk != NULL);
+
+	if (bulk->hg_bulk_hdl != HG_BULK_NULL) {
+		hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			D_ERROR("HG_Bulk_free() failed (%s)\n", HG_Error_to_string(hg_ret));
+			/* Ignore the error, as we are already in a cleanup path */
 		}
 	}
 
-	hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
-		rc = crt_hgret_2_der(hg_ret);
-	}
+	ctx = bulk->crt_ctx;
+
+	/* bulks that are decoded don't have a cart context associated with them */
+	if (ctx)
+		CRT_METRIC_INC(ctx, CM_BULK_FREE);
 
 	/* decoded bulks are not counted towards quota; such bulks have crt_ctx set to NULL */
-	if (bulk->crt_ctx)
-		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
-out:
-	if (bulk != NULL) {
-		if (bulk->iovs)
-			D_FREE(bulk->iovs);
-		D_FREE(bulk);
-	}
-	return rc;
+	if (!bulk->deferred && ctx != NULL)
+		put_quota_resource(ctx, CRT_QUOTA_BULKS);
+
+	D_FREE(bulk->iovs);
+	D_FREE(bulk);
 }
 
 /* Helper function to check for bulk expiration */
@@ -296,7 +305,8 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, false);
 	if (rc != 0)
-		DL_ERROR(rc, "crt_hg_bulk_transfer() failed");
+		DL_ERROR(rc, "crt_hg_bulk_transfer() failed; origin=%s",
+			 crt_req_origin_addr_get(bulk_desc->bd_rpc));
 out:
 	return rc;
 }
@@ -317,7 +327,8 @@ crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_c
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, true);
 	if (rc != 0)
-		DL_ERROR(rc, "crt_hg_bulk_transfer() failed");
+		DL_ERROR(rc, "crt_hg_bulk_transfer() failed; origin=%s",
+			 crt_req_origin_addr_get(bulk_desc->bd_rpc));
 out:
 	return rc;
 }

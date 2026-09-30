@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -529,14 +530,17 @@ main(int argc, char **argv)
 
 	/*
 	 * For daos_racer, if pool/cont uuids are supplied as command line
-	 * arguments it's assumed that the pool/cont were created. If only a
-	 * cont uuid is supplied then a pool and container will be created and
-	 * the cont uuid will be used during creation
+	 * arguments it's assumed that the pool/cont were already created and
+	 * will be opened.
 	 */
-	if (!uuid_is_null(ts_ctx.tsc_pool_uuid)) {
+	if (!uuid_is_null(ts_ctx.tsc_pool_uuid))
 		ts_ctx.tsc_skip_pool_create = true;
-		if (!uuid_is_null(ts_ctx.tsc_cont_uuid))
-			ts_ctx.tsc_skip_cont_create = true;
+	if (!uuid_is_null(ts_ctx.tsc_cont_uuid))
+		ts_ctx.tsc_skip_cont_create = true;
+	if (!ts_ctx.tsc_skip_pool_create && ts_ctx.tsc_skip_cont_create) {
+		if (ts_ctx.tsc_mpi_rank == 0)
+			fprintf(stderr, "Specifying a container must also specify a pool\n");
+		D_GOTO(out, rc = -1);
 	}
 
 	if (seed == 0) {
@@ -551,11 +555,6 @@ main(int argc, char **argv)
 	ts_ctx.tsc_nvme_size	= nvme_size;
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
-		if (uuid_is_null(ts_ctx.tsc_pool_uuid))
-			uuid_generate(ts_ctx.tsc_pool_uuid);
-		if (uuid_is_null(ts_ctx.tsc_cont_uuid))
-			uuid_generate(ts_ctx.tsc_cont_uuid);
-
 		fprintf(stdout,
 			"racer start with %d threads duration %u secs\n"
 			"\tpool size     : SCM: %u MB, NVMe: %u MB\n",

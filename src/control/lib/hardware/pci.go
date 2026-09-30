@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -180,7 +181,8 @@ func (pa *PCIAddress) BackingToVMDAddress() (*PCIAddress, error) {
 		return nil, ErrNotVMDBackingAddress
 	}
 
-	return pa.VMDAddr, nil
+	va := *pa.VMDAddr
+	return &va, nil
 }
 
 // NewPCIAddress creates a PCIAddress struct from input string.
@@ -396,8 +398,11 @@ func (pas *PCIAddressSet) BackingToVMDAddresses() (*PCIAddressSet, error) {
 
 	for _, inAddr := range pas.Addresses() {
 		if !inAddr.IsVMDBackingAddress() {
-			if err := outAddrs.Add(inAddr); err != nil {
-				return nil, err
+			if inAddr != nil {
+				ia := *inAddr
+				if err := outAddrs.Add(&ia); err != nil {
+					return nil, err
+				}
 			}
 			continue
 		}

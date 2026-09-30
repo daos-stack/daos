@@ -44,32 +44,36 @@ severity, message, description, and cause.
 
 |Event|Event type|Severity|Message|Description|Cause|
 |:----|:----|:----|:----|:----|:----|
-| device\_set\_faulty| INFO\_ONLY| NOTICE or ERROR| Device: <uuid\> set faulty / Device: <uuid\> set faulty failed: <rc\> / Device: <uuid\> auto faulty detect / Device: <uuid\> auto faulty detect failed: <rc\> | Indicates that a device has either been explicitly automatically set as faulty. Device UUID specified in event data. | Either DMG set nvme-faulty command was used to explicitly set device as faulty or an error threshold was reached on a device which has triggered an auto faulty reaction. |
-| device\_media\_error| INFO\_ONLY| ERROR| Device: <uuid\> <error-type\> error logged from tgt\_id:<idx\> | Indicates that a device media error has been detected for a specific target. The error type could be unmap, write, read or checksum (csum). Device UUID and target ID specified in event data. | Media error occurred on backing device. |
-| device\_unplugged| INFO\_ONLY| NOTICE| Device: <uuid\> unplugged | Indicates device was physically removed from host. | NVMe SSD physically removed from host. |
-| device\_plugged| INFO\_ONLY| NOTICE| Detected hot plugged device: <bdev-name\> | Indicates device was physically inserted into host. | NVMe SSD physically added to host. |
-| device\_replace| INFO\_ONLY| NOTICE or ERROR| Replaced device: <uuid\> with device: <uuid\> [failed: <rc\>] | Indicates that a faulty device was replaced with a new device and if the operation failed. The old and new device IDs as well as any non-zero return code are specified in the event data. | Device was replaced using DMG nvme replace command. |
-| device\_link\_speed\_changed| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link speed changed to <transfer-rate\> (max <transfer-rate\>)| Indicates that an NVMe device link speed has changed. The negotiated and maximum device link speeds are indicated in the event message field and the severity is set to warning if the negotiated speed is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link speed was previously downgraded and has returned to maximum or link speed has downgraded to a value that is less than its maximum capability.|
-| device\_link\_width\_changed| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link width changed to <pcie-link-lanes\> (max <pcie-link-lanes\>)| Indicates that an NVMe device link width has changed. The negotiated and maximum device link widths are indicated in the event message field and the severity is set to warning if the negotiated width is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link width was previously downgraded and has returned to maximum or link width has downgraded to a value that is less than its maximum capability.|
+| unknown\_ras\_event| INFO\_ONLY| NOTICE| Unknown RAS event| Indicates an unidentified or undefined RAS event has occurred.| Internal placeholder for unknown events.|
 | engine\_format\_required|INFO\_ONLY|NOTICE|DAOS engine <idx\> requires a <type\> format|Indicates engine is waiting for allocated storage to be formatted on formatted on instance <idx\> with dmg tool. <type\> can be either SCM or Metadata.|DAOS server attempts to bring-up an engine that has unformatted storage.|
 | engine\_died| STATE\_CHANGE| ERROR| DAOS engine <idx\> exited exited unexpectedly: <error\> | Indicates engine instance <idx\> unexpectedly. <error> describes the exit state returned from exited daos\_engine process.| N/A                          |
 | engine\_asserted| STATE\_CHANGE| ERROR| TBD| Indicates engine instance <idx\> threw a runtime assertion, causing a crash. | An unexpected internal state resulted in assert failure. |
 | engine\_clock\_drift| INFO\_ONLY   | ERROR| clock drift detected| Indicates CART comms layer has detected clock skew between engines.| NTP may not be syncing clocks across DAOS system.      |
+| engine\_self\_terminated| INFO\_ONLY| NOTICE| excluded rank self terminated detected| Indicates that a DAOS engine rank has performed a self-termination due to having been excluded from the system's group map. The rank is automatically restarted by the control plane with rate-limiting (default: 5 minute minimum delay between restarts per rank) to prevent restart storms. | An engine was found to be in a transient non-functional state and excluded from the group map. The control plane monitors for this event and automatically restarts the affected engine so it can rejoin the system. Restarts are rate-limited per rank using the `engine_auto_restart_min_delay` configuration parameter. |
 | engine\_join\_failed| INFO\_ONLY| ERROR | DAOS engine <idx\> (rank <rank\>) was not allowed to join the system | Join operation failed for the given engine instance ID and rank (if assigned). | Reason should be provided in the extended info field of the event data. |
 | pool\_corruption\_detected| INFO\_ONLY| ERROR | Data corruption detected| Indicates a corruption in pool data has been detected. The event fields will contain pool and container UUIDs. | A corruption was found by the checksum scrubber. |
-| pool\_destroy\_deferred| INFO\_ONLY| WARNING | pool:<uuid\> destroy is deferred| Indicates a destroy operation has been deferre. | Pool destroy in progress but not complete. |
 | pool\_rebuild\_started| INFO\_ONLY| NOTICE   | Pool rebuild started.| Indicates a pool rebuild has started. The event data field contains pool map version and pool operation identifier. | When a pool rank becomes unavailable a rebuild will be triggered.   |
 | pool\_rebuild\_finished| INFO\_ONLY| NOTICE| Pool rebuild finished.| Indicates a pool rebuild has finished successfully. The event data field includes the pool map version and pool operation identifier.  | N/A|
 | pool\_rebuild\_failed| INFO\_ONLY| ERROR| Pool rebuild failed: <rc\>.| Indicates a pool rebuild has failed. The event data field includes the pool map version and pool operation identifier. <rc\> provides a string representation of DER code.| N/A                          |
 | pool\_replicas\_updated| STATE\_CHANGE| NOTICE| List of pool service replica ranks has been updated.| Indicates a pool service replica list has changed. The event contains the new service replica list in a custom payload. | When a pool service replica rank becomes unavailable a new rank is selected to replace it (if available). |
-| pool\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version: <current\> not in [<min\>, <max\>]| Indicates the given pool's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with pool data in local storage that has an incompatible layout version. |
-| container\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>\]| Indicates the given container's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with container data in local storage that has an incompatible layout version.|
+| pool\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version: <current\> not in [<min\>, <max\>]| Indicates the given pool's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with pool data in local storage that has an incompatible layout version. |
+| pool\_destroy\_deferred| INFO\_ONLY| WARNING | pool:<uuid\> destroy is deferred| Indicates a destroy operation has been deferred. | Pool destroy in progress but not complete. |
+| pool\_start\_failed| INFO\_ONLY| ERROR| Pool <uuid\> start failed: <rc\>| Indicates that a pool failed to start. The pool UUID and error code are specified in the event data.| Pool start operation encountered an error during startup.|
+| container\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>\]| Indicates the given container's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with container data in local storage that has an incompatible layout version.|
 | rdb\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>]] OR incompatible DB UUID: <uuid\> | Indicates the given RDB's layout version does not match any of the versions supported by the currently running DAOS software, or the given RDB's UUID does not match the expected UUID (usually because the RDB belongs to a pool created by a pre-2.0 DAOS version).| DAOS engine is started with rdb data in local storage that has an incompatible layout version.|
 | swim\_rank\_alive| STATE\_CHANGE| NOTICE| TBD| The SWIM protocol has detected the specified rank is responsive.| A remote DAOS engine has become responsive.|
 | swim\_rank\_dead| STATE\_CHANGE| NOTICE| SWIM rank marked as dead.| The SWIM protocol has detected the specified rank is unresponsive.| A remote DAOS engine has become unresponsive.|
 | system\_start\_failed| INFO\_ONLY| ERROR| System startup failed, <errors\>| Indicates that a user initiated controlled startup failed. <errors\> shows which ranks failed.| Ranks failed to start.|
 | system\_stop\_failed| INFO\_ONLY| ERROR| System shutdown failed during <action\> action, <errors\>  | Indicates that a user initiated controlled shutdown failed. <action\> identifies the failing shutdown action and <errors\> shows which ranks failed.| Ranks failed to stop.|
-| system\_fabric\_provider\_changed| NOTICE| System fabric provider has changed: <old-provider\> -> <new-provider\>| Indicates that the system-wide fabric provider has been updated. No other specific information is included in event data.| A system-wide fabric provider change has been intentionally applied to all joined ranks.|
+| device\_set\_faulty| INFO\_ONLY| NOTICE or ERROR| Device: <uuid\> set faulty / Device: <uuid\> set faulty failed: <rc\> / Device: <uuid\> auto faulty detect / Device: <uuid\> auto faulty detect failed: <rc\> | Indicates that a device has either been explicitly automatically set as faulty. Device UUID specified in event data. | Either DMG set nvme-faulty command was used to explicitly set device as faulty or an error threshold was reached on a device which has triggered an auto faulty reaction. |
+| device\_media\_error| INFO\_ONLY| ERROR| Device: <uuid\> <error-type\> error logged from tgt\_id:<idx\> | Indicates that a device media error has been detected for a specific target. The error type could be unmap, write, read or checksum (csum). Device UUID and target ID specified in event data. | Media error occurred on backing device. |
+| device\_unplugged| INFO\_ONLY| NOTICE| Device: <uuid\> unplugged | Indicates device was physically removed from host. | NVMe SSD physically removed from host. |
+| device\_plugged| INFO\_ONLY| NOTICE| Detected hot plugged device: <bdev-name\> | Indicates device was physically inserted into host. | NVMe SSD physically added to host. |
+| device\_replace| INFO\_ONLY| NOTICE or ERROR| Replaced device: <uuid\> with device: <uuid\> [failed: <rc\>] | Indicates that a faulty device was replaced with a new device and if the operation failed. The old and new device IDs as well as any non-zero return code are specified in the event data. | Device was replaced using DMG nvme replace command. |
+| system\_fabric\_provider\_changed| INFO\_ONLY| NOTICE| System fabric provider has changed: <old-provider\> -> <new-provider\>| Indicates that the system-wide fabric provider has been updated. No other specific information is included in event data.| A system-wide fabric provider change has been intentionally applied to all joined ranks.|
+| device\_link\_speed\_changed| INFO\_ONLY| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link speed changed to <transfer-rate\> (max <transfer-rate\>)| Indicates that an NVMe device link speed has changed. The negotiated and maximum device link speeds are indicated in the event message field and the severity is set to warning if the negotiated speed is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link speed was previously downgraded and has returned to maximum or link speed has downgraded to a value that is less than its maximum capability.|
+| device\_link\_width\_changed| INFO\_ONLY| NOTICE or WARNING| NVMe PCIe device at <pci-address\> port-<idx\>: link width changed to <pcie-link-lanes\> (max <pcie-link-lanes\>)| Indicates that an NVMe device link width has changed. The negotiated and maximum device link widths are indicated in the event message field and the severity is set to warning if the negotiated width is not at maximum capability (and notice level severity if at maximum). No other specific information is included in the event data.| Either device link width was previously downgraded and has returned to maximum or link width has downgraded to a value that is less than its maximum capability.|
+| device\_led\_set| INFO\_ONLY| NOTICE| LED on device <device\> set to state <state\>| Indicates that the LED state has been changed on a device. Device identifier and LED state are specified in the event message.| LED control command was issued to change device LED state for visual identification or fault indication.|
 
 ## System Logging
 
@@ -146,18 +150,21 @@ Help Options:
 
 If an arg is not passed, then that logging parameter for each engine process is reset to the
 values set in the server config file that was used when starting `daos_server`.
+
 - `--masks` will be reset to the value of the engine config `log_mask` parameter.
-- `--streams` will be reset to the `env_vars` `DD_MASK` environment variable value or to an empty
-string if not set.
-- `--subsystems` will be reset to the `env_vars` `DD_SUBSYS` environment variable value or to an
-empty string if not set.
+- `--streams` will be reset to the `env_vars` `DD_MASK` environment variable value
+  or to an empty string if not set.
+- `--subsystems` will be reset to the `env_vars` `DD_SUBSYS` environment variable value
+  or to an empty string if not set.
 
 Example usage:
+
 ```
 dmg server set-logmasks -m DEBUG,MEM=ERR -d mgmt,md -s server,mgmt,bio,common
 ```
 
 This example would be a runtime equivalent to setting the following in the server config file:
+
 ```
 ...
 engines:
@@ -174,7 +181,7 @@ example given above.
 
 For more information on the usage of masks (`D_LOG_MASK`), streams (`DD_MASK`) and subsystems
 (`DD_SUBSYS`) parameters refer to the
-[`Debugging System`](https://docs.daos.io/v2.6/admin/troubleshooting/#debugging-system) section.
+[Debugging System](https://docs.daos.io/v2.6/admin/troubleshooting/#debugging-system) section.
 
 ## System Monitoring
 
@@ -292,6 +299,7 @@ prometheus --config-file=$HOME/.prometheus.yml
 ## Storage Operations
 
 Storage subcommands can be used to operate on host storage.
+
 ```bash
 $ dmg storage --help
 Usage:
@@ -310,6 +318,7 @@ Available commands:
 
 Storage query subcommands can be used to get detailed information about how DAOS
 is using host storage.
+
 ```bash
 $ dmg storage query --help
 Usage:
@@ -329,6 +338,7 @@ To query SCM and NVMe storage space usage and show how much space is available t
 create new DAOS pools with, run the following command:
 
 - Query Per-Server Space Utilization:
+
 ```bash
 $ dmg storage query usage --help
 Usage:
@@ -341,6 +351,7 @@ The command output shows online DAOS storage utilization, only including storage
 statistics for devices that have been formatted by DAOS control-plane and assigned
 to a currently running rank of the DAOS system. This represents the storage that
 can host DAOS pools.
+
 ```bash
 $ dmg storage query usage
 Hosts   SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
@@ -351,11 +362,11 @@ wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
-[`dmg pool create`](https://docs.daos.io/v2.6/admin/pool_operations/#pool-creationdestroy)
+[dmg pool create](https://docs.daos.io/v2.6/admin/pool_operations/#pool-creationdestroy)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[daos\_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 then the values supplied to `dmg pool create` should be
 a maximum of the SCM/NVMe free space divided by the number of ranks per host.
 
@@ -373,6 +384,7 @@ overhead).
 Useful admin dmg commands to query NVMe SSD health:
 
 - Query Per-Server Metadata:
+
 ```bash
 $ dmg storage query list-devices --help
 Usage:
@@ -388,6 +400,7 @@ Usage:
       -u, --uuid=         Device UUID (all devices if blank)
       -e, --show-evicted  Show only evicted faulty devices
 ```
+
 ```bash
 $ dmg storage query list-pools --help
 Usage:
@@ -406,10 +419,11 @@ stored SMD device and pool tables, respectively. The device table maps the inter
 device UUID to attached VOS target IDs. The rank number of the server where the device
 is located is also listed, along with the current device state. The current device
 states are the following:
-  - NORMAL: a fully functional device in-use by DAOS
-  - EVICTED: the device is no longer in-use by DAOS
-  - UNPLUGGED: the device is currently unplugged from the system (may or not be evicted)
-  - NEW: the device is plugged and available and not currently in-use by DAOS
+
+- NORMAL: a fully functional device in-use by DAOS
+- EVICTED: the device is no longer in-use by DAOS
+- UNPLUGGED: the device is currently unplugged from the system (may or not be evicted)
+- NEW: the device is plugged and available and not currently in-use by DAOS
 
 To list only devices in the EVICTED state, use the (--show-evicted|-e) option to the
 list-devices command.
@@ -423,6 +437,7 @@ are both VMD devices with transport addresses in the BDF format behind the VMD a
 The pool table maps the DAOS pool UUID to attached VOS target IDs and will list all
 of the server ranks that the pool is distributed on. With the additional verbose flag,
 the mapping of SPDK blob IDs to VOS target IDs will also be displayed.
+
 ```bash
 $ dmg -l boro-11,boro-13 storage query list-devices
 -------
@@ -440,6 +455,7 @@ boro-11
     UUID:2ccb8afb-5d32-454e-86e3-762ec5dca7be [TrAddr:5d0505:03:00.0]
       Targets:[1 3] Rank:1 State:NORMAL LED:OFF
 ```
+
 ```bash
 $ dmg -l boro-11,boro-13 storage query list-pools
 -------
@@ -462,6 +478,7 @@ boro-11
 ```
 
 - Query Storage Device Health Data:
+
 ```bash
 $ dmg storage query list-devices --health --help
 Usage:
@@ -477,6 +494,7 @@ Usage:
       -u, --uuid=         Device UUID (all devices if blank)
       -e, --show-evicted  Show only evicted faulty devices
 ```
+
 ```bash
 $ dmg storage scan --nvme-health --help
 Usage:
@@ -502,6 +520,7 @@ Note: A reasonable timed workload > 60 min must be ran for the SMART stats to re
 (Raw values are 65535).
 Media wear percentage can be calculated by dividing by 1024 to find the percentage of the
 maximum rated cycles.
+
 ```bash
 $ dmg -l boro-11 storage query list-devices --health --uuid=d5ec1227-6f39-40db-a1f6-70245aa079f1
 -------
@@ -552,9 +571,18 @@ boro-11
         PLL Lock Loss Count:0
         NAND Bytes Written:244081
         Host Bytes Written:52114
-
 ```
+
 #### Exclusion and Hotplug
+
+!!! note
+    **SysXS Device Failure**: A SysXS device is a special NVMe SSD region that
+    contains critical system metadata for a DAOS engine. If a SysXS device fails,
+    the engine will terminate immediately. Unlike regular NVMe device faults that
+    can be addressed using online hotplug, SysXS device failures require
+    **offline** device replacement using `dmg storage format --replace`. See
+    [SysXS Device Failure Recovery](#sysxs-device-failure-recovery) for detailed
+    procedures.
 
 - Automatic exclusion of an NVMe SSD:
 
@@ -610,6 +638,7 @@ applied:
 ```
 
 - Manually exclude an NVMe SSD:
+
 ```bash
 $ dmg storage set nvme-faulty --help
 Usage:
@@ -625,6 +654,7 @@ Usage:
 
 To manually evict an NVMe SSD (auto eviction is covered later in this section),
 the device state needs to be set faulty by running the following command:
+
 ```bash
 $ dmg storage set nvme-faulty --host=boro-11 --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 NOTICE: This command will permanently mark the device as unusable!
@@ -632,6 +662,7 @@ Are you sure you want to continue? (yes/no)
 yes
 set-faulty operation performed successfully on the following host: wolf-310:10001
 ```
+
 The device state will transition from "NORMAL" to "EVICTED" (shown above), during which time the
 faulty device reaction will have been triggered (all targets on the SSD will be rebuilt).
 The SSD will remain evicted until device replacement occurs.
@@ -646,6 +677,7 @@ The LED of the VMD device will remain in this state until replaced by a new devi
 unbound from the kernel driver and bound instead to a user-space driver so that the device can be
 used with DAOS. To rebind an SSD on a single host, run the following command (replace SSD PCI
 address and hostname with appropriate values):
+
 ```bash
 $ dmg storage nvme-rebind -a 0000:84:00.0 -l wolf-167
 Command completed successfully
@@ -656,6 +688,7 @@ DAOS I/O engine processes. Now the new device can be used in the following
 `dmg storage replace nvme` command.
 
 - Replace an excluded SSD with a New Device:
+
 ```bash
 $ dmg storage replace nvme --help
 Usage:
@@ -671,10 +704,12 @@ Usage:
 
 To replace an NVMe SSD with an evicted device and reintegrate it into use with
 DAOS, run the following command:
+
 ```bash
 $ dmg storage replace nvme --host=boro-11 --old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=80c9f1be-84b9-4318-a1be-c416c96ca48b
 dev-replace operation performed successfully on the following host: boro-11:10001
 ```
+
 The old, now replaced device will remain in an "EVICTED" state until it is unplugged.
 The new device will transition from a "NEW" state to a "NORMAL" state (shown above).
 
@@ -683,11 +718,13 @@ The new device will transition from a "NEW" state to a "NORMAL" state (shown abo
 In order to reuse a device that was previously set as FAULTY and evicted from the DAOS
 system, an admin can run the following command (setting the old device UUID to be the
 new device UUID):
+
 ```bash
 $ dmg storage replace nvme --host=boro-11 ---old-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19 --new-uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 NOTICE: Attempting to reuse a previously set FAULTY device!
 dev-replace operation performed successfully on the following host: boro-11:10001
 ```
+
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
 be for testing or for accidental device eviction.
@@ -701,6 +738,7 @@ The feature supports two LED device events: locating a healthy device and locati
 an evicted device.
 
 - Locate a Healthy SSD:
+
 ```bash
 $ dmg storage led identify --help
 Usage:
@@ -718,6 +756,7 @@ Usage:
 
 To identify a single SSD, any of the Device-UUIDs can be used which can be found from
 output of the `dmg storage query list-devices` command:
+
 ```bash
 $ dmg -l boro-11 storage led identify 6fccb374-413b-441a-bfbe-860099ac5e8d
 ---------
@@ -730,6 +769,7 @@ boro-11
 The SSD PCI address can also be used in the command to identify a SSD. The PCI address
 should refer to a VMD backing device and can be found from either `dmg storage scan -v`
 or `dmg storage query list-devices` commands:
+
 ```bash
 $ dmg -l boro-11 storage led identify 850505:0b:00.0
 ---------
@@ -741,6 +781,7 @@ boro-11
 
 To identify multiple SSDs, supply a comma separated list of Device-UUIDs and/or PCI addresses,
 adding custom timeout of 5 minutes for LED identification (time to flash LED for):
+
 ```bash
 $ dmg -l boro-11 storage led identify --timeout 5 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
 ---------
@@ -778,6 +819,7 @@ no positional arguments are supplied.
 
 To verify the LED state of SSDs the following command can be used in a similar way to the identify
 command:
+
 ```bash
 $ dmg -l boro-11 storage led check 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
 ---------
@@ -817,15 +859,16 @@ removed and storage wiped.
 System commands will be handled by a DAOS Server acting as the MS leader and
 listening on the address specified in the DMG config file "hostlist" parameter.
 See
-[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+[daos\_control.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
 for details.
 
 At least one of the addresses in the hostlist parameters should match one of the
 `mgmt_svc_replicas` addresses specified in the server config file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[daos\_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 that is supplied when starting `daos_server` instances.
 
 - Commands used to manage a DAOS System:
+
 ```bash
 $ dmg system --help
 Usage:
@@ -849,6 +892,7 @@ The system membership refers to the DAOS engine processes that have registered,
 or joined, a specific DAOS system.
 
 - Query System Membership:
+
 ```bash
 $ dmg system query --help
 Usage:
@@ -877,8 +921,9 @@ from the pools it hosted, please check the pool operation section on how to
 reintegrate an excluded engine.
 
 After one or more DAOS engines being excluded, the DAOS agent cache needs to be
-refreshed.  For detailed information, please refer to the [1][System Deployment
-documentation].  Before refreshing the DAOS Agent cache, it should be checked
+refreshed.  For detailed information, please refer to the
+[1][System Deployment documentation].
+Before refreshing the DAOS Agent cache, it should be checked
 that the exclusion information has been spread to the Management Service leader.
 This could be done using the `dump-attachinfo` sub-command of the `daos_agent`
 executable:
@@ -900,12 +945,12 @@ transport_config:
 log_file: /var/log/daos/daos_agent-tmp.log
 ```
 
-
 ### Shutdown
 
 When up and running, the entire system can be shutdown.
 
 - Stop a System:
+
 ```bash
 $ dmg system stop --help
 Usage:
@@ -946,6 +991,7 @@ This is useful to stop (and restart) misbehaving engines.
 The system can be started backup after a controlled shutdown.
 
 - Start a System:
+
 ```bash
 $ dmg system start --help
 Usage:
@@ -971,19 +1017,109 @@ specified on the command line:
 If the ranks were excluded from pools (e.g., unclean shutdown), they will need to
 be reintegrated. Please see the pool operation section for more information.
 
+### Engine Auto-Restart
+
+DAOS automatically restarts engines that self-terminate after being excluded from
+the system. This feature improves system availability by recovering from transient
+failures without administrator intervention.
+
+#### How It Works
+
+When an engine is excluded (e.g., due to network issues detected by SWIM), the
+engine detects the exclusion and performs a self-termination. The control plane
+monitors for these events and automatically restarts the affected engine after
+clearing the exclusion state, allowing it to rejoin the system.
+
+The automatic restart includes rate-limiting to prevent restart storms. By default,
+an engine must wait 5 minutes between automatic restarts.
+
+#### Configuration
+
+Control auto-restart behavior in `daos_server.yml`:
+
+```yaml
+# Disable automatic restart (default: enabled)
+disable_engine_auto_restart: false
+
+# Minimum delay between automatic restarts per rank (default: 300 seconds)
+engine_auto_restart_min_delay: 300
+```
+
+#### Manual Operations
+
+Manual `dmg system stop` and `dmg system start` operations are never affected by
+the rate-limiting mechanism. Administrators can always immediately stop and start
+ranks regardless of recent automatic restart activity.
+
+```bash
+# Manual operations always work immediately
+$ dmg system stop --ranks=0,1,2
+$ dmg system start --ranks=0,1,2
+```
+
+When you manually stop or start ranks, the restart history for those ranks is
+automatically cleared, ensuring no delays from previous automatic restarts.
+
+#### Monitoring
+
+The `engine_self_terminated` RAS event is logged when an engine self-terminates
+and triggers an automatic restart:
+
+```
+&&& RAS EVENT id: [engine_self_terminated] ... msg: [excluded rank self terminated detected]
+```
+
+Use `dmg system query` to check rank status and incarnation numbers. The
+incarnation number increments each time a rank restarts, helping track restart
+events:
+
+```bash
+$ dmg system query --ranks=0
+Rank UUID                                 Control Address  Fault Domain State  Reason Incarnation
+---- ----                                 --------------- ------------- -----  ------ -----------
+0    12345678-1234-1234-1234-123456789012 10.0.0.1:10001  /node1        Joined        3
+```
+
+#### Best Practices
+
+- **Leave enabled**: Automatic restart improves availability for transient failures
+- **Adjust timing**: For frequent exclusions, consider increasing `engine_auto_restart_min_delay`
+- **Monitor events**: Watch for repeated `engine_self_terminated` events indicating persistent issues
+- **Manual control**: Use `dmg system stop/start` for maintenance without worrying about delays
+
+#### Troubleshooting
+
+**Problem**: Rank keeps self-terminating and restarting
+
+**Solution**: Investigate root cause:
+1. Check network connectivity (SWIM may be detecting real failures)
+2. Review engine logs for errors
+3. Verify hardware health
+4. Consider disabling auto-restart temporarily for investigation
+
+**Problem**: Need immediate restart but recently auto-restarted
+
+**Solution**: Use manual operations (not affected by rate-limiting):
+```bash
+$ dmg system stop --ranks=X
+$ dmg system start --ranks=X
+```
+
 ### Storage Reformat
 
 To reformat the system after a controlled shutdown, run the command:
 
-`$ dmg storage format --force`
+```
+$ dmg storage format --force
+```
 
-- `--force` flag indicates that a (re)format operation should be
-performed disregarding existing filesystems
-- if no record of previously running ranks can be found, reformat is
-performed on the hosts that are specified in the `daos_control.yml`
-config file's `hostlist` parameter.
-- if system membership has records of previously running ranks, storage
-allocated to those ranks will be formatted
+- The `--force` flag indicates that a (re)format operation should be
+  performed disregarding existing filesystems
+- If no record of previously running ranks can be found, reformat is
+  performed on the hosts that are specified in the `daos_control.yml`
+  config file's `hostlist` parameter.
+- If system membership has records of previously running ranks, storage
+  allocated to those ranks will be formatted
 
 The output table will indicate action and result.
 
@@ -1005,30 +1141,282 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
     ```
     Then restart DAOS Servers and format.
 
-
 ### Storage Format Replace
 
-If storage metadata for a rank is lost, for example after losing PMem contents after NVDIMM failure,
-storage for that rank will need to be formatted and rank metadata regenerated. If other hardware on
-the storage server has not changed the old rank can be "reused" by formatting using the
-`dmg storage format --replace` option.
+If storage metadata for a rank is lost, for example after losing PMem contents after NVDIMM failure
+or after an SSD failure in MD-on-SSD mode, storage for that rank will need to be formatted and rank
+metadata regenerated. If other hardware on the storage server has not changed, the old rank can be
+"reused" by formatting using the `dmg storage format --replace` option.
 
-An examples workflow would be:
-- `daos_server` is running and PMem NVDIMM fails causing an engine to enter excluded state.
-- `daos_server` is stopped, storage server powered down, faulty PMem NVDIMM is replaced.
-- After powering up storage server, `daos_server scm prepare` command is used to repair PMem.
-- Storage server is rebooted after running `daos_server scm prepare` and command is run again.
-- Now PMem is intact, clear with `wipefs -a /dev/pmemX` where "X" refers to the repaired PMem ID.
-- `daos_server` can be started again. On start-up repaired engine prompts for "SCM format required".
-- Run `dmg storage format --replace` to rejoin with existing rank (if --replace isn't used, a new
-  rank will be created).
-- Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
+#### PMem (DCPM) Failure Recovery Workflow
+
+An example workflow for PMem failure would be:
+
+1. `daos_server` is running and PMem NVDIMM fails causing an engine to enter excluded state.
+2. `daos_server` is stopped, storage server powered down, faulty PMem NVDIMM is replaced.
+3. After powering up storage server, `daos_server scm prepare` command is used to repair PMem.
+4. Storage server is rebooted after running `daos_server scm prepare` and command is run again.
+5. Now PMem is intact, clear with `wipefs -a /dev/pmemX` where "X" refers to the repaired PMem ID.
+6. `daos_server` can be started again. On start-up repaired engine prompts for "SCM format required".
+7. Run `dmg storage format --replace` to rejoin with existing rank (if --replace isn't used, a new
+   rank will be created).
+8. Formatted engine will join using the existing (old) rank which is mapped to the engine's hardware.
+
+#### SSD Failure Recovery in MD-on-SSD Mode
+
+In MD-on-SSD mode, when an SSD fails, the recovery process depends on which SSD failed and what
+data was stored on it. The control_metadata can be stored on any persistent local path (a dedicated
+SSD, shared storage device, or any mounted filesystem), and it stores critical engine metadata
+including superblocks separately from the data/meta/wal SSDs used for pool storage.
+
+!!! warning
+    This workflow is intended for offline device replacement scenarios where the storage server must
+    be powered down to replace the failed SSD. For SSD failures that support online replacement, use
+    the online device replacement procedures documented in the [SSD Management](#ssd-management)
+    section (see `dmg storage set nvme-faulty` and `dmg storage replace nvme`). Only use the
+    `dmg storage format --replace` workflow when hot-plug or online replacement is not available or
+    not suitable for the failure scenario.
+
+**Key Improvement**: The `dmg storage format --replace` command now safely handles control metadata
+formatting in MD-on-SSD mode. When an engine's data/meta/wal SSD fails and is replaced offline,
+the administrator must manually remove the engine's superblock before restarting the server to 
+trigger a format request. The command then selectively removes only the failed engine's 
+control_metadata subdirectory, preserving healthy engines' metadata on the same host.
+
+An example workflow for SSD failure in MD-on-SSD mode would be:
+
+1. `daos_server` is running and an SSD (data/meta/wal role) fails, causing one or more engines to become excluded.
+2. `daos_server` is stopped on the affected storage server.
+3. Storage server is powered down and the faulty SSD is physically replaced.
+4. After powering up storage server, prepare the new SSD (partition, filesystem if needed).
+5. Update server configuration if the SSD device path changed.
+6. For a host with multiple engines where only one engine's storage was lost:
+   - Both engines will be excluded (server was powered down)
+   - The control_metadata path (on any persistent local storage) remains intact with both engines' metadata
+   - **Before restarting the server, manually remove the failed engine's superblock** to trigger a format request
+     (e.g., `rm /path/to/control_metadata/daos_control/engine0/superblock`)
+   - Only the engine whose data/meta/wal SSD failed needs to be reformatted
+   - The healthy engine's control_metadata subdirectory should be preserved (do not remove its superblock)
+7. Start `daos_server` again. The engine with the removed superblock will now prompt for format.
+8. Run `dmg storage format --replace` to format only the affected engine(s).
+   - The command automatically identifies which engines need formatting based on missing superblocks
+   - If control_metadata path is intact: selectively removes subdirectories for engines with missing superblocks only
+   - If control_metadata path itself is inaccessible: the entire directory must be recreated (all engines on that path need formatting)
+9. Formatted engine(s) will rejoin using their existing rank(s) mapped to the server's hardware.
+
+**Example Scenario 1**: Server with two engines where a data SSD fails:
+- Engine 0 (rank 2): Data SSD fails, making the engine invalid
+- Engine 1 (rank 3): All storage healthy
+- Control_metadata path: Intact with both engines' metadata (stored on any persistent local storage)
+- Server is powered down for SSD replacement
+- Both rank 2 and rank 3 become excluded (server offline)
+- After powering up with new data SSD:
+  - Engine 0: Still has superblock in control_metadata, but data SSD is new/empty
+  - Engine 1: Healthy, superblock intact in control_metadata
+- **Before starting the server, administrator manually removes engine 0's superblock**: 
+  `rm /path/to/control_metadata/daos_control/engine0/superblock`
+- Start `daos_server` and engine 0 detects missing superblock and prompts for format
+- Attempting to format without `--replace` flag will fail:
+  ```bash
+  $ dmg storage format -l storage-server-16
+  ERROR: Errors:
+    Hosts              Error
+    -----              -----
+    storage-server-16  engine metadata directories or superblocks are missing for engines [0]; 
+                       running format with missing subdirectories or superblocks is not supported
+  ```
+- `dmg storage format --replace` will succeed:
+  ```bash
+  $ dmg storage format -l storage-server-16 --replace
+  Format Summary:
+    Hosts              SCM Devices NVMe Devices
+    -----              ----------- ------------
+    storage-server-16  2           2
+  ```
+- The command will:
+  - Detect engine 0 needs formatting (no superblock)
+  - Remove only `/path/to/control_metadata/daos_control/engine0/` subdirectory
+  - Preserve `/path/to/control_metadata/daos_control/engine1/` subdirectory
+  - Reinitialize engine 0's metadata with the old rank (rank 2)
+  - Engine 0 rejoins with rank 2, engine 1 with rank 3
+- Verify both engines rejoin the system:
+  ```bash
+  $ dmg system query -v
+  Rank UUID                                 Control Address      Fault Domain                State   Reason
+  ----  ----                                ---------------      ------------                -----   ------
+  0     bc5c3554-78a9-407d-87e6-f2ed9157752a 10.8.1.13:10001     /storage-server-13          Joined
+  1     94bb94a7-1aed-4e2c-98fd-049088ce3e27 10.8.1.16:10001     /storage-server-16          Joined
+  2     b72d6ac6-7805-4f1c-a408-adb1be3b2c39 10.8.1.15:10001     /storage-server-15          Joined
+  3     fc53495f-53cb-4c43-b26e-aec6cca17574 10.8.1.14:10001     /storage-server-14          Joined
+  ```
+
+**Example Scenario 2**: Server where the control_metadata storage path itself becomes inaccessible:
+- The storage hosting control_metadata path (e.g., `/mnt/control_metadata/daos_control/`) becomes inaccessible
+- All engines lose access to their superblocks and metadata
+- After resolving the storage issue (or changing control_metadata path): the control_metadata directory doesn't exist
+- `dmg storage format --replace` will:
+  - Create the control_metadata directory structure
+  - Format all engines that were stored on that path
+  - All engines rejoin with their previous ranks
 
 !!! note
-    `dmg storage format --replace` can be used to replace a rank in `AdminExcluded` state. The
-    subsequent state of the rank will then no longer be `AdminExcluded`. This special case reduces
-    a chance that a duplicate rank entry is introduced inadvertently because the rank to be replaced
-    is in the `AdminExcluded` state and so is recreated rather than replaced.
+    In MD-on-SSD mode, the control_metadata path stores critical rank metadata including superblocks.
+    This path can be on any persistent local storage (dedicated SSD, shared device, or any mounted
+    filesystem) and is separate from the data/meta/wal SSDs used for pool storage. When an engine's
+    data/meta/wal SSD fails and is replaced offline, the administrator must manually remove the
+    failed engine's superblock **before restarting the server** to trigger a format request. This 
+    manual step allows `dmg storage format --replace` to reinitialize that engine's metadata and 
+    restore it with the old rank. If only a data/meta/wal SSD fails, the control_metadata path 
+    remains intact and the command will selectively remove only the subdirectories for engines with 
+    missing superblocks (i.e., only those where the administrator removed the superblock before 
+    server restart). If the control_metadata storage path itself becomes inaccessible, all engine 
+    metadata is lost and must be recreated during format replace.
+
+!!! note
+    `dmg storage format --replace` can not be used to replace a rank in `AdminExcluded` state. An
+    administrator is required to run `dmg system clear-exclude` to remove the `AdminExcluded` state
+    before being able to assign an engine it's previous rank.
+
+!!! note
+    If `dmg storage format --replace` succeeds at the format level but the subsequent rank join
+    fails (e.g. due to a misconfigured fabric URI), the engine's superblock is automatically
+    removed to prevent a new rank from being unintentionally created on the next restart. On DCPM
+    systems the PMem device (`/dev/pmemX`) will remain mounted after the failure; this is
+    intentional so that the next `dmg storage format --replace` can write the new superblock onto
+    the PMEM correctly.  Resolve the configuration issue and re-run `dmg storage format --replace`
+    or run `dmg storage format` without `--replace` to create a new rank with a different fabric
+    URI (for example).
+
+#### SysXS Device Failure Recovery
+
+SysXS is a special region on NVMe SSDs that stores critical system metadata for DAOS engines.
+In MD-on-SSD mode, each engine will contain a "special" SysXS target on one of it's SSDs.
+Unlike regular NVMe device failures that can often be handled online using hotplug procedures,
+a SysXS device failure causes the engine to terminate immediately.
+
+The command `dmg storage query list-devices` can be used to identify which device is
+running the SysXS target on a given engine/rank. The output will show "SysXS" in each device that
+contains either a meta or wal role AND hosts target-0 as illustrated in the following example:
+
+```bash
+$ dmg storage query list-devices
+--------
+daos-16
+--------
+  Devices
+    UUID:440a7ce9-849f-440c-befe-017d1cc2072b [TrAddr:0000:5e:00.0 NSID:1]
+      Roles:data,meta,wal SysXS Targets:[0 2 4 6 8 10 12 14] Rank:3 State:NORMAL LED:NA
+    UUID:9ee24bbf-6cd9-40c0-94f3-776056e9ea69 [TrAddr:0000:5f:00.0 NSID:1]
+      Roles:data,meta,wal Targets:[1 3 5 7 9 11 13 15] Rank:3 State:NORMAL LED:NA
+    UUID:67ad6337-c14b-497b-a37d-521e604d17be [TrAddr:0000:8e:00.0 NSID:1]
+      Roles:data,meta,wal SysXS Targets:[0 2 4 6 8 10 12 14] Rank:4 State:NORMAL LED:NA
+    UUID:5a81ca73-c33e-49f2-a31b-fd86ea48669a [TrAddr:0000:8f:00.0 NSID:1]
+      Roles:data,meta,wal Targets:[1 3 5 7 9 11 13 15] Rank:4 State:NORMAL LED:NA
+```
+
+**Key Characteristics of SysXS Failure:**
+- The engine will **exit unexpectedly** when the SysXS device fails and `engine_died` RAS event
+will be emitted
+- Engine will transition to "Errored" or "Excluded" state and engine logs show SysXS related
+errors at failure point
+- Online hotplug procedures (see [Exclusion and Hotplug](#exclusion-and-hotplug)) do not apply
+- The engine cannot self-exclude and restart; manual intervention is required
+- The failed SSD must be replaced when `daos_server` process is stopped
+- Recovery requires `dmg storage format --replace` to reuse the engine's "old" rank once fixed
+
+**Example Scenario: Engine with SysXS on Data/WAL/Meta SSD**
+
+If a server is configured with engines where a single SSD carries the data, WAL, and meta roles
+(including the SysXS system metadata), and that SSD fails:
+
+1. The engine immediately terminates with an `engine_died` RAS event
+2. The engine becomes excluded from the system
+3. The failed SSD must be physically replaced
+4. `dmg storage format --replace` is used to recover the engine with it's original rank
+5. `dmg system reintegrate -r <rank>` is used to reintegrate rank into it's pools
+
+**Recovery Workflow for SysXS Device Failure:**
+
+1. Verify Failure
+When an engine terminates because of SysXS device failure the following will be logged by the
+engine:
+```bash
+2026/06/25 16:55:18.107687 daos-75 DAOS[12274/0/243] pool ERR  src/pool/srv_util.c:1835 nvme_reaction() SYS target SSD is failed, kill the engine...
+```
+To verify:
+```bash
+dmg system query -v  # Look for "Errored" state
+dmg storage query list-devices  # Confirm failure is on SysXS device
+grep -i "SYS target SSD is failed" /var/log/daos/daos_engine.0.log  # Check for SysXS-related errors
+```
+
+2. Stop Server
+```bash
+systemctl stop daos_server
+systemctl disable daos_server
+```
+
+3. Physical Replacement (either online or offline)
+- Replace the faulty SSD
+
+4. Prepare To Trigger Format Request By Removing Superblock
+```bash
+# Example for engine 0
+rm /mnt/control_metadata/daos_control/engine0/superblock
+```
+
+5. Restart Server
+```bash
+systemctl enable daos_server
+systemctl start daos_server
+```
+
+6. Format with Replace
+```bash
+dmg storage format --replace -l <storage-server-hostname>
+```
+
+7. Verify Recovery
+After waiting for storage format command to complete and engine to start/join.
+```bash
+dmg system query -v  # Check engine is "Joined"
+dmg storage query list-devices --health  # Verify new device health
+```
+
+8. Reintegrate Rank Into Pools
+Reintegrate the replaced rank into it's pools (retrieve rank identifier from
+'dmg system query' output).
+```bash
+dmg system reintegrate -r <engine_rank>
+```
+
+**Differences from Online Hotplug:**
+
+| Aspect | Online Hotplug (Regular NVMe) | Offline Replacement (SysXS) |
+|--------|------|------|
+| Engine Behavior | Engine may report IO and media errors | Engine terminates immediately |
+| Data Availability | System continues running | Engine goes offline |
+| Procedure | `dmg storage set nvme-faulty` + `dmg storage replace nvme` | Stop `daos_server` + hardware replacement + remove superblock + Start `daos_server` + `dmg storage format --replace` |
+| Timing | Can be performed while system is running | Requires DAOS service stop/start on affected host |
+| Recovery Time | Minutes (online) | Hours (includes downtime) |
+
+**Common Mistakes to AVOID:**
+
+1. **❌ Do NOT use online hotplug commands for SysXS failures**
+   - `dmg storage set nvme-faulty` - Won't work, engine already died
+   - `dmg storage replace nvme` - Requires online hotplug support, command will fail
+
+2. **❌ Do NOT restart daos_server without removing superblock**
+   - Engine won't trigger format request
+   - May use wrong rank assignment
+
+3. **❌ Do NOT remove control_metadata for multi-engine hosts**
+   - Only remove the failed engine's superblock
+   - Preserve other engines' metadata
+
+4. **❌ Do NOT use dmg storage format without --replace flag**
+   - Will create a NEW rank instead of reusing the old one
+   - Orphaned ranks are generally considered undesirable
 
 ### System Erase
 
@@ -1048,7 +1436,6 @@ formatted again by running `dmg storage format`.
     `daos_server scm reset` which will completely reset the PMem.
     A reboot will be required to finalize the change of the PMem
     allocation goals.
-
 
 ### System Extension
 
@@ -1084,7 +1471,7 @@ the system (this can be checked with `dmg system query -v`).
 
 After extending the system, the cache of the `daos_agent` service of the client
 nodes needs to be refreshed.  For detailed information, please refer to the
-[1][System Deployment documentation].
+[System Deployment](deployment.md#refresh-agent-cache) documentation.
 
 ### Adding or removing Management Service (MS) replicas
 
@@ -1098,7 +1485,9 @@ An administrator may add or remove hosts from the MS replica list.
 5. Restart all `daos_server` and `daos_agent` processes.
 
 To verify that the updated MS replicas came up correctly:
-1. Use the `dmg system query` command to check that all expected ranks have come up in the Joined state.
+
+1. Use the `dmg system query` command to check that all expected ranks have
+   come up in the Joined state.
    The command should not time out.
 2. Use the `dmg system leader-query` to ensure a leader election has completed.
 
@@ -1106,56 +1495,10 @@ To verify that the updated MS replicas came up correctly:
     When removing or replacing MS replicas, do *not* replace all old replicas with
     new ones.
     At least one old replica must remain in the list to act as a data source for
-    the new replicas. 
-
+    the new replicas.
 
 ## Software Upgrade
 
-The DAOS v2.0 wire protocol and persistent layout is not compatible with
-previous DAOS versions and would require a reformat and all client and server
-nodes to be upgraded to a 2.x version.
-
-!!! warning
-    Attempts to start DAOS v2.0 over a system formatted with a previous DAOS
-    version will trigger a RAS event and cause all the engines to abort.
-    Similarly, a 2.0 DAOS client or engine will refuse to communicate with a
-    peer that runs an incompatible version.
-
-DAOS v2.0 will maintain interoperability for both the wire protocol and
-persistent layout with any future v2.x versions. That being said, it is
-required that all engines in the same system run the same DAOS version.
-
-!!! warning
-    Rolling upgrade is not supporting at this time.
-
-DAOS v2.2 client connections to pools which were created by DAOS v2.4
-will be rejected. DAOS v2.4 client should work with DAOS v2.4 and DAOS v2.2
-server. To upgrade all pools to latest format after software upgrade, run
-`dmg pool upgrade <pool>`
-
-### Interoperability Matrix
-
-The following table is intended to visually depict the interoperability
-policies for all major components in a DAOS system.
-
-
-||Server<br>(daos_server)|Engine<br>(daos_engine)|Agent<br>(daos_agent)|Client<br>(libdaos)|Admin<br>(dmg)|
-|:---|:---:|:---:|:---:|:---:|:---:|
-|Server|x.y.z|x.y.z|x.(y±1)|n/a|x.y|
-|Engine|x.y.z|x.y.z|n/a|x.(y±1)|n/a|
-|Agent|x.(y±1)|n/a|n/a|x.y.z|n/a|
-|Client|n/a|x.(y±1)|x.y.z|n/a|n/a|
-|Admin|x.y|n/a|n/a|n/a|n/a|
-
-Key:
-  * x.y.z: Major.Minor.Patch must be equal
-  * x.y: Major.Minor must be equal
-  * x.(y±1): Major must be equal, Minor must be equal or -1/+1 release version
-  * n/a: Components do not communicate
-
-Examples:
-  * daos_server 2.4.0 is only compatible with daos_engine 2.4.0
-  * daos_agent 2.6.0 is compatible with daos_server 2.4.0 (2.5 is a development version)
-  * dmg 2.4.1 is compatible with daos_server 2.4.0
-
-[1]: <deployment.md#refresh-agent-cache>(Refresh DAOS Agent Cache)
+For information on upgrading the DAOS software version, please refer to
+[Upgrading DAOS to Version 3.0](../release/upgrading.md) and
+[DAOS Version Interoperability](../release/version_interop.md).

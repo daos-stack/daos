@@ -92,8 +92,7 @@ dpdk_cli_build_opts(int eal_level, int default_level)
 		       "--log-level=user5:%d "
 		       "--log-level=user6:%d "
 		       "--log-level=user7:%d "
-		       "--log-level=user8:%d "
-		       "--no-telemetry",
+		       "--log-level=user8:%d",
 		       eal_level, default_level, default_level, default_level, default_level,
 		       default_level, default_level, default_level, default_level, default_level,
 		       default_level, default_level, default_level, default_level, default_level,

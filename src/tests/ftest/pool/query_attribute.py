@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -48,7 +49,7 @@ class QueryAttributeTest(TestWithServers):
 
         # 1. Test pool query.
         expected_size = self.params.get("scm_size", "/run/pool/*")
-        self.add_pool()
+        self.pool = self.get_pool()
 
         # Call daos pool query, obtain pool UUID and SCM size, and compare
         # against those used when creating the pool.

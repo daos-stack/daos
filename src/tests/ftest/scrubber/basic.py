@@ -24,7 +24,6 @@ class TestWithScrubberBasic(TestWithScrubber):
         self.ior_cmd.api.update(apis[0])
         self.ior_cmd.flags.update(flags[0], "ior.flags")
         self.ior_cmd.dfs_oclass.update(obj_class[0])
-        self.ior_cmd.dfs_dir_oclass.update(obj_class[0])
         for test in transfer_block_size:
             self.ior_cmd.transfer_size.update(test[0])
             self.ior_cmd.block_size.update(test[1])
@@ -53,12 +52,12 @@ class TestWithScrubberBasic(TestWithScrubber):
         """
         other_properties = self.params.get("other_properties", '/run/pool/*')
 
-        self.add_pool()
+        self.pool = self.get_pool()
         for prop_val in other_properties.split(","):
             if prop_val is not None:
                 value = prop_val.split(":")
                 self.pool.set_property(value[0], value[1])
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         self.run_scrubber_basic()
 
@@ -80,7 +79,7 @@ class TestWithScrubberBasic(TestWithScrubber):
         pool_properties = self.params.get("properties", '/run/pool/*')
         other_properties = self.params.get("other_properties", '/run/pool/*')
 
-        self.add_pool(properties=f"{pool_properties},{other_properties}")
-        self.add_container(pool=self.pool)
+        self.pool = self.get_pool(properties=f"{pool_properties},{other_properties}")
+        self.container = self.get_container(self.pool)
 
         self.run_scrubber_basic()

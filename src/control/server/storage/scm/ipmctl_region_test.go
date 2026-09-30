@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +16,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -71,10 +71,10 @@ func TestIpmctl_getRegions(t *testing.T) {
 			},
 			ID:                   1,
 			SocketID:             0,
-			PersistentMemoryType: regionType(ipmctl.RegionTypeAppDirect),
+			PersistentMemoryType: regionType(RegionTypeAppDirect),
 			Capacity:             humanize.GiByte * 1008,
 			FreeCapacity:         0,
-			Health:               regionHealth(ipmctl.RegionHealthNormal),
+			Health:               regionHealth(RegionHealthNormal),
 			ISetID:               13312958398157623568,
 		},
 		1: {
@@ -83,10 +83,10 @@ func TestIpmctl_getRegions(t *testing.T) {
 			},
 			ID:                   2,
 			SocketID:             1,
-			PersistentMemoryType: regionType(ipmctl.RegionTypeAppDirect),
+			PersistentMemoryType: regionType(RegionTypeAppDirect),
 			Capacity:             humanize.GiByte * 1008,
 			FreeCapacity:         0,
-			Health:               regionHealth(ipmctl.RegionHealthNormal),
+			Health:               regionHealth(RegionHealthNormal),
 			ISetID:               13312958398157623569,
 		},
 	}
@@ -177,7 +177,7 @@ func TestIpmctl_getRegionState(t *testing.T) {
 	}{
 		"not interleaved": {
 			region: Region{
-				PersistentMemoryType: regionType(ipmctl.RegionTypeNotInterleaved),
+				PersistentMemoryType: regionType(RegionTypeNotInterleaved),
 			},
 			expState: storage.ScmNotInterleaved,
 		},
@@ -187,14 +187,14 @@ func TestIpmctl_getRegionState(t *testing.T) {
 		},
 		"unhealthy": {
 			region: Region{
-				PersistentMemoryType: regionType(ipmctl.RegionTypeAppDirect),
-				Health:               regionHealth(ipmctl.RegionHealthError),
+				PersistentMemoryType: regionType(RegionTypeAppDirect),
+				Health:               regionHealth(RegionHealthError),
 			},
 			expState: storage.ScmNotHealthy,
 		},
 		"full free capacity": {
 			region: Region{
-				PersistentMemoryType: regionType(ipmctl.RegionTypeAppDirect),
+				PersistentMemoryType: regionType(RegionTypeAppDirect),
 				Capacity:             regionCapacity(humanize.TiByte * 2),
 				FreeCapacity:         regionCapacity(humanize.TiByte * 2),
 			},
@@ -202,7 +202,7 @@ func TestIpmctl_getRegionState(t *testing.T) {
 		},
 		"no free capacity": {
 			region: Region{
-				PersistentMemoryType: regionType(ipmctl.RegionTypeAppDirect),
+				PersistentMemoryType: regionType(RegionTypeAppDirect),
 				Capacity:             regionCapacity(humanize.TiByte * 2),
 				FreeCapacity:         regionCapacity(0),
 			},
@@ -210,7 +210,7 @@ func TestIpmctl_getRegionState(t *testing.T) {
 		},
 		"partial free capacity": {
 			region: Region{
-				PersistentMemoryType: regionType(ipmctl.RegionTypeAppDirect),
+				PersistentMemoryType: regionType(RegionTypeAppDirect),
 				Capacity:             regionCapacity(humanize.TiByte * 2),
 				FreeCapacity:         regionCapacity(humanize.TiByte),
 			},

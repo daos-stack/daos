@@ -1,5 +1,5 @@
 #!/bin/bash
-# (C) Copyright 2025 Google LLC
+# (C) Copyright 2025-2026 Google LLC
 root="$(realpath "$(dirname "$(dirname "$(dirname "${BASH_SOURCE[0]}")")")")"
 . "${root}/utils/sl/setup_local.sh" > /dev/null
 unset tmp
@@ -10,8 +10,10 @@ export install_list=()
 export PACKAGE_TYPE="dir"
 export dbg_list=()
 export CONFLICTS=()
+export CONFIG_FILES=()
 export DEPENDS=()
 export EXTERNAL_DEPENDS=()
+export PROVIDES=()
 export EXTRA_OPTS=()
 export FILTER_LIST=()
 isa="$(uname -m)"
@@ -125,7 +127,9 @@ clean_bin() {
     dbgpath="${dbgroot}/${dname}"
     cp "${file}" "${dbgpath}"
     strip --only-keep-debug "${dbgpath}" > /dev/null 2>&1
-    strip "${file}" > /dev/null 2>&1 || true
+    if [[ -z "${NO_STRIP:-}" ]]; then
+      strip "${file}" > /dev/null 2>&1 || true
+    fi
     dbg_list+=("${dbgpath}")
   done
 }
@@ -152,25 +156,34 @@ create_opts() {
 
 build_package() {
   name="$1"; shift
-  if [ "${1-}" != "noautoreq" ]; then
-    EXTRA_OPTS+=("--rpm-autoreq")
-  fi
 
   output_type="${OUTPUT_TYPE:-rpm}"
-  EXTRA_OPTS+=("--rpm-autoprov")
-
-  if [ -n "${RPM_CHANGELOG:-}" ]; then
-    EXTRA_OPTS+=("--rpm-changelog" "${root}/utils/rpms/${RPM_CHANGELOG}")
+  if [ "${output_type}" = "rpm" ]; then
+    EXTRA_OPTS+=("--rpm-autoprov")
+    if [ "${1-}" != "noautoreq" ]; then
+      EXTRA_OPTS+=("--rpm-autoreq")
+    fi
+    if [ -n "${RPM_CHANGELOG:-}" ]; then
+      EXTRA_OPTS+=("--rpm-changelog" "${root}/utils/rpms/${RPM_CHANGELOG}")
+    fi
   fi
 
   depends=()
   create_opts "--depends" depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
   conflicts=()
   create_opts "--conflicts" conflicts "${CONFLICTS[@]}"
+  provides=()
+  create_opts "--provides" provides "${PROVIDES[@]}"
+  config_files=()
+  create_opts "--config-files" config_files "${CONFIG_FILES[@]}"
   pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
+  if [ -n "${PACKAGE_OUTPUT_DIR:-}" ]; then
+    mkdir -p "${PACKAGE_OUTPUT_DIR}"
+    pkgname="${PACKAGE_OUTPUT_DIR}/${pkgname}"
+  fi
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
-  fpm -s "${PACKAGE_TYPE}" -t "${output_type}" \
+  fpm --verbose -s "${PACKAGE_TYPE}" -t "${output_type}" \
   -p "${pkgname}" \
   --name "${name}" \
   --license "${LICENSE}" \
@@ -184,6 +197,8 @@ build_package() {
   --prefix "" \
   "${depends[@]}" \
   "${conflicts[@]}" \
+  "${provides[@]}" \
+  "${config_files[@]}" \
   "${EXTRA_OPTS[@]}" \
   "${install_list[@]}"
 
@@ -191,8 +206,10 @@ build_package() {
   install_list=()
 
   CONFLICTS=()
+  CONFIG_FILES=()
   DEPENDS=()
   EXTERNAL_DEPENDS=()
+  PROVIDES=()
   if [[ ! "${name}" =~ debuginfo ]]; then
     build_debug_package "${name}"
   fi

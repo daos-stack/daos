@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,6 +66,16 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		 * kernel cache to be used.  If not then use pre-read.
 		 * This should mean that pre-read is only used on the first read, and on files
 		 * which pre-existed in the container.
+		 *
+		 * For timed cache with write-through mode, avoid the pre-read path but otherwise
+		 * keep the existing cache reuse behavior unchanged.
+		 *
+		 * TODO: The current pre-read validation only detects file shrink via a returned
+		 * length mismatch in dfuse_cb_pre_read_complete(). It does not detect a file being
+		 * rewritten at the same size, replaced by rename at the same size, or grown after
+		 * the stat/open snapshot used to launch the async pre-read. Build-style workloads
+		 * hit exactly those patterns, so pre-read is disabled here until it has a stronger
+		 * freshness check.
 		 */
 
 		/* TODO: This probably wants reflowing to not reference ie_open_count */
@@ -73,7 +84,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		     dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
 			fi_out.keep_cache = 1;
 		} else {
-			prefetch = true;
+			prefetch = ie->ie_dfs->dfc_wb_cache;
 		}
 	} else if (ie->ie_dfs->dfc_data_otoc) {
 		/* Open to close caching, this allows the use of shared mmap */
@@ -231,12 +242,11 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		dfuse_inode_decref(dfuse_info, oh->doh_parent_dir);
 	}
 	if (ie) {
-		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
-						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
-
-		if (rc != 0 && rc != -ENOENT)
-			DHS_ERROR(ie, -rc, "inval_entry() error");
-		dfuse_inode_decref(dfuse_info, ie);
+		rc = dfuse_mark_inval_entry(ie->ie_parent, ie->ie_name, ie);
+		if (rc) {
+			DHS_ERROR(ie, rc, "dfuse_mark_inval_entry() failed");
+			dfuse_inode_decref(dfuse_info, ie);
+		}
 	}
 	dfuse_oh_free(dfuse_info, oh);
 }

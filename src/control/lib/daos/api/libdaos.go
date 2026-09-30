@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -15,7 +16,9 @@ package api
 #include <daos/agent.h>
 #include <daos/pool.h>
 
-#cgo LDFLAGS: -lcart -lgurt -ldaos -ldaos_common
+#cgo LDFLAGS: -lcart -lgurt -ldaos
+#cgo !server LDFLAGS: -ldaos_common
+#cgo server LDFLAGS: -ldaos_common_pmem
 */
 import "C"
 import "unsafe"

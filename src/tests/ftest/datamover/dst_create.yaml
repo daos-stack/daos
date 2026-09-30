@@ -17,7 +17,6 @@ server_config:
 pool:
   size: 1G
 container:
-  control_method: daos
   properties: compression:lz4
 ior:
   client_processes:

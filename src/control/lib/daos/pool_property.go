@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
 // (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,7 @@
 package daos
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -30,7 +31,9 @@ import (
 #include <daos/pool_map.h>
 #include <daos_srv/control.h>
 
-#cgo LDFLAGS: -ldaos_common -lgurt -lcart
+#cgo LDFLAGS: -lgurt -lcart
+#cgo !server LDFLAGS: -ldaos_common
+#cgo server LDFLAGS: -ldaos_common_pmem
 */
 import "C"
 
@@ -755,6 +758,23 @@ func (ppv *PoolPropertyValue) SetNumber(numVal uint64) {
 	ppv.data = numVal
 }
 
+// SetBytes sets the property value to a byte array.
+func (ppv *PoolPropertyValue) SetBytes(byteVal []byte) {
+	ppv.data = byteVal
+}
+
+// GetBytes returns the byte array value set for the property,
+// or an error if the value is not a byte array.
+func (ppv *PoolPropertyValue) GetBytes() ([]byte, error) {
+	if !ppv.IsSet() {
+		return nil, errors.New("value not set")
+	}
+	if v, ok := ppv.data.([]byte); ok {
+		return v, nil
+	}
+	return nil, errors.Errorf("%+v is not []byte", ppv.data)
+}
+
 func (ppv *PoolPropertyValue) IsSet() bool {
 	return ppv != nil && ppv.data != nil
 }
@@ -769,6 +789,8 @@ func (ppv *PoolPropertyValue) String() string {
 		return v
 	case uint64:
 		return strconv.FormatUint(v, 10)
+	case []byte:
+		return base64.StdEncoding.EncodeToString(v)
 	default:
 		return fmt.Sprintf("unknown data type for %+v", ppv.data)
 	}

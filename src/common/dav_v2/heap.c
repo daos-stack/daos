@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2024, Intel Corporation
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+/* Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  */
 
 /*
@@ -194,7 +194,7 @@ heap_zinfo_get_size(uint64_t *alloc_size, uint64_t *capacity)
 	*capacity   = ZINFO_CAPACITY;
 }
 
-void
+int
 heap_zinfo_init(struct palloc_heap *heap, bool is_create)
 {
 	struct zinfo_vec *zv;
@@ -202,7 +202,19 @@ heap_zinfo_init(struct palloc_heap *heap, bool is_create)
 	uint64_t          alloc_size, capacity;
 
 	heap_zinfo_get_size(&alloc_size, &capacity);
-	D_ASSERT(z0->header.zone0_zinfo_size == alloc_size);
+	if (z0->header.zone0_zinfo_size != alloc_size) {
+		/*
+		 * On create the zinfo array was just allocated, so the size must match. On
+		 * open a mismatch means zone0 was never initialized (e.g. an empty meta blob
+		 * left behind by an NVMe device replace) or is corrupt; report it instead of
+		 * aborting the engine so the caller can treat the shard as lost and recover it
+		 * via reintegration/rebuild.
+		 */
+		D_ASSERT(!is_create);
+		D_ERROR("zone0 zinfo size mismatch: stored %lu, expected %lu\n",
+			z0->header.zone0_zinfo_size, alloc_size);
+		return ENOENT;
+	}
 
 	heap->rt->zinfo_vec      = HEAP_OFF_TO_PTR(heap, z0->header.zone0_zinfo_off);
 	heap->rt->zinfo_vec_size = z0->header.zone0_zinfo_size;
@@ -225,6 +237,8 @@ heap_zinfo_init(struct palloc_heap *heap, bool is_create)
 	heap->rt->zones_exhausted    = 1;
 	heap->rt->zones_exhausted_ne = 1;
 	heap->rt->zones_exhausted_e  = 0;
+
+	return 0;
 }
 
 static void
@@ -2213,6 +2227,14 @@ heap_init(void *heap_start, uint64_t umem_cache_size, struct umem_store *store)
 
 	nzones = heap_max_zone(heap_size);
 	meta_clear_pages(store, sizeof(struct heap_header), 4096, ZONE_MAX_SIZE, nzones);
+
+	/*
+	 * The SCM cache backing file (zone0 is mapped at heap_start) may be reused with
+	 * stale content on a fresh create, e.g. pool recreate after an NVMe device replace
+	 * where only the SSD blobs are destroyed. Clear zone0's header so the create path
+	 * doesn't mistake the previous pool's still-valid magic for an initialized zone0.
+	 */
+	memset(heap_start, 0, sizeof(struct zone_header));
 
 	if (heap_write_header(store, heap_size, umem_cache_size, nemb_pct))
 		return ENOMEM;

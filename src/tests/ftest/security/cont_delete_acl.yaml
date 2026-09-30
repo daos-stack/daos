@@ -19,7 +19,6 @@ server_config:
 pool:
   scm_size: 2G
 container:
-  control_method: daos
   type: POSIX
 
 invalid_principals:

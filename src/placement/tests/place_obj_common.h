@@ -1,11 +1,9 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2023 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(tests)
-
 #ifndef __PL_MAP_COMMON_H__
 #define __PL_MAP_COMMON_H__
 
@@ -148,14 +146,35 @@ extend_test_pool_map(struct pool_map *map, uint32_t nnodes,
 bool
 is_max_class_obj(daos_oclass_id_t cid);
 
+/** max number of sub tests which can be selected with the -u option */
+#define PLT_MAX_SUB_TESTS 1024
+
+/**
+ * Parse a sub tests selection string ("1,2,3", "2-8", "1,3-5,9") into an array of
+ * test indices.
+ */
 int
-placement_tests_run(bool verbose);
+plt_parse_sub_tests(const char *sub_tests_str, int *sub_tests, int max_sub_tests,
+		    int *sub_tests_nr);
+
+/** Print the test names of a suite along with their index */
+void
+plt_list_tests(const char *name, const struct CMUnitTest *tests, int tests_size);
+
+/** Run all tests of a suite, or only the selected sub tests if sub_tests_nr > 0 */
 int
-pda_tests_run(bool verbose);
+plt_run_tests(const char *name, const struct CMUnitTest *tests, int tests_size, int *sub_tests,
+	      int sub_tests_nr);
+
 int
-pda_layout_run(bool verbose);
+placement_tests_run(bool verbose, int *sub_tests, int sub_tests_nr, bool list_only);
 int
-dist_tests_run(bool verbose, uint32_t num_obj, int obj_class);
+pda_tests_run(bool verbose, int *sub_tests, int sub_tests_nr, bool list_only);
+int
+pda_layout_run(bool verbose, int *sub_tests, int sub_tests_nr, bool list_only);
+int
+dist_tests_run(bool verbose, uint32_t num_obj, int obj_class, int *sub_tests, int sub_tests_nr,
+	       bool list_only);
 
 static inline void
 verbose_msg(char *msg, ...)
@@ -235,5 +254,15 @@ gen_oid(daos_obj_id_t *oid, uint64_t lo, uint64_t hi, daos_oclass_id_t cid)
 				   pl_map, false);				\
 		assert_rc_equal(rc, -DER_INVAL);				\
 	} while (0)
+
+bool
+plt_layout_with_tgts_on_same_dom(struct pl_obj_layout *layout, uint32_t tgts_per_dom);
+bool
+plt_layout_with_tgts_on_same_dom_for_same_grp(struct pl_obj_layout *layout, uint32_t tgts_per_dom);
+void
+plt_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout);
+int
+plt_obj_place_mode(daos_obj_id_t oid, struct pl_obj_layout **layout, struct pl_map *pl_map,
+		   unsigned int mode);
 
 #endif /*   PL_MAP_COMMON_H   */

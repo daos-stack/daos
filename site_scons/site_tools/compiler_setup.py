@@ -5,6 +5,13 @@ from SCons.Script import Configure, Exit, GetOption
 FRAME_SIZE_MAX = 4096
 ASAN_FRAME_SIZE_MAX = {'gcc': 8192,
                        'clang': 10240}
+# SANITIZERS accepts a clearer, human-readable token for UBSan than the
+# compiler's own fixed -fsanitize= name: gcc/clang call it 'undefined'
+# (easily misread as "value not set"), so SANITIZERS instead uses
+# 'undefined_behavior' and this map translates a SANITIZERS token back to
+# the compiler's real -fsanitize=<name> identifier wherever one is built.
+# https://github.com/daos-stack/daos/pull/18613#discussion_r3883325337
+SANITIZER_FLAG_NAMES = {'undefined_behavior': 'undefined'}
 DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-sign-compare',
                  '-Wno-missing-attributes',
@@ -58,7 +65,12 @@ def _base_setup(env):
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
-    if 'SANITIZERS' in env and env['SANITIZERS'] != "":
+    if env.get('SANITIZERS'):
+
+        if env.get('HEAP_PROFILER'):
+            print('Google Sanitizers and Gperftools.Heap.Profiler can not be mixed')
+            Exit(2)
+
         cc = 'gcc'
         if 'COMPILER' in env:
             cc = env['COMPILER']
@@ -77,8 +89,14 @@ def _base_setup(env):
                     '-Wno-stringop-truncation']
 
         asan_flags = []
+        san_libs = []
+        # Sanitizer runtime libraries that must be linked explicitly.
+        # GCC injects them for pure-C targets but CGO bypasses that path.
+        _sanitizer_libs = {'undefined_behavior': '-lubsan', 'thread': '-ltsan'}
         for sanitizer in env['SANITIZERS'].split(','):
-            asan_flags.append(f"-fsanitize={sanitizer}")
+            asan_flags.append(f"-fsanitize={SANITIZER_FLAG_NAMES.get(sanitizer, sanitizer)}")
+            if sanitizer in _sanitizer_libs:
+                san_libs.append(_sanitizer_libs[sanitizer])
 
         env.AppendIfSupported(CCFLAGS=cc_flags + asan_flags)
 
@@ -86,6 +104,18 @@ def _base_setup(env):
             if flag in env["CCFLAGS"]:
                 env.AppendUnique(LINKFLAGS=flag)
                 print(f"Enabling {flag.split('=')[1]} sanitizer for C code")
+
+        for lib in san_libs:
+            env.AppendUnique(LINKFLAGS=lib)
+            # Also inject into CGO_LDFLAGS so that 'go build' (which invokes
+            # the C linker via CGO) includes the sanitizer runtime libraries.
+            # Without this, any Go binary that CGO-links a UBSan-compiled C
+            # archive gets "DSO missing from command line" for libubsan.so.1.
+            env.AppendENVPath('CGO_LDFLAGS', lib, sep=' ')
+
+    if env.get('HEAP_PROFILER'):
+        env.AppendUnique(LINKFLAGS="-ltcmalloc")
+        print("Enabling Gperftools Heap Profiler")
 
     if '-Wmismatched-dealloc' in env['CCFLAGS']:
         env.AppendUnique(CPPDEFINES={'HAVE_DEALLOC': '1'})
@@ -105,20 +135,11 @@ def _base_setup(env):
 
     if build_type != 'release':
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
-        env.AppendUnique(CPPDEFINES={'BUILD_PIPELINE': '1'})
 
-    if env['CMOCKA_FILTER_SUPPORTED']:
-        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '1'})
-    else:
-        env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
+    cmocka_val = '1' if env['CMOCKA_FILTER_SUPPORTED'] else '0'
+    env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': cmocka_val})
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
-
-    if compiler == 'icx' and not GetOption('no_rpath'):
-        # Hack to add rpaths
-        for path in env['ENV']['LD_LIBRARY_PATH'].split(':'):
-            if 'oneapi' in path:
-                env.AppendUnique(RPATH_FULL=[path])
 
     if GetOption('preprocess'):
         # Could refine this but for now, just assume these warnings are ok
@@ -129,11 +150,7 @@ def _base_setup(env):
 
 def _check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
-    if compiler in ["icc", "icpc"]:
-        flags = ["-diag-error=10006", "-diag-error=10148", "-Werror-all", flag]
-        # bug in older scons, need CFLAGS to exist, -O2 is default.
-        context.env.Replace(CFLAGS=['-O2'])
-    elif compiler in ["gcc", "g++"]:
+    if compiler in ["gcc", "g++"]:
         # pylint: disable=wrong-spelling-in-comment
         # remove -no- for test
         # There is a issue here when mpicc is a wrapper around gcc, in that we can pass -Wno-
@@ -224,13 +241,17 @@ def _check_func(env, func_name):
     """Check if a function is usable"""
     denv = env.Clone()
     # NOTE Remove sanitizers to not scramble the test output
-    if 'SANITIZERS' in denv and denv['SANITIZERS'] != "":
+    if denv.get('SANITIZERS'):
         for sanitizer in denv['SANITIZERS'].split(','):
-            flag = f"-fsanitize={sanitizer}"
+            flag = f"-fsanitize={SANITIZER_FLAG_NAMES.get(sanitizer, sanitizer)}"
             if flag not in denv["CCFLAGS"]:
                 continue
             denv["CCFLAGS"].remove(flag)
             denv["LINKFLAGS"].remove(flag)
+
+    # NOTE Remove Heap Profiler to not scramble the test output
+    if denv.get('HEAP_PROFILER'):
+        denv["LINKFLAGS"].remove("-ltcmalloc")
 
     config = Configure(denv)
     res = config.CheckFunc(func_name)

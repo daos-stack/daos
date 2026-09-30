@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -59,7 +60,6 @@ class EcodServerRestart(TestWithServers):
             oclass = container.oclass.value
             ior_kwargs["container"] = container
             ior_kwargs["ior_params"]["dfs_oclass"] = oclass
-            ior_kwargs["ior_params"]["dfs_dir_oclass"] = oclass
             ior_kwargs["log"] = "ior_write_container_test_{}.log".format(oclass)
             try:
                 run_ior(**ior_kwargs)
@@ -134,7 +134,6 @@ class EcodServerRestart(TestWithServers):
             "namespace": "/run/ior/*",
             "ior_params": {
                 "dfs_oclass": None,
-                "dfs_dir_oclass": None,
                 "flags": ior_w_flags,
                 "transfer_size": transfer_size,
                 "block_size": block_size

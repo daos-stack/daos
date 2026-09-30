@@ -36,32 +36,90 @@ as well as the MPICH 4.x releases.
 To build MPICH, including ROMIO with the DAOS ADIO driver:
 
 ```bash
-export MPI_LIB=""
+$ sudo dnf install -y daos-devel
 
-# to clone the latest development snapshot:
-git clone https://github.com/pmodels/mpich
-cd mpich
+$ export MPI_LIB=""
+$ PREFIX=$HOME/software/mpich
 
-# to clone a specific tagged version:
-git clone -b v3.4.3 https://github.com/pmodels/mpich mpich-3.4.3
-cd mpich-3.4.3
-
-git submodule update --init
-
-./autogen.sh
-
-PREFIX=$HOME/software/mpich
-# or PREFIX=$HOME/software/mpich-3.4.3 for a specific tagged version
-mkdir -p $PREFIX
-
-./configure --prefix=$PREFIX --enable-fortran=all --enable-romio \
- --enable-cxx --enable-g=all --enable-debuginfo --with-device=ch3:nemesis \
- --with-file-system=ufs+daos --with-daos=/usr
-
-# compiling 3.4.3 may need FFLAGS=-fallow-argument-mismatch on the configure command line
-
-make -j8; make install
+$ cd /tmp
+$ git clone https://github.com/pmodels/mpich
+$ cd mpich/
+$ git submodule update --init
+$ ./autogen.sh
+$ ./configure --prefix=$PREFIX --disable-fortran --enable-romio --enable-cxx --enable-g=all --enable-debuginfo --with-device=ch3:nemesis --with-file-system=ufs+daos --with-daos=/usr
+$ make -j8; make install
 ```
+
+Optionally create a module file to use with the `module` command
+
+1. Determine the version for the module filename
+
+    ```bash
+    $ ${PREFIX}/bin/mpirun --version
+    HYDRA build details:
+        Version:                                 5.0.0b1
+        Release Date:                            unreleased development copy
+        CC:                              gcc
+        Configure options:                       '--disable-option-checking' '--prefix=/home/hendersp/software/mpich' '--enable-fortran=all' '--enable-romio' '--enable-cxx' '--enable-g=all' '--enable-debuginfo' '--with-device=ch3:nemesis' '--with-file-system=ufs+daos' '--with-daos=/usr' '--disable-fortran' '--cache-file=/dev/null' '--srcdir=.' 'CC=gcc' 'CFLAGS= -g -O2' 'LDFLAGS= ' 'LIBS= ' 'CPPFLAGS= -I/tmp/mpich/src/mpl/include -I/tmp/mpich/modules/json-c -D_REENTRANT -I/tmp/mpich/src/mpi/romio/include -I/tmp/mpich/src/pmi/include'
+        Process Manager:                         pmi
+        Launchers available:                     ssh rsh fork slurm ll lsf sge manual persist
+        Topology libraries available:            hwloc
+        Resource management kernels available:   user slurm ll lsf sge pbs cobalt
+        Demux engines available:                 poll select
+    ```
+
+2. Determine a path for the module filename.
+
+    Example for RHEL:
+
+    ```bash
+    $ echo $MODULEPATH
+    /etc/scl/modulefiles:/usr/share/Modules/modulefiles:/etc/modulefiles:/usr/share/modulefiles
+
+    $ sudo mkdir /usr/share/modulefiles/mpich
+
+    $ sudo vim /usr/share/modulefiles/mpich/5.0.0b1.lua
+
+    $ cat /usr/share/modulefiles/mpich/5.0.0b1.lua
+    #%Module 1.0
+    #
+    #  MPICH module for use with 'environment-modules' package:
+    #
+    conflict                mpi
+    prepend-path            PATH            /home/hendersp/software/mpich/bin
+    prepend-path            LD_LIBRARY_PATH /home/hendersp/software/mpich/lib64
+    prepend-path            INCLUDE         /home/hendersp/software/mpich/include
+    ```
+
+    Example for SLES:
+
+    ```bash
+    $ echo $MODULEPATH
+    /usr/share/lmod/modulefiles
+
+    $ sudo mkdir /usr/share/lmod/modulefiles/mpich
+
+    $ sudo vim /usr/share/lmod/modulefiles/mpich/5.0.0b1.lua
+
+    $ cat /usr/share/lmod/modulefiles/mpich/5.0.0b1.lua
+    help([[
+    ...
+    ]])
+    whatis("Name: MPICH")
+    whatis("Version: 5.0.0b1")
+    prepend_path("PATH", "/home/hendersp/software/mpich/bin")
+    prepend_path("LD_LIBRARY_PATH", "/home/hendersp/software/mpich/lib64")
+    prepend_path("INCLUDE", "/home/hendersp/software/mpich/include")
+    ```
+
+3. Load the modulefile
+
+    ```bash
+    $ module add mpich/5.0.0b1.lua
+    $ module list
+    Currently Loaded Modulefiles:
+    1) mpich/5.0.0b1.lua
+    ```
 
 This assumes that DAOS is installed into the `/usr` tree, which is the case for
 the DAOS RPM installation. Other configure options can be added, modified, or

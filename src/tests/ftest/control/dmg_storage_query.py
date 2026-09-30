@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -148,7 +149,7 @@ class DmgStorageQuery(ControlTestBase):
         targets = self.server_managers[-1].get_config_value('targets')
 
         # Create pool and get the storage smd information, then verify info
-        self.add_pool()
+        self.pool = self.get_pool()
         pool_info = get_storage_query_pool_info(self.dmg, verbose=True)
 
         # Check the dmg storage query list-pools output for inaccuracies

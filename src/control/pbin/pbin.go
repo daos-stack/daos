@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,13 +24,6 @@ const (
 	// DaosPrivHelperLogFileEnvVar is the name of the environment variable which
 	// can be set to enable non-ERROR logging in the privileged helper.
 	DaosPrivHelperLogFileEnvVar = "DAOS_HELPER_LOG_FILE"
-
-	// DaosFWName is the name of the firmware helper.
-	DaosFWName = "daos_firmware_helper"
-
-	// DaosFWLogFileEnvVar is the name of the environment variable that
-	// can be set to enable non-ERROR logging in the firmware helper.
-	DaosFWLogFileEnvVar = "DAOS_FIRMWARE_LOG_FILE"
 )
 
 // PingResp is the response from a privileged helper application to a Ping

@@ -26,7 +26,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 ior:
   client_processes:
@@ -42,6 +41,5 @@ ior:
   transfer_size: 1M
   block_size: 1G
   dfs_oclass: EC_2P2G1
-  dfs_dir_oclass: EC_2P2G1
 
 scm_threshold: 1500000

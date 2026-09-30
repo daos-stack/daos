@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 (C) Copyright 2018-2022 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -31,7 +31,7 @@ def errprint(*args, **kwargs):
 
 def _get_version_string():
     clang_exe = WhereIs('clang-format')
-    if clang_exe is None:
+    if not clang_exe:
         return None
     try:
         rawbytes = subprocess.check_output([clang_exe, "-version"])

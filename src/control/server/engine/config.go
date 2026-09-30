@@ -31,8 +31,9 @@ const (
 	envLogDbgStreams = "DD_MASK"
 	envLogSubsystems = "DD_SUBSYS"
 
-	minABTThreadStackSizeDCPM = 20480
-	minABTThreadStackSizeUCX  = 32768
+	minABTThreadStackSizeDCPM    = 20480
+	minABTThreadStackSizeUCX     = 32768
+	minABTThreadStackSizeMdOnSsd = 24576
 )
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -419,6 +420,37 @@ func (c *Config) UpdatePMDKEnvars() error {
 	return nil
 }
 
+// Ensure at least 24KiB ABT stack size for md_on_ssd.
+func (c *Config) UpdateMdOnSsdStackSize() error {
+	stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
+	if err != nil {
+		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+			minABTThreadStackSizeMdOnSsd))
+		return nil
+	}
+	// Ensure at least 24KiB ABT stack size for an engine in md_on_ssd mode.
+	stackSizeValue, err := strconv.Atoi(stackSizeStr)
+	if err != nil {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
+			stackSizeStr)
+	}
+	if stackSizeValue < minABTThreadStackSizeMdOnSsd {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
+			"for MD on SSD, found %d", minABTThreadStackSizeMdOnSsd,
+			stackSizeValue)
+	}
+	return nil
+}
+
+// Ensure 24k for md_on_ssd configuration
+func (c *Config) UpdateABTEnvarsMdOnSsd() error {
+
+	if c.Storage.Tiers.HasBdevRoleMeta() {
+		return c.UpdateMdOnSsdStackSize()
+	}
+	return nil
+}
+
 // Increase ABT stack size for UCX provider.
 func (c *Config) UpdateABTEnvarsUCX() error {
 
@@ -536,8 +568,8 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 // HasEnvVar returns true if the configuration contains
 // an environment variable with the given name.
 func (c *Config) HasEnvVar(name string) bool {
-	for _, keyPair := range c.EnvVars {
-		if strings.HasPrefix(keyPair, name+"=") {
+	for _, kv := range c.EnvVars {
+		if strings.HasPrefix(kv, name+"=") {
 			return true
 		}
 	}
@@ -634,6 +666,12 @@ func (c *Config) WithStorageControlMetadataPath(path string) *Config {
 // WithStorageControlMetadataDevice sets the metadata device to be used by this instance.
 func (c *Config) WithStorageControlMetadataDevice(device string) *Config {
 	c.Storage.ControlMetadata.DevicePath = device
+	return c
+}
+
+// WithStorageKernelConfigPath sets the kernel config path to be used by this instance.
+func (c *Config) WithStorageKernelConfigPath(path string) *Config {
+	c.Storage.KernelConfigPath = path
 	return c
 }
 
@@ -745,13 +783,13 @@ func (c *Config) WithLogSubsystems(subsystems string) *Config {
 	return c
 }
 
-// WithMemSize sets the NVMe memory size for SPDK memory allocation on this instance.
+// WithMemSize sets the NVMe memory size in MiB for SPDK memory allocation on this instance.
 func (c *Config) WithMemSize(memsize int) *Config {
 	c.MemSize = memsize
 	return c
 }
 
-// WithHugepageSize sets the configured hugepage size on this instance.
+// WithHugepageSize sets the configured hugepage size in MiB on this instance.
 func (c *Config) WithHugepageSize(hugepagesz int) *Config {
 	c.HugepageSz = hugepagesz
 	return c

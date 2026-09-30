@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -78,7 +79,7 @@ xattr_copy(daos_handle_t src_oh, const char *src_name, daos_handle_t dst_oh, con
 		 */
 		for (ptr = enum_buf, i = 0; i < number; i++) {
 			/** if not an xattr, go to next entry */
-			if (strncmp("x:", ptr, 2) != 0) {
+			if (kds[i].kd_key_len < 2 || strncmp("x:", ptr, 2) != 0) {
 				ptr += kds[i].kd_key_len;
 				continue;
 			}
@@ -180,6 +181,11 @@ restart:
 	if (moid)
 		oid_cp(moid, entry.oid);
 
+	/** source and target are the same entry: POSIX requires success with no other action */
+	if (flags == 0 && parent->oid.hi == new_parent->oid.hi &&
+	    parent->oid.lo == new_parent->oid.lo && strcmp(name, new_name) == 0)
+		D_GOTO(out, rc = 0);
+
 	rc = fetch_entry(dfs->layout_v, new_parent->oh, th, new_name, new_len, true, &exists,
 			 &new_entry, 0, NULL, NULL, NULL);
 	if (rc) {
@@ -245,7 +251,7 @@ restart:
 			D_GOTO(out, rc);
 		}
 
-		rc = insert_entry(dfs->layout_v, parent->oh, th, new_name, new_len,
+		rc = insert_entry(dfs->layout_v, new_parent->oh, th, new_name, new_len,
 				  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry);
 		if (rc)
 			D_ERROR("Inserting new entry %s failed (%d)\n", new_name, rc);
@@ -381,6 +387,11 @@ restart:
 	if (exists == false)
 		D_GOTO(out, rc = EINVAL);
 
+	/** exchanging an entry with itself is a no-op */
+	if (parent1->oid.hi == parent2->oid.hi && parent1->oid.lo == parent2->oid.lo &&
+	    strcmp(name1, name2) == 0)
+		D_GOTO(out, rc = 0);
+
 	/** remove the first entry from parent1 (just the dkey) */
 	d_iov_set(&dkey, (void *)name1, len1);
 	rc = daos_obj_punch_dkeys(parent1->oh, th, 0, 1, &dkey, NULL);
@@ -405,22 +416,22 @@ restart:
 	entry1.mtime = entry1.ctime = now.tv_sec;
 	entry1.mtime_nano = entry1.ctime_nano = now.tv_nsec;
 
-	/** insert entry1 in parent2 object */
-	rc = insert_entry(dfs->layout_v, parent2->oh, th, name1, len1,
+	/** insert entry1 at destination path (parent2/name2) */
+	rc = insert_entry(dfs->layout_v, parent2->oh, th, name2, len2,
 			  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry1);
 	if (rc) {
-		D_ERROR("Inserting entry %s failed (%d)\n", name1, rc);
+		D_ERROR("Inserting entry %s failed (%d)\n", name2, rc);
 		D_GOTO(out, rc);
 	}
 
 	entry2.mtime = entry2.ctime = now.tv_sec;
 	entry2.mtime_nano = entry2.ctime_nano = now.tv_nsec;
 
-	/** insert entry2 in parent1 object */
-	rc = insert_entry(dfs->layout_v, parent1->oh, th, name2, len2,
+	/** insert entry2 at destination path (parent1/name1) */
+	rc = insert_entry(dfs->layout_v, parent1->oh, th, name1, len1,
 			  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry2);
 	if (rc) {
-		D_ERROR("Inserting entry %s failed (%d)\n", name2, rc);
+		D_ERROR("Inserting entry %s failed (%d)\n", name1, rc);
 		D_GOTO(out, rc);
 	}
 

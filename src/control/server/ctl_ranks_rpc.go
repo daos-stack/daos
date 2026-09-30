@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,12 +29,14 @@ const (
 	instanceUpdateDelay = 500 * time.Millisecond
 )
 
+type pollValidateFn func(Engine) bool
+
 // pollInstanceState waits for either context to be cancelled/timeout or for the
 // provided validate function to return true for each of the provided instances.
 //
 // Returns true if all instances return true from the validate function, false
 // if context is cancelled before.
-func pollInstanceState(ctx context.Context, instances []Engine, validate func(Engine) bool) error {
+func pollInstanceState(ctx context.Context, instances []Engine, validate pollValidateFn) error {
 	ready := make(chan struct{})
 	go func() {
 		for {
@@ -153,6 +155,21 @@ func (svc *ControlService) memberStateResults(instances []Engine, tgtState syste
 	return results, nil
 }
 
+// Clear restart history for manually stopped ranks on this server. This prevents rate-limiting
+// from interfering with manual operations and vice versa.
+func clearRankRestartHistory(mgr *engineRestartManager, instances []Engine) {
+	ranks := make([]ranklist.Rank, 0, len(instances))
+	for _, ei := range instances {
+		rank, err := ei.GetRank()
+		if err == nil {
+			ranks = append(ranks, rank)
+		}
+	}
+	if len(ranks) > 0 {
+		mgr.clearRankRestartHistory(ranks)
+	}
+}
+
 // StopRanks implements the method defined for the Management Service.
 //
 // Stop data-plane instance(s) managed by control-plane identified by unique
@@ -205,6 +222,10 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	if err := convert.Types(results, &resp.Results); err != nil {
 		return nil, err
 	}
+
+	// clear state history for stopped ranks, instances have already been filtered by
+	// FilterInstancesByRankSet() to match req.GetRanks()
+	clearRankRestartHistory(svc.restartMgr, instances)
 
 	return resp, nil
 }
@@ -318,6 +339,10 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	if err := convert.Types(results, &resp.Results); err != nil {
 		return nil, err
 	}
+
+	// clear state history for started ranks, instances have already been filtered by
+	// FilterInstancesByRankSet() to match req.GetRanks()
+	clearRankRestartHistory(svc.restartMgr, instances)
 
 	return resp, nil
 }

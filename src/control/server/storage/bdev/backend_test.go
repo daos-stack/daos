@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -701,47 +701,6 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 	}
 }
 
-func TestBackend_Update(t *testing.T) {
-	numCtrlrs := 4
-	controllers := make(storage.NvmeControllers, 0, numCtrlrs)
-	for i := 0; i < numCtrlrs; i++ {
-		c := mockSpdkController(int32(i))
-		controllers = append(controllers, &c)
-	}
-
-	for name, tc := range map[string]struct {
-		pciAddr string
-		mec     spdk.MockEnvCfg
-		mnc     spdk.MockNvmeCfg
-		expErr  error
-	}{
-		"no PCI addr": {
-			expErr: FaultBadPCIAddr(""),
-		},
-		"binding update fail": {
-			pciAddr: controllers[0].PciAddr,
-			mnc: spdk.MockNvmeCfg{
-				UpdateErr: errors.New("spdk says no"),
-			},
-			expErr: errors.New("spdk says no"),
-		},
-		"binding update success": {
-			pciAddr: controllers[0].PciAddr,
-			expErr:  nil,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
-
-			b := backendWithMockBinding(log, tc.mec, tc.mnc)
-
-			gotErr := b.UpdateFirmware(tc.pciAddr, "/some/path", 0)
-			test.CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
 type mockFileInfo struct {
 	name    string
 	size    int64
@@ -1112,6 +1071,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2)),
 						fmt.Sprintf("%s=%s", driverOverrideEnv, noDriver),
 					},
 				},
@@ -1174,6 +1134,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", driverOverrideEnv, noDriver),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(3)),
 					},
 				},
 				{
@@ -1198,13 +1159,6 @@ func TestBackend_prepare_reset(t *testing.T) {
 			},
 			vmdDetectRet: mockAddrList(3, 5),
 			expScriptCalls: []scriptCall{
-				{
-					Env: []string{
-						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", driverOverrideEnv, noDriver),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4)),
-					},
-				},
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
@@ -1245,6 +1199,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 				},
 			},
 		},
+		// Populated blocklist results in unbind operation being skipped.
 		"prepare setup; vmd enabled; vmd devices allowed and blocked": {
 			req: storage.BdevPrepareRequest{
 				HugepageCount: testNrHugepages,
@@ -1255,13 +1210,6 @@ func TestBackend_prepare_reset(t *testing.T) {
 			},
 			vmdDetectRet: mockAddrList(3, 2),
 			expScriptCalls: []scriptCall{
-				{
-					Env: []string{
-						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", driverOverrideEnv, noDriver),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4)),
-					},
-				},
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),

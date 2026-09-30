@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -49,11 +49,11 @@ class RebuildTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.add_pool(create=False)
+        self.pool = self.get_pool(create=False)
 
     def setup_test_container(self):
         """Define a TestContainer object."""
-        self.add_container(self.pool, create=False)
+        self.container = self.get_container(self.pool, create=False)
 
     def setup_pool_verify(self):
         """Set up pool verification initial expected values."""

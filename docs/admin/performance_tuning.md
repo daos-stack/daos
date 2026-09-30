@@ -398,10 +398,22 @@ Duration across processes:
 Completed test=FETCH
 ```
 
-!!! note
-    With 3rd Gen Intel® Xeon® Scalable processors (ICX), the PMEM_NO_FLUSH
-    environment variable can be set to 1 to take advantage of the extended
-    asynchronous DRAM refresh (eADR) feature
+!!! warning
+    Do not set the `PMEM_NO_FLUSH` environment variable in production. This
+    document previously recommended setting `PMEM_NO_FLUSH=1` on 3rd Gen
+    Intel® Xeon® Scalable processors (ICX) to take advantage of the extended
+    asynchronous DRAM refresh (eADR) feature; **that guidance is deprecated
+    and must no longer be followed**.
+
+    Per PMDK's [libpmem(7)](https://github.com/daos-stack/pmdk/blob/stable-2.1/doc/libpmem/libpmem.7.md)
+    documentation, environment variables such as `PMEM_NO_FLUSH` are "largely
+    intended for testing and are not normally required". Setting
+    `PMEM_NO_FLUSH=1` unconditionally disables the
+    `CLFLUSH`/`CLFLUSHOPT`/`CLWB` cache-flush instructions, regardless of
+    whether the platform's persistence domain actually covers CPU caches.
+    PMDK already checks this safely and automatically at runtime via
+    [`pmem_has_auto_flush()`](https://github.com/daos-stack/pmdk/blob/stable-2.1/doc/libpmem/pmem_flush.3.md),
+    so no manual override should be used in production.
 
 A tool called daos\_perf with the same syntax as vos\_perf is also available
 to run tests from a compute node with the full DAOS stack. Please refer
@@ -409,16 +421,16 @@ to the next section for more information.
 
 ### SSDs
 
-Performance of SSDs can be measured directly with SPDK via the spdk_nvme_perf
+Performance of SSDs can be measured directly with SPDK via the daos_spdk_nvme_perf
 tool. It can be run to test bandwidth in a non-destructive way as follows:
 
 ```bash
-spdk_nvme_perf -q 16 -o 1048576 -w read -c 0xff -t 60
+daos_spdk_nvme_perf -q 16 -o 1048576 -w read -c 0xff -t 60
 ```
 
 IOPS can be measured with the following command:
 ```bash
-spdk_nvme_perf -q 16 -o 4096 -w read -c 0xff -t 60
+daos_spdk_nvme_perf -q 16 -o 4096 -w read -c 0xff -t 60
 ```
 
 `-q` is used to control the queue depth, `-o` for the I/O size, `-w` is the
@@ -438,7 +450,7 @@ form of a core mash. `-c 0xff` uses the first 8 cores.
 !!! note
     On storage node using Intel VMD, the `--enable-vmd` option must be specified.
 
-Many more options are available. Please run `spdk_nvme_perf` to see the list of
+Many more options are available. Please run `daos_spdk_nvme_perf` to see the list of
 parameters that can be tweaked.
 
 ## End-to-end Performance

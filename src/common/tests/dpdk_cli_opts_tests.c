@@ -28,9 +28,6 @@ test_dpdk_cli_build_opts_valid(void **state)
 		char expected[64];
 		snprintf(expected, sizeof(expected), "--log-level=lib.eal:%d ", log_level);
 		assert_non_null(strstr(opts, expected));
-
-		/* Verify it contains --no-telemetry */
-		assert_non_null(strstr(opts, "--no-telemetry"));
 	}
 }
 

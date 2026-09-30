@@ -1,11 +1,11 @@
 # DAOS Telemetry Example
 
-This document will help to run daos metrics command and collect some key metrics from the 
+This document will help to run daos metrics command and collect some key metrics from the
 server to help debug the issues and analyze the system behavior.
 
 ## How to run telemetry command:
 
-### Directly on server using daos_metrics command as sudo user
+### Directly on server using daos\_metrics command as sudo user
 
 - Example of collecting the pool query metrics on the servers using daos_metrics command.
 - daos_metrics -S will show telemetry data from First I/O Engine (default 0)
@@ -48,7 +48,7 @@ connecting to brd-222:9191...
 
  - Some metrics are only available on pool leader rank so identify the leader rank for that pool from the pool query command.
  - Below is the example of pool query where leader rank is 1
-   - Pool 55cc96d8-5c46-41f4-af29-881d293b6f6f, ntarget=48, disabled=0, `leader=1`, version=1, state=Ready      
+   - Pool 55cc96d8-5c46-41f4-af29-881d293b6f6f, ntarget=48, disabled=0, `leader=1`, version=1, state=Ready
 
 ```
 #sudo dmg pool query samir_pool
@@ -68,7 +68,7 @@ Pool space info:
   Free: 598 GB, min:12 GB, max:12 GB, mean:12 GB
 ```
 
- - Find the leader rank address so that daos_metrics command can be run on that specific server.
+ - Find the leader rank address so that daos\_metrics command can be run on that specific server.
    In this example Rank 1 is on `brd-221.daos.hpc.amslabs.hpecorp.net` (`10.214.213.41`)
 
 ```
@@ -172,7 +172,7 @@ export MY_MOUNT=/tmp/daos_mount
 
 In case of no response to any dmg pool command or any I/O operation means any one of the single xstream might have stuck. Either ULT is stuck or NVMe cannot respond to I/O operation.
 To check if ULT is stuck, run metrics command on each server and check for sched/cycle_duration and sched/cycle_size.
-In this case sched/cycle_duration and sched/cycle_size for stuck xstream counter value is higher (outlier) compared to other xstream and ULT count. 
+In this case sched/cycle_duration and sched/cycle_size for stuck xstream counter value is higher (outlier) compared to other xstream and ULT count.
 
 - sched/cycle_duration: Schedule cycle duration, units: ms
 - sched/cycle_size: Schedule cycle size, units: ULT
@@ -182,7 +182,7 @@ Below is the example on real system where ULT was stuck and not responding. You 
 **xs_3: 72508 ULT**
 ```
 # sudo daos_metrics -C -S 0 | grep -e cycle
- 
+
         cycle_duration
             xs_0: 4 ms [min: 0, max: 736, avg: 1, sum: 4374707, stddev: 2, samples: 4337768]
             xs_1: 0 ms [min: 0, max: 4, avg: 0, sum: 12, stddev: 1, samples: 57]
@@ -243,44 +243,43 @@ This metrics are available in different IO size ranges from 256B to 4GB so looks
 ```
 #sudo daos_metrics -C -S 0 | grep 'io/latency/update'
 
-ID: 0/io/latency/update/4MB/tgt_0,16349826,733843,16349826,7329515.976190,42,307839671,4196687.177444 
-ID: 0/io/latency/update/4MB/tgt_1,1260,1147,2191,1463.423077,52,76098,273.640909 
-ID: 0/io/latency/update/4MB/tgt_2,1252,1122,2275,1452.000000,62,90024,272.896966 
-ID: 0/io/latency/update/4MB/tgt_3,1637,1179,2639,1558.844444,45,70148,302.601219 
-ID: 0/io/latency/update/4MB/tgt_4,1155,1119,2280,1496.857143,49,73346,281.746857 
-ID: 0/io/latency/update/4MB/tgt_5,1804,1139,1920,1493.767442,43,64232,234.072520 
-ID: 0/io/latency/update/4MB/tgt_6,1160,1136,2550,1560.862745,51,79604,293.899440 
-ID: 0/io/latency/update/4MB/tgt_7,1399,1126,1969,1411.929825,57,80480,195.942125 
-ID: 0/io/latency/update/4MB/tgt_8,15264368,857936,19645847,9109087.453125,64,582981597,5094157.829112 
-ID: 0/io/latency/update/4MB/tgt_9,1601,1146,2455,1437.038462,52,74726,262.549712 
-ID: 0/io/latency/update/4MB/tgt_10,1366,1138,2094,1459.828125,64,93429,228.692526 
-ID: 0/io/latency/update/4MB/tgt_11,1118,1113,2742,1475.378788,66,97375,309.820731 
-ID: 0/io/latency/update/4MB/tgt_12,1169,1158,2531,1492.392857,56,83574,270.312323 
-ID: 0/io/latency/update/4MB/tgt_13,1477,1148,2204,1485.853659,41,60920,244.983118 
-ID: 0/io/latency/update/4MB/tgt_14,1159,1159,2390,1523.333333,48,73120,318.466026 
+ID: 0/io/latency/update/4MB/tgt_0,16349826,733843,16349826,7329515.976190,42,307839671,4196687.177444
+ID: 0/io/latency/update/4MB/tgt_1,1260,1147,2191,1463.423077,52,76098,273.640909
+ID: 0/io/latency/update/4MB/tgt_2,1252,1122,2275,1452.000000,62,90024,272.896966
+ID: 0/io/latency/update/4MB/tgt_3,1637,1179,2639,1558.844444,45,70148,302.601219
+ID: 0/io/latency/update/4MB/tgt_4,1155,1119,2280,1496.857143,49,73346,281.746857
+ID: 0/io/latency/update/4MB/tgt_5,1804,1139,1920,1493.767442,43,64232,234.072520
+ID: 0/io/latency/update/4MB/tgt_6,1160,1136,2550,1560.862745,51,79604,293.899440
+ID: 0/io/latency/update/4MB/tgt_7,1399,1126,1969,1411.929825,57,80480,195.942125
+ID: 0/io/latency/update/4MB/tgt_8,15264368,857936,19645847,9109087.453125,64,582981597,5094157.829112
+ID: 0/io/latency/update/4MB/tgt_9,1601,1146,2455,1437.038462,52,74726,262.549712
+ID: 0/io/latency/update/4MB/tgt_10,1366,1138,2094,1459.828125,64,93429,228.692526
+ID: 0/io/latency/update/4MB/tgt_11,1118,1113,2742,1475.378788,66,97375,309.820731
+ID: 0/io/latency/update/4MB/tgt_12,1169,1158,2531,1492.392857,56,83574,270.312323
+ID: 0/io/latency/update/4MB/tgt_13,1477,1148,2204,1485.853659,41,60920,244.983118
+ID: 0/io/latency/update/4MB/tgt_14,1159,1159,2390,1523.333333,48,73120,318.466026
 ID: 0/io/latency/update/4MB/tgt_15,1511,1165,2318,1447.608696,46,66590,253.351094
 
 #sudo daos_metrics -C -S 0 | grep 'io/latency/fetch'
 
-ID: 0/io/latency/fetch/4MB/tgt_0,1390,1099,2169,1380.785714,42,57993,202.810200 
-ID: 0/io/latency/fetch/4MB/tgt_1,1902,1413,2956,1845.769231,52,95980,313.043041 
-ID: 0/io/latency/fetch/4MB/tgt_2,1741,1395,2493,1783.983871,62,110607,226.501945 
-ID: 0/io/latency/fetch/4MB/tgt_3,1543,1241,2568,1824.800000,45,82116,281.414092 
-ID: 0/io/latency/fetch/4MB/tgt_4,1705,1506,2426,1850.020408,49,90651,232.079413 
-ID: 0/io/latency/fetch/4MB/tgt_5,1579,1251,2396,1754.139535,43,75428,213.314275 
-ID: 0/io/latency/fetch/4MB/tgt_6,1566,1262,2403,1747.823529,51,89139,260.631134 
-ID: 0/io/latency/fetch/4MB/tgt_7,1663,1354,2912,1853.631579,57,105657,287.610267 
-ID: 0/io/latency/fetch/4MB/tgt_8,1508,1051,2276,1417.562500,64,90724,271.118956 
-ID: 0/io/latency/fetch/4MB/tgt_9,1508,1404,2468,1791.788462,52,93173,251.042324 
-ID: 0/io/latency/fetch/4MB/tgt_10,1746,1453,2645,1796.203125,64,114957,230.458630 
-ID: 0/io/latency/fetch/4MB/tgt_11,1695,1394,2416,1761.151515,66,116236,220.046376 
-ID: 0/io/latency/fetch/4MB/tgt_12,1966,1396,2654,1740.464286,56,97466,238.501684 
-ID: 0/io/latency/fetch/4MB/tgt_13,1915,1341,2613,1774.536585,41,72756,237.038298 
-ID: 0/io/latency/fetch/4MB/tgt_14,1861,1337,2543,1807.625000,48,86766,279.890680 
-ID: 0/io/latency/fetch/4MB/tgt_15,1740,1326,2420,1733.521739,46,79742,238.393674 
+ID: 0/io/latency/fetch/4MB/tgt_0,1390,1099,2169,1380.785714,42,57993,202.810200
+ID: 0/io/latency/fetch/4MB/tgt_1,1902,1413,2956,1845.769231,52,95980,313.043041
+ID: 0/io/latency/fetch/4MB/tgt_2,1741,1395,2493,1783.983871,62,110607,226.501945
+ID: 0/io/latency/fetch/4MB/tgt_3,1543,1241,2568,1824.800000,45,82116,281.414092
+ID: 0/io/latency/fetch/4MB/tgt_4,1705,1506,2426,1850.020408,49,90651,232.079413
+ID: 0/io/latency/fetch/4MB/tgt_5,1579,1251,2396,1754.139535,43,75428,213.314275
+ID: 0/io/latency/fetch/4MB/tgt_6,1566,1262,2403,1747.823529,51,89139,260.631134
+ID: 0/io/latency/fetch/4MB/tgt_7,1663,1354,2912,1853.631579,57,105657,287.610267
+ID: 0/io/latency/fetch/4MB/tgt_8,1508,1051,2276,1417.562500,64,90724,271.118956
+ID: 0/io/latency/fetch/4MB/tgt_9,1508,1404,2468,1791.788462,52,93173,251.042324
+ID: 0/io/latency/fetch/4MB/tgt_10,1746,1453,2645,1796.203125,64,114957,230.458630
+ID: 0/io/latency/fetch/4MB/tgt_11,1695,1394,2416,1761.151515,66,116236,220.046376
+ID: 0/io/latency/fetch/4MB/tgt_12,1966,1396,2654,1740.464286,56,97466,238.501684
+ID: 0/io/latency/fetch/4MB/tgt_13,1915,1341,2613,1774.536585,41,72756,237.038298
+ID: 0/io/latency/fetch/4MB/tgt_14,1861,1337,2543,1807.625000,48,86766,279.890680
+ID: 0/io/latency/fetch/4MB/tgt_15,1740,1326,2420,1733.521739,46,79742,238.393674
 
 ```
-
 
 ### NVMe Device Error
 
@@ -305,7 +304,7 @@ ID: 0/nvme/0000:83:00.0/vendor/crc_err_cnt_raw,0
 
 ## Metrics Unit Type
 
-daos_metrics output is available in multiple units. for example, Counters, Gauge. It can display the data based on different unit type.
+daos\_metrics output is available in multiple units. for example, Counters, Gauge. It can display the data based on different unit type.
 
 ### Display Counter type metrics
 A counter is a cumulative metric that represents a single monotonically increasing counter whose value can only increase or be reset or to zero on restart.
@@ -338,9 +337,9 @@ ID: 0/net/ofi+tcp;ofi_rxm/hg/active_rpcs/ctx_3,0,,,,,,Mercury-layer count of act
 Gauge metrics units are in format where multiple values are display for number of samples. For example, update/fetch latency output.
 
 ```
-        latency 
-            update  
-                256B    
+        latency
+            update
+                256B
                     tgt_0: 118 us [min: 15, max: 3703, avg: 100, sum: 200968, stddev: 124, samples: 2010]
 ```
 
@@ -359,6 +358,7 @@ Gauge metrics units are in format where multiple values are display for number o
 Metrics counter will be reset when system restarts or it can be reset using below command on individual servers.
 
 For Engine 0 & 1 (In case multiple engines are running on same node)
+
 ```
 sudo daos_metrics -S 0 -e; sudo daos_metrics -S 1 -e
 ```

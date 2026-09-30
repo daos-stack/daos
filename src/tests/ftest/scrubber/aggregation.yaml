@@ -38,7 +38,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   properties: "cksum:sha512,rd_fac:1"
 
 ior: &ior_base

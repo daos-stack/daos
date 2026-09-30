@@ -81,7 +81,8 @@ fi
 rm -rf "$test_log_dir"
 
 # Use default python as that's where storage_estimator is installed.
-python3 -m venv venv
+: "${PYTHON_VERSION:=3.11}"
+"python${PYTHON_VERSION}" -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 
@@ -97,5 +98,7 @@ pip install --upgrade pip
 pip install --requirement requirements-utest.txt
 pip install /opt/daos/lib/daos/python/
 
-HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" utils/run_utest.py $RUN_TEST_VALGRIND \
+HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" \
+NO_PROXY="${DAOS_NO_PROXY:-}" \
+utils/run_utest.py $RUN_TEST_VALGRIND \
     --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" $SUDO_ARG

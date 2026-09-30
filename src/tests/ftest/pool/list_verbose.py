@@ -292,15 +292,16 @@ class ListVerboseTest(IorTestBase):
         5. Exclude a target for pool 1.
         (dmg pool exclude TestLabel_1 --rank=1 --target-idx=7)
         6. Verify the fields for both pools with expected disabled and size.
-        7. Destroy pool 2.
-        8. Verify the fields for pool 1.
-        9. Verify that there's only one pool in the list.
-        10. Destroy pool 1.
-        11. Verify that the list is empty.
+        7. Wait for rebuild to complete.
+        8. Destroy pool 2.
+        9. Verify the fields for pool 1.
+        10. Verify that there's only one pool in the list.
+        11. Destroy pool 1.
+        12. Verify that the list is empty.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=pool
+        :avocado: tags=pool,rebuild
         :avocado: tags=ListVerboseTest,test_fields_basic
         """
         self.pool = []
@@ -365,7 +366,13 @@ class ListVerboseTest(IorTestBase):
             state=state, rebuild_state=rebuild_state, ranks_disabled=ranks_disabled,
             rebuild_degraded=rebuild_degraded)
 
-        # 7-11. Destroy and verify until the pools are gone.
+        # 7. Wait for rebuild to complete.
+        self.log_step("Wait for rebuild to complete")
+        self.pool[0].wait_for_rebuild_to_end()
+        rebuild_state[0] = "done"
+        rebuild_degraded[0] = False
+
+        # 8-12. Destroy and verify until the pools are gone.
         while self.pool:
             self.log_step("Destroy and verify until the pools are gone")
             self.pool[-1].destroy()

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -199,14 +199,15 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool keep_act
 /**
  * Abort the specified DTXs.
  *
- * \param coh	[IN]	Container open handle.
- * \param dti	[IN]	The DTX identifiers to be aborted.
- * \param epoch	[IN]	The max epoch for the DTX to be aborted.
+ * \param coh     [IN]	Container open handle.
+ * \param dti     [IN]	The DTX identifiers to be aborted.
+ * \param epoch   [IN]	The max epoch for the DTX to be aborted.
+ * \param version [IN]	The max version for the DTX to be aborted.
  *
  * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
+vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch, uint32_t version);
 
 /**
  * Discard the active DTX entry's records if invalid.
@@ -583,6 +584,19 @@ int
 vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh);
 
 /**
+ * Open a container within a VOSP with a checker.
+ *
+ * \param poh		[IN]	Pool open handle
+ * \param co_uuid	[IN]	Container uuid
+ * \param ck		[IN]	Checker structure
+ * \param coh		[OUT]	Returned container handle
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_handle_t *coh);
+
+/**
  * Release container open handle
  *
  * \param coh	[IN]	container open handle
@@ -913,8 +927,8 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
  * \param[in] nr	Number of I/O descriptors in \a ios.
  * \param[in,out] iods	Array of I/O descriptors. The returned record sizes are also restored in
  * 			this parameter.
- * \param[in] vos_flags	VOS fetch flags, VOS cond flags, VOS_OF_FETCH_SIZE_ONLY or
- * 			VOS_OF_FETCH_RECX_LIST.
+ * \param[in] vos_flags	VOS fetch flags, VOS cond flags, VOS_OF_FETCH_SIZE_ONLY,
+ * 			VOS_OF_FETCH_RECX_LIST or VOS_OF_FETCH_CSUM.
  * \param[in] shadows	Optional shadow recx/epoch lists, one for each iod.
  *			data of extents covered by these should not be returned
  *			by fetch function. Only used for EC obj degraded fetch.
@@ -1098,6 +1112,18 @@ vos_ioh2ci(daos_handle_t ioh);
 
 uint32_t
 vos_ioh2ci_nr(daos_handle_t ioh);
+
+/**
+ * Get the actual stored epoch of the single value fetched by vos_fetch_begin().
+ * Only meaningful for DAOS_IOD_SINGLE akeys after a successful fetch; returns 0
+ * if no single value was found (hole, -DER_NONEXIST, or array akey fetch).
+ *
+ * \param ioh	[IN]	The I/O handle.
+ *
+ * \return		Actual stored epoch, or 0 if no SV was found.
+ */
+daos_epoch_t
+vos_ioh2sv_epoch(daos_handle_t ioh);
 
 /**
  * Get the scatter/gather list associated with a given I/O descriptor.
@@ -1318,6 +1344,21 @@ vos_iter_empty(daos_handle_t ih);
  */
 int
 vos_iter_validate(daos_handle_t ih);
+
+/**
+ * Check an iterator.
+ *
+ * \param[in] ih			Iterator handle.
+ * \param[in] report_fn			Report function.
+ * \param[in] report_arg		Argument for the report function.
+ * \param[in] error_on_non_zero_padding	Trigger an error on non-zero padding.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Errors returned by the iterator check.
+ */
+int
+vos_iter_check(daos_handle_t ih, report_fn_t report_fn, void *report_arg,
+	       bool error_on_non_zero_padding);
 
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
@@ -1684,6 +1725,7 @@ struct scrub_ctx {
 	sc_sleep_fn_t		 sc_sleep_fn;
 	sc_yield_fn_t		 sc_yield_fn;
 	void			*sc_sched_arg;
+	uint32_t                 sc_filter_credits;
 
 	enum scrub_status        sc_status;
 	uint8_t                  sc_cont_loaded : 1, /* Have all the containers been loaded */

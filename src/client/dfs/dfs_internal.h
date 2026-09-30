@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -311,7 +312,7 @@ check_name(const char *name, size_t *_len)
 
 	len = strnlen(name, DFS_MAX_NAME + 1);
 	if (len > DFS_MAX_NAME)
-		return EINVAL;
+		return ENAMETOOLONG;
 
 	*_len = len;
 	return 0;
@@ -354,8 +355,6 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 			D_MUTEX_UNLOCK(&dfs->lock);
 			return daos_der2errno(rc);
 		}
-		/** Start such that dfs->last_hi will be final value */
-		dfs->oid.hi = dfs->last_hi;
 	}
 
 	/** set oid and lo, bump the current hi value */
@@ -429,4 +428,7 @@ update_stbuf_times(struct dfs_entry entry, daos_epoch_t max_epoch, struct stat *
 int
 lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_obj_t **_obj,
 		mode_t *mode, struct stat *stbuf, size_t depth);
+int
+follow_symlink(dfs_t *dfs, dfs_obj_t *parent, const char *value, int flags, dfs_obj_t **_obj,
+	       mode_t *mode, struct stat *stbuf, size_t depth);
 #endif /* __DFS_INTERNAL_H__ */

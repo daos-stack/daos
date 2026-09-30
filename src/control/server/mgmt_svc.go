@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -83,6 +84,14 @@ type mgmtSvc struct {
 	serialReqs        batchReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
+	cancel            context.CancelFunc
+	// loopWg tracks background processing loops (batchReqLoop, serialReqLoop,
+	// leaderTaskLoop) started by startAsyncLoops/startLeaderLoops, so that
+	// Close() can block until they have actually exited rather than merely
+	// signaling cancellation and returning immediately. This avoids racing
+	// with goroutine-leak checks (e.g. goleak) that run shortly after a
+	// test's cleanup completes.
+	loopWg sync.WaitGroup
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
@@ -99,6 +108,21 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		batchReqs:         make(batchReqChan),
 		serialReqs:        make(batchReqChan),
 		groupUpdateReqs:   make(chan bool),
+	}
+}
+
+// Close cleanly shuts down the management service, canceling the context,
+// waiting for background processing loops to exit, and closing the events
+// PubSub if present.
+func (svc *mgmtSvc) Close() {
+	if svc != nil {
+		if svc.cancel != nil {
+			svc.cancel()
+		}
+		svc.loopWg.Wait()
+		if svc.events != nil {
+			svc.events.Close()
+		}
 	}
 }
 
@@ -175,13 +199,24 @@ func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
 // startLeaderLoops kicks off the leader-only processing loops
 // that will be canceled on leadership loss.
 func (svc *mgmtSvc) startLeaderLoops(ctx context.Context) {
-	go svc.leaderTaskLoop(ctx)
+	svc.loopWg.Add(1)
+	go func() {
+		defer svc.loopWg.Done()
+		svc.leaderTaskLoop(ctx)
+	}()
 }
 
 // startAsyncLoops kicks off the asynchronous processing loops.
 func (svc *mgmtSvc) startAsyncLoops(ctx context.Context) {
-	go svc.batchReqLoop(ctx)
-	go svc.serialReqLoop(ctx)
+	svc.loopWg.Add(2)
+	go func() {
+		defer svc.loopWg.Done()
+		svc.batchReqLoop(ctx)
+	}()
+	go func() {
+		defer svc.loopWg.Done()
+		svc.serialReqLoop(ctx)
+	}()
 }
 
 // submitBatchRequest submits a message for batch processing and waits for a response.

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,7 +59,7 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 	if (rc != 0)
 		D_GOTO(ev, rc);
 
-	sem_post(&eqt->de_sem);
+	dfuse_eq_wakeup(eqt);
 
 	return;
 ev:

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -167,6 +167,7 @@ func (m *mockConn) SetReadOutputBytesToResponse(t *testing.T, resp *Response) {
 
 // mockListener is a mock of the net.Listener interface
 type mockListener struct {
+	t               *testing.T
 	acceptNumConns  int // accept a certain number of connections before failing
 	acceptErr       error
 	acceptCallCount int
@@ -179,7 +180,9 @@ func (l *mockListener) Accept() (net.Conn, error) {
 	if l.acceptCallCount > l.acceptNumConns {
 		return nil, l.acceptErr
 	}
-	return newMockConn(), nil
+	c := newMockConn()
+	c.SetReadOutputBytesToResponse(l.t, &Response{})
+	return c, nil
 }
 
 func (l *mockListener) Close() error {
@@ -197,10 +200,8 @@ func (l *mockListener) setNumConnsToAccept(n int) {
 	l.acceptErr = errors.New("mock done accepting connections")
 }
 
-func newMockListener() *mockListener {
-	return &mockListener{
-		acceptNumConns: -1,
-	}
+func newMockListener(t *testing.T) *mockListener {
+	return &mockListener{t: t}
 }
 
 // ctxMockListener is a mock of the net.Listener interface that blocks
