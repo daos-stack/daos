@@ -1590,6 +1590,24 @@ dump_csum_recx_cb_004(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_ep
 	return 0;
 }
 
+/*
+ * g_oids[DVT_FAKE_CSUM_OID_VALID]: A [0, S)@1, B [S/2, 3S/2)@2 with checksum infos.
+ * fetching at recx [2S, 3S)@DAOS_EPOCH_MAX (no extent stored there)
+ * result: no recx list (NULL), no checksum info.
+ */
+static int
+dump_csum_recx_cb_005(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		      struct dcs_ci_list *cil)
+{
+	assert_null(cb_args);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 0);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 0);
+
+	return 0;
+}
+
 static void
 dump_csum_recx_tests(void **state)
 {
@@ -1625,6 +1643,13 @@ dump_csum_recx_tests(void **state)
 	path.vtp_recx.rx_idx = csum_ctx->dct_recx_size / 2;
 	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size / 2;
 	rc = dv_dump_csum(tctx->dvt_poh, &path, 1, dump_csum_recx_cb_004, csum_ctx);
+	assert_success(rc);
+
+	/* range without any stored extent: VOS reports no recx list at all (NULL) */
+	path.vtp_oid         = g_oids[DVT_FAKE_CSUM_OID_VALID];
+	path.vtp_recx.rx_idx = 2 * csum_ctx->dct_recx_size;
+	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_csum_recx_cb_005, NULL);
 	assert_success(rc);
 
 	/* with csum info, without callback */
@@ -2017,6 +2042,25 @@ check_csum_recx_cb_008(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_e
 	return 0;
 }
 
+/*
+ * g_oids[DVT_FAKE_CSUM_OID_VALID]: A [0, S)@1, B [S/2, 3S/2)@2 with checksum infos.
+ * fetching at recx [2S, 3S)@DAOS_EPOCH_MAX (no extent stored there)
+ * result: no recx list (NULL), no checksum info, nothing to check (got_csums NULL).
+ */
+static int
+check_csum_recx_cb_009(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	assert_null(cb_args);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 0);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 0);
+	assert_null(got_csums);
+
+	return 0;
+}
+
 static void
 check_csum_recx_tests(void **state)
 {
@@ -2071,6 +2115,13 @@ check_csum_recx_tests(void **state)
 	path.vtp_recx.rx_idx = csum_ctx->dct_recx_size / 2;
 	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size / 2;
 	rc = dv_check_csum(tctx->dvt_poh, &path, 1, check_csum_recx_cb_008, csum_ctx);
+	assert_success(rc);
+
+	/* range without any stored extent: VOS reports no recx list at all (NULL), nothing to
+	 * check */
+	path.vtp_recx.rx_idx = 2 * csum_ctx->dct_recx_size;
+	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_009, NULL);
 	assert_success(rc);
 	path.vtp_recx.rx_idx = 0;
 	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
@@ -2144,6 +2195,14 @@ csum_chunk_nr_inject(uint32_t chunk_nr)
 	daos_fail_loc_set(DDB_CSUM_CHUNK_NR_INJECT | DAOS_FAIL_ONCE);
 }
 
+/* Arm the fault for the next checksum info checked by dv_dump_csum()/dv_check_csum() only. */
+static void
+csum_type_inject(uint32_t csum_type)
+{
+	daos_fail_value_set(csum_type);
+	daos_fail_loc_set(DDB_CSUM_TYPE_INJECT | DAOS_FAIL_ONCE);
+}
+
 static int
 dump_cb_unexpected(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
 		   struct dcs_ci_list *cil)
@@ -2192,6 +2251,19 @@ dump_csum_sv_inconsistent_tests(void **state)
 	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_unexpected, NULL);
 	assert_rc_equal(-DER_CSUM, rc);
 
+	/* one checksum info claimed for a value without any (dcs_csum_info_get() returns NULL):
+	 * -DER_CSUM, callback not invoked */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_NONE];
+	csum_nr_inject(1);
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+
+	/* checksum type unknown to the checksum library: -DER_CSUM, callback not invoked */
+	csum_type_inject(HASH_TYPE_END);
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
 	/* control: the consistent count is accepted */
 	csum_nr_inject(1);
 	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_count, &cb_calls);
@@ -2202,13 +2274,14 @@ dump_csum_sv_inconsistent_tests(void **state)
 static void
 dump_csum_recx_inconsistent_tests(void **state)
 {
-	struct dt_vos_pool_ctx *tctx = *state;
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
 	struct dv_tree_path     path;
 	int                     cb_calls = 0;
 	int                     rc;
 
 	FAULT_INJECTION_REQUIRED();
-	mock_csum_path_recx(&path, tctx->dvt_extra);
+	mock_csum_path_recx(&path, csum_ctx);
 
 	/* fewer checksum infos than stored extents: -DER_CSUM, callback not invoked */
 	csum_nr_inject(DVT_FAKE_RECX_COUNT - 1);
@@ -2220,6 +2293,22 @@ dump_csum_recx_inconsistent_tests(void **state)
 	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_unexpected, NULL);
 	assert_rc_equal(-DER_CSUM, rc);
 
+	/* checksum infos claimed for extents without any (dcs_csum_info_get() returns NULL):
+	 * -DER_CSUM, callback not invoked */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_NONE];
+	csum_nr_inject(DVT_FAKE_RECX_COUNT);
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+
+	/* checksum info claimed for a range without any stored extent (no recx list at all):
+	 * -DER_CSUM, callback not invoked */
+	path.vtp_recx.rx_idx = 2 * csum_ctx->dct_recx_size;
+	csum_nr_inject(1);
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+	path.vtp_recx.rx_idx = 0;
+
 	/* checksum covering more chunks than its extent (first entry): -DER_CSUM, callback not
 	 * invoked */
 	csum_chunk_nr_inject(3);
@@ -2228,6 +2317,12 @@ dump_csum_recx_inconsistent_tests(void **state)
 
 	/* checksum covering fewer chunks than its extent (first entry): same outcome */
 	csum_chunk_nr_inject(1);
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* checksum type unknown to the checksum library (first entry): -DER_CSUM, callback not
+	 * invoked */
+	csum_type_inject(HASH_TYPE_END);
 	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_cb_unexpected, NULL);
 	assert_rc_equal(-DER_CSUM, rc);
 
@@ -2260,8 +2355,22 @@ check_csum_sv_inconsistent_tests(void **state)
 	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
 	assert_rc_equal(-DER_CSUM, rc);
 
+	/* one checksum info claimed for a value without any (dcs_csum_info_get() returns NULL):
+	 * -DER_CSUM, callback not invoked */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_NONE];
+	csum_nr_inject(1);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+
 	/* checksum stored for a value without data: -DER_CSUM, callback not invoked */
 	csum_no_data_inject();
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* checksum type unknown to the checksum library: -DER_CSUM, callback not invoked, nothing
+	 * verified */
+	csum_type_inject(HASH_TYPE_END);
 	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
 	assert_rc_equal(-DER_CSUM, rc);
 
@@ -2275,13 +2384,14 @@ check_csum_sv_inconsistent_tests(void **state)
 static void
 check_csum_recx_inconsistent_tests(void **state)
 {
-	struct dt_vos_pool_ctx *tctx = *state;
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
 	struct dv_tree_path     path;
 	int                     cb_calls = 0;
 	int                     rc;
 
 	FAULT_INJECTION_REQUIRED();
-	mock_csum_path_recx(&path, tctx->dvt_extra);
+	mock_csum_path_recx(&path, csum_ctx);
 
 	/* fewer checksum infos than stored extents: -DER_CSUM, callback not invoked */
 	csum_nr_inject(DVT_FAKE_RECX_COUNT - 1);
@@ -2310,6 +2420,12 @@ check_csum_recx_inconsistent_tests(void **state)
 	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
 	assert_rc_equal(-DER_CSUM, rc);
 
+	/* checksum type unknown to the checksum library (first segment): -DER_CSUM, callback not
+	 * invoked, nothing verified */
+	csum_type_inject(HASH_TYPE_END);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
 	/* control: the consistent count is accepted and the checksums verified */
 	csum_nr_inject(DVT_FAKE_RECX_COUNT);
 	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
@@ -2321,6 +2437,22 @@ check_csum_recx_inconsistent_tests(void **state)
 	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
 	assert_success(rc);
 	assert_int_equal(cb_calls, 2);
+
+	/* checksum info claimed for a range without any stored extent (no recx list at all):
+	 * -DER_CSUM, callback not invoked */
+	path.vtp_recx.rx_idx = 2 * csum_ctx->dct_recx_size;
+	csum_nr_inject(1);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+	path.vtp_recx.rx_idx = 0;
+
+	/* checksum infos claimed for extents without any (dcs_csum_info_get() returns NULL):
+	 * -DER_CSUM, callback not invoked */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_NONE];
+	csum_nr_inject(DVT_FAKE_RECX_COUNT);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
 }
 
 /*
