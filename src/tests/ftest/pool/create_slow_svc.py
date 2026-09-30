@@ -364,8 +364,8 @@ class PoolCreateSlowSvc(TestWithServers):
 
         Test Description:
             Delay the target destroy of the rollback long enough that, beyond outliving the
-            rollback's own CoRPC timeout (as in test_pool_create_slow_svc_slow_destroy), the
-            retried create's own wait for that same in-flight destroy also outlives its create RPC
+            rollback's own CoRPC timeout (as in test_pool_create_slow_svc_slow_destroy), the wait
+            of the retried create for that same in-flight destroy also outlives its create RPC
             timeout. The retry must then be rolled back too (a second, serialized destroy of the
             same pool UUID) and dmg must retry again, which must eventually succeed once the
             delayed destroy has completed. This exercises DAOS-19608's create-vs-destroy and
@@ -401,7 +401,7 @@ class PoolCreateSlowSvc(TestWithServers):
 
         self.log_step("Verifying that the retry waited for the in-flight destroy before creating")
         destroy_wait_count = self.count_leader_log(pool, ENGINE_CREATE_WAITING_FOR_DESTROY)
-        # Only a retry's create (not the original attempt, since nothing is being destroyed yet
+        # Only a retry create (not the original attempt, since nothing is being destroyed yet
         # when it starts) can ever wait on dpt_destroys_ht, so this can happen at most once per
         # retry.
         if destroy_wait_count < 1 or destroy_wait_count > retries:
