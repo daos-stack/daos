@@ -24,7 +24,10 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          # Enough for the 4GB pool and its 1GiB service replica on 3 engines.
+          # Pinned rather than left to auto-sizing: auto-sizing computes a ramdisk from a
+          # fraction of total host memory, which can pick a value that does not fit on every
+          # host. This is the minimum this test actually needs: enough for the 4GB pool and its
+          # 1GiB service replica on 3 engines.
           scm_size: 6
   system_ram_reserved: 1
 # The pool is created on an odd number of ranks with as many service replicas.

@@ -176,8 +176,8 @@ class PoolCreateSlowSvc(TestWithServers):
         elapsed = time.time() - start
         retries = self.get_create_retries(pool.dmg.result)
         self.log.info(
-            "Pool %s created in %.1f seconds with %d dmg retries", pool.identifier, elapsed,
-            retries)
+            "Pool %s created in %.1f seconds (includes log-mask RPC overhead) with %d dmg "
+            "retries", pool.identifier, elapsed, retries)
         # The delayed replica creation is always waited for, and the delayed rollback destroy only
         # starts once the first create attempt has timed out, i.e. at least crt_timeout after the
         # create was issued (15 s with the fix, which raises the RSVC_START timeout to a floor).
