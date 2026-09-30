@@ -278,7 +278,7 @@ class PoolCreateSlowSvc(TestWithServers):
             the minimum RSVC_START create timeout (15s). The pool create must succeed on its first
             attempt, waiting for the slow replicas: dmg must not have retried the create.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_create,fault_injection
         :avocado: tags=PoolCreateSlowSvc,test_pool_create_slow_svc
@@ -303,7 +303,7 @@ class PoolCreateSlowSvc(TestWithServers):
             timeout granted to it (at least the one of the replica creation); the retry of the
             create with the same pool UUID must then succeed.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_create,fault_injection
         :avocado: tags=PoolCreateSlowSvc,test_pool_create_slow_svc_retry
