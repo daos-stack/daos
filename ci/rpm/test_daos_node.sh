@@ -31,9 +31,8 @@ set -uex
 
 dnf_retry() {
     local retries=3
-    shift
-
     local rc=0
+
     for ((attempt = 1; attempt <= retries; attempt++)); do
         if ((rc != 0)); then
             echo "dnf $* failed on attempt $((attempt - 1)) of $retries" \
