@@ -649,7 +649,7 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium Provider stage.')
         booleanParam(name: bashName('Functional Hardware Medium Provider MD on SSD'),
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the Functional Hardware Medium Provider MD on SSD stage.')
         booleanParam(name: bashName('Functional Hardware Large'),
                      defaultValue: false,
@@ -661,7 +661,7 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Functional Cluster Box test stage')
         booleanParam(name: bashName('Functional Cluster Box Medium Provider MD on SSD'),
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the Functional Cluster Box Provider MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
