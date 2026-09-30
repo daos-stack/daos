@@ -28,6 +28,3 @@ pool_1:
 
 pool_2:
   size: 95%
-
-pool_3:
-  size: 40%
