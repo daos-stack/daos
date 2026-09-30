@@ -10,7 +10,6 @@ import threading
 import time
 
 from osa_utils import OSAUtils
-from test_utils_container import get_existing_container
 
 
 class OSAOfflineParallelTest(OSAUtils):
@@ -194,32 +193,9 @@ class OSAOfflineParallelTest(OSAUtils):
         # Finally run IOR to read the data and perform daos_container_check
         if data:
             # Perform a data consistency check.
-            containers = []
-            container = None
             for pool in pools:
                 self.pool = pool
-                daos_cmd = self.get_daos_command()
-                containers = daos_cmd.container_list(pool=self.pool.identifier)
-                for info in containers["response"]:
-                    max_attempts = 3
-                    for attempt in range(1, max_attempts + 1):
-                        try:
-                            container = get_existing_container(
-                                self, self.pool, info["uuid"], daos=daos_cmd)
-                        except Exception as error:
-                            container_error = str(error)
-                        else:
-                            if container is not None:
-                                break
-                            container_error = "get_existing_container returned an invalid object"
-                        self.log.info(
-                            "Container %s attempt %s/%s failed: %s",
-                            info["uuid"], attempt, max_attempts, container_error)
-                        if attempt == max_attempts:
-                            self.fail(
-                                "Failed to get a valid TestContainer for {} after {} attempts: {}"
-                                .format(info["uuid"], max_attempts, container_error))
-                        time.sleep(1)
+                for container in self.get_all_containers(self.pool):
                     self.run_ior_thread("Read", oclass, test_seq, single_cont_read=False)
                     self.log.info("Checking data integrity for container %s", container)
                     container.check()
