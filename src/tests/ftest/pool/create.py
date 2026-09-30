@@ -155,5 +155,5 @@ class PoolCreateTests(TestWithServers):
         self.server_managers[0].stop_ranks([0])
 
         # Create 1 pool using 40% of the available capacity
-        pool = self.get_pool(namespace="/run/pool_3/*", size='100%', create=False)
+        pool = self.get_pool(namespace="/run/pool_3/*", size='40%', create=False)
         check_pool_creation(self, [pool], 120)
