@@ -45,6 +45,8 @@ expect_worker_fopen(int error)
 	expect_string(__wrap_fopen, path, Mock_log_file);
 	expect_string(__wrap_fopen, mode, "w");
 	will_return(__wrap_fopen, error);
+	if (error == 0)
+		will_return(__wrap_fopen, Mock_file_stream);
 }
 
 static int
@@ -74,6 +76,7 @@ setup_worker_checker(void **state)
 	ck = *state;
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, 0);
+	will_return(__wrap_d_asprintf2, Mock_log_file);
 	expect_worker_fopen(0);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	assert_int_equal(dlck_checker_worker_init(&options, "/tmp", Mock_pool_uuid, 0, NULL, ck),
@@ -127,6 +130,7 @@ test_worker_init_log_open_failure(void **state)
 
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, 0);
+	will_return(__wrap_d_asprintf2, Mock_log_file);
 	expect_worker_fopen(EIO);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	expect_value(__wrap_d_free, ptr, &Dcw);

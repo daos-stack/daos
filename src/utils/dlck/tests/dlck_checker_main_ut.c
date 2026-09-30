@@ -49,6 +49,7 @@ setup_main_checker(void **state)
 	EXPECT_CHECKER_D_CALLOC(Dcm);
 	expect_value(__wrap_ABT_mutex_create, newmutex, &Dcm.stream_mutex);
 	will_return(__wrap_ABT_mutex_create, ABT_SUCCESS);
+	will_return(__wrap_ABT_mutex_create, Mock_mutex_handle);
 	assert_int_equal(dlck_checker_main_init(ck), DER_SUCCESS);
 	assert_non_null(ck->ck_private);
 	return 0;
@@ -69,6 +70,7 @@ teardown_main_checker(void **state)
 
 	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
 	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
+	expect_value(__wrap_ABT_mutex_free, handle, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_free, ABT_SUCCESS);
 	expect_value(__wrap_d_free, ptr, &Dcm);
 	assert_int_equal(dlck_checker_main_fini(ck), DER_SUCCESS);
@@ -221,6 +223,7 @@ test_main_fini_mutex_free_failure(void **state)
 
 	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
 	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
+	expect_value(__wrap_ABT_mutex_free, handle, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_free, ABT_ERR_OTHER);
 	expect_value(__wrap_d_free, ptr, &Dcm);
 	assert_int_equal(dlck_checker_main_fini(ck), dss_abterr2der(ABT_ERR_OTHER));

@@ -60,7 +60,8 @@ __wrap_d_free(void *ptr)
 char *
 __wrap_d_asprintf2(int *rc, const char *fmt, ...)
 {
-	int mock_rc = mock_type(int);
+	char *result;
+	int   mock_rc = mock_type(int);
 
 	(void)fmt;
 	if (mock_rc == -1) {
@@ -68,8 +69,10 @@ __wrap_d_asprintf2(int *rc, const char *fmt, ...)
 		return NULL;
 	}
 
-	*rc = sizeof(Mock_log_file) - 1;
-	return Mock_log_file;
+	result = mock_ptr_type(char *);
+	assert_non_null(result);
+	*rc = (int)strlen(result);
+	return result;
 }
 
 FILE *
@@ -83,7 +86,8 @@ __wrap_fopen(const char *path, const char *mode)
 		errno = error;
 		return NULL;
 	}
-	return Mock_file_stream;
+
+	return mock_ptr_type(FILE *);
 }
 
 int
@@ -106,18 +110,20 @@ __wrap_ABT_mutex_create(ABT_mutex *newmutex)
 	check_expected_ptr(newmutex);
 	assert_non_null(newmutex);
 	if (rc == ABT_SUCCESS)
-		*newmutex = Mock_mutex_handle;
+		*newmutex = mock_ptr_type(ABT_mutex);
 	return rc;
 }
 
 int
 __wrap_ABT_mutex_free(ABT_mutex *mutex)
 {
-	int rc = mock_type(int);
+	ABT_mutex handle;
+	int       rc = mock_type(int);
 
 	check_expected_ptr(mutex);
 	assert_non_null(mutex);
-	assert_ptr_equal(*mutex, Mock_mutex_handle);
+	handle = *mutex;
+	check_expected_ptr(handle);
 	if (rc == ABT_SUCCESS)
 		*mutex = ABT_MUTEX_NULL;
 	return rc;

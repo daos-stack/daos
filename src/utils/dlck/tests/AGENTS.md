@@ -21,10 +21,17 @@ Apply these rules when adding or changing DLCK unit tests:
   success and relevant failure boundaries, not every theoretical branch.
 - Use `will_return(mock, value)` for each mocked return consumed by
   `mock_type(type)`; use `mock_ptr_type(type)` for pointer-returning mocks.
-  Queue values in call order, including initialization and cleanup calls. Do
-  not leave unused values or expectations. Use `EXPECT_CHECKER_D_CALLOC(Dcm)`
-  or `EXPECT_CHECKER_D_CALLOC(Dcw)` for successful checker payload allocation.
-  Use `expect_checker_d_calloc(sizeof(payload), NULL)` for allocation failure.
+- Queue test-controlled return values and output handles in each test, not as
+  constants in mocks. Queue only values consumed on that execution path, in
+  call order, including initialization and cleanup; leave no unused values.
+  Preserve fixed effects required by the mocked API contract.
+- For example, `d_asprintf2`, `fopen`, and `ABT_mutex_create` consume a result
+  code and, only on success, a pointer or handle. An error must not leave an
+  unused pointer return. Successful `ABT_mutex_free` sets its handle to
+  `ABT_MUTEX_NULL` as a fixed API effect; check the input with `expect_value()`.
+- Use `EXPECT_CHECKER_D_CALLOC(Dcm)` or `EXPECT_CHECKER_D_CALLOC(Dcw)` for
+  successful checker payload allocation. Use
+  `expect_checker_d_calloc(sizeof(payload), NULL)` for allocation failure.
   The helper validates `nmemb` and `size`; every wrapped checker `d_calloc`
   call must have a matching expectation, or CMocka fails the test.
 - Check arguments with matching CMocka pairs: `expect_value()` with
