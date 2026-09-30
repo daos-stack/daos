@@ -6,6 +6,9 @@ timeouts:
   # Lower: these reuse the agents/servers started by the test above (start_*_once default True).
   test_pool_create_slow_svc_retry: 150
   test_pool_create_slow_svc_slow_destroy: 150
+  # Higher: the destroy delay alone outlasts two back-to-back create timeouts (see slow_svc_
+  # retry_timeout below).
+  test_pool_create_slow_svc_retry_timeout: 240
 server_config:
   name: daos_server
   # Tight generic RPC timeout, shorter than the fault delays below.
@@ -37,3 +40,8 @@ slow_svc_retry:
 slow_svc_slow_destroy:
   create_rsvc_delay_ms: 20000
   destroy_tgt_delay_ms: 20000
+# The retried create's own wait for the same in-flight destroy must also outlive its create RPC
+# timeout (another 15s tier), so the destroy delay needs to clear both back-to-back windows.
+slow_svc_retry_timeout:
+  create_rsvc_delay_ms: 20000
+  destroy_tgt_delay_ms: 45000

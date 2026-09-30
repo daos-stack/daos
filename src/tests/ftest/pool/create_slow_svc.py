@@ -25,6 +25,10 @@ DMG_RETRYING_MS_REQUEST = r"retrying MS request"
 ENGINE_SVC_CREATE_TIMEDOUT = r"create pool {uuid} svc failed: rc DER_TIMEDOUT"
 ENGINE_ROLLBACK_TIMEDOUT = r"{uuid}: failed to clean up failed pool: DER_TIMEDOUT"
 
+# Logged by ds_mgmt_hdlr_tgt_create() (src/mgmt/srv_target.c) on the rank hosting an in-flight
+# target destroy of the same pool UUID, when a (retried) create waits for it to complete first.
+ENGINE_CREATE_WAITING_FOR_DESTROY = r"{uuid}: waiting for in-flight target destroy before creating"
+
 
 class PoolCreateSlowSvc(TestWithServers):
     """Test pool creation with slow pool service replica creation (DAOS-19608).
@@ -229,6 +233,21 @@ class PoolCreateSlowSvc(TestWithServers):
             self.fail(
                 f"The pool create was retried {retries} times by dmg: its retry timed out too")
 
+    def count_leader_log(self, pool, message):
+        """Count how many times the engines logged a message about the pool create.
+
+        Args:
+            pool (TestPool): the pool created by the test
+            message (str): message to search for in the engine logs, with a {uuid} placeholder for
+                the pool UUID prefix printed by the engine
+
+        Returns:
+            int: the number of matching log lines found across the engine logs
+        """
+        pattern = message.format(uuid=pool.uuid.lower()[:8])
+        result = self.server_managers[0].search_engine_logs(pattern)
+        return sum(len(data.stdout) for data in result.output if data.passed and not data.timeout)
+
     def verify_leader_log(self, pool, message, expected):
         """Verify whether the engine hosting the MS leader logged a message about the pool create.
 
@@ -238,10 +257,9 @@ class PoolCreateSlowSvc(TestWithServers):
                 the pool UUID prefix printed by the engine
             expected (bool): whether the message must (True) or must not (False) have been logged
         """
-        pattern = message.format(uuid=pool.uuid.lower()[:8])
-        result = self.server_managers[0].search_engine_logs(pattern)
-        found = any(data.passed and not data.timeout for data in result.output)
+        found = self.count_leader_log(pool, message) > 0
         if found != expected:
+            pattern = message.format(uuid=pool.uuid.lower()[:8])
             self.fail(
                 f"'{pattern}' {'not ' if expected else ''}found in the engine logs of "
                 f"{self.server_managers[0].hosts}")
@@ -338,5 +356,58 @@ class PoolCreateSlowSvc(TestWithServers):
         pool, retries = self.create_pool_with_slow_svc(create_rsvc_delay_ms, destroy_tgt_delay_ms)
         self.verify_create_retried(retries)
         self.verify_rollback(pool, timed_out=True)
+        self.destroy_pool(pool)
+        self.log.info("Test passed")
+
+    def test_pool_create_slow_svc_retry_timeout(self):
+        """Create a pool whose retried create also times out waiting for the earlier rollback.
+
+        Test Description:
+            Delay the target destroy of the rollback long enough that, beyond outliving the
+            rollback's own CoRPC timeout (as in test_pool_create_slow_svc_slow_destroy), the
+            retried create's own wait for that same in-flight destroy also outlives its create RPC
+            timeout. The retry must then be rolled back too (a second, serialized destroy of the
+            same pool UUID) and dmg must retry again, which must eventually succeed once the
+            delayed destroy has completed. This exercises DAOS-19608's create-vs-destroy and
+            destroy-vs-destroy serialization back to back, rather than just once. How many times
+            this cascades (2 retries, or occasionally more under load) depends on exact timing, so
+            this only asserts a lower bound rather than an exact count.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_create,fault_injection
+        :avocado: tags=PoolCreateSlowSvc,test_pool_create_slow_svc_retry_timeout
+        """
+        create_rsvc_delay_ms = self.params.get("create_rsvc_delay_ms",
+                                               "/run/slow_svc_retry_timeout/*")
+        destroy_tgt_delay_ms = self.params.get("destroy_tgt_delay_ms",
+                                               "/run/slow_svc_retry_timeout/*")
+        pool, retries = self.create_pool_with_slow_svc(create_rsvc_delay_ms, destroy_tgt_delay_ms)
+
+        self.log_step("Verifying that dmg retried the pool create at least twice")
+        if retries < 2:
+            self.fail(
+                f"The pool create was only retried {retries} time(s) by dmg: the retry should "
+                "have also timed out waiting for the earlier destroy")
+
+        self.verify_rollback(pool, timed_out=True)
+
+        self.log_step("Verifying that the create and at least one retry rolled back on a timeout")
+        rollback_count = self.count_leader_log(pool, ENGINE_ROLLBACK_TIMEDOUT)
+        if rollback_count < 2:
+            self.fail(
+                f"Expected the rollback to time out at least twice (once per failed create "
+                f"attempt), found only {rollback_count} occurrence(s) in the engine logs")
+
+        self.log_step("Verifying that the retry waited for the in-flight destroy before creating")
+        destroy_wait_count = self.count_leader_log(pool, ENGINE_CREATE_WAITING_FOR_DESTROY)
+        # Only a retry's create (not the original attempt, since nothing is being destroyed yet
+        # when it starts) can ever wait on dpt_destroys_ht, so this can happen at most once per
+        # retry.
+        if destroy_wait_count < 1 or destroy_wait_count > retries:
+            self.fail(
+                f"Expected 1 to {retries} occurrence(s) of the retry waiting for the in-flight "
+                f"destroy (at most once per retry), found {destroy_wait_count} in the engine logs")
+
         self.destroy_pool(pool)
         self.log.info("Test passed")
