@@ -146,6 +146,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         """
         daos_cmd = self.get_daos_command()
         container_list = []
+        container = None
         containers = daos_cmd.container_list(pool=pool.identifier)
         for info in containers["response"]:
             max_attempts = 3
