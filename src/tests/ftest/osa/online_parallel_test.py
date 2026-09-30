@@ -217,10 +217,11 @@ class OSAOnlineParallelTest(OSAUtils):
         for pool in pools:
             self.pool = pool
             for container in self.get_all_containers(self.pool):
+                self.container = container
                 self.run_ior_thread("Read", oclass, test_seq, single_cont_read=False)
-                self.log.info("Checking data integrity for container %s", container)
-                container.check()
-                container.skip_cleanup()
+                self.log.info("Checking data integrity for container %s", self.container)
+                self.container.check()
+                self.container.skip_cleanup()
 
     def test_osa_online_parallel_test(self):
         """
