@@ -626,7 +626,7 @@ This is done in multiple steps:
   meaning that the VNIs allocated from that pool are per job.
 - Finally, one can test the configuration by running the following command within a PBS job:
   ```bash
-  mpiexec --daos env | grep SLIN
+  mpiexec --daos env | grep SLING
   SLINGSHOT_VNIS=1116,1115,64529
   SLINGSHOT_DEVICES=cxi0
   SLINGSHOT_SVC_IDS=5
