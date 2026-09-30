@@ -1,8 +1,96 @@
 # DAOS Version 2.8 Release Notes
 
-## DAOS Version 2.8.0 (2026-08-12)
-
 We are pleased to announce the release of DAOS version 2.8.
+
+## DAOS Version 2.8.1 (2026-09-30)
+
+### Known Issues and Limitations
+
+* An issue with the checksum scrubber has been observed that may cause DAOS engines
+  to assert and crash (DAOS-19721). Enabling the checksum scrubber is discouraged
+  until this issue has been fixed.
+
+### Bug fixes
+
+The DAOS 2.8.1 release includes the following fixes.
+
+* mercury -- memory leak and performance degradation with UCX (DAOS-18988):
+ Update the mercury UCX plugin to make na\_ucx\_addr\_deserialize() behave like the OFI plugin
+ to look up the packed worker address in a cache and reuse the existing na\_ucx\_addr/ucp\_ep,
+ creating one only on miss. This fixes an issue where on continuous bulk transfers with UCX,
+ the client memory kept growing and performance slowed down due to always creating
+ a UCP endpoint and bypassing the cache.
+
+* object -- Erasure-coded I/O map merge could crash (DAOS-17681):
+ Merging the I/O maps of an EC object could trip an assertion or touch invalid
+ memory. The merge logic is corrected, with a new test that reproduces the original failure.
+
+* object -- Querying the max epoch inside a transaction could segfault (DAOS-19495):
+ A max-epoch query carries no dkey or akey, but the transaction layer still recorded it
+ as a one-entry read. Committing the transaction then dereferenced a NULL I/O descriptor
+ and crashed. Such queries are now recorded as an object-level read, and any read without a
+ dkey is treated the same way.
+
+* vos -- Conditional akey updates could be silently skipped (DAOS-19258):
+ When an akey conditional flag (INSERT/UPDATE) was combined with any other flag, such as a dkey
+ conditional or an internal EC flag, the akey condition was ignored and the update wrongly
+ succeeded instead of returning -DER\_EXIST or -DER\_NONEXIST. The condition is now always evaluated.
+
+* array -- Shrinking to a chunk boundary left stale data (DAOS-19537):
+ Resizing an array to just past a chunk boundary (k * chunk\_size + 1) failed to clear records
+ beyond the new end of file, so later size queries still reported the old, larger size.
+ The trailing records are now punched correctly.
+
+* dfs -- Renaming a file onto itself destroyed it (DAOS-19542):
+ Calling rename (or exchange) with the same source and destination removed the file instead of
+ leaving it untouched. These self-operations are now a no-op and return success.
+
+* dfuse -- Read/write races could cause a stale EOF (DAOS-19449):
+ An end-of-file flag was being set without updating the read position, so a following read could
+ return nothing (zero-filled files or a SIGBUS through mmap), and writes could report a stale EOF
+ over freshly appended data. The flag is now managed together with the read position, closing
+ both cases.
+
+* dfuse -- Raised the interception mount limit to 32 (DAOS-18928):
+ More concurrent DAOS mounts can now use I/O interception, and exceeding the limit disables
+ interception gracefully instead of crashing.
+
+* rebuild -- Several correctness fixes (DAOS-19548):
+ Fixes three issues that could stall or skip data migration: the target used the wrong field to
+ detect DTX resync progress; a task that waited for the stable epoch could exit without migrating
+ its object; and merging queued rebuild tasks could keep a stale reclaim epoch, letting cleanup
+ run against too small a boundary.
+
+* placement -- Correct layout during rebuild on small pools (DAOS-19616):
+ Computing the in-flight ("current") layout directly could mishandle cascading shard relocation
+ on small configurations. The current layout is now derived from the pre- and post-rebuild layouts,
+ keeping the readable source target and adding the rebuild destination as a write-only peer.
+
+* cart -- SWIM false-death fix and configurable address family (DAOS-19148, DAOS-18972):
+ A stale suspicion was not cleared when a member rejoined with a new incarnation, which could mark
+ a healthy rank DEAD prematurely; the stale suspicion is now removed. Separately, a new per-provide
+ address-family hint (cio\_addr\_format / D\_ADDR\_FORMAT: unspec, ipv4, ipv6, native) lets operators
+ select IPv6 fabrics instead of always defaulting to IPv4.
+
+* control -- Assorted management-plane fixes
+ (DAOS-19255, DAOS-19331, DAOS-19281):
+ Closed-connection errors are now reported as a clear Fault instead of a raw Go error; a swapped
+ directory/object-class pair in JSON output is corrected; and the misleading low storage-tier-ratio
+ warning is suppressed for MD-on-SSD pools, where a low ratio is normal.
+
+* client/tools -- Query retries and EC container clone
+ (DAOS-19378, DAOS-17681):
+ The client protocol-version query no longer tied its retry budget to the engine count, so
+ single-engine systems get a proper number of retries with clearer diagnostics. Cloning an EC
+ container with punched holes now reads from a consistent snapshot and copies via an I/O map,
+ avoiding uninitialized data in the destination.
+
+For details, please refer to the Github [release/2.8 commit
+history](https://github.com/daos-stack/daos/commits/release/2.8) and the
+associated [Jira tickets](https://daosio.atlassian.net/jira) as stated in the
+commit messages.
+
+## DAOS Version 2.8.0 (2026-08-12)
 
 ### General Support
 
