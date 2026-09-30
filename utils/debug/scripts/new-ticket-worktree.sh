@@ -3,8 +3,9 @@
 # work, deploys the shared env-setup files into it (see deploy-daos-env.sh),
 # generates a ticket-specific env.sh/inventory.yml/README.md with isolated
 # build/install paths (see generate-daos-env.sh), symlinks in the generic
-# build/test scripts (build-daos.sh, provision-daos.sh, cleanup.sh/start-daos.sh/
-# stop-daos.sh, run-*_tests.sh, run-ftest.sh), and optionally seeds it from an
+# build/test scripts (build-daos.sh, build-isolated.sh, provision-daos.sh,
+# cleanup.sh/start-daos.sh/stop-daos.sh, run-*_tests.sh, run-ftest.sh), and
+# optionally seeds it from an
 # existing ticket's skeleton of genuinely ticket-specific scripts. See
 # README-worktrees.md for the full workflow.
 #
@@ -35,7 +36,7 @@ GENERATE_ENV="$SCRIPT_DIR/generate-daos-env.sh"
 # own regular-file copy of one of these (older tickets, or a deliberately
 # customized script) keeps it: the symlink step never overwrites a regular file.
 GENERIC_TICKET_SCRIPTS=(
-build-daos.sh provision-daos.sh
+build-daos.sh build-isolated.sh provision-daos.sh
 cleanup.sh start-daos.sh stop-daos.sh
 run-vos_tests.sh run-ddb_ut.sh run-ddb_tests.sh run-dtx_ut.sh run-dtx_tests.sh run-go_unit.sh
 run-ftest.sh
