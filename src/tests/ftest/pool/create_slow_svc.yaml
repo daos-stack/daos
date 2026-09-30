@@ -2,7 +2,9 @@ hosts:
   # The faults are armed from the local host; at least 3 servers are needed.
   test_servers: 3
 timeouts:
-  test_pool_create_slow_svc: 180
+  # Higher: unlike the sub-tests below, this one also pays for the full agent/server startup,
+  # which is the most CI-load-dependent part (seen ranging ~71-103s over 10 back-to-back runs).
+  test_pool_create_slow_svc: 240
   # Lower: these reuse the agents/servers started by the test above (start_*_once default True).
   test_pool_create_slow_svc_retry: 150
   test_pool_create_slow_svc_slow_destroy: 150
