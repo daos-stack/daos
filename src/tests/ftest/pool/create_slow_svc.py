@@ -344,7 +344,7 @@ class PoolCreateSlowSvc(TestWithServers):
             target destroy and the retry of the create with the same pool UUID must wait for that
             rollback to complete and succeed.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_create,fault_injection
         :avocado: tags=PoolCreateSlowSvc,test_pool_create_slow_svc_slow_destroy
