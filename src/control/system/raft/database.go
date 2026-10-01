@@ -504,6 +504,13 @@ func (db *Database) RemoveFiles() error {
 	return os.RemoveAll(db.cfg.RaftDir)
 }
 
+// RaftDir returns the configured path to the raft directory, so that callers
+// removing it (e.g. RemoveFiles()) can fsync its parent directory afterwards
+// to deterministically confirm the removal has been committed to disk.
+func (db *Database) RaftDir() string {
+	return db.cfg.RaftDir
+}
+
 // Stop signals to the database that it should shutdown all background
 // tasks and release any resources.
 func (db *Database) Stop() error {

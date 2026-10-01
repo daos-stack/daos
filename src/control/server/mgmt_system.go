@@ -1678,15 +1678,26 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEvent
 	return resp, nil
 }
 
+// awaitSync issues a bulk filesystem sync, a cheap best-effort flush of any pending
+// writes unrelated to the removals performed by the caller (e.g. engine I/O prior to
+// being killed). It does not by itself guarantee that a specific removal has been
+// committed to disk; callers that need that guarantee should follow up with fsyncDir()
+// on the relevant parent directory, which deterministically blocks until the directory
+// entry change is durable, rather than sleeping an arbitrary duration.
 func awaitSync() {
-	// Sync filesystem to ensure all deletions are committed to disk before restart.
-	// In MD-on-SSD mode, this ensures the control metadata device has all changes
-	// committed so they persist across the server restart and remount.
 	unix.Sync()
+}
 
-	// Give the kernel time to complete pending I/O operations to the control metadata
-	// device before restarting. This is especially important for MD-on-SSD mode.
-	time.Sleep(100 * time.Millisecond)
+// fsyncDir opens path and fsyncs it, blocking until directory-entry changes made
+// within it (e.g. a file or subdirectory removal) are committed to stable storage.
+func fsyncDir(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return f.Sync()
 }
 
 // eraseSysdb is called on MS replicas to shut down the raft DB and remove its files.
@@ -1706,12 +1717,20 @@ func (svc *mgmtSvc) eraseSysdb(errOnFail bool, leaderStr string) error {
 			err, pid, leaderStr)
 	}
 
+	raftDir := svc.sysdb.RaftDir()
 	if err := svc.sysdb.RemoveFiles(); err != nil {
 		return errors.Wrapf(err, "failed to remove system database on pid %d [role=%s]",
 			pid, leaderStr)
 	}
 
 	awaitSync()
+
+	// Deterministically confirm the raft dir removal is durable before restarting,
+	// rather than sleeping an arbitrary duration after the bulk sync() above.
+	if err := fsyncDir(filepath.Dir(raftDir)); err != nil {
+		svc.log.Errorf("fsync raft dir parent %q: %s, pid %d [role=%s]",
+			filepath.Dir(raftDir), err, pid, leaderStr)
+	}
 
 	return nil
 }
@@ -1724,6 +1743,7 @@ func (svc *mgmtSvc) resetLocalEngines() error {
 	svc.log.Trace("SystemErase: REPLICA - Step 1: Stopping local engines")
 
 	instances := svc.harness.Instances()
+	sbDirs := make(map[string]struct{}) // unique parent dirs of removed superblocks
 	for _, engine := range instances {
 		svc.log.Tracef("SystemErase: REPLICA - Stopping engine instance %d", engine.Index())
 		if err := engine.Stop(unix.SIGKILL); err != nil {
@@ -1733,12 +1753,22 @@ func (svc *mgmtSvc) resetLocalEngines() error {
 		if err := engine.RemoveSuperblock(); err != nil {
 			svc.log.Errorf("instance %d failed to remove superblock: %s", engine.Index(), err)
 		}
+		if storage := engine.GetStorage(); storage != nil {
+			sbDirs[storage.ControlMetadataEnginePath()] = struct{}{}
+		}
 	}
 
-	// Sync filesystem to commit superblock deletions before proceeding
 	svc.log.Trace("SystemErase: REPLICA - Step 2: Syncing filesystem")
 
 	awaitSync()
+
+	// Deterministically confirm each superblock removal is durable before proceeding,
+	// rather than sleeping an arbitrary duration after the bulk sync() above.
+	for dir := range sbDirs {
+		if err := fsyncDir(dir); err != nil {
+			svc.log.Errorf("fsync superblock dir %q: %s", dir, err)
+		}
+	}
 
 	// Remove the control-metadata directory once (not per-engine, to avoid spurious
 	// "directory not found" errors when multiple local engines race on this). Without
@@ -1750,6 +1780,11 @@ func (svc *mgmtSvc) resetLocalEngines() error {
 			svc.log.Tracef("SystemErase: REPLICA - Removing entire control metadata directory: %s", mdPath)
 			if err := os.RemoveAll(mdPath); err != nil {
 				svc.log.Errorf("failed to remove control metadata directory %q: %s", mdPath, err)
+			} else {
+				awaitSync()
+				if err := fsyncDir(filepath.Dir(mdPath)); err != nil {
+					svc.log.Errorf("fsync control metadata parent dir %q: %s", filepath.Dir(mdPath), err)
+				}
 			}
 		}
 	}
