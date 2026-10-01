@@ -1718,6 +1718,10 @@ func (svc *mgmtSvc) eraseSysdb(errOnFail bool, leaderStr string) error {
 	}
 
 	raftDir := svc.sysdb.RaftDir()
+	// RemoveFiles() renames RaftDir aside before removing it, so even if it returns an
+	// error here (e.g. a transient failure removing the renamed copy), RaftDir itself is
+	// already gone and the control plane restart scheduled by our caller's defer will
+	// bootstrap a fresh, empty database rather than reloading stale pre-erase raft state.
 	if err := svc.sysdb.RemoveFiles(); err != nil {
 		return errors.Wrapf(err, "failed to remove system database on pid %d [role=%s]",
 			pid, leaderStr)

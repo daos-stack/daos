@@ -14,6 +14,9 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"os"
+	"os/user"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -57,6 +60,118 @@ func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained b
 			return
 		case <-ticker.C:
 		}
+	}
+}
+
+func TestSystem_Database_RemoveFiles(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setup        func(t *testing.T, raftDir string)
+		noDir        bool
+		expErr       error
+		expDirExists bool
+	}{
+		"raft dir does not exist": {
+			noDir:        true,
+			expDirExists: false,
+		},
+		"raft dir removed successfully": {
+			expDirExists: false,
+		},
+		"stale leftover from a prior failed removal is cleared first": {
+			setup: func(t *testing.T, raftDir string) {
+				stale := raftDir + ".erasing"
+				if err := os.MkdirAll(stale, 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(stale, "leftover"), []byte("x"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			},
+			expDirExists: false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testDir, cleanup := test.CreateTestDir(t)
+			defer cleanup()
+
+			raftDir := filepath.Join(testDir, "raftdir")
+			if !tc.noDir {
+				if err := os.MkdirAll(raftDir, 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(raftDir, "db"), []byte("x"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.setup != nil {
+				tc.setup(t, raftDir)
+			}
+
+			db := &Database{cfg: &DatabaseConfig{RaftDir: raftDir}}
+
+			gotErr := db.RemoveFiles()
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			_, statErr := os.Stat(raftDir)
+			dirExists := statErr == nil
+			if dirExists != tc.expDirExists {
+				t.Fatalf("expected raft dir exists=%v, got exists=%v", tc.expDirExists, dirExists)
+			}
+			// The renamed-aside staging path should never survive a successful call.
+			if _, err := os.Stat(raftDir + ".erasing"); !os.IsNotExist(err) {
+				t.Fatalf("expected staging path to be removed, stat returned: %v", err)
+			}
+		})
+	}
+}
+
+// TestSystem_Database_RemoveFiles_RenameGuaranteesCleanRestart verifies the core safety
+// property relied on by SystemErase(): even if removal of the renamed-aside copy fails
+// (e.g. a transient I/O error), RaftDir itself is already gone, so a subsequent restart
+// sees no database at that path and bootstraps fresh rather than reloading stale,
+// partially-erased raft state.
+func TestSystem_Database_RemoveFiles_RenameGuaranteesCleanRestart(t *testing.T) {
+	usrCurrent, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usrCurrent.Username == "root" {
+		t.Skip("test cannot be run as root user")
+	}
+
+	testDir, cleanup := test.CreateTestDir(t)
+	defer cleanup()
+
+	raftDir := filepath.Join(testDir, "raftdir")
+	lockedDir := filepath.Join(raftDir, "locked")
+	if err := os.MkdirAll(lockedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(lockedDir, "file"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Remove write permission on the subdirectory so that removing its contents (as
+	// part of the trailing os.RemoveAll() of the renamed-aside copy) fails, while
+	// still allowing the directory rename itself to succeed (which only needs write
+	// permission on raftDir's parent, not on raftDir's contents).
+	if err := os.Chmod(lockedDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	// RemoveFiles() renames raftDir to raftDir+".erasing" before attempting removal,
+	// so the locked subdirectory ends up at the renamed path, not the original one;
+	// restore its permissions there so the test harness can clean up afterwards.
+	defer os.Chmod(filepath.Join(raftDir+".erasing", "locked"), 0755)
+
+	db := &Database{cfg: &DatabaseConfig{RaftDir: raftDir}}
+
+	if err := db.RemoveFiles(); err == nil {
+		t.Fatal("expected RemoveFiles() to return an error removing the renamed-aside copy")
+	}
+
+	// The critical guarantee: regardless of the error above, RaftDir itself must
+	// already be gone (renamed aside) so a restart bootstraps a fresh database.
+	if _, err := os.Stat(raftDir); !os.IsNotExist(err) {
+		t.Fatalf("expected raft dir to be gone, stat returned: %v", err)
 	}
 }
 
