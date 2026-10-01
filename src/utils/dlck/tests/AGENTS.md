@@ -27,10 +27,9 @@ Apply these rules when adding or changing DLCK unit tests:
   leave no unused values. CMocka queues are per mock, so passing tests do not
   prove that expectations in different mocks are arranged in call order.
   Preserve fixed effects required by the mocked API contract.
-- For example, `d_asprintf2` consumes one queued string pointer (or `NULL` for
-  failure); its mock sets `*rc` from that result. `fopen` and
-  `ABT_mutex_create` consume a result code and, only on success, a stream or
-  handle. An error must not leave an unused pointer return. Successful
+- For example, `fopen` and `ABT_mutex_create` consume a result code and a
+  stream or handle only on success. An error must not leave an unused pointer
+  return. Successful
   `ABT_mutex_free` sets its handle to `ABT_MUTEX_NULL` as a fixed API effect;
   check the input with `expect_value()`.
 - Use `EXPECT_CHECKER_D_CALLOC(Dcm)` or `EXPECT_CHECKER_D_CALLOC(Dcw)` for

@@ -218,7 +218,7 @@ static void
 test_main_fini_mutex_free_failure(void **state)
 {
 	struct checker  ck_zeroed = {0};
-	struct checker *ck = *state;
+	struct checker *ck        = *state;
 
 	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	expect_value(__wrap_ABT_mutex_free, handle, Mock_mutex_handle);

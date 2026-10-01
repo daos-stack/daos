@@ -16,6 +16,8 @@
 
 #include "dlck_checker_ut_mock.h"
 
+#define MOCK_ASPRINTF_LENGTH 573
+
 struct dlck_checker_main   Dcm;
 struct dlck_checker_worker Dcw;
 const ABT_mutex            Mock_mutex_handle = (ABT_mutex)0x1234;
@@ -62,10 +64,11 @@ __wrap_d_asprintf2(int *rc, const char *fmt, ...)
 {
 	char *result = mock_ptr_type(char *);
 	(void)fmt;
+
 	if (result == NULL)
 		*rc = -1;
 	else
-		*rc = 573;
+		*rc = MOCK_ASPRINTF_LENGTH;
 
 	return result;
 }
