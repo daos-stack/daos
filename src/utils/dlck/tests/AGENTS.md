@@ -25,10 +25,12 @@ Apply these rules when adding or changing DLCK unit tests:
   constants in mocks. Queue only values consumed on that execution path, in
   call order, including initialization and cleanup; leave no unused values.
   Preserve fixed effects required by the mocked API contract.
-- For example, `d_asprintf2`, `fopen`, and `ABT_mutex_create` consume a result
-  code and, only on success, a pointer or handle. An error must not leave an
-  unused pointer return. Successful `ABT_mutex_free` sets its handle to
-  `ABT_MUTEX_NULL` as a fixed API effect; check the input with `expect_value()`.
+- For example, `d_asprintf2` consumes one queued string pointer (or `NULL` for
+  failure); its mock sets `*rc` from that result. `fopen` and
+  `ABT_mutex_create` consume a result code and, only on success, a stream or
+  handle. An error must not leave an unused pointer return. Successful
+  `ABT_mutex_free` sets its handle to `ABT_MUTEX_NULL` as a fixed API effect;
+  check the input with `expect_value()`.
 - Use `EXPECT_CHECKER_D_CALLOC(Dcm)` or `EXPECT_CHECKER_D_CALLOC(Dcw)` for
   successful checker payload allocation. Use
   `expect_checker_d_calloc(sizeof(payload), NULL)` for allocation failure.

@@ -43,11 +43,11 @@ __wrap_d_calloc(size_t nmemb, size_t size)
 	check_expected(nmemb);
 	check_expected(size);
 
-	if (payload == NULL)
-		return NULL;
-	assert_true((payload == &Dcm && size == sizeof(Dcm)) ||
-		    (payload == &Dcw && size == sizeof(Dcw)));
-	memset(payload, 0, size);
+	if (payload != NULL) {
+		assert_true((payload == &Dcm && size == sizeof(Dcm)) ||
+			    (payload == &Dcw && size == sizeof(Dcw)));
+		memset(payload, 0, size);
+	}
 	return payload;
 }
 
@@ -60,18 +60,13 @@ __wrap_d_free(void *ptr)
 char *
 __wrap_d_asprintf2(int *rc, const char *fmt, ...)
 {
-	char *result;
-	int   mock_rc = mock_type(int);
-
+	char *result = mock_ptr_type(char *);
 	(void)fmt;
-	if (mock_rc == -1) {
+	if (result == NULL)
 		*rc = -1;
-		return NULL;
-	}
+	else
+		*rc = 573;
 
-	result = mock_ptr_type(char *);
-	assert_non_null(result);
-	*rc = (int)strlen(result);
 	return result;
 }
 
@@ -188,6 +183,9 @@ __wrap_fflush(FILE *stream)
 	int error = mock_type(int);
 
 	check_expected_ptr(stream);
-	errno = error;
-	return error != 0 ? EOF : 0;
+	if (error != 0) {
+		errno = error;
+		return EOF;
+	}
+	return 0;
 }
