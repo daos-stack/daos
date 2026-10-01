@@ -89,14 +89,13 @@ setup_worker_checker(void **state)
 static int
 teardown_worker_checker(void **state)
 {
-	struct checker  ck_zeroed;
-	struct checker *ck = *state;
+	struct checker  ck_zeroed = {0};
+	struct checker *ck        = *state;
 
-	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
-	expect_value(__wrap_d_free, ptr, &Dcw);
 	expect_value(__wrap_fclose, stream, Mock_file_stream);
 	expect_function_call(__wrap_fclose);
 	will_return(__wrap_fclose, mock_worker_fclose_rc);
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	dlck_checker_worker_fini(ck);
 	assert_memory_equal(ck, &ck_zeroed, sizeof(*ck));
 	return teardown(state);
@@ -131,9 +130,9 @@ test_worker_init_log_open_failure(void **state)
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, Mock_log_file);
 	expect_worker_fopen(EIO);
+	expect_function_call(mock_main_ck_vprintf);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	expect_value(__wrap_d_free, ptr, &Dcw);
-	expect_function_call(mock_main_ck_vprintf);
 	assert_int_equal(
 	    dlck_checker_worker_init(&options, MOCK_LOG_DIR, Mock_pool_uuid, 0, &main_ck, ck),
 	    daos_errno2der(EIO));
@@ -150,8 +149,8 @@ test_worker_init_log_path_alloc_failure(void **state)
 
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, NULL);
-	expect_value(__wrap_d_free, ptr, &Dcw);
 	expect_function_call(mock_main_ck_vprintf);
+	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(
 	    dlck_checker_worker_init(&options, MOCK_LOG_DIR, Mock_pool_uuid, 0, &main_ck, ck),
 	    -DER_NOMEM);

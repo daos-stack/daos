@@ -23,7 +23,9 @@ Apply these rules when adding or changing DLCK unit tests:
   `mock_type(type)`; use `mock_ptr_type(type)` for pointer-returning mocks.
 - Queue test-controlled return values and output handles in each test, not as
   constants in mocks. Queue only values consumed on that execution path, in
-  call order, including initialization and cleanup; leave no unused values.
+  call order across different mocks, including initialization and cleanup;
+  leave no unused values. CMocka queues are per mock, so passing tests do not
+  prove that expectations in different mocks are arranged in call order.
   Preserve fixed effects required by the mocked API contract.
 - For example, `d_asprintf2` consumes one queued string pointer (or `NULL` for
   failure); its mock sets `*rc` from that result. `fopen` and
