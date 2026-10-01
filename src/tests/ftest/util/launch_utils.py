@@ -23,7 +23,7 @@ from util.logger_utils import LOG_FILE_FORMAT, get_file_handler
 from util.results_utils import LaunchTestName
 from util.run_utils import RunException, command_as_user, run_local, run_remote
 from util.slurm_utils import create_partition, delete_partition, show_partition
-from util.storage_utils import StorageException, StorageInfo
+from util.storage_utils import StorageException, StorageInfo, record_nvme_devices
 from util.systemctl_utils import SystemctlFailure, create_override_config
 from util.user_utils import get_group_id, get_user_groups, groupadd, useradd, userdel
 from util.yaml_utils import YamlUpdater, get_yaml_data, write_yaml_file
@@ -280,6 +280,8 @@ class TestInfo():
         self.host_info = HostInfo()
         self.yaml_info = {}
         self.extra_yaml = []
+        # NVMe devices detected on each server host before the test is run
+        self.nvme_devices = {}
 
     def __str__(self):
         """Get the test file as a string.
@@ -436,6 +438,9 @@ class TestRunner():
         # Check storage devices for servers
         if not check_server_storage(logger, test, self.test_result, "Prepare"):
             return 128
+
+        # Record the NVMe devices visible before the test to detect any lost by the test
+        test.nvme_devices = record_nvme_devices(logger, test.host_info.servers.hosts)
 
         # Generate certificate files for the test
         if not self._generate_certs(logger):

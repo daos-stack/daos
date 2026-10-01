@@ -205,6 +205,56 @@ function check_ib_devices {
     done
 }
 
+function log_nvme_baseline {
+    local device
+
+    echo "NVMe baseline for $HOSTNAME before DAOS tests:"
+    echo "# lspci NVMe/VMD devices"
+    lspci -Dnnk | grep -Ei 'Non-Volatile|NVMe|VMD|Kernel driver' || true
+    echo "# NVMe PCI device driver and IOMMU links"
+    while IFS= read -r device; do
+        echo "## $device"
+        lspci -Dnnk -s "$device" || true
+        readlink -f "/sys/bus/pci/devices/$device/driver" 2>&1 || true
+        readlink -f "/sys/bus/pci/devices/$device/iommu_group" 2>&1 || true
+    done < <(lspci -Dnn | awk '/Non-Volatile memory controller/ {print $1}')
+    echo "# /sys/class/iommu"
+    ls -la /sys/class/iommu 2>&1 || true
+    echo "# nvme list"
+    if command -v nvme >/dev/null; then
+        nvme list || true
+    fi
+}
+
+function check_iommu {
+    local iommu_entry
+
+    ((testruns++)) || true
+    testcases+="  <testcase name=\"VT-d IOMMU Node $mynodenum\">"
+    testcases+="${nl}"
+    iommu_entry=$(find /sys/class/iommu -mindepth 1 -maxdepth 1 \
+        -print -quit 2>/dev/null || true)
+    if [ -z "$iommu_entry" ]; then
+        iommu_message="FAIL: No active VT-d/IOMMU instance found"
+        iommu_message+=" on $HOSTNAME."
+        iommu_message+="$nl$(cat /proc/cmdline)"
+        iommu_message+="$nl$(dmesg | grep -Ei 'DMAR|IOMMU|VT-d' || true)"
+        mail_message+="$nl$iommu_message$nl"
+        testcases+="    <error message=\"VT-d disabled\" type=\"error\">
+    <![CDATA[ $iommu_message ]]>
+    </error>$nl"
+        ((testfails++)) || true
+        result=7
+    else
+        iommu_message="OK: Active VT-d/IOMMU instance found"
+        iommu_message+=" on $HOSTNAME: $iommu_entry"
+        echo "$iommu_message"
+        testcases+="    <system-out>"
+        testcases+="<![CDATA[ $iommu_message ]]></system-out>${nl}"
+    fi
+    testcases+="  </testcase>${nl}"
+}
+
 function apply_network_alias_rules {
     local query_script="/var/tmp/query_node_interfaces.sh"
     local alias_csv="/var/tmp/daos_ftest_iface_aliases.csv"
@@ -419,6 +469,8 @@ if [ "$ib_count" -ge 2 ] ; then
             echo "OK: Even number ($nvme_count) of NVMe devices seen."
         fi
         testcases+="  </testcase>$nl"
+        check_iommu
+        log_nvme_baseline
     fi
     # All storage found by lspci should also be in lsblk report
     lsblk_nvme=$(lsblk | grep nvme -c)

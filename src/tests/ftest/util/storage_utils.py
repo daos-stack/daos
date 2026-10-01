@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,6 +17,11 @@ from ClusterShell.NodeSet import NodeSet
 from util.run_utils import run_remote
 from util.yaml_utils import write_yaml_file
 
+# TEMPORARY - revert to False before merging: forces the NVMe reset/missing
+# device failure paths so they can be exercised in a PR run.
+# Referenced by collection_utils and server_utils.
+FORCE_NVME_FAILURE = False
+
 
 def find_pci_address(value, *flags):
     """Find PCI addresses in the specified string.
@@ -32,6 +37,114 @@ def find_pci_address(value, *flags):
     digit = '0-9a-fA-F'
     pattern = rf'[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]'
     return re.findall(pattern, str(value), *flags)
+
+
+def get_nvme_diagnostics_command(label):
+    """Get a shell command to report NVMe PCI and IOMMU state.
+
+    Args:
+        label (str): label to include in the diagnostic output
+
+    Returns:
+        str: shell command to collect NVMe diagnostics
+
+    """
+    safe_label = str(label).replace('"', '\\"')
+    pci_devices = (
+        'for dev in $(lspci -Dnn | '
+        'awk "/Non-Volatile memory controller/ {print \\$1}"); do '
+        'echo "## $dev"; '
+        'lspci -Dnnk -s "$dev"; '
+        'readlink -f "/sys/bus/pci/devices/$dev/driver" 2>&1 || true; '
+        'readlink -f "/sys/bus/pci/devices/$dev/iommu_group" 2>&1 || true; '
+        'done')
+    commands = [
+        f'echo "--- NVMe diagnostics: {safe_label} ---"',
+        'date -Ins',
+        'echo "# lspci NVMe/VMD devices"',
+        'lspci -Dnnk | grep -Ei "Non-Volatile|NVMe|VMD|Kernel driver" || true',
+        'echo "# NVMe PCI device driver and IOMMU links"',
+        pci_devices,
+        'echo "# /sys/class/iommu"',
+        'ls -la /sys/class/iommu 2>&1 || true',
+        'echo "# /sys/kernel/iommu_groups"',
+        'find /sys/kernel/iommu_groups -maxdepth 2 -type l -print '
+        '-exec readlink -f {} \\; 2>/dev/null || true',
+        'echo "# nvme list"',
+        'command -v nvme >/dev/null && nvme list || true',
+        'echo "# lsblk NVMe devices"',
+        'lsblk -o NAME,KNAME,PATH,MAJ:MIN,SIZE,TYPE,MODEL,SERIAL,STATE,TRAN '
+        '| grep -i nvme || true',
+        'echo "# recent NVMe/IOMMU/PCI kernel messages"',
+        'dmesg -T | grep -Ei '
+        '"DMAR|IOMMU|AER|PCIe|pcie|nvme|uio|vfio|reset|fault|error|timeout|'
+        'surprise|link|vmd" | tail -n 120 || true']
+    return '; '.join(commands)
+
+
+def record_nvme_devices(logger, hosts):
+    """Record the NVMe devices currently visible to the OS on each host.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to detect the NVMe devices
+
+    Returns:
+        dict: sets of NVMe PCI addresses (values) detected on each host name (keys)
+
+    """
+    command = 'lspci -Dnn | grep -i "Non-Volatile memory controller" || true'
+    devices = {}
+    if not hosts:
+        # run_remote() with no hosts runs the command locally on the test control node
+        logger.debug('Skipping NVMe device detection - no hosts specified')
+        return devices
+    result = run_remote(logger, hosts, command, verbose=False, timeout=60)
+    for data in result.output:
+        addresses = set(find_pci_address('\n'.join(data.stdout)))
+        for host in data.hosts:
+            devices[str(host)] = addresses
+    logger.debug('Detected NVMe devices on %s: %s', hosts, devices)
+    return devices
+
+
+def report_missing_nvme_devices(logger, hosts, recorded):
+    """Report any previously recorded NVMe devices no longer visible to the OS.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to detect the NVMe devices
+        recorded (dict): sets of NVMe PCI addresses (values) previously detected on each host name
+            (keys) - see record_nvme_devices()
+
+    Returns:
+        dict: sets of missing NVMe PCI addresses (values) for each host name (keys)
+
+    """
+    if not recorded:
+        logger.debug('Skipping NVMe device verification - no devices previously recorded')
+        return {}
+
+    missing = {}
+    current = record_nvme_devices(logger, hosts)
+    if FORCE_NVME_FAILURE:
+        logger.debug('FORCE_NVME_FAILURE: reporting all recorded NVMe devices as missing')
+        current = {}
+    for host, addresses in recorded.items():
+        absent = addresses - current.get(host, set())
+        if absent:
+            missing[host] = absent
+
+    if missing:
+        for host in sorted(missing):
+            logger.error(
+                'NVMe devices no longer detected on %s: %s', host, ' '.join(sorted(missing[host])))
+        run_remote(
+            logger, NodeSet.fromlist(missing), get_nvme_diagnostics_command('missing NVMe devices'),
+            timeout=60)
+    else:
+        logger.debug('All previously detected NVMe devices are still present on %s', hosts)
+    return missing
 
 
 def get_tier_roles(tier, total_tiers):

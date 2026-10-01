@@ -838,7 +838,7 @@ pipeline {
                     steps {
                         script {
                             sh label: 'Collect dependency RPMs built into the image',
-                               script: ''' 
+                               script: '''
                                        set -- /home/daos/rpms/deps/*.rpm
                                        if [ -e "$1" ]; then
                                            mkdir -p rpms/deps
@@ -909,7 +909,7 @@ pipeline {
                     steps {
                         script {
                             sh label: 'Collect dependency RPMs built into the image',
-                               script: ''' 
+                               script: '''
                                        set -- /home/daos/rpms/deps/*.rpm
                                        if [ -e "$1" ]; then
                                            mkdir -p rpms/deps
