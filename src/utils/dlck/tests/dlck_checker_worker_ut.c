@@ -51,7 +51,7 @@ expect_worker_fopen(int error)
 }
 
 static int
-mock_main_ck_vprintf(struct checker *ck, const char *fmt, va_list args)
+mock_main_vprintf(struct checker *ck, const char *fmt, va_list args)
 {
 	(void)ck;
 	(void)fmt;
@@ -124,13 +124,13 @@ static void
 test_worker_init_log_open_failure(void **state)
 {
 	struct checker        *ck      = *state;
-	struct checker         main_ck = {.ck_vprintf = mock_main_ck_vprintf};
+	struct checker         main_ck = {.ck_vprintf = mock_main_vprintf};
 	struct checker_options options = {0};
 
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, Mock_log_file);
 	expect_worker_fopen(EIO);
-	expect_function_call(mock_main_ck_vprintf);
+	expect_function_call(mock_main_vprintf);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(
@@ -144,12 +144,12 @@ static void
 test_worker_init_log_path_alloc_failure(void **state)
 {
 	struct checker        *ck      = *state;
-	struct checker         main_ck = {.ck_vprintf = mock_main_ck_vprintf};
+	struct checker         main_ck = {.ck_vprintf = mock_main_vprintf};
 	struct checker_options options = {0};
 
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, NULL);
-	expect_function_call(mock_main_ck_vprintf);
+	expect_function_call(mock_main_vprintf);
 	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(
 	    dlck_checker_worker_init(&options, MOCK_LOG_DIR, Mock_pool_uuid, 0, &main_ck, ck),
