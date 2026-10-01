@@ -397,13 +397,17 @@ if [ "$ib_count" -ge 2 ] ; then
         # DAOS tests do and records it in the console log.
         nvme_devices="$(lspci -vmm -D | grep -E '^(Slot|Class|Device|NUMANode):' |
                         grep -E 'Class:\s+Non-Volatile memory controller' -B 1 -A 2)"
+
+        _root_src="$(findmnt -n -o SOURCE /)"
+        _root_nvme="$(basename "${_root_src%%p[0-9]*}")"
+        _root_ctrl="${_root_nvme%%n[0-9]*}"
+
         nvme_count=0
-        while IFS= read -r line; do
-            if [[ "$line" != *"Class:"*"Non-Volatile memory controller"* ]];then
-                continue
-            fi
+        for _ctrl in /sys/class/nvme/nvme*; do
+            [ -e "$_ctrl" ] || continue
+            [ "$(basename "$_ctrl")" == "$_root_ctrl" ] && continue
             ((nvme_count++)) || true
-        done < <(printf %s "$nvme_devices")
+        done
 
         ((testruns++)) || true
         testcases+="  <testcase name=\"NVMe Count Node $mynodenum\">${nl}"
@@ -420,9 +424,14 @@ if [ "$ib_count" -ge 2 ] ; then
         fi
         testcases+="  </testcase>$nl"
     fi
-    # All storage found by lspci should also be in lsblk report
-    lsblk_nvme=$(lsblk | grep nvme -c)
-    lsblk_pmem=$(lsblk | grep pmem -c)
+    # All storage found by lspci should also be in lsblk report.
+    # Count only data NVMe block devices, excluding the OS boot device.
+    lsblk_nvme=0
+    while IFS= read -r _dev; do
+        [[ "$_dev" == "$_root_nvme" ]] && continue
+        ((lsblk_nvme++)) || true
+    done < <(lsblk -d -o NAME --noheadings | grep nvme)
+    lsblk_pmem=$(lsblk | grep pmem -c) || true
 
     if [ "$DAOS_NVME" -gt 0 ]; then
         ((testruns++)) || true
