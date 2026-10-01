@@ -267,18 +267,25 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		}
 	}
 
-	// In MD-on-SSD mode, remove the entire control metadata directory once
-	// (not per-engine). Ignore failures as multiple ranks on same host may
-	// attempt this operation, causing "directory not found" errors on subsequent
-	// attempts.
-	if svc.storage.ControlMetadataPathConfigured() {
-		mdPath := svc.storage.ControlMetadataPath()
-		svc.log.Debugf("Removing entire control metadata directory: %s", mdPath)
-		if err := os.RemoveAll(mdPath); err != nil {
-			return nil, errors.Wrap(err, "removing control metadata directory")
+	// In MD-on-SSD mode, remove only the per-engine control-metadata subdirectory of
+	// each targeted instance. This is scoped deliberately: the shared host-level root
+	// also holds the MS replica's raft DB (control_raft) and other, non-targeted
+	// engines' subdirectories, neither of which should be touched by a partial-rank
+	// reset. os.RemoveAll() is a no-op if the subdirectory is already gone, so repeat
+	// calls for the same rank are safe.
+	for _, ei := range instances {
+		storage := ei.GetStorage()
+		if storage == nil || !storage.ControlMetadataPathConfigured() {
+			continue
 		}
 
-		svc.log.Debugf("Control metadata directory removed successfully")
+		enginePath := storage.ControlMetadataEnginePath()
+		svc.log.Debugf("Removing control metadata directory for instance %d: %s", ei.Index(),
+			enginePath)
+		if err := os.RemoveAll(enginePath); err != nil {
+			return nil, errors.Wrapf(err, "removing control metadata directory for instance %d",
+				ei.Index())
+		}
 	}
 
 	for _, ei := range instances {
