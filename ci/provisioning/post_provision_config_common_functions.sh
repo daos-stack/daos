@@ -414,22 +414,39 @@ post_provision_config_nodes() {
     # RoCE tests with Mellanox adapters may use MOFED/DOCA drivers.
     last_pci_bus=''
     mellanox_drivers=false
-    while IFS= read -r line; do
-        pci_bus="${line%.*}"
-        if [ "$pci_bus" == "$last_pci_bus" ]; then
-            # We only use one interface on a dual interface HBA
-            # Fortunately lspci appears to group them together
+        while IFS= read -r line; do
+        if [[ $line == Slot:* ]]; then
+            # e.g. Slot:   0000:07:00.0
+            pci_bus="${line#Slot: }"
+            pci_bus="${pci_bus//[[:space:]]/}"
+            pci_bus="${pci_bus%.*}"
+            if [ -n "$last_pci_bus" ] && [ "$pci_bus" == "$last_pci_bus" ]; then
+                # We only use one interface on a dual interface HBA
+                # Fortunately lspci appears to group them together
+                continue
+            fi
+        elif [[ $line == Class:* ]]; then
             continue
+        elif [[ $line == Device:* ]]; then
+            # e.g. Device: MT2910 Family [ConnectX-7]                   - HW node
+            #      Device: MT28908 Family [ConnectX-6 Virtual Function] - CB node
+            #      Device: ConnectX Family mlx5Gen Virtual Function     - VM node
+            if [[ $line =~ (ConnectX-|mlx)([0-9]+)(Gen)? ]]; then
+                generation="${BASH_REMATCH[2]}"
+                if [ "$generation" -ge 5 ]; then
+                    mellanox_drivers=true
+                    break
+                fi
+            elif [[ $line =~ *ConnectX* ]]; then
+                echo "Unable to determine Mellanox driver generation for line: $line"
+                return 1
+            fi
         fi
-        last_pci_bus="$pci_bus"
-        mlnx_type="${line##*ConnectX-}"
-        mlnx_type="${mlnx_type%]*}"
-        mlnx_type="${mlnx_type%% *}"
-        if [ "$mlnx_type" -ge 5 ]; then
-            mellanox_drivers=true
-            break
-        fi
-    done < <(lspci -mm | grep "ConnectX" || true)
+    done < <(
+        lspci -vmm -D |
+        grep -E '^(Slot|Class|Device):' |
+        grep -E 'Class:\sInfiniband controller' -B 1 -A 1 ||
+        true)
 
     if "$mellanox_drivers"; then
         # Remove OPA and install MOFED

@@ -261,6 +261,7 @@ def get_hg_info(logger, hosts, filter_provider=None, filter_device=None, verbose
         dict: a dictionary of interface keys with a dictionary value of a comma-separated string of
             providers key with a NodeSet value where the providers where detected.
     """
+    # pylint: disable=too-many-nested-blocks
     command = "hg_info"
     result = run_remote(logger, hosts, command, verbose=verbose, stderr=True)
     providers = {}
