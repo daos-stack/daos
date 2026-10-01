@@ -729,6 +729,19 @@ func TestServer_MgmtSvc_getPoolRanks(t *testing.T) {
 func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r ...[]*control.HostResponse) *mgmtSvc {
 	t.Helper()
 
+	return mgmtSystemTestSetupSelfAddr(t, l, mbs, common.LocalhostCtrlAddr(), r...)
+}
+
+// mgmtSystemTestSetupSelfAddr is a variant of mgmtSystemTestSetup that lets the caller
+// control which address the system db considers to be "self" (svc.sysdb.ReplicaAddr()).
+// By default (mgmtSystemTestSetup) this is an address-less localhost placeholder that
+// never matches any configured member host, so getPeersAndFanout()'s self/replica-peer
+// rank exclusion (see Section 4.6 of the MD-on-SSD system erase design doc) never
+// actually excludes anything. Passing a selfAddr that matches one of mbs' hosts (e.g.
+// test.MockHostAddr(1)) allows that exclusion behavior to be exercised.
+func mgmtSystemTestSetupSelfAddr(t *testing.T, l logging.Logger, mbs system.Members, selfAddr *net.TCPAddr, r ...[]*control.HostResponse) *mgmtSvc {
+	t.Helper()
+
 	mockResolver := func(_ string, addr string) (*net.TCPAddr, error) {
 		return map[string]*net.TCPAddr{
 				"10.0.0.1:10001": {IP: net.ParseIP("10.0.0.1"), Port: 10001},
@@ -743,7 +756,7 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 	svc := newTestMgmtSvcMulti(t, l, maxEngines, false)
 	svc.harness.started.SetTrue()
 	svc.harness.instances[0].(*EngineInstance)._superblock.Rank = ranklist.NewRankPtr(0)
-	svc.sysdb = raft.MockDatabase(t, l)
+	svc.sysdb = raft.MockDatabaseWithAddr(t, l, selfAddr)
 	svc.membership = system.MockMembership(t, l, svc.sysdb, mockResolver)
 	for _, m := range mbs {
 		if _, err := svc.membership.Add(m); err != nil {
@@ -3609,6 +3622,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 		nilReq         bool
 		forwarded      bool
 		notLeader      bool
+		selfHostIdx    int32 // index (per test.MockHostAddr) of the "self" leader host; 0 = default
 		ranks          string
 		hosts          string
 		members        system.Members
@@ -3714,12 +3728,47 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 				mockMember(t, 3, 2, "awaitformat"),
 			},
 		},
+		"leader's own host ranks excluded from fanout": {
+			// svc.sysdb's self address matches host 1 (where ranks 0,1 live, see
+			// mockMember() calls below), so getPeersAndFanout() must exclude both
+			// ranks from the ResetFormatRanks fanout request entirely (see Section
+			// 4.6 of the MD-on-SSD system erase design doc); they are instead
+			// erased locally via resetLocalEngines(), which produces no RankResult
+			// of its own. Only host 2's ranks (2, 3) go through RPC fanout and
+			// appear in the response/get their membership state updated.
+			selfHostIdx: 1,
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "stopped"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			mResps: []*control.HostResponse{
+				hr(2, mockRankSuccess("reset format", 2), mockRankSuccess("reset format", 3)),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("reset format", 2, 2),
+				mockRankSuccess("reset format", 3, 2),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "awaitformat"),
+				mockMember(t, 3, 2, "awaitformat"),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
+			var svc *mgmtSvc
+			if tc.selfHostIdx != 0 {
+				svc = mgmtSystemTestSetupSelfAddr(t, log, tc.members,
+					test.MockHostAddr(tc.selfHostIdx), tc.mResps)
+			} else {
+				svc = mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
+			}
 
 			if tc.notLeader {
 				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
