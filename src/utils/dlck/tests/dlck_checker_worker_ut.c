@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include <setjmp.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <abt.h>
@@ -41,14 +42,16 @@ teardown(void **state)
 }
 
 static void
-expect_worker_fopen(int error)
+expect_worker_fopen(bool error)
 {
 	expect_string(__wrap_fopen, path, Mock_log_file);
 	expect_string(__wrap_fopen, mode, "w");
-	if (error == 0)
+	if (!error) {
 		will_return(__wrap_fopen, Mock_file_stream);
-	else
+	} else {
 		will_return(__wrap_fopen, NULL);
+		will_return(__wrap_fopen, EIO);
+	}
 }
 
 static int
@@ -78,7 +81,7 @@ setup_worker_checker(void **state)
 	ck = *state;
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, Mock_log_file);
-	expect_worker_fopen(0);
+	expect_worker_fopen(false);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	assert_int_equal(
 	    dlck_checker_worker_init(&options, MOCK_LOG_DIR, Mock_pool_uuid, 0, NULL, ck),
@@ -95,6 +98,8 @@ teardown_worker_checker(void **state)
 
 	expect_value(__wrap_fclose, stream, Mock_file_stream);
 	will_return(__wrap_fclose, mock_worker_fclose_rc);
+	if (mock_worker_fclose_rc == EOF)
+		will_return(__wrap_fclose, EIO);
 	expect_value(__wrap_d_free, ptr, &Dcw);
 
 	dlck_checker_worker_fini(ck);
@@ -131,7 +136,7 @@ test_worker_init_log_open_failure(void **state)
 
 	EXPECT_CHECKER_D_CALLOC(Dcw);
 	will_return(__wrap_d_asprintf2, Mock_log_file);
-	expect_worker_fopen(EIO);
+	expect_worker_fopen(true);
 	expect_function_call(mock_main_vprintf);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	expect_value(__wrap_d_free, ptr, &Dcw);
@@ -215,6 +220,7 @@ test_worker_vprintf_vfprintf_failure(void **state)
 	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
 	expect_string(__wrap_vfprintf, fmt, "worker");
 	will_return(__wrap_vfprintf, -1);
+	will_return(__wrap_vfprintf, EIO);
 	assert_int_equal(ck_common_printf(ck, "worker"), daos_errno2der(EIO));
 }
 
@@ -228,6 +234,7 @@ test_worker_vprintf_fflush_failure(void **state)
 	expect_string(__wrap_vfprintf, fmt, "worker");
 	will_return(__wrap_vfprintf, 1);
 	expect_value(__wrap_fflush, stream, Mock_file_stream);
+	will_return(__wrap_fflush, EOF);
 	will_return(__wrap_fflush, EIO);
 	assert_int_equal(ck_common_printf(ck, "worker"), daos_errno2der(EIO));
 }

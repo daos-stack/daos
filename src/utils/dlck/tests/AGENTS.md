@@ -62,8 +62,9 @@ Apply these rules when adding or changing DLCK unit tests:
   and the I/O wrappers check their stream arguments. `__wrap_vfprintf` always
   checks its format; `mock_vfprintf_check_output` enables rendered-output
   checking for that call.
-- When an error path reads `errno`, set it in the relevant wrapper. Assert the
-  correct mapping (`daos_errno2der()` or `dss_abterr2der()`) and cleanup.
+- When an error path reads `errno`, have the test queue the failing mock return
+  followed by the errno value; consume errno only on that failure path. Assert
+  the correct mapping (`daos_errno2der()` or `dss_abterr2der()`) and cleanup.
 - For DAOS assertions, call `d_register_alt_assert(mock_assert)` in `main()` before
   using `expect_assert_failure()`.
 - Use fake streams only when real file contents are irrelevant, and ensure fake

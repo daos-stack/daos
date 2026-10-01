@@ -17,7 +17,6 @@
 #include "dlck_checker_ut_mock.h"
 
 #define MOCK_ASPRINTF_LENGTH 573
-#define MOCK_ERRNO           123456
 
 struct dlck_checker_main   Dcm;
 struct dlck_checker_worker Dcw;
@@ -83,9 +82,8 @@ __wrap_fopen(const char *path, const char *mode)
 
 	FILE *result = mock_ptr_type(FILE *);
 
-	if (result == NULL) {
-		errno = MOCK_ERRNO;
-	}
+	if (result == NULL)
+		errno = mock_type(int);
 
 	return result;
 }
@@ -98,7 +96,7 @@ __wrap_fclose(FILE *stream)
 	int rc = mock_type(int);
 
 	if (rc == EOF)
-		errno = MOCK_ERRNO;
+		errno = mock_type(int);
 
 	return rc;
 }
@@ -176,7 +174,7 @@ __wrap_vfprintf(FILE *stream, const char *fmt, va_list args)
 	int rc = mock_type(int);
 
 	if (rc < 0)
-		errno = EIO;
+		errno = mock_type(int);
 
 	return rc;
 }
@@ -197,12 +195,10 @@ __wrap_fflush(FILE *stream)
 {
 	check_expected_ptr(stream);
 
-	int error = mock_type(int);
+	int rc = mock_type(int);
 
-	if (error != 0) {
-		errno = error;
-		return EOF;
-	}
+	if (rc == EOF)
+		errno = mock_type(int);
 
-	return 0;
+	return rc;
 }

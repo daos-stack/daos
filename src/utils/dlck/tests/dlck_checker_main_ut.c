@@ -140,6 +140,7 @@ test_vprintf_vfprintf_failure(void **state)
 	expect_value(__wrap_vfprintf, stream, stdout);
 	expect_string(__wrap_vfprintf, fmt, "test");
 	will_return(__wrap_vfprintf, -1);
+	will_return(__wrap_vfprintf, EIO);
 	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
 	assert_int_equal(ck_common_printf(ck, "test"), daos_errno2der(EIO));
@@ -157,6 +158,7 @@ test_vprintf_fflush_failure(void **state)
 	expect_string(__wrap_vfprintf, fmt, "test");
 	will_return(__wrap_vfprintf, 1);
 	expect_value(__wrap_fflush, stream, stdout);
+	will_return(__wrap_fflush, EOF);
 	will_return(__wrap_fflush, EIO);
 	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
