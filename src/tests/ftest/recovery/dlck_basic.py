@@ -100,8 +100,13 @@ class DlckBasicTest(TestDlck):
 
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
-        run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
-        run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
+        if self.server_managers[0].manager.job.using_control_metadata:
+            # Mount 128G of memory-backed tmpfs for testing purposes
+            cmd = "mount -t tmpfs -o size=128G tmpfs /mnt/daos0"
+            run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
+            # Display the tmpfs mount
+            run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
+            run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
 
         for test_fault in fault_list:
             fault_config = {
