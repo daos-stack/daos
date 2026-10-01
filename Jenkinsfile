@@ -533,8 +533,8 @@ pipeline {
                             'parameter.')
         string(name: 'TestProvider',
                defaultValue: '',
-               description: 'Test-provider to use for all Functional Hardware test stages. ' +
-                            'Specifies the default provider to use the daos_server ' +
+               description: 'Test-provider to use for all Functional Hardware and Cluster Box ' +
+                            'test stages. Defines the default provider to use in the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs;ofi_rxm", "ofi+tcp")')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
@@ -680,10 +680,16 @@ pipeline {
                description: 'Label to use for Fault Injection (FI) tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
+               description: 'Label to use for the Functional Hardware Medium stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_nvme5 || ci_nvme5_only',
+               description: 'Label to use for the Functional Hardware Medium MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium Provider (MD on SSD) stages')
+               description: 'Label to use for 5 node Functional Hardware Medium Provider stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_ofed5 || ci_nvme5_only',
+               description: 'Label to use for the Functional Hardware Medium Provider MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',
                description: 'Label to use for the Functional Hardware Medium VMD stage')
@@ -1296,7 +1302,7 @@ pipeline {
                             name: 'Functional Hardware Medium MD on SSD',
                             runStage: shouldStageRun('Functional Hardware Medium MD on SSD'),
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: next_version(),
                             other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,-provider,-cb',
@@ -1336,7 +1342,7 @@ pipeline {
                             name: 'Functional Hardware Medium Provider MD on SSD',
                             runStage: shouldStageRun('Functional Hardware Medium Provider MD on SSD'),
                             pragma_suffix: '-hw-medium-provider-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: next_version(),
                             other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,provider,-cb',
