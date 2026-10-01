@@ -154,6 +154,7 @@ debuginfo
 deduplicated
 defusedxml
 del
+dentries
 dentry
 deps
 dereference
@@ -224,6 +225,9 @@ groupdel
 groupname
 grp
 hackery
+hardlink
+hardlinked
+hardlinks
 hexdump
 hfi
 hostfile
@@ -395,6 +399,7 @@ rc
 rdb
 rdbt
 readdir
+readdirplus
 readlink
 realloc
 rebase
@@ -424,10 +429,12 @@ sbatch
 sbin
 scalable
 scancel
+scandir
 scm
 scons
 scontrol
 seekable
+setattr
 sharedctypes
 shlex
 simul

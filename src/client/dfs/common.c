@@ -326,7 +326,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 
 static int
 remove_hardlink(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *name, size_t len,
-		struct dfs_entry entry)
+		struct dfs_entry entry, bool *deleted)
 {
 	daos_key_t       dkey;
 	daos_key_t       git_dkey;
@@ -373,9 +373,13 @@ restart:
 	 * directory entry still has its hardlink bit set, and the inode metadata
 	 * remains in GIT.
 	 */
-	if (new_link_cnt > 0)
+	if (new_link_cnt > 0) {
+		if (deleted)
+			*deleted = false;
 		D_GOTO(out,
 		       rc = git_update_link_cnt(dfs->git_oh, th, &entry.oid, new_link_cnt, NULL));
+	} else if (deleted)
+		*deleted = true;
 
 	d_iov_set(&git_dkey, &entry.oid, sizeof(daos_obj_id_t));
 	rc = daos_obj_punch_dkeys(dfs->git_oh, th, 0, 1, &git_dkey, NULL);
@@ -415,14 +419,18 @@ out:
 
 int
 remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *name, size_t len,
-	     struct dfs_entry entry)
+	     struct dfs_entry entry, bool *deleted)
 {
 	daos_key_t    dkey;
 	daos_handle_t oh;
 	int           rc;
 
+	/* Default: the object is removed unless a surviving hardlink is found below. */
+	if (deleted)
+		*deleted = true;
+
 	if (DFS_IS_HARDLINK(entry.mode))
-		return remove_hardlink(dfs, th, parent_oh, name, len, entry);
+		return remove_hardlink(dfs, th, parent_oh, name, len, entry, deleted);
 
 	if (S_ISLNK(entry.mode))
 		goto punch_entry;

@@ -437,7 +437,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	    void *xvals[], daos_size_t *xsizes);
 int
 remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh, const char *name, size_t len,
-	     struct dfs_entry entry);
+	     struct dfs_entry entry, bool *deleted);
 int
 git_fetch_entry(daos_handle_t git_oh, daos_handle_t th, daos_obj_id_t *oid, struct dfs_entry *entry,
 		int xnr, char *xnames[], void *xvals[], daos_size_t *xsizes);
