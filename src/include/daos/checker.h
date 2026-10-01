@@ -10,6 +10,14 @@
 #include <stdarg.h>
 #include <gurt/common.h>
 
+/**
+ * Do NOT use the following format to print DKEYs outside code paths dedicated SOLELY to local
+ * consistency checks. Regular code paths use a less verbose format for security reasons.
+ * See daos-stack/daos#2932.
+ */
+#define CHECKER_DKEY_FMT         "[%d] '%s'"
+#define CHECKER_DKEY_PRINT(DKEY) (int)(DKEY)->iov_len, daos_key2str(DKEY)
+
 #define CHECKER_INDENT_MAX 10
 
 /**
