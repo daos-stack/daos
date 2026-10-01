@@ -82,6 +82,13 @@ type EngineInstance struct {
 	_superblock      *Superblock
 	_lastErr         error // populated when harness receives signal
 	_lastHealthStats map[string]*ctlpb.BioHealthResp
+	// _storageReadyClosed guards against closing storageReady more than once
+	// for the current start attempt, which would otherwise panic if two
+	// NotifyStorageReady() calls raced past the isAwaitingFormat() check in
+	// ctl_storage_rpc.go's notifyStorageReady() concurrently. Reset to false
+	// alongside storageReady each time a new channel is created in
+	// startRunner().
+	_storageReadyClosed bool
 }
 
 // NewEngineInstance returns an *EngineInstance initialized with its dependencies.
