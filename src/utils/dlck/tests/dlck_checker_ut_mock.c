@@ -38,11 +38,11 @@ expect_checker_d_calloc(size_t size, void *payload)
 void *
 __wrap_d_calloc(size_t nmemb, size_t size)
 {
-	void *payload;
+	void *payload = mock_ptr_type(void *);
 
 	check_expected(nmemb);
 	check_expected(size);
-	payload = mock_ptr_type(void *);
+
 	if (payload == NULL)
 		return NULL;
 	assert_true((payload == &Dcm && size == sizeof(Dcm)) ||
@@ -96,7 +96,6 @@ __wrap_fclose(FILE *stream)
 	int rc = mock_type(int);
 
 	check_expected_ptr(stream);
-	function_called();
 	if (rc == EOF)
 		errno = EIO;
 	return rc;

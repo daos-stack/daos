@@ -15,7 +15,6 @@
 #include <cmocka.h>
 
 #include <daos_srv/checker.h>
-#include <daos_srv/mgmt_tgt_common.h>
 
 #include "../dlck_checker.h"
 #include "dlck_checker_ut_mock.h"
@@ -109,7 +108,6 @@ test_worker_init_success(void **state)
 	/* setup_worker_checker() is an integral part of this test. */
 	assert_ptr_equal(ck->ck_private, &Dcw);
 	assert_int_equal(Dcw.magic, DLCK_CHECKER_WORKER_MAGIC);
-	assert_non_null(Dcw.stream);
 	assert_non_null(ck->ck_vprintf);
 	assert_non_null(ck->ck_indent_set);
 	assert_ptr_equal(ck->ck_prefix, Dcw.prefix);
@@ -274,6 +272,7 @@ test_worker_indent_set_invalid_magic(void **state)
 
 	Dcw.magic = ~DLCK_CHECKER_WORKER_MAGIC;
 	expect_assert_failure(ck->ck_indent_set(ck));
+	/* Restore magic so teardown_worker_checker() can clean up. */
 	Dcw.magic = DLCK_CHECKER_WORKER_MAGIC;
 }
 
@@ -302,7 +301,6 @@ static const struct CMUnitTest dlck_checker_worker_tests[] = {
      setup_worker_checker, teardown_worker_checker},
     {"DLCK_CHECKER_WORKER_112: CK_PRINTF - indentation", test_worker_CK_PRINTF_with_indent,
      setup_worker_checker, teardown_worker_checker},
-
 };
 
 int

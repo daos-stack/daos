@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -20,7 +20,6 @@
 #include <abt.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/checker.h>
-#include <daos_srv/mgmt_tgt_common.h>
 
 #include "../dlck_checker.h"
 #include "dlck_checker_ut_mock.h"
@@ -218,10 +217,9 @@ test_main_get_custom_invalid_magic(void **state)
 static void
 test_main_fini_mutex_free_failure(void **state)
 {
-	struct checker  ck_zeroed;
+	struct checker  ck_zeroed = {0};
 	struct checker *ck = *state;
 
-	memset(&ck_zeroed, 0, sizeof(ck_zeroed));
 	expect_value(__wrap_ABT_mutex_free, mutex, &Dcm.stream_mutex);
 	expect_value(__wrap_ABT_mutex_free, handle, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_free, ABT_ERR_OTHER);
@@ -271,12 +269,12 @@ test_main_indent_set_out_of_range(void **state)
 
 	ck->ck_level = -1;
 	expect_assert_failure(ck->ck_indent_set(ck));
-	ck->ck_level = -1;
+	ck->ck_level = 0;
 	expect_assert_failure(checker_print_indent_dec(ck));
 
 	ck->ck_level = CHECKER_INDENT_MAX + 1;
 	expect_assert_failure(ck->ck_indent_set(ck));
-	ck->ck_level = CHECKER_INDENT_MAX + 1;
+	ck->ck_level = CHECKER_INDENT_MAX;
 	expect_assert_failure(checker_print_indent_inc(ck));
 }
 

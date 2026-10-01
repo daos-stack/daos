@@ -35,15 +35,7 @@ expect_callback_arguments(struct checker *ck)
 	expect_string(mock_checker_vprintf, message, "ready");
 }
 
-static struct checker checker_state;
-
-static int
-setup_checker(void **state)
-{
-	checker_state.ck_vprintf = mock_checker_vprintf;
-	*state                   = &checker_state;
-	return 0;
-}
+static struct checker Checker_state = {.ck_vprintf = mock_checker_vprintf};
 
 static void
 test_ck_common_vprintf_dispatches_arguments(void **state)
@@ -67,9 +59,9 @@ test_ck_common_vprintf_returns_callback_error(void **state)
 
 static const struct CMUnitTest dlck_checker_common_tests[] = {
     {"DLCK_CHECKER_COMMON_101: vprintf dispatches arguments",
-     test_ck_common_vprintf_dispatches_arguments, setup_checker},
+     test_ck_common_vprintf_dispatches_arguments, NULL, NULL, &Checker_state},
     {"DLCK_CHECKER_COMMON_102: vprintf returns callback error",
-     test_ck_common_vprintf_returns_callback_error, setup_checker},
+     test_ck_common_vprintf_returns_callback_error, NULL, NULL, &Checker_state},
 };
 
 int
