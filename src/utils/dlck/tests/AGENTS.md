@@ -73,8 +73,10 @@ Apply these rules when adding or changing DLCK unit tests:
 - Keep case IDs sequential (Starting from 101) in execution order in suites
   that use descriptive numbered IDs.
   - When adding a test binary, register it in `SConscript`, `utils/utest.yaml`, and
-  `ci/test_files_to_stash.txt`. Use `env.Clone()`, a unique `OBJPREFIX`, and only
-  the required sources, libraries, dependencies, include paths, and linker wraps.
+  `ci/test_files_to_stash.txt`. Keep sibling registrations alphabetical. Use
+  `env.Clone()`, a unique `OBJPREFIX` when needed, and only the required sources,
+  libraries, dependencies, include paths, and linker wraps. The test helper
+  needs its explicit `CPPPATH` to find `engine/srv_internal.h`.
 - Build and run the affected binary. If shared checker mocks change, run both
   main and worker suites. From the DAOS repo root, the current debug/gcc pattern
   is:

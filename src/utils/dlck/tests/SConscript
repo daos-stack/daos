@@ -55,6 +55,14 @@ def build_dlck_args_ut(henv):
     henv.d_test_program('dlck_args_ut', srcs, LIBS=libs)
 
 
+def build_dlck_checker_common_ut(henv):
+    """Build dlck_checker_common_ut"""
+    henv.require('cmocka')
+
+    henv.d_test_program('dlck_checker_common_ut', ['dlck_checker_common_ut.c'],
+                        LIBS=['gurt', 'cmocka'])
+
+
 def build_dlck_checker_main_ut(henv):
     """Build dlck_checker_main_ut"""
     henv.Append(OBJPREFIX="dlck_checker_main_ut_")
@@ -73,14 +81,6 @@ def build_dlck_checker_main_ut(henv):
         '../dlck_checker.c',
     ]
     henv.d_test_program('dlck_checker_main_ut', srcs, LIBS=libs)
-
-
-def build_dlck_checker_common_ut(henv):
-    """Build dlck_checker_common_ut"""
-    henv.require('cmocka')
-
-    henv.d_test_program('dlck_checker_common_ut', ['dlck_checker_common_ut.c'],
-                        LIBS=['gurt', 'cmocka'])
 
 
 def build_dlck_checker_worker_ut(henv):
@@ -107,8 +107,8 @@ def scons():
 
     build_dlck_test_helper(env.Clone())
     build_dlck_args_ut(env.Clone())
-    build_dlck_checker_main_ut(env.Clone())
     build_dlck_checker_common_ut(env.Clone())
+    build_dlck_checker_main_ut(env.Clone())
     build_dlck_checker_worker_ut(env.Clone())
 
 

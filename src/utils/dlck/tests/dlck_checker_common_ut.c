@@ -13,6 +13,10 @@
 #include <daos_errno.h>
 #include <daos_srv/checker.h>
 
+#define FMT  "worker %d: %s"
+#define ARG0 42
+#define ARG1 "ready"
+
 static int
 mock_checker_vprintf(struct checker *ck, const char *fmt, va_list args)
 {
@@ -30,9 +34,9 @@ static void
 expect_callback_arguments(struct checker *ck)
 {
 	expect_value(mock_checker_vprintf, ck, ck);
-	expect_string(mock_checker_vprintf, fmt, "worker %d: %s");
-	expect_value(mock_checker_vprintf, value, 42);
-	expect_string(mock_checker_vprintf, message, "ready");
+	expect_string(mock_checker_vprintf, fmt, FMT);
+	expect_value(mock_checker_vprintf, value, ARG0);
+	expect_string(mock_checker_vprintf, message, ARG1);
 }
 
 static struct checker Checker_state = {.ck_vprintf = mock_checker_vprintf};
@@ -44,7 +48,7 @@ test_ck_common_vprintf_dispatches_arguments(void **state)
 
 	expect_callback_arguments(ck);
 	will_return(mock_checker_vprintf, DER_SUCCESS);
-	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"), DER_SUCCESS);
+	assert_int_equal(ck_common_printf(ck, FMT, ARG0, ARG1), DER_SUCCESS);
 }
 
 static void
@@ -54,7 +58,7 @@ test_ck_common_vprintf_returns_callback_error(void **state)
 
 	expect_callback_arguments(ck);
 	will_return(mock_checker_vprintf, -DER_IO);
-	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"), -DER_IO);
+	assert_int_equal(ck_common_printf(ck, FMT, ARG0, ARG1), -DER_IO);
 }
 
 static const struct CMUnitTest dlck_checker_common_tests[] = {
