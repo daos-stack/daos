@@ -252,8 +252,7 @@ RUN --mount=type=bind,source=VERSION,target=/home/daos/daos/VERSION \
     --mount=type=bind,source=utils/rpms,target=/home/daos/daos/rpms \
     --mount=type=bind,source=src,target=/tmp/daos-src \
     [ "$DAOS_BUILD" != "yes" ] || { \
-        export GOCACHE=/tmp/go-cache MPI_PKG=any \
-            PATH="/usr/lib64/mpi/gcc/openmpi3/bin:${PATH}" && \
+        export GOCACHE=/tmp/go-cache && \
         mkdir -p /home/daos/daos/src && \
         cp -r /tmp/daos-src/. /home/daos/daos/src && \
            utils/build/build_daos.sh \
