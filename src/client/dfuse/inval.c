@@ -98,14 +98,19 @@ struct dfuse_ival {
 };
 
 /* A single on-demand dentry invalidation request.  Request handlers running on the fixed worker
- * pool enqueue these rather than calling fuse_lowlevel_notify_inval_entry() directly, as that
- * blocks acquiring the parent's kernel i_rwsem, which may be held by a client waiting on the same
- * worker pool - deadlocking it.  The dedicated invalidation thread drains the queue instead.
+ * pool enqueue these rather than calling fuse_lowlevel_notify_inval_entry() or
+ * fuse_lowlevel_notify_delete() directly, as both block acquiring the parent's kernel i_rwsem,
+ * which may be held by a client waiting on the same worker pool - deadlocking it.  The dedicated
+ * invalidation thread drains the queue instead.
  */
 struct dfuse_inval_item {
 	d_list_t                  link;
 	fuse_ino_t                parent;
 	char                      name[NAME_MAX + 1];
+	/* Child inode for a delete request; unused (0) for a plain invalidation. */
+	fuse_ino_t                ino;
+	/* When set, issue notify_delete(parent, ino, name) rather than notify_inval_entry(). */
+	bool                      delete_entry;
 	/* Optional inode reference to drop once the invalidation has completed, or NULL */
 	struct dfuse_inode_entry *ie_drop;
 };
@@ -237,11 +242,17 @@ ival_drain_queue(void)
 		if (!ival_stop && !ival_data.session_dead) {
 			int rc;
 
-			rc = fuse_lowlevel_notify_inval_entry(ival_data.session, item->parent,
-							      item->name,
-							      strnlen(item->name, NAME_MAX));
+			if (item->delete_entry)
+				rc = fuse_lowlevel_notify_delete(ival_data.session, item->parent,
+								 item->ino, item->name,
+								 strnlen(item->name, NAME_MAX));
+			else
+				rc = fuse_lowlevel_notify_inval_entry(
+				    ival_data.session, item->parent, item->name,
+				    strnlen(item->name, NAME_MAX));
 			if (rc && rc != -ENOENT && rc != -EBADF)
-				DHS_ERROR(&ival_data, -rc, "notify_inval_entry() failed");
+				DHS_ERROR(&ival_data, -rc, "notify_%s() failed",
+					  item->delete_entry ? "delete" : "inval_entry");
 			if (rc == -EBADF)
 				ival_data.session_dead = true;
 		}
@@ -299,8 +310,10 @@ dfuse_queue_inval_dentries(struct dfuse_dentry *released, struct dfuse_inode_ent
 		D_ALLOC_PTR(item);
 		if (item == NULL)
 			D_GOTO(fail, rc = ENOMEM);
-		item->parent  = released->dd_parent;
-		item->ie_drop = NULL;
+		item->parent       = released->dd_parent;
+		item->ie_drop      = NULL;
+		item->ino          = 0;
+		item->delete_entry = false;
 		strncpy(item->name, released->dd_name, NAME_MAX);
 		item->name[NAME_MAX] = '\0';
 		d_list_add_tail(&item->link, &items);
@@ -311,8 +324,10 @@ dfuse_queue_inval_dentries(struct dfuse_dentry *released, struct dfuse_inode_ent
 		D_ALLOC_PTR(item);
 		if (item == NULL)
 			D_GOTO(fail, rc = ENOMEM);
-		item->parent  = dd->dd_parent;
-		item->ie_drop = NULL;
+		item->parent       = dd->dd_parent;
+		item->ie_drop      = NULL;
+		item->ino          = 0;
+		item->delete_entry = false;
 		strncpy(item->name, dd->dd_name, NAME_MAX);
 		item->name[NAME_MAX] = '\0';
 		d_list_add_tail(&item->link, &items);
@@ -354,42 +369,67 @@ dfuse_ie_inode_delete(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *i
 		      struct dfuse_dentry *released, fuse_ino_t exclude_parent,
 		      const char *exclude_name)
 {
-	struct dfuse_dentry *dd, *ddn;
-	fuse_ino_t           ino = ie->ie_stat.st_ino;
-	int                  rc;
+	struct dfuse_dentry     *dd, *ddn;
+	struct dfuse_inval_item *item;
+	fuse_ino_t               ino = ie->ie_stat.st_ino;
+	d_list_t                 items;
+	int                      rc;
+
+	D_INIT_LIST_HEAD(&items);
 
 	/* Drop cached data and attributes (a no-op if caching is off).  The kernel just did a
 	 * lookup for this unlink/rename and has often destroyed the inode already, so this races
-	 * and usually returns -ENOENT, which is expected and ignored.
+	 * and usually returns -ENOENT, which is expected and ignored.  This operates on the inode
+	 * itself rather than the parent, so it takes no parent i_rwsem and stays synchronous.
 	 */
 	rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session, ino, 0, 0);
 	if (rc && rc != -ENOENT)
 		DHS_ERROR(ie, -rc, "inval_inode() error");
 
-	/* Delete every cached name so the kernel issues a forget for each, except (exclude_parent,
-	 * exclude_name) which the kernel already handled and forgets on its own via this call.
+	/* Queue a delete for every cached name so the kernel issues a forget for each, except
+	 * (exclude_parent, exclude_name) which the kernel already handled and forgets on its own
+	 * via this call.  notify_delete() blocks acquiring the parent's i_rwsem, so it is deferred
+	 * to the invalidation thread (see struct dfuse_inval_item).  Delaying is safe because the
+	 * kernel matches the child nodeid before deleting, so a name re-created in the meantime is
+	 * left untouched.
 	 */
 	if (released->dd_name[0] != '\0' &&
 	    (released->dd_parent != exclude_parent ||
 	     strncmp(released->dd_name, exclude_name, NAME_MAX) != 0)) {
-		rc = fuse_lowlevel_notify_delete(dfuse_info->di_session, released->dd_parent, ino,
-						 released->dd_name,
-						 strnlen(released->dd_name, NAME_MAX));
-		if (rc && rc != -ENOENT)
-			DHS_ERROR(ie, -rc, "notify_delete() error");
+		D_ALLOC_PTR(item);
+		if (item != NULL) {
+			item->parent       = released->dd_parent;
+			item->ino          = ino;
+			item->delete_entry = true;
+			strncpy(item->name, released->dd_name, NAME_MAX);
+			item->name[NAME_MAX] = '\0';
+			d_list_add_tail(&item->link, &items);
+		}
 	}
 
 	d_list_for_each_entry_safe(dd, ddn, &released->dd_list, dd_list) {
 		if (dd->dd_parent != exclude_parent ||
 		    strncmp(dd->dd_name, exclude_name, NAME_MAX) != 0) {
-			rc = fuse_lowlevel_notify_delete(dfuse_info->di_session, dd->dd_parent, ino,
-							 dd->dd_name,
-							 strnlen(dd->dd_name, NAME_MAX));
-			if (rc && rc != -ENOENT)
-				DHS_ERROR(ie, -rc, "notify_delete() error");
+			D_ALLOC_PTR(item);
+			if (item != NULL) {
+				item->parent       = dd->dd_parent;
+				item->ino          = ino;
+				item->delete_entry = true;
+				strncpy(item->name, dd->dd_name, NAME_MAX);
+				item->name[NAME_MAX] = '\0';
+				d_list_add_tail(&item->link, &items);
+			}
 		}
 		d_list_del(&dd->dd_list);
 		D_FREE(dd);
+	}
+
+	if (!d_list_empty(&items)) {
+		D_MUTEX_LOCK(&ival_lock);
+		while ((item = d_list_pop_entry(&items, struct dfuse_inval_item, link)) != NULL)
+			d_list_add_tail(&item->link, &ival_queue);
+		D_MUTEX_UNLOCK(&ival_lock);
+		sem_post(&ival_sem);
 	}
 }
 

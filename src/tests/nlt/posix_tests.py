@@ -948,6 +948,105 @@ class PosixTests():
             pass
         assert 'sec_moved' in os.listdir(sec_sub)
 
+    def test_hardlink_dir_cache(self):
+        """Check a hardlink invalidates the parent's cached directory listing.
+
+        With caching on, dfuse keeps a shared in-memory readdir handle (ie_rd_hdl) for a directory
+        while any stream is open, and a newly opened stream is served from it.  dfuse_cb_link()
+        must evict that handle (as create/unlink/rename do) or the new stream reuses the stale
+        cached listing and omits the new name.
+        """
+        # Mount config mirrors the manual reproducer: caching on, write-back and data cache off,
+        # with a dentry timeout long enough that the readdir cache survives across the link.
+        cont_attrs = {'dfuse-data-cache': 'off',
+                      'dfuse-attr-time': '60',
+                      'dfuse-dentry-time': '60',
+                      'dfuse-ndentry-time': '60'}
+        self.container.set_attrs(cont_attrs)
+        dfuse = DFuse(self.server, self.conf, caching=True, wbcache=False,
+                      container=self.container)
+        dfuse.start(v_hint='hardlink_dir_cache')
+        try:
+            directory = join(dfuse.dir, 'linkdir')
+            os.mkdir(directory)
+            seeds = ('seed0', 'seed1', 'seed2')
+            for name in seeds:
+                with open(join(directory, name), 'w'):
+                    pass
+            source = join(directory, seeds[0])
+            link_name = 'new-link'
+
+            # Retain the directory stream: read every entry but break before exhausting the
+            # iterator, since os.scandir() auto-closes on exhaustion which would drop the shared
+            # dfuse readdir handle.  Keeping it open holds that handle resident across the link.
+            held = os.scandir(directory)
+            try:
+                before = []
+                for entry in held:
+                    before.append(entry.name)
+                    if len(before) == len(seeds):
+                        break
+                assert link_name not in before
+
+                os.link(source, join(directory, link_name))
+
+                # An independently opened stream shares the retained handle.  Without the eviction
+                # in dfuse_cb_link it is served the stale cached listing and omits the new name.
+                after = set(os.listdir(directory))
+            finally:
+                held.close()
+
+            assert link_name in after, 'hardlink missing from an independently opened stream'
+            assert after == set(before) | {link_name}
+        finally:
+            if dfuse.stop():
+                self.fatal_errors = True
+
+    def test_hardlink_mtime(self):
+        """Check a hardlink does not move the cached mtime of the shared inode backward.
+
+        dfs_link() builds its stat from stored inode metadata, which lags the array's modification
+        epoch.  With attribute caching on and write-back off, publishing that stale mtime through
+        the dfuse attr cache would regress the modification time for both names.  dfuse must reuse
+        the reconciled timestamp so an immediate stat reports the real mtime.
+        """
+        # Mount config mirrors the manual reproducer: attribute caching on, write-back and data
+        # cache off, so the stat after the link is served from the attr cache the link publishes.
+        cont_attrs = {'dfuse-data-cache': 'off',
+                      'dfuse-attr-time': '60',
+                      'dfuse-dentry-time': '60',
+                      'dfuse-ndentry-time': '60'}
+        self.container.set_attrs(cont_attrs)
+        dfuse = DFuse(self.server, self.conf, caching=True, wbcache=False,
+                      container=self.container)
+        dfuse.start(v_hint='hardlink_mtime')
+        try:
+            source = join(dfuse.dir, 'mtime-source')
+            target = join(dfuse.dir, 'mtime-link')
+
+            with open(source, 'w') as fd:
+                fd.write('data')
+
+            # Pin the stored entry mtime to the past, then a fresh write advances the modification
+            # epoch beyond it so the stored value and the reconciled mtime diverge.
+            old = 946684800  # 2000-01-01T00:00:00Z
+            os.utime(source, (old, old))
+            with open(source, 'w') as fd:
+                fd.write('newer data')
+
+            before = os.stat(source)
+            assert before.st_mtime_ns > old * 1000000000, 'write did not advance mtime'
+
+            os.link(source, target)
+
+            assert os.stat(source).st_mtime_ns == before.st_mtime_ns, \
+                'link moved the source mtime backward'
+            assert os.stat(target).st_mtime_ns == before.st_mtime_ns, \
+                'new hardlink name reports a stale mtime'
+        finally:
+            if dfuse.stop():
+                self.fatal_errors = True
+
     def test_hardlink_two_mounts(self):
         """Create a hardlink on one mount and check it is visible from a second mount.
 

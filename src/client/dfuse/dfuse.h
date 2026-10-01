@@ -1300,8 +1300,9 @@ dfuse_ie_dentry_inval(struct dfuse_info *dfuse_info, struct dfuse_dentry *releas
 int
 dfuse_queue_inval_dentries(struct dfuse_dentry *released, struct dfuse_inode_entry *ie_drop);
 
-/* Invalidate cached data/attrs and delete every name in released, skipping
- * (exclude_parent, exclude_name) which the kernel already handled.  Consumes released.
+/* Invalidate cached data/attrs synchronously, then queue a delete on the invalidation thread for
+ * every name in released, skipping (exclude_parent, exclude_name) which the kernel already handled.
+ * Consumes released.
  */
 void
 dfuse_ie_inode_delete(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,

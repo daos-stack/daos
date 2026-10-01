@@ -39,6 +39,8 @@ dfuse_cb_link(fuse_req_t req, struct dfuse_inode_entry *inode, struct dfuse_inod
 
 	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
 
+	dfuse_cache_evict_dir(dfuse_info, parent);
+
 	dfuse_reply_entry(dfuse_info, ie, NULL, true, req);
 
 	return;
