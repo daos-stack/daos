@@ -9,7 +9,6 @@ def build_dlck_test_helper(henv):
     """Build dlck_test_helper"""
     henv.Append(OBJPREFIX="dlck_ut_helper_")
     henv.Append(CPPPATH=[Dir('../../../').srcnode()])
-    henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     henv.require('argobots', 'cmocka')
 
     libs = [
@@ -38,9 +37,7 @@ def build_dlck_test_helper(henv):
 def build_dlck_args_ut(henv):
     """Build dlck_args_ut"""
     henv.Append(OBJPREFIX="dlck_args_ut_")
-    henv.Append(CPPPATH=[Dir('../../../').srcnode()])
     henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=argp_failure'])
-    henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     henv.require('cmocka')
 
     libs = [
@@ -80,7 +77,6 @@ def build_dlck_checker_main_ut(henv):
 
 def build_dlck_checker_common_ut(henv):
     """Build dlck_checker_common_ut"""
-    henv.Append(OBJPREFIX="dlck_checker_common_ut_")
     henv.require('cmocka')
 
     henv.d_test_program('dlck_checker_common_ut', ['dlck_checker_common_ut.c'],
