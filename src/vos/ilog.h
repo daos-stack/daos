@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -344,11 +344,14 @@ ilog_is_punch(const struct ilog_entry *entry)
  * Validate ilog's root.
  *
  * \param[in] ilog_df
+ * \param[in] report_fn		Report function.
+ * \param[in] report_arg	Argument for the report function.
  *
- * \return true if the root is valid.
+ * \retval DER_SUCCESS		On success.
+ * \retval -DER_DF_INVAL	Invalid ilog magic.
  */
-bool
-ilog_root_is_valid(struct ilog_df *ilog_df);
+int
+ilog_root_is_valid(struct ilog_df *ilog_df, report_fn_t report_fn, void *report_arg);
 
 /** Validate the provided ilog.
  *

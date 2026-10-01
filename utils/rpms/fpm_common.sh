@@ -13,6 +13,7 @@ export CONFLICTS=()
 export CONFIG_FILES=()
 export DEPENDS=()
 export EXTERNAL_DEPENDS=()
+export PROVIDES=()
 export EXTRA_OPTS=()
 export FILTER_LIST=()
 isa="$(uname -m)"
@@ -171,9 +172,15 @@ build_package() {
   create_opts "--depends" depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
   conflicts=()
   create_opts "--conflicts" conflicts "${CONFLICTS[@]}"
+  provides=()
+  create_opts "--provides" provides "${PROVIDES[@]}"
   config_files=()
   create_opts "--config-files" config_files "${CONFIG_FILES[@]}"
   pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
+  if [ -n "${PACKAGE_OUTPUT_DIR:-}" ]; then
+    mkdir -p "${PACKAGE_OUTPUT_DIR}"
+    pkgname="${PACKAGE_OUTPUT_DIR}/${pkgname}"
+  fi
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
   fpm --verbose -s "${PACKAGE_TYPE}" -t "${output_type}" \
@@ -190,6 +197,7 @@ build_package() {
   --prefix "" \
   "${depends[@]}" \
   "${conflicts[@]}" \
+  "${provides[@]}" \
   "${config_files[@]}" \
   "${EXTRA_OPTS[@]}" \
   "${install_list[@]}"
@@ -201,6 +209,7 @@ build_package() {
   CONFIG_FILES=()
   DEPENDS=()
   EXTERNAL_DEPENDS=()
+  PROVIDES=()
   if [[ ! "${name}" =~ debuginfo ]]; then
     build_debug_package "${name}"
   fi
