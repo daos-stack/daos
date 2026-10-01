@@ -2,7 +2,10 @@
 
 We are pleased to announce the release of DAOS version 2.8.
 
-## DAOS Version 2.8.1 (2026-09-30)
+## DAOS Version 2.8.1 (2026-10-02)
+
+The DAOS 2.8.1 release includes the
+[daos-2.8.1 RPM packages](https://packages.daos.io/v2.8.1/) and its prerequisites.
 
 ### Known Issues and Limitations
 
@@ -13,6 +16,13 @@ We are pleased to announce the release of DAOS version 2.8.
 ### Bug fixes
 
 The DAOS 2.8.1 release includes the following fixes.
+
+* object -- fix a replica lookup and layout refresh race (DAOS-19636):
+ Fix a race in object replica lookup and layout refresh when using extended layouts,
+ where selection of the next replica could use stale shard information after an RPC failure.
+ The fix makes replica retry logic use the failed RPC’s physical shard index and group size,
+ reads layout metadata consistently under cob\_lock, and returns -DER\_STALE
+ when the layout changes so I/O retries with a refreshed layout. 
 
 * mercury -- memory leak and performance degradation with UCX (DAOS-18988):
  Update the mercury UCX plugin to make na\_ucx\_addr\_deserialize() behave like the OFI plugin
@@ -92,11 +102,12 @@ commit messages.
 
 ## DAOS Version 2.8.0 (2026-08-12)
 
+The DAOS 2.8.0 release includes the
+[daos-2.8.0 RPM packages](https://packages.daos.io/v2.8.0/) and its prerequisites.
+
 ### General Support
 
-The DAOS 2.8.0 release includes the
-[daos-2.8.0 RPM packages](https://packages.daos.io/v2.8.0/) and its
-prerequisites. DAOS Version 2.8.0 supports the following environments:
+DAOS Version 2.8.0 supports the following environments:
 
 Architecture Support:
 
