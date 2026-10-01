@@ -17,6 +17,7 @@
 #include "dlck_checker_ut_mock.h"
 
 #define MOCK_ASPRINTF_LENGTH 573
+#define MOCK_ERRNO           123456
 
 struct dlck_checker_main   Dcm;
 struct dlck_checker_worker Dcw;
@@ -40,16 +41,17 @@ expect_checker_d_calloc(size_t size, void *payload)
 void *
 __wrap_d_calloc(size_t nmemb, size_t size)
 {
-	void *payload = mock_ptr_type(void *);
-
 	check_expected(nmemb);
 	check_expected(size);
+
+	void *payload = mock_ptr_type(void *);
 
 	if (payload != NULL) {
 		assert_true((payload == &Dcm && size == sizeof(Dcm)) ||
 			    (payload == &Dcw && size == sizeof(Dcw)));
 		memset(payload, 0, size);
 	}
+
 	return payload;
 }
 
@@ -62,8 +64,8 @@ __wrap_d_free(void *ptr)
 char *
 __wrap_d_asprintf2(int *rc, const char *fmt, ...)
 {
-	char *result = mock_ptr_type(char *);
 	(void)fmt;
+	char *result = mock_ptr_type(char *);
 
 	if (result == NULL)
 		*rc = -1;
@@ -76,81 +78,88 @@ __wrap_d_asprintf2(int *rc, const char *fmt, ...)
 FILE *
 __wrap_fopen(const char *path, const char *mode)
 {
-	int error = mock_type(int);
-
 	check_expected(path);
 	check_expected(mode);
-	if (error != 0) {
-		errno = error;
-		return NULL;
+
+	FILE *result = mock_ptr_type(FILE *);
+
+	if (result == NULL) {
+		errno = MOCK_ERRNO;
 	}
 
-	return mock_ptr_type(FILE *);
+	return result;
 }
 
 int
 __wrap_fclose(FILE *stream)
 {
+	check_expected_ptr(stream);
+
 	int rc = mock_type(int);
 
-	check_expected_ptr(stream);
 	if (rc == EOF)
-		errno = EIO;
+		errno = MOCK_ERRNO;
+
 	return rc;
 }
 
 int
 __wrap_ABT_mutex_create(ABT_mutex *newmutex)
 {
+	check_expected_ptr(newmutex);
+
 	int rc = mock_type(int);
 
-	check_expected_ptr(newmutex);
-	assert_non_null(newmutex);
-	if (rc == ABT_SUCCESS)
+	if (rc == ABT_SUCCESS) {
+		assert_non_null(newmutex);
 		*newmutex = mock_ptr_type(ABT_mutex);
+	}
+
 	return rc;
 }
 
 int
 __wrap_ABT_mutex_free(ABT_mutex *mutex)
 {
-	ABT_mutex handle;
-	int       rc = mock_type(int);
-
 	check_expected_ptr(mutex);
 	assert_non_null(mutex);
-	handle = *mutex;
+	ABT_mutex handle = *mutex;
 	check_expected_ptr(handle);
+
+	int rc = mock_type(int);
+
 	if (rc == ABT_SUCCESS)
 		*mutex = ABT_MUTEX_NULL;
+
 	return rc;
 }
 
 int
 __wrap_ABT_mutex_lock(ABT_mutex mutex)
 {
+	check_expected_ptr(mutex);
+
 	int rc = mock_type(int);
 
-	check_expected_ptr(mutex);
 	return rc;
 }
 
 int
 __wrap_ABT_mutex_unlock(ABT_mutex mutex)
 {
+	check_expected_ptr(mutex);
+
 	int rc = mock_type(int);
 
-	check_expected_ptr(mutex);
 	return rc;
 }
 
 int
 __wrap_vfprintf(FILE *stream, const char *fmt, va_list args)
 {
-	int rc = mock_type(int);
-
 	check_expected_ptr(stream);
 	check_expected(fmt);
+
 	if (mock_vfprintf_check_output != 0) {
 		char    output[128];
 		va_list copy;
@@ -164,8 +173,11 @@ __wrap_vfprintf(FILE *stream, const char *fmt, va_list args)
 		check_expected(output);
 	}
 
+	int rc = mock_type(int);
+
 	if (rc < 0)
 		errno = EIO;
+
 	return rc;
 }
 
@@ -183,12 +195,14 @@ __wrap___vfprintf_chk(FILE *stream, int flag, const char *fmt, va_list args)
 int
 __wrap_fflush(FILE *stream)
 {
+	check_expected_ptr(stream);
+
 	int error = mock_type(int);
 
-	check_expected_ptr(stream);
 	if (error != 0) {
 		errno = error;
 		return EOF;
 	}
+
 	return 0;
 }

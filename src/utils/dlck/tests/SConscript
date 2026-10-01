@@ -9,6 +9,7 @@ def build_dlck_test_helper(henv):
     """Build dlck_test_helper"""
     henv.Append(OBJPREFIX="dlck_ut_helper_")
     henv.Append(CPPPATH=[Dir('../../../').srcnode()])
+    henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     henv.require('argobots', 'cmocka')
 
     libs = [

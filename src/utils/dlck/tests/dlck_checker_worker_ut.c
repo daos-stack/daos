@@ -45,9 +45,10 @@ expect_worker_fopen(int error)
 {
 	expect_string(__wrap_fopen, path, Mock_log_file);
 	expect_string(__wrap_fopen, mode, "w");
-	will_return(__wrap_fopen, error);
 	if (error == 0)
 		will_return(__wrap_fopen, Mock_file_stream);
+	else
+		will_return(__wrap_fopen, NULL);
 }
 
 static int
@@ -93,11 +94,12 @@ teardown_worker_checker(void **state)
 	struct checker *ck        = *state;
 
 	expect_value(__wrap_fclose, stream, Mock_file_stream);
-	expect_function_call(__wrap_fclose);
 	will_return(__wrap_fclose, mock_worker_fclose_rc);
 	expect_value(__wrap_d_free, ptr, &Dcw);
+
 	dlck_checker_worker_fini(ck);
 	assert_memory_equal(ck, &ck_zeroed, sizeof(*ck));
+
 	return teardown(state);
 }
 
