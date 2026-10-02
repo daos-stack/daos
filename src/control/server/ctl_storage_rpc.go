@@ -359,13 +359,20 @@ func newScanScmResp(inResp *storage.ScmScanResponse, inErr error) (*ctlpb.ScanSc
 }
 
 // scanScm will return mount details and usage for either emulated RAM or real PMem.
-func (cs *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*ctlpb.ScanScmResp, error) {
+func (cs *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq, scanPMem bool) (*ctlpb.ScanScmResp, error) {
 	if req == nil {
 		return nil, errors.New("nil scm request")
 	}
 
+	// DAOS-18835: Skip PMem scan based on deployment mode flags
+	var pMemInConfig bool
+	if scanPMem {
+		pMemInConfig = cs.srvCfg.HasPMem()
+	}
+	// If scanPMem is false, pMemInConfig remains false → no PMem scan performed
+
 	reqInner := storage.ScmScanRequest{
-		PMemInConfig: cs.srvCfg.HasPMem(),
+		PMemInConfig: pMemInConfig,
 	}
 
 	msg := fmt.Sprintf("pmem scan, req %+v", reqInner)
@@ -772,7 +779,11 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 	}
 	resp := new(ctlpb.StorageScanResp)
 
-	respScm, err := cs.scanScm(ctx, req.Scm)
+	// DAOS-18835: Skip PMem scan when using tmpfs SCM or MD-on-SSD mode (deployment modes that don't need PMem)
+	// Only scan PMem if both conditions are false
+	scanPMem := !(req.UseTmpfsSCM || req.ExtMetadataPath != "")
+
+	respScm, err := cs.scanScm(ctx, req.Scm, scanPMem)
 	if err != nil {
 		return nil, err
 	}
