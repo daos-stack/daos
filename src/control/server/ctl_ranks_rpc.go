@@ -9,6 +9,7 @@ package server
 
 import (
 	"context"
+	"os"
 	"syscall"
 	"time"
 
@@ -253,6 +254,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	}
 
 	savedRanks := make(map[uint32]ranklist.Rank) // instance idx to system rank
+
 	for _, ei := range instances {
 		rank, err := ei.GetRank()
 		if err != nil {
@@ -263,9 +265,38 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		if ei.IsStarted() {
 			return nil, FaultInstancesNotStopped("reset format", rank)
 		}
-		if err := ei.RemoveSuperblock(); err != nil {
-			return nil, err
+	}
+
+	// In MD-on-SSD mode, remove only the per-engine control-metadata subdirectory of
+	// each targeted instance. This is scoped deliberately: the shared host-level root
+	// also holds the MS replica's raft DB (control_raft) and other, non-targeted
+	// engines' subdirectories, neither of which should be touched by a partial-rank
+	// reset. os.RemoveAll() is a no-op if the subdirectory is already gone, so repeat
+	// calls for the same rank are safe.
+	for _, ei := range instances {
+		storage := ei.GetStorage()
+		if storage == nil || !storage.ControlMetadataPathConfigured() {
+			continue
 		}
+
+		enginePath := storage.ControlMetadataEnginePath()
+		svc.log.Debugf("Removing control metadata directory for instance %d: %s", ei.Index(),
+			enginePath)
+		if err := os.RemoveAll(enginePath); err != nil {
+			return nil, errors.Wrapf(err, "removing control metadata directory for instance %d",
+				ei.Index())
+		}
+	}
+
+	for _, ei := range instances {
+		if !svc.storage.ControlMetadataPathConfigured() {
+			// In PMem mode just remove superblock and rely on format flow to clear
+			// metadata.
+			if err := ei.RemoveSuperblock(); err != nil {
+				return nil, err
+			}
+		}
+
 		ei.requestStart(ctx)
 	}
 

@@ -674,6 +674,10 @@ func Start(log logging.Logger, cfg *config.Server) error {
 	if err := srv.setupGrpc(); err != nil {
 		return err
 	}
+	// Wire up a reference to the gRPC server so that SystemErase's
+	// scheduleControlPlaneRestart() can gracefully drain in-flight RPCs
+	// (i.e. ensure its own response has been sent) before restarting.
+	srv.mgmtSvc.grpcServer = srv.grpcServer
 
 	srv.registerEvents()
 

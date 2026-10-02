@@ -257,6 +257,12 @@ type SystemQueryResp struct {
 // Wrap sysResponse handling of absent hosts and ranks in a helper to be called from response
 // UnmarshalJSON implementations.
 func unmarshalSysRespJsonFields(data []byte, sr *sysResponse) error {
+	// A JSON literal null (e.g. from an empty/unset MS response) unmarshals into a nil
+	// pointer, so guard against it here to avoid a nil pointer dereference below.
+	if string(data) == "null" {
+		return nil
+	}
+
 	resp := &sysResponse{}
 	type Alias sysResponse
 	aux := &struct {
@@ -741,11 +747,24 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemErase(ctx, pbReq)
 	})
+	// SystemErase deliberately tears down the raft DB and exec-restarts the control
+	// plane process on both the leader and any replicas (see mgmt_system.go). During
+	// that window callers can see a mix of transient errors: "not leader"/"not
+	// replica" responses while raft re-elects, and connection-refused/reset errors
+	// while the process is mid-exec and its listener is briefly down. All of these
+	// must be retried (with backoff, via the generic MS retry loop in rpc.go) until
+	// the restarted process comes back up and a new leader is elected, matching the
+	// retry behavior used by SystemQuery/SystemJoin/SystemSelfHealEval for the same
+	// MS-unavailability windows.
+	//
+	// NB: Deliberately no retryFn is set here. Setting one causes rpc.go's retry loop to treat
+	// the very first retryable error as terminal: canRetry() is consulted before the loop's
+	// per-error-type handling, so a non-nil retryFn return aborts immediately instead of
+	// allowing exponential backoff and a resend. Leaving retryFn nil lets onRetry() fall
+	// through (errNoRetryHandler) to that normal backoff-and-retry handling.
 	req.retryTestFn = func(err error, _ uint) bool {
-		return system.IsUnavailable(err)
-	}
-	req.retryFn = func(_ context.Context, _ uint) error {
-		return system.ErrRaftUnavail
+		return system.IsUnavailable(err) || IsRetryableConnErr(err) ||
+			system.IsNotLeader(err) || system.IsNotReplica(err)
 	}
 
 	rpcClient.Debugf("DAOS system-erase request: %s", pbUtil.Debug(pbReq))

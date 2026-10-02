@@ -966,3 +966,163 @@ func TestDmg_systemSelfHealEvalCmd_execute(t *testing.T) {
 		})
 	}
 }
+
+// TestDmg_systemEraseCmd_execute tests the execution behavior of system erase command
+func TestDmg_systemEraseCmd_execute(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp    *mgmtpb.SystemEraseResp
+		msErr   error
+		expErr  error
+		expInfo string
+	}{
+		"ms rpc failure": {
+			msErr:  errors.New("rpc failed"),
+			expErr: errors.New("rpc failed"),
+		},
+		"success with no errors": {
+			resp:    &mgmtpb.SystemEraseResp{},
+			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
+		},
+		"uninitialized error from ms is now a genuine failure": {
+			// The server drains its response before restarting (see
+			// scheduleControlPlaneRestart()), the RPC is expected to always
+			// return a clean response, so an uninitialized error is treated the
+			// same as any other unexpected RPC failure.
+			resp:   &mgmtpb.SystemEraseResp{},
+			msErr:  system.ErrUninitialized,
+			expErr: system.ErrUninitialized,
+		},
+		"success with rank results in await-format state but no ms err": {
+			resp: &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:   0,
+						Addr:   "10.0.0.1:10001",
+						Action: "reset-format",
+						State:  system.MemberStateAwaitFormat.String(),
+					},
+					{
+						Rank:   1,
+						Addr:   "10.0.0.1:10001",
+						Action: "reset-format",
+						State:  system.MemberStateAwaitFormat.String(),
+					},
+				},
+			},
+			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
+		},
+		"failure with rank errors": {
+			resp: &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:    0,
+						Addr:    "10.0.0.1:10001",
+						Action:  "reset-format",
+						Errored: true,
+						Msg:     "failed to reset rank",
+						State:   system.MemberStateErrored.String(),
+					},
+				},
+			},
+			expErr: errors.New("failed rank 0"),
+		},
+		"failure with multiple rank errors": {
+			resp: &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:    0,
+						Addr:    "10.0.0.1:10001",
+						Action:  "reset-format",
+						Errored: true,
+						Msg:     "error on rank 0",
+						State:   system.MemberStateErrored.String(),
+					},
+					{
+						Rank:    1,
+						Addr:    "10.0.0.1:10001",
+						Action:  "reset-format",
+						Errored: true,
+						Msg:     "error on rank 1",
+						State:   system.MemberStateErrored.String(),
+					},
+				},
+			},
+			expErr: errors.New("failed ranks 0-1"),
+		},
+		"failure with other error": {
+			resp:   &mgmtpb.SystemEraseResp{},
+			msErr:  errors.New("some other error"),
+			expErr: errors.New("some other error"),
+		},
+		"nil response": {
+			resp:    nil,
+			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			cmd := new(systemEraseCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+
+			gotErr := cmd.Execute(nil)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if tc.expInfo == "" {
+				if strings.Contains(buf.String(), "successful") {
+					t.Fatalf("unexpected success message printed, got:\n%s", buf.String())
+				}
+				return
+			}
+
+			// Check if the success message is printed
+			output := buf.String()
+			if !strings.Contains(output, tc.expInfo) {
+				t.Fatalf("expected info message not found:\nexpected substring:\n%s\ngot:\n%s",
+					tc.expInfo, output)
+			}
+		})
+	}
+}
+
+// TestDmg_systemEraseCmd_uninitialized_error_handling verifies that an uninitialized
+// (or any other) error from the erase RPC is surfaced as a genuine failure.
+// scheduleControlPlaneRestart() drains the response before restarting (see mgmt_system.go), the
+// RPC is expected to always return cleanly, so no error from it should ever be treated as success.
+// This is a regression test.
+func TestDmg_systemEraseCmd_uninitialized_error_handling(t *testing.T) {
+	for name, errorMsg := range map[string]string{
+		"exact uninitialized error":   "system is uninitialized (storage format required?)",
+		"uninitialized wrapped error": "wrapped: system is uninitialized (storage format required?)",
+		"other error":                 "some other error",
+		"unavailable error":           "raft service unavailable",
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			testErr := errors.New(errorMsg)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					testErr, &mgmtpb.SystemEraseResp{}),
+			})
+
+			cmd := new(systemEraseCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+
+			gotErr := cmd.Execute(nil)
+			if gotErr == nil {
+				t.Fatalf("expected error for %q, but got success", errorMsg)
+			}
+		})
+	}
+}
