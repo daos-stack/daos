@@ -4,8 +4,8 @@
 # generates a ticket-specific env.sh/inventory.yml/README.md with isolated
 # build/install paths (see generate-daos-env.sh), symlinks in the generic
 # build/test scripts (build-daos.sh, build-isolated.sh, provision-daos.sh,
-# cleanup.sh/start-daos.sh/stop-daos.sh, run-*_tests.sh, run-ftest.sh), and
-# optionally seeds it from an
+# cleanup.sh/start-daos.sh/stop-daos.sh, run-*_tests.sh, run-ftest.sh,
+# trigger-gha.sh), and optionally seeds it from an
 # existing ticket's skeleton of genuinely ticket-specific scripts. See
 # README-worktrees.md for the full workflow.
 #
@@ -40,6 +40,7 @@ build-daos.sh build-isolated.sh provision-daos.sh
 cleanup.sh start-daos.sh stop-daos.sh
 run-vos_tests.sh run-ddb_ut.sh run-ddb_tests.sh run-dtx_ut.sh run-dtx_tests.sh run-go_unit.sh
 run-ftest.sh
+trigger-gha.sh
 )
 
 DAOS_MAIN_REPO="${DAOS_MAIN_REPO:-$HOME/work/daos}"
@@ -293,8 +294,8 @@ echo "new-ticket-worktree.sh: [INFO] seeding skeleton from $SRC_DIR into $TICKET
 COPIED_FILES=()
 
 # env.sh/inventory.yml/README.md (generate-daos-env.sh) and the generic
-# cleanup.sh/start-daos.sh/stop-daos.sh/build-daos.sh/provision-daos.sh/run-*.sh scripts
-# (symlinked above) are already handled by default -- --skeleton-from now only
+# cleanup.sh/start-daos.sh/stop-daos.sh/build-daos.sh/provision-daos.sh/run-*.sh/
+# trigger-gha.sh scripts (symlinked above) are already handled by default -- --skeleton-from now only
 # copies genuinely ticket-specific scripts (e.g. a prior ticket's own
 # check-*.sh reproduction scripts, or one-off run-*.sh not part of the
 # generic set).
