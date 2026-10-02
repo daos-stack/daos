@@ -3625,7 +3625,7 @@ vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck)
 	int				 i;
 
 	if (IS_CHECKER(ck) && UMOFF_IS_NULL(dbd_off)) {
-		CK_PRINT(ck, "No DTX blobs.\n");
+		CK_PRINTF(ck, "No DTX blobs.\n");
 	}
 
 	while (!UMOFF_IS_NULL(dbd_off)) {
@@ -3639,7 +3639,7 @@ vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck)
 		if (IS_NOT_CHECKER(ck)) {
 			D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
 		} else {
-			CK_PRINT(ck, "Magic... ");
+			CK_PRINTF(ck, "Magic... ");
 			if (dbd->dbd_magic != DTX_ACT_BLOB_MAGIC ||
 			    DAOS_FAIL_CHECK(DAOS_FAULT_DBD_MAGIC)) {
 				CK_APPENDFL_ERR(ck, "invalid (%#x)", dbd->dbd_magic);
@@ -3681,7 +3681,7 @@ vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck)
 
 			CK_PRINTF(ck, "[%d] ID (dae_xid)... ", i);
 			if (daos_is_zero_dti(&dae_df->dae_xid)) {
-				CK_APPENDL_WARN(ck, "zero");
+				CK_APPENDFL_WARN(ck, "zero");
 				D_WARN("Hit zero active DTX entry.\n");
 				continue;
 			}
