@@ -37,6 +37,8 @@ MPI
 Makefile
 Mellanox
 MiB
+Mutex
+mutex
 NLT
 NodeSet
 OC
@@ -65,6 +67,7 @@ Skylake
 StackFrame
 SubProcess
 Subdirectories
+TsanThread
 TestFail
 Testcase
 tsan
