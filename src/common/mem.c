@@ -806,6 +806,8 @@ pmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned i
 		pflags |= POBJ_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= POBJ_FLAG_NO_FLUSH;
+	if (flags & UMEM_FLAG_NO_ABORT)
+		pflags |= POBJ_FLAG_TX_NO_ABORT;
 	return umem_id2off(umm, pmemobj_tx_xalloc(size, type_num, pflags));
 }
 
@@ -828,6 +830,8 @@ pmem_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
 
 	if (flags & UMEM_XADD_NO_SNAPSHOT)
 		pflags |= POBJ_XADD_NO_SNAPSHOT;
+	if (flags & UMEM_FLAG_NO_ABORT)
+		pflags |= POBJ_FLAG_TX_NO_ABORT;
 
 	rc = pmemobj_tx_xadd_range(umem_off2id(umm, umoff), offset, size,
 				   pflags);
@@ -998,6 +1002,16 @@ pmem_defer_free(struct umem_instance *umm, umem_off_t off, void *act)
 }
 
 static int
+pmem_tx_set_snapbuf(struct umem_instance *umm, umem_off_t snapbuf, size_t size)
+{
+	void *buf = umem_off2ptr(umm, snapbuf);
+	int   rc;
+
+	rc = pmemobj_tx_log_append_buffer(TX_LOG_TYPE_SNAPSHOT, buf, size);
+	return rc ? umem_tx_errno(rc) : 0;
+}
+
+static int
 pmem_tx_stage(void)
 {
 	return pmemobj_tx_stage();
@@ -1135,27 +1149,27 @@ umem_tx_add_cb(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 	return 0;
 }
 
-static umem_ops_t	pmem_ops = {
-	.mo_tx_free		= pmem_tx_free,
-	.mo_tx_alloc		= pmem_tx_alloc,
-	.mo_tx_add		= pmem_tx_add,
-	.mo_tx_xadd		= pmem_tx_xadd,
-	.mo_tx_add_ptr		= pmem_tx_add_ptr,
-	.mo_tx_abort		= pmem_tx_abort,
-	.mo_tx_begin		= pmem_tx_begin,
-	.mo_tx_commit		= pmem_tx_commit,
-	.mo_tx_stage		= pmem_tx_stage,
-	.mo_reserve		= pmem_reserve,
-	.mo_defer_free		= pmem_defer_free,
-	.mo_cancel		= pmem_cancel,
-	.mo_tx_publish		= pmem_tx_publish,
-	.mo_atomic_copy		= pmem_atomic_copy,
-	.mo_atomic_alloc	= pmem_atomic_alloc,
-	.mo_atomic_free		= pmem_atomic_free,
-	.mo_atomic_flush	= pmem_atomic_flush,
-	.mo_tx_add_callback	= umem_tx_add_cb,
+static umem_ops_t pmem_ops = {
+    .mo_tx_free         = pmem_tx_free,
+    .mo_tx_alloc        = pmem_tx_alloc,
+    .mo_tx_add          = pmem_tx_add,
+    .mo_tx_xadd         = pmem_tx_xadd,
+    .mo_tx_add_ptr      = pmem_tx_add_ptr,
+    .mo_tx_abort        = pmem_tx_abort,
+    .mo_tx_begin        = pmem_tx_begin,
+    .mo_tx_commit       = pmem_tx_commit,
+    .mo_tx_set_snapbuf  = pmem_tx_set_snapbuf,
+    .mo_tx_stage        = pmem_tx_stage,
+    .mo_reserve         = pmem_reserve,
+    .mo_defer_free      = pmem_defer_free,
+    .mo_cancel          = pmem_cancel,
+    .mo_tx_publish      = pmem_tx_publish,
+    .mo_atomic_copy     = pmem_atomic_copy,
+    .mo_atomic_alloc    = pmem_atomic_alloc,
+    .mo_atomic_free     = pmem_atomic_free,
+    .mo_atomic_flush    = pmem_atomic_flush,
+    .mo_tx_add_callback = umem_tx_add_cb,
 };
-
 
 /** BMEM operations (depends on dav) */
 
@@ -1199,6 +1213,8 @@ bmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned i
 		pflags |= DAV_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= DAV_FLAG_NO_FLUSH;
+	if (flags & UMEM_FLAG_NO_ABORT)
+		pflags |= DAV_FLAG_TX_NO_ABORT;
 	return dav_tx_xalloc(size, type_num, pflags);
 }
 
@@ -1221,6 +1237,8 @@ bmem_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
 
 	if (flags & UMEM_XADD_NO_SNAPSHOT)
 		pflags |= DAV_XADD_NO_SNAPSHOT;
+	if (flags & UMEM_FLAG_NO_ABORT)
+		pflags |= DAV_FLAG_TX_NO_ABORT;
 
 	rc = dav_tx_xadd_range(umem_off2offset(umoff), size, pflags);
 	return rc ? umem_tx_errno(rc) : 0;
@@ -1438,6 +1456,8 @@ bmem_tx_alloc_v2(struct umem_instance *umm, size_t size, uint64_t flags, unsigne
 		pflags |= DAV_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= DAV_FLAG_NO_FLUSH;
+	if (flags & UMEM_FLAG_NO_ABORT)
+		pflags |= DAV_FLAG_TX_NO_ABORT;
 	if (mbkt_id != 0)
 		pflags |= DAV_EZONE_ID(mbkt_id);
 	return dav_tx_alloc_v2(size, type_num, pflags);
@@ -1462,6 +1482,8 @@ bmem_tx_xadd_v2(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
 
 	if (flags & UMEM_XADD_NO_SNAPSHOT)
 		pflags |= DAV_XADD_NO_SNAPSHOT;
+	if (flags & UMEM_FLAG_NO_ABORT)
+		pflags |= DAV_FLAG_TX_NO_ABORT;
 
 	rc = dav_tx_xadd_range_v2(umem_off2offset(umoff), size, pflags);
 	return rc ? umem_tx_errno(rc) : 0;
