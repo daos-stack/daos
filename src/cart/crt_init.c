@@ -161,6 +161,7 @@ exit:
 
 /* Value based on default daos runs with 16 targets + 2 service contexts */
 #define CRT_SRV_CONTEXT_NUM_MIN (16 + 2)
+D_CASSERT(CRT_SRV_CONTEXT_NUM_MIN <= CRT_SRV_CONTEXT_NUM);
 
 static int
 prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool primary,
@@ -169,7 +170,13 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 {
 	uint32_t max_expect_size   = 0;
 	uint32_t max_unexpect_size = 0;
+	uint32_t cores             = (uint32_t)crt_gdata.cg_num_cores;
 	uint32_t ctx_max_num       = 0;
+	uint32_t requested         = 0;
+	uint32_t opt_ctx           = 0;
+	uint32_t env_ctx           = 0;
+	bool     env_set           = false;
+	bool     explicit_req      = false;
 	int      i;
 	int      rc;
 
@@ -178,26 +185,36 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 		return rc;
 
 	if (crt_is_service()) {
+		/* Servers always get CRT_SRV_CONTEXT_NUM. */
 		ctx_max_num = CRT_SRV_CONTEXT_NUM;
 	} else {
-		/* Only limit the number of contexts for clients */
-		CRT_ENV_OPT_GET(opt, ctx_max_num, CRT_CTX_NUM);
+		/*
+		 * For clients, the CRT_CTX_NUM env var wins if set, otherwise take the bigger
+		 * of the core count and the init option, then hold the result between
+		 * CRT_SRV_CONTEXT_NUM_MIN and CRT_SRV_CONTEXT_NUM.
+		 */
+		if (opt != NULL && opt->cio_ctx_max_num > 0)
+			opt_ctx = (uint32_t)opt->cio_ctx_max_num;
 
-		/* Default setting to the number of cores */
-		if (!ctx_max_num)
-			ctx_max_num = crt_gdata.cg_num_cores;
+		/* Set, and a number: a malformed CRT_CTX_NUM leaves the default. */
+		crt_env_get(CRT_CTX_NUM, &env_ctx);
+		env_set = crt_env_is_set(CRT_CTX_NUM);
 
-		if (ctx_max_num > CRT_SRV_CONTEXT_NUM) {
-			D_WARN("ctx_max_num %u exceeds max %u, using max\n", ctx_max_num,
-			       CRT_SRV_CONTEXT_NUM);
-			ctx_max_num = CRT_SRV_CONTEXT_NUM;
-		}
+		requested    = env_set ? env_ctx : max(cores, opt_ctx);
+		explicit_req = env_set || opt_ctx > cores;
+
+		ctx_max_num = requested;
 		/* To be able to run on VMs */
-		if (ctx_max_num < CRT_SRV_CONTEXT_NUM_MIN) {
-			D_INFO("ctx_max_num %u is less than min %u, using min\n", ctx_max_num,
-			       CRT_SRV_CONTEXT_NUM_MIN);
+		if (ctx_max_num < CRT_SRV_CONTEXT_NUM_MIN)
 			ctx_max_num = CRT_SRV_CONTEXT_NUM_MIN;
-		}
+		if (ctx_max_num > CRT_SRV_CONTEXT_NUM)
+			ctx_max_num = CRT_SRV_CONTEXT_NUM;
+		if (ctx_max_num != requested)
+			D_CDEBUG(explicit_req, DLOG_WARN, DLOG_INFO,
+				 "requested context limit %u is out of range, using %u "
+				 "(min %u, max %u)\n",
+				 requested, ctx_max_num, CRT_SRV_CONTEXT_NUM_MIN,
+				 CRT_SRV_CONTEXT_NUM);
 	}
 
 	D_DEBUG(DB_ALL, "Max number of contexts set to %u\n", ctx_max_num);
