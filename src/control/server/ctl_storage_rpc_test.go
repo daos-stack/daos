@@ -2779,6 +2779,109 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 	}
 }
 
+func TestServer_CtlSvc_StorageFormat_Status(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notStarted []bool // per-engine stopped/started state, see mockControlService
+		awaitFmt   []bool // per-engine isAwaitingFormat() state to apply
+		expResp    *ctlpb.StorageFormatResp
+	}{
+		"single engine awaiting format": {
+			notStarted: []bool{true},
+			awaitFmt:   []bool{true},
+			expResp: &ctlpb.StorageFormatResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: true,
+						State:          system.MemberStateAwaitFormat.String(),
+					},
+				},
+			},
+		},
+		"single engine already started": {
+			notStarted: []bool{false},
+			awaitFmt:   []bool{false},
+			expResp: &ctlpb.StorageFormatResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: false,
+						State:          system.MemberStateReady.String(),
+					},
+				},
+			},
+		},
+		"single engine stopped, not awaiting format": {
+			notStarted: []bool{true},
+			awaitFmt:   []bool{false},
+			expResp: &ctlpb.StorageFormatResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: false,
+						State:          system.MemberStateStopped.String(),
+					},
+				},
+			},
+		},
+		"mixed engine states": {
+			notStarted: []bool{true, false},
+			awaitFmt:   []bool{true, false},
+			expResp: &ctlpb.StorageFormatResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: true,
+						State:          system.MemberStateAwaitFormat.String(),
+					},
+					{
+						Instanceidx:    1,
+						AwaitingFormat: false,
+						State:          system.MemberStateReady.String(),
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			engineCfgs := make([]*engine.Config, len(tc.notStarted))
+			for i := range engineCfgs {
+				engineCfgs[i] = engine.MockConfig().WithTargetCount(1)
+			}
+			cfg := config.DefaultServer().WithEngines(engineCfgs...)
+
+			cs := mockControlService(t, log, cfg, nil, nil, nil, tc.notStarted...)
+
+			for i, e := range cs.harness.Instances() {
+				ei := e.(*EngineInstance)
+				if tc.awaitFmt[i] {
+					ei.waitFormat.SetTrue()
+				} else {
+					ei.waitFormat.SetFalse()
+				}
+			}
+
+			resp, err := cs.StorageFormat(test.Context(t), &ctlpb.StorageFormatReq{Status: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(resp.Crets) != 0 || len(resp.Mrets) != 0 {
+				t.Fatalf("expected no format side-effects, got Crets=%+v Mrets=%+v",
+					resp.Crets, resp.Mrets)
+			}
+
+			if diff := cmp.Diff(tc.expResp.EngineStatus, resp.EngineStatus,
+				protocmp.Transform()); diff != "" {
+				t.Fatalf("unexpected engine status (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 	usrCurrent, _ := user.Current()
 	username := usrCurrent.Username
