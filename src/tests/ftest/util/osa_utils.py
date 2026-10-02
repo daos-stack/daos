@@ -14,6 +14,7 @@ from exception_utils import CommandFailure
 from general_utils import run_command
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
+from test_utils_container import get_existing_container
 
 
 class OSAUtils(MdtestBase, IorTestBase):
@@ -134,6 +135,41 @@ class OSAUtils(MdtestBase, IorTestBase):
                 cmd = None  # To appease pylint
                 self.fail("Not supported engine per server configuration")
             run_command(cmd)
+
+    def get_all_containers(self, pool):
+        """Get all containers (TestContainer objects) for the specified pool.
+        Args:
+            pool (TestPool): Pool object for which to retrieve containers.
+
+        Returns:
+            list: List of container objects.
+        """
+        daos_cmd = self.get_daos_command()
+        container_list = []
+        containers = daos_cmd.container_list(pool=pool.identifier)
+        for info in containers["response"]:
+            container = None
+            max_attempts = 3
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    container = get_existing_container(
+                        self, pool, info["uuid"], daos=daos_cmd)
+                except CommandFailure as error:
+                    container_error = str(error)
+                else:
+                    if container is not None:
+                        container_list.append(container)
+                        break
+                    container_error = "get_existing_container returned an invalid object"
+                self.log.info(
+                    "Container %s attempt %s/%s failed: %s",
+                    info["uuid"], attempt, max_attempts, container_error)
+                if attempt == max_attempts:
+                    self.fail(
+                        "Failed to get a valid TestContainer for {} after {} attempts: {}"
+                        .format(info["uuid"], max_attempts, container_error))
+                time.sleep(1)
+        return container_list
 
     def set_container(self, container):
         """Set the OSA utils container object.
@@ -323,6 +359,22 @@ class OSAUtils(MdtestBase, IorTestBase):
             exc = out_queue.get(block=False)
             out_queue.put(exc)
             raise CommandFailure(exc)
+
+    def check_ranks(self, expect, data, key):
+        """Check the expected and actual rank lists are equal.
+
+        Args:
+            expect (list): list of ranks to expect
+            data (dict): dmg json response containing actual list of ranks
+            key (str): the dmg json response key used to access the actual list of ranks
+        """
+        actual = data["response"].get(key)
+        if expect is None:
+            self.assertIsNone(actual, f"Invalid {key} field: want=None, got={actual}")
+        else:
+            self.assertListEqual(
+                actual, expect, f"Invalid {key} field: want={expect}, got={actual}")
+        self.log.info("Check of %s passed: %s == %s", key, expect, actual)
 
     def cleanup_queue(self, out_queue=None):
         """Cleanup the existing thread queue.
