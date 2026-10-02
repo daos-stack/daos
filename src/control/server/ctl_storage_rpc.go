@@ -1067,7 +1067,7 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 
 func notifyStorageReady(log logging.Logger, req *ctlpb.StorageFormatReq, engine Engine) {
 	if !engine.isAwaitingFormat() {
-		log.Debugf("instance %d not awaiting format", engine.Index())
+		log.Errorf("notifyStorageReady(): instance %d not awaiting format", engine.Index())
 		return
 	}
 

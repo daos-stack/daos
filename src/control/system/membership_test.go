@@ -765,6 +765,19 @@ func TestSystem_Membership_FindRankFromJoinRequest(t *testing.T) {
 			},
 			expRank: curMember.Rank,
 		},
+		"non-nil rank with identical UUID": {
+			req: &JoinRequest{
+				Rank:                    curMember.Rank,
+				UUID:                    curMember.UUID,
+				ControlAddr:             curMember.Addr,
+				PrimaryFabricURI:        curMember.PrimaryFabricURI,
+				SecondaryFabricURIs:     curMember.SecondaryFabricURIs,
+				FabricContexts:          curMember.PrimaryFabricContexts,
+				SecondaryFabricContexts: curMember.SecondaryFabricContexts,
+				FaultDomain:             curMember.FaultDomain,
+			},
+			expErr: ErrUuidExists(curMember.UUID),
+		},
 		"non-nil rank with non-matching control address": {
 			req: &JoinRequest{
 				Rank:             curMember.Rank,
