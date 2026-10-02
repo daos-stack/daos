@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,7 +18,11 @@ SUPPORTED_PROVIDERS = (
     "ofi+cxi",
     "ofi+verbs;ofi_rxm",
     "ucx+dc_x",
+    "ucx+dc_mlx5",
+    "ucx+dc",
     "ucx+ud_x",
+    "ucx+ud_mlx5",
+    "ucx+ud",
     "ofi+tcp",
     "ofi+tcp;ofi_rxm",
     "ofi+opx"
@@ -340,9 +344,8 @@ def get_ucx_info(logger, hosts, supported=None, verbose=True):
                 if not transport or not device:
                     continue
 
-                # Add 'ucx+' to the provider and replace 'mlx[0-9]' with 'x'
-                transport = [
-                    "+".join(["ucx", re.sub(r"mlx[0-9]+", "x", item)]) for item in transport]
+                # Add 'ucx+' to the provider
+                transport = ["+".join(["ucx", item]) for item in transport]
 
                 # Only include supported providers if a supported list is provided
                 if supported and transport[0] not in supported:
