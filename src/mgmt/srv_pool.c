@@ -12,10 +12,58 @@
 
 #define D_LOGFAC	DD_FAC(mgmt)
 
+#include <daos_srv/bio.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/smd.h>
 #include <daos/rpc.h>
 
 #include "srv_internal.h"
+
+static size_t
+pool_destroy_local_scm_size(uuid_t pool_uuid)
+{
+	struct smd_pool_info *pool_info     = NULL;
+	uint64_t              eng_local_scm = 0;
+	int                   rc;
+
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		return 0;
+
+	rc = smd_pool_get_info(pool_uuid, &pool_info);
+	if (rc != 0 || pool_info == NULL)
+		return 0;
+
+	if (pool_info->spi_scm_sz > 0 && dss_tgt_nr > 0)
+		eng_local_scm = pool_info->spi_scm_sz * dss_tgt_nr;
+
+	smd_pool_free_info(pool_info);
+	return eng_local_scm;
+}
+
+static uint32_t
+pool_destroy_rpc_timeout(crt_rpc_t *td_req, uuid_t pool_uuid)
+{
+	uint32_t default_timeout;
+	uint32_t timeout;
+	size_t   gib;
+	size_t   eng_local_scm_size;
+	int      rc;
+
+	rc = crt_req_get_timeout(td_req, &default_timeout);
+	D_ASSERTF(rc == 0, "crt_req_get_timeout: " DF_RC "\n", DP_RC(rc));
+
+	eng_local_scm_size = pool_destroy_local_scm_size(pool_uuid);
+	if (eng_local_scm_size == 0)
+		return default_timeout;
+
+	gib = eng_local_scm_size / ((size_t)1024 * 1024 * 1024);
+	if (gib < 1024)
+		timeout = 90;
+	else
+		timeout = 180;
+
+	return max(timeout, default_timeout);
+}
 
 /** Destroy the pool on the specified ranks. */
 int
@@ -27,6 +75,7 @@ ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 	unsigned int			opc;
 	int				topo;
 	int				rc;
+	uint32_t                         timeout;
 	uint8_t                          mgmt_ver;
 
 	rc = ds_mgmt_rpc_protocol(&mgmt_ver);
@@ -44,6 +93,11 @@ ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 	td_in = crt_req_get(td_req);
 	D_ASSERT(td_in != NULL);
 	uuid_copy(td_in->td_pool_uuid, pool_uuid);
+
+	timeout = pool_destroy_rpc_timeout(td_req, pool_uuid);
+	crt_req_set_timeout(td_req, timeout);
+	D_DEBUG(DB_MGMT, DF_UUID ": setting pool destroy CoRPC timeout: %u sec\n",
+		DP_UUID(pool_uuid), timeout);
 
 	rc = dss_rpc_send(td_req);
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_DESTROY_FAIL_CORPC))
