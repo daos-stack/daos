@@ -61,6 +61,23 @@ type HostStorage struct {
 
 	// SysMemInfo contains information about the host's RAM and hugepages.
 	SysMemInfo *common.SysMemInfo `json:"mem_info"`
+
+	// EngineFormatStatus contains per-engine instance format-related state,
+	// populated in response to a storage format status query.
+	EngineFormatStatus []*EngineFormatStatus `json:"engine_format_status,omitempty"`
+}
+
+// EngineFormatStatus describes the control server's local-state view of a
+// single engine instance's format-related status.
+type EngineFormatStatus struct {
+	// Instanceidx is the index of the I/O Engine instance on the host.
+	Instanceidx uint32 `json:"instanceidx"`
+	// AwaitingFormat indicates whether the engine instance is waiting for
+	// an administrator action to trigger a format.
+	AwaitingFormat bool `json:"awaiting_format"`
+	// State is the human-readable local engine instance state, e.g.
+	// "AwaitFormat", "Starting", "Ready", "Stopped".
+	State string `json:"state"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -313,6 +330,9 @@ type (
 		Reformat bool   `json:"reformat"`
 		Replace  bool   `json:"replace"`
 		Rank     uint32 `json:"rank"` // Specific rank to replace (only valid with replace=true)
+		// Status, if set, requests that hosts report local engine instance
+		// format-related status rather than performing a storage format.
+		Status bool `json:"status"`
 	}
 
 	// StorageFormatResp contains the response from a storage format request.
@@ -378,6 +398,14 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 				}
 			}
 		}
+	}
+
+	for _, es := range pbResp.GetEngineStatus() {
+		hs.EngineFormatStatus = append(hs.EngineFormatStatus, &EngineFormatStatus{
+			Instanceidx:    es.GetInstanceidx(),
+			AwaitingFormat: es.GetAwaitingFormat(),
+			State:          es.GetState(),
+		})
 	}
 
 	if sfr.HostStorage == nil {
@@ -446,9 +474,15 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 // if not explicitly specified. The function blocks until all results
 // (successful or otherwise) are received, and returns a single response
 // structure containing results for all host storage prepare operations.
+//
+// If req.Status is set, no format is performed and the system-running check
+// is skipped as the request is read-only; hosts instead report local
+// engine instance format-related status.
 func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageFormatReq) (*StorageFormatResp, error) {
-	if err := checkFormatReq(ctx, rpcClient, req); err != nil {
-		return nil, err
+	if !req.Status {
+		if err := checkFormatReq(ctx, rpcClient, req); err != nil {
+			return nil, err
+		}
 	}
 
 	pbReq := new(ctlpb.StorageFormatReq)

@@ -57,11 +57,25 @@ message StorageFormatReq {
 	bool reformat = 3;
 	bool          replace  = 4;
 	uint32        rank     = 5; // Specific rank to replace (only valid with replace=true)
+	// Only report whether storage format is required, local engine instance
+	// state, without performing a format.
+	bool          status   = 6;
 }
 
 message StorageFormatResp {
 	repeated NvmeControllerResult crets = 1;	// One per controller format attempt
 	repeated ScmMountResult mrets = 2;		// One per scm format and mount attempt
+	// One per engine instance, only populated when StorageFormatReq.status is set.
+	repeated EngineFormatStatus engine_status = 3;
+}
+
+// EngineFormatStatus describes the local control server's view of a single
+// engine instance's format-related state, derived without contacting the
+// engine process itself.
+message EngineFormatStatus {
+	uint32 instanceidx     = 1;	// Index of I/O Engine instance
+	bool   awaiting_format = 2;	// True if engine instance is awaiting storage format
+	string state           = 3;	// Local engine instance state e.g. "AwaitFormat", "Ready"
 }
 
 message NvmeRebindReq {

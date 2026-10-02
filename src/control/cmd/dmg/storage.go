@@ -102,6 +102,7 @@ type storageFormatCmd struct {
 	Force   bool    `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
 	Replace bool    `long:"replace" description:"Replace an excluded rank. Allows a DAOS engine instance to reclaim its old rank number after metadata is lost due to PMem or other storage media failure"`
 	Rank    *uint32 `long:"rank" description:"Specific rank to replace (only valid with --replace)"`
+	Status  bool    `long:"status" description:"Report whether engines on hosts in the host list are awaiting storage format, without performing a format"`
 }
 
 // Execute is run when storageFormatCmd activates.
@@ -112,6 +113,12 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 
 	if cmd.Replace && cmd.Force {
 		return errIncompatFlags("replace", "force")
+	}
+	if cmd.Status && cmd.Force {
+		return errIncompatFlags("status", "force")
+	}
+	if cmd.Status && cmd.Replace {
+		return errIncompatFlags("status", "replace")
 	}
 
 	if cmd.Replace && len(cmd.getHostList()) != 1 {
@@ -127,7 +134,12 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		rank = *cmd.Rank
 	}
 
-	req := &control.StorageFormatReq{Reformat: cmd.Force, Replace: cmd.Replace, Rank: rank}
+	req := &control.StorageFormatReq{
+		Reformat: cmd.Force,
+		Replace:  cmd.Replace,
+		Rank:     rank,
+		Status:   cmd.Status,
+	}
 	req.SetHostList(cmd.getHostList())
 
 	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
@@ -137,6 +149,10 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	if cmd.Status {
+		return cmd.printFormatStatusResp(resp)
 	}
 
 	return cmd.printFormatResp(resp)
@@ -154,6 +170,24 @@ func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) er
 	var out strings.Builder
 	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
 	if err := pretty.PrintStorageFormatMap(resp.HostStorage, &out, verbose); err != nil {
+		return err
+	}
+	cmd.Info(out.String())
+
+	return resp.Errors()
+}
+
+func (cmd *storageFormatCmd) printFormatStatusResp(resp *control.StorageFormatResp) error {
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
+		return err
+	}
+	if outErr.Len() > 0 {
+		cmd.Error(outErr.String())
+	}
+
+	var out strings.Builder
+	if err := pretty.PrintStorageFormatStatusMap(resp.HostStorage, &out); err != nil {
 		return err
 	}
 	cmd.Info(out.String())
