@@ -422,10 +422,17 @@ post_provision_config_nodes() {
             continue
         fi
         last_pci_bus="$pci_bus"
+        # Newer virtual functions (e.g. 15b3:101e) are named
+        # "ConnectX Family mlx5Gen Virtual Function", with no generation
+        # number; they are always ConnectX-6 Dx or later.
+        if [[ "$line" == *"ConnectX Family"* ]]; then
+            mellanox_drivers=true
+            break
+        fi
         mlnx_type="${line##*ConnectX-}"
         mlnx_type="${mlnx_type%]*}"
         mlnx_type="${mlnx_type%% *}"
-        if [ "$mlnx_type" -ge 5 ]; then
+        if [[ "$mlnx_type" =~ ^[0-9]+$ ]] && [ "$mlnx_type" -ge 5 ]; then
             mellanox_drivers=true
             break
         fi
