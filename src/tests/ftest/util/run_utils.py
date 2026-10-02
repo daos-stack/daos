@@ -465,6 +465,10 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     Returns:
         CommandResult: groups of command results from the same hosts with the same return status
     """
+    if hosts is None:
+        raise ValueError("No hosts specified for run_remote()")
+    if command is None:
+        raise ValueError("No command specified for run_remote()")
     task = task_self()
     task.set_info('debug', task_debug)
     task.set_default("stderr", stderr)
