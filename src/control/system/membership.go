@@ -293,10 +293,10 @@ func (m *Membership) checkForMatchingMember(req *JoinRequest) error {
 			continue // Fields don't match, skip
 		}
 
-		// All fields match except UUID - this rank needs to use --replace
 		if cm.State == MemberStateAdminExcluded {
 			return FaultJoinMemberExistsAdminExcluded(req.UUID, cm.UUID)
 		}
+		// All fields match except UUID - this rank needs to use --replace
 		return FaultJoinMemberExists(req.UUID, cm.UUID)
 	}
 
