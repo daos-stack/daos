@@ -39,7 +39,7 @@ String bashName(String name) {
 void updateRunStage() {
     Map reasons = [:]
 
-    // Ordered list of stage names as params.keySet() does not guarantee order
+    // Ordered list of stages and stage groups used by build parameters and commit pragmas.
     List<String> stageOrder = [
         'Cancel Previous Builds',
         'Pre-build',
@@ -53,16 +53,19 @@ void updateRunStage() {
         'NLT',
         'Unit Test with memcheck',
         'Unit Test bdev with memcheck',
-        'Test',
+        'Test RPMs on EL 9',
+        'Test RPMs on Leap 15',
+        'VM Tests',
         'Functional on EL 9 with Valgrind',
         'Functional on EL 9',
         'Functional on Leap 15',
         'Functional on SLES 15',
         'Functional on Ubuntu 20.04',
         'Fault injection testing',
-        'Test RPMs on EL 9',
-        'Test RPMs on Leap 15',
-        'Test Hardware',
+        'CB Tests',
+        'Functional Cluster Box Medium MD on SSD',
+        'Functional Cluster Box Medium Verbs Provider MD on SSD',
+        'HW Tests',
         'Functional Hardware Medium',
         'Functional Hardware Medium MD on SSD',
         'Functional Hardware Medium VMD',
@@ -70,9 +73,7 @@ void updateRunStage() {
         'Functional Hardware Medium Verbs Provider MD on SSD',
         'Functional Hardware Medium UCX Provider',
         'Functional Hardware Large',
-        'Functional Hardware Large MD on SSD',
-        'Functional Cluster Box Medium MD on SSD',
-        'Functional Cluster Box Medium Verbs Provider MD on SSD'
+        'Functional Hardware Large MD on SSD'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
@@ -93,7 +94,7 @@ void updateRunStage() {
     if (startedByLanding()) {
         println('updateRunStage: Detected landing build, overwriting defaults')
         for (stage in runStage.keySet()) {
-            if (stage in ['Pre-build', 'Python Bandit check', 'Build', 'Unit Tests', 'Test']
+            if (stage in ['Pre-build', 'Python Bandit check', 'Build', 'Unit Tests', 'VM Tests']
                     || stage.contains('Build on')
                     || stage.contains('Unit Test')
                     || stage.contains('NLT')
@@ -114,7 +115,7 @@ void updateRunStage() {
     if (docOnlyChange(target_branch)) {
         println('updateRunStage: Detected doc-only change, skipping testing')
         for (stage in runStage.keySet()) {
-            if (stage in ['Unit Tests', 'Test', 'Test Hardware']) {
+            if (stage in ['Unit Tests', 'VM Tests', 'CB Tests', 'HW Tests']) {
                 runStage[stage] = false
                 reasons[stage] = 'doc-only change'
             }
@@ -292,10 +293,12 @@ List<String> getStageNameSkipPragmas(String stageName) {
         if (stagePragma.contains('-with-')) {
             pragmas.add(stagePragma.replace('-with-', '-'))
         }
-    } else if (stageName == 'Test' || stageName.contains('Functional on')
+    } else if (stageName == 'VM Tests' || stageName.contains('Functional on')
             || stageName.contains('Fault injection') || stageName.contains('Test RPMs')) {
         // Add skip pragma for parent stage
-        if (stageName != 'Test') {
+        if (stageName != 'VM Tests') {
+            pragmas.add('skip-vm-tests')
+            // Compatibility with existing commit pragmas
             pragmas.add('skip-test')
         }
         if (stageName.contains('Functional on')) {
@@ -316,9 +319,27 @@ List<String> getStageNameSkipPragmas(String stageName) {
         }
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
-    } else if (stageName.contains('Hardware') || stageName.contains('Cluster Box')) {
+        if (stageName == 'VM Tests') {
+            // Compatibility with existing commit pragmas
+            pragmas.add('skip-test')
+        }
+    } else if (stageName == 'CB Tests' || stageName.contains('Cluster Box')) {
         // Add skip pragma for parent stage
-        if (stageName != 'Test Hardware') {
+        if (stageName != 'CB Tests') {
+            pragmas.add('skip-cb-tests')
+        }
+        if (stageName.contains('Functional')) {
+            // Add skip pragma alias for all functional tests
+            pragmas.add('skip-functional')
+            pragmas.add('skip-functional-test')
+        }
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+    } else if (stageName == 'HW Tests' || stageName.contains('Functional Hardware')) {
+        // Add skip pragma for parent stage
+        if (stageName != 'HW Tests') {
+            pragmas.add('skip-hw-tests')
+            // Compatibility with existing commit pragmas
             pragmas.add('skip-test-hardware')
         }
         if (stageName.contains('Functional')) {
@@ -333,6 +354,10 @@ List<String> getStageNameSkipPragmas(String stageName) {
         }
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
+        if (stageName == 'HW Tests') {
+            // Compatibility with existing commit pragmas
+            pragmas.add('skip-test-hardware')
+        }
     }
 
     // Compatibility with existing commit pragmas using distro versions
@@ -376,6 +401,10 @@ void setupRunStage() {
 Boolean shouldStageRun(String name) {
     if (!runStage) {
         setupRunStage()
+    }
+    if (!runStage.containsKey(name)) {
+        echo("shouldStageRun: '${name}' is not a known stage run state, treating as false")
+        return false
     }
     return runStage[name]
 }
@@ -608,9 +637,9 @@ pipeline {
         booleanParam(name: bashName('Unit Test bdev with memcheck'),
                      defaultValue: false,
                      description: 'Run the Unit Test bdev with memcheck stage.')
-        booleanParam(name: bashName('Test'),
+        booleanParam(name: bashName('VM Tests'),
                      defaultValue: true,
-                     description: 'Run the Test stage.')
+                     description: 'Run the VM Tests stage under Functional Tests.')
         booleanParam(name: bashName('Functional on EL 9 with Valgrind'),
                      defaultValue: false,
                      description: 'Run the Functional on EL 9 with Valgrind stage.')
@@ -635,9 +664,12 @@ pipeline {
         booleanParam(name: bashName('Test RPMs on Leap 15'),
                      defaultValue: true,
                      description: 'Run the Test RPMs on Leap 15 stage.')
-        booleanParam(name: bashName('Test Hardware'),
+        booleanParam(name: bashName('CB Tests'),
                      defaultValue: true,
-                     description: 'Run the Test Hardware stage.')
+                     description: 'Run the CB Tests stage under Functional Tests.')
+        booleanParam(name: bashName('HW Tests'),
+                     defaultValue: true,
+                     description: 'Run the HW Tests stage under Functional Tests.')
         booleanParam(name: bashName('Functional Hardware Medium'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium stage.')
@@ -1124,17 +1156,64 @@ pipeline {
                 } // stage('Unit Test bdev with memcheck')
             }
         }
-        stage('Test') {
+        stage('Test Storage Prep on EL 9') {
             when {
                 beforeAgent true
-                expression { shouldStageRun('Test') }
+                expression { params.CI_STORAGE_PREP_LABEL != '' }
+            }
+            agent {
+                label params.CI_STORAGE_PREP_LABEL
             }
             steps {
+                job_step_update(
+                    storagePrepTest(
+                        inst_repos: daosRepos(),
+                        inst_rpms: functionalPackages(1, next_version(), 'tests-internal')))
+            }
+            post {
+                cleanup {
+                    job_status_update()
+                }
+            }
+        } // stage('Test Storage Prep')
+        stage('Functional Tests') {
+            steps {
                 script {
-                    parallel(
+                    Boolean runVmTests = shouldStageRun('VM Tests')
+                    Boolean runCbTests = shouldStageRun('CB Tests')
+                    Boolean runHardwareTests = shouldStageRun('HW Tests')
+                    Map functionalTestStages = [
+                        'Test RPMs on EL 9': scriptedTestRpmStage(
+                            name: 'Test RPMs on EL 9',
+                            runStage: runVmTests && shouldStageRun('Test RPMs on EL 9'),
+                            label: params.CI_UNIT_VM1_LABEL,
+                            jobStatus: job_status_internal,
+                            testRpmArgs: [
+                                target: 'el9.6',
+                                inst_rpms: 'mercury-libfabric',
+                                ignoreFailure: false],
+                            nextVersion: next_version(),
+                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
+                            archiveArtifactsArgs: [
+                                artifacts: 'Test RPMs on EL 9/']
+                        ),
+                        'Test RPMs on Leap 15': scriptedTestRpmStage(
+                            name: 'Test RPMs on Leap 15',
+                            runStage: runVmTests && shouldStageRun('Test RPMs on Leap 15'),
+                            label: params.CI_UNIT_VM1_LABEL,
+                            jobStatus: job_status_internal,
+                            testRpmArgs: [
+                                target: 'leap15.6',
+                                inst_rpms: 'mercury-libfabric',
+                                ignoreFailure: false],
+                            nextVersion: next_version(),
+                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
+                            archiveArtifactsArgs: [
+                                artifacts: 'Test RPMs on Leap 15/']
+                        ),
                         'Functional on EL 9 with Valgrind': getFunctionalTestStage(
                             name: 'Functional on EL 9 with Valgrind',
-                            runStage: shouldStageRun('Functional on EL 9 with Valgrind'),
+                            runStage: runVmTests && shouldStageRun('Functional on EL 9 with Valgrind'),
                             pragma_suffix: '-vm',
                             label: vm9_label('EL9'),
                             next_version: next_version(),
@@ -1147,7 +1226,7 @@ pipeline {
                         ),
                         'Functional on EL 9': getFunctionalTestStage(
                             name: 'Functional on EL 9',
-                            runStage: shouldStageRun('Functional on EL 9'),
+                            runStage: runVmTests && shouldStageRun('Functional on EL 9'),
                             pragma_suffix: '-vm',
                             label: vm9_label('EL9'),
                             next_version: next_version(),
@@ -1160,7 +1239,7 @@ pipeline {
                         ),
                         'Functional on Leap 15': getFunctionalTestStage(
                             name: 'Functional on Leap 15',
-                            runStage: shouldStageRun('Functional on Leap 15'),
+                            runStage: runVmTests && shouldStageRun('Functional on Leap 15'),
                             pragma_suffix: '-vm',
                             label: vm9_label('Leap15'),
                             next_version: next_version(),
@@ -1173,7 +1252,7 @@ pipeline {
                         ),
                         'Functional on SLES 15': getFunctionalTestStage(
                             name: 'Functional on SLES 15',
-                            runStage: shouldStageRun('Functional on SLES 15'),
+                            runStage: runVmTests && shouldStageRun('Functional on SLES 15'),
                             pragma_suffix: '-vm',
                             label: vm9_label('Leap15'),
                             next_version: next_version(),
@@ -1186,7 +1265,7 @@ pipeline {
                         ),
                         'Functional on Ubuntu 20.04': getFunctionalTestStage(
                             name: 'Functional on Ubuntu 20.04',
-                            runStage: shouldStageRun('Functional on Ubuntu 20.04'),
+                            runStage: runVmTests && shouldStageRun('Functional on Ubuntu 20.04'),
                             pragma_suffix: '-vm',
                             label: vm9_label('Ubuntu'),
                             next_version: next_version(),
@@ -1199,7 +1278,7 @@ pipeline {
                         'Fault injection testing': scriptedUnitTestStage(
                             name: 'Fault injection testing',
                             // Release builds compile out fault injection
-                            runStage: shouldStageRun('Fault injection testing') &&
+                            runStage: runVmTests && shouldStageRun('Fault injection testing') &&
                                       !sconsArgs().contains('BUILD_TYPE=release'),
                             label: params.CI_FI_1_LABEL,
                             jobStatus: job_status_internal,
@@ -1228,69 +1307,10 @@ pipeline {
                                 artifacts: 'nlt_logs/fault-injection/',
                                 allowEmptyArchive: true]
                         ),
-                        'Test RPMs on EL 9': scriptedTestRpmStage(
-                            name: 'Test RPMs on EL 9',
-                            runStage: shouldStageRun('Test RPMs on EL 9'),
-                            label: params.CI_UNIT_VM1_LABEL,
-                            jobStatus: job_status_internal,
-                            testRpmArgs: [
-                                target: 'el9.6',
-                                inst_rpms: 'mercury-libfabric',
-                                ignoreFailure: false],
-                            nextVersion: next_version(),
-                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
-                            archiveArtifactsArgs: [
-                                artifacts: 'Test RPMs on EL 9/']
-                        ),
-                        'Test RPMs on Leap 15': scriptedTestRpmStage(
-                            name: 'Test RPMs on Leap 15',
-                            runStage: shouldStageRun('Test RPMs on Leap 15'),
-                            label: params.CI_UNIT_VM1_LABEL,
-                            jobStatus: job_status_internal,
-                            testRpmArgs: [
-                                target: 'leap15.6',
-                                inst_rpms: 'mercury-libfabric',
-                                ignoreFailure: false],
-                            nextVersion: next_version(),
-                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
-                            archiveArtifactsArgs: [
-                                artifacts: 'Test RPMs on Leap 15/']
-                        )
-                    )
-                }
-            }
-        } // stage('Test')
-        stage('Test Storage Prep on EL 9') {
-            when {
-                beforeAgent true
-                expression { params.CI_STORAGE_PREP_LABEL != '' }
-            }
-            agent {
-                label params.CI_STORAGE_PREP_LABEL
-            }
-            steps {
-                job_step_update(
-                    storagePrepTest(
-                        inst_repos: daosRepos(),
-                        inst_rpms: functionalPackages(1, next_version(), 'tests-internal')))
-            }
-            post {
-                cleanup {
-                    job_status_update()
-                }
-            }
-        } // stage('Test Storage Prep')
-        stage('Test Hardware') {
-            when {
-                beforeAgent true
-                expression { shouldStageRun('Test Hardware') }
-            }
-            steps {
-                script {
-                    parallel(
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
-                            runStage: shouldStageRun('Functional Hardware Medium'),
+                            runStage: runHardwareTests &&
+                                      shouldStageRun('Functional Hardware Medium'),
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
@@ -1303,7 +1323,8 @@ pipeline {
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
-                            runStage: shouldStageRun('Functional Hardware Medium MD on SSD'),
+                            runStage: runHardwareTests &&
+                                      shouldStageRun('Functional Hardware Medium MD on SSD'),
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: next_version(),
@@ -1316,7 +1337,8 @@ pipeline {
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
-                            runStage: shouldStageRun('Functional Hardware Medium VMD'),
+                            runStage: runHardwareTests &&
+                                      shouldStageRun('Functional Hardware Medium VMD'),
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version(),
@@ -1330,7 +1352,8 @@ pipeline {
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
-                            runStage: shouldStageRun('Functional Hardware Medium Verbs Provider'),
+                            runStage: runHardwareTests &&
+                                      shouldStageRun('Functional Hardware Medium Verbs Provider'),
                             pragma_suffix: '-hw-medium-verbs-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version(),
@@ -1344,7 +1367,8 @@ pipeline {
                         ),
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
-                            runStage: shouldStageRun('Functional Hardware Medium Verbs Provider MD on SSD'),
+                            runStage: runHardwareTests &&
+                                      shouldStageRun('Functional Hardware Medium Verbs Provider MD on SSD'),
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: next_version(),
@@ -1358,7 +1382,8 @@ pipeline {
                         ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
-                            runStage: shouldStageRun('Functional Hardware Medium UCX Provider'),
+                            runStage: runHardwareTests &&
+                                      shouldStageRun('Functional Hardware Medium UCX Provider'),
                             pragma_suffix: '-hw-medium-ucx-provider',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version(),
@@ -1371,7 +1396,8 @@ pipeline {
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
-                            runStage: shouldStageRun('Functional Hardware Large'),
+                            runStage: runHardwareTests &&
+                                      shouldStageRun('Functional Hardware Large'),
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
@@ -1384,7 +1410,8 @@ pipeline {
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
-                            runStage: shouldStageRun('Functional Hardware Large MD on SSD'),
+                            runStage: runHardwareTests &&
+                                      shouldStageRun('Functional Hardware Large MD on SSD'),
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
@@ -1397,7 +1424,8 @@ pipeline {
                         ),
                         'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Cluster Box Medium MD on SSD',
-                            runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
+                            runStage: runCbTests &&
+                                      shouldStageRun('Functional Cluster Box Medium MD on SSD'),
                             pragma_suffix:'-cb-medium-md-on-ssd',
                             label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
                             next_version: next_version(),
@@ -1413,7 +1441,8 @@ pipeline {
                         ),
                         'Functional Cluster Box Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Cluster Box Medium Verbs Provider MD on SSD',
-                            runStage: shouldStageRun('Functional Cluster Box Medium Verbs Provider MD on SSD'),
+                            runStage: runCbTests &&
+                                      shouldStageRun('Functional Cluster Box Medium Verbs Provider MD on SSD'),
                             pragma_suffix:'-cb-medium-verbs-provider-md-on-ssd',
                             label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
                             next_version: next_version(),
@@ -1428,10 +1457,58 @@ pipeline {
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
+                    ]
+                    Map testRpmStages = functionalTestStages.subMap([
+                        'Test RPMs on EL 9',
+                        'Test RPMs on Leap 15'
+                    ])
+                    Map vmTestStages = functionalTestStages.subMap([
+                        'Functional on EL 9 with Valgrind',
+                        'Functional on EL 9',
+                        'Functional on Leap 15',
+                        'Functional on SLES 15',
+                        'Functional on Ubuntu 20.04',
+                        'Fault injection testing'
+                    ])
+                    Map cbTestStages = functionalTestStages.subMap([
+                        'Functional Cluster Box Medium MD on SSD',
+                        'Functional Cluster Box Medium Verbs Provider MD on SSD'
+                    ])
+                    Map hwTestStages = functionalTestStages.subMap([
+                        'Functional Hardware Medium',
+                        'Functional Hardware Medium MD on SSD',
+                        'Functional Hardware Medium VMD',
+                        'Functional Hardware Medium Verbs Provider',
+                        'Functional Hardware Medium Verbs Provider MD on SSD',
+                        'Functional Hardware Medium UCX Provider',
+                        'Functional Hardware Large',
+                        'Functional Hardware Large MD on SSD'
+                    ])
+                    parallel(
+                        'Test RPMs': {
+                            stage('Test RPMs') {
+                                parallel(testRpmStages)
+                            }
+                        },
+                        'VM Tests': {
+                            stage('VM Tests') {
+                                parallel(vmTestStages)
+                            }
+                        },
+                        'CB Tests': {
+                            stage('CB Tests') {
+                                parallel(cbTestStages)
+                            }
+                        },
+                        'HW Tests': {
+                            stage('HW Tests') {
+                                parallel(hwTestStages)
+                            }
+                        }
                     )
                 }
             }
-        } // stage('Test Hardware')
+        } // stage('Functional Tests')
     } // stages
     post {
         always {
