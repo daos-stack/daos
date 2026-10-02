@@ -32,10 +32,12 @@ server_config:
 
 pool:
   size: 93%
+  properties: rd_fac:0,space_rb:0
   pool_query_timeout: 30
 
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 
 ior:
   api: "DFS"
