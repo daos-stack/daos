@@ -142,7 +142,7 @@ class PoolCreateTests(TestWithServers):
         """JIRA ID: DAOS-18621.
 
         Test Description:
-            Create a single pool with 40% usage that utilizes all the persistent memory and all
+            Create a single pool with 100% usage that utilizes all the persistent memory and all
             the SSD capacity on all of the servers after stopping rank 0.
             Verify that pool creation succeeds.
 
@@ -154,6 +154,6 @@ class PoolCreateTests(TestWithServers):
         # Stop rank 0 on server
         self.server_managers[0].stop_ranks([0])
 
-        # Create 1 pool using 40% of the available capacity
-        pool = self.get_pool(namespace="/run/pool_3/*", size='40%', create=False)
+        # Create 1 pool using 100% of the available capacity
+        pool = self.get_pool(size='100%', create=False)
         check_pool_creation(self, [pool], 120)
