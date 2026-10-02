@@ -192,6 +192,10 @@ pick_eqt(struct dfuse_info *dfuse_info)
  * and this contains a list of read_chunk_data entries, one for each bucket.  Buckets where all
  * slots have been requested are remove from the list and closed when the last request is completed.
  *
+ * A bucket is only reachable through the list; once off the list (all slots requested, overlapping
+ * write, or last close) it is freed when the last request that found it has been answered, i.e.
+ * when exited == entered.  Both counters are protected by the active_inode lock.
+ *
  * TODO: Currently there is no code to remove partially read buckets from the list so reading
  * one slot every chunk would leave the entire file contents in memory until close and mean long
  * list traversal times.
@@ -209,65 +213,49 @@ struct read_chunk_data {
 	struct dfuse_eq      *eqt;
 	int                   rc;
 	int                   entered;
-	ATOMIC int            exited;
+	int                   exited;
 	bool                  exiting;
 	bool                  complete;
 };
 
 static void
-chunk_free(struct read_chunk_data *cd)
+chunk_release(struct read_chunk_data *cd)
 {
-	d_list_del(&cd->list);
-	d_slab_release(cd->eqt->de_read_slab, cd->ev);
+	if (cd->ev)
+		d_slab_release(cd->eqt->de_read_slab, cd->ev);
 	D_FREE(cd);
 }
 
-/* Called when the last open file handle on a inode is closed.  This needs to free everything which
- * is complete and for anything that isn't flag it for deletion in the callback.
- *
- * Returns true if the feature was used.
- */
-bool
-read_chunk_close(struct dfuse_inode_entry *ie)
+static void
+chunk_free(struct read_chunk_data *cd)
 {
-	struct read_chunk_data *cd, *cdn;
-	bool                    rcb = false;
-
-	D_SPIN_LOCK(&ie->ie_active->lock);
-	if (d_list_empty(&ie->ie_active->chunks))
-		goto out;
-
-	rcb = true;
-
-	d_list_for_each_entry_safe(cd, cdn, &ie->ie_active->chunks, list) {
-		if (cd->complete) {
-			chunk_free(cd);
-		} else {
-			cd->exiting = true;
-		}
-	}
-out:
-	D_SPIN_UNLOCK(&ie->ie_active->lock);
-	return rcb;
+	d_list_del(&cd->list);
+	chunk_release(cd);
 }
 
+/* Drop one request's use of a chunk.  Frees it once it is unreachable and nobody else is using it.
+ */
 static void
-chunk_cb(struct dfuse_event *ev)
+chunk_put(struct read_chunk_data *cd)
 {
-	struct read_chunk_data *cd = ev->de_cd;
-	struct active_inode    *ia = cd->ia;
-	fuse_req_t              req;
-	bool                    done = false;
+	struct active_inode *ia = cd->ia;
+	bool                 release;
 
-	cd->rc = ev->de_ev.ev_error;
+	D_SPIN_LOCK(&ia->lock);
+	cd->exited++;
+	release = d_list_empty(&cd->list) && cd->exited == cd->entered;
+	D_SPIN_UNLOCK(&ia->lock);
 
-	if (cd->rc == 0 && (ev->de_len != CHUNK_SIZE)) {
-		cd->rc = EIO;
-		DS_WARN(cd->rc, "Unexpected short read bucket %ld (%#zx) expected %i got %zi",
-			cd->bucket, cd->bucket * CHUNK_SIZE, CHUNK_SIZE, ev->de_len);
-	}
+	if (release)
+		chunk_release(cd);
+}
 
-	daos_event_fini(&ev->de_ev);
+/* Mark a chunk complete and answer every request parked on it with cd->rc / cd->ev. */
+static void
+chunk_complete(struct read_chunk_data *cd)
+{
+	struct active_inode *ia = cd->ia;
+	fuse_req_t           req;
 
 	do {
 		int i;
@@ -300,24 +288,115 @@ chunk_cb(struct dfuse_event *ev)
 			} else {
 				DFUSE_TRA_DEBUG(cd->ohs[i], "%#zx-%#zx read", position,
 						position + K128 - 1);
-				DFUSE_REPLY_BUFQ(cd->ohs[i], req, ev->de_iov.iov_buf + (i * K128),
-						 K128);
+				DFUSE_REPLY_BUFQ(cd->ohs[i], req,
+						 cd->ev->de_iov.iov_buf + (i * K128), K128);
 			}
 
-			if (atomic_fetch_add_relaxed(&cd->exited, 1) == 7)
-				done = true;
+			/* May free cd, in which case there is nothing left to answer. */
+			D_SPIN_LOCK(&ia->lock);
+			cd->exited++;
+			if (d_list_empty(&cd->list) && cd->exited == cd->entered) {
+				D_SPIN_UNLOCK(&ia->lock);
+				chunk_release(cd);
+				return;
+			}
+			D_SPIN_UNLOCK(&ia->lock);
 		}
-	} while (req && !done);
+	} while (req);
+}
 
-	if (done) {
-		d_slab_release(cd->eqt->de_read_slab, cd->ev);
-		D_FREE(cd);
+/* Called before a write or truncate changes [position, position + len).  Cached data for any
+ * bucket overlapping that range is dropped so later reads fetch it again from DAOS.
+ */
+void
+read_chunk_invalidate(struct dfuse_inode_entry *ie, off_t position, size_t len)
+{
+	struct active_inode    *active = ie->ie_active;
+	struct read_chunk_data *cd, *cdn;
+	uint64_t                first;
+	uint64_t                last;
+
+	if (active == NULL || len == 0)
+		return;
+
+	first = position / CHUNK_SIZE;
+	if (len - 1 > UINT64_MAX - position)
+		last = UINT64_MAX;
+	else
+		last = (position + len - 1) / CHUNK_SIZE;
+
+	D_SPIN_LOCK(&active->lock);
+	d_list_for_each_entry_safe(cd, cdn, &active->chunks, list) {
+		if (cd->bucket < first || cd->bucket > last)
+			continue;
+
+		DFUSE_TRA_DEBUG(ie, "invalidate bucket %ld (entered %d exited %d complete %d)",
+				cd->bucket, cd->entered, cd->exited, cd->complete);
+
+		if (cd->complete && cd->exited == cd->entered) {
+			chunk_free(cd);
+		} else {
+			/* In use; the last reader (or the fetch callback) frees it. */
+			d_list_del_init(&cd->list);
+		}
 	}
+	D_SPIN_UNLOCK(&active->lock);
+}
+
+/* Called when the last open file handle on a inode is closed.  This needs to free everything which
+ * is complete and for anything that isn't flag it for deletion in the callback.
+ *
+ * Returns true if the feature was used.
+ */
+bool
+read_chunk_close(struct dfuse_inode_entry *ie)
+{
+	struct read_chunk_data *cd, *cdn;
+	bool                    rcb = false;
+
+	D_SPIN_LOCK(&ie->ie_active->lock);
+	if (d_list_empty(&ie->ie_active->chunks))
+		goto out;
+
+	rcb = true;
+
+	d_list_for_each_entry_safe(cd, cdn, &ie->ie_active->chunks, list) {
+		if (cd->complete && cd->exited == cd->entered) {
+			chunk_free(cd);
+		} else if (cd->complete) {
+			/* A reply is still in progress; the last chunk_put() frees it. */
+			d_list_del_init(&cd->list);
+		} else {
+			cd->exiting = true;
+		}
+	}
+out:
+	D_SPIN_UNLOCK(&ie->ie_active->lock);
+	return rcb;
+}
+
+static void
+chunk_cb(struct dfuse_event *ev)
+{
+	struct read_chunk_data *cd = ev->de_cd;
+
+	cd->rc = ev->de_ev.ev_error;
+
+	if (cd->rc == 0 && (ev->de_len != CHUNK_SIZE)) {
+		cd->rc = EIO;
+		DS_WARN(cd->rc, "Unexpected short read bucket %ld (%#zx) expected %i got %zi",
+			cd->bucket, cd->bucket * CHUNK_SIZE, CHUNK_SIZE, ev->de_len);
+	}
+
+	daos_event_fini(&ev->de_ev);
+
+	chunk_complete(cd);
 }
 
 /* Submut a read to dfs.
  *
- * Returns true on success.
+ * Returns true on success.  On failure the caller falls back to a plain read for its own request;
+ * any other requests parked on the chunk meanwhile are failed here.
  */
 static bool
 chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd, int slot)
@@ -332,10 +411,8 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 	eqt = pick_eqt(dfuse_info);
 
 	ev = d_slab_acquire(eqt->de_read_slab);
-	if (ev == NULL) {
-		cd->rc = ENOMEM;
-		return false;
-	}
+	if (ev == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
 	ev->de_iov.iov_len = CHUNK_SIZE;
 	ev->de_req         = req;
@@ -349,10 +426,15 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 	cd->reqs[slot] = req;
 	cd->ohs[slot]  = oh;
 
+	/* Writes acked to the kernel under write-back may still be in flight. */
+	DFUSE_IE_WFLUSH(ie);
+
 	rc = dfs_read(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_sgl, position, &ev->de_len,
 		      &ev->de_ev);
-	if (rc != 0)
+	if (rc != 0) {
+		daos_event_fini(&ev->de_ev);
 		goto err;
+	}
 
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&eqt->de_sem);
@@ -363,9 +445,15 @@ chunk_fetch(fuse_req_t req, struct dfuse_obj_hdl *oh, struct read_chunk_data *cd
 	return true;
 
 err:
-	daos_event_fini(&ev->de_ev);
-	d_slab_release(eqt->de_read_slab, ev);
-	cd->rc = rc;
+	D_SPIN_LOCK(&ie->ie_active->lock);
+	cd->rc         = rc;
+	cd->reqs[slot] = 0;
+	cd->ohs[slot]  = NULL;
+	d_list_del_init(&cd->list);
+	D_SPIN_UNLOCK(&ie->ie_active->lock);
+
+	chunk_complete(cd);
+	chunk_put(cd);
 	return false;
 }
 
@@ -418,6 +506,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 
 	cd->ia     = ie->ie_active;
 	cd->bucket = bucket;
+	D_INIT_LIST_HEAD(&cd->list);
 	submit     = true;
 
 found:
@@ -425,6 +514,9 @@ found:
 	if (++cd->entered < 8) {
 		/* Put on front of list for efficient searching */
 		d_list_add(&cd->list, &ie->ie_active->chunks);
+	} else {
+		/* All slots requested; unreachable from now on, freed by the last chunk_put(). */
+		D_INIT_LIST_HEAD(&cd->list);
 	}
 
 	D_SPIN_UNLOCK(&ie->ie_active->lock);
@@ -433,7 +525,7 @@ found:
 		DFUSE_TRA_DEBUG(oh, "submit for bucket %ld[%d]", bucket, slot);
 		rcb = chunk_fetch(req, oh, cd, slot);
 	} else {
-		struct dfuse_event *ev = NULL;
+		bool done = false;
 
 		/* Now check if this read request is complete or not yet, if it isn't then just
 		 * save req in the right slot however if it is then reply here.  After the call to
@@ -444,14 +536,14 @@ found:
 
 		D_SPIN_LOCK(&ie->ie_active->lock);
 		if (cd->complete) {
-			ev = cd->ev;
+			done = true;
 		} else {
 			cd->reqs[slot] = req;
 			cd->ohs[slot]  = oh;
 		}
 		D_SPIN_UNLOCK(&ie->ie_active->lock);
 
-		if (ev) {
+		if (done) {
 			if (cd->rc != 0) {
 				/* Don't pass fuse an error here, rather return false and the read
 				 * will be tried over the network.
@@ -460,12 +552,10 @@ found:
 			} else {
 				DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position,
 						position + K128 - 1);
-				DFUSE_REPLY_BUFQ(oh, req, ev->de_iov.iov_buf + (slot * K128), K128);
+				DFUSE_REPLY_BUFQ(oh, req, cd->ev->de_iov.iov_buf + (slot * K128),
+						 K128);
 			}
-			if (atomic_fetch_add_relaxed(&cd->exited, 1) == 7) {
-				d_slab_release(cd->eqt->de_read_slab, cd->ev);
-				D_FREE(cd);
-			}
+			chunk_put(cd);
 		}
 	}
 

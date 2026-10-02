@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1142,6 +1142,10 @@ dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *i
  */
 bool
 read_chunk_close(struct dfuse_inode_entry *ie);
+
+/* Drop cached chunk-read data overlapping [position, position + len). */
+void
+read_chunk_invalidate(struct dfuse_inode_entry *ie, off_t position, size_t len);
 
 /* Metadata caching functions. */
 

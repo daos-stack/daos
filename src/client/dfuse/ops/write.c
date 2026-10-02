@@ -11,6 +11,9 @@
 static void
 dfuse_cb_write_complete(struct dfuse_event *ev)
 {
+	/* Chunks fetched while this write was in flight may hold pre-write data. */
+	read_chunk_invalidate(ev->de_oh->doh_ie, ev->de_req_position, ev->de_req_len);
+
 	if (ev->de_req) {
 		if (ev->de_ev.ev_error == 0)
 			DFUSE_REPLY_WRITE(ev->de_oh, ev->de_req, ev->de_len);
@@ -103,8 +106,12 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 		ev->de_req = 0;
 	else
 		ev->de_req = req;
-	ev->de_len         = len;
-	ev->de_complete_cb = dfuse_cb_write_complete;
+	ev->de_len          = len;
+	ev->de_req_position = position;
+	ev->de_req_len      = len;
+	ev->de_complete_cb  = dfuse_cb_write_complete;
+
+	read_chunk_invalidate(oh->doh_ie, position, len);
 
 	/* Update all inode state before submitting the write.  Once dfs_write() submits the
 	 * event, the async progress thread may complete it and reply to the request at any time,

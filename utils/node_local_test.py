@@ -23,6 +23,7 @@ import errno
 import functools
 import importlib
 import json
+import mmap
 import os
 import pickle  # nosec
 import pprint
@@ -2385,6 +2386,57 @@ class PosixTests():
             data = fd.read(16)  # Pass in a buffer size here or python will only read file size.
         print(data)
         assert data == 'test'
+
+    @needs_dfuse
+    def test_chunk_read_invalidate(self):
+        """Test that a write invalidates the dfuse 1 MiB chunk-read cache.
+
+        A 128 KiB aligned 128 KiB read makes dfuse fetch and cache the whole 1 MiB bucket for as
+        long as the inode has an open handle.  A write to another slot of that bucket followed by a
+        read of that slot must return the new data, not the cached pre-write copy.  O_DIRECT is
+        used so the kernel passes the 128 KiB requests through unchanged.
+        """
+        k128 = 128 * 1024
+        file_size = 4 * 1024 * 1024
+        file_name = join(self.dfuse.dir, 'chunk_file')
+
+        old = bytes([0xA5]) * file_size
+        new = bytes([0x5A]) * k128
+
+        def pread_direct(fd, length, offset):
+            buf = mmap.mmap(-1, length)
+            got = os.preadv(fd, [buf], offset)
+            assert got == length, f'short read {got} != {length}'
+            buf.seek(0)
+            return buf.read(length)
+
+        with open(file_name, 'wb') as fd:
+            fd.write(old)
+            fd.flush()
+            os.fsync(fd.fileno())
+
+        # Keep this handle open so the inode stays active and the cached bucket is retained.
+        rfd = os.open(file_name, os.O_RDONLY | os.O_DIRECT)
+        try:
+            assert pread_direct(rfd, k128, 0) == old[:k128]
+
+            wfd = os.open(file_name, os.O_WRONLY | os.O_DIRECT)
+            try:
+                wbuf = mmap.mmap(-1, k128)
+                wbuf.write(new)
+                assert os.pwritev(wfd, [wbuf], k128) == k128
+                os.fsync(wfd)
+            finally:
+                os.close(wfd)
+
+            data = pread_direct(rfd, k128, k128)
+        finally:
+            os.close(rfd)
+
+        if data == old[:k128]:
+            print('read returned stale pre-write data from the chunk cache')
+            self.fail()
+        assert data == new
 
     def test_pre_read(self):
         """Test the pre-read code.
