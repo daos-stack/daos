@@ -1,4 +1,7 @@
 %changelog
+* Wed Sep 30 2026 Jerome Soumagne <jerome.soumagne@hpe.com> - 1-22.0-6
+- Drop psm2 provider
+
 * Wed Nov 19 2025 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 1-22.0-5
 - Restore the RPM changelog, which has not been available since version 1.22.0-2
 
