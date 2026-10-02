@@ -83,6 +83,15 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
         dmg_command.check_disable()
 
+    def clear_reports(self, dmg_command):
+        self.log_step("Clear the checker inconsistency reports.")
+        dmg_command.check_stop()
+        # Start with --reset clears the inconsistency reports. Old inconsistency reports
+        # may cause subsequent tests to fail because the tests don't expect them. The
+        # tests expect the system to be clean at the beginning.
+        dmg_command.check_start(reset=True)
+        wait_for_check_complete(dmg=dmg_command)
+
     def test_start_back_to_back(self):
         """Test dmg check start <pool_1> and <pool_2> back to back.
 
@@ -147,12 +156,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         self.log_step("Query checker and verify that they’re fixed.")
         wait_for_check_complete(dmg=dmg_command)
 
-        self.log_step("Clear the checker inconsistency reports.")
-        dmg_command.check_stop()
-        # Start with --reset clears the inconsistency reports. Old inconsistency reports
-        # may cause subsequent tests to fail because the tests don't expect them. The
-        # tests expect the system to be clean at the beginning.
-        dmg_command.check_start(reset=True)
+        self.clear_reports(dmg_command=dmg_command)
 
         self.log_step("Disable checker and start system.")
         dmg_command.check_disable()
@@ -282,6 +286,9 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
             exp_msg = "unable to find pool service"
             if exp_msg not in str(command_failure):
                 self.fail(f"{exp_msg} is not in the error message!")
+
+        # 8. Clear inconsistency reports.
+        self.clear_reports(dmg_command=dmg_command)
 
         # 9. Disable checker and verify that the fault is actually fixed.
         self.log_step("Disable checker and verify that the fault is actually fixed.")
@@ -419,6 +426,8 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
         self.log_step("Check that the fault is fixed for pool_2 pool_3.")
         wait_for_check_complete(dmg=dmg_command)
+
+        self.clear_reports(dmg_command=dmg_command)
 
         # 7. Disable checker and verify that the three pools were actually fixed.
         self.log_step("Disable checker and verify that the three pools were actually fixed.")
