@@ -160,12 +160,16 @@ int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb
  * Callback invoked by dv_dump_csum() with the fetched checksum information.
  *
  * @param cb_arg    User-provided argument passed through from dv_dump_csum().
- * @param recx_rel  Recx/epoch list describing the stored extents. Non-NULL for array akeys;
- *                  NULL for single-value akeys. The caller must not free this pointer.
+ * @param recx_rel  Recx/epoch list describing the stored extents. NULL for single-value akeys,
+ *                  and for array akeys when no data extent is stored in the requested range at
+ *                  the requested epoch (\a cil is then empty). The caller must not free this
+ *                  pointer.
  * @param sv_epoch  Actual stored epoch of the single value. Non-zero for single-value akeys
  *                  when an SV was found within the requested epoch range; 0 for array akeys
  *                  or when no SV was found (hole or -DER_NONEXIST).
- * @param cil       Checksum info list. Valid only for the duration of the callback.
+ * @param cil       Checksum info list; every entry passes ci_is_valid() and has a checksum type
+ *                  known to the checksum library (daos_mhash_type2algo()). Valid only for the
+ *                  duration of the callback.
  * @return          0 on success; a negative error code is propagated back to the caller of
  *                  dv_dump_csum().
  */
@@ -179,12 +183,15 @@ typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel,
  * @param path     VOS tree path identifying the container, object, dkey, and akey.
  *                 For array akeys, path->vtp_recx selects the extent to inspect.
  * @param epoch    Epoch for the fetch. For single-value akeys, controls which version is
- *                 returned — pass DAOS_EPOCH_MAX to get the latest, or a snapshot epoch to
+ *                 returned - pass DAOS_EPOCH_MAX to get the latest, or a snapshot epoch to
  *                 access an earlier version. For array akeys, selects the visible extent set.
  * @param dump_cb  Callback invoked with the result. If NULL, the function returns 0
  *                 without opening the container or calling VOS.
  * @param cb_arg   Opaque argument forwarded to \a dump_cb.
- * @return         0 on success, or a negative error code.
+ * @return         0 on success; -DER_CSUM if the fetched checksum metadata is inconsistent
+ *                 (e.g. a checksum-info count that does not match the stored entries, an
+ *                 invalid checksum info or an unknown checksum type; \a dump_cb is not
+ *                 invoked); another negative error code otherwise.
  */
 int
 dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
