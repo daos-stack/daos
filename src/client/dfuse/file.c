@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -122,5 +123,15 @@ active_ie_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 
 	ah_free(dfuse_info, ie);
 out:
+	D_MUTEX_UNLOCK(&alock);
+}
+
+/* Drop cached chunk reads for an inode which may have no open handle, e.g. truncate by path. */
+void
+active_ie_chunk_invalidate(struct dfuse_inode_entry *ie)
+{
+	D_MUTEX_LOCK(&alock);
+	if (ie->ie_active)
+		read_chunk_invalidate(ie, 0, DFS_MAX_FSIZE);
 	D_MUTEX_UNLOCK(&alock);
 }
