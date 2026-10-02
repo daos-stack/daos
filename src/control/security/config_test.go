@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -352,6 +353,31 @@ func TestPublicKey(t *testing.T) {
 
 			key, err := tc.config.PublicKey()
 			tc.Validate(t, key, err)
+		})
+	}
+}
+
+func TestSecurity_TransportConfigValidate(t *testing.T) {
+	for name, tc := range map[string]struct {
+		skew   time.Duration
+		expErr bool
+	}{
+		"zero":                 {0, false},
+		"positive":             {time.Minute, false},
+		"one second boundary":  {time.Second, false},
+		"negative":             {-time.Second, true},
+		"sub-second (bare ns)": {300 * time.Nanosecond, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := DefaultServerTransportConfig()
+			cfg.PoolCertMaxClockSkew = tc.skew
+			err := cfg.Validate()
+			if tc.expErr && err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !tc.expErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 		})
 	}
 }

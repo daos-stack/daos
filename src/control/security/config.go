@@ -21,8 +21,10 @@ import (
 )
 
 const (
-	certDir              = "/etc/daos/certs/"
-	defaultCACert        = certDir + "daosCA.crt"
+	certDir = "/etc/daos/certs/"
+	// DefaultCACertPath is the default path to the DAOS CA certificate.
+	DefaultCACertPath    = certDir + "daosCA.crt"
+	defaultCACert        = DefaultCACertPath
 	defaultServerCert    = certDir + "server.crt"
 	defaultServerKey     = certDir + "server.key"
 	defaultAdminCert     = certDir + "admin.crt"
@@ -105,12 +107,26 @@ type CredentialConfig struct {
 // TransportConfig contains all the information on whether or not to use
 // certificates and their location if their use is specified.
 type TransportConfig struct {
-	AllowInsecure     bool `yaml:"allow_insecure"`
-	CertificateConfig `yaml:",inline"`
+	AllowInsecure        bool          `yaml:"allow_insecure"`
+	PoolCertMaxClockSkew time.Duration `yaml:"pool_cert_max_clock_skew,omitempty"`
+	CertificateConfig    `yaml:",inline"`
 }
 
 func (tc *TransportConfig) String() string {
 	return fmt.Sprintf("allow insecure: %v", tc.AllowInsecure)
+}
+
+// Validate checks the transport config for invalid values.
+func (tc *TransportConfig) Validate() error {
+	if tc.PoolCertMaxClockSkew < 0 {
+		return errors.Errorf("pool_cert_max_clock_skew must not be negative (got %s)",
+			tc.PoolCertMaxClockSkew)
+	}
+	if s := tc.PoolCertMaxClockSkew; s > 0 && s < time.Second {
+		return errors.Errorf("pool_cert_max_clock_skew %s is below 1s; bare integers "+
+			"parse as nanoseconds, use a unit suffix (e.g. 300s)", s)
+	}
+	return nil
 }
 
 // CertificateConfig contains the specific certificate information for the daos
