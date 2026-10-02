@@ -424,8 +424,6 @@ post_provision_config_nodes() {
                 echo "Unable to determine Infiniband controller PCI address for line: $line"
                 return 1
             fi
-        elif [[ $line == Class:* ]]; then
-            continue
         elif [[ $line == Device:* ]]; then
             # e.g. Device: MT2910 Family [ConnectX-7]                   - HW node
             #      Device: MT28908 Family [ConnectX-6 Virtual Function] - CB node
@@ -442,7 +440,7 @@ post_provision_config_nodes() {
                     mellanox_drivers=true
                     break
                 fi
-            elif [[ $line =~ *ConnectX* ]]; then
+            elif [[ $line == *ConnectX* ]]; then
                 echo "Unable to determine Mellanox driver generation for line: $line"
                 return 1
             fi
