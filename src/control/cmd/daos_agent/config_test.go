@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -292,6 +293,16 @@ telemetry_disabled_procs: ""
 telemetry_retain: foo
 `,
 			expErr: errors.New("time.Duration"),
+		},
+		"custom node cert dir": {
+			input: `
+credential_config:
+  node_cert_dir: /custom/certs
+`,
+			expCfg: cfgWith(DefaultConfig(), func(cfg *Config) *Config {
+				cfg.CredentialConfig.NodeCertDir = "/custom/certs"
+				return cfg
+			}),
 		},
 		"minimal telemetry config": {
 			input: `

@@ -959,6 +959,17 @@ out:
 	pool_connect_in_get_cred(arg->rpc, &credp);
 	pool_connect_in_get_data(arg->rpc, NULL /* flags */, NULL /* bits */, &bulk,
 				 NULL /* version */);
+	{
+		d_iov_t *certp, *popp, *payloadp;
+
+		pool_connect_in_get_node_cert(arg->rpc, &certp, &popp, &payloadp);
+		if (certp != NULL)
+			daos_iov_free(certp);
+		if (popp != NULL)
+			daos_iov_free(popp);
+		if (payloadp != NULL)
+			daos_iov_free(payloadp);
+	}
 	crt_req_decref(arg->rpc);
 	map_bulk_destroy(bulk, map_buf);
 	/* Ensure credential memory is wiped clean */
@@ -1057,12 +1068,30 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 	/** for con_args */
 	crt_req_addref(rpc);
 
-	/** request credentials */
-	pool_connect_in_get_cred(rpc, &credp);
-	rc = dc_sec_request_creds(credp);
-	if (rc != 0) {
-		DL_ERROR(rc, "failed to obtain security credential");
-		D_GOTO(out_req, rc);
+	/** request credentials (with per-pool node cert if available) */
+	{
+		d_iov_t node_cert   = {0};
+		d_iov_t pop_sig     = {0};
+		d_iov_t pop_payload = {0};
+
+		bool    with_pool_auth = rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_NODE_CERT);
+
+		pool_connect_in_get_cred(rpc, &credp);
+		rc = dc_sec_request_pool_creds(credp, with_pool_auth ? pool->dp_pool : NULL,
+					       with_pool_auth ? pool->dp_pool_hdl : NULL,
+					       &node_cert, &pop_sig, &pop_payload);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to obtain security credential");
+			D_GOTO(out_req, rc);
+		}
+
+		if (node_cert.iov_len > 0) {
+			pool_connect_in_set_node_cert(rpc, &node_cert, &pop_sig, &pop_payload);
+		} else {
+			daos_iov_free(&node_cert);
+			daos_iov_free(&pop_sig);
+			daos_iov_free(&pop_payload);
+		}
 	}
 
 	rc = map_bulk_create(daos_task2ctx(task), &bulk, &map_buf, pool_buf_nr(pool->dp_map_sz));
@@ -1088,7 +1117,17 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 
 out_bulk:
 	map_bulk_destroy(bulk, map_buf);
-out_cred:
+out_cred: {
+	d_iov_t *certp, *popp, *payloadp;
+
+	pool_connect_in_get_node_cert(rpc, &certp, &popp, &payloadp);
+	if (certp != NULL)
+		daos_iov_free(certp);
+	if (popp != NULL)
+		daos_iov_free(popp);
+	if (payloadp != NULL)
+		daos_iov_free(payloadp);
+}
 	/* Ensure credential memory is wiped clean */
 	explicit_bzero(credp->iov_buf, credp->iov_buf_len);
 	daos_iov_free(credp);
