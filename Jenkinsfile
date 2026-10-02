@@ -55,6 +55,7 @@ void updateRunStage() {
         'Functional Hardware Medium TCP Provider MD on SSD',
         'Functional Hardware Large TCP MD on SSD',
         'Functional Hardware Medium Verbs MD on SSD',
+        'Functional Hardware Medium Verbs Provider MD on SSD',
         'Functional Hardware Large Verbs MD on SSD',
         'Functional Cluster Box Medium MD on SSD',
         'Functional Cluster Box Medium TCP MD on SSD',
@@ -64,36 +65,40 @@ void updateRunStage() {
     // Initialize the run state of each stage using the parameter stage keys
     for (name in stageOrder) {
         value = params.get(bashName(name), null)
-        if (value instanceof Boolean && !name.startsWith('CI_')) {
+        if (value != null && value.class == Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
-            reasons[name] = "parameter selection or default"
+            reasons[name] = 'parameter selection or default'
         }
     }
 
     // Debug
-    String buildCause = currentBuild.getBuildCauses().toString()
-    println("updateRunStage: Build cause: ${buildCause}")
+    List buildCauses = currentBuild.buildCauses
+    println("updateRunStage: Build cause: ${buildCauses}")
     println("updateRunStage: Started by user: ${startedByUser()}")
 
     // Handle landing builds
     if (startedByLanding()) {
-        println("updateRunStage: Detected landing build, overwriting defaults")
+        println('updateRunStage: Detected landing build, overwriting defaults')
         for (stage in runStage.keySet()) {
             if (stage in ['Test', 'Functional on EL 9']) {
                 runStage[stage] = true
             } else {
                 runStage[stage] = false
             }
-            reasons[stage] = "landing build"
+            reasons[stage] = 'landing build'
         }
         displayRunStage(reasons)
         return
+    } else if (startedByTimer()) {
+        // Prevent timed builds from canceling existing builds
+        println('updateRunStage: Detected timed build - disabling Cancel Previous Builds')
+        runStage['Cancel Previous Builds'] = false
     }
 
     // Handle user setting CI_IGNORE_SKIP_COMMIT_PRAGMAS
     if (params.CI_IGNORE_SKIP_COMMIT_PRAGMAS) {
         println(
-            "updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas")
+            'updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas')
         displayRunStage(reasons)
         return
     }
@@ -101,12 +106,13 @@ void updateRunStage() {
     // Update stage running based on commit pragmas
     println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
     Map<String, String> commitPragmas = envToPragmas()
-    println("updateRunStage: Checking skip commit pragmas from commit message:")
+    println('updateRunStage: Checking skip commit pragmas from commit message:')
     commitPragmas.each { key, value ->
         println("  ${key}: ${value}")
     }
     for (stage in runStage.keySet()) {
         List<String> skipPragmas = getStageNameSkipPragmas(stage)
+        /* groovylint-disable-next-line NestedForLoop */
         for (pragma in skipPragmas) {
             // commitPragmas will already contain lower case keys from pragmasToMap()
             println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
@@ -127,7 +133,7 @@ void updateRunStage() {
 
 // Log which stages will be run and why based on the current state of the runStage map
 void displayRunStage(Map reasons = [:]) {
-    println("Stage run conditions:")
+    println('Stage run conditions:')
     for (stage in runStage.keySet()) {
         String reason = reasons.get(stage, 'default')
         if (runStage[stage]) {
@@ -147,7 +153,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
     if (stageName in ['Cancel Previous Builds']) {
         // Add skip pragma for this stage
         pragmas.add(stagePragma)
-
     } else if (stageName == 'Test' || stageName.contains('Functional')) {
         // Add skip pragma for parent stage
         if (stageName != 'Test') {
@@ -181,6 +186,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
     List<String> distros = ['el', 'leap', 'sles', 'ubuntu']
     List<String> copyPragmas = pragmas.clone()
     for (distro in distros) {
+        /* groovylint-disable-next-line NestedForLoop */
         for (_pragma in copyPragmas) {
             if (_pragma.contains("-${distro}-")) {
                 Integer _index = pragmas.indexOf(_pragma)
@@ -205,7 +211,7 @@ List<String> getStageNameSkipPragmas(String stageName) {
 
 // Initialize the runStage map with the current state of the build parameters and any commit
 // pragmas related to skipping/running stages. Should only be called once per build.
-def setupRunStage() {
+void setupRunStage() {
     pragmasToEnv()
     updateRunStage()
 }
@@ -233,7 +239,6 @@ void job_step_update(def value=currentBuild.currentResult) {
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
-String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
@@ -264,13 +269,10 @@ String vm9_label(String distro) {
         def_val: cachedCommitPragma(pragma: 'VM9-label', def_val: params.FUNCTIONAL_VM_LABEL))
 }
 
-// Get the default tags to use for a stage based on the current build type
+// Get the default tags to use for a functional test stage based on the current build type
 String defaultTags(String timedTags, String prTags = 'always_passes') {
     /* groovylint-disable-next-line UnnecessaryGetter */
-    if (isPr()) {
-        return prTags
-    }
-    return timedTags
+    return (isPr() || startedByLanding()) ? prTags : timedTags
 }
 
 pipeline {
@@ -305,17 +307,17 @@ pipeline {
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: 'full_regression',
+               defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
         // The TestNvme and TestRepeat parameter definitions are purposely excluded. The functional
         // test stage launch.py --nvme argument is hard-coded in each stage definition to avoid the
         // stages from duplicating testing.
         string(name: 'TestProvider',
-               defaultValue: 'ucx+dc_x',
+               defaultValue: '',
                description: 'Test-provider to use for the non-Provider Functional Hardware test ' +
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
-                            '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
+                            '--provider argument; i.e. "ucx+dc_x", "ofi+verbs;ofi_rxm", "ofi+tcp")')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of latest. example: 1.3.103-1, 1.2-2')
@@ -388,6 +390,9 @@ pipeline {
         booleanParam(name: bashName('Functional Hardware Medium Verbs MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs MD on SSD stage.')
+        booleanParam(name: bashName('Functional Hardware Medium Verbs Provider MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD stage.')
         booleanParam(name: bashName('Functional Hardware Large Verbs MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large Verbs MD on SSD stage.')
@@ -404,10 +409,10 @@ pipeline {
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_ofed5',
                description: 'Label to use for the Functional Hardware Medium stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_ofed5 || ci_nvme5_only',
                description: 'Label to use for the Functional Hardware Medium MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',
@@ -419,17 +424,20 @@ pipeline {
                defaultValue: 'ci_nvme9',
                description: 'Label to use for the Functional Hardware Large MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_MD_ON_SSD_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_nvme5 || ci_nvme5_only',
                description: 'Label to use for 5 node Functional Hardware Medium TCP MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_MD_ON_SSD_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_nvme5 || ci_nvme5_only',
                description: 'Label to use for 5 node Functional Hardware Medium TCP Provider MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_TCP_MD_ON_SSD_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large TCP MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_MD_ON_SSD_LABEL',
-               defaultValue: 'ci_ofed5',
+               defaultValue: 'ci_ofed5 || ci_ofed5_only',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs MD on SSD stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_ofed5 || ci_ofed5_only',
+               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_VERBS_MD_ON_SSD_LABEL',
                defaultValue: 'ci_ofed9',
                description: 'Label to use for 9 node Functional Hardware Large Verbs MD on SSD stage')
@@ -596,7 +604,6 @@ pipeline {
                             stage_tags: 'hw_vmd,medium',
                             default_tags: defaultTags('full_regression'),
                             nvme: 'auto',
-                            provider: 'ofi+tcp',
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
@@ -647,7 +654,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric',
-                            stage_tags: 'hw,medium,provider,-cb',
+                            stage_tags: 'hw,medium,provider',
                             default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             provider: 'ofi+tcp',
@@ -667,6 +674,21 @@ pipeline {
                             provider: 'ofi+tcp',
                             job_status: job_status_internal
                         ),
+                        'Functional Cluster Box Medium TCP MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium TCP MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium TCP MD on SSD'),
+                            pragma_suffix: '-cb-medium-tcp-md-on-ssd',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
+                            next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'cb,medium',
+                            default_tags: defaultTags('pr daily_regression'),
+                            nvme: 'auto_md_on_ssd',
+                            provider: 'ofi+tcp',
+                            node_count: 5,
+                            job_status: job_status_internal
+                        ),
                         'Functional Hardware Medium Verbs MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs MD on SSD',
                             runStage: shouldStageRun('Functional Hardware Medium Verbs MD on SSD'),
@@ -676,6 +698,20 @@ pipeline {
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric',
                             stage_tags: 'hw,medium,-provider,-cb',
+                            default_tags: defaultTags('pr daily_regression'),
+                            nvme: 'auto_md_on_ssd',
+                            provider: 'ofi+verbs;ofi_rxm',
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Verbs Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Medium Verbs Provider MD on SSD'),
+                            pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_MD_ON_SSD_LABEL,
+                            next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'hw,medium,provider',
                             default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
@@ -693,35 +729,6 @@ pipeline {
                             default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             provider: 'ofi+verbs;ofi_rxm',
-                            job_status: job_status_internal
-                        ),
-                        'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Cluster Box Medium MD on SSD',
-                            runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
-                            pragma_suffix: '-cb-medium-md-on-ssd',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
-                            next_version: params.BaseBranch,
-                            other_packages: 'mercury-libfabric mercury-ucx',
-                            stage_tags: 'cb,medium,-provider',
-                            default_tags: defaultTags('pr daily_regression'),
-                            nvme: 'auto_md_on_ssd',
-                            node_count: 5,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Cluster Box Medium TCP MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Cluster Box Medium TCP MD on SSD',
-                            runStage: shouldStageRun('Functional Cluster Box Medium TCP MD on SSD'),
-                            pragma_suffix: '-cb-medium-tcp-md-on-ssd',
-                            base_branch: params.BaseBranch,
-                            label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
-                            next_version: params.BaseBranch,
-                            other_packages: 'mercury-libfabric',
-                            stage_tags: 'cb,medium',
-                            default_tags: defaultTags('pr daily_regression'),
-                            nvme: 'auto_md_on_ssd',
-                            provider: 'ofi+tcp',
-                            node_count: 5,
                             job_status: job_status_internal
                         ),
                         'Functional Cluster Box Medium Verbs MD on SSD': getFunctionalTestStage(
