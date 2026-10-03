@@ -1055,6 +1055,10 @@ active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
 void
 active_ie_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
+/* Drop cached chunk reads for an inode which may have no open handle */
+void
+active_ie_chunk_invalidate(struct dfuse_inode_entry *ie);
+
 /* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
  * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending
  * writes are complete.
@@ -1156,6 +1160,10 @@ dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *i
  */
 bool
 read_chunk_close(struct dfuse_inode_entry *ie);
+
+/* Drop cached chunk-read data overlapping [position, position + len). */
+void
+read_chunk_invalidate(struct dfuse_inode_entry *ie, off_t position, size_t len);
 
 /* Metadata caching functions. */
 
