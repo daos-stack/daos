@@ -1,0 +1,36 @@
+hosts:
+  test_servers: 3
+  test_clients: 2
+setup:
+  start_agents_once: false
+  start_servers_once: false
+timeout: 600
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      log_mask: INFO
+      storage: auto
+  system_ram_reserved: 2
+pool:
+  size: 90%
+container:
+  type: POSIX
+ior:
+  env_vars:
+    - D_LOG_MASK=INFO
+    - DD_MASK=all
+    - DD_SUBSYS=all
+  api: POSIX
+  client_processes:
+    np: 16
+  test_file: testFile
+  read_flags: "-v -C -k -e -r -R -G 27"
+  flags: "-v -k -e -w -r -R -G 27"
+  transfer_size: '1M'
+  block_size: '100M'
+  write_x: 2
+  read_x: 1
+dfuse:
+  disable_caching: true
