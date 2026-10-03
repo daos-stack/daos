@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 # find the base branch of the current branch
-# base branches can be master, release/2.4+, release/3+
+# base branches can be master, release/2.6+, release/3+
 # or optionally branches passed into $1
 set -eu -o pipefail
 
@@ -28,7 +28,7 @@ for origin in $(git remote); do
     while IFS= read -r base; do
         builtin_bases+=("$base")
     done < <(echo "master"
-             git branch -r | sed -ne "/^  $origin\\/release\\/\(2.[4-9]\|[3-9]\)/s/^  $origin\\///p")
+             git branch -r | sed -ne "/^  $origin\\/release\\/\(2.[6-9]\|[3-9]\)/s/^  $origin\\///p")
     export ORIGIN="${origin}"
     export find_branches
     readarray -t branches <<< "$(find_branches)"
