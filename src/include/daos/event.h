@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,6 +85,16 @@ void
 daos_event_complete(daos_event_t *ev, int rc);
 
 /**
+ * Mark the event completed with validation check firstly.
+ *
+ * \param ev   [IN]	event to complete.
+ * \param rc   [IN]	operation return code.
+ * \param data [IN]	argument for completion callback verification.
+ */
+void
+daos_event_complete_with_check(daos_event_t *ev, int rc, void *data);
+
+/**
  * Mark the event launched, i.e. move this event to running list.
  *
  * \param ev		[IN]	event to launch.
@@ -120,6 +131,8 @@ daos_event_destroy(struct daos_event *ev, bool force);
 int
 daos_event_destroy_children(struct daos_event *ev, bool force);
 
+unsigned int
+daos_event_bump_gen(daos_event_t *ev);
 
 /**
  * Wait for completion of the private event
