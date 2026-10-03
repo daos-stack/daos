@@ -12,7 +12,6 @@ server_config:
 pool:
   scm_size: 50000000000
   nvme_size: 500000000000
-  properties: rd_fac:0
 container:
   type: POSIX
 ior:
