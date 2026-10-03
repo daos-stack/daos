@@ -769,6 +769,12 @@ umem_id2off(const struct umem_instance *umm, PMEMoid oid)
 static int
 pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 {
+	PMEMoid oid  = umem_off2id(umm, umoff);
+	size_t  size = pmemobj_alloc_usable_size(oid);
+	void   *ptr  = pmemobj_direct(oid);
+	D_ERROR("Freeing memory at %p of size %zu\n", ptr, size);
+	memset(ptr, 0xd, size);
+
 	/*
 	 * This free call could be on error cleanup code path where
 	 * the transaction is already aborted due to previous failed

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -127,6 +128,7 @@ evt_off2node(struct evt_context *tcx, umem_off_t offset)
 	struct evt_node *node;
 
 	node = evt_off2ptr(tcx, offset);
+	D_ERROR("Accessing evt_node at %p\n", node);
 	D_ASSERT(node->tn_magic == EVT_NODE_MAGIC);
 
 	return node;

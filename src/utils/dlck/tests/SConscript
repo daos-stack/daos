@@ -21,10 +21,10 @@ def build_dlck_test_helper(henv):
         '../dlck_engine.c',
         '../dlck_pool.c',
         '../dlck_tls.c',
+        '../dlck_sched.c',
         '../../../dtx/tests/srv_mock.c',
         '../../../dtx/tests/ult_mock.c',
         '../../../dtx/tests/pl_map_mock.c',
-        '../../../dtx/tests/sched_mock.c',
         '../../../engine/util.c',
         '../../../mgmt/mgmt_common.c',
     ]
