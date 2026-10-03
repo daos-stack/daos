@@ -1,5 +1,6 @@
 """
   (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,7 +35,7 @@ class EcodSpaceUsage(IorTestBase):
         :avocado: tags=ec,ior,pool,query_targets
         :avocado: tags=EcodSpaceUsage,test_ec_space_balanced_ec_4p1gx
         """
-        self._run_test(ior_namespace='/run/ior_ec_4p1gx/*')
+        self.__run_test(ior_namespace='/run/ior_ec_4p1gx/*')
 
     def test_ec_space_balanced_ec_4p2gx(self):
         """Jira ID: DAOS-10912.
@@ -46,9 +47,9 @@ class EcodSpaceUsage(IorTestBase):
         :avocado: tags=ec,ior,pool,query_targets
         :avocado: tags=EcodSpaceUsage,test_ec_space_balanced_ec_4p2gx
         """
-        self._run_test(ior_namespace='/run/ior_ec_4p2gx/*')
+        self.__run_test(ior_namespace='/run/ior_ec_4p2gx/*')
 
-    def _run_test(self, ior_namespace):
+    def __run_test(self, ior_namespace):
         """Run the test.
 
         Args:

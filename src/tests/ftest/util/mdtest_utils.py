@@ -255,7 +255,6 @@ class Mdtest:
         self.manager.assign_hosts(hosts, path, slots)
         self.manager.job = MdtestCommand(test.test_env.log_dir, namespace)
         self.manager.job.get_params(test)
-        self.manager.output_check = "both"
         self.timeout = test.params.get("timeout", namespace, None)
         self.label_generator = test.label_generator
         self.test_id = test.test_id
