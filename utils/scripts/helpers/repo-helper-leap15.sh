@@ -17,6 +17,7 @@ set -uex
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
 : "${DAOS_LAB_CA_FILE_URL:=}"
+: "${ZSCALER_CA_FILE:=}"
 : "${REPOSITORY_NAME:=artifactory}"
 
 # shellcheck disable=SC2120
@@ -81,6 +82,17 @@ install_optional_ca() {
         update-ca-certificates
     fi
 }
+
+install_zscaler_ca() {
+    ca_storage="/etc/pki/trust/anchors/"
+    if [ -n "$ZSCALER_CA_FILE" ]; then
+        echo "$ZSCALER_CA_FILE" >> "${ca_storage}ZscalerRootCertificate-2048-SHA256.crt"
+        update-ca-certificates
+    fi
+}
+
+# Install Zscaler CA if provided
+install_zscaler_ca
 
 # Use local repo server if present
 # if a local repo server is present and the distro repo server can not

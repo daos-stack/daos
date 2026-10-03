@@ -67,6 +67,7 @@ dnf --nodocs install ${dnf_install_args} \
     patch \
     patchelf \
     pciutils-devel \
+    procps \
     python${PYTHON_VERSION//./}-devel \
     rpm-build \
     scons \

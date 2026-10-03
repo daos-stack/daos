@@ -13,7 +13,8 @@ set -uex
 
 : "${REPO_FILE_URL:=}"
 : "${HTTPS_PROXY:=}"
-: "${DAOS_LAB_CA_FILE_UR:=}"
+: "${DAOS_LAB_CA_FILE_URL:=}"
+: "${ZSCALER_CA_FILE:=}"
 : "${REPOSITORY_NAME:=artifactory}"
 : "${BASE_DISTRO:=24.04}"
 
@@ -58,6 +59,14 @@ install_optional_ca() {
     fi
 }
 
+install_zscaler_ca() {
+    ca_storage="/etc/pki/ca-trust/source/anchors/"
+    if [ -n "$ZSCALER_CA_FILE" ]; then
+        echo "$ZSCALER_CA_FILE" >> "${ca_storage}ZscalerRootCertificate-2048-SHA256.crt"
+        update-ca-trust
+    fi
+}
+
 echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
 echo "APT::Install-Recommends \"false\";" > /etc/apt/apt.conf.d/no-recommends
 if [ -n "$HTTPS_PROXY" ];then
@@ -71,6 +80,9 @@ if [ -n "$HTTPS_PROXY" ];then
         /etc/apt/apt.conf.d/local_proxy
     fi
 fi
+
+# Install Zscaler CA if provided
+install_zscaler_ca
 
 # These need to be installed here until we can figure out how to
 # get them installed from a local repository.
