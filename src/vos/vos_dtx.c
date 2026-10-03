@@ -1451,16 +1451,14 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 
 	if (intent == DAOS_INTENT_MIGRATION) {
 		/*
-		 * A non-ready DTX inside the migration snapshot may still be modifying the
-		 * rebuilding shard. Restart rebuild with a new stable epoch rather than
-		 * migrating a view that can change after this check.
+		 * Resync is best-effort. Warn about unresolved DTXs inside the migration
+		 * boundary, but keep their uncommitted records out of migration.
 		 */
 		if (dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch) {
 			D_WARN("Non-ready DTX " DF_DTI " at " DF_X64 " (version %u)"
-			       " conflicts with migration boundary " DF_X64 " (version %u)\n",
+			       " skipped at migration boundary " DF_X64 " (version %u)\n",
 			       DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae), dth->dth_epoch,
 			       dth->dth_ver);
-			return -DER_VOS_PARTIAL_UPDATE;
 		}
 
 		return ALB_UNAVAILABLE;
@@ -3286,6 +3284,27 @@ vos_dtx_aggregate(daos_handle_t coh, const uint64_t *cmt_time)
 		rc = 0;
 
 	return rc;
+}
+
+bool
+vos_dtx_has_inprogress(daos_handle_t coh, uint32_t ver)
+{
+	struct vos_container   *cont = vos_hdl2cont(coh);
+	struct vos_dtx_act_ent *dae;
+
+	D_ASSERT(cont != NULL);
+
+	d_list_for_each_entry(dae, &cont->vc_dtx_act_list, dae_link) {
+		if (DAE_VER(dae) >= ver ||
+		    DAE_FLAGS(dae) & (DTE_CORRUPTED | DTE_ORPHAN | DTE_PARTIAL_COMMITTED) ||
+		    vos_dae_is_commit(dae) || vos_dae_is_abort(dae) || dae->dae_committable)
+			continue;
+
+		if (dae->dae_dth != NULL || dae->dae_preparing)
+			return true;
+	}
+
+	return false;
 }
 
 void

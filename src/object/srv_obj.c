@@ -2469,10 +2469,9 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid, bool for_modify)
 }
 
 /*
- * The IO targets some rebuilding shard(s). The rebuild scan uses the rebuild stable epoch as
- * its snapshot boundary, so such an IO has to be stamped with an epoch that is strictly newer
- * than the stable epoch, otherwise it may be missed by the rebuild and lost on the rebuilding
- * target. Ask the client to retry (with a newer epoch) until that is the case.
+ * Reject rebuilding modifications older than the local DTX resync-start watermark.
+ * Late unprepared writes must retry with a newer epoch, even before rebuild starts.
+ * During rebuild, also require an epoch strictly newer than its stable boundary.
  *
  * NOTE: It must be called after the epoch has been fixed, and after the resend (if any) has been
  *	 resolved, otherwise the checked epoch is not the one that will be used for the write.
@@ -2484,7 +2483,16 @@ obj_rebuilding_io_check(struct ds_cont_child *child, daos_epoch_t epoch, uint32_
 	daos_epoch_t    stable_epoch;
 	uint32_t        version;
 
-	if (!(flags & ORF_REBUILDING_IO) || !atomic_load(&pool->sp_rebuilding))
+	if (!(flags & ORF_REBUILDING_IO))
+		return 0;
+
+	if (epoch < child->sc_pool->spc_dtx_resync_epoch) {
+		D_DEBUG(DB_IO, DF_UUID " retry rebuilding IO epoch " DF_X64 ", resync " DF_X64 "\n",
+			DP_UUID(child->sc_pool_uuid), epoch, child->sc_pool->spc_dtx_resync_epoch);
+		return -DER_UPDATE_AGAIN;
+	}
+
+	if (!atomic_load(&pool->sp_rebuilding))
 		return 0;
 
 	ds_rebuild_running_query(child->sc_pool_uuid, RB_OP_REBUILD, &version, &stable_epoch, NULL);
