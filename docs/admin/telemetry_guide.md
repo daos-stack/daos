@@ -75,7 +75,7 @@ Pool space info:
 #sudo dmg system query -v
 ```
 ```
-Rank UUID                                 Control Address      Fault Domain                          State  Reason
+Rank UUID                                 Fabric Address       Fault Domain                          State  Reason
 ---- ----                                 ---------------      ------------                          -----  ------
 0    6c481fea-b820-4b50-9845-6a5a04b4cfcf 10.214.213.41:10001  /brd-221.daos.hpc.amslabs.hpecorp.net Joined
 1    43865b12-86d3-4107-afe8-3921f19bc9ff 10.214.213.41:10001  /brd-221.daos.hpc.amslabs.hpecorp.net Joined

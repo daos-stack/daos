@@ -356,7 +356,7 @@ bring-up DAOS servers and clients.
 
 	# Verify stopped server been evicted
 	$ dmg system query -v
-	Rank UUID Control Address Fault Domain State Reason
+	Rank UUID Fabric Address Fault Domain State Reason
 	---- --------------- ------------ ----- ------
 	0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 boro-8.boro.example.com Joined
 	1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 boro-35.boro.example.com Joined
@@ -365,7 +365,7 @@ bring-up DAOS servers and clients.
 
 	# Restart, after evicted server restarted, verify the server joined
 	$ /usr/bin/dmg system query -v
-	Rank UUID Control Address Fault Domain State Reason
+	Rank UUID Fabric Address Fault Domain State Reason
 	---- --------------- ------------ ----- ------
 	0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 /boro-8.boro.example.com Joined
 	1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 /boro-35.boro.example.com Joined
@@ -413,7 +413,7 @@ bring-up DAOS servers and clients.
 
 	# Verify stopped server been evicted
 	$ dmg system query -v
-	Rank UUID Control Address Fault Domain State Reason
+	Rank UUID Fabric Address Fault Domain State Reason
 	 ---- --------------- ------------ ----- ------
 	 0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 boro-8.boro.example.com Joined
 	 1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 boro-35.boro.example.com Joined
@@ -422,7 +422,7 @@ bring-up DAOS servers and clients.
 
 	 # Restart, after evicted server restarted, verify the server joined
 	$ /usr/bin/dmg system query -v
-	 Rank UUID Control Address Fault Domain State Reason
+	 Rank UUID Fabric Address Fault Domain State Reason
 	 ---- --------------- ------------ ----- ------
 	 0 2bf0e083-33d6-4ce3-83c4-c898c2a7ddbd 10.7.1.8:10001 /boro-8.boro.example.com Joined
 	 1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 /boro-35.boro.example.com Joined

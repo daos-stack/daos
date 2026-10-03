@@ -523,7 +523,7 @@ Rank  State
 [0,2] Joined
 
 $ dmg system query -v -r 1,3
-Rank UUID                                 Control Address Fault Domain State   Reason
+Rank UUID                                 Fabric Address  Fault Domain State   Reason
 ---- ----                                 --------------- ------------ -----   ------
 1    1ad01ebe-08f2-4b20-aa39-80faf14bc373 10.7.1.75:10001 /boro-75     Errored DAOS engine 0 exited unexpectedly: rpc error: code = Unknown desc = rank 1 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"
 3    15e53aa7-fc0c-42eb-93de-8b485d96c63e 10.7.1.75:10001 /boro-75     Errored DAOS engine 1 exited unexpectedly: rpc error: code = Unknown desc = rank 3 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"

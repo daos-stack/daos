@@ -448,15 +448,31 @@ func (srv *server) setupGrpc() error {
 		return err
 	}
 
+	// Address family is a property of this system's fabric, so it must travel
+	// to attaching clients alongside the provider. Surface the operator's
+	// addr_format choice as a D_ADDR_FORMAT entry in the per-provider client
+	// hint env, which the client applies before crt_init (see
+	// dc_mgmt_net_cfg_init). A client/agent attached to several systems gets
+	// each system's family from that system's own hint. Empty addr_format
+	// leaves the hint untouched, preserving the historical default.
+	addrFormats := srv.cfg.Fabric.GetAddrFormats()
+
 	clientNetHints := make([]*mgmtpb.ClientNetHint, 0, len(providers))
 	for i, p := range providers {
+		envVars := srv.cfg.ClientEnvVars
+		if i < len(addrFormats) && addrFormats[i] != "" {
+			// Copy rather than append in place to avoid aliasing the shared
+			// ClientEnvVars slice across providers.
+			envVars = append(append([]string{}, envVars...), "D_ADDR_FORMAT="+addrFormats[i])
+		}
+
 		clientNetHints = append(clientNetHints, &mgmtpb.ClientNetHint{
 			Provider:    p,
 			CrtTimeout:  srv.cfg.Fabric.CrtTimeout,
 			NetDevClass: uint32(srv.netDevClass[i]),
 			SrvSrxSet:   srxSetting,
 			ProviderIdx: uint32(i),
-			EnvVars:     srv.cfg.ClientEnvVars,
+			EnvVars:     envVars,
 		})
 	}
 	srv.mgmtSvc.clientNetworkHint = clientNetHints
