@@ -874,6 +874,172 @@ class IORequest():
             raise DaosApiError("Array punch returned non-zero. RC: {0}"
                                .format(ret))
 
+    def insert_recx(self, dkey, akey, rec_size, rx_idx, rx_nr, data,
+                    txn=daos_cref.DAOS_TX_NONE):
+        """Update one record extent from a single contiguous buffer.
+
+        insert_array describes an extent with one scatter gather entry per record, which
+        caps the extent at the scatter gather list limit. This uses a single entry for
+        the whole extent, so a byte granular extent can span an erasure coded stripe.
+
+        dkey      --1st level key for the array value
+        akey      --2nd level key for the array value
+        rec_size  --size in bytes of a single record
+        rx_idx    --index of the first record
+        rx_nr     --how many records
+        data      --buffer holding rx_nr * rec_size bytes
+        txn       --which transaction to write in.
+                    Default is independent transaction (DAOS_TX_NONE)
+        """
+        buf_len = rx_nr * rec_size
+
+        extent = daos_cref.Extent()
+        extent.rx_idx = rx_idx
+        extent.rx_nr = rx_nr
+
+        self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
+        self.iod.iod_name.iov_buf_len = ctypes.sizeof(akey)
+        self.iod.iod_name.iov_len = ctypes.sizeof(akey)
+        self.iod.iod_type = 2
+        self.iod.iod_size = rec_size
+        self.iod.iod_flags = 0
+        self.iod.iod_nr = 1
+        self.iod.iod_recxs = ctypes.pointer(extent)
+
+        sgl_iov = daos_cref.IOV()
+        sgl_iov.iov_len = buf_len
+        sgl_iov.iov_buf_len = buf_len
+        sgl_iov.iov_buf = ctypes.cast(data, ctypes.c_void_p)
+        self.sgl.sg_iovs = ctypes.pointer(sgl_iov)
+        self.sgl.sg_nr = 1
+        self.sgl.sg_nr_out = 0
+
+        dkey_iov = daos_cref.IOV()
+        dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
+        dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
+        dkey_iov.iov_len = ctypes.sizeof(dkey)
+
+        func = self.context.get_function('update-obj')
+
+        ret = func(self.obj.obj_handle, txn, 0, ctypes.byref(dkey_iov),
+                   1, ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
+        if ret != 0:
+            raise DaosApiError("Recx update returned non-zero. RC: {0}"
+                               .format(ret))
+
+    def fetch_recx(self, dkey, akey, rec_size, rx_idx, rx_nr,
+                   txn=daos_cref.DAOS_TX_NONE):
+        """Fetch one record extent into a single contiguous buffer.
+
+        dkey      --1st level key for the array value
+        akey      --2nd level key for the array value
+        rec_size  --size in bytes of a single record
+        rx_idx    --index of the first record
+        rx_nr     --how many records
+        txn       --which transaction to read from.
+                    Default is independent transaction (DAOS_TX_NONE)
+
+        Returns:
+            bytes: rx_nr * rec_size bytes. The fetch leaves holes untouched, and the
+                buffer starts zeroed, so a hole reads back as zeros.
+
+        """
+        data, _ = self._fetch_recx(dkey, akey, rec_size, rx_idx, rx_nr, 0, txn)
+        return data
+
+    def fetch_recx_map(self, dkey, akey, rec_size, rx_idx, rx_nr, max_extents=64,
+                       txn=daos_cref.DAOS_TX_NONE):
+        """Fetch one record extent and the io map describing what really holds data.
+
+        A hole and a range someone wrote zeros over read back the same, so the io map
+        is the only way to tell them apart.
+
+        dkey        --1st level key for the array value
+        akey        --2nd level key for the array value
+        rec_size    --size in bytes of a single record
+        rx_idx      --index of the first record
+        rx_nr       --how many records
+        max_extents --how many extents the io map can hold. Raises if the server has
+                      more to report, since a truncated map would silently under
+                      report what is there
+        txn         --which transaction to read from.
+                      Default is independent transaction (DAOS_TX_NONE)
+
+        Returns:
+            tuple: (bytes, extents), where extents is a list of (rx_idx, rx_nr)
+                covering only the records that really hold data.
+
+        """
+        return self._fetch_recx(dkey, akey, rec_size, rx_idx, rx_nr, max_extents, txn)
+
+    def _fetch_recx(self, dkey, akey, rec_size, rx_idx, rx_nr, max_extents, txn):
+        """Fetch one record extent, optionally asking for the io map.
+
+        See fetch_recx and fetch_recx_map.
+
+        Returns:
+            tuple: (bytes, extents), extents is None when max_extents is 0.
+
+        """
+        buf_len = rx_nr * rec_size
+        buf = ctypes.create_string_buffer(buf_len)
+
+        extent = daos_cref.Extent()
+        extent.rx_idx = rx_idx
+        extent.rx_nr = rx_nr
+
+        self.iod.iod_name.iov_buf = ctypes.cast(akey, ctypes.c_void_p)
+        self.iod.iod_name.iov_buf_len = ctypes.sizeof(akey)
+        self.iod.iod_name.iov_len = ctypes.sizeof(akey)
+        self.iod.iod_type = 2
+        self.iod.iod_size = rec_size
+        self.iod.iod_flags = 0
+        self.iod.iod_nr = 1
+        self.iod.iod_recxs = ctypes.pointer(extent)
+
+        sgl_iov = daos_cref.IOV()
+        sgl_iov.iov_len = buf_len
+        sgl_iov.iov_buf_len = buf_len
+        sgl_iov.iov_buf = ctypes.cast(buf, ctypes.c_void_p)
+        self.sgl.sg_iovs = ctypes.pointer(sgl_iov)
+        self.sgl.sg_nr = 1
+        self.sgl.sg_nr_out = 0
+
+        dkey_iov = daos_cref.IOV()
+        dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
+        dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
+        dkey_iov.iov_len = ctypes.sizeof(dkey)
+
+        iom_ptr = None
+        iom = None
+        if max_extents:
+            iom = daos_cref.DaosIOMap()
+            iom_recxs = (daos_cref.Extent * max_extents)()
+            iom.iom_flags = daos_cref.DAOS_IOMF_DETAIL
+            iom.iom_nr = max_extents
+            iom.iom_recxs = ctypes.cast(iom_recxs, ctypes.POINTER(daos_cref.Extent))
+            iom_ptr = ctypes.byref(iom)
+
+        func = self.context.get_function('fetch-obj')
+
+        ret = func(self.obj.obj_handle, txn, 0, ctypes.byref(dkey_iov), 1,
+                   ctypes.byref(self.iod), ctypes.byref(self.sgl), iom_ptr, None)
+        if ret != 0:
+            raise DaosApiError("Recx fetch returned non-zero. RC: {0}"
+                               .format(ret))
+
+        data = ctypes.string_at(buf, buf_len)
+        if iom is None:
+            return data, None
+
+        if iom.iom_nr_out > iom.iom_nr:
+            raise DaosApiError(
+                "Io map holds {0} extents, need room for {1}".format(
+                    iom.iom_nr, iom.iom_nr_out))
+
+        return data, [(iom.iom_recxs[i].rx_idx, iom.iom_recxs[i].rx_nr)
+                      for i in range(iom.iom_nr_out)]
+
     def fetch_array(self, dkey, akey, rec_count, rec_size,
                     txn=daos_cref.DAOS_TX_NONE):
         """Retrieve an array data from a dkey/akey pair.

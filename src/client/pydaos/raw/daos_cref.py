@@ -209,6 +209,22 @@ class DaosIODescriptor(ctypes.Structure):
                 ("iod_recxs", ctypes.POINTER(Extent))]
 
 
+class DaosIOMap(ctypes.Structure):
+    """Represents struct: daos_iom_t"""
+    _fields_ = [("iom_type", ctypes.c_int),  # enum
+                ("iom_nr", ctypes.c_uint32),
+                ("iom_nr_out", ctypes.c_uint32),
+                ("iom_flags", ctypes.c_uint32),
+                ("iom_size", ctypes.c_uint64),
+                ("iom_recx_lo", Extent),
+                ("iom_recx_hi", Extent),
+                ("iom_recxs", ctypes.POINTER(Extent))]
+
+
+# daos_iom_t iom_flags, ask for the full list of extents rather than just lo/hi
+DAOS_IOMF_DETAIL = 0x1
+
+
 class Anchor(ctypes.Structure):
     """ Class to represent a C daos_anchor_t struct. """
     _fields_ = [('da_type', ctypes.c_uint16),
