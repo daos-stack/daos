@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -572,6 +572,82 @@ func StorageNvmeAddDevice(ctx context.Context, rpcClient UnaryInvoker, req *Nvme
 	}
 
 	resp := new(NvmeAddDeviceResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := resp.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return resp, nil
+}
+
+// RemoveSuperblockReq contains the parameters for the RemoveSuperblock RPC.
+type RemoveSuperblockReq struct {
+	unaryRequest
+	EngineIndex uint32 `json:"engine_index"`
+}
+
+// RemoveSuperblockResp contains the response from a RemoveSuperblock request.
+type RemoveSuperblockResp struct {
+	HostErrorsResp
+}
+
+// RemoveSuperblock removes a superblock from an engine on the specified host(s).
+func RemoveSuperblock(ctx context.Context, rpcClient UnaryInvoker, req *RemoveSuperblockReq) (*RemoveSuperblockResp, error) {
+	pbReq := new(ctlpb.RemoveSuperblockReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).RemoveSuperblock(ctx, pbReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(RemoveSuperblockResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := resp.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return resp, nil
+}
+
+// RemoveSuperblockReq contains the parameters for the RemoveSuperblock RPC.
+type RemoveSuperblockReq struct {
+	unaryRequest
+	EngineIndex uint32 `json:"engine_index"`
+}
+
+// RemoveSuperblockResp contains the response from a RemoveSuperblock request.
+type RemoveSuperblockResp struct {
+	HostErrorsResp
+}
+
+// RemoveSuperblock removes a superblock from an engine on the specified host(s).
+func RemoveSuperblock(ctx context.Context, rpcClient UnaryInvoker, req *RemoveSuperblockReq) (*RemoveSuperblockResp, error) {
+	pbReq := new(ctlpb.RemoveSuperblockReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).RemoveSuperblock(ctx, pbReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(RemoveSuperblockResp)
 	for _, hostResp := range ur.Responses {
 		if hostResp.Error != nil {
 			if err := resp.addHostError(hostResp.Addr, hostResp.Error); err != nil {
