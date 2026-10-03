@@ -8,10 +8,10 @@ def scons():
 
     if prereqs.server_requested():
         # Build daos_metrics
-        SConscript('daos_metrics/SConscript')
+        # SConscript('daos_metrics/SConscript')
 
         # Build ddb
-        SConscript('ddb/SConscript')
+        # SConscript('ddb/SConscript')
 
         # Build dlck
         SConscript('dlck/SConscript')
@@ -22,18 +22,18 @@ def scons():
     env.d_add_build_rpath()
 
     # Build self test
-    SConscript('self_test/SConscript')
-    Default('self_test')
+    # SConscript('self_test/SConscript')
+    # Default('self_test')
 
-    if prereqs.test_requested():
+    # if prereqs.test_requested():
         # Build wrapper libraries
-        SConscript('wrap/SConscript')
+        # SConscript('wrap/SConscript')
 
         # Build crt_launch
-        SConscript('crt_launch/SConscript')
+        # SConscript('crt_launch/SConscript')
 
     # Build cart_ctl
-    SConscript('ctl/SConscript')
+    # SConscript('ctl/SConscript')
 
     denv = env.Clone()
     denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])

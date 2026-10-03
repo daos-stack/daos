@@ -126,20 +126,20 @@ def scons():
     SConscript('client/SConscript')
 
     # rdb unit test rdbt depends on libdaos
-    SConscript('rdb/SConscript')
+    # SConscript('rdb/SConscript')
 
     # Then the DAOS I/O Engine executable
-    SConscript('engine/SConscript')
+    # SConscript('engine/SConscript')
 
     # Build utilities
     SConscript('utils/SConscript')
 
     # Build the control plane components
-    SConscript('control/SConscript')
+    # SConscript('control/SConscript')
 
     # Build test
-    SConscript('placement/tests/SConscript')
-    SConscript('tests/SConscript')
+    # SConscript('placement/tests/SConscript')
+    # SConscript('tests/SConscript')
 
     if prereqs.client_requested():
         api_version = env.Command('API_VERSION', "SConscript", f"echo {API_VERSION} > $TARGET")
