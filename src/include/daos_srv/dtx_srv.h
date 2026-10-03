@@ -426,6 +426,11 @@ dtx_is_real_handle(const struct dtx_handle *dth)
 	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid) && !dth->dth_local;
 }
 
+enum dtx_resync_flags {
+	/* Skip the live-handle wait and its deadline during container-open resync. */
+	DTX_RESYNC_NOWAIT = (1 << 0),
+};
+
 struct dtx_scan_args {
 	uuid_t		pool_uuid;
 	uint32_t	version;
@@ -434,7 +439,8 @@ struct dtx_scan_args {
 
 /* clang-format off */
 int dtx_cleanup_orphan(uuid_t po_uuid, uint32_t pm_ver);
-int dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block);
+int dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block,
+	      uint32_t flags);
 void dtx_resync_ult(void *arg);
 /* clang-format on */
 

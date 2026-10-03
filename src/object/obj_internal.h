@@ -454,6 +454,8 @@ struct obj_auxi_tgt_list {
 	uint32_t	*tl_tgts;
 	/** number of ranks & tgts */
 	uint32_t	tl_nr;
+	/** Last replica error, preserved across layout retries. */
+	int              tl_error;
 };
 
 struct coll_query_args {
