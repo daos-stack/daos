@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -131,6 +132,11 @@ obj_latency_tm_init(uint32_t opc, int tgt_id, struct d_tm_node_t **tm, char *op,
 		if (rc)
 			D_WARN("Failed to create per-I/O size latency "
 			       "sensor: " DF_RC "\n",
+			       DP_RC(rc));
+
+		rc = d_tm_init_histogram(tm[i], path, 18, 256, 2, "ns");
+		if (rc)
+			D_WARN("Failed to create per-I/O size latency histogram: " DF_RC "\n",
 			       DP_RC(rc));
 		D_FREE(path);
 
