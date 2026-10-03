@@ -88,13 +88,35 @@ btr_ops_t dbtree_coll_ops = {
 	.to_rec_update	= coll_rec_update,
 };
 
-bool
-obj_need_coll(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
+int
+obj_ptr2shards(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
+	       uint32_t *grp_nr)
+{
+	int rc = 0;
+
+	/* The layout can be refreshed concurrently, so read it under cob_lock. */
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (obj->cob_version != map_ver || obj->cob_shards == NULL) {
+		rc = -DER_STALE;
+	} else {
+		*start_shard = 0;
+		*shard_nr    = obj->cob_shards_nr;
+		*grp_nr      = obj->cob_grp_nr;
+	}
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
+	return rc;
+}
+
+int
+obj_need_coll(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
 	      uint32_t *grp_nr)
 {
-	bool	coll = false;
+	int rc;
 
-	obj_ptr2shards(obj, start_shard, shard_nr, grp_nr);
+	rc = obj_ptr2shards(obj, map_ver, start_shard, shard_nr, grp_nr);
+	if (rc != 0)
+		return rc;
 
 	/*
 	 * We support object collective operation since release-2.6 (version 10).
@@ -111,20 +133,20 @@ obj_need_coll(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
 	 */
 
 	if (dc_obj_proto_version < 10 || obj_coll_thd == 0)
-		return false;
+		return 0;
 
 	if (*shard_nr > obj_coll_thd)
-		 return true;
+		return 1;
 
 	if (*shard_nr <= 4)
-		return false;
+		return 0;
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
 	if (*shard_nr >= (obj->cob_max_rank - obj->cob_min_rank + 1) * 2)
-		coll = true;
+		rc = 1;
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
-	return coll;
+	return rc;
 }
 
 int
