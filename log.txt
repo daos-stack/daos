@@ -1,0 +1,131 @@
+INFO 2026/10/03 00:32:43.658563 clx-121 DAOS[1653580/1653580/0] fi   src/gurt/fault_inject.c:542 d_fault_inject_init() No config file, fault injection is OFF.
+INFO 2026/10/03 00:32:43.662726 clx-121 DAOS[1653580/1653580/0] bio  src/bio/bio_xstream.c:306 bio_nvme_init_ext() RDMA to SCM is disabled
+INFO 2026/10/03 00:32:43.687285 clx-121 DAOS[1653580/1653580/0] bio  src/bio/bio_xstream.c:314 bio_nvme_init_ext() SPDK subsystem fini timeout is 25000 ms
+INFO 2026/10/03 00:32:43.687296 clx-121 DAOS[1653580/1653580/0] bio  src/bio/bio_xstream.c:319 bio_nvme_init_ext() SPDK batch blob unmap call count is 32
+INFO 2026/10/03 00:32:43.719861 clx-121 DAOS[1653580/1653580/0] bio  src/bio/bio_xstream.c:322 bio_nvme_init_ext() Max async data size is set to 32768 bytes
+INFO 2026/10/03 00:32:43.719868 clx-121 DAOS[1653580/1653580/0] bio  src/bio/bio_xstream.c:332 bio_nvme_init_ext() SPDK IO timeout set to 120000000 us
+INFO 2026/10/03 00:32:43.719873 clx-121 DAOS[1653580/1653580/0] bio  src/bio/bio_xstream.c:363 bio_nvme_init_ext() Set per-xstream DMA buffer upper bound to 160 8MB chunks, prealloc 80 chunks
+INFO 2026/10/03 00:32:43.719884 clx-121 DAOS[1653580/1653580/0] bio  src/bio/bio_xstream.c:178 bio_spdk_env_init() SPDK log level: 0, DPDK log level: 4
+INFO 2026/10/03 00:32:43.891266 clx-121 DAOS[1653580/1653580/0] bio  src/bio/bio_xstream.c:223 bio_spdk_env_init() Initialized SPDK v26.01
+INFO 2026/10/03 00:32:43.910583 clx-121 DAOS[1653580/1653580/0] bio  src/bio/bio_xstream.c:417 bio_nvme_init_ext() MD on SSD is disabled, 1073741824 cluster size is used
+INFO 2026/10/03 00:32:43.910627 clx-121 DAOS[1653580/1653580/0] pmdk pmdk/src/core/log.c:92 core_log_lib_info() src version: 2.1.4
+INFO 2026/10/03 00:32:43.912372 clx-121 DAOS[1653580/1653580/0] pmdk pmdk/src/core/log.c:94 core_log_lib_info() compiled with support for shutdown state
+INFO 2026/10/03 00:32:43.912380 clx-121 DAOS[1653580/1653580/0] pmdk pmdk/src/core/log.c:97 core_log_lib_info() compiled with libndctl 63+
+INFO 2026/10/03 00:32:43.913896 clx-121 DAOS[1653580/1653580/0] vos  src/vos/vos_common.c:712 vos_mod_init() Set aggregate NVMe record threshold to 256 blocks (blk_sz:4096).
+INFO 2026/10/03 00:32:43.986471 clx-121 DAOS[1653580/1653580/0] vos  src/vos/vos_common.c:716 vos_mod_init() DKEY punch propagation is disabled
+INFO 2026/10/03 00:32:43.986480 clx-121 DAOS[1653580/1653580/0] vos  src/vos/vos_common.c:724 vos_mod_init() Keep old partial committed DTX record
+INFO 2026/10/03 00:32:43.986485 clx-121 DAOS[1653580/1653580/0] vos  src/vos/vos_common.c:734 vos_mod_init() Set DAOS VOS aggregation gap as 20 (second)
+WARN 2026/10/03 00:32:43.994743 clx-121 DAOS[1653580/1653580/0] vos  src/vos/vos_common.c:589 vos_tls_init() Failed to create LRU alloc size: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:43.994920 clx-121 DAOS[1653580/1653580/0] pmdk pmdk/src/common/set.c:2795 util_replica_check() Possible silent data corruption. The unsafe shutdown detection (SDS) is not supported in the pool: /dev/shm/daos/daos_sys/sys_db
+INFO 2026/10/03 00:32:44.011756 clx-121 DAOS[1653580/1653580/0] vos  src/vos/vos_space.c:79 vos_space_sys_init() Reserved SCM space for pool:00000000, sys:42595200, tot:134217728
+INFO 2026/10/03 00:32:44.011777 clx-121 DAOS[1653580/1653580/0] vos  src/vos/vos_space.c:82 vos_space_sys_init() Reserved NVMe space for pool:00000000, sys:0, tot:0
+WARN 2026/10/03 00:32:44.027824 clx-121 DAOS[1653580/1653591/0] vos  src/vos/vos_common.c:589 vos_tls_init() Failed to create LRU alloc size: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.027946 clx-121 DAOS[1653580/1653587/0] dtx  src/dtx/dtx_srv.c:41 dtx_tls_init() Failed to create DTX committable metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.028881 clx-121 DAOS[1653580/1653587/0] dtx  src/dtx/dtx_srv.c:49 dtx_tls_init() Failed to create DTX leader metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.028889 clx-121 DAOS[1653580/1653587/0] dtx  src/dtx/dtx_srv.c:56 dtx_tls_init() Failed to create DTX async commit latency metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.030058 clx-121 DAOS[1653580/1653587/0] dtx  src/dtx/dtx_srv.c:62 dtx_tls_init() Failed to create DTX chore retry metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.092654 clx-121 DAOS[1653580/1653587/0] vos  src/vos/vos_common.c:567 vos_tls_init() Failed to create committed cnt sensor: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.092695 clx-121 DAOS[1653580/1653587/0] vos  src/vos/vos_common.c:574 vos_tls_init() Failed to create invalid DTX cnt sensor: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.092702 clx-121 DAOS[1653580/1653587/0] vos  src/vos/vos_common.c:581 vos_tls_init() Failed to create vos obj cnt: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.092706 clx-121 DAOS[1653580/1653587/0] vos  src/vos/vos_common.c:589 vos_tls_init() Failed to create LRU alloc size: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.092738 clx-121 DAOS[1653580/1653587/0] bio  src/bio/bio_buffer.c:160 dma_metrics_init() Failed to create total_chunks telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.093632 clx-121 DAOS[1653580/1653587/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_io telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.093638 clx-121 DAOS[1653580/1653587/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_local telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.093643 clx-121 DAOS[1653580/1653587/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_rebuild telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.094503 clx-121 DAOS[1653580/1653587/0] bio  src/bio/bio_buffer.c:174 dma_metrics_init() Failed to create total_bulk_grps telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.094508 clx-121 DAOS[1653580/1653587/0] bio  src/bio/bio_buffer.c:179 dma_metrics_init() Failed to create active_requests telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.095331 clx-121 DAOS[1653580/1653587/0] bio  src/bio/bio_buffer.c:184 dma_metrics_init() Failed to create queued_requests telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.095337 clx-121 DAOS[1653580/1653587/0] bio  src/bio/bio_buffer.c:189 dma_metrics_init() Failed to create grab_errs telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.095931 clx-121 DAOS[1653580/1653587/0] bio  src/bio/bio_buffer.c:194 dma_metrics_init() Failed to create grab_retries telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.273992 clx-121 DAOS[1653580/1653588/0] dtx  src/dtx/dtx_srv.c:41 dtx_tls_init() Failed to create DTX committable metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.274027 clx-121 DAOS[1653580/1653588/0] dtx  src/dtx/dtx_srv.c:49 dtx_tls_init() Failed to create DTX leader metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.274033 clx-121 DAOS[1653580/1653588/0] dtx  src/dtx/dtx_srv.c:56 dtx_tls_init() Failed to create DTX async commit latency metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.274038 clx-121 DAOS[1653580/1653588/0] dtx  src/dtx/dtx_srv.c:62 dtx_tls_init() Failed to create DTX chore retry metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.335669 clx-121 DAOS[1653580/1653588/0] vos  src/vos/vos_common.c:567 vos_tls_init() Failed to create committed cnt sensor: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.335708 clx-121 DAOS[1653580/1653588/0] vos  src/vos/vos_common.c:574 vos_tls_init() Failed to create invalid DTX cnt sensor: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.335719 clx-121 DAOS[1653580/1653588/0] vos  src/vos/vos_common.c:581 vos_tls_init() Failed to create vos obj cnt: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.335723 clx-121 DAOS[1653580/1653588/0] vos  src/vos/vos_common.c:589 vos_tls_init() Failed to create LRU alloc size: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.335748 clx-121 DAOS[1653580/1653588/0] bio  src/bio/bio_buffer.c:160 dma_metrics_init() Failed to create total_chunks telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.363215 clx-121 DAOS[1653580/1653588/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_io telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.363221 clx-121 DAOS[1653580/1653588/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_local telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.363226 clx-121 DAOS[1653580/1653588/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_rebuild telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.363231 clx-121 DAOS[1653580/1653588/0] bio  src/bio/bio_buffer.c:174 dma_metrics_init() Failed to create total_bulk_grps telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.363241 clx-121 DAOS[1653580/1653588/0] bio  src/bio/bio_buffer.c:179 dma_metrics_init() Failed to create active_requests telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.363245 clx-121 DAOS[1653580/1653588/0] bio  src/bio/bio_buffer.c:184 dma_metrics_init() Failed to create queued_requests telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.364591 clx-121 DAOS[1653580/1653588/0] bio  src/bio/bio_buffer.c:189 dma_metrics_init() Failed to create grab_errs telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.364597 clx-121 DAOS[1653580/1653588/0] bio  src/bio/bio_buffer.c:194 dma_metrics_init() Failed to create grab_retries telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.520407 clx-121 DAOS[1653580/1653589/0] dtx  src/dtx/dtx_srv.c:41 dtx_tls_init() Failed to create DTX committable metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.520438 clx-121 DAOS[1653580/1653589/0] dtx  src/dtx/dtx_srv.c:49 dtx_tls_init() Failed to create DTX leader metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.520445 clx-121 DAOS[1653580/1653589/0] dtx  src/dtx/dtx_srv.c:56 dtx_tls_init() Failed to create DTX async commit latency metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.520452 clx-121 DAOS[1653580/1653589/0] dtx  src/dtx/dtx_srv.c:62 dtx_tls_init() Failed to create DTX chore retry metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.582173 clx-121 DAOS[1653580/1653589/0] vos  src/vos/vos_common.c:567 vos_tls_init() Failed to create committed cnt sensor: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.582214 clx-121 DAOS[1653580/1653589/0] vos  src/vos/vos_common.c:574 vos_tls_init() Failed to create invalid DTX cnt sensor: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.582221 clx-121 DAOS[1653580/1653589/0] vos  src/vos/vos_common.c:581 vos_tls_init() Failed to create vos obj cnt: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.582226 clx-121 DAOS[1653580/1653589/0] vos  src/vos/vos_common.c:589 vos_tls_init() Failed to create LRU alloc size: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.582256 clx-121 DAOS[1653580/1653589/0] bio  src/bio/bio_buffer.c:160 dma_metrics_init() Failed to create total_chunks telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.584227 clx-121 DAOS[1653580/1653589/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_io telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.585490 clx-121 DAOS[1653580/1653589/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_local telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.630066 clx-121 DAOS[1653580/1653589/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_rebuild telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.630073 clx-121 DAOS[1653580/1653589/0] bio  src/bio/bio_buffer.c:174 dma_metrics_init() Failed to create total_bulk_grps telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.630079 clx-121 DAOS[1653580/1653589/0] bio  src/bio/bio_buffer.c:179 dma_metrics_init() Failed to create active_requests telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.696833 clx-121 DAOS[1653580/1653589/0] bio  src/bio/bio_buffer.c:184 dma_metrics_init() Failed to create queued_requests telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.696839 clx-121 DAOS[1653580/1653589/0] bio  src/bio/bio_buffer.c:189 dma_metrics_init() Failed to create grab_errs telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.696844 clx-121 DAOS[1653580/1653589/0] bio  src/bio/bio_buffer.c:194 dma_metrics_init() Failed to create grab_retries telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.981097 clx-121 DAOS[1653580/1653590/0] dtx  src/dtx/dtx_srv.c:41 dtx_tls_init() Failed to create DTX committable metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.981127 clx-121 DAOS[1653580/1653590/0] dtx  src/dtx/dtx_srv.c:49 dtx_tls_init() Failed to create DTX leader metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.981134 clx-121 DAOS[1653580/1653590/0] dtx  src/dtx/dtx_srv.c:56 dtx_tls_init() Failed to create DTX async commit latency metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:44.981139 clx-121 DAOS[1653580/1653590/0] dtx  src/dtx/dtx_srv.c:62 dtx_tls_init() Failed to create DTX chore retry metric: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.041216 clx-121 DAOS[1653580/1653590/0] vos  src/vos/vos_common.c:567 vos_tls_init() Failed to create committed cnt sensor: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.041258 clx-121 DAOS[1653580/1653590/0] vos  src/vos/vos_common.c:574 vos_tls_init() Failed to create invalid DTX cnt sensor: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.041263 clx-121 DAOS[1653580/1653590/0] vos  src/vos/vos_common.c:581 vos_tls_init() Failed to create vos obj cnt: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.041268 clx-121 DAOS[1653580/1653590/0] vos  src/vos/vos_common.c:589 vos_tls_init() Failed to create LRU alloc size: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.041293 clx-121 DAOS[1653580/1653590/0] bio  src/bio/bio_buffer.c:160 dma_metrics_init() Failed to create total_chunks telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.041300 clx-121 DAOS[1653580/1653590/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_io telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.042821 clx-121 DAOS[1653580/1653590/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_local telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.042832 clx-121 DAOS[1653580/1653590/0] bio  src/bio/bio_buffer.c:167 dma_metrics_init() Failed to create used_chunks_rebuild telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.044091 clx-121 DAOS[1653580/1653590/0] bio  src/bio/bio_buffer.c:174 dma_metrics_init() Failed to create total_bulk_grps telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.044097 clx-121 DAOS[1653580/1653590/0] bio  src/bio/bio_buffer.c:179 dma_metrics_init() Failed to create active_requests telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.092338 clx-121 DAOS[1653580/1653590/0] bio  src/bio/bio_buffer.c:184 dma_metrics_init() Failed to create queued_requests telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.092344 clx-121 DAOS[1653580/1653590/0] bio  src/bio/bio_buffer.c:189 dma_metrics_init() Failed to create grab_errs telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.092349 clx-121 DAOS[1653580/1653590/0] bio  src/bio/bio_buffer.c:194 dma_metrics_init() Failed to create grab_retries telemetry: DER_UNINIT(-1015): 'Device or resource not initialized'
+WARN 2026/10/03 00:32:45.240006 clx-121 DAOS[1653580/1653587/0] pmdk pmdk/src/common/set.c:2795 util_replica_check() Possible silent data corruption. The unsafe shutdown detection (SDS) is not supported in the pool: /dev/shm/daos/89880283-6446-4da4-901d-a186e3880f4e/vos-0
+INFO 2026/10/03 00:32:45.260032 clx-121 DAOS[1653580/1653587/0] vos  src/vos/vos_space.c:63 vos_space_sys_init() Disable SCM space reserving for tiny pool:89880283 2*sys[85190400] >= tot[32002048]
+INFO 2026/10/03 00:32:45.260056 clx-121 DAOS[1653580/1653587/0] vos  src/vos/vos_space.c:79 vos_space_sys_init() Reserved SCM space for pool:89880283, sys:0, tot:32002048
+INFO 2026/10/03 00:32:45.260062 clx-121 DAOS[1653580/1653587/0] vos  src/vos/vos_space.c:82 vos_space_sys_init() Reserved NVMe space for pool:89880283, sys:0, tot:0
+ERR  2026/10/03 00:32:45.260222 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84eb3a4c0 of size 512
+ERR  2026/10/03 00:32:45.264931 clx-121 DAOS[1653580/1653587/0] vos  src/vos/evt_priv.h:131 evt_off2node() Accessing evt_node at 0x7fc84e601680
+ERR  2026/10/03 00:32:45.264955 clx-121 DAOS[1653580/1653587/0] vos  src/vos/evt_priv.h:131 evt_off2node() Accessing evt_node at 0x7fc84e601680
+ERR  2026/10/03 00:32:45.264962 clx-121 DAOS[1653580/1653587/0] vos  src/vos/evt_priv.h:131 evt_off2node() Accessing evt_node at 0x7fc84e601680
+Iterating objects in container cc728e49...
+Iterating over object: 564146955.628115952.0.0
+Iterating over dkey.
+Iterating over akey.
+ERR  2026/10/03 00:32:45.267875 clx-121 DAOS[1653580/1653587/0] vos  src/vos/evt_priv.h:131 evt_off2node() Accessing evt_node at 0x7fc84e601680
+ERR  2026/10/03 00:32:45.268666 clx-121 DAOS[1653580/1653587/0] vos  src/vos/evt_priv.h:131 evt_off2node() Accessing evt_node at 0x7fc84e601680
+ERR  2026/10/03 00:32:45.269458 clx-121 DAOS[1653580/1653587/0] vos  src/vos/evt_priv.h:131 evt_off2node() Accessing evt_node at 0x7fc84e601680
+Iterating over recx.
+Scrubber yields here.
+Punch...
+Aggregate...
+ERR  2026/10/03 00:32:45.270846 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84eb3a6c0 of size 512
+Collect garbage...
+ERR  2026/10/03 00:32:45.272123 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e601640 of size 64
+ERR  2026/10/03 00:32:45.272768 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e11c750 of size 16496
+ERR  2026/10/03 00:32:45.273626 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e580540 of size 128
+ERR  2026/10/03 00:32:45.273647 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e1207d0 of size 16496
+ERR  2026/10/03 00:32:45.274280 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e5c1580 of size 96
+ERR  2026/10/03 00:32:45.274887 clx-121 DAOS[1653580/1653587/0] vos  src/vos/evt_priv.h:131 evt_off2node() Accessing evt_node at 0x7fc84e601680
+ERR  2026/10/03 00:32:45.274895 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e000750 of size 112
+ERR  2026/10/03 00:32:45.275496 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e642040 of size 32
+ERR  2026/10/03 00:32:45.275501 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e601680 of size 64
+ERR  2026/10/03 00:32:45.275510 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e124850 of size 16496
+ERR  2026/10/03 00:32:45.276080 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e5c15e0 of size 96
+ERR  2026/10/03 00:32:45.276097 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e7b6450 of size 4144
+ERR  2026/10/03 00:32:45.276729 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e114650 of size 16496
+ERR  2026/10/03 00:32:45.276746 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e880d00 of size 352
+ERR  2026/10/03 00:32:45.277469 clx-121 DAOS[1653580/1653587/0] common src/common/mem.c:775 pmem_tx_free() Freeing memory at 0x7fc84e7fe4c0 of size 256
+Back to the scrubber.
+ERR  2026/10/03 00:32:45.278040 clx-121 DAOS[1653580/1653587/0] vos  src/vos/evt_priv.h:131 evt_off2node() Accessing evt_node at 0x7fc84e601680
+EMRG 2026/10/03 00:32:45.278046 clx-121 DAOS[1653580/1653587/0] vos  src/vos/evt_priv.h:132 evt_off2node() Assertion 'node->tn_magic == EVT_NODE_MAGIC' failed
+EMRG 2026/10/03 00:32:45.278046 clx-121 DAOS[1653580/1653587/0] vos  src/vos/evt_priv.h:132 evt_off2node() Assertion 'node->tn_magic == EVT_NODE_MAGIC' failed
+dlck_test_helper: src/vos/evt_priv.h:132: evt_off2node: Assertion `0' failed.
