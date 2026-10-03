@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,6 +45,9 @@ struct daos_event_callback {
 	d_list_t		evx_comp_list;
 };
 
+#define DAOS_EVENT_GEN_BITS (30)
+#define DAOS_EVENT_GEN_MAX  ((1 << DAOS_EVENT_GEN_BITS) - 1)
+
 struct daos_event_private {
 	daos_handle_t		evx_eqh;
 	d_list_t		evx_link;
@@ -52,10 +56,9 @@ struct daos_event_private {
 	unsigned int		evx_nchild;
 	unsigned int		evx_nchild_running;
 	unsigned int		evx_nchild_comp;
-	/** flag to indicate whether event is a barrier event */
-	unsigned int		is_barrier:1;
-	/** flag to indicate whether to convert DER to errno */
-	unsigned int		is_errno:1;
+
+	unsigned int evx_gen : DAOS_EVENT_GEN_BITS, /* Generation for validation when completion. */
+	    is_barrier : 1, /* Barrier event. */ is_errno : 1; /* Whether convert DER to errno. */
 
 	unsigned int		evx_flags;
 	ATOMIC daos_ev_status_t	evx_status;
