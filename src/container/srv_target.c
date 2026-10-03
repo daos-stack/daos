@@ -433,7 +433,24 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	if (!param->ap_vos_agg)
 		vos_cont_set_mod_bound(cont->sc_hdl, epoch_range.epr_hi);
 
-	if (dss_xstream_is_busy())
+	/*
+	 * Force-merge coalesces small contiguous records into large physical
+	 * extents to defragment the VOS tree. It's normally skipped for this
+	 * tail (non-snapshot) range under load to avoid relocation IO.
+	 *
+	 * For EC objects this coalescing is the ONLY way the data shards get
+	 * defragmented: the client can't recompute parity for partial-stripe
+	 * writes, so small writes land as many tiny records that only VOS
+	 * aggregation can merge. Unlike replicated objects, this range is
+	 * already capped to the EC aggregation epoch boundary (see
+	 * adjust_upper_bound()), so keeping force-merge enabled here can never
+	 * merge/relocate epochs whose parity isn't yet consistent - degraded
+	 * reads and rebuild always reconstruct identical bytes, i.e. no data
+	 * corruption. Retain it for the EC VOS-agg pass so partial-stripe EC
+	 * data doesn't stay fragmented (slow reads/rebuild) under sustained
+	 * load. Reversible via DAOS_EC_AGG_FORCE_MERGE=0.
+	 */
+	if (dss_xstream_is_busy() && !(param->ap_vos_agg && ec_agg_force_merge && !ec_agg_disabled))
 		flags &= ~VOS_AGG_FL_FORCE_MERGE;
 	rc = agg_cb(cont, &epoch_range, flags, param);
 out:
