@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -71,10 +72,25 @@ func (ei *EngineInstance) MountScm() error {
 }
 
 // NotifyStorageReady releases any blocks on awaitStorageReady().
-func (ei *EngineInstance) NotifyStorageReady(replaceRank bool) {
-	go func() {
-		ei.storageReady <- replaceRank
-	}()
+// If rank is nil, indicates standard join behavior.
+// If rank is non-nil and points to NilRank, indicates replace mode with auto-detection.
+// If rank is non-nil and points to a valid rank, indicates replace mode with explicit rank.
+//
+// Safe to call concurrently, and safe to call when no attempt is currently
+// awaiting storage: closing storageReady more than once for the same start
+// attempt would panic, so this is guarded by _storageReadyClosed (reset
+// alongside storageReady on each new attempt in startRunner()).
+func (ei *EngineInstance) NotifyStorageReady(rank *ranklist.Rank) {
+	ei.Lock()
+	defer ei.Unlock()
+
+	if ei._storageReadyClosed {
+		return
+	}
+	ei._storageReadyClosed = true
+
+	ei.replaceRank.Store(rank)
+	close(ei.storageReady)
 }
 
 func (ei *EngineInstance) clearFormat(ctx context.Context, stopEngineFn func(context.Context, *EngineInstance) error) error {
@@ -232,12 +248,17 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		ei.log.Infof("%s %s storage not ready: %s", build.DataPlaneName, msgIdx, ctx.Err())
-	case replaceRank := <-ei.storageReady:
-		// Set replaceRank instance state to be used later in join request.
-		ei.replaceRank.Store(replaceRank)
+	case <-ei.storageReady:
 		msg := fmt.Sprintf("%s %s storage ready", build.DataPlaneName, msgIdx)
-		if replaceRank {
-			msg += ", attempting to replace rank..."
+
+		// Check if we're in replace mode
+		replaceRank := ei.replaceRank.Load()
+		if replaceRank != nil {
+			if replaceRank.Equals(ranklist.NilRank) {
+				msg += ", attempting to replace rank..."
+			} else {
+				msg += fmt.Sprintf(", attempting to replace rank %d...", *replaceRank)
+			}
 		}
 		ei.log.Info(msg)
 	}

@@ -1065,6 +1065,21 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 	return nil
 }
 
+func notifyStorageReady(log logging.Logger, req *ctlpb.StorageFormatReq, engine Engine) {
+	if !engine.isAwaitingFormat() {
+		log.Errorf("notifyStorageReady(): instance %d not awaiting format", engine.Index())
+		return
+	}
+
+	// Prepare the replace rank pointer based on the request
+	var replaceRank *ranklist.Rank
+	if req.Replace {
+		r := ranklist.Rank(req.Rank)
+		replaceRank = &r
+	}
+	engine.NotifyStorageReady(replaceRank)
+}
+
 // StorageFormat delegates to Storage implementation's Format methods to prepare
 // storage for use by DAOS data plane.
 //
@@ -1146,7 +1161,8 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 			cs.log.Errorf("instance %d: %s", idx, msg)
 			continue
 		}
-		engine.NotifyStorageReady(req.Replace)
+
+		notifyStorageReady(cs.log, req, engine)
 	}
 
 	return resp, nil
