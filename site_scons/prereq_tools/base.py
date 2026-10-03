@@ -611,6 +611,12 @@ class PreReqComponent():
             reqs.extend(client_reqs)
         opts.Add(ListVariable('DEPS', "Dependencies to build by default", 'all', reqs))
         opts.Update(self.__env)
+
+        unknown = opts.UnknownVariables()
+        if unknown:
+            print(f"ERROR: Unknown scons variable(s): {', '.join(sorted(unknown))}")
+            Exit(1)
+
         if GetOption('build_deps') == 'only':
             # Optionally, limit the deps we build in this pass
             reqs = self.__env.get('DEPS')
