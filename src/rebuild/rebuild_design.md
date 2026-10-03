@@ -76,7 +76,7 @@ essential for reasoning about rebuild correctness.
 
 | Boundary | Purpose | When Determined | How Derived | Who Computes | Where Stored | Where Consumed |
 |----------|---------|-----------------|-------------|--------------|--------------|----------------|
-| **Stable epoch** | Data-visibility cutoff: only data committed at or below this epoch is eligible for migration | During scan broadcast (§7.2) | Each participating target engine snapshots its local HLC in the scan handler (XS-0); the collective aggregator takes the **maximum** across all replies | Scan handler on each target engine; aggregated by collective framework | `rgt_stable_epoch` (leader), `rt_stable_epoch` (target engines, via IV) | Scanner: bounds VOS iteration; clients: writes above this epoch are invisible to rebuild |
+| **Stable epoch** | Data-visibility cutoff: only data committed at or below this epoch is eligible for migration | During scan broadcast (§7.2), before target DTX resync begins | Each participating target engine snapshots its local HLC in the scan handler (XS-0); the collective aggregator takes the **maximum** across all replies | Scan handler on each target engine; aggregated by collective framework | `rgt_stable_epoch` (leader), `rt_stable_epoch` (target engines, via IV) | Scanner: bounds VOS iteration; clients: writes above this epoch are invisible to rebuild |
 | **Rebuild fence** | Aggregation barrier: prevents VOS aggregation from crossing the rebuild's data boundary | During target engine prepare, *before* stable epoch is negotiated | `d_hlc_get()` in `rebuild_tgt_prepare()` on each target engine's XS-0 | Each target engine independently | `rpt->rt_rebuild_fence` (target engine), then copied to `spc_rebuild_fence` on each VOS target (pool child) | VOS aggregation: treats fence as snapshot boundary (§13) |
 | **Reclaim epoch** | Cleanup boundary: bounds what reclaim/fail-reclaim will discard or confirm | At scheduling time, before scan begins | `d_hlc_get()` in pool service on the leader engine | Leader engine (pool service) | `rgt_reclaim_epoch` (leader), propagated as `rsi_reclaim_epoch` in scan RPCs | `RB_OP_RECLAIM` / `RB_OP_FAIL_RECLAIM`: epoch below which stale data is discarded |
 
@@ -564,7 +564,7 @@ Each rebuild operation transitions through the following states, tracked in `rgt
    - the **scan ULT** (`rebuild_scan_leader`, which distributes `rebuild_scanner` to each VOS-XS)
    - the **status-check ULT** (`rebuild_tgt_status_check_ult`)
 
-   The broadcast reply returns a `rso_stable_epoch` computed as the **maximum** across all successfully responding target engines (each target engine's scan handler snapshots its local HLC). The leader stores this in `rgt->rgt_stable_epoch`.
+   Before starting DTX resync, each target handler snapshots its local HLC. The broadcast reply returns their maximum as `rso_stable_epoch`, which the leader stores in `rgt->rgt_stable_epoch`. A repeated delivery reuses the target's first snapshot. The global EC aggregation barrier publishes this already-selected cutoff and does not advance it.
 
 4. **Leader monitoring.** Launch `rebuild_leader_status_check()`, the leader's polling loop (§7.5).
 
@@ -1664,7 +1664,7 @@ A correct implementation must pass tests covering the following scenarios:
 | Administrative stop during fail-reclaim | Integration | `src/tests/suite/daos_rebuild_interactive.c` |
 | Container destroy during rebuild | Integration | `src/tests/suite/daos_rebuild.c` (REBUILD6: `rebuild_destroy_container`) |
 | Rebuild of pool with 100+ snapshots (epoch ordering) | Integration | New test required |
-| Multi-pool simultaneous rebuild (inflight limit) | Integration | `src/tests/suite/daos_rebuild.c` |
+| Multi-pool simultaneous rebuild (in-flight limit) | Integration | `src/tests/suite/daos_rebuild.c` |
 | Maximum-inflight-RPC rebuild storm | Stress | New test required |
 | EC partial-stripe migration | Integration | `src/tests/suite/daos_rebuild_ec.c` |
 | Drain single target | Integration | `src/tests/suite/daos_drain_simple.c` |
