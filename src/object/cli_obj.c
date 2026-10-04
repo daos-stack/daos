@@ -3484,29 +3484,23 @@ merge_recx_insert(struct obj_auxi_list_recx *prev, d_list_t *head, uint64_t offs
 
 	while (size > 0) {
 		struct obj_auxi_list_recx	*new;
-		uint64_t			new_size;
-		daos_epoch_t			new_eph;
+		uint64_t                         new_size;
 
 		/* Split by boundary */
-		if (boundary > 0) {
+		if (boundary > 0)
 			new_size = min(roundup(offset + 1, boundary), end) - offset;
-			if ((offset % boundary) == 0 || prev == NULL)
-				new_eph = eph;
-			else
-				new_eph = max(prev->recx_eph, eph);
-		} else {
+		else
 			new_size = size;
-			new_eph = eph;
-		}
 
 		/* Check if merging with previous recx or creating new one. */
 		if (prev && recx_can_merge_with_boundary(&prev->recx, offset, new_size,
 							 boundary)) {
 			daos_recx_merge_with_offset_size(&prev->recx, offset, new_size);
-			prev->recx_eph = max(prev->recx_eph, new_eph);
+			prev->recx_eph = max(prev->recx_eph, eph);
 		} else {
-			new = merge_recx_create_one(prev == NULL ? head : &prev->recx_list,
-						    offset, new_size, new_eph);
+			/* prev may be an unrelated recx, so do not inherit its epoch */
+			new = merge_recx_create_one(prev == NULL ? head : &prev->recx_list, offset,
+						    new_size, eph);
 			if (new == NULL)
 				return -DER_NOMEM;
 			prev = new;

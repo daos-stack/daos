@@ -615,8 +615,8 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	}
 	epoch = is_recalc ? stripe->as_hi_epoch :
 		entry->ae_par_extent.ape_epoch;
-	rc = dsc_obj_fetch(entry->ae_obj_hdl, epoch, &entry->ae_dkey, 1, &iod,
-			   &sgl, NULL, DIOF_FOR_EC_AGG, NULL, NULL);
+	rc    = dsc_obj_fetch(entry->ae_obj_hdl, epoch, &entry->ae_dkey, 1, &iod, &sgl, NULL,
+			      DIOF_FOR_EC_AGG | DIOF_EC_NO_DEGRADE, NULL, NULL);
 	if (rc)
 		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
@@ -1566,7 +1566,7 @@ out:
 	 * of all parity shards.
 	 * NB: it's OK if the only remote parity peer failed.
 	 */
-	rc = peer_updated > 0 ? 0 : peer_rc;
+	rc = peer_updated > 0 ? 0 : (peer_rc ?: rc);
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -1692,9 +1692,10 @@ agg_process_holes_ult(void *arg)
 	if (ext_cnt) {
 		struct daos_csummer	*csummer;
 
+		/* Data reconstructed from the parity being replaced must not feed new parity */
 		rc = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_cur_stripe.as_hi_epoch,
-				   &entry->ae_dkey, 1, iod, &entry->ae_sgl,
-				   NULL, DIOF_FOR_EC_AGG, NULL, NULL);
+				   &entry->ae_dkey, 1, iod, &entry->ae_sgl, NULL,
+				   DIOF_FOR_EC_AGG | DIOF_EC_NO_DEGRADE, NULL, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
@@ -1815,7 +1816,7 @@ out:
 	/* NB: before switching to DTX, any successful parity write is deemed as success
 	 * of all parity shards.
 	 */
-	rc = peer_updated > 0 ? 0 : peer_rc;
+	rc = peer_updated > 0 ? 0 : (peer_rc ?: rc);
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -2767,6 +2768,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	struct dtx_epoch	 epoch = { 0 };
 	daos_unit_oid_t		 oid = { 0 };
 	uint64_t                  ec_agg_eph;
+	uint32_t                  mig_writes;
 	int			 blocks = 0;
 	int			 rc = 0;
 
@@ -2806,6 +2808,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	}
 
 	ec_agg_eph                     = cont->sc_ec_agg_eph;
+	mig_writes                     = cont->sc_ec_agg_mig_writes;
 	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
 	if (flags & VOS_AGG_FL_FORCE_SCAN) {
 		/** We don't want to use the latest container aggregation epoch for the filter
@@ -2887,8 +2890,15 @@ update_hae:
 	/* clear the flag before next turn's cont_aggregate_runnable(), to save conflict
 	 * window with rebuild (see obj_inflight_io_check()).
 	 */
-	if (ds_pool_is_rebuilding(cont->sc_pool->spc_pool))
+	if (ds_pool_is_rebuilding(cont->sc_pool->spc_pool)) {
 		cont->sc_ec_agg_active = 0;
+		/* rebuild may still migrate replicas in below epr_hi */
+		return rc;
+	}
+
+	/* a replica migrated in during this round may have been missed */
+	if (cont->sc_ec_agg_mig_writes != mig_writes)
+		return rc;
 
 	if (rc == 0) {
 		/* If pool map updated during this round of aggregation, the sc_ec_agg_eph
@@ -2904,7 +2914,9 @@ update_hae:
 			return rc;
 		}
 
-		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
+		/* rescan replicas left for the leader so they keep holding back the boundary */
+		cont->sc_ec_agg_eph =
+		    max(cont->sc_ec_agg_eph, min(epr->epr_hi, ec_agg_param->ap_min_unagg_eph - 1));
 		if (!cont->sc_stopping && cont->sc_query_ec_agg_eph) {
 			uint64_t orig, cur, cur_eph;
 
