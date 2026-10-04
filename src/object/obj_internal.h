@@ -945,18 +945,6 @@ struct obj_io_context {
 				 ioc_fetch_snap:1;
 };
 
-static inline void
-obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
-	       uint32_t *grp_nr)
-{
-	*start_shard = 0;
-	*shard_nr = obj->cob_shards_nr;
-	*grp_nr = obj->cob_shards_nr / obj_get_grp_size(obj);
-
-	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "DF_OID": %u/%u\n",
-		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
-}
-
 static inline uint64_t
 obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
 {
@@ -1150,8 +1138,12 @@ dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 			uint32_t *pmv);
 
 /* cli_coll.c */
-bool
-obj_need_coll(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
+int
+obj_ptr2shards(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
+	       uint32_t *grp_nr);
+
+int
+obj_need_coll(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
 	      uint32_t *grp_nr);
 
 int
