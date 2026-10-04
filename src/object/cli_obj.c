@@ -7514,7 +7514,10 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 	}
 
 	if (opc == DAOS_OBJ_RPC_PUNCH) {
-		if (obj_need_coll(obj, &shard, &shard_cnt, &grp_cnt)) {
+		rc = obj_need_coll(obj, map_ver, &shard, &shard_cnt, &grp_cnt);
+		if (rc < 0)
+			D_GOTO(out_task, rc);
+		if (rc > 0) {
 			obj_auxi->opc = DAOS_OBJ_RPC_COLL_PUNCH;
 			return dc_obj_coll_punch(task, obj, epoch, map_ver, api_args, obj_auxi);
 		}
@@ -7821,8 +7824,10 @@ dc_obj_query_key(tse_task_t *api_task)
 		D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
 	obj_auxi->dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	if (api_args->flags & DAOS_GET_DKEY) {
-		if (obj_need_coll(obj, &start_shard, &shard_cnt, &grp_nr))
-			coll = true;
+		rc = obj_need_coll(obj, map_ver, &start_shard, &shard_cnt, &grp_nr);
+		if (rc < 0)
+			D_GOTO(out_task, rc);
+		coll    = rc > 0;
 		grp_idx = 0;
 		/** set data len to 0 before retrieving dkey. */
 		api_args->dkey->iov_len = 0;
@@ -8037,7 +8042,10 @@ dc_obj_sync(tse_task_t *task)
 	}
 
 	obj_auxi->to_leader = 1;
-	obj_ptr2shards(obj, &shard, &shard_cnt, &grp_cnt);
+
+	rc = obj_ptr2shards(obj, map_ver, &shard, &shard_cnt, &grp_cnt);
+	if (rc != 0)
+		D_GOTO(out_task, rc);
 	rc = obj_shards_2_fwtgts(obj, map_ver, NIL_BITMAP, shard, shard_cnt,
 				 grp_cnt, OBJ_TGT_FLAG_LEADER_ONLY, obj_auxi);
 	if (rc != 0)
