@@ -427,7 +427,7 @@ dtx_is_real_handle(const struct dtx_handle *dth)
 }
 
 enum dtx_resync_flags {
-	/* Skip the live-handle wait and its deadline during container-open resync. */
+	/* Skip the five-minute live-handle wait during container-open resync. */
 	DTX_RESYNC_NOWAIT = (1 << 0),
 };
 
