@@ -23,7 +23,7 @@ struct dtx_resync_entry {
 	d_list_t		dre_link;
 	daos_epoch_t		dre_epoch;
 	daos_unit_oid_t		dre_oid;
-	uint32_t                dre_inline_mbs : 1, dre_retry : 1;
+	uint32_t                dre_inline_mbs : 1;
 	uint64_t		dre_dkey_hash;
 	struct dtx_entry	dre_dte;
 };
@@ -41,17 +41,10 @@ struct dtx_resync_args {
 	struct ds_cont_child  *cont;
 	struct dtx_resync_head tables;
 	daos_epoch_t           epoch;
-	uint64_t               deadline;
 	uint32_t               resync_version;
 	uint32_t               discard_version;
 	bool                   for_all;
 };
-
-static bool
-dtx_resync_wait_expired(struct dtx_resync_args *dra)
-{
-	return dra->deadline != 0 && daos_gettime_coarse() >= dra->deadline;
-}
 
 static inline void
 dtx_dre_release(struct dtx_resync_head *drh, struct dtx_resync_entry *dre)
@@ -63,22 +56,6 @@ dtx_dre_release(struct dtx_resync_head *drh, struct dtx_resync_entry *dre)
 			D_FREE(dre->dre_dte.dte_mbs);
 		D_FREE(dre);
 	}
-}
-
-static bool
-dtx_resync_skip_retry(struct dtx_resync_args *dra, struct dtx_resync_entry *dre)
-{
-	struct ds_cont_child *cont = dra->cont;
-
-	if (!dtx_resync_wait_expired(dra))
-		return false;
-
-	D_WARN("DTX resync " DF_UUID "/" DF_UUID " stop retrying DTX " DF_DTI
-	       " after %u seconds, ver %u\n",
-	       DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), DP_DTI(&dre->dre_xid),
-	       DTX_RESYNC_WAIT_TIMEOUT, dra->resync_version);
-	dtx_dre_release(&dra->tables, dre);
-	return true;
 }
 
 static int
@@ -417,9 +394,6 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 again:
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
-		if (dre->dre_retry && dtx_resync_skip_retry(dra, dre))
-			continue;
-
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch,
 					    dre->dre_dte.dte_ver);
@@ -479,9 +453,6 @@ again:
 		case DSHR_NEED_COMMIT:
 			goto commit;
 		case DSHR_NEED_RETRY:
-			if (dtx_resync_skip_retry(dra, dre))
-				continue;
-			dre->dre_retry = 1;
 			d_list_del(&dre->dre_link);
 			d_list_add_tail(&dre->dre_link, &drh->drh_list);
 			continue;
@@ -642,6 +613,36 @@ dtx_resync_epoch_set(struct ds_pool_child *child, daos_epoch_t epoch)
 	child->spc_dtx_resync_epoch = max(child->spc_dtx_resync_epoch, epoch);
 }
 
+/* Bound the live-handle wait without changing recovery's status retries. */
+static int
+dtx_resync_wait(struct ds_cont_child *cont, uint32_t ver)
+{
+	uint64_t deadline = daos_gettime_coarse() + DTX_RESYNC_WAIT_TIMEOUT;
+	int      rc;
+
+	while (vos_dtx_has_inprogress(cont->sc_hdl, ver)) {
+		if (cont->sc_stopping || dss_xstream_exiting(dss_current_xstream()))
+			return -DER_CANCELED;
+
+		if (daos_gettime_coarse() >= deadline) {
+			D_WARN("DTX resync " DF_UUID "/" DF_UUID
+			       " stop waiting for old-map handles after %u seconds, ver %u\n",
+			       DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid),
+			       DTX_RESYNC_WAIT_TIMEOUT, ver);
+			break;
+		}
+
+		D_DEBUG(DB_MD,
+			"Waiting for old-map DTX handles for " DF_UUID "/" DF_UUID " with ver %u\n",
+			DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
+		rc = dss_sleep(1);
+		if (rc != 0)
+			return rc;
+	}
+
+	return 0;
+}
+
 int
 dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block,
 	   uint32_t flags)
@@ -651,9 +652,7 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 	struct dtx_resync_args		 dra = { 0 };
 	d_rank_t			 myrank;
 	int				 rc = 0;
-	int				 rc1 = 0;
-	bool                             inprogress;
-	bool                             wait_for_dtx = !(flags & DTX_RESYNC_NOWAIT);
+	int                              rc1 = 0;
 
 	D_DEBUG(DB_MD, "Enter DTX resync (%s) for " DF_UUID "/" DF_UUID " with ver %u\n",
 		block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
@@ -713,9 +712,7 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 
 	dra.cont = cont;
 	dra.resync_version = ver;
-	dra.epoch = d_hlc_get();
-	if (wait_for_dtx)
-		dra.deadline = daos_gettime_coarse() + DTX_RESYNC_WAIT_TIMEOUT;
+	dra.epoch          = d_hlc_get();
 	dtx_resync_epoch_set(cont->sc_pool, dra.epoch);
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
@@ -741,11 +738,12 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 	D_DEBUG(DB_MD, "Start DTX resync (%s) scan for " DF_UUID "/" DF_UUID " with ver %u\n",
 		block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 
-again:
-	if (dra.deadline != 0 && (cont->sc_stopping || dss_xstream_exiting(dss_current_xstream())))
-		D_GOTO(fail, rc = -DER_CANCELED);
+	if (!(flags & DTX_RESYNC_NOWAIT)) {
+		rc = dtx_resync_wait(cont, ver);
+		if (rc != 0)
+			goto fail;
+	}
 
-	inprogress = wait_for_dtx && vos_dtx_has_inprogress(cont->sc_hdl, ver);
 	rc = ds_cont_iter(po_hdl, cont->sc_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX, 0);
 
 	/* Handle the DTXs that have been scanned even if some failure happened
@@ -757,37 +755,6 @@ again:
 
 	if (rc >= 0)
 		rc = rc1;
-
-	if (rc >= 0 && dra.deadline != 0) {
-		if (cont->sc_stopping || dss_xstream_exiting(dss_current_xstream()))
-			D_GOTO(fail, rc = -DER_CANCELED);
-
-		/*
-		 * A live handle may detach while recovery yields, leaving a prepared DTX.
-		 * Rescan even if that handle has already finished by the end of this pass.
-		 */
-		if (wait_for_dtx && (inprogress || vos_dtx_has_inprogress(cont->sc_hdl, ver))) {
-			if (dtx_resync_wait_expired(&dra)) {
-				D_WARN(
-				    "DTX resync " DF_UUID "/" DF_UUID
-				    " stop waiting for old-map handles after %u seconds, ver %u\n",
-				    DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid),
-				    DTX_RESYNC_WAIT_TIMEOUT, ver);
-				/* wait long enough, assume those DTXs are stale (aborted
-				 * application) */
-				wait_for_dtx = false;
-				goto again;
-			}
-			D_DEBUG(DB_MD,
-				"Waiting for old-map DTX handles for " DF_UUID "/" DF_UUID
-				" with ver %u\n",
-				DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
-			rc = dss_sleep(1);
-			if (rc != 0)
-				goto fail;
-			goto again;
-		}
-	}
 
 	if (rc >= 0)
 		vos_set_dtx_resync_version(cont->sc_hdl, ver);
