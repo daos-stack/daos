@@ -1,13 +1,31 @@
 hosts:
-  test_servers: 1
+  test_servers: 3
   test_clients: 1
 timeout: 300
-server_config:
-  name: daos_server
-  engines_per_host: 1
-  engines:
-    0:
-      storage: auto
-  system_ram_reserved: 32
-pool:
-  size: 90%
+setup: !mux
+  single_replica:
+    mgmt_svc_replicas_qty: 1
+  multi_replica:
+    mgmt_svc_replicas_qty: 3
+server_config: !mux
+  standard:
+    name: daos_server
+    engines_per_host: 1
+    engines:
+      0:
+        storage: auto
+    system_ram_reserved: 32
+  non_standard:
+    name: daos_server_nonstd
+    port: 10515
+    engines_per_host: 1
+    engines:
+      0:
+        storage: auto
+    system_ram_reserved: 32
+pool: !mux
+  default:
+    size: 90%
+  md_on_ssd_p2:
+    size: 90%
+    mem_ratio: 25
