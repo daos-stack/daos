@@ -8,9 +8,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -167,21 +169,28 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 	return resp.Errors()
 }
 
+// eraseAwaitFormatTimeout bounds how long `dmg system erase` will block
+// waiting for all engines to be reset and reach the awaiting-format state,
+// unless --no-wait is supplied.
+const eraseAwaitFormatTimeout = 5 * time.Minute
+
 type systemEraseCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	cmdutil.JSONOutputCmd
+	NoWait bool `long:"no-wait" description:"Return immediately after the erase completes instead of blocking until all engines have been reset and are awaiting format"`
 }
 
 func (cmd *systemEraseCmd) Execute(_ []string) error {
-	resp, err := control.SystemErase(cmd.MustLogCtx(), cmd.ctlInvoker, new(control.SystemEraseReq))
+	ctx := cmd.MustLogCtx()
+
+	resp, err := control.SystemErase(ctx, cmd.ctlInvoker, new(control.SystemEraseReq))
 	if err != nil {
 		if cmd.JSONOutputEnabled() {
 			return cmd.OutputJSON(nil, err)
 		}
 		return err
 	}
-
 	if respErr := resp.Errors(); respErr != nil {
 		if cmd.JSONOutputEnabled() {
 			return cmd.OutputJSON(resp, respErr)
@@ -189,10 +198,34 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 		return respErr
 	}
 
+	if !cmd.NoWait {
+		waitCtx, cancel := context.WithTimeout(ctx, eraseAwaitFormatTimeout)
+		defer cancel()
+
+		cmd.Info("waiting for all engines to be reset and awaiting format...\n")
+		if err := control.WaitForStorageFormatReady(waitCtx, cmd.ctlInvoker); err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				err = errors.Errorf("engines did not reach awaiting-format state within %s; "+
+					"use --no-wait to skip this check", eraseAwaitFormatTimeout)
+				if cmd.JSONOutputEnabled() {
+					return cmd.OutputJSON(resp, err)
+				}
+				return err
+			}
+			err = errors.Wrap(err, "waiting for engines to be awaiting format")
+			if cmd.JSONOutputEnabled() {
+				return cmd.OutputJSON(resp, err)
+			}
+			return err
+		}
+		cmd.Info("all engines are awaiting format\n")
+	}
+
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, nil)
 	}
-	cmd.Infof("System erase successful. System is now uninitialized and ready for 'dmg storage format'.\n")
+	cmd.Infof("System erase successful. System can be re-initialized with 'dmg storage format'.\n")
+
 	return nil
 }
 

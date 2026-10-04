@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
@@ -513,6 +514,68 @@ func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageForm
 	}
 
 	return sfr, nil
+}
+
+// defaultFormatWaitRetry is the interval between storage format status polls
+// performed by WaitForStorageFormatReady.
+const defaultFormatWaitRetry = 2 * time.Second
+
+// allEnginesAwaitingFormat returns true if hsm contains at least one engine
+// format status entry and every reported engine instance is awaiting format.
+func allEnginesAwaitingFormat(hsm HostStorageMap) bool {
+	if len(hsm) == 0 {
+		return false
+	}
+
+	found := false
+	for _, hss := range hsm {
+		for _, es := range hss.HostStorage.EngineFormatStatus {
+			found = true
+			if !es.AwaitingFormat {
+				return false
+			}
+		}
+	}
+
+	return found
+}
+
+// WaitForStorageFormatReady polls the read-only storage-format status (as
+// used by `dmg storage format --status`) on the configured hostlist until
+// every reported engine instance is awaiting format, the supplied context is
+// cancelled, or an unexpected (non-transient) error occurs.
+//
+// Per-host RPC failures are expected while engines are being reset (e.g.
+// a host may be briefly unreachable while the control plane process
+// restarts) and are logged but do not abort the wait; only cancellation of
+// ctx (e.g. via a caller-supplied timeout) terminates an unsuccessful wait.
+func WaitForStorageFormatReady(ctx context.Context, rpcClient UnaryInvoker, retryInterval ...time.Duration) error {
+	interval := defaultFormatWaitRetry
+	if len(retryInterval) > 0 {
+		interval = retryInterval[0]
+	}
+
+	startedAt := time.Now()
+	for {
+		resp, err := StorageFormat(ctx, rpcClient, &StorageFormatReq{Status: true})
+		switch {
+		case err != nil:
+			rpcClient.Debugf("storage format status request failed, retrying: %s", err)
+		case resp.Errors() != nil:
+			rpcClient.Debugf("storage format status reported host errors, retrying: %s", resp.Errors())
+		case allEnginesAwaitingFormat(resp.HostStorage):
+			rpcClient.Debugf("all engines awaiting format after %s", time.Since(startedAt))
+			return nil
+		default:
+			rpcClient.Debugf("not all engines awaiting format yet, waiting...")
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
+	}
 }
 
 type (
