@@ -1684,6 +1684,86 @@ vos_iterate_test(void **state)
 	arg->ta_flags = old_flags;
 }
 
+struct iter_delete_arg {
+	struct vos_test_ctx *ctx;
+	daos_unit_oid_t      oid;
+	bool                 deleted;
+};
+
+static void
+iter_delete_object(struct vos_test_ctx *ctx, daos_unit_oid_t oid, daos_epoch_t epoch)
+{
+	daos_epoch_range_t epr = {.epr_lo = 0, .epr_hi = epoch};
+
+	assert_success(vos_obj_punch(ctx->tc_co_hdl, oid, epoch, 0, 0, NULL, 0, NULL, NULL));
+	assert_success(vos_aggregate(ctx->tc_co_hdl, &epr, NULL, NULL,
+				     VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE));
+	while (!vos_gc_pool_idle(ctx->tc_po_hdl))
+		assert_success(vos_gc_pool(ctx->tc_po_hdl, -1, NULL, NULL));
+}
+
+static int
+iter_delete_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		   vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct iter_delete_arg *arg = cb_arg;
+
+	if (type == VOS_ITER_OBJ) {
+		arg->oid = entry->ie_oid;
+	} else if (type == VOS_ITER_RECX && !arg->deleted) {
+		arg->deleted = true;
+		iter_delete_object(arg->ctx, arg->oid, entry->ie_epoch + 1);
+	}
+
+	return 0;
+}
+
+static void
+object_deleted_by_aggregation_and_gc(void **state)
+{
+	struct io_test_args    *arg      = *state;
+	vos_iter_param_t        param    = {0};
+	struct vos_iter_anchors anchors  = {0};
+	struct iter_delete_arg  iter_arg = {.ctx = &arg->ctx};
+	daos_key_t              dkey;
+	daos_iod_t              iod  = {0};
+	daos_recx_t             recx = {0};
+	d_iov_t                 value;
+	d_sg_list_t             sgl = {0};
+	char                    fetch_buf[UPDATE_BUF_SIZE];
+
+#if !FAULT_INJECTION
+	skip();
+#endif
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
+	arg->ta_flags = TF_REC_EXT | TF_USE_CSUMS;
+	assert_success(io_update_and_fetch_dkey(arg, 1, 1));
+
+	param.ip_hdl        = arg->ctx.tc_co_hdl;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_epc_expr   = VOS_IT_EPC_RE;
+
+	assert_success(
+	    vos_iterate_obj(&param, &anchors, iter_delete_pre_cb, NULL, &iter_arg, NULL));
+	assert_true(iter_arg.deleted);
+
+	set_iov(&dkey, last_dkey, is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&iod.iod_name, last_akey, is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+	recx.rx_idx   = hash_key(&dkey, is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	recx.rx_nr    = UPDATE_BUF_SIZE / UPDATE_REC_SIZE;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_size  = DAOS_REC_ANY;
+	iod.iod_nr    = 1;
+	iod.iod_recxs = &recx;
+	d_iov_set(&value, fetch_buf, sizeof(fetch_buf));
+	sgl.sg_nr   = 1;
+	sgl.sg_iovs = &value;
+
+	assert_success(vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, 0, &dkey, 1, &iod, &sgl));
+	assert_int_equal(iod.iod_size, 0);
+	assert_int_equal(sgl.sg_nr_out, 0);
+}
+
 static int
 io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 				   daos_epoch_t update_epoch,
@@ -3726,6 +3806,8 @@ static const struct CMUnitTest io_tests[] = {
     {"VOS245.1: Object iter test with anchor (for oid)", oid_iter_test_with_anchor,
      oid_iter_test_setup, NULL},
     {"VOS250.0: vos_iterate tests - Check single callback", vos_iterate_test, NULL, NULL},
+    {"VOS251.0: vos_iterate tests - object deleted by aggregation and GC during iteration",
+     object_deleted_by_aggregation_and_gc, NULL, NULL},
     {"VOS280: Same Obj ID on two containers (obj_cache test)", io_simple_one_key_cross_container,
      NULL, NULL},
     {"VOS281.0: Fetch from non existent object", io_fetch_no_exist_object, NULL, NULL},
