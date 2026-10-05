@@ -17,6 +17,7 @@
 #include <daos_srv/vos.h>
 #include <fcntl.h>
 #include <daos/tests_lib.h>
+#include <vos_internal.h>
 
 /*
  * ms_between_periods is a helper function for determining how much time to wait between
@@ -775,6 +776,75 @@ dkey_deleted_by_aggregation_with_multiple_akeys(void **state)
 	sts_ctx_do_scrub(ctx);
 }
 
+/*
+ * DAOS-19721 regression test (iterator only, no scrubber).
+ *
+ * While a recursive vos_iterate_obj() sits in the RECX callback, the object
+ * being iterated is fully punched, aggregated and garbage collected, freeing
+ * its evtree. When the callback returns, the iterator advances the RECX
+ * iterator over the freed tree and trips an assertion (e.g.
+ * evt_off2node(): 'node->tn_magic == EVT_NODE_MAGIC').
+ */
+struct dgo_iter_arg {
+	struct sts_context	*ctx;
+	daos_unit_oid_t		 oid;
+	bool			 deleted;
+};
+
+static void
+dgo_delete_object(struct sts_context *ctx, daos_unit_oid_t oid, daos_epoch_t epoch)
+{
+	daos_epoch_range_t epr = {.epr_lo = 0, .epr_hi = epoch};
+
+	assert_success(vos_obj_punch(ctx->tsc_coh, oid, epoch, 0, 0, NULL, 0, NULL, NULL));
+	assert_success(vos_aggregate(ctx->tsc_coh, &epr, NULL, NULL,
+				     VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE));
+	/* Drain GC so the object's trees are actually freed, not just queued. */
+	while (!vos_gc_pool_idle(ctx->tsc_poh))
+		assert_success(vos_gc_pool(ctx->tsc_poh, -1, NULL, NULL));
+}
+
+static int
+dgo_iter_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct dgo_iter_arg *arg = cb_arg;
+
+	if (type == VOS_ITER_OBJ) {
+		arg->oid = entry->ie_oid;
+	} else if (type == VOS_ITER_RECX && !arg->deleted) {
+		arg->deleted = true;
+		dgo_delete_object(arg->ctx, arg->oid, entry->ie_epoch + 1);
+	}
+
+	return 0;
+}
+
+static void
+object_deleted_by_aggregation_and_gc(void **state)
+{
+	struct sts_context	*ctx = *state;
+	vos_iter_param_t	 param = {0};
+	struct vos_iter_anchors	 anchors = {0};
+	struct dgo_iter_arg	 arg = {.ctx = ctx};
+
+#if !FAULT_INJECTION
+	/* Relies on freed-memory poisoning in pmem_tx_free() */
+	skip();
+#endif
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 1, false);
+
+	param.ip_hdl        = ctx->tsc_coh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_epc_expr   = VOS_IT_EPC_RE;
+
+	assert_success(vos_iterate_obj(&param, &anchors, dgo_iter_pre_cb, NULL, &arg, NULL));
+	assert_true(arg.deleted);
+
+	assert_rc_equal(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 1),
+			-DER_NONEXIST);
+}
+
 static int
 test_yield_deletes_container(void *arg)
 {
@@ -1036,6 +1106,13 @@ static const struct CMUnitTest scrubbing_tests[] = {
 	   drain_target),
 	TS("CSUM_SCRUBBING_14: Scrubber doesn't get stuck in lazy mode when system is busy and "
 	   "mode is changed to TIMED", scrubber_doesnot_get_stuck_in_lazy_mode),
+	TS("CSUM_SCRUBBING_15: DAOS-19721 - object fully punched and GC'd inside "
+	   "vos_iterate_obj() callback", object_deleted_by_aggregation_and_gc),
+};
+
+static const struct CMUnitTest scrubbing_testsTG[] = {
+	TS("CSUM_SCRUBBING_15: DAOS-19721 - object fully punched and GC'd inside "
+	   "vos_iterate_obj() callback", object_deleted_by_aggregation_and_gc),
 };
 
 int
@@ -1051,10 +1128,10 @@ run_scrubbing_tests(int argc, char *argv[])
 		cmocka_set_test_filter(filter);
 	}
 #endif
-
+	(void) scrubbing_tests;
 	rc += cmocka_run_group_tests_name(
 		"Storage and retrieval of checksums for Single Value Type",
-		scrubbing_tests, NULL, NULL);
+		scrubbing_testsTG, NULL, NULL);
 
 	return rc;
 }
