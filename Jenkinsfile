@@ -53,6 +53,7 @@ void updateRunStage() {
         'NLT',
         'Unit Test with memcheck',
         'Unit Test bdev with memcheck',
+        'Test RPMs',
         'Test RPMs on EL 9',
         'Test RPMs on Leap 15',
         'VM Tests',
@@ -115,7 +116,7 @@ void updateRunStage() {
     if (docOnlyChange(target_branch)) {
         println('updateRunStage: Detected doc-only change, skipping testing')
         for (stage in runStage.keySet()) {
-            if (stage in ['Unit Tests', 'VM Tests', 'CB Tests', 'HW Tests']) {
+            if (stage in ['Unit Tests', 'Test RPMs', 'VM Tests', 'CB Tests', 'HW Tests']) {
                 runStage[stage] = false
                 reasons[stage] = 'doc-only change'
             }
@@ -293,8 +294,21 @@ List<String> getStageNameSkipPragmas(String stageName) {
         if (stagePragma.contains('-with-')) {
             pragmas.add(stagePragma.replace('-with-', '-'))
         }
+    } else if (stageName == 'Test RPMs' || stageName.contains('Test RPMs on')) {
+        // Add skip pragma for the parent group to child stages
+        if (stageName != 'Test RPMs') {
+            pragmas.add('skip-test-rpms')
+            // Compatibility with existing commit pragmas that skipped RPMs via VM Tests
+            pragmas.add('skip-test')
+        }
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+        if (stageName == 'Test RPMs') {
+            // Compatibility with existing commit pragmas that skipped RPMs via VM Tests
+            pragmas.add('skip-test')
+        }
     } else if (stageName == 'VM Tests' || stageName.contains('Functional on')
-            || stageName.contains('Fault injection') || stageName.contains('Test RPMs')) {
+            || stageName.contains('Fault injection')) {
         // Add skip pragma for parent stage
         if (stageName != 'VM Tests') {
             pragmas.add('skip-vm-tests')
@@ -310,9 +324,6 @@ List<String> getStageNameSkipPragmas(String stageName) {
             pragmas.add('skip-functional-vm-test')
             // Compatibility with existing commit pragmas
             pragmas.add(stagePragma.replace('functional-on-', 'functional-test-'))
-        } else if (stageName.contains('Test RPMs on')) {
-            // Add skip pragma alias for all RPM tests
-            pragmas.add('skip-test-rpms')
         } else if (stageName.contains('Fault injection')) {
             // Compatibility with existing commit pragmas
             pragmas.add('skip-fault-injection-test')
@@ -637,6 +648,9 @@ pipeline {
         booleanParam(name: bashName('Unit Test bdev with memcheck'),
                      defaultValue: false,
                      description: 'Run the Unit Test bdev with memcheck stage.')
+        booleanParam(name: bashName('Test RPMs'),
+                     defaultValue: true,
+                     description: 'Run the Test RPMs group under Functional Tests.')
         booleanParam(name: bashName('VM Tests'),
                      defaultValue: true,
                      description: 'Run the VM Tests stage under Functional Tests.')
@@ -1179,7 +1193,8 @@ pipeline {
                     Map functionalTestStages = [
                         'Test RPMs on EL 9': scriptedTestRpmStage(
                             name: 'Test RPMs on EL 9',
-                            runStage: runVmTests && shouldStageRun('Test RPMs on EL 9'),
+                            runStage: shouldStageRun('Test RPMs') &&
+                                      shouldStageRun('Test RPMs on EL 9'),
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
                             testRpmArgs: [
@@ -1193,7 +1208,8 @@ pipeline {
                         ),
                         'Test RPMs on Leap 15': scriptedTestRpmStage(
                             name: 'Test RPMs on Leap 15',
-                            runStage: runVmTests && shouldStageRun('Test RPMs on Leap 15'),
+                            runStage: shouldStageRun('Test RPMs') &&
+                                      shouldStageRun('Test RPMs on Leap 15'),
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
                             testRpmArgs: [
