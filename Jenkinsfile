@@ -653,7 +653,7 @@ pipeline {
                      description: 'Run the Test RPMs group under Functional Tests.')
         booleanParam(name: bashName('VM Tests'),
                      defaultValue: true,
-                     description: 'Run the VM Tests stage under Functional Tests.')
+                     description: 'Run the VM Tests group under Functional Tests.')
         booleanParam(name: bashName('Functional on EL 9 with Valgrind'),
                      defaultValue: false,
                      description: 'Run the Functional on EL 9 with Valgrind stage.')
@@ -680,10 +680,10 @@ pipeline {
                      description: 'Run the Test RPMs on Leap 15 stage.')
         booleanParam(name: bashName('CB Tests'),
                      defaultValue: true,
-                     description: 'Run the CB Tests stage under Functional Tests.')
+                     description: 'Run the CB Tests group under Functional Tests.')
         booleanParam(name: bashName('HW Tests'),
                      defaultValue: true,
-                     description: 'Run the HW Tests stage under Functional Tests.')
+                     description: 'Run the HW Tests group under Functional Tests.')
         booleanParam(name: bashName('Functional Hardware Medium'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium stage.')
