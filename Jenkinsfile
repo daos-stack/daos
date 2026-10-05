@@ -34,6 +34,11 @@ String bashName(String name) {
     return name.replaceAll('[^a-zA-Z0-9]', '_')
 }
 
+String stageParamName(String name) {
+    // Jenkins environment names are case-insensitive, so 'Test_RPMs' would clobber TEST_RPMS
+    return name == 'Test RPMs' ? 'Test_RPMs_group' : bashName(name)
+}
+
 // Update the runStage map
 /* groovylint-disable-next-line MethodSize */
 void updateRunStage() {
@@ -79,7 +84,7 @@ void updateRunStage() {
 
     // Initialize the run state of each stage using the parameter stage keys
     for (name in stageOrder) {
-        value = params.get(bashName(name), null)
+        value = params.get(stageParamName(name), null)
         if (value != null && value.class == Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
             reasons[name] = 'parameter selection or default'
@@ -648,7 +653,7 @@ pipeline {
         booleanParam(name: bashName('Unit Test bdev with memcheck'),
                      defaultValue: false,
                      description: 'Run the Unit Test bdev with memcheck stage.')
-        booleanParam(name: bashName('Test RPMs'),
+        booleanParam(name: stageParamName('Test RPMs'),
                      defaultValue: true,
                      description: 'Run the Test RPMs group under Functional Tests.')
         booleanParam(name: bashName('VM Tests'),
