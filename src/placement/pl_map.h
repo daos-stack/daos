@@ -87,7 +87,9 @@ struct failed_shard {
  * status before rebuild, for example UP --> NEW, DOWN --> UPIN, during layout
  * generation.
  *
- * CURRENT means the target status will not change during layout generation.
+ * CURRENT is a transition view derived from PRE_REBUILD and POST_REBUILD.
+ * It is retained as a caller parameter, but must not be passed into the
+ * placement algorithm itself.
  *
  * POST_REBUILD means the targets statuses need to be converted to the status
  * after rebuild finished, for example UP --> UPIN, DOWN --> DOWNOUT, during

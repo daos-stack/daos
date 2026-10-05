@@ -143,8 +143,8 @@ The DAOS software stack is built and supported on
 Linux for the x86\_64 architecture.
 
 DAOS Version 2.8 has been validated on
-[Rocky Linux 9.6](https://docs.rockylinux.org/release_notes/9.6/),
-[Rocky Linux 9.7](https://docs.rockylinux.org/release_notes/9.7/),
+[Rocky Linux 9.6](https://docs.rockylinux.org/releases/release_notes/9.6/),
+[Rocky Linux 9.7](https://docs.rockylinux.org/releases/release_notes/9.7/),
 [openSUSE Leap 15.6](https://en.opensuse.org/openSUSE:Roadmap),
 and [SLES 15 SP7](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP7/).
 (Note that an
@@ -196,8 +196,10 @@ Links to RHEL 9 Release Notes:
 
 Links to Rocky Linux Release Notes:
 
-* [Rocky Linux 9.6](https://docs.rockylinux.org/release_notes/9_6/)
-* [Rocky Linux 9.7](https://docs.rockylinux.org/release_notes/9_7/)
+* [Rocky Linux 9.6](https://docs.rockylinux.org/releases/release_notes/9_6/)
+* [Rocky Linux 9.7](https://docs.rockylinux.org/releases/release_notes/9_7/)
+* [Rocky Linux 9.8](https://docs.rockylinux.org/releases/release_notes/9_8/)
+
 
 Links to AlmaLinux Release Notes:
 

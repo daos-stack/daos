@@ -26,7 +26,7 @@ def scons():
                                        'placement_test.c'])
     pl_bench_tgt = denv.SharedObject(['pl_bench.c', 'place_obj_common.c'])
 
-    libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal', 'm']
+    libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal', 'm', 'pthread']
 
     ring_pl_test = denv.d_program('ring_pl_map', ring_test_tgt, LIBS=libraries)
 
