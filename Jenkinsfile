@@ -264,9 +264,9 @@ String vm9_label(String distro) {
 }
 
 // Get the default tags for a functional test stage based on the trigger conditions.
-String defaultTags() {
+String defaultTags(String timedTags, String prTags = 'always_passes') {
     /* groovylint-disable-next-line UnnecessaryGetter */
-    return (isPr() || startedByLanding()) ? 'always_passes' : 'pr daily_regression'
+    return (isPr() || startedByLanding()) ? prTags : timedTags
 }
 
 pipeline {
@@ -486,7 +486,7 @@ pipeline {
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric',
                             stage_tags: 'vm',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto',
                             provider: 'ofi+tcp',
                             job_status: job_status_internal
@@ -502,7 +502,7 @@ pipeline {
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric',
                             stage_tags: 'vm',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto',
                             provider: 'ofi+tcp',
                             job_status: job_status_internal
@@ -518,7 +518,7 @@ pipeline {
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric',
                             stage_tags: 'vm',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto',
                             provider: 'ofi+tcp',
                             job_status: job_status_internal
@@ -533,7 +533,7 @@ pipeline {
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric',
                             stage_tags: 'vm',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             provider: 'ofi+tcp',
                             nvme: 'auto',
                             job_status: job_status_internal
@@ -547,7 +547,7 @@ pipeline {
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,-provider',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto',
                             job_status: job_status_internal
                         ),
@@ -560,7 +560,7 @@ pipeline {
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,-provider,-cb',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal
                         ),
@@ -571,9 +571,9 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_LABEL,
                             next_version: params.BaseBranch,
-                            other_packages: 'mercury-libfabric',
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,provider',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto',
                             job_status: job_status_internal
                         ),
@@ -584,9 +584,9 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
-                            other_packages: 'mercury-libfabric',
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,provider,-cb',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal
                         ),
@@ -599,7 +599,7 @@ pipeline {
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,large',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto',
                             job_status: job_status_internal
                         ),
@@ -612,7 +612,7 @@ pipeline {
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,large',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal
                         ),
@@ -625,7 +625,7 @@ pipeline {
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'cb,medium,-provider',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             node_count: 5,
                             job_status: job_status_internal
@@ -637,9 +637,9 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
                             next_version: params.BaseBranch,
-                            other_packages: 'mercury-libfabric',
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'cb,medium,provider',
-                            default_tags: defaultTags(),
+                            default_tags: defaultTags('pr daily_regression'),
                             nvme: 'auto_md_on_ssd',
                             node_count: 5,
                             job_status: job_status_internal
