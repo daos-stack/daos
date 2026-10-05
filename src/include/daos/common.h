@@ -609,6 +609,8 @@ daos_errno2der(int err)
 	case EINVAL:		return -DER_INVAL;
 	case ENOTDIR:		return -DER_NOTDIR;
 	case EIO:		return -DER_IO;
+	case EINPROGRESS:
+		return -DER_INPROGRESS;
 	case ENOTSUP:
 		return -DER_NOTSUPPORTED;
 	case EFAULT:
@@ -669,6 +671,8 @@ daos_der2errno(int err)
 	case -DER_NOTDIR:	return ENOTDIR;
 	case -DER_STALE:	return ESTALE;
 	case -DER_TX_RESTART:	return ERESTART;
+	case -DER_INPROGRESS:
+		return EINPROGRESS;
 	case -DER_NOTSUPPORTED:
 		return ENOTSUP;
 	default:		return EIO;
@@ -957,7 +961,7 @@ enum {
 #define DLCK_FAULT_ENGINE_START            (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x107)
 #define DLCK_FAULT_ENGINE_EXEC             (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x108)
 #define DLCK_FAULT_ENGINE_JOIN             (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x109)
-#define DLCK_FAULT_ENGINE_STOP             (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x10a)
+#define DLCK_DECOMMISSIONED_01             (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x10a)
 
 /** Pool open fault injection */
 #define DAOS_FAULT_POOL_NVME_HEALTH       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x200)
@@ -982,6 +986,7 @@ enum {
 #define DAOS_FAULT_DAE_INV_FLAGS           (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x306)
 #define DAOS_FAULT_DAE_ALLOC               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x307)
 #define DAOS_FAULT_DBD_COUNT               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x308)
+#define DAOS_FAULT_OBJ_ILOG_MAGIC          (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x309)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 

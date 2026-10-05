@@ -16,8 +16,10 @@ server_config:
   system_ram_reserved: 1
 pool:
   scm_size: 3G
+  properties: rd_fac:0,space_rb:0
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
   class_names: !mux
     oclass_s1:
       oclass: S1

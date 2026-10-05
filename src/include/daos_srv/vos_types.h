@@ -307,7 +307,7 @@ enum {
 	VOS_OF_EC = (1 << 19),
 	/** Update from rebuild */
 	VOS_OF_REBUILD = (1 << 20),
-	/* only query for checksums */
+	/** Only query for checksums: no data fetched, checksums kept whole (see save_csum()) */
 	VOS_OF_FETCH_CSUM = (1 << 21),
 };
 

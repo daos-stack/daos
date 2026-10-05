@@ -37,7 +37,7 @@ class NvmeIoVerification(IorTestBase):
         7. Destroy pool and go to step 1.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,hw,medium
         :avocado: tags=nvme,daosio
         :avocado: tags=NvmeIoVerification,test_nvme_server_restart
         """

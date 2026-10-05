@@ -863,9 +863,25 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
 	if (ioc->ic_size_fetch)
 		return 0;
 
+	/*
+	 * Single value: entry is NULL (no physical extent to trim against), the checksum is
+	 * always saved whole.
+	 */
 	if (entry == NULL)
 		return dcs_csum_info_save(&ioc->ic_csum_list, csum_info);
 
+	/*
+	 * A csum-only fetch has no data and reports the whole physical extent instead (see
+	 * akey_fetch_recx()), so its checksum is kept whole.
+	 */
+	if (ioc->ic_csum_fetch)
+		return dcs_csum_info_save(&ioc->ic_csum_list, csum_info);
+
+	/*
+	 * Regular fetch returns only the visible part of the extent (its bio_iov starts at
+	 * en_sel_ext.ex_lo), so the checksums of hidden or out-of-range leading chunks are
+	 * dropped to stay aligned with the data.
+	 */
 	ci_duplicate = *csum_info;
 	evt_entry_csum_update(&entry->en_ext, &entry->en_sel_ext, &ci_duplicate, rec_size);
 	return dcs_csum_info_save(&ioc->ic_csum_list, &ci_duplicate);

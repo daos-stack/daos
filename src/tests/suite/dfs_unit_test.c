@@ -336,6 +336,7 @@ dfs_test_lookup(void **state)
 	char			*path_sym1 = "/sym1";
 	char			*filename_sym2 = "sym2";
 	char			*path_sym2 = "/dir1/sym2";
+	char                     long_name[DFS_MAX_NAME + 2];
 	mode_t			create_mode = S_IWUSR | S_IRUSR;
 	struct stat		stbuf;
 	int			create_flags = O_RDWR | O_CREAT | O_EXCL;
@@ -437,6 +438,12 @@ dfs_test_lookup(void **state)
 	/** Close dir1 */
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
+
+	/** Lookup with a name exceeding the max allowed length */
+	memset(long_name, 'a', sizeof(long_name) - 1);
+	long_name[sizeof(long_name) - 1] = '\0';
+	rc = dfs_lookup_rel(dfs_mt, NULL, long_name, O_RDWR, &obj, NULL, NULL);
+	assert_int_equal(rc, ENAMETOOLONG);
 }
 
 static void
@@ -3625,8 +3632,11 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 		}
 	}
 
-	/** sleep to avoid DER_INPROGRESS errors since pipeline currently does not retry */
-	sleep(10);
+	/**
+	 * sleep past DTX_COMMIT_THRESHOLD_AGE to avoid DER_INPROGRESS errors since pipeline
+	 * currently does not retry.
+	 */
+	sleep(15);
 
 	dfs_predicate_t pred = {0};
 	dfs_pipeline_t *dpipe = NULL;
@@ -3671,8 +3681,8 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 			 * It is still possible to get INPROGRESS even with the sleep, so let's just
 			 * skip the test in this case.
 			 */
-			if (rc == -DER_INPROGRESS) {
-				print_message("dfs_readdir_with_filter() returned -DER_INPROGRESS; "
+			if (rc == EINPROGRESS) {
+				print_message("dfs_readdir_with_filter() returned EINPROGRESS; "
 					      "skipping test!\n");
 				free(dents);
 				free(anchors);

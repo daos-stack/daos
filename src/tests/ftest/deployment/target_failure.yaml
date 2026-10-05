@@ -21,16 +21,20 @@ server_config:
 
 pool_size_ratio_80:
   size: 80%
+  properties: rd_fac:0,space_rb:0
 pool_size_ratio_40:
   size: 40%
+  properties: rd_fac:0,space_rb:0
 pool_size_ratio_66:
   size: 66%
+  properties: rd_fac:0,space_rb:0
 
 container_wo_rf:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 container_with_rf:
   type: POSIX
-  properties: rd_fac:1
+  properties: cksum:off,srv_cksum:off,rd_fac:1
 
 ior: &ior_base
   client_processes:
