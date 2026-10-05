@@ -84,11 +84,14 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         dmg_command.check_disable()
 
     def clear_reports(self, dmg_command):
-        """
-        Clear old checker inconsistency reports.
+        """Clear old checker inconsistency reports.
+
         Start with --reset clears the inconsistency reports. Old inconsistency reports
         may cause subsequent tests to fail because the tests don't expect them. The
         tests expect the system to be clean at the beginning.
+
+        Args:
+            dmg_command (DmgCommand): DmgCommand used for check operations.
         """
         self.log_step("Clear the checker inconsistency reports.")
         dmg_command.check_stop()
