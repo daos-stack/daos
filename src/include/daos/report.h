@@ -12,6 +12,7 @@ enum report_opts {
 	REPORT_WARNING,
 	REPORT_MSG,
 	/** flags occupy the highest bits */
+	REPORT_RC         = (1 << 28),
 	REPORT_NO_PREFIX  = (1 << 29),
 	REPORT_INDENT_INC = (1 << 30),
 	REPORT_INDENT_DEC = (1 << 31),
