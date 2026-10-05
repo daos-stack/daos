@@ -2148,8 +2148,7 @@ label_strings_test(void **state)
 {
 	int		 i;
 	test_arg_t	*arg = *state;
-	/* clang-format would split the long literal, tripping clang -Wstring-concatenation */
-	/* clang-format off */
+	// clang-format off: splitting the long literal trips -Wstring-concatenation
 	const char	*valid_labels[] = {
 					   "mypool",
 					   "my_pool",
@@ -2170,7 +2169,7 @@ label_strings_test(void **state)
 					     "g006b637-c63a-4734-99bc-a71298597de1",
 					     "0006b637-c63a-4734-99bc-a71298597de1-clone",
 	};
-	/* clang-format on */
+	// clang-format on
 	const char	*invalid_labels[] = {
 					     "",
 					     "no/slashes\\at\\all",
