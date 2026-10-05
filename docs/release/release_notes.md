@@ -17,6 +17,16 @@ The DAOS 2.8.1 release includes the
 
 The DAOS 2.8.1 release includes the following fixes.
 
+* object -- fix EC selection and CPD layout refresh races (DAOS-19636):
+ Fix several race conditions in DAOS object I/O that could occur
+ when a layout refresh happens during rebuild or reintegration. Target selection,
+ shard identity, parity/degraded placement, and enumeration logic could use stale
+ layout data after a refresh.
+ The fix makes layout-dependent decisions version-aware and protected under cob\_lock,
+ revalidates shards against the current layout, preserves request identity fields
+ from a stable snapshot, and returns -DER\_STALE when a layout changes
+ so the operation can refresh and retry safely.
+
 * object -- fix a replica lookup and layout refresh race (DAOS-19636):
  Fix a race in object replica lookup and layout refresh when using extended layouts,
  where selection of the next replica could use stale shard information after an RPC failure.
