@@ -94,8 +94,8 @@ class PoolCreateTests(TestWithServers):
         pools = [add_pool(self, namespace="/run/pool_2/*", create=False, **params[0])]
         self.log.info("Creating")
         pools[0].create()
-        self.assertTrue(
-            pools[0].dmg.result.exit_status == 0,
+        self.assertEqual(
+            pools[0].dmg.result.exit_status, 0,
             "Creating a large capacity pool on a single server should succeed."
         )
 
