@@ -5,7 +5,8 @@
  */
 
 /**
- * Unit tests for the replicated service server helpers of daos_srv/rsvc.h
+ * Unit tests for dss_vos_create_timeout_by_size() of daos_srv/daos_engine.h,
+ * shared by the rsvc and mgmt create paths.
  */
 
 #include <stdarg.h>
@@ -14,7 +15,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 #include <daos/tests_lib.h>
-#include <daos_srv/rsvc.h>
+#include <daos_srv/daos_engine.h>
 
 #define GIB ((uint64_t)1 << 30)
 
@@ -37,7 +38,7 @@ test_create_timeout_by_size_tiers(void **state)
 	for (i = 0; i < ARRAY_SIZE(cases); i++) {
 		print_message("size=" DF_U64 " expected timeout=%u s\n", cases[i].size,
 			      cases[i].timeout);
-		assert_int_equal(ds_rsvc_create_timeout_by_size(cases[i].size), cases[i].timeout);
+		assert_int_equal(dss_vos_create_timeout_by_size(cases[i].size), cases[i].timeout);
 	}
 }
 
@@ -46,14 +47,14 @@ test_create_timeout_by_size_min(void **state)
 {
 	uint64_t size;
 
-	assert_int_equal(ds_rsvc_create_timeout_by_size(0), DS_RSVC_CREATE_TIMEOUT_MIN);
+	assert_int_equal(dss_vos_create_timeout_by_size(0), DSS_VOS_CREATE_TIMEOUT_MIN);
 
 	/* The timeout is a non-decreasing function of the size, never below the minimum. */
 	for (size = 1; size != 0; size <<= 1) {
-		uint32_t timeout = ds_rsvc_create_timeout_by_size(size);
+		uint32_t timeout = dss_vos_create_timeout_by_size(size);
 
-		assert_true(timeout >= DS_RSVC_CREATE_TIMEOUT_MIN);
-		assert_true(timeout >= ds_rsvc_create_timeout_by_size(size - 1));
+		assert_true(timeout >= DSS_VOS_CREATE_TIMEOUT_MIN);
+		assert_true(timeout >= dss_vos_create_timeout_by_size(size - 1));
 	}
 }
 

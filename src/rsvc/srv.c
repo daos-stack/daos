@@ -1473,7 +1473,7 @@ dist_start_set_create_timeout(crt_rpc_t *rpc, const uuid_t dbid, size_t size)
 		return rc;
 	}
 
-	floor = ds_rsvc_create_timeout_by_size(size);
+	floor = dss_vos_create_timeout_by_size(size);
 	if (timeout >= floor)
 		return 0;
 

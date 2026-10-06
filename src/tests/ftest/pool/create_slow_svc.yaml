@@ -36,7 +36,7 @@ server_config:
 pool:
   size: 4GB
 # Fault delays, in milliseconds. For this pool size the RSVC_START create RPC timeout is the
-# 15 seconds minimum (DS_RSVC_CREATE_TIMEOUT_MIN) and the rollback destroy RPC is granted at
+# 15 seconds minimum (DSS_VOS_CREATE_TIMEOUT_MIN) and the rollback destroy RPC is granted at
 # least the same 15 seconds. The normal pool destroy keeps the generic crt_timeout (i.e. 5s).
 slow_svc:
   create_rsvc_delay_ms: 8000

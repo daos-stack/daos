@@ -138,7 +138,7 @@ pool_create_rpc_timeout(crt_rpc_t *tc_req, size_t scm_size)
 	rc = crt_req_get_timeout(tc_req, &default_timeout);
 	D_ASSERTF(rc == 0, "crt_req_get_timeout: " DF_RC "\n", DP_RC(rc));
 
-	timeout = ds_rsvc_create_timeout_by_size(scm_size);
+	timeout = dss_vos_create_timeout_by_size(scm_size);
 
 	return max(timeout, default_timeout);
 }
@@ -341,8 +341,8 @@ out_ranks:
 		 * few seconds times out the rollback and leaves remnants behind for the retry of
 		 * the same pool UUID (DAOS-19608).
 		 */
-		rollback_timeout = max(ds_rsvc_create_timeout_by_size(scm_size),
-				       ds_rsvc_create_timeout_by_size(ds_rsvc_get_md_cap()));
+		rollback_timeout = max(dss_vos_create_timeout_by_size(scm_size),
+				       dss_vos_create_timeout_by_size(ds_rsvc_get_md_cap()));
 		rc_cleanup = pool_destroy_ranks(pool_uuid, dummy != NULL ? dummy : create_ranks,
 						rollback_timeout);
 		if (rc_cleanup)
