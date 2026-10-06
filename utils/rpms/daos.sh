@@ -472,3 +472,10 @@ DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-client-tests-openmpi = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-serialize = ${VERSION}-${RELEASE}")
 build_package "daos-tests-internal"
+
+# A shim to bridge MOFED's openmpi to distribution dependency tags
+EXTERNAL_DEPENDS=("libmpi.so.40()(64bit)")
+PROVIDES=("libmpi.so.40()(64bit)(openmpi-x86_64)")
+PROVIDES+=("libmpi_cxx.so.40()(64bit)")
+PROVIDES+=("libmpi_cxx.so.40()(64bit)(openmpi-x86_64)")
+build_package "daos-mofed-shim"
