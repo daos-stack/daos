@@ -271,7 +271,6 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=cb,hw,medium
         :avocado: tags=vm
         :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_data
@@ -288,7 +287,6 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=cb,hw,medium
         :avocado: tags=vm
         :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_nocache
