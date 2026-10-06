@@ -74,9 +74,11 @@ struct cont_track_eph_leader {
 	struct rank_eph		*cte_server_ephs;
 	d_list_t                 cte_list;
 	int                      cte_servers_num;
-	uint32_t                 cte_deleted : 1;
+	uint32_t                 cte_deleted : 1, cte_rebuilding : 1;
 	/* TS to check for ec_agg_eph sluggish warning */
 	uint64_t                 cte_ec_agg_warn_slug_ts;
+	/* HLC when a rebuild was last seen pending or running */
+	daos_epoch_t             cte_rebuild_hlc;
 };
 
 /*
