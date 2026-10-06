@@ -227,13 +227,19 @@ func TestControl_SystemCheckQuery(t *testing.T) {
 							Status:        chkpb.CheckPoolStatus_CPS_CHECKED,
 							Phase:         chkpb.CheckScanPhase_CSP_DONE,
 							Inconsistency: &mgmtpb.CheckQueryInconsist{},
-							Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+							Time: &mgmtpb.CheckQueryTime{
+								StartTime: uint64(testTime.Unix()),
+								MiscTime:  uint64(testTime.Unix() + 15),
+							},
 							Targets: []*mgmtpb.CheckQueryTarget{
 								{
 									Rank:          3,
 									Status:        chkpb.CheckInstStatus_CIS_COMPLETED,
 									Inconsistency: &mgmtpb.CheckQueryInconsist{},
-									Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+									Time: &mgmtpb.CheckQueryTime{
+										StartTime: uint64(testTime.Unix()),
+										MiscTime:  uint64(testTime.Unix() + 15),
+									},
 								},
 							},
 						},
@@ -259,13 +265,19 @@ func TestControl_SystemCheckQuery(t *testing.T) {
 								Status:        chkpb.CheckPoolStatus_CPS_CHECKED,
 								Phase:         chkpb.CheckScanPhase_CSP_DONE,
 								Inconsistency: &mgmtpb.CheckQueryInconsist{},
-								Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+								Time: &mgmtpb.CheckQueryTime{
+									StartTime: uint64(testTime.Unix()),
+									MiscTime:  uint64(testTime.Unix() + 15),
+								},
 								Targets: []*mgmtpb.CheckQueryTarget{
 									{
 										Rank:          3,
 										Status:        chkpb.CheckInstStatus_CIS_COMPLETED,
 										Inconsistency: &mgmtpb.CheckQueryInconsist{},
-										Time:          &mgmtpb.CheckQueryTime{StartTime: uint64(testTime.Unix())},
+										Time: &mgmtpb.CheckQueryTime{
+											StartTime: uint64(testTime.Unix()),
+											MiscTime:  uint64(testTime.Unix() + 15),
+										},
 									},
 								},
 							},
@@ -274,6 +286,7 @@ func TestControl_SystemCheckQuery(t *testing.T) {
 						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
 						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
 						StartTime: time.Unix(testTime.Unix(), 0),
+						StopTime:  time.Unix(testTime.Unix()+15, 0),
 					},
 				},
 				Reports: []*SystemCheckReport{
@@ -298,6 +311,78 @@ func TestControl_SystemCheckQuery(t *testing.T) {
 				mgmtpb.CheckQueryTarget{},
 				mgmtpb.CheckQueryTime{},
 			))
+		})
+	}
+}
+
+func TestControl_SystemCheckQueryResp_StopTime(t *testing.T) {
+	testTime1 := time.Date(2026, time.September, 21, 10, 30, 15, 10, time.UTC)
+	testTime2 := time.Date(1999, time.December, 31, 23, 59, 59, 0, time.UTC)
+	testTime3 := time.Date(2020, time.March, 15, 9, 30, 25, 1000, time.UTC)
+
+	for name, tc := range map[string]struct {
+		resp      *SystemCheckQueryResp
+		expResult time.Time
+	}{
+		"check still running": {
+			resp: &SystemCheckQueryResp{
+				Status: SystemCheckStatusRunning,
+				Pools: map[string]*SystemCheckPoolInfo{
+					"pool1": {
+						StopTime: time.Now(), // time on pool ignored because we're not done yet
+					},
+				},
+			},
+			expResult: time.Time{},
+		},
+		"done with single pool": {
+			resp: &SystemCheckQueryResp{
+				Status: SystemCheckStatusCompleted,
+				Pools: map[string]*SystemCheckPoolInfo{
+					"pool1": {
+						StopTime: testTime1,
+					},
+				},
+			},
+			expResult: testTime1,
+		},
+		"done with multi pool": {
+			resp: &SystemCheckQueryResp{
+				Status: SystemCheckStatusCompleted,
+				Pools: map[string]*SystemCheckPoolInfo{
+					"pool1": {
+						StopTime: testTime2,
+					},
+					"pool2": {
+						StopTime: testTime1,
+					},
+					"pool3": {
+						StopTime: testTime3,
+					},
+				},
+			},
+			expResult: testTime1,
+		},
+		"pool hasn't stopped": {
+			resp: &SystemCheckQueryResp{
+				Status: SystemCheckStatusCompleted,
+				Pools: map[string]*SystemCheckPoolInfo{
+					"pool1": {
+						StopTime: testTime2,
+					},
+					"pool2": {
+						StopTime: testTime1,
+					},
+					"pool3": {},
+				},
+			},
+			expResult: time.Time{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := tc.resp.StopTime()
+
+			test.CmpAny(t, "stop time", tc.expResult, result)
 		})
 	}
 }
