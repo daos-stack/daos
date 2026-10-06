@@ -3596,18 +3596,18 @@ func TestServer_MgmtSvc_SystemSelfHealEval(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemErase(t *testing.T) {
-	// SystemErase() unconditionally schedules a real process restart via execRestart()
+	// SystemErase() unconditionally schedules a real process restart via unixExec()
 	// (unix.Exec()) from a background goroutine after a short (500ms) delay. Stub it out
 	// for the lifetime of this test function so that running these subtests does not
 	// replace the test binary's process image mid-suite.
 	//
 	// NB: this is intentionally NOT restored (e.g. via defer/t.Cleanup) once the test
-	// function returns. execRestart is invoked asynchronously ~500ms after each subtest's
+	// function returns. unixExec is invoked asynchronously ~500ms after each subtest's
 	// SystemErase() call returns, which is often after the subtest (or even the whole
 	// top-level test) has already finished; restoring the real unix.Exec() before that
 	// delayed goroutine fires would defeat the mock and trigger a genuine self-exec of the
 	// test binary, silently restarting (and replaying) the entire suite.
-	exec = func(argv0 string, argv []string, envv []string) error {
+	unixExec = func(argv0 string, argv []string, envv []string) error {
 		return nil
 	}
 
@@ -3800,6 +3800,32 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 
 			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
+		})
+	}
+}
+
+func TestServer_fsyncDir(t *testing.T) {
+	for name, tc := range map[string]struct {
+		path   func(t *testing.T) string
+		expErr error
+	}{
+		"existing directory": {
+			path: func(t *testing.T) string {
+				testDir, cleanup := test.CreateTestDir(t)
+				t.Cleanup(cleanup)
+				return testDir
+			},
+		},
+		"nonexistent path": {
+			path: func(t *testing.T) string {
+				return "/nonexistent/path/that/should/not/exist"
+			},
+			expErr: errors.New("no such file or directory"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotErr := fsyncDir(tc.path(t))
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

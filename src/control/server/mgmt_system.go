@@ -50,8 +50,8 @@ const (
 	domainLabelsSep      = "=" // invalid in a label name
 )
 
-// exec is a function pointer wrapping unix.Exec() to enable mocking in unit tests.
-var exec = unix.Exec
+// unixExec is a function pointer wrapping unix.Exec() to enable mocking in unit tests.
+var unixExec = unix.Exec
 
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
@@ -2000,7 +2000,7 @@ func (svc *mgmtSvc) scheduleControlPlaneRestart(leaderStr string) error {
 
 		svc.log.Infof("System Erase: exec'ing %s to restart control plane after %s total drain [role=%s]",
 			myPath, time.Since(scheduledAt), leaderStr)
-		if err := exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
+		if err := unixExec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
 			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
 		}
 	}()
