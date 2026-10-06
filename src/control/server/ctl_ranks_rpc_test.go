@@ -556,9 +556,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 // TestServer_CtlSvc_ResetFormatRanks_ControlMetadata verifies that ResetFormatRanks()
 // only removes the control-metadata subdirectory belonging to the targeted engine(s)
 // (ControlMetadataEnginePath()), leaving any other engine's subdirectory and the
-// shared control_raft directory (used by the MS replica's raft DB) untouched. This
-// guards against the bug fixed in a5ff9d3369, where the whole shared control-metadata
-// root was wiped regardless of which ranks were targeted.
+// shared control_raft directory (used by the MS replica's raft DB) untouched.
 func TestServer_CtlSvc_ResetFormatRanks_ControlMetadata(t *testing.T) {
 	for name, tc := range map[string]struct {
 		ranks             string

@@ -1099,8 +1099,8 @@ func TestDmg_systemEraseCmd_execute(t *testing.T) {
 // This is a regression test.
 func TestDmg_systemEraseCmd_uninitialized_error_handling(t *testing.T) {
 	for name, errorMsg := range map[string]string{
-		"exact uninitialized error":   "system is uninitialized (storage format required?)",
-		"uninitialized wrapped error": "wrapped: system is uninitialized (storage format required?)",
+		"exact uninitialized error":   system.ErrUninitialized.Error(),
+		"uninitialized wrapped error": errors.Wrap(system.ErrUninitialized, "wrapped").Error(),
 		"other error":                 "some other error",
 		"unavailable error":           "raft service unavailable",
 	} {

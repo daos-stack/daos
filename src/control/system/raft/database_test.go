@@ -125,11 +125,9 @@ func TestSystem_Database_RemoveFiles(t *testing.T) {
 	}
 }
 
-// TestSystem_Database_RemoveFiles_RenameGuaranteesCleanRestart verifies the core safety
-// property relied on by SystemErase(): even if removal of the renamed-aside copy fails
-// (e.g. a transient I/O error), RaftDir itself is already gone, so a subsequent restart
-// sees no database at that path and bootstraps fresh rather than reloading stale,
-// partially-erased raft state.
+// TestSystem_Database_RemoveFiles_RenameGuaranteesCleanRestart verifies that even if removal of
+// the renamed-aside copy fails (e.g. a transient I/O error), RaftDir itself is already gone, so a
+// subsequent restart sees no database at that path.
 func TestSystem_Database_RemoveFiles_RenameGuaranteesCleanRestart(t *testing.T) {
 	usrCurrent, err := user.Current()
 	if err != nil {

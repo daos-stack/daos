@@ -267,18 +267,28 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		}
 	}
 
-	// In MD-on-SSD mode, remove only the per-engine control-metadata subdirectory of
-	// each targeted instance. This is scoped deliberately: the shared host-level root
-	// also holds the MS replica's raft DB (control_raft) and other, non-targeted
-	// engines' subdirectories, neither of which should be touched by a partial-rank
-	// reset. os.RemoveAll() is a no-op if the subdirectory is already gone, so repeat
-	// calls for the same rank are safe.
 	for _, ei := range instances {
 		storage := ei.GetStorage()
-		if storage == nil || !storage.ControlMetadataPathConfigured() {
+		if storage == nil {
+			return nil, errors.Errorf("instance %d: storage provider not initialized", ei.Index())
+		}
+
+		// In PMem mode just remove the superblock and rely on the format flow to clear
+		// metadata.
+		if !storage.ControlMetadataPathConfigured() {
+			if err := ei.RemoveSuperblock(); err != nil {
+				return nil, err
+			}
+			ei.requestStart(ctx)
 			continue
 		}
 
+		// In MD-on-SSD mode, remove only the per-engine control-metadata subdirectory of
+		// each targeted instance. This is scoped deliberately: the shared host-level root
+		// also holds the MS replica's raft DB (control_raft) and other, non-targeted
+		// engines' subdirectories, neither of which should be touched by a partial-rank
+		// reset. os.RemoveAll() is a no-op if the subdirectory is already gone, so repeat
+		// calls for the same rank are safe.
 		enginePath := storage.ControlMetadataEnginePath()
 		svc.log.Debugf("Removing control metadata directory for instance %d: %s", ei.Index(),
 			enginePath)
@@ -286,17 +296,6 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 			return nil, errors.Wrapf(err, "removing control metadata directory for instance %d",
 				ei.Index())
 		}
-	}
-
-	for _, ei := range instances {
-		if !svc.storage.ControlMetadataPathConfigured() {
-			// In PMem mode just remove superblock and rely on format flow to clear
-			// metadata.
-			if err := ei.RemoveSuperblock(); err != nil {
-				return nil, err
-			}
-		}
-
 		ei.requestStart(ctx)
 	}
 

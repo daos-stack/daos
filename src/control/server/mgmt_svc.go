@@ -80,38 +80,23 @@ func (br *batchRequest) sendResponse(parent context.Context, msg proto.Message, 
 // mgmtpb.MgmtSvcServer.
 type mgmtSvc struct {
 	mgmtpb.UnimplementedMgmtSvcServer
-	log               logging.Logger
-	harness           *EngineHarness
-	membership        *system.Membership // if MS leader, system membership list
-	sysdb             *raft.Database
-	rpcClient         control.UnaryInvoker
-	events            *events.PubSub
-	systemProps       daos.SystemPropertyMap
-	clientNetworkHint []*mgmtpb.ClientNetHint
-	batchInterval     time.Duration
-	batchReqs         batchReqChan
-	serialReqs        batchReqChan
-	groupUpdateReqs   chan bool
-	lastMapVer        uint32
-	cancel            context.CancelFunc
-	// grpcServer is a reference to the server's gRPC server, wired up once it's
-	// created (see server.go's setupGrpc()). It is used by
-	// scheduleControlPlaneRestart() to drain in-flight RPCs (in particular, this
-	// SystemErase call's own response) before restarting the control plane. It
-	// is nil in unit tests, where scheduleControlPlaneRestart() falls back to a
-	// short sleep instead.
-	grpcServer *grpc.Server
-	// gracefulStopTimeout bounds how long scheduleControlPlaneRestart() waits
-	// for grpcServer.GracefulStop() before forcing a hard Stop(). Defaults to
-	// defaultGracefulStopTimeout but may be overridden (e.g. in unit tests).
-	gracefulStopTimeout time.Duration
-	// loopWg tracks background processing loops (batchReqLoop, serialReqLoop,
-	// leaderTaskLoop) started by startAsyncLoops/startLeaderLoops, so that
-	// Close() can block until they have actually exited rather than merely
-	// signaling cancellation and returning immediately. This avoids racing
-	// with goroutine-leak checks (e.g. goleak) that run shortly after a
-	// test's cleanup completes.
-	loopWg sync.WaitGroup
+	log                 logging.Logger
+	harness             *EngineHarness
+	membership          *system.Membership // if MS leader, system membership list
+	sysdb               *raft.Database
+	rpcClient           control.UnaryInvoker
+	events              *events.PubSub
+	systemProps         daos.SystemPropertyMap
+	clientNetworkHint   []*mgmtpb.ClientNetHint
+	batchInterval       time.Duration
+	batchReqs           batchReqChan
+	serialReqs          batchReqChan
+	groupUpdateReqs     chan bool
+	lastMapVer          uint32
+	cancel              context.CancelFunc
+	grpcServer          *grpc.Server   // reference to server's gRPC server
+	gracefulStopTimeout time.Duration  // bound how long to wait for gRPC server's GracefulStop
+	loopWg              sync.WaitGroup // block on background processing loops exit
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {

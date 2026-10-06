@@ -98,6 +98,7 @@ func (ei *EngineInstance) needsSuperblock() (bool, error) {
 	// superblock may have been deleted.
 	err := ei.ReadSuperblock()
 	if os.IsNotExist(errors.Cause(err)) {
+		ei.setSuperblock(nil)
 		ei.log.Debugf("instance %d: superblock not found", ei.Index())
 		return true, nil
 	}

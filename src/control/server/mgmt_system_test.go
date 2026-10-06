@@ -3607,7 +3607,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	// top-level test) has already finished; restoring the real unix.Exec() before that
 	// delayed goroutine fires would defeat the mock and trigger a genuine self-exec of the
 	// test binary, silently restarting (and replaying) the entire suite.
-	execRestart = func(argv0 string, argv []string, envv []string) error {
+	exec = func(argv0 string, argv []string, envv []string) error {
 		return nil
 	}
 
