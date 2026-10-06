@@ -20,14 +20,15 @@ import (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Scan          storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format        storageFormatCmd  `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query         storageQueryCmd   `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	NvmeRebind    nvmeRebindCmd     `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
-	NvmeAddDevice nvmeAddDeviceCmd  `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
-	Set           setFaultyCmd      `command:"set" description:"Manually set the device state."`
-	Replace       storageReplaceCmd `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
-	LedManage     ledManageCmd      `command:"led" description:"Manage LED status for supported drives."`
+	Scan          storageScanCmd         `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format        storageFormatCmd       `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
+	FormatStatus  storageFormatStatusCmd `command:"format-status" description:"Report whether engines on hosts in the host list are awaiting storage format, without performing a format."`
+	Query         storageQueryCmd        `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	NvmeRebind    nvmeRebindCmd          `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
+	NvmeAddDevice nvmeAddDeviceCmd       `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
+	Set           setFaultyCmd           `command:"set" description:"Manually set the device state."`
+	Replace       storageReplaceCmd      `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
+	LedManage     ledManageCmd           `command:"led" description:"Manage LED status for supported drives."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -102,7 +103,6 @@ type storageFormatCmd struct {
 	Force   bool    `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
 	Replace bool    `long:"replace" description:"Replace an excluded rank. Allows a DAOS engine instance to reclaim its old rank number after metadata is lost due to PMem or other storage media failure"`
 	Rank    *uint32 `long:"rank" description:"Specific rank to replace (only valid with --replace)"`
-	Status  bool    `long:"status" description:"Report whether engines on hosts in the host list are awaiting storage format, without performing a format"`
 }
 
 // Execute is run when storageFormatCmd activates.
@@ -113,12 +113,6 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 
 	if cmd.Replace && cmd.Force {
 		return errIncompatFlags("replace", "force")
-	}
-	if cmd.Status && cmd.Force {
-		return errIncompatFlags("status", "force")
-	}
-	if cmd.Status && cmd.Replace {
-		return errIncompatFlags("status", "replace")
 	}
 
 	if cmd.Replace && len(cmd.getHostList()) != 1 {
@@ -138,7 +132,6 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		Reformat: cmd.Force,
 		Replace:  cmd.Replace,
 		Rank:     rank,
-		Status:   cmd.Status,
 	}
 	req.SetHostList(cmd.getHostList())
 
@@ -149,10 +142,6 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, resp.Errors())
-	}
-
-	if cmd.Status {
-		return cmd.printFormatStatusResp(resp)
 	}
 
 	return cmd.printFormatResp(resp)
@@ -177,7 +166,33 @@ func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) er
 	return resp.Errors()
 }
 
-func (cmd *storageFormatCmd) printFormatStatusResp(resp *control.StorageFormatResp) error {
+// storageFormatStatusCmd is the struct representing the format-status storage subcommand.
+type storageFormatStatusCmd struct {
+	baseCmd
+	ctlInvokerCmd
+	hostListCmd
+	cmdutil.JSONOutputCmd
+}
+
+// Execute is run when storageFormatStatusCmd activates.
+//
+// Report whether engines on hosts in the host list are awaiting storage format, without
+// performing a format.
+func (cmd *storageFormatStatusCmd) Execute(args []string) (err error) {
+	ctx := cmd.MustLogCtx()
+
+	req := &control.StorageFormatReq{Status: true}
+	req.SetHostList(cmd.getHostList())
+
+	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
 	var outErr strings.Builder
 	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
 		return err

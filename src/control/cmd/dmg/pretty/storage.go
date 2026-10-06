@@ -138,7 +138,7 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 
 // PrintStorageFormatStatusMap generates a human-readable representation of the
 // supplied HostStorageMap which is populated in response to a StorageFormat
-// status query (dmg storage format --status). Only format-related engine
+// status query (dmg storage format-status). Only format-related engine
 // instance state is reported; no format operation is performed.
 func PrintStorageFormatStatusMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	if len(hsm) == 0 {

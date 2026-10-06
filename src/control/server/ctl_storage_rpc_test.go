@@ -32,7 +32,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/provider/system"
 	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -40,6 +39,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/mount"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const defaultRdbSize uint64 = uint64(daos.DefaultDaosMdCapSize)
@@ -2583,7 +2583,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			if tc.scmMounted {
 				getFsRetStr = "ext4"
 			}
-			smsc := &system.MockSysConfig{
+			smsc := &sysprov.MockSysConfig{
 				IsMountedBool:  tc.scmMounted,
 				GetfsStr:       getFsRetStr,
 				SourceToTarget: devToMount,
@@ -2595,20 +2595,20 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				if !tc.tmpfsEmpty {
 					avail--
 				}
-				smsc.GetfsUsageResps = []system.GetfsUsageRetval{
+				smsc.GetfsUsageResps = []sysprov.GetfsUsageRetval{
 					{
 						Total: total,
 						Avail: avail,
 					},
 				}
 			}
-			sysProv := system.NewMockSysProvider(log, smsc)
+			sysProv := sysprov.NewMockSysProvider(log, smsc)
 			mounter := mount.NewProvider(log, sysProv)
 			scmProv := scm.NewProvider(&scm.ProviderConfig{
 				Log:       log,
 				Sys:       sysProv,
 				Mounter:   mounter,
-				KernelCfg: system.KernelConfig{},
+				KernelCfg: sysprov.KernelConfig{},
 			})
 			bdevProv := bdev.NewMockProvider(log, nil)
 			if tc.getSysMemInfo == nil {
@@ -4971,7 +4971,7 @@ func (m *mockEngineWithNotify) GetStorage() *storage.Provider {
 	log := logging.NewCommandLineLogger()
 
 	// Create minimal mock sys and SCM providers needed for formatMetadata
-	sysProv := system.NewMockSysProvider(log, nil)
+	sysProv := sysprov.NewMockSysProvider(log, nil)
 	mounter := mount.NewProvider(log, sysProv)
 	scmProv := scm.NewProvider(&scm.ProviderConfig{
 		Log:     log,

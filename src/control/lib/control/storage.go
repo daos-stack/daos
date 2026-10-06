@@ -541,7 +541,7 @@ func allEnginesAwaitingFormat(hsm HostStorageMap) bool {
 }
 
 // WaitForStorageFormatReady polls the read-only storage-format status (as
-// used by `dmg storage format --status`) on the configured hostlist until
+// used by `dmg storage format-status`) on the configured hostlist until
 // every reported engine instance is awaiting format, the supplied context is
 // cancelled, or an unexpected (non-transient) error occurs.
 //
