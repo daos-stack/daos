@@ -114,16 +114,16 @@ class DaosAggregationThrottling(IorTestBase):
 
         self.log.info("Max perf diff: %s, expected perf diff: %s", max_perf_diff,
                       expected_perf_diff)
-        self.assertSmaller(
+        self.assertLess(
             max_perf_diff, expected_perf_diff,
             f"Max performance difference > {expected_perf_diff}")
         self.log.info("Min perf diff: %s, expected perf diff: %s", min_perf_diff,
                       expected_perf_diff)
-        self.assertSmaller(
+        self.assertLess(
             min_perf_diff, expected_perf_diff,
             f"Min performance difference > {expected_perf_diff}")
         self.log.info("Mean perf diff: %s, expected perf diff: %s", mean_perf_diff,
                       expected_perf_diff)
-        self.assertSmaller(
+        self.assertLess(
             mean_perf_diff, expected_perf_diff,
             f"Mean performance difference > {expected_perf_diff}")
