@@ -2510,11 +2510,34 @@ obj_rebuilding_io_check(struct ds_cont_child *child, daos_epoch_t epoch, uint32_
 	return 0;
 }
 
+static bool
+obj_tgt_discarding(struct ds_pool *pool)
+{
+	struct pool_target *target;
+	bool                discarding = true;
+	int                 rc;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = pool_map_find_target_by_rank_idx(pool->sp_map, dss_self_rank(),
+					      dss_get_module_info()->dmi_tgt_id, &target);
+	if (rc == 1)
+		discarding = target->ta_comp.co_status != PO_COMP_ST_UPIN;
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	if (rc != 1)
+		D_ERROR(DF_UUID " failed to find local rank/target=%u/%d, rc=%d\n",
+			DP_UUID(pool->sp_uuid), dss_self_rank(), dss_get_module_info()->dmi_tgt_id,
+			rc);
+
+	return discarding;
+}
+
 static int
 obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		      uint32_t rpc_map_ver, uint32_t flags)
 {
 	struct ds_pool *pool = child->sc_pool->spc_pool;
+	bool            modifying;
 
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
 		/* EC aggregation is still in-flight, rebuild should wait until it's paused */
@@ -2526,7 +2549,42 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 		}
 	}
 
-	if (!obj_is_modification_opc(opc) && (opc != DAOS_OBJ_RPC_CPD || flags & ORF_CPD_RDONLY))
+	modifying =
+	    obj_is_modification_opc(opc) || (opc == DAOS_OBJ_RPC_CPD && !(flags & ORF_CPD_RDONLY));
+
+	/*
+	 * Do not let online I/O race with VOS discard. The server-side discard
+	 * state is authoritative, so do not depend on the client to identify a
+	 * reintegrating target correctly.
+	 */
+	if (atomic_load(&pool->sp_discarding) > 0 && obj_tgt_discarding(pool)) {
+		if (opc == DAOS_OBJ_RPC_FETCH) {
+			/*
+			 * Placement should not select a reintegrating target for fetch.
+			 * Treat a stale or inconsistent client layout as retryable rather
+			 * than asserting on remote input.
+			 */
+			D_ERROR(DF_UUID " reject fetch during discard on rank/target=%u/%d, "
+					"map_ver=%u flags=%#x reintegrating=%d\n",
+				DP_UUID(pool->sp_uuid), dss_self_rank(),
+				dss_get_module_info()->dmi_tgt_id, rpc_map_ver, flags,
+				!!(flags & ORF_REINTEGRATING_IO));
+			return -DER_FETCH_AGAIN;
+		}
+
+		if (modifying) {
+			if (!(flags & ORF_REINTEGRATING_IO))
+				D_ERROR(DF_UUID " reject modification without ORF_REINTEGRATING_IO "
+						"during discard on rank/target=%u/%d, opc=%s(%u) "
+						"map_ver=%u flags=%#x\n",
+					DP_UUID(pool->sp_uuid), dss_self_rank(),
+					dss_get_module_info()->dmi_tgt_id, obj_opc_to_str(opc), opc,
+					rpc_map_ver, flags);
+			return -DER_UPDATE_AGAIN;
+		}
+	}
+
+	if (!modifying)
 		return 0;
 
 	if (atomic_load(&pool->sp_rebuilding)) {
@@ -2540,15 +2598,6 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
 			        version);
 			return -DER_UPDATE_AGAIN;
 		}
-	}
-
-	/* If the incoming I/O is during integration, then it needs to wait the
-	 * vos discard to finish, which otherwise might discard these new in-flight
-	 * I/O update.
-	 */
-	if ((flags & ORF_REINTEGRATING_IO) && atomic_load(&pool->sp_discarding) > 0) {
-		D_ERROR("reintegrating " DF_UUID " retry.\n", DP_UUID(pool->sp_uuid));
-		return -DER_UPDATE_AGAIN;
 	}
 
 	return 0;
