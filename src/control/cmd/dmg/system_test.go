@@ -481,6 +481,18 @@ func TestDmg_SystemCommands(t *testing.T) {
 			nil,
 		},
 		{
+			// --no-wait is required here to avoid blocking on
+			// WaitForStorageFormatReady against the mock invoker, which
+			// never reports engines as awaiting format.
+			"system erase with no-wait",
+			"system erase --no-wait",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{FailOnUnavailable: true}),
+				printRequest(t, &control.SystemEraseReq{}),
+			}, " "),
+			nil,
+		},
+		{
 			"system self-heal evaluate",
 			"system self-heal eval",
 			strings.Join([]string{

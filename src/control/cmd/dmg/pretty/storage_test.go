@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1250,6 +1251,91 @@ SCM Mount Format Result
 				t.Fatal(err)
 			}
 			if err := PrintStorageFormatMap(tc.resp.HostStorage, &bld, PrintWithVerboseOutput(true)); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintStorageFormatStatusMap(t *testing.T) {
+	for name, tc := range map[string]struct {
+		hsm         control.HostStorageMap
+		expPrintStr string
+	}{
+		"empty response": {},
+		"single host, single engine, awaiting format": {
+			hsm: func() control.HostStorageMap {
+				hsm := make(control.HostStorageMap)
+				hs := &control.HostStorage{
+					EngineFormatStatus: []*control.EngineFormatStatus{
+						{Instanceidx: 0, AwaitingFormat: true, State: "AwaitFormat"},
+					},
+				}
+				if err := hsm.Add("host1", hs); err != nil {
+					t.Fatal(err)
+				}
+				return hsm
+			}(),
+			expPrintStr: `
+Format Status:
+  Hosts Engine Awaiting Format State       
+  ----- ------ --------------- -----       
+  host1 0      true            AwaitFormat 
+`,
+		},
+		"single host, multiple engines, mixed status": {
+			hsm: func() control.HostStorageMap {
+				hsm := make(control.HostStorageMap)
+				hs := &control.HostStorage{
+					EngineFormatStatus: []*control.EngineFormatStatus{
+						{Instanceidx: 0, AwaitingFormat: true, State: "AwaitFormat"},
+						{Instanceidx: 1, AwaitingFormat: false, State: "Ready"},
+					},
+				}
+				if err := hsm.Add("host1", hs); err != nil {
+					t.Fatal(err)
+				}
+				return hsm
+			}(),
+			expPrintStr: `
+Format Status:
+  Hosts Engine Awaiting Format State       
+  ----- ------ --------------- -----       
+  host1 0      true            AwaitFormat 
+  host1 1      false           Ready       
+`,
+		},
+		"multiple hosts, same status": {
+			hsm: func() control.HostStorageMap {
+				hsm := make(control.HostStorageMap)
+				hs := &control.HostStorage{
+					EngineFormatStatus: []*control.EngineFormatStatus{
+						{Instanceidx: 0, AwaitingFormat: true, State: "AwaitFormat"},
+					},
+				}
+				if err := hsm.Add("host1", hs); err != nil {
+					t.Fatal(err)
+				}
+				if err := hsm.Add("host2", hs); err != nil {
+					t.Fatal(err)
+				}
+				return hsm
+			}(),
+			expPrintStr: `
+Format Status:
+  Hosts     Engine Awaiting Format State       
+  -----     ------ --------------- -----       
+  host[1-2] 0      true            AwaitFormat 
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			if err := PrintStorageFormatStatusMap(tc.hsm, &bld); err != nil {
 				t.Fatal(err)
 			}
 

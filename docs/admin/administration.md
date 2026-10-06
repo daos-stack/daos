@@ -1438,6 +1438,22 @@ dmg system reintegrate -r <engine_rank>
    - Will create a NEW rank instead of reusing the old one
    - Orphaned ranks are generally considered undesirable
 
+### Storage Format Status
+
+`dmg storage format-status` reports whether engines on the hosts in the host list are
+currently awaiting storage format, without performing a format or any other side effect. This is
+useful for polling engines after a `dmg system erase` or after replacing failed storage, to confirm
+engines have reached the `AwaitFormat` state before issuing `dmg storage format`:
+
+```bash
+$ dmg storage format-status -l storage-server-16
+Format Status:
+  Hosts             Engine Awaiting Format State
+  -----             ------ --------------- -----
+  storage-server-16 0      true            AwaitFormat
+  storage-server-16 1      false           Ready
+```
+
 ### System Erase
 
 To erase the DAOS storage configuration, the `dmg system erase`
@@ -1445,13 +1461,25 @@ command can be used. Before doing this, the affected engines need to be
 stopped by running `dmg system stop` (if necessary with the `--force` flag).
 The erase operation will destroy any pools that may still exist, and will
 unconfigure the storage. It will not stop the daos\_server process, so
-the `dmg` command can still be used. For example, the system can be
+the `dmg` command can still be used.
+
+By default, `dmg system erase` blocks after issuing the erase until every engine has restarted
+and reached the `AwaitFormat` state, or until 5 minutes have elapsed, whichever comes first. Pass
+`--no-wait` to return immediately after the erase RPC completes instead of waiting:
+
+```bash
+$ dmg system erase --no-wait
+```
+
+If the wait times out, `dmg system erase` reports an error advising the use of `--no-wait`, but
+the erase itself has still been issued; use `dmg storage format-status` or `dmg system query -v`
+to check engine state before retrying. Once engines report `AwaitFormat`, the system can be
 formatted again by running `dmg storage format`.
 
 !!! note
     Note that `dmg system erase` does not currently reset the SCM.
     The `/dev/pmemX` devices will remain mounted,
-    and the PMem configuration will not be reset to Memory Mode.
+    and the PMem configuration will not be reset.
     To completely unconfigure the SCM, it is advisable to run
     `daos_server scm reset` which will completely reset the PMem.
     A reboot will be required to finalize the change of the PMem
