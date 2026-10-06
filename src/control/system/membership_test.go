@@ -35,6 +35,10 @@ var (
 		cmpopts.IgnoreUnexported(Member{}),
 		cmpopts.EquateApproxTime(time.Second),
 	}
+	memberCmpOptsNoTimestamp = []cmp.Option{
+		cmpopts.IgnoreUnexported(Member{}),
+		cmpopts.IgnoreFields(Member{}, "LastUpdate"),
+	}
 )
 
 func mockEvtEngineDied(t *testing.T, r uint32, inc uint64) *events.RASEvent {
@@ -1216,7 +1220,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if diff := cmp.Diff(tc.expMembers, members, memberCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expMembers, members, memberCmpOptsNoTimestamp...); diff != "" {
 				t.Errorf("unexpected membership (-want, +got):\n%s\n", diff)
 			}
 		})

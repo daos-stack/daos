@@ -66,12 +66,6 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 		return nil, err
 	}
 
-	// --num-engines and --allow-numa-imbalance are mutually exclusive
-	if req.ConfGenerateReq.AllowNumaImbalance && req.ConfGenerateReq.NrEngines > 0 {
-		return nil, errors.New("--num-engines and --allow-numa-imbalance flags are mutually exclusive; " +
-			"when --allow-numa-imbalance is set, engine count is determined automatically based on NUMA nodes")
-	}
-
 	cmd.Debugf("control API ConfGenerateRemote called with req: %+v", req)
 
 	// Use a modified commandline logger to send all log messages to stderr in debug mode
