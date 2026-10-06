@@ -71,7 +71,7 @@ class DaosAggregationThrottling(IorTestBase):
         out = self.run_ior_with_pool(create_pool=False)
         metric_after_aggregate = IorCommand.get_ior_metrics(out)
 
-        expected_perf_diff = 50.0
+        expected_perf_diff = 35.0
 
         self.verify_performance(metric_before_aggregate,
                                 metric_after_aggregate,
@@ -114,16 +114,16 @@ class DaosAggregationThrottling(IorTestBase):
 
         self.log.info("Max perf diff: %s, expected perf diff: %s", max_perf_diff,
                       expected_perf_diff)
-        self.assertGreater(
+        self.assertSmaller(
             max_perf_diff, expected_perf_diff,
             f"Max performance difference > {expected_perf_diff}")
         self.log.info("Min perf diff: %s, expected perf diff: %s", min_perf_diff,
                       expected_perf_diff)
-        self.assertGreater(
+        self.assertSmaller(
             min_perf_diff, expected_perf_diff,
             f"Min performance difference > {expected_perf_diff}")
         self.log.info("Mean perf diff: %s, expected perf diff: %s", mean_perf_diff,
                       expected_perf_diff)
-        self.assertGreater(
+        self.assertSmaller(
             mean_perf_diff, expected_perf_diff,
             f"Mean performance difference > {expected_perf_diff}")
