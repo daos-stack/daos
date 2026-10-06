@@ -1110,11 +1110,12 @@ static const struct CMUnitTest scrubbing_tests[] = {
 	   "vos_iterate_obj() callback", object_deleted_by_aggregation_and_gc),
 };
 
+#if 0
 static const struct CMUnitTest scrubbing_testsTG[] = {
 	TS("CSUM_SCRUBBING_15: DAOS-19721 - object fully punched and GC'd inside "
 	   "vos_iterate_obj() callback", object_deleted_by_aggregation_and_gc),
 };
-
+#endif /** 0 */
 int
 run_scrubbing_tests(int argc, char *argv[])
 {
@@ -1131,7 +1132,7 @@ run_scrubbing_tests(int argc, char *argv[])
 	(void) scrubbing_tests;
 	rc += cmocka_run_group_tests_name(
 		"Storage and retrieval of checksums for Single Value Type",
-		scrubbing_testsTG, NULL, NULL);
+		scrubbing_tests, NULL, NULL);
 
 	return rc;
 }
