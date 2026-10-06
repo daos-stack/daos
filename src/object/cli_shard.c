@@ -171,7 +171,7 @@ rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	if (rc == -DER_CSUM && is_ec_obj) {
 		uint32_t tgt_idx;
 
-		tgt_idx = rw_args->shard_args->auxi.shard % obj_get_grp_size(obj);
+		tgt_idx = rw_args->shard_args->auxi.ec_tgt_idx;
 		rc = obj_ec_fail_info_insert(rw_args->shard_args->reasb_req, tgt_idx);
 		if (rc) {
 			D_ERROR(DF_OID" fail info insert"
@@ -899,8 +899,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				uint32_t		 tgt_idx;
 
 				sa = &rw_args->shard_args->auxi;
-				tgt_idx = sa->shard %
-					  obj_get_grp_size(rw_args->shard_args->auxi.obj_auxi->obj);
+				tgt_idx = sa->ec_tgt_idx;
 				rc = obj_ec_fail_info_insert(reasb_req, tgt_idx);
 				if (rc)
 					D_ERROR(DF_OID" fail info insert: " DF_RC"\n",

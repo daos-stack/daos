@@ -280,7 +280,7 @@ struct shard_auxi_args {
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
-	/* only for EC, the target idx [0, k + p) */
+	/* EC target index [0, k + p), saved from the request layout. */
 	uint16_t		 ec_tgt_idx;
 	/* group index within the req_tgts->ort_shard_tgts */
 	uint16_t		 grp_idx;
