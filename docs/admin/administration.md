@@ -1148,6 +1148,28 @@ or after an SSD failure in MD-on-SSD mode, storage for that rank will need to be
 metadata regenerated. If other hardware on the storage server has not changed, the old rank can be
 "reused" by formatting using the `dmg storage format --replace` option.
 
+#### Selecting the Rank to Replace
+
+By default, `dmg storage format --replace` auto-detects which excluded rank to reuse by matching
+the joining engine's control address, fabric URIs/contexts, and fault domain against the existing
+system membership. A specific rank may instead be supplied explicitly with `--rank`:
+
+```bash
+$ dmg storage format -l storage-server-16 --replace --rank 2
+```
+
+- `--rank` is only valid in combination with `--replace`; it is rejected otherwise.
+- When `--rank` is supplied, the Management Service verifies the given rank is excluded from all
+  pools it belongs to and that the joining engine's UUID differs from the existing member's (i.e.
+  this is a genuine replacement, not a duplicate join).
+- When `--rank` is omitted, the same validation is performed against whichever member is found to
+  match the joining engine's connection details; if no unique match can be found, the join is
+  rejected.
+- As a safety check, if the engine's on-disk superblock already has a valid rank assigned, the
+  replace request is refused with `cannot replace: superblock already has valid rank <N>
+  (reformat required)` rather than silently reusing or overwriting it. This guards against
+  accidentally running `--replace` against an engine that was never actually reset.
+
 #### PMem (DCPM) Failure Recovery Workflow
 
 An example workflow for PMem failure would be:
