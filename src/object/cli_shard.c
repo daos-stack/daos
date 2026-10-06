@@ -2710,7 +2710,7 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	cb_args.epoch = &args->ka_auxi.epoch;
 	cb_args.th = &obj_args->th;
 	cb_args.anchor = args->ka_anchor;
-	cb_args.shard = obj_shard->do_shard_idx;
+	cb_args.shard       = obj_shard->do_shard;
 	cb_args.enqueue_id = &args->ka_auxi.enqueue_id;
 	cb_args.max_delay = &args->ka_auxi.obj_auxi->max_delay;
 	cb_args.send_time   = daos_client_metric ? daos_get_ntime() : 0;
