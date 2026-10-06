@@ -1103,7 +1103,7 @@ obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi)
 }
 
 /**
- * Query target info. ec_tgt_idx only used for EC obj fetch.
+ * Query target info, including the EC target index from the request layout.
  */
 static int
 obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
@@ -1133,15 +1133,16 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	}
 	layout = obj->cob_shards;
 
-	if (bitmap != NIL_BITMAP) {
+	shard_tgt->st_ec_tgt = 0;
+	if (obj_is_ec(obj)) {
 		uint32_t tgt_idx;
 		uint32_t grp_idx;
 
 		grp_idx = shard / obj_get_grp_size(obj);
-		tgt_idx = obj_shard->do_id.id_shard -
-			  grp_idx * daos_oclass_grp_size(obj_get_oca(obj_auxi->obj));
+		tgt_idx =
+		    obj_shard->do_id.id_shard - grp_idx * daos_oclass_grp_size(obj_get_oca(obj));
 
-		if (isclr(bitmap, tgt_idx)) {
+		if (bitmap != NIL_BITMAP && isclr(bitmap, tgt_idx)) {
 			D_DEBUG(DB_IO, DF_OID " shard %u is not in bitmap\n",
 				DP_OID(obj->cob_md.omd_id), obj_shard->do_id.id_shard);
 			D_GOTO(unlock, rc = -DER_NONEXIST);
@@ -3607,9 +3608,8 @@ obj_ec_recxs_convert(d_list_t *merged_list, daos_recx_t *recx,
 
 	cell_nr = obj_ec_cell_rec_nr(oca);
 	stripe_nr = obj_ec_stripe_rec_nr(oca);
-	shard = shard_auxi->shard % obj_get_grp_size(shard_auxi->obj_auxi->obj);
-	shard = obj_ec_shard_off(shard_auxi->obj_auxi->obj,
-				 shard_auxi->obj_auxi->dkey_hash, shard);
+	shard     = obj_ec_shard_off(shard_auxi->obj_auxi->obj, shard_auxi->obj_auxi->dkey_hash,
+				     shard_auxi->ec_tgt_idx);
 	/* If all parity nodes are down(degraded mode), then
 	 * the enumeration is sent to all data nodes.
 	 */
@@ -7073,15 +7073,15 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 			if (shard < 0)
 				D_GOTO(out, shard);
 
-			if (is_ec_data_shard(obj_auxi->obj, obj_auxi->dkey_hash, shard)) {
-				first = shard;
+			first = shard - grp_start;
+			if (is_ec_data_shard(obj_auxi->obj, obj_auxi->dkey_hash, first)) {
 				/* If the leader is one of the data shard, then let's check
 				 * if all data shards are valid, then set the bitmaps.
 				 */
 				D_GOTO(out_set, shard);
 			} else {
 				if (bitmaps != NULL)
-					setbit(*bitmaps, shard % grp_size);
+					setbit(*bitmaps, shard - grp_start);
 			}
 			D_GOTO(out, shard);
 		}
@@ -7089,7 +7089,7 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 		shard = obj_ec_random_parity_get(obj, map_ver, obj_auxi->dkey_hash, grp_idx);
 		if (shard >= 0) {
 			if (bitmaps != NULL)
-				setbit(*bitmaps, shard % grp_size);
+				setbit(*bitmaps, shard - grp_start);
 			D_GOTO(out, shard);
 		}
 		if (shard != -DER_NONEXIST)
@@ -7121,7 +7121,7 @@ out_set:
 		}
 
 		if (bitmaps != NULL)
-			setbit(*bitmaps, shard_idx % obj_ec_tgt_nr(oca));
+			setbit(*bitmaps, shard_idx - grp_start);
 	}
 
 	*shard_cnt = obj_ec_data_tgt_nr(oca);
@@ -7772,6 +7772,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	uuid_t			co_hdl;
 	uuid_t			co_uuid;
 	uint32_t		grp_size;
+	uint32_t                 layout_grp_size;
 	int			grp_idx;
 	uint32_t		grp_nr;
 	uint32_t		shard_cnt;
@@ -7877,14 +7878,23 @@ dc_obj_query_key(tse_task_t *api_task)
 
 	grp_size = daos_oclass_grp_size(&obj->cob_oca);
 
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (obj->cob_version != map_ver || obj->cob_shards == NULL) {
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		D_GOTO(out_task, rc = -DER_STALE);
+	}
+	layout_grp_size = obj_get_grp_size(obj);
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
 	for (i = grp_idx; i < grp_idx + grp_nr; i++) {
+		start_shard = i * layout_grp_size;
 		/* Try leader for current group */
 		if (!obj_is_ec(obj) || !obj_ec_parity_rotate_enabled(obj)) {
 			leader = obj_grp_leader_get(obj, i, (uint64_t)d_rand(),
 						    obj_auxi->cond_modify, map_ver, NULL);
 			if (leader >= 0) {
-				if (obj_is_ec(obj) &&
-				    !is_ec_parity_shard(obj, obj_auxi->dkey_hash, leader))
+				if (obj_is_ec(obj) && !is_ec_parity_shard(obj, obj_auxi->dkey_hash,
+									  leader - start_shard))
 					goto non_leader;
 
 				if (coll)
@@ -7911,11 +7921,16 @@ dc_obj_query_key(tse_task_t *api_task)
 non_leader:
 		/* Then Try non-leader shards */
 		D_ASSERT(obj_is_ec(obj));
-		start_shard = i * obj_get_grp_size(obj);
 		D_DEBUG(DB_IO, DF_OID" EC needs to try all shards for group %d.\n",
 			DP_OID(obj->cob_md.omd_id), i);
 		for (j = start_shard, shard_cnt = 0; j < start_shard + grp_size; j++) {
-			if (obj_shard_is_invalid(obj, j, DAOS_OBJ_RPC_QUERY_KEY))
+			bool invalid;
+
+			rc = obj_shard_is_invalid_at_ver(obj, j, map_ver, DAOS_OBJ_RPC_QUERY_KEY,
+							 &invalid);
+			if (rc != 0)
+				D_GOTO(out_task, rc);
+			if (invalid)
 				continue;
 
 			if (coll)
@@ -7951,7 +7966,8 @@ non_leader:
 
 out_task:
 	if (head != NULL && !d_list_empty(head)) {
-		D_ASSERTF(!obj_retry_error(rc), "unexpected ret "DF_RC"\n", DP_RC(rc));
+		D_ASSERTF(!obj_retry_error(rc) || rc == -DER_STALE, "unexpected ret " DF_RC "\n",
+			  DP_RC(rc));
 		/* abort/complete sub-tasks will complete api_task */
 		tse_task_list_traverse(head, shard_task_abort, &rc);
 	} else {
