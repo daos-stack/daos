@@ -267,6 +267,27 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 				},
 			},
 		}
+	case *control.StorageFormatReq:
+		// Report the engine as already awaiting format so that
+		// control.WaitForStorageFormatReady() (used by `dmg system erase`
+		// without --no-wait) observes an immediate "awaiting format" result
+		// instead of polling until the real timeout elapses.
+		resp = &control.UnaryResponse{
+			Responses: []*control.HostResponse{
+				{
+					Addr: "host1",
+					Message: &ctlpb.StorageFormatResp{
+						EngineStatus: []*ctlpb.EngineFormatStatus{
+							{
+								Instanceidx:    0,
+								AwaitingFormat: true,
+								State:          "AwaitFormat",
+							},
+						},
+					},
+				},
+			},
+		}
 	}
 
 	return resp, nil
