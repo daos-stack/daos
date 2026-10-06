@@ -21,7 +21,7 @@ import groovy.transform.Field
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-@Library(value='pipeline-lib@osalyk/SRE-3895_change-UID-to-DAOS_SERVER_UID') _
+//@Library(value='pipeline-lib@your_branch') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
