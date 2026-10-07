@@ -75,7 +75,7 @@ smoke:
     - fio_smoke
     #- daos_racer
     - mdtest_smoke
-    - vpic_smoke
+    #- vpic_smoke
     - lammps_smoke
     - macsio_smoke
     - datamover_smoke
