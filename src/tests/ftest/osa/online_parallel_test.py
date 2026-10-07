@@ -228,7 +228,7 @@ class OSAOnlineParallelTest(OSAUtils):
         # Perform a data consistency check.
         for pool in pools:
             self.pool = pool
-            for container in get_all_containers(self.pool):
+            for container in get_all_containers(self, self.pool):
                 self.container = container
                 self.run_ior_thread("Read", oclass, test_seq, single_cont_read=False)
                 self.log.info("Checking data integrity for container %s", self.container)
