@@ -33,11 +33,15 @@ def scons():
     # Add runtime paths for daos libraries
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
     prereqs.require(tenv, 'argobots', 'protobufc', 'pmdk', 'spdk')
+    # Required by the WAL tests to forge a WAL header on the test pool's blob (bio_wal.h) and to
+    # get the BIO xstream context of the standalone VOS instance (vos_internal.h)
+    tenv.AppendUnique(CPPPATH=[Dir('../../../bio/').srcnode()])
+    tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
 
     libs = ['vos', 'uuid', 'daos_common_pmem', 'abt', 'gurt', 'bio', 'cart', 'cmocka', 'ddb']
     src = ['ddb_commands_print_tests.c', 'ddb_commands_tests.c',
            'ddb_parse_tests.c', 'ddb_path_tests.c', 'ddb_test_driver.c',
-           'ddb_vos_tests.c']
+           'ddb_vos_tests.c', 'ddb_wal_tests.c']
     ddb_tests = tenv.d_program('ddb_tests', src, LIBS=libs + spdk_libs)
 
     tenv.Install('$PREFIX/bin/', ddb_tests)
@@ -62,7 +66,7 @@ def scons():
         'json-c',
     ]
     src = ['ddb_ut.c', 'ddb_vos_ut.c', 'ddb_commands_ut.c', 'ddb_spdk_reinit_wa_ut.c',
-           'ddb_mocks.c', 'ddb_fake_print.c']
+           'ddb_wal_ut.c', 'ddb_mocks.c', 'ddb_fake_print.c']
     # vos and mock object files to wrap vos symbols
     vos_obj = tenv.Object(Glob('../../../vos/*.c'))
     mock_obj = tenv.Object(Glob('../../../dtx/tests/*_mock.c'))
