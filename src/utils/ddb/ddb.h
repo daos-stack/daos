@@ -63,10 +63,14 @@ struct ddb_io_ft {
 	size_t (*ddb_read_file)(const char *src_path, d_iov_t *contents);
 };
 
+struct bio_meta_context;
+
 struct ddb_ctx {
-	struct ddb_io_ft dc_io_ft;
-	daos_handle_t    dc_poh;
-	bool             dc_write_mode;
+	struct ddb_io_ft         dc_io_ft;
+	daos_handle_t            dc_poh;
+	bool                     dc_write_mode;
+	/** WAL session opened by 'wal_open' (meta/WAL blobs only, no replay); NULL when none */
+	struct bio_meta_context *dc_wal_mc;
 };
 
 void ddb_ctx_init(struct ddb_ctx *ctx);
@@ -188,6 +192,12 @@ struct csum_dump_options {
 	daos_epoch_t epoch;
 };
 
+struct wal_open_options {
+	bool  write_mode;
+	char *db_path;
+	char *path;
+};
+
 /* Run commands ... */
 int
 ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt);
@@ -248,5 +258,11 @@ int
 ddb_run_dtx_aggr(struct ddb_ctx *ctx, struct dtx_aggr_options *opt);
 int
 ddb_run_csum_dump(struct ddb_ctx *ctx, struct csum_dump_options *opt);
+bool
+ddb_wal_is_open(struct ddb_ctx *ctx);
+int
+ddb_run_wal_open(struct ddb_ctx *ctx, struct wal_open_options *opt);
+int
+ddb_run_wal_close(struct ddb_ctx *ctx);
 
 #endif /* __DDB_RUN_CMDS_H */

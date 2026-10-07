@@ -111,3 +111,43 @@ __wrap_d_asprintf2(int *rc, const char *fmt, ...)
 		buf = NULL;
 	return buf;
 }
+
+/* Test-installed dw_open()/dw_close() implementations; NULL selects the real functions. */
+static dw_open_fn_t  mock_dw_open;
+static dw_close_fn_t mock_dw_close;
+
+void
+mock_dw_open_set(dw_open_fn_t mock_fn)
+{
+	mock_dw_open = mock_fn;
+}
+
+void
+mock_dw_close_set(dw_close_fn_t mock_fn)
+{
+	mock_dw_close = mock_fn;
+}
+
+int
+__real_dw_open(const char *path, const char *db_path, struct ddb_ctx *ctx,
+	       struct bio_meta_context **mc);
+
+int
+__wrap_dw_open(const char *path, const char *db_path, struct ddb_ctx *ctx,
+	       struct bio_meta_context **mc)
+{
+	if (mock_dw_open != NULL)
+		return mock_dw_open(path, db_path, ctx, mc);
+	return __real_dw_open(path, db_path, ctx, mc);
+}
+
+int
+__real_dw_close(struct bio_meta_context *mc);
+
+int
+__wrap_dw_close(struct bio_meta_context *mc)
+{
+	if (mock_dw_close != NULL)
+		return mock_dw_close(mc);
+	return __real_dw_close(mc);
+}

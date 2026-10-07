@@ -21,6 +21,7 @@
 #include "ddb_parse.h"
 #include "ddb.h"
 #include "ddb_vos.h"
+#include "ddb_wal.h"
 #include "ddb_printer.h"
 #include "ddb_tree_path.h"
 
@@ -43,6 +44,22 @@
 		}                                                                                  \
 	} while (0)
 
+#define DDB_WAL_SHOULD_OPEN(ctx)                                                                   \
+	do {                                                                                       \
+		if ((ctx)->dc_wal_mc == NULL) {                                                    \
+			ddb_error(ctx, "No WAL session is open. Run 'wal_open' first.\n");         \
+			return -DER_NO_HDL;                                                        \
+		}                                                                                  \
+	} while (0)
+
+#define DDB_WAL_SHOULD_CLOSE(ctx)                                                                  \
+	do {                                                                                       \
+		if ((ctx)->dc_wal_mc != NULL) {                                                    \
+			ddb_error(ctx, "A WAL session is open. Run 'wal_close' first.\n");         \
+			return -DER_BUSY;                                                          \
+		}                                                                                  \
+	} while (0)
+
 int
 ddb_run_version(struct ddb_ctx *ctx)
 {
@@ -60,10 +77,17 @@ ddb_pool_is_open(struct ddb_ctx *ctx)
 	return daos_handle_is_valid(ctx->dc_poh);
 }
 
+bool
+ddb_wal_is_open(struct ddb_ctx *ctx)
+{
+	return ctx->dc_wal_mc != NULL;
+}
+
 int
 ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 {
 	DDB_POOL_SHOULD_CLOSE(ctx);
+	DDB_WAL_SHOULD_CLOSE(ctx);
 
 	ctx->dc_write_mode = opt->write_mode;
 	return dv_pool_open(opt->path, opt->db_path, ctx, &ctx->dc_poh, 0, opt->write_mode);
@@ -1082,6 +1106,7 @@ ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 	int	rc;
 
 	DDB_POOL_SHOULD_CLOSE(ctx);
+	DDB_WAL_SHOULD_CLOSE(ctx);
 
 	if (opt->nvme_conf != NULL) {
 		if (strlen(opt->nvme_conf) == 0 || strlen(opt->nvme_conf) >= DDB_PATH_MAX) {
@@ -1382,6 +1407,8 @@ ddb_run_feature(struct ddb_ctx *ctx, struct feature_options *opt)
 		goto skip;
 	}
 
+	DDB_WAL_SHOULD_CLOSE(ctx);
+
 	ctx->dc_write_mode = feature_write_action(opt);
 	if (feature_write_action(opt) && !ctx->dc_write_mode)
 		return -DER_NO_PERM;
@@ -1436,6 +1463,7 @@ int
 ddb_run_rm_pool(struct ddb_ctx *ctx, struct rm_pool_options *opt)
 {
 	DDB_POOL_SHOULD_CLOSE(ctx);
+	DDB_WAL_SHOULD_CLOSE(ctx);
 
 	return dv_pool_destroy(opt->path, opt->db_path, ctx);
 }
@@ -1517,6 +1545,7 @@ ddb_run_dev_list(struct ddb_ctx *ctx, struct dev_list_options *opt)
 	int                  rc, dev_cnt = 0;
 
 	DDB_POOL_SHOULD_CLOSE(ctx);
+	DDB_WAL_SHOULD_CLOSE(ctx);
 
 	if (opt->db_path != NULL) {
 		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
@@ -1557,6 +1586,7 @@ ddb_run_dev_replace(struct ddb_ctx *ctx, struct dev_replace_options *opt)
 	int    rc;
 
 	DDB_POOL_SHOULD_CLOSE(ctx);
+	DDB_WAL_SHOULD_CLOSE(ctx);
 
 	if (opt->db_path != NULL) {
 		if (strlen(opt->db_path) == 0 || strlen(opt->db_path) >= DDB_PATH_MAX) {
@@ -2080,6 +2110,7 @@ ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 	int rc = 0;
 
 	DDB_POOL_SHOULD_CLOSE(ctx);
+	DDB_WAL_SHOULD_CLOSE(ctx);
 
 	if (opt->db_path == NULL || strlen(opt->db_path) == 0 ||
 	    strlen(opt->db_path) >= DDB_PATH_MAX) {
@@ -2102,6 +2133,84 @@ ddb_run_prov_mem(struct ddb_ctx *ctx, struct prov_mem_options *opt)
 	} else {
 		ddb_printf(ctx, "Prepare the environment on '%s' Success.\n", opt->tmpfs_mount);
 	}
+
+	return rc;
+}
+
+/*
+ * WAL inspection session (DAOS-17817). 'wal_open' only opens the meta and WAL blobs of a
+ * MD-on-SSD VOS target through the BIO layer: the VOS pool is never opened, so the WAL is never
+ * replayed. A WAL session and a pool session ('open') are mutually exclusive.
+ */
+int
+ddb_run_wal_open(struct ddb_ctx *ctx, struct wal_open_options *opt)
+{
+	int rc;
+
+	DDB_POOL_SHOULD_CLOSE(ctx);
+	DDB_WAL_SHOULD_CLOSE(ctx);
+
+	if (opt->path == NULL || strlen(opt->path) == 0) {
+		ddb_error(ctx, "A VOS target path ([/db_path/]<pool-uuid>/(vos-N|rdb-pool)) is "
+			       "required\n");
+		return -DER_INVAL;
+	}
+
+	rc = dw_open(opt->path, opt->db_path, ctx, &ctx->dc_wal_mc);
+	switch (rc) {
+	case 0:
+		ctx->dc_write_mode = opt->write_mode;
+		ddb_printf(ctx, "WAL of '%s' opened (no replay)%s\n", opt->path,
+			   opt->write_mode ? " in write mode" : "");
+		break;
+	case -DER_NOTSUPPORTED:
+		ddb_errorf(ctx, "'%s' is not a MD-on-SSD target: no WAL to open.\n", opt->path);
+		break;
+	case -DER_NONEXIST:
+		ddb_errorf(ctx, "No meta/WAL blob found for '%s' in the system DB.\n", opt->path);
+		break;
+	case -DER_UNINIT:
+	case -DER_DF_INCOMPT:
+	case -DER_CSUM:
+		ddb_errorf(ctx,
+			   "Invalid meta or WAL header for '%s' (%s). The header may be "
+			   "repaired with 'wal_repair_hdr' (not available yet).\n",
+			   opt->path,
+			   rc == -DER_UNINIT       ? "bad magic"
+			   : rc == -DER_DF_INCOMPT ? "unsupported version"
+						   : "bad checksum");
+		break;
+	case -DER_DF_INVAL:
+		ddb_errorf(
+		    ctx,
+		    "Inconsistent meta or WAL header for '%s' (details in the DAOS log). "
+		    "The header may be repaired with 'wal_repair_hdr' (not available yet).\n",
+		    opt->path);
+		break;
+	case -DER_NO_SERVICE:
+		/* dwa_can_proceed() already reported the SPDK re-initialization limitation */
+		break;
+	default:
+		ddb_errorf(ctx, "Failed to open the WAL of '%s': " DF_RC "\n", opt->path,
+			   DP_RC(rc));
+		break;
+	}
+
+	return rc;
+}
+
+int
+ddb_run_wal_close(struct ddb_ctx *ctx)
+{
+	int rc;
+
+	DDB_WAL_SHOULD_OPEN(ctx);
+
+	rc                 = dw_close(ctx->dc_wal_mc);
+	ctx->dc_wal_mc     = NULL;
+	ctx->dc_write_mode = false;
+	if (rc)
+		ddb_errorf(ctx, "Failed to close the WAL session: " DF_RC "\n", DP_RC(rc));
 
 	return rc;
 }

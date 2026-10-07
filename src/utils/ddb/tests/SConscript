@@ -60,6 +60,9 @@ def scons():
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=ddb_parse_vos_file_parts'])
     # Required to mock nvme_conf_exists()'s D_ASPRINTF() call for dwa_can_proceed() tests.
     tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_asprintf2'])
+    # Required to test the error handling of the WAL session commands in ddb_commands.c
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dw_open'])
+    tenv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dw_close'])
 
     libs = [
         'uuid', 'daos_common_pmem', 'gurt', 'vea', 'abt', 'bio', 'cmocka', 'pthread', 'pmemobj',
