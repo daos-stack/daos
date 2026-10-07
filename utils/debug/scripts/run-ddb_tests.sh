@@ -6,7 +6,10 @@
 #                      so the tmpfs mount is invisible to and can't collide
 #                      with anything else on the shared host (e.g. another
 #                      ticket's live daos_server). Vanishes with the process,
-#                      no manual cleanup needed.
+#                      no manual cleanup needed. Recommended: ddb_tests
+#                      hard-codes /mnt/daos (no -S option), so without it the
+#                      script (re)mounts the host's /mnt/daos and refuses to
+#                      run when that mount point is in use by another process.
 #   --prefix DIR       Exec DIR/bin/ddb_tests instead of $DDB_TESTS_BIN (e.g.
 #                      build-isolated.sh's own isolated install prefix).
 #   --valgrind         Run under $VALGRIND_BIN/$VALGRIND_OPTS (also lowers
@@ -61,6 +64,12 @@ fi
 	fi
 
 	if mountpoint -q "$DDB_TESTS_MNT_PATH" ; then
+		if sudo -n fuser -s -m "$DDB_TESTS_MNT_PATH" 2>/dev/null ; then
+			echo "[ERROR] $DDB_TESTS_MNT_PATH is in use (e.g. a live daos_server):" >&2
+			sudo -n fuser -v -m "$DDB_TESTS_MNT_PATH" >&2 || true
+			echo "[ERROR] rerun with --private-mount instead of remounting it" >&2
+			exit 1
+		fi
 		echo "[INFO] umount $DDB_TESTS_MNT_PATH"
 		sudo umount "$DDB_TESTS_MNT_PATH"
 	fi

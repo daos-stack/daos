@@ -5,12 +5,15 @@
 # each other. Pure local file generation -- no ssh/ansible interaction.
 #
 # Usage:
-#   generate-daos-env.sh --ticket DAOS-NNNNN --worktree /path/to/worktree/daos [--force] [--dry-run]
+#   generate-daos-env.sh --ticket DAOS-NNNNN --worktree /path/to/worktree/daos [--ftest-nvme MODE] [--force] [--dry-run]
 #
 # Flags:
 #   --ticket DAOS-NNNNN   Ticket ID (required; normalizes daos-17321/17321 -> DAOS-17321)
 #   --worktree PATH       Path to the ticket's DAOS source worktree (required;
 #                         becomes DAOS_SRC / daos_source_dir)
+#   --ftest-nvme MODE     launch.py --nvme mode written as FTEST_NVME in env.sh
+#                         (auto, auto_md_on_ssd, auto_nvme, ...; default: empty =
+#                         ram only)
 #   --force               Overwrite an existing env.sh/inventory.yml (default: skip,
 #                         so hand-edited customizations -- CONT_OPTS, POOL_OPTS,
 #                         checksum settings, etc. -- are never silently clobbered)
@@ -33,17 +36,19 @@ DAOS_SHARED_WORKSPACE="${DAOS_SHARED_WORKSPACE:-/scratch/$USER/daos-install}"
 
 TICKET=""
 WORKTREE=""
+FTEST_NVME=""
 FORCE=0
 DRY_RUN=0
 
 usage() {
 cat <<'EOF'
 Usage:
-  generate-daos-env.sh --ticket DAOS-NNNNN --worktree /path/to/worktree/daos [--force] [--dry-run]
+  generate-daos-env.sh --ticket DAOS-NNNNN --worktree /path/to/worktree/daos [--ftest-nvme MODE] [--force] [--dry-run]
 
 Flags:
   --ticket DAOS-NNNNN   Ticket ID (required)
   --worktree PATH       Path to the ticket's DAOS source worktree (required)
+  --ftest-nvme MODE     launch.py --nvme mode for FTEST_NVME in env.sh (default: empty = ram only)
   --force               Overwrite an existing env.sh/inventory.yml
   --dry-run             Print planned actions without writing anything
 
@@ -66,6 +71,7 @@ while [[ $# -gt 0 ]]; do
 case "$1" in
 --ticket) TICKET="$2"; shift 2 ;;
 --worktree) WORKTREE="$2"; shift 2 ;;
+--ftest-nvme) FTEST_NVME="$2"; shift 2 ;;
 --force) FORCE=1; shift ;;
 --dry-run) DRY_RUN=1; shift ;;
 --help|-h) usage; exit 0 ;;
@@ -145,7 +151,10 @@ DDB_BIN="\$DAOS_INSTALL/bin/ddb"
 DAOS_SCM_MNT_PATH="/mnt/daos0-$TICKET_LC"
 
 DDB_TESTS_BIN="\$DAOS_INSTALL/bin/ddb_tests"
-DDB_TESTS_MNT_PATH="/mnt/daos-$TICKET_LC"
+# ddb_tests hard-codes /mnt/daos (no -S option like vos_tests/dtx_tests), so
+# this path cannot be made ticket-unique: run-ddb_tests.sh --private-mount
+# mounts it inside a private mount namespace, invisible to the rest of the host.
+DDB_TESTS_MNT_PATH="/mnt/daos"
 DDB_TESTS_MNT_OPTS="-t tmpfs -o rw,noatime,size=16777216k,inode64,huge=always,mpol=prefer:0,uid=\$(id -u),gid=\$(id -g)"
 
 DDB_UT_BIN="\$DAOS_INSTALL/bin/ddb_ut"
@@ -174,8 +183,9 @@ CLIENT_ASAN_OPTIONS=halt_on_error=1:atexit=1:leak_check_at_exit=1:use_sigaltstac
 FTEST_SERVERS="brd-[217-219]"
 FTEST_CLIENTS="brd-216"
 # launch.py --nvme mode (auto, auto_md_on_ssd, auto_nvme, ...); empty = ram
-# only -- the brd-21x nodes have no SPDK setup.sh, "auto" fails there.
-FTEST_NVME=""
+# only. The auto modes need the spdk-tools setup.sh on the test servers
+# (installed on brd-[217-219]).
+FTEST_NVME="$FTEST_NVME"
 # launch.py --scm_size in GiB; needed by "class: ram" yamls without scm_size,
 # which otherwise auto-size the ramdisk from the whole node memory.
 FTEST_SCM_SIZE=""
@@ -308,7 +318,9 @@ is visible everywhere.
    provider, default filters). Files under \`files/ftest/\` (a test under
    development, e.g. \`files/ftest/pool/my_test.py\` + \`.yaml\`) are installed on
    top of the install tree's \`TESTING/ftest/\` before each run, so they can be
-   iterated on without rebuilding.
+   iterated on without rebuilding. The script first checks that this ticket's
+   install is the live one on every node involved (step 3 with \`--activate\`)
+   and refuses to run otherwise (\`--skip-live-check\` to override).
 
 ## Files
 

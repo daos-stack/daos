@@ -136,15 +136,32 @@ cd ~/work/tickets/daos-jira/DAOS-17321 && ./provision-daos.sh
 
 # 3. build/install into this ticket's own isolated prefix, reusing shared prereqs
 cd ~/work/tickets/daos-jira/DAOS-17321 && ./build-daos.sh --force --deps
+#    (or, for unit-test binaries only and without step 2: ./build-isolated.sh)
 
 # 4. run standalone unit tests (isolated, safe regardless of what's "live")
 ./run-vos_tests.sh
 
 # 5. functional tests (exclusive: ftest drives the cluster-wide systemd units,
-#    so make this ticket the live one first); defaults from FTEST_* in env.sh,
-#    ./files/ftest/ overlaid onto the install tree before each run
+#    so make this ticket the live one first -- run-ftest.sh refuses to start
+#    otherwise); defaults from FTEST_* in env.sh, ./files/ftest/ overlaid onto
+#    the install tree before each run
 ./build-daos.sh --activate && ./run-ftest.sh PoolCreateSlowSvc
 ```
+
+`run-ftest.sh` checks on the login node, the test servers and the test
+clients that the ticket's `DAOS_INSTALL` is the live one before doing
+anything: `/etc/ld.so.conf.d/daos-x86_64.conf` (repointed by
+`build-daos.sh --activate`) and the `ExecStart` of the `daos_server`/
+`daos_agent` systemd units (rendered by `provision-daos.sh` -- note that
+provisioning a ticket already repoints the units to its prefix, so a
+provisioned-but-not-activated ticket leaves the cluster half switched) must
+both resolve into it. `--skip-live-check` (or `FTEST_SKIP_LIVE_CHECK=1` in
+`env.sh`) overrides, `--dry-run` only reports.
+
+Tests that need NVMe (`--nvme auto`, `auto_md_on_ssd`, ...) work on
+brd-[217-219] (spdk-tools `setup.sh` installed); pass
+`--ftest-nvme auto_md_on_ssd` to `new-ticket-worktree.sh`/`generate-daos-env.sh`
+to have the generated `env.sh` default to it instead of ram-only.
 
 Steps 1-4 are all isolated per ticket: `provision-daos.sh` (step 2) doesn't
 repoint the shared `/etc/ld.so.conf.d`/PAM PATH by default
@@ -156,6 +173,41 @@ exclusive across tickets —
 see the generated `README.md`'s "Isolation model" section for exactly why
 (shared systemd units, the activated `ld.so.conf.d` entry, and ultimately
 the physical PMEM/NVMe/network hardware on `brd-216..219`).
+
+
+### Stacked sub-tasks: one worktree per ticket
+
+A feature split into JIRA sub-tasks whose PRs depend on each other
+(e.g. DAOS-17817 Phase 1: DAOS-19577 -> DAOS-19578 -> DAOS-19579 ->
+DAOS-19581) gets **one worktree per sub-task**, each on its own
+`ckochhof/dev/master/daos-<N>/patch-NNN` branch stacked on the previous
+one, plus an *integration* worktree for the umbrella ticket whose branch
+carries no commit of its own and just mirrors the top of the stack. Every
+worktree has its own `DAOS_BUILD`/`DAOS_INSTALL`, so each PR can be edited,
+built (`build-isolated.sh`) and unit-tested independently, and
+`trigger-gha.sh` targets each branch separately. The cluster stays single:
+only the worktree that is `build-daos.sh --activate`d can run ftests, one
+at a time (see the live-install check above).
+
+```
+# create the stack (branches may already exist locally -- they are reused)
+for t in 19577 19578 19579 19581; do
+  ~/work/daos-tools/utils/debug/scripts/new-ticket-worktree.sh --ticket DAOS-$t --type dev --base master --patch 000 --ftest-nvme auto_md_on_ssd
+done
+
+# propagate an amended lower commit through the stack (one `git rebase --onto`
+# per worktree -- `git rebase --update-refs` cannot update branches checked
+# out in other worktrees), then reset the umbrella branch to the new top:
+~/work/daos-tools/utils/debug/scripts/rebase-stack.sh --dry-run --umbrella DAOS-17817 DAOS-19577 DAOS-19578 DAOS-19579 DAOS-19581
+~/work/daos-tools/utils/debug/scripts/rebase-stack.sh --umbrella DAOS-17817 DAOS-19577 DAOS-19578 DAOS-19579 DAOS-19581
+```
+
+`rebase-stack.sh` relies on the DAOS commit convention (`DAOS-NNNNN ...`
+subjects) to tell a ticket's own commits from the ones of the ticket below;
+it refuses dirty worktrees, stops on a conflict with instructions
+(`git rebase --continue` in that worktree, then rerun the same command --
+already-rebased pairs are skipped) and never pushes. Rebuild the rebased
+worktrees afterwards.
 
 
 ### The `DAOS_BUILD`/`DAOS_INSTALL` collision this also avoids
@@ -187,14 +239,15 @@ own `DAOS_BUILD`, and `DAOS_INSTALL` was always the one shared location.
 | `scripts/deploy-daos-env.sh` | Symlinks the 4 `setup-*.sh` + copies `envrc` -> `.envrc` into any target directory. |
 | `scripts/new-ticket-worktree.sh` | Create/re-sync a per-ticket `git worktree`, optionally seeded from another ticket's skeleton. |
 | `scripts/remove-ticket-worktree.sh` | Symmetric teardown, refuses on uncommitted/unpushed changes unless `--force`. |
-| `scripts/generate-daos-env.sh` | Renders a ticket-specific `env.sh`/`inventory.yml`/`README.md` with isolated `DAOS_BUILD`/`DAOS_INSTALL` paths. Skips files that already exist unless `--force`. |
+| `scripts/rebase-stack.sh` | **Not** deployed into ticket dirs (spans several tickets): rebases a stack of per-ticket worktrees bottom to top after a lower commit was amended (`git rebase --onto` in each worktree), optionally resetting an umbrella/integration branch to the new top. Idempotent, `--dry-run`, never pushes. |
+| `scripts/generate-daos-env.sh` | Renders a ticket-specific `env.sh`/`inventory.yml`/`README.md` with isolated `DAOS_BUILD`/`DAOS_INSTALL` paths. Skips files that already exist unless `--force`. `--ftest-nvme MODE` presets `FTEST_NVME` (default: empty = ram only). |
 | `scripts/compute-daos-alt-prefix.sh` | Computes the colon-separated scons `ALT_PREFIX` list from a shared install's `.build_vars.sh`, used by `generate-daos-env.sh`. |
 | `scripts/build-daos.sh` | Deployed into each ticket dir; ssh + invokes that ticket's ansible-generated `daos-make.sh`, `--build-only` by default (see `--activate`). |
-| `scripts/build-isolated.sh` | Deployed into each ticket dir; builds/installs the ticket's own worktree directly via `scons` over ssh, into its own isolated `BUILD_ROOT`/`PREFIX` (`/var/tmp/daos-build-<ticket>`, `/scratch/$USER/daos-install-<ticket>/install`), reusing shared prereqs via `ALT_PREFIX`/`compute-daos-alt-prefix.sh` -- no `provision-daos.sh`/ansible required first. For standalone unit-test binaries only (no system-wide activation). |
+| `scripts/build-isolated.sh` | Deployed into each ticket dir; builds/installs the ticket's own worktree directly via `scons` over ssh, into its own isolated `BUILD_ROOT`/`PREFIX` (`/var/tmp/daos-build-<ticket>`, `/scratch/$USER/daos-install-<ticket>/install`), reusing shared prereqs via `ALT_PREFIX`/`compute-daos-alt-prefix.sh` -- no `provision-daos.sh`/ansible required first. The prereqs (`.build_vars.sh`) and the python virtualenv come from the ticket's own workspace when already populated, else from `DAOS_SHARED_WORKSPACE` (default `/scratch/$USER/daos-install`), so it works on a brand-new ticket. For standalone unit-test binaries only (no system-wide activation). |
 | `scripts/provision-daos.sh` | Deployed into each ticket dir; invoke with no args (or only additional ansible-playbook flags, e.g. `-e`/`--check`/`-vvv`/`--limit` -- never `-i`/a playbook path, both are already hardcoded and rejected if passed). Internally runs `ansible-playbook` against this ticket's `inventory.yml` and `ftest.yml`, passing `-e daos_client_manage_system_paths=false` so provisioning this ticket doesn't repoint the shared ld.so.conf.d/PAM PATH (see `build-daos.sh --activate`). |
-| `scripts/run-vos_tests.sh`, `run-ddb_ut.sh`, `run-ddb_tests.sh`, `run-dtx_ut.sh`, `run-dtx_tests.sh`, `run-go_unit.sh` | Deployed into each ticket dir; generic standalone unit-test-suite runners. `run-vos_tests.sh`/`run-ddb_tests.sh`/`run-dtx_tests.sh` (the 3 that mount tmpfs) accept `--private-mount` (run inside a private mount namespace via `sudo unshare -m`, so the mount can't collide with anything else on the shared host, e.g. another ticket's live `daos_server` -- auto-cleaned up on exit). All 5 except `run-go_unit.sh` accept `--prefix DIR` (exec the binary from `DIR/bin/<name>` instead of `$DAOS_INSTALL`'s, e.g. `build-isolated.sh`'s own isolated prefix) and `--valgrind` (run under `$VALGRIND_BIN`/`$VALGRIND_OPTS` with the fd limit lowered to 1024 via `prlimit`, logging to `<name>-valgrind.log` instead of `<name>.log`). All 3 flags default off (unchanged behavior) and are consumed locally before ssh -- everything else is forwarded to the binary as-is. |
+| `scripts/run-vos_tests.sh`, `run-ddb_ut.sh`, `run-ddb_tests.sh`, `run-dtx_ut.sh`, `run-dtx_tests.sh`, `run-go_unit.sh` | Deployed into each ticket dir; generic standalone unit-test-suite runners. `run-vos_tests.sh`/`run-ddb_tests.sh`/`run-dtx_tests.sh` (the 3 that mount tmpfs) accept `--private-mount` (run inside a private mount namespace via `sudo unshare -m`, so the mount can't collide with anything else on the shared host, e.g. another ticket's live `daos_server` -- auto-cleaned up on exit). `vos_tests`/`dtx_tests` take the ticket-unique tmpfs path through `-S`, but `ddb_tests` hard-codes `/mnt/daos`, so `DDB_TESTS_MNT_PATH` is generated as `/mnt/daos` itself: always run `run-ddb_tests.sh` with `--private-mount` on a shared node (without it the script refuses to remount a `/mnt/daos` that is in use, e.g. by a live `daos_server`). All 5 except `run-go_unit.sh` accept `--prefix DIR` (exec the binary from `DIR/bin/<name>` instead of `$DAOS_INSTALL`'s, e.g. `build-isolated.sh`'s own isolated prefix) and `--valgrind` (run under `$VALGRIND_BIN`/`$VALGRIND_OPTS` with the fd limit lowered to 1024 via `prlimit`, logging to `<name>-valgrind.log` instead of `<name>.log`). All 3 flags default off (unchanged behavior) and are consumed locally before ssh -- everything else is forwarded to the binary as-is. |
 | `scripts/cleanup.sh`, `start-daos.sh`, `stop-daos.sh` | Deployed into each ticket dir; live-cluster lifecycle from the ticket's `files/daos_*-<host>.yml` configs. `start-daos.sh` waits until every engine is joined after the format and creates a pool+container; `start-daos.sh --no-pool` stops after the servers and agents are up (for reproduction scripts that test the pool creation itself). |
-| `scripts/run-ftest.sh` | Deployed into each ticket dir; runs launch.py test filters through the ticket's ansible-generated `daos-launch.sh` on `$LOGIN_NODE`, after overlaying the ticket's `files/ftest/` onto its install tree. Defaults (test servers/clients, `--nvme`, `--scm_size`, provider, default filters) come from the `FTEST_*` variables of the generated `env.sh`. |
+| `scripts/run-ftest.sh` | Deployed into each ticket dir; runs launch.py test filters through the ticket's ansible-generated `daos-launch.sh` on `$LOGIN_NODE`, after checking that the ticket's install is the live one on every node involved (`--skip-live-check`/`FTEST_SKIP_LIVE_CHECK=1` to override) and overlaying the ticket's `files/ftest/` onto its install tree. Defaults (test servers/clients, `--nvme`, `--scm_size`, provider, default filters) come from the `FTEST_*` variables of the generated `env.sh`. |
 | `scripts/trigger-gha.sh` | Deployed into each ticket dir; triggers the `unit-testing.yml` GitHub Actions workflow (standard+asan+ubsan+tsan, all 4 jobs via `unit-test-template.yml`) on this ticket's own worktree branch (`$DAOS_SRC`), without waiting for the scheduled CI pipeline. |
 | `scripts/check-build_freshness.sh` | **Not** deployed into ticket dirs directly (needs feature-specific arguments) -- a reusable engine, called from a thin per-feature wrapper (e.g. `DAOS-17321/check-ddb_build_freshness.sh`) that sources its own ticket's `env.sh`, exports `BUILD_NODE`/`DAOS_SRC`/`DAOS_BUILD`, and passes its own `<src-rel>:<obj-rel>[,obj-rel...]` pairs (+ optional `--lib PATH`). Detects a real scons `.sconsign.dblite` build-caching bug: compares source mtimes against built object/library mtimes, all read remotely on `$BUILD_NODE`, and fails (`[STALE]`, non-zero exit) if a rebuild silently didn't recompile a changed file. |
 | `ansible/ftest/` | The DAOS functional-test-platform Ansible playbook/roles (imported from the `ansible/ftest` branch — see "The branch tree" above), extended with `daos_alt_prefix`/`ALT_PREFIX` reuse and `daos-make.sh --build-only` for per-ticket isolated builds. |

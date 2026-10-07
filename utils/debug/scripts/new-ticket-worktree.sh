@@ -11,7 +11,8 @@
 #
 # Usage:
 #   new-ticket-worktree.sh --ticket DAOS-NNNNN [--type dev|fix] [--base NAME]
-#                          [--patch NNN] [--skeleton-from DAOS-YYYYY] [--dry-run]
+#                          [--patch NNN] [--ftest-nvme MODE]
+#                          [--skeleton-from DAOS-YYYYY] [--dry-run]
 #   new-ticket-worktree.sh --list
 #   new-ticket-worktree.sh --help
 #
@@ -51,6 +52,7 @@ TICKET=""
 TYPE="dev"
 BASE="master"
 PATCH=""
+FTEST_NVME=""
 SKELETON_FROM=""
 DRY_RUN=0
 DO_LIST=0
@@ -59,7 +61,8 @@ usage() {
 cat <<'EOF'
 Usage:
   new-ticket-worktree.sh --ticket DAOS-NNNNN [--type dev|fix] [--base NAME]
-                         [--patch NNN] [--skeleton-from DAOS-YYYYY] [--dry-run]
+                         [--patch NNN] [--ftest-nvme MODE]
+                         [--skeleton-from DAOS-YYYYY] [--dry-run]
   new-ticket-worktree.sh --list
   new-ticket-worktree.sh --help
 
@@ -69,6 +72,9 @@ Flags:
   --base NAME             Base branch to fork from, e.g. master, release/2.8 (default: master)
   --patch NNN             Patch number (default: auto-incremented from existing
                           local+origin branches for this ticket/type/base, else 001)
+  --ftest-nvme MODE       FTEST_NVME written into the generated env.sh (launch.py
+                          --nvme: auto, auto_md_on_ssd, auto_nvme, ...; default:
+                          empty = ram only). Only applies when env.sh is generated.
   --skeleton-from TICKET  Seed the new ticket dir with an existing ticket's
                           genuinely ticket-specific scripts (run-*.sh,
                           check-*.sh not already part of the generic set,
@@ -104,6 +110,7 @@ case "$1" in
 --type) TYPE="$2"; shift 2 ;;
 --base) BASE="$2"; shift 2 ;;
 --patch) PATCH="$2"; shift 2 ;;
+--ftest-nvme) FTEST_NVME="$2"; shift 2 ;;
 --skeleton-from) SKELETON_FROM="$2"; shift 2 ;;
 --dry-run) DRY_RUN=1; shift ;;
 --list) DO_LIST=1; shift ;;
@@ -237,7 +244,7 @@ echo "new-ticket-worktree.sh: [INFO] (dry-run) would run: git -C $DAOS_MAIN_REPO
 echo "new-ticket-worktree.sh: [INFO] (dry-run) would run: git -C $WORKTREE_DIR submodule update --init --recursive"
 echo "new-ticket-worktree.sh: [INFO] (dry-run) would run: $DEPLOY_ENV $WORKTREE_DIR"
 fi
-echo "new-ticket-worktree.sh: [INFO] (dry-run) would run: $GENERATE_ENV --ticket $TICKET --worktree $WORKTREE_DIR"
+echo "new-ticket-worktree.sh: [INFO] (dry-run) would run: $GENERATE_ENV --ticket $TICKET --worktree $WORKTREE_DIR${FTEST_NVME:+ --ftest-nvme $FTEST_NVME}"
 echo "new-ticket-worktree.sh: [INFO] (dry-run) would symlink into $TICKET_DIR: ${GENERIC_TICKET_SCRIPTS[*]}"
 for script in "${GENERIC_TICKET_SCRIPTS[@]}"; do
 if [[ -f "$TICKET_DIR/$script" && ! -L "$TICKET_DIR/$script" ]]; then
@@ -261,7 +268,7 @@ git -C "$WORKTREE_DIR" submodule update --init --recursive
 "$DEPLOY_ENV" "$WORKTREE_DIR"
 fi
 
-"$GENERATE_ENV" --ticket "$TICKET" --worktree "$WORKTREE_DIR"
+"$GENERATE_ENV" --ticket "$TICKET" --worktree "$WORKTREE_DIR" ${FTEST_NVME:+--ftest-nvme "$FTEST_NVME"}
 
 LINKED_SCRIPTS=()
 for script in "${GENERIC_TICKET_SCRIPTS[@]}"; do
