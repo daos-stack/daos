@@ -1451,9 +1451,12 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 
 	if (intent == DAOS_INTENT_MIGRATION) {
 		/*
-		 * Restart rebuild rather than skip unresolved DTXs inside the migration boundary.
+		 * Restart rebuild rather than skip unresolved old-map DTXs inside the migration
+		 * boundary. DTXs prepared with the rebuild (or newer) map version were sent with a
+		 * layout that already includes the in-rebuilding target, so they stay invisible.
 		 */
-		if (dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch) {
+		if (dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch &&
+		    DAE_VER(dae) < dth->dth_ver) {
 			D_WARN("Non-ready DTX " DF_DTI " at " DF_X64 " (version %u)"
 			       " restart rebuild at migration boundary " DF_X64 " (version %u)\n",
 			       DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae), dth->dth_epoch,
