@@ -34,7 +34,7 @@ source "$CWD/env.sh"
 TICKET_LC="$(basename "$CWD" | tr '[:upper:]' '[:lower:]')"
 DAOS_SHARED_WORKSPACE="${DAOS_SHARED_WORKSPACE:-/scratch/$USER/daos-install}"
 
-JOBS_NB=16
+JOBS_NB=""
 if [[ "${1:-}" == "-j" ]]; then
 	JOBS_NB="$2"
 	shift 2
@@ -45,6 +45,14 @@ ISO_SRC="$CWD/daos"
 ISO_BUILD="/var/tmp/daos-build-$TICKET_LC"
 ISO_PREFIX="/scratch/$USER/daos-install-$TICKET_LC/install"
 ALT_PREFIX_HELPER="${DAOS_TOOLS_DIR:-$HOME/work/daos-tools}/utils/debug/scripts/compute-daos-alt-prefix.sh"
+# Physical cores (not nproc's logical/hyperthread count) by default when -j
+# wasn't given -- see physical-cores.sh. Computed by the heredoc below on
+# $BUILD_NODE itself (where the build actually happens), not here locally.
+PHYSICAL_CORES_HELPER="${DAOS_TOOLS_DIR:-$HOME/work/daos-tools}/utils/debug/scripts/physical-cores.sh"
+# Wraps a scons invocation that can reach src/control's ddb man-page step
+# with a detect-and-retry-once safety net -- see this script's own header
+# comment for the full stale-libddb.so/RPATH root cause.
+RETRY_LIB_SYNC_HELPER="${DAOS_TOOLS_DIR:-$HOME/work/daos-tools}/utils/debug/scripts/scons-retry-lib-sync.sh"
 
 # Prefer the ticket's own workspace once provisioned/built, else the shared one
 # (both live on the build node's /scratch, which is also mounted here).
@@ -65,15 +73,20 @@ echo "[INFO] prereqs from $BUILD_VARS, virtualenv $VENV"
 	[[ -n "\$alt_prefix" ]] || { echo "[ERROR] empty ALT_PREFIX" >&2; exit 1; }
 	echo "[INFO] ALT_PREFIX=\$alt_prefix"
 
+	JOBS_NB="${JOBS_NB:-\$("$PHYSICAL_CORES_HELPER")}"
+	echo "[INFO] JOBS_NB=\$JOBS_NB"
+
 	source "$VENV/bin/activate"
 	mkdir -p "$ISO_BUILD" "$ISO_PREFIX"
 	cd "$ISO_SRC"
 	echo "[INFO] building \$(git rev-parse --short HEAD) from $ISO_SRC into $ISO_BUILD (PREFIX=$ISO_PREFIX)"
-	env --unset=http_proxy --unset=https_proxy --unset=HTTP_PROXY --unset=HTTPS_PROXY \\
-		MPI_PKG=any scons --directory="$ISO_SRC" --jobs=$JOBS_NB \\
+	"$RETRY_LIB_SYNC_HELPER" "$ISO_BUILD/daos" "$ISO_PREFIX" -- \\
+		env --unset=http_proxy --unset=https_proxy --unset=HTTP_PROXY --unset=HTTPS_PROXY \\
+		MPI_PKG=any scons --directory="$ISO_SRC" --jobs=\$JOBS_NB \\
 		BUILD_TYPE=debug BUILD_ROOT="$ISO_BUILD/daos" PREFIX="$ISO_PREFIX" \\
 		ALT_PREFIX="\$alt_prefix" "\$@"
-	scons --directory="$ISO_SRC" --jobs=$JOBS_NB install
+	"$RETRY_LIB_SYNC_HELPER" "$ISO_BUILD/daos" "$ISO_PREFIX" -- \\
+		scons --directory="$ISO_SRC" --jobs=\$JOBS_NB install
 	ls -la "$ISO_PREFIX/bin/ddb_tests" "$ISO_PREFIX/bin/ddb_ut" "$ISO_PREFIX/bin/vos_tests"
 	echo "[INFO] build done"
 	EOF
