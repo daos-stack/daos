@@ -984,7 +984,7 @@ open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t sup
 				strerror(rc));
 			D_GOTO(err, rc);
 		}
-		if (pl.nr > 1) {
+		if (pl.nr > DFS_PL_NR_SUPPORTED) {
 			rc = ENOTSUP;
 			D_ERROR(
 			    "Progressive layout with %u tail segments is not supported: %d (%s)\n",

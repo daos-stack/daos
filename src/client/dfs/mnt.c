@@ -1038,8 +1038,8 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 		return EINVAL;
 
 	memcpy(attr, &dfs->attr, sizeof(dfs_attr_t));
-	/* report the resolved PL layout (below) rather than the stored configuration */
-	attr->da_pl_nr          = 0;
+	/* da_pl_nr keeps the stored enablement; head/tail/split report the resolved layout (below)
+	 */
 	attr->da_pl_head_oclass = 0;
 	memset(attr->da_pl_segs, 0, sizeof(attr->da_pl_segs));
 
@@ -1055,7 +1055,8 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 	/*
 	 * An unset da_file_oclass_id means files get the DAOS default byte-array class; resolve it
 	 * for reporting, and, if the container enables progressive layout, the head/tail/split
-	 * that default files would receive (da_pl_nr stays 0 when PL does not apply).
+	 * that default files would receive (left 0 when PL is enabled but does not currently
+	 * apply, e.g. the pool is below the target minimum).
 	 */
 	if (!dfs->attr.da_file_oclass_id) {
 		daos_oclass_id_t head_cid  = OC_UNKNOWN;
@@ -1080,7 +1081,6 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 			return rc;
 		}
 		if (has_tail) {
-			attr->da_pl_nr                    = 1;
 			attr->da_pl_head_oclass           = head_cid;
 			attr->da_pl_segs[0].pls_oclass_id = tail_cid;
 			attr->da_pl_segs[0].pls_split_off = split_off;

@@ -70,6 +70,9 @@ func dfs_query(dfs *C.dfs_t, attrs *C.dfs_attr_t) C.int {
 		plNr = int(C.DFS_PL_MAX_SEGMENTS)
 	}
 	attrs.da_pl_nr = C.uint32_t(plNr)
+	if dfs_query_Attrs.FilePLEnabled && plNr == 0 {
+		attrs.da_pl_nr = 1
+	}
 	attrs.da_pl_head_oclass = C.uint32_t(dfs_query_Attrs.FilePLHeadClass)
 	for i := 0; i < plNr; i++ {
 		seg := dfs_query_Attrs.FilePLTails[i]

@@ -162,7 +162,7 @@ type containerCreateCmd struct {
 	DirObjectClass  ObjClassFlag         `long:"dir-oclass" short:"d" description:"default directory object class"`
 	FileObjectClass ObjClassFlag         `long:"file-oclass" short:"f" description:"default file object class"`
 	CHints          string               `long:"hints" short:"H" description:"container hints"`
-	DFSPL           DFSPLFlag            `long:"dfs-pl" default:"off" description:"DFS progressive file layout (POSIX only): off, auto (derive head/tail classes and split offset) or explicit <head>,<tail>[@<split_off>]; split_off accepts the --chunk-size size syntax"`
+	DFSPL           DFSPLFlag            `long:"dfs-pl" default:"off" description:"DFS progressive file layout (POSIX only): off, auto (derive head/tail classes and split offset) or explicit <head>,<tail>[@<split_off>]; split_off accepts the --chunk-size size syntax. Takes effect only on pools with at least 1000 targets"`
 	Properties      CreatePropertiesFlag `long:"properties" description:"container properties"`
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile         string               `long:"acl-file" short:"A" description:"input file containing ACL"`
@@ -273,8 +273,8 @@ func (cmd *containerCreateCmd) validatePLFlags() error {
 	if strings.Contains(strings.ToLower(cmd.CHints), "file:") {
 		return errors.New("--dfs-pl cannot be combined with a file: hint")
 	}
-	if len(cmd.DFSPL.Tails) > 1 {
-		return errors.New("progressive layout with more than one tail is not supported")
+	if len(cmd.DFSPL.Tails) > C.DFS_PL_NR_SUPPORTED {
+		return errors.Errorf("progressive layout with more than %d tail(s) is not supported", C.DFS_PL_NR_SUPPORTED)
 	}
 	return nil
 }

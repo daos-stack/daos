@@ -102,16 +102,23 @@ dfs_pl_seg_t     da_pl_segs[DFS_PL_MAX_SEGMENTS];
 | 1 | 0 | Y | `EINVAL` (head and tail must be pinned together) |
 | > 1 | - | - | `ENOTSUP` today (the inode holds one tail; format is multi-tail ready) |
 
-`dfs_query()` reports the *resolved* configuration back through the same `da_pl_*` fields and
-leaves `da_file_oclass_id` untouched. `dfs_obj_info_t` mirrors this with `doi_pl_head_oclass_id`
-next to the existing `doi_pl_nr`/`doi_pl_segs[]`.
+`DFS_PL_MAX_SEGMENTS` (8) is the tail count the on-disk format can describe; `DFS_PL_NR_SUPPORTED`
+(1) is what the current implementation accepts.
+
+`dfs_query()` reports back through the same `da_pl_*` fields and leaves `da_file_oclass_id`
+untouched: `da_pl_nr` is the *stored* enablement (so an opted-in container is always
+recognizable as such), while `da_pl_head_oclass` and `da_pl_segs[0]` carry the *resolved* head,
+tail and split_off, or stay 0 when PL is enabled but does not currently apply (the pool is below
+the target minimum). `dfs_obj_info_t` mirrors the resolved part with `doi_pl_head_oclass_id` next
+to the existing `doi_pl_nr`/`doi_pl_segs[]`; for a directory it describes the effective
+file-creation template only.
 
 ### Validation at container create
 
 | condition | result |
 |---|---|
 | `da_pl_nr > DFS_PL_MAX_SEGMENTS` | `EINVAL` |
-| `da_pl_nr > 1` | `ENOTSUP` |
+| `da_pl_nr > DFS_PL_NR_SUPPORTED` | `ENOTSUP` |
 | `da_pl_nr > 0` with an explicit file class (`da_file_oclass_id`, `da_oclass_id` or a `file:` hint) | `EINVAL` |
 | exactly one of head / tail class set | `EINVAL` |
 | head or tail class not a known object class | `EINVAL` |
@@ -148,8 +155,25 @@ The split_off accepts the same size syntax as `--chunk-size` (`8GiB`, `8GB`, `51
 bytes, ...); note that `GB` (10^9) and `GiB` (2^30) differ, as for the chunk size. `dir:` hints
 and `--dir-oclass` are unaffected by progressive layout.
 
-`daos cont query` and `daos fs get-attr` print the resolved head, tail and split_off, each tagged
-`auto` or `explicit` so the configured and derived values can be told apart.
+`daos cont query` reports whether progressive layout is enabled for the container and, when it is
+active on the current pool, the resolved head, tail and split_off; on a pool below the target
+minimum it reports it as `enabled (inactive: pool has too few targets)` so an opted-in container
+is never mistaken for a plain one. `daos fs get-attr` on a directory reports only the effective
+file-creation template.
+
+```
+$ daos cont query tank B --verbose            # created with --dfs-pl EC_2P2G8,EC_2P2G32@8GiB
+  Progressive Layout     : enabled (inactive: pool has too few targets)
+
+$ daos cont query tank B --verbose            # same container after the pool grew past 1000 targets
+  Progressive Layout     : enabled
+  File Head Object Class : EC_2P2G8
+  File Tail Object Class : EC_2P2G32
+  Split Offset           : 8.0 GiB
+```
+
+`daos fs fix-sb` does not take `--dfs-pl` yet; repairing the superblock of an opted-in container
+currently rewrites it with PL off (tracked as a follow-up).
 
 ### Persistence
 

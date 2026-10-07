@@ -3982,6 +3982,23 @@ dfs_test_pl_oclass_selection(void **state)
 		      pool_info.pi_ntargets, bypass_target_limit, max_groups, default_tail_name,
 		      default_head_name, has_tail);
 
+	/* dfs_query() reports the stored enablement and, only when PL applies, the resolved layout
+	 */
+	memset(&qattr, 0, sizeof(qattr));
+	rc = dfs_query(dfs_l, &qattr);
+	assert_int_equal(rc, 0);
+	assert_int_equal(qattr.da_pl_nr, 1);
+	if (has_tail) {
+		assert_int_equal(compare_oclass(coh, qattr.da_pl_head_oclass, default_head), 0);
+		assert_int_equal(
+		    compare_oclass(coh, qattr.da_pl_segs[0].pls_oclass_id, default_tail), 0);
+		assert_true(qattr.da_pl_segs[0].pls_split_off != 0);
+	} else {
+		assert_int_equal(qattr.da_pl_head_oclass, 0);
+		assert_int_equal(qattr.da_pl_segs[0].pls_oclass_id, 0);
+		assert_int_equal(qattr.da_pl_segs[0].pls_split_off, 0);
+	}
+
 	/* Default file creation should use PL selection: compact head plus default tail when
 	 * enabled. */
 	print_message("PL stage: default file selection\n");

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024-2025 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -43,7 +44,7 @@ func ObjectClassFromName(name string) (daos.ObjectClass, error) {
 
 // ObjectClassNameFromID returns a new ObjectClass for the given ID.
 func ObjectClassName(class daos.ObjectClass) string {
-	var oclass [10]C.char
+	var oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 
 	if rc := daos_oclass_id2name(C.daos_oclass_id_t(class), &oclass[0]); rc != 0 {
 		return errors.Wrapf(daos.InvalidInput, "invalid object class %d", class).Error()

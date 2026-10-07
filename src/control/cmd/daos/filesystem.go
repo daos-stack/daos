@@ -341,12 +341,12 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "%s failed", fsOpString((ap.fs_op)))
 	}
 
-	var oclassName [16]C.char
+	var oclassName [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 	C.daos_oclass_id2name(attrs.doi_oclass_id, &oclassName[0])
 
-	var diroclassName [16]C.char
-	var fileoclassName [16]C.char
-	var plHeadName [16]C.char
+	var diroclassName [C.MAX_OBJ_CLASS_NAME_LEN]C.char
+	var fileoclassName [C.MAX_OBJ_CLASS_NAME_LEN]C.char
+	var plHeadName [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 	var oid C.daos_obj_id_t = attrs.doi_oid
 	var oidStr string = fmt.Sprintf("%d.%d", oid.hi, oid.lo)
 	isDir := bool(C.mode_is_dir(cmode))
@@ -365,7 +365,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	}
 	for i := 0; i < plNr; i++ {
 		seg := attrs.doi_pl_segs[i]
-		var segClass [16]C.char
+		var segClass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 		C.daos_oclass_id2name(seg.pls_oclass_id, &segClass[0])
 		t := plTail{
 			oclass:   C.GoString(&segClass[0]),

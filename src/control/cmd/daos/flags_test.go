@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -330,6 +331,146 @@ func TestFlags_ObjClassFlag(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := ObjClassFlag{}
+			gotErr := f.UnmarshalFlag(tc.arg)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			flagTestFini, err := flagTestInit()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer flagTestFini()
+
+			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+
+			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
+				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestFlags_DFSPLFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		arg       string
+		expFlag   *DFSPLFlag
+		expString string
+		expErr    error
+	}{
+		"unset": {
+			expErr: errors.New("invalid --dfs-pl value"),
+		},
+		"off": {
+			arg:       "off",
+			expFlag:   &DFSPLFlag{},
+			expString: "off",
+		},
+		"off is case-insensitive": {
+			arg:       "OFF",
+			expFlag:   &DFSPLFlag{},
+			expString: "off",
+		},
+		"auto": {
+			arg:       "auto",
+			expFlag:   &DFSPLFlag{Enabled: true},
+			expString: "auto",
+		},
+		"auto is case-insensitive": {
+			arg:       "Auto",
+			expFlag:   &DFSPLFlag{Enabled: true},
+			expString: "auto",
+		},
+		"explicit head and tail": {
+			arg: "S1,SX",
+			expFlag: &DFSPLFlag{
+				Enabled: true,
+				Head:    16777217,
+				Tails:   []PLTail{{Class: 16842751}},
+			},
+			expString: "S1,SX",
+		},
+		"explicit with surrounding whitespace": {
+			arg: " S1 , SX ",
+			expFlag: &DFSPLFlag{
+				Enabled: true,
+				Head:    16777217,
+				Tails:   []PLTail{{Class: 16842751}},
+			},
+			expString: "S1,SX",
+		},
+		"explicit with auto split offset": {
+			arg: "S1,SX@auto",
+			expFlag: &DFSPLFlag{
+				Enabled: true,
+				Head:    16777217,
+				Tails:   []PLTail{{Class: 16842751}},
+			},
+			expString: "S1,SX",
+		},
+		"explicit with GiB split offset": {
+			arg: "S1,SX@8GiB",
+			expFlag: &DFSPLFlag{
+				Enabled: true,
+				Head:    16777217,
+				Tails:   []PLTail{{Class: 16842751, SplitOff: 8 << 30}},
+			},
+			expString: "S1,SX@8.0 GiB",
+		},
+		"explicit with GB split offset": {
+			arg: "S1,SX@8GB",
+			expFlag: &DFSPLFlag{
+				Enabled: true,
+				Head:    16777217,
+				Tails:   []PLTail{{Class: 16842751, SplitOff: 8000000000}},
+			},
+			expString: "S1,SX@7.5 GiB",
+		},
+		"explicit with byte split offset": {
+			arg: "S1,SX@3146240",
+			expFlag: &DFSPLFlag{
+				Enabled: true,
+				Head:    16777217,
+				Tails:   []PLTail{{Class: 16842751, SplitOff: 3146240}},
+			},
+			expString: "S1,SX@3.0 MiB",
+		},
+		"multiple tails parse (rejected later by validation)": {
+			arg: "S1,S2@1GiB,SX@32GiB",
+			expFlag: &DFSPLFlag{
+				Enabled: true,
+				Head:    16777217,
+				Tails: []PLTail{
+					{Class: 16777218, SplitOff: 1 << 30},
+					{Class: 16842751, SplitOff: 32 << 30},
+				},
+			},
+			expString: "S1,S2@1.0 GiB,SX@32 GiB",
+		},
+		"head only": {
+			arg:    "S1",
+			expErr: errors.New("invalid --dfs-pl value"),
+		},
+		"unknown head": {
+			arg:    "snausages,SX",
+			expErr: errors.New("progressive-layout head: unknown object class"),
+		},
+		"unknown tail": {
+			arg:    "S1,snausages",
+			expErr: errors.New("progressive-layout tail: unknown object class"),
+		},
+		"empty tail": {
+			arg:    "S1,",
+			expErr: errors.New("progressive-layout tail: empty object class"),
+		},
+		"invalid split offset": {
+			arg:    "S1,SX@lots",
+			expErr: errors.New("invalid progressive-layout split offset"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := DFSPLFlag{}
 			gotErr := f.UnmarshalFlag(tc.arg)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {

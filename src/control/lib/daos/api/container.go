@@ -381,9 +381,14 @@ func containerQueryDFSAttrs(contConn *ContainerHandle) (*daos.POSIXAttributes, e
 	pa.ObjectClass = daos.ObjectClass(attr.da_oclass_id)
 	pa.DirObjectClass = daos.ObjectClass(attr.da_dir_oclass_id)
 	pa.FileObjectClass = daos.ObjectClass(attr.da_file_oclass_id)
+	pa.FilePLEnabled = attr.da_pl_nr > 0
 	plNr := int(attr.da_pl_nr)
 	if plNr > int(C.DFS_PL_MAX_SEGMENTS) {
 		plNr = int(C.DFS_PL_MAX_SEGMENTS)
+	}
+	// a zero head means PL is enabled but does not apply on the current pool
+	if attr.da_pl_head_oclass == 0 {
+		plNr = 0
 	}
 	if plNr > 0 {
 		pa.FilePLHeadClass = daos.ObjectClass(attr.da_pl_head_oclass)

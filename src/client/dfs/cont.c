@@ -134,8 +134,9 @@ dfs_pl_attr_verify(const dfs_attr_t *attr, uint64_t rf)
 			DFS_PL_MAX_SEGMENTS);
 		return EINVAL;
 	}
-	if (attr->da_pl_nr > 1) {
-		D_ERROR("Progressive layout with more than one tail is not supported\n");
+	if (attr->da_pl_nr > DFS_PL_NR_SUPPORTED) {
+		D_ERROR("Progressive layout with more than %u tail(s) is not supported\n",
+			DFS_PL_NR_SUPPORTED);
 		return ENOTSUP;
 	}
 
@@ -198,7 +199,6 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 	struct dfs_entry          entry           = {0};
 	daos_prop_t              *prop            = NULL;
 	daos_oclass_hints_t       dir_oclass_hint = 0;
-	daos_oclass_hints_t       file_hints      = 0;
 	uint64_t                  rf;
 	daos_cont_info_t          co_info;
 	dfs_t                    *dfs;
@@ -355,6 +355,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 
 	/** check hints for SB and Root Dir */
 	if (dattr.da_hints[0] != 0) {
+		daos_oclass_hints_t file_hints;
+
 		rc = get_oclass_hints(dattr.da_hints, &dir_oclass_hint, &file_hints, rf);
 		if (rc)
 			D_GOTO(err_prop, rc);
