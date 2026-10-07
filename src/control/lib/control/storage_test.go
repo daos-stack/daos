@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -763,13 +764,11 @@ func TestControl_StorageFormat(t *testing.T) {
 }
 
 func TestControl_checkFormatReq(t *testing.T) {
-	reqHosts := func(h ...string) []string {
-		return h
-	}
 	localServer := DefaultConfig().HostList[0]
 
 	for name, tc := range map[string]struct {
 		reqHosts   []string
+		replace    bool
 		invokerErr error
 		responses  []*UnaryResponse
 		expErr     error
@@ -786,37 +785,53 @@ func TestControl_checkFormatReq(t *testing.T) {
 			expErr: FaultFormatRunningSystem,
 		},
 		"non-replica no MS running": {
-			reqHosts: reqHosts("non-replica"),
+			reqHosts: []string{"non-replica"},
 			responses: []*UnaryResponse{
 				MockMSResponse("non-replica", &system.ErrNotReplica{Replicas: []string{"replica"}}, nil),
 				MockMSResponse("replica", errMSConnectionFailure, nil),
 			},
 		},
 		"replica not running": {
-			reqHosts: reqHosts("replica"),
+			reqHosts: []string{"replica"},
 			responses: []*UnaryResponse{
 				MockMSResponse("replica", system.ErrRaftUnavail, nil),
 			},
 		},
 		"replica running": {
-			reqHosts: reqHosts("replica"),
+			reqHosts: []string{"replica"},
 			responses: []*UnaryResponse{
 				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{}),
 			},
 			expErr: FaultFormatRunningSystem,
 		},
 		"system unformatted": {
-			reqHosts: reqHosts("replica"),
+			reqHosts: []string{"replica"},
 			responses: []*UnaryResponse{
 				MockMSResponse("replica", system.ErrUninitialized, nil),
 			},
 		},
 		"system query fails": {
-			reqHosts: reqHosts("replica"),
+			reqHosts: []string{"replica"},
 			responses: []*UnaryResponse{
 				MockMSResponse("replica", errors.New("oops"), nil),
 			},
 			expErr: errors.New("oops"),
+		},
+		"replace on replica running": {
+			reqHosts: []string{"replica"},
+			replace:  true,
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{}),
+			},
+			// Should succeed because Replace bypasses MS replica check
+		},
+		"replace on multiple hosts fails": {
+			reqHosts: []string{"replica", "replica2"},
+			replace:  true,
+			responses: []*UnaryResponse{
+				MockMSResponse(localServer, nil, &mgmtpb.SystemQueryResp{}),
+			},
+			expErr: errors.New("exactly one"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -828,11 +843,10 @@ func TestControl_checkFormatReq(t *testing.T) {
 				UnaryResponseSet: tc.responses,
 			})
 
-			req := &StorageFormatReq{}
+			req := &StorageFormatReq{Replace: tc.replace}
 			req.SetHostList(tc.reqHosts)
 			err := checkFormatReq(test.Context(t), mi, req)
 			test.CmpErr(t, tc.expErr, err)
-
 		})
 	}
 }
