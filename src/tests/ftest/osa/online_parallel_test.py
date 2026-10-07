@@ -12,6 +12,7 @@ import time
 from daos_racer_utils import DaosRacerCommand
 from exception_utils import CommandFailure
 from osa_utils import OSAUtils
+from test_utils_container import get_all_containers
 from write_host_file import write_host_file
 
 
@@ -227,7 +228,7 @@ class OSAOnlineParallelTest(OSAUtils):
         # Perform a data consistency check.
         for pool in pools:
             self.pool = pool
-            for container in self.get_all_containers(self.pool):
+            for container in get_all_containers(self.pool):
                 self.container = container
                 self.run_ior_thread("Read", oclass, test_seq, single_cont_read=False)
                 self.log.info("Checking data integrity for container %s", self.container)
