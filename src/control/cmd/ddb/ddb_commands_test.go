@@ -133,6 +133,14 @@ func TestDdb_HelpCmds(t *testing.T) {
 			cmdStr:     "csum_dump",
 			helpSubStr: "Usage:\n  csum_dump [flags] path [dst]\n",
 		},
+		"help for 'wal_open' command": {
+			cmdStr:     "wal_open",
+			helpSubStr: "Usage:\n  wal_open [flags] path\n",
+		},
+		"help for 'wal_close' command": {
+			cmdStr:     "wal_close",
+			helpSubStr: "Usage:\n  wal_close [flags]\n",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			ctx := newTestContext(t)
@@ -188,6 +196,16 @@ func TestDdb_Cmds(t *testing.T) {
 	openFnChecking := func(t *testing.T, wantPath, wantDbPath string, wantWriteMode bool) func(string, string, bool) error {
 		return func(path, dbPath string, writeMode bool) error {
 			fmt.Println("open called")
+			test.CmpAny(t, "path", wantPath, path)
+			test.CmpAny(t, "db_path", wantDbPath, dbPath)
+			test.CmpAny(t, "write_mode", wantWriteMode, writeMode)
+			return nil
+		}
+	}
+
+	walOpenFnChecking := func(t *testing.T, wantPath, wantDbPath string, wantWriteMode bool) func(string, string, bool) error {
+		return func(path, dbPath string, writeMode bool) error {
+			fmt.Println("wal_open called")
 			test.CmpAny(t, "path", wantPath, path)
 			test.CmpAny(t, "db_path", wantDbPath, dbPath)
 			test.CmpAny(t, "write_mode", wantWriteMode, writeMode)
@@ -916,6 +934,81 @@ func TestDdb_Cmds(t *testing.T) {
 			},
 			expStdout: []string{"csum_dump called"},
 		},
+
+		// --- wal_open command ---
+		"wal_open missing path": {
+			args:   []string{"wal_open"},
+			expErr: ddbTestErr("missing argument 'path'"),
+		},
+		"wal_open invalid options": {
+			args:   []string{"wal_open", "--bar", "/path/to/vos-0"},
+			expErr: ddbTestErr("invalid flag: --bar"),
+		},
+		"wal_open default": {
+			args: []string{"wal_open", "/path/to/vos-0"},
+			setup: func(t *testing.T) {
+				ddb_run_wal_open_Fn = walOpenFnChecking(t, "/path/to/vos-0", "", false)
+			},
+			expStdout: []string{"wal_open called"},
+		},
+		"wal_open with short write_mode flag": {
+			args: []string{"wal_open", "-w", "/path/to/vos-0"},
+			setup: func(t *testing.T) {
+				ddb_run_wal_open_Fn = walOpenFnChecking(t, "/path/to/vos-0", "", true)
+			},
+			expStdout: []string{"wal_open called"},
+		},
+		"wal_open with long write_mode flag": {
+			args: []string{"wal_open", "--write_mode", "/path/to/vos-0"},
+			setup: func(t *testing.T) {
+				ddb_run_wal_open_Fn = walOpenFnChecking(t, "/path/to/vos-0", "", true)
+			},
+			expStdout: []string{"wal_open called"},
+		},
+		"wal_open with short db_path flag": {
+			args: []string{"wal_open", "-p", "/sysdb", "/path/to/vos-0"},
+			setup: func(t *testing.T) {
+				ddb_run_wal_open_Fn = walOpenFnChecking(t, "/path/to/vos-0", "/sysdb", false)
+			},
+			expStdout: []string{"wal_open called"},
+		},
+		"wal_open with long db_path flag and rdb-pool": {
+			args: []string{"wal_open", "--db_path", "/sysdb", "/path/to/rdb-pool"},
+			setup: func(t *testing.T) {
+				ddb_run_wal_open_Fn = walOpenFnChecking(t, "/path/to/rdb-pool", "/sysdb", false)
+			},
+			expStdout: []string{"wal_open called"},
+		},
+		"wal_open error": {
+			args: []string{"wal_open", "/path/to/vos-0"},
+			setup: func(t *testing.T) {
+				ddb_run_wal_open_Fn = func(_, _ string, _ bool) error {
+					return fmt.Errorf("simulated wal_open failure")
+				}
+			},
+			expErr: ddbTestErr("DER_UNKNOWN"),
+		},
+
+		// --- wal_close command ---
+		"wal_close": {
+			args: []string{"wal_close"},
+			setup: func(t *testing.T) {
+				ddb_run_wal_close_Fn = func() error {
+					fmt.Println("wal_close called")
+					return nil
+				}
+			},
+			expStdout: []string{"wal_close called"},
+		},
+		"wal_close error": {
+			args: []string{"wal_close"},
+			setup: func(t *testing.T) {
+				ddb_run_wal_close_Fn = func() error {
+					return fmt.Errorf("simulated wal_close failure")
+				}
+			},
+			expErr: ddbTestErr("DER_UNKNOWN"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			checkCmd := func(t *testing.T, stdout string, err error) {
@@ -969,9 +1062,12 @@ func TestDdb_ManPage(t *testing.T) {
 		manPathSection[:20],
 		manMdOnSsdSection[:20],
 		manSpdkReinitSection[:20],
+		manWalSection[:20],
 		manLoggingSection[:20],
 		".B ls\n",
 		".B open\n",
+		".B wal_open\n",
+		".B wal_close\n",
 	}
 
 	// manpage to stdout: must contain all section headers and known commands.

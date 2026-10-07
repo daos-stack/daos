@@ -399,3 +399,29 @@ func (ctx *DdbContext) CsumDump(path string, dst string, epoch uint64) error {
 	/* Run the c code command */
 	return daosError(ddb_run_csum_dump(&ctx.ctx, &options))
 }
+
+// WalIsOpen reports whether a WAL session is currently open in the context.
+func (ctx *DdbContext) WalIsOpen() bool {
+	return bool(ddb_wal_is_open(&ctx.ctx))
+}
+
+// WalOpen opens the meta and WAL blobs of the MD-on-SSD VOS target at path using the DAOS
+// management database at dbPath, without opening the VOS pool and therefore without replaying
+// the WAL. When writeMode is true, the session allows modifying commands.
+func (ctx *DdbContext) WalOpen(path string, dbPath string, writeMode bool) error {
+	/* Set up the options */
+	options := C.struct_wal_open_options{}
+	options.path = C.CString(path)
+	defer freeString(options.path)
+	options.db_path = C.CString(dbPath)
+	defer freeString(options.db_path)
+	options.write_mode = C.bool(writeMode)
+	/* Run the c code command */
+	return daosError(ddb_run_wal_open(&ctx.ctx, &options))
+}
+
+// WalClose closes the currently opened WAL session.
+func (ctx *DdbContext) WalClose() error {
+	/* Run the c code command */
+	return daosError(ddb_run_wal_close(&ctx.ctx))
+}

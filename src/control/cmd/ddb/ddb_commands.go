@@ -519,4 +519,42 @@ select`,
 		},
 		Completer: nil,
 	})
+	// Command: wal_open
+	app.AddCommand(&grumble.Command{
+		Name:    "wal_open",
+		Aliases: nil,
+		Help:    "Open the WAL of the MD-on-SSD VOS target at <path> without replaying it",
+		LongHelp: `Open the WAL of the MD-on-SSD VOS target at <path> without replaying it. Only the
+meta and WAL blobs of the target are opened through the BIO layer: the VOS pool itself is not
+opened, so the WAL content is left untouched and can be inspected as it is on the device. The
+path <path> has the same format as for 'open' ([/db_path/]<pool-uuid>/(vos-N|rdb-pool)); the
+VOS file itself does not need to exist. A WAL session is exclusive with an opened pool: 'open'
+and 'wal_open' cannot be used at the same time, and a WAL session must be ended with 'wal_close'
+before another WAL session or a pool can be opened. The '-w' option allows the WAL modifying
+commands.` + lifecycleCmdHelpNote,
+		HelpGroup: "wal",
+		Flags: func(f *grumble.Flags) {
+			f.Bool("w", "write_mode", false, "Open the WAL in write mode.")
+			f.String("p", "db_path", "", "Path to the sys db to open.")
+		},
+		Args: func(a *grumble.Args) {
+			a.String("path", "Path to the VOS target whose WAL to open.")
+		},
+		Run: func(c *grumble.Context) error {
+			return ctx.WalOpen(c.Args.String("path"), c.Flags.String("db_path"), c.Flags.Bool("write_mode"))
+		},
+		Completer: openCompleter,
+	})
+	// Command: wal_close
+	app.AddCommand(&grumble.Command{
+		Name:      "wal_close",
+		Aliases:   nil,
+		Help:      "Close the currently opened WAL session",
+		LongHelp:  "Close the WAL session opened with 'wal_open'." + lifecycleCmdHelpNote,
+		HelpGroup: "wal",
+		Run: func(c *grumble.Context) error {
+			return ctx.WalClose()
+		},
+		Completer: nil,
+	})
 }

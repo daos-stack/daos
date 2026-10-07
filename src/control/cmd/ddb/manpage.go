@@ -114,7 +114,8 @@ from a \fI-f\fR command file, the VOS file is opened before the command executes
 top-level \fI--vos_path\fR/\fI--db_path\fR.
 .PP
 \fBPool-lifecycle commands\fR (\fBopen\fR, \fBclose\fR, \fBfeature\fR, \fBrm_pool\fR,
-\fBdev_list\fR, \fBdev_replace\fR, \fBprov_mem\fR, \fBsmd_sync\fR) manage the VOS pool's own
+\fBdev_list\fR, \fBdev_replace\fR, \fBprov_mem\fR, \fBsmd_sync\fR, \fBwal_open\fR,
+\fBwal_close\fR) manage the VOS pool's own
 open/close/remove/replace lifecycle themselves, so ddb does not pre-open a pool for them. When
 one of these is given as a single bare command directly on the command line, \fI--vos_path\fR/
 \fI--db_path\fR are \fBnot accepted\fR: ddb returns an error and the path must be provided
@@ -214,9 +215,10 @@ config comes from a separate \fInvme_conf\fR argument rather than \fIdb_path\fR.
 .PP
 To avoid crashing, ddb allows only one such initialization per process: once an NVMe-backed pool
 has been used by one of \fBopen\fR, \fBrm_pool\fR, \fBfeature\fR, \fBdev_list\fR,
-\fBdev_replace\fR, \fBprov_mem\fR, or \fBsmd_sync\fR, any later attempt by one of these commands
-to initialize SPDK again for another NVMe-backed pool is refused with an error. Pools with no
-\fBdaos_nvme.conf\fR (pure PMEM) never touch SPDK and are unaffected by this limitation.
+\fBdev_replace\fR, \fBprov_mem\fR, \fBsmd_sync\fR, or \fBwal_open\fR, any later attempt by one of
+these commands to initialize SPDK again for another NVMe-backed pool is refused with an error.
+Pools with no \fBdaos_nvme.conf\fR (pure PMEM) never touch SPDK and are unaffected by this
+limitation.
 .SS Notes
 .IP "*" 4
 If you hit this error, restart the ddb process and run the remaining operation as a separate
@@ -224,6 +226,37 @@ invocation.
 .IP "*" 4
 This limitation does not apply across separate ddb process invocations, only within the same
 one.`
+
+const manWalSection = `.SH WAL INSPECTION
+.SS Overview
+In MD-on-SSD mode, every VOS target persists its metadata updates in a Write-Ahead Log (WAL)
+stored on an NVMe device. When a pool is opened (by \fBdaos_engine\fR or by ddb's \fBopen\fR
+command), the committed WAL transactions are replayed onto the metadata blob and the WAL content
+is then discarded. The WAL commands give access to the WAL \fBwithout replaying it\fR: they open
+only the meta and WAL blobs of a target through the BIO layer, never the VOS pool itself, so the
+WAL can be examined as it is on the device.
+.PP
+\fBwal_open\fR starts a WAL session for the target designated by its VOS path
+([/db_path/]<pool-uuid>/(vos-N|rdb-pool)); the VOS file does not need to exist on a tmpfs
+mount and \fBprov_mem\fR is not required. The pool and target are resolved through the system
+DB at \fIdb_path\fR, exactly as for \fBopen\fR. \fBwal_close\fR ends the session.
+.PP
+A WAL session and an opened pool are mutually exclusive: \fBopen\fR fails while a WAL session is
+open and \fBwal_open\fR fails while a pool is open. Only one WAL session can exist at a time, and
+it is subject to the SPDK re-initialization limitation described in the SPDK RE-INITIALIZATION
+section: a second \fBwal_open\fR in the same ddb process is refused, even after \fBwal_close\fR.
+.SS Notes
+.IP "*" 4
+The WAL commands require the system DB at \fIdb_path\fR to be configured in MD-on-SSD mode;
+otherwise \fBwal_open\fR fails with a "not supported" error.
+.IP "*" 4
+If the meta or WAL header of the target is invalid (bad magic, unsupported version or bad
+checksum), or valid but inconsistent (its content does not describe this target and pool),
+\fBwal_open\fR fails and reports which kind of check failed.
+.IP "*" 4
+\fBwal_open\fR never writes to the target: the headers are verified read-only before the WAL
+session is opened, and a header in an older on-disk format (version 1) is refused as an
+unsupported version instead of being upgraded.`
 
 func fprintManPage(dest io.Writer, app *grumble.App, parser *flags.Parser) {
 	fmt.Fprintln(dest, manMacroSection)
@@ -257,6 +290,8 @@ func fprintManPage(dest io.Writer, app *grumble.App, parser *flags.Parser) {
 	fmt.Fprintln(dest, manMdOnSsdSection)
 
 	fmt.Fprintln(dest, manSpdkReinitSection)
+
+	fmt.Fprintln(dest, manWalSection)
 
 	fmt.Fprint(dest, manLoggingSection)
 }

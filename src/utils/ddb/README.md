@@ -51,9 +51,10 @@ implementation, making the VOS interaction a bit nicer for ddb.
 
 Unlike daos_engine, which initializes SPDK only once during the lifetime of the
 process, ddb allows the user to run multiple pool-lifecycle commands (`open`,
-`rm_pool`, `feature`, `dev_list`, `dev_replace`, `prov_mem`, `smd_sync`) in the
-same interactive session or by providing a sequence of commands via `-f`, each
-potentially triggering its own `vos_self_init()` and SPDK initialization. SPDK
+`rm_pool`, `feature`, `dev_list`, `dev_replace`, `prov_mem`, `smd_sync`,
+`wal_open`) in the same interactive session or by providing a sequence of
+commands via `-f`, each potentially triggering its own `vos_self_init()` and
+SPDK initialization. SPDK
 does not support being re-initialized within the same process: its re-init path
 only rescans the PCI bus and never rebuilds the DPDK memory/address-translation
 tables torn down by the previous `vos_self_fini()`. This is unsafe for any pool
@@ -169,6 +170,10 @@ vos
   value_load               Load a value to a vos path.
   vea_dump                 Dump information from the vea about free regions
   vea_update               Alter the VEA tree to mark a region as free.
+
+wal
+  wal_close  Close the currently opened WAL session
+  wal_open   Open the WAL of the MD-on-SSD VOS target at <path> without replaying it
 ```
 
 ### Pool-content commands vs. pool-lifecycle commands
@@ -181,7 +186,8 @@ file, the VOS file is opened before the command executes, using the top-level `-
 `--db_path`.
 
 **Pool-lifecycle commands** (`open`, `close`, `feature`, `rm_pool`, `dev_list`, `dev_replace`,
-`prov_mem`, `smd_sync`) manage the VOS pool's own open/close/remove/replace lifecycle themselves,
+`prov_mem`, `smd_sync`, `wal_open`, `wal_close`) manage the VOS pool's own open/close/remove/replace
+lifecycle themselves,
 so ddb does not pre-open a pool for them. When one of these is given as a single bare command
 directly on the command line, `--vos_path`/`--db_path` are **not accepted**: ddb returns an error
 and the path must be provided directly to the command instead (see its own `--help`). For example:
@@ -248,3 +254,79 @@ ddb prov_mem --db_path /path/to/sys/db -s 16 /mnt/tmpfs
 - `db_path` used to be a positional argument (`ddb prov_mem <db_path> <tmpfs_mount>`); it is now
   a `-p`/`--db_path` flag, consistent with the other pool-lifecycle commands (`open`, `feature`,
   `rm_pool`, `dev_list`, `dev_replace`, `smd_sync`).
+
+## WAL inspection commands
+
+In MD-on-SSD mode, every VOS target (`vos-N` file or the `rdb-pool` of a pool) is backed by a
+meta blob and a Write-Ahead Log (WAL) blob on the NVMe devices. When a pool is opened, VOS replays
+the WAL transactions committed since the last checkpoint onto the meta blob before the pool can
+be used. The WAL commands let a user look at the WAL **as it is on the device**, without
+triggering this replay:
+
+```
+wal_open   Open the WAL of the MD-on-SSD VOS target at <path> without replaying it
+wal_close  Close the currently opened WAL session
+```
+
+### `wal_open` command
+
+```
+Usage:
+  wal_open [flags] path
+
+Args:
+  path  string    Path to the VOS target whose WAL to open.
+
+Flags:
+  -p, --db_path    string    Path to the sys db to open.
+  -h, --help                 display help
+  -w, --write_mode           Open the WAL in write mode.
+```
+
+`wal_open` initializes the standalone VOS/BIO environment (like `open` does) and opens only the
+meta and WAL blobs of the target through the BIO layer: the VOS pool itself is never opened. The
+path has the same format as for `open` (`[/db_path/]<pool-uuid>/(vos-N|rdb-pool)`); the VOS file
+itself does not need to exist on the tmpfs, so `prov_mem` is not required beforehand. The
+`-w`/`--write_mode` flag is reserved for the WAL modifying commands.
+
+### `wal_close` command
+
+```
+Usage:
+  wal_close [flags]
+```
+
+Ends the WAL session started with `wal_open`. A WAL session that is still open when ddb exits is
+closed automatically.
+
+### Examples
+
+```bash
+# Open and close a WAL session in a single ddb invocation
+cat > /tmp/wal.ddb <<EOC
+wal_open -p /mnt/daos/daos_sys /mnt/daos/3550f5df-e6b1-4415-947e-82e15cf769af/vos-0
+wal_close
+EOC
+ddb -f /tmp/wal.ddb
+
+# The RDB of a pool also has a WAL
+ddb wal_open -p /mnt/daos/daos_sys /mnt/daos/3550f5df-e6b1-4415-947e-82e15cf769af/rdb-pool
+```
+
+### Notes
+
+- A WAL session is exclusive with an opened pool: `open` is rejected while a WAL session is open
+  and `wal_open` is rejected while a pool is open. `wal_close` (or `close`) must be run first.
+- Only one WAL session can be open at a time; `wal_close` without a session is an error.
+- Like the other pool-lifecycle commands, `wal_open` is subject to the SPDK re-initialization
+  limitation described above: a second `wal_open` in the same ddb process is refused once the
+  SPDK/VOS environment has been torn down by `wal_close` (or by `close`, `rm_pool`, ...).
+- `wal_open` fails with `DER_NOTSUPPORTED` on a PMEM target (no WAL), and with `DER_NONEXIST`
+  when the sys db at `db_path` has no meta/WAL blob for the target.
+- `wal_open` validates the meta and WAL headers (magic, version, checksum and content) and fails
+  with `DER_UNINIT`, `DER_DF_INCOMPT` or `DER_CSUM` when they are invalid, and with `DER_DF_INVAL`
+  when they are valid but inconsistent; such a header will be repairable with the
+  `wal_repair_hdr` command (not available yet).
+- `wal_open` never writes to the target: the headers are verified read-only before the WAL
+  session is opened, and a version 1 header is refused with `DER_DF_INCOMPT` instead of being
+  upgraded to version 2.
