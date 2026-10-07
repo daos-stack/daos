@@ -217,6 +217,19 @@
   tests:
     - cmd: ["bin/ddb_tests"]
     - cmd: ["bin/ddb_ut"]
+- name: ddb_md_on_ssd
+  base: "PREFIX"
+  sudo: True
+  required_src: ["src/utils/ddb/tests/ddb_wal_tests.c"]
+  tests:
+    # Only the WAL test groups, one per process: the other groups re-initialize SPDK, which is
+    # not supported, and each WAL group holds the one NVMe-backed wal_open attempt of its process
+    - cmd: ["bin/ddb_tests", "--suites", "f"]
+      aio: "AIO_7"
+      size: 4
+    - cmd: ["bin/ddb_tests", "--suites", "g"]
+      aio: "AIO_7"
+      size: 4
 - name: dlck
   base: "BUILD_DIR"
   tests:

@@ -24,6 +24,9 @@ ddb_commands_ut_run(void);
 int
 ddb_spdk_reinit_wa_ut_run(void);
 
+int
+ddb_wal_ut_run(void);
+
 static int
 ddb_test_driver_arguments_parse(uint32_t argc, char **argv)
 {
@@ -98,6 +101,7 @@ main(int argc, char *argv[])
 	RUN_TEST_SUIT('a', ddb_vos_ut_run);
 	RUN_TEST_SUIT('b', ddb_commands_ut_run);
 	RUN_TEST_SUIT('c', ddb_spdk_reinit_wa_ut_run);
+	RUN_TEST_SUIT('d', ddb_wal_ut_run);
 
 	ddb_fini();
 	if (rc > 0)

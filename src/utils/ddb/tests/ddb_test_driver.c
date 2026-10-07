@@ -526,7 +526,7 @@ dvt_vos_insert_dtx_records(daos_handle_t coh, uint32_t nr, uint32_t committed_nr
 
 struct ddb_test_driver_arguments {
 	bool	 dtda_create_vos_file;
-	/* Test groups to run ('a'..'e', see main()); empty means all of them */
+	/* Test groups to run ('a'..'g', see main()); empty means all of them */
 	char     dtda_suites[16];
 };
 
@@ -1061,7 +1061,7 @@ int main(int argc, char *argv[])
 	rc = ddb_test_driver_arguments_parse(argc, argv, &args);
 	if (rc != 0) {
 		printf("Usage: ddb_tests [-c|--create_vos] [-f|--filter <test>] "
-		       "[-s|--suites <a-e letters>]\n");
+		       "[-s|--suites <a-g letters>]\n");
 		ddb_fini();
 		return 1;
 	}
@@ -1084,6 +1084,8 @@ int main(int argc, char *argv[])
 	RUN_TEST_SUIT('c', ddb_commands_tests_run);
 	RUN_TEST_SUIT('d', ddb_commands_print_tests_run);
 	RUN_TEST_SUIT('e', ddb_path_tests_run);
+	RUN_TEST_SUIT('f', ddb_wal_tests_run);
+	RUN_TEST_SUIT('g', ddb_wal_bad_hdr_tests_run);
 
 done:
 	ddb_fini();
