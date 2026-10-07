@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,8 +55,7 @@ struct btr_test_state {
 };
 
 #define SK_TREE_CLASS	100
-#define POOL_NAME "/mnt/daos/btree-direct-test"
-#define POOL_SIZE ((1024 * 1024  * 1024ULL))
+#define POOL_NAME       "/mnt/daos/btree-direct-test"
 
 #define SK_ORDER_DEF	16
 
