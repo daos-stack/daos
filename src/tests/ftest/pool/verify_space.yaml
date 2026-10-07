@@ -11,33 +11,43 @@ server_config:
     0:
       storage: auto
 
+pool_base: &pool_base
+  properties: rd_fac:0,space_rb:0
+
 pool_rank_0:
+  <<: *pool_base
   size: 100G
   target_list: [0]
 
 pool_rank_1_a:
+  <<: *pool_base
   size: 75G
   target_list: [1]
 
 pool_rank_1_b:
+  <<: *pool_base
   size: 85G
   target_list: [1]
 
 pool_rank_1_c:
+  <<: *pool_base
   size: 95G
   target_list: [1]
 
 pool_rank_1_2:
+  <<: *pool_base
   size: 200G
   target_list: [1, 2]
 
 pool_rank_0_1_2:
+  <<: *pool_base
   size: 175G
   target_list: [0, 1, 2]
 
 container:
   type: POSIX
   register_cleanup: False
+  properties: cksum:off,srv_cksum:off
 
 ior:
   api: DFS

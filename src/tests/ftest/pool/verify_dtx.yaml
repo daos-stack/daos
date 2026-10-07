@@ -28,9 +28,11 @@ pool: !mux
   md_on_ssd_p2:
     size: 575G
     mem_ratio: 25
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 
 mdtest:
   manager: "MPICH"
