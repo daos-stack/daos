@@ -355,7 +355,6 @@ static int
 vos_iter_validate_internal(struct vos_iterator *iter)
 {
 	daos_anchor_t     *anchor;
-	daos_anchor_t      saved;
 	int                rc;
 	struct dtx_handle *old;
 	bool               is_sysdb = !!iter->it_for_sysdb;
@@ -373,12 +372,6 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 		D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 	}
 
-	/* Object punched/deleted while yielding; cached obj_df and tree roots may be freed */
-	if (iter->it_type != VOS_ITER_OBJ && vos_obj_is_evicted(vos_iter2oiter(iter)->it_obj)) {
-		iter->it_anchors->ia_probe_level = VOS_ITER_OBJ;
-		return VOS_ITER_OBJ;
-	}
-
 	switch (iter->it_type) {
 	case VOS_ITER_OBJ:
 		anchor = &iter->it_anchors->ia_obj;
@@ -393,24 +386,16 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 		anchor = &iter->it_anchors->ia_sv;
 		break;
 	case VOS_ITER_RECX:
-		anchor = &iter->it_anchors->ia_ev;
+		anchor = &iter->it_anchors->ia_sv;
 		break;
 	default:
 		D_ASSERTF(0, "Unexpected iterator type %d\n", iter->it_type);
 	}
 
-	saved = *anchor;
-	old   = vos_dth_get(is_sysdb);
+	old = vos_dth_get(is_sysdb);
 	vos_dth_set(iter->it_dth, is_sysdb);
 	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
 	vos_dth_set(old, is_sysdb);
-
-	/* PROBE_AGAIN is GE: a different entry means ours is gone and children hold stale roots */
-	if (rc == 0 &&
-	    (iter->it_type == VOS_ITER_OBJ || iter->it_type == VOS_ITER_DKEY ||
-	     iter->it_type == VOS_ITER_AKEY) &&
-	    memcmp(saved.da_buf, anchor->da_buf, sizeof(saved.da_buf)) != 0)
-		rc = -DER_NONEXIST;
 
 	if (rc == 0)
 		return 0;
