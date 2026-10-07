@@ -49,9 +49,20 @@ class OSAOfflineParallelTest(OSAUtils):
             if action == "reintegrate":
                 self.log.info("Interrupt rebuild with reintegrate")
                 time.sleep(10)
-                if self.pool.get_rebuild_state() != "busy":
-                    self.log.info("Rebuild is not busy yet; waiting for it to start")
-                    self.pool.wait_for_rebuild_to_start(interval=5)
+                max_attempts = 10
+                for attempt in range(1, max_attempts + 1):
+                    rebuild_state = self.pool.get_rebuild_state()
+                    if rebuild_state == "busy":
+                        break
+                    self.log.info(
+                        "Rebuild is not busy yet (check %s/%s)", attempt, max_attempts)
+                    if attempt < max_attempts:
+                        time.sleep(2)
+                else:
+                    results.put(
+                        "{} failed: rebuild did not become busy after {} checks".format(
+                            action, max_attempts))
+                    return
             if action == "exclude" and self.server_boot is True:
                 self.log.info("Stop/Start rank %s using system stop/start", kwargs["ranks"])
                 ranks = str(kwargs["ranks"])
