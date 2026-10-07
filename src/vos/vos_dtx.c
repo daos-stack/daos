@@ -1451,14 +1451,14 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 
 	if (intent == DAOS_INTENT_MIGRATION) {
 		/*
-		 * Resync is best-effort. Warn about unresolved DTXs inside the migration
-		 * boundary, but keep their uncommitted records out of migration.
+		 * Restart rebuild rather than skip unresolved DTXs inside the migration boundary.
 		 */
 		if (dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch) {
 			D_WARN("Non-ready DTX " DF_DTI " at " DF_X64 " (version %u)"
-			       " skipped at migration boundary " DF_X64 " (version %u)\n",
+			       " restart rebuild at migration boundary " DF_X64 " (version %u)\n",
 			       DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae), dth->dth_epoch,
 			       dth->dth_ver);
+			return -DER_VOS_PARTIAL_UPDATE;
 		}
 
 		return ALB_UNAVAILABLE;
