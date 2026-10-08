@@ -1227,6 +1227,15 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	D_ASSERT(dth->dth_mbs != NULL);
 
 cache:
+	if (!dth->dth_solo && unlikely(dth->dth_ver < cont->sc_pool->spc_map_version)) {
+		D_DEBUG(DB_IO, "Pool map changed from %u to %u during process transaction " DF_DTI
+			"with epoch " DF_X64 ", flags %x, client needs to refresh its pool map.\n",
+			dth->dth_ver, cont->sc_pool->spc_map_version, DP_DTI(&dth->dth_xid),
+			dth->dth_epoch, dth->dth_flags);
+		result = -DER_STALE;
+		goto abort;
+	}
+
 	if (dlh->dlh_coll) {
 		rc = dtx_cos_add(cont, dlh->dlh_coll_entry, &dth->dth_leader_oid,
 				 dth->dth_dkey_hash, dth->dth_epoch, DCF_EXP_CMT | DCF_COLL);
@@ -1278,6 +1287,15 @@ cache:
 	}
 
 sync:
+	if (!dth->dth_solo && unlikely(dth->dth_ver < cont->sc_pool->spc_map_version)) {
+		D_DEBUG(DB_IO, "Pool map changed from %u to %u during process transaction " DF_DTI
+			"with epoch " DF_X64 ", flags %x, client needs to refresh its pool map.\n",
+			dth->dth_ver, cont->sc_pool->spc_map_version, DP_DTI(&dth->dth_xid),
+			dth->dth_epoch, dth->dth_flags);
+		result = -DER_STALE;
+		goto abort;
+	}
+
 	if (dth->dth_sync) {
 		/*
 		 * TBD: We need to reserve some space to guarantee that the local commit can be

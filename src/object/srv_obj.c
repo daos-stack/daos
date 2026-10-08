@@ -5524,6 +5524,9 @@ out:
 		  DLOG_ERR, DB_IO, rc, "Handled DTX " DF_DTI " on leader, idx %u",
 		  DP_DTI(&dcsh->dcsh_xid), dca->dca_idx);
 
+	if (unlikely(rc == -DER_STALE))
+		rc = -DER_TX_RESTART;
+
 	if (rc == -DER_AGAIN) {
 		oci->oci_flags |= ORF_RESEND;
 		need_abort = true;

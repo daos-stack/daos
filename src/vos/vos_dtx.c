@@ -1457,10 +1457,10 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		 */
 		if (dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch &&
 		    DAE_VER(dae) < dth->dth_ver) {
-			D_WARN("Non-ready DTX " DF_DTI " at " DF_X64 " (version %u)"
-			       " restart rebuild at migration boundary " DF_X64 " (version %u)\n",
-			       DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae), dth->dth_epoch,
-			       dth->dth_ver);
+			D_WARN("Non-ready DTX " DF_DTI " at " DF_X64 " (version %u) restart "
+			       "rebuild (" DF_DTI ") at migration boundary " DF_X64 " (ver %u)\n",
+			       DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae),
+			       DP_DTI(&dth->dth_xid), dth->dth_epoch, dth->dth_ver);
 			return -DER_VOS_PARTIAL_UPDATE;
 		}
 
