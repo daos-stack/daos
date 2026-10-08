@@ -121,6 +121,7 @@ def get_all_containers(test, pool):
     """
     daos_cmd = test.get_daos_command()
     container_list = []
+    container_error = None
     containers = daos_cmd.container_list(pool=pool.identifier)
     for info in containers["response"]:
         max_attempts = 3
@@ -137,6 +138,7 @@ def get_all_containers(test, pool):
                 test.fail(
                     "Failed to get a valid TestContainer for {} after {} attempts: {}"
                     .format(info["uuid"], max_attempts, container_error))
+    return container_list
 
 
 class TestContainerData():
