@@ -8,7 +8,7 @@
 
 import ctypes
 from logging import getLogger
-from time import sleep, time
+from time import time
 
 from avocado import TestFail, fail_on
 from command_utils_base import BasicParameter
@@ -110,13 +110,11 @@ def get_existing_container(test, pool, container_id, daos=None, namespace=CONT_N
     return container
 
 
-def get_all_containers(test, pool, time_delay=1):
+def get_all_containers(test, pool):
     """Get all containers (TestContainer objects) for the specified pool.
     Args:
         test (Test): the test object used to get the daos command.
         pool (TestPool): Pool object for which to retrieve containers.
-        time_delay (int, optional): time to wait between attempts to get a valid container.
-            Defaults to 1 second.
 
     Returns:
         list: List of container objects.
@@ -125,19 +123,13 @@ def get_all_containers(test, pool, time_delay=1):
     container_list = []
     containers = daos_cmd.container_list(pool=pool.identifier)
     for info in containers["response"]:
-        container = None
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
             try:
-                container = get_existing_container(
-                    test, pool, info["uuid"], daos=daos_cmd)
+                container_list.append(get_existing_container(test, pool, info["uuid"]))
+                break
             except CommandFailure as error:
                 container_error = str(error)
-            else:
-                if container is not None:
-                    container_list.append(container)
-                    break
-                container_error = "get_existing_container returned an invalid object"
             test.log.info(
                 "Container %s attempt %s/%s failed: %s",
                 info["uuid"], attempt, max_attempts, container_error)
@@ -145,8 +137,6 @@ def get_all_containers(test, pool, time_delay=1):
                 test.fail(
                     "Failed to get a valid TestContainer for {} after {} attempts: {}"
                     .format(info["uuid"], max_attempts, container_error))
-            sleep(time_delay)
-    return container_list
 
 
 class TestContainerData():
