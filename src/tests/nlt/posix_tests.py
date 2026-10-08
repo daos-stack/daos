@@ -441,6 +441,8 @@ class PosixTests():
         # Any dfuse-* attribute switches to the attribute path, which enables write-back.
         self.container.set_attrs({'dfuse-data-cache': 'on'})
         dfuse = DFuse(self.server, self.conf, container=self.container)
+        # The log is checked before stop, which removes it.
+        dfuse.log_flush = True
         dfuse.start(v_hint='chunk_wb_order')
 
         file_name = join(dfuse.dir, 'chunk_wb_order')
@@ -466,13 +468,13 @@ class PosixTests():
             os.close(rfd)
             os.close(wfd)
 
-        if dfuse.stop():
-            self.fatal_errors = True
-
         chunk_path = True
         if self.conf.args.dfuse_debug in (None, 'DEBUG'):
             with open(dfuse.log_file, 'rb') as fd:
                 chunk_path = b'submit for bucket' in fd.read()
+
+        if dfuse.stop():
+            self.fatal_errors = True
 
         if stale:
             print(f'chunk read returned data from before the write, iterations {stale}')
