@@ -1451,9 +1451,36 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 
 	if (intent == DAOS_INTENT_MIGRATION) {
 		/*
-		 * Restart rebuild rather than skip unresolved old-map DTXs inside the migration
-		 * boundary. DTXs prepared with the rebuild (or newer) map version were sent with a
-		 * layout that already includes the in-rebuilding target, so they stay invisible.
+		 * Up layer rebuild logic guarantees that the rebuild scan is not triggered
+		 * until DTX resync has been done on all related targets, so a non-committed
+		 * DTX hit by migration is normally for new IO whose version is not older than
+		 * the rebuild and whose layout already includes the in-rebuilding target. The
+		 * rules below handle the exceptions, in order:
+		 *
+		 * 1. Old-map DTX (version older than the rebuild) inside the migration boundary:
+		 *    its layout did not include the in-rebuilding target, so nothing can be
+		 *    skipped safely. Restart the rebuild and let DTX resync resolve it first.
+		 *    (Rare: stale-map RPCs are rejected by the object handler and resync waits
+		 *    for in-flight old-map DTXs, but keep it as the safety net.)
+		 * 2. In-flight DTX (not yet prepared, or being prepared) on any replica: the
+		 *    result is still undecided, skip it as the DEFAULT intent does. NB: on the
+		 *    leader the entry keeps its owner (dae_dth) until the leader marks it
+		 *    committable, so a leader entry is either in-flight or already visible.
+		 * 3. Prepared DTX on a non-leader: the leader may already treat it as
+		 *    committable while the batched commit has not arrived here. Skipping it
+		 *    would make the fetch miss the record (-DER_DATA_LOSS) or return an older
+		 *    version that then overwrites, at the migration epoch, the data directly
+		 *    written to the in-rebuilding target. This happens in practice because the
+		 *    write leader is chosen on the extended RW layout during reintegration or
+		 *    drain, whereas the migration fetch picks its leader on the pre-rebuild
+		 *    layout. Refresh with the leader via -DER_INPROGRESS, same as a regular
+		 *    read on a non-leader; the fetch/enumeration handlers retry after refresh.
+		 * 4. Prepared DTX on the leader without owner: left by an abort in progress or
+		 *    a leader restart, will be resolved by DTX resync. Skip it, same as a
+		 *    stand-alone read on the leader.
+		 *
+		 * Rules 1 and 3 need a DTX handle to restart/refresh. Without one (rebuild
+		 * object/dkey scan via vos_iterate), fall back to skipping as before.
 		 */
 		if (dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch &&
 		    DAE_VER(dae) < dth->dth_ver) {
@@ -1463,6 +1490,12 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			       DP_DTI(&dth->dth_xid), dth->dth_epoch, dth->dth_ver);
 			return -DER_VOS_PARTIAL_UPDATE;
 		}
+
+		if (dae->dae_dbd == NULL || dae->dae_dth != NULL || dae->dae_preparing)
+			return ALB_UNAVAILABLE;
+
+		if (dth != NULL && !(DAE_FLAGS(dae) & DTE_LEADER))
+			return dtx_inprogress(dae, dth, false, true, 10);
 
 		return ALB_UNAVAILABLE;
 	}
