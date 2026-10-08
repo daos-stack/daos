@@ -2578,6 +2578,59 @@ class PosixTests():
             print('reads did not use the chunk-read path')
             self.fail()
 
+    @needs_dfuse
+    def test_eof_other_handle(self):
+        """A cached EOF on one handle must not hide data appended through another handle"""
+        k4 = 4096
+        file_name = join(self.dfuse.dir, 'eof_file')
+        with open(file_name, 'wb'):
+            pass
+        self._write_direct(file_name, b'a' * k4, 0)
+
+        buf = mmap.mmap(-1, 16 * k4)
+        rfd = os.open(file_name, os.O_RDONLY | os.O_DIRECT)
+        try:
+            assert os.preadv(rfd, [buf], 0) == k4
+            self._write_direct(file_name, b'b' * k4, k4)
+            got = os.preadv(rfd, [buf], k4)
+        finally:
+            os.close(rfd)
+
+        if got != k4 or buf[:k4] != b'b' * k4:
+            print(f'read after append returned {got} bytes')
+            self.fail()
+
+    def test_pre_read_invalidate(self):
+        """A write through another handle must not be hidden by data pre-read at open"""
+        k64 = 64 * 1024
+        # Pre-read needs write-back caching, which only the attribute path enables.
+        self.container.set_attrs({'dfuse-data-cache': 'on'})
+
+        dfuse = DFuse(self.server, self.conf, container=self.container)
+        dfuse.start(v_hint='pre_read_inval_0')
+        with open(join(dfuse.dir, 'file'), 'wb') as fd:
+            fd.write(b'o' * k64)
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        # A fresh mount does not know the file, so opening it starts a pre-read.
+        dfuse = DFuse(self.server, self.conf, container=self.container)
+        dfuse.start(v_hint='pre_read_inval_1')
+        file_name = join(dfuse.dir, 'file')
+        rfd = os.open(file_name, os.O_RDONLY)
+        try:
+            time.sleep(1)
+            self._write_direct(file_name, b'n' * k64, 0)
+            data = os.pread(rfd, k64, 0)
+        finally:
+            os.close(rfd)
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        if data != b'n' * k64:
+            print(f'read returned pre-read data from before the write: {data[:1]!r}')
+            self.fail()
+
     def test_pre_read(self):
         """Test the pre-read code.
 
