@@ -277,6 +277,7 @@ chunk_complete(struct read_chunk_data *cd)
 
 /* Called before a write or truncate changes [position, position + len).  Cached data for any
  * bucket overlapping that range is dropped so later reads fetch it again from DAOS.
+ * Cached EOF replies are also disabled for the remaining open handles.
  */
 void
 read_chunk_invalidate(struct dfuse_inode_entry *ie, off_t position, size_t len)
@@ -290,6 +291,7 @@ read_chunk_invalidate(struct dfuse_inode_entry *ie, off_t position, size_t len)
 		return;
 
 	D_SPIN_LOCK(&active->lock);
+	active->read_cache_invalidated = true;
 	d_list_for_each_entry_safe(cd, cdn, &active->chunks, list) {
 		if (cd->bucket >= first && cd->bucket <= last)
 			chunk_unlink(cd);
@@ -505,14 +507,20 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	struct active_inode  *active     = oh->doh_ie->ie_active;
 	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
 	bool                  mock_read  = false;
+	bool                  cache_invalidated;
 	struct dfuse_eq      *eqt;
 	int                   rc;
 	struct dfuse_event   *ev;
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ);
 
-	/* The cached EOF is only valid while the handle is still linear */
-	if (oh->doh_linear_read && oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
+	D_SPIN_LOCK(&active->lock);
+	cache_invalidated = active->read_cache_invalidated;
+	D_SPIN_UNLOCK(&active->lock);
+
+	/* A write or truncate through another handle also invalidates a cached EOF. */
+	if (!cache_invalidated && oh->doh_linear_read && oh->doh_linear_read_eof &&
+	    position == oh->doh_linear_read_pos) {
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
 		oh->doh_linear_read_eof = false;
 		oh->doh_linear_read     = false;
@@ -535,12 +543,17 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
+	/* Take one snapshot of the written range. Concurrent writes must not lose an extent or
+	 * let this read synthesize zeros over data from a completed write.
+	 */
+	D_SPIN_LOCK(&active->lock);
 	if (oh->doh_ie->ie_truncated && position + len < oh->doh_ie->ie_stat.st_size &&
 	    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
 	     position >= oh->doh_ie->ie_end_off || position + len <= oh->doh_ie->ie_start_off)) {
 		DFUSE_TRA_DEBUG(oh, "Returning zeros");
 		mock_read = true;
 	}
+	D_SPIN_UNLOCK(&active->lock);
 
 	/* DFuse requests a buffer size of "0" which translates to 1024*1024 at the time of writing
 	 * however this may change over time.  If the kernel ever starts requesting larger reads
