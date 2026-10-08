@@ -121,6 +121,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	 * Check for potentially using readahead on this file, ie_truncated will only be set if
 	 * caching is enabled so only check for the one flag rather than two here.
 	 */
+	D_SPIN_LOCK(&oh->doh_ie->ie_active->lock);
 	if (oh->doh_ie->ie_truncated) {
 		if (oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) {
 			oh->doh_ie->ie_start_off = position;
@@ -135,6 +136,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 
 	if (end_position > oh->doh_ie->ie_stat.st_size)
 		oh->doh_ie->ie_stat.st_size = end_position;
+	D_SPIN_UNLOCK(&oh->doh_ie->ie_active->lock);
 
 	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_ev);
 	if (rc != 0)
