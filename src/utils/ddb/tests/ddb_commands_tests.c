@@ -654,8 +654,8 @@ print_csum_sv_tests(void **state)
 	opt.path  = path;
 	opt.epoch = DAOS_EPOCH_MAX;
 
-	/* no csum info (g_oids[0]: SV at epoch 1, no checksum stored) */
-	csum_test_sv_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[0]);
+	/* no csum info (SV at epoch 1, no checksum stored) */
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_NONE], g_akeys_str[0]);
 	assert_success(ddb_run_csum_dump(&ctx, &opt));
 	rc = snprintf(buf, sizeof(buf), "^No checksum at AKEY:[[:blank:]].+[[:blank:]]%s$", path);
 	assert_true(rc > 0 && rc < sizeof(buf));
@@ -663,7 +663,8 @@ print_csum_sv_tests(void **state)
 	dvt_fake_print_reset();
 
 	/* with csum info, EPOCH_MAX returns the epoch-2 (latest) checksum */
-	csum_test_sv_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[0]);
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_VALID],
+			       g_akeys_str[0]);
 	assert_success(ddb_run_csum_dump(&ctx, &opt));
 	assert_string_contains(dvt_fake_print_buffer, "Epoch: 2");
 	memcpy(buf, regex_prf, strlen(regex_prf));
@@ -720,7 +721,7 @@ write_csum_sv_tests(void **state)
 	opt.dst   = path_dst;
 
 	/* no csum info */
-	csum_test_sv_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[0]);
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_NONE], g_akeys_str[0]);
 	assert_success(ddb_run_csum_dump(&ctx, &opt));
 	rc = snprintf(buf, sizeof(buf), "^No checksum at AKEY:[[:blank:]].+[[:blank:]]%s$", path);
 	assert_true(rc > 0 && rc < sizeof(buf));
@@ -728,7 +729,8 @@ write_csum_sv_tests(void **state)
 	dvt_fake_print_reset();
 
 	/* with csum info, EPOCH_MAX returns the epoch-2 (latest) checksum */
-	csum_test_sv_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[0]);
+	csum_test_sv_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_VALID],
+			       g_akeys_str[0]);
 	will_return(csum_sv_fake_write_file, path_dst);
 	will_return(csum_sv_fake_write_file, csum_ctx->dct_sv_ics[1]->ic_data);
 	will_return(csum_sv_fake_write_file, 0);
@@ -761,19 +763,72 @@ csum_test_recx_path_init(char *path, size_t path_size, const daos_unit_oid_t *oi
 		fail_msg("path buffer too small");
 }
 
+/*
+ * Build the exact "- Record Indexes: ..." line printed by csum_dump for the extent \a recx of
+ * records of size 1 written at \a epoch: followed by all the chunk checksums of the write-time
+ * checksum info \a ci when dumping to the screen, by nothing when \a ci is NULL (dumping to a
+ * file).
+ */
+static void
+csum_test_recx_line_init(char *line, size_t line_size, const daos_recx_t *recx, daos_epoch_t epoch,
+			 struct dcs_csum_info *ci)
+{
+	size_t line_len;
+	size_t len;
+	int    idx;
+
+	line_len =
+	    snprintf(line, line_size,
+		     "- Record Indexes: {" DF_U64 "-" DF_U64 "}, Record Size: 1, Epoch: " DF_U64,
+		     recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, epoch);
+	assert_true(line_len > 0 && line_len < line_size);
+
+	for (idx = 0; ci != NULL && idx < ci->cs_nr; idx++) {
+		len = snprintf(line + line_len, line_size - line_len, "%s0x",
+			       idx == 0 ? ", Checksum Value(s): " : ", ");
+		assert_true(len > 0 && len < line_size - line_len);
+		line_len += len;
+		assert_true(line_len + 2 * ci->cs_len < line_size);
+		csumbuf_dump(line + line_len, ci_idx2csum(ci, idx), ci->cs_len);
+		line_len += 2 * ci->cs_len;
+	}
+
+	len = snprintf(line + line_len, line_size - line_len, "\n");
+	assert_true(len > 0 && len < line_size - line_len);
+}
+
+static int
+printed_count(const char *substr)
+{
+	const char *buf   = dvt_fake_print_buffer;
+	int         count = 0;
+	size_t      substr_len;
+
+	substr_len = strlen(substr);
+	while ((buf = strstr(buf, substr)) != NULL) {
+		count++;
+		buf += substr_len;
+	}
+
+	return count;
+}
+
 static void
 print_csum_recx_tests(void **state)
 {
-	const char              *regex_prf = "0x";
-	struct dt_vos_pool_ctx  *tctx      = *state;
-	struct dt_csum_ctx      *csum_ctx  = tctx->dvt_extra;
-	struct ddb_ctx           ctx       = {0};
-	struct csum_dump_options opt       = {0};
-	daos_recx_t              recx      = {.rx_idx = 0, .rx_nr = csum_ctx->dct_recx_size};
-	char                     path[128];
-	char                     buf[256];
-	char                    *buf_csum;
-	int                      i;
+	struct dt_vos_pool_ctx  *tctx     = *state;
+	struct dt_csum_ctx      *csum_ctx = tctx->dvt_extra;
+	struct ddb_ctx           ctx      = {0};
+	struct csum_dump_options opt      = {0};
+	uint64_t                 size     = csum_ctx->dct_recx_size;
+	daos_recx_t              recxs[]  = {
+            {.rx_idx = 0, .rx_nr = size},
+            {.rx_idx = 0, .rx_nr = size / 2},
+            {.rx_idx = size / 2, .rx_nr = size},
+        };
+	struct dcs_iod_csums   **part_ics;
+	char                     path[128]   = {0};
+	char                     buf[2][256] = {0};
 	int                      rc;
 
 	ctx.dc_poh                     = tctx->dvt_poh;
@@ -785,50 +840,78 @@ print_csum_recx_tests(void **state)
 	opt.epoch = DAOS_EPOCH_MAX;
 
 	/* no csum info */
-	csum_test_recx_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[1], &recx);
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_NONE],
+				 g_akeys_str[1], &recxs[0]);
 	assert_success(ddb_run_csum_dump(&ctx, &opt));
-	rc = snprintf(buf, sizeof(buf), "^No checksum at RECX:[[:blank:]].+$");
-	assert_true(rc > 0 && rc < sizeof(buf));
-	assert_regex_match(dvt_fake_print_buffer, buf);
+	rc = snprintf(buf[0], sizeof(buf[0]), "^No checksum at RECX:[[:blank:]].+$");
+	assert_true(rc > 0 && rc < sizeof(buf[0]));
+	assert_regex_match(dvt_fake_print_buffer, buf[0]);
 	dvt_fake_print_reset();
 
-	csum_test_recx_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[1], &recx);
+	/* g_oid  = [0, S)@1, [S/2, 3S/2)@2
+	 * recx   = [0, S)@EP_MAX
+	 * result = [0, S)@1, [S/2, 3S/2)@2 */
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_VALID],
+				 g_akeys_str[1], &recxs[0]);
 	assert_success(ddb_run_csum_dump(&ctx, &opt));
-	memcpy(buf, regex_prf, strlen(regex_prf));
-	buf_csum = buf + strlen(regex_prf);
-	for (i = 0; i < DVT_FAKE_RECX_COUNT; i++) {
-		int                   csum_idx;
-		struct dcs_csum_info *ci;
+	assert_int_equal(printed_count("- Record Indexes: "), DVT_FAKE_RECX_COUNT);
+	csum_test_recx_line_init(buf[0], sizeof(buf[0]), &recxs[0], 1,
+				 csum_ctx->dct_recx_ics[0]->ic_data);
+	csum_test_recx_line_init(buf[1], sizeof(buf[1]), &recxs[2], 2,
+				 csum_ctx->dct_recx_ics[1]->ic_data);
+	assert_strings_in_order(dvt_fake_print_buffer, buf[0], buf[1]);
+	dvt_fake_print_reset();
 
-		ci = csum_ctx->dct_recx_ics[i]->ic_data;
-		for (csum_idx = 0; csum_idx < ci->cs_nr; ++csum_idx) {
-			csumbuf_dump(buf_csum, ci_idx2csum(ci, csum_idx), ci->cs_len);
-			assert_string_contains(dvt_fake_print_buffer, buf);
-		}
-	}
+	/* g_oid  = [0, S)@1, [0, S/2)@2
+	 * recx   = [0, S)@EP_MAX
+	 * result = [0, S/2)@2, [0, S)@1 */
+	part_ics = csum_ctx->dct_part_ics[DVT_FAKE_PART_ICS_IDX(DVT_FAKE_PART_OID_VALID)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_PART_OID_VALID],
+				 g_akeys_str[1], &recxs[0]);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_int_equal(printed_count("- Record Indexes: "), DVT_FAKE_PART_RECX_COUNT);
+	csum_test_recx_line_init(buf[0], sizeof(buf[0]), &recxs[0], 1,
+				 part_ics[DVT_FAKE_PART_RECX_A]->ic_data);
+	csum_test_recx_line_init(buf[1], sizeof(buf[1]), &recxs[1], 2,
+				 part_ics[DVT_FAKE_PART_RECX_B]->ic_data);
+	assert_strings_in_order(dvt_fake_print_buffer, buf[1], buf[0]);
+	dvt_fake_print_reset();
+
+	/* g_oid  = [0, S)@1, [S/2, 3S/2)@2
+	 * recx   = [S/2, 3S/2)@1
+	 * result = [0, S)@1 */
+	opt.epoch = 1;
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_VALID],
+				 g_akeys_str[1], &recxs[2]);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_int_equal(printed_count("- Record Indexes: "), 1);
+	csum_test_recx_line_init(buf[0], sizeof(buf[0]), &recxs[0], 1,
+				 csum_ctx->dct_recx_ics[0]->ic_data);
+	assert_printed_contains(buf[0]);
 	dvt_fake_print_reset();
 }
 
 static int
 csum_recx_fake_write_file(const char *dst_path, d_iov_t *contents)
 {
-	int      i;
-	uint8_t *buf;
+	uint8_t              *buf;
+	uint8_t              *end;
+	struct dcs_csum_info *ci;
 
 	assert_string_equal(dst_path, mock_ptr_type(const char *));
 
 	buf = (uint8_t *)contents->iov_buf;
-	for (i = 0; i < DVT_FAKE_RECX_COUNT; i++) {
-		int                   idx;
-		struct dcs_csum_info *ci;
+	end = buf + contents->iov_len;
+	while ((ci = mock_ptr_type(struct dcs_csum_info *)) != NULL) {
+		int idx;
 
-		ci = mock_ptr_type(struct dcs_csum_info *);
 		for (idx = 0; idx < ci->cs_nr; ++idx) {
-			assert_true(memcmp(buf, ci_idx2csum(ci, idx), ci->cs_len) == 0);
+			assert_true(buf + ci->cs_len <= end);
+			assert_memory_equal(buf, ci_idx2csum(ci, idx), ci->cs_len);
 			buf += ci->cs_len;
 		}
 	}
-	assert_true(buf - (uint8_t *)contents->iov_buf == contents->iov_len);
+	assert_ptr_equal(buf, end);
 
 	return mock();
 }
@@ -841,9 +924,15 @@ write_csum_recx_tests(void **state)
 	struct dt_csum_ctx      *csum_ctx = tctx->dvt_extra;
 	struct ddb_ctx           ctx      = {0};
 	struct csum_dump_options opt      = {0};
-	daos_recx_t              recx     = {.rx_idx = 0, .rx_nr = csum_ctx->dct_recx_size};
-	char                     path[128];
-	char                     buf[256];
+	uint64_t                 size     = csum_ctx->dct_recx_size;
+	daos_recx_t              recxs[]  = {
+            {.rx_idx = 0, .rx_nr = size},
+            {.rx_idx = 0, .rx_nr = size / 2},
+            {.rx_idx = size / 2, .rx_nr = size},
+        };
+	struct dcs_iod_csums   **part_ics;
+	char                     path[128]   = {0};
+	char                     buf[2][256] = {0};
 	int                      i;
 	int                      rc;
 
@@ -857,20 +946,67 @@ write_csum_recx_tests(void **state)
 	opt.epoch = DAOS_EPOCH_MAX;
 	opt.dst   = path_dst;
 
-	csum_test_recx_path_init(path, sizeof(path), &g_oids[0], g_akeys_str[1], &recx);
+	/* no csum info */
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_NONE],
+				 g_akeys_str[1], &recxs[0]);
 	assert_success(ddb_run_csum_dump(&ctx, &opt));
-	rc = snprintf(buf, sizeof(buf), "^No checksum at RECX:[[:blank:]].+$");
-	assert_true(rc > 0 && rc < sizeof(buf));
-	assert_regex_match(dvt_fake_print_buffer, buf);
+	rc = snprintf(buf[0], sizeof(buf[0]), "^No checksum at RECX:[[:blank:]].+$");
+	assert_true(rc > 0 && rc < sizeof(buf[0]));
+	assert_regex_match(dvt_fake_print_buffer, buf[0]);
 	dvt_fake_print_reset();
 
-	csum_test_recx_path_init(path, sizeof(path), &g_oids[1], g_akeys_str[1], &recx);
+	/* g_oid  = [0, S)@1, [S/2, 3S/2)@2
+	 * recx   = [0, S)@EP_MAX
+	 * result = [0, S)@1, [S/2, 3S/2)@2 */
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_VALID],
+				 g_akeys_str[1], &recxs[0]);
 	will_return(csum_recx_fake_write_file, path_dst);
 	for (i = 0; i < DVT_FAKE_RECX_COUNT; i++)
 		will_return(csum_recx_fake_write_file, csum_ctx->dct_recx_ics[i]->ic_data);
-	will_return(csum_recx_fake_write_file, 0);
+	will_return(csum_recx_fake_write_file, NULL);
+	will_return(csum_recx_fake_write_file, -DER_SUCCESS);
 	assert_success(ddb_run_csum_dump(&ctx, &opt));
-	assert_string_contains(dvt_fake_print_buffer, "Dumping checksum");
+	assert_printed_contains("Dumping checksum");
+	assert_int_equal(printed_count("- Record Indexes: "), DVT_FAKE_RECX_COUNT);
+	csum_test_recx_line_init(buf[0], sizeof(buf[0]), &recxs[0], 1, NULL);
+	csum_test_recx_line_init(buf[1], sizeof(buf[1]), &recxs[2], 2, NULL);
+	assert_strings_in_order(dvt_fake_print_buffer, buf[0], buf[1]);
+	dvt_fake_print_reset();
+
+	/* g_oid  = [0, S)@1, [0, S/2)@2
+	 * recx   = [0, S)@EP_MAX
+	 * result = [0, S/2)@2, [0, S)@1 (the file holds the checksums in that order too) */
+	part_ics = csum_ctx->dct_part_ics[DVT_FAKE_PART_ICS_IDX(DVT_FAKE_PART_OID_VALID)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_PART_OID_VALID],
+				 g_akeys_str[1], &recxs[0]);
+	will_return(csum_recx_fake_write_file, path_dst);
+	will_return(csum_recx_fake_write_file, part_ics[DVT_FAKE_PART_RECX_B]->ic_data);
+	will_return(csum_recx_fake_write_file, part_ics[DVT_FAKE_PART_RECX_A]->ic_data);
+	will_return(csum_recx_fake_write_file, NULL);
+	will_return(csum_recx_fake_write_file, -DER_SUCCESS);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_printed_contains("Dumping checksum");
+	assert_int_equal(printed_count("- Record Indexes: "), DVT_FAKE_PART_RECX_COUNT);
+	csum_test_recx_line_init(buf[0], sizeof(buf[0]), &recxs[0], 1, NULL);
+	csum_test_recx_line_init(buf[1], sizeof(buf[1]), &recxs[1], 2, NULL);
+	assert_strings_in_order(dvt_fake_print_buffer, buf[1], buf[0]);
+	dvt_fake_print_reset();
+
+	/* g_oid  = [0, S)@1, [S/2, 3S/2)@2
+	 * recx   = [S/2, 3S/2)@1
+	 * result = [0, S)@1 */
+	opt.epoch = 1;
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_VALID],
+				 g_akeys_str[1], &recxs[2]);
+	will_return(csum_recx_fake_write_file, path_dst);
+	will_return(csum_recx_fake_write_file, csum_ctx->dct_recx_ics[0]->ic_data);
+	will_return(csum_recx_fake_write_file, NULL);
+	will_return(csum_recx_fake_write_file, -DER_SUCCESS);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_printed_contains("Dumping checksum");
+	assert_int_equal(printed_count("- Record Indexes: "), 1);
+	csum_test_recx_line_init(buf[0], sizeof(buf[0]), &recxs[0], 1, NULL);
+	assert_printed_contains(buf[0]);
 	dvt_fake_print_reset();
 }
 
