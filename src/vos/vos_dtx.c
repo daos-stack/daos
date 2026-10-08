@@ -1422,6 +1422,16 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 				if (unlikely(dsp->dsp_status != 0))
 					return dsp->dsp_status;
 
+				if (intent == DAOS_INTENT_MIGRATION &&
+				    DAE_EPOCH(dae) <= dth->dth_epoch) {
+					D_DEBUG(DB_REBUILD,
+						"migration hit non-committed DTX " DF_DTI " at "
+						DF_X64 " <= " DF_X64 " pos 11 (refreshed)\n",
+						DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae),
+						dth->dth_epoch);
+					return dtx_inprogress(dae, dth, true, true, 11);
+				}
+
 				if (!dtx_is_valid_handle(dth) ||
 				    intent == DAOS_INTENT_IGNORE_NONCOMMITTED)
 					return ALB_UNAVAILABLE;
@@ -1457,8 +1467,20 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	 * to rebuild. Related new IO corresponding to such non-committed DTX
 	 * has already been sent to the in-rebuilding target.
 	 */
-	if (intent == DAOS_INTENT_MIGRATION)
+	if (intent == DAOS_INTENT_MIGRATION) {
+		/* A prepared DTX at or below the migration epoch may already be committed
+		 * on the replica that was enumerated; hiding it here would let migration
+		 * write older data at the enumerated epoch. Resolve it with the leader.
+		 */
+		if (dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch) {
+			D_DEBUG(DB_REBUILD,
+				"migration hit non-committed DTX " DF_DTI " at " DF_X64 " <= "
+				DF_X64 " pos 10\n",
+				DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), dth->dth_epoch);
+			return dtx_inprogress(dae, dth, false, true, 10);
+		}
 		return ALB_UNAVAILABLE;
+	}
 
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
