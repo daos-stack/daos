@@ -432,7 +432,7 @@ class PosixTests():
     def test_chunk_read_wb_order(self):
         """A chunk read must see a write that write-back caching acknowledged early.
 
-        The writer stays open without fsync or close, so only the flush in the chunk-read path
+        The writer stays open without a sync or close, so only the flush in the chunk-read path
         waits for the write to reach DAOS.  This is best effort, the race is not forced.
         """
         k128 = 128 * 1024
