@@ -854,6 +854,113 @@ dtx_18(void **state)
 }
 
 static int
+vts_migration_fetch(struct io_test_args *args, daos_epoch_t epoch, daos_key_t *dkey,
+		    daos_iod_t *iod, d_sg_list_t *sgl, char *fetch_buf)
+{
+	struct dtx_handle	*dth;
+	int			 rc;
+
+	D_ALLOC_PTR(dth);
+	assert_non_null(dth);
+
+	dth->dth_coh           = args->ctx.tc_co_hdl;
+	dth->dth_epoch         = epoch;
+	dth->dth_epoch_bound   = epoch;
+	dth->dth_for_migration = 1;
+	D_INIT_LIST_HEAD(&dth->dth_share_cmt_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_abt_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
+	dth->dth_shares_inited = 1;
+
+	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
+	d_iov_set(&sgl->sg_iovs[0], fetch_buf, UPDATE_BUF_SIZE);
+	iod->iod_size = DAOS_REC_ANY;
+
+	rc = vos_obj_fetch_ex(args->ctx.tc_co_hdl, args->oid, epoch, 0, dkey, 1, iod, sgl, dth);
+	D_FREE(dth);
+	return rc;
+}
+
+/*
+ * Rebuild/migration must not hide a prepared DTX at or below the migration epoch: the DTX may
+ * already be committed on the replica that was enumerated, so silently returning the older
+ * record would let migration write stale data at the enumerated epoch.
+ */
+static void
+vts_dtx_migration_prepared(struct io_test_args *args, bool ext)
+{
+	struct dtx_handle	*dth = NULL;
+	struct dtx_id		 xid;
+	daos_iod_t		 iod = {0};
+	d_sg_list_t		 sgl = {0};
+	daos_recx_t		 rex = {0};
+	daos_key_t		 dkey;
+	daos_key_t		 akey;
+	d_iov_t			 val_iov;
+	d_iov_t			 dkey_iov;
+	uint64_t		 epoch;
+	uint64_t		 dkey_hash;
+	char			 dkey_buf[UPDATE_DKEY_SIZE];
+	char			 akey_buf[UPDATE_AKEY_SIZE];
+	char			 update_buf1[UPDATE_BUF_SIZE];
+	char			 update_buf2[UPDATE_BUF_SIZE];
+	char			 fetch_buf[UPDATE_BUF_SIZE];
+	int			 rc;
+
+	vts_dtx_prep_update(args, &val_iov, &dkey_iov, &dkey, dkey_buf, &akey, akey_buf, &iod,
+			    &sgl, &rex, update_buf1, UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
+			    &epoch, ext);
+
+	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, NULL, true);
+	assert_rc_equal(rc, 0);
+
+	dts_buf_render(update_buf2, UPDATE_BUF_SIZE);
+	d_iov_set(&val_iov, update_buf2, UPDATE_BUF_SIZE);
+
+	vts_dtx_begin(&args->oid, args->ctx.tc_co_hdl, ++epoch, dkey_hash, &dth);
+	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
+	assert_rc_equal(rc, 0);
+	xid = dth->dth_xid;
+	/* The update DTX is 'prepared'. */
+	vts_dtx_end(dth);
+
+	/* Migration below the prepared DTX epoch still reads the committed data. */
+	rc = vts_migration_fetch(args, epoch - 1, &dkey, &iod, &sgl, fetch_buf);
+	assert_rc_equal(rc, 0);
+	assert_memory_equal(update_buf1, fetch_buf, UPDATE_BUF_SIZE);
+
+	/* Migration at the prepared DTX epoch must wait for it to be resolved. */
+	rc = vts_migration_fetch(args, epoch, &dkey, &iod, &sgl, fetch_buf);
+	assert_rc_equal(rc, -DER_INPROGRESS);
+
+	rc = vts_migration_fetch(args, epoch + 1, &dkey, &iod, &sgl, fetch_buf);
+	assert_rc_equal(rc, -DER_INPROGRESS);
+
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, false, NULL);
+	assert_rc_equal(rc, 1);
+
+	/* Once committed, migration reads the new data. */
+	rc = vts_migration_fetch(args, epoch, &dkey, &iod, &sgl, fetch_buf);
+	assert_rc_equal(rc, 0);
+	assert_memory_equal(update_buf2, fetch_buf, UPDATE_BUF_SIZE);
+}
+
+/* Migration must not hide prepared DTX at or below its epoch (single value) */
+static void
+dtx_19(void **state)
+{
+	vts_dtx_migration_prepared(*state, false);
+}
+
+/* Migration must not hide prepared DTX at or below its epoch (extent value) */
+static void
+dtx_20(void **state)
+{
+	vts_dtx_migration_prepared(*state, true);
+}
+
+static int
 dtx_tst_teardown(void **state)
 {
 	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
@@ -887,6 +994,10 @@ static const struct CMUnitTest dtx_tests[] = {
 	  dtx_17, NULL, dtx_tst_teardown },
 	{ "VOS518: DTX aggregation",
 	  dtx_18, NULL, dtx_tst_teardown },
+	{ "VOS519: migration does not hide prepared DTX (single value)",
+	  dtx_19, NULL, dtx_tst_teardown },
+	{ "VOS520: migration does not hide prepared DTX (extent value)",
+	  dtx_20, NULL, dtx_tst_teardown },
 };
 
 int

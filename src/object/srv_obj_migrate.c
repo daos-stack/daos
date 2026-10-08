@@ -813,8 +813,12 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
+	/* -DER_INPROGRESS: the fetch hit a prepared DTX at or below the migration epoch and
+	 * the DTX leader has not resolved it yet. Wait for commit/abort instead of migrating
+	 * an incomplete replica or failing the whole rebuild.
+	 */
 	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM ||
-	     daos_crt_network_error(rc)) &&
+	     rc == -DER_INPROGRESS || daos_crt_network_error(rc)) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
