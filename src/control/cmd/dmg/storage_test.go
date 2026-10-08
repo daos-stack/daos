@@ -59,7 +59,7 @@ func TestStorageCommands(t *testing.T) {
 		{
 			"Format status",
 			"storage format-status",
-			printRequest(t, &control.StorageFormatReq{Status: true}),
+			printRequest(t, &control.StorageFormatStatusReq{}),
 			nil,
 		},
 		{

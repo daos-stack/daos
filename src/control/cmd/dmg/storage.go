@@ -181,10 +181,10 @@ type storageFormatStatusCmd struct {
 func (cmd *storageFormatStatusCmd) Execute(args []string) (err error) {
 	ctx := cmd.MustLogCtx()
 
-	req := &control.StorageFormatReq{Status: true}
+	req := &control.StorageFormatStatusReq{}
 	req.SetHostList(cmd.getHostList())
 
-	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
+	resp, err := control.StorageFormatStatus(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}

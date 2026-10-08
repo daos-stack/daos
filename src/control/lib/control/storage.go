@@ -331,9 +331,6 @@ type (
 		Reformat bool   `json:"reformat"`
 		Replace  bool   `json:"replace"`
 		Rank     uint32 `json:"rank"` // Specific rank to replace (only valid with replace=true)
-		// Status, if set, requests that hosts report local engine instance
-		// format-related status rather than performing a storage format.
-		Status bool `json:"status"`
 	}
 
 	// StorageFormatResp contains the response from a storage format request.
@@ -399,14 +396,6 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 				}
 			}
 		}
-	}
-
-	for _, es := range pbResp.GetEngineStatus() {
-		hs.EngineFormatStatus = append(hs.EngineFormatStatus, &EngineFormatStatus{
-			Instanceidx:    es.GetInstanceidx(),
-			AwaitingFormat: es.GetAwaitingFormat(),
-			State:          es.GetState(),
-		})
 	}
 
 	if sfr.HostStorage == nil {
@@ -475,15 +464,9 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 // if not explicitly specified. The function blocks until all results
 // (successful or otherwise) are received, and returns a single response
 // structure containing results for all host storage prepare operations.
-//
-// If req.Status is set, no format is performed and the system-running check
-// is skipped as the request is read-only; hosts instead report local
-// engine instance format-related status.
 func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageFormatReq) (*StorageFormatResp, error) {
-	if !req.Status {
-		if err := checkFormatReq(ctx, rpcClient, req); err != nil {
-			return nil, err
-		}
+	if err := checkFormatReq(ctx, rpcClient, req); err != nil {
+		return nil, err
 	}
 
 	pbReq := new(ctlpb.StorageFormatReq)
@@ -519,6 +502,79 @@ func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageForm
 // defaultFormatWaitRetry is the interval between storage format status polls
 // performed by WaitForStorageFormatReady.
 const defaultFormatWaitRetry = 2 * time.Second
+
+type (
+	// StorageFormatStatusReq contains the parameters for a storage format
+	// status request.
+	StorageFormatStatusReq struct {
+		unaryRequest
+	}
+
+	// StorageFormatStatusResp contains the response from a storage format
+	// status request.
+	StorageFormatStatusResp struct {
+		HostErrorsResp
+		HostStorage HostStorageMap
+	}
+)
+
+// addHostResponse is responsible for validating the given HostResponse
+// and adding it to the StorageFormatStatusResp.
+func (sfr *StorageFormatStatusResp) addHostResponse(hr *HostResponse) (err error) {
+	pbResp, ok := hr.Message.(*ctlpb.StorageFormatStatusResp)
+	if !ok {
+		return errors.Errorf("unable to unpack message: %+v", hr.Message)
+	}
+
+	hs := new(HostStorage)
+	for _, es := range pbResp.GetEngineStatus() {
+		hs.EngineFormatStatus = append(hs.EngineFormatStatus, &EngineFormatStatus{
+			Instanceidx:    es.GetInstanceidx(),
+			AwaitingFormat: es.GetAwaitingFormat(),
+			State:          es.GetState(),
+		})
+	}
+
+	if sfr.HostStorage == nil {
+		sfr.HostStorage = make(HostStorageMap)
+	}
+	return sfr.HostStorage.Add(hr.Addr, hs)
+}
+
+// StorageFormatStatus concurrently queries the read-only storage format
+// status of all hosts supplied in the request's hostlist, or all configured
+// hosts if not explicitly specified. Unlike StorageFormat, no format is
+// performed and the system-running check is skipped, since the request is
+// read-only and safe to issue against a live system; hosts report local
+// engine instance format-related status using cached local state without
+// contacting the engine process.
+func StorageFormatStatus(ctx context.Context, rpcClient UnaryInvoker, req *StorageFormatStatusReq) (*StorageFormatStatusResp, error) {
+	pbReq := new(ctlpb.StorageFormatStatusReq)
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).StorageFormatStatus(ctx, pbReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	sfr := new(StorageFormatStatusResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := sfr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		if err := sfr.addHostResponse(hostResp); err != nil {
+			return nil, err
+		}
+	}
+
+	return sfr, nil
+}
 
 // allEnginesAwaitingFormat returns true if hsm contains at least one engine
 // format status entry and every reported engine instance is awaiting format.
@@ -557,7 +613,7 @@ func WaitForStorageFormatReady(ctx context.Context, rpcClient UnaryInvoker, retr
 
 	startedAt := time.Now()
 	for {
-		resp, err := StorageFormat(ctx, rpcClient, &StorageFormatReq{Status: true})
+		resp, err := StorageFormatStatus(ctx, rpcClient, &StorageFormatStatusReq{})
 		switch {
 		case err != nil:
 			rpcClient.Debugf("storage format status request failed, retrying: %s", err)

@@ -27,6 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var mockRamCfg = storage.Config{
@@ -557,6 +558,108 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 				t.Fatalf("unexpected event description (-want, +got):\n%s\n", diff)
 			}
 		})
+	}
+}
+
+// TestIOEngineInstance_localStateTransitions exercises the full local-state
+// lifecycle of an EngineInstance across a real (non-superblock) format, as
+// reported by LocalFormatState():
+// Stopped (before anything starts) -> ServerStarting (format-readiness check
+// underway) -> AwaitingFormat (blocked waiting for admin to trigger format)
+// -> EngineStarting (once the engine process has been started, following
+// NotifyStorageReady()) -> Ready.
+func TestIOEngineInstance_localStateTransitions(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	trc := &engine.TestRunnerConfig{}
+	cfg := engine.MockConfig().WithStorage(
+		storage.NewTierConfig().
+			WithStorageClass(storage.ClassDcpm.String()).
+			WithScmMountPoint("/mnt/test").
+			WithScmDeviceList("/dev/foo"),
+	)
+	runner := engine.NewTestRunner(trc, cfg)
+
+	msc := sysprov.MockSysConfig{
+		// No filesystem on the SCM device yet, so a format is required.
+		GetfsStr: "none",
+	}
+	mp := storage.NewProvider(log, 0, &cfg.Storage,
+		sysprov.NewMockSysProvider(log, &msc),
+		scm.NewMockProvider(log, &scm.MockBackendConfig{}, &msc),
+		nil, &storage.MockMetadataProvider{})
+	ei := NewEngineInstance(log, mp, nil, runner, nil)
+
+	if state := ei.LocalFormatState(); state != "Stopped" {
+		t.Fatalf("expected initial state Stopped, got %s", state)
+	}
+
+	ctx, cancel := context.WithTimeout(test.Context(t), 10*time.Second)
+	defer cancel()
+
+	awaitErrCh := make(chan error, 1)
+	go func() {
+		awaitErrCh <- ei.awaitStorageReady(ctx)
+	}()
+
+	// Poll for isAwaitingFormat() to confirm awaitStorageReady() has
+	// determined a format is needed and has already transitioned out of
+	// ServerStarting and into AwaitingFormat (blocked on ei.storageReady).
+	for !ei.isAwaitingFormat() {
+		select {
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for AwaitingFormat state")
+		case <-time.After(time.Millisecond):
+		}
+	}
+
+	if ei.isServerStarting() {
+		t.Fatal("expected isServerStarting() to be false once AwaitingFormat is reached")
+	}
+	if !ei.isAwaitingFormat() {
+		t.Fatal("expected isAwaitingFormat() to be true while blocked on format")
+	}
+	if state := ei.LocalFormatState(); state != "AwaitingFormat" {
+		t.Fatalf("expected AwaitingFormat, got %s", state)
+	}
+	if state := ei.LocalState(); state != system.MemberStateAwaitFormat {
+		t.Fatalf("expected MemberStateAwaitFormat, got %s", state)
+	}
+
+	// Simulate an admin triggering "dmg storage format", releasing the
+	// block on awaitStorageReady().
+	ei.NotifyStorageReady(nil)
+
+	select {
+	case err := <-awaitErrCh:
+		if err != nil {
+			t.Fatalf("unexpected error from awaitStorageReady(): %s", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for awaitStorageReady() to return")
+	}
+
+	if ei.isServerStarting() || ei.isAwaitingFormat() {
+		t.Fatal("expected both ServerStarting and AwaitingFormat flags to be cleared post-format")
+	}
+
+	// Simulate the engine process having been exec'd by start().
+	if _, err := runner.Start(ctx); err != nil {
+		t.Fatalf("runner.Start() failed: %s", err)
+	}
+
+	if state := ei.LocalFormatState(); state != "EngineStarting" {
+		t.Fatalf("expected EngineStarting once engine process is running, got %s", state)
+	}
+	if state := ei.LocalState(); state != system.MemberStateStarting {
+		t.Fatalf("expected MemberStateStarting, got %s", state)
+	}
+
+	// Finally, simulate dRPC NotifyReady completing startup.
+	ei.ready.SetTrue()
+	if state := ei.LocalFormatState(); state != "Ready" {
+		t.Fatalf("expected Ready once engine reports ready, got %s", state)
 	}
 }
 

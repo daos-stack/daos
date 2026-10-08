@@ -341,15 +341,12 @@ func (x *StorageScanResp) GetSysMemInfo() *SysMemInfo {
 }
 
 type StorageFormatReq struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Nvme     *FormatNvmeReq         `protobuf:"bytes,1,opt,name=nvme,proto3" json:"nvme,omitempty"`
-	Scm      *FormatScmReq          `protobuf:"bytes,2,opt,name=scm,proto3" json:"scm,omitempty"`
-	Reformat bool                   `protobuf:"varint,3,opt,name=reformat,proto3" json:"reformat,omitempty"`
-	Replace  bool                   `protobuf:"varint,4,opt,name=replace,proto3" json:"replace,omitempty"`
-	Rank     uint32                 `protobuf:"varint,5,opt,name=rank,proto3" json:"rank,omitempty"` // Specific rank to replace (only valid with replace=true)
-	// Only report whether storage format is required, local engine instance
-	// state, without performing a format.
-	Status        bool `protobuf:"varint,6,opt,name=status,proto3" json:"status,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nvme          *FormatNvmeReq         `protobuf:"bytes,1,opt,name=nvme,proto3" json:"nvme,omitempty"`
+	Scm           *FormatScmReq          `protobuf:"bytes,2,opt,name=scm,proto3" json:"scm,omitempty"`
+	Reformat      bool                   `protobuf:"varint,3,opt,name=reformat,proto3" json:"reformat,omitempty"`
+	Replace       bool                   `protobuf:"varint,4,opt,name=replace,proto3" json:"replace,omitempty"`
+	Rank          uint32                 `protobuf:"varint,5,opt,name=rank,proto3" json:"rank,omitempty"` // Specific rank to replace (only valid with replace=true)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -419,19 +416,10 @@ func (x *StorageFormatReq) GetRank() uint32 {
 	return 0
 }
 
-func (x *StorageFormatReq) GetStatus() bool {
-	if x != nil {
-		return x.Status
-	}
-	return false
-}
-
 type StorageFormatResp struct {
-	state protoimpl.MessageState  `protogen:"open.v1"`
-	Crets []*NvmeControllerResult `protobuf:"bytes,1,rep,name=crets,proto3" json:"crets,omitempty"` // One per controller format attempt
-	Mrets []*ScmMountResult       `protobuf:"bytes,2,rep,name=mrets,proto3" json:"mrets,omitempty"` // One per scm format and mount attempt
-	// One per engine instance, only populated when StorageFormatReq.status is set.
-	EngineStatus  []*EngineFormatStatus `protobuf:"bytes,3,rep,name=engine_status,json=engineStatus,proto3" json:"engine_status,omitempty"`
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Crets         []*NvmeControllerResult `protobuf:"bytes,1,rep,name=crets,proto3" json:"crets,omitempty"` // One per controller format attempt
+	Mrets         []*ScmMountResult       `protobuf:"bytes,2,rep,name=mrets,proto3" json:"mrets,omitempty"` // One per scm format and mount attempt
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -480,7 +468,84 @@ func (x *StorageFormatResp) GetMrets() []*ScmMountResult {
 	return nil
 }
 
-func (x *StorageFormatResp) GetEngineStatus() []*EngineFormatStatus {
+// StorageFormatStatusReq requests the local control server's cached
+// format-related status of each locally attached engine instance, without
+// performing a format or contacting the engine processes themselves.
+type StorageFormatStatusReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StorageFormatStatusReq) Reset() {
+	*x = StorageFormatStatusReq{}
+	mi := &file_ctl_storage_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StorageFormatStatusReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StorageFormatStatusReq) ProtoMessage() {}
+
+func (x *StorageFormatStatusReq) ProtoReflect() protoreflect.Message {
+	mi := &file_ctl_storage_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StorageFormatStatusReq.ProtoReflect.Descriptor instead.
+func (*StorageFormatStatusReq) Descriptor() ([]byte, []int) {
+	return file_ctl_storage_proto_rawDescGZIP(), []int{6}
+}
+
+type StorageFormatStatusResp struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// One per engine instance.
+	EngineStatus  []*EngineFormatStatus `protobuf:"bytes,1,rep,name=engine_status,json=engineStatus,proto3" json:"engine_status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StorageFormatStatusResp) Reset() {
+	*x = StorageFormatStatusResp{}
+	mi := &file_ctl_storage_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StorageFormatStatusResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StorageFormatStatusResp) ProtoMessage() {}
+
+func (x *StorageFormatStatusResp) ProtoReflect() protoreflect.Message {
+	mi := &file_ctl_storage_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StorageFormatStatusResp.ProtoReflect.Descriptor instead.
+func (*StorageFormatStatusResp) Descriptor() ([]byte, []int) {
+	return file_ctl_storage_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *StorageFormatStatusResp) GetEngineStatus() []*EngineFormatStatus {
 	if x != nil {
 		return x.EngineStatus
 	}
@@ -494,14 +559,14 @@ type EngineFormatStatus struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Instanceidx    uint32                 `protobuf:"varint,1,opt,name=instanceidx,proto3" json:"instanceidx,omitempty"`                             // Index of I/O Engine instance
 	AwaitingFormat bool                   `protobuf:"varint,2,opt,name=awaiting_format,json=awaitingFormat,proto3" json:"awaiting_format,omitempty"` // True if engine instance is awaiting storage format
-	State          string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`                                          // Local engine instance state e.g. "AwaitFormat", "Ready"
+	State          string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`                                          // Local engine instance state e.g. "AwaitingFormat", "Ready"
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *EngineFormatStatus) Reset() {
 	*x = EngineFormatStatus{}
-	mi := &file_ctl_storage_proto_msgTypes[6]
+	mi := &file_ctl_storage_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -513,7 +578,7 @@ func (x *EngineFormatStatus) String() string {
 func (*EngineFormatStatus) ProtoMessage() {}
 
 func (x *EngineFormatStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[6]
+	mi := &file_ctl_storage_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -526,7 +591,7 @@ func (x *EngineFormatStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EngineFormatStatus.ProtoReflect.Descriptor instead.
 func (*EngineFormatStatus) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{6}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *EngineFormatStatus) GetInstanceidx() uint32 {
@@ -559,7 +624,7 @@ type NvmeRebindReq struct {
 
 func (x *NvmeRebindReq) Reset() {
 	*x = NvmeRebindReq{}
-	mi := &file_ctl_storage_proto_msgTypes[7]
+	mi := &file_ctl_storage_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -571,7 +636,7 @@ func (x *NvmeRebindReq) String() string {
 func (*NvmeRebindReq) ProtoMessage() {}
 
 func (x *NvmeRebindReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[7]
+	mi := &file_ctl_storage_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,7 +649,7 @@ func (x *NvmeRebindReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NvmeRebindReq.ProtoReflect.Descriptor instead.
 func (*NvmeRebindReq) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{7}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *NvmeRebindReq) GetPciAddr() string {
@@ -603,7 +668,7 @@ type NvmeRebindResp struct {
 
 func (x *NvmeRebindResp) Reset() {
 	*x = NvmeRebindResp{}
-	mi := &file_ctl_storage_proto_msgTypes[8]
+	mi := &file_ctl_storage_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -615,7 +680,7 @@ func (x *NvmeRebindResp) String() string {
 func (*NvmeRebindResp) ProtoMessage() {}
 
 func (x *NvmeRebindResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[8]
+	mi := &file_ctl_storage_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -628,7 +693,7 @@ func (x *NvmeRebindResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NvmeRebindResp.ProtoReflect.Descriptor instead.
 func (*NvmeRebindResp) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{8}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *NvmeRebindResp) GetState() *ResponseState {
@@ -649,7 +714,7 @@ type NvmeAddDeviceReq struct {
 
 func (x *NvmeAddDeviceReq) Reset() {
 	*x = NvmeAddDeviceReq{}
-	mi := &file_ctl_storage_proto_msgTypes[9]
+	mi := &file_ctl_storage_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -661,7 +726,7 @@ func (x *NvmeAddDeviceReq) String() string {
 func (*NvmeAddDeviceReq) ProtoMessage() {}
 
 func (x *NvmeAddDeviceReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[9]
+	mi := &file_ctl_storage_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -674,7 +739,7 @@ func (x *NvmeAddDeviceReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NvmeAddDeviceReq.ProtoReflect.Descriptor instead.
 func (*NvmeAddDeviceReq) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{9}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *NvmeAddDeviceReq) GetPciAddr() string {
@@ -707,7 +772,7 @@ type NvmeAddDeviceResp struct {
 
 func (x *NvmeAddDeviceResp) Reset() {
 	*x = NvmeAddDeviceResp{}
-	mi := &file_ctl_storage_proto_msgTypes[10]
+	mi := &file_ctl_storage_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -719,7 +784,7 @@ func (x *NvmeAddDeviceResp) String() string {
 func (*NvmeAddDeviceResp) ProtoMessage() {}
 
 func (x *NvmeAddDeviceResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_storage_proto_msgTypes[10]
+	mi := &file_ctl_storage_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -732,7 +797,7 @@ func (x *NvmeAddDeviceResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NvmeAddDeviceResp.ProtoReflect.Descriptor instead.
 func (*NvmeAddDeviceResp) Descriptor() ([]byte, []int) {
-	return file_ctl_storage_proto_rawDescGZIP(), []int{10}
+	return file_ctl_storage_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *NvmeAddDeviceResp) GetState() *ResponseState {
@@ -776,18 +841,19 @@ const file_ctl_storage_proto_rawDesc = "" +
 	"\x04nvme\x18\x01 \x01(\v2\x11.ctl.ScanNvmeRespR\x04nvme\x12\"\n" +
 	"\x03scm\x18\x02 \x01(\v2\x10.ctl.ScanScmRespR\x03scm\x121\n" +
 	"\fsys_mem_info\x18\x03 \x01(\v2\x0f.ctl.SysMemInfoR\n" +
-	"sysMemInfo\"\xc1\x01\n" +
+	"sysMemInfo\"\xa9\x01\n" +
 	"\x10StorageFormatReq\x12&\n" +
 	"\x04nvme\x18\x01 \x01(\v2\x12.ctl.FormatNvmeReqR\x04nvme\x12#\n" +
 	"\x03scm\x18\x02 \x01(\v2\x11.ctl.FormatScmReqR\x03scm\x12\x1a\n" +
 	"\breformat\x18\x03 \x01(\bR\breformat\x12\x18\n" +
 	"\areplace\x18\x04 \x01(\bR\areplace\x12\x12\n" +
-	"\x04rank\x18\x05 \x01(\rR\x04rank\x12\x16\n" +
-	"\x06status\x18\x06 \x01(\bR\x06status\"\xad\x01\n" +
+	"\x04rank\x18\x05 \x01(\rR\x04rank\"o\n" +
 	"\x11StorageFormatResp\x12/\n" +
 	"\x05crets\x18\x01 \x03(\v2\x19.ctl.NvmeControllerResultR\x05crets\x12)\n" +
-	"\x05mrets\x18\x02 \x03(\v2\x13.ctl.ScmMountResultR\x05mrets\x12<\n" +
-	"\rengine_status\x18\x03 \x03(\v2\x17.ctl.EngineFormatStatusR\fengineStatus\"u\n" +
+	"\x05mrets\x18\x02 \x03(\v2\x13.ctl.ScmMountResultR\x05mrets\"\x18\n" +
+	"\x16StorageFormatStatusReq\"W\n" +
+	"\x17StorageFormatStatusResp\x12<\n" +
+	"\rengine_status\x18\x01 \x03(\v2\x17.ctl.EngineFormatStatusR\fengineStatus\"u\n" +
 	"\x12EngineFormatStatus\x12 \n" +
 	"\vinstanceidx\x18\x01 \x01(\rR\vinstanceidx\x12'\n" +
 	"\x0fawaiting_format\x18\x02 \x01(\bR\x0eawaitingFormat\x12\x14\n" +
@@ -815,43 +881,45 @@ func file_ctl_storage_proto_rawDescGZIP() []byte {
 	return file_ctl_storage_proto_rawDescData
 }
 
-var file_ctl_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_ctl_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_ctl_storage_proto_goTypes = []any{
-	(*StorageScanReq)(nil),       // 0: ctl.StorageScanReq
-	(*MemInfo)(nil),              // 1: ctl.MemInfo
-	(*SysMemInfo)(nil),           // 2: ctl.SysMemInfo
-	(*StorageScanResp)(nil),      // 3: ctl.StorageScanResp
-	(*StorageFormatReq)(nil),     // 4: ctl.StorageFormatReq
-	(*StorageFormatResp)(nil),    // 5: ctl.StorageFormatResp
-	(*EngineFormatStatus)(nil),   // 6: ctl.EngineFormatStatus
-	(*NvmeRebindReq)(nil),        // 7: ctl.NvmeRebindReq
-	(*NvmeRebindResp)(nil),       // 8: ctl.NvmeRebindResp
-	(*NvmeAddDeviceReq)(nil),     // 9: ctl.NvmeAddDeviceReq
-	(*NvmeAddDeviceResp)(nil),    // 10: ctl.NvmeAddDeviceResp
-	(*ScanNvmeReq)(nil),          // 11: ctl.ScanNvmeReq
-	(*ScanScmReq)(nil),           // 12: ctl.ScanScmReq
-	(*ScanNvmeResp)(nil),         // 13: ctl.ScanNvmeResp
-	(*ScanScmResp)(nil),          // 14: ctl.ScanScmResp
-	(*FormatNvmeReq)(nil),        // 15: ctl.FormatNvmeReq
-	(*FormatScmReq)(nil),         // 16: ctl.FormatScmReq
-	(*NvmeControllerResult)(nil), // 17: ctl.NvmeControllerResult
-	(*ScmMountResult)(nil),       // 18: ctl.ScmMountResult
-	(*ResponseState)(nil),        // 19: ctl.ResponseState
+	(*StorageScanReq)(nil),          // 0: ctl.StorageScanReq
+	(*MemInfo)(nil),                 // 1: ctl.MemInfo
+	(*SysMemInfo)(nil),              // 2: ctl.SysMemInfo
+	(*StorageScanResp)(nil),         // 3: ctl.StorageScanResp
+	(*StorageFormatReq)(nil),        // 4: ctl.StorageFormatReq
+	(*StorageFormatResp)(nil),       // 5: ctl.StorageFormatResp
+	(*StorageFormatStatusReq)(nil),  // 6: ctl.StorageFormatStatusReq
+	(*StorageFormatStatusResp)(nil), // 7: ctl.StorageFormatStatusResp
+	(*EngineFormatStatus)(nil),      // 8: ctl.EngineFormatStatus
+	(*NvmeRebindReq)(nil),           // 9: ctl.NvmeRebindReq
+	(*NvmeRebindResp)(nil),          // 10: ctl.NvmeRebindResp
+	(*NvmeAddDeviceReq)(nil),        // 11: ctl.NvmeAddDeviceReq
+	(*NvmeAddDeviceResp)(nil),       // 12: ctl.NvmeAddDeviceResp
+	(*ScanNvmeReq)(nil),             // 13: ctl.ScanNvmeReq
+	(*ScanScmReq)(nil),              // 14: ctl.ScanScmReq
+	(*ScanNvmeResp)(nil),            // 15: ctl.ScanNvmeResp
+	(*ScanScmResp)(nil),             // 16: ctl.ScanScmResp
+	(*FormatNvmeReq)(nil),           // 17: ctl.FormatNvmeReq
+	(*FormatScmReq)(nil),            // 18: ctl.FormatScmReq
+	(*NvmeControllerResult)(nil),    // 19: ctl.NvmeControllerResult
+	(*ScmMountResult)(nil),          // 20: ctl.ScmMountResult
+	(*ResponseState)(nil),           // 21: ctl.ResponseState
 }
 var file_ctl_storage_proto_depIdxs = []int32{
-	11, // 0: ctl.StorageScanReq.nvme:type_name -> ctl.ScanNvmeReq
-	12, // 1: ctl.StorageScanReq.scm:type_name -> ctl.ScanScmReq
+	13, // 0: ctl.StorageScanReq.nvme:type_name -> ctl.ScanNvmeReq
+	14, // 1: ctl.StorageScanReq.scm:type_name -> ctl.ScanScmReq
 	1,  // 2: ctl.SysMemInfo.numa_nodes:type_name -> ctl.MemInfo
-	13, // 3: ctl.StorageScanResp.nvme:type_name -> ctl.ScanNvmeResp
-	14, // 4: ctl.StorageScanResp.scm:type_name -> ctl.ScanScmResp
+	15, // 3: ctl.StorageScanResp.nvme:type_name -> ctl.ScanNvmeResp
+	16, // 4: ctl.StorageScanResp.scm:type_name -> ctl.ScanScmResp
 	2,  // 5: ctl.StorageScanResp.sys_mem_info:type_name -> ctl.SysMemInfo
-	15, // 6: ctl.StorageFormatReq.nvme:type_name -> ctl.FormatNvmeReq
-	16, // 7: ctl.StorageFormatReq.scm:type_name -> ctl.FormatScmReq
-	17, // 8: ctl.StorageFormatResp.crets:type_name -> ctl.NvmeControllerResult
-	18, // 9: ctl.StorageFormatResp.mrets:type_name -> ctl.ScmMountResult
-	6,  // 10: ctl.StorageFormatResp.engine_status:type_name -> ctl.EngineFormatStatus
-	19, // 11: ctl.NvmeRebindResp.state:type_name -> ctl.ResponseState
-	19, // 12: ctl.NvmeAddDeviceResp.state:type_name -> ctl.ResponseState
+	17, // 6: ctl.StorageFormatReq.nvme:type_name -> ctl.FormatNvmeReq
+	18, // 7: ctl.StorageFormatReq.scm:type_name -> ctl.FormatScmReq
+	19, // 8: ctl.StorageFormatResp.crets:type_name -> ctl.NvmeControllerResult
+	20, // 9: ctl.StorageFormatResp.mrets:type_name -> ctl.ScmMountResult
+	8,  // 10: ctl.StorageFormatStatusResp.engine_status:type_name -> ctl.EngineFormatStatus
+	21, // 11: ctl.NvmeRebindResp.state:type_name -> ctl.ResponseState
+	21, // 12: ctl.NvmeAddDeviceResp.state:type_name -> ctl.ResponseState
 	13, // [13:13] is the sub-list for method output_type
 	13, // [13:13] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
@@ -873,7 +941,7 @@ func file_ctl_storage_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ctl_storage_proto_rawDesc), len(file_ctl_storage_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

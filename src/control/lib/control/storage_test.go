@@ -765,10 +765,10 @@ func TestControl_StorageFormat(t *testing.T) {
 	}
 }
 
-func TestControl_StorageFormat_Status(t *testing.T) {
+func TestControl_StorageFormatStatus(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic         *MockInvokerConfig
-		expResponse *StorageFormatResp
+		expResponse *StorageFormatStatusResp
 		expErr      error
 	}{
 		"engine status populated": {
@@ -778,12 +778,12 @@ func TestControl_StorageFormat_Status(t *testing.T) {
 						Responses: []*HostResponse{
 							{
 								Addr: "host1",
-								Message: &ctlpb.StorageFormatResp{
+								Message: &ctlpb.StorageFormatStatusResp{
 									EngineStatus: []*ctlpb.EngineFormatStatus{
 										{
 											Instanceidx:    0,
 											AwaitingFormat: true,
-											State:          "AwaitFormat",
+											State:          "AwaitingFormat",
 										},
 										{
 											Instanceidx:    1,
@@ -797,13 +797,13 @@ func TestControl_StorageFormat_Status(t *testing.T) {
 					},
 				},
 			},
-			expResponse: &StorageFormatResp{
+			expResponse: &StorageFormatStatusResp{
 				HostErrorsResp: HostErrorsResp{},
 				HostStorage: func() HostStorageMap {
 					hsm := make(HostStorageMap)
 					if err := hsm.Add("host1", &HostStorage{
 						EngineFormatStatus: []*EngineFormatStatus{
-							{Instanceidx: 0, AwaitingFormat: true, State: "AwaitFormat"},
+							{Instanceidx: 0, AwaitingFormat: true, State: "AwaitingFormat"},
 							{Instanceidx: 1, AwaitingFormat: false, State: "Ready"},
 						},
 					}); err != nil {
@@ -824,7 +824,7 @@ func TestControl_StorageFormat_Status(t *testing.T) {
 			// Status requests must skip the "is MS running" check, so
 			// only a single (non-MS) response is required in the mock
 			// invoker's response set, unlike a regular format request.
-			gotResponse, gotErr := StorageFormat(ctx, mi, &StorageFormatReq{Status: true})
+			gotResponse, gotErr := StorageFormatStatus(ctx, mi, &StorageFormatStatusReq{})
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -843,9 +843,9 @@ func TestControl_WaitForStorageFormatReady(t *testing.T) {
 			Responses: []*HostResponse{
 				{
 					Addr: addr,
-					Message: &ctlpb.StorageFormatResp{
+					Message: &ctlpb.StorageFormatStatusResp{
 						EngineStatus: []*ctlpb.EngineFormatStatus{
-							{Instanceidx: 0, AwaitingFormat: false, State: "Starting"},
+							{Instanceidx: 0, AwaitingFormat: false, State: "ServerStarting"},
 						},
 					},
 				},
@@ -857,9 +857,9 @@ func TestControl_WaitForStorageFormatReady(t *testing.T) {
 			Responses: []*HostResponse{
 				{
 					Addr: addr,
-					Message: &ctlpb.StorageFormatResp{
+					Message: &ctlpb.StorageFormatStatusResp{
 						EngineStatus: []*ctlpb.EngineFormatStatus{
-							{Instanceidx: 0, AwaitingFormat: true, State: "AwaitFormat"},
+							{Instanceidx: 0, AwaitingFormat: true, State: "AwaitingFormat"},
 						},
 					},
 				},

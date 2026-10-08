@@ -492,16 +492,16 @@ func TestDmg_SystemCommands(t *testing.T) {
 		{
 			// Without --no-wait, system erase blocks on
 			// control.WaitForStorageFormatReady(), which polls via a
-			// StorageFormatReq{Status: true} request. The mock invoker
-			// reports the engine as already awaiting format, so the
-			// blocking wait loop exercises the synchronous poll exactly
-			// once before returning, rather than timing out.
+			// StorageFormatStatusReq request. The mock invoker reports
+			// the engine as already awaiting format, so the blocking
+			// wait loop exercises the synchronous poll exactly once
+			// before returning, rather than timing out.
 			"system erase without no-wait blocks on awaiting-format poll",
 			"system erase",
 			strings.Join([]string{
 				printRequest(t, &control.SystemQueryReq{FailOnUnavailable: true}),
 				printRequest(t, &control.SystemEraseReq{}),
-				printRequest(t, &control.StorageFormatReq{Status: true}),
+				printRequest(t, &control.StorageFormatStatusReq{}),
 			}, " "),
 			nil,
 		},

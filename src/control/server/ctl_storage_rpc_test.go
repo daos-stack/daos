@@ -3040,21 +3040,21 @@ func Test_notifyStorageReady(t *testing.T) {
 	}
 }
 
-func TestServer_CtlSvc_StorageFormat_Status(t *testing.T) {
+func TestServer_CtlSvc_StorageFormatStatus(t *testing.T) {
 	for name, tc := range map[string]struct {
 		notStarted []bool // per-engine stopped/started state, see mockControlService
 		awaitFmt   []bool // per-engine isAwaitingFormat() state to apply
-		expResp    *ctlpb.StorageFormatResp
+		expResp    *ctlpb.StorageFormatStatusResp
 	}{
 		"single engine awaiting format": {
 			notStarted: []bool{true},
 			awaitFmt:   []bool{true},
-			expResp: &ctlpb.StorageFormatResp{
+			expResp: &ctlpb.StorageFormatStatusResp{
 				EngineStatus: []*ctlpb.EngineFormatStatus{
 					{
 						Instanceidx:    0,
 						AwaitingFormat: true,
-						State:          system.MemberStateAwaitFormat.String(),
+						State:          "AwaitingFormat",
 					},
 				},
 			},
@@ -3062,7 +3062,7 @@ func TestServer_CtlSvc_StorageFormat_Status(t *testing.T) {
 		"single engine already started": {
 			notStarted: []bool{false},
 			awaitFmt:   []bool{false},
-			expResp: &ctlpb.StorageFormatResp{
+			expResp: &ctlpb.StorageFormatStatusResp{
 				EngineStatus: []*ctlpb.EngineFormatStatus{
 					{
 						Instanceidx:    0,
@@ -3075,7 +3075,7 @@ func TestServer_CtlSvc_StorageFormat_Status(t *testing.T) {
 		"single engine stopped, not awaiting format": {
 			notStarted: []bool{true},
 			awaitFmt:   []bool{false},
-			expResp: &ctlpb.StorageFormatResp{
+			expResp: &ctlpb.StorageFormatStatusResp{
 				EngineStatus: []*ctlpb.EngineFormatStatus{
 					{
 						Instanceidx:    0,
@@ -3088,12 +3088,12 @@ func TestServer_CtlSvc_StorageFormat_Status(t *testing.T) {
 		"mixed engine states": {
 			notStarted: []bool{true, false},
 			awaitFmt:   []bool{true, false},
-			expResp: &ctlpb.StorageFormatResp{
+			expResp: &ctlpb.StorageFormatStatusResp{
 				EngineStatus: []*ctlpb.EngineFormatStatus{
 					{
 						Instanceidx:    0,
 						AwaitingFormat: true,
-						State:          system.MemberStateAwaitFormat.String(),
+						State:          "AwaitingFormat",
 					},
 					{
 						Instanceidx:    1,
@@ -3125,14 +3125,9 @@ func TestServer_CtlSvc_StorageFormat_Status(t *testing.T) {
 				}
 			}
 
-			resp, err := cs.StorageFormat(test.Context(t), &ctlpb.StorageFormatReq{Status: true})
+			resp, err := cs.StorageFormatStatus(test.Context(t), &ctlpb.StorageFormatStatusReq{})
 			if err != nil {
 				t.Fatal(err)
-			}
-
-			if len(resp.Crets) != 0 || len(resp.Mrets) != 0 {
-				t.Fatalf("expected no format side-effects, got Crets=%+v Mrets=%+v",
-					resp.Crets, resp.Mrets)
 			}
 
 			if diff := cmp.Diff(tc.expResp.EngineStatus, resp.EngineStatus,

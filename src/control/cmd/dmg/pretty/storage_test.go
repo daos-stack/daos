@@ -1272,7 +1272,7 @@ func TestPretty_PrintStorageFormatStatusMap(t *testing.T) {
 				hsm := make(control.HostStorageMap)
 				hs := &control.HostStorage{
 					EngineFormatStatus: []*control.EngineFormatStatus{
-						{Instanceidx: 0, AwaitingFormat: true, State: "AwaitFormat"},
+						{Instanceidx: 0, AwaitingFormat: true, State: "AwaitingFormat"},
 					},
 				}
 				if err := hsm.Add("host1", hs); err != nil {
@@ -1282,9 +1282,9 @@ func TestPretty_PrintStorageFormatStatusMap(t *testing.T) {
 			}(),
 			expPrintStr: `
 Format Status:
-  Hosts Engine Awaiting Format State       
-  ----- ------ --------------- -----       
-  host1 0      true            AwaitFormat 
+  Hosts Engine Awaiting Format State          
+  ----- ------ --------------- -----          
+  host1 0      true            AwaitingFormat 
 `,
 		},
 		"single host, multiple engines, mixed status": {
@@ -1292,7 +1292,7 @@ Format Status:
 				hsm := make(control.HostStorageMap)
 				hs := &control.HostStorage{
 					EngineFormatStatus: []*control.EngineFormatStatus{
-						{Instanceidx: 0, AwaitingFormat: true, State: "AwaitFormat"},
+						{Instanceidx: 0, AwaitingFormat: true, State: "AwaitingFormat"},
 						{Instanceidx: 1, AwaitingFormat: false, State: "Ready"},
 					},
 				}
@@ -1303,10 +1303,10 @@ Format Status:
 			}(),
 			expPrintStr: `
 Format Status:
-  Hosts Engine Awaiting Format State       
-  ----- ------ --------------- -----       
-  host1 0      true            AwaitFormat 
-  host1 1      false           Ready       
+  Hosts Engine Awaiting Format State          
+  ----- ------ --------------- -----          
+  host1 0      true            AwaitingFormat 
+  host1 1      false           Ready          
 `,
 		},
 		"multiple hosts, same status": {
@@ -1314,7 +1314,7 @@ Format Status:
 				hsm := make(control.HostStorageMap)
 				hs := &control.HostStorage{
 					EngineFormatStatus: []*control.EngineFormatStatus{
-						{Instanceidx: 0, AwaitingFormat: true, State: "AwaitFormat"},
+						{Instanceidx: 0, AwaitingFormat: true, State: "AwaitingFormat"},
 					},
 				}
 				if err := hsm.Add("host1", hs); err != nil {
@@ -1327,9 +1327,37 @@ Format Status:
 			}(),
 			expPrintStr: `
 Format Status:
-  Hosts     Engine Awaiting Format State       
-  -----     ------ --------------- -----       
-  host[1-2] 0      true            AwaitFormat 
+  Hosts     Engine Awaiting Format State          
+  -----     ------ --------------- -----          
+  host[1-2] 0      true            AwaitingFormat 
+`,
+		},
+		"single host, all local states represented": {
+			hsm: func() control.HostStorageMap {
+				hsm := make(control.HostStorageMap)
+				hs := &control.HostStorage{
+					EngineFormatStatus: []*control.EngineFormatStatus{
+						{Instanceidx: 0, AwaitingFormat: false, State: "Stopped"},
+						{Instanceidx: 1, AwaitingFormat: false, State: "ServerStarting"},
+						{Instanceidx: 2, AwaitingFormat: true, State: "AwaitingFormat"},
+						{Instanceidx: 3, AwaitingFormat: false, State: "EngineStarting"},
+						{Instanceidx: 4, AwaitingFormat: false, State: "Ready"},
+					},
+				}
+				if err := hsm.Add("host1", hs); err != nil {
+					t.Fatal(err)
+				}
+				return hsm
+			}(),
+			expPrintStr: `
+Format Status:
+  Hosts Engine Awaiting Format State          
+  ----- ------ --------------- -----          
+  host1 0      false           Stopped        
+  host1 1      false           ServerStarting 
+  host1 2      true            AwaitingFormat 
+  host1 3      false           EngineStarting 
+  host1 4      false           Ready          
 `,
 		},
 	} {
