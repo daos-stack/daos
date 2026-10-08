@@ -550,6 +550,13 @@ struct dfuse_cont {
 	bool                    dfc_save_ino;
 };
 
+/* True if any handle on this container can use the page cache, chunk reads or zero-fill reads */
+static inline bool
+dfuse_cont_data_caching(struct dfuse_cont *dfc)
+{
+	return dfc->dfc_data_timeout != 0 || dfc->dfc_data_otoc || dfc->dfc_direct_io_disable;
+}
+
 #define dfs_entry core.dfcc_entry
 #define dfc_uuid  core.dfcc_uuid
 #define dfs_ino   core.dfcc_ino
@@ -1027,10 +1034,10 @@ struct active_inode {
 	d_list_t               chunks;
 	pthread_spinlock_t     lock;
 	struct dfuse_pre_read *readahead;
-	/* Local mutations disable cached EOF shortcuts.
-	 * Protected by lock; remains set until the last handle closes.
+	/* Local mutations disable cached EOF and pre-read replies.
+	 * Remains set until the last handle closes.
 	 */
-	bool                   read_cache_invalidated;
+	ATOMIC bool            read_cache_invalidated;
 };
 
 /* Increase active count on inode.  This takes a reference and allocates ie->active as required */

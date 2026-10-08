@@ -107,6 +107,12 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 {
 	struct active_inode *active = oh->doh_ie->ie_active;
 
+	/* The pre-read buffer may predate a write or truncate through any handle. */
+	if (atomic_load_relaxed(&active->read_cache_invalidated)) {
+		DFUSE_TRA_DEBUG(oh, "Pre read invalidated");
+		return false;
+	}
+
 	D_SPIN_LOCK(&active->lock);
 	if (!active->readahead->complete) {
 		struct read_req *rr;
@@ -290,8 +296,12 @@ read_chunk_invalidate(struct dfuse_inode_entry *ie, off_t position, size_t len)
 	if (len == 0)
 		return;
 
+	atomic_store_relaxed(&active->read_cache_invalidated, true);
+
+	if (!dfuse_cont_data_caching(ie->ie_dfs))
+		return;
+
 	D_SPIN_LOCK(&active->lock);
-	active->read_cache_invalidated = true;
 	d_list_for_each_entry_safe(cd, cdn, &active->chunks, list) {
 		if (cd->bucket >= first && cd->bucket <= last)
 			chunk_unlink(cd);
@@ -507,20 +517,15 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	struct active_inode  *active     = oh->doh_ie->ie_active;
 	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
 	bool                  mock_read  = false;
-	bool                  cache_invalidated;
 	struct dfuse_eq      *eqt;
 	int                   rc;
 	struct dfuse_event   *ev;
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ);
 
-	D_SPIN_LOCK(&active->lock);
-	cache_invalidated = active->read_cache_invalidated;
-	D_SPIN_UNLOCK(&active->lock);
-
 	/* A write or truncate through another handle also invalidates a cached EOF. */
-	if (!cache_invalidated && oh->doh_linear_read && oh->doh_linear_read_eof &&
-	    position == oh->doh_linear_read_pos) {
+	if (!atomic_load_relaxed(&active->read_cache_invalidated) && oh->doh_linear_read &&
+	    oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
 		oh->doh_linear_read_eof = false;
 		oh->doh_linear_read     = false;
@@ -544,16 +549,20 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		D_GOTO(err, rc = ENOMEM);
 
 	/* Take one snapshot of the written range. Concurrent writes must not lose an extent or
-	 * let this read synthesize zeros over data from a completed write.
+	 * let this read synthesize zeros over data from a completed write.  ie_truncated is only
+	 * set with data caching, so skip the lock otherwise.
 	 */
-	D_SPIN_LOCK(&active->lock);
-	if (oh->doh_ie->ie_truncated && position + len < oh->doh_ie->ie_stat.st_size &&
-	    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
-	     position >= oh->doh_ie->ie_end_off || position + len <= oh->doh_ie->ie_start_off)) {
-		DFUSE_TRA_DEBUG(oh, "Returning zeros");
-		mock_read = true;
+	if (dfuse_cont_data_caching(oh->doh_ie->ie_dfs)) {
+		D_SPIN_LOCK(&active->lock);
+		if (oh->doh_ie->ie_truncated && position + len < oh->doh_ie->ie_stat.st_size &&
+		    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
+		     position >= oh->doh_ie->ie_end_off ||
+		     position + len <= oh->doh_ie->ie_start_off)) {
+			DFUSE_TRA_DEBUG(oh, "Returning zeros");
+			mock_read = true;
+		}
+		D_SPIN_UNLOCK(&active->lock);
 	}
-	D_SPIN_UNLOCK(&active->lock);
 
 	/* DFuse requests a buffer size of "0" which translates to 1024*1024 at the time of writing
 	 * however this may change over time.  If the kernel ever starts requesting larger reads
