@@ -118,9 +118,9 @@ class DaosAggregationThrottling(IorTestBase):
         }
         self.log.info("Expecting the following performance differences to be < %s",
                       expected_perf_diff)
-        for key in perf_diff:
-            self.log.info("  %-4s perf diff: %s", key, perf_diff[key])
-        for key in perf_diff:
+        for key, value in perf_diff.items():
+            self.log.info("  %-4s perf diff: %s", key, value)
+        for key, value in perf_diff.items():
             self.assertLess(
-                perf_diff[key], expected_perf_diff,
+                value, expected_perf_diff,
                 f"{key.title()} performance difference >= {expected_perf_diff}")
