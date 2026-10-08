@@ -201,13 +201,14 @@ pick_eqt(struct dfuse_info *dfuse_info)
  * list traversal times.
  */
 
-#define CHUNK_SIZE (1024 * 1024)
+#define CHUNK_SIZE      (1024 * 1024)
+#define SLOTS_PER_CHUNK (CHUNK_SIZE / K128)
 
 struct read_chunk_data {
 	struct dfuse_event   *ev;
 	struct active_inode  *ia;
-	fuse_req_t            reqs[8];
-	struct dfuse_obj_hdl *ohs[8];
+	fuse_req_t            reqs[SLOTS_PER_CHUNK];
+	struct dfuse_obj_hdl *ohs[SLOTS_PER_CHUNK];
 	d_list_t              list;
 	uint64_t              bucket;
 	struct dfuse_eq      *eqt;
@@ -242,8 +243,8 @@ chunk_unlink(struct read_chunk_data *cd)
 static void
 chunk_complete(struct read_chunk_data *cd)
 {
-	fuse_req_t            reqs[8];
-	struct dfuse_obj_hdl *ohs[8];
+	fuse_req_t            reqs[SLOTS_PER_CHUNK];
+	struct dfuse_obj_hdl *ohs[SLOTS_PER_CHUNK];
 	int                   i;
 
 	/* A request is still parked here or being failed by its submitter, so the inode is live */
@@ -254,7 +255,7 @@ chunk_complete(struct read_chunk_data *cd)
 	memset(cd->reqs, 0, sizeof(cd->reqs));
 	D_SPIN_UNLOCK(&cd->ia->lock);
 
-	for (i = 0; i < 8; i++) {
+	for (i = 0; i < SLOTS_PER_CHUNK; i++) {
 		size_t position = (cd->bucket * CHUNK_SIZE) + (i * K128);
 
 		if (!reqs[i])
@@ -422,7 +423,7 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	bucket = D_ALIGNUP(position + len, CHUNK_SIZE);
 	bucket = (bucket / CHUNK_SIZE) - 1;
 
-	slot = (position / K128) % 8;
+	slot = (position / K128) % SLOTS_PER_CHUNK;
 
 	DFUSE_TRA_DEBUG(oh, "read bucket %#zx-%#zx last %#zx size %#zx bucket %ld slot %d",
 			position, position + len - 1, last, ie->ie_stat.st_size, bucket, slot);
@@ -432,8 +433,12 @@ chunk_read(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 	d_list_for_each_entry(cd, &ie->ie_active->chunks, list)
 		if (cd->bucket == bucket) {
 			/* Another read of this slot is already waiting for the fetch. */
-			if (!cd->complete && cd->reqs[slot])
+			if (!cd->complete && cd->reqs[slot]) {
+				DFUSE_TRA_DEBUG(
+				    oh, "slot %d busy on bucket %ld, falling back to uncached read",
+				    slot, bucket);
 				goto err;
+			}
 			/* Remove from list to re-add again later. */
 			d_list_del_init(&cd->list);
 			goto found;
@@ -454,7 +459,7 @@ found:
 	atomic_fetch_add_relaxed(&cd->ref, 1);
 
 	/* Put on front of list for efficient searching, once all slots are requested drop it */
-	if (++cd->entered < 8)
+	if (++cd->entered < SLOTS_PER_CHUNK)
 		d_list_add(&cd->list, &ie->ie_active->chunks);
 	else
 		chunk_put(cd);

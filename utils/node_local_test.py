@@ -2526,6 +2526,58 @@ class PosixTests():
             print('uncached read returned stale data written through another mount')
             self.fail()
 
+    def test_chunk_read_wb_order(self):
+        """A chunk read must see a write that write-back caching acknowledged early.
+
+        The writer stays open without a sync or close, so only the flush in the chunk-read path
+        waits for the write to reach DAOS.  This is best effort, the race is not forced.
+        """
+        k128 = 128 * 1024
+        chunk = 1024 * 1024
+        file_size = 4 * chunk
+        # Any dfuse-* attribute switches to the attribute path, which enables write-back.
+        self.container.set_attrs({'dfuse-data-cache': 'on'})
+        dfuse = DFuse(self.server, self.conf, container=self.container)
+        dfuse.start(v_hint='chunk_wb_order')
+
+        file_name = join(dfuse.dir, 'chunk_wb_order')
+        with open(file_name, 'wb') as fd:
+            fd.write(bytes(file_size))
+
+        stale = []
+        buf = mmap.mmap(-1, chunk)
+        wfd = os.open(file_name, os.O_WRONLY | os.O_DIRECT)
+        rfd = os.open(file_name, os.O_RDONLY)
+        try:
+            os.posix_fadvise(rfd, 0, 0, os.POSIX_FADV_RANDOM)
+            for i in range(200):
+                pattern = bytes([i % 255 + 1]) * k128
+                bucket = i % (file_size // chunk)
+                slot = i % (chunk // k128)
+                buf.seek(0)
+                buf.write(pattern * (chunk // k128))
+                assert os.pwritev(wfd, [buf], bucket * chunk) == chunk
+                if self._chunk_read(rfd, bucket * chunk + slot * k128) != pattern:
+                    stale.append(i)
+        finally:
+            os.close(rfd)
+            os.close(wfd)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        chunk_path = True
+        if self.conf.args.dfuse_debug in (None, 'DEBUG'):
+            with open(dfuse.log_file, 'rb') as fd:
+                chunk_path = b'submit for bucket' in fd.read()
+
+        if stale:
+            print(f'chunk read returned data from before the write, iterations {stale}')
+            self.fail()
+        if not chunk_path:
+            print('reads did not use the chunk-read path')
+            self.fail()
+
     def test_pre_read(self):
         """Test the pre-read code.
 
