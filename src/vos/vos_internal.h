@@ -1222,6 +1222,9 @@ struct vos_iter_ops {
 	/** Delete the record that the cursor points to */
 	int	(*iop_process)(struct vos_iterator *iter, vos_iter_proc_op_t op,
 			       void *args);
+	/** Check the current record */
+	int (*iop_check)(struct vos_iterator *iter, report_fn_t report_fn, void *report_arg,
+			 bool error_on_non_zero_padding);
 	/**
 	 * Optional, the iterator has no element.
 	 *

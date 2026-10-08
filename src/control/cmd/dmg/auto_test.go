@@ -272,10 +272,19 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Generate with both num-engines and allow-numa-imbalance (should error)",
+			"Generate with both num-engines and allow-numa-imbalance",
 			"config generate -a foo -e 4 --allow-numa-imbalance",
-			"",
-			errors.New("--num-engines and --allow-numa-imbalance flags are mutually exclusive"),
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.MgmtSvcReplicas = []string{"foo"}
+				req.ConfGenerateReq.NrEngines = 4
+				req.ConfGenerateReq.AllowNumaImbalance = true
+				return req
+			}()),
+			nil,
 		},
 		{
 			"Nonexistent subcommand",

@@ -1407,6 +1407,8 @@ reintegrate_failure_and_retry(void **state)
 	daos_obj_id_t	oids[20];
 	int		i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -1420,6 +1422,7 @@ reintegrate_failure_and_retry(void **state)
 	arg->rebuild_cb = reintegrate_failure_cb;
 	print_message("start reintegrate rank %d\n", ranks_to_kill[0]);
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
+	assert_int_equal(arg->pool.pool_info.pi_rebuild_st.rs_errno, -DER_IO);
 
 	arg->rebuild_cb = NULL;
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
