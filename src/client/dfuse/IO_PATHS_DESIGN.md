@@ -468,6 +468,17 @@ These bypass FUSE request/reply macros and call DFS directly through intercepted
 - Returns bytes written or `-1`.
 - Ensures DAOS event is finalized on initialized paths.
 
+### 8.3 Cache coherency with IOIL and libpil4dfs
+
+- Interception writes never reach `ops/write.c`, so `read_chunk_invalidate()` is not called and the
+  kernel page cache is not invalidated for DFuse handles that are already open.
+- `handle_il_ioctl` invalidates the kernel inode once, for writable handles, and resets the
+  mcache/dcache timestamps; it does not touch `ie_active->chunks`.
+- While `ie_il_count` is non-zero, attribute replies use a zero timeout, so file sizes stay correct.
+- libpil4dfs does not issue the IL ioctl per file, so neither of the above applies to it.
+- Mixing intercepted writes with data-cached DFuse handles is therefore not coherent; the user
+  documentation directs users to disable data caching for that case.
+
 ## 9. Read/Write Path Selection Summary
 
 ### 9.1 Read path order (FUSE)

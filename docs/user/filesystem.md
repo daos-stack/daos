@@ -671,6 +671,20 @@ The following types of data will be cached by default.
     applications to fail. Please disable caching (--disable-caching option) if
     you experience this or want up to date data sharing between nodes.
 
+!!! warning
+    I/O issued through an interception library (`libioil` or `libpil4dfs`) goes
+    directly to DAOS and is not seen by dfuse, so dfuse cannot invalidate cached
+    file data for handles that are already open through dfuse. With data caching
+    enabled, such handles, in the same or another process, may return stale data
+    for ranges written through the interception library until they are closed.
+    While a file is open for writing through `libioil`, dfuse disables attribute
+    caching for it, so file sizes stay correct. `libpil4dfs` does not notify dfuse
+    per file, so attributes such as the file size may also be stale for up to the
+    attribute timeout.  If the same files are accessed both through an
+    interception library and directly through dfuse, disable data caching
+    (`dfuse-data-cache` set to off) when using `libioil`, and disable all caching
+    (`--disable-caching`) when using `libpil4dfs`.
+
 To selectively control caching within a container the following container
 attributes should be used, if any attribute is set then the rest are assumed
 to be set to 0 or off, except dentry-dir-time which defaults to dentry-time
@@ -820,6 +834,9 @@ $ LD_PRELOAD=/usr/lib64/libioil.so dd if=/dev/zero of=./bar bs=1G count=20
 Alternatively, it's possible to simply link the interception library into the application
 at compile time with the `-lioil` flag.
 
+See the [Caching](#caching) section for consistency limits when files written through `libioil`
+are also accessed through dfuse with data caching enabled.
+
 ### Monitoring Activity
 
 The interception library is intended to be transparent to the user, and no other
@@ -968,6 +985,9 @@ Example:
 ```
 $ LD_PRELOAD=/usr/lib64/libpil4dfs.so mdtest -a POSIX -z 0 -F -C -i 1 -n 1667 -e 4096 -d /scratch_fs/dfuse/ -w 4096
 ```
+
+See the [Caching](#caching) section for consistency limits when files written through
+`libpil4dfs` are also accessed through dfuse with caching enabled.
 
 ### Using libpil4dfs without dfuse
 
