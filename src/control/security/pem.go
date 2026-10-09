@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,7 @@ package security
 
 import (
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -193,8 +195,9 @@ func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
 	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err == nil {
 		switch key := key.(type) {
-		// TODO: Support key types other than RSA
 		case *rsa.PrivateKey:
+			return key, nil
+		case *ecdsa.PrivateKey:
 			return key, nil
 		default:
 			return nil, fmt.Errorf("%s contains an unsupported private key type",
