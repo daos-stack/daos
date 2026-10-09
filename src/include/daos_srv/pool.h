@@ -126,6 +126,8 @@ struct ds_pool {
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
 void ds_pool_put(struct ds_pool *pool);
 void ds_pool_get(struct ds_pool *pool);
+int
+ds_pool_update_mod_bound(uuid_t uuid, daos_epoch_t epoch);
 
 /*
  * Pool handle object
@@ -193,6 +195,8 @@ struct ds_pool_child {
 	 * DAOS_TGT_TAG.
 	 */
 	void			*spc_metrics[DAOS_NR_MODULE];
+	/* The remaining time (seconds) for waiting container global stable epoch. */
+	int                      spc_remaining_wait_time;
 };
 
 struct ds_pool_svc_op_key {

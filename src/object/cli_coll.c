@@ -398,6 +398,9 @@ obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
 	if (rc != 0 || (shard->do_rebuilding && !coa->coa_for_modify))
 		goto out;
 
+	if (shard->do_rebuilding || shard->do_reintegrating)
+		coa->coa_sync_io = 1;
+
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
 
 	D_ASSERTF(coa->coa_min_rank == obj->cob_min_rank,
@@ -817,6 +820,8 @@ gen_mbs:
 
 	if (obj_is_ec(obj))
 		auxi->flags |= ORF_EC;
+	if (coa->coa_sync_io)
+		auxi->flags |= ORF_DTX_SYNC;
 
 	mbs_max_size = sizeof(*mbs) + mbs->dm_data_size +
 		       sizeof(coa->coa_targets[0]) * coa->coa_max_shard_nr + coa->coa_max_bitmap_sz;
