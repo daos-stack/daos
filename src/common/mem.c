@@ -787,6 +787,13 @@ pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 	if (!UMOFF_IS_NULL(umoff)) {
 		int	rc;
 
+#if FAULT_INJECTION
+		PMEMoid oid  = umem_off2id(umm, umoff);
+		size_t  size = pmemobj_alloc_usable_size(oid);
+
+		/* Poison freed memory to expose use-after-free (not undone on tx abort). */
+		memset(pmemobj_direct(oid), 0x55, size);
+#endif
 		rc = pmemobj_tx_free(umem_off2id(umm, umoff));
 		return rc ? umem_tx_errno(rc) : 0;
 	}
