@@ -115,6 +115,128 @@ func TestAdvanceCertWatermark(t *testing.T) {
 	}
 }
 
+func TestWatermarkCutoff(t *testing.T) {
+	olderPEM, _ := sectest.NewCA(t, "older", nil, nil)
+	older := sectest.ParseCert(t, olderPEM)
+	newerPEM, _ := sectest.NewCA(t, "newer", nil, nil)
+	for name, tc := range map[string]struct {
+		bundle []byte
+		exp    time.Time
+		expErr bool
+	}{
+		"empty bundle prunes nothing": {bundle: nil, exp: time.Time{}},
+		"single CA":                   {bundle: olderPEM, exp: older.NotBefore},
+		"earliest of two":             {bundle: append(append([]byte{}, newerPEM...), olderPEM...), exp: older.NotBefore},
+		"malformed CA":                {bundle: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("junk")}), expErr: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := watermarkCutoff(tc.bundle)
+			if tc.expErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !got.Equal(tc.exp) {
+				t.Fatalf("got %s, want %s", got, tc.exp)
+			}
+		})
+	}
+}
+
+func TestPruneCertWatermarks(t *testing.T) {
+	t0 := time.Date(2026, 4, 15, 14, 0, 0, 0, time.UTC)
+	wm := CertWatermarks{
+		"node:fresh":    t0,
+		"node:stale":    t0.Add(-25 * time.Hour),
+		"node:boundary": t0.Add(-24 * time.Hour), // exactly at cutoff stays
+	}
+	out := pruneCertWatermarks(wm, t0.Add(-24*time.Hour))
+	if len(out) != 2 {
+		t.Fatalf("len=%d, want 2", len(out))
+	}
+	if _, ok := out["node:stale"]; ok {
+		t.Errorf("stale entry survived prune")
+	}
+	if _, ok := out["node:fresh"]; !ok {
+		t.Errorf("fresh entry was pruned")
+	}
+	if _, ok := out["node:boundary"]; !ok {
+		t.Errorf("boundary entry (==cutoff) was pruned")
+	}
+}
+
+func TestSecurity_RevokeCertWatermark(t *testing.T) {
+	caPEM, _ := sectest.NewCA(t, "CA", nil, nil)
+	caNotBefore := sectest.ParseCert(t, caPEM).NotBefore
+	now := time.Now().UTC().Truncate(time.Second)
+	encode := func(t *testing.T, wm CertWatermarks) []byte {
+		t.Helper()
+		b, err := EncodeCertWatermarks(wm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+
+	for name, tc := range map[string]struct {
+		watermarks   []byte
+		bundle       []byte
+		expCommitted time.Time
+		expWM        CertWatermarks
+		expErr       bool
+	}{
+		"first revocation": {
+			bundle:       caPEM,
+			expCommitted: now,
+			expWM:        CertWatermarks{"node:n1": now},
+		},
+		"same second bumps past the previous": {
+			watermarks:   encode(t, CertWatermarks{"node:n1": now}),
+			bundle:       caPEM,
+			expCommitted: now.Add(time.Second),
+			expWM:        CertWatermarks{"node:n1": now.Add(time.Second)},
+		},
+		"watermark no CA can enforce is dropped": {
+			watermarks:   encode(t, CertWatermarks{"node:old": caNotBefore.Add(-time.Hour), "node:kept": now}),
+			bundle:       caPEM,
+			expCommitted: now,
+			expWM:        CertWatermarks{"node:kept": now, "node:n1": now},
+		},
+		"unreadable watermarks": {watermarks: []byte("junk"), bundle: caPEM, expErr: true},
+		"unreadable bundle": {
+			bundle: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("junk")}),
+			expErr: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			encoded, committed, err := RevokeCertWatermark(tc.watermarks, tc.bundle, "node:n1", now)
+			if tc.expErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !committed.Equal(tc.expCommitted) {
+				t.Errorf("committed %s, want %s", committed, tc.expCommitted)
+			}
+			got, err := DecodeCertWatermarks(encoded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.expWM, got); diff != "" {
+				t.Errorf("watermarks (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestRemoveCertByFingerprint(t *testing.T) {
 	pemA, _ := sectest.NewCA(t, "CA-A", nil, nil)
 	pemB, _ := sectest.NewCA(t, "CA-B", nil, nil)

@@ -943,3 +943,27 @@ func (m PoolPropertyMap) Keys() []string {
 
 	return keys
 }
+
+// PoolRevokeEvictMode selects which handles PoolRevokeClient evicts.
+type PoolRevokeEvictMode int
+
+const (
+	// PoolRevokeEvictDefault evicts the revoked node's handles, or every handle for a tenant.
+	PoolRevokeEvictDefault PoolRevokeEvictMode = iota
+	// PoolRevokeEvictPoolWide evicts every handle on the pool.
+	PoolRevokeEvictPoolWide
+	// PoolRevokeEvictNone leaves active handles alone.
+	PoolRevokeEvictNone
+)
+
+// PoolRevokeEvictScope is what PoolRevokeClient evicted, as reported on the wire.
+type PoolRevokeEvictScope string
+
+const (
+	// PoolRevokeEvictScopeNone left every handle alive.
+	PoolRevokeEvictScopeNone PoolRevokeEvictScope = "none"
+	// PoolRevokeEvictScopeMachine evicted the handles of the revoked node.
+	PoolRevokeEvictScopeMachine PoolRevokeEvictScope = "machine"
+	// PoolRevokeEvictScopePool evicted every handle on the pool.
+	PoolRevokeEvictScopePool PoolRevokeEvictScope = "pool"
+)
