@@ -23,12 +23,14 @@ struct dtx_resync_entry {
 	d_list_t		dre_link;
 	daos_epoch_t		dre_epoch;
 	daos_unit_oid_t		dre_oid;
-	uint32_t		dre_inline_mbs:1;
+	uint32_t                dre_inline_mbs : 1;
 	uint64_t		dre_dkey_hash;
 	struct dtx_entry	dre_dte;
 };
 
 #define dre_xid		dre_dte.dte_xid
+
+#define DTX_RESYNC_WAIT_TIMEOUT (5 * 60U)
 
 struct dtx_resync_head {
 	d_list_t		drh_list;
@@ -605,15 +607,52 @@ out:
 	return 0;
 }
 
+static void
+dtx_resync_epoch_set(struct ds_pool_child *child, daos_epoch_t epoch)
+{
+	child->spc_dtx_resync_epoch = max(child->spc_dtx_resync_epoch, epoch);
+}
+
+/* Bound the live-handle wait without changing recovery's status retries. */
+static int
+dtx_resync_wait(struct ds_cont_child *cont, uint32_t ver)
+{
+	uint64_t deadline = daos_gettime_coarse() + DTX_RESYNC_WAIT_TIMEOUT;
+	int      rc;
+
+	while (vos_dtx_has_inprogress(cont->sc_hdl, ver)) {
+		if (cont->sc_stopping || dss_xstream_exiting(dss_current_xstream()))
+			return -DER_CANCELED;
+
+		if (daos_gettime_coarse() >= deadline) {
+			D_WARN("DTX resync " DF_UUID "/" DF_UUID
+			       " stop waiting for old-map handles after %u seconds, ver %u\n",
+			       DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid),
+			       DTX_RESYNC_WAIT_TIMEOUT, ver);
+			break;
+		}
+
+		D_DEBUG(DB_MD,
+			"Waiting for old-map DTX handles for " DF_UUID "/" DF_UUID " with ver %u\n",
+			DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
+		rc = dss_sleep(1);
+		if (rc != 0)
+			return rc;
+	}
+
+	return 0;
+}
+
 int
-dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block)
+dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block,
+	   uint32_t flags)
 {
 	struct ds_pool			*pool;
 	struct pool_target		*target;
 	struct dtx_resync_args		 dra = { 0 };
 	d_rank_t			 myrank;
 	int				 rc = 0;
-	int				 rc1 = 0;
+	int                              rc1 = 0;
 
 	D_DEBUG(DB_MD, "Enter DTX resync (%s) for " DF_UUID "/" DF_UUID " with ver %u\n",
 		block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
@@ -673,7 +712,8 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 
 	dra.cont = cont;
 	dra.resync_version = ver;
-	dra.epoch = d_hlc_get();
+	dra.epoch          = d_hlc_get();
+	dtx_resync_epoch_set(cont->sc_pool, dra.epoch);
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 
@@ -697,6 +737,12 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 
 	D_DEBUG(DB_MD, "Start DTX resync (%s) scan for " DF_UUID "/" DF_UUID " with ver %u\n",
 		block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
+
+	if (!(flags & DTX_RESYNC_NOWAIT)) {
+		rc = dtx_resync_wait(cont, ver);
+		if (rc != 0)
+			goto fail;
+	}
 
 	rc = ds_cont_iter(po_hdl, cont->sc_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX, 0);
 
@@ -766,7 +812,7 @@ again:
 			goto again;
 		}
 	} else {
-		rc = dtx_resync(iter_param->ip_hdl, cont, arg->version, true);
+		rc = dtx_resync(iter_param->ip_hdl, cont, arg->version, true, 0);
 	}
 	if (rc == 0)
 		/* Since dtx_{cleanup,resync} might yield, let's reprobe anyway */
@@ -798,6 +844,9 @@ dtx_resync_one(void *data)
 
 	if (unlikely(child->spc_no_storage))
 		D_GOTO(out, rc = 0);
+
+	if (!arg->for_orphan)
+		dtx_resync_epoch_set(child, d_hlc_get());
 
 	D_ALLOC_PTR(param);
 	if (param == NULL)
