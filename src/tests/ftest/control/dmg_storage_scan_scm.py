@@ -40,7 +40,7 @@ class DmgStorageScanSCMTest(ControlTestBase):
         """
         errors = []
 
-        for scm_namespace in storage_dict["scm_namespaces"] or []:
+        for scm_namespace in storage_dict["scm_namespaces"]:
             # Verify that all namespaces exist under /dev.
             pmem_name = scm_namespace["blockdev"]
             ls_cmd = f"ls {os.path.join('/dev', pmem_name)}"
