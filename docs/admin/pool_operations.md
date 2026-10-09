@@ -1243,6 +1243,10 @@ $ dmg pool exclude --ranks=${rank} --wait <pool_label>
 $ dmg pool drain --ranks=${rank} --wait=30m <pool_label>
 ```
 
+The `dmg pool exclude`, `drain`, `reintegrate`, and `extend` commands silently
+skip any specified ranks or targets that are already in the requested state
+(respectively excluded, drained, reintegrated, or added).
+
 ### Manual Exclusion
 
 An operator can exclude one or more engines or targets from a specific DAOS pool using the rank(s)
