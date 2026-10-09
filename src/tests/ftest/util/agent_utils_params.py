@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -77,6 +77,9 @@ class DaosAgentYamlParameters(YamlParameters):
         #       Hosts can be specified with or without port, default port below
         #       assumed if not specified. Defaults to the hostname of this node
         #       at port 10000 for local testing.
+        #   - node_cert_dir: <str>, e.g. node_certs
+        #       Directory under the test log directory from which the agent loads
+        #       per-pool node certificates (credential_config.node_cert_dir).
         self.runtime_dir = BasicParameter(None, default_runtime_dir)
         self.log_file = LogParameter(log_dir, None, "daos_agent.log")
         self.control_log_mask = BasicParameter(None, "debug")
@@ -87,6 +90,19 @@ class DaosAgentYamlParameters(YamlParameters):
         self.telemetry_enabled = BasicParameter(None)
         self.telemetry_retain = BasicParameter(None)
         self.access_points = BasicParameter(None, ["localhost"])
+        self.node_cert_dir = LogParameter(log_dir, None)
+
+    def get_yaml_data(self):
+        """Convert the parameters into a dictionary to use to write a yaml file.
+
+        Returns:
+            dict: a dictionary of parameter name keys and values
+        """
+        yaml_data = super().get_yaml_data()
+        node_cert_dir = yaml_data.pop("node_cert_dir", None)
+        if node_cert_dir is not None:
+            yaml_data["credential_config"] = {"node_cert_dir": node_cert_dir}
+        return yaml_data
 
     def update_log_file(self, name):
         """Update the log file name for the daos agent.
