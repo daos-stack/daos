@@ -64,6 +64,7 @@ void updateRunStage() {
         'Functional on EL 8',
         'Functional on EL 9',
         'Functional on Leap 15',
+        'Functional on SLES 15',
         'Functional on Ubuntu 20.04',
         'Fault injection testing',
         'Test RPMs on EL 9',
@@ -218,6 +219,7 @@ void updateRunStage() {
             'Functional on EL 8': 'Build on EL 8',
             'Functional on EL 9': 'Build on EL 9',
             'Functional on Leap 15': 'Build on Leap 15',
+            'Functional on SLES 15': 'Build on Leap 15',
             'Functional Hardware Medium': hwBuildStage,
             'Functional Hardware Medium MD on SSD': hwBuildStage,
             'Functional Hardware Medium VMD': hwBuildStage,
@@ -627,6 +629,9 @@ pipeline {
         booleanParam(name: bashName('Functional on Leap 15'),
                      defaultValue: false,
                      description: 'Run the Functional on Leap 15 stage.')
+        booleanParam(name: bashName('Functional on SLES 15'),
+                     defaultValue: false,
+                     description: 'Run the Functional on SLES 15 stage.')
         booleanParam(name: bashName('Functional on Ubuntu 20.04'),
                      defaultValue: false,
                      description: 'Run the Functional on Ubuntu 20.04 stage.')
