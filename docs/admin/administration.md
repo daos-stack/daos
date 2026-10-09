@@ -1177,11 +1177,12 @@ including superblocks separately from the data/meta/wal SSDs used for pool stora
     `dmg storage format --replace` workflow when hot-plug or online replacement is not available or
     not suitable for the failure scenario.
 
-**Key Improvement**: The `dmg storage format --replace` command now safely handles control metadata
-formatting in MD-on-SSD mode. When an engine's data/meta/wal SSD fails and is replaced offline,
-the administrator must manually remove the engine's superblock before restarting the server to 
-trigger a format request. The command then selectively removes only the failed engine's 
-control_metadata subdirectory, preserving healthy engines' metadata on the same host.
+`dmg storage format` (with or without `--replace`) safely handles control metadata formatting in
+MD-on-SSD mode. When an engine's data/meta/wal SSD fails and is replaced offline, the administrator
+must manually remove the engine's superblock before restarting the server to trigger a format
+request. The command then selectively reformats only the affected engine's control_metadata
+subdirectory, preserving healthy engines' metadata on the same host; `--replace` is only required if
+the engine should rejoin using its previous rank rather than a newly-assigned one.
 
 An example workflow for SSD failure in MD-on-SSD mode would be:
 
@@ -1216,16 +1217,11 @@ An example workflow for SSD failure in MD-on-SSD mode would be:
 - **Before starting the server, administrator manually removes engine 0's superblock**: 
   `rm /path/to/control_metadata/daos_control/engine0/superblock`
 - Start `daos_server` and engine 0 detects missing superblock and prompts for format
-- Attempting to format without `--replace` flag will fail:
-  ```bash
-  $ dmg storage format -l storage-server-16
-  ERROR: Errors:
-    Hosts              Error
-    -----              -----
-    storage-server-16  engine metadata directories or superblocks are missing for engines [0]; 
-                       running format with missing subdirectories or superblocks is not supported
-  ```
-- `dmg storage format --replace` will succeed:
+- Formatting without `--replace` will succeed, but engine 0 will rejoin with a **new** rank rather
+  than reusing rank 2 (missing per-engine `control_metadata` subdirectories/superblocks are always
+  tolerated and recreated as needed, regardless of `--replace`; e.g. this is also the case
+  following a `dmg system erase`, which deliberately preserves the shared `control_metadata` root
+  while removing per-engine subdirectories). To reuse the old rank, use `--replace`:
   ```bash
   $ dmg storage format -l storage-server-16 --replace
   Format Summary:
@@ -1264,13 +1260,15 @@ An example workflow for SSD failure in MD-on-SSD mode would be:
     This path can be on any persistent local storage (dedicated SSD, shared device, or any mounted
     filesystem) and is separate from the data/meta/wal SSDs used for pool storage. When an engine's
     data/meta/wal SSD fails and is replaced offline, the administrator must manually remove the
-    failed engine's superblock **before restarting the server** to trigger a format request. This 
-    manual step allows `dmg storage format --replace` to reinitialize that engine's metadata and 
-    restore it with the old rank. If only a data/meta/wal SSD fails, the control_metadata path 
-    remains intact and the command will selectively remove only the subdirectories for engines with 
-    missing superblocks (i.e., only those where the administrator removed the superblock before 
-    server restart). If the control_metadata storage path itself becomes inaccessible, all engine 
-    metadata is lost and must be recreated during format replace.
+    failed engine's superblock **before restarting the server** to trigger a format request. Any
+    engine whose `control_metadata` subdirectory or superblock is found missing has its
+    subdirectory (re)created automatically, whether or not `--replace` is supplied; `--replace`
+    additionally causes the engine to rejoin with its previous rank instead of being assigned a
+    new one. If only a data/meta/wal SSD fails, the control_metadata path remains intact and the
+    command will selectively reformat only the subdirectories for engines with missing
+    superblocks (i.e., only those where the administrator removed the superblock before server
+    restart). If the control_metadata storage path itself becomes inaccessible, all engine
+    metadata is lost and must be recreated during format.
 
 !!! note
     `dmg storage format --replace` can not be used to replace a rank in `AdminExcluded` state. An
