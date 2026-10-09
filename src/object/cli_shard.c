@@ -171,7 +171,7 @@ rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	if (rc == -DER_CSUM && is_ec_obj) {
 		uint32_t tgt_idx;
 
-		tgt_idx = rw_args->shard_args->auxi.shard % obj_get_grp_size(obj);
+		tgt_idx = rw_args->shard_args->auxi.ec_tgt_idx;
 		rc = obj_ec_fail_info_insert(rw_args->shard_args->reasb_req, tgt_idx);
 		if (rc) {
 			D_ERROR(DF_OID" fail info insert"
@@ -899,8 +899,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				uint32_t		 tgt_idx;
 
 				sa = &rw_args->shard_args->auxi;
-				tgt_idx = sa->shard %
-					  obj_get_grp_size(rw_args->shard_args->auxi.obj_auxi->obj);
+				tgt_idx = sa->ec_tgt_idx;
 				rc = obj_ec_fail_info_insert(reasb_req, tgt_idx);
 				if (rc)
 					D_ERROR(DF_OID" fail info insert: " DF_RC"\n",
@@ -1457,6 +1456,8 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(opi->opi_co_uuid, shard->do_co->dc_uuid);
 	daos_dti_copy(&opi->opi_dti, &args->pa_dti);
 	opi->opi_flags = args->pa_auxi.flags;
+	if (args->pa_auxi.obj_auxi->rebuilding)
+		opi->opi_flags |= ORF_REBUILDING_IO;
 	opi->opi_dti_cos.ca_count = 0;
 	opi->opi_dti_cos.ca_arrays = NULL;
 	if (opc_get_rpc_ver(req->cr_opc) >= 10) {
@@ -2711,7 +2712,7 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	cb_args.epoch = &args->ka_auxi.epoch;
 	cb_args.th = &obj_args->th;
 	cb_args.anchor = args->ka_anchor;
-	cb_args.shard = obj_shard->do_shard_idx;
+	cb_args.shard       = obj_shard->do_shard;
 	cb_args.enqueue_id = &args->ka_auxi.enqueue_id;
 	cb_args.max_delay = &args->ka_auxi.obj_auxi->max_delay;
 	cb_args.send_time   = daos_client_metric ? daos_get_ntime() : 0;

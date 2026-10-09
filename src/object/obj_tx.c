@@ -84,7 +84,7 @@ struct dc_tx {
 	uint32_t                 tx_fixed_epoch : 1,                      /** epoch is specified. */
 	    tx_retry : 1, /** Retry the commit RPC. */ tx_set_resend : 1, /** Set 'resend' flag. */
 	    tx_for_convert : 1, tx_has_cond : 1, tx_renew : 1, tx_closed : 1, tx_reintegrating : 1,
-	    tx_maybe_starve : 1;
+	    tx_rebuilding : 1, tx_maybe_starve : 1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
 	/** The rank for the server on which the TX leader resides. */
@@ -1348,6 +1348,8 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		if (shard->do_reintegrating)
 			tx->tx_reintegrating = 1;
+		if (!read && shard->do_rebuilding)
+			tx->tx_rebuilding = 1;
 		/*
 		 * NOTE: It is possible that more than one shards locate on the same DAOS target
 		 *	 under OSA mode, then the shard_idx may be not equal to "shard->do_shard".
@@ -1845,6 +1847,37 @@ out:
 }
 
 static int
+dc_tx_leader_resolve(struct dc_tx_req_group *dtrgs, uint32_t tgt_cnt, uint32_t req_idx,
+		     uint32_t shard_idx, uint32_t *leader_dtrg_idx, daos_unit_oid_t *leader_oid)
+{
+	struct daos_cpd_req_idx *dcri;
+	uint32_t                 i;
+	uint32_t                 j;
+
+	/* Resolve against the classified participants, not a layout that may have been refreshed
+	 * after leader selection.
+	 */
+	for (i = 0; i < tgt_cnt; i++) {
+		if (dtrgs[i].dtrg_req_idx == NULL)
+			continue;
+
+		for (j = 0; j < dtrgs[i].dtrg_read_cnt + dtrgs[i].dtrg_write_cnt; j++) {
+			dcri = &dtrgs[i].dtrg_req_idx[j];
+			if (dcri->dcri_req_idx != req_idx || dcri->dcri_shard_off != shard_idx)
+				continue;
+
+			*leader_dtrg_idx     = i;
+			leader_oid->id_shard = dcri->dcri_shard_id;
+			return 0;
+		}
+	}
+
+	D_DEBUG(DB_IO, "Selected leader shard %u for request %u is not a classified participant\n",
+		shard_idx, req_idx);
+	return -DER_STALE;
+}
+
+static int
 dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 {
 	daos_unit_oid_t			 leader_oid = { 0 };
@@ -1998,9 +2031,12 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		if (i < 0)
 			D_GOTO(out, rc = i);
 
+		rc = dc_tx_leader_resolve(dtrgs, tgt_cnt, dc_tx_leftmost_req(tx, true) - start, i,
+					  &leader_dtrg_idx, &leader_oid);
+		if (rc != 0)
+			goto out;
+
 		leader_oid.id_pub = obj->cob_md.omd_id;
-		leader_oid.id_shard = i;
-		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
 		if (!obj_is_ec(obj) && act_grp_cnt == 1)
 			mbs->dm_flags |= DMF_SRDG_REP;
 
@@ -2011,22 +2047,35 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER)) {
-		i = dc_tx_leftmost_req(tx, true);
+		i    = dc_tx_leftmost_req(tx, true);
 		dcsr = &tx->tx_req_cache[i];
-		obj = dcsr->dcsr_obj;
+		obj  = dcsr->dcsr_obj;
 
-		leader_oid.id_pub = obj->cob_md.omd_id;
 		/* Use the shard 0 as the leader for test. The test program
 		 * will guarantee that at least one sub-modification happen
 		 * on the object shard 0.
 		 */
-		leader_oid.id_shard = 0;
-		leader_dtrg_idx = obj_get_shard(obj, 0)->po_target;
+		D_RWLOCK_RDLOCK(&obj->cob_lock);
+		if (obj->cob_version != tx->tx_pm_ver || obj->cob_shards == NULL ||
+		    obj->cob_shards_nr == 0) {
+			D_RWLOCK_UNLOCK(&obj->cob_lock);
+			D_GOTO(out, rc = -DER_STALE);
+		}
+		leader_oid.id_pub   = obj->cob_md.omd_id;
+		leader_oid.id_shard = obj_get_shard(obj, 0)->po_shard;
+		leader_dtrg_idx     = obj_get_shard(obj, 0)->po_target;
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
 	}
 
-	dcsh->dcsh_xid = tx->tx_id;
+	if (leader_dtrg_idx >= tgt_cnt || dtrgs[leader_dtrg_idx].dtrg_req_idx == NULL) {
+		D_DEBUG(DB_IO, "TX " DF_DTI " leader target %u is not a classified participant\n",
+			DP_DTI(&tx->tx_id), leader_dtrg_idx);
+		D_GOTO(out, rc = -DER_STALE);
+	}
+
+	dcsh->dcsh_xid        = tx->tx_id;
 	dcsh->dcsh_leader_oid = leader_oid;
-	dcsh->dcsh_epoch = tx->tx_epoch;
+	dcsh->dcsh_epoch      = tx->tx_epoch;
 	if (tx->tx_epoch.oe_flags & DTX_EPOCH_UNCERTAIN)
 		dcsh->dcsh_epoch.oe_rpc_flags |= ORF_EPOCH_UNCERTAIN;
 	else
@@ -2320,6 +2369,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	tx->tx_renew = 0;
 	if (tx->tx_reintegrating)
 		oci->oci_flags |= ORF_REINTEGRATING_IO;
+	if (tx->tx_rebuilding)
+		oci->oci_flags |= ORF_REBUILDING_IO;
 	if (tx->tx_write_cnt == 0)
 		oci->oci_flags |= ORF_CPD_RDONLY;
 
@@ -2601,6 +2652,7 @@ dc_tx_restart_end(struct dc_tx *tx)
 	tx->tx_status = TX_OPEN;
 	tx->tx_pm_ver = 0;
 	tx->tx_epoch.oe_value = 0;
+	tx->tx_rebuilding     = 0;
 }
 
 /**
