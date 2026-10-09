@@ -564,6 +564,13 @@ struct dfuse_cont {
 	bool                    dfc_save_ino;
 };
 
+/* True if any handle on this container can use the page cache, chunk reads or zero-fill reads */
+static inline bool
+dfuse_cont_data_caching(struct dfuse_cont *dfc)
+{
+	return dfc->dfc_data_timeout != 0 || dfc->dfc_data_otoc || dfc->dfc_direct_io_disable;
+}
+
 #define dfs_entry core.dfcc_entry
 #define dfc_uuid  core.dfcc_uuid
 #define dfs_ino   core.dfcc_ino
@@ -993,7 +1000,7 @@ struct dfuse_inode_entry {
 	/* Time of last kernel cache data update, also used for kernel readdir caching. */
 	struct timespec           ie_dcache_last_update;
 
-	/** written region for truncated files (i.e. ie_truncated set) */
+	/** Written region for truncated files, protected by ie_active->lock while open. */
 	size_t                    ie_start_off;
 	size_t                    ie_end_off;
 
@@ -1011,7 +1018,7 @@ struct dfuse_inode_entry {
 	/* Readdir handle, if present.  May be shared */
 	struct dfuse_readdir_hdl *ie_rd_hdl;
 
-	/** file was truncated from 0 to a certain size */
+	/** File was truncated from 0 to a certain size; protected by ie_active->lock while open. */
 	bool                      ie_truncated;
 
 	/** file is the root of a container */
@@ -1041,6 +1048,10 @@ struct active_inode {
 	d_list_t               chunks;
 	pthread_spinlock_t     lock;
 	struct dfuse_pre_read *readahead;
+	/* Local mutations disable cached EOF and pre-read replies.
+	 * Remains set until the last handle closes.
+	 */
+	ATOMIC bool            read_cache_invalidated;
 };
 
 /* Increase active count on inode.  This takes a reference and allocates ie->active as required */
@@ -1054,6 +1065,10 @@ active_oh_decref(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
 /* Decrease active count on inode, called on error where there is no oh */
 void
 active_ie_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
+
+/* Reset chunk and synthetic-zero read state for an inode which may have no open handle. */
+void
+active_ie_set_truncated(struct dfuse_inode_entry *ie, bool truncated);
 
 /* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
  * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending
@@ -1156,6 +1171,10 @@ dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *i
  */
 bool
 read_chunk_close(struct dfuse_inode_entry *ie);
+
+/* Drop cached chunk-read data overlapping [position, position + len). */
+void
+read_chunk_invalidate(struct dfuse_inode_entry *ie, off_t position, size_t len);
 
 /* Metadata caching functions. */
 

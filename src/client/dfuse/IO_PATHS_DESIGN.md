@@ -171,6 +171,7 @@ one 1 MiB back-end DFS read.
 
 Trigger gates (all must pass):
 
+- The open handle uses caching (`doh_caching`), so uncached mounts and `O_DIRECT` always read DAOS.
 - Request length is exactly 128 KiB.
 - Request offset is aligned to 128 KiB boundaries.
 - Request is eligible for chunking in current inode state (active chunk state exists and request is
@@ -211,20 +212,22 @@ Mechanism details:
   On async completion, chunk callback slices the 1 MiB buffer into 128 KiB slot windows and replies
   each queued slot request from the shared memory.
 6. Lifetime and cleanup
-  Bucket state tracks entered and exited slot participants; when all participating requests finish,
-  bucket state and backing event are released.
+  Bucket state is reference counted: one reference for the active list, one for the in-flight fetch
+  and one per request using it. The last reference releases bucket state and backing event, so no
+  inode state is touched after a reply. Writes, truncates and `O_TRUNC` drop overlapping buckets
+  from the list so later reads fetch fresh data.
 
 Concurrency and ownership notes:
 
 - Bucket list operations are protected by active inode lock.
-- Slot accounting is used to avoid freeing bucket state while callbacks are still consuming it.
-- On file close, completed buckets are freed immediately; in-flight buckets are marked for deferred
-  free in callback path.
+- References keep bucket state alive while callbacks are still consuming it.
+- On file close, all buckets are dropped from the list and freed once their last request completes.
 
 Fallback behavior:
 
-- If allocation fails, slot state is inconsistent, DFS submit fails, or shape checks fail, chunk path
-  aborts and caller continues with regular per-request DFS read.
+- If allocation fails, the slot already has a request waiting, DFS submit fails, or shape checks
+  fail, chunk path aborts and caller continues with regular per-request DFS read. Other requests
+  already waiting on a bucket whose submit failed are answered with the error.
 - This makes chunk read an opportunistic optimization, not a required correctness path.
 
 ### 3.4 Regular DFS read path
@@ -464,6 +467,17 @@ These bypass FUSE request/reply macros and call DFS directly through intercepted
 - Uses async event + poll loop when EQ is available, else sync call.
 - Returns bytes written or `-1`.
 - Ensures DAOS event is finalized on initialized paths.
+
+### 8.3 Cache coherency with IOIL and libpil4dfs
+
+- Interception writes never reach `ops/write.c`, so `read_chunk_invalidate()` is not called and the
+  kernel page cache is not invalidated for DFuse handles that are already open.
+- `handle_il_ioctl` invalidates the kernel inode once, for writable handles, and resets the
+  mcache/dcache timestamps; it does not touch `ie_active->chunks`.
+- While `ie_il_count` is non-zero, attribute replies use a zero timeout, so file sizes stay correct.
+- libpil4dfs does not issue the IL ioctl per file, so neither of the above applies to it.
+- Mixing intercepted writes with data-cached DFuse handles is therefore not coherent; the user
+  documentation directs users to disable data caching for that case.
 
 ## 9. Read/Write Path Selection Summary
 
