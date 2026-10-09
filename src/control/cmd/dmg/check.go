@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -223,7 +223,7 @@ func (cmd *checkQueryCmd) Execute(_ []string) error {
 
 	resp, err := control.SystemCheckQuery(ctx, cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, nil)
+		return cmd.OutputJSON(resp, err)
 	}
 	if err != nil {
 		return err
@@ -319,7 +319,7 @@ func (cmd *checkGetPolicyCmd) Execute(_ []string) error {
 	req.SetClasses(cmd.Args.Classes.ReqClasses)
 	resp, err := control.SystemCheckGetPolicy(ctx, cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, nil)
+		return cmd.OutputJSON(resp, err)
 	}
 	if err != nil {
 		return err
