@@ -3281,7 +3281,8 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 				     " restart rebuild after migration enumeration DTX conflict\n",
 			       DP_RB_MPT(tls), DP_UOID(arg->oid));
 			break;
-		} else if (rc && rc != -DER_SHUTDOWN &&
+		} else if (rc && rc != -DER_SHUTDOWN && rc != -DER_TIMEDOUT &&
+			   !daos_crt_network_error(rc) &&
 			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
 			if (rc != -DER_INPROGRESS) {
 				enum_flags &= ~DIOF_TO_LEADER;
