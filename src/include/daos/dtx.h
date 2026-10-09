@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -303,23 +303,25 @@ enum daos_ops_intent {
  */
 enum dtx_status {
 	/* DTX is pre-allocated, not prepared yet. */
-	DTX_ST_INITED		= 0,
+	DTX_ST_INITED = 0,
 	/** Local participant has done the modification. */
-	DTX_ST_PREPARED		= 1,
+	DTX_ST_PREPARED = 1,
 	/** The DTX has been committed. */
-	DTX_ST_COMMITTED	= 2,
+	DTX_ST_COMMITTED = 2,
 	/** The DTX is corrupted, some participant RDG(s) may be lost. */
-	DTX_ST_CORRUPTED	= 3,
+	DTX_ST_CORRUPTED = 3,
 	/** The DTX is committable, but not committed, non-persistent status. */
-	DTX_ST_COMMITTABLE	= 4,
+	DTX_ST_COMMITTABLE = 4,
 	/** The DTX is aborted. */
-	DTX_ST_ABORTED		= 5,
+	DTX_ST_ABORTED = 5,
 	/** The DTX is in aborting, non-persistent status. */
-	DTX_ST_ABORTING		= 6,
+	DTX_ST_ABORTING = 6,
 	/** The DTX is in committing, non-persistent status. */
-	DTX_ST_COMMITTING	= 7,
+	DTX_ST_COMMITTING = 7,
 	/** The DTX is in preparing, non-persistent status. */
-	DTX_ST_PREPARING	= 8,
+	DTX_ST_PREPARING = 8,
+
+	DTX_ST_MAX = 9,
 };
 
 enum daos_dtx_alb {

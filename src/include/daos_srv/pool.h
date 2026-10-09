@@ -79,6 +79,8 @@ struct ds_pool {
 	d_list_t		sp_ec_ephs_list;
 	struct sched_request	*sp_ec_ephs_req;
 
+	daos_epoch_t             sp_rebuild_epoch;
+
 	uint32_t		sp_dtx_resync_version;
 	uint32_t                 sp_gl_dtx_resync_version; /* global DTX resync version */
 	/* Special pool/container handle uuid, which are

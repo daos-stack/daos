@@ -364,8 +364,10 @@ dtx_coll_local_one(void *args)
 	case DTX_COLL_ABORT:
 		rc = vos_dtx_abort(cont->sc_hdl, &dcla->dcla_xid, dcla->dcla_epoch, dcla->dcla_ver);
 		break;
-	case DTX_COLL_CHECK:
-		rc = vos_dtx_check(cont->sc_hdl, &dcla->dcla_xid, NULL, NULL, NULL, false);
+	case DTX_COLL_CHECK: {
+		uint32_t ver = dcla->dcla_ver;
+
+		rc = vos_dtx_check(cont->sc_hdl, &dcla->dcla_xid, NULL, &ver, NULL, DCI_RESYNC);
 		if (rc == DTX_ST_INITED) {
 			/*
 			 * For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
@@ -383,6 +385,7 @@ dtx_coll_local_one(void *args)
 					dss_self_rank(), dmi->dmi_tgt_id, DP_RC(rc1));
 		}
 		break;
+	}
 	default:
 		D_ASSERTF(0, "Unknown collective DTX opc %u\n", opc);
 		D_GOTO(out, rc = -DER_NOTSUPPORTED);

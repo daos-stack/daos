@@ -481,6 +481,9 @@ struct vos_dtx_act_ent {
 	/* Back pointer to the DTX handle. */
 	struct dtx_handle		*dae_dth;
 
+	/* The known max version used by DTX check. Abort DTX with older version will be refused. */
+	uint32_t                         dae_known_max_version;
+
 	/* The capacity of dae_oids if it points to new allocated area. */
 	uint32_t                         dae_oid_cap;
 

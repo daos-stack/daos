@@ -648,9 +648,9 @@ dtx_rpc_helper(struct dss_chore *chore, bool is_reentrance)
 }
 
 static int
-dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes, uint32_t count,
-	int opc, daos_epoch_t epoch, d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list,
-	bool keep_head, struct dtx_common_args *dca)
+dtx_rpc(struct ds_cont_child *cont, d_list_t *dti_list, struct dtx_entry **dtes, uint32_t count,
+	int opc, daos_epoch_t epoch, uint32_t version, d_list_t *cmt_list, d_list_t *abt_list,
+	d_list_t *act_list, bool keep_head, struct dtx_common_args *dca)
 {
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct dtx_req_rec	*drr;
@@ -673,11 +673,12 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 	dca->dca_dtes = dtes;
 
 	dra = &dca->dca_dra;
-	dra->dra_future = ABT_FUTURE_NULL;
+
+	dra->dra_future   = ABT_FUTURE_NULL;
 	dra->dra_cmt_list = cmt_list;
 	dra->dra_abt_list = abt_list;
 	dra->dra_act_list = act_list;
-	dra->dra_version  = pool->sp_map_version;
+	dra->dra_version  = version;
 	dra->dra_opc      = opc;
 	uuid_copy(dra->dra_po_uuid, pool->sp_uuid);
 	uuid_copy(dra->dra_co_uuid, cont->sc_uuid);
@@ -862,7 +863,8 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	 *	 failed. So here, we let remote participants to commit firstly, if failed, we
 	 *	 will ask the leader to retry the commit until all participants got committed.
 	 */
-	rc = dtx_rpc(cont, NULL, dtes, count, DTX_COMMIT, 0, NULL, NULL, NULL, false, &dca);
+	rc = dtx_rpc(cont, NULL, dtes, count, DTX_COMMIT, 0, cont->sc_pool->spc_map_version, NULL,
+		     NULL, NULL, false, &dca);
 	if (rc > 0 || rc == -DER_NONEXIST || rc == -DER_EXCLUDED || rc == -DER_OOG)
 		rc = 0;
 
@@ -939,15 +941,14 @@ out:
 	return rc != 0 ? rc : rc1;
 }
 
-
 int
-dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
+dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch, uint32_t ver)
 {
 	struct dtx_common_args	dca;
 	int			rc;
 	int			rc1;
 
-	rc = dtx_rpc(cont, NULL, &dte, 1, DTX_ABORT, epoch, NULL, NULL, NULL, false, &dca);
+	rc = dtx_rpc(cont, NULL, &dte, 1, DTX_ABORT, epoch, ver, NULL, NULL, NULL, false, &dca);
 	if (rc > 0 || rc == -DER_NONEXIST)
 		rc = 0;
 
@@ -961,7 +962,7 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	 *	 to resend sometime later.
 	 */
 	if (epoch != 0)
-		rc1 = vos_dtx_abort(cont->sc_hdl, &dte->dte_xid, epoch, dte->dte_ver);
+		rc1 = vos_dtx_abort(cont->sc_hdl, &dte->dte_xid, epoch, ver);
 	else
 		rc1 = vos_dtx_set_flags(cont->sc_hdl, &dte->dte_xid, 1, DTE_CORRUPTED);
 	if (rc1 > 0 || rc1 == -DER_NONEXIST)
@@ -976,8 +977,14 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 int
 dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 {
-	struct dtx_common_args	dca;
-	int			rc;
+	struct dtx_common_args dca;
+	int                    rc;
+	uint32_t               ver = cont->sc_pool->spc_map_version;
+
+	rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, &ver, NULL, DCI_RESYNC);
+	/* Skip the DTX that may has been committed or aborted. */
+	if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
+		return DSHR_IGNORE;
 
 	/* If no other target, then current target is the unique
 	 * one and 'prepared', then related DTX can be committed.
@@ -985,7 +992,8 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	if (dte->dte_mbs->dm_tgt_cnt == 1)
 		return DTX_ST_PREPARED;
 
-	rc = dtx_rpc(cont, NULL, &dte, 1, DTX_CHECK, epoch, NULL, NULL, NULL, false, &dca);
+	rc = dtx_rpc(cont, NULL, &dte, 1, DTX_CHECK, epoch, cont->sc_pool->spc_map_version, NULL,
+		     NULL, NULL, false, &dca);
 
 	D_CDEBUG(rc < 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_TRACE,
 		 "Check DTX "DF_DTI": rc %d\n", DP_DTI(&dte->dte_xid), rc);
@@ -1156,8 +1164,8 @@ next:
 	}
 
 	if (len > 0) {
-		rc = dtx_rpc(cont, &head, NULL, len, DTX_REFRESH, 0, cmt_list, abt_list, act_list,
-			     for_io, &dca);
+		rc = dtx_rpc(cont, &head, NULL, len, DTX_REFRESH, 0, cont->sc_pool->spc_map_version,
+			     cmt_list, abt_list, act_list, for_io, &dca);
 
 		/*
 		 * For IO case, the DTX refresh failure caused by network trouble may be not fatal
@@ -1226,15 +1234,14 @@ next2:
 			 * RPC sponsor. Let's check such case to avoid confused abort failure.
 			 */
 
-			rc1 = vos_dtx_check(cont->sc_hdl, &dsp->dsp_xid,
-					    NULL, NULL, NULL, false);
+			rc1 = vos_dtx_check(cont->sc_hdl, &dsp->dsp_xid, NULL, NULL, NULL,
+					    DCI_DEFAULT);
 			if (rc1 == DTX_ST_COMMITTED || rc1 == DTX_ST_COMMITTABLE ||
 			    rc1 == -DER_NONEXIST) {
 				d_list_del(&dsp->dsp_link);
 				dtx_dsp_free(dsp);
 			} else {
-				rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch,
-						    dsp->dsp_version);
+				rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch, 0);
 				D_ASSERT(rc1 != -DER_NO_PERM);
 
 				if (rc1 == 0 || !for_io) {
@@ -1258,8 +1265,8 @@ next2:
 				d_list_del(&dsp->dsp_link);
 				dtx_dsp_free(dsp);
 			} else if (dsp->dsp_status == -DER_INPROGRESS) {
-				rc1 = vos_dtx_check(cont->sc_hdl, &dsp->dsp_xid,
-						    NULL, NULL, NULL, false);
+				rc1 = vos_dtx_check(cont->sc_hdl, &dsp->dsp_xid, NULL, NULL, NULL,
+						    DCI_DEFAULT);
 				if (rc1 != DTX_ST_COMMITTED && rc1 != DTX_ST_ABORTED &&
 				    rc1 != -DER_NONEXIST) {
 					if (!for_io)
@@ -1297,7 +1304,8 @@ next2:
 		dte.dte_mbs = dsp->dsp_mbs;
 
 		if (for_io) {
-			rc = vos_dtx_check(cont->sc_hdl, &dsp->dsp_xid, NULL, NULL, NULL, false);
+			rc = vos_dtx_check(cont->sc_hdl, &dsp->dsp_xid, NULL, NULL, NULL,
+					   DCI_DEFAULT);
 			switch(rc) {
 			case DTX_ST_COMMITTABLE:
 				dck.oid = dsp->dsp_oid;
@@ -1566,20 +1574,20 @@ dtx_coll_rpc_helper(struct dss_chore *chore, bool is_reentrance)
 
 static int
 dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32_t opc,
-		  daos_epoch_t epoch, struct dtx_coll_rpc_args *dcra)
+		  daos_epoch_t epoch, uint32_t version, struct dtx_coll_rpc_args *dcra)
 {
 	int	rc;
 
-	dcra->dcra_cont = cont;
-	dcra->dcra_xid = dce->dce_xid;
-	dcra->dcra_opc = opc;
-	dcra->dcra_ver = dce->dce_ver;
+	dcra->dcra_cont     = cont;
+	dcra->dcra_xid      = dce->dce_xid;
+	dcra->dcra_opc      = opc;
+	dcra->dcra_ver      = version;
 	dcra->dcra_min_rank = dce->dce_min_rank;
 	dcra->dcra_max_rank = dce->dce_max_rank;
-	dcra->dcra_epoch = epoch;
-	dcra->dcra_ranks = dce->dce_ranks;
-	dcra->dcra_hints = dce->dce_hints;
-	dcra->dcra_hint_sz = dce->dce_hint_sz;
+	dcra->dcra_epoch    = epoch;
+	dcra->dcra_ranks    = dce->dce_ranks;
+	dcra->dcra_hints    = dce->dce_hints;
+	dcra->dcra_hint_sz  = dce->dce_hint_sz;
 
 	dcra->dcra_chore.cho_func     = dtx_coll_rpc_helper;
 	dcra->dcra_chore.cho_priority = 1;
@@ -1640,7 +1648,8 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct d
 	bool				 cos = true;
 
 	if (dce->dce_ranks != NULL)
-		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_COMMIT, 0, &dcra);
+		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_COMMIT, 0,
+				       cont->sc_pool->spc_map_version, &dcra);
 
 	/*
 	 * NOTE: Before committing the DTX on remote participants, we cannot remove the active
@@ -1712,7 +1721,8 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct d
 }
 
 int
-dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch)
+dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch,
+	       uint32_t ver)
 {
 	struct dtx_coll_rpc_args	 dcra = { 0 };
 	int				*results = NULL;
@@ -1723,7 +1733,7 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 	int				 i;
 
 	if (dce->dce_ranks != NULL)
-		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_ABORT, epoch, &dcra);
+		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_ABORT, epoch, ver, &dcra);
 
 	/*
 	 * NOTE: The DTX abort maybe triggered by dtx_leader_end() for timeout on some DTX
@@ -1737,8 +1747,8 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 	if (dce->dce_bitmap != NULL) {
 		clrbit(dce->dce_bitmap, dss_get_module_info()->dmi_tgt_id);
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, epoch,
-					  dce->dce_ver, DTX_COLL_ABORT, dce->dce_bitmap_sz,
-					  dce->dce_bitmap, &results);
+					  ver, DTX_COLL_ABORT, dce->dce_bitmap_sz, dce->dce_bitmap,
+					  &results);
 		if (len < 0) {
 			rc1 = len;
 		} else {
@@ -1758,7 +1768,7 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 	}
 
 	if (epoch != 0)
-		rc2 = vos_dtx_abort(cont->sc_hdl, &dce->dce_xid, epoch, dce->dce_ver);
+		rc2 = vos_dtx_abort(cont->sc_hdl, &dce->dce_xid, epoch, ver);
 	else
 		rc2 = vos_dtx_set_flags(cont->sc_hdl, &dce->dce_xid, 1, DTE_CORRUPTED);
 	if (rc2 > 0 || rc2 == -DER_NONEXIST)
@@ -1775,12 +1785,18 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 int
 dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch)
 {
-	struct dtx_coll_rpc_args	 dcra = { 0 };
-	int				*results = NULL;
-	int				 len;
-	int				 rc = 0;
-	int				 rc1 = 0;
-	int				 i;
+	struct dtx_coll_rpc_args dcra    = {0};
+	int                     *results = NULL;
+	int                      len;
+	int                      rc  = 0;
+	int                      rc1 = 0;
+	int                      i;
+	uint32_t                 ver = cont->sc_pool->spc_map_version;
+
+	rc = vos_dtx_check(cont->sc_hdl, &dce->dce_xid, NULL, &ver, NULL, DCI_RESYNC);
+	/* Skip the DTX that may has been committed or aborted. */
+	if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
+		return DSHR_IGNORE;
 
 	/*
 	 * If no other target, then current target is the unique
@@ -1790,12 +1806,13 @@ dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 		return DTX_ST_PREPARED;
 
 	if (dce->dce_ranks != NULL)
-		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_CHECK, epoch, &dcra);
+		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_CHECK, epoch,
+				       cont->sc_pool->spc_map_version, &dcra);
 
 	if (dce->dce_bitmap != NULL) {
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, epoch,
-					  dce->dce_ver, DTX_COLL_CHECK, dce->dce_bitmap_sz,
-					  dce->dce_bitmap, &results);
+					  cont->sc_pool->spc_map_version, DTX_COLL_CHECK,
+					  dce->dce_bitmap_sz, dce->dce_bitmap, &results);
 		if (len < 0) {
 			rc1 = len;
 		} else {

@@ -127,7 +127,7 @@ vos_dtx_validation(struct dtx_handle *dth);
  *				the DTX's epoch will be saved in it.
  * \param[out] pm_ver		Hold the DTX's pool map version.
  * \param[out] dck		Pointer to the key for CoS cache.
- * \param[in] for_refresh	It is for DTX_REFRESH or not.
+ * \param[in] intent		The purpose for check DTX.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -145,8 +145,8 @@ vos_dtx_validation(struct dtx_handle *dth);
  *			Other negative value if error.
  */
 int
-vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_cos_key *dck, bool for_refresh);
+vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32_t *pm_ver,
+	      struct dtx_cos_key *dck, uint32_t intent);
 
 /**
  * Load participants information for the given DTX.

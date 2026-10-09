@@ -213,12 +213,14 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			dst_iv->riv_global_scan_done, dst_iv->riv_global_done,
 			dst_iv->riv_stable_epoch, dst_iv->riv_global_dtx_resyc_version);
 
-		if (rpt->rt_stable_epoch == 0)
-			rpt->rt_stable_epoch = dst_iv->riv_stable_epoch;
-		else if (rpt->rt_stable_epoch != dst_iv->riv_stable_epoch)
+		if (rpt->rt_stable_epoch == 0) {
+			rpt->rt_stable_epoch           = dst_iv->riv_stable_epoch;
+			rpt->rt_pool->sp_rebuild_epoch = rpt->rt_stable_epoch;
+		} else if (rpt->rt_stable_epoch != dst_iv->riv_stable_epoch) {
 			D_WARN("leader change stable epoch from "DF_U64" to "
 			       DF_U64 "\n", rpt->rt_stable_epoch,
 			       dst_iv->riv_stable_epoch);
+		}
 
 		/* NB: IV refresh can arrive out of order, but rebuild can't revert global done */
 		if (!rpt->rt_global_done)

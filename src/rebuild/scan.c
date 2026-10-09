@@ -300,14 +300,6 @@ rebuild_objects_send_ult(void *data)
 				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 
-	if (rpt->rt_stable_epoch == 0) {
-		rc = rpt_wait_rebuild_epoch(rpt);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed", DP_RB_RPT(rpt));
-			goto out;
-		}
-	}
-
 	D_ALLOC_ARRAY(oids, REBUILD_SEND_LIMIT);
 	if (oids == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -688,16 +680,6 @@ rebuild_obj_ult(void *data)
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 	int                              rc;
 
-	if (rpt->rt_stable_epoch == 0) {
-		rc = rpt_wait_rebuild_epoch(rpt);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed, abort the rebuild",
-				 DP_RB_RPT(rpt));
-			rebuild_obj_record_failure(rpt, rc);
-			goto out;
-		}
-	}
-
 	rc = ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
 			       rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
 			       rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
@@ -706,7 +688,7 @@ rebuild_obj_ult(void *data)
 		DL_ERROR(rc, DF_RB " ds_migrate_object failed", DP_RB_RPT(rpt));
 		rebuild_obj_record_failure(rpt, rc);
 	}
-out:
+
 	rpt_put(rpt);
 	D_FREE(arg);
 }
@@ -930,18 +912,20 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			  vos_iter_type_t type, vos_iter_param_t *iter_param,
 			  void *data, unsigned *acts)
 {
-	struct rebuild_scan_arg		*arg = data;
-	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
-	struct dtx_handle		*dth = NULL;
-	vos_iter_param_t		param = { 0 };
-	struct vos_iter_anchors		anchor = { 0 };
-	daos_handle_t			coh;
-	struct ds_cont_child		*cont_child = NULL;
-	struct dtx_id			dti = { 0 };
-	struct dtx_epoch		epoch = { 0 };
-	daos_unit_oid_t			oid = { 0 };
-	int				snapshot_cnt = 0;
-	int				rc;
+	struct rebuild_scan_arg         *arg    = data;
+	struct rebuild_tgt_pool_tracker *rpt    = arg->rpt;
+	struct dtx_handle               *dth    = NULL;
+	vos_iter_param_t                 param  = {0};
+	struct vos_iter_anchors          anchor = {0};
+	daos_handle_t                    coh;
+	struct ds_cont_child            *cont_child = NULL;
+	struct dtx_id                    dti        = {0};
+	struct dtx_epoch                 epoch      = {0};
+	daos_unit_oid_t                  oid        = {0};
+	daos_epoch_t                     gse;
+	int                              count        = 0;
+	int                              snapshot_cnt = 0;
+	int                              rc;
 
 	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already scanned\n", DP_RB_RPT(rpt),
@@ -949,6 +933,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return 0;
 	}
 
+again:
 	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already destroyed\n",
@@ -960,6 +945,40 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		DL_ERROR(rc, DF_RB " Open container " DF_UUID " failed", DP_RB_RPT(rpt),
 			 DP_UUID(entry->ie_couuid));
 		return rc;
+	}
+
+	gse = vos_cont_get_global_stable_epoch(coh);
+	if (gse < rpt->rt_stable_epoch) {
+		if (++count % 60 == 0)
+			D_WARN("Waiting for global stable epoch " DF_X64
+			       " to exceed rebuild epoch " DF_X64 " on the container " DF_CONT
+			       " for more than %u seconds\n",
+			       gse, rpt->rt_stable_epoch,
+			       DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid), count);
+		/*
+		 * Global stable epoch maybe not refreshed if the container is (being) destroyed.
+		 * Close it (to release reference) before sleep to avoid being blocked for ever.
+		 */
+		vos_cont_close(coh);
+
+		/*
+		 * Usually, the diff between container global stable epoch and rebuild epoch will
+		 * be within 2 minutes unless it is very busy. Let's wait for at most 10 minutes.
+		 */
+		if (count > 600)
+			return -DER_TIMEDOUT;
+
+		dss_sleep(1000);
+
+		if (rpt->rt_abort || rpt->rt_finishing) {
+			D_DEBUG(DB_REBUILD, DF_RB " " DF_UUID " rebuild abort %u/%u.\n",
+				DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid), rpt->rt_abort,
+				rpt->rt_finishing);
+			*acts |= VOS_ITER_CB_ABORT;
+			return 1;
+		}
+
+		goto again;
 	}
 
 	rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
@@ -1143,6 +1162,14 @@ rebuild_scanner(void *data)
 	if (!is_rebuild_scanning_tgt(rpt)) {
 		D_DEBUG(DB_REBUILD, DF_RB " skip scan\n", DP_RB_RPT(rpt));
 		D_GOTO(out, rc = 0);
+	}
+
+	if (rpt->rt_stable_epoch == 0) {
+		rc = rpt_wait_rebuild_epoch(rpt);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_RB " failed to wait for rebuild epoch", DP_RB_RPT(rpt));
+			goto out;
+		}
 	}
 
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG)) {
