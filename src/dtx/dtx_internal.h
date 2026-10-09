@@ -308,11 +308,11 @@ int dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos
 /* clang-format on */
 
 enum dtx_status_handle_result {
-	DSHR_NEED_COMMIT	= 1,
-	DSHR_NEED_RETRY		= 2,
-	DSHR_IGNORE		= 3,
-	DSHR_ABORT_FAILED	= 4,
-	DSHR_CORRUPT		= 5,
+	DSHR_NEED_COMMIT = DTX_ST_MAX + 100,
+	DSHR_NEED_RETRY,
+	DSHR_IGNORE,
+	DSHR_ABORT_FAILED,
+	DSHR_CORRUPT,
 };
 
 enum dtx_rpc_flags {

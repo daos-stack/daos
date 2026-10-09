@@ -285,6 +285,13 @@ enum dtx_flags {
 	DTX_EPOCH_OWNER = (1 << 12),
 };
 
+enum dtx_check_intent {
+	DCI_DEFAULT = 0, /* Only check existence without additional action. */
+	DCI_RESENT  = 1, /* For check resent RPC. */
+	DCI_RESYNC  = 2, /* For DTX resync. */
+	DCI_REFRESH = 3, /* For DTX refresh. */
+};
+
 void
 dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth);
 int
@@ -336,7 +343,8 @@ int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	       struct dtx_cos_key *dcks, int count, bool has_cos);
 
-int dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch);
+int
+    dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch, uint32_t ver);
 
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 
@@ -345,7 +353,8 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct d
 		bool has_cos);
 
 int
-dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch);
+    dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch,
+		   uint32_t ver);
 
 /**
  * Check whether the given DTX is resent one or not.

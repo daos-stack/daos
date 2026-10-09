@@ -253,8 +253,8 @@ dtx_handler(crt_rpc_t *rpc)
 		if (din->di_dtx_array.ca_count != 1)
 			D_GOTO(out, rc = -DER_PROTO);
 
-		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				   NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays, NULL,
+				   &din->di_version, NULL, DCI_RESYNC);
 		if (rc == DTX_ST_INITED) {
 			/* For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
 			 * return 'DTX_ST_INITED' to avoid interoperability trouble if related
@@ -299,7 +299,7 @@ dtx_handler(crt_rpc_t *rpc)
 			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
 			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &din->di_version, &dcks[i],
-					     true);
+					     DCI_REFRESH);
 			if (*ptr == -DER_NONEXIST && !(flags[i] & DRF_INITIAL_LEADER)) {
 				struct dtx_stat		stat = { 0 };
 

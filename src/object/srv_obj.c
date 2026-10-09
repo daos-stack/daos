@@ -2803,7 +2803,9 @@ obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, ui
 			D_GOTO(out, rc = -DER_INPROGRESS);
 
 		/* Abort it if exist but with different epoch, then re-execute with new epoch. */
-		rc = vos_dtx_abort(coh, dti, e, ver);
+		rc = vos_dtx_abort(coh, dti, e, pm_ver);
+		if (unlikely(rc == -DER_NO_PERM))
+			D_GOTO(out, rc = -DER_STALE);
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 		/* Fall through */
@@ -3004,6 +3006,18 @@ comp:
 	return ds_obj_remote_update(dlh, arg, idx, comp_cb);
 }
 
+static inline int
+check_rebuild_race(struct ds_cont_child *cont, daos_epoch_t epoch)
+{
+	if (unlikely(cont->sc_pool->spc_pool->sp_rebuild_epoch >= epoch)) {
+		D_DEBUG(DB_IO, "Race with rebuild " DF_X64 " vs " DF_X64 ", client will retry.\n",
+			cont->sc_pool->spc_pool->sp_rebuild_epoch, epoch);
+		return -DER_UPDATE_AGAIN;
+	}
+
+	return 0;
+}
+
 /* Nonnegative return codes of process_epoch */
 enum process_epoch_rc {
 	PE_OK_REMOTE,	/* OK and epoch chosen remotely */
@@ -3198,6 +3212,12 @@ again:
 		D_GOTO(out, rc);
 	}
 
+	if (!daos_is_zero_dti(&orw->orw_dti) && !(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(ioc.ioc_coc, orw->orw_epoch);
+		if (rc != 0)
+			goto out;
+	}
+
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
 	 * CoS (committable) cache, piggyback them via the dispdatched
@@ -3235,9 +3255,10 @@ again:
 			      &orw->orw_oid, dti_cos, dti_cos_cnt, tgts, tgt_cnt, dtx_flags, mbs,
 			      NULL /* dce */, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": Failed to start DTX for update " DF_RC "\n",
-			DP_UOID(orw->orw_oid), DP_RC(rc));
-		D_GOTO(out, rc);
+		DL_CDEBUG(rc == -DER_TX_RESTART, DB_IO, DLOG_ERR, rc,
+			  "Failed to start DTX " DF_DTI " for update " DF_UOID,
+			  DP_DTI(&orw->orw_dti), DP_UOID(orw->orw_oid));
+		D_GOTO(out, rc = (rc == -DER_TX_RESTART ? -DER_INPROGRESS : rc));
 	}
 
 	exec_arg.rpc = rpc;
@@ -3316,7 +3337,7 @@ out:
 		dte.dte_refs = 1;
 		dte.dte_mbs  = mbs;
 
-		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&orw->orw_dti), DP_RC(rc1));
@@ -4126,6 +4147,12 @@ again:
 		goto cleanup;
 	}
 
+	if (!(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(ioc.ioc_coc, opi->opi_epoch);
+		if (rc != 0)
+			goto out;
+	}
+
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
 	 * CoS (committable) cache, piggyback them via the dispdatched
@@ -4163,9 +4190,10 @@ again:
 			      &opi->opi_oid, dti_cos, dti_cos_cnt, tgts, tgt_cnt, dtx_flags, mbs,
 			      NULL /* dce */, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": Failed to start DTX for punch " DF_RC "\n",
-			DP_UOID(opi->opi_oid), DP_RC(rc));
-		D_GOTO(out, rc);
+		DL_CDEBUG(rc == -DER_TX_RESTART, DB_IO, DLOG_ERR, rc,
+			  "Failed to start DTX " DF_DTI " for punch " DF_UOID,
+			  DP_DTI(&opi->opi_dti), DP_UOID(opi->opi_oid));
+		D_GOTO(out, rc = (rc == -DER_TX_RESTART ? -DER_INPROGRESS : rc));
 	}
 
 	exec_arg.rpc = rpc;
@@ -4238,7 +4266,7 @@ out:
 		dte.dte_refs = 1;
 		dte.dte_mbs  = mbs;
 
-		rc1 = dtx_abort(ioc.ioc_coc, &dte, opi->opi_epoch);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, opi->opi_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&opi->opi_dti), DP_RC(rc1));
@@ -5345,6 +5373,12 @@ again:
 		D_GOTO(out, rc = 0);
 	}
 
+	if (!(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(dca->dca_ioc->ioc_coc, dcsh->dcsh_epoch.oe_value);
+		if (rc != 0)
+			goto out;
+	}
+
 	dcde = ds_obj_cpd_get_ents(dca->dca_rpc, dca->dca_idx, 0);
 	dcsrs = ds_obj_cpd_get_reqs(dca->dca_rpc, dca->dca_idx);
 	tgts = ds_obj_cpd_get_tgts(dca->dca_rpc, dca->dca_idx);
@@ -5411,7 +5445,9 @@ out:
 		dte.dte_ver = oci->oci_map_ver;
 		dte.dte_refs = 1;
 		dte.dte_mbs = dcsh->dcsh_mbs;
-		rc1 = dtx_abort(dca->dca_ioc->ioc_coc, &dte, dcsh->dcsh_epoch.oe_value);
+
+		rc1 = dtx_abort(dca->dca_ioc->ioc_coc, &dte, dcsh->dcsh_epoch.oe_value,
+				oci->oci_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&dcsh->dcsh_xid), DP_RC(rc1));
@@ -5936,6 +5972,12 @@ again:
 			D_GOTO(out, rc = 0);
 	}
 
+	if (leader && !(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(ioc.ioc_coc, ocpi->ocpi_epoch);
+		if (rc != 0)
+			goto out;
+	}
+
 	epoch.oe_value = ocpi->ocpi_epoch;
 	epoch.oe_first = epoch.oe_value;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(ocpi->ocpi_flags);
@@ -5961,9 +6003,10 @@ again:
 			      NULL /* tgts */, exec_arg.coll_cur.grp_nr /* tgt_cnt */, dtx_flags,
 			      odm->odm_mbs, dce, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": Failed to start DTX for collective punch: "DF_RC"\n",
-			DP_UOID(ocpi->ocpi_oid), DP_RC(rc));
-		D_GOTO(out, rc);
+		DL_CDEBUG(rc == -DER_TX_RESTART, DB_IO, DLOG_ERR, rc,
+			  "Failed to start DTX " DF_DTI " for collective punch " DF_UOID,
+			  DP_DTI(&odm->odm_xid), DP_UOID(ocpi->ocpi_oid));
+		D_GOTO(out, rc = (rc == -DER_TX_RESTART ? -DER_INPROGRESS : rc));
 	}
 
 	/* Execute the operation on all shards */
@@ -5995,7 +6038,7 @@ again:
 
 out:
 	if (rc != 0 && need_abort) {
-		rc1 = dtx_coll_abort(ioc.ioc_coc, dce, ocpi->ocpi_epoch);
+		rc1 = dtx_coll_abort(ioc.ioc_coc, dce, ocpi->ocpi_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to collective abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&ocpi->ocpi_xid), DP_RC(rc1));
@@ -6136,7 +6179,7 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 			      NULL /* tgts */, exec_arg.coll_cur.grp_nr /* tgt_cnt */,
 			      DTX_TGT_COLL | DTX_RELAY, NULL /* mbs */, &dce, &dlh);
 	if (rc != 0)
-		goto out;
+		D_GOTO(out, rc = (rc == -DER_TX_RESTART ? -DER_INPROGRESS : rc));
 
 	rc = dtx_leader_exec_ops(dlh, obj_coll_query_disp, obj_coll_query_agg_cb, -DER_NONEXIST,
 				 &exec_arg);
