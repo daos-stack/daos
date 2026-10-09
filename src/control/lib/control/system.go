@@ -679,6 +679,13 @@ type SystemEraseReq struct {
 	msRequest
 	unaryRequest
 	retryableRequest
+	// Forwarded indicates that this request is being sent by the MS leader directly to
+	// an MS replica peer (see mgmtSvc.eraseReplicas()), rather than being an external
+	// admin-initiated request. When set, the expanded MS-unavailability retry criteria
+	// below are skipped, so that a forwarding leader doesn't block for the full context
+	// timeout retrying against a peer that has already wiped its own DB and may be
+	// mid-restart or briefly unreachable.
+	Forwarded bool
 }
 
 // SystemEraseResp contains the results of a system erase request.
@@ -757,12 +764,24 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 	// retry behavior used by SystemQuery/SystemJoin/SystemSelfHealEval for the same
 	// MS-unavailability windows.
 	//
+	// This expanded criteria only applies to external (non-forwarded) requests. When
+	// Forwarded is set (i.e. this is the MS leader calling a specific replica peer
+	// directly, see mgmtSvc.eraseReplicas()), the peer has already wiped its own DB by
+	// the time it acks, so there's no "wait for a new leader to be elected" scenario to
+	// retry through; retrying here would instead just block the forwarding leader for
+	// the full context timeout against a peer that is restarting or unreachable. The
+	// caller already handles that case directly (see eraseReplicas()'s own
+	// IsRetryableConnErr() check on the one-shot result).
+	//
 	// NB: Deliberately no retryFn is set here. Setting one causes rpc.go's retry loop to treat
 	// the very first retryable error as terminal: canRetry() is consulted before the loop's
 	// per-error-type handling, so a non-nil retryFn return aborts immediately instead of
 	// allowing exponential backoff and a resend. Leaving retryFn nil lets onRetry() fall
 	// through (errNoRetryHandler) to that normal backoff-and-retry handling.
 	req.retryTestFn = func(err error, _ uint) bool {
+		if req.Forwarded {
+			return false
+		}
 		return system.IsUnavailable(err) || IsRetryableConnErr(err) ||
 			system.IsNotLeader(err) || system.IsNotReplica(err)
 	}
