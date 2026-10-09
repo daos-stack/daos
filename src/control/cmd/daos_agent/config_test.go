@@ -1,6 +1,7 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -132,7 +133,7 @@ exclude_fabric_ifaces: ["ib3"]
 				RuntimeDir:       "/tmp/runtime",
 				LogFile:          "/home/frodo/logfile",
 				LogLevel:         common.DefaultControlLogLevel,
-				CredentialConfig: &security.CredentialConfig{},
+				CredentialConfig: &security.CredentialConfig{NodeCertDir: security.DefaultNodeCertDir},
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
@@ -160,6 +161,7 @@ exclude_fabric_ifaces: ["ib3"]
 				CacheExpiration:  refreshMinutes(30 * time.Minute),
 				DisableAutoEvict: true,
 				CredentialConfig: &security.CredentialConfig{
+					NodeCertDir:     security.DefaultNodeCertDir,
 					CacheExpiration: time.Minute * 10,
 					ClientUserMap: map[uint32]*security.MappedClientUser{
 						1000: {
@@ -292,6 +294,16 @@ telemetry_disabled_procs: ""
 telemetry_retain: foo
 `,
 			expErr: errors.New("time.Duration"),
+		},
+		"custom node cert dir": {
+			input: `
+credential_config:
+  node_cert_dir: /custom/certs
+`,
+			expCfg: cfgWith(DefaultConfig(), func(cfg *Config) *Config {
+				cfg.CredentialConfig.NodeCertDir = "/custom/certs"
+				return cfg
+			}),
 		},
 		"minimal telemetry config": {
 			input: `

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -356,6 +357,24 @@ func TestPublicKey(t *testing.T) {
 	}
 }
 
+func TestSecurity_TransportConfig_Validate(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg    *TransportConfig
+		expErr error
+	}{
+		"nil":                 {nil, errors.New("nil TransportConfig")},
+		"default":             {DefaultServerTransportConfig(), nil},
+		"zero skew":           {&TransportConfig{}, nil},
+		"negative skew":       {&TransportConfig{CertificateConfig: CertificateConfig{CertMaxClockSkew: -time.Second}}, errors.New("must not be negative")},
+		"sub-second skew":     {&TransportConfig{CertificateConfig: CertificateConfig{CertMaxClockSkew: 300}}, errors.New("below 1s")},
+		"one second boundary": {&TransportConfig{CertificateConfig: CertificateConfig{CertMaxClockSkew: time.Second}}, nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
+		})
+	}
+}
+
 func TestSecurity_DefaultTransportConfigs(t *testing.T) {
 	for name, tc := range map[string]struct {
 		genTransportConfig func() *TransportConfig
@@ -365,11 +384,12 @@ func TestSecurity_DefaultTransportConfigs(t *testing.T) {
 			genTransportConfig: DefaultClientTransportConfig,
 			expResult: &TransportConfig{
 				CertificateConfig: CertificateConfig{
-					ServerName:      defaultServer,
-					CARootPath:      defaultCACert,
-					CertificatePath: defaultAdminCert,
-					PrivateKeyPath:  defaultAdminKey,
-					maxKeyPerms:     MaxGroupKeyPerm,
+					ServerName:       defaultServer,
+					CARootPath:       defaultCACert,
+					CertificatePath:  defaultAdminCert,
+					PrivateKeyPath:   defaultAdminKey,
+					CertMaxClockSkew: DefaultCertMaxClockSkew,
+					maxKeyPerms:      MaxGroupKeyPerm,
 				},
 			},
 		},
@@ -377,11 +397,12 @@ func TestSecurity_DefaultTransportConfigs(t *testing.T) {
 			genTransportConfig: DefaultAgentTransportConfig,
 			expResult: &TransportConfig{
 				CertificateConfig: CertificateConfig{
-					ServerName:      defaultServer,
-					CARootPath:      defaultCACert,
-					CertificatePath: defaultAgentCert,
-					PrivateKeyPath:  defaultAgentKey,
-					maxKeyPerms:     MaxUserOnlyKeyPerm,
+					ServerName:       defaultServer,
+					CARootPath:       defaultCACert,
+					CertificatePath:  defaultAgentCert,
+					PrivateKeyPath:   defaultAgentKey,
+					CertMaxClockSkew: DefaultCertMaxClockSkew,
+					maxKeyPerms:      MaxUserOnlyKeyPerm,
 				},
 			},
 		},
@@ -389,12 +410,13 @@ func TestSecurity_DefaultTransportConfigs(t *testing.T) {
 			genTransportConfig: DefaultServerTransportConfig,
 			expResult: &TransportConfig{
 				CertificateConfig: CertificateConfig{
-					ServerName:      defaultServer,
-					CARootPath:      defaultCACert,
-					ClientCertDir:   defaultClientCertDir,
-					CertificatePath: defaultServerCert,
-					PrivateKeyPath:  defaultServerKey,
-					maxKeyPerms:     MaxUserOnlyKeyPerm,
+					ServerName:       defaultServer,
+					CARootPath:       defaultCACert,
+					ClientCertDir:    defaultClientCertDir,
+					CertificatePath:  defaultServerCert,
+					PrivateKeyPath:   defaultServerKey,
+					CertMaxClockSkew: DefaultCertMaxClockSkew,
+					maxKeyPerms:      MaxUserOnlyKeyPerm,
 				},
 			},
 		},
