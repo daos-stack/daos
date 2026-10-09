@@ -258,6 +258,20 @@ void
 vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags);
 
 /**
+ * Check for non-committable DTXs with a live handle or preparation in progress.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param ver	[IN]	Exclusive upper bound on the DTX pool map version.
+ *
+ * Detached prepared DTXs are recovered by resync, not waited on here.
+ * Corrupted and orphan entries are excluded, as in normal resync.
+ *
+ * \return		True if an older-map DTX is still executing.
+ */
+bool
+vos_dtx_has_inprogress(daos_handle_t coh, uint32_t ver);
+
+/**
  * Notify lower layer that DTX resync has been done.
  *
  * \param coh	[IN]	Container open handle.
