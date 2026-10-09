@@ -20,6 +20,9 @@ import "ctl/common.proto";
 message StorageScanReq {
 	ScanNvmeReq nvme = 1;
 	ScanScmReq scm = 2;
+	// DAOS-18835: Skip PMem scan when using tmpfs SCM or MD-on-SSD mode
+	bool use_tmpfs_scm = 3;
+	string ext_metadata_path = 4;
 }
 
 message MemInfo {

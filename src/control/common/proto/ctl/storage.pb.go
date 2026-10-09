@@ -29,11 +29,14 @@ const (
 )
 
 type StorageScanReq struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Nvme          *ScanNvmeReq           `protobuf:"bytes,1,opt,name=nvme,proto3" json:"nvme,omitempty"`
-	Scm           *ScanScmReq            `protobuf:"bytes,2,opt,name=scm,proto3" json:"scm,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Nvme  *ScanNvmeReq           `protobuf:"bytes,1,opt,name=nvme,proto3" json:"nvme,omitempty"`
+	Scm   *ScanScmReq            `protobuf:"bytes,2,opt,name=scm,proto3" json:"scm,omitempty"`
+	// DAOS-18835: Skip PMem scan when using tmpfs SCM or MD-on-SSD mode
+	UseTmpfsScm     bool   `protobuf:"varint,3,opt,name=use_tmpfs_scm,json=useTmpfsScm,proto3" json:"use_tmpfs_scm,omitempty"`
+	ExtMetadataPath string `protobuf:"bytes,4,opt,name=ext_metadata_path,json=extMetadataPath,proto3" json:"ext_metadata_path,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *StorageScanReq) Reset() {
@@ -78,6 +81,20 @@ func (x *StorageScanReq) GetScm() *ScanScmReq {
 		return x.Scm
 	}
 	return nil
+}
+
+func (x *StorageScanReq) GetUseTmpfsScm() bool {
+	if x != nil {
+		return x.UseTmpfsScm
+	}
+	return false
+}
+
+func (x *StorageScanReq) GetExtMetadataPath() string {
+	if x != nil {
+		return x.ExtMetadataPath
+	}
+	return ""
 }
 
 type MemInfo struct {
@@ -656,10 +673,12 @@ var File_ctl_storage_proto protoreflect.FileDescriptor
 
 const file_ctl_storage_proto_rawDesc = "" +
 	"\n" +
-	"\x11ctl/storage.proto\x12\x03ctl\x1a\x16ctl/storage_nvme.proto\x1a\x15ctl/storage_scm.proto\x1a\x10ctl/common.proto\"Y\n" +
+	"\x11ctl/storage.proto\x12\x03ctl\x1a\x16ctl/storage_nvme.proto\x1a\x15ctl/storage_scm.proto\x1a\x10ctl/common.proto\"\xa9\x01\n" +
 	"\x0eStorageScanReq\x12$\n" +
 	"\x04nvme\x18\x01 \x01(\v2\x10.ctl.ScanNvmeReqR\x04nvme\x12!\n" +
-	"\x03scm\x18\x02 \x01(\v2\x0f.ctl.ScanScmReqR\x03scm\"\x90\x02\n" +
+	"\x03scm\x18\x02 \x01(\v2\x0f.ctl.ScanScmReqR\x03scm\x12\"\n" +
+	"\ruse_tmpfs_scm\x18\x03 \x01(\bR\vuseTmpfsScm\x12*\n" +
+	"\x11ext_metadata_path\x18\x04 \x01(\tR\x0fextMetadataPath\"\x90\x02\n" +
 	"\aMemInfo\x12&\n" +
 	"\x0fnuma_node_index\x18\x01 \x01(\rR\rnumaNodeIndex\x12'\n" +
 	"\x0fhugepages_total\x18\x02 \x01(\x04R\x0ehugepagesTotal\x12%\n" +
