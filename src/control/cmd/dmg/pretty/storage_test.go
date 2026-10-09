@@ -1340,7 +1340,7 @@ Format Status:
 						{Instanceidx: 0, AwaitingFormat: false, State: "Stopped"},
 						{Instanceidx: 1, AwaitingFormat: false, State: "ServerStarting"},
 						{Instanceidx: 2, AwaitingFormat: true, State: "AwaitingFormat"},
-						{Instanceidx: 3, AwaitingFormat: false, State: "EngineStarting"},
+						{Instanceidx: 3, AwaitingFormat: false, State: "EnginesStarting"},
 						{Instanceidx: 4, AwaitingFormat: false, State: "Ready"},
 					},
 				}
@@ -1351,13 +1351,13 @@ Format Status:
 			}(),
 			expPrintStr: `
 Format Status:
-  Hosts Engine Awaiting Format State          
-  ----- ------ --------------- -----          
-  host1 0      false           Stopped        
-  host1 1      false           ServerStarting 
-  host1 2      true            AwaitingFormat 
-  host1 3      false           EngineStarting 
-  host1 4      false           Ready          
+  Hosts Engine Awaiting Format State           
+  ----- ------ --------------- -----           
+  host1 0      false           Stopped         
+  host1 1      false           ServerStarting  
+  host1 2      true            AwaitingFormat  
+  host1 3      false           EnginesStarting 
+  host1 4      false           Ready           
 `,
 		},
 	} {

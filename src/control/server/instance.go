@@ -193,7 +193,7 @@ func (ei *EngineInstance) LocalState() system.MemberState {
 //     awaitStorageReady()).
 //   - AwaitingFormat: format is required and the instance is blocked
 //     waiting for an administrator to trigger it.
-//   - EngineStarting: format is no longer required/awaited and the engine
+//   - EnginesStarting: format is no longer required/awaited and the engine
 //     process has been started, but it has not yet reported ready (this
 //     bucket also covers formatting carried out internally by the engine
 //     process itself, which the control plane cannot currently observe).
@@ -203,7 +203,7 @@ func (ei *EngineInstance) LocalFormatState() string {
 	case ei.IsReady():
 		return "Ready"
 	case ei.IsStarted():
-		return "EngineStarting"
+		return "EnginesStarting"
 	case ei.isAwaitingFormat():
 		return "AwaitingFormat"
 	case ei.isServerStarting():

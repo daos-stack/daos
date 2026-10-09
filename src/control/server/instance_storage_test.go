@@ -566,7 +566,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 // reported by LocalFormatState():
 // Stopped (before anything starts) -> ServerStarting (format-readiness check
 // underway) -> AwaitingFormat (blocked waiting for admin to trigger format)
-// -> EngineStarting (once the engine process has been started, following
+// -> EnginesStarting (once the engine process has been started, following
 // NotifyStorageReady()) -> Ready.
 func TestIOEngineInstance_localStateTransitions(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
@@ -649,8 +649,8 @@ func TestIOEngineInstance_localStateTransitions(t *testing.T) {
 		t.Fatalf("runner.Start() failed: %s", err)
 	}
 
-	if state := ei.LocalFormatState(); state != "EngineStarting" {
-		t.Fatalf("expected EngineStarting once engine process is running, got %s", state)
+	if state := ei.LocalFormatState(); state != "EnginesStarting" {
+		t.Fatalf("expected EnginesStarting once engine process is running, got %s", state)
 	}
 	if state := ei.LocalState(); state != system.MemberStateStarting {
 		t.Fatalf("expected MemberStateStarting, got %s", state)
