@@ -3513,7 +3513,8 @@ migrate_obj_ult(void *data)
 		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child);
 		if (cont_child != NULL && !cont_child->sc_stopping) {
 			if (vos_oi_exist(cont_child->sc_hdl, arg->oid)) {
-				stable_epoch = vos_cont_get_global_stable_epoch(cont_child->sc_hdl);
+				/* For old backend, the stable epoch will always be zero. */
+				vos_cont_get_global_stable_epoch(cont_child->sc_hdl, &stable_epoch);
 			} else {
 				/* If the object does not exist on the local target at all,
 				 * it is either created after stable epoch or migrated to this
