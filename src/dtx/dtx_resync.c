@@ -87,7 +87,7 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before current commit.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, DCI_DEFAULT);
 
 		/*
 		 * Skip this DTX since it has been committed or aggregated.
@@ -240,6 +240,8 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		rc = dtx_check(cont, dte, epoch);
 	}
 	switch (rc) {
+	case DSHR_IGNORE:
+		goto out;
 	case DTX_ST_COMMITTED:
 	case DTX_ST_COMMITTABLE:
 		/* The DTX has been committed on some remote replica(s),
@@ -282,9 +284,9 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 			 *	dtx_abort() with 0 @epoch.
 			 */
 			if (mbs->dm_flags & DMF_COLL_TARGET)
-				rc = dtx_coll_abort(cont, dce, 0);
+				rc = dtx_coll_abort(cont, dce, 0, 0);
 			else
-				rc = dtx_abort(cont, dte, 0);
+				rc = dtx_abort(cont, dte, 0, 0);
 			if (rc < 0 && err != NULL)
 				*err = rc;
 
@@ -298,7 +300,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before next action.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, DCI_DEFAULT);
 
 		/* Skip the DTX that may has been committed or aborted. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -326,9 +328,9 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * abort the DTXs one by one, not batched.
 		 */
 		if (mbs->dm_flags & DMF_COLL_TARGET)
-			rc = dtx_coll_abort(cont, dce, epoch);
+			rc = dtx_coll_abort(cont, dce, epoch, cont->sc_pool->spc_map_version);
 		else
-			rc = dtx_abort(cont, dte, epoch);
+			rc = dtx_abort(cont, dte, epoch, cont->sc_pool->spc_map_version);
 
 		DL_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, rc,
 			  "As new leader for DTX " DF_DTI ", abort it (2)", DP_DTI(&dte->dte_xid));

@@ -959,10 +959,10 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 	dth->dth_dkey_hash       = 0;
 
 	if (!(flags & DTX_LOCAL)) {
-		if (daos_is_zero_dti(dti))
-			return 0;
-
 		if (!dtx_epoch_chosen(epoch)) {
+			if (daos_is_zero_dti(dti))
+				return 0;
+
 			D_ERROR("initializing DTX " DF_DTI " with invalid epoch: value=" DF_U64
 				" first=" DF_U64 " flags=%x\n",
 				DP_DTI(dti), epoch->oe_value, epoch->oe_first, epoch->oe_flags);
@@ -970,6 +970,9 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 		}
 		dth->dth_epoch       = epoch->oe_value;
 		dth->dth_epoch_bound = dtx_epoch_bound(epoch);
+
+		if (daos_is_zero_dti(dti))
+			return 0;
 	}
 
 	rc = vos_dtx_rsrvd_init(dth);
@@ -1328,9 +1331,9 @@ abort:
 		 */
 		vos_dtx_cleanup(dth, true);
 		if (dlh->dlh_coll)
-			dtx_coll_abort(cont, dlh->dlh_coll_entry, dth->dth_epoch);
+			dtx_coll_abort(cont, dlh->dlh_coll_entry, dth->dth_epoch, dth->dth_ver);
 		else
-			dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
+			dtx_abort(cont, &dth->dth_dte, dth->dth_epoch, dth->dth_ver);
 		aborted = true;
 	}
 
@@ -1870,7 +1873,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, false);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, DCI_RESENT);
 	switch (rc) {
 	case DTX_ST_INITED:
 		return -DER_INPROGRESS;

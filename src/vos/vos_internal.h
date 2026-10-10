@@ -483,6 +483,8 @@ struct vos_dtx_act_ent {
 
 	/* The capacity of dae_oids if it points to new allocated area. */
 	uint32_t                         dae_oid_cap;
+	/* The known max version used by DTX check. Abort DTX with old version will be refused. */
+	uint32_t                         dae_known_max_version;
 
 	unsigned int			 dae_committable:1,
 					 dae_committing:1,
