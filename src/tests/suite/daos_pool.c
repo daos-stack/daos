@@ -2352,6 +2352,9 @@ reconf_notleader_handling(void **state)
 	assert_ptr_not_equal(prop, NULL);
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_SVC_REDUN_FAC;
 	prop->dpp_entries[0].dpe_val  = 1;
+	/* Then we no longer use the potentially conflicting arg->pool.svc. */
+	d_rank_list_free(arg->pool.svc);
+	arg->pool.svc = NULL;
 	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
