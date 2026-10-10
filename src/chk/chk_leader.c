@@ -1750,9 +1750,9 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 			}
 
 			rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list,
-						clp[i].clp_uuid, CHK_LEADER_RANK, false,
-						NULL /* bookmark */, ins, NULL /* shard_nr */,
-						NULL /* data */, NULL, &cpr);
+						clp[i].clp_uuid, CHK_LEADER_RANK,
+						0 /* useless status */, NULL /* bookmark */, ins,
+						NULL /* shard_nr */, NULL /* data */, NULL, &cpr);
 			if (rc != 0) {
 				D_ERROR("Failed to create record for dangling pool "
 					DF_UUIDF" with %s: "DF_RC"\n", DP_UUID(clp[i].clp_uuid),
@@ -1983,6 +1983,8 @@ chk_leader_pool_ult(void *arg)
 
 	if (cbk->cb_phase < CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST) {
 		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST;
+		/* QUEST: How to estimate the left time? */
+		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		rc = chk_bk_update_pool(cbk, uuid_str);
 		if (rc != 0) {
 			cpr->cpr_skip = 1;
@@ -2039,6 +2041,8 @@ start:
 
 	if (cbk->cb_phase < CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS) {
 		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS;
+		/* QUEST: How to estimate the left time? */
+		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		rc = chk_bk_update_pool(cbk, uuid_str);
 		if (rc != 0) {
 			cpr->cpr_skip = 1;
@@ -2057,7 +2061,8 @@ out:
 	/* For stop case, the pool status will be updated via chk_pool_stop_one() by the sponsor. */
 	if ((rc < 0 || cpr->cpr_skip) && !cpr->cpr_notified_exit && !cpr->cpr_stop) {
 		if (rc < 0) {
-			cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_FAILED;
+			cbk->cb_pool_status       = CHK__CHECK_POOL_STATUS__CPS_FAILED;
+			cbk->cb_time.ct_stop_time = time(NULL);
 			chk_bk_update_pool(cbk, uuid_str);
 			iv.ci_pool_status = CHK__CHECK_POOL_STATUS__CPS_FAILED;
 		} else {
@@ -2803,8 +2808,8 @@ chk_leader_start_cb(struct chk_co_rpc_cb_args *cb_args)
 			goto out;
 
 		rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, clue->pc_uuid,
-					clue->pc_rank, false, NULL, ins, NULL, clue,
-					chk_leader_free_clue, NULL);
+					clue->pc_rank, 0 /* useless status */, NULL, ins, NULL,
+					clue, chk_leader_free_clue, NULL);
 		if (rc != 0) {
 			chk_leader_free_clue(clue);
 			goto out;
@@ -3184,10 +3189,9 @@ chk_leader_query_cb(struct chk_co_rpc_cb_args *cb_args)
 		if (rc != 0)
 			goto out;
 
-		rc = chk_pool_add_shard(
-		    cqa->cqa_hdl, &cqa->cqa_list, shard->cqps_uuid, shard->cqps_rank,
-		    shard->cqps_status == CHK__CHECK_POOL_STATUS__CPS_PENDING, NULL, cqa->cqa_ins,
-		    &cqa->cqa_count, shard, chk_leader_free_shard, NULL);
+		rc = chk_pool_add_shard(cqa->cqa_hdl, &cqa->cqa_list, shard->cqps_uuid,
+					shard->cqps_rank, shard->cqps_status, NULL, cqa->cqa_ins,
+					&cqa->cqa_count, shard, chk_leader_free_shard, NULL);
 		if (rc != 0) {
 			chk_leader_free_shard(shard);
 			goto out;
@@ -3235,6 +3239,54 @@ chk_cqa_free(struct chk_query_args *cqa)
 	}
 }
 
+static int
+chk_leader_query_pool(uuid_t uuid, void *args)
+{
+	struct chk_query_args       *cqa   = args;
+	struct chk_instance         *ins   = cqa->cqa_ins;
+	struct chk_query_pool_shard *shard = NULL;
+	struct chk_bookmark          cbk;
+	char                         uuid_str[DAOS_UUID_STR_SIZE];
+	int                          rc;
+
+	D_ALLOC_PTR(shard);
+	if (shard == NULL)
+		return -DER_NOMEM;
+
+	chk_uuid_unparse(ins, uuid, uuid_str);
+	rc = chk_bk_fetch_pool(&cbk, uuid_str);
+	if (rc == -DER_NONEXIST) {
+		rc = ds_mgmt_pool_exist(uuid);
+		if (rc <= 0)
+			goto out;
+
+		shard->cqps_status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
+		shard->cqps_phase  = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
+	} else if (rc != 0) {
+		goto out;
+	} else {
+		shard->cqps_status = cbk.cb_pool_status;
+		shard->cqps_phase  = cbk.cb_phase;
+		shard->cqps_time   = cbk.cb_time;
+	}
+
+	shard->cqps_rank = CHK_LEADER_RANK;
+	uuid_copy(shard->cqps_uuid, uuid);
+
+	rc = chk_pool_add_shard(cqa->cqa_hdl, &cqa->cqa_list, uuid, CHK_LEADER_RANK,
+				shard->cqps_status, NULL, ins, &cqa->cqa_count, shard,
+				chk_leader_free_shard, NULL);
+
+out:
+	if (rc != 0) {
+		D_ERROR(DF_LEADER " failed to add pool " DF_UUID " for query " DF_RC "\n",
+			DP_LEADER(ins), DP_UUID(uuid), DP_RC(rc));
+		D_FREE(shard);
+	}
+
+	return rc;
+}
+
 int
 chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 		 chk_query_pool_cb_t pool_cb, void *buf)
@@ -3245,10 +3297,6 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 	struct chk_pool_rec         *cpr;
 	struct chk_pool_shard       *cps;
 	struct chk_query_pool_shard *shard;
-	struct chk_bookmark          tmp;
-	d_iov_t                      kiov;
-	d_iov_t                      riov;
-	char                         uuid_str[DAOS_UUID_STR_SIZE];
 	uint64_t                     gen = cbk->cb_gen;
 	uint32_t                     idx = 0;
 	uint32_t                     status;
@@ -3258,7 +3306,6 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 	int                          wait_cnt = 0;
 	int                          rc;
 	int                          i;
-	bool                         skip;
 
 	CHK_IS_READY(ins);
 
@@ -3328,38 +3375,11 @@ again:
 		goto again;
 	}
 
-	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
-		/*
-		 * For non-dangling pool, the check engine will return related pool shards
-		 * information, and then merge with the check leader owned information via
-		 * the subsequent chk_pool_merge_status().
-		 */
-		if (!cpr->cpr_dangling)
-			continue;
-
-		skip = false;
-		if (pool_nr != 0) {
-			skip = true;
-			for (i = 0; i < pool_nr && skip; i++) {
-				if (uuid_compare(cpr->cpr_uuid, pools[i]) == 0)
-					skip = false;
-			}
-		}
-
-		if (!skip) {
-			D_ALLOC_PTR(shard);
-			if (shard == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-
-			uuid_copy(shard->cqps_uuid, cpr->cpr_uuid);
-			shard->cqps_status = cpr->cpr_bk.cb_pool_status;
-			shard->cqps_phase = cpr->cpr_bk.cb_phase;
-			shard->cqps_rank = CHK_LEADER_RANK;
-
-			rc = chk_pool_add_shard(
-			    cqa->cqa_hdl, &cqa->cqa_list, cpr->cpr_uuid, CHK_LEADER_RANK,
-			    shard->cqps_status == CHK__CHECK_POOL_STATUS__CPS_PENDING, NULL, ins,
-			    &cqa->cqa_count, shard, chk_leader_free_shard, NULL);
+	if (pool_nr == 0) {
+		rc = ds_mgmt_tgt_pool_iterate(chk_leader_query_pool, cqa);
+	} else {
+		for (i = 0; i < pool_nr; i++) {
+			rc = chk_leader_query_pool(pools[i], cqa);
 			if (rc != 0)
 				goto out;
 		}
@@ -3374,47 +3394,8 @@ again:
 		goto out;
 
 	d_list_for_each_entry(cpr, &cqa->cqa_list, cpr_link) {
-		d_iov_set(&riov, NULL, 0);
-		d_iov_set(&kiov, cpr->cpr_uuid, sizeof(uuid_t));
-		rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
-		if (likely(rc == 0)) {
-			status = ((struct chk_pool_rec *)riov.iov_buf)->cpr_bk.cb_pool_status;
-			phase  = ((struct chk_pool_rec *)riov.iov_buf)->cpr_bk.cb_phase;
-		} else {
-			chk_uuid_unparse(ins, cpr->cpr_uuid, uuid_str);
-			rc = chk_bk_fetch_pool(&tmp, uuid_str);
-			if (rc == 0) {
-				status = tmp.cb_pool_status;
-				phase  = tmp.cb_phase;
-			} else {
-				status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
-				phase  = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
-			}
-		}
-
 		d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
 			shard = cps->cps_data;
-
-			/*
-			 * NOTE: The pool status on different engines may be different. For example:
-			 *	 the PS leader may be in PENDING because of interaction, but others
-			 *	 are still in running status. We summarize the status for the query
-			 *	 result to avoid confusing. It is just temporary solution, and will
-			 *	 be moved to control plane in the future - DAOS-13989.
-			 *
-			 *	 After supporting CHK leader switch, CHK engine can directly report
-			 *	 to control plane instead of via CHK leader, then CHK leader may not
-			 *	 know CHK interaction. Let's handle that when query - DAOS-18674.
-			 */
-			if (cpr->cpr_has_pending == 0)
-				shard->cqps_status =
-				    chk_pool_merge_status(shard->cqps_status, status);
-			else
-				shard->cqps_status = CHK__CHECK_POOL_STATUS__CPS_PENDING;
-
-			if (shard->cqps_phase < phase)
-				shard->cqps_phase = phase;
-
 			rc = pool_cb(shard, idx++, buf);
 			if (rc != 0)
 				goto out;

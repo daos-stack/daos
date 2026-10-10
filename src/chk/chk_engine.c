@@ -2776,25 +2776,32 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 		cqpa->cqpa_cap <<= 1;
 	}
 
-	shard = &cqpa->cqpa_shards[cqpa->cqpa_idx++];
-	uuid_copy(shard->cqps_uuid, uuid);
-	shard->cqps_rank = dss_self_rank();
-
 	chk_uuid_unparse(cqpa->cqpa_ins, uuid, uuid_str);
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
 	if (rc == -DER_NONEXIST) {
-		shard->cqps_status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
-		shard->cqps_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
+		rc = ds_mgmt_pool_exist(uuid);
+		if (rc <= 0)
+			goto out;
+
+		shard = &cqpa->cqpa_shards[cqpa->cqpa_idx++];
+		uuid_copy(shard->cqps_uuid, uuid);
 		memset(&shard->cqps_statistics, 0, sizeof(shard->cqps_statistics));
 		memset(&shard->cqps_time, 0, sizeof(shard->cqps_time));
+		shard->cqps_rank      = dss_self_rank();
+		shard->cqps_status    = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
+		shard->cqps_phase     = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
 		shard->cqps_target_nr = 0;
-		shard->cqps_targets = NULL;
+		shard->cqps_targets   = NULL;
 
 		D_GOTO(out, rc = 0);
 	}
 
 	if (rc != 0)
 		goto out;
+
+	shard = &cqpa->cqpa_shards[cqpa->cqpa_idx++];
+	uuid_copy(shard->cqps_uuid, uuid);
+	shard->cqps_rank = dss_self_rank();
 
 	D_ALLOC_ARRAY(shard->cqps_targets, dss_tgt_nr);
 	if (shard->cqps_targets == NULL)
@@ -3158,7 +3165,7 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 		}
 
 		rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid, dss_self_rank(),
-					false, &new, ins, NULL, NULL, NULL, &cpr);
+					0 /* useless status */, &new, ins, NULL, NULL, NULL, &cpr);
 		if (rc != 0)
 			goto out;
 	} else {
