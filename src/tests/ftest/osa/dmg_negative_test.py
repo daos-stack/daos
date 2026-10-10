@@ -88,9 +88,9 @@ class OSADmgNegativeTest(OSAUtils):
                 expected_result = str(sequence[2])
 
                 # Extend the pool
-                # There is no need to extend rank 0
+                # There is no need to extend rank 0-3
                 # Avoid DER_ALREADY
-                if extend is True and rank != "0":
+                if extend is True and rank in ["4", "5"]:
                     self.log.info("=> Sequence %s: Extend rank %s onto pool %s", index, rank, pool)
                     if not self.validate_results(pool, expected_result, pool.extend(rank)):
                         self.fail("Error extending rank {} onto pool {}".format(rank, str(pool)))
