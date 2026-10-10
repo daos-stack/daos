@@ -23,6 +23,7 @@ import errno
 import functools
 import importlib
 import json
+import mmap
 import os
 import pickle  # nosec
 import pprint
@@ -2385,6 +2386,252 @@ class PosixTests():
             data = fd.read(16)  # Pass in a buffer size here or python will only read file size.
         print(data)
         assert data == 'test'
+
+    @staticmethod
+    def _chunk_read(fd, offset):
+        """Read one 128 KiB slot, dropping clean kernel pages so the read reaches dfuse"""
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+        return os.pread(fd, 128 * 1024, offset)
+
+    @staticmethod
+    def _write_direct(file_name, data, offset):
+        buf = mmap.mmap(-1, len(data))
+        buf.write(data)
+        fd = os.open(file_name, os.O_WRONLY | os.O_DIRECT)
+        try:
+            assert os.pwritev(fd, [buf], offset) == len(data)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+    @needs_dfuse
+    def test_chunk_read_invalidate(self):
+        """Test that writes and truncates invalidate the dfuse 1 MiB chunk-read cache.
+
+        A 128 KiB aligned read makes dfuse fetch and keep the whole 1 MiB bucket while the inode
+        is open, a later read of another slot must not return data from before a write or a
+        truncate (by path, so without a dfuse file handle).
+        """
+        k128 = 128 * 1024
+        file_size = 4 * 1024 * 1024
+        file_name = join(self.dfuse.dir, 'chunk_file')
+        old = bytes([0xA5]) * file_size
+        new = bytes([0x5A]) * k128
+
+        with open(file_name, 'wb') as fd:
+            fd.write(old)
+            fd.flush()
+            os.fsync(fd.fileno())
+
+        rfd = os.open(file_name, os.O_RDONLY)
+        try:
+            os.posix_fadvise(rfd, 0, 0, os.POSIX_FADV_RANDOM)
+
+            assert self._chunk_read(rfd, 0) == old[:k128]
+            self._write_direct(file_name, new, k128)
+            if self._chunk_read(rfd, k128) != new:
+                print('read returned stale data after write')
+                self.fail()
+
+            assert self._chunk_read(rfd, 4 * k128) == old[:k128]
+            os.truncate(file_name, 0)
+            os.truncate(file_name, file_size)
+            if self._chunk_read(rfd, 5 * k128) != bytes(k128):
+                print('read returned stale data after truncate')
+                self.fail()
+        finally:
+            os.close(rfd)
+
+    @needs_dfuse
+    def test_chunk_read_stress(self):
+        """Concurrent chunk reads, open/close, writes and truncates by path.
+
+        Checks reads of the same slot from several handles are all answered and, under valgrind,
+        that chunk-read state is not used after the file is closed.
+        """
+        k128 = 128 * 1024
+        file_size = 4 * 1024 * 1024
+        file_name = join(self.dfuse.dir, 'chunk_stress')
+        stop = time.time() + 5
+        errors = []
+
+        with open(file_name, 'wb') as fd:
+            fd.write(bytes(file_size))
+
+        def reader(seed):
+            i = seed
+            while time.time() < stop:
+                try:
+                    fd = os.open(file_name, os.O_RDONLY)
+                    try:
+                        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_RANDOM)
+                        for _ in range(8):
+                            i = (i * 7 + 3) % (file_size // k128 - 8)
+                            self._chunk_read(fd, i * k128)
+                    finally:
+                        os.close(fd)
+                except OSError as error:
+                    errors.append(error)
+
+        def writer():
+            count = 0
+            try:
+                while time.time() < stop:
+                    count += 1
+                    self._write_direct(file_name, bytes([count & 0xFF]) * k128,
+                                       (count % 24) * k128)
+                    if count % 10 == 0:
+                        os.truncate(file_name, file_size)
+            except (OSError, AssertionError) as error:
+                errors.append(error)
+
+        threads = [threading.Thread(target=reader, args=(t,)) for t in range(8)]
+        threads.append(threading.Thread(target=writer))
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        print(errors)
+        assert not errors
+
+    def test_chunk_read_two_mounts(self):
+        """Without caching, a read must see a write made through another mount"""
+        k128 = 128 * 1024
+        dfuse0 = DFuse(self.server, self.conf, caching=False, container=self.container)
+        dfuse0.start(v_hint='chunk_two_0')
+        dfuse1 = DFuse(self.server, self.conf, caching=False, container=self.container)
+        dfuse1.start(v_hint='chunk_two_1')
+
+        file0 = join(dfuse0.dir, 'chunk_file')
+        with open(file0, 'wb') as fd:
+            fd.write(bytes([0xA5]) * 4 * 1024 * 1024)
+
+        rfd = os.open(file0, os.O_RDONLY)
+        try:
+            assert os.pread(rfd, k128, 0) == bytes([0xA5]) * k128
+            with open(join(dfuse1.dir, 'chunk_file'), 'r+b') as fd:
+                fd.seek(k128)
+                fd.write(bytes([0x5A]) * k128)
+                fd.flush()
+                os.fsync(fd.fileno())
+            data = os.pread(rfd, k128, k128)
+        finally:
+            os.close(rfd)
+
+        if dfuse1.stop():
+            self.fatal_errors = True
+        if dfuse0.stop():
+            self.fatal_errors = True
+        if data != bytes([0x5A]) * k128:
+            print('uncached read returned stale data written through another mount')
+            self.fail()
+
+    def test_chunk_read_wb_order(self):
+        """A chunk read must see a write that write-back caching acknowledged early.
+
+        The writer stays open without a sync or close, so only the flush in the chunk-read path
+        waits for the write to reach DAOS.  This is best effort, the race is not forced.
+        """
+        k128 = 128 * 1024
+        chunk = 1024 * 1024
+        file_size = 4 * chunk
+        # Any dfuse-* attribute switches to the attribute path, which enables write-back.
+        self.container.set_attrs({'dfuse-data-cache': 'on'})
+        dfuse = DFuse(self.server, self.conf, container=self.container)
+        # The log is checked before stop, which removes it.
+        dfuse.log_flush = True
+        dfuse.start(v_hint='chunk_wb_order')
+
+        file_name = join(dfuse.dir, 'chunk_wb_order')
+        with open(file_name, 'wb') as fd:
+            fd.write(bytes(file_size))
+
+        stale = []
+        buf = mmap.mmap(-1, chunk)
+        wfd = os.open(file_name, os.O_WRONLY | os.O_DIRECT)
+        rfd = os.open(file_name, os.O_RDONLY)
+        try:
+            os.posix_fadvise(rfd, 0, 0, os.POSIX_FADV_RANDOM)
+            for i in range(200):
+                pattern = bytes([i % 255 + 1]) * k128
+                bucket = i % (file_size // chunk)
+                slot = i % (chunk // k128)
+                buf.seek(0)
+                buf.write(pattern * (chunk // k128))
+                assert os.pwritev(wfd, [buf], bucket * chunk) == chunk
+                if self._chunk_read(rfd, bucket * chunk + slot * k128) != pattern:
+                    stale.append(i)
+        finally:
+            os.close(rfd)
+            os.close(wfd)
+
+        chunk_path = True
+        if self.conf.args.dfuse_debug in (None, 'DEBUG'):
+            with open(dfuse.log_file, 'rb') as fd:
+                chunk_path = b'submit for bucket' in fd.read()
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        if stale:
+            print(f'chunk read returned data from before the write, iterations {stale}')
+            self.fail()
+        if not chunk_path:
+            print('reads did not use the chunk-read path')
+            self.fail()
+
+    @needs_dfuse
+    def test_eof_other_handle(self):
+        """A cached EOF on one handle must not hide data appended through another handle"""
+        k4 = 4096
+        file_name = join(self.dfuse.dir, 'eof_file')
+        with open(file_name, 'wb'):
+            pass
+        self._write_direct(file_name, b'a' * k4, 0)
+
+        buf = mmap.mmap(-1, 16 * k4)
+        rfd = os.open(file_name, os.O_RDONLY | os.O_DIRECT)
+        try:
+            assert os.preadv(rfd, [buf], 0) == k4
+            self._write_direct(file_name, b'b' * k4, k4)
+            got = os.preadv(rfd, [buf], k4)
+        finally:
+            os.close(rfd)
+
+        if got != k4 or buf[:k4] != b'b' * k4:
+            print(f'read after append returned {got} bytes')
+            self.fail()
+
+    def test_pre_read_invalidate(self):
+        """A write through another handle must not be hidden by data pre-read at open"""
+        k64 = 64 * 1024
+        # Pre-read needs write-back caching, which only the attribute path enables.
+        self.container.set_attrs({'dfuse-data-cache': 'on'})
+
+        dfuse = DFuse(self.server, self.conf, container=self.container)
+        dfuse.start(v_hint='pre_read_inval_0')
+        with open(join(dfuse.dir, 'file'), 'wb') as fd:
+            fd.write(b'o' * k64)
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        # A fresh mount does not know the file, so opening it starts a pre-read.
+        dfuse = DFuse(self.server, self.conf, container=self.container)
+        dfuse.start(v_hint='pre_read_inval_1')
+        file_name = join(dfuse.dir, 'file')
+        rfd = os.open(file_name, os.O_RDONLY)
+        try:
+            time.sleep(1)
+            self._write_direct(file_name, b'n' * k64, 0)
+            data = os.pread(rfd, k64, 0)
+        finally:
+            os.close(rfd)
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        if data != b'n' * k64:
+            print(f'read returned pre-read data from before the write: {data[:1]!r}')
+            self.fail()
 
     def test_pre_read(self):
         """Test the pre-read code.
