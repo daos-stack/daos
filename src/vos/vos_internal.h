@@ -1223,8 +1223,7 @@ struct vos_iter_ops {
 	int	(*iop_process)(struct vos_iterator *iter, vos_iter_proc_op_t op,
 			       void *args);
 	/** Check the current record */
-	int (*iop_check)(struct vos_iterator *iter, report_fn_t report_fn, void *report_arg,
-			 bool error_on_non_zero_padding);
+	int (*iop_check)(struct vos_iterator *iter, struct checker *ck);
 	/**
 	 * Optional, the iterator has no element.
 	 *
