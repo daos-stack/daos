@@ -9,7 +9,6 @@ import threading
 import time
 
 import pydaos
-from apricot import skipForTicket
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure
@@ -673,7 +672,6 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.log_step("Run one more sanity IOR to fill 1%")
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
-    @skipForTicket("DAOS-8896")
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
 
@@ -685,7 +683,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                   ran prior system storage was full.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=nvme,der_enospace,enospc_performance
         :avocado: tags=NvmeEnospace,test_performance_storage_full
         """
@@ -703,7 +701,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.run_enospace_with_bg_job(self.client_log)
 
         # Read the same container which was written at the beginning.
-        self.container.uuid = baseline_cont_uuid
+        self.ior_cmd.dfs_cont.update(baseline_cont_uuid)
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         self.log.info("IOR Latest Read MiB %s", max_mib_latest)
