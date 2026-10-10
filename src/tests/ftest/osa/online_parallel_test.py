@@ -75,11 +75,11 @@ class OSAOnlineParallelTest(OSAUtils):
                         "Rebuild is not busy yet (check %s/%s)", attempt, max_attempts)
                     if attempt < max_attempts:
                         time.sleep(2)
-                else:
-                    results.put(
-                        "{} failed: rebuild did not become busy after {} checks".format(
-                            action, max_attempts))
-                    return
+                    else:
+                        results.put(
+                            "{} failed: rebuild did not become busy after {} checks".format(
+                                action, max_attempts))
+                        return
             # For each action, read the values from the
             # dictionary.
             # example {"exclude" : {"puuid": self.pool, "ranks: rank

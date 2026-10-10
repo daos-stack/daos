@@ -59,11 +59,11 @@ class OSAOfflineParallelTest(OSAUtils):
                         "Rebuild is not busy yet (check %s/%s)", attempt, max_attempts)
                     if attempt < max_attempts:
                         time.sleep(2)
-                else:
-                    results.put(
-                        "{} failed: rebuild did not become busy after {} checks".format(
-                            action, max_attempts))
-                    return
+                    else:
+                        results.put(
+                            "{} failed: rebuild did not become busy after {} checks".format(
+                                action, max_attempts))
+                        return
             if action == "exclude" and self.server_boot is True:
                 self.log.info("Stop/Start rank %s using system stop/start", kwargs["ranks"])
                 ranks = str(kwargs["ranks"])
