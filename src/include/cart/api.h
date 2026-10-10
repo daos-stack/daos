@@ -1118,6 +1118,18 @@ int
 crt_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len);
 
 /**
+ * Get provider index (0 for primary, 1+ for secondary) associated with the
+ * bulk handle
+ *
+ * \param[in] crt_bulk         bulk handle
+ * \param[out] ret_idx         provider index
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_bulk_get_provider_index(crt_bulk_t crt_bulk, uint32_t *ret_idx);
+
+/**
  * Get the number of segments of data abstracted by bulk handle.
  *
  * \param[in] bulk_hdl         bulk handle

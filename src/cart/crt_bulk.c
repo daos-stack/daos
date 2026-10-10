@@ -108,6 +108,9 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		D_GOTO(out, rc = -DER_NOMEM);
 	ret_hdl->refcount = 1;
 
+	/* TODO: currently only 1 secondary provider is supported */
+	ret_hdl->prov_idx = ctx->cc_primary ? 0 : 1;
+
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
 	if (quota_rc == -DER_QUOTA_LIMIT) {
 		int i;
@@ -153,6 +156,27 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 out:
 	if (rc == 0 && bulk_hdl)
 		*bulk_hdl = ret_hdl;
+	return rc;
+}
+
+int
+crt_bulk_get_provider_index(crt_bulk_t crt_bulk, uint32_t *ret_idx)
+{
+	struct crt_bulk *bulk = crt_bulk;
+	int              rc   = 0;
+
+	if (bulk == NULL) {
+		D_ERROR("bulk is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (ret_idx == NULL) {
+		D_ERROR("ret_idx is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	*ret_idx = bulk->prov_idx;
+out:
 	return rc;
 }
 

@@ -472,6 +472,8 @@ struct crt_bulk {
 	ATOMIC uint32_t refcount;    /** reference count for this struct */
 	bool            bound;       /** whether crt_bulk_bind() was used on it */
 	bool            deferred;    /** whether handle allocation was deferred */
+
+	uint32_t        prov_idx; /** provider index on which bulk was allocated */
 };
 
 #define CRT_METRIC_INC(ctx, name)                                                                  \

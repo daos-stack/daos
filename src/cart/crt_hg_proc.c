@@ -178,6 +178,12 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 
 		/* Pack mercury bulk handle to send over the wire */
 		hg_ret = hg_proc_hg_bulk_t(proc, &hg_bulk);
+		if (hg_ret != HG_SUCCESS)
+			return -DER_HG;
+
+		/* Pack provider index to send over the wire; NOTE: This breaks wire backwards
+		 * compat */
+		rc = crt_proc_uint32_t(proc, proc_op, &bulk->prov_idx);
 		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
 
 	case CRT_PROC_DECODE:
@@ -205,6 +211,12 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 					  .refcount    = 1,
 					  .bound       = false,
 					  .deferred    = false};
+
+		hg_ret = crt_proc_uint32_t(proc, proc_op, &bulk->prov_idx);
+		if (hg_ret != HG_SUCCESS) {
+			D_FREE(bulk);
+			return -DER_HG;
+		}
 
 		*pcrt_bulk = bulk;
 		return 0;
