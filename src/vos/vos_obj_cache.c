@@ -137,12 +137,26 @@ obj_lop_rec_hash(struct daos_llink *llink)
 }
 
 static inline void
+obj_bkt_nodes_free(struct vos_object *obj)
+{
+	struct vos_obj_bkt_node *node = obj->obj_bkt_nodes, *next;
+
+	while (node != NULL) {
+		next = node->bn_next;
+		D_FREE(node);
+		node = next;
+	}
+	obj->obj_bkt_nodes = NULL;
+}
+
+static inline void
 clean_object(struct vos_object *obj)
 {
 	vos_ilog_fetch_finish(&obj->obj_ilog_info);
 	if (obj->obj_cont != NULL)
 		vos_cont_decref(obj->obj_cont);
 
+	obj_bkt_nodes_free(obj);
 	obj_tree_fini(obj);
 }
 
@@ -285,10 +299,53 @@ vos_obj_unpin(struct vos_object *obj)
 	}
 }
 
-static void
+/* The primary bucket must be shared bucket */
+static inline void
+set_primary_bkt(struct vos_object *obj, uint32_t bkt_id)
+{
+	D_ASSERT(obj->obj_bkt_cnt == 0);
+	obj->obj_bkt_cnt = 1;
+	obj->obj_bkt_id0 = vos_bkt_id_encode(bkt_id, true);
+}
+
+/* Load the durable bucket chain of an existing object into the in-memory chain */
+static int
+obj_load_bkts(struct vos_pool *pool, struct vos_object *obj, struct vos_obj_p2_df *p2)
+{
+	umem_off_t                  next = p2->p2_bkt_extra;
+	struct vos_obj_bkt_node_df *node_df;
+	struct vos_obj_bkt_node    *node, *last = NULL;
+	int                         i;
+
+	obj->obj_bkt_id0 = p2->p2_bkt_id0;
+	obj->obj_bkt_cnt = p2->p2_bkt_cnt;
+	while (!UMOFF_IS_NULL(next)) {
+		node_df = umem_off2ptr(vos_pool2umm(pool), next);
+
+		D_ALLOC_PTR(node);
+		if (node == NULL)
+			return -DER_NOMEM;
+
+		node->bn_bkt_cnt = node_df->bn_bkt_cnt;
+		for (i = 0; i < node_df->bn_bkt_cnt; i++)
+			node->bn_bkt_ids[i] = node_df->bn_bkt_ids[i];
+
+		if (last == NULL)
+			obj->obj_bkt_nodes = node;
+		else
+			last->bn_next = node;
+
+		last = node;
+		next = node_df->bn_next;
+	}
+	return 0;
+}
+
+static int
 obj_allot_bkt(struct vos_pool *pool, struct vos_object *obj)
 {
 	struct dtx_handle	*cur_dth;
+	int                      rc = 0;
 
 	D_ASSERT(umem_tx_none(vos_pool2umm(pool)));
 
@@ -299,29 +356,32 @@ obj_allot_bkt(struct vos_pool *pool, struct vos_object *obj)
 		ABT_cond_wait(obj->obj_wait_alloting, obj->obj_mutex);
 		ABT_mutex_unlock(obj->obj_mutex);
 
-		D_ASSERT(obj->obj_bkt_alloted == 1);
 		restore_cur_dth(pool, cur_dth);
-		return;
+
+		return obj->obj_bkt_alloted ? 0 : -DER_NOMEM;
 	}
 	obj->obj_bkt_alloting = 1;
 
 	if (!obj->obj_df) {
 		cur_dth = clear_cur_dth(pool);
 		obj->obj_bkt_id0 = umem_allot_mb_evictable(vos_pool2umm(pool), 0);
-		obj->obj_bkt_cnt = 1;
+		if (obj->obj_bkt_id0 != UMEM_DEFAULT_MBKT_ID)
+			set_primary_bkt(obj, obj->obj_bkt_id0);
 		restore_cur_dth(pool, cur_dth);
 	} else {
 		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
-
-		obj->obj_bkt_id0 = p2->p2_bkt_id0;
+		rc                       = obj_load_bkts(pool, obj, p2);
 	}
 
-	obj->obj_bkt_alloted = 1;
+	if (rc == 0)
+		obj->obj_bkt_alloted = 1;
 	obj->obj_bkt_alloting = 0;
 
 	ABT_mutex_lock(obj->obj_mutex);
 	ABT_cond_broadcast(obj->obj_wait_alloting);
 	ABT_mutex_unlock(obj->obj_mutex);
+
+	return rc;
 }
 
 /* Get all object shared buckets from in-memory vos_object */
@@ -415,12 +475,16 @@ static inline int
 vos_obj_pin(struct vos_object *obj)
 {
 	struct vos_pool		*pool = vos_obj2pool(obj);
+	int                      rc;
 
 	if (!vos_pool_is_evictable(pool))
 		return 0;
 
-	if (!obj->obj_bkt_alloted)
-		obj_allot_bkt(pool, obj);
+	if (!obj->obj_bkt_alloted) {
+		rc = obj_allot_bkt(pool, obj);
+		if (rc)
+			return rc;
+	}
 
 	return obj_pin_bkt(pool, obj);
 }
@@ -484,6 +548,10 @@ cache_object(struct daos_lru_cache *occ, struct vos_object **objp)
 	obj_new->obj_df = obj_local.obj_df;
 	obj_new->obj_zombie = obj_local.obj_zombie;
 	obj_new->obj_bkt_alloted = obj_local.obj_bkt_alloted;
+	obj_new->obj_bkt_id0     = obj_local.obj_bkt_id0;
+	obj_new->obj_bkt_cnt     = obj_local.obj_bkt_cnt;
+	obj_new->obj_bkt_nodes   = obj_local.obj_bkt_nodes;
+	obj_local.obj_bkt_nodes  = NULL;
 	obj_new->obj_pin_hdl = obj_local.obj_pin_hdl;
 	obj_local.obj_toh = DAOS_HDL_INVAL;
 	obj_local.obj_ih = DAOS_HDL_INVAL;
@@ -555,6 +623,95 @@ vos_obj_check_discard(struct vos_container *cont, daos_unit_oid_t oid, uint64_t 
 	return rc;
 }
 
+static inline void
+set_bkt_node_df(struct vos_obj_bkt_node_df *node_df, struct vos_obj_bkt_node *node)
+{
+	int i;
+
+	D_ASSERT(node->bn_bkt_cnt > 0 && node->bn_bkt_cnt < VOS_OBJ_BKT_NODE_CAP);
+	node_df->bn_bkt_cnt = node->bn_bkt_cnt;
+	for (i = 0; i < node->bn_bkt_cnt; i++)
+		node_df->bn_bkt_ids[i] = node->bn_bkt_ids[i];
+}
+
+/* Sync the durable bucket chain with the in-memory one. */
+static int
+obj_persist_bkts(struct vos_object *obj)
+{
+	struct umem_instance       *umm     = vos_obj2umm(obj);
+	struct vos_obj_p2_df       *p2      = (struct vos_obj_p2_df *)obj->obj_df;
+	struct vos_obj_bkt_node_df *node_df = NULL, *prev_df = NULL;
+	struct vos_obj_bkt_node    *node;
+	umem_off_t                  off;
+	int                         rc;
+
+	if (p2->p2_bkt_id0 == UMEM_DEFAULT_MBKT_ID) {
+		rc = umem_tx_add_ptr(umm, &p2->p2_bkt_id0, sizeof(p2->p2_bkt_id0));
+		if (rc)
+			return rc;
+		p2->p2_bkt_id0 = obj->obj_bkt_id0;
+
+	} else {
+		D_ASSERT(p2->p2_bkt_id0 == obj->obj_bkt_id0);
+	}
+
+	D_ASSERT(obj->obj_bkt_cnt >= p2->p2_bkt_cnt);
+	if (obj->obj_bkt_cnt != p2->p2_bkt_cnt) {
+		rc = umem_tx_add_ptr(umm, &p2->p2_bkt_cnt, sizeof(p2->p2_bkt_cnt));
+		if (rc)
+			return rc;
+		p2->p2_bkt_cnt = obj->obj_bkt_cnt;
+	}
+
+	if (!UMOFF_IS_NULL(p2->p2_bkt_extra))
+		node_df = umem_off2ptr(umm, p2->p2_bkt_extra);
+
+	for (node = obj->obj_bkt_nodes; node != NULL; node = node->bn_next) {
+		if (node->bn_flags & VOS_BKT_NODE_FL_CREATE) {
+			D_ASSERT(node_df == NULL);
+
+			off = umem_zalloc(umm, sizeof(*node_df));
+			if (UMOFF_IS_NULL(off))
+				return -DER_NOSPACE;
+
+			if (UMOFF_IS_NULL(p2->p2_bkt_extra)) {
+				rc = umem_tx_add_ptr(umm, &p2->p2_bkt_extra,
+						     sizeof(p2->p2_bkt_extra));
+				if (rc)
+					return rc;
+				p2->p2_bkt_extra = off;
+			} else {
+				D_ASSERT(prev_df != NULL);
+				rc = umem_tx_add_ptr(umm, &prev_df->bn_next,
+						     sizeof(prev_df->bn_next));
+				if (rc)
+					return rc;
+				prev_df->bn_next = off;
+			}
+
+			node_df = umem_off2ptr(umm, off);
+			set_bkt_node_df(node_df, node);
+
+		} else if (node->bn_flags & VOS_BKT_NODE_FL_DIRTY) {
+			D_ASSERT(node_df != NULL);
+
+			rc = umem_tx_add_ptr(umm, node_df, sizeof(*node_df));
+			if (rc)
+				return rc;
+			set_bkt_node_df(node_df, node);
+		}
+
+		/* Clear node flags */
+		node->bn_flags = 0;
+
+		prev_df = node_df;
+		if (node_df != NULL)
+			node_df = umem_off2ptr(umm, node_df->bn_next);
+	}
+
+	return 0;
+}
+
 int
 vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t bound,
 		  uint64_t flags, uint32_t intent, struct vos_ts_set *ts_set)
@@ -619,29 +776,13 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 	}
 
 	if (obj->obj_bkt_id0 != UMEM_DEFAULT_MBKT_ID) {
-		struct vos_obj_p2_df *p2 = (struct vos_obj_p2_df *)obj->obj_df;
-
 		D_ASSERT(vos_pool_is_evictable(vos_obj2pool(obj)));
 		D_ASSERT(obj->obj_bkt_alloted);
 
-		if (p2->p2_bkt_id0 == UMEM_DEFAULT_MBKT_ID) {
-			rc = umem_tx_add_ptr(vos_cont2umm(cont), &p2->p2_bkt_id0,
-					     sizeof(p2->p2_bkt_id0));
-			if (rc) {
-				DL_ERROR(rc, "Add bucket ID failed.");
-				return rc;
-			}
-			p2->p2_bkt_id0 = obj->obj_bkt_id0;
-
-			rc = umem_tx_add_ptr(vos_cont2umm(cont), &p2->p2_bkt_cnt,
-					     sizeof(p2->p2_bkt_cnt));
-			if (rc) {
-				DL_ERROR(rc, "Add bucket count failed.");
-				return rc;
-			}
-			p2->p2_bkt_cnt = 1;
-		} else {
-			D_ASSERT(p2->p2_bkt_id0 == obj->obj_bkt_id0);
+		rc = obj_persist_bkts(obj);
+		if (rc) {
+			DL_ERROR(rc, "Persist object bucket chain failed.");
+			return rc;
 		}
 	}
 
@@ -1040,8 +1181,13 @@ vos_obj_acquire(struct vos_container *cont, daos_unit_oid_t oid, bool pin,
 	}
 
 	if (vos_pool_is_evictable(cont->vc_pool)) {
-		if (!obj->obj_bkt_alloted)
-			obj_allot_bkt(cont->vc_pool, obj);
+		if (!obj->obj_bkt_alloted) {
+			rc = obj_allot_bkt(cont->vc_pool, obj);
+			if (rc) {
+				obj_put(occ, obj, false);
+				return rc;
+			}
+		}
 
 		if (pin) {
 			rc = obj_pin_bkt(cont->vc_pool, obj);
@@ -1109,12 +1255,10 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
 
 		obj = vos_hdl->vph_objs[i];
 		D_ASSERT(obj->obj_bkt_alloted == 1);
-		if (obj->obj_bkt_id0 != UMEM_DEFAULT_MBKT_ID) {
-			rc = vos_bkt_array_add(&bkts, obj->obj_bkt_id0);
-			if (rc) {
-				DL_ERROR(rc, "Failed to add bucket:%u to array", obj->obj_bkt_id0);
-				goto error;
-			}
+		rc = obj_shared_bkts(pool, obj, &bkts);
+		if (rc) {
+			DL_ERROR(rc, "Failed to add object buckets to array");
+			goto error;
 		}
 	}
 
@@ -1131,4 +1275,107 @@ error:
 	vos_bkt_array_fini(&bkts);
 	vos_unpin_objects(coh, vos_hdl);
 	return rc;
+}
+
+/* Repin object when spillover happened */
+static int
+obj_repin_bkt(struct vos_object *obj)
+{
+	struct vos_pool        *pool  = vos_obj2pool(obj);
+	struct umem_store      *store = vos_pool2store(pool);
+	struct vos_bkt_array    bkts;
+	struct umem_pin_handle *old_hdl = obj->obj_pin_hdl;
+	int                     rc;
+
+	vos_bkt_array_init(&bkts);
+	rc = obj_shared_bkts(pool, obj, &bkts);
+	if (rc)
+		goto out;
+
+	D_ASSERT(bkts.vba_cnt > 0);
+	obj->obj_pin_hdl = NULL;
+	/*
+	 * Old buckets are already pinned by object cache, newly added spillover bucket is
+	 * pinned also, so following pin operation won't yield.
+	 */
+	rc = vos_bkt_array_pin(pool, &bkts, &obj->obj_pin_hdl);
+	if (rc) {
+		DL_ERROR(rc, "Failed to repin object:" DF_UOID ".", DP_UOID(obj->obj_id));
+		obj->obj_pin_hdl = old_hdl;
+		goto out;
+	}
+	umem_cache_unpin(store, old_hdl);
+out:
+	vos_bkt_array_fini(&bkts);
+	return rc;
+}
+
+int
+vos_obj_bkt_update(struct vos_object *obj, umem_off_t umoff, bool shared)
+{
+	struct umem_instance    *umm = vos_obj2umm(obj);
+	struct vos_obj_bkt_node *node, *last = NULL, *found_node = NULL;
+	uint32_t                 bkt_id;
+	int                      i, shared_cnt = 1, idx;
+
+	bkt_id = umem_get_mb_from_offset(umm, umoff);
+	if (bkt_id == UMEM_DEFAULT_MBKT_ID)
+		return 0;
+
+	if (obj->obj_bkt_id0 == UMEM_DEFAULT_MBKT_ID) {
+		/* The object has no E bucket yet, the spillover bucket becomes the primary one */
+		set_primary_bkt(obj, bkt_id);
+		return obj_repin_bkt(obj);
+	}
+
+	if (vos_bkt_id_raw(obj->obj_bkt_id0) == bkt_id)
+		return 0;
+
+	for (node = obj->obj_bkt_nodes; node != NULL; node = node->bn_next) {
+		last = node;
+		for (i = 0; i < node->bn_bkt_cnt; i++) {
+			if (vos_bkt_id_is_shared(node->bn_bkt_ids[i]))
+				shared_cnt++;
+			if (vos_bkt_id_raw(node->bn_bkt_ids[i]) == bkt_id) {
+				found_node = node;
+				idx        = i;
+			}
+		}
+	}
+
+	if (found_node != NULL)
+		goto found;
+
+	if ((shared_cnt == VOS_OBJ_BKTS_MAX) && shared)
+		return -DER_NOTSUPPORTED;
+
+	if (last == NULL || last->bn_bkt_cnt == VOS_OBJ_BKT_NODE_CAP) {
+		D_ALLOC_PTR(node);
+		if (node == NULL)
+			return -DER_NOMEM;
+		if (last != NULL)
+			last->bn_next = node;
+		else
+			obj->obj_bkt_nodes = node;
+		last = node;
+		last->bn_flags |= VOS_BKT_NODE_FL_CREATE;
+	}
+
+	last->bn_bkt_ids[last->bn_bkt_cnt++] = vos_bkt_id_encode(bkt_id, shared);
+	last->bn_flags |= VOS_BKT_NODE_FL_DIRTY;
+	obj->obj_bkt_cnt++;
+
+	/* A new spillover bucket is added to object, repin object */
+	return obj_repin_bkt(obj);
+
+found:
+	/* Change existing dkey bucket to shared bucket */
+	if (!(found_node->bn_bkt_ids[idx] & VOS_BKT_ID_SHARED_FLAG) && shared) {
+		if (shared_cnt == VOS_OBJ_BKTS_MAX)
+			return -DER_NOTSUPPORTED;
+		found_node->bn_bkt_ids[idx] |= VOS_BKT_ID_SHARED_FLAG;
+		found_node->bn_flags |= VOS_BKT_NODE_FL_DIRTY;
+	}
+
+	return 0;
 }
