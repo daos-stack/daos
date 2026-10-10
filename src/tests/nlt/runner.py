@@ -29,6 +29,7 @@ from .reporting import WarningsFactory
 from .server import DaosServer
 from .special_tests import (check_readdir_perf, run_dfuse, run_duns_overlay_test, run_in_fg,
                             test_pydaos_kv, test_pydaos_kv_obj_class)
+from .watchdog import WedgeWatch
 
 
 def generate_special_test_list():
@@ -204,6 +205,12 @@ def run(wf, args):
     # Arm the summary now so it is still emitted if a test, startup or teardown raises.
     wf.arm_summary(args.summary, args, conf, run_start)
 
+    def _report_wedge(failure, output):
+        wf.add_test_case('wedge_watchdog', failure, output=output)
+
+    WedgeWatch(args.failfast, log_dir=conf.tmp_dir, report=_report_wedge,
+               finalize=wf.write_summary).start()
+
     fi_test = False
     fi_test_dfuse = False
 
@@ -269,6 +276,9 @@ def run(wf, args):
         print(fs)
         if fs.returncode == 0:
             run_fi = True
+        elif fi_test or fi_test_dfuse:
+            raise NLTestFail('Unable to detect fault injection feature '
+                             '- cannot run requested FI tests')
         else:
             print("Unable to detect fault injection feature - skipping FI testing")
 
@@ -345,6 +355,7 @@ def run(wf, args):
 
     wf_server.close()
     close_log_test(conf)
+    conf.cleanup()
     if args.summary:
         wf.write_summary()
     print(f'Total time in log analysis: {conf.log_timer.total:.2f} seconds')
