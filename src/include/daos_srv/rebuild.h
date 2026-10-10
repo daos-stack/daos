@@ -17,6 +17,11 @@
 #define REBUILD_ENV            "DAOS_REBUILD"
 #define REBUILD_ENV_DISABLED   "no"
 #define REBUILD_WAIT_EC_PAUSE_ENV "DAOS_REBUILD_WAIT_EC_PAUSE"
+/*
+ * Max seconds to wait for the container global stable epoch to exceed the rebuild epoch
+ * before scanning the container, zero (default) means waiting without timeout.
+ */
+#define REBUILD_GSE_WAIT_TIMEOUT_ENV "DAOS_REBUILD_GSE_WAIT_TIMEOUT"
 
 /**
  * Enum values to indicate the rebuild operation that should be applied to the

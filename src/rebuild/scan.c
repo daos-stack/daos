@@ -976,10 +976,22 @@ again:
 
 		/*
 		 * Usually, the diff between container global stable epoch and rebuild epoch will
-		 * be within 2 minutes unless it is very busy. Let's wait for at most 10 minutes.
+		 * be within 1 minute (vos_agg_gap plus a few report/sync intervals). It can be
+		 * held back for long by any slow target or a long-lived prepared DTX anywhere
+		 * in the pool. Failing the scan here would fail (and then retry) the whole
+		 * rebuild without making the condition any better, so by default keep waiting
+		 * (the loop is still abortable) and only give up if an explicit timeout is set
+		 * via DAOS_REBUILD_GSE_WAIT_TIMEOUT.
 		 */
-		if (count > 600)
+		if (rebuild_gse_wait_timeout != 0 && count > rebuild_gse_wait_timeout) {
+			D_ERROR(DF_RB " global stable epoch " DF_X64
+				      " cannot exceed rebuild epoch " DF_X64
+				      " on the container " DF_CONT " within %u seconds\n",
+				DP_RB_RPT(rpt), gse, rpt->rt_stable_epoch,
+				DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid),
+				rebuild_gse_wait_timeout);
 			return -DER_TIMEDOUT;
+		}
 
 		dss_sleep(1000);
 

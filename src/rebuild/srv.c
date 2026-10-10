@@ -30,6 +30,7 @@
 #define RBLD_LOG_INTV_CNT (RBLD_LOG_INTV * 1000 / RBLD_CHECK_INTV)
 struct rebuild_global	rebuild_gst;
 unsigned int            rebuild_wait_ec_pause = 0;
+unsigned int            rebuild_gse_wait_timeout = 0;
 
 struct pool_map *
 rebuild_pool_map_get(struct ds_pool *pool)
@@ -3428,6 +3429,11 @@ init(void)
 	rc = d_getenv_uint(REBUILD_WAIT_EC_PAUSE_ENV, &rebuild_wait_ec_pause);
 	if (rc == 0)
 		D_DEBUG(DB_REBUILD, "Set REBUILD_WAIT_EC_PAUSE to %u\n", rebuild_wait_ec_pause);
+
+	rc = d_getenv_uint(REBUILD_GSE_WAIT_TIMEOUT_ENV, &rebuild_gse_wait_timeout);
+	if (rc == 0)
+		D_DEBUG(DB_REBUILD, "Set REBUILD_GSE_WAIT_TIMEOUT to %u\n",
+			rebuild_gse_wait_timeout);
 
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_tgt_tracker_list);
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_global_tracker_list);

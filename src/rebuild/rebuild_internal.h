@@ -229,6 +229,7 @@ struct rebuild_global {
 /* Per target structure to track the rebuild status */
 extern struct rebuild_global rebuild_gst;
 extern unsigned int          rebuild_wait_ec_pause;
+extern unsigned int          rebuild_gse_wait_timeout;
 
 struct rebuild_task {
 	d_list_t			dst_list;
