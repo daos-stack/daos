@@ -257,6 +257,12 @@ type SystemQueryResp struct {
 // Wrap sysResponse handling of absent hosts and ranks in a helper to be called from response
 // UnmarshalJSON implementations.
 func unmarshalSysRespJsonFields(data []byte, sr *sysResponse) error {
+	// A JSON literal null (e.g. from an empty/unset MS response) unmarshals into a nil
+	// pointer, so guard against it here to avoid a nil pointer dereference below.
+	if string(data) == "null" {
+		return nil
+	}
+
 	resp := &sysResponse{}
 	type Alias sysResponse
 	aux := &struct {
@@ -673,6 +679,13 @@ type SystemEraseReq struct {
 	msRequest
 	unaryRequest
 	retryableRequest
+	// Forwarded indicates that this request is being sent by the MS leader directly to
+	// an MS replica peer (see mgmtSvc.eraseReplicas()), rather than being an external
+	// admin-initiated request. When set, the expanded MS-unavailability retry criteria
+	// below are skipped, so that a forwarding leader doesn't block for the full context
+	// timeout retrying against a peer that has already wiped its own DB and may be
+	// mid-restart or briefly unreachable.
+	Forwarded bool
 }
 
 // SystemEraseResp contains the results of a system erase request.
@@ -741,11 +754,36 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemErase(ctx, pbReq)
 	})
+	// SystemErase deliberately tears down the raft DB and exec-restarts the control
+	// plane process on both the leader and any replicas (see mgmt_system.go). During
+	// that window callers can see a mix of transient errors: "not leader"/"not
+	// replica" responses while raft re-elects, and connection-refused/reset errors
+	// while the process is mid-exec and its listener is briefly down. All of these
+	// must be retried (with backoff, via the generic MS retry loop in rpc.go) until
+	// the restarted process comes back up and a new leader is elected, matching the
+	// retry behavior used by SystemQuery/SystemJoin/SystemSelfHealEval for the same
+	// MS-unavailability windows.
+	//
+	// This expanded criteria only applies to external (non-forwarded) requests. When
+	// Forwarded is set (i.e. this is the MS leader calling a specific replica peer
+	// directly, see mgmtSvc.eraseReplicas()), the peer has already wiped its own DB by
+	// the time it acks, so there's no "wait for a new leader to be elected" scenario to
+	// retry through; retrying here would instead just block the forwarding leader for
+	// the full context timeout against a peer that is restarting or unreachable. The
+	// caller already handles that case directly (see eraseReplicas()'s own
+	// IsRetryableConnErr() check on the one-shot result).
+	//
+	// NB: Deliberately no retryFn is set here. Setting one causes rpc.go's retry loop to treat
+	// the very first retryable error as terminal: canRetry() is consulted before the loop's
+	// per-error-type handling, so a non-nil retryFn return aborts immediately instead of
+	// allowing exponential backoff and a resend. Leaving retryFn nil lets onRetry() fall
+	// through (errNoRetryHandler) to that normal backoff-and-retry handling.
 	req.retryTestFn = func(err error, _ uint) bool {
-		return system.IsUnavailable(err)
-	}
-	req.retryFn = func(_ context.Context, _ uint) error {
-		return system.ErrRaftUnavail
+		if req.Forwarded {
+			return false
+		}
+		return system.IsUnavailable(err) || IsRetryableConnErr(err) ||
+			system.IsNotLeader(err) || system.IsNotReplica(err)
 	}
 
 	rpcClient.Debugf("DAOS system-erase request: %s", pbUtil.Debug(pbReq))

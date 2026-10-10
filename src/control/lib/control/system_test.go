@@ -1404,11 +1404,6 @@ func TestControl_SystemErase(t *testing.T) {
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
 			expErr: errors.New("remote failed"),
 		},
-		"remote unavailable": {
-			req:    new(SystemEraseReq),
-			uResp:  MockMSResponse("host1", system.ErrRaftUnavail, nil),
-			expErr: system.ErrRaftUnavail,
-		},
 		"single host dual rank": {
 			req: new(SystemEraseReq),
 			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemEraseResp{
@@ -1559,6 +1554,48 @@ func TestControl_SystemErase(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+// TestControl_SystemErase_RetryableErrors verifies that SystemErase retries (with
+// backoff, via the generic MS retry loop in rpc.go) rather than failing fast on the
+// transient errors expected during the erase-and-exec-restart window (see
+// mgmt_system.go), matching the behavior of SystemSelfHealEval for the same class of
+// errors.
+func TestControl_SystemErase_RetryableErrors(t *testing.T) {
+	for name, testErr := range map[string]error{
+		"system unavailable": system.ErrRaftUnavail,
+		"connection closed":  FaultConnectionClosed(""),
+		"connection refused": FaultConnectionRefused(""),
+		"not leader":         &system.ErrNotLeader{LeaderHint: "host1", Replicas: []string{"host2"}},
+		"not replica":        &system.ErrNotReplica{Replicas: []string{"host1", "host2"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			// checkSystemErase() issues its own (retryable) System-Query request
+			// before the erase RPC is sent, so the first configured response is
+			// consumed by that call; use an empty membership so it succeeds and
+			// lets SystemErase proceed to the erase RPC itself.
+			client := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.SystemQueryResp{}),
+					MockMSResponse("host1", testErr, nil),
+					MockMSResponse("host1", nil, &mgmtpb.SystemEraseResp{}),
+				},
+			})
+
+			gotResp, gotErr := SystemErase(test.Context(t), client, new(SystemEraseReq))
+			if gotErr != nil {
+				t.Fatalf("unexpected error: %v", gotErr)
+			}
+
+			expResp := new(SystemEraseResp)
+			if diff := cmp.Diff(expResp, gotResp, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})

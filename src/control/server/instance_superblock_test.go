@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -84,6 +85,77 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		if i._superblock.UUID == mi._superblock.UUID {
 			t.Fatal("second instance has same superblock as first")
 		}
+	}
+}
+
+// TestServer_Instance_needsSuperblock_staleInMemory verifies that needsSuperblock()
+// always re-reads the on-disk superblock rather than trusting stale in-memory state,
+// so a superblock removed from disk (e.g. by a format --replace or erase operation)
+// is correctly detected even if a previous in-memory superblock is still cached.
+func TestServer_Instance_needsSuperblock_staleInMemory(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	testDir, cleanup := test.CreateTestDir(t)
+	defer cleanup()
+
+	mnt := "mnt"
+	if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
+		t.Fatal(err)
+	}
+	cfg := engine.MockConfig().
+		WithSystemName(t.Name()).
+		WithStorage(
+			storage.NewTierConfig().
+				WithStorageClass("ram").
+				WithScmRamdiskSize(1).
+				WithScmMountPoint(mnt),
+		)
+	r := engine.NewRunner(log, cfg)
+	msc := &sysprov.MockSysConfig{
+		IsMountedBool: true,
+		RealReadFile:  true,
+	}
+	mbc := &scm.MockBackendConfig{}
+	mp := storage.NewProvider(log, 0, &cfg.Storage,
+		sysprov.NewMockSysProvider(log, msc),
+		scm.NewMockProvider(log, mbc, msc), nil, nil)
+	ei := NewEngineInstance(log, mp, nil, r, nil)
+	ei.fsRoot = testDir
+
+	if err := ei.createSuperblock(); err != nil {
+		t.Fatalf("createSuperblock(): %s", err)
+	}
+
+	needs, err := ei.needsSuperblock()
+	if err != nil {
+		t.Fatalf("needsSuperblock(): %s", err)
+	}
+	if needs {
+		t.Fatal("expected needsSuperblock() to be false with superblock present on disk")
+	}
+
+	// Simulate stale in-memory superblock state (e.g. retained from before a
+	// format --replace or system erase removed the on-disk copy) by removing the
+	// on-disk file without clearing the cached in-memory superblock.
+	if ei._superblock == nil {
+		t.Fatal("expected in-memory superblock to be set after createSuperblock()")
+	}
+	if err := os.Remove(ei.superblockPath()); err != nil {
+		t.Fatalf("failed to remove on-disk superblock: %s", err)
+	}
+
+	needs, err = ei.needsSuperblock()
+	if err != nil {
+		t.Fatalf("needsSuperblock(): %s", err)
+	}
+	if !needs {
+		t.Fatal("expected needsSuperblock() to be true after on-disk superblock removed, " +
+			"despite stale in-memory superblock still being cached")
+	}
+	if ei._superblock != nil {
+		t.Fatal("expected in-memory superblock to be cleared (nil) after " +
+			"needsSuperblock() detected the on-disk superblock was missing")
 	}
 }
 

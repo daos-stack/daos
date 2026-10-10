@@ -22,6 +22,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -728,6 +729,19 @@ func TestServer_MgmtSvc_getPoolRanks(t *testing.T) {
 func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r ...[]*control.HostResponse) *mgmtSvc {
 	t.Helper()
 
+	return mgmtSystemTestSetupSelfAddr(t, l, mbs, common.LocalhostCtrlAddr(), r...)
+}
+
+// mgmtSystemTestSetupSelfAddr is a variant of mgmtSystemTestSetup that lets the caller
+// control which address the system db considers to be "self" (svc.sysdb.ReplicaAddr()).
+// By default (mgmtSystemTestSetup) this is an address-less localhost placeholder that
+// never matches any configured member host, so getPeersAndFanout()'s self/replica-peer
+// rank exclusion (see Section 4.6 of the MD-on-SSD system erase design doc) never
+// actually excludes anything. Passing a selfAddr that matches one of mbs' hosts (e.g.
+// test.MockHostAddr(1)) allows that exclusion behavior to be exercised.
+func mgmtSystemTestSetupSelfAddr(t *testing.T, l logging.Logger, mbs system.Members, selfAddr *net.TCPAddr, r ...[]*control.HostResponse) *mgmtSvc {
+	t.Helper()
+
 	mockResolver := func(_ string, addr string) (*net.TCPAddr, error) {
 		return map[string]*net.TCPAddr{
 				"10.0.0.1:10001": {IP: net.ParseIP("10.0.0.1"), Port: 10001},
@@ -742,7 +756,7 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 	svc := newTestMgmtSvcMulti(t, l, maxEngines, false)
 	svc.harness.started.SetTrue()
 	svc.harness.instances[0].(*EngineInstance)._superblock.Rank = ranklist.NewRankPtr(0)
-	svc.sysdb = raft.MockDatabase(t, l)
+	svc.sysdb = raft.MockDatabaseWithAddr(t, l, selfAddr)
 	svc.membership = system.MockMembership(t, l, svc.sysdb, mockResolver)
 	for _, m := range mbs {
 		if _, err := svc.membership.Add(m); err != nil {
@@ -3582,6 +3596,21 @@ func TestServer_MgmtSvc_SystemSelfHealEval(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemErase(t *testing.T) {
+	// SystemErase() unconditionally schedules a real process restart via unixExec()
+	// (unix.Exec()) from a background goroutine after a short (500ms) delay. Stub it out
+	// for the lifetime of this test function so that running these subtests does not
+	// replace the test binary's process image mid-suite.
+	//
+	// NB: this is intentionally NOT restored (e.g. via defer/t.Cleanup) once the test
+	// function returns. unixExec is invoked asynchronously ~500ms after each subtest's
+	// SystemErase() call returns, which is often after the subtest (or even the whole
+	// top-level test) has already finished; restoring the real unix.Exec() before that
+	// delayed goroutine fires would defeat the mock and trigger a genuine self-exec of the
+	// test binary, silently restarting (and replaying) the entire suite.
+	unixExec = func(argv0 string, argv []string, envv []string) error {
+		return nil
+	}
+
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
 		return &control.HostResponse{
 			Addr:    test.MockHostAddr(a).String(),
@@ -3591,6 +3620,9 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		nilReq         bool
+		forwarded      bool
+		notLeader      bool
+		selfHostIdx    int32 // index (per test.MockHostAddr) of the "self" leader host; 0 = default
 		ranks          string
 		hosts          string
 		members        system.Members
@@ -3599,11 +3631,36 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 		expResults     []*sharedpb.RankResult
 		expAbsentRanks string
 		expAbsentHosts string
-		expErrMsg      string
+		expErr         error
 	}{
 		"nil req": {
-			nilReq:    true,
-			expErrMsg: "nil request",
+			nilReq: true,
+			expErr: errors.New("nil request"),
+		},
+		"external request on non-leader replica is redirected": {
+			// Simulates an external (e.g. dmg) request landing on a non-leader
+			// replica; the request context carries no "server" component, so
+			// leader-only enforcement kicks in and the client-redirectable
+			// ErrNotLeader is returned rather than silently erasing only the
+			// local replica's engines.
+			notLeader: true,
+			expErr:    &system.ErrNotLeader{},
+		},
+		"forwarded request from leader takes replica-only path on non-leader replica": {
+			// Simulates the MS leader forwarding a per-replica erase request
+			// (see eraseReplicas()) directly to a non-leader peer; the request
+			// context carries the "server" component, so it is allowed to run
+			// locally (resetLocalEngines()) instead of being redirected back to
+			// the leader (which would occur if checkLeaderRequest were used).
+			// The mock system database doesn't support a full Start()/Stop()
+			// lifecycle, so the local erase itself fails deeper in the call
+			// chain (after passing the replica-only check) - proving that the
+			// "server" component correctly bypassed leader-only enforcement
+			// rather than returning *system.ErrNotLeader.
+			forwarded: true,
+			notLeader: true,
+			mResps:    []*control.HostResponse{},
+			expErr:    errors.New("no shutdown callback set"),
 		},
 		"unfiltered rank results": {
 			members: system.Members{
@@ -3671,12 +3728,62 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 				mockMember(t, 3, 2, "awaitformat"),
 			},
 		},
+		"leader's own host ranks excluded from fanout": {
+			// svc.sysdb's self address matches host 1 (where ranks 0,1 live, see
+			// mockMember() calls below), so getPeersAndFanout() must exclude both
+			// ranks from the ResetFormatRanks fanout request entirely (see Section
+			// 4.6 of the MD-on-SSD system erase design doc); they are instead
+			// erased locally via resetLocalEngines(), which produces no RankResult
+			// of its own. Only host 2's ranks (2, 3) go through RPC fanout and
+			// appear in the response/get their membership state updated.
+			selfHostIdx: 1,
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "stopped"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			mResps: []*control.HostResponse{
+				hr(2, mockRankSuccess("reset format", 2), mockRankSuccess("reset format", 3)),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockRankSuccess("reset format", 2, 2),
+				mockRankSuccess("reset format", 3, 2),
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "awaitformat"),
+				mockMember(t, 3, 2, "awaitformat"),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
+			var svc *mgmtSvc
+			if tc.selfHostIdx != 0 {
+				svc = mgmtSystemTestSetupSelfAddr(t, log, tc.members,
+					test.MockHostAddr(tc.selfHostIdx), tc.mResps)
+			} else {
+				svc = mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
+			}
+
+			if tc.notLeader {
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			ctx := test.Context(t)
+			if tc.forwarded {
+				md := metadata.Pairs(
+					build.DaosComponentHeader, build.ComponentServer.String(),
+					build.DaosVersionHeader, "1.0.0",
+				)
+				ctx = metadata.NewIncomingContext(ctx, md)
+			}
 
 			req := &mgmtpb.SystemEraseReq{
 				Sys: build.DefaultSystemName,
@@ -3685,14 +3792,103 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 				req = nil
 			}
 
-			gotResp, gotErr := svc.SystemErase(test.Context(t), req)
-			test.ExpectError(t, gotErr, tc.expErrMsg, name)
-			if tc.expErrMsg != "" {
+			gotResp, gotErr := svc.SystemErase(ctx, req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
 				return
 			}
 
 			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
+		})
+	}
+}
+
+func TestServer_fsyncDir(t *testing.T) {
+	for name, tc := range map[string]struct {
+		path   func(t *testing.T) string
+		expErr error
+	}{
+		"existing directory": {
+			path: func(t *testing.T) string {
+				testDir, cleanup := test.CreateTestDir(t)
+				t.Cleanup(cleanup)
+				return testDir
+			},
+		},
+		"nonexistent path": {
+			path: func(t *testing.T) string {
+				return "/nonexistent/path/that/should/not/exist"
+			},
+			expErr: errors.New("no such file or directory"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotErr := fsyncDir(tc.path(t))
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestServer_MgmtSvc_eraseSysdb(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(t, log)
+
+	t.Run("no shutdown callback set", func(t *testing.T) {
+		// sysdb (a bare raft.MockDatabase) was never Start()ed, so it has no
+		// shutdown callback and Stop() must fail cleanly rather than panic.
+		if err := svc.eraseSysdb(true, ""); err == nil {
+			t.Fatal("expected error erasing a never-started system database")
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		ctx := test.Context(t)
+		replicas := []*net.TCPAddr{common.LocalhostCtrlAddr()}
+		cleanup := startSysDB(t, ctx, log, replicas, svc)
+		defer cleanup()
+
+		// Success path: sysdb is a real, started, single-replica database, so
+		// Stop()/RemoveFiles() should both succeed and the trailing
+		// awaitSync() should return without blocking indefinitely.
+		if err := svc.eraseSysdb(true, ""); err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+	})
+}
+
+func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {
+	mockAddr := func(a int32) *net.TCPAddr {
+		return test.MockHostAddr(a)
+	}
+
+	for name, tc := range map[string]struct {
+		peers     []*net.TCPAddr
+		uErr      error
+		expErrMsg string
+	}{
+		"no peers": {
+			peers: nil,
+		},
+		"peer erase request fails": {
+			peers:     []*net.TCPAddr{mockAddr(1)},
+			uErr:      errors.New("mock rpc error"),
+			expErrMsg: "System-Query command failed: mock rpc error",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			svc := newTestMgmtSvc(t, log)
+			svc.rpcClient = control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryError: tc.uErr,
+			})
+
+			gotErr := svc.eraseReplicas(test.Context(t), tc.peers)
+			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 		})
 	}
 }
