@@ -2803,7 +2803,9 @@ obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, ui
 			D_GOTO(out, rc = -DER_INPROGRESS);
 
 		/* Abort it if exist but with different epoch, then re-execute with new epoch. */
-		rc = vos_dtx_abort(coh, dti, e, ver);
+		rc = vos_dtx_abort(coh, dti, e, pm_ver);
+		if (unlikely(rc == -DER_NO_PERM))
+			D_GOTO(out, rc = -DER_STALE);
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 		/* Fall through */
@@ -3316,7 +3318,7 @@ out:
 		dte.dte_refs = 1;
 		dte.dte_mbs  = mbs;
 
-		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&orw->orw_dti), DP_RC(rc1));
@@ -4238,7 +4240,7 @@ out:
 		dte.dte_refs = 1;
 		dte.dte_mbs  = mbs;
 
-		rc1 = dtx_abort(ioc.ioc_coc, &dte, opi->opi_epoch);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, opi->opi_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&opi->opi_dti), DP_RC(rc1));
@@ -5396,6 +5398,9 @@ out:
 		  DLOG_ERR, DB_IO, rc, "Handled DTX " DF_DTI " on leader, idx %u",
 		  DP_DTI(&dcsh->dcsh_xid), dca->dca_idx);
 
+	if (unlikely(rc == -DER_STALE))
+		rc = -DER_TX_RESTART;
+
 	if (rc == -DER_AGAIN) {
 		oci->oci_flags |= ORF_RESEND;
 		need_abort = true;
@@ -5411,7 +5416,9 @@ out:
 		dte.dte_ver = oci->oci_map_ver;
 		dte.dte_refs = 1;
 		dte.dte_mbs = dcsh->dcsh_mbs;
-		rc1 = dtx_abort(dca->dca_ioc->ioc_coc, &dte, dcsh->dcsh_epoch.oe_value);
+
+		rc1 = dtx_abort(dca->dca_ioc->ioc_coc, &dte, dcsh->dcsh_epoch.oe_value,
+				oci->oci_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&dcsh->dcsh_xid), DP_RC(rc1));
@@ -5995,7 +6002,7 @@ again:
 
 out:
 	if (rc != 0 && need_abort) {
-		rc1 = dtx_coll_abort(ioc.ioc_coc, dce, ocpi->ocpi_epoch);
+		rc1 = dtx_coll_abort(ioc.ioc_coc, dce, ocpi->ocpi_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to collective abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&ocpi->ocpi_xid), DP_RC(rc1));

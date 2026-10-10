@@ -186,7 +186,7 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
-		for (i = 0, j = 0; i < dct->dct_tgt_nr; i++) {
+		for (i = 0; i < dct->dct_tgt_nr; i++) {
 			rc = pool_map_find_target(map->pl_poolmap, dct->dct_tgts[i], &target);
 			D_ASSERT(rc == 1);
 
@@ -198,25 +198,17 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 			if (target->ta_comp.co_ver > dtx_ver)
 				continue;
 
-			/* Skip non-healthy one. */
-			if (target->ta_comp.co_status != PO_COMP_ST_UP &&
-			    target->ta_comp.co_status != PO_COMP_ST_UPIN &&
+			/* Skip non-healthy one and UP target for CHECK case. */
+			if (target->ta_comp.co_status != PO_COMP_ST_UPIN &&
 			    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
 				continue;
 
 			/* Skip current (new) leader target. */
-			if (my_tgtid != target->ta_comp.co_index) {
+			if (my_tgtid != target->ta_comp.co_index)
 				setbit(dce->dce_bitmap, target->ta_comp.co_index);
-				j++;
-			}
 		}
 
 		rc = 0;
-
-		if (unlikely(j == 0)) {
-			D_FREE(dce->dce_bitmap);
-			dce->dce_bitmap_sz = 0;
-		}
 	}
 
 	if (!need_hint)
@@ -365,7 +357,8 @@ dtx_coll_local_one(void *args)
 		rc = vos_dtx_abort(cont->sc_hdl, &dcla->dcla_xid, dcla->dcla_epoch, dcla->dcla_ver);
 		break;
 	case DTX_COLL_CHECK:
-		rc = vos_dtx_check(cont->sc_hdl, &dcla->dcla_xid, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dcla->dcla_xid, NULL, &dcla->dcla_ver, NULL,
+				   DCI_RESYNC);
 		if (rc == DTX_ST_INITED) {
 			/*
 			 * For DTX_CHECK, non-ready one is equal to non-exist. Do not directly

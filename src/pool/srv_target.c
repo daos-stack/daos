@@ -3193,3 +3193,48 @@ out:
 	if (pool != NULL)
 		ds_pool_put(pool);
 }
+
+struct pool_update_mod_bound_args {
+	uuid_t       uuid;
+	daos_epoch_t bound;
+};
+
+static int
+pool_update_mod_bound_one(void *data)
+{
+	struct pool_update_mod_bound_args *args = data;
+	struct ds_pool_child              *pool;
+	struct ds_cont_child              *cont;
+	int                                rc = 0;
+
+	pool = ds_pool_child_lookup(args->uuid);
+	if (unlikely(pool == NULL))
+		return -DER_NONEXIST;
+
+	d_list_for_each_entry(cont, &pool->spc_cont_list, sc_link) {
+		rc = vos_cont_set_mod_bound(cont->sc_hdl, args->bound);
+		if (rc != 0)
+			break;
+	}
+
+	ds_pool_child_put(pool);
+	return rc;
+}
+
+int
+ds_pool_update_mod_bound(uuid_t uuid, daos_epoch_t epoch)
+{
+	struct pool_update_mod_bound_args args = {0};
+	int                               rc;
+
+	args.bound = epoch;
+	uuid_copy(args.uuid, uuid);
+
+	rc = ds_pool_thread_collective(uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				       pool_update_mod_bound_one, &args, 0);
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_REBUILD, rc,
+		  "Update modification boundary for pool " DF_UUID " to " DF_X64, DP_UUID(uuid),
+		  epoch);
+
+	return rc;
+}
