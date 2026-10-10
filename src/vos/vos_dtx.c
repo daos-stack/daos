@@ -1451,18 +1451,48 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 
 	/*
 	 * Up layer rebuild logic guarantees that the rebuild scan will not be
-	 * triggered until DTX resync has been done on all related targets. So
+	 * triggered until DTX resync has been done on all related targets and
+	 * the container global stable epoch has exceeded the rebuild epoch. So
 	 * here, if rebuild logic hits non-committed DTX entry, it must be for
 	 * new IO that version is not older than rebuild, then it is invisible
 	 * to rebuild. Related new IO corresponding to such non-committed DTX
 	 * has already been sent to the in-rebuilding target.
 	 */
 	if (intent == DAOS_INTENT_MIGRATION) {
-		if (unlikely(dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch))
-			D_ERROR("Hit prepared DTX " DF_DTI " with epoch " DF_X64 ", ver %u "
-				"during rebuild (" DF_DTI ") with epoch " DF_X64 ", ver %u\n",
-				DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae),
-				DP_DTI(&dth->dth_xid), dth->dth_epoch, dth->dth_ver);
+		if (likely(dth == NULL || DAE_EPOCH(dae) > dth->dth_epoch))
+			return ALB_UNAVAILABLE;
+
+		D_ERROR("Hit prepared DTX " DF_DTI " with epoch " DF_X64 ", ver %u "
+			"during rebuild (" DF_DTI ") with epoch " DF_X64 ", ver %u\n",
+			DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae), DP_DTI(&dth->dth_xid),
+			dth->dth_epoch, dth->dth_ver);
+
+		/*
+		 * Defense in depth for the unexpected case above (a prepared DTX that is not
+		 * newer than the rebuild epoch), e.g. if the stable epoch barrier was skipped
+		 * for an old-layout container:
+		 *
+		 * 1. In-flight DTX (not yet prepared, being prepared, or still owned by the
+		 *    RPC handler): the result is undecided, skip it as the DEFAULT intent does.
+		 * 2. Prepared DTX on a non-leader: the leader may already have marked it as
+		 *    committable while the batched commit has not arrived here. Skipping it
+		 *    would make the migration fetch miss the record or return an older version
+		 *    that is then written over the data already on the in-rebuilding target.
+		 *    Refresh with the leader via -DER_INPROGRESS, same as a regular read on a
+		 *    non-leader; the fetch/enumeration handlers retry after the refresh.
+		 * 3. Prepared DTX on the leader without owner: left by an abort in progress
+		 *    or a leader restart, to be resolved by DTX resync. Skip it.
+		 *
+		 * Rule 2 needs a sponsor that can refresh, i.e. the migration fetch or the
+		 * enumeration handle. The rebuild object scan (dth_ignore_uncommitted) cannot
+		 * refresh, so it falls back to skipping the entry.
+		 */
+		if (dae->dae_dbd == NULL || dae->dae_dth != NULL || dae->dae_preparing)
+			return ALB_UNAVAILABLE;
+
+		if (!dth->dth_ignore_uncommitted && !(DAE_FLAGS(dae) & DTE_LEADER))
+			return dtx_inprogress(dae, dth, false, true, 10);
+
 		return ALB_UNAVAILABLE;
 	}
 
