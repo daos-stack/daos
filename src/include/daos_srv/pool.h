@@ -121,6 +121,7 @@ struct ds_pool {
 	uint32_t		 sp_reint_mode;
 	/* Hold wlock when recover container, rlock when handle container create/destroy RPC. */
 	ABT_rwlock               sp_recov_lock;
+	daos_epoch_t             sp_rebuild_epoch;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -193,6 +194,8 @@ struct ds_pool_child {
 	 * DAOS_TGT_TAG.
 	 */
 	void			*spc_metrics[DAOS_NR_MODULE];
+	/* The remaining time (seconds) for waiting container global stable epoch. */
+	int spc_remaining_wait_time;
 };
 
 struct ds_pool_svc_op_key {

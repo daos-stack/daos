@@ -2803,7 +2803,9 @@ obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, ui
 			D_GOTO(out, rc = -DER_INPROGRESS);
 
 		/* Abort it if exist but with different epoch, then re-execute with new epoch. */
-		rc = vos_dtx_abort(coh, dti, e, ver);
+		rc = vos_dtx_abort(coh, dti, e, pm_ver);
+		if (unlikely(rc == -DER_NO_PERM))
+			D_GOTO(out, rc = -DER_STALE);
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 		/* Fall through */
@@ -3004,6 +3006,18 @@ comp:
 	return ds_obj_remote_update(dlh, arg, idx, comp_cb);
 }
 
+static inline int
+check_rebuild_race(struct ds_cont_child *cont, daos_epoch_t epoch)
+{
+	if (unlikely(cont->sc_pool->spc_pool->sp_rebuild_epoch >= epoch)) {
+		D_DEBUG(DB_IO, "Race with rebuild " DF_X64 " vs " DF_X64 ", client will retry.\n",
+			cont->sc_pool->spc_pool->sp_rebuild_epoch, epoch);
+		return -DER_UPDATE_AGAIN;
+	}
+
+	return 0;
+}
+
 /* Nonnegative return codes of process_epoch */
 enum process_epoch_rc {
 	PE_OK_REMOTE,	/* OK and epoch chosen remotely */
@@ -3198,6 +3212,16 @@ again:
 		D_GOTO(out, rc);
 	}
 
+	/*
+	 * For resent case, if the used epoch is older than rebuild epoch, then related
+	 * DTX may be aborted via dtx_leader_end() before being marked as committable.
+	 */
+	if (!daos_is_zero_dti(&orw->orw_dti) && !(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(ioc.ioc_coc, orw->orw_epoch);
+		if (rc != 0)
+			goto out;
+	}
+
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
 	 * CoS (committable) cache, piggyback them via the dispdatched
@@ -3316,7 +3340,7 @@ out:
 		dte.dte_refs = 1;
 		dte.dte_mbs  = mbs;
 
-		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&orw->orw_dti), DP_RC(rc1));
@@ -4126,6 +4150,12 @@ again:
 		goto cleanup;
 	}
 
+	if (!(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(ioc.ioc_coc, opi->opi_epoch);
+		if (rc != 0)
+			goto out;
+	}
+
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
 	 * CoS (committable) cache, piggyback them via the dispdatched
@@ -4238,7 +4268,7 @@ out:
 		dte.dte_refs = 1;
 		dte.dte_mbs  = mbs;
 
-		rc1 = dtx_abort(ioc.ioc_coc, &dte, opi->opi_epoch);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, opi->opi_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&opi->opi_dti), DP_RC(rc1));
@@ -5345,6 +5375,12 @@ again:
 		D_GOTO(out, rc = 0);
 	}
 
+	if (!(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(dca->dca_ioc->ioc_coc, dcsh->dcsh_epoch.oe_value);
+		if (rc != 0)
+			goto out;
+	}
+
 	dcde = ds_obj_cpd_get_ents(dca->dca_rpc, dca->dca_idx, 0);
 	dcsrs = ds_obj_cpd_get_reqs(dca->dca_rpc, dca->dca_idx);
 	tgts = ds_obj_cpd_get_tgts(dca->dca_rpc, dca->dca_idx);
@@ -5396,6 +5432,9 @@ out:
 		  DLOG_ERR, DB_IO, rc, "Handled DTX " DF_DTI " on leader, idx %u",
 		  DP_DTI(&dcsh->dcsh_xid), dca->dca_idx);
 
+	if (unlikely(rc == -DER_STALE))
+		rc = -DER_TX_RESTART;
+
 	if (rc == -DER_AGAIN) {
 		oci->oci_flags |= ORF_RESEND;
 		need_abort = true;
@@ -5411,7 +5450,9 @@ out:
 		dte.dte_ver = oci->oci_map_ver;
 		dte.dte_refs = 1;
 		dte.dte_mbs = dcsh->dcsh_mbs;
-		rc1 = dtx_abort(dca->dca_ioc->ioc_coc, &dte, dcsh->dcsh_epoch.oe_value);
+
+		rc1 = dtx_abort(dca->dca_ioc->ioc_coc, &dte, dcsh->dcsh_epoch.oe_value,
+				oci->oci_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&dcsh->dcsh_xid), DP_RC(rc1));
@@ -5936,6 +5977,12 @@ again:
 			D_GOTO(out, rc = 0);
 	}
 
+	if (leader && !(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(ioc.ioc_coc, ocpi->ocpi_epoch);
+		if (rc != 0)
+			goto out;
+	}
+
 	epoch.oe_value = ocpi->ocpi_epoch;
 	epoch.oe_first = epoch.oe_value;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(ocpi->ocpi_flags);
@@ -5995,7 +6042,7 @@ again:
 
 out:
 	if (rc != 0 && need_abort) {
-		rc1 = dtx_coll_abort(ioc.ioc_coc, dce, ocpi->ocpi_epoch);
+		rc1 = dtx_coll_abort(ioc.ioc_coc, dce, ocpi->ocpi_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to collective abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&ocpi->ocpi_xid), DP_RC(rc1));
