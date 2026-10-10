@@ -813,8 +813,14 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
-	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM ||
-	     daos_crt_network_error(rc)) &&
+	/*
+	 * -DER_INPROGRESS: the fetched replica hit a non-committed DTX that the remote
+	 * server could not resolve with the DTX leader yet (still in flight). The dsc
+	 * client does not retry it for migration (obj_retriable_migrate()), so retry here
+	 * as the enumeration path does, instead of failing the whole rebuild.
+	 */
+	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_INPROGRESS ||
+	     rc == -DER_NOMEM || daos_crt_network_error(rc)) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",

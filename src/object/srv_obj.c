@@ -2804,8 +2804,19 @@ obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, ui
 
 		/* Abort it if exist but with different epoch, then re-execute with new epoch. */
 		rc = vos_dtx_abort(coh, dti, e, pm_ver);
-		if (rc < 0 && rc != -DER_NONEXIST)
+		if (rc < 0 && rc != -DER_NONEXIST) {
+			/*
+			 * -DER_NO_PERM means either a newer leader (with higher pool map
+			 * version) has already taken over this DTX via DTX resync, or the DTX
+			 * has just been committed by race. Neither can be decided here, and
+			 * the client does not retry on -DER_NO_PERM. Return -DER_INPROGRESS
+			 * instead so that the client (after refreshing the pool map) retries
+			 * and lets the new leader decide the fate of the DTX.
+			 */
+			if (rc == -DER_NO_PERM)
+				rc = -DER_INPROGRESS;
 			D_GOTO(out, rc);
+		}
 		/* Fall through */
 	case -DER_NONEXIST:
 		if (flags != NULL)

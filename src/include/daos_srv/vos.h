@@ -1024,6 +1024,19 @@ daos_epoch_t
 vos_cont_get_local_stable_epoch(daos_handle_t coh);
 
 /**
+ * Check whether the given container can track the global stable epoch. Containers created
+ * with an old layout (before the container extension existed), or living in a pool with an
+ * old layout version, do not support it; vos_cont_get_global_stable_epoch() always returns
+ * zero for them.
+ *
+ * \param coh	[IN]	Container open handle
+ *
+ * \return		True if supported, false otherwise.
+ */
+bool
+vos_cont_global_stable_epoch_supported(daos_handle_t coh);
+
+/**
  * Get global stable epoch for the given container.
  *
  * \param coh	[IN]	Container open handle
