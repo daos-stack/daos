@@ -34,9 +34,9 @@ set_lib_name() {
 
 distro_name=".${DISTRO:-el9}"
 
-export libfabric_min_version="1.20"
-export libfabric_version="1.22.0"
-export libfabric_release="5${distro_name}"
+export libfabric_min_version="2.0"
+export libfabric_version="2.7.0"
+export libfabric_release="1${distro_name}"
 export libfabric_full="${libfabric_version}-${libfabric_release}"
 export mercury_version="2.4.1"
 export mercury_release="5${distro_name}"
