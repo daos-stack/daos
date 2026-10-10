@@ -183,6 +183,10 @@ struct ds_pool_child {
 	ABT_eventual	spc_ref_eventual;
 
 	uint64_t                 spc_no_storage : 1; /* The pool shard has no storage. */
+	ATOMIC uint32_t          spc_ec_agg_pause_gate;
+	ATOMIC uint64_t          spc_ec_agg_pause_term;
+	/* Debug state set by RB_OP_REBUILD START after the global EC agg pause. */
+	ATOMIC uint64_t          spc_rebuild_ec_agg_paused_hlc;
 
 	uint32_t	spc_reint_mode;
 	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */
@@ -210,6 +214,26 @@ static inline bool
 ds_pool_is_rebuilding(struct ds_pool *pool)
 {
 	return (atomic_load(&pool->sp_rebuilding) > 0 || atomic_load(&pool->sp_rebuild_enum) > 0);
+}
+
+static inline bool
+ds_pool_child_ec_agg_paused(struct ds_pool_child *child)
+{
+	return atomic_load(&child->spc_ec_agg_pause_gate) != 0;
+}
+
+static inline bool
+ds_pool_child_rebuild_started(struct ds_pool_child *child)
+{
+	return atomic_load(&child->spc_rebuild_ec_agg_paused_hlc) != 0;
+}
+
+static inline bool
+ds_pool_child_ec_agg_token_match(struct ds_pool_child *child, uint64_t leader_term,
+				 uint32_t rebuild_gen)
+{
+	return atomic_load(&child->spc_ec_agg_pause_gate) == rebuild_gen &&
+	       atomic_load(&child->spc_ec_agg_pause_term) <= leader_term;
 }
 
 /* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.
