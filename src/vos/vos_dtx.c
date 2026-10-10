@@ -2043,9 +2043,22 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32
 			}
 			break;
 		case DCI_RESYNC:
+			/*
+			 * For DTX check from the (new) leader's DTX resync, @pm_ver is the
+			 * checker's pool map version. Record it to forbid an older leader from
+			 * aborting this DTX later (see vos_dtx_abort), it is DRAM-only and will
+			 * be lost on restart, that is acceptable since resync will run again.
+			 *
+			 * The checker decides the DTX fate, it must not be asked to retry just
+			 * because local DTX resync for @pm_ver has not completed: when two
+			 * targets are leaders for each other's DTXs, both would otherwise get
+			 * -DER_INPROGRESS and loop in DSHR_NEED_RETRY until the other one
+			 * finishes, so skip the vc_dtx_resync_ver check below.
+			 */
 			if (pm_ver != NULL && dae->dae_known_max_version < *pm_ver)
 				dae->dae_known_max_version = *pm_ver;
-			break;
+
+			return vos_dae_is_prepare(dae) ? DTX_ST_PREPARED : DTX_ST_INITED;
 		case DCI_REFRESH:
 			dae->dae_maybe_shared = 1;
 			/*
