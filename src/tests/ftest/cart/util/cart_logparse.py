@@ -418,13 +418,22 @@ class StateIter():
         return self
 
     def __next__(self):
-        # pylint: disable=too-many-branches
         line = next(self._l)
 
         if not line.trace:
             line.rpc = False
             return line
 
+        try:
+            return self._track(line)
+        except IndexError:
+            # Trace line truncated by an abrupt process kill; treat as plain text.
+            line.trace = False
+            line.rpc = False
+            return line
+
+    def _track(self, line):
+        # pylint: disable=too-many-branches
         if line.is_new() or line.is_new_rpc():
             if line.descriptor in self.reuse_table:
                 self.reuse_table[line.descriptor] += 1
