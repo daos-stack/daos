@@ -170,9 +170,11 @@ leader calling a specific peer has no "wait for a new leader" scenario to
 retry through, since the peer has already wiped its own DB by the time it
 acks — retrying would only block the leader for the full context timeout
 against a peer that is restarting or briefly unreachable.
-`eraseReplicas()` instead handles a retryable connection error from that
-one-shot call directly (treating it as an acceptable outcome, since the
-peer's `exec()` tears down the connection anyway).
+`eraseReplicas()` treats any error from that one-shot call, including a
+retryable connection error, as a hard failure of the overall operation: a
+connection error can't be distinguished from "the peer never received the
+request and still has its DB intact" versus "the peer erased successfully
+but the ack was lost", so it is not safe to assume success and continue.
 
 Each replica restarts and re-execs **independently** of the others and of
 the leader — there is no synchronization between replicas' restarts, only

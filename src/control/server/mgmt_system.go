@@ -790,26 +790,6 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 			req.Ranks.Count(), len(resp.Results))
 	}
 
-	// Normally UpdateMemberStates() (below) opportunistically fills in each result's
-	// Addr field from the membership DB as a side effect of persisting state via raft.
-	// When raft is unavailable (see below) that never runs, so do it here unconditionally
-	// from the same in-memory host/rank mapping used for addUnresponsiveResults() above --
-	// this is a plain read of already-fetched data, not a raft write, so it works
-	// regardless of leadership state. Without this, results returned to the client (e.g.
-	// during SystemErase's post-raft-stop ResetFormatRanks fanout) have an empty Addr,
-	// which callers such as dmg's system-erase result rendering treat as a hard error.
-	rankAddrs := make(map[ranklist.Rank]string)
-	for addr, ranks := range hostRanks {
-		for _, rank := range ranks {
-			rankAddrs[rank] = addr
-		}
-	}
-	for _, result := range resp.Results {
-		if result.Addr == "" {
-			result.Addr = rankAddrs[result.Rank]
-		}
-	}
-
 	if err = svc.membership.UpdateMemberStates(resp.Results, updateOnFail); err != nil {
 		return nil, nil, err
 	}
@@ -1852,12 +1832,13 @@ func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) err
 		peerReq.Forwarded = true
 
 		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
-			if control.IsRetryableConnErr(err) {
-				svc.log.Tracef("SystemErase: LEADER - Retryable connection error for peer %s: %s",
-					peer.String(), err)
-				continue
-			}
-			return err
+			// Forwarded requests are single-shot (see SystemErase()'s retryTestFn),
+			// so a connection error here can't be distinguished from "the peer
+			// never received the request and still has its DB intact". Treat it
+			// as a hard failure rather than silently assuming the peer erased
+			// itself; the invariant documented above (every peer provably wiped
+			// by the time this returns nil) must not be allowed to drift.
+			return errors.Wrapf(err, "erase request to MS replica peer %s failed", peer.String())
 		}
 		svc.log.Tracef("SystemErase: LEADER - Peer %s acknowledged erase request", peer.String())
 	}
