@@ -944,6 +944,26 @@ vos_cont_get_local_stable_epoch(daos_handle_t coh)
 	return epoch;
 }
 
+bool
+vos_cont_global_stable_epoch_supported(daos_handle_t coh)
+{
+	struct vos_container *cont;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	/* The pool layout must be new enough to track the stable epoch. */
+	if (cont->vc_pool->vp_pool_df->pd_version < VOS_POOL_DF_2_8)
+		return false;
+
+	/*
+	 * The container extension (that holds the global stable epoch) is only allocated when
+	 * the container is created with the new layout. A container created with an old layout
+	 * does not get one via pool upgrade, so it can never track the global stable epoch.
+	 */
+	return cont->vc_cont_df->cd_ext != UMOFF_NULL;
+}
+
 /*
  * The global stable epoch can be used for incremental reintegration: all the modifications
  * involved in current target (container shard) under the global stable epoch have already

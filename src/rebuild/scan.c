@@ -949,6 +949,19 @@ again:
 
 	gse = vos_cont_get_global_stable_epoch(coh);
 	if (gse < rpt->rt_stable_epoch) {
+		/*
+		 * Containers created with an old layout (or in a pool with an old layout version)
+		 * can never track the global stable epoch, waiting for it would always time out.
+		 * Fall back to the former behavior (scan right after DTX resync) for such ones.
+		 */
+		if (!vos_cont_global_stable_epoch_supported(coh)) {
+			D_INFO(DF_RB " container " DF_UUID " does not support global stable "
+				     "epoch, skip waiting for it to exceed rebuild epoch " DF_X64
+				     "\n",
+			       DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid), rpt->rt_stable_epoch);
+			goto lookup;
+		}
+
 		if (++count % 60 == 0)
 			D_WARN("Waiting for global stable epoch " DF_X64
 			       " to exceed rebuild epoch " DF_X64 " on the container " DF_CONT
@@ -981,6 +994,7 @@ again:
 		goto again;
 	}
 
+lookup:
 	rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
 	if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already destroyed or destroying\n",
