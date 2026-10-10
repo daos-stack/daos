@@ -88,12 +88,12 @@ if [ -n "$DAOS_NO_PROXY" ]; then
     export NO_PROXY="${DAOS_NO_PROXY:-""}"
 fi
 
-launch_node_args="-ts ${TEST_NODES}"
+launch_node_args="-ts ${TEST_SERVER_NODES} -tc ${TEST_CLIENT_NODES}"
 if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     # Currently the 'Functional Hardware 24' uses a cluster that has 8 hosts configured to run
     # daos engines and the remaining hosts are configured to be clients. Use separate -ts and -tc
     # launch.py arguments to ensure these hosts are not used for unintended role
-    IFS=" " read -r -a test_node_list <<< "${TEST_NODES//,/ }"
+    IFS=" " read -r -a test_node_list <<< "${TEST_SERVER_NODES//,/ }"
     server_nodes=$(IFS=','; echo "${test_node_list[*]:0:8}")
     client_nodes=$(IFS=','; echo "${test_node_list[*]:8}")
     launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
