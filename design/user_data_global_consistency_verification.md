@@ -83,15 +83,15 @@ On the other hand, efficiency is another non-ignorable factor, especially for th
 
 ## 3.1 Goals
 
-- **Search and recover (if possible) orphan DTX**:
+- **Search and recover (if possible) orphan DTX**
 
-    CHK engines will scan all active targets, find out orphan DTX entries. For each one, if related redundancy is broken, then mark it as `CORRUPTED`; otherwise, commit or abort it according to related data global consistency.
+    CHK engines will scan all active targets, find out orphan DTX entries. Mark it as `ORPHAN` or `CORRUPTED` if related redundancy is broken.
 
-- **Find out corrupted checksum (if applicable)**:
+- **Find out corrupted checksum (if applicable)**
 
     For unmatched checksum, if redundancy is enough, then recover it via reconstructing data from other redundancy in the redundancy group.
 
-- **Detect data global inconsistency**:
+- **Detect data global inconsistency**
 
     CHK engine will be able to find out data global inconsistency and report the trouble component (object shard, dkey, akey, or SV/EV record).
 
@@ -104,6 +104,12 @@ On the other hand, efficiency is another non-ignorable factor, especially for th
 - **Recover redundancy**
 
     We are not able to recover data redundancy until we can locate the bad shard. That will be done in subsequent release via object-based rebuild.
+
+## 3.2 Optional
+
+- **Repair orphan DTX**
+
+    For an orphan DTX, if related redundancy is not broken, then it is possible to leverage data global consistency to decide whether commit or abort it.
 
 # 4 Design
 
@@ -333,7 +339,7 @@ If these repeated inconsistencies are directly reported to user/admin via contro
 
 So the CHK scan leader needs to filter out repeated EC inconsistencies before reporting to control plane. For such purpose, each scan leader will maintain per redundancy group based tree to hold known EC inconsistencies. Such tree will be drained after verifying current redundancy group.
 
-### 4.3.4 Backward reasoning for handle orphan DTX
+### 4.3.4 Backward reasoning for handle orphan DTX (optional)
 
 The visibility for the data with orphan DTX is uncertain. That may affect the data global consistency. So if we assume some orphan DTX to be committed or aborted, then the visibility for related data will be changed accordingly as to may affect data global consistency result.
 
