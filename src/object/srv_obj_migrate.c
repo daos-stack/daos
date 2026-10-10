@@ -289,6 +289,44 @@ struct iter_obj_arg {
 	} while (0)
 
 static int
+migrate_dtx_retry_wait(struct migrate_pool_tls *tls, daos_unit_oid_t oid, uint64_t *then,
+		       int *tried)
+{
+	uint64_t now;
+	int      rc;
+
+	if (tls->mpt_fini) {
+		DL_ERROR(-DER_SHUTDOWN, DF_RB ": stop waiting for DTX refresh of " DF_UOID,
+			 DP_RB_MPT(tls), DP_UOID(oid));
+		return -DER_SHUTDOWN;
+	}
+	if (tls->mpt_version + 1 < tls->mpt_pool->spc_map_version) {
+		DL_WARN(-DER_STALE,
+			DF_RB ": pool map changed while waiting for DTX refresh of " DF_UOID,
+			DP_RB_MPT(tls), DP_UOID(oid));
+		return -DER_STALE;
+	}
+	now = daos_gettime_coarse();
+	if (*then == 0)
+		*then = now;
+	if (now - *then >= 600) {
+		DL_ERROR(-DER_TIMEDOUT, DF_RB ": waited 10 minutes for DTX refresh of " DF_UOID,
+			 DP_RB_MPT(tls), DP_UOID(oid));
+		return -DER_TIMEDOUT;
+	}
+	(*tried)++;
+	if ((*tried & (*tried - 1)) == 0)
+		D_WARN(DF_RB ": retry DTX refresh of " DF_UOID ", tried %d, waited " DF_U64
+			     " secs\n",
+		       DP_RB_MPT(tls), DP_UOID(oid), *tried, now - *then);
+	rc = dss_sleep(1000);
+	if (rc != 0)
+		DL_ERROR(rc, DF_RB ": wait for DTX refresh of " DF_UOID " failed", DP_RB_MPT(tls),
+			 DP_UOID(oid));
+	return rc;
+}
+
+static int
 migrate_try_obj_insert(struct migrate_pool_tls *tls, uuid_t co_uuid, daos_unit_oid_t oid,
 		       daos_epoch_t epoch, daos_epoch_t punched_epoch, unsigned int shard,
 		       unsigned int tgt_idx);
@@ -813,6 +851,12 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
+	if (rc == -DER_INPROGRESS) {
+		rc = migrate_dtx_retry_wait(tls, mrone->mo_oid, &then, &tried);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_GOTO(retry, rc);
+	}
 	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM ||
 	     daos_crt_network_error(rc)) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
@@ -859,6 +903,7 @@ retry:
 		}
 		D_GOTO(retry, rc);
 	}
+out:
 	if (wait != MEM_NO_WAIT) {
 		D_ASSERT(res->res_data.mem_waiting > 0);
 		res->res_data.mem_revived++;
@@ -3236,7 +3281,12 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 		rc  = dsc_obj_list_obj(arg->ioa_oh, epr, NULL, NULL, NULL, &num, kds, &sgl, &anchor,
 				       &dkey_anchor, &akey_anchor, p_csum);
 
-		if (rc == -DER_KEY2BIG) {
+		if (rc == -DER_INPROGRESS) {
+			rc = migrate_dtx_retry_wait(tls, arg->oid, &then, &tried);
+			if (rc != 0)
+				break;
+			continue;
+		} else if (rc == -DER_KEY2BIG) {
 			D_DEBUG(DB_REBUILD,
 				DF_RB ": migrate obj " DF_UOID " got -DER_KEY2BIG, "
 				      "key_len " DF_U64 "\n",
@@ -3284,20 +3334,9 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 		} else if (rc && rc != -DER_SHUTDOWN && rc != -DER_TIMEDOUT &&
 			   !daos_crt_network_error(rc) &&
 			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
-			if (rc != -DER_INPROGRESS) {
-				enum_flags &= ~DIOF_TO_LEADER;
-				D_DEBUG(DB_REBUILD,
-					DF_RB ": retry to non leader " DF_UOID ": " DF_RC "\n",
-					DP_RB_MPT(tls), DP_UOID(arg->oid), DP_RC(rc));
-			} else {
-				/* Keep retry on leader if it is inprogress or shutdown,
-				 * since the new dtx leader might still resync the
-				 * uncommitted records, or it will choose a new leader
-				 * once the pool map is updated.
-				 */
-				D_DEBUG(DB_REBUILD, DF_RB ": retry leader " DF_UOID "\n",
-					DP_RB_MPT(tls), DP_UOID(arg->oid));
-			}
+			enum_flags &= ~DIOF_TO_LEADER;
+			D_DEBUG(DB_REBUILD, DF_RB ": retry to non leader " DF_UOID ": " DF_RC "\n",
+				DP_RB_MPT(tls), DP_UOID(arg->oid), DP_RC(rc));
 			continue;
 		} else if (rc == -DER_UPDATE_AGAIN) {
 			/* -DER_UPDATE_AGAIN means the remote target does not parse EC
