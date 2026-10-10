@@ -504,6 +504,31 @@ gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct
 	return umem_free(&pool->vp_umm, item->it_addr);
 }
 
+static int
+gc_free_obj(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct vos_gc_item *item)
+{
+	struct umem_instance *umm = &pool->vp_umm;
+	int                   rc;
+
+	if (vos_pool_is_evictable(pool)) {
+		struct vos_obj_p2_df *p2   = umem_off2ptr(umm, item->it_addr);
+		umem_off_t            next = p2->p2_bkt_extra;
+
+		while (!UMOFF_IS_NULL(next)) {
+			struct vos_obj_bkt_node_df *node_df = umem_off2ptr(umm, next);
+			umem_off_t                  cur     = next;
+
+			next = node_df->bn_next;
+			rc   = umem_free(umm, cur);
+			if (rc) {
+				DL_ERROR(rc, "Failed to free object bucket node");
+				return rc;
+			}
+		}
+	}
+	return umem_free(umm, item->it_addr);
+}
+
 static struct vos_gc gc_table[] = {
     {
 	.gc_name        = "akey",
@@ -525,7 +550,7 @@ static struct vos_gc gc_table[] = {
 	.gc_type        = GC_OBJ,
 	.gc_drain_creds = 8,
 	.gc_drain       = gc_drain_obj,
-	.gc_free        = NULL,
+	.gc_free        = gc_free_obj,
     },
     {
 	.gc_name        = "container",
