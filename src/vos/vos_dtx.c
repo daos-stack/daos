@@ -1422,6 +1422,10 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 				if (unlikely(dsp->dsp_status != 0))
 					return dsp->dsp_status;
 
+				if (intent == DAOS_INTENT_MIGRATION &&
+				    DAE_EPOCH(dae) <= dth->dth_epoch)
+					return dtx_inprogress(dae, dth, true, true, 10);
+
 				if (!dtx_is_valid_handle(dth) ||
 				    intent == DAOS_INTENT_IGNORE_NONCOMMITTED)
 					return ALB_UNAVAILABLE;
@@ -1451,17 +1455,17 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 
 	if (intent == DAOS_INTENT_MIGRATION) {
 		/*
-		 * Restart rebuild rather than skip unresolved old-map DTXs inside the migration
-		 * boundary. DTXs prepared with the rebuild (or newer) map version were sent with a
-		 * layout that already includes the in-rebuilding target, so they stay invisible.
+		 * Enumeration and fetch may use different replicas. Resolve prepared records
+		 * inside the migration boundary even with a new map, rather than combine their
+		 * enumerated epochs with an older payload from this replica.
 		 */
-		if (dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch &&
-		    DAE_VER(dae) < dth->dth_ver) {
-			D_WARN("Non-ready DTX " DF_DTI " at " DF_X64 " (version %u) restart "
-			       "rebuild (" DF_DTI ") at migration boundary " DF_X64 " (ver %u)\n",
-			       DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae),
-			       DP_DTI(&dth->dth_xid), dth->dth_epoch, dth->dth_ver);
-			return -DER_VOS_PARTIAL_UPDATE;
+		if (dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch) {
+			D_DEBUG(DB_IO,
+				"Refresh DTX " DF_DTI " at " DF_X64 " (version %u) during "
+				"migration (" DF_DTI ") at " DF_X64 " (version %u)\n",
+				DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae),
+				DP_DTI(&dth->dth_xid), dth->dth_epoch, dth->dth_ver);
+			return dtx_inprogress(dae, dth, false, true, 10);
 		}
 
 		return ALB_UNAVAILABLE;
