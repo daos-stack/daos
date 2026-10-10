@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -74,9 +74,17 @@ class DmgStorageScanSCMTest(ControlTestBase):
         2. Verify the Socket ID matches with the one in
         /sys/class/block/<dev_name>/device/numa_node
 
+        This test requires real PMem/SCM namespaces and is not applicable when the
+        servers are configured for MD-on-SSD, which uses a tmpfs-backed ram tier
+        instead of PMem, so dmg storage scan reports no scm_namespaces in that case.
+
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=control,storage_scan,scm
         :avocado: tags=DmgStorageScanSCMTest,test_dmg_storage_scan_scm
         """
+        if self.server_managers[0].manager.job.using_control_metadata:
+            self.cancel(
+                "Skipping SCM namespace verification: servers are configured for "
+                "MD-on-SSD (tmpfs-backed ram tier), which has no PMem namespaces.")
         self.verify_dmg_storage_scan(self.verify_storage_scan_scm)

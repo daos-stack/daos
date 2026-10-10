@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -189,6 +189,21 @@ func (ei *EngineInstance) startRunner(parent context.Context) (_ chan *engine.Ru
 			cancel()
 		}
 	}()
+
+	// Reinitialize the storageReady channel (and its closed-guard) for this
+	// engine start attempt. The channel may have been closed by a previous
+	// format operation, and reading from a closed channel returns
+	// immediately, which would bypass the format wait in
+	// awaitStorageReady(). Giving each attempt its own channel object also
+	// ensures that a stray NotifyStorageReady() call left over from a
+	// previous, already-abandoned attempt (e.g. one that exited via
+	// ctx.Done() in awaitStorageReady()) can only ever signal that old,
+	// orphaned channel -- nobody is listening on it any more -- rather than
+	// being misattributed to this new attempt's wait.
+	ei.Lock()
+	ei.storageReady = make(chan struct{})
+	ei._storageReadyClosed = false
+	ei.Unlock()
 
 	if err = ei.format(ctx); err != nil {
 		return
