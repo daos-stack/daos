@@ -32,7 +32,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/provider/system"
 	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -40,6 +39,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/mount"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const defaultRdbSize uint64 = uint64(daos.DefaultDaosMdCapSize)
@@ -2583,7 +2583,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			if tc.scmMounted {
 				getFsRetStr = "ext4"
 			}
-			smsc := &system.MockSysConfig{
+			smsc := &sysprov.MockSysConfig{
 				IsMountedBool:  tc.scmMounted,
 				GetfsStr:       getFsRetStr,
 				SourceToTarget: devToMount,
@@ -2595,20 +2595,20 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				if !tc.tmpfsEmpty {
 					avail--
 				}
-				smsc.GetfsUsageResps = []system.GetfsUsageRetval{
+				smsc.GetfsUsageResps = []sysprov.GetfsUsageRetval{
 					{
 						Total: total,
 						Avail: avail,
 					},
 				}
 			}
-			sysProv := system.NewMockSysProvider(log, smsc)
+			sysProv := sysprov.NewMockSysProvider(log, smsc)
 			mounter := mount.NewProvider(log, sysProv)
 			scmProv := scm.NewProvider(&scm.ProviderConfig{
 				Log:       log,
 				Sys:       sysProv,
 				Mounter:   mounter,
-				KernelCfg: system.KernelConfig{},
+				KernelCfg: sysprov.KernelConfig{},
 			})
 			bdevProv := bdev.NewMockProvider(log, nil)
 			if tc.getSysMemInfo == nil {
@@ -3035,6 +3035,104 @@ func Test_notifyStorageReady(t *testing.T) {
 					"expected non-nil rank for replace mode")
 				test.AssertEqual(t, *tc.expReplaceRank, *capturedRank,
 					"rank mismatch in NotifyStorageReady call")
+			}
+		})
+	}
+}
+
+func TestServer_CtlSvc_StorageFormatStatus(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notStarted []bool // per-engine stopped/started state, see mockControlService
+		awaitFmt   []bool // per-engine isAwaitingFormat() state to apply
+		expResp    *ctlpb.StorageFormatStatusResp
+	}{
+		"single engine awaiting format": {
+			notStarted: []bool{true},
+			awaitFmt:   []bool{true},
+			expResp: &ctlpb.StorageFormatStatusResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: true,
+						State:          "AwaitingFormat",
+					},
+				},
+			},
+		},
+		"single engine already started": {
+			notStarted: []bool{false},
+			awaitFmt:   []bool{false},
+			expResp: &ctlpb.StorageFormatStatusResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: false,
+						State:          system.MemberStateReady.String(),
+					},
+				},
+			},
+		},
+		"single engine stopped, not awaiting format": {
+			notStarted: []bool{true},
+			awaitFmt:   []bool{false},
+			expResp: &ctlpb.StorageFormatStatusResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: false,
+						State:          system.MemberStateStopped.String(),
+					},
+				},
+			},
+		},
+		"mixed engine states": {
+			notStarted: []bool{true, false},
+			awaitFmt:   []bool{true, false},
+			expResp: &ctlpb.StorageFormatStatusResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: true,
+						State:          "AwaitingFormat",
+					},
+					{
+						Instanceidx:    1,
+						AwaitingFormat: false,
+						State:          system.MemberStateReady.String(),
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			engineCfgs := make([]*engine.Config, len(tc.notStarted))
+			for i := range engineCfgs {
+				engineCfgs[i] = engine.MockConfig().WithTargetCount(1)
+			}
+			cfg := config.DefaultServer().WithEngines(engineCfgs...)
+
+			cs := mockControlService(t, log, cfg, nil, nil, nil, tc.notStarted...)
+
+			for i, e := range cs.harness.Instances() {
+				ei := e.(*EngineInstance)
+				if tc.awaitFmt[i] {
+					ei.waitFormat.SetTrue()
+				} else {
+					ei.waitFormat.SetFalse()
+				}
+			}
+
+			resp, err := cs.StorageFormatStatus(test.Context(t), &ctlpb.StorageFormatStatusReq{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.expResp.EngineStatus, resp.EngineStatus,
+				protocmp.Transform()); diff != "" {
+				t.Fatalf("unexpected engine status (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -4868,7 +4966,7 @@ func (m *mockEngineWithNotify) GetStorage() *storage.Provider {
 	log := logging.NewCommandLineLogger()
 
 	// Create minimal mock sys and SCM providers needed for formatMetadata
-	sysProv := system.NewMockSysProvider(log, nil)
+	sysProv := sysprov.NewMockSysProvider(log, nil)
 	mounter := mount.NewProvider(log, sysProv)
 	scmProv := scm.NewProvider(&scm.ProviderConfig{
 		Log:     log,

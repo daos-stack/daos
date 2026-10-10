@@ -28,6 +28,8 @@ service CtlSvc {
 	rpc StorageScan(StorageScanReq) returns(StorageScanResp) {};
 	// Format nonvolatile storage devices for use with DAOS
 	rpc StorageFormat(StorageFormatReq) returns(StorageFormatResp) {};
+	// Report cached local engine instance format-related status without formatting
+	rpc StorageFormatStatus(StorageFormatStatusReq) returns (StorageFormatStatusResp) {};
 	// Rebind SSD from kernel and bind instead to user-space for use with DAOS
 	rpc StorageNvmeRebind(NvmeRebindReq) returns(NvmeRebindResp) {};
 	// Add newly inserted SSD to DAOS engine config

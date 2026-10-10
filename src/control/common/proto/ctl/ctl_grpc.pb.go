@@ -28,6 +28,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	CtlSvc_StorageScan_FullMethodName          = "/ctl.CtlSvc/StorageScan"
 	CtlSvc_StorageFormat_FullMethodName        = "/ctl.CtlSvc/StorageFormat"
+	CtlSvc_StorageFormatStatus_FullMethodName  = "/ctl.CtlSvc/StorageFormatStatus"
 	CtlSvc_StorageNvmeRebind_FullMethodName    = "/ctl.CtlSvc/StorageNvmeRebind"
 	CtlSvc_StorageNvmeAddDevice_FullMethodName = "/ctl.CtlSvc/StorageNvmeAddDevice"
 	CtlSvc_NetworkScan_FullMethodName          = "/ctl.CtlSvc/NetworkScan"
@@ -56,6 +57,8 @@ type CtlSvcClient interface {
 	StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(ctx context.Context, in *StorageFormatReq, opts ...grpc.CallOption) (*StorageFormatResp, error)
+	// Report cached local engine instance format-related status without formatting
+	StorageFormatStatus(ctx context.Context, in *StorageFormatStatusReq, opts ...grpc.CallOption) (*StorageFormatStatusResp, error)
 	// Rebind SSD from kernel and bind instead to user-space for use with DAOS
 	StorageNvmeRebind(ctx context.Context, in *NvmeRebindReq, opts ...grpc.CallOption) (*NvmeRebindResp, error)
 	// Add newly inserted SSD to DAOS engine config
@@ -104,6 +107,16 @@ func (c *ctlSvcClient) StorageFormat(ctx context.Context, in *StorageFormatReq, 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StorageFormatResp)
 	err := c.cc.Invoke(ctx, CtlSvc_StorageFormat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ctlSvcClient) StorageFormatStatus(ctx context.Context, in *StorageFormatStatusReq, opts ...grpc.CallOption) (*StorageFormatStatusResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StorageFormatStatusResp)
+	err := c.cc.Invoke(ctx, CtlSvc_StorageFormatStatus_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -244,6 +257,8 @@ type CtlSvcServer interface {
 	StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(context.Context, *StorageFormatReq) (*StorageFormatResp, error)
+	// Report cached local engine instance format-related status without formatting
+	StorageFormatStatus(context.Context, *StorageFormatStatusReq) (*StorageFormatStatusResp, error)
 	// Rebind SSD from kernel and bind instead to user-space for use with DAOS
 	StorageNvmeRebind(context.Context, *NvmeRebindReq) (*NvmeRebindResp, error)
 	// Add newly inserted SSD to DAOS engine config
@@ -283,6 +298,9 @@ func (UnimplementedCtlSvcServer) StorageScan(context.Context, *StorageScanReq) (
 }
 func (UnimplementedCtlSvcServer) StorageFormat(context.Context, *StorageFormatReq) (*StorageFormatResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method StorageFormat not implemented")
+}
+func (UnimplementedCtlSvcServer) StorageFormatStatus(context.Context, *StorageFormatStatusReq) (*StorageFormatStatusResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method StorageFormatStatus not implemented")
 }
 func (UnimplementedCtlSvcServer) StorageNvmeRebind(context.Context, *NvmeRebindReq) (*NvmeRebindResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method StorageNvmeRebind not implemented")
@@ -373,6 +391,24 @@ func _CtlSvc_StorageFormat_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CtlSvcServer).StorageFormat(ctx, req.(*StorageFormatReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CtlSvc_StorageFormatStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StorageFormatStatusReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CtlSvcServer).StorageFormatStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CtlSvc_StorageFormatStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CtlSvcServer).StorageFormatStatus(ctx, req.(*StorageFormatStatusReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -607,6 +643,10 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StorageFormat",
 			Handler:    _CtlSvc_StorageFormat_Handler,
+		},
+		{
+			MethodName: "StorageFormatStatus",
+			Handler:    _CtlSvc_StorageFormatStatus_Handler,
 		},
 		{
 			MethodName: "StorageNvmeRebind",

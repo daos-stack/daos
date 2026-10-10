@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
@@ -61,6 +62,23 @@ type HostStorage struct {
 
 	// SysMemInfo contains information about the host's RAM and hugepages.
 	SysMemInfo *common.SysMemInfo `json:"mem_info"`
+
+	// EngineFormatStatus contains per-engine instance format-related state,
+	// populated in response to a storage format status query.
+	EngineFormatStatus []*EngineFormatStatus `json:"engine_format_status,omitempty"`
+}
+
+// EngineFormatStatus describes the control server's local-state view of a
+// single engine instance's format-related status.
+type EngineFormatStatus struct {
+	// Instanceidx is the index of the I/O Engine instance on the host.
+	Instanceidx uint32 `json:"instanceidx"`
+	// AwaitingFormat indicates whether the engine instance is waiting for
+	// an administrator action to trigger a format.
+	AwaitingFormat bool `json:"awaiting_format"`
+	// State is the human-readable local engine instance state, e.g.
+	// "AwaitFormat", "Starting", "Ready", "Stopped".
+	State string `json:"state"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -479,6 +497,141 @@ func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageForm
 	}
 
 	return sfr, nil
+}
+
+// defaultFormatWaitRetry is the interval between storage format status polls
+// performed by WaitForStorageFormatReady.
+const defaultFormatWaitRetry = 2 * time.Second
+
+type (
+	// StorageFormatStatusReq contains the parameters for a storage format
+	// status request.
+	StorageFormatStatusReq struct {
+		unaryRequest
+	}
+
+	// StorageFormatStatusResp contains the response from a storage format
+	// status request.
+	StorageFormatStatusResp struct {
+		HostErrorsResp
+		HostStorage HostStorageMap
+	}
+)
+
+// addHostResponse is responsible for validating the given HostResponse
+// and adding it to the StorageFormatStatusResp.
+func (sfr *StorageFormatStatusResp) addHostResponse(hr *HostResponse) (err error) {
+	pbResp, ok := hr.Message.(*ctlpb.StorageFormatStatusResp)
+	if !ok {
+		return errors.Errorf("unable to unpack message: %+v", hr.Message)
+	}
+
+	hs := new(HostStorage)
+	for _, es := range pbResp.GetEngineStatus() {
+		hs.EngineFormatStatus = append(hs.EngineFormatStatus, &EngineFormatStatus{
+			Instanceidx:    es.GetInstanceidx(),
+			AwaitingFormat: es.GetAwaitingFormat(),
+			State:          es.GetState(),
+		})
+	}
+
+	if sfr.HostStorage == nil {
+		sfr.HostStorage = make(HostStorageMap)
+	}
+	return sfr.HostStorage.Add(hr.Addr, hs)
+}
+
+// StorageFormatStatus concurrently queries the read-only storage format
+// status of all hosts supplied in the request's hostlist, or all configured
+// hosts if not explicitly specified. Unlike StorageFormat, no format is
+// performed and the system-running check is skipped, since the request is
+// read-only and safe to issue against a live system; hosts report local
+// engine instance format-related status using cached local state without
+// contacting the engine process.
+func StorageFormatStatus(ctx context.Context, rpcClient UnaryInvoker, req *StorageFormatStatusReq) (*StorageFormatStatusResp, error) {
+	pbReq := new(ctlpb.StorageFormatStatusReq)
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).StorageFormatStatus(ctx, pbReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	sfr := new(StorageFormatStatusResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := sfr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		if err := sfr.addHostResponse(hostResp); err != nil {
+			return nil, err
+		}
+	}
+
+	return sfr, nil
+}
+
+// allEnginesAwaitingFormat returns true if hsm contains at least one engine
+// format status entry and every reported engine instance is awaiting format.
+func allEnginesAwaitingFormat(hsm HostStorageMap) bool {
+	if len(hsm) == 0 {
+		return false
+	}
+
+	found := false
+	for _, hss := range hsm {
+		for _, es := range hss.HostStorage.EngineFormatStatus {
+			found = true
+			if !es.AwaitingFormat {
+				return false
+			}
+		}
+	}
+
+	return found
+}
+
+// WaitForStorageFormatReady polls the read-only storage-format status (as
+// used by `dmg storage format-status`) on the configured hostlist until
+// every reported engine instance is awaiting format, the supplied context is
+// cancelled, or an unexpected (non-transient) error occurs.
+//
+// Per-host RPC failures are expected while engines are being reset (e.g.
+// a host may be briefly unreachable while the control plane process
+// restarts) and are logged but do not abort the wait; only cancellation of
+// ctx (e.g. via a caller-supplied timeout) terminates an unsuccessful wait.
+func WaitForStorageFormatReady(ctx context.Context, rpcClient UnaryInvoker, retryInterval ...time.Duration) error {
+	interval := defaultFormatWaitRetry
+	if len(retryInterval) > 0 {
+		interval = retryInterval[0]
+	}
+
+	startedAt := time.Now()
+	for {
+		resp, err := StorageFormatStatus(ctx, rpcClient, &StorageFormatStatusReq{})
+		switch {
+		case err != nil:
+			rpcClient.Debugf("storage format status request failed, retrying: %s", err)
+		case resp.Errors() != nil:
+			rpcClient.Debugf("storage format status reported host errors, retrying: %s", resp.Errors())
+		case allEnginesAwaitingFormat(resp.HostStorage):
+			rpcClient.Debugf("all engines awaiting format after %s", time.Since(startedAt))
+			return nil
+		default:
+			rpcClient.Debugf("not all engines awaiting format yet, waiting...")
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+		}
+	}
 }
 
 type (

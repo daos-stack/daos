@@ -1103,6 +1103,21 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		return resp, nil
 	}
 
+	// Report format-related status of each local engine instance using cached
+	// local state without performing any format operation or contacting the
+	// engine process.
+	if req.Status {
+		resp.EngineStatus = make([]*ctlpb.EngineFormatStatus, 0, len(instances))
+		for _, engine := range instances {
+			resp.EngineStatus = append(resp.EngineStatus, &ctlpb.EngineFormatStatus{
+				Instanceidx:    engine.Index(),
+				AwaitingFormat: engine.isAwaitingFormat(),
+				State:          engine.LocalState().String(),
+			})
+		}
+		return resp, nil
+	}
+
 	//  Only engines with missing metadata directories will have their control_metadata
 	//  subdirectories reformatted, preserving healthy engines.
 	mdFormatted, err := cs.formatMetadata(instances, req.Reformat)
@@ -1158,6 +1173,32 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		}
 
 		notifyStorageReady(cs.log, req, engine)
+	}
+
+	return resp, nil
+}
+
+// StorageFormatStatus reports whether each local engine instance is
+// currently awaiting storage format, using cached local state without
+// performing any format operation or contacting the engine process.
+func (cs *ControlService) StorageFormatStatus(ctx context.Context, req *ctlpb.StorageFormatStatusReq) (*ctlpb.StorageFormatStatusResp, error) {
+	if req == nil {
+		return nil, errNilReq
+	}
+	if cs.srvCfg == nil {
+		return nil, errNoSrvCfg
+	}
+
+	instances := cs.harness.Instances()
+	resp := new(ctlpb.StorageFormatStatusResp)
+	resp.EngineStatus = make([]*ctlpb.EngineFormatStatus, 0, len(instances))
+
+	for _, engine := range instances {
+		resp.EngineStatus = append(resp.EngineStatus, &ctlpb.EngineFormatStatus{
+			Instanceidx:    engine.Index(),
+			AwaitingFormat: engine.isAwaitingFormat(),
+			State:          engine.LocalFormatState(),
+		})
 	}
 
 	return resp, nil

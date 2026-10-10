@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,8 +8,10 @@
 package control
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -758,6 +761,179 @@ func TestControl_StorageFormat(t *testing.T) {
 			if diff := cmp.Diff(tc.expResponse, gotResponse, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_StorageFormatStatus(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic         *MockInvokerConfig
+		expResponse *StorageFormatStatusResp
+		expErr      error
+	}{
+		"engine status populated": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					{
+						Responses: []*HostResponse{
+							{
+								Addr: "host1",
+								Message: &ctlpb.StorageFormatStatusResp{
+									EngineStatus: []*ctlpb.EngineFormatStatus{
+										{
+											Instanceidx:    0,
+											AwaitingFormat: true,
+											State:          "AwaitingFormat",
+										},
+										{
+											Instanceidx:    1,
+											AwaitingFormat: false,
+											State:          "Ready",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expResponse: &StorageFormatStatusResp{
+				HostErrorsResp: HostErrorsResp{},
+				HostStorage: func() HostStorageMap {
+					hsm := make(HostStorageMap)
+					if err := hsm.Add("host1", &HostStorage{
+						EngineFormatStatus: []*EngineFormatStatus{
+							{Instanceidx: 0, AwaitingFormat: true, State: "AwaitingFormat"},
+							{Instanceidx: 1, AwaitingFormat: false, State: "Ready"},
+						},
+					}); err != nil {
+						t.Fatal(err)
+					}
+					return hsm
+				}(),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, tc.mic)
+
+			// Status requests must skip the "is MS running" check, so
+			// only a single (non-MS) response is required in the mock
+			// invoker's response set, unlike a regular format request.
+			gotResponse, gotErr := StorageFormatStatus(ctx, mi, &StorageFormatStatusReq{})
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResponse, gotResponse, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_WaitForStorageFormatReady(t *testing.T) {
+	notAwaitingResp := func(addr string) *UnaryResponse {
+		return &UnaryResponse{
+			Responses: []*HostResponse{
+				{
+					Addr: addr,
+					Message: &ctlpb.StorageFormatStatusResp{
+						EngineStatus: []*ctlpb.EngineFormatStatus{
+							{Instanceidx: 0, AwaitingFormat: false, State: "ServerStarting"},
+						},
+					},
+				},
+			},
+		}
+	}
+	awaitingResp := func(addr string) *UnaryResponse {
+		return &UnaryResponse{
+			Responses: []*HostResponse{
+				{
+					Addr: addr,
+					Message: &ctlpb.StorageFormatStatusResp{
+						EngineStatus: []*ctlpb.EngineFormatStatus{
+							{Instanceidx: 0, AwaitingFormat: true, State: "AwaitingFormat"},
+						},
+					},
+				},
+			},
+		}
+	}
+	errorResp := func(addr string) *UnaryResponse {
+		return &UnaryResponse{
+			Responses: []*HostResponse{
+				{
+					Addr:  addr,
+					Error: errors.New("connection refused"),
+				},
+			},
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		mic        *MockInvokerConfig
+		ctxTimeout time.Duration
+		expErr     error
+	}{
+		"already awaiting format": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					awaitingResp("host1"),
+				},
+			},
+		},
+		"becomes ready after retry": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					notAwaitingResp("host1"),
+					notAwaitingResp("host1"),
+					awaitingResp("host1"),
+				},
+			},
+		},
+		"transient host error then ready": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					errorResp("host1"),
+					awaitingResp("host1"),
+				},
+			},
+		},
+		"never becomes ready, context times out": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					notAwaitingResp("host1"),
+				},
+			},
+			ctxTimeout: 10 * time.Millisecond,
+			expErr:     context.DeadlineExceeded,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.Context(t)
+			if tc.ctxTimeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
+				defer cancel()
+			}
+
+			mi := NewMockInvoker(log, tc.mic)
+
+			// Use a short retry interval so retry-based test cases
+			// run quickly and the timeout case has a chance to poll
+			// at least once before the context deadline expires.
+			gotErr := WaitForStorageFormatReady(ctx, mi, time.Millisecond)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

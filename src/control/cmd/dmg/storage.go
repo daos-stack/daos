@@ -20,14 +20,15 @@ import (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Scan          storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format        storageFormatCmd  `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query         storageQueryCmd   `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	NvmeRebind    nvmeRebindCmd     `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
-	NvmeAddDevice nvmeAddDeviceCmd  `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
-	Set           setFaultyCmd      `command:"set" description:"Manually set the device state."`
-	Replace       storageReplaceCmd `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
-	LedManage     ledManageCmd      `command:"led" description:"Manage LED status for supported drives."`
+	Scan          storageScanCmd         `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format        storageFormatCmd       `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
+	FormatStatus  storageFormatStatusCmd `command:"format-status" description:"Report whether engines on hosts in the host list are awaiting storage format, without performing a format."`
+	Query         storageQueryCmd        `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	NvmeRebind    nvmeRebindCmd          `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
+	NvmeAddDevice nvmeAddDeviceCmd       `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
+	Set           setFaultyCmd           `command:"set" description:"Manually set the device state."`
+	Replace       storageReplaceCmd      `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
+	LedManage     ledManageCmd           `command:"led" description:"Manage LED status for supported drives."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -127,7 +128,11 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		rank = *cmd.Rank
 	}
 
-	req := &control.StorageFormatReq{Reformat: cmd.Force, Replace: cmd.Replace, Rank: rank}
+	req := &control.StorageFormatReq{
+		Reformat: cmd.Force,
+		Replace:  cmd.Replace,
+		Rank:     rank,
+	}
 	req.SetHostList(cmd.getHostList())
 
 	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
@@ -154,6 +159,50 @@ func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) er
 	var out strings.Builder
 	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
 	if err := pretty.PrintStorageFormatMap(resp.HostStorage, &out, verbose); err != nil {
+		return err
+	}
+	cmd.Info(out.String())
+
+	return resp.Errors()
+}
+
+// storageFormatStatusCmd is the struct representing the format-status storage subcommand.
+type storageFormatStatusCmd struct {
+	baseCmd
+	ctlInvokerCmd
+	hostListCmd
+	cmdutil.JSONOutputCmd
+}
+
+// Execute is run when storageFormatStatusCmd activates.
+//
+// Report whether engines on hosts in the host list are awaiting storage format, without
+// performing a format.
+func (cmd *storageFormatStatusCmd) Execute(args []string) (err error) {
+	ctx := cmd.MustLogCtx()
+
+	req := &control.StorageFormatStatusReq{}
+	req.SetHostList(cmd.getHostList())
+
+	resp, err := control.StorageFormatStatus(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
+		return err
+	}
+	if outErr.Len() > 0 {
+		cmd.Error(outErr.String())
+	}
+
+	var out strings.Builder
+	if err := pretty.PrintStorageFormatStatusMap(resp.HostStorage, &out); err != nil {
 		return err
 	}
 	cmd.Info(out.String())
