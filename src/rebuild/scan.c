@@ -47,6 +47,8 @@ struct rebuild_obj_val {
 	uint32_t	shard;
 };
 
+bool rebuild_continue_on_timeout;
+
 static int
 rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 		     d_iov_t *val_iov, void *data)
@@ -974,9 +976,14 @@ again:
 		if (cont_child->sc_pool->spc_remaining_wait_time <= 0) {
 			D_ERROR("Accumulated waiting time for global stable epoch " DF_X64
 				" to exceed rebuild epoch " DF_X64 " on the pool/container " DF_CONT
-				" for more than 600 seconds, timeout and abort current rebuild.\n",
+				" for more than 600 seconds, timeout and %s.\n",
 				gse, rpt->rt_stable_epoch,
-				DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
+				DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid),
+				rebuild_continue_on_timeout ? "continue by force" : "failout");
+
+			if (unlikely(rebuild_continue_on_timeout))
+				goto next;
+
 			D_GOTO(close, rc = -DER_TIMEDOUT);
 		}
 
@@ -1002,6 +1009,7 @@ again:
 		goto again;
 	}
 
+next:
 	/*
 	 * The container may has been closed by the application, but some resource (DRAM) occupied
 	 * by DTX may be not released because DTX resync was in-progress at that time. When arrive
