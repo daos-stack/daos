@@ -300,14 +300,6 @@ rebuild_objects_send_ult(void *data)
 				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 
-	if (rpt->rt_stable_epoch == 0) {
-		rc = rpt_wait_rebuild_epoch(rpt);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed", DP_RB_RPT(rpt));
-			goto out;
-		}
-	}
-
 	D_ALLOC_ARRAY(oids, REBUILD_SEND_LIMIT);
 	if (oids == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -688,16 +680,6 @@ rebuild_obj_ult(void *data)
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 	int                              rc;
 
-	if (rpt->rt_stable_epoch == 0) {
-		rc = rpt_wait_rebuild_epoch(rpt);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed, abort the rebuild",
-				 DP_RB_RPT(rpt));
-			rebuild_obj_record_failure(rpt, rc);
-			goto out;
-		}
-	}
-
 	rc = ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
 			       rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
 			       rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
@@ -706,7 +688,7 @@ rebuild_obj_ult(void *data)
 		DL_ERROR(rc, DF_RB " ds_migrate_object failed", DP_RB_RPT(rpt));
 		rebuild_obj_record_failure(rpt, rc);
 	}
-out:
+
 	rpt_put(rpt);
 	D_FREE(arg);
 }
@@ -942,6 +924,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	daos_unit_oid_t			oid = { 0 };
 	int				snapshot_cnt = 0;
 	int				rc;
+	daos_epoch_t                     gse;
 
 	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already scanned\n", DP_RB_RPT(rpt),
@@ -949,6 +932,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return 0;
 	}
 
+again:
 	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already destroyed\n",
@@ -974,6 +958,48 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		DL_ERROR(rc, DF_RB " Container " DF_UUID ", ds_cont_child_lookup failed",
 			 DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid));
 		D_GOTO(close, rc);
+	}
+
+	rc = vos_cont_get_global_stable_epoch(coh, &gse);
+	if (unlikely(rc == -DER_NOTSUPPORTED)) {
+		/*
+		 * For old backend, we cannot use the container's global stable epoch to defense
+		 * potential inflight IO. Then directly wait for 1 minute on the first container.
+		 */
+		if (cont_child->sc_pool->spc_remaining_wait_time > 0) {
+			dss_sleep(1000 * 60);
+			cont_child->sc_pool->spc_remaining_wait_time = 0;
+		}
+	} else if (gse < rpt->rt_stable_epoch) {
+		if (cont_child->sc_pool->spc_remaining_wait_time <= 0) {
+			D_ERROR("Accumulated waiting time for global stable epoch " DF_X64
+				" to exceed rebuild epoch " DF_X64 " on the pool/container " DF_CONT
+				" for more than 600 seconds, timeout and abort current rebuild.\n",
+				gse, rpt->rt_stable_epoch,
+				DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
+			D_GOTO(close, rc = -DER_TIMEDOUT);
+		}
+
+		/*
+		 * Global stable epoch maybe not refreshed if the container is (being) destroyed.
+		 * Close it (to release reference) before sleep to avoid being blocked for ever.
+		 */
+		cont_child->sc_pool->spc_remaining_wait_time--;
+		ds_cont_child_put(cont_child);
+		cont_child = NULL;
+		vos_cont_close(coh);
+
+		dss_sleep(1000);
+
+		if (rpt->rt_abort || rpt->rt_finishing) {
+			D_DEBUG(DB_REBUILD, DF_RB " " DF_UUID " rebuild abort %u/%u.\n",
+				DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid), rpt->rt_abort,
+				rpt->rt_finishing);
+			*acts |= VOS_ITER_CB_ABORT;
+			return 1;
+		}
+
+		goto again;
 	}
 
 	/*
@@ -1058,13 +1084,13 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	dtx_end(dth, NULL, rc);
 
 close:
-	vos_cont_close(coh);
-
 	if (cont_child != NULL) {
 		cont_child->sc_rebuilding = 0;
 		ABT_cond_broadcast(cont_child->sc_rebuild_cond);
 		ds_cont_child_put(cont_child);
 	}
+
+	vos_cont_close(coh);
 
 	D_DEBUG(DB_REBUILD, DF_RB " " DF_UUID " iterate cont done: " DF_RC "\n", DP_RB_RPT(rpt),
 		DP_UUID(entry->ie_couuid), DP_RC(rc));
@@ -1145,6 +1171,14 @@ rebuild_scanner(void *data)
 		D_GOTO(out, rc = 0);
 	}
 
+	if (rpt->rt_stable_epoch == 0) {
+		rc = rpt_wait_rebuild_epoch(rpt);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_RB " failed to wait for rebuild epoch", DP_RB_RPT(rpt));
+			goto out;
+		}
+	}
+
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG)) {
 		/* Skip reclaim OP for HANG failure injection */
 		if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
@@ -1174,6 +1208,13 @@ rebuild_scanner(void *data)
 			D_GOTO(out, rc);
 		}
 	}
+
+	/*
+	 * Usually, the diff between container global stable epoch and rebuild epoch will
+	 * be within 2 minutes unless it is quite busy. Let's wait for at most 10 minutes.
+	 * That is the total time for all containers in the pool.
+	 */
+	child->spc_remaining_wait_time = 600;
 
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;

@@ -3004,6 +3004,18 @@ comp:
 	return ds_obj_remote_update(dlh, arg, idx, comp_cb);
 }
 
+static inline int
+check_rebuild_race(struct ds_cont_child *cont, daos_epoch_t epoch)
+{
+	if (unlikely(cont->sc_pool->spc_pool->sp_rebuild_epoch >= epoch)) {
+		D_DEBUG(DB_IO, "Race with rebuild " DF_X64 " vs " DF_X64 ", client will retry.\n",
+			cont->sc_pool->spc_pool->sp_rebuild_epoch, epoch);
+		return -DER_UPDATE_AGAIN;
+	}
+
+	return 0;
+}
+
 /* Nonnegative return codes of process_epoch */
 enum process_epoch_rc {
 	PE_OK_REMOTE,	/* OK and epoch chosen remotely */
@@ -3196,6 +3208,12 @@ again:
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
 		ioc.ioc_lost_reply = 1;
 		D_GOTO(out, rc);
+	}
+
+	if (!daos_is_zero_dti(&orw->orw_dti) && !(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(ioc.ioc_coc, orw->orw_epoch);
+		if (rc != 0)
+			goto out;
 	}
 
 	/* For leader case, we need to find out the potential conflict
@@ -4124,6 +4142,12 @@ again:
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST) ||
 		   DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
 		goto cleanup;
+	}
+
+	if (!(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(ioc.ioc_coc, opi->opi_epoch);
+		if (rc != 0)
+			goto out;
 	}
 
 	/* For leader case, we need to find out the potential conflict
@@ -5345,6 +5369,12 @@ again:
 		D_GOTO(out, rc = 0);
 	}
 
+	if (!(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(dca->dca_ioc->ioc_coc, dcsh->dcsh_epoch.oe_value);
+		if (rc != 0)
+			goto out;
+	}
+
 	dcde = ds_obj_cpd_get_ents(dca->dca_rpc, dca->dca_idx, 0);
 	dcsrs = ds_obj_cpd_get_reqs(dca->dca_rpc, dca->dca_idx);
 	tgts = ds_obj_cpd_get_tgts(dca->dca_rpc, dca->dca_idx);
@@ -5934,6 +5964,12 @@ again:
 			goto out;
 		if (rc == ORS_DONE)
 			D_GOTO(out, rc = 0);
+	}
+
+	if (leader && !(flags & ORF_RESEND)) {
+		rc = check_rebuild_race(ioc.ioc_coc, ocpi->ocpi_epoch);
+		if (rc != 0)
+			goto out;
 	}
 
 	epoch.oe_value = ocpi->ocpi_epoch;
