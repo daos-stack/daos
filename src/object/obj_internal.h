@@ -280,7 +280,7 @@ struct shard_auxi_args {
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
-	/* only for EC, the target idx [0, k + p) */
+	/* EC target index [0, k + p), saved from the request layout. */
 	uint16_t		 ec_tgt_idx;
 	/* group index within the req_tgts->ort_shard_tgts */
 	uint16_t		 grp_idx;
@@ -454,6 +454,8 @@ struct obj_auxi_tgt_list {
 	uint32_t	*tl_tgts;
 	/** number of ranks & tgts */
 	uint32_t	tl_nr;
+	/** Last replica error, preserved across layout retries. */
+	int              tl_error;
 };
 
 struct coll_query_args {
@@ -943,18 +945,6 @@ struct obj_io_context {
 				 ioc_fetch_snap:1;
 };
 
-static inline void
-obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
-	       uint32_t *grp_nr)
-{
-	*start_shard = 0;
-	*shard_nr = obj->cob_shards_nr;
-	*grp_nr = obj->cob_shards_nr / obj_get_grp_size(obj);
-
-	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "DF_OID": %u/%u\n",
-		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
-}
-
 static inline uint64_t
 obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
 {
@@ -1148,8 +1138,12 @@ dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 			uint32_t *pmv);
 
 /* cli_coll.c */
-bool
-obj_need_coll(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
+int
+obj_ptr2shards(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
+	       uint32_t *grp_nr);
+
+int
+obj_need_coll(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
 	      uint32_t *grp_nr);
 
 int
