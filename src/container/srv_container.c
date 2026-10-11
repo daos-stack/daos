@@ -1967,9 +1967,16 @@ cont_refresh_track_eph_one(void *data)
 
 	cont_child->sc_ec_agg_eph_valid = 1;
 
-	/* Only should update local stable epoch if the target is in UPIN status */
+	/*
+	 * Only update the global stable epoch if the target is in UPIN or DRAIN status.
+	 * A DRAIN target is still serving I/O, participates in rebuild scanning and is
+	 * counted in the leader's min calculation, so it must keep tracking the GSE
+	 * (rebuild_container_scan_cb() waits for GSE >= rt_stable_epoch before scan).
+	 * Do NOT include UP (reintegrating) targets: their GSE must stay frozen at the
+	 * value it had when they were excluded.
+	 */
 	if (cont_child->sc_global_stable_eph < arg->min_stable_eph &&
-	    (arg->tgt_status[idx] & PO_COMP_ST_UPIN)) {
+	    (arg->tgt_status[idx] & (PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN))) {
 		rc = vos_cont_set_global_stable_epoch(cont_child->sc_hdl, arg->min_stable_eph);
 		if (rc == 0)
 			cont_child->sc_global_stable_eph = arg->min_stable_eph;
