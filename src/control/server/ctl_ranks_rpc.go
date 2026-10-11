@@ -296,6 +296,14 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 			return nil, errors.Wrapf(err, "removing control metadata directory for instance %d",
 				ei.Index())
 		}
+
+		// Unmount the SCM ramdisk so that any pool/engine state left over in tmpfs from
+		// before the reset is discarded, rather than persisting across the restart. This
+		// also avoids CheckFormat() seeing a stale mounted ramdisk and incorrectly
+		// short-circuiting the subsequent format as a no-op.
+		if err := storage.UnmountTmpfs(); err != nil {
+			return nil, errors.Wrapf(err, "unmounting tmpfs for instance %d", ei.Index())
+		}
 		ei.requestStart(ctx)
 	}
 

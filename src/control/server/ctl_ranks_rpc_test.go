@@ -9,6 +9,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -30,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -582,6 +584,12 @@ func TestServer_CtlSvc_ResetFormatRanks_ControlMetadata(t *testing.T) {
 			defer cleanup()
 
 			mdCfg := storage.ControlMetadata{Path: filepath.Join(testDir, "md")}
+			ramTierCfg := storage.TierConfigs{
+				{
+					Class: storage.ClassRam,
+					Scm:   storage.ScmConfig{MountPoint: filepath.Join(testDir, "scm")},
+				},
+			}
 
 			// Pre-create the shared control_raft directory (as used by the MS
 			// replica's raft DB, see cfgGetRaftDir()) and each engine's own
@@ -611,8 +619,20 @@ func TestServer_CtlSvc_ResetFormatRanks_ControlMetadata(t *testing.T) {
 			}
 			t.Cleanup(cs.Close)
 
+			scmProvs := make([]*storage.MockScmProvider, 2)
 			for i := 0; i < 2; i++ {
-				storProv := storage.MockProvider(log, i, &storage.Config{ControlMetadata: mdCfg}, nil, nil, nil, nil)
+				// Simulate engine 0's ramdisk still being mounted from before the
+				// reset (e.g. it never cleanly exited), and engine 1's already
+				// being unmounted, to exercise both the unmount and no-op paths.
+				sysProv := sysprov.NewMockSysProvider(log, &sysprov.MockSysConfig{
+					IsMountedBool: i == 0,
+				})
+				scmProvs[i] = &storage.MockScmProvider{
+					UnmountRes: &storage.MountResponse{Mounted: false},
+				}
+				storProv := storage.MockProvider(log, i,
+					&storage.Config{ControlMetadata: mdCfg, Tiers: ramTierCfg},
+					sysProv, scmProvs[i], nil, nil)
 				ei := NewEngineInstance(log, storProv, nil, engine.NewTestRunner(&engine.TestRunnerConfig{}, engine.MockConfig()), nil)
 
 				superblock := &Superblock{
@@ -658,6 +678,19 @@ func TestServer_CtlSvc_ResetFormatRanks_ControlMetadata(t *testing.T) {
 			checkDir(engineDirs[0], tc.expEngine0Removed)
 			checkDir(engineDirs[1], tc.expEngine1Removed)
 			checkDir(raftDir, false) // control_raft must never be touched by this RPC
+
+			// Engine 0's ramdisk was "mounted" (IsMountedBool: true), so
+			// UnmountTmpfs() should call Unmount() whenever it's targeted by this
+			// reset. Engine 1's ramdisk was already unmounted, so Unmount() should
+			// never be called for it, regardless of whether it's targeted.
+			expUnmountCalls := []int{0, 0}
+			if tc.expEngine0Removed {
+				expUnmountCalls[0] = 1
+			}
+			for i, exp := range expUnmountCalls {
+				test.AssertEqual(t, exp, scmProvs[i].UnmountCalls,
+					fmt.Sprintf("unexpected unmount call count for engine %d", i))
+			}
 		})
 	}
 }
