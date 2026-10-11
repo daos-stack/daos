@@ -176,60 +176,42 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 
 	dce->dce_bitmap_sz = dct->dct_bitmap_sz;
 
-	if (!for_check) {
-		memcpy(dce->dce_bitmap, dct->dct_tgts + dct->dct_tgt_nr, dct->dct_bitmap_sz);
-	} else {
-		map = pl_map_find(po_uuid, oid.id_pub);
-		if (map == NULL) {
-			D_ERROR("Failed to find valid placement map in pool "DF_UUID"\n",
-				DP_UUID(po_uuid));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-
-		for (i = 0, j = 0; i < dct->dct_tgt_nr; i++) {
-			rc = pool_map_find_target(map->pl_poolmap, dct->dct_tgts[i], &target);
-			D_ASSERT(rc == 1);
-
-			/* Skip the targets that reside on other engines. */
-			if (unlikely(target->ta_comp.co_rank != my_rank))
-				continue;
-
-			/* Skip the target that (re-)joined the system after the DTX. */
-			if (target->ta_comp.co_ver > dtx_ver)
-				continue;
-
-			/* Skip non-healthy one. */
-			if (target->ta_comp.co_status != PO_COMP_ST_UP &&
-			    target->ta_comp.co_status != PO_COMP_ST_UPIN &&
-			    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
-				continue;
-
-			/* Skip current (new) leader target. */
-			if (my_tgtid != target->ta_comp.co_index) {
-				setbit(dce->dce_bitmap, target->ta_comp.co_index);
-				j++;
-			}
-		}
-
-		rc = 0;
-
-		if (unlikely(j == 0)) {
-			D_FREE(dce->dce_bitmap);
-			dce->dce_bitmap_sz = 0;
-		}
+	map = pl_map_find(po_uuid, oid.id_pub);
+	if (map == NULL) {
+		D_ERROR("Failed to find valid placement map in pool " DF_UUID "\n",
+			DP_UUID(po_uuid));
+		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	for (i = 0; i < dct->dct_tgt_nr; i++) {
+		rc = pool_map_find_target(map->pl_poolmap, dct->dct_tgts[i], &target);
+		D_ASSERT(rc == 1);
+
+		/* Skip the targets that reside on other engines. */
+		if (unlikely(target->ta_comp.co_rank != my_rank))
+			continue;
+
+		/* Skip the target that (re-)joined the system after the DTX. */
+		if (target->ta_comp.co_ver > dtx_ver)
+			continue;
+
+		/* Skip non-healthy one. */
+		if (target->ta_comp.co_status != PO_COMP_ST_UP &&
+		    target->ta_comp.co_status != PO_COMP_ST_UPIN &&
+		    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
+			continue;
+
+		/* Skip UP target for CHECK case. */
+		if (for_check && target->ta_comp.co_status == PO_COMP_ST_UP)
+			continue;
+
+		setbit(dce->dce_bitmap, target->ta_comp.co_index);
+	}
+
+	rc = 0;
 
 	if (!need_hint)
 		goto out;
-
-	if (map == NULL) {
-		map = pl_map_find(po_uuid, oid.id_pub);
-		if (map == NULL) {
-			D_ERROR("Failed to find valid placement map in pool "DF_UUID"\n",
-				DP_UUID(po_uuid));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-	}
 
 	md.omd_id       = oid.id_pub;
 	md.omd_ver      = pm_ver;
@@ -365,7 +347,8 @@ dtx_coll_local_one(void *args)
 		rc = vos_dtx_abort(cont->sc_hdl, &dcla->dcla_xid, dcla->dcla_epoch, dcla->dcla_ver);
 		break;
 	case DTX_COLL_CHECK:
-		rc = vos_dtx_check(cont->sc_hdl, &dcla->dcla_xid, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dcla->dcla_xid, NULL, &dcla->dcla_ver, NULL,
+				   DCI_RESYNC);
 		if (rc == DTX_ST_INITED) {
 			/*
 			 * For DTX_CHECK, non-ready one is equal to non-exist. Do not directly

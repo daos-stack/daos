@@ -328,9 +328,7 @@ struct coll_oper_args {
 	};
 	uint8_t			 coa_max_shard_nr;
 	uint8_t			 coa_max_bitmap_sz;
-	uint8_t			 coa_for_modify:1,
-				 coa_raw_sparse:1,
-				 coa_sparse:1;
+	uint8_t coa_for_modify : 1, coa_raw_sparse : 1, coa_sparse : 1, coa_sync_io : 1;
 	uint8_t			 coa_target_nr;
 	/*
 	 * The target ID for the top four healthy shards.
