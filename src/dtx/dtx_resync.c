@@ -87,7 +87,7 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before current commit.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, DCI_DEFAULT);
 
 		/*
 		 * Skip this DTX since it has been committed or aggregated.
@@ -225,6 +225,16 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 	struct dtx_coll_entry   *dce = NULL;
 	int			 rc = 0;
 
+	/*
+	 * Current DTX may has been committed or aborted during checking other DTX entries.
+	 * So check it locally before senting out CHECK RPCs to remote targets. Similarly,
+	 * double check locally after CHECK RPC replied.
+	 */
+	rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, &cont->sc_pool->spc_map_version, NULL,
+			   DCI_RESYNC);
+	if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
+		D_GOTO(out, rc = DSHR_IGNORE);
+
 	if (mbs->dm_flags & DMF_COLL_TARGET) {
 		rc = dtx_coll_prep(cont->sc_pool_uuid, oid, &dte->dte_xid, mbs,
 				   dss_get_module_info()->dmi_tgt_id, dte->dte_ver,
@@ -282,9 +292,9 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 			 *	dtx_abort() with 0 @epoch.
 			 */
 			if (mbs->dm_flags & DMF_COLL_TARGET)
-				rc = dtx_coll_abort(cont, dce, 0);
+				rc = dtx_coll_abort(cont, dce, 0, 0);
 			else
-				rc = dtx_abort(cont, dte, 0);
+				rc = dtx_abort(cont, dte, 0, 0);
 			if (rc < 0 && err != NULL)
 				*err = rc;
 
@@ -298,7 +308,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before next action.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, DCI_DEFAULT);
 
 		/* Skip the DTX that may has been committed or aborted. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -326,9 +336,9 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * abort the DTXs one by one, not batched.
 		 */
 		if (mbs->dm_flags & DMF_COLL_TARGET)
-			rc = dtx_coll_abort(cont, dce, epoch);
+			rc = dtx_coll_abort(cont, dce, epoch, cont->sc_pool->spc_map_version);
 		else
-			rc = dtx_abort(cont, dte, epoch);
+			rc = dtx_abort(cont, dte, epoch, cont->sc_pool->spc_map_version);
 
 		DL_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, rc,
 			  "As new leader for DTX " DF_DTI ", abort it (2)", DP_DTI(&dte->dte_xid));
@@ -393,8 +403,9 @@ dtx_status_handle(struct dtx_resync_args *dra)
 again:
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
+			/* Use the latest known version to abort DTX locally to avoid rejection. */
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch,
-					    dre->dre_dte.dte_ver);
+					    cont->sc_pool->spc_map_version);
 			if (err == -DER_NONEXIST)
 				err = 0;
 			if (err != 0)
