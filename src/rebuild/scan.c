@@ -29,6 +29,8 @@
 #include "rpc.h"
 #include "rebuild_internal.h"
 
+/* Only for test. */
+
 #define REBUILD_SEND_LIMIT	4096
 /* Minimum pending objects before the send ULT flushes a batch (25% of max). */
 #define REBUILD_SEND_BATCH_MIN         (REBUILD_SEND_LIMIT / 4)
