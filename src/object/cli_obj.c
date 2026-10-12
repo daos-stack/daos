@@ -5666,6 +5666,9 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 	obj_auxi = tse_task_stack_push(task, sizeof(*obj_auxi));
 	if (obj_is_modification_opc(opc))
 		obj_auxi->spec_group = 0;
+	if (opc == DAOS_OBJ_RPC_FETCH && !obj_is_ec(obj) && obj_auxi->io_retry &&
+	    obj_auxi->map_ver_req != map_ver)
+		obj_auxi->initial_shard = UINT32_MAX;
 	obj_auxi->opc = opc;
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->obj_task = task;
@@ -6176,13 +6179,18 @@ obj_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned int
 		rc = obj_ec_fetch_shards_get(obj, args, map_ver, obj_auxi, shard, shard_cnt);
 		if (rc)
 			D_GOTO(out, rc);
-	} else if (need_retry_redundancy(obj_auxi)) {
+	} else if (need_retry_redundancy(obj_auxi) && obj_auxi->initial_shard != UINT32_MAX) {
 		*shard_cnt = 1;
 		rc = obj_retry_next_shard(obj, obj_auxi, map_ver, shard);
 		if (rc)
 			D_GOTO(out, rc);
 	} else {
 		rc = obj_replica_fetch_shards_get(obj, obj_auxi, map_ver, shard, shard_cnt);
+		if (need_retry_redundancy(obj_auxi) &&
+		    (rc == -DER_NONEXIST || rc == retry_errcode(obj_auxi, 0))) {
+			obj_auxi->no_retry = 1;
+			rc                 = retry_errcode(obj_auxi, rc);
+		}
 		if (rc < 0)
 			D_GOTO(out, rc);
 	}
@@ -6384,7 +6392,7 @@ dc_obj_fetch_task(tse_task_t *task)
 		D_GOTO(out_task, rc);
 	}
 
-	if (!obj_auxi->io_retry && !obj_auxi->is_ec_obj)
+	if (!obj_auxi->is_ec_obj && (!obj_auxi->io_retry || obj_auxi->initial_shard == UINT32_MAX))
 		obj_auxi->initial_shard = obj_auxi->req_tgts.ort_shard_tgts[0].st_shard;
 
 	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr,

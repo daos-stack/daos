@@ -498,6 +498,7 @@ struct obj_auxi_args {
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
+	/* Replica-cycle start in the request layout; UINT32_MAX requires reselection. */
 	uint32_t			 initial_shard;
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
