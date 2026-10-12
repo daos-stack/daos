@@ -158,10 +158,11 @@ struct ds_cont_child {
 };
 
 struct agg_param {
-	void			*ap_data;
-	struct ds_cont_child	*ap_cont;
-	daos_epoch_t             ap_full_scan_hlc;
-	bool			ap_vos_agg;
+	void                 *ap_data;
+	struct ds_cont_child *ap_cont;
+	daos_epoch_t          ap_full_scan_hlc;
+	uint64_t              ap_stable_eph_query_msec;
+	bool                  ap_vos_agg;
 };
 
 typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
