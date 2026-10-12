@@ -1032,3 +1032,80 @@ func TestControl_StorageNvmeAddDevice(t *testing.T) {
 		})
 	}
 }
+
+func TestControl_RemoveSuperblock(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic         *MockInvokerConfig
+		engineIndex uint32
+		expResponse *RemoveSuperblockResp
+		expErr      error
+	}{
+		"empty response": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					{},
+				},
+			},
+			expResponse: new(RemoveSuperblockResp),
+		},
+		"invoke fails": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("failed"),
+			},
+			expErr: errors.New("failed"),
+		},
+		"server error": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					{
+						Responses: []*HostResponse{
+							{
+								Addr:  "host1",
+								Error: errors.New("failed"),
+							},
+						},
+					},
+				},
+			},
+			expResponse: &RemoveSuperblockResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "failed"}),
+			},
+		},
+		"success": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					{
+						Responses: []*HostResponse{
+							{
+								Addr:    "host1",
+								Message: &ctlpb.RemoveSuperblockResp{},
+							},
+						},
+					},
+				},
+			},
+			engineIndex: 1,
+			expResponse: &RemoveSuperblockResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, tc.mic)
+
+			gotResponse, gotErr := RemoveSuperblock(ctx, mi, &RemoveSuperblockReq{
+				EngineIndex: tc.engineIndex,
+			})
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResponse, gotResponse, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
