@@ -360,7 +360,7 @@ dtx_cleanup_internal(struct ds_cont_child *cont, struct sched_request *sr, uint3
 	D_ASSERT(d_list_empty(&abt_list));
 	D_ASSERT(d_list_empty(&act_list));
 
-	while ((sr == NULL || !dss_ult_exiting(sr)) && !d_list_empty(&dcca.dcca_st_list)) {
+	while ((sr == NULL || !dss_ult_exiting(sr)) && !d_list_empty(&dcca.dcca_pc_list)) {
 		dpci = d_list_pop_entry(&dcca.dcca_pc_list, struct dtx_partial_cmt_item, dpci_link);
 		dcca.dcca_pc_count--;
 

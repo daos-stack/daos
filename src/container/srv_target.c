@@ -49,6 +49,33 @@ cont2req(struct ds_cont_child *cont, bool vos_agg)
 	return vos_agg ? cont->sc_agg_req : cont->sc_ec_agg_req;
 }
 
+/*
+ * Sample the local stable epoch for ds_cont_eph_report() to pick up and report through IV.
+ * The sample must be refreshed periodically even when a round of VOS aggregation runs for
+ * a long time (rate-controlled aggregation in LAZY mode may sleep one second per credit
+ * batch), otherwise the reported stable epoch stays stale and the global stable epoch is
+ * frozen for the whole container, which stalls rebuild waiting for it.
+ */
+#define CONT_STABLE_EPH_SAMPLE_INTV_MS 1000
+
+static void
+cont_stable_eph_sample(struct agg_param *param)
+{
+	struct ds_cont_child *cont = param->ap_cont;
+	uint64_t              now;
+
+	if (!param->ap_vos_agg || cont->sc_query_stable_eph == NULL)
+		return;
+
+	now = daos_getmtime_coarse();
+	if (param->ap_stable_eph_ts != 0 &&
+	    now < param->ap_stable_eph_ts + CONT_STABLE_EPH_SAMPLE_INTV_MS)
+		return;
+
+	param->ap_stable_eph_ts    = now;
+	*cont->sc_query_stable_eph = vos_cont_get_local_stable_epoch(cont->sc_hdl);
+}
+
 int
 agg_rate_ctl(void *arg)
 {
@@ -68,6 +95,8 @@ agg_rate_ctl(void *arg)
 	 **/
 	if (ds_pool_is_rebuilding(pool) && cont->sc_ec_agg_active && !param->ap_vos_agg)
 		return -1;
+
+	cont_stable_eph_sample(param);
 
 	/* When system is idle or under space pressure, let aggregation run in tight mode */
 	if (!dss_xstream_is_busy() || sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
@@ -473,10 +502,11 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		uint64_t msecs = 2000;
 
 		/* Reuse the vos aggregation ULT to periodically query the stable epoch,
-		 * ds_cont_eph_report() will read & report the epoch through IV.
+		 * ds_cont_eph_report() will read & report the epoch through IV. It is
+		 * also refreshed from agg_rate_ctl() during a long aggregation round.
 		 */
-		if (param->ap_vos_agg && cont->sc_query_stable_eph != NULL)
-			*cont->sc_query_stable_eph = vos_cont_get_local_stable_epoch(cont->sc_hdl);
+		param->ap_stable_eph_ts = 0;
+		cont_stable_eph_sample(param);
 
 		if (!cont_aggregate_runnable(cont, req, param->ap_vos_agg))
 			goto next;

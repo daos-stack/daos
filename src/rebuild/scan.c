@@ -976,9 +976,11 @@ again:
 		if (cont_child->sc_pool->spc_remaining_wait_time <= 0) {
 			D_ERROR("Accumulated waiting time for global stable epoch " DF_X64
 				" to exceed rebuild epoch " DF_X64 " on the pool/container " DF_CONT
-				" for more than 600 seconds, timeout and %s.\n",
+				" for more than 600 seconds (local stable epoch " DF_X64
+				"), timeout and %s.\n",
 				gse, rpt->rt_stable_epoch,
 				DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid),
+				vos_cont_get_local_stable_epoch(coh),
 				rebuild_continue_on_timeout ? "continue by force" : "failout");
 
 			if (unlikely(rebuild_continue_on_timeout))
@@ -986,6 +988,15 @@ again:
 
 			D_GOTO(close, rc = -DER_TIMEDOUT);
 		}
+
+		/* Periodically report the progress to help diagnosing a stuck stable epoch. */
+		if (cont_child->sc_pool->spc_remaining_wait_time % 60 == 0)
+			D_WARN(DF_RB " Container " DF_UUID ": global stable epoch " DF_X64
+				     " < rebuild epoch " DF_X64 ", local stable epoch " DF_X64
+				     ", remaining wait %d seconds\n",
+			       DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid), gse, rpt->rt_stable_epoch,
+			       vos_cont_get_local_stable_epoch(coh),
+			       cont_child->sc_pool->spc_remaining_wait_time);
 
 		/*
 		 * Global stable epoch maybe not refreshed if the container is (being) destroyed.

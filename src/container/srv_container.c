@@ -2174,6 +2174,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	uint64_t			 cur_eph, new_eph;
 	daos_epoch_t			 min_ec_agg_eph;
 	daos_epoch_t			 min_stable_eph;
+	d_rank_t                         min_stable_rank;
 	uint64_t                         cur_ts;
 	int				 i;
 	int                              warn_slug_ranks = 8; /* 8 ranks at most */
@@ -2210,9 +2211,10 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			}
 		}
 
-		min_ec_agg_eph = DAOS_EPOCH_MAX;
-		min_stable_eph = DAOS_EPOCH_MAX;
-		cur_ts         = daos_gettime_coarse();
+		min_ec_agg_eph  = DAOS_EPOCH_MAX;
+		min_stable_eph  = DAOS_EPOCH_MAX;
+		min_stable_rank = CRT_NO_RANK;
+		cur_ts          = daos_gettime_coarse();
 		if (ds_pool_is_rebuilding(pool) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
 			eph_ldr->cte_ec_agg_warn_slug_ts = cur_ts;
 		for (i = 0; i < eph_ldr->cte_servers_num; i++) {
@@ -2237,8 +2239,10 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < min_ec_agg_eph)
 				min_ec_agg_eph = eph_ldr->cte_server_ephs[i].re_ec_agg_eph;
-			if (eph_ldr->cte_server_ephs[i].re_stable_eph < min_stable_eph)
-				min_stable_eph = eph_ldr->cte_server_ephs[i].re_stable_eph;
+			if (eph_ldr->cte_server_ephs[i].re_stable_eph < min_stable_eph) {
+				min_stable_eph  = eph_ldr->cte_server_ephs[i].re_stable_eph;
+				min_stable_rank = rank;
+			}
 		}
 
 		/* for reboot case the ea_rdb_eph possibly higher than min_eph */
@@ -2278,9 +2282,9 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		new_eph = d_hlc2sec(min_stable_eph);
 		if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
 			D_WARN(DF_CONT ": Sluggish stable epoch reporting. "
-				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 "\n",
+				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 " min_rank:%u\n",
 			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), cur_eph, new_eph,
-			       new_eph - cur_eph);
+			       new_eph - cur_eph, min_stable_rank);
 
 		if (min_ec_agg_eph > eph_ldr->cte_rdb_ec_agg_eph) {
 			rc = cont_agg_eph_store(svc, eph_ldr->cte_cont_uuid, min_ec_agg_eph,
