@@ -159,6 +159,8 @@ struct agg_param {
 	void			*ap_data;
 	struct ds_cont_child	*ap_cont;
 	daos_epoch_t             ap_full_scan_hlc;
+	/* Last time (in msecs) the local stable epoch was sampled, VOS aggregation only. */
+	uint64_t                 ap_stable_eph_ts;
 	bool			ap_vos_agg;
 };
 
