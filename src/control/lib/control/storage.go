@@ -405,6 +405,21 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 		if len(hosts) != 1 {
 			return errors.New("replace option requires exactly one host in hostlist")
 		}
+
+		// Unlike the non-replace path, a running MS is expected (and
+		// required) while replacing a rank, so a successful query is not
+		// treated as a fault here. This call exists purely to surface a
+		// clear, early error if the target host is unreachable, rather
+		// than letting the admin wait for the format RPC itself to fail.
+		sysReq := &SystemQueryReq{FailOnUnavailable: true}
+		sysReq.AddHost(hosts[0])
+		if _, err := SystemQuery(ctx, rpcClient, sysReq); err != nil {
+			if !(system.IsUnavailable(err) || system.IsUninitialized(err) ||
+				err == errMSConnectionFailure) {
+				return err
+			}
+		}
+
 		return nil
 	}
 
