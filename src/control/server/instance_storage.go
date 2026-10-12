@@ -182,6 +182,13 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 		return errors.Errorf("can't wait for storage: %s already started", msgIdx)
 	}
 
+	// Indicate that a format-readiness check is underway but not yet
+	// resolved. Cleared below, either just before entering the
+	// AwaitFormat wait or (via defer) on any other return path, e.g. once
+	// it's determined that no format is required.
+	ei.starting.SetTrue()
+	defer ei.starting.SetFalse()
+
 	ei.log.Infof("Checking %s %s storage ...", build.DataPlaneName, msgIdx)
 
 	needsMetaFormat, err := ei.storage.ControlMetadataNeedsFormat()
@@ -236,6 +243,9 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	}
 	ei.log.Infof("%s format required on %s", formatType, msgIdx)
 
+	// Format is required: transition out of ServerStarting and into
+	// AwaitFormat for the (potentially long) wait for admin action.
+	ei.starting.SetFalse()
 	ei.waitFormat.SetTrue()
 	// After we know that the instance is awaiting format, fire off
 	// any callbacks that are waiting for this state.

@@ -277,6 +277,7 @@ type (
 		Ready               atm.Bool
 		CheckerMode         atm.Bool
 		LocalState          system.MemberState
+		LocalFormatState    string
 		RemoveSuperblockErr error
 		SetupRankErr        error
 		StopErr             error
@@ -334,6 +335,13 @@ func (mi *MockInstance) IsReady() bool {
 
 func (mi *MockInstance) LocalState() system.MemberState {
 	return mi.cfg.LocalState
+}
+
+func (mi *MockInstance) LocalFormatState() string {
+	if mi.cfg.LocalFormatState != "" {
+		return mi.cfg.LocalFormatState
+	}
+	return mi.cfg.LocalState.String()
 }
 
 func (mi *MockInstance) RemoveSuperblock() error {

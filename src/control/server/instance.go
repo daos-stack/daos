@@ -59,6 +59,7 @@ type EngineInstance struct {
 	incarnation     uint64
 	storage         *storage.Provider
 	waitFormat      atm.Bool
+	starting        atm.Bool
 	storageReady    chan struct{}
 	waitDrpc        atm.Bool
 	drpcReady       chan *srvpb.NotifyReadyReq
@@ -119,6 +120,15 @@ func (ei *EngineInstance) isAwaitingFormat() bool {
 	return ei.waitFormat.Load()
 }
 
+// isServerStarting indicates whether the engine's format-readiness has
+// been requested but not yet determined, i.e. the control plane has begun
+// processing a start request for this instance but has not yet established
+// whether storage format is required (isAwaitingFormat()) or can proceed
+// straight to starting the engine process (IsStarted()).
+func (ei *EngineInstance) isServerStarting() bool {
+	return ei.starting.Load()
+}
+
 // IsStarted indicates whether EngineInstance is in a running state.
 func (ei *EngineInstance) IsStarted() bool {
 	return ei.runner.IsRunning()
@@ -168,6 +178,38 @@ func (ei *EngineInstance) LocalState() system.MemberState {
 		return system.MemberStateAwaitFormat
 	default:
 		return system.MemberStateStopped
+	}
+}
+
+// LocalFormatState returns a local-only state name for use in format-status
+// reporting. Unlike LocalState(), which returns a system.MemberState for
+// compatibility with system membership processing (and so is restricted to
+// its fixed set of values), this reports a finer-grained, format-centric
+// state name:
+//
+//   - Stopped: engine process is not running and no start has been requested.
+//   - ServerStarting: a start has been requested but it is not yet known
+//     whether a format is required (precedes the determination made in
+//     awaitStorageReady()).
+//   - AwaitingFormat: format is required and the instance is blocked
+//     waiting for an administrator to trigger it.
+//   - EnginesStarting: format is no longer required/awaited and the engine
+//     process has been started, but it has not yet reported ready (this
+//     bucket also covers formatting carried out internally by the engine
+//     process itself, which the control plane cannot currently observe).
+//   - Ready: the engine has started up successfully.
+func (ei *EngineInstance) LocalFormatState() string {
+	switch {
+	case ei.IsReady():
+		return "Ready"
+	case ei.IsStarted():
+		return "EnginesStarting"
+	case ei.isAwaitingFormat():
+		return "AwaitingFormat"
+	case ei.isServerStarting():
+		return "ServerStarting"
+	default:
+		return "Stopped"
 	}
 }
 

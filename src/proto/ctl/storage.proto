@@ -64,6 +64,26 @@ message StorageFormatResp {
 	repeated ScmMountResult mrets = 2;		// One per scm format and mount attempt
 }
 
+// StorageFormatStatusReq requests the local control server's cached
+// format-related status of each locally attached engine instance, without
+// performing a format or contacting the engine processes themselves.
+message StorageFormatStatusReq {}
+
+message StorageFormatStatusResp
+{
+	// One per engine instance.
+	repeated EngineFormatStatus engine_status = 1;
+}
+
+// EngineFormatStatus describes the local control server's view of a single
+// engine instance's format-related state, derived without contacting the
+// engine process itself.
+message EngineFormatStatus {
+	uint32 instanceidx     = 1;	// Index of I/O Engine instance
+	bool   awaiting_format = 2;	// True if engine instance is awaiting storage format
+	string state           = 3; // Local engine instance state e.g. "AwaitingFormat", "Ready"
+}
+
 message NvmeRebindReq {
 	string pci_addr = 1;	// an NVMe controller PCI address
 }
