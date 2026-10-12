@@ -3875,7 +3875,7 @@ func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {
 		"peer erase request fails": {
 			peers:     []*net.TCPAddr{mockAddr(1)},
 			uErr:      errors.New("mock rpc error"),
-			expErrMsg: "System-Query command failed: mock rpc error",
+			expErrMsg: "erase request to MS replica peer 10.0.0.1:10001 failed: System-Query command failed: mock rpc error",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
