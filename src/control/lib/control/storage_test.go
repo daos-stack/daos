@@ -463,6 +463,8 @@ func TestControl_StorageFormat(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic         *MockInvokerConfig
 		reformat    bool
+		replace     bool
+		hostList    []string
 		expResponse *StorageFormatResp
 		expErr      error
 	}{
@@ -744,6 +746,50 @@ func TestControl_StorageFormat(t *testing.T) {
 				NvmePerHost: 2,
 			}),
 		},
+		"replace; target engine's raft/data-plane not yet up is retried until ready": {
+			replace:  true,
+			hostList: []string{"host1"},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					// First (and retried) SystemQuery attempts find the
+					// target engine's raft/data-plane not yet up.
+					MockMSResponse("", system.ErrRaftUnavail, nil),
+					MockMSResponse("", system.ErrRaftUnavail, nil),
+					// SystemQuery eventually succeeds once the engine is up.
+					MockMSResponse("host1", nil, &mgmtpb.SystemQueryResp{}),
+					// The real StorageFormat RPC then proceeds.
+					{
+						Responses: []*HostResponse{
+							{
+								Addr:    "host1",
+								Message: &ctlpb.StorageFormatResp{},
+							},
+						},
+					},
+				},
+			},
+			expResponse: MockFormatResp(t, MockFormatConf{Hosts: 1}),
+		},
+		"replace; system never formatted is not swallowed": {
+			replace:  true,
+			hostList: []string{"host1"},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", system.ErrUninitialized, nil),
+				},
+			},
+			expErr: system.ErrUninitialized,
+		},
+		"replace; target host unreachable is not swallowed": {
+			replace:  true,
+			hostList: []string{"host1"},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", errMSConnectionFailure, nil),
+				},
+			},
+			expErr: errMSConnectionFailure,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -752,7 +798,9 @@ func TestControl_StorageFormat(t *testing.T) {
 			ctx := test.Context(t)
 			mi := NewMockInvoker(log, tc.mic)
 
-			gotResponse, gotErr := StorageFormat(ctx, mi, &StorageFormatReq{Reformat: tc.reformat})
+			req := &StorageFormatReq{Reformat: tc.reformat, Replace: tc.replace}
+			req.SetHostList(tc.hostList)
+			gotResponse, gotErr := StorageFormat(ctx, mi, req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
