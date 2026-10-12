@@ -169,6 +169,16 @@ VOS_TESTS_BIN="\$DAOS_INSTALL/bin/vos_tests"
 VOS_TESTS_MNT_PATH="/mnt/daos-$TICKET_LC"
 VOS_TESTS_MNT_OPTS="-t tmpfs -o rw,noatime,size=16777216k,inode64,huge=always,mpol=prefer:0,uid=\$(id -u),gid=\$(id -g)"
 
+# run-utest.sh (utils/run_utest.py suites: VOS_md_on_ssd, ddb_md_on_ssd, ...).
+# run_utest.py hard-codes /mnt/daos for its AIO tmpfs and fills /tmp with 4 GB
+# AIO files, hence --private-mount: private tmpfs on both, sized by these.
+UTEST_MNT_PATH="/mnt/daos"
+UTEST_MNT_OPTS="-t tmpfs -o rw,noatime,size=32G"
+UTEST_TMP_SIZE="34G"
+# Python virtualenv providing junit_xml/yaml for run_utest.py; empty = the
+# ticket workspace's virtualenvs, else \$DAOS_SHARED_WORKSPACE/virtualenvs.
+DAOS_PY_VENV=""
+
 DFUSE_MNT_PATH="/tmp/dfuse_mnt"
 
 VALGRIND_BIN="/usr/bin/valgrind"

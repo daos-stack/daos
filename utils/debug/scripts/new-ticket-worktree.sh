@@ -40,6 +40,7 @@ GENERIC_TICKET_SCRIPTS=(
 build-daos.sh build-isolated.sh provision-daos.sh
 cleanup.sh start-daos.sh stop-daos.sh
 run-vos_tests.sh run-ddb_ut.sh run-ddb_tests.sh run-dtx_ut.sh run-dtx_tests.sh run-go_unit.sh
+run-utest.sh
 run-ftest.sh
 trigger-gha.sh
 )
