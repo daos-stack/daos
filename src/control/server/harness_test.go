@@ -343,7 +343,9 @@ func TestServer_Harness_Start(t *testing.T) {
 				for {
 					for _, ei := range instances {
 						if ei.(*EngineInstance).isAwaitingFormat() {
-							ei.(*EngineInstance).NotifyStorageReady(false)
+							// Pass nil rank pointer for non-replace
+							// case
+							ei.(*EngineInstance).NotifyStorageReady(nil)
 						}
 					}
 					select {

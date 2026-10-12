@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
@@ -31,6 +32,11 @@ import (
 var storageHashOpts = hashstructure.HashOptions{
 	SlicesAsSets: true,
 }
+
+// replaceMSCheckTimeout bounds how long checkFormatReq() will wait for the
+// target host's MS/engine to become reachable before giving up, when
+// verifying a storage format --replace request.
+const replaceMSCheckTimeout = 15 * time.Second
 
 // HostStorage describes a host storage configuration which
 // may apply to one or more hosts.
@@ -310,8 +316,9 @@ type (
 	// StorageFormatReq contains the parameters for a storage format request.
 	StorageFormatReq struct {
 		unaryRequest
-		Reformat bool `json:"reformat"`
-		Replace  bool `json:"replace"`
+		Reformat bool   `json:"reformat"`
+		Replace  bool   `json:"replace"`
+		Rank     uint32 `json:"rank"` // Specific rank to replace (only valid with replace=true)
 	}
 
 	// StorageFormatResp contains the response from a storage format request.
@@ -404,6 +411,32 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 		if len(hosts) != 1 {
 			return errors.New("replace option requires exactly one host in hostlist")
 		}
+
+		// Unlike the non-replace path (where the absence of a running MS
+		// is the expected, successful outcome before first-ever format),
+		// the target engine being replaced is, by definition, not yet
+		// part of a healthy data plane -- that's the whole reason
+		// --replace is being used. So rather than fail fast on an
+		// IsUnavailable error (raft/leader not settled, or that engine's
+		// data plane not started), wait a bounded amount of time for the
+		// MS to become reachable, in case the admin issued the command
+		// while the engine/MS was still coming up. Leaving
+		// FailOnUnavailable unset (false) lets the normal retry/backoff
+		// logic in invokeUnaryRPC() keep retrying IsUnavailable errors
+		// until the request times out, rather than failing on the first
+		// attempt. An IsUninitialized error (system never formatted at
+		// all) contradicts the premise that we're replacing a rank on an
+		// already-formatted, running system, and a connection failure
+		// means the target host itself can't be reached -- both are
+		// genuine problems and are surfaced immediately rather than
+		// waiting out the full timeout.
+		sysReq := &SystemQueryReq{}
+		sysReq.SetTimeout(replaceMSCheckTimeout)
+		sysReq.AddHost(hosts[0])
+		if _, err := SystemQuery(ctx, rpcClient, sysReq); err != nil {
+			return err
+		}
+
 		return nil
 	}
 

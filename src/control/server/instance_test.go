@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	sysprov "github.com/daos-stack/daos/src/control/provider/system"
@@ -377,7 +379,7 @@ func (mi *MockInstance) isAwaitingFormat() bool {
 }
 
 func (mi *MockInstance) NotifyDrpcReady(_ *srvpb.NotifyReadyReq) {}
-func (mi *MockInstance) NotifyStorageReady(_ bool)               {}
+func (mi *MockInstance) NotifyStorageReady(_ *ranklist.Rank)     {}
 
 func (mi *MockInstance) GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	return nil, nil
@@ -417,4 +419,303 @@ func (mi *MockInstance) GetLastHealthStats(pciAddr string) *ctlpb.BioHealthResp 
 
 func (mi *MockInstance) SetLastHealthStats(pciAddr string, bhr *ctlpb.BioHealthResp) {
 	mi.cfg.LastHealthStats[pciAddr] = bhr
+}
+
+func TestEngineInstance_determineRank(t *testing.T) {
+	defaultUUID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	defaultReq := &srvpb.NotifyReadyReq{
+		Uri:            "test-uri",
+		SecondaryUris:  []string{"secondary-uri"},
+		Nctxs:          8,
+		SecondaryNctxs: []uint32{4},
+		Incarnation:    1,
+	}
+
+	for name, tc := range map[string]struct {
+		setupRank           *ranklist.Rank // Initial rank in superblock
+		replaceRank         *ranklist.Rank // Replace rank pointer (nil = not replacing)
+		useNotifyAPI        bool           // If true, use NotifyStorageReady() instead of direct Store()
+		joinResp            *control.SystemJoinResp
+		joinErr             error
+		noSB                bool
+		expJoinReqRank      ranklist.Rank
+		expJoinReqReplace   bool
+		expRank             ranklist.Rank
+		expLocalJoin        bool
+		expErr              error
+		validateFullJoinReq bool // If true, validate all SystemJoinReq fields
+	}{
+		"nil superblock": {
+			noSB:   true,
+			expErr: errors.New("nil superblock"),
+		},
+		"standard join - no rank": {
+			joinResp: &control.SystemJoinResp{
+				Rank:       5,
+				State:      system.MemberStateJoined,
+				LocalJoin:  false,
+				MapVersion: 1,
+			},
+			expJoinReqRank:    ranklist.NilRank,
+			expJoinReqReplace: false,
+			expRank:           5,
+			expLocalJoin:      false,
+		},
+		"standard join - existing rank": {
+			setupRank: func() *ranklist.Rank { r := ranklist.Rank(3); return &r }(),
+			joinResp: &control.SystemJoinResp{
+				Rank:       3,
+				State:      system.MemberStateJoined,
+				LocalJoin:  true,
+				MapVersion: 1,
+			},
+			expJoinReqRank:    3,
+			expJoinReqReplace: false,
+			expRank:           3,
+			expLocalJoin:      true,
+		},
+		"replace with auto-detect": {
+			replaceRank: func() *ranklist.Rank { r := ranklist.NilRank; return &r }(),
+			joinResp: &control.SystemJoinResp{
+				Rank:       7,
+				State:      system.MemberStateJoined,
+				LocalJoin:  false,
+				MapVersion: 2,
+			},
+			expJoinReqRank:    ranklist.NilRank,
+			expJoinReqReplace: true,
+			expRank:           7,
+			expLocalJoin:      false,
+		},
+		"replace with explicit rank": {
+			replaceRank: func() *ranklist.Rank { r := ranklist.Rank(10); return &r }(),
+			joinResp: &control.SystemJoinResp{
+				Rank:       10,
+				State:      system.MemberStateJoined,
+				LocalJoin:  false,
+				MapVersion: 2,
+			},
+			expJoinReqRank:    10,
+			expJoinReqReplace: true,
+			expRank:           10,
+			expLocalJoin:      false,
+		},
+		"replace with explicit rank 0": {
+			replaceRank: func() *ranklist.Rank { r := ranklist.Rank(0); return &r }(),
+			joinResp: &control.SystemJoinResp{
+				Rank:       0,
+				State:      system.MemberStateJoined,
+				LocalJoin:  false,
+				MapVersion: 2,
+			},
+			expJoinReqRank:    0,
+			expJoinReqReplace: true,
+			expRank:           0,
+			expLocalJoin:      false,
+		},
+		"replace fails if superblock has valid rank": {
+			setupRank:         func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
+			replaceRank:       func() *ranklist.Rank { r := ranklist.Rank(10); return &r }(),
+			expJoinReqReplace: true,
+			expErr:            errors.New("cannot replace: superblock already has valid rank"),
+		},
+		"replace with auto-detect fails if superblock has valid rank": {
+			setupRank:         func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
+			replaceRank:       func() *ranklist.Rank { r := ranklist.NilRank; return &r }(),
+			expJoinReqReplace: true,
+			expErr:            errors.New("cannot replace: superblock already has valid rank"),
+		},
+		"excluded rank": {
+			setupRank: func() *ranklist.Rank { r := ranklist.Rank(3); return &r }(),
+			joinResp: &control.SystemJoinResp{
+				Rank:  3,
+				State: system.MemberStateExcluded,
+			},
+			expJoinReqRank:    3,
+			expJoinReqReplace: false,
+			expErr:            errors.New("excluded"),
+		},
+		"admin excluded rank": {
+			setupRank: func() *ranklist.Rank { r := ranklist.Rank(3); return &r }(),
+			joinResp: &control.SystemJoinResp{
+				Rank:  3,
+				State: system.MemberStateAdminExcluded,
+			},
+			expJoinReqRank:    3,
+			expJoinReqReplace: false,
+			expErr:            errors.New("excluded"),
+		},
+		"join failure": {
+			joinErr: errors.New("join failed"),
+			expErr:  errors.New("join failed"),
+		},
+		"NotifyStorageReady: standard join - no replace": {
+			useNotifyAPI:        true,
+			replaceRank:         nil, // NotifyStorageReady(nil) = standard join
+			setupRank:           nil,
+			expJoinReqRank:      ranklist.NilRank,
+			expJoinReqReplace:   false,
+			expRank:             5,
+			expLocalJoin:        false,
+			validateFullJoinReq: true,
+			joinResp: &control.SystemJoinResp{
+				Rank:       5,
+				State:      system.MemberStateJoined,
+				LocalJoin:  false,
+				MapVersion: 1,
+			},
+		},
+		"NotifyStorageReady: standard join - existing rank in superblock": {
+			useNotifyAPI:        true,
+			replaceRank:         nil, // NotifyStorageReady(nil) = standard join
+			setupRank:           func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
+			expJoinReqRank:      5,
+			expJoinReqReplace:   false,
+			expRank:             5,
+			expLocalJoin:        true,
+			validateFullJoinReq: true,
+			joinResp: &control.SystemJoinResp{
+				Rank:       5,
+				State:      system.MemberStateJoined,
+				LocalJoin:  true,
+				MapVersion: 1,
+			},
+		},
+		"NotifyStorageReady: replace with auto-detect": {
+			useNotifyAPI:        true,
+			replaceRank:         func() *ranklist.Rank { r := ranklist.NilRank; return &r }(),
+			setupRank:           nil,
+			expJoinReqRank:      ranklist.NilRank,
+			expJoinReqReplace:   true,
+			expRank:             7,
+			expLocalJoin:        false,
+			validateFullJoinReq: true,
+			joinResp: &control.SystemJoinResp{
+				Rank:       7,
+				State:      system.MemberStateJoined,
+				LocalJoin:  false,
+				MapVersion: 1,
+			},
+		},
+		"NotifyStorageReady: replace with explicit rank 7": {
+			useNotifyAPI:        true,
+			replaceRank:         func() *ranklist.Rank { r := ranklist.Rank(7); return &r }(),
+			setupRank:           nil,
+			expJoinReqRank:      7,
+			expJoinReqReplace:   true,
+			expRank:             7,
+			expLocalJoin:        false,
+			validateFullJoinReq: true,
+			joinResp: &control.SystemJoinResp{
+				Rank:       7,
+				State:      system.MemberStateJoined,
+				LocalJoin:  false,
+				MapVersion: 1,
+			},
+		},
+		"NotifyStorageReady: replace fails if superblock has valid rank": {
+			useNotifyAPI:      true,
+			replaceRank:       func() *ranklist.Rank { r := ranklist.Rank(10); return &r }(),
+			setupRank:         func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
+			expJoinReqReplace: true,
+			expErr:            errors.New("cannot replace: superblock already has valid rank"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var capturedJoinReq *control.SystemJoinReq
+
+			mockJoin := func(_ context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+				capturedJoinReq = req
+
+				if tc.joinErr != nil {
+					return nil, tc.joinErr
+				}
+
+				// Verify the replace flag is set correctly
+				test.AssertEqual(t, tc.expJoinReqReplace, req.Replace, "Replace flag mismatch")
+
+				// Verify rank in join request
+				test.AssertEqual(t, tc.expJoinReqRank, req.Rank, "unexpected rank in join request")
+
+				// Verify additional join request fields if requested
+				if tc.validateFullJoinReq {
+					test.AssertEqual(t, defaultUUID.String(), req.UUID, "UUID mismatch")
+					test.AssertEqual(t, defaultReq.Uri, req.URI, "URI mismatch")
+					test.AssertEqual(t, defaultReq.SecondaryUris, req.SecondaryURIs, "SecondaryURIs mismatch")
+					test.AssertEqual(t, defaultReq.Nctxs, req.NumContexts, "NumContexts mismatch")
+					test.AssertEqual(t, defaultReq.SecondaryNctxs, req.NumSecondaryContexts, "NumSecondaryContexts mismatch")
+				}
+
+				return tc.joinResp, nil
+			}
+
+			testEngineIdx := 0
+			baseDir, cleanup := test.CreateTestDir(t)
+			defer cleanup()
+			mdDir := filepath.Join(baseDir, "daos_control", fmt.Sprintf("engine%d", testEngineIdx))
+			if err := os.MkdirAll(mdDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+
+			cfg := engine.MockConfig().
+				WithStorageControlMetadataPath(baseDir).
+				WithStorage(
+					storage.NewTierConfig().
+						WithStorageClass("ram").
+						WithScmMountPoint("/mnt/daos"),
+				)
+			runner := engine.NewRunner(log, cfg)
+			storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil, nil)
+			engine := NewEngineInstance(log, storage, mockJoin, runner, nil)
+			sb := &Superblock{
+				UUID:      defaultUUID.String(),
+				ValidRank: tc.setupRank != nil,
+			}
+			if tc.setupRank != nil {
+				sb.Rank = tc.setupRank
+			}
+			if !tc.noSB {
+				engine.setSuperblock(sb)
+			}
+
+			// Set replace rank via NotifyStorageReady() API or direct Store()
+			if tc.useNotifyAPI {
+				engine.NotifyStorageReady(tc.replaceRank)
+				// Verify replaceRank was stored correctly by NotifyStorageReady()
+				storedRank := engine.replaceRank.Load()
+				if tc.replaceRank == nil {
+					test.AssertTrue(t, storedRank == nil, "replaceRank should be nil for standard join")
+				} else {
+					test.AssertTrue(t, storedRank != nil, "replaceRank should be set")
+					test.AssertEqual(t, *tc.replaceRank, *storedRank, "stored replaceRank mismatch")
+				}
+			} else if tc.replaceRank != nil {
+				engine.replaceRank.Store(tc.replaceRank)
+			}
+
+			rank, localJoin, mapVersion, err := engine.determineRank(test.Context(t), defaultReq)
+
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expRank, rank, "rank mismatch")
+			test.AssertEqual(t, tc.expLocalJoin, localJoin, "localJoin mismatch")
+			if tc.joinResp != nil {
+				test.AssertEqual(t, tc.joinResp.MapVersion, mapVersion, "mapVersion mismatch")
+			}
+
+			// Verify replaceRank is cleared after join
+			test.AssertTrue(t, engine.replaceRank.Load() == nil, "replaceRank should be cleared")
+
+			// Additional validation for captured join request
+			if tc.validateFullJoinReq && capturedJoinReq == nil {
+				t.Fatal("join request was not captured")
+			}
+		})
+	}
 }
