@@ -179,7 +179,7 @@ func TestStorageCommands(t *testing.T) {
 			"storage format --replace -l foo1.com",
 			strings.Join([]string{
 				printRequest(t, func() *control.SystemQueryReq {
-					req := &control.SystemQueryReq{FailOnUnavailable: true}
+					req := &control.SystemQueryReq{}
 					req.SetHostList([]string{"foo1.com:10001"})
 					return req
 				}()),
@@ -198,7 +198,7 @@ func TestStorageCommands(t *testing.T) {
 			"storage format --replace --rank 5 -l foo1.com",
 			strings.Join([]string{
 				printRequest(t, func() *control.SystemQueryReq {
-					req := &control.SystemQueryReq{FailOnUnavailable: true}
+					req := &control.SystemQueryReq{}
 					req.SetHostList([]string{"foo1.com:10001"})
 					return req
 				}()),
@@ -223,7 +223,7 @@ func TestStorageCommands(t *testing.T) {
 			"storage format --replace --rank 0 -l foo1.com",
 			strings.Join([]string{
 				printRequest(t, func() *control.SystemQueryReq {
-					req := &control.SystemQueryReq{FailOnUnavailable: true}
+					req := &control.SystemQueryReq{}
 					req.SetHostList([]string{"foo1.com:10001"})
 					return req
 				}()),
