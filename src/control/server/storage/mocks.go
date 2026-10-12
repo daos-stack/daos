@@ -435,6 +435,7 @@ type MockScmProvider struct {
 	ScanErr        error
 	PrepareRes     *ScmPrepareResponse
 	PrepareErr     error
+	UnmountCalls   int
 }
 
 func (m *MockScmProvider) Mount(ScmMountRequest) (*MountResponse, error) {
@@ -442,6 +443,7 @@ func (m *MockScmProvider) Mount(ScmMountRequest) (*MountResponse, error) {
 }
 
 func (m *MockScmProvider) Unmount(ScmMountRequest) (*MountResponse, error) {
+	m.UnmountCalls++
 	return m.UnmountRes, m.UnmountErr
 }
 

@@ -670,6 +670,21 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		return nil
 	})
 
+	// Register callback to unmount the SCM ramdisk when the control-plane server itself
+	// shuts down, in addition to the OnInstanceExit callback above. This covers cases
+	// where the engine process never cleanly exited in this control-plane generation
+	// (e.g. it was never started, or exited via a path that bypassed OnInstanceExit),
+	// ensuring stale ramdisk content doesn't persist across a control-plane restart.
+	srv.OnShutdown(func() {
+		if !engine.storage.BdevRoleMetaConfigured() {
+			return
+		}
+		if err := engine.storage.UnmountTmpfs(); err != nil {
+			srv.log.Errorf("engine instance %d: failed to unmount tmpfs on shutdown: %s",
+				engine.Index(), err)
+		}
+	})
+
 	// Register callback to publish engine format requested events.
 	engine.OnAwaitFormat(createPublishFormatRequiredFunc(srv.pubSub.Publish, srv.hostname))
 
