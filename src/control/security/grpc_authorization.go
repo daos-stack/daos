@@ -36,6 +36,7 @@ var methodAuthorizations = map[string][]Component{
 	"/ctl.CtlSvc/StorageFormatStatus":        {ComponentAdmin},
 	"/ctl.CtlSvc/StorageNvmeRebind":          {ComponentAdmin},
 	"/ctl.CtlSvc/StorageNvmeAddDevice":       {ComponentAdmin},
+	"/ctl.CtlSvc/RemoveSuperblock":           {ComponentAdmin},
 	"/ctl.CtlSvc/NetworkScan":                {ComponentAdmin},
 	"/ctl.CtlSvc/CollectLog":                 {ComponentAdmin},
 	"/ctl.CtlSvc/SmdQuery":                   {ComponentAdmin},

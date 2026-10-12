@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,13 +31,14 @@ var File_ctl_ctl_proto protoreflect.FileDescriptor
 
 const file_ctl_ctl_proto_rawDesc = "" +
 	"\n" +
-	"\rctl/ctl.proto\x12\x03ctl\x1a\x11ctl/storage.proto\x1a\x11ctl/network.proto\x1a\rctl/smd.proto\x1a\x0fctl/ranks.proto\x1a\x10ctl/server.proto\x1a\x11ctl/support.proto\x1a\x0fctl/check.proto2\x93\a\n" +
+	"\rctl/ctl.proto\x12\x03ctl\x1a\x11ctl/storage.proto\x1a\x11ctl/network.proto\x1a\rctl/smd.proto\x1a\x0fctl/ranks.proto\x1a\x10ctl/server.proto\x1a\x11ctl/support.proto\x1a\x0fctl/check.proto2\xde\a\n" +
 	"\x06CtlSvc\x12:\n" +
 	"\vStorageScan\x12\x13.ctl.StorageScanReq\x1a\x14.ctl.StorageScanResp\"\x00\x12@\n" +
 	"\rStorageFormat\x12\x15.ctl.StorageFormatReq\x1a\x16.ctl.StorageFormatResp\"\x00\x12R\n" +
 	"\x13StorageFormatStatus\x12\x1b.ctl.StorageFormatStatusReq\x1a\x1c.ctl.StorageFormatStatusResp\"\x00\x12>\n" +
 	"\x11StorageNvmeRebind\x12\x12.ctl.NvmeRebindReq\x1a\x13.ctl.NvmeRebindResp\"\x00\x12G\n" +
-	"\x14StorageNvmeAddDevice\x12\x15.ctl.NvmeAddDeviceReq\x1a\x16.ctl.NvmeAddDeviceResp\"\x00\x12:\n" +
+	"\x14StorageNvmeAddDevice\x12\x15.ctl.NvmeAddDeviceReq\x1a\x16.ctl.NvmeAddDeviceResp\"\x00\x12I\n" +
+	"\x10RemoveSuperblock\x12\x18.ctl.RemoveSuperblockReq\x1a\x19.ctl.RemoveSuperblockResp\"\x00\x12:\n" +
 	"\vNetworkScan\x12\x13.ctl.NetworkScanReq\x1a\x14.ctl.NetworkScanResp\"\x00\x121\n" +
 	"\bSmdQuery\x12\x10.ctl.SmdQueryReq\x1a\x11.ctl.SmdQueryResp\"\x00\x124\n" +
 	"\tSmdManage\x12\x11.ctl.SmdManageReq\x1a\x12.ctl.SmdManageResp\"\x00\x12@\n" +
@@ -57,25 +58,27 @@ var file_ctl_ctl_proto_goTypes = []any{
 	(*StorageFormatStatusReq)(nil),  // 2: ctl.StorageFormatStatusReq
 	(*NvmeRebindReq)(nil),           // 3: ctl.NvmeRebindReq
 	(*NvmeAddDeviceReq)(nil),        // 4: ctl.NvmeAddDeviceReq
-	(*NetworkScanReq)(nil),          // 5: ctl.NetworkScanReq
-	(*SmdQueryReq)(nil),             // 6: ctl.SmdQueryReq
-	(*SmdManageReq)(nil),            // 7: ctl.SmdManageReq
-	(*SetLogMasksReq)(nil),          // 8: ctl.SetLogMasksReq
-	(*RanksReq)(nil),                // 9: ctl.RanksReq
-	(*CollectLogReq)(nil),           // 10: ctl.CollectLogReq
-	(*CheckEngineActReq)(nil),       // 11: ctl.CheckEngineActReq
-	(*StorageScanResp)(nil),         // 12: ctl.StorageScanResp
-	(*StorageFormatResp)(nil),       // 13: ctl.StorageFormatResp
-	(*StorageFormatStatusResp)(nil), // 14: ctl.StorageFormatStatusResp
-	(*NvmeRebindResp)(nil),          // 15: ctl.NvmeRebindResp
-	(*NvmeAddDeviceResp)(nil),       // 16: ctl.NvmeAddDeviceResp
-	(*NetworkScanResp)(nil),         // 17: ctl.NetworkScanResp
-	(*SmdQueryResp)(nil),            // 18: ctl.SmdQueryResp
-	(*SmdManageResp)(nil),           // 19: ctl.SmdManageResp
-	(*SetLogMasksResp)(nil),         // 20: ctl.SetLogMasksResp
-	(*RanksResp)(nil),               // 21: ctl.RanksResp
-	(*CollectLogResp)(nil),          // 22: ctl.CollectLogResp
-	(*CheckEngineActResp)(nil),      // 23: ctl.CheckEngineActResp
+	(*RemoveSuperblockReq)(nil),     // 5: ctl.RemoveSuperblockReq
+	(*NetworkScanReq)(nil),          // 6: ctl.NetworkScanReq
+	(*SmdQueryReq)(nil),             // 7: ctl.SmdQueryReq
+	(*SmdManageReq)(nil),            // 8: ctl.SmdManageReq
+	(*SetLogMasksReq)(nil),          // 9: ctl.SetLogMasksReq
+	(*RanksReq)(nil),                // 10: ctl.RanksReq
+	(*CollectLogReq)(nil),           // 11: ctl.CollectLogReq
+	(*CheckEngineActReq)(nil),       // 12: ctl.CheckEngineActReq
+	(*StorageScanResp)(nil),         // 13: ctl.StorageScanResp
+	(*StorageFormatResp)(nil),       // 14: ctl.StorageFormatResp
+	(*StorageFormatStatusResp)(nil), // 15: ctl.StorageFormatStatusResp
+	(*NvmeRebindResp)(nil),          // 16: ctl.NvmeRebindResp
+	(*NvmeAddDeviceResp)(nil),       // 17: ctl.NvmeAddDeviceResp
+	(*RemoveSuperblockResp)(nil),    // 18: ctl.RemoveSuperblockResp
+	(*NetworkScanResp)(nil),         // 19: ctl.NetworkScanResp
+	(*SmdQueryResp)(nil),            // 20: ctl.SmdQueryResp
+	(*SmdManageResp)(nil),           // 21: ctl.SmdManageResp
+	(*SetLogMasksResp)(nil),         // 22: ctl.SetLogMasksResp
+	(*RanksResp)(nil),               // 23: ctl.RanksResp
+	(*CollectLogResp)(nil),          // 24: ctl.CollectLogResp
+	(*CheckEngineActResp)(nil),      // 25: ctl.CheckEngineActResp
 }
 var file_ctl_ctl_proto_depIdxs = []int32{
 	0,  // 0: ctl.CtlSvc.StorageScan:input_type -> ctl.StorageScanReq
@@ -83,33 +86,35 @@ var file_ctl_ctl_proto_depIdxs = []int32{
 	2,  // 2: ctl.CtlSvc.StorageFormatStatus:input_type -> ctl.StorageFormatStatusReq
 	3,  // 3: ctl.CtlSvc.StorageNvmeRebind:input_type -> ctl.NvmeRebindReq
 	4,  // 4: ctl.CtlSvc.StorageNvmeAddDevice:input_type -> ctl.NvmeAddDeviceReq
-	5,  // 5: ctl.CtlSvc.NetworkScan:input_type -> ctl.NetworkScanReq
-	6,  // 6: ctl.CtlSvc.SmdQuery:input_type -> ctl.SmdQueryReq
-	7,  // 7: ctl.CtlSvc.SmdManage:input_type -> ctl.SmdManageReq
-	8,  // 8: ctl.CtlSvc.SetEngineLogMasks:input_type -> ctl.SetLogMasksReq
-	9,  // 9: ctl.CtlSvc.PrepShutdownRanks:input_type -> ctl.RanksReq
-	9,  // 10: ctl.CtlSvc.StopRanks:input_type -> ctl.RanksReq
-	9,  // 11: ctl.CtlSvc.ResetFormatRanks:input_type -> ctl.RanksReq
-	9,  // 12: ctl.CtlSvc.StartRanks:input_type -> ctl.RanksReq
-	10, // 13: ctl.CtlSvc.CollectLog:input_type -> ctl.CollectLogReq
-	11, // 14: ctl.CtlSvc.CheckEngineRepair:input_type -> ctl.CheckEngineActReq
-	12, // 15: ctl.CtlSvc.StorageScan:output_type -> ctl.StorageScanResp
-	13, // 16: ctl.CtlSvc.StorageFormat:output_type -> ctl.StorageFormatResp
-	14, // 17: ctl.CtlSvc.StorageFormatStatus:output_type -> ctl.StorageFormatStatusResp
-	15, // 18: ctl.CtlSvc.StorageNvmeRebind:output_type -> ctl.NvmeRebindResp
-	16, // 19: ctl.CtlSvc.StorageNvmeAddDevice:output_type -> ctl.NvmeAddDeviceResp
-	17, // 20: ctl.CtlSvc.NetworkScan:output_type -> ctl.NetworkScanResp
-	18, // 21: ctl.CtlSvc.SmdQuery:output_type -> ctl.SmdQueryResp
-	19, // 22: ctl.CtlSvc.SmdManage:output_type -> ctl.SmdManageResp
-	20, // 23: ctl.CtlSvc.SetEngineLogMasks:output_type -> ctl.SetLogMasksResp
-	21, // 24: ctl.CtlSvc.PrepShutdownRanks:output_type -> ctl.RanksResp
-	21, // 25: ctl.CtlSvc.StopRanks:output_type -> ctl.RanksResp
-	21, // 26: ctl.CtlSvc.ResetFormatRanks:output_type -> ctl.RanksResp
-	21, // 27: ctl.CtlSvc.StartRanks:output_type -> ctl.RanksResp
-	22, // 28: ctl.CtlSvc.CollectLog:output_type -> ctl.CollectLogResp
-	23, // 29: ctl.CtlSvc.CheckEngineRepair:output_type -> ctl.CheckEngineActResp
-	15, // [15:30] is the sub-list for method output_type
-	0,  // [0:15] is the sub-list for method input_type
+	5,  // 5: ctl.CtlSvc.RemoveSuperblock:input_type -> ctl.RemoveSuperblockReq
+	6,  // 6: ctl.CtlSvc.NetworkScan:input_type -> ctl.NetworkScanReq
+	7,  // 7: ctl.CtlSvc.SmdQuery:input_type -> ctl.SmdQueryReq
+	8,  // 8: ctl.CtlSvc.SmdManage:input_type -> ctl.SmdManageReq
+	9,  // 9: ctl.CtlSvc.SetEngineLogMasks:input_type -> ctl.SetLogMasksReq
+	10, // 10: ctl.CtlSvc.PrepShutdownRanks:input_type -> ctl.RanksReq
+	10, // 11: ctl.CtlSvc.StopRanks:input_type -> ctl.RanksReq
+	10, // 12: ctl.CtlSvc.ResetFormatRanks:input_type -> ctl.RanksReq
+	10, // 13: ctl.CtlSvc.StartRanks:input_type -> ctl.RanksReq
+	11, // 14: ctl.CtlSvc.CollectLog:input_type -> ctl.CollectLogReq
+	12, // 15: ctl.CtlSvc.CheckEngineRepair:input_type -> ctl.CheckEngineActReq
+	13, // 16: ctl.CtlSvc.StorageScan:output_type -> ctl.StorageScanResp
+	14, // 17: ctl.CtlSvc.StorageFormat:output_type -> ctl.StorageFormatResp
+	15, // 18: ctl.CtlSvc.StorageFormatStatus:output_type -> ctl.StorageFormatStatusResp
+	16, // 19: ctl.CtlSvc.StorageNvmeRebind:output_type -> ctl.NvmeRebindResp
+	17, // 20: ctl.CtlSvc.StorageNvmeAddDevice:output_type -> ctl.NvmeAddDeviceResp
+	18, // 21: ctl.CtlSvc.RemoveSuperblock:output_type -> ctl.RemoveSuperblockResp
+	19, // 22: ctl.CtlSvc.NetworkScan:output_type -> ctl.NetworkScanResp
+	20, // 23: ctl.CtlSvc.SmdQuery:output_type -> ctl.SmdQueryResp
+	21, // 24: ctl.CtlSvc.SmdManage:output_type -> ctl.SmdManageResp
+	22, // 25: ctl.CtlSvc.SetEngineLogMasks:output_type -> ctl.SetLogMasksResp
+	23, // 26: ctl.CtlSvc.PrepShutdownRanks:output_type -> ctl.RanksResp
+	23, // 27: ctl.CtlSvc.StopRanks:output_type -> ctl.RanksResp
+	23, // 28: ctl.CtlSvc.ResetFormatRanks:output_type -> ctl.RanksResp
+	23, // 29: ctl.CtlSvc.StartRanks:output_type -> ctl.RanksResp
+	24, // 30: ctl.CtlSvc.CollectLog:output_type -> ctl.CollectLogResp
+	25, // 31: ctl.CtlSvc.CheckEngineRepair:output_type -> ctl.CheckEngineActResp
+	16, // [16:32] is the sub-list for method output_type
+	0,  // [0:16] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name

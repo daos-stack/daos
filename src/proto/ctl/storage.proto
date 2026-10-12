@@ -99,3 +99,11 @@ message NvmeAddDeviceReq {
 message NvmeAddDeviceResp {
 	ResponseState state = 1;
 }
+
+message RemoveSuperblockReq {
+	uint32 engine_index = 1;	// Index of DAOS engine whose superblock to remove
+}
+
+message RemoveSuperblockResp {
+	ResponseState state = 1;
+}

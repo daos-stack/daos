@@ -804,6 +804,94 @@ func (x *NvmeAddDeviceResp) GetState() *ResponseState {
 	return nil
 }
 
+type RemoveSuperblockReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EngineIndex   uint32                 `protobuf:"varint,1,opt,name=engine_index,json=engineIndex,proto3" json:"engine_index,omitempty"` // Index of DAOS engine whose superblock to remove
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveSuperblockReq) Reset() {
+	*x = RemoveSuperblockReq{}
+	mi := &file_ctl_storage_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveSuperblockReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveSuperblockReq) ProtoMessage() {}
+
+func (x *RemoveSuperblockReq) ProtoReflect() protoreflect.Message {
+	mi := &file_ctl_storage_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveSuperblockReq.ProtoReflect.Descriptor instead.
+func (*RemoveSuperblockReq) Descriptor() ([]byte, []int) {
+	return file_ctl_storage_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *RemoveSuperblockReq) GetEngineIndex() uint32 {
+	if x != nil {
+		return x.EngineIndex
+	}
+	return 0
+}
+
+type RemoveSuperblockResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         *ResponseState         `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveSuperblockResp) Reset() {
+	*x = RemoveSuperblockResp{}
+	mi := &file_ctl_storage_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveSuperblockResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveSuperblockResp) ProtoMessage() {}
+
+func (x *RemoveSuperblockResp) ProtoReflect() protoreflect.Message {
+	mi := &file_ctl_storage_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveSuperblockResp.ProtoReflect.Descriptor instead.
+func (*RemoveSuperblockResp) Descriptor() ([]byte, []int) {
+	return file_ctl_storage_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *RemoveSuperblockResp) GetState() *ResponseState {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
 var File_ctl_storage_proto protoreflect.FileDescriptor
 
 const file_ctl_storage_proto_rawDesc = "" +
@@ -864,6 +952,10 @@ const file_ctl_storage_proto_rawDesc = "" +
 	"\fengine_index\x18\x02 \x01(\rR\vengineIndex\x12,\n" +
 	"\x12storage_tier_index\x18\x03 \x01(\x05R\x10storageTierIndex\"=\n" +
 	"\x11NvmeAddDeviceResp\x12(\n" +
+	"\x05state\x18\x01 \x01(\v2\x12.ctl.ResponseStateR\x05state\"8\n" +
+	"\x13RemoveSuperblockReq\x12!\n" +
+	"\fengine_index\x18\x01 \x01(\rR\vengineIndex\"@\n" +
+	"\x14RemoveSuperblockResp\x12(\n" +
 	"\x05state\x18\x01 \x01(\v2\x12.ctl.ResponseStateR\x05stateB9Z7github.com/daos-stack/daos/src/control/common/proto/ctlb\x06proto3"
 
 var (
@@ -878,7 +970,7 @@ func file_ctl_storage_proto_rawDescGZIP() []byte {
 	return file_ctl_storage_proto_rawDescData
 }
 
-var file_ctl_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_ctl_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_ctl_storage_proto_goTypes = []any{
 	(*StorageScanReq)(nil),          // 0: ctl.StorageScanReq
 	(*MemInfo)(nil),                 // 1: ctl.MemInfo
@@ -893,35 +985,38 @@ var file_ctl_storage_proto_goTypes = []any{
 	(*NvmeRebindResp)(nil),          // 10: ctl.NvmeRebindResp
 	(*NvmeAddDeviceReq)(nil),        // 11: ctl.NvmeAddDeviceReq
 	(*NvmeAddDeviceResp)(nil),       // 12: ctl.NvmeAddDeviceResp
-	(*ScanNvmeReq)(nil),             // 13: ctl.ScanNvmeReq
-	(*ScanScmReq)(nil),              // 14: ctl.ScanScmReq
-	(*ScanNvmeResp)(nil),            // 15: ctl.ScanNvmeResp
-	(*ScanScmResp)(nil),             // 16: ctl.ScanScmResp
-	(*FormatNvmeReq)(nil),           // 17: ctl.FormatNvmeReq
-	(*FormatScmReq)(nil),            // 18: ctl.FormatScmReq
-	(*NvmeControllerResult)(nil),    // 19: ctl.NvmeControllerResult
-	(*ScmMountResult)(nil),          // 20: ctl.ScmMountResult
-	(*ResponseState)(nil),           // 21: ctl.ResponseState
+	(*RemoveSuperblockReq)(nil),     // 13: ctl.RemoveSuperblockReq
+	(*RemoveSuperblockResp)(nil),    // 14: ctl.RemoveSuperblockResp
+	(*ScanNvmeReq)(nil),             // 15: ctl.ScanNvmeReq
+	(*ScanScmReq)(nil),              // 16: ctl.ScanScmReq
+	(*ScanNvmeResp)(nil),            // 17: ctl.ScanNvmeResp
+	(*ScanScmResp)(nil),             // 18: ctl.ScanScmResp
+	(*FormatNvmeReq)(nil),           // 19: ctl.FormatNvmeReq
+	(*FormatScmReq)(nil),            // 20: ctl.FormatScmReq
+	(*NvmeControllerResult)(nil),    // 21: ctl.NvmeControllerResult
+	(*ScmMountResult)(nil),          // 22: ctl.ScmMountResult
+	(*ResponseState)(nil),           // 23: ctl.ResponseState
 }
 var file_ctl_storage_proto_depIdxs = []int32{
-	13, // 0: ctl.StorageScanReq.nvme:type_name -> ctl.ScanNvmeReq
-	14, // 1: ctl.StorageScanReq.scm:type_name -> ctl.ScanScmReq
+	15, // 0: ctl.StorageScanReq.nvme:type_name -> ctl.ScanNvmeReq
+	16, // 1: ctl.StorageScanReq.scm:type_name -> ctl.ScanScmReq
 	1,  // 2: ctl.SysMemInfo.numa_nodes:type_name -> ctl.MemInfo
-	15, // 3: ctl.StorageScanResp.nvme:type_name -> ctl.ScanNvmeResp
-	16, // 4: ctl.StorageScanResp.scm:type_name -> ctl.ScanScmResp
+	17, // 3: ctl.StorageScanResp.nvme:type_name -> ctl.ScanNvmeResp
+	18, // 4: ctl.StorageScanResp.scm:type_name -> ctl.ScanScmResp
 	2,  // 5: ctl.StorageScanResp.sys_mem_info:type_name -> ctl.SysMemInfo
-	17, // 6: ctl.StorageFormatReq.nvme:type_name -> ctl.FormatNvmeReq
-	18, // 7: ctl.StorageFormatReq.scm:type_name -> ctl.FormatScmReq
-	19, // 8: ctl.StorageFormatResp.crets:type_name -> ctl.NvmeControllerResult
-	20, // 9: ctl.StorageFormatResp.mrets:type_name -> ctl.ScmMountResult
+	19, // 6: ctl.StorageFormatReq.nvme:type_name -> ctl.FormatNvmeReq
+	20, // 7: ctl.StorageFormatReq.scm:type_name -> ctl.FormatScmReq
+	21, // 8: ctl.StorageFormatResp.crets:type_name -> ctl.NvmeControllerResult
+	22, // 9: ctl.StorageFormatResp.mrets:type_name -> ctl.ScmMountResult
 	8,  // 10: ctl.StorageFormatStatusResp.engine_status:type_name -> ctl.EngineFormatStatus
-	21, // 11: ctl.NvmeRebindResp.state:type_name -> ctl.ResponseState
-	21, // 12: ctl.NvmeAddDeviceResp.state:type_name -> ctl.ResponseState
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	23, // 11: ctl.NvmeRebindResp.state:type_name -> ctl.ResponseState
+	23, // 12: ctl.NvmeAddDeviceResp.state:type_name -> ctl.ResponseState
+	23, // 13: ctl.RemoveSuperblockResp.state:type_name -> ctl.ResponseState
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_ctl_storage_proto_init() }
@@ -938,7 +1033,7 @@ func file_ctl_storage_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ctl_storage_proto_rawDesc), len(file_ctl_storage_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

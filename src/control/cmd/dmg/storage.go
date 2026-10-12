@@ -29,6 +29,7 @@ type storageCmd struct {
 	Set           setFaultyCmd           `command:"set" description:"Manually set the device state."`
 	Replace       storageReplaceCmd      `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
 	LedManage     ledManageCmd           `command:"led" description:"Manage LED status for supported drives."`
+	RemoveSB      removeSuperblockCmd    `command:"remove-superblock" description:"Remove engine superblock to prepare a single engine for reformat."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -299,6 +300,51 @@ func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 		cmd.Error(outErr.String())
 	} else {
 		cmd.Info("Command completed successfully")
+	}
+
+	return resp.Errors()
+}
+
+// removeSuperblockCmd is the struct representing the remove-superblock storage subcommand.
+type removeSuperblockCmd struct {
+	baseCmd
+	ctlInvokerCmd
+	hostListCmd
+	cmdutil.JSONOutputCmd
+	EngineIndex uint32 `short:"e" long:"engine-index" required:"1" description:"Index of DAOS engine whose superblock to remove."`
+}
+
+// Execute is run when removeSuperblockCmd activates.
+//
+// Remove superblock from engine storage to prepare for reformat.
+func (cmd *removeSuperblockCmd) Execute(args []string) error {
+	ctx := cmd.MustLogCtx()
+
+	if len(cmd.getHostList()) != 1 {
+		return errors.New("command expects a single host in hostlist")
+	}
+
+	req := &control.RemoveSuperblockReq{EngineIndex: cmd.EngineIndex}
+	req.SetHostList(cmd.getHostList())
+
+	cmd.Debugf("remove superblock req: %+v", req)
+	resp, err := control.RemoveSuperblock(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
+		return err
+	}
+	if outErr.Len() > 0 {
+		cmd.Error(outErr.String())
+	} else {
+		cmd.Info("Superblock removed successfully")
 	}
 
 	return resp.Errors()

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,6 +31,7 @@ const (
 	CtlSvc_StorageFormatStatus_FullMethodName  = "/ctl.CtlSvc/StorageFormatStatus"
 	CtlSvc_StorageNvmeRebind_FullMethodName    = "/ctl.CtlSvc/StorageNvmeRebind"
 	CtlSvc_StorageNvmeAddDevice_FullMethodName = "/ctl.CtlSvc/StorageNvmeAddDevice"
+	CtlSvc_RemoveSuperblock_FullMethodName     = "/ctl.CtlSvc/RemoveSuperblock"
 	CtlSvc_NetworkScan_FullMethodName          = "/ctl.CtlSvc/NetworkScan"
 	CtlSvc_SmdQuery_FullMethodName             = "/ctl.CtlSvc/SmdQuery"
 	CtlSvc_SmdManage_FullMethodName            = "/ctl.CtlSvc/SmdManage"
@@ -63,6 +64,8 @@ type CtlSvcClient interface {
 	StorageNvmeRebind(ctx context.Context, in *NvmeRebindReq, opts ...grpc.CallOption) (*NvmeRebindResp, error)
 	// Add newly inserted SSD to DAOS engine config
 	StorageNvmeAddDevice(ctx context.Context, in *NvmeAddDeviceReq, opts ...grpc.CallOption) (*NvmeAddDeviceResp, error)
+	// Remove engine superblock to prepare for reformat
+	RemoveSuperblock(ctx context.Context, in *RemoveSuperblockReq, opts ...grpc.CallOption) (*RemoveSuperblockResp, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	NetworkScan(ctx context.Context, in *NetworkScanReq, opts ...grpc.CallOption) (*NetworkScanResp, error)
 	// Query the per-server metadata
@@ -137,6 +140,16 @@ func (c *ctlSvcClient) StorageNvmeAddDevice(ctx context.Context, in *NvmeAddDevi
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(NvmeAddDeviceResp)
 	err := c.cc.Invoke(ctx, CtlSvc_StorageNvmeAddDevice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ctlSvcClient) RemoveSuperblock(ctx context.Context, in *RemoveSuperblockReq, opts ...grpc.CallOption) (*RemoveSuperblockResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveSuperblockResp)
+	err := c.cc.Invoke(ctx, CtlSvc_RemoveSuperblock_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -263,6 +276,8 @@ type CtlSvcServer interface {
 	StorageNvmeRebind(context.Context, *NvmeRebindReq) (*NvmeRebindResp, error)
 	// Add newly inserted SSD to DAOS engine config
 	StorageNvmeAddDevice(context.Context, *NvmeAddDeviceReq) (*NvmeAddDeviceResp, error)
+	// Remove engine superblock to prepare for reformat
+	RemoveSuperblock(context.Context, *RemoveSuperblockReq) (*RemoveSuperblockResp, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	NetworkScan(context.Context, *NetworkScanReq) (*NetworkScanResp, error)
 	// Query the per-server metadata
@@ -307,6 +322,9 @@ func (UnimplementedCtlSvcServer) StorageNvmeRebind(context.Context, *NvmeRebindR
 }
 func (UnimplementedCtlSvcServer) StorageNvmeAddDevice(context.Context, *NvmeAddDeviceReq) (*NvmeAddDeviceResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method StorageNvmeAddDevice not implemented")
+}
+func (UnimplementedCtlSvcServer) RemoveSuperblock(context.Context, *RemoveSuperblockReq) (*RemoveSuperblockResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveSuperblock not implemented")
 }
 func (UnimplementedCtlSvcServer) NetworkScan(context.Context, *NetworkScanReq) (*NetworkScanResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method NetworkScan not implemented")
@@ -445,6 +463,24 @@ func _CtlSvc_StorageNvmeAddDevice_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CtlSvcServer).StorageNvmeAddDevice(ctx, req.(*NvmeAddDeviceReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CtlSvc_RemoveSuperblock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveSuperblockReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CtlSvcServer).RemoveSuperblock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CtlSvc_RemoveSuperblock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CtlSvcServer).RemoveSuperblock(ctx, req.(*RemoveSuperblockReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -655,6 +691,10 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StorageNvmeAddDevice",
 			Handler:    _CtlSvc_StorageNvmeAddDevice_Handler,
+		},
+		{
+			MethodName: "RemoveSuperblock",
+			Handler:    _CtlSvc_RemoveSuperblock_Handler,
 		},
 		{
 			MethodName: "NetworkScan",
