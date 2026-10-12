@@ -1991,10 +1991,8 @@ vos_obj_bkt2req(struct vos_object *obj, uint32_t *ids, umem_bucket_req_t *req)
 
 	for (node = obj->obj_bkt_nodes; node != NULL; node = node->bn_next) {
 		for (i = 0; i < node->bn_bkt_cnt && cnt < VOS_OBJ_BKTS_MAX; i++) {
-			if (vos_bkt_id_is_shared(node->bn_bkt_ids[i])) {
-				D_ASSERT(cnt < VOS_OBJ_BKTS_MAX);
+			if (vos_bkt_id_is_shared(node->bn_bkt_ids[i]))
 				ids[cnt++] = vos_bkt_id_raw(node->bn_bkt_ids[i]);
-			}
 		}
 	}
 

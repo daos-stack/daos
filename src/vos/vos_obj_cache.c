@@ -327,8 +327,10 @@ obj_load_bkts(struct vos_pool *pool, struct vos_object *obj, struct vos_obj_p2_d
 		node_df = umem_off2ptr(vos_pool2umm(pool), next);
 
 		D_ALLOC_PTR(node);
-		if (node == NULL)
+		if (node == NULL) {
+			obj_bkt_nodes_free(obj);
 			return -DER_NOMEM;
+		}
 
 		node->bn_bkt_cnt = node_df->bn_bkt_cnt;
 		for (i = 0; i < node_df->bn_bkt_cnt; i++)
@@ -632,7 +634,7 @@ set_bkt_node_df(struct vos_obj_bkt_node_df *node_df, struct vos_obj_bkt_node *no
 {
 	int i;
 
-	D_ASSERT(node->bn_bkt_cnt > 0 && node->bn_bkt_cnt < VOS_OBJ_BKT_NODE_CAP);
+	D_ASSERT(node->bn_bkt_cnt > 0 && node->bn_bkt_cnt <= VOS_OBJ_BKT_NODE_CAP);
 	node_df->bn_bkt_cnt = node->bn_bkt_cnt;
 	for (i = 0; i < node->bn_bkt_cnt; i++)
 		node_df->bn_bkt_ids[i] = node->bn_bkt_ids[i];
