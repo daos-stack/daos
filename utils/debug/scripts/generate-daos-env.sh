@@ -179,6 +179,11 @@ UTEST_TMP_SIZE="34G"
 # ticket workspace's virtualenvs, else \$DAOS_SHARED_WORKSPACE/virtualenvs.
 DAOS_PY_VENV=""
 
+# gcov side directory of the cov-*.sh/.py helpers (see README-coverage.md):
+# instrumented objects, relinked consumers and .gcno/.gcda files land there,
+# the scons tree and the install prefix stay untouched.
+COV_DIR="/var/tmp/daos-cov-$TICKET_LC"
+
 DFUSE_MNT_PATH="/tmp/dfuse_mnt"
 
 VALGRIND_BIN="/usr/bin/valgrind"
