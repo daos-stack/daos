@@ -89,26 +89,6 @@ btr_ops_t dbtree_coll_ops = {
 };
 
 int
-obj_ptr2shards(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
-	       uint32_t *grp_nr)
-{
-	int rc = 0;
-
-	/* The layout can be refreshed concurrently, so read it under cob_lock. */
-	D_RWLOCK_RDLOCK(&obj->cob_lock);
-	if (obj->cob_version != map_ver || obj->cob_shards == NULL) {
-		rc = -DER_STALE;
-	} else {
-		*start_shard = 0;
-		*shard_nr    = obj->cob_shards_nr;
-		*grp_nr      = obj->cob_grp_nr;
-	}
-	D_RWLOCK_UNLOCK(&obj->cob_lock);
-
-	return rc;
-}
-
-int
 obj_need_coll(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
 	      uint32_t *grp_nr)
 {

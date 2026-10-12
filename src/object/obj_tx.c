@@ -1845,37 +1845,6 @@ out:
 }
 
 static int
-dc_tx_leader_resolve(struct dc_tx_req_group *dtrgs, uint32_t tgt_cnt, uint32_t req_idx,
-		     uint32_t shard_idx, uint32_t *leader_dtrg_idx, daos_unit_oid_t *leader_oid)
-{
-	struct daos_cpd_req_idx *dcri;
-	uint32_t                 i;
-	uint32_t                 j;
-
-	/* Resolve against the classified participants, not a layout that may have been refreshed
-	 * after leader selection.
-	 */
-	for (i = 0; i < tgt_cnt; i++) {
-		if (dtrgs[i].dtrg_req_idx == NULL)
-			continue;
-
-		for (j = 0; j < dtrgs[i].dtrg_read_cnt + dtrgs[i].dtrg_write_cnt; j++) {
-			dcri = &dtrgs[i].dtrg_req_idx[j];
-			if (dcri->dcri_req_idx != req_idx || dcri->dcri_shard_off != shard_idx)
-				continue;
-
-			*leader_dtrg_idx     = i;
-			leader_oid->id_shard = dcri->dcri_shard_id;
-			return 0;
-		}
-	}
-
-	D_DEBUG(DB_IO, "Selected leader shard %u for request %u is not a classified participant\n",
-		shard_idx, req_idx);
-	return -DER_STALE;
-}
-
-static int
 dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 {
 	daos_unit_oid_t			 leader_oid = { 0 };
@@ -2029,12 +1998,17 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		if (i < 0)
 			D_GOTO(out, rc = i);
 
-		rc = dc_tx_leader_resolve(dtrgs, tgt_cnt, dc_tx_leftmost_req(tx, true) - start, i,
-					  &leader_dtrg_idx, &leader_oid);
-		if (rc != 0)
-			goto out;
+		D_RWLOCK_RDLOCK(&obj->cob_lock);
+		if (obj->cob_version != tx->tx_pm_ver || obj->cob_shards == NULL ||
+		    i >= obj->cob_shards_nr) {
+			D_RWLOCK_UNLOCK(&obj->cob_lock);
+			D_GOTO(out, rc = -DER_STALE);
+		}
+		leader_oid.id_pub   = obj->cob_md.omd_id;
+		leader_oid.id_shard = obj_get_shard(obj, i)->po_shard;
+		leader_dtrg_idx     = obj_get_shard(obj, i)->po_target;
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
 
-		leader_oid.id_pub = obj->cob_md.omd_id;
 		if (!obj_is_ec(obj) && act_grp_cnt == 1)
 			mbs->dm_flags |= DMF_SRDG_REP;
 

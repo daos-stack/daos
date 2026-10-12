@@ -502,6 +502,26 @@ obj_get_grp_size(struct dc_object *obj)
 	return obj->cob_grp_size;
 }
 
+int
+obj_ptr2shards(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
+	       uint32_t *grp_nr)
+{
+	int rc = 0;
+
+	/* The layout can be refreshed concurrently, so read it under cob_lock. */
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (obj->cob_version != map_ver || obj->cob_shards == NULL) {
+		rc = -DER_STALE;
+	} else {
+		*start_shard = 0;
+		*shard_nr    = obj->cob_shards_nr;
+		*grp_nr      = obj->cob_grp_nr;
+	}
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
+	return rc;
+}
+
 static unsigned int
 obj_shard_idx2grpidx(struct dc_object *obj, unsigned int shard_idx)
 {
@@ -4576,14 +4596,14 @@ obj_comp_cb_internal(struct obj_auxi_args *obj_auxi)
 		rc = obj_list_comp(obj_auxi, &iter_arg);
 	else if (obj_auxi->opc == DAOS_OBJ_RPC_KEY2ANCHOR) {
 		daos_obj_key2anchor_t *obj_arg = dc_task_get_args(obj_auxi->obj_task);
-		uint32_t               grp_start;
+		uint32_t               grp_idx;
 
-		rc = obj_dkey2grpmemb(obj_auxi->obj, obj_auxi->dkey_hash, obj_auxi->map_ver_req,
-				      &grp_start, NULL);
+		rc = obj_dkey2grp(obj_auxi->obj, obj_auxi->dkey_hash, obj_auxi->map_ver_req,
+				 &grp_idx, NULL, NULL);
 		if (rc != 0)
 			goto out;
 
-		obj_arg->anchor->da_shard = grp_start;
+		dc_obj_shard2anchor(obj_arg->anchor, grp_idx * obj_get_replicas(obj_auxi->obj));
 		sub_anchors               = (struct shard_anchors *)obj_arg->anchor->da_sub_anchors;
 		if (sub_anchors) {
 			if (sub_anchors_is_eof(sub_anchors))
