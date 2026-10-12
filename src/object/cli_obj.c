@@ -4599,12 +4599,12 @@ obj_comp_cb_internal(struct obj_auxi_args *obj_auxi)
 		uint32_t               grp_idx;
 
 		rc = obj_dkey2grp(obj_auxi->obj, obj_auxi->dkey_hash, obj_auxi->map_ver_req,
-				 &grp_idx, NULL, NULL);
+				  &grp_idx, NULL, NULL);
 		if (rc != 0)
 			goto out;
 
 		dc_obj_shard2anchor(obj_arg->anchor, grp_idx * obj_get_replicas(obj_auxi->obj));
-		sub_anchors               = (struct shard_anchors *)obj_arg->anchor->da_sub_anchors;
+		sub_anchors = (struct shard_anchors *)obj_arg->anchor->da_sub_anchors;
 		if (sub_anchors) {
 			if (sub_anchors_is_eof(sub_anchors))
 				daos_anchor_set_eof(obj_arg->anchor);

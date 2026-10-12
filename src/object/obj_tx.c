@@ -1263,7 +1263,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	struct obj_reasb_req	*reasb_req = NULL;
 	uint32_t		 size;
 	uint32_t		 start_tgt;
-	uint32_t		 grp_size;
+	uint32_t                 grp_size;
 	int			 skipped_parity = 0;
 	int			 handled = 0;
 	int			 grp_start;
@@ -1295,7 +1295,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	if (dtr == NULL)
 		return -DER_NOMEM;
 
-	grp_start = grp_idx * grp_size;
+	grp_start            = grp_idx * grp_size;
 	dcsr->dcsr_ec_tgt_nr = 0;
 
 	if (dcsr->dcsr_opc == DCSO_UPDATE) {
@@ -1319,8 +1319,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 	/* Descending order to guarantee that EC parity is handled firstly. */
 	for (i = 0, idx = start_tgt, shard_idx = idx + grp_start; i < grp_size;
-	     i++, idx = ((idx + grp_size - 1) % grp_size),
-	     shard_idx = idx + grp_start) {
+	     i++, idx = ((idx + grp_size - 1) % grp_size), shard_idx = idx + grp_start) {
 		rc = obj_shard_open(obj, shard_idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
