@@ -357,6 +357,27 @@ def define_components(reqs):
                 required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
 
+    reqs.define('munge', libs=['munge'], headers=['munge.h'], package='munge-devel')
+    reqs.define('slurm',
+                retriever=GitRepoRetriever(),
+                commands=[['./configure', '--prefix=/usr',
+                           '--libdir=/usr/lib64', '--sysconfdir=/etc/slurm',
+                           '--with-munge=/usr', '--without-mysql', '--without-hdf5',
+                           '--disable-slurmrestd', '--enable-pkgconfig',
+                           '--with-systemdsystemunitdir=/usr/lib/systemd/system'],
+                          ['make'],
+                          ['make', 'install', 'DESTDIR=$SLURM_PREFIX'],
+                          ['cp', '-a', '$SLURM_PREFIX/usr/.', '$SLURM_PREFIX/'],
+                          ['rm', '-rf', '$SLURM_PREFIX/usr'],
+                          ['install', '-D', '-m', '644', 'etc/slurm.conf.example',
+                           '$SLURM_PREFIX/etc/slurm/slurm.conf.example'],
+                          ['install', '-D', '-m', '644', 'etc/cgroup.conf.example',
+                           '$SLURM_PREFIX/etc/slurm/cgroup.conf.example']],
+                requires=['munge', 'hwloc'],
+                libs=['slurm'],
+                headers=['slurm/slurm.h'],
+                package='slurm-devel')
+
     # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
     # are relocating binaries across systems, for example in CI under GitHub actions etc.  There
     # isn't a minimum value needed here, but getting this wrong will cause daos server to exit
