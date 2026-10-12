@@ -402,9 +402,12 @@ obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
 
-	D_ASSERTF(coa->coa_min_rank == obj->cob_min_rank,
-		  "Object "DF_OID" layout has been changed unexpectedly %u => %u, idx %u, ver %u\n",
-		  DP_OID(obj->cob_md.omd_id), coa->coa_min_rank, obj->cob_min_rank, idx, map_ver);
+	if (obj->cob_version != map_ver || coa->coa_min_rank != obj->cob_min_rank) {
+		D_DEBUG(DB_IO, DF_OID " collective layout changed, idx %u, ver %u/%u\n",
+			DP_OID(obj->cob_md.omd_id), idx, map_ver, obj->cob_version);
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		D_GOTO(out, rc = -DER_STALE);
+	}
 	D_ASSERTF(shard->do_target_rank >= obj->cob_min_rank,
 		  "Unexpected shard with rank %u < %u\n", shard->do_target_rank, obj->cob_min_rank);
 
@@ -756,7 +759,8 @@ new_leader:
 	for (i = 0; i < len; i++) {
 		if (isset(dct->dct_bitmap, i)) {
 			rc = obj_shard_open(obj, dct->dct_shards[i].dcs_idx, map_ver, &shard);
-			D_ASSERT(rc == 0);
+			if (rc != 0)
+				goto out;
 
 			if (!shard->do_rebuilding && !shard->do_reintegrating)
 				goto gen_mbs;
