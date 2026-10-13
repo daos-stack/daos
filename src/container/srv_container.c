@@ -2165,10 +2165,13 @@ out_lock:
 	return rc;
 }
 
+/* Seconds between "no stable epoch reported" warnings for a container */
+#define STABLE_EPH_WARN_INTVL 600
+
 static void
 cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 {
-	d_rank_list_t                    fail_ranks = {0};
+	d_rank_list_t                    skip_ranks = {0};
 	struct cont_track_eph_leader	*eph_ldr;
 	struct cont_track_eph_leader	*tmp;
 	uint64_t			 cur_eph, new_eph;
@@ -2181,7 +2184,15 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	int                              cont_num        = 0;
 	int				 rc = 0;
 
-	rc = map_ranks_failed(pool->sp_map, &fail_ranks);
+	/*
+	 * Skip the failed ranks, and the NEW (being extended) ranks: they are not in the
+	 * pool group yet, so they never get the pool map and never report any epoch. They
+	 * hold no data and do not take part in rebuild, so they must not take part in the
+	 * minimum either, otherwise their initial 0 pins the global stable epoch of every
+	 * container for ever.
+	 */
+	rc = map_ranks_failed(pool->sp_map, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+			      &skip_ranks);
 	if (rc) {
 		D_ERROR(DF_UUID ": ranks init failed: %d\n", DP_UUID(pool->sp_uuid), rc);
 		return;
@@ -2220,7 +2231,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		for (i = 0; i < eph_ldr->cte_servers_num; i++) {
 			d_rank_t rank = eph_ldr->cte_server_ephs[i].re_rank;
 
-			if (d_rank_in_rank_list(&fail_ranks, rank)) {
+			if (d_rank_in_rank_list(&skip_ranks, rank)) {
 				D_DEBUG(DB_MD, DF_CONT " skip %u\n",
 					DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), rank);
 				continue;
@@ -2243,6 +2254,26 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 				min_stable_eph  = eph_ldr->cte_server_ephs[i].re_stable_eph;
 				min_stable_rank = rank;
 			}
+		}
+
+		/* All ranks are failed or new, nothing can be refreshed. */
+		if (min_stable_eph == DAOS_EPOCH_MAX) {
+			if (cont_num % 10 == 0)
+				dss_sleep(0);
+			continue;
+		}
+
+		/*
+		 * Some non-failed rank has never reported, the global stable epoch of this
+		 * container cannot move. Say which rank it is since rebuild waits on it.
+		 */
+		if (min_stable_eph == 0 &&
+		    cur_ts > eph_ldr->cte_stable_warn_ts + STABLE_EPH_WARN_INTVL) {
+			eph_ldr->cte_stable_warn_ts = cur_ts;
+			D_WARN(DF_CONT ": no stable epoch reported from rank %u yet, global "
+				       "stable epoch stays at " DF_X64 "\n",
+			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), min_stable_rank,
+			       eph_ldr->cte_current_stable_eph);
 		}
 
 		/* for reboot case the ea_rdb_eph possibly higher than min_eph */
@@ -2282,11 +2313,6 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		new_eph = d_hlc2sec(min_stable_eph);
 		if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
 			D_WARN(DF_CONT ": Sluggish stable epoch reporting. "
-				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 " min_rank:%u\n",
-			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), cur_eph, new_eph,
-			       new_eph - cur_eph, min_stable_rank);
-		else if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 60)
-			D_INFO(DF_CONT ": Slow stable epoch reporting. "
 				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 " min_rank:%u\n",
 			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), cur_eph, new_eph,
 			       new_eph - cur_eph, min_stable_rank);
@@ -2336,7 +2362,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	}
 	ABT_mutex_unlock(svc->cs_cont_ephs_mutex);
 
-	map_ranks_fini(&fail_ranks);
+	map_ranks_fini(&skip_ranks);
 }
 
 int

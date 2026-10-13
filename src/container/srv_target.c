@@ -2819,7 +2819,10 @@ ds_cont_eph_report(struct ds_pool *pool)
 	unsigned int             failed_tgts_nr;
 
 	D_ASSERT(pool != NULL && pool->sp_map != NULL);
-	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid, &failed_tgts, &failed_tgts_nr);
+	/* NEW targets hold no data and never run aggregation, keep them out of the minimum. */
+	rc = ds_pool_get_tgt_idx_by_state(pool->sp_uuid,
+					  PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_NEW,
+					  &failed_tgts, &failed_tgts_nr);
 	if (rc) {
 		D_DEBUG(DB_MD, DF_UUID ": Failed to get index", DP_UUID(pool->sp_uuid));
 		return rc;
