@@ -93,12 +93,13 @@ func (ei *EngineInstance) hasSuperblock() bool {
 //
 // Should not be called if SCM format is required.
 func (ei *EngineInstance) needsSuperblock() (bool, error) {
-	// Always read superblock from disk to avoid stale in-memory state preventing format.
-	// The in-memory superblock may exist from a previous operation, but the on-disk
-	// superblock may have been deleted.
+	if ei.hasSuperblock() {
+		ei.log.Debugf("instance %d already has superblock", ei.Index())
+		return false, nil
+	}
+
 	err := ei.ReadSuperblock()
 	if os.IsNotExist(errors.Cause(err)) {
-		ei.setSuperblock(nil)
 		ei.log.Debugf("instance %d: superblock not found", ei.Index())
 		return true, nil
 	}

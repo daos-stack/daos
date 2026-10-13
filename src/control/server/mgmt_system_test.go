@@ -3596,21 +3596,6 @@ func TestServer_MgmtSvc_SystemSelfHealEval(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_SystemErase(t *testing.T) {
-	// SystemErase() unconditionally schedules a real process restart via unixExec()
-	// (unix.Exec()) from a background goroutine after a short (500ms) delay. Stub it out
-	// for the lifetime of this test function so that running these subtests does not
-	// replace the test binary's process image mid-suite.
-	//
-	// NB: this is intentionally NOT restored (e.g. via defer/t.Cleanup) once the test
-	// function returns. unixExec is invoked asynchronously ~500ms after each subtest's
-	// SystemErase() call returns, which is often after the subtest (or even the whole
-	// top-level test) has already finished; restoring the real unix.Exec() before that
-	// delayed goroutine fires would defeat the mock and trigger a genuine self-exec of the
-	// test binary, silently restarting (and replaying) the entire suite.
-	unixExec = func(argv0 string, argv []string, envv []string) error {
-		return nil
-	}
-
 	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
 		return &control.HostResponse{
 			Addr:    test.MockHostAddr(a).String(),
@@ -3622,6 +3607,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 		nilReq         bool
 		forwarded      bool
 		notLeader      bool
+		skipDBStart    bool  // leave sysdb un-Start()ed to exercise eraseSysdb()'s Stop() failure path
 		selfHostIdx    int32 // index (per test.MockHostAddr) of the "self" leader host; 0 = default
 		ranks          string
 		hosts          string
@@ -3650,17 +3636,18 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			// Simulates the MS leader forwarding a per-replica erase request
 			// (see eraseReplicas()) directly to a non-leader peer; the request
 			// context carries the "server" component, so it is allowed to run
-			// locally (resetLocalEngines()) instead of being redirected back to
+			// locally (eraseLocalEngines()) instead of being redirected back to
 			// the leader (which would occur if checkLeaderRequest were used).
-			// The mock system database doesn't support a full Start()/Stop()
-			// lifecycle, so the local erase itself fails deeper in the call
-			// chain (after passing the replica-only check) - proving that the
-			// "server" component correctly bypassed leader-only enforcement
-			// rather than returning *system.ErrNotLeader.
-			forwarded: true,
-			notLeader: true,
-			mResps:    []*control.HostResponse{},
-			expErr:    errors.New("no shutdown callback set"),
+			// sysdb is deliberately left un-Start()ed here (skipDBStart) so that
+			// eraseSysdb()'s Stop() call fails deeper in the call chain (after
+			// passing the replica-only check) - proving that the "server"
+			// component correctly bypassed leader-only enforcement rather than
+			// returning *system.ErrNotLeader.
+			forwarded:   true,
+			notLeader:   true,
+			skipDBStart: true,
+			mResps:      []*control.HostResponse{},
+			expErr:      errors.New("no shutdown callback set"),
 		},
 		"unfiltered rank results": {
 			members: system.Members{
@@ -3733,7 +3720,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			// mockMember() calls below), so getPeersAndFanout() must exclude both
 			// ranks from the ResetFormatRanks fanout request entirely (see Section
 			// 4.6 of the MD-on-SSD system erase design doc); they are instead
-			// erased locally via resetLocalEngines(), which produces no RankResult
+			// erased locally via eraseLocalEngines(), which produces no RankResult
 			// of its own. Only host 2's ranks (2, 3) go through RPC fanout and
 			// appear in the response/get their membership state updated.
 			selfHostIdx: 1,
@@ -3785,6 +3772,10 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 				ctx = metadata.NewIncomingContext(ctx, md)
 			}
 
+			if !tc.skipDBStart {
+				raft.StartMockDatabase(t, svc.sysdb, ctx)
+			}
+
 			req := &mgmtpb.SystemEraseReq{
 				Sys: build.DefaultSystemName,
 			}
@@ -3804,32 +3795,6 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	}
 }
 
-func TestServer_fsyncDir(t *testing.T) {
-	for name, tc := range map[string]struct {
-		path   func(t *testing.T) string
-		expErr error
-	}{
-		"existing directory": {
-			path: func(t *testing.T) string {
-				testDir, cleanup := test.CreateTestDir(t)
-				t.Cleanup(cleanup)
-				return testDir
-			},
-		},
-		"nonexistent path": {
-			path: func(t *testing.T) string {
-				return "/nonexistent/path/that/should/not/exist"
-			},
-			expErr: errors.New("no such file or directory"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotErr := fsyncDir(tc.path(t))
-			test.CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
 func TestServer_MgmtSvc_eraseSysdb(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
@@ -3839,7 +3804,7 @@ func TestServer_MgmtSvc_eraseSysdb(t *testing.T) {
 	t.Run("no shutdown callback set", func(t *testing.T) {
 		// sysdb (a bare raft.MockDatabase) was never Start()ed, so it has no
 		// shutdown callback and Stop() must fail cleanly rather than panic.
-		if err := svc.eraseSysdb(true, ""); err == nil {
+		if err := svc.eraseSysdb(""); err == nil {
 			t.Fatal("expected error erasing a never-started system database")
 		}
 	})
@@ -3853,7 +3818,7 @@ func TestServer_MgmtSvc_eraseSysdb(t *testing.T) {
 		// Success path: sysdb is a real, started, single-replica database, so
 		// Stop()/RemoveFiles() should both succeed and the trailing
 		// awaitSync() should return without blocking indefinitely.
-		if err := svc.eraseSysdb(true, ""); err != nil {
+		if err := svc.eraseSysdb(""); err != nil {
 			t.Fatalf("unexpected error: %s", err)
 		}
 	})

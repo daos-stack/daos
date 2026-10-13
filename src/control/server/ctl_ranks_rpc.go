@@ -9,7 +9,6 @@ package server
 
 import (
 	"context"
-	"os"
 	"syscall"
 	"time"
 
@@ -268,43 +267,17 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	}
 
 	for _, ei := range instances {
-		storage := ei.GetStorage()
-		if storage == nil {
+		if ei.GetStorage() == nil {
 			return nil, errors.Errorf("instance %d: storage provider not initialized", ei.Index())
 		}
+	}
 
-		// In PMem mode just remove the superblock and rely on the format flow to clear
-		// metadata.
-		if !storage.ControlMetadataPathConfigured() {
-			if err := ei.RemoveSuperblock(); err != nil {
-				return nil, err
-			}
-			ei.requestStart(ctx)
-			continue
-		}
-
-		// In MD-on-SSD mode, remove only the per-engine control-metadata subdirectory of
-		// each targeted instance. This is scoped deliberately: the shared host-level root
-		// also holds the MS replica's raft DB (control_raft) and other, non-targeted
-		// engines' subdirectories, neither of which should be touched by a partial-rank
-		// reset. os.RemoveAll() is a no-op if the subdirectory is already gone, so repeat
-		// calls for the same rank are safe.
-		enginePath := storage.ControlMetadataEnginePath()
-		svc.log.Debugf("Removing control metadata directory for instance %d: %s", ei.Index(),
-			enginePath)
-		if err := os.RemoveAll(enginePath); err != nil {
-			return nil, errors.Wrapf(err, "removing control metadata directory for instance %d",
-				ei.Index())
-		}
-
-		// Unmount the SCM ramdisk so that any pool/engine state left over in tmpfs from
-		// before the reset is discarded, rather than persisting across the restart. This
-		// also avoids CheckFormat() seeing a stale mounted ramdisk and incorrectly
-		// short-circuiting the subsequent format as a no-op.
-		if err := storage.UnmountTmpfs(); err != nil {
-			return nil, errors.Wrapf(err, "unmounting tmpfs for instance %d", ei.Index())
-		}
-		ei.requestStart(ctx)
+	if err := svc.harness.eraseEngineFormat(ctx, instances, eraseEngineFormatOpts{
+		stopFirst:         false,
+		wholeMetadataRoot: false,
+		restartNow:        true,
+	}); err != nil {
+		return nil, err
 	}
 
 	// ignore poll results as we gather state immediately after

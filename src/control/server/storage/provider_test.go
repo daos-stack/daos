@@ -859,12 +859,10 @@ func TestStorage_ControlMetadataEnginePath(t *testing.T) {
 
 func TestStorage_UnmountTmpfs(t *testing.T) {
 	for name, tc := range map[string]struct {
-		nilProv       bool
-		cfg           *Config
-		sysCfg        *system.MockSysConfig
-		scmProv       *MockScmProvider
-		expErr        error
-		expUnmountCnt int
+		nilProv bool
+		cfg     *Config
+		scmProv *MockScmProvider
+		expErr  error
 	}{
 		"nil provider": {
 			nilProv: true,
@@ -885,16 +883,12 @@ func TestStorage_UnmountTmpfs(t *testing.T) {
 					},
 				},
 			},
-			sysCfg: &system.MockSysConfig{
-				IsMountedBool: true,
-			},
 			scmProv: &MockScmProvider{
 				UnmountRes: &MountResponse{
 					Target:  "/mnt/daos0",
 					Mounted: false,
 				},
 			},
-			expUnmountCnt: 1,
 		},
 		"RAM class failure": {
 			cfg: &Config{
@@ -907,53 +901,10 @@ func TestStorage_UnmountTmpfs(t *testing.T) {
 					},
 				},
 			},
-			sysCfg: &system.MockSysConfig{
-				IsMountedBool: true,
-			},
 			scmProv: &MockScmProvider{
 				UnmountErr: errors.New("unmount fail"),
 			},
-			expErr:        errors.New("unmount fail"),
-			expUnmountCnt: 1,
-		},
-		"RAM class not mounted is a no-op": {
-			cfg: &Config{
-				Tiers: TierConfigs{
-					{
-						Class: ClassRam,
-						Scm: ScmConfig{
-							MountPoint: "/mnt/daos0",
-						},
-					},
-				},
-			},
-			sysCfg: &system.MockSysConfig{
-				IsMountedBool: false,
-			},
-			scmProv: &MockScmProvider{
-				UnmountErr: errors.New("should not be called"),
-			},
-			expUnmountCnt: 0,
-		},
-		"RAM class is-mounted check failure": {
-			cfg: &Config{
-				Tiers: TierConfigs{
-					{
-						Class: ClassRam,
-						Scm: ScmConfig{
-							MountPoint: "/mnt/daos0",
-						},
-					},
-				},
-			},
-			sysCfg: &system.MockSysConfig{
-				IsMountedErr: errors.New("stat fail"),
-			},
-			scmProv: &MockScmProvider{
-				UnmountErr: errors.New("should not be called"),
-			},
-			expErr:        errors.New("stat fail"),
-			expUnmountCnt: 0,
+			expErr: errors.New("unmount fail"),
 		},
 		"DCPM class skips failure": {
 			cfg: &Config{
@@ -981,19 +932,12 @@ func TestStorage_UnmountTmpfs(t *testing.T) {
 				if tc.scmProv == nil {
 					tc.scmProv = &MockScmProvider{}
 				}
-				if tc.sysCfg == nil {
-					tc.sysCfg = &system.MockSysConfig{}
-				}
-				sp := system.NewMockSysProvider(log, tc.sysCfg)
-				p = NewProvider(log, 0, tc.cfg, sp, tc.scmProv, nil, nil)
+				p = NewProvider(log, 0, tc.cfg, nil, tc.scmProv, nil, nil)
 			}
 
 			err := p.UnmountTmpfs()
 
 			test.CmpErr(t, tc.expErr, err)
-			if tc.scmProv != nil {
-				test.AssertEqual(t, tc.expUnmountCnt, tc.scmProv.UnmountCalls, "unexpected unmount call count")
-			}
 		})
 	}
 }

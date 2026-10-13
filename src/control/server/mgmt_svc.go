@@ -34,7 +34,7 @@ const (
 	groupUpdateInterval = 500 * time.Millisecond
 	batchLoopInterval   = 250 * time.Millisecond
 
-	// defaultGracefulStopTimeout bounds how long scheduleControlPlaneRestart()
+	// defaultGracefulStopTimeout bounds how long execControlPlaneRestart()
 	// will wait for grpcServer.GracefulStop() to drain in-flight RPCs (i.e.
 	// ensure the SystemErase response itself has been fully written to the
 	// wire) before falling back to a hard Stop() and proceeding with the
@@ -97,10 +97,17 @@ type mgmtSvc struct {
 	grpcServer          *grpc.Server   // reference to server's gRPC server
 	gracefulStopTimeout time.Duration  // bound how long to wait for gRPC server's GracefulStop
 	loopWg              sync.WaitGroup // block on background processing loops exit
+	// restartControlPlane performs the actual control-plane process restart (draining
+	// the gRPC server then exec()ing) scheduled by SystemErase via
+	// scheduleControlPlaneRestart(). It defaults to execControlPlaneRestart, but is a
+	// field (rather than a direct call) so that unit tests can substitute a no-op,
+	// avoiding the need for a real gRPC server, a real exec() call, or special-casing
+	// those conditions in the production code path.
+	restartControlPlane func(myPath, leaderStr string)
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
-	return &mgmtSvc{
+	svc := &mgmtSvc{
 		log:                 h.log,
 		harness:             h,
 		membership:          m,
@@ -115,6 +122,9 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		groupUpdateReqs:     make(chan bool),
 		gracefulStopTimeout: defaultGracefulStopTimeout,
 	}
+	svc.restartControlPlane = svc.execControlPlaneRestart
+
+	return svc
 }
 
 // Close cleanly shuts down the management service, canceling the context,

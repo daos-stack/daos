@@ -176,21 +176,15 @@ type systemEraseCmd struct {
 func (cmd *systemEraseCmd) Execute(_ []string) error {
 	resp, err := control.SystemErase(cmd.MustLogCtx(), cmd.ctlInvoker, new(control.SystemEraseReq))
 	if err != nil {
-		if cmd.JSONOutputEnabled() {
-			return cmd.OutputJSON(nil, err)
-		}
-		return err
-	}
-
-	if respErr := resp.Errors(); respErr != nil {
-		if cmd.JSONOutputEnabled() {
-			return cmd.OutputJSON(resp, respErr)
-		}
-		return respErr
+		return err // control api returned an error, disregard response
 	}
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, nil)
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	if err := resp.Errors(); err != nil {
+		return err
 	}
 	cmd.Infof("System erase successful. System is now uninitialized and ready for 'dmg storage format'.\n")
 	return nil

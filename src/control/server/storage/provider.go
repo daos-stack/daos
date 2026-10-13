@@ -356,15 +356,6 @@ func (p *Provider) UnmountTmpfs() error {
 		return nil
 	}
 
-	isMounted, err := p.Sys.IsMounted(cfg.Scm.MountPoint)
-	if err != nil {
-		return errors.Wrapf(err, "checking if %s is mounted", cfg.Scm.MountPoint)
-	}
-	if !isMounted {
-		p.log.Debugf("skipping unmount tmpfs as %s is not mounted", cfg.Scm.MountPoint)
-		return nil
-	}
-
 	req := ScmMountRequest{
 		Target: cfg.Scm.MountPoint,
 	}
