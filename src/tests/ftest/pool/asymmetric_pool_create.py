@@ -59,12 +59,14 @@ class AsymmetricPoolCreate(TestWithServers):
             candidate_ranks = all_ranks
         rank_to_stop = self.random.choice(candidate_ranks)
 
-        self.log.info("Stopping rank %s before pool create", rank_to_stop)
+        self.log.info("Stopping and excluding rank %s before pool create", rank_to_stop)
         self.server_managers[0].stop_ranks([rank_to_stop], force=True)
+        self.get_dmg_command().system_exclude(ranks=[rank_to_stop], rank_hosts=None)
+        self.server_managers[0].update_expected_states([rank_to_stop], ["adminexcluded"])
         failed = self.server_managers[0].check_rank_state(
-            ranks=[rank_to_stop], valid_states=["excluded"], max_checks=30)
+            ranks=[rank_to_stop], valid_states=["adminexcluded"], max_checks=30)
         self.assertListEqual(
-            failed, [], f"Rank {rank_to_stop} did not reach excluded state before pool create")
+            failed, [], f"Rank {rank_to_stop} did not reach adminexcluded state before pool create")
 
         pool = self.get_pool(connect=False)
         self.assertIsNotNone(

@@ -226,7 +226,7 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "scan"), verbose=verbose)
 
-    def storage_format(self, force=False, timeout=30, verbose=False):
+    def storage_format(self, force=False, timeout=30, verbose=False, start=False):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -239,6 +239,8 @@ class DmgCommand(DmgCommandBase):
                 times out.
             verbose (bool): show results of each SCM & NVMe device format
                 operation.
+            start (bool): start the engines after formatting instead of waiting
+                for dmg system initialize. Defaults to False
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -252,7 +254,7 @@ class DmgCommand(DmgCommandBase):
         try:
             self.timeout = timeout
             self._get_result(
-                ("storage", "format"), force=force, verbose=verbose)
+                ("storage", "format"), force=force, verbose=verbose, start=start)
         finally:
             self.timeout = saved_timeout
         return self.result
@@ -1383,6 +1385,44 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_json_result(("system", "set-prop"), properties=properties)
+
+    def system_initialize(self, hosts=None, timeout=None):
+        """Start the engines on the formatted hosts and wait for them to join.
+
+        Args:
+            hosts (NodeSet, optional): hosts whose engines to start. Defaults to None, which
+                uses the dmg host list.
+            timeout (str, optional): time to wait for the engines to join, e.g. "2m".
+                Defaults to None, which waits until the engines join.
+
+        Raises:
+            CommandFailure: if the dmg system initialize command fails.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        """
+        return self._get_result(("system", "initialize"), host_list=hosts, timeout=timeout)
+
+    def system_extend(self, hosts=None, timeout=None):
+        """Start the engines on newly formatted hosts and wait for them to join.
+
+        Args:
+            hosts (NodeSet, optional): hosts whose engines to start. Defaults to None, which
+                uses the dmg host list.
+            timeout (str, optional): time to wait for the engines to join, e.g. "2m".
+                Defaults to None, which waits until the engines join.
+
+        Raises:
+            CommandFailure: if the dmg system extend command fails.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        """
+        return self._get_result(("system", "extend"), host_list=hosts, timeout=timeout)
 
     def system_start(self, ranks=None, ignore_admin_excluded=False):
         """Start the system.
