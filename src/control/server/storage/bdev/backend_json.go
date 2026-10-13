@@ -100,8 +100,13 @@ func (_ IobufParams) isSpdkSubsystemConfigParams() {}
 
 // HotplugBusidRangeParams specifies details for a storage.ConfSetHotplugBusidRange method.
 type HotplugBusidRangeParams struct {
-	Begin uint8 `json:"begin"`
-	End   uint8 `json:"end"`
+	Domain uint16 `json:"domain"`
+	Begin  uint8  `json:"begin"`
+	End    uint8  `json:"end"`
+	// IgnoreDomain retains pre-PCI-domain-awareness behavior of matching hotplug events on
+	// bus-ID range alone when VMD is enabled, as VMD backing devices may be enumerated under
+	// a different domain to the domain of the NUMA node that the VMD endpoint resides on.
+	IgnoreDomain bool `json:"ignore_domain,omitempty"`
 }
 
 func (_ HotplugBusidRangeParams) isDaosConfigParams() {}
@@ -365,8 +370,10 @@ func hotplugPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 	data.Configs = append(data.Configs, &DaosConfig{
 		Method: storage.ConfSetHotplugBusidRange,
 		Params: &HotplugBusidRangeParams{
-			Begin: req.HotplugBusidBegin,
-			End:   req.HotplugBusidEnd,
+			Domain:       req.HotplugBusidDomain,
+			Begin:        req.HotplugBusidBegin,
+			End:          req.HotplugBusidEnd,
+			IgnoreDomain: req.VMDEnabled,
 		},
 	})
 }

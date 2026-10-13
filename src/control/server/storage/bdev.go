@@ -605,20 +605,21 @@ type (
 	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
 	BdevWriteConfigRequest struct {
 		pbin.ForwardableRequest
-		ConfigOutputPath  string
-		OwnerUID          int
-		OwnerGID          int
-		TierProps         []BdevTierProperties
-		HotplugEnabled    bool
-		HotplugBusidBegin uint8
-		HotplugBusidEnd   uint8
-		Hostname          string
-		AccelProps        AccelProps
-		SpdkRpcSrvProps   SpdkRpcServer
-		AutoFaultyProps   BdevAutoFaulty
-		SpdkIobufProps    SpdkIobuf
-		VMDEnabled        bool
-		ScannedBdevs      NvmeControllers // VMD needs address mapping for backing devices.
+		ConfigOutputPath   string
+		OwnerUID           int
+		OwnerGID           int
+		TierProps          []BdevTierProperties
+		HotplugEnabled     bool
+		HotplugBusidDomain uint16
+		HotplugBusidBegin  uint8
+		HotplugBusidEnd    uint8
+		Hostname           string
+		AccelProps         AccelProps
+		SpdkRpcSrvProps    SpdkRpcServer
+		AutoFaultyProps    BdevAutoFaulty
+		SpdkIobufProps     SpdkIobuf
+		VMDEnabled         bool
+		ScannedBdevs       NvmeControllers // VMD needs address mapping for backing devices.
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.
@@ -657,35 +658,43 @@ type (
 // getNumaNodeBusidRange sets range parameters in the input request either to user configured
 // values if provided in the server config file, or automatically derive them by querying
 // hardware configuration.
-func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numaNodeIdx uint) (uint8, uint8, error) {
+func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numaNodeIdx uint) (uint16, uint8, uint8, error) {
 	topo, err := getTopology(ctx)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	if topo == nil {
-		return 0, 0, errors.New("nil topology")
+		return 0, 0, 0, errors.New("nil topology")
 	}
 
 	// Take the lowest and highest buses in all of the ranges for an engine following the
-	// assumption that bus-IDs assigned to each NUMA node will always be contiguous.
+	// assumption that bus-IDs assigned to each NUMA node will always be contiguous and
+	// belong to a single PCI domain.
 	// TODO: add each range individually if unsure about assumption
 
 	nodes := topo.NUMANodes
 	if len(nodes) <= int(numaNodeIdx) {
-		return 0, 0, errors.Errorf("insufficient numa nodes in topology, want %d got %d",
+		return 0, 0, 0, errors.Errorf("insufficient numa nodes in topology, want %d got %d",
 			numaNodeIdx+1, len(nodes))
 	}
 
 	buses := nodes[numaNodeIdx].PCIBuses
 	if len(buses) == 0 {
-		return 0, 0, errors.Errorf("no PCI buses found on numa node %d in topology",
+		return 0, 0, 0, errors.Errorf("no PCI buses found on numa node %d in topology",
 			numaNodeIdx)
 	}
 
 	lowAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[0].LowAddress
 	highAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[len(buses)-1].HighAddress
 
-	return lowAddr.Bus, highAddr.Bus, nil
+	if lowAddr.Domain != highAddr.Domain {
+		return 0, 0, 0, errors.Errorf(
+			"numa node %d spans multiple PCI domains (%04x-%04x), unable to derive a "+
+				"single hotplug bus-id range; set bdev_busid_range explicitly",
+			numaNodeIdx, lowAddr.Domain, highAddr.Domain)
+	}
+
+	return lowAddr.Domain, lowAddr.Bus, highAddr.Bus, nil
 }
 
 // filterBdevScanResponse removes controllers that are not in the input list from the scan response.

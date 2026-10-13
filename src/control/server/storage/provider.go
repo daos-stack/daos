@@ -569,27 +569,31 @@ func (p *Provider) FormatBdevTiers(ctrlrs NvmeControllers) (results []BdevTierFo
 // setHotplugRange sets request parameters related to bus-id range limits to restrict hotplug
 // actions of engine to a set of ssd devices.
 func setHotplugRange(ctx context.Context, log logging.Logger, getTopo topologyGetter, numaNode uint, tier *TierConfig, req *BdevWriteConfigRequest) error {
+	var domain uint16
 	var begin, end uint8
 
 	switch {
 	case req.VMDEnabled:
 		log.Debug("hotplug bus-id filter allows all as vmd is enabled")
+		domain = 0x0000
 		begin = 0x00
 		end = 0xFF
 	case tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero():
 		log.Debugf("received user-specified hotplug bus-id range %q", tier.Bdev.BusidRange)
+		domain = tier.Bdev.BusidRange.LowAddress.Domain
 		begin = tier.Bdev.BusidRange.LowAddress.Bus
 		end = tier.Bdev.BusidRange.HighAddress.Bus
 	default:
 		var err error
 		log.Debug("generating hotplug bus-id range based on hardware topology")
-		begin, end, err = getNumaNodeBusidRange(ctx, getTopo, numaNode)
+		domain, begin, end, err = getNumaNodeBusidRange(ctx, getTopo, numaNode)
 		if err != nil {
 			return errors.Wrapf(err, "get busid range limits")
 		}
 	}
 
-	log.Infof("NUMA %d: hotplug bus-ids %X-%X", numaNode, begin, end)
+	log.Infof("NUMA %d: hotplug bus-ids %04x:%X-%X", numaNode, domain, begin, end)
+	req.HotplugBusidDomain = domain
 	req.HotplugBusidBegin = begin
 	req.HotplugBusidEnd = end
 
