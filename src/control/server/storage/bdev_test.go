@@ -375,3 +375,63 @@ func Test_CalcMinHugepages(t *testing.T) {
 		})
 	}
 }
+
+func Test_deriveHotplugRangesFromBdevList(t *testing.T) {
+	for name, tc := range map[string]struct {
+		bdevList  *BdevDeviceList
+		expRanges []string
+		expErr    error
+	}{
+		"nil bdev_list": {
+			expErr: errors.New("empty bdev_list"),
+		},
+		"empty bdev_list": {
+			bdevList: &BdevDeviceList{},
+			expErr:   errors.New("empty bdev_list"),
+		},
+		"single domain, single address": {
+			bdevList:  MustNewBdevDeviceList("0000:80:00.0"),
+			expRanges: []string{"0000:80"},
+		},
+		"single domain, contiguous addresses": {
+			bdevList: MustNewBdevDeviceList("0000:80:00.0", "0000:81:00.0",
+				"0000:82:00.0"),
+			expRanges: []string{"0000:80-82"},
+		},
+		"single domain, non-contiguous addresses": {
+			bdevList:  MustNewBdevDeviceList("0000:00:00.0", "0000:07:00.0"),
+			expRanges: []string{"0000:00", "0000:07"},
+		},
+		"single domain, out of order addresses, mixed contiguity": {
+			bdevList: MustNewBdevDeviceList("0000:4f:00.0", "0000:00:00.0",
+				"0000:07:00.0", "0000:08:00.0"),
+			expRanges: []string{"0000:00", "0000:07-08", "0000:4f"},
+		},
+		"multiple domains": {
+			bdevList: MustNewBdevDeviceList("0000:00:00.0", "0000:07:00.0",
+				"0001:80:00.0", "0001:8f:00.0"),
+			expRanges: []string{"0000:00", "0000:07", "0001:80", "0001:8f"},
+		},
+		"multiple domains, out of order": {
+			bdevList: MustNewBdevDeviceList("0001:8f:00.0", "0000:07:00.0",
+				"0001:80:00.0", "0000:00:00.0"),
+			expRanges: []string{"0000:00", "0000:07", "0001:80", "0001:8f"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotRanges, gotErr := deriveHotplugRangesFromBdevList(tc.bdevList)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			gotStrs := make([]string, len(gotRanges))
+			for i, r := range gotRanges {
+				gotStrs[i] = r.String()
+			}
+			if diff := cmp.Diff(tc.expRanges, gotStrs); diff != "" {
+				t.Fatalf("unexpected ranges (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
