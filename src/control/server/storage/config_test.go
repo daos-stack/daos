@@ -259,11 +259,12 @@ func TestStorage_BdevDeviceList_FromJSON(t *testing.T) {
 
 func TestStorage_parsePCIBusRange(t *testing.T) {
 	for name, tc := range map[string]struct {
-		rangeStr string
-		bitSize  int
-		expBegin uint8
-		expEnd   uint8
-		expErr   error
+		rangeStr  string
+		bitSize   int
+		expDomain uint16
+		expBegin  uint8
+		expEnd    uint8
+		expErr    error
 	}{
 		"hexadecimal": {
 			rangeStr: "0x80-0x8f",
@@ -306,14 +307,37 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 			bitSize:  8,
 			expErr:   errors.New("value out of range"),
 		},
+		"domain prefixed": {
+			rangeStr:  "0001:0x80-0x8f",
+			expDomain: 0x0001,
+			expBegin:  0x80,
+			expEnd:    0x8f,
+		},
+		"domain prefixed; decimal bus range": {
+			rangeStr:  "0001:128-143",
+			expDomain: 0x0001,
+			expBegin:  0x80,
+			expEnd:    0x8F,
+		},
+		"domain prefixed; zero domain": {
+			rangeStr:  "0000:0x80-0x8f",
+			expDomain: 0x0000,
+			expBegin:  0x80,
+			expEnd:    0x8f,
+		},
+		"invalid domain": {
+			rangeStr: "000g:0x80-0x8f",
+			expErr:   errors.New("parse busid range domain"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			begin, end, err := parsePCIBusRange(tc.rangeStr, tc.bitSize)
+			domain, begin, end, err := parsePCIBusRange(tc.rangeStr, tc.bitSize)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
+			test.AssertEqual(t, tc.expDomain, domain, "bad domain")
 			test.AssertEqual(t, tc.expBegin, begin, "bad beginning limit")
 			test.AssertEqual(t, tc.expEnd, end, "bad ending limit")
 		})
