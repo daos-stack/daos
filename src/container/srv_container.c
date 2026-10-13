@@ -1823,6 +1823,7 @@ cont_track_eph_leader_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	}
 	d_list_add(&eph_ldr->cte_list, &cont_svc->cs_cont_ephs_leader_list);
 	eph_ldr->cte_ec_agg_warn_slug_ts = eph_ldr->cte_start_ts;
+	eph_ldr->cte_stable_warn_ts      = eph_ldr->cte_ec_agg_warn_slug_ts;
 	*leader_p = eph_ldr;
 out:
 	if (rc) {
@@ -1989,6 +1990,61 @@ cont_refresh_track_eph_one(void *data)
 	return rc;
 }
 
+static int
+cont_child_recreate_one(void *data)
+{
+	struct refresh_track_eph_arg *arg = data;
+	struct ds_cont_child         *cont_child;
+	int                           rc;
+
+	rc = ds_cont_child_lookup(arg->pool_uuid, arg->cont_uuid, &cont_child);
+	if (rc == 0) {
+		ds_cont_child_put(cont_child);
+		return 0;
+	}
+	if (rc != -DER_CONT_NONEXIST)
+		return rc;
+
+	rc = ds_cont_child_open_create(arg->pool_uuid, arg->cont_uuid, false, NULL);
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc,
+		  DF_CONT ": re-create missing container shard on target %u/%u",
+		  DP_CONT(arg->pool_uuid, arg->cont_uuid), dss_self_rank(),
+		  dss_get_module_info()->dmi_tgt_id);
+	return rc;
+}
+
+/*
+ * Some local target has no shard of a container that the PS leader tracks (the leader
+ * checks the container against RDB before tracking it). Such target never reports a
+ * stable epoch, so this rank never reports one for the container and its global stable
+ * epoch stays pinned for ever, which blocks rebuild. Re-create the missing shard(s), the
+ * same way the container recovery does on reintegration.
+ */
+static int
+cont_tgt_recreate_missing(struct refresh_track_eph_arg *arg)
+{
+	struct cont_props props;
+	int               rc;
+
+	/* The container may be being destroyed concurrently, check it before re-creating. */
+	rc = ds_cont_get_props(&props, arg->pool_uuid, arg->cont_uuid);
+	if (rc != 0) {
+		DL_CDEBUG(rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING, DLOG_DBG,
+			  DLOG_ERR, rc, DF_CONT ": skip re-creating missing container shard",
+			  DP_CONT(arg->pool_uuid, arg->cont_uuid));
+		return rc;
+	}
+
+	rc = ds_pool_thread_collective(arg->pool_uuid,
+				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				       cont_child_recreate_one, arg, DSS_ULT_DEEP_STACK);
+	/* The shard may be being destroyed or the target stopping meanwhile, that is fine. */
+	DL_CDEBUG(rc == 0 || rc == -DER_CONT_DESTROYING || rc == -DER_SHUTDOWN, DLOG_DBG, DLOG_ERR,
+		  rc, DF_CONT ": re-create missing container shard",
+		  DP_CONT(arg->pool_uuid, arg->cont_uuid));
+	return rc;
+}
+
 int
 ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 			      daos_epoch_t ec_agg_eph, daos_epoch_t stable_eph)
@@ -2032,6 +2088,9 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 		  DF_CONT ": refresh ec_agg_eph " DF_X64 ", "
 			  "stable_eph " DF_X64,
 		  DP_CONT(pool_uuid, cont_uuid), ec_agg_eph, stable_eph);
+
+	if (rc == -DER_CONT_NONEXIST)
+		rc = cont_tgt_recreate_missing(&arg);
 
 out:
 	if (arg.tgt_status != NULL && arg.tgt_status != arg.tgt_status_inline)
@@ -2183,6 +2242,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	int				 i;
 	int                              warn_slug_ranks = 8; /* 8 ranks at most */
 	int                              cont_num        = 0;
+	bool                             force_refresh;
 	int				 rc = 0;
 
 	/*
@@ -2266,11 +2326,15 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 		/*
 		 * Some non-failed rank has never reported, the global stable epoch of this
-		 * container cannot move. Say which rank it is since rebuild waits on it.
+		 * container cannot move. Say which rank it is since rebuild waits on it, and
+		 * force a refresh: on a rank that misses the container shard, the refresh
+		 * re-creates the shard (see ds_cont_tgt_refresh_track_eph()).
 		 */
+		force_refresh = false;
 		if (min_stable_eph == 0 &&
 		    cur_ts > eph_ldr->cte_stable_warn_ts + STABLE_EPH_WARN_INTVL) {
 			eph_ldr->cte_stable_warn_ts = cur_ts;
+			force_refresh               = true;
 			D_WARN(DF_CONT ": no stable epoch reported from rank %u yet, global "
 				       "stable epoch stays at " DF_X64 "\n",
 			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), min_stable_rank,
@@ -2281,7 +2345,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (min_ec_agg_eph < eph_ldr->cte_rdb_ec_agg_eph)
 			min_ec_agg_eph = eph_ldr->cte_rdb_ec_agg_eph;
 
-		if (min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
+		if (!force_refresh && min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
 		    min_stable_eph == eph_ldr->cte_current_stable_eph &&
 		    eph_ldr->cte_current_ec_agg_eph != 0) {
 			if (cont_num % 10 == 0)
