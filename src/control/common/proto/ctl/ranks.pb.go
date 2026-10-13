@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -136,6 +137,156 @@ func (x *RanksResp) GetResults() []*shared.RankResult {
 	return nil
 }
 
+// Request to start every engine on a host.
+type StartEnginesReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartEnginesReq) Reset() {
+	*x = StartEnginesReq{}
+	mi := &file_ctl_ranks_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartEnginesReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartEnginesReq) ProtoMessage() {}
+
+func (x *StartEnginesReq) ProtoReflect() protoreflect.Message {
+	mi := &file_ctl_ranks_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartEnginesReq.ProtoReflect.Descriptor instead.
+func (*StartEnginesReq) Descriptor() ([]byte, []int) {
+	return file_ctl_ranks_proto_rawDescGZIP(), []int{2}
+}
+
+// Per-instance start result.
+type EngineResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Index         uint32                 `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"` // engine instance index
+	State         string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`  // local engine state after the request
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`  // why the engine exited instead of starting
+	Uuid          string                 `protobuf:"bytes,4,opt,name=uuid,proto3" json:"uuid,omitempty"`    // superblock UUID; empty until formatted
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EngineResult) Reset() {
+	*x = EngineResult{}
+	mi := &file_ctl_ranks_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EngineResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EngineResult) ProtoMessage() {}
+
+func (x *EngineResult) ProtoReflect() protoreflect.Message {
+	mi := &file_ctl_ranks_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EngineResult.ProtoReflect.Descriptor instead.
+func (*EngineResult) Descriptor() ([]byte, []int) {
+	return file_ctl_ranks_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *EngineResult) GetIndex() uint32 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+func (x *EngineResult) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *EngineResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *EngineResult) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+type StartEnginesResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Results       []*EngineResult        `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"` // one per requested instance
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartEnginesResp) Reset() {
+	*x = StartEnginesResp{}
+	mi := &file_ctl_ranks_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartEnginesResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartEnginesResp) ProtoMessage() {}
+
+func (x *StartEnginesResp) ProtoReflect() protoreflect.Message {
+	mi := &file_ctl_ranks_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartEnginesResp.ProtoReflect.Descriptor instead.
+func (*StartEnginesResp) Descriptor() ([]byte, []int) {
+	return file_ctl_ranks_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *StartEnginesResp) GetResults() []*EngineResult {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
 var File_ctl_ranks_proto protoreflect.FileDescriptor
 
 const file_ctl_ranks_proto_rawDesc = "" +
@@ -147,7 +298,15 @@ const file_ctl_ranks_proto_rawDesc = "" +
 	"\n" +
 	"check_mode\x18\x05 \x01(\bR\tcheckMode\"9\n" +
 	"\tRanksResp\x12,\n" +
-	"\aresults\x18\x01 \x03(\v2\x12.shared.RankResultR\aresultsB9Z7github.com/daos-stack/daos/src/control/common/proto/ctlb\x06proto3"
+	"\aresults\x18\x01 \x03(\v2\x12.shared.RankResultR\aresults\"\x11\n" +
+	"\x0fStartEnginesReq\"d\n" +
+	"\fEngineResult\x12\x14\n" +
+	"\x05index\x18\x01 \x01(\rR\x05index\x12\x14\n" +
+	"\x05state\x18\x02 \x01(\tR\x05state\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\x12\x12\n" +
+	"\x04uuid\x18\x04 \x01(\tR\x04uuid\"?\n" +
+	"\x10StartEnginesResp\x12+\n" +
+	"\aresults\x18\x01 \x03(\v2\x11.ctl.EngineResultR\aresultsB9Z7github.com/daos-stack/daos/src/control/common/proto/ctlb\x06proto3"
 
 var (
 	file_ctl_ranks_proto_rawDescOnce sync.Once
@@ -161,19 +320,23 @@ func file_ctl_ranks_proto_rawDescGZIP() []byte {
 	return file_ctl_ranks_proto_rawDescData
 }
 
-var file_ctl_ranks_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_ctl_ranks_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_ctl_ranks_proto_goTypes = []any{
 	(*RanksReq)(nil),          // 0: ctl.RanksReq
 	(*RanksResp)(nil),         // 1: ctl.RanksResp
-	(*shared.RankResult)(nil), // 2: shared.RankResult
+	(*StartEnginesReq)(nil),   // 2: ctl.StartEnginesReq
+	(*EngineResult)(nil),      // 3: ctl.EngineResult
+	(*StartEnginesResp)(nil),  // 4: ctl.StartEnginesResp
+	(*shared.RankResult)(nil), // 5: shared.RankResult
 }
 var file_ctl_ranks_proto_depIdxs = []int32{
-	2, // 0: ctl.RanksResp.results:type_name -> shared.RankResult
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	5, // 0: ctl.RanksResp.results:type_name -> shared.RankResult
+	3, // 1: ctl.StartEnginesResp.results:type_name -> ctl.EngineResult
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_ctl_ranks_proto_init() }
@@ -187,7 +350,7 @@ func file_ctl_ranks_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ctl_ranks_proto_rawDesc), len(file_ctl_ranks_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
