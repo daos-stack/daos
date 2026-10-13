@@ -10,41 +10,83 @@
 #include "bio_ut.h"
 #include "../../bio/bio_wal.h"
 
-static void
+/* Close the session, if a failed test left it opened, and destroy the pool */
+static int
 ut_mc_fini(struct bio_ut_args *args)
 {
-	int	rc;
+	int tmp;
+	int rc = 0;
 
-	rc = bio_mc_close(args->bua_mc);
-	if (rc)
-		D_ERROR("UT MC close failed. "DF_RC"\n", DP_RC(rc));
+	if (args->bua_mc != NULL) {
+		rc = bio_mc_close(args->bua_mc);
+		/* The context is freed even on error */
+		args->bua_mc = NULL;
+		if (rc != 0)
+			D_ERROR("UT MC close failed. " DF_RC "\n", DP_RC(rc));
+	}
 
-	rc = bio_mc_destroy(args->bua_xs_ctxt, args->bua_pool_id, 0);
-	if (rc)
-		D_ERROR("UT MC destroy failed. "DF_RC"\n", DP_RC(rc));
+	tmp = bio_mc_destroy(args->bua_xs_ctxt, args->bua_pool_id, args->bua_mc_flags);
+	if (tmp != 0) {
+		/* Only the first failure is an error: a later one may be its consequence */
+		D_CDEBUG(rc == 0, DLOG_ERR, DLOG_DBG, "UT MC destroy failed. " DF_RC "\n",
+			 DP_RC(tmp));
+		if (rc == 0)
+			rc = tmp;
+	}
+
+	return rc;
 }
 
 static int
 ut_mc_init(struct bio_ut_args *args, uint64_t meta_sz, uint64_t wal_sz, uint64_t data_sz)
 {
-	int	rc, ret;
+	enum bio_mc_flags flags = args->bua_mc_flags;
+	int               rc;
 
 	uuid_generate(args->bua_pool_id);
-	rc = bio_mc_create(args->bua_xs_ctxt, args->bua_pool_id, 0, meta_sz, wal_sz, data_sz, 0, 0);
+	rc = bio_mc_create(args->bua_xs_ctxt, args->bua_pool_id, 0, meta_sz, wal_sz, data_sz, flags,
+			   0);
 	if (rc) {
 		D_ERROR("UT MC create failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
-	rc = bio_mc_open(args->bua_xs_ctxt, args->bua_pool_id, 0, &args->bua_mc);
+	rc = bio_mc_open(args->bua_xs_ctxt, args->bua_pool_id, flags, &args->bua_mc);
 	if (rc) {
+		int ret;
+
 		D_ERROR("UT MC open failed. "DF_RC"\n", DP_RC(rc));
-		ret = bio_mc_destroy(args->bua_xs_ctxt, args->bua_pool_id, 0);
+		ret = bio_mc_destroy(args->bua_xs_ctxt, args->bua_pool_id, flags);
 		if (ret)
 			D_ERROR("UT MC destroy failed. "DF_RC"\n", DP_RC(ret));
 	}
 
 	return rc;
+}
+
+/*
+ * Close the session of the pool. A test closing the session must go through this function:
+ * bua_mc is NULL afterwards, which keeps ut_mc_fini() from closing it twice if the test fails
+ * before ut_mc_open().
+ */
+static void
+ut_mc_close(struct bio_ut_args *args)
+{
+	int rc;
+
+	rc = bio_mc_close(args->bua_mc);
+	/* The context is freed even on error */
+	args->bua_mc = NULL;
+	assert_rc_equal(rc, 0);
+}
+
+static void
+ut_mc_open(struct bio_ut_args *args)
+{
+	int rc;
+
+	rc = bio_mc_open(args->bua_xs_ctxt, args->bua_pool_id, args->bua_mc_flags, &args->bua_mc);
+	assert_rc_equal(rc, 0);
 }
 
 struct ut_fake_tx {
@@ -872,15 +914,228 @@ wal_ut_holes(void **state)
 	ut_mc_fini(args);
 }
 
+/* Compute a header checksum the way BIO does */
+static void
+ut_hdr_csum(struct bio_meta_context *mc, void *hdr, unsigned int hdr_sz, uint32_t *csum)
+{
+	struct hash_ft *algo = mc->mc_csum_algo;
+	int             rc;
+
+	assert_non_null(algo);
+	rc = algo->cf_reset(mc->mc_csum_ctx);
+	assert_rc_equal(rc, 0);
+	rc = algo->cf_update(mc->mc_csum_ctx, hdr, hdr_sz - sizeof(*csum));
+	assert_rc_equal(rc, 0);
+	rc = algo->cf_finish(mc->mc_csum_ctx, (uint8_t *)csum, sizeof(*csum));
+	assert_rc_equal(rc, 0);
+}
+
+/* Write a raw header at the first block of a blob */
+static void
+ut_hdr_write(struct bio_io_context *ioc, void *hdr, unsigned int hdr_sz)
+{
+	bio_addr_t addr = {0};
+	d_iov_t    iov;
+	int        rc;
+
+	bio_addr_set(&addr, DAOS_MEDIA_NVME, 0);
+	d_iov_set(&iov, hdr, hdr_sz);
+	rc = bio_write(ioc, addr, &iov);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+ut_meta_hdr_write(struct bio_ut_args *args, struct meta_header *hdr, bool fix_csum)
+{
+	struct bio_meta_context *mc = args->bua_mc;
+
+	if (fix_csum)
+		ut_hdr_csum(mc, hdr, sizeof(*hdr), &hdr->mh_csum);
+	ut_hdr_write(mc->mc_meta, hdr, sizeof(*hdr));
+}
+
+/*
+ * Stage a forged meta header on the blob (the open session keeps its in-memory copy) and verify the
+ * headers. The forged header is left on the blob: the pool is destroyed by the teardown of the
+ * test.
+ */
+static void
+ut_meta_hdr_forge(struct bio_ut_args *args, struct meta_header *forged, bool fix_csum, int exp_rc)
+{
+	int rc;
+
+	ut_meta_hdr_write(args, forged, fix_csum);
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, args->bua_pool_id, args->bua_mc_flags);
+	assert_rc_equal(rc, exp_rc);
+}
+
+/* Restore the original header and check its consistency and usability */
+static void
+ut_meta_hdr_restore(struct bio_ut_args *args)
+{
+	int rc;
+
+	ut_meta_hdr_write(args, &args->bua_mc->mc_meta_hdr, false);
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, args->bua_pool_id, args->bua_mc_flags);
+	assert_rc_equal(rc, 0);
+
+	/* Check the session can still be closed and opened */
+	ut_mc_close(args);
+	ut_mc_open(args);
+}
+
+#define UT_HDR_META_SZ (128ULL << 20) /* 128 MB */
+
+/*
+ * Fixtures of the header verifier tests: a pool with an opened session, destroyed whatever the
+ * outcome of the test.
+ */
+static int
+wal_ut_hdr_pool_setup(void **state)
+{
+	return ut_mc_init(*state, UT_HDR_META_SZ, UT_HDR_META_SZ, UT_HDR_META_SZ);
+}
+
+static int
+wal_ut_hdr_rdb_pool_setup(void **state)
+{
+	struct bio_ut_args *args = *state;
+	int                 rc;
+
+	/* A RDB has meta and WAL blobs only, no data blob */
+	args->bua_mc_flags = BIO_MC_FL_RDB;
+	rc                 = ut_mc_init(args, UT_HDR_META_SZ, UT_HDR_META_SZ, 0);
+	if (rc != 0)
+		args->bua_mc_flags = 0;
+	return rc;
+}
+
+static int
+wal_ut_hdr_pool_teardown(void **state)
+{
+	struct bio_ut_args *args = *state;
+	int                 rc;
+
+	rc                 = ut_mc_fini(args);
+	args->bua_mc_flags = 0;
+	return rc;
+}
+
+static void
+wal_ut_hdr_verify_ok(void **state)
+{
+	struct bio_ut_args *args = *state;
+	uuid_t              unknown_id;
+	int                 rc;
+
+	/* Fresh pool, session opened */
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, args->bua_pool_id, 0);
+	assert_rc_equal(rc, 0);
+
+	/* Fresh pool, session closed */
+	ut_mc_close(args);
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, args->bua_pool_id, 0);
+	assert_rc_equal(rc, 0);
+
+	/* Used pool with check-pointed transactions, session closed */
+	ut_mc_open(args);
+	ut_fill_wal(args, 10, NULL);
+	ut_mc_close(args);
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, args->bua_pool_id, 0);
+	assert_rc_equal(rc, 0);
+
+	/* Unknown pool */
+	uuid_generate(unknown_id);
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, unknown_id, 0);
+	assert_rc_equal(rc, -DER_NONEXIST);
+}
+
+static void
+wal_ut_bad_meta_hdr(void **state)
+{
+	struct bio_ut_args *args    = *state;
+	struct meta_header *hdr_bkp = &args->bua_mc->mc_meta_hdr;
+	struct meta_header  hdr_tmp;
+
+	assert_int_equal(hdr_bkp->mh_version, BIO_META_VERSION);
+	assert_true(hdr_bkp->mh_data_blobid != SPDK_BLOBID_INVALID);
+
+	/* Header checks of the loader: magic, version, checksum */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_magic = ~BIO_META_MAGIC;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_UNINIT);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_version = BIO_META_VERSION + 1;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INCOMPT);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_csum ^= 1;
+	ut_meta_hdr_forge(args, &hdr_tmp, false, -DER_CSUM);
+
+	/* No WAL blob: must be reported before any attempt to open the WAL blob */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_wal_blobid = SPDK_BLOBID_INVALID;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Geometry */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_blk_bytes = 0;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_hdr_blks = 0;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_tot_blks = 0;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Check the original header is still valid */
+	ut_meta_hdr_restore(args);
+}
+
+static void
+wal_ut_rdb_flag_mismatch(void **state)
+{
+	struct bio_ut_args *args    = *state;
+	struct meta_header *hdr_bkp = &args->bua_mc->mc_meta_hdr;
+	struct meta_header  hdr_tmp;
+	int                 rc;
+
+	assert_true(hdr_bkp->mh_data_blobid == SPDK_BLOBID_INVALID);
+
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, args->bua_pool_id, BIO_MC_FL_RDB);
+	assert_rc_equal(rc, 0);
+
+	/* The flag selects the SMD table: a RDB is unknown as a regular pool */
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, args->bua_pool_id, 0);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	/* A RDB meta header referencing a data blob */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_data_blobid = hdr_bkp->mh_meta_blobid;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Check the original header is still valid */
+	ut_meta_hdr_restore(args);
+}
+
 static const struct CMUnitTest wal_uts[] = {
-	{ "single tx commit/replay", wal_ut_single, NULL, NULL},
-	{ "single tx with many acts", wal_ut_many_acts, NULL, NULL},
-	{ "single tx with large payload", wal_ut_large_payload, NULL, NULL},
-	{ "multiple tx commit/replay", wal_ut_multi, NULL, NULL},
-	{ "replay after checkpoint", wal_ut_checkpoint, NULL, NULL},
-	{ "wal log wraps once", wal_ut_wrap, NULL, NULL},
-	{ "wal log wraps many", wal_ut_wrap_many, NULL, NULL},
-	{ "holes on replay", wal_ut_holes, NULL, NULL},
+    {"single tx commit/replay", wal_ut_single, NULL, NULL},
+    {"single tx with many acts", wal_ut_many_acts, NULL, NULL},
+    {"single tx with large payload", wal_ut_large_payload, NULL, NULL},
+    {"multiple tx commit/replay", wal_ut_multi, NULL, NULL},
+    {"replay after checkpoint", wal_ut_checkpoint, NULL, NULL},
+    {"wal log wraps once", wal_ut_wrap, NULL, NULL},
+    {"wal log wraps many", wal_ut_wrap_many, NULL, NULL},
+    {"holes on replay", wal_ut_holes, NULL, NULL},
+    {"header verify on consistent headers", wal_ut_hdr_verify_ok, wal_ut_hdr_pool_setup,
+     wal_ut_hdr_pool_teardown},
+    {"header verify on inconsistent meta header", wal_ut_bad_meta_hdr, wal_ut_hdr_pool_setup,
+     wal_ut_hdr_pool_teardown},
+    {"header verify on rdb flag mismatch", wal_ut_rdb_flag_mismatch, wal_ut_hdr_rdb_pool_setup,
+     wal_ut_hdr_pool_teardown},
 };
 
 static int

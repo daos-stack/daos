@@ -999,6 +999,80 @@ free_mem:
 }
 
 int
+bio_mc_hdr_verify(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_flags flags)
+{
+	struct bio_meta_context *bio_mc;
+	int                      tmp;
+	int                      rc;
+
+	D_ASSERT(xs_ctxt != NULL);
+
+	/* No meta/WAL blob to verify */
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		return 0;
+
+	D_ALLOC_PTR(bio_mc);
+	if (bio_mc == NULL)
+		return -DER_NOMEM;
+
+	rc = __bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, pool_id, flags, SMD_DEV_TYPE_META,
+			       SPDK_BLOBID_INVALID);
+	if (rc != 0) {
+		D_DEBUG(DB_MGMT,
+			"Failed to open meta ioctxt for pool " DF_UUID ", xs %p: " DF_RC "\n",
+			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
+		goto free_mem;
+	}
+
+	rc = meta_hdr_check(bio_mc, flags);
+	if (rc != 0) {
+		D_DEBUG(DB_MGMT, "Invalid meta header for pool " DF_UUID ", xs %p: " DF_RC "\n",
+			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
+		goto close_meta_ioctxt;
+	}
+
+	rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, pool_id, flags, SMD_DEV_TYPE_WAL,
+			       bio_mc->mc_meta_hdr.mh_wal_blobid);
+	if (rc != 0) {
+		D_DEBUG(DB_MGMT,
+			"Failed to open wal ioctxt for pool " DF_UUID ", xs %p: " DF_RC "\n",
+			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
+		goto close_meta;
+	}
+
+	rc = wal_hdr_check(bio_mc);
+	if (rc != 0)
+		D_DEBUG(DB_MGMT, "Invalid wal header for pool " DF_UUID ", xs %p: " DF_RC "\n",
+			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
+
+	/* A close failure is only an error when it is the status being returned */
+	tmp = bio_ioctxt_close(bio_mc->mc_wal);
+	if (tmp != 0) {
+		DL_CDEBUG(rc == 0, DLOG_ERR, DB_MGMT, tmp,
+			  "Failed to close wal ioctxt for pool " DF_UUID ", xs %p",
+			  DP_UUID(pool_id), xs_ctxt);
+		if (rc == 0)
+			rc = tmp;
+	}
+close_meta:
+	meta_close(bio_mc);
+close_meta_ioctxt:
+	/* A close failure is only an error when it is the status being returned */
+	tmp = bio_ioctxt_close(bio_mc->mc_meta);
+	if (tmp != 0) {
+		DL_CDEBUG(rc == 0, DLOG_ERR, DB_MGMT, tmp,
+			  "Failed to close meta ioctxt for pool " DF_UUID ", xs %p",
+			  DP_UUID(pool_id), xs_ctxt);
+		if (rc == 0)
+			rc = tmp;
+	}
+free_mem:
+	D_FREE(bio_mc);
+
+	return rc;
+}
+
+int
 bio_blob_close(struct bio_io_context *ctxt, bool async)
 {
 	struct blob_msg_arg	*bma;
