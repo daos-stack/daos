@@ -110,6 +110,45 @@ Ranks Action Result
 	}
 }
 
+func TestPretty_fabricAddress(t *testing.T) {
+	for name, tc := range map[string]struct {
+		uri        string
+		expAddress string
+	}{
+		"IPv4 UCX": {
+			uri:        "ucx+dc_x://10.92.62.190:20000",
+			expAddress: "10.92.62.190:20000",
+		},
+		"IPv6 UCX": {
+			uri:        "ucx+dc_x://[2a04:f547:93:30fa::3e83]:20000",
+			expAddress: "[2a04:f547:93:30fa::3e83]:20000",
+		},
+		"IPv4 OFI": {
+			uri:        "ofi+verbs;ofi_rxm://10.92.62.190:20000",
+			expAddress: "10.92.62.190:20000",
+		},
+		"legacy address": {
+			uri:        "10.92.62.190:20000",
+			expAddress: "10.92.62.190:20000",
+		},
+		"missing address": {
+			expAddress: "N/A",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expAddress, fabricAddress(tc.uri), "fabric address")
+		})
+	}
+}
+
+func mockMemberWithFabricURI(t *testing.T, idx uint32, uri string) *Member {
+	t.Helper()
+
+	member := MockMember(t, idx, MemberStateJoined)
+	member.PrimaryFabricURI = uri
+	return member
+}
+
 func TestPretty_PrintSystemQueryResp(t *testing.T) {
 	for name, tc := range map[string]struct {
 		resp           *control.SystemQueryResp
@@ -172,22 +211,23 @@ Unknown 3 hosts: foo[7-9]
 		"single response verbose": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
+					mockMemberWithFabricURI(t, 0,
+						"ucx+dc_x://[2a04:f547:93:30fa::3e83]:20000"),
 				},
 			},
 			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
-Rank UUID                                 Control Address Fault Domain State  Reason 
----- ----                                 --------------- ------------ -----  ------ 
-0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined        
+Rank UUID                                 Fabric Address                  Fault Domain State  Reason 
+---- ----                                 --------------                  ------------ -----  ------ 
+0    00000000-0000-0000-0000-000000000000 [2a04:f547:93:30fa::3e83]:20000 /            Joined        
 
 `,
 		},
 		"single response verbose with missing hosts and ranks": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
+					mockMemberWithFabricURI(t, 0, ""),
 				},
 			},
 			absentHosts:    "foo[7,8,9]",
@@ -195,9 +235,9 @@ Rank UUID                                 Control Address Fault Domain State  Re
 			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
-Rank UUID                                 Control Address Fault Domain State  Reason 
----- ----                                 --------------- ------------ -----  ------ 
-0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined        
+Rank UUID                                 Fabric Address Fault Domain State  Reason 
+---- ----                                 -------------- ------------ -----  ------ 
+0    00000000-0000-0000-0000-000000000000 N/A            /            Joined        
 
 Unknown 3 hosts: foo[7-9]
 Unknown 3 ranks: 7-9
@@ -383,8 +423,8 @@ Unknown 3 hosts: foo[7-9]
 			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
-Rank UUID                                 Control Address Fault Domain State    Reason 
----- ----                                 --------------- ------------ -----    ------ 
+Rank UUID                                 Fabric Address  Fault Domain State    Reason 
+---- ----                                 --------------  ------------ -----    ------ 
 0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined          
 1    00000001-0001-0001-0001-000000000001 127.0.0.1:10001 /            Joined          
 2    00000002-0002-0002-0002-000000000002 127.0.0.2:10001 /            Stopped         
@@ -412,8 +452,8 @@ Rank UUID                                 Control Address Fault Domain State    
 			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			verbose:        true,
 			expPrintStr: `
-Rank UUID                                 Control Address Fault Domain State    Reason 
----- ----                                 --------------- ------------ -----    ------ 
+Rank UUID                                 Fabric Address  Fault Domain State    Reason 
+---- ----                                 --------------  ------------ -----    ------ 
 0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined          
 1    00000001-0001-0001-0001-000000000001 127.0.0.1:10001 /            Joined          
 2    00000002-0002-0002-0002-000000000002 127.0.0.2:10001 /            Stopped         

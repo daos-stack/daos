@@ -150,6 +150,56 @@ func TestDmg_SystemCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"system query short verbose with insecure",
+			"-i system query -v",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{}),
+			}, " "),
+			nil,
+		},
+		{
+			"system query alias short verbose",
+			"sys query -v",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{}),
+			}, " "),
+			nil,
+		},
+		{
+			"system query verbose with rank filter",
+			"-i system query -v --ranks 0",
+			strings.Join([]string{
+				printRequest(t, withRanks(&control.SystemQueryReq{}, 0)),
+			}, " "),
+			nil,
+		},
+		{
+			"system query verbose with host filter",
+			"-i system query -v --rank-hosts foo-0",
+			strings.Join([]string{
+				printRequest(t, withHosts(&control.SystemQueryReq{}, "foo-0")),
+			}, " "),
+			nil,
+		},
+		{
+			"system query verbose with not-ok filter",
+			"-i system query -v --not-ok",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{NotOK: true}),
+			}, " "),
+			nil,
+		},
+		{
+			"system query verbose with state filter",
+			"-i system query -v --with-states joined,excluded",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{
+					WantedStates: system.MemberStateJoined | system.MemberStateExcluded,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"system stop with no arguments",
 			"system stop",
 			strings.Join([]string{
