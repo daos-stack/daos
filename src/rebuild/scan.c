@@ -979,7 +979,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	daos_unit_oid_t			oid = { 0 };
 	int				snapshot_cnt = 0;
 	int				rc;
-	daos_epoch_t                     gse = 0;
+	daos_epoch_t                     gse           = 0;
+	bool                             snaps_fetched = false;
 
 	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already scanned\n", DP_RB_RPT(rpt),
@@ -1013,6 +1014,32 @@ again:
 		DL_ERROR(rc, DF_RB " Container " DF_UUID ", ds_cont_child_lookup failed",
 			 DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid));
 		D_GOTO(close, rc);
+	}
+
+	/*
+	 * Fetch the snapshots (from PS leader through IV) before waiting for the global
+	 * stable epoch. An orphan container, which exists only on this engine but not on
+	 * the PS leader, is never tracked by the leader, so its global stable epoch never
+	 * advances and the wait below would burn the whole wait budget of the pool for
+	 * nothing. Skip such container right away, as the puller side does.
+	 */
+	if (!snaps_fetched) {
+		rc = ds_cont_fetch_snaps(rpt->rt_pool->sp_iv_ns, entry->ie_couuid, NULL,
+					 &snapshot_cnt);
+		if (rc) {
+			if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING) {
+				DL_INFO(rc, DF_RB " " DF_CONT " skip orphan container",
+					DP_RB_RPT(rpt),
+					DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
+				rc = 0;
+			} else {
+				DL_ERROR(rc,
+					 DF_RB " Container " DF_UUID ", ds_cont_fetch_snaps failed",
+					 DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid));
+			}
+			D_GOTO(close, rc);
+		}
+		snaps_fetched = true;
 	}
 
 	if (rpt->rt_rebuild_op == RB_OP_RECLAIM || rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM)
@@ -1102,19 +1129,6 @@ next:
 	}
 
 	cont_child->sc_rebuilding = 1;
-
-	rc = ds_cont_fetch_snaps(rpt->rt_pool->sp_iv_ns, entry->ie_couuid, NULL,
-				 &snapshot_cnt);
-	if (rc) {
-		DL_ERROR(rc, DF_RB " Container " DF_UUID ", ds_cont_fetch_snaps failed",
-			 DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid));
-		if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING) {
-			DL_ERROR(rc, DF_CONT " skip orphan container",
-				 DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
-			rc = 0;
-		}
-		D_GOTO(close, rc);
-	}
 
 	rc = ds_cont_get_props(&arg->co_props, rpt->rt_pool->sp_uuid, entry->ie_couuid);
 	if (rc) {
