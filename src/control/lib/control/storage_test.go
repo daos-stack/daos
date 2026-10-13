@@ -765,6 +765,13 @@ func TestControl_StorageFormat(t *testing.T) {
 
 func TestControl_checkFormatReq(t *testing.T) {
 	localServer := DefaultConfig().HostList[0]
+	joined := func(addr string) *mgmtpb.SystemQueryResp {
+		return &mgmtpb.SystemQueryResp{
+			Members: []*mgmtpb.SystemMember{
+				{Rank: 0, Uuid: test.MockUUID(0), Addr: addr, State: system.MemberStateJoined.String()},
+			},
+		}
+	}
 
 	for name, tc := range map[string]struct {
 		reqHosts   []string
@@ -780,9 +787,14 @@ func TestControl_checkFormatReq(t *testing.T) {
 		},
 		"localserver running": {
 			responses: []*UnaryResponse{
-				MockMSResponse(localServer, nil, &mgmtpb.SystemQueryResp{}),
+				MockMSResponse(localServer, nil, joined(localServer)),
 			},
 			expErr: FaultFormatRunningSystem,
+		},
+		"localserver formatted; nothing joined": {
+			responses: []*UnaryResponse{
+				MockMSResponse(localServer, nil, &mgmtpb.SystemQueryResp{}),
+			},
 		},
 		"non-replica no MS running": {
 			reqHosts: []string{"non-replica"},
@@ -800,9 +812,15 @@ func TestControl_checkFormatReq(t *testing.T) {
 		"replica running": {
 			reqHosts: []string{"replica"},
 			responses: []*UnaryResponse{
-				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{}),
+				MockMSResponse("replica", nil, joined("10.0.0.1:10001")),
 			},
 			expErr: FaultFormatRunningSystem,
+		},
+		"replica formatted; nothing joined": {
+			reqHosts: []string{"replica"},
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{}),
+			},
 		},
 		"system unformatted": {
 			reqHosts: []string{"replica"},

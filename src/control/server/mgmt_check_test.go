@@ -2379,3 +2379,71 @@ func TestServer_mgmtSvc_forwardCheckLeaderDrpc(t *testing.T) {
 		})
 	}
 }
+
+func TestServer_mgmtSvc_SystemCheckEnable(t *testing.T) {
+	hr := func(a int32, rrs ...*sharedpb.RankResult) *control.HostResponse {
+		return &control.HostResponse{
+			Addr:    test.MockHostAddr(a).String(),
+			Message: &mgmtpb.SystemStartResp{Results: rrs},
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		members    system.Members
+		enabled    bool
+		mResps     []*control.HostResponse
+		expErr     error
+		expStatus  daos.Status
+		expEnabled bool
+	}{
+		"already enabled": {
+			members:    system.Members{mockMember(t, 0, 1, "stopped")},
+			enabled:    true,
+			expStatus:  daos.Already,
+			expEnabled: true,
+		},
+		"running member": {
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "joined"),
+			},
+			expErr: checker.FaultIncorrectMemberStates(true, "1", "AdminExcluded|Stopped"),
+		},
+		"stopped members start in checker mode": {
+			members: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 2, 2, "adminexcluded"),
+			},
+			mResps: []*control.HostResponse{
+				hr(1, mockRankSuccess("start", 0, 1), mockRankSuccess("start", 1, 1)),
+			},
+			expEnabled: true,
+		},
+		"nothing to start": {
+			members:    system.Members{mockMember(t, 0, 1, "adminexcluded")},
+			expErr:     errors.New("no ranks to start"),
+			expEnabled: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
+			if tc.enabled {
+				if err := svc.enableChecker(); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			resp, gotErr := svc.SystemCheckEnable(test.Context(t), &mgmtpb.CheckEnableReq{Sys: build.DefaultSystemName})
+			test.CmpErr(t, tc.expErr, gotErr)
+			test.AssertEqual(t, tc.expEnabled, svc.checkerIsEnabled(), "checker enabled")
+			if tc.expErr != nil {
+				return
+			}
+			test.AssertEqual(t, tc.expStatus, daos.Status(resp.Status), "response status")
+		})
+	}
+}

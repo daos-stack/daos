@@ -650,7 +650,7 @@ func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname st
 	}
 }
 
-func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarted *sync.WaitGroup) {
+func registerEngineEventCallbacks(srv *server, engine *EngineInstance) {
 	// Register callback to publish engine process exit events.
 	engine.OnInstanceExit(createPublishInstanceExitFunc(srv.pubSub.Publish, srv.hostname))
 
@@ -672,16 +672,6 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 
 	// Register callback to publish engine format requested events.
 	engine.OnAwaitFormat(createPublishFormatRequiredFunc(srv.pubSub.Publish, srv.hostname))
-
-	var onceReady sync.Once
-	engine.OnReady(func(_ context.Context) error {
-		// Indicate that engine has been started, only do this the first time that the
-		// engine starts as shared memory persists between engine restarts.
-		onceReady.Do(func() {
-			allStarted.Done()
-		})
-		return nil
-	})
 
 	// Register callback to update engine cfg mem_size after format.
 	engine.OnStorageReady(func(_ context.Context) error {
@@ -754,26 +744,24 @@ func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *ra
 	}
 }
 
-// registerTelemetryCallbacks sets telemetry related callbacks to
-// be triggered when all engines have been started.
-func registerTelemetryCallbacks(ctx context.Context, srv *server) {
+// startTelemetry starts the Prometheus exporter if a telemetry port is configured.
+func startTelemetry(ctx context.Context, srv *server) error {
 	telemPort := srv.cfg.TelemetryPort
 	if telemPort == 0 {
-		return
+		return nil
 	}
 
 	// Use the same bind address as the control plane listener.
 	bindAddr := srv.ctlAddr.IP.String()
 
-	srv.OnEnginesStarted(func(ctxIn context.Context) error {
-		srv.log.Debug("starting Prometheus exporter")
-		cleanup, err := startPrometheusExporter(ctxIn, srv.log, telemPort, bindAddr, srv.harness.Instances())
-		if err != nil {
-			return err
-		}
-		srv.OnShutdown(cleanup)
-		return nil
-	})
+	srv.log.Debug("starting Prometheus exporter")
+	cleanup, err := startPrometheusExporter(ctx, srv.log, telemPort, bindAddr, srv.harness.Instances())
+	if err != nil {
+		return err
+	}
+	srv.OnShutdown(cleanup)
+
+	return nil
 }
 
 // Handle local engine self termination and restart engine to rejoin system.

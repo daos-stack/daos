@@ -149,6 +149,10 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemEraseResp{})
 	case *control.SystemStartReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStartResp{})
+	case *control.SystemInitializeReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemInitializeResp{})
+	case *control.SystemExtendReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemExtendResp{})
 	case *control.SystemExcludeReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemExcludeResp{})
 	case *control.SystemDrainReq:
