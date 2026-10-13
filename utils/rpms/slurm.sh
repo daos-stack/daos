@@ -42,14 +42,31 @@ stage_files() {
   append_install_list "${files[@]}"
 }
 
+clean_slurm_bin() {
+  local file needed
+
+  clean_bin "$@"
+  for file in "$@"; do
+    if [[ -L "${file}" ]]; then
+      continue
+    fi
+    if ! needed="$(patchelf --print-needed "${file}" 2>/dev/null)"; then
+      continue
+    fi
+    if [[ $'\n'"${needed}"$'\n' == *$'\nlibslurmfull.so\n'* ]]; then
+      patchelf --set-rpath "${libdir}/slurm" "${file}"
+    fi
+  done
+}
+
 stage_files "${bindir}" "${SL_SLURM_PREFIX}"/bin/*
-clean_bin "${files[@]}"
+clean_slurm_bin "${files[@]}"
 stage_files "${libdir}" "${SL_SLURM_PREFIX}"/lib64/*.so*
-clean_bin "${files[@]}"
+clean_slurm_bin "${files[@]}"
 FILTER_LIST=('\.la$' '\.a$' '/auth_none\.so$' '/cred_none\.so$'
              '/accounting_storage_mysql\.so$')
 stage_files "${libdir}" "${SL_SLURM_PREFIX}/lib64/slurm"
-clean_bin "${files[@]}"
+clean_slurm_bin "${files[@]}"
 for section in 1 5 8; do
   stage_files "${mandir}/man${section}" "${SL_SLURM_PREFIX}"/share/man/man"${section}"/*
 done
@@ -74,11 +91,11 @@ for daemon in slurmctld slurmd slurmdbd; do
     PROVIDES=(slurmctld)
   fi
   stage_files "${SBINDIR:-/usr/sbin}" "${daemon_files[@]}"
-  clean_bin "${files[@]}"
+  clean_slurm_bin "${files[@]}"
   stage_files "${unitdir}" "${SL_SLURM_PREFIX}/lib/systemd/system/${daemon}.service"
   if [[ "${daemon}" = slurmdbd ]]; then
     stage_files "${libdir}/slurm" "${SL_SLURM_PREFIX}/lib64/slurm/accounting_storage_mysql.so"
-    clean_bin "${files[@]}"
+    clean_slurm_bin "${files[@]}"
   fi
   printf '#!/bin/sh\nif [ -d /run/systemd/system ]; then\n  systemctl daemon-reload || :\nfi\n' \
     > "${tmp}/${daemon}_reload"

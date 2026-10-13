@@ -73,11 +73,9 @@ This change does not switch provisioning from distribution repositories.
 ## Checks
 
 ```sh
-python3 -m unittest discover -s utils/rpms/tests -p 'test_slurm.py'
 shellcheck -x utils/rpms/slurm.sh
 ```
 
-The staging tests mock the FPM executable, not the shared packaging helpers.
 An actual source build and RPM install test must run in the target distribution.
 
 See [SchedMD's administrator guide](https://slurm.schedmd.com/quickstart_admin.html#manual_build)

@@ -1,3 +1,6 @@
+* Tue Oct 13 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 26.05.4-3
+- Restore the private library search path for files requiring libslurmfull.so.
+
 * Tue Oct 13 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 26.05.4-2
 - Enable MySQL accounting and package the Slurm database daemon and backend plugin.
 
