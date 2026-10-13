@@ -226,6 +226,7 @@ create_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent, st
 
 	if (rlink != &ie->ie_htl) {
 		struct dfuse_inode_entry *inode;
+		int                       qrc;
 
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -264,7 +265,9 @@ create_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent, st
 					DFUSE_TRA_DEBUG(inode, "dfs_update_parent() failed %d", rc);
 			}
 		}
-		dfuse_queue_inval_dentries(&released, NULL);
+		qrc = dfuse_queue_inval_dentries(&released, NULL);
+		if (qrc)
+			DHS_ERROR(inode, qrc, "dfuse_queue_inval_dentries() failed");
 
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		dfuse_ie_close(dfuse_info, ie);

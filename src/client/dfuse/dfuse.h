@@ -1302,9 +1302,9 @@ dfuse_queue_inval_dentries(struct dfuse_dentry *released, struct dfuse_inode_ent
 
 /* Invalidate cached data/attrs synchronously, then queue a delete on the invalidation thread for
  * every name in released, skipping (exclude_parent, exclude_name) which the kernel already handled.
- * Consumes released.
+ * Consumes released.  Returns 0 on success or ENOMEM, in which case nothing is queued.
  */
-void
+int
 dfuse_ie_inode_delete(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		      struct dfuse_dentry *released, fuse_ino_t exclude_parent,
 		      const char *exclude_name);

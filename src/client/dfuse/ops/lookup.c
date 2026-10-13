@@ -161,7 +161,9 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		DFUSE_REPLY_ENTRY(ie, req, entry);
 	}
 
-	dfuse_queue_inval_dentries(&released, NULL);
+	rc = dfuse_queue_inval_dentries(&released, NULL);
+	if (rc)
+		DHS_ERROR(ie, rc, "dfuse_queue_inval_dentries() failed");
 
 	return;
 out_err:

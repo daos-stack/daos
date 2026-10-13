@@ -46,6 +46,7 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 	struct dfuse_dentry       released = {0};
 	fuse_ino_t                ino;
 	fuse_ino_t                parent_ino = parent->ie_stat.st_ino;
+	int                       rc;
 
 	D_INIT_LIST_HEAD(&released.dd_list);
 
@@ -72,7 +73,9 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 	/* Invalidate cached data/attrs and delete every known name, except the one the kernel
 	 * already handled via this unlink/rename.
 	 */
-	dfuse_ie_inode_delete(dfuse_info, ie, &released, parent_ino, name);
+	rc = dfuse_ie_inode_delete(dfuse_info, ie, &released, parent_ino, name);
+	if (rc)
+		DHS_ERROR(ie, rc, "dfuse_ie_inode_delete() failed");
 
 	/* Drop the ref again */
 	dfuse_inode_decref(dfuse_info, ie);

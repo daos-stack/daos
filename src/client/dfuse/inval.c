@@ -364,7 +364,7 @@ fail:
 	return rc;
 }
 
-void
+int
 dfuse_ie_inode_delete(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 		      struct dfuse_dentry *released, fuse_ino_t exclude_parent,
 		      const char *exclude_name)
@@ -397,28 +397,28 @@ dfuse_ie_inode_delete(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *i
 	    (released->dd_parent != exclude_parent ||
 	     strncmp(released->dd_name, exclude_name, NAME_MAX) != 0)) {
 		D_ALLOC_PTR(item);
-		if (item != NULL) {
-			item->parent       = released->dd_parent;
-			item->ino          = ino;
-			item->delete_entry = true;
-			strncpy(item->name, released->dd_name, NAME_MAX);
-			item->name[NAME_MAX] = '\0';
-			d_list_add_tail(&item->link, &items);
-		}
+		if (item == NULL)
+			D_GOTO(fail, rc = ENOMEM);
+		item->parent       = released->dd_parent;
+		item->ino          = ino;
+		item->delete_entry = true;
+		strncpy(item->name, released->dd_name, NAME_MAX);
+		item->name[NAME_MAX] = '\0';
+		d_list_add_tail(&item->link, &items);
 	}
 
 	d_list_for_each_entry_safe(dd, ddn, &released->dd_list, dd_list) {
 		if (dd->dd_parent != exclude_parent ||
 		    strncmp(dd->dd_name, exclude_name, NAME_MAX) != 0) {
 			D_ALLOC_PTR(item);
-			if (item != NULL) {
-				item->parent       = dd->dd_parent;
-				item->ino          = ino;
-				item->delete_entry = true;
-				strncpy(item->name, dd->dd_name, NAME_MAX);
-				item->name[NAME_MAX] = '\0';
-				d_list_add_tail(&item->link, &items);
-			}
+			if (item == NULL)
+				D_GOTO(fail, rc = ENOMEM);
+			item->parent       = dd->dd_parent;
+			item->ino          = ino;
+			item->delete_entry = true;
+			strncpy(item->name, dd->dd_name, NAME_MAX);
+			item->name[NAME_MAX] = '\0';
+			d_list_add_tail(&item->link, &items);
 		}
 		d_list_del(&dd->dd_list);
 		D_FREE(dd);
@@ -431,6 +431,18 @@ dfuse_ie_inode_delete(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *i
 		D_MUTEX_UNLOCK(&ival_lock);
 		sem_post(&ival_sem);
 	}
+
+	return 0;
+
+fail:
+	while ((item = d_list_pop_entry(&items, struct dfuse_inval_item, link)) != NULL)
+		D_FREE(item);
+	d_list_for_each_entry_safe(dd, ddn, &released->dd_list, dd_list) {
+		d_list_del(&dd->dd_list);
+		D_FREE(dd);
+	}
+
+	return rc;
 }
 
 /* Main loop for eviction thread.  Spins until ready for exit waking after one second and iterates
