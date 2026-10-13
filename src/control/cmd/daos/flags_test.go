@@ -436,7 +436,7 @@ func TestFlags_DFSPLFlag(t *testing.T) {
 			},
 			expString: "S1,SX@3.0 MiB",
 		},
-		"multiple tails parse (rejected later by validation)": {
+		"multiple tails": {
 			arg: "S1,S2@1GiB,SX@32GiB",
 			expFlag: &DFSPLFlag{
 				Enabled: true,
