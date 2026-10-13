@@ -1035,15 +1035,19 @@ again:
 	}
 
 	if (gse < rpt->rt_stable_epoch) {
+		/* Gap between rebuild epoch and GSE in wall-clock seconds (HLC physical part). */
+		uint64_t gap_sec = d_hlc2sec(rpt->rt_stable_epoch) - d_hlc2sec(gse);
+
 		if (cont_child->sc_pool->spc_remaining_wait_time == 0) {
 			if (rc != 0)
 				goto next;
 
 			D_ERROR(DF_RB " accumulated waiting time for global stable epoch " DF_X64
-				      " to exceed rebuild epoch " DF_X64
-				      " on the pool/container " DF_CONT
+				      " to exceed rebuild epoch " DF_X64 " (gap " DF_U64
+				      " seconds, %.1f hours) on the pool/container " DF_CONT
 				      " for more than 600 seconds at " DF_X64 ", timeout and %s.\n",
-				DP_RB_RPT(rpt), gse, rpt->rt_stable_epoch,
+				DP_RB_RPT(rpt), gse, rpt->rt_stable_epoch, gap_sec,
+				(double)gap_sec / 3600,
 				DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid),
 				vos_cont_get_local_stable_epoch(coh),
 				rebuild_continue_on_timeout ? "continue by force" : "failout");
@@ -1055,13 +1059,14 @@ again:
 		}
 
 		/* Periodically report the progress to help diagnosing a stuck stable epoch. */
-		if (rc == 0 && cont_child->sc_pool->spc_remaining_wait_time % 60 == 0)
-			D_WARN(DF_RB " Container " DF_UUID ": global stable epoch " DF_X64
-				     " < rebuild epoch " DF_X64 ", local stable epoch " DF_X64
-				     ", remaining wait %d seconds\n",
-			       DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid), gse, rpt->rt_stable_epoch,
-			       vos_cont_get_local_stable_epoch(coh),
-			       cont_child->sc_pool->spc_remaining_wait_time);
+		if (rc == 0 && cont_child->sc_pool->spc_remaining_wait_time % 120 == 0)
+			D_WARN(
+			    DF_RB " Container " DF_UUID ": global stable epoch " DF_X64
+				  " < rebuild epoch " DF_X64 " (gap " DF_U64 " seconds, %.1f hours)"
+				  ", local stable epoch " DF_X64 ", remaining wait %d seconds\n",
+			    DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid), gse, rpt->rt_stable_epoch,
+			    gap_sec, (double)gap_sec / 3600, vos_cont_get_local_stable_epoch(coh),
+			    cont_child->sc_pool->spc_remaining_wait_time);
 
 		/*
 		 * Global stable epoch maybe not refreshed if the container is (being) destroyed.

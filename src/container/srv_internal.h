@@ -82,6 +82,8 @@ struct cont_track_eph_leader {
 	uint64_t                 cte_start_ts;
 	/* TS to check for ec_agg_eph sluggish warning */
 	uint64_t                 cte_ec_agg_warn_slug_ts;
+	/* TS of the last "no stable epoch reported" warning */
+	uint64_t                 cte_stable_warn_ts;
 };
 
 /*
