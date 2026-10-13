@@ -524,6 +524,33 @@ vos_obj_check_discard(struct vos_container *cont, daos_unit_oid_t oid, uint64_t 
 }
 
 int
+vos_obj_has_other_users(struct vos_container *cont, daos_unit_oid_t oid, bool *other_users)
+{
+	struct vos_object     *obj;
+	struct daos_lru_cache *occ;
+	int                    rc;
+
+	D_ASSERT(cont != NULL);
+	D_ASSERT(cont->vc_pool != NULL);
+	D_ASSERT(other_users != NULL);
+
+	*other_users = false;
+	occ          = vos_obj_cache_get(cont->vc_pool->vp_sysdb);
+	D_ASSERT(occ != NULL);
+
+	rc = obj_get(occ, cont, oid, false, &obj);
+	if (rc == -DER_NONEXIST)
+		return 0;
+	if (rc != 0)
+		return rc;
+
+	*other_users = !daos_lru_is_last_user(&obj->obj_llink);
+	obj_put(occ, obj, false);
+
+	return 0;
+}
+
+int
 vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t bound,
 		  uint64_t flags, uint32_t intent, struct vos_ts_set *ts_set)
 {
