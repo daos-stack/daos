@@ -10,11 +10,15 @@ increase `slurm_release` when changing patches or packaging.
 
 Run from the DAOS repository root in the normal DAOS build environment. Install
 MUNGE and hwloc development packages first (`munge-devel hwloc-devel` on EL9
-and Leap, `libmunge-dev libhwloc-dev` on Ubuntu). The image setup scripts include
-these prerequisites. Optional plugins are detected by Slurm's configure script;
+and Leap, `libmunge-dev libhwloc-dev` on Ubuntu). Accounting support also requires
+MariaDB client development files providing `/usr/bin/mysql_config`: `mariadb-devel`
+on EL9, `libmariadb-devel` on Leap, and `libmariadb-dev libmariadb-dev-compat` on
+Ubuntu. The image setup scripts include these prerequisites.
+Optional plugins are detected by Slurm's configure script;
 cgroup-v2 support additionally needs libbpf and D-Bus development support as
-described in the upstream administrator guide. Accounting/MySQL, HDF5 and REST
-services are disabled for this test-cluster build.
+described in the upstream administrator guide. Accounting/MySQL support is
+required; HDF5 and REST services are disabled for this test-cluster build.
+Rebuild any existing Slurm dependency tree previously built without MySQL support.
 
 Build just Slurm from the pinned Git source, allowing its system prerequisites:
 
@@ -47,6 +51,9 @@ Debian packaging is not provided by this wrapper.
 - `slurm-slurmctld`: controller and systemd unit; also provides `slurmctld`.
 - `slurm-slurmd`: compute daemon, `slurmstepd` and unit; also provides the
   `slurm-slurmmd` name currently used by DAOS provisioning.
+- `slurm-slurmdbd`: database daemon, systemd unit and MySQL accounting plugin,
+  requiring the matching `slurm` runtime. The prebuilt dependency installer
+  requests this package alongside `slurm-devel`.
 - `slurm-devel`: API headers and pkg-config metadata, requiring matching `slurm`.
 - `slurm-example-configs`: configuration examples marked as configuration files.
 
@@ -57,6 +64,10 @@ Install using the system package manager and configure the cluster separately:
 create a consistent Slurm service account, distribute MUNGE keys, install
 `/etc/slurm/slurm.conf`, and create writable state/log directories before
 starting services. The examples do not replace an existing cluster configuration.
+For accounting, provision a MariaDB/MySQL server separately and install a
+protected `/etc/slurm/slurmdbd.conf` (mode `0600`, owned by the service account)
+with the database connection settings before starting `slurmdbd`. Its example
+is packaged as `slurmdbd.conf.example`; no database credentials are supplied.
 This change does not switch provisioning from distribution repositories.
 
 ## Checks

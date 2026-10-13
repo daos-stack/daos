@@ -83,6 +83,7 @@ isal_crypto_pkg="$("${rpms_dir}/package_version.sh" isal_crypto dev)"
 daos_spdk_pkg="$("${rpms_dir}/package_version.sh" daos_spdk dev)"
 pmdk_pkg="$("${rpms_dir}/package_version.sh" pmdk dev pmemobj)"
 slurm_pkg="$("${rpms_dir}/package_version.sh" slurm dev)"
+slurm_dbd_pkg="$("${rpms_dir}/package_version.sh" slurm dbd)"
 
 sudo dnf install --allowerasing -y "${libfabric_pkg}" || echo "${libfabric_pkg} not available"
 sudo dnf install --allowerasing -y "${mercury_pkg}" || echo "${mercury_pkg} not available"
@@ -93,3 +94,4 @@ sudo dnf install --allowerasing -y "${pmdk_pkg}" || echo "${pmdk_pkg} not availa
 sudo dnf install --allowerasing -y "${isal_pkg}" || echo "${isal_pkg} not available"
 sudo dnf install --allowerasing -y "${isal_crypto_pkg}" || echo "${isal_crypto_pkg} not available"
 sudo dnf install --allowerasing -y "${slurm_pkg}" || echo "${slurm_pkg} not available"
+sudo dnf install --allowerasing -y "${slurm_dbd_pkg}" || echo "${slurm_dbd_pkg} not available"

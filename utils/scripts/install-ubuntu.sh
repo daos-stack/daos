@@ -44,6 +44,8 @@ apt-get install ${apt_get_install_args} \
     libibverbs-dev \
     libjson-c-dev \
     liblz4-dev \
+    libmariadb-dev \
+    libmariadb-dev-compat \
     libmunge-dev \
     libndctl-dev \
     libnuma-dev \

@@ -46,7 +46,8 @@ stage_files "${bindir}" "${SL_SLURM_PREFIX}"/bin/*
 clean_bin "${files[@]}"
 stage_files "${libdir}" "${SL_SLURM_PREFIX}"/lib64/*.so*
 clean_bin "${files[@]}"
-FILTER_LIST=('\.la$' '\.a$' '/auth_none\.so$' '/cred_none\.so$')
+FILTER_LIST=('\.la$' '\.a$' '/auth_none\.so$' '/cred_none\.so$'
+             '/accounting_storage_mysql\.so$')
 stage_files "${libdir}" "${SL_SLURM_PREFIX}/lib64/slurm"
 clean_bin "${files[@]}"
 for section in 1 5 8; do
@@ -63,18 +64,22 @@ EXTRA_OPTS+=(--after-install "${tmp}/slurm_ldconfig" --after-remove "${tmp}/slur
 EXTERNAL_DEPENDS=(munge)
 build_package "${slurm_lib}"
 
-for daemon in slurmctld slurmd; do
+for daemon in slurmctld slurmd slurmdbd; do
   DESCRIPTION="Slurm ${daemon} daemon built for DAOS testing"
   daemon_files=("${SL_SLURM_PREFIX}/sbin/${daemon}")
   if [[ "${daemon}" = slurmd ]]; then
     daemon_files+=("${SL_SLURM_PREFIX}/sbin/slurmstepd")
     PROVIDES=(slurm-slurmmd)
-  else
+  elif [[ "${daemon}" = slurmctld ]]; then
     PROVIDES=(slurmctld)
   fi
   stage_files "${SBINDIR:-/usr/sbin}" "${daemon_files[@]}"
   clean_bin "${files[@]}"
   stage_files "${unitdir}" "${SL_SLURM_PREFIX}/lib/systemd/system/${daemon}.service"
+  if [[ "${daemon}" = slurmdbd ]]; then
+    stage_files "${libdir}/slurm" "${SL_SLURM_PREFIX}/lib64/slurm/accounting_storage_mysql.so"
+    clean_bin "${files[@]}"
+  fi
   printf '#!/bin/sh\nif [ -d /run/systemd/system ]; then\n  systemctl daemon-reload || :\nfi\n' \
     > "${tmp}/${daemon}_reload"
   printf "#!/bin/sh\nif [ \"\$1\" = 0 ] && [ -d /run/systemd/system ]; then\n  systemctl --no-reload disable --now %s.service || :\nfi\n" \

@@ -45,6 +45,7 @@ dnf --nodocs install ${dnf_install_args} \
     libiscsi-devel \
     libjson-c-devel \
     liblz4-devel \
+    libmariadb-devel \
     libndctl-devel \
     libnl3-devel \
     libnuma-devel \

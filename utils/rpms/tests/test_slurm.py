@@ -2,6 +2,7 @@
 
 import ast
 import configparser
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
@@ -17,9 +18,9 @@ class SlurmPackagingTest(unittest.TestCase):
     """Check FPM metadata and staged payloads for the Slurm dependency."""
 
     def setUp(self):
-        self.workspace = tempfile.TemporaryDirectory()
-        self.addCleanup(self.workspace.cleanup)
-        self.root = Path(self.workspace.name)
+        workspace = ExitStack()
+        self.addCleanup(workspace.close)
+        self.root = Path(workspace.enter_context(tempfile.TemporaryDirectory()))
         self.prefix = self.root / "slurm"
         self.tools = self.root / "tools"
         self.tools.mkdir()
@@ -33,6 +34,7 @@ class SlurmPackagingTest(unittest.TestCase):
             "bin/sbatch": "client",
             "lib64/libslurm.so.44": "library",
             "lib64/slurm/auth_munge.so": "plugin",
+            "lib64/slurm/accounting_storage_mysql.so": "accounting plugin",
             "lib64/slurm/auth_none.so": "excluded",
             "lib64/slurm/cred_none.so": "excluded",
             "lib64/slurm/plugin.la": "excluded",
@@ -41,12 +43,13 @@ class SlurmPackagingTest(unittest.TestCase):
             "include/slurm/slurm.h": "header",
             "etc/slurm/slurm.conf.example": "example",
             "etc/slurm/cgroup.conf.example": "example",
+            "etc/slurm/slurmdbd.conf.example": "database example",
         }
         for section in (1, 5, 8):
             payloads[f"share/man/man{section}/slurm.{section}"] = "manual"
-        for daemon in ("slurmctld", "slurmd", "slurmstepd"):
+        for daemon in ("slurmctld", "slurmd", "slurmstepd", "slurmdbd"):
             payloads[f"sbin/{daemon}"] = "daemon"
-        for daemon in ("slurmctld", "slurmd"):
+        for daemon in ("slurmctld", "slurmd", "slurmdbd"):
             payloads[f"lib/systemd/system/{daemon}.service"] = (
                 f"[Service]\nExecStart=/usr/sbin/{daemon} -D\n")
         for relative, contents in payloads.items():
@@ -70,7 +73,8 @@ class SlurmPackagingTest(unittest.TestCase):
             "    if arg in ('--after-install', '--before-remove', '--after-remove'):\n"
             "        hooks[arg] = pathlib.Path(args[index + 1]).read_text()\n"
             "with open(os.environ['FPM_LOG'], 'a') as stream:\n"
-            "    stream.write(json.dumps({'args': args, 'payload': payload, 'hooks': hooks}) + '\\n')\n",
+            "    stream.write(json.dumps({'args': args, 'payload': payload, 'hooks': hooks})"
+            " + '\\n')\n",
             encoding="utf-8")
         fpm.chmod(0o755)
         patchelf = self.tools / "patchelf"
@@ -106,14 +110,17 @@ class SlurmPackagingTest(unittest.TestCase):
                     self.assertFalse(all_paths & paths)
                     all_paths.update(paths)
                 self.assertEqual(set(packages), {"slurm", "slurm-slurmctld", "slurm-slurmd",
-                                                 "slurm-devel", "slurm-example-configs"})
+                                                 "slurm-slurmdbd", "slurm-devel",
+                                                 "slurm-example-configs"})
                 self.assertIn("/usr/lib64/slurm/src/internal.so", all_paths)
                 for excluded in ("auth_none.so", "cred_none.so", "plugin.la"):
                     self.assertFalse(any(path.endswith(excluded) for path in all_paths))
-                for name in ("slurm-devel", "slurm-slurmctld", "slurm-slurmd"):
-                    self.assertIn(f"slurm = 26.05.4-1.{distro}", packages[name]["args"])
+                for name in ("slurm-devel", "slurm-slurmctld", "slurm-slurmd", "slurm-slurmdbd"):
+                    self.assertIn(f"slurm = 26.05.4-2.{distro}", packages[name]["args"])
                 self.assertIn("/usr/sbin/slurmstepd", packages["slurm-slurmd"]["payload"])
-                for daemon in ("slurmctld", "slurmd"):
+                self.assertIn("/usr/lib64/slurm/accounting_storage_mysql.so",
+                              packages["slurm-slurmdbd"]["payload"])
+                for daemon in ("slurmctld", "slurmd", "slurmdbd"):
                     package = packages[f"slurm-{daemon}"]
                     unit = package["payload"][f"/usr/lib/systemd/system/{daemon}.service"]
                     self.assertIn(f"ExecStart=/usr/sbin/{daemon}", unit)
@@ -121,7 +128,7 @@ class SlurmPackagingTest(unittest.TestCase):
                     self.assertIn("daemon-reload", package["hooks"]["--after-install"])
                 examples = packages["slurm-example-configs"]["args"]
                 self.assertEqual(examples[examples.index("--architecture") + 1], "noarch")
-                self.assertEqual(examples.count("--config-files"), 2)
+                self.assertEqual(examples.count("--config-files"), 3)
 
     def test_missing_required_files_fail(self):
         """Do not emit an incomplete compute-node package."""
@@ -133,6 +140,32 @@ class SlurmPackagingTest(unittest.TestCase):
         result = self.package(output_type="deb")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("RPM only", result.stderr)
+
+    def test_missing_accounting_plugin_fails(self):
+        """Reject a source build without the database daemon's accounting backend."""
+        (self.prefix / "lib64/slurm/accounting_storage_mysql.so").unlink()
+        result = self.package()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("accounting_storage_mysql.so", result.stderr)
+
+    def test_dependency_installer_requests_database_rpm(self):
+        """Install the pinned database-daemon RPM without touching the host system."""
+        install_log = self.root / "install.log"
+        sudo = self.tools / "sudo"
+        sudo.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$INSTALL_LOG"\n',
+                        encoding="utf-8")
+        sudo.chmod(0o755)
+        identity = self.tools / "id"
+        identity.write_text('#!/bin/sh\nprintf "1000\\n"\n', encoding="utf-8")
+        identity.chmod(0o755)
+        environment = dict(os.environ, PATH=f"{self.tools}:{os.environ['PATH']}",
+                           INSTALL_LOG=str(install_log), DAOS_DEPS_EXT_REPO="")
+        result = subprocess.run(["bash", str(REPO_ROOT / "utils/build/install_deps.sh"), "el9"],
+                                cwd=self.root, env=environment, capture_output=True, text=True,
+                                check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("dnf install --allowerasing -y slurm-slurmdbd-26.05.4-2.el9",
+                      install_log.read_text(encoding="utf-8").splitlines())
 
     def test_source_definition_and_version_match(self):
         """The registered source build targets final RPM paths and a staging prefix."""
@@ -150,6 +183,12 @@ class SlurmPackagingTest(unittest.TestCase):
         self.assertIn("--prefix=/usr", commands[0])
         self.assertIn("--sysconfdir=/etc/slurm", commands[0])
         self.assertIn("--enable-pkgconfig", commands[0])
+        self.assertIn("--with-mysql_config=/usr/bin", commands[0])
+        self.assertNotIn("--without-mysql", commands[0])
+        self.assertEqual(ast.literal_eval(keywords["required_progs"]), ["mysql_config"])
+        self.assertIn(
+            ["install", "-D", "-m", "600", "etc/slurmdbd.conf.example",
+             "$SLURM_PREFIX/etc/slurm/slurmdbd.conf.example"], commands)
         self.assertIn(["make", "install", "DESTDIR=$SLURM_PREFIX"], commands)
         self.assertIn(["cp", "-a", "$SLURM_PREFIX/usr/.", "$SLURM_PREFIX/"], commands)
         self.assertEqual(ast.literal_eval(keywords["requires"]), ["munge", "hwloc"])
