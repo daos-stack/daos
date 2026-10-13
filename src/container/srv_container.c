@@ -1792,46 +1792,20 @@ cont_track_eph_leader_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 			    struct cont_track_eph_leader **leader_p)
 {
 	struct cont_track_eph_leader	*eph_ldr = NULL;
-	struct pool_domain		*doms;
-	int				 rank_nr;
-	int				 rc = 0;
-	int			i;
 
 	D_ALLOC_PTR(eph_ldr);
 	if (eph_ldr == NULL)
 		return -DER_NOMEM;
 
-	D_ASSERT(cont_svc->cs_pool->sp_map != NULL);
-	rank_nr = pool_map_find_ranks(cont_svc->cs_pool->sp_map, PO_COMP_ID_ALL, &doms);
-	if (rank_nr < 0)
-		D_GOTO(out, rc = rank_nr);
-
-	D_ALLOC_ARRAY(eph_ldr->cte_server_ephs, rank_nr);
-	if (eph_ldr->cte_server_ephs == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
 	uuid_copy(eph_ldr->cte_cont_uuid, cont_uuid);
-	eph_ldr->cte_servers_num = rank_nr;
-	eph_ldr->cte_current_ec_agg_eph = 0;
-	eph_ldr->cte_rdb_ec_agg_eph     = 0;
-	eph_ldr->cte_start_ts           = daos_gettime_coarse();
-	for (i = 0; i < rank_nr; i++) {
-		eph_ldr->cte_server_ephs[i].re_rank = doms[i].do_comp.co_rank;
-		eph_ldr->cte_server_ephs[i].re_ec_agg_eph = 0;
-		eph_ldr->cte_server_ephs[i].re_stable_eph = 0;
-		eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts = eph_ldr->cte_start_ts;
-	}
-	d_list_add(&eph_ldr->cte_list, &cont_svc->cs_cont_ephs_leader_list);
+	eph_ldr->cte_current_ec_agg_eph  = 0;
+	eph_ldr->cte_rdb_ec_agg_eph      = 0;
+	eph_ldr->cte_start_ts            = daos_gettime_coarse();
 	eph_ldr->cte_ec_agg_warn_slug_ts = eph_ldr->cte_start_ts;
+	d_list_add(&eph_ldr->cte_list, &cont_svc->cs_cont_ephs_leader_list);
 	*leader_p = eph_ldr;
-out:
-	if (rc) {
-		if (eph_ldr)
-			D_FREE(eph_ldr->cte_server_ephs);
-		D_FREE(eph_ldr);
-	}
 
-	return rc;
+	return 0;
 }
 
 static void
@@ -1847,90 +1821,6 @@ cont_track_eph_leader_delete(struct cont_svc *svc, uuid_t cont_uuid)
 	 * to avoid list iteration broken.
 	 */
 	eph_ldr->cte_deleted = 1;
-}
-
-/**
- * Update the epoch (by rank) on the leader of container service, which
- * will be called by IV update on the leader.
- */
-int
-ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid, d_rank_t rank,
-				daos_epoch_t ec_agg_eph, daos_epoch_t stable_eph)
-{
-	struct cont_svc			*svc;
-	struct rdb_tx                    tx;
-	struct cont_track_eph_leader	*eph_ldr;
-	struct cont                     *cont = NULL;
-	int				 rc;
-	bool				 retried = false;
-	int				 i;
-
-	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL /* hint */);
-	if (rc != 0)
-		return rc;
-
-retry:
-	eph_ldr = cont_track_eph_leader_lookup(svc, cont_uuid);
-	if (eph_ldr == NULL) {
-		/* check container's existence before creating cont_track_eph_leader */
-		rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
-		if (rc != 0)
-			D_GOTO(out_put, rc);
-
-		ABT_rwlock_rdlock(svc->cs_lock);
-		rc = cont_lookup(&tx, svc, cont_uuid, &cont);
-		ABT_rwlock_unlock(svc->cs_lock);
-		rdb_tx_end(&tx);
-		if (rc != 0) {
-			DL_CDEBUG(rc == -DER_NONEXIST, DB_MD, DLOG_ERR, rc,
-				  DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
-			D_GOTO(out_put, rc);
-		}
-		cont_put(cont);
-
-		eph_ldr = cont_track_eph_leader_lookup(svc, cont_uuid);
-		if (eph_ldr == NULL) {
-			rc = cont_track_eph_leader_alloc(svc, cont_uuid, &eph_ldr);
-			if (rc)
-				D_GOTO(out_put, rc);
-		}
-	}
-
-	for (i = 0; i < eph_ldr->cte_servers_num; i++) {
-		if (eph_ldr->cte_server_ephs[i].re_rank == rank) {
-			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < ec_agg_eph) {
-				eph_ldr->cte_server_ephs[i].re_ec_agg_eph = ec_agg_eph;
-				eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts =
-				    daos_gettime_coarse();
-			}
-			if (eph_ldr->cte_server_ephs[i].re_stable_eph < stable_eph)
-				eph_ldr->cte_server_ephs[i].re_stable_eph = stable_eph;
-			break;
-		}
-	}
-
-	if (i == eph_ldr->cte_servers_num) {
-		if (!retried) {
-			D_DEBUG(DB_MD, "rank %u ec_agg_eph "DF_X64", stable_eph "DF_X64
-				" retry for"DF_CONT"\n", rank, ec_agg_eph, stable_eph,
-				DP_CONT(pool_uuid, cont_uuid));
-			retried = true;
-			eph_ldr->cte_deleted = 1;
-			goto retry;
-		} else {
-			D_WARN("rank %u ec_agg_eph "DF_X64", stable_eph "DF_X64
-			       " does not exist for "DF_CONT"\n", rank, ec_agg_eph, stable_eph,
-			       DP_CONT(pool_uuid, cont_uuid));
-		}
-	} else {
-		D_DEBUG(DB_MD, DF_CONT" update eph rank %u ec_agg_eph "DF_X64
-			", stable_eph "DF_X64".\n", DP_CONT(pool_uuid, cont_uuid),
-			rank, ec_agg_eph, stable_eph);
-	}
-
-out_put:
-	cont_svc_put_leader(svc);
-	return rc;
 }
 
 #define EPH_ARG_TGT_INLINE	(64)
@@ -2160,36 +2050,181 @@ out_lock:
 	return rc;
 }
 
+/* Growable list of container UUIDs discovered from the RDB. */
+struct eph_cont_list {
+	uuid_t	*ecl_uuids;
+	int	 ecl_nr;
+	int	 ecl_cap;
+};
+
+static int
+eph_cont_list_add(struct eph_cont_list *list, uuid_t cont_uuid)
+{
+	if (list->ecl_nr == list->ecl_cap) {
+		int	 new_cap = list->ecl_cap == 0 ? 8 : list->ecl_cap * 2;
+		uuid_t	*new_uuids;
+
+		D_REALLOC_ARRAY(new_uuids, list->ecl_uuids, list->ecl_cap, new_cap);
+		if (new_uuids == NULL)
+			return -DER_NOMEM;
+		list->ecl_uuids = new_uuids;
+		list->ecl_cap   = new_cap;
+	}
+	uuid_copy(list->ecl_uuids[list->ecl_nr++], cont_uuid);
+	return 0;
+}
+
+static void
+eph_cont_list_fini(struct eph_cont_list *list)
+{
+	D_FREE(list->ecl_uuids);
+	list->ecl_nr  = 0;
+	list->ecl_cap = 0;
+}
+
+struct eph_collect_arg {
+	struct cont_svc		*eca_svc;
+	struct rdb_tx		*eca_tx;
+	struct eph_cont_list	*eca_list;
+};
+
+static int
+cont_eph_collect_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+{
+	struct eph_collect_arg	*arg  = varg;
+	struct cont		*cont = NULL;
+	uuid_t			 cont_uuid;
+	int			 rc;
+
+	uuid_copy(cont_uuid, key->iov_buf);
+	/* Trust only the RDB: skip containers that are being destroyed. */
+	rc = cont_lookup_active(arg->eca_tx, arg->eca_svc, cont_uuid, &cont);
+	if (rc == -DER_NONEXIST || rc == -DER_CONT_DESTROYING)
+		return 0;
+	if (rc != 0)
+		return rc;
+
+	cont_put(cont);
+	return eph_cont_list_add(arg->eca_list, cont_uuid);
+}
+
+/* Collect the UUIDs of all existing, non-destroying containers from the RDB. */
+static int
+cont_eph_collect_active(struct cont_svc *svc, struct eph_cont_list *list)
+{
+	struct eph_collect_arg	arg;
+	struct rdb_tx		tx;
+	int			rc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		return rc;
+
+	arg.eca_svc  = svc;
+	arg.eca_tx   = &tx;
+	arg.eca_list = list;
+	ABT_rwlock_rdlock(svc->cs_lock);
+	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */, cont_eph_collect_cb, &arg);
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+
+	return rc;
+}
+
+/*
+ * Pull the per-target EC aggregation and stable epochs of a container from all engines
+ * through the CONT_TGT_TRACK_EPOCH CoRPC and return the system-wide minimum. A target
+ * without a local container child reports its current HLC, so it does not block the minimum.
+ */
+static int
+cont_track_eph_query(struct cont_svc *svc, uuid_t cont_uuid, daos_epoch_t *ec_agg_eph,
+		     daos_epoch_t *stable_eph)
+{
+	struct cont_tgt_track_eph_in	*in;
+	struct cont_tgt_track_eph_out	*out;
+	crt_rpc_t			*rpc;
+	int				 rc;
+
+	rc = ds_cont_bcast_create(dss_get_module_info()->dmi_ctx, svc, CONT_TGT_TRACK_EPOCH, &rpc);
+	if (rc != 0)
+		return rc;
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->tti_pool_uuid, svc->cs_pool_uuid);
+	uuid_copy(in->tti_cont_uuid, cont_uuid);
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = crt_reply_get(rpc);
+	if (out->tto_rc != 0)
+		D_GOTO(out_rpc, rc = out->tto_rc);
+
+	*ec_agg_eph = out->tto_ec_agg_eph;
+	*stable_eph = out->tto_stable_eph;
+out_rpc:
+	crt_req_decref(rpc);
+	return rc;
+}
+
 static void
 cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 {
-	d_rank_list_t                    fail_ranks = {0};
+	struct eph_cont_list		 active = { 0 };
 	struct cont_track_eph_leader	*eph_ldr;
 	struct cont_track_eph_leader	*tmp;
 	uint64_t			 cur_eph, new_eph;
-	daos_epoch_t			 min_ec_agg_eph;
-	daos_epoch_t			 min_stable_eph;
-	uint64_t                         cur_ts;
+	uint64_t			 cur_ts;
 	int				 i;
-	int                              warn_slug_ranks = 8; /* 8 ranks at most */
-	int                              cont_num        = 0;
-	int				 rc = 0;
+	int				 cont_num = 0;
+	int				 rc       = 0;
 
-	rc = map_ranks_failed(pool->sp_map, &fail_ranks);
+	/* Trust only the RDB for which containers exist and are not being destroyed. */
+	rc = cont_eph_collect_active(svc, &active);
 	if (rc) {
-		D_ERROR(DF_UUID ": ranks init failed: %d\n", DP_UUID(pool->sp_uuid), rc);
-		return;
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_MD, DLOG_ERR, rc,
+			  DF_UUID ": collect active containers failed", DP_UUID(pool->sp_uuid));
+		goto out;
 	}
 
 	ABT_mutex_lock(svc->cs_cont_ephs_mutex);
+
+	/* Reconcile the tracked list with the RDB snapshot: add entries for newly seen
+	 * containers and mark the rest so stale ones can be dropped below.
+	 */
+	d_list_for_each_entry(eph_ldr, &svc->cs_cont_ephs_leader_list, cte_list)
+		eph_ldr->cte_seen = 0;
+	for (i = 0; i < active.ecl_nr; i++) {
+		eph_ldr = cont_track_eph_leader_lookup(svc, active.ecl_uuids[i]);
+		if (eph_ldr == NULL) {
+			rc = cont_track_eph_leader_alloc(svc, active.ecl_uuids[i], &eph_ldr);
+			if (rc) {
+				DL_ERROR(rc, DF_CONT ": alloc track eph leader failed",
+					 DP_CONT(svc->cs_pool_uuid, active.ecl_uuids[i]));
+				rc = 0;
+				continue;
+			}
+		}
+		eph_ldr->cte_seen = 1;
+	}
+
 	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
+		daos_epoch_t min_ec_agg_eph;
+		daos_epoch_t min_stable_eph;
+
 		cont_num++;
-		if (eph_ldr->cte_deleted) {
+		/* Drop entries for containers that no longer exist (or are destroying) in the
+		 * RDB, or that were explicitly deleted.
+		 */
+		if (eph_ldr->cte_deleted || !eph_ldr->cte_seen) {
 			d_list_del(&eph_ldr->cte_list);
-			D_FREE(eph_ldr->cte_server_ephs);
 			D_FREE(eph_ldr);
 			continue;
 		}
+
+		if (dss_ult_exiting(svc->cs_cont_ephs_leader_req))
+			break;
 
 		if (eph_ldr->cte_rdb_ec_agg_eph == 0) {
 			rc = cont_agg_eph_load(svc, eph_ldr->cte_cont_uuid,
@@ -2205,38 +2240,35 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			}
 		}
 
-		min_ec_agg_eph = DAOS_EPOCH_MAX;
-		min_stable_eph = DAOS_EPOCH_MAX;
-		cur_ts         = daos_gettime_coarse();
+		cur_ts = daos_gettime_coarse();
 		if (ds_pool_is_rebuilding(pool) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
 			eph_ldr->cte_ec_agg_warn_slug_ts = cur_ts;
-		for (i = 0; i < eph_ldr->cte_servers_num; i++) {
-			d_rank_t rank = eph_ldr->cte_server_ephs[i].re_rank;
 
-			if (d_rank_in_rank_list(&fail_ranks, rank)) {
-				D_DEBUG(DB_MD, DF_CONT " skip %u\n",
-					DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), rank);
-				continue;
+		/* Pull the per-target epochs from all engines; a target without a local
+		 * container child returns its current HLC so it does not block the minimum.
+		 */
+		min_ec_agg_eph = DAOS_EPOCH_MAX;
+		min_stable_eph = DAOS_EPOCH_MAX;
+		rc = cont_track_eph_query(svc, eph_ldr->cte_cont_uuid, &min_ec_agg_eph,
+					  &min_stable_eph);
+		if (rc) {
+			DL_CDEBUG(rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST, DB_MD, DLOG_ERR,
+				  rc, DF_CONT ": track eph query failed",
+				  DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
+			if (rc == -DER_SHUTDOWN)
+				break;
+			/* On network errors or pool map inconsistency, skip the following
+			 * eph sync, which will fail anyway.
+			 */
+			if (daos_crt_network_error(rc) || rc == -DER_GRPVER) {
+				D_INFO(DF_UUID ": skip sync due to: " DF_RC "\n",
+				       DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+				break;
 			}
-
-			if (cur_ts > eph_ldr->cte_ec_agg_warn_slug_ts + 600 &&
-			    cur_ts > eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts + 600 &&
-			    warn_slug_ranks > 0) {
-				warn_slug_ranks--;
-				D_WARN(DF_CONT ": Sluggish EC boundary report from rank %d, " DF_U64
-					       " Seconds.",
-				       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), rank,
-				       cur_ts -
-					   eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts);
-			}
-
-			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < min_ec_agg_eph)
-				min_ec_agg_eph = eph_ldr->cte_server_ephs[i].re_ec_agg_eph;
-			if (eph_ldr->cte_server_ephs[i].re_stable_eph < min_stable_eph)
-				min_stable_eph = eph_ldr->cte_server_ephs[i].re_stable_eph;
+			continue;
 		}
 
-		/* for reboot case the ea_rdb_eph possibly higher than min_eph */
+		/* for reboot case the rdb_eph possibly higher than min_eph */
 		if (min_ec_agg_eph < eph_ldr->cte_rdb_ec_agg_eph)
 			min_ec_agg_eph = eph_ldr->cte_rdb_ec_agg_eph;
 
@@ -2322,8 +2354,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		eph_ldr->cte_current_stable_eph = min_stable_eph;
 	}
 	ABT_mutex_unlock(svc->cs_cont_ephs_mutex);
-
-	map_ranks_fini(&fail_ranks);
+out:
+	eph_cont_list_fini(&active);
 }
 
 int
@@ -2370,7 +2402,6 @@ out:
 
 	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
 		d_list_del(&eph_ldr->cte_list);
-		D_FREE(eph_ldr->cte_server_ephs);
 		D_FREE(eph_ldr);
 	}
 }
