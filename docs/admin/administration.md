@@ -972,6 +972,16 @@ The output table will indicate action and result.
 While the engines are stopped, the DAOS servers will continue to
 operate and listen on the management network.
 
+A stopped rank leaves the system group at once, so its pools exclude it
+under their self-heal policy just as they would a failed rank. To stop a
+rank without a pool exclusion, disable self-heal exclusion on its pools
+first.
+
+The same applies to a system that is stopped and then only partly started:
+the ranks still stopped are excluded from every pool as soon as the pool
+services come up. A staged restart must disable self-heal exclusion first or
+start every rank.
+
 !!! warning
     All engines monitor each other and pro-actively exclude unresponsive
     members. It is critical to properly stop a DAOS system as with dmg in
@@ -1016,6 +1026,47 @@ specified on the command line:
 
 If the ranks were excluded from pools (e.g., unclean shutdown), they will need to
 be reintegrated. Please see the pool operation section for more information.
+
+### Engine Startup
+
+A `daos_server` only starts an I/O engine when the system expects it to be
+running. After the first `dmg storage format`, engines wait for
+`dmg system initialize` (or `dmg system extend` for hosts added later). When
+`daos_server` restarts, an engine whose rank was stopped with `dmg system stop`
+stays stopped until `dmg system start`; any other rank that was a member is
+restarted.
+
+- Initialize a System:
+
+```bash
+$ dmg system initialize -l ${storage_nodes} [--timeout=<duration>]
+```
+
+Starts the engines on the listed hosts (or the hosts in the dmg configuration
+file) and waits for them to join. With `--timeout`, hosts whose engines had
+not joined when it expired are named in the output and the command may be
+rerun once they are fixed; without it, the command waits until interrupted.
+
+- Extend a System:
+
+```bash
+$ dmg system extend -l ${new_storage_nodes} [--timeout=<duration>]
+```
+
+The same operation for hosts added to a system that already has pools.
+
+The `restart_engines_on_boot` system property controls whether `daos_server`
+restarts joined ranks on boot. Set it to `false` for sites where a reboot is a
+maintenance step and engines should stay down until `dmg system start`:
+
+```bash
+$ dmg system set-prop restart_engines_on_boot:false
+```
+
+`dmg storage format --start` formats and starts the engines in one step, as
+earlier releases did; on hosts that are already formatted it starts the engines
+still waiting. `dmg storage format --replace` also starts the engine it
+formats, so the rank it replaces rejoins without a further command.
 
 ### Engine Auto-Restart
 
@@ -1449,19 +1500,20 @@ To add a new server to an existing DAOS system, one should install:
 
 The daos\_control.yml file should also be updated to include the new DAOS server.
 
-Then start the daos\_server via systemd and format the new server via
-dmg as follows:
+Then start the daos\_server via systemd, format the new server and start its
+engines via dmg as follows:
 
 ```
 $ dmg storage format -l ${new_storage_node}
+$ dmg system extend -l ${new_storage_node}
 ```
 
 `new_storage_node` should be replaced with the hostname or the IP address of the
 new storage node (comma separated list or range of hosts for multiple nodes)
 to be added.
 
-Upon completion of the format operation, the new storage nodes will join
-the system (this can be checked with `dmg system query -v`).
+`dmg system extend` returns once the new storage nodes have joined the system
+(this can be checked with `dmg system query -v`).
 
 !!! note
     New pools created after the extension will automatically use the newly added
