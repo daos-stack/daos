@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -143,8 +143,8 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	if localState != system.MemberStateReady {
 		// member not ready for dRPC comms, annotate result with last error if stopped
 		var err error
-		if localState == system.MemberStateStopped && ei._lastErr != nil {
-			err = ei._lastErr
+		if localState == system.MemberStateStopped {
+			err = ei.getExitErr()
 		}
 		return system.NewMemberResult(rank, err, localState)
 	}

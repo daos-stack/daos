@@ -234,6 +234,7 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	ei.log.Infof("%s format required on %s", formatType, msgIdx)
 
 	ei.waitFormat.SetTrue()
+	ei.waitStart.SetTrue() // every format is followed by a hold
 	// After we know that the instance is awaiting format, fire off
 	// any callbacks that are waiting for this state.
 	for _, fn := range ei.onAwaitFormat {

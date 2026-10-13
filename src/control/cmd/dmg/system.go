@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -19,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
@@ -32,6 +34,8 @@ type SystemCmd struct {
 	Query        systemQueryCmd        `command:"query" description:"Query DAOS system status"`
 	Stop         systemStopCmd         `command:"stop" description:"Perform controlled shutdown of DAOS system"`
 	Start        systemStartCmd        `command:"start" description:"Perform start of stopped DAOS system"`
+	Initialize   systemInitializeCmd   `command:"initialize" description:"Start engines on formatted hosts to form a new DAOS system"`
+	Extend       systemExtendCmd       `command:"extend" description:"Start engines on formatted hosts to join an existing DAOS system"`
 	Exclude      systemExcludeCmd      `command:"exclude" description:"Exclude ranks from DAOS system"`
 	ClearExclude systemClearExcludeCmd `command:"clear-exclude" description:"Clear excluded state for ranks"`
 	Drain        systemDrainCmd        `command:"drain" description:"Drain ranks or hosts from all relevant pools in DAOS system"`
@@ -154,9 +158,11 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
+	wholeSystem := cmd.Hosts.HostSet.Count() == 0 && cmd.Ranks.RankSet.Count() == 0 &&
+		cmd.WantedStates.Empty() && !cmd.NotOK
 	var out, outErr strings.Builder
 	if err := pretty.PrintSystemQueryResponse(&out, &outErr, resp,
-		pretty.PrintWithVerboseOutput(cmd.Verbose)); err != nil {
+		pretty.PrintWithVerboseOutput(cmd.Verbose), pretty.PrintWithWholeSystem(wholeSystem)); err != nil {
 		return err
 	}
 	cmd.Info(out.String())
@@ -286,6 +292,75 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 	}
 
 	return resp.Errors()
+}
+
+// systemStartHostsCmd is embedded by the commands that start engines on a hostlist.
+type systemStartHostsCmd struct {
+	baseCtlCmd
+	hostListCmd
+	JoinTimeout time.Duration `long:"timeout" description:"Time to wait for engines to join (default: until interrupted)"`
+}
+
+// run starts the engines on the hostlist (-l, or the config's) and reports the result.
+func (cmd *systemStartHostsCmd) run(start func(*hostlist.HostSet) (*control.SystemStartHostsResp, error)) error {
+	hs, err := hostlist.CreateSet(strings.Join(cmd.config.HostList, ","))
+	if err != nil {
+		return err
+	}
+
+	resp, err := start(hs)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	var out, outErr strings.Builder
+	pretty.PrintSystemStartHostsResponse(&out, &outErr, resp)
+	cmd.Info(out.String())
+	if outErr.String() != "" {
+		cmd.Error(outErr.String())
+	}
+
+	return resp.Errors()
+}
+
+// systemInitializeCmd is the struct representing the command to initialize a new system.
+type systemInitializeCmd struct {
+	systemStartHostsCmd
+}
+
+// Execute is run when systemInitializeCmd activates.
+func (cmd *systemInitializeCmd) Execute(_ []string) (errOut error) {
+	defer func() {
+		errOut = errors.Wrap(errOut, "system initialize failed")
+	}()
+
+	return cmd.run(func(hs *hostlist.HostSet) (*control.SystemStartHostsResp, error) {
+		req := &control.SystemInitializeReq{JoinTimeout: cmd.JoinTimeout}
+		req.Hosts.Replace(hs)
+		return control.SystemInitialize(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	})
+}
+
+// systemExtendCmd is the struct representing the command to add hosts to a system.
+type systemExtendCmd struct {
+	systemStartHostsCmd
+}
+
+// Execute is run when systemExtendCmd activates.
+func (cmd *systemExtendCmd) Execute(_ []string) (errOut error) {
+	defer func() {
+		errOut = errors.Wrap(errOut, "system extend failed")
+	}()
+
+	return cmd.run(func(hs *hostlist.HostSet) (*control.SystemStartHostsResp, error) {
+		req := &control.SystemExtendReq{JoinTimeout: cmd.JoinTimeout}
+		req.Hosts.Replace(hs)
+		return control.SystemExtend(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	})
 }
 
 type systemExcludeCmd struct {

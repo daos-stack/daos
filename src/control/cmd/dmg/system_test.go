@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -289,6 +290,37 @@ func TestDmg_SystemCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.SystemStopReq{
 					IgnoreAdminExcluded: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system initialize from config hostlist",
+			"system initialize",
+			strings.Join([]string{
+				printRequest(t, &control.SystemInitializeReq{
+					Hosts: *hostlist.MustCreateSet("localhost:10001"),
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system initialize with hosts and timeout",
+			"system initialize -l foo-[1-4] --timeout 90s",
+			strings.Join([]string{
+				printRequest(t, &control.SystemInitializeReq{
+					Hosts:       *hostlist.MustCreateSet("foo-[1-4]"),
+					JoinTimeout: 90 * time.Second,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system extend with hosts",
+			"system extend -l foo-[5-6]",
+			strings.Join([]string{
+				printRequest(t, &control.SystemExtendReq{
+					Hosts: *hostlist.MustCreateSet("foo-[5-6]"),
 				}),
 			}, " "),
 			nil,

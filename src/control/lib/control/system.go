@@ -37,6 +37,9 @@ const (
 	// accommodate (re)joins during leadership upheaval and other scenarios
 	// that are expected to eventually resolve.
 	SystemJoinTimeout = 1 * time.Hour // effectively "forever", just keep retrying
+	// EnginePreflightTimeout defines the amount of time to wait for the MS
+	// to answer one engine preflight request.
+	EnginePreflightTimeout = time.Minute
 	// SystemJoinRetryTimeout defines the amount of time a retry attempt can take. It
 	// should be set low in order to ensure that individual join attempts retry quickly.
 	SystemJoinRetryTimeout = 10 * time.Second
@@ -221,6 +224,63 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	return resp, nil
 }
 
+// PreflightEngine identifies one engine instance in a preflight request.
+type PreflightEngine struct {
+	Idx  uint32        `json:"idx"`
+	Rank ranklist.Rank `json:"rank"`
+}
+
+// PreflightResult is the preflight result for one engine instance.
+type PreflightResult struct {
+	Idx    uint32 `json:"idx"`
+	Start  bool   `json:"start"`
+	Reason string `json:"reason"`
+}
+
+// EnginePreflightReq contains the inputs for an engine preflight request.
+type EnginePreflightReq struct {
+	unaryRequest
+	msRequest
+	retryableRequest
+	Engines []*PreflightEngine `json:"engines"`
+}
+
+// EnginePreflightResp contains the request response.
+type EnginePreflightResp struct {
+	Engines []*PreflightResult `json:"engines"`
+}
+
+// EnginePreflight asks the MS what a server needs to know before it launches
+// the listed engines.
+func EnginePreflight(ctx context.Context, rpcClient UnaryInvoker, req *EnginePreflightReq) (*EnginePreflightResp, error) {
+	pbReq := new(mgmtpb.EnginePreflightReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, err
+	}
+	pbReq.Sys = req.getSystem(rpcClient)
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).EnginePreflight(ctx, pbReq)
+	})
+	req.SetTimeout(EnginePreflightTimeout)
+	req.retryTimeout = SystemJoinRetryTimeout
+	req.retryTestFn = func(err error, _ uint) bool {
+		switch {
+		case IsRetryableConnErr(err), system.IsNotReady(err):
+			return true
+		}
+		return err == errNoMsResponse
+	}
+	rpcClient.Debugf("DAOS engine preflight request: %+v", pbReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(EnginePreflightResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
 // SystemQueryReq contains the inputs for the system query request.
 type SystemQueryReq struct {
 	unaryRequest
@@ -374,11 +434,132 @@ func concatErrs(errOne, errTwo error) error {
 	return nil
 }
 
+// SystemInitializeReq contains the inputs for the system initialize request.
+type SystemInitializeReq struct {
+	unaryRequest
+	msRequest
+	retryableRequest
+	Hosts       hostlist.HostSet
+	JoinTimeout time.Duration // 0: wait until ctx is done
+}
+
+// Validate checks the request parameters.
+func (req *SystemInitializeReq) Validate() error {
+	return validateStartHosts(&req.Hosts, req.JoinTimeout)
+}
+
+// SystemExtendReq contains the inputs for the system extend request.
+type SystemExtendReq struct {
+	unaryRequest
+	msRequest
+	retryableRequest
+	Hosts       hostlist.HostSet
+	JoinTimeout time.Duration // 0: wait until ctx is done
+}
+
+// Validate checks the request parameters.
+func (req *SystemExtendReq) Validate() error {
+	return validateStartHosts(&req.Hosts, req.JoinTimeout)
+}
+
+func validateStartHosts(hosts *hostlist.HostSet, joinTimeout time.Duration) error {
+	if hosts.Count() == 0 {
+		return errors.New("no hosts specified")
+	}
+	if joinTimeout != 0 && joinTimeout < time.Second {
+		return errors.New("join timeout must be at least 1s")
+	}
+	return nil
+}
+
+// SystemStartHostsResp contains the response from a request that starts the
+// engines on a set of hosts.
+type SystemStartHostsResp struct {
+	Results system.MemberResults
+}
+
+// Errors returns a single error combining all error messages associated with
+// the response.
+func (resp *SystemStartHostsResp) Errors() error {
+	return resp.Results.Errors()
+}
+
+// retryUninitialized retries a request that follows a storage format or a
+// daos_server restart while the replica's database is still starting.
+func retryUninitialized(err error, _ uint) bool {
+	return system.IsUninitialized(err)
+}
+
+// startHosts sends a request that starts engines and waits for them to join.
+func startHosts(ctx context.Context, rpcClient UnaryInvoker, req UnaryRequest, joinTimeout time.Duration, pbReq proto.Message) (*SystemStartHostsResp, error) {
+	if joinTimeout > 0 {
+		req.SetTimeout(joinTimeout + defaultRequestTimeout)
+	} else {
+		req.SetNoDeadline()
+	}
+
+	rpcClient.Debugf("DAOS %T: %s", pbReq, pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemStartHostsResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
+// SystemInitialize starts the engines on the supplied hosts and waits for them
+// to join a new DAOS system.
+func SystemInitialize(ctx context.Context, rpcClient UnaryInvoker, req *SystemInitializeReq) (*SystemStartHostsResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	pbReq := &mgmtpb.SystemInitializeReq{
+		Hosts:       req.Hosts.String(),
+		Sys:         req.getSystem(rpcClient),
+		JoinTimeout: uint32(req.JoinTimeout.Seconds()),
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemInitialize(ctx, pbReq)
+	})
+	req.retryTestFn = retryUninitialized
+
+	return startHosts(ctx, rpcClient, req, req.JoinTimeout, pbReq)
+}
+
+// SystemExtend starts the engines on the supplied hosts and waits for them to
+// join an existing DAOS system.
+func SystemExtend(ctx context.Context, rpcClient UnaryInvoker, req *SystemExtendReq) (*SystemStartHostsResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	pbReq := &mgmtpb.SystemExtendReq{
+		Hosts:       req.Hosts.String(),
+		Sys:         req.getSystem(rpcClient),
+		JoinTimeout: uint32(req.JoinTimeout.Seconds()),
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemExtend(ctx, pbReq)
+	})
+	req.retryTestFn = retryUninitialized
+
+	return startHosts(ctx, rpcClient, req, req.JoinTimeout, pbReq)
+}
+
 // SystemStartReq contains the inputs for the system start request.
 type SystemStartReq struct {
 	unaryRequest
 	msRequest
 	sysRequest
+	retryableRequest
 	IgnoreAdminExcluded bool // Ignore AdminExcluded ranks in the Ranks/Hosts lists
 }
 
@@ -438,6 +619,7 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 	})
 
 	rpcClient.Debugf("DAOS system start request: %s", pbUtil.Debug(pbReq))
+	req.retryTestFn = retryUninitialized
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -984,6 +1166,68 @@ func ResetFormatRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq
 
 	rpcClient.Debugf("DAOS system reset-format-ranks request: %s", pbUtil.Debug(pbReq))
 	return invokeRPCFanout(ctx, rpcClient, req)
+}
+
+type (
+	// StartEnginesReq contains the parameters for a start engines request.
+	StartEnginesReq struct {
+		unaryRequest
+	}
+
+	// EngineResult contains the result of a start request for one engine.
+	EngineResult struct {
+		Addr  string `json:"addr"`
+		Index uint32 `json:"index"`
+		State string `json:"state"`
+		Error string `json:"error"`
+		UUID  string `json:"uuid"`
+	}
+
+	// StartEnginesResp contains the response from a start engines request.
+	StartEnginesResp struct {
+		HostErrorsResp
+		Results []*EngineResult `json:"results"`
+	}
+)
+
+// StartEngines concurrently starts the engines on all hosts supplied in the
+// request's hostlist.
+func StartEngines(ctx context.Context, rpcClient UnaryInvoker, req *StartEnginesReq) (*StartEnginesResp, error) {
+	pbReq := new(ctlpb.StartEnginesReq)
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).StartEngines(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("DAOS start-engines request: %s", pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(StartEnginesResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := resp.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		pbResp, ok := hostResp.Message.(*ctlpb.StartEnginesResp)
+		if !ok {
+			return nil, errors.Errorf("unable to unpack message: %+v", hostResp.Message)
+		}
+		for _, pbRes := range pbResp.GetResults() {
+			res := new(EngineResult)
+			if err := convert.Types(pbRes, res); err != nil {
+				return nil, err
+			}
+			res.Addr = hostResp.Addr
+			resp.Results = append(resp.Results, res)
+		}
+	}
+
+	return resp, nil
 }
 
 // StartRanks concurrently performs start ranks across all hosts
