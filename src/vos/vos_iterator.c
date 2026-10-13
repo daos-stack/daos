@@ -351,6 +351,28 @@ vos_iter_sched_check(struct vos_iterator *iter)
 	return ret;
 }
 
+static inline bool
+vos_iter_obj_evicted(struct vos_iterator *iter)
+{
+	struct vos_obj_iter *oiter;
+
+	switch (iter->it_type) {
+	case VOS_ITER_DKEY:
+	case VOS_ITER_AKEY:
+	case VOS_ITER_SINGLE:
+	case VOS_ITER_RECX:
+		break;
+	default:
+		return false;
+	}
+
+	oiter = vos_iter2oiter(iter);
+	if (oiter->it_flags == VOS_IT_KEY_TREE || oiter->it_obj == NULL)
+		return false;
+
+	return vos_obj_is_evicted(oiter->it_obj);
+}
+
 static int
 vos_iter_validate_internal(struct vos_iterator *iter)
 {
@@ -362,6 +384,12 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 	bool               is_sysdb = !!iter->it_for_sysdb;
 
 	D_ASSERT(iter->it_anchors != NULL);
+
+	/* An object eviction invalidates nested tree cursors even without a yield. */
+	if (vos_iter_obj_evicted(iter)) {
+		iter->it_anchors->ia_probe_level = VOS_ITER_OBJ;
+		return VOS_ITER_OBJ;
+	}
 
 	if (!vos_iter_sched_check(iter))
 		return 0; /* No interleaving operations so no need to revalidate */
@@ -782,6 +810,10 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	vos_iter_sched_sync(iter);
 	D_ASSERT(iter_cb != NULL);
 	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
+	if (rc == 0 && vos_iter_obj_evicted(iter)) {
+		iter->it_anchors->ia_probe_level = VOS_ITER_OBJ;
+		*acts |= VOS_ITER_CB_YIELD;
+	}
 	if (vos_iter_sched_check(iter)) {
 		*acts |= VOS_ITER_CB_YIELD;
 		if (rc == 0 && iter->it_parent != NULL &&
@@ -974,8 +1006,13 @@ probe:
 					 recursive, anchors, pre_cb, post_cb,
 					 arg, dth);
 
+			if (rc == 0 && vos_iter_obj_evicted(iter)) {
+				anchors->ia_probe_level = VOS_ITER_OBJ;
+				acts |= VOS_ITER_CB_YIELD;
+			}
+
 			if (evictable && vos_iter_sched_check(iter))
-				acts = VOS_ITER_CB_YIELD;
+				acts |= VOS_ITER_CB_YIELD;
 
 			if (rc != 0)
 				D_GOTO(out, rc);
