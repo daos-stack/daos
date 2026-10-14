@@ -3293,6 +3293,57 @@ free:
 	return rc;
 }
 
+#define REBUILD_SRV_HDL_FETCH_RETRY_INTVL_MS	1000
+#define REBUILD_SRV_HDL_FETCH_RETRY_MAX_MS	(30 * 1000)
+
+/*
+ * A rebuild regenerated during pool service leader startup can reach targets
+ * before the new leader's server-handle IV entry is available everywhere.
+ * Retry the transient DER_NOTLEADER response while that IV state propagates.
+ */
+static int
+rebuild_tgt_fetch_srv_hdls(struct ds_pool *pool, struct rebuild_tgt_pool_tracker *rpt)
+{
+	uint64_t deadline = daos_getmtime_coarse() + REBUILD_SRV_HDL_FETCH_RETRY_MAX_MS;
+	int      retries  = 0;
+	int      rc = 0;
+
+	while (1) {
+		if (pool->sp_stopping || rpt->rt_abort || rpt->rt_finishing) {
+			D_INFO(DF_RB " cancel server handle fetch, pool_stopping %d abort %d "
+			       "finishing %d\n",
+			       DP_RB_RPT(rpt), pool->sp_stopping, rpt->rt_abort, rpt->rt_finishing);
+			return -DER_SHUTDOWN;
+		}
+
+		rc = ds_pool_iv_srv_hdl_fetch(pool, &rpt->rt_poh_uuid, &rpt->rt_coh_uuid);
+		if (rc == 0) {
+			if (retries > 0)
+				D_INFO(DF_RB " fetched server handles after %d retries\n",
+				       DP_RB_RPT(rpt), retries);
+			return 0;
+		}
+
+		if (!daos_rpc_retryable_rc(rc) && rc != -DER_NOTLEADER && rc != -DER_BUSY)
+			return rc;
+
+		if (retries == 0)
+			DL_INFO(rc, DF_RB " waiting for server handles during leader startup",
+				DP_RB_RPT(rpt));
+
+		if (daos_getmtime_coarse() >= deadline) {
+			DL_ERROR(rc, DF_RB " timed out fetching server handles after %d retries",
+				 DP_RB_RPT(rpt), retries);
+			return -DER_TIMEDOUT;
+		}
+
+		retries++;
+		dss_sleep(REBUILD_SRV_HDL_FETCH_RETRY_INTVL_MS);
+	}
+
+	return rc;
+}
+
 /* rebuild prepare on each target, which will be called after
  * each target get the scan rpc from the master.
  */
@@ -3344,8 +3395,7 @@ rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
 	 * to make sure the new coming request can find the rpt in the list.
 	 */
 	rpt_insert(rpt);
-	rc = ds_pool_iv_srv_hdl_fetch(pool, &rpt->rt_poh_uuid,
-				      &rpt->rt_coh_uuid);
+	rc = rebuild_tgt_fetch_srv_hdls(pool, rpt);
 	if (rc)
 		D_GOTO(out, rc);
 
