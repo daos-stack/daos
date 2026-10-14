@@ -1,3 +1,10 @@
+/**
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+
+/* This file implements CaRT RPC header tests */
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
