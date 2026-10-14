@@ -14,7 +14,7 @@ post_provision_config_nodes() {
     #                 ompi argobots cart daos daos-client dpdk      \
     #                 fuse-libs libisa-l libpmemobj mercury mpich   \
     #                 pmix protobuf-c spdk libfabric libpmem        \
-    #                 munge-libs munge slurm                        \
+    #                 munge-libs munge slurm slurm-example-configs  \
     #                 slurm-slurmdbd slurmctld slurm-slurmmd
     #fi
     codename=$(lsb_release -s -c)
