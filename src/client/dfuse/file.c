@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -122,5 +123,22 @@ active_ie_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 
 	ah_free(dfuse_info, ie);
 out:
+	D_MUTEX_UNLOCK(&alock);
+}
+
+/* Reset read state after truncate, including for an inode with no open handle. */
+void
+active_ie_set_truncated(struct dfuse_inode_entry *ie, bool truncated)
+{
+	D_MUTEX_LOCK(&alock);
+	if (ie->ie_active) {
+		read_chunk_invalidate(ie, 0, DFS_MAX_FSIZE);
+		D_SPIN_LOCK(&ie->ie_active->lock);
+	}
+	ie->ie_truncated = truncated;
+	ie->ie_start_off = 0;
+	ie->ie_end_off   = 0;
+	if (ie->ie_active)
+		D_SPIN_UNLOCK(&ie->ie_active->lock);
 	D_MUTEX_UNLOCK(&alock);
 }
