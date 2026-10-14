@@ -1184,16 +1184,11 @@ obj_fetch_shadow(struct obj_io_context *ioc, daos_unit_oid_t oid,
 	rc = vos_fetch_begin(ioc->ioc_vos_coh, oid, epoch, dkey, iod_nr, iods,
 			     cond_flags | VOS_OF_FETCH_RECX_LIST, NULL, &ioh,
 			     dth);
-	if (rc) {
-		D_ERROR(DF_UOID" Fetch begin failed: "DF_RC"\n",
-			DP_UOID(oid), DP_RC(rc));
-		goto out;
+	if (rc == 0) {
+		*pshadows = vos_ioh2recx_list(ioh);
+		vos_fetch_end(ioh, NULL, 0);
 	}
 
-	*pshadows = vos_ioh2recx_list(ioh);
-	vos_fetch_end(ioh, NULL, 0);
-
-out:
 	obj_iod_idx_parity2vos(iod_nr, iods);
 	if (rc == 0) {
 		uint32_t tgt_off;
@@ -1610,8 +1605,9 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 					      orw->orw_dkey_hash, iods_nr, iods,
 					      orw->orw_tgt_idx, dth, &shadows);
 			if (rc) {
-				D_ERROR(DF_UOID" Fetch shadow failed: "DF_RC
-					"\n", DP_UOID(orw->orw_oid), DP_RC(rc));
+				DL_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR, rc,
+					  " fetch shadow for " DF_UOID " failed.",
+					  DP_UOID(orw->orw_oid));
 				goto out;
 			}
 			iod_converted = true;
