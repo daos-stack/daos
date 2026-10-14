@@ -109,6 +109,7 @@ main(int argc, char **argv)
 	int	index = 0;
 	int                  otype;
 	int                  keys;
+	char                *filter         = NULL;
 	const char          *vos_command    = NULL;
 	const char          *short_options  = "apcdglzni:mXA:S:hf:e:tCwMr:";
 	static struct option long_options[] = {
@@ -174,9 +175,16 @@ main(int argc, char **argv)
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 			{
 				/** Add wildcards for easier filtering */
-				char filter[sizeof(optarg) + 2];
+				size_t filter_size = strlen(optarg) + 3;
 
-				sprintf(filter, "*%s*", optarg);
+				free(filter);
+				filter = malloc(filter_size);
+				if (filter == NULL) {
+					print_error("Unable to allocate test filter\n");
+					nr_failed = ENOMEM;
+					goto exit_0;
+				}
+				snprintf(filter, filter_size, "*%s*", optarg);
 				cmocka_set_test_filter(filter);
 				printf("Test filter: %s\n", filter);
 			}
@@ -314,6 +322,7 @@ main(int argc, char **argv)
 exit_1:
 	vos_self_fini();
 exit_0:
+	free(filter);
 	daos_debug_fini();
 	return nr_failed;
 }
