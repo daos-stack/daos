@@ -615,8 +615,8 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	}
 	epoch = is_recalc ? stripe->as_hi_epoch :
 		entry->ae_par_extent.ape_epoch;
-	rc = dsc_obj_fetch(entry->ae_obj_hdl, epoch, &entry->ae_dkey, 1, &iod,
-			   &sgl, NULL, DIOF_FOR_EC_AGG, NULL, NULL);
+	rc    = dsc_obj_fetch(entry->ae_obj_hdl, epoch, &entry->ae_dkey, 1, &iod, &sgl, NULL,
+			      DIOF_FOR_EC_AGG | DIOF_EC_NO_DEGRADE, NULL, NULL);
 	if (rc)
 		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
@@ -1693,8 +1693,8 @@ agg_process_holes_ult(void *arg)
 		struct daos_csummer	*csummer;
 
 		rc = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_cur_stripe.as_hi_epoch,
-				   &entry->ae_dkey, 1, iod, &entry->ae_sgl,
-				   NULL, DIOF_FOR_EC_AGG, NULL, NULL);
+				   &entry->ae_dkey, 1, iod, &entry->ae_sgl, NULL,
+				   DIOF_FOR_EC_AGG | DIOF_EC_NO_DEGRADE, NULL, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
