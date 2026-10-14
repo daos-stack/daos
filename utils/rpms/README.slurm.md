@@ -55,7 +55,6 @@ Debian packaging is not provided by this wrapper.
   requiring the matching `slurm` runtime. The prebuilt dependency installer
   requests this package alongside `slurm-devel`.
 - `slurm-devel`: API headers and pkg-config metadata, requiring matching `slurm`.
-- `slurm-example-configs`: configuration examples marked as configuration files.
 
 FPM generates RPM specs internally, following the existing dependency scripts;
 there is no separately maintained `.spec` file. Debug packages use the shared

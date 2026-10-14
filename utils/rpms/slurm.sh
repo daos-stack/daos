@@ -115,10 +115,3 @@ stage_files "${libdir}/pkgconfig" "${SL_SLURM_PREFIX}/lib64/pkgconfig/slurm.pc"
 DEPENDS=("${slurm_lib} = ${slurm_full}")
 build_package "${slurm_dev}"
 
-DESCRIPTION="Slurm example configuration files"
-stage_files "${sysconfdir}/slurm" "${SL_SLURM_PREFIX}"/etc/slurm/*.example
-for config in "${files[@]}"; do
-  CONFIG_FILES+=("${config#"${tmp}"}")
-done
-ARCH=noarch
-build_package slurm-example-configs
