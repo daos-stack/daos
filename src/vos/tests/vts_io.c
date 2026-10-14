@@ -1684,84 +1684,240 @@ vos_iterate_test(void **state)
 	arg->ta_flags = old_flags;
 }
 
-struct iter_delete_arg {
-	struct vos_test_ctx *ctx;
-	daos_unit_oid_t      oid;
-	bool                 deleted;
+#define ITER_DELETE_ENTRIES 3
+
+struct iter_delete_entry {
+	daos_unit_oid_t oid;
+	daos_key_t      dkey;
+	daos_key_t      akey;
+	daos_recx_t     recx;
+	char            dkey_buf[UPDATE_DKEY_SIZE];
+	char            akey_buf[UPDATE_AKEY_SIZE];
+	char            data[64];
+	unsigned int    visits;
+};
+
+struct iter_delete_config {
+	vos_iter_type_t delete_type;
+	vos_iter_type_t value_type;
+	bool            post_callback;
+	unsigned int    entry_count;
+};
+
+static struct iter_delete_config iter_delete_configs[] = {
+    {VOS_ITER_OBJ, VOS_ITER_RECX, false, 1},
+    {VOS_ITER_DKEY, VOS_ITER_RECX, false, ITER_DELETE_ENTRIES},
+    {VOS_ITER_AKEY, VOS_ITER_RECX, false, ITER_DELETE_ENTRIES},
+    {VOS_ITER_RECX, VOS_ITER_RECX, false, ITER_DELETE_ENTRIES},
+    {VOS_ITER_OBJ, VOS_ITER_RECX, false, ITER_DELETE_ENTRIES},
+    {VOS_ITER_OBJ, VOS_ITER_SINGLE, false, ITER_DELETE_ENTRIES},
+    {VOS_ITER_OBJ, VOS_ITER_RECX, true, ITER_DELETE_ENTRIES},
+};
+
+struct iter_delete_survivors_arg {
+	const struct iter_delete_config *config;
+	struct vos_test_ctx             *ctx;
+	struct iter_delete_entry         entries[ITER_DELETE_ENTRIES];
+	int                              deleted_index;
 };
 
 static void
-iter_delete_object(struct vos_test_ctx *ctx, daos_unit_oid_t oid, daos_epoch_t epoch)
+iter_delete_key_init(daos_key_t *key, char *buf, size_t size, bool integer_key,
+		     unsigned int key_index)
 {
-	daos_epoch_range_t epr = {.epr_lo = 0, .epr_hi = epoch};
+	uint64_t key_value = key_index + 1;
 
-	assert_success(vos_obj_punch(ctx->tc_co_hdl, oid, epoch, 0, 0, NULL, 0, NULL, NULL));
-	assert_success(vos_aggregate(ctx->tc_co_hdl, &epr, NULL, NULL,
-				     VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE));
-	while (!vos_gc_pool_idle(ctx->tc_po_hdl))
-		assert_success(vos_gc_pool(ctx->tc_po_hdl, -1, NULL, NULL));
+	if (integer_key)
+		memcpy(buf, &key_value, sizeof(key_value));
+	else
+		snprintf(buf, size, "iter_key_%u", key_index);
+	set_iov(key, buf, integer_key);
 }
 
 static int
-iter_delete_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
-		   vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+iter_delete_survivors_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+			     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
-	struct iter_delete_arg *arg = cb_arg;
+	struct iter_delete_survivors_arg *arg = cb_arg;
+	struct iter_delete_entry         *current;
+	daos_epoch_t                      epoch = entry->ie_epoch + 1;
+	daos_epoch_range_t                epr   = {.epr_lo = 0, .epr_hi = epoch};
+	daos_key_t                       *dkey;
+	daos_key_t                       *akey;
+	unsigned int                      entry_index;
 
-	if (type == VOS_ITER_OBJ) {
-		arg->oid = entry->ie_oid;
-	} else if (type == VOS_ITER_RECX && !arg->deleted) {
-		arg->deleted = true;
-		iter_delete_object(arg->ctx, arg->oid, entry->ie_epoch + 1);
+	if (type != arg->config->value_type)
+		return 0;
+
+	for (entry_index = 0; entry_index < arg->config->entry_count; entry_index++) {
+		current = &arg->entries[entry_index];
+		if (daos_unit_oid_compare(current->oid, param->ip_oid) == 0 &&
+		    key_compare(&current->dkey, &param->ip_dkey) == 0 &&
+		    key_compare(&current->akey, &param->ip_akey) == 0 &&
+		    (type != VOS_ITER_RECX || current->recx.rx_idx == entry->ie_recx.rx_idx))
+			break;
 	}
+	assert_true(entry_index < arg->config->entry_count);
+	current = &arg->entries[entry_index];
+	assert_int_equal(++current->visits, 1);
+	if (arg->deleted_index >= 0)
+		return 0;
 
+	arg->deleted_index = entry_index;
+	dkey               = arg->config->delete_type == VOS_ITER_OBJ ? NULL : &current->dkey;
+	akey               = arg->config->delete_type == VOS_ITER_AKEY ? &current->akey : NULL;
+	if (arg->config->delete_type == VOS_ITER_RECX)
+		assert_success(vos_obj_array_remove(arg->ctx->tc_co_hdl, current->oid, &epr,
+						    &current->dkey, &current->akey,
+						    &current->recx));
+	else
+		assert_success(vos_obj_punch(arg->ctx->tc_co_hdl, current->oid, epoch, 0, 0, dkey,
+					     akey == NULL ? 0 : 1, akey, NULL));
+	assert_success(vos_aggregate(arg->ctx->tc_co_hdl, &epr, NULL, NULL,
+				     VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE));
+	while (!vos_gc_pool_idle(arg->ctx->tc_po_hdl))
+		assert_success(vos_gc_pool(arg->ctx->tc_po_hdl, -1, NULL, NULL));
 	return 0;
 }
 
-static void
-object_deleted_by_aggregation_and_gc(void **state)
+static int
+iter_delete_setup(void **state)
 {
-	struct io_test_args    *arg      = *state;
-	vos_iter_param_t        param    = {0};
-	struct vos_iter_anchors anchors  = {0};
-	struct iter_delete_arg  iter_arg = {.ctx = &arg->ctx};
-	daos_key_t              dkey;
-	daos_iod_t              iod  = {0};
-	daos_recx_t             recx = {0};
-	d_iov_t                 value;
-	d_sg_list_t             sgl = {0};
-	char                    fetch_buf[UPDATE_BUF_SIZE];
+	const struct iter_delete_config  *config = *state;
+	struct io_test_args              *arg    = &test_args;
+	struct iter_delete_survivors_arg *iter_arg;
+	vos_iter_type_t                   delete_type = config->delete_type;
+	vos_iter_type_t                   value_type  = config->value_type;
+	void                             *io_state    = NULL;
+	unsigned int                      entry_index;
+	int                               rc;
+
+	D_ALLOC_PTR(iter_arg);
+	if (iter_arg == NULL)
+		return -DER_NOMEM;
+	iter_arg->config        = config;
+	iter_arg->ctx           = &arg->ctx;
+	iter_arg->deleted_index = -1;
+	*state                  = iter_arg;
+#if !FAULT_INJECTION
+	return 0;
+#endif
+	rc = setup_io(&io_state);
+	if (rc != 0)
+		goto out;
+	arg->ta_flags = TF_USE_CSUMS;
+	if (value_type == VOS_ITER_RECX)
+		arg->ta_flags |= TF_REC_EXT;
+	for (entry_index = 0; entry_index < config->entry_count; entry_index++) {
+		struct iter_delete_entry *current = &iter_arg->entries[entry_index];
+		daos_iod_t                iod     = {0};
+		d_iov_t                   value;
+		d_sg_list_t               sgl = {0};
+
+		current->oid = delete_type == VOS_ITER_OBJ ? gen_oid(arg->otype) : arg->oid;
+		iter_delete_key_init(&current->dkey, current->dkey_buf, sizeof(current->dkey_buf),
+				     is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64),
+				     delete_type == VOS_ITER_DKEY ? entry_index : 0);
+		iter_delete_key_init(&current->akey, current->akey_buf, sizeof(current->akey_buf),
+				     is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64),
+				     delete_type == VOS_ITER_AKEY ? entry_index : 0);
+		memset(current->data, 'a' + entry_index, sizeof(current->data));
+		current->recx.rx_idx =
+		    delete_type == VOS_ITER_RECX ? entry_index * 2 * sizeof(current->data) : 0;
+		current->recx.rx_nr = sizeof(current->data);
+		iod.iod_name        = current->akey;
+		iod.iod_type  = value_type == VOS_ITER_RECX ? DAOS_IOD_ARRAY : DAOS_IOD_SINGLE;
+		iod.iod_size  = value_type == VOS_ITER_RECX ? 1 : sizeof(current->data);
+		iod.iod_nr    = 1;
+		iod.iod_recxs = value_type == VOS_ITER_RECX ? &current->recx : NULL;
+		d_iov_set(&value, current->data, sizeof(current->data));
+		sgl.sg_nr   = 1;
+		sgl.sg_iovs = &value;
+		arg->oid    = current->oid;
+		rc          = io_test_obj_update(arg, 1, 0, &current->dkey, &iod, &sgl, NULL, true);
+		if (rc != 0)
+			goto out;
+	}
+	return 0;
+out:
+	io_state = arg;
+	teardown_io(&io_state);
+	*state = (void *)config;
+	D_FREE(iter_arg);
+	return rc;
+}
+
+static int
+iter_delete_teardown(void **state)
+{
+	struct iter_delete_survivors_arg *iter_arg = *state;
+	int                               rc       = 0;
+
+#if FAULT_INJECTION
+	void *io_state = &test_args;
+
+	rc = teardown_io(&io_state);
+#endif
+	*state = (void *)iter_arg->config;
+	D_FREE(iter_arg);
+	return rc;
+}
+
+static void
+iteration_continues_after_deletion(void **state)
+{
+	struct iter_delete_survivors_arg *iter_arg      = *state;
+	vos_iter_type_t                   delete_type   = iter_arg->config->delete_type;
+	vos_iter_type_t                   value_type    = iter_arg->config->value_type;
+	bool                              post_callback = iter_arg->config->post_callback;
+	vos_iter_param_t                  param         = {0};
+	struct vos_iter_anchors           anchors       = {0};
+	unsigned int                      entry_index;
 
 #if !FAULT_INJECTION
 	skip();
 #endif
-	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
-	arg->ta_flags = TF_REC_EXT | TF_USE_CSUMS;
-	assert_success(io_update_and_fetch_dkey(arg, 1, 1));
-
-	param.ip_hdl        = arg->ctx.tc_co_hdl;
+	param.ip_hdl        = iter_arg->ctx->tc_co_hdl;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_epc_expr   = VOS_IT_EPC_RE;
-
 	assert_success(
-	    vos_iterate_obj(&param, &anchors, iter_delete_pre_cb, NULL, &iter_arg, NULL));
-	assert_true(iter_arg.deleted);
+	    vos_iterate_obj(&param, &anchors, post_callback ? NULL : iter_delete_survivors_pre_cb,
+			    post_callback ? iter_delete_survivors_pre_cb : NULL, iter_arg, NULL));
+	assert_true(iter_arg->deleted_index >= 0);
+	for (entry_index = 0; entry_index < iter_arg->config->entry_count; entry_index++) {
+		struct iter_delete_entry *current = &iter_arg->entries[entry_index];
+		daos_iod_t                iod     = {0};
+		d_iov_t                   value;
+		d_sg_list_t               sgl                            = {0};
+		char                      fetched[sizeof(current->data)] = {0};
+		char                      empty[sizeof(current->data)]   = {0};
 
-	set_iov(&dkey, last_dkey, is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
-	set_iov(&iod.iod_name, last_akey, is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
-	recx.rx_idx   = hash_key(&dkey, is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
-	recx.rx_nr    = UPDATE_BUF_SIZE / UPDATE_REC_SIZE;
-	iod.iod_type  = DAOS_IOD_ARRAY;
-	iod.iod_size  = DAOS_REC_ANY;
-	iod.iod_nr    = 1;
-	iod.iod_recxs = &recx;
-	d_iov_set(&value, fetch_buf, sizeof(fetch_buf));
-	sgl.sg_nr   = 1;
-	sgl.sg_iovs = &value;
-
-	assert_success(vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, 0, &dkey, 1, &iod, &sgl));
-	assert_int_equal(iod.iod_size, 0);
-	assert_int_equal(sgl.sg_nr_out, 0);
+		assert_int_equal(current->visits, 1);
+		iod.iod_name  = current->akey;
+		iod.iod_type  = value_type == VOS_ITER_RECX ? DAOS_IOD_ARRAY : DAOS_IOD_SINGLE;
+		iod.iod_size  = DAOS_REC_ANY;
+		iod.iod_nr    = 1;
+		iod.iod_recxs = value_type == VOS_ITER_RECX ? &current->recx : NULL;
+		d_iov_set(&value, fetched, sizeof(fetched));
+		sgl.sg_nr   = 1;
+		sgl.sg_iovs = &value;
+		assert_success(vos_obj_fetch(iter_arg->ctx->tc_co_hdl, current->oid, 1, 0,
+					     &current->dkey, 1, &iod, &sgl));
+		if (entry_index == (unsigned int)iter_arg->deleted_index) {
+			if (delete_type == VOS_ITER_RECX) {
+				assert_memory_equal(fetched, empty, sizeof(fetched));
+			} else {
+				assert_int_equal(iod.iod_size, 0);
+				assert_int_equal(sgl.sg_nr_out, 0);
+			}
+		} else {
+			assert_int_equal(iod.iod_size,
+					 value_type == VOS_ITER_RECX ? 1 : sizeof(current->data));
+			assert_int_equal(sgl.sg_nr_out, 1);
+			assert_int_equal(value.iov_len, sizeof(fetched));
+			assert_memory_equal(fetched, current->data, sizeof(fetched));
+		}
+	}
 }
 
 static int
@@ -3806,8 +3962,7 @@ static const struct CMUnitTest io_tests[] = {
     {"VOS245.1: Object iter test with anchor (for oid)", oid_iter_test_with_anchor,
      oid_iter_test_setup, NULL},
     {"VOS250.0: vos_iterate tests - Check single callback", vos_iterate_test, NULL, NULL},
-    {"VOS251.0: vos_iterate tests - object deleted by aggregation and GC during iteration",
-     object_deleted_by_aggregation_and_gc, NULL, NULL},
+
     {"VOS280: Same Obj ID on two containers (obj_cache test)", io_simple_one_key_cross_container,
      NULL, NULL},
     {"VOS281.0: Fetch from non existent object", io_fetch_no_exist_object, NULL, NULL},
@@ -3824,6 +3979,30 @@ static const struct CMUnitTest io_tests[] = {
      io_csum_fetch_recx_missing_csum, NULL, NULL},
     {"VOS401.3: Fetch checksum of partially visible array extents", io_csum_fetch_recx_partial,
      NULL, NULL},
+};
+
+static const struct CMUnitTest iter_delete_tests[] = {
+    {"VOS251.0: vos_iterate tests - object deleted by aggregation and GC during iteration",
+     iteration_continues_after_deletion, iter_delete_setup, iter_delete_teardown,
+     &iter_delete_configs[0]},
+    {"VOS251.1: vos_iterate tests - dkey deletion preserves sibling iteration",
+     iteration_continues_after_deletion, iter_delete_setup, iter_delete_teardown,
+     &iter_delete_configs[1]},
+    {"VOS251.2: vos_iterate tests - akey deletion preserves sibling iteration",
+     iteration_continues_after_deletion, iter_delete_setup, iter_delete_teardown,
+     &iter_delete_configs[2]},
+    {"VOS251.3: vos_iterate tests - extent deletion preserves remaining extent iteration",
+     iteration_continues_after_deletion, iter_delete_setup, iter_delete_teardown,
+     &iter_delete_configs[3]},
+    {"VOS251.4: vos_iterate tests - object deletion preserves remaining object iteration",
+     iteration_continues_after_deletion, iter_delete_setup, iter_delete_teardown,
+     &iter_delete_configs[4]},
+    {"VOS251.5: vos_iterate tests - object deleted from SINGLE callback",
+     iteration_continues_after_deletion, iter_delete_setup, iter_delete_teardown,
+     &iter_delete_configs[5]},
+    {"VOS251.6: vos_iterate tests - object deleted from RECX post-callback",
+     iteration_continues_after_deletion, iter_delete_setup, iter_delete_teardown,
+     &iter_delete_configs[6]},
 };
 
 static const struct CMUnitTest int_tests[] = {
@@ -3862,6 +4041,10 @@ run_oclass_tests(const char *cfg)
 	D_PRINT("Running %s\n", test_name);
 
 	rc = cmocka_run_group_tests_name(test_name, io_tests, setup_io, teardown_io);
+
+	dts_create_config(test_name, "IO iterator deletion tests (dkey=%-6s akey=%s) %s", dkey,
+			  akey, cfg);
+	rc += cmocka_run_group_tests_name(test_name, iter_delete_tests, NULL, NULL);
 
 	dts_create_config(test_name, "IO_iterator tests (nested=false dkey=%-6s akey=%s) %s", dkey,
 			  akey, cfg);
