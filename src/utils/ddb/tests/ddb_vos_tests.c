@@ -1666,6 +1666,478 @@ dump_csum_recx_tests(void **state)
 	assert_rc_equal(-DER_INVAL, rc);
 }
 
+/* Callback that returns *(int *)cb_args, or 0 if cb_args is NULL. */
+static int
+check_cb_return_rc(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		   struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	return (cb_args != NULL) ? (*(int *)cb_args) : (0);
+}
+
+static void
+check_csum_error_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	struct dv_tree_path     path     = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
+	path.vtp_dkey    = g_dkeys[0];
+	path.vtp_akey    = g_akeys[0]; /* single value type */
+	path.vtp_is_recx = false;
+
+	/* invalid poh: error comes from vos_cont_open */
+	rc = dv_check_csum(DAOS_HDL_INVAL, &path, DAOS_EPOCH_MAX, check_cb_return_rc, NULL);
+	assert_rc_equal(-DER_INVAL, rc);
+}
+
+/*
+ * g_oids[DVT_FAKE_CSUM_OID_NONE]: SV@1 without checksum info.
+ * fetching at EPOCH_MAX
+ * result: SV@1 without checksum info, nothing to check (got_csums NULL).
+ */
+static int
+check_csum_sv_cb_001(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		     struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	assert_null(cb_args);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 1);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 0);
+	assert_null(got_csums);
+
+	return 0;
+}
+
+/*
+ * g_oids[DVT_FAKE_CSUM_OID_VALID]: A SV@1, B SV@2 with checksum infos.
+ * fetching at 1
+ * result: A SV@1 with checksum info, checksum matches (got_csums[0] NULL).
+ */
+static int
+check_csum_sv_cb_002(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		     struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	assert_non_null(cb_args);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 1);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+	assert_non_null(got_csums);
+	assert_null(got_csums[0]);
+
+	return 0;
+}
+
+/*
+ * g_oids[DVT_FAKE_CSUM_OID_VALID]: A SV@1, B SV@2 with checksum infos.
+ * fetching at EPOCH_MAX
+ * result: B SV@2 with checksum info, checksum matches (got_csums[0] NULL).
+ */
+static int
+check_csum_sv_cb_003(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		     struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	assert_non_null(cb_args);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 2);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+	assert_non_null(got_csums);
+	assert_null(got_csums[0]);
+
+	return 0;
+}
+
+/*
+ * g_oids[DVT_FAKE_CSUM_OID_BAD]: SV@1 with a corrupted checksum info.
+ * fetching at EPOCH_MAX
+ * result: SV@1 with checksum info, mismatch reported in got_csums[0].
+ */
+static int
+check_csum_sv_cb_004(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		     struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	struct dcs_csum_info *stored_ci;
+	struct dcs_csum_info *got_ci;
+	uint8_t               expect_byte0;
+
+	assert_non_null(cb_args);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 1);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+
+	assert_non_null(got_csums);
+	assert_non_null(got_csums[0]);
+	stored_ci    = dcs_csum_info_get(cil, 0);
+	got_ci       = got_csums[0];
+	expect_byte0 = ci_idx2csum(stored_ci, 0)[0] ^ 0xff;
+	assert_int_equal(got_ci->cs_len, stored_ci->cs_len);
+	assert_int_equal(got_ci->cs_nr, stored_ci->cs_nr);
+	assert_int_equal(ci_idx2csum(got_ci, 0)[0], expect_byte0);
+	assert_memory_equal(ci_idx2csum(got_ci, 0) + 1, ci_idx2csum(stored_ci, 0) + 1,
+			    stored_ci->cs_len - 1);
+
+	return 0;
+}
+
+static void
+check_csum_sv_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	struct dv_tree_path     path     = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
+	path.vtp_dkey    = g_dkeys[0];
+	path.vtp_akey    = g_akeys[0]; /* single value type */
+	path.vtp_is_recx = false;
+
+	/* no csum info: nothing to verify, success */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_NONE];
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_sv_cb_001, NULL);
+	assert_success(rc);
+
+	/* valid, matching csum info: epoch 1 returns the epoch-1 checksum */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+	rc           = dv_check_csum(tctx->dvt_poh, &path, 1, check_csum_sv_cb_002, csum_ctx);
+	assert_success(rc);
+
+	/* valid, matching csum info: EPOCH_MAX returns the latest (epoch-2) checksum */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_sv_cb_003, csum_ctx);
+	assert_success(rc);
+
+	/* deliberately corrupted csum info: -DER_CSUM */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_BAD];
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_sv_cb_004, csum_ctx);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* with csum info, without callback */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+	rc           = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, NULL, csum_ctx);
+	assert_success(rc);
+
+	/* callback failure is propagated */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+	rc           = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_return_rc,
+				     &(int){-DER_INVAL});
+	assert_rc_equal(-DER_INVAL, rc);
+}
+
+/*
+ * g_oids[DVT_FAKE_CSUM_OID_NONE]: A [0, S)@1, B [S/2, 3S/2)@2 without checksum.
+ * fetching at recx [0, S)@DAOS_EPOCH_MAX
+ * result: A [0, S)@1, B [S/2, 3S/2)@2 without checksum infos, nothing to check (got_csums NULL).
+ */
+static int
+check_csum_recx_cb_001(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	assert_null(cb_args);
+	assert_non_null(recx_rel);
+	assert_int_equal(sv_epoch, 0);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 0);
+	assert_null(got_csums);
+
+	return -DER_SUCCESS;
+}
+
+/*
+ * g_oids[DVT_FAKE_CSUM_OID_VALID]: A [0, S)@1, B [S/2, 3S/2)@2 with checksum infos.
+ * fetching at recx [0, S)@DAOS_EPOCH_MAX
+ * result: A [0, S)@1, B [S/2, 3S/2)@2 with checksum infos, all matching (got_csums[*] NULL).
+ */
+static int
+check_csum_recx_cb_002(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	assert_non_null(cb_args);
+	assert_non_null(recx_rel);
+	assert_int_equal(sv_epoch, 0);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, DVT_FAKE_RECX_COUNT);
+	assert_csum_recx_consistent(recx_rel, cil);
+	assert_non_null(got_csums);
+	assert_null(got_csums[0]);
+	assert_null(got_csums[1]);
+
+	return -DER_SUCCESS;
+}
+
+/*
+ * Check that only the chunk at index \a bad_chunk is flipped.
+ */
+static void
+assert_recx_csum_chunk_flipped(struct dcs_csum_info *stored_ci, struct dcs_csum_info *got_ci,
+			       uint32_t bad_chunk)
+{
+	uint32_t chunk;
+
+	assert_non_null(got_ci);
+	assert_int_equal(got_ci->cs_len, stored_ci->cs_len);
+	assert_int_equal(got_ci->cs_nr, stored_ci->cs_nr);
+	for (chunk = 0; chunk < stored_ci->cs_nr; chunk++) {
+		uint8_t *stored = ci_idx2csum(stored_ci, chunk);
+		uint8_t *got    = ci_idx2csum(got_ci, chunk);
+
+		if (chunk != bad_chunk) {
+			assert_memory_equal(got, stored, stored_ci->cs_len);
+			continue;
+		}
+		assert_int_equal(got[0], (uint8_t)(stored[0] ^ 0xff));
+		assert_memory_equal(got + 1, stored + 1, stored_ci->cs_len - 1);
+	}
+}
+
+/*
+ * g_oids[DVT_FAKE_CSUM_OID_BAD]: A [0, S)@1, B [S/2, 3S/2)@2 with B's checksum info corrupted
+ * (DVT_FAKE_RECX_BAD_IDX).
+ * fetching at recx [0, S)@DAOS_EPOCH_MAX
+ * result: A [0, S)@1, B [S/2, 3S/2)@2 with checksum infos, B's mismatch reported in
+ * got_csums[DVT_FAKE_RECX_BAD_IDX].
+ */
+static int
+check_csum_recx_cb_003(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	struct dcs_csum_info *stored_ci;
+	struct dcs_csum_info *got_ci;
+	int                   i;
+
+	assert_non_null(cb_args);
+	assert_non_null(recx_rel);
+	assert_int_equal(sv_epoch, 0);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, DVT_FAKE_RECX_COUNT);
+	assert_csum_recx_consistent(recx_rel, cil);
+	assert_non_null(got_csums);
+
+	for (i = 0; i < DVT_FAKE_RECX_COUNT; i++) {
+		if (i == DVT_FAKE_RECX_BAD_IDX)
+			continue;
+		assert_null(got_csums[i]);
+	}
+
+	assert_non_null(got_csums[DVT_FAKE_RECX_BAD_IDX]);
+	stored_ci = dcs_csum_info_get(cil, DVT_FAKE_RECX_BAD_IDX);
+	got_ci    = got_csums[DVT_FAKE_RECX_BAD_IDX];
+	assert_recx_csum_chunk_flipped(stored_ci, got_ci, 0);
+
+	return 0;
+}
+
+/*
+ * g_oids[DVT_FAKE_PART_OID_VALID]: A [0, S)@1, B [0, S/2)@2 with valid checksum infos.
+ * fetching at recx [0, S)@DAOS_EPOCH_MAX
+ * result: B [0, S/2)@2, A [0, S)@1 with checksum infos, all matching (got_csums[*] NULL).
+ */
+static int
+check_csum_recx_cb_004(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	assert_non_null(cb_args);
+	assert_int_equal(sv_epoch, 0);
+	assert_partial_recx_layout(cb_args, recx_rel, cil);
+	assert_non_null(got_csums);
+	assert_null(got_csums[0]);
+	assert_null(got_csums[1]);
+
+	return 0;
+}
+
+/*
+ * g_oids[DVT_FAKE_PART_OID_BAD_VISIBLE]: A [0, S)@1, B [0, S/2)@2, A's chunk [S/2, S) corrupted.
+ * fetching at recx [0, S)@DAOS_EPOCH_MAX
+ * result: B [0, S/2)@2, A [0, S)@1 with checksum infos, A's mismatch reported in got_csums[1].
+ */
+static int
+check_csum_recx_cb_005(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	assert_non_null(cb_args);
+	assert_int_equal(sv_epoch, 0);
+	assert_partial_recx_layout(cb_args, recx_rel, cil);
+	assert_non_null(got_csums);
+	assert_null(got_csums[0]);
+	assert_recx_csum_chunk_flipped(dcs_csum_info_get(cil, 1), got_csums[1], 1);
+
+	return 0;
+}
+
+/*
+ * g_oids[DVT_FAKE_PART_OID_BAD_HIDDEN]: A [0, S)@1, B [0, S/2)@2, A's chunk [0, S/2) corrupted.
+ * fetching at recx [0, S)@DAOS_EPOCH_MAX
+ * result: B [0, S/2)@2, A [0, S)@1 with checksum infos, A's mismatch reported in got_csums[1].
+ */
+static int
+check_csum_recx_cb_006(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	assert_non_null(cb_args);
+	assert_int_equal(sv_epoch, 0);
+	assert_partial_recx_layout(cb_args, recx_rel, cil);
+	assert_non_null(got_csums);
+	assert_null(got_csums[0]);
+	assert_recx_csum_chunk_flipped(dcs_csum_info_get(cil, 1), got_csums[1], 0);
+
+	return 0;
+}
+
+/*
+ * g_oids[DVT_FAKE_PART_OID_BAD_HIDDEN]: A [0, S)@1, B [0, S/2)@2, A's chunk [0, S/2) corrupted.
+ * fetching at recx [0, S)@1
+ * result: A [0, S)@1 with checksum info, A's mismatch reported in got_csums[0].
+ */
+static int
+check_csum_recx_cb_007(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	struct dt_csum_ctx *csum_ctx = cb_args;
+
+	assert_non_null(cb_args);
+	assert_int_equal(sv_epoch, 0);
+	assert_non_null(recx_rel);
+	assert_int_equal(recx_rel->re_nr, 1);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_nr, csum_ctx->dct_recx_size);
+	assert_int_equal(recx_rel->re_items[0].re_ep, 1);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 1);
+	assert_csum_recx_consistent(recx_rel, cil);
+	assert_int_equal(dcs_csum_info_get(cil, 0)->cs_nr, 2);
+	assert_non_null(got_csums);
+	assert_recx_csum_chunk_flipped(dcs_csum_info_get(cil, 0), got_csums[0], 0);
+
+	return 0;
+}
+
+/*
+ * g_oids[DVT_FAKE_CSUM_OID_VALID]: A [0, S)@1, B [S/2, 3S/2)@2 with checksum infos.
+ * fetching at recx [S/2, S)@1
+ * result: A [0, S)@1 with checksum info, checksum matches (got_csums[0] NULL).
+ */
+static int
+check_csum_recx_cb_008(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	struct dt_csum_ctx *csum_ctx = cb_args;
+
+	assert_non_null(cb_args);
+	assert_int_equal(sv_epoch, 0);
+	assert_csum_recx_consistent(recx_rel, cil);
+	assert_int_equal(recx_rel->re_nr, 1);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_nr, csum_ctx->dct_recx_size);
+	assert_int_equal(recx_rel->re_items[0].re_ep, 1);
+	assert_int_equal(dcs_csum_info_get(cil, 0)->cs_nr, 2);
+	assert_non_null(got_csums);
+	assert_null(got_csums[0]);
+
+	return 0;
+}
+
+/*
+ * g_oids[DVT_FAKE_CSUM_OID_VALID]: A [0, S)@1, B [S/2, 3S/2)@2 with checksum infos.
+ * fetching at recx [2S, 3S)@DAOS_EPOCH_MAX (no extent stored there)
+ * result: no recx list (NULL), no checksum info, nothing to check (got_csums NULL).
+ */
+static int
+check_csum_recx_cb_009(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	assert_null(cb_args);
+	assert_null(recx_rel);
+	assert_int_equal(sv_epoch, 0);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, 0);
+	assert_null(got_csums);
+
+	return 0;
+}
+
+static void
+check_csum_recx_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	struct dv_tree_path     path     = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
+	path.vtp_dkey        = g_dkeys[0];
+	path.vtp_akey        = g_akeys[1]; /* array value type */
+	path.vtp_is_recx     = true;
+	path.vtp_recx.rx_idx = 0;
+	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
+
+	/* no csum info */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_NONE];
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_001, NULL);
+	assert_success(rc);
+
+	/* valid, matching csum info */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_002, csum_ctx);
+	assert_success(rc);
+
+	/* deliberately corrupted csum info: -DER_CSUM */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_BAD];
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_003, csum_ctx);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* partially overwritten extent, whole checksum info reported: valid */
+	path.vtp_oid = g_oids[DVT_FAKE_PART_OID_VALID];
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_004, csum_ctx);
+	assert_success(rc);
+
+	/* partially overwritten extent, corrupted visible chunk: -DER_CSUM */
+	path.vtp_oid = g_oids[DVT_FAKE_PART_OID_BAD_VISIBLE];
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_005, csum_ctx);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* partially overwritten extent, corrupted hidden chunk: -DER_CSUM at EPOCH_MAX ... */
+	path.vtp_oid = g_oids[DVT_FAKE_PART_OID_BAD_HIDDEN];
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_006, csum_ctx);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* ... and at epoch 1, where the extent is fully visible */
+	rc = dv_check_csum(tctx->dvt_poh, &path, 1, check_csum_recx_cb_007, csum_ctx);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* range starting inside an extent: its whole extent is verified, no mismatch */
+	path.vtp_oid         = g_oids[DVT_FAKE_CSUM_OID_VALID];
+	path.vtp_recx.rx_idx = csum_ctx->dct_recx_size / 2;
+	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size / 2;
+	rc = dv_check_csum(tctx->dvt_poh, &path, 1, check_csum_recx_cb_008, csum_ctx);
+	assert_success(rc);
+
+	/* range without any stored extent: VOS reports no recx list at all (NULL), nothing to
+	 * check */
+	path.vtp_recx.rx_idx = 2 * csum_ctx->dct_recx_size;
+	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_csum_recx_cb_009, NULL);
+	assert_success(rc);
+	path.vtp_recx.rx_idx = 0;
+	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
+
+	/* with csum info, without callback */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+	rc           = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, NULL, csum_ctx);
+	assert_success(rc);
+
+	/* callback failure is propagated */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+	rc           = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_return_rc,
+				     &(int){-DER_INVAL});
+	assert_rc_equal(-DER_INVAL, rc);
+}
+
 static void
 mock_csum_path_base(struct dv_tree_path *path, struct dt_csum_ctx *csum_ctx)
 {
@@ -1693,7 +2165,7 @@ mock_csum_path_recx(struct dv_tree_path *path, struct dt_csum_ctx *csum_ctx)
 	path->vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
 }
 
-/* Arm the fault for the next dv_dump_csum() call only. */
+/* Arm the fault for the next dv_dump_csum()/dv_check_csum() call only. */
 static void
 csum_nr_inject(uint32_t csum_nr)
 {
@@ -1701,7 +2173,21 @@ csum_nr_inject(uint32_t csum_nr)
 	daos_fail_loc_set(DDB_CSUM_NR_INJECT | DAOS_FAIL_ONCE);
 }
 
-/* Arm the fault for the next recx segment checked by dv_dump_csum() only. */
+/* Arm the fault for the next checksum snapshot taken by dv_check_csum() only. */
+static void
+csum_snapshot_nomem_inject(void)
+{
+	daos_fail_loc_set(DDB_CSUM_SNAPSHOT_NOMEM_INJECT | DAOS_FAIL_ONCE);
+}
+
+/* Arm the fault for the next checksummed segment verified by dv_check_csum() only. */
+static void
+csum_no_data_inject(void)
+{
+	daos_fail_loc_set(DDB_CSUM_NO_DATA_INJECT | DAOS_FAIL_ONCE);
+}
+
+/* Arm the fault for the next recx segment checked by dv_dump_csum()/dv_check_csum() only. */
 static void
 csum_chunk_nr_inject(uint32_t chunk_nr)
 {
@@ -1709,7 +2195,7 @@ csum_chunk_nr_inject(uint32_t chunk_nr)
 	daos_fail_loc_set(DDB_CSUM_CHUNK_NR_INJECT | DAOS_FAIL_ONCE);
 }
 
-/* Arm the fault for the next checksum info checked by dv_dump_csum() only. */
+/* Arm the fault for the next checksum info checked by dv_dump_csum()/dv_check_csum() only. */
 static void
 csum_type_inject(uint32_t csum_type)
 {
@@ -1726,8 +2212,24 @@ dump_cb_unexpected(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch
 }
 
 static int
+check_cb_unexpected(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+		    struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
+{
+	fail_msg("check callback unexpectedly invoked");
+	return -1;
+}
+
+static int
 dump_cb_count(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
 	      struct dcs_ci_list *cil)
+{
+	(*(int *)cb_args)++;
+	return 0;
+}
+
+static int
+check_cb_count(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+	       struct dcs_ci_list *cil, struct dcs_csum_info **got_csums)
 {
 	(*(int *)cb_args)++;
 	return 0;
@@ -1837,6 +2339,162 @@ dump_csum_recx_inconsistent_tests(void **state)
 	assert_int_equal(cb_calls, 2);
 }
 
+static void
+check_csum_sv_inconsistent_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct dv_tree_path     path;
+	int                     cb_calls = 0;
+	int                     rc;
+
+	FAULT_INJECTION_REQUIRED();
+	mock_csum_path_sv(&path, tctx->dvt_extra);
+
+	/* two checksum infos for a single value: -DER_CSUM, callback not invoked */
+	csum_nr_inject(2);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* one checksum info claimed for a value without any (dcs_csum_info_get() returns NULL):
+	 * -DER_CSUM, callback not invoked */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_NONE];
+	csum_nr_inject(1);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+
+	/* checksum stored for a value without data: -DER_CSUM, callback not invoked */
+	csum_no_data_inject();
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* checksum type unknown to the checksum library: -DER_CSUM, callback not invoked, nothing
+	 * verified */
+	csum_type_inject(HASH_TYPE_END);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* control: the consistent count is accepted and the checksum verified */
+	csum_nr_inject(1);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
+	assert_success(rc);
+	assert_int_equal(cb_calls, 1);
+}
+
+static void
+check_csum_recx_inconsistent_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	struct dv_tree_path     path;
+	int                     cb_calls = 0;
+	int                     rc;
+
+	FAULT_INJECTION_REQUIRED();
+	mock_csum_path_recx(&path, csum_ctx);
+
+	/* fewer checksum infos than stored extents: -DER_CSUM, callback not invoked */
+	csum_nr_inject(DVT_FAKE_RECX_COUNT - 1);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* more checksum infos than stored extents: -DER_CSUM, callback not invoked */
+	csum_nr_inject(DVT_FAKE_RECX_COUNT + 1);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* checksum stored for an extent without data (first segment): -DER_CSUM, callback not
+	 * invoked, remaining segments not verified */
+	csum_no_data_inject();
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* checksum covering more chunks than its extent (first segment): -DER_CSUM, callback not
+	 * invoked, remaining segments not verified */
+	csum_chunk_nr_inject(3);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* checksum covering fewer chunks than its extent (first segment): same outcome */
+	csum_chunk_nr_inject(1);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* checksum type unknown to the checksum library (first segment): -DER_CSUM, callback not
+	 * invoked, nothing verified */
+	csum_type_inject(HASH_TYPE_END);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* control: the consistent count is accepted and the checksums verified */
+	csum_nr_inject(DVT_FAKE_RECX_COUNT);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
+	assert_success(rc);
+	assert_int_equal(cb_calls, 1);
+
+	/* control: the consistent chunk count is accepted and the checksums verified */
+	csum_chunk_nr_inject(2);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
+	assert_success(rc);
+	assert_int_equal(cb_calls, 2);
+
+	/* checksum info claimed for a range without any stored extent (no recx list at all):
+	 * -DER_CSUM, callback not invoked */
+	path.vtp_recx.rx_idx = 2 * csum_ctx->dct_recx_size;
+	csum_nr_inject(1);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+	path.vtp_recx.rx_idx = 0;
+
+	/* checksum infos claimed for extents without any (dcs_csum_info_get() returns NULL):
+	 * -DER_CSUM, callback not invoked */
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_NONE];
+	csum_nr_inject(DVT_FAKE_RECX_COUNT);
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
+}
+
+/*
+ * A mismatch whose recomputed checksum cannot be allocated for the callback is still reported
+ * as -DER_CSUM, without invoking the callback.
+ */
+static void
+check_csum_snapshot_nomem_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	struct dv_tree_path     path;
+	int                     cb_calls = 0;
+	int                     rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	/* SV with a corrupted checksum info: -DER_CSUM, callback not invoked */
+	mock_csum_path_sv(&path, tctx->dvt_extra);
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_BAD];
+	csum_snapshot_nomem_inject();
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* control: the same mismatch is reported through the callback */
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
+	assert_rc_equal(-DER_CSUM, rc);
+	assert_int_equal(cb_calls, 1);
+
+	/* recx with B's checksum info corrupted (A matches, so the fault fires on B's snapshot):
+	 * -DER_CSUM, callback not invoked */
+	mock_csum_path_recx(&path, tctx->dvt_extra);
+	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_BAD];
+	csum_snapshot_nomem_inject();
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_unexpected, NULL);
+	assert_rc_equal(-DER_CSUM, rc);
+
+	/* control: the same mismatch is reported through the callback */
+	rc = dv_check_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, check_cb_count, &cb_calls);
+	assert_rc_equal(-DER_CSUM, rc);
+	assert_int_equal(cb_calls, 2);
+}
+
 /*
  * All these tests use the same VOS tree that is created at suit_setup. Therefore, tests
  * that modify the state of the tree (delete, add, etc) should be run after all others.
@@ -1876,8 +2534,14 @@ const struct CMUnitTest dv_test_cases[] = {
     TEST_CSUM(dump_csum_error_tests),
     TEST_CSUM(dump_csum_sv_tests),
     TEST_CSUM(dump_csum_recx_tests),
+    TEST_CSUM(check_csum_error_tests),
+    TEST_CSUM(check_csum_sv_tests),
+    TEST_CSUM(check_csum_recx_tests),
     TEST_CSUM_FI(dump_csum_sv_inconsistent_tests),
     TEST_CSUM_FI(dump_csum_recx_inconsistent_tests),
+    TEST_CSUM_FI(check_csum_sv_inconsistent_tests),
+    TEST_CSUM_FI(check_csum_recx_inconsistent_tests),
+    TEST_CSUM_FI(check_csum_snapshot_nomem_tests),
 };
 
 int
