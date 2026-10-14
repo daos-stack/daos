@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -350,6 +350,21 @@ d_log_memory(const uint8_t *ptr, size_t size);
 		if (d_alt_assert != NULL)				\
 			d_alt_assert(0, #e, __FILE__, __LINE__);	\
 		assert(0);						\
+	} while (0)
+
+#define D_ASSERTEQ(x, y)                                                                           \
+	do {                                                                                       \
+		__typeof__(x) _d_asserteq_actual   = (x);                                          \
+		__typeof__(y) _d_asserteq_expected = (y);                                          \
+		if (likely(_d_asserteq_actual == _d_asserteq_expected))                            \
+			break;                                                                     \
+		D_FATAL("Assertion \"%s == %s\" failed, actual 0x%llx, expected 0x%llx\n", #x, #y, \
+			(unsigned long long)_d_asserteq_actual,                                    \
+			(unsigned long long)_d_asserteq_expected);                                 \
+		d_log_sync();                                                                      \
+		if (d_alt_assert != NULL)                                                          \
+			d_alt_assert(0, #x " == " #y, __FILE__, __LINE__);                         \
+		assert(0);                                                                         \
 	} while (0)
 
 #define D_ASSERTF_MEM(cond, ptr, size, fmt, ...)                                                   \
