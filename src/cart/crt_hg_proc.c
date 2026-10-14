@@ -465,26 +465,98 @@ out:
 	return rc;
 }
 
-static inline int
-crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
+#define CRT_HDR_MAX_WIRE_BYTES 512U
+
+/* Supports newer minor version by skipping unknown header parts */
+static int
+crt_proc_hdr_validate_skip(crt_proc_t proc, crt_proc_op_t proc_op,
+			   const struct crt_hdr_common *common, size_t known_bytes)
 {
-	crt_proc_op_t	proc_op;
-	int		rc;
+	uint8_t  skip[CRT_HDR_MAX_WIRE_BYTES];
+	uint16_t header_bytes = common->chc_envelope.che_header_bytes;
+	size_t   extra_bytes;
 
-	if (unlikely(hdr == NULL))
-		D_GOTO(out, rc = -DER_INVAL);
+	if (common->chc_envelope.che_major != CRT_HDR_MAJOR || header_bytes < known_bytes ||
+	    header_bytes > CRT_HDR_MAX_WIRE_BYTES || header_bytes % sizeof(uint32_t) != 0)
+		return -DER_PROTO;
 
-	/*
-	 * D_DEBUG("in crt_proc_common_hdr, opc: %#x.\n", hdr->cch_opc);
-	 */
+	if (common->chc_envelope.che_minor == CRT_HDR_MINOR && header_bytes != known_bytes)
+		return -DER_PROTO;
+
+	extra_bytes = header_bytes - known_bytes;
+	if (extra_bytes == 0)
+		return 0;
+
+	/* We get here if the incoming minor version is newer */
+	if (hg_proc_get_size_left(proc) < extra_bytes)
+		return -DER_PROTO;
+
+	return crt_proc_memcpy(proc, proc_op, skip, extra_bytes);
+}
+
+int
+crt_proc_req_hdr(crt_proc_t proc, struct crt_req_hdr *hdr)
+{
+	crt_proc_op_t proc_op;
+	int           rc;
 
 	rc = crt_proc_get_op(proc, &proc_op);
-	if (unlikely(rc))
-		D_GOTO(out, rc);
+	if (rc != 0)
+		return rc;
+
+	if (hdr == NULL)
+		return -DER_INVAL;
+
+	if (FREEING(proc_op))
+		return 0;
+
+	if (ENCODING(proc_op)) {
+		hdr->crh_common.chc_envelope.che_major        = CRT_HDR_MAJOR;
+		hdr->crh_common.chc_envelope.che_minor        = CRT_HDR_MINOR;
+		hdr->crh_common.chc_envelope.che_header_bytes = sizeof(*hdr);
+	}
+
+	if (DECODING(proc_op) && hg_proc_get_size_left(proc) < sizeof(*hdr))
+		return -DER_PROTO;
 
 	rc = crt_proc_memcpy(proc, proc_op, hdr, sizeof(*hdr));
+	if (rc != 0 || ENCODING(proc_op))
+		return rc;
 
-out:
+	rc = crt_proc_hdr_validate_skip(proc, proc_op, &hdr->crh_common, sizeof(*hdr));
+	return rc;
+}
+
+int
+crt_proc_reply_hdr(crt_proc_t proc, struct crt_reply_hdr *hdr)
+{
+	crt_proc_op_t proc_op;
+	int           rc;
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc != 0)
+		return rc;
+
+	if (hdr == NULL)
+		return -DER_INVAL;
+
+	if (FREEING(proc_op))
+		return 0;
+
+	if (ENCODING(proc_op)) {
+		hdr->crh_common.chc_envelope.che_major        = CRT_HDR_MAJOR;
+		hdr->crh_common.chc_envelope.che_minor        = CRT_HDR_MINOR;
+		hdr->crh_common.chc_envelope.che_header_bytes = sizeof(*hdr);
+	}
+
+	if (DECODING(proc_op) && hg_proc_get_size_left(proc) < sizeof(*hdr))
+		return -DER_PROTO;
+
+	rc = crt_proc_memcpy(proc, proc_op, hdr, sizeof(*hdr));
+	if (rc != 0 || ENCODING(proc_op))
+		return rc;
+
+	rc = crt_proc_hdr_validate_skip(proc, proc_op, &hdr->crh_common, sizeof(*hdr));
 	return rc;
 }
 
@@ -562,36 +634,38 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	}
 
 	/* Decode header */
-	rc = crt_proc_common_hdr(hg_proc, &rpc_priv->crp_req_hdr);
+	rc = crt_proc_req_hdr(hg_proc, &rpc_priv->crp_req_hdr);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: " DF_RC "\n", DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_proc_req_hdr failed: " DF_RC "\n", DP_RC(rc));
+		hg_proc_free(hg_proc);
 		D_GOTO(out, rc);
 	}
 
 	/* Sync the HLC. Clients never decode requests. */
 	D_ASSERT(crt_is_service());
-	rc = d_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc, NULL /* hlc_out */, &clock_offset);
+	rc = d_hlc_get_msg(rpc_priv->crp_req_hdr.crh_common.chc_hlc, NULL /* hlc_out */,
+			   &clock_offset);
 	if (rc != 0) {
-		REPORT_HLC_SYNC_ERR("failed to sync HLC for request: opc=%x ts="
-				    DF_U64" offset="DF_U64" from=%u\n",
-				    rpc_priv->crp_req_hdr.cch_opc,
-				    rpc_priv->crp_req_hdr.cch_hlc,
-				    clock_offset,
-				    rpc_priv->crp_req_hdr.cch_src_rank);
+		REPORT_HLC_SYNC_ERR("failed to sync HLC for request: opc=%x ts=" DF_U64
+				    " offset=" DF_U64 " from=%u\n",
+				    rpc_priv->crp_req_hdr.crh_opc,
+				    rpc_priv->crp_req_hdr.crh_common.chc_hlc, clock_offset,
+				    rpc_priv->crp_req_hdr.crh_src_rank);
 
 		/* Fail all but SWIM requests. */
-		if (!crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc))
+		if (!crt_opc_is_swim(rpc_priv->crp_req_hdr.crh_opc))
 			rpc_priv->crp_fail_hlc = 1;
 
 		rc = 0;
 	}
 
-	rpc_priv->crp_flags = rpc_priv->crp_req_hdr.cch_flags;
+	rpc_priv->crp_flags = rpc_priv->crp_req_hdr.crh_flags;
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		rc = crt_proc_corpc_hdr(hg_proc, &rpc_priv->crp_coreq_hdr);
 		if (rc != 0) {
 			RPC_ERROR(rpc_priv, "crt_proc_corpc_hdr failed: "
 				  DF_RC"\n", DP_RC(rc));
+			hg_proc_free(hg_proc);
 			D_GOTO(out, rc);
 		}
 	}
@@ -605,17 +679,12 @@ out:
 /* Process header.
  * Populate 'out' fields of rpc_priv struct based on incoming rpc header 'in'
  *
- * Treat incoming 'cch_src_deadline_sec' header value as either a timeout or a
- * deadline based on a feature flag set in the RPC header.
- *
- *
  * Returns 0 on success or -DER_TIMEDOUT if RPC is determined to be expired already.
  */
 int
 crt_hg_process_header(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 {
-	int src_val;
-	int timeout;
+	int64_t timeout;
 	int rc = 0;
 
 	out->crp_hg_addr           = in->crp_hg_addr;
@@ -623,31 +692,14 @@ crt_hg_process_header(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 	out->crp_pub.cr_ctx        = in->crp_pub.cr_ctx;
 	out->crp_flags             = in->crp_flags;
 	out->crp_req_hdr           = in->crp_req_hdr;
-	out->crp_reply_hdr.cch_hlc = in->crp_reply_hdr.cch_hlc;
-
-	src_val = in->crp_req_hdr.cch_src_deadline_sec;
-
-	/* Treat header value as a deadline or a timeout depending on the feat flag */
-	if (in->crp_flags & CRT_RPC_FLAG_DEADLINES_USED) {
-		out->crp_deadline_sec = src_val;
-
-		timeout = crt_deadline_to_timeout(src_val);
-		/*
-		 * TODO: need a better way in future to handle an edge case where a client
-		 * can be running ahead of the server, but within hlc_epsilon allowed. Also
-		 * need to account for 1 second granularity of deadlines.
-		 */
-		if (timeout == 0)
-			timeout = 1;
-
-		if (timeout > 0)
-			out->crp_timeout_sec = timeout;
-		else
-			D_GOTO(exit, rc = -DER_TIMEDOUT);
-	} else {
-		out->crp_deadline_sec = crt_timeout_to_deadline(src_val);
-		out->crp_timeout_sec  = src_val;
-	}
+	out->crp_reply_hdr.crh_common.chc_rpcid = in->crp_req_hdr.crh_common.chc_rpcid;
+	out->crp_deadline_sec                   = in->crp_req_hdr.crh_deadline_unix_sec;
+	timeout                                 = crt_deadline_to_timeout(out->crp_deadline_sec);
+	if (timeout == 0)
+		timeout = 1;
+	if (timeout < 0)
+		D_GOTO(exit, rc = -DER_TIMEDOUT);
+	out->crp_timeout_sec = timeout;
 
 	if (!(out->crp_flags & CRT_RPC_FLAG_COLL))
 		return 0;
@@ -715,7 +767,7 @@ int
 crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 {
 	struct crt_rpc_priv	*rpc_priv;
-	struct crt_common_hdr	*hdr;
+	struct crt_req_hdr      *hdr;
 	crt_proc_op_t		 proc_op;
 	int			 rc;
 
@@ -733,40 +785,35 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 		if (ENCODING(proc_op)) {
 			hdr = &rpc_priv->crp_req_hdr;
 
-			hdr->cch_flags    = rpc_priv->crp_flags;
-			hdr->cch_dst_rank = crt_grp_priv_get_primary_rank(
-			    rpc_priv->crp_grp_priv, rpc_priv->crp_pub.cr_ep.ep_rank);
-			hdr->cch_dst_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
+			hdr->crh_flags = rpc_priv->crp_flags;
+			rc             = crt_req_dst_set(
+                            hdr,
+                            crt_grp_priv_get_primary_rank(rpc_priv->crp_grp_priv,
+								      rpc_priv->crp_pub.cr_ep.ep_rank),
+                            rpc_priv->crp_pub.cr_ep.ep_tag);
+			if (rc != 0)
+				D_GOTO(out, rc);
 
-			if (rpc_priv->crp_flags & CRT_RPC_FLAG_DEADLINES_USED) {
-				hdr->cch_src_deadline_sec = rpc_priv->crp_deadline_sec;
-			} else {
-				/* Support forwarding of rpc timeout for deprecated clients */
-				hdr->cch_src_deadline_sec = rpc_priv->crp_timeout_sec;
-			}
+			hdr->crh_deadline_unix_sec = rpc_priv->crp_deadline_sec;
 
 			if (crt_is_service()) {
-				hdr->cch_src_rank =
-					crt_grp_priv_get_primary_rank(
-						rpc_priv->crp_grp_priv,
-						rpc_priv->crp_grp_priv->gp_self
-						);
-				hdr->cch_hlc = d_hlc_get();
+				hdr->crh_src_rank = crt_grp_priv_get_primary_rank(
+				    rpc_priv->crp_grp_priv, rpc_priv->crp_grp_priv->gp_self);
+				hdr->crh_common.chc_hlc = d_hlc_get();
 			} else {
-				hdr->cch_src_rank = CRT_NO_RANK;
+				hdr->crh_src_rank = CRT_NO_RANK;
 				/*
 				 * Because client HLC timestamps shall never be
 				 * used to sync server HLCs, we forward the
 				 * HLCT reading, which must be either zero or a
 				 * server HLC timestamp.
 				 */
-				hdr->cch_hlc = d_hlct_get();
+				hdr->crh_common.chc_hlc = d_hlct_get();
 			}
 		}
-		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_req_hdr);
+		rc = crt_proc_req_hdr(proc, &rpc_priv->crp_req_hdr);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_proc_req_hdr failed: " DF_RC "\n", DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 		/**
@@ -795,7 +842,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 	if (*data == NULL) {
 		/*
 		D_DEBUG("crt_proc_in_common, opc: %#x, NULL input.\n",
-			rpc_priv->crp_req_hdr.cch_opc);
+			rpc_priv->crp_req_hdr.crh_opc);
 		*/
 		D_GOTO(out, rc);
 	}
@@ -833,45 +880,45 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 		if (ENCODING(proc_op)) {
 			/* Clients never encode replies. */
 			D_ASSERT(crt_is_service());
-			rpc_priv->crp_reply_hdr.cch_hlc = d_hlc_get();
+			rpc_priv->crp_reply_hdr.crh_common.chc_hlc = d_hlc_get();
+			rpc_priv->crp_reply_hdr.crh_common.chc_rpcid =
+			    rpc_priv->crp_req_hdr.crh_common.chc_rpcid;
 		}
-		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_reply_hdr);
+		rc = crt_proc_reply_hdr(proc, &rpc_priv->crp_reply_hdr);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_proc_reply_hdr failed: " DF_RC "\n", DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 		if (DECODING(proc_op)) {
-			struct crt_common_hdr *hdr = &rpc_priv->crp_reply_hdr;
+			struct crt_reply_hdr *hdr = &rpc_priv->crp_reply_hdr;
+
+			if (hdr->crh_common.chc_rpcid != rpc_priv->crp_req_hdr.crh_common.chc_rpcid)
+				D_GOTO(out, rc = -DER_PROTO);
 
 			if (crt_is_service()) {
 				uint64_t clock_offset;
 
-				rc = d_hlc_get_msg(hdr->cch_hlc,
-						     NULL /* hlc_out */,
-						     &clock_offset);
+				rc = d_hlc_get_msg(hdr->crh_common.chc_hlc, NULL /* hlc_out */,
+						   &clock_offset);
 				if (rc != 0) {
-					REPORT_HLC_SYNC_ERR("failed to sync "
-							    "HLC for reply: "
-							    "opc=%x ts="DF_U64
-							    " offset="DF_U64
-							    " from=%u\n",
-							    hdr->cch_opc,
-							    hdr->cch_hlc,
-							    clock_offset,
-							    hdr->cch_dst_rank);
+					REPORT_HLC_SYNC_ERR(
+					    "failed to sync "
+					    "HLC for reply: "
+					    "opc=%x ts=" DF_U64 " offset=" DF_U64 " from=%u\n",
+					    rpc_priv->crp_pub.cr_opc, hdr->crh_common.chc_hlc,
+					    clock_offset, rpc_priv->crp_pub.cr_ep.ep_rank);
 					/* Fail all but SWIM replies. */
-					if (!crt_opc_is_swim(hdr->cch_opc))
+					if (!crt_opc_is_swim(rpc_priv->crp_pub.cr_opc))
 						rpc_priv->crp_fail_hlc = 1;
 
 					rc = 0;
 				}
 			} else {
-				d_hlct_sync(hdr->cch_hlc);
+				d_hlct_sync(hdr->crh_common.chc_hlc);
 			}
 		}
 
-		rc2 = rpc_priv->crp_reply_hdr.cch_rc;
+		rc2 = rpc_priv->crp_reply_hdr.crh_status;
 		if (rc2 != 0) {
 			RPC_CWARN(crt_quiet_error(rc2), DB_NET, rpc_priv,
 				  "RPC failed to execute on target. "
@@ -885,7 +932,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 	if (*data == NULL) {
 		/*
 		D_DEBUG("crt_proc_out_common, opc: %#x, NULL output.\n",
-			rpc_priv->crp_req_hdr.cch_opc);
+			rpc_priv->crp_req_hdr.crh_opc);
 		*/
 		D_GOTO(out, rc);
 	}

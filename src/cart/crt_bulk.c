@@ -253,16 +253,18 @@ crt_bulk_free_common(struct crt_bulk *bulk)
 static inline bool
 crt_bulk_desc_expired(struct crt_bulk_desc *bulk_desc)
 {
-	struct timespec      now;
+	uint64_t             now_sec;
 	struct crt_rpc_priv *rpc_priv;
 
-	clock_gettime(CLOCK_REALTIME_COARSE, &now);
+	now_sec  = crt_realtime_sec();
 	rpc_priv = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv, crp_pub);
 
 	/* Deadline expired */
-	if (now.tv_sec > rpc_priv->crp_deadline_sec) {
-		RPC_TRACE(DB_NET, rpc_priv, "Deadline expired for bulk. Deadline=%d, now=%ld\n",
-			  rpc_priv->crp_deadline_sec, now.tv_sec);
+	if (now_sec > rpc_priv->crp_deadline_sec) {
+		RPC_TRACE(DB_NET, rpc_priv,
+			  "Deadline expired for bulk. Deadline=" DF_U64 ", now=" DF_U64
+			  " seconds\n",
+			  rpc_priv->crp_deadline_sec, now_sec);
 		return true;
 	}
 

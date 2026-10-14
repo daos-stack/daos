@@ -1668,17 +1668,16 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 }
 
 static inline void
-crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
+crt_rpc_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 {
 	uint64_t	rpcid;
 
 	rpcid = atomic_fetch_add(&crt_gdata.cg_rpcid, 1);
 
-	rpc_priv->crp_req_hdr.cch_opc = opc;
-	rpc_priv->crp_req_hdr.cch_rpcid = rpcid;
+	rpc_priv->crp_req_hdr.crh_opc              = opc;
+	rpc_priv->crp_req_hdr.crh_common.chc_rpcid = rpcid;
 
-	rpc_priv->crp_reply_hdr.cch_opc = opc;
-	rpc_priv->crp_reply_hdr.cch_rpcid = rpcid;
+	rpc_priv->crp_reply_hdr.crh_common.chc_rpcid = rpcid;
 }
 
 void
@@ -1696,13 +1695,12 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 	rpc_priv->crp_completed = 0;
 	if (!srv_flag) {
 		/* avoid checksum warning */
-		crt_common_hdr_init(rpc_priv, opc);
+		crt_rpc_hdr_init(rpc_priv, opc);
 	}
 	rpc_priv->crp_state = RPC_STATE_INITED;
 	rpc_priv->crp_hdl_reuse = NULL;
 	rpc_priv->crp_srv = srv_flag;
-	rpc_priv->crp_ul_retry = 0;
-	rpc_priv->crp_flags |= CRT_RPC_FLAG_DEADLINES_USED;
+	rpc_priv->crp_ul_retry  = 0;
 
 	if (srv_flag) {
 		rpc_priv->crp_src_is_primary = ctx->cc_primary;
@@ -1803,12 +1801,13 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 			goto skip_check;
 	}
 
-	if ((self_rank != CRT_NO_RANK && self_rank != rpc_priv->crp_req_hdr.cch_dst_rank) ||
-	    crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag) {
+	if ((self_rank != CRT_NO_RANK && self_rank != crt_req_dst_rank(&rpc_priv->crp_req_hdr)) ||
+	    crt_ctx->cc_idx != crt_req_dst_tag(&rpc_priv->crp_req_hdr)) {
 		D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
 			"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
-			rpc_priv, rpc_priv->crp_pub.cr_opc, rpc_priv->crp_req_hdr.cch_dst_rank,
-			rpc_priv->crp_req_hdr.cch_dst_tag, self_rank, crt_ctx->cc_idx,
+			rpc_priv, rpc_priv->crp_pub.cr_opc,
+			crt_req_dst_rank(&rpc_priv->crp_req_hdr),
+			crt_req_dst_tag(&rpc_priv->crp_req_hdr), self_rank, crt_ctx->cc_idx,
 			rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
 
 		D_GOTO(out, rc = -DER_BAD_TARGET);
@@ -1820,7 +1819,7 @@ skip_check:
 		rpc_priv->crp_reply_pending = 1;
 
 	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub) &&
-	    !crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc)) {
+	    !crt_opc_is_swim(rpc_priv->crp_req_hdr.crh_opc)) {
 		/* Corresponding decref in crt_handle_rpc() */
 		RPC_ADDREF(rpc_priv);
 		rc = crt_ctx->cc_rpc_cb((crt_context_t)crt_ctx,
@@ -1912,7 +1911,7 @@ crt_req_src_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 
-	*rank = rpc_priv->crp_req_hdr.cch_src_rank;
+	*rank = rpc_priv->crp_req_hdr.crh_src_rank;
 
 out:
 	return rc;
@@ -1936,7 +1935,7 @@ crt_req_dst_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 
-	*rank = rpc_priv->crp_req_hdr.cch_dst_rank;
+	*rank = crt_req_dst_rank(&rpc_priv->crp_req_hdr);
 
 out:
 	return rc;
@@ -1959,7 +1958,7 @@ crt_req_dst_tag_get(crt_rpc_t *rpc, uint32_t *tag)
 	}
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	*tag = rpc_priv->crp_req_hdr.cch_dst_tag;
+	*tag     = crt_req_dst_tag(&rpc_priv->crp_req_hdr);
 out:
 	return rc;
 }

@@ -38,8 +38,6 @@ enum crt_rpc_flags_internal {
 	CRT_RPC_FLAG_COLL = (1U << 16),
 	/* flag of targeting primary group */
 	CRT_RPC_FLAG_PRIMARY_GRP = (1U << 17),
-	/* flag of using deadlines instead of timeouts in RPC headers */
-	CRT_RPC_FLAG_DEADLINES_USED = (1U << 18),
 };
 
 struct crt_corpc_hdr {
@@ -59,49 +57,88 @@ struct crt_corpc_hdr {
 	uint32_t		 coh_padding;
 };
 
-/* CaRT layer common header */
-struct crt_common_hdr {
-	uint32_t	cch_opc;
-	/* RPC request flag, see enum crt_rpc_flags_internal */
-	uint32_t	cch_flags;
-	/* HLC timestamp */
-	uint64_t	cch_hlc;
-	/* RPC id */
-	uint64_t	cch_rpcid;
-	/* destination rank in default primary group */
-	d_rank_t	cch_dst_rank;
-	/* originator rank in default primary group */
-	d_rank_t	cch_src_rank;
-	/* destination tag */
-	uint32_t	cch_dst_tag;
-
-
-	/* used in crp_reply_hdr to propagate rpc failure back to sender */
-	/* TODO: workaround for DAOS-13973 */
-	union {
-		uint32_t        cch_src_deadline_sec;
-		uint32_t	cch_rc;
-	};
+struct __attribute__((packed)) crt_hdr_envelope {
+	uint8_t  che_major;
+	uint8_t  che_minor;
+	uint16_t che_header_bytes;
 };
 
-static inline int32_t
-crt_deadline_to_timeout(uint32_t deadline_sec)
-{
-	struct timespec now;
+struct __attribute__((packed)) crt_hdr_common {
+	struct crt_hdr_envelope chc_envelope;
+	uint64_t                chc_hlc;
+	uint64_t                chc_rpcid;
+};
 
-	clock_gettime(CLOCK_REALTIME_COARSE, &now);
-	return deadline_sec - now.tv_sec - 1;
-}
+union crt_dst_rank_tag {
+	uint32_t packed;
+	uint8_t  bytes[4];
+};
+
+struct __attribute__((packed)) crt_req_hdr {
+	struct crt_hdr_common  crh_common;
+	uint32_t               crh_opc;
+	uint32_t               crh_flags;
+	uint32_t               crh_src_rank;
+	union crt_dst_rank_tag crh_dst;
+	uint64_t               crh_deadline_unix_sec;
+};
+
+struct __attribute__((packed)) crt_reply_hdr {
+	struct crt_hdr_common crh_common;
+	int32_t               crh_status;
+};
+
+#define CRT_HDR_MAJOR          1U
+#define CRT_HDR_MINOR          0U
+#define CRT_REQ_HDR_V1_BYTES   sizeof(struct crt_req_hdr)
+#define CRT_REPLY_HDR_V1_BYTES sizeof(struct crt_reply_hdr)
 
 static inline uint32_t
-crt_timeout_to_deadline(int timeout_sec)
+crt_req_dst_rank(const struct crt_req_hdr *hdr)
+{
+	return hdr->crh_dst.packed >> 8;
+}
+
+static inline uint8_t
+crt_req_dst_tag(const struct crt_req_hdr *hdr)
+{
+	return hdr->crh_dst.packed & 0xffU;
+}
+
+static inline int
+crt_req_dst_set(struct crt_req_hdr *hdr, uint32_t rank, uint32_t tag)
+{
+	if (rank > 0x00ffffffU || tag > 0xffU)
+		return -DER_INVAL;
+	hdr->crh_dst.packed = (rank << 8) | tag;
+	return 0;
+}
+
+static inline uint64_t
+crt_realtime_sec(void)
 {
 	struct timespec now;
 
 	clock_gettime(CLOCK_REALTIME_COARSE, &now);
+	return (uint64_t)now.tv_sec;
+}
 
-	/* Deadline is the next second after timeout */
-	return now.tv_sec + timeout_sec + 1;
+static inline int64_t
+crt_deadline_to_timeout(uint64_t deadline_sec)
+{
+	uint64_t now_sec = crt_realtime_sec();
+	uint64_t timeout_sec;
+
+	if (deadline_sec <= now_sec)
+		return -1;
+	timeout_sec = deadline_sec - now_sec - 1;
+	return timeout_sec > UINT32_MAX ? UINT32_MAX : (int64_t)timeout_sec;
+}
+
+static inline uint64_t
+crt_timeout_to_deadline(uint32_t timeout_sec)
+{
+	return crt_realtime_sec() + (uint64_t)timeout_sec + 1;
 }
 
 typedef enum {
@@ -166,8 +203,8 @@ struct crt_rpc_priv {
 	struct d_binheap_node	crp_timeout_bp_node;
 	/* the timeout in seconds set by user */
 	uint32_t		crp_timeout_sec;
-	/* the deadline corresponding to crp_timeout_sec */
-	uint32_t                 crp_deadline_sec;
+	/* the absolute Unix deadline in seconds */
+	uint64_t                 crp_deadline_sec;
 	/* time stamp to be timeout, the key of timeout binheap */
 	uint64_t		crp_timeout_ts;
 	crt_cb_t		crp_complete_cb;
@@ -190,7 +227,7 @@ struct crt_rpc_priv {
 	struct crt_grp_priv	*crp_grp_priv; /* group private pointer */
 	/*
 	 * RPC request flag, see enum crt_rpc_flags/crt_rpc_flags_internal,
-	 * match with crp_req_hdr.cch_flags.
+	 * match with crp_req_hdr.crh_flags.
 	 */
 	uint32_t		crp_flags;
 	uint32_t                 crp_srv : 1, /* flag of server received request */
@@ -235,8 +272,8 @@ struct crt_rpc_priv {
 	 *   crt_gdata.cg_rwlock
 	 */
 	pthread_mutex_t		crp_mutex;
-	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
-	struct crt_common_hdr	crp_req_hdr; /* common header for request */
+	struct crt_reply_hdr     crp_reply_hdr; /* header for reply */
+	struct crt_req_hdr       crp_req_hdr;   /* header for request */
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
 
