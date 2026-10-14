@@ -2904,7 +2904,9 @@ update_hae:
 			return rc;
 		}
 
-		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
+		/* rescan replicas left for the leader so they keep holding back the boundary */
+		cont->sc_ec_agg_eph =
+		    max(cont->sc_ec_agg_eph, min(epr->epr_hi, ec_agg_param->ap_min_unagg_eph - 1));
 		if (!cont->sc_stopping && cont->sc_query_ec_agg_eph) {
 			uint64_t orig, cur, cur_eph;
 
