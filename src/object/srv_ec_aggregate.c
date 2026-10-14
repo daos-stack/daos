@@ -1566,7 +1566,7 @@ out:
 	 * of all parity shards.
 	 * NB: it's OK if the only remote parity peer failed.
 	 */
-	rc = peer_updated > 0 ? 0 : peer_rc;
+	rc = peer_updated > 0 ? 0 : (peer_rc ?: rc);
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -1815,7 +1815,7 @@ out:
 	/* NB: before switching to DTX, any successful parity write is deemed as success
 	 * of all parity shards.
 	 */
-	rc = peer_updated > 0 ? 0 : peer_rc;
+	rc = peer_updated > 0 ? 0 : (peer_rc ?: rc);
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
