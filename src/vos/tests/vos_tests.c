@@ -109,6 +109,7 @@ main(int argc, char **argv)
 	int	index = 0;
 	int                  otype;
 	int                  keys;
+	char                *filter         = NULL;
 	const char          *vos_command    = NULL;
 	const char          *short_options  = "apcdglzni:mXA:S:hf:e:tCwMr:";
 	static struct option long_options[] = {
@@ -312,6 +313,7 @@ main(int argc, char **argv)
 exit_1:
 	vos_self_fini();
 exit_0:
+	free(filter);
 	daos_debug_fini();
 	return nr_failed;
 }
