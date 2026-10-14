@@ -71,6 +71,9 @@
   base: "PREFIX"
   tests:
     - cmd: ["bin/jump_pl_map"]
+- name: placement_layout_test
+  tests:
+    - cmd: ["src/placement/tests/layout_test.py"]
 - name: rdb
   memcheck: False
   asan: False
@@ -81,6 +84,7 @@
   base: "BUILD_DIR"
   tests:
     - cmd: ["src/common/tests/rsvc_tests"]
+    - cmd: ["src/rsvc/tests/rsvc_srv_tests"]
 - name: security
   base: "BUILD_DIR"
   tests:
