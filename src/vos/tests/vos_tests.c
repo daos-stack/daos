@@ -103,13 +103,15 @@ run_all_tests(int keys)
 int
 main(int argc, char **argv)
 {
-	int	rc = 0;
-	int	nr_failed = 0;
-	int	opt = 0;
-	int	index = 0;
-	int                  otype;
-	int                  keys;
-	char                *filter         = NULL;
+	int rc        = 0;
+	int nr_failed = 0;
+	int opt       = 0;
+	int index     = 0;
+	int otype;
+	int keys;
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
+	char filter[1024];
+#endif
 	const char          *vos_command    = NULL;
 	const char          *short_options  = "apcdglzni:mXA:S:hf:e:tCwMr:";
 	static struct option long_options[] = {
