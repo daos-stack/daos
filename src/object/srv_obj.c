@@ -1184,16 +1184,11 @@ obj_fetch_shadow(struct obj_io_context *ioc, daos_unit_oid_t oid,
 	rc = vos_fetch_begin(ioc->ioc_vos_coh, oid, epoch, dkey, iod_nr, iods,
 			     cond_flags | VOS_OF_FETCH_RECX_LIST, NULL, &ioh,
 			     dth);
-	if (rc) {
-		D_ERROR(DF_UOID" Fetch begin failed: "DF_RC"\n",
-			DP_UOID(oid), DP_RC(rc));
-		goto out;
+	if (rc == 0) {
+		*pshadows = vos_ioh2recx_list(ioh);
+		vos_fetch_end(ioh, NULL, 0);
 	}
 
-	*pshadows = vos_ioh2recx_list(ioh);
-	vos_fetch_end(ioh, NULL, 0);
-
-out:
 	obj_iod_idx_parity2vos(iod_nr, iods);
 	if (rc == 0) {
 		uint32_t tgt_off;
@@ -1610,8 +1605,9 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 					      orw->orw_dkey_hash, iods_nr, iods,
 					      orw->orw_tgt_idx, dth, &shadows);
 			if (rc) {
-				D_ERROR(DF_UOID" Fetch shadow failed: "DF_RC
-					"\n", DP_UOID(orw->orw_oid), DP_RC(rc));
+				DL_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR, rc,
+					  " fetch shadow for " DF_UOID " failed.",
+					  DP_UOID(orw->orw_oid));
 				goto out;
 			}
 			iod_converted = true;
@@ -3004,6 +3000,46 @@ comp:
 	return ds_obj_remote_update(dlh, arg, idx, comp_cb);
 }
 
+static inline int
+check_update_rebuild_race(struct ds_cont_child *cont, daos_epoch_t epoch)
+{
+	if (unlikely(cont->sc_pool->spc_pool->sp_rebuild_epoch >= epoch)) {
+		D_DEBUG(DB_IO, "IO race with rebuild " DF_X64 " vs " DF_X64 ", need retry.\n",
+			epoch, cont->sc_pool->spc_pool->sp_rebuild_epoch);
+		return -DER_UPDATE_AGAIN;
+	}
+
+	return 0;
+}
+
+static inline int
+check_read_rebuild_fense(struct ds_cont_child *cont, uint32_t opc)
+{
+	struct ds_pool *pool = cont->sc_pool->spc_pool;
+
+	/*
+	 * sp_rebuild_epoch == 0 means that either current engine did not get rebuild epoch via IV,
+	 * or current rebuild is aborted, or current rebuild is globally done. For all the cases,
+	 * return -DER_FETCH_AGAIN to the fetch/enumerate sponsor who will handle them by itself.
+	 */
+	if (unlikely(pool->sp_rebuild_epoch == 0)) {
+		D_DEBUG(DB_IO, "Wait for rebuild epoch to be refreshed and retry opc %u.\n", opc);
+		return -DER_REBUILD_DELAY;
+	}
+
+	if (cont->sc_local_stable_epoch >= pool->sp_rebuild_epoch)
+		return 0;
+
+	cont->sc_local_stable_epoch = vos_cont_get_local_stable_epoch(cont->sc_hdl);
+	if (cont->sc_local_stable_epoch >= pool->sp_rebuild_epoch)
+		return 0;
+
+	D_DEBUG(DB_IO, "Local stable epoch " DF_X64 " fense for rebuild " DF_X64 ", retry %u.\n",
+		cont->sc_local_stable_epoch, pool->sp_rebuild_epoch, opc);
+
+	return -DER_REBUILD_DELAY;
+}
+
 /* Nonnegative return codes of process_epoch */
 enum process_epoch_rc {
 	PE_OK_REMOTE,	/* OK and epoch chosen remotely */
@@ -3093,6 +3129,14 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle	*dth;
 
+		if (orw->orw_flags & ORF_FOR_MIGRATION) {
+			rc = check_read_rebuild_fense(ioc.ioc_coc, opc_get(rpc->cr_opc));
+			if (rc != 0)
+				goto out;
+
+			dtx_flags = DTX_FOR_MIGRATION;
+		}
+
 		/* ORF_FETCH_EPOCH_EC_AGG_BOUNDARY only used for rebuild fetch. The container's
 		 * sc_ec_agg_eph_boundary possibly be different on the initiator and target engines
 		 * of the rebuild fetch, initiator selected fetch epoch possibly lower than readable
@@ -3149,9 +3193,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		epoch.oe_first = orw->orw_epoch_first;
 		epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
 
-		if (orw->orw_flags & ORF_FOR_MIGRATION)
-			dtx_flags = DTX_FOR_MIGRATION;
-
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0, orw->orw_map_ver,
 			       &orw->orw_oid, NULL, 0, dtx_flags, NULL, &dth);
 		if (rc == 0) {
@@ -3196,6 +3237,12 @@ again:
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
 		ioc.ioc_lost_reply = 1;
 		D_GOTO(out, rc);
+	}
+
+	if (!daos_is_zero_dti(&orw->orw_dti) && !(flags & ORF_RESEND)) {
+		rc = check_update_rebuild_race(ioc.ioc_coc, orw->orw_epoch);
+		if (rc != 0)
+			goto out;
 	}
 
 	/* For leader case, we need to find out the potential conflict
@@ -3642,6 +3689,12 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_tgt_id,
 		dss_get_module_info()->dmi_xs_id,
 		oei->oei_map_ver, ioc.ioc_map_ver);
+
+	if (oei->oei_flags & ORF_FOR_MIGRATION) {
+		rc = check_read_rebuild_fense(ioc.ioc_coc, opc);
+		if (rc != 0)
+			goto out;
+	}
 
 	D_ALLOC_PTR(anchors);
 	if (anchors == NULL)
@@ -4124,6 +4177,12 @@ again:
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST) ||
 		   DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
 		goto cleanup;
+	}
+
+	if (!(flags & ORF_RESEND)) {
+		rc = check_update_rebuild_race(ioc.ioc_coc, opi->opi_epoch);
+		if (rc != 0)
+			goto out;
 	}
 
 	/* For leader case, we need to find out the potential conflict
@@ -5345,6 +5404,12 @@ again:
 		D_GOTO(out, rc = 0);
 	}
 
+	if (!(flags & ORF_RESEND)) {
+		rc = check_update_rebuild_race(dca->dca_ioc->ioc_coc, dcsh->dcsh_epoch.oe_value);
+		if (rc != 0)
+			goto out;
+	}
+
 	dcde = ds_obj_cpd_get_ents(dca->dca_rpc, dca->dca_idx, 0);
 	dcsrs = ds_obj_cpd_get_reqs(dca->dca_rpc, dca->dca_idx);
 	tgts = ds_obj_cpd_get_tgts(dca->dca_rpc, dca->dca_idx);
@@ -5934,6 +5999,12 @@ again:
 			goto out;
 		if (rc == ORS_DONE)
 			D_GOTO(out, rc = 0);
+	}
+
+	if (leader && !(flags & ORF_RESEND)) {
+		rc = check_update_rebuild_race(ioc.ioc_coc, ocpi->ocpi_epoch);
+		if (rc != 0)
+			goto out;
 	}
 
 	epoch.oe_value = ocpi->ocpi_epoch;
