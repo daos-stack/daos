@@ -1164,19 +1164,36 @@ cont_iv_track_eph_update_internal(void *ns, uuid_t cont_uuid, daos_epoch_t ec_ag
 	return rc;
 }
 
+/* 1 second retry interval */
+#define CONT_TRACK_EPH_RETRY_INTV_MS 1000
+/*
+ * Upper bound of the time spent retrying a single epoch tracking IV operation.
+ * A rank which went down but is not evicted from the pool map yet keeps failing
+ * these IV operations with a retryable error (-DER_HG for instance). Retrying
+ * forever would block the epoch tracking ULT, and so the global stable epoch
+ * refresh, for every container of the pool. Give up instead, so that the caller
+ * can resume with the latest pool map on its next round.
+ */
+#define CONT_TRACK_EPH_RETRY_MAX_MS  (30 * 1000)
+
 static int
 cont_iv_track_eph_retry(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
 			daos_epoch_t stable_eph, unsigned int shortcut, unsigned int sync_mode,
 			uint32_t op, struct sched_request *req)
 {
-	int sleep_ms = 1000; /* 1 second retry interval */
-	int rc       = 0;
+	uint64_t deadline = daos_getmtime_coarse() + CONT_TRACK_EPH_RETRY_MAX_MS;
+	int      retries  = 0;
+	int      rc       = 0;
 
 	while (1) {
 		rc = cont_iv_track_eph_update_internal(ns, cont_uuid, ec_agg_eph, stable_eph,
 						       shortcut, sync_mode, op);
-		if (rc == 0)
+		if (rc == 0) {
+			if (retries > 0)
+				D_INFO(DF_UUID " op %d: succeeded after %d retries\n",
+				       DP_UUID(cont_uuid), op, retries);
 			break;
+		}
 
 		/* Only retry on specific errors */
 		if (!cont_iv_retryable_error(rc))
@@ -1187,7 +1204,18 @@ cont_iv_track_eph_retry(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
 			break;
 		}
 
-		dss_sleep(sleep_ms);
+		if (retries == 0)
+			DL_INFO(rc, DF_UUID " op %d: retryable cont_iv_update failure",
+				DP_UUID(cont_uuid), op);
+
+		if (daos_getmtime_coarse() >= deadline) {
+			DL_WARN(rc, DF_UUID " op %d: giving up after %d retries",
+				DP_UUID(cont_uuid), op, retries);
+			break;
+		}
+
+		retries++;
+		dss_sleep(CONT_TRACK_EPH_RETRY_INTV_MS);
 	}
 
 	return rc;

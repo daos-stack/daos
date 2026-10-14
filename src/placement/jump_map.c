@@ -375,7 +375,9 @@ struct dom_grp_used {
 static bool
 comp_may_change_layout(const struct pool_component *comp)
 {
-	return comp->co_status != PO_COMP_ST_UPIN && comp->co_status != PO_COMP_ST_DOWNOUT;
+	/* Only transitional states have different PRE/POST eligibility, NEW is skipped in both. */
+	return comp->co_status == PO_COMP_ST_UP || comp->co_status == PO_COMP_ST_DOWN ||
+	       comp->co_status == PO_COMP_ST_DRAIN;
 }
 
 /**
