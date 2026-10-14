@@ -31,7 +31,22 @@ const (
 	driverOverrideEnv  = "_DRIVER_OVERRIDE"
 	vfioDisabledDriver = "uio_pci_generic"
 	noDriver           = "none"
+	devTypeEnv         = "_DEV_TYPE"
+	devTypeVMD         = "VMD"
+	devTypeNVMe        = "NVME"
 )
+
+// devType returns the SPDK setup.sh DEV_TYPE value to restrict device binding to either VMD or
+// NVMe devices, as appropriate for the (already VMD-detection-resolved) request. Mandating one of
+// these two types prevents setup.sh from touching unrelated SPDK-supported device classes (e.g.
+// IOAT, DSA, IAA, VIRTIO, AE4DMA) that DAOS does not manage.
+func devType(req *storage.BdevPrepareRequest) string {
+	if req.EnableVMD {
+		return devTypeVMD
+	}
+
+	return devTypeNVMe
+}
 
 type runCmdFn func(logging.Logger, []string, string, ...string) (string, error)
 
@@ -83,7 +98,26 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 	}
 }
 
+// validateDevType enforces that DEV_TYPE is always explicitly set to either VMD or NVME before
+// invoking the SPDK setup script. Without this, any future caller/method that forgets to set
+// DEV_TYPE in the env map would silently fall back to SPDK's default of selecting every
+// SPDK-supported device class (IOAT, AE4DMA, DSA, IAA, VIRTIO, VMD, NVME), not just the ones
+// DAOS manages.
+func (s *spdkSetupScript) validateDevType() error {
+	switch s.env[devTypeEnv] {
+	case devTypeVMD, devTypeNVMe:
+		return nil
+	default:
+		return errors.Errorf("invalid or unset %s %q, expected %q or %q", devTypeEnv,
+			s.env[devTypeEnv], devTypeVMD, devTypeNVMe)
+	}
+}
+
 func (s *spdkSetupScript) run(args ...string) error {
+	if err := s.validateDevType(); err != nil {
+		return errors.Wrap(err, "refusing to run spdk setup script")
+	}
+
 	envStrs := make([]string, 0, len(s.env))
 	for k, v := range s.env {
 		if k == "" || v == "" {
@@ -116,6 +150,7 @@ func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 		pciAllowListEnv: req.PCIAllowList,
 		nrHugepagesEnv:  fmt.Sprintf("%d", nrHugepages),
 		hugeNodeEnv:     req.HugeNodes,
+		devTypeEnv:      devType(req),
 	}
 
 	if req.DisableVFIO {
@@ -135,6 +170,7 @@ func (s *spdkSetupScript) Unbind(req *storage.BdevPrepareRequest) error {
 		pciAllowListEnv:   req.PCIAllowList,
 		pciBlockListEnv:   req.PCIBlockList,
 		driverOverrideEnv: noDriver,
+		devTypeEnv:        devType(req),
 	}
 
 	return errors.Wrap(s.run(), "unbind devices")
@@ -152,6 +188,7 @@ func (s *spdkSetupScript) Reset(req *storage.BdevPrepareRequest) error {
 		"PATH":          os.Getenv("PATH"),
 		pciAllowListEnv: req.PCIAllowList,
 		pciBlockListEnv: req.PCIBlockList,
+		devTypeEnv:      devType(req),
 	}
 
 	return errors.Wrap(s.run("reset"), "reset")
