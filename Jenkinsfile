@@ -34,56 +34,52 @@ String bashName(String name) {
     return name.replaceAll('[^a-zA-Z0-9]', '_')
 }
 
-String stageParamName(String name) {
-    // Jenkins environment names are case-insensitive, so 'Test_RPMs' would clobber TEST_RPMS
-    return name == 'Test RPMs' ? 'Test_RPMs_group' : bashName(name)
-}
-
 // Update the runStage map
 /* groovylint-disable-next-line MethodSize */
 void updateRunStage() {
     Map reasons = [:]
 
     // Ordered list of stages and stage groups used by build parameters and commit pragmas.
+    // Child stages are indented under their parent stage group.
     List<String> stageOrder = [
         'Cancel Previous Builds',
         'Pre-build',
         'Python Bandit check',
         'Build',
-        'Build on EL 9',
-        'Build on Leap 15',
+            'Build on EL 9',
+            'Build on Leap 15',
         'Unit Tests',
-        'Unit Test',
-        'Unit Test bdev',
-        'NLT',
-        'Unit Test with memcheck',
-        'Unit Test bdev with memcheck',
-        'Test RPMs',
-        'Test RPMs on EL 9',
-        'Test RPMs on Leap 15',
+            'Unit Test',
+            'Unit Test bdev',
+            'NLT',
+            'Unit Test with memcheck',
+            'Unit Test bdev with memcheck',
+        'RPM Tests',
+            'Test RPMs on EL 9',
+            'Test RPMs on Leap 15',
         'VM Tests',
-        'Functional on EL 9 with Valgrind',
-        'Functional on EL 9',
-        'Functional on Leap 15',
-        'Functional on SLES 15',
-        'Functional on Ubuntu 20.04',
-        'Fault injection testing',
+            'Functional on EL 9 with Valgrind',
+            'Functional on EL 9',
+            'Functional on Leap 15',
+            'Functional on SLES 15',
+            'Functional on Ubuntu 20.04',
+            'Fault injection testing',
         'CB Tests',
-        'Functional Cluster Box Medium MD on SSD',
-        'Functional Cluster Box Medium Provider MD on SSD',
+            'Functional Cluster Box Medium MD on SSD',
+            'Functional Cluster Box Medium Provider MD on SSD',
         'HW Tests',
-        'Functional Hardware Medium',
-        'Functional Hardware Medium MD on SSD',
-        'Functional Hardware Medium VMD',
-        'Functional Hardware Medium Provider',
-        'Functional Hardware Medium Provider MD on SSD',
-        'Functional Hardware Large',
-        'Functional Hardware Large MD on SSD'
+            'Functional Hardware Medium',
+            'Functional Hardware Medium MD on SSD',
+            'Functional Hardware Medium VMD',
+            'Functional Hardware Medium Provider',
+            'Functional Hardware Medium Provider MD on SSD',
+            'Functional Hardware Large',
+            'Functional Hardware Large MD on SSD'
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
     for (name in stageOrder) {
-        value = params.get(stageParamName(name), null)
+        value = params.get(bashName(name), null)
         if (value != null && value.class == Boolean && !name.startsWith('CI_')) {
             runStage[name] = value
             reasons[name] = 'parameter selection or default'
@@ -99,7 +95,7 @@ void updateRunStage() {
     if (startedByLanding()) {
         println('updateRunStage: Detected landing build, overwriting defaults')
         for (stage in runStage.keySet()) {
-            if (stage in ['Pre-build', 'Python Bandit check', 'Build', 'Unit Tests', 'VM Tests']
+            if (stage in ['Pre-build', 'Python Bandit check', 'Build', 'Unit Tests', 'RPM Tests', 'VM Tests']
                     || stage.contains('Build on')
                     || stage.contains('Unit Test')
                     || stage.contains('NLT')
@@ -120,7 +116,7 @@ void updateRunStage() {
     if (docOnlyChange(target_branch)) {
         println('updateRunStage: Detected doc-only change, skipping testing')
         for (stage in runStage.keySet()) {
-            if (stage in ['Unit Tests', 'Test RPMs', 'VM Tests', 'CB Tests', 'HW Tests']) {
+            if (stage in ['Unit Tests', 'RPM Tests', 'VM Tests', 'CB Tests', 'HW Tests']) {
                 runStage[stage] = false
                 reasons[stage] = 'doc-only change'
             }
@@ -135,6 +131,7 @@ void updateRunStage() {
         for (stage in runStage.keySet()) {
             if (stage.contains('Build')
                     || stage.contains('Unit Tests')
+                    || stage == 'RPM Tests'
                     || stage.contains('Test RPMs')) {
                 runStage[stage] = false
                 reasons[stage] = 'RPM test version'
@@ -297,27 +294,19 @@ List<String> getStageNameSkipPragmas(String stageName) {
         if (stagePragma.contains('-with-')) {
             pragmas.add(stagePragma.replace('-with-', '-'))
         }
-    } else if (stageName == 'Test RPMs' || stageName.contains('Test RPMs on')) {
-        // Add skip pragma for the parent group to child stages
-        if (stageName != 'Test RPMs') {
-            pragmas.add('skip-test-rpms')
-            // Compatibility with existing commit pragmas that skipped RPMs via VM Tests
-            pragmas.add('skip-test')
-        }
-        // Add skip pragma for this stage
-        pragmas.add(stagePragma)
-        if (stageName == 'Test RPMs') {
-            // Compatibility with existing commit pragmas that skipped RPMs via VM Tests
-            pragmas.add('skip-test')
+    } else if (stageName == 'RPM Tests' || stageName.contains('Test RPMs on')) {
+        // Group pragma and its legacy alias apply to the group and all child stages
+        pragmas.add('skip-rpm-tests')
+        pragmas.add('skip-test')
+        if (stageName != 'RPM Tests') {
+            // Add skip pragma for this stage
+            pragmas.add(stagePragma)
         }
     } else if (stageName == 'VM Tests' || stageName.contains('Functional on')
             || stageName.contains('Fault injection')) {
-        // Add skip pragma for parent stage
-        if (stageName != 'VM Tests') {
-            pragmas.add('skip-vm-tests')
-            // Compatibility with existing commit pragmas
-            pragmas.add('skip-test')
-        }
+        // Group pragma and its legacy alias apply to the group and all child stages
+        pragmas.add('skip-vm-tests')
+        pragmas.add('skip-test')
         if (stageName.contains('Functional on')) {
             // Add skip pragma alias for all functional tests
             pragmas.add('skip-functional')
@@ -331,32 +320,25 @@ List<String> getStageNameSkipPragmas(String stageName) {
             // Compatibility with existing commit pragmas
             pragmas.add('skip-fault-injection-test')
         }
-        // Add skip pragma for this stage
-        pragmas.add(stagePragma)
-        if (stageName == 'VM Tests') {
-            // Compatibility with existing commit pragmas
-            pragmas.add('skip-test')
+        if (stageName != 'VM Tests') {
+            // Add skip pragma for this stage
+            pragmas.add(stagePragma)
         }
     } else if (stageName == 'CB Tests' || stageName.contains('Cluster Box')) {
-        // Add skip pragma for parent stage
+        // Group pragma applies to the group and all child stages
+        pragmas.add('skip-cb-tests')
         if (stageName != 'CB Tests') {
-            pragmas.add('skip-cb-tests')
-        }
-        if (stageName.contains('Functional')) {
             // Add skip pragma alias for all functional tests
             pragmas.add('skip-functional')
             pragmas.add('skip-functional-test')
+            // Add skip pragma for this stage
+            pragmas.add(stagePragma)
         }
-        // Add skip pragma for this stage
-        pragmas.add(stagePragma)
     } else if (stageName == 'HW Tests' || stageName.contains('Functional Hardware')) {
-        // Add skip pragma for parent stage
+        // Group pragma and its legacy alias apply to the group and all child stages
+        pragmas.add('skip-hw-tests')
+        pragmas.add('skip-test-hardware')
         if (stageName != 'HW Tests') {
-            pragmas.add('skip-hw-tests')
-            // Compatibility with existing commit pragmas
-            pragmas.add('skip-test-hardware')
-        }
-        if (stageName.contains('Functional')) {
             // Add skip pragma alias for all functional tests
             pragmas.add('skip-functional')
             pragmas.add('skip-functional-test')
@@ -365,12 +347,8 @@ List<String> getStageNameSkipPragmas(String stageName) {
             pragmas.add('skip-functional-hardware-test')
             // Compatibility with existing commit pragmas
             pragmas.add(stagePragma.replace('functional-hardware-', 'functional-hardware-test-'))
-        }
-        // Add skip pragma for this stage
-        pragmas.add(stagePragma)
-        if (stageName == 'HW Tests') {
-            // Compatibility with existing commit pragmas
-            pragmas.add('skip-test-hardware')
+            // Add skip pragma for this stage
+            pragmas.add(stagePragma)
         }
     }
 
@@ -651,9 +629,9 @@ pipeline {
         booleanParam(name: bashName('Unit Test bdev with memcheck'),
                      defaultValue: false,
                      description: 'Run the Unit Test bdev with memcheck stage.')
-        booleanParam(name: stageParamName('Test RPMs'),
+        booleanParam(name: bashName('RPM Tests'),
                      defaultValue: true,
-                     description: 'Run the Test RPMs group under Functional Tests.')
+                     description: 'Run the RPM Tests group under Functional Tests.')
         booleanParam(name: bashName('VM Tests'),
                      defaultValue: true,
                      description: 'Run the VM Tests group under Functional Tests.')
@@ -1196,7 +1174,7 @@ pipeline {
                     Map functionalTestStages = [
                         'Test RPMs on EL 9': scriptedTestRpmStage(
                             name: 'Test RPMs on EL 9',
-                            runStage: shouldStageRun('Test RPMs') &&
+                            runStage: shouldStageRun('RPM Tests') &&
                                       shouldStageRun('Test RPMs on EL 9'),
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
@@ -1211,7 +1189,7 @@ pipeline {
                         ),
                         'Test RPMs on Leap 15': scriptedTestRpmStage(
                             name: 'Test RPMs on Leap 15',
-                            runStage: shouldStageRun('Test RPMs') &&
+                            runStage: shouldStageRun('RPM Tests') &&
                                       shouldStageRun('Test RPMs on Leap 15'),
                             label: params.CI_UNIT_VM1_LABEL,
                             jobStatus: job_status_internal,
@@ -1481,8 +1459,8 @@ pipeline {
                         'Functional Hardware Large MD on SSD'
                     ])
                     parallel(
-                        'Test RPMs': {
-                            stage('Test RPMs') {
+                        'RPM Tests': {
+                            stage('RPM Tests') {
                                 parallel(testRpmStages)
                             }
                         },
