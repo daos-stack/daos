@@ -131,6 +131,8 @@ struct ds_cont_child {
 	uint64_t		sc_ec_agg_eph_boundary;
 	/* The local EC aggregation epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
+	/* Bumped by every replica migrated in, voids the EC agg round in progress */
+	uint32_t                 sc_ec_agg_mig_writes;
 	/* Used by ds_cont_eph_report() to query the minimum ec_agg_eph and stable_eph
 	 * from all local VOS.
 	 */

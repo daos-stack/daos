@@ -813,6 +813,19 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
+	/* EC migration fetches do not hide prepared DTXs, wait for them to be resolved */
+	if (rc == -DER_INPROGRESS && daos_oclass_is_ec(&mrone->mo_oca) && !tls->mpt_fini) {
+		now = daos_gettime_coarse();
+		if (then == 0)
+			then = now;
+		if (now - then < 600) {
+			MIGR_RETRY_WAIT_WARN(tls, mrone->mo_oid, rc, tried, now - then);
+			D_GOTO(retry, rc);
+		}
+		DL_ERROR(rc, DF_RB " waited for over 10 minutes for DTX resolution",
+			 DP_RB_MRO(mrone));
+		return rc;
+	}
 	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM ||
 	     daos_crt_network_error(rc)) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
@@ -1190,6 +1203,16 @@ again:
 		if (rc != 0)
 			D_GOTO(out, rc);
 
+		if (write_nr != stride_nr) {
+			/* EC agg must rescan this replica, and not report from a round that missed
+			 * it */
+			ds_cont->sc_ec_agg_eph = min(ds_cont->sc_ec_agg_eph, parity_eph - 1);
+			ds_cont->sc_ec_agg_mig_writes++;
+			if (ds_cont->sc_query_ec_agg_eph != NULL)
+				*ds_cont->sc_query_ec_agg_eph =
+				    min(*ds_cont->sc_query_ec_agg_eph, parity_eph - 1);
+		}
+
 		size -= write_nr;
 		offset += write_nr;
 		buffer += write_nr * iod->iod_size;
@@ -1242,45 +1265,57 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh, daos_
 
 	csummer = dsc_cont2csummer(dc_obj_hdl2cont_hdl(oh));
 	for (i = 0; i < iods_num; i++) {
-		daos_off_t	offset;
-		daos_iod_t	tmp_iod;
-		daos_epoch_t	parity_eph;
-		int		j;
+		daos_off_t     offset = 0;
+		daos_iod_t     tmp_iod;
+		daos_epoch_t   parity_eph = 0;
+		unsigned char *seg        = NULL;
+		int            j;
 
-		offset = iods[i].iod_recxs[0].rx_idx;
-		size = iods[i].iod_recxs[0].rx_nr;
-		/* Use stable epoch for partial parity update to make sure
-		 * these partial updates are not below stable epoch boundary,
-		 * otherwise both EC and VOS aggregation might operate on
-		 * the same recxs.
-		 */
-		parity_eph = encode ? ephs[i][0] : mrone->mo_epoch;
+		size    = 0;
 		tmp_iod = iods[i];
 		ptr = iov[i].iov_buf;
-		for (j = 1; j < iods[i].iod_nr; j++) {
+		for (j = 0; j < iods[i].iod_nr; j++) {
 			daos_recx_t	*recx = &iods[i].iod_recxs[j];
+			daos_epoch_t     eph  = ephs[i][j];
 
-			/* Merge the recx if there are in the same stripe */
-			if (offset + size == recx->rx_idx &&
-			    offset / stride_nr == recx->rx_idx / stride_nr) {
-				size += recx->rx_nr;
-				parity_eph = max(ephs[i][j], parity_eph);
+			/*
+			 * A replica at or below the EC agg boundary is in the parity already. Keep
+			 * the others at their own epoch, the same as on every other shard.
+			 */
+			if (!encode && eph <= ds_cont->sc_ec_agg_eph_boundary) {
+				ptr += recx->rx_nr * iods[i].iod_size;
 				continue;
 			}
 
-			rc = migrate_update_parity(mrone, parity_eph, ds_cont, ptr, offset,
-						   size, &tmp_iod, p_bufs, csummer, encode);
-			if (rc)
-				D_GOTO(out, rc);
-			ptr += size * iods[i].iod_size;
+			/* Merge the recx if there are in the same stripe */
+			if (size > 0 && offset + size == recx->rx_idx &&
+			    offset / stride_nr == recx->rx_idx / stride_nr &&
+			    (encode || eph == parity_eph)) {
+				size += recx->rx_nr;
+				parity_eph = max(eph, parity_eph);
+				ptr += recx->rx_nr * iods[i].iod_size;
+				continue;
+			}
+
+			if (size > 0) {
+				rc = migrate_update_parity(mrone, parity_eph, ds_cont, seg, offset,
+							   size, &tmp_iod, p_bufs, csummer, encode);
+				if (rc)
+					D_GOTO(out, rc);
+			}
+			seg        = ptr;
 			offset = recx->rx_idx;
 			size = recx->rx_nr;
-			parity_eph = encode ? ephs[i][j] : mrone->mo_epoch;
+			parity_eph = eph;
+			ptr += recx->rx_nr * iods[i].iod_size;
 		}
 
-		if (size > 0)
-			rc = migrate_update_parity(mrone, parity_eph, ds_cont, ptr, offset,
-						   size, &tmp_iod, p_bufs, csummer, encode);
+		if (size > 0) {
+			rc = migrate_update_parity(mrone, parity_eph, ds_cont, seg, offset, size,
+						   &tmp_iod, p_bufs, csummer, encode);
+			if (rc)
+				D_GOTO(out, rc);
+		}
 	}
 out:
 	for (i = 0; i < iods_num; i++) {

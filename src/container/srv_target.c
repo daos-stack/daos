@@ -2830,36 +2830,13 @@ ds_cont_eph_report(struct ds_pool *pool)
 			}
 		}
 
-		if (min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
-		    min_stable_eph <= ec_eph->cte_last_stable_epoch &&
-		    pool->sp_reclaim == DAOS_RECLAIM_DISABLED) {
-			if (cont_num % 10 == 0)
-				dss_sleep(0);
-			continue;
-		}
-
-		/* if aggregation enabled, make sure to report ec_agg_eph at the start phase
-		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero.
+		/* EC agg epochs go down too, e.g. after replicas are migrated in, report that.
+		 * The PS uses the stable epoch to tell reports from after a rebuild.
 		 */
+		min_stable_eph = max(min_stable_eph, ec_eph->cte_last_stable_epoch);
 		if (min_ec_agg_eph == DAOS_EPOCH_MAX || min_stable_eph == DAOS_EPOCH_MAX ||
-		    (ec_eph->cte_last_ec_agg_epoch != 0 &&
-		     min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
-		     min_stable_eph <= ec_eph->cte_last_stable_epoch)) {
-			if (min_ec_agg_eph > 0 && min_stable_eph > 0 &&
-			    (min_ec_agg_eph < ec_eph->cte_last_ec_agg_epoch ||
-			     min_stable_eph < ec_eph->cte_last_stable_epoch))
-				D_ERROR("ignore for now, min_ec_agg_eph " DF_X64 " < " DF_X64 ", "
-					"or min_stable_eph " DF_X64 " < " DF_X64 ", " DF_UUID "\n",
-					min_ec_agg_eph, ec_eph->cte_last_ec_agg_epoch,
-					min_stable_eph, ec_eph->cte_last_stable_epoch,
-					DP_UUID(ec_eph->cte_cont_uuid));
-			else
-				D_DEBUG(DB_MD,
-					"Skip ec_agg_eph " DF_X64 "/" DF_X64 ", "
-					"stable_eph " DF_X64 "/" DF_X64 ", " DF_UUID "\n",
-					min_ec_agg_eph, ec_eph->cte_last_ec_agg_epoch,
-					min_stable_eph, ec_eph->cte_last_stable_epoch,
-					DP_UUID(ec_eph->cte_cont_uuid));
+		    (min_ec_agg_eph == ec_eph->cte_last_ec_agg_epoch &&
+		     min_stable_eph == ec_eph->cte_last_stable_epoch)) {
 			if (cont_num % 10 == 0)
 				dss_sleep(0);
 			continue;

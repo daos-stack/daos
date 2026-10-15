@@ -3149,7 +3149,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		epoch.oe_first = orw->orw_epoch_first;
 		epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
 
-		if (orw->orw_flags & ORF_FOR_MIGRATION)
+		/* EC rebuild stamps data with enumerated epochs, so never hide in-flight writes */
+		if ((orw->orw_flags & ORF_FOR_MIGRATION) && !daos_oclass_is_ec(&ioc.ioc_oca))
 			dtx_flags = DTX_FOR_MIGRATION;
 
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0, orw->orw_map_ver,

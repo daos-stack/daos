@@ -1897,13 +1897,14 @@ retry:
 
 	for (i = 0; i < eph_ldr->cte_servers_num; i++) {
 		if (eph_ldr->cte_server_ephs[i].re_rank == rank) {
-			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < ec_agg_eph) {
+			/* latest report wins, it goes down when replicas are migrated in */
+			if (eph_ldr->cte_server_ephs[i].re_stable_eph <= stable_eph) {
+				if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph != ec_agg_eph)
+					eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts =
+					    daos_gettime_coarse();
 				eph_ldr->cte_server_ephs[i].re_ec_agg_eph = ec_agg_eph;
-				eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts =
-				    daos_gettime_coarse();
-			}
-			if (eph_ldr->cte_server_ephs[i].re_stable_eph < stable_eph)
 				eph_ldr->cte_server_ephs[i].re_stable_eph = stable_eph;
+			}
 			break;
 		}
 	}
@@ -2168,6 +2169,9 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	daos_epoch_t			 min_ec_agg_eph;
 	daos_epoch_t			 min_stable_eph;
 	uint64_t                         cur_ts;
+	bool                             rebuilding;
+	bool                             stale;
+	unsigned int                     tgt_cnt = 0;
 	int				 i;
 	int                              warn_slug_ranks = 8; /* 8 ranks at most */
 	int                              cont_num        = 0;
@@ -2178,6 +2182,12 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		D_ERROR(DF_UUID ": ranks init failed: %d\n", DP_UUID(pool->sp_uuid), rc);
 		return;
 	}
+
+	/* Targets still in transition have rebuild pending or running */
+	pool_map_find_tgts_by_state(
+	    pool->sp_map, PO_COMP_ST_DOWN | PO_COMP_ST_UP | PO_COMP_ST_DRAIN | PO_COMP_ST_NEW, NULL,
+	    &tgt_cnt);
+	rebuilding = tgt_cnt > 0 || ds_pool_is_rebuilding(pool);
 
 	ABT_mutex_lock(svc->cs_cont_ephs_mutex);
 	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
@@ -2205,7 +2215,11 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 		min_ec_agg_eph = DAOS_EPOCH_MAX;
 		min_stable_eph = DAOS_EPOCH_MAX;
+		stale          = false;
 		cur_ts         = daos_gettime_coarse();
+		if (rebuilding || eph_ldr->cte_rebuilding)
+			eph_ldr->cte_rebuild_hlc = d_hlc_get();
+		eph_ldr->cte_rebuilding = rebuilding;
 		if (ds_pool_is_rebuilding(pool) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
 			eph_ldr->cte_ec_agg_warn_slug_ts = cur_ts;
 		for (i = 0; i < eph_ldr->cte_servers_num; i++) {
@@ -2216,6 +2230,10 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 					DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), rank);
 				continue;
 			}
+
+			/* the report may predate replicas migrated in by the last rebuild */
+			if (eph_ldr->cte_server_ephs[i].re_stable_eph <= eph_ldr->cte_rebuild_hlc)
+				stale = true;
 
 			if (cur_ts > eph_ldr->cte_ec_agg_warn_slug_ts + 600 &&
 			    cur_ts > eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts + 600 &&
@@ -2233,6 +2251,10 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			if (eph_ldr->cte_server_ephs[i].re_stable_eph < min_stable_eph)
 				min_stable_eph = eph_ldr->cte_server_ephs[i].re_stable_eph;
 		}
+
+		/* Failed ranks' replicas only count again once their new homes report */
+		if (rebuilding || stale)
+			min_ec_agg_eph = eph_ldr->cte_current_ec_agg_eph;
 
 		/* for reboot case the ea_rdb_eph possibly higher than min_eph */
 		if (min_ec_agg_eph < eph_ldr->cte_rdb_ec_agg_eph)
