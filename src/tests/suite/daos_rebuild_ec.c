@@ -313,10 +313,11 @@ rebuild_ec_6nodes_setup(void **state)
 	return rebuild_ec_setup(state, 6, DAOS_PROP_CO_REDUN_RF2);
 }
 
+/* pool on all ranks: the test itself checks the rank count it needs */
 static int
-rebuild_ec_10nodes_setup(void **state)
+rebuild_ec_all_nodes_setup(void **state)
 {
-	return rebuild_ec_setup(state, 10, DAOS_PROP_CO_REDUN_RF2);
+	return rebuild_ec_setup(state, 0, DAOS_PROP_CO_REDUN_RF2);
 }
 
 static void
@@ -2005,7 +2006,7 @@ static const struct CMUnitTest rebuild_tests[] = {
     {"REBUILD48: combine multiple rebuild operation for EC", rebuild_ec_combined_ops,
      rebuild_ec_6nodes_setup, test_teardown},
     {"REBUILD49: EC reint data loss through parity replica epoch inflation",
-     rebuild_ec_reint_parity_epoch_inflation, rebuild_ec_10nodes_setup, test_teardown},
+     rebuild_ec_reint_parity_epoch_inflation, rebuild_ec_all_nodes_setup, test_teardown},
 };
 
 int

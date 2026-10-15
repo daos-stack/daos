@@ -139,7 +139,7 @@ src/tests/suite/daos_rebuild\.c$:
   <<: *ftest-only
 
 src/tests/suite/daos_rebuild_ec\.c$:
-  test-tag: test_daos_rebuild_ec
+  test-tag: test_daos_rebuild_ec DaosCoreTestRebuildEC
   <<: *ftest-only
 
 src/tests/suite/daos_rebuild_interactive\.c$:
