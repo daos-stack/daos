@@ -18,8 +18,9 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		  const char *name, const char *value, size_t size,
 		  int flags)
 {
-	int	rc;
-	bool	duns_attr = false;
+	struct dfuse_dentry released = {0};
+	int                 rc;
+	bool                duns_attr = false;
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
@@ -55,9 +56,11 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		 * locks that may be held by a client waiting on this worker pool, deadlocking it.
 		 */
 		if (duns_attr && inode->ie_dfs->dfc_dentry_dir_timeout > 0) {
-			rc = dfuse_mark_inval_entry(inode->ie_parent, inode->ie_name, NULL);
+			D_INIT_LIST_HEAD(&released.dd_list);
+			dfuse_ie_dentry_snapshot(inode, &released);
+			rc = dfuse_queue_inval_dentries(&released, NULL);
 			if (rc)
-				DHS_ERROR(inode, rc, "dfuse_mark_inval_entry() failed");
+				DHS_ERROR(inode, rc, "dfuse_queue_inval_dentries() failed");
 		}
 		DFUSE_REPLY_ZERO(inode, req);
 		return;

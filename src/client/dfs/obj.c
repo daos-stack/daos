@@ -392,6 +392,8 @@ open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flag
 	if (rc)
 		return rc;
 
+	mode = DFS_EXTERNAL_MODE(mode);
+
 	/** default for newly created entries; fetch_entry/git_fetch_entry overwrite for existing */
 	entry.link_cnt = 1;
 
@@ -1757,7 +1759,7 @@ restart:
 		i++;
 
 		flags &= ~DFS_SET_ATTR_MODE;
-		rstat.st_mode = stbuf->st_mode;
+		rstat.st_mode = DFS_EXTERNAL_MODE(stbuf->st_mode);
 	}
 	if (flags & DFS_SET_ATTR_ATIME) {
 		flags &= ~DFS_SET_ATTR_ATIME;
@@ -2220,11 +2222,6 @@ restart:
 		stbuf->st_mode         = DFS_EXTERNAL_MODE(link_entry->mode);
 		stbuf->st_uid          = link_entry->uid;
 		stbuf->st_gid          = link_entry->gid;
-		stbuf->st_mtim.tv_sec  = link_entry->mtime;
-		stbuf->st_mtim.tv_nsec = link_entry->mtime_nano;
-		stbuf->st_ctim.tv_sec  = link_entry->ctime;
-		stbuf->st_ctim.tv_nsec = link_entry->ctime_nano;
-		stbuf->st_atim         = stbuf->st_mtim;
 		stbuf->st_blksize =
 		    link_entry->chunk_size ? link_entry->chunk_size : dfs->attr.da_chunk_size;
 
@@ -2250,6 +2247,12 @@ restart:
 		if (!(new_obj && *new_obj))
 			daos_array_close(arr_oh, NULL);
 
+		/** Reconcile entry times with the array's modification epoch, as normal stat does.
+		 */
+		rc = update_stbuf_times(*link_entry, array_stbuf.st_max_epoch, stbuf, NULL);
+		if (rc)
+			D_GOTO(out, rc);
+		stbuf->st_atim   = stbuf->st_mtim;
 		stbuf->st_size   = array_stbuf.st_size;
 		stbuf->st_blocks = (array_stbuf.st_size + (1 << 9) - 1) >> 9;
 	}

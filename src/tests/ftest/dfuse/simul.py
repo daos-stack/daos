@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -135,13 +135,10 @@ class PosixSimul(TestWithServers):
         :avocado: tags=PosixSimul,test_posix_simul
         """
         # test  9, readdir, shared mode, dfuse returns NULL for readdir of an empty dir
-        # test 18, link, shared mode, daos does not support hard link
         # test 20, fcntl locking, shared mode, daos does not support flock
         # test 30, readdir, individual mode, dfuse returns NULL for readdir of an empty dir
-        # test 39, link, individual mode, daos does not support hard link
-        # test 40, link, individual mode, daos does not support hard link
         # test 41, fcntl locking, individual mode, daos does not support flock
-        self.run_simul(exclude="9,18,20,30,39,40,41")
+        self.run_simul(exclude="9,20,30,41")
         self.log.info('Test passed')
 
     def test_posix_expected_failures(self):
@@ -152,6 +149,6 @@ class PosixSimul(TestWithServers):
         :avocado: tags=posix,simul,dfuse
         :avocado: tags=PosixSimul,test_posix_expected_failures
         """
-        faillist = {"9", "18", "20", "30", "39", "40", "41"}
+        faillist = {"9", "20", "30", "41"}
         self.run_simul(faillist=faillist)
         self.log.info('Test passed')
