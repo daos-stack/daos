@@ -1205,8 +1205,11 @@ class Systemctl(JobManager):
         for summary, command_list in debug_commands.items():
             self.log.info("Collecting debug information; %s", summary)
             for command in command_list:
-                details = self.str_log_data(self.get_log_data(hosts, command))
-                self.log.info("Additional '%s' output:\n%s", command, details)
+                try:
+                    details = self.str_log_data(self.get_log_data(hosts, command))
+                    self.log.info("Additional '%s' output:\n%s", command, details)
+                except CommandFailure as error:
+                    self.log.info("Problem running '%s': %s", command, error)
 
 
 class Clush(JobManager):
