@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -311,6 +311,12 @@ static int
 rebuild_ec_6nodes_setup(void **state)
 {
 	return rebuild_ec_setup(state, 6, DAOS_PROP_CO_REDUN_RF2);
+}
+
+static int
+rebuild_ec_10nodes_setup(void **state)
+{
+	return rebuild_ec_setup(state, 10, DAOS_PROP_CO_REDUN_RF2);
 }
 
 static void
@@ -1454,147 +1460,552 @@ rebuild_ec_combined_ops(void **state)
 	print_message("END %s\n", __FUNCTION__);
 }
 
+/*
+ * REBUILD49: EC reintegration data loss through parity replica epoch
+ * inflation (DAOS-19632).
+ *
+ * The chain, with E_w the epoch of the original writes:
+ *   1. the rank hosting P0 (the first parity shard, obj_ec_parity_start(),
+ *      the one obj_ec_parity_alive() returns as enumeration source of every
+ *      later rebuild) is excluded. migrate_fetch_update_parity() rebuilds the
+ *      replicas of the partial stripes at the rebuild epoch mo_0 > E_w;
+ *   2. the rank hosting a data cell of those dkeys is excluded. The cell is
+ *      rebuilt from P0's rebuilt copy, i.e. at mo_0, onto a spare;
+ *   3. EC aggregation runs, led by the original P1 (min fseq). It encodes
+ *      parity at E_w from its own replicas and removes the replicas up to
+ *      E_w: P1 keeps only parity@E_w, P0's copy keeps parity@E_w plus the
+ *      inflated replicas@mo_0, the spare only has the cell@mo_0;
+ *   4. the rank hosting P0's rebuilt copy is excluded too, so that P0 is
+ *      rebuilt once more from the clean P1 and carries nothing but
+ *      parity@E_w (without this step the inflated replicas on P0's copy still
+ *      rescue the cells during the reint, DER_DATA_LOSS is logged but the
+ *      data is fine);
+ *   5. the first two ranks are reintegrated. The puller enumerates P0, gets
+ *      parity recxs only and fetches the cell from the spare at the parity
+ *      epoch E_w (the EC boundary is frozen at 0, as in the field where it
+ *      stayed ~30 min behind). The spare's record is at mo_0 -> empty fetch
+ *      -> DER_DATA_LOSS, swallowed by migrate_one_ult() -> the cell is a
+ *      hole on the reintegrated target and reads as zeros.
+ */
+#define RCL_OBJ_NR        32
+#define RCL_DKEY_NR       4
+#define RCL_STRIPE_NR     4
+#define RCL_DATA_NR       4 /* OC_EC_4P2G1 */
+#define RCL_TGT_NR        6
+#define RCL_P0            RCL_DATA_NR /* cell index of the first parity shard */
+#define RCL_STRIPE_SIZE   (RCL_DATA_NR * CELL_SIZE)
+#define RCL_BLK_SIZE      (CELL_SIZE / 2) /* partial cell write, like fio bs=64K */
+#define RCL_BLKS_PER_CELL (CELL_SIZE / RCL_BLK_SIZE)
+#define RCL_AGG_WAIT_SEC  300 /* > aggregation gap, time for EC aggregation to pass */
+#define RCL_RANK_MAX      64
+
+struct rcl_layout {
+	d_rank_t rank[RCL_TGT_NR];
+	uint32_t tgt[RCL_TGT_NR];
+};
+
+struct rcl_ctx {
+	test_arg_t       *arg;
+	daos_obj_id_t     oids[RCL_OBJ_NR];
+	struct rcl_layout orig[RCL_OBJ_NR]; /* before any exclude */
+	struct rcl_layout cur[RCL_OBJ_NR];
+	int               chain_o; /* first (obj, dkey) following the chain */
+	int               chain_d;
+};
+
+static inline void
+rcl_dkey(int d, char *buf, size_t len)
+{
+	snprintf(buf, len, "d_key_%d", d);
+}
+
+/* data cell @cell of a stripe is EC shard (grp_start + cell) % grp_size */
+static uint32_t
+rcl_cell2shard(const char *dkey, int cell)
+{
+	uint64_t hash = d_hash_murmur64((const unsigned char *)dkey, strlen(dkey), 5731);
+
+	return (hash % RCL_TGT_NR + cell) % RCL_TGT_NR;
+}
+
+static inline char
+rcl_pattern(int o)
+{
+	return 'a' + o % 26;
+}
+
+static void
+rcl_layout_get(struct rcl_ctx *ctx, struct rcl_layout *lo)
+{
+	int o, s, rc;
+
+	for (o = 0; o < RCL_OBJ_NR; o++) {
+		struct daos_obj_layout *layout;
+
+		rc = daos_obj_layout_get(ctx->arg->coh, ctx->oids[o], &layout);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(layout->ol_shards[0]->os_replica_nr, RCL_TGT_NR);
+		for (s = 0; s < RCL_TGT_NR; s++) {
+			lo[o].rank[s] = layout->ol_shards[0]->os_shard_loc[s].sd_rank;
+			lo[o].tgt[s]  = layout->ol_shards[0]->os_shard_loc[s].sd_tgt_idx;
+		}
+		daos_obj_layout_free(layout);
+	}
+}
+
+/* every 64K block as one update (sequential fio): replica-only, fully covered stripes */
+static void
+rcl_write_blocks(struct rcl_ctx *ctx)
+{
+	struct ioreq req;
+	daos_recx_t  recx;
+	char         dkey[32];
+	char        *buf;
+	int          o, d, s, cell, b;
+
+	buf = malloc(RCL_BLK_SIZE);
+	assert_non_null(buf);
+	print_message("write every 64K block separately\n");
+	for (o = 0; o < RCL_OBJ_NR; o++) {
+		memset(buf, rcl_pattern(o), RCL_BLK_SIZE);
+		ioreq_init(&req, ctx->arg->coh, ctx->oids[o], DAOS_IOD_ARRAY, ctx->arg);
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			for (s = 0; s < RCL_STRIPE_NR; s++)
+				for (cell = 0; cell < RCL_DATA_NR; cell++)
+					for (b = 0; b < RCL_BLKS_PER_CELL; b++) {
+						recx.rx_idx = (uint64_t)s * RCL_STRIPE_SIZE +
+							      (uint64_t)cell * CELL_SIZE +
+							      (uint64_t)b * RCL_BLK_SIZE;
+						recx.rx_nr = RCL_BLK_SIZE;
+						insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx,
+							     1, buf, RCL_BLK_SIZE, &req);
+					}
+		}
+		ioreq_fini(&req);
+	}
+	free(buf);
+}
+
+/*
+ * excl[0]: the rank hosting P0 of most dkeys; excl[1]: the rank hosting the
+ * most data cells of exactly those dkeys. Returns the number of (obj, dkey,
+ * cell) following the chain.
+ */
+static int
+rcl_pick_chain_ranks(struct rcl_ctx *ctx, d_rank_t *excl)
+{
+	test_arg_t *arg               = ctx->arg;
+	int         cnt[RCL_RANK_MAX] = {0};
+	int         o, d, c, best, hits = 0;
+	char        dkey[32];
+	d_rank_t    r;
+
+	D_ASSERT(arg->srv_nnodes <= RCL_RANK_MAX);
+	for (o = 0; o < RCL_OBJ_NR; o++)
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			cnt[ctx->orig[o].rank[rcl_cell2shard(dkey, RCL_P0)]]++;
+		}
+	for (r = 0, best = -1; r < arg->srv_nnodes; r++)
+		if (cnt[r] > best) {
+			best    = cnt[r];
+			excl[0] = r;
+		}
+	print_message("chain: rank %u hosts the first parity (P0) of %d/%d dkeys\n", excl[0], best,
+		      RCL_OBJ_NR * RCL_DKEY_NR);
+
+	memset(cnt, 0, sizeof(cnt));
+	for (o = 0; o < RCL_OBJ_NR; o++)
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			if (ctx->orig[o].rank[rcl_cell2shard(dkey, RCL_P0)] != excl[0])
+				continue;
+			for (c = 0; c < RCL_DATA_NR; c++)
+				cnt[ctx->orig[o].rank[rcl_cell2shard(dkey, c)]]++;
+		}
+	for (r = 0, best = -1; r < arg->srv_nnodes; r++)
+		if (r != excl[0] && cnt[r] > best) {
+			best    = cnt[r];
+			excl[1] = r;
+		}
+	for (o = 0; o < RCL_OBJ_NR; o++)
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			if (ctx->orig[o].rank[rcl_cell2shard(dkey, RCL_P0)] != excl[0])
+				continue;
+			for (c = 0; c < RCL_DATA_NR; c++)
+				if (ctx->orig[o].rank[rcl_cell2shard(dkey, c)] == excl[1]) {
+					print_message("chain: obj[%d] %s cell %d (shard %u) P0 "
+						      "shard %u on rank %u, data on rank %u\n",
+						      o, dkey, c, rcl_cell2shard(dkey, c),
+						      rcl_cell2shard(dkey, RCL_P0), excl[0],
+						      excl[1]);
+					if (hits == 0) {
+						ctx->chain_o = o;
+						ctx->chain_d = d;
+					}
+					hits++;
+				}
+		}
+	print_message("chain: rank %u hosts %d data cells of those dkeys -> %d (obj, dkey, cell) "
+		      "follow the chain\n",
+		      excl[1], best, hits);
+	return hits;
+}
+
+/* the rank that received the rebuilt P0 of most chain dkeys in the current layout */
+static d_rank_t
+rcl_pick_chain_p0_host(struct rcl_ctx *ctx, d_rank_t *excl)
+{
+	test_arg_t *arg               = ctx->arg;
+	int         cnt[RCL_RANK_MAX] = {0};
+	int         o, d, c, best;
+	char        dkey[32];
+	d_rank_t    r, host = excl[0];
+
+	for (o = 0; o < RCL_OBJ_NR; o++)
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			if (ctx->orig[o].rank[rcl_cell2shard(dkey, RCL_P0)] != excl[0])
+				continue;
+			for (c = 0; c < RCL_DATA_NR; c++)
+				if (ctx->orig[o].rank[rcl_cell2shard(dkey, c)] == excl[1])
+					break;
+			if (c == RCL_DATA_NR)
+				continue;
+			cnt[ctx->cur[o].rank[rcl_cell2shard(dkey, RCL_P0)]]++;
+		}
+	for (r = 0, best = -1; r < arg->srv_nnodes; r++)
+		if (r != excl[0] && r != excl[1] && cnt[r] > best) {
+			best = cnt[r];
+			host = r;
+		}
+	print_message("chain: rank %u hosts the rebuilt P0 of %d chain dkeys\n", host, best);
+	return host;
+}
+
+static bool
+rcl_is_zero(const char *buf, size_t len)
+{
+	size_t i;
+
+	for (i = 0; i < len; i++)
+		if (buf[i] != 0)
+			return false;
+	return true;
+}
+
+static bool
+rcl_cell_ok(const char *buf, char pat)
+{
+	size_t i;
+
+	for (i = 0; i < CELL_SIZE; i++)
+		if (buf[i] != pat)
+			return false;
+	return true;
+}
+
+/* read one cell directly from its data shard, bypassing EC recovery */
+static void
+rcl_read_cell_direct(struct ioreq *req, const char *dkey, int s, uint32_t shard, char *buf)
+{
+	daos_recx_t recx;
+
+	/* vos idx on the data shard: stripe * cell_size + offset in cell */
+	recx.rx_idx = (uint64_t)s * CELL_SIZE;
+	recx.rx_nr  = CELL_SIZE;
+	memset(buf, 0, CELL_SIZE);
+	/* DAOS_FAIL_ALWAYS is required, otherwise the fail_loc never fires */
+	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_ALWAYS);
+	daos_fail_value_set(shard);
+	lookup_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1, buf, CELL_SIZE, req);
+	daos_fail_loc_set(0);
+	daos_fail_value_set(0);
+}
+
+/*
+ * Verify all data through the normal fetch path and every data cell directly
+ * from its shard. Returns the number of bad cells.
+ */
+static int
+rcl_verify(struct rcl_ctx *ctx, const char *stage)
+{
+	struct ioreq req;
+	daos_recx_t  recx;
+	char         dkey[32];
+	char        *buf, *cbuf;
+	int          o, d, s, c;
+	int          bad = 0;
+
+	buf  = malloc(RCL_STRIPE_SIZE);
+	cbuf = malloc(CELL_SIZE);
+	assert_non_null(buf);
+	assert_non_null(cbuf);
+	print_message("verify [%s]\n", stage);
+	rcl_layout_get(ctx, ctx->cur);
+	for (o = 0; o < RCL_OBJ_NR; o++) {
+		char pat = rcl_pattern(o);
+
+		ioreq_init(&req, ctx->arg->coh, ctx->oids[o], DAOS_IOD_ARRAY, ctx->arg);
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			for (s = 0; s < RCL_STRIPE_NR; s++) {
+				recx.rx_idx = (uint64_t)s * RCL_STRIPE_SIZE;
+				recx.rx_nr  = RCL_STRIPE_SIZE;
+				memset(buf, 0, RCL_STRIPE_SIZE);
+				lookup_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1, buf,
+					     RCL_STRIPE_SIZE, &req);
+				for (c = 0; c < RCL_DATA_NR; c++) {
+					char    *got   = buf + c * CELL_SIZE;
+					uint32_t shard = rcl_cell2shard(dkey, c);
+					bool     nbad, dbad;
+
+					nbad = !rcl_cell_ok(got, pat);
+					rcl_read_cell_direct(&req, dkey, s, shard, cbuf);
+					dbad = !rcl_cell_ok(cbuf, pat);
+					if (!nbad && !dbad)
+						continue;
+					bad++;
+					print_message("[%s] BAD obj[%d] " DF_OID " %s stripe %d "
+						      "cell %d shard %u (rank %u tgt %u): "
+						      "normal=%s direct=%s\n",
+						      stage, o, DP_OID(ctx->oids[o]), dkey, s, c,
+						      shard, ctx->cur[o].rank[shard],
+						      ctx->cur[o].tgt[shard],
+						      !nbad                         ? "ok"
+						      : rcl_is_zero(got, CELL_SIZE) ? "HOLE(zeros)"
+										    : "garbage",
+						      !dbad                          ? "ok"
+						      : rcl_is_zero(cbuf, CELL_SIZE) ? "HOLE(zeros)"
+										     : "garbage");
+				}
+			}
+		}
+		ioreq_fini(&req);
+	}
+	print_message("verify [%s] done: %d bad cells\n", stage, bad);
+	free(cbuf);
+	free(buf);
+	return bad;
+}
+
+static void
+rcl_exclude_rank(struct rcl_ctx *ctx, d_rank_t rank, const char *stage)
+{
+	test_arg_t *arg = ctx->arg;
+
+	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
+	if (arg->myrank == 0)
+		assert_int_equal(rcl_verify(ctx, stage), 0);
+	par_barrier(PAR_COMM_WORLD);
+}
+
+/* reintegrate @nr ranks in one rebuild and verify */
+static int
+rcl_reint_ranks(struct rcl_ctx *ctx, d_rank_t *ranks, int nr, const char *stage)
+{
+	test_arg_t *arg = ctx->arg;
+	int         bad = 0, i, retry, rc;
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		for (i = 0; i < nr; i++) {
+			for (retry = 0; retry < 30; retry++) {
+				rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid,
+							  arg->group, ranks[i], -1);
+				print_message("dmg pool reintegrate rank %u rc=%d\n", ranks[i], rc);
+				if (rc == 0)
+					break;
+				sleep(2);
+			}
+			assert_success(rc);
+		}
+		test_rebuild_wait_to_start_next(&arg, 1);
+		test_rebuild_wait(&arg, 1);
+		bad = rcl_verify(ctx, stage);
+	}
+	par_barrier(PAR_COMM_WORLD);
+	return bad;
+}
+
+static void
+rebuild_ec_reint_parity_epoch_inflation(void **state)
+{
+	test_arg_t     *arg = *state;
+	struct rcl_ctx *ctx;
+	d_rank_t        excl[3];
+	int             pred = 0, bad = 0, o, i;
+	char            stage[64];
+
+	print_message("BEGIN %s\n", __FUNCTION__);
+	if (!test_runable(arg, 10))
+		return;
+	if (svc_nreplicas < 5)
+		return;
+
+	D_ALLOC_PTR(ctx);
+	assert_non_null(ctx);
+	ctx->arg = arg;
+	for (o = 0; o < RCL_OBJ_NR; o++)
+		ctx->oids[o] = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+
+	if (arg->myrank == 0) {
+		/* no aggregation until the two excludes are done */
+		print_message("disable aggregation\n");
+		daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
+		rcl_write_blocks(ctx);
+		rcl_layout_get(ctx, ctx->orig);
+		pred = rcl_pick_chain_ranks(ctx, excl);
+	}
+	par_bcast(PAR_COMM_WORLD, excl, 2, PAR_INT, 0);
+	par_bcast(PAR_COMM_WORLD, &pred, 1, PAR_INT, 0);
+
+	for (i = 0; i < 2; i++) {
+		snprintf(stage, sizeof(stage), "after exclude #%d rank %u", i, excl[i]);
+		rcl_exclude_rank(ctx, excl[i], stage);
+	}
+
+	if (arg->myrank == 0) {
+		/*
+		 * Let EC aggregation run naturally with the EC boundary frozen on
+		 * every rank (as in the field, where it stayed ~30 min behind the
+		 * parity epochs): the from-parity fetch of the reint then uses the
+		 * parity epoch instead of the boundary.
+		 */
+		print_message("freeze the EC boundary on all ranks, enable aggregation and wait "
+			      "%d s for the replicas to be aggregated\n",
+			      RCL_AGG_WAIT_SEC);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_CONT_EC_BOUNDARY_FREEZE | DAOS_FAIL_ALWAYS, 0, NULL);
+		daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+		sleep(RCL_AGG_WAIT_SEC);
+		assert_int_equal(rcl_verify(ctx, "after EC aggregation"), 0);
+		excl[2] = rcl_pick_chain_p0_host(ctx, excl);
+	}
+	par_bcast(PAR_COMM_WORLD, &excl[2], 1, PAR_INT, 0);
+	snprintf(stage, sizeof(stage), "after exclude #2 rank %u (P0 host)", excl[2]);
+	rcl_exclude_rank(ctx, excl[2], stage);
+
+	bad += rcl_reint_ranks(ctx, excl, 2, "after reint both");
+	bad += rcl_reint_ranks(ctx, &excl[2], 1, "after reint the P0 host");
+
+	if (arg->myrank == 0) {
+		print_message("clear fail_loc on all ranks\n");
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		print_message("SUMMARY %s: %d (obj, dkey, cell) on the chain, %d bad cells\n",
+			      __FUNCTION__, pred, bad);
+	}
+	par_barrier(PAR_COMM_WORLD);
+	arg->srv_disabled_ntgts = 0;
+	D_FREE(ctx);
+	assert_int_equal(bad, 0);
+	print_message("END %s\n", __FUNCTION__);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
-	{"REBUILD0: rebuild partial update with data tgt fail",
-	 rebuild_partial_fail_data, rebuild_ec_8nodes_rf1_setup, test_teardown},
-	{"REBUILD1: rebuild partial update with parity tgt fail",
-	 rebuild_partial_fail_parity, rebuild_ec_8nodes_rf1_setup, test_teardown},
-	{"REBUILD2: rebuild full stripe update with data tgt fail",
-	 rebuild_full_fail_data, rebuild_ec_8nodes_rf1_setup, test_teardown},
-	{"REBUILD3: rebuild full stripe update with parity tgt fail",
-	 rebuild_full_fail_parity, rebuild_ec_8nodes_rf1_setup, test_teardown},
-	{"REBUILD4: rebuild full then partial update with data tgt fail",
-	 rebuild_full_partial_fail_data, rebuild_ec_8nodes_rf1_setup,
-	 test_teardown},
-	{"REBUILD5: rebuild full then partial update with parity tgt fail",
-	 rebuild_full_partial_fail_parity, rebuild_ec_8nodes_rf1_setup,
-	 test_teardown},
-	{"REBUILD6: rebuild partial then full update with data tgt fail",
-	 rebuild_partial_full_fail_data, rebuild_ec_8nodes_rf1_setup,
-	 test_teardown},
-	{"REBUILD7: rebuild partial then full update with parity tgt fail",
-	 rebuild_partial_full_fail_parity, rebuild_ec_8nodes_rf1_setup,
-	 test_teardown},
-	{"REBUILD8: rebuild2p partial update with data tgt fail ",
-	 rebuild2p_partial_fail_data, rebuild_ec_8nodes_setup, test_teardown},
-	{"REBUILD9: rebuild2p partial update with 2 data tgt fail ",
-	 rebuild2p_partial_fail_2data, rebuild_ec_8nodes_setup, test_teardown},
-	{"REBUILD10: rebuild2p partial update with data/parity tgts fail ",
-	 rebuild2p_partial_fail_data_parity, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD11: rebuild2p partial update with parity tgt fail",
-	 rebuild2p_partial_fail_parity, rebuild_ec_8nodes_setup, test_teardown},
-	{"REBUILD12: rebuild2p partial update with 2 parity tgt fail",
-	 rebuild2p_partial_fail_2parity, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD13: rebuild with mixed partial/full stripe",
-	 rebuild_mixed_stripes, rebuild_ec_8nodes_setup, test_teardown},
-	{"REBUILD14: rebuild dfs io with data(s0) tgt fail ",
-	 rebuild_dfs_fail_data_s0, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD15: rebuild dfs io with data(s1) tgt fail ",
-	 rebuild_dfs_fail_data_s1, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD16: rebuild dfs io with data(s1) tgt fail ",
-	 rebuild_dfs_fail_data_s3, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD17: rebuild dfs io with data(s0, s1) tgt fail ",
-	 rebuild_dfs_fail_2data_s0s1, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD18: rebuild dfs io with data(s0, s2) tgt fail ",
-	 rebuild_dfs_fail_2data_s0s2, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD19: rebuild dfs io with data(s0, s3) tgt fail ",
-	 rebuild_dfs_fail_2data_s0s3, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD20: rebuild dfs io with data(s1, s2) tgt fail ",
-	 rebuild_dfs_fail_2data_s1s2, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD21: rebuild dfs io with data(s1, s3) tgt fail ",
-	 rebuild_dfs_fail_2data_s1s3, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD22: rebuild dfs io with data(s2, s3) tgt fail ",
-	 rebuild_dfs_fail_2data_s2s3, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD23: rebuild dfs io with 1data 1parity(s0, p1)",
-	 rebuild_dfs_fail_data_parity_s0p1, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD24: rebuild dfs io with 1data 1parity(s3, p1)",
-	 rebuild_dfs_fail_data_parity_s3p1, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD25: rebuild dfs io with 1data 1parity(s2, p1)",
-	 rebuild_dfs_fail_data_parity_s2p1, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD26: rebuild dfs io with 1data 1parity(s0, p0)",
-	 rebuild_dfs_fail_data_parity_s0p0, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD27: rebuild dfs io with 1data 1parity(s3, p0)",
-	 rebuild_dfs_fail_data_parity_s3p0, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD28: rebuild dfs io with 1data 1parity(s2, p0)",
-	 rebuild_dfs_fail_data_parity_s2p0, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD29: rebuild dfs io with sequential data(s0, s1) fail",
-	 rebuild_dfs_fail_seq_s0s1, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD30: rebuild dfs io with sequential data(s1, s2) fail",
-	 rebuild_dfs_fail_seq_s1s2, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD31: rebuild dfs io with sequential data(s2, s3) fail",
-	 rebuild_dfs_fail_seq_s2s3, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD32: rebuild dfs io with sequential data(s0, s3) fail",
-	 rebuild_dfs_fail_seq_s0s3, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD33: rebuild dfs io with data and parity(s0, p0) fail",
-	 rebuild_dfs_fail_seq_s0p0, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD34: rebuild dfs io with data and parity(s3, p1) fail",
-	 rebuild_dfs_fail_seq_s3p1, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD35: rebuild dfs io with 2 parities(p0, p1) fail",
-	 rebuild_dfs_fail_seq_p0p1, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD36: rebuild multiple group EC object",
-	 rebuild_multiple_group_ec_object, rebuild_ec_8nodes_rf1_setup,
-	 test_teardown},
-	{"REBUILD37: rebuild EC dkey enumeration",
-	 rebuild_ec_dkey_enumeration, rebuild_ec_8nodes_rf1_setup,
-	 test_teardown},
-	{"REBUILD38: rebuild EC multi-stripes @ different epochs",
-	 rebuild_ec_multi_stripes, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD39: rebuild EC parity with multiple group",
-	 rebuild_ec_parity_multi_group, rebuild_ec_8nodes_rf1_setup,
-	 test_teardown},
-	{"REBUILD40: rebuild EC snapshot with data shard",
-	 rebuild_ec_snapshot_data_shard, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD41: rebuild EC snapshot with parity shard",
-	 rebuild_ec_snapshot_parity_shard, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD42: rebuild parity over write",
-	 rebuild_ec_parity_overwrite, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD43: EC rebuild then aggregation",
-	 rebuild_ec_then_aggregation, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD44: multiple shards in the same target after rebuild",
-	 rebuild_ec_multiple_shards, rebuild_ec_6nodes_setup,
-	 test_teardown},
-	{"REBUILD45: multiple shards fail tgts",
-	 rebuild_ec_multiple_failure_tgts, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD46: fail parity shard and data shards after overwrite",
-	 rebuild_ec_overwrite_fail_parity_data, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD47: fail parity shard and data shards after overwrite with aggregation",
-	 rebuild_ec_overwrite_fail_parity_data_with_parity, rebuild_ec_8nodes_setup,
-	 test_teardown},
-	{"REBUILD48: combine multiple rebuild operation for EC",
-	 rebuild_ec_combined_ops, rebuild_ec_6nodes_setup,
-	 test_teardown},
+    {"REBUILD0: rebuild partial update with data tgt fail", rebuild_partial_fail_data,
+     rebuild_ec_8nodes_rf1_setup, test_teardown},
+    {"REBUILD1: rebuild partial update with parity tgt fail", rebuild_partial_fail_parity,
+     rebuild_ec_8nodes_rf1_setup, test_teardown},
+    {"REBUILD2: rebuild full stripe update with data tgt fail", rebuild_full_fail_data,
+     rebuild_ec_8nodes_rf1_setup, test_teardown},
+    {"REBUILD3: rebuild full stripe update with parity tgt fail", rebuild_full_fail_parity,
+     rebuild_ec_8nodes_rf1_setup, test_teardown},
+    {"REBUILD4: rebuild full then partial update with data tgt fail",
+     rebuild_full_partial_fail_data, rebuild_ec_8nodes_rf1_setup, test_teardown},
+    {"REBUILD5: rebuild full then partial update with parity tgt fail",
+     rebuild_full_partial_fail_parity, rebuild_ec_8nodes_rf1_setup, test_teardown},
+    {"REBUILD6: rebuild partial then full update with data tgt fail",
+     rebuild_partial_full_fail_data, rebuild_ec_8nodes_rf1_setup, test_teardown},
+    {"REBUILD7: rebuild partial then full update with parity tgt fail",
+     rebuild_partial_full_fail_parity, rebuild_ec_8nodes_rf1_setup, test_teardown},
+    {"REBUILD8: rebuild2p partial update with data tgt fail ", rebuild2p_partial_fail_data,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD9: rebuild2p partial update with 2 data tgt fail ", rebuild2p_partial_fail_2data,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD10: rebuild2p partial update with data/parity tgts fail ",
+     rebuild2p_partial_fail_data_parity, rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD11: rebuild2p partial update with parity tgt fail", rebuild2p_partial_fail_parity,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD12: rebuild2p partial update with 2 parity tgt fail", rebuild2p_partial_fail_2parity,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD13: rebuild with mixed partial/full stripe", rebuild_mixed_stripes,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD14: rebuild dfs io with data(s0) tgt fail ", rebuild_dfs_fail_data_s0,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD15: rebuild dfs io with data(s1) tgt fail ", rebuild_dfs_fail_data_s1,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD16: rebuild dfs io with data(s1) tgt fail ", rebuild_dfs_fail_data_s3,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD17: rebuild dfs io with data(s0, s1) tgt fail ", rebuild_dfs_fail_2data_s0s1,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD18: rebuild dfs io with data(s0, s2) tgt fail ", rebuild_dfs_fail_2data_s0s2,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD19: rebuild dfs io with data(s0, s3) tgt fail ", rebuild_dfs_fail_2data_s0s3,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD20: rebuild dfs io with data(s1, s2) tgt fail ", rebuild_dfs_fail_2data_s1s2,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD21: rebuild dfs io with data(s1, s3) tgt fail ", rebuild_dfs_fail_2data_s1s3,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD22: rebuild dfs io with data(s2, s3) tgt fail ", rebuild_dfs_fail_2data_s2s3,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD23: rebuild dfs io with 1data 1parity(s0, p1)", rebuild_dfs_fail_data_parity_s0p1,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD24: rebuild dfs io with 1data 1parity(s3, p1)", rebuild_dfs_fail_data_parity_s3p1,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD25: rebuild dfs io with 1data 1parity(s2, p1)", rebuild_dfs_fail_data_parity_s2p1,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD26: rebuild dfs io with 1data 1parity(s0, p0)", rebuild_dfs_fail_data_parity_s0p0,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD27: rebuild dfs io with 1data 1parity(s3, p0)", rebuild_dfs_fail_data_parity_s3p0,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD28: rebuild dfs io with 1data 1parity(s2, p0)", rebuild_dfs_fail_data_parity_s2p0,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD29: rebuild dfs io with sequential data(s0, s1) fail", rebuild_dfs_fail_seq_s0s1,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD30: rebuild dfs io with sequential data(s1, s2) fail", rebuild_dfs_fail_seq_s1s2,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD31: rebuild dfs io with sequential data(s2, s3) fail", rebuild_dfs_fail_seq_s2s3,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD32: rebuild dfs io with sequential data(s0, s3) fail", rebuild_dfs_fail_seq_s0s3,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD33: rebuild dfs io with data and parity(s0, p0) fail", rebuild_dfs_fail_seq_s0p0,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD34: rebuild dfs io with data and parity(s3, p1) fail", rebuild_dfs_fail_seq_s3p1,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD35: rebuild dfs io with 2 parities(p0, p1) fail", rebuild_dfs_fail_seq_p0p1,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD36: rebuild multiple group EC object", rebuild_multiple_group_ec_object,
+     rebuild_ec_8nodes_rf1_setup, test_teardown},
+    {"REBUILD37: rebuild EC dkey enumeration", rebuild_ec_dkey_enumeration,
+     rebuild_ec_8nodes_rf1_setup, test_teardown},
+    {"REBUILD38: rebuild EC multi-stripes @ different epochs", rebuild_ec_multi_stripes,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD39: rebuild EC parity with multiple group", rebuild_ec_parity_multi_group,
+     rebuild_ec_8nodes_rf1_setup, test_teardown},
+    {"REBUILD40: rebuild EC snapshot with data shard", rebuild_ec_snapshot_data_shard,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD41: rebuild EC snapshot with parity shard", rebuild_ec_snapshot_parity_shard,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD42: rebuild parity over write", rebuild_ec_parity_overwrite, rebuild_ec_8nodes_setup,
+     test_teardown},
+    {"REBUILD43: EC rebuild then aggregation", rebuild_ec_then_aggregation, rebuild_ec_8nodes_setup,
+     test_teardown},
+    {"REBUILD44: multiple shards in the same target after rebuild", rebuild_ec_multiple_shards,
+     rebuild_ec_6nodes_setup, test_teardown},
+    {"REBUILD45: multiple shards fail tgts", rebuild_ec_multiple_failure_tgts,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD46: fail parity shard and data shards after overwrite",
+     rebuild_ec_overwrite_fail_parity_data, rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD47: fail parity shard and data shards after overwrite with aggregation",
+     rebuild_ec_overwrite_fail_parity_data_with_parity, rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD48: combine multiple rebuild operation for EC", rebuild_ec_combined_ops,
+     rebuild_ec_6nodes_setup, test_teardown},
+    {"REBUILD49: EC reint data loss through parity replica epoch inflation",
+     rebuild_ec_reint_parity_epoch_inflation, rebuild_ec_10nodes_setup, test_teardown},
 };
 
 int
