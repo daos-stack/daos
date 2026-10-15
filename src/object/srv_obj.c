@@ -3013,16 +3013,26 @@ check_update_rebuild_race(struct ds_cont_child *cont, daos_epoch_t epoch)
 }
 
 static inline int
-check_read_rebuild_fense(struct ds_cont_child *cont, uint32_t opc)
+check_read_rebuild_fense(struct ds_cont_child *cont, uint64_t epoch, uint32_t opc)
 {
 	struct ds_pool *pool = cont->sc_pool->spc_pool;
 
+	/* For rebuild read, epoch must be specified instead of reading against MAX. */
+	if (unlikely(epoch == DAOS_EPOCH_MAX))
+		return -DER_INVAL;
+
 	/*
-	 * sp_rebuild_epoch == 0 means that either current engine did not get rebuild epoch via IV,
-	 * or current rebuild is aborted, or current rebuild is globally done. For all the cases,
-	 * return -DER_FETCH_AGAIN to the fetch/enumerate sponsor who will handle them by itself.
+	 * Always allow to read things under local stable epoch even if it was older than (stale)
+	 * rebuild epoch.
 	 */
-	if (unlikely(pool->sp_rebuild_epoch == 0)) {
+	if (epoch <= cont->sc_local_stable_epoch)
+		return 0;
+
+	/*
+	 * "epoch > pool->sp_rebuild_epoch means" means that current engine did not get latest
+	 * rebuild epoch via IV. Return "-DER_FETCH_AGAIN" to the RPC sponsor for retry later.
+	 */
+	if (unlikely(epoch > pool->sp_rebuild_epoch)) {
 		D_DEBUG(DB_IO, "Wait for rebuild epoch to be refreshed and retry opc %u.\n", opc);
 		return -DER_REBUILD_DELAY;
 	}
@@ -3130,7 +3140,16 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		struct dtx_handle	*dth;
 
 		if (orw->orw_flags & ORF_FOR_MIGRATION) {
-			rc = check_read_rebuild_fense(ioc.ioc_coc, opc_get(rpc->cr_opc));
+			uint64_t read_epoch;
+
+			if (orw->orw_epoch >= orw->orw_epoch_first &&
+			    orw->orw_epoch != DAOS_EPOCH_MAX)
+				read_epoch = orw->orw_epoch;
+			else
+				read_epoch = orw->orw_epoch_first;
+
+			rc =
+			    check_read_rebuild_fense(ioc.ioc_coc, read_epoch, opc_get(rpc->cr_opc));
 			if (rc != 0)
 				goto out;
 
@@ -3691,7 +3710,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		oei->oei_map_ver, ioc.ioc_map_ver);
 
 	if (oei->oei_flags & ORF_FOR_MIGRATION) {
-		rc = check_read_rebuild_fense(ioc.ioc_coc, opc);
+		rc = check_read_rebuild_fense(ioc.ioc_coc, oei->oei_epr.epr_hi, opc);
 		if (rc != 0)
 			goto out;
 	}
