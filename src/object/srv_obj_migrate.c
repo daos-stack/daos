@@ -1180,6 +1180,39 @@ out:
 	return rc;
 }
 
+/*
+ * Epoch at which an extent enumerated from a parity shard is written to the
+ * rebuilt parity shard.
+ *
+ * Parity extents (@encode) are re-encoded at the enumerated epoch. Replica
+ * extents (partial stripe updates not yet EC aggregated) must keep their
+ * enumerated epoch as well: the same update lives at that epoch on the data
+ * shards and on the other parity shards, and this copy is the enumeration
+ * source of later rebuilds. Writing them at mo_epoch instead (as it used to
+ * be done) inflates the epoch of every data shard rebuilt from this copy;
+ * EC aggregation led by another parity shard then produces parity at the
+ * original epoch, below those data records, and a later from-parity
+ * migration fetch at the parity epoch finds nothing on the healthy data
+ * shard (DER_DATA_LOSS, the cell is left empty).
+ *
+ * The epoch is only raised to just above the EC aggregation boundary (capped
+ * by mo_epoch) so that a replica never lands where both EC and VOS
+ * aggregation could operate on it; since replicas below the boundary have
+ * already been aggregated away this floor normally does not apply.
+ */
+static inline daos_epoch_t
+migrate_parity_epoch(struct migrate_one *mrone, struct ds_cont_child *cont, daos_epoch_t epoch,
+		     bool encode)
+{
+	daos_epoch_t floor_epc;
+
+	if (encode)
+		return epoch;
+
+	floor_epc = min(cont->sc_ec_agg_eph_boundary + 1, mrone->mo_epoch);
+	return max(floor_epc, epoch);
+}
+
 static int
 __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh, daos_iod_t *iods,
 			      daos_epoch_t fetch_eph, daos_epoch_t **ephs, uint32_t iods_num,
@@ -1230,12 +1263,8 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh, daos_
 
 		offset = iods[i].iod_recxs[0].rx_idx;
 		size = iods[i].iod_recxs[0].rx_nr;
-		/* Use stable epoch for partial parity update to make sure
-		 * these partial updates are not below stable epoch boundary,
-		 * otherwise both EC and VOS aggregation might operate on
-		 * the same recxs.
-		 */
-		parity_eph = encode ? ephs[i][0] : mrone->mo_epoch;
+		/* see migrate_parity_epoch() */
+		parity_eph = migrate_parity_epoch(mrone, ds_cont, ephs[i][0], encode);
 		tmp_iod = iods[i];
 		ptr = iov[i].iov_buf;
 		for (j = 1; j < iods[i].iod_nr; j++) {
@@ -1256,7 +1285,7 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh, daos_
 			ptr += size * iods[i].iod_size;
 			offset = recx->rx_idx;
 			size = recx->rx_nr;
-			parity_eph = encode ? ephs[i][j] : mrone->mo_epoch;
+			parity_eph = migrate_parity_epoch(mrone, ds_cont, ephs[i][j], encode);
 		}
 
 		if (size > 0)
