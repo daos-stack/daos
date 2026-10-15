@@ -31,7 +31,9 @@ struct dtx_rsrvd_uint {
 
 enum dtx_stat_flags {
 	/* Skip bad DTX entries (such as corruptted ones) when stat. */
-	DSF_SKIP_BAD		= (1 << 1),
+	DSF_SKIP_BAD = (1 << 1),
+	/* Dump active DTX in reindex list. */
+	DSF_DUMP_REINDEX = (1 << 2),
 };
 
 struct dtx_cos_key {

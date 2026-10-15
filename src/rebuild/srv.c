@@ -1871,7 +1871,8 @@ static bool
 rebuild_retryable_err(int error)
 {
 	return (daos_crt_network_error(error) || error == -DER_TIMEDOUT || error == -DER_GRPVER ||
-		error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE);
+		error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE ||
+		errno == -DER_REBUILD_DELAY);
 }
 
 static bool
@@ -3199,6 +3200,15 @@ rebuild_tgt_status_check_ult(void *arg)
 	sched_req_put(rpt->rt_ult);
 	rpt->rt_ult = NULL;
 out:
+	/*
+	 * Rebuild epoch is sent via IV. It is possible that new rebuild task has already started
+	 * and overwritten sp_rebuild_epoch. Let's check rt_rebuild_slave_{ver,gen} to avoid clear
+	 * other rebuild task's sp_rebuild_epoch by wrong.
+	 */
+	if (rpt->rt_pool->sp_rebuild_slave_ver == rpt->rt_rebuild_ver &&
+	    rpt->rt_pool->sp_rebuild_slave_gen == rpt->rt_rebuild_gen)
+		rpt->rt_pool->sp_rebuild_epoch = 0;
+
 	rebuild_tgt_fini(rpt);
 	rpt_put(rpt);
 }
@@ -3379,7 +3389,9 @@ rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
 
 	ABT_mutex_lock(rpt->rt_lock);
 	ds_pool_get(pool);
-	rpt->rt_pool = pool; /* pin it */
+	rpt->rt_pool               = pool; /* pin it */
+	pool->sp_rebuild_slave_ver = rpt->rt_rebuild_ver;
+	pool->sp_rebuild_slave_gen = rpt->rt_rebuild_gen;
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	*p_rpt = rpt;
