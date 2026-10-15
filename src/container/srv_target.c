@@ -49,6 +49,33 @@ cont2req(struct ds_cont_child *cont, bool vos_agg)
 	return vos_agg ? cont->sc_agg_req : cont->sc_ec_agg_req;
 }
 
+/*
+ * Sample the local stable epoch for ds_cont_eph_report() to pick up and report through IV.
+ * The sample must be refreshed periodically even when a round of VOS aggregation runs for
+ * a long time (rate-controlled aggregation in LAZY mode may sleep one second per credit
+ * batch), otherwise the reported stable epoch stays stale and the global stable epoch is
+ * frozen for the whole container, which stalls rebuild waiting for it.
+ */
+#define CONT_STABLE_EPH_SAMPLE_INTV_MS 1000
+
+static void
+cont_stable_eph_sample(struct agg_param *param)
+{
+	struct ds_cont_child *cont = param->ap_cont;
+	uint64_t              now;
+
+	if (!param->ap_vos_agg || cont->sc_query_stable_eph == NULL)
+		return;
+
+	now = daos_getmtime_coarse();
+	if (param->ap_stable_eph_ts != 0 &&
+	    now < param->ap_stable_eph_ts + CONT_STABLE_EPH_SAMPLE_INTV_MS)
+		return;
+
+	param->ap_stable_eph_ts    = now;
+	*cont->sc_query_stable_eph = vos_cont_get_local_stable_epoch(cont->sc_hdl);
+}
+
 int
 agg_rate_ctl(void *arg)
 {
@@ -68,6 +95,8 @@ agg_rate_ctl(void *arg)
 	 **/
 	if (ds_pool_is_rebuilding(pool) && cont->sc_ec_agg_active && !param->ap_vos_agg)
 		return -1;
+
+	cont_stable_eph_sample(param);
 
 	/* When system is idle or under space pressure, let aggregation run in tight mode */
 	if (!dss_xstream_is_busy() || sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
@@ -473,10 +502,11 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		uint64_t msecs = 2000;
 
 		/* Reuse the vos aggregation ULT to periodically query the stable epoch,
-		 * ds_cont_eph_report() will read & report the epoch through IV.
+		 * ds_cont_eph_report() will read & report the epoch through IV. It is
+		 * also refreshed from agg_rate_ctl() during a long aggregation round.
 		 */
-		if (param->ap_vos_agg && cont->sc_query_stable_eph != NULL)
-			*cont->sc_query_stable_eph = vos_cont_get_local_stable_epoch(cont->sc_hdl);
+		param->ap_stable_eph_ts = 0;
+		cont_stable_eph_sample(param);
 
 		if (!cont_aggregate_runnable(cont, req, param->ap_vos_agg))
 			goto next;
@@ -2202,13 +2232,15 @@ cont_snap_update_one(void *vin)
 	struct ds_cont_child	*cont;
 	int			 rc;
 
-	/* The container should be exist on the system at this point, if non-exist on this target
-	 * it should be the case of reintegrate the container was destroyed ahead, so just
-	 * open_create the container here.
-	 */
-	rc = ds_cont_child_open_create(args->pool_uuid, args->cont_uuid, false, &cont);
-	if (rc != 0)
+	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	if (rc != 0) {
+		if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING) {
+			D_DEBUG(DB_MD, DF_CONT ": skip: " DF_RC "\n",
+				DP_CONT(args->pool_uuid, args->cont_uuid), DP_RC(rc));
+			rc = 0;
+		}
 		return rc;
+	}
 
 	if (args->snap_count == 0) {
 		if (cont->sc_snapshots != NULL) {
@@ -2789,7 +2821,10 @@ ds_cont_eph_report(struct ds_pool *pool)
 	unsigned int             failed_tgts_nr;
 
 	D_ASSERT(pool != NULL && pool->sp_map != NULL);
-	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid, &failed_tgts, &failed_tgts_nr);
+	/* NEW targets hold no data and never run aggregation, keep them out of the minimum. */
+	rc = ds_pool_get_tgt_idx_by_state(pool->sp_uuid,
+					  PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_NEW,
+					  &failed_tgts, &failed_tgts_nr);
 	if (rc) {
 		D_DEBUG(DB_MD, DF_UUID ": Failed to get index", DP_UUID(pool->sp_uuid));
 		return rc;
