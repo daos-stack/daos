@@ -551,8 +551,8 @@ class PoolListConsolidationTest(TestWithServers):
         report_errors(test=self, errors=errors)
 
     def test_lost_all_rdb(self):
-        """Remove rdb-pool from all mount point from all nodes. Now the pool cannot be
-        recovered, so checker should remove it from both MS and engine.
+        """Remove rdb-pool from all mount point from all nodes. Now the pool cannot be recovered, so
+        checker should remove it from both MS and engine.
 
         PMEM steps:
         1. Create a pool.
