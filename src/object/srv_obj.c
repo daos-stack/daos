@@ -3013,29 +3013,38 @@ check_update_rebuild_race(struct ds_cont_child *cont, daos_epoch_t epoch)
 }
 
 static inline int
-check_read_rebuild_fense(struct ds_cont_child *cont, uint32_t ver, uint32_t opc)
+check_read_rebuild_fense(struct ds_cont_child *cont, uint32_t ver, daos_epoch_t read_epoch,
+			 uint32_t opc)
 {
 	struct ds_pool *pool = cont->sc_pool->spc_pool;
+	daos_epoch_t    fence_epoch;
 
 	/*
 	 * sp_rebuild_epoch == 0 means that either current engine did not get rebuild epoch via IV,
 	 * or current rebuild is aborted, or current rebuild is globally done. For all the cases,
-	 * return -DER_FETCH_AGAIN to the fetch/enumerate sponsor who will handle them by itself.
+	 * return -DER_REBUILD_DELAY to the fetch/enumerate sponsor who will handle them by itself.
 	 */
 	if (unlikely(pool->sp_rebuild_epoch == 0 || pool->sp_rebuild_slave_ver < ver)) {
 		D_DEBUG(DB_IO, "Wait for rebuild epoch to be refreshed and retry opc %u.\n", opc);
 		return -DER_REBUILD_DELAY;
 	}
 
-	if (cont->sc_local_stable_epoch >= pool->sp_rebuild_epoch)
+	/*
+	 * The cached rebuild epoch may belong to an older generation at the same map version.
+	 * Also fence the requested read view until the current rebuild epoch arrives via IV.
+	 */
+	fence_epoch = max(pool->sp_rebuild_epoch, read_epoch);
+	if (cont->sc_local_stable_epoch >= fence_epoch)
 		return 0;
 
 	cont->sc_local_stable_epoch = vos_cont_get_local_stable_epoch(cont->sc_hdl);
-	if (cont->sc_local_stable_epoch >= pool->sp_rebuild_epoch)
+	if (cont->sc_local_stable_epoch >= fence_epoch)
 		return 0;
 
-	D_DEBUG(DB_IO, "Local stable epoch " DF_X64 " fense for rebuild " DF_X64 ", retry %u.\n",
-		cont->sc_local_stable_epoch, pool->sp_rebuild_epoch, opc);
+	D_DEBUG(DB_IO,
+		"Local stable epoch " DF_X64 " fence for read " DF_X64 " and rebuild " DF_X64
+		", retry %u.\n",
+		cont->sc_local_stable_epoch, read_epoch, pool->sp_rebuild_epoch, opc);
 
 	return -DER_REBUILD_DELAY;
 }
@@ -3130,7 +3139,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		struct dtx_handle	*dth;
 
 		if (orw->orw_flags & ORF_FOR_MIGRATION) {
-			rc = check_read_rebuild_fense(ioc.ioc_coc, orw->orw_map_ver,
+			daos_epoch_t read_epoch = orw->orw_epoch;
+
+			/* The EC boundary adjustment below cannot exceed this cutoff. */
+			if (orw->orw_flags & ORF_FETCH_EPOCH_EC_AGG_BOUNDARY)
+				read_epoch = max(read_epoch, orw->orw_epoch_first);
+			rc = check_read_rebuild_fense(ioc.ioc_coc, orw->orw_map_ver, read_epoch,
 						      opc_get(rpc->cr_opc));
 			if (rc != 0)
 				goto out;
@@ -3692,7 +3706,8 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		oei->oei_map_ver, ioc.ioc_map_ver);
 
 	if (oei->oei_flags & ORF_FOR_MIGRATION) {
-		rc = check_read_rebuild_fense(ioc.ioc_coc, oei->oei_map_ver, opc);
+		rc = check_read_rebuild_fense(ioc.ioc_coc, oei->oei_map_ver, oei->oei_epr.epr_hi,
+					      opc);
 		if (rc != 0)
 			goto out;
 	}
