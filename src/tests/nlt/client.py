@@ -335,7 +335,8 @@ def run_daos_cmd(conf,
 
 # pylint: disable-next=too-many-arguments
 def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None, dir_oclass=None,
-                file_oclass=None, hints=None, valgrind=False, log_check=True, cwd=None, attrs=None):
+                file_oclass=None, hints=None, progressive=False, valgrind=False, log_check=True,
+                cwd=None, attrs=None):
     """Use 'daos' command to create a new container.
 
     Args:
@@ -349,6 +350,7 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
         dir_oclass (str, optional): directory object class to use.
         file_oclass (str, optional): file object class to use.
         hints (str, optional): Container hints.
+        progressive (bool, optional): Enable progressive file layout (POSIX only).
         valgrind (bool, optional): Whether to run command under valgrind.  Defaults to True.
         log_check (bool, optional): Whether to run log analysis to check for leaks.
         cwd (str, optional): Path to run daos command from.
@@ -392,6 +394,9 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
 
     if hints:
         cmd.extend(['--hints', hints])
+
+    if progressive:
+        cmd.extend(['--dfs-pl', 'auto'])
 
     if attrs:
         cmd.extend(['--attrs', ','.join([f"{name}:{val}" for name, val in attrs.items()])])
@@ -539,15 +544,17 @@ def check_file_pl_attr(data, head_oclass, tail_oclass, split_off):
     return True
 
 
-def check_dir_pl_attr(data, head_oclass, tail_oclass, split_off):
+def check_dir_pl_attr(data, head_oclass, tail_oclass, split_off, file_oclass=None):
     """Verify daos fs get-attr output for a progressive-layout directory template
 
     Files created in the directory use head_oclass for the head and a single tail using
-    tail_oclass starting at split_off.
+    tail_oclass starting at split_off.  file_oclass, when given, is the directory's plain
+    default file class, which progressive layout must leave untouched.
     """
     if not check_fs_get_attr_oid(data['response'], 'object'):
         return False
-    if not check_fs_get_attr(data['response'], 'directory', file_oclass=head_oclass):
+    if not check_fs_get_attr(data['response'], 'directory', file_oclass=file_oclass,
+                             file_pl_head_oclass=head_oclass):
         return False
     tails = data['response']['directory'].get('file_pl_tails')
     if not tails or len(tails) != 1:

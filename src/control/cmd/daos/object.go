@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -113,7 +114,7 @@ func layoutShards(layout *C.struct_daos_obj_layout) []*objectShard {
 }
 
 func newObjLayout(oid C.daos_obj_id_t, layout *C.struct_daos_obj_layout) *objectLayout {
-	var oclass [10]C.char
+	var oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 	C.daos_oclass_id2name(C.daos_obj_id2class(oid), &oclass[0])
 
 	return &objectLayout{

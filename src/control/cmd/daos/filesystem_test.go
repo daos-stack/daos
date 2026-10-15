@@ -15,14 +15,15 @@ import (
 
 func TestDaos_newFSGetAttrJSON(t *testing.T) {
 	for name, tc := range map[string]struct {
-		isDir      bool
-		oidStr     string
-		oclass     string
-		dirOclass  string
-		fileOclass string
-		chunkSize  uint64
-		tails      []fsGetAttrTailJSON
-		expJSON    string
+		isDir        bool
+		oidStr       string
+		oclass       string
+		dirOclass    string
+		fileOclass   string
+		plHeadOclass string
+		chunkSize    uint64
+		tails        []fsGetAttrTailJSON
+		expJSON      string
 	}{
 		"file": {
 			isDir:     false,
@@ -85,40 +86,54 @@ func TestDaos_newFSGetAttrJSON(t *testing.T) {
 				`{"oid":"5.6","oclass":"EC_2P1G1","split_off":4194304}]}`,
 		},
 		"directory with progressive-layout tail omits oid": {
-			isDir:      true,
-			oidStr:     "5.6",
-			oclass:     "S1",
-			dirOclass:  "RP_2G1",
-			fileOclass: "S1",
-			chunkSize:  1048576,
+			isDir:        true,
+			oidStr:       "5.6",
+			oclass:       "S1",
+			dirOclass:    "RP_2G1",
+			fileOclass:   "S1",
+			plHeadOclass: "EC_2P1G1",
+			chunkSize:    1048576,
 			tails: []fsGetAttrTailJSON{
-				{ObjClass: "EC_2P1G1", SplitOff: 4194304},
+				{ObjClass: "EC_2P1GX", SplitOff: 4194304},
 			},
 			expJSON: `{"object":{"oid":"5.6","oclass":"S1"},"directory":{` +
-				`"dir_oclass":"RP_2G1","file_oclass":"S1",` +
-				`"file_pl_tails":[{"oclass":"EC_2P1G1","split_off":4194304}],` +
+				`"dir_oclass":"RP_2G1","file_oclass":"S1","file_pl_head_oclass":"EC_2P1G1",` +
+				`"file_pl_tails":[{"oclass":"EC_2P1GX","split_off":4194304}],` +
 				`"chunk_size":1048576}}`,
 		},
 		"directory with multiple progressive-layout tails": {
-			isDir:      true,
-			oidStr:     "5.6",
-			oclass:     "S1",
-			dirOclass:  "RP_2G1",
-			fileOclass: "S1",
-			chunkSize:  1048576,
+			isDir:        true,
+			oidStr:       "5.6",
+			oclass:       "S1",
+			dirOclass:    "RP_2G1",
+			fileOclass:   "S1",
+			plHeadOclass: "S1",
+			chunkSize:    1048576,
 			tails: []fsGetAttrTailJSON{
 				{ObjClass: "S2", SplitOff: 1048576},
 				{ObjClass: "EC_2P1G1", SplitOff: 4194304},
 			},
 			expJSON: `{"object":{"oid":"5.6","oclass":"S1"},"directory":{` +
-				`"dir_oclass":"RP_2G1","file_oclass":"S1","file_pl_tails":[` +
+				`"dir_oclass":"RP_2G1","file_oclass":"S1","file_pl_head_oclass":"S1",` +
+				`"file_pl_tails":[` +
 				`{"oclass":"S2","split_off":1048576},` +
 				`{"oclass":"EC_2P1G1","split_off":4194304}],` +
 				`"chunk_size":1048576}}`,
 		},
+		"directory without progressive layout omits head": {
+			isDir:        true,
+			oidStr:       "5.6",
+			oclass:       "S1",
+			dirOclass:    "RP_2G1",
+			fileOclass:   "S1",
+			plHeadOclass: "S2",
+			chunkSize:    1048576,
+			expJSON: `{"object":{"oid":"5.6","oclass":"S1"},` +
+				`"directory":{"dir_oclass":"RP_2G1","file_oclass":"S1","chunk_size":1048576}}`,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			got := newFSGetAttrJSON(tc.isDir, tc.oidStr, tc.oclass, tc.dirOclass, tc.fileOclass, tc.chunkSize, tc.tails)
+			got := newFSGetAttrJSON(tc.isDir, tc.oidStr, tc.oclass, tc.dirOclass, tc.fileOclass, tc.plHeadOclass, tc.chunkSize, tc.tails)
 
 			gotBytes, err := json.Marshal(got)
 			if err != nil {

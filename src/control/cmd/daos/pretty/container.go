@@ -48,11 +48,17 @@ func PrintContainerInfo(out io.Writer, ci *daos.ContainerInfo, verbose bool) err
 				rows = append(rows, txtfmt.TableRow{"Dir Object Class": ci.DirObjectClass.String()})
 			}
 			if ci.FileObjectClass != 0 {
-				label := "File Object Class"
-				if len(ci.FilePLTails) > 0 {
-					label = "File Head Object Class"
+				rows = append(rows, txtfmt.TableRow{"File Object Class": ci.FileObjectClass.String()})
+			}
+			if ci.FilePLEnabled {
+				state := "enabled"
+				if len(ci.FilePLTails) == 0 {
+					state = "enabled (inactive: pool has too few targets)"
 				}
-				rows = append(rows, txtfmt.TableRow{label: ci.FileObjectClass.String()})
+				rows = append(rows, txtfmt.TableRow{"Progressive Layout": state})
+			}
+			if len(ci.FilePLTails) > 0 {
+				rows = append(rows, txtfmt.TableRow{"File Head Object Class": ci.FilePLHeadClass.String()})
 			}
 			for i, seg := range ci.FilePLTails {
 				tailLabel := "File Tail Object Class"

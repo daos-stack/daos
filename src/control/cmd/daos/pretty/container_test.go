@@ -185,6 +185,73 @@ func TestPretty_PrintContainerInfo(t *testing.T) {
 
 `,
 		},
+		"verbose output with active progressive layout": {
+			ci: &daos.ContainerInfo{
+				PoolUUID:         testPoolUUID,
+				ContainerUUID:    testContainerUUID,
+				Type:             daos.ContainerLayoutPOSIX,
+				RedundancyFactor: 1,
+				OpenTime:         daos.HLC(500),
+				CloseModifyTime:  daos.HLC(600),
+				POSIXAttributes: &daos.POSIXAttributes{
+					ChunkSize:       1048576,
+					FileObjectClass: daos.ObjectClass(3),
+					FilePLEnabled:   true,
+					FilePLHeadClass: daos.ObjectClass(4),
+					FilePLTails: []daos.PLSegment{
+						{ObjectClass: daos.ObjectClass(5), SplitOffset: 8 << 30},
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+  Container UUID              : 00000001-0001-0001-0001-000000000001           
+  Container Type              : POSIX                                          
+  Pool UUID                   : 00000001-0001-0001-0001-000000000001           
+  Container redundancy factor : 1                                              
+  Number of open handles      : 0                                              
+  Latest open time            : <TIMESTAMP> (0x1f4)
+  Latest close/modify time    : <TIMESTAMP> (0x258)
+  Number of snapshots         : 0                                              
+  File Object Class           : 0x3                                            
+  Progressive Layout          : enabled                                        
+  File Head Object Class      : 0x4                                            
+  File Tail Object Class      : 0x5                                            
+  Split Offset                : 8.0 GiB                                        
+  Chunk Size                  : 1.0 MiB                                        
+
+`,
+		},
+		"verbose output with inactive progressive layout": {
+			ci: &daos.ContainerInfo{
+				PoolUUID:         testPoolUUID,
+				ContainerUUID:    testContainerUUID,
+				Type:             daos.ContainerLayoutPOSIX,
+				RedundancyFactor: 1,
+				OpenTime:         daos.HLC(500),
+				CloseModifyTime:  daos.HLC(600),
+				POSIXAttributes: &daos.POSIXAttributes{
+					ChunkSize:       1048576,
+					FileObjectClass: daos.ObjectClass(3),
+					FilePLEnabled:   true,
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+  Container UUID              : 00000001-0001-0001-0001-000000000001           
+  Container Type              : POSIX                                          
+  Pool UUID                   : 00000001-0001-0001-0001-000000000001           
+  Container redundancy factor : 1                                              
+  Number of open handles      : 0                                              
+  Latest open time            : <TIMESTAMP> (0x1f4)
+  Latest close/modify time    : <TIMESTAMP> (0x258)
+  Number of snapshots         : 0                                              
+  File Object Class           : 0x3                                            
+  Progressive Layout          : enabled (inactive: pool has too few targets)   
+  Chunk Size                  : 1.0 MiB                                        
+
+`,
+		},
 		"non-verbose with label and various types": {
 			ci: &daos.ContainerInfo{
 				ContainerUUID:  testContainerUUID,

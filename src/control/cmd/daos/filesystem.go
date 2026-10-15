@@ -278,6 +278,7 @@ type fsGetAttrDirJSON struct {
 	DirAttr struct {
 		DirObjClass  string              `json:"dir_oclass"`
 		FileObjClass string              `json:"file_oclass"`
+		FilePLHead   string              `json:"file_pl_head_oclass,omitempty"`
 		FilePLTails  []fsGetAttrTailJSON `json:"file_pl_tails,omitempty"`
 		ChunkSize    uint64              `json:"chunk_size"`
 	} `json:"directory"`
@@ -294,14 +295,18 @@ type fsGetAttrFileJSON struct {
 
 // newFSGetAttrJSON builds the JSON output value for the fs get-attr command.
 // It is kept free of cgo so that the attribute-to-field mapping can be unit
-// tested. \a tails carries any progressive-layout segments beyond the head.
-func newFSGetAttrJSON(isDir bool, oidStr, oclass, dirOclass, fileOclass string, chunkSize uint64, tails []fsGetAttrTailJSON) any {
+// tested. \a tails carries any progressive-layout segments beyond the head and
+// \a plHeadOclass the directory's file-creation PL head class (empty when not PL).
+func newFSGetAttrJSON(isDir bool, oidStr, oclass, dirOclass, fileOclass, plHeadOclass string, chunkSize uint64, tails []fsGetAttrTailJSON) any {
 	if isDir {
 		out := fsGetAttrDirJSON{}
 		out.ObjAttr.OID = oidStr
 		out.ObjAttr.ObjClass = oclass
 		out.DirAttr.DirObjClass = dirOclass
 		out.DirAttr.FileObjClass = fileOclass
+		if len(tails) > 0 {
+			out.DirAttr.FilePLHead = plHeadOclass
+		}
 		out.DirAttr.FilePLTails = tails
 		out.DirAttr.ChunkSize = chunkSize
 		return out
@@ -336,11 +341,12 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "%s failed", fsOpString((ap.fs_op)))
 	}
 
-	var oclassName [16]C.char
+	var oclassName [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 	C.daos_oclass_id2name(attrs.doi_oclass_id, &oclassName[0])
 
-	var diroclassName [16]C.char
-	var fileoclassName [16]C.char
+	var diroclassName [C.MAX_OBJ_CLASS_NAME_LEN]C.char
+	var fileoclassName [C.MAX_OBJ_CLASS_NAME_LEN]C.char
+	var plHeadName [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 	var oid C.daos_obj_id_t = attrs.doi_oid
 	var oidStr string = fmt.Sprintf("%d.%d", oid.hi, oid.lo)
 	isDir := bool(C.mode_is_dir(cmode))
@@ -359,7 +365,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	}
 	for i := 0; i < plNr; i++ {
 		seg := attrs.doi_pl_segs[i]
-		var segClass [16]C.char
+		var segClass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 		C.daos_oclass_id2name(seg.pls_oclass_id, &segClass[0])
 		t := plTail{
 			oclass:   C.GoString(&segClass[0]),
@@ -375,6 +381,9 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	if isDir {
 		C.daos_oclass_id2name(attrs.doi_dir_oclass_id, &diroclassName[0])
 		C.daos_oclass_id2name(attrs.doi_file_oclass_id, &fileoclassName[0])
+		if isPL {
+			C.daos_oclass_id2name(attrs.doi_pl_head_oclass_id, &plHeadName[0])
+		}
 	}
 
 	if cmd.JSONOutputEnabled() {
@@ -384,7 +393,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		}
 		jsonAttrs := newFSGetAttrJSON(isDir, oidStr, C.GoString(&oclassName[0]),
 			C.GoString(&diroclassName[0]), C.GoString(&fileoclassName[0]),
-			uint64(attrs.doi_chunk_size), jsonTails)
+			C.GoString(&plHeadName[0]), uint64(attrs.doi_chunk_size), jsonTails)
 		return cmd.OutputJSON(jsonAttrs, nil)
 	}
 
@@ -393,7 +402,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 		cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
 		cmd.Infof("Directory Creation Object Class = %s", C.GoString(&diroclassName[0]))
 		if isPL {
-			cmd.Infof("File Creation Head Object Class = %s", C.GoString(&fileoclassName[0]))
+			cmd.Infof("File Creation Head Object Class = %s", C.GoString(&plHeadName[0]))
 			for i, t := range tails {
 				if len(tails) > 1 {
 					cmd.Infof("File Creation Tail %d Object Class = %s", i+1, t.oclass)

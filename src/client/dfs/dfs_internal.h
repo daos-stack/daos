@@ -21,7 +21,7 @@
 /** D-key name of SB metadata */
 #define SB_DKEY            "DFS_SB_METADATA"
 
-#define SB_AKEYS           9
+#define SB_AKEYS           10
 /** A-key name of SB magic */
 #define MAGIC_NAME         "DFS_MAGIC"
 /** A-key name of SB version */
@@ -40,6 +40,8 @@
 #define CONT_MODE_NAME     "DFS_MODE"
 /** A-key name of the object class hints */
 #define CONT_HINT_NAME     "DFS_HINTS"
+/** A-key name of the progressive layout configuration (absent when PL is disabled) */
+#define CONT_PL_NAME       "DFS_PL"
 
 #define MAGIC_IDX          0
 #define SB_VER_IDX         1
@@ -50,11 +52,28 @@
 #define FILE_OC_IDX        6
 #define CONT_MODE_IDX      7
 #define CONT_HINT_IDX      8
+#define CONT_PL_IDX        9
+
+/** One tail segment of the on-disk progressive layout configuration record */
+struct dfs_sb_pl_seg {
+	daos_oclass_id_t oclass;
+	daos_size_t      split_off;
+};
+
+/** On-disk progressive layout configuration record; user-supplied values, 0 means auto */
+struct dfs_sb_pl {
+	uint32_t             nr;
+	daos_oclass_id_t     head;
+	struct dfs_sb_pl_seg seg[DFS_PL_MAX_SEGMENTS];
+};
+
+/** Size of the on-disk PL record holding \a nr tail segments */
+#define DFS_SB_PL_SIZE(nr)     (offsetof(struct dfs_sb_pl, seg) + (nr) * sizeof(struct dfs_sb_pl_seg))
 
 /** Magic Value */
 #define DFS_SB_MAGIC       0xda05df50da05df50
 /** DFS SB version value */
-#define DFS_SB_VERSION     2
+#define DFS_SB_VERSION         3
 /** DFS Layout Version Value */
 #define DFS_LAYOUT_VERSION     4
 /** Layout version where progressive-layout tail OID was introduced */
