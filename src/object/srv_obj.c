@@ -3013,7 +3013,7 @@ check_update_rebuild_race(struct ds_cont_child *cont, daos_epoch_t epoch)
 }
 
 static inline int
-check_read_rebuild_fense(struct ds_cont_child *cont, uint32_t opc)
+check_read_rebuild_fense(struct ds_cont_child *cont, uint32_t ver, uint32_t opc)
 {
 	struct ds_pool *pool = cont->sc_pool->spc_pool;
 
@@ -3022,7 +3022,7 @@ check_read_rebuild_fense(struct ds_cont_child *cont, uint32_t opc)
 	 * or current rebuild is aborted, or current rebuild is globally done. For all the cases,
 	 * return -DER_FETCH_AGAIN to the fetch/enumerate sponsor who will handle them by itself.
 	 */
-	if (unlikely(pool->sp_rebuild_epoch == 0)) {
+	if (unlikely(pool->sp_rebuild_epoch == 0 || pool->sp_rebuild_slave_ver < ver)) {
 		D_DEBUG(DB_IO, "Wait for rebuild epoch to be refreshed and retry opc %u.\n", opc);
 		return -DER_REBUILD_DELAY;
 	}
@@ -3130,7 +3130,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		struct dtx_handle	*dth;
 
 		if (orw->orw_flags & ORF_FOR_MIGRATION) {
-			rc = check_read_rebuild_fense(ioc.ioc_coc, opc_get(rpc->cr_opc));
+			rc = check_read_rebuild_fense(ioc.ioc_coc, orw->orw_map_ver,
+						      opc_get(rpc->cr_opc));
 			if (rc != 0)
 				goto out;
 
@@ -3691,7 +3692,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		oei->oei_map_ver, ioc.ioc_map_ver);
 
 	if (oei->oei_flags & ORF_FOR_MIGRATION) {
-		rc = check_read_rebuild_fense(ioc.ioc_coc, opc);
+		rc = check_read_rebuild_fense(ioc.ioc_coc, oei->oei_map_ver, opc);
 		if (rc != 0)
 			goto out;
 	}

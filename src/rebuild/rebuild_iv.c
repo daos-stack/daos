@@ -214,8 +214,12 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			dst_iv->riv_stable_epoch, dst_iv->riv_global_dtx_resyc_version);
 
 		if (rpt->rt_stable_epoch == 0) {
-			rpt->rt_stable_epoch           = src_iv->riv_stable_epoch;
-			rpt->rt_pool->sp_rebuild_epoch = src_iv->riv_stable_epoch;
+			rpt->rt_stable_epoch = src_iv->riv_stable_epoch;
+			if (rpt->rt_pool->sp_rebuild_epoch < src_iv->riv_stable_epoch) {
+				rpt->rt_pool->sp_rebuild_epoch     = src_iv->riv_stable_epoch;
+				rpt->rt_pool->sp_rebuild_slave_ver = rpt->rt_rebuild_ver;
+				rpt->rt_pool->sp_rebuild_slave_gen = rpt->rt_rebuild_gen;
+			}
 		} else if (rpt->rt_stable_epoch != dst_iv->riv_stable_epoch) {
 			D_WARN("leader change stable epoch from "DF_U64" to "
 			       DF_U64 "\n", rpt->rt_stable_epoch,

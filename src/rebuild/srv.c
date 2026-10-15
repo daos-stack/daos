@@ -1871,7 +1871,8 @@ static bool
 rebuild_retryable_err(int error)
 {
 	return (daos_crt_network_error(error) || error == -DER_TIMEDOUT || error == -DER_GRPVER ||
-		error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE);
+		error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE ||
+		errno == -DER_REBUILD_DELAY);
 }
 
 static bool
@@ -3388,9 +3389,7 @@ rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
 
 	ABT_mutex_lock(rpt->rt_lock);
 	ds_pool_get(pool);
-	rpt->rt_pool               = pool; /* pin it */
-	pool->sp_rebuild_slave_ver = rpt->rt_rebuild_ver;
-	pool->sp_rebuild_slave_gen = rpt->rt_rebuild_gen;
+	rpt->rt_pool = pool; /* pin it */
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	*p_rpt = rpt;

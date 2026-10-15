@@ -196,6 +196,9 @@ struct ds_pool_child {
 	 * DAOS_TGT_TAG.
 	 */
 	void			*spc_metrics[DAOS_NR_MODULE];
+
+	/* The remaining time (seconds) for waiting container local stable epoch (LSE). */
+	int                      spc_remaining_wait_time;
 };
 
 struct ds_pool_svc_op_key {
