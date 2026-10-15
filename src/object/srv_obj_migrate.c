@@ -287,7 +287,7 @@ struct iter_obj_arg {
 		if ((tried & (tried - 1)) == 0)                                                    \
 			D_WARN(DF_RB ": retry " DF_UOID ", tried[%d] " DF_U64 " secs, rc " DF_RC,  \
 			       DP_RB_MPT(tls), DP_UOID(oid), tried, (duration), DP_RC(rc));        \
-		dss_sleep(1000);                                                                   \
+		dss_sleep(rc == -DER_REBUILD_DELAY ? 2000 + d_rand() % 2000 : 1000);               \
 	} while (0)
 
 static int
