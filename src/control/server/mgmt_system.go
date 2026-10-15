@@ -1894,29 +1894,30 @@ func (svc *mgmtSvc) eraseAllEngines(ctx context.Context) (*mgmtpb.SystemEraseRes
 		return nil, err
 	}
 
-	// Erase the leader's own DB before telling replicas to erase, to avoid a race where
-	// a replica restarts with a clean DB, rejoins, and syncs the leader's stale entries
-	// before the leader erases itself.
-	//
+	// Erase storage before any raft DB, on replicas and then the leader, so the system
+	// DB keeps tracking state for as long as possible: a replica/leader with wiped
+	// storage can't restart and rejoin with a clean DB, so there's no race to guard
+	// against by erasing DBs first.
+	svc.log.Trace("SystemErase: LEADER - Step 4: Sending erase request to MS replica peers")
+	if err := svc.eraseReplicas(ctx, peers); err != nil {
+		return nil, err
+	}
+
+	svc.log.Trace("SystemErase: LEADER - Step 5: Erasing leader's local engines")
+	if err := svc.eraseLocalEngines(); err != nil {
+		return nil, err
+	}
+
 	// SAFETY WARNING: once raft is stopped the leader cannot handle leadership changes;
 	// if it crashes before completing, manual recovery will be required. (POINT OF NO
 	// RETURN)
-	svc.log.Trace("SystemErase: LEADER - Step 4: Erasing leader's raft DB (POINT OF NO RETURN)")
-
+	svc.log.Trace("SystemErase: LEADER - Step 6: Erasing leader's raft DB (POINT OF NO RETURN)")
 	if err := svc.eraseSysdb("LEADER"); err != nil {
 		return nil, err
 	}
 
 	if err := svc.scheduleControlPlaneRestart("LEADER"); err != nil {
 		svc.log.Errorf("failed to schedule control plane restart: %s", err)
-	}
-
-	if err := svc.eraseReplicas(ctx, peers); err != nil {
-		return nil, err
-	}
-
-	if err := svc.eraseLocalEngines(); err != nil {
-		return nil, err
 	}
 
 	return pbResp, nil
@@ -1969,39 +1970,22 @@ func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
 // SystemErase implements the gRPC handler for erasing system metadata.
 //
 // SAFETY: destructive and irreversible. All ranks must already be stopped (enforced by
-// checkSystemErase). On the leader, non-MS engine superblocks are wiped while raft is
-// still up, then the leader's raft DB is stopped (POINT OF NO RETURN: a crash after this
-// requires manual recovery).
-//
-//   - Forwarded (leader -> replica peer): erase local engines + DB, restart immediately
-//   - Non-forwarded (external, serviced by the leader): wipe non-MS engines, erase its
-//     own DB, coordinate replica erase, then its own engines, restart last
+// checkSystemErase). Engine storage is wiped before any raft DB is stopped (POINT OF NO
+// RETURN: a crash after a DB is erased requires manual recovery).
 func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseReq) (*mgmtpb.SystemEraseResp, error) {
-	// Distinguish an externally-initiated request (e.g. from the dmg admin tool) from
-	// an internally-forwarded request sent by the MS leader directly to a specific
-	// non-leader replica peer (see eraseReplicas()). Only external requests must be
-	// routed to the current leader so it can coordinate DB/engine erasure across all
-	// replicas and ranks; forwarded per-replica requests are explicitly targeted at a
-	// non-leader host by the leader and must be allowed to run locally there.
-	//
-	// If the caller's component can't be determined (e.g. missing header in an
-	// insecure/no-TLS deployment, or an unexpected error), fail safe by treating the
-	// request as external so that leader-only enforcement still applies.
+	// Forwarded requests (leader -> replica, see eraseReplicas()) must always run
+	// locally, even if this replica has since become leader. Default to false
+	// (external, leader-only) if the caller's component can't be determined.
 	isForwarded := false
 	if comp, err := build.FromContext(ctx); err == nil && comp.Component == build.ComponentServer {
 		isForwarded = true
 	}
 
 	if isForwarded {
-		// At a minimum, ensure that this only runs on MS replicas.
 		if err := svc.checkReplicaRequest(pbReq); err != nil {
 			return nil, err
 		}
 	} else {
-		// External (admin) request: must be serviced by the current leader. If this
-		// replica isn't the leader, checkLeaderRequest() returns *system.ErrNotLeader,
-		// which the dmg/control client automatically retries against the leader hint
-		// (see lib/control/rpc.go's *system.ErrNotLeader handling).
 		if err := svc.checkLeaderRequest(pbReq); err != nil {
 			return nil, err
 		}
@@ -2013,27 +1997,22 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 	}
 	svc.log.Tracef("SystemErase: START [role=%s, forwarded=%v]", leaderStr, isForwarded)
 
-	// isForwarded (not local leader-state) decides which code path runs: a forwarded
-	// request is always explicitly targeted at a specific replica by the leader (see
-	// eraseReplicas()), so it must always take the "erase self and restart" path, even
-	// if this host's local raft state happens to have changed (e.g. it has itself just
-	// been elected leader) by the time the request is handled. Keying this decision off
-	// IsLeader() instead would be racy under concurrent leadership changes.
 	if isForwarded {
-		svc.log.Trace("SystemErase: REPLICA - Step 3: Erasing raft DB")
+		svc.log.Trace("SystemErase: REPLICA - Step 1: Erasing local engines")
+		if err := svc.eraseLocalEngines(); err != nil {
+			return nil, errors.Wrap(err, "resetting non-leader ms-replica engines")
+		}
+
+		// SAFETY WARNING: once raft is stopped this replica cannot track system state;
+		// if it crashes before completing, manual recovery will be required. (POINT OF
+		// NO RETURN)
+		svc.log.Trace("SystemErase: REPLICA - Step 2: Erasing raft DB (POINT OF NO RETURN)")
 		if err := svc.eraseSysdb(leaderStr); err != nil {
 			return nil, errors.Wrap(err, "erasing non-leader ms-replica db")
 		}
 
-		// The DB is gone; a restart is now unconditionally required to recover, so arm
-		// it right after this point of no return rather than unconditionally before
-		// any erase was attempted.
 		if err := svc.scheduleControlPlaneRestart(leaderStr); err != nil {
 			svc.log.Errorf("failed to schedule control plane restart: %s", err)
-		}
-
-		if err := svc.eraseLocalEngines(); err != nil {
-			return nil, errors.Wrap(err, "resetting non-leader ms-replica engines")
 		}
 
 		svc.log.Tracef("SystemErase: REPLICA - returning success to caller [isForwarded=%v]", isForwarded)

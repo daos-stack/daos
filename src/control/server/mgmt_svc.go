@@ -94,9 +94,9 @@ type mgmtSvc struct {
 	groupUpdateReqs     chan bool
 	lastMapVer          uint32
 	cancel              context.CancelFunc
-	grpcServer          *grpc.Server   // reference to server's gRPC server
-	gracefulStopTimeout time.Duration  // bound how long to wait for gRPC server's GracefulStop
-	loopWg              sync.WaitGroup // block on background processing loops exit
+	grpcServer          *grpc.Server
+	gracefulStopTimeout time.Duration
+	loopWg              sync.WaitGroup
 	// restartControlPlane performs the actual control-plane process restart (draining
 	// the gRPC server then exec()ing) scheduled by SystemErase via
 	// scheduleControlPlaneRestart(). It defaults to execControlPlaneRestart, but is a
