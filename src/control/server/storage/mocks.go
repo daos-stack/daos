@@ -270,6 +270,17 @@ func MockGetTopology(context.Context) (*hardware.Topology, error) {
 						},
 					},
 				),
+			// Mimics a dual-socket platform where each socket's PCI buses are
+			// enumerated under a distinct, non-zero PCI domain (segment).
+			2: hardware.MockNUMANode(0, 14).
+				WithPCIBuses(
+					[]*hardware.PCIBus{
+						{
+							LowAddress:  *hardware.MustNewPCIAddress("0001:80:00.0"),
+							HighAddress: *hardware.MustNewPCIAddress("0001:8f:00.0"),
+						},
+					},
+				),
 		},
 	}, nil
 }
