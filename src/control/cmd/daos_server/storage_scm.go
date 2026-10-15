@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -232,7 +232,10 @@ type scanSCMCmd struct {
 	scmCmd
 }
 
-func scanPMem(cmd *scanSCMCmd) (*storage.ScmScanResponse, error) {
+// scanPMem scans for locally-attached PMem. pmemInConfig indicates whether PMem is
+// expected to be present (e.g. false for tmpfs/MD-on-SSD deployments), determining
+// whether a missing ipmctl binary is treated as fatal (see scm.Provider.Scan()).
+func scanPMem(cmd *scanSCMCmd, pmemInConfig bool) (*storage.ScmScanResponse, error) {
 	cmd.Info("Scanning locally-attached PMem storage...")
 
 	if cmd.config != nil && cmd.SocketID == nil {
@@ -241,7 +244,7 @@ func scanPMem(cmd *scanSCMCmd) (*storage.ScmScanResponse, error) {
 
 	req := storage.ScmScanRequest{
 		SocketID:     cmd.SocketID,
-		PMemInConfig: true,
+		PMemInConfig: pmemInConfig,
 	}
 
 	cmd.Tracef("scm scan request: %+v", req)
@@ -251,7 +254,7 @@ func scanPMem(cmd *scanSCMCmd) (*storage.ScmScanResponse, error) {
 func (cmd *scanSCMCmd) Execute(_ []string) error {
 	cmd.Debugf("executing scan scm command: %+v", cmd)
 
-	resp, err := scanPMem(cmd)
+	resp, err := scanPMem(cmd, true)
 	if err != nil {
 		return err
 	}
