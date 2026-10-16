@@ -816,7 +816,7 @@ retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
 	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM ||
-	     daos_crt_network_error(rc)) &&
+	     rc == -DER_REBUILD_DELAY || daos_crt_network_error(rc)) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
@@ -3336,7 +3336,8 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 			/* To avoid reclaim and retry rebuild, let's retry until the pool map
 			 * being changed due to further failure.
 			 */
-			if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) &&
+			if ((rc == -DER_TIMEDOUT || rc == -DER_REBUILD_DELAY ||
+			     daos_crt_network_error(rc)) &&
 			    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 				now = daos_gettime_coarse();
 				if (then == 0)
