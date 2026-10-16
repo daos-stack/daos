@@ -11,6 +11,14 @@
 #include <gurt/common.h>
 #include <daos/common.h>
 
+/**
+ * Do NOT use the following format to print DKEYs outside code paths dedicated SOLELY to local
+ * consistency checks. Regular code paths use a less verbose format for security reasons.
+ * See daos-stack/daos#2932.
+ */
+#define CK_DKEY_FMT         "[%d] '%s'"
+#define CK_DKEY_PRINT(DKEY) (int)(DKEY)->iov_len, daos_key2str(DKEY)
+
 #define CHECKER_INDENT_MAX 10
 
 /**
@@ -265,6 +273,24 @@ checker_fi_proxy(uint64_t fail_loc_in)
 		return DAOS_FAULT_BTREE_FEATURES;
 	case DLCK_FAULT_CONT_DOES_NOT_EXIST:
 		return DAOS_FAULT_CONT_DOES_NOT_EXIST;
+	case DLCK_FAULT_OBJ_ILOG_MAGIC:
+		return DAOS_FAULT_ILOG_MAGIC;
+	case DLCK_FAULT_DKEY_TREE_INV_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_INV_CLASS;
+	case DLCK_FAULT_DKEY_TREE_UNREG_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_UNREG_CLASS;
+	case DLCK_FAULT_DKEY_TREE_FEATURES:
+		return DAOS_FAULT_BTREE_FEATURES;
+	case DLCK_FAULT_DKEY_ILOG_MAGIC:
+		return DAOS_FAULT_ILOG_MAGIC;
+	case DLCK_FAULT_AKEY_TREE_INV_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_INV_CLASS;
+	case DLCK_FAULT_AKEY_TREE_UNREG_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_UNREG_CLASS;
+	case DLCK_FAULT_AKEY_TREE_FEATURES:
+		return DAOS_FAULT_BTREE_FEATURES;
+	case DLCK_FAULT_AKEY_ILOG_MAGIC:
+		return DAOS_FAULT_ILOG_MAGIC;
 	default:
 		D_ASSERTF(0, "Unknown fail location: %lu\n", fail_loc_in);
 		return 0;
