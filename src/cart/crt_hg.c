@@ -1485,6 +1485,13 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		return rc;
 	}
 
+	/* A previously canceled in-flight RPC finally completed via Mercury. */
+	if (rpc_priv->crp_hg_cancelled) {
+		struct crt_context *crt_ctx = rpc_pub->cr_ctx;
+
+		CRT_METRIC_DEC_GAUGE(crt_ctx, CM_RPC_CANCEL_INFLIGHT, 1);
+	}
+
 	RPC_TRACE(DB_TRACE, rpc_priv, "entered, hg_cbinfo->ret %d.\n", hg_cbinfo->ret);
 	switch (hg_cbinfo->ret) {
 	case HG_SUCCESS:

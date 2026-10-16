@@ -521,6 +521,10 @@ struct crt_bulk {
 	X(CM_RPC_COMPLETED_ERR, D_TM_COUNTER, "Total number of sent RPCs completed with error",    \
 	  "rpcs")                                                                                  \
 	X(CM_RPC_TIMEDOUT, D_TM_COUNTER, "Total number of timed out RPC send requests", "rpcs")    \
+	X(CM_RPC_CANCEL_SENT, D_TM_COUNTER,                                                        \
+	  "Total number of Mercury cancels issued on in-flight timeout", "rpcs")                   \
+	X(CM_RPC_CANCEL_INFLIGHT, D_TM_GAUGE,                                                      \
+	  "Canceled in-flight RPCs still awaiting lower-layer completion", "rpcs")                 \
 	X(CM_RPC_DOUBLE_COMPLETE, D_TM_COUNTER,                                                    \
 	  "Total number of RPCs having a duplicate completion ", "rpcs")                           \
 	X(CM_BULK_CREATE, D_TM_COUNTER, "Total number of bulks created", "bulks")                  \
