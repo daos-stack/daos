@@ -254,8 +254,6 @@ struct dtx_stat {
 	uint32_t	dtx_pool_cmt_count;
 	/* The epoch for the most new DTX entry that is aggregated. */
 	uint64_t	dtx_newest_aggregated;
-	/* All reindexed active DTX are either committed or aborted. */
-	bool            dtx_reindex_empty;
 };
 
 enum dtx_flags {

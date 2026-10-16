@@ -3140,16 +3140,15 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		struct dtx_handle	*dth;
 
 		if (orw->orw_flags & ORF_FOR_MIGRATION) {
-			uint64_t read_epoch;
+			uint64_t rd_epoch;
 
 			if (orw->orw_epoch >= orw->orw_epoch_first &&
 			    orw->orw_epoch != DAOS_EPOCH_MAX)
-				read_epoch = orw->orw_epoch;
+				rd_epoch = orw->orw_epoch;
 			else
-				read_epoch = orw->orw_epoch_first;
+				rd_epoch = orw->orw_epoch_first;
 
-			rc = check_read_rebuild_fense(ioc.ioc_coc, read_epoch,
-						      opc_get(rpc->cr_opc));
+			rc = check_read_rebuild_fense(ioc.ioc_coc, rd_epoch, opc_get(rpc->cr_opc));
 			if (rc != 0)
 				goto out;
 

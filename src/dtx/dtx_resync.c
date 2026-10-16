@@ -765,15 +765,6 @@ again:
 			ABT_thread_yield();
 			goto again;
 		}
-
-		if (rc == 0) {
-			struct dtx_stat stat;
-
-			vos_dtx_stat(cont->sc_hdl, &stat, DSF_DUMP_REINDEX);
-			if (!stat.dtx_reindex_empty)
-				D_WARN("Incompleted orphan DTX cleanup for " DF_CONT "\n",
-				       DP_CONT(arg->pool_uuid, entry->ie_couuid));
-		}
 	} else {
 		rc = dtx_resync(iter_param->ip_hdl, cont, arg->version, true);
 	}
