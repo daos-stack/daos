@@ -1778,6 +1778,22 @@ retry:
 			if (ec_agg->ea_server_ephs[i].eph < eph) {
 				ec_agg->ea_server_ephs[i].eph = eph;
 				ec_agg->ea_server_ephs[i].ee_update_ts = daos_gettime_coarse();
+			} else if (eph == 0 && ec_agg->ea_current_eph != 0) {
+				/*
+				 * A rank reports zero only while its EC aggregation is paused
+				 * waiting for the boundary (sc_ec_agg_eph_valid == 0), e.g. a
+				 * reintegrated/extended rank that got the VOS container after the
+				 * last refresh. Ask cont_agg_eph_sync() to re-send the current
+				 * boundary even if the minimum epoch did not change, otherwise
+				 * the rank never starts and pins the boundary forever.
+				 * (ea_current_eph == 0 refreshes every round anyway.)
+				 */
+				if (!ec_agg->ea_need_refresh)
+					D_INFO(DF_CONT ": rank %u waits for EC agg boundary, "
+						       "current " DF_X64 "\n",
+					       DP_CONT(pool_uuid, cont_uuid), rank,
+					       ec_agg->ea_current_eph);
+				ec_agg->ea_need_refresh = 1;
 			}
 			break;
 		}
@@ -1820,25 +1836,9 @@ cont_refresh_vos_agg_eph_one(void *data)
 	int			rc;
 
 	rc = ds_cont_child_lookup(arg->pool_uuid, arg->cont_uuid, &cont_child);
-	if (rc == -DER_NONEXIST) {
-		/*
-		 * The VOS container can be absent on this target when the container was
-		 * created while the target was excluded, and the following reintegration
-		 * (or extend) did not migrate any record for it. Create it here, otherwise
-		 * this target never reports EC aggregation epoch to the container service
-		 * leader, and the leader keeps the EC aggregation boundary of the whole
-		 * container pinned. The container service leader only refreshes containers
-		 * that still exist in RDB, so it is safe to create the VOS container here.
-		 */
-		rc = ds_cont_child_open_create(arg->pool_uuid, arg->cont_uuid, &cont_child);
-		DL_CDEBUG(rc != 0 && rc != -DER_SHUTDOWN, DLOG_ERR, DLOG_INFO, rc,
-			  DF_CONT " create missing vos container",
-			  DP_CONT(arg->pool_uuid, arg->cont_uuid));
-		if (rc != 0)
-			return rc;
-	} else if (rc != 0) {
-		DL_CDEBUG(rc != -DER_SHUTDOWN, DLOG_ERR, DB_MD, rc, DF_CONT " lookup cont failed",
-			  DP_CONT(arg->pool_uuid, arg->cont_uuid));
+	if (rc) {
+		DL_CDEBUG(rc != 0 && rc != -DER_SHUTDOWN, DLOG_ERR, DB_MD, rc,
+			  DF_CONT " lookup cont failed", DP_CONT(arg->pool_uuid, arg->cont_uuid));
 		return rc;
 	}
 
@@ -1868,13 +1868,9 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.min_eph = eph;
 
-	/*
-	 * NB: cont_refresh_vos_agg_eph_one() may create the VOS container, which can yield
-	 * and needs a deep stack, so a thread (ULT) collective must be used here.
-	 */
-	rc = ds_pool_thread_collective(
-	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-	    cont_refresh_vos_agg_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
+	rc = ds_pool_task_collective(pool_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				     cont_refresh_vos_agg_eph_one, &arg, DSS_ULT_FL_PERIODIC);
 	if (rc) {
 		DL_ERROR(rc, DF_CONT ": refresh ec_agg_eph " DF_X64 " failed.",
 			 DP_CONT(pool_uuid, cont_uuid), eph);
@@ -2096,7 +2092,14 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		if (min_eph < ec_agg->ea_rdb_eph)
 			min_eph = ec_agg->ea_rdb_eph;
 
-		if (min_eph == ec_agg->ea_current_eph && ec_agg->ea_current_eph != 0)
+		/*
+		 * Skip the refresh when nothing changed, unless some rank asked for the
+		 * boundary (see ds_cont_leader_update_agg_eph()). Such a rank has eph 0,
+		 * so min_eph is pinned to ea_rdb_eph == ea_current_eph and it would never
+		 * get the boundary it needs to start reporting.
+		 */
+		if (min_eph == ec_agg->ea_current_eph && ec_agg->ea_current_eph != 0 &&
+		    !ec_agg->ea_need_refresh)
 			continue;
 
 		/**
@@ -2143,6 +2146,10 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			}
 		}
 
+		/* clear before the refresh (which yields), so a request arriving meanwhile
+		 * triggers another refresh in the next round.
+		 */
+		ec_agg->ea_need_refresh = 0;
 		rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg->ea_cont_uuid, min_eph,
 						svc->cs_ec_leader_ephs_req);
 		if (rc) {
