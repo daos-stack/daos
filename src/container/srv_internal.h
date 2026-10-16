@@ -78,7 +78,11 @@ struct cont_ec_agg {
 	struct ec_eph		*ea_server_ephs;
 	d_list_t		ea_list;
 	int			ea_servers_num;
-	uint32_t                 ea_deleted : 1;
+	uint32_t                 ea_deleted : 1,
+	    /* some rank reported eph 0 (its EC aggregation waits for the boundary), re-send the
+	     * boundary in the next cont_agg_eph_sync() even if the minimum epoch did not change.
+	     */
+	    ea_need_refresh                 : 1;
 };
 
 /*
