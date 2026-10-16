@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -140,6 +141,25 @@ crt_proc_struct_dcs_csum_info(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 /**
+ * Free the checksum buffers of the first \a nr entries of \a iod_csum->ic_data,
+ * then the array itself. Used to unwind a partially decoded iod_csums.
+ */
+static void
+iod_csums_free_decoded(struct dcs_iod_csums *iod_csum, uint32_t nr)
+{
+	uint32_t i;
+
+	if (iod_csum->ic_data == NULL)
+		return;
+
+	for (i = 0; i < nr; i++)
+		D_FREE(iod_csum->ic_data[i].cs_csum);
+
+	D_FREE(iod_csum->ic_data);
+	iod_csum->ic_nr = 0;
+}
+
+/**
  * advanced iod_csums proc, can be used to proc partial data of the iod_csum
  * for EC obj.
  */
@@ -190,7 +210,7 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 				rc = proc_struct_dcs_csum_info(proc, proc_op,
 							       &iod_csum->ic_data[i]);
 				if (unlikely(rc)) {
-					D_FREE(iod_csum->ic_data);
+					iod_csums_free_decoded(iod_csum, i);
 					return rc;
 				}
 			}
@@ -198,7 +218,7 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 	}
 
 	if (FREEING(proc_op)) {
-		for (i = 0; i < iod_csum->ic_nr; i++) {
+		for (i = 0; i < iod_csum->ic_nr && iod_csum->ic_data != NULL; i++) {
 			rc = proc_struct_dcs_csum_info(proc, proc_op,
 						       &iod_csum->ic_data[i]);
 			if (unlikely(rc))
@@ -212,7 +232,7 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 	rc = proc_struct_dcs_csum_info(proc, proc_op, &iod_csum->ic_akey);
 	if (unlikely(rc)) {
 		if (DECODING(proc_op))
-			D_FREE(iod_csum->ic_data);
+			iod_csums_free_decoded(iod_csum, iod_csum->ic_nr);
 		return rc;
 	}
 
