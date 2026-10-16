@@ -367,6 +367,9 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 		return rc;
 	}
 
+	/** register DTX module key */
+	dss_register_key(dtx_module.sm_key);
+
 	/** start an engine */
 	rc = dlck_engine_start(&args->engine, &engine);
 	if (rc != DER_SUCCESS) {
@@ -397,9 +400,6 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 	for (int i = 0; i < args->engine.targets; ++i) {
 		random_uuid(bundle->co_uuids[i], &seed);
 	}
-
-	/** register DTX module key */
-	dss_register_key(dtx_module.sm_key);
 
 	bundle->args_engine = &args->engine;
 	bundle->args_files  = &args->files;
