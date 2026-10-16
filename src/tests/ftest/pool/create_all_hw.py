@@ -1,6 +1,6 @@
 """
 (C) Copyright 2022-2023 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -78,7 +78,7 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
             created pool is always the same.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,hw,medium
         :avocado: tags=pool,pool_create_all
         :avocado: tags=PoolCreateAllHwTests,test_recycle_pools_hw
         """
