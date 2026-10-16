@@ -999,7 +999,7 @@ pipeline {
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh' +
                                                   ' --system-ram-reserved 4' +
-                                                  ' --max-log-size 1950MiB' +
+                                                  ' --max-log-size 2500MiB' +
                                                   ' --dfuse-dir /localhome/jenkins/' +
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
@@ -1024,7 +1024,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/'],
+                            unitTestPost artifacts: ['nlt_logs/', 'nlt-summary-nlt.md'],
                                          testResults: 'nlt-junit.xml',
                                          referenceJobName: 'daos-stack/daos/release%252F2.8',
                                          valgrind_stash: 'nlt-memcheck',
@@ -1193,7 +1193,7 @@ pipeline {
                             ],
                             unitTestPostArgs: [
                                 /* groovylint-disable-next-line DuplicateListLiteral */
-                                artifacts: ['nlt_logs/'],
+                                artifacts: ['nlt_logs/', 'nlt-summary-fault-injection.md'],
                                 testResults: 'nlt-junit.xml',
                                 with_valgrind: '',
                                 FI: true],
