@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,6 +34,8 @@ struct pool_metrics {
 	/* service metrics */
 	struct d_tm_node_t      *service_leader;
 	struct d_tm_node_t      *map_version;
+	struct d_tm_node_t      *map_dist_begin; /* when last map_dist callback began */
+	struct d_tm_node_t      *map_dist_state; /* low 2 bits: phase, higher bits: call count */
 	struct d_tm_node_t      *open_handles;
 	struct d_tm_node_t      *total_targets;
 	struct d_tm_node_t      *disabled_targets;
