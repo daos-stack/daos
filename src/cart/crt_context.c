@@ -1209,6 +1209,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 				 "opc: %#x.\n",
 				 rc, rpc_priv->crp_pub.cr_opc);
 			crt_context_req_untrack(rpc_priv);
+		} else if (!rpc_priv->crp_hg_cancelled) {
+			rpc_priv->crp_hg_cancelled = 1;
+			CRT_METRIC_INC_GAUGE(crt_ctx, CM_RPC_HG_CANCEL_INFLIGHT, 1);
 		}
 		crt_rpc_unlock(rpc_priv);
 		break;

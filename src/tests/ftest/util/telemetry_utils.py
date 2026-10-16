@@ -401,6 +401,8 @@ class TelemetryUtils():
         "engine_net_cm_rpc_completed",
         "engine_net_cm_rpc_completed_err",
         "engine_net_cm_rpc_timedout",
+        "engine_net_cm_rpc_hg_inflight",
+        "engine_net_cm_rpc_hg_cancel_inflight",
         "engine_net_cm_rpc_double_complete",
         "engine_net_cm_bulk_create",
         "engine_net_cm_bulk_create_failed",
