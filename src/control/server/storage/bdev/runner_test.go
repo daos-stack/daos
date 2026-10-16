@@ -7,9 +7,15 @@
 package bdev
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // scriptCall absolute details of a call into the bdev runner script.
@@ -41,4 +47,126 @@ func mockScriptRunner(t *testing.T, log logging.Logger, mbc *MockBackendConfig) 
 			return "", nil
 		},
 	}, &calls
+}
+
+// TestSpdkSetupScript_validateDevType verifies that run() refuses to invoke the SPDK setup
+// script unless DEV_TYPE has been explicitly set to one of the two values DAOS supports. This
+// guards against a future regression where a new or modified spdkSetupScript method forgets to
+// set DEV_TYPE in its env map, which would otherwise silently fall back to SPDK's default
+// behavior of selecting every supported device class (not just VMD/NVMe).
+func TestSpdkSetupScript_validateDevType(t *testing.T) {
+	for name, tc := range map[string]struct {
+		devType string
+		unset   bool
+		expErr  error
+	}{
+		"unset": {
+			unset:  true,
+			expErr: errors.New("invalid or unset _DEV_TYPE"),
+		},
+		"empty": {
+			devType: "",
+			expErr:  errors.New("invalid or unset _DEV_TYPE"),
+		},
+		"invalid": {
+			devType: "IOAT",
+			expErr:  errors.New("invalid or unset _DEV_TYPE"),
+		},
+		"lower case invalid": {
+			devType: "nvme",
+			expErr:  errors.New("invalid or unset _DEV_TYPE"),
+		},
+		"vmd": {
+			devType: devTypeVMD,
+		},
+		"nvme": {
+			devType: devTypeNVMe,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			sss, calls := mockScriptRunner(t, log, nil)
+			sss.env = map[string]string{
+				"PATH": "/some/path",
+			}
+			if !tc.unset {
+				sss.env[devTypeEnv] = tc.devType
+			}
+
+			gotErr := sss.run()
+
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				if len(*calls) != 0 {
+					t.Fatalf("expected script not to be invoked, got %d calls", len(*calls))
+				}
+				return
+			}
+			if len(*calls) != 1 {
+				t.Fatalf("expected script to be invoked once, got %d calls", len(*calls))
+			}
+		})
+	}
+}
+
+// TestSpdkSetupScript_setsDevType verifies that Prepare(), Unbind() and Reset() always populate
+// DEV_TYPE in the script env, selecting VMD when the (already VMD-detection-resolved) request has
+// VMD enabled, and NVME otherwise. This is independent of and complements the VMD-detection
+// coverage in TestBackend_prepare_reset, providing direct confidence that every entry point into
+// the SPDK setup script mandates DEV_TYPE.
+func TestSpdkSetupScript_setsDevType(t *testing.T) {
+	for name, tc := range map[string]struct {
+		enableVMD  bool
+		expDevType string
+	}{
+		"vmd disabled": {
+			enableVMD:  false,
+			expDevType: devTypeNVMe,
+		},
+		"vmd enabled": {
+			enableVMD:  true,
+			expDevType: devTypeVMD,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			req := &storage.BdevPrepareRequest{
+				TargetUser: "bob",
+				EnableVMD:  tc.enableVMD,
+			}
+
+			for _, method := range []struct {
+				name string
+				call func(*spdkSetupScript, *storage.BdevPrepareRequest) error
+			}{
+				{"Prepare", (*spdkSetupScript).Prepare},
+				{"Unbind", (*spdkSetupScript).Unbind},
+				{"Reset", (*spdkSetupScript).Reset},
+			} {
+				t.Run(method.name, func(t *testing.T) {
+					sss, calls := mockScriptRunner(t, log, nil)
+
+					if err := method.call(sss, req); err != nil {
+						t.Fatalf("unexpected error: %s", err)
+					}
+					if len(*calls) != 1 {
+						t.Fatalf("expected a single script call, got %d", len(*calls))
+					}
+
+					var gotDevType string
+					for _, kv := range (*calls)[0].Env {
+						if strings.HasPrefix(kv, devTypeEnv+"=") {
+							gotDevType = strings.TrimPrefix(kv, devTypeEnv+"=")
+						}
+					}
+					test.AssertEqual(t, tc.expDevType, gotDevType,
+						fmt.Sprintf("unexpected %s value", devTypeEnv))
+				})
+			}
+		})
+	}
 }
