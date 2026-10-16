@@ -366,11 +366,51 @@ ktr_node_alloc(struct btr_instance *tins, int size)
 	return vos_obj_alloc(&tins->ti_umm, tins->ti_priv, size, true);
 }
 
+#define REP_XKEY_FMT "%s: " CK_DKEY_FMT "... "
+
 static int
 ktr_df_rec_check(struct btr_instance *tins, struct btr_record *rec, struct checker *ck)
 {
-	/** NOP. TBD. */
-	return 0;
+	d_iov_t               key_iov;
+	d_iov_t               val_iov;
+	struct vos_rec_bundle rbund;
+	d_iov_t               key  = {0};
+	struct dcs_csum_info  csum = {0};
+	struct vos_krec_df   *krec;
+	const char           *XKEY;
+	int                   rc;
+
+	tree_rec_bundle2iov(&rbund, &val_iov);
+	rbund.rb_iov  = &key;
+	rbund.rb_csum = &csum;
+
+	CK_PRINTF(ck, "Record fetch (off=%#lx)... ", rec->rec_off);
+	rc = tins->ti_ops->to_rec_fetch(tins, rec, &key_iov, &val_iov);
+	if (rc == DER_SUCCESS && rbund.rb_krec == NULL) {
+		CK_APPENDFL_ERR(ck, "Invalid record: buffer is NULL\n");
+		return -DER_IO_INVAL;
+	}
+	CK_APPENDL_RC(ck, rc);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	krec = rbund.rb_krec;
+
+	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
+		CK_PRINTF_ERR(ck, "KREC_BF_NO_AKEY is not supported\n");
+		return rc;
+	} else {
+		XKEY = (krec->kr_bmap & KREC_BF_DKEY) ? "DKEY" : "AKEY";
+	}
+
+	checker_print_indent_inc(ck);
+	CK_PRINTF(ck, REP_XKEY_FMT "\n", XKEY, CK_DKEY_PRINT(&key));
+	CK_INDENT(ck, rc = ilog_root_is_valid(&krec->kr_ilog, ck));
+	CK_PRINTFL_RC(ck, rc, REP_XKEY_FMT, XKEY, CK_DKEY_PRINT(&key));
+	checker_print_indent_dec(ck);
+
+	return rc;
 }
 
 static btr_ops_t key_btr_ops = {

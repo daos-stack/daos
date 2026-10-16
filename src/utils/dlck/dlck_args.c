@@ -72,6 +72,7 @@ dlck_env(struct dlck_control *ctrl)
 	ctrl->scope.pools      = d_agetenv_str(&env, "DLCK_CHECK_NO_POOLS") != DER_SUCCESS;
 	ctrl->scope.containers = d_agetenv_str(&env, "DLCK_CHECK_NO_CONTAINERS") != DER_SUCCESS;
 	ctrl->scope.objects    = d_agetenv_str(&env, "DLCK_CHECK_NO_OBJECTS") != DER_SUCCESS;
+	ctrl->scope.dkeys      = d_agetenv_str(&env, "DLCK_CHECK_NO_DKEYS") != DER_SUCCESS;
 }
 
 void

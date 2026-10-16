@@ -1,0 +1,64 @@
+VOS file allocation: ok.
+Check dkey: [8] 'uint64:400144679'...
+- Akey tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Embedded value:
+--- Record fetch (off=0xb018e0)... ok.
+---- AKEY: [8] 'uint64:400144679'... 
+----- ILOG... error: invalid magic (0x46).
+---- error: AKEY: [8] 'uint64:400144679'... : DER_DF_INVAL(-2022): 'Unsupported durable format'
+- error: Akey tree: DER_DF_INVAL(-2022): 'Unsupported durable format'
+error: Check dkey: [8] 'uint64:400144679': DER_DF_INVAL(-2022): 'Unsupported durable format'
+Check dkey: [8] 'R"&S uint64:1395008082'...
+- Akey tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xb01b20)... ok.
+--- Record fetch (off=0xb01ac0)... ok.
+---- AKEY: [8] 'uint64:511817567'... 
+----- ILOG... error: invalid magic (0x36).
+---- error: AKEY: [8] 'uint64:511817567'... : DER_DF_INVAL(-2022): 'Unsupported durable format'
+--- Record fetch (off=0xb017c0)... ok.
+---- AKEY: [8] 'uint64:873026844'... 
+----- ILOG... ok.
+---- AKEY: [8] 'uint64:873026844'... : ok.
+- error: Akey tree: DER_DF_INVAL(-2022): 'Unsupported durable format'
+error: Check dkey: [8] 'R"&S uint64:1395008082': DER_DF_INVAL(-2022): 'Unsupported durable format'
+Check dkey: [8] 'uint64:511817567'...
+- Akey tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xb019a0)... ok.
+--- Record fetch (off=0xb01700)... ok.
+---- AKEY: [8] 'uint64:511817567'... 
+----- ILOG... error: invalid magic (0x36).
+---- error: AKEY: [8] 'uint64:511817567'... : DER_DF_INVAL(-2022): 'Unsupported durable format'
+--- Record fetch (off=0xb01940)... ok.
+---- AKEY: [8] 'R"&S uint64:1395008082'... 
+----- ILOG... ok.
+---- AKEY: [8] 'R"&S uint64:1395008082'... : ok.
+- error: Akey tree: DER_DF_INVAL(-2022): 'Unsupported durable format'
+error: Check dkey: [8] 'uint64:511817567': DER_DF_INVAL(-2022): 'Unsupported durable format'
+Check dkey: [8] 'uint64:873026844'...
+- Akey tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Embedded value:
+--- Record fetch (off=0xb01a60)... ok.
+---- AKEY: [8] 'uint64:511817567'... 
+----- ILOG... error: invalid magic (0x46).
+---- error: AKEY: [8] 'uint64:511817567'... : DER_DF_INVAL(-2022): 'Unsupported durable format'
+- error: Akey tree: DER_DF_INVAL(-2022): 'Unsupported durable format'
+error: Check dkey: [8] 'uint64:873026844': DER_DF_INVAL(-2022): 'Unsupported durable format'
+Check dkey: [8] 'R"&S uint64:1395008082'...
+- Akey tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Embedded value:
+--- Record fetch (off=0xb015e0)... ok.
+---- AKEY: [8] 'uint64:873026844'... 
+----- ILOG... error: invalid magic (0x46).
+---- error: AKEY: [8] 'uint64:873026844'... : DER_DF_INVAL(-2022): 'Unsupported durable format'
+- error: Akey tree: DER_DF_INVAL(-2022): 'Unsupported durable format'
+error: Check dkey: [8] 'R"&S uint64:1395008082': DER_DF_INVAL(-2022): 'Unsupported durable format'

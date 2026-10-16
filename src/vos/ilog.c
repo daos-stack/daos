@@ -1655,7 +1655,7 @@ ilog_root_is_valid(struct ilog_df *ilog_df, struct checker *ck)
 	D_ASSERT(root != NULL);
 
 	CK_PRINTF(ck, "ILOG... ");
-	if (!ILOG_MAGIC_VALID(root->lr_magic) || DAOS_FAIL_CHECK(DAOS_FAULT_OBJ_ILOG_MAGIC)) {
+	if (!ILOG_MAGIC_VALID(root->lr_magic) || DAOS_FAIL_CHECK(DAOS_FAULT_ILOG_MAGIC)) {
 		CK_APPENDFL_ERR(ck, "invalid magic (%#" PRIx32 ").", root->lr_magic);
 		return -DER_DF_INVAL;
 	}

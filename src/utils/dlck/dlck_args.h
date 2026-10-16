@@ -109,6 +109,7 @@ struct dlck_check_scope {
 	bool pools;
 	bool containers;
 	bool objects;
+	bool dkeys;
 };
 
 /**

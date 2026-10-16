@@ -13,5 +13,9 @@ Check container:
 ---- Object (oid=1185667690.2136093645.0.0)... 
 ----- ILOG... error: invalid magic (0x46).
 ---- Object (oid=1185667690.2136093645.0.0)... error: DER_DF_INVAL(-2022): 'Unsupported durable format'
+--- Record fetch (off=0xac0540)... ok.
+---- Object (oid=471378945.1581695481.0.0)... 
+----- ILOG... ok.
+---- Object (oid=471378945.1581695481.0.0)... ok.
 - error: Object index tree: DER_DF_INVAL(-2022): 'Unsupported durable format'
 error: Check container: DER_DF_INVAL(-2022): 'Unsupported durable format'

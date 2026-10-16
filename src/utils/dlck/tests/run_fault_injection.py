@@ -92,6 +92,11 @@ class FaultCatalog:
         """Return the complete dictionary of faults (id, name) in the catalog."""
         return self._faults
 
+    @property
+    def faults_list(self):
+        """Return the complete list of fault names in the catalog."""
+        return [fault[1] for fault in self._faults]
+
     def _read_faults(self):
         """Return the (id, name) of each fault in the template config."""
         faults = []
@@ -301,18 +306,36 @@ class FaultInjectionTest:
         """Return the environment variables for the given fault."""
         pool_faults = ["ENGINE", "POOL", "CONT_TREE"]
         cont_faults = ["CONT", "OBJ_ILOG", "DAE", "DBD"]
+        obj_faults = ["DKEY_TREE", "DKEY_ILOG"]
+        dkey_faults = ["AKEY_TREE", "AKEY_ILOG"]
         env_check_pool_only = {
             "DLCK_CHECK_NO_CONTAINERS": "1",
             "DLCK_CHECK_NO_OBJECTS": "1",
+            "DLCK_CHECK_NO_DKEYS": "1",
         }
         env_check_cont_only = {
             "DLCK_CHECK_NO_POOLS": "1",
+            "DLCK_CHECK_NO_OBJECTS": "1",
+            "DLCK_CHECK_NO_DKEYS": "1",
+        }
+        env_check_obj_only = {
+            "DLCK_CHECK_NO_POOLS": "1",
+            "DLCK_CHECK_NO_CONTAINERS": "1",
+            "DLCK_CHECK_NO_DKEYS": "1",
+        }
+        env_check_dkey_only = {
+            "DLCK_CHECK_NO_POOLS": "1",
+            "DLCK_CHECK_NO_CONTAINERS": "1",
             "DLCK_CHECK_NO_OBJECTS": "1",
         }
         if any(fault in name for fault in pool_faults):
             return env_check_pool_only
         elif any(fault in name for fault in cont_faults):
             return env_check_cont_only
+        elif any(fault in name for fault in obj_faults):
+            return env_check_obj_only
+        elif any(fault in name for fault in dkey_faults):
+            return env_check_dkey_only
         return {}
 
     @staticmethod
@@ -441,9 +464,23 @@ def main():
     failed = [name for name, code in results.items() if code == ReturnCode.FAIL]
     passed = sum(1 for code in results.values() if code == ReturnCode.OK)
     skipped = len(results) - passed - len(failed)
-    print(f"\nTotal: {len(results)}, pass: {passed}, skip: {skipped}, failed: {len(failed)}")
+    print(f"\nTests total: {len(results)}, pass: {passed}, skip: {skipped}, failed: {len(failed)}")
     if failed:
         print("\nFailed:\n  " + "\n  ".join(failed))
+
+    # detect orphaned templates
+    orphaned = []
+    for template_dir in TEMPLATE_DIR.iterdir():
+        if template_dir.is_dir() and template_dir.name not in catalog.faults_list:
+            orphaned.append(template_dir.name)
+    if orphaned:
+        print("\nOrphaned templates:\n  " + "\n  ".join(orphaned))
+        # mark the test as failed due to orphaned templates
+        failed = True
+    else:
+        print("\nNo orphaned templates.")
+
+    # print the final result
     print(f"\nResult: {'FAIL' if failed else 'OK'}")
     if failed:
         raise SystemExit(1)
