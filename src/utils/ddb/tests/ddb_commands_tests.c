@@ -663,7 +663,7 @@ print_csum_sv_tests(void **state)
 	assert_regex_match(dvt_fake_print_buffer, buf);
 	dvt_fake_print_reset();
 
-	/* with csum info, EPOCH_MAX returns the epoch-2 (latest) checksum */
+	/* with csum info, DAOS_EPOCH_MAX returns the epoch-2 (latest) checksum */
 	csum_test_sv_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_VALID],
 			       g_akeys_str[DVT_FAKE_CSUM_AKEY_SV]);
 	assert_success(ddb_run_csum_dump(&ctx, &opt));
@@ -730,7 +730,7 @@ write_csum_sv_tests(void **state)
 	assert_regex_match(dvt_fake_print_buffer, buf);
 	dvt_fake_print_reset();
 
-	/* with csum info, EPOCH_MAX returns the epoch-2 (latest) checksum */
+	/* with csum info, DAOS_EPOCH_MAX returns the epoch-2 (latest) checksum */
 	csum_test_sv_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_VALID],
 			       g_akeys_str[DVT_FAKE_CSUM_AKEY_SV]);
 	will_return(csum_sv_fake_write_file, path_dst);
@@ -850,7 +850,7 @@ print_csum_recx_tests(void **state)
 	assert_regex_match(dvt_fake_print_buffer, buf[0]);
 	dvt_fake_print_reset();
 
-	/* g_oid  = [0, S)@1, [S/2, 3S/2)@2
+	/* oid    = [0, S)@1, [S/2, 3S/2)@2
 	 * recx   = [0, S)@DAOS_EPOCH_MAX
 	 * result = [0, S)@1, [S/2, 3S/2)@2 */
 	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_VALID],
@@ -864,7 +864,7 @@ print_csum_recx_tests(void **state)
 	assert_strings_in_order(dvt_fake_print_buffer, buf[0], buf[1]);
 	dvt_fake_print_reset();
 
-	/* g_oid  = [0, S)@1, [0, S/2)@2
+	/* oid    = [0, S)@1, [0, S/2)@2
 	 * recx   = [0, S)@DAOS_EPOCH_MAX
 	 * result = [0, S/2)@2, [0, S)@1 */
 	part_ics = csum_ctx->dct_part_ics[DVT_FAKE_PART_ICS_IDX(DVT_FAKE_PART_OID_VALID)];
@@ -879,7 +879,7 @@ print_csum_recx_tests(void **state)
 	assert_strings_in_order(dvt_fake_print_buffer, buf[1], buf[0]);
 	dvt_fake_print_reset();
 
-	/* g_oid  = [0, S)@1, [S/2, 3S/2)@2
+	/* oid    = [0, S)@1, [S/2, 3S/2)@2
 	 * recx   = [S/2, 3S/2)@1
 	 * result = [0, S)@1 */
 	opt.epoch = 1;
@@ -957,7 +957,7 @@ write_csum_recx_tests(void **state)
 	assert_regex_match(dvt_fake_print_buffer, buf[0]);
 	dvt_fake_print_reset();
 
-	/* g_oid  = [0, S)@1, [S/2, 3S/2)@2
+	/* oid    = [0, S)@1, [S/2, 3S/2)@2
 	 * recx   = [0, S)@DAOS_EPOCH_MAX
 	 * result = [0, S)@1, [S/2, 3S/2)@2 */
 	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_CSUM_OID_VALID],
@@ -975,7 +975,7 @@ write_csum_recx_tests(void **state)
 	assert_strings_in_order(dvt_fake_print_buffer, buf[0], buf[1]);
 	dvt_fake_print_reset();
 
-	/* g_oid  = [0, S)@1, [0, S/2)@2
+	/* oid    = [0, S)@1, [0, S/2)@2
 	 * recx   = [0, S)@DAOS_EPOCH_MAX
 	 * result = [0, S/2)@2, [0, S)@1 (the file holds the checksums in that order too) */
 	part_ics = csum_ctx->dct_part_ics[DVT_FAKE_PART_ICS_IDX(DVT_FAKE_PART_OID_VALID)];
@@ -994,7 +994,7 @@ write_csum_recx_tests(void **state)
 	assert_strings_in_order(dvt_fake_print_buffer, buf[1], buf[0]);
 	dvt_fake_print_reset();
 
-	/* g_oid  = [0, S)@1, [S/2, 3S/2)@2
+	/* oid    = [0, S)@1, [S/2, 3S/2)@2
 	 * recx   = [S/2, 3S/2)@1
 	 * result = [0, S)@1 */
 	opt.epoch = 1;
