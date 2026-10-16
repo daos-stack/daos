@@ -4837,6 +4837,27 @@ btr_node_check(struct btr_node *nd, umem_off_t nd_off, struct checker *ck)
 	return DER_SUCCESS;
 }
 
+static int
+btr_check_embedded(struct btr_context *tcx, struct checker *ck)
+{
+	struct btr_record *rec = &tcx->tc_record;
+
+	if (btr_is_int_key(tcx)) {
+		CK_PRINTF_ERR(ck,
+			      "Unsupported feature bits: %#" PRIx64
+			      " (embedded value and integer keys)\n",
+			      tcx->tc_feats);
+		return -DER_NOTYPE;
+	}
+
+	/** Use the fake record since only the user allocated part is stored
+	 *  in the tree root.
+	 */
+	rec->rec_off = tcx->tc_tins.ti_root->tr_node;
+
+	return btr_rec_check(tcx, rec, ck);
+}
+
 /**
  * \struct node_info
  *
@@ -4875,7 +4896,11 @@ btr_nodes_check(struct btr_context *tcx, struct checker *ck)
 		return DER_SUCCESS;
 	}
 
-	D_ASSERT(!btr_has_embedded_value(tcx));
+	if (btr_has_embedded_value(tcx)) {
+		CK_PRINTF(ck, "Embedded value:\n");
+		CK_INDENT(ck, rc = btr_check_embedded(tcx, ck));
+		return rc;
+	}
 
 	/** add the root node to the node list */
 	D_ALLOC_PTR(ni);

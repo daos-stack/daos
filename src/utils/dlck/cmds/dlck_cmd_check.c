@@ -39,6 +39,44 @@ struct bundle {
 	struct checker     *ck;
 };
 
+#define DLCK_DKEY_FMT "Check dkey: " CK_DKEY_FMT
+
+static int
+dkey_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct bundle  *bndl = cb_arg;
+	struct checker *ck   = bndl->ck;
+	int             rc;
+
+	CK_PRINTF(ck, DLCK_DKEY_FMT "...\n", CK_DKEY_PRINT(&entry->ie_key));
+	CK_INDENT(ck, rc = vos_iter_check(ih, ck));
+	CK_PRINTFL_RC(ck, rc, DLCK_DKEY_FMT, CK_DKEY_PRINT(&entry->ie_key));
+	dlck_xstream_status_set(bndl->xa, &ck->ck_status);
+
+	/** continue checking other DKEYs even if this one failed */
+	return 0;
+}
+
+static void
+dkeys_process(daos_handle_t coh, daos_unit_oid_t oid, struct bundle *bndl)
+{
+	vos_iter_param_t        param   = {0};
+	struct vos_iter_anchors anchors = {0};
+	int                     rc;
+
+	param.ip_hdl        = coh;
+	param.ip_oid        = oid;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
+
+	rc = vos_iterate(&param, VOS_ITER_DKEY, false, &anchors, dkey_process, NULL, bndl, NULL);
+
+	/** Just in case there is a problem with the iterator. Most of the issues are accounted for
+	 * in the callback. */
+	dlck_xstream_status_set_rc(bndl->xa, rc);
+}
+
 #define CK_OID_FMT "Check oid: " DF_UOID
 
 /**
@@ -66,6 +104,9 @@ obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	CK_INDENT(ck, rc = vos_iter_check(ih, ck));
 	CK_PRINTFL_RC(ck, rc, CK_OID_FMT, DP_UOID(entry->ie_oid));
 	dlck_xstream_status_set(bndl->xa, &ck->ck_status);
+	if (rc == DER_SUCCESS) {
+		dkeys_process(param->ip_hdl, entry->ie_oid, bndl);
+	}
 
 	/** continue checking other objects even if this one failed */
 	return 0;
