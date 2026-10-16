@@ -53,9 +53,18 @@ struct dt_vos_pool_ctx {
 #define DVT_FAKE_CHUNK_SIZE                 (1u << 12)
 #define DVT_FAKE_CSUM_TYPE                  (HASH_TYPE_CRC64)
 
-/* Checksum fixture objects: SV under g_akeys_str[0] and recxs A=[0, S)@1, B=[S/2, 3S/2)@2 under
- * g_akeys_str[1].  The *_FILLER constants are the data byte of the first version/extent, the next
- * ones use the following bytes. */
+/* Akeys of the checksum fixture objects, as indexes in g_akeys[] and g_akeys_str[].
+ *
+ * FIXME DAOS-18535: The generic pool of dvt_insert_data() has the opposite layout (arrays at even
+ * indexes, single values at odd ones), so do not use these constants with it.  The ticket aligns
+ * this fixture on that layout.
+ */
+#define DVT_FAKE_CSUM_AKEY_SV               (0)
+#define DVT_FAKE_CSUM_AKEY_RECX             (1)
+
+/* Checksum fixture objects: SV under DVT_FAKE_CSUM_AKEY_SV and recxs A=[0, S)@1, B=[S/2, 3S/2)@2
+ * under DVT_FAKE_CSUM_AKEY_RECX.  The *_FILLER constants are the data byte of the first
+ * version/extent, the next ones use the following bytes. */
 #define DVT_FAKE_CSUM_OID_NONE              (0) /* no checksum stored, SV@1 only */
 #define DVT_FAKE_CSUM_OID_NONE_SV_FILLER    ('a')
 #define DVT_FAKE_CSUM_OID_NONE_RECX_FILLER  ('c')
@@ -100,7 +109,7 @@ int ddb_test_setup_vos(void **state);
 int ddb_teardown_vos(void **state);
 
 /* Requires tctx->dvt_poh to be a valid open pool handle (caller-owned). */
-int
+void
 ddb_test_csum_setup(void **state);
 /* Requires tctx->dvt_poh to be the same valid open pool handle as provided to
  * ddb_test_csum_setup(). */

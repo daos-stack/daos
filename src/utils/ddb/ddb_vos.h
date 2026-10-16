@@ -167,9 +167,10 @@ int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb
  * @param sv_epoch  Actual stored epoch of the single value. Non-zero for single-value akeys
  *                  when an SV was found within the requested epoch range; 0 for array akeys
  *                  or when no SV was found (hole or -DER_NONEXIST).
- * @param cil       Checksum info list; every entry passes ci_is_valid() and has a checksum type
- *                  known to the checksum library (daos_mhash_type2algo()). Valid only for the
- *                  duration of the callback.
+ * @param cil       Checksum info list. dv_dump_csum() has already checked it, so the callback can
+ *                  rely on every entry passing ci_is_valid() and having a checksum type known to
+ *                  the checksum library (daos_mhash_type2algo()). Valid only for the duration of
+ *                  the callback.
  * @return          0 on success; a negative error code is propagated back to the caller of
  *                  dv_dump_csum().
  */
@@ -186,12 +187,15 @@ typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel,
  *                 returned - pass DAOS_EPOCH_MAX to get the latest, or a snapshot epoch to
  *                 access an earlier version. For array akeys, selects the visible extent set.
  * @param dump_cb  Callback invoked with the result. If NULL, the function returns 0
- *                 without opening the container or calling VOS.
+ *                 without opening the container or calling VOS. It is not invoked if the
+ *                 container cannot be opened, the fetch fails or the checksum metadata is
+ *                 inconsistent.
  * @param cb_arg   Opaque argument forwarded to \a dump_cb.
- * @return         0 on success; -DER_CSUM if the fetched checksum metadata is inconsistent
- *                 (e.g. a checksum-info count that does not match the stored entries, an
- *                 invalid checksum info or an unknown checksum type; \a dump_cb is not
- *                 invoked); another negative error code otherwise.
+ * @retval         0 on success
+ * @retval         -DER_CSUM if the fetched checksum metadata is inconsistent, e.g. a
+ *                 checksum-info count that does not match the stored entries, an invalid checksum
+ *                 info or an unknown checksum type
+ * @retval         -DER_* other errors, including the one returned by \a dump_cb
  */
 int
 dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,

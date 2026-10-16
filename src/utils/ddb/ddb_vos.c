@@ -24,6 +24,9 @@
 #include "ddb_spdk.h"
 #include "ddb_spdk_reinit_wa.h"
 
+#define DF_CSUM_LOC                  DF_UOID " dkey " DF_KEY " akey " DF_KEY
+#define DP_CSUM_LOC(oid, dkey, akey) DP_UOID(*(oid)), DP_KEY(dkey), DP_KEY(akey)
+
 #define ddb_vos_iterate(param, iter_type, recursive, anchors, cb, args) \
 				vos_iterate(param, iter_type, recursive, \
 						anchors, cb, NULL, args, NULL)
@@ -1102,13 +1105,14 @@ dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dum
  * also read from the pool, is not covered by it and must be known to the checksum library.
  */
 static int
-csum_info_check(daos_unit_oid_t *oid, struct dcs_csum_info *ci)
+csum_info_check(daos_unit_oid_t *oid, daos_key_t *dkey, daos_key_t *akey, struct dcs_csum_info *ci)
 {
 	uint32_t type;
 
 	if (!ci_is_valid(ci)) {
-		D_ERROR("Checksum metadata of " DF_UOID " is inconsistent: invalid checksum info\n",
-			DP_UOID(*oid));
+		D_ERROR("Checksum metadata of " DF_CSUM_LOC " is inconsistent: "
+			"invalid checksum info\n",
+			DP_CSUM_LOC(oid, dkey, akey));
 		return -DER_CSUM;
 	}
 
@@ -1118,9 +1122,9 @@ csum_info_check(daos_unit_oid_t *oid, struct dcs_csum_info *ci)
 		type = daos_fail_value_get();
 
 	if (daos_mhash_type2algo(type) == NULL) {
-		D_ERROR("Checksum metadata of " DF_UOID " is inconsistent: "
+		D_ERROR("Checksum metadata of " DF_CSUM_LOC " is inconsistent: "
 			"unknown checksum type %" PRIu32 "\n",
-			DP_UOID(*oid), type);
+			DP_CSUM_LOC(oid, dkey, akey), type);
 		return -DER_CSUM;
 	}
 
@@ -1131,15 +1135,19 @@ static int
 dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
 	     daos_epoch_t epoch, dv_dump_csum_cb dump_cb, void *cb_arg)
 {
+	daos_key_t         *akey;
 	daos_handle_t       ioh;
 	struct dcs_ci_list *cil;
 	uint32_t            csum_nr;
 	int                 rc;
 
+	D_ASSERT(iod != NULL);
+	akey = &iod->iod_name;
+
 	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
 	if (!SUCCESS(rc)) {
-		D_ERROR("vos_fetch_begin for csum dump of " DF_UOID " failed: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("vos_fetch_begin for csum dump of " DF_CSUM_LOC " failed: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 		goto out;
 	}
 
@@ -1153,21 +1161,21 @@ dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod
 	/* For a single value, the checksum-info list is either empty or has exactly one entry by
 	 * construction. */
 	if (csum_nr != 0 && csum_nr != 1) {
-		D_ERROR("Checksum dump of SV entry " DF_UOID " failed: "
+		D_ERROR("Checksum dump of SV entry " DF_CSUM_LOC " failed: "
 			"inconsistent checksum metadata (expected 0 or 1, got %" PRIu32 ")\n",
-			DP_UOID(*oid), csum_nr);
+			DP_CSUM_LOC(oid, dkey, akey), csum_nr);
 		D_GOTO(out_fetch_end, rc = -DER_CSUM);
 	}
 	if (csum_nr == 1) {
-		rc = csum_info_check(oid, dcs_csum_info_get(cil, 0));
+		rc = csum_info_check(oid, dkey, akey, dcs_csum_info_get(cil, 0));
 		if (!SUCCESS(rc))
 			goto out_fetch_end;
 	}
 
 	rc = dump_cb(cb_arg, NULL, vos_ioh2sv_epoch(ioh), cil);
 	if (!SUCCESS(rc))
-		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("Csum dump callback for " DF_CSUM_LOC " returned: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 
 out_fetch_end:
 	rc = vos_fetch_end(ioh, NULL, rc);
@@ -1176,7 +1184,8 @@ out:
 }
 
 static int
-csum_recx_check_chunks(daos_unit_oid_t *oid, struct daos_recx_ep *rep, struct dcs_csum_info *ci)
+csum_recx_check_chunks(daos_unit_oid_t *oid, daos_key_t *dkey, daos_key_t *akey,
+		       struct daos_recx_ep *rep, struct dcs_csum_info *ci)
 {
 	uint32_t csum_nr = ci->cs_nr;
 	uint32_t chunk_nr;
@@ -1188,9 +1197,9 @@ csum_recx_check_chunks(daos_unit_oid_t *oid, struct daos_recx_ep *rep, struct dc
 		csum_nr = daos_fail_value_get();
 
 	if (csum_nr != chunk_nr) {
-		D_ERROR("Checksum metadata of RECX " DF_UOID " " DF_RECX " is inconsistent: "
+		D_ERROR("Checksum metadata of RECX " DF_CSUM_LOC " " DF_RECX " is inconsistent: "
 			"checksum covers %" PRIu32 " chunks, extent has %" PRIu32 "\n",
-			DP_UOID(*oid), DP_RECX(rep->re_recx), csum_nr, chunk_nr);
+			DP_CSUM_LOC(oid, dkey, akey), DP_RECX(rep->re_recx), csum_nr, chunk_nr);
 		return -DER_CSUM;
 	}
 
@@ -1201,6 +1210,7 @@ static int
 dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
 	       daos_epoch_t epoch, dv_dump_csum_cb dump_cb, void *cb_arg)
 {
+	daos_key_t               *akey;
 	daos_handle_t             ioh;
 	struct dcs_ci_list       *cil;
 	struct daos_recx_ep_list *rel;
@@ -1208,10 +1218,13 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 	int                       i;
 	int                       rc;
 
+	D_ASSERT(iod != NULL);
+	akey = &iod->iod_name;
+
 	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
 	if (!SUCCESS(rc)) {
-		D_ERROR("vos_fetch_begin for csum dump of " DF_UOID " failed: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("vos_fetch_begin for csum dump of " DF_CSUM_LOC " failed: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 		goto out;
 	}
 
@@ -1235,9 +1248,9 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 	 * non-hole extent of a checksummed akey, while akey_fetch_recx() records one recx per such
 	 * extent.  A mismatch can only come from corrupted metadata or a broken VOS invariant. */
 	if (rel == NULL || csum_nr != rel->re_nr) {
-		D_ERROR("Checksum dump of RECX " DF_UOID " failed: "
+		D_ERROR("Checksum dump of RECX " DF_CSUM_LOC " failed: "
 			"inconsistent checksum metadata (expected %" PRIu32 ", got %" PRIu32 ")\n",
-			DP_UOID(*oid), rel != NULL ? rel->re_nr : 0, csum_nr);
+			DP_CSUM_LOC(oid, dkey, akey), rel != NULL ? rel->re_nr : 0, csum_nr);
 		D_GOTO(out_rel, rc = -DER_CSUM);
 	}
 
@@ -1246,18 +1259,18 @@ dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_i
 		struct dcs_csum_info *ci  = dcs_csum_info_get(cil, i);
 		struct daos_recx_ep  *rep = &rel->re_items[i];
 
-		rc = csum_info_check(oid, ci);
+		rc = csum_info_check(oid, dkey, akey, ci);
 		if (!SUCCESS(rc))
 			goto out_rel;
-		rc = csum_recx_check_chunks(oid, rep, ci);
+		rc = csum_recx_check_chunks(oid, dkey, akey, rep, ci);
 		if (!SUCCESS(rc))
 			goto out_rel;
 	}
 
 	rc = dump_cb(cb_arg, rel, 0, cil);
 	if (!SUCCESS(rc))
-		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("Csum dump callback for " DF_CSUM_LOC " returned: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 
 out_rel:
 	/* rel ownership is transferred by vos_ioh2recx_list(); free before vos_fetch_end. */
