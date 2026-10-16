@@ -102,22 +102,41 @@ func ParseHostList(in []string, defaultPort int) (out []string, err error) {
 		return
 	}
 
+	normalized := make([]string, len(in))
+	for i, host := range in {
+		normalized[i] = host
+		ipLiteral := host
+		if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+			ipLiteral = host[1 : len(host)-1]
+		}
+		if net.ParseIP(ipLiteral) != nil && strings.ContainsRune(ipLiteral, ':') {
+			normalized[i] = net.JoinHostPort(ipLiteral, strconv.Itoa(defaultPort))
+		}
+	}
+
 	var set *hostlist.HostSet
-	set, err = hostlist.CreateSet(strings.Join(in, ","))
+	set, err = hostlist.CreateSet(strings.Join(normalized, ","))
 	if err != nil {
 		return nil, err
 	}
 	out = strings.Split(set.DerangedString(), ",")
 
 	for i, host := range out {
-		hostPort := strings.Split(host, ":")
-		switch len(hostPort) {
-		case 1:
-			out[i] = fmt.Sprintf("%s:%d", host, defaultPort)
-		case 2:
-			_, err = strconv.Atoi(hostPort[1])
-		default:
-			err = errors.New("host should conform to hostname[:port]")
+		// Use net.SplitHostPort so IPv6 bracketed literals like
+		// [2a04:...]:10001 parse correctly. Falls back to default port if
+		// no port present.
+		h, p, splitErr := net.SplitHostPort(host)
+		if splitErr != nil {
+			// Likely missing port. Try treating the whole thing as a hostname.
+			if _, _, splitErr2 := net.SplitHostPort(host + ":0"); splitErr2 != nil {
+				err = errors.New("host should conform to hostname[:port]")
+			} else {
+				out[i] = net.JoinHostPort(host, fmt.Sprintf("%d", defaultPort))
+			}
+		} else if _, atoiErr := strconv.Atoi(p); atoiErr != nil {
+			err = atoiErr
+		} else {
+			out[i] = net.JoinHostPort(h, p)
 		}
 
 		if err != nil {

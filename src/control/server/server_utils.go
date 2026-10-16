@@ -189,12 +189,12 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 func createListener(ctlAddr *net.TCPAddr, listen netListenFn, bindToCtlAddr bool) (net.Listener, error) {
 	// Create and start listener on management network.
 	// Only bind to ctlAddr.IP if explicitly requested (i.e., control_iface is set),
-	// otherwise bind to all interfaces (0.0.0.0) for backwards compatibility.
-	bindAddr := fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port)
+	// otherwise bind to all IPv4 and IPv6 interfaces.
+	bindAddr := fmt.Sprintf("[::]:%d", ctlAddr.Port)
 	if bindToCtlAddr {
 		bindAddr = ctlAddr.String()
 	}
-	lis, err := listen("tcp4", bindAddr)
+	lis, err := listen("tcp", bindAddr)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to listen on %s", bindAddr)
 	}

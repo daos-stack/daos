@@ -1869,6 +1869,57 @@ func TestServerUtils_resolveFirstAddr(t *testing.T) {
 	}
 }
 
+func TestServerUtils_createListener(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctlAddr       *net.TCPAddr
+		bindToCtlAddr bool
+		expAddr       string
+	}{
+		"all interfaces": {
+			ctlAddr: &net.TCPAddr{
+				IP:   net.ParseIP("127.0.0.1"),
+				Port: 10001,
+			},
+			expAddr: "[::]:10001",
+		},
+		"configured IPv4 interface": {
+			ctlAddr: &net.TCPAddr{
+				IP:   net.ParseIP("192.0.2.1"),
+				Port: 10001,
+			},
+			bindToCtlAddr: true,
+			expAddr:       "192.0.2.1:10001",
+		},
+		"configured IPv6 interface": {
+			ctlAddr: &net.TCPAddr{
+				IP:   net.ParseIP("2001:db8::1"),
+				Port: 10001,
+			},
+			bindToCtlAddr: true,
+			expAddr:       "[2001:db8::1]:10001",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var gotNetwork, gotAddr string
+			listen := func(network, addr string) (net.Listener, error) {
+				gotNetwork = network
+				gotAddr = addr
+				return nil, nil
+			}
+
+			if _, err := createListener(tc.ctlAddr, listen, tc.bindToCtlAddr); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff("tcp", gotNetwork); diff != "" {
+				t.Fatalf("unexpected network (-want, +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expAddr, gotAddr); diff != "" {
+				t.Fatalf("unexpected address (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestServerUtils_getControlAddr(t *testing.T) {
 	testTCPAddr := &net.TCPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
