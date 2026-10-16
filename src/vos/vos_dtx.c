@@ -1463,11 +1463,14 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		 * start rebuild scanning. So when rebuild logic arrives here,
 		 * all old DTX should have been either committed or aborted.
 		 */
-		if (unlikely(dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch))
-			D_ERROR("Hit prepared DTX " DF_DTI " with epoch " DF_X64 ", ver %u "
-				"during rebuild (" DF_DTI ") with epoch " DF_X64 ", ver %u\n",
-				DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae),
-				DP_DTI(&dth->dth_xid), dth->dth_epoch, dth->dth_ver);
+		if (unlikely(dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch &&
+			     dth->dth_ignore_uncommitted == 0))
+			D_ERROR("In cont " DF_UUID " hit prepared DTX " DF_DTI " with epoch " DF_X64
+				", version %u during rebuild (" DF_DTI ") with epoch " DF_X64
+				", version %u, local stable epoch " DF_X64 "\n",
+				DP_UUID(cont->vc_id), DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae),
+				DAE_VER(dae), DP_DTI(&dth->dth_xid), dth->dth_epoch, dth->dth_ver,
+				vos_cont_get_local_stable_epoch(coh));
 		return ALB_UNAVAILABLE;
 	}
 
