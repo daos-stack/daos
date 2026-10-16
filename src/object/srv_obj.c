@@ -3016,6 +3016,7 @@ static inline int
 check_read_rebuild_fense(struct ds_cont_child *cont, uint64_t epoch, uint32_t opc)
 {
 	struct ds_pool *pool = cont->sc_pool->spc_pool;
+	uint64_t        now;
 
 	/* For rebuild read, epoch must be specified instead of reading against MAX. */
 	if (unlikely(epoch == DAOS_EPOCH_MAX))
@@ -3033,7 +3034,14 @@ check_read_rebuild_fense(struct ds_cont_child *cont, uint64_t epoch, uint32_t op
 	 * rebuild epoch via IV. Return "-DER_FETCH_AGAIN" to the RPC sponsor for retry later.
 	 */
 	if (unlikely(epoch > pool->sp_rebuild_epoch)) {
-		D_DEBUG(DB_IO, "Wait for rebuild epoch to be refreshed and retry opc %u.\n", opc);
+		now = daos_gettime_coarse();
+		if (now - cont->sc_rebuild_delay_ts > 30) {
+			D_WARN("Delay rebuild ops %u with epoch " DF_X64
+			       " because of old rebuild epoch " DF_X64 " on current target.\n",
+			       opc, epoch, cont->sc_rebuild_delay_ts);
+			cont->sc_rebuild_delay_ts = now;
+		}
+
 		return -DER_REBUILD_DELAY;
 	}
 
@@ -3044,8 +3052,12 @@ check_read_rebuild_fense(struct ds_cont_child *cont, uint64_t epoch, uint32_t op
 	if (cont->sc_local_stable_epoch >= pool->sp_rebuild_epoch)
 		return 0;
 
-	D_DEBUG(DB_IO, "Local stable epoch " DF_X64 " fense for rebuild " DF_X64 ", retry %u.\n",
-		cont->sc_local_stable_epoch, pool->sp_rebuild_epoch, opc);
+	now = daos_gettime_coarse();
+	if (now - cont->sc_rebuild_delay_ts > 30) {
+		D_WARN("Local stable epoch " DF_X64 " fense for rebuild " DF_X64 ", retry %u.\n",
+		       cont->sc_local_stable_epoch, pool->sp_rebuild_epoch, opc);
+		cont->sc_rebuild_delay_ts = now;
+	}
 
 	return -DER_REBUILD_DELAY;
 }
