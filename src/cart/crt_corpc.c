@@ -522,7 +522,7 @@ corpc_del_child_rpc_locked(struct crt_rpc_priv *parent_rpc_priv,
 static inline void
 crt_corpc_fail_parent_rpc(struct crt_rpc_priv *parent_rpc_priv, int failed_rc)
 {
-	parent_rpc_priv->crp_reply_hdr.cch_rc = failed_rc;
+	parent_rpc_priv->crp_reply_hdr.crh_status = failed_rc;
 	parent_rpc_priv->crp_corpc_info->co_rc = failed_rc;
 	if (failed_rc != -DER_GRPVER)
 		RPC_ERROR(parent_rpc_priv,
@@ -662,9 +662,9 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 		co_info->co_rc = rc;
 	}
 	/* propagate failure rc to parent */
-	if (child_rpc_priv->crp_reply_hdr.cch_rc != 0)
+	if (child_rpc_priv->crp_reply_hdr.crh_status != 0)
 		crt_corpc_fail_parent_rpc(parent_rpc_priv,
-					  child_rpc_priv->crp_reply_hdr.cch_rc);
+					  child_rpc_priv->crp_reply_hdr.crh_status);
 
 	co_ops = opc_info->coi_co_ops;
 	if (co_ops == NULL) {
@@ -900,8 +900,11 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 
 		/* Set child's deadline same as parent and calculate timeout left from it */
 		child_rpc_priv->crp_deadline_sec = rpc_priv->crp_deadline_sec;
-		child_rpc_priv->crp_timeout_sec =
-		    crt_deadline_to_timeout(rpc_priv->crp_deadline_sec);
+		{
+			int64_t timeout_sec = crt_deadline_to_timeout(rpc_priv->crp_deadline_sec);
+
+			child_rpc_priv->crp_timeout_sec = timeout_sec > 0 ? timeout_sec : 1;
+		}
 
 		rc = crt_req_send(child_rpc, crt_corpc_reply_hdlr, rpc_priv);
 		if (rc != 0) {
