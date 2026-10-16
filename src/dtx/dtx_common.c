@@ -360,7 +360,7 @@ dtx_cleanup_internal(struct ds_cont_child *cont, struct sched_request *sr, uint3
 	D_ASSERT(d_list_empty(&abt_list));
 	D_ASSERT(d_list_empty(&act_list));
 
-	while ((sr == NULL || !dss_ult_exiting(sr)) && !d_list_empty(&dcca.dcca_st_list)) {
+	while ((sr == NULL || !dss_ult_exiting(sr)) && !d_list_empty(&dcca.dcca_pc_list)) {
 		dpci = d_list_pop_entry(&dcca.dcca_pc_list, struct dtx_partial_cmt_item, dpci_link);
 		dcca.dcca_pc_count--;
 
@@ -959,10 +959,10 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 	dth->dth_dkey_hash       = 0;
 
 	if (!(flags & DTX_LOCAL)) {
-		if (daos_is_zero_dti(dti))
-			return 0;
-
 		if (!dtx_epoch_chosen(epoch)) {
+			if (daos_is_zero_dti(dti))
+				return 0;
+
 			D_ERROR("initializing DTX " DF_DTI " with invalid epoch: value=" DF_U64
 				" first=" DF_U64 " flags=%x\n",
 				DP_DTI(dti), epoch->oe_value, epoch->oe_first, epoch->oe_flags);
@@ -970,6 +970,9 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 		}
 		dth->dth_epoch       = epoch->oe_value;
 		dth->dth_epoch_bound = dtx_epoch_bound(epoch);
+
+		if (daos_is_zero_dti(dti))
+			return 0;
 	}
 
 	rc = vos_dtx_rsrvd_init(dth);
