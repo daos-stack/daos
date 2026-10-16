@@ -153,6 +153,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 	struct crt_bulk *bulk = NULL;
 	hg_bulk_t        hg_bulk;
 	hg_return_t      hg_ret;
+	uint32_t         tmp = 0;
 	int              rc;
 
 	/*
@@ -178,12 +179,25 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 
 		/* Pack mercury bulk handle to send over the wire */
 		hg_ret = hg_proc_hg_bulk_t(proc, &hg_bulk);
-		return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
+		if (unlikely(hg_ret != HG_SUCCESS))
+			return -DER_HG;
+
+		/* Pack primary/secondary provider identifier with bulk */
+		rc = crt_proc_uint32_t(proc, proc_op, &tmp);
+		if (unlikely(rc))
+			return rc;
+
+		return 0;
 
 	case CRT_PROC_DECODE:
 		/* unpack mercury handle and wrap it around crt_bulk_t struct */
 		hg_ret = hg_proc_hg_bulk_t(proc, &hg_bulk);
-		if (hg_ret != HG_SUCCESS)
+		if (unlikely(hg_ret != HG_SUCCESS))
+			return -DER_HG;
+
+		/* unpack primary/secondary provider identifier with bulk */
+		rc = crt_proc_uint32_t(proc, proc_op, &tmp);
+		if (unlikely(rc))
 			return -DER_HG;
 
 		/* don't create a bulk wrapper if null bulk was transmitted */
@@ -194,7 +208,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 
 		/* Allocate space for a wrapper struct */
 		D_ALLOC_PTR(bulk);
-		if (bulk == NULL)
+		if (unlikely(bulk == NULL))
 			return -DER_NOMEM;
 
 		*bulk = (struct crt_bulk){.hg_bulk_hdl = hg_bulk,
@@ -207,6 +221,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 					  .deferred    = false};
 
 		*pcrt_bulk = bulk;
+
 		return 0;
 
 	case CRT_PROC_FREE:
