@@ -1040,11 +1040,12 @@ vos_cont_get_local_stable_epoch(daos_handle_t coh);
  * Get global stable epoch for the given container.
  *
  * \param coh	[IN]	Container open handle
+ * \param epoch	[OUT]	Hold the container known global stable epoch
  *
- * \return		The epoch on success, negative value if error.
+ * \return		Zero on success, negative value if error.
  */
-daos_epoch_t
-vos_cont_get_global_stable_epoch(daos_handle_t coh);
+int
+vos_cont_get_global_stable_epoch(daos_handle_t coh, daos_epoch_t *epoch);
 
 /**
  * Set global stable epoch for the given container.

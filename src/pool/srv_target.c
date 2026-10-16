@@ -1142,6 +1142,7 @@ eph_report_exiting(struct ds_pool *pool)
 
 #define EPH_REPORT_INTVL       5000 /* 5 seconds */
 #define EPH_REPORT_RETRY_INTVL 2000 /* 2 seconds */
+#define EPH_REPORT_MAP_WAIT_WARN 600  /* seconds between "waiting for pool map" warnings */
 
 static void
 eph_report_ult(void *data)
@@ -1162,8 +1163,26 @@ eph_report_ult(void *data)
 	 */
 	ABT_mutex_lock(pool->sp_mutex);
 	if (pool->sp_map == NULL) {
+		struct timespec deadline;
+		int             waited = 0;
+
 		D_INFO(DF_UUID ": Wait for pool map.\n", DP_UUID(pool->sp_uuid));
-		ABT_cond_wait(pool->sp_fetch_hdls_cond, pool->sp_mutex);
+		while (pool->sp_map == NULL && !pool->sp_stopping) {
+			/* ABT_cond_timedwait uses CLOCK_REALTIME internally. */
+			clock_gettime(CLOCK_REALTIME_COARSE, &deadline);
+			deadline.tv_sec += EPH_REPORT_MAP_WAIT_WARN;
+			ABT_cond_timedwait(pool->sp_fetch_hdls_cond, pool->sp_mutex, &deadline);
+			if (pool->sp_map != NULL || pool->sp_stopping)
+				break;
+			waited += EPH_REPORT_MAP_WAIT_WARN;
+			/*
+			 * A NEW (extending) rank is not in the pool group and will not get the
+			 * map until the extend finishes; it cannot report any epoch meanwhile.
+			 */
+			D_WARN(DF_UUID ": still waiting for pool map after %d seconds, no "
+				       "epoch reported yet\n",
+			       DP_UUID(pool->sp_uuid), waited);
+		}
 		D_INFO(DF_UUID ": Wait for pool map done.\n", DP_UUID(pool->sp_uuid));
 	}
 	ABT_mutex_unlock(pool->sp_mutex);

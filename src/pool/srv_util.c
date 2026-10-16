@@ -78,12 +78,14 @@ all_tgts_match(struct pool_domain *rank_dom, unsigned int status)
 	return true;
 }
 
-/* Build failed rank list, treats the rank as DOWN if all its targets are DOWN . */
+/*
+ * Build the rank list with certain status, a rank is also included if all its targets
+ * are with the status (e.g. treats the rank as DOWN if all its targets are DOWN).
+ */
 int
-map_ranks_failed(const struct pool_map *map, d_rank_list_t *ranks)
+map_ranks_failed(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks)
 {
 	struct pool_domain *domains = NULL;
-	unsigned int        status  = PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN;
 	int                 nranks;
 	int                 n = 0;
 	int                 i;
