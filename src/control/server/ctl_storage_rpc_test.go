@@ -32,6 +32,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -2774,6 +2775,153 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					t.Fatalf("unexpected results: (\nwant: %+v\ngot: %+v)",
 						tc.expResp.Mrets, resp.Mrets)
 				}
+			}
+		})
+	}
+}
+
+// mockFormatMetadataEngine is a minimal Engine double used to exercise
+// ControlService.formatMetadata() in isolation, without the full StorageFormat()
+// SCM/NVMe test harness. Only Index() and GetStorage() are overridden; GetStorage()
+// returns a real *storage.Provider wired with a mock Sys so that
+// ControlMetadataEngineNeedsFormat()'s superblock check can be driven per test case.
+type mockFormatMetadataEngine struct {
+	MockInstance
+	idx      uint32
+	provider *storage.Provider
+}
+
+func (m *mockFormatMetadataEngine) Index() uint32 {
+	return m.idx
+}
+
+func (m *mockFormatMetadataEngine) GetStorage() *storage.Provider {
+	return m.provider
+}
+
+// newMockFormatMetadataEngine builds a mockFormatMetadataEngine whose
+// ControlMetadataEngineNeedsFormat() will report missing/present based on
+// superblockMissing, iff mdPath is non-empty (matching MD-on-SSD configuration).
+func newMockFormatMetadataEngine(log logging.Logger, idx uint32, mdPath string, superblockMissing bool) *mockFormatMetadataEngine {
+	cfg := &storage.Config{ControlMetadata: storage.ControlMetadata{Path: mdPath}}
+	sysProv := sysprov.NewMockSysProvider(log, nil)
+	storProv := storage.MockProvider(log, int(idx), cfg, sysProv, nil, nil, nil)
+
+	if mdPath != "" {
+		superblockPath := filepath.Join(storProv.ControlMetadataEnginePath(), "superblock")
+		if superblockMissing {
+			sysProv = sysprov.NewMockSysProvider(log, &sysprov.MockSysConfig{
+				ReadFileErrors: map[string]error{superblockPath: os.ErrNotExist},
+			})
+		} else {
+			sysProv = sysprov.NewMockSysProvider(log, &sysprov.MockSysConfig{
+				ReadFileResults: map[string][]byte{superblockPath: []byte("x")},
+			})
+		}
+		storProv = storage.MockProvider(log, int(idx), cfg, sysProv, nil, nil, nil)
+	}
+
+	return &mockFormatMetadataEngine{
+		MockInstance: *NewMockInstance(&MockInstanceConfig{Index: idx}),
+		idx:          idx,
+		provider:     storProv,
+	}
+}
+
+// TestServer_CtlSvc_formatMetadata verifies ControlService.formatMetadata()'s behavior
+// across host-level (control_metadata root/daos_control missing) and per-engine
+// (individual engine's superblock missing) format-needed scenarios. In particular, it
+// confirms that engines with missing control-metadata subdirectories/superblocks are
+// always (re)formatted regardless of the (now removed) "replace" gating, matching the
+// behavior previously exclusive to --replace.
+func TestServer_CtlSvc_formatMetadata(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mdPathConfigured    bool
+		hostNeedsFormat     bool // ControlMetadataNeedsFormat() return value
+		reformat            bool
+		engineMissing       map[uint32]bool
+		expMdFormatted      bool
+		expFullFormatLog    bool
+		expFormattedEngines []uint
+	}{
+		"legacy PMem mode: no control metadata path configured": {
+			mdPathConfigured: false,
+			engineMissing:    map[uint32]bool{0: false, 1: false},
+			expMdFormatted:   false,
+		},
+		"host-level format needed (root or daos_control missing) formats all engines": {
+			mdPathConfigured: true,
+			hostNeedsFormat:  true,
+			engineMissing:    map[uint32]bool{0: false, 1: false},
+			expMdFormatted:   true,
+			expFullFormatLog: true,
+		},
+		"reformat requested formats all engines even if none report missing": {
+			mdPathConfigured: true,
+			reformat:         true,
+			engineMissing:    map[uint32]bool{0: false, 1: false},
+			expMdFormatted:   true,
+			expFullFormatLog: true,
+		},
+		"single engine missing superblock is (re)formatted without --replace": {
+			mdPathConfigured:    true,
+			engineMissing:       map[uint32]bool{0: false, 1: true},
+			expMdFormatted:      true,
+			expFormattedEngines: []uint{1},
+		},
+		"both engines missing superblock are (re)formatted without --replace": {
+			mdPathConfigured:    true,
+			engineMissing:       map[uint32]bool{0: true, 1: true},
+			expMdFormatted:      true,
+			expFormattedEngines: []uint{0, 1},
+		},
+		"no engines missing and no reformat requested: no format needed": {
+			mdPathConfigured: true,
+			engineMissing:    map[uint32]bool{0: false, 1: false},
+			expMdFormatted:   false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mdPath := ""
+			if tc.mdPathConfigured {
+				mdPath = "/mnt/control_metadata"
+			}
+
+			cs := &ControlService{
+				StorageControlService: StorageControlService{
+					log: log,
+					storage: storage.MockProvider(log, 0, &storage.Config{
+						ControlMetadata: storage.ControlMetadata{Path: mdPath},
+					}, nil, nil, nil, &storage.MockMetadataProvider{
+						NeedsFormatRes: tc.hostNeedsFormat,
+					}),
+				},
+			}
+
+			var instances []Engine
+			for _, idx := range []uint32{0, 1} {
+				instances = append(instances,
+					newMockFormatMetadataEngine(log, idx, mdPath, tc.engineMissing[idx]))
+			}
+
+			mdFormatted, err := cs.formatMetadata(instances, tc.reformat)
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			test.AssertEqual(t, tc.expMdFormatted, mdFormatted, "mdFormatted mismatch")
+
+			if tc.expFullFormatLog {
+				test.AssertTrue(t,
+					strings.Contains(buf.String(), "formatting control metadata storage (all engines)"),
+					"expected full (all engines) format log message, got: "+buf.String())
+			} else if len(tc.expFormattedEngines) > 0 {
+				expMsg := fmt.Sprintf("formatting control metadata storage for engines %v",
+					tc.expFormattedEngines)
+				test.AssertTrue(t, strings.Contains(buf.String(), expMsg),
+					fmt.Sprintf("expected log message %q, got: %s", expMsg, buf.String()))
 			}
 		})
 	}

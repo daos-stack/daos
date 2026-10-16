@@ -500,8 +500,41 @@ func (db *Database) Start(parent context.Context) error {
 
 // RemoveFiles destructively removes files associated with the system
 // database.
+//
+// The directory is renamed aside (a single atomic rename within the same
+// parent directory) before the renamed copy is removed. This guarantees that
+// even if the subsequent removal fails partway (e.g. a transient I/O error),
+// the original RaftDir path is already gone, so a following restart sees no
+// database at that path and bootstraps a fresh, empty one rather than
+// reloading stale, partially-erased raft state.
 func (db *Database) RemoveFiles() error {
-	return os.RemoveAll(db.cfg.RaftDir)
+	if _, err := os.Stat(db.cfg.RaftDir); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return errors.Wrapf(err, "stat %s", db.cfg.RaftDir)
+	}
+
+	// Clear out any leftover from a prior failed removal before reusing the path.
+	stalePath := db.cfg.RaftDir + ".erasing"
+	if err := os.RemoveAll(stalePath); err != nil {
+		return errors.Wrapf(err, "removing stale leftover %s", stalePath)
+	}
+
+	if err := os.Rename(db.cfg.RaftDir, stalePath); err != nil {
+		return errors.Wrapf(err, "renaming %s aside before removal", db.cfg.RaftDir)
+	}
+
+	// RaftDir is already gone from this point, regardless of whether the
+	// following removal succeeds.
+	return os.RemoveAll(stalePath)
+}
+
+// RaftDir returns the configured path to the raft directory, so that callers
+// removing it (e.g. RemoveFiles()) can fsync its parent directory afterwards
+// to deterministically confirm the removal has been committed to disk.
+func (db *Database) RaftDir() string {
+	return db.cfg.RaftDir
 }
 
 // Stop signals to the database that it should shutdown all background

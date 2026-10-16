@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -32,6 +33,14 @@ import (
 const (
 	groupUpdateInterval = 500 * time.Millisecond
 	batchLoopInterval   = 250 * time.Millisecond
+
+	// defaultGracefulStopTimeout bounds how long execControlPlaneRestart()
+	// will wait for grpcServer.GracefulStop() to drain in-flight RPCs (i.e.
+	// ensure the SystemErase response itself has been fully written to the
+	// wire) before falling back to a hard Stop() and proceeding with the
+	// restart regardless. Exposed as an mgmtSvc field so it can be overridden
+	// (e.g. in unit tests).
+	defaultGracefulStopTimeout = 5 * time.Second
 )
 
 type (
@@ -71,44 +80,51 @@ func (br *batchRequest) sendResponse(parent context.Context, msg proto.Message, 
 // mgmtpb.MgmtSvcServer.
 type mgmtSvc struct {
 	mgmtpb.UnimplementedMgmtSvcServer
-	log               logging.Logger
-	harness           *EngineHarness
-	membership        *system.Membership // if MS leader, system membership list
-	sysdb             *raft.Database
-	rpcClient         control.UnaryInvoker
-	events            *events.PubSub
-	systemProps       daos.SystemPropertyMap
-	clientNetworkHint []*mgmtpb.ClientNetHint
-	batchInterval     time.Duration
-	batchReqs         batchReqChan
-	serialReqs        batchReqChan
-	groupUpdateReqs   chan bool
-	lastMapVer        uint32
-	cancel            context.CancelFunc
-	// loopWg tracks background processing loops (batchReqLoop, serialReqLoop,
-	// leaderTaskLoop) started by startAsyncLoops/startLeaderLoops, so that
-	// Close() can block until they have actually exited rather than merely
-	// signaling cancellation and returning immediately. This avoids racing
-	// with goroutine-leak checks (e.g. goleak) that run shortly after a
-	// test's cleanup completes.
-	loopWg sync.WaitGroup
+	log                 logging.Logger
+	harness             *EngineHarness
+	membership          *system.Membership // if MS leader, system membership list
+	sysdb               *raft.Database
+	rpcClient           control.UnaryInvoker
+	events              *events.PubSub
+	systemProps         daos.SystemPropertyMap
+	clientNetworkHint   []*mgmtpb.ClientNetHint
+	batchInterval       time.Duration
+	batchReqs           batchReqChan
+	serialReqs          batchReqChan
+	groupUpdateReqs     chan bool
+	lastMapVer          uint32
+	cancel              context.CancelFunc
+	grpcServer          *grpc.Server
+	gracefulStopTimeout time.Duration
+	loopWg              sync.WaitGroup
+	// restartControlPlane performs the actual control-plane process restart (draining
+	// the gRPC server then exec()ing) scheduled by SystemErase via
+	// scheduleControlPlaneRestart(). It defaults to execControlPlaneRestart, but is a
+	// field (rather than a direct call) so that unit tests can substitute a no-op,
+	// avoiding the need for a real gRPC server, a real exec() call, or special-casing
+	// those conditions in the production code path.
+	restartControlPlane func(myPath, leaderStr string)
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
-	return &mgmtSvc{
-		log:               h.log,
-		harness:           h,
-		membership:        m,
-		sysdb:             s,
-		rpcClient:         c,
-		events:            p,
-		systemProps:       daos.SystemProperties(),
-		clientNetworkHint: []*mgmtpb.ClientNetHint{new(mgmtpb.ClientNetHint)},
-		batchInterval:     batchLoopInterval,
-		batchReqs:         make(batchReqChan),
-		serialReqs:        make(batchReqChan),
-		groupUpdateReqs:   make(chan bool),
+	svc := &mgmtSvc{
+		log:                 h.log,
+		harness:             h,
+		membership:          m,
+		sysdb:               s,
+		rpcClient:           c,
+		events:              p,
+		systemProps:         daos.SystemProperties(),
+		clientNetworkHint:   []*mgmtpb.ClientNetHint{new(mgmtpb.ClientNetHint)},
+		batchInterval:       batchLoopInterval,
+		batchReqs:           make(batchReqChan),
+		serialReqs:          make(batchReqChan),
+		groupUpdateReqs:     make(chan bool),
+		gracefulStopTimeout: defaultGracefulStopTimeout,
 	}
+	svc.restartControlPlane = svc.execControlPlaneRestart
+
+	return svc
 }
 
 // Close cleanly shuts down the management service, canceling the context,

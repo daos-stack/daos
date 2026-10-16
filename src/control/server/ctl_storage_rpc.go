@@ -28,7 +28,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/metadata"
 )
 
 const (
@@ -803,7 +802,7 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 	return resp, nil
 }
 
-func (cs *ControlService) formatMetadata(instances []Engine, reformat, replace bool) (bool, error) {
+func (cs *ControlService) formatMetadata(instances []Engine, reformat bool) (bool, error) {
 	// Exit early if not using MD-on-SSD mode (legacy PMem mode)
 	if !cs.storage.ControlMetadataPathConfigured() {
 		cs.log.Debug("control metadata path not configured, skipping metadata format (legacy PMem mode)")
@@ -828,7 +827,10 @@ func (cs *ControlService) formatMetadata(instances []Engine, reformat, replace b
 		return true, nil
 	}
 
-	// Check for engines with missing metadata directories
+	// Check for engines with missing metadata directories. The host-level root already exists
+	// (checked above), so any individual engine subdirectory found missing here has no
+	// surviving state to protect. Such engines are (re)formatted unconditionally.
+
 	var needFormatIdxs []uint
 	for _, eng := range instances {
 		engIdx := uint(eng.Index())
@@ -846,16 +848,11 @@ func (cs *ControlService) formatMetadata(instances []Engine, reformat, replace b
 	}
 
 	if len(needFormatIdxs) > 0 {
-		if replace {
-			// In replace mode, format only the engines that need it
-			cs.log.Debugf("formatting control metadata storage for engines %v (--replace)", needFormatIdxs)
-			if err := cs.storage.FormatControlMetadata(needFormatIdxs); err != nil {
-				return false, errors.Wrap(err, "formatting control metadata storage")
-			}
-			return true, nil
+		cs.log.Debugf("formatting control metadata storage for engines %v", needFormatIdxs)
+		if err := cs.storage.FormatControlMetadata(needFormatIdxs); err != nil {
+			return false, errors.Wrap(err, "formatting control metadata storage")
 		}
-		// Not in replace mode, but some engines need format - return fault
-		return false, metadata.FaultIncompleteFormat(needFormatIdxs)
+		return true, nil
 	}
 
 	cs.log.Debug("no control metadata format needed")
@@ -1091,11 +1088,9 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		return resp, nil
 	}
 
-	// DAOS-15947, DAOS-19385: control_metadata format is required in --replace case
-	// to ensure old rank metadata is cleared. Only engines with missing metadata
-	// directories will have their control_metadata subdirectories reformatted,
-	// preserving healthy engines. SCM formatting is handled separately.
-	mdFormatted, err := cs.formatMetadata(instances, req.Reformat, req.Replace)
+	//  Only engines with missing metadata directories will have their control_metadata
+	//  subdirectories reformatted, preserving healthy engines.
+	mdFormatted, err := cs.formatMetadata(instances, req.Reformat)
 	if err != nil {
 		return nil, err
 	}

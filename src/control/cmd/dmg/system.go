@@ -170,15 +170,24 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 type systemEraseCmd struct {
 	baseCmd
 	ctlInvokerCmd
+	cmdutil.JSONOutputCmd
 }
 
 func (cmd *systemEraseCmd) Execute(_ []string) error {
 	resp, err := control.SystemErase(cmd.MustLogCtx(), cmd.ctlInvoker, new(control.SystemEraseReq))
 	if err != nil {
-		return err
+		return err // control api returned an error, disregard response
 	}
 
-	return resp.Errors()
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	if err := resp.Errors(); err != nil {
+		return err
+	}
+	cmd.Infof("System erase successful. System is now uninitialized and ready for 'dmg storage format'.\n")
+	return nil
 }
 
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
