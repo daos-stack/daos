@@ -1449,16 +1449,23 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_UNAVAILABLE;
 	}
 
-	/*
-	 * Up layer rebuild logic guarantees that the rebuild scan will not be
-	 * triggered until DTX resync has been done on all related targets. So
-	 * here, if rebuild logic hits non-committed DTX entry, it must be for
-	 * new IO that version is not older than rebuild, then it is invisible
-	 * to rebuild. Related new IO corresponding to such non-committed DTX
-	 * has already been sent to the in-rebuilding target.
-	 */
-	if (intent == DAOS_INTENT_MIGRATION)
+	if (intent == DAOS_INTENT_MIGRATION) {
+		/*
+		 * Restart rebuild rather than skip unresolved old-map DTXs inside the migration
+		 * boundary. DTXs prepared with the rebuild (or newer) map version were sent with a
+		 * layout that already includes the in-rebuilding target, so they stay invisible.
+		 */
+		if (dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch &&
+		    DAE_VER(dae) < dth->dth_ver) {
+			D_WARN("Non-ready DTX " DF_DTI " at " DF_X64 " (version %u) restart "
+			       "rebuild (" DF_DTI ") at migration boundary " DF_X64 " (ver %u)\n",
+			       DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae),
+			       DP_DTI(&dth->dth_xid), dth->dth_epoch, dth->dth_ver);
+			return -DER_VOS_PARTIAL_UPDATE;
+		}
+
 		return ALB_UNAVAILABLE;
+	}
 
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
@@ -3280,6 +3287,27 @@ vos_dtx_aggregate(daos_handle_t coh, const uint64_t *cmt_time)
 		rc = 0;
 
 	return rc;
+}
+
+bool
+vos_dtx_has_inprogress(daos_handle_t coh, uint32_t ver)
+{
+	struct vos_container   *cont = vos_hdl2cont(coh);
+	struct vos_dtx_act_ent *dae;
+
+	D_ASSERT(cont != NULL);
+
+	d_list_for_each_entry(dae, &cont->vc_dtx_act_list, dae_link) {
+		if (DAE_VER(dae) >= ver ||
+		    DAE_FLAGS(dae) & (DTE_CORRUPTED | DTE_ORPHAN | DTE_PARTIAL_COMMITTED) ||
+		    vos_dae_is_commit(dae) || vos_dae_is_abort(dae) || dae->dae_committable)
+			continue;
+
+		if (dae->dae_dth != NULL || dae->dae_preparing)
+			return true;
+	}
+
+	return false;
 }
 
 void

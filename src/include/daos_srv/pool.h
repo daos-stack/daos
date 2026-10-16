@@ -179,6 +179,8 @@ struct ds_pool_child {
 	d_list_t                 spc_srv_cont_hdl; /* Single server cont handle */
 
 	uint32_t	spc_map_version;
+	/* Monotonic resync-start watermark, retained for the pool child's lifetime. */
+	daos_epoch_t             spc_dtx_resync_epoch;
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
