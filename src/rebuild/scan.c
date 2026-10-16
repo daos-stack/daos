@@ -924,6 +924,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	daos_unit_oid_t			oid = { 0 };
 	int				snapshot_cnt = 0;
 	int				rc;
+	uint32_t                         flags = 0;
 	daos_epoch_t                     lse;
 
 	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
@@ -960,8 +961,14 @@ again:
 		D_GOTO(close, rc);
 	}
 
-	if (rpt->rt_rebuild_op == RB_OP_RECLAIM || rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM)
+	if (rpt->rt_rebuild_op == RB_OP_RECLAIM || rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		/*
+		 * For RB_OP_RECLAIM or RB_OP_FAIL_RECLAIM, it is unnecessary to wait stable
+		 * epoch, instead, just notify DTX logic in VOS to ignore non-committed DTX.
+		 */
+		flags = DTX_IGNORE_UNCOMMITTED;
 		goto next;
+	}
 
 	lse = vos_cont_get_local_stable_epoch(coh);
 	if (lse < rpt->rt_stable_epoch) {
@@ -1056,10 +1063,10 @@ next:
 	}
 
 	epoch.oe_value = rpt->rt_stable_epoch;
-	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
-		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
+
+	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver, &oid, NULL, 0, flags, NULL, &dth);
 	D_ASSERT(rc == 0);
-	memset(&param, 0, sizeof(param));
+
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
