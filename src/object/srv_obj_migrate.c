@@ -1286,15 +1286,12 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh, daos_
 		ptr = iov[i].iov_buf;
 		for (j = 1; j < iods[i].iod_nr; j++) {
 			daos_recx_t	*recx = &iods[i].iod_recxs[j];
-			daos_epoch_t     eph  = migrate_parity_epoch(mrone, ephs[i][j], encode);
 
-			/* Merge contiguous recxs in the same stripe only when they are
-			 * written at the same epoch, so that replica extents enumerated
-			 * from a parity shard keep their own epochs.
-			 */
+			/* Merge the recx if there are in the same stripe */
 			if (offset + size == recx->rx_idx &&
-			    offset / stride_nr == recx->rx_idx / stride_nr && eph == parity_eph) {
+			    offset / stride_nr == recx->rx_idx / stride_nr) {
 				size += recx->rx_nr;
+				parity_eph = max(ephs[i][j], parity_eph);
 				continue;
 			}
 
@@ -1305,15 +1302,12 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh, daos_
 			ptr += size * iods[i].iod_size;
 			offset = recx->rx_idx;
 			size = recx->rx_nr;
-			parity_eph = eph;
+			parity_eph = migrate_parity_epoch(mrone, ephs[i][j], encode);
 		}
 
-		if (size > 0) {
+		if (size > 0)
 			rc = migrate_update_parity(mrone, parity_eph, ds_cont, ptr, offset,
 						   size, &tmp_iod, p_bufs, csummer, encode);
-			if (rc)
-				D_GOTO(out, rc);
-		}
 	}
 out:
 	for (i = 0; i < iods_num; i++) {
@@ -3039,10 +3033,9 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	 * be able to be merged here.
 	 */
 	d_list_for_each_entry(mo, &arg->merge_list, mo_list) {
-		if (daos_oid_cmp(mo->mo_oid.id_pub, io->ui_oid.id_pub) == 0 &&
+		if (daos_oid_cmp(mo->mo_oid.id_pub,
+				 io->ui_oid.id_pub) == 0 &&
 		    mo->mo_version == io->ui_version &&
-		    mo->mo_from_parity ==
-			is_ec_parity_shard_by_tgt_off(unpack_tgt_off, &arg->oc_attr) &&
 		    daos_key_match(&mo->mo_dkey, &io->ui_dkey)) {
 			rc = migrate_try_merge_recx(mo, obj, io);
 			if (rc < 0)
