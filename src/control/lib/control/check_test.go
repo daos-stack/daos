@@ -238,7 +238,7 @@ func TestControl_SystemCheckQuery(t *testing.T) {
 									Inconsistency: &mgmtpb.CheckQueryInconsist{},
 									Time: &mgmtpb.CheckQueryTime{
 										StartTime: uint64(testTime.Unix()),
-										MiscTime:  uint64(testTime.Unix() + 15),
+										MiscTime:  uint64(testTime.Unix() + 12),
 									},
 								},
 							},
@@ -276,7 +276,7 @@ func TestControl_SystemCheckQuery(t *testing.T) {
 										Inconsistency: &mgmtpb.CheckQueryInconsist{},
 										Time: &mgmtpb.CheckQueryTime{
 											StartTime: uint64(testTime.Unix()),
-											MiscTime:  uint64(testTime.Unix() + 15),
+											MiscTime:  uint64(testTime.Unix() + 12),
 										},
 									},
 								},
@@ -287,6 +287,15 @@ func TestControl_SystemCheckQuery(t *testing.T) {
 						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
 						StartTime: time.Unix(testTime.Unix(), 0),
 						StopTime:  time.Unix(testTime.Unix()+15, 0),
+						Targets: []*SystemCheckTargetInfo{
+							{
+								Rank:      3,
+								Status:    "CIS_COMPLETED",
+								StartTime: time.Unix(testTime.Unix(), 0),
+								StopTime:  time.Unix(testTime.Unix()+12, 0),
+								Stats:     &SystemCheckStatistics{},
+							},
+						},
 					},
 				},
 				Reports: []*SystemCheckReport{
