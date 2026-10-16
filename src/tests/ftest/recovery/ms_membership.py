@@ -1,6 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -65,8 +65,7 @@ class MSMembershipTest(TestWithServers):
         self.log_step("Verify dmg check query fails")
         try:
             dmg_command.check_query()
-            # To be fixed by DAOS-18001
-            # self.fail("dmg check query did not fail as expected")
+            self.fail("dmg check query did not fail as expected")
         except CommandFailure as error:
             self.log.info("dmg check query is expected to fail. Error: %s", error)
 
