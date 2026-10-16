@@ -926,6 +926,32 @@ oi_iter_check(struct vos_iterator *iter, report_fn_t report_fn, void *report_arg
 	return rc;
 }
 
+static int
+oi_iter_defer_if_busy(struct vos_oi_iter *oiter, struct vos_obj_df *obj, bool *deferred)
+{
+	struct vos_container *cont = oiter->oit_cont;
+	bool                  other_users;
+	int                   rc;
+
+	*deferred = false;
+	rc        = vos_obj_has_other_users(cont, obj->vo_id, &other_users);
+	if (rc != 0 || !other_users)
+		return rc;
+
+	D_DEBUG(DB_EPC, "Defer aggregation of in-use object " DF_UOID "\n", DP_UOID(obj->vo_id));
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = vos_mark_agg(cont, &obj->vo_tree, &cont->vc_cont_df->cd_obj_root,
+			  oiter->oit_epr.epr_hi + 1);
+	rc = umem_tx_end(vos_cont2umm(cont), rc);
+	if (rc == 0)
+		*deferred = true;
+
+	return rc;
+}
+
 int
 oi_iter_check_punch(daos_handle_t ih)
 {
@@ -935,6 +961,7 @@ oi_iter_check_punch(daos_handle_t ih)
 	struct oi_delete_arg	del_arg;
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
+	bool                     deferred;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
@@ -962,6 +989,10 @@ oi_iter_check_punch(daos_handle_t ih)
 			 DP_UOID(oid));
 		return rc;
 	}
+
+	rc = oi_iter_defer_if_busy(oiter, obj, &deferred);
+	if (rc != 0 || deferred)
+		return rc;
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
@@ -1000,6 +1031,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
 	bool			 delete = false, invisible = false;
+	bool                     deferred;
 	int			 rc;
 	uint64_t                 base_flag = range_discard ? VOS_OBJ_DISCARD : VOS_OBJ_AGGREGATE;
 
@@ -1024,6 +1056,10 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 			 DP_UOID(oid));
 		return rc;
 	}
+
+	rc = oi_iter_defer_if_busy(oiter, obj, &deferred);
+	if (rc != 0 || deferred)
+		return rc;
 
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
