@@ -1463,15 +1463,14 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		 * start rebuild scanning. So when rebuild logic arrives here,
 		 * all old DTX should have been either committed or aborted.
 		 */
-		if (unlikely(dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch))
-			D_ERROR("Hit prepared DTX " DF_DTI " with epoch " DF_X64 ", ver %u "
-				"during rebuild (" DF_DTI ") with epoch " DF_X64 ", ver %u, local "
-				"stable epoch " DF_X64 ", reindex list is %s for " DF_UUID "\n",
-				DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), DAE_VER(dae),
-				DP_DTI(&dth->dth_xid), dth->dth_epoch, dth->dth_ver,
-				vos_cont_get_local_stable_epoch(coh),
-				d_list_empty(&cont->vc_dtx_reindex_list) ? "empty" : "non-empty",
-				DP_UUID(cont->vc_id));
+		if (unlikely(dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch &&
+			     dth->dth_ignore_uncommitted == 0))
+			D_ERROR("In cont " DF_UUID " hit prepared DTX " DF_DTI " with epoch " DF_X64
+				", version %u during rebuild (" DF_DTI ") with epoch " DF_X64
+				", version %u, local stable epoch " DF_X64 "\n",
+				DP_UUID(cont->vc_id), DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae),
+				DAE_VER(dae), DP_DTI(&dth->dth_xid), dth->dth_epoch, dth->dth_ver,
+				vos_cont_get_local_stable_epoch(coh));
 		return ALB_UNAVAILABLE;
 	}
 
@@ -3300,10 +3299,8 @@ vos_dtx_aggregate(daos_handle_t coh, const uint64_t *cmt_time)
 void
 vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags)
 {
-	struct vos_container   *cont;
-	struct vos_cont_df     *cont_df;
-	struct vos_dtx_act_ent *dae;
-	int                     i;
+	struct vos_container *cont;
+	struct vos_cont_df   *cont_df;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -3311,6 +3308,8 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags)
 	if (d_list_empty(&cont->vc_dtx_act_list)) {
 		stat->dtx_oldest_active_time = 0;
 	} else {
+		struct vos_dtx_act_ent *dae;
+
 		dae = d_list_entry(cont->vc_dtx_act_list.next,
 				   struct vos_dtx_act_ent, dae_link);
 		if (flags & DSF_SKIP_BAD) {
@@ -3341,8 +3340,11 @@ cmt:
 
 	if (!UMOFF_IS_NULL(cont_df->cd_dtx_committed_head)) {
 		struct umem_instance      *umm = vos_cont2umm(cont);
-		struct vos_dtx_blob_df    *dbd = umem_off2ptr(umm, cont_df->cd_dtx_committed_head);
+		struct vos_dtx_blob_df    *dbd;
 		struct vos_dtx_cmt_ent_df *dce;
+		int                        i;
+
+		dbd = umem_off2ptr(umm, cont_df->cd_dtx_committed_head);
 
 		for (i = 0; i < dbd->dbd_count; i++) {
 			dce = &dbd->dbd_committed_data[i];
@@ -3362,20 +3364,6 @@ cmt:
 				stat->dtx_first_cmt_blob_time_lo = dce->dce_cmt_time;
 				break;
 			}
-		}
-	}
-
-	if (d_list_empty(&cont->vc_dtx_reindex_list)) {
-		stat->dtx_reindex_empty = true;
-	} else {
-		stat->dtx_reindex_empty = false;
-		if (flags & DSF_DUMP_REINDEX) {
-			i = 0;
-			d_list_for_each_entry(dae, &cont->vc_dtx_reindex_list, dae_order_link)
-				D_INFO("Reindex list (%d): DTX " DF_DTI " with epoch " DF_X64 "\n",
-				       i++, DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae));
-			D_INFO("Reindex epoch diff for container " DF_UUID ": " DF_X64 "\n",
-			       DP_UUID(cont->vc_id), cont->vc_dtx_reindex_eph_diff);
 		}
 	}
 }
