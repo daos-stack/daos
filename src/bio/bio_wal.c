@@ -2167,6 +2167,67 @@ meta_open(struct bio_meta_context *mc)
 }
 
 /*
+ * Content checks on a meta header which passed the magic, version and checksum checks of
+ * load_meta_header(). They cover the invariants bio_mc_open() asserts on, so that an inconsistent
+ * header can be reported instead of aborting.
+ */
+static int
+meta_hdr_verify(struct meta_header *hdr, enum bio_mc_flags flags)
+{
+	/* bio_mc_open() asserts on a missing WAL blob and on a data blob of a RDB */
+	if (hdr->mh_wal_blobid == SPDK_BLOBID_INVALID) {
+		D_ERROR("Meta header has no WAL blob ID\n");
+		return -DER_DF_INVAL;
+	}
+
+	if ((flags & BIO_MC_FL_RDB) && hdr->mh_data_blobid != SPDK_BLOBID_INVALID) {
+		D_ERROR("Meta header of a RDB references data blob " DF_U64 "\n",
+			hdr->mh_data_blobid);
+		return -DER_DF_INVAL;
+	}
+
+	/* Geometry handed to vos_pool_open() by bio_meta_get_attr(); the format never writes 0 */
+	if (hdr->mh_blk_bytes == 0 || hdr->mh_hdr_blks == 0 || hdr->mh_tot_blks == 0) {
+		D_ERROR("Invalid meta geometry: blk_bytes:%" PRIu32 " hdr_blks:%" PRIu32
+			" tot_blks:" DF_U64 "\n",
+			hdr->mh_blk_bytes, hdr->mh_hdr_blks, hdr->mh_tot_blks);
+		return -DER_DF_INVAL;
+	}
+
+	return 0;
+}
+
+int
+meta_hdr_check(struct bio_meta_context *mc, enum bio_mc_flags flags)
+{
+	int rc;
+
+	rc = meta_csum_init(mc, HASH_TYPE_CRC32);
+	if (rc != 0)
+		return rc;
+
+	rc = load_meta_header(mc);
+	if (rc != 0)
+		goto out_csum;
+
+	rc = meta_hdr_verify(&mc->mc_meta_hdr, flags);
+	if (rc != 0)
+		goto out_csum;
+
+	return 0;
+
+out_csum:
+	meta_csum_fini(mc);
+	return rc;
+}
+
+int
+wal_hdr_check(struct bio_meta_context *mc)
+{
+	return load_wal_header(mc);
+}
+
+/*
  * Try to generate an unique generation for WAL blob, the generation will be used
  * to distinguish the stale TX blocks from destroyed pools.
  *

@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -190,5 +190,16 @@ int meta_open(struct bio_meta_context *mc);
 void meta_close(struct bio_meta_context *mc);
 int wal_open(struct bio_meta_context *mc);
 void wal_close(struct bio_meta_context *mc);
+
+/*
+ * Read-only header checks: load and verify the meta (resp. WAL) header with the
+ * meta (resp. WAL) I/O context of @mc, without upgrading or writing anything.
+ * On success meta_hdr_check() leaves the checksum context initialized, to be
+ * released with meta_close().
+ */
+int
+meta_hdr_check(struct bio_meta_context *mc, enum bio_mc_flags flags);
+int
+wal_hdr_check(struct bio_meta_context *mc);
 
 #endif /* __BIO_WAL_H__*/
