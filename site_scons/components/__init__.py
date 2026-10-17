@@ -127,7 +127,7 @@ def define_mercury(reqs):
                  '--enable-verbs',
                  '--enable-rxm',
                  '--enable-shm',
-                 '--enable-psm2',
+                 '--disable-psm2',
                  '--enable-opx',
                  '--disable-efa',
                  '--disable-dmabuf_peer_mem',
