@@ -995,7 +995,11 @@ crt_proc_struct_chk_time(crt_proc_t proc, crt_proc_op_t proc_op, struct chk_time
 	if (unlikely(rc != 0))
 		return rc;
 
-	return crt_proc_uint64_t(proc, proc_op, &time->ct_start_time);
+	rc = crt_proc_uint64_t(proc, proc_op, &time->ct_start_time);
+	if (unlikely(rc != 0))
+		return rc;
+
+	return crt_proc_uint64_t(proc, proc_op, &time->ct_stop_time);
 }
 
 static int
