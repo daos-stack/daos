@@ -37,8 +37,38 @@
 struct bundle {
 	struct xstream_arg *xa;
 	struct checker     *ck;
-	bool                error_on_non_zero_padding;
 };
+
+#define CK_DKEY_FMT "Check dkey: " CHECKER_DKEY_FMT
+
+static int
+dkey_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct bundle  *bndl = cb_arg;
+	struct checker *ck   = bndl->ck;
+	int             rc;
+
+	CK_PRINTF(ck, CK_DKEY_FMT "...\n", CHECKER_DKEY_PRINT(&entry->ie_key));
+	CK_INDENT(ck, rc = vos_iter_check(ih, ck_report, ck, bndl->error_on_non_zero_padding));
+	CK_PRINTFL_RC(ck, rc, CK_DKEY_FMT, CHECKER_DKEY_PRINT(&entry->ie_key));
+
+	return 0;
+}
+
+static int
+dkeys_process(daos_handle_t coh, daos_unit_oid_t oid, struct bundle *bndl)
+{
+	vos_iter_param_t        param   = {0};
+	struct vos_iter_anchors anchors = {0};
+
+	param.ip_hdl        = coh;
+	param.ip_oid        = oid;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
+
+	return vos_iterate(&param, VOS_ITER_DKEY, false, &anchors, dkey_process, NULL, bndl, NULL);
+}
 
 #define CK_OID_FMT "Check oid: " DF_UOID
 
@@ -64,8 +94,11 @@ obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	int             rc;
 
 	CK_PRINTF(ck, CK_OID_FMT "...\n", DP_UOID(entry->ie_oid));
-	CK_INDENT(ck, rc = vos_iter_check(ih, ck_report, ck, bndl->error_on_non_zero_padding));
+	CK_INDENT(ck, rc = vos_iter_check(ih, ck));
 	CK_PRINTFL_RC(ck, rc, CK_OID_FMT, DP_UOID(entry->ie_oid));
+	if (rc == DER_SUCCESS) {
+		dkeys_process(param->ip_hdl, entry->ie_oid, bndl);
+	}
 
 	return rc;
 }
@@ -141,10 +174,7 @@ conts_process(struct xstream_arg *xa, daos_handle_t poh, struct checker *ck)
 {
 	vos_iter_param_t        param   = {0};
 	struct vos_iter_anchors anchors = {0};
-	struct bundle           cb_arg  = {.xa = xa,
-					   .ck = ck,
-					   .error_on_non_zero_padding =
-					       (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR)};
+	struct bundle           cb_arg  = {.xa = xa, .ck = ck};
 
 	param.ip_hdl        = poh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
@@ -175,7 +205,7 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 
 	rc = dlck_pool_file_preallocate(xa->ctrl->engine.storage_path, file->po_uuid,
 					xa->xs->tgt_id);
-	CK_PRINTL_RC(ck, xa->rc, "VOS file allocation");
+	CK_PRINTFL_RC(ck, xa->rc, "VOS file allocation");
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
@@ -184,7 +214,7 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 	rc = ds_mgmt_file(xa->ctrl->engine.storage_path, file->po_uuid, VOS_FILE, &xa->xs->tgt_id,
 			  &path);
 	if (rc != DER_SUCCESS) {
-		CK_PRINTL_RC(ck, xa->rc, "VOS file path allocation failed");
+		CK_PRINTFL_RC(ck, xa->rc, "VOS file path allocation failed");
 		return rc;
 	}
 
@@ -273,12 +303,12 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	}
 	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
-		CK_PRINTL_RC(ck, rc, "Cannot create log directory");
+		CK_PRINTFL_RC(ck, rc, "Cannot create log directory");
 		return rc;
 	}
 	CK_PRINTF(ck, "Log directory: %s\n", ctrl->log_dir);
 
-	CK_PRINT(ck, "Start the engine... ");
+	CK_PRINTF(ck, "Start the engine... ");
 	rc = dlck_engine_start(&ctrl->engine, &engine);
 	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
@@ -287,7 +317,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 
 	if (d_list_empty(&ctrl->files.list)) {
 		/** no files specified means all files are requested */
-		CK_PRINT(ck, "Read the list of pools... ");
+		CK_PRINTF(ck, "Read the list of pools... ");
 		rc = dlck_pool_list(&ctrl->files.list);
 		CK_APPENDL_RC(ck, rc);
 		if (rc != DER_SUCCESS) {
@@ -295,12 +325,12 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		}
 		/** no files exist */
 		if (d_list_empty(&ctrl->files.list)) {
-			CK_PRINT(ck, "No pools exist. Exiting...\n");
+			CK_PRINTF(ck, "No pools exist. Exiting...\n");
 			goto err_stop_engine;
 		}
 	}
 
-	CK_PRINT(ck, "Create pools directories... ");
+	CK_PRINTF(ck, "Create pools directories... ");
 	rc = dlck_pool_mkdir_all(ctrl->engine.storage_path, &ctrl->files.list, ck);
 	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
@@ -311,7 +341,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	D_ALLOC_ARRAY(rcs, ctrl->engine.targets);
 	if (rcs == NULL) {
 		rc = -DER_NOMEM;
-		CK_PRINTL_RC(ck, rc, "");
+		CK_PRINTFL_RC(ck, rc, "");
 		goto err_stop_engine;
 	}
 
@@ -321,7 +351,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		goto err_free_rcs;
 	}
 
-	CK_PRINT(ck, "Stop the engine... ");
+	CK_PRINTF(ck, "Stop the engine... ");
 	rc = dlck_engine_stop(engine);
 	CK_APPENDL_RC(ck, rc);
 
