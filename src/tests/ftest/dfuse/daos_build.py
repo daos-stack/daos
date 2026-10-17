@@ -34,10 +34,9 @@ def run_build_test(self, cache_mode, il_lib=None):
     # scons commands which can both take a long time.
     build_time = 60
 
-    build_jobs = 6 * 2
+    build_jobs = 6 * 5
 
     remote_env = EnvironmentVariables()
-    remote_env['D_IL_MAX_EQ'] = '0'
 
     dfuse = get_dfuse(self, self.hostlist_clients)
 
@@ -101,7 +100,6 @@ def run_build_test(self, cache_mode, il_lib=None):
         if il_lib == 'libpil4dfs.so':
             remote_env['D_IL_NO_BYPASS'] = '1'
             remote_env['D_IL_COMPATIBLE'] = '1'
-            remote_env['D_IL_MAX_EQ'] = '0'
 
     preload_cmd = remote_env.to_export_str()
 
@@ -223,7 +221,7 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=vm
+        :avocado: tags=cb,hw,medium
         :avocado: tags=build,daosio,dfs,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
         """
@@ -239,7 +237,7 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=vm
+        :avocado: tags=cb,hw,medium
         :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt
         """
@@ -255,7 +253,7 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=cb,hw,medium
         :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_metadata
         """
@@ -271,7 +269,7 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=cb,hw,medium
         :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_data
         """
@@ -287,7 +285,7 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=cb,hw,medium
         :avocado: tags=build,daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_nocache
         """
@@ -303,7 +301,7 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=cb,hw,medium
         :avocado: tags=build,daosio,dfuse,ioil
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
@@ -319,7 +317,7 @@ class DaosBuild(TestWithServers):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=cb,hw,medium
         :avocado: tags=build,daosio,pil4dfs
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_pil4dfs
         """
