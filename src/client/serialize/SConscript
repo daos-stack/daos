@@ -8,6 +8,9 @@ def scons():
 
     denv = env.Clone()
 
+    if GetOption('help') or GetOption('clean'):
+        return
+
     have_hdf5 = True
 
     # If hdf5 installed build DAOS serialization library
