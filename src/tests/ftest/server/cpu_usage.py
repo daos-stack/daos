@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -61,9 +61,9 @@ class CPUUsage(IorTestBase):
             usage (str): daos_engine CPU usage.
             usage_limit (int): Limit that we want daos_engine to use.
         """
-        self.assertTrue(usage != -1, "daos_engine CPU usage couldn't be obtained!")
-        self.assertTrue(
-            float(usage) < usage_limit, "CPU usage is above {}%: {}%".format(usage, usage_limit))
+        self.assertNotEqual(usage, -1, "daos_engine CPU usage couldn't be obtained!")
+        self.assertLess(
+            float(usage), usage_limit, "CPU usage is above {}%: {}%".format(usage, usage_limit))
 
     def test_cpu_usage(self):
         """JIRA ID: DAOS-4826.
