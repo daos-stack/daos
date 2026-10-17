@@ -3012,10 +3012,11 @@ check_update_rebuild_race(struct ds_cont_child *cont, daos_epoch_t epoch)
 	return 0;
 }
 
-static inline int
+static int
 check_read_rebuild_fense(struct ds_cont_child *cont, uint64_t epoch, uint32_t opc)
 {
 	struct ds_pool *pool = cont->sc_pool->spc_pool;
+	uint64_t        now;
 
 	/* For rebuild read, epoch must be specified instead of reading against MAX. */
 	if (unlikely(epoch == DAOS_EPOCH_MAX))
@@ -3030,10 +3031,17 @@ check_read_rebuild_fense(struct ds_cont_child *cont, uint64_t epoch, uint32_t op
 
 	/*
 	 * "epoch > pool->sp_rebuild_epoch means" means that current engine did not get latest
-	 * rebuild epoch via IV. Return "-DER_FETCH_AGAIN" to the RPC sponsor for retry later.
+	 * rebuild epoch via IV. Return "-DER_REBUILD_DELAY" to the RPC sponsor for retry later.
 	 */
 	if (unlikely(epoch > pool->sp_rebuild_epoch)) {
-		D_DEBUG(DB_IO, "Wait for rebuild epoch to be refreshed and retry opc %u.\n", opc);
+		now = daos_gettime_coarse();
+		if (now - cont->sc_rebuild_delay_ts > 30) {
+			D_WARN("Delay rebuild ops %u with epoch " DF_X64
+			       " because of old rebuild epoch " DF_X64 " on current target.\n",
+			       opc, epoch, cont->sc_rebuild_delay_ts);
+			cont->sc_rebuild_delay_ts = now;
+		}
+
 		return -DER_REBUILD_DELAY;
 	}
 
@@ -3044,8 +3052,12 @@ check_read_rebuild_fense(struct ds_cont_child *cont, uint64_t epoch, uint32_t op
 	if (cont->sc_local_stable_epoch >= pool->sp_rebuild_epoch)
 		return 0;
 
-	D_DEBUG(DB_IO, "Local stable epoch " DF_X64 " fense for rebuild " DF_X64 ", retry %u.\n",
-		cont->sc_local_stable_epoch, pool->sp_rebuild_epoch, opc);
+	now = daos_gettime_coarse();
+	if (now - cont->sc_rebuild_delay_ts > 30) {
+		D_WARN("Local stable epoch " DF_X64 " fense for rebuild " DF_X64 ", retry %u.\n",
+		       cont->sc_local_stable_epoch, pool->sp_rebuild_epoch, opc);
+		cont->sc_rebuild_delay_ts = now;
+	}
 
 	return -DER_REBUILD_DELAY;
 }
@@ -3141,6 +3153,19 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		if (orw->orw_flags & ORF_FOR_MIGRATION) {
 			uint64_t rd_epoch;
+
+			/*
+			 * Check the rebuild fence against the highest epoch this fetch may read.
+			 * Migration fetch epoch comes from dc_tx_local_open(), so normally
+			 * orw_epoch == orw_epoch_first and either one is the read epoch. With
+			 * ORF_FETCH_EPOCH_EC_AGG_BOUNDARY, the client sets orw_epoch_first to
+			 * the rebuild (object max) epoch and orw_epoch <= orw_epoch_first. The
+			 * ORF_FETCH_EPOCH_EC_AGG_BOUNDARY handling below may then raise orw_epoch
+			 * up to min(sc_ec_agg_eph_boundary, orw_epoch_first), so orw_epoch_first
+			 * is the upper bound of the final read epoch. Using it here keeps the
+			 * fence valid regardless of that later adjustment. orw_epoch cannot be
+			 * DAOS_EPOCH_MAX after process_epoch(); the check is kept defensively.
+			 */
 
 			if (orw->orw_epoch >= orw->orw_epoch_first &&
 			    orw->orw_epoch != DAOS_EPOCH_MAX)
