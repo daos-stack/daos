@@ -3505,29 +3505,23 @@ merge_recx_insert(struct obj_auxi_list_recx *prev, d_list_t *head, uint64_t offs
 
 	while (size > 0) {
 		struct obj_auxi_list_recx	*new;
-		uint64_t			new_size;
-		daos_epoch_t			new_eph;
+		uint64_t                         new_size;
 
 		/* Split by boundary */
-		if (boundary > 0) {
+		if (boundary > 0)
 			new_size = min(roundup(offset + 1, boundary), end) - offset;
-			if ((offset % boundary) == 0 || prev == NULL)
-				new_eph = eph;
-			else
-				new_eph = max(prev->recx_eph, eph);
-		} else {
+		else
 			new_size = size;
-			new_eph = eph;
-		}
 
 		/* Check if merging with previous recx or creating new one. */
 		if (prev && recx_can_merge_with_boundary(&prev->recx, offset, new_size,
 							 boundary)) {
 			daos_recx_merge_with_offset_size(&prev->recx, offset, new_size);
-			prev->recx_eph = max(prev->recx_eph, new_eph);
+			prev->recx_eph = max(prev->recx_eph, eph);
 		} else {
-			new = merge_recx_create_one(prev == NULL ? head : &prev->recx_list,
-						    offset, new_size, new_eph);
+			/* prev may be an unrelated recx, so do not inherit its epoch */
+			new = merge_recx_create_one(prev == NULL ? head : &prev->recx_list, offset,
+						    new_size, eph);
 			if (new == NULL)
 				return -DER_NOMEM;
 			prev = new;
@@ -3693,17 +3687,15 @@ obj_shard_list_obj_cb(struct shard_auxi_args *shard_auxi,
 	shard_arg = container_of(shard_auxi, struct shard_list_args, la_auxi);
 	ptr += iter_arg->merge_sgl_off;
 	D_ASSERTF(obj_arg->sgl->sg_iovs[0].iov_buf_len >=
-		  obj_arg->sgl->sg_iovs[0].iov_len +
-		  shard_arg->la_sgl->sg_iovs[0].iov_len,
-		  "buf size %zu/%zu shard buf size %zu shard %u "DF_OID" shard_nr %u merge_nr %u\n",
+		      iter_arg->merge_sgl_off + shard_arg->la_sgl->sg_iovs[0].iov_len,
+		  "buf size %zu/%zu shard buf size %zu shard %u " DF_OID
+		  " shard_nr %u merge_nr %u\n",
 		  obj_arg->sgl->sg_iovs[0].iov_buf_len, obj_arg->sgl->sg_iovs[0].iov_len,
 		  shard_arg->la_sgl->sg_iovs[0].iov_len, shard_auxi->shard,
 		  DP_OID(obj_auxi->obj->cob_md.omd_id), shard_arg->la_nr, iter_arg->merge_nr);
-	memcpy(ptr, shard_arg->la_sgl->sg_iovs[0].iov_buf,
-	       shard_arg->la_sgl->sg_iovs[0].iov_len);
-	obj_arg->sgl->sg_iovs[0].iov_len +=
-		shard_arg->la_sgl->sg_iovs[0].iov_len;
+	memcpy(ptr, shard_arg->la_sgl->sg_iovs[0].iov_buf, shard_arg->la_sgl->sg_iovs[0].iov_len);
 	iter_arg->merge_sgl_off += shard_arg->la_sgl->sg_iovs[0].iov_len;
+	obj_arg->sgl->sg_iovs[0].iov_len = iter_arg->merge_sgl_off;
 
 	kds += iter_arg->merge_nr;
 	for (i = 0; i < shard_arg->la_nr; i++)
@@ -6585,6 +6577,9 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
 
+	if (obj_auxi->rebuilding || obj_auxi->reintegrating)
+		obj_auxi->flags |= ORF_DTX_SYNC;
+
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
 		DP_OID(obj->cob_md.omd_id), obj_auxi->dkey_hash);
 
@@ -7590,6 +7585,8 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 		D_GOTO(out_task, rc = -DER_NEED_TX);
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
+		obj_auxi->flags |= ORF_DTX_SYNC;
+	if (obj_auxi->rebuilding || obj_auxi->reintegrating)
 		obj_auxi->flags |= ORF_DTX_SYNC;
 	if (obj_is_ec(obj))
 		obj_auxi->flags |= ORF_EC;
