@@ -121,6 +121,7 @@ struct ds_pool {
 	uint32_t		 sp_reint_mode;
 	/* Hold wlock when recover container, rlock when handle container create/destroy RPC. */
 	ABT_rwlock               sp_recov_lock;
+	daos_epoch_t             sp_rebuild_epoch;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -193,6 +194,9 @@ struct ds_pool_child {
 	 * DAOS_TGT_TAG.
 	 */
 	void			*spc_metrics[DAOS_NR_MODULE];
+
+	/* The remaining time (seconds) for waiting container global stable epoch (GSE). */
+	int                      spc_remaining_wait_time;
 };
 
 struct ds_pool_svc_op_key {
@@ -378,7 +382,7 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
 int
 map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks);
 int
-map_ranks_failed(const struct pool_map *map, d_rank_list_t *ranks);
+map_ranks_failed(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks);
 void
 map_ranks_fini(d_rank_list_t *ranks);
 

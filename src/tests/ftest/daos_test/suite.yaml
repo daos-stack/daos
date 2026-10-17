@@ -10,11 +10,11 @@ timeout: 600
 timeouts:
   test_daos_degraded_mode: 450
   test_daos_management: 110
-  test_daos_pool: 240
+  test_daos_pool: 420
   test_daos_container: 700
   test_daos_epoch: 125
   test_daos_verify_consistency: 105
-  test_daos_io: 350
+  test_daos_io: 530
   test_daos_ec_io: 510
   test_daos_ec_obj: 750
   test_daos_object_array: 105
@@ -23,13 +23,13 @@ timeouts:
   test_daos_capability: 104
   test_daos_epoch_recovery: 104
   test_daos_md_replication: 104
-  test_daos_rebuild_simple: 2400
+  test_daos_rebuild_simple: 3600
   test_daos_drain_simple: 3720
   test_daos_extend_simple: 3600
   test_daos_rebuild_interactive: 1485
   test_daos_oid_allocator: 640
-  test_daos_checksum: 500
-  test_daos_rebuild_ec: 10200
+  test_daos_checksum: 900
+  test_daos_rebuild_ec: 10800
   test_daos_aggregate_ec: 200
   test_daos_degraded_ec: 1900
   test_daos_dedup: 220

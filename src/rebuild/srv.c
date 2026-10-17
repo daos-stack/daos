@@ -3524,6 +3524,11 @@ init(void)
 	if (rc == 0)
 		D_DEBUG(DB_REBUILD, "Set REBUILD_WAIT_EC_PAUSE to %u\n", rebuild_wait_ec_pause);
 
+	rebuild_continue_on_timeout = false;
+	d_getenv_bool("DAOS_REBUILD_CONTINUE_ON_TIMEOUT", &rebuild_continue_on_timeout);
+	D_INFO("%s rebuild if got timeout when wait for global stable epoch.\n",
+	       rebuild_continue_on_timeout ? "Continue" : "Restart");
+
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_tgt_tracker_list);
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_global_tracker_list);
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_completed_list);
