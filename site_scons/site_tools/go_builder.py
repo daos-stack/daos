@@ -18,9 +18,11 @@ def _is_valgrind_build(env):
     """
     if not env.get('BUILD_GO_VALGRIND'):
         return False
-    if env.get('SANITIZERS'):
-        Exit('BUILD_GO_VALGRIND=1 is incompatible with SANITIZERS')
-    return True
+    if env.get('BUILD_GO_VALGRIND') == '1':
+        if env.get('SANITIZERS'):
+            Exit('BUILD_GO_VALGRIND=1 is incompatible with SANITIZERS')
+        return True
+    return False
 
 
 def _scan_go_file(node, env, _path):
