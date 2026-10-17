@@ -3474,9 +3474,11 @@ merge_recx_create_one(d_list_t *prev, uint64_t offset, uint64_t size, daos_epoch
 }
 
 static bool
-recx_can_merge_with_boundary(daos_recx_t *recx, uint64_t offset,
-			     uint64_t size, uint64_t boundary)
+recx_can_merge_with_boundary(daos_recx_t *recx, uint64_t offset, uint64_t size, uint64_t boundary,
+			     bool same_epoch)
 {
+	if (!same_epoch && (DAOS_RECX_END(*recx) == offset || offset + size == recx->rx_idx))
+		return false;
 	if (!daos_recx_can_merge_with_offset_size(recx, offset, size))
 		return false;
 
@@ -3505,29 +3507,23 @@ merge_recx_insert(struct obj_auxi_list_recx *prev, d_list_t *head, uint64_t offs
 
 	while (size > 0) {
 		struct obj_auxi_list_recx	*new;
-		uint64_t			new_size;
-		daos_epoch_t			new_eph;
+		uint64_t                         new_size;
 
 		/* Split by boundary */
-		if (boundary > 0) {
+		if (boundary > 0)
 			new_size = min(roundup(offset + 1, boundary), end) - offset;
-			if ((offset % boundary) == 0 || prev == NULL)
-				new_eph = eph;
-			else
-				new_eph = max(prev->recx_eph, eph);
-		} else {
+		else
 			new_size = size;
-			new_eph = eph;
-		}
 
 		/* Check if merging with previous recx or creating new one. */
-		if (prev && recx_can_merge_with_boundary(&prev->recx, offset, new_size,
-							 boundary)) {
+		if (prev && recx_can_merge_with_boundary(&prev->recx, offset, new_size, boundary,
+							 prev->recx_eph == eph)) {
 			daos_recx_merge_with_offset_size(&prev->recx, offset, new_size);
-			prev->recx_eph = max(prev->recx_eph, new_eph);
+			prev->recx_eph = max(prev->recx_eph, eph);
 		} else {
-			new = merge_recx_create_one(prev == NULL ? head : &prev->recx_list,
-						    offset, new_size, new_eph);
+			/* prev may be an unrelated recx, so do not inherit its epoch */
+			new = merge_recx_create_one(prev == NULL ? head : &prev->recx_list, offset,
+						    new_size, eph);
 			if (new == NULL)
 				return -DER_NOMEM;
 			prev = new;
@@ -3554,8 +3550,9 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph, uin
 		offset, size, eph, boundary);
 
 	d_list_for_each_entry_safe(recx, tmp, head, recx_list) {
-		if (end < recx->recx.rx_idx ||
-		    daos_recx_can_merge_with_offset_size(&recx->recx, offset, size)) {
+		if (end <= recx->recx.rx_idx ||
+		    (offset != DAOS_RECX_END(recx->recx) &&
+		     daos_recx_can_merge_with_offset_size(&recx->recx, offset, size))) {
 			rc = merge_recx_insert(prev, head, offset, size, eph, boundary);
 			inserted = true;
 			break;
@@ -3576,8 +3573,8 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph, uin
 			continue;
 		}
 
-		if (recx_can_merge_with_boundary(&prev->recx, recx->recx.rx_idx,
-						 recx->recx.rx_nr, boundary)) {
+		if (recx_can_merge_with_boundary(&prev->recx, recx->recx.rx_idx, recx->recx.rx_nr,
+						 boundary, prev->recx_eph == recx->recx_eph)) {
 			daos_recx_merge(&recx->recx, &prev->recx);
 			prev->recx_eph = max(prev->recx_eph, recx->recx_eph);
 			d_list_del(&recx->recx_list);
@@ -6583,6 +6580,9 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
 
+	if (obj_auxi->rebuilding || obj_auxi->reintegrating)
+		obj_auxi->flags |= ORF_DTX_SYNC;
+
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
 		DP_OID(obj->cob_md.omd_id), obj_auxi->dkey_hash);
 
@@ -7588,6 +7588,8 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 		D_GOTO(out_task, rc = -DER_NEED_TX);
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
+		obj_auxi->flags |= ORF_DTX_SYNC;
+	if (obj_auxi->rebuilding || obj_auxi->reintegrating)
 		obj_auxi->flags |= ORF_DTX_SYNC;
 	if (obj_is_ec(obj))
 		obj_auxi->flags |= ORF_EC;
