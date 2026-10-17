@@ -1459,9 +1459,10 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	 */
 	if (intent == DAOS_INTENT_MIGRATION) {
 		/*
-		 * Rebuild logic has already waited global stable epoch before
-		 * start rebuild scanning. So when rebuild logic arrives here,
-		 * all old DTX should have been either committed or aborted.
+		 * Rebuild logic (for RB_OP_REBUILD) has already waited local stable epoch before
+		 * arriving at here. So all old DTX should have been either committed or aborted.
+		 *
+		 * "dth_ignore_uncommitted == 1" is for RB_OP_RECLAIM or RB_OP_FAIL_RECLAIM.
 		 */
 		if (unlikely(dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch &&
 			     dth->dth_ignore_uncommitted == 0))
