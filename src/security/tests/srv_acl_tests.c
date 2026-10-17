@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -427,6 +428,177 @@ test_validate_creds_success(void **state)
 	daos_iov_free(&cred);
 	auth__sys__free_unpacked(authsys, NULL);
 	auth__token__free_unpacked(result, NULL);
+}
+
+/*
+ * Node cert validation dRPC adapter
+ */
+
+#define NODE_CERT_POOL_UUID "12345678-1234-1234-1234-123456789abc"
+
+struct node_cert_inputs {
+	uuid_t  pool_uuid;
+	d_iov_t pool_ca;
+	d_iov_t node_cert;
+	d_iov_t pop_sig;
+	d_iov_t pop_payload;
+	d_iov_t watermarks;
+};
+
+static void
+init_node_cert_inputs(struct node_cert_inputs *in)
+{
+	assert_rc_equal(uuid_parse(NODE_CERT_POOL_UUID, in->pool_uuid), 0);
+	d_iov_set(&in->pool_ca, "pool-ca-bundle", 14);
+	d_iov_set(&in->node_cert, "node-cert-pem", 13);
+	d_iov_set(&in->pop_sig, "pop-signature", 13);
+	d_iov_set(&in->pop_payload, "pop-payload", 11);
+	d_iov_set(&in->watermarks, "{\"node:h\":\"t\"}", 16);
+}
+
+static void
+setup_drpc_with_node_cert_status(int32_t status, const char *detail)
+{
+	Auth__ValidateNodeCertResp resp = AUTH__VALIDATE_NODE_CERT_RESP__INIT;
+
+	resp.status = status;
+	resp.detail = (char *)detail;
+	pack_node_cert_resp_in_drpc_call_resp_body(&resp);
+}
+
+static Auth__ValidateNodeCertReq *
+unpack_sent_node_cert_req(void)
+{
+	Auth__ValidateNodeCertReq *req;
+
+	assert_int_equal(drpc_call_msg_content.module, DRPC_MODULE_SEC);
+	assert_int_equal(drpc_call_msg_content.method, DRPC_METHOD_SEC_VALIDATE_NODE_CERT);
+	req = auth__validate_node_cert_req__unpack(NULL, drpc_call_msg_content.body.len,
+						   drpc_call_msg_content.body.data);
+	assert_non_null(req);
+	return req;
+}
+
+static void
+assert_iov_sent(ProtobufCBinaryData *sent, d_iov_t *iov)
+{
+	assert_int_equal(sent->len, iov->iov_len);
+	assert_memory_equal(sent->data, iov->iov_buf, iov->iov_len);
+}
+
+static void
+test_validate_node_cert_no_cert_short_circuits(void **state)
+{
+	struct node_cert_inputs in;
+	d_iov_t                 empty = {0};
+
+	init_node_cert_inputs(&in);
+
+	assert_rc_equal(ds_sec_validate_node_cert(in.pool_uuid, &in.pool_ca, TEST_HOST,
+						  &in.watermarks, NULL, &in.pop_sig,
+						  &in.pop_payload),
+			-DER_NO_NODE_CERT);
+	assert_rc_equal(ds_sec_validate_node_cert(in.pool_uuid, &in.pool_ca, TEST_HOST,
+						  &in.watermarks, &empty, &in.pop_sig,
+						  &in.pop_payload),
+			-DER_NO_NODE_CERT);
+	/* No dRPC was made */
+	assert_null(drpc_call_ctx);
+}
+
+static void
+test_validate_node_cert_sends_every_field(void **state)
+{
+	struct node_cert_inputs    in;
+	Auth__ValidateNodeCertReq *req;
+
+	init_node_cert_inputs(&in);
+	setup_drpc_with_node_cert_status(0, NULL);
+
+	assert_rc_equal(ds_sec_validate_node_cert(in.pool_uuid, &in.pool_ca, TEST_HOST,
+						  &in.watermarks, &in.node_cert, &in.pop_sig,
+						  &in.pop_payload),
+			0);
+
+	assert_string_equal(drpc_connect_sockaddr, ds_sec_server_socket_path);
+	assert_int_equal(drpc_call_flags, R_SYNC);
+	assert_ptr_equal(drpc_close_ctx, drpc_call_ctx);
+
+	req = unpack_sent_node_cert_req();
+	assert_int_equal(req->pool_uuid.len, sizeof(uuid_t));
+	assert_memory_equal(req->pool_uuid.data, in.pool_uuid, sizeof(uuid_t));
+	assert_iov_sent(&req->pool_ca, &in.pool_ca);
+	assert_iov_sent(&req->node_cert, &in.node_cert);
+	assert_iov_sent(&req->pop_sig, &in.pop_sig);
+	assert_iov_sent(&req->pop_payload, &in.pop_payload);
+	assert_iov_sent(&req->cert_watermarks, &in.watermarks);
+	/* The CN binding on the control plane depends on this being sent. */
+	assert_string_equal(req->machine_name, TEST_HOST);
+
+	auth__validate_node_cert_req__free_unpacked(req, NULL);
+}
+
+static void
+test_validate_node_cert_optional_fields_absent(void **state)
+{
+	struct node_cert_inputs    in;
+	Auth__ValidateNodeCertReq *req;
+
+	init_node_cert_inputs(&in);
+	setup_drpc_with_node_cert_status(0, NULL);
+
+	assert_rc_equal(ds_sec_validate_node_cert(in.pool_uuid, &in.pool_ca, NULL, NULL,
+						  &in.node_cert, &in.pop_sig, &in.pop_payload),
+			0);
+
+	req = unpack_sent_node_cert_req();
+	assert_string_equal(req->machine_name, "");
+	assert_int_equal(req->cert_watermarks.len, 0);
+
+	auth__validate_node_cert_req__free_unpacked(req, NULL);
+}
+
+static void
+test_validate_node_cert_status_propagated(void **state)
+{
+	struct node_cert_inputs in;
+
+	init_node_cert_inputs(&in);
+	setup_drpc_with_node_cert_status(-DER_BAD_CERT, "cert CN does not match");
+
+	assert_rc_equal(ds_sec_validate_node_cert(in.pool_uuid, &in.pool_ca, TEST_HOST,
+						  &in.watermarks, &in.node_cert, &in.pop_sig,
+						  &in.pop_payload),
+			-DER_BAD_CERT);
+}
+
+static void
+test_validate_node_cert_drpc_failures(void **state)
+{
+	struct node_cert_inputs in;
+
+	init_node_cert_inputs(&in);
+
+	drpc_call_return = -DER_MISC;
+	assert_rc_equal(ds_sec_validate_node_cert(in.pool_uuid, &in.pool_ca, TEST_HOST,
+						  &in.watermarks, &in.node_cert, &in.pop_sig,
+						  &in.pop_payload),
+			-DER_MISC);
+	drpc_call_return = 0;
+
+	drpc_call_resp_return_ptr = NULL;
+	assert_rc_equal(ds_sec_validate_node_cert(in.pool_uuid, &in.pool_ca, TEST_HOST,
+						  &in.watermarks, &in.node_cert, &in.pop_sig,
+						  &in.pop_payload),
+			-DER_NOREPLY);
+	drpc_call_resp_return_ptr = &drpc_call_resp_return_content;
+
+	drpc_call_resp_return_content.status = DRPC__STATUS__FAILURE;
+	assert_rc_equal(ds_sec_validate_node_cert(in.pool_uuid, &in.pool_ca, TEST_HOST,
+						  &in.watermarks, &in.node_cert, &in.pop_sig,
+						  &in.pop_payload),
+			-DER_MISC);
+	drpc_call_resp_return_content.status = DRPC__STATUS__SUCCESS;
 }
 
 /*
@@ -2155,6 +2327,7 @@ teardown_tests(void **state)
 int
 main(void)
 {
+	/* clang-format off */
 	const struct CMUnitTest tests[] = {
 		ACL_UTEST(test_validate_creds_null_cred),
 		ACL_UTEST(test_validate_creds_null_token_ptr),
@@ -2226,6 +2399,11 @@ main(void)
 		cmocka_unit_test(test_cont_can_evict_all),
 		cmocka_unit_test(test_get_rebuild_cont_capas),
 		cmocka_unit_test(test_get_admin_cont_capas),
+		ACL_UTEST(test_validate_node_cert_no_cert_short_circuits),
+		ACL_UTEST(test_validate_node_cert_sends_every_field),
+		ACL_UTEST(test_validate_node_cert_optional_fields_absent),
+		ACL_UTEST(test_validate_node_cert_status_propagated),
+		ACL_UTEST(test_validate_node_cert_drpc_failures),
 		ACL_UTEST(test_origin_null_cred),
 		ACL_UTEST(test_origin_null_machine_ptr),
 		ACL_UTEST(test_origin_empty_cred),
@@ -2234,6 +2412,7 @@ main(void)
 		ACL_UTEST(test_origin_valid_origin),
 
 	};
+	/* clang-format on */
 
 	return cmocka_run_group_tests_name("security_srv_acl", tests, NULL,
 					   teardown_tests);
