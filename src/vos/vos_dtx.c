@@ -1457,8 +1457,23 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	 * to rebuild. Related new IO corresponding to such non-committed DTX
 	 * has already been sent to the in-rebuilding target.
 	 */
-	if (intent == DAOS_INTENT_MIGRATION)
+	if (intent == DAOS_INTENT_MIGRATION) {
+		/*
+		 * Rebuild logic (for RB_OP_REBUILD) has already waited local stable epoch before
+		 * arriving at here. So all old DTX should have been either committed or aborted.
+		 *
+		 * "dth_ignore_uncommitted == 1" is for RB_OP_RECLAIM or RB_OP_FAIL_RECLAIM.
+		 */
+		if (unlikely(dth != NULL && DAE_EPOCH(dae) <= dth->dth_epoch &&
+			     dth->dth_ignore_uncommitted == 0))
+			D_ERROR("In cont " DF_UUID " hit prepared DTX " DF_DTI " with epoch " DF_X64
+				", version %u during rebuild (" DF_DTI ") with epoch " DF_X64
+				", version %u, local stable epoch " DF_X64 "\n",
+				DP_UUID(cont->vc_id), DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae),
+				DAE_VER(dae), DP_DTI(&dth->dth_xid), dth->dth_epoch, dth->dth_ver,
+				vos_cont_get_local_stable_epoch(coh));
 		return ALB_UNAVAILABLE;
+	}
 
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
