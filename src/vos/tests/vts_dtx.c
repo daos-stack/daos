@@ -819,7 +819,7 @@ dtx_18(void **state)
 	assert_rc_equal(rc, 10);
 
 	for (i = 0; i < 10; i++) {
-		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, DCI_DEFAULT);
 		assert_int_equal(rc, DTX_ST_COMMITTED);
 	}
 
@@ -838,7 +838,7 @@ dtx_18(void **state)
 	assert_int_equal(cnt, 0);
 
 	for (i = 0; i < 10; i++) {
-		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, DCI_DEFAULT);
 		assert_rc_equal(rc, -DER_NONEXIST);
 	}
 
