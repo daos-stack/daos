@@ -155,6 +155,10 @@ struct ds_cont_child {
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	int                      sc_ec_agg_updates;
+	/* The cache for local stable epoch, stop refreshing if >= the latest rebuild epoch. */
+	daos_epoch_t             sc_local_stable_epoch;
+	/* Last timestamp for delay rebuild operations because of old LSE or rebuild epoch. */
+	uint64_t                 sc_rebuild_delay_ts;
 };
 
 struct agg_param {

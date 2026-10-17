@@ -874,7 +874,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 */
 		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST || rc == -DER_NO_PERM ||
 		    rc == -DER_EXIST || rc == -DER_RF || rc == -DER_UPDATE_AGAIN ||
-		    rc == -DER_FETCH_AGAIN)
+		    rc == -DER_FETCH_AGAIN || rc == -DER_REBUILD_DELAY)
 			D_DEBUG(DB_IO, DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
@@ -1827,8 +1827,8 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 			if (timeout > *enum_args->max_delay)
 				*enum_args->max_delay = timeout;
 		} else {
-			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
-				enum_args->rpc, opc, DP_RC(rc));
+			DL_CDEBUG(rc == -DER_REBUILD_DELAY, DLOG_DBG, DLOG_ERR, rc,
+				  "rpc %p RPC %d failed", enum_args->rpc, opc);
 		}
 		D_GOTO(out, rc);
 	}
