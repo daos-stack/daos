@@ -648,7 +648,7 @@ dtx_rpc_helper(struct dss_chore *chore, bool is_reentrance)
 }
 
 static int
-dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes, uint32_t count,
+dtx_rpc(struct ds_cont_child *cont, d_list_t *dti_list, struct dtx_entry **dtes, uint32_t count,
 	int opc, daos_epoch_t epoch, d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list,
 	bool keep_head, struct dtx_common_args *dca)
 {
@@ -938,7 +938,6 @@ out:
 
 	return rc != 0 ? rc : rc1;
 }
-
 
 int
 dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
