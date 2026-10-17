@@ -2319,32 +2319,15 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 	poc = ioc->ioc_coc->sc_pool;
 	D_ASSERT(poc != NULL);
 
-	if (unlikely(poc->spc_pool->sp_map == NULL ||
+	if (unlikely(poc->spc_pool->sp_map == NULL || rpc_map_ver > ioc->ioc_map_ver ||
 		     DAOS_FAIL_CHECK(DAOS_FORCE_REFRESH_POOL_MAP))) {
-		/* XXX: Client (or leader replica) has newer pool map than
-		 *	current replica. Two possible cases:
-		 *
-		 *	1. The current replica was the old leader if with
-		 *	   the old pool map version. According to current
-		 *	   leader election algorithm, it is still the new
-		 *	   leader with the new pool map version. Since no
-		 *	   leader switch, the unmatched pool version will
-		 *	   not affect DTX related availability check.
-		 *
-		 *	2. The current replica was NOT the old leader if
-		 *	   with the old pool map version. But it becomes
-		 *	   the new leader with the new pool map version.
-		 *	   In the subsequent modification, it may hit
-		 *	   some 'prepared' DTX when make availability
-		 *	   check, it will return -DER_INPROGRESS that
-		 *	   will cause client to retry. It is possible
-		 *	   that the pool map version event arrives at
-		 *	   this server during the client retry. It is
-		 *	   inefficient, but harmless.
+		/*
+		 * Install the newer map before accepting its I/O, so a later old-layout
+		 * write cannot miss reintegrating targets while getting a newer epoch.
 		 */
 		D_DEBUG(DB_IO, "stale server map_version %d req %d\n",
 			ioc->ioc_map_ver, rpc_map_ver);
-		rc = ds_pool_child_map_refresh_async(poc);
+		rc = ds_pool_child_map_refresh_async(poc, rpc_map_ver);
 		if (rc == 0) {
 			ioc->ioc_map_ver = poc->spc_map_version;
 			rc = -DER_STALE;

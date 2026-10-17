@@ -377,7 +377,7 @@ int ds_pool_svc_query_map_dist(uuid_t uuid, uint32_t *version, bool *idle);
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
 int
-ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
+ds_pool_child_map_refresh_async(struct ds_pool_child *dpc, uint32_t map_version);
 
 int
 map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks);

@@ -9389,7 +9389,7 @@ out_eventual:
 }
 
 int
-ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
+ds_pool_child_map_refresh_async(struct ds_pool_child *dpc, uint32_t map_version)
 {
 	struct pool_map_refresh_ult_arg	*arg;
 	int				rc;
@@ -9397,7 +9397,7 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
 	D_ALLOC_PTR(arg);
 	if (arg == NULL)
 		return -DER_NOMEM;
-	arg->iua_pool_version = dpc->spc_map_version;
+	arg->iua_pool_version = map_version;
 	uuid_copy(arg->iua_pool_uuid, dpc->spc_uuid);
 
 	rc = dss_ult_create(ds_pool_map_refresh_ult, arg, DSS_XS_SYS,
