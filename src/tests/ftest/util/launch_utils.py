@@ -1023,7 +1023,7 @@ class TestGroup():
                             file_name, class_name, method_name, ','.join(tags))
 
     def update_test_yaml(self, logger, scm_size, scm_mount, extra_yaml, multiplier, override,
-                         verbose, include_localhost):
+                         verbose, include_localhost, shared_server_client=False):
         """Update each test yaml file.
 
         Args:
@@ -1035,6 +1035,8 @@ class TestGroup():
             override (bool): whether or not to override the number of hosts for the test
             verbose (int): level of verbosity
             include_localhost (bool): whether or not to include the local host with the client hosts
+            shared_server_client (bool, optional): whether the test yaml potentially uses the same
+                nodes for both servers and clients. Defaults to False.
 
         Raises:
             RunException: if there is an error modifying the test yaml files
@@ -1078,7 +1080,10 @@ class TestGroup():
         if extra_yaml:
             logger.debug("Updating placeholders in extra yaml files: %s", extra_yaml)
             common_extra_yaml = [
-                updater.update(extra, self._yaml_directory) or extra for extra in extra_yaml]
+                updater.update(
+                    extra, self._yaml_directory,
+                    shared_server_client=shared_server_client) or extra
+                for extra in extra_yaml]
             for test in self.tests:
                 test.extra_yaml.extend(common_extra_yaml)
 
