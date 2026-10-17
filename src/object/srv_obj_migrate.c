@@ -3195,6 +3195,8 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 	uint64_t                  now;
 	uint64_t                  then  = 0;
 	int                       tried = 0;
+	bool                      pinned      = false;
+	int                       delay_tried = 0;
 	int			 rc = 0;
 
 	D_DEBUG(DB_REBUILD, DF_RB ": migrate obj " DF_UOID " shard %u eph " DF_X64 "-" DF_X64 "\n",
@@ -3310,9 +3312,10 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 				break;
 			}
 			continue;
-		} else if (rc && rc != -DER_SHUTDOWN &&
+		} else if (rc && rc != -DER_SHUTDOWN && !pinned &&
 			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
-			if (rc != -DER_INPROGRESS) {
+			if (rc != -DER_INPROGRESS &&
+			    (rc != -DER_REBUILD_DELAY || ++delay_tried > 120)) {
 				enum_flags &= ~DIOF_TO_LEADER;
 				D_DEBUG(DB_REBUILD,
 					DF_RB ": retry to non leader " DF_UOID ": " DF_RC "\n",
@@ -3322,9 +3325,18 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 				 * since the new dtx leader might still resync the
 				 * uncommitted records, or it will choose a new leader
 				 * once the pool map is updated.
+				 *
+				 * -DER_REBUILD_DELAY only means the leader's stable epoch
+				 * has not reached the rebuild epoch yet (see
+				 * check_read_rebuild_fense()); it normally catches up
+				 * within seconds, so keep the leader (bounded, ~3 min)
+				 * rather than enumerating a random replica that may lack
+				 * resynced DTX state.
 				 */
-				D_DEBUG(DB_REBUILD, DF_RB ": retry leader " DF_UOID "\n",
-					DP_RB_MPT(tls), DP_UOID(arg->oid));
+				D_DEBUG(DB_REBUILD, DF_RB ": retry leader " DF_UOID ": " DF_RC "\n",
+					DP_RB_MPT(tls), DP_UOID(arg->oid), DP_RC(rc));
+				if (rc == -DER_REBUILD_DELAY)
+					dss_sleep(1000 + d_rand() % 1000);
 			}
 			continue;
 		} else if (rc == -DER_UPDATE_AGAIN) {
@@ -3342,9 +3354,13 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 		} else if (rc) {
 			/* To avoid reclaim and retry rebuild, let's retry until the pool map
 			 * being changed due to further failure.
+			 *
+			 * Once the enumeration is pinned to a shard (see below) it must not
+			 * fall back to another replica, so a leader that is still resyncing
+			 * (-DER_INPROGRESS) is retried in place as well.
 			 */
 			if ((rc == -DER_TIMEDOUT || rc == -DER_REBUILD_DELAY ||
-			     daos_crt_network_error(rc)) &&
+			     (pinned && rc == -DER_INPROGRESS) || daos_crt_network_error(rc)) &&
 			    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 				now = daos_gettime_coarse();
 				if (then == 0)
@@ -3406,6 +3422,27 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 
 		if (daos_anchor_is_eof(&dkey_anchor))
 			break;
+
+		/*
+		 * The anchors (dkey/akey/recx) returned by a replica are only valid on
+		 * the shard that produced them: the recx anchor is the last visible
+		 * extent and replicas split/merge extents differently, so re-probing
+		 * it on another replica silently skips extents (data loss on the
+		 * rebuilt shard). The first batch may have come from the leader or,
+		 * after a leader error, from a random non-leader replica; from now on
+		 * stay on the shard that served it (recorded in dkey_anchor by the
+		 * client, see obj_list_obj_cb()) instead of going back to the leader
+		 * or picking another random replica.
+		 */
+		if (!pinned && !daos_oclass_is_ec(&unpack_arg.oc_attr)) {
+			enum_flags &= ~(DIOF_TO_LEADER | DIOF_TO_SPEC_GROUP);
+			enum_flags |= DIOF_TO_SPEC_SHARD;
+			pinned = true;
+			D_DEBUG(DB_REBUILD, DF_RB ": pin enumeration of " DF_UOID " to shard %u\n",
+				DP_RB_MPT(tls), DP_UOID(arg->oid),
+				dc_obj_anchor2shard(&dkey_anchor));
+			continue;
+		}
 
 		/* Restore leader flag to always try the leader first */
 		enum_flags |= DIOF_TO_LEADER;
