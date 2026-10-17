@@ -75,6 +75,19 @@ ds_pool_metrics_alloc(const char *path, int tgt_id)
 	if (rc != 0)
 		DL_WARN(rc, "Failed to create pool map version metric");
 
+	rc = d_tm_add_metric(&metrics->map_dist_begin, D_TM_TIMESTAMP,
+			     "Last time the pool map distribution callback began", NULL,
+			     "%s/svc/map_dist_begin", path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create pool map_dist_begin metric");
+
+	rc = d_tm_add_metric(&metrics->map_dist_state, D_TM_GAUGE,
+			     "Pool map distribution state (low 2 bits: 0=beginning, "
+			     "1=ds_pool_iv_map_update, 2=erred, 3=successful; higher bits: call count)",
+			     NULL, "%s/svc/map_dist_state", path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create pool map_dist_state metric");
+
 	rc = d_tm_add_metric(&metrics->open_handles, D_TM_GAUGE, "Pool handles held by clients",
 			     NULL, "%s/svc/open_pool_handles", path);
 	if (rc != 0)
