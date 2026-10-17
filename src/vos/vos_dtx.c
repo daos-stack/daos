@@ -2734,20 +2734,55 @@ out:
 int
 vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force)
 {
-	struct dtx_handle	*dth = dae->dae_dth;
-	struct umem_instance	*umm;
-	struct umem_pin_handle	*pin_hdl = NULL;
-	int			 rc;
+	struct dtx_handle      *dth;
+	struct dtx_id           xid        = DAE_XID(dae);
+	daos_epoch_t            epoch      = DAE_EPOCH(dae);
+	uint64_t                start_time = dae->dae_start_time;
+	uint32_t                version    = DAE_VER(dae);
+	struct umem_instance   *umm;
+	struct umem_pin_handle *pin_hdl = NULL;
+	d_iov_t                 kiov;
+	d_iov_t                 riov;
+	bool                    abort_started = false;
+	int                     rc;
+
+	D_ASSERT(!force || dae->dae_aborting);
 
 	rc = dtx_abort_pin(cont, dae, &pin_hdl);
 	if (rc)
 		goto out;
 
 	umm = vos_cont2umm(cont);
-	rc = umem_tx_begin(umm, NULL);
+	rc  = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		goto out;
 
+	if (!force) {
+		/* Pinning and WAL reservation may yield; the entry may have been replaced. */
+		d_iov_set(&kiov, &xid, sizeof(xid));
+		d_iov_set(&riov, NULL, 0);
+		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+		if (rc != 0)
+			goto abort_tx;
+
+		if (riov.iov_buf != dae)
+			D_GOTO(abort_tx, rc = -DER_NONEXIST);
+
+		if (dae->dae_start_time != start_time || DAE_EPOCH(dae) != epoch ||
+		    DAE_VER(dae) != version)
+			D_GOTO(abort_tx, rc = -DER_NONEXIST);
+
+		if (vos_dae_is_commit(dae) || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
+			D_GOTO(abort_tx, rc = -DER_NO_PERM);
+
+		if (vos_dae_is_abort(dae))
+			D_GOTO(abort_tx, rc = -DER_ALREADY);
+
+		if (dae->dae_preparing)
+			D_GOTO(abort_tx, rc = -DER_INPROGRESS);
+	}
+
+	dth = dae->dae_dth;
 	if (dth != NULL) {
 		D_ASSERT(dth->dth_ent == dae || dth->dth_ent == NULL);
 		/* Not allow dtx_abort against solo DTX. */
@@ -2756,10 +2791,11 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 		dth->dth_need_validation = 1;
 	}
 
-	rc = dtx_rec_release(cont, dae, true, false);
+	abort_started      = true;
+	dae->dae_aborting  = 1;
+	rc                 = dtx_rec_release(cont, dae, true, false);
 	dae->dae_preparing = 0;
 	if (rc == 0) {
-		dae->dae_aborting = 1;
 		rc = umem_tx_commit(umm);
 		D_ASSERTF(rc == 0, "local TX commit failure %d\n", rc);
 	} else {
@@ -2767,10 +2803,10 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 	}
 
 	if (rc == 0 && dth != NULL) {
-		dae->dae_dth = NULL;
+		dae->dae_dth     = NULL;
 		dth->dth_aborted = 1;
-		dth->dth_ent = NULL;
-		dth->dth_pinned = 0;
+		dth->dth_ent     = NULL;
+		dth->dth_pinned  = 0;
 		/*
 		 * dtx_act_ent_cleanup() will be triggered via vos_dtx_post_handle()
 		 * when remove the DTX entry from active DTX table.
@@ -2782,13 +2818,19 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 	 *	 because it may be also co-set (shared) by others.
 	 */
 
+	goto out;
+
+abort_tx:
+	rc = umem_tx_abort(umm, rc);
 out:
 	dtx_unpin(cont, pin_hdl);
 
-	if (rc == 0 || force)
-		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false, false);
-	else if (rc != 0)
-		dae->dae_aborting = 0;
+	if (abort_started || force) {
+		if (rc == 0 || force)
+			vos_dtx_post_handle(cont, &dae, NULL, 1, true, false, false);
+		else
+			dae->dae_aborting = 0;
+	}
 
 	return rc;
 }
@@ -2821,7 +2863,7 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch, uint32_
 		goto out;
 
 	dae = riov.iov_buf;
-	if (vos_dae_is_commit(dae)) {
+	if (vos_dae_is_commit(dae) || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED) {
 		D_ERROR("NOT allow to abort a committed DTX (2) "DF_DTI"\n", DP_DTI(dti));
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
