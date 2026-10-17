@@ -4,10 +4,12 @@
 import json
 import os
 import random
+import re
 import string
 import sys
 import time
 import urllib
+from argparse import ArgumentParser
 
 import jira
 
@@ -20,7 +22,6 @@ import jira
 
 # To do this it should  be run as a GitHub action which will apply comments (and possibly labels)
 # to PRs, as well as warning and failing PR builds if any ticket metadata is incorrect.
-# It should run inside Jenkins to set appropriate job priority for builds.
 
 # https://jira.readthedocs.io/api.html#module-jira.client
 # https://github.com/marketplace/actions/comment-pull-request
@@ -36,10 +37,7 @@ VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
 
 # 10044 is "Approved to Merge"
 # 10045 is "Required for Version"
-FIELDS = 'summary,status,labels,customfield_10044,customfield_10045'
-
-# Labels in GitHub which this script will set/clear based on the logic below.
-MANAGED_LABELS = ('release-2.2', 'release-2.4', 'release-2.6', 'priority')
+FIELDS = 'summary,status,labels,fixVersions,customfield_10044,customfield_10045'
 
 
 def set_output(key, value):
@@ -62,54 +60,159 @@ def valid_comp_from_dir(component):
         or os.path.isdir(os.path.join('utils', component))
 
 
-def fetch_pr_data():
-    """Query GibHub API and return PR metadata"""
-    pr_data = None
-    if len(sys.argv) == 2:
-        try:
-            pr_number = int(sys.argv[1])
-        except ValueError:
-            print('argument must be a value')
-            sys.exit(1)
+def fetch_pr_data(pr_number):
+    """Query GitHub API and return PR metadata.
 
-        github_repo = os.environ.get('GITHUB_REPOSITORY', 'daos-stack/daos')
-        gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
+    Args:
+        pr_number (int): pull request number
 
-        # We occasionally see this fail with rate-limit-exceeded, if that happens then wait for a
-        # while and re-try once.
-        try:
-            with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
-                pr_data = json.loads(raw_pr_data.read())
-        except urllib.error.HTTPError as error:
-            if error.code == 403:
-                time.sleep(60 * 10)
-                with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
-                    pr_data = json.loads(raw_pr_data.read())
-            else:
-                raise
-    else:
-        print('Pass PR number on command line')
-        sys.exit(1)
+    Returns:
+        dict: PR metadata from GitHub API
+    """
+    github_repo = os.environ.get('GITHUB_REPOSITORY', 'daos-stack/daos')
+    github_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
 
-    assert pr_data is not None
-    return pr_data
+    # We occasionally see this fail with rate-limit-exceeded, if that happens then wait for a
+    # while and re-try once.
+    try:
+        with urllib.request.urlopen(github_url) as raw_pr_data:  # nosec
+            return json.loads(raw_pr_data.read())
+    except urllib.error.HTTPError as error:
+        if error.code != 403:
+            raise
+        time.sleep(60 * 10)
+        with urllib.request.urlopen(github_url) as raw_pr_data:  # nosec
+            return json.loads(raw_pr_data.read())
+
+
+def _get_targeted_branch_version():
+    """Get the targeted DAOS branch version based on the VERSION file.
+
+    Returns:
+        tuple: the targeted version as a tuple of integers (major, minor, patch)
+    """
+    with open(os.path.join(os.path.dirname(__file__), '..', 'VERSION')) as version_file:
+        raw_version = version_file.read().strip()
+    version_major, version_minor, version_patch = _version_str_to_tuple(raw_version)
+
+    # If the minor version is odd, it is a development version,
+    # so bump it to the next even number for the release version.
+    if version_minor % 2 == 1:
+        version_minor += 1
+        version_patch = 0
+
+    # If the minor version is at 10, bump the major version and reset the minor version to 0.
+    if version_minor == 10:
+        version_major += 1
+        version_minor = 0
+        version_patch = 0
+
+    return (version_major, version_minor, version_patch)
+
+
+def _version_str_to_tuple(version_str):
+    """Convert a version string to a tuple of integers.
+
+    Args:
+        version_str (str): version string, e.g. "2.8.1"
+
+    Returns:
+        tuple: the version as a tuple of integers (major, minor, patch)
+    """
+    version_parts = version_str.split('.')
+    version_major = int(version_parts[0])
+    version_minor = int(version_parts[1])
+    version_patch = int(version_parts[2]) if len(version_parts) > 2 else 0
+    return (version_major, version_minor, version_patch)
+
+
+def _jira_version_to_tuple(jira_version):
+    """Convert a Jira version string to a tuple of integers.
+
+    Args:
+        jira_version (str): Jira version string, e.g. "2.8.1 Community Release"
+
+    Returns:
+        tuple: the version as a tuple of integers (major, minor, patch)
+    """
+    match = re.match(r'^(\d+\.\d+(?:\.\d+)?)', str(jira_version))
+    if not match:
+        raise ValueError(f'Invalid Jira version string: {jira_version}')
+    return _version_str_to_tuple(match.group(1))
+
+
+def _jira_approved_to_merge(ticket):
+    """Get the approved to merge status from a Jira ticket.
+
+    Args:
+        ticket (jira.Issue): Jira ticket object
+
+    Returns:
+        list: list of approved to merge versions as a tuple of integers (major, minor, patch)
+    """
+    return list(map(_jira_version_to_tuple, (ticket.fields.customfield_10044 or [])))
+
+
+def _jira_required_for_version(ticket):
+    """Get the required for version from a Jira ticket.
+
+    Args:
+        ticket (jira.Issue): Jira ticket object
+
+    Returns:
+        list: list of required for versions as a tuple of integers (major, minor, patch)
+    """
+    return list(map(_jira_version_to_tuple, (ticket.fields.customfield_10045 or [])))
+
+
+def _jira_fix_versions(ticket):
+    """Get the fix versions from a Jira ticket.
+
+    Args:
+        ticket (jira.Issue): Jira ticket object
+
+    Returns:
+        list: list of fix versions as a tuple of integers (major, minor, patch)
+    """
+    return list(map(_jira_version_to_tuple, (ticket.fields.fixVersions or [])))
+
+
+def _get_jira_release_versions(ticket):
+    """Get the release versions from a Jira ticket.
+
+    Args:
+        ticket (jira.Issue): Jira ticket object
+
+    Returns:
+        list: list of release versions as a tuple of integers (major, minor, patch)
+    """
+    return _jira_required_for_version(ticket) + _jira_fix_versions(ticket)
 
 
 def main():
     """Run the script"""
     # pylint: disable=too-many-branches
-    pr_data = fetch_pr_data()
+    parser = ArgumentParser(description='Query JIRA to automatically set PR metadata')
+    parser.add_argument('pr_number', type=int, help='Pull request number')
+    args = parser.parse_args()
 
-    priority = None
+    pr_data = fetch_pr_data(args.pr_number)
+
+    # Labels to be removed from the PR
+    labels_to_clear = set()
+
+    # Labels to add to the PR
+    labels_to_add = set()
+
+    # Labels already on the PR
+    labels_on_pr = set(label['name'] for label in pr_data['labels'])
+
     errors = []
-    gh_label = set()
     pr_title = pr_data['title']
 
-    # Revert PRs can be auto-generated, detect and handle this, as well as
-    # marking them a priority.
+    # Revert PRs can be auto-generated, so detect and handle this
     if pr_title.startswith('Revert "'):
         pr_title = pr_title[8:-1]
-        priority = 2
 
     parts = pr_title.split(' ')
     ticket_number = parts[0]
@@ -152,48 +255,37 @@ def main():
     print(f'Ticket summary: {ticket.fields.summary}')
     print(f'Ticket status: {ticket.fields.status}')
 
-    # Highest priority, tickets with "Approved to Merge" set.
-    if ticket.fields.customfield_10044:
-        priority = 1
+    # Best effort to determine which release this PR is going into.
+    # 1. Get all the versions from the ticket.
+    # 2. Keep only those which match the major.minor of the branch version.
+    # 3. Sort the remaining versions and pick the lowest one.
+    jira_release_versions = _get_jira_release_versions(ticket)
+    targeted_branch_version = _get_targeted_branch_version()
+    candidate_versions = sorted([
+        version
+        for version in jira_release_versions
+        if version[:2] == targeted_branch_version[:2]])
 
-    # Elevated priority, PRs to master where ticket is "Required for Version" is set.
-    if ticket.fields.customfield_10045:
+    # Add a GitHub label for the release version, if one was found
+    if candidate_versions:
+        release_version = candidate_versions[0]
+        daos_version_str = '.'.join(map(str, release_version))
+        labels_to_add.add(f'release-{daos_version_str}')
+        # Also add a label if the ticket is approved to merge for this release version.
+        # Or remove if it is not approved to merge for this release version.
+        if release_version in _jira_approved_to_merge(ticket):
+            labels_to_add.add('approved-to-merge')
+        elif 'approved-to-merge' in labels_on_pr:
+            labels_to_clear.add('approved-to-merge')
 
-        # Check the target branch here.  Can not be done from a ticket number alone, so only perform
-        # this check if we can.
-
-        rv_priority = None
-
-        for version in ticket.fields.customfield_10045:
-            if str(version) in ('2.0.3 Community Release', '2.0.3 Community Release',
-                                '2.2 Community Release'):
-                rv_priority = 2
-            elif str(version) in ('2.4 Community Release'):
-                rv_priority = 3
-
-            if str(version) in ('2.2 Community Release'):
-                gh_label.add('release-2.2')
-            if str(version) in ('2.4 Community Release'):
-                gh_label.add('release-2.4')
-            if str(version) in ('2.6 Community Release'):
-                gh_label.add('release-2.6')
-
-        # If a PR does not otherwise have priority then use custom values from above.
-        if priority is None and not pr_data['base']['ref'].startswith('release'):
-            priority = rv_priority
-
-    output = []
-
-    output.append(f"Ticket title is '{ticket.fields.summary}'")
-    output.append(f"Status is '{ticket.fields.status}'")
+    output = [
+        f"Ticket title is '{ticket.fields.summary}'",
+        f"Status is '{ticket.fields.status}'"
+    ]
 
     if ticket.fields.labels:
         label_str = ','.join(ticket.fields.labels)
         output.append(f"Labels: '{label_str}'")
-
-    if priority is not None:
-        output.append(f'Job should run at elevated priority ({priority})')
-        gh_label.add('priority')
 
     if errors:
         output.append(f'Errors are {",".join(errors)}')
@@ -202,17 +294,16 @@ def main():
 
     set_output('message', '\n'.join(output))
 
-    if gh_label:
-        set_output('label', '\n'.join(sorted(gh_label)))
+    if labels_to_add:
+        set_output('label', '\n'.join(sorted(labels_to_add)))
 
     # Remove all managed labels which are not to be set.
-    to_remove = []
-    for label in pr_data['labels']:
-        name = label['name']
-        if name in MANAGED_LABELS and name not in gh_label:
-            to_remove.append(name)
-    if to_remove:
-        set_output('label-clear', '\n'.join(to_remove))
+    for label in labels_on_pr:
+        # Remove any release-* labels which are not in the set of labels to be applied
+        if label.startswith('release-') and label not in labels_to_add:
+            labels_to_clear.add(label)
+    if labels_to_clear:
+        set_output('label-clear', '\n'.join(sorted(labels_to_clear)))
 
     if errors:
         sys.exit(1)
