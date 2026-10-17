@@ -12,8 +12,9 @@ After `daos_server` instances have been started on each storage node for the
 first time, `daos_server scm prepare` will set PMem storage into the necessary
 state for use with DAOS when run on each host.
 Then `dmg storage format` formats persistent storage devices (specified in the
-server configuration file) on the storage nodes and writes necessary metadata
-before starting DAOS I/O engine processes that will operate across the fabric.
+server configuration file) on the storage nodes and writes necessary metadata,
+and `dmg system initialize` starts the DAOS I/O engine processes that will
+operate across the fabric.
 
 To sum up, the typical workflow of a DAOS system deployment consists of the
 following steps:
@@ -24,6 +25,8 @@ following steps:
   dmg utility.
 
 - [Format](#storage-formatting) the DAOS system
+
+- [Initialize](#system-initialization) the DAOS system
 
 - [Set up and start the agent](#agent-setup) on the client nodes
 
@@ -551,12 +554,11 @@ SCM format required on instance 1
 The `daos_server start --auto-format` option has now been added to allow automatic formatting on
 startup in the event that externally triggered format is not desirable. When using this option
 the storage format will occur on `daos_server` startup without any user intervention assuming the
-supplied config file is valid.
+supplied config file is valid. The engines still wait for `dmg system initialize`.
 
 To manually format the storage and start the engine processes, we run the following on a separate
-terminal window and verify that engine processes (ranks) have registered with the system.
-Note the subsequent system query command may not show ranks started immediately after the storage
-format command returns so it is recommended to leave a short delay (~5s) before invoking.
+terminal window. `dmg system initialize` returns once the engine processes (ranks) have registered
+with the system or, with `--timeout`, reports the hosts whose engines did not.
 
 ```bash
 $ dmg storage format -i
@@ -564,13 +566,13 @@ Format Summary:
   Hosts     SCM Devices NVMe Devices
   -----     ----------- ------------
   localhost 2           16
+$ dmg system initialize -i
+2 engines joined on 1 host
 $ dmg system query -i
 Rank  State
 ----  -----
 [0-1] Joined
 ```
-
-Engine I/O processes will be launched by the `daos_server` service following storage format.
 
 ```bash
 Instance 0: starting format of nvme block devices 0000:2b:00.0,0000:2c:00.0,0000:2d:00.0,0000:2e:00.0,0000:63:00.0,0000:64:00.0,0000:65:00.0,0000:66:00.0
@@ -1584,11 +1586,8 @@ the host for use with DAOS using the parameters defined in the server config fil
 node specifying a hostlist (`-l <host>[,...]`) of storage nodes with SCM/PMem
 modules and NVMe SSDs installed and prepared.
 
-Upon successful format, DAOS Control Servers will start DAOS I/O engines that
-have been specified in the server config file.
-
-Successful start-up is indicated by the following on stdout:
-`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.domain.`
+Upon successful format, the DAOS Control Servers hold the DAOS I/O engines
+specified in the server config file until the system is initialized.
 
 ### SCM Format
 
@@ -1632,9 +1631,23 @@ After the `storage format` command is run, the path specified by the server
 configuration file `scm_mount` parameter should be mounted and should contain
 the necessary DAOS metadata indicating that the server has been formatted.
 
-When starting, `daos_server` will skip `maintenance mode` and attempt to start
-I/O engines if valid DAOS metadata is found in `scm_mount`.
+When starting, `daos_server` will skip `maintenance mode` if valid DAOS metadata
+is found in `scm_mount`, and will start the I/O engines that the system expects
+to be running (see [Engine Startup](administration.md#engine-startup)).
 
+## System Initialization
+
+`dmg -l <host>[,...] system initialize` starts the I/O engines on the formatted
+storage nodes and waits for them to join the system. It is run once, after the
+first format, and may be rerun if some hosts did not join. To add storage nodes
+to a system that already has pools, format them and run
+`dmg -l <host>[,...] system extend` instead.
+
+Successful start-up is indicated by the following on stdout:
+`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.domain.`
+
+To format and start the engines in one step, as earlier releases did, run
+`dmg storage format --start`; the engines join without `dmg system initialize`.
 
 ## Agent Setup
 

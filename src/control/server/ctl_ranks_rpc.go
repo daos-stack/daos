@@ -9,6 +9,7 @@ package server
 
 import (
 	"context"
+	"strings"
 	"syscall"
 	"time"
 
@@ -266,6 +267,10 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		if err := ei.RemoveSuperblock(); err != nil {
 			return nil, err
 		}
+		if ei.isAwaitingStart() {
+			ei.abortStart()
+			continue
+		}
 		ei.requestStart(ctx)
 	}
 
@@ -315,11 +320,7 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	}
 	for _, ei := range instances {
 		ei.SetCheckerMode(req.CheckMode)
-
-		if ei.IsStarted() {
-			continue
-		}
-		ei.requestStart(ctx)
+		startInstance(ctx, ei)
 	}
 
 	// ignore poll results as we gather state immediately after
@@ -343,6 +344,58 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	// clear state history for started ranks, instances have already been filtered by
 	// FilterInstancesByRankSet() to match req.GetRanks()
 	clearRankRestartHistory(svc.restartMgr, instances)
+
+	return resp, nil
+}
+
+// startInstance releases an instance held at the launch gate, or requests
+// a start if it is stopped.
+func startInstance(ctx context.Context, ei Engine) {
+	switch {
+	case ei.IsStarted(), ei.isAwaitingFormat():
+	case ei.isAwaitingStart():
+		ei.NotifyStartReady()
+	default:
+		ei.requestStart(ctx)
+	}
+}
+
+// StartEngines implements the method defined for the Management Service.
+//
+// Start every data-plane instance on this host, releasing any that are held
+// awaiting start. An instance awaiting format, or one that exits, is reported as such.
+func (svc *ControlService) StartEngines(ctx context.Context, req *ctlpb.StartEnginesReq) (*ctlpb.StartEnginesResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	instances := svc.harness.Instances()
+	for _, ei := range instances {
+		startInstance(ctx, ei)
+	}
+
+	pollFn := func(e Engine) bool {
+		return e.IsStarted() || e.isAwaitingFormat() || e.getExitErr() != nil
+	}
+	if err := pollInstanceState(ctx, instances, pollFn); err != nil {
+		return nil, errors.Wrap(err, "waiting for engines to start")
+	}
+
+	resp := &ctlpb.StartEnginesResp{}
+	for _, ei := range instances {
+		res := &ctlpb.EngineResult{
+			Index: ei.Index(),
+			State: strings.ToLower(ei.LocalState().String()),
+		}
+		if err := ei.getExitErr(); err != nil {
+			res.State = strings.ToLower(system.MemberStateErrored.String())
+			res.Error = err.Error()
+		}
+		if sb := ei.getSuperblock(); sb != nil {
+			res.Uuid = sb.UUID
+		}
+		resp.Results = append(resp.Results, res)
+	}
 
 	return resp, nil
 }

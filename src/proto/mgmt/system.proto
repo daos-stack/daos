@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -66,6 +66,34 @@ message SystemStartResp {
 	repeated shared.RankResult results = 1;
 	string absentranks = 2; // rankset missing from membership
 	string absenthosts = 3; // hostset missing from membership
+}
+
+// SystemInitializeReq supplies system initialize parameters.
+message SystemInitializeReq
+{
+	string sys          = 1; // DAOS system name
+	string hosts        = 2; // hostset to start engines on
+	uint32 join_timeout = 3; // seconds to wait for engines to join (0: no limit)
+}
+
+// SystemInitializeResp returns results of attempts to start and join engines.
+message SystemInitializeResp
+{
+	repeated shared.RankResult results = 1; // joined ranks, or the host that fell short
+}
+
+// SystemExtendReq supplies system extend parameters.
+message SystemExtendReq
+{
+	string sys          = 1; // DAOS system name
+	string hosts        = 2; // hostset to start engines on
+	uint32 join_timeout = 3; // seconds to wait for engines to join (0: no limit)
+}
+
+// SystemExtendResp returns results of attempts to start and join engines.
+message SystemExtendResp
+{
+	repeated shared.RankResult results = 1; // joined ranks, or the host that fell short
 }
 
 // SystemExcludeReq supplies system exclude parameters.

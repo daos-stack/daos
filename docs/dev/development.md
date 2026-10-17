@@ -392,8 +392,13 @@ This can be triggered in a different shell, using the following command:
 $ docker exec server dmg -i storage format
 ```
 
-Upon successful completion of the format, the storage engine is started, and pools
-can be created using the daos admin tool (see next section).
+Once the storage is formatted, start the engine with:
+
+```bash
+$ docker exec server dmg -i system initialize
+```
+
+Pools can then be created using the daos admin tool (see next section).
 
 For more advanced configurations involving SCM, SSD or a real fabric, please
 refer to the next section.

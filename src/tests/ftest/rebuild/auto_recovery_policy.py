@@ -112,17 +112,17 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         self.log_step('Scenario 2 - Disable system self_heal')
         dmg.system_set_prop('self_heal:none')
 
-        self.log_step('Scenario 2 - Stop a rank and verify it is not excluded')
-        dmg.system_stop(ranks=ranks_x)
-        self.server_managers[0].update_expected_states(ranks_x, 'stopped')
+        self.log_step('Scenario 2 - Kill a rank and verify it is not excluded')
+        self.server_managers[0].kill_ranks(ranks_x)
+        self.server_managers[0].update_expected_states(ranks_x, ['errored'])
         self._wait_detection_delay()
-        self._verify_rank_state(ranks_x, 'stopped')
+        self._verify_rank_state(ranks_x, 'errored')
 
         self.log_step(
             'Scenario 2 - Enable system self_heal and invoke dmg system self-heal eval')
         dmg.system_set_prop('self_heal:exclude;pool_exclude;pool_rebuild')
         dmg.system_self_heal_eval()
-        self.server_managers[0].update_expected_states(ranks_x, ['stopped', 'excluded'])
+        self.server_managers[0].update_expected_states(ranks_x, ['excluded'])
 
         self.log_step('Scenario 2 - Verify ranks are excluded and rebuilt in the pool')
         self._verify_rank_state(ranks_x, 'excluded')
@@ -130,18 +130,17 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         pool.wait_for_rebuild_to_end(interval=3)
 
         self.log_step(
-            'Scenario 2 - Stop another rank and verify it is excluded and rebuilt in the pool')
-        dmg.system_stop(ranks=ranks_y)
-        self.server_managers[0].update_expected_states(ranks_y, ['stopped', 'excluded'])
+            'Scenario 2 - Kill another rank and verify it is excluded and rebuilt in the pool')
+        self.server_managers[0].kill_ranks(ranks_y)
         pool.wait_for_rebuild_to_start(interval=1)
         pool.wait_for_rebuild_to_end(interval=3)
         self._verify_rank_state(ranks_y, 'excluded')
 
         self.log_step(
-            'Scenario 2 - Reintegrate stopped ranks to bring system back to original state')
-        stopped_ranks_str = list_to_str(ranks_x + ranks_y)
-        dmg.system_start(stopped_ranks_str)
-        dmg.system_reintegrate(stopped_ranks_str)
+            'Scenario 2 - Reintegrate killed ranks to bring system back to original state')
+        killed_ranks_str = list_to_str(ranks_x + ranks_y)
+        dmg.system_start(killed_ranks_str)
+        dmg.system_reintegrate(killed_ranks_str)
         self.server_managers[0].update_expected_states(ranks_x + ranks_y, ['joined'])
         pool.wait_for_rebuild_to_start(interval=1)
         pool.wait_for_rebuild_to_end(interval=3)
@@ -167,9 +166,8 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         dmg.system_set_prop('self_heal:exclude;pool_exclude')
         dmg.system_get_prop(properties='self_heal')
 
-        self.log_step('Scenario 3 - Stop a rank and verify it is excluded without rebuild')
-        dmg.system_stop(ranks=ranks_x)
-        self.server_managers[0].update_expected_states(ranks_x, ['stopped', 'excluded'])
+        self.log_step('Scenario 3 - Kill a rank and verify it is excluded without rebuild')
+        self.server_managers[0].kill_ranks(ranks_x)
         self._wait_detection_delay()
         self._verify_rank_state(ranks_x, 'excluded')
         pool.verify_query({
@@ -323,13 +321,12 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         all_ranks = list(self.server_managers[0].ranks.keys())
         all_ranks_minus_1 = sorted(self.random.sample(all_ranks, k=len(all_ranks) - 1))
 
-        self.log_step('Scenario 6 - Simulate restart with dmg system stop')
+        self.log_step('Scenario 6 - Kill every engine; an admin stop is not unexpected')
         # We expect the pool version to stay the same through this scenario since
         # there are no exclusions or rebuilds
         self.log.info('Save current pool version')
         pool_version = pool.query()['response']['version']
-        dmg.system_stop()
-        self.server_managers[0].update_expected_states(all_ranks, ['stopped'])
+        self.server_managers[0].kill_ranks(all_ranks)
 
         self.log_step('Scenario 6 - Start all but 1 rank and immediately disable self-heal')
         dmg.system_start(ranks=list_to_str(all_ranks_minus_1))
@@ -381,9 +378,8 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         pool2.set_prop('self_heal:exclude')
         pool2.query()
 
-        self.log_step('Scenario 7 - Stop a rank and wait for the detection delay')
-        dmg.system_stop(ranks=ranks_x)
-        self.server_managers[0].update_expected_states(ranks_x, ['stopped', 'excluded'])
+        self.log_step('Scenario 7 - Kill a rank and wait for the detection delay')
+        self.server_managers[0].kill_ranks(ranks_x)
         self._wait_detection_delay()
 
         self.log_step(
@@ -405,10 +401,10 @@ class RbldAutoRecoveryPolicy(TestWithServers):
         pool2.verify_query_targets_state(ranks_x, 'down')
 
         self.log_step(
-            'Scenario 7 - Reintegrate stopped ranks to bring system back to original state')
-        stopped_ranks_str = list_to_str(ranks_x)
-        dmg.system_start(stopped_ranks_str)
-        dmg.system_reintegrate(stopped_ranks_str)
+            'Scenario 7 - Reintegrate the killed rank to bring system back to original state')
+        killed_ranks_str = list_to_str(ranks_x)
+        dmg.system_start(killed_ranks_str)
+        dmg.system_reintegrate(killed_ranks_str)
         self.server_managers[0].update_expected_states(ranks_x, ['joined'])
         pool.wait_for_rebuild_to_start(interval=1)
         pool.wait_for_rebuild_to_end(interval=3)

@@ -1251,10 +1251,9 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			incarnation:    2,
 			expNeedsGrpUpd: true,
 		},
-		"event for stopped member": {
-			rank:           1,
-			incarnation:    2,
-			expNeedsGrpUpd: true,
+		"event for stopped member ignored; stays stopped": {
+			rank:        1,
+			incarnation: 2,
 		},
 		// TODO: zero incarnation
 	} {

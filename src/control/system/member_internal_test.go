@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,6 +37,23 @@ func TestSystem_MemberState_isTransitionIllegal(t *testing.T) {
 			start: MemberStateAwaitFormat,
 			expLegalStates: []MemberState{
 				MemberStateAdminExcluded,
+				MemberStateAwaitStart,
+				MemberStateCheckerStarted,
+				MemberStateErrored,
+				MemberStateJoined,
+				MemberStateReady,
+				MemberStateStarting,
+				MemberStateStopped,
+				MemberStateStopping,
+				MemberStateUnresponsive,
+				MemberStateUnknown,
+			},
+		},
+		"await start": {
+			start: MemberStateAwaitStart,
+			expLegalStates: []MemberState{
+				MemberStateAdminExcluded,
+				MemberStateAwaitFormat,
 				MemberStateCheckerStarted,
 				MemberStateErrored,
 				MemberStateJoined,
@@ -53,6 +70,7 @@ func TestSystem_MemberState_isTransitionIllegal(t *testing.T) {
 			expLegalStates: []MemberState{
 				MemberStateAdminExcluded,
 				MemberStateAwaitFormat,
+				MemberStateAwaitStart,
 				MemberStateCheckerStarted,
 				MemberStateErrored,
 				MemberStateJoined,
@@ -68,6 +86,7 @@ func TestSystem_MemberState_isTransitionIllegal(t *testing.T) {
 			expLegalStates: []MemberState{
 				MemberStateAdminExcluded,
 				MemberStateAwaitFormat,
+				MemberStateAwaitStart,
 				MemberStateCheckerStarted,
 				MemberStateErrored,
 				MemberStateJoined,
@@ -83,6 +102,7 @@ func TestSystem_MemberState_isTransitionIllegal(t *testing.T) {
 			expLegalStates: []MemberState{
 				MemberStateAdminExcluded,
 				MemberStateAwaitFormat,
+				MemberStateAwaitStart,
 				MemberStateCheckerStarted,
 				MemberStateErrored,
 				MemberStateExcluded,
@@ -98,6 +118,7 @@ func TestSystem_MemberState_isTransitionIllegal(t *testing.T) {
 			expLegalStates: []MemberState{
 				MemberStateAdminExcluded,
 				MemberStateAwaitFormat,
+				MemberStateAwaitStart,
 				MemberStateCheckerStarted,
 				MemberStateExcluded,
 				MemberStateStarting,
@@ -111,6 +132,7 @@ func TestSystem_MemberState_isTransitionIllegal(t *testing.T) {
 			expLegalStates: []MemberState{
 				MemberStateAdminExcluded,
 				MemberStateAwaitFormat,
+				MemberStateAwaitStart,
 				MemberStateCheckerStarted,
 				MemberStateErrored,
 				MemberStateExcluded,
@@ -124,6 +146,7 @@ func TestSystem_MemberState_isTransitionIllegal(t *testing.T) {
 			expLegalStates: []MemberState{
 				MemberStateAdminExcluded,
 				MemberStateAwaitFormat,
+				MemberStateAwaitStart,
 				MemberStateErrored,
 				MemberStateExcluded,
 				MemberStateStarting,
@@ -138,6 +161,7 @@ func TestSystem_MemberState_isTransitionIllegal(t *testing.T) {
 			expLegalStates: []MemberState{
 				MemberStateAdminExcluded,
 				MemberStateAwaitFormat,
+				MemberStateAwaitStart,
 				MemberStateJoined,
 				MemberStateCheckerStarted,
 				MemberStateUnknown,
@@ -148,6 +172,7 @@ func TestSystem_MemberState_isTransitionIllegal(t *testing.T) {
 			expLegalStates: []MemberState{
 				MemberStateAdminExcluded,
 				MemberStateAwaitFormat,
+				MemberStateAwaitStart,
 				MemberStateCheckerStarted,
 				MemberStateErrored,
 				MemberStateExcluded,
@@ -164,9 +189,9 @@ func TestSystem_MemberState_isTransitionIllegal(t *testing.T) {
 			expLegalStates: []MemberState{
 				MemberStateAdminExcluded,
 				MemberStateAwaitFormat,
+				MemberStateAwaitStart,
 				MemberStateCheckerStarted,
 				MemberStateErrored,
-				MemberStateExcluded,
 				MemberStateJoined,
 				MemberStateReady,
 				MemberStateStarting,

@@ -1956,6 +1956,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		expErr           error
 		reformat         bool // indicates setting of reformat parameter
 		replace          bool // indicates setting of replace parameter
+		start            bool // indicates setting of start parameter
+		expStartReady    bool // instances are released from the start hold
 	}{
 		"nil request": {
 			nilReq: true,
@@ -1978,6 +1980,23 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			sClass:  storage.ClassRam,
 			sSize:   6,
 			bmbcs:   []*bdev.MockBackendConfig{{}},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
+		"ram no nvme; start set": {
+			start:         true,
+			expStartReady: true,
+			sMounts:       []string{"/mnt/daos"},
+			sClass:        storage.ClassRam,
+			sSize:         6,
+			bmbcs:         []*bdev.MockBackendConfig{{}},
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{},
 				Mrets: []*ctlpb.ScmMountResult{
@@ -2117,12 +2136,13 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			},
 		},
 		"nvme and dcpm; replace set": {
-			sMounts: []string{"/mnt/daos"},
-			sClass:  storage.ClassDcpm,
-			sDevs:   []string{"dev/pmem0"},
-			bClass:  storage.ClassNvme,
-			bDevs:   [][]string{{mockNvmeController0.PciAddr}},
-			replace: true,
+			sMounts:       []string{"/mnt/daos"},
+			sClass:        storage.ClassDcpm,
+			sDevs:         []string{"dev/pmem0"},
+			bClass:        storage.ClassNvme,
+			bDevs:         [][]string{{mockNvmeController0.PciAddr}},
+			replace:       true,
+			expStartReady: true,
 			bmbcs: []*bdev.MockBackendConfig{
 				{
 					ScanRes: &storage.BdevScanResponse{
@@ -2194,6 +2214,44 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		},
 		// if emulated scm (ram) is already formatted and mounted (with
 		// superblock) then awaitStorageReady() will not wait and format
+		"ram already mounted; start releases the held engine": {
+			start:         true,
+			expStartReady: true,
+			scmMounted:    true,
+			sMounts:       []string{"/mnt/daos"},
+			sClass:        storage.ClassRam,
+			sSize:         6,
+			bClass:        storage.ClassNvme,
+			bDevs:         [][]string{{mockNvmeController0.PciAddr}},
+			bmbcs: []*bdev.MockBackendConfig{
+				{
+					ScanRes: &storage.BdevScanResponse{
+						Controllers: storage.NvmeControllers{mockNvmeController0},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: storage.NilBdevAddress,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info: fmt.Sprintf(msgNvmeFormatSkipNotDone,
+								0),
+						},
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "SCM is already formatted",
+						},
+					},
+				},
+			},
+		},
 		// attempt should fail with no reformat option set
 		"ram already mounted no reformat": {
 			scmMounted: true,
@@ -2455,7 +2513,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				{mockNvmeController0.PciAddr},
 				{mockNvmeController1.PciAddr},
 			},
-			replace: true,
+			replace:       true,
+			expStartReady: true,
 			// One for each engine.
 			bmbcs: []*bdev.MockBackendConfig{
 				{
@@ -2647,6 +2706,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 				ei := NewEngineInstance(log, esp, nil, runner, nil)
 				ei.ready.Store(tc.instancesStarted)
+				ei.holdStart(func() {}) // every format is followed by a hold
 
 				// if the instance is expected to have a valid superblock, create one
 				if tc.superblockExists {
@@ -2735,6 +2795,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				req = &ctlpb.StorageFormatReq{
 					Reformat: tc.reformat,
 					Replace:  tc.replace,
+					Start:    tc.start,
 				}
 			}
 			if tc.noSrvCfg {
@@ -2774,6 +2835,14 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					t.Fatalf("unexpected results: (\nwant: %+v\ngot: %+v)",
 						tc.expResp.Mrets, resp.Mrets)
 				}
+			}
+			for _, ei := range instances {
+				released := false
+				select {
+				case released = <-ei.(*EngineInstance).startReady:
+				default:
+				}
+				test.AssertEqual(t, tc.expStartReady, released, "start hold released")
 			}
 		})
 	}
