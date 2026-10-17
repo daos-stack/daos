@@ -615,8 +615,8 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	}
 	epoch = is_recalc ? stripe->as_hi_epoch :
 		entry->ae_par_extent.ape_epoch;
-	rc = dsc_obj_fetch(entry->ae_obj_hdl, epoch, &entry->ae_dkey, 1, &iod,
-			   &sgl, NULL, DIOF_FOR_EC_AGG, NULL, NULL);
+	rc    = dsc_obj_fetch(entry->ae_obj_hdl, epoch, &entry->ae_dkey, 1, &iod, &sgl, NULL,
+			      DIOF_FOR_EC_AGG | DIOF_EC_NO_DEGRADE, NULL, NULL);
 	if (rc)
 		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
@@ -1566,7 +1566,7 @@ out:
 	 * of all parity shards.
 	 * NB: it's OK if the only remote parity peer failed.
 	 */
-	rc = peer_updated > 0 ? 0 : peer_rc;
+	rc = peer_updated > 0 ? 0 : (peer_rc ?: rc);
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -1693,8 +1693,8 @@ agg_process_holes_ult(void *arg)
 		struct daos_csummer	*csummer;
 
 		rc = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_cur_stripe.as_hi_epoch,
-				   &entry->ae_dkey, 1, iod, &entry->ae_sgl,
-				   NULL, DIOF_FOR_EC_AGG, NULL, NULL);
+				   &entry->ae_dkey, 1, iod, &entry->ae_sgl, NULL,
+				   DIOF_FOR_EC_AGG | DIOF_EC_NO_DEGRADE, NULL, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
@@ -1815,7 +1815,7 @@ out:
 	/* NB: before switching to DTX, any successful parity write is deemed as success
 	 * of all parity shards.
 	 */
-	rc = peer_updated > 0 ? 0 : peer_rc;
+	rc = peer_updated > 0 ? 0 : (peer_rc ?: rc);
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -2904,7 +2904,9 @@ update_hae:
 			return rc;
 		}
 
-		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
+		/* rescan replicas left for the leader so they keep holding back the boundary */
+		cont->sc_ec_agg_eph =
+		    max(cont->sc_ec_agg_eph, min(epr->epr_hi, ec_agg_param->ap_min_unagg_eph - 1));
 		if (!cont->sc_stopping && cont->sc_query_ec_agg_eph) {
 			uint64_t orig, cur, cur_eph;
 
