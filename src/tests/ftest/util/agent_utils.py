@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import json
 import os
 import socket
 
@@ -88,9 +87,11 @@ class DaosAgentCommand(YamlCommand):
 
         # Command line parameters:
         # -d, --debug        Enable debug output
+        # -j, --json         Enable JSON output
         # -J, --json-logging Enable JSON logging
         # -o, --config-path= Path to agent configuration file
         self.debug = FormattedParameter("--debug", True)
+        self.json = FormattedParameter("-j", False)
         self.json_logs = FormattedParameter("--json-logging", False)
         self.config = FormattedParameter("--config-path={}", default_yaml_file)
 
@@ -117,6 +118,8 @@ class DaosAgentCommand(YamlCommand):
         """Get the daos_agent sub command object based on the sub-command."""
         if self.sub_command.value == "dump-attachinfo":
             self.sub_command_class = self.DumpAttachInfoSubCommand()
+        elif self.sub_command.value == "server-version":
+            self.sub_command_class = self.ServerVersionSubCommand()
         elif self.sub_command.value == "support":
             self.sub_command_class = self.SupportSubCommand()
         else:
@@ -131,6 +134,14 @@ class DaosAgentCommand(YamlCommand):
                 "/run/daos_agent/dump-attachinfo/*", "dump-attachinfo")
 
             self.output = FormattedParameter("--output {}", None)
+
+    class ServerVersionSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_agent server-version sub command."""
+
+        def __init__(self):
+            """Create a daos_agent server-version subcommand object."""
+            super().__init__(
+                "/run/daos_agent/server-version/*", "server-version")
 
     class SupportSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_agent support sub command."""
@@ -175,6 +186,20 @@ class DaosAgentCommand(YamlCommand):
         self.set_sub_command("dump-attachinfo")
         self.sub_command_class.output.value = output
         return self._get_result()
+
+    def server_version(self):
+        """Run daos_agent server-version.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        """
+        self.set_sub_command("server-version")
+        result = self._get_result()
+        return result
 
     def support_collect_log(self, **kwargs):
         """support collect-log command run.
@@ -306,24 +331,26 @@ class DaosAgentManager(SubprocessManager):
         cmd.set_sub_command("dump-attachinfo")
         return run_remote(self.log, self.hosts, cmd.with_exports)
 
-    def server_version(self):
-        """Run server-version on the daos_agent.
+    def server_version(self, **kwargs):
+        """Run daos_agent server-version.
+
+        Args:
+            kwargs: key-value arguments to the command
 
         Raises:
-            CommandFailure: if the daos_agent command fails.
+            CommandFailure: if the command fails.
 
         Returns:
-            dict: the JSON command output converted to a python dictionary
+            CommandResult: groups of command results from the same hosts with the same return status
         """
-        config = self.manager.job.yaml.filename
-        agent_bin = os.path.join(self.manager.job.command_path, "daos_agent")
-        run_user = self.manager.job.certificate_owner
-        cmd = (f"sudo -u {run_user} {agent_bin} -j --config-path={config}"
-               f" --logfile=/dev/null server-version 2>/dev/null")
-        result = run_remote(self.log, self.hosts, cmd)
-        if not result.passed:
-            raise CommandFailure("daos_agent server-version failed")
-        return json.loads(result.joined_stdout)
+        cmd = self.manager.job.copy()
+        cmd.set_sub_command("server-version")
+        cmd.update_params(
+            config=self.manager.job.yaml.filename, logfile='/dev/null', debug=False, **kwargs)
+        cmd_str = cmd.with_exports
+        if cmd.json.value is True:
+            cmd_str += ' 2>/dev/null'
+        return run_remote(self.log, self.hosts, cmd_str)
 
     def support_collect_log(self, **kwargs):
         """Collect logs for debug purpose.
