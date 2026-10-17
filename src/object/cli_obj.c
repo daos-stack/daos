@@ -6577,6 +6577,9 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
 
+	if (obj_auxi->rebuilding || obj_auxi->reintegrating)
+		obj_auxi->flags |= ORF_DTX_SYNC;
+
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
 		DP_OID(obj->cob_md.omd_id), obj_auxi->dkey_hash);
 
@@ -7582,6 +7585,8 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 		D_GOTO(out_task, rc = -DER_NEED_TX);
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
+		obj_auxi->flags |= ORF_DTX_SYNC;
+	if (obj_auxi->rebuilding || obj_auxi->reintegrating)
 		obj_auxi->flags |= ORF_DTX_SYNC;
 	if (obj_is_ec(obj))
 		obj_auxi->flags |= ORF_EC;
