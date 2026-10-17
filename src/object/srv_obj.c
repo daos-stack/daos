@@ -2800,6 +2800,8 @@ obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, ui
 
 		/* Abort it if exist but with different epoch, then re-execute with new epoch. */
 		rc = vos_dtx_abort(coh, dti, e, ver);
+		if (rc == -DER_NO_PERM)
+			D_GOTO(out, rc = -DER_INPROGRESS);
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 		/* Fall through */

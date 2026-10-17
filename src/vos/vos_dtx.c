@@ -2098,6 +2098,28 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 }
 
 int
+vos_dtx_check_resync(daos_handle_t coh, struct dtx_id *dti, uint32_t version)
+{
+	struct vos_container   *cont = vos_hdl2cont(coh);
+	struct vos_dtx_act_ent *dae;
+	d_iov_t                 kiov;
+	d_iov_t                 riov;
+	int                     rc;
+
+	d_iov_set(&kiov, dti, sizeof(*dti));
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc == 0) {
+		dae                        = riov.iov_buf;
+		dae->dae_known_max_version = max(dae->dae_known_max_version, version);
+	} else if (rc != -DER_NONEXIST) {
+		return rc;
+	}
+
+	return vos_dtx_check(coh, dti, NULL, NULL, NULL, false);
+}
+
+int
 vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
 		 struct dtx_memberships **mbs)
 {
@@ -2735,10 +2757,11 @@ int
 vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force)
 {
 	struct dtx_handle      *dth;
-	struct dtx_id           xid        = DAE_XID(dae);
-	daos_epoch_t            epoch      = DAE_EPOCH(dae);
-	uint64_t                start_time = dae->dae_start_time;
-	uint32_t                version    = DAE_VER(dae);
+	struct dtx_id           xid              = DAE_XID(dae);
+	daos_epoch_t            epoch            = DAE_EPOCH(dae);
+	uint64_t                start_time       = dae->dae_start_time;
+	uint32_t                version          = DAE_VER(dae);
+	uint32_t                recovery_version = dae->dae_known_max_version;
 	struct umem_instance   *umm;
 	struct umem_pin_handle *pin_hdl = NULL;
 	d_iov_t                 kiov;
@@ -2771,6 +2794,10 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 		if (dae->dae_start_time != start_time || DAE_EPOCH(dae) != epoch ||
 		    DAE_VER(dae) != version)
 			D_GOTO(abort_tx, rc = -DER_NONEXIST);
+
+		/* Recovery may have checked this entry while pinning or reserving WAL space. */
+		if (recovery_version < dae->dae_known_max_version)
+			D_GOTO(abort_tx, rc = -DER_NO_PERM);
 
 		if (vos_dae_is_commit(dae) || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
 			D_GOTO(abort_tx, rc = -DER_NO_PERM);
@@ -2884,6 +2911,12 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch, uint32_
 
 	if (version != 0 && version < DAE_VER(dae))
 		D_GOTO(out, rc = -DER_NONEXIST);
+
+	if (version != 0 && version < dae->dae_known_max_version) {
+		D_WARN("Forbid abort of DTX " DF_DTI " with version %u, recovery version %u\n",
+		       DP_DTI(dti), version, dae->dae_known_max_version);
+		D_GOTO(out, rc = -DER_NO_PERM);
+	}
 
 	if (unlikely(dae->dae_preparing)) {
 		/*

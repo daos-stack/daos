@@ -481,6 +481,9 @@ struct vos_dtx_act_ent {
 	/* Back pointer to the DTX handle. */
 	struct dtx_handle		*dae_dth;
 
+	/* Highest recovery version that has checked this entry. */
+	uint32_t                         dae_known_max_version;
+
 	/* The capacity of dae_oids if it points to new allocated area. */
 	uint32_t                         dae_oid_cap;
 

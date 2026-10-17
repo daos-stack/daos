@@ -336,7 +336,16 @@ int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	       struct dtx_cos_key *dcks, int count, bool has_cos);
 
-int dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch);
+/* Recovery aborts use the recovery map version; ordinary aborts retain the DTX version. */
+int
+dtx_abort_version(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch,
+		  uint32_t version);
+
+static inline int
+dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
+{
+	return dtx_abort_version(cont, dte, epoch, dte->dte_ver);
+}
 
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 

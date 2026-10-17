@@ -149,6 +149,13 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 	      uint32_t *pm_ver, struct dtx_cos_key *dck, bool for_refresh);
 
 /**
+ * Check ordinary DTX status for recovery and fence aborts from leaders older than \a version.
+ * Returns the same status as vos_dtx_check().
+ */
+int
+vos_dtx_check_resync(daos_handle_t coh, struct dtx_id *dti, uint32_t version);
+
+/**
  * Load participants information for the given DTX.
  *
  * \param coh		[IN]	Container open handle.

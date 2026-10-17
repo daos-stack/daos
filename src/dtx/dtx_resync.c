@@ -223,6 +223,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 {
 	struct dtx_memberships	*mbs = dte->dte_mbs;
 	struct dtx_coll_entry	*dce = NULL;
+	uint32_t                 version = cont->sc_pool->spc_map_version;
 	int			 rc = 0;
 
 	if (mbs->dm_flags & DMF_COLL_TARGET) {
@@ -237,7 +238,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 
 		rc = dtx_coll_check(cont, dce, epoch);
 	} else {
-		rc = dtx_check(cont, dte, epoch);
+		rc = dtx_check(cont, dte, epoch, version);
 	}
 	switch (rc) {
 	case DTX_ST_COMMITTED:
@@ -258,6 +259,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		D_WARN("Other participants not sure about whether the "
 		       "DTX "DF_DTI" is committed or not, need retry.\n",
 		       DP_DTI(&dte->dte_xid));
+		ABT_thread_yield();
 		D_GOTO(out, rc = DSHR_NEED_RETRY);
 	case DTX_ST_PREPARED: {
 		/* If the transaction across multiple redundancy groups,
@@ -328,7 +330,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		if (mbs->dm_flags & DMF_COLL_TARGET)
 			rc = dtx_coll_abort(cont, dce, epoch);
 		else
-			rc = dtx_abort(cont, dte, epoch);
+			rc = dtx_abort_version(cont, dte, epoch, version);
 
 		DL_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, rc,
 			  "As new leader for DTX " DF_DTI ", abort it (2)", DP_DTI(&dte->dte_xid));

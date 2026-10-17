@@ -648,9 +648,9 @@ dtx_rpc_helper(struct dss_chore *chore, bool is_reentrance)
 }
 
 static int
-dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes, uint32_t count,
-	int opc, daos_epoch_t epoch, d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list,
-	bool keep_head, struct dtx_common_args *dca)
+dtx_rpc(struct ds_cont_child *cont, d_list_t *dti_list, struct dtx_entry **dtes, uint32_t count,
+	int opc, daos_epoch_t epoch, uint32_t version, d_list_t *cmt_list, d_list_t *abt_list,
+	d_list_t *act_list, bool keep_head, struct dtx_common_args *dca)
 {
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct dtx_req_rec	*drr;
@@ -677,7 +677,7 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 	dra->dra_cmt_list = cmt_list;
 	dra->dra_abt_list = abt_list;
 	dra->dra_act_list = act_list;
-	dra->dra_version  = pool->sp_map_version;
+	dra->dra_version  = version;
 	dra->dra_opc      = opc;
 	uuid_copy(dra->dra_po_uuid, pool->sp_uuid);
 	uuid_copy(dra->dra_co_uuid, cont->sc_uuid);
@@ -862,7 +862,8 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	 *	 failed. So here, we let remote participants to commit firstly, if failed, we
 	 *	 will ask the leader to retry the commit until all participants got committed.
 	 */
-	rc = dtx_rpc(cont, NULL, dtes, count, DTX_COMMIT, 0, NULL, NULL, NULL, false, &dca);
+	rc = dtx_rpc(cont, NULL, dtes, count, DTX_COMMIT, 0,
+		     cont->sc_pool->spc_pool->sp_map_version, NULL, NULL, NULL, false, &dca);
 	if (rc > 0 || rc == -DER_NONEXIST || rc == -DER_EXCLUDED || rc == -DER_OOG)
 		rc = 0;
 
@@ -939,15 +940,15 @@ out:
 	return rc != 0 ? rc : rc1;
 }
 
-
 int
-dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
+dtx_abort_version(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch,
+		  uint32_t version)
 {
 	struct dtx_common_args	dca;
 	int			rc;
 	int			rc1;
 
-	rc = dtx_rpc(cont, NULL, &dte, 1, DTX_ABORT, epoch, NULL, NULL, NULL, false, &dca);
+	rc = dtx_rpc(cont, NULL, &dte, 1, DTX_ABORT, epoch, version, NULL, NULL, NULL, false, &dca);
 	if (rc > 0 || rc == -DER_NONEXIST)
 		rc = 0;
 
@@ -961,7 +962,7 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	 *	 to resend sometime later.
 	 */
 	if (epoch != 0)
-		rc1 = vos_dtx_abort(cont->sc_hdl, &dte->dte_xid, epoch, dte->dte_ver);
+		rc1 = vos_dtx_abort(cont->sc_hdl, &dte->dte_xid, epoch, version);
 	else
 		rc1 = vos_dtx_set_flags(cont->sc_hdl, &dte->dte_xid, 1, DTE_CORRUPTED);
 	if (rc1 > 0 || rc1 == -DER_NONEXIST)
@@ -974,10 +975,14 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 }
 
 int
-dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
+dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch, uint32_t version)
 {
 	struct dtx_common_args	dca;
 	int			rc;
+
+	rc = vos_dtx_check_resync(cont->sc_hdl, &dte->dte_xid, version);
+	if (rc != DTX_ST_PREPARED && rc != DTX_ST_INITED)
+		return rc;
 
 	/* If no other target, then current target is the unique
 	 * one and 'prepared', then related DTX can be committed.
@@ -985,7 +990,7 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	if (dte->dte_mbs->dm_tgt_cnt == 1)
 		return DTX_ST_PREPARED;
 
-	rc = dtx_rpc(cont, NULL, &dte, 1, DTX_CHECK, epoch, NULL, NULL, NULL, false, &dca);
+	rc = dtx_rpc(cont, NULL, &dte, 1, DTX_CHECK, epoch, version, NULL, NULL, NULL, false, &dca);
 
 	D_CDEBUG(rc < 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_TRACE,
 		 "Check DTX "DF_DTI": rc %d\n", DP_DTI(&dte->dte_xid), rc);
@@ -1156,7 +1161,8 @@ next:
 	}
 
 	if (len > 0) {
-		rc = dtx_rpc(cont, &head, NULL, len, DTX_REFRESH, 0, cmt_list, abt_list, act_list,
+		rc = dtx_rpc(cont, &head, NULL, len, DTX_REFRESH, 0,
+			     cont->sc_pool->spc_pool->sp_map_version, cmt_list, abt_list, act_list,
 			     for_io, &dca);
 
 		/*
@@ -1235,9 +1241,11 @@ next2:
 			} else {
 				rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch,
 						    dsp->dsp_version);
-				D_ASSERT(rc1 != -DER_NO_PERM);
-
-				if (rc1 == 0 || !for_io) {
+				/* A concurrent refresh or recovery may have resolved this DTX.
+				 * If not, encountering it again will trigger another refresh or
+				 * retry.
+				 */
+				if (rc1 == 0 || rc1 == -DER_NO_PERM || !for_io) {
 					d_list_del(&dsp->dsp_link);
 					dtx_dsp_free(dsp);
 				}
