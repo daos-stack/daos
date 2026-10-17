@@ -140,7 +140,9 @@ def main():
         errors.append(f'PR title is malformatted. See {link}')
 
     try:
-        server = jira.JIRA({'server': 'https://daosio.atlassian.net/'})
+        server = jira.JIRA(
+            server='https://daosio.atlassian.net/',
+            basic_auth=(os.environ.get('JIRA_EMAIL'), os.environ.get('JIRA_API_TOKEN')))
         ticket = server.issue(ticket_number, fields=FIELDS)
     except jira.exceptions.JIRAError:
         errors.append('Unable to load ticket data')
