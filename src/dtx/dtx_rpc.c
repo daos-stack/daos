@@ -569,7 +569,7 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head, int *
 		}
 
 		/* Skip the target that (re-)joined the system after the DTX. */
-		if (target->ta_comp.co_ver > dte->dte_ver)
+		if (target->ta_comp.co_in_ver > dte->dte_ver)
 			continue;
 
 		/* Skip non-healthy one. */
@@ -979,10 +979,6 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch,
 {
 	struct dtx_common_args	dca;
 	int			rc;
-
-	rc = vos_dtx_check_resync(cont->sc_hdl, &dte->dte_xid, version);
-	if (rc != DTX_ST_PREPARED && rc != DTX_ST_INITED)
-		return rc;
 
 	/* If no other target, then current target is the unique
 	 * one and 'prepared', then related DTX can be committed.
@@ -1801,6 +1797,7 @@ dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_CHECK, epoch, &dcra);
 
 	if (dce->dce_bitmap != NULL) {
+		clrbit(dce->dce_bitmap, dss_get_module_info()->dmi_tgt_id);
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, epoch,
 					  dce->dce_ver, DTX_COLL_CHECK, dce->dce_bitmap_sz,
 					  dce->dce_bitmap, &results);

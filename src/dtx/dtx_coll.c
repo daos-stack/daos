@@ -122,7 +122,7 @@ dtx_coll_find_rank_range(struct pl_map *map, struct pl_obj_layout *layout, uint3
 			continue;
 
 		/* Skip the target that (re-)joined the system after the DTX. */
-		if (target->ta_comp.co_ver > version)
+		if (target->ta_comp.co_in_ver > version)
 			continue;
 
 		/* Skip non-healthy one. */

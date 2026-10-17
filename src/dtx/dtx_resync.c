@@ -226,6 +226,11 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 	uint32_t                 version = cont->sc_pool->spc_map_version;
 	int			 rc = 0;
 
+	rc = vos_dtx_check_resync(cont->sc_hdl, &dte->dte_xid, version);
+	/* Skip the DTX that may has been committed or aborted. */
+	if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
+		D_GOTO(out, rc = DSHR_IGNORE);
+
 	if (mbs->dm_flags & DMF_COLL_TARGET) {
 		rc = dtx_coll_prep(cont->sc_pool_uuid, oid, &dte->dte_xid, mbs,
 				   dss_get_module_info()->dmi_tgt_id, dte->dte_ver,
