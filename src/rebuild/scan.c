@@ -1188,11 +1188,6 @@ rebuild_scanner(void *data)
 
 	ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
 
-	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
-	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
 	if (!is_rebuild_scanning_tgt(rpt)) {
 		D_DEBUG(DB_REBUILD, DF_RB " skip scan\n", DP_RB_RPT(rpt));
 		D_GOTO(out, rc = 0);
@@ -1298,6 +1293,12 @@ rebuild_scan_leader(void *data)
 	}
 
 do_scan:
+	D_INFO(DF_RB " cleanup orphan DTX before rebuild scanning\n", DP_RB_RPT(rpt));
+	rc = dtx_resync_start(rpt->rt_pool, rpt->rt_pool->sp_dtx_resync_version, RESYNC_FOR_ORPHAN,
+			      true);
+	if (rc != 0)
+		goto out;
+
 	D_INFO(DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, rebuild_scanner, rpt,
