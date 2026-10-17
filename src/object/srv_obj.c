@@ -3155,6 +3155,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0, orw->orw_map_ver,
 			       &orw->orw_oid, NULL, 0, dtx_flags, NULL, &dth);
 		if (rc == 0) {
+			if (dth->dth_for_migration)
+				dth->dth_epoch = orw->orw_epoch;
 			rc = obj_local_rw(rpc, &ioc, dth);
 			rc = dtx_end(dth, ioc.ioc_coc, rc);
 		}
@@ -3513,6 +3515,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		       NULL, &dth);
 	if (rc != 0)
 		goto failed;
+
+	if (dth->dth_for_migration)
+		dth->dth_epoch = param.ip_epr.epr_hi;
 
 re_pack:
 	rc = ds_obj_enum_pack(&param, type, recursive, anchors, enum_arg, vos_iterate, dth);
