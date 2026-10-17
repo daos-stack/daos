@@ -29,6 +29,8 @@ func TestStorageCommands(t *testing.T) {
 		req.SetHostList([]string{"foo2.com"})
 		return req
 	}
+	removeSuperblockReq := &control.RemoveSuperblockReq{EngineIndex: 1}
+	removeSuperblockReq.SetHostList([]string{"foo2.com"})
 
 	runCmdTests(t, []cmdTest{
 		{
@@ -153,6 +155,36 @@ func TestStorageCommands(t *testing.T) {
 			"Add NVMe device; long opts",
 			"storage nvme-add-device --host-list foo2.com --pci-address 0000:80:00.0 --engine-index 1 --tier-index 0",
 			printRequest(t, nvmeAddDeviceReq().WithStorageTierIndex(0)),
+			nil,
+		},
+		{
+			"Remove superblock; no engine index",
+			"storage remove-superblock -l foo2.com",
+			"",
+			errors.New("required flag"),
+		},
+		{
+			"Remove superblock; 0 hosts in hostlist",
+			"storage remove-superblock --engine-index 1",
+			"",
+			errors.New("expects a single host"),
+		},
+		{
+			"Remove superblock; 2 hosts in hostlist",
+			"storage remove-superblock -l foo[1,2].com --engine-index 1",
+			"",
+			errors.New("expects a single host"),
+		},
+		{
+			"Remove superblock; short opts",
+			"storage remove-superblock -l foo2.com -e 1",
+			printRequest(t, removeSuperblockReq),
+			nil,
+		},
+		{
+			"Remove superblock; long opts",
+			"storage remove-superblock --host-list foo2.com --engine-index 1",
+			printRequest(t, removeSuperblockReq),
 			nil,
 		},
 		{
