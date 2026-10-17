@@ -1328,9 +1328,9 @@ abort:
 		 */
 		vos_dtx_cleanup(dth, true);
 		if (dlh->dlh_coll)
-			dtx_coll_abort(cont, dlh->dlh_coll_entry, dth->dth_epoch);
+			dtx_coll_abort(cont, dlh->dlh_coll_entry, dth->dth_epoch, dth->dth_ver);
 		else
-			dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
+			dtx_abort(cont, &dth->dth_dte, dth->dth_epoch, dth->dth_ver);
 		aborted = true;
 	}
 
@@ -1870,7 +1870,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, false);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, DCI_RESENT);
 	switch (rc) {
 	case DTX_ST_INITED:
 		return -DER_INPROGRESS;
