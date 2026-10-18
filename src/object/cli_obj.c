@@ -4515,6 +4515,19 @@ obj_list_obj_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
 	grp = dc_obj_anchor2shard(anchor) / obj_get_replicas(obj_auxi->obj);
 	if (!daos_anchor_is_eof(anchor)) {
 		D_DEBUG(DB_IO, "More in grp %d\n", grp);
+		/*
+		 * Replicated-object migration enumerates one shard at a time and
+		 * resumes with VOS anchors returned by that shard. Those anchors are
+		 * only meaningful on the shard that produced them: the recx anchor
+		 * is the last visible extent, and replicas split/merge extents
+		 * differently, so re-probing it on another replica silently skips
+		 * extents. Record the shard that served this batch so the migration
+		 * can pin the following batches to it via DIOF_TO_SPEC_SHARD.
+		 */
+		if (task->dt_result == 0 && !obj_auxi->is_ec_obj &&
+		    (daos_anchor_get_flags(anchor) & DIOF_FOR_MIGRATION) &&
+		    obj_auxi->req_tgts.ort_shard_tgts != NULL)
+			dc_obj_shard2anchor(anchor, obj_auxi->req_tgts.ort_shard_tgts[0].st_shard);
 	} else if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
 		   grp + 1 < obj_auxi->obj->cob_grp_nr) {
 		D_DEBUG(DB_IO, DF_OID " next grp %u total grp %u\n",
