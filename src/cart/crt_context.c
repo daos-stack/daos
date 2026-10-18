@@ -134,6 +134,29 @@ crt_context_ep_empty(crt_context_t crt_ctx)
 	return rc == 0;
 }
 
+/* helper function to add counters */
+static void
+crt_context_add_counters(struct crt_context *ctx)
+{
+	char *prov;
+	int   idx;
+	int   rc = 0;
+
+	D_ASSERT(ctx != NULL);
+
+	prov = crt_provider_name_get(ctx->cc_hg_ctx.chc_provider);
+	idx  = ctx->cc_idx;
+
+#define X(name, type, desc, unit_desc)                                                             \
+	rc = d_tm_add_metric(&ctx->cc_metrics.name, type, desc, unit_desc, "net/%s/%s/ctx_%u",     \
+			     prov, #name, idx);                                                    \
+	if (rc != 0)                                                                               \
+		DL_WARN(rc, "Failed to add metric " #name "\n");
+
+	CRT_METRICS_LIST;
+#undef X
+}
+
 static int
 crt_context_init(struct crt_context *ctx)
 {
@@ -272,56 +295,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 
 	/** initialize sensors for servers */
 	if (crt_gdata.cg_use_sensors && crt_is_service()) {
-		int	ret;
-		char	*prov;
-
-		prov = crt_provider_name_get(ctx->cc_hg_ctx.chc_provider);
-		ret = d_tm_add_metric(&ctx->cc_timedout, D_TM_COUNTER,
-				      "Total number of timed out RPC requests",
-				      "reqs", "net/%s/req_timeout/ctx_%u",
-				      prov, ctx->cc_idx);
-		if (ret)
-			DL_WARN(ret, "Failed to create timed out req counter");
-
-		ret = d_tm_add_metric(&ctx->cc_timedout_uri, D_TM_COUNTER,
-				      "Total number of timed out URI lookup "
-				      "requests", "reqs",
-				      "net/%s/uri_lookup_timeout/ctx_%u",
-				      prov, ctx->cc_idx);
-		if (ret)
-			DL_WARN(ret, "Failed to create timed out uri req counter");
-
-		ret = d_tm_add_metric(&ctx->cc_failed_addr, D_TM_COUNTER,
-				      "Total number of failed address "
-				      "resolution attempts", "reqs",
-				      "net/%s/failed_addr/ctx_%u",
-				      prov, ctx->cc_idx);
-		if (ret)
-			DL_WARN(ret, "Failed to create failed addr counter");
-
-		ret = d_tm_add_metric(&ctx->cc_net_glitches, D_TM_COUNTER,
-				      "Total number of network glitch errors", "errors",
-				      "net/%s/glitch/ctx_%u", prov, ctx->cc_idx);
-		if (ret)
-			DL_WARN(ret, "Failed to create network glitch counter");
-
-		ret = d_tm_add_metric(&ctx->cc_swim_delay, D_TM_STATS_GAUGE,
-				      "SWIM delay measurements", "delay",
-				      "net/%s/swim_delay/ctx_%u", prov, ctx->cc_idx);
-		if (ret)
-			DL_WARN(ret, "Failed to create SWIM delay gauge");
-
-		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_waitq_depth, D_TM_GAUGE,
-				      "Current count of enqueued RPCs", "rpcs",
-				      "net/%s/waitq_depth/ctx_%u", prov, ctx->cc_idx);
-		if (ret)
-			DL_WARN(ret, "Failed to create rpc waitq gauge");
-
-		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_quota_exceeded, D_TM_COUNTER,
-				      "Total number of exceeded RPC quota errors", "errors",
-				      "net/%s/quota_exceeded/ctx_%u", prov, ctx->cc_idx);
-		if (ret)
-			DL_WARN(ret, "Failed to create quota exceeded counter");
+		crt_context_add_counters(ctx);
 	}
 
 	if (crt_is_service() && crt_gdata.cg_auto_swim_disable == 0 &&
@@ -501,12 +475,40 @@ crt_rpc_completed(struct crt_rpc_priv *rpc_priv)
 void
 crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 {
+	struct crt_context *ctx;
+	struct crt_cb_info  cbinfo;
+
 	D_ASSERT(rpc_priv != NULL);
+	ctx = rpc_priv->crp_pub.cr_ctx;
 
 	if (crt_rpc_completed(rpc_priv)) {
+		CRT_METRIC_INC(ctx, CM_RPC_DOUBLE_COMPLETE);
 		crt_rpc_unlock(rpc_priv);
 		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
 		return;
+	}
+
+	cbinfo.cci_rpc = &rpc_priv->crp_pub;
+	cbinfo.cci_arg = rpc_priv->crp_arg;
+	cbinfo.cci_rc  = rc;
+
+	if (cbinfo.cci_rc == 0)
+		cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
+
+	if (cbinfo.cci_rc != 0)
+		RPC_CWARN(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv, "failed, " DF_RC "\n",
+			  DP_RC(cbinfo.cci_rc));
+
+	switch (cbinfo.cci_rc) {
+	case DER_SUCCESS:
+		CRT_METRIC_INC(ctx, CM_RPC_COMPLETED);
+		break;
+	case -DER_TIMEDOUT:
+		CRT_METRIC_INC(ctx, CM_RPC_TIMEDOUT);
+		break;
+	default:
+		CRT_METRIC_INC(ctx, CM_RPC_COMPLETED_ERR);
+		break;
 	}
 
 	if (rc == -DER_CANCELED)
@@ -521,18 +523,6 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 	crt_rpc_unlock(rpc_priv);
 
 	if (rpc_priv->crp_complete_cb != NULL) {
-		struct crt_cb_info	cbinfo;
-
-		cbinfo.cci_rpc = &rpc_priv->crp_pub;
-		cbinfo.cci_arg = rpc_priv->crp_arg;
-		cbinfo.cci_rc = rc;
-		if (cbinfo.cci_rc == 0)
-			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
-
-		if (cbinfo.cci_rc != 0)
-			RPC_CWARN(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,
-				  "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
-
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: "
 			  DF_RC "\n",
@@ -1147,9 +1137,6 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
-	if (crt_gdata.cg_use_sensors)
-		d_tm_inc_counter(crt_ctx->cc_timedout, 1);
-
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_INITED:
 	case RPC_STATE_QUEUED:
@@ -1170,8 +1157,8 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			 container_of(ul_req, struct crt_rpc_priv, crp_pub), ul_in->ul_grp_id,
 			 ul_in->ul_rank, ul_req->cr_ep.ep_rank);
 
-		if (crt_gdata.cg_use_sensors)
-			d_tm_inc_counter(crt_ctx->cc_timedout_uri, 1);
+		CRT_METRIC_INC(crt_ctx, CM_URI_LOOKUP_TIMEDOUT);
+
 		crt_req_abort(ul_req);
 		/*
 		 * don't crt_rpc_complete_and_unlock rpc_priv here, because crt_req_abort
@@ -1410,7 +1397,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 
 	if (quota_rc == -DER_QUOTA_LIMIT) {
 		d_list_add_tail(&rpc_priv->crp_waitq_link, &crt_ctx->cc_quotas.rpc_waitq);
-		d_tm_inc_gauge(crt_ctx->cc_quotas.rpc_waitq_depth, 1);
+		CRT_METRIC_INC_GAUGE(crt_ctx, CM_RPC_WAITQ_DEPTH, 1);
 	}
 
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
@@ -1589,7 +1576,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	D_INIT_LIST_HEAD(&submit_list);
 	if (tmp_rpc != NULL) {
 		add_rpc_to_list(tmp_rpc, &submit_list);
-		d_tm_dec_gauge(crt_ctx->cc_quotas.rpc_waitq_depth, 1);
+		CRT_METRIC_DEC_GAUGE(crt_ctx, CM_RPC_WAITQ_DEPTH, 1);
 	} else {
 		put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPCS);
 	}
@@ -2155,7 +2142,7 @@ get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 	} else {
 		D_DEBUG(DB_TRACE, "Quota limit (%d) reached for quota_type=%d\n",
 			ctx->cc_quotas.limit[quota], quota);
-		d_tm_inc_counter(ctx->cc_quotas.rpc_quota_exceeded, 1);
+		CRT_METRIC_INC(ctx, CM_RPC_QUOTA_EXCEEDED);
 		rc = -DER_QUOTA_LIMIT;
 	}
 
