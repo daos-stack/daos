@@ -976,7 +976,7 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch,
 }
 
 int
-dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
+dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch, uint32_t version)
 {
 	struct dtx_common_args	dca;
 	int			rc;
@@ -987,8 +987,7 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	if (dte->dte_mbs->dm_tgt_cnt == 1)
 		return DTX_ST_PREPARED;
 
-	rc = dtx_rpc(cont, NULL, &dte, 1, DTX_CHECK, epoch, cont->sc_pool->spc_map_version, NULL,
-		     NULL, NULL, false, &dca);
+	rc = dtx_rpc(cont, NULL, &dte, 1, DTX_CHECK, epoch, version, NULL, NULL, NULL, false, &dca);
 
 	D_CDEBUG(rc < 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_TRACE,
 		 "Check DTX "DF_DTI": rc %d\n", DP_DTI(&dte->dte_xid), rc);
@@ -1777,7 +1776,8 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 }
 
 int
-dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch)
+dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch,
+	       uint32_t version)
 {
 	struct dtx_coll_rpc_args	 dcra = { 0 };
 	int				*results = NULL;
@@ -1795,15 +1795,15 @@ dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 		return DTX_ST_PREPARED;
 
 	if (dce->dce_ranks != NULL)
-		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_CHECK, epoch,
-				       cont->sc_pool->spc_map_version, &dcra);
+		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_CHECK, epoch, version, &dcra);
 
 	if (dce->dce_bitmap != NULL) {
 		clrbit(dce->dce_bitmap, dss_get_module_info()->dmi_tgt_id);
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, epoch,
-					  cont->sc_pool->spc_map_version, DTX_COLL_CHECK,
-					  dce->dce_bitmap_sz, dce->dce_bitmap, &results);
+					  version, DTX_COLL_CHECK, dce->dce_bitmap_sz,
+					  dce->dce_bitmap, &results);
 		if (len < 0) {
+			empty = false;
 			rc1 = len;
 		} else {
 			D_ASSERT(results != NULL);
@@ -1821,6 +1821,8 @@ dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 		rc = dtx_coll_rpc_post(&dcra, rc);
 		if (dce->dce_bitmap != NULL && !empty)
 			dtx_merge_check_result(&rc, rc1);
+	} else if (empty) {
+		rc1 = DTX_ST_PREPARED;
 	}
 
 	D_CDEBUG((rc < 0 && rc != -DER_NONEXIST) || (rc1 < 0 && rc1 != -DER_NONEXIST), DLOG_ERR,

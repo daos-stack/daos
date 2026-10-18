@@ -305,6 +305,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	d_iov_t				 dkey_iov;
 	uint64_t			 epoch;
 	uint64_t			 dkey_hash;
+	uint32_t                         recovery_version = VTS_DTX_VER + 1;
 	char				 dkey_buf[UPDATE_DKEY_SIZE];
 	char				 akey_buf[UPDATE_AKEY_SIZE];
 	char				 update_buf1[UPDATE_BUF_SIZE];
@@ -333,6 +334,9 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	xid = dth->dth_xid;
 
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, &recovery_version, NULL, DCI_RESYNC);
+	assert_rc_equal(rc, -DER_INPROGRESS);
+
 	/* The update DTX is 'prepared'. */
 	vts_dtx_end(dth);
 
@@ -344,8 +348,15 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER - 1);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
-	/* Aborted the update DTX. */
+	/* An older check must not lower the recovery fence installed while the DTX was busy. */
+	recovery_version = VTS_DTX_VER;
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, &recovery_version, NULL, DCI_RESYNC);
+	assert_int_equal(rc, DTX_ST_PREPARED);
 	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	/* Aborted the update DTX. */
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER + 1);
 	assert_rc_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);

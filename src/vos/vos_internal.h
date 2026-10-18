@@ -838,7 +838,8 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
 
 int
-vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force);
+vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, uint32_t version,
+		       bool force);
 
 void
 vos_dtx_post_handle(struct vos_container *cont,

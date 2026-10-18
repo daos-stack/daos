@@ -2067,6 +2067,8 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32
 			 */
 			if (pm_ver != NULL && dae->dae_known_max_version < *pm_ver)
 				dae->dae_known_max_version = *pm_ver;
+			if (dae->dae_dth != NULL || dae->dae_preparing)
+				return -DER_INPROGRESS;
 			break;
 		default:
 			break;
@@ -2745,13 +2747,14 @@ out:
 }
 
 int
-vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force)
+vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, uint32_t version,
+		       bool force)
 {
 	struct dtx_handle      *dth;
-	struct dtx_id           xid        = DAE_XID(dae);
-	daos_epoch_t            epoch      = DAE_EPOCH(dae);
-	uint64_t                start_time = dae->dae_start_time;
-	uint32_t                version    = DAE_VER(dae);
+	struct dtx_id           xid         = DAE_XID(dae);
+	daos_epoch_t            epoch       = DAE_EPOCH(dae);
+	uint64_t                start_time  = dae->dae_start_time;
+	uint32_t                dtx_version = DAE_VER(dae);
 	struct umem_instance   *umm;
 	struct umem_pin_handle *pin_hdl = NULL;
 	d_iov_t                 kiov;
@@ -2782,8 +2785,12 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 			D_GOTO(abort_tx, rc = -DER_NONEXIST);
 
 		if (dae->dae_start_time != start_time || DAE_EPOCH(dae) != epoch ||
-		    DAE_VER(dae) != version)
+		    DAE_VER(dae) != dtx_version)
 			D_GOTO(abort_tx, rc = -DER_NONEXIST);
+
+		/* Recovery may have fenced this entry while pinning or reserving WAL space. */
+		if (version != 0 && version < dae->dae_known_max_version)
+			D_GOTO(abort_tx, rc = -DER_NO_PERM);
 
 		if (vos_dae_is_commit(dae) || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
 			D_GOTO(abort_tx, rc = -DER_NO_PERM);
@@ -2920,7 +2927,7 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch, uint32_
 		D_WARN("Trying to abort in preparing DTX "DF_DTI" by race\n", DP_DTI(dti));
 		dae->dae_aborting = 1;
 	} else {
-		rc = vos_dtx_abort_internal(cont, dae, false);
+		rc = vos_dtx_abort_internal(cont, dae, version, false);
 	}
 
 out:
@@ -3923,7 +3930,7 @@ out:
 		if (dae != NULL) {
 			if (unlikely(dae->dae_preparing && dae->dae_aborting)) {
 				dae->dae_preparing = 0;
-				rc = vos_dtx_abort_internal(cont, dae, true);
+				rc                 = vos_dtx_abort_internal(cont, dae, 0, true);
 				DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
 					  "Delay abort DTX " DF_DTI " (2)", DP_DTI(&dth->dth_xid));
 
