@@ -5,16 +5,21 @@ hosts:
   # server_partition: daos_server
   client_partition: daos_client
   # client_reservation: daos-test
+
 orterun:
   allow_run_as_root: true
+
 mpi_module: mpi/mpich-x86_64
+
 enable_sudo: true
+
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 24 Min test
 timeout: 30M
 setup:
   start_servers: true
   start_agents: true
+
 server_config:
   name: daos_server
   control_log_mask: INFO
@@ -37,21 +42,30 @@ server_config:
       env_vars:
         - FI_UNIVERSE_SIZE=2048
       storage: auto
+
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   size: 90%
+  properties: rd_fac:0,space_rb:0
+
 pool_reserved:
   size: 5%
+  properties: rd_fac:0,space_rb:0
+
 pool_racer:
   size: 5%
+  properties: rd_fac:0,space_rb:0
+
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
   file_oclass: EC_2P1GX
   dir_oclass: RP_2GX
+
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -84,6 +98,7 @@ smoke:
   enable_intercept_lib: true
   enable_remote_logging: false
   enable_scrubber: true
+
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -121,6 +136,7 @@ ior_smoke:
     disable_caching: true
     thread_count: 8
     cores: '0-7'
+
 fio_smoke:
   api:
     - POSIX
@@ -156,8 +172,10 @@ fio_smoke:
     disable_caching: true
     thread_count: 8
     cores: '0-7'
+
 daos_racer:
   runtime: 120
+
 vpic_smoke:
   job_timeout: 10
   nodesperjob:
@@ -177,6 +195,7 @@ vpic_smoke:
     cores: '0-7'
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
+
 lammps_smoke:
   job_timeout: 10
   nodesperjob:
@@ -196,6 +215,7 @@ lammps_smoke:
     cores: '0-7'
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
+
 mdtest_smoke:
   # maximum timeout for a single job in test in minutes
   job_timeout: 10
@@ -227,6 +247,7 @@ mdtest_smoke:
     disable_caching: true
     thread_count: 8
     cores: '0-7'
+
 macsio_smoke:
   job_timeout: 10
   nodesperjob:
@@ -251,6 +272,7 @@ macsio_smoke:
     disable_caching: true
     thread_count: 8
     cores: '0-7'
+
 datamover_smoke:
   job_timeout: 10
   nodesperjob:
@@ -284,13 +306,17 @@ datamover_smoke:
       - 4G
     test_file: "daos:/testFile"
     dfs_destroy: false
+
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
+
 events:
   - "mce: [Hardware Error]: Machine check events logged"
   - "Package temperature above threshold"
+
 monitor:
   - "/usr/bin/free -h"
   - "/usr/bin/vmstat -w"
   - "ps -C daos_engine -o %mem,%cpu,cmd"
+
 enable_telemetry: true
