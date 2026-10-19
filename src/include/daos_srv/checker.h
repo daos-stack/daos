@@ -34,6 +34,12 @@ struct checker_options {
 	enum checker_event cko_non_zero_padding;
 };
 
+struct checker_status {
+	unsigned warnings_num;
+	unsigned errors_num;
+	int      rc; /** return code */
+};
+
 /**
  * @struct checker
  *
@@ -49,7 +55,7 @@ struct checker {
 	int (*ck_indent_set)(struct checker *ck);
 	/** output */
 	int (*ck_vprintf)(struct checker *ck, const char *fmt, va_list ap);
-	unsigned ck_warnings_num;
+	struct checker_status ck_status;
 };
 
 #define CHECKER_ERROR_INFIX   "error: "
@@ -135,11 +141,12 @@ ck_report(void *arg, enum report_opts opts, const char *fmt, ...)
 	case REPORT_ERROR:
 		ck_common_printf(ck, "%s%s", prefix, CHECKER_ERROR_INFIX);
 		ck->ck_vprintf(ck, fmt, args);
+		ck->ck_status.errors_num++;
 		break;
 	case REPORT_WARNING:
 		ck_common_printf(ck, "%s%s", prefix, CHECKER_WARNING_INFIX);
 		ck->ck_vprintf(ck, fmt, args);
-		ck->ck_warnings_num++;
+		ck->ck_status.warnings_num++;
 		break;
 	case REPORT_MSG:
 		ck_common_printf(ck, "%s", prefix);
@@ -211,22 +218,33 @@ ck_report(void *arg, enum report_opts opts, const char *fmt, ...)
 		}                                                                                  \
 	} while (0)
 
+#define CK_WARN_NUM_INC(ck)                                                                        \
+	if (IS_CHECKER(ck)) {                                                                      \
+		++(ck)->ck_status.warnings_num;                                                    \
+	}
+
+#define CK_ERR_NUM_INC(ck)                                                                         \
+	if (IS_CHECKER(ck)) {                                                                      \
+		++(ck)->ck_status.errors_num;                                                      \
+	}
+
 #define CK_APPENDFL_ERR(ck, fmt, ...)                                                              \
-	CK_PRINTF_WO_PREFIX(ck, CHECKER_ERROR_INFIX fmt "\n", __VA_ARGS__)
+	do {                                                                                       \
+		CK_PRINTF_WO_PREFIX(ck, CHECKER_ERROR_INFIX fmt "\n", ##__VA_ARGS__);              \
+		CK_ERR_NUM_INC(ck);                                                                \
+	} while (0)
 
 #define CK_APPENDFL_WARN(ck, fmt, ...)                                                             \
 	do {                                                                                       \
-		if (IS_CHECKER(ck)) {                                                              \
-			CK_PRINTF_WO_PREFIX(ck, CHECKER_WARNING_INFIX fmt "\n", __VA_ARGS__);      \
-			++(ck)->ck_warnings_num;                                                   \
-		}                                                                                  \
+		CK_PRINTF_WO_PREFIX(ck, CHECKER_WARNING_INFIX fmt "\n", ##__VA_ARGS__);            \
+		CK_WARN_NUM_INC(ck);                                                               \
 	} while (0)
 
 #define CK_APPENDL_WARN(ck, msg)                                                                   \
 	do {                                                                                       \
 		if (IS_CHECKER(ck)) {                                                              \
 			CK_PRINT_WO_PREFIX(ck, CHECKER_WARNING_INFIX msg "\n");                    \
-			++(ck)->ck_warnings_num;                                                   \
+			CK_WARN_NUM_INC(ck);                                                       \
 		}                                                                                  \
 	} while (0)
 
@@ -251,6 +269,12 @@ ck_report(void *arg, enum report_opts opts, const char *fmt, ...)
 			CK_PRINTF(ck, CHECKER_ERROR_INFIX fmt ": " DF_RC "\n", __VA_ARGS__,        \
 				  DP_RC(rc));                                                      \
 		}                                                                                  \
+	} while (0)
+
+#define CK_PRINTF_ERR(ck, fmt, ...)                                                                \
+	do {                                                                                       \
+		CK_PRINTF(ck, fmt, ##__VA_ARGS__);                                                 \
+		CK_ERR_NUM_INC(ck);                                                                \
 	} while (0)
 
 /**

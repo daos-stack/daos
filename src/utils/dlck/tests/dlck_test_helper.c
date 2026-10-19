@@ -310,13 +310,11 @@ arg_alloc(struct dlck_engine *engine, int idx, void *input_arg, void **output_ar
 /**
  * Free an execution stream's arguments.
  */
-static int
+static void
 arg_free(void *unused, void **arg)
 {
 	D_FREE(*arg);
 	*arg = NULL;
-
-	return 0;
 }
 
 /** command-line argument parsing */
@@ -453,7 +451,8 @@ main(int argc, char **argv)
 		goto fail_args_free;
 	}
 
-	rc = dlck_engine_exec_all(bundle.engine, exec_one, arg_alloc, &bundle, arg_free, NULL);
+	rc =
+	    dlck_engine_exec_all(bundle.engine, exec_one, arg_alloc, &bundle, arg_free, NULL, NULL);
 	if (rc != DER_SUCCESS) {
 		goto fail_teardown;
 	}
