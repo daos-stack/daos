@@ -12,6 +12,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -3797,8 +3799,9 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 
 func TestServer_MgmtSvc_eraseSysdb(t *testing.T) {
 	for name, tc := range map[string]struct {
-		startDB bool
-		expErr  error
+		startDB             bool
+		removeRaftDirParent bool
+		expErr              error
 	}{
 		"no shutdown callback set": {
 			// sysdb (a bare raft.MockDatabase) was never Start()ed, so it has
@@ -3808,6 +3811,13 @@ func TestServer_MgmtSvc_eraseSysdb(t *testing.T) {
 		},
 		"success": {
 			startDB: true,
+		},
+		"raft dir parent already removed": {
+			// In MD-on-SSD mode the raft dir lives under the control-metadata
+			// root that eraseLocalEngines() already removed by the time
+			// eraseSysdb() runs; its SyncDir() call must tolerate that.
+			startDB:             true,
+			removeRaftDirParent: true,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -3820,6 +3830,12 @@ func TestServer_MgmtSvc_eraseSysdb(t *testing.T) {
 				ctx := test.Context(t)
 				replicas := []*net.TCPAddr{common.LocalhostCtrlAddr()}
 				defer startSysDB(t, ctx, log, replicas, svc)()
+			}
+
+			if tc.removeRaftDirParent {
+				if err := os.RemoveAll(filepath.Dir(svc.sysdb.RaftDir())); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			test.CmpErr(t, tc.expErr, svc.eraseSysdb(""))

@@ -1659,7 +1659,9 @@ func (svc *mgmtSvc) eraseSysdb(leaderStr string) error {
 			pid, leaderStr)
 	}
 
-	if err := common.SyncDir(filepath.Dir(raftDir)); err != nil {
+	// The parent may already be gone: in MD-on-SSD mode it is the control-metadata root
+	// that eraseLocalEngines() removed (and whose own parent it synced).
+	if err := common.SyncDir(filepath.Dir(raftDir)); err != nil && !os.IsNotExist(errors.Cause(err)) {
 		return errors.Wrapf(err, "fsync raft dir parent %q, pid %d [role=%s]",
 			filepath.Dir(raftDir), pid, leaderStr)
 	}
