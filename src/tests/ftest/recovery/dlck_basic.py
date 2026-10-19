@@ -93,6 +93,10 @@ class DlckBasicTest(TestDlck):
         dlck.exit_status_exception = False
         dlck.env["D_FI_CONFIG"] = fault_inject_file
         dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
+
+        self.log_step("Perform dmg system stop to run dlck command")
+        dmg.system_stop()
+
         if self.server_managers[0].manager.job.using_control_metadata:
             dlck.nvme.value = os.path.join(
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
@@ -105,10 +109,11 @@ class DlckBasicTest(TestDlck):
             run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
             dlck.storage.value = "/mnt/dlck_test"
 
-        self.log_step("Perform dmg system stop to run dlck command")
-        dmg.system_stop()
-
         for test_fault in fault_list:
+            if test_fault == "DAOS_FAULT_POOL_OPEN_BIO" and \
+               not self.server_managers[0].manager.job.using_control_metadata:
+                self.log.info("Skipping test fault %s as control metadata is not used", test_fault)
+                continue
             fault_config = {
                 'fault_config': [
                     {key: str(value) for key, value in faults_dict[test_fault].items()}]}
