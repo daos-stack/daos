@@ -80,7 +80,7 @@ struct __attribute__((packed)) crt_req_hdr {
 	uint32_t               crh_flags;
 	uint32_t               crh_src_rank;
 	union crt_dst_rank_tag crh_dst;
-	uint64_t               crh_deadline_unix_sec;
+	uint32_t               crh_deadline_unix_sec;
 };
 
 struct __attribute__((packed)) crt_reply_hdr {
