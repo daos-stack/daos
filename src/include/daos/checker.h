@@ -32,6 +32,12 @@ struct checker_options {
 	enum checker_event cko_non_zero_padding;
 };
 
+struct checker_status {
+	unsigned warnings_num;
+	unsigned errors_num;
+	int      rc; /** return code */
+};
+
 /**
  * @struct checker
  *
@@ -47,7 +53,7 @@ struct checker {
 	int (*ck_indent_set)(struct checker *ck);
 	/** output */
 	int (*ck_vprintf)(struct checker *ck, const char *fmt, va_list ap);
-	unsigned ck_warnings_num;
+	struct checker_status ck_status;
 };
 
 #define CHECKER_ERROR_INFIX   "error: "
@@ -124,15 +130,26 @@ ck_common_printf(struct checker *ck, const char *fmt, ...)
 		}                                                                                  \
 	} while (0)
 
+#define CK_WARN_NUM_INC(ck)                                                                        \
+	if (IS_CHECKER(ck)) {                                                                      \
+		++(ck)->ck_status.warnings_num;                                                    \
+	}
+
+#define CK_ERR_NUM_INC(ck)                                                                         \
+	if (IS_CHECKER(ck)) {                                                                      \
+		++(ck)->ck_status.errors_num;                                                      \
+	}
+
 #define CK_APPENDFL_ERR(ck, fmt, ...)                                                              \
-	CK_PRINTF_WO_PREFIX(ck, CHECKER_ERROR_INFIX fmt "\n", ##__VA_ARGS__)
+	do {                                                                                       \
+		CK_PRINTF_WO_PREFIX(ck, CHECKER_ERROR_INFIX fmt "\n", ##__VA_ARGS__);              \
+		CK_ERR_NUM_INC(ck);                                                                \
+	} while (0)
 
 #define CK_APPENDFL_WARN(ck, fmt, ...)                                                             \
 	do {                                                                                       \
-		if (IS_CHECKER(ck)) {                                                              \
-			CK_PRINTF_WO_PREFIX(ck, CHECKER_WARNING_INFIX fmt "\n", ##__VA_ARGS__);    \
-			++(ck)->ck_warnings_num;                                                   \
-		}                                                                                  \
+		CK_PRINTF_WO_PREFIX(ck, CHECKER_WARNING_INFIX fmt "\n", ##__VA_ARGS__);            \
+		CK_WARN_NUM_INC(ck);                                                               \
 	} while (0)
 
 #define CK_APPENDL(ck, msg) CK_PRINTF_WO_PREFIX(ck, msg "\n")
@@ -147,6 +164,12 @@ ck_common_printf(struct checker *ck, const char *fmt, ...)
 			CK_PRINTF(ck, CHECKER_ERROR_INFIX fmt ": " DF_RC "\n", ##__VA_ARGS__,      \
 				  DP_RC(rc));                                                      \
 		}                                                                                  \
+	} while (0)
+
+#define CK_PRINTF_ERR(ck, fmt, ...)                                                                \
+	do {                                                                                       \
+		CK_PRINTF(ck, fmt, ##__VA_ARGS__);                                                 \
+		CK_ERR_NUM_INC(ck);                                                                \
 	} while (0)
 
 /**

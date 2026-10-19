@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,16 +10,11 @@
 /**
  * Report targets' results.
  *
- * \param[in]	rcs	        Array of return codes for all targets.
+ * \param[in]	sts	        Array of statuses for all targets.
  * \param[in]	targets	        Number of targets.
- * \param[in]	warnings_num	Number of warnings.
- * \param[in]	dp	        Main print utility.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_MISC	Printing error.
- * \retval -DER_*	Other errors.
+ * \param[in]	ck	        Main checker.
  */
 void
-dlck_report_results(int *rcs, unsigned targets, unsigned warnings_num, struct checker *ck);
+dlck_report_results(struct checker_status *sts, unsigned targets, struct checker *ck);
 
 #endif /** __DLCK_REPORT__ */

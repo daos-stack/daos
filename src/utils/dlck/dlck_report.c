@@ -37,13 +37,32 @@ get_separator()
 
 #define DLCK_PRINT_SEPARATOR(ck) CK_PRINTF(ck, "%s\n", get_separator())
 
+static void
+dlck_report_status(struct checker_status *st, struct checker *ck)
+{
+	if (st->errors_num + st->warnings_num != 0) {
+		ck_common_printf(ck, "%u error(s), %u warning(s)", st->errors_num,
+				 st->warnings_num);
+
+		if (st->rc != DER_SUCCESS) {
+			CK_APPENDL_RC(ck, st->rc);
+		} else {
+			CK_APPENDL(ck, ".");
+		}
+	} else {
+		CK_APPENDL_RC(ck, st->rc);
+	}
+}
+
 /**
  * \note This function is called when no other threads are running in parallel. No locks are
  * necessary.
  */
 void
-dlck_report_results(int *rcs, unsigned targets, unsigned warnings_num, struct checker *ck)
+dlck_report_results(struct checker_status *sts, unsigned targets, struct checker *ck)
 {
+	struct checker_status total = {0};
+
 	/** print header */
 	DLCK_PRINT_SEPARATOR(ck);
 	CK_PRINTF(ck, "Targets:\n");
@@ -51,11 +70,15 @@ dlck_report_results(int *rcs, unsigned targets, unsigned warnings_num, struct ch
 
 	/** print records */
 	for (int i = 0; i < targets; ++i) {
-		CK_PRINTFL_RC(ck, rcs[i], "[%d] result", i);
+		CK_PRINTF(ck, "[%d] result: ", i);
+		dlck_report_status(&sts[i], ck);
+		total.errors_num += sts[i].errors_num;
+		total.warnings_num += sts[i].warnings_num;
 	}
 
 	/** print footer */
 	DLCK_PRINT_SEPARATOR(ck);
-	CK_PRINTF(ck, "Total: %u warning(s).\n", warnings_num);
+	CK_PRINTF(ck, "Total: ");
+	dlck_report_status(&total, ck);
 	DLCK_PRINT_SEPARATOR(ck);
 }
