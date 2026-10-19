@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -392,8 +393,16 @@ daos_obj_query_merge(struct obj_query_merge_args *oqma)
 		D_GOTO(out, rc = oqma->oqma_ret);
 	}
 
-	if (*oqma->oqma_tgt_map_ver < oqma->oqma_src_map_ver)
+	if (*oqma->oqma_tgt_map_ver < oqma->oqma_src_map_ver) {
 		*oqma->oqma_tgt_map_ver = oqma->oqma_src_map_ver;
+		/*
+		 * The replying engine is provably alive and ahead of our cached
+		 * map; record it so the caller can seed the pool map refresh with
+		 * it. Server-side callers leave oqma_tgt_map_ver_rank NULL.
+		 */
+		if (oqma->oqma_tgt_map_ver_rank != NULL && oqma->oqma_rpc != NULL)
+			*oqma->oqma_tgt_map_ver_rank = oqma->oqma_rpc->cr_ep.ep_rank;
+	}
 
 	if (oqma->oqma_flags == 0)
 		goto set_max_epoch;

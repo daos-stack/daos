@@ -1452,8 +1452,8 @@ obj_pool_query_cb(tse_task_t *task, void *data)
 }
 
 int
-obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
-		    unsigned int map_ver, tse_task_t **taskp)
+obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj, unsigned int map_ver,
+		    d_rank_t hint_rank, tse_task_t **taskp)
 {
 	tse_task_t		       *task;
 	struct dc_pool		       *pool;
@@ -1465,7 +1465,7 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 	D_ASSERT(pool != NULL);
 
 	dc_pool2hdl_noref(pool, &ph);
-	rc = dc_pool_create_map_refresh_task(ph, map_ver, sched, &task);
+	rc = dc_pool_create_map_refresh_task(ph, map_ver, hint_rank, sched, &task);
 	if (rc != 0)
 		return rc;
 
@@ -1854,7 +1854,17 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	int          rc;
 
 	if (pmap_stale) {
-		rc = obj_pool_query_task(sched, obj, 0, &pool_task);
+		/*
+		 * Seed the map refresh with the engine that supplied the newest
+		 * map version in this request's replies (for a stale query, the
+		 * one that returned the higher version with -DER_STALE): it is
+		 * provably alive and already ahead of our cached map, so the
+		 * refresh need not round robin onto ranks that may be excluded
+		 * (and possibly down) in our stale map. When no reply advanced our
+		 * map version (e.g. the contacted shards timed out), the hint is
+		 * CRT_NO_RANK and normal round robin is used.
+		 */
+		rc = obj_pool_query_task(sched, obj, 0, obj_auxi->map_ver_reply_rank, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
 	}
@@ -3908,6 +3918,24 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 	return rc;
 }
 
+/*
+ * Return the rank currently hosting @shard in the object layout, or CRT_NO_RANK
+ * if the shard index is out of range. Used to identify the engine that replied
+ * with the newest pool map version so the map refresh can be seeded with it.
+ */
+static d_rank_t
+obj_shard_reply_rank(struct dc_object *obj, uint32_t shard)
+{
+	d_rank_t rank = CRT_NO_RANK;
+
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (shard < obj->cob_shards_nr)
+		rank = obj->cob_shards->do_shards[shard].do_target_rank;
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
+	return rank;
+}
+
 static int
 obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 		  struct obj_auxi_args *obj_auxi, void *cb_arg)
@@ -3926,8 +3954,27 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 	 * 2) if any shard failed, store it in obj_auxi->result, the
 	 *    un-retryable error with higher priority.
 	 */
-	if (obj_auxi->map_ver_reply < shard_auxi->map_ver)
+	if (obj_auxi->map_ver_reply < shard_auxi->map_ver) {
 		obj_auxi->map_ver_reply = shard_auxi->map_ver;
+		/*
+		 * A successful reply from this shard carried the newer map
+		 * version, so the shard's engine is alive and ahead of our cached
+		 * map. Record its rank to seed the pool map refresh. Failed or
+		 * timed-out shards (ret != 0) are skipped so the refresh is never
+		 * seeded with a possibly-down rank.
+		 */
+		if (ret == 0)
+			obj_auxi->map_ver_reply_rank =
+			    obj_shard_reply_rank(obj_auxi->obj, shard_auxi->shard);
+	}
+	/*
+	 * A -DER_STALE reply means this engine is alive and already on a newer
+	 * pool map: the ideal seed for the refresh. A down shard times out
+	 * instead, so it never reaches here.
+	 */
+	if (ret == -DER_STALE)
+		obj_auxi->map_ver_reply_rank =
+		    obj_shard_reply_rank(obj_auxi->obj, shard_auxi->shard);
 	if (ret == 0) {
 		if (obj_req_is_ec_cond_fetch(obj_auxi)) {
 			iter_arg->cond_fetch_exist = true;
@@ -5687,6 +5734,7 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 		obj_auxi->initial_shard = UINT32_MAX;
 	obj_auxi->opc = opc;
 	obj_auxi->map_ver_req = map_ver;
+	obj_auxi->map_ver_reply_rank = CRT_NO_RANK;
 	obj_auxi->obj_task = task;
 	obj_auxi->th = th;
 	obj_auxi->obj = obj;
@@ -7751,21 +7799,20 @@ shard_query_key_task(tse_task_t *task)
 
 	api_args = dc_task_get_args(auxi->obj_task);
 	if (args->kqa_dcts != NULL)
-		rc = dc_obj_shard_coll_query(obj_shard, epoch, api_args->flags, auxi->map_ver_req,
-					     obj, api_args->dkey, api_args->akey, api_args->recx,
-					     api_args->max_epoch, args->kqa_coh_uuid,
-					     args->kqa_cont_uuid, &args->kqa_dti,
-					     &auxi->map_ver_reply, args->kqa_dcts, args->kqa_dct_nr,
-					     auxi->cq_args.cqa_coa.coa_max_dct_sz,
-					     auxi->cq_args.cqa_cur.grp_nr, th, task,
-					     &auxi->max_delay, &args->kqa_auxi.enqueue_id);
+		rc = dc_obj_shard_coll_query(
+		    obj_shard, epoch, api_args->flags, auxi->map_ver_req, obj, api_args->dkey,
+		    api_args->akey, api_args->recx, api_args->max_epoch, args->kqa_coh_uuid,
+		    args->kqa_cont_uuid, &args->kqa_dti, &auxi->map_ver_reply,
+		    &auxi->map_ver_reply_rank, args->kqa_dcts, args->kqa_dct_nr,
+		    auxi->cq_args.cqa_coa.coa_max_dct_sz, auxi->cq_args.cqa_cur.grp_nr, th, task,
+		    &auxi->max_delay, &args->kqa_auxi.enqueue_id);
 	else
 		rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, auxi->map_ver_req,
 					    obj, api_args->dkey, api_args->akey, api_args->recx,
 					    api_args->max_epoch, args->kqa_coh_uuid,
 					    args->kqa_cont_uuid, &args->kqa_dti,
-					    &auxi->map_ver_reply, th, task, &auxi->max_delay,
-					    &args->kqa_auxi.enqueue_id);
+					    &auxi->map_ver_reply, &auxi->map_ver_reply_rank, th,
+					    task, &auxi->max_delay, &args->kqa_auxi.enqueue_id);
 
 	return rc;
 }
@@ -7903,6 +7950,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	}
 
 	obj_auxi->map_ver_reply = 0;
+	obj_auxi->map_ver_reply_rank = CRT_NO_RANK;
 	obj_auxi->map_ver_req = map_ver;
 
 	D_DEBUG(DB_IO, "Object Key Query "DF_OID" grp %d/%u map %u\n",

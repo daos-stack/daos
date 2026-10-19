@@ -1045,8 +1045,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		struct daos_cpd_sub_req		*dcsr;
 
 		dcsr = &tx->tx_req_cache[dc_tx_leftmost_req(tx, false)];
-		rc1 = obj_pool_query_task(tse_task2sched(task), dcsr->dcsr_obj,
-					  oco->oco_map_version, &pool_task);
+		rc1  = obj_pool_query_task(tse_task2sched(task), dcsr->dcsr_obj,
+					   oco->oco_map_version, CRT_NO_RANK, &pool_task);
 		if (rc1 != 0) {
 			D_ERROR("Failed to refresh pool map: %d, %d\n", rc1, rc);
 			tx->tx_status = TX_ABORTED;
@@ -2381,7 +2381,8 @@ out_req:
 out:
 	if (rc == -DER_STALE) {
 		dcsr = &tx->tx_req_cache[dc_tx_leftmost_req(tx, false)];
-		rc = obj_pool_query_task(tse_task2sched(task), dcsr->dcsr_obj, 0, &pool_task);
+		rc   = obj_pool_query_task(tse_task2sched(task), dcsr->dcsr_obj, 0, CRT_NO_RANK,
+					   &pool_task);
 		if (rc != 0) {
 			/* It is unnecessary to restart the TX if failed to
 			 * refresh pool map to avoid falling into deap loop.
