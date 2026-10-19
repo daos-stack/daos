@@ -69,11 +69,22 @@ struct cont_ec_agg {
 	uuid_t			ea_cont_uuid;
 	daos_epoch_t		ea_current_eph;
 	daos_epoch_t             ea_rdb_eph;
+	/* time when this leader started tracking the container. A boundary jump larger
+	 * than the tracking age cannot have been observed by this leader, it comes from
+	 * the stale epoch loaded from rdb at leader step-up, so it is not a real stall.
+	 */
+	uint64_t                 ea_start_ts;
 	uint64_t                 ea_warn_slug_ts;
 	struct ec_eph		*ea_server_ephs;
 	d_list_t		ea_list;
 	int			ea_servers_num;
-	uint32_t                 ea_deleted : 1;
+	uint32_t                 ea_deleted : 1,
+	    /* some rank reported eph 0 (its EC aggregation waits for the boundary), re-send the
+	     * boundary in the next cont_agg_eph_sync() even if the minimum epoch did not change.
+	     */
+	    ea_need_refresh                 : 1,
+	    /* a boundary refresh is in flight for the container, see cont_ec_agg_delete() */
+	    ea_refreshing                   : 1;
 };
 
 /*
