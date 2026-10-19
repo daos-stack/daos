@@ -158,7 +158,7 @@ retry_dnf() {
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
                 # shellcheck disable=SC2154
-                send_mail "Command retry successful in $STAGE_NAME after $((attempt + 1)) attempts using ${repo_servers[0]} as initial repo server " \
+                send_mail "INFO: Command retry successful in $STAGE_NAME after $((attempt + 1)) attempts using ${repo_servers[0]} as initial repo server " \
                           "Command:  ${args[*]}\nAttempts: $attempt\nStatus:   $rc"
             fi
             if [ -n "$ARTIFACTORY_URL" ]; then
@@ -186,7 +186,7 @@ retry_dnf() {
         fi
     done
     if [ "$rc" -ne 0 ]; then
-        send_mail "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server " \
+        send_mail "ERROR: Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server " \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
         echo "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server "
         echo "Command:  $*"
@@ -230,7 +230,7 @@ monitor_cmd() {
     fi
     ((duration = SECONDS - start))
     if [ "$duration" -gt "$threshold" ]; then
-        send_mail "Command exceeded ${threshold}s in $STAGE_NAME" \
+        send_mail "WARNING: Command exceeded ${threshold}s in $STAGE_NAME" \
                     "Command:  $*\nReal time: $duration"
     fi
     return 0
@@ -249,7 +249,7 @@ retry_cmd() {
         if [ "$rc" -eq 0 ]; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
-                send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
+                send_mail "INFO: Command retry successful in $STAGE_NAME after $attempt attempts" \
                           "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
             fi
             return 0
@@ -264,7 +264,7 @@ retry_cmd() {
         fi
     done
     if [ "$rc" -ne 0 ]; then
-        send_mail "Command retry failed in $STAGE_NAME after $attempt attempts" \
+        send_mail "ERROR: Command retry failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
         echo "Command retry failed in $STAGE_NAME after $attempt attempts"
         echo "Command:  $*"
@@ -286,7 +286,7 @@ timeout_cmd() {
         if [ "$rc" -eq 0 ]; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
-                send_mail "Command timeout successful in $STAGE_NAME after $attempt attempts" \
+                send_mail "INFO: Command timeout successful in $STAGE_NAME after $attempt attempts" \
                           "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
             fi
             return 0
@@ -300,7 +300,7 @@ timeout_cmd() {
         break
     done
     if [ "$rc" -ne 0 ]; then
-        send_mail "Command timeout failed in $STAGE_NAME after $attempt attempts" \
+        send_mail "ERROR: Command timeout failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
         echo "Command timeout failed in $STAGE_NAME after $attempt attempts"
         echo "Command:  $*"
