@@ -1541,7 +1541,7 @@ out:
 	return rc;
 }
 
-static void
+static int
 cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid);
 
 static int
@@ -1591,28 +1591,30 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		goto out_prop;
 
+	rc = cont_ec_agg_delete(cont->c_svc, cont->c_uuid);
+	if (rc != 0)
+		goto out_prop;
+
 	rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
 	if (rc != 0)
 		goto out_prop;
 
-	cont_ec_agg_delete(cont->c_svc, cont->c_uuid);
+	if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
+		need_destroy_oid_oit_kvs = true;
+	} else {
+		d_iov_t value;
 
-        if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
-                need_destroy_oid_oit_kvs = true;
-        } else {
-                d_iov_t value;
-
-                d_iov_set(&value, NULL, 0);
-                rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
-                if (rc && rc != -DER_NONEXIST) {
-                        DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
-                                 DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
-                        goto out_prop;
-                }
-                /* There was a bug that oit oids might be created already see DAOS-14799 */
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
+		if (rc && rc != -DER_NONEXIST) {
+			DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
+				 DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
+			goto out_prop;
+		}
+		/* There was a bug that oit oids might be created already see DAOS-14799 */
 		if (rc == 0)
 			need_destroy_oid_oit_kvs = true;
-        }
+	}
 
 	/* Destroy oit oids index KVS. */
 	if (need_destroy_oid_oit_kvs) {
@@ -1712,10 +1714,12 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	ec_agg->ea_servers_num = rank_nr;
 	ec_agg->ea_current_eph = 0;
 	ec_agg->ea_rdb_eph     = 0;
+	ec_agg->ea_start_ts     = daos_gettime_coarse();
+	ec_agg->ea_warn_slug_ts = ec_agg->ea_start_ts;
 	for (i = 0; i < rank_nr; i++) {
 		ec_agg->ea_server_ephs[i].rank = doms[i].do_comp.co_rank;
 		ec_agg->ea_server_ephs[i].eph = 0;
-		ec_agg->ea_server_ephs[i].ee_update_ts = daos_gettime_coarse();
+		ec_agg->ea_server_ephs[i].ee_update_ts = ec_agg->ea_start_ts;
 	}
 	d_list_add(&ec_agg->ea_list, &cont_svc->cs_ec_agg_list);
 	*ec_aggp = ec_agg;
@@ -1729,19 +1733,35 @@ out:
 	return rc;
 }
 
-static void
+static int
 cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid)
 {
-	struct cont_ec_agg	*ec_agg;
+	struct cont_ec_agg *ec_agg;
+	int                 retry = 0;
 
-	ec_agg = cont_ec_agg_lookup(svc, cont_uuid);
-	if (ec_agg == NULL)
-		return;
-
-	/* Set ea_deleted flag to destroy it inside cont_agg_eph_leader_ult()
-	 * to avoid list iteration broken.
+	/* A boundary push may create VOS containers. Do not destroy until it completes,
+	 * but bound the wait (cs_lock may held) in case the push keeps retrying on an
+	 * unreachable rank.
 	 */
-	ec_agg->ea_deleted = 1;
+again:
+	d_list_for_each_entry(ec_agg, &svc->cs_ec_agg_list, ea_list) {
+		if (uuid_compare(ec_agg->ea_cont_uuid, cont_uuid) == 0 && ec_agg->ea_refreshing) {
+			if (retry++ < 30) {
+				dss_sleep(300 /* ms, 10s in total */);
+				goto again;
+			}
+			D_DEBUG(DB_MD, DF_CONT ": EC boundary refresh in flight\n",
+				DP_CONT(svc->cs_pool_uuid, cont_uuid));
+			return -DER_BUSY;
+		}
+	}
+
+	/* Defer freeing to cont_agg_eph_sync() to preserve its list iteration. */
+	d_list_for_each_entry(ec_agg, &svc->cs_ec_agg_list, ea_list) {
+		if (uuid_compare(ec_agg->ea_cont_uuid, cont_uuid) == 0)
+			ec_agg->ea_deleted = 1;
+	}
+	return 0;
 }
 
 /**
@@ -1776,6 +1796,9 @@ retry:
 			if (ec_agg->ea_server_ephs[i].eph < eph) {
 				ec_agg->ea_server_ephs[i].eph = eph;
 				ec_agg->ea_server_ephs[i].ee_update_ts = daos_gettime_coarse();
+			} else if (eph == 0 && ec_agg->ea_current_eph != 0) {
+				/* A recovered target of this rank waits for the boundary. */
+				ec_agg->ea_need_refresh = 1;
 			}
 			break;
 		}
@@ -1808,6 +1831,7 @@ struct refresh_vos_agg_eph_arg {
 	uuid_t	pool_uuid;
 	uuid_t  cont_uuid;
 	daos_epoch_t min_eph;
+	bool         create;
 };
 
 int
@@ -1818,9 +1842,19 @@ cont_refresh_vos_agg_eph_one(void *data)
 	int			rc;
 
 	rc = ds_cont_child_lookup(arg->pool_uuid, arg->cont_uuid, &cont_child);
-	if (rc) {
-		DL_CDEBUG(rc != 0 && rc != -DER_SHUTDOWN, DLOG_ERR, DB_MD, rc,
-			  DF_CONT " lookup cont failed", DP_CONT(arg->pool_uuid, arg->cont_uuid));
+	if (rc == -DER_NONEXIST && arg->create) {
+		/* Reintegration may not migrate any records for this container. Only a
+		 * leader push, serialized with destroy, may create the missing container.
+		 */
+		rc = ds_cont_child_open_create(arg->pool_uuid, arg->cont_uuid, &cont_child);
+		DL_CDEBUG(rc != 0 && rc != -DER_SHUTDOWN, DLOG_ERR, DLOG_INFO, rc,
+			  DF_CONT " create missing vos container",
+			  DP_CONT(arg->pool_uuid, arg->cont_uuid));
+		if (rc != 0)
+			return rc;
+	} else if (rc != 0) {
+		DL_CDEBUG(rc != -DER_SHUTDOWN, DLOG_ERR, DB_MD, rc, DF_CONT " lookup cont failed",
+			  DP_CONT(arg->pool_uuid, arg->cont_uuid));
 		return rc;
 	}
 
@@ -1838,8 +1872,7 @@ cont_refresh_vos_agg_eph_one(void *data)
 }
 
 int
-ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
-			    daos_epoch_t eph)
+ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid, daos_epoch_t eph, bool create)
 {
 	struct refresh_vos_agg_eph_arg	arg;
 	static uint64_t                 cnt;
@@ -1849,10 +1882,12 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.min_eph = eph;
+	arg.create  = create;
 
-	rc = ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				     PO_COMP_ST_DOWNOUT, cont_refresh_vos_agg_eph_one,
-				     &arg, DSS_ULT_FL_PERIODIC);
+	/* VOS container creation may yield and needs a deep stack. */
+	rc = ds_pool_thread_collective(
+	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+	    cont_refresh_vos_agg_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
 	if (rc) {
 		DL_ERROR(rc, DF_CONT ": refresh ec_agg_eph " DF_X64 " failed.",
 			 DP_CONT(pool_uuid, cont_uuid), eph);
@@ -1996,6 +2031,7 @@ out_lock:
 	return rc;
 }
 
+#define EC_AGG_EPH_INTV (10ULL * 1000) /* seconds interval to check*/
 static void
 cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 {
@@ -2030,12 +2066,15 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			rc = cont_agg_eph_load(svc, ec_agg->ea_cont_uuid, &ec_agg->ea_rdb_eph);
 			if (rc) {
 				if (rc == -DER_NONEXIST) {
+					/* destroyed, free the entry in the next round */
+					ec_agg->ea_deleted = 1;
 					DL_INFO(rc, DF_CONT " container skipped",
 						DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
 					continue;
 				}
 				DL_ERROR(rc, DF_CONT ": cont_agg_eph_load failed.",
 					 DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
+				continue;
 			}
 		}
 
@@ -2070,11 +2109,21 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 				min_eph = ec_agg->ea_server_ephs[i].eph;
 		}
 
+		/* some rank reported nothing, it may lack the VOS container */
+		if (min_eph == 0)
+			ec_agg->ea_need_refresh = 1;
+
 		/* for reboot case the ea_rdb_eph possibly higher than min_eph */
 		if (min_eph < ec_agg->ea_rdb_eph)
 			min_eph = ec_agg->ea_rdb_eph;
 
-		if (min_eph == ec_agg->ea_current_eph && ec_agg->ea_current_eph != 0)
+		/* A recovered target may report nothing, or its zero epoch may be suppressed
+		 * by the rank's last report. Periodically resend even an unchanged boundary
+		 * while some rank waits for it, once rebuild is done and reclaim is enabled.
+		 */
+		if (min_eph == ec_agg->ea_current_eph && ec_agg->ea_current_eph != 0 &&
+		    (!warn_sluggish || !ec_agg->ea_need_refresh ||
+		     cur_ts - ec_agg->ea_refresh_ts < EC_AGG_EPH_INTV * 3 / 1000))
 			continue;
 
 		/**
@@ -2094,6 +2143,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			ec_agg->ea_warn_slug_ts = cur_ts;
 
 		} else if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600 &&
+			   (cur_ts - ec_agg->ea_start_ts) >= (new_eph - cur_eph) &&
 			   (cur_ts - ec_agg->ea_warn_slug_ts) >= 600) {
 			ec_agg->ea_warn_slug_ts = cur_ts;
 			D_WARN(DF_CONT ": Sluggish EC boundary reporting. "
@@ -2110,6 +2160,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 						&ec_agg->ea_rdb_eph);
 			if (rc) {
 				if (rc == -DER_NONEXIST) {
+					ec_agg->ea_deleted = 1;
 					DL_INFO(rc, DF_CONT " container skipped",
 						DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
 					continue;
@@ -2117,11 +2168,19 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 				DL_ERROR(rc,
 					 DF_CONT ": rdb_tx_update ec_agg_eph " DF_X64 " failed.",
 					 DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid), min_eph);
+				continue;
 			}
 		}
 
+		if (ec_agg->ea_deleted)
+			continue;
+
+		/* clear before the push (which yields), a request arriving meanwhile is kept */
+		ec_agg->ea_need_refresh = 0;
+		ec_agg->ea_refreshing   = 1;
 		rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg->ea_cont_uuid, min_eph,
 						svc->cs_ec_leader_ephs_req);
+		ec_agg->ea_refreshing = 0;
 		if (rc) {
 			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
 				  DF_CONT ": refresh failed",
@@ -2144,6 +2203,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			continue;
 		}
 		ec_agg->ea_current_eph = min_eph;
+		ec_agg->ea_refresh_ts  = daos_gettime_coarse();
 	}
 	ABT_mutex_unlock(svc->cs_ec_agg_mutex);
 
@@ -2166,7 +2226,6 @@ ds_cont_svc_refresh_agg_eph(uuid_t pool_uuid)
 	return 0;
 }
 
-#define EC_AGG_EPH_INTV (10ULL * 1000) /* seconds interval to check*/
 static void
 cont_agg_eph_leader_ult(void *arg)
 {
@@ -6278,9 +6337,9 @@ ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid)
 		/* Forbid to destroy non-orphan container. */
 		D_GOTO(out, rc = -DER_BUSY);
 
-	rc = cont_destroy_bcast(dss_get_module_info()->dmi_ctx, svc, uuid);
+	rc = cont_ec_agg_delete(svc, uuid);
 	if (rc == 0)
-		cont_ec_agg_delete(svc, uuid);
+		rc = cont_destroy_bcast(dss_get_module_info()->dmi_ctx, svc, uuid);
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,

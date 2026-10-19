@@ -69,11 +69,16 @@ struct cont_ec_agg {
 	uuid_t			ea_cont_uuid;
 	daos_epoch_t		ea_current_eph;
 	daos_epoch_t             ea_rdb_eph;
+	/* Ignore boundary jumps predating this leader's tracking. */
+	uint64_t                 ea_start_ts;
+	uint64_t                 ea_refresh_ts;
 	uint64_t                 ea_warn_slug_ts;
 	struct ec_eph		*ea_server_ephs;
 	d_list_t		ea_list;
 	int			ea_servers_num;
-	uint32_t                 ea_deleted : 1;
+	uint32_t                 ea_deleted : 1, ea_refreshing : 1,
+	    /* some rank waits for the boundary (reported 0 or nothing), see cont_agg_eph_sync() */
+	    ea_need_refresh : 1;
 };
 
 /*
@@ -165,6 +170,10 @@ struct cont_iv_prop {
 
 struct cont_iv_agg_eph {
 	daos_epoch_t	eph;
+	/* Reports carry the reporter rank. For boundaries, CRT_NO_RANK allows a push to create
+	 * missing VOS containers; fetch replies use 0 to disallow creation, not as
+	 * a reporter rank. Only leader pushes are tracked against container destroy.
+	 */
 	d_rank_t	rank;
 };
 
@@ -275,8 +284,8 @@ int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint64_t *snapshots, int snap_count);
 int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
 int ds_cont_tgt_close(uuid_t pool_uuid, uuid_t cont_hdl_uuid);
-int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
-				daos_epoch_t eph);
+int
+    ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid, daos_epoch_t eph, bool create);
 int ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *prop);
 
 /* oid_iv.c */
