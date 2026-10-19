@@ -34,6 +34,8 @@ struct vos_container;
 struct vos_object {
 	/** llink for daos lru cache */
 	struct daos_llink		obj_llink;
+	d_list_t                        obj_iter_link;
+	unsigned int                    obj_iter_refs;
 	/** Cache of incarnation log */
 	struct vos_ilog_info		obj_ilog_info;
 	/** Key for searching, object ID within a container */
@@ -121,6 +123,10 @@ vos_obj_release(struct vos_object *obj, uint64_t flags, bool evict);
 
 /** Evict an object reference from the cache */
 void vos_obj_evict(struct vos_object *obj);
+
+void vos_obj_iter_hold(struct vos_object *obj);
+void vos_obj_iter_release(struct vos_object *obj);
+bool vos_obj_is_iterated(struct vos_container *cont, daos_unit_oid_t oid);
 
 int vos_obj_evict_by_oid(struct vos_container *cont, daos_unit_oid_t oid);
 
