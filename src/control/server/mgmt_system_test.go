@@ -733,12 +733,8 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 }
 
 // mgmtSystemTestSetupSelfAddr is a variant of mgmtSystemTestSetup that lets the caller
-// control which address the system db considers to be "self" (svc.sysdb.ReplicaAddr()).
-// By default (mgmtSystemTestSetup) this is an address-less localhost placeholder that
-// never matches any configured member host, so getPeersAndFanout()'s self/replica-peer
-// rank exclusion (see Section 4.6 of the MD-on-SSD system erase design doc) never
-// actually excludes anything. Passing a selfAddr that matches one of mbs' hosts (e.g.
-// test.MockHostAddr(1)) allows that exclusion behavior to be exercised.
+// control which address the system db considers to be "self" (svc.sysdb.ReplicaAddr()),
+// to exercise getPeersAndFanout()'s self/replica-peer rank exclusion.
 func mgmtSystemTestSetupSelfAddr(t *testing.T, l logging.Logger, mbs system.Members, selfAddr *net.TCPAddr, r ...[]*control.HostResponse) *mgmtSvc {
 	t.Helper()
 
@@ -3604,45 +3600,37 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		nilReq         bool
-		forwarded      bool
-		notLeader      bool
-		skipDBStart    bool  // leave sysdb un-Start()ed to exercise eraseSysdb()'s Stop() failure path
-		selfHostIdx    int32 // index (per test.MockHostAddr) of the "self" leader host; 0 = default
-		ranks          string
-		hosts          string
-		members        system.Members
-		mResps         []*control.HostResponse
-		expMembers     system.Members
-		expResults     []*sharedpb.RankResult
-		expAbsentRanks string
-		expAbsentHosts string
-		expErr         error
+		nilReq          bool
+		forwarded       bool
+		notLeader       bool
+		skipDBStart     bool  // leave sysdb un-Start()ed to exercise eraseSysdb()'s Stop() failure path
+		selfHostIdx     int32 // index (per test.MockHostAddr) of the "self" leader host; 0 = default
+		ranks           string
+		hosts           string
+		members         system.Members
+		mResps          []*control.HostResponse
+		expMembers      system.Members
+		expResults      []*sharedpb.RankResult
+		expAbsentRanks  string
+		expAbsentHosts  string
+		expErr          error
+		expRestartArmed bool // whether a control plane restart should be scheduled
 	}{
 		"nil req": {
 			nilReq: true,
 			expErr: errors.New("nil request"),
 		},
 		"external request on non-leader replica is redirected": {
-			// Simulates an external (e.g. dmg) request landing on a non-leader
-			// replica; the request context carries no "server" component, so
-			// leader-only enforcement kicks in and the client-redirectable
-			// ErrNotLeader is returned rather than silently erasing only the
-			// local replica's engines.
+			// No "server" component on the request, so leader-only enforcement
+			// redirects to the leader instead of erasing the local replica.
 			notLeader: true,
 			expErr:    &system.ErrNotLeader{},
 		},
 		"forwarded request from leader takes replica-only path on non-leader replica": {
-			// Simulates the MS leader forwarding a per-replica erase request
-			// (see eraseReplicas()) directly to a non-leader peer; the request
-			// context carries the "server" component, so it is allowed to run
-			// locally (eraseLocalEngines()) instead of being redirected back to
-			// the leader (which would occur if checkLeaderRequest were used).
-			// sysdb is deliberately left un-Start()ed here (skipDBStart) so that
-			// eraseSysdb()'s Stop() call fails deeper in the call chain (after
-			// passing the replica-only check) - proving that the "server"
-			// component correctly bypassed leader-only enforcement rather than
-			// returning *system.ErrNotLeader.
+			// "server" component on the request allows it to run locally
+			// (eraseLocalEngines()) instead of being redirected to the leader.
+			// sysdb is left un-Start()ed (skipDBStart) so eraseSysdb()'s Stop()
+			// fails after the replica-only check, proving it wasn't redirected.
 			forwarded:   true,
 			notLeader:   true,
 			skipDBStart: true,
@@ -3650,6 +3638,9 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			expErr:      errors.New("no shutdown callback set"),
 		},
 		"unfiltered rank results": {
+			// rank 0's ResetFormatRanks failure must stop the erase before the
+			// point of no return (nothing erased on the MS side yet, so a
+			// restart is not armed and the operation is safely retryable).
 			members: system.Members{
 				mockMember(t, 0, 1, "stopped"),
 				mockMember(t, 1, 1, "stopped"),
@@ -3716,13 +3707,9 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			},
 		},
 		"leader's own host ranks excluded from fanout": {
-			// svc.sysdb's self address matches host 1 (where ranks 0,1 live, see
-			// mockMember() calls below), so getPeersAndFanout() must exclude both
-			// ranks from the ResetFormatRanks fanout request entirely (see Section
-			// 4.6 of the MD-on-SSD system erase design doc); they are instead
-			// erased locally via eraseLocalEngines(), which produces no RankResult
-			// of its own. Only host 2's ranks (2, 3) go through RPC fanout and
-			// appear in the response/get their membership state updated.
+			// Self address matches host 1 (ranks 0,1), so getPeersAndFanout()
+			// excludes those ranks from the fanout; only host 2's ranks (2, 3)
+			// go through RPC fanout and appear in the response.
 			selfHostIdx: 1,
 			members: system.Members{
 				mockMember(t, 0, 1, "stopped"),
@@ -3743,6 +3730,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 				mockMember(t, 2, 2, "awaitformat"),
 				mockMember(t, 3, 2, "awaitformat"),
 			},
+			expRestartArmed: true,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -3756,6 +3744,9 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			} else {
 				svc = mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
 			}
+
+			restartArmedCh := make(chan struct{}, 1)
+			svc.restartControlPlane = func(string, string) { restartArmedCh <- struct{}{} }
 
 			if tc.notLeader {
 				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
@@ -3791,37 +3782,49 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 
 			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
+
+			var restartArmed bool
+			select {
+			case <-restartArmedCh:
+				restartArmed = true
+			case <-time.After(time.Second):
+			}
+			test.AssertEqual(t, tc.expRestartArmed, restartArmed,
+				"control plane restart armed")
 		})
 	}
 }
 
 func TestServer_MgmtSvc_eraseSysdb(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
+	for name, tc := range map[string]struct {
+		startDB bool
+		expErr  error
+	}{
+		"no shutdown callback set": {
+			// sysdb (a bare raft.MockDatabase) was never Start()ed, so it has
+			// no shutdown callback and Stop() must fail cleanly rather than
+			// panic.
+			expErr: errors.New("no shutdown callback set"),
+		},
+		"success": {
+			startDB: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
-	svc := newTestMgmtSvc(t, log)
+			svc := newTestMgmtSvc(t, log)
 
-	t.Run("no shutdown callback set", func(t *testing.T) {
-		// sysdb (a bare raft.MockDatabase) was never Start()ed, so it has no
-		// shutdown callback and Stop() must fail cleanly rather than panic.
-		if err := svc.eraseSysdb(""); err == nil {
-			t.Fatal("expected error erasing a never-started system database")
-		}
-	})
+			if tc.startDB {
+				ctx := test.Context(t)
+				replicas := []*net.TCPAddr{common.LocalhostCtrlAddr()}
+				defer startSysDB(t, ctx, log, replicas, svc)()
+			}
 
-	t.Run("success", func(t *testing.T) {
-		ctx := test.Context(t)
-		replicas := []*net.TCPAddr{common.LocalhostCtrlAddr()}
-		cleanup := startSysDB(t, ctx, log, replicas, svc)
-		defer cleanup()
-
-		// Success path: sysdb is a real, started, single-replica database, so
-		// Stop()/RemoveFiles() should both succeed and the trailing
-		// awaitSync() should return without blocking indefinitely.
-		if err := svc.eraseSysdb(""); err != nil {
-			t.Fatalf("unexpected error: %s", err)
-		}
-	})
+			test.CmpErr(t, tc.expErr, svc.eraseSysdb(""))
+		})
+	}
 }
 
 func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {

@@ -176,7 +176,7 @@ type systemEraseCmd struct {
 func (cmd *systemEraseCmd) Execute(_ []string) error {
 	resp, err := control.SystemErase(cmd.MustLogCtx(), cmd.ctlInvoker, new(control.SystemEraseReq))
 	if err != nil {
-		return err // control api returned an error, disregard response
+		return err
 	}
 
 	if cmd.JSONOutputEnabled() {

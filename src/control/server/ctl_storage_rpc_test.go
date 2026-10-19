@@ -2781,10 +2781,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 }
 
 // mockFormatMetadataEngine is a minimal Engine double used to exercise
-// ControlService.formatMetadata() in isolation, without the full StorageFormat()
-// SCM/NVMe test harness. Only Index() and GetStorage() are overridden; GetStorage()
-// returns a real *storage.Provider wired with a mock Sys so that
-// ControlMetadataEngineNeedsFormat()'s superblock check can be driven per test case.
+// ControlService.formatMetadata() in isolation.
 type mockFormatMetadataEngine struct {
 	MockInstance
 	idx      uint32
@@ -2799,9 +2796,6 @@ func (m *mockFormatMetadataEngine) GetStorage() *storage.Provider {
 	return m.provider
 }
 
-// newMockFormatMetadataEngine builds a mockFormatMetadataEngine whose
-// ControlMetadataEngineNeedsFormat() will report missing/present based on
-// superblockMissing, iff mdPath is non-empty (matching MD-on-SSD configuration).
 func newMockFormatMetadataEngine(log logging.Logger, idx uint32, mdPath string, superblockMissing bool) *mockFormatMetadataEngine {
 	cfg := &storage.Config{ControlMetadata: storage.ControlMetadata{Path: mdPath}}
 	sysProv := sysprov.NewMockSysProvider(log, nil)
@@ -2828,12 +2822,6 @@ func newMockFormatMetadataEngine(log logging.Logger, idx uint32, mdPath string, 
 	}
 }
 
-// TestServer_CtlSvc_formatMetadata verifies ControlService.formatMetadata()'s behavior
-// across host-level (control_metadata root/daos_control missing) and per-engine
-// (individual engine's superblock missing) format-needed scenarios. In particular, it
-// confirms that engines with missing control-metadata subdirectories/superblocks are
-// always (re)formatted regardless of the (now removed) "replace" gating, matching the
-// behavior previously exclusive to --replace.
 func TestServer_CtlSvc_formatMetadata(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mdPathConfigured    bool

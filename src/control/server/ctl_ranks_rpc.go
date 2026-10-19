@@ -266,12 +266,6 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		}
 	}
 
-	for _, ei := range instances {
-		if ei.GetStorage() == nil {
-			return nil, errors.Errorf("instance %d: storage provider not initialized", ei.Index())
-		}
-	}
-
 	if err := svc.harness.eraseEngineFormat(ctx, instances, eraseEngineFormatOpts{
 		stopFirst:         false,
 		wholeMetadataRoot: false,

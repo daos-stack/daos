@@ -166,8 +166,6 @@ func TestSystem_Database_RemoveFiles_RenameGuaranteesCleanRestart(t *testing.T) 
 		t.Fatal("expected RemoveFiles() to return an error removing the renamed-aside copy")
 	}
 
-	// The critical guarantee: regardless of the error above, RaftDir itself must
-	// already be gone (renamed aside) so a restart bootstraps a fresh database.
 	if _, err := os.Stat(raftDir); !os.IsNotExist(err) {
 		t.Fatalf("expected raft dir to be gone, stat returned: %v", err)
 	}

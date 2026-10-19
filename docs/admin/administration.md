@@ -1182,7 +1182,10 @@ MD-on-SSD mode. When an engine's data/meta/wal SSD fails and is replaced offline
 must manually remove the engine's superblock before restarting the server to trigger a format
 request. The command then selectively reformats only the affected engine's control_metadata
 subdirectory, preserving healthy engines' metadata on the same host; `--replace` is only required if
-the engine should rejoin using its previous rank rather than a newly-assigned one.
+the engine should rejoin using its previous rank rather than a newly-assigned one. Reusing the
+previous rank is the common case (e.g. after swapping a failed SSD on the same hardware); a new rank
+is appropriate when the replacement should not inherit the old rank's identity, for example when
+permanently decommissioning that engine slot in favor of different hardware.
 
 An example workflow for SSD failure in MD-on-SSD mode would be:
 

@@ -827,9 +827,11 @@ func (cs *ControlService) formatMetadata(instances []Engine, reformat bool) (boo
 		return true, nil
 	}
 
-	// Check for engines with missing metadata directories. The host-level root already exists
-	// (checked above), so any individual engine subdirectory found missing here has no
-	// surviving state to protect. Such engines are (re)formatted unconditionally.
+	// Check for engines with missing metadata directories. The host-level root already
+	// exists (checked above), so a missing engine subdirectory here means either the
+	// engine has never been formatted, or its storage was deliberately wiped.
+	// Both cases are safe to (re)format without an explicit --replace confirmation,
+	// since there is no metadata left to lose.
 
 	var needFormatIdxs []uint
 	for _, eng := range instances {

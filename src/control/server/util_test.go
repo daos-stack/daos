@@ -251,10 +251,6 @@ func newTestMgmtSvcWithProvider(t *testing.T, log logging.Logger, provider *stor
 	svc := newMgmtSvc(harness, ms, db, nil, events.NewPubSub(ctx, log))
 	svc.cancel = cancel
 	svc.batchInterval = 100 * time.Microsecond // Speed up tests
-	// SystemErase() unconditionally schedules a control plane process restart via
-	// svc.restartControlPlane after a drain delay. Stub it out with a no-op so that
-	// running SystemErase in tests doesn't drain a (non-existent) real gRPC server or
-	// exec() the test binary; see mgmtSvc.execControlPlaneRestart.
 	svc.restartControlPlane = func(string, string) {}
 	svc.startAsyncLoops(ctx)
 	svc.startLeaderLoops(ctx)

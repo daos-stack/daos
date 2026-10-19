@@ -35,11 +35,7 @@ const (
 	batchLoopInterval   = 250 * time.Millisecond
 
 	// defaultGracefulStopTimeout bounds how long execControlPlaneRestart()
-	// will wait for grpcServer.GracefulStop() to drain in-flight RPCs (i.e.
-	// ensure the SystemErase response itself has been fully written to the
-	// wire) before falling back to a hard Stop() and proceeding with the
-	// restart regardless. Exposed as an mgmtSvc field so it can be overridden
-	// (e.g. in unit tests).
+	// will wait for grpcServer.GracefulStop() to drain in-flight RPCs.
 	defaultGracefulStopTimeout = 5 * time.Second
 )
 
@@ -97,12 +93,8 @@ type mgmtSvc struct {
 	grpcServer          *grpc.Server
 	gracefulStopTimeout time.Duration
 	loopWg              sync.WaitGroup
-	// restartControlPlane performs the actual control-plane process restart (draining
-	// the gRPC server then exec()ing) scheduled by SystemErase via
-	// scheduleControlPlaneRestart(). It defaults to execControlPlaneRestart, but is a
-	// field (rather than a direct call) so that unit tests can substitute a no-op,
-	// avoiding the need for a real gRPC server, a real exec() call, or special-casing
-	// those conditions in the production code path.
+	// restartControlPlane is a field rather than a direct call so unit tests
+	// can substitute a no-op. Defaults to execControlPlaneRestart.
 	restartControlPlane func(myPath, leaderStr string)
 }
 
