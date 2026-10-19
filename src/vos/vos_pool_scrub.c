@@ -417,6 +417,7 @@ static int
 sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 {
 	daos_key_t		 chunk_iov = {0};
+	struct dcs_csum_info     orig_csums;
 	uint8_t			*csum_buf = NULL;
 	daos_recx_t		*recx;
 	daos_size_t		 rec_len;
@@ -437,6 +438,16 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 	csum_nr = daos_recx_calc_chunks(*recx, rec_len, chunksize);
 	csum_len = daos_csummer_get_csum_len(sc_csummer(ctx));
 
+	/* Stored csums point into the evtree record, which may be freed while yielding below */
+	orig_csums         = *ctx->sc_csum_to_verify;
+	orig_csums.cs_csum = NULL;
+	if (orig_csums.cs_buf_len > 0) {
+		D_ALLOC(orig_csums.cs_csum, orig_csums.cs_buf_len);
+		if (orig_csums.cs_csum == NULL)
+			return -DER_NOMEM;
+		memcpy(orig_csums.cs_csum, ctx->sc_csum_to_verify->cs_csum, orig_csums.cs_buf_len);
+	}
+
 	/** Create a buffer to calculate the checksum into */
 	D_ALLOC(csum_buf, csum_len);
 
@@ -452,7 +463,7 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 		if (sc_cont_is_stopping(ctx))
 			D_GOTO(done, rc = 0);
 
-		orig_csum = ci_idx2csum(ctx->sc_csum_to_verify, i);
+		orig_csum    = ci_idx2csum(&orig_csums, i);
 		rec_in_chunk = sc_get_rec_in_chunk_at_idx(ctx, i);
 
 		/** set an iov with just the data for the current chunk */
@@ -488,6 +499,7 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 
 done:
 	D_FREE(csum_buf);
+	D_FREE(orig_csums.cs_csum);
 
 	return rc;
 }

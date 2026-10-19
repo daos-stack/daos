@@ -405,7 +405,7 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
 	vos_dth_set(old, is_sysdb);
 
-	/* PROBE_AGAIN is GE: a different entry means ours is gone and children hold stale roots */
+	/* Children are bound to the old entry's subtree; a different entry means it's gone */
 	if (rc == 0 &&
 	    (iter->it_type == VOS_ITER_OBJ || iter->it_type == VOS_ITER_DKEY ||
 	     iter->it_type == VOS_ITER_AKEY) &&
