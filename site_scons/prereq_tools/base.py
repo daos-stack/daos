@@ -598,7 +598,7 @@ class PreReqComponent():
         common_reqs = ['ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
                        'lz4', 'isal', 'isal_crypto', 'argobots']
         client_reqs = ['fused', 'json-c', 'capstone', 'aio']
-        server_reqs = ['pmdk', 'spdk', 'ipmctl']
+        server_reqs = ['pmdk', 'spdk']
         test_reqs = ['cmocka']
 
         reqs = []
