@@ -976,6 +976,11 @@ oi_iter_check_punch(daos_handle_t ih)
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 
+	if (vos_obj_is_iterated(oiter->oit_cont, oid)) {
+		rc = oi_iter_defer_if_busy(oiter, obj, &deferred);
+		return rc == 0 && deferred ? 2 : rc;
+	}
+
 	if (!vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
 				 NULL, &oiter->oit_ilog_info))
 		return 0;

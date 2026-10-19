@@ -3117,6 +3117,9 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
 	daos_handle_t		 ioh;
 	int			 rc;
 
+	if (vos_obj_is_iterated(vos_hdl2cont(coh), oid))
+		return -DER_BUSY;
+
 	iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_recxs = (daos_recx_t *)recx;
 	iod.iod_nr = 1;

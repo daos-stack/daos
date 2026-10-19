@@ -39,6 +39,39 @@ struct obj_lru_key {
 	daos_unit_oid_t		 olk_oid;
 };
 
+static __thread d_list_t iterated_objects;
+
+void
+vos_obj_iter_hold(struct vos_object *obj)
+{
+	if (iterated_objects.next == NULL)
+		D_INIT_LIST_HEAD(&iterated_objects);
+	if (obj->obj_iter_refs++ == 0)
+		d_list_add_tail(&obj->obj_iter_link, &iterated_objects);
+}
+
+void
+vos_obj_iter_release(struct vos_object *obj)
+{
+	D_ASSERT(obj->obj_iter_refs > 0);
+	if (--obj->obj_iter_refs == 0)
+		d_list_del_init(&obj->obj_iter_link);
+}
+
+bool
+vos_obj_is_iterated(struct vos_container *cont, daos_unit_oid_t oid)
+{
+	struct vos_object *obj;
+
+	if (iterated_objects.next == NULL)
+		return false;
+	d_list_for_each_entry(obj, &iterated_objects, obj_iter_link) {
+		if (obj->obj_cont == cont && daos_unit_oid_compare(obj->obj_id, oid) == 0)
+			return true;
+	}
+	return false;
+}
+
 static inline void
 init_object(struct vos_object *obj, daos_unit_oid_t oid, struct vos_container *cont)
 {
@@ -535,6 +568,10 @@ vos_obj_has_other_users(struct vos_container *cont, daos_unit_oid_t oid, bool *o
 	D_ASSERT(other_users != NULL);
 
 	*other_users = false;
+	if (vos_obj_is_iterated(cont, oid)) {
+		*other_users = true;
+		return 0;
+	}
 	occ          = vos_obj_cache_get(cont->vc_pool->vp_sysdb);
 	D_ASSERT(occ != NULL);
 
