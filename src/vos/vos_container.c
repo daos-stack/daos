@@ -401,7 +401,7 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 		rc = daos_errno2der(daos_fail_value_get());
 	}
 	if (rc) {
-		CK_PRINTF(ck, "Container does not exist.\n");
+		CK_PRINTF_ERR(ck, "Container does not exist.\n");
 		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
 			DP_UUID(co_uuid));
 		D_GOTO(exit, rc);
