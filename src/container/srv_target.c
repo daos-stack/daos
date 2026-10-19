@@ -1428,6 +1428,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 			bool *started, struct ds_cont_child **cont_out)
 {
 	struct ds_pool_child	*pool_child;
+	bool                     created = true;
 	int rc;
 
 	pool_child = ds_pool_child_lookup(pool_uuid);
@@ -1451,11 +1452,21 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 		DP_CONT(pool_uuid, cont_uuid));
 
 	rc = vos_cont_create(pool_child->spc_hdl, cont_uuid);
+	if (unlikely(rc == -DER_EXIST)) {
+		/*
+		 * Another sponsor (e.g. migration, IV container open or EC aggregation
+		 * boundary refresh) created it since the cont_child_start() above, which
+		 * can happen if vos_cont_create() yields. Just start it, and do not destroy
+		 * it on failure as it is not ours.
+		 */
+		rc      = 0;
+		created = false;
+	}
 	if (!rc) {
 		rc = cont_child_start(pool_child, cont_uuid, started, cont_out);
 		if (rc == 0) {
 			(*cont_out)->sc_status_pm_ver = pm_ver;
-		} else {
+		} else if (created) {
 			int rc_tmp;
 
 			rc_tmp = vos_cont_destroy(pool_child->spc_hdl, cont_uuid);
@@ -1466,7 +1477,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 	}
 
 	ds_pool_child_put(pool_child);
-	return rc == 0 ? 1 : rc;
+	return rc == 0 ? (created ? 1 : 0) : rc;
 }
 
 int

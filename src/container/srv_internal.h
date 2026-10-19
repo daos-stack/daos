@@ -82,7 +82,9 @@ struct cont_ec_agg {
 	    /* some rank reported eph 0 (its EC aggregation waits for the boundary), re-send the
 	     * boundary in the next cont_agg_eph_sync() even if the minimum epoch did not change.
 	     */
-	    ea_need_refresh                 : 1;
+	    ea_need_refresh                 : 1,
+	    /* a boundary refresh is in flight for the container, see cont_ec_agg_delete() */
+	    ea_refreshing                   : 1;
 };
 
 /*
