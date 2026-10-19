@@ -530,6 +530,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos faults set-param object."""
                 super().__init__("set-param")
+                self.value = FormattedParameter("--value={}", None)
 
     class ObjectSubCommand(CommandWithSubCommand):
         """Defines an object for the daos object sub command."""
