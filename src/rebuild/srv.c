@@ -1103,7 +1103,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op, struct pool_targe
 		 * version, e.g. a reintegrating target is reverted to DOWNOUT by an exclude, which
 		 * changes the layouts of the objects, or any target that this rebuild may have
 		 * migrated data to has been dropped from the layouts without a rebuild of its own,
-		 * e.g. a DOWNOUT->UP target is excluded, or a target is drained/reintegrated after
+		 * e.g. an extending target is excluded, or a target is drained/reintegrated after
 		 * the rebuild version, which may drop the spare this rebuild is migrating data to
 		 * from the write layouts, abort and retry with the new version.
 		 */
@@ -1119,12 +1119,12 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op, struct pool_targe
 				/*
 				 * The retry rebuilds the targets by their status at the new
 				 * version, which might be the opposite of this rebuild, e.g. the
-				 * exclusion rebuild of a DOWN->UP reintegrating target instead of
-				 * the reintegration, log the reason to make it clear.
+				 * exclusion rebuild of an extending target instead of the
+				 * extension, log the reason to make it clear.
 				 */
 				D_INFO(DF_RB ": abort stale rebuild, retry with ver %u, target of "
 					     "the rebuild changed at ver %u, target dropped from "
-					     "layouts (e.g. reintegration aborted) at ver %u\n",
+					     "layouts (e.g. extension aborted) at ver %u\n",
 				       DP_RB_RGT(rgt), max(changed_ver, dropped_ver), changed_ver,
 				       dropped_ver);
 				ABT_rwlock_unlock(pool->sp_lock);
@@ -1860,7 +1860,7 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 
 	/* The status of some targets of the task have been changed after the task version, e.g. a
 	 * reintegrating target is reverted to DOWNOUT by an exclude, then reintegrated again, or
-	 * some targets have been dropped from the layouts, e.g. a DOWNOUT->UP target is excluded,
+	 * some targets have been dropped from the layouts, e.g. an extending target is excluded,
 	 * or some targets have been drained/reintegrated, so the layouts of the task version are
 	 * stale. Rebuild with the version of the change
 	 * instead, otherwise it will be aborted by rebuild_leader_status_check() or rejected on

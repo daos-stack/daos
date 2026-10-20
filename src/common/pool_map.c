@@ -2441,13 +2441,14 @@ pool_map_tgts_changed_after(struct pool_map *map, struct pool_target_id_list *tg
 /**
  * Check whether the layouts of the pool have been changed after pool map version \a ver in
  * a way that is not covered by a rebuild of its own, i.e. a target status has been changed
- * to DOWNOUT, to DRAIN or to UP after \a ver.
+ * to DOWNOUT, to DOWN while being unplaced (see pool_comp_is_unplaced()), to DRAIN or to UP
+ * after \a ver.
  *
  * A rebuild task computes the layouts with pool map version \a ver, it may migrate data to
- * any UP target of the POST_REBUILD layouts, not only to the targets of the task, e.g. to a
- * DOWNOUT->UP reintegrating target. If such a target is excluded, it is dropped from the
- * layouts with its co_fseq kept, i.e. reverted to DOWNOUT, so the rebuild of the exclusion
- * has nothing to do, and the shards that the task has
+ * any UP target of the POST_REBUILD layouts, not only to the targets of the task, e.g. to an
+ * extending or a DOWNOUT->UP reintegrating target. If such a target is excluded, it is
+ * dropped from the layouts with its co_fseq kept, i.e. reverted to DOWNOUT or unplaced DOWN,
+ * so the rebuild of the exclusion has nothing to do, and the shards that the task has
  * migrated to it would be lost once the task is finished. A placed DOWN target is rebuilt by
  * its own rebuild, which also covers such shards, so it is not checked here.
  *
@@ -2484,7 +2485,8 @@ pool_map_tgts_dropped_after(struct pool_map *map, uint32_t ver)
 			comp_ver = comp->co_fseq;
 		else if (comp->co_status == PO_COMP_ST_UP)
 			comp_ver = comp->co_in_ver;
-		else if (comp->co_status == PO_COMP_ST_DOWNOUT)
+		else if (comp->co_status == PO_COMP_ST_DOWNOUT ||
+			 (comp->co_status == PO_COMP_ST_DOWN && pool_comp_is_unplaced(comp)))
 			comp_ver = comp->co_out_ver;
 		else
 			continue;
@@ -2669,7 +2671,9 @@ update_failed_cnt_helper(struct pool_domain *dom,
 
 	if (dom->do_children == NULL) {
 		for (i = 0; i < dom->do_target_nr; ++i) {
-			if (pool_target_is_down(&dom->do_targets[i]))
+			/* an unplaced target never held data, see pool_comp_is_unplaced() */
+			if (pool_target_is_down(&dom->do_targets[i]) &&
+			    !pool_comp_is_unplaced(&dom->do_targets[i].ta_comp))
 				num_failed++;
 		}
 	} else {
@@ -2834,7 +2838,9 @@ pmap_fail_stat_fini(struct pmap_fail_stat *stat)
 static bool
 pmap_comp_failed(struct pool_component *comp)
 {
-	return (comp->co_status == PO_COMP_ST_DOWN) || pool_comp_is_failed_downout(comp);
+	/* an unplaced target never held data, see pool_comp_is_unplaced() */
+	return (comp->co_status == PO_COMP_ST_DOWN && !pool_comp_is_unplaced(comp)) ||
+	       pool_comp_is_failed_downout(comp);
 }
 
 static bool

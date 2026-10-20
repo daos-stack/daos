@@ -141,17 +141,37 @@ pool_comp_is_creation_downout(struct pool_component *comp)
 }
 
 /**
+ * True if the component has never been a member of any object layout, i.e. it was added by
+ * MAP_EXTEND (co_fseq < co_ver, as gen_pool_buf() initializes co_fseq to 1 and co_ver to the
+ * extend map version) and has never become UPIN:
+ * - NEW: not extended yet.
+ * - UP: being extended, or being reintegrated after the following.
+ * - DOWN/DOWNOUT: excluded while being extended. MAP_EXCLUDE keeps its co_fseq, so it stays
+ *   out of the layouts, see comp_is_skipped(), and it is not a failure for the RF check, as
+ *   it never held any authoritative data.
+ * Once it is UPIN, it is a layout member, and MAP_EXCLUDE/MAP_DRAIN bump its co_fseq above
+ * co_ver, so co_fseq < co_ver of an UPIN component does not mean unplaced.
+ */
+static inline bool
+pool_comp_is_unplaced(struct pool_component *comp)
+{
+	return comp->co_status != PO_COMP_ST_UPIN && comp->co_fseq < comp->co_ver;
+}
+
+/**
  * True if the component is a DOWNOUT that resulted from a real failure and rebuild.
  *
  * PO_COMPF_DOWN2OUT is set only by update_tgt_down_drain_to_downout(), which requires the
- * comp to have gone through UPIN -> DOWN, i.e. through MAP_EXCLUDE which bumps co_fseq
- * strictly above co_ver. So a DOWN2OUT comp always has co_fseq > co_ver and is by
- * construction not a creation-time DOWNOUT. DOWN2OUT alone suffices.
+ * comp to have gone through DOWN. A placed comp gets DOWN through MAP_EXCLUDE of UPIN, which
+ * bumps co_fseq strictly above co_ver, so it is not a creation-time DOWNOUT. An unplaced comp
+ * excluded while being extended keeps co_fseq < co_ver, it never held data, so it is not a
+ * failure.
  */
 static inline bool
 pool_comp_is_failed_downout(struct pool_component *comp)
 {
-	return comp->co_status == PO_COMP_ST_DOWNOUT && (comp->co_flags & PO_COMPF_DOWN2OUT);
+	return comp->co_status == PO_COMP_ST_DOWNOUT && (comp->co_flags & PO_COMPF_DOWN2OUT) &&
+	       !pool_comp_is_unplaced(comp);
 }
 
 /**
@@ -163,7 +183,7 @@ static inline bool
 pool_comp_is_drain_downout(struct pool_component *comp)
 {
 	return comp->co_status == PO_COMP_ST_DOWNOUT && !(comp->co_flags & PO_COMPF_DOWN2OUT) &&
-	       !pool_comp_is_creation_downout(comp);
+	       !pool_comp_is_creation_downout(comp) && !pool_comp_is_unplaced(comp);
 }
 
 /**
