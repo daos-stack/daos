@@ -1669,9 +1669,7 @@ func (svc *mgmtSvc) eraseSysdb(leaderStr string) error {
 	return nil
 }
 
-// eraseEngineFormatOpts controls how eraseEngineFormat() wipes an engine's on-disk
-// format state, since its two callers (full-host SystemErase vs. a possibly-partial
-// ResetFormatRanks RPC) need different scope/behavior.
+// eraseEngineFormatOpts controls how eraseEngineFormat() wipes an engine's on-disk format state
 type eraseEngineFormatOpts struct {
 	stopFirst         bool // force-stop before wipe
 	wholeMetadataRoot bool // remove control-metadata root instead of per-instance subdirectory
@@ -1863,8 +1861,8 @@ func (svc *mgmtSvc) eraseNonReplicaEngines(ctx context.Context, fanReq *fanoutRe
 		result.Action = "reset format"
 	}
 
-	if fanResp.Results.Errors() != nil {
-		svc.log.Error("ResetFormatRanks encountered errors")
+	if err := fanResp.Results.Errors(); err != nil {
+		svc.log.Errorf("ResetFormatRanks encountered errors: %s", err)
 	}
 
 	return pbResp, nil
@@ -1938,7 +1936,7 @@ func (svc *mgmtSvc) scheduleControlPlaneRestart(leaderStr string) error {
 
 // execControlPlaneRestart drains the gRPC server via GracefulStop() (falling back to a
 // forced Stop() after svc.gracefulStopTimeout), then exec()s to restart the control
-// plane process. This is the production implementation of svc.restartControlPlane.
+// plane process.
 func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
 	scheduledAt := time.Now()
 

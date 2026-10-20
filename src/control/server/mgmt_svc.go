@@ -93,8 +93,6 @@ type mgmtSvc struct {
 	grpcServer          *grpc.Server
 	gracefulStopTimeout time.Duration
 	loopWg              sync.WaitGroup
-	// restartControlPlane is a field rather than a direct call so unit tests
-	// can substitute a no-op. Defaults to execControlPlaneRestart.
 	restartControlPlane func(myPath, leaderStr string)
 }
 

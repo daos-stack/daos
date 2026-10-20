@@ -3623,16 +3623,12 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			expErr: errors.New("nil request"),
 		},
 		"external request on non-leader replica is redirected": {
-			// No "server" component on the request, so leader-only enforcement
-			// redirects to the leader instead of erasing the local replica.
 			notLeader: true,
 			expErr:    &system.ErrNotLeader{},
 		},
 		"forwarded request from leader takes replica-only path on non-leader replica": {
-			// "server" component on the request allows it to run locally
-			// (eraseLocalEngines()) instead of being redirected to the leader.
-			// sysdb is left un-Start()ed (skipDBStart) so eraseSysdb()'s Stop()
-			// fails after the replica-only check, proving it wasn't redirected.
+			// skipDBStart proves it wasn't redirected: eraseSysdb()'s Stop() fails
+			// locally instead of succeeding on the leader.
 			forwarded:   true,
 			notLeader:   true,
 			skipDBStart: true,
@@ -3640,9 +3636,8 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			expErr:      errors.New("no shutdown callback set"),
 		},
 		"unfiltered rank results": {
-			// rank 0's ResetFormatRanks failure must stop the erase before the
-			// point of no return (nothing erased on the MS side yet, so a
-			// restart is not armed and the operation is safely retryable).
+			// expRestartArmed defaults to false: a failed rank must stop the
+			// erase before the point of no return.
 			members: system.Members{
 				mockMember(t, 0, 1, "stopped"),
 				mockMember(t, 1, 1, "stopped"),
@@ -3709,9 +3704,6 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			},
 		},
 		"leader's own host ranks excluded from fanout": {
-			// Self address matches host 1 (ranks 0,1), so getPeersAndFanout()
-			// excludes those ranks from the fanout; only host 2's ranks (2, 3)
-			// go through RPC fanout and appear in the response.
 			selfHostIdx: 1,
 			members: system.Members{
 				mockMember(t, 0, 1, "stopped"),
