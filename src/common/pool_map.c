@@ -2043,7 +2043,7 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 			if (child->do_comp.co_status &
 			    (PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
 				if (child->do_comp.co_status == PO_COMP_ST_DOWN)
-					child->do_comp.co_flags = PO_COMPF_DOWN2UP;
+					child->do_comp.co_flags |= PO_COMPF_DOWN2UP;
 				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u\n",
 					child->do_comp.co_rank, child->do_comp.co_id,
 					child->do_comp.co_status, status);
@@ -2062,6 +2062,8 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u\n",
 					child->do_comp.co_rank, child->do_comp.co_id,
 					child->do_comp.co_status, status);
+				/* same as a target, see update_tgt_up_to_upin() */
+				child->do_comp.co_flags &= ~(PO_COMPF_DOWN2UP | PO_COMPF_DOWN2OUT);
 				child->do_comp.co_status = status;
 				child->do_comp.co_in_ver = version;
 				*updated = true;
@@ -2401,9 +2403,9 @@ pool_map_node_status_match(struct pool_domain *dom, unsigned int status)
 /**
  * Check whether the status of any target in \a tgts has been changed after pool map version
  * \a ver, e.g. a reintegrating (DOWNOUT->UP) target is reverted to DOWNOUT by an exclude,
- * then is reintegrated (UP) again, or a reintegrating DOWN2UP target is excluded (DOWN). A
- * rebuild task of these targets that has been computed with map version \a ver is stale in
- * that case.
+ * then is reintegrated (UP) again, a reintegrating DOWN2UP target is excluded (DOWN), or a
+ * draining target is excluded (DOWN). A rebuild task of these targets that has been computed
+ * with map version \a ver is stale in that case.
  *
  * The version of the last status change of a target is the max of co_fseq and
  * co_in_ver/co_out_ver (they share the same field), as co_fseq is kept by some changes, e.g.

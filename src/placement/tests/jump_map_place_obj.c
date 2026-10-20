@@ -3267,6 +3267,163 @@ exclude_reintegrating_target_keeps_layout(void **state)
 }
 
 /*
+ * Excluding a draining target, it goes DOWN with a new co_fseq, the same as an UPIN target, and
+ * its data will be rebuilt from the other replicas. The drain is stale, and it can not be
+ * reverted to UPIN anymore.
+ */
+static void
+_exclude_draining_target(uint32_t domain_nr, uint32_t target_nr, daos_oclass_id_t oc,
+			 uint32_t obj_nr)
+{
+	struct jm_test_ctx  ctx;
+	struct pool_target *tgt;
+	struct pool_domain *dom;
+	uint32_t            tgt_ids[32];
+	uint32_t            shard_ids[32];
+	uint32_t           *fseqs;
+	uint32_t            drain_ver;
+	uint32_t            rebuild_nr = 0;
+	uint32_t            i, o;
+	int                 s;
+
+	jtc_init(&ctx, domain_nr, 1, target_nr, oc, g_verbose);
+
+	/* drain rank 0 */
+	jtc_update_targets(&ctx, MAP_DRAIN, 0, target_nr, false);
+	drain_ver = ctx.ver;
+	D_ALLOC_ARRAY(fseqs, target_nr);
+	assert_non_null(fseqs);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DRAIN);
+		assert_int_equal(jtc_tgt_changed_after(&ctx, i, drain_ver), 0);
+	}
+
+	/* rank 0 is excluded by SWIM during draining */
+	dom = pool_map_find_dom_by_rank(ctx.po_map, 0);
+	assert_non_null(dom);
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 0, target_nr, true);
+	assert_true(ctx.ver > drain_ver);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_DOWN);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+		/* a new failure */
+		assert_true(tgt->ta_comp.co_fseq > drain_ver);
+		assert_true(tgt->ta_comp.co_fseq <= ctx.ver);
+		fseqs[i] = tgt->ta_comp.co_fseq;
+		/* the drain is stale, but not the rebuild of the exclusion */
+		assert_true(jtc_tgt_changed_after(&ctx, i, drain_ver) > drain_ver);
+		assert_int_equal(jtc_tgt_changed_after(&ctx, i, ctx.ver), 0);
+	}
+
+	/* no shard is on the DOWN targets, and their data has to be rebuilt */
+	for (o = 0; o < obj_nr; o++) {
+		struct pl_obj_layout *layout;
+		struct daos_obj_md    md = {0};
+		daos_obj_id_t         oid;
+		int                   rc;
+
+		jtc_wb_gen_oid(&oid, o, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &layout));
+		for (s = 0; s < layout->ol_nr; s++) {
+			struct pl_obj_shard *shard = &layout->ol_shards[s];
+
+			assert_int_equal(shard->po_shard, s);
+			assert_true(shard->po_target >= target_nr ||
+				    shard->po_target == (uint32_t)-1);
+		}
+		pl_obj_layout_free(layout);
+
+		md.omd_id  = oid;
+		md.omd_ver = ctx.ver;
+		rc         = pl_obj_find_rebuild(ctx.pl_map, PLT_LAYOUT_VERSION, &md, NULL, ctx.ver,
+						 tgt_ids, shard_ids, ARRAY_SIZE(tgt_ids));
+		assert_true(rc >= 0);
+		rebuild_nr += rc;
+	}
+	assert_true(rebuild_nr > 0);
+
+	/* a failed drain can not revert the DOWN targets to UPIN */
+	jtc_update_targets(&ctx, MAP_REVERT_REBUILD, 0, target_nr, false);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+		assert_int_equal(tgt->ta_comp.co_fseq, fseqs[i]);
+	}
+
+	/* excluding them again is a no-op */
+	drain_ver = ctx.ver;
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 0, target_nr, true);
+	assert_int_equal(ctx.ver, drain_ver);
+
+	/* the rebuild of the exclusion finishes */
+	jtc_update_targets(&ctx, MAP_FINISH_REBUILD, 0, target_nr, true);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_DOWNOUT);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+		assert_int_equal(tgt->ta_comp.co_fseq, fseqs[i]);
+	}
+
+	D_FREE(fseqs);
+	jtc_fini(&ctx);
+}
+
+static void
+exclude_draining_target(void **state)
+{
+	struct jm_test_ctx  ctx;
+	struct pool_target *tgt;
+	uint32_t            drain_ver;
+
+	/* a single draining target excluded by dmg */
+	jtc_init(&ctx, 4, 1, 4, OC_RP_2G1, g_verbose);
+	jtc_update_targets(&ctx, MAP_DRAIN, 1, 1, false);
+	drain_ver = ctx.ver;
+	tgt       = jtc_find_target(&ctx, 1);
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 1, 1, false);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(tgt->ta_comp.co_fseq, ctx.ver);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 1, drain_ver), ctx.ver);
+	/* the rank is not changed by a target exclusion */
+	assert_int_equal(pool_map_find_dom_by_rank(ctx.po_map, 0)->do_comp.co_status,
+			 PO_COMP_ST_UPIN);
+	jtc_fini(&ctx);
+
+	_exclude_draining_target(8, 4, OC_RP_3G2, 500);
+	_exclude_draining_target(10, 4, OC_EC_4P2G2, 500);
+}
+
+/*
+ * A draining target is still readable and writable, so it is not a failure for the RF check.
+ * Once it fails (DRAIN->DOWN), it is a new failure since its new co_fseq.
+ */
+static void
+rf_verify_exclude_draining_target(void **state)
+{
+	struct jm_test_ctx  ctx;
+	struct pool_target *tgt;
+	uint32_t            drain_ver;
+
+	jtc_init(&ctx, 4, 1, 4, OC_RP_2G1, g_verbose);
+	jtc_update_targets(&ctx, MAP_DRAIN, 1, 1, false);
+	drain_ver = ctx.ver;
+	assert_success(pool_map_rf_verify(ctx.po_map, drain_ver, DAOS_PROP_CO_REDUN_RANK, 0));
+
+	/* fails after the container has seen the drain, it is a new failure */
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 1, 1, false);
+	tgt = jtc_find_target(&ctx, 1);
+	assert_int_equal(tgt->ta_comp.co_fseq, ctx.ver);
+	assert_int_equal(pool_map_rf_verify(ctx.po_map, drain_ver, DAOS_PROP_CO_REDUN_RANK, 0),
+			 -DER_RF);
+	assert_success(pool_map_rf_verify(ctx.po_map, drain_ver, DAOS_PROP_CO_REDUN_RANK, 1));
+	/* but not once the container has seen the failure */
+	assert_success(pool_map_rf_verify(ctx.po_map, ctx.ver, DAOS_PROP_CO_REDUN_RANK, 0));
+	jtc_fini(&ctx);
+}
+
+/*
  * A rebuild task may migrate data to any UP target of the POST_REBUILD layouts, not only to the
  * targets of the task, e.g. to a DOWNOUT->UP reintegrating target. If it is excluded then, it is
  * reverted to DOWNOUT with its co_fseq kept, so the rebuild of its exclusion has nothing to do.
@@ -3299,6 +3456,13 @@ dropped_target_stales_rebuild(void **state)
 	/* UPIN->DOWN is rebuilt by its own rebuild */
 	ver = ctx.ver;
 	jtc_update_targets(&ctx, MAP_EXCLUDE, 9, 1, false);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), 0);
+
+	/* so is DRAIN->DOWN */
+	jtc_update_targets(&ctx, MAP_DRAIN, 13, 1, false);
+	ver = ctx.ver;
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 13, 1, false);
+	assert_int_equal(jtc_find_target(&ctx, 13)->ta_comp.co_status, PO_COMP_ST_DOWN);
 	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), 0);
 
 	/* and DOWN2UP->DOWN */
@@ -4550,6 +4714,8 @@ static const struct CMUnitTest tests[] = {
     T("exclude reintegrating target keeps fseq", exclude_reintegrating_target_keeps_fseq),
     T("exclude reintegrating creation-time DOWNOUT target", exclude_reintegrating_creation_downout),
     T("exclude reintegrating target keeps layout", exclude_reintegrating_target_keeps_layout),
+    T("exclude draining target", exclude_draining_target),
+    T("RF check of excluded draining target", rf_verify_exclude_draining_target),
     T("dropped target stales rebuild", dropped_target_stales_rebuild),
 };
 

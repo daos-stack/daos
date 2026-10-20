@@ -91,10 +91,29 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 		switch (target->ta_comp.co_status) {
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DOWNOUT:
-		case PO_COMP_ST_DRAIN:
 			/* Nothing to do, already excluded */
 			D_INFO(DF_MAP ": Skip exclude down " DF_TARGET "\n", DP_MAP(pool_uuid, map),
 			       DP_TARGET(target));
+			break;
+		case PO_COMP_ST_DRAIN:
+			/*
+			 * A draining target fails, its data has to be rebuilt from the other
+			 * replicas instead. It is a new failure, give it a new co_fseq the same as
+			 * an UPIN target, so the drain is stale, and its Fail_reclaim deletes the
+			 * data drained to the spares, the rebuild of the failure may select other
+			 * spares then. The rebuilds of the components changed after the drain start
+			 * are queued after the drain, so remapping it after them is safe.
+			 */
+			target->ta_comp.co_status = PO_COMP_ST_DOWN;
+			target->ta_comp.co_fseq   = ++(*version);
+			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to DOWN fseq %u\n",
+				DP_MAP(pool_uuid, map), DP_TARGET(target), target->ta_comp.co_fseq);
+			if (print_changes)
+				D_PRINT(DF_MAP ": " DF_TARGET " is down during draining.\n",
+					DP_MAP(pool_uuid, map), DP_TARGET(target));
+			D_INFO(DF_MAP ": " DF_TARGET " is down during draining.\n",
+			       DP_MAP(pool_uuid, map), DP_TARGET(target));
+			rc = 1;
 			break;
 		case PO_COMP_ST_UP:
 			/*
