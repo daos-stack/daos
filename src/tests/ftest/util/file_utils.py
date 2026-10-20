@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -65,6 +66,25 @@ def change_file_owner(logger, hosts, filename, owner, group, timeout=15, verbose
         CommandResult: groups of command results from the same hosts with the same return status
     """
     command = command_as_user(get_chown_command(owner, group, file=filename), user)
+    return __run_command(logger, hosts, command, verbose, timeout)
+
+
+def change_file_mode(logger, hosts, filename, mode, timeout=15, verbose=True, user=None):
+    """Change the mode of the specified file on the specified hosts.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
+        filename (str): the file for which to change the mode
+        mode (str): the mode to apply, as chmod accepts it
+        timeout (int, optional): command timeout. Defaults to 15 seconds.
+        verbose (bool, optional): log the command output. Defaults to True.
+        user (str, optional): user to run the command as. Defaults to None.
+
+    Returns:
+        CommandResult: groups of command results from the same hosts with the same return status
+    """
+    command = command_as_user(f"chmod {mode} {filename}", user)
     return __run_command(logger, hosts, command, verbose, timeout)
 
 
