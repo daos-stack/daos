@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include "vts_io.h"
 #include <vos_internal.h>
 #include <daos_srv/container.h>
+#include <daos_api.h>
 
 #define VERBOSE_MSG(...)			\
 {						\
@@ -1936,6 +1937,149 @@ aggregate_37(void **state)
 	cleanup();
 }
 
+struct agg_enum_arg {
+	daos_recx_t ea_recxs[32];
+	int         ea_nr;
+	int         ea_stop_at; /* stop (return 1) after this many entries */
+};
+
+static int
+agg_enum_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct agg_enum_arg *ea = cb_arg;
+
+	assert_int_equal(type, VOS_ITER_RECX);
+	/* Mimic ds_obj_enum_pack(): buffer is full, leave this entry for the next batch */
+	if (ea->ea_stop_at > 0 && ea->ea_nr >= ea->ea_stop_at)
+		return 1;
+
+	assert_true(ea->ea_nr < ARRAY_SIZE(ea->ea_recxs));
+	ea->ea_recxs[ea->ea_nr++] = entry->ie_recx;
+	return 0;
+}
+
+static void
+agg_enum_visible(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey, char *akey,
+		 daos_epoch_t epoch, struct vos_iter_anchors *anchors, struct agg_enum_arg *ea)
+{
+	vos_iter_param_t param = {0};
+	daos_key_t       dkey_iov, akey_iov;
+	int              rc;
+
+	d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	d_iov_set(&akey_iov, akey, strlen(akey));
+
+	param.ip_hdl        = arg->ctx.tc_co_hdl;
+	param.ip_oid        = oid;
+	param.ip_dkey       = dkey_iov;
+	param.ip_akey       = akey_iov;
+	param.ip_epr.epr_lo = 0;
+	param.ip_epr.epr_hi = epoch;
+	param.ip_epc_expr   = VOS_IT_EPC_RR;
+	param.ip_flags      = VOS_IT_RECX_VISIBLE;
+
+	rc = vos_iterate(&param, VOS_ITER_RECX, false, anchors, agg_enum_cb, NULL, ea, NULL);
+	assert_true(rc >= 0);
+}
+
+/*
+ * Enumeration anchor vs. aggregation.  A recx enumeration (as used by rebuild
+ * migration) stops with the recx anchor pointing at the first unpacked visible
+ * extent.  Before the enumeration is resumed, aggregation (running above the
+ * enumeration epoch) splits the physical extent under the anchor at a merge
+ * window boundary, so the anchor extent now overlaps several visible extents.
+ * The resumed enumeration must continue from the lowest one, otherwise the
+ * extents between anchor.lo and the probed entry are silently lost.
+ */
+static void
+aggregate_38(void **state)
+{
+	struct io_test_args    *arg     = *state;
+	struct vos_iter_anchors anchors = {0};
+	struct agg_enum_arg     ea      = {0};
+	daos_unit_oid_t         oid;
+	daos_epoch_range_t      epr_a;
+	daos_recx_t             recx;
+	char                    dkey[UPDATE_DKEY_SIZE] = {0};
+	char                    akey[UPDATE_AKEY_SIZE] = {0};
+	const daos_epoch_t      enum_eph               = 10;
+	const uint64_t          total                  = 1000;
+	char                   *buf;
+	bool                    covered[1000];
+	uint64_t                i, lo, hi;
+	int                     rc;
+
+	oid = dts_unit_oid_gen(0, 0);
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+
+	D_ALLOC(buf, total);
+	assert_non_null(buf);
+
+	/* P: [0, 1000) @1 */
+	recx.rx_idx = 0;
+	recx.rx_nr  = total;
+	update_value(arg, oid, 1, 0, dkey, akey, DAOS_IOD_ARRAY, 1, &recx, buf);
+	/* Q: [0, 100) @2, so P's first visible fragment starts at 100 */
+	recx.rx_idx = 0;
+	recx.rx_nr  = 100;
+	update_value(arg, oid, 2, 0, dkey, akey, DAOS_IOD_ARRAY, 1, &recx, buf);
+	/* W: [600, 700) @20, above the enumeration epoch, splits P for aggregation only */
+	recx.rx_idx = 600;
+	recx.rx_nr  = 100;
+	update_value(arg, oid, 20, 0, dkey, akey, DAOS_IOD_ARRAY, 1, &recx, buf);
+
+	/* Batch 1 at epoch 10: pack [0,100)@2, stop with anchor on [100,1000)@1 */
+	ea.ea_stop_at = 1;
+	agg_enum_visible(arg, oid, dkey, akey, enum_eph, &anchors, &ea);
+	assert_int_equal(ea.ea_nr, 1);
+	assert_int_equal(ea.ea_recxs[0].rx_idx, 0);
+	assert_int_equal(ea.ea_recxs[0].rx_nr, 100);
+	assert_false(daos_anchor_is_eof(&anchors.ia_ev));
+
+	/*
+	 * Aggregate [0, 20] with a tiny merge window so that the window is flushed
+	 * at every visible fragment boundary; P is truncated into [100,600)@1 and
+	 * [600,1000)@1 (later [700,1000)@1), i.e. the anchor extent [100,1000) now
+	 * overlaps two visible extents at epoch 10.
+	 */
+	epr_a.epr_lo = 0;
+	epr_a.epr_hi = 20;
+	daos_fail_loc_set(DAOS_VOS_AGG_MW_THRESH | DAOS_FAIL_ALWAYS);
+	daos_fail_value_set(300);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr_a, NULL, NULL, 0);
+	assert_rc_equal(rc, 0);
+	daos_fail_loc_set(0);
+
+	/* Batch 2: resume with the anchors left by batch 1 */
+	ea.ea_stop_at = 0;
+	agg_enum_visible(arg, oid, dkey, akey, enum_eph, &anchors, &ea);
+	assert_true(daos_anchor_is_eof(&anchors.ia_ev));
+
+	/* Everything visible at epoch 10 ([0,600) and [700,1000)) must have been listed */
+	memset(covered, 0, sizeof(covered));
+	for (i = 0; i < ea.ea_nr; i++) {
+		lo = ea.ea_recxs[i].rx_idx;
+		hi = lo + ea.ea_recxs[i].rx_nr;
+		print_message("listed recx [" DF_U64 ", " DF_U64 ")\n", lo, hi);
+		assert_true(hi <= total);
+		for (; lo < hi; lo++)
+			covered[lo] = true;
+	}
+	for (i = 0; i < total; i++) {
+		if (i >= 600 && i < 700)
+			continue;
+		if (!covered[i])
+			fail_msg("record " DF_U64 " visible at epoch " DF_U64
+				 " was lost by the resumed enumeration",
+				 i, enum_eph);
+	}
+
+	D_FREE(buf);
+	cleanup();
+}
+
 static void
 print_space_info(vos_pool_info_t *pi, char *desc)
 {
@@ -3054,6 +3198,7 @@ static const struct CMUnitTest aggregate_tests[] = {
     {"VOS435: Test aggregation timestamp functions", aggregate_35, NULL, NULL},
     {"VOS436: Aggregate SV, multiple objects, flat dkeys", aggregate_36, NULL, agg_tst_teardown},
     {"VOS437: Aggregate EV, multiple objects, flat dkeys", aggregate_37, NULL, agg_tst_teardown},
+    {"VOS438: Enumeration anchor across aggregation split", aggregate_38, NULL, agg_tst_teardown},
 };
 
 int
