@@ -38,6 +38,8 @@ class SlurmSetup():
     PACKAGE_LIST = ['slurm', 'slurm-slurmdbd', 'slurm-slurmctld', 'slurm-slurmd',
                     'slurm-example-configs']
     SLURM_CONF = '/etc/slurm/slurm.conf'
+    SLURMCTLD_LOG_FILE = '/var/log/slurm/slurmctld.log'
+    SLURMD_LOG_FILE = '/var/log/slurm/slurmd.log'
     SLURM_LOG_DIR = '/var/log/slurm'
 
     def __init__(self, log, nodes, control_node, sudo=False):
@@ -184,19 +186,19 @@ class SlurmSetup():
 
         # Restart slurmctld on the control node
         self._restart_systemctl(
-            self.control, 'slurmctld', '/var/log/slurm/slurmctld.log', self.SLURM_CONF)
+            self.control, 'slurmctld', self.SLURMCTLD_LOG_FILE, self.SLURM_CONF)
 
         # Restart slurmd on all nodes
         self._restart_systemctl(
-            self.all_nodes, 'slurmd', '/var/log/slurm/slurmd.log', self.SLURM_CONF)
+            self.all_nodes, 'slurmd', self.SLURMD_LOG_FILE, self.SLURM_CONF)
 
         # Update nodes to the idle state
         command = command_as_user(
             f'scontrol update nodename={str(self.nodes)} state=idle', self.root)
         result = run_remote(self.log, self.nodes, command)
         if not result.passed or debug:
-            self._display_debug(self.control, '/var/log/slurm/slurmctld.log', self.SLURM_CONF)
-            self._display_debug(self.all_nodes, '/var/log/slurm/slurmd.log', self.SLURM_CONF)
+            self._display_debug(self.control, self.SLURMCTLD_LOG_FILE, self.SLURM_CONF)
+            self._display_debug(self.all_nodes, self.SLURMD_LOG_FILE, self.SLURM_CONF)
         if not result.passed:
             raise SlurmSetupException(f'Error setting nodes to idle on {self.nodes}')
 
@@ -274,19 +276,44 @@ class SlurmSetup():
             'epilog file', self.all_nodes,
             f's#EpilogSlurmctld=#EpilogSlurmctld={self.EPILOG_FILE}#g', self.root)
 
+        # Keep configured log paths consistent with the directories created for Slurm.
+        self._modify_slurm_config_file(
+            'slurmctld log file', self.all_nodes,
+            f's#^[[:space:]]*SlurmctldLogFile=.*#SlurmctldLogFile={self.SLURMCTLD_LOG_FILE}#',
+            self.root)
+        self._modify_slurm_config_file(
+            'slurmd log file', self.all_nodes,
+            f's#^[[:space:]]*SlurmdLogFile=.*#SlurmdLogFile={self.SLURMD_LOG_FILE}#',
+            self.root)
+
         # Update the config file with the slurm control node
         not_updated = self.all_nodes.copy()
         for control_keyword in ['SlurmctldHost', 'ControlMachine']:
-            command = f'grep {control_keyword} {self.SLURM_CONF}'
+            command = (f"grep -E '^[[:space:]]*{control_keyword}[[:space:]]*=' "
+                       f'{self.SLURM_CONF}')
             results = run_remote(self.log, self.all_nodes, command)
             if results.passed_hosts:
                 not_updated.remove(
                     self._modify_slurm_config_file(
                         'slurm control node', results.passed_hosts,
-                        f's/{control_keyword}=localhost/{control_keyword}={str(self.control)}/g',
+                        f's/^[[:space:]]*{control_keyword}[[:space:]]*=.*/'
+                        f'{control_keyword}={str(self.control)}/',
                         self.root))
         if not_updated:
             raise SlurmSetupException(f'Slurm control node not updated on {not_updated}')
+
+        control_host = str(self.control)
+        command = (
+            "awk -F= '/^[[:space:]]*(SlurmctldHost|ControlMachine)[[:space:]]*=/ "
+            f'{{ found=1; value=$2; gsub(/[[:space:]]/, "", value); '
+            f'if (value != "{control_host}") invalid=1 }} '
+            "END { exit !(found && !invalid) }' "
+            f'{self.SLURM_CONF}')
+        result = run_remote(self.log, self.all_nodes, command_as_user(command, self.root))
+        if not result.passed:
+            raise SlurmSetupException(
+                f'Slurm control node configuration does not match {control_host} '
+                f'on {result.failed_hosts}')
 
         # Update the config file with each node's socket/core/thread information
         self._update_slurm_config_sys_info()
@@ -455,7 +482,7 @@ class SlurmSetup():
             command = command_as_user(f'systemctl {action} {service}', self.root)
             result = run_remote(self.log, self.all_nodes, command)
             if not result.passed:
-                self._display_debug(result.failed_hosts, debug_log, debug_config)
+                self._display_debug(result.failed_hosts, debug_log, debug_config, service)
                 raise SlurmSetupException(f'Error restarting {service} on {result.failed_hosts}')
 
     def _active_systemctl(self, nodes, service, debug_log=None, debug_config=None):
@@ -480,14 +507,22 @@ class SlurmSetup():
             self.log.debug(f'{service} service not active on {result.failed_hosts}')
         return result.homogeneous and "/n".join(result.output[0].stdout) == "active"
 
-    def _display_debug(self, nodes, debug_log=None, debug_config=None):
+    def _display_debug(self, nodes, debug_log=None, debug_config=None, service=None):
         """Display debug information.
 
         Args:
             nodes (NodeSet): nodes on which to display the debug information
             debug_log (str, optional): log file to display. Defaults to None.
             debug_config (str, optional): config file to display. Defaults to None.
+            service (str, optional): systemd service for which to display status and journal.
         """
+        if service:
+            for description, command in (
+                    ('systemd status', f'systemctl status --no-pager --full {service}'),
+                    ('systemd journal', f'journalctl -b -u {service} --no-pager -n 100')):
+                self.log.debug('DEBUG: %s for %s:', description, service)
+                run_remote(
+                    self.log, nodes, command_as_user(f'{command} || true', self.root))
         if debug_log:
             self.log.debug('DEBUG: %s contents:', debug_log)
             command = command_as_user(f'cat {debug_log}', self.root)
