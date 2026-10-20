@@ -2439,7 +2439,7 @@ pool_map_tgts_changed_after(struct pool_map *map, struct pool_target_id_list *tg
 /**
  * Check whether the layouts of the pool have been changed after pool map version \a ver in
  * a way that is not covered by a rebuild of its own, i.e. a target status has been changed
- * to DOWNOUT after \a ver.
+ * to DOWNOUT, to DRAIN or to UP after \a ver.
  *
  * A rebuild task computes the layouts with pool map version \a ver, it may migrate data to
  * any UP target of the POST_REBUILD layouts, not only to the targets of the task, e.g. to a
@@ -2448,6 +2448,17 @@ pool_map_tgts_changed_after(struct pool_map *map, struct pool_target_id_list *tg
  * has nothing to do, and the shards that the task has
  * migrated to it would be lost once the task is finished. A placed DOWN target is rebuilt by
  * its own rebuild, which also covers such shards, so it is not checked here.
+ *
+ * A target that starts draining after \a ver is checked as well (by its co_fseq): it is
+ * dropped from the layouts of the shards that are still being rebuilt, e.g. the shards that
+ * the task is migrating to it as a spare of a DOWN target are moved to the next spare, so it
+ * misses the updates of them, while it holds them again (readable) once the task turns the
+ * DOWN target into DOWNOUT, as the spare failed after the DOWN target.
+ *
+ * Likewise a target that is reintegrated or extended (UP) after \a ver is checked (by its
+ * co_in_ver): it takes over the shards of the layouts as a reintegrating target, so the
+ * spare that the task is migrating a shard to may be dropped from the write layout and miss
+ * the updates, while it is readable again once the task is finished.
  *
  * co_out_ver of a DOWNOUT target is also bumped by MAP_FINISH_REBUILD of a DOWN/DRAIN
  * target. As there is only one running rebuild task of a pool, it is the task itself, while
@@ -2465,12 +2476,19 @@ pool_map_tgts_dropped_after(struct pool_map *map, uint32_t ver)
 
 	for (i = 0; targets != NULL && i < nr; i++) {
 		struct pool_component *comp = &targets[i].ta_comp;
+		uint32_t               comp_ver;
 
-		if (comp->co_status != PO_COMP_ST_DOWNOUT)
+		if (comp->co_status == PO_COMP_ST_DRAIN)
+			comp_ver = comp->co_fseq;
+		else if (comp->co_status == PO_COMP_ST_UP)
+			comp_ver = comp->co_in_ver;
+		else if (comp->co_status == PO_COMP_ST_DOWNOUT)
+			comp_ver = comp->co_out_ver;
+		else
 			continue;
 
-		if (comp->co_out_ver > ver && comp->co_out_ver > dropped_ver)
-			dropped_ver = comp->co_out_ver;
+		if (comp_ver > ver && comp_ver > dropped_ver)
+			dropped_ver = comp_ver;
 	}
 
 	return dropped_ver;

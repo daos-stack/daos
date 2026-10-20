@@ -3272,7 +3272,9 @@ exclude_reintegrating_target_keeps_layout(void **state)
  * reverted to DOWNOUT with its co_fseq kept, so the rebuild of its exclusion has nothing to do.
  * The other rebuilds have to be detected as stale and retried with the new version, otherwise
  * the shards migrated to it would be lost. A placed DOWN target is rebuilt by its own rebuild, so
- * it does not make other rebuilds stale.
+ * it does not make other rebuilds stale. A target drained or reintegrated after the rebuild
+ * version may drop the spare the rebuild is migrating data to from the write layouts, so it
+ * makes the rebuild stale too.
  */
 static void
 dropped_target_stales_rebuild(void **state)
@@ -3306,6 +3308,21 @@ dropped_target_stales_rebuild(void **state)
 	assert_int_equal(jtc_find_target(&ctx, 9)->ta_comp.co_status, PO_COMP_ST_DOWN);
 	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), 0);
 
+	/* a drain after the version may drop the spare the rebuild is migrating data to */
+	ver = ctx.ver;
+	jtc_update_targets(&ctx, MAP_DRAIN, 17, 1, false);
+	assert_int_equal(jtc_find_target(&ctx, 17)->ta_comp.co_status, PO_COMP_ST_DRAIN);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), ctx.ver);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ctx.ver), 0);
+
+	/* so may a reintegration */
+	jtc_update_targets(&ctx, MAP_FINISH_REBUILD, 17, 1, false);
+	assert_int_equal(jtc_find_target(&ctx, 17)->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+	ver = ctx.ver;
+	jtc_update_targets(&ctx, MAP_REINT, 17, 1, false);
+	assert_int_equal(jtc_find_target(&ctx, 17)->ta_comp.co_status, PO_COMP_ST_UP);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), ctx.ver);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ctx.ver), 0);
 	jtc_fini(&ctx);
 }
 

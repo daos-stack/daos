@@ -1103,7 +1103,9 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op, struct pool_targe
 		 * version, e.g. a reintegrating target is reverted to DOWNOUT by an exclude, which
 		 * changes the layouts of the objects, or any target that this rebuild may have
 		 * migrated data to has been dropped from the layouts without a rebuild of its own,
-		 * e.g. a DOWNOUT->UP target is excluded, abort and retry with the new version.
+		 * e.g. a DOWNOUT->UP target is excluded, or a target is drained/reintegrated after
+		 * the rebuild version, which may drop the spare this rebuild is migrating data to
+		 * from the write layouts, abort and retry with the new version.
 		 */
 		if (rgt->rgt_opc == RB_OP_REBUILD) {
 			uint32_t changed_ver;
@@ -1859,7 +1861,8 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	/* The status of some targets of the task have been changed after the task version, e.g. a
 	 * reintegrating target is reverted to DOWNOUT by an exclude, then reintegrated again, or
 	 * some targets have been dropped from the layouts, e.g. a DOWNOUT->UP target is excluded,
-	 * so the layouts of the task version are stale. Rebuild with the version of the change
+	 * or some targets have been drained/reintegrated, so the layouts of the task version are
+	 * stale. Rebuild with the version of the change
 	 * instead, otherwise it will be aborted by rebuild_leader_status_check() or rejected on
 	 * finish again and again. It might also be a retry of an aborted one, see
 	 * rebuild_leader_status_check().
