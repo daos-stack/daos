@@ -40,6 +40,42 @@ class PoolMembershipTest(IorTestBase):
 
         return rank_to_free
 
+    def get_pmem_pool_copy_locations(self, pool_rank):
+        """Find the hosts, mounts, and destination rank for copying a PMEM pool.
+
+        Args:
+            pool_rank (int): Rank containing the source pool.
+
+        Returns:
+            tuple: Source host, destination host, source mount, destination mount, and
+                destination rank.
+        """
+        self.log_step("Determine source host and destination host.")
+        src_host = dst_host = NodeSet(self.server_managers[0].get_host(pool_rank))
+        rank = 1
+        while rank < self.server_managers[0].engines and dst_host == src_host:
+            dst_host = NodeSet(self.server_managers[0].get_host(rank))
+            rank += 1
+        self.log.info("src_host = %s; dst_host = %s", src_host, dst_host)
+
+        src_mount = None
+        dst_mount = None
+        dst_rank = None
+        storage_query_out = self.get_dmg_command().storage_query_usage()
+        hash_dict = storage_query_out["response"]["HostStorage"]
+        for storage_dict in hash_dict.values():
+            if str(src_host) in storage_dict["hosts"]:
+                for scm_namespace in storage_dict["storage"]["scm_namespaces"]:
+                    if scm_namespace["mount"]["rank"] == pool_rank:
+                        dst_mount = src_mount = scm_namespace["mount"]["path"]
+        for storage_dict in hash_dict.values():
+            if str(dst_host) in storage_dict["hosts"]:
+                for scm_namespace in storage_dict["storage"]["scm_namespaces"]:
+                    if scm_namespace["mount"]["path"] == dst_mount:
+                        dst_rank = scm_namespace["mount"]["rank"]
+
+        return src_host, dst_host, src_mount, dst_mount, dst_rank
+
     def test_orphan_pool_shard(self):
         """Test orphan pool shard.
 
@@ -102,8 +138,8 @@ class PoolMembershipTest(IorTestBase):
 
             orphan_pool_host = self.server_managers[0].get_host(fault_rank)
             for rank in sorted(rank_to_mount):
-                if (rank != fault_rank and
-                        self.server_managers[0].get_host(rank) != orphan_pool_host):
+                if (rank != fault_rank
+                        and self.server_managers[0].get_host(rank) != orphan_pool_host):
                     pool_rank = rank
                     break
             else:
@@ -115,6 +151,7 @@ class PoolMembershipTest(IorTestBase):
         pool = self.get_pool(connect=False, target_list=str(pool_rank))
 
         # PMEM variables. PMEM has quite different algorithm, so these names work better.
+        src_host = None
         dst_host = None
         src_mount = None
         dst_mount = None
@@ -130,44 +167,11 @@ class PoolMembershipTest(IorTestBase):
                     f"Orphan pool wasn't created on rank {fault_rank} on "
                     f"{rank_to_mount[fault_rank]} at {orphan_pool_host}!")
         else:
-            # 3. Prepare to copy the pool path before stopping servers.
-
-            # In order to copy the pool directory without password, there are several things
-            # to determine and set up.
-
-            # 3-1. Determine source host and destination host. Source host is where pool_rank is.
-            # Destination host is the other host.
-            self.log_step("Determine source host and destination host.")
-            src_host = dst_host = NodeSet(self.server_managers[0].get_host(pool_rank))
-            rank = 1
-            while rank < self.server_managers[0].engines and dst_host == src_host:
-                dst_host = NodeSet(self.server_managers[0].get_host(rank))
-                rank += 1
-            self.log.info("src_host = %s; dst_host = %s", src_host, dst_host)
-
-            # 3-2. Determine source and destination mount point. First, find the source mount
-            # point that maps to pool_rank. Then use the same mount point for the destination.
-            # This way, we can handle the case where the mount point name is changed in the
-            # future. At the same time, determine the destination rank, which is where
-            # dst_mount is mapped.
-            storage_query_out = dmg_command.storage_query_usage()
-            hash_dict = storage_query_out["response"]["HostStorage"]
-            for storage_dict in hash_dict.values():
-                if str(src_host) in storage_dict["hosts"]:
-                    # Determine source mount point that maps to pool_rank.
-                    for scm_namespace in storage_dict["storage"]["scm_namespaces"]:
-                        if scm_namespace["mount"]["rank"] == pool_rank:
-                            # For dst_mount, use the same mount point as source.
-                            dst_mount = src_mount = scm_namespace["mount"]["path"]
-            for storage_dict in hash_dict.values():
-                if str(dst_host) in storage_dict["hosts"]:
-                    # Determine destination rank that maps to dst_mount.
-                    for scm_namespace in storage_dict["storage"]["scm_namespaces"]:
-                        if scm_namespace["mount"]["path"] == dst_mount:
-                            dst_rank = scm_namespace["mount"]["rank"]
+            src_host, dst_host, src_mount, dst_mount, dst_rank = (
+                self.get_pmem_pool_copy_locations(pool_rank))
 
         self.log_step("Stop servers.")
-        self.server_managers[0].system_stop()
+        dmg_command.system_stop()
 
         if not md_on_ssd:
             # 5. Copy /mnt/daos?/<pool_path> from the engine where we created the pool to
@@ -220,10 +224,11 @@ class PoolMembershipTest(IorTestBase):
             # (rdb-pool is smaller). If we run a simple rsync, which runs serially, it takes
             # 1 min 50 sec. However, if we run them in parallel, it's reduced to 24 sec.
             self.log_step(f"Copy pool files from {src_host}:{src_mount} to {dst_host}:{dst_mount}.")
-            xargs_rsync_cmd = (f"ls {src_mount}/{pool.uuid.lower()} | "
-                               f"xargs --max-procs=8 -I% "
-                               f"rsync -avz {src_mount}/{pool.uuid.lower()}/% "
-                               f"{str(dst_host)}:{dst_mount}/{pool.uuid.lower()}")
+            xargs_rsync_cmd = (
+                f"ls {src_mount}/{pool.uuid.lower()} | "
+                f"xargs --max-procs=8 -I% "
+                f"rsync -avz {src_mount}/{pool.uuid.lower()}/% "
+                f"{str(dst_host)}:{dst_mount}/{pool.uuid.lower()}")
             if not run_remote(log=self.log, hosts=src_host, command=xargs_rsync_cmd).passed:
                 self.fail(f"Following command failed on {src_host}! {xargs_rsync_cmd}")
 
@@ -270,9 +275,10 @@ class PoolMembershipTest(IorTestBase):
         pools = pool_list_out["response"]["pools"]
         if pools:
             out_label = pools[0]["label"]
+            self.assertEqual(
+                out_label, pool.identifier, "Pool labels don't match after check repair!")
         else:
             errors.append("Pool wasn't found after check repair!")
-        self.assertEqual(out_label, pool.identifier, "Pool labels don't match after check repair!")
 
         report_errors(test=self, errors=errors)
 
