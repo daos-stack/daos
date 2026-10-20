@@ -168,6 +168,26 @@ will control the event queues and associated threads.
 In addition DFuse will always use a single main thread and a invalidation thread to manage dentry
 timeouts.
 
+### Background requests
+
+The kernel sends buffered reads, including readahead, and most `O_DIRECT` I/O to DFuse as
+background requests, and limits how many are outstanding independently of `--thread-count` and
+`--eq-count`. Buffered writes are not affected.
+
+* `--max-background` (default 256) is a hard limit. Once it is reached, new background requests
+  wait until one completes.
+* `--congestion-threshold` (default three quarters of `--max-background`) is a soft limit. Once it
+  is reached, the kernel stops asynchronous readahead, so small sequential reads become small
+  requests.
+
+Both values must be between 1 and 65535, and `--congestion-threshold` must not exceed
+`--max-background`. Raising them can help when many files are read in parallel, at the cost of
+memory held by each outstanding request in the kernel and in DFuse.
+
+When DFuse runs without `CAP_SYS_ADMIN`, the kernel silently lowers both values to the `fuse` module
+parameters `max_user_bgreq` and `max_user_congthresh`. The applied values are in
+`/sys/fs/fuse/connections/<dev>/`, where `<dev>` is the output of `stat -c %d <mountpoint>`.
+
 ### Restrictions
 
 DFuse by default is limited to a single user. Access to the filesystem from other users,
@@ -222,15 +242,17 @@ is owned by the user.
 
 Additionally, there are several optional command-line options:
 
-| **Command-line Option**    | **Description**                  |
-| -------------------------- | -------------------------------- |
-| --pool=<label\|uuid\>      | pool label or uuid to connect to |
-| --container=<label\|uuid\> | container label or uuid to open  |
-| --sys-name=<name\>         | DAOS system name                 |
-| --foreground               | run in foreground                |
-| --thread-count=<count>     | Number of threads to use         |
-| --multi-user               | Run in multi user mode           |
-| --read-only                | Mount in read-only mode          |
+| **Command-line Option**        | **Description**                                   |
+| ------------------------------ | ------------------------------------------------- |
+| --pool=<label\|uuid\>          | pool label or uuid to connect to                  |
+| --container=<label\|uuid\>     | container label or uuid to open                   |
+| --sys-name=<name\>             | DAOS system name                                  |
+| --foreground                   | run in foreground                                 |
+| --thread-count=<count>         | Number of threads to use                          |
+| --max-background=<count>       | Hard limit on outstanding background requests     |
+| --congestion-threshold=<count> | Background requests at which the kernel throttles |
+| --multi-user                   | Run in multi user mode                            |
+| --read-only                    | Mount in read-only mode                           |
 
 The `--pool` and `--container` options can also be passed as the second and third positional
 arguments.
