@@ -463,6 +463,9 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 		if (sc_cont_is_stopping(ctx))
 			D_GOTO(done, rc = 0);
 
+		rc = vos_iter_validate(ctx->sc_vos_iter_handle);
+		if (rc != 0)
+			D_GOTO(done, rc = rc > 0 ? 0 : rc);
 		orig_csum    = ci_idx2csum(&orig_csums, i);
 		rec_in_chunk = sc_get_rec_in_chunk_at_idx(ctx, i);
 
