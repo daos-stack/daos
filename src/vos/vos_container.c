@@ -665,8 +665,12 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cont_info)
 	cont_info->ci_used  = cont_df->cd_used;
 	cont_info->ci_hae   = cont_df->cd_hae;
 
+	/* No stamp means "not tracked", not "never written": report DAOS_EPOCH_MAX so callers scan
+	 * instead of skipping.
+	 */
 	feats = dbtree_feats_get(&cont_df->cd_obj_root);
-	vos_feats_agg_time_get(feats, &cont_info->ci_agg_write);
+	if (!vos_feats_agg_time_get(feats, &cont_info->ci_agg_write))
+		cont_info->ci_agg_write = DAOS_EPOCH_MAX;
 
 	return 0;
 }
