@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,7 @@ package security
 
 import (
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -158,6 +160,17 @@ func LoadCertificate(certPath string) (*x509.Certificate, error) {
 	return cert, err
 }
 
+func parseCertificate(pemData []byte) (*x509.Certificate, error) {
+	block, _ := pem.Decode(pemData)
+	if block == nil {
+		return nil, errors.New("no PEM data")
+	}
+	if block.Type != "CERTIFICATE" {
+		return nil, errors.Errorf("PEM block is %q, not CERTIFICATE", block.Type)
+	}
+	return x509.ParseCertificate(block.Bytes)
+}
+
 // LoadPrivateKey loads the private key specified at the given path into an
 // crypto.PrivateKey interface compliant object.
 func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
@@ -193,8 +206,9 @@ func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
 	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err == nil {
 		switch key := key.(type) {
-		// TODO: Support key types other than RSA
 		case *rsa.PrivateKey:
+			return key, nil
+		case *ecdsa.PrivateKey:
 			return key, nil
 		default:
 			return nil, fmt.Errorf("%s contains an unsupported private key type",
@@ -202,6 +216,19 @@ func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
 		}
 	}
 	return nil, errors.Wrapf(err, "Invalid key data in PRIVATE KEY block")
+}
+
+// LoadCertAndKey loads a PEM certificate and its private key.
+func LoadCertAndKey(certPath, keyPath string) (*x509.Certificate, crypto.PrivateKey, error) {
+	cert, err := LoadCertificate(certPath)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "loading certificate")
+	}
+	key, err := LoadPrivateKey(keyPath)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "loading private key")
+	}
+	return cert, key, nil
 }
 
 // ValidateCertDirectory ensures the certificate directory has safe permissions
