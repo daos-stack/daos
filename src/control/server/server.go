@@ -165,9 +165,8 @@ type server struct {
 	controlClient *control.Client
 	restartMgr    *engineRestartManager
 
-	cbLock           sync.Mutex
-	onEnginesStarted []func(context.Context) error
-	onShutdown       []func()
+	cbLock     sync.Mutex
+	onShutdown []func()
 }
 
 func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
@@ -261,6 +260,13 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	srv.ctlSvc.restartMgr = srv.restartMgr
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, srv.sysdb, rpcClient, srv.pubSub)
 
+	srv.harness.WithPreflight(func(ctxIn context.Context, req *control.EnginePreflightReq) (*control.EnginePreflightResp, error) {
+		req.SetHostList(srv.cfg.MgmtSvcReplicas)
+		req.SetSystem(srv.cfg.SystemName)
+
+		return control.EnginePreflight(ctxIn, rpcClient, req)
+	})
+
 	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
 		return srv.cfg.SystemName
 	}); err != nil {
@@ -268,14 +274,6 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	}
 
 	return nil
-}
-
-// OnEnginesStarted adds callback functions to be called when all engines have
-// started up.
-func (srv *server) OnEnginesStarted(fns ...func(context.Context) error) {
-	srv.cbLock.Lock()
-	srv.onEnginesStarted = append(srv.onEnginesStarted, fns...)
-	srv.cbLock.Unlock()
 }
 
 // OnShutdown adds callback functions to be called when the server shuts down.
@@ -374,12 +372,8 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 	return engine, nil
 }
 
-// addEngines creates and adds engine instances to harness then starts goroutine to execute
-// callbacks when all engines are started.
+// addEngines creates and adds engine instances to harness.
 func (srv *server) addEngines(ctx context.Context, smi *common.SysMemInfo) error {
-	var allStarted sync.WaitGroup
-	registerTelemetryCallbacks(ctx, srv)
-
 	iommuChecker := topology.DefaultIOMMUDetector(srv.log)
 	thpChecker := topology.DefaultTHPDetector(srv.log)
 
@@ -388,42 +382,18 @@ func (srv *server) addEngines(ctx context.Context, smi *common.SysMemInfo) error
 		return err
 	}
 
-	if len(srv.cfg.Engines) == 0 {
-		return nil
-	}
-
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
 			return errors.Wrap(err, "creating engine instances")
 		}
 
-		registerEngineEventCallbacks(srv, engine, &allStarted)
+		registerEngineEventCallbacks(srv, engine)
 
 		if err := srv.harness.AddInstance(engine); err != nil {
 			return err
 		}
-		// increment count of engines waiting to start
-		allStarted.Add(1)
 	}
-
-	go func() {
-		srv.log.Debug("waiting for engines to start...")
-		allStarted.Wait()
-		srv.log.Debug("engines have started")
-
-		// Start the restart manager
-		srv.restartMgr.start(ctx)
-
-		srv.cbLock.Lock()
-		onEnginesStartedCbs := srv.onEnginesStarted
-		srv.cbLock.Unlock()
-		for _, cb := range onEnginesStartedCbs {
-			if err := cb(ctx); err != nil {
-				srv.log.Errorf("on engines started: %s", err)
-			}
-		}
-	}()
 
 	return nil
 }
@@ -556,6 +526,10 @@ func (srv *server) start(ctx context.Context) error {
 	}()
 
 	srv.mgmtSvc.startAsyncLoops(ctx)
+	srv.restartMgr.start(ctx)
+	if err := startTelemetry(ctx, srv); err != nil {
+		return errors.Wrap(err, "start telemetry")
+	}
 
 	if srv.cfg.AutoFormat {
 		srv.log.Notice("--auto flag set on server start so formatting storage now")

@@ -312,6 +312,7 @@ type (
 		unaryRequest
 		Reformat bool `json:"reformat"`
 		Replace  bool `json:"replace"`
+		Start    bool `json:"start"`
 	}
 
 	// StorageFormatResp contains the response from a storage format request.
@@ -412,10 +413,13 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 		return err
 	}
 
-	checkError := func(err error) error {
-		// If the call succeeded, then the MS is running and
-		// we should return an error.
+	checkResp := func(resp *SystemQueryResp, err error) error {
+		// The MS answers on a formatted system; it is running once a
+		// member has joined. A system with no members is only held.
 		if err == nil {
+			if len(resp.Members) == 0 {
+				return nil
+			}
 			return FaultFormatRunningSystem
 		}
 
@@ -437,9 +441,7 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 	// MS is running and fail if so.
 	if len(reqHosts) == 0 {
 		sysReq := &SystemQueryReq{FailOnUnavailable: true}
-		_, err := SystemQuery(ctx, rpcClient, sysReq)
-
-		return checkError(err)
+		return checkResp(SystemQuery(ctx, rpcClient, sysReq))
 	}
 
 	// Check the hosts in the format request's hostlist to see if there is
@@ -448,8 +450,7 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 	for _, host := range reqHosts {
 		sysReq := &SystemQueryReq{FailOnUnavailable: true}
 		sysReq.AddHost(host)
-		_, err := SystemQuery(ctx, rpcClient, sysReq)
-		if err := checkError(err); err != nil {
+		if err := checkResp(SystemQuery(ctx, rpcClient, sysReq)); err != nil {
 			return err
 		}
 	}

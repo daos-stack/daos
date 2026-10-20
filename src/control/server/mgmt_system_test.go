@@ -28,6 +28,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
@@ -1256,6 +1257,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilReq         bool
 		emptyDb        bool
+		notLeader      bool
 		ranks          string
 		hosts          string
 		clientNetHints []*mgmtpb.ClientNetHint
@@ -1374,7 +1376,11 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			expAbsentHosts: "10.0.0.[4-5]",
 		},
 		"empty membership": {
+			emptyDb: true,
+		},
+		"empty membership on a non-leader replica": {
 			emptyDb:   true,
+			notLeader: true,
 			expErrMsg: system.ErrRaftUnavail.Error(),
 		},
 		"use clientNetHint for providers": {
@@ -1465,6 +1471,11 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 					if _, err := svc.membership.Add(m); err != nil {
 						t.Fatal(err)
 					}
+				}
+			}
+			if tc.notLeader {
+				if err := svc.sysdb.ResignLeadership(nil); err != nil {
+					t.Fatal(err)
 				}
 			}
 
@@ -1811,6 +1822,403 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expDispatched, subscriber.getRx(), defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
+	engines := func(ranks ...uint32) []*mgmtpb.EnginePreflightReq_Engine {
+		var out []*mgmtpb.EnginePreflightReq_Engine
+		for i, r := range ranks {
+			out = append(out, &mgmtpb.EnginePreflightReq_Engine{Idx: uint32(i), Rank: r})
+		}
+		return out
+	}
+	hold := func(idx uint32, reason string) *mgmtpb.EnginePreflightResp_Engine {
+		return &mgmtpb.EnginePreflightResp_Engine{Idx: idx, Reason: reason}
+	}
+	start := func(idx uint32) *mgmtpb.EnginePreflightResp_Engine {
+		return &mgmtpb.EnginePreflightResp_Engine{Idx: idx, Start: true}
+	}
+	notMember := "not a system member; awaiting dmg system initialize or extend"
+
+	for name, tc := range map[string]struct {
+		req       *mgmtpb.EnginePreflightReq
+		members   system.Members
+		noRestart bool
+		expResp   *mgmtpb.EnginePreflightResp
+		expErr    error
+	}{
+		"nil req": {
+			req:    (*mgmtpb.EnginePreflightReq)(nil),
+			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			req:    &mgmtpb.EnginePreflightReq{Sys: "quack"},
+			expErr: FaultWrongSystem("quack", build.DefaultSystemName),
+		},
+		"no engines": {
+			req:     &mgmtpb.EnginePreflightReq{},
+			expResp: &mgmtpb.EnginePreflightResp{},
+		},
+		"never joined": {
+			req: &mgmtpb.EnginePreflightReq{Engines: engines(uint32(ranklist.NilRank))},
+			expResp: &mgmtpb.EnginePreflightResp{
+				Engines: []*mgmtpb.EnginePreflightResp_Engine{hold(0, notMember)},
+			},
+		},
+		"rank unknown to the system": {
+			req: &mgmtpb.EnginePreflightReq{Engines: engines(3)},
+			expResp: &mgmtpb.EnginePreflightResp{
+				Engines: []*mgmtpb.EnginePreflightResp_Engine{hold(0, notMember)},
+			},
+		},
+		"stopped rank": {
+			req: &mgmtpb.EnginePreflightReq{Engines: engines(1)},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "stopped"),
+			},
+			expResp: &mgmtpb.EnginePreflightResp{
+				Engines: []*mgmtpb.EnginePreflightResp_Engine{
+					hold(0, "rank 1 is Stopped; awaiting dmg system start"),
+				},
+			},
+		},
+		"restart on boot disabled": {
+			req: &mgmtpb.EnginePreflightReq{Engines: engines(0)},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+			},
+			noRestart: true,
+			expResp: &mgmtpb.EnginePreflightResp{
+				Engines: []*mgmtpb.EnginePreflightResp_Engine{
+					hold(0, "restart_engines_on_boot is false; awaiting dmg system start"),
+				},
+			},
+		},
+		"restart on boot disabled speaks before the rank state": {
+			req: &mgmtpb.EnginePreflightReq{Engines: engines(1, uint32(ranklist.NilRank))},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "stopped"),
+			},
+			noRestart: true,
+			expResp: &mgmtpb.EnginePreflightResp{
+				Engines: []*mgmtpb.EnginePreflightResp_Engine{
+					hold(0, "restart_engines_on_boot is false; awaiting dmg system start"),
+					hold(1, notMember),
+				},
+			},
+		},
+		"excluded rank starts": {
+			req: &mgmtpb.EnginePreflightReq{Engines: engines(0)},
+			members: system.Members{
+				mockMember(t, 0, 1, "excluded"),
+			},
+			expResp: &mgmtpb.EnginePreflightResp{
+				Engines: []*mgmtpb.EnginePreflightResp_Engine{start(0)},
+			},
+		},
+		"one result per engine": {
+			req: &mgmtpb.EnginePreflightReq{Engines: engines(0, 1, uint32(ranklist.NilRank))},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "stopped"),
+			},
+			expResp: &mgmtpb.EnginePreflightResp{
+				Engines: []*mgmtpb.EnginePreflightResp_Engine{
+					start(0),
+					hold(1, "rank 1 is Stopped; awaiting dmg system start"),
+					hold(2, notMember),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			svc := mgmtSystemTestSetup(t, log, tc.members, []*control.HostResponse{})
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+			if tc.noRestart {
+				if err := system.SetUserProperty(svc.sysdb, svc.systemProps,
+					daos.SystemPropertyRestartEnginesOnBoot.String(), "false"); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			gotResp, gotErr := svc.EnginePreflight(test.Context(t), tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, test.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func mockStartEnginesResp(a int32, ranks ...int32) *control.HostResponse {
+	resp := &ctlpb.StartEnginesResp{}
+	for i, r := range ranks {
+		resp.Results = append(resp.Results, &ctlpb.EngineResult{
+			Index: uint32(i), State: stateString(system.MemberStateStarting), Uuid: test.MockUUID(r),
+		})
+	}
+	return &control.HostResponse{Addr: test.MockHostAddr(a).String(), Message: resp}
+}
+
+// mockHostFailure is a host-level start failure; its message is prose and not compared.
+func mockHostFailure(a int32) *sharedpb.RankResult {
+	return &sharedpb.RankResult{
+		Rank: uint32(ranklist.NilRank), Action: "start", Errored: true,
+		State: stateString(system.MemberStateErrored), Addr: test.MockHostAddr(a).String(),
+	}
+}
+
+// startResultCmpOpts compares start results without their host error prose.
+func startResultCmpOpts() []cmp.Option {
+	return append(test.DefaultCmpOpts(), protocmp.IgnoreFields(&sharedpb.RankResult{}, "msg"))
+}
+
+func mockJoinedRank(r uint32, a int32) *sharedpb.RankResult {
+	rr := mockRankSuccess("start", r, a)
+	rr.State = stateString(system.MemberStateJoined)
+	return rr
+}
+
+func TestServer_MgmtSvc_SystemInitialize(t *testing.T) {
+
+	for name, tc := range map[string]struct {
+		req        *mgmtpb.SystemInitializeReq
+		members    system.Members
+		hasPool    bool
+		joinLater  system.Members
+		mResps     []*control.HostResponse
+		expResults []*sharedpb.RankResult
+		expErr     error
+	}{
+		"nil req": {
+			req:    (*mgmtpb.SystemInitializeReq)(nil),
+			expErr: errors.New("nil request"),
+		},
+		"not system leader": {
+			req:    &mgmtpb.SystemInitializeReq{Sys: "quack"},
+			expErr: FaultWrongSystem("quack", build.DefaultSystemName),
+		},
+		"already initialized": {
+			req: &mgmtpb.SystemInitializeReq{Hosts: "10.0.0.1"},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+			},
+			hasPool: true,
+			expErr:  FaultSystemInitialized(1),
+		},
+		"rerun after partial join": {
+			req:    &mgmtpb.SystemInitializeReq{Hosts: "10.0.0.[1-2]", JoinTimeout: 5},
+			mResps: []*control.HostResponse{mockStartEnginesResp(1, 0, 1), mockStartEnginesResp(2, 2, 3)},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+			},
+			joinLater: system.Members{
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockJoinedRank(0, 1), mockJoinedRank(1, 1), mockJoinedRank(2, 2), mockJoinedRank(3, 2),
+			},
+		},
+		"no hosts": {
+			req:    &mgmtpb.SystemInitializeReq{},
+			expErr: errors.New("no hosts specified"),
+		},
+		"no join timeout": {
+			req:    &mgmtpb.SystemInitializeReq{Hosts: "10.0.0.[1-2]"},
+			mResps: []*control.HostResponse{mockStartEnginesResp(1, 0, 1), mockStartEnginesResp(2, 2, 3)},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockJoinedRank(0, 1), mockJoinedRank(1, 1), mockJoinedRank(2, 2), mockJoinedRank(3, 2),
+			},
+		},
+		"started engine without uuid is reported": {
+			req: &mgmtpb.SystemInitializeReq{Hosts: "10.0.0.1", JoinTimeout: 5},
+			mResps: []*control.HostResponse{{
+				Addr: test.MockHostAddr(1).String(),
+				Message: &ctlpb.StartEnginesResp{Results: []*ctlpb.EngineResult{
+					{Index: 0, State: stateString(system.MemberStateStarting)},
+				}},
+			}},
+			expResults: []*sharedpb.RankResult{mockHostFailure(1)},
+		},
+		"host awaiting format is reported without waiting": {
+			req: &mgmtpb.SystemInitializeReq{Hosts: "10.0.0.[1-2]", JoinTimeout: 5},
+			mResps: []*control.HostResponse{
+				mockStartEnginesResp(1, 0),
+				{
+					Addr: test.MockHostAddr(2).String(),
+					Message: &ctlpb.StartEnginesResp{Results: []*ctlpb.EngineResult{
+						{Index: 0, State: stateString(system.MemberStateAwaitFormat)},
+					}},
+				},
+			},
+			joinLater: system.Members{
+				mockMember(t, 0, 1, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockJoinedRank(0, 1),
+				mockHostFailure(2),
+			},
+		},
+		"host whose engine exits is reported without waiting": {
+			req: &mgmtpb.SystemInitializeReq{Hosts: "10.0.0.[1-2]", JoinTimeout: 5},
+			mResps: []*control.HostResponse{
+				mockStartEnginesResp(1, 0),
+				{
+					Addr: test.MockHostAddr(2).String(),
+					Message: &ctlpb.StartEnginesResp{Results: []*ctlpb.EngineResult{
+						{
+							Index: 0, State: stateString(system.MemberStateErrored),
+							Error: "exit status 1",
+						},
+					}},
+				},
+			},
+			joinLater: system.Members{
+				mockMember(t, 0, 1, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockJoinedRank(0, 1),
+				mockHostFailure(2),
+			},
+		},
+		"engines join under another control address": {
+			req:    &mgmtpb.SystemInitializeReq{Hosts: "10.0.0.1", JoinTimeout: 5},
+			mResps: []*control.HostResponse{mockStartEnginesResp(1, 0, 1)},
+			joinLater: system.Members{
+				mockMember(t, 0, 3, "joined"),
+				mockMember(t, 1, 3, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockJoinedRank(0, 1), mockJoinedRank(1, 1),
+			},
+		},
+		"engines join": {
+			req:    &mgmtpb.SystemInitializeReq{Hosts: "10.0.0.[1-2]", JoinTimeout: 5},
+			mResps: []*control.HostResponse{mockStartEnginesResp(1, 0, 1), mockStartEnginesResp(2, 2, 3)},
+			joinLater: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "joined"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expResults: []*sharedpb.RankResult{
+				mockJoinedRank(0, 1), mockJoinedRank(1, 1), mockJoinedRank(2, 2), mockJoinedRank(3, 2),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+			if tc.hasPool {
+				addTestPoolService(t, svc.sysdb, mockPoolService)
+			}
+			if len(tc.joinLater) > 0 {
+				go func() {
+					time.Sleep(instanceUpdateDelay)
+					for _, m := range tc.joinLater {
+						if _, err := svc.membership.Add(m); err != nil {
+							t.Error(err)
+						}
+					}
+				}()
+			}
+
+			gotResp, gotErr := svc.SystemInitialize(test.Context(t), tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, startResultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected results (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_MgmtSvc_SystemExtend(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *mgmtpb.SystemExtendReq
+		members    system.Members
+		mResps     []*control.HostResponse
+		expResults []*sharedpb.RankResult
+		expErr     error
+	}{
+		"not initialized": {
+			req:    &mgmtpb.SystemExtendReq{Hosts: "10.0.0.1"},
+			expErr: FaultSystemNotInitialized(),
+		},
+		"host unreachable": {
+			req: &mgmtpb.SystemExtendReq{Hosts: "10.0.0.[1-2]", JoinTimeout: 1},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+			},
+			mResps: []*control.HostResponse{
+				mockStartEnginesResp(1, 0, 1),
+				{Addr: test.MockHostAddr(2).String(), Error: errors.New("connection refused")},
+			},
+			expResults: []*sharedpb.RankResult{
+				mockJoinedRank(0, 1), mockJoinedRank(1, 1), mockHostFailure(2),
+			},
+		},
+		"engines do not all join": {
+			req: &mgmtpb.SystemExtendReq{Hosts: "10.0.0.[1-2]", JoinTimeout: 1},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 1, "joined"),
+				mockMember(t, 2, 2, "joined"),
+			},
+			mResps: []*control.HostResponse{mockStartEnginesResp(1, 0, 1), mockStartEnginesResp(2, 2, 3)},
+			expResults: []*sharedpb.RankResult{
+				mockJoinedRank(0, 1), mockJoinedRank(1, 1), mockJoinedRank(2, 2),
+				mockHostFailure(2),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			svc := mgmtSystemTestSetup(t, log, tc.members, tc.mResps)
+			tc.req.Sys = build.DefaultSystemName
+
+			gotResp, gotErr := svc.SystemExtend(test.Context(t), tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, startResultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected results (-want, +got)\n%s\n", diff)
 			}
 		})
 	}
@@ -4125,7 +4533,6 @@ func TestServer_MgmtSvc_doGroupUpdate(t *testing.T) {
 				svc := mgmtSystemTestSetup(t, l, system.Members{}, nil)
 				return svc
 			},
-			expErr: system.ErrEmptyGroupMap,
 		},
 		"map version already updated": {
 			getSvc: func(t *testing.T, l logging.Logger) *mgmtSvc {

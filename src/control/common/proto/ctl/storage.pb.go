@@ -346,6 +346,7 @@ type StorageFormatReq struct {
 	Scm           *FormatScmReq          `protobuf:"bytes,2,opt,name=scm,proto3" json:"scm,omitempty"`
 	Reformat      bool                   `protobuf:"varint,3,opt,name=reformat,proto3" json:"reformat,omitempty"`
 	Replace       bool                   `protobuf:"varint,4,opt,name=replace,proto3" json:"replace,omitempty"`
+	Start         bool                   `protobuf:"varint,5,opt,name=start,proto3" json:"start,omitempty"` // start the engines after format instead of holding them
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -404,6 +405,13 @@ func (x *StorageFormatReq) GetReformat() bool {
 func (x *StorageFormatReq) GetReplace() bool {
 	if x != nil {
 		return x.Replace
+	}
+	return false
+}
+
+func (x *StorageFormatReq) GetStart() bool {
+	if x != nil {
+		return x.Start
 	}
 	return false
 }
@@ -686,12 +694,13 @@ const file_ctl_storage_proto_rawDesc = "" +
 	"\x04nvme\x18\x01 \x01(\v2\x11.ctl.ScanNvmeRespR\x04nvme\x12\"\n" +
 	"\x03scm\x18\x02 \x01(\v2\x10.ctl.ScanScmRespR\x03scm\x121\n" +
 	"\fsys_mem_info\x18\x03 \x01(\v2\x0f.ctl.SysMemInfoR\n" +
-	"sysMemInfo\"\x95\x01\n" +
+	"sysMemInfo\"\xab\x01\n" +
 	"\x10StorageFormatReq\x12&\n" +
 	"\x04nvme\x18\x01 \x01(\v2\x12.ctl.FormatNvmeReqR\x04nvme\x12#\n" +
 	"\x03scm\x18\x02 \x01(\v2\x11.ctl.FormatScmReqR\x03scm\x12\x1a\n" +
 	"\breformat\x18\x03 \x01(\bR\breformat\x12\x18\n" +
-	"\areplace\x18\x04 \x01(\bR\areplace\"o\n" +
+	"\areplace\x18\x04 \x01(\bR\areplace\x12\x14\n" +
+	"\x05start\x18\x05 \x01(\bR\x05start\"o\n" +
 	"\x11StorageFormatResp\x12/\n" +
 	"\x05crets\x18\x01 \x03(\v2\x19.ctl.NvmeControllerResultR\x05crets\x12)\n" +
 	"\x05mrets\x18\x02 \x03(\v2\x13.ctl.ScmMountResultR\x05mrets\"*\n" +

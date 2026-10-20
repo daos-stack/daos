@@ -1075,7 +1075,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 				MemberStateReady,         // rank 3
 				MemberStateJoined,        // rank 4
 				MemberStateStopping,      // rank 5
-				MemberStateStopped,       // rank 6
+				MemberStateStopped,       // rank 6, excluded
 				MemberStateExcluded,      // rank 7, excluded
 				MemberStateAdminExcluded, // rank 8, excluded
 				MemberStateErrored,       // rank 9
@@ -1103,10 +1103,6 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 					5: {
 						PrimaryURI:     MockControlAddr(t, 5).String(),
 						NumPrimaryCtxs: 5,
-					},
-					6: {
-						PrimaryURI:     MockControlAddr(t, 6).String(),
-						NumPrimaryCtxs: 6,
 					},
 					9: {
 						PrimaryURI:     MockControlAddr(t, 9).String(),

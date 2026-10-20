@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/events"
@@ -57,6 +58,65 @@ func (ei *EngineInstance) format(ctx context.Context) error {
 	return nil
 }
 
+var errStartAborted = errors.New("engine start aborted")
+
+// awaitStart blocks a held engine start until NotifyStartReady() releases it
+// or abortStart() sends it back to format.
+func (ei *EngineInstance) awaitStart(ctx context.Context) error {
+	if !ei.waitStart.Load() {
+		return nil
+	}
+
+	released := func(start bool) error {
+		if !start {
+			return errStartAborted
+		}
+		ei.waitStart.SetFalse()
+		return nil
+	}
+
+	// A format with --start or --replace releases the engine before it gets here.
+	select {
+	case start := <-ei.startReady:
+		return released(start)
+	default:
+	}
+
+	ei.log.Infof("%s instance %d awaiting start", build.DataPlaneName, ei.Index())
+	ei.onAwaitStart()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case start := <-ei.startReady:
+		return released(start)
+	}
+}
+
+// NotifyStartReady releases a held engine start, allowing it to proceed.
+func (ei *EngineInstance) NotifyStartReady() {
+	ei.Lock()
+	defer ei.Unlock()
+
+	// A parked abort wins; see abortStart.
+	select {
+	case ei.startReady <- true:
+	default:
+	}
+}
+
+// abortStart sends a held engine back to format.
+func (ei *EngineInstance) abortStart() {
+	ei.Lock()
+	defer ei.Unlock()
+
+	// Drain any previous release so that the next awaitStart() will block.
+	select {
+	case <-ei.startReady:
+	default:
+	}
+	ei.startReady <- false
+}
+
 func (ei *EngineInstance) initIncarnationFromSuperblock() error {
 	if ei.incarnation > 0 {
 		return nil
@@ -89,13 +149,19 @@ func (ei *EngineInstance) start(ctx context.Context) (chan *engine.RunnerExitInf
 	return ch, errors.Wrap(err, "runner Start")
 }
 
+var errExitedBeforeReady = errors.New("engine exited before it was ready")
+
 // waitReady awaits ready signal from I/O Engine before starting
 // management service on MS replicas immediately so other instances can join.
-// I/O Engine modules are then loaded.
-func (ei *EngineInstance) waitReady(ctx context.Context) error {
+// I/O Engine modules are then loaded. An engine that exits first is handled
+// here, as the run loop only watches for exits once this returns.
+func (ei *EngineInstance) waitReady(ctx context.Context, exitCh chan *engine.RunnerExitInfo) error {
 	select {
 	case <-ctx.Done(): // propagated harness exit
 		return ctx.Err()
+	case exit := <-exitCh:
+		ei.handleExit(ctx, exit.PID, exit.Error)
+		return errExitedBeforeReady
 	case ready := <-ei.awaitDrpcReady():
 		if err := ei.finishStartup(ctx, ready); err != nil {
 			return err
@@ -149,7 +215,11 @@ func (ei *EngineInstance) handleExit(ctx context.Context, exitPid int, exitErr e
 		ei.log.Debugf("instance %d: no rank (%s)", engineIdx, err)
 	}
 
-	ei._lastErr = exitErr
+	// Only a requested stop reports a clean exit as stopped.
+	if exitErr == nil && !ei.stopRequested.Load() {
+		exitErr = errors.New("exited without a stop request")
+	}
+	ei.setExitErr(exitErr)
 
 	details := []string{fmt.Sprintf("instance %d", engineIdx)}
 	if exitPid != 0 {
@@ -190,22 +260,32 @@ func (ei *EngineInstance) startRunner(parent context.Context) (_ chan *engine.Ru
 		}
 	}()
 
-	if err = ei.format(ctx); err != nil {
+	for {
+		if err = ei.format(ctx); err != nil {
+			return
+		}
+		if err = ei.awaitStart(ctx); err != errStartAborted {
+			break
+		}
+	}
+	if err != nil {
 		return
 	}
 
+	ei.stopRequested.SetFalse()
 	runnerExitChan, err := ei.start(ctx)
 	if err != nil {
 		return
 	}
 	ei.waitDrpc.SetTrue()
 
-	return runnerExitChan, ei.waitReady(ctx)
+	return runnerExitChan, ei.waitReady(ctx, runnerExitChan)
 }
 
 // requestStart makes a request to (re-)start the engine, and blocks
 // until the request is received.
 func (ei *EngineInstance) requestStart(ctx context.Context) {
+	ei.setExitErr(nil)
 	select {
 	case <-ctx.Done():
 	case ei.startRequested <- true:
@@ -236,8 +316,11 @@ func (ei *EngineInstance) Run(ctx context.Context) {
 
 				runnerExitCh, err = ei.startRunner(ctx)
 				if err != nil {
-					ei.log.Errorf("runner exited without starting process: %+v", err)
-					ei.handleExit(ctx, 0, err)
+					runnerExitCh = nil
+					if err != errExitedBeforeReady {
+						ei.log.Errorf("runner exited without starting process: %+v", err)
+						ei.handleExit(ctx, 0, err)
+					}
 					continue
 				}
 			case runnerExit := <-runnerExitCh:
@@ -257,6 +340,7 @@ func (ei *EngineInstance) Run(ctx context.Context) {
 
 // Stop sends signal to stop EngineInstance runner (nonblocking).
 func (ei *EngineInstance) Stop(signal os.Signal) error {
+	ei.stopRequested.SetTrue()
 	ei.runner.Signal(signal)
 	return nil
 }

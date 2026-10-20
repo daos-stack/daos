@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -222,10 +222,10 @@ class EngineEvents(TestWithTelemetry):
         Steps are described in DAOS-15181.
 
         1. Gather initial data for the required metrics for all the server nodes.
-        2. Stop a rank.
-        3. Verify the desired rank has stopped successfully.
+        2. Kill a rank.
+        3. Verify the desired rank has died.
         4. Verify that the RPCs circulated.
-        5. Restart the stopped rank.
+        5. Restart the killed rank.
         6. Verify the desired rank restarted successfully.
         7. Gather final data for required metrics with the same command as in step 1.
         8. Compare the before and after values.
@@ -240,17 +240,17 @@ class EngineEvents(TestWithTelemetry):
         rank_count = self.server_managers[0].engines
         telemetry_before = self.collect_telemetry(rank_count=rank_count)
 
-        # 2. Stop a rank.
+        # 2. Kill a rank.
         restart_rank = rank_count - 1
-        self.log_step(f"Stop rank {restart_rank} and wait for a while for RPCs to circulate")
-        self.server_managers[0].stop_ranks(ranks=[restart_rank])
+        self.log_step(f"Kill rank {restart_rank} and wait for a while for RPCs to circulate")
+        self.server_managers[0].kill_ranks([restart_rank])
 
-        # 3. Verify the desired rank has stopped successfully.
-        self.log_step("Verify the desired rank has stopped successfully.")
+        # 3. Verify the desired rank has died.
+        self.log_step("Verify the desired rank has died.")
         failed_ranks = self.server_managers[0].check_rank_state(
-            ranks=[restart_rank], valid_states=["stopped", "excluded"], max_checks=15)
+            ranks=[restart_rank], valid_states=["errored", "excluded"], max_checks=15)
         if failed_ranks:
-            self.fail(f"Rank {restart_rank} didn't stop!")
+            self.fail(f"Rank {restart_rank} didn't die!")
 
         # 4. Verify that the RPCs circulated.
         for count in range(10):
@@ -270,8 +270,8 @@ class EngineEvents(TestWithTelemetry):
 
             self.log.info("RPCs didn't circulate. Check again. %d", count)
 
-        # 5. Restart the stopped rank.
-        self.log_step("Restart the stopped rank.")
+        # 5. Restart the killed rank.
+        self.log_step("Restart the killed rank.")
         self.server_managers[0].start_ranks(ranks=[restart_rank])
 
         # 6. Verify the desired rank restarted successfully.

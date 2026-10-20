@@ -1147,6 +1147,12 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 			continue
 		}
 		engine.NotifyStorageReady(req.Replace)
+		// --start releases every engine still held, formatted now or
+		// earlier; --replace releases only the engine it formatted.
+		_, skipped := instanceSkips[idx]
+		if (req.Start && engine.isAwaitingStart()) || (req.Replace && !skipped) {
+			engine.NotifyStartReady()
+		}
 	}
 
 	return resp, nil

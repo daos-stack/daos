@@ -16,6 +16,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -47,6 +48,84 @@ func TestControl_IsMSConnectionFailure(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			test.AssertEqual(t, tc.expResult, IsMSConnectionFailure(tc.err), "")
+		})
+	}
+}
+
+func TestControl_StartEngines(t *testing.T) {
+	for name, tc := range map[string]struct {
+		uErr    error
+		uResps  []*HostResponse
+		expResp *StartEnginesResp
+		expErr  error
+	}{
+		"local failure": {
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			uResps: []*HostResponse{
+				{
+					Addr:  "host1",
+					Error: errors.New("remote failed"),
+				},
+			},
+			expResp: &StartEnginesResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "remote failed"}),
+			},
+		},
+		"mixed results": {
+			uResps: []*HostResponse{
+				{
+					Addr: "host1",
+					Message: &ctlpb.StartEnginesResp{
+						Results: []*ctlpb.EngineResult{
+							{Index: 0, State: system.MemberStateReady.String(), Uuid: test.MockUUID(0)},
+							{Index: 1, State: system.MemberStateReady.String(), Uuid: test.MockUUID(1)},
+						},
+					},
+				},
+				{
+					Addr: "host2",
+					Message: &ctlpb.StartEnginesResp{
+						Results: []*ctlpb.EngineResult{
+							{Index: 0, State: system.MemberStateStopped.String()},
+						},
+					},
+				},
+				{
+					Addr:  "host3",
+					Error: errors.New("connection refused"),
+				},
+			},
+			expResp: &StartEnginesResp{
+				Results: []*EngineResult{
+					{Addr: "host1", Index: 0, State: system.MemberStateReady.String(), UUID: test.MockUUID(0)},
+					{Addr: "host1", Index: 1, State: system.MemberStateReady.String(), UUID: test.MockUUID(1)},
+					{Addr: "host2", Index: 0, State: system.MemberStateStopped.String()},
+				},
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host3", "connection refused"}),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
+			})
+
+			gotResp, gotErr := StartEngines(test.Context(t), mi, &StartEnginesReq{})
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
@@ -677,6 +756,134 @@ func TestControl_SystemQuery(t *testing.T) {
 	}
 }
 
+func mockInitializeReq(joinTimeout time.Duration) *SystemInitializeReq {
+	req := &SystemInitializeReq{JoinTimeout: joinTimeout}
+	req.Hosts.Replace(hostlist.MustCreateSet("10.0.0.[1-2]"))
+	return req
+}
+
+func TestControl_SystemInitialize(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *SystemInitializeReq
+		uErr       error
+		uResp      *UnaryResponse
+		uResps     []*UnaryResponse
+		expErr     error
+		expResp    *SystemStartHostsResp
+		expRespErr error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil *control.SystemInitializeReq request"),
+		},
+		"no hosts": {
+			req:    &SystemInitializeReq{JoinTimeout: time.Minute},
+			expErr: errors.New("no hosts specified"),
+		},
+		"negative join timeout": {
+			req:    mockInitializeReq(-time.Minute),
+			expErr: errors.New("join timeout must be at least 1s"),
+		},
+		"sub-second join timeout": {
+			req:    mockInitializeReq(500 * time.Millisecond),
+			expErr: errors.New("join timeout must be at least 1s"),
+		},
+		"no join timeout": {
+			req: mockInitializeReq(0),
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemInitializeResp{
+				Results: []*sharedpb.RankResult{
+					{Rank: 0, Addr: "10.0.0.1:10001", State: system.MemberStateJoined.String()},
+				},
+			}),
+			expResp: &SystemStartHostsResp{
+				Results: system.MemberResults{
+					withAddr(system.NewMemberResult(0, nil, system.MemberStateJoined), "10.0.0.1:10001"),
+				},
+			},
+		},
+		"local failure": {
+			req:    mockInitializeReq(time.Minute),
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req:    mockInitializeReq(time.Minute),
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"retries while the replica database starts": {
+			req: mockInitializeReq(time.Minute),
+			uResps: []*UnaryResponse{
+				MockMSResponse("10.0.0.1:10001", system.ErrUninitialized, nil),
+				MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemInitializeResp{
+					Results: []*sharedpb.RankResult{
+						{Rank: 0, Addr: "10.0.0.1:10001", State: system.MemberStateJoined.String()},
+					},
+				}),
+			},
+			expResp: &SystemStartHostsResp{
+				Results: system.MemberResults{
+					withAddr(system.NewMemberResult(0, nil, system.MemberStateJoined), "10.0.0.1:10001"),
+				},
+			},
+		},
+		"members joined": {
+			req: mockInitializeReq(time.Minute),
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemInitializeResp{
+				Results: []*sharedpb.RankResult{
+					{Rank: 0, Addr: "10.0.0.1:10001", State: system.MemberStateJoined.String()},
+					{Rank: 1, Addr: "10.0.0.1:10001", State: system.MemberStateJoined.String()},
+					{
+						Rank: uint32(ranklist.NilRank), Addr: "10.0.0.2:10001",
+						Errored: true, Msg: "0 of 2 engines joined",
+						State: system.MemberStateErrored.String(),
+					},
+				},
+			}),
+			expResp: &SystemStartHostsResp{
+				Results: system.MemberResults{
+					withAddr(system.NewMemberResult(0, nil, system.MemberStateJoined), "10.0.0.1:10001"),
+					withAddr(system.NewMemberResult(1, nil, system.MemberStateJoined), "10.0.0.1:10001"),
+					withAddr(system.NewMemberResult(ranklist.NilRank, errors.New("0 of 2 engines joined"),
+						system.MemberStateErrored), "10.0.0.2:10001"),
+				},
+			},
+			expRespErr: errors.New("failed host 10.0.0.2:10001"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:       tc.uErr,
+				UnaryResponse:    tc.uResp,
+				UnaryResponseSet: tc.uResps,
+			})
+
+			gotResp, gotErr := SystemInitialize(test.Context(t), mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(SystemStartHostsResp{}, system.MemberResult{}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
+		})
+	}
+}
+
+func withAddr(mr *system.MemberResult, addr string) *system.MemberResult {
+	mr.Addr = addr
+	return mr
+}
+
 func TestControl_SystemStart(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStartReq)
@@ -694,6 +901,7 @@ func TestControl_SystemStart(t *testing.T) {
 		req        *SystemStartReq
 		uErr       error
 		uResp      *UnaryResponse
+		uResps     []*UnaryResponse
 		expErr     error
 		expResp    *SystemStartResp
 		expRespErr error
@@ -711,6 +919,22 @@ func TestControl_SystemStart(t *testing.T) {
 			req:    new(SystemStartReq),
 			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
 			expErr: errors.New("remote failed"),
+		},
+		"retries while the replica database starts": {
+			req: new(SystemStartReq),
+			uResps: []*UnaryResponse{
+				MockMSResponse("10.0.0.1:10001", system.ErrUninitialized, nil),
+				MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemStartResp{
+					Results: []*sharedpb.RankResult{
+						{Rank: 0, State: system.MemberStateReady.String()},
+					},
+				}),
+			},
+			expResp: &SystemStartResp{
+				Results: system.MemberResults{
+					system.NewMemberResult(0, nil, system.MemberStateReady),
+				},
+			},
 		},
 		"request absent host set": {
 			req: testReqHS,
@@ -802,8 +1026,9 @@ func TestControl_SystemStart(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := NewMockInvoker(log, &MockInvokerConfig{
-				UnaryError:    tc.uErr,
-				UnaryResponse: tc.uResp,
+				UnaryError:       tc.uErr,
+				UnaryResponse:    tc.uResp,
+				UnaryResponseSet: tc.uResps,
 			})
 
 			gotResp, gotErr := SystemStart(test.Context(t), mi, tc.req)
@@ -1643,6 +1868,61 @@ func TestControl_LeaderQuery(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_EnginePreflight(t *testing.T) {
+	for name, tc := range map[string]struct {
+		uErr    error
+		uResp   *UnaryResponse
+		expErr  error
+		expResp *EnginePreflightResp
+	}{
+		"local failure": {
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"results returned": {
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.EnginePreflightResp{
+				Engines: []*mgmtpb.EnginePreflightResp_Engine{
+					{Idx: 0, Start: true},
+					{Idx: 1, Reason: "rank 2 is Stopped"},
+				},
+			}),
+			expResp: &EnginePreflightResp{
+				Engines: []*PreflightResult{
+					{Idx: 0, Start: true},
+					{Idx: 1, Reason: "rank 2 is Stopped"},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			req := &EnginePreflightReq{
+				Engines: []*PreflightEngine{{Idx: 0, Rank: 1}, {Idx: 1, Rank: 2}},
+			}
+			gotResp, gotErr := EnginePreflight(test.Context(t), mi, req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})

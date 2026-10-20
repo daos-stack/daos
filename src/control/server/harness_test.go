@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
@@ -439,7 +440,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					t.Fatalf("unexpected rank for instance %d (-want, +got):\n%s\n",
 						ei.Index(), diff)
 				}
-				CmpErr(t, tc.expIoErrs[ei.Index()], ei._lastErr)
+				CmpErr(t, tc.expIoErrs[ei.Index()], ei.getExitErr())
 			}
 			members, err := membership.Members(nil)
 			if err != nil {
@@ -703,6 +704,148 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 			test.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
 			test.AssertEqual(t, db.isLeader, !tc.expNotLeader, "unexpected leader state")
 			test.AssertEqual(t, drpcFailureInvoked.Load(), tc.expFailHandler, "unexpected fail handler invocation")
+		})
+	}
+}
+
+func TestServer_Harness_preflight(t *testing.T) {
+	rpcTimeout := control.FaultRpcTimeout(&control.EnginePreflightReq{})
+	engines := func(ranks ...ranklist.Rank) []*control.PreflightEngine {
+		var out []*control.PreflightEngine
+		for i, r := range ranks {
+			out = append(out, &control.PreflightEngine{Idx: uint32(i), Rank: r})
+		}
+		return out
+	}
+
+	defer func(d time.Duration) { preflightBatchDelay = d }(preflightBatchDelay)
+	preflightBatchDelay = 10 * time.Millisecond
+
+	for name, tc := range map[string]struct {
+		ranks    []*ranklist.Rank // per instance; nil = never joined
+		stagger  bool             // second instance reaches the gate after the first batch
+		reformat bool             // first instance is reformatted while the request is in flight
+		errs     []error
+		resps    []*control.EnginePreflightResp
+		expStart []bool
+		expReqs  []*control.EnginePreflightReq
+	}{
+		"unreachable then start": {
+			ranks: []*ranklist.Rank{ranklist.NewRankPtr(0)},
+			errs:  []error{rpcTimeout, nil},
+			resps: []*control.EnginePreflightResp{nil, {
+				Engines: []*control.PreflightResult{{Idx: 0, Start: true}},
+			}},
+			expStart: []bool{true},
+		},
+		"ms error holds": {
+			ranks:    []*ranklist.Rank{ranklist.NewRankPtr(0)},
+			errs:     []error{errors.New("quack")},
+			expStart: []bool{false},
+		},
+		"one request for all held instances": {
+			ranks: []*ranklist.Rank{ranklist.NewRankPtr(2), nil},
+			resps: []*control.EnginePreflightResp{{
+				Engines: []*control.PreflightResult{
+					{Idx: 0, Start: true},
+					{Idx: 1, Reason: "not a system member"},
+					{Idx: 7, Start: true},
+				},
+			}},
+			expStart: []bool{true, false},
+			expReqs: []*control.EnginePreflightReq{
+				{Engines: engines(2, ranklist.NilRank)},
+			},
+		},
+		"missing result holds": {
+			ranks: []*ranklist.Rank{ranklist.NewRankPtr(0), ranklist.NewRankPtr(1)},
+			resps: []*control.EnginePreflightResp{{
+				Engines: []*control.PreflightResult{{Idx: 0, Start: true}},
+			}},
+			expStart: []bool{true, false},
+		},
+		"reformatted before result": {
+			ranks:    []*ranklist.Rank{ranklist.NewRankPtr(0)},
+			reformat: true,
+			resps: []*control.EnginePreflightResp{{
+				Engines: []*control.PreflightResult{{Idx: 0, Start: true}},
+			}},
+			expStart: []bool{false},
+		},
+		"late arrival gets its own request": {
+			ranks:   []*ranklist.Rank{ranklist.NewRankPtr(0), ranklist.NewRankPtr(1)},
+			stagger: true,
+			resps: []*control.EnginePreflightResp{
+				{Engines: []*control.PreflightResult{{Idx: 0, Start: true}}},
+				{Engines: []*control.PreflightResult{{Idx: 1, Reason: "rank 1 is Stopped"}}},
+			},
+			expStart: []bool{true, false},
+			expReqs: []*control.EnginePreflightReq{
+				{Engines: engines(0)},
+				{Engines: []*control.PreflightEngine{{Idx: 1, Rank: 1}}},
+			},
+		},
+	} {
+		tc := tc // the preflight closure outlives the subtest's loop iteration
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var mu sync.Mutex
+			var gotReqs []*control.EnginePreflightReq
+			var instances []*EngineInstance
+			preflight := func(_ context.Context, req *control.EnginePreflightReq) (*control.EnginePreflightResp, error) {
+				mu.Lock()
+				defer mu.Unlock()
+				call := len(gotReqs)
+				gotReqs = append(gotReqs, req)
+				if tc.reformat {
+					instances[0].setSuperblock(&Superblock{UUID: test.MockUUID()})
+				}
+				if call < len(tc.errs) && tc.errs[call] != nil {
+					return nil, tc.errs[call]
+				}
+				return tc.resps[call], nil
+			}
+
+			harness := NewEngineHarness(log).WithPreflight(preflight)
+			for _, rank := range tc.ranks {
+				ei := NewEngineInstance(log, nil, nil, engine.NewTestRunner(nil, engine.MockConfig()), nil)
+				if err := harness.AddInstance(ei); err != nil {
+					t.Fatal(err)
+				}
+				ei.setSuperblock(&Superblock{UUID: test.MockUUID(), Rank: rank, ValidRank: rank != nil})
+				instances = append(instances, ei)
+			}
+
+			ctx, cancel := context.WithTimeout(test.Context(t), 200*time.Millisecond)
+			defer cancel()
+			harness.holdStarts(ctx)
+
+			errs := make([]error, len(instances))
+			var wg sync.WaitGroup
+			for i, ei := range instances {
+				if tc.stagger && i > 0 {
+					time.Sleep(5 * preflightBatchDelay)
+				}
+				wg.Add(1)
+				go func(i int, ei *EngineInstance) {
+					defer wg.Done()
+					errs[i] = ei.awaitStart(ctx)
+				}(i, ei)
+			}
+			wg.Wait()
+
+			for i, err := range errs {
+				test.AssertEqual(t, tc.expStart[i], err == nil, fmt.Sprintf("instance %d start", i))
+			}
+			if tc.expReqs != nil {
+				mu.Lock()
+				defer mu.Unlock()
+				if diff := cmp.Diff(tc.expReqs, gotReqs, cmpopts.IgnoreUnexported(control.EnginePreflightReq{})); diff != "" {
+					t.Fatalf("unexpected requests (-want, +got):\n%s\n", diff)
+				}
+			}
 		})
 	}
 }

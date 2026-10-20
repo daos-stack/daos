@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -300,11 +300,12 @@ func (sp SystemPropertyKey) IsValid() bool {
 
 func (sp SystemPropertyKey) String() string {
 	if str, found := map[SystemPropertyKey]string{
-		SystemPropertyDaosVersion:     "daos_version",
-		SystemPropertyDaosSystem:      "daos_system",
-		SystemPropertyPoolScrubMode:   "pool_scrub_mode",
-		SystemPropertyPoolScrubThresh: "pool_scrub_thresh",
-		SystemPropertySelfHeal:        "self_heal",
+		SystemPropertyDaosVersion:          "daos_version",
+		SystemPropertyDaosSystem:           "daos_system",
+		SystemPropertyPoolScrubMode:        "pool_scrub_mode",
+		SystemPropertyPoolScrubThresh:      "pool_scrub_thresh",
+		SystemPropertySelfHeal:             "self_heal",
+		SystemPropertyRestartEnginesOnBoot: "restart_engines_on_boot",
 	}[sp]; found {
 		return str
 	}
@@ -345,6 +346,9 @@ const (
 	SystemPropertyPoolScrubThresh
 	// SystemPropertySelfHeal stores the self-heal policy for the system.
 	SystemPropertySelfHeal
+	// SystemPropertyRestartEnginesOnBoot controls whether daos_server starts its
+	// engines on boot without an explicit start request.
+	SystemPropertyRestartEnginesOnBoot
 	// NB: This must be the last entry.
 	systemPropertyMax
 )
@@ -611,6 +615,11 @@ func SystemProperties() SystemPropertyMap {
 				subsets(strings.Split(DefaultSysSelfHealFlagsStr, propValSep),
 					propValSep, selfHealFlagsEmpty)...),
 			Description: "Self-heal policy for the system",
+		},
+		SystemPropertyRestartEnginesOnBoot: SystemProperty{
+			Key:         SystemPropertyRestartEnginesOnBoot,
+			Value:       NewBoolPropVal(true),
+			Description: "Engine restart on daos_server boot",
 		},
 	}
 }

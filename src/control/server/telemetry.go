@@ -30,8 +30,13 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 	}
 	prometheus.MustRegister(c)
 
-	addFn := func(idx uint32, rank ranklist.Rank) func(context.Context) error {
+	addFn := func(idx uint32) onReadyFn {
 		return func(context.Context) error {
+			rank, err := engines[idx].GetRank()
+			if err != nil {
+				return errors.Wrapf(err, "engine %d", idx)
+			}
+
 			log.Debugf("Setting up metrics collection for engine %d", idx)
 			es, cleanup, err := promexp.NewEngineSource(ctx, idx, rank.Uint32())
 			if err != nil {
@@ -51,18 +56,7 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 	}
 
 	for i := 0; i < numEngines; i++ {
-		er, err := engines[i].GetRank()
-		if err != nil {
-			return errors.Wrapf(err, "failed to get rank for idx %d", i)
-		}
-
-		addEngineSrc := addFn(uint32(i), er)
-		if err := addEngineSrc(ctx); err != nil {
-			return err
-		}
-
-		// Set up engine to add/remove source on exit/restart
-		engines[i].OnReady(addEngineSrc)
+		engines[i].OnReady(addFn(uint32(i)))
 		engines[i].OnInstanceExit(delFn(uint32(i)))
 	}
 
