@@ -281,10 +281,11 @@ static inline bool
 daos_is_valid_uuid_string(const char *uuid, int sensitive)
 {
 	d_iov_t iov;
+	size_t  len = strnlen(uuid, DAOS_UUID_STR_SIZE);
 
 	iov.iov_buf     = (void *)uuid;
-	iov.iov_buf_len = DAOS_UUID_STR_SIZE;
-	iov.iov_len     = strnlen(uuid, DAOS_UUID_STR_SIZE);
+	iov.iov_buf_len = len;
+	iov.iov_len     = len;
 
 	return daos_is_valid_uuid_iov(&iov, sensitive);
 }
