@@ -130,7 +130,7 @@ struct pool_component {
  * (normally 1), so co_fseq == co_ver is a unique baseline mark.
  *
  * Neither co_fseq nor co_ver is touched by MAP_REINT, MAP_EXTEND, MAP_ADD_IN, or
- * MAP_REVERT_REBUILD (baseline branch also restores co_in_ver = co_ver), so this
+ * MAP_REVERT_REBUILD, so this
  * invariant survives a baseline reint -> revert-failure round trip: a baseline that
  * failed to reintegrate is still classified as baseline.
  */
@@ -164,6 +164,21 @@ pool_comp_is_drain_downout(struct pool_component *comp)
 {
 	return comp->co_status == PO_COMP_ST_DOWNOUT && !(comp->co_flags & PO_COMPF_DOWN2OUT) &&
 	       !pool_comp_is_creation_downout(comp);
+}
+
+/**
+ * True if the component is being reintegrated (UP) from DOWNOUT, either a real DOWNOUT
+ * (co_fseq > co_ver) or a creation-time DOWNOUT (co_fseq == co_ver), i.e. neither from DOWN
+ * (DOWN2UP) nor from NEW (extend, co_fseq < co_ver). Placement always remaps such a component
+ * in the pre-reintegration layout, so it never holds authoritative data, and its data stays on
+ * the spare targets. Failing it only aborts the reintegration: it goes back to DOWNOUT with its
+ * co_fseq, the placement remap order key, unchanged.
+ */
+static inline bool
+pool_comp_is_downout2up(struct pool_component *comp)
+{
+	return comp->co_status == PO_COMP_ST_UP && !(comp->co_flags & PO_COMPF_DOWN2UP) &&
+	       comp->co_fseq >= comp->co_ver;
 }
 
 /** a leaf of pool map */
@@ -368,6 +383,12 @@ update_dom_status_by_tgt_id(struct pool_map *map, uint32_t tgt_id, uint32_t stat
 			    uint32_t version, bool *updated, bool for_revert);
 bool
 pool_map_node_status_match(struct pool_domain *dom, unsigned int status);
+uint32_t
+pool_map_tgts_changed_after(struct pool_map *map, struct pool_target_id_list *tgts, uint32_t ver);
+uint32_t
+pool_map_tgts_dropped_after(struct pool_map *map, uint32_t ver);
+uint32_t
+pool_map_rebuild_stale_ver(struct pool_map *map, struct pool_target_id_list *tgts, uint32_t ver);
 
 struct pool_domain *
 pool_map_find_dom_by_rank(struct pool_map *map, uint32_t rank);

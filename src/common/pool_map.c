@@ -2398,6 +2398,101 @@ pool_map_node_status_match(struct pool_domain *dom, unsigned int status)
 	return true;
 }
 
+/**
+ * Check whether the status of any target in \a tgts has been changed after pool map version
+ * \a ver, e.g. a reintegrating (DOWNOUT->UP) target is reverted to DOWNOUT by an exclude,
+ * then is reintegrated (UP) again, or a reintegrating DOWN2UP target is excluded (DOWN). A
+ * rebuild task of these targets that has been computed with map version \a ver is stale in
+ * that case.
+ *
+ * The version of the last status change of a target is the max of co_fseq and
+ * co_in_ver/co_out_ver (they share the same field), as co_fseq is kept by some changes, e.g.
+ * UP->DOWNOUT. UPIN/NEW targets are not rebuilt by the task.
+ *
+ * \return	the max version of such changes, or 0 if there is none.
+ */
+uint32_t
+pool_map_tgts_changed_after(struct pool_map *map, struct pool_target_id_list *tgts, uint32_t ver)
+{
+	uint32_t changed_ver = 0;
+	int      i;
+
+	for (i = 0; tgts != NULL && i < tgts->pti_number; i++) {
+		struct pool_target *target = NULL;
+		uint32_t            tgt_ver;
+
+		if (pool_map_find_target(map, tgts->pti_ids[i].pti_id, &target) <= 0)
+			continue;
+
+		if (target->ta_comp.co_status & (PO_COMP_ST_UPIN | PO_COMP_ST_NEW))
+			continue;
+
+		tgt_ver = max(target->ta_comp.co_fseq, target->ta_comp.co_in_ver);
+
+		if (tgt_ver > ver && tgt_ver > changed_ver)
+			changed_ver = tgt_ver;
+	}
+
+	return changed_ver;
+}
+
+/**
+ * Check whether the layouts of the pool have been changed after pool map version \a ver in
+ * a way that is not covered by a rebuild of its own, i.e. a target status has been changed
+ * to DOWNOUT after \a ver.
+ *
+ * A rebuild task computes the layouts with pool map version \a ver, it may migrate data to
+ * any UP target of the POST_REBUILD layouts, not only to the targets of the task, e.g. to a
+ * DOWNOUT->UP reintegrating target. If such a target is excluded, it is dropped from the
+ * layouts with its co_fseq kept, i.e. reverted to DOWNOUT, so the rebuild of the exclusion
+ * has nothing to do, and the shards that the task has
+ * migrated to it would be lost once the task is finished. A placed DOWN target is rebuilt by
+ * its own rebuild, which also covers such shards, so it is not checked here.
+ *
+ * co_out_ver of a DOWNOUT target is also bumped by MAP_FINISH_REBUILD of a DOWN/DRAIN
+ * target. As there is only one running rebuild task of a pool, it is the task itself, while
+ * a queued task of an older version just starts with the newer version, which is harmless.
+ *
+ * \return	the max version of such changes, or 0 if there is none.
+ */
+uint32_t
+pool_map_tgts_dropped_after(struct pool_map *map, uint32_t ver)
+{
+	struct pool_target *targets     = pool_map_targets(map);
+	unsigned int        nr          = pool_map_target_nr(map);
+	uint32_t            dropped_ver = 0;
+	unsigned int        i;
+
+	for (i = 0; targets != NULL && i < nr; i++) {
+		struct pool_component *comp = &targets[i].ta_comp;
+
+		if (comp->co_status != PO_COMP_ST_DOWNOUT)
+			continue;
+
+		if (comp->co_out_ver > ver && comp->co_out_ver > dropped_ver)
+			dropped_ver = comp->co_out_ver;
+	}
+
+	return dropped_ver;
+}
+
+/**
+ * The version from which a rebuild task of \a tgts computed with pool map version \a ver
+ * is stale, see pool_map_tgts_changed_after() and pool_map_tgts_dropped_after(). The task
+ * should be aborted, its finish should be rejected, and it should be retried with the
+ * returned version.
+ *
+ * \return	the max version of such changes, or 0 if the task is not stale.
+ */
+uint32_t
+pool_map_rebuild_stale_ver(struct pool_map *map, struct pool_target_id_list *tgts, uint32_t ver)
+{
+	uint32_t changed_ver = pool_map_tgts_changed_after(map, tgts, ver);
+	uint32_t dropped_ver = pool_map_tgts_dropped_after(map, ver);
+
+	return max(changed_ver, dropped_ver);
+}
+
 static void
 fseq_sort_op_swap(void *array, int a, int b)
 {

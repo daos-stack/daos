@@ -47,6 +47,24 @@ update_tgt_down_drain_to_downout(uuid_t pool_uuid, struct pool_map *map, struct 
 }
 
 /*
+ * Revert a DOWNOUT->UP reintegration back to DOWNOUT. co_fseq must be kept unchanged, as it
+ * is the placement remap order key, and changing it would change the layout of all objects
+ * that have shards remapped from this target. co_out_ver records the version of the status
+ * change, so the reintegration task can find it is stale, see pool_map_tgts_changed_after().
+ * This also applies to a creation-time DOWNOUT target, co_out_ver is not used by it.
+ */
+static void
+update_tgt_up_revert_to_downout(uuid_t pool_uuid, struct pool_map *map, struct pool_target *target,
+				uint32_t *version)
+{
+	D_ASSERT(pool_comp_is_downout2up(&target->ta_comp));
+	D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to DOWNOUT fseq %u\n", DP_MAP(pool_uuid, map),
+		DP_TARGET(target), target->ta_comp.co_fseq);
+	target->ta_comp.co_status  = PO_COMP_ST_DOWNOUT;
+	target->ta_comp.co_out_ver = ++(*version);
+}
+
+/*
  * Updates a single target by the operation given in opc
  * If something changed, *version is incremented
  *
@@ -79,6 +97,23 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 			       DP_TARGET(target));
 			break;
 		case PO_COMP_ST_UP:
+			/*
+			 * Excluding a DOWNOUT->UP reintegrating target, it only aborts the
+			 * reintegration, so revert it to DOWNOUT and keep its co_fseq.
+			 */
+			if (pool_comp_is_downout2up(&target->ta_comp)) {
+				update_tgt_up_revert_to_downout(pool_uuid, map, target, version);
+				if (print_changes)
+					D_PRINT(DF_MAP ": " DF_TARGET " is excluded during "
+						       "reintegration, reverted.\n",
+						DP_MAP(pool_uuid, map), DP_TARGET(target));
+				D_INFO(DF_MAP ": " DF_TARGET " is excluded during reintegration, "
+					      "reverted.\n",
+				       DP_MAP(pool_uuid, map), DP_TARGET(target));
+				rc = 1;
+				break;
+			}
+			/* fallthrough */
 		case PO_COMP_ST_UPIN:
 			D_DEBUG(DB_MD, DF_MAP ": change " DF_TARGET " to DOWN\n",
 				DP_MAP(pool_uuid, map), DP_TARGET(target));
@@ -277,8 +312,7 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 			 *                       Revert to NEW.
 			 *   co_fseq == co_ver : baseline creation-DOWNOUT reintegration
 			 *                       (see pool_comp_is_creation_downout()).
-			 *                       Revert to DOWNOUT, preserving the invariant
-			 *                       (do not touch co_out_ver).
+			 *                       Revert to DOWNOUT, preserving the invariant.
 			 *   co_fseq >  co_ver : real UPIN->DOWN/DRAIN->DOWNOUT->UP or
 			 *                       UPIN->DOWN->UP (DOWN2UP). MAP_EXCLUDE bumped
 			 *                       co_fseq strictly above co_ver. Revert to
@@ -300,12 +334,14 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 					DP_MAP(pool_uuid, map), DP_TARGET(target));
 				target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
 				/*
-				 * Restore co_in_ver == co_ver == co_fseq to keep every baseline
-				 * invariant intact so subsequent reint attempts behave the same
-				 * as the very first attempt.
+				 * co_fseq == co_ver is kept, so subsequent reint attempts behave
+				 * the same as the very first attempt. co_out_ver records the
+				 * version of the status change, as MAP_EXCLUDE does, so the
+				 * rebuilds that may have migrated data to it can find they are
+				 * stale, see pool_map_tgts_dropped_after(). It is not used by the
+				 * RF check, a creation-time DOWNOUT is not a failure.
 				 */
-				target->ta_comp.co_in_ver = target->ta_comp.co_ver;
-				++(*version);
+				target->ta_comp.co_out_ver = ++(*version);
 			} else {
 				if (target->ta_comp.co_flags & PO_COMPF_DOWN2UP) {
 					D_DEBUG(DB_MD,
@@ -361,9 +397,19 @@ update_one_dom(struct pool_map *map, struct pool_domain *dom, struct pool_target
 		break;
 	case MAP_EXCLUDE:
 		/* Only change the dom status if it is from SWIM eviction */
-		if (exclude_rank &&
-		    !(dom->do_comp.co_status & (PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) &&
-		    pool_map_node_status_match(dom, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT))
+		if (!exclude_rank ||
+		    (dom->do_comp.co_status & (PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) ||
+		    !pool_map_node_status_match(dom, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT))
+			break;
+		/*
+		 * Excluding a DOWNOUT->UP reintegrating domain whose targets are all reverted to
+		 * DOWNOUT, revert it to DOWNOUT and keep its fseq, same as MAP_REVERT_REBUILD.
+		 */
+		if (pool_comp_is_downout2up(&dom->do_comp) &&
+		    pool_map_node_status_match(dom, PO_COMP_ST_DOWNOUT))
+			update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id, PO_COMP_ST_DOWNOUT,
+						    *version, &updated, true);
+		else
 			update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id, PO_COMP_ST_DOWN,
 						    *version, &updated, false);
 		break;

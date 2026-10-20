@@ -7567,6 +7567,9 @@ pool_prop_recov_cont_check_and_update(struct rdb_tx *tx, struct pool_svc *svc, b
  *				initialized to empty and freed by the caller)
  * \param[in]	src		source of the map update
  * \param[in]	flags		flags, such as skip the RF check, or check cont recovery
+ * \param[in]	rebuild_ver	for MAP_FINISH_REBUILD, the version of the rebuild that is
+ *				being finished, reject with -DER_STALE if it is stale (see
+ *				pool_map_rebuild_stale_ver); ignored for other operations
  */
 static int
 pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclude_rank,
@@ -7575,7 +7578,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 			     struct pool_target_addr_list *tgt_addrs, struct rsvc_hint *hint,
 			     bool *p_updated, uint32_t *map_version_p, uint32_t *tgt_map_ver,
 			     struct pool_target_addr_list *inval_tgt_addrs,
-			     enum map_update_source src, uint32_t flags)
+			     enum map_update_source src, uint32_t flags, uint32_t rebuild_ver)
 {
 	struct rdb_tx		tx;
 	struct pool_map	       *map;
@@ -7687,6 +7690,25 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc, bool exclud
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
+	if (opc == MAP_FINISH_REBUILD) {
+		uint32_t changed_ver = pool_map_rebuild_stale_ver(map, tgts, rebuild_ver);
+
+		/*
+		 * Checked against the committed pool map within this TX, to close the race
+		 * window between the rebuild leader having seen the rebuild done and here.
+		 */
+		if (changed_ver != 0) {
+			D_INFO(DF_UUID ": reject finishing stale rebuild ver %u, target changed "
+				       "at ver %u\n",
+			       DP_UUID(svc->ps_uuid), rebuild_ver, changed_ver);
+			D_GOTO(out_map, rc = -DER_STALE);
+		}
+	} else if (opc == MAP_REINT) {
+		/* Do not reintegrate a target until its stale rebuild task has been aborted. */
+		rc = ds_rebuild_reint_check(svc->ps_uuid, map, tgts);
+		if (rc != 0)
+			D_GOTO(out_map, rc);
+	}
 	rc = ds_pool_map_tgts_update(svc->ps_uuid, map, tgts, opc, exclude_rank, tgt_map_ver,
 				     true /* print_changes */);
 	if (rc != 0)
@@ -7906,11 +7928,10 @@ struct redist_open_hdls_arg {
 /* See pool_svc_update_map_internal documentation. */
 static int
 pool_update_map_internal(uuid_t pool_uuid, unsigned int opc, bool exclude_rank,
-			 struct pool_target_id_list *tgts,
-			 struct pool_target_addr_list *tgt_addrs,
-			 struct rsvc_hint *hint, bool *p_updated,
-			 uint32_t *map_version_p, uint32_t *tgt_map_ver,
-			 struct pool_target_addr_list *inval_tgt_addrs)
+			 struct pool_target_id_list *tgts, struct pool_target_addr_list *tgt_addrs,
+			 struct rsvc_hint *hint, bool *p_updated, uint32_t *map_version_p,
+			 uint32_t *tgt_map_ver, struct pool_target_addr_list *inval_tgt_addrs,
+			 uint32_t rebuild_ver)
 {
 	struct pool_svc	       *svc;
 	int			rc;
@@ -7919,9 +7940,9 @@ pool_update_map_internal(uuid_t pool_uuid, unsigned int opc, bool exclude_rank,
 	if (rc != 0)
 		return rc;
 
-	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, NULL, 0, NULL, tgts, tgt_addrs,
-					  hint, p_updated, map_version_p, tgt_map_ver,
-					  inval_tgt_addrs, MUS_DMG, POOL_TGT_UPDATE_SKIP_RF_CHECK);
+	rc = pool_svc_update_map_internal(
+	    svc, opc, exclude_rank, NULL, 0, NULL, tgts, tgt_addrs, hint, p_updated, map_version_p,
+	    tgt_map_ver, inval_tgt_addrs, MUS_DMG, POOL_TGT_UPDATE_SKIP_RF_CHECK, rebuild_ver);
 
 	pool_svc_put_leader(svc);
 	return rc;
@@ -7930,30 +7951,30 @@ pool_update_map_internal(uuid_t pool_uuid, unsigned int opc, bool exclude_rank,
 int
 ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
-	return pool_update_map_internal(pool_uuid, pool_opc_2map_opc(POOL_EXCLUDE_OUT), false,
-					list, NULL, NULL, NULL, NULL, NULL, NULL);
+	return pool_update_map_internal(pool_uuid, pool_opc_2map_opc(POOL_EXCLUDE_OUT), false, list,
+					NULL, NULL, NULL, NULL, NULL, NULL, 0);
 }
 
 int
 ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
 	return pool_update_map_internal(pool_uuid, pool_opc_2map_opc(POOL_ADD_IN), false, list,
-					NULL, NULL, NULL, NULL, NULL, NULL);
+					NULL, NULL, NULL, NULL, NULL, NULL, 0);
 }
 
 int
-ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list,
+ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list, uint32_t rebuild_ver,
 			   uint32_t *reclaim_ver)
 {
 	return pool_update_map_internal(pool_uuid, MAP_FINISH_REBUILD, true, list, NULL, NULL, NULL,
-					NULL, reclaim_ver, NULL);
+					NULL, reclaim_ver, NULL, rebuild_ver);
 }
 
 int
 ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list)
 {
-	return pool_update_map_internal(pool_uuid, MAP_REVERT_REBUILD, false, list,
-					NULL, NULL, NULL, NULL, NULL, NULL);
+	return pool_update_map_internal(pool_uuid, MAP_REVERT_REBUILD, false, list, NULL, NULL,
+					NULL, NULL, NULL, NULL, 0);
 }
 
 /*
@@ -8011,7 +8032,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
 					  extend_domains_nr, extend_domains, &target_list, list,
 					  hint, &updated, map_version, &tgt_map_ver, inval_list_out,
-					  src, flags);
+					  src, flags, 0 /* rebuild_ver */);
 	if (rc)
 		D_GOTO(out, rc);
 
