@@ -373,12 +373,6 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 		D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 	}
 
-	/* Object punched/deleted while yielding; cached obj_df and tree roots may be freed */
-	if (iter->it_type != VOS_ITER_OBJ && vos_obj_is_evicted(vos_iter2oiter(iter)->it_obj)) {
-		iter->it_anchors->ia_probe_level = VOS_ITER_OBJ;
-		return VOS_ITER_OBJ;
-	}
-
 	switch (iter->it_type) {
 	case VOS_ITER_OBJ:
 		anchor = &iter->it_anchors->ia_obj;
@@ -406,7 +400,7 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 	vos_dth_set(old, is_sysdb);
 
 	/* Children are bound to the old entry's subtree; a different entry means it's gone */
-	if (rc == 0 &&
+	if (rc == 0 && !vos_anchor_is_zero(&saved) &&
 	    (iter->it_type == VOS_ITER_OBJ || iter->it_type == VOS_ITER_DKEY ||
 	     iter->it_type == VOS_ITER_AKEY) &&
 	    memcmp(saved.da_buf, anchor->da_buf, sizeof(saved.da_buf)) != 0)
