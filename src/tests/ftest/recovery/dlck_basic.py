@@ -56,8 +56,18 @@ class DlckBasicTest(TestDlck):
 
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
-        run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
-        run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
+
+        if self.server_managers[0].manager.job.using_control_metadata:
+            dlck.nvme.value = os.path.join(
+                self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
+                "daos_nvme.conf")
+            # Mount 128G of memory-backed tmpfs for testing purposes
+            cmd = "mkdir -p /mnt/dlck_test && mount -t tmpfs -o size=128G tmpfs /mnt/dlck_test"
+            run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
+            # Display the tmpfs mount
+            run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
+            run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
+            dlck.storage.value = "/mnt/dlck_test"
 
         self.log_step("Run dlck command to check the health of the pool and storage")
         result = dlck.run()
@@ -102,7 +112,7 @@ class DlckBasicTest(TestDlck):
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
             # Mount 128G of memory-backed tmpfs for testing purposes
-            cmd = "mount -t tmpfs -o size=128G tmpfs /mnt/dlck_test"
+            cmd = "mkdir -p /mnt/dlck_test && mount -t tmpfs -o size=128G tmpfs /mnt/dlck_test"
             run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
             # Display the tmpfs mount
             run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
