@@ -1309,6 +1309,7 @@ dfuse_open_handle_init(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
 	oh->doh_linear_read_pos = 0;
 	atomic_init(&oh->doh_il_calls, 0);
 	atomic_init(&oh->doh_write_count, 0);
+	oh->doh_wb_error_seq = dfuse_wb_error_sample(ie);
 	atomic_fetch_add_relaxed(&dfuse_info->di_fh_count, 1);
 }
 
@@ -1319,6 +1320,8 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_open_count, 0);
 	atomic_init(&ie->ie_open_write_count, 0);
 	atomic_init(&ie->ie_il_count, 0);
+	ie->ie_wb_error     = 0;
+	ie->ie_wb_error_seq = 0;
 	atomic_init(&ie->ie_linear_read, true);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
 	D_INIT_LIST_HEAD(&ie->ie_evict_entry);
