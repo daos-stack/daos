@@ -104,14 +104,9 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 		D_GOTO(err, rc);
 
 	if (dfs_flags & DFS_SET_ATTR_SIZE) {
-		if (truncated) {
+		active_ie_set_truncated(ie, truncated);
+		if (truncated)
 			DFUSE_TRA_DEBUG(ie, "truncating 0-size file");
-			ie->ie_truncated = true;
-			ie->ie_start_off = 0;
-			ie->ie_end_off   = 0;
-		} else {
-			ie->ie_truncated = false;
-		}
 	}
 
 	attr->st_ino = ie->ie_stat.st_ino;

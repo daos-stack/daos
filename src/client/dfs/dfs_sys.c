@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -297,7 +298,7 @@ sys_path_parse(dfs_sys_t *dfs_sys, struct sys_path *sys_path,
 	if (path[0] != '/')
 		return EINVAL;
 
-	path_len = strnlen(path, PATH_MAX);
+	path_len = strnlen(path, DFS_MAX_PATH);
 	if (path_len > PATH_MAX - 1)
 		return ENAMETOOLONG;
 
@@ -1422,8 +1423,8 @@ dfs_sys_mkdir_p(dfs_sys_t *dfs_sys, const char *dir_path, mode_t mode, daos_ocla
 	if (dir_path[0] != '/')
 		return EINVAL;
 
-	path_len = strnlen(dir_path, PATH_MAX);
-	if (path_len == PATH_MAX)
+	path_len = strnlen(dir_path, DFS_MAX_PATH);
+	if (path_len == DFS_MAX_PATH)
 		return ENAMETOOLONG;
 
 	D_STRNDUP(_path, dir_path, path_len);
