@@ -3446,6 +3446,72 @@ rf_verify_exclude_draining_target(void **state)
 	jtc_fini(&ctx);
 }
 
+/*
+ * The checker marks a target whose storage is lost by pool_map_comp_lost_status() and
+ * pool_map_comp_mark_lost(), they must end up the same as MAP_EXCLUDE: a DOWNOUT->UP target
+ * goes back to DOWNOUT with co_fseq kept, so the layouts are not changed, a DRAIN target goes
+ * DOWN with a new co_fseq. A NEW target is kept as NEW.
+ */
+static void
+chk_mark_lost_same_as_exclude(void **state)
+{
+	struct jm_test_ctx    ex, chk;
+	struct pool_target   *ex_tgt, *chk_tgt;
+	struct pool_component new_comp = {.co_status = PO_COMP_ST_NEW};
+	uint32_t              status, ver;
+	int                   i;
+	/* DOWNOUT->UP, DRAIN, UPIN, DOWN->UP targets */
+	const uint32_t        tgts[] = {0, 1, 2, 3};
+
+	jtc_init(&ex, 4, 1, 4, OC_RP_2G1, g_verbose);
+	jtc_init(&chk, 4, 1, 4, OC_RP_2G1, g_verbose);
+	for (i = 0; i < 2; i++) {
+		struct jm_test_ctx *ctx = i == 0 ? &ex : &chk;
+
+		jtc_set_status_on_target(ctx, DOWN, tgts[0]);
+		jtc_set_status_on_target(ctx, DOWNOUT, tgts[0]);
+		jtc_set_status_on_target(ctx, UP, tgts[0]);
+		jtc_update_targets(ctx, MAP_DRAIN, tgts[1], 1, false);
+		jtc_set_status_on_target(ctx, DOWN, tgts[3]);
+		jtc_update_targets(ctx, MAP_REINT, tgts[3], 1, false);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(tgts); i++) {
+		jtc_update_targets(&ex, MAP_EXCLUDE, tgts[i], 1, false);
+
+		chk_tgt = jtc_find_target(&chk, tgts[i]);
+		status  = pool_map_comp_lost_status(&chk_tgt->ta_comp);
+		pool_map_comp_mark_lost(chk.po_map, &chk_tgt->ta_comp, status);
+		ver = pool_map_get_version(chk.po_map);
+
+		ex_tgt = jtc_find_target(&ex, tgts[i]);
+		assert_int_equal(chk_tgt->ta_comp.co_status, ex_tgt->ta_comp.co_status);
+		/* the map versions differ, so a new co_fseq is the version of the change */
+		if (ex_tgt->ta_comp.co_fseq == ex.ver) {
+			assert_int_equal(chk_tgt->ta_comp.co_fseq, ver);
+		} else {
+			assert_int_equal(chk_tgt->ta_comp.co_fseq, ex_tgt->ta_comp.co_fseq);
+			assert_int_equal(chk_tgt->ta_comp.co_out_ver, ver);
+		}
+		assert_int_equal(chk_tgt->ta_comp.co_flags, ex_tgt->ta_comp.co_flags);
+
+		/* already lost, nothing changes */
+		assert_int_equal(pool_map_comp_lost_status(&chk_tgt->ta_comp),
+				 chk_tgt->ta_comp.co_status);
+		pool_map_comp_mark_lost(chk.po_map, &chk_tgt->ta_comp, chk_tgt->ta_comp.co_status);
+		assert_int_equal(pool_map_get_version(chk.po_map), ver);
+	}
+	assert_int_equal(jtc_find_target(&chk, tgts[0])->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+	assert_int_equal(jtc_find_target(&chk, tgts[1])->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(jtc_find_target(&chk, tgts[2])->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(jtc_find_target(&chk, tgts[3])->ta_comp.co_status, PO_COMP_ST_DOWN);
+
+	assert_int_equal(pool_map_comp_lost_status(&new_comp), PO_COMP_ST_NEW);
+
+	jtc_fini(&ex);
+	jtc_fini(&chk);
+}
+
 /* give the unplaced DOWN domains under @dom a new fseq, as a real failure does */
 static void
 jtc_dom_bump_unplaced_fseq(struct pool_domain *dom, uint32_t fseq)
@@ -3799,10 +3865,11 @@ dropped_target_stales_rebuild(void **state)
 static void
 exclude_extending_target(void **state)
 {
-	struct jm_test_ctx    ex;
-	struct pool_target   *tgt;
+	struct jm_test_ctx    ex, chk;
+	struct pool_target   *tgt, *chk_tgt;
 	struct pool_domain   *dom;
 	uint32_t              first, fseq, ver;
+	uint32_t              status;
 	struct pool_component new_comp = {.co_status = PO_COMP_ST_NEW, .co_ver = 2};
 
 	/* a NEW target is not changed by an exclusion */
@@ -3814,9 +3881,11 @@ exclude_extending_target(void **state)
 	assert_int_equal(jtc_find_target(&ex, 16)->ta_comp.co_status, PO_COMP_ST_NEW);
 	jtc_fini(&ex);
 
-	/* a single extending target excluded by dmg */
+	/* a single extending target excluded by dmg, the same by the checker */
 	jtc_init(&ex, 4, 1, 4, OC_RP_2G1, g_verbose);
+	jtc_init(&chk, 4, 1, 4, OC_RP_2G1, g_verbose);
 	first = jtc_extend_rank(&ex, 4);
+	assert_int_equal(jtc_extend_rank(&chk, 4), first);
 
 	tgt  = jtc_find_target(&ex, first + 1);
 	fseq = tgt->ta_comp.co_fseq;
@@ -3829,7 +3898,17 @@ exclude_extending_target(void **state)
 	/* the rank is not changed by a target exclusion */
 	dom = pool_map_find_dom_by_rank(ex.po_map, 4);
 	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_UP);
+
+	chk_tgt = jtc_find_target(&chk, first + 1);
+	status  = pool_map_comp_lost_status(&chk_tgt->ta_comp);
+	assert_int_equal(status, PO_COMP_ST_DOWN);
+	pool_map_comp_mark_lost(chk.po_map, &chk_tgt->ta_comp, status);
+	assert_int_equal(chk_tgt->ta_comp.co_status, tgt->ta_comp.co_status);
+	assert_int_equal(chk_tgt->ta_comp.co_fseq, tgt->ta_comp.co_fseq);
+	assert_int_equal(chk_tgt->ta_comp.co_flags, tgt->ta_comp.co_flags);
+	assert_int_equal(chk_tgt->ta_comp.co_out_ver, pool_map_get_version(chk.po_map));
 	jtc_fini(&ex);
+	jtc_fini(&chk);
 
 	assert_true(pool_comp_is_unplaced(&new_comp));
 
@@ -5063,6 +5142,7 @@ static const struct CMUnitTest tests[] = {
     T("exclude reintegrating target keeps layout", exclude_reintegrating_target_keeps_layout),
     T("exclude draining target", exclude_draining_target),
     T("RF check of excluded draining target", rf_verify_exclude_draining_target),
+    T("checker marks lost targets the same as exclude", chk_mark_lost_same_as_exclude),
     T("exclude extending target", exclude_extending_target),
     T("dropped target stales rebuild", dropped_target_stales_rebuild),
 };

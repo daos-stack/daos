@@ -2515,6 +2515,98 @@ pool_map_rebuild_stale_ver(struct pool_map *map, struct pool_target_id_list *tgt
 	return max(changed_ver, dropped_ver);
 }
 
+/**
+ * The status that a component (target or rank) whose storage is lost should be marked as by
+ * the checker, the same as MAP_EXCLUDE does, see update_one_tgt():
+ * - NEW: unchanged. Placement skips a NEW component, it never holds data, while a placed DOWN
+ *   or DOWNOUT one is a member of the layout, so changing it would change the existing layouts.
+ * - DOWNOUT->UP reintegrating: DOWNOUT, it only aborts the reintegration.
+ * - DOWN, DOWNOUT: unchanged.
+ * - Others, e.g. UPIN, DRAIN, DOWN->UP or extending UP: DOWN, to be rebuilt.
+ */
+uint32_t
+pool_map_comp_lost_status(struct pool_component *comp)
+{
+	switch (comp->co_status) {
+	case PO_COMP_ST_NEW:
+	case PO_COMP_ST_DOWN:
+	case PO_COMP_ST_DOWNOUT:
+		return comp->co_status;
+	default:
+		return pool_comp_is_downout2up(comp) ? PO_COMP_ST_DOWNOUT : PO_COMP_ST_DOWN;
+	}
+}
+
+/**
+ * Mark a component (target or rank) of \a map whose storage is lost as \a status, which is
+ * returned by pool_map_comp_lost_status() for a target, or derived from its targets for a rank,
+ * and bump the map version.
+ *
+ * co_fseq is the placement remap order key, it must be kept for a DOWNOUT->UP reintegrating
+ * component reverted to DOWNOUT, the same as MAP_EXCLUDE, otherwise the layouts of the objects
+ * that have shards remapped from it would be changed. It must be kept for an extending
+ * (unplaced) component too, so placement still skips it, see pool_comp_is_unplaced().
+ * co_out_ver records the version of the change instead. Others, including a DRAIN component,
+ * get a new co_fseq as a new failure. The ancestor domains of a rank are changed in the same
+ * way once all their children are DOWN/DOWNOUT.
+ */
+static void
+comp_mark_lost(struct pool_component *comp, uint32_t status, uint32_t ver)
+{
+	if (pool_comp_is_downout2up(comp) || pool_comp_is_unplaced(comp))
+		comp->co_out_ver = ver;
+	else
+		comp->co_fseq = ver;
+	comp->co_status = status;
+}
+
+/*
+ * Mark the ancestor domains of \a comp whose children are all DOWN/DOWNOUT as \a status, the
+ * same as update_dom_status() for MAP_EXCLUDE. Return whether \a comp is under \a domain.
+ */
+static bool
+dom_mark_lost_ancestors(struct pool_domain *domain, struct pool_component *comp, uint32_t status,
+			uint32_t ver)
+{
+	int i;
+
+	if (&domain->do_comp == comp)
+		return true;
+
+	for (i = 0; domain->do_children != NULL && i < domain->do_child_nr; i++) {
+		struct pool_domain *child = &domain->do_children[i];
+
+		if (!dom_mark_lost_ancestors(child, comp, status, ver))
+			continue;
+
+		if (&child->do_comp != comp && child->do_comp.co_status != status &&
+		    child_status_check(child, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT))
+			comp_mark_lost(&child->do_comp, status, ver);
+		return true;
+	}
+	return false;
+}
+
+void
+pool_map_comp_mark_lost(struct pool_map *map, struct pool_component *comp, uint32_t status)
+{
+	uint32_t ver;
+
+	D_ASSERTF(status == PO_COMP_ST_DOWN || status == PO_COMP_ST_DOWNOUT, "%u\n", status);
+	if (comp->co_status == status)
+		return;
+
+	ver = pool_map_bump_version(map);
+	comp_mark_lost(comp, status, ver);
+	/*
+	 * The upper level domains (e.g. a node domain added by the same extension) must be
+	 * changed as well, otherwise e.g. an extending (unplaced) one is still UP and joins the
+	 * layouts while its only rank is skipped by placement.
+	 */
+	if (comp->co_type != PO_COMP_TP_TARGET && map->po_tree != NULL)
+		dom_mark_lost_ancestors(map->po_tree, comp, status, ver);
+}
+
 static void
 fseq_sort_op_swap(void *array, int a, int b)
 {

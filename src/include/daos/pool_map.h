@@ -409,6 +409,10 @@ uint32_t
 pool_map_tgts_dropped_after(struct pool_map *map, uint32_t ver);
 uint32_t
 pool_map_rebuild_stale_ver(struct pool_map *map, struct pool_target_id_list *tgts, uint32_t ver);
+uint32_t
+pool_map_comp_lost_status(struct pool_component *comp);
+void
+pool_map_comp_mark_lost(struct pool_map *map, struct pool_component *comp, uint32_t status);
 
 struct pool_domain *
 pool_map_find_dom_by_rank(struct pool_map *map, uint32_t rank);
