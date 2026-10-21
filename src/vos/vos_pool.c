@@ -1676,6 +1676,8 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	/* It has been taken by uma->uma_pool and will be closed when pool_hop_free(). */
 	*p_ph = NULL;
 
+	if (pool_df->pd_version >= VOS_POOL_DF_2_2)
+		pool->vp_feats |= VOS_POOL_FEAT_2_2;
 	if (pool_df->pd_version >= VOS_POOL_DF_2_4)
 		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 	if (pool_df->pd_version >= VOS_POOL_DF_2_6)

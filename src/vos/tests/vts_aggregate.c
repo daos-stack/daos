@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2976,6 +2976,119 @@ aggregate_35(void **state)
 	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
 }
 
+/** Close and reopen the test pool so the next open goes through pool_open_post() again */
+static void
+agg_pool_reopen(struct io_test_args *arg)
+{
+	struct vos_test_ctx *tcx = &arg->ctx;
+	int                  rc;
+
+	rc = vos_cont_close(tcx->tc_co_hdl);
+	assert_rc_equal(rc, 0);
+	rc = vos_pool_close(tcx->tc_po_hdl);
+	assert_rc_equal(rc, 0);
+	gc_wait();
+
+	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, 0, &tcx->tc_po_hdl);
+	assert_rc_equal(rc, 0);
+	rc = vos_cont_open(tcx->tc_po_hdl, tcx->tc_co_uuid, &tcx->tc_co_hdl);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+aggregate_38(void **state)
+{
+	struct io_test_args *arg = *state;
+	struct vos_pool     *pool;
+	uint64_t             all =
+	    VOS_POOL_FEAT_2_2 | VOS_POOL_FEAT_2_4 | VOS_POOL_FEAT_2_6 | VOS_POOL_FEAT_2_8;
+
+	/** A new pool has the current layout, so create and open must enable every feature set */
+	pool = vos_hdl2pool(arg->ctx.tc_po_hdl);
+	assert_true(pool->vp_pool_df->pd_version >= VOS_POOL_DF_2_8);
+	assert_int_equal(pool->vp_feats, all);
+
+	agg_pool_reopen(arg);
+	pool = vos_hdl2pool(arg->ctx.tc_po_hdl);
+	assert_int_equal(pool->vp_feats, all);
+}
+
+static void
+aggregate_39(void **state)
+{
+	struct io_test_args *arg = *state;
+	vos_cont_info_t      info;
+	daos_unit_oid_t      oid;
+	daos_epoch_t         epoch;
+	char                 dkey[UPDATE_DKEY_SIZE] = {0};
+	char                 akey[UPDATE_AKEY_SIZE] = {0};
+	char                 buf[16]                = {0};
+	int                  rc;
+
+	oid = dts_unit_oid_gen(0, 0);
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+
+	/** Nothing written yet: no stamp, so it reads DAOS_EPOCH_MAX ("not tracked"), not 0 */
+	rc = vos_cont_query(arg->ctx.tc_co_hdl, &info);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_agg_write, DAOS_EPOCH_MAX);
+
+	/** The first write creates the key, has nothing to aggregate and is not stamped */
+	update_value(arg, oid, d_hlc_get(), 0, dkey, akey, DAOS_IOD_SINGLE, sizeof(buf), NULL, buf);
+	rc = vos_cont_query(arg->ctx.tc_co_hdl, &info);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_agg_write, DAOS_EPOCH_MAX);
+
+	/** Overwriting it needs aggregation, so the tree roots must be stamped */
+	epoch = d_hlc_get();
+	update_value(arg, oid, epoch, 0, dkey, akey, DAOS_IOD_SINGLE, sizeof(buf), NULL, buf);
+
+	rc = vos_cont_query(arg->ctx.tc_co_hdl, &info);
+	assert_rc_equal(rc, 0);
+	assert_true(info.ci_agg_write >= epoch);
+	assert_true(info.ci_agg_write != DAOS_EPOCH_MAX);
+
+	cleanup();
+}
+
+static void
+aggregate_40(void **state)
+{
+	struct io_test_args *arg = *state;
+	vos_cont_info_t      info;
+	daos_unit_oid_t      oid;
+	daos_recx_t          recx;
+	daos_epoch_t         epoch;
+	char                 dkey[UPDATE_DKEY_SIZE] = {0};
+	char                 akey[UPDATE_AKEY_SIZE] = {0};
+	char                 buf[64]                = {0};
+	int                  rc;
+
+	oid = dts_unit_oid_gen(0, 0);
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+
+	recx.rx_idx = 0;
+	recx.rx_nr  = sizeof(buf);
+	update_value(arg, oid, d_hlc_get(), 0, dkey, akey, DAOS_IOD_ARRAY, 1, &recx, buf);
+
+	/** A partial overwrite of the extent needs aggregation */
+	recx.rx_idx = 16;
+	recx.rx_nr  = 16;
+	epoch       = d_hlc_get();
+	update_value(arg, oid, epoch, 0, dkey, akey, DAOS_IOD_ARRAY, 1, &recx, buf);
+
+	/** The stamp is persistent: it must survive a pool reopen, as after an engine restart */
+	agg_pool_reopen(arg);
+	rc = vos_cont_query(arg->ctx.tc_co_hdl, &info);
+	assert_rc_equal(rc, 0);
+	assert_true(info.ci_agg_write >= epoch);
+	assert_true(info.ci_agg_write != DAOS_EPOCH_MAX);
+
+	cleanup();
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -3054,6 +3167,12 @@ static const struct CMUnitTest aggregate_tests[] = {
     {"VOS435: Test aggregation timestamp functions", aggregate_35, NULL, NULL},
     {"VOS436: Aggregate SV, multiple objects, flat dkeys", aggregate_36, NULL, agg_tst_teardown},
     {"VOS437: Aggregate EV, multiple objects, flat dkeys", aggregate_37, NULL, agg_tst_teardown},
+    {"VOS438: Pool create and open enable all layout features", aggregate_38, NULL,
+     agg_tst_teardown},
+    {"VOS439: Aggregation timestamp is recorded on SV overwrite", aggregate_39, NULL,
+     agg_tst_teardown},
+    {"VOS440: Aggregation timestamp on EV overwrite survives pool reopen", aggregate_40, NULL,
+     agg_tst_teardown},
 };
 
 int
