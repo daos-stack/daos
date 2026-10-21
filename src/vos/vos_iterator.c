@@ -356,6 +356,7 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 {
 	daos_anchor_t     *anchor;
 	daos_anchor_t      saved;
+	vos_iter_entry_t   ent;
 	int                rc;
 	struct dtx_handle *old;
 	bool               is_sysdb = !!iter->it_for_sysdb;
@@ -397,12 +398,13 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 	old   = vos_dth_get(is_sysdb);
 	vos_dth_set(iter->it_dth, is_sysdb);
 	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
+	/* SV probe moves past a deleted entry without updating the anchor */
+	if (rc == 0 && iter->it_type == VOS_ITER_SINGLE)
+		rc = iter->it_ops->iop_fetch(iter, &ent, anchor);
 	vos_dth_set(old, is_sysdb);
 
-	/* Children are bound to the old entry's subtree; a different entry means it's gone */
-	if (rc == 0 && !vos_anchor_is_zero(&saved) &&
-	    (iter->it_type == VOS_ITER_OBJ || iter->it_type == VOS_ITER_DKEY ||
-	     iter->it_type == VOS_ITER_AKEY) &&
+	/* Probes land on the next entry if ours is gone; unsorted evtree probe is exact */
+	if (rc == 0 && iter->it_type != VOS_ITER_RECX && !vos_anchor_is_zero(&saved) &&
 	    memcmp(saved.da_buf, anchor->da_buf, sizeof(saved.da_buf)) != 0)
 		rc = -DER_NONEXIST;
 
