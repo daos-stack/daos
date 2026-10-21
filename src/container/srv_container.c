@@ -1963,7 +1963,8 @@ cont_refresh_track_eph_one(void *data)
 		cont_child->sc_global_stable_eph < arg->min_stable_eph ? "update" : "ignore",
 		cont_child->sc_global_stable_eph, arg->min_stable_eph);
 
-	if (cont_child->sc_ec_agg_eph_boundary < arg->min_ec_agg_eph)
+	if (cont_child->sc_ec_agg_eph_boundary < arg->min_ec_agg_eph &&
+	    !DAOS_FAIL_CHECK(DAOS_CONT_EC_BOUNDARY_FREEZE))
 		cont_child->sc_ec_agg_eph_boundary = arg->min_ec_agg_eph;
 
 	cont_child->sc_ec_agg_eph_valid = 1;
