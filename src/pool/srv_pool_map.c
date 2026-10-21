@@ -335,8 +335,8 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 			 *   co_fseq >  co_ver : real UPIN->DOWN/DRAIN->DOWNOUT->UP or
 			 *                       UPIN->DOWN->UP (DOWN2UP). MAP_EXCLUDE bumped
 			 *                       co_fseq strictly above co_ver. Revert to
-			 *                       DOWN if DOWN2UP flag is set, otherwise
-			 *                       DOWNOUT.
+			 *                       DOWN with a new co_fseq if DOWN2UP flag is
+			 *                       set, same as MAP_EXCLUDE, otherwise DOWNOUT.
 			 *
 			 * Do NOT rely on co_in_ver here: both MAP_EXTEND and MAP_REINT bump
 			 * it on the UP transition, so it cannot distinguish these cases.
@@ -363,11 +363,20 @@ update_one_tgt(uuid_t pool_uuid, struct pool_map *map, struct pool_target *targe
 				target->ta_comp.co_out_ver = ++(*version);
 			} else {
 				if (target->ta_comp.co_flags & PO_COMPF_DOWN2UP) {
+					/*
+					 * It is a failure again. While it was UP, the other
+					 * rebuilds may have migrated data to it, and the other
+					 * DOWN targets failed after its old co_fseq may have
+					 * been rebuilt and turned into DOWNOUT. Renew co_fseq,
+					 * so it is remapped after them, and its own rebuild
+					 * covers the data on it.
+					 */
+					target->ta_comp.co_status = PO_COMP_ST_DOWN;
+					target->ta_comp.co_fseq   = *version + 1;
 					D_DEBUG(DB_MD,
 						DF_MAP ": change " DF_TARGET " to DOWN fseq %u\n",
 						DP_MAP(pool_uuid, map), DP_TARGET(target),
 						target->ta_comp.co_fseq);
-					target->ta_comp.co_status = PO_COMP_ST_DOWN;
 				} else {
 					D_DEBUG(DB_MD,
 						DF_MAP ": change " DF_TARGET
@@ -453,10 +462,11 @@ update_one_dom(struct pool_map *map, struct pool_domain *dom, struct pool_target
 				update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id,
 							    PO_COMP_ST_DOWNOUT, *version, &updated,
 							    true);
-			else if (dom->do_comp.co_flags == PO_COMPF_DOWN2UP)
+			/* a new failure, renew its fseq, see update_one_tgt() */
+			else if (dom->do_comp.co_flags & PO_COMPF_DOWN2UP)
 				update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id,
 							    PO_COMP_ST_DOWN, *version, &updated,
-							    true);
+							    false);
 			else
 				update_dom_status_by_tgt_id(map, tgt->ta_comp.co_id,
 							    PO_COMP_ST_DOWNOUT, *version, &updated,

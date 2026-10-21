@@ -3397,14 +3397,15 @@ exclude_draining_target(void **state)
 
 /*
  * A draining target is still readable and writable, so it is not a failure for the RF check.
- * Once it fails (DRAIN->DOWN), it is a new failure since its new co_fseq.
+ * Once it fails (DRAIN->DOWN), it is a new failure since its new co_fseq. So is a DOWN->UP
+ * reintegration reverted back to DOWN.
  */
 static void
 rf_verify_exclude_draining_target(void **state)
 {
 	struct jm_test_ctx  ctx;
 	struct pool_target *tgt;
-	uint32_t            drain_ver;
+	uint32_t            drain_ver, down_ver;
 
 	jtc_init(&ctx, 4, 1, 4, OC_RP_2G1, g_verbose);
 	jtc_update_targets(&ctx, MAP_DRAIN, 1, 1, false);
@@ -3419,6 +3420,28 @@ rf_verify_exclude_draining_target(void **state)
 			 -DER_RF);
 	assert_success(pool_map_rf_verify(ctx.po_map, drain_ver, DAOS_PROP_CO_REDUN_RANK, 1));
 	/* but not once the container has seen the failure */
+	assert_success(pool_map_rf_verify(ctx.po_map, ctx.ver, DAOS_PROP_CO_REDUN_RANK, 0));
+	jtc_fini(&ctx);
+
+	/*
+	 * DOWN -> UP -> reverted to DOWN, it is a new failure, the data written to it while it was
+	 * UP is lost.
+	 */
+	jtc_init(&ctx, 4, 1, 4, OC_RP_2G1, g_verbose);
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 1, 1, false);
+	down_ver = ctx.ver;
+	assert_int_equal(pool_map_rf_verify(ctx.po_map, down_ver - 1, DAOS_PROP_CO_REDUN_RANK, 0),
+			 -DER_RF);
+	assert_success(pool_map_rf_verify(ctx.po_map, down_ver, DAOS_PROP_CO_REDUN_RANK, 0));
+
+	jtc_update_targets(&ctx, MAP_REINT, 1, 1, false);
+	jtc_update_targets(&ctx, MAP_REVERT_REBUILD, 1, 1, false);
+	tgt = jtc_find_target(&ctx, 1);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(tgt->ta_comp.co_fseq, ctx.ver);
+	assert_int_equal(tgt->ta_comp.co_out_ver, ctx.ver);
+	assert_int_equal(pool_map_rf_verify(ctx.po_map, down_ver, DAOS_PROP_CO_REDUN_RANK, 0),
+			 -DER_RF);
 	assert_success(pool_map_rf_verify(ctx.po_map, ctx.ver, DAOS_PROP_CO_REDUN_RANK, 0));
 	jtc_fini(&ctx);
 }
