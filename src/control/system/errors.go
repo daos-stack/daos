@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -39,8 +41,10 @@ func IsUnavailable(err error) bool {
 	if err == nil {
 		return false
 	}
-	cause := errors.Cause(err).Error()
-	return strings.Contains(cause, ErrRaftUnavail.Error()) || strings.Contains(cause, ErrLeaderStepUpInProgress.Error())
+	cause := errors.Cause(err)
+	return strings.Contains(cause.Error(), ErrRaftUnavail.Error()) ||
+		strings.Contains(cause.Error(), ErrLeaderStepUpInProgress.Error()) ||
+		fault.IsFaultCode(cause, code.ServerDataPlaneNotStarted)
 }
 
 // IsEmptyGroupMap returns a boolean indicating whether or not the
@@ -151,7 +155,7 @@ func (err *ErrJoinFailure) Error() string {
 	case err.rankChanged:
 		return fmt.Sprintf("can't rejoin member with uuid %s: rank changed from %d -> %d", *err.curUUID, *err.curRank, *err.newRank)
 	case err.uuidChanged:
-		return fmt.Sprintf("can't rejoin member with rank %d: uuid changed from %s -> %s", *err.curRank, *err.curUUID, *err.newUUID)
+		return fmt.Sprintf("can't rejoin member with rank %d: uuid changed from %s -> %s (use 'dmg storage format --replace' to update UUID)", *err.curRank, *err.curUUID, *err.newUUID)
 	case err.isExcluded:
 		return fmt.Sprintf("member %s (rank %d) has been administratively excluded", err.curUUID, *err.curRank)
 	case err.addrChanged:

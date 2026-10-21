@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,9 +11,11 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -31,6 +33,10 @@ import (
 const (
 	groupUpdateInterval = 500 * time.Millisecond
 	batchLoopInterval   = 250 * time.Millisecond
+
+	// defaultGracefulStopTimeout bounds how long execControlPlaneRestart()
+	// will wait for grpcServer.GracefulStop() to drain in-flight RPCs.
+	defaultGracefulStopTimeout = 5 * time.Second
 )
 
 type (
@@ -70,35 +76,59 @@ func (br *batchRequest) sendResponse(parent context.Context, msg proto.Message, 
 // mgmtpb.MgmtSvcServer.
 type mgmtSvc struct {
 	mgmtpb.UnimplementedMgmtSvcServer
-	log               logging.Logger
-	harness           *EngineHarness
-	membership        *system.Membership // if MS leader, system membership list
-	sysdb             *raft.Database
-	rpcClient         control.UnaryInvoker
-	events            *events.PubSub
-	systemProps       daos.SystemPropertyMap
-	clientNetworkHint []*mgmtpb.ClientNetHint
-	batchInterval     time.Duration
-	batchReqs         batchReqChan
-	serialReqs        batchReqChan
-	groupUpdateReqs   chan bool
-	lastMapVer        uint32
+	log                 logging.Logger
+	harness             *EngineHarness
+	membership          *system.Membership // if MS leader, system membership list
+	sysdb               *raft.Database
+	rpcClient           control.UnaryInvoker
+	events              *events.PubSub
+	systemProps         daos.SystemPropertyMap
+	clientNetworkHint   []*mgmtpb.ClientNetHint
+	batchInterval       time.Duration
+	batchReqs           batchReqChan
+	serialReqs          batchReqChan
+	groupUpdateReqs     chan bool
+	lastMapVer          uint32
+	cancel              context.CancelFunc
+	grpcServer          *grpc.Server
+	gracefulStopTimeout time.Duration
+	loopWg              sync.WaitGroup
+	restartControlPlane func(myPath, leaderStr string)
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
-	return &mgmtSvc{
-		log:               h.log,
-		harness:           h,
-		membership:        m,
-		sysdb:             s,
-		rpcClient:         c,
-		events:            p,
-		systemProps:       daos.SystemProperties(),
-		clientNetworkHint: []*mgmtpb.ClientNetHint{new(mgmtpb.ClientNetHint)},
-		batchInterval:     batchLoopInterval,
-		batchReqs:         make(batchReqChan),
-		serialReqs:        make(batchReqChan),
-		groupUpdateReqs:   make(chan bool),
+	svc := &mgmtSvc{
+		log:                 h.log,
+		harness:             h,
+		membership:          m,
+		sysdb:               s,
+		rpcClient:           c,
+		events:              p,
+		systemProps:         daos.SystemProperties(),
+		clientNetworkHint:   []*mgmtpb.ClientNetHint{new(mgmtpb.ClientNetHint)},
+		batchInterval:       batchLoopInterval,
+		batchReqs:           make(batchReqChan),
+		serialReqs:          make(batchReqChan),
+		groupUpdateReqs:     make(chan bool),
+		gracefulStopTimeout: defaultGracefulStopTimeout,
+	}
+	svc.restartControlPlane = svc.execControlPlaneRestart
+
+	return svc
+}
+
+// Close cleanly shuts down the management service, canceling the context,
+// waiting for background processing loops to exit, and closing the events
+// PubSub if present.
+func (svc *mgmtSvc) Close() {
+	if svc != nil {
+		if svc.cancel != nil {
+			svc.cancel()
+		}
+		svc.loopWg.Wait()
+		if svc.events != nil {
+			svc.events.Close()
+		}
 	}
 }
 
@@ -175,13 +205,24 @@ func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
 // startLeaderLoops kicks off the leader-only processing loops
 // that will be canceled on leadership loss.
 func (svc *mgmtSvc) startLeaderLoops(ctx context.Context) {
-	go svc.leaderTaskLoop(ctx)
+	svc.loopWg.Add(1)
+	go func() {
+		defer svc.loopWg.Done()
+		svc.leaderTaskLoop(ctx)
+	}()
 }
 
 // startAsyncLoops kicks off the asynchronous processing loops.
 func (svc *mgmtSvc) startAsyncLoops(ctx context.Context) {
-	go svc.batchReqLoop(ctx)
-	go svc.serialReqLoop(ctx)
+	svc.loopWg.Add(2)
+	go func() {
+		defer svc.loopWg.Done()
+		svc.batchReqLoop(ctx)
+	}()
+	go func() {
+		defer svc.loopWg.Done()
+		svc.serialReqLoop(ctx)
+	}()
 }
 
 // submitBatchRequest submits a message for batch processing and waits for a response.

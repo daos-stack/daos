@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +10,6 @@ import time
 from daos_racer_utils import DaosRacerCommand
 from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
 
@@ -69,7 +69,7 @@ class OSAOnlineExtend(OSAUtils):
             time.sleep(30)
 
         for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
+            pool[val] = self.get_pool(connect=False)
             pool[val].set_property("reclaim", "disabled")
 
         # Extend the pool, rank and targets
@@ -132,9 +132,9 @@ class OSAOnlineExtend(OSAUtils):
             pver_extend = self.pool.get_version(True)
             self.log.info("Pool Version after extend %s", pver_extend)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_extend > pver_begin, "Pool Version Error:  After extend")
-            self.assertTrue(free_space_after_extend > initial_free_space,
-                            "Expected free space after extend is less than initial")
+            self.assertGreater(pver_extend, pver_begin, "Pool Version Error:  After extend")
+            self.assertGreater(free_space_after_extend, initial_free_space,
+                               "Expected free space after extend is less than initial")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()

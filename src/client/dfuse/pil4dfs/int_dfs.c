@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -64,7 +64,7 @@
 #define FREE(ptr)	do {free(ptr); (ptr) = NULL; } while (0)
 
 /* The max number of mount points for DAOS mounted simultaneously */
-#define MAX_DAOS_MT         (8)
+#define MAX_DAOS_MT         (32)
 
 #define READ_DIR_BATCH_SIZE (96)
 #define MAX_FD_DUP2ED       (16)
@@ -93,6 +93,11 @@ static int                    fd_dummy = -1;
 #define DCACHE_GC_RECLAIM_MAX 1000
 /* Default dir cache garbage collector time-out in seconds */
 #define DCACHE_GC_PERIOD      120
+
+/* Symlink hops followed while resolving ".." before giving up with ELOOP, as the kernel's
+ * MAXSYMLINKS
+ */
+#define MAX_SYMLINK_HOPS      40
 
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
@@ -242,6 +247,11 @@ struct statx {
 
 /* working dir of current process */
 static char             cur_dir[DFS_MAX_PATH] = "";
+/* pid cur_dir was last set for. CPython uses vfork() for subprocess with cwd=, and a vfork()ed
+ * child runs in the parent's address space until execve(), so a chdir() there would otherwise
+ * leave the parent resolving relative paths against the child's directory.
+ */
+static pid_t            cur_dir_pid;
 static bool             segv_handler_inited;
 /* Old segv handler */
 struct sigaction        old_segv;
@@ -264,6 +274,8 @@ static void
 finalize_dfs(void);
 static void
 update_cwd(void);
+static void
+cur_dir_check_owner(void);
 static int
 get_eqh(daos_handle_t *eqh);
 static void
@@ -412,6 +424,8 @@ static int (*next_rmdir)(const char *path);
 
 static int (*next_rename)(const char *old_name, const char *new_name);
 
+static int (*next_renameat)(int olddirfd, const char *oldpath, int newdirfd, const char *newpath);
+
 static char *(*next_getcwd)(char *buf, size_t size);
 
 static int (*libc_unlink)(const char *path);
@@ -468,9 +482,6 @@ static int (*next_munmap)(void *addr, size_t length);
 static void (*next_exit)(int rc);
 static void (*next__exit)(int rc) __attribute__((__noreturn__));
 
-/* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
-/* static org_dup3 real_dup3=NULL; */
-
 static int (*next_execve)(const char *filename, char *const argv[], char *const envp[]);
 static int (*next_execv)(const char *filename, char *const argv[]);
 static int (*next_execvp)(const char *filename, char *const argv[]);
@@ -478,6 +489,10 @@ static int (*next_execvpe)(const char *filename, char *const argv[], char *const
 static int (*next_fexecve)(int fd, char *const argv[], char *const envp[]);
 
 static pid_t (*next_fork)(void);
+
+static int (*next_fchown)(int fd, uid_t uid, gid_t gid);
+static ssize_t (*next_fgetxattr)(int fd, char *name, void *value, size_t size);
+static int (*next_fsetxattr)(int fd, char *name, void *value, size_t size, int flags);
 
 /* start NOT supported by DAOS */
 static int (*next_posix_fadvise)(int fd, off_t offset, off_t len, int advice);
@@ -499,12 +514,28 @@ static void *(*next_dlopen)(const char *filename, int flags);
  */
 
 static int
-remove_dot_dot(char path[], int *len);
+normalize_path(char path[], int len);
 static int
-remove_dot_and_cleanup(char szPath[], int len);
+resolve_dot_dot(struct dfs_mt *dfs_mt, char path[], int *len, bool *use_kernel);
+
+/* dfs cannot follow a symlink whose value is absolute (EINVAL), or one that climbs more than one
+ * level with ".." (ENOTSUP): the first needs the process root, the second the ancestry of the
+ * link, and only the kernel has both. The lookup that hits such a link fails, so a path that fails
+ * this way is handed to the kernel, which resolves it through dfuse.
+ */
+static inline bool
+lookup_needs_kernel(int rc)
+{
+	return rc == EINVAL || rc == ENOTSUP;
+}
 
 /* reference count of fake fd duplicated by real fd with dup2() */
 static int                dup_ref_count[MAX_OPENED_FILE];
+/* whether the direct fake fd of a slot is still open. Together with dup_ref_count[] it
+ * tells when a slot can be cleared, independent of the shared struct file_obj reference
+ * count (the same struct file_obj may be referenced by multiple fake fd slots).
+ */
+static bool               fd_direct_open[MAX_OPENED_FILE];
 struct file_obj          *d_file_list[MAX_OPENED_FILE];
 static struct dir_obj    *dir_list[MAX_OPENED_DIR];
 static struct mmap_obj    mmap_list[MAX_MMAP_BLOCK];
@@ -581,11 +612,6 @@ discover_daos_mount_with_env(void)
 		/* env D_IL_MOUNT_POINT is undefined, return success (0) */
 		D_GOTO(out, rc = 0);
 
-	if (num_dfs >= MAX_DAOS_MT) {
-		D_FATAL("dfs_list[] is full already. Need to increase MAX_DAOS_MT.\n");
-		D_GOTO(out, rc = EBUSY);
-	}
-
 	if (access(fs_root, R_OK)) {
 		D_FATAL("no read permission for %s: %d (%s)\n", fs_root, errno,	strerror(errno));
 		D_GOTO(out, rc = EACCES);
@@ -594,7 +620,18 @@ discover_daos_mount_with_env(void)
 	/* check whether fs_root exists in dfs_list[] already. "idx >= 0" means exists. */
 	idx = query_dfs_mount(fs_root);
 	if (idx >= 0)
+		/* already registered by discover_dfuse_mounts(), no new slot needed */
 		D_GOTO(out, rc = 0);
+
+	/* A new slot is required. If the table is already full, skip this mount point
+	 * gracefully instead of aborting the application.
+	 */
+	if (num_dfs >= MAX_DAOS_MT) {
+		D_WARN("D_IL_MOUNT_POINT ignored: dfs_list[] is full (%d mounts). Increase "
+		       "MAX_DAOS_MT to support more simultaneous mounts.\n",
+		       MAX_DAOS_MT);
+		D_GOTO(out, rc = 0);
+	}
 
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
@@ -679,32 +716,36 @@ discover_dfuse_mounts(void)
 	}
 
 	while ((fs_entry = getmntent(fp)) != NULL) {
-		if (num_dfs >= MAX_DAOS_MT) {
-			D_FATAL("dfs_list[] is full. Need to increase MAX_DAOS_MT.\n");
-			abort();
-		}
-		pt_dfs_mt = &dfs_list[num_dfs];
-		if (memcmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) == 0) {
-			pt_dfs_mt->dcache      = NULL;
-			pt_dfs_mt->len_fs_root = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
-			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "mnt_dir[] is too long. Skip this entry.\n");
-				D_GOTO(out, rc = ENAMETOOLONG);
-			}
-			if (access(fs_entry->mnt_dir, R_OK)) {
-				D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n",
-					fs_entry->mnt_dir, errno, strerror(errno));
-				continue;
-			}
+		if (memcmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) != 0)
+			continue;
 
-			atomic_init(&pt_dfs_mt->inited, 0);
-			pt_dfs_mt->pool         = NULL;
-			pt_dfs_mt->cont         = NULL;
-			D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
-			if (pt_dfs_mt->fs_root == NULL)
-				D_GOTO(out, rc = ENOMEM);
-			num_dfs++;
+		if (num_dfs >= MAX_DAOS_MT) {
+			D_WARN("Found more than MAX_DAOS_MT (%d) dfuse mount points. "
+			       "Disabling interception. Increase MAX_DAOS_MT to support "
+			       "more simultaneous mounts.\n",
+			       MAX_DAOS_MT);
+			D_GOTO(out, rc = EOVERFLOW);
 		}
+		pt_dfs_mt              = &dfs_list[num_dfs];
+		pt_dfs_mt->dcache      = NULL;
+		pt_dfs_mt->len_fs_root = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
+		if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
+			D_DEBUG(DB_ANY, "mnt_dir[] is too long. Skip this entry.\n");
+			D_GOTO(out, rc = ENAMETOOLONG);
+		}
+		if (access(fs_entry->mnt_dir, R_OK)) {
+			D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n", fs_entry->mnt_dir,
+				errno, strerror(errno));
+			continue;
+		}
+
+		atomic_init(&pt_dfs_mt->inited, 0);
+		pt_dfs_mt->pool = NULL;
+		pt_dfs_mt->cont = NULL;
+		D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
+		if (pt_dfs_mt->fs_root == NULL)
+			D_GOTO(out, rc = ENOMEM);
+		num_dfs++;
 	}
 
 out:
@@ -848,7 +889,7 @@ retrieve_handles_from_fuse(int idx)
 		fclose(tmp_file);
 		unlink(fname);
 		if (read_size != hs_reply.fsr_pool_size) {
-			errno_saved = EAGAIN;
+			errno_saved = EIO;
 			D_DEBUG(DB_ANY, "fread expected %zu bytes, read %d bytes : %d (%s)\n",
 				hs_reply.fsr_pool_size, read_size, errno_saved,
 				strerror(errno_saved));
@@ -1102,6 +1143,7 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 {
 	int    pos, len;
 	bool   with_daos_prefix;
+	bool   use_kernel;
 	char   pool[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char   cont[DAOS_PROP_MAX_LABEL_BUF_LEN + 1];
 	char  *rel_path = NULL;
@@ -1139,6 +1181,10 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 	if (full_path_parse == NULL)
 		goto out_oom;
 
+	/* Relative paths resolve against cur_dir, which may still belong to a different process. */
+	if (szInput[0] != '/')
+		cur_dir_check_owner();
+
 	if (strncmp(szInput, ".", 2) == 0) {
 		/* special case for current work directory */
 		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH + 1);
@@ -1167,17 +1213,8 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 		}
 	}
 
-	/* Remove '/./'; Replace '//' with '/'; Remove '/' at the end of path. */
-	len = remove_dot_and_cleanup(full_path_parse, len);
-
-	/* standarlize and determine whether a path is a target path or not */
-
-	/* Assume full_path_parse[] = "/A/B/C/../D/E", it will be "/A/B/D/E" after
-	 * remove_dot_dot.
-	 */
-	rc = remove_dot_dot(full_path_parse, &len);
-	if (rc)
-		D_GOTO(out_err, rc);
+	/* e.g. "/A/./B//C/../D/" becomes "/A/B/C/../D"; ".." is left to resolve_dot_dot() */
+	len = normalize_path(full_path_parse, len);
 
 	/* determine whether the path contains any known dfs mount point */
 	idx_dfs = query_dfs_mount(full_path_parse);
@@ -1283,6 +1320,19 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			}
 			D_MUTEX_UNLOCK(&lock_dfs);
 		}
+
+		rc = resolve_dot_dot(*dfs_mt, full_path_parse, &len, &use_kernel);
+		if (rc)
+			D_GOTO(out_err, rc);
+		if (use_kernel) {
+			/* the path leaves the container through "..", or dfs cannot follow a link
+			 * in it
+			 */
+			strncpy(*full_path, full_path_parse, len + 1);
+			*is_target_path = 0;
+			item_name[0]    = '\0';
+			goto out_normal;
+		}
 		*is_target_path = 1;
 
 		/* root dir */
@@ -1326,9 +1376,18 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 			/* look up the dfs object from hash table for the parent dir */
 			rc = dcache_find_insert((*dfs_mt)->dcache, *parent_dir, parent_dir_len,
 						parent);
-			/* parent dir does not exist or something wrong */
-			if (rc)
-				D_GOTO(out_err, rc = daos_der2errno(rc));
+			if (rc) {
+				rc = daos_der2errno(rc);
+				if (!lookup_needs_kernel(rc))
+					/* parent dir does not exist or something wrong */
+					D_GOTO(out_err, rc);
+				/* a symlink in the parent path that only the kernel can follow */
+				full_path_parse[pos] = '/';
+				strncpy(*full_path, full_path_parse, len + 1);
+				*is_target_path = 0;
+				item_name[0]    = '\0';
+				goto out_normal;
+			}
 		}
 	} else {
 		strncpy(*full_path, full_path_parse, len + 1);
@@ -1355,113 +1414,200 @@ out_oom:
 	return ENOMEM;
 }
 
+/* Lexically clean an absolute path in place: drop empty and "." components and strip the trailing
+ * "/". Working on components rather than on substrings keeps a "//" that follows a "/./" from
+ * surviving the pass. ".." is kept: whether it can be collapsed depends on the component in front
+ * of it being a directory rather than a symlink, which resolve_dot_dot() decides with a lookup.
+ * Returns the new length, at least 1 for "/".
+ */
 static int
-remove_dot_dot(char path[], int *len)
+normalize_path(char path[], int len)
 {
-	char *p_Offset_2Dots, *p_Back, *pTmp, *pMax, *new_str;
-	int   i, nNonZero;
+	int r = 0;
+	int w = 0;
 
-	/* the length of path[] is already checked in the caller of this function. */
+	D_ASSERT(len == 0 || path[0] == '/');
 
-	p_Offset_2Dots = strstr(path, "/../");
-again:
-	nNonZero = 0;
-	if (p_Offset_2Dots == path) {
-		D_DEBUG(DB_ANY, "wrong path %s: %d (%s)\n", path, EINVAL, strerror(EINVAL));
-		return EINVAL;
+	while (r < len) {
+		int start;
+		int comp_len;
+
+		while (r < len && path[r] == '/')
+			r++;
+		start = r;
+		while (r < len && path[r] != '/')
+			r++;
+		comp_len = r - start;
+		if (comp_len == 0 || (comp_len == 1 && path[start] == '.'))
+			continue;
+		/* w < start always holds, as each kept component consumed at least one more '/' */
+		path[w++] = '/';
+		memmove(path + w, path + start, comp_len);
+		w += comp_len;
 	}
+	if (w == 0)
+		path[w++] = '/';
+	path[w] = '\0';
 
-	while (p_Offset_2Dots != NULL) {
-		pMax = p_Offset_2Dots + 4;
-		for (p_Back = p_Offset_2Dots - 2; p_Back >= path; p_Back--) {
-			if (*p_Back == '/') {
-				for (pTmp = p_Back; pTmp < (pMax - 1); pTmp++)
-					*pTmp = 0;
-				break;
-			}
-		}
-		p_Offset_2Dots = strstr(p_Offset_2Dots + 3, "/../");
-		if (p_Offset_2Dots == NULL)
-			break;
-	}
-
-	new_str = path;
-	for (i = 0; i < *len; i++) {
-		if (path[i]) {
-			new_str[nNonZero] = path[i];
-			nNonZero++;
-		}
-	}
-	new_str[nNonZero] = 0;
-	*len = nNonZero;
-
-	p_Offset_2Dots = strstr(path, "/../");
-	if (p_Offset_2Dots)
-		goto again;
-	p_Offset_2Dots = strstr(path, "/..");
-	if (p_Offset_2Dots && p_Offset_2Dots[3] == '\0')
-		/* /.. at the very end of the path. */
-		goto again;
-
-	return 0;
+	return w;
 }
 
-/* Remove '/./'. Replace '//' with '/'. Remove '/.'. Remove '/' at the end of path. */
+/* Index of the '/' in front of the first ".." component at or after 'from', or -1. The path has
+ * been through normalize_path(), so ".." is always delimited by '/' or the end of the string.
+ */
 static int
-remove_dot_and_cleanup(char path[], int len)
+find_dot_dot(const char *path, int from)
 {
-	char *p_Offset_Dots, *p_Offset_Slash, *new_str;
-	int   i, nNonZero = 0;
+	const char *p = path + from;
 
-	/* the length of path[] is already checked in the caller of this function. */
-
-	p_Offset_Dots = strstr(path, "/./");
-	while ((p_Offset_Dots != NULL)) {
-		p_Offset_Dots[0] = 0;
-		p_Offset_Dots[1] = 0;
-		p_Offset_Dots    = strstr(p_Offset_Dots + 2, "/./");
-		if (p_Offset_Dots == NULL)
-			break;
+	while ((p = strstr(p, "/..")) != NULL) {
+		if (p[3] == '/' || p[3] == '\0')
+			return (int)(p - path);
+		p += 3;
 	}
+	return -1;
+}
 
-	/* replace "//" with "/" */
-	p_Offset_Slash = strstr(path, "//");
-	while (p_Offset_Slash != NULL) {
-		p_Offset_Slash[0] = 0;
-		p_Offset_Slash    = strstr(p_Offset_Slash + 1, "//");
-		if (p_Offset_Slash == NULL)
-			break;
-	}
+/* Resolve the ".." components of a path inside a container the way the kernel does: ".." applies
+ * to the component in front of it after that component has been resolved, so "link/.." with
+ * "link -> c/d" leads to "c", not to the parent of "link". Each such component is looked up with
+ * O_NOFOLLOW: a directory lets "X/.." collapse, a relative symlink value is spliced in place of X
+ * and the scan restarts, anything else is an error as in the kernel. A ".." applied to the mount
+ * point itself collapses lexically, the mount path being taken as canonical as query_dfs_mount()
+ * does, and the path stays with pil4dfs only if it comes straight back into this mount. A symlink
+ * with an absolute value, or one in the path in front of ".." that dfs cannot follow, leaves the
+ * container and is handed to the kernel. Paths without ".." return at the first scan and pay
+ * nothing.
+ */
+static int
+resolve_dot_dot(struct dfs_mt *dfs_mt, char path[], int *len, bool *use_kernel)
+{
+	int hops = 0;
 
-	/* remove '/.' at the end */
-	if (len > 2 && strncmp(path + len - 2, "/.", 3) == 0) {
-		p_Offset_Slash = path + len - 2;
-		p_Offset_Slash[0] = 0;
-		p_Offset_Slash[1] = 0;
-	}
+	*use_kernel = false;
+	for (;;) {
+		struct dcache_rec *parent = NULL;
+		dfs_obj_t         *obj    = NULL;
+		mode_t             mode   = 0;
+		char              *parent_path;
+		char              *value = NULL;
+		daos_size_t        value_len;
+		int                pos, xs, end, parent_len, rc;
+		char               saved;
 
-	new_str = path;
-	for (i = 0; i < len; i++) {
-		if (path[i]) {
-			new_str[nNonZero] = path[i];
-			nNonZero++;
+		pos = find_dot_dot(path, dfs_mt->len_fs_root);
+		if (pos < 0)
+			return 0;
+		if (pos <= dfs_mt->len_fs_root) {
+			/* ".." right after the mount root: its parent is on the host, so only a
+			 * path that re-enters this very mount can be served here
+			 */
+			if (dfs_mt->len_fs_root <= 1) {
+				*use_kernel = true;
+				return 0;
+			}
+			xs = dfs_mt->len_fs_root;
+			while (xs > 0 && path[xs - 1] != '/')
+				xs--;
+			end = pos + 3;
+			memmove(path + xs, path + end, *len - end + 1);
+			*len -= end - xs;
+			*len = normalize_path(path, *len);
+			if (strncmp(path, dfs_mt->fs_root, dfs_mt->len_fs_root) != 0 ||
+			    (path[dfs_mt->len_fs_root] != '/' &&
+			     path[dfs_mt->len_fs_root] != '\0')) {
+				*use_kernel = true;
+				return 0;
+			}
+			continue;
 		}
-	}
-	/* remove "/" at the end of path */
-	new_str[nNonZero] = 0;
-	if (new_str[1] == 0 && new_str[0] == '/')
-		/* root dir */
-		return 1;
-	for (i = nNonZero - 1; i >= 0; i--) {
-		if (new_str[i] == '/') {
-			new_str[i] = 0;
-			nNonZero--;
+
+		/* X is the component in front of "..", its parent the container path before it */
+		xs = pos - 1;
+		while (path[xs - 1] != '/')
+			xs--;
+		parent_len = (xs - 1) - dfs_mt->len_fs_root;
+		if (parent_len == 0) {
+			D_STRNDUP(parent_path, "/", 1);
+			parent_len = 1;
 		} else {
-			break;
+			D_STRNDUP(parent_path, path + dfs_mt->len_fs_root, parent_len);
 		}
-	}
+		if (parent_path == NULL)
+			return ENOMEM;
+		rc = dcache_find_insert(dfs_mt->dcache, parent_path, parent_len, &parent);
+		D_FREE(parent_path);
+		if (rc) {
+			rc = daos_der2errno(rc);
+			if (!lookup_needs_kernel(rc))
+				return rc;
+			*use_kernel = true;
+			return 0;
+		}
 
-	return nNonZero;
+		saved     = path[pos];
+		path[pos] = '\0';
+		rc = dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), path + xs, O_RDONLY | O_NOFOLLOW,
+				    &obj, &mode, NULL);
+		path[pos] = saved;
+		drec_decref(dfs_mt->dcache, parent);
+		if (rc)
+			return rc;
+
+		if (S_ISDIR(mode)) {
+			dfs_release(obj);
+			/* drop "X/.."; the cleanup pass removes the "/" left behind */
+			end = pos + 3;
+			memmove(path + xs, path + end, *len - end + 1);
+			*len -= end - xs;
+			*len = normalize_path(path, *len);
+			continue;
+		}
+		if (!S_ISLNK(mode)) {
+			dfs_release(obj);
+			return ENOTDIR;
+		}
+
+		value_len = 0;
+		rc        = dfs_get_symlink_value(obj, NULL, &value_len);
+		if (rc == 0) {
+			D_ALLOC(value, value_len);
+			if (value == NULL)
+				rc = ENOMEM;
+			else
+				rc = dfs_get_symlink_value(obj, value, &value_len);
+		}
+		dfs_release(obj);
+		if (rc) {
+			D_FREE(value);
+			return rc;
+		}
+		/* value_len includes the terminating NUL */
+		value_len--;
+		if (value_len == 0) {
+			D_FREE(value);
+			return ENOENT;
+		}
+		if (value[0] == '/') {
+			D_FREE(value);
+			*use_kernel = true;
+			return 0;
+		}
+		if (++hops > MAX_SYMLINK_HOPS) {
+			D_FREE(value);
+			return ELOOP;
+		}
+		/* splice the value in place of X, then clean up whatever it contained */
+		if (*len - (pos - xs) + (int)value_len >= DFS_MAX_PATH) {
+			D_FREE(value);
+			return ENAMETOOLONG;
+		}
+		memmove(path + xs + value_len, path + pos, *len - pos + 1);
+		memcpy(path + xs, value, value_len);
+		*len += (int)value_len - (pos - xs);
+		D_FREE(value);
+		*len = normalize_path(path, *len);
+	}
 }
 
 static int
@@ -1471,16 +1617,16 @@ init_fd_list(void)
 
 	rc = D_MUTEX_INIT(&lock_fd, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_MUTEX_INIT(&lock_dirfd, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_MUTEX_INIT(&lock_mmap, NULL);
 	if (rc)
-		return 1;
+		return rc;
 	rc = D_RWLOCK_INIT(&lock_fd_dup2ed, NULL);
 	if (rc)
-		return 1;
+		return rc;
 
 	/* fatal error above: failure to create mutexes. */
 
@@ -1533,6 +1679,7 @@ find_next_available_fd(struct file_obj *obj, int *new_fd)
 		d_file_list[idx] = new_obj;
 	}
 	dup_ref_count[idx] = 0;
+	fd_direct_open[idx] = true;
 	if (next_free_fd > last_fd)
 		last_fd = next_free_fd;
 	next_free_fd = -1;
@@ -1652,7 +1799,6 @@ find_next_available_map(int *idx)
 	return 0;
 }
 
-/* May need to support duplicated fd as duplicated dirfd too. */
 static void
 free_fd(int idx, bool closing_dup_fd)
 {
@@ -1670,10 +1816,18 @@ free_fd(int idx, bool closing_dup_fd)
 
 	if (closing_dup_fd)
 		dup_ref_count[idx]--;
+	else
+		/* the direct fake fd of this slot is being closed */
+		fd_direct_open[idx] = false;
 	d_file_list[idx]->ref_count--;
 	if (d_file_list[idx]->ref_count == 0)
 		saved_obj = d_file_list[idx];
-	if (dup_ref_count[idx] > 0) {
+	/* Keep this slot while it still has references of its own: either the direct fake fd
+	 * is still open, or it still has dup2() references via low fds. ref_count must not be
+	 * used to decide whether to clear this slot, since it is shared when the same struct
+	 * file_obj is referenced by multiple fake fd slots (e.g. dup()/fcntl(F_DUPFD)).
+	 */
+	if (fd_direct_open[idx] || (dup_ref_count[idx] > 0)) {
 		D_MUTEX_UNLOCK(&lock_fd);
 		return;
 	}
@@ -1971,6 +2125,15 @@ check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int
 	int len_str, dirfd_directed;
 
 	*error = 0;
+
+	if (rel_path[0] == '/') {
+		/* an absolute path, dirfd should be ignored */
+		*full_path_out = strdup(rel_path);
+		if (*full_path_out == NULL)
+			goto out_oom;
+		return query_dfs_mount(*full_path_out);
+	}
+
 	*full_path_out = NULL;
 	dirfd_directed = d_get_fd_redirected(dirfd);
 
@@ -1982,6 +2145,7 @@ check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int
 		else if (len_str < 0)
 			goto out_oom;
 	} else if (dirfd_directed == AT_FDCWD) {
+		cur_dir_check_owner();
 		len_str = asprintf(full_path_out, "%s/%s", cur_dir, rel_path);
 		if (len_str >= DFS_MAX_PATH)
 			goto out_toolong;
@@ -2035,6 +2199,43 @@ out_readlink:
 	return (-1);
 }
 
+/* The leaf of the path is a symlink that dfs cannot follow, see lookup_needs_kernel(). A link in
+ * the container root whose relative value climbs out of the container reports ENOENT instead, as
+ * dfs resolves ".." of its root to the root itself. None of these errnos is specific to a symlink,
+ * so the entry is looked up again to confirm that it really is one. The value that dfs rejected
+ * may sit anywhere in a chain of links, as with the python3 -> python -> /usr/bin/python3.x layout
+ * of a venv, so the value of the entry itself is not inspected.
+ *
+ * A symlink of this kind in a non-leaf position fails inside query_path(), which hands the path to
+ * the kernel itself.
+ */
+static bool
+need_kernel_to_resolve(int rc, struct dfs_mt *dfs_mt, struct dcache_rec *parent,
+		       const char *item_name, const char *parent_dir)
+{
+	dfs_obj_t *obj  = NULL;
+	mode_t     mode = 0;
+
+	if (parent == NULL || item_name[0] == '\0')
+		return false;
+	if (rc == ENOENT) {
+		/* A lookup miss is common, so only probe where dfs can report one for such a
+		 * link, and keep it cheap everywhere else.
+		 */
+		if (parent_dir == NULL || strncmp(parent_dir, "/", 2) != 0)
+			return false;
+	} else if (!lookup_needs_kernel(rc)) {
+		return false;
+	}
+
+	if (dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), item_name, O_RDONLY | O_NOFOLLOW, &obj,
+			   &mode, NULL) != 0)
+		return false;
+	dfs_release(obj);
+
+	return S_ISLNK(mode);
+}
+
 static int
 open_common(int (*real_open)(const char *pathname, int oflags, ...), const char *caller_name,
 	    const char *pathname, int oflags, ...)
@@ -2067,10 +2268,12 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	if (!d_hook_enabled)
 		goto org_func;
 
+	item_name[0] = '\0';
+
 	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
-	if (rc == ENOENT)
-		D_GOTO(out_error, rc = ENOENT);
+	if (rc)
+		D_GOTO(out_error, rc);
 	parent_dfs = NULL;
 	if (parent != NULL)
 		parent_dfs = drec2obj(parent);
@@ -2194,7 +2397,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		return fd_kernel;
 	}
 
-	if (oflags & __O_TMPFILE) {
+	/* __O_TMPFILE includes O_DIRECTORY, so the whole mask has to match */
+	if ((oflags & __O_TMPFILE) == __O_TMPFILE) {
 		if (!parent && (strncmp(item_name, "/", 2) == 0))
 			rc = dfs_access(dfs_mt->dfs, NULL, NULL, X_OK | W_OK);
 		else
@@ -2237,8 +2441,25 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				    &dfs_obj, &mode_query, NULL);
 	}
 
+	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir))
+		goto org_func;
 	if (rc)
 		D_GOTO(out_error, rc);
+
+	/* O_NOFOLLOW on a symlink: ELOOP, or ENOTDIR with O_DIRECTORY as the kernel checks that
+	 * first, or with O_PATH an fd on the link that only the kernel can provide. A fake fd on
+	 * the link object would only fail later, at read().
+	 */
+	if (S_ISLNK(mode_query)) {
+		dfs_release(dfs_obj);
+		if (oflags & O_PATH)
+			goto org_func;
+		D_GOTO(out_error, rc = (oflags & O_DIRECTORY) ? ENOTDIR : ELOOP);
+	}
+	if ((oflags & O_DIRECTORY) && !S_ISDIR(mode_query)) {
+		dfs_release(dfs_obj);
+		D_GOTO(out_error, rc = ENOTDIR);
+	}
 
 	if (S_ISDIR(mode_query)) {
 		rc = find_next_available_dirfd(NULL, &idx_dirfd);
@@ -2391,6 +2612,16 @@ new_open_pthread(const char *pathname, int oflags, ...)
 
 	return rc;
 }
+
+int
+creat(const char *path, mode_t mode)
+{
+	/* https://linux.die.net/man/3/creat */
+	return new_open_libc(path, O_WRONLY | O_CREAT | O_TRUNC, mode);
+}
+
+int
+creat64(const char *path, mode_t mode) __attribute__((alias("creat")));
 
 /* Search a fd in fd hash table. Remove it in case it is found. Also free the fake fd.
  * Return true if fd is found. Return false if fd is not found.
@@ -3049,6 +3280,7 @@ static int
 new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int                is_target_path, rc;
+	bool               use_kernel;
 	dfs_obj_t         *obj;
 	mode_t             mode;
 	char               item_name[DFS_MAX_NAME];
@@ -3063,6 +3295,8 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 		errno = ENOENT;
 		return (-1);
 	}
+
+	item_name[0] = '\0';
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3099,10 +3333,12 @@ out_org:
 	return next_xstat(ver, path, stat_buf);
 
 out_err:
+	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
+		     ((rc == EIO || rc == EINVAL) && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if ((rc == EIO || rc == EINVAL) && d_compatible_mode)
+	if (use_kernel)
 		return next_xstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -3112,6 +3348,7 @@ static int
 new_lxstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int                is_target_path, rc;
+	bool               use_kernel;
 	char               item_name[DFS_MAX_NAME];
 	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
@@ -3124,6 +3361,8 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 		errno = ENOENT;
 		return (-1);
 	}
+
+	item_name[0] = '\0';
 
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -3151,10 +3390,12 @@ out_org:
 	return libc_lxstat(ver, path, stat_buf);
 
 out_err:
+	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
+		     ((rc == EIO || rc == EINVAL) && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
-	if ((rc == EIO || rc == EINVAL) && d_compatible_mode)
+	if (use_kernel)
 		return libc_lxstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
@@ -3166,7 +3407,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
-	if (!d_hook_enabled)
+	if (path == NULL || !d_hook_enabled)
 		return libc_fxstatat(ver, dirfd, path, stat_buf, flags);
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
 		errno = ENOENT;
@@ -3223,7 +3464,7 @@ new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
-	if (!d_hook_enabled)
+	if (path == NULL || !d_hook_enabled)
 		return libc_fstatat(dirfd, path, stat_buf, flags);
 
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
@@ -3307,18 +3548,21 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 	int         rc, idx_dfs, error = 0;
 	struct stat stat_buf;
 	char        *full_path = NULL;
+	/* glibc declares path nonnull and gcc folds a direct NULL test away, so read it as
+	 * volatile. Rust's std probes statx() with a NULL path and expects EFAULT from the kernel.
+	 */
+	const char *volatile path_probe = path;
 
 	if (next_statx == NULL) {
 		next_statx = dlsym(RTLD_NEXT, "statx");
 		D_ASSERT(next_statx != NULL);
 	}
+	if (path_probe == NULL || !d_hook_enabled)
+		return next_statx(dirfd, path, flags, mask, statx_buf);
 	if (path[0] == 0 && ((flags & AT_EMPTY_PATH) == 0)) {
 		errno = ENOENT;
 		return (-1);
 	}
-
-	if (!d_hook_enabled)
-		return next_statx(dirfd, path, flags, mask, statx_buf);
 
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/') {
@@ -5025,6 +5269,53 @@ out_err:
 	return (-1);
 }
 
+int
+renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath)
+{
+	int   error = 0;
+	int   rc;
+	char *full_path_old = NULL;
+	char *full_path_new = NULL;
+
+	if (next_renameat == NULL) {
+		next_renameat = dlsym(RTLD_NEXT, "renameat");
+		D_ASSERT(next_renameat != NULL);
+	}
+	if (!d_hook_enabled)
+		return next_renameat(olddirfd, oldpath, newdirfd, newpath);
+
+	if ((oldpath[0] == '/') && (newpath[0] == '/'))
+		/* fd is ignored for absolute path */
+		return rename(oldpath, newpath);
+
+	check_path_with_dirfd(olddirfd, &full_path_old, oldpath, &error);
+	if (error)
+		goto out_err;
+
+	check_path_with_dirfd(newdirfd, &full_path_new, newpath, &error);
+	if (error) {
+		if (full_path_old)
+			free(full_path_old);
+		goto out_err;
+	}
+	rc = rename(full_path_old, full_path_new);
+	/* save errno since free() may affect errno */
+	error = errno;
+	if (full_path_old) {
+		free(full_path_old);
+		errno = error;
+	}
+	if (full_path_new) {
+		free(full_path_new);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
+}
+
 char *
 getcwd(char *buf, size_t size)
 {
@@ -5036,6 +5327,7 @@ getcwd(char *buf, size_t size)
 	if (!d_hook_enabled)
 		return next_getcwd(buf, size);
 
+	cur_dir_check_owner();
 	if (cur_dir[0] != '/')
 		update_cwd();
 
@@ -5100,6 +5392,8 @@ access(const char *path, int mode)
 	if (!d_hook_enabled)
 		return next_access(path, mode);
 
+	item_name[0] = '\0';
+
 	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
 	if (rc)
@@ -5125,6 +5419,8 @@ out_org:
 	return next_access(path, mode);
 
 out_err:
+	if (need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir))
+		goto out_org;
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -5187,22 +5483,33 @@ chdir(const char *path)
 	if (!d_hook_enabled)
 		return next_chdir(path);
 
-	rc = query_path(path, &is_target_path, &parent, item_name, &parent_dir,
-			&full_path, &dfs_mt);
-	if (rc)
-		D_GOTO(out_err, rc);
-
 	rc = next_chdir(path);
 	if (rc)
-		D_GOTO(out_err, rc = errno);
+		return (-1);
+
+	if (cur_dir_pid != 0 && cur_dir_pid != getpid()) {
+		/* A vfork()ed child shares the parent's memory until execve(): updating cur_dir
+		 * here would redirect the parent's relative paths to this child's directory.
+		 */
+		return 0;
+	}
+
+	rc =
+	    query_path(path, &is_target_path, &parent, item_name, &parent_dir, &full_path, &dfs_mt);
+	if (rc) {
+		/* The kernel already moved cwd, so chdir() has to report success. Only cur_dir
+		 * cannot be derived from path here. query_path() above allocates and takes locks,
+		 * so a chdir() between fork() and exec() is still not safe in general.
+		 */
+		update_cwd();
+		return 0;
+	}
 
 	if (!is_target_path) {
-		len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s", full_path);
-		if (len_str >= DFS_MAX_PATH) {
-			D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
-				strerror(ENAMETOOLONG));
-			D_GOTO(out_err, rc = ENAMETOOLONG);
-		}
+		/* the path is not normalized for ".." outside a container, so take the kernel's
+		 * view of the new cwd
+		 */
+		update_cwd();
 		D_GOTO(out, rc);
 	}
 
@@ -5242,8 +5549,13 @@ fchdir(int dirfd)
 		return next_fchdir(dirfd);
 
 	fd_directed = d_get_fd_redirected(dirfd);
-	if (fd_directed < FD_DIR_BASE)
-		return next_fchdir(dirfd);
+	if (fd_directed < FD_DIR_BASE) {
+		rc = next_fchdir(dirfd);
+		/* as in chdir(), a vfork()ed child must leave the parent's cur_dir alone */
+		if (rc == 0 && (cur_dir_pid == 0 || cur_dir_pid == getpid()))
+			update_cwd();
+		return rc;
+	}
 
 	/* assume dfuse is running. call chdir() to update cwd. */
 	if (next_chdir == NULL) {
@@ -5254,7 +5566,11 @@ fchdir(int dirfd)
 	if (rc)
 		return rc;
 
+	if (cur_dir_pid != 0 && cur_dir_pid != getpid())
+		return 0;
+
 	pt_end = stpncpy(cur_dir, dir_list[fd_directed - FD_DIR_BASE]->path, DFS_MAX_PATH - 1);
+	cur_dir_pid = getpid();
 	if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
 			strerror(ENAMETOOLONG));
@@ -5670,6 +5986,119 @@ out_err:
 }
 
 int
+fchown(int fd, uid_t uid, gid_t gid)
+{
+	int rc, fd_directed;
+
+	if (next_fchown == NULL) {
+		next_fchown = dlsym(RTLD_NEXT, "fchown");
+		D_ASSERT(next_fchown != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fchown(fd, uid, gid);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fchown(fd, uid, gid);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed >= FD_DIR_BASE)
+		/* Let dfuse handle this case. This function is not commonly used in applications.
+		 * There is no need for further optimization here at this time.
+		 */
+		return chown(dir_list[fd_directed - FD_DIR_BASE]->path, uid, gid);
+
+	/* regular file */
+	rc = dfs_chown(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+		       drec2obj(d_file_list[fd_directed - FD_FILE_BASE]->parent),
+		       d_file_list[fd_directed - FD_FILE_BASE]->item_name, uid, gid, 0);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return 0;
+}
+
+ssize_t
+fgetxattr(int fd, char *name, void *value, size_t size)
+{
+	int    rc, fd_directed;
+	size_t buf_size = size;
+
+	if (next_fgetxattr == NULL) {
+		next_fgetxattr = dlsym(RTLD_NEXT, "fgetxattr");
+		D_ASSERT(next_fgetxattr != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fgetxattr(fd, name, value, size);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fgetxattr(fd, name, value, size);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed < FD_DIR_BASE)
+		rc = dfs_getxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value,
+				  &buf_size);
+	else
+		rc = dfs_getxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
+				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, &buf_size);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return buf_size;
+}
+
+int
+fsetxattr(int fd, char *name, void *value, size_t size, int flags)
+{
+	int rc, fd_directed;
+
+	if (next_fsetxattr == NULL) {
+		next_fsetxattr = dlsym(RTLD_NEXT, "fsetxattr");
+		D_ASSERT(next_fsetxattr != NULL);
+	}
+
+	if (!d_hook_enabled)
+		return next_fsetxattr(fd, name, value, size, flags);
+	fd_directed = d_get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fsetxattr(fd, name, value, size, flags);
+
+	if (fd_directed >= (FD_DIR_BASE + MAX_OPENED_DIR)) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (fd_directed < FD_DIR_BASE)
+		rc = dfs_setxattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+				  d_file_list[fd_directed - FD_FILE_BASE]->file, name, value, size,
+				  flags);
+	else
+		rc = dfs_setxattr(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
+				  dir_list[fd_directed - FD_DIR_BASE]->dir, name, value, size,
+				  flags);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return rc;
+}
+
+int
 utime(const char *path, const struct utimbuf *times)
 {
 	int                is_target_path, rc;
@@ -5910,8 +6339,10 @@ out_err:
 int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
-	int  idx_dfs, error = 0, rc;
-	char *full_path = NULL;
+	int              idx_dfs, error = 0, rc;
+	char            *full_path = NULL;
+	struct timespec  times_loc[2];
+	struct timespec *times_ptr;
 
 	if (next_utimensat == NULL) {
 		next_utimensat = dlsym(RTLD_NEXT, "utimensat");
@@ -5929,18 +6360,30 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	}
 	_Pragma("GCC diagnostic pop")
 
+	    /* clang-format off */
+
+	if (times == NULL) {
+		clock_gettime(CLOCK_REALTIME, &times_loc[0]);
+		times_loc[1].tv_sec = times_loc[0].tv_sec;
+		times_loc[1].tv_nsec = times_loc[0].tv_nsec;
+		times_ptr = times_loc;
+	} else {
+		times_ptr = (struct timespec *)times;
+	}
+	/* clang-format on */
+
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/')
-		return utimens_timespec(path, times, flags);
+		return utimens_timespec(path, times_ptr, flags);
 
 	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
 	if (error)
 		goto out_err;
 
 	if (idx_dfs >= 0)
-		rc = utimens_timespec(full_path, times, flags);
+		rc = utimens_timespec(full_path, times_ptr, flags);
 	else
-		rc = next_utimensat(dirfd, path, times, flags);
+		rc = next_utimensat(dirfd, path, times_ptr, flags);
 
 	error = errno;
 	if (full_path) {
@@ -6315,7 +6758,11 @@ new_dup3(int oldfd, int newfd, int flags)
 	if (d_get_fd_redirected(oldfd) < FD_FILE_BASE && d_get_fd_redirected(newfd) < FD_FILE_BASE)
 		return libc_dup3(oldfd, newfd, flags);
 
-	/* Ignore flags now. Need more work later to handle flags, e.g., O_CLOEXEC */
+	/* only O_CLOEXEC and 0 are accepted for flags in glibc */
+	if (flags != O_CLOEXEC && flags != 0) {
+		errno = EINVAL;
+		return (-1);
+	}
 	return dup2(oldfd, newfd);
 }
 
@@ -6627,25 +7074,39 @@ new_exit(int rc)
 static void
 update_cwd(void)
 {
-	char *cwd = NULL;
-	char *pt_end = NULL;
+	int saved_errno = errno;
 
-	/* daos_init() may be not called yet. */
-	cwd = get_current_dir_name();
-
-	if (cwd == NULL) {
-		D_FATAL("fatal error to get CWD with get_current_dir_name(): %d (%s)\n", errno,
-			strerror(errno));
-		abort();
-	} else {
-		pt_end = stpncpy(cur_dir, cwd, DFS_MAX_PATH - 1);
-		if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
-			D_FATAL("fatal error, cwd path is too long:  %d (%s)\n", ENAMETOOLONG,
-				strerror(ENAMETOOLONG));
-			abort();
-		}
-		free(cwd);
+	if (next_getcwd == NULL) {
+		next_getcwd = dlsym(RTLD_NEXT, "getcwd");
+		D_ASSERT(next_getcwd != NULL);
 	}
+
+	/* get_current_dir_name() returns $PWD when stat($PWD) and stat(".") match, but both go
+	 * through the intercepted stat() and so agree with the stale cur_dir to be refreshed.
+	 * cur_dir is filled directly to stay allocation free between fork() and exec().
+	 */
+	if (next_getcwd(cur_dir, DFS_MAX_PATH) == NULL) {
+		/* e.g. cwd was removed or is too long. Relative paths are left to libc until the
+		 * cwd is known again.
+		 */
+		D_DEBUG(DB_ANY, "getcwd() failed: %d (%s)\n", errno, strerror(errno));
+		cur_dir[0] = '\0';
+	}
+	cur_dir_pid = getpid();
+
+	errno = saved_errno;
+}
+
+/* Adopt cur_dir for this process when it was last set by another one, e.g. after fork(). By the
+ * time a parent runs again after vfork() the child has already exec'd, so writing here is safe.
+ */
+static void
+cur_dir_check_owner(void)
+{
+	if (cur_dir_pid == getpid())
+		return;
+
+	update_cwd();
 }
 
 static int

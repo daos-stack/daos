@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/dustin/go-humanize"
@@ -27,7 +28,8 @@ import (
 
 const defaultMetadataPath = "/mnt/daos"
 
-// SystemProvider provides operating system capabilities.
+// SystemProvider provides a limited set of operating system capabilities. Not all of the
+// capabilities in src/control/provider/system are exposed via the storage provider.
 type SystemProvider interface {
 	system.IsMountedProvider
 	GetfsUsage(string) (uint64, uint64, error)
@@ -45,6 +47,7 @@ type Provider struct {
 	scm           ScmProvider
 	bdev          BdevProvider
 	vmdEnabled    bool
+	getTopology   topologyGetter
 }
 
 // DefaultProvider returns a provider populated with default parameters.
@@ -52,8 +55,10 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provid
 	if engineStorage == nil {
 		engineStorage = new(Config)
 	}
-	return NewProvider(log, idx, engineStorage, system.DefaultProvider(),
+	p := NewProvider(log, idx, engineStorage, system.DefaultProvider(),
 		NewScmForwarder(log), NewBdevForwarder(log), NewMetadataForwarder(log))
+	p.getTopology = hwloc.NewProvider(log).GetTopology
+	return p
 }
 
 // FormatControlMetadata formats the storage used for control metadata.
@@ -110,6 +115,30 @@ func (p *Provider) ControlMetadataPathConfigured() bool {
 		return true
 	}
 	return false
+}
+
+// ControlMetadataEngineNeedsFormat checks if this engine's superblock exists.
+// This is distinct from ControlMetadataNeedsFormat which checks the host-level DataPath.
+func (p *Provider) ControlMetadataEngineNeedsFormat() (bool, error) {
+	if p == nil {
+		return false, errors.New("nil provider")
+	}
+
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		// No metadata section defined, metadata stored on SCM
+		return false, nil
+	}
+
+	superblockPath := filepath.Join(p.ControlMetadataEnginePath(), "superblock")
+
+	if _, err := p.Sys.ReadFile(superblockPath); os.IsNotExist(err) {
+		p.log.Debugf("engine %d superblock missing: %s", p.engineIndex, superblockPath)
+		return true, nil
+	} else if err != nil {
+		return false, errors.Wrapf(err, "checking engine %d superblock", p.engineIndex)
+	}
+
+	return false, nil
 }
 
 // ControlMetadataPath returns the path where control plane metadata is stored.
@@ -202,6 +231,15 @@ func (p *Provider) ControlMetadataIsMounted() (bool, error) {
 	return p.Sys.IsMounted(p.engineStorage.ControlMetadata.Path)
 }
 
+// AllowSpdkConfOverride returns true if override of SPDK JSON config file (daos_nvme.conf) has been
+// explicitly enabled within the ControlMetadata section of the server config file.
+func (p *Provider) AllowSpdkConfOverride() bool {
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		return false
+	}
+	return p.engineStorage.ControlMetadata.AllowSpdkConfOverride
+}
+
 // PrepareScm calls into storage SCM provider to attempt to configure PMem devices to be usable by
 // DAOS.
 func (p *Provider) PrepareScm(req ScmPrepareRequest) (*ScmPrepareResponse, error) {
@@ -266,16 +304,21 @@ func (p *Provider) MountScm() error {
 	}
 
 	req := ScmMountRequest{
-		Class:  cfg.Class,
-		Target: cfg.Scm.MountPoint,
+		Class:            cfg.Class,
+		Target:           cfg.Scm.MountPoint,
+		KernelConfigPath: p.engineStorage.KernelConfigPath,
 	}
 
 	switch cfg.Class {
 	case ClassRam:
+		disableHugepages := true
+		if cfg.Scm.DisableHugepages != nil {
+			disableHugepages = *cfg.Scm.DisableHugepages
+		}
 		req.Ramdisk = &RamdiskParams{
 			Size:             cfg.Scm.RamdiskSize,
 			NUMANode:         cfg.Scm.NumaNodeIndex,
-			DisableHugepages: cfg.Scm.DisableHugepages,
+			DisableHugepages: disableHugepages,
 		}
 	case ClassDcpm:
 		if len(cfg.Scm.DeviceList) != 1 {
@@ -299,6 +342,10 @@ func (p *Provider) MountScm() error {
 
 // UnmountTmpfs unmounts SCM based on provider config.
 func (p *Provider) UnmountTmpfs() error {
+	if p == nil {
+		return errors.New("nil provider")
+	}
+
 	cfg, err := p.GetScmConfig()
 	if err != nil {
 		return err
@@ -334,10 +381,14 @@ func createScmFormatRequest(class Class, scmCfg ScmConfig, force bool) (*ScmForm
 
 	switch class {
 	case ClassRam:
+		disableHugepages := true
+		if scmCfg.DisableHugepages != nil {
+			disableHugepages = *scmCfg.DisableHugepages
+		}
 		req.Ramdisk = &RamdiskParams{
 			Size:             scmCfg.RamdiskSize,
 			NUMANode:         scmCfg.NumaNodeIndex,
-			DisableHugepages: scmCfg.DisableHugepages,
+			DisableHugepages: disableHugepages,
 		}
 	case ClassDcpm:
 		if len(scmCfg.DeviceList) != 1 {
@@ -366,6 +417,7 @@ func (p *Provider) ScmNeedsFormat() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	req.KernelConfigPath = p.engineStorage.KernelConfigPath
 
 	res, err := p.scm.CheckFormat(*req)
 	if err != nil {
@@ -388,6 +440,7 @@ func (p *Provider) FormatScm(force bool) error {
 	if err != nil {
 		return errors.Wrap(err, "generate format request")
 	}
+	req.KernelConfigPath = p.engineStorage.KernelConfigPath
 
 	scmStr := fmt.Sprintf("SCM (%s:%s)", cfg.Class, cfg.Scm.MountPoint)
 	p.log.Infof("Instance %d: starting format of %s", p.engineIndex, scmStr)
@@ -408,16 +461,6 @@ func (p *Provider) FormatScm(force bool) error {
 // GetBdevConfigs returns the Bdev tier configs.
 func (p *Provider) GetBdevConfigs() TierConfigs {
 	return p.engineStorage.Tiers.BdevConfigs()
-}
-
-// QueryScmFirmware queries PMem SSD firmware.
-func (p *Provider) QueryScmFirmware(req ScmFirmwareQueryRequest) (*ScmFirmwareQueryResponse, error) {
-	return p.scm.QueryFirmware(req)
-}
-
-// UpdateScmFirmware queries PMem SSD firmware.
-func (p *Provider) UpdateScmFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmwareUpdateResponse, error) {
-	return p.scm.UpdateFirmware(req)
 }
 
 // PrepareBdevs attempts to configure NVMe devices to be usable by DAOS.
@@ -580,6 +623,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		AccelProps:       cfg.AccelProps,
 		SpdkRpcSrvProps:  cfg.SpdkRpcSrvProps,
 		AutoFaultyProps:  cfg.AutoFaultyProps,
+		SpdkIobufProps:   cfg.SpdkIobufProps,
 	}
 
 	for idx, tier := range cfg.Tiers.BdevConfigs() {
@@ -606,10 +650,11 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger, ctrl
 	vmdEnabled := p.vmdEnabled
 	engineIndex := p.engineIndex
 	engineStorage := p.engineStorage
+	getTopology := p.getTopology
 	p.RUnlock()
 
 	req, err := BdevWriteConfigRequestFromConfig(ctx, log, engineStorage,
-		vmdEnabled, hwloc.NewProvider(log).GetTopology)
+		vmdEnabled, getTopology)
 	if err != nil {
 		return errors.Wrap(err, "creating write config request")
 	}
@@ -638,8 +683,8 @@ type BdevTierScanResult struct {
 	Result *BdevScanResponse
 }
 
-// ScanBdevs calls into bdev storage provider to scan SSDs, always bypassing cache.
-// Function should not be called when engines have been started and SSDs have been claimed by SPDK.
+// ScanBdevs calls into bdev storage provider to scan SSDs. Function should not be called when
+// engines have been started and SSDs have been claimed by SPDK.
 func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	p.RLock()
 	defer p.RUnlock()
@@ -668,16 +713,6 @@ func (p *Provider) BdevRoleMetaConfigured() bool {
 		}
 	}
 	return false
-}
-
-// QueryBdevFirmware queries NVMe SSD firmware.
-func (p *Provider) QueryBdevFirmware(req NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error) {
-	return p.bdev.QueryFirmware(req)
-}
-
-// UpdateBdevFirmware queries NVMe SSD firmware.
-func (p *Provider) UpdateBdevFirmware(req NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error) {
-	return p.bdev.UpdateFirmware(req)
 }
 
 // UpgradeBdevConfig updates an existing SPDK bdev config, if necessary.
@@ -718,4 +753,10 @@ func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemP
 		bdev:          bdev,
 		metadata:      meta,
 	}
+}
+
+// setTopologyGetter sets the topology getter function for the provider. This is
+// used in tests to inject a mock topology.
+func (p *Provider) setTopologyGetter(fn topologyGetter) {
+	p.getTopology = fn
 }

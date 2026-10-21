@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2022 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -38,8 +38,6 @@ type Nvme interface {
 	Discover(logging.Logger) (storage.NvmeControllers, error)
 	// Format NVMe controller namespaces
 	Format(logging.Logger) ([]*FormatResult, error)
-	// Update updates the firmware on a specific PCI address and slot
-	Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error
 	// Clean removes lockfiles associated with NVMe controllers. Decisions regarding which
 	// lockfiles to remove made using supplied address check function.
 	Clean(logging.Logger, LockfileAddrCheckFn) ([]string, error)

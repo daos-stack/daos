@@ -2,22 +2,20 @@ hosts:
   test_servers: 2
   test_clients: 1
 
-timeout: 285
+timeout: 600
 
 server_config:
   name: daos_server
   engines_per_host: 2
   engines:
     0:
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
       nr_xs_helpers: 1
       storage: auto
     1:
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
       nr_xs_helpers: 1
       storage: auto
 
@@ -27,7 +25,4 @@ setup:
   start_servers_once: False
 
 pool:
-  size: 60G
-
-container:
-  control_method: daos
+  size: 100G

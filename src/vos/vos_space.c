@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,15 +38,13 @@ frag_reserve_space(uuid_t uuid, daos_size_t *rsrvd, daos_size_t scm_tot)
 		return;
 	}
 
-	if (ovhd_sz > max_sz) {
+	if (ovhd_sz > max_sz)
 		ovhd_sz = max_sz;
-	}
 
-	if (ovhd_sz < min_sz && scm_tot >= 2 * (min_sz + rsrvd[DAOS_MEDIA_SCM])) {
+	if (ovhd_sz < min_sz && scm_tot >= 2 * (min_sz + rsrvd[DAOS_MEDIA_SCM]))
 		ovhd_sz = min_sz;
-	}
 
-	rsrvd[DAOS_MEDIA_SCM] += ovhd_sz;
+	rsrvd[DAOS_MEDIA_SCM] = max(rsrvd[DAOS_MEDIA_SCM], ovhd_sz);
 }
 
 void
@@ -320,10 +318,14 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 		return rc;
 	}
 
-	estimate_space(pool, dkey, iod_nr, iods, iods_csums, &space_est[0]);
+	if (flags & VOS_OF_REMOVE)
+		/* (1 EVT node + 1 EVT desc), a moderate estimation for removal */
+		space_est[DAOS_MEDIA_SCM] += (1024 + 256);
+	else
+		estimate_space(pool, dkey, iod_nr, iods, iods_csums, &space_est[0]);
 
-	/* if this is a critical update, skip SCM and NVMe sys/held checks */
-	if (flags & VOS_OF_CRIT)
+	/* if this is a critical update or removal, skip SCM and NVMe sys/held checks */
+	if (flags & (VOS_OF_CRIT | VOS_OF_REMOVE))
 		goto success;
 
 	scm_left = SCM_FREE(&vps);

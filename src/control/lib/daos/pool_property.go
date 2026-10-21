@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
 // (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,7 @@
 package daos
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -30,7 +31,9 @@ import (
 #include <daos/pool_map.h>
 #include <daos_srv/control.h>
 
-#cgo LDFLAGS: -ldaos_common -lgurt -lcart
+#cgo LDFLAGS: -lgurt -lcart
+#cgo !server LDFLAGS: -ldaos_common
+#cgo server LDFLAGS: -ldaos_common_pmem
 */
 import "C"
 
@@ -93,6 +96,10 @@ const (
 	PoolPropertyReintMode      = C.DAOS_PROP_PO_REINT_MODE
 	PoolPropertySvcOpsEnabled  = C.DAOS_PROP_PO_SVC_OPS_ENABLED
 	PoolPropertySvcOpsEntryAge = C.DAOS_PROP_PO_SVC_OPS_ENTRY_AGE
+	// PoolPropertyCACert is the PEM intermediate CA for per-pool node auth.
+	PoolPropertyCACert = C.DAOS_PROP_PO_CA_CERT
+	// PoolPropertyCertWatermarks is an opaque JSON blob of per-CN cert revocation watermarks.
+	PoolPropertyCertWatermarks = C.DAOS_PROP_PO_CERT_WATERMARKS
 )
 
 const (
@@ -209,6 +216,25 @@ func DataThreshIsValid(size uint64) bool {
 	return bool(C.daos_data_thresh_valid(C.uint32_t(size)))
 }
 
+// DefaultPoolSelfHealStr describes the default self_heal flags.
+const DefaultPoolSelfHealStr = "exclude;rebuild"
+
+// PoolPropertySelfHealUnsetFlags returns disabled flags in the self-heal pool property as a
+// string slice.
+func PoolPropertySelfHealUnsetFlags(value string) []string {
+	offFlags := []string{"exclude", "rebuild", "delay_rebuild"}
+	for _, flag := range strings.Split(value, propValSep) {
+		for i, v := range offFlags {
+			if v == flag {
+				offFlags = append(offFlags[:i], offFlags[i+1:]...)
+				break
+			}
+		}
+	}
+
+	return offFlags
+}
+
 const (
 	PoolScrubModeOff   = C.DAOS_SCRUB_MODE_OFF
 	PoolScrubModeLazy  = C.DAOS_SCRUB_MODE_LAZY
@@ -265,6 +291,8 @@ func PoolProperties() PoolPropertyMap {
 						return "not set"
 					}
 					switch n {
+					case 0:
+						return "none"
 					case PoolSelfHealingAutoExclude:
 						return "exclude"
 					case PoolSelfHealingAutoRebuild:
@@ -272,7 +300,7 @@ func PoolProperties() PoolPropertyMap {
 					case PoolSelfHealingDelayRebuild:
 						return "delay_rebuild"
 					case PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild:
-						return "exclude;rebuild"
+						return DefaultPoolSelfHealStr
 					case PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild:
 						return "exclude;delay_rebuild"
 					default:
@@ -281,10 +309,11 @@ func PoolProperties() PoolPropertyMap {
 				},
 			},
 			values: map[string]uint64{
+				"none":                  0,
 				"exclude":               PoolSelfHealingAutoExclude,
 				"rebuild":               PoolSelfHealingAutoRebuild,
 				"delay_rebuild":         PoolSelfHealingDelayRebuild,
-				"exclude;rebuild":       PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
+				DefaultPoolSelfHealStr:  PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
 				"rebuild;exclude":       PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
 				"delay_rebuild;exclude": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
 				"exclude;delay_rebuild": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
@@ -733,6 +762,23 @@ func (ppv *PoolPropertyValue) SetNumber(numVal uint64) {
 	ppv.data = numVal
 }
 
+// SetBytes sets the property value to a byte array.
+func (ppv *PoolPropertyValue) SetBytes(byteVal []byte) {
+	ppv.data = byteVal
+}
+
+// GetBytes returns the byte array value set for the property,
+// or an error if the value is not a byte array.
+func (ppv *PoolPropertyValue) GetBytes() ([]byte, error) {
+	if !ppv.IsSet() {
+		return nil, errors.New("value not set")
+	}
+	if v, ok := ppv.data.([]byte); ok {
+		return v, nil
+	}
+	return nil, errors.Errorf("%+v is not []byte", ppv.data)
+}
+
 func (ppv *PoolPropertyValue) IsSet() bool {
 	return ppv != nil && ppv.data != nil
 }
@@ -747,6 +793,8 @@ func (ppv *PoolPropertyValue) String() string {
 		return v
 	case uint64:
 		return strconv.FormatUint(v, 10)
+	case []byte:
+		return base64.StdEncoding.EncodeToString(v)
 	default:
 		return fmt.Sprintf("unknown data type for %+v", ppv.data)
 	}

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@
 package raft
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -26,13 +27,15 @@ type (
 		err      error
 		index    uint64
 		response interface{}
+		config   raft.Configuration
 	}
 	mockRaftServiceConfig struct {
-		LeaderCh              <-chan bool
-		ServerAddress         raft.ServerAddress
-		State                 raft.RaftState
-		LeadershipTransferErr error
-		BarrierReturn         raft.Future
+		LeaderCh               <-chan bool
+		ServerAddress          raft.ServerAddress
+		State                  raft.RaftState
+		LeadershipTransferErr  error
+		BarrierReturn          raft.Future
+		GetConfigurationReturn raft.ConfigurationFuture
 	}
 	mockRaftService struct {
 		cfg                    mockRaftServiceConfig
@@ -42,9 +45,10 @@ type (
 )
 
 // mockRaftFuture implements raft.Future, raft.IndexFuture, and raft.ApplyFuture
-func (mrf *mockRaftFuture) Error() error          { return mrf.err }
-func (mrf *mockRaftFuture) Index() uint64         { return mrf.index }
-func (mrf *mockRaftFuture) Response() interface{} { return mrf.response }
+func (mrf *mockRaftFuture) Error() error                      { return mrf.err }
+func (mrf *mockRaftFuture) Index() uint64                     { return mrf.index }
+func (mrf *mockRaftFuture) Response() interface{}             { return mrf.response }
+func (mrf *mockRaftFuture) Configuration() raft.Configuration { return mrf.config }
 
 func (mrs *mockRaftService) Apply(cmd []byte, timeout time.Duration) raft.ApplyFuture {
 	mrs.fsm.Apply(&raft.Log{Data: cmd})
@@ -93,6 +97,13 @@ func (mrs *mockRaftService) Barrier(time.Duration) raft.Future {
 		return &mockRaftFuture{}
 	}
 	return mrs.cfg.BarrierReturn
+}
+
+func (mrs *mockRaftService) GetConfiguration() raft.ConfigurationFuture {
+	if mrs.cfg.GetConfigurationReturn == nil {
+		return &mockRaftFuture{}
+	}
+	return mrs.cfg.GetConfigurationReturn
 }
 
 // resetCalls resets call counts for the mock.
@@ -153,6 +164,21 @@ func MockDatabase(t *testing.T, log logging.Logger) *Database {
 	return MockDatabaseWithAddr(t, log, common.LocalhostCtrlAddr())
 }
 
+// StartMockDatabase arms db's shutdown machinery (the shutdownCb/shutdownErrCh pair
+// consumed by Stop(), and the monitorLeadershipState() goroutine that services them) so
+// that a subsequent Stop() behaves like it would on a real, Start()-ed database, without
+// going through the full raft init/bootstrap that Start() itself performs (which would
+// replace the mock raftService installed by MockDatabase*() above with a real one).
+// ctx's cancellation (e.g. via t.Cleanup()) stops the goroutine if the test doesn't call
+// Stop() itself.
+func StartMockDatabase(t *testing.T, db *Database, ctx context.Context) {
+	t.Helper()
+
+	var dbCtx context.Context
+	dbCtx, db.shutdownCb = context.WithCancel(ctx)
+	go db.monitorLeadershipState(dbCtx)
+}
+
 // MockDatabaseWithFaultDomainTree creates a MockDatabase and sets the fault domain tree.
 func MockDatabaseWithFaultDomainTree(t *testing.T, log logging.Logger, tree *system.FaultDomainTree) *Database {
 	db := MockDatabase(t, log)
@@ -173,8 +199,10 @@ func TestDatabase(t *testing.T, log logging.Logger, replicas ...*net.TCPAddr) (*
 	}
 
 	db, err := NewDatabase(log, &DatabaseConfig{
-		Replicas: replicas,
-		RaftDir:  testDir + "/raft",
+		Replicas:             replicas,
+		RaftDir:              testDir + "/raft",
+		RaftHeartbeatTimeout: time.Second,
+		RaftElectionTimeout:  time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)

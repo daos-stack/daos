@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,7 +35,7 @@ struct ds_obj_enum_arg {
 			int			kds_cap;
 			int			kds_len;
 			d_sg_list_t	       *sgl;
-			d_iov_t			csum_iov;
+			d_iov_t                 oea_csum_iov;
 			uint32_t		ec_cell_sz;
 			int			sgl_idx;
 		};
@@ -87,10 +87,10 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_u
 		       uint32_t new_gl_ver, unsigned int migrate_opc, uint64_t *enqueue_id,
 		       uint32_t *max_delay);
 int
-ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid,
-		  uint32_t version, uint32_t generation, uint64_t max_eph, uint32_t opc,
-		  daos_unit_oid_t *oids, daos_epoch_t *epochs, daos_epoch_t *punched_epochs,
-		  unsigned int *shards, uint32_t count, unsigned int tgt_idx, uint32_t new_gl_ver);
+ds_migrate_object(uuid_t pool_uuid, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid, uint32_t version,
+		  uint32_t generation, uint64_t max_eph, uint32_t opc, daos_unit_oid_t *oids,
+		  daos_epoch_t *epochs, daos_epoch_t *punched_epochs, unsigned int *shards,
+		  uint32_t count, unsigned int tgt_idx, uint32_t new_gl_ver);
 void
 ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
 

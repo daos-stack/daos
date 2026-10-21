@@ -7,6 +7,7 @@
 #
 set -eu
 
+# shellcheck disable=SC1091
 . utils/githooks/find_base.sh
 export TARGET
 

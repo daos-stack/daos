@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,8 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -1884,6 +1886,271 @@ func TestControl_SystemGetAttr(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_SystemRebuildManage(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *SystemRebuildManageReq
+		uErr       error
+		uResp      *UnaryResponse
+		expErr     error
+		expResp    *SystemRebuildManageResp
+		expRespErr error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil *control.SystemRebuildManageReq request"),
+		},
+		"opcode not supplied": {
+			req:    new(SystemRebuildManageReq),
+			expErr: errors.New("invalid pool-rebuild opcode"),
+		},
+		"local failure": {
+			req:    &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStart},
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req:    &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStart},
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"no pools; rebuild-stop no-op": {
+			req:     &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStop},
+			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemRebuildManageResp{}),
+			expResp: &SystemRebuildManageResp{},
+		},
+		"dual pools; rebuild-start": {
+			req: &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStart},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     test.MockUUID(1),
+						OpCode: uint32(PoolRebuildOpCodeStart),
+					},
+					{
+						Id:     test.MockUUID(2),
+						OpCode: uint32(PoolRebuildOpCodeStart),
+					},
+				},
+			}),
+			expResp: &SystemRebuildManageResp{
+				Results: []*PoolRebuildManageResult{
+					{
+						ID:     test.MockUUID(1),
+						OpCode: PoolRebuildOpCodeStart,
+					},
+					{
+						ID:     test.MockUUID(2),
+						OpCode: PoolRebuildOpCodeStart,
+					},
+				},
+			},
+		},
+		"dual pools; rebuild-stop; with errors": {
+			req: &SystemRebuildManageReq{OpCode: PoolRebuildOpCodeStop},
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:      test.MockUUID(1),
+						OpCode:  uint32(PoolRebuildOpCodeStop),
+						Errored: true,
+						Msg:     "fail1",
+					},
+					{
+						Id:      test.MockUUID(2),
+						OpCode:  uint32(PoolRebuildOpCodeStop),
+						Errored: true,
+						Msg:     "fail2",
+					},
+				},
+			}),
+			expResp: &SystemRebuildManageResp{
+				Results: []*PoolRebuildManageResult{
+					{
+						ID:      test.MockUUID(1),
+						OpCode:  PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "fail1",
+					},
+					{
+						ID:      test.MockUUID(2),
+						OpCode:  PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "fail2",
+					},
+				},
+			},
+			expRespErr: errors.Errorf("pool-rebuild stop failed on pool %s: %s, pool-rebuild "+
+				"stop failed on pool %s: %s", test.MockUUID(1), "fail1", test.MockUUID(2),
+				"fail2"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			gotResp, gotErr := SystemRebuildManage(test.Context(t), mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(SystemRebuildManageResp{}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
+		})
+	}
+}
+
+func TestControl_SystemSelfHealEval(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *SystemSelfHealEvalReq
+		uErr       error
+		uResp      *UnaryResponse
+		expErr     error
+		expResp    *SystemSelfHealEvalResp
+		expRespErr error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil *control.SystemSelfHealEvalReq request"),
+		},
+		"local failure": {
+			req:    new(SystemSelfHealEvalReq),
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req:    new(SystemSelfHealEvalReq),
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"success": {
+			req:     new(SystemSelfHealEvalReq),
+			uResp:   MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.DaosResp{}),
+			expResp: new(SystemSelfHealEvalResp),
+		},
+		"failure": {
+			req: new(SystemSelfHealEvalReq),
+			uResp: MockMSResponse("10.0.0.1:10001", nil, &mgmtpb.DaosResp{
+				Status: -1,
+			}),
+			expErr: errors.New("DER_UNKNOWN"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			gotResp, gotErr := SystemSelfHealEval(test.Context(t), mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(SystemSelfHealEvalResp{}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			test.CmpErr(t, tc.expRespErr, gotResp.Errors())
+		})
+	}
+}
+
+func TestControl_SystemSelfHealEval_RetryableErrors(t *testing.T) {
+	for name, testErr := range map[string]error{
+		"system unavailable":     system.ErrRaftUnavail,
+		"leader step-up":         system.ErrLeaderStepUpInProgress,
+		"connection closed":      FaultConnectionClosed(""),
+		"connection refused":     FaultConnectionRefused(""),
+		"not leader":             &system.ErrNotLeader{LeaderHint: "host1", Replicas: []string{"host2"}},
+		"not replica":            &system.ErrNotReplica{Replicas: []string{"host1", "host2"}},
+		"data plane not started": &fault.Fault{Code: code.ServerDataPlaneNotStarted},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			client := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", testErr, nil),
+					MockMSResponse("", nil, &mgmtpb.DaosResp{}),
+				},
+			})
+
+			gotResp, gotErr := SystemSelfHealEval(test.Context(t), client, &SystemSelfHealEvalReq{})
+			if gotErr != nil {
+				t.Fatalf("unexpected error: %v", gotErr)
+			}
+
+			expResp := new(SystemSelfHealEvalResp)
+			if diff := cmp.Diff(expResp, gotResp, cmpopts.IgnoreUnexported(SystemSelfHealEvalResp{})); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_SystemSelfHealEval_NonRetryableErrors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		testErr error
+		expErr  error
+	}{
+		"system uninitialized": {
+			testErr: system.ErrUninitialized,
+			expErr:  system.ErrUninitialized,
+		},
+		"generic error": {
+			testErr: errors.New("something went wrong"),
+			expErr:  errors.New("something went wrong"),
+		},
+		"connection bad host": {
+			testErr: FaultConnectionBadHost("badhost"),
+			expErr:  FaultConnectionBadHost("badhost"),
+		},
+		"connection no route": {
+			testErr: FaultConnectionNoRoute("10.0.0.1"),
+			expErr:  FaultConnectionNoRoute("10.0.0.1"),
+		},
+		"member exists": {
+			testErr: system.ErrRankExists(1),
+			expErr:  system.ErrRankExists(1),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			client := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", tc.testErr, nil),
+					MockMSResponse("", nil, &mgmtpb.DaosResp{}),
+				},
+			})
+
+			_, gotErr := SystemSelfHealEval(test.Context(t), client, &SystemSelfHealEvalReq{})
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

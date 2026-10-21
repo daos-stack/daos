@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -20,7 +22,9 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pbutil "github.com/daos-stack/daos/src/control/common/proto"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -399,6 +403,17 @@ type SystemCheckReport struct {
 	chkpb.CheckReport
 }
 
+func (r *SystemCheckReport) MarshalJSON() ([]byte, error) {
+	type toJSON SystemCheckReport
+	return json.Marshal(struct {
+		Rank uint32 `json:"rank"`
+		*toJSON
+	}{
+		Rank:   r.Rank,
+		toJSON: (*toJSON)(r),
+	})
+}
+
 // RepairChoices lists all possible repair options for this particular report.
 func (r *SystemCheckReport) RepairChoices() []*SystemCheckRepairChoice {
 	if r == nil {
@@ -428,11 +443,27 @@ func (r *SystemCheckReport) IsInteractive() bool {
 	return r.Action == chkpb.CheckInconsistAction_CIA_INTERACT
 }
 
+// IsStale indicates whether this report was awaiting user interaction when it became stale. Stale
+// reports are still valid but can't be repaired without re-running the checker on the affected
+// pool.
+func (r *SystemCheckReport) IsStale() bool {
+	return r.Action == chkpb.CheckInconsistAction_CIA_STALE
+}
+
 // IsRemovedPool indicates whether the error detected in this report indicates a missing pool.
 func (r *SystemCheckReport) IsRemovedPool() bool {
 	return r.Action == chkpb.CheckInconsistAction_CIA_DISCARD &&
 		(r.Class == chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE ||
 			r.Class == chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_MS)
+}
+
+// IsDryRun indicates whether this report was for a dry run. In a dry run, the resolution was not
+// actually applied.
+func (r *SystemCheckReport) IsDryRun() bool {
+	if r == nil {
+		return false
+	}
+	return r.Result == int32(chkpb.CheckResult_DRY_RUN)
 }
 
 // Resolution returns a string describing the action taken to resolve this report.
@@ -449,12 +480,12 @@ type rawRankMap map[ranklist.Rank]*mgmtpb.CheckQueryPool
 type SystemCheckPoolInfo struct {
 	RawRankInfo rawRankMap    `json:"-"`
 	UUID        string        `json:"uuid"`
-	Label       string        `json:"label"`
+	Label       string        `json:"label,omitempty"`
 	Status      string        `json:"status"`
 	Phase       string        `json:"phase"`
 	StartTime   time.Time     `json:"-"`
+	StopTime    time.Time     `json:"-"`
 	Remaining   time.Duration `json:"-"`
-	Elapsed     time.Duration `json:"-"`
 }
 
 func (p *SystemCheckPoolInfo) MarshalJSON() ([]byte, error) {
@@ -463,27 +494,32 @@ func (p *SystemCheckPoolInfo) MarshalJSON() ([]byte, error) {
 		*toJSON
 		RankCount int     `json:"rank_count"`
 		StartTime string  `json:"start_time"`
-		Remaining float64 `json:"remaining"`
-		Elapsed   float64 `json:"elapsed"`
+		StopTime  string  `json:"stop_time,omitempty"`
+		Remaining float64 `json:"remaining,omitempty"`
 	}{
 		toJSON:    (*toJSON)(p),
 		RankCount: len(p.RawRankInfo),
 		StartTime: common.FormatTime(p.StartTime),
+		StopTime: func() string {
+			if p.StopTime.IsZero() {
+				return ""
+			}
+			return common.FormatTime(p.StopTime)
+		}(),
 		Remaining: p.Remaining.Seconds(),
-		Elapsed:   p.Elapsed.Seconds(),
 	})
 }
 
 func (p *SystemCheckPoolInfo) String() string {
-	var remOrElapsed string
-	if p.Elapsed > 0 {
-		remOrElapsed = fmt.Sprintf(" elapsed: %s", p.Elapsed)
+	var remainingOrStopTime string
+	if !p.StopTime.IsZero() {
+		remainingOrStopTime = fmt.Sprintf(" stopped: %s", common.FormatTime(p.StopTime))
 	} else if p.Remaining > 0 {
-		remOrElapsed = fmt.Sprintf(" remaining: %s", p.Remaining)
+		remainingOrStopTime = fmt.Sprintf(" remaining: %s", p.Remaining)
 	}
 	timeStr := ""
 	if !p.StartTime.IsZero() {
-		timeStr = fmt.Sprintf(", started: %s%s", common.FormatTime(p.StartTime), remOrElapsed)
+		timeStr = fmt.Sprintf(", started: %s%s", common.FormatTime(p.StartTime), remainingOrStopTime)
 	}
 	return fmt.Sprintf("Pool %s: %d ranks, status: %s, phase: %s%s",
 		p.UUID, len(p.RawRankInfo), p.Status, p.Phase, timeStr)
@@ -500,14 +536,24 @@ func getQueryPoolRank(pool *mgmtpb.CheckQueryPool) ranklist.Rank {
 	return ranklist.Rank(pool.Targets[0].Rank)
 }
 
-func roe(f string, status chkpb.CheckPoolStatus, val uint64) time.Duration {
-	if f == "r" && status != chkpb.CheckPoolStatus_CPS_CHECKING {
+func isPoolCheckInProgress(status chkpb.CheckPoolStatus) bool {
+	return status == chkpb.CheckPoolStatus_CPS_CHECKING || status == chkpb.CheckPoolStatus_CPS_PENDING
+}
+
+func remainingDuration(status chkpb.CheckPoolStatus, seconds uint64) time.Duration {
+	if !isPoolCheckInProgress(status) {
+		// Done - no time remaining
 		return 0
 	}
-	if f == "e" && status == chkpb.CheckPoolStatus_CPS_CHECKING {
-		return 0
+	return time.Duration(seconds) * time.Second
+}
+
+func stopTime(status chkpb.CheckPoolStatus, timestamp uint64) time.Time {
+	if isPoolCheckInProgress(status) {
+		// Hasn't stopped yet
+		return time.Time{}
 	}
-	return time.Duration(val) * time.Second
+	return time.Unix(int64(timestamp), 0)
 }
 
 func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckPoolInfo {
@@ -523,8 +569,8 @@ func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckP
 				Status:    pbPool.Status.String(),
 				Phase:     pbPool.Phase.String(),
 				StartTime: time.Unix(int64(pbPool.Time.StartTime), 0),
-				Remaining: roe("r", pbPool.Status, pbPool.Time.MiscTime),
-				Elapsed:   roe("e", pbPool.Status, pbPool.Time.MiscTime),
+				StopTime:  stopTime(pbPool.Status, pbPool.Time.MiscTime),
+				Remaining: remainingDuration(pbPool.Status, pbPool.Time.MiscTime),
 			}
 		}
 		pools[pbPool.Uuid].RawRankInfo[getQueryPoolRank(pbPool)] = pbPool
@@ -537,6 +583,7 @@ type SystemCheckQueryResp struct {
 	Status    SystemCheckStatus    `json:"status"`
 	ScanPhase SystemCheckScanPhase `json:"scan_phase"`
 	StartTime time.Time            `json:"start_time"`
+	Leader    ranklist.Rank        `json:"leader"`
 
 	Pools   map[string]*SystemCheckPoolInfo `json:"pools"`
 	Reports []*SystemCheckReport            `json:"reports"`
@@ -546,11 +593,40 @@ func (r *SystemCheckQueryResp) MarshalJSON() ([]byte, error) {
 	type toJSON SystemCheckQueryResp
 	return json.Marshal(struct {
 		StartTime string `json:"start_time"`
+		StopTime  string `json:"stop_time,omitempty"`
 		*toJSON
 	}{
 		StartTime: common.FormatTime(r.StartTime),
+		StopTime:  r.StopTimeFormatted(),
 		toJSON:    (*toJSON)(r),
 	})
+}
+
+// StopTimeFormatted returns the stop time of the check instance as a timestamp-formatted string.
+func (r *SystemCheckQueryResp) StopTimeFormatted() string {
+	st := r.StopTime()
+	if st.IsZero() {
+		return ""
+	}
+	return common.FormatTime(st)
+}
+
+// StopTime returns the stop time of the check instance.
+func (r *SystemCheckQueryResp) StopTime() time.Time {
+	if r.Status == SystemCheckStatusRunning {
+		return time.Time{}
+	}
+	var stopTime time.Time
+	for _, p := range r.Pools {
+		// If any pool doesn't have a stop time, the check instance is still running.
+		if p.StopTime.IsZero() {
+			return time.Time{}
+		}
+		if p.StopTime.After(stopTime) {
+			stopTime = p.StopTime
+		}
+	}
+	return stopTime
 }
 
 // SystemCheckQuery queries the system checker status.
@@ -579,12 +655,22 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 		ScanPhase: SystemCheckScanPhase(pbResp.GetInsPhase()),
 		StartTime: time.Unix(int64(pbResp.GetTime().GetStartTime()), 0),
 		Pools:     getPoolCheckInfo(pbResp.GetPools()),
+		Leader:    ranklist.Rank(pbResp.Leader),
 	}
 	for _, pbReport := range pbResp.GetReports() {
 		rpt := new(SystemCheckReport)
 		proto.Merge(rpt, pbReport)
 		resp.Reports = append(resp.Reports, rpt)
 	}
+
+	// Sort reports by class, then sequence for consistent ordering.
+	sort.Slice(resp.Reports, func(i, j int) bool {
+		if resp.Reports[i].Class != resp.Reports[j].Class {
+			return resp.Reports[i].Class < resp.Reports[j].Class
+		}
+		return resp.Reports[i].Seq < resp.Reports[j].Seq
+	})
+
 	return resp, nil
 }
 
@@ -724,4 +810,253 @@ func SystemCheckRepair(ctx context.Context, rpcClient UnaryInvoker, req *SystemC
 	}
 
 	return ur.getMSError()
+}
+
+// CheckEngineRepairReq contains a repair request for a specific engine.
+type CheckEngineRepairReq struct {
+	unaryRequest
+
+	ctlpb.CheckEngineActReq
+}
+
+// CheckEngineRepairResp contains the engine response for a repair request.
+type CheckEngineRepairResp struct {
+	ctlpb.CheckEngineActResp
+}
+
+// CheckEngineRepair directs a repair request to a specific engine.
+//
+// NB: This is an inter-server RPC.
+func CheckEngineRepair(ctx context.Context, rpcClient UnaryInvoker, req *CheckEngineRepairReq) (*CheckEngineRepairResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if req.Req == nil {
+		return nil, errors.Errorf("no action request included in %T", req)
+	}
+
+	if len(req.HostList) != 1 {
+		return nil, errors.Errorf("CheckEngineRepair requires exactly one host")
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).CheckEngineRepair(ctx, &req.CheckEngineActReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	if len(ur.Responses) == 0 {
+		return nil, errors.New("no host responses")
+	}
+
+	pbResp, ok := ur.Responses[0].Message.(*ctlpb.CheckEngineActResp)
+	if !ok {
+		return nil, errors.Errorf("bad response type %T", ur.Responses[0].Message)
+	}
+
+	return &CheckEngineRepairResp{
+		CheckEngineActResp: *pbResp,
+	}, nil
+}
+
+// SystemCheckEngineReportReq contains parameters to be passed to SystemCheckEngineReport.
+type SystemCheckEngineReportReq struct {
+	unaryRequest
+	msRequest
+
+	sharedpb.CheckReportReq
+}
+
+// SystemCheckEngineReportResp contains the response from the SystemCheckEngineReport RPC.
+type SystemCheckEngineReportResp struct {
+	sharedpb.CheckReportResp
+}
+
+// SystemCheckEngineReport registers a checker report for an individual rank with the management service.
+//
+// NB: This is an inter-server RPC.
+func SystemCheckEngineReport(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckEngineReportReq) (*SystemCheckEngineReportResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if req.Report == nil {
+		return nil, errors.Errorf("no check report in %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckEngineReport(ctx, &req.CheckReportReq)
+	})
+
+	rpcClient.Debugf("DAOS system check report request: %s", pbutil.Debug(&req.CheckReportReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	if err := ur.getMSError(); err != nil {
+		return nil, errors.Wrap(err, "MS error")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*sharedpb.CheckReportResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+
+	resp := new(SystemCheckEngineReportResp)
+	resp.CheckReportResp = *pbResp
+
+	return resp, nil
+}
+
+// SystemCheckRegPoolReq contains parameters to be passed to SystemCheckRegPool.
+type SystemCheckRegPoolReq struct {
+	unaryRequest
+	msRequest
+
+	sharedpb.CheckRegPoolReq
+}
+
+// SystemCheckRegPoolResp contains the response from the SystemCheckRegPool RPC.
+type SystemCheckRegPoolResp struct {
+	sharedpb.CheckRegPoolResp
+}
+
+// SystemCheckRegPool registers a pool with the management service for the checker.
+//
+// NB: This is an inter-server RPC.
+func SystemCheckRegPool(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckRegPoolReq) (*SystemCheckRegPoolResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckRegPool(ctx, &req.CheckRegPoolReq)
+	})
+
+	rpcClient.Debugf("DAOS system check register pool request: %s", pbutil.Debug(&req.CheckRegPoolReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*sharedpb.CheckRegPoolResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+
+	resp := new(SystemCheckRegPoolResp)
+	resp.CheckRegPoolResp = *pbResp
+
+	return resp, nil
+}
+
+// SystemCheckDeregPoolReq contains parameters to be passed to SystemCheckDeregPool.
+type SystemCheckDeregPoolReq struct {
+	unaryRequest
+	msRequest
+
+	sharedpb.CheckDeregPoolReq
+}
+
+// SystemCheckDeregPoolResp contains the response from the SystemCheckDeregPool RPC.
+type SystemCheckDeregPoolResp struct {
+	sharedpb.CheckDeregPoolResp
+}
+
+// SystemCheckDeregPool de-registers a pool with the management service for the checker.
+//
+// NB: This is an inter-server RPC.
+func SystemCheckDeregPool(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckDeregPoolReq) (*SystemCheckDeregPoolResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckDeregPool(ctx, &req.CheckDeregPoolReq)
+	})
+
+	rpcClient.Debugf("DAOS system check de-register pool request: %s", pbutil.Debug(&req.CheckDeregPoolReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*sharedpb.CheckDeregPoolResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+
+	resp := new(SystemCheckDeregPoolResp)
+	resp.CheckDeregPoolResp = *pbResp
+
+	return resp, nil
+}
+
+// CheckLeaderReq is a request for a message to be sent to the checker leader.
+type CheckLeaderReq struct {
+	unaryRequest
+	msRequest
+
+	mgmtpb.CheckLeaderReq
+}
+
+// CheckLeaderResp contains the response from the checker leader.
+type CheckLeaderResp struct {
+	mgmtpb.CheckLeaderResp
+}
+
+// CheckLeaderForward forwards a request to the checker leader.
+//
+// NB: This is an inter-server RPC. It will only be successful when it is sent to the checker leader.
+func CheckLeaderForward(ctx context.Context, rpcClient UnaryInvoker, req *CheckLeaderReq) (*CheckLeaderResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T", req)
+	}
+
+	if req.Req == nil {
+		return nil, errors.Errorf("no forwarded request included in %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).CheckLeaderDrpc(ctx, &req.CheckLeaderReq)
+	})
+
+	rpcClient.Debugf("DAOS check leader forward request: %s", pbutil.Debug(&req.CheckLeaderReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call")
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, errors.Wrap(err, "checking MS response")
+	}
+
+	pbResp, ok := msResp.(*mgmtpb.CheckLeaderResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type %T", msResp)
+	}
+	return &CheckLeaderResp{
+		CheckLeaderResp: *pbResp,
+	}, nil
 }

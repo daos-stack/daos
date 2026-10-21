@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +34,13 @@ message PoolCreateReq {
 	repeated uint32 ranks      = 12; // target ranks
 	repeated uint64 tier_bytes = 13; // Size in bytes of storage tier
 	float           mem_ratio = 14; // Fraction of meta-blob-sz to use as mem-file-sz
+	// Ranks that are not currently joined (Ready/Excluded/AdminExcluded/Stopped/
+	// Stopping/Errored/Unresponsive/AwaitFormat/Starting/...).
+	// May be populated by either the client (auto rank-selection paths) or the
+	// management service; if both supply values, they are merged. Listed ranks
+	// enter the initial pool map as DOWNOUT and do NOT receive VOS/blob-store
+	// creation, so subsequent membership changes can address them by rank.
+	repeated uint32       unavailable_ranks = 15;
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
@@ -199,17 +206,24 @@ message StorageUsageStats {
 	StorageMediaType media_type = 6;
 }
 
-// PoolRebuildStatus represents a pool's rebuild status.
+// PoolRebuildStatus represents a pool's rebuild status, translates to enum daos_rebuild_state_t
+// IN_PROGRESS/NOT_STARTED/COMPLETED states.
 message PoolRebuildStatus {
 	int32 status = 1; // DAOS error code
 	enum State {
-		IDLE = 0;
-		DONE = 1;
-		BUSY = 2;
+		BUSY     = 0;
+		IDLE     = 1;
+		DONE     = 2;
+		STOPPING = 3;
+		STOPPED  = 4;
+		FAILING  = 5;
+		FAILED   = 6;
 	}
 	State state = 2;
 	uint64 objects = 3;
 	uint64 records = 4;
+	State  derived_state = 5;
+	bool degraded = 6; // data redundancy degraded
 }
 
 enum PoolServiceState {
@@ -246,6 +260,8 @@ message PoolQueryResp {
 	uint64 mem_file_bytes = 21; // per-pool accumulated value of memory file sizes
 	string dead_ranks     = 22; // optional set of dead ranks
 	bool   md_on_ssd_active = 23; // MD-on-SSD mode flag
+	string self_heal_policy     = 24; // pool property self_heal value
+	string sys_self_heal_policy = 25; // system property self_heal value
 }
 
 message PoolProperty {
@@ -253,6 +269,7 @@ message PoolProperty {
 	oneof value {
 		string strval = 2; // pool property string value
 		uint64 numval = 3; // pool property numeric value
+		bytes  byteval = 4; // pool property byte array value
 	}
 }
 
@@ -291,10 +308,7 @@ message PoolUpgradeReq {
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
-// PoolUpgradeResp returns resultant state of upgrade operation.
-message PoolUpgradeResp {
-	int32 status = 1; // DAOS error code
-}
+// PoolUpgrade returns a DaosResp.
 
 // PoolQueryTargetReq represents a pool query target(s) request.
 message PoolQueryTargetReq {
@@ -315,14 +329,7 @@ message StorageTargetUsage {
 // PoolQueryTargetInfo represents pool target query info for a single target.
 // The RPC response type (PoolQueryTargetResponse) contains a sequence of these.
 message PoolQueryTargetInfo {
-	enum TargetType { // See enum daos_target_type_t
-		UNKNOWN = 0;
-		HDD = 1; // Rotating disk
-		SSD = 2; // Flash-based
-		PM = 3; // Persistent memory
-		VM = 4; // Volatile memory
-	}
-	TargetType type = 1; // Target type jsee enum daos_target_type_t
+	reserved 1;
 
 	enum TargetState { // See enum daos_target_state_t
 		STATE_UNKNOWN = 0;
@@ -344,4 +351,127 @@ message PoolQueryTargetInfo {
 message PoolQueryTargetResp {
 	int32 status = 1; // DAOS error code
 	repeated PoolQueryTargetInfo infos = 2; // Per-target information
+}
+
+// PoolRebuildStartReq contains information about a request to start an interactive rebuild on a
+// given pool.
+message PoolRebuildStartReq
+{
+	string sys = 1; // DAOS system identifier
+	string id  = 2; // DAOS pool identifier
+	repeated uint32 svc_ranks = 3; // List of pool service ranks
+}
+
+// PoolRebuildStart uses DaosResp
+
+// PoolRebuildStopReq contains information about a request to stop an interactive rebuild on a
+// given pool.
+message PoolRebuildStopReq
+{
+	string sys = 1; // DAOS system identifier
+	string id  = 2; // DAOS pool identifier
+	bool            force     = 3; // Force interactive rebuild stop
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
+}
+
+// PoolRebuildStop uses DaosResp
+
+// PoolSelfHealEvalReq contains information about a request to evaluate the self_heal system
+// property value on a given pool.
+message PoolSelfHealEvalReq
+{
+	string          sys       = 1; // DAOS system identifier
+	string          id        = 2; // DAOS pool identifier
+	string          sys_prop_val = 4; // self_heal system property value
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
+}
+
+// PoolSelfHealEval uses DaosResp
+
+// PoolGetCAReq fetches the pool's CA bundle.
+message PoolGetCAReq
+{
+	string          sys       = 1;
+	string          id        = 2;
+	repeated uint32 svc_ranks = 3;
+}
+
+message PoolGetCAResp
+{
+	int32  status    = 1;
+	bytes  ca_bundle = 2;
+	string pool_uuid = 3;
+}
+
+// PoolAddCAReq appends a CA certificate to the pool's CA bundle.
+message PoolAddCAReq
+{
+	string          sys       = 1;
+	string          id        = 2;
+	bytes           cert_pem  = 3;
+	repeated uint32 svc_ranks = 4;
+	bool            no_evict  = 5; // keep existing handles when enabling
+}
+
+message PoolAddCAResp
+{
+	int32  status          = 1;
+	string pool_uuid       = 2;
+	int32  handles_evicted = 3; // handles evicted when enabling
+}
+
+// PoolRemoveCAReq removes one or all CAs from the pool's CA bundle.
+message PoolRemoveCAReq
+{
+	string          sys         = 1;
+	string          id          = 2;
+	string          fingerprint = 3; // SHA-256 hex of the CA cert to remove
+	bool            all         = 4; // remove every CA in the bundle
+	repeated uint32 svc_ranks   = 5;
+}
+
+message PoolRemoveCAResp
+{
+	int32  status        = 1;
+	int32  certs_removed = 2;
+	string pool_uuid     = 3;
+}
+
+// PoolGetCertWatermarksReq fetches the per-CN revocation watermarks blob.
+message PoolGetCertWatermarksReq
+{
+	string          sys       = 1;
+	string          id        = 2;
+	repeated uint32 svc_ranks = 3;
+}
+
+message PoolGetCertWatermarksResp
+{
+	int32  status     = 1;
+	bytes  watermarks = 2; // JSON blob, may be empty
+	string pool_uuid  = 3;
+}
+
+// PoolRevokeClientReq advances the pool's revocation watermark for a CN.
+message PoolRevokeClientReq
+{
+	enum EvictMode {
+		EVICT_DEFAULT   = 0; // per-CN for node:, pool-wide for tenant:
+		EVICT_POOL_WIDE = 1; // always evict all handles on the pool
+		EVICT_NONE      = 2; // advance watermark, leave handles alive
+	}
+	string          sys        = 1;
+	string          id         = 2;
+	string          cn         = 3;
+	repeated uint32 svc_ranks  = 4;
+	EvictMode       evict_mode = 5;
+}
+
+message PoolRevokeClientResp
+{
+	int32  status                = 1;
+	string watermark_rfc3339     = 2; // committed watermark in RFC3339 UTC
+	string pool_uuid             = 3;
+	int32  handles_evicted_count = 4;
+	string evict_scope           = 5; // "machine" | "pool" | "none"
 }

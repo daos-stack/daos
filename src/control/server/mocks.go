@@ -86,3 +86,23 @@ func (ms *mockSubscriber) getRx() []string {
 
 	return ms.rx
 }
+
+type mockIOMMUDetector struct {
+	enabled bool
+	err     error
+}
+
+// IsIOMMUEnabled implements hardware.IOMMUDetector interface
+func (mid mockIOMMUDetector) IsIOMMUEnabled() (bool, error) {
+	return mid.enabled, mid.err
+}
+
+type mockTHPDetector struct {
+	enabled bool
+	err     error
+}
+
+// IsTHPEnabled implements hardware.THPDetector interface
+func (mid mockTHPDetector) IsTHPEnabled() (bool, error) {
+	return mid.enabled, mid.err
+}

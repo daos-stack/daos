@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -597,7 +597,7 @@ punch_model_test(void **state)
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	daos_unit_oid_t		oid;
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 
 	memset(&rex, 0, sizeof(rex));
 	memset(&iod, 0, sizeof(iod));
@@ -774,7 +774,7 @@ simple_multi_update(void **state)
 	daos_unit_oid_t		oid;
 	int			i;
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 
 	memset(iod, 0, sizeof(iod));
 
@@ -862,7 +862,7 @@ object_punch_and_fetch(void **state)
 	char			 key2 = 'b';
 	char			 buf[32] = {0};
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 
 	rc = d_sgl_init(&sgl, 1);
 	assert_rc_equal(rc, 0);
@@ -932,7 +932,7 @@ sgl_test(void **state)
 	char			 key1 = 'a';
 	char			 key2 = 'b';
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 
 	oid = gen_oid(0);
 
@@ -1274,7 +1274,7 @@ cond_test(void **state)
 	daos_epoch_t		 epoch;
 	int			 i;
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	epoch = d_hlc_get() + 1000;
 	oid = gen_oid(0);
 
@@ -1310,12 +1310,11 @@ cond_test(void **state)
 	cond_fetch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, true, "a", "b",
 		      0, 0, sgl, "xxxx", 'x');
 	/** Conditional update of non-existent key should fail */
-	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch - 1, "a", "b",
-		       VOS_OF_COND_DKEY_UPDATE,
+	cond_update_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b", VOS_OF_COND_DKEY_UPDATE,
 		       -DER_NONEXIST, sgl, "foo");
 	/** Conditional punch of non-existent akey should fail */
-	cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch, "a", "b",
-			   VOS_OF_COND_PUNCH, -DER_NONEXIST);
+	cond_akey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a", "b", VOS_OF_COND_PUNCH,
+			   -DER_NONEXIST);
 	/** Key doesn't exist still, that supersedes read conflict */
 	cond_dkey_punch_op(state, arg->ctx.tc_co_hdl, oid, epoch++, "a",
 			   VOS_OF_COND_PUNCH, -DER_NONEXIST);
@@ -1387,7 +1386,7 @@ multiple_oid_cond_test(void **state)
 	daos_epoch_t		 epoch;
 	int			 i;
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	epoch = d_hlc_get() + NUM_OIDS * 3;
 	sgl.sg_iovs = &iov;
 	sgl.sg_nr = 1;
@@ -1497,7 +1496,7 @@ remove_test(void **state)
 	char			 key1 = 'a';
 	char			 key2 = 'b';
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	epoch = d_hlc_get();
 	oid = gen_oid(0);
 
@@ -1611,7 +1610,7 @@ small_sgl(void **state)
 	dts_buf_render(buf2, 24);
 	dts_buf_render(buf3, 24);
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 
 	oid = gen_oid(0);
 
@@ -1675,7 +1674,7 @@ minor_epoch_punch_sv(void **state)
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	daos_unit_oid_t		oid;
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	epoch = d_hlc_get();
 	memset(&rex, 0, sizeof(rex));
 	memset(&iod, 0, sizeof(iod));
@@ -1759,7 +1758,7 @@ minor_epoch_punch_array(void **state)
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	daos_unit_oid_t		oid;
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	epoch = d_hlc_get();
 	memset(&rex, 0, sizeof(rex));
 	memset(&iod, 0, sizeof(iod));
@@ -1852,7 +1851,7 @@ minor_epoch_punch_rebuild(void **state)
 	char			akey_buf[UPDATE_DKEY_SIZE];
 	daos_unit_oid_t		oid;
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	epoch = d_hlc_get();
 	memset(&rex, 0, sizeof(rex));
 	memset(&iod, 0, sizeof(iod));
@@ -2098,7 +2097,7 @@ ec_size(void **state)
 	uint64_t		stripe_offsets[] = {0, 2, STRIPES_PER_KEY, STRIPES_PER_KEY * 3 + 2};
 	int			i;
 
-	test_args_reset(arg, VPOOL_1G);
+	test_args_reset(arg, VPOOL_1G, 0, VPOOL_1G, 0);
 	epoch = d_hlc_get();
 	rc = d_sgl_init(&sgl, 1);
 	assert_rc_equal(rc, 0);
@@ -2218,7 +2217,7 @@ test_inprogress_parent_punch(void **state)
 	char			akey3_buf[UPDATE_DKEY_SIZE];
 	daos_unit_oid_t		oid;
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	epoch = d_hlc_get();
 	memset(&rex, 0, sizeof(rex));
 	memset(&iod, 0, sizeof(iod));
@@ -2465,7 +2464,7 @@ many_tx(void **state)
 		nr_obj /= 5;
 	}
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	coh = arg->ctx.tc_co_hdl;
 	memset(&iod, 0, sizeof(iod));
 
@@ -2680,7 +2679,7 @@ uncommitted_parent(void **state)
 	daos_unit_oid_t		oid;
 	struct dtx_id		xid;
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	coh = arg->ctx.tc_co_hdl;
 	epoch = d_hlc_get();
 	memset(&iod, 0, sizeof(iod));
@@ -2743,7 +2742,7 @@ test_uncommitted_key(void **state)
 	daos_unit_oid_t      oid;
 	struct dtx_id        xid;
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	coh = arg->ctx.tc_co_hdl;
 	epoch = d_hlc_get();
 	memset(&iod, 0, sizeof(iod));
@@ -2809,7 +2808,7 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	char			akey2_buf[UPDATE_DKEY_SIZE];
 	daos_unit_oid_t		oid;
 
-	test_args_reset(arg, VPOOL_SIZE);
+	test_args_reset(arg, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	epoch = d_hlc_get();
 	memset(rex, 0, sizeof(rex));
 	memset(iod, 0, sizeof(iod));

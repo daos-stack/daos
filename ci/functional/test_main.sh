@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2024 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -14,17 +14,34 @@ fi
 
 test_tag="$TEST_TAG"
 
+: "${NODELIST:=localhost}"
+: "${TEST_RPMS:=false}"
+: "${STAGE_NAME:=unknown}"
+
+def_node_count="$(nodeset -c "$NODELIST")"
+: "${NODE_COUNT:=$def_node_count}"
+
 tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-"$NODE_COUNT")
 first_node=${NODELIST%%,*}
 
 hardware_ok=false
 
 cluster_reboot () {
-    # shellcheck disable=SC2029,SC2089
-    clush -B -S -o '-i ci_key' -l root -w "${tnodes}" reboot || true
+    if [ -z "$tnodes" ]; then
+        echo "ERROR: cluster_reboot called without reboot targets"
+        return 1
+    fi
+
+    if [ "$tnodes" = "localhost" ]; then
+        echo "WARNING: localhost is the only reboot target; skipping reboot"
+        return 0
+    fi
 
     # shellcheck disable=SC2029,SC2089
-    poll_cmd=( clush -B -S -o "-i ci_key" -l root -w "${tnodes}" )
+    clush -B -S -o '-i ci_key' -l root -w "$tnodes" reboot || true
+
+    # shellcheck disable=SC2029,SC2089
+    poll_cmd=( clush -B -S -o "-i ci_key" -l root -w "$tnodes" )
     poll_cmd+=( cat /etc/os-release )
     # 20 minutes, HPE systems may take more than 15 minutes.
     reboot_timeout=1200
@@ -42,14 +59,17 @@ cluster_reboot () {
 test_cluster() {
     # Test that all nodes in the cluster are healthy
     clush -B -S -o '-i ci_key' -l root -w "${tnodes}"   \
-        "OPERATIONS_EMAIL=${OPERATIONS_EMAIL}           \
+        "OPERATIONS_EMAIL=${OPERATIONS_EMAIL:-}         \
         FIRST_NODE=${first_node}                        \
         TEST_RPMS=${TEST_RPMS}                          \
         NODELIST=${tnodes}                              \
         BUILD_URL=\"${BUILD_URL:-Unknown in GHA}\"      \
-        STAGE_NAME=\"$STAGE_NAME\"                      \
+        STAGE_NAME=\"${STAGE_NAME}\"                    \
         JENKINS_URL=\"${JENKINS_URL:-}\"                \
         DAOS_DEVOPS_EMAIL=\"${DAOS_DEVOPS_EMAIL:-}\"    \
+        DAOS_INFINIBAND=${DAOS_INFINIBAND:-}            \
+        DAOS_NVME=${DAOS_NVME:-}                        \
+        DAOS_PMEM=${DAOS_PMEM:-}                        \
         $(cat ci/functional/test_main_prep_node.sh)"
 }
 
@@ -65,7 +85,7 @@ if ! test_cluster; then
             echo "Hardware test failed again after reboot"
         fi
     else
-        echo "Cluster reboot failed"        
+        echo "Cluster reboot failed"
     fi
 else
     hardware_ok=true
@@ -88,8 +108,16 @@ trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 
 # Setup the Jenkins build artifacts directory before running the tests to ensure
 # there is enough disk space to report the results.
-rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
-mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+# Even though STAGE_NAME forced to be set, shellcheck wants this syntax.
+mkdir -p "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+stage_dir="${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+
+find "$stage_dir" -mindepth 1 -maxdepth 2 \
+    ! -wholename "*/framework/*.xml" \
+    ! -name "framework" \
+    -exec rm -rf {} +
+# The framework directory holds JUnit results from the post-provisioning script
+# and must be preserved when the workspace is reused across stages.
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
@@ -98,24 +126,24 @@ rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 
 if "$hardware_ok"; then
-    if $TEST_RPMS; then
+    if "$TEST_RPMS"; then
         # shellcheck disable=SC2029
-        ssh -i ci_key -l jenkins "${first_node}"   \
-          "TEST_TAG=\"$test_tag\"                  \
-           TNODES=\"$tnodes\"                      \
-           FTEST_ARG=\"${FTEST_ARG:-}\"            \
-           WITH_VALGRIND=\"${WITH_VALGRIND:-}\"    \
-           STAGE_NAME=\"$STAGE_NAME\"              \
-           DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\"        \
+        ssh -i ci_key -l jenkins "${first_node}"      \
+          "TEST_TAG=\"$test_tag\"                     \
+           TNODES=\"$tnodes\"                         \
+           FTEST_ARG=\"${FTEST_ARG:-}\"               \
+           WITH_VALGRIND=\"${WITH_VALGRIND:-}\"       \
+           STAGE_NAME=\"${STAGE_NAME}\"               \
+           DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \
+           DAOS_NO_PROXY=\"${DAOS_NO_PROXY:-}\"       \
            $(cat ci/functional/test_main_node.sh)"
     else
-        ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
+        ./ftest.sh "$test_tag" "$tnodes" "${FTEST_ARG:-}"
     fi
 fi
 
 # Now rename the previously collected hardware test data for Jenkins
 # to use them for Junit processing.
-: "${STAGE_NAME:=}"
 mkdir -p "${STAGE_NAME}/hardware_prep/"
 for node in ${tnodes//,/ }; do
     old_name="./hardware_prep_node_results.xml.$node"
@@ -125,4 +153,5 @@ for node in ${tnodes//,/ }; do
         mv "$old_name" "$new_name"
     fi
 done
+
 "$hardware_ok"

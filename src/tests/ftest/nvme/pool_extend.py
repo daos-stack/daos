@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -54,7 +55,7 @@ class NvmePoolExtend(OSAUtils):
         pools = []
         for _ in range(0, num_pool):
             pools.append(self.get_pool(namespace="/run/pool_qty_{}/*".format(num_pool),
-                         properties="reclaim:disabled"))
+                         properties="rd_fac:0,space_rb:0,reclaim:disabled"))
 
         # On each pool (max 3), extend the ranks
         # eg: ranks : 4,5 ; 6,7; 8,9.
@@ -91,13 +92,11 @@ class NvmePoolExtend(OSAUtils):
                 if not all_joined:
                     self.fail("One or more extra servers failed to join: {}".format(extra_servers))
 
-            # Extend ranks (4,5), (6,7), (8,9)
+            # Extend ranks (4,5), (6,7), (8,9). --wait blocks until the
+            # triggered rebuild completes.
             ranks_extended = "{},{}".format((index * 2) + 4, (index * 2) + 5)
-            pool.extend(ranks_extended)
+            pool.extend(ranks_extended, wait=True)
 
-            # Wait for rebuild to complete
-            pool.wait_for_rebuild_to_start()
-            pool.wait_for_rebuild_to_end(interval=3)
             rebuild_status = pool.get_rebuild_status()
             self.log.info("Rebuild Status: %s", rebuild_status)
             if rebuild_status in ["failed", "scanning", "aborted", "busy"]:

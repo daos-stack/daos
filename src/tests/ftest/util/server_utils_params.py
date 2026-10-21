@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -57,17 +57,21 @@ class DaosServerTransportCredentials(TransportCredentials):
         return DaosServerTransportCredentials(self._log_dir)
 
 
-class DaosServerYamlParameters(YamlParameters):
+class DaosServerYamlParameters(YamlParameters):  # pylint: disable=too-many-instance-attributes
     """Defines the daos_server configuration yaml parameters."""
 
-    def __init__(self, filename, common_yaml):
+    def __init__(self, filename, common_yaml, version=None):
         """Initialize an DaosServerYamlParameters object.
 
         Args:
             filename (str): yaml configuration file name
             common_yaml (YamlParameters): [description]
+            version (Version, optional): daos_server version for compatibility changes.
+                Default is None, which does not handle compatibility
         """
         super().__init__("/run/server_config/*", filename, None, common_yaml)
+
+        self._version = version
 
         # pylint: disable=wrong-spelling-in-comment
         # daos_server configuration file parameters
@@ -137,8 +141,14 @@ class DaosServerYamlParameters(YamlParameters):
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_server_helper.log")
         self.telemetry_port = BasicParameter(None, 9191)
+        self.control_iface = BasicParameter(None)
         self.client_env_vars = BasicParameter(None)
-        self.mgmt_svc_replicas = BasicParameter(None, ["localhost"])
+
+        # access_points was changed to mgmt_svc_replicas in 2.7
+        if self._version is not None and self._version < "2.7.0":
+            self.mgmt_svc_replicas = BasicParameter(None, ["localhost"], yaml_key="access_points")
+        else:
+            self.mgmt_svc_replicas = BasicParameter(None, ["localhost"])
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
@@ -165,6 +175,10 @@ class DaosServerYamlParameters(YamlParameters):
         # Fault domain path & callback
         self.fault_path = BasicParameter(None)
         self.fault_cb = BasicParameter(None)
+
+        # Engine auto-restart parameters
+        self.disable_engine_auto_restart = BasicParameter(None)
+        self.engine_auto_restart_min_delay = BasicParameter(None)
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -433,7 +447,7 @@ class ControlMetadataParameters(YamlParameters):
         return ControlMetadataParameters(self.namespace)
 
 
-class EngineYamlParameters(YamlParameters):
+class EngineYamlParameters(YamlParameters):  # pylint: disable=too-many-instance-attributes
     """Defines the configuration yaml parameters for a single server engine."""
 
     # Engine environment variables that are required by provider type.
@@ -441,6 +455,7 @@ class EngineYamlParameters(YamlParameters):
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
             "DAOS_POOL_RF=4",
+            "DAOS_REBUILD_WAIT_EC_PAUSE=1",
             "CRT_EVENT_DELAY=1",
             # pylint: disable-next=fixme
             # FIXME disable space cache since some tests need to verify instant pool space
@@ -468,15 +483,27 @@ class EngineYamlParameters(YamlParameters):
                 Defaults to MAX_STORAGE_TIERS.
         """
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines", str(index), "*"]
+        common_ns = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines_common", "*"]
+        self.common_namespace = os.path.join(*common_ns)
         self._base_namespace = base_namespace
         self._index = index
         self._provider = provider or os.environ.get("D_PROVIDER", "ofi+tcp")
         self._max_storage_tiers = max_storage_tiers
         super().__init__(os.path.join(*namespace))
 
-        # Use environment variables to get default parameters
-        default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
-        default_port = int(os.environ.get("D_PORT", 31416))
+        # Use environment variables to get default parameters. Supports lists to define values for
+        # multiple engines through comma-separated strings. If the index exceeds the list length
+        # then values are reused round-robin style.
+        try:
+            _defaults = os.environ.get("DAOS_TEST_FABRIC_IFACE").split(",")
+            default_interface = list(filter(None, _defaults))[index % len(_defaults)]
+        except (AttributeError, IndexError):
+            default_interface = f"eth{index}"
+        try:
+            _defaults = [int(port) for port in os.environ.get("D_PORT").split(",")]
+            default_port = list(filter(None, _defaults))[index % len(_defaults)]
+        except (AttributeError, ValueError, IndexError):
+            default_port = 31317 + (100 * index)
 
         # All log files should be placed in the same directory on each host
         # to enable easy log file archiving by launch.py
@@ -523,7 +550,11 @@ class EngineYamlParameters(YamlParameters):
         Args:
             test (Test): avocado Test object
         """
-        super().get_params(test)
+        # Get the values for the engine yaml parameters
+        for name in self.get_param_names():
+            if not getattr(self, name).get_yaml_value(name, test, self.namespace):
+                # If a new value was not assigned, check the engine's common namespace for a value
+                getattr(self, name).get_yaml_value(name, test, self.common_namespace)
 
         # Override the log file file name with the test log file name
         if hasattr(test, "server_log") and test.server_log is not None:
@@ -857,7 +888,7 @@ class StorageYamlParameters(YamlParameters):
         return StorageYamlParameters(self.namespace, self._max_tiers)
 
 
-class StorageTierYamlParameters(YamlParameters):
+class StorageTierYamlParameters(YamlParameters):  # pylint: disable=too-many-instance-attributes
     """Defines the configuration yaml parameters for each storage tier for an engine."""
 
     def __init__(self, base_namespace, tier):

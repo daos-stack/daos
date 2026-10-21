@@ -1,5 +1,6 @@
 """
   (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -150,3 +151,83 @@ def dict_subtract(dict1, dict2):
             except TypeError as error:
                 raise TypeError('Invalid type for key {}'.format(key)) from error
     return dict3
+
+
+def assert_val_in_list(val, allowed_list):
+    """Assert whether a value is in the allowed list.
+
+    Args:
+        val (object): value to check
+        allowed_list (list): list of allowed values
+
+    Returns:
+        bool: True if val is in allowed_list
+
+    Raises:
+        AssertionError: if val is not in allowed_list
+    """
+    if val not in allowed_list:
+        raise AssertionError(f'Expected one of {allowed_list}')
+    return True
+
+
+def assert_dict_subset(subset, full):
+    """Assert that a dictionary is a subset of another dictionary.
+
+    For example:
+        assert_dict_subset({'a': 1}, {'a': 1, 'b': 2}) -> passes
+        assert_dict_subset({'a': 2}, {'a': 1, 'b': 2}) -> AssertionError
+        assert_dict_subset({'c': 2}, {'a': 1, 'b': 2}) -> AssertionError
+
+    Args:
+        subset (dict): Expected subset dictionary, where only keys in the subset are verified
+            in the full dictionary.
+            Expected values can be type callable(actual_value) -> bool for custom verification.
+        full (dict): Full dictionary to verify against the subset
+
+    Raises:
+        AssertionError: if subset is not contained in full
+    """
+
+    def _format_keys(keys):
+        """Convert list of keys to ["key1"]["key2"] format."""
+        return ''.join(map(lambda k: f'["{k}"]', keys))
+
+    def _assert_subset(prev_keys, expected, actual):
+        """Recursively verify expected dict matches actual dict."""
+        for key, expected_value in expected.items():
+            cur_keys = prev_keys + [key]
+            try:
+                actual_value = actual[key]
+            except KeyError as error:
+                raise AssertionError(
+                    f'Missing expected key {_format_keys(cur_keys)}') from error
+
+            if callable(expected_value):
+                # Use custom callable to verify value
+                try:
+                    if not expected_value(actual_value):
+                        raise AssertionError(
+                            f'{_format_keys(cur_keys)} = {actual_value} ; '
+                            f'expected to satisfy {expected_value.__name__}')
+                except AssertionError as error:
+                    # If the custom callable raised an AssertionError, use its error message
+                    raise AssertionError(
+                        f'{_format_keys(cur_keys)} = {actual_value} ; {str(error)}') from error
+
+            elif type(expected_value) is not type(actual_value):
+                # Types must match
+                raise AssertionError(
+                    f'type({_format_keys(cur_keys)}) = {type(actual_value)} ; '
+                    f'expected {type(expected_value)}')
+
+            elif isinstance(expected_value, dict):
+                # Recursively verify nested dict
+                _assert_subset(cur_keys, expected_value, actual_value)
+
+            elif expected_value != actual_value:
+                # Compare leaf values
+                raise AssertionError(
+                    f'{_format_keys(cur_keys)} = {actual_value} ; expected "{expected_value}"')
+
+    _assert_subset([], subset, full)

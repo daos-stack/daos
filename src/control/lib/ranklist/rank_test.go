@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -385,6 +386,57 @@ func TestSystem_TestRankMembership(t *testing.T) {
 			if diff := cmp.Diff(tc.expMissing, gotMissing); diff != "" {
 				t.Fatalf("unexpected missing ranks (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestRanklist_NewRankFromString(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input   string
+		expRank *Rank
+		expErr  error
+	}{
+		"empty": {
+			expErr: errors.New("empty string"),
+		},
+		"NilRank": {
+			input:   NilRankStr,
+			expRank: NewRankPtr(uint32(NilRank)),
+		},
+		"garbage": {
+			input:  "'Twas brillig and the slithy toves did gyre and gimble in the wabe",
+			expErr: errors.New("invalid rank"),
+		},
+		"negative": {
+			input:  "-1",
+			expErr: errors.New("invalid rank"),
+		},
+		"zero": {
+			input:   "0",
+			expRank: NewRankPtr(0),
+		},
+		"small number": {
+			input:   "5",
+			expRank: NewRankPtr(5),
+		},
+		"maximum": {
+			input:   fmt.Sprintf("%d", MaxRank),
+			expRank: NewRankPtr(uint32(MaxRank)),
+		},
+		"NilRank value": {
+			input:   fmt.Sprintf("%d", NilRank),
+			expRank: NewRankPtr(uint32(NilRank)),
+		},
+		"overflow": {
+			input:  fmt.Sprintf("%d", math.MaxUint32+1),
+			expErr: errors.New("invalid rank"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rank, err := NewRankFromString(tc.input)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpAny(t, "Rank", tc.expRank, rank)
 		})
 	}
 }

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -161,21 +162,22 @@ func processLogEnvs(env []string) ([]string, error) {
 func (r *Runner) Start(ctx context.Context) (RunnerExitChan, error) {
 	args, err := r.Config.CmdLineArgs()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "CmdLineArgs")
 	}
 	env, err := r.Config.CmdLineEnv()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "CmdLineEnv")
 	}
 	env = common.MergeKeyValues(cleanEnvVars(os.Environ(), r.Config.EnvPassThrough), env)
 
 	env, err = processLogEnvs(env)
 	if err != nil {
+		return nil, errors.Wrap(err, "processLogEnvs")
 		return nil, err
 	}
 
 	exitCh := make(RunnerExitChan)
-	return exitCh, r.run(ctx, args, env, exitCh)
+	return exitCh, errors.Wrap(r.run(ctx, args, env, exitCh), "Runner run")
 }
 
 // IsRunning indicates whether the Runner process is running or not.

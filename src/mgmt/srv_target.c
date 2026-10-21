@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,43 +29,61 @@ static char *newborns_path;
 /** directory for destroyed pool */
 static char *zombies_path;
 
-static int
-tgt_vos_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr, bool *cancel_pending);
-
-/* ds_pooltgts*
- * dpt_creates_ht tracks in-flight pool tgt creates
- * tgt create inserts a record into creates_ht ; and during tgt allocation
- * periodically checks if a tgt destroy is requested.
- * tgt destroy checks if a record exists, modifies it to ask create to stop ;
- * waits for create to remove the record (indicating create is done).
- * In-memory, not persistent.
+/*
+ * ds_pooltgts keeps two independent in-memory synchronization domains:
+ * - create vs destroy: dpt_creates_ht tracks in-flight creates so destroy can
+ *   request cancellation and wait until preallocation exits.
+ * - destroy vs destroy: dpt_destroys_ht tracks in-flight destroys so only one
+ *   destroy handler runs per pool UUID at a time.
  */
 struct ds_pooltgts {
-	ABT_mutex		dpt_mutex;
-	ABT_cond		dpt_cv;
+	ABT_mutex               dpt_create_mutex;
+	ABT_cond                dpt_create_cv;
 	struct d_hash_table	dpt_creates_ht;
+	ABT_mutex               dpt_destroy_mutex;
+	ABT_cond                dpt_destroy_cv;
+	struct d_hash_table     dpt_destroys_ht;
 };
 
-
-struct ds_pooltgts_rec {
+struct ds_pooltgts_create_rec {
 	uuid_t		dptr_uuid;
 	bool		cancel_create;	/* ask create hdlr to stop prealloc */
 	d_list_t	dptr_hlink;	/* in hash table */
 };
 
+struct ds_pooltgts_destroy_rec {
+	uuid_t   dptr_uuid;
+	d_list_t dptr_hlink; /* in hash table */
+};
+
 static struct ds_pooltgts	*pooltgts;
 
-static inline struct ds_pooltgts_rec *
-pooltgts_obj(d_list_t *rlink)
+static inline struct ds_pooltgts_create_rec *
+pooltgts_create_obj(d_list_t *rlink)
 {
-	return container_of(rlink, struct ds_pooltgts_rec, dptr_hlink);
+	return container_of(rlink, struct ds_pooltgts_create_rec, dptr_hlink);
+}
+
+static inline struct ds_pooltgts_destroy_rec *
+pooltgts_destroy_obj(d_list_t *rlink)
+{
+	return container_of(rlink, struct ds_pooltgts_destroy_rec, dptr_hlink);
 }
 
 static bool
 pooltgts_cmp_keys(struct d_hash_table *htable, d_list_t *rlink,
 		  const void *key, unsigned int ksize)
 {
-	struct ds_pooltgts_rec *ptrec = pooltgts_obj(rlink);
+	struct ds_pooltgts_create_rec *ptrec = pooltgts_create_obj(rlink);
+
+	return uuid_compare(key, ptrec->dptr_uuid) == 0;
+}
+
+static bool
+pooltgts_destroy_cmp_keys(struct d_hash_table *htable, d_list_t *rlink, const void *key,
+			  unsigned int ksize)
+{
+	struct ds_pooltgts_destroy_rec *ptrec = pooltgts_destroy_obj(rlink);
 
 	return uuid_compare(key, ptrec->dptr_uuid) == 0;
 }
@@ -74,66 +92,9 @@ static d_hash_table_ops_t pooltgts_hops = {
 	.hop_key_cmp		= pooltgts_cmp_keys,
 };
 
-static int
-path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx,
-	 char **fpath)
-{
-	int	 size;
-	int	 off;
-
-	/** *fpath = dir + "/" + pool_uuid + "/" + fname + idx */
-
-	/** DAOS_UUID_STR_SIZE includes the trailing '\0' */
-	size = strlen(dir) + 1 /* "/" */ + DAOS_UUID_STR_SIZE;
-	if (fname != NULL || idx != NULL)
-		size += 1 /* "/" */;
-	if (fname)
-		size += strlen(fname);
-	if (idx)
-		size += snprintf(NULL, 0, "%d", *idx);
-
-	D_ALLOC(*fpath, size);
-	if (*fpath == NULL)
-		return -DER_NOMEM;
-
-	off = sprintf(*fpath, "%s", dir);
-	off += sprintf(*fpath + off, "/");
-	uuid_unparse_lower(pool_uuid, *fpath + off);
-	off += DAOS_UUID_STR_SIZE - 1;
-	if (fname != NULL || idx != NULL)
-		off += sprintf(*fpath + off, "/");
-	if (fname)
-		off += sprintf(*fpath + off, "%s", fname);
-	if (idx)
-		sprintf(*fpath + off, "%d", *idx);
-
-	return 0;
-}
-
-static inline int
-dir_fsync(const char *path)
-{
-	int	fd;
-	int	rc;
-
-	fd = open(path, O_RDONLY|O_DIRECTORY);
-	if (fd < 0) {
-		rc = errno;
-		D_CDEBUG(rc == ENOENT, DB_MGMT, DLOG_ERR, "failed to open %s for sync: %d\n", path,
-			 rc);
-		return daos_errno2der(rc);
-	}
-
-	rc = fsync(fd);
-	if (rc < 0) {
-		D_ERROR("failed to fync %s: %d\n", path, errno);
-		rc = daos_errno2der(errno);
-	}
-
-	(void)close(fd);
-
-	return rc;
-}
+static d_hash_table_ops_t pooltgts_destroy_hops = {
+    .hop_key_cmp = pooltgts_destroy_cmp_keys,
+};
 
 static int
 destroy_cb(const char *path, const struct stat *sb, int flag,
@@ -271,7 +232,7 @@ ds_mgmt_pool_exist_internal(uuid_t uuid, const char *dir, const char *fname, int
 	char	*path = NULL;
 	int	 rc;
 
-	rc = path_gen(uuid, dss_storage_path, fname, idx, &path);
+	rc = ds_mgmt_file(dss_storage_path, uuid, fname, idx, &path);
 	if (rc != 0)
 		goto out;
 
@@ -395,7 +356,7 @@ cleanup_dead_list(d_list_t *dead_list, const char *path)
 	int			 rc;
 
 	d_list_for_each_entry_safe(dp, tmp, dead_list, dp_link) {
-		rc = path_gen(dp->dp_uuid, path, NULL, NULL, &dead_dir);
+		rc = ds_mgmt_file(path, dp->dp_uuid, NULL, NULL, &dead_dir);
 
 		d_list_del_init(&dp->dp_link);
 		D_FREE(dp);
@@ -433,105 +394,6 @@ cleanup_leftover_pools(bool zombie_only)
 		D_ERROR("failed to delete SPDK blobs for NEWBORNS pools: "
 			"%d, will try again\n", rc);
 	cleanup_dead_list(&dead_list, newborns_path);
-}
-
-static int
-tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_size_t rdb_blob_sz)
-{
-	char			*pool_newborn_path = NULL;
-	char			*pool_path = NULL;
-	char			*rdb_path = NULL;
-	bool			 dummy_cancel_state = false;
-	int			 rc;
-	int			 fd;
-	struct stat		 statbuf;
-
-	D_ASSERT(bio_nvme_configured(SMD_DEV_TYPE_META));
-
-	/** generate path to the target directory */
-	rc = ds_mgmt_tgt_file(pool_uuid, NULL, NULL, &pool_path);
-	if (rc) {
-		D_ERROR("newborn path_gen failed for "DF_UUID": "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
-	}
-
-	/** Skip recreation if directory already exists */
-	rc = stat(pool_path, &statbuf);
-	if ((rc == 0) && (statbuf.st_mode & S_IFDIR))
-		goto out;
-
-	/** create the pool directory under NEWBORNS */
-	rc = path_gen(pool_uuid, newborns_path, NULL,
-		      NULL, &pool_newborn_path);
-	if (rc) {
-		D_ERROR(DF_UUID": path_gen failed for: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
-	}
-	rc = mkdir(pool_newborn_path, 0700);
-	if (rc < 0 && errno != EEXIST) {
-		rc = daos_errno2der(errno);
-		D_ERROR("failed to created pool directory: "DF_RC"\n",
-			DP_RC(rc));
-		/* avoid tgt_destroy(), nothing to do */
-		D_FREE(pool_newborn_path);
-		goto out;
-	}
-
-	/** create VOS files */
-	rc = tgt_vos_preallocate_parallel(pool_uuid, scm_size, tgt_nr,
-					  &dummy_cancel_state);
-	if (rc) {
-		D_ERROR(DF_UUID": failed to create tgt vos files: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
-	}
-
-	if (rdb_blob_sz) {
-		rc = path_gen(pool_uuid, newborns_path, RDB_FILE"pool",
-			      NULL, &rdb_path);
-		if (rdb_path == NULL) {
-			D_ERROR(DF_UUID": cannot retrieve rdb file info: "DF_RC"\n",
-				DP_UUID(pool_uuid), DP_RC(rc));
-			rc = -DER_NONEXIST;
-			goto out;
-		}
-		fd = open(rdb_path, O_RDWR|O_CREAT, 0600);
-		if (fd < 0) {
-			rc = daos_errno2der(errno);
-			D_ERROR("failed to create/open the vos file %s:"DF_RC"\n",
-				rdb_path, DP_RC(rc));
-			goto out;
-		}
-		rc = fallocate(fd, 0, 0, rdb_blob_sz);
-		close(fd);
-		if (rc) {
-			rc = daos_errno2der(errno);
-			D_ERROR("fallocate on rdb file %s failed:"DF_RC"\n",
-				rdb_path, DP_RC(rc));
-			goto out;
-		}
-		D_FREE(rdb_path);
-	}
-
-	/** move away from NEWBORNS dir */
-	rc = rename(pool_newborn_path, pool_path);
-	if (rc < 0) {
-		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to rename pool directory: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
-	}
-
-	/** make sure the rename is persistent */
-	(void)dir_fsync(pool_path);
-
-out:
-	D_FREE(pool_newborn_path);
-	D_FREE(pool_path);
-
-	return rc;
 }
 
 static int
@@ -580,8 +442,10 @@ recreate_pooltgts()
 		}
 
 		D_ASSERT(pool_info->spi_scm_sz > 0);
-		rc = tgt_recreate(pool_info->spi_id, pool_info->spi_scm_sz,
-				  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], rdb_blob_sz);
+		rc = ds_mgmt_tgt_recreate(pool_info->spi_id, pool_info->spi_scm_sz,
+					  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META],
+					  pool_info->spi_tgts[SMD_DEV_TYPE_META], rdb_blob_sz,
+					  dss_storage_path, dss_bind_to_xstream_cpuset);
 		if (rc)
 			goto out;
 	}
@@ -601,16 +465,16 @@ ds_mgmt_tgt_setup(void)
 	int	rc;
 
 	/** create the path string */
-	D_ASPRINTF(newborns_path, "%s/NEWBORNS", dss_storage_path);
+	D_ASPRINTF(newborns_path, "%s/" DIR_NEWBORNS "", dss_storage_path);
 	if (newborns_path == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
-	D_ASPRINTF(zombies_path, "%s/ZOMBIES", dss_storage_path);
+	D_ASPRINTF(zombies_path, "%s/" DIR_ZOMBIES "", dss_storage_path);
 	if (zombies_path == NULL)
 		D_GOTO(err_newborns, rc = -DER_NOMEM);
 
 	stored_mode = umask(0);
 	/** create NEWBORNS directory if it does not exist already */
-	rc = mkdir(newborns_path, S_IRWXU);
+	rc = mkdir(newborns_path, DEFAULT_DIR_PERM);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
 		umask(stored_mode);
@@ -618,7 +482,7 @@ ds_mgmt_tgt_setup(void)
 	}
 
 	/** create ZOMBIES directory if it does not exist already */
-	rc = mkdir(zombies_path, S_IRWXU);
+	rc = mkdir(zombies_path, DEFAULT_DIR_PERM);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
 		umask(stored_mode);
@@ -637,32 +501,55 @@ ds_mgmt_tgt_setup(void)
 		}
 	}
 
-	/* create lock/cv and hash table to track outstanding pool creates */
+	/* Create-side synchronization: create mutex/cv + in-flight create hash. */
 	D_ALLOC_PTR(pooltgts);
 	if (pooltgts == NULL) {
 		D_GOTO(err_zombies, rc = -DER_NOMEM);
 	}
 
-	rc = ABT_mutex_create(&pooltgts->dpt_mutex);
+	rc = ABT_mutex_create(&pooltgts->dpt_create_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to create pooltgts mutex: %d\n", rc);
+		D_ERROR("failed to create create mutex: %d\n", rc);
 		rc = dss_abterr2der(rc);
-		goto err_pooltgts;
+		goto err_pooltgts_alloc;
 	}
 
-	rc = ABT_cond_create(&pooltgts->dpt_cv);
+	rc = ABT_cond_create(&pooltgts->dpt_create_cv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to create pooltgts cv: %d\n", rc);
+		D_ERROR("failed to create create cv: %d\n", rc);
 		rc = dss_abterr2der(rc);
-		goto err_mutex;
+		goto err_create_mutex;
 	}
+
+	/* Destroy-side synchronization: destroy mutex/cv + in-flight destroy hash. */
+	rc = ABT_mutex_create(&pooltgts->dpt_destroy_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create destroy mutex: %d\n", rc);
+		rc = dss_abterr2der(rc);
+		goto err_create_cv;
+	}
+
+	rc = ABT_cond_create(&pooltgts->dpt_destroy_cv);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create destroy cv: %d\n", rc);
+		rc = dss_abterr2der(rc);
+		goto err_destroy_mutex;
+	}
+
 	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 6 /* bits */,
 					 NULL /* priv */, &pooltgts_hops,
 					 &pooltgts->dpt_creates_ht);
 	if (rc) {
 		D_ERROR("failed to create hash table (creates) "DF_RC"\n",
 			DP_RC(rc));
-		goto err_cv;
+		goto err_destroy_cv;
+	}
+
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 6 /* bits */, NULL /* priv */,
+					 &pooltgts_destroy_hops, &pooltgts->dpt_destroys_ht);
+	if (rc) {
+		D_ERROR("failed to create hash table (destroys) " DF_RC "\n", DP_RC(rc));
+		goto err_creates_ht;
 	}
 
 	rc = subtree_destroy(newborns_path);
@@ -677,11 +564,18 @@ ds_mgmt_tgt_setup(void)
 			rc);
 	return 0;
 
-err_cv:
-	ABT_cond_free(&pooltgts->dpt_cv);
-err_mutex:
-	ABT_mutex_free(&pooltgts->dpt_mutex);
-err_pooltgts:
+err_creates_ht:
+	d_hash_table_destroy_inplace(&pooltgts->dpt_creates_ht, true);
+err_destroy_cv:
+	ABT_cond_free(&pooltgts->dpt_destroy_cv);
+err_destroy_mutex:
+	ABT_mutex_free(&pooltgts->dpt_destroy_mutex);
+
+err_create_cv:
+	ABT_cond_free(&pooltgts->dpt_create_cv);
+err_create_mutex:
+	ABT_mutex_free(&pooltgts->dpt_create_mutex);
+err_pooltgts_alloc:
 	D_FREE(pooltgts);
 err_zombies:
 	D_FREE(zombies_path);
@@ -701,22 +595,17 @@ ds_mgmt_tgt_cleanup(void)
 		D_ERROR("failed to destroy table: dpt_creates_ht: "DF_RC"\n",
 			DP_RC(rc));
 	}
-	ABT_cond_free(&pooltgts->dpt_cv);
-	ABT_mutex_free(&pooltgts->dpt_mutex);
+	rc = d_hash_table_destroy_inplace(&pooltgts->dpt_destroys_ht, true);
+	if (rc) {
+		D_ERROR("failed to destroy table: dpt_destroys_ht: " DF_RC "\n", DP_RC(rc));
+	}
+	ABT_cond_free(&pooltgts->dpt_destroy_cv);
+	ABT_mutex_free(&pooltgts->dpt_destroy_mutex);
+	ABT_cond_free(&pooltgts->dpt_create_cv);
+	ABT_mutex_free(&pooltgts->dpt_create_mutex);
 	D_FREE(pooltgts);
 	D_FREE(zombies_path);
 	D_FREE(newborns_path);
-}
-
-/**
- * Generate path to a target file for pool \a pool_uuid with a filename set to
- * \a fname and suffixed by \a idx. \a idx can be NULL.
- */
-int
-ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
-		 char **fpath)
-{
-	return path_gen(pool_uuid, dss_storage_path, fname, idx, fpath);
 }
 
 struct vos_pool_arg {
@@ -734,8 +623,7 @@ tgt_vos_create_one(void *varg)
 	char			*path = NULL;
 	int			 rc;
 
-	rc = path_gen(vpa->vpa_uuid, newborns_path, VOS_FILE, &info->dmi_tgt_id,
-		      &path);
+	rc = ds_mgmt_file(newborns_path, vpa->vpa_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc)
 		return rc;
 
@@ -748,188 +636,6 @@ tgt_vos_create_one(void *varg)
 
 	D_FREE(path);
 	return rc;
-}
-
-static int
-tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id)
-{
-	char				*path = NULL;
-	int				 fd = -1, rc;
-
-	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-	rc = path_gen(uuid, newborns_path, VOS_FILE, &tgt_id, &path);
-	if (rc)
-		goto out;
-
-	D_DEBUG(DB_MGMT, DF_UUID ": creating vos file %s (%ld bytes)\n", DP_UUID(uuid), path,
-		scm_size);
-
-	fd = open(path, O_CREAT|O_RDWR, 0600);
-	if (fd < 0) {
-		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to create vos file %s: "
-			DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
-		goto out;
-	}
-
-	/** Align to 4K or locking the region based on the size will fail */
-	scm_size = D_ALIGNUP(scm_size, 1ULL << 12);
-	/**
-	 * Pre-allocate blocks for vos files in order to provide
-	 * consistent performance and avoid entering into the backend
-	 * filesystem allocator through page faults.
-	 * Use fallocate(2) instead of posix_fallocate(3) since the
-	 * latter is bogus with tmpfs.
-	 */
-	rc = fallocate(fd, 0, 0, scm_size);
-	if (rc) {
-		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to allocate vos file %s with "
-			"size: "DF_U64": "DF_RC"\n",
-			DP_UUID(uuid), path, scm_size, DP_RC(rc));
-		goto out;
-	}
-
-	rc = fsync(fd);
-	(void)close(fd);
-	fd = -1;
-	if (rc) {
-		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to sync vos pool %s: "
-			DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
-		goto out;
-	}
-out:
-	if (fd != -1)
-		close(fd);
-	D_FREE(path);
-	return rc;
-}
-
-struct tgt_vos_prealloc_args {
-	uuid_t		tvpa_uuid;
-	daos_size_t	tvpa_scm_size;
-	int		tvpa_tgt_id;
-};
-
-struct tgt_vos_thrdlist {
-	d_list_t			tvt_link;
-	pthread_t			tvt_tid;
-	struct tgt_vos_prealloc_args	tvt_args;
-};
-
-static void *
-tgt_vos_preallocate_thrd_func(void *arg)
-{
-	struct tgt_vos_prealloc_args	*tvpa = (struct tgt_vos_prealloc_args *)arg;
-
-	dss_bind_to_xstream_cpuset(tvpa->tvpa_tgt_id);
-	return (void *)(uintptr_t)tgt_vos_preallocate(tvpa->tvpa_uuid, tvpa->tvpa_scm_size,
-						      tvpa->tvpa_tgt_id);
-}
-
-static void
-tgt_vos_preallocate_thrds_cleanup(d_list_t *head)
-{
-	struct tgt_vos_thrdlist *entry;
-	int			 rc;
-
-	d_list_for_each_entry(entry, head, tvt_link) {
-		rc = pthread_cancel(entry->tvt_tid);
-		if (rc) {
-			rc = daos_errno2der(rc);
-			D_ERROR("pthread_cancel failed: "DF_RC"\n", DP_RC(rc));
-		}
-	}
-
-	d_list_for_each_entry(entry, head, tvt_link) {
-		rc = pthread_join(entry->tvt_tid, NULL);
-		if (rc) {
-			rc = daos_errno2der(rc);
-			D_ERROR("pthread_join failed: "DF_RC"\n", DP_RC(rc));
-		}
-	}
-}
-
-static int
-tgt_vos_preallocate_sequential(uuid_t uuid, daos_size_t scm_size, int tgt_nr)
-{
-	int i, rc = 0;
-
-	for (i = 0; i < tgt_nr; i++) {
-		rc = tgt_vos_preallocate(uuid, scm_size, i);
-		if (rc)
-			break;
-	}
-	return rc;
-}
-
-static int
-tgt_vos_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr, bool *cancel_pending)
-{
-	int				 i;
-	int				 rc;
-	int				 saved_rc = 0;
-	int				 res;
-	int				 old_cancelstate;
-	struct tgt_vos_thrdlist		*entry, *tmp;
-	struct tgt_vos_thrdlist		*thrds_list;
-
-	D_LIST_HEAD(thrds_list_head);
-
-	D_INIT_LIST_HEAD(&thrds_list_head);
-	D_ALLOC_ARRAY(thrds_list, tgt_nr);
-
-	/* Disable cancellation to manage other threads created within. */
-	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate);
-
-	for (i = 0; i < tgt_nr; i++) {
-		entry = &thrds_list[i];
-		uuid_copy(entry->tvt_args.tvpa_uuid, uuid);
-		entry->tvt_args.tvpa_scm_size = scm_size;
-		entry->tvt_args.tvpa_tgt_id = i;
-		rc = pthread_create(&entry->tvt_tid, NULL, tgt_vos_preallocate_thrd_func,
-				    &entry->tvt_args);
-		if (rc) {
-			saved_rc = daos_errno2der(rc);
-			D_ERROR(DF_UUID": failed to create thread for target file "
-				"creation: "DF_RC"\n", DP_UUID(uuid),
-				DP_RC(saved_rc));
-			goto out;
-		}
-		d_list_add_tail(&entry->tvt_link, &thrds_list_head);
-		if (*cancel_pending == true) {
-			saved_rc = -DER_CANCELED;
-			goto out;
-		}
-	}
-
-	while (!d_list_empty(&thrds_list_head)) {
-		sched_yield();
-		if (*cancel_pending == true) {
-			saved_rc = -DER_CANCELED;
-			goto out;
-		}
-		d_list_for_each_entry_safe(entry, tmp, &thrds_list_head, tvt_link) {
-			rc = pthread_tryjoin_np(entry->tvt_tid, (void **)&res);
-			if (rc == EBUSY)
-				continue;
-			else if (rc == 0)
-				rc = res;
-			else {
-				rc = daos_errno2der(rc);
-				D_ERROR("pthread_join failed: "DF_RC"\n", DP_RC(rc));
-			}
-			if (!saved_rc && rc)
-				saved_rc = rc;
-			d_list_del(&entry->tvt_link);
-		}
-	}
-out:
-	tgt_vos_preallocate_thrds_cleanup(&thrds_list_head);
-	D_FREE(thrds_list);
-	pthread_setcancelstate(old_cancelstate, NULL);
-	return saved_rc;
 }
 
 int
@@ -993,7 +699,7 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 struct tgt_create_args {
 	char			*tca_newborn;
 	char			*tca_path;
-	struct ds_pooltgts_rec	*tca_ptrec;
+	struct ds_pooltgts_create_rec *tca_ptrec;
 	struct dss_xstream	*tca_dx;
 	daos_size_t		 tca_scm_size;
 	daos_size_t		 tca_nvme_size;
@@ -1003,14 +709,13 @@ struct tgt_create_args {
 static void *
 tgt_create_preallocate(void *arg)
 {
-	struct tgt_create_args	*tca = arg;
+	struct tgt_create_args  *tca = arg;
 	int			 rc;
 
 	(void)dss_xstream_set_affinity(tca->tca_dx);
 
 	/** generate path to the target directory */
-	rc = ds_mgmt_tgt_file(tca->tca_ptrec->dptr_uuid, NULL, NULL,
-			      &tca->tca_path);
+	rc = ds_mgmt_file(dss_storage_path, tca->tca_ptrec->dptr_uuid, NULL, NULL, &tca->tca_path);
 	if (rc)
 		goto out;
 
@@ -1023,17 +728,17 @@ tgt_create_preallocate(void *arg)
 		 * flush again in case the previous one in tgt_create()
 		 * failed
 		 */
-		rc = dir_fsync(tca->tca_path);
+		rc = ds_mgmt_dir_fsync(tca->tca_path);
 		D_DEBUG(DB_MGMT, "reuse existing tca_path: %s, dir_fsync rc: "DF_RC"\n",
 			tca->tca_path, DP_RC(rc));
 	} else if (errno == ENOENT) { /** target doesn't exist, create one */
 		/** create the pool directory under NEWBORNS */
-		rc = path_gen(tca->tca_ptrec->dptr_uuid, newborns_path, NULL,
-			      NULL, &tca->tca_newborn);
+		rc = ds_mgmt_file(newborns_path, tca->tca_ptrec->dptr_uuid, NULL, NULL,
+				  &tca->tca_newborn);
 		if (rc)
 			goto out;
 
-		rc = mkdir(tca->tca_newborn, 0700);
+		rc = mkdir(tca->tca_newborn, DEFAULT_DIR_PERM);
 		if (rc < 0 && errno != EEXIST) {
 			rc = daos_errno2der(errno);
 			D_ERROR("failed to created pool directory: "DF_RC"\n",
@@ -1052,12 +757,14 @@ tgt_create_preallocate(void *arg)
 		D_ASSERT(dss_tgt_nr > 0);
 		D_ASSERT((tca->tca_scm_size / dss_tgt_nr) >= (1 << 24));
 		if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
-			rc = tgt_vos_preallocate_sequential(
-			    tca->tca_ptrec->dptr_uuid, tca->tca_scm_size / dss_tgt_nr, dss_tgt_nr);
+			rc = ds_mgmt_tgt_preallocate_sequential(tca->tca_ptrec->dptr_uuid,
+								tca->tca_scm_size / dss_tgt_nr,
+								dss_tgt_nr, newborns_path);
 		} else {
-			rc = tgt_vos_preallocate_parallel(
+			rc = ds_mgmt_tgt_preallocate_parallel(
 			    tca->tca_ptrec->dptr_uuid, tca->tca_scm_size / dss_tgt_nr, dss_tgt_nr,
-			    &tca->tca_ptrec->cancel_create);
+			    &tca->tca_ptrec->cancel_create, newborns_path,
+			    dss_bind_to_xstream_cpuset, NULL);
 		}
 		if (rc)
 			goto out;
@@ -1066,6 +773,7 @@ tgt_create_preallocate(void *arg)
 	}
 out:
 	tca->tca_rc = rc;
+
 	return NULL;
 }
 
@@ -1105,11 +813,11 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		D_GOTO(out_reply, rc = -DER_NOMEM);
 	uuid_copy(tca.tca_ptrec->dptr_uuid, tc_in->tc_pool_uuid);
 	tca.tca_ptrec->cancel_create = false;
-	ABT_mutex_lock(pooltgts->dpt_mutex);
+	ABT_mutex_lock(pooltgts->dpt_create_mutex);
 	rc = d_hash_rec_insert(&pooltgts->dpt_creates_ht,
 			       tca.tca_ptrec->dptr_uuid, sizeof(uuid_t),
 			       &tca.tca_ptrec->dptr_hlink, true);
-	ABT_mutex_unlock(pooltgts->dpt_mutex);
+	ABT_mutex_unlock(pooltgts->dpt_create_mutex);
 	if (rc == -DER_EXIST) {
 		D_ERROR(DF_UUID": already creating or cleaning up\n",
 			DP_UUID(tc_in->tc_pool_uuid));
@@ -1121,6 +829,27 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": record inserted to dpt_creates_ht\n",
 		DP_UUID(tca.tca_ptrec->dptr_uuid));
+
+	/*
+	 * Racing with any in-flight destroy of the same pool UUID is not allowed: it could destroy
+	 * the new targets or leave remnants of the previous attempt behind (DER_EXIST). Waiting
+	 * with our record already in dpt_creates_ht lets a destroy sent after this create cancel
+	 * us instead of running concurrently with us, hence the cancel check after each wake-up.
+	 */
+	ABT_mutex_lock(pooltgts->dpt_destroy_mutex);
+	while (d_hash_rec_find(&pooltgts->dpt_destroys_ht, tc_in->tc_pool_uuid, sizeof(uuid_t)) !=
+	       NULL) {
+		if (tca.tca_ptrec->cancel_create) {
+			D_DEBUG(DB_MGMT, DF_UUID ": canceled while waiting for in-flight destroy\n",
+				DP_UUID(tc_in->tc_pool_uuid));
+			ABT_mutex_unlock(pooltgts->dpt_destroy_mutex);
+			D_GOTO(out, rc = -DER_CANCELED);
+		}
+		D_INFO(DF_UUID ": waiting for in-flight target destroy before creating\n",
+		       DP_UUID(tc_in->tc_pool_uuid));
+		ABT_cond_wait(pooltgts->dpt_destroy_cv, pooltgts->dpt_destroy_mutex);
+	}
+	ABT_mutex_unlock(pooltgts->dpt_destroy_mutex);
 
 	tgt_scm_sz  = tc_in->tc_scm_size / dss_tgt_nr;
 	tgt_meta_sz = tc_in->tc_meta_size / dss_tgt_nr;
@@ -1217,7 +946,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		}
 
 		/** make sure the rename is persistent */
-		(void)dir_fsync(tca.tca_path);
+		(void)ds_mgmt_dir_fsync(tca.tca_path);
 		/** Mark the pool as ready in smd */
 		smd_pool_mark_ready(tc_in->tc_pool_uuid);
 	}
@@ -1253,11 +982,11 @@ out:
 	}
 	D_FREE(tca.tca_newborn);
 	D_FREE(tca.tca_path);
-	ABT_mutex_lock(pooltgts->dpt_mutex);
+	ABT_mutex_lock(pooltgts->dpt_create_mutex);
 	d_hash_rec_delete_at(&pooltgts->dpt_creates_ht,
 			     &tca.tca_ptrec->dptr_hlink);
-	ABT_cond_signal(pooltgts->dpt_cv);
-	ABT_mutex_unlock(pooltgts->dpt_mutex);
+	ABT_cond_signal(pooltgts->dpt_create_cv);
+	ABT_mutex_unlock(pooltgts->dpt_create_mutex);
 	D_DEBUG(DB_MGMT, DF_UUID" record removed from dpt_creates_ht\n",
 		DP_UUID(tca.tca_ptrec->dptr_uuid));
 out_rec:
@@ -1279,7 +1008,7 @@ tgt_destroy_cleanup(void *arg)
 	(void)dss_xstream_set_affinity(tda->tda_dx);
 
 	/** move target directory to ZOMBIES */
-	rc = path_gen(tda->tda_id.uuid, zombies_path, NULL, NULL, &zombie);
+	rc = ds_mgmt_file(zombies_path, tda->tda_id.uuid, NULL, NULL, &zombie);
 	if (rc)
 		goto out;
 
@@ -1292,7 +1021,7 @@ tgt_destroy_cleanup(void *arg)
 	}
 
 	/** make sure the rename is persistent */
-	(void)dir_fsync(zombie);
+	(void)ds_mgmt_dir_fsync(zombie);
 	D_INFO(DF_UUID ": moved %s to %s\n", DP_UUID(tda->tda_id.uuid), tda->tda_path, zombie);
 
 	/**
@@ -1370,8 +1099,10 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 {
 	struct mgmt_tgt_destroy_in	*td_in;
 	struct mgmt_tgt_destroy_out	*td_out;
-	char				*path;
+	struct ds_pooltgts_destroy_rec  *dtrec = NULL;
+	char                            *path  = NULL;
 	int				 rc;
+	bool                             destroy_registered = false;
 
 	/** incoming request buffer */
 	td_in = crt_req_get(td_req);
@@ -1382,11 +1113,14 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	td_out = crt_reply_get(td_req);
 	D_ASSERT(td_in != NULL && td_out != NULL);
 
-	/* If create in-flight, request it be canceled ; then wait */
-	ABT_mutex_lock(pooltgts->dpt_mutex);
+	/*
+	 * If create is in flight for this UUID, request cancel and wait until the
+	 * create handler removes its record from dpt_creates_ht.
+	 */
+	ABT_mutex_lock(pooltgts->dpt_create_mutex);
 	do {
 		d_list_t		*rec = NULL;
-		struct ds_pooltgts_rec	*ptrec = NULL;
+		struct ds_pooltgts_create_rec *ptrec = NULL;
 		uint32_t		 nreqs = 0;
 
 		rec = d_hash_rec_find(&pooltgts->dpt_creates_ht,
@@ -1394,14 +1128,54 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		if (!rec)
 			break;
 
-		ptrec = pooltgts_obj(rec);
+		ptrec = pooltgts_create_obj(rec);
 		nreqs++;
 		D_DEBUG(DB_MGMT, DF_UUID": busy creating tgts, ask to cancel "
 			"(request %u)\n", DP_UUID(td_in->td_pool_uuid), nreqs);
 		ptrec->cancel_create = true;
-		ABT_cond_wait(pooltgts->dpt_cv, pooltgts->dpt_mutex);
+		ABT_cond_wait(pooltgts->dpt_create_cv, pooltgts->dpt_create_mutex);
 	} while (1);
-	ABT_mutex_unlock(pooltgts->dpt_mutex);
+	ABT_mutex_unlock(pooltgts->dpt_create_mutex);
+
+	/*
+	 * Serialize destroy handlers for the same pool UUID. The first destroy
+	 * inserts into dpt_destroys_ht and proceeds; later destroy requests wait.
+	 */
+	ABT_mutex_lock(pooltgts->dpt_destroy_mutex);
+	do {
+		d_list_t *rec;
+
+		rec = d_hash_rec_find(&pooltgts->dpt_destroys_ht, td_in->td_pool_uuid,
+				      sizeof(uuid_t));
+		if (rec != NULL) {
+			D_DEBUG(DB_MGMT, DF_UUID ": waiting for in-flight target destroy\n",
+				DP_UUID(td_in->td_pool_uuid));
+			ABT_cond_wait(pooltgts->dpt_destroy_cv, pooltgts->dpt_destroy_mutex);
+			continue;
+		}
+
+		D_ALLOC_PTR(dtrec);
+		if (dtrec == NULL) {
+			rc = -DER_NOMEM;
+			ABT_mutex_unlock(pooltgts->dpt_destroy_mutex);
+			goto out;
+		}
+		uuid_copy(dtrec->dptr_uuid, td_in->td_pool_uuid);
+
+		rc = d_hash_rec_insert(&pooltgts->dpt_destroys_ht, dtrec->dptr_uuid, sizeof(uuid_t),
+				       &dtrec->dptr_hlink, true);
+		if (rc != 0) {
+			D_FREE(dtrec);
+			dtrec = NULL;
+			ABT_mutex_unlock(pooltgts->dpt_destroy_mutex);
+			goto out;
+		}
+
+		destroy_registered = true;
+		break;
+	} while (1);
+	ABT_mutex_unlock(pooltgts->dpt_destroy_mutex);
+
 	D_INFO(DF_UUID ": ready to destroy targets\n", DP_UUID(td_in->td_pool_uuid));
 
 	if (engine_in_check()) {
@@ -1417,10 +1191,24 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	if (rc != 0)
 		goto out;
 
+	/*
+	 * Emulate a slow rank whose pool is stopped but whose target files are not removed yet
+	 * (the window in which a retried create of the same UUID used to hit DER_EXIST).
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_MGMT_TGT_DESTROY_SLOW)) {
+		uint64_t delay_ms = daos_fail_value_get();
+
+		if (delay_ms == 0)
+			delay_ms = DAOS_FAIL_DELAY_DEFAULT_MS;
+		D_INFO(DF_UUID ": fault injection: delaying target destroy by " DF_U64 " ms\n",
+		       DP_UUID(td_in->td_pool_uuid), delay_ms);
+		dss_sleep(delay_ms);
+	}
+
 	/** generate path to the target directory */
-	rc = ds_mgmt_tgt_file(td_in->td_pool_uuid, NULL, NULL, &path);
-	if (rc)
-		D_GOTO(out, rc);
+	rc = ds_mgmt_file(dss_storage_path, td_in->td_pool_uuid, NULL, NULL, &path);
+	if (rc != 0)
+		goto out;
 
 	/** check whether the target exists */
 	rc = access(path, F_OK);
@@ -1430,7 +1218,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		if (rc != 0 && rc != -DER_BUSY) {
 			D_ERROR(DF_UUID": kill pool service VOS pool: "DF_RC"\n",
 				DP_UUID(td_in->td_pool_uuid), DP_RC(rc));
-			goto out_path;
+			goto out;
 		}
 		rc = tgt_destroy(td_req->cr_input, path);
 	} else if (errno == ENOENT) {
@@ -1441,11 +1229,10 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		 * that said, the previous flush in tgt_destroy() might have
 		 * failed, so flush again.
 		 */
-		rc = path_gen(td_in->td_pool_uuid, zombies_path, NULL, NULL,
-			      &zombie);
-		if (rc)
-			D_GOTO(out, rc);
-		rc = dir_fsync(zombie);
+		rc = ds_mgmt_file(zombies_path, td_in->td_pool_uuid, NULL, NULL, &zombie);
+		if (rc != 0)
+			goto out;
+		rc = ds_mgmt_dir_fsync(zombie);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		D_FREE(zombie);
@@ -1453,9 +1240,15 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		rc = daos_errno2der(errno);
 	}
 
-out_path:
-	D_FREE(path);
 out:
+	D_FREE(path);
+	if (destroy_registered) {
+		ABT_mutex_lock(pooltgts->dpt_destroy_mutex);
+		d_hash_rec_delete_at(&pooltgts->dpt_destroys_ht, &dtrec->dptr_hlink);
+		ABT_cond_broadcast(pooltgts->dpt_destroy_cv);
+		ABT_mutex_unlock(pooltgts->dpt_destroy_mutex);
+	}
+	D_FREE(dtrec);
 	td_out->td_rc = rc;
 	crt_reply_send(td_req);
 }
@@ -1618,7 +1411,8 @@ ds_mgmt_hdlr_tgt_shard_destroy(crt_rpc_t *req)
 	if (rc != 0 && rc != -DER_NONEXIST)
 		goto out;
 
-	rc = ds_mgmt_tgt_file(tsdi->tsdi_pool_uuid, VOS_FILE, &tsdi->tsdi_shard_idx, &path);
+	rc = ds_mgmt_file(dss_storage_path, tsdi->tsdi_pool_uuid, VOS_FILE, &tsdi->tsdi_shard_idx,
+			  &path);
 	if (rc == 0) {
 		rc = unlink(path);
 		if (rc < 0) {

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,6 +21,7 @@
 #include <daos_event.h>
 #include <daos_task.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/rdb.h>
 #include "cli_internal.h"
@@ -643,7 +644,6 @@ pool_query_target_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	D_DEBUG(DB_MGMT, DF_UUID ": Successfully queried pool rank %u target %u\n",
 		DP_UUID(pool_uuid), arg->pqta_rank, arg->pqta_tgt_idx);
 
-	arg->pqta_info->ta_type  = DAOS_TP_UNKNOWN;
 	arg->pqta_info->ta_state = out->pqio_state;
 	for (i = 0; i < DAOS_MEDIA_MAX; i++) {
 		arg->pqta_info->ta_space.s_total[i] = out->pqio_space.s_total[i];
@@ -960,12 +960,18 @@ pool_extend_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 static int
 pool_extend_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 {
+	struct pool_extend_arg *arg = varg;
 	struct pool_extend_out *out = crt_reply_get(rpc);
 	int                     rc  = out->peo_op.po_rc;
 
-	if (rc != 0)
-		DL_ERROR(rc, DF_UUID ": Failed to set targets to UP state for reintegration",
-			 DP_UUID(pool_uuid));
+	if (rc == -DER_AGAIN) {
+		D_DEBUG(DB_MGMT, DF_UUID ": extend to %d ranks: " DF_RC "\n", DP_UUID(pool_uuid),
+			arg->pea_ntargets, DP_RC(rc));
+		rc = DSC_POOL_SVC_CALL_AGAIN;
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to extend to %d ranks", DP_UUID(pool_uuid),
+			 arg->pea_ntargets);
+	}
 	return rc;
 }
 
@@ -1016,11 +1022,14 @@ pool_update_target_state_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	struct pool_tgt_update_out          *out = crt_reply_get(rpc);
 	int                                  rc  = out->pto_op.po_rc;
 
-	if (rc != 0)
+	if (rc == -DER_AGAIN) {
+		D_DEBUG(DB_MGMT, DF_UUID ": set targets to state %s: " DF_RC "\n",
+			DP_UUID(pool_uuid), pool_map_status2name(arg->puta_state), DP_RC(rc));
+		rc = DSC_POOL_SVC_CALL_AGAIN;
+	} else if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": Failed to set targets to %s state", DP_UUID(pool_uuid),
-			 arg->puta_state == PO_COMP_ST_DOWN ? "DOWN"
-			 : arg->puta_state == PO_COMP_ST_UP ? "UP"
-							    : "UNKNOWN");
+			 pool_map_status2name(arg->puta_state));
+	}
 	return rc;
 }
 
@@ -1223,4 +1232,159 @@ dsc_pool_svc_upgrade(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline)
 {
 	D_DEBUG(DB_MGMT, DF_UUID ": Upgrading pool prop\n", DP_UUID(pool_uuid));
 	return dsc_pool_svc_call(pool_uuid, ranks, &pool_upgrade_cbs, NULL /* arg */, deadline);
+}
+
+struct pool_rebuild_stop_arg {
+	uint32_t rstpa_force;
+};
+
+static int
+pool_rebuild_stop_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_rebuild_stop_arg *arg = varg;
+	struct pool_rebuild_stop_in  *in;
+
+	in              = crt_req_get(rpc);
+	in->rstpi_force = arg->rstpa_force;
+	return 0;
+}
+
+static int
+pool_rebuild_stop_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_rebuild_stop_out *out = crt_reply_get(rpc);
+	int                           rc  = out->rstpo_op.po_rc;
+
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": failed to stop rebuild", DP_UUID(pool_uuid));
+	return rc;
+}
+
+static struct dsc_pool_svc_call_cbs pool_rebuild_stop_cbs = {.pscc_op   = POOL_REBUILD_STOP,
+							     .pscc_init = pool_rebuild_stop_init,
+							     .pscc_consume =
+								 pool_rebuild_stop_consume,
+							     .pscc_fini = NULL};
+
+/**
+ * Request pool stop a running rebuild.
+ *
+ * \param[in]		pool_uuid		UUID of the pool.
+ * \param[in]		force			boolean. force a rebuild in op:Fail_reclaim to stop.
+ * \param[in]		ps_ranks		Ranks of pool svc replicas.
+ * \param[in]		deadline		Unix time deadline in milliseconds
+ *
+ * \return	0		Success
+ *		Negative value	Error
+ */
+
+int
+dsc_pool_svc_rebuild_stop(uuid_t pool_uuid, uint32_t force, d_rank_list_t *ps_ranks,
+			  uint64_t deadline)
+{
+	struct pool_rebuild_stop_arg arg = {.rstpa_force = force};
+
+	return dsc_pool_svc_call(pool_uuid, ps_ranks, &pool_rebuild_stop_cbs, &arg, deadline);
+}
+
+static int
+pool_rebuild_start_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_rebuild_start_out *out = crt_reply_get(rpc);
+	int                            rc  = out->rstao_op.po_rc;
+
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": failed to start/resume rebuild", DP_UUID(pool_uuid));
+	return rc;
+}
+
+static struct dsc_pool_svc_call_cbs pool_rebuild_start_cbs = {.pscc_op   = POOL_REBUILD_START,
+							      .pscc_init = NULL,
+							      .pscc_consume =
+								  pool_rebuild_start_consume,
+							      .pscc_fini = NULL};
+
+/**
+ * Request pool start/resume rebuilding.
+ *
+ * \param[in]		pool_uuid		UUID of the pool.
+ * \param[in]		ps_ranks		Ranks of pool svc replicas.
+ * \param[in]		deadline		Unix time deadline in milliseconds
+ *
+ * \return	0		Success
+ *		Negative value	Error
+ */
+int
+dsc_pool_svc_rebuild_start(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline)
+{
+	return dsc_pool_svc_call(pool_uuid, ps_ranks, &pool_rebuild_start_cbs, NULL /* varg */,
+				 deadline);
+}
+
+struct pool_eval_self_heal_arg {
+	uint64_t pesa_sys_self_heal;
+};
+
+static int
+pool_eval_self_heal_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_eval_self_heal_arg *arg = varg;
+	struct pool_eval_self_heal_in  *in  = crt_req_get(rpc);
+
+	in->pesi_sys_self_heal = arg->pesa_sys_self_heal;
+	return 0;
+}
+
+static int
+pool_eval_self_heal_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_eval_self_heal_arg *arg = varg;
+	struct pool_eval_self_heal_out *out = crt_reply_get(rpc);
+	int                             rc  = out->peso_op.po_rc;
+
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to evaluate self-heal policy: sys_self_heal=" DF_X64,
+			 DP_UUID(pool_uuid), arg->pesa_sys_self_heal);
+		return rc;
+	}
+
+	return 0;
+}
+
+/* clang-format off */
+static struct dsc_pool_svc_call_cbs pool_eval_self_heal_cbs = {
+	.pscc_op	= POOL_EVAL_SELF_HEAL,
+	.pscc_init	= pool_eval_self_heal_init,
+	.pscc_consume	= pool_eval_self_heal_consume,
+	.pscc_fini	= NULL
+};
+/* clang-format on */
+
+/**
+ * Evaluate the self-heal policy. Usually called after any pool aspect (e.g.,
+ * pool_exclude or pool_rebuild) of the system self-heal property is enabled,
+ * so that any pending or ignored fault will be processed again according to
+ * \a sys_self_heal.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	deadline	Unix time deadline in milliseconds
+ * \param[in]	sys_self_heal	Value of system property "self_heal"
+ *
+ * \return	0		Success
+ *
+ */
+int
+dsc_pool_svc_eval_self_heal(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
+			    uint64_t sys_self_heal)
+{
+	struct pool_eval_self_heal_arg arg = {.pesa_sys_self_heal = sys_self_heal};
+
+	D_DEBUG(DB_MGMT, DF_UUID ": sys_self_heal=" DF_X64 "\n", DP_UUID(pool_uuid), sys_self_heal);
+
+	if (!(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_EXCLUDE) &&
+	    !(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD))
+		return 0;
+
+	return dsc_pool_svc_call(pool_uuid, ranks, &pool_eval_self_heal_cbs, &arg, deadline);
 }

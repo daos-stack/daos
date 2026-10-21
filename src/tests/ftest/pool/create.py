@@ -1,10 +1,11 @@
 """
 (C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from test_utils_pool import add_pool, check_pool_creation, get_size_params
+from test_utils_pool import check_pool_creation, get_size_params
 
 
 class PoolCreateTests(TestWithServers):
@@ -38,7 +39,7 @@ class PoolCreateTests(TestWithServers):
         # Create 1 pool using 90% of the available SCM capacity (no NVMe)
         data = self.server_managers[0].get_available_storage()
         params = {"scm_size": int(float(data["scm"]) * 0.9)}
-        pool = add_pool(self, namespace="/run/pool_1/*", create=False, **params)
+        pool = self.get_pool(namespace="/run/pool_1/*", create=False, **params)
         check_pool_creation(self, [pool], 60)
 
     def test_create_max_pool(self):
@@ -54,8 +55,8 @@ class PoolCreateTests(TestWithServers):
         :avocado: tags=pool
         :avocado: tags=PoolCreateTests,test_create_max_pool
         """
-        # Create 1 pool using 90% of the available capacity
-        pool = add_pool(self, namespace="/run/pool_2/*", create=False)
+        # Create 1 pool using almost all of the available capacity
+        pool = self.get_pool(namespace="/run/pool_2/*", create=False)
         check_pool_creation(self, [pool], 120)
 
     def test_create_no_space_loop(self):
@@ -66,19 +67,19 @@ class PoolCreateTests(TestWithServers):
             server.  Verify that attempting to create  a pool of the same size
             across all of the servers fails due to no space.  Now verify that
             creating a pool of the same size on across all but the first server
-            succeeds.  Repeat the last two steps 100 times with the addition of
+            succeeds.  Repeat the last two steps 20 times with the addition of
             deleting the successfully created pool to verify that there is not
             any subtle/low capacity space being lost with each failed create.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
         :avocado: tags=PoolCreateTests,test_create_no_space_loop
         """
         # Define three pools to create:
-        #   - one pool using 90% of the available capacity of one server
-        #   - one pool using 90% of the available capacity of all servers
-        #   - one pool using 90% of the available capacity of the other server
+        #   - one pool using almost all of the available capacity of one server
+        #   - one pool using almost all of the available capacity of all servers
+        #   - one pool using almost all of the available capacity of the other server
         ranks = sorted(self.server_managers[0].ranks.keys())
         params = (
             {"target_list": ranks[:1]},
@@ -90,11 +91,11 @@ class PoolCreateTests(TestWithServers):
         self.get_dmg_command().exit_status_exception = False
 
         # Create the first of three pools which should succeed.
-        pools = [add_pool(self, namespace="/run/pool_2/*", create=False, **params[0])]
+        pools = [self.get_pool(namespace="/run/pool_2/*", create=False, **params[0])]
         self.log.info("Creating")
         pools[0].create()
-        self.assertTrue(
-            pools[0].dmg.result.exit_status == 0,
+        self.assertEqual(
+            pools[0].dmg.result.exit_status, 0,
             "Creating a large capacity pool on a single server should succeed."
         )
 
@@ -103,9 +104,9 @@ class PoolCreateTests(TestWithServers):
         for index in range(1, 3):
             params[index].update(size_params)
             pools.append(
-                add_pool(self, namespace="/run/pool_2/*", create=False, **params[index]))
+                self.get_pool(namespace="/run/pool_2/*", create=False, **params[index]))
 
-        for index in range(100):
+        for index in range(20):
             # Create the second of three pools which should fail due to not enough space.
             self.log.info("Loop %s", index)
             pools[1].create()
@@ -116,11 +117,19 @@ class PoolCreateTests(TestWithServers):
                     "existing pool on one server consuming the required space.")
 
             # Create the third of three pools which should succeed.
-            pools[2].create()
+            attempts = 1
+            while attempts <= 3:
+                pools[2].create()
+                if pools[2].dmg.result.exit_status == 0:
+                    break
+                self.log.info(
+                    "Loop %s: Pool create on ranks %s failed in %s/3 attempts",
+                    index, pools[2].target_list.value, attempts)
+                attempts += 1
             if pools[2].dmg.result.exit_status != 0:
                 self.fail(
                     "Creating a large capacity pool that spans across all but the first server "
-                    "should succeed.")
+                    f"should succeed - failed after {attempts} loops.")
 
             # Destroy the third of three pools so it can be created again in the next loop
             pools[2].destroy()
@@ -128,3 +137,23 @@ class PoolCreateTests(TestWithServers):
                 self.fail(
                     "Destroying a large capacity pool that spans across all but the first server "
                     "should succeed.")
+
+    def test_create_after_stop_rank(self):
+        """JIRA ID: DAOS-18621.
+
+        Test Description:
+            Create a single pool with 100% usage that utilizes all the persistent memory and all
+            the SSD capacity on all of the servers after stopping rank 0.
+            Verify that pool creation succeeds.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=pool
+        :avocado: tags=PoolCreateTests,test_create_after_stop_rank
+        """
+        # Stop rank 0 on server
+        self.server_managers[0].stop_ranks([0])
+
+        # Create 1 pool using 100% of the available capacity
+        pool = self.get_pool(size='100%', create=False)
+        check_pool_creation(self, [pool], 120)

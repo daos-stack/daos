@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,7 +31,9 @@ const (
 	envLogDbgStreams = "DD_MASK"
 	envLogSubsystems = "DD_SUBSYS"
 
-	minABTThreadStackSizeDCPM = 20480
+	minABTThreadStackSizeDCPM    = 20480
+	minABTThreadStackSizeUCX     = 32768
+	minABTThreadStackSizeMdOnSsd = 24576
 )
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -220,11 +223,6 @@ func (fc *FabricConfig) Validate() error {
 	}
 
 	return nil
-}
-
-// GetAuthKeyEnv returns the environment variable string for the auth key.
-func (fc *FabricConfig) GetAuthKeyEnv() string {
-	return fmt.Sprintf("D_PROVIDER_AUTH_KEY=%s", fc.AuthKey)
 }
 
 // cleanEnvVars scrubs the supplied slice of environment
@@ -431,6 +429,70 @@ func (c *Config) UpdatePMDKEnvars() error {
 	return nil
 }
 
+// Ensure at least 24KiB ABT stack size for md_on_ssd.
+func (c *Config) UpdateMdOnSsdStackSize() error {
+	stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
+	if err != nil {
+		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+			minABTThreadStackSizeMdOnSsd))
+		return nil
+	}
+	// Ensure at least 24KiB ABT stack size for an engine in md_on_ssd mode.
+	stackSizeValue, err := strconv.Atoi(stackSizeStr)
+	if err != nil {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
+			stackSizeStr)
+	}
+	if stackSizeValue < minABTThreadStackSizeMdOnSsd {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
+			"for MD on SSD, found %d", minABTThreadStackSizeMdOnSsd,
+			stackSizeValue)
+	}
+	return nil
+}
+
+// Ensure 24k for md_on_ssd configuration
+func (c *Config) UpdateABTEnvarsMdOnSsd() error {
+
+	if c.Storage.Tiers.HasBdevRoleMeta() {
+		return c.UpdateMdOnSsdStackSize()
+	}
+	return nil
+}
+
+// Increase ABT stack size for UCX provider.
+func (c *Config) UpdateABTEnvarsUCX() error {
+
+	providerStr, err := c.Fabric.GetPrimaryProvider()
+	if err != nil {
+		return err
+	}
+
+	if !strings.HasPrefix(providerStr, "ucx+") {
+		return nil
+	}
+
+	stackSizeStr, err := c.GetEnvVar("ABT_THREAD_STACKSIZE")
+	if err != nil {
+		c.EnvVars = append(c.EnvVars, fmt.Sprintf("ABT_THREAD_STACKSIZE=%d",
+			minABTThreadStackSizeUCX))
+		return nil
+	}
+
+	stackSizeValue, err := strconv.Atoi(stackSizeStr)
+	if err != nil {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE has invalid value: %s",
+			stackSizeStr)
+	}
+
+	if stackSizeValue < minABTThreadStackSizeUCX {
+		return errors.Errorf("env_var ABT_THREAD_STACKSIZE should be >= %d "+
+			"for UCX provider, found %d", minABTThreadStackSizeUCX,
+			stackSizeValue)
+	}
+	return nil
+}
+
 type cfgNumaMismatch struct {
 	cfgNode uint
 	detNode uint
@@ -515,8 +577,8 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 // HasEnvVar returns true if the configuration contains
 // an environment variable with the given name.
 func (c *Config) HasEnvVar(name string) bool {
-	for _, keyPair := range c.EnvVars {
-		if strings.HasPrefix(keyPair, name+"=") {
+	for _, kv := range c.EnvVars {
+		if strings.HasPrefix(kv, name+"=") {
 			return true
 		}
 	}
@@ -613,6 +675,12 @@ func (c *Config) WithStorageControlMetadataPath(path string) *Config {
 // WithStorageControlMetadataDevice sets the metadata device to be used by this instance.
 func (c *Config) WithStorageControlMetadataDevice(device string) *Config {
 	c.Storage.ControlMetadata.DevicePath = device
+	return c
+}
+
+// WithStorageKernelConfigPath sets the kernel config path to be used by this instance.
+func (c *Config) WithStorageKernelConfigPath(path string) *Config {
+	c.Storage.KernelConfigPath = path
 	return c
 }
 
@@ -724,13 +792,13 @@ func (c *Config) WithLogSubsystems(subsystems string) *Config {
 	return c
 }
 
-// WithMemSize sets the NVMe memory size for SPDK memory allocation on this instance.
+// WithMemSize sets the NVMe memory size in MiB for SPDK memory allocation on this instance.
 func (c *Config) WithMemSize(memsize int) *Config {
 	c.MemSize = memsize
 	return c
 }
 
-// WithHugepageSize sets the configured hugepage size on this instance.
+// WithHugepageSize sets the configured hugepage size in MiB on this instance.
 func (c *Config) WithHugepageSize(hugepagesz int) *Config {
 	c.HugepageSz = hugepagesz
 	return c
@@ -761,6 +829,13 @@ func (c *Config) WithStorageAutoFaultyCriteria(enable bool, maxIoErrs, maxCsumEr
 	c.Storage.AutoFaultyProps.Enable = enable
 	c.Storage.AutoFaultyProps.MaxIoErrs = maxIoErrs
 	c.Storage.AutoFaultyProps.MaxCsumErrs = maxCsumErrs
+	return c
+}
+
+// WithStorageSpdkIobufProps specifies SPDK I/O buffer pool settings in the I/O Engine.
+func (c *Config) WithStorageSpdkIobufProps(smallPoolCount, largePoolCount uint32) *Config {
+	c.Storage.SpdkIobufProps.SmallPoolCount = smallPoolCount
+	c.Storage.SpdkIobufProps.LargePoolCount = largePoolCount
 	return c
 }
 

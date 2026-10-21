@@ -1,10 +1,12 @@
 #!/usr/bin/groovy
+/* groovylint-disable DuplicateListLiteral */
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
-/* groovylint-disable ParameterName-0, VariableName */
+/* groovylint-disable ParameterName, VariableName */
 /* Copyright 2019-2024 Intel Corporation
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+/* Copyright 2025 Google LLC
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -15,12 +17,379 @@
  * LICENSE file.
  */
 
+import groovy.transform.Field
+
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
+
+// Keys and values updated by the updateRunStage() function using the parameters.
+@Field
+Map<String, Boolean> runStage = [:]
+
+String bashName(String name) {
+    return name.replaceAll('[^a-zA-Z0-9]', '_')
+}
+
+// Update the runStage map
+/* groovylint-disable-next-line MethodSize */
+void updateRunStage() {
+    Map reasons = [:]
+
+    // Ordered list of stage names as params.keySet() does not guarantee order
+    List<String> stageOrder = [
+        'Cancel Previous Builds',
+        'Pre-build',
+        'Python Bandit check',
+        'Build',
+        'Build on EL 9',
+        'Build on Leap 15',
+        'Unit Tests',
+        'Unit Test',
+        'Unit Test bdev',
+        'NLT',
+        'Unit Test with memcheck',
+        'Unit Test bdev with memcheck',
+        'Test',
+        'Functional on EL 9 with Valgrind',
+        'Functional on EL 9',
+        'Functional on Leap 15',
+        'Functional on SLES 15',
+        'Functional on Ubuntu 20.04',
+        'Fault injection testing',
+        'Test RPMs on EL 9',
+        'Test RPMs on Leap 15',
+        'Test Hardware',
+        'Functional Hardware Medium',
+        'Functional Hardware Medium MD on SSD',
+        'Functional Hardware Medium VMD',
+        'Functional Hardware Medium Provider',
+        'Functional Hardware Medium Provider MD on SSD',
+        'Functional Hardware Large',
+        'Functional Hardware Large MD on SSD',
+        'Functional Cluster Box Medium MD on SSD',
+        'Functional Cluster Box Medium Provider MD on SSD',
+    ]
+
+    // Initialize the run state of each stage using the parameter stage keys
+    for (name in stageOrder) {
+        value = params.get(bashName(name), null)
+        if (value != null && value.class == Boolean && !name.startsWith('CI_')) {
+            runStage[name] = value
+            reasons[name] = 'parameter selection or default'
+        }
+    }
+
+    // Debug
+    List buildCauses = currentBuild.buildCauses
+    println("updateRunStage: Build cause: ${buildCauses}")
+    println("updateRunStage: Started by user: ${startedByUser()}")
+
+    // Handle landing builds
+    if (startedByLanding()) {
+        println('updateRunStage: Detected landing build, overwriting defaults')
+        for (stage in runStage.keySet()) {
+            if (stage in ['Pre-build', 'Python Bandit check', 'Build', 'Unit Tests', 'Test']
+                    || stage.contains('Build on')
+                    || stage.contains('Unit Test')
+                    || stage.contains('NLT')
+                    || stage.contains('Fault injection')
+                    || stage.contains('Test RPMs')
+                    || stage == 'Functional on EL 9') {
+                runStage[stage] = true
+            } else {
+                runStage[stage] = false
+            }
+            reasons[stage] = 'landing build'
+        }
+        displayRunStage(reasons)
+        return
+    }
+
+    // Handle doc-only changes: Only run default or selected build stages
+    if (docOnlyChange(target_branch)) {
+        println('updateRunStage: Detected doc-only change, skipping testing')
+        for (stage in runStage.keySet()) {
+            if (stage in ['Unit Tests', 'Test', 'Test Hardware']) {
+                runStage[stage] = false
+                reasons[stage] = 'doc-only change'
+            }
+        }
+        displayRunStage(reasons)
+        return
+    }
+
+    // Handle user setting CI_RPM_TEST_VERSION or specifying RPM-test-version
+    if (rpmTestVersion()) {
+        println('updateRunStage: Detected RPM test version, skipping build/RPM test stages')
+        for (stage in runStage.keySet()) {
+            if (stage.contains('Build')
+                    || stage.contains('Unit Tests')
+                    || stage.contains('Test RPMs')) {
+                runStage[stage] = false
+                reasons[stage] = 'RPM test version'
+            }
+        }
+        displayRunStage(reasons)
+        return
+    }
+
+    // Handle user setting CI_BUILD_PACKAGES_ONLY
+    if (params.CI_BUILD_PACKAGES_ONLY) {
+        println('updateRunStage: Detected CI_BUILD_PACKAGES_ONLY, skipping unit test stages')
+        for (stage in runStage.keySet()) {
+            if (stage.contains('Unit Tests')) {
+                runStage[stage] = false
+                reasons[stage] = 'CI_BUILD_PACKAGES_ONLY'
+            } else if (stage.contains('Build')) {
+                runStage[stage] = true
+                reasons[stage] = 'CI_BUILD_PACKAGES_ONLY'
+            }
+        }
+        displayRunStage(reasons)
+        return
+    }
+
+    // Handle user setting CI_IGNORE_SKIP_COMMIT_PRAGMAS
+    if (params.CI_IGNORE_SKIP_COMMIT_PRAGMAS) {
+        println(
+            'updateRunStage: Detected CI_IGNORE_SKIP_COMMIT_PRAGMAS, ignoring skip commit pragmas')
+        displayRunStage(reasons)
+        return
+    }
+
+    // Update stage running based on commit pragmas
+    println("updateRunStage: Converting env.pragmas string back into a Map: ${env.pragmas}")
+    Map<String, String> commitPragmas = envToPragmas()
+    println('updateRunStage: Checking skip commit pragmas from commit message:')
+    commitPragmas.each { key, value ->
+        println("  ${key}: ${value}")
+    }
+    for (stage in runStage.keySet()) {
+        List<String> skipPragmas = getStageNameSkipPragmas(stage)
+        /* groovylint-disable-next-line NestedForLoop */
+        for (pragma in skipPragmas) {
+            // commitPragmas will already contain lower case keys from pragmasToMap()
+            println("updateRunStage: ${stage} checking for a ${pragma} commit pragma")
+            if (commitPragmas.get(pragma, '').toLowerCase() == 'true') {
+                runStage[stage] = false
+                reasons[stage] = "commit pragma ${pragma}: true"
+                break
+            } else if (commitPragmas.get(pragma, '').toLowerCase() == 'false') {
+                runStage[stage] = true
+                reasons[stage] = "commit pragma ${pragma}: false"
+                break
+            }
+        }
+    }
+
+    // Handle quick functional commit pragma
+    if (quickFunctional()) {
+        println('updateRunStage: Detected quick functional testing')
+        // These stages must be run for functional testing
+        for (stage in ['Pre-build', 'Python Bandit check', 'Build']) {
+            runStage[stage] = true
+            reasons[stage] = 'Quick functional testing'
+        }
+        // These stages are unrelated to functional testing and should be skipped
+        /* groovylint-disable-next-line BracesForForLoop */
+        for (stage in ['Unit Tests', 'Fault injection testing',
+                       'Test RPMs on EL 9', 'Test RPMs on Leap 15']) {
+            runStage[stage] = false
+            reasons[stage] = 'Quick functional testing'
+        }
+        // Build stages should only be run if their RPMs are needed
+        String hwBuildStage = 'Build on '
+        List distroTarget = hwDistroTarget2()
+        if (distroTarget[0].toUpperCase() == 'LEAP' || distroTarget[0].toUpperCase() == 'SLES') {
+            hwBuildStage += "Leap ${distroTarget[1]}"
+        } else {
+            hwBuildStage += "${distroTarget[0].toUpperCase()} ${distroTarget[1]}"
+        }
+        Map testBuildStage = [
+            'Functional on EL 9': 'Build on EL 9',
+            'Functional on Leap 15': 'Build on Leap 15',
+            'Functional on SLES 15': 'Build on Leap 15',
+            'Functional Hardware Medium': hwBuildStage,
+            'Functional Hardware Medium MD on SSD': hwBuildStage,
+            'Functional Hardware Medium VMD': hwBuildStage,
+            'Functional Hardware Medium Provider': hwBuildStage,
+            'Functional Hardware Medium Provider MD on SSD': hwBuildStage,
+            'Functional Hardware Large': hwBuildStage,
+            'Functional Hardware Large MD on SSD': hwBuildStage,
+            'Functional Cluster Box Medium MD on SSD': hwBuildStage,
+            'Functional Cluster Box Medium Provider MD on SSD': hwBuildStage,
+            ]
+        // Initially skip all the build stages
+        for (stage in testBuildStage.values().toSet()) {
+            runStage[stage] = false
+            reasons[stage] = 'Quick functional testing'
+        }
+        // The mapped build stage must be run to generate RPMs for the functional test stage
+        for (stage in testBuildStage.keySet()) {
+            if (runStage[stage]) {
+                runStage[testBuildStage[stage]] = true
+                reasons[testBuildStage[stage]] = 'Quick functional testing'
+            }
+        }
+    }
+
+    displayRunStage(reasons)
+}
+
+// Log which stages will be run and why based on the current state of the runStage map
+void displayRunStage(Map reasons = [:]) {
+    println('Stage run conditions:')
+    for (stage in runStage.keySet()) {
+        String reason = reasons.get(stage, 'default')
+        if (runStage[stage]) {
+            echo("Running:   ${stage} (reason: ${reason})")
+        } else {
+            echo("Skipping:  ${stage} (reason: ${reason})")
+        }
+    }
+}
+
+// Get a list of skip commit pragmas to check for a given stage name
+/* groovylint-disable-next-line MethodSize */
+List<String> getStageNameSkipPragmas(String stageName) {
+    String stagePragma = "skip-${stageName.replaceAll(' ', '-').toLowerCase()}"
+    List<String> pragmas = []
+
+    // Build up a priority list of pragmas to check based on the stage name.
+    if (stageName in ['Cancel Previous Builds', 'Pre-build']) {
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+    } else if (stageName == 'Python Bandit check') {
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+        // Compatibility with existing commit pragmas
+        pragmas.add(stagePragma.replace('-bandit-check', '-bandit'))
+    } else if (stageName.contains('Build')) {
+        // Add skip pragma for parent stage
+        if (stageName != 'Build') {
+            pragmas.add('skip-build')
+        }
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+        // Compatibility with existing commit pragmas
+        if (stagePragma.contains('build-on-')) {
+            pragmas.add(stagePragma.replace('build-on-', 'build-'))
+        }
+    } else if (stageName.contains('Unit Test') || stageName.contains('NLT')) {
+        // Add skip pragma for parent stage
+        if (stageName != 'Unit Tests') {
+            pragmas.add('skip-unit-tests')
+        }
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+        // Compatibility with existing commit pragmas
+        if (stagePragma.contains('-with-')) {
+            pragmas.add(stagePragma.replace('-with-', '-'))
+        }
+    } else if (stageName == 'Test' || stageName.contains('Functional on')
+            || stageName.contains('Fault injection') || stageName.contains('Test RPMs')) {
+        // Add skip pragma for parent stage
+        if (stageName != 'Test') {
+            pragmas.add('skip-test')
+        }
+        if (stageName.contains('Functional on')) {
+            // Add skip pragma alias for all functional tests
+            pragmas.add('skip-functional')
+            pragmas.add('skip-functional-test')
+            // Add skip pragma alias for all functional VM tests
+            pragmas.add('skip-functional-test-vm')
+            pragmas.add('skip-functional-vm-test')
+            // Compatibility with existing commit pragmas
+            pragmas.add(stagePragma.replace('functional-on-', 'functional-test-'))
+        } else if (stageName.contains('Test RPMs on')) {
+            // Add skip pragma alias for all RPM tests
+            pragmas.add('skip-test-rpms')
+        } else if (stageName.contains('Fault injection')) {
+            // Compatibility with existing commit pragmas
+            pragmas.add('skip-fault-injection-test')
+        }
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+    } else if (stageName.contains('Hardware') || stageName.contains('Cluster Box')) {
+        // Add skip pragma for parent stage
+        if (stageName != 'Test Hardware') {
+            pragmas.add('skip-test-hardware')
+        }
+        if (stageName.contains('Functional')) {
+            // Add skip pragma alias for all functional tests
+            pragmas.add('skip-functional')
+            pragmas.add('skip-functional-test')
+            // Add skip pragma alias for all functional HW tests
+            pragmas.add('skip-functional-test-hardware')
+            pragmas.add('skip-functional-hardware-test')
+            // Compatibility with existing commit pragmas
+            pragmas.add(stagePragma.replace('functional-hardware-', 'functional-hardware-test-'))
+        }
+        // Add skip pragma for this stage
+        pragmas.add(stagePragma)
+    }
+
+    // Compatibility with existing commit pragmas using distro versions
+    List<String> distros = ['el', 'leap', 'sles', 'ubuntu']
+    List<String> copyPragmas = pragmas.clone()
+    for (distro in distros) {
+        /* groovylint-disable-next-line NestedForLoop */
+        for (_pragma in copyPragmas) {
+            if (_pragma.contains("-${distro}-")) {
+                Integer _index = pragmas.indexOf(_pragma)
+                pragmas.add(_index + 1, _pragma.replace("-${distro}-", "-${distro}"))
+            }
+        }
+    }
+
+    // Compatibility with existing commit pragmas using shortened func or hw
+    copyPragmas = pragmas.clone()
+    for (_pragma in copyPragmas) {
+         if (_pragma.contains('-functional') || _pragma.contains('-hardware')) {
+            Integer _index = pragmas.indexOf(_pragma)
+            String _compat_pragma = _pragma.replace('-functional', '-func')
+            _compat_pragma = _compat_pragma.replace('-hardware', '-hw')
+            pragmas.add(_index + 1, _compat_pragma)
+        }
+    }
+
+    return pragmas
+}
+
+// Initialize the runStage map with the current state of the build parameters and any commit
+// pragmas related to skipping/running stages. Should only be called once per build.
+void setupRunStage() {
+    pragmasToEnv()
+    update_default_commit_pragmas()
+    updateRunStage()
+}
+
+// Determine if a given stage should be run based on the current state of the runStage map.
+// Ensure the runStage map is initialized before checking the stage state - required to support
+// the Jenkins Restart from Stage option.
+Boolean shouldStageRun(String name) {
+    if (!runStage) {
+        setupRunStage()
+    }
+    return runStage[name]
+}
+
+void get_rpm_relval() {
+    env.DAOS_RELVAL = sh(label: 'get git tag',
+               script: '''if [ -n "$GIT_CHECKOUT_DIR" ] && [ -d "$GIT_CHECKOUT_DIR" ]; then
+                              cd "$GIT_CHECKOUT_DIR"
+                          fi
+                          if git diff-index --name-only HEAD^ | grep -q TAG; then
+                              echo ""
+                          else
+                              echo ".$(git rev-list HEAD --count).g$(git rev-parse --short=8 HEAD)"
+                          fi''',
+                returnStdout: true).trim()
+}
 
 // groovylint-disable-next-line MethodParameterTypeRequired, NoDef
 void job_status_update(String name=env.STAGE_NAME, def value=currentBuild.currentResult) {
@@ -31,42 +400,6 @@ void job_status_update(String name=env.STAGE_NAME, def value=currentBuild.curren
 void job_step_update(def value=currentBuild.currentResult) {
     // job_status_update(env.STAGE_NAME, value)
     jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
-}
-
-Map nlt_test() {
-    // groovylint-disable-next-line NoJavaUtilDate
-    Date startDate = new Date()
-    try {
-        unstash('nltr')
-    } catch (e) {
-        print 'Unstash failed, results from NLT stage will not be included'
-    }
-    sh label: 'Fault injection testing using NLT',
-       script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
-    List filesList = []
-    filesList.addAll(findFiles(glob: '*.memcheck.xml'))
-    int vgfail = 0
-    int vgerr = 0
-    if (filesList) {
-        String rcs = sh label: 'Check for Valgrind errors',
-               script: "grep -E '<error( |>)' ${filesList.join(' ')} || true",
-               returnStdout: true
-        if (rcs) {
-            vfail = 1
-        }
-        String suite = sanitizedStageName()
-        junitSimpleReport suite: suite,
-                          file: suite + '_valgrind_results.xml',
-                          fails: vgfail,
-                          errors: vgerr,
-                          name: 'Valgrind_Memcheck',
-                          class: 'Valgrind',
-                          message: 'Valgrind Memcheck error detected',
-                          testdata: rcs
-    }
-    int runTime = durationSeconds(startDate)
-    Map runData = ['nlttest_time': runTime]
-    return runData
 }
 
 // For master, this is just some wildly high number
@@ -104,7 +437,7 @@ Integer getuid() {
 }
 
 void fixup_rpmlintrc() {
-    if (env.SCONS_FAULTS_ARGS != 'BUILD_TYPE=dev') {
+    if (sconsArgs() != 'BUILD_TYPE=dev') {
         return
     }
 
@@ -112,7 +445,6 @@ void fixup_rpmlintrc() {
                     '/usr/bin/daos',
                     '/usr/bin/daos_agent',
                     '/usr/bin/hello_drpc',
-                    '/usr/bin/daos_firmware',
                     '/usr/bin/daos_admin',
                     '/usr/bin/daos_server',
                     '/usr/bin/ddb']
@@ -127,20 +459,14 @@ void fixup_rpmlintrc() {
     writeFile(file: 'utils/rpms/daos.rpmlintrc', text: content)
 }
 
+void uploadNewRPMs(String target, String stage) {
+    buildRpmPost target: target, condition: stage, rpmlint: false, new_rpm: true
+}
+
 String vm9_label(String distro) {
     return cachedCommitPragma(pragma: distro + '-VM9-label',
                               def_val: cachedCommitPragma(pragma: 'VM9-label',
                                                           def_val: params.FUNCTIONAL_VM_LABEL))
-}
-
-void rpm_test_post(String stageName, String node) {
-    sh label: 'Fetch and stage artifacts',
-       script: 'hostname; ssh -i ci_key jenkins@' + node + ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
-               'scp -i ci_key jenkins@' + node +
-               ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
-               stageName + '/"'
-    archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-    job_status_update()
 }
 
 String sconsArgs() {
@@ -175,8 +501,8 @@ pipeline {
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
         REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
-        SCONS_FAULTS_ARGS = sconsArgs()
         HTTPS_PROXY = ''
+        PYTHON_VERSION = '3.11'
     }
 
     options {
@@ -194,11 +520,6 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
-        // string(name: 'TestNvme',
-        //        defaultValue: '',
-        //        description: 'The launch.py --nvme argument to use for the Functional test ' +
-        //                     'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
-        //                     '0000:81:00.0, etc.).  Does not apply to MD on SSD stages.')
         string(name: 'BuildType',
                defaultValue: '',
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
@@ -212,16 +533,20 @@ pipeline {
                             'parameter.')
         string(name: 'TestProvider',
                defaultValue: '',
-               description: 'Test-provider to use for the non-Provider Functional Hardware test ' +
-                            'stages.  Specifies the default provider to use the daos_server ' +
+               description: 'Test-provider to use for all Functional Hardware and Cluster Box ' +
+                            'test stages. Defines the default provider to use in the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
-                            '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
-        booleanParam(name: 'CI_CANCEL_PREV_BUILD_SKIP',
-                     defaultValue: false,
-                     description: 'Do not cancel previous build.')
+                            '--provider argument; i.e. "ucx+dc_x", "ofi+verbs;ofi_rxm", "ofi+tcp")')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
-                     description: 'Only build RPM and DEB packages, Skip unit tests.')
+                     description: 'Build RPM and DEB packages, Skip unit tests.')
+        booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
+                     defaultValue: false,
+                     description: 'Continue testing if a previous stage is Unstable')
+        booleanParam(name: 'CI_IGNORE_SKIP_COMMIT_PRAGMAS',
+                     defaultValue: false,
+                     description: 'Ignore any commit pragmas used to skip/run stages and rely ' +
+                                  'solely on the build parameter settings')
         string(name: 'CI_SCONS_ARGS',
                defaultValue: '',
                description: 'Arguments for scons when building DAOS')
@@ -236,9 +561,6 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        string(name: 'CI_EL8_TARGET',
-               defaultValue: '',
-               description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
         string(name: 'CI_EL9_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 9 CI tests.  I.e. el9, el9.1, etc.')
@@ -248,98 +570,99 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_RPM_el8_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build RPM packages for EL 8')
-        booleanParam(name: 'CI_RPM_el9_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build RPM packages for EL 9')
-        booleanParam(name: 'CI_RPM_leap15_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build RPM packages for Leap 15')
-        booleanParam(name: 'CI_DEB_Ubuntu20_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build DEB packages for Ubuntu 20')
-        booleanParam(name: 'CI_el8_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build on EL 8')
-        booleanParam(name: 'CI_el9_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build on EL 9')
-        booleanParam(name: 'CI_leap15_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build on Leap 15')
-        booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
-                     defaultValue: false,
-                     description: 'Continue testing if a previous stage is Unstable')
-        booleanParam(name: 'CI_UNIT_TEST',
+        booleanParam(name: bashName('Cancel Previous Builds'),
                      defaultValue: true,
-                     description: 'Run the Unit Test on EL 8 test stage')
-        booleanParam(name: 'CI_NLT_TEST',
+                     description: 'Run the Cancel Previous Builds stage.')
+        booleanParam(name: bashName('Pre-build'),
                      defaultValue: true,
-                     description: 'Run the NLT test stage')
-        booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
+                     description: 'Run the Pre-build stage.')
+        booleanParam(name: bashName('Python Bandit check'),
                      defaultValue: true,
-                     description: 'Run the Unit Test with memcheck on EL 8 test stage')
-        booleanParam(name: 'CI_FI_el8_TEST',
+                     description: 'Run the Python Bandit check stage.')
+        booleanParam(name: bashName('Build'),
                      defaultValue: true,
-                     description: 'Run the Fault injection testing on EL 8 test stage')
-        booleanParam(name: 'CI_TEST_EL8_RPMs',
+                     description: 'Run the Build stage.')
+        booleanParam(name: bashName('Build on EL 9'),
                      defaultValue: true,
-                     description: 'Run the Test RPMs on EL 8 test stage')
-        booleanParam(name: 'CI_TEST_LEAP15_RPMs',
+                     description: 'Run the Build on EL 9 stage.')
+        booleanParam(name: bashName('Build on Leap 15'),
                      defaultValue: true,
-                     description: 'Run the Test RPMs on Leap 15 test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_TEST_SKIP',
-                     defaultValue: false,
-                     description: 'Skip all functional test stages (Test)')
-        booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
-                     defaultValue: false,
-                     description: 'Enable more distros for functional CI tests')
-        booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional on EL 8 with Valgrind test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
+                     description: 'Run the Build on Leap 15 stage.')
+        booleanParam(name: bashName('Unit Tests'),
                      defaultValue: true,
-                     description: 'Run the Functional on EL 8 test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional on EL 9 test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional on Leap 15 test stage' +
-                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
-        booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional on Ubuntu 20.04 test stage' +
-                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
-        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_TEST_SKIP',
-                     defaultValue: false,
-                     description: 'Skip Functional Hardware (Test Hardware) stage')
-        booleanParam(name: 'CI_medium_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional Hardware Medium test stage')
-        booleanParam(name: 'CI_medium_md_on_ssd_TEST',
+                     description: 'Run the Unit Tests stage.')
+        booleanParam(name: bashName('Unit Test'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium MD on SSD test stage')
-        booleanParam(name: 'CI_medium_vmd_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional Hardware Medium VMD test stage')
-        booleanParam(name: 'CI_medium_verbs_provider_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional Hardware Medium Verbs Provider test stage')
-        booleanParam(name: 'CI_medium_verbs_provider_md_on_ssd_TEST',
+                     description: 'Run the Unit Test stage.')
+        booleanParam(name: bashName('Unit Test bdev'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
-        booleanParam(name: 'CI_medium_ucx_provider_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional Hardware Medium UCX Provider test stage')
-        booleanParam(name: 'CI_large_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional Hardware Large test stage')
-        booleanParam(name: 'CI_large_md_on_ssd_TEST',
+                     description: 'Run the Unit Test bdev stage.')
+        booleanParam(name: bashName('NLT'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Large MD on SSD test stage')
+                     description: 'Run the NLT stage.')
+        booleanParam(name: bashName('Unit Test with memcheck'),
+                     defaultValue: true,
+                     description: 'Run the Unit Test with memcheck stage.')
+        booleanParam(name: bashName('Unit Test bdev with memcheck'),
+                     defaultValue: false,
+                     description: 'Run the Unit Test bdev with memcheck stage.')
+        booleanParam(name: bashName('Test'),
+                     defaultValue: true,
+                     description: 'Run the Test stage.')
+        booleanParam(name: bashName('Functional on EL 9 with Valgrind'),
+                     defaultValue: false,
+                     description: 'Run the Functional on EL 9 with Valgrind stage.')
+        booleanParam(name: bashName('Functional on EL 9'),
+                     defaultValue: true,
+                     description: 'Run the Functional on EL 9 stage.')
+        booleanParam(name: bashName('Functional on Leap 15'),
+                     defaultValue: false,
+                     description: 'Run the Functional on Leap 15 stage.')
+        booleanParam(name: bashName('Functional on SLES 15'),
+                     defaultValue: false,
+                     description: 'Run the Functional on SLES 15 stage.')
+        booleanParam(name: bashName('Functional on Ubuntu 20.04'),
+                     defaultValue: false,
+                     description: 'Run the Functional on Ubuntu 20.04 stage.')
+        booleanParam(name: bashName('Fault injection testing'),
+                     defaultValue: true,
+                     description: 'Run the Fault injection testing stage.')
+        booleanParam(name: bashName('Test RPMs on EL 9'),
+                     defaultValue: true,
+                     description: 'Run the Test RPMs on EL 9 stage.')
+        booleanParam(name: bashName('Test RPMs on Leap 15'),
+                     defaultValue: true,
+                     description: 'Run the Test RPMs on Leap 15 stage.')
+        booleanParam(name: bashName('Test Hardware'),
+                     defaultValue: true,
+                     description: 'Run the Test Hardware stage.')
+        booleanParam(name: bashName('Functional Hardware Medium'),
+                     defaultValue: false,
+                     description: 'Run the Functional Hardware Medium stage.')
+        booleanParam(name: bashName('Functional Hardware Medium MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium MD on SSD stage.')
+        booleanParam(name: bashName('Functional Hardware Medium VMD'),
+                     defaultValue: false,
+                     description: 'Run the Functional Hardware Medium VMD stage.')
+        booleanParam(name: bashName('Functional Hardware Medium Provider'),
+                     defaultValue: false,
+                     description: 'Run the Functional Hardware Medium Provider stage.')
+        booleanParam(name: bashName('Functional Hardware Medium Provider MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium Provider MD on SSD stage.')
+        booleanParam(name: bashName('Functional Hardware Large'),
+                     defaultValue: false,
+                     description: 'Run the Functional Hardware Large stage.')
+        booleanParam(name: bashName('Functional Hardware Large MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Large MD on SSD stage.')
+        booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box test stage')
+        booleanParam(name: bashName('Functional Cluster Box Medium Provider MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box Provider MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -350,23 +673,32 @@ pipeline {
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
-               defaultValue: 'ci_nlt_1',
+               defaultValue: 'ci_nlt_vm1',
                description: 'Label to use for NLT tests')
+        string(name: 'CI_FI_1_LABEL',
+               defaultValue: 'ci_fi_vm1',
+               description: 'Label to use for Fault Injection (FI) tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
+               description: 'Label to use for the Functional Hardware Medium stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_nvme5 || ci_nvme5_only',
+               description: 'Label to use for the Functional Hardware Medium MD on SSD stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
+               description: 'Label to use for 5 node Functional Hardware Medium Provider stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_ofed5 || ci_nvme5_only',
+               description: 'Label to use for the Functional Hardware Medium Provider MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',
                description: 'Label to use for the Functional Hardware Medium VMD stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
-               defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
+        string(name: 'FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL',
+               defaultValue: 'cluster_box',
+               description: 'Label to use for the Functional Cluster Box stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -379,22 +711,27 @@ pipeline {
     }
 
     stages {
-        stage('Set Description') {
-            steps {
-                script {
-                    if (params.CI_BUILD_DESCRIPTION) {
-                        buildDescription params.CI_BUILD_DESCRIPTION
+        stage('Prepare') {
+            parallel {
+                stage('Set Description') {
+                    steps {
+                        script {
+                            String description = params.CI_BUILD_DESCRIPTION ?:
+                                                 cachedCommitPragma('Build-description', '')
+                            if (description) {
+                                buildDescription description
+                            }
+                        }
                     }
                 }
-            }
-        }
-        stage('Prepare Environment Variables') {
-            // TODO: Could/should these be moved to the environment block?
-            parallel {
-                stage('Get Commit Message') {
+                stage('Setup Stages') {
                     steps {
-                        pragmasToEnv()
-                        update_default_commit_pragmas()
+                        setupRunStage()
+                    }
+                }
+                stage('Get RPM relval') {
+                    steps {
+                        get_rpm_relval()
                     }
                 }
                 stage('Determine Release Branch') {
@@ -405,11 +742,6 @@ pipeline {
                         }
                     }
                 }
-            }
-        }
-        stage('Check PR') {
-            when { changeRequest() }
-            parallel {
                 stage('Branch name check') {
                     when { changeRequest() }
                     steps {
@@ -425,12 +757,12 @@ pipeline {
                         }
                     }
                 }
-            } // parallel
-        } // stage('Check PR')
+            }
+        }
         stage('Cancel Previous Builds') {
             when {
                 beforeAgent true
-                expression { !paramsValue('CI_CANCEL_PREV_BUILD_SKIP', false)  && !skipStage() }
+                expression { shouldStageRun('Cancel Previous Builds') }
             }
             steps {
                 cancelPreviousBuilds()
@@ -439,20 +771,21 @@ pipeline {
         stage('Pre-build') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { shouldStageRun('Pre-build') }
             }
             parallel {
                 stage('Python Bandit check') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { shouldStageRun('Python Bandit check') }
                     }
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.code_scanning'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos: false) +
-                                                ' --build-arg FVERSION=37'
+                                                ' --build-arg POINT_RELEASE=.7' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
@@ -478,206 +811,13 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { shouldStageRun('Build') }
             }
             parallel {
-                stage('Build RPM on EL 8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' --privileged=true'   +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build RPM on EL 9') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build RPM on Leap 15.5') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.mockbuild'
-                            label 'docker_runner'
-                            args '--group-add mock'     +
-                                 ' --cap-add=SYS_ADMIN' +
-                                 ' --privileged=true'   +
-                                 ' -v /scratch:/scratch'
-                            additionalBuildArgs dockerBuildArgs() +
-                                '--build-arg FVERSION=37'
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            fixup_rpmlintrc()
-                            buildRpmPost condition: 'success', rpmlint: true
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                /* This stage is commented out until it can be replaced
-                with code for building the current Ubuntu release. */
-                stage('Build DEB on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        // expression { !skipStage() }
-                        expression { false }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/rpms/packaging/Dockerfile.ubuntu'
-                            label 'docker_runner'
-                            args '--cap-add=SYS_ADMIN'
-                            additionalBuildArgs dockerBuildArgs()
-                        }
-                    }
-                    steps {
-                        job_step_update(buildRpm())
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !params.CI_el8_NOBUILD && !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true,
-                                                                parallel_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-el8 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-el8-gcc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-el8-gcc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
                 stage('Build on EL 9') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_el9_NOBUILD && !skipStage() }
+                        expression { shouldStageRun('Build on EL 9') }
                     }
                     agent {
                         dockerfile {
@@ -687,19 +827,52 @@ pipeline {
                                                                 deps_build: true,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                ' --target build-ci' +
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg POINT_RELEASE=.7' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       stash_files: 'ci/test_files_to_stash.txt',
-                                       build_deps: 'no',
-                                       stash_opt: true,
-                                       scons_args: sconsArgs() +
-                                                  ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                        script {
+                            sh label: 'Collect dependency RPMs built into the image',
+                               script: '''
+                                       set -- /home/daos/rpms/deps/*.rpm
+                                       if [ -e "$1" ]; then
+                                           mkdir -p rpms/deps
+                                           cp -- "$@" rpms/deps/
+                                       fi
+                               '''
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                           stash_files: 'ci/test_files_to_stash.txt',
+                                           build_deps: 'no',
+                                           stash_opt: true,
+                                           scons_exe: 'utils/build/build_daos.sh',
+                                           scons_args: sconsArgs() +
+                                                      ' TARGET_TYPE=release'))
+                            sh label: 'Build DAOS RPMs',
+                                script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
+                                    ' utils/build/build_packages.sh --rpm-suffix=el9' +
+                                    ' --build-range=daos rpms'
+                            // Go binaries need to be instrumented in order to work reliably
+                            // with valgrind. We do this in a separate build because we don't
+                            // want to ship the instrumented binaries.
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                           build_deps: 'no',
+                                           scons_exe: 'utils/build/build_daos.sh',
+                                           scons_args: sconsArgs() +
+                                                      ' BUILD_GO_VALGRIND=1 TARGET_TYPE=release'))
+                            sh label: 'Stash valgrind install tree for NLT',
+                                script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
+                            stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
+                        }
                     }
                     post {
+                        success {
+                            uploadNewRPMs('el9', 'success')
+                        }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
                                       mv config.log config.log-el9-gcc
@@ -708,33 +881,57 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
+                            uploadNewRPMs('el9', 'cleanup')
                             job_status_update()
                         }
                     }
                 }
-                stage('Build on Leap 15.5') {
+                stage('Build on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
+                        expression { shouldStageRun('Build on Leap 15') }
                     }
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15-gcc"
+                                                                deps_build: true,
+                                                                parallel_build: true) +
+                                                " -t ${sanitized_JOB_NAME()}-leap15" +
+                                                ' --target build-ci' +
+                                                ' --build-arg POINT_RELEASE=.6' +
+                                                " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
                     }
                     steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'yes'))
+                        script {
+                            sh label: 'Collect dependency RPMs built into the image',
+                               script: '''
+                                       set -- /home/daos/rpms/deps/*.rpm
+                                       if [ -e "$1" ]; then
+                                           mkdir -p rpms/deps
+                                           cp -- "$@" rpms/deps/
+                                       fi
+                               '''
+                            job_step_update(
+                                sconsBuild(parallel_build: true,
+                                           stash_files: 'ci/test_files_to_stash.txt',
+                                           build_deps: 'no',
+                                           stash_opt: true,
+                                           scons_exe: 'utils/build/build_daos.sh',
+                                           scons_args: sconsArgs() +
+                                                      ' TARGET_TYPE=release'))
+                            sh label: 'Build DAOS RPMs',
+                                script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
+                                    ' utils/build/build_packages.sh --rpm-suffix=suse.lp156' +
+                                    ' --build-range=daos rpms'
+                        }
                     }
                     post {
+                        success {
+                            uploadNewRPMs('leap15', 'success')
+                        }
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
                                       mv config.log config.log-leap15-gcc
@@ -743,42 +940,7 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
-                            job_status_update()
-                        }
-                    }
-                }
-                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
-                    when {
-                        beforeAgent true
-                        expression { !params.CI_leap15_NOBUILD &&  !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME()}-leap15" +
-                                                ' --build-arg COMPILER=icc'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: sconsFaultsArgs() +
-                                                   ' PREFIX=/opt/daos TARGET_TYPE=release',
-                                       build_deps: 'no'))
-                    }
-                    post {
-                        unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-intelc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-leap15-intelc',
-                                             allowEmptyArchive: true
-                        }
-                        cleanup {
+                            uploadNewRPMs('leap15', 'cleanup')
                             job_status_update()
                         }
                     }
@@ -788,23 +950,26 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { !skipStage() }
+                expression { shouldStageRun('Unit Tests') }
             }
             parallel {
-                stage('Unit Test on EL 8.8') {
+                stage('Unit Test') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { shouldStageRun('Unit Test') }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
-                        job_step_update(
-                            unitTest(timeout_time: 60,
-                                     unstash_opt: true,
-                                     inst_repos: prRepos(),
-                                     inst_rpms: unitPackages()))
+                            job_step_update(
+                                unitTest(timeout_time: 60,
+                                        unstash_opt: true,
+                                        inst_repos: daosRepos(),
+                                        inst_rpms: unitPackages(target: 'el9'),
+                                        image_version: 'el9.7',
+                                        )
+                            )
                     }
                     post {
                         always {
@@ -813,10 +978,10 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test bdev on EL 8.8') {
+                stage('Unit Test bdev') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { shouldStageRun('Unit Test bdev') }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -825,8 +990,9 @@ pipeline {
                         job_step_update(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
-                                     inst_repos: prRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages(target: 'el9'),
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {
@@ -835,22 +1001,42 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT on EL 8.8') {
+                stage('NLT') {
                     when {
                         beforeAgent true
-                        expression { params.CI_NLT_TEST && !skipStage() }
+                        expression { shouldStageRun('NLT') }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
                     }
                     steps {
+                        // NLT memchecks the valgrind-tagged build, not the shared -race one.
+                        unstash 'opt-daos-valgrind'
                         job_step_update(
-                            unitTest(timeout_time: 60,
-                                     inst_repos: prRepos(),
-                                     test_script: 'ci/unit/test_nlt.sh',
+                            unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat',
+                                                                           def_val: '1').toInteger(),
+                                     inst_repos: daosRepos(),
+                                     test_script: 'ci/unit/test_nlt.sh' +
+                                                  ' --system-ram-reserved 4' +
+                                                  ' --max-log-size 2500MiB' +
+                                                  ' --dfuse-dir /localhome/jenkins/' +
+                                                  ' --log-usage-save nltir.xml' +
+                                                  ' --log-usage-export nltr.json' +
+                                                  ' --class-name nlt' +
+                                                  /* groovylint-disable-next-line LineLength */
+                                                  " --repeat ${cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1')}" +
+                                                  /* groovylint-disable-next-line LineLength */
+                                                  (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +
+                                                  ' all',
+                                     with_valgrind: 'memcheck',
+                                     valgrind_pattern: '*memcheck.xml',
+                                     always_script: 'ci/unit/test_nlt_post.sh',
+                                     testResults: 'nlt-junit.xml',
                                      unstash_opt: true,
                                      unstash_tests: false,
-                                     inst_rpms: unitPackages()))
+                                     inst_rpms: unitPackages(target: 'el9'),
+                                     image_version: 'el9.7',
+                                     prov_env_vars: 'VM_CPUS=14'))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
                         //                 skipPublishingChecks: true,
                         //                 id: 'tlc', name: 'Fault Injection Interim Report')
@@ -858,10 +1044,11 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/'],
+                            unitTestPost artifacts: ['nlt_logs/', 'nlt-summary-nlt.md'],
                                          testResults: 'nlt-junit.xml',
-                                         always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
+                                         valgrind_stash: 'nlt-memcheck',
+                                         valgrind_pattern: '*memcheck.xml',
+                                         NLT: true
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
@@ -875,10 +1062,10 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test with memcheck on EL 8.8') {
+                stage('Unit Test with memcheck') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { shouldStageRun('Unit Test with memcheck') }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -888,22 +1075,23 @@ pipeline {
                             unitTest(timeout_time: 160,
                                      unstash_opt: true,
                                      ignore_failure: true,
-                                     inst_repos: prRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages(target: 'el9'),
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/**/*.log'],
-                                         valgrind_stash: 'el8-gcc-unit-memcheck'
+                                         valgrind_stash: 'unit-memcheck'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck on EL 8.8')
-                stage('Unit Test bdev with memcheck on EL 8.8') {
+                } // stage('Unit Test with memcheck')
+                stage('Unit Test bdev with memcheck') {
                     when {
                         beforeAgent true
-                        expression { !skipStage() }
+                        expression { shouldStageRun('Unit Test bdev with memcheck') }
                     }
                     agent {
                         label params.CI_UNIT_VM1_NVME_LABEL
@@ -913,270 +1101,163 @@ pipeline {
                             unitTest(timeout_time: 180,
                                      unstash_opt: true,
                                      ignore_failure: true,
-                                     inst_repos: prRepos(),
-                                     inst_rpms: unitPackages()))
+                                     inst_repos: daosRepos(),
+                                     inst_rpms: unitPackages(target: 'el9'),
+                                     image_version: 'el9.7'))
                     }
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
                                                      'unit_test_memcheck_bdev_logs/**/*.log'],
-                                         valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
+                                         valgrind_stash: 'unit-bdev-memcheck'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test bdev with memcheck on EL 8')
+                } // stage('Unit Test bdev with memcheck')
             }
         }
         stage('Test') {
             when {
                 beforeAgent true
-                //expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false)  && !skipStage() }
-                // Above not working, always skipping functional VM tests.
-                expression { !paramsValue('CI_FUNCTIONAL_TEST_SKIP', false) }
+                expression { shouldStageRun('Test') }
             }
-            parallel {
-                stage('Functional on EL 8.8 with Valgrind') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8.8 with Valgrind')
-                stage('Functional on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('EL8')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 8.8')
-                stage('Functional on EL 9') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('EL9')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                    test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional on EL 9')
-                stage('Functional on Leap 15.6') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('Leap15')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2',
-                                image_version: 'leap15.6'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on Leap 15.6')
-                stage('Functional on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label vm9_label('Ubuntu')
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } // post
-                } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 8.8') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: true)
-                            args '--tmpfs /mnt/daos_0'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            sconsBuild(parallel_build: true,
-                                       scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
-                                       build_deps: 'no'))
-                        job_step_update(nlt_test())
-                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                        //                skipPublishingChecks: true,
-                        //                id: 'fir', name: 'Fault Injection Report')
-                    }
-                    post {
-                        always {
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos',
-                                                      requiredResult: hudson.model.Result.UNSTABLE
-                            recordIssues enabledForFailure: true,
-                                         /* ignore warning/errors from PMDK logging system */
-                                         filters: [excludeFile('pmdk/.+')],
-                                         failOnError: false,
-                                         ignoreQualityGate: true,
-                                         qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
-                                                        [threshold: 1, type: 'TOTAL_HIGH'],
-                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true],
-                                                        [threshold: 1, type: 'NEW_LOW', unstable: true]],
-                                         tools: [issues(pattern: 'nlt-errors.json',
-                                                        name: 'Fault injection issues',
-                                                        id: 'Fault_Injection'),
-                                                 issues(pattern: 'nlt-client-leaks.json',
-                                                        name: 'Fault injection leaks',
-                                                        id: 'NLT_client')],
-                                         scm: 'daos-stack/daos'
-                            junit testResults: 'nlt-junit.xml'
-                            stash name: 'fault-inject-valgrind',
-                                  includes: '*.memcheck.xml',
-                                  allowEmpty: true
-                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/',
-                                             allowEmptyArchive: true
-                            job_status_update()
-                        }
-                    }
-                } // stage('Fault injection testing on EL 8.8')
-                stage('Test RPMs on EL 8.6') {
-                    when {
-                        beforeAgent true
-                        expression { params.CI_TEST_EL8_RPMs && !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()))
+            steps {
+                script {
+                    parallel(
+                        'Functional on EL 9 with Valgrind': getFunctionalTestStage(
+                            name: 'Functional on EL 9 with Valgrind',
+                            runStage: shouldStageRun('Functional on EL 9 with Valgrind'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('EL9'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: 'memcheck',
+                            nvme: 'auto',
+                            provider: 'ofi+tcp',
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional on EL 9': getFunctionalTestStage(
+                            name: 'Functional on EL 9',
+                            runStage: shouldStageRun('Functional on EL 9'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('EL9'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            provider: 'ofi+tcp',
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional on Leap 15': getFunctionalTestStage(
+                            name: 'Functional on Leap 15',
+                            runStage: shouldStageRun('Functional on Leap 15'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('Leap15'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            provider: 'ofi+tcp',
+                            job_status: job_status_internal,
+                            image_version: 'leap15.6'
+                        ),
+                        'Functional on SLES 15': getFunctionalTestStage(
+                            name: 'Functional on SLES 15',
+                            runStage: shouldStageRun('Functional on SLES 15'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('Leap15'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            provider: 'ofi+tcp',
+                            job_status: job_status_internal,
+                            image_version: 'sles15.7'
+                        ),
+                        'Functional on Ubuntu 20.04': getFunctionalTestStage(
+                            name: 'Functional on Ubuntu 20.04',
+                            runStage: shouldStageRun('Functional on Ubuntu 20.04'),
+                            pragma_suffix: '-vm',
+                            label: vm9_label('Ubuntu'),
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric',
+                            stage_tags: 'vm',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            provider: 'ofi+tcp',
+                            job_status: job_status_internal
+                        ),
+                        'Fault injection testing': scriptedUnitTestStage(
+                            name: 'Fault injection testing',
+                            // Release builds compile out fault injection
+                            runStage: shouldStageRun('Fault injection testing') &&
+                                      !sconsArgs().contains('BUILD_TYPE=release'),
+                            label: params.CI_FI_1_LABEL,
+                            jobStatus: job_status_internal,
+                            distro: 'el9',
+                            unitTestArgs: [
+                                timeout_time: 240,
+                                test_script: 'ci/unit/test_nlt.sh --memcheck no' +
+                                             ' --system-ram-reserved 4 --server-debug WARN' +
+                                             ' --log-usage-import nltr.json' +
+                                             ' --log-usage-save nltr.xml' +
+                                             ' --class-name fault-injection fi',
+                                always_script: 'ci/unit/test_nlt_post.sh',
+                                testResults: 'nlt-junit.xml',
+                                unstash_opt: true,
+                                unstash_tests: false,
+                                image_version: 'el9.7',
+                                prov_env_vars: 'VM_CPUS=14'
+                            ],
+                            unitTestPostArgs: [
+                                /* groovylint-disable-next-line DuplicateListLiteral */
+                                artifacts: ['nlt_logs/', 'nlt-summary-fault-injection.md'],
+                                testResults: 'nlt-junit.xml',
+                                with_valgrind: '',
+                                FI: true],
+                            archiveArtifactsArgs: [
+                                artifacts: 'nlt_logs/fault-injection/',
+                                allowEmptyArchive: true]
+                        ),
+                        'Test RPMs on EL 9': scriptedTestRpmStage(
+                            name: 'Test RPMs on EL 9',
+                            runStage: shouldStageRun('Test RPMs on EL 9'),
+                            label: params.CI_UNIT_VM1_LABEL,
+                            jobStatus: job_status_internal,
+                            testRpmArgs: [
+                                target: 'el9.6',
+                                inst_rpms: 'mercury-libfabric',
+                                ignoreFailure: false],
+                            nextVersion: next_version(),
+                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on EL 9\'',
+                            archiveArtifactsArgs: [
+                                artifacts: 'Test RPMs on EL 9/']
+                        ),
+                        'Test RPMs on Leap 15': scriptedTestRpmStage(
+                            name: 'Test RPMs on Leap 15',
+                            runStage: shouldStageRun('Test RPMs on Leap 15'),
+                            label: params.CI_UNIT_VM1_LABEL,
+                            jobStatus: job_status_internal,
+                            testRpmArgs: [
+                                target: 'leap15.6',
+                                inst_rpms: 'mercury-libfabric',
+                                ignoreFailure: false],
+                            nextVersion: next_version(),
+                            alwaysScript: 'ci/rpm/test_daos_post.sh \'Test RPMs on Leap 15\'',
+                            archiveArtifactsArgs: [
+                                artifacts: 'Test RPMs on Leap 15/']
                         )
-                    }
-                    post {
-                        always {
-                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                        }
-                    }
-                } // stage('Test RPMs on EL 8.6')
-                stage('Test RPMs on Leap 15.5') {
-                    when {
-                        beforeAgent true
-                        expression { params.CI_TEST_LEAP15_RPMs && !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        /* neither of these work as FTest strips the first node
-                           out of the pool requiring 2 node clusters at minimum
-                         * additionally for this use-case, can't override
-                           ftest_arg with this :-(
-                        script {
-                            'Test RPMs on Leap 15.5': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.5',
-                                pragma_suffix: '',
-                                label: params.CI_UNIT_VM1_LABEL,
-                                next_version: next_version(),
-                                stage_tags: '',
-                                default_tags: 'test_daos_management',
-                                nvme: 'auto',
-                                run_if_pr: true,
-                                run_if_landing: true,
-                                job_status: job_status_internal
-                            )
-                        }
-                           job_step_update(
-                            functionalTest(
-                                test_tag: 'test_daos_management',
-                                ftest_arg: '--yaml_extension single_host',
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version(), 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    } */
-                        job_step_update(
-                            testRpm(inst_repos: daosRepos(),
-                                    daos_pkg_version: daosPackagesVersion(next_version()))
-                        )
-                    }
-                    post {
-                        always {
-                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                        }
-                    }
-                } // stage('Test RPMs on Leap 15.5')
-            } // parallel
+                    )
+                }
+            }
         } // stage('Test')
-        stage('Test Storage Prep on EL 8.8') {
+        stage('Test Storage Prep on EL 9') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
@@ -1199,110 +1280,130 @@ pipeline {
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { !paramsValue('CI_FUNCTIONAL_HARDWARE_TEST_SKIP', false)  && !skipStage() }
+                expression { shouldStageRun('Test Hardware') }
             }
             steps {
                 script {
                     parallel(
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
+                            runStage: shouldStageRun('Functional Hardware Medium'),
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Medium MD on SSD'),
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: next_version(),
-                            stage_tags: 'hw,medium,-provider',
+                            other_packages: 'mercury-libfabric mercury-ucx',
+                            stage_tags: 'hw,medium,-provider,-cb',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Medium VMD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium VMD',
+                            runStage: shouldStageRun('Functional Hardware Medium VMD'),
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
-                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider',
-                            pragma_suffix: '-hw-medium-verbs-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                        'Functional Hardware Medium Provider': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Provider',
+                            runStage: shouldStageRun('Functional Hardware Medium Provider'),
+                            pragma_suffix: '-hw-medium-provider',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
-                        'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider MD on SSD',
-                            pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                        'Functional Hardware Medium Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Medium Provider MD on SSD'),
+                            pragma_suffix: '-hw-medium-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
+                            other_packages: 'mercury-libfabric mercury-ucx',
+                            stage_tags: 'hw,medium,provider,-cb',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
-                        ),
-                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium UCX Provider',
-                            pragma_suffix: '-hw-medium-ucx-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
+                            runStage: shouldStageRun('Functional Hardware Large'),
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
-                            run_if_pr: false,
-                            run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Large MD on SSD'),
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
-                            run_if_landing: false,
-                            job_status: job_status_internal
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
+                            pragma_suffix:'-cb-medium-md-on-ssd',
+                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
+                            stage_tags: 'cb,medium,-provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional Cluster Box Medium Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium Provider MD on SSD'),
+                            pragma_suffix:'-cb-medium-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
+                            stage_tags: 'cb,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
                         ),
                     )
                 }
@@ -1311,14 +1412,18 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
-                                                     'el8-gcc-unit-memcheck',
-                                                     'fault-inject-valgrind']
+            valgrindReportPublish valgrind_stashes: ['nlt-memcheck',
+                                                     'unit-memcheck']
             job_status_update('final_status')
             jobStatusWrite(job_status_internal)
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
+        }
+        cleanup {
+            // Need to clean the workspace to reduce disk space usage on
+            // Jenkins build agents
+            cleanWs()
         }
     } // post
 }

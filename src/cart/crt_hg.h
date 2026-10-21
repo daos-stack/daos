@@ -1,18 +1,17 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It is the header file of bridging to mercury.
  */
-#ifndef __CRT_MERCURY_H__
-#define __CRT_MERCURY_H__
+#ifndef __CRT_HG_H__
+#define __CRT_HG_H__
 
 #include <gurt/list.h>
-
 #include <mercury.h>
 #include <mercury_types.h>
 #include <mercury_macros.h>
@@ -20,6 +19,8 @@
 #include <mercury_proc_string.h>
 #include <mercury_log.h>
 #include <mercury_config.h>
+
+#include <stdatomic.h>
 
 /** the shared HG RPC ID used for all CRT opc */
 #define CRT_HG_RPCID		(0xDA036868)
@@ -37,6 +38,9 @@
 #define CRT_HG_POST_INIT        (512)
 #define CRT_HG_POST_INCR        (512)
 #define CRT_HG_MRECV_BUF        (16)
+
+/** default progress spindown time in milliseconds */
+#define CRT_HG_PROGRESS_SPINDOWN_MS (10)
 
 #define CRT_UCX_STR             "ucx"
 
@@ -130,22 +134,33 @@ struct crt_hg_metrics {
 	struct d_tm_node_t *chm_req_sent;
 };
 
+/* For multi progress on single context */
+struct crt_hg_progress_multi {
+	pthread_cond_t  cond;
+	pthread_mutex_t mutex;
+	atomic_uint     count; /* Number of threads waiting in progress */
+};
+
 /** HG context */
 struct crt_hg_context {
-	/* Flag indicating whether hg class is shared; true for SEP mode */
-	bool               chc_shared_hg_class;
-	hg_class_t        *chc_hgcla;              /* HG class */
-	hg_context_t      *chc_hgctx;              /* HG context */
-	hg_class_t        *chc_bulkcla;            /* bulk class */
-	hg_context_t      *chc_bulkctx;            /* bulk context */
-	struct crt_hg_pool chc_hg_pool;            /* HG handle pool */
-	int                chc_provider;           /* provider */
-	bool               chc_thread_mode_single; /* thread safety */
-	uint64_t              chc_diag_pub_ts;        /* time of last diagnostics pub */
-	struct crt_hg_metrics chc_metrics;            /* HG metrics */
+	struct crt_hg_pool           chc_hg_pool;         /* HG handle pool */
+	struct crt_hg_metrics        chc_metrics;         /* HG metrics */
+	struct crt_hg_progress_multi chc_progress_multi;  /* multi progress */
+	hg_class_t                  *chc_hgcla;           /* HG class */
+	hg_context_t                *chc_hgctx;           /* HG context */
+	hg_addr_t                    chc_self_addr;       /* cached self address */
+	uint64_t                     chc_diag_pub_ts;     /* time of last diagnostics pub */
+	int                          chc_provider;        /* provider */
+	int                          chc_epfd;            /* epoll fd */
+	struct timespec              chc_spin_deadline;   /* deadline for spin loop */
+	unsigned int                 chc_spindown_ms;     /* progress spindown time in ms */
+	bool                         chc_spin_flag;       /* true if in spin loop for spindown ms */
+	bool                         chc_shared_hg_class; /* shared class for SEP mode */
+	bool                         chc_thread_mode_single; /* relax thread safety */
 };
 
 /* crt_hg.c */
+/* clang-format off */
 int crt_hg_get_protocol_info(const char *info_string, struct na_protocol_info **na_protocol_info_p);
 void crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info);
 int crt_hg_init(void);
@@ -160,15 +175,18 @@ int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
 void crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code);
 int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
 int crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout);
+int crt_hg_event_progress(struct crt_hg_context *hg_ctx, const struct timespec *deadline);
 int crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr);
 int crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size);
+/* clang-format on */
 
 int crt_rpc_handler_common(hg_handle_t hg_hdl);
 
 /* crt_hg_proc.c */
 int crt_hg_unpack_header(hg_handle_t hg_hdl, struct crt_rpc_priv *rpc_priv,
 			 crt_proc_t *proc);
-void crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out);
+int
+	  crt_hg_process_header(struct crt_rpc_priv *tmp_in, struct crt_rpc_priv *out);
 void crt_hg_unpack_cleanup(crt_proc_t proc);
 int crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
 int crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data);
@@ -267,9 +285,10 @@ crt_hg_bulk_bind(hg_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
 int
 crt_hg_bulk_access(hg_bulk_t bulk_hdl, d_sg_list_t *sgl);
 int
-crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
-		     crt_bulk_opid_t *opid, bool bind);
+crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
+		     crt_bulk_cb_t complete_cb, void *arg, crt_bulk_opid_t *opid, bool bind);
+
 void
 crt_hg_republish_diags(struct crt_hg_context *hg_ctx);
 
-#endif /* __CRT_MERCURY_H__ */
+#endif /* __CRT_HG_H__ */

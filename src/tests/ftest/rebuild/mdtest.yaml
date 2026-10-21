@@ -12,8 +12,6 @@ server_config:
       targets: 8
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: INFO
       storage: auto
@@ -21,8 +19,6 @@ server_config:
       targets: 8
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: INFO
       storage: auto
@@ -35,7 +31,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 mpirun:
   args: "--bind-to hwthread --map-by socket"
@@ -54,4 +49,3 @@ mdtest:
   read_bytes: 512KiB
   write_bytes: 512KiB
   num_of_files_dirs: 15625  # 1 million total files
-  dfs_destroy: false

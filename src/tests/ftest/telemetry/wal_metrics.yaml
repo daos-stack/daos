@@ -11,10 +11,9 @@ server_config:
       storage: auto
 
 pool:
-  size: 20G
+  size: 40G
 
 container:
-  control_method: daos
   type: POSIX
   dfs_oclass: SX
 

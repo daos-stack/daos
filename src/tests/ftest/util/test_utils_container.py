@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -108,6 +108,23 @@ def get_existing_container(test, pool, container_id, daos=None, namespace=CONT_N
     container.create(query_id=container_id)
 
     return container
+
+
+def get_all_containers(test, pool):
+    """Get all containers (TestContainer objects) for the specified pool.
+    Args:
+        test (Test): the test object used to get the daos command.
+        pool (TestPool): Pool object for which to retrieve containers.
+
+    Returns:
+        list: List of container objects.
+    """
+    daos_cmd = test.get_daos_command()
+    container_list = []
+    containers = daos_cmd.container_list(pool=pool.identifier)
+    for info in containers["response"]:
+        container_list.append(get_existing_container(test, pool, info["uuid"]))
+    return container_list
 
 
 class TestContainerData():
@@ -367,7 +384,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.dir_oclass = BasicParameter(None)
         self.file_oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
-        self.properties = BasicParameter(None)
+        self.properties = BasicParameter(None, "cksum:off,srv_cksum:off")
         self.acl_file = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
         self.label = BasicParameter(None, "TestContainer")
@@ -486,6 +503,9 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             result = self.daos.container_query(**kwargs)
 
         elif self.control_method.value == self.USE_API:
+            # Need a pool handle to create a container with the API method
+            self.pool.connect()
+
             # pydaos.raw doesn't support create with a label
             if not self.silent.value:
                 self.log.info("Ignoring label for container created with API")
@@ -1182,4 +1202,20 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         """
         return self.daos.container_update_acl(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def del_attr(self, *args, **kwargs):
+        """Call daos container del-attr.
+
+        Args:
+            args (tuple, optional): args to pass to container_del_attr
+            kwargs (dict, optional): keyword args to pass to container_del_attr
+
+        Returns:
+            str: JSON output of daos container get-attr.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+        """
+        return self.daos.container_del_attr(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)

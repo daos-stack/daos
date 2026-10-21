@@ -25,7 +25,7 @@ class RbldBasic(TestWithServers):
             Multiple pool rebuild, single client, various record/object counts
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,large
         :avocado: tags=rebuild,pool,daos_cmd
         :avocado: tags=RbldBasic,test_rebuild_basic
         """

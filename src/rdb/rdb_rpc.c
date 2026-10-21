@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2017-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -172,6 +172,21 @@ crt_proc_struct_rdb_local(crt_proc_t proc, crt_proc_op_t proc_op,
 	return 0;
 }
 
+int
+crt_proc_rdb_replica_id_t(crt_proc_t proc, crt_proc_op_t proc_op, rdb_replica_id_t *p)
+{
+	int rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &p->rri_rank);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_uint32_t(proc, proc_op, &p->rri_gen);
+	if (unlikely(rc))
+		return rc;
+
+	return 0;
+}
+
 CRT_RPC_DEFINE(rdb_op, DAOS_ISEQ_RDB_OP, DAOS_OSEQ_RDB_OP)
 
 static int
@@ -218,24 +233,42 @@ struct crt_proto_format rdb_proto_fmt = {
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_RDB_MODULE, 0)
 };
 
+/* Create an RDB RPC and fill the rdb_op_in fields. */
 int
-rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
+rdb_create_raft_rpc(struct rdb *db, crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
 {
-	crt_opcode_t		opc_full;
-	crt_endpoint_t		ep;
+	rdb_replica_id_t        id = rdb_replica_id_decode(raft_node_get_id(node));
+	crt_opcode_t            opc_full;
+	crt_endpoint_t          ep;
 	struct dss_module_info *info = dss_get_module_info();
 	int                     rc;
 	uint8_t                 rdb_ver;
+	struct rdb_op_in       *in;
 
 	rc = rdb_rpc_protocol(&rdb_ver);
-	if (rc)
+	if (rc != 0) {
+		DL_ERROR(rc, DF_DB ": failed to get RDB RPC protocol", DP_DB(db));
 		return rc;
+	}
+	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, rdb_ver);
 
-	opc_full   = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, rdb_ver);
-	ep.ep_grp = NULL;
-	ep.ep_rank = raft_node_get_id(node);
-	ep.ep_tag = daos_rpc_tag(DAOS_REQ_RDB, 0);
-	return crt_req_create(info->dmi_ctx, &ep, opc_full, rpc);
+	ep.ep_grp  = NULL;
+	ep.ep_rank = id.rri_rank;
+	ep.ep_tag  = daos_rpc_tag(DAOS_REQ_RDB, 0);
+
+	rc = crt_req_create(info->dmi_ctx, &ep, opc_full, rpc);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_DB ": failed to create RPC %u to " RDB_F_RID, DP_DB(db), opc,
+			 RDB_P_RID(id));
+		return rc;
+	}
+
+	in = crt_req_get(*rpc);
+	uuid_copy(in->ri_uuid, db->d_uuid);
+	in->ri_from = db->d_replica_id;
+	in->ri_to   = id;
+
+	return 0;
 }
 
 struct rdb_raft_rpc {
@@ -318,24 +351,18 @@ rdb_recvd(void *arg)
 static void
 rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 {
-	struct rdb_raft_rpc    *rrpc = cb_info->cci_arg;
-	struct rdb	       *db = rrpc->drc_db;
-	crt_opcode_t		opc = opc_get(cb_info->cci_rpc->cr_opc);
-	d_rank_t		dstrank;
-	int			rc;
+	struct rdb_raft_rpc *rrpc = cb_info->cci_arg;
+	struct rdb          *db   = rrpc->drc_db;
+	crt_opcode_t         opc  = opc_get(cb_info->cci_rpc->cr_opc);
+	int                  rc   = cb_info->cci_rc;
 
-	rc = crt_req_dst_rank_get(rrpc->drc_rpc, &dstrank);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-
-	rc = cb_info->cci_rc;
-	D_DEBUG(DB_MD, DF_DB": opc=%u rank=%u rtt=%f\n", DP_DB(db), opc,
-		dstrank, ABT_get_wtime() - rrpc->drc_sent);
+	D_DEBUG(DB_MD, DF_DB ": opc=%u rank=%u rtt=%f\n", DP_DB(db), opc,
+		rrpc->drc_rpc->cr_ep.ep_rank, ABT_get_wtime() - rrpc->drc_sent);
 	ABT_mutex_lock(db->d_mutex);
 	if (rc != 0 || db->d_stop) {
 		if (rc != -DER_CANCELED)
-			D_ERROR(DF_DB": RPC %x to rank %u failed: "DF_RC"\n",
-				DP_DB(rrpc->drc_db), opc,
-				dstrank, DP_RC(rc));
+			DL_INFO(rc, DF_DB ": RPC %x to rank %u failed", DP_DB(rrpc->drc_db), opc,
+				rrpc->drc_rpc->cr_ep.ep_rank);
 		/*
 		 * Drop this RPC, assuming that raft will make a new one. If we
 		 * are stopping, rdb_recvd() might have already stopped. Hence,
@@ -400,14 +427,8 @@ rdb_abort_raft_rpcs(struct rdb *db)
 		d_list_del_init(&rrpc->drc_entry);
 		rc = crt_req_abort(rrpc->drc_rpc);
 		if (rc != 0) {
-			d_rank_t	dstrank;
-			int		rc2;
-
-			rc2 = crt_req_dst_rank_get(rrpc->drc_rpc, &dstrank);
-			D_ASSERTF(rc2 == 0, ""DF_RC"\n", DP_RC(rc2));
-			D_ERROR(DF_DB": failed to abort %x to rank %u: "
-				""DF_RC"\n", DP_DB(rrpc->drc_db),
-				rrpc->drc_rpc->cr_opc, dstrank, DP_RC(rc));
+			DL_ERROR(rc, DF_DB ": failed to abort %x to rank %u", DP_DB(rrpc->drc_db),
+				 rrpc->drc_rpc->cr_opc, rrpc->drc_rpc->cr_ep.ep_rank);
 			return rc;
 		}
 	}

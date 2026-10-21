@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +15,8 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 #include "vts_io.h"
+
+#define VTS_DTX_VER 3
 
 static void
 vts_init_dte(struct dtx_entry *dte)
@@ -34,7 +36,7 @@ vts_init_dte(struct dtx_entry *dte)
 
 	/** Use unique API so new UUID is generated even on same thread */
 	daos_dti_gen_unique(&dte->dte_xid);
-	dte->dte_ver = 1;
+	dte->dte_ver  = VTS_DTX_VER;
 	dte->dte_refs = 1;
 	dte->dte_mbs = mbs;
 }
@@ -51,40 +53,13 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 
 	vts_init_dte(&dth->dth_dte);
 
-	dth->dth_coh = coh;
-	dth->dth_epoch = epoch;
-	dth->dth_leader_oid = *oid;
-
-	dth->dth_pinned = 0;
-	dth->dth_sync = 0;
-	dth->dth_cos_done = 0;
-	dth->dth_touched_leader_oid = 0;
-	dth->dth_local_tx_started = 0;
-	dth->dth_solo = 0;
-	dth->dth_drop_cmt = 0;
-	dth->dth_modify_shared = 0;
-	dth->dth_active = 0;
-	dth->dth_dist = 0;
-	dth->dth_for_migration = 0;
-	dth->dth_ignore_uncommitted = 0;
-	dth->dth_prepared = 0;
-	dth->dth_epoch_owner = 0;
-	dth->dth_aborted = 0;
-	dth->dth_already = 0;
-	dth->dth_need_validation = 0;
-
-	dth->dth_dti_cos_count = 0;
-	dth->dth_dti_cos = NULL;
-	dth->dth_ent = NULL;
-	dth->dth_flags = DTE_LEADER;
+	dth->dth_coh              = coh;
+	dth->dth_epoch            = epoch;
+	dth->dth_leader_oid       = *oid;
+	dth->dth_flags            = DTE_LEADER;
 	dth->dth_modification_cnt = 1;
-
-	dth->dth_op_seq = 1;
-	dth->dth_oid_cnt = 0;
-	dth->dth_oid_cap = 0;
-	dth->dth_oid_array = NULL;
-
-	dth->dth_dkey_hash = dkey_hash;
+	dth->dth_op_seq           = 1;
+	dth->dth_dkey_hash        = dkey_hash;
 
 	D_INIT_LIST_HEAD(&dth->dth_share_cmt_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_abt_list);
@@ -361,8 +336,16 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	/* The update DTX is 'prepared'. */
 	vts_dtx_end(dth);
 
+	/* Abort with old epoch should fail. */
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch - 1, VTS_DTX_VER);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	/* Abort with old version should fail. */
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER - 1);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
 	/* Aborted the update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
 	assert_rc_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -394,7 +377,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	vts_dtx_end(dth);
 
 	/* Aborted the punch DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
 	assert_rc_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -493,7 +476,7 @@ dtx_14(void **state)
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Committed DTX cannot be aborted. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
 	assert_int_not_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -555,11 +538,11 @@ dtx_15(void **state)
 	vts_dtx_end(dth);
 
 	/* Aborted the update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
 	assert_rc_equal(rc, 0);
 
 	/* Double aborted the DTX is harmless. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
 	assert_int_not_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -791,21 +774,22 @@ dtx_17(void **state)
 static void
 dtx_18(void **state)
 {
-	struct io_test_args		*args = *state;
-	struct dtx_id			 xid[10];
-	daos_iod_t			 iod = { 0 };
-	d_sg_list_t			 sgl = { 0 };
-	daos_recx_t			 rex = { 0 };
-	daos_key_t			 dkey;
-	daos_key_t			 akey;
-	d_iov_t				 val_iov;
-	uint64_t			 epoch;
-	char				 dkey_buf[UPDATE_DKEY_SIZE];
-	char				 akey_buf[UPDATE_AKEY_SIZE];
-	char				 update_buf[UPDATE_BUF_SIZE];
-	char				 fetch_buf[UPDATE_BUF_SIZE];
-	int				 rc;
-	int				 i;
+	struct io_test_args *args = *state;
+	struct dtx_id        xid[10];
+	daos_iod_t           iod = {0};
+	d_sg_list_t          sgl = {0};
+	daos_recx_t          rex = {0};
+	daos_key_t           dkey;
+	daos_key_t           akey;
+	d_iov_t              val_iov;
+	uint64_t             epoch;
+	uint64_t             cnt;
+	char                 dkey_buf[UPDATE_DKEY_SIZE];
+	char                 akey_buf[UPDATE_AKEY_SIZE];
+	char                 update_buf[UPDATE_BUF_SIZE];
+	char                 fetch_buf[UPDATE_BUF_SIZE];
+	int                  rc;
+	int                  i;
 
 	/* Assume I am the leader. */
 	for (i = 0; i < 10; i++) {
@@ -841,9 +825,17 @@ dtx_18(void **state)
 
 	sleep(3);
 
-	/* Aggregate the DTXs. */
-	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl);
+	rc = vos_dtx_get_cmt_stat(args->ctx.tc_co_hdl, &cnt, NULL);
 	assert_rc_equal(rc, 0);
+	assert_int_equal(cnt, 10);
+
+	/* Aggregate the DTXs. */
+	rc = vos_dtx_aggregate(args->ctx.tc_co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = vos_dtx_get_cmt_stat(args->ctx.tc_co_hdl, &cnt, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cnt, 0);
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, false);
@@ -864,7 +856,7 @@ dtx_18(void **state)
 static int
 dtx_tst_teardown(void **state)
 {
-	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE);
+	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE, 0, VPOOL_SIZE, 0);
 	return 0;
 }
 

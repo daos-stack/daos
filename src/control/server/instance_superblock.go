@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +17,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -34,6 +36,7 @@ type Superblock struct {
 	URI             string
 	ValidRank       bool
 	HostFaultDomain string
+	Incarnation     uint64
 }
 
 // TODO: Marshal/Unmarshal using a binary representation?
@@ -91,7 +94,7 @@ func (ei *EngineInstance) hasSuperblock() bool {
 // Should not be called if SCM format is required.
 func (ei *EngineInstance) needsSuperblock() (bool, error) {
 	if ei.hasSuperblock() {
-		ei.log.Debugf("instance %d has no superblock set", ei.Index())
+		ei.log.Debugf("instance %d already has superblock", ei.Index())
 		return false, nil
 	}
 
@@ -203,6 +206,6 @@ func WriteSuperblock(sbPath string, sb *Superblock) error {
 		return err
 	}
 
-	return errors.Wrapf(common.WriteFileAtomic(sbPath, data, 0600),
+	return errors.Wrapf(common.WriteFileAtomic(sbPath, data, daos.DefaultFilePerm),
 		"Failed to write Superblock to %s", sbPath)
 }

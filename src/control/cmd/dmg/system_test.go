@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +24,62 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+// extractInfoMessages extracts INFO level messages from a log buffer, returning just
+// the message content without timestamps or prefixes. Returns a single string with
+// messages joined by newlines, terminated with a newline if any messages were found.
+// Continuation lines (lines that don't contain log level markers) are appended to
+// the previous INFO message.
+func extractInfoMessages(logOutput string) string {
+	var infoLines []string
+	lines := strings.Split(logOutput, "\n")
+
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		if strings.Contains(line, " INFO ") {
+			// Extract just the message part after the timestamp
+			// Format: "prefix INFO YYYY/MM/DD HH:MM:SS message"
+			parts := strings.SplitN(line, " INFO ", 2)
+			if len(parts) == 2 {
+				// Skip the date and time to get just the message
+				// After " INFO ", we have "YYYY/MM/DD HH:MM:SS message"
+				remainder := parts[1]
+
+				// Find the message by skipping two space-separated fields (date and time)
+				fields := strings.SplitN(remainder, " ", 3)
+				if len(fields) == 3 {
+					// fields[0] = date, fields[1] = time, fields[2] = message
+					msg := fields[2]
+
+					// Collect continuation lines (lines that don't have log level markers)
+					for i+1 < len(lines) {
+						nextLine := lines[i+1]
+						// Check if it's a continuation line (no log level marker)
+						if len(nextLine) > 0 &&
+							!strings.Contains(nextLine, " INFO ") &&
+							!strings.Contains(nextLine, " DEBUG ") &&
+							!strings.Contains(nextLine, " WARN ") &&
+							!strings.Contains(nextLine, " ERROR ") &&
+							nextLine != "captured log output:" &&
+							!strings.HasPrefix(nextLine, "---") &&
+							!strings.HasPrefix(nextLine, "===") {
+							msg += "\n" + nextLine
+							i++
+						} else {
+							break
+						}
+					}
+
+					infoLines = append(infoLines, msg)
+				}
+			}
+		}
+	}
+	if len(infoLines) == 0 {
+		return ""
+	}
+	return strings.Join(infoLines, "\n") + "\n"
+}
 
 func TestDmg_SystemCommands(t *testing.T) {
 	withRanks := func(req control.UnaryRequest, ranks ...ranklist.Rank) control.UnaryRequest {
@@ -388,6 +444,51 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errors.New("not provided"),
 		},
 		{
+			"system rebuild start",
+			"system rebuild start",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStart,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system rebuild start with force",
+			"system rebuild start --force",
+			"",
+			errors.New("unknown flag"),
+		},
+		{
+			"system rebuild stop",
+			"system rebuild stop",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStop,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system rebuild stop with force",
+			"system rebuild stop --force",
+			strings.Join([]string{
+				printRequest(t, &control.SystemRebuildManageReq{
+					OpCode: control.PoolRebuildOpCodeStop,
+					Force:  true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system self-heal evaluate",
+			"system self-heal eval",
+			strings.Join([]string{
+				printRequest(t, &control.SystemSelfHealEvalReq{}),
+			}, " "),
+			nil,
+		},
+		{
 			"leader query",
 			"system leader-query",
 			strings.Join([]string{
@@ -552,6 +653,476 @@ func TestDmg_systemStartCmd(t *testing.T) {
 
 			gotErr := startCmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestDmg_systemRebuildOpCmd_execute(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctlCfg  *control.Config
+		opCode  control.PoolRebuildOpCode
+		force   bool
+		verbose bool
+		resp    *mgmtpb.SystemRebuildManageResp
+		msErr   error
+		expErr  error
+		expInfo string
+	}{
+		"no config": {
+			opCode: control.PoolRebuildOpCodeStop,
+			expErr: errors.New("system rebuild stop failed: no configuration loaded"),
+		},
+		"ms failures": {
+			ctlCfg: &control.Config{},
+			resp:   &mgmtpb.SystemRebuildManageResp{},
+			msErr:  errors.New("failed"),
+			expErr: errors.New("failed"),
+		},
+		"no pools": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp:   &mgmtpb.SystemRebuildManageResp{},
+			expInfo: `No pools in system.
+Command completed successfully.
+`,
+		},
+		"rebuild stop with DER_NONEXIST and real errors": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool_success",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool_notrebuilding",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "real error happened",
+						Id:      "pool_failed",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expErr: errors.New("pool-rebuild stop failed on pool pool_failed: real error happened"),
+			expInfo: `System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  1 pool
+- Without active rebuild:            1 pool
+- Errors:                            1 pool
+`,
+		},
+		"rebuild stop failed": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Errored: true,
+						Msg:     "failed",
+						Id:      "foo",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "failed",
+						Id:      "bar",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Id:     "baz",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expErr: errors.New("pool-rebuild stop failed on pool foo: failed, pool-rebuild stop failed on pool bar: failed"),
+			expInfo: `System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  1 pool
+- Errors:                            2 pools
+`,
+		},
+		"rebuild start succeeded; verbose": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStart,
+			verbose: true,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "foo",
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
+					},
+					{
+						Id:     "bar",
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
+					},
+					{
+						Id:     "baz",
+						OpCode: uint32(control.PoolRebuildOpCodeStart),
+					},
+				},
+			},
+			expInfo: `System-rebuild start requested for 3 pools
+- Successfully requested:            3 pools (foo, bar, baz)
+Command completed successfully.
+`,
+		},
+		"rebuild stop with only DER_NONEXIST; verbose": {
+			ctlCfg:  &control.Config{},
+			opCode:  control.PoolRebuildOpCodeStop,
+			verbose: true,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "uuid1",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "uuid2",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "uuid3",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: `System-rebuild stop requested for 3 pools
+- Without active rebuild:            3 pools (uuid1, uuid2, uuid3)
+Command completed successfully.
+`,
+		},
+		"rebuild stop with DER_BUSY - treated as success": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool1",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool2",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool3",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: `System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  3 pools
+Command completed successfully.
+`,
+		},
+		"rebuild stop mixed DER_BUSY DER_NONEXIST and success": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Id:     "pool_success",
+						OpCode: uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool_busy",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+						Id:      "pool_norebuild",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expInfo: `System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  2 pools
+- Without active rebuild:            1 pool
+Command completed successfully.
+`,
+		},
+		"rebuild stop with DER_BUSY and real errors": {
+			ctlCfg: &control.Config{},
+			opCode: control.PoolRebuildOpCodeStop,
+			resp: &mgmtpb.SystemRebuildManageResp{
+				Results: []*mgmtpb.PoolRebuildManageResult{
+					{
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+						Id:      "pool_busy",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+					{
+						Errored: true,
+						Msg:     "real error",
+						Id:      "pool_error",
+						OpCode:  uint32(control.PoolRebuildOpCodeStop),
+					},
+				},
+			},
+			expErr: errors.New("pool-rebuild stop failed on pool pool_error: real error"),
+			expInfo: `System-rebuild stop requested for 2 pools
+- With active or finishing rebuild:  1 pool
+- Errors:                            1 pool
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			rbldCmd := new(systemRebuildOpCmd)
+			rbldCmd.setInvoker(mi)
+			rbldCmd.SetLog(log)
+			rbldCmd.setConfig(tc.ctlCfg)
+			rbldCmd.Verbose = tc.verbose
+
+			gotErr := rbldCmd.execute(tc.opCode, tc.force)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if tc.expInfo == "" {
+				if strings.Contains(buf.String(), "INFO") {
+					t.Fatalf("unexpected INFO log output printed, got:\n%s", buf.String())
+				}
+				return
+			}
+
+			gotInfo := extractInfoMessages(buf.String())
+			if gotInfo != tc.expInfo {
+				t.Fatalf("INFO output mismatch:\nexpected:\n%s\ngot:\n%s\nfull buffer:\n%s",
+					tc.expInfo, gotInfo, buf.String())
+			}
+		})
+	}
+}
+
+func TestDmg_systemSelfHealEvalCmd_execute(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctlCfg  *control.Config
+		resp    *mgmtpb.DaosResp
+		msErr   error
+		expErr  error
+		expInfo string
+	}{
+		"no config": {
+			expErr: errors.New("system self-heal eval failed: no configuration loaded"),
+		},
+		"ms failures": {
+			ctlCfg: &control.Config{},
+			msErr:  errors.New("failed"),
+			expErr: errors.New("failed"),
+		},
+		"success": {
+			ctlCfg:  &control.Config{},
+			resp:    &mgmtpb.DaosResp{},
+			expInfo: "System self-heal eval request succeeded",
+		},
+		"daos error": {
+			ctlCfg: &control.Config{},
+			resp: &mgmtpb.DaosResp{
+				Status: -1,
+			},
+			expErr: errors.New("DER_UNKNOWN"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			cmd := new(systemSelfHealEvalCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+			cmd.setConfig(tc.ctlCfg)
+
+			gotErr := cmd.Execute(nil)
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+// TestDmg_systemEraseCmd_execute tests the execution behavior of system erase command
+func TestDmg_systemEraseCmd_execute(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp    *mgmtpb.SystemEraseResp
+		msErr   error
+		expErr  error
+		expInfo string
+	}{
+		"ms rpc failure": {
+			msErr:  errors.New("rpc failed"),
+			expErr: errors.New("rpc failed"),
+		},
+		"success with no errors": {
+			resp:    &mgmtpb.SystemEraseResp{},
+			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
+		},
+		"uninitialized error from ms is now a genuine failure": {
+			// The server drains its response before restarting (see
+			// scheduleControlPlaneRestart()), the RPC is expected to always
+			// return a clean response, so an uninitialized error is treated the
+			// same as any other unexpected RPC failure.
+			resp:   &mgmtpb.SystemEraseResp{},
+			msErr:  system.ErrUninitialized,
+			expErr: system.ErrUninitialized,
+		},
+		"success with rank results in await-format state but no ms err": {
+			resp: &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:   0,
+						Addr:   "10.0.0.1:10001",
+						Action: "reset-format",
+						State:  system.MemberStateAwaitFormat.String(),
+					},
+					{
+						Rank:   1,
+						Addr:   "10.0.0.1:10001",
+						Action: "reset-format",
+						State:  system.MemberStateAwaitFormat.String(),
+					},
+				},
+			},
+			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
+		},
+		"failure with rank errors": {
+			resp: &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:    0,
+						Addr:    "10.0.0.1:10001",
+						Action:  "reset-format",
+						Errored: true,
+						Msg:     "failed to reset rank",
+						State:   system.MemberStateErrored.String(),
+					},
+				},
+			},
+			expErr: errors.New("failed rank 0"),
+		},
+		"failure with multiple rank errors": {
+			resp: &mgmtpb.SystemEraseResp{
+				Results: []*sharedpb.RankResult{
+					{
+						Rank:    0,
+						Addr:    "10.0.0.1:10001",
+						Action:  "reset-format",
+						Errored: true,
+						Msg:     "error on rank 0",
+						State:   system.MemberStateErrored.String(),
+					},
+					{
+						Rank:    1,
+						Addr:    "10.0.0.1:10001",
+						Action:  "reset-format",
+						Errored: true,
+						Msg:     "error on rank 1",
+						State:   system.MemberStateErrored.String(),
+					},
+				},
+			},
+			expErr: errors.New("failed ranks 0-1"),
+		},
+		"failure with other error": {
+			resp:   &mgmtpb.SystemEraseResp{},
+			msErr:  errors.New("some other error"),
+			expErr: errors.New("some other error"),
+		},
+		"nil response": {
+			resp:    nil,
+			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
+			})
+
+			cmd := new(systemEraseCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+
+			gotErr := cmd.Execute(nil)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if tc.expInfo == "" {
+				if strings.Contains(buf.String(), "successful") {
+					t.Fatalf("unexpected success message printed, got:\n%s", buf.String())
+				}
+				return
+			}
+
+			// Check if the success message is printed
+			output := buf.String()
+			if !strings.Contains(output, tc.expInfo) {
+				t.Fatalf("expected info message not found:\nexpected substring:\n%s\ngot:\n%s",
+					tc.expInfo, output)
+			}
+		})
+	}
+}
+
+// TestDmg_systemEraseCmd_uninitialized_error_handling verifies that an uninitialized
+// (or any other) error from the erase RPC is surfaced as a genuine failure.
+// scheduleControlPlaneRestart() drains the response before restarting (see mgmt_system.go), the
+// RPC is expected to always return cleanly, so no error from it should ever be treated as success.
+// This is a regression test.
+func TestDmg_systemEraseCmd_uninitialized_error_handling(t *testing.T) {
+	for name, errorMsg := range map[string]string{
+		"exact uninitialized error":   system.ErrUninitialized.Error(),
+		"uninitialized wrapped error": errors.Wrap(system.ErrUninitialized, "wrapped").Error(),
+		"other error":                 "some other error",
+		"unavailable error":           "raft service unavailable",
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			testErr := errors.New(errorMsg)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					testErr, &mgmtpb.SystemEraseResp{}),
+			})
+
+			cmd := new(systemEraseCmd)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+
+			gotErr := cmd.Execute(nil)
+			if gotErr == nil {
+				t.Fatalf("expected error for %q, but got success", errorMsg)
+			}
 		})
 	}
 }

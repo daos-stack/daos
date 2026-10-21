@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -31,6 +32,7 @@ class IorInterceptTestBase(IorTestBase):
         # Write and read performance thresholds
         write_x = self.params.get("write_x", self.ior_cmd.namespace, None)
         read_x = self.params.get("read_x", self.ior_cmd.namespace, None)
+        enforce_performance = self.params.get("enforce_performance", self.ior_cmd.namespace, True)
         if write_x is None or read_x is None:
             self.fail("Failed to get write_x and read_x from config")
 
@@ -81,5 +83,8 @@ class IorInterceptTestBase(IorTestBase):
         self.log.info("DFUSE IL Max Read:  %.2f", dfuse_max_read)
         self.log.info("Percent Diff:       %.2f%%", actual_read_x * 100)
 
-        self.assertLessEqual(abs(actual_write_x), write_x, "Max Write Diff too large")
-        self.assertLessEqual(abs(actual_read_x), read_x, "Max Read Diff too large")
+        if enforce_performance:
+            self.assertLessEqual(abs(actual_write_x), write_x, "Max Write Diff too large")
+            self.assertLessEqual(abs(actual_read_x), read_x, "Max Read Diff too large")
+        else:
+            self.log.info("Skipping performance enforcement checks")

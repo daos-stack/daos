@@ -1,5 +1,6 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// Copyright 2020-2022 Intel Corporation.
+// Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -124,6 +125,10 @@ func (hcl *hcLogger) ResetNamed(name string) hclog.Logger {
 }
 
 func (hcl *hcLogger) SetLevel(level hclog.Level) {}
+
+func (hcl *hcLogger) GetLevel() hclog.Level {
+	return hclog.NoLevel
+}
 
 func (hcl *hcLogger) StandardLogger(opts *hclog.StandardLoggerOptions) *log.Logger {
 	return log.New(hcl.StandardWriter(opts), "", 0)

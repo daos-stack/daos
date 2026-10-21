@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +8,6 @@ import threading
 import time
 
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
 
@@ -32,14 +31,14 @@ class OSAOnlineDrain(OSAUtils):
         self.dmg_command.exit_status_exception = True
         self.pool = None
 
-    def run_online_drain_test(self, num_pool, oclass=None, app_name="ior", num_ranks=1):
+    def run_online_drain_test(self, num_pool, ranks, oclass=None, app_name="ior"):
         """Run the Online drain without data.
 
         Args:
              num_pool (int) : total pools to create for testing purposes.
+             ranks (list) : list of ranks to drain
              oclass (str) : Object class type (RP_2G1, etc)
              app_name (str) : application to run on parallel (ior or mdtest). Defaults to ior.
-             num_ranks (int): Number of ranks to drain. Defaults to 1.
         """
         # Create a pool
         pool = {}
@@ -51,12 +50,8 @@ class OSAOnlineDrain(OSAUtils):
         targets = int(self.server_managers[-1].get_config_value('targets'))
         t_string = ','.join(map(str, self.random.sample(range(targets), 2)))
 
-        # Get random rank(s) from the rank list.
-        ranklist = list(self.server_managers[0].ranks.keys())
-        rank = ",".join(map(str, self.random.sample(ranklist, k=num_ranks)))
-
         for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
+            pool[val] = self.get_pool(connect=False)
             pool[val].set_property("reclaim", "disabled")
 
         # Drain the rank and targets
@@ -89,7 +84,7 @@ class OSAOnlineDrain(OSAUtils):
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # Get initial total space (scm+nvme)
             initial_total_space = self.pool.get_total_space(refresh=True)
-            output = self.pool.drain(rank, t_string)
+            output = self.pool.drain(ranks, t_string)
             self.print_and_assert_on_rebuild_failure(output)
             total_space_after_drain = self.pool.get_total_space(refresh=True)
 
@@ -127,7 +122,8 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=OSAOnlineDrain,test_osa_online_drain
         """
         self.log.info("Online Drain : With Checksum")
-        self.run_online_drain_test(1)
+        ranks = self.get_random_test_ranks()
+        self.run_online_drain_test(num_pool=1, ranks=ranks)
 
     def test_osa_online_drain_no_csum(self):
         """Test ID: DAOS-6909
@@ -143,7 +139,8 @@ class OSAOnlineDrain(OSAUtils):
         self.log.info("Online Drain : No Checksum")
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
-        self.run_online_drain_test(1)
+        ranks = self.get_random_test_ranks()
+        self.run_online_drain_test(num_pool=1, ranks=ranks)
 
     def test_osa_online_drain_oclass(self):
         """Test ID: DAOS-6909
@@ -157,8 +154,9 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=OSAOnlineDrain,test_osa_online_drain_oclass
         """
         self.log.info("Online Drain : Oclass")
+        ranks = self.get_random_test_ranks()
         for oclass in self.test_oclass:
-            self.run_online_drain_test(1, oclass=oclass)
+            self.run_online_drain_test(num_pool=1, oclass=oclass, ranks=ranks)
 
     def test_osa_online_drain_with_aggregation(self):
         """Test ID: DAOS-6909
@@ -174,7 +172,8 @@ class OSAOnlineDrain(OSAUtils):
         self.log.info("Online Drain : Aggregation")
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
-        self.run_online_drain_test(1)
+        ranks = self.get_random_test_ranks()
+        self.run_online_drain_test(num_pool=1, ranks=ranks)
 
     def test_osa_online_drain_mdtest(self):
         """Test ID: DAOS-4750
@@ -188,7 +187,8 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=OSAOnlineDrain,test_osa_online_drain_mdtest
         """
         self.log.info("Online Drain : With Mdtest")
-        self.run_online_drain_test(1, app_name="mdtest")
+        ranks = self.get_random_test_ranks()
+        self.run_online_drain_test(1, app_name="mdtest", ranks=ranks)
 
     def test_osa_online_drain_with_multiple_ranks(self):
         """Test ID: DAOS-4753.
@@ -201,4 +201,5 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=OSAOnlineDrain,test_osa_online_drain_with_multiple_ranks
         """
         self.log.info("Online Drain : Test with multiple ranks")
-        self.run_online_drain_test(1, num_ranks=2)
+        ranks = self.get_random_test_ranks(join_ranks=False)
+        self.run_online_drain_test(num_pool=1, ranks=ranks)

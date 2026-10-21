@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -838,6 +839,12 @@ func TestAPI_PoolHandleMethods(t *testing.T) {
 		case "DestroyContainer":
 			methArgs = append(methArgs, reflect.ValueOf("foo"), reflect.ValueOf(true))
 			expResults = 1
+		case "DestroyContainerAtPath":
+			methArgs = append(methArgs, reflect.ValueOf("/mnt/daos/path"))
+			expResults = 1
+		case "LinkContainerAtPath":
+			methArgs = append(methArgs, reflect.ValueOf("container-id"), reflect.ValueOf("/mnt/daos/path"))
+			expResults = 1
 		case "QueryContainer":
 			methArgs = append(methArgs, reflect.ValueOf("foo"))
 			expResults = 2
@@ -955,11 +962,11 @@ func TestAPI_GetPoolList(t *testing.T) {
 			ctx:      test.Context(t),
 			expPools: defaultPoolInfoResp,
 		},
-		"default system name supplied": {
+		"empty system name supplied": {
 			ctx: test.Context(t),
 			req: GetPoolListReq{},
 			checkParams: func(t *testing.T) {
-				test.CmpAny(t, "sysName", build.DefaultSystemName, daos_mgmt_list_pools_SetSys)
+				test.CmpAny(t, "sysName", "", daos_mgmt_list_pools_SetSys)
 			},
 			expPools: defaultPoolInfoResp,
 		},

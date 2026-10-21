@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +10,7 @@ package security
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -42,14 +44,7 @@ func TestSecurity_CommonNameToComponent(t *testing.T) {
 		})
 	}
 }
-func inList(c Component, compList []Component) bool {
-	for _, comp := range compList {
-		if c == comp {
-			return true
-		}
-	}
-	return false
-}
+
 func TestSecurity_ComponentHasAccess(t *testing.T) {
 	allComponents := []Component{ComponentUndefined, ComponentAdmin, ComponentAgent, ComponentServer}
 	testCases := map[string][]Component{
@@ -59,8 +54,6 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/ctl.CtlSvc/StorageNvmeAddDevice":       {ComponentAdmin},
 		"/ctl.CtlSvc/NetworkScan":                {ComponentAdmin},
 		"/ctl.CtlSvc/CollectLog":                 {ComponentAdmin},
-		"/ctl.CtlSvc/FirmwareQuery":              {ComponentAdmin},
-		"/ctl.CtlSvc/FirmwareUpdate":             {ComponentAdmin},
 		"/ctl.CtlSvc/SmdQuery":                   {ComponentAdmin},
 		"/ctl.CtlSvc/SmdManage":                  {ComponentAdmin},
 		"/ctl.CtlSvc/SetEngineLogMasks":          {ComponentAdmin},
@@ -68,31 +61,43 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/ctl.CtlSvc/StopRanks":                  {ComponentServer},
 		"/ctl.CtlSvc/ResetFormatRanks":           {ComponentServer},
 		"/ctl.CtlSvc/StartRanks":                 {ComponentServer},
+		"/ctl.CtlSvc/CheckEngineRepair":          {ComponentServer},
 		"/mgmt.MgmtSvc/Join":                     {ComponentServer},
 		"/mgmt.MgmtSvc/ClusterEvent":             {ComponentServer},
 		"/mgmt.MgmtSvc/LeaderQuery":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemQuery":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemStop":               {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemErase":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemErase":              {ComponentAdmin, ComponentServer},
 		"/mgmt.MgmtSvc/SystemStart":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemExclude":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemDrain":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemRebuildManage":      {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemSelfHealEval":       {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolCreate":               {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolDestroy":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolQuery":                {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolQueryTarget":          {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolSetProp":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolGetProp":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolGetCA":                {ComponentAdmin, ComponentAgent},
+		"/mgmt.MgmtSvc/PoolAddCA":                {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolRemoveCA":             {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolGetCertWatermarks":    {ComponentAdmin, ComponentAgent},
+		"/mgmt.MgmtSvc/PoolRevokeClient":         {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolGetACL":               {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolOverwriteACL":         {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolUpdateACL":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolDeleteACL":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolExclude":              {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolDrain":                {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolDrain":                {ComponentAdmin, ComponentServer},
+		"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin, ComponentServer},
 		"/mgmt.MgmtSvc/PoolEvict":                {ComponentAdmin, ComponentAgent},
 		"/mgmt.MgmtSvc/PoolExtend":               {ComponentAdmin},
-		"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAgent},
+		"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolRebuildStart":         {ComponentAdmin, ComponentServer},
+		"/mgmt.MgmtSvc/PoolRebuildStop":          {ComponentAdmin, ComponentServer},
+		"/mgmt.MgmtSvc/PoolSelfHealEval":         {ComponentAdmin, ComponentServer},
+		"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAdmin, ComponentAgent},
 		"/mgmt.MgmtSvc/ListPools":                {ComponentAdmin},
 		"/mgmt.MgmtSvc/ListContainers":           {ComponentAdmin},
 		"/mgmt.MgmtSvc/ContSetOwner":             {ComponentAdmin},
@@ -105,14 +110,17 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/SystemCheckSetPolicy":     {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCheckGetPolicy":     {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCheckRepair":        {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckEngineReport":  {ComponentServer},
+		"/mgmt.MgmtSvc/SystemCheckRegPool":       {ComponentServer},
+		"/mgmt.MgmtSvc/SystemCheckDeregPool":     {ComponentServer},
+		"/mgmt.MgmtSvc/CheckLeaderDrpc":          {ComponentServer},
 		"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
 		"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
 		"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},
-		"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemSetAttr":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemGetAttr":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemSetProp":            {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin, ComponentServer},
 		"/RaftTransport/AppendEntries":           {ComponentServer},
 		"/RaftTransport/AppendEntriesPipeline":   {ComponentServer},
 		"/RaftTransport/RequestVote":             {ComponentServer},
@@ -140,11 +148,11 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		t.Fatalf("%s has test cases for the following methods that are not in methodAuthorizations:\n%s", t.Name(), strings.Join(invalid, "\n"))
 	}
 
-	for method, correctComponent := range testCases {
+	for method, correctComponents := range testCases {
 		methodName := strings.SplitAfterN(method, "/", 3)[2]
 		t.Run(methodName, func(t *testing.T) {
 			for _, comp := range allComponents {
-				if inList(comp, correctComponent) {
+				if slices.Contains(correctComponents, comp) {
 					test.AssertTrue(t, comp.HasAccess(method), fmt.Sprintf("%s should have access to %s but does not", comp, methodName))
 				} else {
 					test.AssertFalse(t, comp.HasAccess(method), fmt.Sprintf("%s should not have access to %s but does", comp, methodName))
@@ -156,7 +164,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 
 func TestSecurity_AllRpcsAreAuthorized(t *testing.T) {
 	for name, tc := range map[string]struct {
-		service interface{}
+		service any
 		prefix  string
 	}{
 		"mgmt rpcs": {
@@ -196,7 +204,7 @@ func TestSecurity_AllRpcsAreAuthorized(t *testing.T) {
 
 func TestSecurity_AuthorizedRpcsAreValid(t *testing.T) {
 	for name, tc := range map[string]struct {
-		service interface{}
+		service any
 		prefix  string
 	}{
 		"mgmt rpcs": {

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +20,8 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/daos/api"
 )
 
 type faultsCmdRoot struct {
@@ -58,23 +61,53 @@ func (ff faultFrequency) HasSome() (uint64, bool) {
 type faultLocation uint64
 
 func (fl *faultLocation) UnmarshalFlag(fv string) error {
-	// Ugh. Seems like there should be a more clever way to do this...
-	switch strings.TrimSpace(fv) {
-	case "DAOS_CHK_CONT_ORPHAN":
-		*fl = faultLocation(C.DAOS_CHK_CONT_ORPHAN)
-	case "DAOS_CHK_CONT_BAD_LABEL":
-		*fl = faultLocation(C.DAOS_CHK_CONT_BAD_LABEL)
-	default:
-		return errors.Errorf("unhandled fault location %q", fv)
+	if fv == "none" {
+		*fl = 0
+		return nil
 	}
 
+	loc, err := api.FaultLocationFromString(fv)
+	if err != nil {
+		return err
+	}
+
+	*fl = faultLocation(loc)
 	return nil
+}
+
+// IsSet indicates whether a fault location has been set.
+func (fl faultLocation) IsSet() bool {
+	return fl != 0
+}
+
+type faultValue uint64
+
+const faultValueUnset = faultValue(^uint64(0))
+
+func (fv *faultValue) UnmarshalFlag(fvStr string) error {
+	if fvStr == "none" {
+		*fv = faultValueUnset
+		return nil
+	}
+
+	// Allow hexadecimal and binary values, as well as decimal.
+	v, err := strconv.ParseUint(fvStr, 0, 64)
+	if err != nil {
+		return errors.Errorf("invalid fault value %q", fvStr)
+	}
+	*fv = faultValue(v)
+	return nil
+}
+
+// IsSet indicates whether a fault value has been set.
+func (fv faultValue) IsSet() bool {
+	return fv != faultValueUnset
 }
 
 type faultRank uint32
 
 func (fr *faultRank) UnmarshalFlag(fv string) error {
-	if fv == strconv.FormatUint(uint64(C.CRT_NO_RANK), 10) || fv == "-1" {
+	if fv == "all" || fv == strconv.FormatUint(uint64(C.CRT_NO_RANK), 10) || fv == "-1" {
 		*fr = faultRank(C.CRT_NO_RANK)
 		return nil
 	}
@@ -90,9 +123,10 @@ func (fr *faultRank) UnmarshalFlag(fv string) error {
 type faultInjectionCmd struct {
 	daosCmd
 
-	Rank      faultRank      `short:"r" long:"rank" description:"Rank to inject fault on" default:"4294967295"`
+	Rank      faultRank      `short:"r" long:"rank" description:"Rank to inject fault on" default:"all"`
 	Frequency faultFrequency `short:"f" long:"frequency" description:"Fault injection frequency" choices:"always,once" default:"once"`
-	Location  faultLocation  `short:"l" long:"location" description:"Fault injection location" required:"1"`
+	Location  faultLocation  `short:"l" long:"location" description:"Fault injection location" default:"none"`
+	Value     faultValue     `short:"v" long:"value" description:"Fault injection value" default:"none"`
 }
 
 func (cmd *faultInjectionCmd) setParams() error {
@@ -112,19 +146,41 @@ func (cmd *faultInjectionCmd) setParams() error {
 	if cmd.Rank != C.CRT_NO_RANK {
 		rankMsg = fmt.Sprintf("rank %d", cmd.Rank)
 	}
-	cmd.Debugf("injecting fault %d on %s", faultMask, rankMsg)
+	cmd.Debugf("injecting fault location 0x%x on %s", faultMask, rankMsg)
 	rc := C.daos_debug_set_params(nil, C.d_rank_t(cmd.Rank), C.DMG_KEY_FAIL_LOC, faultMask, 0, nil)
 	if err := daosError(rc); err != nil {
 		return errors.Wrap(err, "failed to set fault injection")
+	}
+
+	if cmd.Value.IsSet() {
+		cmd.Debugf("injecting fault value %d on %s", cmd.Value, rankMsg)
+		rc = C.daos_debug_set_params(nil, C.d_rank_t(cmd.Rank), C.DMG_KEY_FAIL_VALUE, C.uint64_t(cmd.Value), 0, nil)
+		if err := daosError(rc); err != nil {
+			return errors.Wrap(err, "failed to set fault injection value")
+		}
 	}
 	return nil
 }
 
 type debugFaultCmd struct {
 	faultInjectionCmd
+
+	Reset bool `long:"reset" description:"Reset all fault injection parameters"`
 }
 
 func (cmd *debugFaultCmd) Execute(_ []string) error {
+	if cmd.Reset {
+		if cmd.Location.IsSet() || cmd.Value.IsSet() {
+			return errors.New("cannot set location or value when resetting fault injection parameters")
+		}
+
+		cmd.Debugf("resetting all fault injection parameters")
+		cmd.Frequency = 0
+		cmd.Location = 0
+		cmd.Value = 0
+	} else if !cmd.Location.IsSet() {
+		return errors.New("--location must be specified unless --reset is used")
+	}
 	return cmd.setParams()
 }
 

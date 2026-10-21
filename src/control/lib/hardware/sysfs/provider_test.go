@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1342,6 +1343,68 @@ func TestSysfs_Provider_IsIOMMUEnabled(t *testing.T) {
 			}
 
 			result, err := p.IsIOMMUEnabled()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
+		})
+	}
+}
+
+func setupTestIsTHPEnabled(t *testing.T, root, txt string, extraDirs ...string) {
+	t.Helper()
+
+	dirs := append([]string{root}, extraDirs...)
+
+	path := filepath.Join(dirs...)
+	os.MkdirAll(path, 0755)
+
+	contents := []byte(txt + "\n")
+	if err := os.WriteFile(filepath.Join(path, "enabled"), contents, 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSysfs_Provider_IsTHPEnabled(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilProvider bool
+		extraDirs   []string
+		enableText  string
+		expResult   bool
+		expErr      error
+	}{
+		"nil provider": {
+			nilProvider: true,
+			expErr:      errors.New("provider is nil"),
+		},
+		"missing thp dir": {
+			extraDirs: []string{"kernel", "mm"},
+			expErr:    errors.New("no such file or directory"),
+		},
+		"thp enabled": {
+			extraDirs:  []string{"kernel", "mm", "transparent_hugepage"},
+			enableText: "[always] madvise never",
+			expResult:  true,
+		},
+		"thp disabled": {
+			extraDirs:  []string{"kernel", "mm", "transparent_hugepage"},
+			enableText: "always madvise [never]",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testDir, cleanupTestDir := test.CreateTestDir(t)
+			defer cleanupTestDir()
+
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var p *Provider
+			if !tc.nilProvider {
+				p = NewProvider(log)
+				p.root = testDir
+				setupTestIsTHPEnabled(t, testDir, tc.enableText, tc.extraDirs...)
+			}
+
+			result, err := p.IsTHPEnabled()
 
 			test.CmpErr(t, tc.expErr, err)
 			test.AssertEqual(t, tc.expResult, result, "")

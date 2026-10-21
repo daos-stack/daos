@@ -1,13 +1,28 @@
 #!/bin/bash
 #
 #  Copyright 2020-2023 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 set -eux
 
 env > /root/last_run-env.txt
+: "${JUNIT_RESULTS_FILE:=post_provision_results.xml}"
+
+# Compute node position in cluster for stable JUnit naming (matches functional tests)
+myhost="${HOSTNAME%%.*}"
+: "${NODELIST:=$myhost}"
+mynodenum=0
+for node in ${NODELIST//,/ }; do
+    ((mynodenum++)) || true
+    if [ "$node" = "$myhost" ]; then break; fi
+done
+export mynodenum
+
+if ! node_alias=$(printf "test-%03d" "$mynodenum"); then
+  node_alias="test-000"
+fi
 
 # Need this fix earlier
 # For some reason sssd_common must be reinstalled
@@ -15,6 +30,9 @@ env > /root/last_run-env.txt
 if command -v dnf; then
     bootstrap_dnf
 fi
+
+# Apply optional site-specific SMTP relay override across all distro paths.
+configure_postfix_relay
 
 # If in CI use made up user "Jenkins" with UID that the build agent is
 # currently using.   Not sure that the UID is actually important any more
@@ -55,22 +73,21 @@ chmod 600 "${jenkins_ssh}"/{authorized_keys,id_rsa*,config}
 chown -R "${ci_uid}.${ci_gid}" "/localhome/${CI_USER}/"
 echo "$CI_USER ALL=(ALL) NOPASSWD: ALL" > "/etc/sudoers.d/$CI_USER"
 
-# /scratch is needed on test nodes to be CI info for now.
 # DAOS tests need to be changed to use /CIShare instead.
 if [ -n "$DAOS_CI_INFO_DIR" ]; then
     mkdir -p /CIShare
     retry_cmd 2400 mount "${DAOS_CI_INFO_DIR}" /CIShare
-    # This part only until DAOS is migrated to use /CIShare
-    rm -f /scratch
-    ln -sfn /CIShare /scratch
 fi
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
-if ! post_provision_config_nodes; then
-    rc=${PIPESTATUS[0]}
-    echo "post_provision_config_nodes failed with rc=$rc"
-    exit "$rc"
+rc=0
+post_provision_config_nodes || rc=$?
+if [ "$rc" -ne 0 ]; then
+  echo "post_provision_config_nodes failed with rc=$rc"
+  junit_result "post_provision_config $node_alias" \
+         "post_provision_config_nodes failed with rc=$rc"
+  exit "$rc"
 fi
 
 # Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
@@ -82,82 +99,10 @@ if lspci | grep -i nvme; then
   daos_server nvme reset && rmmod vfio_pci && modprobe vfio_pci
 fi
 
-# FOR now limit to 2 devices per CPU NUMA node
-: "${DAOS_CI_NVME_NUMA_LIMIT:=2}"
-
-function mount_nvme_drive {
-    local drive="$1"
-    file_system=$(file -sL "/dev/$drive")
-    if  [[ "$file_system" != *"ext4 filesystem"* ]]; then
-        yes | mkfs -t ext4 "/dev/$drive"
-    fi
-    mkdir -p "/mnt/$drive"
-    mount "/dev/$drive" "/mnt/$drive"
-}
-
-
-nvme_class="/sys/class/nvme/"
-function nvme_limit {
-    set +x
-    if [ ! -d /sys/class/nvme ]; then
-        echo "No NVMe devices found"
-        return
-    fi
-    local numa0_devices=()
-    local numa1_devices=()
-    for nvme_path in "$nvme_class"*; do
-        nvme="$(basename "$nvme_path")n1"
-        numa_node="$(cat "${nvme_path}/numa_node")"
-        if mount | grep "$nvme"; then
-            continue
-        fi
-        if [ "$numa_node" -eq 0 ]; then
-            numa0_devices+=("$nvme")
-        else
-            numa1_devices+=("$nvme")
-        fi
-    done
-    echo numa0 "${numa0_devices[@]}"
-    echo numa1 "${numa1_devices[@]}"
-    if [ "${#numa0_devices[@]}" -gt 0 ] && [ "${#numa1_devices[@]}" -gt 0 ]; then
-        echo "balanced NVMe configuration possible"
-        nvme_count=0
-        for nvme in "${numa0_devices[@]}"; do
-            if [ "$nvme_count" -ge "${DAOS_CI_NVME_NUMA_LIMIT}" ]; then
-                mount_nvme_drive "$nvme"
-            else
-                ((nvme_count++)) || true
-            fi
-        done
-        nvme_count=0
-        for nvme in "${numa1_devices[@]}"; do
-            if [ "$nvme_count" -ge "${DAOS_CI_NVME_NUMA_LIMIT}" ]; then
-                mount_nvme_drive "$nvme"
-            else
-                ((nvme_count++)) || true
-            fi
-        done
-    else
-        echo "balanced NVMe configuration not possible"
-        for nvme in "${numa0_devices[@]}" "${numa1_devices[@]}"; do
-            ((needed = "$DAOS_CI_NVME_NUMA_LIMIT" + 1)) || true
-            nvme_count=0
-            if [ "$nvme_count" -ge "$needed" ]; then
-                mount_nvme_drive "$nvme"
-            else
-                ((nvme_count++)) || true
-            fi
-        done
-    fi
-    set -x
-}
-
-# Force only the desired number of NVMe devices to be seen by DAOS tests
-# by mounting the extra ones.
-nvme_limit
-
 systemctl enable nfs-server.service
 systemctl start nfs-server.service
+junit_pass_result "post_provision_config $node_alias" \
+                  "post_provision_config_nodes completed successfully"
 sync
 sync
 exit 0

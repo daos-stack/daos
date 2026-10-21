@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -137,9 +138,9 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         """
 
         # create pool and container
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         self.pool.set_property("reclaim", "disabled")
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         # collect first set of pool metric data before read/write
         metric_names = [
@@ -147,7 +148,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             "engine_pool_ops_update",
             "engine_pool_xferred_fetch",
             "engine_pool_xferred_update",
-            "engine_net_req_timeout",
+            "engine_net_cm_rpc_timedout",
             "engine_pool_resent"
         ]
         metrics_init = self.get_metrics(metric_names)
@@ -172,7 +173,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 name, metrics[name], metrics_init[name], metrics_end[name])
 
         # Check if transient networking occurred during the test.
-        timeout_ops = metrics["engine_net_req_timeout"]
+        timeout_ops = metrics["engine_net_cm_rpc_timedout"]
         resent_ops = metrics["engine_pool_resent"]
         if timeout_ops > 0 or resent_ops > 0:
             self.log.info(
@@ -209,7 +210,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         :avocado: tags=TelemetryPoolMetrics,test_telemetry_pool_metrics_sanity_check
         """
         # Create a Pool
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         # Get all the default Pool Metrics and check for any errors.
         # If errors are noticed, get_pool_metrics will report them and
         # fail the test.

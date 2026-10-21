@@ -1,10 +1,10 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 
 
 class OSADmgNegativeTest(OSAUtils):
@@ -68,7 +68,7 @@ class OSADmgNegativeTest(OSAUtils):
 
         for index in range(0, num_pool):
             self.log.info("=> Creating pool %s", index + 1)
-            pool_list.append(add_pool(self, create=False, connect=False))
+            pool_list.append(self.get_pool(create=False, connect=False))
             # Split total SCM and NVME size for creating multiple pools.
             pool_list[-1].scm_size.value = int(pool_list[-1].scm_size.value / num_pool)
             pool_list[-1].nvme_size.value = int(pool_list[-1].nvme_size.value / num_pool)
@@ -88,9 +88,9 @@ class OSADmgNegativeTest(OSAUtils):
                 expected_result = str(sequence[2])
 
                 # Extend the pool
-                # There is no need to extend rank 0
+                # There is no need to extend rank 0-3
                 # Avoid DER_ALREADY
-                if extend is True and rank != "0":
+                if extend is True and rank in ["4", "5"]:
                     self.log.info("=> Sequence %s: Extend rank %s onto pool %s", index, rank, pool)
                     if not self.validate_results(pool, expected_result, pool.extend(rank)):
                         self.fail("Error extending rank {} onto pool {}".format(rank, str(pool)))

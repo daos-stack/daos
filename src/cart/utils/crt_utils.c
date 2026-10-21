@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,7 +46,7 @@ crtu_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	opts.is_server		= is_server;
 	opts.num_attach_retries	= num_attach_retries;
 	opts.assert_on_error	= assert_on_error;
-	opts.shutdown		= 0;
+	atomic_init(&opts.shutdown, 0);
 	opts.is_swim_enabled	= false;
 	opts.use_daos_agent_env	= false;
 
@@ -57,26 +57,16 @@ crtu_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 static inline int
 crtu_drain_queue(crt_context_t ctx)
 {
-	int	rc;
-	int	i;
+	int rc;
 
 	/* TODO: Need better mechanism for tests to drain all queues */
-	for (i = 0; i < 1000; i++)
-		crt_progress(ctx, 1000);
-
-	/* Drain the queue. Progress until 1 second timeout.  We need
-	 * a more robust method
-	 */
 	do {
-		rc = crt_progress(ctx, 1000000);
+		rc = crt_progress(ctx, 1000);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress failed rc: %d.\n", rc);
+			D_ERROR("crt_progress() failed with rc=%d\n", rc);
 			return rc;
 		}
-
-		if (rc == -DER_TIMEDOUT)
-			break;
-	} while (1);
+	} while (rc == 0);
 
 	D_DEBUG(DB_TEST, "Done draining queue\n");
 	return 0;
@@ -91,7 +81,7 @@ crtu_set_shutdown_delay(int delay_sec)
 void
 crtu_progress_stop(void)
 {
-	opts.shutdown = 1;
+	atomic_store(&opts.shutdown, 1);
 }
 
 /* Write a completion file to signal graceful server shutdown */
@@ -132,7 +122,7 @@ crtu_progress_fn(void *data)
 		assert(0);
 	}
 
-	while (opts.shutdown == 0)
+	while (atomic_load(&opts.shutdown) == 0)
 		crt_progress(*p_ctx, 1000);
 
 	if (opts.is_server) {

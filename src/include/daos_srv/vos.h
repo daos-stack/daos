@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,7 @@
 #include <daos/common.h>
 #include <daos_types.h>
 #include <daos/placement.h>
+#include <daos_srv/checker.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
@@ -164,6 +165,23 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
 		 struct dtx_memberships **mbs);
 
 /**
+ * Refresh participants information and pool map version for the given DTX.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param dti		[IN]	Pointer to the DTX identifier.
+ * \param mbs		[IN]	Pointer to the DTX participants information.
+ * \param pm_ver	[IN]	Pool map version for the new DTX participants information.
+ * \param leader	[IN]	Is DTX leader or not.
+ *
+ * \return		Zero on success.
+ *			Positive if changed nothing.
+ *			Negative value if error.
+ */
+int
+vos_dtx_refresh_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships *mbs,
+		    uint32_t pm_ver, bool leader);
+
+/**
  * Commit the specified DTXs.
  *
  * \param coh	[IN]	Container open handle.
@@ -181,14 +199,15 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool keep_act
 /**
  * Abort the specified DTXs.
  *
- * \param coh	[IN]	Container open handle.
- * \param dti	[IN]	The DTX identifiers to be aborted.
- * \param epoch	[IN]	The max epoch for the DTX to be aborted.
+ * \param coh     [IN]	Container open handle.
+ * \param dti     [IN]	The DTX identifiers to be aborted.
+ * \param epoch   [IN]	The max epoch for the DTX to be aborted.
+ * \param version [IN]	The max version for the DTX to be aborted.
  *
  * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
+vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch, uint32_t version);
 
 /**
  * Discard the active DTX entry's records if invalid.
@@ -218,12 +237,15 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t f
 /**
  * Aggregate the committed DTXs.
  *
- * \param coh	[IN]	Container open handle.
+ * \param coh		[IN]	Container open handle.
+ * \param cmt_time	[IN]	The upper commit time to aggregate, or NULL.
  *
- * \return		Zero on success, negative value if error.
+ * \return			Zero if all qualified DTX entries have been removed.
+ * 				Positive value if more DTX entries can be eventually aggregated.
+ * 				Negative value for error.
  */
 int
-vos_dtx_aggregate(daos_handle_t coh);
+vos_dtx_aggregate(daos_handle_t coh, const uint64_t *cmt_time);
 
 /**
  * Query the container's DTXs statistics information.
@@ -336,7 +358,7 @@ int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
 
 int
-vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init);
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool init_spdk);
 
 /**
  * Finalize the environment for a VOS instance
@@ -346,6 +368,19 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
  */
 void
 vos_self_fini(void);
+
+/**
+ * Initialize the environment for a VOS instance as an engine.
+ *
+ * \param[in]	nvme_conf	NVMe config file
+ * \param[in]	storage_path	Storage path e.g. /mnt/daos
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ * \retval -DER_*	Other errors.
+ */
+int
+vos_sys_db_init(const char *nvme_conf, const char *storage_path);
 
 /**
  * Versioning Object Storage Pool (VOSP)
@@ -458,7 +493,7 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version);
  */
 int
 vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
-		      daos_handle_t *poh);
+		      struct checker *ck, daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
@@ -547,6 +582,19 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid);
  */
 int
 vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh);
+
+/**
+ * Open a container within a VOSP with a checker.
+ *
+ * \param poh		[IN]	Pool open handle
+ * \param co_uuid	[IN]	Container uuid
+ * \param ck		[IN]	Checker structure
+ * \param coh		[OUT]	Returned container handle
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_handle_t *coh);
 
 /**
  * Release container open handle
@@ -843,6 +891,23 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 		daos_key_t *akey);
 
 /**
+ * Mark the specified object or {d,a}key as corrupted.
+ *
+ * \param coh     [IN]	Container open handle
+ * \param epoch   [IN]	Epoch for the the mark operation
+ * \param pm_ver  [IN]	Pool map version for the mark operation
+ * \param oid     [IN]	ID of the object
+ * \param dkey    [IN]	Optional, dkey being marked if \akey_nr is zero
+ * \param akey_nr [IN]	Number of akeys in \a akeys.
+ * \param akeys   [IN]	Optional, akey being marked if \akey_nr is not zero
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, daos_unit_oid_t oid,
+			daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys);
+
+/**
  * I/O APIs
  */
 /**
@@ -862,8 +927,8 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
  * \param[in] nr	Number of I/O descriptors in \a ios.
  * \param[in,out] iods	Array of I/O descriptors. The returned record sizes are also restored in
  * 			this parameter.
- * \param[in] vos_flags	VOS fetch flags, VOS cond flags, VOS_OF_FETCH_SIZE_ONLY or
- * 			VOS_OF_FETCH_RECX_LIST.
+ * \param[in] vos_flags	VOS fetch flags, VOS cond flags, VOS_OF_FETCH_SIZE_ONLY,
+ * 			VOS_OF_FETCH_RECX_LIST or VOS_OF_FETCH_CSUM.
  * \param[in] shadows	Optional shadow recx/epoch lists, one for each iod.
  *			data of extents covered by these should not be returned
  *			by fetch function. Only used for EC obj degraded fetch.
@@ -1004,6 +1069,17 @@ int
 vos_cont_set_mod_bound(daos_handle_t coh, uint64_t epoch);
 
 /**
+ * Save property for the given container.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param props	[IN]	Pointer to container property to be saved.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_cont_save_props(daos_handle_t coh, struct cont_props *props);
+
+/**
  * Query the gap between the max allowed aggregation epoch and current HLC.
  *
  * \return		The gap value in seconds.
@@ -1036,6 +1112,18 @@ vos_ioh2ci(daos_handle_t ioh);
 
 uint32_t
 vos_ioh2ci_nr(daos_handle_t ioh);
+
+/**
+ * Get the actual stored epoch of the single value fetched by vos_fetch_begin().
+ * Only meaningful for DAOS_IOD_SINGLE akeys after a successful fetch; returns 0
+ * if no single value was found (hole, -DER_NONEXIST, or array akey fetch).
+ *
+ * \param ioh	[IN]	The I/O handle.
+ *
+ * \return		Actual stored epoch, or 0 if no SV was found.
+ */
+daos_epoch_t
+vos_ioh2sv_epoch(daos_handle_t ioh);
 
 /**
  * Get the scatter/gather list associated with a given I/O descriptor.
@@ -1258,6 +1346,21 @@ int
 vos_iter_validate(daos_handle_t ih);
 
 /**
+ * Check an iterator.
+ *
+ * \param[in] ih			Iterator handle.
+ * \param[in] report_fn			Report function.
+ * \param[in] report_arg		Argument for the report function.
+ * \param[in] error_on_non_zero_padding	Trigger an error on non-zero padding.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Errors returned by the iterator check.
+ */
+int
+vos_iter_check(daos_handle_t ih, report_fn_t report_fn, void *report_arg,
+	       bool error_on_non_zero_padding);
+
+/**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
  *
@@ -1286,12 +1389,13 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
- * Iterate VOS objects and subtrees when recursive mode is specified. When it's
- * called against md-on-ssd phase2 pool, it iterates objects in bucket ID order
- * instead of OID order to minimize bucket eviction/load.
+ * Recursively iterate VOS objects and subtrees. When it's called against md-on-ssd
+ * phase2 pool, it iterates objects in bucket ID order instead of OID order to
+ * minimize the bucket eviction/loading.
+ *
+ * Note: Don't use this interface when caller requires iterating in OID order.
  *
  * \param[in]		param		iteration parameters
- * \param[in]		recursive	iterate in lower level recursively
  * \param[in]		anchors		array of anchors, one for each
  *					iteration level
  * \param[in]		pre_cb		pre subtree iteration callback
@@ -1304,8 +1408,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \retval		-DER_*	error (but never -DER_NONEXIST)
  */
 int
-vos_iterate_obj(vos_iter_param_t *param, bool recursive, struct vos_iter_anchors *anchors,
-		vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
+vos_iterate_obj(vos_iter_param_t *param, struct vos_iter_anchors *anchors, vos_iter_cb_t pre_cb,
+		vos_iter_cb_t post_cb, void *arg, struct dtx_handle *dth);
 
 /**
  * Skip the object not located on specified bucket (for md-on-ssd phase2).
@@ -1527,7 +1631,7 @@ struct cont_scrub {
 	void			*scs_cont_src;
 	daos_handle_t		 scs_cont_hdl;
 	uuid_t			 scs_cont_uuid;
-	bool			 scs_props_fetched;
+	bool                     scs_csummer_inited;
 };
 
 /*
@@ -1621,6 +1725,7 @@ struct scrub_ctx {
 	sc_sleep_fn_t		 sc_sleep_fn;
 	sc_yield_fn_t		 sc_yield_fn;
 	void			*sc_sched_arg;
+	uint32_t                 sc_filter_credits;
 
 	enum scrub_status        sc_status;
 	uint8_t                  sc_cont_loaded : 1, /* Have all the containers been loaded */
@@ -1745,5 +1850,25 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
  */
 bool
 vos_oi_exist(daos_handle_t coh, daos_unit_oid_t oid);
+
+/* Timing statistic of DTX entries */
+enum { DTX_TIME_STAT_MIN = 0, DTX_TIME_STAT_MAX, DTX_TIME_STAT_MEAN, DTX_TIME_STAT_COUNT };
+
+struct dtx_time_stat {
+	daos_epoch_t dts_epoch[DTX_TIME_STAT_COUNT];
+	uint64_t     dts_cmt_time[DTX_TIME_STAT_COUNT];
+};
+
+/**
+ * Return statistics on the DTX committed entries of a container.
+ *
+ * \param[in]	coh	container open handle.
+ * \param[out]	cmt_cnt	number of DTX committed entries.
+ * \param[out]	dts	Timing statistics on the DTX committed entries.
+ *
+ * \return		0 on success, error otherwise.
+ */
+int
+vos_dtx_get_cmt_stat(daos_handle_t coh, uint64_t *cmt_cnt, struct dtx_time_stat *dts);
 
 #endif /* __VOS_API_H */

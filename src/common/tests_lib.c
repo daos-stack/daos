@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -279,7 +280,7 @@ td_init(struct test_data *td, uint32_t iod_nr, struct td_init_args args)
 
 		/* Initialize and create some data */
 		dts_sgl_generate(sgl, 1, args.ca_data_size, 0xAB);
-		D_ASSERT(daos_sgl_data_len(sgl) == data_len);
+		D_ASSERT(daos_sgl_data_len(sgl, false) == data_len);
 
 		iod->iod_type = iod_types[i];
 		dts_iov_alloc_str(&iod->iod_name, "akey");

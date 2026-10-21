@@ -24,11 +24,11 @@ The primary layers for the application are:
 
 The golang interface which handles parsing most of the user input. The
 github.com/jessevdk/go-flags module handles the user input from the command
-line. This includes determining if the -R and -f options are passed and if a
+line. This includes determining if the -f option is passed and if a
 path to a vos file was supplied.
 
 The github.com/desertbit/grumble module handles the execution of the commands,
-whether from interactive mode or from the values of -R or -f. It also supplies
+whether from interactive mode or from the -f value. It also supplies
 the interactive mode, managing history, input keys, etc.
 
 The golang code also calls the c code functions to initialize daos and vos.
@@ -45,63 +45,206 @@ VOS api.
 This layer will adapt the needs of the ddb commands to the current VOS API
 implementation, making the VOS interaction a bit nicer for ddb.
 
-# Help and Usage
+## Limitations
+
+### SPDK re-initialization
+
+Unlike daos_engine, which initializes SPDK only once during the lifetime of the
+process, ddb allows the user to run multiple pool-lifecycle commands (`open`,
+`rm_pool`, `feature`, `dev_list`, `dev_replace`, `prov_mem`, `smd_sync`) in the
+same interactive session or by providing a sequence of commands via `-f`, each
+potentially triggering its own `vos_self_init()` and SPDK initialization. SPDK
+does not support being re-initialized within the same process: its re-init path
+only rescans the PCI bus and never rebuilds the DPDK memory/address-translation
+tables torn down by the previous `vos_self_fini()`. This is unsafe for any pool
+backed by an NVMe device (i.e. whose `db_path` has a `daos_nvme.conf`), with or
+without VMD. `smd_sync` is always treated as NVMe-backed, since its SPDK config
+comes from a separate `nvme_conf` argument rather than `db_path`.
+
+`src/utils/ddb/ddb_spdk_reinit_wa.c` enforces a "single SPDK/VOS init per
+process for NVMe-backed pools" rule to turn that unsafe sequence into a clean,
+actionable error instead of letting ddb crash. Pools with no `daos_nvme.conf`
+(pure PMEM) never touch SPDK and are unaffected. This is a workaround, not a
+fix, for a limitation in SPDK's initialization model; it can be removed once
+the underlying issue is properly resolved.
+
+> **Note (developers only):** in non-release builds (i.e. when
+> `DAOS_BUILD_RELEASE` is not defined), setting `DAOS_DDB_ALLOW_SPDK_REINIT`
+> in the environment unconditionally bypasses this guard. This is a
+> diagnostic-only escape hatch, not a supported workflow, meant to let a
+> developer deliberately retry the unsafe sequence against real hardware to
+> check whether a newer SPDK/DPDK version has actually fixed the underlying
+> re-initialization limitation. It is compiled out of release builds and is
+> intentionally not mentioned in the man page or `ddb`'s interactive/`-h`
+> help output.
+
+## Help and Usage
 
 ```
 $ ddb -h
 Usage:
-  ddb [OPTIONS] [<vos_file_path>]
+  ddb [OPTIONS] [vos_file_path] [ddb_command] [ddb_command_args...]
 
 The DAOS Debug Tool (ddb) allows a user to navigate through and modify
 a file in the VOS format. It offers both a command line and interactive
-shell mode. If the '-R' or '-f' options are not provided, then it will
-run in interactive mode. In order to modify the file, the '-w' option
-must be included. The optional <vos_file_path> will be opened before running
-commands supplied by '-R' or '-f' or entering interactive mode.
+shell mode. If neither a single command or '-f' option is provided, then
+the tool will run in interactive mode. In order to modify the VOS file,
+the '-w' option must be included. If supplied, the VOS file supplied in
+the first positional parameter will be opened before commands are executed.
+
+Many of the commands take a vos tree path. The format for this path
+is [cont]/[obj]/[dkey]/[akey]/[extent].
+- cont - the full container uuid.
+- obj - the object id.
+- keys (akey, dkey) - there are multiple types of keys
+-- string keys are simply the string value. If the size of the
+key is greater than strlen(key), then the size is included at
+the end of the string value. Example: 'akey{5}' is the key: akey
+with a null terminator at the end.
+-- number keys are formatted as '{[type]: NNN}' where type is
+'uint8, uint16, uint32, or uint64'. NNN can be a decimal or
+hex number. Example: '{uint32: 123456}'
+-- binary keys are formatted as '{bin: 0xHHH}' where HHH is the hex
+representation of the binary key. Example: '{bin: 0x1a2b}'
+- extent for array values - in the format {lo-hi}.
+
+To make it easier to navigate the tree, indexes can be
+used instead of the path part. The index is in the format [i]. Indexes
+and actual path values can be used together
+
+Example Paths:
+/3550f5df-e6b1-4415-947e-82e15cf769af/939000573846355970.0.13.1/dkey/akey/[0-1023]
+[0]/[1]/[2]/[1]/[9]
+/[0]/939000573846355970.0.13.1/[2]/akey{5}/[0-1023]
+
 
 Application Options:
-  -R, --run_cmd=    Execute the single command <cmd>, then exit
-  -f, --file_cmd=   Path to a file container a list of ddb commands, one
-                    command per line, then exit.
-  -w, --write_mode  Open the vos file in write mode.
+      --debug             enable debug output
+  -w, --write_mode        Open the vos file in write mode.
+  -f, --cmd_file=         Path to a file containing a sequence of ddb commands to execute.
+  -p, --db_path=          Path to the sys db.
+  -v, --version           Show version
 
 Help Options:
-  -h, --help        Show this help message
+  -h, --help              Show this help message
 ```
 
-Interactive mode help
+### Interactive mode help
+
 ```
 $ help
 
-The DAOS Debug Tool (ddb) allows a user to navigate through and modify
-a file in the VOS format. In order to modify the file, the '-w' option must
-be included when opening the vos file.
-
-Many of the commands take a vos tree path. The format for this path
-is 'cont_uuid/obj_id/dkey/akey/recx'. The keys currently only support string
-keys. The recx for array values is the format {lo-hi}. To make it easier to
-navigate the tree, indexes can be used instead of the path part. The index
-is in the format '[i]', for example '[0]/[0]/[0]'
-
 Commands:
-  clear            clear the screen
-  clear_cmt_dtx    Clear the dtx committed table
-  close            Close the currently opened vos pool shard
-  commit_ilog      Process the ilog
-  dtx_abort        Mark the active dtx entry as aborted
-  dtx_commit       Mark the active dtx entry as committed
-  dump_dtx         Dump the dtx tables
-  dump_ilog        Dump the ilog
-  dump_superblock  Dump the pool superblock information
-  dump_value       Dump a value to a file
-  dump_vea         Dump information from the vea about free regions
-  exit             exit the shell
-  help             use 'help [command]' for command help
-  load             Load a value to a vos path.
-  ls               List containers, objects, dkeys, akeys, and values
-  open             Opens the vos file at <path>
-  rm               Remove a branch of the VOS tree.
-  rm_ilog          Remove all the ilog entries
-  smd_sync         Restore the SMD file with backup from blob
-  update_vea       Alter the VEA tree to mark a region as free.
+  clear    clear the screen
+  exit     exit the shell
+  help     use 'help [command]' for command help
+  quit, q  exit the shell
+  version  Print ddb version
+
+smd
+  smd_sync  Restore the SMD file with backup from blob
+
+vos
+  close                    Close the currently opened vos pool shard
+  dev_list                 List all devices
+  dev_replace              Replace an old device with a new unused device
+  dtx_act_abort            Mark the active dtx entry as aborted
+  dtx_act_commit           Mark the active dtx entry as committed
+  dtx_act_discard_invalid  Discard the active DTX entry's records if invalid.
+  dtx_aggr                 Aggregate DTX entries
+  dtx_cmt_clear            Clear the dtx committed table
+  dtx_dump                 Dump the dtx tables
+  dtx_stat                 Stat on DTX entries
+  feature                  Manage vos pool features
+  ilog_clear               Remove all the ilog entries
+  ilog_commit              Process the ilog
+  ilog_dump                Dump the ilog
+  ls                       List containers, objects, dkeys, akeys, and values
+  open                     Opens the vos file at <path>
+  prov_mem                 Prepare the memory environment for md-on-ssd mode
+  rm                       Remove a branch of the VOS tree.
+  rm_pool                  Remove a vos pool.
+  superblock_dump          Dump the pool superblock information
+  value_dump               Dump a value
+  value_load               Load a value to a vos path.
+  vea_dump                 Dump information from the vea about free regions
+  vea_update               Alter the VEA tree to mark a region as free.
 ```
+
+### Pool-content commands vs. pool-lifecycle commands
+
+ddb's subcommands fall into two categories:
+
+**Pool-content commands** (`ls`, `rm`, `value_dump`, and most others) operate on the content of an
+already-open VOS pool. When one of these is given as a single command or run from a `-f` command
+file, the VOS file is opened before the command executes, using the top-level `--vos_path`/
+`--db_path`.
+
+**Pool-lifecycle commands** (`open`, `close`, `feature`, `rm_pool`, `dev_list`, `dev_replace`,
+`prov_mem`, `smd_sync`) manage the VOS pool's own open/close/remove/replace lifecycle themselves,
+so ddb does not pre-open a pool for them. When one of these is given as a single bare command
+directly on the command line, `--vos_path`/`--db_path` are **not accepted**: ddb returns an error
+and the path must be provided directly to the command instead (see its own `--help`). For example:
+
+```bash
+# Rejected: rm_pool manages its own pool lifecycle and does not accept the top-level flags
+# as a bare command.
+ddb --db_path /path/to/sys/db --vos_path /path/to/vos-0 rm_pool
+
+# Works: provide rm_pool's own db_path flag and path argument directly.
+ddb rm_pool --db_path /path/to/sys/db /path/to/vos-0
+```
+
+In interactive mode or when running a `-f` command file, `--vos_path`/`--db_path` are accepted: they
+only ever drive the one-time initial auto-open, and it is up to the user to close the pre-opened
+pool (or target a different one) before running a pool-lifecycle command from within that session or
+file that requires it to be closed.
+
+## `prov_mem` command
+
+```
+Prepare the memory environment for md-on-ssd mode
+
+Usage:
+  prov_mem [flags] tmpfs_mount
+
+Args:
+  tmpfs_mount  string    Path to the tmpfs mountpoint.
+
+Flags:
+  -h, --help               display help
+  -p, --db_path string     Path to the sys db. This command manages its own pool lifecycle and
+                           does not accept the top-level --vos_path/--db_path as a bare command;
+                           see "Pool-content commands vs. pool-lifecycle commands" above.
+  -s, --tmpfs_size uint    Specify tmpfs size(GiB) for mount. By default, the total size of all VOS files will be used.
+```
+
+### Description
+
+This command is used when working with DAOS in md-on-ssd (metadata-on-SSD) mode. It:
+
+1. Verifies the system is running in MD-on-SSD mode.
+2. Creates a tmpfs mount at the specified path (if not already mounted).
+3. Sets up the necessary directory structure.
+4. Recreates VOS pool target files on the tmpfs mount.
+
+### Examples
+
+**Note**: The user you use have to have access to specified resources and be able to mount(2).
+
+```bash
+# Prepare memory environment with auto-calculated tmpfs size
+ddb prov_mem --db_path /path/to/sys/db /mnt/tmpfs
+
+# Prepare memory environment with specific tmpfs size of 16 GiB
+ddb prov_mem --db_path /path/to/sys/db -s 16 /mnt/tmpfs
+```
+
+### Notes
+
+- The `tmpfs_mount` path must not already be a mount point; otherwise, the command will fail with a "busy" error. 
+- If `tmpfs_size` is not specified, the size will be automatically calculated based on the total size of all VOS files. 
+- This command requires the system to be configured for MD-on-SSD mode.
+- `db_path` used to be a positional argument (`ddb prov_mem <db_path> <tmpfs_mount>`); it is now
+  a `-p`/`--db_path` flag, consistent with the other pool-lifecycle commands (`open`, `feature`,
+  `rm_pool`, `dev_list`, `dev_replace`, `smd_sync`).

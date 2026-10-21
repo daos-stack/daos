@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -55,6 +56,7 @@ func MockNvmeHealth(varIdx ...int32) *NvmeHealth {
 		UnsafeShutdowns:         uint64(idx),
 		MediaErrors:             uint64(idx),
 		ErrorLogEntries:         uint64(idx),
+		PercentageUsed:          uint32(idx),
 		ReadErrors:              uint32(idx),
 		WriteErrors:             uint32(idx),
 		UnmapErrors:             uint32(idx),
@@ -202,7 +204,7 @@ func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 	return &ScmMountPoint{
 		Class:      ClassDcpm,
 		Path:       fmt.Sprintf("/mnt/daos%d", idx),
-		DeviceList: []string{fmt.Sprintf("pmem%d", idx)},
+		DeviceList: []string{fmt.Sprintf("/dev/pmem%d", idx)},
 		TotalBytes: uint64(humanize.TByte) * uint64(idx+1),
 		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 25% available
 		Rank:       ranklist.Rank(uint32(idx)),
@@ -223,12 +225,27 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 	}
 }
 
+// MockScmNamespaceRamdisk returns struct with examples values for namespace representing ramdisk
+// with associated mount point including usage statistics. Avoid creating mock with zero sizes.
+func MockScmNamespaceRamdisk(varIdx ...int32) *ScmNamespace {
+	idx := test.GetIndex(varIdx...)
+
+	return &ScmNamespace{
+		BlockDevice: "ramdisk",
+		Mount: &ScmMountPoint{
+			Class: ClassRam,
+			Path:  fmt.Sprintf("/mnt/daos%d", idx),
+		},
+	}
+}
+
 func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider, meta MetadataProvider) *Provider {
 	p := DefaultProvider(log, idx, engineStorage)
 	p.Sys = sys
 	p.scm = scm
 	p.bdev = bdev
 	p.metadata = meta
+	p.getTopology = MockGetTopology
 	return p
 }
 
@@ -406,22 +423,18 @@ func (m *MockMetadataProvider) NeedsFormat(MetadataFormatRequest) (bool, error) 
 
 // MockScmProvider defines a mock version of an ScmProvider.
 type MockScmProvider struct {
-	MountRes          *MountResponse
-	MountErr          error
-	UnmountRes        *MountResponse
-	UnmountErr        error
-	FormatRes         *ScmFormatResponse
-	FormatErr         error
-	CheckFormatRes    *ScmFormatResponse
-	CheckFormatErr    error
-	ScanRes           *ScmScanResponse
-	ScanErr           error
-	PrepareRes        *ScmPrepareResponse
-	PrepareErr        error
-	FirmwareQueryRes  *ScmFirmwareQueryResponse
-	FirmwareQueryErr  error
-	FirmwareUpdateRes *ScmFirmwareUpdateResponse
-	FirmwareUpdateErr error
+	MountRes       *MountResponse
+	MountErr       error
+	UnmountRes     *MountResponse
+	UnmountErr     error
+	FormatRes      *ScmFormatResponse
+	FormatErr      error
+	CheckFormatRes *ScmFormatResponse
+	CheckFormatErr error
+	ScanRes        *ScmScanResponse
+	ScanErr        error
+	PrepareRes     *ScmPrepareResponse
+	PrepareErr     error
 }
 
 func (m *MockScmProvider) Mount(ScmMountRequest) (*MountResponse, error) {
@@ -448,30 +461,18 @@ func (m *MockScmProvider) Prepare(ScmPrepareRequest) (*ScmPrepareResponse, error
 	return m.PrepareRes, m.PrepareErr
 }
 
-func (m *MockScmProvider) QueryFirmware(ScmFirmwareQueryRequest) (*ScmFirmwareQueryResponse, error) {
-	return m.FirmwareQueryRes, m.FirmwareQueryErr
-}
-
-func (m *MockScmProvider) UpdateFirmware(ScmFirmwareUpdateRequest) (*ScmFirmwareUpdateResponse, error) {
-	return m.FirmwareUpdateRes, m.FirmwareUpdateErr
-}
-
 type mockBdevProvider struct {
-	callCounts         map[string]int
-	PrepareErr         error
-	PrepareResp        *BdevPrepareResponse
-	ScanErr            error
-	ScanResp           *BdevScanResponse
-	FormatErr          error
-	FormatResp         *BdevFormatResponse
-	WriteConfigErr     error
-	WriteConfigResp    *BdevWriteConfigResponse
-	ReadConfigErr      error
-	ReadConfigResp     *BdevReadConfigResponse
-	QueryFirmwareErr   error
-	QueryFirmwareResp  *NVMeFirmwareQueryResponse
-	UpdateFirmwareErr  error
-	UpdateFirmwareResp *NVMeFirmwareUpdateResponse
+	callCounts      map[string]int
+	PrepareErr      error
+	PrepareResp     *BdevPrepareResponse
+	ScanErr         error
+	ScanResp        *BdevScanResponse
+	FormatErr       error
+	FormatResp      *BdevFormatResponse
+	WriteConfigErr  error
+	WriteConfigResp *BdevWriteConfigResponse
+	ReadConfigErr   error
+	ReadConfigResp  *BdevReadConfigResponse
 }
 
 func (m *mockBdevProvider) addCall(name string) {
@@ -504,14 +505,4 @@ func (m *mockBdevProvider) WriteConfig(BdevWriteConfigRequest) (*BdevWriteConfig
 func (m *mockBdevProvider) ReadConfig(BdevReadConfigRequest) (*BdevReadConfigResponse, error) {
 	m.addCall("ReadConfig")
 	return m.ReadConfigResp, m.ReadConfigErr
-}
-
-func (m *mockBdevProvider) QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error) {
-	m.addCall("QueryFirmware")
-	return m.QueryFirmwareResp, m.QueryFirmwareErr
-}
-
-func (m *mockBdevProvider) UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error) {
-	m.addCall("UpdateFirmware")
-	return m.UpdateFirmwareResp, m.UpdateFirmwareErr
 }

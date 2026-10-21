@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -258,6 +259,11 @@ degraded_setup(void **state)
 
 	arg = *state;
 	arg->no_rebuild = 1;
+
+	/* Disable manual rebuilds */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_DISABLE | DAOS_FAIL_ALWAYS);
+
+	/* Disable automatic rebuilds */
 	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal",
 				"exclude");
 	return rc;

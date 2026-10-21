@@ -4,7 +4,7 @@
 ENV:
   default:
     #!filter-only : /run/tests/proto_np
-    - D_LOG_MASK: "WARN"
+    - D_LOG_MASK: "INFO"
     - D_INTERFACE: "eth0"
     - CRT_TEST_CONT: "1"
     - test_servers_CRT_CTX_NUM: "16"
@@ -29,11 +29,11 @@ tests: !mux
     test_clients_env: ""
     test_clients_ppn: "1"
     test_clients_arg:
-      - "--name client_group --attach_to tg_srv_grp_swim_test --init_only --holdtime 20"
-      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank2=alive' --skip_shutdown --skip_check_in"
-      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 2   --shut_only --holdtime 30"
-      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank2=dead'  --skip_shutdown --skip_check_in"
-      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank1=alive' --skip_shutdown --skip_check_in"
-      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank0=alive' --skip_shutdown --skip_check_in"
-      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --disable_swim --skip_shutdown --skip_check_in"
-      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --shut_only"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1,2 --init_only --holdtime 30"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank2=alive' --skip_shutdown --skip_check_in --skip_wait"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 2   --shut_only --holdtime 30 --skip_wait"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank2=dead'  --skip_shutdown --skip_check_in --skip_wait"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank1=alive' --skip_shutdown --skip_check_in --skip_wait"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank0=alive' --skip_shutdown --skip_check_in --skip_wait"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --disable_swim --skip_shutdown --skip_check_in --skip_wait"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --shut_only --skip_wait"

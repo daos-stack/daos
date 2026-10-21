@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -38,12 +39,14 @@ func TestMetadata_Provider_Format(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		nilProv  bool
-		sysCfg   *system.MockSysConfig
-		mountCfg *storage.MockMountProviderConfig
-		setup    func(*testing.T, string) func()
-		req      storage.MetadataFormatRequest
-		expErr   error
+		nilProv     bool
+		sysCfg      *system.MockSysConfig
+		mountCfg    *storage.MockMountProviderConfig
+		setup       func(*testing.T, string) func()
+		req         storage.MetadataFormatRequest
+		expErr      error
+		expMkfs     bool
+		expMkfsOpts []string
 	}{
 		"nil provider": {
 			nilProv: true,
@@ -107,6 +110,8 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			sysCfg: &system.MockSysConfig{
 				GetfsTypeErr: []error{errors.New("mock GetfsType")},
 			},
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"GetfsType retries with parent if dir doesn't exist": {
 			req: pathReq,
@@ -129,21 +134,32 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			},
 			expErr: errors.New("mock MakeMountPath"),
 		},
+		"get label fails": {
+			req: deviceReq,
+			sysCfg: &system.MockSysConfig{
+				GetDeviceLabelErr: errors.New("mock GetDeviceLabel"),
+			},
+			expErr: errors.New("mock GetDeviceLabel"),
+		},
 		"mkfs fails": {
 			req: deviceReq,
 			sysCfg: &system.MockSysConfig{
 				MkfsErr: errors.New("mock mkfs"),
 			},
-			expErr: errors.New("mock mkfs"),
+			expErr:      errors.New("mock mkfs"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"Mount fails": {
 			req: deviceReq,
 			mountCfg: &storage.MockMountProviderConfig{
 				MountErr: errors.New("mock Mount"),
 			},
-			expErr: errors.New("mock Mount"),
+			expErr:      errors.New("mock Mount"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
-		"remove old data dir fails": {
+		"remove old data dir fails with permission denied": {
 			req: deviceReq,
 			setup: func(t *testing.T, root string) func() {
 				t.Helper()
@@ -159,7 +175,9 @@ func TestMetadata_Provider_Format(t *testing.T) {
 					}
 				}
 			},
-			expErr: errors.New("removing old control metadata subdirectory"),
+			expErr:      errors.New("permission denied"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"create data dir fails": {
 			req: deviceReq,
@@ -177,14 +195,18 @@ func TestMetadata_Provider_Format(t *testing.T) {
 					}
 				}
 			},
-			expErr: errors.New("creating control metadata subdirectory"),
+			expErr:      errors.New("creating control metadata subdirectory"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"chown data dir fails": {
 			req: deviceReq,
 			sysCfg: &system.MockSysConfig{
 				ChownErr: errors.New("mock chown"),
 			},
-			expErr: errors.New("mock chown"),
+			expErr:      errors.New("mock chown"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"Unmount fails": {
 			req: deviceReq,
@@ -192,12 +214,24 @@ func TestMetadata_Provider_Format(t *testing.T) {
 				IsMountedRes: true,
 				UnmountErr:   errors.New("mock Unmount"),
 			},
-			expErr: errors.New("mock Unmount"),
+			expErr:      errors.New("mock Unmount"),
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
 		"device success": {
-			req: deviceReq,
+			req:         deviceReq,
+			expMkfsOpts: []string{"-q"},
+			expMkfs:     true,
 		},
-		"path only doesn't attempt device format": {
+		"preserve existing label": {
+			req: deviceReq,
+			sysCfg: &system.MockSysConfig{
+				GetDeviceLabelRes: "old_label",
+			},
+			expMkfsOpts: []string{"-q", "-L", "old_label"},
+			expMkfs:     true,
+		},
+		"path only; doesn't attempt device format": {
 			req: pathReq,
 			sysCfg: &system.MockSysConfig{
 				MkfsErr:      errors.New("mkfs was called!"),
@@ -244,14 +278,23 @@ func TestMetadata_Provider_Format(t *testing.T) {
 			defer teardown()
 
 			var p *Provider
+			mockSys := system.NewMockSysProvider(log, tc.sysCfg)
 			if !tc.nilProv {
-				p = NewProvider(log, system.NewMockSysProvider(log, tc.sysCfg),
-					storage.NewMockMountProvider(tc.mountCfg))
+				p = NewProvider(log, mockSys, storage.NewMockMountProvider(tc.mountCfg))
 			}
 
 			err := p.Format(tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
+
+			if tc.expMkfs {
+				test.AssertEqual(t, 1, len(mockSys.MkfsReqs), "should have called mkfs")
+				if diff := cmp.Diff(tc.expMkfsOpts, mockSys.MkfsReqs[0].Options); diff != "" {
+					t.Errorf("unexpected mkfs options (-want +got):\n%s\n", diff)
+				}
+			} else {
+				test.AssertEqual(t, 0, len(mockSys.MkfsReqs), "should not have called mkfs")
+			}
 		})
 	}
 }
@@ -599,6 +642,170 @@ func TestMetadata_Provider_Unmount(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+// TestMetadata_Provider_setupDataDir_SelectiveEngineDelete tests the new selective
+// engine directory deletion feature for DAOS-19385.
+func TestMetadata_Provider_setupDataDir_SelectiveEngineDelete(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setupExisting func(t *testing.T, dataPath string)
+		req           storage.MetadataFormatRequest
+		sysCfg        *system.MockSysConfig
+		expErr        error
+		expExist      []uint
+		expNotExist   []uint
+	}{
+		"selective delete: engines 0 and 2 when datapath exists": {
+			setupExisting: func(t *testing.T, dataPath string) {
+				// Create the data directory and subdirectories for engines 0, 1, 2
+				if err := os.MkdirAll(dataPath, 0775); err != nil {
+					t.Fatal(err)
+				}
+				for _, idx := range []uint{0, 1, 2} {
+					engPath := storage.ControlMetadataEngineDir(dataPath, idx)
+					if err := os.MkdirAll(engPath, 0775); err != nil {
+						t.Fatal(err)
+					}
+					testFile := filepath.Join(engPath, "test.dat")
+					if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+						t.Fatal(err)
+					}
+				}
+			},
+			req: storage.MetadataFormatRequest{
+				RootPath:   "/test_root",
+				DataPath:   "/test_root/data",
+				OwnerUID:   100,
+				OwnerGID:   200,
+				EngineIdxs: []uint{0, 2},
+			},
+			expExist:    []uint{1},
+			expNotExist: []uint{},
+		},
+		"selective delete: single engine when others exist": {
+			setupExisting: func(t *testing.T, dataPath string) {
+				if err := os.MkdirAll(dataPath, 0775); err != nil {
+					t.Fatal(err)
+				}
+				for _, idx := range []uint{0, 1, 2, 3} {
+					engPath := storage.ControlMetadataEngineDir(dataPath, idx)
+					if err := os.MkdirAll(engPath, 0775); err != nil {
+						t.Fatal(err)
+					}
+				}
+			},
+			req: storage.MetadataFormatRequest{
+				RootPath:   "/test_root",
+				DataPath:   "/test_root/data",
+				OwnerUID:   100,
+				OwnerGID:   200,
+				EngineIdxs: []uint{1},
+			},
+			expExist:    []uint{0, 2, 3},
+			expNotExist: []uint{},
+		},
+		"datapath doesn't exist: create with specific engines": {
+			setupExisting: func(t *testing.T, dataPath string) {
+				// Don't create anything
+			},
+			req: storage.MetadataFormatRequest{
+				RootPath:   "/test_root",
+				DataPath:   "/test_root/data",
+				OwnerUID:   100,
+				OwnerGID:   200,
+				EngineIdxs: []uint{0, 2},
+			},
+			expExist:    []uint{},
+			expNotExist: []uint{1, 3},
+		},
+		"stat error on datapath": {
+			setupExisting: func(t *testing.T, dataPath string) {
+				// Setup doesn't matter
+			},
+			req: storage.MetadataFormatRequest{
+				RootPath:   "/test_root",
+				DataPath:   "/test_root/data",
+				OwnerUID:   100,
+				OwnerGID:   200,
+				EngineIdxs: []uint{0, 1},
+			},
+			sysCfg: &system.MockSysConfig{
+				StatErrors: map[string]error{
+					"/test_root/data": errors.New("mock stat error"),
+				},
+			},
+			expErr: errors.New("mock stat error"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			testDir, cleanupTestDir := test.CreateTestDir(t)
+			defer cleanupTestDir()
+
+			oldDataPath := tc.req.DataPath
+			tc.req.RootPath = filepath.Join(testDir, tc.req.RootPath)
+			tc.req.DataPath = filepath.Join(testDir, tc.req.DataPath)
+
+			if tc.sysCfg == nil {
+				tc.sysCfg = &system.MockSysConfig{}
+			}
+			// Enable real file operations for testing (unless StatErrors configured)
+			if tc.sysCfg.StatErrors == nil {
+				tc.sysCfg.RealStat = true
+			}
+			tc.sysCfg.RealMkdir = true
+			tc.sysCfg.RealRemoveAll = true
+
+			if tc.sysCfg.StatErrors != nil {
+				if statErr, exists := tc.sysCfg.StatErrors[oldDataPath]; exists {
+					tc.sysCfg.StatErrors[tc.req.DataPath] = statErr
+				}
+			}
+
+			if tc.setupExisting != nil {
+				tc.setupExisting(t, tc.req.DataPath)
+			}
+
+			// Ensure parent directory exists for tests where DataPath doesn't exist
+			if tc.req.RootPath != "" {
+				if err := os.MkdirAll(tc.req.RootPath, 0775); err != nil && !os.IsExist(err) {
+					t.Fatal(err)
+				}
+			}
+
+			p := NewProvider(log, system.NewMockSysProvider(log, tc.sysCfg), nil)
+
+			err := p.setupDataDir(tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			for _, idx := range tc.expExist {
+				engPath := storage.ControlMetadataEngineDir(tc.req.DataPath, idx)
+				if _, err := os.Stat(engPath); os.IsNotExist(err) {
+					t.Errorf("expected engine %d directory to exist at %s", idx, engPath)
+				}
+			}
+
+			for _, idx := range tc.expNotExist {
+				engPath := storage.ControlMetadataEngineDir(tc.req.DataPath, idx)
+				if _, err := os.Stat(engPath); err == nil {
+					t.Errorf("expected engine %d directory NOT to exist at %s", idx, engPath)
+				}
+			}
+
+			for _, idx := range tc.req.EngineIdxs {
+				engPath := storage.ControlMetadataEngineDir(tc.req.DataPath, idx)
+				if _, err := os.Stat(engPath); os.IsNotExist(err) {
+					t.Errorf("expected engine %d directory created at %s", idx, engPath)
+				}
 			}
 		})
 	}

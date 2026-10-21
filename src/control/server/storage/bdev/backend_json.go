@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -88,6 +89,15 @@ type AioCreateParams struct {
 
 func (_ AioCreateParams) isSpdkSubsystemConfigParams() {}
 
+// IobufParams specifies details for a storage.ConfIobufSetOptions method. Zero values are not
+// marshalled to JSON config output.
+type IobufParams struct {
+	SmallPoolCount uint32 `json:"small_pool_count,omitzero"`
+	LargePoolCount uint32 `json:"large_pool_count,omitzero"`
+}
+
+func (_ IobufParams) isSpdkSubsystemConfigParams() {}
+
 // HotplugBusidRangeParams specifies details for a storage.ConfSetHotplugBusidRange method.
 type HotplugBusidRangeParams struct {
 	Begin uint8 `json:"begin"`
@@ -140,6 +150,8 @@ func (ssc *SpdkSubsystemConfig) UnmarshalJSON(data []byte) error {
 		ssc.Params = &VmdEnableParams{}
 	case storage.ConfBdevAioCreate:
 		ssc.Params = &AioCreateParams{}
+	case storage.ConfIobufSetOptions:
+		ssc.Params = &IobufParams{}
 	default:
 		return errors.Errorf("unknown SPDK subsystem config method %q", ssc.Method)
 	}
@@ -324,6 +336,29 @@ func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWrite
 	return sc
 }
 
+// WithSpdkIobufOpts adds custom SPDK iobuf options. No config entry is added if values are all
+// zero. Only non-zero IobufParams field values are
+func (sc *SpdkConfig) WithSpdkIobufOpts(req *storage.BdevWriteConfigRequest) *SpdkConfig {
+	if req.SpdkIobufProps.IsEmpty() {
+		return sc
+	}
+
+	sc.Subsystems = append(sc.Subsystems, &SpdkSubsystem{
+		Name: "iobuf",
+		Configs: []*SpdkSubsystemConfig{
+			{
+				Method: storage.ConfIobufSetOptions,
+				Params: &IobufParams{
+					SmallPoolCount: req.SpdkIobufProps.SmallPoolCount,
+					LargePoolCount: req.SpdkIobufProps.LargePoolCount,
+				},
+			},
+		},
+	})
+
+	return sc
+}
+
 // Add hotplug bus-ID range to DAOS config data for use by non-SPDK consumers in
 // engine e.g. BIO or VOS.
 func hotplugPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
@@ -388,6 +423,7 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 	rpcSrvSet(req, sc.DaosData)
 	autoFaultySet(req, sc.DaosData)
 	sc.WithBdevConfigs(log, req)
+	sc.WithSpdkIobufOpts(req)
 
 	// SPDK-3370: Ensure hotplug config appears after attach directives to avoid race when VMD
 	// with hotplug is enabled with multiple domains.

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2021-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,7 +82,7 @@ cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 	cont->scs_cont_hdl = cont_child->sc_hdl;
 	uuid_copy(cont->scs_cont_uuid, cont_uuid);
 	cont->scs_cont_src = cont_child;
-	cont->scs_props_fetched = cont_child->sc_props_fetched;
+	cont->scs_csummer_inited = cont_child->sc_csummer_inited;
 
 	ABT_mutex_lock(cont_child->sc_mutex);
 	cont_child->sc_scrubbing = 1;
@@ -343,6 +343,12 @@ scrubbing_ult(void *arg)
 	sc_add_pool_metrics(&ctx);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {
 		uint32_t sleep_time = 1000;
+
+		if (child->spc_pool->sp_stopping) {
+			D_INFO(DF_UUID ": pool is stopping, scrubber exiting\n",
+			       DP_UUID(pool_uuid));
+			break;
+		}
 
 		rc = vos_scrub_pool(&ctx);
 		if (rc == -DER_SHUTDOWN) {

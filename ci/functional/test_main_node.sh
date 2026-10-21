@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2022 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -16,5 +16,6 @@ export REMOTE_ACCT=jenkins
 export WITH_VALGRIND="$WITH_VALGRIND"
 export STAGE_NAME="$STAGE_NAME"
 
-DAOS_HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}" /usr/lib/daos/TESTING/ftest/ftest.sh \
-    "$TEST_TAG" "$TNODES" "$FTEST_ARG"
+export DAOS_HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}"
+export DAOS_NO_PROXY="${DAOS_NO_PROXY:-}"
+/usr/lib/daos/TESTING/ftest/ftest.sh "$TEST_TAG" "$TNODES" "$FTEST_ARG"

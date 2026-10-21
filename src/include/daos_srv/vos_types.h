@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2025 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -63,6 +63,10 @@ enum dtx_entry_flags {
 	DTE_EPOCH_SORTED	= (1 << 6),
 };
 
+#define DTE_FLAGS_VALID                                                                            \
+	(DTE_LEADER | DTE_INVALID | DTE_BLOCK | DTE_CORRUPTED | DTE_ORPHAN |                       \
+	 DTE_PARTIAL_COMMITTED | DTE_EPOCH_SORTED)
+
 struct dtx_entry {
 	/** The identifier of the DTX. */
 	struct dtx_id			 dte_xid;
@@ -99,6 +103,8 @@ enum vos_pool_open_flags {
 	VOS_POF_FOR_FEATURE_FLAG = (1 << 7),
 	/** To identify this is a recreate operation. */
 	VOS_POF_FOR_RECREATE = (1 << 8),
+	/** Caller does checkpointing periodically */
+	VOS_POF_EXTERNAL_CHKPT = (1 << 9),
 };
 
 enum vos_oi_attr {
@@ -182,6 +188,8 @@ typedef struct {
 	daos_size_t		ci_used;
 	/** Highest (Last) aggregated epoch */
 	daos_epoch_t		ci_hae;
+	/** latest epoch for writes that require aggregation */
+	daos_epoch_t            ci_agg_write;
 	/** TODO */
 } vos_cont_info_t;
 
@@ -256,49 +264,51 @@ typedef enum {
 
 enum {
 	/** Conditional Op: Punch key if it exists, fail otherwise */
-	VOS_OF_COND_PUNCH		= DAOS_COND_PUNCH,
+	VOS_OF_COND_PUNCH = DAOS_COND_PUNCH,
 	/** Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
-	VOS_OF_COND_DKEY_INSERT		= DAOS_COND_DKEY_INSERT,
+	VOS_OF_COND_DKEY_INSERT = DAOS_COND_DKEY_INSERT,
 	/** Conditional Op: Update dkey if it exists, fail otherwise */
-	VOS_OF_COND_DKEY_UPDATE		= DAOS_COND_DKEY_UPDATE,
+	VOS_OF_COND_DKEY_UPDATE = DAOS_COND_DKEY_UPDATE,
 	/** Conditional Op: Fetch dkey if it exists, fail otherwise */
-	VOS_OF_COND_DKEY_FETCH		= DAOS_COND_DKEY_FETCH,
+	VOS_OF_COND_DKEY_FETCH = DAOS_COND_DKEY_FETCH,
 	/** Conditional Op: Insert akey if it doesn't exist, fail otherwise */
-	VOS_OF_COND_AKEY_INSERT		= DAOS_COND_AKEY_INSERT,
+	VOS_OF_COND_AKEY_INSERT = DAOS_COND_AKEY_INSERT,
 	/** Conditional Op: Update akey if it exists, fail otherwise */
-	VOS_OF_COND_AKEY_UPDATE		= DAOS_COND_AKEY_UPDATE,
+	VOS_OF_COND_AKEY_UPDATE = DAOS_COND_AKEY_UPDATE,
 	/** Conditional Op: Fetch akey if it exists, fail otherwise */
-	VOS_OF_COND_AKEY_FETCH		= DAOS_COND_AKEY_FETCH,
+	VOS_OF_COND_AKEY_FETCH = DAOS_COND_AKEY_FETCH,
 	/** Indicates akey conditions are specified in iod_flags */
-	VOS_OF_COND_PER_AKEY		= DAOS_COND_PER_AKEY,
+	VOS_OF_COND_PER_AKEY = DAOS_COND_PER_AKEY,
 	/* critical update - skip checks on SCM system/held space */
-	VOS_OF_CRIT			= (1 << 8),
+	VOS_OF_CRIT = (1 << 8),
 	/** Instead of update or punch of extents, remove all extents
 	 * under the specified range. Intended for internal use only.
 	 */
-	VOS_OF_REMOVE			= (1 << 9),
+	VOS_OF_REMOVE = (1 << 9),
 	/* only query iod_size */
-	VOS_OF_FETCH_SIZE_ONLY		= (1 << 10),
+	VOS_OF_FETCH_SIZE_ONLY = (1 << 10),
 	/* query recx list */
-	VOS_OF_FETCH_RECX_LIST		= (1 << 11),
+	VOS_OF_FETCH_RECX_LIST = (1 << 11),
 	/* only set read TS */
-	VOS_OF_FETCH_SET_TS_ONLY	= (1 << 12),
+	VOS_OF_FETCH_SET_TS_ONLY = (1 << 12),
 	/* check the target (obj/dkey/akey) existence */
-	VOS_OF_FETCH_CHECK_EXISTENCE	= (1 << 13),
+	VOS_OF_FETCH_CHECK_EXISTENCE = (1 << 13),
 	/** Set when propagating a punch that results in empty subtree */
-	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
+	VOS_OF_PUNCH_PROPAGATE = (1 << 14),
 	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC		= (1 << 15),
+	VOS_OF_REPLAY_PC = (1 << 15),
 	/** Dedup update mode */
-	VOS_OF_DEDUP			= (1 << 16),
+	VOS_OF_DEDUP = (1 << 16),
 	/** Dedup update with memcmp verify mode */
-	VOS_OF_DEDUP_VERIFY		= (1 << 17),
+	VOS_OF_DEDUP_VERIFY = (1 << 17),
 	/** Ignore fetch only used by shadow fetch to ignore the evt fetch */
-	VOS_OF_SKIP_FETCH		= (1 << 18),
+	VOS_OF_SKIP_FETCH = (1 << 18),
 	/** Operation on EC object (currently only applies to update) */
-	VOS_OF_EC			= (1 << 19),
+	VOS_OF_EC = (1 << 19),
 	/** Update from rebuild */
-	VOS_OF_REBUILD			= (1 << 20),
+	VOS_OF_REBUILD = (1 << 20),
+	/** Only query for checksums: no data fetched, checksums kept whole (see save_csum()) */
+	VOS_OF_FETCH_CSUM = (1 << 21),
 };
 
 enum {
@@ -385,7 +395,7 @@ enum {
 	VOS_IT_FOR_MIGRATION = (1 << 5),
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED = (1 << 6),
-	/** Cleanup stale DTX entry. */
+	/** Discard object (shard) */
 	VOS_IT_FOR_DISCARD = (1 << 7),
 	/** Entry is not committed */
 	VOS_IT_UNCOMMITTED = (1 << 8),

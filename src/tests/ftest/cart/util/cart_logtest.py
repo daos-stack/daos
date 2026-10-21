@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 #
 # (C) Copyright 2018-2024 Intel Corporation
+# (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -14,11 +15,10 @@ from collections import Counter, OrderedDict
 
 import cart_logparse
 
-HAVE_TABULATE = True
 try:
     import tabulate
 except ImportError:
-    HAVE_TABULATE = False
+    tabulate = None
 
 
 class LogCheckError(Exception):
@@ -570,6 +570,13 @@ class MemReporting():
 
     def add_line(self, line):
         """Parse an output line"""
+        try:
+            self._add_line(line)
+        except IndexError:
+            # Line truncated by an abrupt process kill (e.g. SIGKILL).
+            show_line(line, 'LOW', 'truncated log line, skipping')
+
+    def _add_line(self, line):
         err_count = 0
         if line.is_calloc():
             pointer = line.calloc_pointer()
@@ -667,6 +674,13 @@ class RpcReporting():
 
     def add_line(self, line):
         """Parse a output line"""
+        try:
+            self._add_line(line)
+        except IndexError:
+            # Line truncated by an abrupt process kill (e.g. SIGKILL).
+            show_line(line, 'LOW', 'truncated log line, skipping')
+
+    def _add_line(self, line):
         try:
             if line.function not in self.known_functions:
                 return
@@ -766,7 +780,7 @@ class RpcReporting():
                 errors.append("ERROR: Opcode {}: Alloc'd Total = {}, Dealloc'd Total = {}".
                               format(operation, counts['ALLOCATED'], counts['DEALLOCATED']))
 
-        if HAVE_TABULATE:
+        if tabulate is not None:
             print('Opcode State Transition Tally')
             print(tabulate.tabulate(table,
                                     headers=headers,

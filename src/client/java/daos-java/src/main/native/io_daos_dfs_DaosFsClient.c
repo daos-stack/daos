@@ -458,13 +458,6 @@ Java_io_daos_dfs_DaosFsClient_createNewFile(JNIEnv *env,
 	dfs_obj_t *parent = NULL;
 	mode_t tmp_mode;
 
-	if (unlikely(!type_id)) {
-		char *msg = NULL;
-
-		asprintf(&msg, "unsupported object class, %s", object_type);
-		throw_exc(env, msg, CUSTOM_ERR6);
-		goto out;
-	}
 	int rc = dfs_lookup(dfs, parent_path, O_RDWR, &parent,
 			    &tmp_mode, NULL);
 

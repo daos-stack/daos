@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,6 +21,7 @@ ioil_do_writesgl(d_sg_list_t *sgl, size_t len, off_t position, struct fd_entry *
 	daos_event_t	ev;
 	daos_handle_t	eqh;
 	int		rc;
+	bool            ev_inited = false;
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "%#zx-%#zx", position, position + len - 1);
 
@@ -33,6 +35,7 @@ ioil_do_writesgl(d_sg_list_t *sgl, size_t len, off_t position, struct fd_entry *
 					DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
+		ev_inited = true;
 
 		rc = dfs_write(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, sgl, position, &ev);
 		if (rc)
@@ -54,6 +57,9 @@ ioil_do_writesgl(d_sg_list_t *sgl, size_t len, off_t position, struct fd_entry *
 		rc = dfs_write(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, sgl, position, NULL);
 	}
 out:
+	if (ev_inited)
+		daos_event_fini(&ev);
+
 	if (rc) {
 		DFUSE_TRA_ERROR(entry->fd_dfsoh, "dfs_write() failed: %d (%s)", rc, strerror(rc));
 		*errcode = rc;

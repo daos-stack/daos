@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -44,6 +44,8 @@ type SystemCmd struct {
 	DelAttr      systemDelAttrCmd      `command:"del-attr" description:"Delete system attributes"`
 	SetProp      systemSetPropCmd      `command:"set-prop" description:"Set system properties"`
 	GetProp      systemGetPropCmd      `command:"get-prop" description:"Get system properties"`
+	Rebuild      systemRebuildCmd      `command:"rebuild" description:"Interactive rebuild commands"`
+	SelfHeal     systemSelfHealCmd     `command:"self-heal" description:"Self-heal commands for auto recovery"`
 }
 
 type baseCtlCmd struct {
@@ -168,6 +170,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 type systemEraseCmd struct {
 	baseCmd
 	ctlInvokerCmd
+	cmdutil.JSONOutputCmd
 }
 
 func (cmd *systemEraseCmd) Execute(_ []string) error {
@@ -176,7 +179,15 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 		return err
 	}
 
-	return resp.Errors()
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	if err := resp.Errors(); err != nil {
+		return err
+	}
+	cmd.Infof("System erase successful. System is now uninitialized and ready for 'dmg storage format'.\n")
+	return nil
 }
 
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
@@ -494,7 +505,7 @@ func (cmd *systemGetAttrCmd) Execute(_ []string) error {
 
 	var bld strings.Builder
 	prettyPrintAttrs(&bld, resp.Attributes)
-	cmd.Infof("%s", bld.String())
+	cmd.Infof("%s", bld)
 
 	return nil
 }
@@ -650,27 +661,6 @@ type systemGetPropCmd struct {
 	} `positional-args:"yes"`
 }
 
-func prettyPrintSysProps(out io.Writer, props []*daos.SystemProperty) {
-	if len(props) == 0 {
-		fmt.Fprintln(out, "No system properties found.")
-		return
-	}
-
-	nameTitle := "Name"
-	valueTitle := "Value"
-	table := []txtfmt.TableRow{}
-	for _, prop := range props {
-		row := txtfmt.TableRow{}
-		row[nameTitle] = fmt.Sprintf("%s (%s)", prop.Description, prop.Key)
-		row[valueTitle] = prop.Value.String()
-		table = append(table, row)
-	}
-
-	tf := txtfmt.NewTableFormatter(nameTitle, valueTitle)
-	tf.InitWriter(out)
-	tf.Format(table)
-}
-
 // Execute is run when systemGetPropCmd subcommand is activated.
 func (cmd *systemGetPropCmd) Execute(_ []string) error {
 	req := &control.SystemGetPropReq{
@@ -686,9 +676,104 @@ func (cmd *systemGetPropCmd) Execute(_ []string) error {
 		return errors.Wrap(err, "system get-attr failed")
 	}
 
-	var bld strings.Builder
-	prettyPrintSysProps(&bld, resp.Properties)
-	cmd.Infof("%s", bld.String())
+	var out strings.Builder
+	pretty.PrintSystemProperties(&out, resp.Properties)
+	cmd.Info(out.String())
 
+	return nil
+}
+
+// systemRebuildCmd represents the system rebuild subcommand.
+type systemRebuildCmd struct {
+	Start systemRebuildStartCmd `command:"start" description:"System rebuild start requests submitted to pools"`
+	Stop  systemRebuildStopCmd  `command:"stop" description:"System rebuild stop requests submitted to pools"`
+}
+
+type systemRebuildOpCmd struct {
+	baseCtlCmd
+	Verbose bool `short:"v" long:"verbose" description:"Print pool identifiers"`
+}
+
+func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force bool) (errOut error) {
+	defer func() {
+		errOut = errors.Wrapf(errOut, "system rebuild %s failed", opCode)
+	}()
+
+	if cmd.config == nil {
+		return errors.New("no configuration loaded")
+	}
+
+	req := &control.SystemRebuildManageReq{
+		OpCode: opCode,
+		Force:  force,
+	}
+
+	resp, err := control.SystemRebuildManage(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	var out strings.Builder
+	err = pretty.PrintSystemRebuildManageResp(&out, resp, cmd.Verbose)
+	cmd.Info(out.String())
+
+	return err
+}
+
+type systemRebuildStartCmd struct {
+	systemRebuildOpCmd
+}
+
+func (cmd *systemRebuildStartCmd) Execute(_ []string) error {
+	return cmd.execute(control.PoolRebuildOpCodeStart, false)
+}
+
+type systemRebuildStopCmd struct {
+	systemRebuildOpCmd
+	Force bool `short:"f" long:"force" description:"Forcibly stop interactive rebuild"`
+}
+
+func (cmd *systemRebuildStopCmd) Execute(_ []string) error {
+	return cmd.execute(control.PoolRebuildOpCodeStop, cmd.Force)
+}
+
+// systemSelfHealCmd represents the system self-heal auto recovery subcommand.
+type systemSelfHealCmd struct {
+	Eval systemSelfHealEvalCmd `command:"eval" description:"Trigger self healing if necessary based on system property self_heal and the current system status"`
+}
+
+type systemSelfHealEvalCmd struct {
+	baseCtlCmd
+}
+
+func (cmd *systemSelfHealEvalCmd) Execute(_ []string) (errOut error) {
+	defer func() {
+		errOut = errors.Wrap(errOut, "system self-heal eval failed")
+	}()
+
+	if cmd.config == nil {
+		return errors.New("no configuration loaded")
+	}
+
+	req := &control.SystemSelfHealEvalReq{}
+
+	resp, err := control.SystemSelfHealEval(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	if resp.Errors() != nil {
+		return resp.Errors()
+	}
+
+	cmd.Info("System self-heal eval request succeeded")
 	return nil
 }

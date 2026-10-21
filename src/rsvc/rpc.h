@@ -17,6 +17,7 @@
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
+#include <daos_srv/rdb.h>
 
 /*
  * RPC operation codes
@@ -49,6 +50,8 @@ enum rsvc_operation {
 
 extern struct crt_proto_format rsvc_proto_fmt;
 
+/* clang-format off */
+
 #define DAOS_ISEQ_RSVC_START /* input fields */			 \
 	((d_iov_t)		(sai_svc_id)		CRT_VAR) \
 	((uuid_t)		(sai_db_uuid)		CRT_VAR) \
@@ -56,16 +59,21 @@ extern struct crt_proto_format rsvc_proto_fmt;
 	((uint32_t)		(sai_mode)		CRT_VAR) \
 	((uint32_t)		(sai_flags)		CRT_VAR) \
 	((uint32_t)		(sai_vos_df_version)	CRT_VAR) \
+	((uint32_t)		(sai_layout_version)	CRT_VAR) \
+	((uint32_t)		(sai_padding)		CRT_VAR) \
 	((uint64_t)		(sai_size)		CRT_VAR) \
 	((uint64_t)		(sai_term)		CRT_VAR) \
-	((d_rank_list_t)	(sai_ranks)		CRT_PTR)
+	((rdb_replica_id_t)	(sai_replicas)		CRT_ARRAY)
 
 #define DAOS_OSEQ_RSVC_START /* output fields (rc: err count) */ \
 	((int32_t)		(sao_rc)		CRT_VAR) \
 	((int32_t)		(sao_rc_errval)		CRT_VAR)
 
+/* clang-format on */
 
 CRT_RPC_DECLARE(rsvc_start, DAOS_ISEQ_RSVC_START, DAOS_OSEQ_RSVC_START)
+
+/* clang-format off */
 
 #define DAOS_ISEQ_RSVC_STOP /* input fields */			 \
 	((d_iov_t)		(soi_svc_id)		CRT_VAR) \
@@ -75,6 +83,8 @@ CRT_RPC_DECLARE(rsvc_start, DAOS_ISEQ_RSVC_START, DAOS_OSEQ_RSVC_START)
 
 #define DAOS_OSEQ_RSVC_STOP /* output fields */			 \
 	((int32_t)		(soo_rc)		CRT_VAR)
+
+/* clang-format on */
 
 CRT_RPC_DECLARE(rsvc_stop, DAOS_ISEQ_RSVC_STOP, DAOS_OSEQ_RSVC_STOP)
 

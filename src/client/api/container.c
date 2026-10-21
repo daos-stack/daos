@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,18 +66,18 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 	return rc;
 }
 
-/**
- * Real latest & greatest implementation of container create.
- * Used by anyone including the daos_cont.h header file.
- */
-int
-daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
-		 daos_event_t *ev)
+static int
+dcsc_prop_free(tse_task_t *task, void *data);
+
+static int
+cont_create(daos_handle_t poh, const char *label, daos_prop_t *cont_prop, uuid_t *uuid,
+	    daos_event_t *ev)
 {
 	daos_cont_create_t	*args;
 	tse_task_t		*task;
-	int			 rc;
-	daos_prop_t		*merged_props = NULL;
+	daos_prop_t             *owned_prop = NULL;
+	daos_prop_t             *prop;
+	int                      rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
 
@@ -85,30 +86,80 @@ daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 		return -DER_INVAL;
 	}
 
-	if (cont_prop) {
-		rc = cont_inherit_redunc_fac(poh, cont_prop, &merged_props);
-		if (rc)
-			return rc;
+	if (label != NULL) {
+		owned_prop = daos_prop_alloc(1);
+		if (owned_prop == NULL) {
+			D_ERROR("failed to allocate label prop\n");
+			return -DER_NOMEM;
+		}
+		owned_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+		rc = daos_prop_entry_set_str(&owned_prop->dpp_entries[0], label,
+					     DAOS_PROP_LABEL_MAX_LEN);
+		if (rc != 0)
+			goto out;
+
+		if (cont_prop != NULL) {
+			daos_prop_t *tmp;
+
+			tmp = daos_prop_merge(cont_prop, owned_prop);
+			if (tmp == NULL) {
+				D_ERROR("failed to merge cont_prop and label prop\n");
+				rc = -DER_NOMEM;
+				goto out;
+			}
+			daos_prop_free(owned_prop);
+			owned_prop = tmp;
+		}
+	}
+
+	prop = owned_prop != NULL ? owned_prop : cont_prop;
+
+	if (prop != NULL) {
+		daos_prop_t *tmp = NULL;
+
+		rc = cont_inherit_redunc_fac(poh, prop, &tmp);
+		if (rc != 0)
+			goto out;
+		if (tmp != NULL) {
+			daos_prop_free(owned_prop);
+			owned_prop = tmp;
+			prop       = tmp;
+		}
 	}
 
 	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
-	if (rc) {
-		if (merged_props)
-			daos_prop_free(merged_props);
-		return rc;
-	}
+	if (rc != 0)
+		goto out;
 
 	args = dc_task_get_args(task);
 	args->poh	= poh;
 	uuid_clear(args->uuid);
-	args->prop	= merged_props ? merged_props : cont_prop;
-	args->cuuid	= cuuid;
+	args->prop  = prop;
+	args->cuuid = uuid;
 
-	rc = dc_task_schedule(task, true);
-	if (merged_props)
-		daos_prop_free(merged_props);
+	if (owned_prop != NULL) {
+		rc = dc_task_reg_comp_cb(task, dcsc_prop_free, &owned_prop, sizeof(owned_prop));
+		if (rc != 0) {
+			tse_task_complete(task, rc);
+			goto out;
+		}
+	}
 
+	return dc_task_schedule(task, true);
+
+out:
+	daos_prop_free(owned_prop);
 	return rc;
+}
+
+/*
+ * Real latest & greatest implementation of container create.
+ * Used by anyone including the daos_cont.h header file.
+ */
+int
+daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop, daos_event_t *ev)
+{
+	return cont_create(poh, NULL /* label */, cont_prop, cuuid, ev);
 }
 
 #undef daos_cont_create
@@ -122,40 +173,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
 			    daos_prop_t *cont_prop, uuid_t *uuid,
 			    daos_event_t *ev)
 {
-	daos_prop_t		*label_prop;
-	daos_prop_t		*merged_props = NULL;
-	int			 rc;
-
-	label_prop = daos_prop_alloc(1);
-	if (label_prop == NULL) {
-		D_ERROR("failed to allocate label_prop\n");
-		return -DER_NOMEM;
-	}
-	label_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	rc = daos_prop_entry_set_str(&label_prop->dpp_entries[0], label, DAOS_PROP_LABEL_MAX_LEN);
-	if (rc)
-		goto out_prop;
-
-	if (cont_prop) {
-		merged_props = daos_prop_merge(cont_prop, label_prop);
-		if (merged_props == NULL) {
-			D_ERROR("failed to merge cont_prop and label_prop\n");
-			rc = -DER_NOMEM;
-			goto out_prop;
-		}
-	}
-
-	rc = daos_cont_create(poh, uuid, merged_props ? merged_props : label_prop, ev);
-	if (rc != 0) {
-		D_ERROR("daos_cont_create label=%s failed, "DF_RC"\n", label, DP_RC(rc));
-		goto out_merged_props;
-	}
-
-out_merged_props:
-	daos_prop_free(merged_props);
-out_prop:
-	daos_prop_free(label_prop);
-	return rc;
+	return cont_create(poh, label, cont_prop, uuid, ev);
 }
 
 /**

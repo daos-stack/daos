@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -532,27 +532,43 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 	int			 rc;
 
 	D_ASSERT((flags & (VOS_OBJ_AGGREGATE | VOS_OBJ_DISCARD)) == 0);
-	D_ASSERT(intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE);
+	D_ASSERT(intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE ||
+		 intent == DAOS_INTENT_MARK);
 
-	if (obj->obj_df == NULL) {
-		rc = vos_oi_alloc(cont, obj->obj_id, epr->epr_hi, &obj->obj_df, ts_set);
-		if (rc) {
-			DL_ERROR(rc, DF_CONT": Failed to allocate OI "DF_UOID".",
-				 DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
-				 DP_UOID(obj->obj_id));
-			return rc;
-		}
-		D_ASSERT(obj->obj_df);
-	} else {
-		vos_ilog_ts_ignore(vos_obj2umm(obj), &obj->obj_df->vo_ilog);
-	}
-
-	/* Check again since it could yield since vos_obj_hold() */
 	if (check_discard(obj, flags))
 		return -DER_UPDATE_AGAIN;
 
+	/* Lookup OI table if the cached object is negative */
+	if (obj->obj_df == NULL) {
+		obj->obj_sync_epoch = 0;
+		rc                  = vos_oi_find(cont, obj->obj_id, &obj->obj_df, ts_set);
+		if (rc == 0) {
+			obj->obj_sync_epoch = obj->obj_df->vo_sync;
+		} else if (rc == -DER_NONEXIST) {
+			if (!(flags & VOS_OBJ_CREATE))
+				return -DER_NONEXIST;
+			rc = vos_oi_alloc(cont, obj->obj_id, epr->epr_hi, &obj->obj_df, ts_set);
+			if (rc) {
+				DL_ERROR(rc, DF_CONT ": Failed to allocate OI " DF_UOID ".",
+					 DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+					 DP_UOID(obj->obj_id));
+				return rc;
+			}
+			D_ASSERT(obj->obj_df);
+		} else if (rc) {
+			DL_ERROR(rc, DF_CONT ": Failed to find OI " DF_UOID ".",
+				 DP_CONT(cont->vc_pool->vp_id, cont->vc_id), DP_UOID(obj->obj_id));
+			return rc;
+		}
+	} else if (likely(intent != DAOS_INTENT_MARK)) {
+		vos_ilog_ts_ignore(vos_obj2umm(obj), &obj->obj_df->vo_ilog);
+		rc = vos_ilog_ts_add(ts_set, &obj->obj_df->vo_ilog, &obj->obj_id,
+				     sizeof(obj->obj_id));
+		D_ASSERT(rc == 0); /* Non-zero only valid for akey */
+	}
+
 	/* Check the sync epoch */
-	if (epr->epr_hi <= obj->obj_sync_epoch &&
+	if (intent != DAOS_INTENT_MARK && epr->epr_hi <= obj->obj_sync_epoch &&
 	    vos_dth_get(obj->obj_cont->vc_pool->vp_sysdb) != NULL) {
 		/* If someone has synced the object against the
 		 * obj->obj_sync_epoch, then we do not allow to modify the
@@ -589,8 +605,8 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 		}
 	}
 
-	/* It's done for DAOS_INTENT_PUNCH case */
-	if (intent == DAOS_INTENT_PUNCH)
+	/* It's done for DAOS_INTENT_PUNCH or DAOS_INTENT_MARK case */
+	if (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_MARK)
 		return 0;
 
 	/** If it's a conditional update, we need to preserve the -DER_NONEXIST
@@ -609,6 +625,10 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 	return rc;
 }
 
+/*
+ * The legacy function is being phased out. It is currently used to hold an object for fetch and
+ * iteration operations. Update and punch operations use vos_obj_acquire() to hold an object.
+ */
 int
 vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t *epr,
 	     daos_epoch_t bound, uint64_t flags, uint32_t intent, struct vos_object **obj_p,
@@ -629,7 +649,8 @@ vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t
 	D_ASSERT(occ != NULL);
 
 	if (flags & VOS_OBJ_CREATE) {
-		D_ASSERT(intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH);
+		D_ASSERT(intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH ||
+			 intent == DAOS_INTENT_MARK);
 		create = true;
 	}
 
@@ -671,7 +692,7 @@ vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t
 		} else if (rc) {
 			goto failed;
 		}
-	} else {
+	} else if (likely(intent != DAOS_INTENT_MARK)) {
 		tmprc = vos_ilog_ts_add(ts_set, &obj->obj_df->vo_ilog, &oid, sizeof(oid));
 		D_ASSERT(tmprc == 0); /* Non-zero only valid for akey */
 	}
@@ -687,16 +708,24 @@ vos_obj_hold(struct vos_container *cont, daos_unit_oid_t oid, daos_epoch_range_t
 	if (rc)
 		goto failed;
 
+	if (unlikely(intent == DAOS_INTENT_MARK))
+		goto out;
+
 	/* It's done for DAOS_INTENT_UPDATE or DAOS_INTENT_PUNCH or DAOS_INTENT_KILL */
 	if (intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH ||
 	    intent == DAOS_INTENT_KILL) {
 		D_ASSERT((flags & (VOS_OBJ_AGGREGATE | VOS_OBJ_DISCARD)) == 0);
+
 		if (obj == &obj_local) {
 			D_ASSERT(create == false);
 			rc = cache_object(occ, &obj);
 			if (rc != 0)
 				goto failed;
+		} else if (intent != DAOS_INTENT_KILL && obj->obj_df != NULL &&
+			   unlikely(ilog_is_corrupted(&obj->obj_df->vo_ilog))) {
+			D_GOTO(failed, rc = -DER_DATA_LOSS);
 		}
+
 		*obj_p = obj;
 		return 0;
 	}
@@ -839,7 +868,8 @@ vos_bkt_array_subset(struct vos_bkt_array *super, struct vos_bkt_array *sub)
 		return false;
 
 	for (i = 0; i < sub->vba_cnt; i++) {
-		idx = daos_array_find(super, super->vba_cnt, sub->vba_bkts[i], &bkt_sort_ops);
+		idx = daos_array_find(super->vba_bkts, super->vba_cnt, sub->vba_bkts[i],
+				      &bkt_sort_ops);
 		if (idx < 0)
 			return false;
 	}
@@ -969,14 +999,16 @@ vos_obj_acquire(struct vos_container *cont, daos_unit_oid_t oid, bool pin,
 		}
 	}
 
-	if (!obj->obj_bkt_alloted)
-		obj_allot_bkt(cont->vc_pool, obj);
+	if (vos_pool_is_evictable(cont->vc_pool)) {
+		if (!obj->obj_bkt_alloted)
+			obj_allot_bkt(cont->vc_pool, obj);
 
-	if (pin) {
-		rc = obj_pin_bkt(cont->vc_pool, obj);
-		if (rc) {
-			obj_put(occ, obj, false);
-			return rc;
+		if (pin) {
+			rc = obj_pin_bkt(cont->vc_pool, obj);
+			if (rc) {
+				obj_put(occ, obj, false);
+				return rc;
+			}
 		}
 	}
 

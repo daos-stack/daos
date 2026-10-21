@@ -1,5 +1,6 @@
 """
 (C) Copyright 2020-2024 Intel Corporation.
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,8 +10,12 @@ from collections import OrderedDict
 
 import yaml
 from ClusterShell.NodeSet import NodeSet
+
 # pylint: disable=import-error,no-name-in-module
-from util.data_utils import dict_extract_values, list_flatten, list_unique
+try:
+    from util.data_utils import dict_extract_values, list_flatten, list_unique
+except (ImportError, ModuleNotFoundError):
+    from data_utils import dict_extract_values, list_flatten, list_unique
 
 
 class YamlException(BaseException):
@@ -70,6 +75,29 @@ def get_yaml_data(yaml_file):
             raise YamlException(f"Error reading {yaml_file}") from error
 
 
+def write_yaml_file(logger, yaml_file, lines):
+    """Write the contents to a yaml file.
+
+    Args:
+        logger (logger): logger for the messages produced by this method
+        yaml_file (str): yaml file to write
+        lines (list): yaml file contents
+
+    Raises:
+        YamlException: if there is an error writing the yaml file.
+    """
+    logger.debug('  Creating %s', yaml_file)
+    for line in lines:
+        logger.debug('    %s', line)
+    try:
+        with open(yaml_file, "w", encoding="utf-8") as yaml_handle:
+            yaml_handle.writelines(f'{line}\n' for line in lines)
+    except IOError as error:
+        message = f"Error writing yaml file {yaml_file}"
+        logger.error(message)
+        raise YamlException(message) from error
+
+
 class YamlUpdater():
     """A class for updating placeholders in test yaml files."""
 
@@ -80,7 +108,7 @@ class YamlUpdater():
         ("bdev_list", "_storage", list),
         ("timeout", "_timeout", int),
         ("timeouts", "_timeout", dict),
-        ("clush_timeout", "_timeout", int),
+        ("daos_racer_timeout", "_timeout", int),
         ("ior_timeout", "_timeout", int),
         ("job_manager_timeout", "_timeout", int),
         ("pattern_timeout", "_timeout", int),

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,6 +30,11 @@ enum {
 	VOS_ILOG_COND_INSERT,
 	/** Operation is conditional fetch */
 	VOS_ILOG_COND_FETCH,
+};
+
+/* The highest 4-bits in ilog magic are used for flags. */
+enum {
+	ILOG_FLAGS_CORRUPTED = (1 << 0),
 };
 
 struct vos_container;
@@ -175,6 +181,22 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 		const daos_epoch_range_t *epr, daos_epoch_t bound,
 		struct vos_ilog_info *parent, struct vos_ilog_info *info,
 		struct vos_ts_set *ts_set, bool leaf, bool replay);
+
+/**
+ * Set flags to the incaration log. Add ilog entry if no visible one exists yet.
+ *
+ * \param	cont[IN]	Pointer to vos container
+ * \param	ilog[IN]	The incarnation log root
+ * \param	epoch[IN]	The epoch for set flags operation
+ * \param	flags[IN]	The flags to be set to the incaration log
+ *
+ * \return	0		Successful set the flags
+ *		other		Appropriate error code
+ */
+#define vos_ilog_set_flags vos_ilog_set_flags_
+int
+vos_ilog_set_flags_(struct vos_container *cont, struct ilog_df *ilog, daos_epoch_t epoch,
+		    uint32_t flags);
 
 /**
  * Check the incarnation log for existence and return important information
@@ -365,5 +387,13 @@ vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type, bool standalone);
 void
 vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc,
 		     bool standalone);
+
+static inline bool
+vos_ilog_failout(struct ilog_df *ilog, uint32_t intent)
+{
+	return ilog_is_corrupted(ilog) && intent != DAOS_INTENT_DISCARD &&
+	       intent != DAOS_INTENT_MARK && intent != DAOS_INTENT_KILL &&
+	       intent != DAOS_INTENT_CHECK;
+}
 
 #endif /* __VOS_ILOG_H__ */

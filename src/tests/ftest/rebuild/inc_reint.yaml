@@ -1,0 +1,63 @@
+hosts:
+  test_servers: 4
+
+timeout: 1H
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      targets: 4
+      pinned_numa_node: 0
+      nr_xs_helpers: 0
+      log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,any
+        - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
+        - D_LOG_FLUSH=DEBUG
+        - FI_LOG_LEVEL=warn
+        - D_LOG_STDERR_IN_LOG=1
+      storage: auto
+
+    1:
+      targets: 4
+      pinned_numa_node: 1
+      nr_xs_helpers: 0
+      log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,any
+        - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
+        - D_LOG_FLUSH=DEBUG
+        - FI_LOG_LEVEL=warn
+        - D_LOG_STDERR_IN_LOG=1
+      storage: auto
+
+  transport_config:
+    allow_insecure: true
+
+pool:
+  scm_size: 6G
+  nvme_size: 80G
+
+agent_config:
+  transport_config:
+    allow_insecure: true
+
+dmg:
+  transport_config:
+    allow_insecure: true
+
+daos_tests:
+  num_clients:
+    test_daos_inc_reint_cont_recov: 1
+  test_name:
+    test_daos_inc_reint_cont_recov: DAOS_Inc_Reint_Cont_Recov
+  daos_test:
+    test_daos_inc_reint_cont_recov: Y
+  args:
+    test_daos_inc_reint_cont_recov: -s3

@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,6 +42,22 @@ char *getenv(const char *name)
 	} else {
 		return NULL;
 	}
+}
+
+int
+setenv(const char *name, const char *value, int overwrite)
+{
+	if (strncmp(name, DEFAULT_JOBID_ENV, sizeof(DEFAULT_JOBID_ENV)) == 0) {
+		if (!getenv_daos_jobid_return || overwrite != 0)
+			getenv_daos_jobid_return = (char *)value;
+	} else if (getenv_jobid_env_return &&
+		   strncmp(name, getenv_jobid_env_return, MAX_ENV_NAME) == 0) {
+		if (!getenv_jobid_return || overwrite != 0)
+			getenv_jobid_return = (char *)value;
+	} else {
+		return -1;
+	}
+	return 0;
 }
 
 static pid_t getpid_pid;
@@ -185,6 +202,91 @@ test_dc_job_init_with_jobid_env_and_jobid(void **state)
 }
 
 static void
+test_dc_job_init_with_default_jobid_and_env_unset(void **state)
+{
+	int   rc            = 0;
+	char *default_jobid = "cool-default-jobid";
+
+	rc = dc_set_default_jobid(default_jobid);
+	assert_return_code(rc, 0);
+
+	rc = dc_job_init();
+	assert_return_code(rc, 0);
+
+	assert_string_equal(dc_jobid, default_jobid);
+
+	dc_job_fini();
+}
+
+static void
+test_dc_job_init_with_default_jobid_and_env_set(void **state)
+{
+	int   rc            = 0;
+	char *exp_jobid     = NULL;
+	char *default_jobid = "cool-default-jobid";
+
+	getenv_daos_jobid_return = "test-jobid";
+	D_STRNDUP(exp_jobid, getenv_daos_jobid_return, MAX_JOBID_LEN);
+
+	rc = dc_set_default_jobid(default_jobid);
+	assert_return_code(rc, 0);
+
+	rc = dc_job_init();
+	assert_return_code(rc, 0);
+
+	assert_string_equal(dc_jobid, exp_jobid);
+
+	D_FREE(exp_jobid);
+	dc_job_fini();
+}
+
+static void
+test_dc_job_init_with_default_jobid_and_jobid_env_unset(void **state)
+{
+	int   rc            = 0;
+	char *default_jobid = "cool-default-jobid";
+
+	getenv_jobid_env_return = "other-jobid-env";
+
+	rc = dc_set_default_jobid(default_jobid);
+	assert_return_code(rc, 0);
+
+	rc = dc_job_init();
+	assert_return_code(rc, 0);
+
+	assert_string_equal(dc_jobid_env, getenv_jobid_env_return);
+
+	assert_string_equal(dc_jobid, default_jobid);
+
+	dc_job_fini();
+}
+
+static void
+test_dc_job_init_with_default_jobid_and_jobid_env_set(void **state)
+{
+	int   rc            = 0;
+	char *exp_jobid     = NULL;
+	char *default_jobid = "cool-default-jobid";
+
+	getenv_jobid_env_return = "other-jobid-env";
+	getenv_jobid_return     = "test-jobid";
+	D_STRNDUP(exp_jobid, getenv_jobid_return, MAX_JOBID_LEN);
+
+	rc = dc_set_default_jobid(default_jobid);
+	assert_return_code(rc, 0);
+
+	rc = dc_job_init();
+	assert_return_code(rc, 0);
+
+	assert_string_equal(dc_jobid_env, getenv_jobid_env_return);
+
+	assert_string_equal(dc_jobid, exp_jobid);
+
+	D_FREE(exp_jobid);
+	dc_job_fini();
+}
+
+static void
 test_dc_job_init_with_uname_fail(void **state)
 {
 	int ret = 0;
@@ -205,16 +307,15 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		JOB_UTEST(
-			test_dc_job_init_no_env),
-		JOB_UTEST(
-			test_dc_job_init_with_jobid),
-		JOB_UTEST(
-			test_dc_job_init_with_jobid_env),
-		JOB_UTEST(
-			test_dc_job_init_with_jobid_env_and_jobid),
-		JOB_UTEST(
-			test_dc_job_init_with_uname_fail),
+	    JOB_UTEST(test_dc_job_init_no_env),
+	    JOB_UTEST(test_dc_job_init_with_jobid),
+	    JOB_UTEST(test_dc_job_init_with_jobid_env),
+	    JOB_UTEST(test_dc_job_init_with_jobid_env_and_jobid),
+	    JOB_UTEST(test_dc_job_init_with_default_jobid_and_env_unset),
+	    JOB_UTEST(test_dc_job_init_with_default_jobid_and_env_set),
+	    JOB_UTEST(test_dc_job_init_with_default_jobid_and_jobid_env_unset),
+	    JOB_UTEST(test_dc_job_init_with_default_jobid_and_jobid_env_set),
+	    JOB_UTEST(test_dc_job_init_with_uname_fail),
 	};
 
 	d_register_alt_assert(mock_assert);

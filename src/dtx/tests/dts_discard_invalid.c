@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,7 +48,7 @@ __wrap_dbtree_lookup(daos_handle_t coh, d_iov_t *key, d_iov_t *val_out)
 	assert_int_equal(val_out->iov_len, 0);
 	assert_int_equal(val_out->iov_buf_len, 0);
 	assert_null(val_out->iov_buf);
-	val_out->iov_buf = (void *)mock();
+	val_out->iov_buf = (void *)mock_ptr_type(void *);
 	if (val_out->iov_buf != NULL) {
 		val_out->iov_len = val_out->iov_buf_len = sizeof(struct vos_dtx_act_ent);
 		return 0;
@@ -64,26 +65,26 @@ __wrap_ilog_is_valid(struct umem_instance *umm, umem_off_t rec, uint32_t dtx_lid
 		     daos_epoch_t epoch)
 {
 	assert_ptr_equal(umm, &Pool.vp_umm);
-	check_expected(umem_off2offset(rec));
+	check_expected_uint(umem_off2offset(rec));
 	assert_int_equal(dtx_lid, DTX_LID);
 	assert_int_equal(epoch, EPOCH);
-	return mock();
+	return mock_type(bool);
 }
 
 bool
 __wrap_vos_irec_is_valid(const struct vos_irec_df *svt, uint32_t dtx_lid)
 {
-	check_expected(svt);
+	check_expected_ptr(svt);
 	assert_int_equal(dtx_lid, DTX_LID);
-	return mock();
+	return mock_type(bool);
 }
 
 bool
 __wrap_evt_desc_is_valid(const struct evt_desc *evt, uint32_t dtx_lid)
 {
-	check_expected(evt);
+	check_expected_ptr(evt);
 	assert_int_equal(dtx_lid, DTX_LID);
-	return mock();
+	return mock_type(bool);
 }
 
 int
@@ -91,7 +92,7 @@ tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {
 	assert_ptr_equal(umm, &Pool.vp_umm);
 	assert_null(txd);
-	int rc = mock();
+	int rc = mock_type(int);
 	if (rc == 0) {
 		In_tx = true;
 	}
@@ -105,29 +106,29 @@ tx_commit(struct umem_instance *umm, void *data)
 	assert_null(data);
 	assert_true(In_tx);
 	In_tx = false;
-	return mock();
+	return mock_type(int);
 }
 
 int
 tx_abort(struct umem_instance *umm, int error)
 {
 	assert_ptr_equal(umm, &Pool.vp_umm);
-	check_expected(error);
+	check_expected_int(error);
 	assert_true(In_tx);
 	In_tx = false;
 	if (error) {
 		return error;
 	}
-	return mock();
+	return mock_type(int);
 }
 
 int
 tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 {
 	assert_ptr_equal(umm, &Pool.vp_umm);
-	check_expected(ptr);
-	check_expected(size);
-	return mock();
+	check_expected_ptr(ptr);
+	check_expected_uint(size);
+	return mock_type(int);
 }
 
 /* tests */
@@ -146,7 +147,7 @@ test_missing_things(void **unused)
 	expect_assert_failure(vos_dtx_discard_invalid(Coh, NULL, &discarded));
 
 	/* DAE not in the DTX active table. */
-	will_return(__wrap_dbtree_lookup, NULL);
+	will_return_ptr(__wrap_dbtree_lookup, NULL);
 	rc = vos_dtx_discard_invalid(Coh, DTX_ID_PTR, &discarded);
 	assert_int_equal(rc, DBTREE_LOOKUP_ERROR_RC);
 }
@@ -170,16 +171,16 @@ prep_records_common(struct rec_valid tmpl[], int num, umem_off_t *rec, umem_off_
 
 		switch (tmpl[i].type) {
 		case DTX_RT_ILOG:
-			expect_value(__wrap_ilog_is_valid, umem_off2offset(rec), off);
-			will_return(__wrap_ilog_is_valid, tmpl[i].valid);
+			expect_uint_value(__wrap_ilog_is_valid, umem_off2offset(rec), off);
+			will_return_int(__wrap_ilog_is_valid, tmpl[i].valid);
 			break;
 		case DTX_RT_SVT:
-			expect_value(__wrap_vos_irec_is_valid, svt, off);
-			will_return(__wrap_vos_irec_is_valid, tmpl[i].valid);
+			expect_uint_value(__wrap_vos_irec_is_valid, svt, off);
+			will_return_int(__wrap_vos_irec_is_valid, tmpl[i].valid);
 			break;
 		case DTX_RT_EVT:
-			expect_value(__wrap_evt_desc_is_valid, evt, off);
-			will_return(__wrap_evt_desc_is_valid, tmpl[i].valid);
+			expect_uint_value(__wrap_evt_desc_is_valid, evt, off);
+			will_return_int(__wrap_evt_desc_is_valid, tmpl[i].valid);
 			break;
 		default:
 			fail_msg("Unknown record type: %d", tmpl[i].type);
@@ -204,8 +205,8 @@ prep_records_inline(struct rec_valid tmpl[], int num)
 	bool discarded = prep_records_common(tmpl, num, Dae.dae_base.dae_rec_inline,
 					     Dae_df.dae_rec_inline, Dae_df_exp.dae_rec_inline);
 	if (discarded) {
-		expect_value(tx_add_ptr, ptr, &Dae_df.dae_rec_inline);
-		expect_value(tx_add_ptr, size, sizeof(umem_off_t) * num);
+		expect_uint_value(tx_add_ptr, ptr, (uintptr_t)(&Dae_df.dae_rec_inline));
+		expect_uint_value(tx_add_ptr, size, sizeof(umem_off_t) * num);
 	}
 
 	return discarded;
@@ -223,8 +224,8 @@ prep_records_noninline(struct rec_valid tmpl[], int num)
 
 	bool discarded = prep_records_common(tmpl, num, Records, Records_df, Records_df_exp);
 	if (discarded) {
-		expect_value(tx_add_ptr, ptr, &Records_df);
-		expect_value(tx_add_ptr, size, sizeof(umem_off_t) * num);
+		expect_uint_value(tx_add_ptr, ptr, (uintptr_t)(&Records_df));
+		expect_uint_value(tx_add_ptr, size, sizeof(umem_off_t) * num);
 	}
 
 	return discarded;
@@ -239,8 +240,8 @@ test_tx_begin_fail(void **unused)
 	int rc;
 
 	/* tx_begin() fails. */
-	will_return(__wrap_dbtree_lookup, &Dae);
-	will_return(tx_begin, TX_ERROR_RC);
+	will_return_ptr(__wrap_dbtree_lookup, &Dae);
+	will_return_int(tx_begin, TX_ERROR_RC);
 	rc = vos_dtx_discard_invalid(Coh, DTX_ID_PTR, &discarded);
 	assert_int_equal(rc, TX_ERROR_RC);
 }
@@ -252,10 +253,10 @@ test_tx_abort_fail(void **unused)
 	int rc;
 
 	/* tx_abort() (when nothing to commit) fails. */
-	will_return(__wrap_dbtree_lookup, &Dae);
-	will_return(tx_begin, 0);
-	expect_value(tx_abort, error, 0);
-	will_return(tx_abort, TX_ERROR_RC);
+	will_return_ptr(__wrap_dbtree_lookup, &Dae);
+	will_return_int(tx_begin, 0);
+	expect_int_value(tx_abort, error, 0);
+	will_return_int(tx_abort, TX_ERROR_RC);
 	rc = vos_dtx_discard_invalid(Coh, DTX_ID_PTR, &discarded);
 	assert_int_equal(rc, TX_ERROR_RC);
 }
@@ -269,11 +270,11 @@ test_tx_add_ptr_inline_fail(void **unused)
 	int rc;
 
 	/* tx_add_ptr() for inline records fails. */
-	will_return(__wrap_dbtree_lookup, &Dae);
-	will_return(tx_begin, 0);
+	will_return_ptr(__wrap_dbtree_lookup, &Dae);
+	will_return_int(tx_begin, 0);
 	prep_records_inline(One_rec, ARRAY_SIZE(One_rec));
-	will_return(tx_add_ptr, TX_ERROR_RC);
-	expect_value(tx_abort, error, TX_ERROR_RC);
+	will_return_int(tx_add_ptr, TX_ERROR_RC);
+	expect_int_value(tx_abort, error, TX_ERROR_RC);
 	rc = vos_dtx_discard_invalid(Coh, DTX_ID_PTR, &discarded);
 	assert_int_equal(rc, TX_ERROR_RC);
 }
@@ -285,11 +286,11 @@ test_tx_add_ptr_noninline_fail(void **unused)
 	int rc;
 
 	/* tx_add_ptr() for non-inline records fails. */
-	will_return(__wrap_dbtree_lookup, &Dae);
-	will_return(tx_begin, 0);
+	will_return_ptr(__wrap_dbtree_lookup, &Dae);
+	will_return_int(tx_begin, 0);
 	prep_records_noninline(One_rec, ARRAY_SIZE(One_rec));
-	will_return(tx_add_ptr, TX_ERROR_RC);
-	expect_value(tx_abort, error, TX_ERROR_RC);
+	will_return_int(tx_add_ptr, TX_ERROR_RC);
+	expect_int_value(tx_abort, error, TX_ERROR_RC);
 	rc = vos_dtx_discard_invalid(Coh, DTX_ID_PTR, &discarded);
 	assert_int_equal(rc, TX_ERROR_RC);
 }
@@ -301,11 +302,11 @@ test_tx_commit_fail(void **unused)
 	int rc;
 
 	/* tx_commit() fails. */
-	will_return(__wrap_dbtree_lookup, &Dae);
-	will_return(tx_begin, 0);
+	will_return_ptr(__wrap_dbtree_lookup, &Dae);
+	will_return_int(tx_begin, 0);
 	prep_records_noninline(One_rec, ARRAY_SIZE(One_rec));
-	will_return(tx_add_ptr, 0);
-	will_return(tx_commit, TX_ERROR_RC);
+	will_return_int(tx_add_ptr, 0);
+	will_return_int(tx_commit, TX_ERROR_RC);
 	rc = vos_dtx_discard_invalid(Coh, DTX_ID_PTR, &discarded);
 	assert_int_equal(rc, TX_ERROR_RC);
 }
@@ -331,11 +332,11 @@ test_discard_inline_all(void **unused)
 	int rc;
 
 	/* discard all inline records at once */
-	will_return(__wrap_dbtree_lookup, &Dae);
-	will_return(tx_begin, 0);
+	will_return_ptr(__wrap_dbtree_lookup, &Dae);
+	will_return_int(tx_begin, 0);
 	prep_records_inline(recs, ARRAY_SIZE(recs));
-	will_return(tx_add_ptr, 0);
-	will_return(tx_commit, 0);
+	will_return_int(tx_add_ptr, 0);
+	will_return_int(tx_commit, 0);
 	rc = vos_dtx_discard_invalid(Coh, DTX_ID_PTR, &discarded);
 	assert_int_equal(rc, 0);
 	assert_int_equal(discarded, ARRAY_SIZE(recs));
@@ -378,11 +379,11 @@ discard_inline_one_execute(struct rec_valid *recs, int num)
 	int discarded = 0;
 	int rc;
 
-	will_return(__wrap_dbtree_lookup, &Dae);
-	will_return(tx_begin, 0);
+	will_return_ptr(__wrap_dbtree_lookup, &Dae);
+	will_return_int(tx_begin, 0);
 	prep_records_inline(recs, num);
-	will_return(tx_add_ptr, 0);
-	will_return(tx_commit, 0);
+	will_return_int(tx_add_ptr, 0);
+	will_return_int(tx_commit, 0);
 	rc = vos_dtx_discard_invalid(Coh, DTX_ID_PTR, &discarded);
 	assert_int_equal(rc, 0);
 	assert_int_equal(discarded, 1);
@@ -411,11 +412,11 @@ test_discard_noninline_all(void **unused)
 	int rc;
 
 	/* discard all noninline records at once */
-	will_return(__wrap_dbtree_lookup, &Dae);
-	will_return(tx_begin, 0);
+	will_return_ptr(__wrap_dbtree_lookup, &Dae);
+	will_return_int(tx_begin, 0);
 	prep_records_noninline(recs, ARRAY_SIZE(recs));
-	will_return(tx_add_ptr, 0);
-	will_return(tx_commit, 0);
+	will_return_int(tx_add_ptr, 0);
+	will_return_int(tx_commit, 0);
 	rc = vos_dtx_discard_invalid(Coh, DTX_ID_PTR, &discarded);
 	assert_int_equal(rc, 0);
 	assert_int_equal(discarded, ARRAY_SIZE(recs));
@@ -429,11 +430,11 @@ discard_noninline_one_execute(struct rec_valid *recs, int num)
 	int discarded = 0;
 	int rc;
 
-	will_return(__wrap_dbtree_lookup, &Dae);
-	will_return(tx_begin, 0);
+	will_return_ptr(__wrap_dbtree_lookup, &Dae);
+	will_return_int(tx_begin, 0);
 	prep_records_noninline(recs, num);
-	will_return(tx_add_ptr, 0);
-	will_return(tx_commit, 0);
+	will_return_int(tx_add_ptr, 0);
+	will_return_int(tx_commit, 0);
 	rc = vos_dtx_discard_invalid(Coh, DTX_ID_PTR, &discarded);
 	assert_int_equal(rc, 0);
 	assert_int_equal(discarded, 1);
@@ -476,25 +477,25 @@ test_discard_rand(void **unused)
 
 	printf("srand(%d), num=%d, discarded=%d\n", RAND_SEED, num, discarded_exp);
 
-	will_return(__wrap_dbtree_lookup, &Dae);
-	will_return(tx_begin, 0);
+	will_return_ptr(__wrap_dbtree_lookup, &Dae);
+	will_return_int(tx_begin, 0);
 
 	/* Note: The inline records are processed first hence they have to be initialized first as
 	 * well. */
 	call_tx_add_ptr = prep_records_inline(recs, min(num, DTX_INLINE_REC_CNT));
 	if (call_tx_add_ptr) {
-		will_return(tx_add_ptr, 0);
+		will_return_int(tx_add_ptr, 0);
 	}
 
 	if (num > DTX_INLINE_REC_CNT) {
 		call_tx_add_ptr =
 		    prep_records_noninline(&recs[DTX_INLINE_REC_CNT], num - DTX_INLINE_REC_CNT);
 		if (call_tx_add_ptr) {
-			will_return(tx_add_ptr, 0);
+			will_return_int(tx_add_ptr, 0);
 		}
 	}
 
-	will_return(tx_commit, 0);
+	will_return_int(tx_commit, 0);
 	rc = vos_dtx_discard_invalid(Coh, DTX_ID_PTR, &discarded);
 	assert_int_equal(rc, 0);
 	assert_int_equal(discarded, discarded_exp);

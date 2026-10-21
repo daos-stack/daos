@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <daos/rpc.h>
 #include <daos/pool.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/object.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
@@ -25,7 +26,10 @@
 #include "rebuild_internal.h"
 
 #define RBLD_CHECK_INTV	 2000	/* milliseconds interval to check*/
+#define RBLD_LOG_INTV     300    /* seconds interval to print logs */
+#define RBLD_LOG_INTV_CNT (RBLD_LOG_INTV * 1000 / RBLD_CHECK_INTV)
 struct rebuild_global	rebuild_gst;
+unsigned int            rebuild_wait_ec_pause = 0;
 
 struct pool_map *
 rebuild_pool_map_get(struct ds_pool *pool)
@@ -85,6 +89,38 @@ rpt_stale(struct rebuild_tgt_pool_tracker *rpt)
 	return !found;
 }
 
+enum {
+	RPT_ABORT_NONE = 0,
+	RPT_ABORT_ORPHANED_RECLAIM,
+	RPT_ABORT_GENERAL_STALE,
+};
+
+static int
+rpt_should_abort(struct rebuild_tgt_pool_tracker *rpt, struct ds_iv_ns *ns, struct rebuild_iv *iv)
+{
+	/* Abort orphaned rpt whose leader is gone. After PS leader switch,
+	 * reclaim tasks are not regenerated (UPIN not in DOWN/UP/DRAIN),
+	 * so this rpt has no matching rgt on the new leader and IV updates
+	 * are silently dropped.
+	 */
+	if (rpt->rt_leader_term < ns->iv_master_term && rpt->rt_scan_done &&
+	    (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM || rpt->rt_rebuild_op == RB_OP_RECLAIM)) {
+		D_ERROR(DF_UUID " ver %d gen %u op %s: stale term " DF_U64 " < " DF_U64
+				", abort orphaned rpt\n",
+			DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_rebuild_gen,
+			RB_OP_STR(rpt->rt_rebuild_op), rpt->rt_leader_term, ns->iv_master_term);
+
+		return RPT_ABORT_ORPHANED_RECLAIM;
+	}
+
+	if (iv->riv_pull_done && rpt_stale(rpt)) {
+		D_ERROR(DF_RB " is stale, exit the ULT.\n", DP_RB_RPT(rpt));
+		return RPT_ABORT_GENERAL_STALE;
+	}
+
+	return RPT_ABORT_NONE;
+}
+
 struct rebuild_pool_tls *
 rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen)
 {
@@ -127,6 +163,7 @@ rebuild_pool_tls_create(struct rebuild_tgt_pool_tracker *rpt)
 	rebuild_pool_tls->rebuild_pool_scanning = 1;
 	rebuild_pool_tls->rebuild_pool_scan_done = 0;
 	rebuild_pool_tls->rebuild_pool_obj_count = 0;
+	rebuild_pool_tls->rebuild_pool_obj_send_pending  = 0;
 	rebuild_pool_tls->rebuild_pool_reclaim_obj_count = 0;
 	rebuild_pool_tls->rebuild_tree_hdl = DAOS_HDL_INVAL;
 	/* Only 1 thread will access the list, no need lock */
@@ -286,27 +323,34 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 		return;
 	}
 
+	if (status->dtx_resync_version != resync_ver)
+		D_DEBUG(DB_REBUILD, DF_RB " rank %d, update dtx_resync_version from %d to %d",
+			DP_RB_RGT(rgt), rank, status->dtx_resync_version, resync_ver);
 	status->dtx_resync_version = resync_ver;
-	if (flags & SCAN_DONE)
+	if ((flags & SCAN_DONE) && !status->scan_done) {
+		D_DEBUG(DB_REBUILD, DF_RB " rank %d is scan_done", DP_RB_RGT(rgt), rank);
 		status->scan_done = 1;
-	if (flags & PULL_DONE)
+	}
+	if ((flags & PULL_DONE) && !status->pull_done) {
+		D_DEBUG(DB_REBUILD, DF_RB " rank %d is pull_done", DP_RB_RGT(rgt), rank);
 		status->pull_done = 1;
+	}
 }
 
 static void
 rebuild_leader_set_update_time(struct rebuild_global_pool_tracker *rgt, d_rank_t rank)
 {
-	int i;
+	struct rebuild_server_status *status;
 
-	i = daos_array_find(rgt->rgt_servers_sorted, rgt->rgt_servers_number, rank,
-			    &servers_sort_ops);
-	if (i >= 0) {
-		rgt->rgt_servers[i].last_update = ABT_get_wtime();
+	status = rebuild_server_get_status(rgt, rank);
+	if (status != NULL) {
+		status->last_update = ABT_get_wtime();
 		return;
 	}
 	D_INFO("rank %u is not included in this rebuild.\n", rank);
 }
 
+#define RB_DTX_RESYNC_VER_SKIP ((uint32_t)-1)
 static uint32_t
 rebuild_get_global_dtx_resync_ver(struct rebuild_global_pool_tracker *rgt)
 {
@@ -316,7 +360,7 @@ rebuild_get_global_dtx_resync_ver(struct rebuild_global_pool_tracker *rgt)
 	D_ASSERT(rgt->rgt_servers_number > 0);
 	D_ASSERT(rgt->rgt_servers != NULL);
 	for (i = 0; i < rgt->rgt_servers_number; i++) {
-		if (rgt->rgt_servers[i].dtx_resync_version == (uint32_t)(-1))
+		if (rgt->rgt_servers[i].dtx_resync_version == RB_DTX_RESYNC_VER_SKIP)
 			continue;
 
 		if (min > rgt->rgt_servers[i].dtx_resync_version)
@@ -330,6 +374,8 @@ static void
 rpt_insert(struct rebuild_tgt_pool_tracker *rpt)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
+	rpt_get(rpt);
 	ABT_rwlock_wrlock(rebuild_gst.rg_ttl_rwlock);
 	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
 	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
@@ -339,9 +385,13 @@ void
 rpt_delete(struct rebuild_tgt_pool_tracker *rpt)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	D_ASSERT(!d_list_empty(&rpt->rt_list));
+
 	ABT_rwlock_wrlock(rebuild_gst.rg_ttl_rwlock);
 	d_list_del_init(&rpt->rt_list);
 	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
+
+	rpt_put(rpt);
 }
 
 struct rebuild_tgt_pool_tracker *
@@ -563,6 +613,10 @@ rebuild_status_completed_update_partial(const uuid_t pool_uuid, int32_t rs_state
 
 	rs_inlist = rebuild_status_completed_lookup(pool_uuid);
 	if (rs_inlist != NULL) {
+		/* possible enhancement: only overwrite rs_inlist->rs_errno if rs_errno != 0
+		 * e.g., if marking a failed rebuild as done after Fail_reclaim, keep original
+		 * rs_errno.
+		 */
 		rs_inlist->rs_errno = rs_errno;
 		rs_inlist->rs_state = rs_state;
 		return 0;
@@ -632,7 +686,12 @@ dss_rebuild_check_one(void *data)
 	if (pool_tls->rebuild_pool_status != 0 && status->status == 0)
 		status->status = pool_tls->rebuild_pool_status;
 
-	status->obj_count += pool_tls->rebuild_pool_reclaim_obj_count;
+	if (rpt->rt_rebuild_op == RB_OP_RECLAIM || rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		status->obj_count += pool_tls->rebuild_pool_reclaim_obj_count;
+		/* use rec_count to simulate progress when no object need to be reclaim */
+		status->rec_count += pool_tls->rebuild_pool_obj_count;
+	}
+
 	status->tobe_obj_count += pool_tls->rebuild_pool_obj_count;
 	ABT_mutex_unlock(status->lock);
 
@@ -646,11 +705,14 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 	struct ds_migrate_status	dms = { 0 };
 	struct rebuild_pool_tls		*tls;
 	struct rebuild_tgt_query_arg	arg;
+	bool                             global_scan_done;
 	int				rc;
+
+	/* Get rt_global_scan_done before querying dms.dm_migrating status */
+	global_scan_done = rpt->rt_global_scan_done;
 
 	arg.rpt = rpt;
 	arg.status = status;
-
 	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		rc = ds_migrate_query_status(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 					     rpt->rt_rebuild_gen, rpt->rt_rebuild_op,
@@ -676,7 +738,7 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 	status->obj_count += dms.dm_obj_count;
 	status->rec_count = dms.dm_rec_count;
 	status->size = dms.dm_total_size;
-	if (status->scanning || dms.dm_migrating)
+	if (!global_scan_done || status->scanning || dms.dm_migrating)
 		status->rebuilding = true;
 	else
 		status->rebuilding = false;
@@ -695,9 +757,10 @@ out:
 	return rc;
 }
 
-void
-ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
-			 daos_epoch_t *stable_eph, uint32_t *generation)
+static void
+ds_rebuild_running_query_adv(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
+			     daos_epoch_t *stable_eph, uint32_t *generation, uint32_t *leader_rank,
+			     uint64_t *leader_term)
 {
 	struct rebuild_tgt_pool_tracker	*rpt;
 
@@ -707,6 +770,10 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 		*stable_eph = 0;
 	if (generation)
 		*generation = -1;
+	if (leader_rank)
+		*leader_rank = -1;
+	if (leader_term)
+		*leader_term = -1;
 	rpt = rpt_lookup(pool_uuid, opc, -1 /* ver */, -1 /* gen */);
 	if (rpt != NULL && !rpt->rt_global_done && !rpt->rt_abort) {
 		D_DEBUG(DB_REBUILD, DF_RB " rebuild %p running eph " DF_X64 "\n", DP_RB_RPT(rpt),
@@ -717,9 +784,20 @@ ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
 			*upper_ver = rpt->rt_rebuild_ver;
 		if (generation)
 			*generation = rpt->rt_rebuild_gen;
+		if (leader_rank)
+			*leader_rank = rpt->rt_leader_rank;
+		if (leader_term)
+			*leader_term = rpt->rt_leader_term;
 	}
 	if (rpt)
 		rpt_put(rpt);
+}
+
+void
+ds_rebuild_running_query(uuid_t pool_uuid, uint32_t opc, uint32_t *upper_ver,
+			 daos_epoch_t *stable_eph, uint32_t *generation)
+{
+	ds_rebuild_running_query_adv(pool_uuid, opc, upper_ver, stable_eph, generation, NULL, NULL);
 }
 
 /*
@@ -811,6 +889,8 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
 			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
 				status->rs_state = DRS_IN_PROGRESS;
+				D_DEBUG(DB_REBUILD, "pool " DF_UUID " in rg_queue_list\n",
+					DP_UUID(pool_uuid));
 				D_GOTO(out, rc);
 			}
 		}
@@ -818,6 +898,8 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		d_list_for_each_entry(task, &rebuild_gst.rg_running_list, dst_list) {
 			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
 				status->rs_state = DRS_IN_PROGRESS;
+				D_DEBUG(DB_REBUILD, "pool " DF_UUID " in rg_running_list\n",
+					DP_UUID(pool_uuid));
 				D_GOTO(out, rc);
 			}
 		}
@@ -873,37 +955,109 @@ enum {
 	RB_BCAST_QUERY,
 };
 
-/* for interactive mode rebuild fault-injection testing */
-static uuid_t test_stop_start_puuid;
+static bool
+rebuild_is_stoppable(struct rebuild_global_pool_tracker *rgt, bool force, int *rcp)
+{
+	/* NAK if another rebuild is queued for the same pool (it would run after this one stopped)
+	 */
+	if (!d_list_empty(&rebuild_gst.rg_queue_list)) {
+		struct rebuild_task *task;
+
+		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
+			if (uuid_compare(task->dst_pool_uuid, rgt->rgt_pool_uuid) == 0) {
+				*rcp = -DER_NO_PERM;
+				return false;
+			}
+		}
+	}
+
+	if ((rgt->rgt_opc == RB_OP_REBUILD) || (rgt->rgt_opc == RB_OP_UPGRADE)) {
+		*rcp = 0;
+		return true;
+	}
+
+	/* Defer stop for many Fail_reclaim cases (until after it finishes). Do not return errors.
+	 * Only allow force-stop of repeating failures in Fail_reclaim
+	 */
+	if (rgt->rgt_opc == RB_OP_FAIL_RECLAIM && force) {
+		if (rgt->rgt_num_op_freclaim_fail == 0) {
+			D_INFO(DF_RB
+			       ": cannot force-stop op:Fail_reclaim with 0 failures - defer stop "
+			       "until after it finishes\n",
+			       DP_RB_RGT(rgt));
+			*rcp = 0;
+			return false;
+		}
+		D_INFO(DF_RB ": force-stop in op:Fail_reclaim after %u failures\n", DP_RB_RGT(rgt),
+		       rgt->rgt_num_op_freclaim_fail);
+		*rcp = 0;
+		return true;
+	} else if (rgt->rgt_opc == RB_OP_FAIL_RECLAIM) {
+		D_INFO(DF_RB ": defer stop until after op:Fail_reclaim finishes\n", DP_RB_RGT(rgt));
+		*rcp = 0;
+		return false;
+	}
+
+	/* NAK if this rebuild is Reclaim (i.e., it's effectively done) */
+	if (rgt->rgt_opc == RB_OP_RECLAIM) {
+		*rcp = -DER_BUSY;
+		return false;
+	}
+
+	/* Not expected */
+	*rcp = -DER_MISC;
+	return false;
+}
 
 /* administrator (via dmg command) asks to stop the currently-running rebuild for pool */
 int
-ds_rebuild_admin_stop(struct ds_pool *pool)
+ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force)
 {
 	struct rebuild_global_pool_tracker *rgt;
+	int                                 rc = 0;
 
 	/* look up the running rebuild and mark it as aborted (and by the administrator) */
 	rgt = rebuild_global_pool_tracker_lookup(pool->sp_uuid, -1 /* ver */, -1 /* gen */);
+
+	/* admin stop command only for specific cases (and force option for failing op:Fail_reclaim)
+	 */
 	if (rgt == NULL) {
-		/* nothing running, make it a no-op */
-		D_INFO(DF_UUID ": received request to stop rebuild - but nothing found to stop\n",
-		       DP_UUID(pool->sp_uuid));
-		return 0;
+		D_INFO(DF_UUID ": nothing found to stop\n", DP_UUID(pool->sp_uuid));
+		return -DER_NONEXIST;
 	}
-
-	/* admin stop command does not terminate reclaim/fail_reclaim jobs */
-	if ((rgt->rgt_opc == RB_OP_REBUILD) || (rgt->rgt_opc == RB_OP_UPGRADE)) {
-		D_INFO(DF_RB ": stopping rebuild opc %u(%s)\n", DP_RB_RGT(rgt), rgt->rgt_opc,
-		       RB_OP_STR(rgt->rgt_opc));
-		rgt->rgt_abort      = 1;
-		rgt->rgt_stop_admin = 1;
-	} else {
-		D_INFO(DF_RB ": NOT stopping rebuild during opc %u(%s)\n", DP_RB_RGT(rgt),
+	if (rebuild_is_stoppable(rgt, force, &rc)) {
+		D_INFO(DF_RB ": stopping rebuild force=%u opc %u(%s)\n", DP_RB_RGT(rgt), force,
 		       rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc));
+		rgt->rgt_abort           = 1;
+		rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
+	} else {
+		D_INFO(DF_RB ": NOT stopping rebuild force=%u opc %u(%s), rc=%d\n", DP_RB_RGT(rgt),
+		       force, rgt->rgt_opc, RB_OP_STR(rgt->rgt_opc), rc);
 	}
-	rgt_put(rgt);
 
-	return 0;
+	/* Only remember the admin-stop (to suppress retry of the original op:Rebuild) when the
+	 * stop was actually honored. A rejected stop (rc != 0, e.g. -DER_NO_PERM because another
+	 * rebuild is queued) must NOT latch rgt_stop_admin. */
+	if (rgt->rgt_abort || (rgt->rgt_opc == RB_OP_FAIL_RECLAIM && rc == 0))
+		rgt->rgt_stop_admin = 1;
+	rgt_put(rgt);
+	return rc;
+}
+
+/* For admin stopped reintegration, FAIL_RECLAIM needs to broadcast to reint engines to cleanup
+ * space, as following rebuild start will not do pool_discard again.
+ */
+static bool
+rgt_up_dom_included(struct rebuild_global_pool_tracker *rgt, struct pool_domain *dom)
+{
+	if (dom->do_comp.co_status != PO_COMP_ST_UP)
+		return false;
+
+	if (dom->do_comp.co_in_ver <= rgt->rgt_rebuild_ver ||
+	    (rgt->rgt_include_up && dom->do_comp.co_in_ver <= rgt->rgt_orig_rb_ver))
+		return true;
+
+	return false;
 }
 
 /*
@@ -914,13 +1068,12 @@ static void
 rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			    struct rebuild_global_pool_tracker *rgt)
 {
-	double                last_print = 0;
+	uint64_t              check_cnt      = 0;
+	uint64_t              last_print_cnt = 0;
+	uint64_t              log_cnt_intv   = 1;
 	unsigned int          total;
 	struct sched_req_attr attr = {0};
 	d_rank_t              myrank;
-	unsigned int          nsleeps          = 0;
-	bool                  fi_admin_stop_fi = false;
-	bool                  fi_admin_stop    = false;
 	int                   rc;
 
 	rc = crt_group_size(pool->sp_group, &total);
@@ -939,67 +1092,81 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 	while (1) {
 		struct daos_rebuild_status *rs = &rgt->rgt_status;
 		char                        sbuf[RBLD_SBUF_LEN];
-		double                      now;
 		char                       *str;
-		d_rank_list_t               excluded      = {0};
+		d_rank_list_t               rank_list     = {0};
 		bool                        rebuild_abort = false;
 		int                         i;
 
-		if (!fi_admin_stop_fi)
-			fi_admin_stop_fi = DAOS_FAIL_CHECK(DAOS_REBUILD_ADMIN_STOP);
-		fi_admin_stop = (fi_admin_stop_fi && (op == RB_OP_REBUILD));
-
-		if (fi_admin_stop && (nsleeps > 0)) {
-			uuid_copy(test_stop_start_puuid, rgt->rgt_pool_uuid);
-
-			/* What the real RPC handler will call. We will exit below due to rgt_abort
-			 */
-			ds_pool_rebuild_stop(test_stop_start_puuid, NULL /* hint */);
-		}
-
+		check_cnt++;
 		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = map_ranks_init(pool->sp_map,
-				    PO_COMP_ST_UP | PO_COMP_ST_DOWN |
-				    PO_COMP_ST_DOWNOUT | PO_COMP_ST_NEW,
-				    &excluded);
+				    PO_COMP_ST_UP | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
+					PO_COMP_ST_NEW,
+				    &rank_list);
 		if (rc != 0) {
 			D_INFO(DF_RB ": get rank list: %d\n", DP_RB_RGT(rgt), rc);
 			ABT_rwlock_unlock(pool->sp_lock);
 			goto sleep;
 		}
 
-		for (i = 0; i < excluded.rl_nr; i++) {
+		for (i = 0; i < rank_list.rl_nr; i++) {
 			struct pool_domain *dom;
 
-			dom = pool_map_find_dom_by_rank(pool->sp_map, excluded.rl_ranks[i]);
+			dom = pool_map_find_dom_by_rank(pool->sp_map, rank_list.rl_ranks[i]);
 			D_ASSERT(dom != NULL);
 
 			if (rgt->rgt_opc == RB_OP_REBUILD) {
 				if (dom->do_comp.co_status == PO_COMP_ST_UP) {
 					if (dom->do_comp.co_in_ver > rgt->rgt_rebuild_ver) {
-						D_INFO(DF_RB ": cancel rebuild co_in_ver=%u\n",
-						       DP_RB_RGT(rgt), dom->do_comp.co_in_ver);
+						D_INFO(DF_RB ": cancel rebuild due to new REINT, "
+							     "co_rank %d, co_in_ver %u\n",
+						       DP_RB_RGT(rgt), dom->do_comp.co_rank,
+						       dom->do_comp.co_in_ver);
 						rebuild_abort = true;
 						break;
-					} else {
-						continue;
 					}
 				} else if (dom->do_comp.co_status == PO_COMP_ST_DOWN) {
 					if (dom->do_comp.co_fseq > rgt->rgt_rebuild_ver) {
-						D_INFO(DF_RB ": cancel rebuild co_fseq=%u\n",
-						       DP_RB_RGT(rgt), dom->do_comp.co_fseq);
+						D_INFO(DF_RB ": cancel rebuild due to new DOWN, "
+							     "co_rank %d, co_fseq %u\n",
+						       DP_RB_RGT(rgt), dom->do_comp.co_rank,
+						       dom->do_comp.co_fseq);
 						rebuild_abort = true;
 						break;
 					}
 				}
 			}
-			D_INFO(DF_RB " exclude rank %d/%x.\n", DP_RB_RGT(rgt), dom->do_comp.co_rank,
-			       dom->do_comp.co_status);
-			rebuild_leader_set_status(rgt, dom->do_comp.co_rank,
-						  -1, SCAN_DONE | PULL_DONE);
+
+			if (check_cnt - last_print_cnt >= log_cnt_intv)
+				D_INFO(DF_RB " rank %d, status 0x%x.\n", DP_RB_RGT(rgt),
+				       dom->do_comp.co_rank, dom->do_comp.co_status);
+
+			/* Some engines don't participate the rebuild that will not report
+			 * progress/completion or dtx resync version through IV, mark the complete/
+			 * skip.
+			 * 1) PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_NEW ranks
+			 * 2) PO_COMP_ST_UP but co_in_ver > rebuild_ver also will be excluded from
+			 *    rebuild request, see rebuild_scan_broadcast()/rgt_up_dom_included().
+			 */
+			if (rgt_up_dom_included(rgt, dom) == false)
+				rebuild_leader_set_status(rgt, dom->do_comp.co_rank,
+							  RB_DTX_RESYNC_VER_SKIP,
+							  SCAN_DONE | PULL_DONE);
 		}
 		ABT_rwlock_unlock(pool->sp_lock);
-		map_ranks_fini(&excluded);
+		map_ranks_fini(&rank_list);
+
+		/* Abort orphaned rgt if the node is no longer the leader.
+		 * After PS leader switch, this rgt becomes orphaned and should be aborted.
+		 */
+		if (rgt->rgt_leader_term < pool->sp_iv_ns->iv_master_term &&
+		    (rgt->rgt_opc == RB_OP_FAIL_RECLAIM || rgt->rgt_opc == RB_OP_RECLAIM)) {
+			D_INFO(DF_RB " op %s: stale term " DF_U64 " < " DF_U64
+				     ", abort orphaned rgt\n",
+			       DP_RB_RGT(rgt), RB_OP_STR(rgt->rgt_opc), rgt->rgt_leader_term,
+			       pool->sp_iv_ns->iv_master_term);
+			rebuild_abort = true;
+		}
 
 		if (rebuild_abort) {
 			rgt->rgt_abort = 1;
@@ -1037,23 +1204,22 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 			 rs->rs_state, rs->rs_errno, rs->rs_fail_rank, rgt->rgt_stable_epoch,
 			 rgt->rgt_reclaim_epoch, rs->rs_seconds);
 
-		D_INFO("%s", sbuf);
 		if (rs->rs_state == DRS_COMPLETED || rebuild_gst.rg_abort || rgt->rgt_abort) {
+			D_INFO("%s", sbuf);
 			D_PRINT("%s", sbuf);
 			break;
 		}
 
-		now = ABT_get_wtime();
-		/* print something at least for each 10 seconds */
-		if (now - last_print > 10) {
-			last_print = now;
+		/* Exponential backoff to print at most every RBLD_LOG_INTV seconds */
+		if (check_cnt - last_print_cnt >= log_cnt_intv) {
+			last_print_cnt = check_cnt;
+			log_cnt_intv   = min(log_cnt_intv * 2, (uint64_t)RBLD_LOG_INTV_CNT);
+			D_INFO("%s", sbuf);
 			D_PRINT("%s", sbuf);
 		}
 sleep:
 		update_and_warn_for_slow_engines(rgt);
 		sched_req_sleep(rgt->rgt_ult, RBLD_CHECK_INTV);
-		if (fi_admin_stop)
-			nsleeps++;
 	}
 
 	sched_req_put(rgt->rgt_ult);
@@ -1301,11 +1467,17 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 
 			dom = pool_map_find_dom_by_rank(pool->sp_map, up_ranks.rl_ranks[i]);
 			D_ASSERT(dom != NULL);
-			D_DEBUG(DB_REBUILD, DF_RB " rank %u co_in_ver %u\n", DP_RB_RGT(rgt),
-				up_ranks.rl_ranks[i], dom->do_comp.co_in_ver);
-			if (dom->do_comp.co_in_ver < rgt->rgt_rebuild_ver)
+			D_DEBUG(DB_REBUILD, DF_RB " rank %u co_in_ver %u, rebuild_ver %u.\n",
+				DP_RB_RGT(rgt), up_ranks.rl_ranks[i], dom->do_comp.co_in_ver,
+				rgt->rgt_rebuild_ver);
+			if (rgt_up_dom_included(rgt, dom))
 				continue;
 
+			D_INFO(DF_RB " bypass UP rank %u co_in_ver %u, rebuild_ver %u, "
+				     "include_up %d, rebuild_op %d, orig_rb_ver %d",
+			       DP_RB_RGT(rgt), up_ranks.rl_ranks[i], dom->do_comp.co_in_ver,
+			       rgt->rgt_rebuild_ver, rgt->rgt_include_up, rebuild_op,
+			       rgt->rgt_orig_rb_ver);
 			excluded->rl_ranks[nr++] = up_ranks.rl_ranks[i];
 		}
 		excluded->rl_nr = nr;
@@ -1315,13 +1487,11 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx, pool, DAOS_REBUILD_MODULE,
 				  REBUILD_OBJECTS_SCAN, rebuild_ver, &rpc, NULL, excluded, NULL);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_RB " pool map broadcast failed", DP_RB_RGT(rgt));
+		DL_ERROR(rc, DF_RB " failed to create scan broadcast request", DP_RB_RGT(rgt));
 		D_GOTO(out, rc);
 	}
 
 	rsi = crt_req_get(rpc);
-	D_DEBUG(DB_REBUILD, DF_RB " scan broadcast\n", DP_RB_RGT(rgt));
-
 	uuid_copy(rsi->rsi_pool_uuid, pool->sp_uuid);
 	rsi->rsi_ns_id = pool->sp_iv_ns->iv_ns_id;
 	rsi->rsi_leader_term = rgt->rgt_leader_term;
@@ -1340,11 +1510,13 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	rso = crt_reply_get(rpc);
 	if (rc == 0)
 		rc = rso->rso_status;
+	else
+		DL_ERROR(rc, DF_RB " scan broadcast send failed.", DP_RB_RGT(rgt));
 
 	rgt->rgt_init_scan = 1;
 	rgt->rgt_stable_epoch = rso->rso_stable_epoch;
-	D_DEBUG(DB_REBUILD, DF_RB " " DF_RC " got stable/reclaim epoch " DF_X64 "/" DF_X64 "\n",
-		DP_RB_RGT(rgt), DP_RC(rc), rgt->rgt_stable_epoch, rgt->rgt_reclaim_epoch);
+	DL_INFO(rc, DF_RB " got stable/reclaim epoch " DF_X64 "/" DF_X64, DP_RB_RGT(rgt),
+		rgt->rgt_stable_epoch, rgt->rgt_reclaim_epoch);
 	crt_req_decref(rpc);
 out:
 	if (excluded)
@@ -1416,7 +1588,7 @@ rpt_put(struct rebuild_tgt_pool_tracker *rpt)
 	D_ASSERT(rpt->rt_refcount >= 0);
 	D_DEBUG(DB_REBUILD, DF_RB ": rpt %p ref %d finishing %d\n", DP_RB_RPT(rpt), rpt,
 		rpt->rt_refcount, rpt->rt_finishing);
-	if (rpt->rt_refcount == 1 && rpt->rt_finishing)
+	if (rpt->rt_finishing)
 		ABT_cond_signal(rpt->rt_fini_cond);
 	zombie = (rpt->rt_refcount == 0);
 	ABT_mutex_unlock(rpt->rt_lock);
@@ -1529,9 +1701,9 @@ rebuild_task_get_min_version(struct pool_map *map, struct pool_target_id_list *t
  * Other return value indicates an error.
  */
 static int
-rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver,
-		       daos_rebuild_opc_t rebuild_op,
-		       struct pool_target_id_list *tgts, uint64_t delay_sec)
+rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver, daos_rebuild_opc_t rebuild_op,
+		       daos_epoch_t reclaim_eph, struct pool_target_id_list *tgts,
+		       uint64_t delay_sec)
 {
 	struct rebuild_task *task;
 	struct rebuild_task *merge_pre_task = NULL;
@@ -1579,6 +1751,12 @@ rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver,
 			if (delay_sec != (uint64_t)(-1))
 				merge_task->dst_schedule_time = daos_gettime_coarse() + delay_sec;
 		}
+		/* For the case of new rebuild task in queue, and then rebuild stop's fail reclaim
+		 * complete and re-scheduled the original rebuild task with delay -1.
+		 */
+		if (merge_pre_task->dst_schedule_time != (uint64_t)(-1) &&
+		    delay_sec == (uint64_t)(-1))
+			merge_task = merge_pre_task;
 	} else if (merge_post_task != NULL && merge_post_task->dst_rebuild_op == rebuild_op) {
 		if ((merge_post_task->dst_schedule_time == (uint64_t)(-1) &&
 		     delay_sec == (uint64_t)(-1)) ||
@@ -1608,6 +1786,7 @@ rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver,
 
 	merge_task->dst_schedule_time = max(merge_task->dst_schedule_time,
 					    daos_gettime_coarse() + delay_sec);
+	merge_task->dst_reclaim_eph   = max(merge_task->dst_reclaim_eph, reclaim_eph);
 	merge_task->dst_reclaim_ver = rebuild_task_get_min_version(pool->sp_map, tgts);
 	D_PRINT("%s [%s] ("DF_UUID" ver=%u/%u) id %u\n",
 		RB_OP_STR(rebuild_op), merge_task->dst_schedule_time == -1 ?
@@ -1631,9 +1810,10 @@ static int
 rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 		     struct rebuild_global_pool_tracker **p_rgt)
 {
-	uint64_t	leader_term;
+	uint64_t        leader_term, rebuild_leader_term;
+	uint32_t        leader_rank, rebuild_leader_rank;
 	uint32_t	version;
-	uint32_t	generation;
+	uint32_t        generation;
 	int		rc;
 
 	rc = ds_pool_svc_term_get(pool->sp_uuid, &leader_term);
@@ -1642,12 +1822,18 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 			DP_RC(rc));
 		return rc;
 	}
+	leader_rank = dss_self_rank();
 
-	/* If this happened due to leader switch, then do not need update
-	 * generation.
+	/* If this happened due to leader switch, then do not need update generation.
+	 * If on the same PS leader, it retry the rebuild/reclaim on same version, should bump
+	 * the generation.
 	 */
-	ds_rebuild_running_query(pool->sp_uuid, -1, &version, NULL, &generation);
-	if (version < task->dst_map_ver)
+	ds_rebuild_running_query_adv(pool->sp_uuid, -1, &version, NULL, &generation,
+				     &rebuild_leader_rank, &rebuild_leader_term);
+	if (task->dst_rebuild_op == RB_OP_RECLAIM || task->dst_rebuild_op == RB_OP_FAIL_RECLAIM ||
+	    (version < task->dst_map_ver) ||
+	    (version == task->dst_map_ver && leader_rank == rebuild_leader_rank &&
+	     leader_term == rebuild_leader_term))
 		generation = ++pool->sp_rebuild_gen;
 
 	rc = rebuild_prepare(pool, task->dst_map_ver, generation,
@@ -1657,11 +1843,22 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 		return rc;
 
 	D_ASSERT(*p_rgt != NULL);
+	(*p_rgt)->rgt_num_op_rb            = task->dst_num_op_rb;
+	(*p_rgt)->rgt_num_op_freclaim      = task->dst_num_op_freclaim;
+	(*p_rgt)->rgt_num_op_rb_fail       = task->dst_num_op_rb_fail;
+	(*p_rgt)->rgt_num_op_freclaim_fail = task->dst_num_op_freclaim_fail;
 	D_INFO(DF_RB "\n", DP_RB_RGT(*p_rgt));
 
-	/* broadcast scan RPC to all targets */
-	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts,
-				    task->dst_new_layout_version, task->dst_rebuild_op);
+	/* For admin stopped reintegration, FAIL_RECLAIM needs to broadcast
+	 * to reint engines to cleanup space, as following rebuild start will
+	 * not do pool_discard again.
+	 */
+	if (task->dst_stop_admin && task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		(*p_rgt)->rgt_include_up  = true;
+		(*p_rgt)->rgt_orig_rb_ver = task->dst_retry_map_ver;
+	}
+	rc = rebuild_scan_broadcast(pool, *p_rgt, &task->dst_tgts, task->dst_new_layout_version,
+				    task->dst_rebuild_op);
 	if (rc)
 		DL_ERROR(rc, DF_RB ": object scan failed", DP_RB_RGT(*p_rgt));
 	else
@@ -1670,14 +1867,81 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	return rc;
 }
 
+static bool
+rebuild_retryable_err(int error)
+{
+	return (daos_crt_network_error(error) || error == -DER_TIMEDOUT || error == -DER_GRPVER ||
+		error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE ||
+		error == -DER_REBUILD_DELAY);
+}
+
+static bool
+rebuild_tgt_in_list(struct pool_target_id_list *tgts, uint32_t tgt_id)
+{
+	int i;
+
+	for (i = 0; tgts != NULL && i < tgts->pti_number; i++) {
+		if (tgts->pti_ids[i].pti_id == tgt_id)
+			return true;
+	}
+
+	return false;
+}
+
+static void
+rebuild_log_finish_scope(struct ds_pool *pool, struct rebuild_task *task,
+			 struct rebuild_global_pool_tracker *rgt)
+{
+	struct pool_target *tgts;
+	unsigned int        tgts_nr;
+	unsigned int        i;
+
+	D_DEBUG(DB_REBUILD, DF_RB " finish scope check: task_ver=%u dst_tgts=%d pool_map_ver=%u",
+		DP_RB_RGT(rgt), task->dst_map_ver, task->dst_tgts.pti_number, pool->sp_map_version);
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+
+	for (i = 0; i < task->dst_tgts.pti_number; i++) {
+		struct pool_target *target = NULL;
+		int                 rc;
+
+		rc = pool_map_find_target(pool->sp_map, task->dst_tgts.pti_ids[i].pti_id, &target);
+		if (rc == 1 && target != NULL)
+			D_DEBUG(DB_REBUILD, DF_RB " finish dst_tgt " DF_TARGET, DP_RB_RGT(rgt),
+				DP_TARGET(target));
+		else
+			D_ERROR(DF_RB " finish dst_tgt id %u not found in pool map", DP_RB_RGT(rgt),
+				task->dst_tgts.pti_ids[i].pti_id);
+	}
+
+	tgts    = pool_map_targets(pool->sp_map);
+	tgts_nr = pool_map_target_nr(pool->sp_map);
+	for (i = 0; i < tgts_nr; i++) {
+		struct pool_target *target = &tgts[i];
+
+		if (target->ta_comp.co_status != PO_COMP_ST_DOWN &&
+		    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
+			continue;
+		if (target->ta_comp.co_fseq == 0 || target->ta_comp.co_fseq > task->dst_map_ver)
+			continue;
+		if (rebuild_tgt_in_list(&task->dst_tgts, target->ta_comp.co_id))
+			continue;
+
+		D_WARN(DF_RB " covered DOWN/DRAIN target not in finish dst_tgts: " DF_TARGET,
+		       DP_RB_RGT(rgt), DP_TARGET(target));
+	}
+
+	ABT_rwlock_unlock(pool->sp_lock);
+}
+
 static void
 retry_rebuild_task(struct rebuild_task *task, struct rebuild_global_pool_tracker *rgt,
 		   daos_rebuild_opc_t *opc)
 {
-	int error = rgt->rgt_status.rs_errno;
 	int rc;
+	int error = rgt->rgt_status.rs_errno;
 
-	/* Only be called if rebuild task failed */
+	/* Only called if task failed. Whether to log is also based on do_map_revert argument */
 
 	/* Do not retry if the administrator manually stopped the rebuild */
 	if (rgt->rgt_stop_admin) {
@@ -1688,10 +1952,9 @@ retry_rebuild_task(struct rebuild_task *task, struct rebuild_global_pool_tracker
 	/* retry with network error, since the pool map will be changed accordingly, so
 	 * rebuild job can be fixed by the new pool map anyway.
 	 */
-	if (daos_crt_network_error(error) || error == -DER_TIMEDOUT ||
-	    error == -DER_GRPVER || error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE) {
-		DL_INFO(error, DF_UUID" opc %u/%u retry", DP_UUID(task->dst_pool_uuid),
-			task->dst_rebuild_op, task->dst_map_ver);
+	if (rebuild_retryable_err(error)) {
+		DL_CDEBUG(error, DLOG_ERR, DLOG_INFO, error, DF_UUID " opc %u/%u retry",
+			  DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op, task->dst_map_ver);
 		*opc = task->dst_rebuild_op;
 		return;
 	}
@@ -1699,40 +1962,41 @@ retry_rebuild_task(struct rebuild_task *task, struct rebuild_global_pool_tracker
 	/* Reclaim and exclude task needs to retry indefinitely */
 	if (task->dst_rebuild_op == RB_OP_RECLAIM ||
 	    task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
-		DL_INFO(error, DF_UUID" opc %u/%u retry", DP_UUID(task->dst_pool_uuid),
-			task->dst_rebuild_op, task->dst_map_ver);
+		DL_CDEBUG(error, DLOG_ERR, DLOG_INFO, error, DF_UUID " opc %u/%u retry",
+			  DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op, task->dst_map_ver);
 		*opc = task->dst_rebuild_op;
 		return;
 	}
 
 	/* Do not need retry for upgrade */
 	if (task->dst_rebuild_op == RB_OP_UPGRADE) {
-		DL_INFO(error, DF_UUID" opc %u/%u, no need to retry", DP_UUID(task->dst_pool_uuid),
-			task->dst_rebuild_op, task->dst_map_ver);
+		DL_CDEBUG(error, DLOG_ERR, DLOG_INFO, error, DF_UUID " opc %u/%u, no need to retry",
+			  DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op, task->dst_map_ver);
 		*opc = RB_OP_NONE;
 		return;
 	}
 
-	DL_INFO(error, DF_UUID" opc %u/%u, revert pool map", DP_UUID(task->dst_pool_uuid),
-		task->dst_rebuild_op, task->dst_map_ver);
+	DL_CDEBUG(error, DLOG_ERR, DLOG_INFO, error, DF_UUID " opc %u/%u, revert pool map",
+		  DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op, task->dst_map_ver);
+
 	rc = ds_pool_tgt_revert_rebuild(task->dst_pool_uuid, &task->dst_tgts);
 	if (rc < 0)
-		D_ERROR(DF_UUID" revert pool map status: %d\n",
-			DP_UUID(task->dst_pool_uuid), rc);
+		D_ERROR(DF_UUID " revert pool map status: %d\n", DP_UUID(task->dst_pool_uuid), rc);
 
 	/* Though there might be DOWN targets in the list needs to retry anyway,
 	 * NB: those drain/extend/reintegration targets have been revert to UPIN
 	 * or DOWNOUT status, so during retry, rebuild job will be canceled anyway.
 	 * Only those exclude targets will keep retry here.
 	 */
-	DL_INFO(error, DF_UUID" opc %u/%u, retry.", DP_UUID(task->dst_pool_uuid),
-		task->dst_rebuild_op, task->dst_map_ver);
+	DL_CDEBUG(error, DLOG_ERR, DLOG_INFO, error, DF_UUID " opc %u/%u, retry.",
+		  DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op, task->dst_map_ver);
 	*opc = RB_OP_REBUILD;
 }
 
 static int
 rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
-			       struct rebuild_global_pool_tracker *rgt, int ret)
+			       struct rebuild_global_pool_tracker *rgt, uint32_t obj_reclaim_ver,
+			       int ret)
 {
 	uint64_t delay_sec = 5; /* reschedule next op at now + 5 seconds time */
 	int      rc        = 0;
@@ -1748,10 +2012,11 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 			return 0;
 		}
 
-		rc = ds_rebuild_schedule(pool, task->dst_map_ver, task->dst_reclaim_eph,
-					 task->dst_new_layout_version, &task->dst_tgts,
-					 task->dst_rebuild_op, task->dst_stop_admin, delay_sec);
-		DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc, DF_UUID ": schedule retry opc %u(%s)",
+		rc = ds_rebuild_schedule(
+		    pool, task->dst_map_ver, task->dst_reclaim_eph, task->dst_new_layout_version,
+		    &task->dst_tgts, task->dst_rebuild_op, task->dst_retry_rebuild_op,
+		    task->dst_retry_map_ver, task->dst_stop_admin, NULL /* cur_taskp */, delay_sec);
+		DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc, DF_UUID ": reschedule not-started %u(%s)",
 			  DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op,
 			  RB_OP_STR(task->dst_rebuild_op));
 		return rc;
@@ -1769,61 +2034,101 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 	}
 
 	if (!is_rebuild_global_done(rgt) || rgt->rgt_status.rs_errno != 0) {
-		daos_rebuild_opc_t	retry_opc = 0;
+		daos_rebuild_opc_t retry_opc = 0;
 
 		/* If current job failed */
-		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
+		if ((rgt->rgt_opc == RB_OP_REBUILD) && (rgt->rgt_status.rs_errno != 0) &&
+		    !rebuild_retryable_err(rgt->rgt_status.rs_errno))
+			rgt->rgt_status.rs_state = DRS_COMPLETED;
+		else
+			rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
+
+		D_DEBUG(DB_REBUILD, DF_RB " rs_errno %d, rs_state %d\n", DP_RB_RGT(rgt),
+			rgt->rgt_status.rs_errno, rgt->rgt_status.rs_state);
 
 		/* reclaim or fail_reclaim failed - retry */
 		if (task->dst_rebuild_op == RB_OP_RECLAIM ||
 		    task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
-			rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
-						 task->dst_new_layout_version, &task->dst_tgts,
-						 task->dst_rebuild_op, task->dst_stop_admin,
-						 delay_sec);
+			/* carry a stop latched during this Fail_reclaim across its retry so a
+			 * later successful pass still parks the original rebuild (delay=-1)
+			 */
+			rc = ds_rebuild_schedule(
+			    pool, task->dst_map_ver, rgt->rgt_stable_epoch,
+			    task->dst_new_layout_version, &task->dst_tgts, task->dst_rebuild_op,
+			    task->dst_retry_rebuild_op, task->dst_retry_map_ver,
+			    task->dst_stop_admin || rgt->rgt_stop_admin, task, delay_sec);
 			DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc,
-				  DF_RB ": errno " DF_RC ", schedule retry", DP_RB_RGT(rgt),
-				  DP_RC(rgt->rgt_status.rs_errno));
+				  DF_RB ": errno " DF_RC ", schedule retry %u(%s)", DP_RB_RGT(rgt),
+				  DP_RC(rgt->rgt_status.rs_errno), task->dst_rebuild_op,
+				  RB_OP_STR(task->dst_rebuild_op));
 			return rc;
 		}
 
-		/* Schedule fail_reclaim to clean up current op. Retry original rebuild, even if
-		 * this fails. However, do not retry the original rebuild if the admin has stopped
-		 * it.
+		/* Schedule fail_reclaim to clean up current op. After fail_reclaim, we may retry
+		 * original. Scheduling any retry is deferred until fail_reclaim is actually done.
 		 */
 		if (rgt->rgt_init_scan) {
 			/* NB: dst_reclaim_ver is the minimum rebuild target version, once rebuild
 			 * fails, it will be used to discard all of the previous rebuild data
 			 * (reclaim - 1 see obj_reclaim()), but keep the in-flight I/O data.
 			 */
+			if (rgt->rgt_stop_admin) {
+				rc = ds_rebuild_schedule(
+				    pool, task->dst_reclaim_ver - 1 /* map_ver */,
+				    rgt->rgt_stable_epoch, task->dst_new_layout_version,
+				    &task->dst_tgts, RB_OP_FAIL_RECLAIM,
+				    task->dst_rebuild_op /* retry_rebuild_op */,
+				    task->dst_map_ver /* retry_map_ver */, rgt->rgt_stop_admin,
+				    task, delay_sec);
+				DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc,
+					  DF_RB ": errno " DF_RC ", schedule %u(%s)",
+					  DP_RB_RGT(rgt), DP_RC(rgt->rgt_status.rs_errno),
+					  RB_OP_FAIL_RECLAIM, RB_OP_STR(RB_OP_FAIL_RECLAIM));
+				D_GOTO(complete, rc);
+			}
+
+			/* revert pool map and defer scheduling a retry until Fail_reclaim is done
+			 */
+			retry_rebuild_task(task, rgt, &retry_opc);
+
 			rc = ds_rebuild_schedule(
-			    pool, task->dst_reclaim_ver - 1, rgt->rgt_stable_epoch,
+			    pool, task->dst_reclaim_ver - 1 /* map_ver */, rgt->rgt_stable_epoch,
 			    task->dst_new_layout_version, &task->dst_tgts, RB_OP_FAIL_RECLAIM,
-			    rgt->rgt_stop_admin, delay_sec);
+			    retry_opc /* retry_rebuild_op */, task->dst_map_ver /* retry_map_ver */,
+			    rgt->rgt_stop_admin, task, delay_sec);
 			DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc,
 				  DF_RB ": errno " DF_RC ", schedule %u(%s)", DP_RB_RGT(rgt),
 				  DP_RC(rgt->rgt_status.rs_errno), RB_OP_FAIL_RECLAIM,
 				  RB_OP_STR(RB_OP_FAIL_RECLAIM));
+			D_GOTO(complete, rc);
 		}
 
-		/* Then check if it needs to retry */
+		/* Determine if original rebuild needs a retry, and if so revert pool map. */
 		retry_rebuild_task(task, rgt, &retry_opc);
+
+		/* Schedule a retry if needed (NB: possibly deferred until after a Fail_reclaim is
+		 * done) */
 		if (retry_opc == RB_OP_NONE)
 			D_GOTO(complete, rc);
 
-		rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
-					 task->dst_new_layout_version, &task->dst_tgts, retry_opc,
-					 false /* stop_admin */, delay_sec);
-		DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc, DF_RB ": errno " DF_RC ", schedule retry",
-			  DP_RB_RGT(rgt), DP_RC(rgt->rgt_status.rs_errno));
+		rc = ds_rebuild_schedule(
+		    pool, task->dst_map_ver, rgt->rgt_stable_epoch, task->dst_new_layout_version,
+		    &task->dst_tgts, retry_opc /* rebuild_op*/, 0 /* retry_rebuild_op */,
+		    0 /* retry_map_ver */, false /* stop_admin */, task, delay_sec);
+		DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc,
+			  DF_RB ": errno " DF_RC ", schedule retry of original %u(%s)",
+			  DP_RB_RGT(rgt), DP_RC(rgt->rgt_status.rs_errno), retry_opc,
+			  RB_OP_STR(retry_opc));
 	} else if (task->dst_rebuild_op == RB_OP_REBUILD || task->dst_rebuild_op == RB_OP_UPGRADE) {
 		/* Schedule reclaim for successful op:Rebuild
 		 * (exclude/drain/reintegrate/extend/upgrade). */
 		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 
-		rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_reclaim_epoch,
-					 task->dst_new_layout_version, &task->dst_tgts,
-					 RB_OP_RECLAIM, false /* stop_admin */, delay_sec);
+		obj_reclaim_ver = obj_reclaim_ver > 0 ? obj_reclaim_ver : task->dst_map_ver;
+		rc              = ds_rebuild_schedule(
+                    pool, obj_reclaim_ver, rgt->rgt_reclaim_epoch, task->dst_new_layout_version,
+                    &task->dst_tgts, RB_OP_RECLAIM, RB_OP_NONE /* retry_rebuild_op */,
+                    0 /* retry_map_ver */, false /* stop_admin */, task, delay_sec);
 		DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc, DF_RB ": errno " DF_RC ", schedule %u(%s)",
 			  DP_RB_RGT(rgt), DP_RC(rgt->rgt_status.rs_errno), RB_OP_RECLAIM,
 			  RB_OP_STR(RB_OP_RECLAIM));
@@ -1832,19 +2137,21 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 complete:
 	/* Update the rebuild complete status for pool query */
 	if (task->dst_rebuild_op != RB_OP_FAIL_RECLAIM) {
-		/* During and after an admin stop, pool query should show an indication.
-		 * Query rs_state from original Rebuild = IN_PROGRESS until Fail_reclaim finishes
-		 * later.
+		/* update pool query rebuild status: original job is done.
+		 * if op:Reclaim scheduled --> DRS_IN_PROGRESS, otherwise DRS_COMPLETED
 		 */
-		if (rgt->rgt_stop_admin && rgt->rgt_abort)
-			rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
 		rc1 = rebuild_status_completed_update(task->dst_pool_uuid, &rgt->rgt_status);
 		DL_CDEBUG(rc1, DLOG_ERR, DLOG_INFO, rc1, DF_RB ": updated, state %d errno " DF_RC,
 			  DP_RB_RGT(rgt), rgt->rgt_status.rs_state,
 			  DP_RC(rgt->rgt_status.rs_errno));
-	} else if (task->dst_rebuild_op == RB_OP_FAIL_RECLAIM && task->dst_stop_admin) {
-		/* Fail_reclaim normally does not update status - except in the manual admin stop
-		 * case */
+	} else if (task->dst_rebuild_op == RB_OP_FAIL_RECLAIM &&
+		   (task->dst_stop_admin || rgt->rgt_stop_admin)) {
+		/* update pool query rebuild status: either the original job was stopped,
+		 * or a stop command was received during Fail_reclaim */
+		if (rgt->rgt_stop_admin)
+			D_INFO(DF_RB ": stop received during Fail_reclaim, change errno=%d to %d\n",
+			       DP_RB_RGT(rgt), rgt->rgt_status.rs_errno, -DER_OP_CANCELED);
+
 		rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
 		rgt->rgt_status.rs_state = DRS_NOT_STARTED;
 		rc1                      = rebuild_status_completed_update_partial(
@@ -1852,6 +2159,35 @@ complete:
 		DL_CDEBUG(rc1, DLOG_ERR, DLOG_INFO, rc1, DF_RB ": updated, state %d errno " DF_RC,
 			  DP_RB_RGT(rgt), rgt->rgt_status.rs_state,
 			  DP_RC(rgt->rgt_status.rs_errno));
+
+		/* re-schedule the stopped original rebuild task with delay -1, to be merged with
+		 * following rebuild task, to avoid losing the task->dst_tgts.
+		 */
+		if (task->dst_retry_rebuild_op == RB_OP_REBUILD) {
+			rc = ds_rebuild_schedule(
+			    pool, task->dst_retry_map_ver, rgt->rgt_reclaim_epoch,
+			    task->dst_new_layout_version, &task->dst_tgts,
+			    task->dst_retry_rebuild_op, RB_OP_NONE /* retry_rebuild_op */,
+			    0 /* retry_map_ver */, false /* stop_admin */, task,
+			    -1 /* delay_sec */);
+			DL_CDEBUG(rc, DLOG_ERR, DLOG_INFO, rc,
+				  DF_RB ": errno " DF_RC ", schedule retry %u(%s) with delay -1",
+				  DP_RB_RGT(rgt), DP_RC(rgt->rgt_status.rs_errno),
+				  task->dst_retry_rebuild_op,
+				  RB_OP_STR(task->dst_retry_rebuild_op));
+		}
+	} else if ((task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) &&
+		   (task->dst_retry_rebuild_op != RB_OP_NONE)) {
+		/* Fail_reclaim done (and a stop command wasn't received during) - retry rebuild. */
+		rc1 = ds_rebuild_schedule(pool, task->dst_retry_map_ver, rgt->rgt_reclaim_epoch,
+					  task->dst_new_layout_version, &task->dst_tgts,
+					  task->dst_retry_rebuild_op,
+					  RB_OP_NONE /* retry_rebuild_op */, 0 /* retry_map_ver */,
+					  false /* stop_admin */, task, delay_sec);
+		DL_CDEBUG(rc1, DLOG_ERR, DLOG_INFO, rc,
+			  DF_RB ": errno " DF_RC ", schedule retry %u(%s)", DP_RB_RGT(rgt),
+			  DP_RC(rgt->rgt_status.rs_errno), task->dst_retry_rebuild_op,
+			  RB_OP_STR(task->dst_retry_rebuild_op));
 	}
 
 	if ((rc1 != 0) && (rc == 0))
@@ -1867,22 +2203,27 @@ rebuild_task_ult(void *arg)
 	uint32_t				map_dist_ver = 0;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	d_rank_t				myrank;
-	uint64_t				cur_ts = 0;
+	uint64_t                                 cur_ts          = 0;
+	uint32_t                                 obj_reclaim_ver = 0;
 	int					rc;
 
 	cur_ts = daos_gettime_coarse();
+	/* rebuild_ults() prevents dequeuing the task until schedule time is reached. */
 	D_ASSERT(task->dst_schedule_time != (uint64_t)-1);
-	if (cur_ts < task->dst_schedule_time) {
-		D_DEBUG(DB_REBUILD, "rebuild task sleep "DF_U64" second\n",
-			task->dst_schedule_time - cur_ts);
-		dss_sleep((task->dst_schedule_time - cur_ts) * 1000);
-	}
+	D_ASSERT(cur_ts >= task->dst_schedule_time);
 
 	rc = ds_pool_lookup(task->dst_pool_uuid, &pool);
 	if (pool == NULL) {
 		D_ERROR(DF_UUID": failed to look up pool: %d\n",
 			DP_UUID(task->dst_pool_uuid), rc);
 		D_GOTO(out_task, rc = -DER_NONEXIST);
+	}
+
+	rc = ds_cont_svc_refresh_agg_eph(task->dst_pool_uuid);
+	if (rc) {
+		D_ERROR(DF_UUID ": ds_cont_svc_refresh_agg_eph failed, " DF_RC "\n",
+			DP_UUID(task->dst_pool_uuid), DP_RC(rc));
+		goto out_pool;
 	}
 
 	while (1) {
@@ -1977,14 +2318,10 @@ done:
 			DP_RC(rgt->rgt_status.rs_errno));
 
 		if (rgt->rgt_abort && rgt->rgt_stop_admin) {
-			/* Administrator asked to stop rebuild (more than a leader abort - stop on
-			 * all engines). Notify all engines to stop with
+			/* Administrator asked to stop rebuild. Notify engines with
 			 * rebuild_leader_status_notify().
 			 */
-			D_INFO(DF_RB ": stop rebuild due to admin command, change rc %d -> " DF_RC
-				     "\n",
-			       DP_RB_RGT(rgt), rgt->rgt_status.rs_errno, DP_RC(-DER_OP_CANCELED));
-			rgt->rgt_status.rs_errno = -DER_OP_CANCELED;
+			D_INFO(DF_RB ": stop rebuild due to admin command\n", DP_RB_RGT(rgt));
 		} else if (rgt->rgt_abort && rgt->rgt_status.rs_errno == 0) {
 			/* If the leader rebuild is aborted due to a leader change, then do not
 			 * abort the real rebuild(scan/pull ults), because the new leader will
@@ -1998,8 +2335,11 @@ done:
 		if (task->dst_tgts.pti_number <= 0 || task->dst_rebuild_op == RB_OP_UPGRADE)
 			goto iv_stop;
 
-		if (task->dst_rebuild_op == RB_OP_REBUILD)
-			rc = ds_pool_tgt_finish_rebuild(pool->sp_uuid, &task->dst_tgts);
+		if (task->dst_rebuild_op == RB_OP_REBUILD) {
+			rebuild_log_finish_scope(pool, task, rgt);
+			rc = ds_pool_tgt_finish_rebuild(pool->sp_uuid, &task->dst_tgts,
+							&obj_reclaim_ver);
+		}
 		DL_INFO(rc, DF_RB " finish rebuild %d", DP_RB_RGT(rgt),
 			task->dst_tgts.pti_ids[0].pti_id);
 	}
@@ -2007,6 +2347,8 @@ iv_stop:
 	/* NB: even if there are failures, the leader should notify other engines to abort rebuild
 	 */
 	if (rgt && rgt->rgt_init_scan) {
+		struct rebuild_tgt_pool_tracker *local_rpt;
+
 		if (myrank != pool->sp_iv_ns->iv_master_rank) {
 			/* If master has been changed, then let's skip
 			 * iv sync, and the new leader will take over
@@ -2018,10 +2360,18 @@ iv_stop:
 		}
 
 		rebuild_leader_status_notify(rgt, pool, task->dst_rebuild_op, myrank);
+
+		local_rpt = rpt_lookup(pool->sp_uuid, task->dst_rebuild_op, rgt->rgt_rebuild_ver,
+				       rgt->rgt_rebuild_gen);
+		if (local_rpt) {
+			local_rpt->rt_abort = 1;
+			D_INFO(DF_RB " set rt_abort", DP_RB_RPT(local_rpt));
+			rpt_put(local_rpt);
+		}
 	}
 
 try_reschedule:
-	rebuild_task_complete_schedule(task, pool, rgt, rc);
+	rebuild_task_complete_schedule(task, pool, rgt, obj_reclaim_ver, rc);
 output:
 	rc = rebuild_notify_ras_end(&task->dst_pool_uuid, task->dst_map_ver,
 				    RB_OP_STR(task->dst_rebuild_op),
@@ -2071,23 +2421,11 @@ rebuild_ults(void *arg)
 	while (DAOS_FAIL_CHECK(DAOS_REBUILD_HANG))
 		ABT_thread_yield();
 
-	/* Stay alive for fault-injection possibility (need a ULT for DAOS_REBUILD_ADMIN_START) */
-	while (true) {
-		bool fi_admin_start = false;
-
+	while (!d_list_empty(&rebuild_gst.rg_queue_list) ||
+	       !d_list_empty(&rebuild_gst.rg_running_list)) {
 		if (rebuild_gst.rg_abort) {
 			D_INFO("abort rebuilds\n");
 			break;
-		}
-
-		fi_admin_start = DAOS_FAIL_CHECK(DAOS_REBUILD_ADMIN_START);
-		if (fi_admin_start) {
-			if (!uuid_is_null(test_stop_start_puuid)) {
-				D_INFO("fi_admin_start=%d, apply to pool " DF_UUID "\n",
-				       fi_admin_start, DP_UUID(test_stop_start_puuid));
-				ds_pool_rebuild_start(test_stop_start_puuid, NULL /* hint */);
-				uuid_clear(test_stop_start_puuid);
-			}
 		}
 
 		if (d_list_empty(&rebuild_gst.rg_queue_list) ||
@@ -2100,12 +2438,13 @@ rebuild_ults(void *arg)
 
 		task = d_list_entry(rebuild_gst.rg_queue_list.next, struct rebuild_task, dst_list);
 		while (&rebuild_gst.rg_queue_list != &task->dst_list) {
-			/* If a pool is already handling a rebuild operation,
-			 * wait to start the next operation until the current
-			 * one completes
+			/* If a pool is currently handling a rebuild, wait for it to finish.
+			 * Skip this pool now if its rebuild task is scheduled for later
+			 * (allow for merging of other tasks into this one in ds_rebuild_schedule().
 			 */
 			if (pool_is_rebuilding(task->dst_pool_uuid) ||
-			    task->dst_schedule_time == (uint64_t)-1) {
+			    task->dst_schedule_time == (uint64_t)-1 ||
+			    (daos_gettime_coarse() < task->dst_schedule_time)) {
 				struct rebuild_task *head_task = task;
 
 				/* jump to next pool */
@@ -2274,9 +2613,9 @@ rebuild_print_list_update(const uuid_t uuid, const uint32_t map_ver,
 {
 	int i;
 
-	D_PRINT("%s [%s] (pool="DF_UUID" ver=%u) tgts=",
-		RB_OP_STR(rebuild_op), delay_sec == -1 ? "queued/delayed" : "queued",
-		DP_UUID(uuid), map_ver);
+	D_PRINT("%s [%s] (pool=" DF_UUID " ver=%u) %d tgts=", RB_OP_STR(rebuild_op),
+		delay_sec == -1 ? "queued/delayed" : "queued", DP_UUID(uuid), map_ver,
+		tgts->pti_number);
 	for (i = 0; tgts != NULL && i < tgts->pti_number; i++) {
 		if (i > 0)
 			D_PRINT(",");
@@ -2292,8 +2631,10 @@ rebuild_print_list_update(const uuid_t uuid, const uint32_t map_ver,
 int
 ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, daos_epoch_t reclaim_eph,
 		    uint32_t layout_version, struct pool_target_id_list *tgts,
-		    daos_rebuild_opc_t rebuild_op, bool stop_admin, uint64_t delay_sec)
+		    daos_rebuild_opc_t rebuild_op, daos_rebuild_opc_t retry_rebuild_op,
+		    uint32_t retry_map_ver, bool stop_admin, void *cur_taskp, uint64_t delay_sec)
 {
+	struct rebuild_task     *cur_task = cur_taskp;
 	struct rebuild_task	*new_task;
 	struct rebuild_task	*task;
 	d_list_t		*inserted_pos;
@@ -2301,6 +2642,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, daos_epoch_t reclaim
 	uint64_t		cur_ts = 0;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	D_ASSERT(rebuild_op != RB_OP_NONE);
 	if (pool->sp_stopping) {
 		D_DEBUG(DB_REBUILD, DF_UUID " is stopping, do not need schedule here\n",
 			DP_UUID(pool->sp_uuid));
@@ -2316,7 +2658,8 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, daos_epoch_t reclaim
 	if (tgts != NULL && tgts->pti_number > 0 &&
 	    rebuild_op != RB_OP_RECLAIM && rebuild_op != RB_OP_FAIL_RECLAIM) {
 		/* Check if the pool already in the queue list */
-		rc = rebuild_try_merge_tgts(pool, map_ver, rebuild_op, tgts, delay_sec);
+		rc =
+		    rebuild_try_merge_tgts(pool, map_ver, rebuild_op, reclaim_eph, tgts, delay_sec);
 		if (rc)
 			return rc == 1 ? 0 : rc;
 	}
@@ -2338,7 +2681,69 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, daos_epoch_t reclaim
 	new_task->dst_rebuild_op = rebuild_op;
 	new_task->dst_reclaim_eph = reclaim_eph;
 	new_task->dst_new_layout_version = layout_version;
-	new_task->dst_stop_admin         = (rebuild_op == RB_OP_FAIL_RECLAIM) ? stop_admin : false;
+	if (rebuild_op == RB_OP_FAIL_RECLAIM) {
+		new_task->dst_retry_map_ver    = retry_map_ver;
+		new_task->dst_retry_rebuild_op = retry_rebuild_op;
+		new_task->dst_stop_admin       = stop_admin;
+	} else {
+		new_task->dst_retry_map_ver    = 0;
+		new_task->dst_retry_rebuild_op = RB_OP_NONE;
+		new_task->dst_stop_admin       = false;
+	}
+
+	/* update operation counts based on this (cur_task->dst_rebuild_op) -> new (rebuild_op),
+	 * e.g.: op:Rebuild -> op:Reclaim or op:Fail_reclaim op:Reclaim -> op:Reclaim (unexpected,
+	 * not tracked / Reclaim failure) op:Rebuild -> op:Rebuild (retry original rebuild /
+	 * scheduled when original Rebuild fails) op:Fail_reclaim -> op:Rebuild (retry original
+	 * rebuild / scheduled after Fail_reclaim done) op:Fail_reclaim -> op:Fail_reclaim
+	 * (unexpected and tracked / Fail_reclaim failure)
+	 */
+	/* TODO: does upgrade ever happen with cur_task != NULL? */
+	new_task->dst_num_op_rb            = cur_task ? cur_task->dst_num_op_rb : 0;
+	new_task->dst_num_op_reclaim       = cur_task ? cur_task->dst_num_op_reclaim : 0;
+	new_task->dst_num_op_freclaim      = cur_task ? cur_task->dst_num_op_freclaim : 0;
+	new_task->dst_num_op_upgrade       = cur_task ? cur_task->dst_num_op_upgrade : 0;
+	new_task->dst_num_op_rb_fail       = cur_task ? cur_task->dst_num_op_rb_fail : 0;
+	new_task->dst_num_op_freclaim_fail = cur_task ? cur_task->dst_num_op_freclaim_fail : 0;
+
+	switch (rebuild_op) {
+	case RB_OP_REBUILD:
+		new_task->dst_num_op_rb++;
+		break;
+	case RB_OP_RECLAIM:
+		D_ASSERT(cur_task != NULL);
+		new_task->dst_num_op_reclaim++;
+		break;
+	case RB_OP_FAIL_RECLAIM:
+		D_ASSERT(cur_task != NULL);
+		new_task->dst_num_op_freclaim++;
+		/* NB: update fail count in cur_task in case caller may be scheduling both
+		 * Fail_reclaim and retry of op:Rebuild at the same time (i.e., while processing
+		 * completion of the original/failed Rebuild).
+		 */
+		if (cur_task->dst_rebuild_op == RB_OP_REBUILD)
+			new_task->dst_num_op_rb_fail = ++cur_task->dst_num_op_rb_fail;
+
+		/* Fail_reclaim failing repeatedly */
+		if (cur_task->dst_rebuild_op == RB_OP_FAIL_RECLAIM)
+			new_task->dst_num_op_freclaim_fail++;
+		break;
+	case RB_OP_UPGRADE:
+		new_task->dst_num_op_upgrade++;
+		break;
+	default:
+		break;
+	}
+
+	D_INFO(DF_UUID
+	       ": %s%s%s (ver=%u), counts (rb/reclaim/freclaim/upgrade/rb_fail/freclaim_fail)"
+	       "= %u/%u/%u/%u/%u/%u\n",
+	       DP_UUID(pool->sp_uuid), cur_task ? RB_OP_STR(cur_task->dst_rebuild_op) : "",
+	       cur_task ? "->" : "", RB_OP_STR(new_task->dst_rebuild_op), new_task->dst_map_ver,
+	       new_task->dst_num_op_rb, new_task->dst_num_op_reclaim, new_task->dst_num_op_freclaim,
+	       new_task->dst_num_op_upgrade, new_task->dst_num_op_rb_fail,
+	       new_task->dst_num_op_freclaim_fail);
+
 	uuid_copy(new_task->dst_pool_uuid, pool->sp_uuid);
 	D_INIT_LIST_HEAD(&new_task->dst_list);
 
@@ -2427,12 +2832,16 @@ regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 		if (tgt->ta_comp.co_status & (PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN)) {
 			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_fseq,
 						 current_eph == 0 ? eph : current_eph, 0, &id_list,
-						 RB_OP_REBUILD, false /* stop_admin */, delay);
+						 RB_OP_REBUILD, RB_OP_NONE /* retry_rebuild_op */,
+						 0 /* retry_map_ver */, false /* stop_admin */,
+						 NULL /* cur_taskp */, delay);
 		} else {
 			D_ASSERT(tgt->ta_comp.co_status == PO_COMP_ST_UP);
 			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_in_ver,
 						 current_eph == 0 ? eph : current_eph, 0, &id_list,
-						 RB_OP_REBUILD, false /* stop_admin */, delay);
+						 RB_OP_REBUILD, RB_OP_NONE /* retry_rebuild_op */,
+						 0 /* retry_map_ver */, false /* stop_admin */,
+						 NULL /* cur_taskp */, delay);
 		}
 		if (rc) {
 			D_ERROR(DF_UUID" schedule ver %d failed: "DF_RC"\n",
@@ -2466,16 +2875,24 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states, ui
 	return rc;
 }
 
-
-/* Regenerate the rebuild tasks when changing the leader. */
+/* Regenerate rebuild tasks when changing the leader, or manually starting rebuilds.
+ * auto_recovery (true for leader change, false for manual) applies to both sys_self_heal and prop.
+ */
 int
-ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
+ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop, uint64_t sys_self_heal,
+			   bool auto_recovery, uint64_t delay_sec)
 {
 	struct daos_prop_entry *entry;
 	char                   *env;
 	int                     rc = 0;
 
 	rebuild_gst.rg_abort = 0;
+
+	if (auto_recovery && !(sys_self_heal & DS_MGMT_SELF_HEAL_POOL_REBUILD)) {
+		D_DEBUG(DB_REBUILD, DF_UUID ": pool_rebuild disabled in sys_self_heal\n",
+			DP_UUID(pool->sp_uuid));
+		return DER_SUCCESS;
+	}
 
 	d_agetenv_str(&env, REBUILD_ENV);
 	if (env && !strcasecmp(env, REBUILD_ENV_DISABLED)) {
@@ -2493,21 +2910,19 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
-
 	D_ASSERT(entry != NULL);
-	if (entry->dpe_val & (DAOS_SELF_HEAL_AUTO_REBUILD | DAOS_SELF_HEAL_DELAY_REBUILD) &&
-	    !pool->sp_disable_rebuild) {
-		rc = regenerate_task_of_type(pool, PO_COMP_ST_DOWN,
-					     pool->sp_self_heal & DAOS_SELF_HEAL_DELAY_REBUILD ? -1
-											       : 0);
+	if (is_pool_rebuild_allowed(pool, entry->dpe_val /* self_heal */, auto_recovery)) {
+		rc = regenerate_task_of_type(
+		    pool, PO_COMP_ST_DOWN,
+		    entry->dpe_val & DAOS_SELF_HEAL_DELAY_REBUILD ? -1 : delay_sec);
 		if (rc != 0)
 			return rc;
 
-		rc = regenerate_task_of_type(pool, PO_COMP_ST_DRAIN, 0);
+		rc = regenerate_task_of_type(pool, PO_COMP_ST_DRAIN, delay_sec);
 		if (rc != 0)
 			return rc;
 	} else {
-		D_DEBUG(DB_REBUILD, DF_UUID" self healing is disabled\n",
+		D_DEBUG(DB_REBUILD, "Pool " DF_UUID " self healing is disabled\n",
 			DP_UUID(pool->sp_uuid));
 	}
 
@@ -2521,7 +2936,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 	 * discarding on an empty targets is harmless. So it is ok to use REINT to
 	 * do EXTEND here.
 	 */
-	rc = regenerate_task_of_type(pool, PO_COMP_ST_UP, 0);
+	rc = regenerate_task_of_type(pool, PO_COMP_ST_UP, delay_sec);
 	if (rc != 0)
 		return rc;
 
@@ -2544,7 +2959,8 @@ ds_rebuild_admin_start(struct ds_pool *pool)
 		goto out;
 	}
 
-	rc = ds_rebuild_regenerate_task(pool, &prop);
+	rc = ds_rebuild_regenerate_task(pool, &prop, DS_MGMT_SELF_HEAL_ALL /* sys_self_heal */,
+					false /* auto_recovery */, 0 /* delay_sec */);
 	daos_prop_fini(&prop);
 	if (rc)
 		DL_ERROR(rc, DF_UUID ": regenerate rebuild task failed", DP_UUID(pool->sp_uuid));
@@ -2574,24 +2990,9 @@ rebuild_fini_one(void *arg)
 	if (dpc == NULL)
 		return 0;
 
-	/* Reset rebuild epoch, then reset the aggregation epoch, so
-	 * it can aggregate the rebuild epoch.
-	 */
-	D_ASSERT(rpt->rt_rebuild_fence != 0);
-	if (rpt->rt_rebuild_fence == dpc->spc_rebuild_fence) {
-		dpc->spc_rebuild_fence = 0;
-		dpc->spc_rebuild_end_hlc = d_hlc_get();
-		D_DEBUG(DB_REBUILD, DF_RB ": Reset aggregation end hlc " DF_U64 "\n",
-			DP_RB_RPT(rpt), dpc->spc_rebuild_end_hlc);
-	} else {
-		D_DEBUG(DB_REBUILD,
-			DF_RB ": pool is still being rebuilt rt_rebuild_fence " DF_U64
-			      " spc_rebuild_fence " DF_U64 "\n",
-			DP_RB_RPT(rpt), rpt->rt_rebuild_fence, dpc->spc_rebuild_fence);
-	}
-
+	D_DEBUG(DB_REBUILD, DF_RB ": rebuild fini for stable epoch " DF_U64 "\n", DP_RB_RPT(rpt),
+		rpt->rt_stable_epoch);
 	ds_pool_child_put(dpc);
-
 	return 0;
 }
 
@@ -2604,22 +3005,23 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_INFO(DF_RB " finishing rebuild rpt refcount %u, pool refcount %u\n", DP_RB_RPT(rpt),
 	       rpt->rt_refcount, daos_lru_ref_count(&rpt->rt_pool->sp_entry));
 
-	D_ASSERT(rpt->rt_pool->sp_rebuilding > 0);
-	rpt->rt_pool->sp_rebuilding--;
+	D_ASSERT(atomic_load(&rpt->rt_pool->sp_rebuilding) > 0);
+	atomic_fetch_sub(&rpt->rt_pool->sp_rebuilding, 1);
+
+	atomic_store(&rpt->rt_pool->sp_rebuild_enum, 0);
 
 	ABT_mutex_lock(rpt->rt_lock);
 	ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
 	D_ASSERT(rpt->rt_refcount > 0);
 	rpt->rt_finishing = 1;
 	/* Wait until all ult/tasks finish and release the rpt.
-	 * NB: Because rebuild_tgt_fini will be only called in
-	 * rebuild_tgt_status_check_ult, which will make sure when
-	 * rt_refcount reaches to 1, either all rebuild is done or
-	 * all ult/task has been aborted by rt_abort, i.e. no new
-	 * ULT/task will be created after this check. So it is safe
-	 * to destroy the rpt after this.
+	 * NB: Because rebuild_tgt_fini will be only called in rebuild_tgt_status_check_ult,
+	 * which will make sure when rt_refcount reaches to 2 (one by check ULT, the other by
+	 * track list), either all rebuild is done or all ult/task has been aborted by rt_abort,
+	 * i.e. no new ULT/task will be created after this check. So it is safe to destroy
+	 * the rpt after this.
 	 */
-	if (rpt->rt_refcount > 1)
+	while (rpt->rt_refcount > 2)
 		ABT_cond_wait(rpt->rt_fini_cond, rpt->rt_lock);
 	ABT_mutex_unlock(rpt->rt_lock);
 
@@ -2638,7 +3040,6 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	/* No one should access rpt after rebuild_fini_one. */
 	D_INFO(DF_RB " Finalized rebuild\n", DP_RB_RPT(rpt));
 	rpt_delete(rpt);
-	rpt_put(rpt);
 }
 
 void
@@ -2646,6 +3047,9 @@ rebuild_tgt_status_check_ult(void *arg)
 {
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
 	struct sched_req_attr	attr = { 0 };
+	uint32_t                         reported_dtx_resyc_ver = 0;
+	uint64_t                         check_cnt              = 0;
+	uint64_t                         log_cnt_intv           = 1;
 
 	D_ASSERT(rpt != NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_MIGRATE, &rpt->rt_pool_uuid);
@@ -2670,8 +3074,6 @@ rebuild_tgt_status_check_ult(void *arg)
 			DL_ERROR(rc == 0 ? status.status : rc, DF_RB " failed", DP_RB_RPT(rpt));
 			if (status.status == 0)
 				status.status = rc;
-			if (rpt->rt_errno == 0)
-				rpt->rt_errno = status.status;
 		}
 
 		memset(&iv, 0, sizeof(iv));
@@ -2749,13 +3151,23 @@ rebuild_tgt_status_check_ult(void *arg)
 				rpt->rt_reported_obj_cnt = status.obj_count;
 				rpt->rt_reported_rec_cnt = status.rec_count;
 				rpt->rt_reported_size = status.size;
+				if (iv.riv_dtx_resyc_version > reported_dtx_resyc_ver) {
+					D_DEBUG(DB_REBUILD,
+						DF_RB "reported riv_dtx_resyc_version %d",
+						DP_RB_RPT(rpt), iv.riv_dtx_resyc_version);
+					reported_dtx_resyc_ver = iv.riv_dtx_resyc_version;
+				}
 			} else {
 				DL_WARN(rc, DF_RB " rebuild iv update failed", DP_RB_RPT(rpt));
 				/* Already finished rebuild, cannot find rebuild status on leader
 				 * (see crt_iv_hdlr_xx()). Abort the rebuild
 				 */
-				if (rc == -DER_NONEXIST && !status.rebuilding)
+				if (rc == -DER_NONEXIST && !status.rebuilding) {
+					D_INFO(DF_RB ", rc %d, status.rebuilding %d, "
+						     "set rt_global_done",
+					       DP_RB_RPT(rpt), rc, status.rebuilding);
 					rpt->rt_global_done = 1;
+				}
 
 				if (ns->iv_stop) {
 					D_DEBUG(DB_REBUILD, "abort rebuild " DF_RB "\n",
@@ -2765,26 +3177,31 @@ rebuild_tgt_status_check_ult(void *arg)
 			}
 		}
 
-		D_INFO(DF_RB " obj " DF_U64 " rec " DF_U64 " size " DF_U64 " scan done %d "
-			     "pull done %d scan gl done %d gl done %d status %d abort %s\n",
-		       DP_RB_RPT(rpt), iv.riv_obj_count, iv.riv_rec_count, iv.riv_size,
-		       rpt->rt_scan_done, iv.riv_pull_done, rpt->rt_global_scan_done,
-		       rpt->rt_global_done, iv.riv_status, rpt->rt_abort ? "yes" : "no");
+		if (check_cnt % log_cnt_intv == 0 || rpt->rt_global_done || rpt->rt_abort) {
+			D_INFO(DF_RB
+			       " obj " DF_U64 "/" DF_U64 " rec " DF_U64 " size " DF_U64
+			       " scan done %d pull done %d scan gl done %d gl done %d status %d "
+			       "abort %s\n",
+			       DP_RB_RPT(rpt), iv.riv_toberb_obj_count, iv.riv_obj_count,
+			       iv.riv_rec_count, iv.riv_size, rpt->rt_scan_done, iv.riv_pull_done,
+			       rpt->rt_global_scan_done, rpt->rt_global_done, iv.riv_status,
+			       rpt->rt_abort ? "yes" : "no");
+			log_cnt_intv = min(log_cnt_intv * 2, (uint64_t)RBLD_LOG_INTV_CNT);
+		}
+		check_cnt++;
 		if (rpt->rt_global_done || rpt->rt_abort)
 			break;
 
 		sched_req_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
-		if (iv.riv_pull_done && rpt_stale(rpt)) {
-			D_ERROR(DF_RB " is stale, exit the ULT.\n", DP_RB_RPT(rpt));
+		if (rpt_should_abort(rpt, rpt->rt_pool->sp_iv_ns, &iv) != RPT_ABORT_NONE)
 			break;
-		}
 	}
 
 	sched_req_put(rpt->rt_ult);
 	rpt->rt_ult = NULL;
 out:
-	rpt_put(rpt);
 	rebuild_tgt_fini(rpt);
+	rpt_put(rpt);
 }
 
 /**
@@ -2818,13 +3235,8 @@ rebuild_prepare_one(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
-	/* Set the rebuild epoch per VOS container, so VOS aggregation will not
-	 * cross the epoch to cause problem.
-	 */
-	D_ASSERT(rpt->rt_rebuild_fence != 0);
-	dpc->spc_rebuild_fence = rpt->rt_rebuild_fence;
-	D_DEBUG(DB_REBUILD, DF_RB " open local container " DF_UUID " rebuild eph " DF_X64 "\n",
-		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence);
+	D_DEBUG(DB_REBUILD, DF_RB " open local container " DF_UUID " stable eph " DF_X64 "\n",
+		DP_RB_RPT(rpt), DP_UUID(rpt->rt_coh_uuid), rpt->rt_stable_epoch);
 
 put:
 	ds_pool_child_put(dpc);
@@ -2886,10 +3298,9 @@ free:
  * each target get the scan rpc from the master.
  */
 int
-rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
+rebuild_tgt_prepare(struct ds_pool *pool, struct rebuild_scan_in *rsi,
+		    struct rebuild_tgt_pool_tracker **p_rpt)
 {
-	struct rebuild_scan_in		*rsi = crt_req_get(rpc);
-	struct ds_pool			*pool;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
 	daos_prop_t			prop = { 0 };
@@ -2898,12 +3309,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	int				rc;
 
 	D_DEBUG(DB_REBUILD, DF_RB " prepare rebuild\n", DP_RB_RSI(rsi));
-
-	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
-	if (rc) {
-		DL_ERROR(rc, DF_RB " cannot find pool", DP_RB_RSI(rsi));
-		return rc;
-	}
 
 	if (ds_pool_get_version(pool) < rsi->rsi_rebuild_ver) {
 		D_INFO(DF_RB " map %u < rsi_rebuild_ver %u\n", DP_RB_RSI(rsi),
@@ -2939,7 +3344,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	/* Let's add the rpt to the tracker list before IV fetch, which might yield,
 	 * to make sure the new coming request can find the rpt in the list.
 	 */
-	rpt_get(rpt);
 	rpt_insert(rpt);
 	rc = ds_pool_iv_srv_hdl_fetch(pool, &rpt->rt_poh_uuid,
 				      &rpt->rt_coh_uuid);
@@ -2966,31 +3370,24 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rpt->rt_rebuild_fence = d_hlc_get();
-	rc                    = ds_pool_task_collective(rpt->rt_pool_uuid,
-							PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-							rebuild_prepare_one, rpt, 0);
+	rc = ds_pool_task_collective(rpt->rt_pool_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				     rebuild_prepare_one, rpt, 0);
 	if (rc) {
-		rpt->rt_rebuild_fence = 0;
 		rebuild_pool_tls_destroy(pool_tls);
 		D_GOTO(out, rc);
 	}
 
 	ABT_mutex_lock(rpt->rt_lock);
+	ds_pool_get(pool);
 	rpt->rt_pool = pool; /* pin it */
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	*p_rpt = rpt;
 out:
-	if (rc) {
-		if (rpt) {
-			if (!d_list_empty(&rpt->rt_list)) {
-				rpt_delete(rpt);
-				rpt_put(rpt);
-			}
-			rpt_put(rpt);
-		}
-		ds_pool_put(pool);
+	if (rc && rpt) {
+		rpt_delete(rpt);
+		rpt_put(rpt);
 	}
 	daos_prop_fini(&prop);
 
@@ -3029,7 +3426,9 @@ init(void)
 {
 	int rc;
 
-	uuid_clear(test_stop_start_puuid);
+	rc = d_getenv_uint(REBUILD_WAIT_EC_PAUSE_ENV, &rebuild_wait_ec_pause);
+	if (rc == 0)
+		D_DEBUG(DB_REBUILD, "Set REBUILD_WAIT_EC_PAUSE to %u\n", rebuild_wait_ec_pause);
 
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_tgt_tracker_list);
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_global_tracker_list);

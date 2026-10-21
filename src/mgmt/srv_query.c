@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -248,11 +249,14 @@ bio_storage_dev_manage_led(void *arg)
 		return -DER_INVAL;
 	}
 
-	/* Set the LED of the VMD device to a FAULT state, tr_addr and state may be updated */
+	/**
+	 * Set/Get the LED state of the VMD device, tr_addr and state led_info fields may be
+	 * updated.
+	 */
 	rc = bio_led_manage(bxc, led_info->tr_addr, led_info->dev_uuid,
 			    (unsigned int)led_info->action, (unsigned int *)led_info->state,
 			    led_info->duration);
-	if ((rc != 0) && (rc != -DER_NOTSUPPORTED))
+	if (rc != 0)
 		DL_ERROR(rc, "bio_led_manage failed on device:" DF_UUID " (action: %s, state %s)",
 			 DP_UUID(led_info->dev_uuid),
 			 ctl__led_action__descriptor.values[led_info->action].name,
@@ -299,8 +303,11 @@ copy_str2ctrlr(char **dst, const char *src)
 {
 	int len;
 
-	D_ASSERT(src != NULL);
 	D_ASSERT(dst != NULL);
+	if (src == NULL) {
+		D_ERROR("source string is NULL\n");
+		return -DER_INVAL;
+	}
 
 	if ((*dst != NULL) && (strnlen(*dst, NVME_DETAIL_BUFLEN) != 0)) {
 		D_ERROR("attempting to copy to non-empty destination");
@@ -410,6 +417,26 @@ add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
 	return 0;
 }
 
+static int
+add_unplugged_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
+{
+	int rc;
+
+	if (dev_info->bdi_ctrlr == NULL)
+		return 0;
+
+	if (dev_info->bdi_ctrlr->model != NULL) {
+		rc = copy_str2ctrlr(&ctrlr->model, dev_info->bdi_ctrlr->model);
+		if (rc != 0)
+			return rc;
+	}
+
+	if (dev_info->bdi_ctrlr->serial != NULL)
+		return copy_str2ctrlr(&ctrlr->serial, dev_info->bdi_ctrlr->serial);
+
+	return 0;
+}
+
 int
 ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 {
@@ -480,21 +507,25 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		/* Set string fields to NULL to allow D_FREE to work as expected on cleanup */
 		ctrlr_reset_str_fields(resp->devices[i]->ctrlr);
 
+		if ((dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) == 0) {
+			rc = add_unplugged_ctrlr_details(resp->devices[i]->ctrlr, dev_info);
+			if (rc != 0)
+				break;
+			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__UNPLUGGED;
+			goto next_dev;
+		}
+
 		if (dev_info->bdi_ctrlr != NULL) {
 			rc = add_ctrlr_details(resp->devices[i]->ctrlr, dev_info);
 			if (rc != 0)
 				break;
 			resp->devices[i]->ctrlr_namespace_id = dev_info->bdi_ctrlr->nss->id;
 		} else {
-			D_DEBUG(DB_MGMT, "ctrlr not initialized in bio_dev_info, unplugged?");
+			D_DEBUG(DB_MGMT, "ctrlr not initialized in bio_dev_info, is it unplugged?");
 		}
 
 		/* Populate NVMe device state */
 
-		if ((dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) == 0) {
-			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__UNPLUGGED;
-			goto next_dev;
-		}
 		if ((dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
 			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__EVICTED;
 		else if ((dev_info->bdi_flags & NVME_DEV_FL_INUSE) == 0)
@@ -513,13 +544,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 				     init_xs_type(),
 				     0, 0);
 		if (rc != 0) {
-			if (rc == -DER_NOTSUPPORTED) {
-				resp->devices[i]->ctrlr->led_state = CTL__LED_STATE__NA;
-				/* Reset rc for non-VMD case */
-				rc = 0;
-			} else {
-				break;
-			}
+			break;
 		}
 		resp->devices[i]->ctrlr->led_state = led_state;
 
@@ -684,11 +709,9 @@ bio_faulty_state_set(void *arg)
 int
 ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 {
-	struct bio_led_manage_info	 led_info = { 0 };
 	struct bio_faulty_dev_info	 faulty_info = { 0 };
 	struct smd_dev_info		*dev_info;
-	ABT_thread			 thread;
-	Ctl__LedState			 led_state;
+	ABT_thread                       thread;
 	int				 tgt_id;
 	int				 rc = 0;
 
@@ -743,25 +766,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	}
 	uuid_unparse_lower(dev_uuid, resp->device->uuid);
 
-	uuid_copy(led_info.dev_uuid, dev_uuid);
-	led_info.action = CTL__LED_ACTION__SET;
-	led_state = CTL__LED_STATE__ON;
-	led_info.state = &led_state;
-	/* Indicate infinite duration */
-	led_info.duration = 0;
-
-	/* Set the VMD LED to FAULTY state on init xstream */
-	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
-			     init_xs_type(), 0, 0);
-	if (rc != 0) {
-		if (rc == -DER_NOTSUPPORTED)
-			/* Reset rc for non-VMD case */
-			rc = 0;
-		else
-			DL_ERROR(rc, "FAULT LED state not set on device:" DF_UUID,
-				 DP_UUID(dev_uuid));
-	}
-
 out:
 	smd_dev_free_info(dev_info);
 
@@ -808,14 +812,13 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	led_info.state = &led_state;
 	led_info.duration = req->led_duration_mins * 60 * (NSEC_PER_SEC / NSEC_PER_USEC);
 
-	/* Manage the VMD LED state on init xstream */
+	/* Manage the LED state on init xstream */
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
 			     init_xs_type(), 0, 0);
 	if (rc != 0) {
+		DL_ERROR(rc, "LED manage failed on device %s (%d)", led_info.tr_addr, rc);
 		resp->device->ctrlr->led_state = CTL__LED_STATE__NA;
-		if (rc == -DER_NOTSUPPORTED)
-			/* Reset rc for non-VMD case */
-			rc = 0;
+		resp->status                   = rc;
 	} else {
 		resp->device->ctrlr->led_state = (Ctl__LedState)led_state;
 	}

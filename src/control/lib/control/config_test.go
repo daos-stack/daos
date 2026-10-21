@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -69,8 +71,10 @@ func TestControl_LoadSystemConfig(t *testing.T) {
 
 	restore := setDirs(t, "NONE", tmpDir)
 	defer restore(t)
-	saveConfig(t, testCfg, SystemConfigPath())
-	testCfg.Path = fmt.Sprintf("%s/%s", tmpDir, defaultConfigFile)
+
+	cfgPath := filepath.Join(tmpDir, defaultConfigFile)
+	saveConfig(t, testCfg, cfgPath)
+	testCfg.Path = cfgPath
 
 	gotCfg, err := LoadConfig("")
 	if err != nil {

@@ -10,8 +10,6 @@ server_config:
   engines:
     0:
       targets: 4
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       env_vars:
         - DD_MASK=group_metadata_only
@@ -19,8 +17,6 @@ server_config:
       storage: auto
     1:
       targets: 4
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       env_vars:
         - DD_MASK=group_metadata_only
@@ -28,7 +24,7 @@ server_config:
       storage: auto
 
 pool:
-  scm_size: 200M
+  scm_size: 512M
   label: pool
   set_logmasks: False
 
@@ -48,7 +44,7 @@ boundary_test: !mux
     num_containers: 30000
     with_io: false
   test_2:
-    num_pools: 100
+    num_pools: 45
     num_containers: 200
     with_io: false
   test_with_io:

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -135,6 +135,15 @@ daos_lru_ref_evict(struct daos_lru_cache *lcache, struct daos_llink *llink)
 
 	llink->ll_evicted = 1;
 	d_hash_rec_evict_at(&lcache->dlc_htable, &llink->ll_link);
+}
+
+/**
+ * Whether the item is evicted or not.
+ */
+static inline bool
+daos_lru_is_evicted(struct daos_llink *llink)
+{
+	return llink->ll_evicted != 0;
 }
 
 /**

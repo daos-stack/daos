@@ -1,5 +1,5 @@
 #!/bin/bash
-# (C) Copyright 2025 Google LLC
+# (C) Copyright 2025-2026 Google LLC
 root="$(realpath "$(dirname "$(dirname "$(dirname "${BASH_SOURCE[0]}")")")")"
 . "${root}/utils/sl/setup_local.sh" > /dev/null
 unset tmp
@@ -9,8 +9,11 @@ tmp="$(mktemp -d)"
 export install_list=()
 export PACKAGE_TYPE="dir"
 export dbg_list=()
-export EXTERNAL_DEPENDS=()
+export CONFLICTS=()
+export CONFIG_FILES=()
 export DEPENDS=()
+export EXTERNAL_DEPENDS=()
+export PROVIDES=()
 export EXTRA_OPTS=()
 export FILTER_LIST=()
 isa="$(uname -m)"
@@ -24,20 +27,8 @@ export sysconfdir="${SYSCONFDIR:-/etc}"
 export sysctldir="${SYSCTLDIR:-/etc/sysctl.d}"
 export unitdir="${UNITDIR:-/usr/lib/systemd/system}"
 export mandir="${MANDIR:-/usr/share/man}"
-daos_version="$(grep "^Version: " "${root}/utils/rpms/daos.spec" | sed 's/^Version: *//')"
-export daos_version
-daos_release="$(grep "^Release: " "${root}/utils/rpms/daos.spec" | \
-  sed 's/^Release: *//' | sed 's/%.*//')"
-export daos_release
 
-export libfabric_version="1.22.0"
-export mercury_version="2.4.0"
-export argobots_version="1.2"
-export pmdk_version="2.1.0"
-export isal_version="2.30.0"
-export isal_crypto_version="2.24.0"
-
-source utils/rpms/package_names.sh
+source utils/rpms/package_info.sh
 
 filter_file() {
   for filter in "${FILTER_LIST[@]}"; do
@@ -130,13 +121,15 @@ clean_bin() {
     relative="$(realpath -s -m "${file}" --relative-to="${tmp}${prefix}")"
     base="$(basename "${relative}")"
     dir="$(dirname "${relative}")"
-    dname="${base}-${VERSION}-${RELEASE}.${DISTRO:-el8}-${isa}.debug"
+    dname="${base}-${VERSION}-${RELEASE}-${isa}.debug"
     dbgroot="${tmp}/usr/lib/debug/${dir}"
     mkdir -p "${dbgroot}"
     dbgpath="${dbgroot}/${dname}"
     cp "${file}" "${dbgpath}"
     strip --only-keep-debug "${dbgpath}" > /dev/null 2>&1
-    strip "${file}" > /dev/null 2>&1 || true
+    if [[ -z "${NO_STRIP:-}" ]]; then
+      strip "${file}" > /dev/null 2>&1 || true
+    fi
     dbg_list+=("${dbgpath}")
   done
 }
@@ -152,11 +145,12 @@ replace_paths() {
   done
 }
 
-create_depends() {
+create_opts() {
+  local opt=$1; shift
   local -n deps=$1; shift
   deps=()
   for dep in "$@"; do
-    deps+=( "--depends" "${dep}" )
+    deps+=( "${opt}" "${dep}" )
   done
 }
 
@@ -164,15 +158,32 @@ build_package() {
   name="$1"; shift
 
   output_type="${OUTPUT_TYPE:-rpm}"
-  EXTRA_OPTS+=("--rpm-autoprov")
-  EXTRA_OPTS+=("--rpm-autoreq")
+  if [ "${output_type}" = "rpm" ]; then
+    EXTRA_OPTS+=("--rpm-autoprov")
+    if [ "${1-}" != "noautoreq" ]; then
+      EXTRA_OPTS+=("--rpm-autoreq")
+    fi
+    if [ -n "${RPM_CHANGELOG:-}" ]; then
+      EXTRA_OPTS+=("--rpm-changelog" "${root}/utils/rpms/${RPM_CHANGELOG}")
+    fi
+  fi
 
   depends=()
-  create_depends depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
+  create_opts "--depends" depends "${DEPENDS[@]}" "${EXTERNAL_DEPENDS[@]}"
+  conflicts=()
+  create_opts "--conflicts" conflicts "${CONFLICTS[@]}"
+  provides=()
+  create_opts "--provides" provides "${PROVIDES[@]}"
+  config_files=()
+  create_opts "--config-files" config_files "${CONFIG_FILES[@]}"
   pkgname="${name}-${VERSION}-${RELEASE}.${ARCH}.${output_type}"
+  if [ -n "${PACKAGE_OUTPUT_DIR:-}" ]; then
+    mkdir -p "${PACKAGE_OUTPUT_DIR}"
+    pkgname="${PACKAGE_OUTPUT_DIR}/${pkgname}"
+  fi
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
-  fpm -s "${PACKAGE_TYPE}" -t "${output_type}" \
+  fpm --verbose -s "${PACKAGE_TYPE}" -t "${output_type}" \
   -p "${pkgname}" \
   --name "${name}" \
   --license "${LICENSE}" \
@@ -181,18 +192,27 @@ build_package() {
   --architecture "${ARCH}" \
   --description "${DESCRIPTION}" \
   --url "${URL}" \
+  --vendor "" \
+  --maintainer "DAOS Foundation <daos@daos.groups.io>" \
+  --prefix "" \
   "${depends[@]}" \
+  "${conflicts[@]}" \
+  "${provides[@]}" \
+  "${config_files[@]}" \
   "${EXTRA_OPTS[@]}" \
   "${install_list[@]}"
 
   export EXTRA_OPTS=()
   install_list=()
 
+  CONFLICTS=()
+  CONFIG_FILES=()
+  DEPENDS=()
+  EXTERNAL_DEPENDS=()
+  PROVIDES=()
   if [[ ! "${name}" =~ debuginfo ]]; then
     build_debug_package "${name}"
   fi
-  DEPENDS=()
-  EXTERNAL_DEPENDS=()
 }
 
 build_debug_package() {

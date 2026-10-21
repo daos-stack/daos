@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -565,6 +566,7 @@ rdb_tx_create_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
 		.dto_attr	= (struct rdb_kvs_attr *)attr
 	};
 
+	D_ASSERT(parent == &rdb_path_attrs || !rdb_path_is_attrs(parent));
 	return rdb_tx_append(tx, &op, false /* is_critical */);
 }
 
@@ -590,6 +592,7 @@ rdb_tx_destroy_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
 		.dto_attr	= NULL
 	};
 
+	D_ASSERT(parent == &rdb_path_attrs || !rdb_path_is_attrs(parent));
 	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
@@ -615,6 +618,7 @@ rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
 		.dto_attr	= NULL
 	};
 
+	D_ASSERT(kvs == &rdb_path_attrs || !rdb_path_is_attrs(kvs));
 	return rdb_tx_append(tx, &op, false /* is_critical */);
 }
 
@@ -641,6 +645,7 @@ rdb_tx_update_critical(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *
 		.dto_attr	= NULL
 	};
 
+	D_ASSERT(kvs == &rdb_path_attrs || !rdb_path_is_attrs(kvs));
 	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
@@ -664,6 +669,7 @@ rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key)
 		.dto_attr	= NULL
 	};
 
+	D_ASSERT(kvs == &rdb_path_attrs || !rdb_path_is_attrs(kvs));
 	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
@@ -1116,8 +1122,12 @@ rdb_tx_query_pre(struct rdb_tx *tx, const rdb_path_t *path,
 	}
 	ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
 
-	if (path == NULL)
+	if (path == NULL) {
+		D_ASSERT(kvs == NULL && index == NULL);
 		return 0;
+	}
+
+	D_ASSERT(path == &rdb_path_attrs || !rdb_path_is_attrs(path));
 
 	rc = rdb_kvs_lookup(tx->dt_db, path, i, true /* alloc */, kvs);
 	if (rc != 0)

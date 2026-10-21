@@ -19,7 +19,6 @@ pool:
   svcn: 3
   pool_query_timeout: 30
 container:
-  control_method: daos
   akey_size: 5
   dkey_size: 5
   data_size: 5

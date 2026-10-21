@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -85,7 +85,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         for elt in self.media_names:
             self.pool_usage_min.append(float(
-                self.params.get(elt.casefold(), "/run/pool/usage_min/*", 0)))
+                self.params.get(f"usage_min_{elt.casefold()}", "/run/pool/*")))
 
         # initialize daos command
         self.daos_cmd = DaosCommand(self.bin)
@@ -461,6 +461,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Fill 75% of current SCM free space. Aggregation is Enabled so NVMe space will
         # start to fill up.
+        # pylint: disable-next=logging-too-few-args
         self.log.info('--Filling 75% of the current SCM free space--')
         try:
             self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
@@ -477,6 +478,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         # Fill 60% of current SCM free space. This time, NVMe will be Full so data will
         # not be moved to NVMe and continue to fill up SCM. SCM will be full and this
         # command is expected to fail with DER_NOSPACE.
+        # pylint: disable-next=logging-too-few-args
         self.log.info('--Filling 60% of the current SCM free space--')
         try:
             self.start_ior_load(
@@ -747,9 +749,9 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
             log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
             try:
-                # Fill 10% more to SCM ,which should Fail because no SCM space
+                # Fill 45% more to SCM ,which should Fail because no SCM space
                 self.start_ior_load(
-                    storage='SCM', operation="Auto_Write", percent=40, log_file=log_file)
+                    storage='SCM', operation="Auto_Write", percent=45, log_file=log_file)
             except TestFail:
                 self.log.info('Expected to fail because of DER_NOSPACE')
             else:

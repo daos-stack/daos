@@ -18,7 +18,6 @@ pool:
   scm_size: 1G
 container:
   type: POSIX
-  control_method: daos
 dcp:
   env_vars:
     - D_LOG_MASK=INFO,DFS=DEBUG

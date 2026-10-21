@@ -17,24 +17,21 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
       log_file: daos_server0.log
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
 
 pool:
   size: 100%
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
-  control_method: daos
+  properties: cksum:off,srv_cksum:off
 
 ior: &ior_base
   client_processes:

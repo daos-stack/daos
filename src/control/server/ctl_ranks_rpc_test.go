@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +10,7 @@ package server
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"testing"
@@ -48,7 +50,7 @@ var (
 
 func mockEvtEngineDied(t *testing.T) *events.RASEvent {
 	t.Helper()
-	return events.NewEngineDiedEvent("foo", 0, 0, common.NormalExit, 1234)
+	return events.NewEngineDiedEvent("foo", 0, 0, 0, common.NormalExit, 1234)
 }
 
 // checkUnorderedRankResults fails if results slices contain any differing results,
@@ -193,16 +195,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 					continue
 				}
 
-				trc := &engine.TestRunnerConfig{}
-				if !tc.instancesStopped {
-					trc.Running.SetTrue()
-					srv.ready.SetTrue()
-				}
-				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
-				srv.setIndex(uint32(i))
-
-				srv._superblock.Rank = new(ranklist.Rank)
-				*srv._superblock.Rank = ranklist.Rank(i + 1)
+				setupTestEngine(t, srv, uint32(i+1), tc.instancesStopped)
 
 				cfg := new(mockDrpcClientConfig)
 				if tc.drpcRet != nil {
@@ -378,7 +371,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				*ei._superblock.Rank = ranklist.Rank(i + 1)
 
 				ei.OnInstanceExit(
-					func(_ context.Context, _ uint32, _ ranklist.Rank, _ error, _ int) error {
+					func(_ context.Context, _ uint32, _ ranklist.Rank, _ uint64, _ error, _ int) error {
 						svc.events.Publish(mockEvtEngineDied(t))
 						return nil
 					})
@@ -556,6 +549,115 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
+		})
+	}
+}
+
+// TestServer_CtlSvc_ResetFormatRanks_ControlMetadata verifies ResetFormatRanks()'s
+// per-engine control-metadata scoping.
+func TestServer_CtlSvc_ResetFormatRanks_ControlMetadata(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ranks             string
+		expEngine0Removed bool
+		expEngine1Removed bool
+	}{
+		"partial rank set only removes the targeted engine's subdirectory": {
+			ranks:             "2",
+			expEngine0Removed: false,
+			expEngine1Removed: true,
+		},
+		"full rank set removes both engines' subdirectories": {
+			ranks:             "1-2",
+			expEngine0Removed: true,
+			expEngine1Removed: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			testDir, cleanup := test.CreateTestDir(t)
+			defer cleanup()
+
+			mdCfg := storage.ControlMetadata{Path: filepath.Join(testDir, "md")}
+
+			// Pre-create the shared control_raft directory (as used by the MS
+			// replica's raft DB, see cfgGetRaftDir()) and each engine's own
+			// metadata subdirectory, each with a marker file so that removal
+			// can be detected precisely.
+			raftDir := filepath.Join(mdCfg.Directory(), "control_raft")
+			engineDirs := []string{mdCfg.EngineDirectory(0), mdCfg.EngineDirectory(1)}
+			for _, dir := range append([]string{raftDir}, engineDirs...) {
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, "marker"), []byte("x"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			ctx, cancel := context.WithCancel(test.Context(t))
+			defer cancel()
+
+			cs := &ControlService{
+				StorageControlService: StorageControlService{
+					log:     log,
+					storage: storage.MockProvider(log, 0, &storage.Config{ControlMetadata: mdCfg}, nil, nil, nil, nil),
+				},
+				harness: NewEngineHarness(log),
+				events:  events.NewPubSub(ctx, log),
+			}
+			t.Cleanup(cs.Close)
+
+			for i := 0; i < 2; i++ {
+				storProv := storage.MockProvider(log, i,
+					&storage.Config{ControlMetadata: mdCfg},
+					nil, nil, nil, nil)
+				ei := NewEngineInstance(log, storProv, nil, engine.NewTestRunner(&engine.TestRunnerConfig{}, engine.MockConfig()), nil)
+
+				superblock := &Superblock{
+					Version: superblockVersion,
+					UUID:    test.MockUUID(),
+					System:  "test",
+				}
+				superblock.Rank = new(ranklist.Rank)
+				*superblock.Rank = ranklist.Rank(i + 1)
+				ei.setSuperblock(superblock)
+				ei.waitFormat.SetTrue()
+
+				// Unblock requestStart() called from ResetFormatRanks() by
+				// reading from the startRequested channel.
+				go func(s *EngineInstance) {
+					select {
+					case <-ctx.Done():
+					case <-s.startRequested:
+					}
+				}(ei)
+
+				if err := cs.harness.AddInstance(ei); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			req := &ctlpb.RanksReq{Ranks: tc.ranks}
+			if _, err := cs.ResetFormatRanks(ctx, req); err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+
+			checkDir := func(dir string, expRemoved bool) {
+				t.Helper()
+				_, err := os.Stat(dir)
+				removed := os.IsNotExist(err)
+				if err != nil && !os.IsNotExist(err) {
+					t.Fatalf("unexpected stat error for %q: %s", dir, err)
+				}
+				if removed != expRemoved {
+					t.Fatalf("dir %q: expected removed=%v, got removed=%v", dir, expRemoved, removed)
+				}
+			}
+			checkDir(engineDirs[0], tc.expEngine0Removed)
+			checkDir(engineDirs[1], tc.expEngine1Removed)
+			checkDir(raftDir, false) // control_raft must never be touched by this RPC
 		})
 	}
 }

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,12 +9,15 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -138,7 +141,7 @@ func createACLFile(t *testing.T, dir string, acl *control.AccessControlList) str
 	return test.CreateTestFile(t, dir, control.FormatACLDefault(acl))
 }
 
-func TestPoolCommands(t *testing.T) {
+func TestDmg_PoolCommands(t *testing.T) {
 	testSizeStr := "512GiB"
 	testSize := 549755813888
 	eUsr, err := user.Current()
@@ -602,9 +605,9 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
 						propWithVal("scrub", "timed"),
 						propWithVal("scrub_freq", "1"),
-						propWithVal("label", "label"),
 					},
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
@@ -613,6 +616,30 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Create pool with properties specified separately",
+			fmt.Sprintf("pool create label --scm-size %s --properties scrub:timed --properties scrub_freq:1", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+						propWithVal("scrub", "timed"),
+						propWithVal("scrub_freq", "1"),
+					},
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with duplicate properties specified separately",
+			fmt.Sprintf("pool create label --scm-size %s --properties scrub:timed --properties scrub:timed,scrub_freq:1", testSizeStr),
+			"",
+			errors.New("more than once"),
 		},
 		// Exclude testing with multiple ranks is verified at the control API layer.
 		{
@@ -758,6 +785,86 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Exclude with --wait issues a follow-up pool query",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Exclude with --wait=TIMEOUT issues a follow-up pool query",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait=30m",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Exclude with invalid --wait timeout",
+			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait=soon",
+			"",
+			errors.New("invalid wait timeout"),
+		},
+		{
+			"Drain with --wait issues a follow-up pool query",
+			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Extend with --wait issues a follow-up pool query",
+			"pool extend 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolExtendReq{
+					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks: []ranklist.Rank{1},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Reintegrate with --wait issues a follow-up pool query",
+			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0 --wait",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRanksReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:     []ranklist.Rank{0},
+					TargetIdx: []uint32{},
+				}),
+				printRequest(t, &control.PoolQueryReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Destroy pool with force",
 			"pool destroy 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
@@ -827,6 +934,20 @@ func TestPoolCommands(t *testing.T) {
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*daos.PoolProperty{
 						propWithVal("self_heal", "exclude;rebuild"),
+						propWithVal("space_rb", "42"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Set pool properties with self_heal value 'none'",
+			`pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb self_heal:none,space_rb:42`,
+			strings.Join([]string{
+				printRequest(t, &control.PoolSetPropReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", "none"),
 						propWithVal("space_rb", "42"),
 					},
 				}),
@@ -1119,8 +1240,16 @@ func TestPoolCommands(t *testing.T) {
 			"pool query 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: daos.DefaultPoolQueryMask,
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
+					}),
+				}),
+				printRequest(t, &control.PoolGetPropReq{
+					ID: test.MockUUID(0),
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", ""),
+					},
 				}),
 			}, " "),
 			nil,
@@ -1130,8 +1259,17 @@ func TestPoolCommands(t *testing.T) {
 			"pool query --show-enabled 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionEnabledEngines) }),
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionEnabledEngines)
+						qm.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
+					}),
+				}),
+				printRequest(t, &control.PoolGetPropReq{
+					ID: test.MockUUID(0),
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", ""),
+					},
 				}),
 			}, " "),
 			nil,
@@ -1141,8 +1279,17 @@ func TestPoolCommands(t *testing.T) {
 			"pool query -e 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { qm.SetOptions(daos.PoolQueryOptionEnabledEngines) }),
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionEnabledEngines)
+						qm.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
+					}),
+				}),
+				printRequest(t, &control.PoolGetPropReq{
+					ID: test.MockUUID(0),
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", ""),
+					},
 				}),
 			}, " "),
 			nil,
@@ -1152,8 +1299,30 @@ func TestPoolCommands(t *testing.T) {
 			"pool query --health-only 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:        "12345678-1234-1234-1234-1234567890ab",
-					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) { *qm = daos.HealthOnlyPoolQueryMask }),
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						*qm = daos.HealthOnlyPoolQueryMask
+						qm.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
+					}),
+				}),
+				printRequest(t, &control.PoolGetPropReq{
+					ID: test.MockUUID(0),
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", ""),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool for health only; skip self_heal fetch",
+			"pool query --health-only 12345678-1234-1234-1234-1234567890ab --no-self-heal-check",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID: "12345678-1234-1234-1234-1234567890ab",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						*qm = daos.HealthOnlyPoolQueryMask
+					}),
 				}),
 			}, " "),
 			nil,
@@ -1163,8 +1332,16 @@ func TestPoolCommands(t *testing.T) {
 			"pool query test_label",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:        "test_label",
-					QueryMask: daos.DefaultPoolQueryMask,
+					ID: "test_label",
+					QueryMask: setQueryMask(func(qm *daos.PoolQueryMask) {
+						qm.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
+					}),
+				}),
+				printRequest(t, &control.PoolGetPropReq{
+					ID: test.MockUUID(0),
+					Properties: []*daos.PoolProperty{
+						propWithVal("self_heal", ""),
+					},
 				}),
 			}, " "),
 			nil,
@@ -1173,7 +1350,7 @@ func TestPoolCommands(t *testing.T) {
 			"Query pool with empty ID",
 			"pool query \"\"",
 			"",
-			fmt.Errorf("invalid label"),
+			errors.New("invalid label"),
 		},
 		{
 			"Upgrade pool with pool ID",
@@ -1186,10 +1363,90 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Interactive rebuild with no operation specified",
+			"pool rebuild",
+			"",
+			errors.New("specify one command"),
+		},
+		{
+			"Interactive rebuild with no operation specified but label",
+			"pool rebuild test_label",
+			"",
+			errors.New("specify one command"),
+		},
+		{
+			"Start interactive rebuild on pool with no ID or label",
+			"pool rebuild start",
+			"",
+			errors.New("not provided"),
+		},
+		{
+			"Start interactive rebuild on pool with empty ID or label",
+			"pool rebuild start \"\"",
+			"",
+			errors.New("invalid label"),
+		},
+		{
+			"Start interactive rebuild on pool with ID",
+			"pool rebuild start 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					OpCode: control.PoolRebuildOpCodeStart,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Start interactive rebuild on pool with label",
+			"pool rebuild start test_label",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "test_label",
+					OpCode: control.PoolRebuildOpCodeStart,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Stop interactive rebuild on pool with no ID or label",
+			"pool rebuild stop",
+			"",
+			errors.New("not provided"),
+		},
+		{
+			"Stop interactive rebuild on pool with empty ID or label",
+			"pool rebuild stop \"\"",
+			"",
+			errors.New("invalid label"),
+		},
+		{
+			"Stop interactive rebuild on pool with ID",
+			"pool rebuild stop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					OpCode: control.PoolRebuildOpCodeStop,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Stop interactive rebuild on pool with label",
+			"pool rebuild stop test_label",
+			strings.Join([]string{
+				printRequest(t, &control.PoolRebuildManageReq{
+					ID:     "test_label",
+					OpCode: control.PoolRebuildOpCodeStop,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"pool quack",
 			"",
-			fmt.Errorf("Unknown command"),
+			errors.New("Unknown command"),
 		},
 	})
 }
@@ -1235,6 +1492,153 @@ func TestPoolGetACLToFile_Success(t *testing.T) {
 
 	if diff := cmp.Diff(expResult, result); diff != "" {
 		t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+	}
+}
+
+// TestDmg_PoolRanksCmds_WaitFailure covers the --wait error path for the
+// rank-op commands that return a populated response: in JSON mode the
+// response must still be emitted alongside the wait error rather than
+// falling through to the top-level null-response fallback.
+func TestDmg_PoolRanksCmds_WaitFailure(t *testing.T) {
+	poolUUID := test.MockUUID(1)
+	ranksResp := &mgmtpb.PoolRanksResp{}
+	failedQuery := &mgmtpb.PoolQueryResp{
+		Uuid: poolUUID,
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State:  mgmtpb.PoolRebuildStatus_DONE,
+			Status: int32(daos.IOError),
+		},
+	}
+	busyQuery := &mgmtpb.PoolQueryResp{
+		Uuid: poolUUID,
+		Rebuild: &mgmtpb.PoolRebuildStatus{
+			State: mgmtpb.PoolRebuildStatus_BUSY,
+		},
+	}
+
+	mkCmd := func(t *testing.T, name string) (*poolRanksCmd, func() error) {
+		t.Helper()
+		var base *poolRanksCmd
+		var exec func() error
+		switch name {
+		case "exclude":
+			c := new(poolExcludeCmd)
+			base, exec = &c.poolRanksCmd, func() error { return c.Execute(nil) }
+		case "drain":
+			c := new(poolDrainCmd)
+			base, exec = &c.poolRanksCmd, func() error { return c.Execute(nil) }
+		case "reintegrate":
+			c := new(poolReintegrateCmd)
+			base, exec = &c.poolRanksCmd, func() error { return c.Execute(nil) }
+		default:
+			t.Fatalf("unknown command %q", name)
+		}
+		if err := base.Args.Pool.UnmarshalFlag(poolUUID); err != nil {
+			t.Fatal(err)
+		}
+		if err := base.RankList.UnmarshalFlag("0"); err != nil {
+			t.Fatal(err)
+		}
+		return base, exec
+	}
+
+	for name, tc := range map[string]struct {
+		cmdName   string
+		wait      waitFlag
+		json      bool
+		queryResp *mgmtpb.PoolQueryResp
+		expErr    error
+		expJSON   bool
+	}{
+		"exclude: rebuild failed, json": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true},
+			json:      true,
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+			expJSON:   true,
+		},
+		"drain: rebuild failed, json": {
+			cmdName:   "drain",
+			wait:      waitFlag{Set: true},
+			json:      true,
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+			expJSON:   true,
+		},
+		"reintegrate: rebuild failed, json": {
+			cmdName:   "reintegrate",
+			wait:      waitFlag{Set: true},
+			json:      true,
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+			expJSON:   true,
+		},
+		"exclude: rebuild failed, text": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true},
+			queryResp: failedQuery,
+			expErr:    errors.New("rebuild failed"),
+		},
+		"exclude: timeout expires, json": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true, Timeout: 10 * time.Millisecond},
+			json:      true,
+			queryResp: busyQuery,
+			expErr:    errors.New("did not complete within 10ms"),
+			expJSON:   true,
+		},
+		"exclude: timeout expires, text": {
+			cmdName:   "exclude",
+			wait:      waitFlag{Set: true, Timeout: 10 * time.Millisecond},
+			queryResp: busyQuery,
+			expErr:    errors.New("did not complete within 10ms"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+				UnaryResponseSet: []*control.UnaryResponse{
+					control.MockMSResponse("10.0.0.1:10001", nil, ranksResp),
+					control.MockMSResponse("10.0.0.1:10001", nil, tc.queryResp),
+				},
+			})
+
+			cmd, exec := mkCmd(t, tc.cmdName)
+			cmd.setInvoker(mi)
+			cmd.SetLog(log)
+			cmd.Wait = tc.wait
+			var out bytes.Buffer
+			if tc.json {
+				cmd.EnableJSONOutput(&out, nil)
+			}
+
+			gotErr := exec()
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if !tc.expJSON {
+				if out.Len() != 0 {
+					t.Fatalf("unexpected JSON output: %s", out.String())
+				}
+				return
+			}
+
+			var got struct {
+				Response *control.PoolRanksResp `json:"response"`
+				Error    *string                `json:"error"`
+			}
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatalf("unmarshal JSON output %q: %s", out.String(), err)
+			}
+			if got.Response == nil {
+				t.Fatalf("JSON response is null: %s", out.String())
+			}
+			if got.Error == nil || !strings.Contains(*got.Error, tc.expErr.Error()) {
+				t.Fatalf("JSON error %v does not contain %q", got.Error, tc.expErr)
+			}
+		})
 	}
 }
 
@@ -1315,6 +1719,106 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 
 			gotErr := cmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func Test_checkPoolCreateTierRatioWarning(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp       *control.PoolCreateResp
+		expWarning string
+	}{
+		"PMem mode with low tier ratio - warning expected": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TiByte}, // 0.98% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "storage tier ratio is less than 1.00%, DAOS performance may suffer!",
+		},
+		"PMem mode with acceptable tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{600 * humanize.GiByte, 9400 * humanize.GiByte}, // 6% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"PMem mode at minimum threshold - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{100 * humanize.GiByte, 9900 * humanize.GiByte}, // 1.0% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"PMem mode just below threshold - warning expected": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{99 * humanize.GiByte, 9901 * humanize.GiByte}, // 0.99% ratio
+				MdOnSsdActive: false,
+			},
+			expWarning: "storage tier ratio is less than 1.00%, DAOS performance may suffer!",
+		},
+		"MD-on-SSD mode with low tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{142 * humanize.GiByte, 20 * humanize.TiByte}, // ~0.7% ratio
+				MdOnSsdActive: true,
+			},
+			expWarning: "",
+		},
+		"MD-on-SSD mode with very low tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{10 * humanize.GiByte, 10 * humanize.TiByte}, // ~0.1% ratio
+				MdOnSsdActive: true,
+			},
+			expWarning: "",
+		},
+		"MD-on-SSD mode with normal tier ratio - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{1200 * humanize.GiByte, 18800 * humanize.GiByte}, // 6% ratio
+				MdOnSsdActive: true,
+			},
+			expWarning: "",
+		},
+		"single tier configuration - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{1000 * humanize.GiByte},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"no second tier - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{1000 * humanize.GiByte, 0},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"three tier configuration - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{100 * humanize.GiByte, 1000 * humanize.GiByte, 10000 * humanize.GiByte},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"empty response - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     []uint64{},
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+		"nil tier bytes - no warning": {
+			resp: &control.PoolCreateResp{
+				TierBytes:     nil,
+				MdOnSsdActive: false,
+			},
+			expWarning: "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotWarning := checkPoolCreateTierRatioWarning(tc.resp)
+
+			if diff := cmp.Diff(tc.expWarning, gotWarning); diff != "" {
+				t.Fatalf("unexpected warning (-want, +got):\n%s", diff)
+			}
 		})
 	}
 }

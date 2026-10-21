@@ -1,21 +1,23 @@
 #!/bin/bash
 # (C) Copyright 2025 Google LLC
+# Copyright 2026 Hewlett Packard Enterprise Development LP
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 . "${root}/fpm_common.sh"
 
-if [ -z "${SL_OFI_PREFIX}" ]; then
+if [ -z "${SL_OFI_PREFIX:-}" ]; then
   echo "Libfabric must be installed or never built"
   exit 0
 fi
 
 VERSION="${libfabric_version}"
-RELEASE="3"
+RELEASE="${libfabric_release}"
 LICENSE="BSD or GPLv2"
 ARCH=${isa}
 DESCRIPTION="Provides a user-space API to access high-performance fabric
 services, such as RDMA. This package contains the runtime library."
 URL="https://github.com/ofiwg/libfabric"
+RPM_CHANGELOG="libfabric.changelog"
 
 files=()
 TARGET_PATH="${bindir}"
@@ -23,23 +25,32 @@ list_files files "${SL_OFI_PREFIX}/bin/fi_*"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
-TARGET_PATH="${libdir}"
-list_files files "${SL_OFI_PREFIX}/lib64/libfabric*.so.*"
-clean_bin "${files[@]}"
-append_install_list "${files[@]}"
+if [[ "${DISTRO:-el9}" =~ el ]]; then
+  TARGET_PATH="${libdir}"
+  list_files files "${SL_OFI_PREFIX}/lib64/libfabric*.so.*"
+  clean_bin "${files[@]}"
+  append_install_list "${files[@]}"
+fi
 
 TARGET_PATH="${mandir}/man1"
 list_files files "${SL_OFI_PREFIX}/share/man/man1/fi_*.1*"
 append_install_list "${files[@]}"
 
-EXTRA_OPTS=()
 cat << EOF  > "${tmp}/post_install_libfabric"
 ldconfig
 EOF
 EXTRA_OPTS+=("--after-install" "${tmp}/post_install_libfabric")
-EXTRA_OPTS+=("--rpm-autoprov")
 ARCH="${isa}"
-build_package "${libfabric_lib}"
+build_package libfabric
+
+if [[ ! "${DISTRO:-el9}" =~ el ]]; then
+  TARGET_PATH="${libdir}"
+  list_files files "${SL_OFI_PREFIX}/lib64/libfabric*.so.*"
+  clean_bin "${files[@]}"
+  append_install_list "${files[@]}"
+  EXTRA_OPTS+=("--after-install" "${tmp}/post_install_libfabric")
+  build_package "${libfabric_lib}"
+fi
 
 TARGET_PATH="${libdir}"
 list_files files "${SL_OFI_PREFIX}/lib64/libfabric*.so"
@@ -66,5 +77,5 @@ TARGET_PATH="${mandir}/man7"
 list_files files "${SL_OFI_PREFIX}/share/man/man7/f*.7*"
 append_install_list "${files[@]}"
 
-DEPENDS=("${libfabric_lib} = ${libfabric_version}")
+DEPENDS=("${libfabric_lib} = ${libfabric_full}")
 build_package "${libfabric_dev}"

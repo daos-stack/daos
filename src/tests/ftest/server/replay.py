@@ -1,6 +1,6 @@
 """
   (C) Copyright 2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +10,6 @@ from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
 from general_utils import join
 from ior_utils import read_data, write_data
-from test_utils_pool import add_pool
 
 
 class ReplayTests(TestWithServers):
@@ -27,13 +26,13 @@ class ReplayTests(TestWithServers):
 
         Args:
             details (str, optional): additional log_step messaging
-            pool_params (dict, optional): named arguments to add_pool()
+            pool_params (dict, optional): named arguments to self.get_pool()
 
         Returns:
             TestContainer: the created container with a reference to the created pool
         """
         self.log_step(join(' ', 'Creating a pool (dmg pool create)', '-', details))
-        pool = add_pool(self, **pool_params)
+        pool = self.get_pool(**pool_params)
         self.log_step(join(' ', 'Creating a container (daos container create)', '-', details))
         return self.get_container(pool)
 
@@ -359,7 +358,7 @@ class ReplayTests(TestWithServers):
         """
         frequency = 5
         container = self.create_container(
-            properties=f'checkpoint:timed,checkpoint_freq:{frequency}')
+            properties=f'rd_fac:0,space_rb:0,checkpoint:timed,checkpoint_freq:{frequency}')
         self.log.info('%s check point frequency: %s seconds', container.pool, frequency)
 
         self.log_step('Write data to the container (ior)')

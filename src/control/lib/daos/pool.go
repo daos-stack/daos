@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -57,9 +57,11 @@ type (
 	PoolRebuildStatus struct {
 		Status       int32            `json:"status"`
 		State        PoolRebuildState `json:"state"`
+		DerivedState PoolRebuildState `json:"derived_state"`
 		Objects      uint64           `json:"objects"`
 		Records      uint64           `json:"records"`
 		TotalObjects uint64           `json:"total_objects"`
+		Degraded     bool             `json:"degraded"`
 	}
 
 	// PoolInfo contains information about the pool.
@@ -84,14 +86,14 @@ type (
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 		MemFileBytes     uint64               `json:"mem_file_bytes"`
 		MdOnSsdActive    bool                 `json:"md_on_ssd_active"`
+		SelfHealPolicy   string               `json:"self_heal_policy"`
 	}
 
-	PoolQueryTargetType  int32
+	// PoolQueryTargetState represents the current state of the pool target.
 	PoolQueryTargetState int32
 
 	// PoolQueryTargetInfo contains information about a single target
 	PoolQueryTargetInfo struct {
-		Type          PoolQueryTargetType  `json:"target_type"`
 		State         PoolQueryTargetState `json:"target_state"`
 		Space         []*StorageUsageStats `json:"space"`
 		MemFileBytes  uint64               `json:"mem_file_bytes"`
@@ -117,9 +119,9 @@ type (
 
 const (
 	// DefaultPoolQueryMask defines the default pool query mask.
-	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DEAD))
+	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DEAD | C.DPI_SELF_HEAL_POLICY))
 	// HealthOnlyPoolQueryMask defines the mask for health-only queries.
-	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE))
+	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE | C.DPI_SELF_HEAL_POLICY))
 
 	// PoolQueryOptionSpace retrieves storage space usage as part of the pool query.
 	PoolQueryOptionSpace PoolQueryOption = "space"
@@ -131,6 +133,8 @@ const (
 	PoolQueryOptionDisabledEngines PoolQueryOption = "disabled_engines"
 	// PoolQueryOptionDeadEngines retrieves dead engines as part of the pool query.
 	PoolQueryOptionDeadEngines PoolQueryOption = "dead_engines"
+	// PoolQueryOptionSelfHealPolicy retrieves self_heal_policy in addition to the pool query.
+	PoolQueryOptionSelfHealPolicy PoolQueryOption = "self_heal_policy"
 
 	// PoolConnectFlagReadOnly indicates that the connection is read-only.
 	PoolConnectFlagReadOnly PoolConnectFlag = C.DAOS_PC_RO
@@ -165,6 +169,7 @@ var poolQueryOptMap = map[C.int]PoolQueryOption{
 	C.DPI_ENGINES_ENABLED:  PoolQueryOptionEnabledEngines,
 	C.DPI_ENGINES_DISABLED: PoolQueryOptionDisabledEngines,
 	C.DPI_ENGINES_DEAD:     PoolQueryOptionDeadEngines,
+	C.DPI_SELF_HEAL_POLICY: PoolQueryOptionSelfHealPolicy,
 }
 
 func resolvePoolQueryOpt(name PoolQueryOption) (C.int, error) {
@@ -310,6 +315,40 @@ func (pi *PoolInfo) RebuildState() string {
 	return pi.Rebuild.State.String()
 }
 
+// UpdateRebuildStatus evaluates a derived state to indicate transient rebuild conditions.
+func (pi *PoolInfo) UpdateRebuildStatus() error {
+	if pi.Rebuild == nil {
+		return nil
+	}
+	if pi.Rebuild.State > PoolRebuildStateDone {
+		return errors.New("illegal rebuild state value")
+	}
+	ds := pi.Rebuild.State
+
+	switch pi.Rebuild.State {
+	case PoolRebuildStateIdle:
+		if pi.Rebuild.Status == int32(OpCanceled) {
+			ds = PoolRebuildStateStopped
+		} else if pi.Rebuild.Status != 0 {
+			ds = PoolRebuildStateFailed
+		}
+	case PoolRebuildStateDone:
+		if pi.Rebuild.Status != 0 {
+			ds = PoolRebuildStateFailed
+		}
+	case PoolRebuildStateBusy:
+		if pi.Rebuild.Status == int32(OpCanceled) {
+			ds = PoolRebuildStateStopping
+		} else if pi.Rebuild.Status != 0 {
+			ds = PoolRebuildStateFailing
+		}
+	}
+
+	pi.Rebuild.DerivedState = ds
+
+	return nil
+}
+
 // Name retrieves effective name for pool from either label or UUID.
 func (pi *PoolInfo) Name() string {
 	name := pi.Label
@@ -425,6 +464,14 @@ const (
 	PoolRebuildStateDone = PoolRebuildState(mgmtpb.PoolRebuildStatus_DONE)
 	// PoolRebuildStateBusy indicates that the rebuild process is in progress.
 	PoolRebuildStateBusy = PoolRebuildState(mgmtpb.PoolRebuildStatus_BUSY)
+	// PoolRebuildStateStopping indicates that the rebuild process is stopping (transient).
+	PoolRebuildStateStopping = PoolRebuildState(mgmtpb.PoolRebuildStatus_STOPPING)
+	// PoolRebuildStateStopped indicates that the rebuild process has stopped.
+	PoolRebuildStateStopped = PoolRebuildState(mgmtpb.PoolRebuildStatus_STOPPED)
+	// PoolRebuildStateFailing indicates that the rebuild process is failing (transient).
+	PoolRebuildStateFailing = PoolRebuildState(mgmtpb.PoolRebuildStatus_FAILING)
+	// PoolRebuildStateFailed indicates that the rebuild process has failed.
+	PoolRebuildStateFailed = PoolRebuildState(mgmtpb.PoolRebuildStatus_FAILED)
 )
 
 func (prs PoolRebuildState) String() string {
@@ -449,18 +496,6 @@ func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
 	*prs = PoolRebuildState(state)
 
 	return nil
-}
-
-func (ptt PoolQueryTargetType) String() string {
-	ptts, ok := mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(ptt)]
-	if !ok {
-		return "invalid"
-	}
-	return strings.ToLower(ptts)
-}
-
-func (pqtt PoolQueryTargetType) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + pqtt.String() + `"`), nil
 }
 
 const (

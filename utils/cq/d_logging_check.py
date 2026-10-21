@@ -18,7 +18,7 @@ import os
 import re
 import sys
 
-ARGS = None
+ARGS = None  # pylint: disable=invalid-name
 
 
 class FileLine():

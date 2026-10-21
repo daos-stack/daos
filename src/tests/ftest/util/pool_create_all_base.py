@@ -1,5 +1,6 @@
 """
 (C) Copyright 2022-2024 Intel Corporation.
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -106,9 +107,12 @@ class PoolCreateAllTestBase(TestWithServers):
             ranks (list, optional): List of rank used for creating pools.  Defaults to None.
         """
         pool_count = 4 if nvme_delta_bytes is None else 5
-        self.add_pool_qty(pool_count, create=False)
+        if self.pool is None:
+            self.pool = []
+        self.pool.extend(self.get_pool(create=False) for _ in range(pool_count))
         pool_idx = len(self.pool) - pool_count
 
+        # pylint: disable-next=logging-format-truncated
         self.log.info("Creating a pool with all the available storage: size=100%")
         self.pool[pool_idx].size.update("100%", "pool[{}].size".format(pool_idx))
         if ranks is not None:
@@ -219,7 +223,10 @@ class PoolCreateAllTestBase(TestWithServers):
             nvme_delta_bytes (int, optional): Allowed difference of the NVMe pool storage.  Defaults
                 to None.
         """
-        self.add_pool_qty(pool_count, namespace="/run/pool/*", create=False)
+        if self.pool is None:
+            self.pool = []
+        self.pool.extend(
+            self.get_pool(namespace="/run/pool/*", create=False) for _ in range(pool_count))
 
         first_pool_size = None
         for index in range(pool_count):
@@ -357,11 +364,14 @@ class PoolCreateAllTestBase(TestWithServers):
             scm_delta_bytes (int): Allowed difference of the SCM pool storage.
             nvme_delta_bytes (int): Allowed difference of the NVMe pool storage.
         """
-        self.add_pool_qty(1, namespace="/run/pool/*", create=False)
+        if self.pool is None:
+            self.pool = []
+        self.pool.append(self.get_pool(namespace="/run/pool/*", create=False))
 
         usable_bytes = self.get_usable_bytes()
         self.log.info("Usable bytes: scm_size=%d, nvme_size=%d", *usable_bytes)
 
+        # pylint: disable-next=logging-format-truncated
         self.log.info("Creating pool with half of the available storage: size=50%")
         self.pool[0].size.update("50%")
         self.pool[0].create()

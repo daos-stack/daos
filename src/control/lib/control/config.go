@@ -1,5 +1,7 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -51,12 +53,6 @@ func UserConfigPath() string {
 	return path.Join(userHome, "."+defaultConfigFile)
 }
 
-// SystemConfigPath returns the computed path to the system
-// control configuration file, if it exists.
-func SystemConfigPath() string {
-	return path.Join(build.ConfigDir, defaultConfigFile)
-}
-
 // LoadConfig attempts to load a configuration by one of the following:
 // 1. If the supplied path is a non-empty string, use it.
 // Otherwise,
@@ -66,10 +62,12 @@ func LoadConfig(cfgPath string) (*Config, error) {
 	if cfgPath == "" {
 		// Try to find either a per-user config file or use
 		// the system config file.
-		for _, cp := range []string{UserConfigPath(), SystemConfigPath()} {
-			if _, err := os.Stat(cp); err == nil {
-				cfgPath = cp
-				break
+		if _, err := os.Stat(UserConfigPath()); err == nil {
+			cfgPath = UserConfigPath()
+		} else {
+			path, err := build.FindConfigFilePath(defaultConfigFile)
+			if err == nil {
+				cfgPath = path
 			}
 		}
 	}

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -246,15 +246,15 @@ dc_pool_init(void)
 		daos_register_key(&dc_pool_module_key);
 
 	dc_pool_proto_version = 0;
-	rc = daos_rpc_proto_query(pool_proto_fmt_v6.cpf_base, ver_array, 2, &dc_pool_proto_version);
+	rc = daos_rpc_proto_query(pool_proto_fmt_v7.cpf_base, ver_array, 2, &dc_pool_proto_version);
 	if (rc)
 		return rc;
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
-		rc = daos_rpc_register(&pool_proto_fmt_v6, POOL_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&pool_proto_fmt_v7, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
-		rc = daos_rpc_register(&pool_proto_fmt_v7, POOL_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&pool_proto_fmt_v8, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else {
 		D_ERROR("%d version pool RPC not supported.\n", dc_pool_proto_version);
@@ -277,9 +277,9 @@ dc_pool_fini(void)
 	int rc;
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
-		rc = daos_rpc_unregister(&pool_proto_fmt_v6);
-	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
 		rc = daos_rpc_unregister(&pool_proto_fmt_v7);
+	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
+		rc = daos_rpc_unregister(&pool_proto_fmt_v8);
 	} else {
 		rc = -DER_PROTO;
 		DL_ERROR(rc, "%d version pool RPC not supported", dc_pool_proto_version);
@@ -721,13 +721,12 @@ out_unlock:
  * Returns:
  *
  *   < 0			error; end the operation
- *   RSVC_CLIENT_RECHOOSE	task reinited; return 0 from completion cb
+ *   RSVC_CLIENT_RECHOOSE	retriable error; retry the operation
  *   RSVC_CLIENT_PROCEED	OK; proceed to process the reply
  */
 static int
-pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
-			      int rc_crt, struct pool_op_out *out,
-			      tse_task_t *task)
+pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep, int rc_crt,
+			      struct pool_op_out *out)
 {
 	int rc;
 
@@ -897,19 +896,14 @@ pool_connect_cp(tse_task_t *task, void *data)
 	d_iov_t                   *credp;
 	bool                       reinit = false;
 	int			   rc = task->dt_result;
+	struct daos_rebuild_status *rs;
 
-	rc = pool_rsvc_client_complete_rpc(tpriv->pool, &arg->rpc->cr_ep, rc, &pco->pco_op, task);
+	rc = pool_rsvc_client_complete_rpc(tpriv->pool, &arg->rpc->cr_ep, rc, &pco->pco_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc) {
-		D_ERROR("RPC error while connecting to pool: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = pco->pco_op.po_rc;
@@ -926,9 +920,13 @@ pool_connect_cp(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
+	rs = &pco->pco_rebuild_st;
 	rc = process_query_reply(tpriv->pool, map_buf, pco->pco_op.po_map_version,
-				 pco->pco_op.po_hint.sh_rank, &pco->pco_space, &pco->pco_rebuild_st,
-				 NULL /* tgts */, info, NULL, NULL, true);
+				 pco->pco_op.po_hint.sh_rank, &pco->pco_space, rs, NULL /* tgts */,
+				 info, NULL, NULL, true);
+	tpriv->pool->dp_max_supported_layout_ver = rs->rs_max_supported_layout_ver
+						       ? rs->rs_max_supported_layout_ver
+						       : DAOS_POOL_OBJ_VERSION_1;
 	if (rc != 0) {
 		if (rc == -DER_AGAIN) {
 			reinit = true;
@@ -1072,8 +1070,9 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 		D_GOTO(out_cred, rc);
 
 	/** fill in request buffer */
-	pool_connect_in_set_data(rpc, pool->dp_capas, pool_query_bits(info, NULL), bulk,
-				 DAOS_POOL_GLOBAL_VERSION);
+	pool_connect_in_set_data(rpc, pool->dp_capas,
+				 pool_query_bits(info, NULL) | DAOS_PO_QUERY_REBULD_MAX_LAYOUT_VER,
+				 bulk, DAOS_POOL_GLOBAL_VERSION);
 
 	/** Prepare "con_args" for pool_connect_cp(). */
 	con_args.pca_info = info;
@@ -1178,19 +1177,12 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &pdo->pdo_op, task);
+	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc, &pdo->pdo_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc) {
-		D_ERROR("RPC error while disconnecting from pool: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = pdo->pdo_op.po_rc;
@@ -1331,7 +1323,8 @@ out_task:
 struct dc_pool_glob {
 	/* magic number, DC_POOL_GLOB_MAGIC */
 	uint32_t	dpg_magic;
-	uint32_t	dpg_padding;
+	uint16_t        dpg_max_supported_layout_ver;
+	uint16_t        dpg_padding;
 	/* pool UUID, pool handle UUID, and capas */
 	uuid_t		dpg_pool;
 	uuid_t		dpg_pool_hdl;
@@ -1386,6 +1379,7 @@ swap_pool_glob(struct dc_pool_glob *pool_glob)
 
 	D_SWAP32S(&pool_glob->dpg_magic);
 	/* skip pool_glob->dpg_padding */
+	D_SWAP16S(&pool_glob->dpg_max_supported_layout_ver);
 	/* skip pool_glob->dpg_pool (uuid_t) */
 	/* skip pool_glob->dpg_pool_hdl (uuid_t) */
 	D_SWAP64S(&pool_glob->dpg_capas);
@@ -1453,6 +1447,7 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 	/* init pool global handle */
 	pool_glob = (struct dc_pool_glob *)glob->iov_buf;
 	pool_glob->dpg_magic = DC_POOL_GLOB_MAGIC;
+	pool_glob->dpg_max_supported_layout_ver = pool->dp_max_supported_layout_ver;
 	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
 	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
 	pool_glob->dpg_capas = pool->dp_capas;
@@ -1523,6 +1518,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	pool->dp_max_supported_layout_ver = pool_glob->dpg_max_supported_layout_ver;
 	uuid_copy(pool->dp_pool, pool_glob->dpg_pool);
 	uuid_copy(pool->dp_pool_hdl, pool_glob->dpg_pool_hdl);
 	pool->dp_capas = pool_glob->dpg_capas;
@@ -1768,8 +1764,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args, int opc)
 		list.pta_addrs[i].pta_target = args->tgts->tl_tgts[i];
 	}
 
-	pool_tgt_update_in_set_data(rpc, list.pta_addrs, (size_t)list.pta_number,
-				    POOL_TGT_UPDATE_SKIP_RF_CHECK);
+	pool_tgt_update_in_set_data(rpc, list.pta_addrs, (size_t)list.pta_number, 0 /* flags */);
 
 	crt_req_addref(rpc);
 
@@ -1858,8 +1853,7 @@ pool_query_cb(tse_task_t *task, void *data)
 	bool                            reinit = false;
 	int				rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
-					   &out_v5->pqo_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc, &out_v5->pqo_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -1869,11 +1863,6 @@ pool_query_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DB_MD, DF_UUID": query rpc done: %d\n",
 		DP_UUID(arg->dqa_pool->dp_pool), rc);
-
-	if (rc) {
-		D_ERROR("RPC error while querying pool: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
-	}
 
 	rc = out_v5->pqo_op.po_rc;
 	if (rc == -DER_TRUNC) {
@@ -2580,8 +2569,7 @@ pool_list_cont_cb(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->lca_pool, &arg->rpc->cr_ep, rc,
-					   &out->plco_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->lca_pool, &arg->rpc->cr_ep, rc, &out->plco_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -2591,11 +2579,6 @@ pool_list_cont_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DB_MD, DF_UUID": list cont rpc done: %d\n",
 		DP_UUID(arg->lca_pool->dp_pool), rc);
-
-	if (rc) {
-		D_ERROR("RPC error while listing containers: %d\n", rc);
-		D_GOTO(out, rc);
-	}
 
 	rc = out->plco_op.po_rc;
 	*arg->lca_ncont = out->plco_ncont;
@@ -2746,8 +2729,7 @@ pool_filter_cont_cb(tse_task_t *task, void *data)
 	bool                             reinit = false;
 	int				 rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->fca_pool, &arg->rpc->cr_ep, rc,
-					   &out->pfco_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->fca_pool, &arg->rpc->cr_ep, rc, &out->pfco_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -2757,11 +2739,6 @@ pool_filter_cont_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DB_MD, DF_UUID": filter cont rpc done: %d\n",
 		DP_UUID(arg->fca_pool->dp_pool), rc);
-
-	if (rc) {
-		D_ERROR("RPC error while filtering containers: %d\n", rc);
-		D_GOTO(out, rc);
-	}
 
 	rc = out->pfco_op.po_rc;
 	*arg->fca_ncont = out->pfco_ncont;
@@ -2940,8 +2917,7 @@ pool_query_target_cb(tse_task_t *task, void *data)
 	out = crt_reply_get(arg->rpc);
 	rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
-					   &out->pqio_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc, &out->pqio_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -2951,12 +2927,6 @@ pool_query_target_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DB_MD, DF_UUID": target query rpc done: %d\n",
 		DP_UUID(arg->dqa_pool->dp_pool), rc);
-
-	if (rc) {
-		D_ERROR("RPC error while querying pool target: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
-	}
 
 	rc = out->pqio_op.po_rc;
 
@@ -3106,18 +3076,12 @@ pool_req_complete(tse_task_t *task, void *data)
 	bool                     reinit  = false;
 	int			 rc	 = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(pool, &args->pra_rpc->cr_ep,
-					   rc, op_out, task);
+	rc = pool_rsvc_client_complete_rpc(pool, &args->pra_rpc->cr_ep, rc, op_out);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
 		reinit = true;
 		D_GOTO(out, rc = 0);
-	}
-
-	if (rc != 0) {
-		D_ERROR("RPC error while querying pool: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
 	}
 
 	rc = op_out->po_rc;
@@ -3637,8 +3601,7 @@ pool_svc_stop_cb(tse_task_t *task, void *data)
 	bool                            reinit = false;
 	int				rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(arg->dsa_pool, &arg->rpc->cr_ep, rc,
-					   &out->pso_op, task);
+	rc = pool_rsvc_client_complete_rpc(arg->dsa_pool, &arg->rpc->cr_ep, rc, &out->pso_op);
 	if (rc < 0) {
 		D_GOTO(out, rc);
 	} else if (rc == RSVC_CLIENT_RECHOOSE) {
@@ -3648,9 +3611,6 @@ pool_svc_stop_cb(tse_task_t *task, void *data)
 
 	D_DEBUG(DB_MD, DF_UUID": stop rpc done: %d\n",
 		DP_UUID(arg->dsa_pool->dp_pool), rc);
-
-	if (rc != 0)
-		D_GOTO(out, rc);
 
 	rc = out->pso_op.po_rc;
 	if (rc)

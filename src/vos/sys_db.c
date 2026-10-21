@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -278,8 +279,7 @@ db_trav_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 {
 	struct db_trav_args	*ta = data;
 
-	return ta->ta_cb(ta->ta_db, ta->ta_table, &entry->ie_key,
-			 ta->ta_cb_args);
+	return ta->ta_cb(ta->ta_db, ta->ta_table, &entry->ie_key, ta->ta_cb_args, acts);
 }
 
 static int

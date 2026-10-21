@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -81,8 +81,8 @@ class AgentFailure(IorTestBase):
         :avocado: tags=AgentFailure,test_agent_failure
         """
         # 1. Create a pool and a container.
-        self.add_pool()
-        self.add_container(self.pool)
+        self.pool = self.get_pool()
+        self.container = self.get_container(self.pool)
 
         # 2. Run IOR.
         ior_results = {}
@@ -124,7 +124,7 @@ class AgentFailure(IorTestBase):
         # 5. Verify journalctl shows the log that the agent is stopped.
         results = get_journalctl(
             hosts=self.hostlist_clients, since=since, until=until,
-            journalctl_type="daos_agent")
+            journalctl_type="daos_agent", run_user=self.test_env.agent_user)
         self.log.info("journalctl results = %s", results)
         if "shutting down" not in results[0]["data"]:
             msg = "Agent shut down message not found in journalctl! Output = {}".format(
@@ -174,8 +174,8 @@ class AgentFailure(IorTestBase):
         :avocado: tags=AgentFailure,test_agent_failure_isolation
         """
         # 1. Create a pool and a container.
-        self.add_pool()
-        self.add_container(self.pool)
+        self.pool = self.get_pool()
+        self.container = self.get_container(self.pool)
 
         # Use the last two agent hosts, since the first is likely the test runner node
         agent_hosts = self.agent_managers[0].hosts
@@ -212,7 +212,8 @@ class AgentFailure(IorTestBase):
         since = journalctl_time()
         self.log.info("Stopping agent on %s", agent_host_kill)
         pattern = self.agent_managers[0].manager.job.command_regex
-        detected, running = stop_processes(self.log, hosts=agent_host_kill, pattern=pattern)
+        detected, running = stop_processes(self.log, hosts=agent_host_kill, pattern=pattern,
+                                           user=self.agent_managers[0].manager.job.run_user)
         if not detected:
             msg = "No daos_agent process killed on {}!".format(agent_host_kill)
             errors.append(msg)
@@ -243,7 +244,7 @@ class AgentFailure(IorTestBase):
         # stopped.
         results = get_journalctl(
             hosts=NodeSet(agent_host_kill), since=since, until=until,
-            journalctl_type="daos_agent")
+            journalctl_type="daos_agent", run_user=self.test_env.agent_user)
         self.log.info("journalctl results (kill) = %s", results)
         if "shutting down" not in results[0]["data"]:
             msg = ("Agent shut down message not found in journalctl on killed client! "
@@ -254,7 +255,7 @@ class AgentFailure(IorTestBase):
         # in the previous step doesn't show that the agent is stopped.
         results = get_journalctl(
             hosts=NodeSet(agent_host_keep), since=since, until=until,
-            journalctl_type="daos_agent")
+            journalctl_type="daos_agent", run_user=self.test_env.agent_user)
         self.log.info("journalctl results (keep) = %s", results)
         if "shutting down" in results[0]["data"]:
             msg = ("Agent shut down message found in journalctl on keep client! "

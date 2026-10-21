@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,7 +37,7 @@ struct test_options {
 	bool		is_server;
 	bool		assert_on_error;
 
-	volatile int	shutdown;
+	ATOMIC int      shutdown;
 	int		delay_shutdown_sec;
 	bool		is_swim_enabled;
 	bool		use_daos_agent_env;

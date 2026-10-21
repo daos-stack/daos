@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,6 +11,7 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
+#include <ctype.h>
 #include <getopt.h>
 #include "dfs_test.h"
 
@@ -33,6 +35,7 @@ print_usage(int rank)
 	print_message("dfs_test -u|--unit\n");
 	print_message("dfs_test -s|--sys\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
+	print_message("dfs_test -t|--subtests SUBTESTS\n");
 	print_message("dfs_test -E|--exclude TESTS\n");
 	print_message("dfs_test -n|--dmg_config\n");
 	print_message("\n=============================\n");
@@ -53,19 +56,19 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DFS parallel tests..");
 			daos_test_print(rank, "=====================");
-			nr_failed += run_dfs_par_test(rank, size);
+			nr_failed += run_dfs_par_test(rank, size, sub_tests, sub_tests_size);
 			break;
 		case 'u':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DFS unit tests..");
 			daos_test_print(rank, "=====================");
-			nr_failed += run_dfs_unit_test(rank, size);
+			nr_failed += run_dfs_unit_test(rank, size, sub_tests, sub_tests_size);
 			break;
 		case 's':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DFS Sys unit tests..");
 			daos_test_print(rank, "=====================");
-			nr_failed += run_dfs_sys_unit_test(rank, size);
+			nr_failed += run_dfs_sys_unit_test(rank, size, sub_tests, sub_tests_size);
 			break;
 
 		default:
@@ -83,8 +86,11 @@ main(int argc, char **argv)
 {
 	test_arg_t *arg;
 	char        tests[64];
+	char       *sub_tests_str         = NULL;
 	char       *exclude_str           = NULL;
 	char       *cmocka_message_output = NULL;
+	int         sub_tests[1024];
+	int         sub_tests_idx         = 0;
 	int         ntests                = 0;
 	int         nr_failed             = 0;
 	int         nr_total_failed       = 0;
@@ -101,14 +107,13 @@ main(int argc, char **argv)
 	par_size(PAR_COMM_WORLD, &size);
 	par_barrier(PAR_COMM_WORLD);
 
-	static struct option long_options[] = {
-		{"all",		no_argument,		NULL,	'a'},
-		{"dmg_config",	required_argument,	NULL,	'n'},
-		{"parallel",	no_argument,		NULL,	'p'},
-		{"unit",	no_argument,		NULL,	'u'},
-		{"sys",		no_argument,		NULL,	's'},
-		{NULL,		0,			NULL,	0}
-	};
+	static struct option long_options[] = {{"all", no_argument, NULL, 'a'},
+					       {"dmg_config", required_argument, NULL, 'n'},
+					       {"parallel", no_argument, NULL, 'p'},
+					       {"subtests", required_argument, NULL, 't'},
+					       {"unit", no_argument, NULL, 'u'},
+					       {"sys", no_argument, NULL, 's'},
+					       {NULL, 0, NULL, 0}};
 
 	rc = daos_init();
 	if (rc) {
@@ -118,8 +123,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "aE:n:pus",
-				  long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aE:n:pst:u", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
@@ -130,6 +134,9 @@ main(int argc, char **argv)
 			break;
 		case 'n':
 			dmg_config_file = optarg;
+			break;
+		case 't':
+			sub_tests_str = optarg;
 			break;
 		case 'E':
 			exclude_str = optarg;
@@ -143,6 +150,58 @@ main(int argc, char **argv)
 
 	if (strlen(tests) == 0)
 		strncpy(tests, all_tests, sizeof(TESTS));
+
+	if (sub_tests_str != NULL) {
+		char *ptr = sub_tests_str;
+		char *tmp;
+		int   start = -1;
+		int   end   = -1;
+
+		while (*ptr) {
+			int number = -1;
+
+			while (!isdigit(*ptr) && *ptr)
+				ptr++;
+
+			if (!*ptr)
+				break;
+
+			tmp = ptr;
+			while (isdigit(*ptr))
+				ptr++;
+
+			number = atoi(tmp);
+			if (*ptr == '-') {
+				if (start != -1) {
+					print_message("str is %s\n", sub_tests_str);
+					return -1;
+				}
+				start = number;
+				continue;
+			}
+
+			if (start != -1)
+				end = number;
+			else
+				start = number;
+
+			if (start != -1 || end != -1) {
+				if (end != -1) {
+					int i;
+
+					for (i = start; i <= end; i++) {
+						sub_tests[sub_tests_idx] = i;
+						sub_tests_idx++;
+					}
+				} else {
+					sub_tests[sub_tests_idx] = start;
+					sub_tests_idx++;
+				}
+				start = -1;
+				end   = -1;
+			}
+		}
+	}
 
 	if (svc_nreplicas > ARRAY_SIZE(arg->pool.ranks) && rank == 0) {
 		print_message("at most %zu service replicas allowed\n",
@@ -179,7 +238,7 @@ main(int argc, char **argv)
 	}
 	d_freeenv_str(&cmocka_message_output);
 
-	nr_failed = run_specified_tests(tests, rank, size, NULL, 0);
+	nr_failed = run_specified_tests(tests, rank, size, sub_tests, sub_tests_idx);
 
 exit:
 	par_allreduce(PAR_COMM_WORLD, &nr_failed, &nr_total_failed, 1, PAR_INT, PAR_SUM);

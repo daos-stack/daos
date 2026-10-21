@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,14 +16,11 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <daos/common.h>
 
-/**
- * Space separated string of CLI options to pass to DPDK when started during
- * spdk_env_init(). These options will override the DPDK defaults.
- */
-extern const char *
-dpdk_cli_override_opts;
+#define DEFAULT_FILE_PERM               (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP)
+#define DEFAULT_DIR_PERM                (S_IRWXU | S_IRWXG)
 
 #define NVME_PCI_DEV_TYPE_VMD           "vmd"
 #define NVME_DETAIL_BUFLEN              1024
@@ -52,7 +50,7 @@ dpdk_cli_override_opts;
 /** NVMe config keys */
 #define NVME_CONF_ATTACH_CONTROLLER	"bdev_nvme_attach_controller"
 #define NVME_CONF_AIO_CREATE		"bdev_aio_create"
-#define NVME_CONF_ENABLE_VMD		"enable_vmd"
+#define NVME_CONF_ENABLE_VMD            "vmd_enable"
 #define NVME_CONF_SET_HOTPLUG_RANGE	"hotplug_busid_range"
 #define NVME_CONF_SET_ACCEL_PROPS	"accel_props"
 #define NVME_CONF_SET_SPDK_RPC_SERVER	"spdk_rpc_srv"
@@ -73,6 +71,17 @@ dpdk_cli_override_opts;
 #define NVME_ROLE_WAL		(1 << 2)
 
 #define NVME_ROLE_ALL		(NVME_ROLE_DATA | NVME_ROLE_META | NVME_ROLE_WAL)
+
+/* Default SPDK log level (one of ERROR,WARN,NOTICE,INFO,DEBUG) */
+#define DAOS_SPDK_LOG_DEFAULT           SPDK_LOG_ERROR
+/* Max SPDK log level */
+#define DAOS_SPDK_LOG_MAX               SPDK_LOG_DEBUG
+/* Default DPDK log level: RTE_LOG_ERR (dpdk/lib/eal/include/rte_log.h) */
+#define DAOS_DPDK_LOG_DEFAULT           4
+/* Min DPDK log level: RTE_LOG_EMERG */
+#define DAOS_DPDK_LOG_MIN               1
+/* Max DPDK log level: RTE_LOG_MAX */
+#define DAOS_DPDK_LOG_MAX               8
 
 /**
  * Current device health state (health statistics). Periodically updated in
@@ -96,6 +105,7 @@ struct nvme_stats {
 	uint64_t	 unsafe_shutdowns;
 	uint64_t	 media_errs;
 	uint64_t	 err_log_entries;
+	uint8_t          percentage_used;
 	/* I/O error counters */
 	uint32_t	 bio_read_errs;
 	uint32_t	 bio_write_errs;
@@ -169,4 +179,25 @@ struct nvme_ns_t {
  * \return		Zero on success, negative value on error
  */
 int copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
+
+/**
+ * Build DPDK CLI options string with per-facility log levels.
+ * Useful for debugging specific facilities while keeping others quiet.
+ *
+ * DPDK log level (1-8): 1=EMERG, 2=ALERT, 3=CRIT, 4=ERR, 5=WARNING,
+ *                       6=NOTICE, 7=INFO, 8=DEBUG
+ *
+ * \param eal_level      Log level for Environment Abstraction Layer facility (1-8)
+ * \param default_level  Default log level for other facilities (1-8)
+ *
+ * \return Pointer to static buffer containing DPDK CLI options string,
+ *         or NULL if log levels are out of range.
+ *
+ * Example:
+ *   // DEBUG for EAL, ERROR for rest
+ *   const char *opts = dpdk_cli_build_opts(8, 4);
+ */
+const char *
+dpdk_cli_build_opts(int eal_level, int default_level);
+
 #endif /** __CONTROL_H_ */

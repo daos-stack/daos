@@ -1,10 +1,12 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC DD_FAC(ddb)
 
-#include <bio_internal.h>
+#include <uuid/uuid.h>
 #include <spdk/stdinc.h>
 #include <spdk/bdev.h>
 #include <spdk/env.h>
@@ -12,7 +14,9 @@
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
 #include <spdk/string.h>
-#include <uuid/uuid.h>
+
+#include <bio_internal.h>
+#include <bio_wal.h>
 
 #include "ddb_common.h"
 #include "ddb_spdk.h"
@@ -288,18 +292,26 @@ blob_read_hdr_cb(void *cb_arg, int bs_errno)
 
 	dsc_record_error(ctx, bs_errno);
 	if (bs_errno == 0) {
-		struct bio_blob_hdr *hdr;
-
 		D_ASSERT(ctx->dsc_read_buf != NULL);
-		hdr = (struct bio_blob_hdr *) ctx->dsc_read_buf;
-		/* verify the header */
-		if (hdr->bbh_magic == BIO_BLOB_HDR_MAGIC) {
-			ctx->dsc_dsi.dsi_hdr = hdr;
-		} else {
+		uint32_t *magic = (uint32_t *)ctx->dsc_read_buf;
+		/* verify the header for different smd type */
+		switch (*magic) {
+		case BIO_BLOB_HDR_MAGIC:
+			ctx->dsc_dsi.st      = SMD_DEV_TYPE_DATA;
+			ctx->dsc_dsi.dsi_hdr = (struct bio_blob_hdr *)ctx->dsc_read_buf;
+			break;
+		case BIO_META_MAGIC:
+			ctx->dsc_dsi.st           = SMD_DEV_TYPE_META;
+			ctx->dsc_dsi.dsi_meta_hdr = (struct meta_header *)ctx->dsc_read_buf;
+			break;
+		case BIO_WAL_MAGIC:
+			ctx->dsc_dsi.st          = SMD_DEV_TYPE_WAL;
+			ctx->dsc_dsi.dsi_wal_hdr = (struct wal_header *)ctx->dsc_read_buf;
+			break;
+		default:
 			D_PRINT("BIO_BLOB_HDR_MAGIC is not correct for blob id '%lu'. "
 				"Got '%x' but expected '%x'\n",
-				spdk_blob_get_id(ctx->dsc_blob), hdr->bbh_magic,
-				BIO_BLOB_HDR_MAGIC);
+				spdk_blob_get_id(ctx->dsc_blob), *magic, BIO_BLOB_HDR_MAGIC);
 			ctx->dsc_rc = -DER_UNKNOWN;
 		}
 	}
@@ -357,6 +369,7 @@ dsc_get_dev_id(struct ddb_spdk_context *ctx)
 	memcpy(ctx->dsc_dsi.dsi_dev_id, bstype.bstype, sizeof(ctx->dsc_dsi.dsi_dev_id));
 	ctx->dsc_dsi.dsi_cluster_size = spdk_bs_get_cluster_size(ctx->dsc_bs);
 	ctx->dsc_dsi.dsi_cluster_nr = spdk_blob_get_num_clusters(ctx->dsc_blob);
+	ctx->dsc_dsi.dsi_blob_id      = spdk_blob_get_id(ctx->dsc_blob);
 	TRACE("Got device id: "DF_UUID"\n", DP_UUID(ctx->dsc_dsi.dsi_dev_id));
 }
 

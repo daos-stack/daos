@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -21,10 +21,11 @@ from host_utils import get_local_host
 from run_utils import command_as_user, run_remote, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
+from storage_utils import StorageInfo
 from user_utils import get_chown_command
 
 
-def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None, version=None):
     """Get the daos_server command object to manage.
 
     Args:
@@ -36,6 +37,8 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
             configuration file locally and then copy it to all the hosts using
             the config_file specification. Defaults to None, which creates and
             utilizes the file specified by config_file.
+        version (Version, optional): daos_server version for compatibility changes.
+            Default is None, which does not handle compatibility
 
     Returns:
         DaosServerCommand: the daos_server command object
@@ -43,7 +46,7 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     """
     transport_config = DaosServerTransportCredentials(cert_dir)
     common_config = CommonConfig(group, transport_config)
-    config = DaosServerYamlParameters(config_file, common_config)
+    config = DaosServerYamlParameters(config_file, common_config, version)
     command = DaosServerCommand(bin_dir, config, None)
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
@@ -70,7 +73,7 @@ class DaosServerManager(SubprocessManager):
     def __init__(self, group, bin_dir,
                  svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
                  svr_config_temp=None, dmg_config_temp=None, manager="Orterun",
-                 namespace="/run/server_manager/*", mgmt_svc_replicas_suffix=None):
+                 namespace="/run/server_manager/*", mgmt_svc_replicas_suffix=None, version=None):
         # pylint: disable=too-many-arguments
         """Initialize a DaosServerManager object.
 
@@ -93,10 +96,12 @@ class DaosServerManager(SubprocessManager):
             namespace (str): yaml namespace (path to parameters)
             mgmt_svc_replicas_suffix (str, optional): Suffix to append to each MS replica name.
                 Defaults to None.
+            version (Version, optional): daos_server version for compatibility changes.
+                Default is None, which does not handle compatibility
         """
         self.group = group
         server_command = get_server_command(
-            group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
+            group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp, version)
         super().__init__(server_command, manager, namespace)
         self.manager.job.sub_command_override = "start"
 
@@ -153,9 +158,11 @@ class DaosServerManager(SubprocessManager):
         """Get the rank and host pairing for all of the engines.
 
         Returns:
-            dict: rank key with host value
+            dict: rank key with host value, or empty dict if not initialized
 
         """
+        if self._expected_states is None:
+            return {}
         return {rank: value["host"] for rank, value in self._expected_states.items()}
 
     @property
@@ -209,7 +216,8 @@ class DaosServerManager(SubprocessManager):
 
     def _prepare_dmg_certificates(self):
         """Set up dmg certificates."""
-        self.dmg.copy_certificates(get_log_file("daosCA/certs"), get_local_host())
+        self.dmg.copy_certificates(
+            get_log_file("daosCA/certs"), self.dmg.temporary_file_hosts or get_local_host())
 
     def _prepare_dmg_hostlist(self, hosts=None):
         """Set up the dmg command host list to use the specified hosts.
@@ -436,6 +444,13 @@ class DaosServerManager(SubprocessManager):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
+        # On nodes booting from NVMe (not SATA), exclude the boot drive so prepare
+        # does not try to bind it to vfio-pci and fail while the OS is using it.
+        if "pci_block_list" not in kwargs:
+            mounted_addresses = StorageInfo(self.log, self._hosts).get_mounted_addresses()
+            if mounted_addresses:
+                kwargs["pci_block_list"] = ",".join(sorted(mounted_addresses))
+
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
@@ -664,9 +679,7 @@ class DaosServerManager(SubprocessManager):
 
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
-        # be further investigated.
-        self.dmg.storage_format(timeout=self.storage_format_timeout.value)
+        self.storage_format()
 
         # Wait for all the engines to start
         self.detect_engine_start()
@@ -997,6 +1010,23 @@ class DaosServerManager(SubprocessManager):
         # set stopped servers state to make teardown happy
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
 
+    def storage_format(self, **kwargs):
+        """Wrapper for dmg storage format that uses self.storage_format_timeout.
+
+        Args:
+            kwargs (dict): keyword args for DmgCommand.storage_format
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage format command fails.
+        """
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = self.storage_format_timeout.value
+        return self.dmg.storage_format(**kwargs)
+
     @fail_on(CommandFailure)
     def system_exclude(self, ranks, copy=False, rank_hosts=None):
         """Exclude the specific server ranks.
@@ -1139,8 +1169,8 @@ class DaosServerManager(SubprocessManager):
         """Get daos_metrics for the server.
 
         Args:
-            verbose (bool, optional): pass verbose to run_pcmd. Defaults to False.
-            timeout (int, optional): pass timeout to each execution ofrun_pcmd. Defaults to 60.
+            verbose (bool, optional): pass verbose to run_remote. Defaults to False.
+            timeout (int, optional): pass timeout to each execution of run_remote. Defaults to 60.
 
         Returns:
             list: list of CommandResult results for each host. See run_utils.run_remote for details.
@@ -1159,16 +1189,20 @@ class DaosServerManager(SubprocessManager):
             engines.append(result)
         return engines
 
-    def get_vos_path(self, pool):
-        """Get the VOS file path.
+    def get_vos_paths(self, pool):
+        """Get the VOS file paths.
 
         Args:
             pool (TestPool): the pool containing the vos file
 
         Returns:
-            str: the full path to the vos file
+            list: the full path list to the vos file
         """
-        return os.path.join(self.get_config_value("scm_mount"), pool.uuid.lower())
+        vos_paths = []
+        for engine_params in self.manager.job.yaml.engine_params:
+            scm_mount = engine_params.get_value("scm_mount")
+            vos_paths.append(os.path.join(scm_mount, pool.uuid.lower()))
+        return vos_paths
 
     def get_vos_files(self, pool, pattern="vos"):
         """Get all the VOS file paths containing the pattern.
@@ -1182,7 +1216,7 @@ class DaosServerManager(SubprocessManager):
                 /mnt/daos0/<pool_uuid>/vos-0. If no matches are found the list will be empty.
         """
         vos_files = []
-        vos_path = self.get_vos_path(pool)
+        vos_path = self.get_vos_paths(pool)[0]
         command = command_as_user(f"ls {vos_path}", "root")
         result = run_remote(self.log, self.hosts[0:1], command)
         if result.passed:
@@ -1191,3 +1225,42 @@ class DaosServerManager(SubprocessManager):
                     vos_files.append(os.path.join(vos_path, file))
                     self.log.info("Found vos file path: %s", vos_files[-1])
         return vos_files
+
+    def search_engine_logs(self, pattern):
+        """Search the server log files for a specific pattern.
+
+        Args:
+            pattern (str): The pattern to search for in the log files.
+
+        Returns:
+            CommandResult: Result of the grep command run against each server log file.
+        """
+        log_dir = os.path.dirname(self.get_config_value("log_file"))
+        find_args = (f"{log_dir} -type f -regextype egrep -regex "
+                     r"'.*/daos_server[[:digit:]]?\.log\.[[:digit:]]+'")
+        return self._search_logs(find_args, pattern)
+
+    def search_control_logs(self, pattern):
+        """Search the control log files for a specific pattern.
+
+        Args:
+            pattern (str): The pattern to search for in the log files
+
+        Returns:
+            CommandResult: Result of the grep command run against each control log file.
+        """
+        return self._search_logs(f"{self.get_config_value('control_log_file')}", pattern)
+
+    def _search_logs(self, find_args, pattern):
+        """Search the log files for a specific pattern.
+
+        Args:
+            find_args (str): arguments used with the find command to locate the log files
+            pattern (str): The pattern to search for in the log files
+
+        Returns:
+            CommandResult: Result of the grep command run against each log file.
+        """
+        command = f"find {find_args} -print0 | xargs -0 -r grep -E -e '{pattern}'"
+        result = run_remote(self.log, self.hosts, command_as_user(command, "root"))
+        return result

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -108,13 +108,17 @@ func findBdevTier(pciAddr string, tcs storage.TierConfigs) *storage.TierConfig {
 }
 
 // Convert bdev scan results to protobuf response.
-func bdevScanToProtoResp(scan scanBdevsFn, bdevCfgs storage.TierConfigs) (*ctlpb.ScanNvmeResp, error) {
+func bdevScanToProtoResp(log logging.DebugLogger, scan scanBdevsFn, bdevCfgs storage.TierConfigs) (*ctlpb.ScanNvmeResp, error) {
 	req := storage.BdevScanRequest{DeviceList: bdevCfgs.Bdevs()}
+
+	log.Debugf("bdevScanToProtoResp: bdev provider scan, req: %+v", req)
 
 	resp, err := scan(req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "bdev provider scan")
 	}
+
+	log.Debugf("bdevScanToProtoResp: bdev provider scan, resp: %+v", resp)
 
 	pbCtrlrs := make(proto.NvmeControllers, 0, len(resp.Controllers))
 
@@ -159,9 +163,11 @@ func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvm
 	resp := &ctlpb.ScanNvmeResp{}
 
 	for _, engine := range instances {
+		cs.log.Tracef("scanning engine %d with namespaces %+v", instances, nsps)
+
 		eReq := new(ctlpb.ScanNvmeReq)
 		*eReq = *req
-		if req.Meta {
+		if req.Meta && engine.IsReady() {
 			ms, rs, err := metaRdbComputeSz(cs, engine, nsps, req.MemRatio)
 			if err != nil {
 				return nil, errors.Wrap(err, "computing meta and rdb size")
@@ -228,7 +234,13 @@ func bdevScanAssigned(ctx context.Context, cs *ControlService, req *ctlpb.ScanNv
 			return nil, errors.New("meta smd usage info unavailable as engines stopped")
 		}
 
-		return bdevScanToProtoResp(cs.storage.ScanBdevs, bdevCfgs)
+		resp, err := bdevScanToProtoResp(cs.log, cs.storage.ScanBdevs, bdevCfgs)
+		if err != nil {
+			return nil, errors.Wrap(err, "bdevScanAssigned: bdevScanToProtoResp")
+		}
+
+		cs.log.Debugf("bdevScanAssigned: bdevScanToProtoResp returned: %+v", resp)
+		return resp, nil
 	}
 
 	// Delegate scan to engine instances as soon as one engine with assigned bdevs has started.
@@ -262,11 +274,12 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 		cs.log.Debugf("scan bdevs from control service as no bdevs in cfg")
 
 		// No bdevs configured for engines to claim so scan through control service.
-		resp, err = bdevScanToProtoResp(cs.storage.ScanBdevs, bdevCfgs)
+		resp, err = bdevScanToProtoResp(cs.log, cs.storage.ScanBdevs, bdevCfgs)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "bdevScan: bdevScanToProtoResp")
 		}
 
+		cs.log.Debugf("bdevScan: bdevScanToProtoResp returned: %+v", resp)
 		return bdevScanTrimResults(req, resp), nil
 	}
 
@@ -284,6 +297,9 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 	if err != nil {
 		return nil, err
 	}
+
+	cs.log.Debugf("bdevScanAssigned returned %d, want %d", nrScannedBdevs, nrCfgBdevs)
+
 	if nrScannedBdevs == nrCfgBdevs {
 		return bdevScanTrimResults(req, resp), nil
 	}
@@ -347,10 +363,19 @@ func (cs *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*
 		return nil, errors.New("nil scm request")
 	}
 
-	ssr, err := cs.ScmScan(storage.ScmScanRequest{})
-	if err != nil || !req.GetUsage() {
-		return newScanScmResp(ssr, err)
+	reqInner := storage.ScmScanRequest{
+		PMemInConfig: cs.srvCfg.HasPMem(),
 	}
+
+	msg := fmt.Sprintf("pmem scan, req %+v", reqInner)
+
+	ssr, err := cs.ScmScan(reqInner)
+	if err != nil || !req.GetUsage() {
+		resp, err := newScanScmResp(ssr, err)
+		cs.log.Tracef("%s, resp %+v", msg, resp)
+		return resp, err
+	}
+	cs.log.Tracef("%s, resp %+v", msg, ssr)
 
 	ssr, err = cs.getScmUsage(ssr)
 	if err != nil {
@@ -407,18 +432,21 @@ func (cs *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 // response.  The maximal metadata (i.e. VOS index file) size should be equal to the SCM available
 // size divided by the number of targets of the engine. Sizes returned are per-target values.
 func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace, memRatio float32) (uint64, uint64, error) {
-	msg := fmt.Sprintf("computing meta/rdb sizes with %d scm namespaces", len(nsps))
-
 	var metaBytes, rdbBytes uint64
+	var msg string
 	for _, nsp := range nsps {
-		msg += fmt.Sprintf(", scm-ns: %+v", nsp)
+		msg = fmt.Sprintf("attempt compute of meta/rdb sizes for engine %d, scm-ns: %+v",
+			ei.Index(), nsp)
 
 		mp := nsp.GetMount()
 		if mp == nil {
 			cs.log.Tracef("%s: skip (no mount)", msg)
 			continue
 		}
-		msg += fmt.Sprintf(", mount: %+v", mp)
+		if mp.Rank == uint32(ranklist.NilRank) {
+			cs.log.Tracef("%s: skip (mount has nil rank, was engine not running?)", msg)
+			continue
+		}
 
 		r, err := ei.GetRank()
 		if err != nil {
@@ -757,8 +785,9 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 	} else {
 		respNvme, err := scanBdevs(ctx, cs, req.Nvme, respScm.Namespaces)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "scan bdevs")
 		}
+		cs.log.Debugf("scanBdevs returned respNvme: %+v", respNvme)
 		resp.Nvme = respNvme
 	}
 
@@ -774,20 +803,57 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 }
 
 func (cs *ControlService) formatMetadata(instances []Engine, reformat bool) (bool, error) {
+	// Exit early if not using MD-on-SSD mode (legacy PMem mode)
+	if !cs.storage.ControlMetadataPathConfigured() {
+		cs.log.Debug("control metadata path not configured, skipping metadata format (legacy PMem mode)")
+		return false, nil
+	}
+
 	// Format control metadata first, if needed
 	if needs, err := cs.storage.ControlMetadataNeedsFormat(); err != nil {
 		return false, errors.Wrap(err, "detecting if metadata format is needed")
 	} else if needs || reformat {
+		// Full format needed
 		engineIdxs := make([]uint, len(instances))
 		for i, eng := range instances {
 			engineIdxs[i] = uint(eng.Index())
 		}
 
-		cs.log.Debug("formatting control metadata storage")
+		cs.log.Debug("formatting control metadata storage (all engines)")
 		if err := cs.storage.FormatControlMetadata(engineIdxs); err != nil {
 			return false, errors.Wrap(err, "formatting control metadata storage")
 		}
 
+		return true, nil
+	}
+
+	// Check for engines with missing metadata directories. The host-level root already
+	// exists (checked above), so a missing engine subdirectory here means either the
+	// engine has never been formatted, or its storage was deliberately wiped.
+	// Both cases are safe to (re)format without an explicit --replace confirmation,
+	// since there is no metadata left to lose.
+
+	var needFormatIdxs []uint
+	for _, eng := range instances {
+		engIdx := uint(eng.Index())
+
+		// Check if engine's metadata directory is missing
+		needsFormat, err := eng.GetStorage().ControlMetadataEngineNeedsFormat()
+		if err != nil {
+			return false, errors.Wrapf(err, "checking if engine %d metadata needs format", engIdx)
+		}
+
+		if needsFormat {
+			cs.log.Debugf("engine %d metadata needs format", engIdx)
+			needFormatIdxs = append(needFormatIdxs, engIdx)
+		}
+	}
+
+	if len(needFormatIdxs) > 0 {
+		cs.log.Debugf("formatting control metadata storage for engines %v", needFormatIdxs)
+		if err := cs.storage.FormatControlMetadata(needFormatIdxs); err != nil {
+			return false, errors.Wrap(err, "formatting control metadata storage")
+		}
 		return true, nil
 	}
 
@@ -827,10 +893,10 @@ type formatScmReq struct {
 }
 
 func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatResp) (map[int]string, map[int]bool, error) {
-	needFormat := make(map[int]bool)
+	needScmFormat := make(map[int]bool)
 	emptyTmpfs := make(map[int]bool)
 	scmCfgs := make(map[int]*storage.TierConfig)
-	allNeedFormat := true
+	allNeedScmFormat := true
 
 	for idx, ei := range req.instances {
 		needs, err := ei.GetStorage().ScmNeedsFormat()
@@ -838,9 +904,9 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 			return nil, nil, errors.Wrap(err, "detecting if SCM format is needed")
 		}
 		if needs {
-			needFormat[idx] = true
+			needScmFormat[idx] = true
 		} else {
-			allNeedFormat = false
+			allNeedScmFormat = false
 		}
 
 		scmCfg, err := ei.GetStorage().GetScmConfig()
@@ -853,19 +919,14 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 		if scmCfg.Class == storage.ClassRam && !needs {
 			info, err := ei.GetStorage().GetScmUsage()
 			if err != nil {
-				return nil, nil, errors.Wrapf(err, "failed to check SCM usage for instance %d", idx)
+				return nil, nil, errors.Wrapf(err,
+					"failed to check SCM usage for instance %d", idx)
 			}
 			emptyTmpfs[idx] = info.TotalBytes-info.AvailBytes == 0
 		}
 	}
 
-	if req.replace && len(needFormat) == 0 {
-		// Only valid if at least one engine requires format.
-		return nil, nil, errors.New("format replace option only valid if at " +
-			"least one engine requires format but no engines need format")
-	}
-
-	if allNeedFormat {
+	if allNeedScmFormat {
 		// Check available RAM is sufficient before formatting SCM on engines.
 		if err := checkTmpfsMem(req.log, scmCfgs, req.getSysMemInfo); err != nil {
 			return nil, nil, err
@@ -878,7 +939,7 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 	formatting := 0
 
 	for idx, ei := range req.instances {
-		if needFormat[idx] || req.reformat {
+		if needScmFormat[idx] || req.reformat {
 			formatting++
 			go func(e Engine) {
 				scmChan <- e.StorageFormatSCM(ctx, req.reformat)
@@ -1029,9 +1090,8 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		return resp, nil
 	}
 
-	// DAOS-15947: control_metadata format is valid in --replace case where multiple engines
-	// require replacement or format on the same host. No need to handle independently for
-	// individual engine as if control_metadata is missing then it needs to be created.
+	//  Only engines with missing metadata directories will have their control_metadata
+	//  subdirectories reformatted, preserving healthy engines.
 	mdFormatted, err := cs.formatMetadata(instances, req.Reformat)
 	if err != nil {
 		return nil, err

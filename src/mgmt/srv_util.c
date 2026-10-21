@@ -63,7 +63,8 @@ ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t versio
 	rc = crt_group_primary_modify(NULL /* grp */, &info->dmi_ctx, 1 /* num_ctxs */, ranks,
 				      incarnations, uris, CRT_GROUP_MOD_OP_REPLACE, version);
 	if (rc != 0) {
-		D_ERROR("failed to update group: %u -> %u: %d\n", version_current, version, rc);
+		DL_CDEBUG(rc == -DER_GRPVER, DLOG_INFO, DLOG_ERR, rc,
+			  "failed to update group: %u -> %u", version_current, version);
 		goto out;
 	}
 
@@ -75,6 +76,72 @@ out:
 		D_FREE(incarnations);
 	if (ranks != NULL)
 		d_rank_list_free(ranks);
+	return rc;
+}
+
+int
+ds_mgmt_get_group_status(uint32_t group_version, d_rank_t **dead_ranks_out,
+			 size_t *n_dead_ranks_out)
+{
+	struct dss_module_info *info = dss_get_module_info();
+	crt_group_t            *group;
+	uint32_t                version;
+	d_rank_list_t          *ranks;
+	d_rank_t               *dead_ranks;
+	size_t                  n_dead_ranks;
+	int                     i;
+	int                     rc;
+
+	D_ASSERTF(info->dmi_ctx_id == 0, "%d\n", info->dmi_ctx_id);
+
+	group = crt_group_lookup(NULL /* grp_id */);
+	D_ASSERT(group != NULL);
+
+	rc = crt_group_version(group, &version);
+	D_ASSERTF(rc == 0, DF_RC "\n", DP_RC(rc));
+	if (group_version != 0 && group_version != version) {
+		rc = -DER_GRPVER;
+		goto out;
+	}
+
+	rc = crt_group_ranks_get(group, &ranks);
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to get group ranks");
+		goto out;
+	}
+
+	D_ALLOC_ARRAY(dead_ranks, ranks->rl_nr);
+	if (dead_ranks == NULL) {
+		rc = -DER_NOMEM;
+		goto out_ranks;
+	}
+	n_dead_ranks = 0;
+
+	for (i = 0; i < ranks->rl_nr; i++) {
+		struct swim_member_state state;
+
+		rc = crt_rank_state_get(group, ranks->rl_ranks[i], &state);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to get rank state for rank %u", ranks->rl_ranks[i]);
+			goto out_dead_ranks;
+		}
+
+		if (state.sms_status == SWIM_MEMBER_DEAD) {
+			dead_ranks[n_dead_ranks] = ranks->rl_ranks[i];
+			n_dead_ranks++;
+		}
+	}
+
+out_dead_ranks:
+	if (rc == 0) {
+		*dead_ranks_out   = dead_ranks;
+		*n_dead_ranks_out = n_dead_ranks;
+	} else {
+		D_FREE(dead_ranks);
+	}
+out_ranks:
+	d_rank_list_free(ranks);
+out:
 	return rc;
 }
 

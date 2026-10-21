@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,6 +83,9 @@ chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int re
 	Chk__CheckReport	  report = CHK__CHECK_REPORT__INIT;
 	time_t			  tm = time(NULL);
 	int			  rc;
+
+	if (DAOS_FAIL_CHECK(DAOS_CHK_REPORT_FAILURE))
+		return -DER_IO;
 
 	report.seq = seq;
 	report.class_ = cla;

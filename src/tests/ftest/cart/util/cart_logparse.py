@@ -1,6 +1,6 @@
 # /*
 #  * (C) Copyright 2016-2023 Intel Corporation.
-#  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+#  * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -72,9 +72,27 @@ class LogLine():
 
     # pylint: disable=too-many-public-methods
 
+    @staticmethod
+    def is_valid(line):
+        """Return True if a valid CaRT log line is recognized."""
+        fields = line.split(None, 6)
+        return (
+            # pylint: disable=too-many-boolean-expressions
+            # CaRT log line contains at least 7 fields:
+            # <level> <date> <time> <node_name> DAOS[<PIDs>] <FAC> <message>
+            len(fields) == 7
+            # Valid level
+            and fields[0] in LOG_LEVELS
+            # Valid date: YYYY/MM/DD
+            and len(fields[1]) == 10 and fields[1][4] == '/' and fields[1][7] == '/'
+            # Valid time: hh:mm:ss.micros
+            and len(fields[2]) == 15 and fields[2][2] == ':' and fields[2][8] == '.'
+            # pylint: enable=too-many-boolean-expressions
+        )
+
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
-    # Match a pointer, with optional ) . or , suffix.
+    # Match a pointer, with optional ')', '.' or ',' suffix.
     re_pointer = re.compile(r"0x[0-9a-f]{1,16}((\)|\.|\,)?)")
     # Match a pid marker
     re_pid = re.compile(r"pid=(\d+)")
@@ -91,23 +109,26 @@ class LogLine():
     re_cont = re.compile(r"[0-9a-f]{8}/[0-9a-f]{8}(:?)")
 
     def __init__(self, line):
+        # The format of log lines depends on the flags (DLOG_FLV_*) passed during initialization.
+        # All assumed flag settings are noted alongside the relevant logic that relies on those
+        # assumptions.
+
         fields = line.split()
-        # Work out the end of the fixed-width portion, and the beginning of the
-        # message.  The hostname and pid fields are both variable width
-        idx = 29 + len(fields[1]) + len(fields[2])
-        pidtid = fields[2][5:-1]
+        # Verify valid level string
+        try:
+            self.level = LOG_LEVELS[fields[0]]
+        except KeyError as error:
+            raise InvalidLogFile(fields[0]) from error
+        self.time_stamp = ' '.join(fields[1:3])
+        self.hostname = fields[3]
+        # Assuming DLOG_FLV_TAG and DLOG_FLV_LOGPID are set in src/gurt/dlog.c - d_vlog()
+        pidtid = fields[4][5:-1]
         pid = pidtid.split("/")
         self.pid = int(pid[0])
-        self._preamble = line[:idx]
-        self.fac = fields[3]
-        try:
-            self.level = LOG_LEVELS[fields[4]]
-        except KeyError as error:
-            raise InvalidLogFile(fields[4]) from error
+        # Assuming DLOG_FLV_FAC is set in src/gurt/dlog.c - d_vlog()
+        self.fac = fields[5]
 
-        self.time_stamp = fields[0]
-        self.hostname = fields[1]
-        self._fields = fields[5:]
+        self._fields = fields[6:]
         try:
             if self._fields[1][-2:] == '()':
                 self.trace = False
@@ -136,8 +157,7 @@ class LogLine():
 
     def to_str(self, mark=False):
         """Convert the object to a string"""
-        pre = self._preamble.split(' ', 3)
-        preamble = ' '.join([pre[0], pre[3]])
+        preamble = self.time_stamp + ' ' + self.fac
         if mark:
             return '{} ** {}'.format(preamble, self._msg)
         return '{}    {}'.format(preamble, self._msg)
@@ -171,6 +191,7 @@ class LogLine():
         return ' '.join(self._fields[1:])
 
     def get_anon_msg(self):
+        # pylint: disable=too-many-branches
         """Return the message part of a line.
 
         stripping up to and including the filename but removing pointers
@@ -403,6 +424,16 @@ class StateIter():
             line.rpc = False
             return line
 
+        try:
+            return self._track(line)
+        except IndexError:
+            # Trace line truncated by an abrupt process kill; treat as plain text.
+            line.trace = False
+            line.rpc = False
+            return line
+
+    def _track(self, line):
+        # pylint: disable=too-many-branches
         if line.is_new() or line.is_new_rpc():
             if line.descriptor in self.reuse_table:
                 self.reuse_table[line.descriptor] += 1
@@ -529,9 +560,8 @@ class LogIter():
 
         index = 0
         for line in self._fd:
-            fields = line.split(None, 8)
             index += 1
-            if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
+            if not LogLine.is_valid(line):
                 self._data.append(LogRaw(line))
             else:
                 l_obj = LogLine(line)
@@ -551,12 +581,12 @@ class LogIter():
         index = 0
         position = 0
         for line in self._fd:
-            fields = line.split(None, 8)
             index += 1
-            if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
+            if not LogLine.is_valid(line):
                 position += len(line)
                 continue
-            pidtid = fields[2][5:-1]
+            fields = line.split(None, 4)
+            pidtid = fields[4][5:-1]
             pid = pidtid.split("/")
             l_pid = int(pid[0])
             if l_pid in pids:
@@ -623,8 +653,7 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            fields = line.split(None, 8)
-            if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
+            if not LogLine.is_valid(line):
                 return LogRaw(line)
             return LogLine(line)
 

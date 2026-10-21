@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,7 @@ package server
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"net"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize/english"
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
@@ -56,7 +58,7 @@ const (
 // the client network autoconfiguration hints, and the set of ranks associated with MS
 // replicas. If req.AllRanks is true, all ranks' fabric URIs are also given the client.
 func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 	if len(svc.clientNetworkHint) == 0 {
@@ -409,7 +411,7 @@ func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, peerAddr *net.TC
 }
 
 func publishJoinFailedEvent(req *mgmtpb.JoinReq, peerAddr *net.TCPAddr, publisher events.Publisher, msg string) {
-	publisher.Publish(events.NewEngineJoinFailedEvent(peerAddr.String(), req.Idx, req.Rank, msg))
+	publisher.Publish(events.NewEngineJoinFailedEvent(peerAddr.String(), req.Idx, req.Rank, req.Incarnation, msg))
 }
 
 func getProviderFromURI(uri string) (string, error) {
@@ -775,7 +777,8 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 
 	resp.Results = ranksResp.RankResults
 
-	addUnresponsiveResults(svc.log, svc.membership.HostRanks(req.Ranks), ranksResp, resp)
+	hostRanks := svc.membership.HostRanks(req.Ranks)
+	addUnresponsiveResults(svc.log, hostRanks, ranksResp, resp)
 
 	removeDuplicateResults(svc.log, resp)
 
@@ -789,6 +792,16 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 	}
 
 	return resp, req.Ranks, nil
+}
+
+func (svc *mgmtSvc) getSysSelfHeal() (string, error) {
+	if sh, err := system.GetUserProperty(svc.sysdb, svc.systemProps,
+		daos.SystemPropertySelfHeal.String()); err != nil {
+		return "", errors.Wrapf(err, "retrieving %s system property",
+			daos.SystemPropertySelfHeal)
+	} else {
+		return sh, nil
+	}
 }
 
 // SystemQuery implements the method defined for the Management Service.
@@ -814,6 +827,18 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		Absentranks: missRanks.String(),
 		Absenthosts: missHosts.String(),
 	}
+
+	// Retrieve system self-heal property. Assume default value where all flags are set if
+	// property isn't present.
+	resp.SysSelfHealPolicy = daos.DefaultSysSelfHealFlagsStr
+	if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
+		svc.log.Debugf(err.Error())
+	} else if err != nil {
+		return nil, err
+	} else {
+		resp.SysSelfHealPolicy = selfHeal
+	}
+
 	if hitRanks.Count() == 0 {
 		// If the membership is empty, this replica is likely waiting
 		// for logs from peers, so we should indicate to the client
@@ -1207,19 +1232,10 @@ func (svc *mgmtSvc) queryPool(ctx context.Context, id string, getEnabled bool) (
 	return ranklist.MustCreateRankSet(rankStr), nil
 }
 
-type poolRanksMap map[string]*ranklist.RankSet
-
-// Build mappings of pools to any ranks that match the input filter by iterating through the pool
-// service list. Identify pools by label if possible.
-func (svc *mgmtSvc) getPoolRanks(ctx context.Context, filterRanks *ranklist.RankSet, getEnabled bool) ([]string, poolRanksMap, error) {
+func (svc *mgmtSvc) getPoolIDs() ([]string, error) {
 	psList, err := svc.sysdb.PoolServiceList(false)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	filterRanksMap := make(map[ranklist.Rank]struct{})
-	for _, r := range filterRanks.Ranks() {
-		filterRanksMap[r] = struct{}{}
+		return nil, err
 	}
 
 	var poolIDs []string
@@ -1232,6 +1248,24 @@ func (svc *mgmtSvc) getPoolRanks(ctx context.Context, filterRanks *ranklist.Rank
 		poolIDs = append(poolIDs, poolID)
 	}
 	sort.Strings(poolIDs)
+
+	return poolIDs, err
+}
+
+type poolRanksMap map[string]*ranklist.RankSet
+
+// Build mappings of pools to any ranks that match the input filter by iterating through the pool
+// service list. Identify pools by label if possible.
+func (svc *mgmtSvc) getPoolRanks(ctx context.Context, filterRanks *ranklist.RankSet, getEnabled bool) ([]string, poolRanksMap, error) {
+	filterRanksMap := make(map[ranklist.Rank]struct{})
+	for _, r := range filterRanks.Ranks() {
+		filterRanksMap[r] = struct{}{}
+	}
+
+	poolIDs, err := svc.getPoolIDs()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	var outPoolIDs []string
 	poolRanks := make(poolRanksMap)
@@ -1284,6 +1318,11 @@ type poolRanksOpSig func(context.Context, control.UnaryInvoker, *control.PoolRan
 func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs []string, poolRanks poolRanksMap, ctlApiCall poolRanksOpSig) ([]*control.PoolRanksResp, error) {
 	resps := []*control.PoolRanksResp{}
 
+	_, replicas, err := svc.sysdb.LeaderQuery()
+	if err != nil {
+		return nil, err
+	}
+
 	for _, id := range poolIDs {
 		rs := poolRanks[id]
 		if rs.Count() == 0 {
@@ -1295,6 +1334,9 @@ func (svc *mgmtSvc) getPoolRanksResps(ctx context.Context, sys string, poolIDs [
 			Ranks: rs.Ranks(),
 		}
 		req.Sys = sys
+		// Set request hostlist from leader query as we don't have
+		// access to the server config from here.
+		req.SetHostList(replicas)
 
 		svc.log.Tracef("%T: %+v", req, req)
 
@@ -1382,6 +1424,208 @@ func (svc *mgmtSvc) SystemDrain(ctx context.Context, pbReq *mgmtpb.SystemDrainRe
 	return pbResp, nil
 }
 
+// SystemRebuildManage triggers pool-rebuild operations on all pools in system.
+func (svc *mgmtSvc) SystemRebuildManage(ctx context.Context, pbReq *mgmtpb.SystemRebuildManageReq) (*mgmtpb.SystemRebuildManageResp, error) {
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T", pbReq)
+	}
+
+	if err := svc.checkLeaderRequest(pbReq); err != nil {
+		return nil, err
+	}
+
+	poolIDs, err := svc.getPoolIDs()
+	if err != nil {
+		return nil, err
+	}
+	if len(poolIDs) == 0 {
+		return &mgmtpb.SystemRebuildManageResp{}, nil // Successful no-op.
+	}
+
+	_, replicas, err := svc.sysdb.LeaderQuery()
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*control.PoolRebuildManageResult
+	for _, id := range poolIDs {
+		opCode := control.PoolRebuildOpCode(pbReq.OpCode)
+
+		req := &control.PoolRebuildManageReq{
+			ID:     id,
+			OpCode: opCode,
+			Force:  pbReq.Force,
+		}
+		// Set request hostlist from leader query as we don't have
+		// access to the server config from here.
+		req.SetHostList(replicas)
+
+		svc.log.Tracef("%T: %+v", req, req)
+
+		result := &control.PoolRebuildManageResult{
+			ID:     id,
+			OpCode: opCode,
+		}
+
+		if err := control.PoolRebuildManage(ctx, svc.rpcClient, req); err != nil {
+			result.Errored = true
+			result.Msg = err.Error()
+		}
+
+		svc.log.Tracef("%T: %+v", result, result)
+		results = append(results, result)
+	}
+
+	pbResp := &mgmtpb.SystemRebuildManageResp{}
+	if err := convert.Types(results, &pbResp.Results); err != nil {
+		return nil, errors.Wrapf(err, "convert %T->%T", results, pbResp.Results)
+	}
+
+	return pbResp, nil
+}
+
+// selfHealExcludeRanks fetches a list of detected dead ranks from the leader's engine and updates
+// states within the control-plane membership appropriately.
+func (svc *mgmtSvc) selfHealExcludeRanks(ctx context.Context) error {
+	// DAOS-18163 TODO: Pass a real, nonzero map version.
+	req := &mgmtpb.GetGroupStatusReq{}
+
+	// Fetch dead rank list from leader's engine with group status dRPC call.
+	dResp, err := svc.harness.CallDrpc(ctx, daos.MethodGroupStatusGet, req)
+	if err != nil {
+		if err == errEngineNotReady {
+			return err
+		}
+		svc.log.Errorf("dRPC GroupStatusGet call failed: %s", err)
+		return err
+	}
+
+	resp := new(mgmtpb.GetGroupStatusResp)
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return err
+	}
+	if resp.GetStatus() != 0 {
+		return daos.Status(resp.GetStatus())
+	}
+
+	svc.log.Tracef("excluding ranks based on self_heal: %T:%+v", resp, resp)
+
+	if len(resp.DeadRanks) > 0 {
+		svc.log.Debugf("dead ranks %s returned from get-group-status drpc",
+			ranklist.RankSetFromRanks(ranklist.RanksFromUint32(resp.DeadRanks)))
+	}
+	for _, deadRank := range resp.DeadRanks {
+		// No incarnation to verify here so pass zero to skip it's check.
+		needsGrpUpd, err := svc.membership.MarkRankDead(ranklist.Rank(deadRank), 0)
+		if system.IsMemberNotFound(err) {
+			svc.log.Debugf("MarkRankDead: rank %d not found", deadRank)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if needsGrpUpd {
+			svc.log.Debugf("do group update after marking rank %d dead", deadRank)
+			svc.reqGroupUpdate(ctx, false)
+		}
+	}
+
+	return nil
+}
+
+// selfHealNotifyPSes calls into each pool service with the current value of self_heal system
+// property so that the appropriate actions can be performed across the pool (e.g. rebuild or
+// exclude).
+func (svc *mgmtSvc) selfHealNotifyPSes(ctx context.Context, propVal string) error {
+	poolIDs, err := svc.getPoolIDs()
+	if err != nil {
+		return err
+	}
+	svc.log.Tracef("evaluating self_heal sys-prop %q on %d pools", propVal, len(poolIDs))
+
+	if len(poolIDs) == 0 {
+		return nil // Successful no-op.
+	}
+
+	_, replicas, err := svc.sysdb.LeaderQuery()
+	if err != nil {
+		return err
+	}
+
+	var successes, failures []string
+	for _, id := range poolIDs {
+		req := &control.PoolSelfHealEvalReq{
+			ID:         id,
+			SysPropVal: propVal,
+		}
+		// Set request hostlist from leader query as we don't have
+		// access to the server config from here.
+		req.SetHostList(replicas)
+
+		svc.log.Tracef("%T: %+v", req, req)
+
+		if err := control.PoolSelfHealEval(ctx, svc.rpcClient, req); err != nil {
+			failures = append(failures, id)
+			svc.log.Errorf("PoolSelfHealEval: %s", err.Error())
+		} else {
+			successes = append(successes, id)
+		}
+	}
+
+	if len(successes) > 0 {
+		svc.log.Debugf("PoolSelfHealEval completed on %s (%s)",
+			english.Plural(len(successes), "pool", "pools"),
+			strings.Join(successes, ", "))
+	}
+	if len(failures) > 0 {
+		return errors.Errorf(
+			"pool self-heal evaluate drpc failed for %s (%s), check server log",
+			english.Plural(len(failures), "pool", "pools"),
+			strings.Join(failures, ", "))
+	}
+
+	return nil
+}
+
+// SystemSelfHealEval triggers actions based on self_heal system property values.
+func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.SystemSelfHealEvalReq) (*mgmtpb.DaosResp, error) {
+	if pbReq == nil {
+		return nil, errors.Errorf("nil %T", pbReq)
+	}
+
+	if err := svc.checkLeaderRequest(pbReq); err != nil {
+		return nil, err
+	}
+
+	// Retrieve system self-heal property. Assume a system property exists when running eval.
+	selfHeal, err := svc.getSysSelfHeal()
+	if err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("system property self_heal='%+v'", selfHeal)
+
+	// Exclude engines based on SWIM status if system property bit set.
+	if daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagExclude) {
+		if err := svc.selfHealExcludeRanks(ctx); err != nil {
+			return nil, errors.Wrap(err, "excluding ranks based on self_heal.exclude")
+		}
+	}
+
+	// If pool_exclude or pool_rebuild is set, send the latest self_heal value to all PSs, who
+	// will handle the reevaluation. This involves calling into the leader engine with self_heal
+	// value for each pool and calling dsc_pool_svc_eval_self_heal() in dRPC handler.
+	if !daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagPoolRebuild) &&
+		!daos.SystemPropertySelfHealHasFlag(selfHeal, daos.SysSelfHealFlagPoolExclude) {
+		return new(mgmtpb.DaosResp), nil
+	}
+	if err := svc.selfHealNotifyPSes(ctx, selfHeal); err != nil {
+		return nil, errors.Wrapf(err, "notify pool services of self_heal=%q", selfHeal)
+	}
+
+	return new(mgmtpb.DaosResp), nil
+}
+
 // ClusterEvent management service gRPC handler receives ClusterEvent requests
 // from control-plane instances attempting to notify the MS of a cluster event
 // in the DAOS system (this handler should only get called on the MS leader).
@@ -1399,77 +1643,214 @@ func (svc *mgmtSvc) ClusterEvent(ctx context.Context, req *sharedpb.ClusterEvent
 	return resp, nil
 }
 
-// eraseAndRestart is called on MS replicas to shut down the raft DB and
-// remove its files before restarting the control plane server.
-func (svc *mgmtSvc) eraseAndRestart(pause bool) error {
-	svc.log.Infof("%s pid %d: erasing system db", build.ControlPlaneName, os.Getpid())
+// eraseSysdb shuts down the raft DB and removes its files on this host.
+func (svc *mgmtSvc) eraseSysdb(leaderStr string) error {
+	pid := os.Getpid()
+	svc.log.Infof("[%s] pid %d: erasing system db", leaderStr, pid)
 
 	if err := svc.sysdb.Stop(); err != nil {
-		return errors.Wrap(err, "failed to stop system database")
+		return errors.Wrapf(err, "failed to stop system database on pid %d [role=%s]",
+			pid, leaderStr)
 	}
+
+	raftDir := svc.sysdb.RaftDir()
 	if err := svc.sysdb.RemoveFiles(); err != nil {
-		return errors.Wrap(err, "failed to remove system database")
+		return errors.Wrapf(err, "failed to remove system database on pid %d [role=%s]",
+			pid, leaderStr)
 	}
 
-	myPath, err := os.Readlink("/proc/self/exe")
-	if err != nil {
-		return errors.Wrap(err, "unable to determine path to self")
+	// The parent may already be gone: in MD-on-SSD mode it is the control-metadata root
+	// that eraseLocalEngines() removed (and whose own parent it synced).
+	if err := common.SyncDir(filepath.Dir(raftDir)); err != nil && !os.IsNotExist(errors.Cause(err)) {
+		return errors.Wrapf(err, "fsync raft dir parent %q, pid %d [role=%s]",
+			filepath.Dir(raftDir), pid, leaderStr)
 	}
-
-	go func() {
-		if pause {
-			time.Sleep(50 * time.Millisecond)
-		}
-		if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
-			svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
-		}
-	}()
 
 	return nil
 }
 
-// SystemErase implements the gRPC handler for erasing system metadata.
-func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseReq) (*mgmtpb.SystemEraseResp, error) {
-	// At a minimum, ensure that this only runs on MS replicas.
-	if err := svc.checkReplicaRequest(pbReq); err != nil {
-		return nil, err
-	}
+// eraseEngineFormatOpts controls how eraseEngineFormat() wipes an engine's on-disk format state
+type eraseEngineFormatOpts struct {
+	stopFirst         bool // force-stop before wipe
+	wholeMetadataRoot bool // remove control-metadata root instead of per-instance subdirectory
+	restartNow        bool // request each instance's restart after wipe
+}
 
-	svc.log.Debug("Received SystemErase RPC")
-
-	// If this is called on a non-leader replica, nuke the local
-	// instance of the database and any superblocks, then restart.
-	//
-	// TODO (DAOS-7080): Rework this to remove redundancy and thoroughly
-	// wipe SCM rather than removing things piecemeal.
-	if !svc.sysdb.IsLeader() {
-		for _, engine := range svc.harness.Instances() {
-			if err := engine.Stop(unix.SIGKILL); err != nil {
-				svc.log.Errorf("instance %d failed to stop: %s", engine.Index(), err)
-			}
-			if err := engine.RemoveSuperblock(); err != nil {
-				svc.log.Errorf("instance %d failed to remove superblock: %s", engine.Index(), err)
-			}
-		}
-		if err := svc.eraseAndRestart(false); err != nil {
-			return nil, errors.Wrap(err, "erasing and restarting non-leader")
+// eraseEngineFormat wipes the on-disk format state (superblock and, in MD-on-SSD mode,
+// all or part of the control-metadata directory) of the given instances so they require
+// reformatting (AwaitFormat) on next start.
+//
+// Errors are logged per-instance and accumulated into the returned error rather than
+// stopping at the first failure.
+func (h *EngineHarness) eraseEngineFormat(ctx context.Context, instances []Engine, opts eraseEngineFormatOpts) error {
+	for _, ei := range instances {
+		if ei.GetStorage() == nil {
+			return errors.Errorf("instance %d: storage provider not initialized", ei.Index())
 		}
 	}
 
-	// On the leader, we should first tell all servers to prepare for
-	// reformat by wiping out their engine superblocks, etc.
+	var errs []error
+
+	if opts.stopFirst {
+		for _, ei := range instances {
+			if err := ei.Stop(unix.SIGKILL); err != nil {
+				h.log.Errorf("instance %d failed to stop: %s", ei.Index(), err)
+				errs = append(errs, errors.Wrapf(err, "instance %d failed to stop", ei.Index()))
+			}
+		}
+	}
+
+	sbDirs := make(map[string]struct{}) // unique parent dirs of removed superblocks
+	for _, ei := range instances {
+		if err := ei.RemoveSuperblock(); err != nil && !os.IsNotExist(err) {
+			h.log.Errorf("instance %d failed to remove superblock: %s", ei.Index(), err)
+			errs = append(errs, errors.Wrapf(err, "instance %d failed to remove superblock", ei.Index()))
+		}
+		if storage := ei.GetStorage(); storage != nil {
+			sbDirs[storage.ControlMetadataEnginePath()] = struct{}{}
+		}
+	}
+
+	for dir := range sbDirs {
+		if err := common.SyncDir(dir); err != nil {
+			h.log.Errorf("fsync superblock dir %q: %s", dir, err)
+			errs = append(errs, errors.Wrapf(err, "fsync superblock dir %q", dir))
+		}
+	}
+
+	if opts.wholeMetadataRoot {
+		// Remove once rather than per-engine, avoiding races between local engines
+		// and a "Metadata format required" (vs. the expected "SCM format required")
+		// report on restart.
+		if len(instances) > 0 {
+			if storage := instances[0].GetStorage(); storage != nil && storage.ControlMetadataPathConfigured() {
+				mdPath := storage.ControlMetadataPath()
+				if err := os.RemoveAll(mdPath); err != nil {
+					h.log.Errorf("failed to remove control metadata directory %q: %s", mdPath, err)
+					errs = append(errs, errors.Wrapf(err, "failed to remove control metadata directory %q", mdPath))
+				} else {
+					if err := common.SyncDir(filepath.Dir(mdPath)); err != nil {
+						h.log.Errorf("fsync control metadata parent dir %q: %s", filepath.Dir(mdPath), err)
+						errs = append(errs, errors.Wrapf(err, "fsync control metadata parent dir %q", filepath.Dir(mdPath)))
+					}
+				}
+			}
+		}
+	} else {
+		// Scope to each targeted instance's own subdirectory, leaving other engines'
+		// subdirectories and the shared control_raft (MS replica raft DB) untouched.
+		for _, ei := range instances {
+			storage := ei.GetStorage()
+			if storage == nil || !storage.ControlMetadataPathConfigured() {
+				continue
+			}
+			enginePath := storage.ControlMetadataEnginePath()
+			if err := os.RemoveAll(enginePath); err != nil {
+				h.log.Errorf("instance %d: failed to remove control metadata directory %q: %s",
+					ei.Index(), enginePath, err)
+				errs = append(errs, errors.Wrapf(err,
+					"instance %d: removing control metadata directory", ei.Index()))
+			}
+		}
+	}
+
+	if opts.restartNow {
+		for _, ei := range instances {
+			ei.requestStart(ctx)
+		}
+	}
+
+	return stderrors.Join(errs...)
+}
+
+// eraseLocalEngines stops this host's engines and wipes their format state so they come
+// up in AwaitFormat state after the control plane restarts.
+func (svc *mgmtSvc) eraseLocalEngines() error {
+	return svc.harness.eraseEngineFormat(context.Background(), svc.harness.Instances(), eraseEngineFormatOpts{
+		stopFirst:         true,
+		wholeMetadataRoot: true,
+		restartNow:        false,
+	})
+}
+
+// getPeersAndFanout gathers MS replica peer addresses and prepares a ResetFormatRanks
+// fanout request targeting every rank except the leader and its replica peers (which
+// erase and restart themselves; see eraseLocalEngines()/eraseReplicas()). Must be called
+// before the raft DB is stopped, as rank/host resolution needs it.
+func (svc *mgmtSvc) getPeersAndFanout(ctx context.Context) ([]*net.TCPAddr, *fanoutRequest, *fanoutResponse, error) {
+	svc.log.Trace("gathering MS replica peer addresses")
+	peers, err := svc.sysdb.PeerAddrs()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	svc.log.Tracef("found %d MS replica peer(s): %v", len(peers), peers)
+
+	svc.log.Trace("preparing fanout request")
 	fanReq, fanResp, err := svc.getFanout(&mgmtpb.SystemQueryReq{})
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
+
+	selfAddr, err := svc.sysdb.ReplicaAddr()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	selfAndPeerHosts := make([]string, 0, len(peers)+1)
+	selfAndPeerHosts = append(selfAndPeerHosts, selfAddr.String())
+	for _, peer := range peers {
+		selfAndPeerHosts = append(selfAndPeerHosts, peer.String())
+	}
+
+	excludeRanks, _, err := svc.membership.CheckHosts(strings.Join(selfAndPeerHosts, ","),
+		build.DefaultControlPort)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for _, rank := range excludeRanks.Ranks() {
+		fanReq.Ranks.Delete(rank)
+	}
+	svc.log.Tracef("fanout request prepared for non-leader, non-replica ranks: %s", fanReq.Ranks)
+
+	return peers, fanReq, fanResp, nil
+}
+
+// eraseReplicas sends erase requests to all MS replica peers, each of which erases its
+// own DB/engines synchronously before acking, then restarts itself.
+func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) error {
+	svc.log.Trace("sending erase request to MS replica peers")
+
+	for _, peer := range peers {
+		svc.log.Tracef("sending erase RPC to peer %s", peer.String())
+		peerReq := new(control.SystemEraseReq)
+		peerReq.AddHost(peer.String())
+
+		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
+			// A connection error here can't be distinguished from "peer never
+			// received the request", so treat it as a hard failure rather than
+			// assuming the peer erased itself.
+			return errors.Wrapf(err, "erase request to MS replica peer %s failed", peer.String())
+		}
+		svc.log.Tracef("peer %s acknowledged erase request", peer.String())
+	}
+
+	return nil
+}
+
+// eraseNonReplicaEngines calls ResetFormatRanks on non-leader, non-replica engines (see
+// getPeersAndFanout()). Does not wait for a new raft leader to be elected first: only the
+// bootstrap MS replica can form a new cluster, and it can't restart until this function
+// (running on the pre-erase leader) returns, so waiting here would deadlock.
+func (svc *mgmtSvc) eraseNonReplicaEngines(ctx context.Context, fanReq *fanoutRequest, fanResp *fanoutResponse) (*mgmtpb.SystemEraseResp, error) {
 	fanReq.Method = control.ResetFormatRanks
+
+	var err error
 	fanResp, _, err = svc.rpcFanout(ctx, fanReq, fanResp, false)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, mr := range fanResp.Results {
-		svc.log.Debugf("member response: %#v", mr)
+		svc.log.Tracef("ResetFormatRanks result: %#v", mr)
 	}
 
 	pbResp := new(mgmtpb.SystemEraseResp)
@@ -1480,29 +1861,165 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 		result.Action = "reset format"
 	}
 
-	if fanResp.Results.Errors() != nil {
-		return pbResp, nil
+	if err := fanResp.Results.Errors(); err != nil {
+		svc.log.Errorf("ResetFormatRanks encountered errors: %s", err)
 	}
 
-	// Next, tell all of the replicas to lobotomize themselves and restart.
-	peers, err := svc.sysdb.PeerAddrs()
+	return pbResp, nil
+}
+
+// eraseAllEngines runs on the leader to coordinate the erase across replicas and engines.
+func (svc *mgmtSvc) eraseAllEngines(ctx context.Context) (*mgmtpb.SystemEraseResp, error) {
+	peers, fanReq, fanResp, err := svc.getPeersAndFanout(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to determine path to self")
+	}
+
+	// Wipe non-MS engine superblocks first, while raft is still up: rpcFanout()'s
+	// UpdateMemberStates() needs a working leader-side raft DB to persist member state.
+	svc.log.Trace("calling ResetFormatRanks on non-replica engines")
+	pbResp, err := svc.eraseNonReplicaEngines(ctx, fanReq, fanResp)
 	if err != nil {
 		return nil, err
 	}
-	for _, peer := range peers {
-		peerReq := new(control.SystemEraseReq)
-		peerReq.AddHost(peer.String())
+	for _, r := range pbResp.GetResults() {
+		if r.Errored {
+			// Nothing erased on the MS side yet: report the failed ranks and stop
+			// before the point of no return rather than proceeding past it.
+			return pbResp, nil
+		}
+	}
 
-		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
-			if control.IsRetryableConnErr(err) {
-				continue
-			}
+	// Erase storage before any raft DB, on replicas and then the leader, so the system
+	// DB keeps tracking state for as long as possible: a replica/leader with wiped
+	// storage can't restart and rejoin with a clean DB, so there's no race to guard
+	// against by erasing DBs first.
+	svc.log.Trace("sending erase request to MS replica peers")
+	if err := svc.eraseReplicas(ctx, peers); err != nil {
+		return nil, err
+	}
+
+	svc.log.Trace("erasing leader's local engines")
+	if err := svc.eraseLocalEngines(); err != nil {
+		return nil, err
+	}
+
+	// SAFETY WARNING: once raft is stopped the leader cannot handle leadership changes;
+	// if it crashes before completing, manual recovery will be required. (POINT OF NO
+	// RETURN)
+	svc.log.Trace("erasing leader's raft DB (POINT OF NO RETURN)")
+	if err := svc.eraseSysdb("LEADER"); err != nil {
+		return nil, err
+	}
+
+	if err := svc.scheduleControlPlaneRestart("LEADER"); err != nil {
+		svc.log.Errorf("failed to schedule control plane restart: %s", err)
+	}
+
+	svc.log.Info("System Erase complete, engines ready for manual 'dmg storage format'")
+
+	return pbResp, nil
+}
+
+// scheduleControlPlaneRestart arranges for the control plane process to restart.
+func (svc *mgmtSvc) scheduleControlPlaneRestart(leaderStr string) error {
+	myPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		return errors.Wrap(err, "unable to determine path to self")
+	}
+
+	svc.log.Infof("System Erase: scheduling control plane restart [role=%s]", leaderStr)
+	go svc.restartControlPlane(myPath, leaderStr)
+
+	return nil
+}
+
+// execControlPlaneRestart drains the gRPC server via GracefulStop() (falling back to a
+// forced Stop() after svc.gracefulStopTimeout), then exec()s to restart the control
+// plane process.
+func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
+	scheduledAt := time.Now()
+
+	done := make(chan struct{})
+	go func() {
+		svc.grpcServer.GracefulStop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		svc.log.Debugf("System Erase: gRPC server drained cleanly after %s [role=%s]",
+			time.Since(scheduledAt), leaderStr)
+	case <-time.After(svc.gracefulStopTimeout):
+		svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, forcing stop [role=%s]",
+			svc.gracefulStopTimeout, leaderStr)
+		svc.grpcServer.Stop()
+	}
+
+	svc.log.Infof("System Erase: exec'ing %s to restart control plane after %s total drain [role=%s]",
+		myPath, time.Since(scheduledAt), leaderStr)
+	if err := unix.Exec(myPath, append([]string{myPath}, os.Args[1:]...), os.Environ()); err != nil {
+		svc.log.Error(errors.Wrap(err, "Exec() failed").Error())
+	}
+}
+
+// SystemErase implements the gRPC handler for erasing system metadata.
+//
+// WARNING: Destructive and irreversible. A crash after a DB is erased requires manual recovery.
+func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseReq) (*mgmtpb.SystemEraseResp, error) {
+	// Forwarded requests (leader -> replica, see eraseReplicas()) must always run
+	// locally, even if this replica has since become leader. Default to false
+	// (external, leader-only) if the caller's component can't be determined.
+	isForwarded := false
+	if comp, err := build.FromContext(ctx); err == nil && comp.Component == build.ComponentServer {
+		isForwarded = true
+	}
+
+	if isForwarded {
+		if err := svc.checkReplicaRequest(pbReq); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := svc.checkLeaderRequest(pbReq); err != nil {
 			return nil, err
 		}
 	}
 
-	// Finally, take care of the leader on the way out.
-	return pbResp, errors.Wrap(svc.eraseAndRestart(true), "erasing and restarting leader")
+	leaderStr := "REPLICA"
+	if svc.sysdb.IsLeader() {
+		leaderStr = "LEADER"
+	}
+	svc.log.Tracef("SystemErase start [role=%s, forwarded=%v]", leaderStr, isForwarded)
+
+	if isForwarded {
+		svc.log.Trace("erasing local engines")
+		if err := svc.eraseLocalEngines(); err != nil {
+			return nil, errors.Wrap(err, "resetting non-leader ms-replica engines")
+		}
+
+		// SAFETY WARNING: once raft is stopped this replica cannot track system state;
+		// if it crashes before completing, manual recovery will be required. (POINT OF
+		// NO RETURN)
+		svc.log.Trace("erasing raft DB (POINT OF NO RETURN)")
+		if err := svc.eraseSysdb(leaderStr); err != nil {
+			return nil, errors.Wrap(err, "erasing non-leader ms-replica db")
+		}
+
+		if err := svc.scheduleControlPlaneRestart(leaderStr); err != nil {
+			svc.log.Errorf("failed to schedule control plane restart: %s", err)
+		}
+
+		svc.log.Trace("SystemErase returning success to caller")
+		return &mgmtpb.SystemEraseResp{}, nil
+	}
+
+	pbResp, err := svc.eraseAllEngines(ctx)
+	if err != nil {
+		svc.log.Errorf("SystemErase returning error to caller: %s", err)
+	} else {
+		svc.log.Tracef("SystemErase returning success to caller: %#v", pbResp)
+	}
+	return pbResp, err
 }
 
 // SystemCleanup implements the method defined for the Management Service.

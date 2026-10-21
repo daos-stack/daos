@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2023 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +17,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 #include <daos/tests_lib.h>
+#include <ctype.h>
 
 bool fail_domain_node;
 void
@@ -424,12 +425,19 @@ plt_set_domain_status(uint32_t id, int status, uint32_t *ver,
 }
 
 void
-plt_set_tgt_status(uint32_t id, int status, uint32_t *ver,
-		struct pool_map *po_map, bool pl_debug_msg)
+plt_set_tgt_status(uint32_t id, int status, uint32_t *ver_ptr, struct pool_map *po_map,
+		   bool pl_debug_msg)
 {
 	struct pool_target	*target;
 	char			*str;
+	uint32_t                 ver;
+	bool                     down2up = false;
 	int			 rc;
+
+	if (ver_ptr != NULL)
+		ver = *ver_ptr;
+	else
+		ver = pool_map_get_version(po_map);
 
 	switch (status) {
 	case PO_COMP_ST_UP:
@@ -457,17 +465,34 @@ plt_set_tgt_status(uint32_t id, int status, uint32_t *ver,
 
 	rc = pool_map_find_target(po_map, id, &target);
 	D_ASSERT(rc == 1);
-	(*ver)++;
+
+	ver++;
+	if (status == PO_COMP_ST_UP) {
+		if (target->ta_comp.co_status == PO_COMP_ST_DOWN) {
+			target->ta_comp.co_flags |= PO_COMPF_DOWN2UP;
+			down2up = true;
+		}
+		target->ta_comp.co_in_ver = ver;
+
+	} else if (status == PO_COMP_ST_DRAIN || status == PO_COMP_ST_DOWN ||
+		   status == PO_COMP_ST_DOWNOUT) {
+		target->ta_comp.co_fseq = ver;
+	}
 	target->ta_comp.co_status = status;
 
-	if (status == PO_COMP_ST_DRAIN || status == PO_COMP_ST_DOWN)
-		target->ta_comp.co_fseq = *ver;
-	if (pl_debug_msg)
-		D_PRINT("set target id %d, rank %d as %s, ver %d.\n",
-			id, target->ta_comp.co_rank, str, *ver);
+	if (pl_debug_msg) {
+		if (down2up)
+			D_PRINT("set target id %d, rank %d vos %d as %s (DOWN2UP), ver %d.\n", id,
+				target->ta_comp.co_rank, target->ta_comp.co_index, str, ver);
+		else
+			D_PRINT("set target id %d, rank %d vos %d as %s, ver %d.\n", id,
+				target->ta_comp.co_rank, target->ta_comp.co_index, str, ver);
+	}
 	pool_map_update_failed_cnt(po_map);
-	rc = pool_map_set_version(po_map, *ver);
+	rc = pool_map_set_version(po_map, ver);
 	D_ASSERT(rc == 0);
+	if (ver_ptr != NULL)
+		*ver_ptr = ver;
 }
 
 void
@@ -602,6 +627,8 @@ gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
 		comp->co_rank   = i / vos_per_target;
 		comp->co_index	= i % vos_per_target;
 		comp->co_ver    = 1;
+		/* gen_pool_buf() gives every target of a new pool fseq 1, not 0 */
+		comp->co_fseq   = 1;
 		comp->co_nr     = 1;
 	}
 
@@ -692,6 +719,7 @@ gen_pool_and_placement_map_non_standard(int num_domains,
 		comp->co_rank   = node_idx;
 
 		comp->co_ver    = 1;
+		comp->co_fseq   = 1;
 		comp->co_nr     = 1;
 	}
 
@@ -837,7 +865,7 @@ extend_test_pool_map(struct pool_map *map, uint32_t nnodes,
 	map_version = pool_map_get_version(map) + 1;
 
 	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes, ntargets, domains,
-			  dss_tgt_nr);
+			  dss_tgt_nr, NULL /* downout_ranks */);
 	assert_success(rc);
 
 	D_ASSERT(map_buf != NULL);
@@ -871,4 +899,203 @@ is_max_class_obj(daos_oclass_id_t cid)
 	    oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
 		return true;
 	return false;
+}
+
+bool
+plt_layout_with_tgts_on_same_dom(struct pl_obj_layout *layout, uint32_t tgts_per_dom)
+{
+	uint32_t i, j, dom, new_dom, tgt, new_tgt;
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		tgt = layout->ol_shards[i].po_target;
+		dom = tgt / tgts_per_dom;
+		for (j = i + 1; j < layout->ol_nr; j++) {
+			new_tgt = layout->ol_shards[j].po_target;
+			assert_true(new_tgt != tgt);
+			assert_true(tgt != -1 && new_tgt != -1);
+			new_dom = new_tgt / tgts_per_dom;
+			if (dom == new_dom) {
+				print_message("shards %d - %d, on same dom %d\n", i, j, dom);
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+bool
+plt_layout_with_tgts_on_same_dom_for_same_grp(struct pl_obj_layout *layout, uint32_t tgts_per_dom)
+{
+	uint32_t i, j, dom, new_dom, tgt, new_tgt;
+	uint32_t grp_end;
+
+	print_message("grp_nr %d, grp_size %d\n", layout->ol_grp_nr, layout->ol_grp_size);
+	for (i = 0; i < layout->ol_nr; i++) {
+		tgt = layout->ol_shards[i].po_target;
+		dom = tgt / tgts_per_dom;
+		grp_end = rounddown(i, layout->ol_grp_size) + layout->ol_grp_size;
+		for (j = i + 1; j < grp_end; j++) {
+			new_tgt = layout->ol_shards[j].po_target;
+			assert_true(new_tgt != tgt);
+			// assert_true(tgt != -1 && new_tgt != -1);
+			new_dom = new_tgt / tgts_per_dom;
+			if (dom == new_dom) {
+				print_message("colocated shards %d - %d, on dom %d\n", i, j, dom);
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+/** Dump layout for debugging purposes*/
+void
+plt_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout)
+{
+	int i;
+
+	D_PRINT("dump layout for " DF_OID ", ver %d\n", DP_OID(oid), layout->ol_ver);
+
+	for (i = 0; i < layout->ol_nr; i++)
+		D_PRINT("%d: shard_id %d, rank %d vos %d, tgt_id %d, f_seq %d, %s %s\n", i,
+			layout->ol_shards[i].po_shard, layout->ol_shards[i].po_rank,
+			layout->ol_shards[i].po_index, layout->ol_shards[i].po_target,
+			layout->ol_shards[i].po_fseq,
+			layout->ol_shards[i].po_rebuilding ? "rebuilding" : "healthy",
+			layout->ol_shards[i].po_reintegrating ? "reintegrating" : "healthy");
+}
+
+int
+plt_obj_place_mode(daos_obj_id_t oid, struct pl_obj_layout **layout, struct pl_map *pl_map,
+		   unsigned int mode)
+{
+	struct daos_obj_md md;
+	int                rc;
+
+	D_ASSERT(pl_map != NULL);
+	memset(&md, 0, sizeof(md));
+	md.omd_id       = oid;
+	md.omd_pda      = 0;
+	md.omd_fdom_lvl = PO_COMP_TP_RANK;
+	md.omd_pdom_lvl = PO_COMP_TP_ROOT;
+	md.omd_ver      = pool_map_get_version(pl_map->pl_poolmap);
+
+	rc = pl_obj_place(pl_map, 2, &md, mode, NULL, layout);
+
+	return rc;
+}
+
+int
+plt_parse_sub_tests(const char *sub_tests_str, int *sub_tests, int max_sub_tests, int *sub_tests_nr)
+{
+	const char *ptr = sub_tests_str;
+	int         nr  = 0;
+
+	*sub_tests_nr = 0;
+	if (sub_tests_str == NULL)
+		return 0;
+
+	/* format: "1,2,3" or "2-8" or "1,3-5,9" */
+	while (*ptr) {
+		const char *tmp;
+		int         start;
+		int         end;
+		int         i;
+
+		while (!isdigit(*ptr) && *ptr)
+			ptr++;
+		if (!*ptr)
+			break;
+
+		tmp = ptr;
+		while (isdigit(*ptr))
+			ptr++;
+		start = atoi(tmp);
+		end   = start;
+
+		if (*ptr == '-') {
+			ptr++;
+			while (!isdigit(*ptr) && *ptr)
+				ptr++;
+			if (!isdigit(*ptr)) {
+				print_message("invalid sub tests string %s\n", sub_tests_str);
+				return -DER_INVAL;
+			}
+			tmp = ptr;
+			while (isdigit(*ptr))
+				ptr++;
+			end = atoi(tmp);
+		}
+
+		if (end < start) {
+			print_message("invalid sub tests string %s\n", sub_tests_str);
+			return -DER_INVAL;
+		}
+
+		for (i = start; i <= end; i++) {
+			if (nr >= max_sub_tests) {
+				print_message("too many sub tests, max %d\n", max_sub_tests);
+				return -DER_INVAL;
+			}
+			sub_tests[nr++] = i;
+		}
+	}
+
+	if (nr == 0) {
+		print_message("invalid sub tests string %s\n", sub_tests_str);
+		return -DER_INVAL;
+	}
+
+	*sub_tests_nr = nr;
+	return 0;
+}
+
+void
+plt_list_tests(const char *name, const struct CMUnitTest *tests, int tests_size)
+{
+	int i;
+
+	print_message("%s - %d tests:\n", name, tests_size);
+	for (i = 0; i < tests_size; i++)
+		print_message("  %3d: %s\n", i, tests[i].name);
+}
+
+int
+plt_run_tests(const char *name, const struct CMUnitTest *tests, int tests_size, int *sub_tests,
+	      int sub_tests_nr)
+{
+	struct CMUnitTest *subtests;
+	int                nr = 0;
+	int                i;
+	int                rc;
+
+	if (sub_tests == NULL || sub_tests_nr == 0)
+		return _cmocka_run_group_tests(name, tests, tests_size, NULL, NULL);
+
+	D_ALLOC_ARRAY(subtests, sub_tests_nr);
+	if (subtests == NULL) {
+		print_message("failed allocating subtests array\n");
+		return -DER_NOMEM;
+	}
+
+	for (i = 0; i < sub_tests_nr; i++) {
+		if (sub_tests[i] >= tests_size || sub_tests[i] < 0) {
+			print_message("No subtest %d\n", sub_tests[i]);
+			continue;
+		}
+		subtests[nr++] = tests[sub_tests[i]];
+	}
+
+	if (nr == 0) {
+		print_message("no valid sub test to run\n");
+		D_FREE(subtests);
+		return -DER_INVAL;
+	}
+
+	rc = _cmocka_run_group_tests(name, subtests, nr, NULL, NULL);
+	D_FREE(subtests);
+
+	return rc;
 }

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -49,8 +49,9 @@ type SupportConfig struct {
 }
 
 type deprecatedParams struct {
-	AccessPoints  []string `yaml:"access_points,omitempty"`  // deprecated in 2.8
-	EnableHotplug *bool    `yaml:"enable_hotplug,omitempty"` // deprecated in 2.8
+	AccessPoints    []string `yaml:"access_points,omitempty"`            // deprecated in 2.8
+	EnableHotplug   *bool    `yaml:"enable_hotplug,omitempty"`           // deprecated in 2.8
+	FWHelperLogFile string   `yaml:"firmware_helper_log_file,omitempty"` // deprecated in 3.0
 }
 
 // Server describes configuration options for DAOS control plane.
@@ -58,6 +59,7 @@ type deprecatedParams struct {
 type Server struct {
 	// control-specific
 	ControlPort        int                       `yaml:"port"`
+	ControlInterface   string                    `yaml:"control_iface,omitempty"`
 	TransportConfig    *security.TransportConfig `yaml:"transport_config"`
 	Engines            []*engine.Config          `yaml:"engines"`
 	BdevExclude        []string                  `yaml:"bdev_exclude,omitempty"`
@@ -68,11 +70,11 @@ type Server struct {
 	SystemRamReserved  int                       `yaml:"system_ram_reserved"` // total for all engines
 	DisableHugepages   bool                      `yaml:"disable_hugepages"`
 	AllowNumaImbalance bool                      `yaml:"allow_numa_imbalance"`
+	AllowTHP           bool                      `yaml:"allow_thp"`
 	ControlLogMask     common.ControlLogLevel    `yaml:"control_log_mask"`
 	ControlLogFile     string                    `yaml:"control_log_file,omitempty"`
 	ControlLogJSON     bool                      `yaml:"control_log_json,omitempty"`
 	HelperLogFile      string                    `yaml:"helper_log_file,omitempty"`
-	FWHelperLogFile    string                    `yaml:"firmware_helper_log_file,omitempty"`
 	FaultPath          string                    `yaml:"fault_path,omitempty"`
 	TelemetryPort      int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter     uint8                     `yaml:"core_dump_filter,omitempty"`
@@ -87,7 +89,8 @@ type Server struct {
 
 	MgmtSvcReplicas []string `yaml:"mgmt_svc_replicas"`
 
-	Metadata storage.ControlMetadata `yaml:"control_metadata,omitempty"`
+	Metadata         storage.ControlMetadata `yaml:"control_metadata,omitempty"`
+	KernelConfigPath string                  `yaml:"kernel_config_path,omitempty"`
 
 	// unused (?)
 	FaultCb      string `yaml:"fault_cb"`
@@ -96,7 +99,9 @@ type Server struct {
 	Path string `yaml:"-"` // path to config file
 
 	// Behavior flags
-	AutoFormat bool `yaml:"-"`
+	AutoFormat                bool `yaml:"-"`
+	DisableEngineAutoRestart  bool `yaml:"disable_engine_auto_restart"`
+	EngineAutoRestartMinDelay int  `yaml:"engine_auto_restart_min_delay,omitempty"`
 
 	deprecatedParams `yaml:",inline"`
 }
@@ -146,7 +151,6 @@ func (cfg *Server) WithFabricProvider(provider string) *Server {
 // WithFabricAuthKey sets the top-level fabric authorization key.
 func (cfg *Server) WithFabricAuthKey(key string) *Server {
 	cfg.Fabric.AuthKey = key
-	cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	for _, engine := range cfg.Engines {
 		engine.Fabric.AuthKey = cfg.Fabric.AuthKey
 	}
@@ -230,6 +234,12 @@ func (cfg *Server) WithControlPort(port int) *Server {
 	return cfg
 }
 
+// WithControlInterface sets the network interface for the control plane listener.
+func (cfg *Server) WithControlInterface(iface string) *Server {
+	cfg.ControlInterface = iface
+	return cfg
+}
+
 // WithTransportConfig sets the gRPC transport configuration.
 func (cfg *Server) WithTransportConfig(cfgTransport *security.TransportConfig) *Server {
 	cfg.TransportConfig = cfgTransport
@@ -299,6 +309,18 @@ func (cfg *Server) WithAllowNumaImbalance(allowed bool) *Server {
 	return cfg
 }
 
+// WithAllowTHP allows DAOS server to run with transparent hugepage support enabled.
+func (cfg *Server) WithAllowTHP(allowed bool) *Server {
+	cfg.AllowTHP = allowed
+	return cfg
+}
+
+// WithKernelConfigPath sets the path to an alternate kernel configuration file.
+func (cfg *Server) WithKernelConfigPath(path string) *Server {
+	cfg.KernelConfigPath = path
+	return cfg
+}
+
 // WithSystemRamReserved sets the amount of system memory to reserve for system (non-DAOS)
 // use. In units of GiB.
 func (cfg *Server) WithSystemRamReserved(nr int) *Server {
@@ -330,15 +352,21 @@ func (cfg *Server) WithHelperLogFile(filePath string) *Server {
 	return cfg
 }
 
-// WithFirmwareHelperLogFile sets the path to the daos_firmware_helper logfile.
-func (cfg *Server) WithFirmwareHelperLogFile(filePath string) *Server {
-	cfg.FWHelperLogFile = filePath
-	return cfg
-}
-
 // WithTelemetryPort sets the port for the telemetry exporter.
 func (cfg *Server) WithTelemetryPort(port int) *Server {
 	cfg.TelemetryPort = port
+	return cfg
+}
+
+// WithDisableEngineAutoRestart enables or disables automatic engine restarts on self-termination.
+func (cfg *Server) WithDisableEngineAutoRestart(disabled bool) *Server {
+	cfg.DisableEngineAutoRestart = disabled
+	return cfg
+}
+
+// WithEngineAutoRestartMinDelay sets minimum time between automatic engine restarts.
+func (cfg *Server) WithEngineAutoRestartMinDelay(secs uint) *Server {
+	cfg.EngineAutoRestartMinDelay = int(secs)
 	return cfg
 }
 
@@ -388,10 +416,6 @@ func (cfg *Server) Load(log logging.Logger) error {
 	// propagate top-level settings to engine configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
-	}
-
-	if cfg.Fabric.AuthKey != "" {
-		cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	}
 
 	if len(cfg.deprecatedParams.AccessPoints) > 0 {
@@ -821,6 +845,11 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigSysRsvdZero
 	}
 
+	if cfg.EngineAutoRestartMinDelay < 0 {
+		return errors.Errorf("engine_auto_restart_min_delay must be >= 0 (got %d)",
+			cfg.EngineAutoRestartMinDelay)
+	}
+
 	// A config without engines is valid when initially discovering hardware prior to adding
 	// per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {
@@ -851,6 +880,7 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 
 	for idx, ec := range cfg.Engines {
 		ec.Storage.ControlMetadata = cfg.Metadata
+		ec.Storage.KernelConfigPath = cfg.KernelConfigPath
 		ec.Storage.EngineIdx = uint(idx)
 		ec.Fabric.Update(cfg.Fabric)
 
@@ -897,6 +927,8 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenHelperStreamCount := -1
 	seenScmCls := storage.ClassNone
 	seenScmClsIdx := -1
+	var seenScmHuge *bool
+	seenScmHugeIdx := -1
 
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%q-%q-%q",
@@ -943,6 +975,22 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 			}
 			seenScmCls = scmConf.Class
 			seenScmClsIdx = idx
+
+			if seenScmHugeIdx != -1 {
+				switch {
+				case scmConf.Scm.DisableHugepages == nil && seenScmHuge == nil:
+				case scmConf.Scm.DisableHugepages != nil && seenScmHuge == nil:
+					return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+				case scmConf.Scm.DisableHugepages == nil && seenScmHuge != nil:
+					return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+				case *scmConf.Scm.DisableHugepages != *seenScmHuge:
+					log.Debugf("scm_hugepages_disabled entry %v in %d doesn't match %d",
+						*scmConf.Scm.DisableHugepages, idx, seenScmHugeIdx)
+					return FaultConfigScmDiffHugeEnabled(idx, seenScmHugeIdx)
+				}
+			}
+			seenScmHuge = scmConf.Scm.DisableHugepages
+			seenScmHugeIdx = idx
 		}
 
 		bdevs := engine.Storage.GetBdevs()
@@ -1083,4 +1131,21 @@ func (cfg *Server) GetBdevConfigs() (bdevCfgs storage.TierConfigs) {
 	}
 
 	return
+}
+
+// HasPMem returns true if any engine storage config contains a DCPM-class SCM-tier.
+func (cfg *Server) HasPMem() bool {
+	if cfg == nil {
+		return false
+	}
+
+	for _, engineCfg := range cfg.Engines {
+		for _, scmCfg := range engineCfg.Storage.Tiers.ScmConfigs() {
+			if scmCfg.Class == storage.ClassDcpm {
+				return true
+			}
+		}
+	}
+
+	return false
 }

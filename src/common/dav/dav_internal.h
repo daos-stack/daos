@@ -69,6 +69,7 @@ typedef struct dav_obj {
 static inline
 struct dav_tx *utx2wtx(struct umem_wal_tx *utx)
 {
+	D_ASSERT(utx != NULL);
 	return (struct dav_tx *)&utx->utx_private;
 }
 

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ package mgmt;
 option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
 
 import "shared/event.proto";
+import "shared/check_engine.proto";
 import "mgmt/pool.proto";
 import "mgmt/check.proto";
 import "mgmt/cont.proto";
@@ -56,6 +57,16 @@ service MgmtSvc {
 	rpc PoolSetProp(PoolSetPropReq) returns (PoolSetPropResp) {}
 	// Get a DAOS pool property list.
 	rpc PoolGetProp(PoolGetPropReq) returns (PoolGetPropResp) {}
+	// Read the pool's CA bundle.
+	rpc PoolGetCA(PoolGetCAReq) returns (PoolGetCAResp) {}
+	// Append a CA certificate to the pool's CA bundle.
+	rpc PoolAddCA(PoolAddCAReq) returns (PoolAddCAResp) {}
+	// Remove one or all CA certificates from the pool's CA bundle.
+	rpc PoolRemoveCA(PoolRemoveCAReq) returns (PoolRemoveCAResp) {}
+	// Read the per-CN revocation watermarks for the pool.
+	rpc PoolGetCertWatermarks(PoolGetCertWatermarksReq) returns (PoolGetCertWatermarksResp) {}
+	// Advance the cert revocation watermark for a given CN.
+	rpc PoolRevokeClient(PoolRevokeClientReq) returns (PoolRevokeClientResp) {}
 	// Fetch the Access Control List for a DAOS pool.
 	rpc PoolGetACL(GetACLReq) returns (ACLResp) {}
 	// Overwrite the Access Control List for a DAOS pool with a new one.
@@ -64,6 +75,14 @@ service MgmtSvc {
 	rpc PoolUpdateACL(ModifyACLReq) returns (ACLResp) {}
 	// Delete an entry from a DAOS pool's Access Control List.
 	rpc PoolDeleteACL(DeleteACLReq) returns (ACLResp) {}
+	// PoolUpgrade upgrades a DAOS pool.
+	rpc PoolUpgrade(PoolUpgradeReq) returns (DaosResp) {}
+	// PoolRebuildStart starts an interactive rebuild on a DAOS pool.
+	rpc PoolRebuildStart(PoolRebuildStartReq) returns (DaosResp) {}
+	// PoolRebuildStop stops an interactive rebuild on a DAOS pool.
+	rpc PoolRebuildStop(PoolRebuildStopReq) returns (DaosResp) {}
+	// PoolSelfHealEval evaluates self_heal system property on a DAOS pool.
+	rpc PoolSelfHealEval(PoolSelfHealEvalReq) returns (DaosResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
@@ -73,37 +92,45 @@ service MgmtSvc {
 	// Change the owner of a DAOS container
 	rpc ContSetOwner(ContSetOwnerReq) returns (DaosResp) {}
 	// Query DAOS system status
-	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {}
+	rpc SystemQuery(SystemQueryReq) returns (SystemQueryResp) {}
 	// Stop DAOS system (shutdown data-plane instances)
-	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {}
+	rpc SystemStop(SystemStopReq) returns (SystemStopResp) {}
 	// Start DAOS system (restart data-plane instances)
-	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {}
+	rpc SystemStart(SystemStartReq) returns (SystemStartResp) {}
 	// Exclude DAOS ranks
-	rpc SystemExclude(SystemExcludeReq) returns(SystemExcludeResp) {}
+	rpc SystemExclude(SystemExcludeReq) returns (SystemExcludeResp) {}
 	// Drain or reintegrate DAOS ranks from all pools
 	rpc SystemDrain(SystemDrainReq) returns (SystemDrainResp) {}
+	// Perform interactive rebuild operation on all DAOS pools
+	rpc SystemRebuildManage(SystemRebuildManageReq) returns (SystemRebuildManageResp) {}
+	// Evaluate self-heal system property and perform updates based on its value.
+	rpc SystemSelfHealEval(SystemSelfHealEvalReq) returns (DaosResp) {}
 	// Erase DAOS system database prior to reformat
-	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
+	rpc SystemErase(SystemEraseReq) returns (SystemEraseResp) {}
 	// Clean up leaked resources for a given node
-	rpc SystemCleanup(SystemCleanupReq) returns(SystemCleanupResp){}
+	rpc SystemCleanup(SystemCleanupReq) returns (SystemCleanupResp) {}
 	// Enable system check mode
-	rpc SystemCheckEnable(CheckEnableReq) returns(DaosResp){}
+	rpc SystemCheckEnable(CheckEnableReq) returns (DaosResp) {}
 	// Disable system check mode
-	rpc SystemCheckDisable(CheckDisableReq) returns(DaosResp){}
+	rpc SystemCheckDisable(CheckDisableReq) returns (DaosResp) {}
 	// Initiate a system check
-	rpc SystemCheckStart(CheckStartReq) returns(CheckStartResp){}
+	rpc SystemCheckStart(CheckStartReq) returns (CheckStartResp) {}
 	// Stop a system check
-	rpc SystemCheckStop(CheckStopReq) returns(CheckStopResp){}
+	rpc SystemCheckStop(CheckStopReq) returns (CheckStopResp) {}
 	// Query a system check
-	rpc SystemCheckQuery(CheckQueryReq) returns(CheckQueryResp){}
+	rpc SystemCheckQuery(CheckQueryReq) returns (CheckQueryResp) {}
 	// Set system check properties
-	rpc SystemCheckSetPolicy(CheckSetPolicyReq) returns(DaosResp){}
+	rpc SystemCheckSetPolicy(CheckSetPolicyReq) returns (DaosResp) {}
 	// Query system check properties
-	rpc SystemCheckGetPolicy(CheckGetPolicyReq) returns(CheckGetPolicyResp){}
+	rpc SystemCheckGetPolicy(CheckGetPolicyReq) returns (CheckGetPolicyResp) {}
 	// Send the desired action to repair an inconsistency.
-	rpc SystemCheckRepair(CheckActReq) returns(CheckActResp){}
-	// PoolUpgrade queries a DAOS pool.
-	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
+	rpc SystemCheckRepair(CheckActReq) returns (CheckActResp) {}
+	// Report on checker results for an individual rank.
+	rpc SystemCheckEngineReport(shared.CheckReportReq) returns (shared.CheckReportResp) {}
+	// Register a pool with the MS from the check leader.
+	rpc SystemCheckRegPool(shared.CheckRegPoolReq) returns (shared.CheckRegPoolResp) {}
+	// De-register a pool with the MS from the check leader.
+	rpc SystemCheckDeregPool(shared.CheckDeregPoolReq) returns (shared.CheckDeregPoolResp) {}
 	// Set a system attribute or attributes.
 	rpc SystemSetAttr(SystemSetAttrReq) returns (DaosResp) {}
 	// Get a system attribute or attributes.
@@ -113,6 +140,8 @@ service MgmtSvc {
 	// Get a system property or properties.
 	rpc SystemGetProp(SystemGetPropReq) returns (SystemGetPropResp) {}
 
+	// Forward a request to the check leader while in checker mode.
+	rpc CheckLeaderDrpc(CheckLeaderReq) returns (CheckLeaderResp) {}
 
 	// Fault injection handlers are only implemented in non-release builds.
 	// FaultInjectReport injects a checker report.

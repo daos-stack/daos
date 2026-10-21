@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +24,8 @@
  * CPU schedule efficiency, and so on.
  */
 #define DTX_THRESHOLD_COUNT		(1 << 9)
+
+#define DTX_PIGGYBACK_COUNT             (1 << 6)
 
 /* The time (in second) threshold for batched DTX commit. */
 #define DTX_COMMIT_THRESHOLD_AGE	10
@@ -256,7 +258,7 @@ daos_is_zero_dti(const struct dtx_id *dti)
 }
 
 static inline bool
-daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
+daos_dti_equal(const struct dtx_id *dti0, const struct dtx_id *dti1)
 {
 	return memcmp(dti0, dti1, sizeof(*dti0)) == 0;
 }
@@ -286,15 +288,16 @@ dtx_coll_mbs_rankrange(struct dtx_memberships *mbs)
 #define DP_DTI(dti)	DP_UUID((dti)->dti_uuid), (dti)->dti_hlc
 
 enum daos_ops_intent {
-	DAOS_INTENT_DEFAULT		= 0, /* fetch/enumerate/query */
-	DAOS_INTENT_PURGE		= 1, /* purge/aggregation */
-	DAOS_INTENT_UPDATE		= 2, /* write/insert */
-	DAOS_INTENT_PUNCH		= 3, /* punch/delete */
-	DAOS_INTENT_MIGRATION		= 4, /* for migration related scan */
-	DAOS_INTENT_CHECK		= 5, /* check aborted or not */
-	DAOS_INTENT_KILL		= 6, /* delete object/key */
-	DAOS_INTENT_IGNORE_NONCOMMITTED	= 7, /* ignore non-committed DTX. */
-	DAOS_INTENT_DISCARD		= 8, /* discard data */
+	DAOS_INTENT_DEFAULT             = 0, /* fetch/enumerate/query */
+	DAOS_INTENT_PURGE               = 1, /* purge/aggregation */
+	DAOS_INTENT_UPDATE              = 2, /* write/insert */
+	DAOS_INTENT_PUNCH               = 3, /* punch/delete */
+	DAOS_INTENT_MIGRATION           = 4, /* for migration related scan */
+	DAOS_INTENT_CHECK               = 5, /* check aborted or not */
+	DAOS_INTENT_KILL                = 6, /* delete object/key */
+	DAOS_INTENT_IGNORE_NONCOMMITTED = 7, /* ignore non-committed DTX. */
+	DAOS_INTENT_DISCARD             = 8, /* discard data */
+	DAOS_INTENT_MARK                = 9, /* mark target (obj/dkey/akey), such as corruption */
 };
 
 /**

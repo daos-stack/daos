@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +8,8 @@
 package security
 
 import (
+	"slices"
+
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -34,8 +37,6 @@ var methodAuthorizations = map[string][]Component{
 	"/ctl.CtlSvc/StorageNvmeAddDevice":       {ComponentAdmin},
 	"/ctl.CtlSvc/NetworkScan":                {ComponentAdmin},
 	"/ctl.CtlSvc/CollectLog":                 {ComponentAdmin},
-	"/ctl.CtlSvc/FirmwareQuery":              {ComponentAdmin},
-	"/ctl.CtlSvc/FirmwareUpdate":             {ComponentAdmin},
 	"/ctl.CtlSvc/SmdQuery":                   {ComponentAdmin},
 	"/ctl.CtlSvc/SmdManage":                  {ComponentAdmin},
 	"/ctl.CtlSvc/SetEngineLogMasks":          {ComponentAdmin},
@@ -43,31 +44,43 @@ var methodAuthorizations = map[string][]Component{
 	"/ctl.CtlSvc/StopRanks":                  {ComponentServer},
 	"/ctl.CtlSvc/ResetFormatRanks":           {ComponentServer},
 	"/ctl.CtlSvc/StartRanks":                 {ComponentServer},
+	"/ctl.CtlSvc/CheckEngineRepair":          {ComponentServer},
 	"/mgmt.MgmtSvc/Join":                     {ComponentServer},
 	"/mgmt.MgmtSvc/ClusterEvent":             {ComponentServer},
 	"/mgmt.MgmtSvc/LeaderQuery":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemQuery":              {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemErase":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemErase":              {ComponentAdmin, ComponentServer},
 	"/mgmt.MgmtSvc/SystemStart":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemStop":               {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemExclude":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemDrain":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemRebuildManage":      {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemSelfHealEval":       {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolCreate":               {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolDestroy":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolQuery":                {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolQueryTarget":          {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolSetProp":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolGetProp":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolGetCA":                {ComponentAdmin, ComponentAgent},
+	"/mgmt.MgmtSvc/PoolAddCA":                {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolRemoveCA":             {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolGetCertWatermarks":    {ComponentAdmin, ComponentAgent},
+	"/mgmt.MgmtSvc/PoolRevokeClient":         {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolGetACL":               {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolOverwriteACL":         {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolUpdateACL":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolDeleteACL":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolExclude":              {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolDrain":                {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolDrain":                {ComponentAdmin, ComponentServer},
+	"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin, ComponentServer},
 	"/mgmt.MgmtSvc/PoolEvict":                {ComponentAdmin, ComponentAgent},
 	"/mgmt.MgmtSvc/PoolExtend":               {ComponentAdmin},
-	"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAgent},
+	"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolRebuildStart":         {ComponentAdmin, ComponentServer},
+	"/mgmt.MgmtSvc/PoolRebuildStop":          {ComponentAdmin, ComponentServer},
+	"/mgmt.MgmtSvc/PoolSelfHealEval":         {ComponentAdmin, ComponentServer},
+	"/mgmt.MgmtSvc/GetAttachInfo":            {ComponentAdmin, ComponentAgent},
 	"/mgmt.MgmtSvc/ListPools":                {ComponentAdmin},
 	"/mgmt.MgmtSvc/ListContainers":           {ComponentAdmin},
 	"/mgmt.MgmtSvc/ContSetOwner":             {ComponentAdmin},
@@ -80,14 +93,17 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/SystemCheckSetPolicy":     {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCheckGetPolicy":     {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCheckRepair":        {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCheckEngineReport":  {ComponentServer},
+	"/mgmt.MgmtSvc/SystemCheckRegPool":       {ComponentServer},
+	"/mgmt.MgmtSvc/SystemCheckDeregPool":     {ComponentServer},
+	"/mgmt.MgmtSvc/CheckLeaderDrpc":          {ComponentServer},
 	"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemSetAttr":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemGetAttr":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemSetProp":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemGetProp":            {ComponentAdmin, ComponentServer},
 	"/RaftTransport/AppendEntries":           {ComponentServer},
 	"/RaftTransport/AppendEntriesPipeline":   {ComponentServer},
 	"/RaftTransport/RequestVote":             {ComponentServer},
@@ -121,13 +137,7 @@ func (c Component) HasAccess(FullMethod string) bool {
 		return false
 	}
 
-	for _, comp := range compList {
-		if c == comp {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(compList, c)
 }
 
 // CommonNameToComponent returns the correct component based on the CommonName

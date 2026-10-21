@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +17,8 @@
 #include <daos_types.h>
 #include <daos/pool.h>
 #include "svc.pb-c.h"
+
+#define DAOS_DEFAULT_SYS_NAME "daos_server"
 
 extern bool d_dynamic_ctx_g;
 
@@ -89,6 +91,6 @@ void dc_put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *
 int dc_mgmt_cache_attach_info(const char *name);
 void dc_mgmt_drop_attach_info(void);
 int
-    dc_mgmt_get_iface(char *iface);
+dc_mgmt_get_iface(char *iface, size_t iface_size);
 int dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *owner_uid);
 #endif

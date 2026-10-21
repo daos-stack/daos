@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -167,6 +167,15 @@ func FaultConfigScmDiffClass(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
+func FaultConfigScmDiffHugeEnabled(curIdx, seenIdx int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigScmHugeEnabled,
+		fmt.Sprintf("the scm_hugepages_disabled in engine %d is different from engine %d",
+			curIdx, seenIdx),
+		"ensure that each I/O Engine has the same setting for this parameter and restart",
+	)
+}
+
 func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigOverlappingBdevDeviceList,
@@ -271,6 +280,25 @@ func FaultConfigEngineNUMAImbalance(nodeMap map[int]int) *fault.Fault {
 		code.ServerConfigEngineNUMAImbalance,
 		fmt.Sprintf("uneven distribution of engines across NUMA nodes %v", nodeMap),
 		"distribute engines evenly across numa-nodes in server config file and restart server",
+	)
+}
+
+// FaultConfigBadControlInterface creates a fault for an invalid control plane network interface.
+func FaultConfigBadControlInterface(iface string, err error) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigBadControlInterface,
+		fmt.Sprintf("control_iface %q is invalid: %s", iface, err),
+		"update the 'control_iface' parameter with a valid network interface and restart",
+	)
+}
+
+// FaultConfigControlInterfaceMismatch creates a fault when the control interface address
+// doesn't match the configured MS replica address.
+func FaultConfigControlInterfaceMismatch(ifaceAddr, replicaAddr string) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigControlInterfaceMismatch,
+		fmt.Sprintf("control_iface address %s doesn't match configured MS replica address %s", ifaceAddr, replicaAddr),
+		"ensure 'control_iface' specifies an interface with an address matching this server's entry in 'mgmt_svc_replicas'",
 	)
 }
 

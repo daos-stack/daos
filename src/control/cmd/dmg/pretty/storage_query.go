@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -264,6 +266,9 @@ func printTierUsageTable(hsm control.HostStorageMap, tierRoles []storage.BdevRol
 	sort.Ints(ranks)
 
 	for _, rank := range ranks {
+		if rank == int(ranklist.NilRank) {
+			continue
+		}
 		table = append(table,
 			getRankRolesRow(rank, tierRoles, rankRoleDevs[rank], showUsable))
 	}

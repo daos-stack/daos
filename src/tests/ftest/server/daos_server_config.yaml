@@ -171,3 +171,23 @@ server_config_val: !mux
       - "targets"
       - -1
       - "FAIL"
+  control_iface_invalid:
+    config_val:
+      - "control_iface"
+      - "nonexistent_interface_12345"
+      - "FAIL"
+  # Loopback interface is valid but its address (127.0.0.1) won't match the
+  # MS replica address derived from the test node's hostname, causing startup
+  # to fail with an address mismatch error.
+  control_iface_loopback_mismatch:
+    config_val:
+      - "control_iface"
+      - "lo"
+      - "FAIL"
+  # Use the auto-detected control interface (from DAOS_TEST_CONTROL_IFACE) which
+  # has an IP matching the hostname, so it should work with the MS replica address.
+  control_iface_valid:
+    config_val:
+      - "control_iface"
+      - "auto"
+      - "PASS"

@@ -166,9 +166,9 @@ class ContRedundancyFactor(RebuildTestBase):
             # Verify the rank to be excluded has at least one object
             self.verify_rank_has_objects()
             # Start the rebuild process
-            self.start_rebuild_cont_rf(rd_fac)
+            self.start_rebuild_cont_rf(rf_match.group(1))
             # Execute the test steps during rebuild
-            self.execute_during_rebuild_cont_rf(rd_fac, expect_cont_status)
+            self.execute_during_rebuild_cont_rf(rf_match.group(1), expect_cont_status)
             # Refresh local pool and container
             self.log.info("==>(6)Check for pool and container info after rebuild.")
             self.pool.check_pool_info()

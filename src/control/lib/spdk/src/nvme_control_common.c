@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -137,6 +138,8 @@ free_ctrlr_fields(struct nvme_ctrlr_t *ctrlr)
 		free(ctrlr->vendor_id);
 	if (ctrlr->pci_type != NULL)
 		free(ctrlr->pci_type);
+	if (ctrlr->pci_addr != NULL)
+		free(ctrlr->pci_addr);
 }
 
 void
@@ -349,6 +352,7 @@ populate_dev_health(struct nvme_stats *stats,
 	stats->read_only_warn = cw.bits.read_only ? true : false;
 	stats->volatile_mem_warn = cw.bits.volatile_memory_backup ?
 				   true : false;
+	stats->percentage_used      = hp->percentage_used;
 
 	/* Intel Smart Information Attributes */
 	if ((cdata == NULL) || (cdata->vid != SPDK_PCI_VID_INTEL))
@@ -445,7 +449,7 @@ populate_dev_health(struct nvme_stats *stats,
 
 void
 _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
-	 socket_id_getter get_socket_id)
+	 socket_id_getter get_socket_id, pci_type_getter get_pci_type)
 {
 	struct ctrlr_entry			*ctrlr_entry;
 	const struct spdk_nvme_ctrlr_data	*cdata;
@@ -499,8 +503,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 		ctrlr_tmp->socket_id = get_socket_id(pci_dev);
 
-		pci_type = spdk_pci_device_get_type(pci_dev);
-		free(pci_dev);
+		pci_type            = get_pci_type(pci_dev);
 		ctrlr_tmp->pci_type = strndup(pci_type, NVME_DETAIL_BUFLEN);
 		if (ctrlr_tmp->pci_type == NULL) {
 			rc = -NVMEC_ERR_GET_PCI_TYPE;
@@ -555,7 +558,7 @@ collect(void)
 
 	ret = init_ret();
 	_collect(ret, &copy_ctrlr_data, &spdk_nvme_ctrlr_get_pci_device,
-		 &spdk_pci_device_get_socket_id);
+		 &spdk_pci_device_get_numa_id, &spdk_pci_device_get_type);
 
 	return ret;
 }

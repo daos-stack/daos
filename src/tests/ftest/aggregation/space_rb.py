@@ -1,5 +1,6 @@
 """
   (C) Copyright 2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -53,6 +54,7 @@ class SpaceRb(IorTestBase):
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", namespace)
         manager.assign_processes(ppn=ppn)
+        manager.assign_environment(ior_cmd.env)
         error_msg = None
         exception_detected = False
 
@@ -65,7 +67,7 @@ class SpaceRb(IorTestBase):
             error_msg = str(error)
         if not exception_detected:
             errors.append(f"IOR {job_num} didn't cause an error!")
-        exp_msg = "No space left on device"
+        exp_msg = "DER_NOSPACE"
         if exp_msg not in error_msg:
             errors.append(f"'{exp_msg}' is not in the error message of IOR {job_num}!")
 
@@ -96,7 +98,11 @@ class SpaceRb(IorTestBase):
         # 2. Call dmg pool get-prop and verify that Rebuild space ratio (space_rb) is 50%.
         self.log_step(
             "Call dmg pool get-prop and verify that Rebuild space ratio (space_rb) is 50%.")
-        expected_space_rb = int(self.params.get("properties", '/run/pool/*').split(":")[1])
+        expected_space_rb = 0
+        for pool_property in self.params.get("properties", "/run/pool/*", "").split(","):
+            if pool_property.startswith("space_rb:"):
+                expected_space_rb = int(pool_property.split(":")[1])
+                break
         self.verify_space_rb_property(pool=pool_1, expected_space_rb=expected_space_rb)
 
         # 3. Run IOR to fill 50% of SCM.

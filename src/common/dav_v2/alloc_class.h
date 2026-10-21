@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /* Copyright 2016-2023, Intel Corporation */
+/* (C) Copyright 2025 Hewlett Packard Enterprise Development LP */
 
 /*
  * alloc_class.h -- internal definitions for allocation classes
@@ -41,7 +42,8 @@ struct alloc_class {
 	struct run_descriptor rdsc;
 };
 
-struct alloc_class_collection *alloc_class_collection_new(void);
+struct alloc_class_collection                     *
+alloc_class_collection_new(bool evictable_mb);
 void alloc_class_collection_delete(struct alloc_class_collection *ac);
 
 struct alloc_class *alloc_class_by_run(

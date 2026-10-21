@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# (C) Copyright 2025 Google LLC
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -15,6 +16,8 @@ set -e
 arch=$(uname -i)
 
 apt_get_install_args="${1:-}"
+
+: "${PYTHON_VERSION:=3}"
 
 # shellcheck disable=SC2086
 apt-get install ${apt_get_install_args} \
@@ -36,6 +39,7 @@ apt-get install ${apt_get_install_args} \
     libcunit1-dev \
     libdaxctl-dev \
     libfuse3-dev \
+    libgoogle-perftools-dev \
     libhwloc-dev \
     libibverbs-dev \
     libjson-c-dev \
@@ -49,10 +53,12 @@ apt-get install ${apt_get_install_args} \
     librdmacm-dev \
     libssl-dev \
     libtool-bin \
+    libucx-dev \
     libunwind-dev \
     libyaml-dev \
     locales \
     maven \
+    nasm \
     numactl \
     openjdk-8-jdk \
     pandoc \
@@ -60,11 +66,12 @@ apt-get install ${apt_get_install_args} \
     pciutils \
     pkg-config \
     ruby \
-    python3-dev \
-    python3-venv \
+    python${PYTHON_VERSION}-dev \
+    python${PYTHON_VERSION}-venv \
     sudo \
     uuid-dev \
     valgrind \
+    libncurses-dev \
     yasm
 
 sudo gem install fpm
@@ -73,5 +80,5 @@ sudo gem install fpm
 if [ "$arch" = x86_64 ]; then
     # shellcheck disable=SC2086
     apt-get install ${apt_get_install_args} \
-        libipmctl-dev
+        ipmctl
 fi

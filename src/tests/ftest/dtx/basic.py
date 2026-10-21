@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,7 +9,6 @@ import traceback
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
 from test_utils_container import add_container
-from test_utils_pool import add_pool
 
 
 class BasicTxTest(TestWithServers):
@@ -35,7 +35,7 @@ class BasicTxTest(TestWithServers):
         """
         # initialize a python pool object then create the underlying
         # daos storage and connect to the pool
-        pool = add_pool(self)
+        pool = self.get_pool()
 
         # create a container
         container = add_container(self, pool)

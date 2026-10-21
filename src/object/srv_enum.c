@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +16,9 @@
 #include <daos/object.h>
 
 #include "obj_internal.h"
+
+#define RC_ENUM_OVERFLOW 1
+#define RC_ENUM_KEY2BIG  2
 
 static int
 fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
@@ -172,7 +176,7 @@ static int
 fill_key_csum(vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *arg)
 {
 	struct daos_csummer	*csummer = arg->csummer;
-	d_iov_t			*csum_iov = &arg->csum_iov;
+	d_iov_t                 *csum_iov = &arg->oea_csum_iov;
 	struct dcs_csum_info	*csum_info;
 	int			 rc;
 
@@ -230,7 +234,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		arg->kds_len++;
 		arg->kds[0].kd_key_len += total_size;
 		if (arg->kds_len >= kds_cap)
-			return 1;
+			return RC_ENUM_OVERFLOW;
 		return 0;
 	}
 
@@ -243,9 +247,9 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		    (arg->chk_key2big && arg->kds_len <= 2)) {
 			if (arg->kds[0].kd_key_len < total_size)
 				arg->kds[0].kd_key_len = total_size;
-			return -DER_KEY2BIG;
+			return RC_ENUM_KEY2BIG;
 		} else {
-			return 1;
+			return RC_ENUM_OVERFLOW;
 		}
 	}
 
@@ -318,37 +322,6 @@ entry_is_partial_extent(const vos_iter_entry_t *key_ent)
 	D_ASSERT(key_ent != NULL);
 
 	return !recx_eq(&key_ent->ie_orig_recx, &key_ent->ie_recx);
-}
-
-static int
-csummer_verify_recx(struct daos_csummer *csummer, d_iov_t *data_to_verify,
-		    daos_recx_t *recx, daos_size_t rsize,
-		    struct dcs_csum_info *csum_info)
-{
-	int			rc;
-	struct dcs_iod_csums	iod_csum = {0};
-	daos_iod_t		iod = {0};
-	d_sg_list_t		sgl = {0};
-
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_recxs = recx;
-	iod.iod_nr = 1;
-	iod.iod_size = rsize;
-
-	sgl.sg_iovs = data_to_verify;
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-
-	iod_csum.ic_nr = 1;
-	iod_csum.ic_data = csum_info;
-
-	rc = daos_csummer_verify_iod(csummer, &iod, &sgl,
-				     &iod_csum, NULL, 0, NULL);
-	if (rc != 0)
-		D_ERROR("Corruption found for recx "DF_RECX"\n",
-			DP_RECX(*recx));
-
-	return rc;
 }
 
 static int
@@ -467,15 +440,13 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct ds_obj_enum_arg *arg,
 			return rc;
 		}
 
-		rc = csummer_verify_recx(csummer,
-					 &data_to_verify,
-					 &ent_to_verify.ie_orig_recx,
-					 ent_to_verify.ie_rsize,
-					 &ent_to_verify.ie_csum);
-
+		rc = daos_csummer_verify_value(csummer, &ent_to_verify.ie_orig_recx,
+					       ent_to_verify.ie_rsize, &data_to_verify,
+					       &ent_to_verify.ie_csum);
 		D_FREE(data_to_verify.iov_buf);
 		if (rc != 0) {
-			D_ERROR("Found corruption!\n");
+			D_ERROR("Found corrupted recx " DF_RECX "\n",
+				DP_RECX(ent_to_verify.ie_orig_recx));
 			return rc;
 		}
 
@@ -487,14 +458,14 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct ds_obj_enum_arg *arg,
 			return rc;
 		}
 
-		rc = fill_data_csum(new_csum_info, &arg->csum_iov);
+		rc = fill_data_csum(new_csum_info, &arg->oea_csum_iov);
 		daos_csummer_free_ci(csummer, &new_csum_info);
 		if (rc != 0) {
 			D_ERROR("Issue filling csum data\n");
 			return rc;
 		}
 	} else {
-		rc = fill_data_csum(&ent->ie_csum, &arg->csum_iov);
+		rc = fill_data_csum(&ent->ie_csum, &arg->oea_csum_iov);
 		if (rc != 0) {
 			D_ERROR("Issue filling csum data\n");
 			return rc;
@@ -637,7 +608,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		arg->kds_len++;
 		arg->kds[0].kd_key_len += size;
 		if (arg->kds_len >= arg->kds_cap)
-			return 1;
+			return RC_ENUM_OVERFLOW;
 		return 0;
 	}
 
@@ -654,9 +625,9 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 			    (arg->kds_len < 3 || (arg->kds_len == 3 && !bump_kds_len))) {
 				if (arg->kds[0].kd_key_len < size)
 					arg->kds[0].kd_key_len = size;
-				D_GOTO(out, rc = -DER_KEY2BIG);
+				D_GOTO(out, rc = RC_ENUM_KEY2BIG);
 			}
-			D_GOTO(out, rc = 1);
+			D_GOTO(out, rc = RC_ENUM_OVERFLOW);
 		} else {
 			insert_new_rec(arg, key_ent, type, iod_size, &rec);
 		}
@@ -790,5 +761,10 @@ ds_obj_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 		     arg, dth);
 
 	D_DEBUG(DB_IO, "enum type %d rc %d\n", type, rc);
+
+	if (rc == RC_ENUM_KEY2BIG) {
+		rc = -DER_KEY2BIG;
+	}
+
 	return rc;
 }

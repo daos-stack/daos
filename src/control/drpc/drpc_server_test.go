@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -60,6 +61,7 @@ func TestSession_ProcessIncomingMessage_WriteError(t *testing.T) {
 
 	socket := newMockConn()
 	socket.WriteOutputError = errors.New("mock write error")
+	socket.ReadOutputBytes = testChunks(getCallBytes(t, 1, 1, &mockMethod{}))
 	s := NewSession(socket, NewModuleService(log))
 
 	err := s.ProcessIncomingMessage(test.Context(t))
@@ -77,12 +79,8 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 		Module:   1,
 		Method:   2,
 	}
-	callBytes, err := proto.Marshal(call)
-	if err != nil {
-		t.Fatalf("failed to create test call: %v", err)
-	}
-	socket.ReadOutputBytes = callBytes
-	socket.ReadOutputNumBytes = len(callBytes)
+	callBytes := getCallBytes(t, 123, 1, &mockMethod{id: 2})
+	socket.ReadOutputBytes = testChunks(callBytes)
 
 	mod := newTestModule(call.Module)
 	svc := NewModuleService(log)
@@ -90,12 +88,16 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 
 	s := NewSession(socket, svc)
 
-	if err = s.ProcessIncomingMessage(test.Context(t)); err != nil {
+	if err := s.ProcessIncomingMessage(test.Context(t)); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
+	writeChunk, err := getChunkFromBuf(socket.WriteInputBytes[0])
+	if err != nil {
+		t.Fatal(err)
+	}
 	resp := &Response{}
-	if err := proto.Unmarshal(socket.WriteInputBytes, resp); err != nil {
+	if err := proto.Unmarshal(writeChunk.dataSlice(), resp); err != nil {
 		t.Fatalf("bytes written to socket weren't a Response: %v", err)
 	}
 
@@ -282,35 +284,51 @@ func TestServer_RegisterModule(t *testing.T) {
 	}
 }
 
-func TestServer_Listen_AcceptError(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
+func TestDrpc_DomainSocketServer_Listen(t *testing.T) {
+	for name, tc := range map[string]struct {
+		newMockListener    func(t *testing.T) *mockListener
+		expAcceptCallCount int
+		expNumSessions     int
+	}{
+		"accept error": {
+			newMockListener: func(t *testing.T) *mockListener {
+				lis := newMockListener(t)
+				lis.acceptErr = errors.New("mock accept error")
+				return lis
+			},
+			expAcceptCallCount: 1, // return after first error
+		},
+		"accept multiple": {
+			newMockListener: func(t *testing.T) *mockListener {
+				lis := newMockListener(t)
+				lis.setNumConnsToAccept(3)
+				return lis
+			},
+			expAcceptCallCount: 4, // accepted connections + final error to exit listener
+			expNumSessions:     3,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.MustLogContext(t)
+			log := logging.FromContext(ctx)
 
-	lis := newMockListener()
-	lis.acceptErr = errors.New("mock accept error")
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
-	dss.listener = lis
+			dss, err := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			lis := tc.newMockListener(t)
+			dss.listener = lis
 
-	dss.Listen(test.Context(t)) // should return instantly
+			dss.Listen(ctx)
 
-	test.AssertEqual(t, lis.acceptCallCount, 1, "should have returned after first error")
-}
+			// Time for session goroutines to settle
+			time.Sleep(500 * time.Microsecond)
 
-func TestServer_Listen_AcceptConnection(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	lis := newMockListener()
-	lis.setNumConnsToAccept(3)
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
-	dss.listener = lis
-
-	dss.Listen(test.Context(t)) // will return when error is sent
-
-	test.AssertEqual(t, lis.acceptCallCount, lis.acceptNumConns+1,
-		"should have returned after listener errored")
-	test.AssertEqual(t, len(dss.sessions), lis.acceptNumConns,
-		"server should have made connections into sessions")
+			test.AssertEqual(t, tc.expAcceptCallCount, lis.acceptCallCount, "")
+			test.AssertEqual(t, tc.expNumSessions, dss.GetNumSessions(),
+				"server should have made connections into sessions")
+		})
+	}
 }
 
 func TestServer_ListenSession_Error(t *testing.T) {

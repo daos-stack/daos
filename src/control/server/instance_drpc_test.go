@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,7 +26,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/engine"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
@@ -90,10 +89,8 @@ func TestEngineInstance_CallDrpc(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			trc := engine.TestRunnerConfig{}
-			trc.Running.Store(!tc.notStarted)
-			runner := engine.NewTestRunner(&trc, engine.MockConfig())
-			instance := NewEngineInstance(log, nil, nil, runner, nil)
+			instance := NewEngineInstance(log, nil, nil, nil, nil)
+			setupTestEngine(t, instance, 0, tc.notStarted)
 			instance.ready.Store(!tc.notReady)
 
 			if !tc.noSocket {
@@ -188,11 +185,8 @@ func TestEngineInstance_CallDrpc_Parallel(t *testing.T) {
 	}(t)
 
 	t.Log("setting up engine...")
-	trc := engine.TestRunnerConfig{}
-	trc.Running.Store(true)
-	runner := engine.NewTestRunner(&trc, engine.MockConfig())
-	instance := NewEngineInstance(log, nil, nil, runner, nil)
-	instance.ready.Store(true)
+	instance := NewEngineInstance(log, nil, nil, nil, nil)
+	setupTestEngine(t, instance, 0)
 
 	instance.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
 		t.Log("fetching drpc client")

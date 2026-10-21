@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -416,12 +416,13 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint64_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth)
 {
-	struct vos_dtx_act_ent	**daes = NULL;
-	struct vos_dtx_cmt_ent	**dces = NULL;
-	struct vos_ts_set	*ts_set;
-	struct vos_container	*cont;
-	struct vos_object	*obj = NULL;
-	bool			 punch_obj = false;
+	struct vos_dtx_act_ent **daes = NULL;
+	bool                    *cmts = NULL;
+	struct vos_ts_set       *ts_set;
+	struct vos_container    *cont;
+	struct vos_object       *obj        = NULL;
+	bool                     punch_obj  = false;
+	bool                     tx_started = false;
 	uint64_t		 hold_flags;
 	daos_epoch_range_t	 epr = { 0 };
 	daos_epoch_t		 bound;
@@ -489,13 +490,25 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	hold_flags = (flags & VOS_OF_COND_PUNCH) ? 0 : VOS_OBJ_CREATE;
 	hold_flags |= VOS_OBJ_VISIBLE;
 
-	rc = vos_obj_hold(cont, oid, &epr, bound, hold_flags, DAOS_INTENT_PUNCH, &obj, ts_set);
+	rc = vos_obj_acquire(cont, oid, true, &obj);
 	if (rc != 0)
 		goto reset;
 
-	rc = vos_tx_begin(dth, vos_cont2umm(cont), cont->vc_pool->vp_sysdb);
+	if (!(hold_flags & VOS_OBJ_CREATE) && (obj->obj_df == NULL)) {
+		rc = vos_ilog_ts_add(ts_set, NULL, &oid, sizeof(oid));
+		D_ASSERT(rc == 0);
+
+		rc = -DER_NONEXIST;
+		vos_obj_release(obj, 0, true);
+		obj = NULL;
+		goto reset;
+	}
+
+	rc = vos_tx_begin(dth, vos_cont2umm(cont), cont->vc_pool->vp_sysdb, obj);
 	if (rc != 0)
 		goto reset;
+
+	tx_started = true;
 
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction.
 	 *
@@ -507,12 +520,12 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (daes == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
-		if (dces == NULL)
+		D_ALLOC_ARRAY(cmts, dth->dth_dti_cos_count);
+		if (cmts == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
 
-		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					     dth->dth_dti_cos_count, 0, false, NULL, daes, dces);
+		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos, dth->dth_dti_cos_count, 0,
+					     false, NULL, daes, cmts);
 		if (rc < 0)
 			goto reset;
 		if (rc == 0)
@@ -565,18 +578,17 @@ reset:
 
 	if (rc == -DER_NONEXIST || rc == 0) {
 		vos_punch_add_missing(ts_set, dkey, akey_nr, akeys);
-		vos_ts_set_update(ts_set, epr.epr_hi);
+		if (!vos_ts_set_update(ts_set, epr.epr_hi))
+			rc = -DER_TX_RESTART;
 	}
 
 	if (rc == 0) {
-		vos_ts_set_wupdate(ts_set, epr.epr_hi);
-
-		if (dtx_is_valid_handle(dth) && dth->dth_local) {
-			rc = vos_insert_oid(dth, cont, &oid);
-		}
+		rc = vos_dtx_record_oid(dth, cont, oid);
+		if (rc == 0)
+			vos_ts_set_wupdate(ts_set, epr.epr_hi);
 	}
 
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, NULL, rc);
+	rc = vos_tx_end(cont, dth, NULL, NULL, tx_started, NULL, rc);
 	if (dtx_is_valid_handle(dth)) {
 		if (rc == 0)
 			dth->dth_cos_done = 1;
@@ -584,15 +596,15 @@ reset:
 			dth->dth_cos_done = 0;
 
 		if (daes != NULL)
-			vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
-					    false, rc != 0, false);
+			vos_dtx_post_handle(cont, daes, cmts, dth->dth_dti_cos_count, false,
+					    rc != 0, false);
 	}
 
 	if (obj != NULL)
-		vos_obj_release(obj, 0, rc != 0);
+		vos_obj_release(obj, 0, rc != 0 && tx_started);
 
 	D_FREE(daes);
-	D_FREE(dces);
+	D_FREE(cmts);
 	vos_ts_set_free(ts_set);
 
 	if (rc == 0) {
@@ -775,9 +787,8 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 
 	if (akey) { /* delete akey */
 		key = akey;
-		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
-				      dkey, 0, DAOS_INTENT_PUNCH, NULL,
-				      &toh, NULL);
+		rc  = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, 0, DAOS_INTENT_KILL,
+				       NULL, &toh, NULL);
 		if (rc) {
 			D_ERROR("open akey tree error: "DF_RC"\n", DP_RC(rc));
 			goto out_tx;
@@ -800,6 +811,128 @@ out_tx:
 	rc = umem_tx_end(umm, rc);
 out:
 	vos_obj_release(obj, 0, true);
+	return rc;
+}
+
+int
+vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, daos_unit_oid_t oid,
+			daos_key_t *dkey, unsigned int akey_nr, daos_key_t *akeys)
+{
+	daos_epoch_range_t    epr = {0, DAOS_EPOCH_MAX};
+	struct vos_object    *obj = NULL;
+	struct vos_container *cont;
+	struct umem_instance *umm;
+	daos_handle_t         toh = DAOS_HDL_INVAL;
+	int                   rc  = 0;
+	int                   i;
+	bool                  dirty      = false;
+	bool                  tx_started = false;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	umm = vos_cont2umm(cont);
+
+	if (dkey != NULL && daos_key_is_null(*dkey))
+		D_GOTO(log, rc = -DER_INVAL);
+
+	if (akey_nr != 0) {
+		if (dkey == NULL)
+			D_GOTO(log, rc = -DER_INVAL);
+
+		if (akeys == NULL)
+			D_GOTO(log, rc = -DER_INVAL);
+
+		if (vos_obj_skip_akey_supported(cont, oid))
+			D_GOTO(log, rc = -DER_NO_PERM);
+
+		for (i = 0; i < akey_nr; i++) {
+			if (daos_key_is_null(akeys[i]))
+				D_GOTO(log, rc = -DER_INVAL);
+		}
+	}
+
+restart:
+	rc = vos_obj_acquire(cont, oid, true, &obj);
+	if (rc != 0)
+		goto log;
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		goto log;
+
+	if (unlikely(vos_obj_is_evicted(obj))) {
+		D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted, needs to restart TX.\n", DP_UOID(oid));
+		umem_tx_end(umm, -DER_TX_RESTART);
+		vos_obj_release(obj, 0, false);
+		obj = NULL;
+		goto restart;
+	}
+
+	tx_started = true;
+
+	rc = vos_obj_incarnate(obj, &epr, epoch, VOS_OBJ_VISIBLE | VOS_OBJ_CREATE, DAOS_INTENT_MARK,
+			       NULL);
+	if (rc != 0)
+		goto out;
+
+	if (ilog_is_corrupted(&obj->obj_df->vo_ilog))
+		D_GOTO(out, rc = -DER_ALREADY);
+
+	rc = vos_ilog_set_flags(cont, &obj->obj_df->vo_ilog, epoch,
+				dkey == NULL ? ILOG_FLAGS_CORRUPTED : 0);
+	if (rc != 0 || dkey == NULL)
+		goto out;
+
+	rc = obj_tree_init(obj);
+	if (rc != 0)
+		goto out;
+
+	rc = vos_tree_mark_corruption(cont, obj, obj->obj_toh, VOS_BTR_DKEY, epoch, pm_ver, true,
+				      dkey, akey_nr == 0 ? NULL : &toh);
+	if (rc != 0)
+		goto out;
+
+	for (i = 0; i < akey_nr; i++) {
+		rc = vos_tree_mark_corruption(cont, obj, toh, VOS_BTR_AKEY, epoch, pm_ver, false,
+					      &akeys[i], NULL);
+		switch (rc) {
+		case 0:
+			dirty = true;
+			break;
+		case -DER_ALREADY:
+			rc = 0;
+			break;
+		default:
+			goto out;
+		}
+	}
+
+out:
+	if (rc == 0 && akey_nr != 0 && !dirty)
+		rc = -DER_ALREADY;
+
+	rc = umem_tx_end(umm, rc);
+
+log:
+	if (dkey != NULL)
+		DL_CDEBUG(rc == 0 || rc == -DER_ALREADY, DLOG_INFO, DLOG_ERR, rc,
+			  "Mark corruption on obj " DF_UOID ", dkey=" DF_KEY
+			  ", akey_nr %u, epoch " DF_X64 ", pm_ver %u",
+			  DP_UOID(oid), DP_KEY(dkey), akey_nr, epoch, pm_ver);
+	else
+		DL_CDEBUG(rc == 0 || rc == -DER_ALREADY, DLOG_INFO, DLOG_ERR, rc,
+			  "Mark corruption on obj " DF_UOID
+			  ", dkey (empty), akey_nr %u, epoch " DF_X64 ", pm_ver %u",
+			  DP_UOID(oid), akey_nr, epoch, pm_ver);
+
+	if (rc == -DER_ALREADY)
+		rc = 0;
+	if (daos_handle_is_valid(toh))
+		dbtree_close(toh);
+	if (obj != NULL)
+		vos_obj_release(obj, 0, rc != 0 && tx_started);
+
 	return rc;
 }
 
@@ -1531,6 +1664,8 @@ recx_get_flags(struct vos_obj_iter *oiter, bool embed)
 		options |= EVT_ITER_FOR_DISCARD;
 	if (oiter->it_flags & VOS_IT_FOR_MIGRATION)
 		options |= EVT_ITER_FOR_MIGRATION;
+	if (oiter->it_flags & VOS_IT_FOR_CHECK)
+		options |= EVT_ITER_FOR_CHECK;
 	return options;
 }
 
@@ -1628,10 +1763,17 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_minor_epc	 = entry.en_minor_epc;
 	it_entry->ie_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_recx.rx_nr	 = evt_extent_width(ext);
+	D_ASSERTF(it_entry->ie_recx.rx_nr != 0, "sel_ext_lo:" DF_U64 ", epoch:" DF_U64 "/%u\n",
+		  ext->ex_lo, entry.en_epoch, entry.en_minor_epc);
+
 	ext = &entry.en_ext;
 	/* Also export the original extent and the visibility flags */
 	it_entry->ie_orig_recx.rx_idx = ext->ex_lo;
 	it_entry->ie_orig_recx.rx_nr	 = evt_extent_width(ext);
+	D_ASSERTF(it_entry->ie_orig_recx.rx_nr != 0,
+		  "orig_ext_lo:" DF_U64 ", epoch:" DF_U64 "/%u\n", ext->ex_lo, entry.en_epoch,
+		  entry.en_minor_epc);
+
 	it_entry->ie_vis_flags = entry.en_visibility;
 	it_entry->ie_rsize	= inob;
 	it_entry->ie_ver	= entry.en_ver;

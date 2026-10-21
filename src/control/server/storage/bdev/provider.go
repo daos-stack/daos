@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -23,7 +24,6 @@ type (
 		Reset(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
-		UpdateFirmware(pciAddr string, path string, slot int32) error
 		WriteConfig(storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error)
 		ReadConfig(storage.BdevReadConfigRequest) (*storage.BdevReadConfigResponse, error)
 	}
@@ -52,9 +52,12 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 
 // Scan calls into the backend to discover NVMe components in the
 // system.
-func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
+func (p *Provider) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
 	p.log.Debugf("run bdev storage provider scan, req: %+v", req)
-	return p.backend.Scan(req)
+	resp, err := p.backend.Scan(req)
+	p.log.Debugf("run bdev storage provider scan, resp: %+v", resp)
+
+	return resp, err
 }
 
 // Prepare attempts to perform all actions necessary to make NVMe components

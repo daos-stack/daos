@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -114,7 +115,7 @@ func (c *ClientConnection) sendCall(ctx context.Context, msg *Call) error {
 		}
 	}(c.conn.Close)
 
-	if _, err := c.conn.Write(callBytes); err != nil {
+	if err := sendMsg(ctx, c.conn, callBytes); err != nil {
 		if ctx.Err() != nil {
 			err = ctx.Err()
 			if cErr := c.close(); cErr != nil {
@@ -138,8 +139,7 @@ func (c *ClientConnection) recvResponse(ctx context.Context) (*Response, error) 
 		}
 	}(c.conn.Close)
 
-	respBytes := make([]byte, MaxMsgSize)
-	numBytes, err := c.conn.Read(respBytes)
+	respBytes, err := recvMsg(ctx, c.conn)
 	if err != nil {
 		if ctx.Err() != nil {
 			err = ctx.Err()
@@ -151,7 +151,7 @@ func (c *ClientConnection) recvResponse(ctx context.Context) (*Response, error) 
 	}
 
 	resp := &Response{}
-	err = proto.Unmarshal(respBytes[:numBytes], resp)
+	err = proto.Unmarshal(respBytes, resp)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal dRPC response")
 	}

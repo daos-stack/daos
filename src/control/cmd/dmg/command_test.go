@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -145,10 +145,10 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		})
 	case *control.SystemStopReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStopResp{})
-	case *control.SystemEraseReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.SystemEraseResp{})
 	case *control.SystemStartReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStartResp{})
+	case *control.SystemEraseReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemEraseResp{})
 	case *control.SystemExcludeReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemExcludeResp{})
 	case *control.SystemDrainReq:
@@ -168,11 +168,17 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.ContSetOwnerReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.PoolQueryReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{})
+		// Include a DONE rebuild status so that --wait cases terminate on
+		// the first poll without needing per-test mock customization.
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{
+			Rebuild: &mgmtpb.PoolRebuildStatus{
+				State: mgmtpb.PoolRebuildStatus_DONE,
+			},
+		})
 	case *control.PoolQueryTargetReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryTargetResp{})
 	case *control.PoolUpgradeReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolUpgradeResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
 		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})
@@ -180,6 +186,16 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolRanksResp{})
 	case *control.PoolExtendReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
+	case *control.PoolRebuildManageReq:
+		if req.OpCode == control.PoolRebuildOpCodeStart {
+			resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+		} else if req.OpCode == control.PoolRebuildOpCodeStop {
+			resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+		}
+	case *control.SystemRebuildManageReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemRebuildManageResp{})
+	case *control.SystemSelfHealEvalReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckEnableReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckDisableReq:

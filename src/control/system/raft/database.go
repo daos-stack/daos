@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -54,6 +54,7 @@ type (
 		Barrier(time.Duration) raft.Future
 		Shutdown() raft.Future
 		State() raft.RaftState
+		GetConfiguration() raft.ConfigurationFuture
 	}
 
 	// syncRaft provides a wrapper for synchronized access to the
@@ -94,6 +95,7 @@ type (
 		raftTransport      raft.Transport
 		raft               syncRaft
 		raftLeaderNotifyCh chan bool
+		cbMutex            sync.RWMutex
 		onLeadershipGained []onLeadershipGainedFn
 		onLeadershipLost   []onLeadershipLostFn
 		onRaftShutdown     []onRaftShutdownFn
@@ -112,6 +114,8 @@ type (
 		RaftSnapshotInterval  time.Duration
 		SystemName            string
 		ReadOnly              bool
+		RaftHeartbeatTimeout  time.Duration
+		RaftElectionTimeout   time.Duration
 	}
 
 	// GroupMap represents a version of the system membership map.
@@ -245,11 +249,14 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 	repAddr, _ := cfg.LocalReplicaAddr()
 
 	db := &Database{
-		log:                log,
-		cfg:                cfg,
-		replicaAddr:        repAddr,
-		shutdownErrCh:      make(chan error),
-		raftLeaderNotifyCh: make(chan bool),
+		log:           log,
+		cfg:           cfg,
+		replicaAddr:   repAddr,
+		shutdownErrCh: make(chan error),
+		// Buffered so hashicorp/raft can post a leadership
+		// transition without blocking if the monitor goroutine
+		// is momentarily busy running callbacks.
+		raftLeaderNotifyCh: make(chan bool, 1),
 
 		data: &dbData{
 			log: log,
@@ -415,19 +422,45 @@ func (db *Database) IsLeader() bool {
 // OnLeadershipGained registers callbacks to be run when this instance
 // gains the leadership role.
 func (db *Database) OnLeadershipGained(fns ...onLeadershipGainedFn) {
+	db.cbMutex.Lock()
+	defer db.cbMutex.Unlock()
 	db.onLeadershipGained = append(db.onLeadershipGained, fns...)
 }
 
 // OnLeadershipLost registers callbacks to be run when this instance
 // loses the leadership role.
 func (db *Database) OnLeadershipLost(fns ...onLeadershipLostFn) {
+	db.cbMutex.Lock()
+	defer db.cbMutex.Unlock()
 	db.onLeadershipLost = append(db.onLeadershipLost, fns...)
 }
 
 // OnRaftShutdown registers callbacks to be run when this instance
 // shuts down.
 func (db *Database) OnRaftShutdown(fns ...onRaftShutdownFn) {
+	db.cbMutex.Lock()
+	defer db.cbMutex.Unlock()
 	db.onRaftShutdown = append(db.onRaftShutdown, fns...)
+}
+
+// Return copies of the registered callbacks under a lock, so that they
+// can be safely retrieved and executed without holding the lock.
+func (db *Database) onLeadershipGainedCbs() []onLeadershipGainedFn {
+	db.cbMutex.RLock()
+	defer db.cbMutex.RUnlock()
+	return append([]onLeadershipGainedFn(nil), db.onLeadershipGained...)
+}
+
+func (db *Database) onLeadershipLostCbs() []onLeadershipLostFn {
+	db.cbMutex.RLock()
+	defer db.cbMutex.RUnlock()
+	return append([]onLeadershipLostFn(nil), db.onLeadershipLost...)
+}
+
+func (db *Database) onRaftShutdownCbs() []onRaftShutdownFn {
+	db.cbMutex.RLock()
+	defer db.cbMutex.RUnlock()
+	return append([]onRaftShutdownFn(nil), db.onRaftShutdown...)
 }
 
 // Start checks to see if the system is configured as a MS replica. If
@@ -467,8 +500,35 @@ func (db *Database) Start(parent context.Context) error {
 
 // RemoveFiles destructively removes files associated with the system
 // database.
+//
+// The directory is renamed aside (a single atomic rename within the same
+// parent directory) before the renamed copy is removed. This guarantees that
+// even if the subsequent removal fails partway (e.g. a transient I/O error),
+// the original RaftDir path is already gone, so a following restart sees no
+// database at that path and bootstraps a fresh, empty one rather than
+// reloading stale, partially-erased raft state.
 func (db *Database) RemoveFiles() error {
-	return os.RemoveAll(db.cfg.RaftDir)
+	// Clear out any leftover from a prior failed removal before reusing the path.
+	stalePath := db.cfg.RaftDir + ".erasing"
+	if err := os.RemoveAll(stalePath); err != nil {
+		return errors.Wrapf(err, "removing stale leftover %s", stalePath)
+	}
+
+	if err := os.Rename(db.cfg.RaftDir, stalePath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return errors.Wrapf(err, "renaming %s aside before removal", db.cfg.RaftDir)
+	}
+
+	// RaftDir is already gone from this point, regardless of whether the
+	// following removal succeeds.
+	return os.RemoveAll(stalePath)
+}
+
+// RaftDir returns the configured path to the raft directory.
+func (db *Database) RaftDir() string {
+	return db.cfg.RaftDir
 }
 
 // Stop signals to the database that it should shutdown all background
@@ -489,7 +549,7 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 	var cancelGainedCtx context.CancelFunc
 
 	runOnLeadershipLost := func() {
-		for _, fn := range db.onLeadershipLost {
+		for _, fn := range db.onLeadershipLostCbs() {
 			if err := fn(); err != nil {
 				db.log.Errorf("failure in onLeadershipLost callback: %s", err)
 			}
@@ -543,7 +603,7 @@ func (db *Database) stepUp(ctx context.Context, cancel context.CancelFunc) {
 		return // restart the monitoring loop
 	}
 
-	for i, fn := range db.onLeadershipGained {
+	for i, fn := range db.onLeadershipGainedCbs() {
 		db.log.Tracef("executing onLeadershipGained[%d]", i)
 
 		if err := fn(ctx); err != nil {
@@ -734,6 +794,21 @@ func (db *Database) RemoveMember(m *system.Member) error {
 	return db.submitMemberUpdate(raftOpRemoveMember, &memberUpdate{Member: m})
 }
 
+func raftSvcHasVoter(svc raftService, voterAddr raft.ServerAddress) (bool, error) {
+	cfgFuture := svc.GetConfiguration()
+	if cfgFuture.Error() != nil {
+		return false, errors.Wrapf(cfgFuture.Error(), "get raft configuration")
+	}
+
+	cfg := cfgFuture.Configuration()
+	for _, rs := range cfg.Servers {
+		if rs.Address == voterAddr {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 	// Ignore self as a voter candidate.
 	if common.CmpTCPAddr(db.replicaAddr, vc.Addr) {
@@ -749,25 +824,42 @@ func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 	rsa := raft.ServerAddress(vc.Addr.String())
 
 	switch op {
-	case raftOpAddMember:
-	case raftOpUpdateMember, raftOpRemoveMember:
-		// If we're updating an existing member, we need to kick it out of the
-		// raft cluster and then re-add it so that it doesn't hijack the campaign.
-		db.log.Debugf("removing %s as a current raft voter", vc)
+	case raftOpAddMember, raftOpUpdateMember:
+		return db.raft.withReadLock(func(svc raftService) error {
+			if hasVoter, err := raftSvcHasVoter(svc, rsa); err != nil {
+				return errors.Wrapf(err, "check if %s is already a raft voter", rsa)
+			} else if !hasVoter {
+				db.log.Debugf("adding %s as a new raft voter", vc)
+				return svc.AddVoter(rsi, rsa, 0, 0).Error()
+			}
+
+			// It's already a voter
+			return nil
+		})
+	case raftOpRemoveMember:
+		// We only need to remove a voter if all of its members are gone.
 		if err := db.raft.withReadLock(func(svc raftService) error {
+			members, err := db.FindMembersByAddr(vc.Addr)
+			if err != nil {
+				return errors.Wrapf(err, "look up members at address %s", rsa)
+			}
+			for _, m := range members {
+				if m.UUID == vc.UUID {
+					// This is the member we're planning to remove
+					continue
+				}
+
+				// There are members other than this one
+				return nil
+			}
+
+			db.log.Debugf("removing %s as a current raft voter", vc)
 			return svc.RemoveServer(rsi, 0, 0).Error()
 		}); err != nil {
 			return errors.Wrapf(err, "failed to remove %q as a raft replica", vc.Addr)
 		}
 	default:
 		return errors.Errorf("unhandled manageVoter op: %s", op)
-	}
-
-	db.log.Debugf("adding %s as a new raft voter", vc)
-	if err := db.raft.withReadLock(func(svc raftService) error {
-		return svc.AddVoter(rsi, rsa, 0, 0).Error()
-	}); err != nil {
-		return errors.Wrapf(err, "failed to add %q as raft replica", vc.Addr)
 	}
 
 	return nil

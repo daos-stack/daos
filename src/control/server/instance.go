@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -35,7 +35,7 @@ type (
 	onAwaitFormatFn  func(context.Context, uint32, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
-	onInstanceExitFn func(context.Context, uint32, ranklist.Rank, error, int) error
+	onInstanceExitFn func(context.Context, uint32, ranklist.Rank, uint64, error, int) error
 )
 
 // EngineInstance encapsulates control-plane specific configuration
@@ -50,6 +50,7 @@ type EngineInstance struct {
 
 	log             logging.Logger
 	runner          EngineRunner
+	incarnation     uint64
 	storage         *storage.Provider
 	waitFormat      atm.Bool
 	storageReady    chan bool
@@ -84,8 +85,8 @@ func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r
 		runner:           r,
 		storage:          p,
 		joinSystem:       jf,
-		drpcReady:        make(chan *srvpb.NotifyReadyReq),
-		storageReady:     make(chan bool),
+		drpcReady:        make(chan *srvpb.NotifyReadyReq, 1),
+		storageReady:     make(chan bool, 1),
 		startRequested:   make(chan bool),
 		Publisher:        ps,
 		_lastHealthStats: make(map[string]*ctlpb.BioHealthResp),
@@ -215,9 +216,24 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		Replace:              ei.replaceRank.Load(),
 	}
 
+	// Reset replaceRank state for instance after joinSystem() has been attempted.
+	defer ei.replaceRank.SetFalse()
+
 	resp, err := ei.joinSystem(ctx, joinReq)
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)
+
+		// If this is a replace operation and join failed, clean up the formatted storage to
+		// prevent leaving the rank in a formatted state. This prevents the engine
+		// inadvertently being joined later with a new rank.
+		if ei.replaceRank.Load() {
+			ei.log.Infof("cleaning up after join failure during replace")
+			if cleanupErr := ei.cleanupFailedJoinReplace(ctx); cleanupErr != nil {
+				ei.log.Errorf("failed to cleanup after join failure: %v", cleanupErr)
+				// Don't override the original join error
+			}
+		}
+
 		return ranklist.NilRank, false, 0, err
 	}
 	switch resp.State {
@@ -235,9 +251,6 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		}
 	}
 	r = ranklist.Rank(resp.Rank)
-
-	// Reset replaceRank state for instance after joinSystem() has returned.
-	ei.replaceRank.SetFalse()
 
 	if !superblock.ValidRank || ready.Uri != superblock.URI {
 		ei.log.Noticef("updating rank %d URI to %s", resp.Rank, ready.Uri)
@@ -281,9 +294,31 @@ func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
 	return nil
 }
 
+func (ei *EngineInstance) updateIncarnation(req *srvpb.NotifyReadyReq) error {
+	ei.incarnation = req.Incarnation
+	ei.log.Debugf("engine idx=%d ready notification with incarnation=%d", ei.Index(), ei.incarnation)
+
+	sb := ei.getSuperblock()
+	if sb == nil {
+		return errors.New("nil superblock while updating incarnation")
+	}
+	sb.Incarnation = req.Incarnation
+	ei.setSuperblock(sb)
+	if err := ei.WriteSuperblock(); err != nil {
+		return errors.Wrapf(err, "write incarnation=%d to superblock", req.Incarnation)
+	}
+
+	ei.log.Debugf("engine idx=%d wrote incarnation=%d to superblock", ei.Index(), ei.incarnation)
+	return nil
+}
+
 // handleReady determines the instance rank and sends a SetRank dRPC request
 // to the Engine.
 func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	if err := ei.updateIncarnation(ready); err != nil {
+		return err
+	}
+
 	if err := ei.updateFaultDomainInSuperblock(); err != nil {
 		ei.log.Error(err.Error()) // nonfatal
 	}

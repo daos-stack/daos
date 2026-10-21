@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -282,6 +282,9 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		if (dra->dra_opc == DTX_REFRESH) {
 			if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
 				rc = crt_req_set_timeout(req, 3);
+			else if (drr->drr_flags != NULL && drr->drr_flags[0] & DRF_FOR_ORPHAN)
+				/* DRF_FOR_ORPHAN case may need longer timeout. */
+				rc = crt_req_set_timeout(req, 60);
 			else
 				/*
 				 * If related DTX is committable, then it will be committed
@@ -745,8 +748,11 @@ dtx_rpc(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **dtes,
 		else
 			dca->dca_steps = length;
 
-		/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
-		if (dss_has_enough_helper()) {
+		/*
+		 * Direct use current ULT instead of dss_chore to send DTX RPC to avoid being
+		 * blocked by some slow dss_chore users. DAOS-18607.
+		 */
+		if (0 && dss_has_enough_helper()) {
 			rc = ABT_eventual_create(0, &dca->dca_chore_eventual);
 			if (rc != ABT_SUCCESS) {
 				D_ERROR("failed to create eventual: %d\n", rc);
@@ -872,11 +878,13 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 		}
 
 		/*
-		 * Some DTX entries may have been committed on some participants. Then mark all
-		 * the DTX entries (in the dtis) as "PARTIAL_COMMITTED" and re-commit them later.
-		 * It is harmless to re-commit the DTX that has ever been committed.
+		 * Some DTX entries may have been committed on parts of (remote) participants.
+		 * It is no way to revert related partially committed DTX entries since we do
+		 * not know whether someone has already read related data for those partially
+		 * committed DTX entries. Then let's mark all the DTX entries in the @dtis as
+		 * "PARTIAL_COMMITTED" and re-commit them later. It is safe to re-commit them.
 		 */
-		rc1 = vos_dtx_commit(cont->sc_hdl, dca.dca_dtis, count, rc != 0, rm_cos);
+		rc1 = dtx_commit_large(cont->sc_hdl, dca.dca_dtis, count, rc != 0, rm_cos);
 		if (rc1 > 0) {
 			dra->dra_committed += rc1;
 			rc1 = 0;
@@ -955,7 +963,7 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	 *	 to resend sometime later.
 	 */
 	if (epoch != 0)
-		rc1 = vos_dtx_abort(cont->sc_hdl, &dte->dte_xid, epoch);
+		rc1 = vos_dtx_abort(cont->sc_hdl, &dte->dte_xid, epoch, dte->dte_ver);
 	else
 		rc1 = vos_dtx_set_flags(cont->sc_hdl, &dte->dte_xid, 1, DTE_CORRUPTED);
 	if (rc1 > 0 || rc1 == -DER_NONEXIST)
@@ -989,7 +997,7 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 
 int
 dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *check_list,
-		     d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list, bool for_io)
+		     d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list, uint32_t intent)
 {
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct pool_target	*target;
@@ -1007,6 +1015,7 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *che
 	int			 count;
 	int			 i;
 	bool			 drop;
+	bool                     for_io = (intent == DRI_IO);
 
 	D_INIT_LIST_HEAD(&head);
 	D_INIT_LIST_HEAD(&self);
@@ -1019,7 +1028,8 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *che
 		if (dsp->dsp_mbs == NULL) {
 			rc = vos_dtx_load_mbs(cont->sc_hdl, &dsp->dsp_xid, NULL, &dsp->dsp_mbs);
 			if (rc != 0) {
-				if (rc < 0 && rc != -DER_NONEXIST && for_io) {
+				if (rc < 0 && rc != -DER_NONEXIST &&
+				    (intent == DRI_IO || intent == DRI_ORPHAN)) {
 					D_ERROR("Failed to load mbs for "DF_DTI": "DF_RC"\n",
 						DP_DTI(&dsp->dsp_xid), DP_RC(rc));
 					goto out;
@@ -1041,7 +1051,7 @@ again:
 			 */
 			D_WARN("Failed to find DTX leader for "DF_DTI", ver %d: "DF_RC"\n",
 			       DP_DTI(&dsp->dsp_xid), pool->sp_map_version, DP_RC(rc));
-			if (for_io)
+			if (intent == DRI_IO || intent == DRI_ORPHAN)
 				goto out;
 
 			drop = true;
@@ -1052,14 +1062,21 @@ again:
 		 *
 		 * 1. In DTX resync, the status may be resolved sometime later.
 		 * 2. The DTX resync is done, but failed to handle related DTX.
+		 * 3. For orphan cleanup, that is almost impossible unless another
+		 *    pool map changes between DTX resync and DTX orphan cleanup.
+		 *    Under such case, another DTX resync will be triggered. For
+		 *    current DTX orphan cleanup, just ignore such case.
 		 */
 		if (myrank == target->ta_comp.co_rank &&
 		    dss_get_module_info()->dmi_tgt_id == target->ta_comp.co_index) {
 			d_list_del(&dsp->dsp_link);
-			if (for_io)
+			if (for_io) {
 				d_list_add_tail(&dsp->dsp_link, &self);
-			else
+			} else {
+				D_WARN("Hit self leader for DTX " DF_DTI " when cleanup\n",
+				       DP_DTI(&dsp->dsp_xid));
 				dtx_dsp_free(dsp);
+			}
 			if (--(*check_count) == 0)
 				break;
 			continue;
@@ -1085,6 +1102,9 @@ again:
 			flags = DRF_INITIAL_LEADER;
 		else
 			flags = 0;
+
+		if (intent == DRI_ORPHAN)
+			flags |= DRF_FOR_ORPHAN;
 
 		d_list_for_each_entry(drr, &head, drr_link) {
 			if (drr->drr_rank == target->ta_comp.co_rank &&
@@ -1215,7 +1235,8 @@ next2:
 				d_list_del(&dsp->dsp_link);
 				dtx_dsp_free(dsp);
 			} else {
-				rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch);
+				rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch,
+						    dsp->dsp_version);
 				D_ASSERT(rc1 != -DER_NO_PERM);
 
 				if (rc1 == 0 || !for_io) {
@@ -1371,7 +1392,7 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 
 	rc = dtx_refresh_internal(cont, &dth->dth_share_tbd_count, &dth->dth_share_tbd_list,
 				  &dth->dth_share_cmt_list, &dth->dth_share_abt_list,
-				  &dth->dth_share_act_list, true);
+				  &dth->dth_share_act_list, DRI_IO);
 	if (rc == 0) {
 		D_ASSERT(dth->dth_share_tbd_count == 0);
 
@@ -1635,8 +1656,8 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct d
 	if (dce->dce_bitmap != NULL) {
 		clrbit(dce->dce_bitmap, dss_get_module_info()->dmi_tgt_id);
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, 0,
-					  DTX_COLL_COMMIT, dce->dce_bitmap_sz, dce->dce_bitmap,
-					  &results);
+					  dce->dce_ver, DTX_COLL_COMMIT, dce->dce_bitmap_sz,
+					  dce->dce_bitmap, &results);
 		if (len < 0) {
 			rc1 = len;
 		} else {
@@ -1718,8 +1739,8 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 	if (dce->dce_bitmap != NULL) {
 		clrbit(dce->dce_bitmap, dss_get_module_info()->dmi_tgt_id);
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, epoch,
-					  DTX_COLL_ABORT, dce->dce_bitmap_sz, dce->dce_bitmap,
-					  &results);
+					  dce->dce_ver, DTX_COLL_ABORT, dce->dce_bitmap_sz,
+					  dce->dce_bitmap, &results);
 		if (len < 0) {
 			rc1 = len;
 		} else {
@@ -1739,7 +1760,7 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 	}
 
 	if (epoch != 0)
-		rc2 = vos_dtx_abort(cont->sc_hdl, &dce->dce_xid, epoch);
+		rc2 = vos_dtx_abort(cont->sc_hdl, &dce->dce_xid, epoch, dce->dce_ver);
 	else
 		rc2 = vos_dtx_set_flags(cont->sc_hdl, &dce->dce_xid, 1, DTE_CORRUPTED);
 	if (rc2 > 0 || rc2 == -DER_NONEXIST)
@@ -1775,8 +1796,8 @@ dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoc
 
 	if (dce->dce_bitmap != NULL) {
 		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, epoch,
-					  DTX_COLL_CHECK, dce->dce_bitmap_sz, dce->dce_bitmap,
-					  &results);
+					  dce->dce_ver, DTX_COLL_CHECK, dce->dce_bitmap_sz,
+					  dce->dce_bitmap, &results);
 		if (len < 0) {
 			rc1 = len;
 		} else {

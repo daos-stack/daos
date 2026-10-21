@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,6 +55,7 @@ RDB_STRING_KEY(ds_cont_prop_, scrubber_disabled);
 RDB_STRING_KEY(ds_cont_prop_, co_md_times);
 RDB_STRING_KEY(ds_cont_prop_, cont_obj_version);
 RDB_STRING_KEY(ds_cont_prop_, nhandles);
+RDB_STRING_KEY(ds_cont_prop_, ec_agg_eph);
 
 /* dummy value for container roots, avoid malloc on demand */
 static struct daos_prop_co_roots dummy_roots;
@@ -71,16 +73,16 @@ struct daos_prop_entry cont_prop_entries_default_v0[CONT_PROP_NUM_V0] = {
 		.dpe_val	= 1,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_CSUM,
-		.dpe_val	= DAOS_PROP_CO_CSUM_OFF,
+		.dpe_val	= DAOS_PROP_CO_CSUM_CRC32,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_CSUM_CHUNK_SIZE,
 		.dpe_val	= 32 * 1024, /** 32K */
 	}, {
 		.dpe_type	= DAOS_PROP_CO_CSUM_SERVER_VERIFY,
-		.dpe_val	= DAOS_PROP_CO_CSUM_SV_OFF,
+		.dpe_val	= DAOS_PROP_CO_CSUM_SV_ON,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_FAC,
-		.dpe_val	= DAOS_PROP_CO_REDUN_RF0,
+		.dpe_val	= DAOS_PROP_CO_REDUN_RF3,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_LVL,
 		.dpe_val	= DAOS_PROP_CO_REDUN_RANK,

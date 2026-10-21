@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,7 +21,6 @@ test_run(d_rank_t my_rank)
 	DBG_PRINT("local group: %s remote group: %s\n",
 		   test.tg_local_group_name, test.tg_remote_group_name);
 
-	opt.cio_use_credits = 1;
 	opt.cio_ep_credits = test.tg_credits;
 
 	rc = crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx, &test.tg_tid, &grp,

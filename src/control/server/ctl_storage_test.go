@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,11 +23,13 @@ import (
 
 func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 	mockScmNs0 := storage.MockScmNamespace(0)
+	mockScmDevice0 := "/dev/" + mockScmNs0.BlockDevice
 	mockScmMountPath0 := "/mnt/daos0"
 	mockScmNs0wMount := storage.MockScmNamespace(0)
 	mockScmNs0wMount.Mount = storage.MockScmMountPoint(0)
 	mockScmNs1 := storage.MockScmNamespace(1)
 	mockScmMountPath1 := "/mnt/daos1"
+	mockScmDevice1 := "/dev/" + mockScmNs1.BlockDevice
 	mockScmNs1wMount := storage.MockScmNamespace(1)
 	mockScmNs1wMount.Mount = storage.MockScmMountPoint(1)
 
@@ -44,7 +47,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
-						WithScmDeviceList(mockScmNs0.BlockDevice),
+						WithScmDeviceList(mockScmDevice0),
 				},
 			},
 			expErr: errors.New("response is nil"),
@@ -55,7 +58,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 				{
 					storage.NewTierConfig().
 						WithScmMountPoint(mockScmMountPath0).
-						WithScmDeviceList(mockScmNs0.BlockDevice),
+						WithScmDeviceList(mockScmDevice0),
 				},
 			},
 			expErr: errors.New("expected exactly 1 SCM tier"),
@@ -67,7 +70,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
-						WithScmDeviceList(mockScmNs0.BlockDevice),
+						WithScmDeviceList(mockScmDevice0),
 				},
 			},
 			expErr: errors.New("missing namespaces"),
@@ -81,7 +84,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
-						WithScmDeviceList(mockScmNs0.BlockDevice),
+						WithScmDeviceList(mockScmDevice0),
 				},
 			},
 			expErr: errors.New("no pmem namespace"),
@@ -102,7 +105,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
-						WithScmDeviceList(mockScmNs0.BlockDevice),
+						WithScmDeviceList(mockScmDevice0),
 				},
 			},
 			expErr: errors.New("unknown"),
@@ -126,7 +129,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
-						WithScmDeviceList(mockScmNs0.BlockDevice),
+						WithScmDeviceList(mockScmDevice0),
 				},
 			},
 			nilRank: true,
@@ -151,7 +154,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
-						WithScmDeviceList(mockScmNs0.BlockDevice),
+						WithScmDeviceList(mockScmDevice0),
 				},
 			},
 			expOutResp: &storage.ScmScanResponse{
@@ -184,13 +187,13 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
-						WithScmDeviceList(mockScmNs0.BlockDevice),
+						WithScmDeviceList(mockScmDevice0),
 				},
 				{
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath1).
-						WithScmDeviceList(mockScmNs1.BlockDevice),
+						WithScmDeviceList(mockScmDevice1),
 				},
 			},
 			expOutResp: &storage.ScmScanResponse{

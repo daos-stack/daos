@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -15,9 +16,9 @@ from util.run_utils import run_remote
 # Order here is used to select default provider in environment_utils
 SUPPORTED_PROVIDERS = (
     "ofi+cxi",
-    "ofi+verbs;ofi_rxm",
     "ucx+dc_x",
     "ucx+ud_x",
+    "ofi+verbs;ofi_rxm",
     "ofi+tcp",
     "ofi+tcp;ofi_rxm",
     "ofi+opx"
@@ -252,16 +253,15 @@ def get_hg_info(logger, hosts, filter_provider=None, filter_device=None, verbose
     Args:
         logger (Logger): logger for the messages produced by this method
         hosts (NodeSet): hosts from which to gather the information
-        filter_provider (list, optional): list of supported providers to filter by.
-            Defaults to None.
-        filter_device (list, optional): list of supported devices to filter by.
-            Defaults to None.
+        filter_provider (list, optional): list of providers to be included. Defaults to None.
+        filter_device (list, optional): list of devices to be included. Defaults to None.
         verbose (bool, optional): display command details. Defaults to True.
 
     Returns:
         dict: a dictionary of interface keys with a dictionary value of a comma-separated string of
             providers key with a NodeSet value where the providers where detected.
     """
+    # pylint: disable=too-many-nested-blocks
     command = "hg_info"
     result = run_remote(logger, hosts, command, verbose=verbose, stderr=True)
     providers = {}
@@ -280,14 +280,27 @@ def get_hg_info(logger, hosts, filter_provider=None, filter_device=None, verbose
             class_protocol_device = re.findall(
                 r'(\S+) +([\S]+) +([\S]+)$', without_header, re.MULTILINE)
             for _class, protocol, device in class_protocol_device:
+                if ":" in device:
+                    # e.g. convert mlx5_0:1 => mlx5_0
+                    device = device.split(":")[0]
                 if filter_device and device not in filter_device:
                     continue
-                provider = f"{_class}+{protocol}"
-                if filter_provider and provider not in filter_provider:
-                    continue
-                if device not in device_providers:
-                    device_providers[device] = set()
-                device_providers[device].add(provider)
+                _class_protocols = []
+                if "_" in protocol:
+                    _protocol = protocol.split("_")
+                    if _protocol[0] in ("dc", "rc", "ud") and _protocol[1] in ("mlx5"):
+                        # Add ucx synonyms, e.g. convert ud_mlx5 => ud_mlx5, ud_x, ud
+                        for synonym in (f"_{_protocol[1]}", "_x", ""):
+                            _class_protocols.append(f"{_class}+{_protocol[0]}{synonym}")
+                else:
+                    _class_protocols.append(f"{_class}+{protocol}")
+
+                for provider in _class_protocols:
+                    if filter_provider and provider not in filter_provider:
+                        continue
+                    if device not in device_providers:
+                        device_providers[device] = set()
+                    device_providers[device].add(provider)
 
             for device, provider_set in device_providers.items():
                 if device not in providers:
@@ -384,8 +397,8 @@ def get_interface_providers(interface, provider_data):
     return providers
 
 
-def get_fastest_interface(logger, hosts, verbose=True):
-    """Get the fastest active interface common to all hosts.
+def get_fastest_interfaces(logger, hosts, verbose=True):
+    """Get the fastest active interfaces common to all hosts.
 
     Args:
         logger (Logger): logger for the messages produced by this method
@@ -396,12 +409,12 @@ def get_fastest_interface(logger, hosts, verbose=True):
         NetworkException: if there is an error detecting the fastest active interface
 
     Returns:
-        str: the fastest active interface common to all hosts specified
+        list: the fastest active interfaces common to all hosts specified
     """
     common_interfaces = get_common_interfaces(logger, hosts, verbose)
 
     # Find the speed of each common active interface in order to be able to choose the fastest
-    interface_speeds = {}
+    interfaces_at_speed = {}
     for interface in common_interfaces:
         detected_speeds = get_interface_speeds(logger, hosts, interface, verbose)
         speed_list = []
@@ -411,26 +424,22 @@ def get_fastest_interface(logger, hosts, verbose=True):
             speed_hosts.add(node_set)
         if speed_list and speed_hosts == hosts:
             # Only include interface speeds if a speed is detected on all the hosts
-            interface_speeds[interface] = min(speed_list)
+            min_speed = min(speed_list)
+            if min_speed not in interfaces_at_speed:
+                interfaces_at_speed[min_speed] = []
+            interfaces_at_speed[min_speed].append(interface)
 
+    fastest_interfaces = None
     logger.info("Active network interface speeds on %s:", hosts)
-    available_interfaces = {}
-    for interface in sorted(interface_speeds):
-        logger.info("  - %-8s (speed: %6s)", interface, interface_speeds[interface])
+    for speed in sorted(interfaces_at_speed):
+        fastest_interfaces = sorted(interfaces_at_speed[speed])
+        logger.info("  - speed: %7s => %s", speed, fastest_interfaces)
 
-        # Only include the first active interface (as determined by alphabetic sort) for each speed
-        if interface_speeds[interface] not in available_interfaces:
-            available_interfaces[interface_speeds[interface]] = interface
+    if fastest_interfaces is None:
+        raise NetworkException(f"Error obtaining default interfaces w/ equal speed on {hosts}!")
 
-    logger.info("Available interfaces on %s: %s", hosts, available_interfaces)
-    try:
-        # Select the fastest active interface available by sorting the speed
-        interface = available_interfaces[sorted(available_interfaces)[-1]]
-    except IndexError as error:
-        raise NetworkException("Error obtaining a default interface!") from error
-
-    logger.info("Fastest interface detected on %s: %s", hosts, interface)
-    return interface
+    logger.info("Fastest interfaces detected on %s: %s", hosts, fastest_interfaces)
+    return fastest_interfaces
 
 
 def get_common_provider(logger, hosts, interface, supported=None, verbose=True):

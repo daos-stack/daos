@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,8 +17,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	. "github.com/daos-stack/daos/src/control/system"
 )
@@ -112,22 +112,25 @@ Ranks Action Result
 
 func TestPretty_PrintSystemQueryResp(t *testing.T) {
 	for name, tc := range map[string]struct {
-		resp        *control.SystemQueryResp
-		absentHosts string
-		absentRanks string
-		verbose     bool
-		expPrintStr string
+		resp           *control.SystemQueryResp
+		absentHosts    string
+		absentRanks    string
+		selfHealPolicy string
+		verbose        bool
+		expPrintStr    string
 	}{
 		"empty response": {
-			resp: &control.SystemQueryResp{},
+			resp:           &control.SystemQueryResp{},
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Query matches no ranks in system
 `,
 		},
 		"response with missing hosts and ranks": {
-			resp:        &control.SystemQueryResp{},
-			absentHosts: "foo[7,8,9]",
-			absentRanks: "7-9",
+			resp:           &control.SystemQueryResp{},
+			absentHosts:    "foo[7,8,9]",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Query matches no ranks in system
 Unknown 3 hosts: foo[7-9]
@@ -140,6 +143,7 @@ Unknown 3 ranks: 7-9
 					MockMember(t, 0, MemberStateJoined),
 				},
 			},
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Rank State  
 ---- -----  
@@ -153,8 +157,9 @@ Rank State
 					MockMember(t, 0, MemberStateJoined),
 				},
 			},
-			absentHosts: "foo[7,8,9]",
-			absentRanks: "7-9",
+			absentHosts:    "foo[7,8,9]",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Rank  State        
 ----  -----        
@@ -170,7 +175,8 @@ Unknown 3 hosts: foo[7-9]
 					MockMember(t, 0, MemberStateJoined),
 				},
 			},
-			verbose: true,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
+			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State  Reason 
 ---- ----                                 --------------- ------------ -----  ------ 
@@ -184,9 +190,10 @@ Rank UUID                                 Control Address Fault Domain State  Re
 					MockMember(t, 0, MemberStateJoined),
 				},
 			},
-			absentHosts: "foo[7,8,9]",
-			absentRanks: "7-9",
-			verbose:     true,
+			absentHosts:    "foo[7,8,9]",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
+			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State  Reason 
 ---- ----                                 --------------- ------------ -----  ------ 
@@ -208,6 +215,7 @@ Unknown 3 ranks: 7-9
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Rank      State    
 ----      -----    
@@ -217,7 +225,7 @@ Rank      State
 
 `,
 		},
-		"missing hosts": {
+		"normal response; empty self_heal system property": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
 					MockMember(t, 0, MemberStateJoined),
@@ -229,7 +237,76 @@ Rank      State
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			absentHosts: "foo[7,8,9]",
+			expPrintStr: `
+Rank      State    
+----      -----    
+[0-1,5-6] Joined   
+[2,4]     Stopped  
+3         Excluded 
+
+System property self_heal flags disabled: exclude, pool_exclude, pool_rebuild
+`,
+		},
+		"normal response; missing exclude and pool_exclude in self_heal system property": {
+			resp: &control.SystemQueryResp{
+				Members: Members{
+					MockMember(t, 0, MemberStateJoined),
+					MockMember(t, 1, MemberStateJoined),
+					MockMember(t, 2, MemberStateStopped),
+					MockMember(t, 3, MemberStateExcluded),
+					MockMember(t, 4, MemberStateStopped),
+					MockMember(t, 5, MemberStateJoined),
+					MockMember(t, 6, MemberStateJoined),
+				},
+			},
+			selfHealPolicy: "pool_rebuild",
+			expPrintStr: `
+Rank      State    
+----      -----    
+[0-1,5-6] Joined   
+[2,4]     Stopped  
+3         Excluded 
+
+System property self_heal flags disabled: exclude, pool_exclude
+`,
+		},
+		"normal response; missing exclude self_heal system property": {
+			resp: &control.SystemQueryResp{
+				Members: Members{
+					MockMember(t, 0, MemberStateJoined),
+					MockMember(t, 1, MemberStateJoined),
+					MockMember(t, 2, MemberStateStopped),
+					MockMember(t, 3, MemberStateExcluded),
+					MockMember(t, 4, MemberStateStopped),
+					MockMember(t, 5, MemberStateJoined),
+					MockMember(t, 6, MemberStateJoined),
+				},
+			},
+			selfHealPolicy: "pool_exclude;pool_rebuild",
+			expPrintStr: `
+Rank      State    
+----      -----    
+[0-1,5-6] Joined   
+[2,4]     Stopped  
+3         Excluded 
+
+System property self_heal flag disabled: exclude
+`,
+		},
+		"missing hosts; none-value self_heal system property": {
+			resp: &control.SystemQueryResp{
+				Members: Members{
+					MockMember(t, 0, MemberStateJoined),
+					MockMember(t, 1, MemberStateJoined),
+					MockMember(t, 2, MemberStateStopped),
+					MockMember(t, 3, MemberStateExcluded),
+					MockMember(t, 4, MemberStateStopped),
+					MockMember(t, 5, MemberStateJoined),
+					MockMember(t, 6, MemberStateJoined),
+				},
+			},
+			absentHosts:    "foo[7,8,9]",
+			selfHealPolicy: "none",
 			expPrintStr: `
 Rank      State    
 ----      -----    
@@ -238,6 +315,7 @@ Rank      State
 3         Excluded 
 
 Unknown 3 hosts: foo[7-9]
+System property self_heal flags disabled: exclude, pool_exclude, pool_rebuild
 `,
 		},
 		"missing ranks": {
@@ -252,7 +330,8 @@ Unknown 3 hosts: foo[7-9]
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			absentRanks: "7-9",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Rank      State        
 ----      -----        
@@ -275,8 +354,9 @@ Rank      State
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			absentHosts: "foo[7,8,9]",
-			absentRanks: "7-9",
+			absentHosts:    "foo[7,8,9]",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Rank      State        
 ----      -----        
@@ -300,7 +380,8 @@ Unknown 3 hosts: foo[7-9]
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			verbose: true,
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
+			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State    Reason 
 ---- ----                                 --------------- ------------ -----    ------ 
@@ -326,9 +407,10 @@ Rank UUID                                 Control Address Fault Domain State    
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
-			absentHosts: "foo[7,8,9]",
-			absentRanks: "7-9",
-			verbose:     true,
+			absentHosts:    "foo[7,8,9]",
+			absentRanks:    "7-9",
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
+			verbose:        true,
 			expPrintStr: `
 Rank UUID                                 Control Address Fault Domain State    Reason 
 ---- ----                                 --------------- ------------ -----    ------ 
@@ -370,6 +452,7 @@ Idx Provider
 		t.Run(name, func(t *testing.T) {
 			tc.resp.AbsentRanks = *MustCreateRankSet(tc.absentRanks)
 			tc.resp.AbsentHosts = *hostlist.MustCreateSet(tc.absentHosts)
+			tc.resp.SysSelfHealPolicy = tc.selfHealPolicy
 
 			var bld strings.Builder
 			// pass the same io writer to standard and error stream
@@ -519,7 +602,7 @@ Rank Operation Result
 			var bld, bldErr strings.Builder
 
 			gotErr := printSystemResults(&bld, &bldErr, tc.results, new(hostlist.HostSet),
-				new(ranklist.RankSet))
+				new(RankSet))
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -626,6 +709,334 @@ Unknown 3 hosts: foo[7-9]
 			// parameters to mimic combined output seen on terminal
 			if err := PrintSystemStopResponse(&bld, &bld, tc.resp); err != nil {
 				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintSystemRebuildManageResp(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp        *control.SystemRebuildManageResp
+		verbose     bool
+		expPrintStr string
+		expErr      error
+	}{
+		"no pools in system": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{},
+			},
+			expPrintStr: `
+No pools in system.
+Command completed successfully.
+`,
+		},
+		"rebuild stop - all successful": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:     "pool2",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:     "pool3",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  3 pools
+Command completed successfully.
+`,
+		},
+		"rebuild stop - all successful verbose": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:     "pool2",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:     "pool3",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  3 pools (pool1, pool2, pool3)
+Command completed successfully.
+`,
+		},
+		"rebuild stop - mixed success and DER_NONEXIST": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild stop requested for 2 pools
+- With active or finishing rebuild:  1 pool
+- Without active rebuild:            1 pool
+Command completed successfully.
+`,
+		},
+		"rebuild stop - only DER_NONEXIST": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:      "pool1",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): entity does not exist",
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild stop requested for 2 pools
+- Without active rebuild:            2 pools
+Command completed successfully.
+`,
+		},
+		"rebuild stop - with real errors": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "failed to stop rebuild",
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild stop requested for 2 pools
+- With active rebuild:    1 pool
+- Errors:                 1 pool
+`,
+			expErr: errors.New("pool-rebuild stop failed on pool pool2: failed to stop rebuild"),
+		},
+		"rebuild stop - mixed categories verbose": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:     "pool2",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool3",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+					},
+					{
+						ID:      "pool4",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "error 1",
+					},
+					{
+						ID:      "pool5",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "error 2",
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+System-rebuild stop requested for 5 pools
+- With active or finishing rebuild:    2 pools (pool1, pool2)
+- Without active rebuild:              1 pool (pool3)
+- Errors:                              2 pools (pool4, pool5)
+`,
+			expErr: errors.New("pool-rebuild stop failed on pool pool4: error 1, pool-rebuild stop failed on pool pool5: error 2"),
+		},
+		"rebuild start - all successful": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStart,
+					},
+					{
+						ID:     "pool2",
+						OpCode: control.PoolRebuildOpCodeStart,
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild start requested for 2 pools
+- Successfully requested:            2 pools
+Command completed successfully.
+`,
+		},
+		"rebuild start - with errors": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStart,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStart,
+						Errored: true,
+						Msg:     "failed to start rebuild",
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild start requested for 2 pools
+- Successfully requested: 1 pool
+- Errors:                 1 pool
+`,
+			expErr: errors.New("pool-rebuild start failed on pool pool2: failed to start rebuild"),
+		},
+		"rebuild stop with DER_BUSY - treated as success": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+				},
+			},
+			expPrintStr: `
+System-rebuild stop requested for 2 pools
+- With active or finishing rebuild:  2 pools
+Command completed successfully.
+`,
+		},
+		"rebuild stop with DER_BUSY verbose": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool2",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+					{
+						ID:      "pool3",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+System-rebuild stop requested for 3 pools
+- With active or finishing rebuild:  3 pools (pool1, pool2, pool3)
+Command completed successfully.
+`,
+		},
+		"rebuild stop mixed DER_BUSY DER_NONEXIST success and errors": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool_ok",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+					{
+						ID:      "pool_busy",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_BUSY(-1012): Device or resource busy",
+					},
+					{
+						ID:      "pool_nonexist",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "DER_NONEXIST(-1005): The specified entity does not exist",
+					},
+					{
+						ID:      "pool_error",
+						OpCode:  control.PoolRebuildOpCodeStop,
+						Errored: true,
+						Msg:     "some error",
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+System-rebuild stop requested for 4 pools
+- With active or finishing rebuild:    2 pools (pool_ok, pool_busy)
+- Without active rebuild:              1 pool (pool_nonexist)
+- Errors:                              1 pool (pool_error)
+`,
+			expErr: errors.New("pool-rebuild stop failed on pool pool_error: some error"),
+		},
+		"mismatched opcodes": {
+			resp: &control.SystemRebuildManageResp{
+				Results: []*control.PoolRebuildManageResult{
+					{
+						ID:     "pool1",
+						OpCode: control.PoolRebuildOpCodeStart,
+					},
+					{
+						ID:     "pool2",
+						OpCode: control.PoolRebuildOpCodeStop,
+					},
+				},
+			},
+			expErr: errors.New("different system rebuild manage opcodes found in results: start and stop"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+
+			gotErr := PrintSystemRebuildManageResp(&bld, tc.resp, tc.verbose)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {

@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2021-2023 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -26,13 +26,13 @@ if [ -n "$repo_files_pr" ]; then
         branch="${branch%:*}"
     fi
     # shellcheck disable=SC2034
-    REPO_FILE_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
+    REPO_FILE_URL="${JENKINS_URL:-https://jenkins-3.daos.hpc.amslabs.hpecorp.net/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
 fi
 
 # shellcheck disable=SC1091
 . /etc/os-release
 # shellcheck disable=SC2034
-EXCLUDE_UPGRADE=mercury,daos,daos-\*
+EXCLUDE_UPGRADE=mercury,mercury-\*,daos,daos-\*
 if rpm -qa | grep mlnx; then
     # packages not to allow upgrading if MLNX OFED is installed
     EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*,\*ucx\*

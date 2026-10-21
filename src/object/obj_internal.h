@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -142,6 +142,27 @@ struct shard_fetch_stat {
 	int32_t			sfs_rc_other;
 };
 
+/* Per-IOM state for the client side EC IOM merge (obj_ec_iom_merge()).
+ * A fetch request can carry multiple IODs and one IOM per IOD, so this
+ * state must be tracked per IOM rather than per request. It is anchored in
+ * struct obj_auxi_args (rather than in struct obj_reasb_req) so that it
+ * survives the request re-assembly teardown/re-init that some retry paths
+ * perform, keeping the oims_realloc flag consistent with the iom_recxs
+ * buffer ownership across retries.
+ */
+struct obj_iom_merge_state {
+	/* number of targets that with this IOM handled */
+	uint32_t oims_tgt_nr;
+	/* number of iom extents that could not be stored in the caller
+	 * provided iom_recxs buffer (used to report the needed iom_nr).
+	 */
+	uint32_t oims_extra_nr;
+	/* the flag of this IOM's iom_recxs internally allocated by DAOS
+	 * (and so re-allocable).
+	 */
+	uint32_t oims_realloc : 1;
+};
+
 /**
  * Reassembled obj request.
  * User input iod/sgl possibly need to be reassembled at client before sending
@@ -171,13 +192,9 @@ struct obj_reasb_req {
 	/* to record returned data size from each targets */
 	daos_size_t			*orr_data_sizes;
 	/* number of targets this IO req involves */
-	uint32_t			 orr_tgt_nr;
-	/* number of targets that with IOM handled */
-	uint32_t			 orr_iom_tgt_nr;
-	/* number of iom extends */
-	uint32_t			 orr_iom_nr;
+	uint32_t                         orr_tgt_nr;
 	/* #iods of IO req */
-	uint32_t			 orr_iod_nr;
+	uint32_t                         orr_iod_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
 	pthread_mutex_t			 orr_mutex;
@@ -192,23 +209,21 @@ struct obj_reasb_req {
 	struct daos_recx_ep_list	*orr_parity_lists;
 	uint32_t			 orr_parity_list_nr;
 	/* for data recovery flag */
-	uint32_t			 orr_recov:1,
-	/* for snapshot data recovery flag */
-					 orr_recov_snap:1,
-	/* for iod_size fetching flag */
-					 orr_size_fetch:1,
-	/* for iod_size fetched flag */
-					 orr_size_fetched:1,
-	/* only with single data target flag */
-					 orr_single_tgt:1,
-	/* only for single-value IO flag */
-					 orr_singv_only:1,
-	/* the flag of IOM re-allocable (used for EC IOM merge) */
-					 orr_iom_realloc:1,
-	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
-					 orr_fail_alloc:1,
-	/* The fetch data/sgl is rebuilt by EC parity rebuild */
-					 orr_recov_data:1;
+	uint32_t                         orr_recov : 1,
+	    /* for snapshot data recovery flag */
+	    orr_recov_snap                         : 1,
+	    /* for iod_size fetching flag */
+	    orr_size_fetch                         : 1,
+	    /* for iod_size fetched flag */
+	    orr_size_fetched                       : 1,
+	    /* only with single data target flag */
+	    orr_single_tgt                         : 1,
+	    /* only for single-value IO flag */
+	    orr_singv_only                         : 1,
+	    /* orr_fail allocated flag, recovery task's orr_fail is inherited */
+	    orr_fail_alloc                         : 1,
+	    /* The fetch data/sgl is rebuilt by EC parity rebuild */
+	    orr_recov_data                         : 1;
 };
 
 static inline void
@@ -265,7 +280,7 @@ struct shard_auxi_args {
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
-	/* only for EC, the target idx [0, k + p) */
+	/* EC target index [0, k + p), saved from the request layout. */
 	uint16_t		 ec_tgt_idx;
 	/* group index within the req_tgts->ort_shard_tgts */
 	uint16_t		 grp_idx;
@@ -439,6 +454,8 @@ struct obj_auxi_tgt_list {
 	uint32_t	*tl_tgts;
 	/** number of ranks & tgts */
 	uint32_t	tl_nr;
+	/** Last replica error, preserved across layout retries. */
+	int              tl_error;
 };
 
 struct coll_query_args {
@@ -464,49 +481,31 @@ struct obj_auxi_args {
 	 * ec_wait_recov -- obj fetch wait another EC recovery task,
 	 * ec_in_recov -- a EC recovery task
 	 */
-	uint32_t			 io_retry:1,
-					 args_initialized:1,
-					 to_leader:1,
-					 spec_shard:1,
-					 spec_group:1,
-					 req_reasbed:1,
-					 is_ec_obj:1,
-					 csum_retry:1,
-					 csum_report:1,
-					 tx_uncertain:1,
-					 nvme_io_err:1,
-					 no_retry:1,
-					 ec_wait_recov:1,
-					 ec_in_recov:1,
-					 new_shard_tasks:1,
-					 reset_param:1,
-					 force_degraded:1,
-					 shards_scheded:1,
-					 sub_anchors:1,
-					 ec_degrade_fetch:1,
-					 tx_convert:1,
-					 cond_modify:1,
-					 /* conf_fetch split to multiple sub-tasks */
-					 cond_fetch_split:1,
-					 reintegrating:1,
-					 tx_renew:1,
-					 rebuilding:1,
-					 for_migrate:1,
-					 req_dup_sgl:1;
+	uint32_t new_shard_tasks : 1, reset_param : 1, force_degraded : 1, shards_scheded : 1,
+	    io_retry : 1, args_initialized : 1, to_leader : 1, spec_shard : 1, spec_group : 1,
+	    req_reasbed : 1, is_ec_obj : 1, csum_retry : 1, csum_report : 1, tx_uncertain : 1,
+	    nvme_io_err : 1, no_retry : 1, ec_wait_recov : 1, ec_in_recov : 1, rebuilding : 1,
+	    sub_anchors : 1, ec_degrade_fetch : 1, long_retry_delay : 1, cond_fetch_split : 1,
+	    cond_modify : 1, reintegrating : 1, tx_renew : 1, tx_convert : 1, req_dup_sgl : 1,
+	    for_migrate : 1;
 	/* request flags. currently only: ORF_RESEND */
-	uint32_t			 specified_shard;
-	uint32_t			 flags;
-	uint16_t			 retry_cnt;
-	uint16_t			 inprogress_cnt;
+	uint32_t                         specified_shard;
+	uint32_t                         flags;
+	uint32_t                         retry_cnt;
 	/* Last timestamp (in second) when report retry warning message. */
 	uint32_t                         retry_warn_ts;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
+	/* Replica-cycle start in the request layout; UINT32_MAX requires reselection. */
 	uint32_t			 initial_shard;
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
+	/* per-IOM merge state for EC fetch, one per iod, allocated on demand
+	 * and kept across retries.
+	 */
+	struct obj_iom_merge_state      *iom_state;
 	struct obj_auxi_tgt_list	*failed_tgt_list;
 	uint64_t			 dkey_hash;
 	/* one shard_args embedded to save one memory allocation if the obj
@@ -798,6 +797,9 @@ int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 struct daos_oclass_attr *obj_get_oca(struct dc_object *obj);
 bool obj_is_ec(struct dc_object *obj);
 int obj_get_replicas(struct dc_object *obj);
+int
+obj_ptr2shards(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
+	       uint32_t *grp_nr);
 int obj_shard_open(struct dc_object *obj, unsigned int shard,
 		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
 int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
@@ -925,8 +927,8 @@ void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
 uint32_t
-dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint16_t *retry_cnt,
-		   uint16_t *inprogress_cnt, uint32_t timeout_secs);
+dc_obj_retry_delay(tse_task_t *task, uint32_t opc, int err, uint32_t *retry_cnt,
+		   uint32_t timeout_secs, bool long_delay);
 
 /* handles, pointers for handling I/O */
 struct obj_io_context {
@@ -946,18 +948,6 @@ struct obj_io_context {
 				 ioc_lost_reply:1,
 				 ioc_fetch_snap:1;
 };
-
-static inline void
-obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
-	       uint32_t *grp_nr)
-{
-	*start_shard = 0;
-	*shard_nr = obj->cob_shards_nr;
-	*grp_nr = obj->cob_shards_nr / obj_get_grp_size(obj);
-
-	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "DF_OID": %u/%u\n",
-		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
-}
 
 static inline uint64_t
 obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
@@ -1152,8 +1142,8 @@ dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 			uint32_t *pmv);
 
 /* cli_coll.c */
-bool
-obj_need_coll(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
+int
+obj_need_coll(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
 	      uint32_t *grp_nr);
 
 int
@@ -1204,10 +1194,14 @@ iov_alloc_for_csum_info(d_iov_t *iov, struct dcs_csum_info *csum_info);
 /* obj_layout.c */
 int
 obj_pl_grp_idx(uint32_t layout_gl_ver, uint64_t hash, uint32_t grp_nr);
+void
+obj_dump_grp_layout(daos_handle_t oh, uint32_t shard);
 
 int
 obj_pl_place(struct pl_map *map, uint16_t layout_ver, struct daos_obj_md *md,
 	     unsigned int mode, struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp);
+void
+obj_ec_recov_reset(struct obj_reasb_req *reasb_req);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

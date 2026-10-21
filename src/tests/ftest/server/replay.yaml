@@ -12,11 +12,10 @@ server_config:
       storage: auto
 
 pool:
-  # size: 50%
   size: 50G
+  properties: rd_fac:0
 
 container:
-  control_method: daos
   type: POSIX
   dfs_oclass: SX
 

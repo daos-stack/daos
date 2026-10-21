@@ -11,35 +11,12 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-: "${CHROOT_NAME:=epel-7-x86_64}"
-: "${TARGET:=centos7}"
-
+: "${TARGET:=el9}"
 artdir="${PWD}/artifacts/${TARGET}"
+rpmdir="${PWD}/rpms"
 rm -rf "$artdir"
 mkdir -p "$artdir"
 
-if [ -d /var/cache/pbuilder/ ]; then
-    mockroot=/var/cache/pbuilder/
-    (if cd "$mockroot/result/"; then
-      cp ./*{.buildinfo,.changes,.deb,.dsc,.xz} "$artdir"
-    fi)
-    cp utils/rpms/_topdir/BUILD/*.orig.tar.*  "$artdir"
-    pushd "$artdir"
-    dpkg-scanpackages . /dev/null | \
-        gzip -9c > Packages.gz
-    popd
-
-    exit 0
+if [ -d "${rpmdir}" ]; then
+  cp -r "${rpmdir}"/* "${artdir}"
 fi
-
-mockroot="/var/lib/mock/${CHROOT_NAME}"
-cat "$mockroot"/result/{root,build}.log 2>/dev/null || true
-
-if srpms="$(ls _topdir/SRPMS/*)"; then
-  cp -af "$srpms" "$artdir"
-fi
-(if cd "$mockroot/result/"; then
-  cp -r . "$artdir"
-fi)
-
-createrepo "$artdir"

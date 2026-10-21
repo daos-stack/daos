@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
@@ -55,12 +57,18 @@ var magicToStr = map[int64]string{
 
 // DefaultProvider returns the package-default provider implementation.
 func DefaultProvider() *LinuxProvider {
-	return &LinuxProvider{}
+	return &LinuxProvider{
+		runCommand: func(name string, args ...string) ([]byte, error) {
+			return exec.Command(name, args...).Output()
+		},
+	}
 }
 
 // LinuxProvider encapsulates Linux-specific implementations of system
 // interfaces.
-type LinuxProvider struct{}
+type LinuxProvider struct {
+	runCommand func(string, ...string) ([]byte, error)
+}
 
 // mountId,parentId,major:minor,root,mountPoint
 const (
@@ -253,6 +261,10 @@ type MkfsReq struct {
 // Mkfs attempts to create a filesystem of the supplied type, on the
 // supplied device.
 func (s LinuxProvider) Mkfs(req MkfsReq) error {
+	if req.Filesystem == "" {
+		return errors.New("no filesystem type specified")
+	}
+
 	cmdPath, err := exec.LookPath(fmt.Sprintf("mkfs.%s", req.Filesystem))
 	if err != nil {
 		return errors.Wrapf(err, "unable to find mkfs.%s", req.Filesystem)
@@ -262,7 +274,7 @@ func (s LinuxProvider) Mkfs(req MkfsReq) error {
 		return err
 	}
 
-	args := make([]string, 0, len(req.Options))
+	args := make([]string, len(req.Options))
 	_ = copy(args, req.Options)
 	// TODO: Think about a way to allow for some kind of progress
 	// callback so that the user has some visibility into long-running
@@ -273,7 +285,7 @@ func (s LinuxProvider) Mkfs(req MkfsReq) error {
 	if req.Force {
 		args = append([]string{"-F"}, args...)
 	}
-	out, err := exec.Command(cmdPath, args...).Output()
+	out, err := s.runCommand(cmdPath, args...)
 	if err != nil {
 		return &RunCmdError{
 			Wrapped: err,
@@ -282,6 +294,33 @@ func (s LinuxProvider) Mkfs(req MkfsReq) error {
 	}
 
 	return nil
+}
+
+// GetDeviceLabel retrieves the filesystem label for the specified device.
+func (s LinuxProvider) GetDeviceLabel(device string) (string, error) {
+	if device == "" {
+		return "", errors.New("empty path")
+	}
+
+	cmdPath, err := exec.LookPath("lsblk")
+	if err != nil {
+		return "", errors.Wrap(err, "unable to find lsblk")
+	}
+
+	if err := s.checkDevice(device); err != nil {
+		return "", err
+	}
+
+	args := []string{"-o", "label", "--noheadings", device}
+	out, err := s.runCommand(cmdPath, args...)
+	if err != nil {
+		return "", &RunCmdError{
+			Wrapped: err,
+			Stdout:  string(out),
+		}
+	}
+
+	return strings.TrimSpace(string(out)), nil
 }
 
 // Getfs probes the specified device in an attempt to determine the
@@ -297,7 +336,7 @@ func (s LinuxProvider) Getfs(device string) (string, error) {
 	}
 
 	args := []string{"-s", device}
-	out, err := exec.Command(cmdPath, args...).Output()
+	out, err := s.runCommand(cmdPath, args...)
 	if err != nil {
 		return FsTypeNone, &RunCmdError{
 			Wrapped: err,
@@ -353,10 +392,9 @@ func (s LinuxProvider) Getegid() int {
 	return os.Getegid()
 }
 
-// Mkdir creates a new directory with the specified name and permission
-// bits (before umask).
-func (s LinuxProvider) Mkdir(name string, perm os.FileMode) error {
-	return os.Mkdir(name, perm)
+// Mkdir creates a new directory with the specified name and permission bits (umask ignored).
+func (s LinuxProvider) Mkdir(path string, perm os.FileMode) error {
+	return common.MkdirForcePerm(path, perm)
 }
 
 // RemoveAll removes path and any children it contains.

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,6 +34,7 @@
 /** pool query request bits */
 #define DAOS_PO_QUERY_SPACE			(1ULL << 0)
 #define DAOS_PO_QUERY_REBUILD_STATUS		(1ULL << 1)
+#define DAOS_PO_QUERY_REBULD_MAX_LAYOUT_VER     (1ULL << 2)
 #define PROP_BIT_START				16
 #define DAOS_PO_QUERY_PROP_BIT_START		PROP_BIT_START
 #define DAOS_PO_QUERY_PROP_LABEL		(1ULL << (PROP_BIT_START + 0))
@@ -63,7 +64,9 @@
 #define DAOS_PO_QUERY_PROP_REINT_MODE		(1ULL << (PROP_BIT_START + 24))
 #define DAOS_PO_QUERY_PROP_SVC_OPS_ENABLED      (1ULL << (PROP_BIT_START + 25))
 #define DAOS_PO_QUERY_PROP_SVC_OPS_ENTRY_AGE    (1ULL << (PROP_BIT_START + 26))
-#define DAOS_PO_QUERY_PROP_BIT_END              42
+#define DAOS_PO_QUERY_PROP_CA_CERT              (1ULL << (PROP_BIT_START + 27))
+#define DAOS_PO_QUERY_PROP_CERT_WATERMARKS      (1ULL << (PROP_BIT_START + 28))
+#define DAOS_PO_QUERY_PROP_BIT_END              44
 
 #define DAOS_PO_QUERY_PROP_ALL                                                                     \
 	(DAOS_PO_QUERY_PROP_LABEL | DAOS_PO_QUERY_PROP_SPACE_RB | DAOS_PO_QUERY_PROP_SELF_HEAL |   \
@@ -77,7 +80,8 @@
 	 DAOS_PO_QUERY_PROP_OBJ_VERSION | DAOS_PO_QUERY_PROP_PERF_DOMAIN |                         \
 	 DAOS_PO_QUERY_PROP_CHECKPOINT_MODE | DAOS_PO_QUERY_PROP_CHECKPOINT_FREQ |                 \
 	 DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH | DAOS_PO_QUERY_PROP_REINT_MODE |                    \
-	 DAOS_PO_QUERY_PROP_SVC_OPS_ENABLED | DAOS_PO_QUERY_PROP_SVC_OPS_ENTRY_AGE)
+	 DAOS_PO_QUERY_PROP_SVC_OPS_ENABLED | DAOS_PO_QUERY_PROP_SVC_OPS_ENTRY_AGE |               \
+	 DAOS_PO_QUERY_PROP_CA_CERT | DAOS_PO_QUERY_PROP_CERT_WATERMARKS)
 
 /*
  * Version 1 corresponds to 2.2 (aggregation optimizations)
@@ -86,6 +90,16 @@
  * Version 4 corresponds to 2.8 (SV gang allocation, server pool/cont hdls)
  */
 #define DAOS_POOL_GLOBAL_VERSION 4
+
+/**
+ * Each individual object layout format, like oid layout, dkey to group,
+ * dkey to EC group start.
+ */
+enum {
+	DAOS_POOL_OBJ_VERSION_1 = 1,
+	DAOS_POOL_OBJ_VERSION_2 = 2,
+	DAOS_POOL_OBJ_VERSION   = DAOS_POOL_OBJ_VERSION_2,
+};
 
 int dc_pool_init(void);
 void dc_pool_fini(void);
@@ -126,6 +140,8 @@ struct dc_pool {
 
 	/* pool redunc factor */
 	uint32_t		dp_rf;
+	/* Maximum supported layout version */
+	uint16_t                dp_max_supported_layout_ver;
 };
 
 static inline unsigned int
