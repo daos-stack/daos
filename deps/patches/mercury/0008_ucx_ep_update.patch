@@ -1,0 +1,448 @@
+From b335e5beaf1a803f7a734ec523ba5ee756b46ff0 Mon Sep 17 00:00:00 2001
+From: Jerome Soumagne <jerome.soumagne@hpe.com>
+Date: Mon, 19 Oct 2026 19:44:18 -0500
+Subject: [PATCH] NA UCX: protect EP update on disconnect event
+
+In multi-threaded workloads, a sender could have started using an EP
+that was not fully resolved yet.
+---
+ src/na/na_ucx.c | 216 ++++++++++++++++++++++++++++++++++++------------
+ 1 file changed, 161 insertions(+), 55 deletions(-)
+
+diff --git a/src/na/na_ucx.c b/src/na/na_ucx.c
+index 255be761..5cb9a3b1 100644
+--- a/src/na/na_ucx.c
++++ b/src/na/na_ucx.c
+@@ -144,13 +144,14 @@ struct na_ucx_addr {
+     ucs_sock_addr_t addr_key;                      /* Address key */
+     struct na_ucx_worker_addr_key worker_addr_key; /* Worker addr key */
+     struct na_ucx_class *na_ucx_class;             /* NA UCX class */
+-    bool worker_addr_alloc;     /* Worker addr was allocated by us */
+-    bool worker_addr_cached;    /* Addr is referenced by worker_map */
+-    ucp_ep_h ucp_ep;            /* Currently only one EP per address */
+-    void *close_request;        /* Close request */
+-    hg_atomic_int32_t refcount; /* Reference counter */
+-    hg_atomic_int32_t status;   /* Connection state */
+-    bool connect;               /* Issued from a connection request */
++    bool worker_addr_alloc;        /* Worker addr was allocated by us */
++    bool worker_addr_cached;       /* Addr is referenced by worker_map */
++    ucp_ep_h ucp_ep;               /* Currently only one EP per address */
++    void *close_request;           /* Close request */
++    hg_atomic_int32_t ep_refcount; /* Endpoint users, -1 during replacement */
++    hg_atomic_int32_t refcount;    /* Reference counter */
++    hg_atomic_int32_t status;      /* Connection state */
++    bool connect;                  /* Issued from a connection request */
+ };
+ 
+ /* Map (used to cache addresses) */
+@@ -212,6 +213,7 @@ typedef na_return_t (*na_ucp_rma_op_t)(ucp_ep_h ep, void *buf, size_t buf_size,
+ /* RMA info */
+ struct na_ucx_rma_info {
+     na_ucp_rma_op_t ucp_rma_op;
++    ucp_ep_h ucp_ep;
+     void *buf;
+     size_t buf_size;
+     uint64_t remote_addr;
+@@ -291,6 +293,7 @@ struct na_ucx_class {
+     size_t unexpected_size_max;    /* Max unexpected size */
+     size_t expected_size_max;      /* Max expected size */
+     hg_atomic_int32_t ncontexts;   /* Number of contexts */
++    uint8_t thread_mode;           /* Thread mode */
+     bool no_wait;                  /* Wait disabled */
+ };
+ 
+@@ -724,6 +727,19 @@ na_ucx_addr_ep_equal(hg_hash_table_key_t key1, hg_hash_table_key_t key2);
+ static NA_INLINE struct na_ucx_addr *
+ na_ucx_addr_ep_lookup(struct na_ucx_map *na_ucx_map, ucp_ep_h ep);
+ 
++/**
++ * Increment ref count for addr EP. Returns true if successful, false if
++ * addr EP is being replaced (refcount is -1).
++ */
++static NA_INLINE bool
++na_ucx_addr_ep_ref_get(hg_atomic_int32_t *refcount);
++
++/**
++ * Try to set ref count for addr EP to -1 to indicate that it is being replaced.
++ */
++static NA_INLINE bool
++na_ucx_addr_ep_ref_try_update(hg_atomic_int32_t *refcount);
++
+ /**
+  * Allocate empty address.
+  */
+@@ -2505,7 +2521,8 @@ na_ucp_put_cb(void *request, ucs_status_t status, void NA_UNUSED *user_data)
+      * until the flush completes. Gets are unaffected: local completion of a get
+      * means the data has already been delivered into the local buffer. */
+     if (status == UCS_OK) {
+-        cb_ret = na_ucp_flush(na_ucx_op_id->addr->ucp_ep, na_ucx_op_id);
++        /* Assume that the EP remains valid */
++        cb_ret = na_ucp_flush(na_ucx_op_id->info.rma.ucp_ep, na_ucx_op_id);
+         NA_CHECK_SUBSYS_NA_ERROR(rma, done, cb_ret, "na_ucp_flush() failed");
+ 
+         return; /* Completion deferred to na_ucp_flush_cb() */
+@@ -2955,20 +2972,29 @@ na_ucx_addr_map_update(struct na_ucx_class *na_ucx_class,
+     if (hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)
+         goto unlock;
+ 
++    if (!(na_ucx_class->thread_mode & NA_THREAD_MODE_SINGLE) &&
++        !na_ucx_addr_ep_ref_try_update(&na_ucx_addr->ep_refcount)) {
++        ret = NA_AGAIN; /* Another thread is already updating the EP */
++        goto unlock;
++    }
++
+     NA_LOG_SUBSYS_DEBUG(
+         addr, "Attempting to reconnect addr %p", (void *) na_ucx_addr);
+ 
+     /* Remove EP handle from secondary map */
+-    rc = hg_hash_table_remove(
+-        na_ucx_map->ep_map, (hg_hash_table_key_t) na_ucx_addr->ucp_ep);
+-    NA_CHECK_SUBSYS_ERROR(addr, rc != 1, unlock, ret, NA_NOENTRY,
+-        "hg_hash_table_remove() failed");
++    if (na_ucx_addr->ucp_ep != NULL) {
++        rc = hg_hash_table_remove(
++            na_ucx_map->ep_map, (hg_hash_table_key_t) na_ucx_addr->ucp_ep);
++        NA_CHECK_SUBSYS_ERROR(addr, rc != 1, release, ret, NA_NOENTRY,
++            "hg_hash_table_remove() failed");
+ 
+-    /* Close previous EP (force closure) */
+-    na_ucp_ep_close(na_ucx_addr->ucp_ep, true, &request);
+-    na_ucx_addr->ucp_ep = NULL;
+-    NA_CHECK_SUBSYS_ERROR(addr, request != NULL, unlock, ret, NA_BUSY,
+-        "Could not close UCP endpoint");
++        /* Close previous EP (force closure) */
++        na_ucp_ep_close(na_ucx_addr->ucp_ep, true, &request);
++        na_ucx_addr->ucp_ep = NULL;
++        /* The request can be ignored as we are force closing */
++        NA_CHECK_SUBSYS_ERROR(addr, request != NULL, release, ret, NA_BUSY,
++            "Could not close UCP endpoint");
++    }
+ 
+     /* Create new endpoint */
+     ret = na_ucp_connect(na_ucx_class->ucp_worker,
+@@ -2976,7 +3002,7 @@ na_ucx_addr_map_update(struct na_ucx_class *na_ucx_class,
+         na_ucx_addr->addr_key.addrlen, na_ucp_ep_error_cb, (void *) na_ucx_addr,
+         &na_ucx_addr->ucp_ep);
+     NA_CHECK_SUBSYS_NA_ERROR(
+-        addr, unlock, ret, "Could not connect UCP endpoint");
++        addr, release, ret, "Could not connect UCP endpoint");
+ 
+     NA_LOG_SUBSYS_DEBUG(addr, "UCP ep for addr %p is %p", (void *) na_ucx_addr,
+         (void *) na_ucx_addr->ucp_ep);
+@@ -2986,17 +3012,27 @@ na_ucx_addr_map_update(struct na_ucx_class *na_ucx_class,
+         (hg_hash_table_key_t) na_ucx_addr->ucp_ep,
+         (hg_hash_table_value_t) na_ucx_addr);
+     NA_CHECK_SUBSYS_ERROR(
+-        addr, rc == 0, unlock, ret, NA_NOMEM, "hg_hash_table_insert() failed");
++        addr, rc == 0, close, ret, NA_NOMEM, "hg_hash_table_insert() failed");
+ 
+     /* Retake refcount taken away from previous disconnect */
+     na_ucx_addr_ref_incr(na_ucx_addr);
+ 
+     hg_atomic_or32(&na_ucx_addr->status, NA_UCX_ADDR_RESOLVED);
+ 
++release:
++    if (!(na_ucx_class->thread_mode & NA_THREAD_MODE_SINGLE))
++        hg_atomic_set32(&na_ucx_addr->ep_refcount, 0);
++
+ unlock:
+     hg_thread_rwlock_release_wrlock(&na_ucx_map->lock);
+ 
+     return ret;
++
++close:
++    na_ucp_ep_close(na_ucx_addr->ucp_ep, true, &request);
++    (void) request; /* The request can be ignored as we are force closing */
++    na_ucx_addr->ucp_ep = NULL;
++    goto release;
+ }
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -3019,10 +3055,12 @@ na_ucx_addr_map_remove(
+     NA_CHECK_SUBSYS_ERROR(addr, rc != 1, unlock, ret, NA_NOENTRY,
+         "hg_hash_table_remove() failed");
+ 
+-    /* Remove EP handle from secondary map */
+-    rc = hg_hash_table_remove(na_ucx_map->ep_map, (hg_hash_table_key_t) ep);
+-    NA_CHECK_SUBSYS_ERROR(addr, rc != 1, unlock, ret, NA_NOENTRY,
+-        "hg_hash_table_remove() failed");
++    /* The EP may already have been removed by a pending reconnect */
++    if (ep != NULL) {
++        rc = hg_hash_table_remove(na_ucx_map->ep_map, (hg_hash_table_key_t) ep);
++        NA_CHECK_SUBSYS_ERROR(addr, rc != 1, unlock, ret, NA_NOENTRY,
++            "hg_hash_table_remove() failed");
++    }
+ 
+ unlock:
+     hg_thread_rwlock_release_wrlock(&na_ucx_map->lock);
+@@ -3191,6 +3229,28 @@ na_ucx_addr_ep_lookup(struct na_ucx_map *na_ucx_map, ucp_ep_h ep)
+     return (value == HG_HASH_TABLE_NULL) ? NULL : (struct na_ucx_addr *) value;
+ }
+ 
++/*---------------------------------------------------------------------------*/
++static NA_INLINE bool
++na_ucx_addr_ep_ref_get(hg_atomic_int32_t *refcount)
++{
++    int32_t count = hg_atomic_get32(refcount);
++
++    while (count >= 0 && count < INT32_MAX) {
++        if (hg_atomic_cas32(refcount, count, count + 1))
++            return true;
++        count = hg_atomic_get32(refcount);
++    }
++
++    return false;
++}
++
++/*---------------------------------------------------------------------------*/
++static NA_INLINE bool
++na_ucx_addr_ep_ref_try_update(hg_atomic_int32_t *refcount)
++{
++    return hg_atomic_cas32(refcount, 0, -1);
++}
++
+ /*---------------------------------------------------------------------------*/
+ static struct na_ucx_addr *
+ na_ucx_addr_alloc(struct na_ucx_class *na_ucx_class)
+@@ -3198,7 +3258,7 @@ na_ucx_addr_alloc(struct na_ucx_class *na_ucx_class)
+     struct na_ucx_addr *na_ucx_addr;
+ 
+     na_ucx_addr = calloc(1, sizeof(*na_ucx_addr));
+-    if (na_ucx_addr)
++    if (na_ucx_addr != NULL)
+         na_ucx_addr->na_ucx_class = na_ucx_class;
+ 
+     return na_ucx_addr;
+@@ -3271,20 +3331,18 @@ na_ucx_addr_release(struct na_ucx_addr *na_ucx_addr, bool force,
+         na_ucp_ep_close(
+             na_ucx_addr->ucp_ep, force, &na_ucx_addr->close_request);
+         na_ucx_addr->ucp_ep = NULL;
+-
+-        if (na_ucx_addr->close_request != NULL) {
+-            NA_LOG_SUBSYS_DEBUG(addr, "EP close for addr %p still pending",
+-                (void *) na_ucx_addr);
+-            /* Keep addr in close list to progress later */
+-            hg_thread_spin_lock(
+-                &na_ucx_addr->na_ucx_class->addr_close_list.lock);
+-            LIST_INSERT_HEAD(&na_ucx_addr->na_ucx_class->addr_close_list.list,
+-                na_ucx_addr, close_list_entry);
+-            hg_thread_spin_unlock(
+-                &na_ucx_addr->na_ucx_class->addr_close_list.lock);
+-        } else if (free_cb)
+-            free_cb(na_ucx_addr);
+     }
++
++    if (na_ucx_addr->close_request != NULL) {
++        NA_LOG_SUBSYS_DEBUG(
++            addr, "EP close for addr %p still pending", (void *) na_ucx_addr);
++        /* Keep addr in close list to progress later */
++        hg_thread_spin_lock(&na_ucx_addr->na_ucx_class->addr_close_list.lock);
++        LIST_INSERT_HEAD(&na_ucx_addr->na_ucx_class->addr_close_list.list,
++            na_ucx_addr, close_list_entry);
++        hg_thread_spin_unlock(&na_ucx_addr->na_ucx_class->addr_close_list.lock);
++    } else if (free_cb)
++        free_cb(na_ucx_addr);
+ }
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -3395,6 +3453,7 @@ static void
+ na_ucx_addr_reset(struct na_ucx_addr *na_ucx_addr, ucs_sock_addr_t *addr_key)
+ {
+     na_ucx_addr->ucp_ep = NULL;
++    hg_atomic_init32(&na_ucx_addr->ep_refcount, 0);
+     hg_atomic_init32(&na_ucx_addr->refcount, 1);
+     hg_atomic_init32(&na_ucx_addr->status, 0);
+     na_ucx_addr->connect = false;
+@@ -3528,7 +3587,7 @@ na_ucx_unexpected_info_free(
+ 
+ /*---------------------------------------------------------------------------*/
+ static na_return_t
+-na_ucx_rma(struct na_ucx_class NA_UNUSED *na_ucx_class, na_context_t *context,
++na_ucx_rma(struct na_ucx_class *na_ucx_class, na_context_t *context,
+     na_cb_type_t cb_type, na_cb_t callback, void *arg,
+     na_ucp_rma_op_t ucp_rma_op, const char *ucp_rma_op_string,
+     struct na_ucx_mem_handle *local_mem_handle, na_offset_t local_offset,
+@@ -3552,18 +3611,27 @@ na_ucx_rma(struct na_ucx_class NA_UNUSED *na_ucx_class, na_context_t *context,
+      * the address if required. */
+ 
+     /* Check addr to ensure the EP for that addr is still valid */
++again:
+     if (na_ucx_addr->connect &&
+         !(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)) {
+         ret = na_ucx_addr_map_update(
+             na_ucx_class, &na_ucx_class->addr_map, na_ucx_addr);
+-        NA_CHECK_SUBSYS_NA_ERROR(
+-            addr, error, ret, "Could not update NA UCX address");
++        if (ret == NA_AGAIN)
++            goto again; /* Try again */
++        else
++            NA_CHECK_SUBSYS_NA_ERROR(
++                addr, error, ret, "Could not update NA UCX address");
+     }
+-    NA_CHECK_SUBSYS_ERROR(rma, na_ucx_addr->ucp_ep == NULL, error, ret,
++    if (!(na_ucx_class->thread_mode & NA_THREAD_MODE_SINGLE) &&
++        !na_ucx_addr_ep_ref_get(&na_ucx_addr->ep_refcount))
++        goto again; /* Try again */
++
++    NA_CHECK_SUBSYS_ERROR(rma, na_ucx_addr->ucp_ep == NULL, ref_release, ret,
+         NA_ADDRNOTAVAIL, "UCP endpoint is NULL for that address");
+ 
+     NA_UCX_OP_RESET(na_ucx_op_id, context, cb_type, callback, arg, na_ucx_addr);
+ 
++    na_ucx_op_id->info.rma.ucp_ep = na_ucx_addr->ucp_ep;
+     na_ucx_op_id->info.rma.ucp_rma_op = ucp_rma_op;
+     na_ucx_op_id->info.rma.buf =
+         (char *) local_mem_handle->desc.base + local_offset;
+@@ -3586,11 +3654,18 @@ na_ucx_rma(struct na_ucx_class NA_UNUSED *na_ucx_class, na_context_t *context,
+     NA_CHECK_SUBSYS_NA_ERROR(rma, release, ret,
+         "Could not post rma operation (%s)", ucp_rma_op_string);
+ 
++    if (!(na_ucx_class->thread_mode & NA_THREAD_MODE_SINGLE))
++        hg_atomic_decr32(&na_ucx_addr->ep_refcount);
++
+     return NA_SUCCESS;
+ 
+ release:
+     NA_UCX_OP_RELEASE(na_ucx_op_id);
+ 
++ref_release:
++    if (!(na_ucx_class->thread_mode & NA_THREAD_MODE_SINGLE))
++        hg_atomic_decr32(&na_ucx_addr->ep_refcount);
++
+ error:
+     return ret;
+ }
+@@ -3859,6 +3934,9 @@ na_ucx_initialize(
+     NA_CHECK_SUBSYS_ERROR(cls, na_ucx_class->protocol_name == NULL, error, ret,
+         NA_NOMEM, "Could not dup NA protocol name");
+ 
++    /* Keep copy of thread mode for optimization */
++    na_ucx_class->thread_mode = na_init_info->thread_mode;
++
+     /* Set wait mode */
+     na_ucx_class->no_wait = no_wait;
+ 
+@@ -4363,11 +4441,12 @@ na_ucx_msg_buf_free(na_class_t *na_class, void *buf, void *plugin_data)
+ 
+ /*---------------------------------------------------------------------------*/
+ static na_return_t
+-na_ucx_msg_send_unexpected(na_class_t NA_UNUSED *na_class,
+-    na_context_t *context, na_cb_t callback, void *arg, const void *buf,
+-    size_t buf_size, void NA_UNUSED *plugin_data, na_addr_t *dest_addr,
++na_ucx_msg_send_unexpected(na_class_t *na_class, na_context_t *context,
++    na_cb_t callback, void *arg, const void *buf, size_t buf_size,
++    void NA_UNUSED *plugin_data, na_addr_t *dest_addr,
+     uint8_t NA_UNUSED dest_id, na_tag_t tag, na_op_id_t *op_id)
+ {
++    struct na_ucx_class *na_ucx_class = NA_UCX_CLASS(na_class);
+     struct na_ucx_addr *na_ucx_addr = (struct na_ucx_addr *) dest_addr;
+     struct na_ucx_op_id *na_ucx_op_id = (struct na_ucx_op_id *) op_id;
+     na_return_t ret;
+@@ -4381,16 +4460,22 @@ na_ucx_msg_send_unexpected(na_class_t NA_UNUSED *na_class,
+         na_cb_type_to_string(na_ucx_op_id->completion_data.callback_info.type));
+ 
+     /* Check addr to ensure the EP for that addr is still valid */
++again:
+     if (na_ucx_addr->connect &&
+         !(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)) {
+-        struct na_ucx_class *na_ucx_class = NA_UCX_CLASS(na_class);
+-
+         ret = na_ucx_addr_map_update(
+             na_ucx_class, &na_ucx_class->addr_map, na_ucx_addr);
+-        NA_CHECK_SUBSYS_NA_ERROR(
+-            addr, error, ret, "Could not update NA UCX address");
++        if (ret == NA_AGAIN)
++            goto again; /* Try again */
++        else
++            NA_CHECK_SUBSYS_NA_ERROR(
++                addr, error, ret, "Could not update NA UCX address");
+     }
+-    NA_CHECK_SUBSYS_ERROR(msg, na_ucx_addr->ucp_ep == NULL, error, ret,
++    if (!(na_ucx_class->thread_mode & NA_THREAD_MODE_SINGLE) &&
++        !na_ucx_addr_ep_ref_get(&na_ucx_addr->ep_refcount))
++        goto again; /* Try again */
++
++    NA_CHECK_SUBSYS_ERROR(msg, na_ucx_addr->ucp_ep == NULL, ref_release, ret,
+         NA_ADDRNOTAVAIL, "UCP endpoint is NULL for that address");
+ 
+     NA_UCX_OP_RESET(na_ucx_op_id, context, NA_CB_SEND_UNEXPECTED, callback, arg,
+@@ -4404,11 +4489,18 @@ na_ucx_msg_send_unexpected(na_class_t NA_UNUSED *na_class,
+         &na_ucx_op_id->info.msg.tag, na_ucx_op_id);
+     NA_CHECK_SUBSYS_NA_ERROR(msg, release, ret, "Could not post msg send");
+ 
++    if (!(na_ucx_class->thread_mode & NA_THREAD_MODE_SINGLE))
++        hg_atomic_decr32(&na_ucx_addr->ep_refcount);
++
+     return NA_SUCCESS;
+ 
+ release:
+     NA_UCX_OP_RELEASE(na_ucx_op_id);
+ 
++ref_release:
++    if (!(na_ucx_class->thread_mode & NA_THREAD_MODE_SINGLE))
++        hg_atomic_decr32(&na_ucx_addr->ep_refcount);
++
+ error:
+     return ret;
+ }
+@@ -4447,11 +4539,12 @@ na_ucx_msg_recv_unexpected(na_class_t *na_class, na_context_t *context,
+ 
+ /*---------------------------------------------------------------------------*/
+ static na_return_t
+-na_ucx_msg_send_expected(na_class_t NA_UNUSED *na_class, na_context_t *context,
++na_ucx_msg_send_expected(na_class_t *na_class, na_context_t *context,
+     na_cb_t callback, void *arg, const void *buf, size_t buf_size,
+     void NA_UNUSED *plugin_data, na_addr_t *dest_addr,
+     uint8_t NA_UNUSED dest_id, na_tag_t tag, na_op_id_t *op_id)
+ {
++    struct na_ucx_class *na_ucx_class = NA_UCX_CLASS(na_class);
+     struct na_ucx_addr *na_ucx_addr = (struct na_ucx_addr *) dest_addr;
+     struct na_ucx_op_id *na_ucx_op_id = (struct na_ucx_op_id *) op_id;
+     na_return_t ret;
+@@ -4465,16 +4558,22 @@ na_ucx_msg_send_expected(na_class_t NA_UNUSED *na_class, na_context_t *context,
+         na_cb_type_to_string(na_ucx_op_id->completion_data.callback_info.type));
+ 
+     /* Check addr to ensure the EP for that addr is still valid */
++again:
+     if (na_ucx_addr->connect &&
+         !(hg_atomic_get32(&na_ucx_addr->status) & NA_UCX_ADDR_RESOLVED)) {
+-        struct na_ucx_class *na_ucx_class = NA_UCX_CLASS(na_class);
+-
+         ret = na_ucx_addr_map_update(
+             na_ucx_class, &na_ucx_class->addr_map, na_ucx_addr);
+-        NA_CHECK_SUBSYS_NA_ERROR(
+-            addr, error, ret, "Could not update NA UCX address");
++        if (ret == NA_AGAIN)
++            goto again; /* Try again */
++        else
++            NA_CHECK_SUBSYS_NA_ERROR(
++                addr, error, ret, "Could not update NA UCX address");
+     }
+-    NA_CHECK_SUBSYS_ERROR(msg, na_ucx_addr->ucp_ep == NULL, error, ret,
++    if (!(na_ucx_class->thread_mode & NA_THREAD_MODE_SINGLE) &&
++        !na_ucx_addr_ep_ref_get(&na_ucx_addr->ep_refcount))
++        goto again; /* Try again */
++
++    NA_CHECK_SUBSYS_ERROR(msg, na_ucx_addr->ucp_ep == NULL, ref_release, ret,
+         NA_ADDRNOTAVAIL, "UCP endpoint is NULL for that address");
+ 
+     NA_UCX_OP_RESET(
+@@ -4488,11 +4587,18 @@ na_ucx_msg_send_expected(na_class_t NA_UNUSED *na_class, na_context_t *context,
+         na_ucx_addr->ucp_ep, buf, buf_size, (ucp_tag_t) tag, na_ucx_op_id);
+     NA_CHECK_SUBSYS_NA_ERROR(msg, release, ret, "Could not post msg send");
+ 
++    if (!(na_ucx_class->thread_mode & NA_THREAD_MODE_SINGLE))
++        hg_atomic_decr32(&na_ucx_addr->ep_refcount);
++
+     return NA_SUCCESS;
+ 
+ release:
+     NA_UCX_OP_RELEASE(na_ucx_op_id);
+ 
++ref_release:
++    if (!(na_ucx_class->thread_mode & NA_THREAD_MODE_SINGLE))
++        hg_atomic_decr32(&na_ucx_addr->ep_refcount);
++
+ error:
+     return ret;
+ }
