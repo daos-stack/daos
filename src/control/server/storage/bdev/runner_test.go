@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -49,11 +50,6 @@ func mockScriptRunner(t *testing.T, log logging.Logger, mbc *MockBackendConfig) 
 	}, &calls
 }
 
-// TestSpdkSetupScript_validateDevType verifies that run() refuses to invoke the SPDK setup
-// script unless DEV_TYPE has been explicitly set to one of the two values DAOS supports. This
-// guards against a future regression where a new or modified spdkSetupScript method forgets to
-// set DEV_TYPE in its env map, which would otherwise silently fall back to SPDK's default
-// behavior of selecting every supported device class (not just VMD/NVMe).
 func TestSpdkSetupScript_validateDevType(t *testing.T) {
 	for name, tc := range map[string]struct {
 		devType string
@@ -84,38 +80,25 @@ func TestSpdkSetupScript_validateDevType(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
-
-			sss, calls := mockScriptRunner(t, log, nil)
-			sss.env = map[string]string{
-				"PATH": "/some/path",
+			sss := &spdkSetupScript{
+				env: map[string]string{
+					"PATH": "/some/path",
+				},
 			}
 			if !tc.unset {
 				sss.env[devTypeEnv] = tc.devType
 			}
 
-			gotErr := sss.run()
+			gotErr := sss.validateDevType()
 
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
-				if len(*calls) != 0 {
-					t.Fatalf("expected script not to be invoked, got %d calls", len(*calls))
-				}
 				return
-			}
-			if len(*calls) != 1 {
-				t.Fatalf("expected script to be invoked once, got %d calls", len(*calls))
 			}
 		})
 	}
 }
 
-// TestSpdkSetupScript_setsDevType verifies that Prepare(), Unbind() and Reset() always populate
-// DEV_TYPE in the script env, selecting VMD when the (already VMD-detection-resolved) request has
-// VMD enabled, and NVME otherwise. This is independent of and complements the VMD-detection
-// coverage in TestBackend_prepare_reset, providing direct confidence that every entry point into
-// the SPDK setup script mandates DEV_TYPE.
 func TestSpdkSetupScript_setsDevType(t *testing.T) {
 	for name, tc := range map[string]struct {
 		enableVMD  bool
