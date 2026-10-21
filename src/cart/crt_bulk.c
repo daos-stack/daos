@@ -218,39 +218,15 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (atomic_fetch_sub(&bulk->refcount, 1) > 1)
-		return DER_SUCCESS;
-
-	crt_bulk_free_common(bulk);
-
-	return DER_SUCCESS;
-}
-
-void
-crt_bulk_free_common(struct crt_bulk *bulk)
-{
-	struct crt_context *ctx;
-	hg_return_t         hg_ret;
-
-	D_ASSERT(bulk != NULL);
-
-	if (bulk->hg_bulk_hdl != HG_BULK_NULL) {
-		hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
-		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Bulk_free() failed (%s)\n", HG_Error_to_string(hg_ret));
-			/* Ignore the error, as we are already in a cleanup path */
-		}
+	hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
+		rc = crt_hgret_2_der(hg_ret);
 	}
 
-	ctx = bulk->crt_ctx;
-
-	/* bulks that are decoded don't have a cart context associated with them */
-	if (ctx)
-		CRT_METRIC_INC(ctx, CM_BULK_FREE);
-
 	/* decoded bulks are not counted towards quota; such bulks have crt_ctx set to NULL */
-	if (!bulk->deferred && ctx != NULL)
-		put_quota_resource(ctx, CRT_QUOTA_BULKS);
+	if (bulk->crt_ctx)
+		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
 out:
 	if (bulk != NULL) {
 		if (bulk->iovs)
