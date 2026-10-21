@@ -118,7 +118,7 @@ tfifo_create(unsigned int tiers)
 {
 	struct tfifo_queue *tq;
 
-	if (tiers > TFIFO_MAX_TIERS) {
+	if (tiers == 0 || tiers > TFIFO_MAX_TIERS) {
 		D_ERROR("%u tiers isn't supported. (max: %u)\n", tiers, TFIFO_MAX_TIERS);
 		return NULL;
 	}
