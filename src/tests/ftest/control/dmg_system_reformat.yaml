@@ -17,7 +17,7 @@ server_config:
     standard:
       name: daos_server
     non_standard:
-      name: daos_server_nonstd
+      name: daos_nonstd
       port: 10515
 pool: !mux
   default:
