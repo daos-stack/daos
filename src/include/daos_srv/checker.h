@@ -311,4 +311,102 @@ checker_print_indent_dec(struct checker *ck)
 		checker_print_indent_dec(ck);                                                      \
 	} while (0)
 
+/** fault injection helpers */
+
+/**
+ * Proxy the fault injection location from the checker-specific definition to the
+ * DAOS fault injection definition.
+ *
+ * \param[in] fail_loc_in Checker-specific fault location.
+ *
+ * \return Corresponding DAOS fault location.
+ */
+static inline uint64_t
+checker_fi_proxy(uint64_t fail_loc_in)
+{
+	switch (fail_loc_in) {
+	case DLCK_FAULT_POOL_OPEN_UMEM:
+		return DAOS_FAULT_POOL_OPEN_UMEM;
+	case DLCK_FAULT_POOL_OPEN_MAGIC:
+		return DAOS_FAULT_POOL_OPEN_MAGIC;
+	case DLCK_FAULT_POOL_OPEN_VERSION:
+		return DAOS_FAULT_POOL_OPEN_VERSION;
+	case DLCK_FAULT_POOL_OPEN_UUID:
+		return DAOS_FAULT_POOL_OPEN_UUID;
+	case DAOS_FAULT_CONT_TREE_INV_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_INV_CLASS;
+	case DAOS_FAULT_CONT_TREE_UNREG_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_UNREG_CLASS;
+	case DAOS_FAULT_CONT_TREE_FEATURES:
+		return DAOS_FAULT_BTREE_FEATURES;
+	case DAOS_FAULT_GC_TREE_INV_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_INV_CLASS;
+	case DAOS_FAULT_GC_TREE_UNREG_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_UNREG_CLASS;
+	case DAOS_FAULT_GC_TREE_FEATURES:
+		return DAOS_FAULT_BTREE_FEATURES;
+	case DLCK_FAULT_CONT_DOES_NOT_EXIST:
+		return DAOS_FAULT_CONT_DOES_NOT_EXIST;
+	default:
+		D_ASSERTF(0, "Unknown fail location: %lu\n", fail_loc_in);
+		return 0;
+	}
+}
+
+/**
+ * Enter a fault injection point for the checker.
+ *
+ * This function assumes you enable a proxy fault via a config file. Each of the proxy faults have
+ * only one corresponding DAOS fault location. This fault location is set progrmatically to fail
+ * only once. Before exit this function disables faults injected via a config file so a
+ * programatically set fault can take effect. Please call the \ref checker_fi_exit() function after
+ * exiting the tested code.
+ *
+ * \param[in] exp_fail_locs NULL-terminated array of expected fault locations.
+ * \param[out] reenable     Whether to re-enable fault injection after exit.
+ */
+static inline void
+checker_fi_entry(const uint64_t *exp_fail_locs, bool *reenable)
+{
+	uint64_t fail_loc_out;
+	int      i = 0;
+
+	if (!d_fault_inject_is_enabled()) {
+		*reenable = false;
+		return;
+	}
+
+	for (i = 0; exp_fail_locs[i] != 0; i++) {
+		if (DAOS_FAIL_CHECK(exp_fail_locs[i])) {
+			fail_loc_out = checker_fi_proxy(exp_fail_locs[i]);
+			daos_fail_loc_set(fail_loc_out | DAOS_FAIL_ONCE);
+
+			/**
+			 * Disable faults injected via the config file so the programmatically set
+			 * fault can take effect.
+			 */
+			d_fault_inject_disable();
+			*reenable = true;
+
+			return;
+		}
+	}
+}
+
+/**
+ * Exit a fault injection point for the checker.
+ *
+ * This function re-enables fault injection if it was previously disabled by \ref
+ * checker_fi_entry().
+ *
+ * \param[in] reenable Whether to re-enable fault injection after exit.
+ */
+static inline void
+checker_fi_exit(bool reenable)
+{
+	if (reenable) {
+		d_fault_inject_enable();
+	}
+}
+
 #endif /** __DAOS_CHECKER_H__ */
