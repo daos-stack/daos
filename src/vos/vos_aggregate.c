@@ -379,11 +379,6 @@ vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned i
 		rc = vos_obj_iter_check_punch(ih);
 	if (rc < 0)
 		goto out;
-	if (rc == 2) {
-		*acts |= VOS_ITER_CB_SKIP;
-		inc_agg_counter(agg_param, desc->id_type, AGG_OP_SKIP);
-		D_GOTO(out, rc = 0);
-	}
 	if (rc == 1) {
 		*acts |= VOS_ITER_CB_DELETE;
 		inc_agg_counter(agg_param, desc->id_type, AGG_OP_DEL);

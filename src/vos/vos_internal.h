@@ -1140,7 +1140,7 @@ struct vos_iterator {
 	 */
 	uint32_t it_from_parent : 1, it_for_purge : 1, it_for_discard : 1, it_for_migration : 1,
 	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1, it_for_agg : 1,
-	    it_for_check : 1, it_obj_pinned : 1;
+	    it_for_check : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested

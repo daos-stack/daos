@@ -266,13 +266,6 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 
 	*ih = vos_iter2hdl(iter);
 out:
-	if (rc == 0 && type >= VOS_ITER_DKEY && type <= VOS_ITER_RECX &&
-	    param->ip_flags != VOS_IT_KEY_TREE &&
-	    (param->ip_flags & (VOS_IT_FOR_AGG | VOS_IT_FOR_DISCARD | VOS_IT_FOR_PURGE)) == 0) {
-		iter = vos_hdl2iter(*ih);
-		vos_obj_iter_hold(vos_iter2oiter(iter)->it_obj);
-		iter->it_obj_pinned = 1;
-	}
 	if (rc == -DER_NONEXIST && dtx_is_valid_handle(dth)) {
 		if (vos_ts_wcheck(ts_set, dth->dth_epoch, dth->dth_epoch_bound))
 			rc = -DER_TX_RESTART;
@@ -297,8 +290,6 @@ iter_decref(struct vos_iterator *iter)
 
 	vos_ts_set_free(iter->it_ts_set);
 	D_ASSERT(iter->it_ops != NULL);
-	if (iter->it_obj_pinned)
-		vos_obj_iter_release(vos_iter2oiter(iter)->it_obj);
 	return iter->it_ops->iop_finish(iter);
 }
 
@@ -1031,14 +1022,6 @@ probe:
 			if (anchors->ia_probe_level != 0 &&
 			    anchors->ia_probe_level != iter->it_type)
 				goto finish;
-
-			if (anchors->ia_probe_level == VOS_ITER_OBJ && type == VOS_ITER_OBJ) {
-				anchors->ia_probe_level = 0;
-				need_reprobe(type, anchors);
-				stage = VOS_ITER_STAGE_FILTER;
-				probe_flags = VOS_ITER_PROBE_NEXT;
-				goto probe;
-			}
 
 			rc = advance_stage(type, acts, param, anchors, anchor, &stage,
 					   VOS_ITER_STAGE_POST, &probe_flags);
