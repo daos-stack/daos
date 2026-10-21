@@ -62,7 +62,8 @@ class DlckBasicTest(TestDlck):
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
             # Mount 128G of memory-backed tmpfs for testing purposes
-            cmd = "mkdir -p /mnt/dlck_test && mount -t tmpfs -o size=128G tmpfs /mnt/dlck_test"
+            cmd = 'sudo -n "mkdir -p /mnt/dlck_test &&' \
+                  'mount -t tmpfs -o size=128G tmpfs /mnt/dlck_test"'
             run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
             # Display the tmpfs mount
             run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
@@ -112,7 +113,8 @@ class DlckBasicTest(TestDlck):
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
             # Mount 128G of memory-backed tmpfs for testing purposes
-            cmd = "mkdir -p /mnt/dlck_test && mount -t tmpfs -o size=128G tmpfs /mnt/dlck_test"
+            cmd = 'sudo -n "mkdir -p /mnt/dlck_test &&' \
+                  'mount -t tmpfs -o size=128G tmpfs /mnt/dlck_test"'
             run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
             # Display the tmpfs mount
             run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
