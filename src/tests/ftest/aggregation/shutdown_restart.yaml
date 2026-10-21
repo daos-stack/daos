@@ -1,7 +1,9 @@
 hosts:
   test_servers: 3
   test_clients: 1
+
 timeout: 600
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -12,9 +14,12 @@ server_config:
 pool:
   size: 50%
   svcn: 1
+  properties: "rd_fac:0,space_rb:0"
+
 container:
   type: POSIX
-  control_method: daos
+  properties: "cksum:off,srv_cksum:off"
+
 ior:
   api: "DFS"
   client_processes:

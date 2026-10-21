@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -204,8 +205,10 @@ rpc_err_init(void)
 	rc = crt_init(rpc_err.re_local_group_name, flag);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
-	rc = crt_group_rank(NULL, &rpc_err.re_my_rank);
-	D_ASSERTF(rc == 0, "crt_group_rank() failed, rc: %d\n", rc);
+	if (rpc_err.re_is_service) {
+		rc = crt_group_rank(NULL, &rpc_err.re_my_rank);
+		D_ASSERTF(rc == 0, "crt_group_rank() failed, rc: %d\n", rc);
+	}
 
 	rc = crt_context_create(&rpc_err.re_crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);

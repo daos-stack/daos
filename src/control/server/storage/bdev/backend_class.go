@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -19,13 +20,14 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
-	aioBlockSize       = humanize.KiByte * 4 // device block size hardcoded to 4096 bytes
-	defaultAioFileMode = 0600                // AIO file permissions set to owner +rw
+	aioBlockSize       = humanize.KiByte * 4  // device block size hardcoded to 4096 bytes
+	defaultAioFileMode = daos.DefaultFilePerm // AIO file permissions
 )
 
 func createEmptyFile(log logging.Logger, path string, size uint64) error {
@@ -100,6 +102,14 @@ func writeConfigFile(log logging.Logger, buf *bytes.Buffer, req *storage.BdevWri
 	f, err := os.Create(req.ConfigOutputPath)
 	if err != nil {
 		return errors.Wrap(err, "create")
+	}
+
+	// os.Create() above creates a file with 0666 permissions (before umask).
+	// Typical umask is 022 so the effective permissions of the created file is 0644.
+	// The os.Chmod ensures the final permissions for both the user and their group are the same.
+	err = os.Chmod(req.ConfigOutputPath, 0664)
+	if err != nil {
+		return errors.Wrap(err, "chmod")
 	}
 
 	defer func() {

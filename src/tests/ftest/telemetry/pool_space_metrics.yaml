@@ -30,7 +30,6 @@ pool_scm_nvme:
 
 container:
   type: POSIX
-  control_method: daos
   properties: rd_fac:0
   oclass: SX
 
@@ -42,7 +41,6 @@ ior:
   test_file: "/testFile"
   dfs_oclass: SX
   dfs_chunk: 1MiB
-  dfs_destroy: false
   env_vars:
     - D_LOG_MASK=INFO
 
@@ -50,5 +48,5 @@ mpirun:
   args: "--bind-to socket"
 
 scm_metric_thresholds:
-  # Maximal metadata size is empirically adjusted to 8MiB
-  metadata_max_size: 8388608
+  # Maximal metadata size is empirically adjusted to 16MiB
+  metadata_max_size: 16777216

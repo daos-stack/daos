@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,7 @@
 #include "client_internal.h"
 #include <daos/mgmt.h>
 #include <daos/rpc.h>
+#include <daos/tls.h>
 
 /** thread-private event */
 static __thread daos_event_t	ev_thpriv;
@@ -48,6 +49,9 @@ daos_eq_lib_init(crt_init_options_t *crt_info)
 {
 	int rc;
 
+	dc_tls_reset();
+	daos_dti_reset();
+
 	D_MUTEX_LOCK(&daos_eq_lock);
 	if (eq_ref > 0) {
 		eq_ref++;
@@ -63,7 +67,7 @@ daos_eq_lib_init(crt_init_options_t *crt_info)
 	if (d_dynamic_ctx_g) {
 		char iface[DAOS_SYS_INFO_STRING_MAX];
 
-		rc = dc_mgmt_get_iface(&iface[0]);
+		rc = dc_mgmt_get_iface(iface, sizeof(iface));
 		if (rc && rc != -DER_NONEXIST) {
 			D_ERROR("failed to get iface: " DF_RC "\n", DP_RC(rc));
 			D_GOTO(crt, rc);
@@ -92,8 +96,6 @@ daos_eq_lib_init(crt_init_options_t *crt_info)
 
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);
-	if (rc == 0)
-		daos_dti_reset();
 
 	return rc;
 crt:
@@ -106,6 +108,8 @@ daos_eq_lib_reset_after_fork(void)
 {
 	crt_init_options_t *crt_info;
 	int                 rc;
+
+	d_log_reset();
 
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;
@@ -652,7 +656,7 @@ daos_eq_create(daos_handle_t *eqh)
 	if (d_dynamic_ctx_g) {
 		char iface[DAOS_SYS_INFO_STRING_MAX];
 
-		rc = dc_mgmt_get_iface(&iface[0]);
+		rc = dc_mgmt_get_iface(iface, sizeof(iface));
 		if (rc && rc != -DER_NONEXIST) {
 			D_ERROR("failed to get iface: " DF_RC "\n", DP_RC(rc));
 			return rc;

@@ -21,10 +21,11 @@ server_config:
 
 pool:
   size: 95%
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
-  control_method: daos
+  properties: cksum:off,srv_cksum:off
 
 ior:
   num_repeat: 30

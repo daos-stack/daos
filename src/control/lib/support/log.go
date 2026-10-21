@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -351,13 +351,12 @@ func ArchiveLogs(log logging.Logger, opts ...CollectLogsParams) error {
 
 // Get the system hostname
 func GetHostName() (string, error) {
-	hn, err := exec.Command("hostname", "-s").Output()
+	hn, err := os.Hostname()
 	if err != nil {
-		return "", errors.Wrapf(err, "Error running hostname -s command %s", hn)
+		return "", errors.Wrapf(err, "Error getting Hostname %s", hn)
 	}
-	out := strings.Split(string(hn), "\n")
 
-	return out[0], nil
+	return hn, nil
 }
 
 // Create the local folder on each servers
@@ -469,25 +468,6 @@ func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 			}
 		}
 	}
-
-	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
-	if err != nil {
-		return err
-	}
-
-	cmd := strings.Join([]string{
-		"rsync",
-		"-av",
-		"--blocking-io",
-		targetLocation,
-		opts[0].AdminNode + ":" + opts[0].TargetFolder},
-		" ")
-
-	out, err := exec.Command("sh", "-c", cmd).Output()
-	if err != nil {
-		return errors.Wrapf(err, "Error running command %s %s", cmd, string(out))
-	}
-	log.Infof("rsyncCmd:= %s stdout:\n%s\n\n", cmd, string(out))
 
 	return nil
 }

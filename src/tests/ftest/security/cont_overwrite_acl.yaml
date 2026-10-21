@@ -20,7 +20,6 @@ server_config:
 pool:
   scm_size: 1G
 container:
-  control_method: daos
   type: POSIX
 
 invalid_acl_filename:

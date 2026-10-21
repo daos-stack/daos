@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -81,8 +81,8 @@ class AgentFailure(IorTestBase):
         :avocado: tags=AgentFailure,test_agent_failure
         """
         # 1. Create a pool and a container.
-        self.add_pool()
-        self.add_container(self.pool)
+        self.pool = self.get_pool()
+        self.container = self.get_container(self.pool)
 
         # 2. Run IOR.
         ior_results = {}
@@ -174,8 +174,8 @@ class AgentFailure(IorTestBase):
         :avocado: tags=AgentFailure,test_agent_failure_isolation
         """
         # 1. Create a pool and a container.
-        self.add_pool()
-        self.add_container(self.pool)
+        self.pool = self.get_pool()
+        self.container = self.get_container(self.pool)
 
         # Use the last two agent hosts, since the first is likely the test runner node
         agent_hosts = self.agent_managers[0].hosts

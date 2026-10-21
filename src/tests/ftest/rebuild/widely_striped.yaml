@@ -26,7 +26,6 @@ pool:
   properties: rd_fac:2
 container:
   type: POSIX
-  control_method: daos
   oclass: RP_3G1
   properties: rd_fac:2
 mdtest:
@@ -35,7 +34,6 @@ mdtest:
     np: 30
   num_of_files_dirs: 4067         # creating total of 120K files
   test_dir: "/"
-  dfs_destroy: false
   dfs_oclass: RP_3G1
   dfs_dir_oclass: RP_3G1
   manager: "MPICH"

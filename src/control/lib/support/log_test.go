@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -331,41 +331,6 @@ func TestSupport_createHostLogFolder(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			collLogParams.TargetFolder = tc.targetFolder
 			_, gotErr := createHostLogFolder(tc.dst, log, collLogParams)
-			test.CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
-func TestSupport_rsyncLog(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-	targetTestDir, targetCleanup := test.CreateTestDir(t)
-	defer targetCleanup()
-	srcPath := test.CreateTestFile(t, targetTestDir, "Temp File\n")
-	hostName, _ := os.Hostname()
-
-	rsLog := CollectLogsParams{}
-
-	for name, tc := range map[string]struct {
-		targetFolder string
-		AdminNode    string
-		expErr       error
-	}{
-		"rsync to invalid Target directory": {
-			targetFolder: targetTestDir + "/foo/bar",
-			AdminNode:    hostName + ":/tmp/foo/bar/",
-			expErr:       errors.New("Error running command"),
-		},
-		"rsync invalid log directory": {
-			targetFolder: srcPath + "/file1",
-			AdminNode:    hostName,
-			expErr:       errors.New("not a directory"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			rsLog.TargetFolder = tc.targetFolder
-			rsLog.AdminNode = tc.AdminNode
-			gotErr := rsyncLog(log, rsLog)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}

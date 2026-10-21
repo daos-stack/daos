@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,7 +66,7 @@ __wrap_d_vlog(int flags, const char *fmt, va_list ap)
 	assert_non_null(output);
 	output += 1;
 
-	check_expected(output);
+	check_expected_ptr(output);
 }
 
 /** setup & teardown */

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2026 Google LLC
  * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -3047,7 +3048,7 @@ p2_fill_single(void **state)
 		      bkt_id, io_size, chunk_size, total_written, used, total, ne_used - ne_init,
 		      ne_total);
 
-	assert_in_range(used * 100 / total, 97, 100);
+	assert_int_in_range(used * 100 / total, 97, 100);
 	checkpoint_fn(&arg->ctx.tc_po_hdl);
 	umm_pool = vos_cont2umm(cont)->umm_pool;
 	/* Close container */

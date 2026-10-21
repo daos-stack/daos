@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -175,7 +176,11 @@ func extractLabels(log logging.Logger, in string) (labels labelMap, name string)
 			compsIdx++
 		}
 	case "net":
+		// Cart metrics format: "net/<prov>/<metric>/ctx_<idx>"
+		// Mercury metrics format: "net/<prov>/hg/<metric>/ctx_<idx>"
+		// Cart global uri metrics format: "net/uri/<metric>"
 		compsIdx++
+
 		if comps[compsIdx] == "uri" {
 			compsIdx++
 			name = "net_uri_" + comps[compsIdx]

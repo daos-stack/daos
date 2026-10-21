@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,7 +8,6 @@ from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosApiError
 from test_utils_container import add_container
-from test_utils_pool import add_pool
 
 RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
@@ -42,7 +41,7 @@ class Permission(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        pool = add_pool(self, create=False)
+        pool = self.get_pool(create=False)
         self.log.debug("Pool initialization successful")
         pool.create()
         self.log.debug("Pool Creation successful")
@@ -56,7 +55,11 @@ class Permission(TestWithServers):
 
         container = add_container(self, pool, create=False)
         self.log.debug("Container initialization successful")
+        # Set pool.connected to True in case it failed above (expected),
+        # so that container.create() does not try to connect to the pool again.
+        was_connected = pool.connected
         try:
+            pool.connected = True
             container.create()
             self.log.debug("Container create successful")
             # now open it
@@ -66,6 +69,8 @@ class Permission(TestWithServers):
             self.log.error(str(error))
             if expected_result == RESULT_PASS:
                 self.fail("Test was expected to pass but it failed at container operations.")
+        finally:
+            pool.connected = was_connected
 
         thedata = b"a string that I want to stuff into an object"
         size = 45

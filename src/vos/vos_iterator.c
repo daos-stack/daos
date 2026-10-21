@@ -1,6 +1,6 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2016-2024 Intel Corporation.
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -269,8 +269,8 @@ out:
 	if (rc == -DER_NONEXIST && dtx_is_valid_handle(dth)) {
 		if (vos_ts_wcheck(ts_set, dth->dth_epoch, dth->dth_epoch_bound))
 			rc = -DER_TX_RESTART;
-		else
-			vos_ts_set_update(ts_set, dth->dth_epoch);
+		else if (!vos_ts_set_update(ts_set, dth->dth_epoch))
+			rc = -DER_TX_RESTART;
 	}
 	if (rc != 0)
 		vos_ts_set_free(ts_set);
@@ -306,7 +306,8 @@ vos_iter_ts_set_update(daos_handle_t ih, daos_epoch_t read_time, int rc)
 	if (vos_ts_wcheck(iter->it_ts_set, read_time, iter->it_bound))
 		return -DER_TX_RESTART;
 
-	vos_ts_set_update(iter->it_ts_set, read_time);
+	if (!vos_ts_set_update(iter->it_ts_set, read_time))
+		return -DER_TX_RESTART;
 
 	return rc;
 }
@@ -831,6 +832,7 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	uint32_t		probe_flags = 0;
 	int			stage = VOS_ITER_STAGE_FILTER;
 	int			rc;
+	bool                     evictable = false;
 
 	D_ASSERT(type >= VOS_ITER_COUUID && type <= VOS_ITER_RECX);
 	D_ASSERT(anchors != NULL);
@@ -870,6 +872,15 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 		iter->it_ignore_uncommitted = 0;
 	}
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
+
+	if ((type == VOS_ITER_OBJ) && recursive) {
+		struct vos_container *cont;
+
+		D_ASSERT(!(param->ip_flags & VOS_IT_KEY_TREE));
+		cont      = vos_hdl2cont(param->ip_hdl);
+		evictable = vos_pool_is_evictable(cont->vc_pool);
+	}
+
 probe:
 	rc = vos_iter_probe_ex(ih, anchor, probe_flags);
 	if (rc < 0) {
@@ -941,10 +952,20 @@ probe:
 				goto out;
 			}
 
+			/*
+			 * In md-on-ssd phase2 mode, dkey subtree iteration could yield
+			 * on vos_iter_prepare() for loading the object.
+			 */
+			vos_iter_sched_sync(iter);
+			acts = 0;
 
 			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
 					 recursive, anchors, pre_cb, post_cb,
 					 arg, dth);
+
+			if (evictable && vos_iter_sched_check(iter))
+				acts = VOS_ITER_CB_YIELD;
+
 			if (rc != 0)
 				D_GOTO(out, rc);
 
@@ -954,7 +975,7 @@ probe:
 			    anchors->ia_probe_level != iter->it_type)
 				goto finish;
 
-			rc = advance_stage(type, 0, param, anchors, anchor, &stage,
+			rc = advance_stage(type, acts, param, anchors, anchor, &stage,
 					   VOS_ITER_STAGE_POST, &probe_flags);
 			JUMP_TO_STAGE(rc, next, probe, out);
 		}
@@ -996,8 +1017,12 @@ next:
 			}
 			break;
 		} else {
+			acts = rc;
 			rc = advance_stage(type, rc, param, anchors, anchor,
 					   &stage, VOS_ITER_STAGE_FILTER, &probe_flags);
+			if (acts & (VOS_ITER_CB_YIELD | VOS_ITER_CB_DELETE))
+				D_ASSERTF((rc != ITER_NEXT) && (rc != ITER_CONTINUE),
+					  "rc=%d, acts=%u\n", rc, acts);
 			JUMP_TO_STAGE(rc, next, probe, out);
 		}
 	}
@@ -1097,7 +1122,7 @@ vos_iterate_obj(vos_iter_param_t *param, struct vos_iter_anchors *anchors, vos_i
 		return vos_iterate_internal(param, VOS_ITER_OBJ, true, false, anchors, pre_cb,
 					    post_cb, arg, dth);
 
-	/* The caller must provide a filter callback and call the oi_bkt_iter_skip() properly */
+	/* The caller must provide a filter callback and call the vos_bkt_iter_skip() properly */
 	D_ASSERT(param->ip_filter_cb != NULL && param->ip_bkt_iter == NULL);
 
 	bkt_iter = bkt_iter_alloc(cont->vc_pool);
@@ -1144,4 +1169,13 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 
 	return vos_iterate_internal(param, type, recursive, false, anchors, pre_cb, post_cb, arg,
 				    dth);
+}
+
+int
+vos_iter_check(daos_handle_t ih, report_fn_t report_fn, void *report_arg,
+	       bool error_on_non_zero_padding)
+{
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+
+	return iter->it_ops->iop_check(iter, report_fn, report_arg, error_on_non_zero_padding);
 }

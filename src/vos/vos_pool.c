@@ -1226,6 +1226,7 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 	d_uhash_ulink_init(&pool->vp_hlink, &pool_uuid_hops);
 	D_INIT_LIST_HEAD(&pool->vp_gc_link);
 	D_INIT_LIST_HEAD(&pool->vp_gc_cont);
+	D_INIT_LIST_HEAD(&pool->vp_cont_list);
 	uuid_copy(pool->vp_id, uuid);
 
 	*pool_p = pool;
@@ -1442,8 +1443,14 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 		pool_df->pd_version = version;
 
 	/* pd_ext is newly allocated, no need to call tx_add_ptr() */
-	pd_ext_df             = umem_off2ptr(&umem, pool_df->pd_ext);
-	pd_ext_df->ped_mem_sz = scm_sz;
+	pd_ext_df                = umem_off2ptr(&umem, pool_df->pd_ext);
+	pd_ext_df->ped_mem_sz    = scm_sz;
+	pd_ext_df->ped_emerg_buf = umem_zalloc(&umem, VOS_SNAPBUF_EMERG_SIZE);
+	if (UMOFF_IS_NULL(pd_ext_df->ped_emerg_buf)) {
+		D_ERROR("Failed to allocate pool emergency buffer.\n");
+		rc = -DER_NOSPACE;
+	}
+
 end:
 	/**
 	 * The transaction can in reality be aborted
@@ -1686,7 +1693,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 
 	if (IS_CHECKER(ck)) {
 		CK_PRINT(ck, CK_CONT_TREE_STR "...\n");
-		CK_INDENT(ck, rc = dbtree_check_inplace(&pool_df->pd_cont_root, &pool->vp_uma,
+		CK_INDENT(ck, rc = dbtree_check_inplace(&pool_df->pd_cont_root, &pool->vp_uma, pool,
 							ck_report, ck, error_on_non_zero_padding));
 		CK_PRINTL_RC(ck, rc, CK_CONT_TREE_STR);
 		if (rc != DER_SUCCESS) {
@@ -1812,6 +1819,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		}
 		pool->vp_opened++;
 		*poh = vos_pool2hdl(pool);
+		checker_print_indent_dec(ck);
 		return 0;
 	}
 

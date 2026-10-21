@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -670,12 +671,11 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	crt_group_detach(srv_grp);
-
 	g_do_shutdown = true;
 	pthread_join(progress_thread, NULL);
 
 	DBG_PRINT("Exiting client\n");
+	crt_group_detach(srv_grp);
 
 	if (log_file != stdout)
 		fclose(log_file);

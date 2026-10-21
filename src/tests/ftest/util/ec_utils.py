@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -136,7 +136,6 @@ class ErasureCodeIor(ServerFillUp):
         self.ior_local_cmd.block_size.update(sizes[1])
         self.ior_local_cmd.transfer_size.update(sizes[2])
         self.ior_local_cmd.dfs_oclass.update(oclass[0])
-        self.ior_local_cmd.dfs_dir_oclass.update(oclass[0])
 
     def ior_write_single_dataset(self, oclass, sizes, storage='NVMe', operation="WriteRead",
                                  percent=1):
@@ -270,7 +269,7 @@ class ErasureCodeSingle(TestWithServers):
         self.server_count = len(self.hostlist_servers) * engine_count
         self.obj_class = self.params.get("dfs_oclass_list", '/run/objectclass/*')
         self.singledata_set = self.params.get("single_data_set", '/run/container/*')
-        self.add_pool()
+        self.pool = self.get_pool()
         self.out_queue = queue.Queue()
 
     def ec_container_create(self, oclass):
@@ -418,7 +417,7 @@ class ErasureCodeMdtest(MdtestBase):
         """Set up each test case."""
         super().setUp()
         # Create Pool
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         self.container = None
         self.out_queue = queue.Queue()
 

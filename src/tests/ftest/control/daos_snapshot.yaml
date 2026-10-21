@@ -16,8 +16,6 @@ server_config:
   system_ram_reserved: 1
 pool:
   scm_size: 1G
-container:
-  control_method: daos
 stress_test: !mux
   small:
     snapshot_count: 5

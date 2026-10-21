@@ -4,7 +4,7 @@
 def configure_lustre(denv):
     """Do Lustre configure checks"""
     if GetOption('help') or GetOption('clean'):
-        return denv
+        return
 
     def _print(msg):
         if not GetOption('silent'):
@@ -12,23 +12,22 @@ def configure_lustre(denv):
 
     # If Lustre installed build a Lustre-aware libduns
     conf = Configure(denv)
-    gotversion = False
-    if not conf.CheckLibWithHeader('lustreapi', 'linux/lustre/lustre_user.h',
-                                   'c'):
-        _print("No installed Lustre version detected")
-    else:
-        _print("Installed Lustre version detected")
-        if not conf.CheckFunc('llapi_unlink_foreign'):
-            _print("Lustre version is not compatible")
-        else:
-            _print("Lustre version is compatible")
-            gotversion = True
-    if gotversion is True:
-        _print("Building with Lustre bindings.")
-        denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
-    else:
-        _print("Not building with Lustre bindings.")
-    return conf.Finish()
+    is_installed = conf.CheckLibWithHeader('lustreapi', 'linux/lustre/lustre_user.h', 'c')
+    conf.Finish()
+
+    if not is_installed:
+        _print("Not building with Lustre bindings: Lustre not detected")
+        return
+    _print("Installed Lustre version detected")
+
+    lenv = denv.Clone()
+    lenv.AppendUnique(LIBS=['lustreapi'])
+    if not lenv.CheckFunc('llapi_unlink_foreign'):
+        _print("Not building with Lustre bindings: Lustre version is not compatible")
+        return
+    _print("Building with Lustre bindings: Lustre version is compatible")
+
+    denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
 
 
 def scons():

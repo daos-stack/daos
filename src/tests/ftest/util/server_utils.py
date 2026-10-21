@@ -21,6 +21,7 @@ from host_utils import get_local_host
 from run_utils import command_as_user, run_remote, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
+from storage_utils import StorageInfo
 from user_utils import get_chown_command
 
 
@@ -157,9 +158,11 @@ class DaosServerManager(SubprocessManager):
         """Get the rank and host pairing for all of the engines.
 
         Returns:
-            dict: rank key with host value
+            dict: rank key with host value, or empty dict if not initialized
 
         """
+        if self._expected_states is None:
+            return {}
         return {rank: value["host"] for rank, value in self._expected_states.items()}
 
     @property
@@ -441,6 +444,13 @@ class DaosServerManager(SubprocessManager):
         Returns:
             CommandResult: groups of command results from the same hosts with the same return status
         """
+        # On nodes booting from NVMe (not SATA), exclude the boot drive so prepare
+        # does not try to bind it to vfio-pci and fail while the OS is using it.
+        if "pci_block_list" not in kwargs:
+            mounted_addresses = StorageInfo(self.log, self._hosts).get_mounted_addresses()
+            if mounted_addresses:
+                kwargs["pci_block_list"] = ",".join(sorted(mounted_addresses))
+
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
@@ -669,9 +679,7 @@ class DaosServerManager(SubprocessManager):
 
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
-        # be further investigated.
-        self.dmg.storage_format(timeout=self.storage_format_timeout.value)
+        self.storage_format()
 
         # Wait for all the engines to start
         self.detect_engine_start()
@@ -1001,6 +1009,23 @@ class DaosServerManager(SubprocessManager):
                 "investigate/report.***", regex, detected)
         # set stopped servers state to make teardown happy
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
+
+    def storage_format(self, **kwargs):
+        """Wrapper for dmg storage format that uses self.storage_format_timeout.
+
+        Args:
+            kwargs (dict): keyword args for DmgCommand.storage_format
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage format command fails.
+        """
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = self.storage_format_timeout.value
+        return self.dmg.storage_format(**kwargs)
 
     @fail_on(CommandFailure)
     def system_exclude(self, ranks, copy=False, rank_hosts=None):

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,7 +27,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -2345,7 +2344,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"dcpm already mounted no reformat; replace fails": {
+		"dcpm already mounted no reformat; replace succeeds": {
 			scmMounted: true,
 			sMounts:    []string{"/mnt/daos"},
 			sClass:     storage.ClassDcpm,
@@ -2360,7 +2359,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("only valid if at least one engine requires format"),
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
@@ -2604,7 +2602,12 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			}
 			sysProv := system.NewMockSysProvider(log, smsc)
 			mounter := mount.NewProvider(log, sysProv)
-			scmProv := scm.NewProvider(log, nil, sysProv, mounter)
+			scmProv := scm.NewProvider(&scm.ProviderConfig{
+				Log:       log,
+				Sys:       sysProv,
+				Mounter:   mounter,
+				KernelCfg: system.KernelConfig{},
+			})
 			bdevProv := bdev.NewMockProvider(log, nil)
 			if tc.getSysMemInfo == nil {
 				tc.getSysMemInfo = func() (*common.SysMemInfo, error) {
@@ -2617,13 +2620,10 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			mscs := NewMockStorageControlService(log, config.Engines, sysProv, scmProv,
 				bdevProv, tc.getSysMemInfo)
 
-			ctxEvt, cancelEvtCtx := context.WithCancel(context.Background())
-			t.Cleanup(cancelEvtCtx)
-
 			cs := &ControlService{
 				StorageControlService: *mscs,
 				harness:               &EngineHarness{log: log},
-				events:                events.NewPubSub(ctxEvt, log),
+				events:                nil, // No event processing needed for this unit test
 				srvCfg:                config,
 			}
 

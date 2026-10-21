@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -173,6 +173,15 @@ var FaultPoolMemRatioNoRoles = serverFault(
 	"pool create request contains MD-on-SSD parameters but MD-on-SSD has not been enabled",
 	"either remove MD-on-SSD-specific options from the command request or set bdev_roles in "+
 		"server config file to enable MD-on-SSD")
+
+func FaultPoolTooFewFaultDomains(rdFac int, numDomains int) *fault.Fault {
+	return serverFault(
+		code.ServerPoolTooFewFaultDomains,
+		fmt.Sprintf("pool redundancy factor %d requires at least %d fault domains but only %d are available",
+			rdFac, rdFac+1, numDomains),
+		"retry the request with a lower redundancy factor or add more fault domains",
+	)
+}
 
 func FaultBadFaultDomainLabels(faultPath, addr string, reqLabels, systemLabels []string) *fault.Fault {
 	return serverFault(

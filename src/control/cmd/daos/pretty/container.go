@@ -40,20 +40,22 @@ func PrintContainerInfo(out io.Writer, ci *daos.ContainerInfo, verbose bool) err
 		if ci.LatestSnapshot != 0 {
 			rows = append(rows, txtfmt.TableRow{"Latest Persistent Snapshot": fmt.Sprintf("%#x (%s)", uint64(ci.LatestSnapshot), ci.LatestSnapshot)})
 		}
-		if ci.ObjectClass != 0 {
-			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass.String()})
-		}
-		if ci.DirObjectClass != 0 {
-			rows = append(rows, txtfmt.TableRow{"Dir Object Class": ci.DirObjectClass.String()})
-		}
-		if ci.FileObjectClass != 0 {
-			rows = append(rows, txtfmt.TableRow{"File Object Class": ci.FileObjectClass.String()})
-		}
-		if ci.Hints != "" {
-			rows = append(rows, txtfmt.TableRow{"Hints": ci.Hints})
-		}
-		if ci.ChunkSize > 0 {
-			rows = append(rows, txtfmt.TableRow{"Chunk Size": humanize.IBytes(ci.ChunkSize)})
+		if ci.POSIXAttributes != nil {
+			if ci.ObjectClass != 0 {
+				rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass.String()})
+			}
+			if ci.DirObjectClass != 0 {
+				rows = append(rows, txtfmt.TableRow{"Dir Object Class": ci.DirObjectClass.String()})
+			}
+			if ci.FileObjectClass != 0 {
+				rows = append(rows, txtfmt.TableRow{"File Object Class": ci.FileObjectClass.String()})
+			}
+			if ci.Hints != "" {
+				rows = append(rows, txtfmt.TableRow{"Hints": ci.Hints})
+			}
+			if ci.ChunkSize > 0 {
+				rows = append(rows, txtfmt.TableRow{"Chunk Size": humanize.IBytes(ci.ChunkSize)})
+			}
 		}
 	}
 	_, err := fmt.Fprintln(out, txtfmt.FormatEntity("", rows))
@@ -73,9 +75,9 @@ func PrintContainers(out io.Writer, poolID string, containers []*daos.ContainerI
 	uuidTitle := "UUID"
 	labelTitle := "Label"
 	layoutTitle := "Layout"
-	titles := []string{labelTitle}
+	titles := []string{labelTitle, uuidTitle}
 	if verbose {
-		titles = append(titles, uuidTitle, layoutTitle)
+		titles = append(titles, layoutTitle)
 	}
 
 	table := []txtfmt.TableRow{}

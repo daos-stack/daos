@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -224,9 +224,9 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb,
 		/* CPU may yield when umem_tx_begin, related object maybe evicted during that. */
 		rc = umem_tx_begin(umm, vos_txd_get(is_sysdb));
 		if (rc == 0 && obj != NULL && unlikely(vos_obj_is_evicted(obj))) {
-			D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted(1), need to restart TX.\n",
+			D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted(1), need to retry.\n",
 				DP_UOID(obj->obj_id));
-			rc = umem_tx_end(umm, -DER_TX_RESTART);
+			rc = umem_tx_end(umm, -DER_AGAIN);
 		}
 
 		return rc;
@@ -247,10 +247,10 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb,
 	if (rc == 0) {
 		/* CPU may yield when umem_tx_begin, related object maybe evicted during that. */
 		if (obj != NULL && unlikely(vos_obj_is_evicted(obj))) {
-			D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted(2), need to restart TX.\n",
+			D_DEBUG(DB_IO, "Obj " DF_UOID " is evicted(2), need to retry.\n",
 				DP_UOID(obj->obj_id));
 
-			return umem_tx_end(umm, -DER_TX_RESTART);
+			return umem_tx_end(umm, -DER_AGAIN);
 		}
 
 		dth->dth_local_tx_started = 1;
@@ -284,15 +284,15 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts,
 	   bool started, struct bio_desc *biod, int err)
 {
-	struct vos_pool         	*pool;
-	struct umem_instance		*umm;
-	struct dtx_handle		*dth = dth_in;
-	struct vos_dtx_act_ent		*dae;
-	struct vos_dtx_act_ent_df	*dae_df;
-	struct dtx_rsrvd_uint		*dru;
-	struct vos_dtx_cmt_ent		*dce = NULL;
-	struct dtx_handle		 tmp = {0};
-	int				 rc = 0;
+	struct vos_pool           *pool;
+	struct umem_instance      *umm;
+	struct dtx_handle         *dth = dth_in;
+	struct vos_dtx_act_ent    *dae;
+	struct vos_dtx_act_ent_df *dae_df;
+	struct dtx_rsrvd_uint     *dru;
+	struct dtx_handle          tmp = {0};
+	int                        rc  = 0;
+	bool                       cmt = false;
 
 	if (!dtx_is_valid_handle(dth)) {
 		/** Created a dummy dth handle for publishing extents */
@@ -350,7 +350,7 @@ commit:
 	dth->dth_local_tx_started = 0;
 
 	if (dtx_is_valid_handle(dth_in) && err == 0 && !dth->dth_local)
-		err = vos_dtx_prepared(dth, &dce);
+		err = vos_dtx_prepared(dth, &cmt);
 
 	if (err == 0)
 		err = vos_tx_publish(dth, true);
@@ -395,9 +395,9 @@ cancel:
 				    cont->vc_solo_dtx_epoch < dth->dth_epoch)
 					cont->vc_solo_dtx_epoch = dth->dth_epoch;
 
-				vos_dtx_post_handle(cont, &dae, &dce, 1, false, err != 0, false);
+				vos_dtx_post_handle(cont, &dae, &cmt, 1, false, err != 0, false);
 			} else {
-				D_ASSERT(dce == NULL);
+				D_ASSERT(!cmt);
 				if (err == 0 && dth->dth_active) {
 					D_ASSERTF(!UMOFF_IS_NULL(dae->dae_df_off),
 						  "Non-prepared DTX " DF_DTI "\n",

@@ -40,7 +40,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   oclass: RP_2GX
   properties: "cksum:sha256,rd_fac:1"
 
@@ -56,7 +55,6 @@ ior:
   transfer_size: 1M
   block_size: 2G
   dfs_oclass: RP_2GX
-  dfs_dir_oclass: RP_2GX
 
 faults:
   fault_list:

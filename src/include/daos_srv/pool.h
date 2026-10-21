@@ -88,18 +88,16 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_need_discard : 1,
-	    sp_disable_rebuild : 1, sp_disable_dtx_resync : 1, sp_incr_reint : 1;
+	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_disable_rebuild : 1,
+	    sp_disable_dtx_resync : 1, sp_incr_reint : 1, sp_hdl_fetched : 1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
 	uint32_t                 sp_rebuild_gen;
+	ATOMIC int               sp_discarding;
 	ATOMIC int               sp_rebuilding;
-	/**
-	 * someone has already messaged this pool to for rebuild scan,
-	 * NB: all xstreams can do lockless-write on it but it's OK
-	 */
-	int                      sp_rebuild_scan;
+	/* someone has already messaged this pool to for rebuild object/key enumeration */
+	ATOMIC int               sp_rebuild_enum;
 
 	int			sp_discard_status;
 	/** path to ephemeral metrics */
@@ -123,6 +121,7 @@ struct ds_pool {
 	uint32_t		 sp_reint_mode;
 	/* Hold wlock when recover container, rlock when handle container create/destroy RPC. */
 	ABT_rwlock               sp_recov_lock;
+	daos_epoch_t             sp_rebuild_epoch;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -148,8 +147,11 @@ struct ds_pool_hdl {
 	d_iov_t			sph_cred;
 };
 
-struct ds_pool_hdl *ds_pool_hdl_lookup(const uuid_t uuid);
+/* clang-format off */
+int ds_pool_hdl_lookup(const uuid_t pool_uuid, const uuid_t uuid, struct ds_pool_hdl **hdl_out);
+struct ds_pool_hdl *ds_pool_hdl_lookup_cached(const uuid_t uuid);
 void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
+/* clang-format on */
 
 enum pool_child_state {
 	POOL_CHILD_NEW	= 0,
@@ -177,22 +179,11 @@ struct ds_pool_child {
 	d_list_t		spc_cont_list;
 	d_list_t                 spc_srv_cont_hdl; /* Single server cont handle */
 
-	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
-	 * vos aggregation can not cross this epoch during rebuild to avoid
-	 * interfering rebuild process.
-	 */
-	uint64_t	spc_rebuild_fence;
-
-	/* The HLC when current rebuild ends, which will be used to compare
-	 * with the aggregation full scan start HLC to know whether the
-	 * aggregation needs to be restarted from 0. */
-	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint64_t	spc_discard_done:1,
-			spc_no_storage:1; /* The pool shard has no storage. */
+	uint64_t                 spc_no_storage : 1; /* The pool shard has no storage. */
 
 	uint32_t	spc_reint_mode;
 	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */
@@ -203,6 +194,9 @@ struct ds_pool_child {
 	 * DAOS_TGT_TAG.
 	 */
 	void			*spc_metrics[DAOS_NR_MODULE];
+
+	/* The remaining time (seconds) for waiting container local stable epoch (LSE). */
+	int                      spc_remaining_wait_time;
 };
 
 struct ds_pool_svc_op_key {
@@ -219,7 +213,7 @@ struct ds_pool_svc_op_val {
 static inline bool
 ds_pool_is_rebuilding(struct ds_pool *pool)
 {
-	return (atomic_load(&pool->sp_rebuilding) > 0 || pool->sp_rebuild_scan > 0);
+	return (atomic_load(&pool->sp_rebuilding) > 0 || atomic_load(&pool->sp_rebuild_enum) > 0);
 }
 
 /* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.
@@ -307,9 +301,10 @@ int
 					  bool skip_rf_check);
 
 uint32_t ds_pool_get_vos_df_version_default(void);
-int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+int
+    ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 			    d_rank_list_t *target_addrs, int ndomains, uint32_t *domains,
-			    daos_prop_t *prop, d_rank_list_t **svc_addrs);
+			    daos_prop_t *prop, d_rank_list_t *downout_ranks, d_rank_list_t **svc_addrs);
 int ds_pool_svc_rf_to_nreplicas(int svc_rf);
 int ds_pool_svc_rf_from_nreplicas(int nreplicas);
 

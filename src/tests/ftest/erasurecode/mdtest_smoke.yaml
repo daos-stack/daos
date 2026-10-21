@@ -24,19 +24,17 @@ server_config:
 
 pool:
   size: 53%
+  properties: rd_fac:1
 
 container:
   type: POSIX
-  control_method: daos
 
 mdtest:
   client_processes:
     np_48:
       np: 48
       num_of_files_dirs: 100
-  mdtest_api:
-    dfs:
-      api: 'DFS'
+  api: 'DFS'
   test_dir: "/"
   iteration: 3
   dfs_destroy: True
@@ -44,11 +42,9 @@ mdtest:
   diff_flags: !mux
     flags_ssf:
       flags: " "
-      data:
-        zero:
-          write_bytes: 1024
-          read_bytes: 1024
-          depth: 10
+      write_bytes: 1024
+      read_bytes: 1024
+      depth: 10
     flags_fpp:
       flags: "-u"
       write_bytes: 32000

@@ -270,14 +270,12 @@ static void
 print_dtx_committed_test(void **state)
 {
 	struct dv_dtx_committed_entry entry = {
-		.ddtx_epoch = 1234,
-		.ddtx_id = {.dti_uuid = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}, .dti_hlc = 0x1234},
+	    .ddtx_id = {.dti_uuid = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}, .dti_hlc = 0x1234},
 	};
 
 	ddb_print_dtx_committed(&g_ctx, &entry);
 
 	assert_printed_contains("ID: 12345678-9abc-0000-0000-000000000000.1234\n");
-	assert_printed_contains("Epoch: 1234\n");
 }
 
 static void

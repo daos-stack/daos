@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -39,6 +40,12 @@ func dfsError(rc C.int) error {
 
 	strErr := C.strerror(rc)
 	return errors.Errorf("errno %d (%s)", rc, C.GoString(strErr))
+}
+
+// dunsError converts a return code from a DUNS API
+// call to a Go error. DUNS uses errno values like DFS.
+func dunsError(rc C.int) error {
+	return dfsError(rc)
 }
 
 // daosError converts a return code from a DAOS API

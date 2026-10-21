@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,36 +13,55 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos.h>
 #include <ddb_common.h>
-#include <ddb_main.h>
 #include <fcntl.h>
 #include <gurt/debug.h>
 #include <libgen.h>
 #include <sys/stat.h>
 
-extern bool		 g_verbose;
-extern const char	*g_uuids_str[10];
-extern const char	*g_invalid_uuid_str;
-extern uuid_t		 g_uuids[10];
-extern daos_unit_oid_t	 g_oids[10];
-extern daos_unit_oid_t	 g_invalid_oid;
-extern char		*g_dkeys_str[10];
-extern char		*g_akeys_str[10];
-extern daos_key_t	 g_dkeys[10];
-extern daos_key_t	 g_akeys[10];
-extern daos_key_t	 g_invalid_key;
-extern daos_recx_t	 g_recxs[10];
-extern daos_recx_t	 g_invalid_recx;
+extern bool            g_verbose;
+extern const char     *g_uuids_str[10];
+extern const char     *g_invalid_uuid_str;
+extern uuid_t          g_uuids[10];
+extern daos_unit_oid_t g_oids[10];
+extern daos_unit_oid_t g_invalid_oid;
+extern char           *g_dkeys_str[10];
+extern char           *g_akeys_str[10];
+extern daos_key_t      g_dkeys[10];
+extern daos_key_t      g_akeys[10];
+extern daos_key_t      g_invalid_key;
+extern daos_recx_t     g_recxs[10];
+extern daos_recx_t     g_invalid_recx;
+extern const char     *g_csum_uuid_str;
 
 struct dt_vos_pool_ctx {
-	daos_handle_t	dvt_poh;
-	uuid_t		dvt_pool_uuid;
-	int		dvt_fd;
-	char		dvt_pmem_file[128];
-	uint32_t	dvt_cont_count;
-	uint32_t	dvt_obj_count;
-	uint32_t	dvt_dkey_count;
-	uint32_t	dvt_akey_count;
-	bool            dvt_special_pool_destroy;
+	daos_handle_t dvt_poh;
+	uuid_t        dvt_pool_uuid;
+	int           dvt_fd;
+	char          dvt_pmem_file[128];
+	uint32_t      dvt_cont_count;
+	uint32_t      dvt_obj_count;
+	uint32_t      dvt_dkey_count;
+	uint32_t      dvt_akey_count;
+	bool          dvt_special_pool_destroy;
+	void         *dvt_extra;
+};
+
+#define DVT_FAKE_SV_COUNT   (2)
+#define DVT_FAKE_RECX_COUNT (2)
+#define DVT_FAKE_SV_SIZE    (1u << 10)
+#define DVT_FAKE_RECX_SIZE  (1u << 13)
+#define DVT_FAKE_CHUNK_SIZE (1u << 12)
+#define DVT_FAKE_CSUM_TYPE  (HASH_TYPE_CRC64)
+
+struct dt_csum_ctx {
+	uuid_t                dct_cont_uuid;
+	size_t                dct_sv_size;
+	size_t                dct_recx_size;
+	enum DAOS_HASH_TYPE   dct_csum_type;
+	size_t                dct_chunk_size;
+	struct daos_csummer  *dct_csummer;
+	struct dcs_iod_csums *dct_sv_ics[DVT_FAKE_SV_COUNT];
+	struct dcs_iod_csums *dct_recx_ics[DVT_FAKE_RECX_COUNT];
 };
 
 daos_unit_oid_t dvt_gen_uoid(uint32_t i);
@@ -59,11 +78,18 @@ void dvt_iov_alloc_str(d_iov_t *iov, const char *str);
 int ddb_test_setup_vos(void **state);
 int ddb_teardown_vos(void **state);
 
+/* Requires tctx->dvt_poh to be a valid open pool handle (caller-owned). */
+int
+ddb_test_csum_setup(void **state);
+/* Requires tctx->dvt_poh to be the same valid open pool handle as provided to
+ * ddb_test_csum_setup(). */
+void
+    ddb_test_csum_teardown(void **state);
+
 int ddb_parse_tests_run(void);
 int ddb_vos_tests_run(void);
-int ddb_commands_tests_run(void);
-int ddb_main_tests_run(void);
-int ddb_cmd_options_tests_run(void);
+int
+		ddb_commands_tests_run(void);
 int ddb_commands_print_tests_run(void);
 int ddb_path_tests_run(void);
 

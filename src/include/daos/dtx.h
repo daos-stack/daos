@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +24,8 @@
  * CPU schedule efficiency, and so on.
  */
 #define DTX_THRESHOLD_COUNT		(1 << 9)
+
+#define DTX_PIGGYBACK_COUNT             (1 << 6)
 
 /* The time (in second) threshold for batched DTX commit. */
 #define DTX_COMMIT_THRESHOLD_AGE	10
@@ -256,7 +258,7 @@ daos_is_zero_dti(const struct dtx_id *dti)
 }
 
 static inline bool
-daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
+daos_dti_equal(const struct dtx_id *dti0, const struct dtx_id *dti1)
 {
 	return memcmp(dti0, dti1, sizeof(*dti0)) == 0;
 }

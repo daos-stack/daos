@@ -1,7 +1,7 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
 // (C) Copyright 2025 Google LLC
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -168,7 +168,13 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.ContSetOwnerReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.PoolQueryReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{})
+		// Include a DONE rebuild status so that --wait cases terminate on
+		// the first poll without needing per-test mock customization.
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{
+			Rebuild: &mgmtpb.PoolRebuildStatus{
+				State: mgmtpb.PoolRebuildStatus_DONE,
+			},
+		})
 	case *control.PoolQueryTargetReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryTargetResp{})
 	case *control.PoolUpgradeReq:

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -170,7 +171,8 @@ func newEventLogger(logBasic logging.Logger, newSyslogger newSysloggerFn) *Event
 }
 
 // NewEventLogger returns an initialized EventLogger capable of writing to the
-// supplied logger in addition to syslog.
+// supplied logger in addition to syslog. Should only be used in production code,
+// use MockEventLogger in unit tests.
 func NewEventLogger(log logging.Logger) *EventLogger {
 	return newEventLogger(log, syslog.NewLogger)
 }

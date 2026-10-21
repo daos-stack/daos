@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # (C) Copyright 2018-2024 Intel Corporation
-# (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+# (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -570,6 +570,13 @@ class MemReporting():
 
     def add_line(self, line):
         """Parse an output line"""
+        try:
+            self._add_line(line)
+        except IndexError:
+            # Line truncated by an abrupt process kill (e.g. SIGKILL).
+            show_line(line, 'LOW', 'truncated log line, skipping')
+
+    def _add_line(self, line):
         err_count = 0
         if line.is_calloc():
             pointer = line.calloc_pointer()
@@ -667,6 +674,13 @@ class RpcReporting():
 
     def add_line(self, line):
         """Parse a output line"""
+        try:
+            self._add_line(line)
+        except IndexError:
+            # Line truncated by an abrupt process kill (e.g. SIGKILL).
+            show_line(line, 'LOW', 'truncated log line, skipping')
+
+    def _add_line(self, line):
         try:
             if line.function not in self.known_functions:
                 return

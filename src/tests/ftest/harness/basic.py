@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -31,9 +32,29 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code.
 
         :avocado: tags=all
-        :avocado: tags=hw,large,medium,small
+        :avocado: tags=hw,large,medium
         :avocado: tags=harness,harness_basic_test
         :avocado: tags=HarnessBasicTest,always_fails,test_always_fails_hw
+        """
+        self.test_always_fails()
+
+    def test_always_fails_cb(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=cb,medium
+        :avocado: tags=harness,harness_basic_test
+        :avocado: tags=HarnessBasicTest,always_fails,test_always_fails_cb
+        """
+        self.test_always_fails()
+
+    def test_always_fails_cb_provider(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=cb,medium,provider
+        :avocado: tags=harness,harness_basic_test
+        :avocado: tags=HarnessBasicTest,always_fails,test_always_fails_cb_provider
         """
         self.test_always_fails()
 
@@ -67,6 +88,26 @@ class HarnessBasicTest(TestWithoutServers):
         """
         self.test_always_passes()
 
+    def test_always_passes_cb(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=cb,medium
+        :avocado: tags=harness,harness_basic_test,always_passes
+        :avocado: tags=HarnessBasicTest,test_always_passes_cb
+        """
+        self.test_always_passes()
+
+    def test_always_passes_cb_provider(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=cb,medium,provider
+        :avocado: tags=harness,harness_basic_test,always_passes
+        :avocado: tags=HarnessBasicTest,test_always_passes_cb_provider
+        """
+        self.test_always_passes()
+
     def test_load_mpi(self):
         """Simple test of apricot test code to load the openmpi module.
 
@@ -91,9 +132,19 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code to load the openmpi module.
 
         :avocado: tags=all
-        :avocado: tags=hw,hw_vmd,medium,large
+        :avocado: tags=hw,cb,hw_vmd,medium,large
         :avocado: tags=harness,harness_basic_test,load_mpi
         :avocado: tags=HarnessBasicTest,test_load_mpi_hw
+        """
+        self.test_load_mpi()
+
+    def test_load_mpi_hw_provider(self):
+        """Simple test of apricot test code to load the openmpi module.
+
+        :avocado: tags=all
+        :avocado: tags=hw,medium,large,provider
+        :avocado: tags=harness,harness_basic_test,load_mpi
+        :avocado: tags=HarnessBasicTest,test_load_mpi_hw_provider
         """
         self.test_load_mpi()
 

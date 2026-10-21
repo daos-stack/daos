@@ -1,5 +1,6 @@
 """
 (C) Copyright 2018-2024 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +13,6 @@ from os.path import join
 from command_utils_base import BasicParameter, EnvironmentVariables
 from data_mover_utils import (ContClone, DcpCommand, DdeserializeCommand, DserializeCommand,
                               DsyncCommand, FsCopy, uuid_from_obj)
-from dfuse_utils import get_dfuse, start_dfuse
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from general_utils import create_string_buffer, get_log_file
@@ -311,7 +311,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         return label_search.group(1).strip()
 
     def dataset_gen(self, cont, num_objs, num_dkeys, num_akeys_single,
-                    num_akeys_array, akey_sizes, akey_extents):
+                    num_akeys_array, akey_sizes, akey_extents, oclass="OC_SX",
+                    punch_extents=0):
         """Generate a dataset with some number of objects, dkeys, and akeys.
 
         Expects the container to be created with the API control method.
@@ -324,6 +325,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             num_akeys_array (int): number of DAOS_IOD_ARRAY akeys per dkey.
             akey_sizes (list): varying akey sizes to iterate.
             akey_extents (list): varying number of akey extents to iterate.
+            oclass (str, optional): object class for the objects. Defaults to "OC_SX".
+            punch_extents (int, optional): number of leading records to punch back out of
+                each array akey. Defaults to 0. Always leaves at least one record intact,
+                so the akey keeps a hole followed by data.
 
         Returns:
             list: a list of DaosObj created.
@@ -339,7 +344,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             # Open the obj
             obj = DaosObj(cont.pool.context, cont.container)
             obj_list.append(obj)
-            obj.create(rank=obj_idx, objcls=3)
+            obj.create(rank=obj_idx, objcls=oclass)
             obj.open()
 
             ioreq = IORequest(cont.pool.context, cont.container, obj)
@@ -377,15 +382,35 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         c_data.append([create_string_buffer(data), data_size])
                     ioreq.insert_array(c_dkey, c_akey, c_data)
 
+                    punch_nr = self._dataset_punch_nr(punch_extents, num_extents)
+                    if punch_nr:
+                        ioreq.punch_array(c_dkey, c_akey, 0, punch_nr)
+
             obj.close()
         cont.close()
 
         return obj_list
 
+    @staticmethod
+    def _dataset_punch_nr(punch_extents, num_extents):
+        """Get how many leading records of an array akey are punched.
+
+        Args:
+            punch_extents (int): number of records the caller asked to punch.
+            num_extents (int): number of records in the akey.
+
+        Returns:
+            int: the number to punch, always leaving at least one record.
+
+        """
+        if not punch_extents:
+            return 0
+        return min(punch_extents, num_extents - 1)
+
     # pylint: disable=too-many-locals
     def dataset_verify(self, obj_list, cont, num_objs, num_dkeys,
                        num_akeys_single, num_akeys_array, akey_sizes,
-                       akey_extents):
+                       akey_extents, punch_extents=0):
         """Verify a dataset generated with dataset_gen.
 
         Args:
@@ -397,6 +422,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             num_akeys_array (int): number of DAOS_IOD_ARRAY akeys per dkey.
             akey_sizes (list): varying akey sizes to iterate.
             akey_extents (list): varying number of akey extents to iterate.
+            punch_extents (int, optional): the value passed to dataset_gen. Punched
+                records must read back as zeros. Defaults to 0.
 
         """
         self.log.info("Verifying dataset in %s/%s", str(cont.pool), str(cont))
@@ -448,9 +475,14 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     c_num_extents = ctypes.c_uint(num_extents)
                     c_data_size = ctypes.c_size_t(data_size)
                     actual_data = ioreq.fetch_array(c_dkey, c_akey, c_num_extents, c_data_size)
+                    punch_nr = self._dataset_punch_nr(punch_extents, num_extents)
                     for data_idx in range(num_extents):
-                        data_val = str(data_idx % 10)
-                        data = data_size * data_val
+                        if data_idx < punch_nr:
+                            # a punched record is a hole and reads back as zeros
+                            data = data_size * "\0"
+                        else:
+                            data_val = str(data_idx % 10)
+                            data = data_size * data_val
                         actual_idx = str(actual_data[data_idx].decode())
                         if data != actual_idx:
                             self.log.info(
@@ -924,109 +956,3 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 self.fail("stderr expected {}: {}".format(expected, test_desc))
 
         return result
-
-    def run_dm_activities_with_ior(self, tool, pool, cont, create_dataset=False):
-        """Generic method to perform various datamover activities using ior
-
-        Args:
-            tool (str): specify the tool name to be used
-            pool (TestPool): source pool object
-            cont (TestContainer): source container object
-            create_dataset (bool, optional): boolean to create initial set of data using ior.
-                Defaults to False.
-        """
-        # Set the tool to use
-        self.set_tool(tool)
-
-        if create_dataset:
-            # create initial data-sets with ior
-            self.run_ior_with_params("DAOS", self.ior_cmd.test_file.value, pool, cont)
-
-        # create cont2
-        cont2 = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
-
-        # perform various datamover activities
-        daos_path = None
-        read_back_cont = None
-        read_back_pool = None
-        if tool == 'CONT_CLONE':
-            result = self.run_datamover(
-                self.test_id + " (cont to cont2)",
-                src_path=format_path(pool, cont),
-                dst_path=format_path(pool))
-            read_back_cont = self.parse_create_cont_label(result.stdout_text)
-            read_back_pool = pool
-        elif tool == 'DSERIAL':
-            # Create pool2
-            pool2 = self.get_pool()
-            # Use dfuse as a shared intermediate for serialize + deserialize
-            dfuse_cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
-            self.dfuse = get_dfuse(self, self.dfuse_hosts)
-            start_dfuse(self, self.dfuse, pool, dfuse_cont)
-            self.serial_tmp_dir = self.dfuse.mount_dir.value
-
-            # Serialize/Deserialize container 1 to a new cont2 in pool2
-            result = self.run_datamover(
-                self.test_id + " (cont->HDF5->cont2)",
-                src_path=format_path(pool, cont),
-                dst_pool=pool2)
-
-            # Get the destination cont2 uuid
-            read_back_cont = self.parse_create_cont_label(result.stdout_text)
-            read_back_pool = pool2
-        elif tool in ['FS_COPY', 'DCP']:
-            # copy from daos cont to cont2
-            self.run_datamover(
-                self.test_id + " (cont to cont2)",
-                src_path=format_path(pool, cont),
-                dst_path=format_path(pool, cont2))
-        else:
-            self.fail("Invalid tool: {}".format(tool))
-
-        # move data from daos to posix FS and vice versa
-        if tool in ['FS_COPY', 'DCP']:
-            posix_path = self.new_posix_test_path(shared=True)
-            # copy from daos cont2 to posix file system
-            self.run_datamover(
-                self.test_id + " (cont2 to posix)",
-                src_path=format_path(pool, cont2),
-                dst_path=posix_path)
-
-            # create cont3
-            cont3 = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
-
-            # copy from posix file system to daos cont3
-            self.run_datamover(
-                self.test_id + " (posix to cont3)",
-                src_path=posix_path,
-                dst_path=format_path(pool, cont3))
-            read_back_cont = cont3
-            read_back_pool = pool
-        test_file = os.path.basename(self.ior_cmd.test_file.value)
-        if tool in ['FS_COPY', 'DCP']:
-            # the result is that a NEW directory is created in the destination
-            daos_path = os.path.join(os.sep, os.path.basename(posix_path), test_file)
-        elif tool in ['CONT_CLONE', 'DSERIAL']:
-            daos_path = os.path.join(os.sep, test_file)
-        else:
-            self.fail("Invalid tool: {}".format(tool))
-
-        # Original flags used for write
-        flags = self.ior_cmd.flags.value
-
-        # Remove read and write from flags if present
-        flags = re.sub(" *-r", "", flags)
-        flags = re.sub(" *-R", "", flags)
-        flags = re.sub(" *-w", "", flags)
-        flags = re.sub(" *-W", "", flags)
-
-        # Remove stonewall
-        flags = re.sub(" *-D [0-9]+", "", flags)
-
-        # Add read flags
-        flags += " -r -R"
-
-        # update ior params, read back and verify data from cont3
-        self.run_ior_with_params(
-            "DAOS", daos_path, read_back_pool, read_back_cont,
-            flags=flags)

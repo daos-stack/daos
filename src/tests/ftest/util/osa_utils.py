@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -190,7 +190,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         #                 pool B : containerA, Updated,
         #                          containerB, None]}
         if self.pool_cont_dict[self.pool][0] is None:
-            self.add_container(self.pool, create=False)
+            self.container = self.get_container(self.pool, create=False)
             self.set_cont_class_properties(oclass)
             if self.test_with_checksum is False:
                 tmp = self.get_object_replica_value(oclass)
@@ -205,7 +205,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                     and (self.pool_cont_dict[self.pool][3] is None)
                     and ("-w" in flags)):
                 # Write to the second container
-                self.add_container(self.pool, create=False)
+                self.container = self.get_container(self.pool, create=False)
                 self.set_cont_class_properties(oclass)
                 if self.test_with_checksum is False:
                     tmp = self.get_object_replica_value(oclass)
@@ -288,7 +288,6 @@ class OSAUtils(MdtestBase, IorTestBase):
                 "Detected container redundancy factor: %s",
                 self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
-            self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
             self.container.oclass.update(None)
 
     def get_random_test_ranks(self, total_ranks=2, join_ranks=True):
@@ -324,6 +323,22 @@ class OSAUtils(MdtestBase, IorTestBase):
             exc = out_queue.get(block=False)
             out_queue.put(exc)
             raise CommandFailure(exc)
+
+    def check_ranks(self, expect, data, key):
+        """Check the expected and actual rank lists are equal.
+
+        Args:
+            expect (list): list of ranks to expect
+            data (dict): dmg json response containing actual list of ranks
+            key (str): the dmg json response key used to access the actual list of ranks
+        """
+        actual = data["response"].get(key)
+        if expect is None:
+            self.assertIsNone(actual, f"Invalid {key} field: want=None, got={actual}")
+        else:
+            self.assertListEqual(
+                actual, expect, f"Invalid {key} field: want={expect}, got={actual}")
+        self.log.info("Check of %s passed: %s == %s", key, expect, actual)
 
     def cleanup_queue(self, out_queue=None):
         """Cleanup the existing thread queue.
@@ -396,7 +411,6 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.ior_cmd.set_daos_params(self.pool, None)
         self.log.info("Redundancy Factor : %s", self.test_with_rf)
         self.ior_cmd.dfs_oclass.update(oclass)
-        self.ior_cmd.dfs_dir_oclass.update(oclass)
         if single_cont_read is True:
             # Prepare the containers created and use in a specific
             # way defined in prepare_cont_ior_write.
@@ -421,7 +435,6 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.log.info(
                 "Detected container redundancy factor: %s", self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
-            self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
         # Run run_ior_with_pool without invoking the pool query method for
         # displaying pool space information (display_space=False)
         self.run_ior_with_pool(create_pool=False, create_cont=False,
@@ -441,7 +454,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.mdtest_cmd.dfs_destroy.update(False)
         create_container = 0
         if self.container is None:
-            self.add_container(self.pool, create=False)
+            self.container = self.get_container(self.pool, create=False)
             create_container = 1
         self.mdtest_cmd.dfs_oclass.update(oclass)
         self.set_cont_class_properties(oclass)

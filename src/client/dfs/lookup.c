@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +13,22 @@
 #include <daos/object.h>
 
 #include "dfs_internal.h"
+
+/* A symlink value is resolved from the directory holding the link. dfs has no notion of the
+ * process root that POSIX resolves an absolute value from, so such a value is rejected wherever
+ * the link sits and left to a caller that can resolve it, as dfuse and pil4dfs do with the kernel.
+ */
+int
+follow_symlink(dfs_t *dfs, dfs_obj_t *parent, const char *value, int flags, dfs_obj_t **_obj,
+	       mode_t *mode, struct stat *stbuf, size_t depth)
+{
+	if (value[0] == '/') {
+		D_DEBUG(DB_TRACE, "Cannot follow absolute symlink value %s\n", value);
+		return EINVAL;
+	}
+
+	return lookup_rel_path(dfs, parent, value, flags, _obj, mode, stbuf, depth);
+}
 
 int
 lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_obj_t **_obj,
@@ -26,7 +43,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_ob
 	int              daos_mode;
 	struct dfs_entry entry = {0};
 	size_t           len;
-	int              rc;
+	int              rc = 0;
 	bool             parent_fully_valid;
 
 	/* Arbitrarily stop to avoid infinite recursion */
@@ -195,8 +212,8 @@ lookup_rel_path_loop:
 					D_GOTO(err_obj, rc = ENOTSUP);
 				}
 
-				rc = lookup_rel_path(dfs, &parent, entry.value, flags, &sym, NULL,
-						     NULL, depth + 1);
+				rc = follow_symlink(dfs, &parent, entry.value, flags, &sym, NULL,
+						    NULL, depth + 1);
 				if (rc) {
 					D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n",
 						entry.value);
@@ -229,8 +246,8 @@ lookup_rel_path_loop:
 					D_GOTO(err_obj, rc = ENOTSUP);
 				}
 
-				rc = lookup_rel_path(dfs, &parent, entry.value, flags, &sym, mode,
-						     stbuf, depth + 1);
+				rc = follow_symlink(dfs, &parent, entry.value, flags, &sym, mode,
+						    stbuf, depth + 1);
 				if (rc) {
 					D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n",
 						entry.value);
@@ -507,7 +524,7 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 			if (entry.value == NULL)
 				D_GOTO(err_obj, rc = EIO);
 			/* dereference the symlink */
-			rc = lookup_rel_path(dfs, parent, entry.value, flags, &sym, mode, stbuf, 0);
+			rc = follow_symlink(dfs, parent, entry.value, flags, &sym, mode, stbuf, 0);
 			if (rc) {
 				D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n", entry.value);
 				D_FREE(entry.value);

@@ -830,6 +830,16 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t term,
 	if (rc != 0)
 		goto err_svc;
 
+	if (mode == DS_RSVC_CREATE && DAOS_FAIL_CHECK(DAOS_RSVC_CREATE_SLOW)) {
+		uint64_t delay_ms = daos_fail_value_get();
+
+		if (delay_ms == 0)
+			delay_ms = DAOS_FAIL_DELAY_DEFAULT_MS;
+		D_INFO("%s: fault injection: delaying replica creation by " DF_U64 " ms\n",
+		       svc->s_name, delay_ms);
+		dss_sleep(delay_ms);
+	}
+
 	if (mode == DS_RSVC_DICTATE) {
 		rc = rdb_dictate(storage);
 		if (rc != 0)
@@ -1200,7 +1210,7 @@ ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 
 int
 ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
-		       uint32_t vos_df_version)
+		       uint32_t vos_df_version, bool (*abort)(void *arg), void *abort_arg)
 {
 	int i;
 	int rc = 0;
@@ -1212,6 +1222,7 @@ ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
 		rdb_replica_id_t             id;
 		int                          ids_len = 1;
 		struct ds_rsvc_create_params create_params;
+		struct d_backoff_seq         backoff_seq;
 
 		rl.rl_ranks = &r;
 		rl.rl_nr    = 1;
@@ -1223,6 +1234,8 @@ ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
 		if (rc != 0)
 			break;
 
+		D_INFO("%s: adding replica " RDB_F_RID "\n", svc->s_name, RDB_P_RID(id));
+
 		create_params.scp_bootstrap      = false;
 		create_params.scp_size           = size;
 		create_params.scp_vos_df_version = vos_df_version;
@@ -1230,15 +1243,51 @@ ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size,
 		create_params.scp_replicas       = &id;
 		create_params.scp_replicas_len   = 1;
 
-		rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, &rl, svc->s_term,
-					DS_RSVC_CREATE, &create_params);
+		/*
+		 * Create and start the replica. If abort is not NULL, retry
+		 * upon retryable errors.
+		 */
+		rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 2 /* factor */, 1 /* next */,
+					8 /* max */);
+		D_ASSERTF(rc == 0, "d_backoff_seq_init: " DF_RC "\n", DP_RC(rc));
+		for (;;) {
+			rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, &rl,
+						svc->s_term, DS_RSVC_CREATE, &create_params);
+			if (!daos_rpc_retryable_rc(rc) || abort == NULL)
+				break;
+			if (abort(abort_arg)) {
+				rc = -DER_OP_CANCELED;
+				break;
+			}
+			DL_INFO(rc, "%s: retrying to create replica " RDB_F_RID, svc->s_name,
+				RDB_P_RID(id));
+			dss_sleep(d_backoff_seq_next(&backoff_seq) * 1000);
+		}
+		d_backoff_seq_fini(&backoff_seq);
 		if (rc != 0)
 			break;
 
 		rc = rdb_modify_replicas(svc->s_db, RDB_REPLICA_ADD, &id, &ids_len);
 		if (rc != 0) {
-			ds_rsvc_dist_stop(svc->s_class, &svc->s_id, &rl, NULL, svc->s_term,
-					  true /* destroy */);
+			rdb_replica_id_t *replicas;
+			int               replicas_len;
+			int               rc_tmp;
+
+			/*
+			 * If this new replica has been added to the local membership, we can't
+			 * destroy it.
+			 */
+			rc_tmp = rdb_get_replicas(svc->s_db, &replicas, &replicas_len);
+			if (rc_tmp == 0) {
+				int j;
+
+				for (j = 0; j < replicas_len; j++)
+					if (rdb_replica_id_compare(replicas[j], id) == 0)
+						break;
+				if (j == replicas_len)
+					ds_rsvc_dist_stop(svc->s_class, &svc->s_id, &rl, NULL,
+							  svc->s_term, true /* destroy */);
+			}
 			break;
 		}
 	}
@@ -1275,7 +1324,8 @@ ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id, d_rank_list_t *ra
 	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
 	if (rc != 0)
 		return rc;
-	rc = ds_rsvc_add_replicas_s(svc, ranks, size, vos_df_version);
+	rc = ds_rsvc_add_replicas_s(svc, ranks, size, vos_df_version, NULL /* abort */,
+				    NULL /* abort_arg */);
 	ds_rsvc_set_hint(svc, hint);
 	ds_rsvc_put_leader(svc);
 	return rc;
@@ -1381,26 +1431,62 @@ enum rdb_stop_flag {
  * filter_ranks only.
  */
 static int
-bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks,
-	     crt_rpc_t **rpc)
+bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks, crt_rpc_t **rpc)
 {
 	struct dss_module_info *info = dss_get_module_info();
-	crt_opcode_t		opc_full;
+	crt_opcode_t            opc_full;
 	uint8_t                 rsvc_ver;
+	uint32_t                flags = CRT_RPC_FLAG_CO_FAILOUT;
 	int                     rc;
 
 	rc = ds_rsvc_rpc_protocol(&rsvc_ver);
-	if (rc)
+	if (rc != 0)
 		return rc;
-
-	D_ASSERT(!filter_invert || filter_ranks != NULL);
 	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RSVC_MODULE, rsvc_ver);
-	return crt_corpc_req_create(info->dmi_ctx, NULL /* grp */,
-				    filter_ranks, opc_full,
-				    NULL /* co_bulk_hdl */, NULL /* priv */,
-				    filter_invert ?
-				    CRT_RPC_FLAG_FILTER_INVERT : 0,
+
+	if (filter_invert) {
+		D_ASSERT(filter_ranks != NULL);
+		flags |= CRT_RPC_FLAG_FILTER_INVERT;
+	}
+
+	return crt_corpc_req_create(info->dmi_ctx, NULL /* grp */, filter_ranks, opc_full,
+				    NULL /* co_bulk_hdl */, NULL /* priv */, flags,
 				    crt_tree_topo(CRT_TREE_KNOMIAL, 2), rpc);
+}
+
+/*
+ * Raise the timeout of the RSVC_START corpc creating replicas of \a size bytes to the time
+ * needed to allocate and format an RDB VOS pool of that size on a slow engine, since the
+ * generic cart RPC timeout (crt_timeout) may be configured much lower. The handler returns
+ * without waiting for a leader election, and the child RPCs of the corpc inherit its deadline.
+ */
+static int
+dist_start_set_create_timeout(crt_rpc_t *rpc, const uuid_t dbid, size_t size)
+{
+	uint32_t timeout;
+	uint32_t floor;
+	int      rc;
+
+	rc = crt_req_get_timeout(rpc, &timeout);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to get create RPC timeout", DP_UUID(dbid));
+		return rc;
+	}
+
+	floor = dss_vos_create_timeout_by_size(size);
+	if (timeout >= floor)
+		return 0;
+
+	rc = crt_req_set_timeout(rpc, floor);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to set create RPC timeout to %u s", DP_UUID(dbid),
+			 floor);
+		return rc;
+	}
+	D_DEBUG(DB_MD, DF_UUID ": raised create RPC timeout from %u to %u s\n", DP_UUID(dbid),
+		timeout, floor);
+
+	return 0;
 }
 
 /**
@@ -1451,6 +1537,10 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 		in->sai_layout_version     = create_params->scp_layout_version;
 		in->sai_replicas.ca_arrays = create_params->scp_replicas;
 		in->sai_replicas.ca_count  = create_params->scp_replicas_len;
+
+		rc = dist_start_set_create_timeout(rpc, dbid, create_params->scp_size);
+		if (rc != 0)
+			goto out_rpc;
 	}
 
 	rc = dss_rpc_send(rpc);

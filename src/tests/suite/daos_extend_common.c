@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -126,7 +126,7 @@ dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kil
 	d_rank_t             extend_rank = 3;
 	char                 str[37];
 	daos_obj_id_t        oids[EXTEND_OBJ_NR];
-	struct extend_cb_arg cb_arg;
+	struct extend_cb_arg cb_arg = {0};
 	dfs_attr_t           attr = {};
 	int                  rc;
 
@@ -180,8 +180,13 @@ dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kil
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 			      DAOS_REBUILD_TGT_SCAN_HANG | DAOS_FAIL_ALWAYS, 0, NULL);
 
-	arg->no_rebuild =
-	    1; /* This has no effect for RB_OP_TYPE_ADD - so can this be removed here? */
+	/*
+	 * For RB_OP_TYPE_ADD, rebuild_targets() still performs the extend and invokes
+	 * rebuild_cb, but no_rebuild=1 disables its internal waits
+	 * (test_rebuild_wait_to_start_next/test_rebuild_wait). Therefore,
+	 * extend_single_pool_rank() returns without waiting for rebuild completion.
+	 */
+	arg->no_rebuild = 1;
 	extend_single_pool_rank(arg, extend_rank);
 	arg->no_rebuild = 0;
 

@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -29,11 +30,11 @@ class AggregationPunching(MdtestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=aggregation,mdtest,mdtest
-        :avocado: tags=AggregationPunching,aggregatepunching,test_aggregation_punching
+        :avocado: tags=aggregation,mdtest
+        :avocado: tags=AggregationPunching,test_aggregation_punching
         """
         if self.pool is None:
-            self.add_pool(connect=False)
+            self.pool = self.get_pool(connect=False)
         self.pool.connect()
 
         storage_index = 1  # SSD
@@ -58,12 +59,13 @@ class AggregationPunching(MdtestBase):
         free_space_after_mdtest =\
             pool_info.pi_space.ps_space.s_free[storage_index]
 
-        self.log.info("free_space_after_mdtest <= initial_free_space - mdtest_data_size")
+        self.log.info("Expect free_space_after_mdtest <= initial_free_space - mdtest_data_size")
         self.log.info("mdtest_data_size = %s", mdtest_data_size)
         self.log.info("Storage Index = %s",
                       "NVMe" if storage_index else "SCM")
         self.log.info("%s <= %s", free_space_after_mdtest, initial_free_space - mdtest_data_size)
-        self.assertTrue(free_space_after_mdtest <= initial_free_space - mdtest_data_size)
+        self.assertLessEqual(free_space_after_mdtest, initial_free_space - mdtest_data_size,
+                             'Free space after mdtest is greater than expected')
 
         # Enable the aggregation
         self.log.info("Enabling aggregation")
@@ -94,6 +96,7 @@ class AggregationPunching(MdtestBase):
             pool_info.pi_space.ps_space.s_free[storage_index]
 
         self.log.info("Checking if space is reclaimed")
-        self.log.info("final_free_space >= free_space_after_mdtest + mdtest_data_size")
+        self.log.info("Expect final_free_space >= free_space_after_mdtest + mdtest_data_size")
         self.log.info("%s >= %s", final_free_space, expected_free_space)
-        self.assertTrue(final_free_space >= expected_free_space)
+        self.assertGreaterEqual(final_free_space, expected_free_space,
+                                'Free space is less than expected')

@@ -434,7 +434,7 @@
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
-   fun:_cgo_b68ed06c1ed7_Cfunc__Cmalloc
+   fun:_cgo_*_Cfunc__Cmalloc
    fun:runtime.asmcgocall.abi0
    ...
    fun:runtime.persistentalloc
@@ -447,6 +447,15 @@
    fun:mem_map_get_map_1gb
    fun:spdk_mem_map_set_translation
    ...
+}
+{
+   DPDK_26_PCI_IOMMU_CLASS_UNINIT
+   Memcheck:Cond
+   fun:rte_pci_get_iommu_class
+   fun:rte_bus_get_iommu_class
+   fun:rte_eal_init
+   fun:spdk_env_init
+   fun:bio_spdk_env_init
 }
 {
    setgrent() leak

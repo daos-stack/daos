@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +17,9 @@ static struct daos_obj_class **oc_resil_array;
 
 static int oc_ident_array_sz;
 static int oc_resil_array_sz;
+
+#define D_GX_RESERVED_ENV "D_GX_RESERVED"
+static unsigned int            oc_gx_reserved;
 
 static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id,
 					       uint32_t *nr_grps);
@@ -251,19 +254,92 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 	return oc_attr->ca_grp_nr;
 }
 
-/**
- * To honor RF setting during failure cases, let's reserve RF
- * groups, so if some targets fail, there will be enough replacement
- * targets to rebuild, so to avoid putting multiple shards in the same
- * domain, which may break the RF setting.
- *
- * Though let's keep reserve targets to be less than 30% of the total
- * targets.
- */
+enum {
+	DOM_TINY   = 16,
+	DOM_SMALL  = 32,
+	DOM_MEDIUM = 64,
+	DOM_LARGE  = 128,
+	DOM_VENTI  = 256,
+};
+
+/* domains < DOM_TINY: reserve RF domains */
+#define RSV_MIN(dom_nr, rf)    (rf)
+
+/* domains < DOM_SMALL: reserve (RF + 1) domains */
+#define RSV_TINY(dom_nr, rf)   (rf + 1)
+
+/* domains < DOM_MEDIUM: reserve (RF + 2) domains */
+#define RSV_SMALL(dom_nr, rf)  (rf + 2)
+
+/* NB: if RF is large enough, reserved number of lower range can be larger than higher range */
+/* domains < DOM_LARGE: reserve 4% domains.  */
+#define RSV_MEDIUM(dom_nr, rf) max((dom_nr * 4) / 100, RSV_SMALL(dom_nr, rf))
+
+/* domains < DOM_VENTI: reserve 6% domains */
+#define RSV_LARGE(dom_nr, rf)  max((dom_nr * 6) / 100, RSV_MEDIUM(dom_nr, rf))
+
+/* domains >  DOM_VENTI: reserve 8% domains */
+#define RSV_VENTI(dom_nr, rf)  max((dom_nr * 8) / 100, RSV_LARGE(dom_nr, rf))
+
 static uint32_t
-reserve_grp_by_rf(uint32_t target_nr, uint32_t grp_size, uint32_t rf)
+reserve_grp_by_rf(int domain_cur, int target_nr, int grp_size, int rf)
 {
-	return min(((target_nr * 3) / 10) / grp_size, rf);
+	int domain_low;
+	int reserv_prev;
+	int reserv_cur;
+	int reserv_tgts;
+	int tgt_per_dom;
+
+	D_ASSERT(target_nr >= domain_cur && domain_cur >= 1); /* unless pool map is corrupted */
+	if (oc_gx_reserved > 0) {
+		reserv_tgts = oc_gx_reserved;
+		goto out_tgt;
+	}
+	tgt_per_dom = target_nr / domain_cur;
+
+	if (domain_cur < DOM_TINY) {
+		domain_low  = 1;
+		reserv_cur  = RSV_MIN(domain_nr, rf);
+		reserv_prev = 0;
+
+	} else if (domain_cur < DOM_SMALL) {
+		domain_low  = DOM_TINY;
+		reserv_cur  = RSV_TINY(domain_cur, rf);
+		reserv_prev = RSV_MIN(domain_nr, rf);
+
+	} else if (domain_cur < DOM_MEDIUM) {
+		domain_low  = DOM_SMALL;
+		reserv_cur  = RSV_SMALL(domain_cur, rf);
+		reserv_prev = RSV_TINY(domain_cur, rf);
+
+	} else if (domain_cur < DOM_LARGE) {
+		domain_low  = DOM_MEDIUM;
+		reserv_cur  = RSV_MEDIUM(domain_cur, rf);
+		reserv_prev = RSV_SMALL(domain_cur, rf);
+
+	} else if (domain_cur < DOM_VENTI) {
+		domain_low  = DOM_LARGE;
+		reserv_cur  = RSV_LARGE(domain_cur, rf);
+		reserv_prev = RSV_MEDIUM(domain_cur, rf);
+
+	} else {
+		domain_low  = DOM_VENTI;
+		reserv_cur  = RSV_VENTI(domain_cur, rf);
+		reserv_prev = RSV_LARGE(domain_cur, rf);
+	}
+
+	/* ensure object layout is larger than layout in the previous range:
+	 * - dom_low is the lower bound of the current range, (dom_low - 1) is the maximum
+	 *   domain number of the previous range.
+	 * - reserv_prev is the reserved domains for the previous range
+	 */
+	if ((domain_cur - reserv_cur) < ((domain_low - 1) - reserv_prev))
+		reserv_cur = reserv_prev;
+
+	reserv_tgts = reserv_cur * tgt_per_dom;
+out_tgt:
+	reserv_tgts = min(reserv_tgts, target_nr - grp_size); /* allow at least one group */
+	return (reserv_tgts + grp_size - 1) / grp_size;
 }
 
 int
@@ -303,7 +379,7 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr, enum d
 
 	grp_size = daos_oclass_grp_size(&ca);
 	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX) {
-		uint32_t reserve_grp = reserve_grp_by_rf(target_nr, grp_size, rf_factor);
+		uint32_t reserve_grp = reserve_grp_by_rf(domain_nr, target_nr, grp_size, rf_factor);
 
 		ca.ca_grp_nr = max(1, (target_nr / grp_size));
 
@@ -865,7 +941,7 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 		grp_nr = max(256, target_nr * 50 / 100);
 		break;
 	case DAOS_OCH_SHD_EXT:
-		grp_nr = max(1024, target_nr * 80 / 100);
+		grp_nr = max(1024, target_nr * 70 / 100);
 		break;
 	default:
 		D_ERROR("Invalid sharding hint\n");
@@ -874,7 +950,7 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 
 	if (grp_nr == DAOS_OBJ_GRP_MAX || grp_nr * grp_size > target_nr) {
 		uint32_t max_grp     = target_nr / grp_size;
-		uint32_t reserve_grp = reserve_grp_by_rf(target_nr, grp_size, rf);
+		uint32_t reserve_grp = reserve_grp_by_rf(domain_nr, target_nr, grp_size, rf);
 
 		/* search for the highest scalability in the allowed range */
 		if (max_grp > reserve_grp)
@@ -947,6 +1023,13 @@ obj_class_init(void)
 
 	if (oc_ident_array)
 		return 0;
+
+	oc_gx_reserved = 0;
+	d_getenv_uint(D_GX_RESERVED_ENV, &oc_gx_reserved);
+	if (oc_gx_reserved > 0) {
+		D_INFO("%s = %u, setting it has global impact on all pools!\n", D_GX_RESERVED_ENV,
+		       oc_gx_reserved);
+	}
 
 	D_ALLOC_ARRAY(oc_ident_array, OC_NR);
 	if (!oc_ident_array)

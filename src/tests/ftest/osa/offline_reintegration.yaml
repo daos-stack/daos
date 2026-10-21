@@ -7,9 +7,6 @@ timeout: 1300
 timeouts:
   test_osa_offline_reintegrate_with_less_pool_space: 1800
 
-setup:
-  start_servers_once: false
-
 skip_add_log_msg: true
 
 server_config:
@@ -53,7 +50,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   oclass: RP_3G6
   properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rd_fac:2
 
@@ -68,7 +64,6 @@ ior:
     read_flags: "-F -r -R -k -G 1"
     api: DFS
     dfs_oclass: RP_3G6
-    dfs_dir_oclass: RP_3G6
   ior_test_sequence:
     # - [scmsize, nvmesize, transfersize, blocksize]
     #   The values are set to be in the multiples of 10.
@@ -81,8 +76,6 @@ mdtest:
     np: 2
   num_of_files_dirs: 100
   test_dir: "/"
-  iteration: 1
-  dfs_destroy: false
   dfs_oclass: RP_3G6
   dfs_dir_oclass: RP_3G6
   manager: "MPICH"

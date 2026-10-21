@@ -88,6 +88,7 @@ d_free(void *ptr)
 
 #else
 
+#if !defined(__SANITIZE_THREAD__)
 static size_t
 _f_get_alloc_size(void *ptr)
 {
@@ -106,13 +107,20 @@ _f_get_alloc_size(void *ptr)
 
 	return size;
 }
+#endif
 
 void
 d_free(void *ptr)
 {
+	/* DAOS-18626: Skip poisoning under TSan
+	 * it turns harmless zero-size-allocation address reuse into a false heap-use-after-free.
+	 */
+#if !defined(__SANITIZE_THREAD__)
 	size_t msize = _f_get_alloc_size(ptr);
 
 	memset(ptr, 0x42, msize);
+#endif
+
 	free(ptr);
 }
 
@@ -235,6 +243,9 @@ d_aligned_alloc(size_t alignment, size_t size, bool zero)
 {
 	void *buf;
 
+	/* POSIX requires size to be a multiple of alignment; round up to satisfy
+	 * strict allocators (e.g. ASAN) without changing the callers. */
+	size = D_ALIGNUP(size, alignment);
 	buf = aligned_alloc(alignment, size);
 	if (unlikely(track_arg != NULL)) {
 		if (buf != NULL)
