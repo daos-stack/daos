@@ -560,14 +560,14 @@ func TestConfig_FabricValidation(t *testing.T) {
 		"missing provider": {
 			cfg: FabricConfig{
 				Interface:     "bar",
-				InterfacePort: 42,
+				InterfacePort: "42",
 			},
 			expErr: errors.New("provider"),
 		},
 		"missing interface": {
 			cfg: FabricConfig{
 				Provider:      "foo",
-				InterfacePort: 42,
+				InterfacePort: "42",
 			},
 			expErr: errors.New("fabric_iface"),
 		},
@@ -582,7 +582,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:      "foo",
 				Interface:     "bar",
-				InterfacePort: -42,
+				InterfacePort: "-42",
 			},
 			expErr: errors.New("fabric_iface_port"),
 		},
@@ -590,21 +590,21 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:      "foo",
 				Interface:     "bar",
-				InterfacePort: 42,
+				InterfacePort: "42",
 			},
 		},
 		"multi provider/interface/port ok": {
 			cfg: FabricConfig{
 				Provider:      multiProviderString("foo", "bar"),
 				Interface:     multiProviderString("baz", "net"),
-				InterfacePort: 42,
+				InterfacePort: multiProviderString("42", "128"),
 			},
 		},
 		"mismatched num providers": {
 			cfg: FabricConfig{
 				Provider:      "foo",
 				Interface:     multiProviderString("baz", "net"),
-				InterfacePort: 42,
+				InterfacePort: multiProviderString("42", "128"),
 			},
 			expErr: errors.New("same number"),
 		},
@@ -612,7 +612,15 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:      multiProviderString("foo", "bar"),
 				Interface:     "baz",
-				InterfacePort: 42,
+				InterfacePort: multiProviderString("42", "128"),
+			},
+			expErr: errors.New("same number"),
+		},
+		"mismatched num ports": {
+			cfg: FabricConfig{
+				Provider:      multiProviderString("foo", "bar"),
+				Interface:     multiProviderString("baz", "net"),
+				InterfacePort: "42",
 			},
 			expErr: errors.New("same number"),
 		},
@@ -620,7 +628,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:              multiProviderString("foo", "bar"),
 				Interface:             multiProviderString("baz", "net"),
-				InterfacePort:         42,
+				InterfacePort:         multiProviderString("42", "128"),
 				NumSecondaryEndpoints: []int{0},
 			},
 			expErr: errors.New("must be > 0"),
@@ -629,7 +637,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:              multiProviderString("foo", "bar", "baz"),
 				Interface:             multiProviderString("net0", "net1", "net2"),
-				InterfacePort:         42,
+				InterfacePort:         multiProviderString("42", "128", "256"),
 				NumSecondaryEndpoints: []int{1, 2},
 			},
 		},
@@ -637,7 +645,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:              multiProviderString("foo", "bar", "baz"),
 				Interface:             multiProviderString("net0", "net1", "net2"),
-				InterfacePort:         42,
+				InterfacePort:         multiProviderString("42", "128", "256"),
 				NumSecondaryEndpoints: []int{1, 2, 3},
 			},
 			expErr: errors.New("must have one value for each"),
@@ -646,7 +654,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:              multiProviderString("foo", "bar", "baz"),
 				Interface:             multiProviderString("net0", "net1", "net2"),
-				InterfacePort:         42,
+				InterfacePort:         multiProviderString("42", "128", "256"),
 				NumSecondaryEndpoints: []int{1},
 			},
 			expErr: errors.New("must have one value for each"),
@@ -949,9 +957,27 @@ func TestFabricConfig_GetInterfacePorts(t *testing.T) {
 		},
 		"single": {
 			cfg: &FabricConfig{
-				InterfacePort: 1234,
+				InterfacePort: "1234",
 			},
 			expPorts: []int{1234},
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				InterfacePort: multiProviderString("1234", "5678", "9012"),
+			},
+			expPorts: []int{1234, 5678, 9012},
+		},
+		"excessive whitespace": {
+			cfg: &FabricConfig{
+				InterfacePort: multiProviderString("1234   ", "  5678  ", "", " 9012"),
+			},
+			expPorts: []int{1234, 5678, 9012},
+		},
+		"non-integer port": {
+			cfg: &FabricConfig{
+				InterfacePort: multiProviderString("1234", "a123"),
+			},
+			expErr: errors.New("strconv.Atoi"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1024,7 +1050,7 @@ func TestFabricConfig_Update(t *testing.T) {
 			new: FabricConfig{
 				Provider:              "provider",
 				Interface:             "iface",
-				InterfacePort:         9999,
+				InterfacePort:         "9999",
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1032,7 +1058,7 @@ func TestFabricConfig_Update(t *testing.T) {
 			expResult: &FabricConfig{
 				Provider:              "provider",
 				Interface:             "iface",
-				InterfacePort:         9999,
+				InterfacePort:         "9999",
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1042,7 +1068,7 @@ func TestFabricConfig_Update(t *testing.T) {
 			fc: &FabricConfig{
 				Provider:              "provider",
 				Interface:             "iface",
-				InterfacePort:         9999,
+				InterfacePort:         "9999",
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1051,7 +1077,7 @@ func TestFabricConfig_Update(t *testing.T) {
 			expResult: &FabricConfig{
 				Provider:              "provider",
 				Interface:             "iface",
-				InterfacePort:         9999,
+				InterfacePort:         "9999",
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1064,14 +1090,14 @@ func TestFabricConfig_Update(t *testing.T) {
 			new: FabricConfig{
 				Provider:      "provider",
 				Interface:     "iface",
-				InterfacePort: 9999,
+				InterfacePort: "9999",
 				CrtTimeout:    120,
 				DisableSRX:    true,
 			},
 			expResult: &FabricConfig{
 				Provider:      "provider",
 				Interface:     "iface",
-				InterfacePort: 9999,
+				InterfacePort: "9999",
 				CrtTimeout:    60,
 				DisableSRX:    true,
 			},
