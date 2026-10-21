@@ -4,9 +4,9 @@ module github.com/daos-stack/daos/src/control
 // - rpm packaging version checks: utils/rpms/daos.spec
 // - debian packaging version checks: debian/control
 // Scons uses this file to extract the minimum version.
-go 1.21
+go 1.21.0
 
-toolchain go1.25.0
+toolchain go1.26.0
 
 require (
 	github.com/Jille/raft-grpc-transport v1.6.1
@@ -27,8 +27,8 @@ require (
 	github.com/prometheus/common v0.66.1
 	go.etcd.io/bbolt v1.4.3
 	go.uber.org/goleak v1.3.0
-	golang.org/x/net v0.58.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/net v0.60.0
+	golang.org/x/sys v0.48.0
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.11
@@ -56,5 +56,5 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 )
