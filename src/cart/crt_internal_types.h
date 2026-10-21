@@ -55,6 +55,32 @@ struct crt_na_config {
 enum crt_traffic_class { CRT_TRAFFIC_CLASSES };
 #undef X
 
+/*
+ * Preferred address family for fabric init. Forwarded to Mercury via
+ * na_init_info.addr_format and translated by Mercury's na_ofi plugin
+ * into the libfabric addr_format hint (FI_SOCKADDR_IN / FI_SOCKADDR_IN6
+ * / provider native / FI_FORMAT_UNSPEC).
+ *
+ * Default is CRT_AF_UNSPEC, which preserves the historical behavior of
+ * letting Mercury pick from its per-provider preference table (IPv4 for
+ * verbs/RoCE). Set to CRT_AF_IPV6 to enable IPv6 fabric on an interface
+ * that lacks an IPv4 address.
+ *
+ * CRT_AF_UNKNOWN is a sentinel returned by crt_str_to_addr_format() when
+ * the input string does not match any known value; callers map it back
+ * to CRT_AF_UNSPEC.
+ */
+#define CRT_ADDR_FORMATS                                                                           \
+	X(CRT_AF_UNSPEC, "unspec")   /* Leave it upon plugin to choose (default) */                \
+	X(CRT_AF_IPV4, "ipv4")       /* Prefer IPv4 (FI_SOCKADDR_IN) */                            \
+	X(CRT_AF_IPV6, "ipv6")       /* Prefer IPv6 (FI_SOCKADDR_IN6) */                           \
+	X(CRT_AF_NATIVE, "native")   /* Provider native addressing */                              \
+	X(CRT_AF_UNKNOWN, "unknown") /* Unknown / parse error sentinel */
+
+#define X(a, b) a,
+enum crt_addr_format { CRT_ADDR_FORMATS };
+#undef X
+
 struct crt_prov_gdata {
 	/** NA plugin type */
 	int                  cpg_provider;
@@ -76,6 +102,13 @@ struct crt_prov_gdata {
 	/** Hints to mercury/ofi for max expected/unexp sizes */
 	uint32_t             cpg_max_exp_size;
 	uint32_t             cpg_max_unexp_size;
+
+	/**
+	 * Preferred address family for Mercury fabric init for this provider.
+	 * Defaults to CRT_AF_UNSPEC (Mercury picks). Set via D_ADDR_FORMAT env
+	 * or crt_init_options_t::cio_addr_format API field.
+	 */
+	enum crt_addr_format cpg_addr_format;
 
 	/** Number of remote tags */
 	uint32_t             cpg_num_remote_tags;
@@ -219,6 +252,7 @@ struct crt_event_cb_priv {
 	ENV_STR(DD_MASK)                                                                           \
 	ENV_STR(DD_STDERR)                                                                         \
 	ENV_STR(DD_SUBSYS)                                                                         \
+	ENV_STR(D_ADDR_FORMAT)                                                                     \
 	ENV_STR(D_CLIENT_METRICS_DUMP_DIR)                                                         \
 	ENV(D_CLIENT_METRICS_ENABLE)                                                               \
 	ENV(D_CLIENT_METRICS_RETAIN)                                                               \

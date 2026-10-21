@@ -21,9 +21,11 @@ server_config:
 
 pool:
   size: 95%
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 
 largefilecount:
   api:
@@ -58,7 +60,6 @@ mdtest:
     np: 30
   num_of_files_dirs: 33334     # creating total of 1M files
   test_dir: "/"
-  dfs_destroy: false
   manager: "MPICH"
   flags: "-F -C"
   write_bytes: 4096

@@ -171,7 +171,7 @@ In MD-on-SSD mode, a pool is made up of a single component in memory (RAM-disk
 associated with each engine) and three components on storage (NVMe SSD). The
 components in storage are related to "roles" WAL, META and DATA and roles are
 assigned to hardware devices in the
-[server configuration file](https://docs.daos.io/v2.6/admin/deployment/#server-configuration-file).
+[server configuration file](https://docs.daos.io/v2.8/admin/deployment/#server-configuration-file).
 
 In MD-on-SSD mode pools are by default created with equal allocations for
 metadata-in-memory and metadata-on-SSD but it is possible to change this. To
@@ -1024,7 +1024,7 @@ to tolerate. Valid values are between 0 to 4, inclusive, with 2 being the
 default. If specified during a pool create operation, this property overrides
 any `--nsvc` options. This property cannot yet be changed afterward.
 
-See [Erasure Code](https://docs.daos.io/v2.6/user/container/#erasure-code) for details on
+See [Erasure Code](https://docs.daos.io/v2.8/user/container/#erasure-code) for details on
 erasure coding at the container level.
 
 ### Properties for Controlling Checkpoints (Metadata on SSD only)
@@ -1075,7 +1075,7 @@ dead rank events.
 ## Access Control Lists
 
 Client user and group access for pools are controlled by
-[Access Control Lists (ACLs)](https://docs.daos.io/v2.6/overview/security/#access-control-lists).
+[Access Control Lists (ACLs)](https://docs.daos.io/v2.8/overview/security/#access-control-lists).
 Most pool-related tasks are performed using the DMG administrative tool, which
 is authenticated by the administrative certificate rather than user-specific
 credentials.
@@ -1091,7 +1091,7 @@ Access-controlled client pool accesses include:
 * Deleting containers in the pool.
 
 This is reflected in the set of supported
-[pool permissions](https://docs.daos.io/v2.6/overview/security/#permissions).
+[pool permissions](https://docs.daos.io/v2.8/overview/security/#permissions).
 
 A user must be able to connect to the pool in order to access any containers
 inside, regardless of their permissions on those containers.
@@ -1114,7 +1114,7 @@ To create a pool with a custom ACL:
 $ dmg pool create --size <size> --acl-file <path> <pool_label>
 ```
 
-The ACL file format is detailed in [here](https://docs.daos.io/v2.6/overview/security/#acl-file).
+The ACL file format is detailed in [here](https://docs.daos.io/v2.8/overview/security/#acl-file).
 
 ### Displaying ACL
 
@@ -1504,7 +1504,7 @@ $ dmg cont set-owner --pool <UUID> --cont <UUID> --group <owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://docs.daos.io/v2.6/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v2.8/overview/security/#principal).
 
 Because this is an administrative action, it does not require the administrator
 to have any privileges assigned in the container ACL.

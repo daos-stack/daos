@@ -18,25 +18,14 @@ fi
 # shellcheck disable=SC2153
 mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
 
-if  [ -d venv ]
-then
-    rm -rf venv
+# use the ftest python virtual environment created by setup_nodes.sh
+if [ -f "${DAOS_FTEST_VENV}"/bin/activate ] ; then
+    # shellcheck disable=SC1091
+    source "${DAOS_FTEST_VENV}"/bin/activate
+else
+    echo "Missing python virtual environment (${DAOS_FTEST_VENV}/bin/activate)!"
+    exit 1
 fi
-
-python3 -m venv venv
-# shellcheck disable=SC1091
-source venv/bin/activate
-
-cat <<EOF > venv/pip.conf
-[global]
-    progress_bar = off
-    no_color = true
-    quiet = 1
-EOF
-
-pip install --upgrade pip
-
-pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
@@ -52,13 +41,6 @@ else
     logs_prefix="$DAOS_BASE/install/lib/daos/TESTING"
     cd "$DAOS_BASE"
 fi
-
-# Copy the pydaos source locally and install it, in an ideal world this would install
-# from the read-only tree directly but for now that isn't working.
-# https://github.com/pypa/setuptools/issues/3237
-cp -a "$PREFIX"/lib/daos/python pydaos
-pip install ./pydaos
-rm -rf pydaos
 
 # Disable D_PROVIDER to allow launch.py to set it
 unset D_PROVIDER

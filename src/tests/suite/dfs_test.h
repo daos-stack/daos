@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,9 +17,12 @@
 #include <daos_fs.h>
 #include <daos_fs_sys.h>
 
-int run_dfs_unit_test(int rank, int size);
-int run_dfs_par_test(int rank, int size);
-int run_dfs_sys_unit_test(int rank, int size);
+int
+run_dfs_unit_test(int rank, int size, int *sub_tests, int sub_tests_size);
+int
+run_dfs_par_test(int rank, int size, int *sub_tests, int sub_tests_size);
+int
+run_dfs_sys_unit_test(int rank, int size, int *sub_tests, int sub_tests_size);
 
 static inline void
 dfs_test_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)

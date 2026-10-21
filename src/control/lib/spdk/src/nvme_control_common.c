@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -555,7 +555,7 @@ collect(void)
 
 	ret = init_ret();
 	_collect(ret, &copy_ctrlr_data, &spdk_nvme_ctrlr_get_pci_device,
-		 &spdk_pci_device_get_socket_id, &spdk_pci_device_get_type);
+		 &spdk_pci_device_get_numa_id, &spdk_pci_device_get_type);
 
 	return ret;
 }

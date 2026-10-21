@@ -89,7 +89,7 @@ struct ds_pool {
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_disable_rebuild : 1,
-	    sp_disable_dtx_resync : 1, sp_incr_reint : 1;
+	    sp_disable_dtx_resync : 1, sp_incr_reint : 1, sp_hdl_fetched : 1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
@@ -121,6 +121,7 @@ struct ds_pool {
 	uint32_t		 sp_reint_mode;
 	/* Hold wlock when recover container, rlock when handle container create/destroy RPC. */
 	ABT_rwlock               sp_recov_lock;
+	daos_epoch_t             sp_rebuild_epoch;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -146,8 +147,11 @@ struct ds_pool_hdl {
 	d_iov_t			sph_cred;
 };
 
-struct ds_pool_hdl *ds_pool_hdl_lookup(const uuid_t uuid);
+/* clang-format off */
+int ds_pool_hdl_lookup(const uuid_t pool_uuid, const uuid_t uuid, struct ds_pool_hdl **hdl_out);
+struct ds_pool_hdl *ds_pool_hdl_lookup_cached(const uuid_t uuid);
 void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
+/* clang-format on */
 
 enum pool_child_state {
 	POOL_CHILD_NEW	= 0,
@@ -190,6 +194,9 @@ struct ds_pool_child {
 	 * DAOS_TGT_TAG.
 	 */
 	void			*spc_metrics[DAOS_NR_MODULE];
+
+	/* The remaining time (seconds) for waiting container local stable epoch (LSE). */
+	int                      spc_remaining_wait_time;
 };
 
 struct ds_pool_svc_op_key {

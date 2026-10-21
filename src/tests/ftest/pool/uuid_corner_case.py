@@ -1,5 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,7 +35,7 @@ class UUIDCornerCase(TestWithServers):
         :avocado: tags=UUIDCornerCase,test_create_label_destroy_uuid
         """
         # Create with a label - Default.
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
         # Make self.pool use UUID.
         self.pool.use_label = False

@@ -18,6 +18,13 @@ PROTOBUF_C__BEGIN_DECLS
 
 typedef struct _Shared__CheckReportReq Shared__CheckReportReq;
 typedef struct _Shared__CheckReportResp Shared__CheckReportResp;
+typedef struct _Shared__CheckListPoolReq Shared__CheckListPoolReq;
+typedef struct _Shared__CheckListPoolResp Shared__CheckListPoolResp;
+typedef struct _Shared__CheckListPoolResp__OnePool Shared__CheckListPoolResp__OnePool;
+typedef struct _Shared__CheckRegPoolReq Shared__CheckRegPoolReq;
+typedef struct _Shared__CheckRegPoolResp Shared__CheckRegPoolResp;
+typedef struct _Shared__CheckDeregPoolReq Shared__CheckDeregPoolReq;
+typedef struct _Shared__CheckDeregPoolResp Shared__CheckDeregPoolResp;
 
 
 /* --- enums --- */
@@ -48,6 +55,133 @@ struct  _Shared__CheckReportResp
 };
 #define SHARED__CHECK_REPORT_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&shared__check_report_resp__descriptor) \
+    , 0 }
+
+
+/*
+ * List all the known pools from MS.
+ */
+struct  _Shared__CheckListPoolReq
+{
+  ProtobufCMessage base;
+};
+#define SHARED__CHECK_LIST_POOL_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__check_list_pool_req__descriptor) \
+     }
+
+
+struct  _Shared__CheckListPoolResp__OnePool
+{
+  ProtobufCMessage base;
+  /*
+   * Pool UUID.
+   */
+  char *uuid;
+  /*
+   * Pool label.
+   */
+  char *label;
+  /*
+   * Pool service replica ranks.
+   */
+  size_t n_svcreps;
+  uint32_t *svcreps;
+};
+#define SHARED__CHECK_LIST_POOL_RESP__ONE_POOL__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__check_list_pool_resp__one_pool__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+
+
+struct  _Shared__CheckListPoolResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code.
+   */
+  int32_t status;
+  /*
+   * The list of pools.
+   */
+  size_t n_pools;
+  Shared__CheckListPoolResp__OnePool **pools;
+};
+#define SHARED__CHECK_LIST_POOL_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__check_list_pool_resp__descriptor) \
+    , 0, 0,NULL }
+
+
+/*
+ * Register pool to MS.
+ */
+struct  _Shared__CheckRegPoolReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS Check event sequence, unique for the instance.
+   */
+  uint64_t seq;
+  /*
+   * Pool UUID.
+   */
+  char *uuid;
+  /*
+   * Pool label.
+   */
+  char *label;
+  /*
+   * Pool service replica ranks.
+   */
+  size_t n_svcreps;
+  uint32_t *svcreps;
+};
+#define SHARED__CHECK_REG_POOL_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__check_reg_pool_req__descriptor) \
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+
+
+struct  _Shared__CheckRegPoolResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code.
+   */
+  int32_t status;
+};
+#define SHARED__CHECK_REG_POOL_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__check_reg_pool_resp__descriptor) \
+    , 0 }
+
+
+/*
+ * Deregister pool from MS.
+ */
+struct  _Shared__CheckDeregPoolReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS Check event sequence, unique for the instance.
+   */
+  uint64_t seq;
+  /*
+   * The pool to be deregistered.
+   */
+  char *uuid;
+};
+#define SHARED__CHECK_DEREG_POOL_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__check_dereg_pool_req__descriptor) \
+    , 0, (char *)protobuf_c_empty_string }
+
+
+struct  _Shared__CheckDeregPoolResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code.
+   */
+  int32_t status;
+};
+#define SHARED__CHECK_DEREG_POOL_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__check_dereg_pool_resp__descriptor) \
     , 0 }
 
 
@@ -89,6 +223,123 @@ Shared__CheckReportResp *
 void   shared__check_report_resp__free_unpacked
                      (Shared__CheckReportResp *message,
                       ProtobufCAllocator *allocator);
+/* Shared__CheckListPoolReq methods */
+void   shared__check_list_pool_req__init
+                     (Shared__CheckListPoolReq         *message);
+size_t shared__check_list_pool_req__get_packed_size
+                     (const Shared__CheckListPoolReq   *message);
+size_t shared__check_list_pool_req__pack
+                     (const Shared__CheckListPoolReq   *message,
+                      uint8_t             *out);
+size_t shared__check_list_pool_req__pack_to_buffer
+                     (const Shared__CheckListPoolReq   *message,
+                      ProtobufCBuffer     *buffer);
+Shared__CheckListPoolReq *
+       shared__check_list_pool_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   shared__check_list_pool_req__free_unpacked
+                     (Shared__CheckListPoolReq *message,
+                      ProtobufCAllocator *allocator);
+/* Shared__CheckListPoolResp__OnePool methods */
+void   shared__check_list_pool_resp__one_pool__init
+                     (Shared__CheckListPoolResp__OnePool         *message);
+/* Shared__CheckListPoolResp methods */
+void   shared__check_list_pool_resp__init
+                     (Shared__CheckListPoolResp         *message);
+size_t shared__check_list_pool_resp__get_packed_size
+                     (const Shared__CheckListPoolResp   *message);
+size_t shared__check_list_pool_resp__pack
+                     (const Shared__CheckListPoolResp   *message,
+                      uint8_t             *out);
+size_t shared__check_list_pool_resp__pack_to_buffer
+                     (const Shared__CheckListPoolResp   *message,
+                      ProtobufCBuffer     *buffer);
+Shared__CheckListPoolResp *
+       shared__check_list_pool_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   shared__check_list_pool_resp__free_unpacked
+                     (Shared__CheckListPoolResp *message,
+                      ProtobufCAllocator *allocator);
+/* Shared__CheckRegPoolReq methods */
+void   shared__check_reg_pool_req__init
+                     (Shared__CheckRegPoolReq         *message);
+size_t shared__check_reg_pool_req__get_packed_size
+                     (const Shared__CheckRegPoolReq   *message);
+size_t shared__check_reg_pool_req__pack
+                     (const Shared__CheckRegPoolReq   *message,
+                      uint8_t             *out);
+size_t shared__check_reg_pool_req__pack_to_buffer
+                     (const Shared__CheckRegPoolReq   *message,
+                      ProtobufCBuffer     *buffer);
+Shared__CheckRegPoolReq *
+       shared__check_reg_pool_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   shared__check_reg_pool_req__free_unpacked
+                     (Shared__CheckRegPoolReq *message,
+                      ProtobufCAllocator *allocator);
+/* Shared__CheckRegPoolResp methods */
+void   shared__check_reg_pool_resp__init
+                     (Shared__CheckRegPoolResp         *message);
+size_t shared__check_reg_pool_resp__get_packed_size
+                     (const Shared__CheckRegPoolResp   *message);
+size_t shared__check_reg_pool_resp__pack
+                     (const Shared__CheckRegPoolResp   *message,
+                      uint8_t             *out);
+size_t shared__check_reg_pool_resp__pack_to_buffer
+                     (const Shared__CheckRegPoolResp   *message,
+                      ProtobufCBuffer     *buffer);
+Shared__CheckRegPoolResp *
+       shared__check_reg_pool_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   shared__check_reg_pool_resp__free_unpacked
+                     (Shared__CheckRegPoolResp *message,
+                      ProtobufCAllocator *allocator);
+/* Shared__CheckDeregPoolReq methods */
+void   shared__check_dereg_pool_req__init
+                     (Shared__CheckDeregPoolReq         *message);
+size_t shared__check_dereg_pool_req__get_packed_size
+                     (const Shared__CheckDeregPoolReq   *message);
+size_t shared__check_dereg_pool_req__pack
+                     (const Shared__CheckDeregPoolReq   *message,
+                      uint8_t             *out);
+size_t shared__check_dereg_pool_req__pack_to_buffer
+                     (const Shared__CheckDeregPoolReq   *message,
+                      ProtobufCBuffer     *buffer);
+Shared__CheckDeregPoolReq *
+       shared__check_dereg_pool_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   shared__check_dereg_pool_req__free_unpacked
+                     (Shared__CheckDeregPoolReq *message,
+                      ProtobufCAllocator *allocator);
+/* Shared__CheckDeregPoolResp methods */
+void   shared__check_dereg_pool_resp__init
+                     (Shared__CheckDeregPoolResp         *message);
+size_t shared__check_dereg_pool_resp__get_packed_size
+                     (const Shared__CheckDeregPoolResp   *message);
+size_t shared__check_dereg_pool_resp__pack
+                     (const Shared__CheckDeregPoolResp   *message,
+                      uint8_t             *out);
+size_t shared__check_dereg_pool_resp__pack_to_buffer
+                     (const Shared__CheckDeregPoolResp   *message,
+                      ProtobufCBuffer     *buffer);
+Shared__CheckDeregPoolResp *
+       shared__check_dereg_pool_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   shared__check_dereg_pool_resp__free_unpacked
+                     (Shared__CheckDeregPoolResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Shared__CheckReportReq_Closure)
@@ -96,6 +347,27 @@ typedef void (*Shared__CheckReportReq_Closure)
                   void *closure_data);
 typedef void (*Shared__CheckReportResp_Closure)
                  (const Shared__CheckReportResp *message,
+                  void *closure_data);
+typedef void (*Shared__CheckListPoolReq_Closure)
+                 (const Shared__CheckListPoolReq *message,
+                  void *closure_data);
+typedef void (*Shared__CheckListPoolResp__OnePool_Closure)
+                 (const Shared__CheckListPoolResp__OnePool *message,
+                  void *closure_data);
+typedef void (*Shared__CheckListPoolResp_Closure)
+                 (const Shared__CheckListPoolResp *message,
+                  void *closure_data);
+typedef void (*Shared__CheckRegPoolReq_Closure)
+                 (const Shared__CheckRegPoolReq *message,
+                  void *closure_data);
+typedef void (*Shared__CheckRegPoolResp_Closure)
+                 (const Shared__CheckRegPoolResp *message,
+                  void *closure_data);
+typedef void (*Shared__CheckDeregPoolReq_Closure)
+                 (const Shared__CheckDeregPoolReq *message,
+                  void *closure_data);
+typedef void (*Shared__CheckDeregPoolResp_Closure)
+                 (const Shared__CheckDeregPoolResp *message,
                   void *closure_data);
 
 /* --- services --- */
@@ -105,6 +377,13 @@ typedef void (*Shared__CheckReportResp_Closure)
 
 extern const ProtobufCMessageDescriptor shared__check_report_req__descriptor;
 extern const ProtobufCMessageDescriptor shared__check_report_resp__descriptor;
+extern const ProtobufCMessageDescriptor shared__check_list_pool_req__descriptor;
+extern const ProtobufCMessageDescriptor shared__check_list_pool_resp__descriptor;
+extern const ProtobufCMessageDescriptor shared__check_list_pool_resp__one_pool__descriptor;
+extern const ProtobufCMessageDescriptor shared__check_reg_pool_req__descriptor;
+extern const ProtobufCMessageDescriptor shared__check_reg_pool_resp__descriptor;
+extern const ProtobufCMessageDescriptor shared__check_dereg_pool_req__descriptor;
+extern const ProtobufCMessageDescriptor shared__check_dereg_pool_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 

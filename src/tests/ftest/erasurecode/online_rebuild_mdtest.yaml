@@ -45,7 +45,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   properties: rd_fac:2
 
 mdtest:
@@ -53,7 +52,6 @@ mdtest:
     np: 4
   api: DFS
   test_dir: /
-  dfs_destroy: False
   manager: MPICH
   flags: "-u -F -C"
   write_bytes: 524288

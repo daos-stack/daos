@@ -1485,7 +1485,8 @@ crt_hdlr_iv_fetch_aux(void *arg)
 			D_GOTO(reply_direct, rc);
 		}
 	} else {
-		D_ERROR("ERROR happened: "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST,
+			  DB_TRACE, DLOG_ERR, rc, "ERROR happened.");
 		D_GOTO(reply_direct, rc);
 	}
 
@@ -3518,8 +3519,9 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else {
-		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER || rc == -DER_BUSY, DB_TRACE,
-			  DLOG_ERR, rc, "ivo_on_update failed");
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_CONT_NONEXIST || rc == -DER_NOTLEADER ||
+			      rc == -DER_BUSY,
+			  DB_TRACE, DLOG_ERR, rc, "ivo_on_update failed");
 
 		update_comp_cb(ivns, class_id, iv_key, NULL,
 			       iv_value, rc, cb_arg);

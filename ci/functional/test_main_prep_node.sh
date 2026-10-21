@@ -205,6 +205,138 @@ function check_ib_devices {
     done
 }
 
+function apply_network_alias_rules {
+    local query_script="/var/tmp/query_node_interfaces.sh"
+    local alias_csv="/var/tmp/daos_ftest_iface_aliases.csv"
+    local rules_file="/etc/udev/rules.d/99-daos-interface-alias.rules"
+    local tmp_rules_file
+    local iface_data
+    local letters="abcdefghijklmnopqrstuvwxyz"
+    local net_index=0
+    local ib_index=0
+    local node_num
+
+    declare -A subnet_label_map
+    declare -A subnet_iface_count
+    declare -A numa_seen
+
+    if [ ! -f "$query_script" ]; then
+        echo "ERROR: Missing $query_script"
+        return 1
+    fi
+
+    if [ ! -x "$query_script" ]; then
+        if ! chmod +x "$query_script"; then
+            echo "ERROR: Failed to make $query_script executable"
+            return 1
+        fi
+    fi
+
+    iface_data="$($query_script 2>/dev/null || true)"
+    if [ -z "$iface_data" ]; then
+        echo "ERROR: Empty interface data from $query_script"
+        return 1
+    fi
+
+    if ! node_num=$(printf "%03d" "$mynodenum"); then
+        node_num="000"
+    fi
+
+    while IFS='|' read -r _ip _iface iface_type subnet _numa _mac; do
+        [ -n "$iface_type" ] || continue
+        [ "$iface_type" = "primary" ] && continue
+        [ -n "$subnet" ] || continue
+        key="$iface_type|$subnet"
+        [ -z "${subnet_label_map[$key]:-}" ] || continue
+        if [ "$iface_type" = "private" ]; then
+            subnet_label_map[$key]="${letters:$net_index:1}"
+            net_index=$((net_index + 1))
+        elif [ "$iface_type" = "infiniband" ]; then
+            subnet_label_map[$key]="${letters:$ib_index:1}"
+            ib_index=$((ib_index + 1))
+        fi
+    done <<< "$(printf "%s\n" "$iface_data" | sort -t'|' -k3,3 -k4,4)"
+
+    while IFS='|' read -r _ip _iface iface_type subnet _numa _mac; do
+        [ -n "$iface_type" ] || continue
+        [ "$iface_type" = "primary" ] && continue
+        group="$iface_type|$subnet"
+        subnet_iface_count[$group]=$(( ${subnet_iface_count[$group]:-0} + 1 ))
+    done <<< "$iface_data"
+
+    tmp_rules_file=$(mktemp)
+    echo "# Managed by ci/functional/test_main_prep_node.sh" > "$tmp_rules_file"
+    echo "# Persistent DAOS interface aliases" >> "$tmp_rules_file"
+    echo "node,node_num,ip,iface,type,subnet,numa,mac,alias" > "$alias_csv"
+
+    while IFS='|' read -r ip iface iface_type subnet numa mac; do
+        [ -n "$ip" ] || continue
+        alias_name=""
+
+        if [ "$iface_type" = "primary" ]; then
+            alias_name="e_daos_mgmt"
+        else
+            key="$iface_type|$subnet"
+            letter="${subnet_label_map[$key]:-a}"
+            group="$iface_type|$subnet"
+            group_count="${subnet_iface_count[$group]:-1}"
+            suffix="00"
+
+            if [ "$group_count" -gt 1 ]; then
+                numa_digit="$numa"
+                if [ -z "$numa_digit" ] || [ "$numa_digit" -lt 0 ]; then
+                    numa_digit=0
+                fi
+                idx_key="$group|$numa_digit"
+                idx="${numa_seen[$idx_key]:-0}"
+                suffix="${numa_digit}${idx}"
+                numa_seen[$idx_key]=$((idx + 1))
+            fi
+
+            if [ "$iface_type" = "private" ]; then
+                alias_name="e_daos_net_${letter}_${suffix}"
+            elif [ "$iface_type" = "infiniband" ]; then
+                alias_name="ib_daos_${letter}_${suffix}"
+            fi
+        fi
+
+        [ -n "$alias_name" ] || continue
+
+        if ! ip -d link show dev "$iface" |
+             grep -q " altname $alias_name"; then
+            if ! ip link property add dev "$iface" altname "$alias_name"; then
+                echo "ERROR: Failed to add altname $alias_name to $iface"
+                return 1
+            fi
+        fi
+
+        echo "${HOSTNAME%%.*},$node_num,$ip,$iface,$iface_type,$subnet,$numa,$mac,$alias_name" \
+            >> "$alias_csv"
+
+        if [ -n "$mac" ]; then
+            rule="SUBSYSTEM==\"net\", ACTION==\"add\", "
+            rule+="ATTR{address}==\"$mac\", NAME=\"$alias_name\""
+            echo "$rule" >> "$tmp_rules_file"
+        fi
+    done <<< "$(printf "%s\n" "$iface_data" |
+              sort -t'|' -k3,3 -k4,4 -k5,5n -k6,6)"
+
+    if ! cp "$tmp_rules_file" "$rules_file"; then
+        rm -f "$tmp_rules_file"
+        echo "ERROR: Failed to install $rules_file"
+        return 1
+    fi
+    rm -f "$tmp_rules_file"
+
+    if ! udevadm control --reload-rules; then
+        echo "ERROR: Failed to reload udev rules for interface aliases"
+        return 1
+    fi
+
+    echo "Updated interface alias rules in $rules_file"
+    return 0
+}
+
 # First check for InfiniBand devices
 if [ "$ib_count" -gt 0 ]; then
     if do_wait_for_ib; then
@@ -216,6 +348,8 @@ if [ "$ib_count" -gt 0 ]; then
         check_ib_devices "${ib_list[@]}"
     fi
 fi
+
+apply_network_alias_rules
 
 # having -x just makes the console log harder to read.
 # set +x
@@ -329,7 +463,10 @@ fi
 # Additional information if any check failed
 if [ "$result" -ne 0 ]; then
     sys_message="$({
-        ls -l /etc/sysconfig/network-scripts/ifcfg-* || true
+        find /etc -name 'ifcfg-*' -type f -print -exec ls -l {} \; || true
+        if command -v nmcli >/dev/null 2>&1; then  # New RHEL
+            nmcli connection show || true
+        fi
         ip link show|| true
         systemctl status || true
         systemctl --failed || true
@@ -339,17 +476,36 @@ if [ "$result" -ne 0 ]; then
 fi
 
 set -x
-if [ -n "$FIRST_NODE" ] && ! grep /mnt/share /proc/mounts; then
+if [ -n "$FIRST_NODE" ] && ! grep -qs ' /mnt/share ' /proc/mounts; then
     mkdir -p /mnt/share
-    mount "$FIRST_NODE":/export/share /mnt/share
+    # Retry the NFS mount to handle the case where the NFS server on
+    # FIRST_NODE has not fully registered its exports yet.
+    nfs_mounted=false
+    for attempt in $(seq 1 3); do
+        if mount "$FIRST_NODE":/export/share /mnt/share; then
+            nfs_mounted=true
+            break
+        fi
+        echo "NFS mount attempt $attempt failed, retrying in 5s..."
+        sleep 5
+    done
+    if ! "$nfs_mounted"; then
+        echo "ERROR: NFS mount failed after $attempt attempts:"
+        echo "  $FIRST_NODE:/export/share -> /mnt/share"
+        echo "Exports advertised by $FIRST_NODE:"
+        showmount -e "$FIRST_NODE" || true
+        echo "DNS/hosts resolution for $FIRST_NODE:"
+        getent hosts "$FIRST_NODE" || true
+        exit 32
+    fi
 fi
 
 # The package name defaults to "(root)" unless there is a dot in the
 # testsuite name, in which case the package name is the part before
 # the last dot in the testsuite name.
 pn="Hardware"
-tf="failures=\"$testfails\""
-te="errors=\"0\""
+tf="failures=\"0\""
+te="errors=\"$testfails\""
 tc="tests=\"$testruns\""
 
 junit_xml="<testsuite name=\"${pn}.${cn}\" skipped=\"0\" $tf $te $tc>$nl

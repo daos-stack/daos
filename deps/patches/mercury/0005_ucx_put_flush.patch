@@ -1,0 +1,273 @@
+From 631ec469b8c4a4aafcce11416ed0145822f109c1 Mon Sep 17 00:00:00 2001
+From: Jerome Soumagne <jerome.soumagne@hpe.com>
+Date: Fri, 29 May 2026 11:49:43 -0500
+Subject: [PATCH] NA UCX: flush endpoint after put
+
+This ensures that data is correctly delivered upon completion of
+RMA puts and that the remote buffer can be safely re-used.
+
+Co-authored-by: Wang Shilong <shilong.wang@hpe.com>
+---
+ src/na/na_ucx.c | 144 ++++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 126 insertions(+), 18 deletions(-)
+
+diff --git a/src/na/na_ucx.c b/src/na/na_ucx.c
+index 7c0ac8d4..27bc6c6e 100644
+--- a/src/na/na_ucx.c
++++ b/src/na/na_ucx.c
+@@ -566,6 +566,12 @@ static na_return_t
+ na_ucp_put(ucp_ep_h ep, void *buf, size_t buf_size, uint64_t remote_addr,
+     ucp_rkey_h rkey, void *request);
+ 
++/**
++ * Put callback.
++ */
++static void
++na_ucp_put_cb(void *request, ucs_status_t status, void *user_data);
++
+ /**
+  * RMA get.
+  */
+@@ -574,10 +580,22 @@ na_ucp_get(ucp_ep_h ep, void *buf, size_t buf_size, uint64_t remote_addr,
+     ucp_rkey_h rkey, void *request);
+ 
+ /**
+- * RMA callback.
++ * Get callback.
+  */
+ static void
+-na_ucp_rma_cb(void *request, ucs_status_t status, void *user_data);
++na_ucp_get_cb(void *request, ucs_status_t status, void *user_data);
++
++/**
++ * Flush an endpoint to guarantee remote completion of a prior RMA put.
++ */
++static na_return_t
++na_ucp_flush(ucp_ep_h ep, void *request);
++
++/**
++ * RMA flush callback.
++ */
++static void
++na_ucp_flush_cb(void *request, ucs_status_t status, void *user_data);
+ 
+ /*---------------------------------------------------------------------------*/
+ /* NA UCX helpers                                                            */
+@@ -745,6 +763,7 @@ na_ucx_unexpected_info_free(
+ static na_return_t
+ na_ucx_rma(struct na_ucx_class *na_ucx_class, na_context_t *context,
+     na_cb_type_t cb_type, na_cb_t callback, void *arg,
++    na_ucp_rma_op_t ucp_rma_op, const char *ucp_rma_op_string,
+     struct na_ucx_mem_handle *local_mem_handle, na_offset_t local_offset,
+     struct na_ucx_mem_handle *remote_mem_handle, na_offset_t remote_offset,
+     size_t length, struct na_ucx_addr *na_ucx_addr,
+@@ -2400,7 +2419,7 @@ na_ucp_put(ucp_ep_h ep, void *buf, size_t buf_size, uint64_t remote_addr,
+ {
+     const ucp_request_param_t rma_params = {
+         .op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK | UCP_OP_ATTR_FIELD_REQUEST,
+-        .cb = {.send = na_ucp_rma_cb},
++        .cb = {.send = na_ucp_put_cb},
+         .request = request};
+     ucs_status_ptr_t status_ptr;
+     na_return_t ret;
+@@ -2411,7 +2430,7 @@ na_ucp_put(ucp_ep_h ep, void *buf, size_t buf_size, uint64_t remote_addr,
+         NA_LOG_SUBSYS_DEBUG(rma, "ucp_put_nbx() completed immediately");
+ 
+         /* Directly execute callback */
+-        na_ucp_rma_cb(request, UCS_OK, NULL);
++        na_ucp_put_cb(request, UCS_OK, NULL);
+     } else
+         NA_CHECK_SUBSYS_ERROR(rma, UCS_PTR_IS_ERR(status_ptr), error, ret,
+             na_ucs_status_to_na(UCS_PTR_STATUS(status_ptr)),
+@@ -2426,6 +2445,36 @@ na_ucp_put(ucp_ep_h ep, void *buf, size_t buf_size, uint64_t remote_addr,
+     return ret;
+ }
+ 
++/*---------------------------------------------------------------------------*/
++static void
++na_ucp_put_cb(void *request, ucs_status_t status, void NA_UNUSED *user_data)
++{
++    struct na_ucx_op_id *na_ucx_op_id = (struct na_ucx_op_id *) request;
++    na_return_t cb_ret;
++
++    NA_LOG_SUBSYS_DEBUG(
++        rma, "ucp_put_nbx() completed (%s)", ucs_status_string(status));
++
++    /* Local completion of a put only means the source buffer can be reused, it
++     * does not guarantee the data is visible in the remote process memory.
++     * Flush the endpoint to force remote completion and defer the NA completion
++     * until the flush completes. Gets are unaffected: local completion of a get
++     * means the data has already been delivered into the local buffer. */
++    if (status == UCS_OK) {
++        cb_ret = na_ucp_flush(na_ucx_op_id->addr->ucp_ep, na_ucx_op_id);
++        NA_CHECK_SUBSYS_NA_ERROR(rma, done, cb_ret, "na_ucp_flush() failed");
++
++        return; /* Completion deferred to na_ucp_flush_cb() */
++    } else if (status == UCS_ERR_CANCELED)
++        NA_GOTO_DONE(done, cb_ret, NA_CANCELED);
++    else
++        NA_GOTO_SUBSYS_ERROR(rma, done, cb_ret, na_ucs_status_to_na(status),
++            "na_ucp_rma_cb() failed (%s)", ucs_status_string(status));
++
++done:
++    na_ucx_complete(na_ucx_op_id, cb_ret);
++}
++
+ /*---------------------------------------------------------------------------*/
+ static na_return_t
+ na_ucp_get(ucp_ep_h ep, void *buf, size_t buf_size, uint64_t remote_addr,
+@@ -2433,7 +2482,7 @@ na_ucp_get(ucp_ep_h ep, void *buf, size_t buf_size, uint64_t remote_addr,
+ {
+     const ucp_request_param_t rma_params = {
+         .op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK | UCP_OP_ATTR_FIELD_REQUEST,
+-        .cb = {.send = na_ucp_rma_cb},
++        .cb = {.send = na_ucp_get_cb},
+         .request = request};
+     ucs_status_ptr_t status_ptr;
+     na_return_t ret;
+@@ -2444,7 +2493,7 @@ na_ucp_get(ucp_ep_h ep, void *buf, size_t buf_size, uint64_t remote_addr,
+         NA_LOG_SUBSYS_DEBUG(rma, "ucp_get_nbx() completed immediately");
+ 
+         /* Directly execute callback */
+-        na_ucp_rma_cb(request, UCS_OK, NULL);
++        na_ucp_get_cb(request, UCS_OK, NULL);
+     } else
+         NA_CHECK_SUBSYS_ERROR(rma, UCS_PTR_IS_ERR(status_ptr), error, ret,
+             na_ucs_status_to_na(UCS_PTR_STATUS(status_ptr)),
+@@ -2461,13 +2510,13 @@ na_ucp_get(ucp_ep_h ep, void *buf, size_t buf_size, uint64_t remote_addr,
+ 
+ /*---------------------------------------------------------------------------*/
+ static void
+-na_ucp_rma_cb(void *request, ucs_status_t status, void NA_UNUSED *user_data)
++na_ucp_get_cb(void *request, ucs_status_t status, void NA_UNUSED *user_data)
+ {
+     struct na_ucx_op_id *na_ucx_op_id = (struct na_ucx_op_id *) request;
+     na_return_t cb_ret;
+ 
+     NA_LOG_SUBSYS_DEBUG(
+-        rma, "ucp_put/get_nbx() completed (%s)", ucs_status_string(status));
++        rma, "ucp_get_nbx() completed (%s)", ucs_status_string(status));
+ 
+     if (status == UCS_OK)
+         NA_GOTO_DONE(done, cb_ret, NA_SUCCESS);
+@@ -2475,7 +2524,63 @@ na_ucp_rma_cb(void *request, ucs_status_t status, void NA_UNUSED *user_data)
+         NA_GOTO_DONE(done, cb_ret, NA_CANCELED);
+     else
+         NA_GOTO_SUBSYS_ERROR(rma, done, cb_ret, na_ucs_status_to_na(status),
+-            "na_ucp_rma_cb() failed (%s)", ucs_status_string(status));
++            "na_ucp_get_cb() failed (%s)", ucs_status_string(status));
++
++done:
++    na_ucx_complete(na_ucx_op_id, cb_ret);
++}
++
++/*---------------------------------------------------------------------------*/
++static na_return_t
++na_ucp_flush(ucp_ep_h ep, void *request)
++{
++    const ucp_request_param_t flush_params = {
++        .op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK | UCP_OP_ATTR_FIELD_REQUEST,
++        .cb = {.send = na_ucp_flush_cb},
++        .request = request};
++    ucs_status_ptr_t status_ptr;
++    na_return_t ret;
++
++    /* Reuse the op ID as the flush request: the put has completed by now and
++     * UCX allows posting new operations from within completion callbacks. */
++    status_ptr = ucp_ep_flush_nbx(ep, &flush_params);
++    if (status_ptr == NULL) {
++        /* Check for immediate completion */
++        NA_LOG_SUBSYS_DEBUG(rma, "ucp_ep_flush_nbx() completed immediately");
++
++        /* Directly execute callback */
++        na_ucp_flush_cb(request, UCS_OK, NULL);
++    } else
++        NA_CHECK_SUBSYS_ERROR(rma, UCS_PTR_IS_ERR(status_ptr), error, ret,
++            na_ucs_status_to_na(UCS_PTR_STATUS(status_ptr)),
++            "ucp_ep_flush_nbx() failed (%s)",
++            ucs_status_string(UCS_PTR_STATUS(status_ptr)));
++
++    NA_LOG_SUBSYS_DEBUG(rma, "ucp_ep_flush_nbx() was posted");
++
++    return NA_SUCCESS;
++
++error:
++    return ret;
++}
++
++/*---------------------------------------------------------------------------*/
++static void
++na_ucp_flush_cb(void *request, ucs_status_t status, void NA_UNUSED *user_data)
++{
++    struct na_ucx_op_id *na_ucx_op_id = (struct na_ucx_op_id *) request;
++    na_return_t cb_ret;
++
++    NA_LOG_SUBSYS_DEBUG(
++        rma, "ucp_ep_flush_nbx() completed (%s)", ucs_status_string(status));
++
++    if (status == UCS_OK)
++        NA_GOTO_DONE(done, cb_ret, NA_SUCCESS);
++    if (status == UCS_ERR_CANCELED)
++        NA_GOTO_DONE(done, cb_ret, NA_CANCELED);
++    else
++        NA_GOTO_SUBSYS_ERROR(rma, done, cb_ret, na_ucs_status_to_na(status),
++            "na_ucp_flush_cb() failed (%s)", ucs_status_string(status));
+ 
+ done:
+     na_ucx_complete(na_ucx_op_id, cb_ret);
+@@ -3234,6 +3339,7 @@ na_ucx_unexpected_info_free(
+ static na_return_t
+ na_ucx_rma(struct na_ucx_class NA_UNUSED *na_ucx_class, na_context_t *context,
+     na_cb_type_t cb_type, na_cb_t callback, void *arg,
++    na_ucp_rma_op_t ucp_rma_op, const char *ucp_rma_op_string,
+     struct na_ucx_mem_handle *local_mem_handle, na_offset_t local_offset,
+     struct na_ucx_mem_handle *remote_mem_handle, na_offset_t remote_offset,
+     size_t length, struct na_ucx_addr *na_ucx_addr,
+@@ -3266,8 +3372,7 @@ na_ucx_rma(struct na_ucx_class NA_UNUSED *na_ucx_class, na_context_t *context,
+ 
+     NA_UCX_OP_RESET(na_ucx_op_id, context, cb_type, callback, arg, na_ucx_addr);
+ 
+-    na_ucx_op_id->info.rma.ucp_rma_op =
+-        (cb_type == NA_CB_PUT) ? na_ucp_put : na_ucp_get;
++    na_ucx_op_id->info.rma.ucp_rma_op = ucp_rma_op;
+     na_ucx_op_id->info.rma.buf =
+         (char *) local_mem_handle->desc.base + local_offset;
+     na_ucx_op_id->info.rma.remote_addr =
+@@ -3286,7 +3391,8 @@ na_ucx_rma(struct na_ucx_class NA_UNUSED *na_ucx_class, na_context_t *context,
+         na_ucx_op_id->info.rma.buf, na_ucx_op_id->info.rma.buf_size,
+         na_ucx_op_id->info.rma.remote_addr, na_ucx_op_id->info.rma.remote_key,
+         na_ucx_op_id);
+-    NA_CHECK_SUBSYS_NA_ERROR(rma, release, ret, "Could not post rma operation");
++    NA_CHECK_SUBSYS_NA_ERROR(rma, release, ret,
++        "Could not post rma operation (%s)", ucp_rma_op_string);
+ 
+     return NA_SUCCESS;
+ 
+@@ -4499,9 +4605,10 @@ na_ucx_put(na_class_t *na_class, na_context_t *context, na_cb_t callback,
+     na_op_id_t *op_id)
+ {
+     return na_ucx_rma(NA_UCX_CLASS(na_class), context, NA_CB_PUT, callback, arg,
+-        (struct na_ucx_mem_handle *) local_mem_handle, local_offset,
+-        (struct na_ucx_mem_handle *) remote_mem_handle, remote_offset, length,
+-        (struct na_ucx_addr *) remote_addr, (struct na_ucx_op_id *) op_id);
++        na_ucp_put, "na_ucp_put", (struct na_ucx_mem_handle *) local_mem_handle,
++        local_offset, (struct na_ucx_mem_handle *) remote_mem_handle,
++        remote_offset, length, (struct na_ucx_addr *) remote_addr,
++        (struct na_ucx_op_id *) op_id);
+ }
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -4513,9 +4620,10 @@ na_ucx_get(na_class_t *na_class, na_context_t *context, na_cb_t callback,
+     na_op_id_t *op_id)
+ {
+     return na_ucx_rma(NA_UCX_CLASS(na_class), context, NA_CB_GET, callback, arg,
+-        (struct na_ucx_mem_handle *) local_mem_handle, local_offset,
+-        (struct na_ucx_mem_handle *) remote_mem_handle, remote_offset, length,
+-        (struct na_ucx_addr *) remote_addr, (struct na_ucx_op_id *) op_id);
++        na_ucp_get, "na_ucp_get", (struct na_ucx_mem_handle *) local_mem_handle,
++        local_offset, (struct na_ucx_mem_handle *) remote_mem_handle,
++        remote_offset, length, (struct na_ucx_addr *) remote_addr,
++        (struct na_ucx_op_id *) op_id);
+ }
+ 
+ /*---------------------------------------------------------------------------*/

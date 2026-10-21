@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -34,8 +35,8 @@ class DaosSnapshotTest(TestWithServers):
 
     def prepare_pool_container(self):
         """Create a pool and a container and prepare for the test cases."""
-        self.add_pool(connect=False)
-        self.add_container(self.pool)
+        self.pool = self.get_pool(connect=False)
+        self.container = self.get_container(self.pool)
 
     def create_verify_snapshots(self, count):
         """Create and list to verify that the snapshots are created.

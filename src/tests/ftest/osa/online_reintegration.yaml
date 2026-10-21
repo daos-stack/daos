@@ -40,7 +40,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
   oclass: RP_2G1
 
@@ -71,8 +70,6 @@ mdtest:
     np: 2
   num_of_files_dirs: 100
   test_dir: "/tmp/"
-  iteration: 1
-  dfs_destroy: false
   dfs_oclass: RP_2G1
   dfs_dir_oclass: RP_2G1
   manager: "MPICH"

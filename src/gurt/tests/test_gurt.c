@@ -131,11 +131,11 @@ test_d_errstr(void **state)
 	assert_string_equal(value, "DER_UNKNOWN");
 
 	/* Check the end of the DAOS error numbers. */
-	value = d_errstr(-DER_CONT_DESTROYING);
-	assert_string_equal(value, "DER_CONT_DESTROYING");
-	value = d_errstr(-2051);
-	assert_string_equal(value, "DER_CONT_DESTROYING");
-	value = d_errstr(-(DER_CONT_DESTROYING + 1));
+	value = d_errstr(-DER_REBUILD_DELAY);
+	assert_string_equal(value, "DER_REBUILD_DELAY");
+	value = d_errstr(-2053);
+	assert_string_equal(value, "DER_REBUILD_DELAY");
+	value = d_errstr(-(DER_REBUILD_DELAY + 1));
 	assert_string_equal(value, "DER_UNKNOWN");
 }
 

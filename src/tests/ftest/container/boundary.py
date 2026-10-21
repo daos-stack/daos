@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -104,9 +104,10 @@ class BoundaryTest(TestWithServers):
             self.fail('{} pool create threads failed'.format(num_failed))
         self.log.info('Created %d pools', num_pools)
 
-        # Create all containers for all pools in parallel
+        # Create all containers for all pools in parallel (specifying max_workers because of the
+        # 2-second sleep in every thread)
         container_manager = ThreadManager(
-            self.create_container_and_test, self.get_remaining_time() - 30)
+            self.create_container_and_test, self.get_remaining_time() - 30, max_workers=1024)
         all_pool_cont_args = list(itertools.product(self.pool, range(num_containers)))
         self.random.shuffle(all_pool_cont_args)
         for pool, cont_num in all_pool_cont_args:

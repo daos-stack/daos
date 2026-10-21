@@ -14,7 +14,6 @@ pool:
   size: 40G
 
 container:
-  control_method: daos
   type: POSIX
   dfs_oclass: SX
 

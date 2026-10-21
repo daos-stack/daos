@@ -18,4 +18,3 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos

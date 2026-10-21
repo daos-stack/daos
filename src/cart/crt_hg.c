@@ -846,6 +846,19 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 
 	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
+	/*
+	 * Forward the per-provider address-family preference to Mercury. The
+	 * default (CRT_AF_UNSPEC -> NA_ADDR_UNSPEC) preserves the original
+	 * behavior: Mercury's na_ofi plugin falls back to its per-provider
+	 * preference table (IPv4 for verbs/RoCE). Setting D_ADDR_FORMAT=ipv6
+	 * (or cio_addr_format="ipv6") instead steers libfabric's fabric scan
+	 * to enumerate IPv6 interfaces, which is required for IPv6-only
+	 * fabric NIC deployments. CRT_AF_* values are statically asserted to
+	 * match the corresponding NA_ADDR_* values in crt_init.c, so the
+	 * direct cast is safe.
+	 */
+	init_info.na_init_info.addr_format = (enum na_addr_format)prov_data->cpg_addr_format;
+
 	if (crt_provider_is_block_mode(provider) && !crt_gdata.cg_progress_busy)
 		init_info.na_init_info.progress_mode = 0;
 	else
@@ -1587,8 +1600,8 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 	 * see CART-146 for details
 	 */
 	if (hg_ret != HG_SUCCESS)
-		D_WARN("hg_cbinfo->ret: " DF_HG_RC ", opc: %#x.\n",
-		       DP_HG_RC(hg_ret), opc);
+		D_WARN("hg_cbinfo->ret: " DF_HG_RC ", opc: %#x from %s\n", DP_HG_RC(hg_ret), opc,
+		       crt_rpc_priv_get_origin_addr(rpc_priv));
 
 	/* corresponding to the crt_req_addref in crt_hg_reply_send */
 	RPC_DECREF(rpc_priv);
@@ -2022,4 +2035,41 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 
 out:
 	return rc;
+}
+
+char *
+crt_rpc_priv_get_origin_addr(struct crt_rpc_priv *rpc_priv)
+{
+	const struct hg_info *hg_info;
+	char                  addr[48];
+	hg_size_t             addr_size = 48;
+	int                   rc;
+
+	if (rpc_priv->crp_orig_uri != NULL)
+		return rpc_priv->crp_orig_uri;
+
+	hg_info = HG_Get_info(rpc_priv->crp_hg_hdl);
+	if (hg_info == NULL)
+		return "NOINFO";
+
+	rc = HG_Addr_to_string(hg_info->hg_class, addr, (hg_size_t *)&addr_size, hg_info->addr);
+	if (rc != 0)
+		return "NONE";
+
+	D_ALLOC(rpc_priv->crp_orig_uri, addr_size);
+	if (rpc_priv->crp_orig_uri == NULL)
+		return "NOMEM";
+
+	memcpy(rpc_priv->crp_orig_uri, addr, addr_size);
+
+	return rpc_priv->crp_orig_uri;
+}
+
+char *
+crt_req_origin_addr_get(crt_rpc_t *rpc_pub)
+{
+	struct crt_rpc_priv *rpc_priv;
+
+	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
+	return crt_rpc_priv_get_origin_addr(rpc_priv);
 }

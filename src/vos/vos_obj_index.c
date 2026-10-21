@@ -513,6 +513,9 @@ oi_iter_ilog_check(struct vos_obj_df *obj, struct vos_oi_iter *oiter,
 	rc = vos_ilog_check(&oiter->oit_ilog_info, &oiter->oit_epr, epr,
 			    (oiter->oit_flags & VOS_IT_PUNCHED) == 0);
 out:
+	if (rc == -DER_INPROGRESS && oiter->oit_iter.it_ignore_uncommitted)
+		rc = -DER_IGNORE;
+
 	D_ASSERTF(check_existence || rc != -DER_NONEXIST,
 		  "Probe is required before fetch\n");
 	return rc;
@@ -697,7 +700,7 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 		rc = oi_iter_ilog_check(obj, oiter, NULL, true);
 		if (rc == 0)
 			break;
-		if (rc != -DER_NONEXIST) {
+		if (rc != -DER_NONEXIST && rc != -DER_IGNORE) {
 			str = "ilog check";
 			goto failed;
 		}

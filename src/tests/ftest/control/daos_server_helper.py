@@ -1,11 +1,13 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import getpass
 import os
 import stat
+import sys
 
 from apricot import TestWithServers
 from run_utils import run_remote
@@ -38,7 +40,7 @@ class DaosPrivHelperTest(TestWithServers):
         # Get the result remotely with os.stat so the format is compatible with local code
         self.log_step("Verify daos_server_helper binary permissions")
         helper_path = os.path.join(self.bin, "daos_server_helper")
-        cmd = f"python3 -c 'import os; print(os.stat(\"{helper_path}\").st_mode)'"
+        cmd = f"{sys.executable} -c 'import os; print(os.stat(\"{helper_path}\").st_mode)'"
         result = run_remote(self.log, self.hostlist_servers, cmd)
         if not result.passed:
             self.fail("Failed to get daos_server_helper mode")
@@ -81,7 +83,7 @@ class DaosPrivHelperTest(TestWithServers):
 
         # Run format command under non-root user
         self.log_step("Perform SCM format")
-        result = self.server_managers[0].dmg.storage_format()
+        result = self.server_managers[0].storage_format()
         if result is None:
             self.fail("Failed to format storage")
 

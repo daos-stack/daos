@@ -5,7 +5,7 @@ hosts:
   test_servers: 5
   test_clients: 3
 
-timeout: 600
+timeout: 800
 
 server_config:
   name: daos_server
@@ -33,7 +33,6 @@ container:
   type: POSIX
 
 mdtest:
-  dfs_destroy: False
   manager: "MPICH"
   ppn: 32
   test_dir: "/"

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -991,14 +992,20 @@ dfs_sys_teardown(void **state)
 }
 
 int
-run_dfs_sys_unit_test(int rank, int size)
+run_dfs_sys_unit_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
+	int selected = sub_tests_size;
+
+	if (sub_tests_size == 0) {
+		sub_tests = NULL;
+		selected  = ARRAY_SIZE(dfs_sys_unit_tests);
+	}
 
 	par_barrier(PAR_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Sys_Unit",
-					 dfs_sys_unit_tests, dfs_sys_setup,
-					 dfs_sys_teardown);
+	rc = run_daos_sub_tests("DAOS_FileSystem_DFS_Sys_Unit", dfs_sys_unit_tests,
+				ARRAY_SIZE(dfs_sys_unit_tests), sub_tests, selected, dfs_sys_setup,
+				dfs_sys_teardown);
 	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

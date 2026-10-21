@@ -1462,7 +1462,7 @@ belongs_to_user(d_iov_t *key, struct find_hdls_by_cont_arg *arg)
 	hdl = value.iov_buf;
 
 	/* Usually we already have the pool handle in memory. */
-	pool_hdl = ds_pool_hdl_lookup(hdl->ch_pool_hdl);
+	pool_hdl = ds_pool_hdl_lookup_cached(hdl->ch_pool_hdl);
 	if (pool_hdl == NULL) {
 		/* Otherwise, look it up in the pool metadata via a hack. */
 		rc = ds_pool_lookup_hdl_cred(arg->fha_tx, cont->c_svc->cs_pool_uuid,
@@ -1637,7 +1637,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	container_flags |= CONTAINER_F_DESTROYING;
 	d_iov_set(&val, &container_flags, sizeof(container_flags));
-	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
+	rc = rdb_tx_update_critical(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
 
 out_prop:
 	daos_prop_free(prop);
@@ -1857,7 +1857,9 @@ ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid, d_rank_t ran
 				daos_epoch_t ec_agg_eph, daos_epoch_t stable_eph)
 {
 	struct cont_svc			*svc;
+	struct rdb_tx                    tx;
 	struct cont_track_eph_leader	*eph_ldr;
+	struct cont                     *cont = NULL;
 	int				 rc;
 	bool				 retried = false;
 	int				 i;
@@ -1869,9 +1871,28 @@ ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid, d_rank_t ran
 retry:
 	eph_ldr = cont_track_eph_leader_lookup(svc, cont_uuid);
 	if (eph_ldr == NULL) {
-		rc = cont_track_eph_leader_alloc(svc, cont_uuid, &eph_ldr);
-		if (rc)
+		/* check container's existence before creating cont_track_eph_leader */
+		rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+		if (rc != 0)
 			D_GOTO(out_put, rc);
+
+		ABT_rwlock_rdlock(svc->cs_lock);
+		rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+		ABT_rwlock_unlock(svc->cs_lock);
+		rdb_tx_end(&tx);
+		if (rc != 0) {
+			DL_CDEBUG(rc == -DER_NONEXIST, DB_MD, DLOG_ERR, rc,
+				  DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+			D_GOTO(out_put, rc);
+		}
+		cont_put(cont);
+
+		eph_ldr = cont_track_eph_leader_lookup(svc, cont_uuid);
+		if (eph_ldr == NULL) {
+			rc = cont_track_eph_leader_alloc(svc, cont_uuid, &eph_ldr);
+			if (rc)
+				D_GOTO(out_put, rc);
+		}
 	}
 
 	for (i = 0; i < eph_ldr->cte_servers_num; i++) {
@@ -1908,7 +1929,7 @@ retry:
 
 out_put:
 	cont_svc_put_leader(svc);
-	return 0;
+	return rc;
 }
 
 #define EPH_ARG_TGT_INLINE	(64)
@@ -1941,7 +1962,8 @@ cont_refresh_track_eph_one(void *data)
 		cont_child->sc_global_stable_eph < arg->min_stable_eph ? "update" : "ignore",
 		cont_child->sc_global_stable_eph, arg->min_stable_eph);
 
-	if (cont_child->sc_ec_agg_eph_boundary < arg->min_ec_agg_eph)
+	if (cont_child->sc_ec_agg_eph_boundary < arg->min_ec_agg_eph &&
+	    !DAOS_FAIL_CHECK(DAOS_CONT_EC_BOUNDARY_FREEZE))
 		cont_child->sc_ec_agg_eph_boundary = arg->min_ec_agg_eph;
 
 	cont_child->sc_ec_agg_eph_valid = 1;
@@ -1999,7 +2021,7 @@ ds_cont_tgt_refresh_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	rc = ds_pool_thread_collective(
 	    pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
 	    cont_refresh_track_eph_one, &arg, DSS_ULT_DEEP_STACK | DSS_ULT_FL_PERIODIC);
-	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG, rc,
+	DL_CDEBUG(rc == 0 || rc == -DER_CONT_NONEXIST, DLOG_DBG, DLOG_ERR, rc,
 		  DF_CONT ": refresh ec_agg_eph " DF_X64 ", "
 			  "stable_eph " DF_X64,
 		  DP_CONT(pool_uuid, cont_uuid), ec_agg_eph, stable_eph);
@@ -2029,10 +2051,10 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 	}
 
 	ABT_rwlock_rdlock(svc->cs_lock);
-	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	rc = cont_lookup_active(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
-			  DF_CONT ": Failed to look container",
+		DL_CDEBUG(rc != -DER_NONEXIST && rc != -DER_CONT_DESTROYING, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": cont_lookup_active failed",
 			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
@@ -2071,7 +2093,8 @@ ds_cont_ec_agg_eph_rdb_lookup(uuid_t pool_uuid, uuid_t cont_uuid, uint64_t *ec_a
 	rc = cont_agg_eph_load(svc, cont_uuid, ec_agg_eph);
 	cont_svc_put_leader(svc);
 	if (rc)
-		DL_ERROR(rc, DF_CONT ": cont_agg_eph_load failed.", DP_CONT(pool_uuid, cont_uuid));
+		DL_CDEBUG(rc != -DER_NONEXIST && rc != -DER_CONT_DESTROYING, DLOG_ERR, DB_MD, rc,
+			  DF_CONT ": cont_agg_eph_load failed", DP_CONT(pool_uuid, cont_uuid));
 	return rc;
 }
 
@@ -2148,6 +2171,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	uint64_t                         cur_ts;
 	int				 i;
 	int                              warn_slug_ranks = 8; /* 8 ranks at most */
+	int                              cont_num        = 0;
 	int				 rc = 0;
 
 	rc = map_ranks_failed(pool->sp_map, &fail_ranks);
@@ -2158,6 +2182,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 	ABT_mutex_lock(svc->cs_cont_ephs_mutex);
 	d_list_for_each_entry_safe(eph_ldr, tmp, &svc->cs_cont_ephs_leader_list, cte_list) {
+		cont_num++;
 		if (eph_ldr->cte_deleted) {
 			d_list_del(&eph_ldr->cte_list);
 			D_FREE(eph_ldr->cte_server_ephs);
@@ -2169,7 +2194,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			rc = cont_agg_eph_load(svc, eph_ldr->cte_cont_uuid,
 					       &eph_ldr->cte_rdb_ec_agg_eph);
 			if (rc) {
-				if (rc == -DER_NONEXIST) {
+				if (rc == -DER_NONEXIST || rc == -DER_CONT_DESTROYING) {
 					DL_INFO(rc, DF_CONT " container skipped",
 						DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
 					continue;
@@ -2216,8 +2241,11 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 		if (min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
 		    min_stable_eph == eph_ldr->cte_current_stable_eph &&
-		    eph_ldr->cte_current_ec_agg_eph != 0)
+		    eph_ldr->cte_current_ec_agg_eph != 0) {
+			if (cont_num % 10 == 0)
+				dss_sleep(0);
 			continue;
+		}
 
 		/**
 		 * NB: during extending or reintegration, the new
@@ -2268,8 +2296,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 					       min_ec_agg_eph, min_stable_eph,
 					       svc->cs_cont_ephs_leader_req);
 		if (rc) {
-			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
-				  DF_CONT ": refresh failed",
+			DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_CONT_NONEXIST, DB_MD, DLOG_ERR,
+				  rc, DF_CONT ": refresh failed",
 				  DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
 
 			/* If ULT is exiting, break out */
@@ -2433,7 +2461,7 @@ cont_lookup_internal(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t
 		if (flags & CONTAINER_F_DESTROYING) {
 			D_DEBUG(DB_MD, DF_CONT ": ignore destroying\n",
 				DP_CONT(svc->cs_pool_uuid, p->c_uuid));
-			rc = -DER_NONEXIST;
+			rc = -DER_CONT_DESTROYING;
 			goto err_prop;
 		}
 	}
@@ -2493,6 +2521,13 @@ int
 cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 {
 	return cont_lookup_internal(tx, svc, uuid, true /* include_destroying */, cont);
+}
+
+int
+cont_lookup_active(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
+		   struct cont **cont)
+{
+	return cont_lookup_internal(tx, svc, uuid, false /* include_destroying */, cont);
 }
 
 static int
@@ -4597,7 +4632,7 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	 * Isn't val the container properties KVS? Can it be used directly?
 	 */
 	rc = cont_lookup_internal(ap->tx, ap->svc, cont_uuid, ap->include_destroying, &cont);
-	if (rc == -DER_NONEXIST && !ap->include_destroying) {
+	if (rc == -DER_CONT_DESTROYING && !ap->include_destroying) {
 		/* Continue iterating. */
 		return 0;
 	} else if (rc != 0) {
@@ -6018,14 +6053,16 @@ cont_cli_opc_name(crt_opcode_t opc)
 void
 ds_cont_op_handler(crt_rpc_t *rpc)
 {
-	struct cont_op_in		*in = crt_req_get(rpc);
-	struct cont_op_out		*out = crt_reply_get(rpc);
-	struct ds_pool_hdl		*pool_hdl;
-	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
-	daos_prop_t			*prop = NULL;
-	const char                      *lbl;
-	struct cont_svc			*svc;
-	int				 rc;
+	struct cont_op_in  *in  = crt_req_get(rpc);
+	struct cont_op_out *out = crt_reply_get(rpc);
+	uuid_t              pool_uuid;
+	struct ds_pool_hdl *pool_hdl;
+	crt_opcode_t        opc  = opc_get(rpc->cr_opc);
+	unsigned int        opv  = opc_get_rpc_ver(rpc->cr_opc);
+	daos_prop_t        *prop = NULL;
+	const char         *lbl;
+	struct cont_svc    *svc;
+	int                 rc;
 
 	/*
 	 * Some mgmt RPCs may come from either client or server (admin/dRPC) calls. RPCs from
@@ -6041,13 +6078,19 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	cont_op_in_get_pool_uuid(rpc, pool_uuid);
+	rc = ds_pool_hdl_lookup(pool_uuid, in->ci_pool_hdl, &pool_hdl);
+	if (rc != 0) {
+		D_DEBUG(DB_MD,
+			DF_CONT ": ds_pool_hdl_lookup: rpc=%p opc=%u(%s) pool_hdl=" DF_UUID "\n",
+			DP_CONT(pool_uuid, in->ci_uuid), rpc, opc, cont_cli_opc_name(opc),
+			DP_UUID(in->ci_pool_hdl));
+		goto out;
+	}
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p proto=%d hdl=" DF_UUID ", opc=%u(%s)\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		opc_get_rpc_ver(rpc->cr_opc), DP_UUID(in->ci_hdl), opc, cont_cli_opc_name(opc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, opv, DP_UUID(in->ci_hdl),
+		opc, cont_cli_opc_name(opc));
 
 	/*
 	 * TODO: How to map to the correct container service among those
@@ -6354,9 +6397,10 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 		D_GOTO(out_put, rc);
 
 	ABT_rwlock_rdlock(svc->cs_lock);
-	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
+	rc = cont_lookup_active(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_CONT_DESTROYING, DB_MD, DLOG_ERR, rc,
+			  DF_CONT " cont_lookup_active failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 

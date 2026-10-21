@@ -191,21 +191,48 @@ type poolCreateCmd struct {
 	} `positional-args:"yes"`
 }
 
-func ratio2Percentage(log logging.Logger, scm, nvme float64) (p float64) {
+func ratio2Percentage(log logging.Logger, tier1, tier2 float64) (p float64) {
 	p = 100.00
-	min := storage.MinScmToNVMeRatio * p
 
-	if nvme > 0 {
-		p *= scm / nvme
-		if p < min {
-			log.Noticef("SCM:NVMe ratio is less than %0.2f%%, DAOS performance "+
-				"will suffer!", min)
-		}
+	if tier2 > 0 {
+		p *= tier1 / (tier1 + tier2)
 		return
 	}
 
-	log.Notice("Creating DAOS pool without NVME storage")
+	log.Notice("Creating DAOS pool with only a single tier of storage")
 	return
+}
+
+// checkPoolCreateTierRatioWarning examines the pool create response and returns a warning
+// message if the tier ratio is below the minimum threshold for PMem mode. Returns empty
+// string if no warning is needed (MD-on-SSD mode or acceptable ratio).
+func checkPoolCreateTierRatioWarning(resp *control.PoolCreateResp) string {
+	// Only check for two-tier configurations (SCM/NVMe or metadata/data)
+	if len(resp.TierBytes) != 2 {
+		return ""
+	}
+
+	// Skip if second tier is not configured
+	if resp.TierBytes[1] == 0 {
+		return ""
+	}
+
+	// Skip warning for MD-on-SSD mode - low metadata ratios are normal
+	if resp.MdOnSsdActive {
+		return ""
+	}
+
+	// Calculate actual tier ratio from allocated bytes
+	percentage := 100.00 * float64(resp.TierBytes[0]) / float64(resp.TierBytes[0]+resp.TierBytes[1])
+	minPercentage := storage.MinScmToNVMeRatio * 100.00
+
+	// Warn if ratio is below minimum for PMem mode (SCM:NVMe)
+	if percentage < minPercentage {
+		return fmt.Sprintf("storage tier ratio is less than %0.2f%%, DAOS performance may suffer!",
+			minPercentage)
+	}
+
+	return ""
 }
 
 // MemRatio can be supplied as two fractions that make up 1 or a single fraction less than 1.
@@ -261,7 +288,8 @@ func (cmd *poolCreateCmd) storageAutoTotal(req *control.PoolCreateReq) error {
 
 	scmPercentage := ratio2Percentage(cmd.Logger, req.TierRatio[0], req.TierRatio[1])
 	msg := fmt.Sprintf("Creating DAOS pool with automatic storage allocation: "+
-		"%s total, %0.2f%% ratio", humanize.Bytes(req.TotalBytes), scmPercentage)
+		"%s total, %0.2f%% storage tier ratio", humanize.Bytes(req.TotalBytes),
+		scmPercentage)
 	if req.NumRanks > 0 {
 		msg += fmt.Sprintf(" with %d ranks", req.NumRanks)
 	}
@@ -282,7 +310,7 @@ func (cmd *poolCreateCmd) storageManualMdOnSsd(req *control.PoolCreateReq) error
 	}
 
 	msg := fmt.Sprintf("Creating DAOS pool in MD-on-SSD mode with manual per-engine storage "+
-		"allocation: %s metadata, %s data (%0.2f%% storage ratio) and %0.2f%% "+
+		"allocation: %s metadata, %s data (%0.2f%% storage tier ratio) and %0.2f%% "+
 		"memory-file:meta-blob size ratio", humanize.Bytes(metaBytes),
 		humanize.Bytes(dataBytes), 100.00*(float64(metaBytes)/float64(dataBytes)),
 		100.00*req.MemRatio)
@@ -311,7 +339,7 @@ func (cmd *poolCreateCmd) storageManual(req *control.PoolCreateReq) error {
 	req.TierBytes = []uint64{scmBytes, nvmeBytes}
 
 	msg := fmt.Sprintf("Creating DAOS pool with manual per-engine storage allocation:"+
-		" %s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(scmBytes),
+		" %s SCM, %s NVMe (%0.2f%% storage tier ratio)", humanize.Bytes(scmBytes),
 		humanize.Bytes(nvmeBytes),
 		ratio2Percentage(cmd.Logger, float64(scmBytes), float64(nvmeBytes)))
 	cmd.Info(msg)
@@ -393,6 +421,11 @@ func (cmd *poolCreateCmd) Execute(args []string) error {
 
 	if err != nil {
 		return err
+	}
+
+	// Check if low tier ratio warning should be shown
+	if warning := checkPoolCreateTierRatioWarning(resp); warning != "" {
+		cmd.Notice(warning)
 	}
 
 	var bld strings.Builder

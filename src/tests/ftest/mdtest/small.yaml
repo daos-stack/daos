@@ -41,6 +41,7 @@ mdtest:
     ppn: 32
   dfs_oclass: S1
   dfs_dir_oclass: SX
+  dfs_destroy: True
   test_dir: "/"
   manager: "MPICH"
   mdtest_params:

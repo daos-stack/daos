@@ -161,10 +161,6 @@ enum pool_map_update_flags {
 	POOL_RESET_RECOV_CONT         = (1 << 1),
 };
 
-enum pool_recov_cont_flags {
-	PRCF_BIND_BULK = (1 << 0),
-};
-
 static inline uint32_t
 pool_opc_2map_opc(uint32_t pool_opc)
 {
@@ -942,7 +938,6 @@ CRT_RPC_DECLARE(pool_eval_self_heal, DAOS_ISEQ_POOL_EVAL_SELF_HEAL, DAOS_OSEQ_PO
 	((uint32_t)			(prci_flags)		CRT_VAR) \
 	((uint32_t)			(prci_padding)		CRT_VAR) \
 	((uint64_t)			(prci_cont_nr)		CRT_VAR) \
-	((crt_bulk_t)			(prci_cont_bulk)	CRT_VAR) \
 	((struct pool_target_addr)	(prci_addrs)		CRT_ARRAY)
 
 #define DAOS_OSEQ_POOL_RECOV_CONT	/* output fields */		 \

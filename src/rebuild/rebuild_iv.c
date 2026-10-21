@@ -193,8 +193,8 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	if (ref_rc != 0) {
 		rc = ref_rc;
-		DL_WARN(rc, DF_UUID "bypass refresh, IV class id %d.",
-			DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
+		DL_WARN(rc, DF_RB ", IV ns pool " DF_UUID "bypass refresh, IV class id %d.",
+			DP_RB_RPT(rpt), DP_UUID(entry->ns->iv_pool_uuid), key->class_id);
 		goto out;
 	}
 
@@ -205,25 +205,33 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	dst_iv->riv_stable_epoch = src_iv->riv_stable_epoch;
 	dst_iv->riv_global_dtx_resyc_version = src_iv->riv_global_dtx_resyc_version;
 
-	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done ||
-	    dst_iv->riv_stable_epoch || dst_iv->riv_dtx_resyc_version) {
+	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done || dst_iv->riv_stable_epoch ||
+	    dst_iv->riv_global_dtx_resyc_version) {
 		D_DEBUG(DB_REBUILD, DF_UUID"/%u/%u/"DF_U64" gsd/gd/stable/ver %d/%d/"DF_X64"/%u\n",
 			DP_UUID(src_iv->riv_pool_uuid), src_iv->riv_ver,
 			src_iv->riv_rebuild_gen, src_iv->riv_leader_term,
 			dst_iv->riv_global_scan_done, dst_iv->riv_global_done,
 			dst_iv->riv_stable_epoch, dst_iv->riv_global_dtx_resyc_version);
 
-		if (rpt->rt_stable_epoch == 0)
-			rpt->rt_stable_epoch = dst_iv->riv_stable_epoch;
-		else if (rpt->rt_stable_epoch != dst_iv->riv_stable_epoch)
+		if (rpt->rt_stable_epoch == 0) {
+			rpt->rt_stable_epoch = src_iv->riv_stable_epoch;
+			if (rpt->rt_pool->sp_rebuild_epoch < src_iv->riv_stable_epoch)
+				rpt->rt_pool->sp_rebuild_epoch = src_iv->riv_stable_epoch;
+		} else if (rpt->rt_stable_epoch != dst_iv->riv_stable_epoch) {
 			D_WARN("leader change stable epoch from "DF_U64" to "
 			       DF_U64 "\n", rpt->rt_stable_epoch,
 			       dst_iv->riv_stable_epoch);
-		rpt->rt_global_done = dst_iv->riv_global_done;
-		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
+		}
+
+		/* NB: IV refresh can arrive out of order, but rebuild can't revert global done */
+		if (!rpt->rt_global_done)
+			rpt->rt_global_done = dst_iv->riv_global_done;
+		if (!rpt->rt_global_scan_done)
+			rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
 		old_ver = rpt->rt_global_dtx_resync_version;
-		if (rpt->rt_global_dtx_resync_version < dst_iv->riv_global_dtx_resyc_version)
+		if (old_ver < dst_iv->riv_global_dtx_resyc_version)
 			rpt->rt_global_dtx_resync_version = dst_iv->riv_global_dtx_resyc_version;
+
 		if (old_ver < rpt->rt_rebuild_ver &&
 		    dst_iv->riv_global_dtx_resyc_version >= rpt->rt_rebuild_ver) {
 			D_INFO(DF_UUID " global/iv/rebuild_ver %u/%u/%u signal wait cond\n",

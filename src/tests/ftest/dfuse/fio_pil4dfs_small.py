@@ -8,10 +8,10 @@
 import os
 
 from dfuse_utils import get_dfuse, start_dfuse
-from fio_test_base import FioBase
+from fio_utils import TestFio
 
 
-class FioPil4dfsSmall(FioBase):
+class FioPil4dfsSmall(TestFio):
     """Test class Description: Runs Fio with in small config.
 
     :avocado: recursive
@@ -28,7 +28,8 @@ class FioPil4dfsSmall(FioBase):
         :avocado: tags=dfuse,fio,checksum,tx,pil4dfs
         :avocado: tags=FioPil4dfsSmall,test_fio_pil4dfs_small
         """
-        self.fio_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+        fio_cmd = self.get_fio_command()
+        fio_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
 
         self.log_step('Create a pool')
         pool = self.get_pool(connect=False)
@@ -42,18 +43,18 @@ class FioPil4dfsSmall(FioBase):
             self.log_step('Start dfuse')
             dfuse = get_dfuse(self, self.hostlist_clients)
             start_dfuse(self, dfuse, pool, container)
-            self.fio_cmd.update_directory(dfuse.mount_dir.value)
+            fio_cmd.update_directory(dfuse.mount_dir.value)
 
             # Run with various fio parameters
             for variant in self.params.get("variants", '/run/fio/global/*'):
                 self.log_step(
                     f'Run fio with direct={variant[0]}, blocksize={variant[1]}, '
                     f'size={variant[2]}, rw={variant[3]}')
-                self.fio_cmd.update('global', 'direct', variant[0], 'global.direct')
-                self.fio_cmd.update('global', 'blocksize', variant[1], 'global.blocksize')
-                self.fio_cmd.update('global', 'size', variant[2], 'global.size')
-                self.fio_cmd.update('global', 'rw', variant[3], 'global.rw')
-                self.execute_fio()
+                fio_cmd.update('global', 'direct', variant[0], 'global.direct')
+                fio_cmd.update('global', 'blocksize', variant[1], 'global.blocksize')
+                fio_cmd.update('global', 'size', variant[2], 'global.size')
+                fio_cmd.update('global', 'rw', variant[3], 'global.rw')
+                fio_cmd.run()
 
             self.log_step('Stop dfuse and destroy container')
             dfuse.stop()

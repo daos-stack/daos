@@ -505,6 +505,8 @@ pool_properties(void **state)
 	char			*expected_owner;
 	char			*expected_group;
 
+	FAULT_INJECTION_REQUIRED();
+
 	par_barrier(PAR_COMM_WORLD);
 
 	print_message("create pool with properties, and query it to verify.\n");
@@ -2298,12 +2300,16 @@ pool_map_refreshes_setup(void **state)
 static void
 pool_map_refreshes(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	pool_map_refreshes_common(state, false /* fall_back */);
 }
 
 static void
 pool_map_refreshes_fallback(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	pool_map_refreshes_common(state, true /* fall_back */);
 }
 

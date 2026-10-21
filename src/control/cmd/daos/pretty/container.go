@@ -75,9 +75,9 @@ func PrintContainers(out io.Writer, poolID string, containers []*daos.ContainerI
 	uuidTitle := "UUID"
 	labelTitle := "Label"
 	layoutTitle := "Layout"
-	titles := []string{labelTitle}
+	titles := []string{labelTitle, uuidTitle}
 	if verbose {
-		titles = append(titles, uuidTitle, layoutTitle)
+		titles = append(titles, layoutTitle)
 	}
 
 	table := []txtfmt.TableRow{}

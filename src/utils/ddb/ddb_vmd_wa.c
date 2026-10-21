@@ -39,7 +39,7 @@
 #define KEY_SUBSYSTEM_CONFIG "config"
 #define KEY_METHOD_NAME      "method"
 #define NAME_VMD             "vmd"
-#define METHOD_ENABLE_VMD    "enable_vmd"
+#define METHOD_ENABLE_VMD    "vmd_enable"
 
 #define JSON_TRUE            ((json_bool)1)
 

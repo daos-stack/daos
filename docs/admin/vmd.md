@@ -28,7 +28,7 @@ _not_ yet provide any additional functionality over non-VMD devices.
 
 DAOS 2.4 introduced the **LED management** feature that requires VMD.
 
-**Surprise hot-plug management** through VMD is roadmap item for DAOS 2.6.
+**Surprise hot-plug management** through VMD is supported in DAOS 2.8.
 
 This document explains how to enable VMD.
 Customers who intend to utilize DAOS capabilities that depend on VMD

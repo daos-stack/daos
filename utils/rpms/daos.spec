@@ -14,6 +14,7 @@
 %global mercury_version   2.4
 %global argobots_version 1.2
 %global __python %{__python3}
+%global daos_sys_dir "/var/daos"
 %global daos_log_dir "/var/log/daos"
 
 %if (0%{?rhel} >= 8)
@@ -23,8 +24,8 @@
 %endif
 
 Name:          daos
-Version:       2.7.105
-Release:       2%{?relval}%{?dist}
+Version:       2.8.1
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -76,7 +77,7 @@ BuildRequires: capstone-devel
 %endif
 %if %{with server}
 BuildRequires: libaio-devel
-BuildRequires: spdk-devel >= 22.01.2
+BuildRequires: spdk-devel >= 26.01
 %endif
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -159,7 +160,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.2
+Requires: spdk-tools >= 26.01
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -407,6 +408,12 @@ getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
 getent group daos_daemons >/dev/null || groupadd -r daos_daemons
 getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
+# Ensure daos_sys_dir exists
+if [ ! -d %{daos_sys_dir} ]; then
+    mkdir -p %{daos_sys_dir}
+    chown daos_server:daos_daemons %{daos_sys_dir}
+    chmod 775 %{daos_sys_dir}
+fi
 # Ensure daos_log_dir exists
 if [ ! -d %{daos_log_dir} ]; then
     mkdir -p %{daos_log_dir}

@@ -84,7 +84,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStartCornerCaseTest,test_start_back_to_back
         """
         self.log_step("Create two pools and a container.")
@@ -171,7 +171,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStartCornerCaseTest,test_two_pools_healthy
         """
         # 1. Create three pools and one container.
@@ -287,7 +287,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStartCornerCaseTest,test_two_pools_corrupted
         """
         # 1. Create three pools and containers.

@@ -494,8 +494,9 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 
 // Per-NUMA hugepage allocations have been calculated and requested from kernel in prepBdevStorage
 // so now set mem-size values for engines and verify there are enough free hugepages to satisfy
-// typical DMA buffer requirements.
-func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) {
+// typical DMA buffer requirements. Note that mem_size generally follows the 1gib-per-tgt rule
+// whereas hugepage allocations made in prepBdevStorage may be slightly different.
+func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) error {
 	ei.RLock()
 	ec := ei.runner.GetConfig()
 	eIdx := ec.Index
@@ -503,40 +504,42 @@ func setEngineMemSize(srv *server, ei *EngineInstance, smi *common.SysMemInfo) {
 	if ec.Storage.Tiers.Bdevs().Len() == 0 {
 		srv.log.Debugf("skipping mem check on engine %d, no bdevs", eIdx)
 		ei.RUnlock()
-		return
+		return nil
 	}
 	ei.RUnlock()
 
-	// Mem-size for each engine to be calculated based on server config total hugepage
-	// requirements. Mem-size should be the same for each engine to avoid performance imbalance
+	// nrPagesRequired is per-engine and to be calculated based on engine config target counts.
+	// Mem-size should be the same for each engine to avoid performance imbalance
 	// and will act as memory cap to stop DMA buffer growing beyond mem-size.
-	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
+	nrPagesRequired, err := storage.CalcMinHugepages(smi.HugepageSizeKiB, ec.TargetCount)
+	if err != nil {
+		return errors.Wrapf(err, "calculating hugepage mem_size for engine %d", eIdx)
+	}
 
 	// Global (rather than per-NUMA) meminfo stats used to verify sufficient free hugepages as
 	// engines should be started even if hugemem has to be used across NUMA boundaries.
 	nrPagesFree := smi.HugepagesFree
 
-	// Calculate mem_size per I/O engine (in MB) based on number of pages required per engine.
+	// Calculate mem_size per I/O engine (in MiB) based on number of pages required per engine.
 	pageSizeMiB := smi.HugepageSizeKiB / humanize.KiByte // kib to mib
 	memSizeReqMiB := nrPagesRequired * pageSizeMiB
 	memSizeFreeMiB := nrPagesFree * pageSizeMiB
 
-	// If free hugepage mem is not enough to meet requested number of hugepages, log notice and
-	// set mem_size engine parameter to free value. Otherwise set to requested value.
-	memSizeMiB := memSizeReqMiB
+	// If free hugepage mem is not enough to meet requested number of hugepages, log notice.
 	if memSizeFreeMiB < memSizeReqMiB {
 		srv.log.Noticef("The amount of hugepage memory available for engine %d (%s, %d "+
-			"hugepages) does not meet what is required (%s, %d hugepages)", ei.Index(),
+			"hugepages) does not meet what is required (%s, %d hugepages)", eIdx,
 			humanize.IBytes(uint64(humanize.MiByte*memSizeFreeMiB)), nrPagesFree,
 			humanize.IBytes(uint64(humanize.MiByte*memSizeReqMiB)), nrPagesRequired)
-		memSizeMiB = memSizeFreeMiB
 	}
 
 	// Set hugepage_size (MiB) values based on hugepage info.
-	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (meminfo: %s)", memSizeMiB,
-		pageSizeMiB, smi.Summary())
-	ei.setMemSize(memSizeMiB)
+	srv.log.Debugf("Engine %d Per-engine MemSize:%dMiB, HugepageSize:%dMiB (meminfo: %s)",
+		eIdx, memSizeReqMiB, pageSizeMiB, smi.Summary())
+	ei.setMemSize(memSizeReqMiB)
 	ei.setHugepageSz(pageSizeMiB)
+
+	return nil
 }
 
 // Clean SPDK resources, both lockfiles and orphaned hugepages. Orphaned hugepages will be cleaned
@@ -697,7 +700,9 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		}
 
 		// Update engine memory related config parameters before starting.
-		setEngineMemSize(srv, engine, smi)
+		if err := setEngineMemSize(srv, engine, smi); err != nil {
+			return errors.Wrap(err, "set engine mem_size value")
+		}
 
 		// Check available RAM can satisfy tmpfs size before starting a new engine.
 		if err := checkEngineTmpfsMem(srv, engine, smi); err != nil {
@@ -769,14 +774,76 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 	})
 }
 
-// registerFollowerSubscriptions stops handling received forwarded (in addition
-// to local) events and starts forwarding events to the new MS leader.
-// Log events on the host that they were raised (and first published) on.
-// This is the initial behavior before leadership has been determined.
-func registerFollowerSubscriptions(srv *server) {
+// Handle local engine self termination and restart engine to rejoin system.
+func handleEngineSelfTerminated(ctx context.Context, srv *server, evt *events.RASEvent) error {
+	srv.log.Tracef("handling engine self termination")
+
+	if evt.IsForwarded() {
+		return errors.Errorf("unexpected forwarded engine_self_terminated event from %q",
+			evt.Hostname)
+	}
+	if srv.hostname != "" && evt.Hostname != "" && evt.Hostname != srv.hostname {
+		return errors.Errorf("unexpected non-local engine_self_terminated event from %q",
+			evt.Hostname)
+	}
+
+	// Check if automatic restart is disabled
+	if srv.cfg.DisableEngineAutoRestart {
+		srv.log.Debugf("automatic engine restart disabled by configuration")
+		return nil
+	}
+
+	ts, err := evt.GetTimestamp()
+	if err != nil {
+		return errors.Wrapf(err, "bad event timestamp %q", evt.Timestamp)
+	}
+
+	// Find the engine instance by rank
+	instances, err := srv.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", evt.Rank))
+	if err != nil {
+		return errors.Wrapf(err, "failed to find instance for rank %d", evt.Rank)
+	}
+
+	if len(instances) == 0 {
+		return errors.Errorf("no instance found for rank %d", evt.Rank)
+	}
+	if len(instances) > 1 {
+		return errors.Errorf("multiple instances found for rank %d", evt.Rank)
+	}
+	ei := instances[0]
+
+	srv.log.Noticef("%s was notified @ %s of rank %d:%d (instance %d) self terminated", ts,
+		evt.Hostname, evt.Rank, evt.Incarnation, ei.Index())
+
+	rank := ranklist.Rank(evt.Rank)
+
+	// Submit restart request to the restart manager
+	srv.restartMgr.requestRestart(rank, ei)
+
+	return nil
+}
+
+// subscribeEngineSelfTerminated creates a handler for engine self-termination events.
+func subscribeEngineSelfTerminated(srv *server) events.Handler {
+	return events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
+		if evt.ID == events.RASEngineSelfTerminated {
+			if err := handleEngineSelfTerminated(ctx, srv, evt); err != nil {
+				srv.log.Errorf("handleEngineSelfTerminated: %s", err)
+			}
+		}
+	})
+}
+
+// registerSubscriptions doesn't handle received forwarded events but forwardable events are sent to
+// the MS leader. Received events are logged on the host that they were raised (and first published)
+// on. This is the initial behavior for all servers and only changes when leadership has been
+// determined (when we change subscribers via registerLeaderSubscriptions). A handler is subscribed
+// for local engine self-termination events.
+func registerSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
 	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly, subscribeEngineSelfTerminated(srv))
 }
 
 func isSysSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
@@ -840,8 +907,11 @@ func handleRankDead(ctx context.Context, srv *server, evt *events.RASEvent) {
 	}
 }
 
-// registerLeaderSubscriptions stops forwarding events to MS and instead starts
-// handling received forwarded (and local) events.
+// registerLeaderSubscriptions doesn't forward events to MS but instead handles received events by
+// subscribing the management service membership and system-DB to StateChange event-type. Received
+// events are logged on the host that they were raised (and first published) on. This behavior is
+// triggered when a new leader steps-up. A handler is subscribed for local engine self-termination
+// events and another for handling forwarded rank-dead events.
 func registerLeaderSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
@@ -854,6 +924,7 @@ func registerLeaderSubscriptions(srv *server) {
 				handleRankDead(ctx, srv, evt)
 			}
 		}))
+	srv.pubSub.Subscribe(events.RASTypeInfoOnly, subscribeEngineSelfTerminated(srv))
 
 	// Add a debounce to throttle multiple SWIM Rank Dead events for the same rank/incarnation.
 	srv.pubSub.Debounce(events.RASSwimRankDead, 0, func(ev *events.RASEvent) string {
