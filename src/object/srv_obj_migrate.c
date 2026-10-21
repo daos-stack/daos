@@ -803,7 +803,8 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 retry:
 	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
 			   csum_iov_fetch);
-	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM) &&
+	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM ||
+	     rc == -DER_REBUILD_DELAY) &&
 	    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 		if (tls->mpt_fini) {
 			DL_ERROR(rc, DF_RB ": dsc_obj_fetch " DF_UOID "failed when mpt_fini",
@@ -816,7 +817,7 @@ retry:
 		if (rc != -DER_NOMEM) {
 			DL_WARN(rc, DF_RB ": retry " DF_UOID, DP_RB_MPT(tls),
 				DP_UOID(mrone->mo_oid));
-			dss_sleep(1000);
+			dss_sleep(rc == -DER_REBUILD_DELAY ? 2000 + d_rand() % 2000 : 1000);
 			D_GOTO(retry, rc);
 		}
 
@@ -3281,6 +3282,14 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 				rc = -DER_NOMEM;
 				break;
 			}
+			continue;
+		} else if (rc == -DER_REBUILD_DELAY) {
+			waited++;
+			dss_sleep(2000 + d_rand() % 2000);
+			if ((waited & (waited - 1)) == 0)
+				D_DEBUG(DB_REBUILD, DF_RB ": " DF_UOID " retry %d times as delay\n",
+					DP_RB_MPT(tls), DP_UOID(arg->oid), waited);
+			rc = 0;
 			continue;
 		} else if (rc && rc != -DER_SHUTDOWN &&
 			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {

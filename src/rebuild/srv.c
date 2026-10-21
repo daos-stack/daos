@@ -1871,7 +1871,8 @@ static bool
 rebuild_retryable_err(int error)
 {
 	return (daos_crt_network_error(error) || error == -DER_TIMEDOUT || error == -DER_GRPVER ||
-		error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE);
+		error == -DER_STALE || error == -DER_VOS_PARTIAL_UPDATE ||
+		error == -DER_REBUILD_DELAY);
 }
 
 static bool
