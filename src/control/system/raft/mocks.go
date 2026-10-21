@@ -8,6 +8,7 @@
 package raft
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -161,6 +162,21 @@ func MockDatabaseWithCfg(t *testing.T, log logging.Logger, dbCfg *DatabaseConfig
 // operations in memory.
 func MockDatabase(t *testing.T, log logging.Logger) *Database {
 	return MockDatabaseWithAddr(t, log, common.LocalhostCtrlAddr())
+}
+
+// StartMockDatabase arms db's shutdown machinery (the shutdownCb/shutdownErrCh pair
+// consumed by Stop(), and the monitorLeadershipState() goroutine that services them) so
+// that a subsequent Stop() behaves like it would on a real, Start()-ed database, without
+// going through the full raft init/bootstrap that Start() itself performs (which would
+// replace the mock raftService installed by MockDatabase*() above with a real one).
+// ctx's cancellation (e.g. via t.Cleanup()) stops the goroutine if the test doesn't call
+// Stop() itself.
+func StartMockDatabase(t *testing.T, db *Database, ctx context.Context) {
+	t.Helper()
+
+	var dbCtx context.Context
+	dbCtx, db.shutdownCb = context.WithCancel(ctx)
+	go db.monitorLeadershipState(dbCtx)
 }
 
 // MockDatabaseWithFaultDomainTree creates a MockDatabase and sets the fault domain tree.
