@@ -1023,6 +1023,15 @@ probe:
 			    anchors->ia_probe_level != iter->it_type)
 				goto finish;
 
+			if (anchors->ia_probe_level == VOS_ITER_OBJ && type == VOS_ITER_OBJ) {
+				/* The current object was deleted; restart at the next object. */
+				anchors->ia_probe_level = 0;
+				need_reprobe(type, anchors);
+				stage       = VOS_ITER_STAGE_FILTER;
+				probe_flags = VOS_ITER_PROBE_NEXT;
+				goto probe;
+			}
+
 			rc = advance_stage(type, acts, param, anchors, anchor, &stage,
 					   VOS_ITER_STAGE_POST, &probe_flags);
 			JUMP_TO_STAGE(rc, next, probe, out);
