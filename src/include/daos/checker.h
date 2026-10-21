@@ -9,6 +9,7 @@
 
 #include <stdarg.h>
 #include <gurt/common.h>
+#include <daos/common.h>
 
 #define CHECKER_INDENT_MAX 10
 
@@ -229,5 +230,71 @@ checker_print_indent_dec(struct checker *ck)
 		exp;                                                                               \
 		checker_print_indent_dec(ck);                                                      \
 	} while (0)
+
+/** fault injection helpers */
+
+static inline uint64_t
+checker_fi_proxy(uint64_t fail_loc_in)
+{
+	switch (fail_loc_in) {
+	case DLCK_FAULT_POOL_OPEN_UMEM:
+		return DAOS_FAULT_POOL_OPEN_UMEM;
+	case DLCK_FAULT_POOL_OPEN_MAGIC:
+		return DAOS_FAULT_POOL_OPEN_MAGIC;
+	case DLCK_FAULT_POOL_OPEN_VERSION:
+		return DAOS_FAULT_POOL_OPEN_VERSION;
+	case DLCK_FAULT_POOL_OPEN_UUID:
+		return DAOS_FAULT_POOL_OPEN_UUID;
+	case DAOS_FAULT_CONT_TREE_INV_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_INV_CLASS;
+	case DAOS_FAULT_CONT_TREE_UNREG_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_UNREG_CLASS;
+	case DAOS_FAULT_CONT_TREE_FEATURES:
+		return DAOS_FAULT_BTREE_FEATURES;
+	case DAOS_FAULT_GC_TREE_INV_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_INV_CLASS;
+	case DAOS_FAULT_GC_TREE_UNREG_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_UNREG_CLASS;
+	case DAOS_FAULT_GC_TREE_FEATURES:
+		return DAOS_FAULT_BTREE_FEATURES;
+	case DLCK_FAULT_CONT_DOES_NOT_EXIST:
+		return DAOS_FAULT_CONT_DOES_NOT_EXIST;
+	default:
+		D_ASSERTF(0, "Unknown fail location: %lu\n", fail_loc_in);
+		return 0;
+	}
+}
+
+static inline void
+checker_fi_entry(const uint64_t *exp_fail_locs, bool *reenable)
+{
+	uint64_t fail_loc_out;
+	int      i = 0;
+
+	if (!d_fault_inject_is_enabled()) {
+		*reenable = false;
+		return;
+	}
+
+	for (i = 0; exp_fail_locs[i] != 0; i++) {
+		if (DAOS_FAIL_CHECK(exp_fail_locs[i])) {
+			fail_loc_out = checker_fi_proxy(exp_fail_locs[i]);
+			daos_fail_loc_set(fail_loc_out | DAOS_FAIL_ONCE);
+
+			d_fault_inject_disable();
+			*reenable = true;
+
+			return;
+		}
+	}
+}
+
+static inline void
+checker_fi_exit(bool reenable)
+{
+	if (reenable) {
+		d_fault_inject_enable();
+	}
+}
 
 #endif /** __DAOS_CHECKER_H__ */
