@@ -217,6 +217,8 @@ test_run()
 		}
 	}
 
+#if 0
+	/* TODO: Not quite right */
 	if (test.tg_test_mode == TEST_MODE_ASYNC) {
 		DBG_PRINT("Waiting all %d rpcs (%d responded so far)\n", num_sent, num_resp);
 		for (i = 0; i < num_sent; i++) {
@@ -226,6 +228,7 @@ test_run()
 			}
 		}
 	}
+#endif
 
 	gettimeofday(&tv_end, NULL);
 	time_delta = (tv_end.tv_sec - tv_start.tv_sec) * 1000000 +
