@@ -1841,6 +1841,8 @@ iter_delete_setup(void **state)
 		if (rc != 0)
 			goto out;
 	}
+	daos_fail_value_set(0xb1);
+	daos_fail_loc_set(DAOS_VOS_PMEM_FREE_POISON | DAOS_FAIL_ALWAYS);
 	return 0;
 out:
 	io_state = arg;
@@ -1859,6 +1861,7 @@ iter_delete_teardown(void **state)
 #if FAULT_INJECTION
 	void *io_state = &test_args;
 
+	daos_fail_loc_reset();
 	rc = teardown_io(&io_state);
 #endif
 	*state = (void *)iter_arg->config;
