@@ -89,6 +89,12 @@ This wait requires pre-discard completion, not success: FAIL_RECLAIM may still
 need to clean up after a failed pre-discard. Other scan operations skip UP targets;
 reintegration migration separately waits for pre-discard before writing data.
 
+RECLAIM and FAIL_RECLAIM scan objects up to their reclaim epoch when no layout
+upgrade is involved (`rt_new_layout_ver == 0`). Layout upgrade cleanup retains
+the maximum scan epoch so that obsolete layout entries are not filtered out.
+Epoch-range discard preserves data newer than the reclaim epoch. Other rebuild
+operations retain their existing scan range.
+
 ### Multiple pool and targets rebuild
 
 In a large-scale storage cluster, multiple failures might occur
