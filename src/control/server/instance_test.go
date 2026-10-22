@@ -384,7 +384,7 @@ func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ []storage.NvmeCont
 }
 
 func (mi *MockInstance) isAwaitingFormat() bool {
-	return false
+	return mi.cfg.AwaitingFormat
 }
 
 func (mi *MockInstance) getExitErr() error {
@@ -400,10 +400,14 @@ func (mi *MockInstance) isAwaitingStart() bool {
 }
 
 func (mi *MockInstance) NotifyDrpcReady(_ *srvpb.NotifyReadyReq) {}
-func (mi *MockInstance) NotifyStorageReady(_ *ranklist.Rank)     {}
-func (mi *MockInstance) NotifyStartReady()                       {}
-func (mi *MockInstance) abortStart()                             {}
-func (mi *MockInstance) holdStart(func())                        {}
+func (mi *MockInstance) NotifyStorageReady(rank *ranklist.Rank) {
+	if mi.cfg.NotifyStorageReadyFn != nil {
+		mi.cfg.NotifyStorageReadyFn(rank)
+	}
+}
+func (mi *MockInstance) NotifyStartReady() {}
+func (mi *MockInstance) abortStart()       {}
+func (mi *MockInstance) holdStart(func())  {}
 
 func (mi *MockInstance) GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	return nil, nil
@@ -422,7 +426,7 @@ func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountR
 }
 
 func (mi *MockInstance) GetStorage() *storage.Provider {
-	return nil
+	return mi.cfg.StorageProvider
 }
 
 func (mi *MockInstance) Debugf(format string, args ...interface{}) {
