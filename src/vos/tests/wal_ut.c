@@ -986,6 +986,13 @@ ut_meta_hdr_restore(struct bio_ut_args *args)
 
 #define UT_HDR_META_SZ (128ULL << 20) /* 128 MB */
 
+/* Size in bytes of the meta blob created for UT_HDR_META_SZ: a whole number of clusters */
+static uint64_t
+ut_meta_blob_size(void)
+{
+	return D_ALIGNUP(UT_HDR_META_SZ, (uint64_t)default_cluster_sz());
+}
+
 /*
  * Fixtures of the header verifier tests: a pool with an opened session, destroyed whatever the
  * outcome of the test.
@@ -1056,6 +1063,7 @@ wal_ut_bad_meta_hdr(void **state)
 	struct bio_ut_args *args    = *state;
 	struct meta_header *hdr_bkp = &args->bua_mc->mc_meta_hdr;
 	struct meta_header  hdr_tmp;
+	uint64_t            blob_blks;
 
 	assert_int_equal(hdr_bkp->mh_version, BIO_META_VERSION);
 	assert_true(hdr_bkp->mh_data_blobid != SPDK_BLOBID_INVALID);
@@ -1078,9 +1086,17 @@ wal_ut_bad_meta_hdr(void **state)
 	hdr_tmp.mh_wal_blobid = SPDK_BLOBID_INVALID;
 	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
 
-	/* Geometry */
+	/* Geometry: the block size and the header size are the ones the format writes */
 	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
 	hdr_tmp.mh_blk_bytes = 0;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_blk_bytes = hdr_bkp->mh_blk_bytes / 8;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_blk_bytes = hdr_bkp->mh_blk_bytes * 2;
 	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
 
 	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
@@ -1088,7 +1104,29 @@ wal_ut_bad_meta_hdr(void **state)
 	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
 
 	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_hdr_blks = hdr_bkp->mh_hdr_blks + 1;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Capacity: it follows the size of the pool, but is set and fits in the blob */
+	blob_blks = ut_meta_blob_size() / hdr_bkp->mh_blk_bytes;
+	assert_true(hdr_bkp->mh_hdr_blks + hdr_bkp->mh_tot_blks <= blob_blks);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
 	hdr_tmp.mh_tot_blks = 0;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* The capacity which fills the blob with the header is accepted, one block more is not */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_tot_blks = blob_blks - hdr_bkp->mh_hdr_blks;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, 0);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_tot_blks = blob_blks - hdr_bkp->mh_hdr_blks + 1;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* A capacity whose product with the block size wraps to 0 */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_tot_blks = 1ULL << 60;
 	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
 
 	/* Check the original header is still valid */

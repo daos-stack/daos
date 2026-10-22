@@ -1079,9 +1079,10 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 /*
  * Verify the Meta and WAL blob headers of a pool without opening a meta context. Both headers are
  * loaded and checked (magic, version, checksum) and the meta header content is checked for the
- * invariants bio_mc_open() relies on (WAL blob ID, no data blob for a RDB, non-zero blob geometry),
- * with no WAL replay, no header upgrade and no write to the blobs. Intended for offline inspection
- * tools, to report an inconsistent header instead of aborting on it.
+ * invariants bio_mc_open() relies on (WAL blob ID, no data blob for a RDB) and for the geometry
+ * VOS relies on (the block and header sizes the format writes, a capacity which fits in the meta
+ * blob), with no WAL replay, no header upgrade and no write to the blobs. Intended for offline
+ * inspection tools, to report an inconsistent header instead of aborting on it.
  *
  * \param[in]	xs_ctxt		Per-xstream NVMe context
  * \param[in]	pool_id		Pool UUID

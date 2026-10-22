@@ -2166,14 +2166,37 @@ meta_open(struct bio_meta_context *mc)
 	return rc;
 }
 
+/* Size in blocks of the meta blob of an I/O context, which must have room after its header */
+static int
+meta_blob_blks(struct bio_io_context *ioc, uint64_t *blob_blks)
+{
+	struct spdk_blob_store *bs = ioc->bic_xs_blobstore->bxb_blobstore->bb_bs;
+	uint64_t                blob_sz;
+
+	blob_sz    = spdk_blob_get_num_clusters(ioc->bic_blob) * spdk_bs_get_cluster_size(bs);
+	*blob_blks = blob_sz / META_BLK_SZ;
+	if (*blob_blks <= META_HDR_BLKS) {
+		D_ERROR("Meta blob has no room after its header: " DF_U64 " bytes, " DF_U64
+			" blocks of %d bytes, %d of them for the header\n",
+			blob_sz, *blob_blks, META_BLK_SZ, META_HDR_BLKS);
+		return -DER_DF_INVAL;
+	}
+
+	return 0;
+}
+
 /*
  * Content checks on a meta header which passed the magic, version and checksum checks of
  * load_meta_header(). They cover the invariants bio_mc_open() asserts on, so that an inconsistent
- * header can be reported instead of aborting.
+ * header can be reported instead of aborting, and the geometry which bio_meta_get_attr() hands to
+ * VOS as is.
  */
 static int
-meta_hdr_verify(struct meta_header *hdr, enum bio_mc_flags flags)
+meta_hdr_verify(struct meta_header *hdr, struct bio_io_context *ioc, enum bio_mc_flags flags)
 {
+	uint64_t blob_blks;
+	int      rc;
+
 	/* bio_mc_open() asserts on a missing WAL blob and on a data blob of a RDB */
 	if (hdr->mh_wal_blobid == SPDK_BLOBID_INVALID) {
 		D_ERROR("Meta header has no WAL blob ID\n");
@@ -2186,11 +2209,21 @@ meta_hdr_verify(struct meta_header *hdr, enum bio_mc_flags flags)
 		return -DER_DF_INVAL;
 	}
 
-	/* Geometry handed to vos_pool_open() by bio_meta_get_attr(); the format never writes 0 */
-	if (hdr->mh_blk_bytes == 0 || hdr->mh_hdr_blks == 0 || hdr->mh_tot_blks == 0) {
-		D_ERROR("Invalid meta geometry: blk_bytes:%" PRIu32 " hdr_blks:%" PRIu32
-			" tot_blks:" DF_U64 "\n",
-			hdr->mh_blk_bytes, hdr->mh_hdr_blks, hdr->mh_tot_blks);
+	if (hdr->mh_blk_bytes != META_BLK_SZ || hdr->mh_hdr_blks != META_HDR_BLKS) {
+		D_ERROR("Invalid meta geometry: blk_bytes:%" PRIu32
+			" (expected %d) hdr_blks:%" PRIu32 " (expected %d)\n",
+			hdr->mh_blk_bytes, META_BLK_SZ, hdr->mh_hdr_blks, META_HDR_BLKS);
+		return -DER_DF_INVAL;
+	}
+
+	rc = meta_blob_blks(ioc, &blob_blks);
+	if (rc != 0)
+		return rc;
+
+	if (hdr->mh_tot_blks == 0 || hdr->mh_tot_blks > blob_blks - META_HDR_BLKS) {
+		D_ERROR("Invalid meta capacity: tot_blks:" DF_U64 " in a blob of " DF_U64
+			" blocks of %d bytes, %d of them for the header\n",
+			hdr->mh_tot_blks, blob_blks, META_BLK_SZ, META_HDR_BLKS);
 		return -DER_DF_INVAL;
 	}
 
@@ -2210,7 +2243,7 @@ meta_hdr_check(struct bio_meta_context *mc, enum bio_mc_flags flags)
 	if (rc != 0)
 		goto out_csum;
 
-	rc = meta_hdr_verify(&mc->mc_meta_hdr, flags);
+	rc = meta_hdr_verify(&mc->mc_meta_hdr, mc->mc_meta, flags);
 	if (rc != 0)
 		goto out_csum;
 
