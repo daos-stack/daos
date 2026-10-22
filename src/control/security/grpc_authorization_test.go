@@ -50,6 +50,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 	testCases := map[string][]Component{
 		"/ctl.CtlSvc/StorageScan":                {ComponentAdmin},
 		"/ctl.CtlSvc/StorageFormat":              {ComponentAdmin},
+		"/ctl.CtlSvc/StorageFormatStatus":        {ComponentAdmin},
 		"/ctl.CtlSvc/StorageNvmeRebind":          {ComponentAdmin},
 		"/ctl.CtlSvc/StorageNvmeAddDevice":       {ComponentAdmin},
 		"/ctl.CtlSvc/NetworkScan":                {ComponentAdmin},
