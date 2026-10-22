@@ -446,6 +446,14 @@ struct vos_container {
 	unsigned int		vc_open_count;
 	/* The latest pool map version that DTX resync has been done. */
 	uint32_t                vc_dtx_resync_ver;
+	/*
+	 * Tombstones (DRAM only) for the DTXs that have been checked (or aborted) by new leader
+	 * with newer pool map version but were not found locally. The in-flight IO of such DTX
+	 * from the old leader (with older pool map version) will be rejected.
+	 */
+	struct d_hash_table    *vc_dtx_tomb_hash;
+	d_list_t                vc_dtx_tomb_list;
+	uint32_t                vc_dtx_tomb_cnt;
 };
 
 struct vos_dtx_act_ent {
@@ -855,6 +863,12 @@ vos_dtx_post_handle(struct vos_container *cont,
  */
 int
 vos_dtx_act_reindex(struct vos_container *cont);
+
+int
+vos_dtx_tomb_init(struct vos_container *cont);
+
+void
+vos_dtx_tomb_fini(struct vos_container *cont);
 
 int
 vos_dtx_record_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t oid);

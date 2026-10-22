@@ -41,26 +41,31 @@ struct dtx_cos_key {
 
 enum dtx_entry_flags {
 	/* The DTX is the leader */
-	DTE_LEADER		= (1 << 0),
+	DTE_LEADER = (1 << 0),
 	/* The DTX entry is invalid. */
-	DTE_INVALID		= (1 << 1),
+	DTE_INVALID = (1 << 1),
 	/* If the DTX with this flag is non-committed, then others
 	 * will be blocked (retry again and again) when access the
 	 * data being modified via this DTX. Currently, it is used
 	 * for distributed transaction. It also can be used for EC
 	 * object modification via standalone update/punch.
 	 */
-	DTE_BLOCK		= (1 << 2),
+	DTE_BLOCK = (1 << 2),
 	/* The DTX is corrupted, some participant RDG(s) may be lost. */
-	DTE_CORRUPTED		= (1 << 3),
+	DTE_CORRUPTED = (1 << 3),
 	/* The DTX entry on leader does not exist, then not sure the status. */
-	DTE_ORPHAN		= (1 << 4),
+	DTE_ORPHAN = (1 << 4),
 	/* Related DTX may be only committed on some participants, but not
 	 * on all yet, need to be re-committed.
 	 */
-	DTE_PARTIAL_COMMITTED	= (1 << 5),
+	DTE_PARTIAL_COMMITTED = (1 << 5),
 	/* The DTX epoch is sorted locally. */
-	DTE_EPOCH_SORTED	= (1 << 6),
+	DTE_EPOCH_SORTED = (1 << 6),
+	/* The DTX has been checked by a new leader with newer pool map version, then the abort
+	 * from the old leader (with the DTX's own pool map version) will be refused. Persistent,
+	 * to survive engine restart.
+	 */
+	DTE_FENCED = (1 << 7),
 };
 
 struct dtx_entry {

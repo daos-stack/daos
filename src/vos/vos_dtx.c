@@ -970,6 +970,158 @@ vos_dtx_flags2name(uint32_t flags)
 	return NULL;
 }
 
+/* Max count of DTX tombstones per container, the oldest one will be dropped if exceed. */
+#define DTX_TOMB_MAX 4096
+
+struct vos_dtx_tomb {
+	d_list_t      dt_hlink;
+	d_list_t      dt_link;
+	struct dtx_id dt_xid;
+	uint32_t      dt_ver;
+};
+
+static inline struct vos_dtx_tomb *
+dtx_tomb_hlink2ptr(d_list_t *rlink)
+{
+	return container_of(rlink, struct vos_dtx_tomb, dt_hlink);
+}
+
+static bool
+dtx_tomb_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned int ksize)
+{
+	D_ASSERT(ksize == sizeof(struct dtx_id));
+
+	return memcmp(&dtx_tomb_hlink2ptr(rlink)->dt_xid, key, ksize) == 0;
+}
+
+static uint32_t
+dtx_tomb_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
+{
+	return d_hash_string_u32(key, ksize);
+}
+
+static d_hash_table_ops_t dtx_tomb_hash_ops = {
+    .hop_key_cmp  = dtx_tomb_key_cmp,
+    .hop_key_hash = dtx_tomb_key_hash,
+};
+
+int
+vos_dtx_tomb_init(struct vos_container *cont)
+{
+	D_INIT_LIST_HEAD(&cont->vc_dtx_tomb_list);
+	cont->vc_dtx_tomb_cnt = 0;
+
+	return d_hash_table_create(D_HASH_FT_NOLOCK | D_HASH_FT_EPHEMERAL, 8, NULL,
+				   &dtx_tomb_hash_ops, &cont->vc_dtx_tomb_hash);
+}
+
+static void
+dtx_tomb_del(struct vos_container *cont, struct vos_dtx_tomb *dt)
+{
+	d_hash_rec_delete_at(cont->vc_dtx_tomb_hash, &dt->dt_hlink);
+	d_list_del(&dt->dt_link);
+	cont->vc_dtx_tomb_cnt--;
+	D_FREE(dt);
+}
+
+void
+vos_dtx_tomb_fini(struct vos_container *cont)
+{
+	struct vos_dtx_tomb *dt;
+
+	if (cont->vc_dtx_tomb_hash == NULL)
+		return;
+
+	while ((dt = d_list_pop_entry(&cont->vc_dtx_tomb_list, struct vos_dtx_tomb, dt_link)) !=
+	       NULL) {
+		d_hash_rec_delete_at(cont->vc_dtx_tomb_hash, &dt->dt_hlink);
+		D_FREE(dt);
+	}
+	cont->vc_dtx_tomb_cnt = 0;
+
+	d_hash_table_destroy(cont->vc_dtx_tomb_hash, true);
+	cont->vc_dtx_tomb_hash = NULL;
+}
+
+static struct vos_dtx_tomb *
+dtx_tomb_lookup(struct vos_container *cont, struct dtx_id *dti)
+{
+	d_list_t *rlink;
+
+	if (cont->vc_dtx_tomb_hash == NULL || cont->vc_dtx_tomb_cnt == 0)
+		return NULL;
+
+	rlink = d_hash_rec_find(cont->vc_dtx_tomb_hash, dti, sizeof(*dti));
+
+	return rlink != NULL ? dtx_tomb_hlink2ptr(rlink) : NULL;
+}
+
+/* Remember that the new leader with pool map @ver has decided that @dti does not exist here. */
+static void
+dtx_tomb_add(struct vos_container *cont, struct dtx_id *dti, uint32_t ver)
+{
+	struct vos_dtx_tomb *dt;
+	int                  rc;
+
+	if (ver == 0 || cont->vc_dtx_tomb_hash == NULL)
+		return;
+
+	dt = dtx_tomb_lookup(cont, dti);
+	if (dt != NULL) {
+		if (dt->dt_ver < ver)
+			dt->dt_ver = ver;
+		return;
+	}
+
+	if (cont->vc_dtx_tomb_cnt >= DTX_TOMB_MAX) {
+		dt = d_list_entry(cont->vc_dtx_tomb_list.next, struct vos_dtx_tomb, dt_link);
+		dtx_tomb_del(cont, dt);
+	}
+
+	D_ALLOC_PTR(dt);
+	if (dt == NULL)
+		return;
+
+	dt->dt_xid = *dti;
+	dt->dt_ver = ver;
+	rc         = d_hash_rec_insert(cont->vc_dtx_tomb_hash, &dt->dt_xid, sizeof(dt->dt_xid),
+				       &dt->dt_hlink, true);
+	if (rc != 0) {
+		D_FREE(dt);
+		return;
+	}
+
+	d_list_add_tail(&dt->dt_link, &cont->vc_dtx_tomb_list);
+	cont->vc_dtx_tomb_cnt++;
+}
+
+/* Persistently mark the DTX as fenced by new leader, see DTE_FENCED. */
+static int
+dtx_fence_persist(struct vos_container *cont, struct vos_dtx_act_ent *dae)
+{
+	struct umem_instance      *umm = vos_cont2umm(cont);
+	struct vos_dtx_act_ent_df *dae_df;
+	int                        rc;
+
+	dae_df = umem_off2ptr(umm, dae->dae_df_off);
+	D_ASSERT(dae_df != NULL);
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = umem_tx_add_ptr(umm, &dae_df->dae_flags, sizeof(dae_df->dae_flags));
+	if (rc == 0) {
+		dae_df->dae_flags |= DTE_FENCED;
+		DAE_FLAGS(dae) |= DTE_FENCED;
+		rc = umem_tx_commit(umm);
+	} else {
+		rc = umem_tx_abort(umm, rc);
+	}
+
+	return rc;
+}
+
 static int
 vos_dtx_extend_act_table(struct vos_container *cont)
 {
@@ -1053,6 +1205,17 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 			cont->vc_dtx_reject_ts = now;
 		}
 		return -DER_TX_RESTART;
+	}
+
+	if (unlikely(cont->vc_dtx_tomb_cnt > 0)) {
+		struct vos_dtx_tomb *dt = dtx_tomb_lookup(cont, &dth->dth_xid);
+
+		/* New leader has decided to abort the DTX, reject the stale IO from old leader. */
+		if (dt != NULL && dth->dth_ver < dt->dt_ver) {
+			D_WARN("Reject stale DTX " DF_DTI " with version %u vs tombstone %u\n",
+			       DP_DTI(&dth->dth_xid), dth->dth_ver, dt->dt_ver);
+			return -DER_STALE;
+		}
 	}
 
 	/*
@@ -1605,6 +1768,9 @@ vos_dtx_validation(struct dtx_handle *dth)
 	}
 
 	rc = vos_dtx_status(dae);
+	/* The prepared DTX is being aborted by others (yield), the owner cannot go ahead. */
+	if (rc == DTX_ST_PREPARED && dae->dae_aborting)
+		rc = DTX_ST_ABORTING;
 
 out:
 	dth->dth_need_validation = 0;
@@ -2089,6 +2255,19 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32
 
 			if (dae->dae_dth != NULL || dae->dae_preparing)
 				return -DER_INPROGRESS;
+
+			/*
+			 * Checked by new leader with newer pool map version, persistently mark
+			 * it to refuse the abort from old leader even if engine restart.
+			 */
+			if (pm_ver != NULL && *pm_ver > DAE_VER(dae) && dae->dae_prepared &&
+			    !(DAE_FLAGS(dae) & DTE_FENCED)) {
+				rc = dtx_fence_persist(cont, dae);
+				if (rc != 0)
+					return rc;
+				/* NOTE: 'dae' may be invalid after yield during local TX commit. */
+				return DTX_ST_PREPARED;
+			}
 			break;
 		default:
 			break;
@@ -2128,6 +2307,9 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32
 
 	if (rc == -DER_NONEXIST && !cont->vc_cmt_dtx_indexed)
 		rc = -DER_INPROGRESS;
+
+	if (rc == -DER_NONEXIST && intent == DCI_RESYNC && pm_ver != NULL)
+		dtx_tomb_add(cont, dti, *pm_ver);
 
 	return rc;
 }
@@ -2779,21 +2961,41 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 	D_ASSERT(!dae->dae_preparing);
 	D_ASSERT(dae->dae_aborting);
 
+	/*
+	 * Set dth->dth_need_validation to notify the dth owner before any yield (pin or local
+	 * TX), otherwise the owner may mark the DTX as committable while it is being aborted.
+	 */
+	if (dth != NULL) {
+		D_ASSERT(dth->dth_ent == dae || dth->dth_ent == NULL);
+		/* Not allow dtx_abort against solo DTX. */
+		D_ASSERT(!dth->dth_solo);
+		dth->dth_need_validation = 1;
+	}
+
 	rc = dtx_abort_pin(cont, dae, &pin_hdl);
 	if (rc)
 		goto out;
+
+	/* Simulate the yield during pin buckets for test. */
+	if (DAOS_FAIL_CHECK(DAOS_VOS_DTX_ABORT_YIELD))
+		ABT_thread_yield();
 
 	umm = vos_cont2umm(cont);
 	rc  = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		goto out;
 
-	if (dth != NULL) {
-		D_ASSERT(dth->dth_ent == dae || dth->dth_ent == NULL);
-		/* Not allow dtx_abort against solo DTX. */
-		D_ASSERT(!dth->dth_solo);
-		/* Set dth->dth_need_validation to notify the dth owner. */
-		dth->dth_need_validation = 1;
+	/*
+	 * The DTX owner may have marked the DTX as committable during above yield (pin buckets
+	 * or start local TX). Then it may have been (or will be) committed on other participants,
+	 * cannot abort it any longer.
+	 */
+	if (unlikely(dae->dae_committable || dae->dae_committing || dae->dae_committed ||
+		     DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)) {
+		D_WARN("Cannot abort committable DTX " DF_DTI " by race\n", DP_DTI(&DAE_XID(dae)));
+		umem_tx_abort(umm, -DER_NO_PERM);
+		rc = -DER_NO_PERM;
+		goto out;
 	}
 
 	rc = dtx_rec_release(cont, dae, true, false);
@@ -2823,7 +3025,7 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 out:
 	dtx_unpin(cont, pin_hdl);
 
-	if (rc == 0 || force)
+	if (rc == 0 || (force && rc != -DER_NO_PERM))
 		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false, false);
 	else
 		dae->dae_aborting = 0;
@@ -2931,6 +3133,12 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch, uint32_
 			dth->dth_pinned          = 0;
 			vos_dtx_cleanup_internal(dth);
 			dth->dth_aborted = 1;
+		} else {
+			/* Non-prepared entry without owner, nothing persistent, just remove it. */
+			rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_BYPASS, &kiov, &dae);
+			if (rc == 0)
+				dtx_evict_lid(cont, dae);
+			dae = NULL;
 		}
 	}
 
@@ -3579,6 +3787,10 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			dae->dae_df_off = umem_ptr2off(umm, dae_df);
 			dae->dae_dbd = dbd;
 			dae->dae_prepared = 1;
+			/* The exact fence version is in DRAM only, refuse the old leader's abort.
+			 */
+			if (DAE_FLAGS(dae) & DTE_FENCED)
+				dae->dae_known_max_version = DAE_VER(dae) + 1;
 			dae->dae_need_release = 1;
 			D_INIT_LIST_HEAD(&dae->dae_link);
 

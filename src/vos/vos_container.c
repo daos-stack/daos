@@ -198,6 +198,8 @@ cont_free_internal(struct vos_container *cont)
 	if (cont->vc_dtx_array)
 		lrua_array_free(cont->vc_dtx_array);
 
+	vos_dtx_tomb_fini(cont);
+
 	D_ASSERT(d_list_empty(&cont->vc_dtx_act_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_sorted_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_unsorted_list));
@@ -484,6 +486,10 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	 * boundary when reopen the container.
 	 */
 	cont->vc_mod_epoch_bound = d_hlc_get();
+
+	rc = vos_dtx_tomb_init(cont);
+	if (rc != 0)
+		goto exit;
 
 	rc = vos_dtx_act_reindex(cont);
 	if (rc != 0) {

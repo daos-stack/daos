@@ -1016,6 +1016,12 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *che
 	int			 i;
 	bool			 drop;
 	bool                     for_io = (intent == DRI_IO);
+	/*
+	 * The pool map version used for leader selection. The pool map may be refreshed during
+	 * the subsequent RPC, then do not use newer version to abort the DTX, otherwise it may
+	 * bypass the fence set by the real new leader.
+	 */
+	uint32_t                 map_ver = cont->sc_pool->spc_map_version;
 
 	D_INIT_LIST_HEAD(&head);
 	D_INIT_LIST_HEAD(&self);
@@ -1158,8 +1164,8 @@ next:
 	}
 
 	if (len > 0) {
-		rc = dtx_rpc(cont, &head, NULL, len, DTX_REFRESH, 0, cont->sc_pool->spc_map_version,
-			     cmt_list, abt_list, act_list, for_io, &dca);
+		rc = dtx_rpc(cont, &head, NULL, len, DTX_REFRESH, 0, map_ver, cmt_list, abt_list,
+			     act_list, for_io, &dca);
 
 		/*
 		 * For IO case, the DTX refresh failure caused by network trouble may be not fatal
@@ -1236,7 +1242,7 @@ next2:
 				dtx_dsp_free(dsp);
 			} else {
 				rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch,
-						    cont->sc_pool->spc_map_version);
+						    map_ver);
 				if (rc1 == 0 || !for_io) {
 					d_list_del(&dsp->dsp_link);
 					dtx_dsp_free(dsp);
