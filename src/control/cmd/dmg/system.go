@@ -8,9 +8,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -167,26 +169,54 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 	return resp.Errors()
 }
 
+// eraseAwaitFormatTimeout bounds how long `dmg system erase` will block
+// waiting for all engines to be reset and reach the awaiting-format state,
+// unless --no-wait is supplied.
+const eraseAwaitFormatTimeout = 5 * time.Minute
+
 type systemEraseCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	cmdutil.JSONOutputCmd
+	NoWait bool `long:"no-wait" description:"Return immediately after the erase completes instead of blocking until all engines have been reset and are awaiting format"`
 }
 
 func (cmd *systemEraseCmd) Execute(_ []string) error {
-	resp, err := control.SystemErase(cmd.MustLogCtx(), cmd.ctlInvoker, new(control.SystemEraseReq))
+	ctx := cmd.MustLogCtx()
+
+	resp, err := control.SystemErase(ctx, cmd.ctlInvoker, new(control.SystemEraseReq))
 	if err != nil {
 		return err
 	}
-
-	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, resp.Errors())
-	}
-
 	if err := resp.Errors(); err != nil {
 		return err
 	}
-	cmd.Infof("System erase successful. System is now uninitialized and ready for 'dmg storage format'.\n")
+
+	if !cmd.NoWait {
+		waitCtx, cancel := context.WithTimeout(ctx, eraseAwaitFormatTimeout)
+		defer cancel()
+
+		if !cmd.JSONOutputEnabled() {
+			cmd.Info("waiting for all engines to be reset and awaiting format...\n")
+		}
+		if err := control.WaitForStorageFormatReady(waitCtx, cmd.ctlInvoker); err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return errors.Errorf("engines did not reach awaiting-format state within %s; "+
+					"use --no-wait to skip this check", eraseAwaitFormatTimeout)
+			}
+			return errors.Wrap(err, "waiting for engines to be awaiting format")
+		}
+		if !cmd.JSONOutputEnabled() {
+			cmd.Info("all engines are awaiting format\n")
+		}
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
+	}
+
+	cmd.Infof("System erase successful. System can be re-initialized with 'dmg storage format'.\n")
+
 	return nil
 }
 

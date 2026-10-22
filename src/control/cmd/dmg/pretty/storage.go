@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -130,6 +130,42 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 		row[nvmeTitle] = fmt.Sprintf("%d",
 			len(parseNvmeFormatResults(hss.HostStorage.NvmeDevices)))
 		table = append(table, row)
+	}
+
+	tablePrint.Format(table)
+	return nil
+}
+
+// PrintStorageFormatStatusMap generates a human-readable representation of the
+// supplied HostStorageMap which is populated in response to a StorageFormat
+// status query (dmg storage format-status). Only format-related engine
+// instance state is reported; no format operation is performed.
+func PrintStorageFormatStatusMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+	if len(hsm) == 0 {
+		return nil
+	}
+
+	hostsTitle := "Hosts"
+	engineTitle := "Engine"
+	awaitTitle := "Awaiting Format"
+	stateTitle := "State"
+
+	fmt.Fprintln(out, "Format Status:")
+	tablePrint := txtfmt.NewTableFormatter(hostsTitle, engineTitle, awaitTitle, stateTitle)
+	tablePrint.InitWriter(txtfmt.NewIndentWriter(out))
+	table := []txtfmt.TableRow{}
+
+	for _, key := range hsm.Keys() {
+		hss := hsm[key]
+		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
+		for _, es := range hss.HostStorage.EngineFormatStatus {
+			table = append(table, txtfmt.TableRow{
+				hostsTitle:  hosts,
+				engineTitle: fmt.Sprintf("%d", es.Instanceidx),
+				awaitTitle:  fmt.Sprintf("%t", es.AwaitingFormat),
+				stateTitle:  es.State,
+			})
+		}
 	}
 
 	tablePrint.Format(table)

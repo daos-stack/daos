@@ -58,6 +58,12 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Format status",
+			"storage format-status",
+			printRequest(t, &control.StorageFormatStatusReq{}),
+			nil,
+		},
+		{
 			"Scan summary",
 			"storage scan",
 			strings.Join([]string{
