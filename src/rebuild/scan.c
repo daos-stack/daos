@@ -1071,6 +1071,10 @@ next:
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
+	/* Upgrade cleanup must also visit obsolete layout entries beyond the reclaim epoch. */
+	if (rpt->rt_new_layout_ver == 0 &&
+	    (rpt->rt_rebuild_op == RB_OP_RECLAIM || rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM))
+		param.ip_epr.epr_hi = rpt->rt_reclaim_epoch;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	arg->snapshot_cnt = snapshot_cnt;
 	arg->cont_child = cont_child;
