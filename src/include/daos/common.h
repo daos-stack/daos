@@ -609,6 +609,8 @@ daos_errno2der(int err)
 	case EINVAL:		return -DER_INVAL;
 	case ENOTDIR:		return -DER_NOTDIR;
 	case EIO:		return -DER_IO;
+	case EINPROGRESS:
+		return -DER_INPROGRESS;
 	case ENOTSUP:
 		return -DER_NOTSUPPORTED;
 	case EFAULT:
@@ -669,6 +671,8 @@ daos_der2errno(int err)
 	case -DER_NOTDIR:	return ENOTDIR;
 	case -DER_STALE:	return ESTALE;
 	case -DER_TX_RESTART:	return ERESTART;
+	case -DER_INPROGRESS:
+		return EINPROGRESS;
 	case -DER_NOTSUPPORTED:
 		return ENOTSUP;
 	default:		return EIO;
@@ -924,6 +928,12 @@ enum {
 #define DAOS_CONT_DESTROY_FAIL_POST        (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa3)
 #define DAOS_CONT_DESTROY_AFTER_FORK       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa4)
 #define DAOS_POOL_TGT_UPDATE_SKIP_RF_CHECK (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa5)
+/** Delay a replicated service replica creation (RSVC_START handler) by the fail value in ms */
+#define DAOS_RSVC_CREATE_SLOW              (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa6)
+/** Delay a pool target destroy (MGMT_TGT_DESTROY handler) by the fail value in ms */
+#define DAOS_MGMT_TGT_DESTROY_SLOW         (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa7)
+/* target stops raising its EC aggregation boundary (stale puller epoch) */
+#define DAOS_CONT_EC_BOUNDARY_FREEZE       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa8)
 
 #define DAOS_CHK_CONT_ORPHAN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb0)
 #define DAOS_CHK_CONT_BAD_LABEL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb1)
@@ -947,7 +957,7 @@ enum {
 #define DAOS_MEM_FAIL_CHECKPOINT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x102)
 
 /** DLCK fault injection */
-#define DLCK_MOCK_ROOT                     (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x100)
+#define DLCK_DECOMMISSIONED_00             (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x100)
 #define DLCK_FAULT_GETGRNAM                (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x101)
 #define DLCK_MOCK_NO_DAOS_SERVER_GROUP     (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x102)
 #define DLCK_FAULT_GETGROUPS               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x103)
@@ -957,7 +967,7 @@ enum {
 #define DLCK_FAULT_ENGINE_START            (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x107)
 #define DLCK_FAULT_ENGINE_EXEC             (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x108)
 #define DLCK_FAULT_ENGINE_JOIN             (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x109)
-#define DLCK_FAULT_ENGINE_STOP             (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x10a)
+#define DLCK_DECOMMISSIONED_01             (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x10a)
 
 /** Pool open fault injection */
 #define DAOS_FAULT_POOL_NVME_HEALTH       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x200)
@@ -971,6 +981,18 @@ enum {
 #define DAOS_FAULT_BTREE_FEATURES         (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x208)
 #define DAOS_FAULT_POOL_EXT_PADDING       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x209)
 #define DAOS_FAULT_POOL_EXT_RESERVED      (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x20a)
+
+/** Container open fault injection */
+#define DAOS_FAULT_CONT_DOES_NOT_EXIST     (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x300)
+#define DAOS_FAULT_CONT_OPEN_UUID          (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x301)
+#define DAOS_FAULT_CONT_INV_PAD            (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x302)
+#define DAOS_FAULT_CONT_INV_USED           (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x303)
+#define DAOS_FAULT_CONT_INV_RESERV_UPGRADE (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x304)
+#define DAOS_FAULT_DBD_MAGIC               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x305)
+#define DAOS_FAULT_DAE_INV_FLAGS           (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x306)
+#define DAOS_FAULT_DAE_ALLOC               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x307)
+#define DAOS_FAULT_DBD_COUNT               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x308)
+#define DAOS_FAULT_OBJ_ILOG_MAGIC          (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x309)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 

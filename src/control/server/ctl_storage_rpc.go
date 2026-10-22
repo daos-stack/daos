@@ -803,20 +803,57 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 }
 
 func (cs *ControlService) formatMetadata(instances []Engine, reformat bool) (bool, error) {
+	// Exit early if not using MD-on-SSD mode (legacy PMem mode)
+	if !cs.storage.ControlMetadataPathConfigured() {
+		cs.log.Debug("control metadata path not configured, skipping metadata format (legacy PMem mode)")
+		return false, nil
+	}
+
 	// Format control metadata first, if needed
 	if needs, err := cs.storage.ControlMetadataNeedsFormat(); err != nil {
 		return false, errors.Wrap(err, "detecting if metadata format is needed")
 	} else if needs || reformat {
+		// Full format needed
 		engineIdxs := make([]uint, len(instances))
 		for i, eng := range instances {
 			engineIdxs[i] = uint(eng.Index())
 		}
 
-		cs.log.Debug("formatting control metadata storage")
+		cs.log.Debug("formatting control metadata storage (all engines)")
 		if err := cs.storage.FormatControlMetadata(engineIdxs); err != nil {
 			return false, errors.Wrap(err, "formatting control metadata storage")
 		}
 
+		return true, nil
+	}
+
+	// Check for engines with missing metadata directories. The host-level root already
+	// exists (checked above), so a missing engine subdirectory here means either the
+	// engine has never been formatted, or its storage was deliberately wiped.
+	// Both cases are safe to (re)format without an explicit --replace confirmation,
+	// since there is no metadata left to lose.
+
+	var needFormatIdxs []uint
+	for _, eng := range instances {
+		engIdx := uint(eng.Index())
+
+		// Check if engine's metadata directory is missing
+		needsFormat, err := eng.GetStorage().ControlMetadataEngineNeedsFormat()
+		if err != nil {
+			return false, errors.Wrapf(err, "checking if engine %d metadata needs format", engIdx)
+		}
+
+		if needsFormat {
+			cs.log.Debugf("engine %d metadata needs format", engIdx)
+			needFormatIdxs = append(needFormatIdxs, engIdx)
+		}
+	}
+
+	if len(needFormatIdxs) > 0 {
+		cs.log.Debugf("formatting control metadata storage for engines %v", needFormatIdxs)
+		if err := cs.storage.FormatControlMetadata(needFormatIdxs); err != nil {
+			return false, errors.Wrap(err, "formatting control metadata storage")
+		}
 		return true, nil
 	}
 
@@ -887,12 +924,6 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 			}
 			emptyTmpfs[idx] = info.TotalBytes-info.AvailBytes == 0
 		}
-	}
-
-	if req.replace && len(needScmFormat) == 0 {
-		// Only valid if at least one engine requires format.
-		return nil, nil, errors.New("format replace option only valid if at least one " +
-			"engine requires scm-format but currently no engines need scm-format")
 	}
 
 	if allNeedScmFormat {
@@ -1059,9 +1090,8 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		return resp, nil
 	}
 
-	// DAOS-15947: control_metadata format is valid in --replace case where multiple engines
-	// require replacement or format on the same host. No need to handle independently for
-	// individual engine as if control_metadata is missing then it needs to be created.
+	//  Only engines with missing metadata directories will have their control_metadata
+	//  subdirectories reformatted, preserving healthy engines.
 	mdFormatted, err := cs.formatMetadata(instances, req.Reformat)
 	if err != nil {
 		return nil, err

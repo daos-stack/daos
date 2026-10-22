@@ -45,6 +45,39 @@ VOS api.
 This layer will adapt the needs of the ddb commands to the current VOS API
 implementation, making the VOS interaction a bit nicer for ddb.
 
+## Limitations
+
+### SPDK re-initialization
+
+Unlike daos_engine, which initializes SPDK only once during the lifetime of the
+process, ddb allows the user to run multiple pool-lifecycle commands (`open`,
+`rm_pool`, `feature`, `dev_list`, `dev_replace`, `prov_mem`, `smd_sync`) in the
+same interactive session or by providing a sequence of commands via `-f`, each
+potentially triggering its own `vos_self_init()` and SPDK initialization. SPDK
+does not support being re-initialized within the same process: its re-init path
+only rescans the PCI bus and never rebuilds the DPDK memory/address-translation
+tables torn down by the previous `vos_self_fini()`. This is unsafe for any pool
+backed by an NVMe device (i.e. whose `db_path` has a `daos_nvme.conf`), with or
+without VMD. `smd_sync` is always treated as NVMe-backed, since its SPDK config
+comes from a separate `nvme_conf` argument rather than `db_path`.
+
+`src/utils/ddb/ddb_spdk_reinit_wa.c` enforces a "single SPDK/VOS init per
+process for NVMe-backed pools" rule to turn that unsafe sequence into a clean,
+actionable error instead of letting ddb crash. Pools with no `daos_nvme.conf`
+(pure PMEM) never touch SPDK and are unaffected. This is a workaround, not a
+fix, for a limitation in SPDK's initialization model; it can be removed once
+the underlying issue is properly resolved.
+
+> **Note (developers only):** in non-release builds (i.e. when
+> `DAOS_BUILD_RELEASE` is not defined), setting `DAOS_DDB_ALLOW_SPDK_REINIT`
+> in the environment unconditionally bypasses this guard. This is a
+> diagnostic-only escape hatch, not a supported workflow, meant to let a
+> developer deliberately retry the unsafe sequence against real hardware to
+> check whether a newer SPDK/DPDK version has actually fixed the underlying
+> re-initialization limitation. It is compiled out of release builds and is
+> intentionally not mentioned in the man page or `ddb`'s interactive/`-h`
+> help output.
+
 ## Help and Usage
 
 ```
@@ -138,20 +171,51 @@ vos
   vea_update               Alter the VEA tree to mark a region as free.
 ```
 
+### Pool-content commands vs. pool-lifecycle commands
+
+ddb's subcommands fall into two categories:
+
+**Pool-content commands** (`ls`, `rm`, `value_dump`, and most others) operate on the content of an
+already-open VOS pool. When one of these is given as a single command or run from a `-f` command
+file, the VOS file is opened before the command executes, using the top-level `--vos_path`/
+`--db_path`.
+
+**Pool-lifecycle commands** (`open`, `close`, `feature`, `rm_pool`, `dev_list`, `dev_replace`,
+`prov_mem`, `smd_sync`) manage the VOS pool's own open/close/remove/replace lifecycle themselves,
+so ddb does not pre-open a pool for them. When one of these is given as a single bare command
+directly on the command line, `--vos_path`/`--db_path` are **not accepted**: ddb returns an error
+and the path must be provided directly to the command instead (see its own `--help`). For example:
+
+```bash
+# Rejected: rm_pool manages its own pool lifecycle and does not accept the top-level flags
+# as a bare command.
+ddb --db_path /path/to/sys/db --vos_path /path/to/vos-0 rm_pool
+
+# Works: provide rm_pool's own db_path flag and path argument directly.
+ddb rm_pool --db_path /path/to/sys/db /path/to/vos-0
+```
+
+In interactive mode or when running a `-f` command file, `--vos_path`/`--db_path` are accepted: they
+only ever drive the one-time initial auto-open, and it is up to the user to close the pre-opened
+pool (or target a different one) before running a pool-lifecycle command from within that session or
+file that requires it to be closed.
+
 ## `prov_mem` command
 
 ```
 Prepare the memory environment for md-on-ssd mode
 
 Usage:
-  prov_mem [flags] db_path tmpfs_mount
+  prov_mem [flags] tmpfs_mount
 
 Args:
-  db_path      string    Path to the sys db.
   tmpfs_mount  string    Path to the tmpfs mountpoint.
 
 Flags:
   -h, --help               display help
+  -p, --db_path string     Path to the sys db. This command manages its own pool lifecycle and
+                           does not accept the top-level --vos_path/--db_path as a bare command;
+                           see "Pool-content commands vs. pool-lifecycle commands" above.
   -s, --tmpfs_size uint    Specify tmpfs size(GiB) for mount. By default, the total size of all VOS files will be used.
 ```
 
@@ -170,10 +234,10 @@ This command is used when working with DAOS in md-on-ssd (metadata-on-SSD) mode.
 
 ```bash
 # Prepare memory environment with auto-calculated tmpfs size
-ddb prov_mem /path/to/sys/db /mnt/tmpfs
+ddb prov_mem --db_path /path/to/sys/db /mnt/tmpfs
 
 # Prepare memory environment with specific tmpfs size of 16 GiB
-ddb prov_mem -s 16 /path/to/sys/db /mnt/tmpfs
+ddb prov_mem --db_path /path/to/sys/db -s 16 /mnt/tmpfs
 ```
 
 ### Notes
@@ -181,3 +245,6 @@ ddb prov_mem -s 16 /path/to/sys/db /mnt/tmpfs
 - The `tmpfs_mount` path must not already be a mount point; otherwise, the command will fail with a "busy" error. 
 - If `tmpfs_size` is not specified, the size will be automatically calculated based on the total size of all VOS files. 
 - This command requires the system to be configured for MD-on-SSD mode.
+- `db_path` used to be a positional argument (`ddb prov_mem <db_path> <tmpfs_mount>`); it is now
+  a `-p`/`--db_path` flag, consistent with the other pool-lifecycle commands (`open`, `feature`,
+  `rm_pool`, `dev_list`, `dev_replace`, `smd_sync`).

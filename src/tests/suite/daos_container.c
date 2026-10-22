@@ -13,6 +13,9 @@
 #include "daos_test.h"
 #include "daos_iotest.h"
 #include <daos/placement.h>
+#include <daos/event.h>
+#include <daos/task.h>
+#include <daos/container.h>
 #include <pwd.h>
 #include <grp.h>
 
@@ -4190,6 +4193,76 @@ out:
 	par_barrier(PAR_COMM_WORLD);
 }
 
+/* daos_cont_create() must ignore the incoming UUID in \a cuuid. */
+static void
+co_create_uuid_ignored(void **state)
+{
+	test_arg_t *arg = *state;
+	uuid_t      in_uuid;
+	uuid_t      out_uuid;
+	char        str[DAOS_UUID_STR_SIZE];
+	int         rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_generate(in_uuid);
+	uuid_copy(out_uuid, in_uuid);
+
+	print_message("creating container with a preset cuuid ... ");
+	rc = daos_cont_create(arg->pool.poh, &out_uuid, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	assert_int_not_equal(uuid_compare(in_uuid, out_uuid), 0);
+	print_message("daos_cont_create ignored the incoming cuuid as expected\n");
+
+	uuid_unparse(out_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+}
+
+/* dc_cont_create() must ignore the incoming UUID in daos_cont_create_t.uuid. */
+static void
+dc_create_uuid_ignored(void **state)
+{
+	test_arg_t         *arg = *state;
+	daos_cont_create_t *args;
+	tse_task_t         *task;
+	uuid_t              in_uuid;
+	uuid_t              out_uuid;
+	char                str[DAOS_UUID_STR_SIZE];
+	int                 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_generate(in_uuid);
+	uuid_clear(out_uuid);
+
+	rc = dc_task_create(dc_cont_create, NULL, NULL, &task);
+	assert_rc_equal(rc, 0);
+
+	args      = dc_task_get_args(task);
+	args->poh = arg->pool.poh;
+	uuid_copy(args->uuid, in_uuid);
+	args->prop  = NULL;
+	args->cuuid = &out_uuid;
+
+	print_message("creating container via dc_cont_create with a preset "
+		      "daos_cont_create_t.uuid ... ");
+	rc = dc_task_schedule(task, true);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	assert_int_not_equal(uuid_compare(in_uuid, out_uuid), 0);
+	print_message("dc_cont_create ignored the incoming uuid as expected\n");
+
+	uuid_unparse(out_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -4267,6 +4340,10 @@ static const struct CMUnitTest co_tests[] = {
      test_case_teardown},
     {"CONT38: retry async cont create with label and RF", co_create_label_rf_async_retry, NULL,
      test_case_teardown},
+    {"CONT39: daos_cont_create ignores incoming cuuid", co_create_uuid_ignored, NULL,
+     test_case_teardown},
+    {"CONT40: dc_cont_create ignores incoming daos_cont_create_t.uuid", dc_create_uuid_ignored,
+     NULL, test_case_teardown},
 };
 
 int

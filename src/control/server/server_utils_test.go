@@ -518,8 +518,12 @@ func TestServer_prepBdevStorage_errors(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
-					mbp, nil),
+					sp, scm.NewProvider(&scm.ProviderConfig{
+						Log:       log,
+						Backend:   scm.NewMockBackend(nil),
+						Sys:       sp,
+						KernelCfg: sysprov.KernelConfig{},
+					}), mbp, nil),
 				srvCfg: cfg,
 			}
 
@@ -1402,8 +1406,12 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
-					mbp, nil),
+					sp, scm.NewProvider(&scm.ProviderConfig{
+						Log:       log,
+						Backend:   scm.NewMockBackend(nil),
+						Sys:       sp,
+						KernelCfg: sysprov.KernelConfig{},
+					}), mbp, nil),
 				srvCfg: cfg,
 			}
 
@@ -1545,8 +1553,12 @@ func TestServer_cleanEngineSpdkResources(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, nil,
-					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
-					mbp, nil),
+					sp, scm.NewProvider(&scm.ProviderConfig{
+						Log:       log,
+						Backend:   scm.NewMockBackend(nil),
+						Sys:       sp,
+						KernelCfg: sysprov.KernelConfig{},
+					}), mbp, nil),
 				srvCfg: cfg,
 			}
 
@@ -1622,6 +1634,20 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 			},
 			tmpfsMounted: true,
 			tmpfsSize:    9,
+		},
+		"tmpfs mounted; MD-on-SSD; validate memory": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				mdOnSsdTier := nvmeTier(0).WithBdevDeviceRoles(storage.BdevRoleMeta)
+				mdOnSsdEngine := ramEngine(0, 10)
+				mdOnSsdEngine.Storage.Tiers = append(mdOnSsdEngine.Storage.Tiers, mdOnSsdTier)
+				mdOnSsdEngine.Storage.ControlMetadata = storage.ControlMetadata{
+					Path: "/var/daos/md0",
+				}
+				return sc.WithEngines(mdOnSsdEngine)
+			},
+			tmpfsMounted: true,
+			tmpfsSize:    9,
+			memAvailGiB:  9,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -2525,6 +2551,7 @@ func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
+	defer pubSub.Close()
 
 	cfg := &config.Server{
 		DisableEngineAutoRestart: false,
@@ -2677,6 +2704,7 @@ func TestServer_registerSubscriptions_includesSelfTerminated(t *testing.T) {
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
+	defer pubSub.Close()
 
 	cfg := &config.Server{
 		DisableEngineAutoRestart: false,
@@ -2755,6 +2783,7 @@ func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T)
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
+	defer pubSub.Close()
 
 	svc := newTestMgmtSvc(t, log)
 

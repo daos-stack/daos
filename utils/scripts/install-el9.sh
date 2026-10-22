@@ -18,17 +18,19 @@ dnf_install_args="${1:-}"
 
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
+    binutils \
     boost-python3-devel \
     bzip2 \
     capstone-devel \
     cmake \
+    cpio \
+    compiler-rt \
     createrepo \
     CUnit-devel \
     daxctl-devel \
     diffutils \
     e2fsprogs \
     fdupes \
-    file \
     flex \
     gcc \
     gcc-c++ \
@@ -41,6 +43,8 @@ dnf --nodocs install ${dnf_install_args} \
     json-c-devel \
     libaio-devel \
     libasan \
+    libubsan \
+    libtsan \
     libcmocka-devel \
     libevent-devel \
     libibverbs-devel \
@@ -69,6 +73,7 @@ dnf --nodocs install ${dnf_install_args} \
     python${PYTHON_VERSION}-pip \
     rpm-build \
     sudo \
+    ucx-devel \
     valgrind-devel \
     which \
     ncurses-devel \

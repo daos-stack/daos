@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2698,66 +2698,902 @@ ec_full_partial_punch_agg(void **state)
 	free(verify_data);
 }
 
+/* number of extents written, one per EC cell so that they land on different
+ * data shards and cannot be merged with each other.
+ */
+#define EC_IOM_EXT_NR   8
+/* size of each extent, much smaller than a cell */
+#define EC_IOM_EXT_SIZE 1024
+/* size of the caller provided iom_recxs buffer */
+#define EC_IOM_BUF_NR   16
+/* size of the intentionally too small iom_recxs buffer */
+#define EC_IOM_SMALL_NR 3
+
+/*
+ * Verify the client side IOM merge of EC array fetch (obj_ec_iom_merge()):
+ *  - the extents returned by the different EC data shards are merged into the
+ *    caller's IOM, sorted and with correct iom_type/iom_size,
+ *  - iom_recx_lo/iom_recx_hi are merged across all the shards, also when
+ *    DAOS_IOMF_DETAIL is not set and when some shards return an empty IOM,
+ *  - when the caller's iom_recxs buffer is too small the number of extents
+ *    needed is reported through iom_nr_out and no memory beyond iom_nr is
+ *    touched.
+ */
+static void
+ec_fetch_iom(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	d_iov_t       dkey;
+	d_sg_list_t   sgl;
+	d_iov_t       sg_iov;
+	daos_iod_t    iod;
+	daos_iom_t    iom = {0};
+	daos_recx_t   iom_recxs[EC_IOM_BUF_NR];
+	daos_recx_t   recxs[EC_IOM_EXT_NR];
+	daos_size_t   cell_size = ec_cell_size;
+	daos_size_t   buf_len;
+	char         *buf;
+	int           i, rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	buf_len = EC_IOM_EXT_NR * EC_IOM_EXT_SIZE;
+	D_ALLOC(buf, buf_len);
+	assert_non_null(buf);
+	dts_buf_render(buf, buf_len);
+
+	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
+	rc  = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, "iom_dkey", strlen("iom_dkey"));
+	d_iov_set(&sg_iov, buf, buf_len);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &sg_iov;
+
+	d_iov_set(&iod.iod_name, "iom_akey", strlen("iom_akey"));
+	iod.iod_size  = 1;
+	iod.iod_recxs = recxs;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_nr    = EC_IOM_EXT_NR;
+
+	for (i = 0; i < EC_IOM_EXT_NR; i++) {
+		recxs[i].rx_idx = i * cell_size;
+		recxs[i].rx_nr  = EC_IOM_EXT_SIZE;
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("fetch IOM with a large enough iom_recxs buffer\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(&iom, 0, sizeof(iom));
+	iom.iom_recxs = iom_recxs;
+	iom.iom_nr    = EC_IOM_BUF_NR;
+	iom.iom_flags = DAOS_IOMF_DETAIL;
+	rc            = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, &iom, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iom.iom_nr_out, EC_IOM_EXT_NR);
+	assert_int_equal(iom.iom_type, DAOS_IOD_ARRAY);
+	assert_int_equal(iom.iom_size, 1);
+	for (i = 0; i < EC_IOM_EXT_NR; i++) {
+		assert_int_equal(iom.iom_recxs[i].rx_idx, i * cell_size);
+		assert_int_equal(iom.iom_recxs[i].rx_nr, EC_IOM_EXT_SIZE);
+	}
+	assert_int_equal(iom.iom_recx_lo.rx_idx, 0);
+	assert_int_equal(iom.iom_recx_lo.rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recx_hi.rx_idx, (EC_IOM_EXT_NR - 1) * cell_size);
+	assert_int_equal(iom.iom_recx_hi.rx_nr, EC_IOM_EXT_SIZE);
+
+	print_message("fetch IOM with a too small iom_recxs buffer\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(&iom, 0, sizeof(iom));
+	iom.iom_recxs = iom_recxs;
+	iom.iom_nr    = EC_IOM_SMALL_NR;
+	iom.iom_flags = DAOS_IOMF_DETAIL;
+	rc            = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, &iom, NULL);
+	assert_rc_equal(rc, 0);
+	/* the number of extents needed to hold the whole IOM */
+	assert_int_equal(iom.iom_nr_out, EC_IOM_EXT_NR);
+	assert_int_equal(iom.iom_nr, EC_IOM_SMALL_NR);
+	/* nothing beyond iom_nr should have been read or written */
+	for (i = EC_IOM_SMALL_NR; i < EC_IOM_BUF_NR; i++) {
+		assert_int_equal(iom_recxs[i].rx_idx, 0);
+		assert_int_equal(iom_recxs[i].rx_nr, 0);
+	}
+	assert_int_equal(iom.iom_recx_lo.rx_idx, 0);
+	assert_int_equal(iom.iom_recx_lo.rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recx_hi.rx_idx, (EC_IOM_EXT_NR - 1) * cell_size);
+	assert_int_equal(iom.iom_recx_hi.rx_nr, EC_IOM_EXT_SIZE);
+
+	print_message("fetch IOM without DAOS_IOMF_DETAIL\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(&iom, 0, sizeof(iom));
+	iom.iom_recxs = iom_recxs;
+	iom.iom_nr    = EC_IOM_BUF_NR;
+	rc            = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, &iom, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iom.iom_nr_out, 0);
+	/* iom_recx_lo/hi must be merged from all the shards, not overwritten
+	 * by the last shard that replied.
+	 */
+	assert_int_equal(iom.iom_recx_lo.rx_idx, 0);
+	assert_int_equal(iom.iom_recx_lo.rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recx_hi.rx_idx, (EC_IOM_EXT_NR - 1) * cell_size);
+	assert_int_equal(iom.iom_recx_hi.rx_nr, EC_IOM_EXT_SIZE);
+
+	print_message("fetch IOM with shards returning an empty IOM\n");
+	/* Only write the extents of the 1st and the 3rd cell, the fetch below
+	 * still spans the first 4 cells so the shards of the 2nd and the 4th
+	 * cell return an empty IOM - which must not drag iom_recx_hi down to
+	 * index 0 nor pin iom_recx_lo to a zero length extent.
+	 */
+	d_iov_set(&dkey, "iom_dkey2", strlen("iom_dkey2"));
+	recxs[0].rx_idx = 0;
+	recxs[0].rx_nr  = EC_IOM_EXT_SIZE;
+	recxs[1].rx_idx = 2 * cell_size;
+	recxs[1].rx_nr  = EC_IOM_EXT_SIZE;
+	iod.iod_nr      = 2;
+	d_iov_set(&sg_iov, buf, 2 * EC_IOM_EXT_SIZE);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	recxs[0].rx_idx = 0;
+	recxs[1].rx_idx = cell_size;
+	recxs[2].rx_idx = 2 * cell_size;
+	recxs[3].rx_idx = 3 * cell_size;
+	for (i = 0; i < 4; i++)
+		recxs[i].rx_nr = EC_IOM_EXT_SIZE;
+	iod.iod_nr = 4;
+	d_iov_set(&sg_iov, buf, 4 * EC_IOM_EXT_SIZE);
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(&iom, 0, sizeof(iom));
+	iom.iom_recxs = iom_recxs;
+	iom.iom_nr    = EC_IOM_BUF_NR;
+	iom.iom_flags = DAOS_IOMF_DETAIL;
+	rc            = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, &iom, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iom.iom_nr_out, 2);
+	assert_int_equal(iom.iom_recxs[0].rx_idx, 0);
+	assert_int_equal(iom.iom_recxs[0].rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recxs[1].rx_idx, 2 * cell_size);
+	assert_int_equal(iom.iom_recxs[1].rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recx_lo.rx_idx, 0);
+	assert_int_equal(iom.iom_recx_lo.rx_nr, EC_IOM_EXT_SIZE);
+	assert_int_equal(iom.iom_recx_hi.rx_idx, 2 * cell_size);
+	assert_int_equal(iom.iom_recx_hi.rx_nr, EC_IOM_EXT_SIZE);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(buf);
+}
+
+/*
+ * Verify the client side IOM merge of EC array fetch with multiple IODs, one
+ * IOM per IOD. Each IOM must be merged independently: the per-IOM merge state
+ * (number of shards merged, number of extents that did not fit, and whether
+ * the iom_recxs buffer was internally allocated by DAOS) must not be shared
+ * between the IOMs.
+ */
+static void
+ec_fetch_multi_iom(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	d_iov_t       dkey;
+	d_sg_list_t   sgls[2];
+	d_iov_t       sg_iovs[2];
+	daos_iod_t    iods[2];
+	daos_iom_t    ioms[2];
+	daos_recx_t   iom_recxs[EC_IOM_BUF_NR];
+	daos_recx_t   recxs[EC_IOM_EXT_NR];
+	daos_size_t   cell_size = ec_cell_size;
+	daos_size_t   buf_len;
+	char         *buf;
+	int           i, rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	buf_len = EC_IOM_EXT_NR * EC_IOM_EXT_SIZE;
+	D_ALLOC(buf, buf_len);
+	assert_non_null(buf);
+	dts_buf_render(buf, buf_len);
+
+	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
+	rc  = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, "miom_dkey", strlen("miom_dkey"));
+	for (i = 0; i < EC_IOM_EXT_NR; i++) {
+		recxs[i].rx_idx = i * cell_size;
+		recxs[i].rx_nr  = EC_IOM_EXT_SIZE;
+	}
+
+	for (i = 0; i < 2; i++) {
+		d_iov_set(&sg_iovs[i], buf, buf_len);
+		sgls[i].sg_nr     = 1;
+		sgls[i].sg_nr_out = 0;
+		sgls[i].sg_iovs   = &sg_iovs[i];
+
+		memset(&iods[i], 0, sizeof(iods[i]));
+		d_iov_set(&iods[i].iod_name, i == 0 ? "miom_akey0" : "miom_akey1",
+			  strlen("miom_akey0"));
+		iods[i].iod_size  = 1;
+		iods[i].iod_recxs = recxs;
+		iods[i].iod_type  = DAOS_IOD_ARRAY;
+		iods[i].iod_nr    = EC_IOM_EXT_NR;
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 2, iods, sgls, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("fetch 2 IODs, caller provided iom_recxs for both IOMs\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(ioms, 0, sizeof(ioms));
+	ioms[0].iom_recxs = iom_recxs;
+	ioms[0].iom_nr    = EC_IOM_BUF_NR;
+	ioms[0].iom_flags = DAOS_IOMF_DETAIL;
+	/* the 2nd IOM asks DAOS to allocate the iom_recxs buffer */
+	ioms[1].iom_recxs = NULL;
+	ioms[1].iom_flags = DAOS_IOMF_DETAIL;
+	rc                = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 2, iods, sgls, ioms, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 2; i++) {
+		assert_int_equal(ioms[i].iom_type, DAOS_IOD_ARRAY);
+		assert_int_equal(ioms[i].iom_size, 1);
+		assert_int_equal(ioms[i].iom_nr_out, EC_IOM_EXT_NR);
+		assert_true(ioms[i].iom_nr_out <= ioms[i].iom_nr);
+		assert_int_equal(ioms[i].iom_recx_lo.rx_idx, 0);
+		assert_int_equal(ioms[i].iom_recx_lo.rx_nr, EC_IOM_EXT_SIZE);
+		assert_int_equal(ioms[i].iom_recx_hi.rx_idx, (EC_IOM_EXT_NR - 1) * cell_size);
+		assert_int_equal(ioms[i].iom_recx_hi.rx_nr, EC_IOM_EXT_SIZE);
+	}
+	/* the caller provided buffer must not have been re-allocated */
+	assert_ptr_equal(ioms[0].iom_recxs, iom_recxs);
+	assert_int_equal(ioms[0].iom_nr, EC_IOM_BUF_NR);
+	assert_non_null(ioms[1].iom_recxs);
+	assert_ptr_not_equal(ioms[1].iom_recxs, iom_recxs);
+	for (i = 0; i < EC_IOM_EXT_NR; i++) {
+		assert_int_equal(ioms[0].iom_recxs[i].rx_idx, i * cell_size);
+		assert_int_equal(ioms[0].iom_recxs[i].rx_nr, EC_IOM_EXT_SIZE);
+		assert_int_equal(ioms[1].iom_recxs[i].rx_idx, i * cell_size);
+		assert_int_equal(ioms[1].iom_recxs[i].rx_nr, EC_IOM_EXT_SIZE);
+	}
+	D_FREE(ioms[1].iom_recxs);
+
+	print_message("fetch 2 IODs, the 1st IOM buffer is too small\n");
+	memset(iom_recxs, 0, sizeof(iom_recxs));
+	memset(ioms, 0, sizeof(ioms));
+	ioms[0].iom_recxs = iom_recxs;
+	ioms[0].iom_nr    = EC_IOM_SMALL_NR;
+	ioms[0].iom_flags = DAOS_IOMF_DETAIL;
+	ioms[1].iom_recxs = NULL;
+	ioms[1].iom_flags = DAOS_IOMF_DETAIL;
+	rc                = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 2, iods, sgls, ioms, NULL);
+	assert_rc_equal(rc, 0);
+	/* the truncation of the 1st IOM must not be accounted in the 2nd one */
+	assert_int_equal(ioms[0].iom_nr, EC_IOM_SMALL_NR);
+	assert_int_equal(ioms[0].iom_nr_out, EC_IOM_EXT_NR);
+	assert_int_equal(ioms[1].iom_nr_out, EC_IOM_EXT_NR);
+	assert_true(ioms[1].iom_nr_out <= ioms[1].iom_nr);
+	/* nothing beyond iom_nr should have been read or written */
+	for (i = EC_IOM_SMALL_NR; i < EC_IOM_BUF_NR; i++) {
+		assert_int_equal(iom_recxs[i].rx_idx, 0);
+		assert_int_equal(iom_recxs[i].rx_nr, 0);
+	}
+	D_FREE(ioms[1].iom_recxs);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(buf);
+}
+
+/*
+ * These cover the DAOS side behavior that "daos container clone" depends on: for an EC object
+ * daos_obj_list_recx() reports a superset of the data, so only the fetch io map says what is
+ * really there. They do not execute the tool - cont_clone_recx_array() in src/utils/daos_hdlr.c
+ * is covered by src/tests/ftest/datamover/obj_ec.py.
+ */
+
+/** batch size used by cont_clone_recx_array() */
+#define CLONE_RECX_NR 5
+
+struct clone_copy_stat {
+	uint32_t ccs_batches;   /** list_recx batches that returned extents */
+	uint32_t ccs_iom_short; /** batches where the fetch held less than was listed */
+	uint64_t ccs_enum_len;  /** bytes advertised by the enumeration */
+	uint64_t ccs_fetch_len; /** bytes the io map reported as present */
+};
+
+/*
+ * Same sequence as cont_clone_recx_array(), reimplemented because that function is static to the
+ * tool. Editing one does not affect the other.
+ */
+static void
+clone_copy_akey(daos_handle_t src_oh, daos_handle_t dst_oh, daos_handle_t th, char *dkey_str,
+		char *akey_str, struct clone_copy_stat *stat)
+{
+	daos_anchor_t      anchor = {0};
+	daos_recx_t        recxs[CLONE_RECX_NR];
+	daos_epoch_range_t eprs[CLONE_RECX_NR];
+	daos_recx_t        iom_recxs[CLONE_RECX_NR * 8];
+	d_iov_t            iovs[CLONE_RECX_NR * 8];
+	daos_key_t         dkey;
+	daos_key_t         akey;
+	daos_iod_t         iod = {0};
+	daos_iom_t         iom = {0};
+	d_sg_list_t        sgl;
+	d_iov_t            iov;
+	char              *buf           = NULL;
+	daos_size_t        buf_len_alloc = 0;
+	daos_size_t        size          = 0;
+	uint32_t           number;
+	int                i;
+	int                j;
+	int                rc;
+
+	d_iov_set(&dkey, dkey_str, strlen(dkey_str));
+	d_iov_set(&akey, akey_str, strlen(akey_str));
+
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_size_t buf_len = 0;
+		daos_size_t iom_len = 0;
+
+		number = CLONE_RECX_NR;
+		rc     = daos_obj_list_recx(src_oh, th, &dkey, &akey, &size, &number, recxs, eprs,
+					    &anchor, true, NULL);
+		assert_rc_equal(rc, 0);
+		if (number == 0)
+			continue;
+
+		for (i = 0; i < number; i++)
+			buf_len += recxs[i].rx_nr;
+		buf_len *= size;
+		assert_true(buf_len > 0);
+
+		if (buf_len > buf_len_alloc) {
+			D_FREE(buf);
+			D_ALLOC(buf, buf_len);
+			assert_non_null(buf);
+			buf_len_alloc = buf_len;
+		}
+
+		iod.iod_name  = akey;
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_nr    = number;
+		iod.iod_recxs = recxs;
+		iod.iod_size  = size;
+
+		d_iov_set(&iov, buf, buf_len);
+		sgl.sg_nr     = 1;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs   = &iov;
+
+		memset(&iom, 0, sizeof(iom));
+		memset(iom_recxs, 0, sizeof(iom_recxs));
+		iom.iom_nr    = ARRAY_SIZE(iom_recxs);
+		iom.iom_recxs = iom_recxs;
+		iom.iom_flags = DAOS_IOMF_DETAIL;
+
+		rc = daos_obj_fetch(src_oh, th, 0, &dkey, 1, &iod, &sgl, &iom, NULL);
+		assert_rc_equal(rc, 0);
+		assert_true(iom.iom_nr_out <= iom.iom_nr);
+
+		for (i = 0; i < iom.iom_nr_out; i++)
+			iom_len += iom_recxs[i].rx_nr;
+		iom_len *= size;
+
+		stat->ccs_batches++;
+		stat->ccs_enum_len += buf_len;
+		stat->ccs_fetch_len += iom_len;
+		if (iom_len < buf_len) {
+			stat->ccs_iom_short++;
+			print_message("  listed %u recx(s) = " DF_U64 " bytes, io map holds " DF_U64
+				      " bytes in %u extent(s), reply length " DF_U64 "\n",
+				      number, buf_len, iom_len, iom.iom_nr_out,
+				      sgl.sg_nr_out == 0 ? 0 : sgl.sg_iovs[0].iov_len);
+		}
+
+		if (iom.iom_nr_out == 0)
+			continue;
+
+		/* point each returned extent at its offset in the fetch buffer */
+		for (i = 0; i < iom.iom_nr_out; i++) {
+			daos_size_t recx_off = 0;
+
+			for (j = 0; j < number; j++) {
+				if (iom_recxs[i].rx_idx >= recxs[j].rx_idx &&
+				    iom_recxs[i].rx_idx < recxs[j].rx_idx + recxs[j].rx_nr) {
+					recx_off += (iom_recxs[i].rx_idx - recxs[j].rx_idx) * size;
+					break;
+				}
+				recx_off += recxs[j].rx_nr * size;
+			}
+			assert_int_not_equal(j, number);
+			assert_true(recx_off + iom_recxs[i].rx_nr * size <= buf_len);
+			d_iov_set(&iovs[i], buf + recx_off, iom_recxs[i].rx_nr * size);
+		}
+
+		iod.iod_nr    = iom.iom_nr_out;
+		iod.iod_recxs = iom_recxs;
+		iod.iod_size  = size;
+		sgl.sg_nr     = iom.iom_nr_out;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs   = iovs;
+
+		rc = daos_obj_update(dst_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+		assert_rc_equal(rc, 0);
+	}
+	D_FREE(buf);
+}
+
+static void
+clone_copy_report(const char *what, struct clone_copy_stat *stat)
+{
+	print_message("%s: %u batch(es), listed " DF_U64 " bytes, copied " DF_U64 " bytes, "
+		      "%u batch(es) where the listing was a superset\n",
+		      what, stat->ccs_batches, stat->ccs_enum_len, stat->ccs_fetch_len,
+		      stat->ccs_iom_short);
+}
+
+/*
+ * Read [0, span) from both objects and require the same extents to hold the same bytes. The
+ * distinct fill patterns make a hole that got copied as data show up as an extent mismatch.
+ * All callers use a one byte record size.
+ */
+static void
+clone_verify_akey(daos_handle_t src_oh, daos_handle_t dst_oh, daos_handle_t th, char *dkey_str,
+		  char *akey_str, daos_size_t span)
+{
+	daos_recx_t recx;
+	daos_recx_t src_iom_recxs[64];
+	daos_recx_t dst_iom_recxs[64];
+	daos_key_t  dkey;
+	daos_key_t  akey;
+	daos_iod_t  iod     = {0};
+	daos_iom_t  src_iom = {0};
+	daos_iom_t  dst_iom = {0};
+	d_sg_list_t sgl;
+	d_iov_t     iov;
+	char       *src_buf;
+	char       *dst_buf;
+	int         i;
+	int         rc;
+
+	D_ALLOC(src_buf, span);
+	assert_non_null(src_buf);
+	D_ALLOC(dst_buf, span);
+	assert_non_null(dst_buf);
+	memset(src_buf, 0xa5, span);
+	memset(dst_buf, 0x5a, span);
+
+	d_iov_set(&dkey, dkey_str, strlen(dkey_str));
+	d_iov_set(&akey, akey_str, strlen(akey_str));
+	recx.rx_idx   = 0;
+	recx.rx_nr    = span;
+	iod.iod_name  = akey;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_nr    = 1;
+	iod.iod_recxs = &recx;
+	iod.iod_size  = 1;
+	sgl.sg_nr     = 1;
+	sgl.sg_iovs   = &iov;
+
+	src_iom.iom_nr    = ARRAY_SIZE(src_iom_recxs);
+	src_iom.iom_recxs = src_iom_recxs;
+	src_iom.iom_flags = DAOS_IOMF_DETAIL;
+	d_iov_set(&iov, src_buf, span);
+	sgl.sg_nr_out = 0;
+	rc            = daos_obj_fetch(src_oh, th, 0, &dkey, 1, &iod, &sgl, &src_iom, NULL);
+	assert_rc_equal(rc, 0);
+	assert_true(src_iom.iom_nr_out <= src_iom.iom_nr);
+
+	iod.iod_size      = 1;
+	dst_iom.iom_nr    = ARRAY_SIZE(dst_iom_recxs);
+	dst_iom.iom_recxs = dst_iom_recxs;
+	dst_iom.iom_flags = DAOS_IOMF_DETAIL;
+	d_iov_set(&iov, dst_buf, span);
+	sgl.sg_nr_out = 0;
+	rc = daos_obj_fetch(dst_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, &dst_iom, NULL);
+	assert_rc_equal(rc, 0);
+	assert_true(dst_iom.iom_nr_out <= dst_iom.iom_nr);
+
+	if (src_iom.iom_nr_out != dst_iom.iom_nr_out) {
+		print_message("source holds %u extent(s), destination holds %u\n",
+			      src_iom.iom_nr_out, dst_iom.iom_nr_out);
+		for (i = 0; i < src_iom.iom_nr_out; i++)
+			print_message("  src recx[%d] " DF_U64 "/" DF_U64 "\n", i,
+				      src_iom_recxs[i].rx_idx, src_iom_recxs[i].rx_nr);
+		for (i = 0; i < dst_iom.iom_nr_out; i++)
+			print_message("  dst recx[%d] " DF_U64 "/" DF_U64 "\n", i,
+				      dst_iom_recxs[i].rx_idx, dst_iom_recxs[i].rx_nr);
+	}
+	assert_int_equal(src_iom.iom_nr_out, dst_iom.iom_nr_out);
+
+	for (i = 0; i < src_iom.iom_nr_out; i++) {
+		assert_int_equal(src_iom_recxs[i].rx_idx, dst_iom_recxs[i].rx_idx);
+		assert_int_equal(src_iom_recxs[i].rx_nr, dst_iom_recxs[i].rx_nr);
+		assert_memory_equal(src_buf + src_iom_recxs[i].rx_idx,
+				    dst_buf + src_iom_recxs[i].rx_idx, src_iom_recxs[i].rx_nr);
+	}
+	print_message("verified %u extent(s) over " DF_U64 " records\n", src_iom.iom_nr_out, span);
+
+	D_FREE(dst_buf);
+	D_FREE(src_buf);
+}
+
+/*
+ * A full stripe update writes parity to the parity shard. Punching that same range replicates
+ * the hole to the parity shard at the unmapped daos index, which cannot cover the parity extent
+ * at PARITY_INDICATOR|off. Recx enumeration is served by the parity shard, so it still reports
+ * the whole stripe and a clone driven off that listing copies data the source does not have.
+ */
+static void
+ec_clone_punched_stripe(void **state)
+{
+	test_arg_t            *arg = *state;
+	struct ioreq           req;
+	daos_obj_id_t          oid;
+	daos_obj_id_t          dst_oid;
+	daos_handle_t          dst_oh;
+	daos_recx_t            recx;
+	struct clone_copy_stat stat        = {0};
+	daos_size_t            stripe_size = 4 * ec_cell_size;
+	char                  *data;
+	int                    i;
+	int                    rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	D_ALLOC(data, stripe_size);
+	assert_non_null(data);
+	memset(data, 'a', stripe_size);
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	req.iod_type = DAOS_IOD_ARRAY;
+
+	dst_oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	rc      = daos_obj_open(arg->coh, dst_oid, DAOS_OO_RW, &dst_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* full stripe updates - parity is written at update time */
+	for (i = 0; i < 4; i++) {
+		recx.rx_idx = i * stripe_size;
+		recx.rx_nr  = stripe_size;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, stripe_size, &req);
+	}
+
+	/* punch every other stripe in full */
+	for (i = 0; i < 4; i += 2) {
+		recx.rx_idx = i * stripe_size;
+		recx.rx_nr  = stripe_size;
+		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
+	}
+
+	clone_copy_akey(req.oh, dst_oh, DAOS_TX_NONE, "d_key", "a_key", &stat);
+	clone_copy_report("punched stripes", &stat);
+	clone_verify_akey(req.oh, dst_oh, DAOS_TX_NONE, "d_key", "a_key", 4 * stripe_size);
+
+	rc = daos_obj_close(dst_oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(data);
+	ioreq_fini(&req);
+}
+
+/*
+ * One parity extent stands for a whole stripe, so the listed extents are stripe granular. A
+ * fetch of a sparsely populated stripe holds less than the listing advertised, and the reply
+ * length only shrinks by whole trailing cells, so length alone cannot detect it.
+ */
+static void
+ec_clone_sparse_stripe(void **state)
+{
+	test_arg_t            *arg = *state;
+	struct ioreq           req;
+	daos_obj_id_t          oid;
+	daos_obj_id_t          dst_oid;
+	daos_handle_t          dst_oh;
+	daos_recx_t            recx;
+	struct clone_copy_stat stat        = {0};
+	daos_size_t            stripe_size = 4 * ec_cell_size;
+	char                  *data;
+	int                    i;
+	int                    rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	D_ALLOC(data, stripe_size);
+	assert_non_null(data);
+	memset(data, 'b', stripe_size);
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	req.iod_type = DAOS_IOD_ARRAY;
+
+	dst_oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	rc      = daos_obj_open(arg->coh, dst_oid, DAOS_OO_RW, &dst_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 4; i++) {
+		recx.rx_idx = i * stripe_size;
+		recx.rx_nr  = stripe_size;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, stripe_size, &req);
+	}
+
+	/* punch the head of every stripe, leaving a hole inside a stripe that still has parity */
+	for (i = 0; i < 4; i++) {
+		recx.rx_idx = i * stripe_size;
+		recx.rx_nr  = ec_cell_size;
+		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
+	}
+	/* and the tail of every stripe, so the shortfall shows up in the reply length too */
+	for (i = 0; i < 4; i++) {
+		recx.rx_idx = (i + 1) * stripe_size - ec_cell_size;
+		recx.rx_nr  = ec_cell_size;
+		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
+	}
+
+	clone_copy_akey(req.oh, dst_oh, DAOS_TX_NONE, "d_key", "a_key", &stat);
+	clone_copy_report("sparse stripes", &stat);
+	clone_verify_akey(req.oh, dst_oh, DAOS_TX_NONE, "d_key", "a_key", 4 * stripe_size);
+
+	rc = daos_obj_close(dst_oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(data);
+	ioreq_fini(&req);
+}
+
+/*
+ * Random mix of full stripe, partial stripe and cross boundary updates and punches, with EC
+ * aggregation forced in between. Run repeatedly - the seed is printed so a failing pattern can
+ * be replayed with DAOS_CLONE_TEST_SEED.
+ */
+static void
+ec_clone_random(void **state)
+{
+	test_arg_t            *arg = *state;
+	struct ioreq           req;
+	daos_obj_id_t          oid;
+	daos_obj_id_t          dst_oid;
+	daos_handle_t          dst_oh;
+	daos_recx_t            recx;
+	struct clone_copy_stat stat        = {0};
+	daos_size_t            stripe_size = 4 * ec_cell_size;
+	daos_size_t            span        = 8 * stripe_size;
+	unsigned int           seed;
+	char                  *env;
+	char                  *data;
+	int                    i;
+	int                    rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	env  = getenv("DAOS_CLONE_TEST_SEED");
+	seed = env != NULL ? atoi(env) : (unsigned int)time(NULL);
+	print_message("DAOS_CLONE_TEST_SEED=%u\n", seed);
+	srand(seed);
+
+	D_ALLOC(data, span);
+	assert_non_null(data);
+	memset(data, 'c', span);
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	req.iod_type = DAOS_IOD_ARRAY;
+
+	dst_oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	rc      = daos_obj_open(arg->coh, dst_oid, DAOS_OO_RW, &dst_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 40; i++) {
+		bool full = (rand() % 3) == 0;
+
+		if (full) {
+			recx.rx_idx = (rand() % 8) * stripe_size;
+			recx.rx_nr  = stripe_size * (1 + rand() % 2);
+		} else {
+			recx.rx_idx = rand() % (span - ec_cell_size);
+			recx.rx_nr  = 1 + rand() % (2 * ec_cell_size);
+		}
+		if (recx.rx_idx + recx.rx_nr > span)
+			recx.rx_nr = span - recx.rx_idx;
+
+		if (rand() % 3 == 0)
+			punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
+		else
+			insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, recx.rx_nr,
+				     &req);
+
+		if (i == 19)
+			trigger_and_wait_ec_aggreation(arg, &oid, 1, NULL, NULL, 0, 0,
+						       DAOS_FORCE_EC_AGG);
+	}
+
+	clone_copy_akey(req.oh, dst_oh, DAOS_TX_NONE, "d_key", "a_key", &stat);
+	clone_copy_report("random workload", &stat);
+	clone_verify_akey(req.oh, dst_oh, DAOS_TX_NONE, "d_key", "a_key", span);
+
+	rc = daos_obj_close(dst_oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(data);
+	ioreq_fini(&req);
+}
+
+/*
+ * The clone tool used to list and fetch with DAOS_TX_NONE, so the two calls landed on different
+ * epochs. This is layout independent, hence the replicated object class. The same walk under the
+ * snapshot the tool creates must see the pre punch state and copy it whole.
+ */
+static void
+clone_epoch_skew(void **state)
+{
+	test_arg_t            *arg = *state;
+	struct ioreq           req;
+	daos_obj_id_t          oid;
+	daos_obj_id_t          dst_oid;
+	daos_handle_t          dst_oh;
+	daos_recx_t            recx;
+	struct clone_copy_stat stat = {0};
+	daos_handle_t          th   = DAOS_TX_NONE;
+	daos_epoch_t           snap_epoch;
+	daos_epoch_range_t     epr;
+	daos_anchor_t          anchor = {0};
+	daos_recx_t            listed[CLONE_RECX_NR];
+	daos_epoch_range_t     eprs[CLONE_RECX_NR];
+	daos_key_t             dkey;
+	daos_key_t             akey;
+	daos_iod_t             iod = {0};
+	d_sg_list_t            sgl;
+	d_iov_t                iov;
+	daos_size_t            size   = 0;
+	uint32_t               number = CLONE_RECX_NR;
+	char                  *data;
+	char                  *buf;
+	daos_size_t            len = 4096;
+	int                    i;
+	int                    rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	D_ALLOC(data, len);
+	assert_non_null(data);
+	memset(data, 'd', len);
+	D_ALLOC(buf, len * CLONE_RECX_NR);
+	assert_non_null(buf);
+
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	req.iod_type = DAOS_IOD_ARRAY;
+
+	dst_oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	rc      = daos_obj_open(arg->coh, dst_oid, DAOS_OO_RW, &dst_oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < CLONE_RECX_NR; i++) {
+		recx.rx_idx = i * 2 * len;
+		recx.rx_nr  = len;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, len, &req);
+	}
+
+	rc = daos_cont_create_snap_opt(arg->coh, &snap_epoch, NULL, DAOS_SNAP_OPT_CR, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_tx_open_snap(arg->coh, snap_epoch, &th, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, "d_key", strlen("d_key"));
+	d_iov_set(&akey, "a_key", strlen("a_key"));
+
+	/* list at one epoch, punch, then fetch what was listed - what the clone tool used to do */
+	rc = daos_obj_list_recx(req.oh, DAOS_TX_NONE, &dkey, &akey, &size, &number, listed, eprs,
+				&anchor, true, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_not_equal(number, 0);
+
+	for (i = 0; i < number; i++)
+		punch_recxs("d_key", "a_key", &listed[i], 1, DAOS_TX_NONE, &req);
+
+	iod.iod_name  = akey;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_nr    = number;
+	iod.iod_recxs = listed;
+	iod.iod_size  = size;
+	d_iov_set(&iov, buf, len * number);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &iov;
+
+	rc = daos_obj_fetch(req.oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("fetch after punch at DAOS_TX_NONE: sg_nr_out %u\n", sgl.sg_nr_out);
+	assert_int_equal(sgl.sg_nr_out, 0);
+
+	clone_copy_akey(req.oh, dst_oh, th, "d_key", "a_key", &stat);
+	clone_copy_report("under snapshot", &stat);
+	assert_int_equal(stat.ccs_iom_short, 0);
+	assert_int_equal(stat.ccs_enum_len, len * CLONE_RECX_NR);
+	clone_verify_akey(req.oh, dst_oh, th, "d_key", "a_key", 2 * len * CLONE_RECX_NR);
+
+	rc = daos_tx_close(th, NULL);
+	assert_rc_equal(rc, 0);
+	epr.epr_lo = snap_epoch;
+	epr.epr_hi = snap_epoch;
+	rc         = daos_cont_destroy_snap(arg->coh, epr, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_obj_close(dst_oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(buf);
+	D_FREE(data);
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
-	{"EC0: ec dkey list and punch test",
-	 ec_dkey_list_punch, async_disable, test_case_teardown},
-	{"EC1: ec akey list and punch test",
-	 ec_akey_list_punch, async_disable, test_case_teardown},
-	{"EC2: ec rec list and punch test",
-	 ec_rec_list_punch, async_disable, test_case_teardown},
-	{"EC3: ec partial update then aggregation",
-	 ec_partial_update_agg, async_disable, test_case_teardown},
-	{"EC4: ec cross cell partial update then aggregation",
-	 ec_cross_cell_partial_update_agg, async_disable, test_case_teardown},
-	{"EC5: ec full and partial update then aggregation",
-	 ec_full_partial_update_agg, async_disable, test_case_teardown},
-	{"EC6: ec partial and full update then aggregation",
-	 ec_partial_full_update_agg, async_disable, test_case_teardown},
-	{"EC7: ec file size check on parity",
-	 dfs_ec_check_size, async_disable, test_case_teardown},
-	{"EC8: ec file size check on non-parity",
-	 dfs_ec_check_size_nonparity, async_disable, test_case_teardown},
-	{"EC9: ec aggregation failed",
-	 ec_agg_fail, async_disable, test_case_teardown},
-	{"EC10: ec aggregation peer update failed",
-	 ec_agg_peer_fail, async_disable, test_case_teardown},
-	{"EC11: ec single-value array mixed IO",
-	 ec_singv_array_mixed_io, async_disable, test_case_teardown},
-	{"EC12: ec full stripe snapshot",
-	 ec_full_stripe_snapshot, async_disable, test_case_teardown},
-	{"EC13: ec partial stripe snapshot",
-	 ec_partial_stripe_snapshot, async_disable, test_case_teardown},
-	{"EC14: ec partial stripe cross boundary snapshot",
-	 ec_partial_stripe_cross_boundry_snapshot, async_disable,
-	 test_case_teardown},
-	{"EC15: ec punch and check_size", ec_punch_check_size, async_disable,
-	 test_case_teardown},
-	{"EC16: ec single-value overwrite", ec_singv_overwrite, async_disable,
-	 test_case_teardown},
-	{"EC17: ec single-value different size fetch", ec_singv_diff_size_fetch, async_disable,
-	 test_case_teardown},
-	{"EC18: ec conditional fetch", ec_cond_fetch, async_disable, test_case_teardown},
-	{"EC19: ec few partial stripe update", ec_few_partial_stripe_aggregation, async_disable,
-	 test_case_teardown},
-	{"EC20: ec recx list from parity", ec_rec_parity_list, async_disable, test_case_teardown},
-	{"EC21: ec update two akeys and parity shards failed", ec_update_2akeys, async_disable,
-	 test_case_teardown},
-	{"EC22: ec data recovery", ec_data_recov, async_disable, test_case_teardown},
-	{"EC23: ec multi-singv overwrite", ec_multi_singv_overwrite, async_disable,
-	test_case_teardown},
-	{"EC24: ec multi-array update", ec_multi_array, async_disable,
-	test_case_teardown},
-	{"EC25: ec dkey enumerate with failure shard", ec_dkey_enum_fail, async_disable,
-	test_case_teardown},
-	{"EC26: ec single nvme io failed", ec_single_stripe_nvme_io, async_disable,
-	test_case_teardown},
-	{"EC27: ec double nvme io failed", ec_two_stripes_nvme_io, async_disable,
-	test_case_teardown},
-	{"EC28: ec three nvme io failed", ec_three_stripes_nvme_io, async_disable,
-	test_case_teardown},
-	{"EC29: ec full and partial punch then aggregation",
-	 ec_full_partial_punch_agg, async_disable, test_case_teardown},
+    {"EC0: ec dkey list and punch test", ec_dkey_list_punch, async_disable, test_case_teardown},
+    {"EC1: ec akey list and punch test", ec_akey_list_punch, async_disable, test_case_teardown},
+    {"EC2: ec rec list and punch test", ec_rec_list_punch, async_disable, test_case_teardown},
+    {"EC3: ec partial update then aggregation", ec_partial_update_agg, async_disable,
+     test_case_teardown},
+    {"EC4: ec cross cell partial update then aggregation", ec_cross_cell_partial_update_agg,
+     async_disable, test_case_teardown},
+    {"EC5: ec full and partial update then aggregation", ec_full_partial_update_agg, async_disable,
+     test_case_teardown},
+    {"EC6: ec partial and full update then aggregation", ec_partial_full_update_agg, async_disable,
+     test_case_teardown},
+    {"EC7: ec file size check on parity", dfs_ec_check_size, async_disable, test_case_teardown},
+    {"EC8: ec file size check on non-parity", dfs_ec_check_size_nonparity, async_disable,
+     test_case_teardown},
+    {"EC9: ec aggregation failed", ec_agg_fail, async_disable, test_case_teardown},
+    {"EC10: ec aggregation peer update failed", ec_agg_peer_fail, async_disable,
+     test_case_teardown},
+    {"EC11: ec single-value array mixed IO", ec_singv_array_mixed_io, async_disable,
+     test_case_teardown},
+    {"EC12: ec full stripe snapshot", ec_full_stripe_snapshot, async_disable, test_case_teardown},
+    {"EC13: ec partial stripe snapshot", ec_partial_stripe_snapshot, async_disable,
+     test_case_teardown},
+    {"EC14: ec partial stripe cross boundary snapshot", ec_partial_stripe_cross_boundry_snapshot,
+     async_disable, test_case_teardown},
+    {"EC15: ec punch and check_size", ec_punch_check_size, async_disable, test_case_teardown},
+    {"EC16: ec single-value overwrite", ec_singv_overwrite, async_disable, test_case_teardown},
+    {"EC17: ec single-value different size fetch", ec_singv_diff_size_fetch, async_disable,
+     test_case_teardown},
+    {"EC18: ec conditional fetch", ec_cond_fetch, async_disable, test_case_teardown},
+    {"EC19: ec few partial stripe update", ec_few_partial_stripe_aggregation, async_disable,
+     test_case_teardown},
+    {"EC20: ec recx list from parity", ec_rec_parity_list, async_disable, test_case_teardown},
+    {"EC21: ec update two akeys and parity shards failed", ec_update_2akeys, async_disable,
+     test_case_teardown},
+    {"EC22: ec data recovery", ec_data_recov, async_disable, test_case_teardown},
+    {"EC23: ec multi-singv overwrite", ec_multi_singv_overwrite, async_disable, test_case_teardown},
+    {"EC24: ec multi-array update", ec_multi_array, async_disable, test_case_teardown},
+    {"EC25: ec dkey enumerate with failure shard", ec_dkey_enum_fail, async_disable,
+     test_case_teardown},
+    {"EC26: ec single nvme io failed", ec_single_stripe_nvme_io, async_disable, test_case_teardown},
+    {"EC27: ec double nvme io failed", ec_two_stripes_nvme_io, async_disable, test_case_teardown},
+    {"EC28: ec three nvme io failed", ec_three_stripes_nvme_io, async_disable, test_case_teardown},
+    {"EC29: ec full and partial punch then aggregation", ec_full_partial_punch_agg, async_disable,
+     test_case_teardown},
+    {"EC30: ec fetch iom merge", ec_fetch_iom, async_disable, test_case_teardown},
+    {"EC31: ec fetch multiple iom merge", ec_fetch_multi_iom, async_disable, test_case_teardown},
+    {"EC32: cont clone copy of punched stripes", ec_clone_punched_stripe, async_disable,
+     test_case_teardown},
+    {"EC33: cont clone copy of sparse stripes", ec_clone_sparse_stripe, async_disable,
+     test_case_teardown},
+    {"EC34: cont clone copy of a random workload", ec_clone_random, async_disable,
+     test_case_teardown},
+    {"EC35: cont clone copy under a snapshot", clone_epoch_skew, async_disable, test_case_teardown},
 };
 
 int

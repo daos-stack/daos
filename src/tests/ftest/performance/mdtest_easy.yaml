@@ -28,6 +28,7 @@ pool:
 
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 
 mdtest: &mdtest_base
   client_processes:

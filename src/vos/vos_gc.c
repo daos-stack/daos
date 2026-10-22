@@ -457,7 +457,7 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	 * Then destroy DTX table firstly to avoid dangling DXT records during drain
 	 * the container (that may yield).
 	 */
-	rc = vos_dtx_table_destroy(&pool->vp_umm, cont);
+	rc = vos_dtx_table_destroy(pool, cont);
 	if (rc != 0) {
 		DL_ERROR(rc, "Failed to destroy DTX table.");
 		return rc;
@@ -1688,8 +1688,8 @@ gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct checker 
 
 	if (IS_CHECKER(ck)) {
 		CK_PRINT(ck, CK_GC_TREE_STR "...\n");
-		CK_INDENT(ck, rc = dbtree_check_inplace(&bkt_df->gd_bins_root, uma, ck_report, ck,
-							error_on_non_zero_padding));
+		CK_INDENT(ck, rc = dbtree_check_inplace(&bkt_df->gd_bins_root, uma, NULL, ck_report,
+							ck, error_on_non_zero_padding));
 		CK_PRINTL_RC(ck, rc, CK_GC_TREE_STR);
 		if (rc != DER_SUCCESS) {
 			return rc;

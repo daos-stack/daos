@@ -584,6 +584,19 @@ int
 vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh);
 
 /**
+ * Open a container within a VOSP with a checker.
+ *
+ * \param poh		[IN]	Pool open handle
+ * \param co_uuid	[IN]	Container uuid
+ * \param ck		[IN]	Checker structure
+ * \param coh		[OUT]	Returned container handle
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_handle_t *coh);
+
+/**
  * Release container open handle
  *
  * \param coh	[IN]	container open handle
@@ -1331,6 +1344,21 @@ vos_iter_empty(daos_handle_t ih);
  */
 int
 vos_iter_validate(daos_handle_t ih);
+
+/**
+ * Check an iterator.
+ *
+ * \param[in] ih			Iterator handle.
+ * \param[in] report_fn			Report function.
+ * \param[in] report_arg		Argument for the report function.
+ * \param[in] error_on_non_zero_padding	Trigger an error on non-zero padding.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Errors returned by the iterator check.
+ */
+int
+vos_iter_check(daos_handle_t ih, report_fn_t report_fn, void *report_arg,
+	       bool error_on_non_zero_padding);
 
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a

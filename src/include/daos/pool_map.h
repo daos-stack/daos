@@ -60,21 +60,21 @@ typedef enum pool_comp_state {
 } pool_comp_state_t;
 
 enum pool_component_flags {
-	PO_COMPF_NONE		= 0,
+	PO_COMPF_NONE = 0,
 	/**
 	 * indicate when in status PO_COMP_ST_DOWNOUT, it is changed from
 	 * PO_COMP_ST_DOWN (rather than from PO_COMP_ST_DRAIN).
 	 */
-	PO_COMPF_DOWN2OUT	= (1 << 0),
+	PO_COMPF_DOWN2OUT = (1 << 0),
 	/**
 	 * If the target status is UP, then it indicates the UP status is
 	 * from DOWN directly, instead of NEW and DOWNOUT.
 	 */
-	PO_COMPF_DOWN2UP	= (1 << 1),
+	PO_COMPF_DOWN2UP = (1 << 1),
 	/**
 	 * The component has been processed by DAOS check, only in DRAM.
 	 */
-	PO_COMPF_CHK_DONE	= (1 << 2),
+	PO_COMPF_CHK_DONE = (1 << 2),
 };
 
 #define co_in_ver	co_out_ver
@@ -106,6 +106,11 @@ struct pool_component {
 	 * it means the map version when the target is excluded.
 	 * Otherwise, it is the map version when the target is
 	 * extended or reintegrated.
+	 *
+	 * For asymmetric pool creation (component inserted directly as
+	 * DOWNOUT), this is the pool creation map version (typically 1).
+	 * It is the same value as co_ver in that case, which distinguishes
+	 * such a component from one that was UP and later excluded.
 	 */
 	uint32_t		co_out_ver; /* co_in_ver */
 
@@ -114,6 +119,52 @@ struct pool_component {
 	/** number of children or storage partitions */
 	uint32_t	co_nr;
 };
+
+/**
+ * True if the DOWNOUT component was inserted as DOWNOUT at pool creation and never
+ * successfully reintegrated. Signature is `co_fseq == co_ver`: real DOWNOUT goes through
+ * MAP_EXCLUDE which sets `co_fseq = ++map_version`, and map_version at that moment is
+ * >= co_ver (map version is monotonic; co_ver is fixed when the comp joined the map). So
+ * real DOWNOUT always has co_fseq > co_ver strictly. gen_pool_buf() initializes
+ * both co_fseq and co_ver to the pool creation map version
+ * (normally 1), so co_fseq == co_ver is a unique baseline mark.
+ *
+ * Neither co_fseq nor co_ver is touched by MAP_REINT, MAP_EXTEND, MAP_ADD_IN, or
+ * MAP_REVERT_REBUILD (baseline branch also restores co_in_ver = co_ver), so this
+ * invariant survives a baseline reint -> revert-failure round trip: a baseline that
+ * failed to reintegrate is still classified as baseline.
+ */
+static inline bool
+pool_comp_is_creation_downout(struct pool_component *comp)
+{
+	return comp->co_status == PO_COMP_ST_DOWNOUT && comp->co_fseq == comp->co_ver;
+}
+
+/**
+ * True if the component is a DOWNOUT that resulted from a real failure and rebuild.
+ *
+ * PO_COMPF_DOWN2OUT is set only by update_tgt_down_drain_to_downout(), which requires the
+ * comp to have gone through UPIN -> DOWN, i.e. through MAP_EXCLUDE which bumps co_fseq
+ * strictly above co_ver. So a DOWN2OUT comp always has co_fseq > co_ver and is by
+ * construction not a creation-time DOWNOUT. DOWN2OUT alone suffices.
+ */
+static inline bool
+pool_comp_is_failed_downout(struct pool_component *comp)
+{
+	return comp->co_status == PO_COMP_ST_DOWNOUT && (comp->co_flags & PO_COMPF_DOWN2OUT);
+}
+
+/**
+ * True if the component is a DOWNOUT that resulted from DRAIN. The !creation_downout
+ * guard is required here: baseline DOWNOUT also has !DOWN2OUT, so without this check we
+ * would misclassify it as drain_downout.
+ */
+static inline bool
+pool_comp_is_drain_downout(struct pool_component *comp)
+{
+	return comp->co_status == PO_COMP_ST_DOWNOUT && !(comp->co_flags & PO_COMPF_DOWN2OUT) &&
+	       !pool_comp_is_creation_downout(comp);
+}
 
 /** a leaf of pool map */
 struct pool_target {
@@ -258,9 +309,14 @@ void pool_buf_free(struct pool_buf *buf);
 int  pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
+uint32_t
+pool_buf_avail_domain_nr(struct pool_buf *buf);
+int
+pool_buf_rf_check(struct pool_buf *buf, uint64_t *rd_fac, bool clamp);
 int
     gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
-		 int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr);
+		 int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr,
+		 d_rank_list_t *downout_ranks);
 
 int pool_map_comp_cnt(struct pool_map *map);
 

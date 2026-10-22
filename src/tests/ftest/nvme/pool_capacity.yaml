@@ -34,6 +34,7 @@ pool_qty_10:
 
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 
 ior:
   no_parallel_job: 10

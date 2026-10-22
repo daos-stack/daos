@@ -12,12 +12,14 @@ server_config:
       storage: auto
 
 pool:
-  scm_size: 1000000000
+  scm_size: 1G
   pool_count: 10
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
   cont_count: 10
+  properties: cksum:off,srv_cksum:off
 
 fio:
   names:

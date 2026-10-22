@@ -22,9 +22,11 @@ server_config:
 pool:
   scm_size: 5G
   nvme_size: 10G
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 
 macsio:
   interface: hdf5

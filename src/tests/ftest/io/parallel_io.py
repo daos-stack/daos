@@ -13,12 +13,12 @@ from getpass import getuser
 
 from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
-from fio_test_base import FioBase
+from fio_utils import TestFio
 from ior_test_base import IorTestBase
 from run_utils import run_remote
 
 
-class ParallelIo(FioBase, IorTestBase):
+class ParallelIo(TestFio, IorTestBase):
     """Base Parallel IO test class.
 
     :avocado: recursive
@@ -35,7 +35,7 @@ class ParallelIo(FioBase, IorTestBase):
         self.pool = []
         self.container = []
 
-    def create_pool(self):
+    def __create_pool(self):
         """Create a thread safe TestPool object."""
         # Use a dedicated DmgCommand copy per thread; sharing self.get_dmg_command()'s
         # single instance across threads races on its parameters and causes partial commands.
@@ -135,7 +135,7 @@ class ParallelIo(FioBase, IorTestBase):
         threads = []
 
         # Create a pool and start dfuse.
-        self.create_pool()
+        self.__create_pool()
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, self.pool[0])
 
@@ -153,8 +153,9 @@ class ParallelIo(FioBase, IorTestBase):
                 self.fail("Error running '{}' on the following hosts: {}".format(
                     cmd, result.failed_hosts))
             # run fio on all containers
-            self.fio_cmd.update_directory(os.path.join(dfuse.mount_dir.value, cont.uuid))
-            thread = threading.Thread(target=self.execute_fio)
+            fio_cmd = self.get_fio_command()
+            fio_cmd.update_directory(os.path.join(dfuse.mount_dir.value, cont.uuid))
+            thread = threading.Thread(target=fio_cmd.run)
             threads.append(thread)
             thread.start()
 
@@ -171,8 +172,9 @@ class ParallelIo(FioBase, IorTestBase):
 
         # try accessing destroyed container, it should fail
         try:
-            self.fio_cmd.update_directory(os.path.join(dfuse.mount_dir.value, container_to_destroy))
-            self.execute_fio()
+            fio_cmd = self.get_fio_command()
+            fio_cmd.update_directory(os.path.join(dfuse.mount_dir.value, container_to_destroy))
+            fio_cmd.run()
             self.fail(f"Fio was able to access destroyed container: {self.container[0]}")
         except CommandFailure:
             self.log.info("fio failed as expected")
@@ -215,7 +217,7 @@ class ParallelIo(FioBase, IorTestBase):
 
         self.log_step("Create pools in parallel.")
         for _ in range(self.pool_count):
-            pool_thread = threading.Thread(target=self.create_pool)
+            pool_thread = threading.Thread(target=self.__create_pool)
             pool_threads.append(pool_thread)
             pool_thread.start()
         # Wait for pool create to finish

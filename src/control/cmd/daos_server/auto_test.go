@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -150,6 +150,30 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			nil,
 		},
 		{
+			"Generate with allow-numa-imbalance flag",
+			"config generate -r foo --allow-numa-imbalance",
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.MgmtSvcReplicas = "foo"
+				cmd.NetClass = "infiniband"
+				cmd.AllowNumaImbalance = true
+				return cmd
+			}()),
+			nil,
+		},
+		{
+			"Generate with allow-numa-imbalance short flag",
+			"config generate -r foo -n",
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.MgmtSvcReplicas = "foo"
+				cmd.NetClass = "infiniband"
+				cmd.AllowNumaImbalance = true
+				return cmd
+			}()),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"network quack",
 			"",
@@ -174,6 +198,7 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 	cmd.UseTmpfsSCM = true
 	cmd.ExtMetadataPath = "/opt/daos_md"
 	cmd.FabricPorts = "12345,13345"
+	cmd.AllowNumaImbalance = true
 
 	req := new(control.ConfGenerateReq)
 	if err := convert.Types(cmd, req); err != nil {
@@ -181,14 +206,15 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 	}
 
 	expReq := &control.ConfGenerateReq{
-		NrEngines:       1,
-		NetProvider:     "ofi+tcp",
-		SCMOnly:         true,
-		MgmtSvcReplicas: []string{"foo", "bar"},
-		NetClass:        hardware.Infiniband,
-		UseTmpfsSCM:     true,
-		ExtMetadataPath: "/opt/daos_md",
-		FabricPorts:     []int{12345, 13345},
+		NrEngines:          1,
+		NetProvider:        "ofi+tcp",
+		SCMOnly:            true,
+		MgmtSvcReplicas:    []string{"foo", "bar"},
+		NetClass:           hardware.Infiniband,
+		UseTmpfsSCM:        true,
+		ExtMetadataPath:    "/opt/daos_md",
+		FabricPorts:        []int{12345, 13345},
+		AllowNumaImbalance: true,
 	}
 
 	if diff := cmp.Diff(expReq, req); diff != "" {
@@ -274,6 +300,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		scmOnly         bool
 		netClass        string
 		tmpfsSCM        bool
+		allowImbalance  bool
 		extMetadataPath string
 		hf              *control.HostFabric
 		hfErr           error
@@ -283,6 +310,114 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		expErr          error
 		expOutPrefix    string
 	}{
+		"single engine requested; all ssds on numa 1": {
+			nrEngines: 1,
+			hf:        defHostFabric,
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				SysMemInfo: defSysMemInfo(),
+				NvmeDevices: storage.NvmeControllers{
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 1},
+				},
+			},
+			// Engine is pinned to NUMA-1 (where the SSDs are) but is still the
+			// first (and only) engine created, so engine-ordinal fields (log
+			// file, fabric port, nvme config output path) use position 0 while
+			// NUMA-affine fields (mount point, device list, pinned numa) use 1.
+			expCfg: control.MockServerCfg("ofi+psm2", []*engine.Config{
+				control.MockEngineCfg(1, 1, 2, 3, 4).
+					WithTargetCount(16).WithHelperStreamCount(4).
+					WithLogFile("/var/log/daos/daos_engine.0.log").
+					WithFabricInterfacePort(31416).
+					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf"),
+			}).
+				WithMgmtSvcReplicas("localhost:10001").
+				WithControlLogFile("/var/log/daos/daos_server.log"),
+		},
+		"single engine requested with allow-numa-imbalance; all ssds on numa 1": {
+			nrEngines:      1,
+			allowImbalance: true,
+			hf:             defHostFabric,
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				SysMemInfo: defSysMemInfo(),
+				NvmeDevices: storage.NvmeControllers{
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 1},
+				},
+			},
+			// With only 1 engine requested, the native NUMA affinity of the SSDs
+			// (all on NUMA-1) already provides a single satisfied NUMA grouping,
+			// so allow-numa-imbalance has nothing to redistribute and the result
+			// matches the non-imbalance case above, other than the flag itself
+			// being persisted to the generated config.
+			expCfg: control.MockServerCfg("ofi+psm2", []*engine.Config{
+				control.MockEngineCfg(1, 1, 2, 3, 4).
+					WithTargetCount(16).WithHelperStreamCount(4).
+					WithLogFile("/var/log/daos/daos_engine.0.log").
+					WithFabricInterfacePort(31416).
+					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf"),
+			}).
+				WithMgmtSvcReplicas("localhost:10001").
+				WithControlLogFile("/var/log/daos/daos_server.log").
+				WithAllowNumaImbalance(true),
+		},
+		"single engine requested; two suitable numa nodes; more ssds on numa 1": {
+			nrEngines: 1,
+			// Equal-priority fabric interfaces on both numa nodes so that the
+			// choice between them is decided purely by ssd count.
+			hf: &control.HostFabric{
+				Interfaces: []*control.HostFabricInterface{
+					{
+						Provider: "ofi+psm2", Device: "ib0", NumaNode: 0,
+						NetDevClass: 32, Priority: 0,
+					},
+					{
+						Provider: "ofi+psm2", Device: "ib1", NumaNode: 1,
+						NetDevClass: 32, Priority: 0,
+					},
+				},
+				NumaCount:    2,
+				CoresPerNuma: 26,
+			},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				SysMemInfo: defSysMemInfo(),
+				NvmeDevices: storage.NvmeControllers{
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(1), SocketID: 0},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(2), SocketID: 0},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(3), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(4), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(5), SocketID: 1},
+					&storage.NvmeController{PciAddr: test.MockPCIAddr(6), SocketID: 1},
+				},
+			},
+			// With fabric priority tied between numa 0 and numa 1, the engine
+			// should be placed on numa 1, which has more ssds (4 vs 2).
+			expCfg: control.MockServerCfg("ofi+psm2", []*engine.Config{
+				control.MockEngineCfg(1, 3, 4, 5, 6).
+					WithTargetCount(16).WithHelperStreamCount(4).
+					WithLogFile("/var/log/daos/daos_engine.0.log").
+					WithFabricInterfacePort(31416).
+					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf"),
+			}).
+				WithMgmtSvcReplicas("localhost:10001").
+				WithControlLogFile("/var/log/daos/daos_server.log"),
+		},
 		"fetching host fabric fails": {
 			hfErr:  errors.New("bad fetch"),
 			expErr: errors.New("bad fetch"),
@@ -528,6 +663,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			cmd.SCMOnly = tc.scmOnly
 			cmd.NetClass = tc.netClass
 			cmd.UseTmpfsSCM = tc.tmpfsSCM
+			cmd.AllowNumaImbalance = tc.allowImbalance
 			cmd.ExtMetadataPath = tc.extMetadataPath
 			log.SetLevel(logging.LogLevelInfo)
 			cmd.Logger = log

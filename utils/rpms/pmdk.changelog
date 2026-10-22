@@ -1,4 +1,8 @@
 %changelog
+* Mon Aug 24 2026  Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 2.1.4-1
+- Add explicit runtime dependency for libpmem-devel to ensure libpmem.so.1
+  provider is present.
+
 * Tue Aug 11 2026  Jan Michalski <jan-marian.michalski@hpe.com@hpe.com> - 2.1.4-0
 - No functional changes compared to 2.1.3-2. Just fully validated and officially released.
 

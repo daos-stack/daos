@@ -138,6 +138,12 @@ enum ds_rsvc_start_mode {
 	DS_RSVC_DICTATE	/**< DANGEROUSLY reset and start the service (see rdb_dictate) */
 };
 
+/**
+ * Default delay (in ms) applied by the DAOS_RSVC_CREATE_SLOW and DAOS_MGMT_TGT_DESTROY_SLOW
+ * fault injection locations (daos/common.h) when the fail value is not set.
+ */
+#define DAOS_FAIL_DELAY_DEFAULT_MS 8000
+
 /* clang-format off */
 int ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t caller_term,
 		  enum ds_rsvc_start_mode mode, struct rdb_create_params *create_params, void *arg);

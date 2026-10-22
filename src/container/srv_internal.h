@@ -75,6 +75,11 @@ struct cont_track_eph_leader {
 	d_list_t                 cte_list;
 	int                      cte_servers_num;
 	uint32_t                 cte_deleted : 1;
+	/* Time when this leader started tracking the container. A boundary jump larger
+	 * than the tracking age cannot have been observed by this leader, it comes from
+	 * the stale epoch loaded from rdb at leader step-up, so it is not a real stall.
+	 */
+	uint64_t                 cte_start_ts;
 	/* TS to check for ec_agg_eph sluggish warning */
 	uint64_t                 cte_ec_agg_warn_slug_ts;
 };
@@ -204,6 +209,9 @@ int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
 			   struct cont_svc **svcp, struct rsvc_hint *hint);
 int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
 		const uuid_t uuid, struct cont **cont);
+int
+     cont_lookup_active(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
+			struct cont **cont);
 void cont_put(struct cont *cont);
 void cont_svc_put_leader(struct cont_svc *svc);
 int

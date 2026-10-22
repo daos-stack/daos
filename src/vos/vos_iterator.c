@@ -269,8 +269,8 @@ out:
 	if (rc == -DER_NONEXIST && dtx_is_valid_handle(dth)) {
 		if (vos_ts_wcheck(ts_set, dth->dth_epoch, dth->dth_epoch_bound))
 			rc = -DER_TX_RESTART;
-		else
-			vos_ts_set_update(ts_set, dth->dth_epoch);
+		else if (!vos_ts_set_update(ts_set, dth->dth_epoch))
+			rc = -DER_TX_RESTART;
 	}
 	if (rc != 0)
 		vos_ts_set_free(ts_set);
@@ -306,7 +306,8 @@ vos_iter_ts_set_update(daos_handle_t ih, daos_epoch_t read_time, int rc)
 	if (vos_ts_wcheck(iter->it_ts_set, read_time, iter->it_bound))
 		return -DER_TX_RESTART;
 
-	vos_ts_set_update(iter->it_ts_set, read_time);
+	if (!vos_ts_set_update(iter->it_ts_set, read_time))
+		return -DER_TX_RESTART;
 
 	return rc;
 }
@@ -1168,4 +1169,13 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 
 	return vos_iterate_internal(param, type, recursive, false, anchors, pre_cb, post_cb, arg,
 				    dth);
+}
+
+int
+vos_iter_check(daos_handle_t ih, report_fn_t report_fn, void *report_arg,
+	       bool error_on_non_zero_padding)
+{
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+
+	return iter->it_ops->iop_check(iter, report_fn, report_arg, error_on_non_zero_padding);
 }

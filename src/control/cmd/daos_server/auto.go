@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2022-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -135,6 +135,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	if err := convert.Types(cmd, req); err != nil {
 		return nil, err
 	}
+
 	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
 
 	// Use a modified commandline logger to send all log messages to stderr in debug mode

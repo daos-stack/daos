@@ -460,6 +460,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolCreateReq	*req = NULL;
 	Mgmt__PoolCreateResp	 resp = MGMT__POOL_CREATE_RESP__INIT;
 	d_rank_list_t		*targets = NULL;
+	d_rank_list_t           *downout_ranks = NULL;
 	d_rank_list_t		*svc = NULL;
 	uuid_t			 pool_uuid;
 	daos_prop_t		*prop = NULL;
@@ -499,6 +500,13 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
+	if (req->n_unavailable_ranks > 0) {
+		downout_ranks =
+		    uint32_array_to_rank_list(req->unavailable_ranks, req->n_unavailable_ranks);
+		if (downout_ranks == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
 	if (uuid_parse(req->uuid, pool_uuid) != 0) {
 		rc = -DER_INVAL;
 		DL_ERROR(rc, "Pool UUID is invalid");
@@ -532,7 +540,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (req->mem_ratio)
 		scm_bytes *= (double)req->mem_ratio;
 
-	rc = ds_mgmt_create_pool(pool_uuid, req->sys, targets, scm_bytes,
+	rc = ds_mgmt_create_pool(pool_uuid, req->sys, targets, downout_ranks, scm_bytes,
 				 req->tier_bytes[DAOS_MEDIA_NVME] /* nvme_size */,
 				 req->tier_bytes[DAOS_MEDIA_SCM] /* meta_size */, prop, &svc,
 				 req->n_fault_domains, req->fault_domains);
@@ -573,6 +581,8 @@ out:
 
 	if (targets != NULL)
 		d_rank_list_free(targets);
+	if (downout_ranks != NULL)
+		d_rank_list_free(downout_ranks);
 
 	D_FREE(resp.tier_bytes);
 	D_FREE(resp.tgt_ranks);
@@ -1228,6 +1238,20 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 			default:
 				D_ERROR("pointer-value props not supported\n");
 				D_GOTO(out, rc = -DER_INVAL);
+			}
+		} else if (daos_prop_has_byteval(entry)) {
+			resp_props[j]->value_case = MGMT__POOL_PROPERTY__VALUE_BYTEVAL;
+			if (entry->dpe_val_ptr != NULL) {
+				struct daos_prop_byteval *bv = entry->dpe_val_ptr;
+
+				resp_props[j]->byteval.len = bv->dpb_len;
+				if (bv->dpb_len > 0) {
+					D_ALLOC(resp_props[j]->byteval.data, bv->dpb_len);
+					if (resp_props[j]->byteval.data == NULL)
+						D_GOTO(out, rc = -DER_NOMEM);
+					memcpy(resp_props[j]->byteval.data, bv->dpb_data,
+					       bv->dpb_len);
+				}
 			}
 		} else {
 			resp_props[j]->numval = entry->dpe_val;

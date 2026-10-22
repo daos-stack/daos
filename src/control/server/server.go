@@ -674,6 +674,7 @@ func Start(log logging.Logger, cfg *config.Server) error {
 	if err := srv.setupGrpc(); err != nil {
 		return err
 	}
+	srv.mgmtSvc.grpcServer = srv.grpcServer
 
 	srv.registerEvents()
 
