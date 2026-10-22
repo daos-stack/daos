@@ -399,6 +399,9 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 const replaceableMemberFilter = system.MemberStateExcluded | system.MemberStateStopped |
 	system.MemberStateErrored | system.MemberStateUnresponsive
 
+var errReplaceRankActive = errors.New("--replace is only valid for a rank that is not an active " +
+	"system member")
+
 // checkReplaceRank verifies that an explicitly-requested --replace rank is a
 // legitimate candidate for replacement: it must exist on the target host and
 // must currently be in a non-active, non-admin-excluded state.
@@ -412,9 +415,8 @@ func checkReplaceRank(host string, rank ranklist.Rank, members system.Members) e
 			continue
 		}
 		if m.State&replaceableMemberFilter == 0 {
-			return errors.Errorf("replace rank %d on host %s is currently %s; "+
-				"--replace is only valid for a rank that is not an active "+
-				"system member", rank, host, m.State)
+			return errors.Wrapf(errReplaceRankActive,
+				"replace rank %d on host %s is currently %s", rank, host, m.State)
 		}
 		return nil
 	}
@@ -439,10 +441,7 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 		}
 
 		// In replace mode expect MS to become reachable in case the admin issued the
-		// command while the engine/MS was still coming up. Leaving FailOnUnavailable
-		// unset (false) lets the normal retry/backoff logic in invokeUnaryRPC() keep
-		// retrying IsUnavailable errors until the request times out. IsUninitialized
-		// and connection failures surface immediately rather than awaiting timeout/.
+		// command while the engine/MS was still coming up.
 		sysReq := &SystemQueryReq{}
 		sysReq.SetTimeout(replaceMSCheckTimeout)
 		sysReq.AddHost(hosts[0])

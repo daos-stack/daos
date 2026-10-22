@@ -796,8 +796,9 @@ func TestControl_StorageFormat(t *testing.T) {
 			ctx := test.Context(t)
 			mi := NewMockInvoker(log, tc.mic)
 
-			// Rank defaults to NilRank (auto-detect), matching the CLI's
-			// behavior when --rank is not supplied with --replace.
+			// Rank defaults to NilRank (auto-detect), matching the CLI's behavior when
+			// --rank is not supplied with --replace. Replace-rank values are verified
+			// within TestControl_checkReplaceRank.
 			req := &StorageFormatReq{
 				Reformat: tc.reformat, Replace: tc.replace,
 				Rank: uint32(ranklist.NilRank),
@@ -902,6 +903,8 @@ func TestControl_checkFormatReq(t *testing.T) {
 	for name, tc := range map[string]struct {
 		reqHosts   []string
 		replace    bool
+		rank       *ranklist.Rank
+		members    system.Members
 		invokerErr error
 		responses  []*UnaryResponse
 		expErr     error
@@ -956,7 +959,6 @@ func TestControl_checkFormatReq(t *testing.T) {
 			responses: []*UnaryResponse{
 				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{}),
 			},
-			// Should succeed because Replace bypasses MS replica check
 		},
 		"replace on multiple hosts fails": {
 			reqHosts: []string{"replica", "replica2"},
@@ -965,6 +967,45 @@ func TestControl_checkFormatReq(t *testing.T) {
 				MockMSResponse(localServer, nil, &mgmtpb.SystemQueryResp{}),
 			},
 			expErr: errors.New("exactly one"),
+		},
+		"replace no rank specified; invalid joined state ignored": {
+			reqHosts: []string{"replica"},
+			replace:  true,
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{
+					Members: []*mgmtpb.SystemMember{
+						{Rank: 0, State: "joined"},
+						{Rank: 5, State: "joined"},
+					},
+				}),
+			},
+		},
+		"replace rank specified; valid excluded state accepted": {
+			reqHosts: []string{"replica"},
+			replace:  true,
+			rank:     ranklist.NewRankPtr(5),
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{
+					Members: []*mgmtpb.SystemMember{
+						{Rank: 0, State: "excluded"},
+						{Rank: 5, State: "excluded"},
+					},
+				}),
+			},
+		},
+		"replace rank specified; invalid joined state refused": {
+			reqHosts: []string{"replica"},
+			replace:  true,
+			rank:     ranklist.NewRankPtr(5),
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{
+					Members: []*mgmtpb.SystemMember{
+						{Rank: 0, State: "excluded"},
+						{Rank: 5, State: "joined"},
+					},
+				}),
+			},
+			expErr: errReplaceRankActive,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -976,9 +1017,12 @@ func TestControl_checkFormatReq(t *testing.T) {
 				UnaryResponseSet: tc.responses,
 			})
 
-			// Rank defaults to NilRank (auto-detect), matching the CLI's
-			// behavior when --rank is not supplied with --replace.
-			req := &StorageFormatReq{Replace: tc.replace, Rank: uint32(ranklist.NilRank)}
+			rank := uint32(ranklist.NilRank)
+			if tc.rank != nil {
+				rank = uint32(*tc.rank)
+			}
+
+			req := &StorageFormatReq{Replace: tc.replace, Rank: rank}
 			req.SetHostList(tc.reqHosts)
 			err := checkFormatReq(test.Context(t), mi, req)
 			test.CmpErr(t, tc.expErr, err)

@@ -207,21 +207,22 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	}
 
 	r := ranklist.NilRank
-	if superblock.Rank != nil {
-		r = *superblock.Rank
-	}
 
-	// Check if we're in replace mode (ei.replaceRank != nil) and if a specific rank was
-	// provided (ei.replaceRank != NilRank).
+	// Check if we're in replace mode (ei.replaceRank != nil) and pass rank if so.
 	replaceRank := ei.replaceRank.Load()
 	isReplace := replaceRank != nil
 	if isReplace {
-		// During replace operations, fail if superblock already has a valid rank
-		// Prior checks in replace flow should prevent this failsafe from being reached
+		// During replace operations, fail if superblock already has a valid rank.
+		// Prior checks in replace flow should prevent this failsafe from being reached.
 		if superblock.ValidRank {
 			return ranklist.NilRank, false, 0, errReplaceSuperblockHasRank(r)
 		}
-		r = *replaceRank
+		if *replaceRank != ranklist.NilRank {
+			r = *replaceRank
+		}
+	} else if superblock.ValidRank {
+		// Assign rank from superblock if present.
+		r = *superblock.Rank
 	}
 
 	joinReq := &control.SystemJoinReq{

@@ -76,9 +76,7 @@ func (ei *EngineInstance) MountScm() error {
 // If rank is non-nil and points to NilRank, indicates replace mode with auto-detection.
 // If rank is non-nil and points to a valid rank, indicates replace mode with explicit rank.
 //
-// Safe to call concurrently, and safe to call when no attempt is currently awaiting storage:
-// closing storageReady more than once for the same start attempt would panic, so this is guarded by
-// _storageReadyClosed (reset alongside storageReady on each new attempt in startRunner()).
+// Safe to call concurrently, and safe to call when no attempt is currently awaiting storage.
 func (ei *EngineInstance) NotifyStorageReady(rank *ranklist.Rank) {
 	ei.Lock()
 	defer ei.Unlock()
