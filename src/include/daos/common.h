@@ -932,6 +932,8 @@ enum {
 #define DAOS_RSVC_CREATE_SLOW              (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa6)
 /** Delay a pool target destroy (MGMT_TGT_DESTROY handler) by the fail value in ms */
 #define DAOS_MGMT_TGT_DESTROY_SLOW         (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa7)
+/* target stops raising its EC aggregation boundary (stale puller epoch) */
+#define DAOS_CONT_EC_BOUNDARY_FREEZE       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa8)
 
 #define DAOS_CHK_CONT_ORPHAN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb0)
 #define DAOS_CHK_CONT_BAD_LABEL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb1)

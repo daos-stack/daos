@@ -110,6 +110,23 @@ def get_existing_container(test, pool, container_id, daos=None, namespace=CONT_N
     return container
 
 
+def get_all_containers(test, pool):
+    """Get all containers (TestContainer objects) for the specified pool.
+    Args:
+        test (Test): the test object used to get the daos command.
+        pool (TestPool): Pool object for which to retrieve containers.
+
+    Returns:
+        list: List of container objects.
+    """
+    daos_cmd = test.get_daos_command()
+    container_list = []
+    containers = daos_cmd.container_list(pool=pool.identifier)
+    for info in containers["response"]:
+        container_list.append(get_existing_container(test, pool, info["uuid"]))
+    return container_list
+
+
 class TestContainerData():
     """A class for storing data written to DaosContainer objects."""
 
