@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -520,7 +521,7 @@ bitmap_tx_add_ptr(struct umem_instance *vsi_umem, uint64_t *bitmap,
 		  uint32_t bit_at, uint32_t bits_nr)
 {
 	uint32_t bitmap_off = bit_at / 8;
-	uint32_t bitmap_sz = ((bit_at % 8) + bits_nr + 7) / 8;
+	uint32_t bitmap_sz  = ((bit_at % 8) + bits_nr + 7) / 8;
 
 	return umem_tx_add_ptr(vsi_umem, (char *)bitmap + bitmap_off, bitmap_sz);
 }
