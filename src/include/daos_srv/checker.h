@@ -371,8 +371,9 @@ checker_fi_entry(const uint64_t *exp_fail_locs, bool *re_enable)
 	uint64_t fail_loc_out;
 	int      i = 0;
 
+	*re_enable = false;
+
 	if (!d_fault_inject_is_enabled()) {
-		*re_enable = false;
 		return;
 	}
 
