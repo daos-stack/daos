@@ -12,6 +12,7 @@
 #include <daos_srv/daos_engine.h>
 
 #include "dlck_checker.h"
+#include "dlck_engine.h"
 #include "dlck_report.h"
 
 #define DLCK_PROGRESS_LINE_LEN 32
@@ -72,8 +73,7 @@ dlck_report_results(struct checker_status *sts, unsigned targets, struct checker
 	for (int i = 0; i < targets; ++i) {
 		CK_PRINTF(ck, "[%d] result: ", i);
 		dlck_report_status(&sts[i], ck);
-		total.errors_num += sts[i].errors_num;
-		total.warnings_num += sts[i].warnings_num;
+		dlck_status_set(&total, &sts[i]);
 	}
 
 	/** print footer */

@@ -66,7 +66,7 @@ obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	CK_PRINTF(ck, CK_OID_FMT "...\n", DP_UOID(entry->ie_oid));
 	CK_INDENT(ck, rc = vos_iter_check(ih, ck_report, ck, bndl->error_on_non_zero_padding));
 	CK_PRINTFL_RC(ck, rc, CK_OID_FMT, DP_UOID(entry->ie_oid));
-	dlck_xstream_status_set(bndl->xa, &ck->ck_status);
+	dlck_status_set(&bndl->xa->status, &ck->ck_status);
 
 	/** continue checking other objects even if this one failed */
 	return 0;
@@ -93,7 +93,7 @@ objs_process(daos_handle_t coh, struct bundle *bndl)
 
 	/** Just in case there is a problem with the iterator. Most of the issues are accounted for
 	 * in the callback. */
-	dlck_xstream_status_set_rc(bndl->xa, rc);
+	dlck_status_set_rc(&bndl->xa->status, rc);
 }
 
 /**
@@ -123,7 +123,7 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, ck, &coh);
 	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc,
 			   ck->ck_status.warnings_num);
-	dlck_xstream_status_set(xa, &ck->ck_status);
+	dlck_status_set(&xa->status, &ck->ck_status);
 	if (rc == DER_SUCCESS) {
 		objs_process(coh, bndl);
 		(void)vos_cont_close(coh);
@@ -144,7 +144,10 @@ conts_process(struct xstream_arg *xa, daos_handle_t poh, struct checker *ck)
 {
 	vos_iter_param_t        param   = {0};
 	struct vos_iter_anchors anchors = {0};
-	struct bundle           cb_arg  = {.xa = xa, .ck = ck};
+	struct bundle           cb_arg  = {.xa = xa,
+					   .ck = ck,
+					   .error_on_non_zero_padding =
+					       (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR)};
 	int                     rc;
 
 	param.ip_hdl        = poh;
@@ -156,7 +159,7 @@ conts_process(struct xstream_arg *xa, daos_handle_t poh, struct checker *ck)
 
 	/** Just in case there is a problem with the iterator. Most of the issues are accounted for
 	 * in the callback. */
-	dlck_xstream_status_set_rc(xa, rc);
+	dlck_status_set_rc(&xa->status, rc);
 }
 
 /**
@@ -195,7 +198,7 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 
 	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, ck, &poh);
 	POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_status.warnings_num);
-	dlck_xstream_status_set(xa, &ck->ck_status);
+	dlck_status_set(&xa->status, &ck->ck_status);
 	if (rc == DER_SUCCESS) {
 		conts_process(xa, poh, ck);
 		(void)vos_pool_close(poh);
@@ -236,7 +239,7 @@ exec_one(void *arg)
 					      file->po_uuid, xa->xs->tgt_id, main_ck, &ck);
 		if (rc != DER_SUCCESS) {
 			/** There is no point continuing without a logfile. */
-			dlck_xstream_status_set(xa, &ck.ck_status);
+			dlck_status_set_rc(&xa->status, rc);
 			xa->progress = DLCK_XSTREAM_PROGRESS_END;
 			break;
 		}

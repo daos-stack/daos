@@ -160,15 +160,15 @@ dlck_uadd_no_overflow(unsigned a, unsigned b, unsigned *result)
 }
 
 static inline void
-dlck_xstream_status_set_rc(struct xstream_arg *xa, int rc)
+dlck_status_set_rc(struct checker_status *status, int rc)
 {
 	if (rc == DER_SUCCESS) {
 		return;
 	}
 
 	/** do not overwrite the first error found */
-	if (xa->status.rc == DER_SUCCESS) {
-		xa->status.rc = rc;
+	if (status->rc == DER_SUCCESS) {
+		status->rc = rc;
 	}
 }
 
@@ -179,12 +179,13 @@ dlck_xstream_status_set_rc(struct xstream_arg *xa, int rc)
 	} while (0)
 
 static inline void
-dlck_xstream_status_set(struct xstream_arg *xa, struct checker_status *cks)
+dlck_status_set(struct checker_status *status, struct checker_status *cks)
 {
-	DLCK_UINT_ADD_AND_CLEAR(xa->status.warnings_num, cks->warnings_num);
-	DLCK_UINT_ADD_AND_CLEAR(xa->status.errors_num, cks->errors_num);
+	DLCK_UINT_ADD_AND_CLEAR(status->warnings_num, cks->warnings_num);
+	DLCK_UINT_ADD_AND_CLEAR(status->errors_num, cks->errors_num);
 
-	dlck_xstream_status_set_rc(xa, cks->rc);
+	dlck_status_set_rc(status, cks->rc);
+	cks->rc = DER_SUCCESS;
 }
 
 /**
