@@ -359,20 +359,20 @@ checker_fi_proxy(uint64_t fail_loc_in)
  * This function assumes you enable a proxy fault via a config file. Each of the proxy faults have
  * only one corresponding DAOS fault location. This fault location is set progrmatically to fail
  * only once. Before exit this function disables faults injected via a config file so a
- * programatically set fault can take effect. Please call the \ref checker_fi_exit() function after
+ * programmatically set fault can take effect. Please call the \ref checker_fi_exit() function after
  * exiting the tested code.
  *
  * \param[in] exp_fail_locs NULL-terminated array of expected fault locations.
- * \param[out] reenable     Whether to re-enable fault injection after exit.
+ * \param[out] re_enable     Whether to re-enable fault injection after exit.
  */
 static inline void
-checker_fi_entry(const uint64_t *exp_fail_locs, bool *reenable)
+checker_fi_entry(const uint64_t *exp_fail_locs, bool *re_enable)
 {
 	uint64_t fail_loc_out;
 	int      i = 0;
 
 	if (!d_fault_inject_is_enabled()) {
-		*reenable = false;
+		*re_enable = false;
 		return;
 	}
 
@@ -386,7 +386,7 @@ checker_fi_entry(const uint64_t *exp_fail_locs, bool *reenable)
 			 * fault can take effect.
 			 */
 			d_fault_inject_disable();
-			*reenable = true;
+			*re_enable = true;
 
 			return;
 		}
@@ -399,12 +399,12 @@ checker_fi_entry(const uint64_t *exp_fail_locs, bool *reenable)
  * This function re-enables fault injection if it was previously disabled by \ref
  * checker_fi_entry().
  *
- * \param[in] reenable Whether to re-enable fault injection after exit.
+ * \param[in] re_enable Whether to re-enable fault injection after exit.
  */
 static inline void
-checker_fi_exit(bool reenable)
+checker_fi_exit(bool re_enable)
 {
-	if (reenable) {
+	if (re_enable) {
 		d_fault_inject_enable();
 	}
 }

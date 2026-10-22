@@ -1654,10 +1654,10 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	       void *metrics, struct vos_pool *pool, struct checker *ck, int ret)
 {
 	struct umem_attr	*uma;
-	bool              fi_reenable;
-	const uint64_t    exp_fail_locs[] = {DAOS_FAULT_CONT_TREE_INV_CLASS,
-					     DAOS_FAULT_CONT_TREE_UNREG_CLASS,
-					     DAOS_FAULT_CONT_TREE_FEATURES, 0};
+	bool                     fi_reenable;
+	const uint64_t           exp_fail_locs[] = {DAOS_FAULT_CONT_TREE_INV_CLASS,
+						    DAOS_FAULT_CONT_TREE_UNREG_CLASS,
+						    DAOS_FAULT_CONT_TREE_FEATURES, 0};
 	const bool               error_on_non_zero_padding =
 	    (IS_CHECKER(ck) ? (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) : false);
 	daos_handle_t            poh;
