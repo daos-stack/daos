@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -194,6 +194,10 @@ cont_iv_ent_copy(struct ds_iv_entry *entry, struct cont_iv_key *key,
 		break;
 	case IV_CONT_AGG_EPOCH_BOUNDRY:
 		dst->iv_agg_eph.eph = src->iv_agg_eph.eph;
+		/* Fetches are not tracked by ea_refreshing: do not propagate the push's
+		 * creation marker, or a late fetch could recreate a destroyed container.
+		 */
+		dst->iv_agg_eph.rank = 0;
 		break;
 	default:
 		rc = -DER_INVAL;
@@ -571,7 +575,7 @@ again:
 					 */
 					rc = ds_cont_tgt_refresh_agg_eph(entry->ns->iv_pool_uuid,
 									 civ_key->cont_uuid,
-									 ec_agg_eph);
+									 ec_agg_eph, false);
 					if (rc == 0)
 						goto again;
 				}
@@ -622,9 +626,9 @@ cont_iv_ent_agg_eph_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct cont_iv_key	*civ_key = key2priv(key);
 	int			rc;
 
-	rc = ds_cont_tgt_refresh_agg_eph(entry->ns->iv_pool_uuid,
-					 civ_key->cont_uuid,
-					 civ_ent->iv_agg_eph.eph);
+	rc = ds_cont_tgt_refresh_agg_eph(entry->ns->iv_pool_uuid, civ_key->cont_uuid,
+					 civ_ent->iv_agg_eph.eph,
+					 civ_ent->iv_agg_eph.rank == CRT_NO_RANK);
 	return rc;
 }
 
@@ -1144,6 +1148,8 @@ cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
 			DP_UUID(cont_uuid), op, DP_RC(rc));
 		return rc;
 	}
+	if (op == IV_CONT_AGG_EPOCH_BOUNDRY)
+		iv_entry.iv_agg_eph.rank = CRT_NO_RANK;
 
 	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry), shortcut, sync_mode,
 			    false /* retry */);
