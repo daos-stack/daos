@@ -21,7 +21,7 @@ import groovy.transform.Field
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@ryon-jensen/sre-4139-library-2c005ddf08bccfb588c11400a1b7e2a72fe8db1d') _
 
 // The trusted-pipeline-lib daosLatestVersion() method will convert this into a number
 /* groovylint-disable-next-line CompileStatic, VariableName */
@@ -490,10 +490,20 @@ Map update_default_commit_pragmas() {
     }
 }
 
+def dependencyValidationLaunch = new groovy.json.JsonSlurperClassic().parseText("{\"job\":\"daos-stack/go-build-toolchain/PR-32\",\"build\":\"3\",\"repositories\":\"go-build-toolchain@PR-32:3\"}")
+if (!currentBuild.getBuildCauses('hudson.model.Cause$UpstreamCause').any { cause ->
+        cause.upstreamProject == dependencyValidationLaunch.job &&
+        cause.upstreamBuild.toString() == dependencyValidationLaunch.build
+    } || params.CI_PR_REPOS != dependencyValidationLaunch.repositories) {
+    echo 'Synthetic dependency validation branch: ignoring non-matching or automatic launch'
+    return
+}
 pipeline {
     agent { label 'lightweight' }
 
     environment {
+        GOTOOLCHAIN = 'local'
+
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         SSH_KEY_ARGS = '-ici_key'
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
@@ -834,6 +844,21 @@ pipeline {
                                 script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
+                            sh(label: 'Verify candidate Go compiler', script: '''set -eu
+        {
+        test "$GOTOOLCHAIN" = local
+        compiler=$(readlink -f "$(command -v go)")
+        identity=$(rpm -qf --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}|%{SIGMD5}' "$compiler")
+        printf '%s\\n' 'golang-1.26.10-1.daos.el9.x86_64|0b83be070b9b468e9689022ea7ff8df3
+golang-1.26.10-1.daos.el8.x86_64|5e8e9f8f44337bc8b143140d2010a94d
+go1.26.10-1.26.10-1.daos.suse.lp155.x86_64|d50fa187299b578e1288e0a77e1a9b33' | grep -F -x -- "$identity"
+        version=$(rpm -qf --qf '%{VERSION}' "$compiler")
+        test "$(go env GOVERSION)" = "go$version"
+        go version
+        printf '%s\\n' "$identity"
+        sha256sum "$compiler"
+        }''' + ' > candidate-compiler-' + sanitizedStageName() + '.txt')
+        archiveArtifacts(artifacts: 'candidate-compiler-*.txt', fingerprint: true)
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -846,6 +871,21 @@ pipeline {
                             // Go binaries need to be instrumented in order to work reliably
                             // with valgrind. We do this in a separate build because we don't
                             // want to ship the instrumented binaries.
+                            sh(label: 'Verify candidate Go compiler', script: '''set -eu
+        {
+        test "$GOTOOLCHAIN" = local
+        compiler=$(readlink -f "$(command -v go)")
+        identity=$(rpm -qf --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}|%{SIGMD5}' "$compiler")
+        printf '%s\\n' 'golang-1.26.10-1.daos.el9.x86_64|0b83be070b9b468e9689022ea7ff8df3
+golang-1.26.10-1.daos.el8.x86_64|5e8e9f8f44337bc8b143140d2010a94d
+go1.26.10-1.26.10-1.daos.suse.lp155.x86_64|d50fa187299b578e1288e0a77e1a9b33' | grep -F -x -- "$identity"
+        version=$(rpm -qf --qf '%{VERSION}' "$compiler")
+        test "$(go env GOVERSION)" = "go$version"
+        go version
+        printf '%s\\n' "$identity"
+        sha256sum "$compiler"
+        }''' + ' > candidate-compiler-' + sanitizedStageName() + '.txt')
+        archiveArtifacts(artifacts: 'candidate-compiler-*.txt', fingerprint: true)
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            build_deps: 'no',
@@ -899,6 +939,21 @@ pipeline {
                                 script: './ci/rpm/install_deps.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
                             sh label: 'Build deps',
                                 script: './ci/rpm/build_deps.sh'
+                            sh(label: 'Verify candidate Go compiler', script: '''set -eu
+        {
+        test "$GOTOOLCHAIN" = local
+        compiler=$(readlink -f "$(command -v go)")
+        identity=$(rpm -qf --qf '%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}|%{SIGMD5}' "$compiler")
+        printf '%s\\n' 'golang-1.26.10-1.daos.el9.x86_64|0b83be070b9b468e9689022ea7ff8df3
+golang-1.26.10-1.daos.el8.x86_64|5e8e9f8f44337bc8b143140d2010a94d
+go1.26.10-1.26.10-1.daos.suse.lp155.x86_64|d50fa187299b578e1288e0a77e1a9b33' | grep -F -x -- "$identity"
+        version=$(rpm -qf --qf '%{VERSION}' "$compiler")
+        test "$(go env GOVERSION)" = "go$version"
+        go version
+        printf '%s\\n' "$identity"
+        sha256sum "$compiler"
+        }''' + ' > candidate-compiler-' + sanitizedStageName() + '.txt')
+        archiveArtifacts(artifacts: 'candidate-compiler-*.txt', fingerprint: true)
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -1372,6 +1427,14 @@ pipeline {
                                                      'unit-memcheck']
             job_status_update('final_status')
             jobStatusWrite(job_status_internal)
+            writeFile(file: 'dependency-validation-evidence.json',
+                text: groovy.json.JsonOutput.toJson([
+                    sourceRevision: sh(script: 'git rev-parse HEAD^', returnStdout: true).trim(),
+                    testRevision: sh(script: 'git rev-parse HEAD', returnStdout: true).trim(),
+                    repositories: params.CI_PR_REPOS,
+                    stages: job_status_internal]))
+            archiveArtifacts(artifacts: 'dependency-validation-evidence.json', fingerprint: true)
+
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
