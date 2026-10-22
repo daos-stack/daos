@@ -38,16 +38,6 @@ func FaultBadFilesystem(fs *system.FsType) *fault.Fault {
 	)
 }
 
-// FaultIncompleteFormat is an error that occurs when engine metadata directories or superblocks
-// are missing but format was not run with the --replace flag.
-func FaultIncompleteFormat(engineIdxs []uint) *fault.Fault {
-	return metadataFault(
-		code.ControlMetadataIncomplete,
-		fmt.Sprintf("engine metadata directories or superblocks are missing for engines %v; running format with missing subdirectories or superblocks is not supported", engineIdxs),
-		"remove the control_metadata directory entirely before running format again, or use the --replace flag to format only the missing engines",
-	)
-}
-
 func metadataFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "controlmetadata",
