@@ -41,9 +41,9 @@ vts_init_dte(struct dtx_entry *dte)
 	dte->dte_mbs = mbs;
 }
 
-void
-vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
-	      uint64_t dkey_hash, struct dtx_handle **dthp)
+static int
+vts_dtx_begin_xid(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
+		  uint64_t dkey_hash, const struct dtx_id *xid, struct dtx_handle **dthp)
 {
 	struct dtx_handle	*dth;
 	int			 rc;
@@ -52,6 +52,8 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	assert_non_null(dth);
 
 	vts_init_dte(&dth->dth_dte);
+	if (xid != NULL)
+		dth->dth_xid = *xid;
 
 	dth->dth_coh              = coh;
 	dth->dth_epoch            = epoch;
@@ -70,9 +72,19 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 
 	vos_dtx_rsrvd_init(dth);
 	rc = vos_dtx_attach(dth, false, false);
-	assert_rc_equal(rc, 0);
 
 	*dthp = dth;
+	return rc;
+}
+
+void
+vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch, uint64_t dkey_hash,
+	      struct dtx_handle **dthp)
+{
+	int rc;
+
+	rc = vts_dtx_begin_xid(oid, coh, epoch, dkey_hash, NULL, dthp);
+	assert_rc_equal(rc, 0);
 }
 
 void
@@ -864,6 +876,311 @@ dtx_18(void **state)
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 }
 
+/* Prepare one update DTX with @xid (or a new one) at @epoch, return its xid. */
+static int
+vts_dtx_prepare_one(struct io_test_args *args, daos_epoch_t epoch, const struct dtx_id *xid,
+		    struct dtx_id *out)
+{
+	struct dtx_handle *dth = NULL;
+	daos_iod_t         iod = {0};
+	d_sg_list_t        sgl = {0};
+	daos_recx_t        rex = {0};
+	daos_key_t         dkey;
+	daos_key_t         akey;
+	d_iov_t            val_iov;
+	d_iov_t            dkey_iov;
+	uint64_t           tmp_epoch;
+	uint64_t           dkey_hash;
+	char               dkey_buf[UPDATE_DKEY_SIZE];
+	char               akey_buf[UPDATE_AKEY_SIZE];
+	char               update_buf[UPDATE_BUF_SIZE];
+	int                rc;
+
+	vts_dtx_prep_update(args, &val_iov, &dkey_iov, &dkey, dkey_buf, &akey, akey_buf, &iod, &sgl,
+			    &rex, update_buf, UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
+			    &tmp_epoch, false);
+
+	rc = vts_dtx_begin_xid(&args->oid, args->ctx.tc_co_hdl, epoch, dkey_hash, xid, &dth);
+	if (rc == 0) {
+		rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
+		assert_rc_equal(rc, 0);
+		*out = dth->dth_xid;
+	}
+	vts_dtx_end(dth);
+
+	return rc;
+}
+
+/*
+ * Once the new leader has checked the DTX with version V (DCI_RESYNC), an abort from the old leader
+ * with version < V must be refused, even if the DTX active table has been re-indexed (restart) in
+ * between.
+ */
+static void
+dtx_19(void **state)
+{
+	struct io_test_args *args = *state;
+	struct dtx_id        xid;
+	daos_epoch_t         epoch   = d_hlc_get();
+	uint32_t             new_ver = VTS_DTX_VER + 1;
+	int                  rc;
+
+	rc = vts_dtx_prepare_one(args, epoch, NULL, &xid);
+	assert_rc_equal(rc, 0);
+
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, &new_ver, NULL, DCI_RESYNC);
+	assert_int_equal(rc, DTX_ST_PREPARED);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	/* Simulate engine restart: rebuild DTX tables from persistent memory. */
+	rc = vos_dtx_cache_reset(args->ctx.tc_co_hdl, true);
+	assert_rc_equal(rc, 0);
+	do {
+		rc = vos_dtx_cmt_reindex(args->ctx.tc_co_hdl);
+	} while (rc == 0);
+	assert_true(rc > 0);
+
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, NULL, NULL, DCI_DEFAULT);
+	assert_int_equal(rc, DTX_ST_PREPARED);
+
+	/* Stale abort from the old leader after restart. */
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	/* The new leader can still abort it. */
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, new_ver);
+	assert_rc_equal(rc, 0);
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, NULL, NULL, DCI_DEFAULT);
+	assert_rc_equal(rc, -DER_NONEXIST);
+}
+
+/*
+ * DTX_CHECK(V) from the new leader found nothing (the IO from the old leader was still in flight),
+ * and the new leader is going to abort. The old leader's IO of the same DTX (dte_ver < V) arrives
+ * later and is prepared. The fence of the new leader must still apply to that DTX, otherwise the
+ * old leader can drive it to a different decision.
+ */
+static void
+dtx_20(void **state)
+{
+	struct io_test_args *args = *state;
+	struct dtx_id        xid;
+	struct dtx_id        xid2;
+	daos_epoch_t         epoch   = d_hlc_get();
+	uint32_t             new_ver = VTS_DTX_VER + 1;
+	int                  rc;
+
+	daos_dti_gen_unique(&xid);
+
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, &new_ver, NULL, DCI_RESYNC);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	/*
+	 * The delayed IO from the old leader (dte_ver = VTS_DTX_VER) must be rejected, otherwise
+	 * it may be committed by the old leader while the new leader has decided to abort it.
+	 */
+	rc = vts_dtx_prepare_one(args, epoch, &xid, &xid2);
+	assert_rc_equal(rc, -DER_STALE);
+
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, NULL, NULL, DCI_DEFAULT);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	/* Other DTX (without tombstone) with the same old version is not affected. */
+	rc = vts_dtx_prepare_one(args, epoch, NULL, &xid2);
+	assert_rc_equal(rc, 0);
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid2, NULL, NULL, NULL, DCI_DEFAULT);
+	assert_int_equal(rc, DTX_ST_PREPARED);
+}
+
+/*
+ * Aborting a non-prepared (inited) DTX entry that has no owner any longer must not report success
+ * while leaving the entry in the active table.
+ */
+static void
+dtx_21(void **state)
+{
+	struct io_test_args *args = *state;
+	struct dtx_handle   *dth  = NULL;
+	struct dtx_id        xid;
+	daos_epoch_t         epoch = d_hlc_get();
+	int                  rc;
+
+	vts_dtx_begin(&args->oid, args->ctx.tc_co_hdl, epoch, 0, &dth);
+	xid = dth->dth_xid;
+
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, NULL, NULL, DCI_DEFAULT);
+	assert_int_equal(rc, DTX_ST_INITED);
+
+	/* The owner goes away without cleanup, the pinned entry is left. */
+	vts_dtx_end(dth);
+
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, NULL, NULL, DCI_DEFAULT);
+	if (rc == -DER_NONEXIST)
+		return;
+	assert_int_equal(rc, DTX_ST_INITED);
+
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
+	if (rc == 0) {
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, NULL, NULL, DCI_DEFAULT);
+		assert_rc_equal(rc, -DER_NONEXIST);
+	}
+}
+
+struct dtx_abort_race_arg {
+	struct dtx_handle *dar_dth;
+	bool               dar_mark_committable;
+	bool               dar_ran;
+	int                dar_rc;
+};
+
+/* The DTX owner (leader) ULT that runs while the abort ULT yields. */
+static void
+dtx_abort_race_owner(void *data)
+{
+	struct dtx_abort_race_arg *arg = data;
+
+	arg->dar_ran = true;
+	if (arg->dar_mark_committable) {
+		/* The owner has passed validation before the abort, then marks it committable. */
+		vos_dtx_mark_committable(arg->dar_dth);
+		arg->dar_rc = 0;
+	} else {
+		arg->dar_rc = vos_dtx_validation(arg->dar_dth);
+	}
+}
+
+/* Fault injection (DAOS_FAIL_CHECK) is compiled out in release build. */
+static bool
+dtx_abort_yield_supported(void)
+{
+	bool supported;
+
+	daos_fail_loc_set(DAOS_VOS_DTX_ABORT_YIELD | DAOS_FAIL_ALWAYS);
+	supported = daos_fail_check(DAOS_VOS_DTX_ABORT_YIELD) != 0;
+	daos_fail_loc_set(0);
+
+	return supported;
+}
+
+/*
+ * Abort a prepared DTX that is still attached to its owner, the abort yields once (as pinning
+ * buckets or starting local TX may do on MD-on-SSD) during which the owner ULT runs.
+ */
+static int
+dtx_abort_race(struct io_test_args *args, bool mark_committable, struct dtx_id *xid,
+	       daos_epoch_t epoch, struct dtx_abort_race_arg *arg)
+{
+	struct dtx_handle *dth = NULL;
+	daos_iod_t         iod = {0};
+	d_sg_list_t        sgl = {0};
+	daos_recx_t        rex = {0};
+	daos_key_t         dkey;
+	daos_key_t         akey;
+	d_iov_t            val_iov;
+	d_iov_t            dkey_iov;
+	uint64_t           tmp_epoch;
+	uint64_t           dkey_hash;
+	char               dkey_buf[UPDATE_DKEY_SIZE];
+	char               akey_buf[UPDATE_AKEY_SIZE];
+	char               update_buf[UPDATE_BUF_SIZE];
+	ABT_xstream        xstream;
+	ABT_pool           pool;
+	ABT_thread         thread;
+	int                rc;
+
+	vts_dtx_prep_update(args, &val_iov, &dkey_iov, &dkey, dkey_buf, &akey, akey_buf, &iod, &sgl,
+			    &rex, update_buf, UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
+			    &tmp_epoch, false);
+
+	rc = vts_dtx_begin_xid(&args->oid, args->ctx.tc_co_hdl, epoch, dkey_hash, NULL, &dth);
+	assert_rc_equal(rc, 0);
+	rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
+	assert_rc_equal(rc, 0);
+	*xid = dth->dth_xid;
+
+	/* Prepared, but still attached to the owner (as leader waits for non-leaders). */
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, xid, NULL, NULL, NULL, DCI_DEFAULT);
+	assert_int_equal(rc, DTX_ST_PREPARED);
+
+	memset(arg, 0, sizeof(*arg));
+	arg->dar_dth              = dth;
+	arg->dar_mark_committable = mark_committable;
+
+	rc = ABT_xstream_self(&xstream);
+	assert_int_equal(rc, ABT_SUCCESS);
+	rc = ABT_xstream_get_main_pools(xstream, 1, &pool);
+	assert_int_equal(rc, ABT_SUCCESS);
+	rc = ABT_thread_create(pool, dtx_abort_race_owner, arg, ABT_THREAD_ATTR_NULL, &thread);
+	assert_int_equal(rc, ABT_SUCCESS);
+
+	daos_fail_loc_set(DAOS_VOS_DTX_ABORT_YIELD | DAOS_FAIL_ALWAYS);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, xid, epoch, 0);
+	daos_fail_loc_set(0);
+
+	ABT_thread_free(&thread);
+	assert_true(arg->dar_ran);
+
+	vts_dtx_end(dth);
+
+	return rc;
+}
+
+/*
+ * If the abort yields before notifying the owner, the owner's validation misses the in-progress
+ * abort and marks the DTX committable.
+ */
+static void
+dtx_22(void **state)
+{
+	struct io_test_args      *args = *state;
+	struct dtx_abort_race_arg arg;
+	struct dtx_id             xid;
+	daos_epoch_t              epoch = d_hlc_get();
+	int                       rc;
+
+	if (!dtx_abort_yield_supported())
+		skip();
+
+	rc = dtx_abort_race(args, false, &xid, epoch, &arg);
+
+	/* The owner must have been notified before the abort yields. */
+	assert_rc_equal(arg.dar_rc, -DER_AGAIN);
+	assert_rc_equal(rc, 0);
+
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, NULL, NULL, DCI_DEFAULT);
+	assert_rc_equal(rc, -DER_NONEXIST);
+}
+
+/*
+ * The owner passed validation before the abort started, and marks the DTX committable while the
+ * abort yields. Then the abort must not release the committable DTX.
+ */
+static void
+dtx_23(void **state)
+{
+	struct io_test_args      *args = *state;
+	struct dtx_abort_race_arg arg;
+	struct dtx_id             xid;
+	daos_epoch_t              epoch = d_hlc_get();
+	int                       rc;
+
+	if (!dtx_abort_yield_supported())
+		skip();
+
+	rc = dtx_abort_race(args, true, &xid, epoch, &arg);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, NULL, NULL, DCI_DEFAULT);
+	assert_int_equal(rc, DTX_ST_COMMITTABLE);
+
+	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, false, NULL);
+	assert_true(rc >= 0);
+
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, NULL, NULL, DCI_DEFAULT);
+	assert_int_equal(rc, DTX_ST_COMMITTED);
+}
+
 static int
 dtx_tst_teardown(void **state)
 {
@@ -872,32 +1189,26 @@ dtx_tst_teardown(void **state)
 }
 
 static const struct CMUnitTest dtx_tests[] = {
-	{ "VOS506: DTX commit visibility (single value, punch key)",
-	  dtx_6, NULL, dtx_tst_teardown },
-	{ "VOS507: DTX commit visibility (extent value, punch key)",
-	  dtx_7, NULL, dtx_tst_teardown },
-	{ "VOS508: DTX commit visibility (single value, punch obj)",
-	  dtx_8, NULL, dtx_tst_teardown },
-	{ "VOS509: DTX commit visibility (extent value, punch obj)",
-	  dtx_9, NULL, dtx_tst_teardown },
-	{ "VOS510: DTX abort visibility (single value, punch key)",
-	  dtx_10, NULL, dtx_tst_teardown },
-	{ "VOS511: DTX abort visibility (extent value, punch key)",
-	  dtx_11, NULL, dtx_tst_teardown },
-	{ "VOS512: DTX abort visibility (single value, punch obj)",
-	  dtx_12, NULL, dtx_tst_teardown },
-	{ "VOS513: DTX abort visibility (extent value, punch obj)",
-	  dtx_13, NULL, dtx_tst_teardown },
-	{ "VOS514: DTX ops against committed DTX",
-	  dtx_14, NULL, dtx_tst_teardown },
-	{ "VOS515: DTX ops against aborted DTX",
-	  dtx_15, NULL, dtx_tst_teardown },
-	{ "VOS516: DTX in CoS cache makes related data record as readable",
-	  dtx_16, NULL, dtx_tst_teardown },
-	{ "VOS517: list dkey with DTX",
-	  dtx_17, NULL, dtx_tst_teardown },
-	{ "VOS518: DTX aggregation",
-	  dtx_18, NULL, dtx_tst_teardown },
+    {"VOS506: DTX commit visibility (single value, punch key)", dtx_6, NULL, dtx_tst_teardown},
+    {"VOS507: DTX commit visibility (extent value, punch key)", dtx_7, NULL, dtx_tst_teardown},
+    {"VOS508: DTX commit visibility (single value, punch obj)", dtx_8, NULL, dtx_tst_teardown},
+    {"VOS509: DTX commit visibility (extent value, punch obj)", dtx_9, NULL, dtx_tst_teardown},
+    {"VOS510: DTX abort visibility (single value, punch key)", dtx_10, NULL, dtx_tst_teardown},
+    {"VOS511: DTX abort visibility (extent value, punch key)", dtx_11, NULL, dtx_tst_teardown},
+    {"VOS512: DTX abort visibility (single value, punch obj)", dtx_12, NULL, dtx_tst_teardown},
+    {"VOS513: DTX abort visibility (extent value, punch obj)", dtx_13, NULL, dtx_tst_teardown},
+    {"VOS514: DTX ops against committed DTX", dtx_14, NULL, dtx_tst_teardown},
+    {"VOS515: DTX ops against aborted DTX", dtx_15, NULL, dtx_tst_teardown},
+    {"VOS516: DTX in CoS cache makes related data record as readable", dtx_16, NULL,
+     dtx_tst_teardown},
+    {"VOS517: list dkey with DTX", dtx_17, NULL, dtx_tst_teardown},
+    {"VOS518: DTX aggregation", dtx_18, NULL, dtx_tst_teardown},
+    {"VOS519: DTX recovery fence survives DTX re-index", dtx_19, NULL, dtx_tst_teardown},
+    {"VOS520: DTX recovery fence for DTX prepared after check", dtx_20, NULL, dtx_tst_teardown},
+    {"VOS521: DTX abort of ownerless inited entry", dtx_21, NULL, dtx_tst_teardown},
+    {"VOS522: DTX owner notified before abort yields", dtx_22, NULL, dtx_tst_teardown},
+    {"VOS523: DTX abort refuses DTX marked committable during yield", dtx_23, NULL,
+     dtx_tst_teardown},
 };
 
 int
