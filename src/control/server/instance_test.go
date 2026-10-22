@@ -267,23 +267,26 @@ func TestServer_EngineInstance_updateIncarnation(t *testing.T) {
 
 type (
 	MockInstanceConfig struct {
-		CallDrpcResp        *drpc.Response
-		CallDrpcErr         error
-		GetRankResp         ranklist.Rank
-		GetRankErr          error
-		TargetCount         int
-		Index               uint32
-		Started             atm.Bool
-		Ready               atm.Bool
-		CheckerMode         atm.Bool
-		LocalState          system.MemberState
-		LocalFormatState    string
-		RemoveSuperblockErr error
-		SetupRankErr        error
-		StopErr             error
-		ScmTierConfig       *storage.TierConfig
-		ScanBdevTiersResult []storage.BdevTierScanResult
-		LastHealthStats     map[string]*ctlpb.BioHealthResp
+		CallDrpcResp         *drpc.Response
+		CallDrpcErr          error
+		GetRankResp          ranklist.Rank
+		GetRankErr           error
+		TargetCount          int
+		Index                uint32
+		Started              atm.Bool
+		Ready                atm.Bool
+		CheckerMode          atm.Bool
+		LocalState           system.MemberState
+		LocalFormatState     string
+		RemoveSuperblockErr  error
+		SetupRankErr         error
+		StopErr              error
+		ScmTierConfig        *storage.TierConfig
+		ScanBdevTiersResult  []storage.BdevTierScanResult
+		LastHealthStats      map[string]*ctlpb.BioHealthResp
+		AwaitingFormat       bool
+		NotifyStorageReadyFn func(*ranklist.Rank)
+		StorageProvider      *storage.Provider
 	}
 
 	MockInstance struct {
@@ -383,11 +386,15 @@ func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ []storage.NvmeCont
 }
 
 func (mi *MockInstance) isAwaitingFormat() bool {
-	return false
+	return mi.cfg.AwaitingFormat
 }
 
 func (mi *MockInstance) NotifyDrpcReady(_ *srvpb.NotifyReadyReq) {}
-func (mi *MockInstance) NotifyStorageReady(_ *ranklist.Rank)     {}
+func (mi *MockInstance) NotifyStorageReady(rank *ranklist.Rank) {
+	if mi.cfg.NotifyStorageReadyFn != nil {
+		mi.cfg.NotifyStorageReadyFn(rank)
+	}
+}
 
 func (mi *MockInstance) GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	return nil, nil
@@ -406,7 +413,7 @@ func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountR
 }
 
 func (mi *MockInstance) GetStorage() *storage.Provider {
-	return nil
+	return mi.cfg.StorageProvider
 }
 
 func (mi *MockInstance) Debugf(format string, args ...interface{}) {

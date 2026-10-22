@@ -116,11 +116,8 @@ func (ei *EngineInstance) isAwaitingFormat() bool {
 	return ei.waitFormat.Load()
 }
 
-// isServerStarting indicates whether the engine's format-readiness has
-// been requested but not yet determined, i.e. the control plane has begun
-// processing a start request for this instance but has not yet established
-// whether storage format is required (isAwaitingFormat()) or can proceed
-// straight to starting the engine process (IsStarted()).
+// isServerStarting indicates whether a start has been requested but it is
+// not yet known whether a format is required.
 func (ei *EngineInstance) isServerStarting() bool {
 	return ei.starting.Load()
 }
@@ -177,23 +174,9 @@ func (ei *EngineInstance) LocalState() system.MemberState {
 	}
 }
 
-// LocalFormatState returns a local-only state name for use in format-status
-// reporting. Unlike LocalState(), which returns a system.MemberState for
-// compatibility with system membership processing (and so is restricted to
-// its fixed set of values), this reports a finer-grained, format-centric
-// state name:
-//
-//   - Stopped: engine process is not running and no start has been requested.
-//   - ServerStarting: a start has been requested but it is not yet known
-//     whether a format is required (precedes the determination made in
-//     awaitStorageReady()).
-//   - AwaitingFormat: format is required and the instance is blocked
-//     waiting for an administrator to trigger it.
-//   - EnginesStarting: format is no longer required/awaited and the engine
-//     process has been started, but it has not yet reported ready (this
-//     bucket also covers formatting carried out internally by the engine
-//     process itself, which the control plane cannot currently observe).
-//   - Ready: the engine has started up successfully.
+// LocalFormatState returns a finer-grained, format-centric state name than
+// LocalState, for use in format-status reporting: Stopped, ServerStarting,
+// AwaitingFormat, EnginesStarting, or Ready.
 func (ei *EngineInstance) LocalFormatState() string {
 	switch {
 	case ei.IsReady():

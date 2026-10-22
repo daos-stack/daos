@@ -1169,9 +1169,8 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 	return resp, nil
 }
 
-// StorageFormatStatus reports whether each local engine instance is
-// currently awaiting storage format, using cached local state without
-// performing any format operation or contacting the engine process.
+// StorageFormatStatus reports cached per-engine format status without
+// performing a format.
 func (cs *ControlService) StorageFormatStatus(ctx context.Context, req *ctlpb.StorageFormatStatusReq) (*ctlpb.StorageFormatStatusResp, error) {
 	if req == nil {
 		return nil, errNilReq

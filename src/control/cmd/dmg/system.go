@@ -169,9 +169,8 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 	return resp.Errors()
 }
 
-// eraseAwaitFormatTimeout bounds how long `dmg system erase` will block
-// waiting for all engines to be reset and reach the awaiting-format state,
-// unless --no-wait is supplied.
+// eraseAwaitFormatTimeout bounds how long `dmg system erase` waits for
+// engines to reach awaiting-format, unless --no-wait is supplied.
 const eraseAwaitFormatTimeout = 5 * time.Minute
 
 type systemEraseCmd struct {

@@ -468,9 +468,8 @@ func (x *StorageFormatResp) GetMrets() []*ScmMountResult {
 	return nil
 }
 
-// StorageFormatStatusReq requests the local control server's cached
-// format-related status of each locally attached engine instance, without
-// performing a format or contacting the engine processes themselves.
+// StorageFormatStatusReq requests cached engine format status without
+// performing a format.
 type StorageFormatStatusReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -552,9 +551,7 @@ func (x *StorageFormatStatusResp) GetEngineStatus() []*EngineFormatStatus {
 	return nil
 }
 
-// EngineFormatStatus describes the local control server's view of a single
-// engine instance's format-related state, derived without contacting the
-// engine process itself.
+// EngineFormatStatus describes local engine format-related state.
 type EngineFormatStatus struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Instanceidx    uint32                 `protobuf:"varint,1,opt,name=instanceidx,proto3" json:"instanceidx,omitempty"`                             // Index of I/O Engine instance

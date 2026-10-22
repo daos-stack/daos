@@ -174,10 +174,6 @@ type storageFormatStatusCmd struct {
 	cmdutil.JSONOutputCmd
 }
 
-// Execute is run when storageFormatStatusCmd activates.
-//
-// Report whether engines on hosts in the host list are awaiting storage format, without
-// performing a format.
 func (cmd *storageFormatStatusCmd) Execute(args []string) (err error) {
 	ctx := cmd.MustLogCtx()
 

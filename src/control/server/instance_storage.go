@@ -76,9 +76,7 @@ func (ei *EngineInstance) MountScm() error {
 // If rank is non-nil and points to NilRank, indicates replace mode with auto-detection.
 // If rank is non-nil and points to a valid rank, indicates replace mode with explicit rank.
 //
-// Safe to call concurrently, and safe to call when no attempt is currently awaiting storage:
-// closing storageReady more than once for the same start attempt would panic, so this is guarded by
-// _storageReadyClosed (reset alongside storageReady on each new attempt in startRunner()).
+// Safe to call concurrently, and safe to call when no attempt is currently awaiting storage.
 func (ei *EngineInstance) NotifyStorageReady(rank *ranklist.Rank) {
 	ei.Lock()
 	defer ei.Unlock()
@@ -181,10 +179,7 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 		return errors.Errorf("can't wait for storage: %s already started", msgIdx)
 	}
 
-	// Indicate that a format-readiness check is underway but not yet
-	// resolved. Cleared below, either just before entering the
-	// AwaitFormat wait or (via defer) on any other return path, e.g. once
-	// it's determined that no format is required.
+	// format-readiness check underway but not yet resolved
 	ei.starting.SetTrue()
 	defer ei.starting.SetFalse()
 
@@ -242,8 +237,6 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	}
 	ei.log.Infof("%s format required on %s", formatType, msgIdx)
 
-	// Format is required: transition out of ServerStarting and into
-	// AwaitFormat for the (potentially long) wait for admin action.
 	ei.starting.SetFalse()
 	ei.waitFormat.SetTrue()
 	// After we know that the instance is awaiting format, fire off

@@ -64,9 +64,8 @@ message StorageFormatResp {
 	repeated ScmMountResult mrets = 2;		// One per scm format and mount attempt
 }
 
-// StorageFormatStatusReq requests the local control server's cached
-// format-related status of each locally attached engine instance, without
-// performing a format or contacting the engine processes themselves.
+// StorageFormatStatusReq requests cached engine format status without
+// performing a format.
 message StorageFormatStatusReq {}
 
 message StorageFormatStatusResp
@@ -75,9 +74,7 @@ message StorageFormatStatusResp
 	repeated EngineFormatStatus engine_status = 1;
 }
 
-// EngineFormatStatus describes the local control server's view of a single
-// engine instance's format-related state, derived without contacting the
-// engine process itself.
+// EngineFormatStatus describes local engine format-related state.
 message EngineFormatStatus
 {
 	uint32 instanceidx     = 1; // Index of I/O Engine instance

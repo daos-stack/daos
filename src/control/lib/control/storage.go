@@ -577,8 +577,7 @@ func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageForm
 	return sfr, nil
 }
 
-// defaultFormatWaitRetry is the interval between storage format status polls
-// performed by WaitForStorageFormatReady.
+// defaultFormatWaitRetry is the poll interval used by WaitForStorageFormatReady.
 const defaultFormatWaitRetry = 2 * time.Second
 
 type (
@@ -619,13 +618,9 @@ func (sfr *StorageFormatStatusResp) addHostResponse(hr *HostResponse) (err error
 	return sfr.HostStorage.Add(hr.Addr, hs)
 }
 
-// StorageFormatStatus concurrently queries the read-only storage format
-// status of all hosts supplied in the request's hostlist, or all configured
-// hosts if not explicitly specified. Unlike StorageFormat, no format is
-// performed and the system-running check is skipped, since the request is
-// read-only and safe to issue against a live system; hosts report local
-// engine instance format-related status using cached local state without
-// contacting the engine process.
+// StorageFormatStatus queries the read-only format status of each host's
+// engines. Unlike StorageFormat, no format is performed and no system-running
+// check applies.
 func StorageFormatStatus(ctx context.Context, rpcClient UnaryInvoker, req *StorageFormatStatusReq) (*StorageFormatStatusResp, error) {
 	pbReq := new(ctlpb.StorageFormatStatusReq)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
@@ -674,15 +669,8 @@ func allEnginesAwaitingFormat(hsm HostStorageMap) bool {
 	return found
 }
 
-// WaitForStorageFormatReady polls the read-only storage-format status (as
-// used by `dmg storage format-status`) on the configured hostlist until
-// every reported engine instance is awaiting format, the supplied context is
-// cancelled, or an unexpected (non-transient) error occurs.
-//
-// Per-host RPC failures are expected while engines are being reset (e.g.
-// a host may be briefly unreachable while the control plane process
-// restarts) and are logged but do not abort the wait; only cancellation of
-// ctx (e.g. via a caller-supplied timeout) terminates an unsuccessful wait.
+// WaitForStorageFormatReady polls storage format status until every engine is
+// awaiting format or ctx is cancelled.
 func WaitForStorageFormatReady(ctx context.Context, rpcClient UnaryInvoker, retryInterval ...time.Duration) error {
 	interval := defaultFormatWaitRetry
 	if len(retryInterval) > 0 {
