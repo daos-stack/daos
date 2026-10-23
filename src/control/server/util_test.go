@@ -251,6 +251,7 @@ func newTestMgmtSvcWithProvider(t *testing.T, log logging.Logger, provider *stor
 	svc := newMgmtSvc(harness, ms, db, nil, events.NewPubSub(ctx, log))
 	svc.cancel = cancel
 	svc.batchInterval = 100 * time.Microsecond // Speed up tests
+	svc.restartControlPlane = func(string, string) {}
 	svc.startAsyncLoops(ctx)
 	svc.startLeaderLoops(ctx)
 
