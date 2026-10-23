@@ -599,7 +599,7 @@ class PreReqComponent():
                        'lz4', 'isal', 'isal_crypto', 'argobots']
         client_reqs = ['fused', 'json-c', 'capstone', 'aio']
         server_reqs = ['pmdk', 'spdk', 'ipmctl']
-        test_reqs = ['cmocka']
+        test_reqs = ['cmocka', 'slurm']
 
         reqs = []
         reqs = common_reqs

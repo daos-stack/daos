@@ -45,6 +45,7 @@ dnf --nodocs install ${dnf_install_args} \
     libiscsi-devel \
     libjson-c-devel \
     liblz4-devel \
+    libmariadb-devel \
     libndctl-devel \
     libnl3-devel \
     libnuma-devel \
@@ -61,6 +62,7 @@ dnf --nodocs install ${dnf_install_args} \
     libyaml-devel \
     lua-lmod \
     make \
+    munge-devel \
     nasm \
     openmpi3-devel \
     pandoc \

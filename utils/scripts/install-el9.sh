@@ -60,6 +60,8 @@ dnf --nodocs install ${dnf_install_args} \
     lz4-devel \
     Lmod \
     make \
+    mariadb-devel \
+    munge-devel \
     nasm \
     ndctl-devel \
     numactl-devel \

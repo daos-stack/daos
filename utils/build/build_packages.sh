@@ -148,6 +148,9 @@ if [[ "${build_range}" =~ deps|all ]]; then
   utils/rpms/mercury.sh
   utils/rpms/pmdk.sh
   utils/rpms/daos-spdk.sh
+  if [[ "${OUTPUT_TYPE:-rpm}" = rpm ]]; then
+    bash utils/rpms/slurm.sh
+  fi
   if ! compgen -G "${pkg_output_dir}/deps/*.rpm" > /dev/null; then
     rm -rf "${pkg_output_dir}/deps"
   else
