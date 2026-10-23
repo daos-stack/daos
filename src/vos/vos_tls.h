@@ -1,7 +1,7 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,6 +27,10 @@
 /* Forward declarations */
 struct vos_ts_table;
 struct dtx_handle;
+
+#ifdef VOS_STANDALONE
+typedef uint64_t (*vos_sched_seq_fn_t)(void);
+#endif
 
 /** VOS thread local storage structure */
 struct vos_tls {
@@ -68,6 +72,9 @@ struct vos_tls {
 	struct d_tm_node_t		 *vtl_invalid_dtx;
 	struct d_tm_node_t		 *vtl_obj_cnt;
 	struct d_tm_node_t		 *vtl_lru_alloc_size;
+#ifdef VOS_STANDALONE
+	vos_sched_seq_fn_t vtl_sched_seq_fn;
+#endif
 };
 
 struct bio_xs_context *vos_xsctxt_get(void);
@@ -178,6 +185,10 @@ vos_hash_get(const void *buf, uint64_t len, bool standalone)
 static inline uint64_t
 vos_sched_seq(bool standalone)
 {
+	struct vos_tls *tls = vos_tls_get(standalone);
+
+	if (unlikely(tls != NULL && tls->vtl_sched_seq_fn != NULL))
+		return tls->vtl_sched_seq_fn();
 	return 0;
 }
 #else
