@@ -860,6 +860,72 @@ dtx_tst_teardown(void **state)
 	return 0;
 }
 
+static void
+dtx_19(void **state)
+{
+	struct io_test_args    *args = *state;
+	struct vos_container   *cont = vos_hdl2cont(args->ctx.tc_co_hdl);
+	struct vos_dtx_act_ent *dae;
+	struct dtx_handle      *dth;
+	struct dtx_id           xid;
+	daos_iod_t              iod = {0};
+	d_sg_list_t             sgl = {0};
+	daos_recx_t             rex = {0};
+	daos_key_t              dkey;
+	daos_key_t              akey;
+	d_iov_t                 val_iov;
+	d_iov_t                 dkey_iov;
+	uint64_t                epoch;
+	uint64_t                dkey_hash;
+	char                    dkey_buf[UPDATE_DKEY_SIZE];
+	char                    akey_buf[UPDATE_AKEY_SIZE];
+	char                    update_buf[UPDATE_BUF_SIZE];
+	char                    fetch_buf[UPDATE_BUF_SIZE];
+	int                     rc;
+	int                     i;
+
+	for (i = 0; i < 2; i++) {
+		vts_dtx_prep_update(args, &val_iov, &dkey_iov, &dkey, dkey_buf, &akey, akey_buf,
+				    &iod, &sgl, &rex, update_buf, UPDATE_BUF_SIZE, UPDATE_REC_SIZE,
+				    &dkey_hash, &epoch, false);
+		vts_dtx_begin(&args->oid, args->ctx.tc_co_hdl, epoch, dkey_hash, &dth);
+		rc = io_test_obj_update(args, epoch, 0, &dkey, &iod, &sgl, dth, true);
+		assert_rc_equal(rc, 0);
+		xid = dth->dth_xid;
+		dae = dth->dth_ent;
+		assert_non_null(dae);
+
+		if (i == 0) {
+			vos_dtx_mark_committable(dth);
+		} else {
+			rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, true, NULL);
+			assert_rc_equal(rc, 1);
+			assert_true(DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED);
+			assert_false(vos_dae_is_commit(dae));
+		}
+
+		/* Exercise the check after storage waits, bypassing the public abort guard. */
+		rc = vos_dtx_abort_internal(cont, dae, false);
+		assert_rc_equal(rc, -DER_NO_PERM);
+		assert_ptr_equal(dth->dth_ent, dae);
+		assert_false(dae->dae_aborting);
+		assert_false(dth->dth_aborted);
+
+		rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
+		assert_rc_equal(rc, -DER_NO_PERM);
+		rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1, false, NULL);
+		assert_rc_equal(rc, 1);
+		vts_dtx_end(dth);
+
+		memset(fetch_buf, 0, UPDATE_BUF_SIZE);
+		d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
+		iod.iod_size = DAOS_REC_ANY;
+		rc           = io_test_obj_fetch(args, epoch, 0, &dkey, &iod, &sgl, true);
+		assert_rc_equal(rc, 0);
+		assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+	}
+}
+
 static const struct CMUnitTest dtx_tests[] = {
 	{ "VOS506: DTX commit visibility (single value, punch key)",
 	  dtx_6, NULL, dtx_tst_teardown },
@@ -887,6 +953,8 @@ static const struct CMUnitTest dtx_tests[] = {
 	  dtx_17, NULL, dtx_tst_teardown },
 	{ "VOS518: DTX aggregation",
 	  dtx_18, NULL, dtx_tst_teardown },
+	{ "VOS519: DTX abort revalidation preserves commit decisions",
+	  dtx_19, NULL, dtx_tst_teardown },
 };
 
 int
