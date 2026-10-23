@@ -596,46 +596,58 @@ out:
 	return rc;
 }
 
-static void
-pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list, bool enabled)
+static size_t
+pool_ranks_str_chunk_len(const char *str, size_t len)
 {
-	const size_t	MAXBYTES = 512;
-	char		line[MAXBYTES];
-	char	       *linepos = line;
-	int		ret;
-	unsigned int	written = 0;
-	unsigned int	remaining = MAXBYTES;
-	int		i;
+	size_t i;
 
-	ret = snprintf(linepos, remaining, DF_UUID": %s ranks: ", DP_UUID(pool->dp_pool),
-		       enabled ? "ENABLED" : "DISABLED");
-	if ((ret < 0) || (ret >= remaining))
-		goto err;
-	written += ret;
-	remaining -= ret;
-	linepos += ret;
+	if (len <= DC_POOL_RANKS_LOG_CHUNK)
+		return len;
 
-	for (i = 0; i < list->rrl_nr; i++) {
-		uint32_t	lo = list->rrl_ranges[i].lo;
-		uint32_t	hi = list->rrl_ranges[i].hi;
-		bool		lastrange = (i == (list->rrl_nr - 1));
+	for (i = DC_POOL_RANKS_LOG_CHUNK; i > 0; i--)
+		if (str[i - 1] == ',')
+			return i;
 
-		if (lo == hi)
-			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
-		else
-			ret = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
-		if ((ret < 0) || (ret >= remaining))
-			goto err;
-		written += ret;
-		remaining -= ret;
-		linepos += ret;
+	return DC_POOL_RANKS_LOG_CHUNK;
+}
+
+void
+dc_pool_log_ranks(uuid_t pool_uuid, d_rank_list_t *ranks, bool enabled)
+{
+	const char *state     = enabled ? "ENABLED" : "DISABLED";
+	char       *ranks_str = NULL;
+	const char *pos;
+	size_t      remaining;
+	size_t      chunk;
+	int         nparts = 0;
+	int         part;
+	int         rc;
+
+	D_ASSERT(ranks != NULL);
+	if (!D_LOG_ENABLED(DB_MD))
+		return;
+
+	rc = d_rank_list_to_str(ranks, &ranks_str);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID ": failed to format %s ranks: " DF_RC "\n",
+			DP_UUID(pool_uuid), state, DP_RC(rc));
+		return;
 	}
-	D_DEBUG(DB_MD, "%s\n", line);
-	return;
-err:
-	if (written > 0)
-		D_DEBUG(DB_MD, "%s%s\n", line, (ret >= remaining) ? " ...(TRUNCATED): " : "");
-	D_ERROR(DF_UUID": snprintf failed, %d\n", DP_UUID(pool->dp_pool), ret);
+
+	for (pos = ranks_str, remaining = strlen(ranks_str); remaining > 0;
+	     pos += chunk, remaining -= chunk) {
+		chunk = pool_ranks_str_chunk_len(pos, remaining);
+		nparts++;
+	}
+
+	for (part = 1, pos = ranks_str, remaining = strlen(ranks_str); remaining > 0;
+	     part++, pos += chunk, remaining -= chunk) {
+		chunk = pool_ranks_str_chunk_len(pos, remaining);
+		D_DEBUG(DB_MD, DF_UUID ": %s ranks (nr=%u, part %d/%d): %.*s\n", DP_UUID(pool_uuid),
+			state, ranks->rl_nr, part, nparts, (int)chunk, pos);
+	}
+
+	D_FREE(ranks_str);
 }
 
 /*
@@ -678,19 +690,16 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 
 	/* Scan all targets for populating ranks */
 	if (ranks != NULL) {
-		d_rank_range_list_t	*range_list;
 		bool	get_enabled = (info ? ((info->pi_bits & DPI_ENGINES_ENABLED) != 0) : false);
 
 		rc = pool_map_get_ranks(pool->dp_pool, map, get_enabled, ranks);
 		if (rc != 0)
 			goto out_unlock;
 
-		/* For debug logging - convert to rank ranges */
-		range_list = d_rank_range_list_create_from_ranks(*ranks);
-		if (range_list) {
-			pool_print_range_list(pool, range_list, get_enabled);
-			d_rank_range_list_free(range_list);
-		}
+		/* Formerly a side effect of building the debug log string; keep it unconditional */
+		if ((*ranks)->rl_nr > 0)
+			d_rank_list_sort(*ranks);
+		dc_pool_log_ranks(pool->dp_pool, *ranks, get_enabled);
 	}
 
 out_unlock:
