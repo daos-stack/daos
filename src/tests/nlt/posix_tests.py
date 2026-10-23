@@ -2287,13 +2287,15 @@ class PosixTests():
         for args, max_bg, cong in cases:
             dfuse = DFuse(self.server, self.conf, container=self.container, extra_args=args)
             dfuse.start(v_hint='bg_limits')
-            conn = join(conn_root, str(os.minor(os.stat(dfuse.dir).st_dev)))
-            with open(join(conn, 'max_background'), 'r') as fd:
-                got_bg = int(fd.read())
-            with open(join(conn, 'congestion_threshold'), 'r') as fd:
-                got_cong = int(fd.read())
-            if dfuse.stop():
-                self.fatal_errors = True
+            try:
+                conn = join(conn_root, str(os.minor(os.stat(dfuse.dir).st_dev)))
+                with open(join(conn, 'max_background'), 'r') as fd:
+                    got_bg = int(fd.read())
+                with open(join(conn, 'congestion_threshold'), 'r') as fd:
+                    got_cong = int(fd.read())
+            finally:
+                if dfuse.stop():
+                    self.fatal_errors = True
             print(f'{args}: max_background {got_bg}, congestion_threshold {got_cong}')
             assert got_bg == applied('max_user_bgreq', max_bg)
             assert got_cong == applied('max_user_congthresh', cong)
