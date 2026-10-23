@@ -276,13 +276,12 @@ parse_bg_limit(const char *opt, const char *arg, uint32_t *val)
 
 	errno = 0;
 	v     = strtol(arg, &end, 10);
-	if (errno != 0 || *end != '\0') {
+	if (end == arg || *end != '\0') {
 		printf("Invalid --%s value '%s', not a number\n", opt, arg);
 		return -DER_INVAL;
 	}
-	if (v < 1 || v > DFUSE_BG_LIMIT_MAX) {
-		printf("Invalid --%s value %ld, must be between 1 and %d\n", opt, v,
-		       DFUSE_BG_LIMIT_MAX);
+	if (errno == ERANGE || v < 1 || v > DFUSE_BG_LIMIT_MAX) {
+		printf("Invalid --%s value '%s', must be between 1 and %d\n", opt, arg, DFUSE_BG_LIMIT_MAX);
 		return -DER_INVAL;
 	}
 	*val = v;
