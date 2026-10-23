@@ -186,7 +186,8 @@ wal_used_blks(struct wal_super_info *si)
 	uint32_t	next_ckp_off, unused_off, next_ckp_seq, unused_seq;
 	uint32_t	tot_blks = si->si_header.wh_tot_blks;
 
-	next_ckp_id = wal_next_id(si, si->si_ckp_id, si->si_ckp_blks);
+	/* Space is reusable only after the checkpoint is persistent in header and unmapped */
+	next_ckp_id = wal_next_id(si, si->si_rcl_id, si->si_rcl_blks);
 
 	D_ASSERTF(wal_id_cmp(si, next_ckp_id, si->si_unused_id) <= 0,
 		  "Checkpoint ID "DF_U64" > Unused ID "DF_U64"\n",
@@ -1977,6 +1978,9 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purged
 	if (rc) /* Wakeup waiters even if unmap failed */
 		DL_ERROR(rc, "Unmap checkpointed region failed.");
 
+	si->si_rcl_id = tx_id;
+	si->si_rcl_blks = blk_desc.bd_blks;
+
 	wakeup_reserve_waiters(si, false);
 out:
 	D_FREE(buf);
@@ -2067,6 +2071,8 @@ wal_open(struct bio_meta_context *mc)
 
 	si->si_ckp_id = hdr->wh_ckp_id;
 	si->si_ckp_blks = hdr->wh_ckp_blks;
+	si->si_rcl_id = hdr->wh_ckp_id;
+	si->si_rcl_blks = hdr->wh_ckp_blks;
 	si->si_commit_id = hdr->wh_commit_id;
 	si->si_commit_blks = hdr->wh_commit_blks;
 

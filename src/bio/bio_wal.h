@@ -149,6 +149,8 @@ struct wal_super_info {
 	uint64_t		si_ckp_id;	/* Last check-pointed ID */
 	uint64_t		si_commit_id;	/* Last committed ID */
 	uint32_t		si_ckp_blks;	/* Blocks used by last check-pointed ID */
+	uint64_t		si_rcl_id;	/* Last check-pointed ID whose WAL space is reusable */
+	uint32_t		si_rcl_blks;	/* Blocks used by si_rcl_id */
 	uint32_t		si_commit_blks;	/* Blocks used by last committed ID */
 	uint64_t                si_unused_id;   /* Next unused ID */
 	d_list_t		si_pending_list;/* Pending transactions */
