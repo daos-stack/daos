@@ -1,0 +1,12 @@
+VOS file allocation: ok.
+Check pool:
+	path: /dev/shm/daos/{{UUID}}/vos-0
+	uuid: {{UUID}}
+- NVMe devices (if applicable): ok.
+- Open the pool: ok.
+- Magic... ok.
+- Version... ok.
+- UUID... ok.
+- Containers tree...
+-- Tree class... error: Invalid class id: 14
+- error: Containers tree: DER_INVAL(-1003): 'Invalid parameters'

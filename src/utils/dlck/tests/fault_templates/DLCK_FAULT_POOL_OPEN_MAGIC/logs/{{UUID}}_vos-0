@@ -1,0 +1,7 @@
+VOS file allocation: ok.
+Check pool:
+	path: /dev/shm/daos/{{UUID}}/vos-0
+	uuid: {{UUID}}
+- NVMe devices (if applicable): ok.
+- Open the pool: ok.
+- Magic... error: invalid (0x5ca1ab1e)
