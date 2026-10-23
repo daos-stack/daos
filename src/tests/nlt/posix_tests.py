@@ -2270,7 +2270,7 @@ class PosixTests():
     def test_bg_limits(self):
         """Check that --max-background and --congestion-threshold reach the kernel"""
         conn_root = '/sys/fs/fuse/connections'
-        if not os.path.isdir(conn_root):
+        if not os.path.ismount(conn_root):
             print(f'{conn_root} not mounted, skipping')
             return
 
