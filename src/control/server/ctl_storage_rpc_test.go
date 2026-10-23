@@ -2919,6 +2919,7 @@ func TestServer_CtlSvc_formatMetadata(t *testing.T) {
 func Test_notifyStorageReady(t *testing.T) {
 	for name, tc := range map[string]struct {
 		awaitingFormat bool
+		skipped        bool
 		replace        bool
 		rank           uint32
 		expNotifyCalls int
@@ -2926,6 +2927,12 @@ func Test_notifyStorageReady(t *testing.T) {
 	}{
 		"not awaiting format - no notification": {
 			awaitingFormat: false,
+			replace:        false,
+			expNotifyCalls: 0,
+		},
+		"not awaiting format and skipped - no notification, debug log": {
+			awaitingFormat: false,
+			skipped:        true,
 			replace:        false,
 			expNotifyCalls: 0,
 		},
@@ -3004,11 +3011,23 @@ func Test_notifyStorageReady(t *testing.T) {
 			}
 
 			// Call the function under test
-			notifyStorageReady(log, req, engine)
+			notifyStorageReady(log, req, engine, tc.skipped)
 
 			// Verify number of NotifyStorageReady calls
 			test.AssertEqual(t, tc.expNotifyCalls, notifyCalls,
 				"unexpected number of NotifyStorageReady calls")
+
+			if !tc.awaitingFormat {
+				if tc.skipped {
+					test.AssertTrue(t,
+						strings.Contains(buf.String(), fmt.Sprintf("instance %d already formatted", engine.Index())),
+						"expected debug log for skipped instance, got: "+buf.String())
+				} else {
+					test.AssertTrue(t,
+						strings.Contains(buf.String(), fmt.Sprintf("instance %d not awaiting format", engine.Index())),
+						"expected error log for instance not awaiting format, got: "+buf.String())
+				}
+			}
 
 			if tc.expNotifyCalls == 0 {
 				return

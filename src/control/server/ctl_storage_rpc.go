@@ -1064,8 +1064,12 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 	return nil
 }
 
-func notifyStorageReady(log logging.Logger, req *ctlpb.StorageFormatReq, engine Engine) {
+func notifyStorageReady(log logging.Logger, req *ctlpb.StorageFormatReq, engine Engine, skipped bool) {
 	if !engine.isAwaitingFormat() {
+		if skipped {
+			log.Debugf("notifyStorageReady(): instance %d already formatted", engine.Index())
+			return
+		}
 		log.Errorf("notifyStorageReady(): instance %d not awaiting format", engine.Index())
 		return
 	}
@@ -1159,7 +1163,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 			continue
 		}
 
-		notifyStorageReady(cs.log, req, engine)
+		notifyStorageReady(cs.log, req, engine, instanceSkips[idx])
 	}
 
 	return resp, nil

@@ -215,7 +215,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		// During replace operations, fail if superblock already has a valid rank.
 		// Prior checks in replace flow should prevent this failsafe from being reached.
 		if superblock.ValidRank {
-			return ranklist.NilRank, false, 0, errReplaceSuperblockHasRank(r)
+			return ranklist.NilRank, false, 0, errReplaceSuperblockHasRank(*superblock.Rank)
 		}
 		if *replaceRank != ranklist.NilRank {
 			r = *replaceRank

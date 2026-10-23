@@ -517,13 +517,13 @@ func TestEngineInstance_determineRank(t *testing.T) {
 			setupRank:         func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
 			replaceRank:       func() *ranklist.Rank { r := ranklist.Rank(10); return &r }(),
 			expJoinReqReplace: true,
-			expErr:            errors.New("cannot replace: superblock already has valid rank"),
+			expErr:            errors.New("cannot replace: superblock already has valid rank 5"),
 		},
 		"replace with auto-detect fails if superblock has valid rank": {
 			setupRank:         func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
 			replaceRank:       func() *ranklist.Rank { r := ranklist.NilRank; return &r }(),
 			expJoinReqReplace: true,
-			expErr:            errors.New("cannot replace: superblock already has valid rank"),
+			expErr:            errors.New("cannot replace: superblock already has valid rank 5"),
 		},
 		"excluded rank": {
 			setupRank: func() *ranklist.Rank { r := ranklist.Rank(3); return &r }(),
@@ -618,7 +618,7 @@ func TestEngineInstance_determineRank(t *testing.T) {
 			replaceRank:       func() *ranklist.Rank { r := ranklist.Rank(10); return &r }(),
 			setupRank:         func() *ranklist.Rank { r := ranklist.Rank(5); return &r }(),
 			expJoinReqReplace: true,
-			expErr:            errors.New("cannot replace: superblock already has valid rank"),
+			expErr:            errors.New("cannot replace: superblock already has valid rank 5"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
