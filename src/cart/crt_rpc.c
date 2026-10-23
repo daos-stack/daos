@@ -1,6 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -579,6 +580,7 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
 
+	D_FREE(rpc_priv->crp_orig_uri);
 	D_FREE(rpc_priv);
 }
 
@@ -1542,8 +1544,8 @@ crt_reply_send(crt_rpc_t *req)
 		RPC_TRACE(DB_ALL, rpc_priv, "reply_send\n");
 		rc = crt_hg_reply_send(rpc_priv);
 		if (rc != 0)
-			D_ERROR("crt_hg_reply_send failed, rc: %d,opc: %#x.\n",
-				rc, rpc_priv->crp_pub.cr_opc);
+			D_ERROR("crt_hg_reply_send failed, rc: %d opc: %#x orig: %s\n", rc,
+				rpc_priv->crp_pub.cr_opc, crt_req_origin_addr_get(req));
 	}
 
 	rpc_priv->crp_reply_pending = 0;
