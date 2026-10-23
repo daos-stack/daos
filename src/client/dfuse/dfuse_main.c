@@ -32,7 +32,7 @@
  * INIT reply.
  */
 #define DFUSE_MAX_BACKGROUND_DEFAULT 256
-#define DFUSE_BG_LIMIT_MAX           65535
+#define DFUSE_BG_LIMIT_MAX           UINT16_MAX
 
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
  * presence makes pselect() return EINTR in the dfuse_bg() function which
