@@ -1535,42 +1535,38 @@ gc_close_pool(struct vos_pool *pool)
 	return gc_close_bkt(&pool->vp_gc_info);
 }
 
-#define CK_NON_ZERO_PADDING_FMT  "non-zero padding[%d] (%#" PRIx64 ")"
-#define CK_NON_ZERO_RESERVED_FMT "non-zero reserved space (%#" PRIx64 ")"
+#define CK_POOL_EXT_FMT          "Pool extension (off=%#lx)"
+#define CK_NON_ZERO_PADDING_FMT  "non-zero padding[%d] (%#" PRIx64 ")\n"
+#define CK_NON_ZERO_RESERVED_FMT "non-zero reserved space (%#" PRIx64 ")\n"
 
 static int
 dlck_pd_ext_check(struct vos_pool_ext_df *pd_ext, umem_off_t off, struct checker *ck)
 {
-	CK_PRINTF(ck, "Pool extension (off=%#lx)... ", off);
-
 	if (pd_ext == NULL) {
-		CK_APPENDL_OK(ck);
 		return DER_SUCCESS;
 	}
 
 	for (int i = 0; i < VOS_POOL_EXT_DF_PADDING_SIZE; ++i) {
 		if (pd_ext->ped_paddings[i] != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_PADDING)) {
 			if (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) {
-				CK_APPENDFL_ERR(ck, CK_NON_ZERO_PADDING_FMT, i,
-						pd_ext->ped_paddings[i]);
+				CK_PRINTF_ERR(ck, CK_NON_ZERO_PADDING_FMT, i,
+					      pd_ext->ped_paddings[i]);
 				return -DER_NOTYPE;
 			} else {
-				CK_APPENDFL_WARN(ck, CK_NON_ZERO_PADDING_FMT, i,
-						 pd_ext->ped_paddings[i]);
+				CK_PRINTF_WARN(ck, CK_NON_ZERO_PADDING_FMT, i,
+					       pd_ext->ped_paddings[i]);
 			}
 		}
 	}
 
 	if (pd_ext->ped_reserve != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_EXT_RESERVED)) {
 		if (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) {
-			CK_APPENDFL_ERR(ck, CK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
+			CK_PRINTF_ERR(ck, CK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
 			return -DER_NOTYPE;
 		} else {
-			CK_APPENDFL_WARN(ck, CK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
+			CK_PRINTF_WARN(ck, CK_NON_ZERO_RESERVED_FMT, pd_ext->ped_reserve);
 		}
 	}
-
-	CK_APPENDL_OK(ck);
 
 	return DER_SUCCESS;
 }
@@ -1582,7 +1578,9 @@ gc_open_pool(struct vos_pool *pool, struct checker *ck)
 	int                     rc;
 
 	if (IS_CHECKER(ck)) {
-		rc = dlck_pd_ext_check(pd_ext, pool->vp_pool_df->pd_ext, ck);
+		CK_PRINTF(ck, CK_POOL_EXT_FMT "...\n", pool->vp_pool_df->pd_ext);
+		CK_INDENT(ck, rc = dlck_pd_ext_check(pd_ext, pool->vp_pool_df->pd_ext, ck));
+		CK_PRINTFL_RC(ck, rc, CK_POOL_EXT_FMT, pool->vp_pool_df->pd_ext);
 		if (rc != DER_SUCCESS) {
 			return rc;
 		}
