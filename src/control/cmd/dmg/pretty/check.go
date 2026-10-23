@@ -141,7 +141,9 @@ func printSystemCheckPoolInfo(out io.Writer, pools []*control.SystemCheckPoolInf
 		if verbose || pool.Unchecked() {
 			fmt.Fprintf(iw, "%+v\n", pool)
 
-			printSystemCheckTargetInfo(iw, pool.Targets)
+			if verbose {
+				printSystemCheckTargetInfo(iw, pool.Targets)
+			}
 		}
 	}
 }

@@ -625,7 +625,7 @@ func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckP
 				Status:    pbTarget.Status.String(),
 				StartTime: time.Unix(int64(pbTarget.Time.StartTime), 0),
 				StopTime:  stopTime(isTargetCheckInProgress(pbTarget.Status), pbTarget.Time.MiscTime),
-				Remaining: remainingDuration(isTargetCheckInProgress(pbTarget.Status), pbPool.Time.MiscTime),
+				Remaining: remainingDuration(isTargetCheckInProgress(pbTarget.Status), pbTarget.Time.MiscTime),
 				Stats: &SystemCheckStatistics{
 					NumTotal:    pbTarget.Inconsistency.Total,
 					NumRepaired: pbTarget.Inconsistency.Repaired,
@@ -635,15 +635,18 @@ func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckP
 			}
 			pools[pbPool.Uuid].Targets = append(pools[pbPool.Uuid].Targets, tInfo)
 		}
-		sortedTargets := pools[pbPool.Uuid].Targets
+		pools[pbPool.Uuid].RawRankInfo[getQueryPoolRank(pbPool)] = pbPool
+	}
+
+	for _, pool := range pools {
+		sortedTargets := pool.Targets
 		sort.Slice(sortedTargets, func(i, j int) bool {
 			if sortedTargets[i].Rank == sortedTargets[j].Rank {
 				return sortedTargets[i].Target < sortedTargets[j].Target
 			}
 			return sortedTargets[i].Rank < sortedTargets[j].Rank
 		})
-		pools[pbPool.Uuid].Targets = sortedTargets
-		pools[pbPool.Uuid].RawRankInfo[getQueryPoolRank(pbPool)] = pbPool
+		pool.Targets = sortedTargets
 	}
 
 	return pools
