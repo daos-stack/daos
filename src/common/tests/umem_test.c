@@ -45,6 +45,10 @@ struct test_arg {
 	int                      ta_chunk_nr;
 	d_list_t                 ta_prep_list;
 	d_list_t                 ta_flush_list;
+	jmp_buf                  ta_jmp;
+	int                      ta_flush_nr;
+	bool                     ta_in_chkpt;
+	bool                     ta_chkpt_waited;
 };
 
 static void
@@ -749,6 +753,114 @@ test_p2_evict(void **state)
 	umem_cache_free(&arg->ta_store);
 }
 
+/* Checkpoint racing with the eviction flushes of a page touched during the flush */
+static struct test_arg *race_arg;
+
+static void
+race_waitqueue_wait(void *wq, bool yield_only)
+{
+	if (race_arg == NULL || !race_arg->ta_in_chkpt)
+		return;
+
+	/* The checkpoint is waiting for the page flush, which can't complete from here */
+	race_arg->ta_chkpt_waited = true;
+	longjmp(race_arg->ta_jmp, 1);
+}
+
+static int
+race_flush_post(daos_handle_t fh, int err)
+{
+	struct test_arg *arg = (struct test_arg *)fh.cookie;
+	uint64_t         off = PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ;
+	uint64_t         id  = 2;
+	uint64_t         tx;
+
+	arg->ta_flush_nr++;
+	if (arg->ta_flush_nr == 1) {
+		/* tx2 and tx3 touch the page while the 1st flush (tx1) is in progress */
+		for (tx = 2; tx <= 3; tx++) {
+			touch_mem(arg, tx, off + (tx - 1) * UMEM_CACHE_CHUNK_SZ,
+				  UMEM_CACHE_CHUNK_SZ);
+			umem_cache_commit(&arg->ta_store, tx);
+		}
+	} else if (arg->ta_flush_nr == 2) {
+		/*
+		 * The 2nd flush (tx1-tx3) is in progress, tx2 is still not durable. A checkpoint
+		 * of ID 2 must wait for it, otherwise the WAL of tx2 would be reclaimed.
+		 */
+		arg->ta_in_chkpt = true;
+		if (setjmp(arg->ta_jmp) == 0)
+			umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id, NULL);
+		arg->ta_in_chkpt = false;
+	}
+
+	return 0;
+}
+
+static struct umem_store_ops race_ops = {
+    .so_waitqueue_create  = waitqueue_create,
+    .so_waitqueue_destroy = waitqueue_destroy,
+    .so_waitqueue_wait    = race_waitqueue_wait,
+    .so_waitqueue_wakeup  = waitqueue_wakeup,
+    .so_load              = store_load,
+    .so_flush_prep        = flush_prep,
+    .so_flush_copy        = flush_copy,
+    .so_flush_post        = race_flush_post,
+    .so_wal_id_cmp        = wal_id_cmp,
+};
+
+static void
+test_p2_evict_chkpt_race(void **state)
+{
+	struct test_arg        *arg = *state;
+	struct umem_cache      *cache;
+	struct umem_cache_range rg = {0};
+	struct umem_pin_handle *pin_hdl;
+	int                     rc;
+
+	arg->ta_store.stor_size  = UMEM_CACHE_PAGE_SZ * PAGE_NUM_MD;
+	arg->ta_store.stor_ops   = &race_ops;
+	arg->ta_store.store_type = DAOS_MD_BMEM;
+
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
+			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn,
+			      pagevnt_fn, NULL);
+	assert_rc_equal(rc, 0);
+
+	cache = arg->ta_store.cache;
+	assert_non_null(cache);
+
+	reset_arg(arg);
+	arg->ta_flush_nr     = 0;
+	arg->ta_in_chkpt     = false;
+	arg->ta_chkpt_waited = false;
+	race_arg             = arg;
+
+	/* Fill the cache, the first evictable page is the one to be evicted */
+	rg.cr_off  = cache->ca_base_off;
+	rg.cr_size = PAGE_NUM_MEM * UMEM_CACHE_PAGE_SZ;
+	rc         = umem_cache_load(&arg->ta_store, &rg, 1, false);
+	assert_rc_equal(rc, 0);
+
+	/* Only the page to be evicted is dirty */
+	touch_mem(arg, 1, PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ, UMEM_CACHE_CHUNK_SZ);
+	umem_cache_commit(&arg->ta_store, 1);
+
+	/* Pin an unmapped page to trigger the eviction, which flushes the page twice */
+	rg.cr_off  = cache->ca_base_off + PAGE_NUM_MEM * UMEM_CACHE_PAGE_SZ;
+	rg.cr_size = 100;
+	rc         = umem_cache_pin(&arg->ta_store, &rg, 1, false, &pin_hdl);
+	assert_rc_equal(rc, 0);
+	umem_cache_unpin(&arg->ta_store, pin_hdl);
+
+	assert_int_equal(arg->ta_flush_nr, 2);
+	assert_true(arg->ta_chkpt_waited);
+	check_lists_empty(arg);
+
+	race_arg = NULL;
+	umem_cache_free(&arg->ta_store);
+}
+
 static void
 test_tx_fail_no_abort(void **state)
 {
@@ -774,6 +886,8 @@ main(int argc, char **argv)
 	    {"UMEM009: Test phase2 eviction", test_p2_evict, NULL, NULL},
 	    {"UMEM010: Test TX failure with NO_ABORT on pmem", test_tx_fail_no_abort, setup_pmem,
 	     teardown_pmem},
+	    {"UMEM011: Test checkpoint racing with eviction flush", test_p2_evict_chkpt_race, NULL,
+	     NULL},
 	    {NULL, NULL, NULL, NULL}};
 
 	d_register_alt_assert(mock_assert);
