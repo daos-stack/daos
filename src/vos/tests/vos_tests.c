@@ -314,7 +314,6 @@ main(int argc, char **argv)
 exit_1:
 	vos_self_fini();
 exit_0:
-	free(filter);
 	daos_debug_fini();
 	return nr_failed;
 }
