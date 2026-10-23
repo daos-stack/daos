@@ -1068,6 +1068,7 @@ umem_open:
 		*ph = pop;
 		return 0;
 	}
+	CK_ERR_NUM_INC(ck);
 
 	D_ASSERT(rc != 0);
 
