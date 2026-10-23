@@ -2124,6 +2124,8 @@ struct umem_page_info {
 	uint64_t pi_last_checkpoint;
 	/** Highest transaction ID of writes to the page */
 	uint64_t pi_last_inflight;
+	/** pi_last_checkpoint before the ongoing flush started, valid when pi_io is set */
+	uint64_t  pi_flush_prev;
 	/** link to global LRU lists, or global free page list, or global pinned list */
 	d_list_t pi_lru_link;
 	/** link to global dirty page list, or wait commit list, or temporary list for flushing */
@@ -2484,6 +2486,7 @@ cache_unmap_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	pinfo->pi_mapped = 0;
 	pinfo->pi_loaded = 0;
 	pinfo->pi_last_inflight                  = 0;
+	pinfo->pi_flush_prev                     = 0;
 	pinfo->pi_last_checkpoint                = 0;
 	cache->ca_pages[pinfo->pi_pg_id].pg_info = NULL;
 
@@ -2892,6 +2895,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 		pinfo->pi_io = 1;
 		D_ASSERT(d_list_empty(&pinfo->pi_flush_link));
 		d_list_add_tail(&pinfo->pi_flush_link, &cache->ca_pgs_flushing);
+		pinfo->pi_flush_prev = pinfo->pi_last_checkpoint;
 		tot_pgs++;
 
 		if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_last_inflight, *chkpt_id) > 0)
@@ -3065,43 +3069,57 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	if (cache == NULL)
 		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
 
-	D_INIT_LIST_HEAD(&dirty_list);
-	if (d_list_empty(&cache->ca_pgs_dirty))
-		goto wait;
-
-	d_list_splice_init(&cache->ca_pgs_dirty, &dirty_list);
-	rc = flush_dirty_list(cache, &dirty_list, wait_cb, arg, &chkpt_id, stats);
-wait:
-	/* Wait for the evicting pages (if any) with lower checkpoint id */
+	/*
+	 * The checkpoint id must cover all the pages not yet durable: the dirty pages, and the
+	 * pages being flushed (e.g. evicting) whose snapshot may carry txs newer than the dirty ones.
+	 */
+	d_list_for_each_entry(pinfo, &cache->ca_pgs_dirty, pi_dirty_link) {
+		if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_last_inflight, chkpt_id) > 0)
+			chkpt_id = pinfo->pi_last_inflight;
+	}
 	d_list_for_each_entry(pinfo, &cache->ca_pgs_flushing, pi_flush_link) {
-		D_ASSERT(pinfo->pi_io == 1);
-		if (store->stor_ops->so_wal_id_cmp(store, chkpt_id, pinfo->pi_last_checkpoint) < 0)
-			continue;
-		page_wait_io(cache, pinfo);
-		goto wait;
+		if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_last_checkpoint, chkpt_id) > 0)
+			chkpt_id = pinfo->pi_last_checkpoint;
 	}
 
 	/*
-	 * A page being evicted (not on the dirty list) could be touched by a tx <= chkpt_id, and
-	 * page_flush_completion() then puts it back to the dirty list. Such a page must be flushed
-	 * before the checkpoint id covers that tx, otherwise the WAL of the tx would be reclaimed
-	 * while its changes only exist in DRAM. Pages dirtied by later txs are left alone, so the
-	 * retry is bounded by the pages being evicted when the checkpoint started.
+	 * Repeat until neither the dirty pages nor the flushing pages carry a tx <= chkpt_id.
+	 * A page being evicted could be touched by such a tx, and page_flush_completion() then puts
+	 * it back to the dirty list, so it must be flushed again before chkpt_id is reported as
+	 * covered, otherwise the WAL of the tx would be reclaimed while its changes only exist in
+	 * DRAM. Pages dirtied by later txs have pi_last_checkpoint > chkpt_id once flushed, so the
+	 * loop is bounded.
 	 */
-	if (rc == 0) {
+	D_INIT_LIST_HEAD(&dirty_list);
+	for (;;) {
+		/* Wait for the flushing pages whose snapshot may carry a tx <= chkpt_id */
+		d_list_for_each_entry(pinfo, &cache->ca_pgs_flushing, pi_flush_link) {
+			D_ASSERT(pinfo->pi_io == 1);
+			if (store->stor_ops->so_wal_id_cmp(store, chkpt_id, pinfo->pi_flush_prev) <
+			    0)
+				continue;
+			page_wait_io(cache, pinfo);
+			/* The list may have changed while waiting, rescan */
+			pinfo = NULL;
+			break;
+		}
+		if (pinfo == NULL)
+			continue;
+		if (rc != 0)
+			break;
+
 		d_list_for_each_entry_safe(pinfo, tmp, &cache->ca_pgs_dirty, pi_dirty_link) {
 			if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_last_checkpoint,
 							   chkpt_id) <= 0)
 				d_list_move_tail(&pinfo->pi_dirty_link, &dirty_list);
 		}
+		if (d_list_empty(&dirty_list))
+			break;
 
-		if (!d_list_empty(&dirty_list)) {
-			tmp_id = chkpt_id;
-			rc     = flush_dirty_list(cache, &dirty_list, wait_cb, arg, &tmp_id, stats);
-			goto wait;
-		}
+		/* Don't let the flush raise chkpt_id with txs dirtied after the checkpoint start */
+		tmp_id = chkpt_id;
+		rc     = flush_dirty_list(cache, &dirty_list, wait_cb, arg, &tmp_id, stats);
 	}
-
 	*out_id = chkpt_id;
 
 	return rc;
@@ -3236,6 +3254,7 @@ cache_flush_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	 * bumping the last checkpoint ID.
 	 */
 	D_ASSERT(is_page_dirty(pinfo));
+	pinfo->pi_flush_prev      = pinfo->pi_last_checkpoint;
 	pinfo->pi_last_checkpoint = pinfo->pi_last_inflight;
 
 	arg.wca_cache = cache;
