@@ -123,6 +123,8 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, ck, &coh);
 	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc,
 			   ck->ck_status.warnings_num);
+	/** vos_cont_open_ex() is fully instrumented, so rc is already accounted for in the
+	 * checker's status. */
 	dlck_status_set(&xa->status, &ck->ck_status);
 	if (rc == DER_SUCCESS) {
 		objs_process(coh, bndl);
@@ -198,6 +200,8 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 
 	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, ck, &poh);
 	POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_status.warnings_num);
+	/** vos_pool_open_metrics() is fully instrumented, so rc is already accounted for in the
+	 * checker's status. */
 	dlck_status_set(&xa->status, &ck->ck_status);
 	if (rc == DER_SUCCESS) {
 		conts_process(xa, poh, ck);

@@ -187,7 +187,7 @@ ck_report(void *arg, enum report_opts opts, const char *fmt, ...)
 #define CK_PRINTF(ck, fmt, ...)                                                                    \
 	do {                                                                                       \
 		if (IS_CHECKER(ck)) {                                                              \
-			(void)ck_common_printf(ck, "%s" fmt, (ck)->ck_prefix, __VA_ARGS__);        \
+			(void)ck_common_printf(ck, "%s" fmt, (ck)->ck_prefix, ##__VA_ARGS__);      \
 		}                                                                                  \
 	} while (0)
 
@@ -201,7 +201,7 @@ ck_report(void *arg, enum report_opts opts, const char *fmt, ...)
 #define CK_PRINTF_WO_PREFIX(ck, fmt, ...)                                                          \
 	do {                                                                                       \
 		if (IS_CHECKER(ck)) {                                                              \
-			(void)ck_common_printf(ck, fmt, __VA_ARGS__);                              \
+			(void)ck_common_printf(ck, fmt, ##__VA_ARGS__);                            \
 		}                                                                                  \
 	} while (0)
 
@@ -264,9 +264,9 @@ ck_report(void *arg, enum report_opts opts, const char *fmt, ...)
 #define CK_PRINTFL_RC(ck, rc, fmt, ...)                                                            \
 	do {                                                                                       \
 		if (rc == DER_SUCCESS) {                                                           \
-			CK_PRINTF(ck, fmt ": " CHECKER_OK_INFIX ".\n", __VA_ARGS__);               \
+			CK_PRINTF(ck, fmt ": " CHECKER_OK_INFIX ".\n", ##__VA_ARGS__);             \
 		} else {                                                                           \
-			CK_PRINTF(ck, CHECKER_ERROR_INFIX fmt ": " DF_RC "\n", __VA_ARGS__,        \
+			CK_PRINTF(ck, CHECKER_ERROR_INFIX fmt ": " DF_RC "\n", ##__VA_ARGS__,      \
 				  DP_RC(rc));                                                      \
 		}                                                                                  \
 	} while (0)

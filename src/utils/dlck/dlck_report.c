@@ -46,6 +46,7 @@ dlck_report_status(struct checker_status *st, struct checker *ck)
 				 st->warnings_num);
 
 		if (st->rc != DER_SUCCESS) {
+			CK_PRINTF_WO_PREFIX(ck, ", ");
 			CK_APPENDL_RC(ck, st->rc);
 		} else {
 			CK_APPENDL(ck, ".");
