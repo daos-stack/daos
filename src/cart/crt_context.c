@@ -513,7 +513,7 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 	cbinfo.cci_rc  = rc;
 
 	if (cbinfo.cci_rc == 0)
-		cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
+		cbinfo.cci_rc = rpc_priv->crp_reply_hdr.crh_status;
 
 	if (cbinfo.cci_rc != 0)
 		RPC_CWARN(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv, "failed, " DF_RC "\n",
@@ -1051,7 +1051,6 @@ crt_req_timeout_track(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_in_binheap == 1)
 		D_GOTO(out, rc = 0);
 
-	/* Set the deadline as RPC is starting to be tracked */
 	rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
 
 	/* add to binheap for timeout tracking */
@@ -1274,19 +1273,23 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		if (!print_once) {
 			print_once = true;
 
-			RPC_WARN(rpc_priv,
-				 "ctx_id %d, (status: %#x) timed out (%d seconds) [deadline: %d], "
-				 "target (%d:%d)\n",
-				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
-				 rpc_priv->crp_deadline_sec, rpc_priv->crp_pub.cr_ep.ep_rank,
-				 rpc_priv->crp_pub.cr_ep.ep_tag);
+			RPC_WARN(
+			    rpc_priv,
+			    "ctx_id %d, (status: %#x) timed out (%d seconds) [deadline_sec: " DF_U64
+			    "], "
+			    "target (%d:%d)\n",
+			    crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+			    rpc_priv->crp_deadline_sec, rpc_priv->crp_pub.cr_ep.ep_rank,
+			    rpc_priv->crp_pub.cr_ep.ep_tag);
 		} else {
-			RPC_INFO(rpc_priv,
-				 "ctx_id %d, (status: %#x) timed out (%d seconds) [deadline: %d], "
-				 "target (%d:%d)\n",
-				 crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
-				 rpc_priv->crp_deadline_sec, rpc_priv->crp_pub.cr_ep.ep_rank,
-				 rpc_priv->crp_pub.cr_ep.ep_tag);
+			RPC_INFO(
+			    rpc_priv,
+			    "ctx_id %d, (status: %#x) timed out (%d seconds) [deadline_sec: " DF_U64
+			    "], "
+			    "target (%d:%d)\n",
+			    crt_ctx->cc_idx, rpc_priv->crp_state, rpc_priv->crp_timeout_sec,
+			    rpc_priv->crp_deadline_sec, rpc_priv->crp_pub.cr_ep.ep_rank,
+			    rpc_priv->crp_pub.cr_ep.ep_tag);
 		}
 
 		crt_req_timeout_hdlr(rpc_priv);
