@@ -173,6 +173,12 @@ ck_common_printf(struct checker *ck, const char *fmt, ...)
 		CK_ERR_NUM_INC(ck);                                                                \
 	} while (0)
 
+#define CK_PRINTF_WARN(ck, fmt, ...)                                                               \
+	do {                                                                                       \
+		CK_PRINTF(ck, CHECKER_WARNING_INFIX fmt, ##__VA_ARGS__);                           \
+		CK_WARN_NUM_INC(ck);                                                               \
+	} while (0)
+
 /**
  * An assert while run without a checker. A checker message otherwise.
  *
