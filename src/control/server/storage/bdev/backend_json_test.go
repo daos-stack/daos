@@ -138,6 +138,47 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				},
 			},
 		},
+		"multiple controllers; hotplug enabled; bus-id range specified; non-zero pci domain": {
+			class:         storage.ClassNvme,
+			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			enableHotplug: true,
+			busidRange:    "0001:0x8a-0x8f",
+			expBdevCfgs:   multiCtrlrConfs(0, true),
+			expDaosCfgs: []*DaosConfig{
+				{
+					Method: storage.ConfSetHotplugBusidRange,
+					Params: &HotplugBusidRangeParams{
+						Domain: 0x0001, Begin: 138, End: 143,
+					},
+				},
+			},
+		},
+		"multiple controllers; hotplug and vmd enabled": {
+			class:         storage.ClassNvme,
+			enableVmd:     true,
+			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			enableHotplug: true,
+			expBdevCfgs:   multiCtrlrConfs(0, true),
+			expExtraSubsystems: []*SpdkSubsystem{
+				{
+					Name: "vmd",
+					Configs: []*SpdkSubsystemConfig{
+						{
+							Method: storage.ConfVmdEnable,
+							Params: &VmdEnableParams{},
+						},
+					},
+				},
+			},
+			expDaosCfgs: []*DaosConfig{
+				{
+					Method: storage.ConfSetHotplugBusidRange,
+					Params: &HotplugBusidRangeParams{
+						Begin: 0x00, End: 0xFF, IgnoreDomain: true,
+					},
+				},
+			},
+		},
 		"AIO file class; multiple files; zero file size": {
 			class:          storage.ClassFile,
 			devList:        []string{"/path/to/myfile", "/path/to/myotherfile"},

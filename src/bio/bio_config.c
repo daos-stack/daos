@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2021-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -116,14 +116,21 @@ config_entry_decoders[] = {
 };
 
 struct busid_range_info {
-	uint8_t	begin;
-	uint8_t	end;
+	uint32_t domain;
+	uint8_t  begin;
+	uint8_t  end;
+	/* Domain is ignored and only the bus-ID range is matched when VMD is enabled, replicating
+	 * the filter behavior used prior to the introduction of PCI domain awareness.
+	 */
+	bool     ignore_domain;
 };
 
-static struct spdk_json_object_decoder
-busid_range_decoders[] = {
-	{"begin", offsetof(struct busid_range_info, begin), spdk_json_decode_uint8},
-	{"end", offsetof(struct busid_range_info, end), spdk_json_decode_uint8},
+static struct spdk_json_object_decoder busid_range_decoders[] = {
+    {"domain", offsetof(struct busid_range_info, domain), spdk_json_decode_uint32, true},
+    {"begin", offsetof(struct busid_range_info, begin), spdk_json_decode_uint8},
+    {"end", offsetof(struct busid_range_info, end), spdk_json_decode_uint8},
+    {"ignore_domain", offsetof(struct busid_range_info, ignore_domain), spdk_json_decode_bool,
+     true},
 };
 
 struct accel_props_info {
@@ -818,23 +825,26 @@ static bool
 hotplug_filter_fn(const struct spdk_pci_addr *addr)
 {
 	if (hotplug_busid_range.end == 0 || hotplug_busid_range.begin > hotplug_busid_range.end) {
-		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %X, invalid range\n",
-			addr->bus);
+		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %04X:%02X, invalid range\n",
+			addr->domain, addr->bus);
 		return true; /* allow if no or invalid range specified */
 	}
 
-	if (addr->bus >= hotplug_busid_range.begin && addr->bus <= hotplug_busid_range.end) {
-		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %X\n", addr->bus);
+	if ((hotplug_busid_range.ignore_domain || addr->domain == hotplug_busid_range.domain) &&
+	    addr->bus >= hotplug_busid_range.begin && addr->bus <= hotplug_busid_range.end) {
+		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %04X:%02X\n", addr->domain,
+			addr->bus);
 		return true;
 	}
 
-	D_DEBUG(DB_MGMT, "hotplug filter refuse event on bus-id %X\n", addr->bus);
+	D_DEBUG(DB_MGMT, "hotplug filter refuse event on bus-id %04X:%02X\n", addr->domain,
+		addr->bus);
 	return false;
 }
 
 /**
  * Set hotplug bus-ID ranges in SPDK filter based on values read from JSON config file.
- * The PCI bus-ID ranges will be used to filter hotplug events.
+ * The PCI domain and bus-ID range will be used to filter hotplug events.
  *
  * \param[in]	nvme_conf	JSON config file path
  *
@@ -844,6 +854,7 @@ int
 bio_set_hotplug_filter(const char *nvme_conf)
 {
 	int	rc;
+	char	range[32];
 
 	rc = decode_daos_object(nvme_conf, NVME_CONF_SET_HOTPLUG_RANGE, busid_range_decoders,
 				SPDK_COUNTOF(busid_range_decoders), &hotplug_busid_range);
@@ -853,11 +864,17 @@ bio_set_hotplug_filter(const char *nvme_conf)
 		return rc;
 	}
 
-	D_INFO("'%s' read from config: %X-%X\n", NVME_CONF_SET_HOTPLUG_RANGE,
-	       hotplug_busid_range.begin, hotplug_busid_range.end);
+	if (hotplug_busid_range.ignore_domain)
+		snprintf(range, sizeof(range), "domain=any, bus-ids=%02X-%02X",
+			 hotplug_busid_range.begin, hotplug_busid_range.end);
+	else
+		snprintf(range, sizeof(range), "domain=%04X, bus-ids=%02X-%02X",
+			 hotplug_busid_range.domain, hotplug_busid_range.begin,
+			 hotplug_busid_range.end);
 
-	D_DEBUG(DB_MGMT, "calling spdk_nvme_pcie_set_hotplug_filter, %X-%X\n",
-		hotplug_busid_range.begin, hotplug_busid_range.end);
+	D_INFO("'%s' read from config: %s\n", NVME_CONF_SET_HOTPLUG_RANGE, range);
+
+	D_DEBUG(DB_MGMT, "calling spdk_nvme_pcie_set_hotplug_filter, %s\n", range);
 	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
 
 	return 0;

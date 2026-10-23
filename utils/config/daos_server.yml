@@ -486,8 +486,16 @@
 #    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
 #    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
+#    # On multi-root-complex platforms where each NUMA node/socket is enumerated under
+#    # a distinct, non-zero PCI domain (segment), prefix the range with a hexadecimal
+#    # domain and colon (defaults to domain 0x0000 if omitted). A single range covers
+#    # only one domain; if automatic derivation fails because the NUMA node's PCI buses
+#    # span more than one domain, engine startup will fail with an explicit error. Set
+#    # bdev_busid_range here to restrict hotplug to one of those domains (hotplug events
+#    # in the other domain will then be ignored), or set disable_hotplug instead.
 #    bdev_busid_range: 0x80-0x8f
 #    #bdev_busid_range: 128-143
+#    #bdev_busid_range: 0001:0x80-0x8f
 #
 #    # Optional explicit nvme-class bdev tier role assignments will
 #    # define the roles and responsibilities of this bdev tier.
@@ -669,8 +677,16 @@
 #    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
 #    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
+#    # On multi-root-complex platforms where each NUMA node/socket is enumerated under
+#    # a distinct, non-zero PCI domain (segment), prefix the range with a hexadecimal
+#    # domain and colon (defaults to domain 0x0000 if omitted). A single range covers
+#    # only one domain; if automatic derivation fails because the NUMA node's PCI buses
+#    # span more than one domain, engine startup will fail with an explicit error. Set
+#    # bdev_busid_range here to restrict hotplug to one of those domains (hotplug events
+#    # in the other domain will then be ignored), or set disable_hotplug instead.
 #    #bdev_busid_range: 0xd0-0xdf
 #    #bdev_busid_range: 208-223
+#    #bdev_busid_range: 0001:0xd0-0xdf
 #
 #    # See about bdev_roles above.
 #    bdev_roles: [wal, meta, data]
