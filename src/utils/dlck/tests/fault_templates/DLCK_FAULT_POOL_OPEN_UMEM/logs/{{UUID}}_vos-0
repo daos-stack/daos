@@ -1,0 +1,6 @@
+VOS file allocation: ok.
+Check pool:
+	path: /dev/shm/daos/{{UUID}}/vos-0
+	uuid: {{UUID}}
+- NVMe devices (if applicable): ok.
+- error: Open the pool: DER_INVAL(-1003): 'Invalid parameters'
