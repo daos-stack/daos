@@ -56,9 +56,9 @@ func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*
 	return hf, nil
 }
 
-type getStorageFn func(context.Context, logging.Logger, bool) (*control.HostStorage, error)
+type getStorageFn func(context.Context, logging.Logger, bool, bool, string) (*control.HostStorage, error)
 
-func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*control.HostStorage, error) {
+func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool, useTmpfsSCM bool, extMetadataPath string) (*control.HostStorage, error) {
 	var err error
 	snc := &scanNVMeCmd{
 		SkipPrep: skipPrep,
@@ -89,7 +89,11 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		return nil, errors.Wrap(err, "scm init")
 	}
 
-	scmResp, errScm := scanPMem(ssc)
+	// tmpfs and MD-on-SSD (external metadata) deployments don't need PMem, so a missing ipmctl
+	// binary shouldn't be fatal in those modes.
+	pmemInConfig := !useTmpfsSCM && extMetadataPath == ""
+
+	scmResp, errScm := scanPMem(ssc, pmemInConfig)
 	if errScm != nil {
 		return nil, errors.Wrap(errScm, "scm scan")
 	}
@@ -123,7 +127,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 
 	cmd.Debugf("fetched host fabric info on localhost: %+v", hf)
 
-	hs, err := getStorage(ctx, cmd.Logger, cmd.SkipPrep)
+	hs, err := getStorage(ctx, cmd.Logger, cmd.SkipPrep, cmd.UseTmpfsSCM, cmd.ExtMetadataPath)
 	if err != nil {
 		return nil, err
 	}
