@@ -6281,10 +6281,15 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 			next_utimes = dlsym(RTLD_NEXT, "utimes");
 			D_ASSERT(next_utimes != NULL);
 		}
-		times_us[0].tv_sec  = times[0].tv_sec;
-		times_us[0].tv_usec = times[0].tv_nsec / 1000;
-		times_us[1].tv_sec  = times[1].tv_sec;
-		times_us[1].tv_usec = times[1].tv_nsec / 1000;
+		if (times == NULL) {
+			FREE(parent_dir);
+			return next_utimes(path, NULL);
+		} else {
+			times_us[0].tv_sec  = times[0].tv_sec;
+			times_us[0].tv_usec = times[0].tv_nsec / 1000;
+			times_us[1].tv_sec  = times[1].tv_sec;
+			times_us[1].tv_usec = times[1].tv_nsec / 1000;
+		}
 		FREE(parent_dir);
 		return next_utimes(path, times_us);
 	}
