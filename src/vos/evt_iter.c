@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -168,8 +168,31 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 		}
 	}
 
-	if (cmp == 0)
+	if (cmp == 0) {
+		/*
+		 * The anchor extent may overlap several (disjoint, sorted) visible
+		 * entries, e.g. when aggregation or a different replica split the
+		 * extent the anchor was taken from. The binary search stops at an
+		 * arbitrary overlapping entry; resume from the one closest to the
+		 * iteration start, otherwise the entries in between are skipped.
+		 */
+		if (iter->it_forward) {
+			while (mid > 0) {
+				evt_ent2rect(&rect2, evt_ent_array_get(enta, mid - 1));
+				if (evt_rect_anchor_cmp(rect, &rect2) != 0)
+					break;
+				mid--;
+			}
+		} else {
+			while (mid < enta->ea_ent_nr - 1) {
+				evt_ent2rect(&rect2, evt_ent_array_get(enta, mid + 1));
+				if (evt_rect_anchor_cmp(rect, &rect2) != 0)
+					break;
+				mid++;
+			}
+		}
 		return mid;
+	}
 
 	/* We didn't find the entry.  Find next entry instead */
 	if (iter->it_forward) { /* Grab GT */
