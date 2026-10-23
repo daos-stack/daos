@@ -139,6 +139,7 @@ def scons():
 
     # Build test
     SConscript('placement/tests/SConscript')
+    SConscript('pool/tests/SConscript')
     SConscript('tests/SConscript')
 
     if prereqs.client_requested():
