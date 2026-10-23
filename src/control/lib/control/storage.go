@@ -445,12 +445,29 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 		sysReq := &SystemQueryReq{}
 		sysReq.SetTimeout(replaceMSCheckTimeout)
 		sysReq.AddHost(hosts[0])
+
+		rank := ranklist.Rank(req.Rank)
+		if rank == ranklist.NilRank {
+			// Auto-detect: restrict the search to ranks hosted on the target host.
+			hs, err := hostlist.CreateSet(hosts[0])
+			if err != nil {
+				return err
+			}
+			sysReq.SetHosts(hs)
+		} else {
+			// Explicit rank may be registered under a different host than the one
+			// replacing it (e.g. the original host is gone), so query by rank.
+			rs := ranklist.NewRankSet()
+			rs.Add(rank)
+			sysReq.SetRanks(rs)
+		}
+
 		sysResp, err := SystemQuery(ctx, rpcClient, sysReq)
 		if err != nil {
 			return err
 		}
 
-		return checkReplaceRank(hosts[0], ranklist.Rank(req.Rank), sysResp.Members)
+		return checkReplaceRank(hosts[0], rank, sysResp.Members)
 	}
 
 	reqHosts, err := common.ParseHostList(req.HostList, build.DefaultControlPort)

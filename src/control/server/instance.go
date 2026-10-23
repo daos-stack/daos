@@ -201,6 +201,9 @@ func (ei *EngineInstance) removeSocket() error {
 }
 
 func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (ranklist.Rank, bool, uint32, error) {
+	// Reset replaceRank state for instance regardless of how this function returns.
+	defer ei.replaceRank.Store(nil)
+
 	superblock := ei.getSuperblock()
 	if superblock == nil {
 		return ranklist.NilRank, false, 0, errors.New("nil superblock while determining rank")
@@ -238,9 +241,6 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		CheckMode:            ready.GetCheckMode(),
 		Replace:              isReplace,
 	}
-
-	// Reset replaceRank state for instance after joinSystem() has been attempted.
-	defer ei.replaceRank.Store(nil)
 
 	resp, err := ei.joinSystem(ctx, joinReq)
 	if err != nil {
