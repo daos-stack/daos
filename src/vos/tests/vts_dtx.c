@@ -68,6 +68,13 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_share_tbd_count = 0;
 	dth->dth_shares_inited = 1;
 
+	/*
+	 * On real engine, the DTX resync is always done (for the pool map version that the
+	 * DTX is generated against) before the stand-alone read on the leader can ignore the
+	 * non-committed DTX. Mark it as done for the container in the tests.
+	 */
+	vos_set_dtx_resync_version(coh, VTS_DTX_VER);
+
 	vos_dtx_rsrvd_init(dth);
 	rc = vos_dtx_attach(dth, false, false);
 	assert_rc_equal(rc, 0);

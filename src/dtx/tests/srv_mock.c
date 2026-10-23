@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,6 +70,13 @@ void
 dss_set_start_epoch(void)
 {
 	assert_true(false);
+}
+
+daos_epoch_t
+dss_get_start_epoch(void)
+{
+	assert_true(false);
+	return 0;
 }
 
 int
