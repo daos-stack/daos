@@ -281,7 +281,4 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 int
 vos_obj_check_discard(struct vos_container *cont, daos_unit_oid_t oid, uint64_t flags);
 
-int
-vos_obj_has_other_users(struct vos_container *cont, daos_unit_oid_t oid, bool *other_users);
-
 #endif
