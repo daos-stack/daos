@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,7 +16,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
@@ -709,26 +708,11 @@ func (cmd *systemRebuildOpCmd) execute(opCode control.PoolRebuildOpCode, force b
 		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
-	// Print successful results before returning any error.
-	respPoolsSuccess := []string{}
-	for _, res := range resp.Results {
-		if !res.Errored {
-			respPoolsSuccess = append(respPoolsSuccess, res.ID)
-		}
-	}
-	msg := fmt.Sprintf("System-rebuild %s request succeeded", opCode)
-	pStr := common.Pluralise("pool", len(respPoolsSuccess))
-	if cmd.Verbose {
-		cmd.Infof("%s on %d %s %v", msg, len(respPoolsSuccess), pStr, respPoolsSuccess)
-	} else {
-		cmd.Infof("%s on %d %s", msg, len(respPoolsSuccess), pStr)
-	}
+	var out strings.Builder
+	err = pretty.PrintSystemRebuildManageResp(&out, resp, cmd.Verbose)
+	cmd.Info(out.String())
 
-	if resp.Errors() != nil {
-		return resp.Errors()
-	}
-
-	return nil
+	return err
 }
 
 type systemRebuildStartCmd struct {
