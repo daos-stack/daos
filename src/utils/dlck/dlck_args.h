@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -119,7 +119,6 @@ struct dlck_control {
 	struct checker          checker;
 	/** out */
 	char                   *log_dir;
-	unsigned                warnings_num;
 };
 
 /** helper definitions */

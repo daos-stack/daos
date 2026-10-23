@@ -588,8 +588,9 @@ dlck_engine_stop(struct dlck_engine *engine)
 struct dlck_exec {
 	struct dlck_ult *ults;
 	void           **ult_args;
-	void            *custom;
+	void            *alloc_arg;
 	arg_free_fn_t    arg_free_fn;
+	void            *free_arg;
 };
 
 /**
@@ -620,7 +621,7 @@ dlck_engine_join_all_no_error(struct dlck_engine *engine, struct dlck_exec *de)
 
 			(void)ABT_thread_free(&de->ults[i].thread);
 		}
-		(void)de->arg_free_fn(de->custom, &de->ult_args[i]);
+		(void)de->arg_free_fn(de->free_arg, &de->ult_args[i]);
 	}
 
 	D_FREE(de->ult_args);
@@ -662,7 +663,7 @@ dlck_engine_targets_start(struct dlck_engine *engine, dlck_ult_func exec_one,
 
 	for (int i = 0; i < engine->targets; ++i) {
 		/** prepare arguments */
-		rc = arg_alloc_fn(engine, i, de->custom, &de->ult_args[i]);
+		rc = arg_alloc_fn(engine, i, de->alloc_arg, &de->ult_args[i]);
 		if (rc != DER_SUCCESS) {
 			goto fail_join_and_free;
 		}
@@ -716,10 +717,7 @@ dlck_engine_targets_stop(struct dlck_engine *engine, struct dlck_exec *de)
 			goto fail_join_and_free;
 		}
 
-		rc = de->arg_free_fn(de->custom, &de->ult_args[i]);
-		if (rc != 0) {
-			goto fail_join_and_free;
-		}
+		de->arg_free_fn(de->free_arg, &de->ult_args[i]);
 	}
 
 	D_FREE(de->ult_args);
@@ -737,15 +735,16 @@ fail_join_and_free:
 
 int
 dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
-		     arg_alloc_fn_t arg_alloc_fn, void *custom, arg_free_fn_t arg_free_fn,
-		     struct checker *ck)
+		     arg_alloc_fn_t arg_alloc_fn, void *alloc_arg, arg_free_fn_t arg_free_fn,
+		     void *free_arg, struct checker *ck)
 {
 	struct dlck_exec de = {0};
 	int              rc;
 
 	/** initialize batch */
 	de.arg_free_fn = arg_free_fn;
-	de.custom      = custom;
+	de.alloc_arg   = alloc_arg;
+	de.free_arg    = free_arg;
 
 	CK_PRINT(ck, "Start targets... ");
 	rc = dlck_engine_targets_start(engine, exec_one, arg_alloc_fn, &de);
@@ -775,29 +774,26 @@ dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_pt
 	xa->ctrl   = ctrl_ptr;
 	xa->engine = engine;
 	xa->xs     = &engine->xss[idx];
-	xa->rc     = DER_SUCCESS;
 
 	*output_arg = xa;
 
 	return DER_SUCCESS;
 }
 
-int
-dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg)
+void
+dlck_engine_xstream_arg_free(void *sts_ptr, void **arg)
 {
-	struct dlck_control *ctrl = ctrl_ptr;
-	struct xstream_arg  *xa   = *arg;
-	int                  rc;
+	struct checker_status *sts = sts_ptr;
+	struct xstream_arg    *xa  = *arg;
 
 	if (xa == NULL) {
-		return DER_SUCCESS;
+		return;
 	}
 
-	rc = xa->rc;
-	dlck_uadd_no_overflow(ctrl->warnings_num, xa->warnings_num, &ctrl->warnings_num);
+	sts[xa->xs->tgt_id].rc           = xa->status.rc;
+	sts[xa->xs->tgt_id].warnings_num = xa->status.warnings_num;
+	sts[xa->xs->tgt_id].errors_num   = xa->status.errors_num;
 
 	D_FREE(*arg);
 	*arg = NULL;
-
-	return rc;
 }

@@ -106,7 +106,7 @@ int
 dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult);
 
 typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *custom, void **arg);
-typedef int (*arg_free_fn_t)(void *custom, void **arg);
+typedef void (*arg_free_fn_t)(void *custom, void **arg);
 
 /**
  * \brief Run the \p exec_one function as a set of ULTs on all the daos_io_* execution streams
@@ -120,8 +120,9 @@ typedef int (*arg_free_fn_t)(void *custom, void **arg);
  * \param[in]	engine		Engine to run the created ULTs.
  * \param[in]	exec_one	Function to run in the ULTs.
  * \param[in]	arg_alloc_fn	Function to allocate arguments for an ULT.
- * \param[in]	custom		Custom parameters for \p arg_alloc_fn and \p arg_free_fn function.
+ * \param[in]	alloc_arg	Custom parameters for \p arg_alloc_fn.
  * \param[in]	arg_free_fn	Function to free arguments.
+ * \param[in]	free_arg	Custom parameters for \p arg_free_fn.
  * \param[in]	checker		Checker.
  *
  * \retval DER_SUCCESS	Success.
@@ -129,8 +130,8 @@ typedef int (*arg_free_fn_t)(void *custom, void **arg);
  */
 int
 dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
-		     arg_alloc_fn_t arg_alloc_fn, void *input_arg, arg_free_fn_t arg_free_fn,
-		     struct checker *ck);
+		     arg_alloc_fn_t arg_alloc_fn, void *alloc_arg, arg_free_fn_t arg_free_fn,
+		     void *free_arg, struct checker *ck);
 
 #define DLCK_XSTREAM_PROGRESS_END UINT_MAX
 
@@ -146,22 +147,8 @@ struct xstream_arg {
 	struct dlck_xstream *xs;     /** The execution stream the ULT is run in. */
 	/** out */
 	volatile unsigned    progress __attribute__((__aligned__(CACHELINE_SIZE)));
-	int                  rc; /** return code */
-	unsigned             warnings_num;
+	struct checker_status status;
 };
-
-static inline void
-dlck_xstream_set_rc(struct xstream_arg *xa, int rc)
-{
-	if (rc == DER_SUCCESS) {
-		return;
-	}
-
-	/** do not overwrite the first error found */
-	if (xa->rc == DER_SUCCESS) {
-		xa->rc = rc;
-	}
-}
 
 static inline void
 dlck_uadd_no_overflow(unsigned a, unsigned b, unsigned *result)
@@ -170,6 +157,35 @@ dlck_uadd_no_overflow(unsigned a, unsigned b, unsigned *result)
 	if (__builtin_uadd_overflow(a, b, result)) {
 		*result = UINT_MAX;
 	}
+}
+
+static inline void
+dlck_status_set_rc(struct checker_status *status, int rc)
+{
+	if (rc == DER_SUCCESS) {
+		return;
+	}
+
+	/** do not overwrite the first error found */
+	if (status->rc == DER_SUCCESS) {
+		status->rc = rc;
+	}
+}
+
+#define DLCK_UINT_ADD_AND_CLEAR(SUM, ADDEND)                                                       \
+	do {                                                                                       \
+		dlck_uadd_no_overflow((SUM), (ADDEND), &(SUM));                                    \
+		(ADDEND) = 0;                                                                      \
+	} while (0)
+
+static inline void
+dlck_status_set(struct checker_status *status, struct checker_status *cks)
+{
+	DLCK_UINT_ADD_AND_CLEAR(status->warnings_num, cks->warnings_num);
+	DLCK_UINT_ADD_AND_CLEAR(status->errors_num, cks->errors_num);
+
+	dlck_status_set_rc(status, cks->rc);
+	cks->rc = DER_SUCCESS;
 }
 
 /**
@@ -192,10 +208,8 @@ dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_pt
  *
  * \param[out]		ctrl_ptr	Control state to collect stats in.
  * \param[in,out]	arg		ULT arguments to process and free.
- *
- * \return The return code for the ULT.
  */
-int
+void
 dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg);
 
 /**
