@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -107,6 +107,10 @@ func TestDmg_JsonOutput(t *testing.T) {
 				return // These commands query via http directly
 			case "system cleanup":
 				testArgs = append(testArgs, "hostname")
+			case "system erase":
+				// Avoid blocking on WaitForStorageFormatReady against the mock
+				// invoker, which never reports engines as awaiting format.
+				testArgs = append(testArgs, "--no-wait")
 			case "check set-policy":
 				testArgs = append(testArgs, "POOL_BAD_LABEL:IGNORE")
 			case "system set-attr":

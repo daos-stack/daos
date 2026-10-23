@@ -1169,6 +1169,31 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 	return resp, nil
 }
 
+// StorageFormatStatus reports cached per-engine format status without
+// performing a format.
+func (cs *ControlService) StorageFormatStatus(ctx context.Context, req *ctlpb.StorageFormatStatusReq) (*ctlpb.StorageFormatStatusResp, error) {
+	if req == nil {
+		return nil, errNilReq
+	}
+	if cs.srvCfg == nil {
+		return nil, errNoSrvCfg
+	}
+
+	instances := cs.harness.Instances()
+	resp := new(ctlpb.StorageFormatStatusResp)
+	resp.EngineStatus = make([]*ctlpb.EngineFormatStatus, 0, len(instances))
+
+	for _, engine := range instances {
+		resp.EngineStatus = append(resp.EngineStatus, &ctlpb.EngineFormatStatus{
+			Instanceidx:    engine.Index(),
+			AwaitingFormat: engine.isAwaitingFormat(),
+			State:          engine.LocalFormatState(),
+		})
+	}
+
+	return resp, nil
+}
+
 // StorageNvmeRebind rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
 func (cs *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeRebindReq) (*ctlpb.NvmeRebindResp, error) {
 	if req == nil {
