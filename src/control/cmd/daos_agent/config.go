@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -135,7 +136,7 @@ type Config struct {
 	ExcludeFabricIfaces common.StringSet           `yaml:"exclude_fabric_ifaces,omitempty"`
 	IncludeFabricIfaces common.StringSet           `yaml:"include_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig        `yaml:"fabric_ifaces,omitempty"`
-	ProviderIdx         uint                       // TODO SRS-31: Enable with multiprovider functionality
+	ProviderIdx         uint                       `yaml:"provider_idx"`
 	Telemetry           TelemetryConfig            `yaml:",inline"`
 }
 
