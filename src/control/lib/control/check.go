@@ -475,17 +475,63 @@ func (r *SystemCheckReport) Resolution() string {
 	return msg
 }
 
+// SystemCheckStatistics contains statistics about the inconsistencies discovered by the checker.
+type SystemCheckStatistics struct {
+	NumTotal    uint32 `json:"num_inconsist_total"`
+	NumRepaired uint32 `json:"num_inconsist_repaired"`
+	NumIgnored  uint32 `json:"num_inconsist_ignored"`
+	NumFailed   uint32 `json:"num_inconsist_failed"`
+}
+
+// SystemCheckTargetInfo contains check info for an individual target.
+type SystemCheckTargetInfo struct {
+	Rank      ranklist.Rank          `json:"rank"`
+	Target    uint32                 `json:"target"`
+	Status    string                 `json:"status"`
+	StartTime time.Time              `json:"-"`
+	StopTime  time.Time              `json:"-"`
+	Remaining time.Duration          `json:"-"`
+	Stats     *SystemCheckStatistics `json:"statistics"`
+}
+
+func startTimeString(t time.Time) string {
+	return common.FormatTime(t)
+}
+
+func stopTimeString(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return common.FormatTime(t)
+}
+
+func (t *SystemCheckTargetInfo) MarshalJSON() ([]byte, error) {
+	type toJSON SystemCheckTargetInfo
+	return json.Marshal(&struct {
+		*toJSON
+		StartTime string  `json:"start_time"`
+		StopTime  string  `json:"stop_time,omitempty"`
+		Remaining float64 `json:"remaining,omitempty"`
+	}{
+		toJSON:    (*toJSON)(t),
+		StartTime: startTimeString(t.StartTime),
+		StopTime:  stopTimeString(t.StopTime),
+		Remaining: t.Remaining.Seconds(),
+	})
+}
+
 type rawRankMap map[ranklist.Rank]*mgmtpb.CheckQueryPool
 
 type SystemCheckPoolInfo struct {
-	RawRankInfo rawRankMap    `json:"-"`
-	UUID        string        `json:"uuid"`
-	Label       string        `json:"label,omitempty"`
-	Status      string        `json:"status"`
-	Phase       string        `json:"phase"`
-	StartTime   time.Time     `json:"-"`
-	StopTime    time.Time     `json:"-"`
-	Remaining   time.Duration `json:"-"`
+	RawRankInfo rawRankMap               `json:"-"`
+	UUID        string                   `json:"uuid"`
+	Label       string                   `json:"label,omitempty"`
+	Status      string                   `json:"status"`
+	Phase       string                   `json:"phase"`
+	StartTime   time.Time                `json:"-"`
+	StopTime    time.Time                `json:"-"`
+	Remaining   time.Duration            `json:"-"`
+	Targets     []*SystemCheckTargetInfo `json:"targets"`
 }
 
 func (p *SystemCheckPoolInfo) MarshalJSON() ([]byte, error) {
@@ -499,13 +545,8 @@ func (p *SystemCheckPoolInfo) MarshalJSON() ([]byte, error) {
 	}{
 		toJSON:    (*toJSON)(p),
 		RankCount: len(p.RawRankInfo),
-		StartTime: common.FormatTime(p.StartTime),
-		StopTime: func() string {
-			if p.StopTime.IsZero() {
-				return ""
-			}
-			return common.FormatTime(p.StopTime)
-		}(),
+		StartTime: startTimeString(p.StartTime),
+		StopTime:  stopTimeString(p.StopTime),
 		Remaining: p.Remaining.Seconds(),
 	})
 }
@@ -540,20 +581,24 @@ func isPoolCheckInProgress(status chkpb.CheckPoolStatus) bool {
 	return status == chkpb.CheckPoolStatus_CPS_CHECKING || status == chkpb.CheckPoolStatus_CPS_PENDING
 }
 
-func remainingDuration(status chkpb.CheckPoolStatus, seconds uint64) time.Duration {
-	if !isPoolCheckInProgress(status) {
+func remainingDuration(inProgress bool, seconds uint64) time.Duration {
+	if !inProgress {
 		// Done - no time remaining
 		return 0
 	}
 	return time.Duration(seconds) * time.Second
 }
 
-func stopTime(status chkpb.CheckPoolStatus, timestamp uint64) time.Time {
-	if isPoolCheckInProgress(status) {
+func stopTime(inProgress bool, timestamp uint64) time.Time {
+	if inProgress {
 		// Hasn't stopped yet
 		return time.Time{}
 	}
 	return time.Unix(int64(timestamp), 0)
+}
+
+func isTargetCheckInProgress(status chkpb.CheckInstStatus) bool {
+	return status == chkpb.CheckInstStatus_CIS_RUNNING
 }
 
 func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckPoolInfo {
@@ -569,11 +614,39 @@ func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckP
 				Status:    pbPool.Status.String(),
 				Phase:     pbPool.Phase.String(),
 				StartTime: time.Unix(int64(pbPool.Time.StartTime), 0),
-				StopTime:  stopTime(pbPool.Status, pbPool.Time.MiscTime),
-				Remaining: remainingDuration(pbPool.Status, pbPool.Time.MiscTime),
+				StopTime:  stopTime(isPoolCheckInProgress(pbPool.Status), pbPool.Time.MiscTime),
+				Remaining: remainingDuration(isPoolCheckInProgress(pbPool.Status), pbPool.Time.MiscTime),
 			}
 		}
+		for _, pbTarget := range pbPool.Targets {
+			tInfo := &SystemCheckTargetInfo{
+				Rank:      ranklist.Rank(pbTarget.Rank),
+				Target:    pbTarget.Target,
+				Status:    pbTarget.Status.String(),
+				StartTime: time.Unix(int64(pbTarget.Time.StartTime), 0),
+				StopTime:  stopTime(isTargetCheckInProgress(pbTarget.Status), pbTarget.Time.MiscTime),
+				Remaining: remainingDuration(isTargetCheckInProgress(pbTarget.Status), pbTarget.Time.MiscTime),
+				Stats: &SystemCheckStatistics{
+					NumTotal:    pbTarget.Inconsistency.Total,
+					NumRepaired: pbTarget.Inconsistency.Repaired,
+					NumIgnored:  pbTarget.Inconsistency.Ignored,
+					NumFailed:   pbTarget.Inconsistency.Failed,
+				},
+			}
+			pools[pbPool.Uuid].Targets = append(pools[pbPool.Uuid].Targets, tInfo)
+		}
 		pools[pbPool.Uuid].RawRankInfo[getQueryPoolRank(pbPool)] = pbPool
+	}
+
+	for _, pool := range pools {
+		sortedTargets := pool.Targets
+		sort.Slice(sortedTargets, func(i, j int) bool {
+			if sortedTargets[i].Rank == sortedTargets[j].Rank {
+				return sortedTargets[i].Target < sortedTargets[j].Target
+			}
+			return sortedTargets[i].Rank < sortedTargets[j].Rank
+		})
+		pool.Targets = sortedTargets
 	}
 
 	return pools
