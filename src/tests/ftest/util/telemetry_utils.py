@@ -390,7 +390,9 @@ class TelemetryUtils():
         "engine_net_hg_resp_recv",
         "engine_net_hg_mr_copies",
         "engine_net_hg_req_sent",
-        "engine_net_hg_active_rpcs"]
+        "engine_net_hg_active_rpcs",
+        "engine_net_hg_inflight",
+        "engine_net_hg_cancel_inflight"]
     ENGINE_RANK_METRICS = [
         "engine_rank"]
     ENGINE_NVME_HEALTH_METRICS = [
