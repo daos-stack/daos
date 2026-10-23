@@ -108,10 +108,7 @@ main(int argc, char **argv)
 	int opt       = 0;
 	int index     = 0;
 	int otype;
-	int keys;
-#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-	char filter[1024];
-#endif
+	int                  keys;
 	const char          *vos_command    = NULL;
 	const char          *short_options  = "apcdglzni:mXA:S:hf:e:tCwMr:";
 	static struct option long_options[] = {
@@ -175,10 +172,11 @@ main(int argc, char **argv)
 		case 'f':
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 			{
-				/** Add wildcards for easier filtering */
-				snprintf(filter, sizeof(filter), "*%s*", optarg);
-				cmocka_set_test_filter(filter);
-				printf("Test filter: %s\n", filter);
+			char filter[1024];
+			/** Add wildcards for easier filtering */
+			snprintf(filter, sizeof(filter), "*%s*", optarg);
+			cmocka_set_test_filter(filter);
+			printf("Test filter: %s\n", filter);
 			}
 #else
 			D_PRINT("filter not enabled\n");
