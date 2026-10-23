@@ -854,6 +854,7 @@ int
 bio_set_hotplug_filter(const char *nvme_conf)
 {
 	int	rc;
+	char	range[32];
 
 	rc = decode_daos_object(nvme_conf, NVME_CONF_SET_HOTPLUG_RANGE, busid_range_decoders,
 				SPDK_COUNTOF(busid_range_decoders), &hotplug_busid_range);
@@ -863,11 +864,17 @@ bio_set_hotplug_filter(const char *nvme_conf)
 		return rc;
 	}
 
-	D_INFO("'%s' read from config: %04X:%02X-%02X\n", NVME_CONF_SET_HOTPLUG_RANGE,
-	       hotplug_busid_range.domain, hotplug_busid_range.begin, hotplug_busid_range.end);
+	if (hotplug_busid_range.ignore_domain)
+		snprintf(range, sizeof(range), "domain=any, bus-ids=%02X-%02X",
+			 hotplug_busid_range.begin, hotplug_busid_range.end);
+	else
+		snprintf(range, sizeof(range), "domain=%04X, bus-ids=%02X-%02X",
+			 hotplug_busid_range.domain, hotplug_busid_range.begin,
+			 hotplug_busid_range.end);
 
-	D_DEBUG(DB_MGMT, "calling spdk_nvme_pcie_set_hotplug_filter, %04X:%02X-%02X\n",
-		hotplug_busid_range.domain, hotplug_busid_range.begin, hotplug_busid_range.end);
+	D_INFO("'%s' read from config: %s\n", NVME_CONF_SET_HOTPLUG_RANGE, range);
+
+	D_DEBUG(DB_MGMT, "calling spdk_nvme_pcie_set_hotplug_filter, %s\n", range);
 	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
 
 	return 0;

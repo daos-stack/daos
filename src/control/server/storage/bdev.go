@@ -667,10 +667,10 @@ func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numa
 		return 0, 0, 0, errors.New("nil topology")
 	}
 
-	// Take the lowest and highest buses in all of the ranges for an engine following the
-	// assumption that bus-IDs assigned to each NUMA node will always be contiguous and
-	// belong to a single PCI domain.
-	// TODO: add each range individually if unsure about assumption
+	// Take the lowest and highest buses across all host bridges on the NUMA node,
+	// following the assumption that bus-IDs assigned to each NUMA node will always be
+	// contiguous and belong to a single PCI domain. Every range is checked below
+	// (rather than only the first and last) to confirm this assumption holds.
 
 	nodes := topo.NUMANodes
 	if len(nodes) <= int(numaNodeIdx) {
@@ -684,17 +684,25 @@ func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numa
 			numaNodeIdx)
 	}
 
-	lowAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[0].LowAddress
-	highAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[len(buses)-1].HighAddress
-
-	if lowAddr.Domain != highAddr.Domain {
-		return 0, 0, 0, errors.Errorf(
-			"numa node %d spans multiple PCI domains (%04x-%04x), unable to derive a "+
-				"single hotplug bus-id range; set bdev_busid_range explicitly",
-			numaNodeIdx, lowAddr.Domain, highAddr.Domain)
+	// Check every range rather than only the first and last, as the enumeration order of
+	// the host bridges is not guaranteed to be sorted by domain (or bus).
+	domain := buses[0].LowAddress.Domain
+	lowBus, highBus := buses[0].LowAddress.Bus, buses[0].HighAddress.Bus
+	for _, bus := range buses {
+		for _, addr := range []hardware.PCIAddress{bus.LowAddress, bus.HighAddress} {
+			if addr.Domain != domain {
+				return 0, 0, 0, errors.Errorf(
+					"numa node %d spans multiple PCI domains (%04x and %04x), "+
+						"unable to derive a single hotplug bus-id range; set "+
+						"bdev_busid_range explicitly",
+					numaNodeIdx, domain, addr.Domain)
+			}
+		}
+		lowBus = min(lowBus, bus.LowAddress.Bus)
+		highBus = max(highBus, bus.HighAddress.Bus)
 	}
 
-	return lowAddr.Domain, lowAddr.Bus, highAddr.Bus, nil
+	return domain, lowBus, highBus, nil
 }
 
 // filterBdevScanResponse removes controllers that are not in the input list from the scan response.
