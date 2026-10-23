@@ -253,9 +253,9 @@ Additionally, there are several optional command-line options:
 | --container=<label\|uuid\>     | container label or uuid to open                   |
 | --sys-name=<name\>             | DAOS system name                                  |
 | --foreground                   | run in foreground                                 |
-| --thread-count=<count>         | Number of threads to use                          |
-| --max-background=<count>       | Hard limit on outstanding background requests     |
-| --congestion-threshold=<count> | Background requests at which the kernel throttles |
+| --thread-count=<coun\t>         | Number of threads to use                          |
+| --max-background=<count\>       | Hard limit on outstanding background requests     |
+| --congestion-threshold=<count\> | Background requests at which the kernel throttles |
 | --multi-user                   | Run in multi user mode                            |
 | --read-only                    | Mount in read-only mode                           |
 
