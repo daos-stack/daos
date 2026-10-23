@@ -734,6 +734,7 @@ advance_stage(vos_iter_type_t type, unsigned int acts, vos_iter_param_t *param,
 	      int next_stage, uint32_t *probe_flags)
 {
 	int	rc = ITER_CONTINUE;
+	bool    gone = false;
 
 	if (acts & VOS_ITER_CB_EXIT)
 		D_GOTO(out, rc = ITER_EXIT);
@@ -741,6 +742,7 @@ advance_stage(vos_iter_type_t type, unsigned int acts, vos_iter_param_t *param,
 	if (anchors->ia_probe_level != 0) {
 		anchors->ia_probe_level = 0;
 		acts |= VOS_ITER_CB_YIELD;
+		gone = true;
 	}
 
 	set_reprobe(type, acts, anchors, param->ip_flags);
@@ -754,7 +756,11 @@ advance_stage(vos_iter_type_t type, unsigned int acts, vos_iter_param_t *param,
 		D_GOTO(out, rc = ITER_PROBE);
 	}
 
-	if (acts & (VOS_ITER_CB_SKIP | VOS_ITER_CB_DELETE)) {
+	if (gone) {
+		/* Our entry is gone; the GE re-probe lands on one not yet visited */
+		*probe_flags = 0;
+		*stage       = VOS_ITER_STAGE_FILTER;
+	} else if (acts & (VOS_ITER_CB_SKIP | VOS_ITER_CB_DELETE)) {
 		*probe_flags = VOS_ITER_PROBE_NEXT;
 		*stage = VOS_ITER_STAGE_FILTER;
 		rc = ITER_NEXT;
