@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3436,8 +3436,17 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 	for (i = 0; i < n_idx_to_check; i++) {
 		uint32_t	idx = idx_to_check[i];
 		uint64_t	incarnation = incarnations[idx];
+		const char     *uri         = "<none>";
 
 		rank = ranks->rl_ranks[idx];
+		if (uris != NULL && uris[idx] != NULL)
+			uri = uris[idx];
+
+		D_DEBUG(DB_ALL,
+			"group replace existing rank: rank=%u incoming_inc=%lu incoming_uri=%s "
+			"note=swim_check_only_uri_cache_not_explicitly_refreshed\n",
+			rank, (unsigned long)incarnation, uri);
+
 		rc = crt_swim_rank_check(grp_priv, rank, incarnation);
 		if (rc != 0)
 			D_ERROR("Failed to check SWIM state of rank %u: "DF_RC"\n", rank,
