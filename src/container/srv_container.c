@@ -92,8 +92,7 @@ cont_destroyer_init(struct cont_destroyer *destroyer)
 	int rc;
 
 	D_INIT_LIST_HEAD(&destroyer->csd_tasks);
-	destroyer->csd_workers = 0;
-	destroyer->csd_stop    = false;
+	destroyer->csd_stop = false;
 
 	rc = ABT_mutex_create(&destroyer->csd_mutex);
 	if (rc != ABT_SUCCESS) {
@@ -1876,88 +1875,53 @@ out:
 	return rc;
 }
 
-/* Maximum number of worker ULTs running concurrently per destroyer. */
-#define CONT_DESTROYER_MAX_WORKERS 8
-
 /* Delay bounds (ms) between attempts of a failing destroy task. */
 #define CONT_DESTROYER_BACKOFF_MIN 1000
 #define CONT_DESTROYER_BACKOFF_MAX 60000
 
-/*
- * Return the first PENDING task that is due at \a now, or NULL. In the latter
- * case, *next_due is the earliest due time among PENDING tasks, or UINT64_MAX
- * if there is none.
- */
-static struct cont_destroyer_task *
-cont_destroyer_next_task(struct cont_destroyer *destroyer, uint64_t now, uint64_t *next_due)
-{
-	struct cont_destroyer_task *task;
+/* Longest nap (ms) of a worker waiting out a backoff. */
+#define CONT_DESTROYER_SLEEP_MAX 1000
 
-	*next_due = UINT64_MAX;
-	d_list_for_each_entry(task, &destroyer->csd_tasks, csdt_link) {
-		if (task->csdt_state != CONT_DESTROYER_PENDING)
-			continue;
-		if (task->csdt_next_try <= now)
-			return task;
-		if (task->csdt_next_try < *next_due)
-			*next_due = task->csdt_next_try;
-	}
-	return NULL;
-}
-
-/* Wait on csd_cond for at most \a ms milliseconds. Must hold csd_mutex. */
+/* Must hold csd_mutex. */
 static void
-cont_destroyer_wait(struct cont_destroyer *destroyer, uint64_t ms)
+cont_destroyer_task_put(struct cont_destroyer_task *task)
 {
-	struct timespec deadline;
-
-	/* ABT_cond_timedwait uses CLOCK_REALTIME absolute time. */
-	clock_gettime(CLOCK_REALTIME, &deadline);
-	deadline.tv_sec += ms / 1000;
-	deadline.tv_nsec += (ms % 1000) * NSEC_PER_MSEC;
-	if (deadline.tv_nsec >= NSEC_PER_SEC) {
-		deadline.tv_sec++;
-		deadline.tv_nsec -= NSEC_PER_SEC;
-	}
-	ABT_cond_timedwait(destroyer->csd_cond, destroyer->csd_mutex, &deadline);
+	D_ASSERT(task->csdt_ref > 0);
+	if (--task->csdt_ref == 0)
+		D_FREE(task);
 }
 
 /*
- * Execute due PENDING tasks until no PENDING task is left (or the destroyer is
- * stopped). Spawned on demand by cont_destroyer_request, up to
- * CONT_DESTROYER_MAX_WORKERS.
+ * Execute one task until it succeeds (or the destroyer is stopped). Spawned
+ * by cont_destroyer_request, one per task.
  *
  * Once a container is DESTROYING, nothing but this destroyer will ever finish
  * it, so a failed attempt is always retried (with exponential backoff) rather
- * than reported as final.
+ * than reported as final. The backoff is waited out in short naps so that
+ * csd_stop and csdt_next_try changes are noticed promptly.
  */
 static void
 cont_destroyer_worker(void *arg)
 {
-	struct cont_svc       *svc       = arg;
-	struct cont_destroyer *destroyer = &svc->cs_destroyer;
+	struct cont_destroyer_task *task      = arg;
+	struct cont_svc            *svc       = task->csdt_svc;
+	struct cont_destroyer      *destroyer = &svc->cs_destroyer;
+	uint64_t                    now;
+	int                         rc;
 
 	ABT_mutex_lock(destroyer->csd_mutex);
 	while (!destroyer->csd_stop) {
-		struct cont_destroyer_task *task;
-		uint64_t                    now = daos_getmtime_coarse();
-		uint64_t                    next_due;
-		int                         rc;
-
-		task = cont_destroyer_next_task(destroyer, now, &next_due);
-		if (task == NULL) {
-			if (next_due == UINT64_MAX)
-				break;
-			/*
-			 * As a simplification, we may end up having more workers waiting for less
-			 * PENDING tasks. If necessary, we might be able to improve this by tracking
-			 * the number of PENDING tasks.
-			 */
-			cont_destroyer_wait(destroyer, next_due - now);
+		now = daos_getmtime_coarse();
+		if (task->csdt_next_try > now) {
+			ABT_mutex_unlock(destroyer->csd_mutex);
+			rc = dss_sleep(min(task->csdt_next_try - now,
+					   (uint64_t)CONT_DESTROYER_SLEEP_MAX));
+			if (rc != 0)
+				ABT_thread_yield();
+			ABT_mutex_lock(destroyer->csd_mutex);
 			continue;
 		}
 
-		task->csdt_state = CONT_DESTROYER_RUNNING;
 		ABT_mutex_unlock(destroyer->csd_mutex);
 
 		rc = cont_destroy_post(svc, task->csdt_cont_uuid);
@@ -1965,37 +1929,32 @@ cont_destroyer_worker(void *arg)
 		ABT_mutex_lock(destroyer->csd_mutex);
 		task->csdt_rc = rc;
 		task->csdt_attempts++;
-		if (rc == 0) {
-			task->csdt_state = CONT_DESTROYER_DONE;
-			if (task->csdt_waiters == 0) {
-				d_list_del(&task->csdt_link);
-				D_FREE(task);
-			}
-		} else {
-			DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN, DB_MD, DLOG_ERR, rc,
-				  DF_CONT ": destroy attempt %u failed, retrying in %u ms",
-				  DP_CONT(svc->cs_pool_uuid, task->csdt_cont_uuid),
-				  task->csdt_attempts, task->csdt_backoff);
-			task->csdt_state    = CONT_DESTROYER_PENDING;
-			task->csdt_next_try = daos_getmtime_coarse() + task->csdt_backoff;
-			task->csdt_backoff =
-			    min(task->csdt_backoff * 2, (uint32_t)CONT_DESTROYER_BACKOFF_MAX);
-			/* Let the other tasks go first. */
-			d_list_move_tail(&task->csdt_link, &destroyer->csd_tasks);
-		}
+		if (rc == 0)
+			break;
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN, DB_MD, DLOG_ERR, rc,
+			  DF_CONT ": destroy attempt %u failed, retrying in %u ms",
+			  DP_CONT(svc->cs_pool_uuid, task->csdt_cont_uuid), task->csdt_attempts,
+			  task->csdt_backoff);
+		task->csdt_next_try = daos_getmtime_coarse() + task->csdt_backoff;
+		task->csdt_backoff  = min(task->csdt_backoff * 2, (uint32_t)CONT_DESTROYER_BACKOFF_MAX);
 		ABT_cond_broadcast(destroyer->csd_cond);
 	}
 
-	destroyer->csd_workers--;
+	d_list_del(&task->csdt_link);
+	cont_destroyer_task_put(task);
 	ABT_cond_broadcast(destroyer->csd_cond);
 	ABT_mutex_unlock(destroyer->csd_mutex);
 }
 
 /*
- * Queue a destroy task for cont_uuid (if no existing task for the same UUID).
- * If wait is true, block until a new attempt of the task completes and return
- * its result; otherwise return immediately. A failed attempt does not remove
- * the task: the destroyer keeps retrying it in the background.
+ * Queue a destroy task for cont_uuid (if no existing task for the same UUID)
+ * and start its worker. If wait is true, block until a new attempt of the task
+ * completes and return its result; otherwise return immediately. A failed
+ * attempt does not remove the task: the worker keeps retrying it in the
+ * background.
+ *
+ * Callers run during step-up or with a leader reference, so this never races
+ * with cont_destroyer_stop.
  */
 static int
 cont_destroyer_request(struct cont_svc *svc, uuid_t cont_uuid, bool wait)
@@ -2006,11 +1965,7 @@ cont_destroyer_request(struct cont_svc *svc, uuid_t cont_uuid, bool wait)
 	int                         rc = 0;
 
 	ABT_mutex_lock(destroyer->csd_mutex);
-
-	if (destroyer->csd_stop) {
-		rc = -DER_NOTLEADER;
-		goto out;
-	}
+	D_ASSERT(!destroyer->csd_stop);
 
 	/* Is there an existing task? */
 	d_list_for_each_entry(task, &destroyer->csd_tasks, csdt_link)
@@ -2022,66 +1977,36 @@ cont_destroyer_request(struct cont_svc *svc, uuid_t cont_uuid, bool wait)
 		rc = -DER_NOMEM;
 		goto out;
 	}
+	task->csdt_svc = svc;
 	uuid_copy(task->csdt_cont_uuid, cont_uuid);
-	task->csdt_state   = CONT_DESTROYER_PENDING;
+	task->csdt_ref     = 1; /* the worker's */
 	task->csdt_backoff = CONT_DESTROYER_BACKOFF_MIN;
 	d_list_add_tail(&task->csdt_link, &destroyer->csd_tasks);
 
-	/*
-	 * Spawn a worker on demand. If we are already at the limit, an existing
-	 * worker will pick the task up.
-	 */
-	if (destroyer->csd_workers < CONT_DESTROYER_MAX_WORKERS) {
-		/* We track workers by destroyer->csd_workers instead of ULT handles. */
-		rc = dss_ult_create(cont_destroyer_worker, svc, DSS_XS_SYS, 0, 0, NULL);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_CONT ": failed to start destroyer worker",
-				 DP_CONT(svc->cs_pool_uuid, cont_uuid));
-			d_list_del(&task->csdt_link);
-			D_FREE(task);
-			goto out;
-		}
-		destroyer->csd_workers++;
-	} else {
-		ABT_cond_broadcast(destroyer->csd_cond);
+	rc = dss_ult_create(cont_destroyer_worker, task, DSS_XS_SYS, 0, 0, NULL);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to start destroyer worker",
+			 DP_CONT(svc->cs_pool_uuid, cont_uuid));
+		d_list_del(&task->csdt_link);
+		D_FREE(task);
+		goto out;
 	}
 
 found:
 	if (!wait)
 		goto out;
 
-	/* If the task is PENDING, make sure it is ready to run immediately. */
-	if (task->csdt_state == CONT_DESTROYER_PENDING &&
-	    task->csdt_next_try > daos_getmtime_coarse()) {
+	/* Make the task due now. Its worker notices within CONT_DESTROYER_SLEEP_MAX. */
+	if (task->csdt_next_try > daos_getmtime_coarse())
 		task->csdt_next_try = 0;
-		ABT_cond_broadcast(destroyer->csd_cond);
-	}
 
-	/*
-	 * Hold a reference of the task, and wait for it to become DONE or
-	 * attempted at least once, so that we have a valid result.
-	 */
-	task->csdt_waiters++;
+	/* Wait for a new attempt to complete, so that we have a valid result. */
+	task->csdt_ref++;
 	attempts = task->csdt_attempts;
-	while (task->csdt_state != CONT_DESTROYER_DONE && task->csdt_attempts == attempts) {
-		if (destroyer->csd_stop) {
-			rc = -DER_NOTLEADER;
-			break;
-		}
+	while (task->csdt_attempts == attempts)
 		ABT_cond_wait(destroyer->csd_cond, destroyer->csd_mutex);
-	}
-	if (rc == 0)
-		rc = task->csdt_rc;
-	task->csdt_waiters--;
-	if (task->csdt_waiters == 0 &&
-	    (task->csdt_state == CONT_DESTROYER_DONE ||
-	     (destroyer->csd_stop && task->csdt_state == CONT_DESTROYER_PENDING))) {
-		d_list_del(&task->csdt_link);
-		D_FREE(task);
-		/* Let cont_destroyer_stop observe the task list draining. */
-		if (destroyer->csd_stop)
-			ABT_cond_broadcast(destroyer->csd_cond);
-	}
+	rc = task->csdt_rc;
+	cont_destroyer_task_put(task);
 
 out:
 	ABT_mutex_unlock(destroyer->csd_mutex);
@@ -2160,7 +2085,6 @@ cont_destroyer_start(struct cont_svc *svc)
 
 	ABT_mutex_lock(destroyer->csd_mutex);
 	D_ASSERT(!destroyer->csd_stop);
-	D_ASSERT(destroyer->csd_workers == 0);
 	D_ASSERT(d_list_empty(&destroyer->csd_tasks));
 	ABT_mutex_unlock(destroyer->csd_mutex);
 
@@ -2194,27 +2118,13 @@ cont_destroyer_start(struct cont_svc *svc)
 static void
 cont_destroyer_stop(struct cont_svc *svc)
 {
-	struct cont_destroyer      *destroyer = &svc->cs_destroyer;
-	struct cont_destroyer_task *task;
-	struct cont_destroyer_task *tmp;
+	struct cont_destroyer *destroyer = &svc->cs_destroyer;
 
 	ABT_mutex_lock(destroyer->csd_mutex);
 	destroyer->csd_stop = true;
 	ABT_cond_broadcast(destroyer->csd_cond);
 
-	/* Wait for all workers to exit. */
-	while (destroyer->csd_workers > 0)
-		ABT_cond_wait(destroyer->csd_cond, destroyer->csd_mutex);
-
-	/* Free tasks with no waiters. */
-	d_list_for_each_entry_safe(task, tmp, &destroyer->csd_tasks, csdt_link) {
-		if (task->csdt_waiters == 0) {
-			d_list_del(&task->csdt_link);
-			D_FREE(task);
-		}
-	}
-
-	/* Wait for waiters to free their tasks. */
+	/* Wait for all workers to exit; each unlinks its task on the way out. */
 	while (!d_list_empty(&destroyer->csd_tasks))
 		ABT_cond_wait(destroyer->csd_cond, destroyer->csd_mutex);
 

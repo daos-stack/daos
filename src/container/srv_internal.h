@@ -56,30 +56,27 @@ dsm_tls_get()
 	return tls;
 }
 
-enum cont_destroyer_task_state {
-	CONT_DESTROYER_PENDING, /* queued (possibly backing off), no worker has claimed it yet */
-	CONT_DESTROYER_RUNNING, /* a worker is destroying it */
-	CONT_DESTROYER_DONE,    /* destroyed successfully */
-};
-
-/* Tracker for one container destroy operation */
+/*
+ * Tracker for one container destroy operation, executed by its own worker ULT.
+ * Unlinked from cont_destroyer.csd_tasks when the worker exits; freed when the
+ * last reference (the worker's or a waiter's) is dropped.
+ */
 struct cont_destroyer_task {
-	d_list_t csdt_link;
-	uuid_t   csdt_cont_uuid;
-	int      csdt_state;
-	int      csdt_rc;
-	int      csdt_waiters;
-	uint32_t csdt_attempts; /* number of completed attempts */
-	uint32_t csdt_backoff;  /* delay before the next attempt (ms) */
-	uint64_t csdt_next_try; /* earliest time of the next attempt (monotonic ms) */
+	d_list_t         csdt_link;
+	struct cont_svc *csdt_svc;
+	uuid_t           csdt_cont_uuid;
+	int              csdt_ref;
+	int              csdt_rc;       /* result of the latest attempt */
+	uint32_t         csdt_attempts; /* number of completed attempts */
+	uint32_t         csdt_backoff;  /* delay before the next attempt (ms) */
+	uint64_t         csdt_next_try; /* earliest time of the next attempt (monotonic ms) */
 };
 
 /* Executor for later steps of container destroy operations */
 struct cont_destroyer {
-	d_list_t  csd_tasks; /* cont_destroyer_task */
+	d_list_t  csd_tasks; /* cont_destroyer_task, one per live worker */
 	ABT_mutex csd_mutex;
-	ABT_cond  csd_cond;
-	int       csd_workers;
+	ABT_cond  csd_cond;  /* attempt completions and worker exits */
 	bool      csd_stop;
 };
 
