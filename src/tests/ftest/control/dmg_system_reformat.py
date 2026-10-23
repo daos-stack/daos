@@ -102,18 +102,36 @@ class DmgSystemReformatTest(TestWithServers):
 
         self.log.info("Perform dmg storage format on all system ranks:")
 
-        # Calling storage format after system stop too soon would fail, so
-        # wait 10 sec and retry up to 4 times.
+        # Record the start time before the first format attempt so that engine-start
+        # detection below covers engines that joined during an earlier retry, even if
+        # that attempt's dmg client call locally timed out before the server-side
+        # format/join sequence actually completed (see MD-on-SSD timing note below).
+        start_time = journalctl_time()
+
+        # Calling storage format after system stop too soon would fail, so wait 10 sec
+        # and retry up to 4 times. Use a generous per-call client timeout since
+        # MD-on-SSD NVMe format plus engine startup/join can legitimately take longer
+        # than the previous 30 sec default, especially under loaded CI hardware; a
+        # client-side timeout here does not necessarily mean the server-side format
+        # failed, it may just still be in progress.
         count = 0
         while count < 4:
             try:
-                dmg.storage_format()
+                dmg.storage_format(timeout=90)
                 if dmg.result.exit_status != 0:
                     self.fail(
                         "Issues performing storage format: {}".format(
                             dmg.result.stderr_text))
                 break
             except CommandFailure as error:
+                if "code = 509" in str(error) or "invoked on a running system" in str(error):
+                    # A previous attempt's client-side call timed out locally but the
+                    # server-side format/join actually completed in the background;
+                    # this later retry is correctly rejected because the system is
+                    # already up. Treat this as success rather than exhausting retries.
+                    self.log.info(
+                        "Storage format already completed by a prior attempt: %s", error)
+                    break
                 self.log.info("Storage format failed. Wait 10 sec and retry. %s", error)
                 count += 1
                 time.sleep(10)
@@ -121,7 +139,6 @@ class DmgSystemReformatTest(TestWithServers):
         # Check that engine starts up again on every host, not just the last one, since
         # a multi-replica MS configuration spans more than one host.
         self.log.info("<SERVER> Waiting for the engines to start")
-        start_time = journalctl_time()
         for server_manager in self.server_managers:
             server_manager.manager.timestamps["start"] = start_time
             server_manager.detect_engine_start()
