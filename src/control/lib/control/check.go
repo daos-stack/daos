@@ -498,7 +498,8 @@ func (p *SystemCheckPoolInfo) MarshalJSON() ([]byte, error) {
 		Remaining float64 `json:"remaining,omitempty"`
 	}{
 		toJSON:    (*toJSON)(p),
-		RankCount: len(p.RawRankInfo),
+		// The first shard is always the fake one for leader status.
+		RankCount: len(p.RawRankInfo) - 1,
 		StartTime: common.FormatTime(p.StartTime),
 		StopTime: func() string {
 			if p.StopTime.IsZero() {
@@ -522,7 +523,7 @@ func (p *SystemCheckPoolInfo) String() string {
 		timeStr = fmt.Sprintf(", started: %s%s", common.FormatTime(p.StartTime), remainingOrStopTime)
 	}
 	return fmt.Sprintf("Pool %s: %d ranks, status: %s, phase: %s%s",
-		p.UUID, len(p.RawRankInfo), p.Status, p.Phase, timeStr)
+		p.UUID, len(p.RawRankInfo) - 1, p.Status, p.Phase, timeStr)
 }
 
 func (p *SystemCheckPoolInfo) Unchecked() bool {
