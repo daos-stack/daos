@@ -4,4 +4,13 @@ Start the engine... ok.
 Create pools directories... ok.
 Start targets... ok.
 Wait for targets to stop...
-error: Wait for targets to stop: DER_INVAL(-1003): 'Invalid parameters'
+error: [0] pool      {{UUID}} check result: DER_INVAL(-1003): 'Invalid parameters'
+Wait for targets to stop: ok.
+Stop the engine... ok.
+===============================
+Targets:
+===============================
+[0] result: error: DER_INVAL(-1003): 'Invalid parameters'
+===============================
+Total: error: DER_INVAL(-1003): 'Invalid parameters'
+===============================

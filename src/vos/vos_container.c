@@ -411,11 +411,12 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 		CK_PRINTF(ck, "uuid... ");
 		if (uuid_compare(args.ca_cont_df->cd_id, co_uuid) != 0 ||
 		    DAOS_FAIL_CHECK(DAOS_FAULT_CONT_OPEN_UUID)) {
-			CK_APPENDFL_ERR(ck, "mismatch (" DF_UUIDF " != " DF_UUIDF ")\n",
+			CK_APPENDFL_ERR(ck, "mismatch (" DF_UUIDF " != " DF_UUIDF ")",
 					DP_UUID(args.ca_cont_df->cd_id), DP_UUID(co_uuid));
 			D_GOTO(exit, rc = -DER_ID_MISMATCH);
+		} else {
+			CK_APPENDL_OK(ck);
 		}
-		CK_APPENDL_OK(ck);
 
 		const bool error_on_non_zero_padding =
 		    (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR);
@@ -430,8 +431,9 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 				CK_APPENDFL_WARN(ck, CK_NON_ZERO_FMT(PRIx32),
 						 args.ca_cont_df->cd_pad);
 			}
+		} else {
+			CK_APPENDL_OK(ck);
 		}
-		CK_APPENDL_OK(ck);
 
 		CK_PRINTF(ck, "Padding (cd_used)... ");
 		if (args.ca_cont_df->cd_used != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_CONT_INV_USED)) {
@@ -443,8 +445,9 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 				CK_APPENDFL_WARN(ck, CK_NON_ZERO_FMT(PRIx64),
 						 args.ca_cont_df->cd_used);
 			}
+		} else {
+			CK_APPENDL_OK(ck);
 		}
-		CK_APPENDL_OK(ck);
 
 		CK_PRINTF(ck, "Reserved (cd_reserv_upgrade)... ");
 		if (args.ca_cont_df->cd_reserv_upgrade != 0 ||
@@ -457,8 +460,9 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 				CK_APPENDFL_WARN(ck, CK_NON_ZERO_FMT(PRIx64),
 						 args.ca_cont_df->cd_reserv_upgrade);
 			}
+		} else {
+			CK_APPENDL_OK(ck);
 		}
-		CK_APPENDL_OK(ck);
 
 		CK_PRINTF(ck, CK_OBJ_TREE_STR "...\n");
 		CK_INDENT(ck, rc = dbtree_check_inplace(&args.ca_cont_df->cd_obj_root,

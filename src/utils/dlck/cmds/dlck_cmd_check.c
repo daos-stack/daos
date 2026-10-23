@@ -21,7 +21,8 @@
 #define REPORT_RESULT(CK, PREFIX_FMT, TGT_ID, UUID, RC, WARN_NUM)                                  \
 	do {                                                                                       \
 		if (RC == DER_SUCCESS && WARN_NUM > 0) {                                           \
-			CK_PRINTF(CK, PREFIX_FMT CHECKER_OK_INFIX DLCK_WARNINGS_NUM_FMT ".\n",     \
+			CK_PRINTF(CK,                                                              \
+				  PREFIX_FMT ": " CHECKER_OK_INFIX DLCK_WARNINGS_NUM_FMT ".\n",    \
 				  TGT_ID, DP_UUID(UUID), WARN_NUM);                                \
 		} else {                                                                           \
 			CK_PRINTFL_RC(CK, RC, PREFIX_FMT, TGT_ID, DP_UUID(UUID));                  \

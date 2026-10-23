@@ -2,7 +2,7 @@ VOS file allocation: ok.
 Check pool:
 	path: {{STORAGE}}/{{UUID}}/vos-0
 	uuid: {{UUID}}
-- NVMe devices (if applicable): ok.
+- NVMe devices (if applicable)... ok.
 - Open the pool: ok.
 - Magic... ok.
 - Version... ok.
@@ -12,7 +12,8 @@ Check pool:
 -- Tree features... ok.
 -- Node (off=0xa7a4c0)... ok.
 - Containers tree: ok.
-- Pool extension (off=0x400550)... ok.
+- Pool extension (off=0x400550)...
+- Pool extension (off=0x400550): ok.
 - Garbage collector's tree...
 -- Tree class... ok.
 -- Tree features... ok.
@@ -24,7 +25,6 @@ Check container:
 - uuid... ok.
 - Padding (cd_pad)... ok.
 - Padding (cd_used)... warning: non-zero (0)
-ok.
 - Reserved (cd_reserv_upgrade)... ok.
 - Object index tree...
 -- Tree class... ok.
