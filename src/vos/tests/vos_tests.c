@@ -175,7 +175,6 @@ main(int argc, char **argv)
 		case 'f':
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 			{
-			char filter[1024];
 			/** Add wildcards for easier filtering */
 			snprintf(filter, sizeof(filter), "*%s*", optarg);
 			cmocka_set_test_filter(filter);
@@ -315,7 +314,6 @@ main(int argc, char **argv)
 exit_1:
 	vos_self_fini();
 exit_0:
-	free(filter);
 	daos_debug_fini();
 	return nr_failed;
 }
