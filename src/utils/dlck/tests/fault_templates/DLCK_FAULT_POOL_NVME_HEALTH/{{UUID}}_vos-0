@@ -2,4 +2,4 @@ VOS file allocation: ok.
 Check pool:
 	path: {{STORAGE}}/{{UUID}}/vos-0
 	uuid: {{UUID}}
-- error: NVMe devices (if applicable): DER_INVAL(-1003): 'Invalid parameters'
+- NVMe devices (if applicable)... error: DER_INVAL(-1003): 'Invalid parameters'
