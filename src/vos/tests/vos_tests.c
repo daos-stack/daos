@@ -103,10 +103,10 @@ run_all_tests(int keys)
 int
 main(int argc, char **argv)
 {
-	int	rc = 0;
-	int	nr_failed = 0;
-	int	opt = 0;
-	int	index = 0;
+	int                  rc        = 0;
+	int                  nr_failed = 0;
+	int                  opt       = 0;
+	int                  index     = 0;
 	int                  otype;
 	int                  keys;
 	const char          *vos_command    = NULL;
@@ -168,17 +168,15 @@ main(int argc, char **argv)
 #else
 			D_PRINT("filter not enabled\n");
 #endif
-
 			break;
 		case 'f':
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 			{
-				/** Add wildcards for easier filtering */
-				char filter[sizeof(optarg) + 2];
-
-				sprintf(filter, "*%s*", optarg);
-				cmocka_set_test_filter(filter);
-				printf("Test filter: %s\n", filter);
+			char filter[1024];
+			/** Add wildcards for easier filtering */
+			snprintf(filter, sizeof(filter), "*%s*", optarg);
+			cmocka_set_test_filter(filter);
+			printf("Test filter: %s\n", filter);
 			}
 #else
 			D_PRINT("filter not enabled\n");
