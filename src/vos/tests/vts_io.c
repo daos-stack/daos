@@ -11,6 +11,10 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venaktesan@intel.com>
  */
+#ifndef VOS_STANDALONE
+#error "VOS_STANDALONE required"
+#endif
+
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "vts_io.h"
@@ -1770,7 +1774,7 @@ iter_delete_yield(struct iter_delete_survivors_arg *arg)
 
 	assert_success(vos_obj_punch(arg->ctx->tc_co_hdl, deleted->oid, arg->delete_epoch, 0, 0,
 				     NULL, 0, NULL, NULL));
-	daos_fail_loc_set(DAOS_VOS_PMEM_FREE_POISON | DAOS_FAIL_ALWAYS);
+	daos_fail_loc_set(DAOS_MEM_PMEM_FREE_POISON | DAOS_FAIL_ALWAYS);
 	assert_success(vos_aggregate(arg->ctx->tc_co_hdl, &epr, NULL, NULL,
 				     VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE));
 	while (!vos_gc_pool_idle(arg->ctx->tc_po_hdl))
@@ -1911,9 +1915,9 @@ iter_delete_setup(void **state)
 		if (rc != 0)
 			goto out;
 	}
-	daos_fail_value_set(0xb1);
 	if (config->defer_delete_after == 0)
-		daos_fail_loc_set(DAOS_VOS_PMEM_FREE_POISON | DAOS_FAIL_ALWAYS);
+		daos_fail_loc_set(DAOS_MEM_PMEM_FREE_POISON | DAOS_FAIL_ALWAYS);
+	daos_fail_value_set(0x21);
 	return 0;
 out:
 	io_state = arg;
