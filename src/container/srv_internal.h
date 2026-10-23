@@ -75,7 +75,14 @@ struct cont_track_eph_leader {
 	d_list_t                 cte_list;
 	int                      cte_servers_num;
 	uint32_t                 cte_deleted : 1;
-	/* TS to check for ec_agg_eph sluggish warning */
+	/* TS of the last successful boundary push to the ranks */
+	uint64_t                 cte_refresh_ts;
+	/* Start of the period in which EC boundary progress is accounted for sluggish
+	 * warnings: set when this leader starts tracking the container, moved forward
+	 * while rebuilding or reclaim is disabled. A boundary jump larger than this
+	 * period was not observed by this leader (it was inherited from rdb at leader
+	 * step-up or made during rebuild), so it is not a real stall.
+	 */
 	uint64_t                 cte_ec_agg_warn_slug_ts;
 };
 
