@@ -2124,6 +2124,8 @@ struct umem_page_info {
 	uint64_t pi_last_checkpoint;
 	/** Highest transaction ID of writes to the page */
 	uint64_t pi_last_inflight;
+	/** Lowest transaction ID of the writes not covered by the last flush, valid when dirty */
+	uint64_t  pi_first_inflight;
 	/** link to global LRU lists, or global free page list, or global pinned list */
 	d_list_t pi_lru_link;
 	/** link to global dirty page list, or wait commit list, or temporary list for flushing */
@@ -2484,6 +2486,7 @@ cache_unmap_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	pinfo->pi_mapped = 0;
 	pinfo->pi_loaded = 0;
 	pinfo->pi_last_inflight                  = 0;
+	pinfo->pi_first_inflight                 = 0;
 	pinfo->pi_last_checkpoint                = 0;
 	cache->ca_pages[pinfo->pi_pg_id].pg_info = NULL;
 
@@ -2651,6 +2654,8 @@ touch_page(struct umem_store *store, struct umem_page_info *pinfo, uint64_t wr_t
 	}
 
 	D_ASSERT(pinfo->pi_loaded == 1);
+	if (!is_page_dirty(pinfo))
+		pinfo->pi_first_inflight = wr_tx;
 	pinfo->pi_last_inflight = wr_tx;
 
 	/* Don't change the pi_dirty_link while the page is being flushed */
@@ -3090,7 +3095,7 @@ wait:
 	 */
 	if (rc == 0) {
 		d_list_for_each_entry_safe(pinfo, tmp, &cache->ca_pgs_dirty, pi_dirty_link) {
-			if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_last_inflight,
+			if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_first_inflight,
 							   chkpt_id) <= 0)
 				d_list_move_tail(&pinfo->pi_dirty_link, &dirty_list);
 		}
