@@ -22,6 +22,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install basic tools
 ARG DAOS_LAB_CA_FILE_URL
+ARG ZSCALER_CA_FILE
 
 # Accept DAOS_NO_PROXY at build time
 ARG DAOS_NO_PROXY
