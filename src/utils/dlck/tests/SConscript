@@ -1,3 +1,7 @@
+# Copyright 2026 Hewlett Packard Enterprise Development LP
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 """Build versioned object store tests"""
 
 
@@ -34,9 +38,7 @@ def build_dlck_test_helper(henv):
 def build_dlck_args_ut(henv):
     """Build dlck_args_ut"""
     henv.Append(OBJPREFIX="dlck_args_ut_")
-    henv.Append(CPPPATH=[Dir('../../../').srcnode()])
     henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=argp_failure'])
-    henv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     henv.require('cmocka')
 
     libs = [
@@ -54,12 +56,61 @@ def build_dlck_args_ut(henv):
     henv.d_test_program('dlck_args_ut', srcs, LIBS=libs)
 
 
+def build_dlck_checker_common_ut(henv):
+    """Build dlck_checker_common_ut"""
+    henv.require('cmocka')
+
+    henv.d_test_program('dlck_checker_common_ut', ['dlck_checker_common_ut.c'],
+                        LIBS=['gurt', 'cmocka'])
+
+
+def build_dlck_checker_main_ut(henv):
+    """Build dlck_checker_main_ut"""
+    henv.Append(OBJPREFIX="dlck_checker_main_ut_")
+    henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=ABT_mutex_create', '-Wl,--wrap=ABT_mutex_free',
+                                 '-Wl,--wrap=ABT_mutex_lock', '-Wl,--wrap=ABT_mutex_unlock',
+                                 '-Wl,--wrap=vfprintf', '-Wl,--wrap=__vfprintf_chk',
+                                 '-Wl,--wrap=fflush', '-Wl,--wrap=d_calloc',
+                                 '-Wl,--wrap=d_free'])
+    henv.require('argobots', 'cmocka')
+
+    libs = ['gurt', 'daos_common_pmem', 'cmocka', 'uuid', 'abt']
+
+    srcs = [
+        'dlck_checker_main_ut.c',
+        'dlck_checker_ut_mock.c',
+        '../dlck_checker.c',
+    ]
+    henv.d_test_program('dlck_checker_main_ut', srcs, LIBS=libs)
+
+
+def build_dlck_checker_worker_ut(henv):
+    """Build dlck_checker_worker_ut"""
+    henv.Append(OBJPREFIX="dlck_checker_worker_ut_")
+    henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=fopen', '-Wl,--wrap=fclose', '-Wl,--wrap=d_asprintf2',
+                                 '-Wl,--wrap=vfprintf', '-Wl,--wrap=__vfprintf_chk',
+                                 '-Wl,--wrap=fflush',
+                                 '-Wl,--wrap=d_calloc', '-Wl,--wrap=d_free'])
+    henv.require('argobots', 'cmocka')
+
+    libs = ['gurt', 'daos_common_pmem', 'cmocka', 'uuid', 'abt']
+    srcs = [
+        'dlck_checker_worker_ut.c',
+        'dlck_checker_ut_mock.c',
+        '../dlck_checker.c'
+    ]
+    henv.d_test_program('dlck_checker_worker_ut', srcs, LIBS=libs)
+
+
 def scons():
     """Execute build"""
     Import('env')
 
     build_dlck_test_helper(env.Clone())
     build_dlck_args_ut(env.Clone())
+    build_dlck_checker_common_ut(env.Clone())
+    build_dlck_checker_main_ut(env.Clone())
+    build_dlck_checker_worker_ut(env.Clone())
 
 
 if __name__ == "SCons.Script":
