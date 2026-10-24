@@ -87,7 +87,7 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before current commit.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, DCI_DEFAULT);
 
 		/*
 		 * Skip this DTX since it has been committed or aggregated.
@@ -221,24 +221,39 @@ int
 dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_unit_oid_t oid,
 		      uint64_t dkey_hash, daos_epoch_t epoch, int *tgt_array, int *err)
 {
-	struct dtx_memberships	*mbs = dte->dte_mbs;
-	struct dtx_coll_entry   *dce = NULL;
-	int			 rc = 0;
+	struct dtx_memberships *mbs     = dte->dte_mbs;
+	struct dtx_coll_entry  *dce     = NULL;
+	uint32_t                version = cont->sc_pool->spc_map_version;
+	int                     rc      = 0;
+
+	/*
+	 * Current DTX may has been committed or aborted during checking other DTX entries.
+	 * So check it locally before senting out CHECK RPCs to remote targets. Similarly,
+	 * double check locally after CHECK RPC replied.
+	 */
+	rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, &version, NULL, DCI_RESYNC);
+	if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
+		D_GOTO(out, rc = DSHR_IGNORE);
+
+	if (rc != DTX_ST_PREPARED && rc != DTX_ST_INITED)
+		goto handle_status;
 
 	if (mbs->dm_flags & DMF_COLL_TARGET) {
 		rc = dtx_coll_prep(cont->sc_pool_uuid, oid, &dte->dte_xid, mbs,
-				   dss_get_module_info()->dmi_tgt_id, dte->dte_ver,
-				   cont->sc_pool->spc_map_version, true, true, &dce);
+				   dss_get_module_info()->dmi_tgt_id, dte->dte_ver, version, true,
+				   true, &dce);
 		if (rc != 0) {
 			D_ERROR("Failed to prepare the bitmap (and hints) for collective DTX "
 				DF_DTI": "DF_RC"\n", DP_DTI(&dte->dte_xid), DP_RC(rc));
 			goto out;
 		}
 
-		rc = dtx_coll_check(cont, dce, epoch);
+		rc = dtx_coll_check(cont, dce, epoch, version);
 	} else {
-		rc = dtx_check(cont, dte, epoch);
+		rc = dtx_check(cont, dte, epoch, version);
 	}
+
+handle_status:
 	switch (rc) {
 	case DTX_ST_COMMITTED:
 	case DTX_ST_COMMITTABLE:
@@ -250,14 +265,13 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 	case -DER_HG:
 		D_WARN("Need retry resync for DTX " DF_DTI " because of " DF_RC "\n",
 		       DP_DTI(&dte->dte_xid), DP_RC(rc));
-		/* Yield to give more chance for network recovery. */
-		ABT_thread_yield();
-		D_GOTO(out, rc = DSHR_NEED_RETRY);
+		/* Fall through. */
 	case -DER_INPROGRESS:
+		/* For resync case, sleep 10ms before retry. */
+		if (tgt_array != NULL)
+			dss_sleep(10);
+		/* Fall through. */
 	case -DER_TIMEDOUT:
-		D_WARN("Other participants not sure about whether the "
-		       "DTX " DF_DTI " is committed or not, need retry.\n",
-		       DP_DTI(&dte->dte_xid));
 		D_GOTO(out, rc = DSHR_NEED_RETRY);
 	case DTX_ST_PREPARED: {
 		/* If the transaction across multiple redundancy groups,
@@ -282,9 +296,9 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 			 *	dtx_abort() with 0 @epoch.
 			 */
 			if (mbs->dm_flags & DMF_COLL_TARGET)
-				rc = dtx_coll_abort(cont, dce, 0);
+				rc = dtx_coll_abort(cont, dce, 0, 0);
 			else
-				rc = dtx_abort(cont, dte, 0);
+				rc = dtx_abort(cont, dte, 0, 0);
 			if (rc < 0 && err != NULL)
 				*err = rc;
 
@@ -298,7 +312,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before next action.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, DCI_DEFAULT);
 
 		/* Skip the DTX that may has been committed or aborted. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
@@ -326,9 +340,9 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * abort the DTXs one by one, not batched.
 		 */
 		if (mbs->dm_flags & DMF_COLL_TARGET)
-			rc = dtx_coll_abort(cont, dce, epoch);
+			rc = dtx_coll_abort(cont, dce, epoch, version);
 		else
-			rc = dtx_abort(cont, dte, epoch);
+			rc = dtx_abort(cont, dte, epoch, version);
 
 		DL_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, rc,
 			  "As new leader for DTX " DF_DTI ", abort it (2)", DP_DTI(&dte->dte_xid));
@@ -393,8 +407,9 @@ dtx_status_handle(struct dtx_resync_args *dra)
 again:
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
+			/* Use the latest known version to abort DTX locally to avoid rejection. */
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch,
-					    dre->dre_dte.dte_ver);
+					    cont->sc_pool->spc_map_version);
 			if (err == -DER_NONEXIST)
 				err = 0;
 			if (err != 0)
