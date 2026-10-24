@@ -909,13 +909,14 @@ class DaosCommand(DaosCommandBase):
             ("faults", "container"), pool=pool, cont=cont, location=location,
             sys_name=sys_name, path=path, rank=rank, frequency=frequency)
 
-    def faults_set_param(self, rank=None, frequency=None, location=None):
+    def faults_set_param(self, rank=None, frequency=None, location=None, value=None):
         """For 'daos faults set-param'
 
         Args:
             rank (str): Rank to inject fault on (default: all). Defaults to None.
             frequency (str): Fault injection frequency (default: once). Defaults to None.
             location (str): Fault injection location (default: none). Defaults to None.
+            value (str): Fault injection value (default: none). Defaults to None.
 
         Returns:
             dict: JSON output
@@ -924,7 +925,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the command fails.
         """
         return self._get_json_result(
-            ("faults", "set-param"), rank=rank, frequency=frequency, location=location)
+            ("faults", "set-param"), rank=rank, frequency=frequency, location=location, value=value)
 
     def filesystem_copy(self, src, dst, preserve_props=None):
         """Copy a POSIX container or path to another POSIX container or path.
