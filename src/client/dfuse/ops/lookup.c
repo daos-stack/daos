@@ -50,6 +50,7 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 			 */
 			oh         = (struct dfuse_obj_hdl *)fi_out->fh;
 			oh->doh_ie = inode;
+			oh->doh_wb_error_seq = dfuse_wb_error_sample(inode);
 		}
 
 		/* The lookup has resulted in an existing file, so reuse that

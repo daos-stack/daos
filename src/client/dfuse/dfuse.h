@@ -183,6 +183,9 @@ struct dfuse_obj_hdl {
 
 	ATOMIC uint64_t           doh_write_count;
 
+	/** Last write-back error generation reported to this open handle. */
+	uint64_t                  doh_wb_error_seq;
+
 	/* Next offset we expect from readdir */
 	off_t                     doh_rd_offset;
 
@@ -1031,6 +1034,9 @@ struct dfuse_inode_entry {
 	 * acquired and released to flush outstanding writes for getattr, close and forget.
 	 */
 	pthread_rwlock_t          ie_wlock;
+	/** Latest asynchronous write-back error and generation, protected by file.c's alock. */
+	int                       ie_wb_error;
+	uint64_t                  ie_wb_error_seq;
 	/** Last file closed in this directory was read linearly.  Directories only.
 	 *
 	 * Set on close() of a file in the directory to the value of linear_read from the fh.
@@ -1069,6 +1075,15 @@ active_ie_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 /* Reset chunk and synthetic-zero read state for an inode which may have no open handle. */
 void
 active_ie_set_truncated(struct dfuse_inode_entry *ie, bool truncated);
+
+uint64_t
+dfuse_wb_error_sample(struct dfuse_inode_entry *ie);
+
+void
+dfuse_wb_error_record(struct dfuse_inode_entry *ie, int error);
+
+int
+dfuse_wb_error_check(struct dfuse_obj_hdl *oh);
 
 /* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
  * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending
