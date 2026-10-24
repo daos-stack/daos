@@ -1,4 +1,7 @@
 %changelog
+* Wed Oct 21 2026 Jerome Soumagne <jerome.soumagne@hpe.com> - 2.4.1-6
+- Add UCX patch to fix EP update race during reconnection.
+
 * Mon Aug 31 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 2.4.1-5
 - Rebuild to force update of defective packages.
 - Restore missing auto-generated runtime dependencies.
