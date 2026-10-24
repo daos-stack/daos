@@ -178,6 +178,11 @@ void
 ds_iv_ns_put(struct ds_iv_ns *ns)
 {
 	D_ASSERT(ns->iv_refcount > 0);
+
+	/* For async ns stop. */
+	if (ns->iv_stop && ns->iv_refcount == 1)
+		ds_iv_ns_cleanup(ns);
+
 	ns->iv_refcount--;
 	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
@@ -935,10 +940,16 @@ ds_iv_ns_reint_prep(struct ds_iv_ns *ns)
 }
 
 void
-ds_iv_ns_stop(struct ds_iv_ns *ns)
+ds_iv_ns_stop(struct ds_iv_ns *ns, bool async)
 {
+	D_ASSERT(ns->iv_refcount > 1);
+
 	ns->iv_stop = 1;
 	ds_iv_ns_put(ns);
+
+	if (async && ns->iv_refcount > 1)
+		return;
+
 	ABT_mutex_lock(ns->iv_mutex); /* only for ABT_cond_wait; unnecessary otherwise */
 	while (ns->iv_refcount > 1) {
 		int rc;
