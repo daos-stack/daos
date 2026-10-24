@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
- * Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -247,16 +247,16 @@ typedef struct {
  *			zero: no care uppercase or lowercase.
  */
 static inline bool
-daos_is_valid_uuid_string(const char *uuid, int sensitive)
+daos_is_valid_uuid_iov(const d_iov_t *iov, int sensitive)
 {
 	const char	*p;
 	int		 len = DAOS_UUID_STR_SIZE - 1; /* Not include the terminated '\0' */
 	int		 i;
 
-	if (strnlen(uuid, len) != len)
+	if (iov->iov_len != (size_t)len)
 		return false;
 
-	for (i = 0, p = uuid; i < len; i++, p++) {
+	for (i = 0, p = (const char *)iov->iov_buf; i < len; i++, p++) {
 		if (i == 8 || i == 13 || i == 18 || i == 23) {
 			if (*p != '-')
 				return false;
@@ -274,6 +274,20 @@ daos_is_valid_uuid_string(const char *uuid, int sensitive)
 	}
 
 	return true;
+}
+
+/* Same as daos_is_valid_uuid_iov(), for a NUL-terminated string. */
+static inline bool
+daos_is_valid_uuid_string(const char *uuid, int sensitive)
+{
+	d_iov_t iov;
+	size_t  len = strnlen(uuid, DAOS_UUID_STR_SIZE);
+
+	iov.iov_buf     = (void *)uuid;
+	iov.iov_buf_len = len;
+	iov.iov_len     = len;
+
+	return daos_is_valid_uuid_iov(&iov, sensitive);
 }
 
 /**
