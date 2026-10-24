@@ -109,6 +109,7 @@ struct test_global_t {
 	int			 tg_num_iterations;
 	int			 tg_chunk_size_kb;
 	int			 tg_force_rank;
+	int                      tg_time_limit_sec;
 };
 
 struct test_global_t test = {0};
@@ -137,6 +138,7 @@ show_usage(void)
 	printf("-f <rank>: Force all rpcs to go to the specified rank\n");
 	printf("-x: When set performs DMA_PUT to client instead of DMA_GET\n");
 	printf("-m: Mode. 1 - Synchronous, 2 - Asynchronous\n");
+	printf("-t <time_limit_sec>: Run until time limits in seconds\n");
 	printf("-q: Shut servers down at the end of the run\n");
 }
 
@@ -160,8 +162,7 @@ test_parse_args(int argc, char **argv)
 	test.tg_force_rank = -1;
 
 	while (1) {
-		rc = getopt_long(argc, argv, "g:c:n:a:s:p:m:e:f:xq", long_options,
-				 &option_index);
+		rc = getopt_long(argc, argv, "g:c:n:a:s:t:p:m:e:f:xq", long_options, &option_index);
 		if (rc == -1)
 			break;
 
@@ -196,6 +197,9 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'n':
 			test.tg_num_iterations = atoi(optarg);
+			break;
+		case 't':
+			test.tg_time_limit_sec = atoi(optarg);
 			break;
 		case 'q':
 			test.tg_do_shutdown = true;
