@@ -12,28 +12,12 @@ server_config:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       log_file: daos_server0.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
-          bdev_class: nvme
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       log_file: daos_server1.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
-          bdev_class: nvme
+      storage: auto
 
 pool:
   mode: 146
