@@ -232,6 +232,17 @@ class Runner():
 RUNNER = Runner()
 
 
+def cmocka_filter_supported():
+    """Check whether the installed cmocka supports test filtering."""
+    try:
+        result = subprocess.run(['pkg-config', '--atleast-version=1.1.5', 'cmocka'],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                check=False)
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
 def default_libpath():
     """On debian systems, the default library path can be queried"""
     if not os.path.isfile('/etc/debian_version'):
@@ -518,7 +529,8 @@ class PreReqComponent():
         opts.Add(BoolVariable('BUILD_GO_VALGRIND',
                               'Build Go artifacts with the Go "valgrind" tag for Memcheck',
                               False))
-        opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests', False))
+        opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests',
+                              cmocka_filter_supported()))
         opts.Add(BoolVariable('CRT_PP', 'Preprocess CaRT sources', False))
         opts.Add(BoolVariable('HEAP_PROFILER', 'Instrument C code with Gperftools Heap Profiler',
                               False))
