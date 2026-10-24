@@ -76,6 +76,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "storage nvme-add-device":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
 					test.MockPCIAddr(), "-e", "0")
+			case "storage remove-superblock":
+				testArgs = append(testArgs, "-l", "foo.com", "-e", "0")
 			case "storage set nvme-faulty":
 				testArgs = append(testArgs, "--host", "foo.com", "--force", "-u",
 					test.MockUUID())
