@@ -519,7 +519,7 @@ def command_as_user(command, user, env=None):
     return " ".join(cmd_list)
 
 
-def find_command(source, pattern, depth, other=None):
+def find_command(source, pattern, depth, other=None, file_type="f"):
     """Get the find command.
 
     Args:
@@ -528,11 +528,12 @@ def find_command(source, pattern, depth, other=None):
         depth (int): max depth for find command
         other (object, optional): other commands, as a list or str, to include at the end of the
             base find command. Defaults to None.
+        file_type (str, optional): type of file to search for. Defaults to "f".
 
     Returns:
         str: the find command
     """
-    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
+    command = ["find", source, "-maxdepth", str(depth), "-type", file_type, "-name", f"'{pattern}'"]
     if isinstance(other, list):
         command.extend(other)
     elif isinstance(other, str):
