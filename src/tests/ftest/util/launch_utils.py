@@ -1023,7 +1023,7 @@ class TestGroup():
                             file_name, class_name, method_name, ','.join(tags))
 
     def update_test_yaml(self, logger, scm_size, scm_mount, extra_yaml, multiplier, override,
-                         verbose, include_localhost):
+                         verbose, include_localhost, test_storage_yaml=None):
         """Update each test yaml file.
 
         Args:
@@ -1035,6 +1035,8 @@ class TestGroup():
             override (bool): whether or not to override the number of hosts for the test
             verbose (int): level of verbosity
             include_localhost (bool): whether or not to include the local host with the client hosts
+            test_storage_yaml (str, optional): path to write the test storage yaml file. Default is
+                None.
 
         Raises:
             RunException: if there is an error modifying the test yaml files
@@ -1110,6 +1112,10 @@ class TestGroup():
 
             # Collect the host information from the updated test yaml
             test.set_yaml_info(logger, include_localhost)
+
+        if test_storage_yaml:
+            logger.info("Writing the test storage yaml to %s", test_storage_yaml)
+            storage_info.write_device_yaml(test_storage_yaml)
 
     def _add_auto_storage_yaml(self, logger, storage_info, yaml_dir, tier_0_type, scm_size,
                                scm_mount, max_nvme_tiers, control_metadata):
