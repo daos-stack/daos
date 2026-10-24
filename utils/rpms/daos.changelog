@@ -1,4 +1,7 @@
 %changelog
+* Thu Aug 20 2026 Jerome Soumagne <jerome.soumagne@hpe.com> 2.9.100-8
+- Add crt perf binaries to DAOS tests
+
 * Tue Aug 11 2026  Jan Michalski <jan-marian.michalski@hpe.com@hpe.com> - 2.9.100-7
 - Update PMDK to version 2.1.4
 
