@@ -734,7 +734,7 @@ csum_test_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_
 	epoch  = 1;
 	filler = 'c';
 	for (recx_idx = 0; recx_idx < DVT_FAKE_RECX_COUNT; recx_idx++) {
-		recx.rx_idx   = recx_idx * csum_ctx->dct_recx_size / 2;
+		recx.rx_idx   = recx_idx * csum_ctx->dct_recx_size / DVT_FAKE_RECX_COUNT;
 		iod.iod_recxs = &recx;
 
 		memset(buf, filler, csum_ctx->dct_recx_size);
@@ -751,7 +751,7 @@ csum_test_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_
 	/* g_oids[1]: recxs written with checksum */
 	epoch = 1;
 	for (recx_idx = 0; recx_idx < DVT_FAKE_RECX_COUNT; recx_idx++) {
-		recx.rx_idx   = recx_idx * csum_ctx->dct_recx_size / 2;
+		recx.rx_idx   = recx_idx * csum_ctx->dct_recx_size / DVT_FAKE_RECX_COUNT;
 		iod.iod_recxs = &recx;
 
 		memset(buf, filler, csum_ctx->dct_recx_size);
@@ -778,6 +778,132 @@ out_ics:
 			daos_csummer_free_ic(csum_ctx->dct_csummer,
 					     &csum_ctx->dct_recx_ics[recx_idx]);
 		}
+	}
+out_buf:
+	D_FREE(buf);
+out:
+	return rc;
+}
+
+/*
+ * Write one checksummed value/segment, optionally corrupting its stored checksum (flips
+ * the first byte) before writing it to VOS. Shared by csum_test_corrupt_sv_setup() (called
+ * once) and csum_test_corrupt_recx_setup() (called once per overlapping segment).
+ */
+static int
+write_maybe_corrupt(struct daos_csummer *csummer, daos_handle_t coh, daos_unit_oid_t oid,
+		    daos_epoch_t epoch, daos_iod_t *iod, d_sg_list_t *sgl, bool corrupt,
+		    struct dcs_iod_csums **ic_out)
+{
+	uint8_t *csum_buf;
+	int      rc;
+
+	rc = daos_csummer_calc_iods(csummer, sgl, iod, NULL, 1, false, NULL, 0, ic_out);
+	if (rc != 0)
+		return rc;
+
+	if (corrupt) {
+		csum_buf = ci_idx2csum((*ic_out)->ic_data, 0);
+		csum_buf[0] ^= 0xff;
+	}
+
+	return vos_obj_update(coh, oid, epoch, 0, 0, &g_dkeys[0], 1, iod, *ic_out, sgl);
+}
+
+/*
+ * g_oids[2]: single value written with valid data but a deliberately corrupted (flipped)
+ * stored checksum, to exercise csum_check's corruption-detection path.
+ */
+static int
+csum_test_corrupt_sv_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t *sgl)
+{
+	struct dt_csum_ctx *csum_ctx;
+	daos_iod_t          iod;
+	char               *buf;
+	int                 rc;
+
+	csum_ctx = tctx->dvt_extra;
+
+	D_ALLOC(buf, csum_ctx->dct_sv_size);
+	if (buf == NULL)
+		return -DER_NOMEM;
+
+	d_iov_set(&iod.iod_name, g_akeys_str[0], strlen(g_akeys_str[0]));
+	iod.iod_nr    = 1;
+	iod.iod_type  = DAOS_IOD_SINGLE;
+	iod.iod_size  = csum_ctx->dct_sv_size;
+	iod.iod_recxs = NULL;
+
+	memset(buf, 'd', csum_ctx->dct_sv_size);
+	d_iov_set(sgl->sg_iovs, &buf[0], csum_ctx->dct_sv_size);
+
+	rc = write_maybe_corrupt(csum_ctx->dct_csummer, coh, g_oids[2], 1, &iod, sgl, true,
+				 &csum_ctx->dct_sv_ic_bad);
+	if (rc != 0)
+		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ic_bad);
+
+	D_FREE(buf);
+	return rc;
+}
+
+/*
+ * g_oids[2]: recx written with valid data, DVT_FAKE_RECX_COUNT overlapping segments (same
+ * layout as csum_test_recx_setup()'s g_oids[1] fixture), but only DVT_FAKE_RECX_BAD_IDX's
+ * stored checksum is deliberately corrupted -- the other segment(s) keep a genuinely
+ * matching checksum, so csum_check's per-entry mismatch isolation can be exercised (only
+ * the bad entry should ever be flagged, never the good one(s)).
+ */
+static int
+csum_test_corrupt_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t *sgl)
+{
+	struct dt_csum_ctx *csum_ctx;
+	daos_iod_t          iod;
+	char               *buf;
+	char                filler;
+	daos_recx_t         recx;
+	int                 recx_idx;
+	daos_epoch_t        epoch;
+	int                 rc;
+
+	csum_ctx = tctx->dvt_extra;
+
+	D_ALLOC(buf, csum_ctx->dct_recx_size);
+	if (buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	d_iov_set(&iod.iod_name, g_akeys_str[1], strlen(g_akeys_str[1]));
+	iod.iod_nr   = 1;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	recx.rx_nr   = csum_ctx->dct_recx_size;
+
+	epoch  = 1;
+	filler = 'f';
+	for (recx_idx = 0; recx_idx < DVT_FAKE_RECX_COUNT; recx_idx++) {
+		recx.rx_idx   = recx_idx * csum_ctx->dct_recx_size / DVT_FAKE_RECX_COUNT;
+		iod.iod_recxs = &recx;
+
+		memset(buf, filler, csum_ctx->dct_recx_size);
+		d_iov_set(sgl->sg_iovs, &buf[0], csum_ctx->dct_recx_size);
+
+		rc = write_maybe_corrupt(csum_ctx->dct_csummer, coh, g_oids[2], epoch, &iod, sgl,
+					 recx_idx == DVT_FAKE_RECX_BAD_IDX,
+					 &csum_ctx->dct_recx_ics_bad[recx_idx]);
+		if (rc != 0)
+			goto out_ics;
+
+		epoch++;
+		filler++;
+	}
+	goto out_buf;
+
+out_ics:
+	for (recx_idx = 0; recx_idx < DVT_FAKE_RECX_COUNT; recx_idx++) {
+		if (csum_ctx->dct_recx_ics_bad[recx_idx] == NULL)
+			continue;
+		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_recx_ics_bad[recx_idx]);
 	}
 out_buf:
 	D_FREE(buf);
@@ -814,6 +940,8 @@ ddb_test_csum_setup(void **state)
 	csum_ctx->dct_csum_type  = DVT_FAKE_CSUM_TYPE;
 	memset(&csum_ctx->dct_sv_ics[0], 0, sizeof(csum_ctx->dct_sv_ics));
 	memset(&csum_ctx->dct_recx_ics[0], 0, sizeof(csum_ctx->dct_recx_ics));
+	csum_ctx->dct_sv_ic_bad = NULL;
+	memset(&csum_ctx->dct_recx_ics_bad[0], 0, sizeof(csum_ctx->dct_recx_ics_bad));
 	rc = daos_csummer_init_with_type(&csum_ctx->dct_csummer, csum_ctx->dct_csum_type,
 					 csum_ctx->dct_chunk_size, 0);
 	if (rc != 0)
@@ -838,6 +966,12 @@ ddb_test_csum_setup(void **state)
 	if (rc != 0)
 		goto out_sgl;
 	rc = csum_test_recx_setup(tctx, coh, &sgl);
+	if (rc != 0)
+		goto out_sgl;
+	rc = csum_test_corrupt_sv_setup(tctx, coh, &sgl);
+	if (rc != 0)
+		goto out_sgl;
+	rc = csum_test_corrupt_recx_setup(tctx, coh, &sgl);
 
 out_sgl:
 	d_sgl_fini(&sgl, false);
@@ -880,6 +1014,9 @@ ddb_test_csum_teardown(void **state)
 		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ics[ci_idx]);
 	for (ci_idx = 0; ci_idx < DVT_FAKE_RECX_COUNT; ci_idx++)
 		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_recx_ics[ci_idx]);
+	daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ic_bad);
+	for (ci_idx = 0; ci_idx < DVT_FAKE_RECX_COUNT; ci_idx++)
+		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_recx_ics_bad[ci_idx]);
 	daos_csummer_destroy(&csum_ctx->dct_csummer);
 
 	vos_cont_destroy(tctx->dvt_poh, csum_ctx->dct_cont_uuid);
