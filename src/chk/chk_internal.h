@@ -730,7 +730,7 @@ int chk_pools_update_bk(struct chk_instance *ins, uint32_t phase);
 int chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv);
 
 int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank,
-		       bool has_pending, struct chk_bookmark *bk, struct chk_instance *ins,
+		       uint32_t status, struct chk_bookmark *bk, struct chk_instance *ins,
 		       uint32_t *shard_nr, void *data, chk_pool_free_data_t free_cb,
 		       struct chk_pool_rec **cpr);
 
@@ -749,8 +749,6 @@ int chk_set_policy(struct chk_instance *ins, uint64_t gen, uint32_t policy_nr,
 
 int chk_prop_prepare(d_rank_t leader, uint32_t flags, uint32_t policy_nr,
 		     struct chk_policy *policies, d_rank_list_t *ranks, struct chk_property *prop);
-
-uint32_t chk_pool_merge_status(uint32_t status_a, uint32_t status_b);
 
 void chk_ins_merge_info(uint32_t *status_dst, uint32_t status_src, uint32_t *phase_dst,
 			uint32_t phase_src, uint64_t *gen_dst, uint64_t gen_src);
