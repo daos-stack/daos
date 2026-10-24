@@ -16,7 +16,7 @@
     - collect_reports()       -- scan a log directory for <prefix>.<pid> files
     - resolve_frame_path()    -- resolve an absolute path to source-root-relative
     - resolve_paths_frames()  -- resolve rel_file on a flat frames list (ASan/UBSan)
-    - resolve_paths_threaded() -- resolve rel_file in TSan's thread→frames structure
+    - resolve_paths_threaded() -- resolve rel_file in TSan's thread->frames structure
     - sarif_location()        -- build a SARIF physicalLocation dict
     - build_sarif_doc()       -- assemble the outer SARIF 2.1.0 skeleton
     - build_summary_md()      -- shared Markdown summary template for all parsers
@@ -31,7 +31,7 @@ import json
 import re
 from pathlib import Path
 
-# ── Shared data structure ─────────────────────────────────────────────────────
+# -- Shared data structure -----------------------------------------------------
 
 
 class StackFrame:
@@ -47,7 +47,7 @@ class StackFrame:
         self.rel_file = rel_file  # relative to source_root, filled in later
 
 
-# ── Shared frame-regex fragments ──────────────────────────────────────────────
+# -- Shared frame-regex fragments ----------------------------------------------
 
 # Recognized source file extensions when matching a frame's file:line[:col].
 _SRC_EXT = r"c|cc|cpp|cxx|h|hpp"
@@ -68,7 +68,7 @@ ADDR_FRAME_RE = re.compile(
 )
 
 
-# ── SARIF 2.1.0 constants ─────────────────────────────────────────────────────
+# -- SARIF 2.1.0 constants -----------------------------------------------------
 
 _SARIF_SCHEMA = (
     "https://raw.githubusercontent.com/oasis-tcs/sarif-spec"
@@ -78,7 +78,7 @@ _SARIF_VERSION = "2.1.0"
 _TOOL_VERSION = "1.0"
 
 
-# ── Log file collection ───────────────────────────────────────────────────────
+# -- Log file collection -------------------------------------------------------
 
 def collect_reports(report_dir, prefix, parse_fn):
     """Scan *report_dir* for files named ``<prefix>.<pid>`` and parse each one.
@@ -113,7 +113,7 @@ def collect_reports(report_dir, prefix, parse_fn):
     return reports
 
 
-# ── Source-path resolution ────────────────────────────────────────────────────
+# -- Source-path resolution ----------------------------------------------------
 
 def resolve_frame_path(frame, source_root):
     """Populate *frame.rel_file* relative to *source_root*."""
@@ -122,7 +122,7 @@ def resolve_frame_path(frame, source_root):
     try:
         frame.rel_file = str(Path(frame.file).relative_to(source_root))
     except ValueError:
-        frame.rel_file = frame.file  # outside checkout — keep as-is
+        frame.rel_file = frame.file  # outside checkout -- keep as-is
 
 
 def resolve_paths_frames(reports, source_root):
@@ -145,7 +145,7 @@ def resolve_paths_threaded(reports, source_root):
                 resolve_frame_path(frame, source_root)
 
 
-# ── SARIF helpers ─────────────────────────────────────────────────────────────
+# -- SARIF helpers -------------------------------------------------------------
 
 def sarif_location(rel_file, line, col=None):
     """Build a SARIF ``location`` dict for a given source position."""
@@ -185,7 +185,7 @@ def build_sarif_doc(tool_name, tool_uri, rules, results):
     }
 
 
-# ── Markdown summary template ─────────────────────────────────────────────────
+# -- Markdown summary template -------------------------------------------------
 
 def build_summary_md(
         tool_name,
@@ -204,14 +204,14 @@ def build_summary_md(
 
     Args:
         tool_name:    Human-readable tool name, e.g. ``"AddressSanitizer"``.
-        emoji:        Status emoji: ``"❌"`` when issues found, ``"✅"`` otherwise.
+        emoji:        Status emoji: ``"FAIL"`` when issues found, ``"PASS"`` otherwise.
         items:        List of items to render; may be plain reports or any objects
                       accepted by ``row_fn`` / ``details_fn`` (e.g. deduplicated
                       ``(report, count)`` tuples for UBSan).
         headers:      Column names for the summary table.
-        row_fn:       ``(index: int, item) → list[str]`` — returns the table cell
+        row_fn:       ``(index: int, item) -> list[str]`` -- returns the table cell
                       values (already Markdown-formatted) for one row.
-        details_fn:   ``(index: int, item) → list[str]`` — returns the Markdown
+        details_fn:   ``(index: int, item) -> list[str]`` -- returns the Markdown
                       lines that make up the ``#### Report N`` details block.
         note:         Optional Markdown note displayed above the summary table
                       (e.g. the Argobots false-positive warning for TSan).
@@ -219,10 +219,10 @@ def build_summary_md(
                       standard "no issues" line for *tool_name*.
     """
     if not items:
-        msg = no_items_msg or f"#### ✅ {tool_name} — No issues detected"
+        msg = no_items_msg or f"#### PASS {tool_name} -- No issues detected"
         return msg + "\n"
 
-    lines = [f"#### {emoji} {tool_name} — {len(items)} issue(s) detected", ""]
+    lines = [f"#### {emoji} {tool_name} -- {len(items)} issue(s) detected", ""]
 
     if note:
         lines += [note, ""]
@@ -249,7 +249,7 @@ def build_summary_md(
     return "\n".join(lines) + "\n"
 
 
-# ── Shared "#### Report N" details block ──────────────────────────────────────
+# -- Shared "#### Report N" details block --------------------------------------
 
 def report_heading(index, report):
     """Return the Markdown lines for one report's details block.
@@ -266,7 +266,7 @@ def report_heading(index, report):
     attributes, which AsanReport, UbsanReport, and TsanReport all provide.
     """
     return [
-        f"#### Report {index} — `{report.error_type}` in "
+        f"#### Report {index} -- `{report.error_type}` in "
         f"**{report.test_name or 'unknown'}** (pid {report.pid})",
         "",
         "```text",
@@ -276,7 +276,7 @@ def report_heading(index, report):
     ]
 
 
-# ── CLI helpers ───────────────────────────────────────────────────────────────
+# -- CLI helpers ---------------------------------------------------------------
 
 def get_args(description):
     """Parse the standard four CLI arguments shared by all sanitizer parsers."""
