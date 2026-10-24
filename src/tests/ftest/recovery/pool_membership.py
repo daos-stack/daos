@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import shlex
 import time
 
 from ClusterShell.NodeSet import NodeSet
@@ -75,6 +76,49 @@ class PoolMembershipTest(IorTestBase):
                         dst_rank = scm_namespace["mount"]["rank"]
 
         return src_host, dst_host, src_mount, dst_mount, dst_rank
+
+    def verify_pmem_pool_copy(self, pool, src_host, src_mount, dst_host, dst_mount):
+        """Verify copied PMEM pool filenames, sizes, and expected RDB/VOS files.
+
+        Args:
+            pool (TestPool): Pool copied to create the orphan shard.
+            src_host (NodeSet): Source host.
+            src_mount (str): Source engine mount point.
+            dst_host (NodeSet): Destination host.
+            dst_mount (str): Destination engine mount point.
+        """
+        for engine in self.server_managers[0].manager.job.yaml.engine_params:
+            if engine.get_value("scm_mount") == src_mount:
+                targets = engine.get_value("targets")
+                break
+        else:
+            self.fail(f"No engine configuration found for source mount {src_mount}")
+
+        expected_files = {"rdb-pool"} | {f"vos-{index}" for index in range(targets)}
+        manifests = []
+        for host, mount in ((src_host, src_mount), (dst_host, dst_mount)):
+            pool_path = f"{mount}/{pool.uuid.lower()}"
+            command = (
+                f"find {shlex.quote(pool_path)} -maxdepth 1 -type f -printf '%f\\t%s\\n'")
+            result = run_remote(log=self.log, hosts=host, command=command)
+            if not result.passed:
+                self.fail(
+                    f"Failed to list pool files at {host}:{pool_path}: "
+                    f"stdout={result.all_stdout}, stderr={result.all_stderr}")
+            manifest = {}
+            for line in result.joined_stdout.splitlines():
+                filename, size = line.rsplit("\t", 1)
+                manifest[filename] = int(size)
+            self.log.info("Pool file sizes at %s:%s: %s", host, pool_path, manifest)
+            missing = expected_files - manifest.keys()
+            if missing:
+                self.fail(f"Missing pool files at {host}:{pool_path}: {sorted(missing)}")
+            manifests.append(manifest)
+
+        self.assertEqual(
+            manifests[0], manifests[1],
+            f"Pool copy filenames or sizes differ between {src_host}:{src_mount} "
+            f"and {dst_host}:{dst_mount}")
 
     def test_orphan_pool_shard(self):
         """Test orphan pool shard.
@@ -231,6 +275,9 @@ class PoolMembershipTest(IorTestBase):
                 f"{str(dst_host)}:{dst_mount}/{pool.uuid.lower()}")
             if not run_remote(log=self.log, hosts=src_host, command=xargs_rsync_cmd).passed:
                 self.fail(f"Following command failed on {src_host}! {xargs_rsync_cmd}")
+
+            self.log_step("Verify copied pool filenames, sizes, and expected RDB/VOS files.")
+            self.verify_pmem_pool_copy(pool, src_host, src_mount, dst_host, dst_mount)
 
         self.log_step("Enable and start the checker.")
         dmg_command.check_enable()
