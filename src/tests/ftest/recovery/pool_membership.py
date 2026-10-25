@@ -215,7 +215,7 @@ class PoolMembershipTest(IorTestBase):
                 self.get_pmem_pool_copy_locations(pool_rank))
 
         self.log_step("Stop servers.")
-        dmg_command.system_stop()
+        dmg_command.system_stop(full=True)
 
         if not md_on_ssd:
             # 5. Copy /mnt/daos?/<pool_path> from the engine where we created the pool to
