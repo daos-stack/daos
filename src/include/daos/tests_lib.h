@@ -588,6 +588,20 @@ int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank);
 int dmg_system_reint_rank(const char *dmg_config_file, d_rank_t rank);
 
 /**
+ * Query the state of a rank in the system.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to be queried.
+ * \param state	[OUT]	Buffer for the state string, such as "joined", "stopped".
+ * \param state_len
+ *		[IN]	Size of the \a state buffer.
+ */
+int
+    dmg_system_query_rank_state(const char *dmg_config_file, d_rank_t rank, char *state,
+				size_t state_len);
+
+/**
  * Exclude a rank from the system.
  *
  * \param dmg_config_file
