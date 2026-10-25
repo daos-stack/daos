@@ -41,7 +41,6 @@ struct dtx_resync_args {
 	daos_epoch_t           epoch;
 	uint32_t               resync_version;
 	uint32_t               discard_version;
-	bool                   for_all;
 };
 
 static inline void
@@ -572,12 +571,17 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	/*
 	 * The DTX version maybe refreshed via obj_handle_resend(). It means that either the
 	 * DTX is generated against the latest pool map or related IO RPC is resent by client
-	 * after pool map changed. Under both cases, the DTX resync that is triggered for pool
-	 * map changes (@for_all is false) should not handle such DTX to avoid making conflict
-	 * commit/abort decision (against regular IO handler) by race.
+	 * after pool map changed. Under both cases, DTX resync should not handle such DTX to
+	 * avoid making conflict commit/abort decision (against regular IO handler) by race.
+	 *
+	 * But for the case of engine restart quickly (without pool map change), DTX resync
+	 * that is triggered by the initial pool map from PS leader needs to handle all the
+	 * DTX entries before engine restart. Because DTX 'committable' status is cached in
+	 * DRAM and will be lost after engine restart. If do not synchronize them, related
+	 * IO (both regular and rebuild) may miss the latest valid data.
 	 */
 	if ((ent->ie_dtx_ver > dra->resync_version) ||
-	    (ent->ie_dtx_ver == dra->resync_version && !dra->for_all))
+	    (ent->ie_dtx_ver == dra->resync_version && ent->ie_epoch > dss_get_start_epoch()))
 		return 0;
 
 	if (ent->ie_dtx_tgt_cnt == 0)
@@ -635,7 +639,7 @@ out:
 }
 
 int
-dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block)
+dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver)
 {
 	struct ds_pool			*pool;
 	struct pool_target		*target;
@@ -644,16 +648,15 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 	int				 rc = 0;
 	int				 rc1 = 0;
 
-	D_DEBUG(DB_MD, "Enter DTX resync (%s) for " DF_UUID "/" DF_UUID " with ver %u\n",
-		block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
+	D_DEBUG(DB_MD, "Enter DTX resync for " DF_UUID "/" DF_UUID " with ver %u\n",
+		DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 
 	crt_group_rank(NULL, &myrank);
 
 	pool = cont->sc_pool->spc_pool;
 	if (pool->sp_disable_dtx_resync) {
-		D_DEBUG(DB_MD, "Skip DTX resync (%s) for " DF_UUID "/" DF_UUID " with ver %u\n",
-			block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid),
-			DP_UUID(cont->sc_uuid), ver);
+		D_DEBUG(DB_MD, "Skip DTX resync for " DF_UUID "/" DF_UUID " with ver %u\n",
+			DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 		goto out;
 	}
 
@@ -673,10 +676,6 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 	ABT_mutex_lock(cont->sc_mutex);
 
 	while (cont->sc_dtx_resyncing) {
-		if (!block) {
-			ABT_mutex_unlock(cont->sc_mutex);
-			goto out;
-		}
 		D_DEBUG(DB_TRACE, "Waiting for resync of " DF_UUID "\n", DP_UUID(cont->sc_uuid));
 		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 	}
@@ -706,11 +705,6 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 
-	if (block)
-		dra.for_all = false;
-	else
-		dra.for_all = true;
-
 	/*
 	 * Trigger DTX reindex. That will avoid DTX_CHECK from others being blocked.
 	 * It is harmless even if (committed) DTX entries have already been re-indexed.
@@ -724,8 +718,8 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 		}
 	}
 
-	D_DEBUG(DB_MD, "Start DTX resync (%s) scan for " DF_UUID "/" DF_UUID " with ver %u\n",
-		block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
+	D_DEBUG(DB_MD, "Start DTX resync scan for " DF_UUID "/" DF_UUID " with ver %u\n",
+		DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 
 	rc = ds_cont_iter(po_hdl, cont->sc_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX, 0);
 
@@ -743,9 +737,8 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 		vos_set_dtx_resync_version(cont->sc_hdl, ver);
 
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MD, rc,
-		  "Stop DTX resync (%s) scan for " DF_UUID "/" DF_UUID " with ver %u",
-		  block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid),
-		  ver);
+		  "Stop DTX resync scan for " DF_UUID "/" DF_UUID " with ver %u",
+		  DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 
 fail:
 	ABT_mutex_lock(cont->sc_mutex);
@@ -755,9 +748,8 @@ fail:
 
 out:
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MD, rc,
-		  "Exit DTX resync (%s) scan for " DF_UUID "/" DF_UUID " with ver %u",
-		  block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid),
-		  ver);
+		  "Exit DTX resync scan for " DF_UUID "/" DF_UUID " with ver %u",
+		  DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 
 	return rc > 0 ? 0 : rc;
 }
@@ -795,7 +787,7 @@ again:
 			goto again;
 		}
 	} else {
-		rc = dtx_resync(iter_param->ip_hdl, cont, arg->version, true);
+		rc = dtx_resync(iter_param->ip_hdl, cont, arg->version);
 	}
 	if (rc == 0)
 		/* Since dtx_{cleanup,resync} might yield, let's reprobe anyway */
