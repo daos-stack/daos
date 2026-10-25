@@ -155,6 +155,29 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				HotplugBusidEnd:    0x8f,
 			},
 		},
+		"range specified; all domains": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevBusidRange("0x00-0xff"),
+				},
+				EnableHotplug: true,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:            hostname,
+				HotplugEnabled:      true,
+				HotplugBusidBegin:   0x00,
+				HotplugBusidEnd:     0xff,
+				HotplugIgnoreDomain: true,
+			},
+		},
 		"range specified; vmd enabled": {
 			cfg: &Config{
 				Tiers: TierConfigs{

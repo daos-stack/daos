@@ -613,13 +613,17 @@ type (
 		HotplugBusidDomain uint16
 		HotplugBusidBegin  uint8
 		HotplugBusidEnd    uint8
-		Hostname           string
-		AccelProps         AccelProps
-		SpdkRpcSrvProps    SpdkRpcServer
-		AutoFaultyProps    BdevAutoFaulty
-		SpdkIobufProps     SpdkIobuf
-		VMDEnabled         bool
-		ScannedBdevs       NvmeControllers // VMD needs address mapping for backing devices.
+		// HotplugIgnoreDomain indicates that HotplugBusidDomain should be ignored and the
+		// bus-ID range matched in any PCI domain, e.g. when derived from a user-specified
+		// range that omits a domain prefix and spans the full bus-ID space 0x00-0xFF.
+		HotplugIgnoreDomain bool
+		Hostname            string
+		AccelProps          AccelProps
+		SpdkRpcSrvProps     SpdkRpcServer
+		AutoFaultyProps     BdevAutoFaulty
+		SpdkIobufProps      SpdkIobuf
+		VMDEnabled          bool
+		ScannedBdevs        NvmeControllers // VMD needs address mapping for backing devices.
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.

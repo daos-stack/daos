@@ -153,6 +153,21 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				},
 			},
 		},
+		"multiple controllers; hotplug enabled; bus-id range specified; all domains": {
+			class:         storage.ClassNvme,
+			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			enableHotplug: true,
+			busidRange:    "0x00-0xff",
+			expBdevCfgs:   multiCtrlrConfs(0, true),
+			expDaosCfgs: []*DaosConfig{
+				{
+					Method: storage.ConfSetHotplugBusidRange,
+					Params: &HotplugBusidRangeParams{
+						Begin: 0x00, End: 0xFF, IgnoreDomain: true,
+					},
+				},
+			},
+		},
 		"multiple controllers; hotplug and vmd enabled": {
 			class:         storage.ClassNvme,
 			enableVmd:     true,

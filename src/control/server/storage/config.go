@@ -781,6 +781,13 @@ func MustNewBdevDeviceList(devices ...string) *BdevDeviceList {
 // BdevBusRange represents a bus-ID range to be used to filter hot plug events.
 type BdevBusRange struct {
 	hardware.PCIBus
+	// IgnoreDomain, when set, indicates that the bus-ID range should match in any PCI
+	// domain rather than only LowAddress.Domain/HighAddress.Domain. This is derived (rather
+	// than configured directly) from a range that omits an explicit domain prefix and spans
+	// the full bus-ID space 0x00-0xFF, reusing the same "ignore domain, match bus-ID only"
+	// mechanism already used for VMD, to let a single engine's hotplug filter accept devices
+	// across every PCI domain rather than requiring one specific domain.
+	IgnoreDomain bool
 }
 
 func (br *BdevBusRange) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -789,7 +796,7 @@ func (br *BdevBusRange) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
-	dom, lo, hi, err := parsePCIBusRange(tmp, hardware.PCIAddrBusBitSize)
+	dom, lo, hi, domSpecified, err := parsePCIBusRange(tmp, hardware.PCIAddrBusBitSize)
 	if err != nil {
 		return errors.Wrapf(err, "failed to parse bus range %q", tmp)
 	}
@@ -798,6 +805,7 @@ func (br *BdevBusRange) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	br.LowAddress.Bus = lo
 	br.HighAddress.Domain = dom
 	br.HighAddress.Bus = hi
+	br.IgnoreDomain = !domSpecified && lo == 0x00 && hi == 0xFF
 
 	return nil
 }
@@ -810,7 +818,7 @@ func (br *BdevBusRange) String() string {
 	if br == nil {
 		return ""
 	}
-	if br.LowAddress.Domain != 0 || br.HighAddress.Domain != 0 {
+	if !br.IgnoreDomain && (br.LowAddress.Domain != 0 || br.HighAddress.Domain != 0) {
 		return fmt.Sprintf("%04x:0x%02x-0x%02x", br.LowAddress.Domain, br.LowAddress.Bus,
 			br.HighAddress.Bus)
 	}
@@ -1046,50 +1054,53 @@ func (bc *BdevConfig) Validate(class Class) error {
 }
 
 // parsePCIBusRange takes a string of format [<Domain>:]<Begin>-<End> and returns the domain,
-// begin and end values. The domain component is optional (defaults to 0x0000) and is always
-// interpreted as hexadecimal without a "0x" prefix, following standard PCI BDF notation (e.g.
-// "0001"). Number base for the begin/end bus values is detected from the string prefixes e.g.
-// 0x for hexadecimal. bitSize parameter sets a cut-off for the begin/end return values e.g. 8
-// for uint8.
-func parsePCIBusRange(numRange string, bitSize int) (uint16, uint8, uint8, error) {
+// begin and end values, plus whether a domain prefix was actually present in the input (as
+// opposed to defaulted). The domain component is optional (defaults to 0x0000 when absent) and
+// is always interpreted as hexadecimal without a "0x" prefix, following standard PCI BDF
+// notation (e.g. "0001"). Number base for the begin/end bus values is detected from the string
+// prefixes e.g. 0x for hexadecimal. bitSize parameter sets a cut-off for the begin/end return
+// values e.g. 8 for uint8.
+func parsePCIBusRange(numRange string, bitSize int) (uint16, uint8, uint8, bool, error) {
 	if numRange == "" {
-		return 0, 0, 0, nil
+		return 0, 0, 0, false, nil
 	}
 
 	var domain uint64
+	var domainSpecified bool
 	busRange := numRange
 
 	if sepIdx := strings.LastIndex(numRange, ":"); sepIdx != -1 {
 		domStr := numRange[:sepIdx]
 		busRange = numRange[sepIdx+1:]
+		domainSpecified = true
 
 		var err error
 		domain, err = strconv.ParseUint(domStr, 16, 16)
 		if err != nil {
-			return 0, 0, 0, errors.Wrapf(err, "parse busid range domain %q", numRange)
+			return 0, 0, 0, false, errors.Wrapf(err, "parse busid range domain %q", numRange)
 		}
 	}
 
 	split := strings.Split(busRange, "-")
 	if len(split) != 2 {
-		return 0, 0, 0, errors.Errorf("invalid busid range %q", numRange)
+		return 0, 0, 0, false, errors.Errorf("invalid busid range %q", numRange)
 	}
 
 	begin, err := strconv.ParseUint(split[0], 0, bitSize)
 	if err != nil {
-		return 0, 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
+		return 0, 0, 0, false, errors.Wrapf(err, "parse busid range %q", numRange)
 	}
 
 	end, err := strconv.ParseUint(split[1], 0, bitSize)
 	if err != nil {
-		return 0, 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
+		return 0, 0, 0, false, errors.Wrapf(err, "parse busid range %q", numRange)
 	}
 
 	if begin > end {
-		return 0, 0, 0, errors.Errorf("invalid busid range %q", numRange)
+		return 0, 0, 0, false, errors.Errorf("invalid busid range %q", numRange)
 	}
 
-	return uint16(domain), uint8(begin), uint8(end), nil
+	return uint16(domain), uint8(begin), uint8(end), domainSpecified, nil
 }
 
 var accelOptFlags = optFlagMap{

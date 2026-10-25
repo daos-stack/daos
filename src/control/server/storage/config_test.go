@@ -259,12 +259,13 @@ func TestStorage_BdevDeviceList_FromJSON(t *testing.T) {
 
 func TestStorage_parsePCIBusRange(t *testing.T) {
 	for name, tc := range map[string]struct {
-		rangeStr  string
-		bitSize   int
-		expDomain uint16
-		expBegin  uint8
-		expEnd    uint8
-		expErr    error
+		rangeStr     string
+		bitSize      int
+		expDomain    uint16
+		expBegin     uint8
+		expEnd       uint8
+		expSpecified bool
+		expErr       error
 	}{
 		"hexadecimal": {
 			rangeStr: "0x80-0x8f",
@@ -308,30 +309,45 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 			expErr:   errors.New("value out of range"),
 		},
 		"domain prefixed": {
-			rangeStr:  "0001:0x80-0x8f",
-			expDomain: 0x0001,
-			expBegin:  0x80,
-			expEnd:    0x8f,
+			rangeStr:     "0001:0x80-0x8f",
+			expDomain:    0x0001,
+			expBegin:     0x80,
+			expEnd:       0x8f,
+			expSpecified: true,
 		},
 		"domain prefixed; decimal bus range": {
-			rangeStr:  "0001:128-143",
-			expDomain: 0x0001,
-			expBegin:  0x80,
-			expEnd:    0x8F,
+			rangeStr:     "0001:128-143",
+			expDomain:    0x0001,
+			expBegin:     0x80,
+			expEnd:       0x8F,
+			expSpecified: true,
 		},
 		"domain prefixed; zero domain": {
-			rangeStr:  "0000:0x80-0x8f",
-			expDomain: 0x0000,
-			expBegin:  0x80,
-			expEnd:    0x8f,
+			rangeStr:     "0000:0x80-0x8f",
+			expDomain:    0x0000,
+			expBegin:     0x80,
+			expEnd:       0x8f,
+			expSpecified: true,
 		},
 		"invalid domain": {
 			rangeStr: "000g:0x80-0x8f",
 			expErr:   errors.New("parse busid range domain"),
 		},
+		"no domain; full bus range": {
+			rangeStr: "0x00-0xFF",
+			expBegin: 0x00,
+			expEnd:   0xFF,
+		},
+		"domain prefixed; full bus range": {
+			rangeStr:     "0001:0x00-0xFF",
+			expDomain:    0x0001,
+			expBegin:     0x00,
+			expEnd:       0xFF,
+			expSpecified: true,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			domain, begin, end, err := parsePCIBusRange(tc.rangeStr, tc.bitSize)
+			domain, begin, end, specified, err := parsePCIBusRange(tc.rangeStr, tc.bitSize)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -340,6 +356,49 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 			test.AssertEqual(t, tc.expDomain, domain, "bad domain")
 			test.AssertEqual(t, tc.expBegin, begin, "bad beginning limit")
 			test.AssertEqual(t, tc.expEnd, end, "bad ending limit")
+			test.AssertEqual(t, tc.expSpecified, specified, "bad domain-specified flag")
+		})
+	}
+}
+
+func TestStorage_BdevBusRange_IgnoreDomain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rangeStr        string
+		expIgnoreDomain bool
+		expDomain       uint16
+		expStr          string
+	}{
+		"no domain; partial range": {
+			rangeStr:        "0x80-0x8f",
+			expIgnoreDomain: false,
+			expStr:          "0x80-0x8f",
+		},
+		"no domain; full bus range means ignore domain": {
+			rangeStr:        "0x00-0xff",
+			expIgnoreDomain: true,
+			expStr:          "0x00-0xff",
+		},
+		"explicit domain; full bus range does not ignore domain": {
+			rangeStr:        "0001:0x00-0xff",
+			expIgnoreDomain: false,
+			expDomain:       0x0001,
+			expStr:          "0001:0x00-0xff",
+		},
+		"explicit zero domain; full bus range does not ignore domain": {
+			rangeStr:        "0000:0x00-0xff",
+			expIgnoreDomain: false,
+			expStr:          "0x00-0xff",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			br, err := NewBdevBusRange(tc.rangeStr)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			test.AssertEqual(t, tc.expIgnoreDomain, br.IgnoreDomain, "bad ignore-domain flag")
+			test.AssertEqual(t, tc.expDomain, br.LowAddress.Domain, "bad domain")
+			test.AssertEqual(t, tc.expStr, br.String(), "bad string representation")
 		})
 	}
 }

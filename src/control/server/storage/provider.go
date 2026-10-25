@@ -583,6 +583,7 @@ func setHotplugRange(ctx context.Context, log logging.Logger, getTopo topologyGe
 		domain = tier.Bdev.BusidRange.LowAddress.Domain
 		begin = tier.Bdev.BusidRange.LowAddress.Bus
 		end = tier.Bdev.BusidRange.HighAddress.Bus
+		req.HotplugIgnoreDomain = tier.Bdev.BusidRange.IgnoreDomain
 	default:
 		var err error
 		log.Debug("generating hotplug bus-id range based on hardware topology")
@@ -592,7 +593,11 @@ func setHotplugRange(ctx context.Context, log logging.Logger, getTopo topologyGe
 		}
 	}
 
-	log.Infof("NUMA %d: hotplug bus-ids %04x:%X-%X", numaNode, domain, begin, end)
+	if req.HotplugIgnoreDomain {
+		log.Infof("NUMA %d: hotplug bus-ids %X-%X (any PCI domain)", numaNode, begin, end)
+	} else {
+		log.Infof("NUMA %d: hotplug bus-ids %04x:%X-%X", numaNode, domain, begin, end)
+	}
 	req.HotplugBusidDomain = domain
 	req.HotplugBusidBegin = begin
 	req.HotplugBusidEnd = end

@@ -374,8 +374,9 @@ func hotplugPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 			End:    req.HotplugBusidEnd,
 			// Ignore domain segment when VMD is enabled, as VMD backing devices will be
 			// assigned a different domain to the domain of the NUMA node that the VMD
-			// endpoint resides on.
-			IgnoreDomain: req.VMDEnabled,
+			// endpoint resides on. Also ignore domain when the user-specified range
+			// requested matching across all PCI domains (see BdevBusRange.IgnoreDomain).
+			IgnoreDomain: req.VMDEnabled || req.HotplugIgnoreDomain,
 		},
 	})
 }
