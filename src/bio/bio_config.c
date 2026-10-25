@@ -852,7 +852,7 @@ int
 bio_set_hotplug_filter(const char *nvme_conf)
 {
 	int	rc;
-	char	range[32];
+	char    range[32];
 
 	rc = decode_daos_object(nvme_conf, NVME_CONF_SET_HOTPLUG_RANGE, busid_range_decoders,
 				SPDK_COUNTOF(busid_range_decoders), &hotplug_busid_range);
