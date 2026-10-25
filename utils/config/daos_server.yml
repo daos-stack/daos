@@ -486,15 +486,11 @@
 #    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
 #    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
-#    # On multi-root-complex platforms where each NUMA node/socket is enumerated under
-#    # a distinct, non-zero PCI domain (segment), prefix the range with a hexadecimal
-#    # domain and colon (defaults to domain 0x0000 if omitted). A single domain-prefixed
-#    # range covers only one domain; if automatic derivation fails because the NUMA
-#    # node's PCI buses span more than one domain, engine startup will fail with an
-#    # explicit error. Set bdev_busid_range here to restrict hotplug to one of those
-#    # domains (hotplug events in the other domain will then be ignored), set it to the
-#    # full range with no domain prefix (0x00-0xff) to match this bus-ID range in any
-#    # domain instead, or set disable_hotplug instead.
+#    # On multi-root-complex platforms, each NUMA node/socket may use a distinct, non-zero
+#    # PCI domain (segment): prefix the range with a hexadecimal domain and colon (defaults
+#    # to 0x0000 if omitted). A range covers only one domain; if a NUMA node's PCI buses
+#    # span more than one domain, either restrict the range to one domain, use the full
+#    # range with no domain prefix (0x00-0xff) to match any domain, or set disable_hotplug.
 #    bdev_busid_range: 0x80-0x8f
 #    #bdev_busid_range: 128-143
 #    #bdev_busid_range: 0001:0x80-0x8f
@@ -680,15 +676,11 @@
 #    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
 #    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
-#    # On multi-root-complex platforms where each NUMA node/socket is enumerated under
-#    # a distinct, non-zero PCI domain (segment), prefix the range with a hexadecimal
-#    # domain and colon (defaults to domain 0x0000 if omitted). A single domain-prefixed
-#    # range covers only one domain; if automatic derivation fails because the NUMA
-#    # node's PCI buses span more than one domain, engine startup will fail with an
-#    # explicit error. Set bdev_busid_range here to restrict hotplug to one of those
-#    # domains (hotplug events in the other domain will then be ignored), set it to the
-#    # full range with no domain prefix (0x00-0xff) to match this bus-ID range in any
-#    # domain instead, or set disable_hotplug instead.
+#    # On multi-root-complex platforms, each NUMA node/socket may use a distinct, non-zero
+#    # PCI domain (segment): prefix the range with a hexadecimal domain and colon (defaults
+#    # to 0x0000 if omitted). A range covers only one domain; if a NUMA node's PCI buses
+#    # span more than one domain, either restrict the range to one domain, use the full
+#    # range with no domain prefix (0x00-0xff) to match any domain, or set disable_hotplug.
 #    #bdev_busid_range: 0xd0-0xdf
 #    #bdev_busid_range: 208-223
 #    #bdev_busid_range: 0001:0xd0-0xdf

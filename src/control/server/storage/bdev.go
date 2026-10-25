@@ -671,11 +671,6 @@ func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numa
 		return 0, 0, 0, errors.New("nil topology")
 	}
 
-	// Take the lowest and highest buses across all host bridges on the NUMA node,
-	// following the assumption that bus-IDs assigned to each NUMA node will always be
-	// contiguous and belong to a single PCI domain. Every range is checked below
-	// (rather than only the first and last) to confirm this assumption holds.
-
 	nodes := topo.NUMANodes
 	if len(nodes) <= int(numaNodeIdx) {
 		return 0, 0, 0, errors.Errorf("insufficient numa nodes in topology, want %d got %d",
@@ -688,8 +683,8 @@ func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numa
 			numaNodeIdx)
 	}
 
-	// Check every range rather than only the first and last, as the enumeration order of
-	// the host bridges is not guaranteed to be sorted by domain (or bus).
+	// Take the lowest/highest bus across every host bridge range (not just the first/last,
+	// since enumeration order is not guaranteed), confirming all ranges share one domain.
 	domain := buses[0].LowAddress.Domain
 	lowBus, highBus := buses[0].LowAddress.Bus, buses[0].HighAddress.Bus
 	for _, bus := range buses {

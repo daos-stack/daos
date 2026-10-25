@@ -781,12 +781,8 @@ func MustNewBdevDeviceList(devices ...string) *BdevDeviceList {
 // BdevBusRange represents a bus-ID range to be used to filter hot plug events.
 type BdevBusRange struct {
 	hardware.PCIBus
-	// IgnoreDomain, when set, indicates that the bus-ID range should match in any PCI
-	// domain rather than only LowAddress.Domain/HighAddress.Domain. This is derived (rather
-	// than configured directly) from a range that omits an explicit domain prefix and spans
-	// the full bus-ID space 0x00-0xFF, reusing the same "ignore domain, match bus-ID only"
-	// mechanism already used for VMD, to let a single engine's hotplug filter accept devices
-	// across every PCI domain rather than requiring one specific domain.
+	// IgnoreDomain, when set, matches the bus-ID range in any PCI domain. Derived from a
+	// range with no domain prefix spanning the full bus-ID space 0x00-0xFF.
 	IgnoreDomain bool
 }
 
@@ -1054,12 +1050,10 @@ func (bc *BdevConfig) Validate(class Class) error {
 }
 
 // parsePCIBusRange takes a string of format [<Domain>:]<Begin>-<End> and returns the domain,
-// begin and end values, plus whether a domain prefix was actually present in the input (as
-// opposed to defaulted). The domain component is optional (defaults to 0x0000 when absent) and
-// is always interpreted as hexadecimal without a "0x" prefix, following standard PCI BDF
-// notation (e.g. "0001"). Number base for the begin/end bus values is detected from the string
-// prefixes e.g. 0x for hexadecimal. bitSize parameter sets a cut-off for the begin/end return
-// values e.g. 8 for uint8.
+// begin and end values, plus whether a domain prefix was present in the input. The domain is
+// hexadecimal without a "0x" prefix (standard PCI BDF notation, e.g. "0001") and defaults to
+// 0x0000 when the prefix is omitted. Begin/end number base is detected from string prefixes
+// (e.g. 0x for hexadecimal); bitSize caps their return width (e.g. 8 for uint8).
 func parsePCIBusRange(numRange string, bitSize int) (uint16, uint8, uint8, bool, error) {
 	if numRange == "" {
 		return 0, 0, 0, false, nil

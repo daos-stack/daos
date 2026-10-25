@@ -119,9 +119,7 @@ struct busid_range_info {
 	uint32_t domain;
 	uint8_t  begin;
 	uint8_t  end;
-	/* Domain is ignored and only the bus-ID range is matched when VMD is enabled, replicating
-	 * the filter behavior used prior to the introduction of PCI domain awareness.
-	 */
+	/* Set for VMD, or when matching the bus-ID range in any PCI domain. */
 	bool     ignore_domain;
 };
 
