@@ -417,6 +417,8 @@ struct vos_container {
 	daos_epoch_t		vc_mod_epoch_bound;
 	/* Last timestamp when VOS reject DTX because of stale epoch. */
 	uint64_t		vc_dtx_reject_ts;
+	/* Last timestamp when warning DTX resync version. */
+	uint64_t                 vc_dtx_resync_ts;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
 	/** Index for timestamp lookup */
