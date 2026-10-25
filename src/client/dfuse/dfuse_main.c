@@ -281,7 +281,8 @@ parse_bg_limit(const char *opt, const char *arg, uint32_t *val)
 		return -DER_INVAL;
 	}
 	if (errno == ERANGE || v < 1 || v > DFUSE_BG_LIMIT_MAX) {
-		printf("Invalid --%s value '%s', must be between 1 and %d\n", opt, arg, DFUSE_BG_LIMIT_MAX);
+		printf("Invalid --%s value '%s', must be between 1 and %d\n", opt, arg,
+		       DFUSE_BG_LIMIT_MAX);
 		return -DER_INVAL;
 	}
 	*val = v;

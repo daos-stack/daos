@@ -247,17 +247,17 @@ is owned by the user.
 
 Additionally, there are several optional command-line options:
 
-| **Command-line Option**        | **Description**                                   |
-| ------------------------------ | ------------------------------------------------- |
-| --pool=<label\|uuid\>          | pool label or uuid to connect to                  |
-| --container=<label\|uuid\>     | container label or uuid to open                   |
-| --sys-name=<name\>             | DAOS system name                                  |
-| --foreground                   | run in foreground                                 |
-| --thread-count=<coun\t>         | Number of threads to use                          |
+| **Command-line Option**         | **Description**                                   |
+| ------------------------------- | ------------------------------------------------- |
+| --pool=<label\|uuid\>           | pool label or uuid to connect to                  |
+| --container=<label\|uuid\>      | container label or uuid to open                   |
+| --sys-name=<name\>              | DAOS system name                                  |
+| --foreground                    | run in foreground                                 |
+| --thread-count=<count\>         | Number of threads to use                          |
 | --max-background=<count\>       | Hard limit on outstanding background requests     |
 | --congestion-threshold=<count\> | Background requests at which the kernel throttles |
-| --multi-user                   | Run in multi user mode                            |
-| --read-only                    | Mount in read-only mode                           |
+| --multi-user                    | Run in multi user mode                            |
+| --read-only                     | Mount in read-only mode                           |
 
 The `--pool` and `--container` options can also be passed as the second and third positional
 arguments.
