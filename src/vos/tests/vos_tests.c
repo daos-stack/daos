@@ -103,10 +103,10 @@ run_all_tests(int keys)
 int
 main(int argc, char **argv)
 {
-	int                  rc        = 0;
-	int                  nr_failed = 0;
-	int                  opt       = 0;
-	int                  index     = 0;
+	int	rc = 0;
+	int	nr_failed = 0;
+	int	opt = 0;
+	int	index = 0;
 	int                  otype;
 	int                  keys;
 	const char          *vos_command    = NULL;
