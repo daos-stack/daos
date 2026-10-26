@@ -570,6 +570,19 @@ class SlurmSetup():
                 self.log.debug('DEBUG: %s for %s:', description, service)
                 run_remote(
                     self.log, nodes, command_as_user(f'{command} || true', self.root))
+        if service == 'slurmd':
+            for description, command in (
+                    ('systemd unit definition', 'systemctl cat slurmd'),
+                    ('systemd cgroup properties',
+                     'systemctl show slurmd -p Delegate -p ControlGroup -p FragmentPath'),
+                    ('PID 1 cgroup', 'cat /proc/1/cgroup'),
+                    ('cgroup v2 mount', 'findmnt -T /sys/fs/cgroup -o TARGET,FSTYPE,OPTIONS'),
+                    ('cgroup v2 controllers', 'cat /sys/fs/cgroup/cgroup.controllers'),
+                    ('cgroup v2 subtree controllers',
+                     'cat /sys/fs/cgroup/cgroup.subtree_control')):
+                self.log.debug('DEBUG: %s on %s:', description, nodes)
+                run_remote(
+                    self.log, nodes, command_as_user(f'{command} || true', self.root))
         if debug_log:
             self.log.debug('DEBUG: %s contents:', debug_log)
             command = command_as_user(f'cat {debug_log}', self.root)
