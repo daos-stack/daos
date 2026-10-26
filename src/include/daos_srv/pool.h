@@ -376,7 +376,7 @@ int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 int ds_pool_svc_query_map_dist(uuid_t uuid, uint32_t *version, bool *idle);
 
 int
-ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
+ds_pool_map_refresh_sync(struct ds_pool *pool);
 int
 ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
 

@@ -9493,7 +9493,7 @@ out:
 
 /* Update pool map version for current xstream. */
 int
-ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc)
+ds_pool_map_refresh_sync(struct ds_pool *pool)
 {
 	struct pool_map_refresh_ult_arg	arg;
 	ABT_eventual			eventual;
@@ -9504,8 +9504,8 @@ ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc)
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
-	arg.iua_pool_version = dpc->spc_map_version;
-	uuid_copy(arg.iua_pool_uuid, dpc->spc_uuid);
+	arg.iua_pool_version = pool->sp_map_version;
+	uuid_copy(arg.iua_pool_uuid, pool->sp_uuid);
 	arg.iua_eventual = eventual;
 
 	rc = dss_ult_create(ds_pool_map_refresh_ult, &arg, DSS_XS_SYS,

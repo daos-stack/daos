@@ -76,7 +76,7 @@ enum daos_module_id {
 #define DAOS_RDB_VERSION      5
 #define DAOS_RDBT_VERSION     3
 #define DAOS_SEC_VERSION      1
-#define DAOS_DTX_VERSION      4
+#define DAOS_DTX_VERSION      5
 #define DAOS_PIPELINE_VERSION 1
 #define DAOS_CHK_VERSION      1
 
