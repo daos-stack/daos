@@ -1,3 +1,9 @@
+daos (2.6.5-6) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * First release candidate for 2.6.5.p3
+
+ -- Phillip Henderson <phillip.henderson@hpe.com>  Mon, 26 Oct 2026 10:11:00 -0500
+
 daos (2.6.5-5) unstable; urgency=medium
   [ Dalton Bohning ]
   * First release candidate for 2.6.5.p2
