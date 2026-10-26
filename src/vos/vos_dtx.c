@@ -1271,6 +1271,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	struct vos_container		*cont;
 	struct vos_dtx_act_ent		*dae = NULL;
 	bool				 found;
+	uint64_t                         now;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -1316,8 +1317,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		  DF_U64 ", boundary " DF_U64 "\n", entry, epoch, cont->vc_solo_dtx_epoch);
 
 	if (intent == DAOS_INTENT_PURGE) {
-		uint32_t	age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
-		uint64_t	now;
+		uint32_t age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
 
 		/*
 		 * Don't print warning message for fresh record, since INTENT_PURGE could
@@ -1428,6 +1428,23 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 				if (unlikely(dsp->dsp_status != 0))
 					return dsp->dsp_status;
 
+				/*
+				 * Initial DTX resync (after engine quick restart) is not completed,
+				 * Former committable DTX maybe not re-synchronized yet, need retry.
+				 */
+				if (unlikely(cont->vc_dtx_resync_ver == 0)) {
+					now = daos_gettime_coarse();
+					if (now - cont->vc_dtx_resync_ts > 30) {
+						D_WARN(DF_CONT ": DTX resync for initial pool map "
+							       "blocks " DF_DTI " > 30 sec (1).\n",
+						       DP_CONT(cont->vc_id, cont->vc_pool->vp_id),
+						       DP_DTI(&DAE_XID(dae)));
+						cont->vc_dtx_resync_ts = now;
+					}
+
+					return dtx_inprogress(dae, dth, true, false, 10);
+				}
+
 				if (!dtx_is_valid_handle(dth) ||
 				    intent == DAOS_INTENT_IGNORE_NONCOMMITTED)
 					return ALB_UNAVAILABLE;
@@ -1446,6 +1463,23 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	 */
 
 	if (intent == DAOS_INTENT_IGNORE_NONCOMMITTED) {
+		/*
+		 * Initial DTX resync (after engine quick restart) is not completed,
+		 * Former committable DTX maybe not re-synchronized yet, need retry.
+		 */
+		if (unlikely(cont->vc_dtx_resync_ver == 0)) {
+			now = daos_gettime_coarse();
+			if (now - cont->vc_dtx_resync_ts > 30) {
+				D_WARN(DF_CONT ": DTX resync for initial pool map blocks " DF_DTI
+					       " more than 30 sec (2).\n",
+				       DP_CONT(cont->vc_id, cont->vc_pool->vp_id),
+				       DP_DTI(&DAE_XID(dae)));
+				cont->vc_dtx_resync_ts = now;
+			}
+
+			return dtx_inprogress(dae, dth, false, false, 11);
+		}
+
 		/* For transactional read, has to wait the non-committed
 		 * modification to guarantee the transaction semantics.
 		 */
@@ -1484,6 +1518,23 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
 			return dtx_inprogress(dae, dth, false, true, 6);
+
+		/*
+		 * Initial DTX resync (after engine quick restart) is not completed,
+		 * Former committable DTX maybe not re-synchronized yet, let's retry.
+		 */
+		if (unlikely(cont->vc_dtx_resync_ver == 0)) {
+			now = daos_gettime_coarse();
+			if (now - cont->vc_dtx_resync_ts > 30) {
+				D_WARN(DF_CONT ": DTX resync for initial pool map blocks " DF_DTI
+					       " more than 30 sec (3).\n",
+				       DP_CONT(cont->vc_id, cont->vc_pool->vp_id),
+				       DP_DTI(&DAE_XID(dae)));
+				cont->vc_dtx_resync_ts = now;
+			}
+
+			return dtx_inprogress(dae, dth, false, true, 12);
+		}
 
 		/*
 		 * For transactional read, has to wait the non-committed
@@ -2100,7 +2151,10 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32
 		if (!vos_dae_is_prepare(dae))
 			return DTX_ST_INITED;
 
-		if (pm_ver == NULL || intent != DCI_RESENT)
+		if (intent == DCI_RESYNC || intent == DCI_DEFAULT)
+			return DTX_ST_PREPARED;
+
+		if (pm_ver == NULL)
 			return DTX_ST_PREPARED;
 
 		if (*pm_ver <= cont->vc_dtx_resync_ver)
@@ -3528,6 +3582,14 @@ vos_dtx_act_reindex(struct vos_container *cont)
 	uint64_t			 start_time = daos_wallclock_secs();
 	int				 rc = 0;
 	int				 i;
+
+	/* If active DTX table is empty, then treat it as new created one. */
+	if (UMOFF_IS_NULL(dbd_off)) {
+		cont->vc_dtx_reindex_eph_diff = 0;
+		if (cont->vc_dtx_resync_ver == 0)
+			cont->vc_dtx_resync_ver = 1;
+		goto out;
+	}
 
 	while (!UMOFF_IS_NULL(dbd_off)) {
 		int	dbd_count = 0;
