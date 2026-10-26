@@ -124,3 +124,9 @@ dss_get_start_epoch(void)
 {
 	return -1;
 }
+
+int
+ds_pool_map_refresh_sync(struct ds_pool *pool)
+{
+	return -1;
+}

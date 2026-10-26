@@ -70,6 +70,28 @@ struct dtx_req_args {
 	d_list_t			*dra_act_list;
 };
 
+struct dtx_common_args {
+	struct dss_chore      dca_chore;
+	ABT_eventual          dca_chore_eventual;
+	struct dtx_req_args   dca_dra;
+	d_list_t              dca_head;
+	struct btr_root       dca_tree_root;
+	daos_handle_t         dca_tree_hdl;
+	daos_epoch_t          dca_epoch;
+	int                   dca_count;
+	int                   dca_steps;
+	d_rank_t              dca_rank;
+	uint32_t              dca_tag;
+	struct ds_cont_child *dca_cont;
+	struct dtx_id         dca_dti_inline;
+	struct dtx_id        *dca_dtis;
+	struct dtx_entry    **dca_dtes;
+
+	/* Chore-internal state variables */
+	struct dtx_req_rec   *dca_drr;
+	int                   dca_i;
+};
+
 /* The record for the DTX classify-tree in DRAM.
  * Each dtx_req_rec contains one RPC (to related rank/tag) args.
  */
@@ -264,11 +286,15 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc == 0) {
+		struct dtx_common_args *dca = container_of(dra, struct dtx_common_args, dca_dra);
+
 		din = crt_req_get(req);
 		uuid_copy(din->di_po_uuid, dra->dra_po_uuid);
 		uuid_copy(din->di_co_uuid, dra->dra_co_uuid);
 		din->di_epoch               = epoch;
 		din->di_version             = dra->dra_version;
+		din->di_led_rank            = dca->dca_rank;
+		din->di_led_tag             = dca->dca_tag;
 		din->di_dtx_array.ca_count  = drr->drr_count;
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 		if (drr->drr_flags != NULL) {
@@ -366,28 +392,6 @@ dtx_req_wait(struct dtx_req_args *dra)
 
 	return dra->dra_result;
 }
-
-struct dtx_common_args {
-	struct dss_chore	  dca_chore;
-	ABT_eventual		  dca_chore_eventual;
-	struct dtx_req_args	  dca_dra;
-	d_list_t		  dca_head;
-	struct btr_root		  dca_tree_root;
-	daos_handle_t		  dca_tree_hdl;
-	daos_epoch_t		  dca_epoch;
-	int			  dca_count;
-	int			  dca_steps;
-	d_rank_t		  dca_rank;
-	uint32_t		  dca_tgtid;
-	struct ds_cont_child	 *dca_cont;
-	struct dtx_id		  dca_dti_inline;
-	struct dtx_id		 *dca_dtis;
-	struct dtx_entry	**dca_dtes;
-
-	/* Chore-internal state variables */
-	struct dtx_req_rec	 *dca_drr;
-	int			  dca_i;
-};
 
 static int
 dtx_req_list_send(struct dtx_common_args *dca, bool is_reentrance)
@@ -669,7 +673,7 @@ dtx_rpc(struct ds_cont_child *cont, d_list_t *dti_list, struct dtx_entry **dtes,
 	dca->dca_epoch = epoch;
 	dca->dca_count = count;
 	crt_group_rank(NULL, &dca->dca_rank);
-	dca->dca_tgtid = dss_get_module_info()->dmi_tgt_id;
+	dca->dca_tag  = dss_get_module_info()->dmi_tgt_id;
 	dca->dca_cont = cont;
 	dca->dca_dtes = dtes;
 
@@ -711,8 +715,8 @@ dtx_rpc(struct ds_cont_child *cont, d_list_t *dti_list, struct dtx_entry **dtes,
 		ABT_rwlock_rdlock(pool->sp_lock);
 		for (i = 0; i < dca->dca_count; i++) {
 			rc = dtx_classify_one(pool, dca->dca_tree_hdl, &dca->dca_head, &length,
-					      dca->dca_dtes[i], dca->dca_count,
-					      dca->dca_rank, dca->dca_tgtid, dca->dca_dra.dra_opc);
+					      dca->dca_dtes[i], dca->dca_count, dca->dca_rank,
+					      dca->dca_tag, dca->dca_dra.dra_opc);
 			if (rc != 0) {
 				ABT_rwlock_unlock(pool->sp_lock);
 				goto out;
@@ -1438,6 +1442,8 @@ struct dtx_coll_rpc_args {
 	uint32_t		 dcra_ver;
 	uint32_t                 dcra_min_rank;
 	uint32_t                 dcra_max_rank;
+	uint32_t                 dcra_led_rank;
+	uint32_t                 dcra_led_tag;
 	daos_epoch_t		 dcra_epoch;
 	d_rank_list_t		*dcra_ranks;
 	uint8_t			*dcra_hints;
@@ -1496,12 +1502,14 @@ dtx_coll_rpc(struct dtx_coll_rpc_args *dcra)
 
 	uuid_copy(dci->dci_po_uuid, dcra->dcra_cont->sc_pool_uuid);
 	uuid_copy(dci->dci_co_uuid, dcra->dcra_cont->sc_uuid);
-	dci->dci_xid = dcra->dcra_xid;
-	dci->dci_version = dcra->dcra_ver;
+	dci->dci_xid             = dcra->dcra_xid;
+	dci->dci_version         = dcra->dcra_ver;
 	dci->dci_min_rank        = dcra->dcra_min_rank;
 	dci->dci_max_rank        = dcra->dcra_max_rank;
-	dci->dci_epoch = dcra->dcra_epoch;
-	dci->dci_hints.ca_count = dcra->dcra_hint_sz;
+	dci->dci_led_rank        = dcra->dcra_led_rank;
+	dci->dci_led_tag         = dcra->dcra_led_tag;
+	dci->dci_epoch           = dcra->dcra_epoch;
+	dci->dci_hints.ca_count  = dcra->dcra_hint_sz;
 	dci->dci_hints.ca_arrays = dcra->dcra_hints;
 
 	rc = crt_req_send(req, dtx_coll_rpc_cb, dcra);
@@ -1547,6 +1555,8 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 	dcra->dcra_ver      = version;
 	dcra->dcra_min_rank = dce->dce_min_rank;
 	dcra->dcra_max_rank = dce->dce_max_rank;
+	dcra->dcra_led_rank = dss_self_rank();
+	dcra->dcra_led_tag  = dss_get_module_info()->dmi_tgt_id;
 	dcra->dcra_epoch    = epoch;
 	dcra->dcra_ranks    = dce->dce_ranks;
 	dcra->dcra_hints    = dce->dce_hints;
