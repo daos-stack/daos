@@ -27,6 +27,7 @@ dnf --nodocs install ${dnf_install_args} \
     cpio \
     createrepo_c \
     cunit-devel \
+    dbus-1-devel \
     fdupes \
     flex \
     gcc \
@@ -38,6 +39,7 @@ dnf --nodocs install ${dnf_install_args} \
     hwloc-devel \
     libaio-devel \
     libasan8 \
+    libbpf-devel \
     libcmocka-devel \
     libcapstone-devel \
     libevent-devel \

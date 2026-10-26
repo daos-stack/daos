@@ -14,10 +14,12 @@ and Leap, `libmunge-dev libhwloc-dev` on Ubuntu). Accounting support also requir
 MariaDB client development files providing `/usr/bin/mysql_config`: `mariadb-devel`
 on EL9, `libmariadb-devel` on Leap, and `libmariadb-dev libmariadb-dev-compat` on
 Ubuntu. The image setup scripts include these prerequisites.
-Optional plugins are detected by Slurm's configure script;
-cgroup-v2 support additionally needs libbpf and D-Bus development support as
-described in the upstream administrator guide. Accounting/MySQL support is
-required; HDF5 and REST services are disabled for this test-cluster build.
+Optional plugins are detected by Slurm's configure script. Cgroup-v2 support
+requires libbpf and D-Bus development packages: `libbpf-devel dbus-devel` on
+EL9, `libbpf-devel dbus-1-devel` on Leap, or `libbpf-dev libdbus-1-dev` on
+Ubuntu. These packages are included by the build-environment setup scripts in
+`utils/scripts/`. Accounting/MySQL support is required; HDF5 and REST services
+are disabled for this test-cluster build.
 Rebuild any existing Slurm dependency tree previously built without MySQL support.
 
 Build just Slurm from the pinned Git source, allowing its system prerequisites:

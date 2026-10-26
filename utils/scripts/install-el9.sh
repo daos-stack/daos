@@ -28,6 +28,7 @@ dnf --nodocs install ${dnf_install_args} \
     createrepo \
     CUnit-devel \
     daxctl-devel \
+    dbus-devel \
     diffutils \
     e2fsprogs \
     fdupes \
@@ -43,6 +44,7 @@ dnf --nodocs install ${dnf_install_args} \
     json-c-devel \
     libaio-devel \
     libasan \
+    libbpf-devel \
     libubsan \
     libtsan \
     libcmocka-devel \

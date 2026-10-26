@@ -33,10 +33,12 @@ apt-get install ${apt_get_install_args} \
     kmod \
     libaio-dev \
     libasan6 \
+    libbpf-dev \
     libboost-dev \
     libcapstone-dev \
     libcmocka-dev \
     libcunit1-dev \
+    libdbus-1-dev \
     libdaxctl-dev \
     libfuse3-dev \
     libgoogle-perftools-dev \
