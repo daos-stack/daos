@@ -340,10 +340,13 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             return pydaos.DaosErrorCode(err_no).name
 
         logfile_glob = log_file + r".*[0-9]"
+        self.log.info("Checking %s on %s for errors:", logfile_glob, self.hostlist_clients)
         errors_count = get_errors_count(self.log, self.hostlist_clients, logfile_glob)
         for error in self.expected_errors:
             if error not in errors_count:
                 errors_count[error] = 0
+        for error in errors_count:
+            self.log.info("  %s [%s]: %s", err_to_str(error), error, errors_count[error])
 
         if errors_count[self.DER_NOSPACE] <= 0:
             self.fail(
@@ -741,8 +744,6 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Repeat the test in loop.
         for _loop in range(10):
-            self.log_step(f"Loop {_loop}: Starting loop")
-
             self.log_step(f"Loop {_loop}: Starting Auto_Write to fill SCM to 75% usage")
             self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
             self.log.info(self.pool.pool_percentage_used())
