@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -95,6 +95,12 @@ dss_xstream_exiting(struct dss_xstream *dxs)
 
 void
 ds_cont_child_get(struct ds_cont_child *cont)
+{
+	assert_true(false);
+}
+
+void
+ds_pool_get(struct ds_pool *pool)
 {
 	assert_true(false);
 }
