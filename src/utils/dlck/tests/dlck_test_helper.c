@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -256,12 +256,6 @@ exec_one(void *arg)
 	struct dlck_file     *file;
 	int                   rc;
 
-	rc = dlck_engine_xstream_init(xst->xs);
-	if (rc != DER_SUCCESS) {
-		xst->rc = rc;
-		return;
-	}
-
 	d_list_for_each_entry(file, &xst->args_files->list, link) {
 		/** do not process the given file if the target is not requested */
 		if (dlck_bitmap_isclr32(file->targets_bitmap, xst->xs->tgt_id)) {
@@ -284,19 +278,7 @@ exec_one(void *arg)
 		}
 	}
 
-	if (xst->rc != DER_SUCCESS) {
-		goto fail_xstream_fini;
-	}
-
-	rc = dlck_engine_xstream_fini(xst->xs);
-	if (rc != DER_SUCCESS) {
-		xst->rc = rc;
-	}
-
 	return;
-
-fail_xstream_fini:
-	(void)dlck_engine_xstream_fini(xst->xs);
 }
 
 /**
@@ -385,11 +367,13 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 		return rc;
 	}
 
+	/** register DTX module key */
+	dss_register_key(dtx_module.sm_key);
+
 	/** start an engine */
 	rc = dlck_engine_start(&args->engine, &engine);
 	if (rc != DER_SUCCESS) {
-		(void)ABT_finalize();
-		return rc;
+		goto fail_unregister;
 	}
 
 	if (d_list_empty(&args->files.list)) {
@@ -416,9 +400,6 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 		random_uuid(bundle->co_uuids[i], &seed);
 	}
 
-	/** register DTX module key */
-	dss_register_key(dtx_module.sm_key);
-
 	bundle->args_engine = &args->engine;
 	bundle->args_files  = &args->files;
 	bundle->engine      = engine;
@@ -428,6 +409,8 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 
 fail_engine_stop:
 	(void)dlck_engine_stop(engine);
+fail_unregister:
+	dss_unregister_key(dtx_module.sm_key);
 	(void)ABT_finalize();
 	return rc;
 }
@@ -438,21 +421,25 @@ teardown(struct bundle *bundle)
 	int rc_abt;
 	int rc;
 
-	dss_unregister_key(dtx_module.sm_key);
-
 	D_FREE(bundle->co_uuids);
 
 	rc = dlck_engine_stop(bundle->engine);
 	if (rc != DER_SUCCESS) {
-		(void)ABT_finalize();
-		return rc;
+		goto fail_unregister;
 	}
+
+	dss_unregister_key(dtx_module.sm_key);
 
 	rc_abt = ABT_finalize();
 	if (rc_abt != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc_abt);
 	}
 
+	return rc;
+
+fail_unregister:
+	dss_unregister_key(dtx_module.sm_key);
+	(void)ABT_finalize();
 	return rc;
 }
 

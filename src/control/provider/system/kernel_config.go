@@ -77,7 +77,10 @@ func parseKernelConfigFile(path string) (KernelConfig, error) {
 // ParseKernelConfig loads and parses the running kernel's configuration.
 // If overridePath is non-empty, only that path is tried. Otherwise, it
 // tries /proc/config.gz (if CONFIG_IKCONFIG_PROC is enabled), then falls
-// back to /boot/config-<kernel-release>.
+// back to /boot/config-<kernel-release>. If neither is available, an empty
+// config is returned alongside a non-nil error describing the failure so
+// callers can log the reason while still gracefully degrading (e.g. in test
+// environments).
 func ParseKernelConfig(overridePath ...string) (KernelConfig, error) {
 	if len(overridePath) > 0 && overridePath[0] != "" {
 		return parseKernelConfigFile(overridePath[0])
@@ -91,13 +94,20 @@ func ParseKernelConfig(overridePath ...string) (KernelConfig, error) {
 	// Fall back to /boot/config-<release>
 	var uts unix.Utsname
 	if err := unix.Uname(&uts); err != nil {
-		return nil, errors.Wrap(err, "getting kernel release")
+		return make(KernelConfig), errors.Wrap(err, "getting kernel release")
 	}
 
 	release := unix.ByteSliceToString(uts.Release[:])
 	bootConfig := filepath.Join("/boot", "config-"+release)
 
-	return parseKernelConfigFile(bootConfig)
+	cfg, err := parseKernelConfigFile(bootConfig)
+	if err != nil {
+		// Return empty config alongside the error so callers can gracefully
+		// degrade (e.g. in test environments) while still being able to log
+		// or diagnose why the kernel config was unavailable.
+		return make(KernelConfig), err
+	}
+	return cfg, nil
 }
 
 // IsEnabled returns true if the given config option is enabled

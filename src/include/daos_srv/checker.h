@@ -117,6 +117,20 @@ ck_report(void *arg, enum report_opts opts, const char *fmt, ...)
 
 	va_start(args, fmt);
 
+	if (opts & REPORT_RC) {
+		int rc = va_arg(args, int);
+
+		if (rc == 0) {
+			ck_report(arg, REPORT_MSG, "%s: %s.\n", fmt, CHECKER_OK_INFIX);
+		} else {
+			ck_report(arg, REPORT_ERROR, "%s: " DF_RC "\n", fmt, DP_RC(rc));
+		}
+
+		va_end(args);
+
+		return;
+	}
+
 	switch (opts & ~REPORT_FLAGS_MASK) {
 	case REPORT_ERROR:
 		ck_common_printf(ck, "%s%s", prefix, CHECKER_ERROR_INFIX);

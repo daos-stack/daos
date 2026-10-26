@@ -186,7 +186,7 @@ class ListVerboseTest(IorTestBase):
 
         msg = "Round up amount is too big! Threshold = {}, Diff = {}".format(
             threshold, diff)
-        self.assertTrue(diff < threshold, msg)
+        self.assertLess(diff, threshold, msg)
 
     def verify_pool_lists(self, targets_disabled, scm_size, nvme_size, state, rebuild_state,
                           ranks_disabled, rebuild_degraded):
@@ -258,7 +258,8 @@ class ListVerboseTest(IorTestBase):
 
         self.log.info("actual_pools: %s", actual_pools)
         self.log.info("expected_pools: %s", expected_pools)
-        self.assertListEqual(expected_pools, actual_pools)
+        self.assertListEqual(expected_pools, actual_pools,
+                             "List of expected pools and pools returned by 'dmg pool list'")
 
         # For convenience.
         return actual_pools

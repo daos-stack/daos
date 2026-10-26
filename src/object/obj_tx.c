@@ -1263,6 +1263,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	struct obj_reasb_req	*reasb_req = NULL;
 	uint32_t		 size;
 	uint32_t		 start_tgt;
+	uint32_t                 grp_size;
 	int			 skipped_parity = 0;
 	int			 handled = 0;
 	int			 grp_start;
@@ -1279,19 +1280,29 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 					  dtr_link);
 
 	oca = obj_get_oca(obj);
-	size = sizeof(*dtr) + sizeof(uint32_t) * obj->cob_grp_size;
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (obj->cob_version != tx->tx_pm_ver || obj->cob_shards == NULL) {
+		D_DEBUG(DB_IO, "Stale layout during CPD classification, ver %u/%u\n",
+			obj->cob_version, tx->tx_pm_ver);
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		return -DER_STALE;
+	}
+	grp_size = obj_get_grp_size(obj);
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
+	size = sizeof(*dtr) + sizeof(uint32_t) * grp_size;
 	D_ALLOC(dtr, size);
 	if (dtr == NULL)
 		return -DER_NOMEM;
 
-	grp_start = grp_idx * obj->cob_grp_size;
+	grp_start            = grp_idx * grp_size;
 	dcsr->dcsr_ec_tgt_nr = 0;
 
 	if (dcsr->dcsr_opc == DCSO_UPDATE) {
 		dcu = &dcsr->dcsr_update;
 		reasb_req = dcsr->dcsr_reasb;
 		if (dcu->dcu_flags & ORF_EC && reasb_req->tgt_bitmap != NIL_BITMAP) {
-			D_ALLOC_ARRAY(dcu->dcu_ec_tgts, obj->cob_grp_size);
+			D_ALLOC_ARRAY(dcu->dcu_ec_tgts, grp_size);
 			if (dcu->dcu_ec_tgts == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1302,14 +1313,13 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	}
 
 	if (daos_oclass_is_ec(oca))
-		start_tgt = obj_ec_shard_idx(obj, dcsr->dcsr_dkey_hash, obj_get_grp_size(obj) - 1);
+		start_tgt = obj_ec_shard_idx(obj, dcsr->dcsr_dkey_hash, grp_size - 1);
 	else
-		start_tgt = obj_get_grp_size(obj) - 1;
+		start_tgt = grp_size - 1;
 
 	/* Descending order to guarantee that EC parity is handled firstly. */
-	for (i = 0, idx = start_tgt, shard_idx = idx + grp_start; i < obj_get_grp_size(obj);
-	     i++, idx = ((idx + obj_get_grp_size(obj) - 1) % obj_get_grp_size(obj)),
-	     shard_idx = idx + grp_start) {
+	for (i = 0, idx = start_tgt, shard_idx = idx + grp_start; i < grp_size;
+	     i++, idx = ((idx + grp_size - 1) % grp_size), shard_idx = idx + grp_start) {
 		rc = obj_shard_open(obj, shard_idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
@@ -1477,6 +1487,13 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		handled++;
 	}
 
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (obj->cob_version != tx->tx_pm_ver)
+		rc = -DER_STALE;
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+	if (rc != 0)
+		goto out;
+
 	if (handled == 0) {
 		D_ERROR("All shards in the redundancy group for the opc %u "
 			"against the obj "DF_OID" for DTX "DF_DTI" are lost\n",
@@ -1490,7 +1507,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 	if (daos_oclass_is_ec(oca) && !all) {
 		dtr->dtr_group.drg_redundancy = oca->u.ec.e_p + 1;
-		D_ASSERT(dtr->dtr_group.drg_redundancy <= obj->cob_grp_size);
+		D_ASSERT(dtr->dtr_group.drg_redundancy <= grp_size);
 	} else {
 		dtr->dtr_group.drg_redundancy = dtr->dtr_group.drg_tgt_cnt;
 	}
@@ -1998,9 +2015,17 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		if (i < 0)
 			D_GOTO(out, rc = i);
 
-		leader_oid.id_pub = obj->cob_md.omd_id;
-		leader_oid.id_shard = i;
-		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
+		D_RWLOCK_RDLOCK(&obj->cob_lock);
+		if (obj->cob_version != tx->tx_pm_ver || obj->cob_shards == NULL ||
+		    i >= obj->cob_shards_nr) {
+			D_RWLOCK_UNLOCK(&obj->cob_lock);
+			D_GOTO(out, rc = -DER_STALE);
+		}
+		leader_oid.id_pub   = obj->cob_md.omd_id;
+		leader_oid.id_shard = obj_get_shard(obj, i)->po_shard;
+		leader_dtrg_idx     = obj_get_shard(obj, i)->po_target;
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
+
 		if (!obj_is_ec(obj) && act_grp_cnt == 1)
 			mbs->dm_flags |= DMF_SRDG_REP;
 
@@ -2011,22 +2036,35 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER)) {
-		i = dc_tx_leftmost_req(tx, true);
+		i    = dc_tx_leftmost_req(tx, true);
 		dcsr = &tx->tx_req_cache[i];
-		obj = dcsr->dcsr_obj;
+		obj  = dcsr->dcsr_obj;
 
-		leader_oid.id_pub = obj->cob_md.omd_id;
 		/* Use the shard 0 as the leader for test. The test program
 		 * will guarantee that at least one sub-modification happen
 		 * on the object shard 0.
 		 */
-		leader_oid.id_shard = 0;
-		leader_dtrg_idx = obj_get_shard(obj, 0)->po_target;
+		D_RWLOCK_RDLOCK(&obj->cob_lock);
+		if (obj->cob_version != tx->tx_pm_ver || obj->cob_shards == NULL ||
+		    obj->cob_shards_nr == 0) {
+			D_RWLOCK_UNLOCK(&obj->cob_lock);
+			D_GOTO(out, rc = -DER_STALE);
+		}
+		leader_oid.id_pub   = obj->cob_md.omd_id;
+		leader_oid.id_shard = obj_get_shard(obj, 0)->po_shard;
+		leader_dtrg_idx     = obj_get_shard(obj, 0)->po_target;
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
 	}
 
-	dcsh->dcsh_xid = tx->tx_id;
+	if (leader_dtrg_idx >= tgt_cnt || dtrgs[leader_dtrg_idx].dtrg_req_idx == NULL) {
+		D_DEBUG(DB_IO, "TX " DF_DTI " leader target %u is not a classified participant\n",
+			DP_DTI(&tx->tx_id), leader_dtrg_idx);
+		D_GOTO(out, rc = -DER_STALE);
+	}
+
+	dcsh->dcsh_xid        = tx->tx_id;
 	dcsh->dcsh_leader_oid = leader_oid;
-	dcsh->dcsh_epoch = tx->tx_epoch;
+	dcsh->dcsh_epoch      = tx->tx_epoch;
 	if (tx->tx_epoch.oe_flags & DTX_EPOCH_UNCERTAIN)
 		dcsh->dcsh_epoch.oe_rpc_flags |= ORF_EPOCH_UNCERTAIN;
 	else

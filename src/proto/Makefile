@@ -66,6 +66,7 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/srv/srv.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\
+		   security/pop.pb.go\
 		   cmd/hello_drpc/hello/drpc_test.pb.go
 CTRL_SOURCE_ROOT = $(DAOS_ROOT)/src/control
 PROTO_SOURCE_DIR = $(DAOS_ROOT)/src/proto
@@ -130,6 +131,9 @@ $(CTRL_SOURCE_ROOT)/drpc/%.pb.go: $(PROTO_SOURCE_DIR)/%.proto
 $(CTRL_SOURCE_ROOT)/security/auth/%.pb.go: $(PROTO_SOURCE_DIR)/security/%.proto
 	protoc -I $(dir $<) --go_out=$(dir $@) --go_opt=paths=source_relative \
 			    --go-grpc_out=$(dir $@) --go-grpc_opt=paths=source_relative $<
+
+$(CTRL_SOURCE_ROOT)/security/%.pb.go: $(PROTO_SOURCE_DIR)/security/%.proto
+	protoc -I $(dir $<) --go_out=$(dir $@) --go_opt=paths=source_relative $<
 
 $(CTRL_SOURCE_ROOT)/cmd/hello_drpc/hello/%.pb.go: $(PROTO_SOURCE_DIR)/test/%.proto
 	protoc -I $(dir $<) --go_out=$(dir $@) --go_opt=paths=source_relative \
