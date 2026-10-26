@@ -63,6 +63,8 @@ enum dtx_operation {
 	((uuid_t)		(di_co_uuid)		CRT_VAR)	\
 	((uint64_t)		(di_epoch)		CRT_VAR)	\
 	((uint32_t)		(di_version)		CRT_VAR)	\
+	((uint32_t)		(di_led_rank)		CRT_VAR)	\
+	((uint32_t)		(di_led_tag)		CRT_VAR)	\
 	((uint32_t)		(di_padding)		CRT_VAR)	\
 	((struct dtx_id)	(di_dtx_array)		CRT_ARRAY)	\
 	((uint32_t)		(di_flags)		CRT_ARRAY)
@@ -89,6 +91,8 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 	((uint32_t)		(dci_version)		CRT_VAR)	\
 	((uint32_t)		(dci_min_rank)		CRT_VAR)	\
 	((uint32_t)		(dci_max_rank)		CRT_VAR)	\
+	((uint32_t)		(dci_led_rank)		CRT_VAR)	\
+	((uint32_t)		(dci_led_tag)		CRT_VAR)	\
 	((uint32_t)		(dci_padding)		CRT_VAR)	\
 	((uint64_t)		(dci_epoch)		CRT_VAR)	\
 	((uint8_t)		(dci_hints)		CRT_ARRAY)

@@ -14,6 +14,7 @@
 #include <daos/btree_class.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/container.h>
+#include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
 #include <gurt/telemetry_consumer.h>
@@ -156,6 +157,56 @@ struct daos_module_metrics dtx_metrics = {
     .dmm_nr_metrics = dtx_metrics_count,
 };
 
+static int
+dtx_abort_check(struct ds_pool *pool, struct dtx_id *xid, uint32_t version, uint32_t rank,
+		uint32_t tag, uint32_t opc)
+{
+	struct pool_domain    *dom;
+	struct pool_component *comp;
+	uint32_t               status = PO_COMP_ST_UNKNOWN;
+	int                    rc;
+
+	/* The engine just restarted without pool map yet. */
+	if (unlikely(pool->sp_map == NULL)) {
+		rc = ds_pool_map_refresh_sync(pool);
+		if (rc != 0) {
+			D_ERROR("No pool map for opc %u with " DF_DTI ", version %u\n", opc,
+				DP_DTI(xid), version);
+			return rc;
+		}
+	}
+
+	if (unlikely(pool->sp_map_version > version)) {
+		ABT_rwlock_rdlock(pool->sp_lock);
+		dom = pool_map_find_dom_by_rank(pool->sp_map, rank);
+		if (dom != NULL)
+			status = dom->do_comp.co_status;
+		ABT_rwlock_unlock(pool->sp_lock);
+
+		/* Only UPIN or DRAIN target can be as the DTX leader. */
+		if (status != PO_COMP_ST_UPIN && status != PO_COMP_ST_DRAIN) {
+			D_ERROR("Refuse opc %u for " DF_DTI " from %u:%u, status %u, version %u\n",
+				opc, DP_DTI(xid), rank, tag, status, version);
+			return -DER_NO_PERM;
+		}
+
+		if (unlikely(tag >= dss_tgt_nr)) {
+			D_ERROR("Invalid leader %u:%u for opc %u with " DF_DTI ", version %u\n",
+				rank, tag, opc, DP_DTI(xid), version);
+			return -DER_NO_PERM;
+		}
+
+		comp = &dom->do_targets[tag].ta_comp;
+		if (comp->co_status != PO_COMP_ST_UPIN && comp->co_status != PO_COMP_ST_DRAIN) {
+			D_ERROR("Refuse opc %u for " DF_DTI " from %u:%u, status %u, version %u\n",
+				opc, DP_DTI(xid), rank, tag, status, version);
+			return -DER_NO_PERM;
+		}
+	}
+
+	return 0;
+}
+
 static void
 dtx_handler(crt_rpc_t *rpc)
 {
@@ -231,6 +282,12 @@ dtx_handler(crt_rpc_t *rpc)
 		break;
 	}
 	case DTX_ABORT:
+		rc = dtx_abort_check(cont->sc_pool->spc_pool,
+				     (struct dtx_id *)din->di_dtx_array.ca_arrays, din->di_version,
+				     din->di_led_rank, din->di_led_tag, DTX_ABORT);
+		if (rc != 0)
+			goto out;
+
 		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 			break;
 
@@ -374,6 +431,7 @@ dtx_coll_handler(crt_rpc_t *rpc)
 	int				 len;
 	int				 rc;
 	int				 i;
+	struct ds_pool                  *pool = NULL;
 
 	D_ASSERT(hints != NULL);
 
@@ -387,6 +445,17 @@ dtx_coll_handler(crt_rpc_t *rpc)
 		D_ERROR("On-wire data corruption: myrank %u, max_rank %u, min_rank %u\n", myrank,
 			dci->dci_max_rank, dci->dci_min_rank);
 		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (opc == DTX_COLL_ABORT) {
+		rc = ds_pool_lookup(dci->dci_po_uuid, &pool);
+		if (rc != 0)
+			goto out;
+
+		rc = dtx_abort_check(pool, &dci->dci_xid, dci->dci_version, dci->dci_led_rank,
+				     dci->dci_led_tag, DTX_COLL_ABORT);
+		if (rc != 0)
+			goto out;
 	}
 
 	D_DEBUG(DB_TRACE, "Handling collective DTX PRC %u on rank %d for " DF_DTI " with hint %d\n",
@@ -492,6 +561,9 @@ dtx_coll_handler(crt_rpc_t *rpc)
 	}
 
 out:
+	if (pool != NULL)
+		ds_pool_put(pool);
+
 	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE,
 		 "Handled collective DTX PRC %u on rank %u for "DF_DTI" in "
 		 DF_UUID"/"DF_UUID": "DF_RC"\n", opc, myrank, DP_DTI(&dci->dci_xid),
