@@ -1750,9 +1750,9 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 			}
 
 			rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list,
-						clp[i].clp_uuid, CHK_LEADER_RANK,
-						0 /* useless status */, NULL /* bookmark */, ins,
-						NULL /* shard_nr */, NULL /* data */, NULL, &cpr);
+						clp[i].clp_uuid, CHK_LEADER_RANK, 0 /* status */,
+						NULL /* bookmark */, ins, NULL, NULL /* data */,
+						NULL, NULL, &cpr);
 			if (rc != 0) {
 				D_ERROR("Failed to create record for dangling pool "
 					DF_UUIDF" with %s: "DF_RC"\n", DP_UUID(clp[i].clp_uuid),
@@ -2808,8 +2808,8 @@ chk_leader_start_cb(struct chk_co_rpc_cb_args *cb_args)
 			goto out;
 
 		rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, clue->pc_uuid,
-					clue->pc_rank, 0 /* useless status */, NULL, ins, NULL,
-					clue, chk_leader_free_clue, NULL);
+					clue->pc_rank, 0 /* status */, NULL, ins, NULL, clue,
+					chk_leader_free_clue, NULL, NULL);
 		if (rc != 0) {
 			chk_leader_free_clue(clue);
 			goto out;
@@ -3164,8 +3164,67 @@ chk_leader_free_shard(void *data)
 	D_FREE(shard);
 }
 
+static void
+chk_leader_renew_shard(void *data, uint32_t status)
+{
+	struct chk_query_pool_shard *shard = data;
+
+	shard->cqps_status = status;
+}
+
 static int
-chk_leader_query_cb(struct chk_co_rpc_cb_args *cb_args)
+chk_leader_query_pool(uuid_t uuid, void *args)
+{
+	struct chk_query_args       *cqa   = args;
+	struct chk_instance         *ins   = cqa->cqa_ins;
+	struct chk_query_pool_shard *shard = NULL;
+	struct chk_bookmark          cbk;
+	char                         uuid_str[DAOS_UUID_STR_SIZE];
+	int                          rc;
+
+	D_ALLOC_PTR(shard);
+	if (shard == NULL)
+		return -DER_NOMEM;
+
+	chk_uuid_unparse(ins, uuid, uuid_str);
+	rc = chk_bk_fetch_pool(&cbk, uuid_str);
+	if (rc == -DER_NONEXIST) {
+		rc = ds_mgmt_pool_exist(uuid);
+		if (rc <= 0) {
+			D_FREE(shard);
+			goto out;
+		}
+
+		shard->cqps_status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
+		shard->cqps_phase  = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
+	} else if (rc != 0) {
+		goto out;
+	} else {
+		shard->cqps_status = cbk.cb_pool_status;
+		shard->cqps_phase  = cbk.cb_phase;
+		memcpy(&shard->cqps_statistics, &cbk.cb_statistics, sizeof(shard->cqps_statistics));
+		memcpy(&shard->cqps_time, &cbk.cb_time, sizeof(shard->cqps_time));
+	}
+
+	shard->cqps_rank = CHK_LEADER_RANK;
+	uuid_copy(shard->cqps_uuid, uuid);
+
+	rc = chk_pool_add_shard(cqa->cqa_hdl, &cqa->cqa_list, uuid, CHK_LEADER_RANK,
+				shard->cqps_status, NULL, ins, &cqa->cqa_count, shard,
+				chk_leader_free_shard, chk_leader_renew_shard, NULL);
+
+out:
+	if (rc != 0) {
+		D_ERROR(DF_LEADER " failed to add pool " DF_UUID " for query " DF_RC "\n",
+			DP_LEADER(ins), DP_UUID(uuid), DP_RC(rc));
+		D_FREE(shard);
+	}
+
+	return rc;
+}
+
+static int
+chk_leader_remote_query_cb(struct chk_co_rpc_cb_args *cb_args)
 {
 	struct chk_query_args		*cqa = cb_args->cb_priv;
 	struct chk_query_pool_shard	*shards = cb_args->cb_data;
@@ -3191,7 +3250,7 @@ chk_leader_query_cb(struct chk_co_rpc_cb_args *cb_args)
 
 		rc = chk_pool_add_shard(cqa->cqa_hdl, &cqa->cqa_list, shard->cqps_uuid,
 					shard->cqps_rank, shard->cqps_status, NULL, cqa->cqa_ins,
-					&cqa->cqa_count, shard, chk_leader_free_shard, NULL);
+					&cqa->cqa_count, shard, chk_leader_free_shard, NULL, NULL);
 		if (rc != 0) {
 			chk_leader_free_shard(shard);
 			goto out;
@@ -3204,6 +3263,21 @@ out:
 			DF_RC"\n", DP_LEADER(cqa->cqa_ins), cb_args->cb_result, DP_RC(rc));
 
 	return rc;
+}
+
+static int
+chk_leader_local_query_cb(struct sys_db *db, char *table, d_iov_t *key, void *args, unsigned *acts)
+{
+	struct chk_query_args *cqa      = args;
+	char                  *uuid_str = key->iov_buf;
+	uuid_t                 uuid;
+
+	if (!chk_is_valid_uuid_iov(cqa->cqa_ins, key))
+		return 0;
+
+	uuid_parse(uuid_str, uuid);
+
+	return chk_leader_query_pool(uuid, args);
 }
 
 static struct chk_query_args *
@@ -3237,54 +3311,6 @@ chk_cqa_free(struct chk_query_args *cqa)
 		dbtree_destroy(cqa->cqa_hdl, NULL);
 		D_FREE(cqa);
 	}
-}
-
-static int
-chk_leader_query_pool(uuid_t uuid, void *args)
-{
-	struct chk_query_args       *cqa   = args;
-	struct chk_instance         *ins   = cqa->cqa_ins;
-	struct chk_query_pool_shard *shard = NULL;
-	struct chk_bookmark          cbk;
-	char                         uuid_str[DAOS_UUID_STR_SIZE];
-	int                          rc;
-
-	D_ALLOC_PTR(shard);
-	if (shard == NULL)
-		return -DER_NOMEM;
-
-	chk_uuid_unparse(ins, uuid, uuid_str);
-	rc = chk_bk_fetch_pool(&cbk, uuid_str);
-	if (rc == -DER_NONEXIST) {
-		rc = ds_mgmt_pool_exist(uuid);
-		if (rc <= 0)
-			goto out;
-
-		shard->cqps_status = CHK__CHECK_POOL_STATUS__CPS_UNCHECKED;
-		shard->cqps_phase  = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
-	} else if (rc != 0) {
-		goto out;
-	} else {
-		shard->cqps_status = cbk.cb_pool_status;
-		shard->cqps_phase  = cbk.cb_phase;
-		shard->cqps_time   = cbk.cb_time;
-	}
-
-	shard->cqps_rank = CHK_LEADER_RANK;
-	uuid_copy(shard->cqps_uuid, uuid);
-
-	rc = chk_pool_add_shard(cqa->cqa_hdl, &cqa->cqa_list, uuid, CHK_LEADER_RANK,
-				shard->cqps_status, NULL, ins, &cqa->cqa_count, shard,
-				chk_leader_free_shard, NULL);
-
-out:
-	if (rc != 0) {
-		D_ERROR(DF_LEADER " failed to add pool " DF_UUID " for query " DF_RC "\n",
-			DP_LEADER(ins), DP_UUID(uuid), DP_RC(rc));
-		D_FREE(shard);
-	}
-
-	return rc;
 }
 
 int
@@ -3336,7 +3362,7 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 again:
 	try_cnt++;
 	ver = ins->ci_ns_ver;
-	rc  = chk_query_remote(ins->ci_ranks, gen, pool_nr, pools, chk_leader_query_cb, cqa);
+	rc  = chk_query_remote(ins->ci_ranks, gen, pool_nr, pools, chk_leader_remote_query_cb, cqa);
 	if (rc != 0) {
 		if (rc != -DER_OOG && rc != -DER_GRPVER && rc != -DER_AGAIN)
 			goto out;
@@ -3376,7 +3402,9 @@ again:
 	}
 
 	if (pool_nr == 0) {
-		rc = ds_mgmt_tgt_pool_iterate(chk_leader_query_pool, cqa);
+		rc = chk_traverse_pools(chk_leader_local_query_cb, cqa);
+		if (rc != 0)
+			goto out;
 	} else {
 		for (i = 0; i < pool_nr; i++) {
 			rc = chk_leader_query_pool(pools[i], cqa);

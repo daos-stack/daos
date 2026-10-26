@@ -352,6 +352,8 @@ typedef int (*chk_co_rpc_cb_t)(struct chk_co_rpc_cb_args *cb_args);
 
 typedef void (*chk_pool_free_data_t)(void *data);
 
+typedef void (*chk_pool_renew_data_t)(void *data, uint32_t status);
+
 enum chk_start_flags {
 	/* Reset all check bookmarks, for leader, engines and all pools. */
 	CSF_RESET_ALL		= 1,
@@ -583,6 +585,7 @@ struct chk_pool_shard {
 	/* Link into chk_pool_rec::cpr_shard_list. */
 	d_list_t		 cps_link;
 	d_rank_t		 cps_rank;
+	uint32_t                 cps_status;
 	void			*cps_data;
 	chk_pool_free_data_t	 cps_free_cb;
 };
@@ -612,7 +615,7 @@ struct chk_pool_rec {
 	uint32_t cpr_started : 1, cpr_start_post : 1, cpr_stop : 1, cpr_done : 1, cpr_skip : 1,
 	    cpr_immutable : 1, cpr_dangling : 1, cpr_for_orphan : 1, cpr_notified_exit : 1,
 	    cpr_destroyed : 1, cpr_healthy : 1, cpr_delay_label : 1, cpr_exist_on_ms : 1,
-	    cpr_not_export_ps : 1, cpr_map_refreshed : 1, cpr_has_pending : 1;
+	    cpr_not_export_ps : 1, cpr_map_refreshed : 1;
 
 	int			 cpr_advice;
 	int			 cpr_refs;
@@ -627,6 +630,7 @@ struct chk_pool_rec {
 	uint64_t		 cpr_label_seq;
 	ABT_mutex		 cpr_mutex;
 	ABT_cond		 cpr_cond;
+	uint32_t                 cpr_query_status;
 };
 
 struct chk_pending_rec {
@@ -732,7 +736,7 @@ int chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv);
 int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank,
 		       uint32_t status, struct chk_bookmark *bk, struct chk_instance *ins,
 		       uint32_t *shard_nr, void *data, chk_pool_free_data_t free_cb,
-		       struct chk_pool_rec **cpr);
+		       chk_pool_renew_data_t renew_cb, struct chk_pool_rec **cpr);
 
 void chk_pool_shard_cleanup(struct chk_instance *ins);
 
@@ -909,6 +913,13 @@ void chk_vos_cleanup(void);
 	} while (0)
 
 /* clang-format on */
+
+static inline bool
+chk_pool_check_in_progress(uint32_t status)
+{
+	return status == CHK__CHECK_POOL_STATUS__CPS_CHECKING ||
+	       status == CHK__CHECK_POOL_STATUS__CPS_PENDING;
+}
 
 static inline bool
 chk_is_ins_reset(struct chk_instance *ins, uint32_t flags)

@@ -3165,7 +3165,7 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 		}
 
 		rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid, dss_self_rank(),
-					0 /* useless status */, &new, ins, NULL, NULL, NULL, &cpr);
+					0 /* status */, &new, ins, NULL, NULL, NULL, NULL, &cpr);
 		if (rc != 0)
 			goto out;
 	} else {
