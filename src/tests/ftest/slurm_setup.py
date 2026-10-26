@@ -302,6 +302,10 @@ class SlurmSetup():
             'slurm user', self.all_nodes, f's/SlurmUser=slurm/SlurmUser={slurm_user}/g',
             self.root)
         self._modify_slurm_config_file(
+            'accounting storage type', self.all_nodes,
+            's|^[[:space:]]*#\\?[[:space:]]*AccountingStorageType[[:space:]]*=.*|'
+            'AccountingStorageType=accounting_storage/none|', self.root)
+        self._modify_slurm_config_file(
             'slurmctld pid file', self.all_nodes,
             f's|^[[:space:]]*#\\?[[:space:]]*SlurmctldPidFile[[:space:]]*=.*|'
             f'SlurmctldPidFile={self.SLURMCTLD_PID_FILE}|', self.root)
