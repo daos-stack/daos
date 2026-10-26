@@ -1934,6 +1934,21 @@ func (svc *mgmtSvc) scheduleControlPlaneRestart(leaderStr string) error {
 	return nil
 }
 
+// dumpGoroutineStacks logs the stacks of all running goroutines, for diagnosing hangs in
+// gRPC/raft shutdown paths that have no other visibility into what is blocking progress.
+func (svc *mgmtSvc) dumpGoroutineStacks(reason string) {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	svc.log.Errorf("System Erase: dumping goroutine stacks (%s):\n%s", reason, buf)
+}
+
 // execControlPlaneRestart drains the gRPC server via GracefulStop() (falling back to a
 // forced Stop() after svc.gracefulStopTimeout), then exec()s to restart the control
 // plane process.
@@ -1953,7 +1968,24 @@ func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
 	case <-time.After(svc.gracefulStopTimeout):
 		svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, forcing stop [role=%s]",
 			svc.gracefulStopTimeout, leaderStr)
-		svc.grpcServer.Stop()
+		svc.dumpGoroutineStacks("GracefulStop() timed out")
+
+		stopDone := make(chan struct{})
+		go func() {
+			svc.log.Debugf("System Erase: calling Stop() [role=%s]", leaderStr)
+			svc.grpcServer.Stop()
+			svc.log.Debugf("System Erase: Stop() returned after %s [role=%s]",
+				time.Since(scheduledAt), leaderStr)
+			close(stopDone)
+		}()
+
+		select {
+		case <-stopDone:
+		case <-time.After(svc.gracefulStopTimeout):
+			svc.log.Errorf("System Erase: Stop() itself did not return within %s, proceeding to exec anyway [role=%s]",
+				svc.gracefulStopTimeout, leaderStr)
+			svc.dumpGoroutineStacks("Stop() timed out")
+		}
 	}
 
 	svc.log.Infof("System Erase: exec'ing %s to restart control plane after %s total drain [role=%s]",
