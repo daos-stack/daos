@@ -23,7 +23,7 @@ NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 
 IFS=" " read -r -a nodes <<< "${2//,/ }"
-TEST_NODES=$(IFS=","; echo "${nodes[*]:1}")
+TEST_NODES=$(IFS=","; echo "${nodes[*]}")
 
 # Optional arguments for launch.py
 LAUNCH_OPT_ARGS="${3:-}"
@@ -97,9 +97,8 @@ CLUSH_ARGS=($CLUSH_ARGS)
 DAOS_FTEST_VENV=${DAOS_FTEST_VENV:-"daos_ftest_venv"}
 DAOS_BASE=${SL_SRC_DIR}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
-    -w "$(IFS=','; echo "${nodes[*]}")"                                 \
-    "FIRST_NODE=${nodes[0]}
-     TEST_RPMS=$TEST_RPMS
+    -w "$TEST_NODES"                                                    \
+    "TEST_RPMS=$TEST_RPMS
      DAOS_BASE=$DAOS_BASE
      SL_PREFIX=$SL_PREFIX
      TEST_TAG_DIR=$TEST_TAG_DIR
@@ -122,8 +121,7 @@ _DAOS_NO_PROXY=${DAOS_NO_PROXY:-}
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
 if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
-    "FIRST_NODE=\"${nodes[0]}\"
-     TEST_RPMS=\"$TEST_RPMS\"
+    "TEST_RPMS=\"$TEST_RPMS\"
      DAOS_TEST_SHARED_DIR=\"${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}\"
      DAOS_BASE=\"$DAOS_BASE\"
      TEST_TAG_DIR=\"$TEST_TAG_DIR\"
