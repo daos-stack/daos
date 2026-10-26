@@ -242,8 +242,10 @@ reserve_allowed(struct wal_super_info *si)
 		return false;
 	}
 
-	/* Freeze ID reserving when checkpointing didn't reclaim space in time */
-	if (wal_free_blks(si) < WAL_MAX_TRANS_BLKS) {
+	/* Freeze ID reserving when checkpointing didn't reclaim space in time. The WAL must never
+	 * be completely full, otherwise replay can't tell a full WAL from a wrapped one.
+	 */
+	if (wal_free_blks(si) <= WAL_MAX_TRANS_BLKS) {
 		D_WARN("WAL space is insufficient (%u free blocks)\n", wal_free_blks(si));
 		return false;
 	}
@@ -1047,7 +1049,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 			blk_desc.bd_blks, blk_desc.bd_payload_idx, blk_desc.bd_payload_off);
 		dump_tx_entries(tx, &dc_arr);
 		/* Tolerate large transaction when there is sufficient WAL free space */
-		if (blk_desc.bd_blks > wal_free_blks(si) ||
+		if (blk_desc.bd_blks >= wal_free_blks(si) ||
 		    blk_desc.bd_blks > WAL_MAX_REPLAY_BLKS) {
 			rc = -DER_INVAL;
 			goto out;

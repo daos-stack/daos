@@ -43,13 +43,21 @@ struct mo_ops {
 static force_inline void
 mo_wal_persist(const struct mo_ops *p_ops, void *d, size_t s)
 {
-	dav_wal_tx_snap(p_ops->base, d, s, d, 0);
+	int rc;
+
+	rc = dav_wal_tx_snap(p_ops->base, d, s, d, 0);
+	/* The checkpoint never yields while a page is being copied, so a tx can't see it */
+	D_ASSERT(rc != -DER_CHKPT_BUSY);
 }
 
 static force_inline void
 mo_wal_flush(const struct mo_ops *p_ops, void *d, size_t s, int flags)
 {
-	dav_wal_tx_snap(p_ops->base, d, s, d, flags);
+	int rc;
+
+	rc = dav_wal_tx_snap(p_ops->base, d, s, d, flags);
+	/* The checkpoint never yields while a page is being copied, so a tx can't see it */
+	D_ASSERT(rc != -DER_CHKPT_BUSY);
 }
 
 static force_inline void
