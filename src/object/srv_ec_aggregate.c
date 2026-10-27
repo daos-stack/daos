@@ -59,6 +59,8 @@
 #include "obj_ec.h"
 #include "srv_internal.h"
 
+#include <isa-l.h>
+
 #define EC_AGG_ITERATION_MAX	1024
 #define EC_AGG_PROCESS_CREDITS  128
 #define EC_AGG_FILTER_CREDITS   1
