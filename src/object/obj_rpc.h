@@ -437,7 +437,8 @@ CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 	((uint64_t)		(ea_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(ea_bulk)		CRT_VAR)	\
 	((uint32_t)		(ea_map_ver)		CRT_VAR)	\
-	((uint32_t)		(ea_padding)		CRT_VAR)	\
+	/* sender's target index + 1, 0 if unknown (was padding) */	\
+	((uint32_t)		(ea_src_tgt)		CRT_VAR)	\
 	((struct daos_req_comm_in) (ea_comm_in)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_EC_AGG	/* output fields */		 \
@@ -460,7 +461,8 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 	((uint64_t)		(er_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(er_bulk)		CRT_VAR)	\
 	((uint32_t)		(er_map_ver)		CRT_VAR)	\
-	((uint32_t)		(er_padding)		CRT_VAR)	\
+	/* sender's target index + 1, 0 if unknown (was padding) */	\
+	((uint32_t)		(er_src_tgt)		CRT_VAR)	\
 	((struct daos_req_comm_in) (er_comm_in)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_EC_REP	/* output fields */		 \
