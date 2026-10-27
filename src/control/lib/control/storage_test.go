@@ -461,6 +461,8 @@ func TestControl_StorageFormat(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic         *MockInvokerConfig
 		reformat    bool
+		replace     bool
+		hostList    []string
 		expResponse *StorageFormatResp
 		expErr      error
 	}{
@@ -742,6 +744,50 @@ func TestControl_StorageFormat(t *testing.T) {
 				NvmePerHost: 2,
 			}),
 		},
+		"replace; target engine's raft/data-plane not yet up is retried until ready": {
+			replace:  true,
+			hostList: []string{"host1"},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					// First (and retried) SystemQuery attempts find the
+					// target engine's raft/data-plane not yet up.
+					MockMSResponse("", system.ErrRaftUnavail, nil),
+					MockMSResponse("", system.ErrRaftUnavail, nil),
+					// SystemQuery eventually succeeds once the engine is up.
+					MockMSResponse("host1", nil, &mgmtpb.SystemQueryResp{}),
+					// The real StorageFormat RPC then proceeds.
+					{
+						Responses: []*HostResponse{
+							{
+								Addr:    "host1",
+								Message: &ctlpb.StorageFormatResp{},
+							},
+						},
+					},
+				},
+			},
+			expResponse: MockFormatResp(t, MockFormatConf{Hosts: 1}),
+		},
+		"replace; system never formatted is not swallowed": {
+			replace:  true,
+			hostList: []string{"host1"},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", system.ErrUninitialized, nil),
+				},
+			},
+			expErr: system.ErrUninitialized,
+		},
+		"replace; target host unreachable is not swallowed": {
+			replace:  true,
+			hostList: []string{"host1"},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", errMSConnectionFailure, nil),
+				},
+			},
+			expErr: errMSConnectionFailure,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -750,7 +796,15 @@ func TestControl_StorageFormat(t *testing.T) {
 			ctx := test.Context(t)
 			mi := NewMockInvoker(log, tc.mic)
 
-			gotResponse, gotErr := StorageFormat(ctx, mi, &StorageFormatReq{Reformat: tc.reformat})
+			// Rank defaults to NilRank (auto-detect), matching the CLI's behavior when
+			// --rank is not supplied with --replace. Replace-rank values are verified
+			// within TestControl_checkReplaceRank.
+			req := &StorageFormatReq{
+				Reformat: tc.reformat, Replace: tc.replace,
+				Rank: uint32(ranklist.NilRank),
+			}
+			req.SetHostList(tc.hostList)
+			gotResponse, gotErr := StorageFormat(ctx, mi, req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -763,12 +817,94 @@ func TestControl_StorageFormat(t *testing.T) {
 	}
 }
 
+func TestControl_checkReplaceRank(t *testing.T) {
+	const host = "host1:10001"
+
+	for name, tc := range map[string]struct {
+		rank    ranklist.Rank
+		members system.Members
+		expErr  error
+	}{
+		"nil rank skips check (auto-detect)": {
+			rank:    ranklist.NilRank,
+			members: system.Members{},
+		},
+		"rank not found on host": {
+			rank: 5,
+			members: system.Members{
+				system.MockMember(t, 1, system.MemberStateExcluded),
+			},
+			expErr: errors.New("replace rank 5 not found on host host1:10001"),
+		},
+		"rank joined is rejected": {
+			rank: 5,
+			members: system.Members{
+				system.MockMember(t, 5, system.MemberStateJoined),
+			},
+			expErr: errors.New("replace rank 5 on host host1:10001 is currently Joined"),
+		},
+		"rank ready is rejected": {
+			rank: 5,
+			members: system.Members{
+				system.MockMember(t, 5, system.MemberStateReady),
+			},
+			expErr: errors.New("replace rank 5 on host host1:10001 is currently Ready"),
+		},
+		"rank admin-excluded is rejected": {
+			rank: 5,
+			members: system.Members{
+				system.MockMember(t, 5, system.MemberStateAdminExcluded),
+			},
+			expErr: errors.New("replace rank 5 on host host1:10001 is currently AdminExcluded"),
+		},
+		"rank excluded is accepted": {
+			rank: 5,
+			members: system.Members{
+				system.MockMember(t, 5, system.MemberStateExcluded),
+			},
+		},
+		"rank stopped is accepted": {
+			rank: 5,
+			members: system.Members{
+				system.MockMember(t, 5, system.MemberStateStopped),
+			},
+		},
+		"rank errored is accepted": {
+			rank: 5,
+			members: system.Members{
+				system.MockMember(t, 5, system.MemberStateErrored),
+			},
+		},
+		"rank unresponsive is accepted": {
+			rank: 5,
+			members: system.Members{
+				system.MockMember(t, 5, system.MemberStateUnresponsive),
+			},
+		},
+		"only the matching rank among several members is considered": {
+			rank: 5,
+			members: system.Members{
+				system.MockMember(t, 1, system.MemberStateJoined),
+				system.MockMember(t, 5, system.MemberStateExcluded),
+				system.MockMember(t, 9, system.MemberStateJoined),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := checkReplaceRank(host, tc.rank, tc.members)
+			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
 func TestControl_checkFormatReq(t *testing.T) {
 	localServer := DefaultConfig().HostList[0]
 
 	for name, tc := range map[string]struct {
 		reqHosts   []string
 		replace    bool
+		rank       *ranklist.Rank
+		members    system.Members
 		invokerErr error
 		responses  []*UnaryResponse
 		expErr     error
@@ -823,7 +959,6 @@ func TestControl_checkFormatReq(t *testing.T) {
 			responses: []*UnaryResponse{
 				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{}),
 			},
-			// Should succeed because Replace bypasses MS replica check
 		},
 		"replace on multiple hosts fails": {
 			reqHosts: []string{"replica", "replica2"},
@@ -832,6 +967,45 @@ func TestControl_checkFormatReq(t *testing.T) {
 				MockMSResponse(localServer, nil, &mgmtpb.SystemQueryResp{}),
 			},
 			expErr: errors.New("exactly one"),
+		},
+		"replace no rank specified; invalid joined state ignored": {
+			reqHosts: []string{"replica"},
+			replace:  true,
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{
+					Members: []*mgmtpb.SystemMember{
+						{Rank: 0, State: "joined"},
+						{Rank: 5, State: "joined"},
+					},
+				}),
+			},
+		},
+		"replace rank specified; valid excluded state accepted": {
+			reqHosts: []string{"replica"},
+			replace:  true,
+			rank:     ranklist.NewRankPtr(5),
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{
+					Members: []*mgmtpb.SystemMember{
+						{Rank: 0, State: "excluded"},
+						{Rank: 5, State: "excluded"},
+					},
+				}),
+			},
+		},
+		"replace rank specified; invalid joined state refused": {
+			reqHosts: []string{"replica"},
+			replace:  true,
+			rank:     ranklist.NewRankPtr(5),
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{
+					Members: []*mgmtpb.SystemMember{
+						{Rank: 0, State: "excluded"},
+						{Rank: 5, State: "joined"},
+					},
+				}),
+			},
+			expErr: errReplaceRankActive,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -843,7 +1017,12 @@ func TestControl_checkFormatReq(t *testing.T) {
 				UnaryResponseSet: tc.responses,
 			})
 
-			req := &StorageFormatReq{Replace: tc.replace}
+			rank := uint32(ranklist.NilRank)
+			if tc.rank != nil {
+				rank = uint32(*tc.rank)
+			}
+
+			req := &StorageFormatReq{Replace: tc.replace, Rank: rank}
 			req.SetHostList(tc.reqHosts)
 			err := checkFormatReq(test.Context(t), mi, req)
 			test.CmpErr(t, tc.expErr, err)

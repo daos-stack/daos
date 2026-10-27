@@ -46,12 +46,41 @@ struct dt_vos_pool_ctx {
 	void         *dvt_extra;
 };
 
-#define DVT_FAKE_SV_COUNT   (2)
-#define DVT_FAKE_RECX_COUNT (2)
-#define DVT_FAKE_SV_SIZE    (1u << 10)
-#define DVT_FAKE_RECX_SIZE  (1u << 13)
-#define DVT_FAKE_CHUNK_SIZE (1u << 12)
-#define DVT_FAKE_CSUM_TYPE  (HASH_TYPE_CRC64)
+#define DVT_FAKE_SV_COUNT                   (2)
+#define DVT_FAKE_RECX_COUNT                 (2)
+#define DVT_FAKE_SV_SIZE                    (1u << 10)
+#define DVT_FAKE_RECX_SIZE                  (1u << 13)
+#define DVT_FAKE_CHUNK_SIZE                 (1u << 12)
+#define DVT_FAKE_CSUM_TYPE                  (HASH_TYPE_CRC64)
+
+/* Akeys of the checksum fixture objects, as indexes in g_akeys[] and g_akeys_str[].
+ *
+ * FIXME DAOS-18535: The generic pool of dvt_insert_data() has the opposite layout (arrays at even
+ * indexes, single values at odd ones), so do not use these constants with it.  The ticket aligns
+ * this fixture on that layout.
+ */
+#define DVT_FAKE_CSUM_AKEY_SV               (0)
+#define DVT_FAKE_CSUM_AKEY_RECX             (1)
+
+/* Checksum fixture objects: SV under DVT_FAKE_CSUM_AKEY_SV and recxs A=[0, S)@1, B=[S/2, 3S/2)@2
+ * under DVT_FAKE_CSUM_AKEY_RECX.  The *_FILLER constants are the data byte of the first
+ * version/extent, the next ones use the following bytes. */
+#define DVT_FAKE_CSUM_OID_NONE              (0) /* no checksum stored, SV@1 only */
+#define DVT_FAKE_CSUM_OID_NONE_SV_FILLER    ('a')
+#define DVT_FAKE_CSUM_OID_NONE_RECX_FILLER  ('c')
+#define DVT_FAKE_CSUM_OID_VALID             (1) /* valid checksums, SV@1 and SV@2 */
+#define DVT_FAKE_CSUM_OID_VALID_SV_FILLER   ('b')
+#define DVT_FAKE_CSUM_OID_VALID_RECX_FILLER ('e')
+
+/* Partially overwritten recx fixture objects: A=[0, S)@1, B=[0, S/2)@2 */
+#define DVT_FAKE_PART_RECX_COUNT            (2)
+#define DVT_FAKE_PART_RECX_A                (0)
+#define DVT_FAKE_PART_RECX_B                (1)
+#define DVT_FAKE_PART_OID_COUNT             (1)
+#define DVT_FAKE_PART_OID_VALID             (3)
+#define DVT_FAKE_PART_OID_VALID_FILLER      ('h')
+/* Row of dct_part_ics holding the checksum infos of the object g_oids[oid] */
+#define DVT_FAKE_PART_ICS_IDX(oid)          ((oid) - DVT_FAKE_PART_OID_VALID)
 
 struct dt_csum_ctx {
 	uuid_t                dct_cont_uuid;
@@ -62,6 +91,7 @@ struct dt_csum_ctx {
 	struct daos_csummer  *dct_csummer;
 	struct dcs_iod_csums *dct_sv_ics[DVT_FAKE_SV_COUNT];
 	struct dcs_iod_csums *dct_recx_ics[DVT_FAKE_RECX_COUNT];
+	struct dcs_iod_csums *dct_part_ics[DVT_FAKE_PART_OID_COUNT][DVT_FAKE_PART_RECX_COUNT];
 };
 
 daos_unit_oid_t dvt_gen_uoid(uint32_t i);
@@ -79,7 +109,7 @@ int ddb_test_setup_vos(void **state);
 int ddb_teardown_vos(void **state);
 
 /* Requires tctx->dvt_poh to be a valid open pool handle (caller-owned). */
-int
+void
 ddb_test_csum_setup(void **state);
 /* Requires tctx->dvt_poh to be the same valid open pool handle as provided to
  * ddb_test_csum_setup(). */
