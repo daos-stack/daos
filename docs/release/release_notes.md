@@ -2,7 +2,10 @@
 
 We are pleased to announce the release of DAOS version 2.8.
 
-## DAOS Version 2.8.1 (2026-09-30)
+## DAOS Version 2.8.1 (2026-10-26)
+
+The DAOS 2.8.1 release includes the
+[daos-2.8.1 RPM packages](https://packages.daos.io/v2.8.1/) and its prerequisites.
 
 ### Known Issues and Limitations
 
@@ -13,6 +16,23 @@ We are pleased to announce the release of DAOS version 2.8.
 ### Bug fixes
 
 The DAOS 2.8.1 release includes the following fixes.
+
+* object -- fix EC selection and CPD layout refresh races (DAOS-19636):
+ Fix several race conditions in DAOS object I/O that could occur
+ when a layout refresh happens during rebuild or reintegration. Target selection,
+ shard identity, parity/degraded placement, and enumeration logic could use stale
+ layout data after a refresh.
+ The fix makes layout-dependent decisions version-aware and protected under cob\_lock,
+ revalidates shards against the current layout, preserves request identity fields
+ from a stable snapshot, and returns -DER\_STALE when a layout changes
+ so the operation can refresh and retry safely.
+
+* object -- fix a replica lookup and layout refresh race (DAOS-19636):
+ Fix a race in object replica lookup and layout refresh when using extended layouts,
+ where selection of the next replica could use stale shard information after an RPC failure.
+ The fix makes replica retry logic use the failed RPC’s physical shard index and group size,
+ reads layout metadata consistently under cob\_lock, and returns -DER\_STALE
+ when the layout changes so I/O retries with a refreshed layout.
 
 * mercury -- memory leak and performance degradation with UCX (DAOS-18988):
  Update the mercury UCX plugin to make na\_ucx\_addr\_deserialize() behave like the OFI plugin
@@ -32,9 +52,10 @@ The DAOS 2.8.1 release includes the following fixes.
  dkey is treated the same way.
 
 * vos -- Conditional akey updates could be silently skipped (DAOS-19258):
- When an akey conditional flag (INSERT/UPDATE) was combined with any other flag, such as a dkey
- conditional or an internal EC flag, the akey condition was ignored and the update wrongly
- succeeded instead of returning -DER\_EXIST or -DER\_NONEXIST. The condition is now always evaluated.
+  When an akey conditional flag (INSERT/UPDATE) was combined with any other flag, such as a dkey
+  conditional or an internal EC flag, the akey condition was ignored and the update wrongly
+  succeeded instead of returning -DER\_EXIST or -DER\_NONEXIST. The condition is now always
+  evaluated.
 
 * array -- Shrinking to a chunk boundary left stale data (DAOS-19537):
  Resizing an array to just past a chunk boundary (k * chunk\_size + 1) failed to clear records
@@ -66,11 +87,42 @@ The DAOS 2.8.1 release includes the following fixes.
  on small configurations. The current layout is now derived from the pre- and post-rebuild layouts,
  keeping the readable source target and adding the rebuild destination as a write-only peer.
 
-* cart -- SWIM false-death fix and configurable address family (DAOS-19148, DAOS-18972):
- A stale suspicion was not cleared when a member rejoined with a new incarnation, which could mark
- a healthy rank DEAD prematurely; the stale suspicion is now removed. Separately, a new per-provide
- address-family hint (cio\_addr\_format / D\_ADDR\_FORMAT: unspec, ipv4, ipv6, native) lets operators
- select IPv6 fabrics instead of always defaulting to IPv4.
+* cart -- SWIM false-death fix and configurable address family (DAOS-19148, DAOS-18972):
+  A stale suspicion was not cleared when a member rejoined with a new incarnation, which could mark
+  a healthy rank DEAD prematurely; the stale suspicion is now removed. Separately, a new
+  address-family hint (cio\_addr\_format / D\_ADDR\_FORMAT: unspec, ipv4, ipv6, native) lets
+  operators select IPv6 fabrics instead of always defaulting to IPv4.
+
+* rebuild -- Make rebuild data enumeration and migration transactionally consistent (DAOS-19616)
+
+    - Establish a stable-epoch barrier before rebuild scanning by waiting until the
+      global stable epoch reaches the rebuild cutoff. This ensures that transactions at or below
+      the cutoff have stable commit or abort outcomes before their data is enumerated. Without
+      this barrier, transaction recovery can change data visibility while scanning is in progress,
+      potentially causing rebuild to miss data. The barrier provides a stable transactional
+      boundary for reconstruction without requiring transactions to commit in epoch order.
+      It does not wait for every open transaction to commit or stop newer I/O; operations beyond
+      the rebuild cutoff can continue.
+    - Preserve epoch boundaries when merging extents. Do not merge adjacent extents with
+      different epochs during rebuild, so their original epoch associations are retained.
+
+    - Keep rebuild enumeration on a single source replica. Prevent enumeration from
+      switching between surviving replicas midway through the operation, avoiding inconsistencies
+      caused by differences in transaction visibility.
+
+* dfuse -- invalidate chunk read cache on write (DAOS-19735)
+  Fixes stale reads by invalidating cached chunks and pre-read buffers after writes
+  or truncation, including changes through another handle. It also honors disabled caching,
+  prevents stale cached EOF information, and corrects synchronization and cache-buffer lifetime
+  issues. Regression tests cover cache invalidation and concurrent access, while documentation
+  clarifies coherence limitations when mixing dfuse and interception-library I/O.
+
+* object -- fix client layout refresh races (DAOS-19636)
+  Fixes races where object-layout changes during rebuild or reintegration invalidate
+  shard mappings while requests are being prepared or dispatched. It protects layout accesses,
+  preserves consistent shard identities and EC indices, and retries requests when mappings
+  become stale. It also corrects enumeration-anchor handling, transaction participant
+  classification, and replica reselection across pool-map changes.
 
 * control -- Assorted management-plane fixes
  (DAOS-19255, DAOS-19331, DAOS-19281):
@@ -92,11 +144,12 @@ commit messages.
 
 ## DAOS Version 2.8.0 (2026-08-12)
 
+The DAOS 2.8.0 release includes the
+[daos-2.8.0 RPM packages](https://packages.daos.io/v2.8.0/) and its prerequisites.
+
 ### General Support
 
-The DAOS 2.8.0 release includes the
-[daos-2.8.0 RPM packages](https://packages.daos.io/v2.8.0/) and its
-prerequisites. DAOS Version 2.8.0 supports the following environments:
+DAOS Version 2.8.0 supports the following environments:
 
 Architecture Support:
 
