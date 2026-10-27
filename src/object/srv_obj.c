@@ -2542,6 +2542,31 @@ failed:
 	return rc;
 }
 
+/*
+ * EC aggregation requests come from the parity leader. Reject them if the
+ * sender's rank has been excluded: an excluded but still alive target may
+ * run EC aggregation with stale data and must not update the real shards.
+ */
+static int
+obj_ec_agg_src_check(crt_rpc_t *rpc, struct ds_cont_child *cont)
+{
+	d_rank_t src_rank;
+	int      rc;
+
+	rc = crt_req_src_rank_get(rpc, &src_rank);
+	if (rc != 0)
+		return rc;
+
+	if (ds_pool_tgt_excluded(cont->sc_pool->spc_pool, src_rank, -1)) {
+		D_ERROR(DF_CONT ": EC aggregation request from excluded rank %u\n",
+			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), src_rank);
+		/* not -DER_STALE: the sender would retry forever, it is excluded for good */
+		return -DER_OP_CANCELED;
+	}
+
+	return 0;
+}
+
 void
 ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 {
@@ -2574,6 +2599,9 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	}
 
 	D_ASSERT(ioc.ioc_coc != NULL);
+	rc = obj_ec_agg_src_check(rpc, ioc.ioc_coc);
+	if (rc)
+		goto out;
 	ioc.ioc_coc->sc_ec_agg_updates++;
 
 	dkey = (daos_key_t *)&oer->er_dkey;
@@ -2664,6 +2692,9 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	}
 
 	D_ASSERT(ioc.ioc_coc != NULL);
+	rc = obj_ec_agg_src_check(rpc, ioc.ioc_coc);
+	if (rc)
+		goto out;
 	ioc.ioc_coc->sc_ec_agg_updates++;
 
 	dkey = (daos_key_t *)&oea->ea_dkey;
