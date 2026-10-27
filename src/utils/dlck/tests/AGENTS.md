@@ -9,11 +9,9 @@
 ## Unit Tests
 
 - Use the CMocka framework.
-- Test observable behavior (return values, output, state, boundaries and cleanup).
 - Don't reproduce the production algorithm in assertions.
 - Choose the smallest suitable suite and dependency boundary.
 - Separate module and header-macro tests.
-- Add integration coverage only when interaction between layers matters.
 - For meaningful paths, prepare inputs and expectations, call the production entry point, then
   assert result and state. Cover success and relevant failures, not every theoretical branch.
 - Assert the correct error mapping and cleanup.
@@ -26,9 +24,7 @@
   keep sibling registrations alphabetical. Use `env.Clone()`, a unique `OBJPREFIX` when needed,
   and only required sources, libraries, dependencies, include paths and linker wraps.
 - Set explicit `CPPPATH` for headers outside the default include paths.
-- Build and run affected tests. For coverage, use a fresh instrumented build with matching
-  `.gcno`/`.gcda`; do not infer coverage from stale data or macro-expansion branches alone.
-- When a changed unit is used by more than one test all affected tests have to be run.
+- Build and run affected tests.
 
 ## Mocking Functions
 
@@ -41,10 +37,10 @@
 - Queue only the values consumed along the tested path, including during initialization and
   cleanup; omit unused values.
 - Do not hardcode values on the mock side.
-- For pointer-returning I/O mocks such as `fopen`, queue the pointer or `NULL`.
+- For pointer-returning I/O mocks such as `fopen`, queue a mock-pointer or `NULL`.
 - For APIs returning status and an output handle, queue the handle only on success.
 - For mocks which are expected to set `errno` on error, queue an `errno` only on error.
-- Successful free APIs may have fixed output effects, such as clearing a handle.
+- Successful free APIs have to have fixed output effects, such as clearing a handle.
 
 ## Checking Parameters
 
@@ -68,13 +64,12 @@
 - Keep checker suites at the smallest useful boundary:
   - `dlck_checker_common_ut.c` tests `ck_common_printf()` with a lightweight `ck_vprintf` callback.
     Do not initialize main or worker state for this callback-dispatch contract.
-  - `dlck_checker_main_ut.c` and `dlck_checker_worker_ut.c` compile the checker implementation
-    into separate binaries with shared `dlck_checker_ut_mock.c`.
+- `dlck_checker_main_ut.c` and `dlck_checker_worker_ut.c` compile the checker implementation
+  into separate binaries with shared `dlck_checker_ut_mock.c`.
 - Use `EXPECT_CHECKER_D_CALLOC(Dcm)` or `EXPECT_CHECKER_D_CALLOC(Dcw)` for successful payload
   allocation; use `expect_checker_d_calloc(sizeof(payload), NULL)` for failure.
-- Reset `mock_vfprintf_check_output` in per-test setup. `__wrap_vfprintf` always checks its format;
-  set the flag to also check rendered `va_list` output. Pair `va_copy()` with `va_end()` when
-  formatting a copied `va_list`.
+- Reset `mock_vfprintf_check_output` in per-test setup. `__wrap_vfprintf` always checks its format.;
+  set the flag to also check rendered `va_list` output.
 - From the DAOS root, build/run a debug/gcc suite with:
 
   ```sh
@@ -83,4 +78,4 @@
   build/debug/gcc/src/utils/dlck/tests/<binary>
   ```
 
-  - Use Python virtual environment for `build` step
+  - Use Python virtual environment for the `build` step.
