@@ -4154,15 +4154,22 @@ co_op_dup_timing(void **state)
 	test_teardown((void **)&arg);
 }
 
-/* Opening a DESTROYING container should fail. */
+/* Opening a DESTROYING container should fail; its label shall be reusable. */
 static void
 co_open_destroying(void **state)
 {
-	test_arg_t   *arg   = *state;
-	char         *label = "c_open_destroying";
-	uuid_t        uuid;
-	daos_handle_t coh;
-	int           rc;
+	test_arg_t                  *arg   = *state;
+	char                        *label = "c_open_destroying";
+	uuid_t                       uuid;
+	uuid_t                       uuid2;
+	char                         str[DAOS_UUID_STR_SIZE];
+	daos_handle_t                coh;
+	daos_cont_info_t             info;
+	struct daos_pool_cont_info  *conts  = NULL;
+	struct daos_pool_cont_info2 *conts2 = NULL;
+	daos_size_t                  ncont  = 0;
+	daos_size_t                  i;
+	int                          rc;
 
 	FAULT_INJECTION_REQUIRED();
 
@@ -4178,14 +4185,72 @@ co_open_destroying(void **state)
 	print_message("destroying container '%s' with fault injection\n", label);
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_DESTROY_FAIL_POST | DAOS_FAIL_ALWAYS);
 	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 	assert_rc_equal(rc, -DER_NOMEM);
 
 	print_message("attempting to open DESTROYING container '%s'\n", label);
 	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, NULL, NULL);
-	assert_rc_equal(rc, -DER_CONT_DESTROYING);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
-	print_message("destroying container '%s'\n", label);
+	print_message("attempting to list DESTROYING container '%s'\n", label);
+	rc = daos_pool_list_cont(arg->pool.poh, &ncont, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	if (ncont > 0) {
+		D_ALLOC_ARRAY(conts, ncont);
+		assert_non_null(conts);
+		rc = daos_pool_list_cont(arg->pool.poh, &ncont, conts, NULL);
+		assert_rc_equal(rc, 0);
+		for (i = 0; i < ncont; i++)
+			assert_int_not_equal(uuid_compare(conts[i].pci_uuid, uuid), 0);
+		D_FREE(conts);
+	}
+
+	print_message("attempting to filter DESTROYING container '%s'\n", label);
+	ncont = 0;
+	rc    = daos_pool_filter_cont(arg->pool.poh, NULL /* filt */, &ncont, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	if (ncont > 0) {
+		D_ALLOC_ARRAY(conts2, ncont);
+		assert_non_null(conts2);
+		rc = daos_pool_filter_cont(arg->pool.poh, NULL /* filt */, &ncont, conts2, NULL);
+		assert_rc_equal(rc, 0);
+		for (i = 0; i < ncont; i++)
+			assert_int_not_equal(uuid_compare(conts2[i].pci_id.pci_uuid, uuid), 0);
+		D_FREE(conts2);
+	}
+
+	print_message("creating a new container with the same label '%s'\n", label);
+	rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, &uuid2, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_not_equal(uuid_compare(uuid, uuid2), 0);
+	print_message("created container '%s' (" DF_UUIDF ")\n", label, DP_UUID(uuid2));
+
+	print_message("opening the new container '%s'\n", label);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(uuid_compare(info.ci_uuid, uuid2), 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("waiting for DESTROYING container " DF_UUIDF " to be destroyed\n",
+		      DP_UUID(uuid));
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+	uuid_unparse(uuid, str);
+	for (;;) {
+		rc = daos_cont_destroy(arg->pool.poh, str, 1 /* force */, NULL);
+		if (rc == -DER_NONEXIST)
+			break;
+		assert_rc_equal(rc, -DER_CONT_DESTROYING);
+		sleep(1);
+	}
+
+	print_message("opening the new container '%s' after the old one is destroyed\n", label);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(uuid_compare(info.ci_uuid, uuid2), 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("destroying the new container '%s'\n", label);
 	rc = daos_cont_destroy(arg->pool.poh, label, 1 /* force */, NULL);
 	assert_rc_equal(rc, 0);
 

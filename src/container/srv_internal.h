@@ -35,6 +35,7 @@ struct cont_pool_metrics {
 	struct d_tm_node_t	*query_total;
 	struct d_tm_node_t	*create_total;
 	struct d_tm_node_t	*destroy_total;
+	struct d_tm_node_t      *destroyer_tasks;
 };
 
 /* ds_cont thread local storage structure */
@@ -55,6 +56,39 @@ dsm_tls_get()
 	tls = (struct dsm_tls *)dss_module_key_get(dtc, &cont_module_key);
 	return tls;
 }
+
+enum cont_destroyer_task_state {
+	CONT_DESTROYER_TASK_IDLE,     /* waiting for csdt_next_attempt and an in-flight slot */
+	CONT_DESTROYER_TASK_BCASTING, /* CONT_TGT_DESTROY bcast in flight */
+	CONT_DESTROYER_TASK_BCASTED,  /* bcast completed; RDB TX pending or in progress */
+};
+
+/* Tracker for the later steps of one container destroy operation. */
+struct cont_destroyer_task {
+	d_list_t                       csdt_link; /* in one of cont_destroyer lists */
+	uuid_t                         csdt_cont_uuid;
+	struct cont_svc               *csdt_svc;
+	crt_rpc_t                     *csdt_rpc;
+	int                            csdt_bcast_rc;
+	enum cont_destroyer_task_state csdt_state;
+	int                            csdt_ref;
+	int                            csdt_rc;
+	uint32_t                       csdt_attempts;
+	uint32_t                       csdt_backoff;      /* ms */
+	uint64_t                       csdt_next_attempt; /* ms */
+};
+
+/* Executor for later steps of container destroy operations */
+struct cont_destroyer {
+	d_list_t   csd_idle;     /* IDLE tasks, sorted by csdt_next_attempt */
+	d_list_t   csd_bcasting; /* BCASTING tasks */
+	d_list_t   csd_bcasted;  /* BCASTED tasks */
+	ABT_mutex  csd_mutex;
+	ABT_cond   csd_cond;
+	ABT_thread csd_ult;
+	int        csd_inflight; /* length of csd_bcasting */
+	bool       csd_stop;
+};
 
 extern bool ec_agg_disabled;
 
@@ -99,6 +133,7 @@ struct cont_svc {
 	rdb_path_t		cs_conts;	/* container KVS */
 	rdb_path_t              cs_hdls;        /* container handle KVS */
 	struct ds_pool	       *cs_pool;
+	struct cont_destroyer   cs_destroyer;
 
 	/* Manage the EC aggregation epoch and stable epoch */
 	struct sched_request   *cs_cont_ephs_leader_req;
@@ -209,9 +244,6 @@ int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
 			   struct cont_svc **svcp, struct rsvc_hint *hint);
 int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
 		const uuid_t uuid, struct cont **cont);
-int
-     cont_lookup_active(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
-			struct cont **cont);
 void cont_put(struct cont *cont);
 void cont_svc_put_leader(struct cont_svc *svc);
 int

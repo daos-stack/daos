@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -59,6 +60,12 @@ ds_cont_metrics_alloc(const char *path, int tgt_id)
 			     "ops", "%s/ops/cont_destroy", path);
 	if (rc != 0)
 		D_WARN("Failed to create container destroy counter: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&metrics->destroyer_tasks, D_TM_GAUGE,
+			     "Number of pending container destroyer tasks", NULL,
+			     "%s/svc/cont_destroyer_tasks", path);
+	if (rc != 0)
+		DL_WARN(rc, "Failed to create container destroyer tasks metric");
 
 	return metrics;
 }
