@@ -593,11 +593,13 @@ func setHotplugRange(ctx context.Context, log logging.Logger, getTopo topologyGe
 		}
 	}
 
-	if req.HotplugIgnoreDomain {
-		log.Infof("NUMA %d: hotplug bus-ids %X-%X (any PCI domain)", numaNode, begin, end)
-	} else {
-		log.Infof("NUMA %d: hotplug bus-ids %04x:%X-%X", numaNode, domain, begin, end)
+	// VMD backing devices use a different domain to their NUMA node, so the domain is
+	// ignored (in addition to any explicit user request to match any domain).
+	domainStr := fmt.Sprintf("%04X", domain)
+	if req.VMDEnabled || req.HotplugIgnoreDomain {
+		domainStr = "any"
 	}
+	log.Infof("NUMA %d: hotplug domain=%s, bus-ids=%02X-%02X", numaNode, domainStr, begin, end)
 	req.HotplugBusidDomain = domain
 	req.HotplugBusidBegin = begin
 	req.HotplugBusidEnd = end

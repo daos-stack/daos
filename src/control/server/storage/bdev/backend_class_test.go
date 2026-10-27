@@ -270,8 +270,9 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					{
 						Method: "hotplug_busid_range",
 						Params: &HotplugBusidRangeParams{
-							Begin: 128,
-							End:   143,
+							Begin:        128,
+							End:          143,
+							IgnoreDomain: true,
 						},
 					},
 				}

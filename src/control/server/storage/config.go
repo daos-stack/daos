@@ -801,7 +801,9 @@ func (br *BdevBusRange) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	br.LowAddress.Bus = lo
 	br.HighAddress.Domain = dom
 	br.HighAddress.Bus = hi
-	br.IgnoreDomain = !domSpecified && lo == 0x00 && hi == 0xFF
+	// No domain prefix means match the bus-ID range in any PCI domain, for backward
+	// compatibility with pre-PCI-domain-aware configs/upgrades.
+	br.IgnoreDomain = !domSpecified
 
 	return nil
 }
@@ -814,11 +816,11 @@ func (br *BdevBusRange) String() string {
 	if br == nil {
 		return ""
 	}
-	if !br.IgnoreDomain && (br.LowAddress.Domain != 0 || br.HighAddress.Domain != 0) {
-		return fmt.Sprintf("%04x:0x%02x-0x%02x", br.LowAddress.Domain, br.LowAddress.Bus,
-			br.HighAddress.Bus)
+	if br.IgnoreDomain {
+		return fmt.Sprintf("0x%02x-0x%02x", br.LowAddress.Bus, br.HighAddress.Bus)
 	}
-	return fmt.Sprintf("0x%02x-0x%02x", br.LowAddress.Bus, br.HighAddress.Bus)
+	return fmt.Sprintf("%04x:0x%02x-0x%02x", br.LowAddress.Domain, br.LowAddress.Bus,
+		br.HighAddress.Bus)
 }
 
 // NewBdevBusRange creates a new BdevBusRange from a string.

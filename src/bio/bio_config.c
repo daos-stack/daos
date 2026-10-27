@@ -819,6 +819,11 @@ out:
 
 struct busid_range_info hotplug_busid_range = {};
 
+/* Sentinel to detect a daos_nvme.conf without a "domain" key, i.e. written by a release
+ * predating PCI-domain-aware hotplug filtering.
+ */
+#define BUSID_RANGE_DOMAIN_UNSET UINT32_MAX
+
 static bool
 hotplug_filter_fn(const struct spdk_pci_addr *addr)
 {
@@ -854,12 +859,22 @@ bio_set_hotplug_filter(const char *nvme_conf)
 	int	rc;
 	char    range[32];
 
+	/* Reset to sentinel so a missing "domain" key (pre-PCI-domain-aware config) can be
+	 * distinguished from an explicit domain 0000, and treated as matching any domain.
+	 */
+	hotplug_busid_range = (struct busid_range_info){.domain = BUSID_RANGE_DOMAIN_UNSET};
+
 	rc = decode_daos_object(nvme_conf, NVME_CONF_SET_HOTPLUG_RANGE, busid_range_decoders,
 				SPDK_COUNTOF(busid_range_decoders), &hotplug_busid_range);
 	if (rc != 0) {
 		if (rc == JSON_NOT_FOUND)
 			rc = 0;
 		return rc;
+	}
+
+	if (hotplug_busid_range.domain == BUSID_RANGE_DOMAIN_UNSET) {
+		hotplug_busid_range.domain        = 0;
+		hotplug_busid_range.ignore_domain = true;
 	}
 
 	if (hotplug_busid_range.ignore_domain)

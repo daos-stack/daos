@@ -133,7 +133,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				{
 					Method: storage.ConfSetHotplugBusidRange,
 					Params: &HotplugBusidRangeParams{
-						Begin: 138, End: 143,
+						Begin: 138, End: 143, IgnoreDomain: true,
 					},
 				},
 			},

@@ -57,7 +57,7 @@ A minimal reproduction procedure (stop one engine, simulate unplug/replug/rebind
 
 `parsePCIBusRange()` previously accepted only a `<Begin>-<End>` bus-ID range. It now accepts an optional `[<Domain>:]<Begin>-<End>` form: if a `:` separator is present, everything before it is parsed as a hexadecimal (no `0x` prefix, standard PCI BDF notation, e.g. `0001`) domain value; everything after it is parsed as the bus range exactly as before. The domain defaults to `0x0000` when the prefix is omitted, preserving every existing config's meaning unchanged. `parsePCIBusRange()` also now returns whether a domain prefix was actually present in the input, distinct from "omitted and defaulted to 0". `BdevBusRange.UnmarshalYAML()` stores the parsed domain into both `LowAddress.Domain` and `HighAddress.Domain` (a single range only ever spans one domain), and `BdevBusRange.String()` now renders the domain prefix (`%04x:0x%02x-0x%02x`) whenever either address has a non-zero domain, so round-tripping a manually-specified non-zero-domain range preserves it.
 
-`BdevBusRange` additionally gains an `IgnoreDomain bool` field: when the domain prefix is **omitted** and the bus range is the **full** `0x00-0xFF` span, `UnmarshalYAML()` sets `IgnoreDomain = true` instead of defaulting to domain `0x0000`. This reuses the "ignore domain, match bus-ID only" mechanism already in place for VMD (Section 4.3/4.4) to let an administrator write `bdev_busid_range: 0x00-0xff` to mean "match this bus-ID range in any domain", for a NUMA node whose PCI buses span more than one domain — without inventing a new reserved sentinel value, since this specific combination (no domain, full range) was not otherwise a useful thing to configure explicitly. An explicit `0000:0x00-0xff` continues to mean exactly domain `0000` only, since the domain-prefix-presence distinction is preserved. This was evaluated as "Option 2b" in `hotplug-multi-pci-domain-design.md` and implemented directly in this PR rather than deferred, since it required no changes below the Go config-parsing/request layer.
+`BdevBusRange` additionally gains an `IgnoreDomain bool` field: whenever the domain prefix is **omitted**, `UnmarshalYAML()` sets `IgnoreDomain = true` instead of defaulting to domain `0x0000` — regardless of whether the bus range is partial or the full `0x00-0xFF` span. This reuses the "ignore domain, match bus-ID only" mechanism already in place for VMD (Section 4.3/4.4) so that any `bdev_busid_range` written without a domain prefix (including pre-existing configs from before this change) means "match this bus-ID range in any domain" after an upgrade, rather than silently narrowing to domain `0000` only — this matches the actual pre-PR filter behavior, which never read the PCI domain at all, so preserving it avoids a new false-negative regression (an engine refusing its own hotplug events) for administrators who upgrade without rewriting their config. An explicit `0000:0x00-0xff` (or any other `<domain>:` prefix) continues to mean exactly that domain only, since the domain-prefix-presence distinction is preserved. `BdevBusRange.String()` is likewise keyed off `IgnoreDomain` alone: it omits the domain prefix only when `IgnoreDomain` is set, and otherwise always renders it (`%04x:0x%02x-0x%02x`), including an explicit domain `0000`, so round-tripping any domain-specified range (even domain `0000`) is lossless.
 
 ### 4.2 Auto-Derivation (`bdev.go`)
 
@@ -65,30 +65,71 @@ A minimal reproduction procedure (stop one engine, simulate unplug/replug/rebind
 
 ### 4.3 Request and Wire Format (`provider.go`, `bdev/backend_json.go`)
 
-`BdevWriteConfigRequest` gains `HotplugBusidDomain uint16` and `HotplugIgnoreDomain bool` fields alongside the existing `HotplugBusidBegin`/`HotplugBusidEnd uint8` fields. `setHotplugRange()` populates these from whichever source applies (VMD: domain `0x0000` with the existing "allow all buses" `0x00`-`0xFF` range; explicit `tier.Bdev.BusidRange`, propagating its `IgnoreDomain` flag; or auto-derivation), and logs either `NUMA %d: hotplug bus-ids %X-%X (any PCI domain)` or `NUMA %d: hotplug bus-ids %04x:%X-%X` for diagnostics, depending on which applies. `HotplugBusidRangeParams` (the JSON struct written into the SPDK config consumed by the engine) gains matching `Domain uint16` and `IgnoreDomain bool` fields; `IgnoreDomain` is set from `req.VMDEnabled || req.HotplugIgnoreDomain`, so both VMD and an explicit "any domain" `bdev_busid_range` configuration drive the same underlying flag, keeping the "match bus-ID only" behavior as a single, explicit, named mechanism rather than an implicit side effect of a wide bus range.
+`BdevWriteConfigRequest` gains `HotplugBusidDomain uint16` and `HotplugIgnoreDomain bool` fields alongside the existing `HotplugBusidBegin`/`HotplugBusidEnd uint8` fields. `setHotplugRange()` populates these from whichever source applies (VMD: domain `0x0000` with the existing "allow all buses" `0x00`-`0xFF` range; explicit `tier.Bdev.BusidRange`, propagating its `IgnoreDomain` flag; or auto-derivation), and logs `NUMA %d: hotplug domain=%s, bus-ids=%02X-%02X`, where `domain` is `any` whenever `req.VMDEnabled || req.HotplugIgnoreDomain` (matching the actual effective filter below), or the hex domain value otherwise. `HotplugBusidRangeParams` (the JSON struct written into the SPDK config consumed by the engine) gains matching `Domain uint16` and `IgnoreDomain bool` fields; `IgnoreDomain` is set from `req.VMDEnabled || req.HotplugIgnoreDomain`, so both VMD and an explicit "any domain" `bdev_busid_range` configuration drive the same underlying flag, keeping the "match bus-ID only" behavior as a single, explicit, named mechanism rather than an implicit side effect of a wide bus range.
 
 ### 4.4 SPDK/C Filter (`bio_config.c`)
 
-`struct busid_range_info` gains `domain` (`uint32_t`) and `ignore_domain` (`bool`) fields, decoded from the JSON config via two new optional `spdk_json_decode_*` entries (defaulting to zero/false when absent, so an older-format JSON config — e.g. generated before this change — still decodes correctly). `hotplug_filter_fn()` now additionally requires `addr->domain == hotplug_busid_range.domain` to match, unless `ignore_domain` is set, in which case the domain check is skipped exactly as before — this one code path serves both the VMD case and the new "any domain" `bdev_busid_range` case from Section 4.1/4.3, with no C-side changes needed to support the latter. The `D_INFO`/`D_DEBUG` log lines in `bio_set_hotplug_filter()` were updated to print the effective domain (or `domain=any` when `ignore_domain` is set) alongside the bus-ID range, so the filter actually in effect is unambiguous in engine logs — this was itself the subject of a PR review comment, since the earlier revision printed a literal domain value even when it was being ignored.
+`struct busid_range_info` gains `domain` (`uint32_t`) and `ignore_domain` (`bool`) fields, decoded from the JSON config via two new optional `spdk_json_decode_*` entries. `bio_set_hotplug_filter()` resets `hotplug_busid_range.domain` to a `UINT32_MAX` sentinel before each decode; if the JSON config has no `"domain"` key at all (i.e. it was generated by a release predating PCI-domain-aware hotplug filtering), the sentinel survives the decode and is translated into `ignore_domain = true` — matching any domain, consistent with the pre-PR filter's behavior of never checking domain, and avoiding a false-negative regression (refusing an engine's own hotplug events) for an upgrade that has not yet regenerated `daos_nvme.conf`. `hotplug_filter_fn()` now additionally requires `addr->domain == hotplug_busid_range.domain` to match, unless `ignore_domain` is set, in which case the domain check is skipped exactly as before — this one code path serves the VMD case, the explicit "any domain" `bdev_busid_range` case, and the missing-domain-key backward-compatibility case, with no further C-side changes needed. The `D_INFO`/`D_DEBUG` log lines in `bio_set_hotplug_filter()` were updated to print the effective domain (or `domain=any` when `ignore_domain` is set) alongside the bus-ID range, so the filter actually in effect is unambiguous in engine logs — this was itself the subject of a PR review comment, since the earlier revision printed a literal domain value even when it was being ignored.
 
 ### 4.5 Documentation (`utils/config/daos_server.yml`)
 
 Both `bdev_busid_range` example blocks were updated to document the new `[domain:]` prefix syntax, a new domain-prefixed example line (`bdev_busid_range: 0001:0x80-0x8f`), a new "any domain" example line (`bdev_busid_range: 0x00-0xff`), and the fact that a single domain-prefixed range still covers only one domain — if auto-derivation fails because a NUMA node's PCI buses span more than one domain, the administrator must either restrict `bdev_busid_range` to one domain (accepting that hotplug events in the other domain are then ignored), set it to the full `0x00-0xff` range with no domain prefix to match any domain, or set `disable_hotplug: true` for that engine.
 
+### 4.6 Filter Resolution Summary
+
+There are three possible sources for the hotplug filter range, evaluated in priority order by `setHotplugRange()`.
+
+1. If `VMDEnabled` is set, the range always covers buses `00`-`FF` and ignores the PCI domain, because VMD backing devices may use a synthetic domain different from their NUMA node.
+2. Otherwise, a user-specified `bdev_busid_range` is used if present.
+3. If neither applies, the range is derived automatically from the PCI topology for the engine's NUMA node.
+
+**`bdev_busid_range` handling**
+
+For a configured `bdev_busid_range`, the presence of a domain prefix determines whether the domain is used for filtering:
+
+| Config string        | Domain | Bus range | Domain specified | Result            |
+|-----------------------|--------|-----------|-------------------|--------------------|
+| Unset                 | –      | –         | –                 | Auto-derived       |
+| `0x00-0xff`           | 0      | 00-FF     | No                | Any domain         |
+| `0x80-0x8f`           | 0      | 80-8F     | No                | Any domain         |
+| `0000:0x00-0xff`      | 0      | 00-FF     | Yes               | Domain 0000 only   |
+| `0001:0x80-0x8f`      | 1      | 80-8F     | Yes               | Domain 0001 only   |
+
+The presence or absence of the domain prefix is therefore the determining factor. Whether the bus range is full (`00`-`FF`) or partial requires no special handling.
+
+**Automatic derivation**
+
+When neither VMD nor `bdev_busid_range` applies, `getNumaNodeBusidRange()` examines all PCI host bridges associated with the engine's NUMA node. If all bridges share a domain, that domain and the minimum-to-maximum bus range are used with domain filtering enabled. If the bridges span multiple domains, the operation fails and requires an explicit `bdev_busid_range`.
+
+**Engine filtering**
+
+The resulting `HotplugBusidRangeParams` contains the derived domain and bus range, with `IgnoreDomain` enabled when VMD is active or domain filtering has explicitly been disabled.
+
+On the engine side, `hotplug_filter_fn` accepts a device when its domain matches, unless domain matching is disabled, and its bus falls within the configured range:
+
+```c
+(ignore_domain || addr->domain == domain) && begin <= addr->bus <= end
+```
+
+For backward compatibility, configurations without a `domain` field are treated as
+domain-agnostic, equivalent to an unprefixed `bdev_busid_range`.
+
+**Known limitation**: only a single domain/bus-ID range can be configured per engine. There is currently no way to precisely match two or more specific, non-zero PCI domains on the same NUMA node while excluding all others — the only available workaround is the domain-agnostic ("any domain") form of `bdev_busid_range`, which is correct but over-permissive (it will also match an unrelated device elsewhere on the host that happens to reuse the same bus-ID range in a different domain). See Section 8.2 for a possible future extension to a list of ranges.
+
 ## 5. Compatibility and Interoperability
 
-No existing config, request, or JSON schema field is removed or repurposed; all new fields (`HotplugBusidDomain`, `HotplugIgnoreDomain`, `Domain`, `ignore_domain`) are strictly additive and default to zero/false, which reproduces the exact pre-existing behavior (domain `0000`, bus-ID-only filtering unaffected). An existing `bdev_busid_range: 0x80-0x8f` config (no domain prefix, partial range) continues to parse identically to before — only the specific combination of "no domain prefix" **and** "full `0x00-0xFF` range" changes meaning, and that combination was not previously a useful thing to configure explicitly (it was silently equivalent to "domain `0000` only, every bus", a narrower and less useful case than either "every domain" or "domain `0000` explicitly"). VMD mode's wire/filter behavior (`ignore_domain = true`, full bus range) is unchanged from an external standpoint; only its internal representation changed from an implicit wide-range side effect to an explicit named flag, now shared with the new "any domain" `bdev_busid_range` case.
+No existing config, request, or JSON schema field is removed or repurposed; all new fields (`HotplugBusidDomain`, `HotplugIgnoreDomain`, `Domain`, `ignore_domain`) are strictly additive. An existing `bdev_busid_range` config written without a domain prefix (e.g. `0x80-0x8f`, partial range, or `0x00-0xff`, full range) now means "match this bus-ID range in any domain" after upgrade, rather than implicitly narrowing to domain `0000` only — this is a deliberate behavior choice, not an oversight: the pre-PR filter never read the PCI domain at all, so this preserves the actual old (accidentally permissive) matching behavior and avoids a new false-negative regression where an engine on a multi-domain platform would otherwise start refusing its own hotplug events purely because an un-regenerated config predates domain awareness. The same reasoning applies one layer down: a `daos_nvme.conf` JSON file written by a pre-PR control-plane (no `"domain"`/`"ignore_domain"` keys at all) is likewise treated as `ignore_domain = true` by the new engine-side decoder (Section 4.4), rather than defaulting to domain `0000`. VMD mode's wire/filter behavior (`ignore_domain = true`, full bus range) is unchanged from an external standpoint; only its internal representation changed from an implicit wide-range side effect to an explicit named flag, now shared with the "any domain" `bdev_busid_range` case.
 
 ## 6. External Interfaces
 
-- `bdev_busid_range` in `daos_server.yml` gains the optional `[domain:]` prefix, and a new meaning for the no-prefix, full-range (`0x00-0xff`) combination specifically ("match any domain"); existing values without a domain prefix and with a non-full range are unaffected.
+- `bdev_busid_range` in `daos_server.yml` gains the optional `[domain:]` prefix; any value without a domain prefix now means "match any domain" (a changed, but deliberately backward-compatible, meaning versus the prior implicit "domain `0000` only").
 - No `dmg`/API surface changes — this is purely an engine-config and SPDK-filter-internal change; the only observable effect to an administrator is that hotplug events are now correctly scoped per engine on multi-domain platforms, where previously they could be mis-attributed or spuriously rejected, and that an engine whose NUMA node spans multiple domains can now opt into "any domain" matching instead of only a hard failure.
 
 ## 7. Testing and Validation
 
 ### 7.1 Unit Tests
 
-New/expanded coverage across `bdev_test.go` (`Test_getNumaNodeBusidRange`, including a multi-domain-mid-list case matching the field incident), `config_test.go` (`TestStorage_parsePCIBusRange` for domain-prefixed range parsing and the domain-prefix-presence flag; `TestStorage_BdevBusRange_IgnoreDomain` for the no-prefix-plus-full-range "any domain" case and its string round-tripping), `provider_test.go` (`Test_BdevWriteRequestFromConfig`, including a "range specified; all domains" case), and `bdev/backend_json_test.go` (request-to-JSON-params population, including both the VMD and the explicit "all domains" `IgnoreDomain` cases).
+New/expanded coverage across `bdev_test.go` (`Test_getNumaNodeBusidRange`, including a multi-domain-mid-list case matching the field incident), `config_test.go` (`TestStorage_parsePCIBusRange` for domain-prefixed range parsing and the domain-prefix-presence flag; `TestStorage_BdevBusRange_IgnoreDomain` for the no-domain-prefix "any domain" case, both partial and full range, and its string round-tripping, including an explicit domain `0000` round-tripping losslessly), `provider_test.go` (`Test_BdevWriteRequestFromConfig`, including "range specified" and "range specified; all domains" cases), and `bdev/backend_json_test.go` (request-to-JSON-params population, including the VMD and the explicit "any domain" `IgnoreDomain` cases).
 
 ### 7.2 Manual Validation
 

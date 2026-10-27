@@ -103,10 +103,11 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				TierProps: []BdevTierProperties{
 					{Class: ClassNvme},
 				},
-				Hostname:          hostname,
-				HotplugEnabled:    true,
-				HotplugBusidBegin: 0x70,
-				HotplugBusidEnd:   0x7f,
+				Hostname:            hostname,
+				HotplugEnabled:      true,
+				HotplugBusidBegin:   0x70,
+				HotplugBusidEnd:     0x7f,
+				HotplugIgnoreDomain: true,
 			},
 		},
 		"range specified; non-zero pci domain": {

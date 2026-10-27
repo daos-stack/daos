@@ -368,9 +368,9 @@ func TestStorage_BdevBusRange_IgnoreDomain(t *testing.T) {
 		expDomain       uint16
 		expStr          string
 	}{
-		"no domain; partial range": {
+		"no domain; partial range means ignore domain": {
 			rangeStr:        "0x80-0x8f",
-			expIgnoreDomain: false,
+			expIgnoreDomain: true,
 			expStr:          "0x80-0x8f",
 		},
 		"no domain; full bus range means ignore domain": {
@@ -387,7 +387,7 @@ func TestStorage_BdevBusRange_IgnoreDomain(t *testing.T) {
 		"explicit zero domain; full bus range does not ignore domain": {
 			rangeStr:        "0000:0x00-0xff",
 			expIgnoreDomain: false,
-			expStr:          "0x00-0xff",
+			expStr:          "0000:0x00-0xff",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
