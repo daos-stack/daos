@@ -1124,7 +1124,7 @@ static int
 dv_test_csum_setup(void **state)
 {
 	assert_success(dv_test_setup(state));
-	assert_success(ddb_test_csum_setup(state));
+	ddb_test_csum_setup(state);
 
 	return 0;
 }
@@ -1136,16 +1136,6 @@ dv_test_csum_teardown(void **state)
 	assert_success(dv_test_teardown(state));
 
 	return 0;
-}
-
-static int
-dv_test_csum_fi_setup(void **state)
-{
-	/* start from a disarmed fault, whatever the previous test left behind */
-	daos_fail_value_set(0);
-	daos_fail_loc_reset();
-
-	return dv_test_csum_setup(state);
 }
 
 static int
@@ -1281,7 +1271,7 @@ dump_csum_error_tests(void **state)
 
 	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
 	path.vtp_dkey    = g_dkeys[0];
-	path.vtp_akey    = g_akeys[0]; /* single value type */
+	path.vtp_akey    = g_akeys[DVT_FAKE_CSUM_AKEY_SV]; /* single value type */
 	path.vtp_is_recx = false;
 
 	/* invalid poh: error comes from vos_cont_open, not the callback (which would return 0) */
@@ -1291,7 +1281,7 @@ dump_csum_error_tests(void **state)
 
 /*
  * g_oids[DVT_FAKE_CSUM_OID_NONE]: SV@1 without checksum info.
- * fetching at EPOCH_MAX
+ * fetching at DAOS_EPOCH_MAX
  * result: SV@1 without checksum info.
  */
 static int
@@ -1340,7 +1330,7 @@ dump_csum_sv_cb_002(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoc
 
 /*
  * g_oids[DVT_FAKE_CSUM_OID_VALID]: A SV@1, B SV@2 with checksum infos.
- * fetching at EPOCH_MAX
+ * fetching at DAOS_EPOCH_MAX
  * result: B SV@2 with checksum infos.
  */
 static int
@@ -1377,7 +1367,7 @@ dump_csum_sv_tests(void **state)
 
 	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
 	path.vtp_dkey    = g_dkeys[0];
-	path.vtp_akey    = g_akeys[0]; /* single value type */
+	path.vtp_akey    = g_akeys[DVT_FAKE_CSUM_AKEY_SV]; /* single value type */
 	path.vtp_is_recx = false;
 
 	/* no csum info */
@@ -1390,14 +1380,14 @@ dump_csum_sv_tests(void **state)
 	rc           = dv_dump_csum(tctx->dvt_poh, &path, 1, dump_csum_sv_cb_002, csum_ctx);
 	assert_success(rc);
 
-	/* with csum info, EPOCH_MAX returns the epoch-2 (latest) checksum */
+	/* with csum info, DAOS_EPOCH_MAX returns the epoch-2 (latest) checksum */
 	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
 	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_csum_sv_cb_003, csum_ctx);
 	assert_success(rc);
 
 	/* with csum info, without callback */
 	path.vtp_oid = g_oids[DVT_FAKE_CSUM_OID_VALID];
-	rc           = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, NULL, csum_ctx);
+	rc           = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, NULL, NULL);
 	assert_success(rc);
 
 	/* callback failure is propagated */
@@ -1618,7 +1608,7 @@ dump_csum_recx_tests(void **state)
 
 	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
 	path.vtp_dkey        = g_dkeys[0];
-	path.vtp_akey        = g_akeys[1]; /* array value type */
+	path.vtp_akey        = g_akeys[DVT_FAKE_CSUM_AKEY_RECX]; /* array value type */
 	path.vtp_is_recx     = true;
 	path.vtp_recx.rx_idx = 0;
 	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
@@ -1656,7 +1646,7 @@ dump_csum_recx_tests(void **state)
 	path.vtp_oid         = g_oids[DVT_FAKE_CSUM_OID_VALID];
 	path.vtp_recx.rx_idx = 0;
 	path.vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
-	rc           = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, NULL, csum_ctx);
+	rc                   = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, NULL, NULL);
 	assert_success(rc);
 
 	/* callback failure is propagated */
@@ -2151,7 +2141,7 @@ static void
 mock_csum_path_sv(struct dv_tree_path *path, struct dt_csum_ctx *csum_ctx)
 {
 	mock_csum_path_base(path, csum_ctx);
-	path->vtp_akey    = g_akeys[0]; /* single value type */
+	path->vtp_akey    = g_akeys[DVT_FAKE_CSUM_AKEY_SV]; /* single value type */
 	path->vtp_is_recx = false;
 }
 
@@ -2159,7 +2149,7 @@ static void
 mock_csum_path_recx(struct dv_tree_path *path, struct dt_csum_ctx *csum_ctx)
 {
 	mock_csum_path_base(path, csum_ctx);
-	path->vtp_akey        = g_akeys[1]; /* array value type */
+	path->vtp_akey        = g_akeys[DVT_FAKE_CSUM_AKEY_RECX]; /* array value type */
 	path->vtp_is_recx     = true;
 	path->vtp_recx.rx_idx = 0;
 	path->vtp_recx.rx_nr  = csum_ctx->dct_recx_size;
@@ -2167,7 +2157,7 @@ mock_csum_path_recx(struct dv_tree_path *path, struct dt_csum_ctx *csum_ctx)
 
 /* Arm the fault for the next dv_dump_csum()/dv_check_csum() call only. */
 static void
-csum_nr_inject(uint32_t csum_nr)
+csum_nr_inject(uint64_t csum_nr)
 {
 	daos_fail_value_set(csum_nr);
 	daos_fail_loc_set(DDB_CSUM_NR_INJECT | DAOS_FAIL_ONCE);
@@ -2189,7 +2179,7 @@ csum_no_data_inject(void)
 
 /* Arm the fault for the next recx segment checked by dv_dump_csum()/dv_check_csum() only. */
 static void
-csum_chunk_nr_inject(uint32_t chunk_nr)
+csum_chunk_nr_inject(uint64_t chunk_nr)
 {
 	daos_fail_value_set(chunk_nr);
 	daos_fail_loc_set(DDB_CSUM_CHUNK_NR_INJECT | DAOS_FAIL_ONCE);
@@ -2197,7 +2187,7 @@ csum_chunk_nr_inject(uint32_t chunk_nr)
 
 /* Arm the fault for the next checksum info checked by dv_dump_csum()/dv_check_csum() only. */
 static void
-csum_type_inject(uint32_t csum_type)
+csum_type_inject(uint64_t csum_type)
 {
 	daos_fail_value_set(csum_type);
 	daos_fail_loc_set(DDB_CSUM_TYPE_INJECT | DAOS_FAIL_ONCE);
@@ -2503,7 +2493,7 @@ check_csum_snapshot_nomem_tests(void **state)
 
 /* Checksum tests need special setup/teardown */
 #define TEST_CSUM(test) {#test, test, dv_test_csum_setup, dv_test_csum_teardown}
-#define TEST_CSUM_FI(test) {#test, test, dv_test_csum_fi_setup, dv_test_csum_fi_teardown}
+#define TEST_CSUM_FI(test) {#test, test, dv_test_csum_setup, dv_test_csum_fi_teardown}
 
 const struct CMUnitTest dv_test_cases[] = {
     {"open_pool", open_pool_test, NULL, NULL}, /* don't want this test to run with setup */

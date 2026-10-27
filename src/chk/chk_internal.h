@@ -1277,12 +1277,12 @@ chk_uuid_unparse(struct chk_instance *ins, const uuid_t uuid, char *uuid_str)
 }
 
 static inline bool
-chk_is_valid_uuid_string(struct chk_instance *ins, const char *uuid_str)
+chk_is_valid_uuid_iov(struct chk_instance *ins, const d_iov_t *key)
 {
-	if (ins->ci_is_leader == 1 && daos_is_valid_uuid_string(uuid_str, UUID_SST_UPPER))
+	if (ins->ci_is_leader == 1 && daos_is_valid_uuid_iov(key, UUID_SST_UPPER))
 		return true;
 
-	if (ins->ci_is_leader == 0 && daos_is_valid_uuid_string(uuid_str, UUID_SST_LOWER))
+	if (ins->ci_is_leader == 0 && daos_is_valid_uuid_iov(key, UUID_SST_LOWER))
 		return true;
 
 	return false;

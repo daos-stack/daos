@@ -2222,23 +2222,18 @@ out:
 	return rc;
 }
 
-static void
-pool_tgt_query_handler(crt_rpc_t *rpc, int handler_version)
+void
+ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_query_in	*in = crt_req_get(rpc);
 	struct pool_tgt_query_out	*out = crt_reply_get(rpc);
-	struct ds_pool			*pool;
-	uint64_t			*mem_file_bytes;
+	struct ds_pool                  *pool;
 	int				 rc;
-
-	if (handler_version >= 7)
-		mem_file_bytes = &out->tqo_mem_file_bytes;
-	else
-		mem_file_bytes = NULL;
 
 	/* Single target query */
 	if (dss_get_module_info()->dmi_xs_id != 0) {
-		rc = pool_query_space(in->tqi_op.pi_uuid, &out->tqo_space, mem_file_bytes);
+		rc =
+		    pool_query_space(in->tqi_op.pi_uuid, &out->tqo_space, &out->tqo_mem_file_bytes);
 		goto out;
 	}
 
@@ -2250,39 +2245,13 @@ pool_tgt_query_handler(crt_rpc_t *rpc, int handler_version)
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	rc = pool_tgt_query(pool, &out->tqo_space, mem_file_bytes);
+	rc = pool_tgt_query(pool, &out->tqo_space, &out->tqo_mem_file_bytes);
 	if (rc != 0)
 		rc = 1;	/* For query aggregator */
 	ds_pool_put(pool);
 out:
 	out->tqo_rc = rc;
 	crt_reply_send(rpc);
-}
-
-void
-ds_pool_tgt_query_handler_v6(crt_rpc_t *rpc)
-{
-	pool_tgt_query_handler(rpc, 6);
-}
-
-void
-ds_pool_tgt_query_handler(crt_rpc_t *rpc)
-{
-	pool_tgt_query_handler(rpc, DAOS_POOL_VERSION);
-}
-
-int
-ds_pool_tgt_query_aggregator_v6(crt_rpc_t *source, crt_rpc_t *result, void *priv)
-{
-	struct pool_tgt_query_v6_out *out_source = crt_reply_get(source);
-	struct pool_tgt_query_v6_out *out_result = crt_reply_get(result);
-
-	out_result->tqo_rc += out_source->tqo_rc;
-	if (out_source->tqo_rc != 0)
-		return 0;
-
-	aggregate_pool_space(&out_result->tqo_space, NULL, &out_source->tqo_space, NULL);
-	return 0;
 }
 
 int

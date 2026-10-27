@@ -94,7 +94,7 @@ func (ei *EngineInstance) hasSuperblock() bool {
 // Should not be called if SCM format is required.
 func (ei *EngineInstance) needsSuperblock() (bool, error) {
 	if ei.hasSuperblock() {
-		ei.log.Debugf("instance %d has no superblock set", ei.Index())
+		ei.log.Debugf("instance %d already has superblock", ei.Index())
 		return false, nil
 	}
 
