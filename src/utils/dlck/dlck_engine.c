@@ -588,6 +588,7 @@ dlck_engine_stop(struct dlck_engine *engine)
 struct dlck_exec {
 	struct dlck_ult *ults;
 	void           **ult_args;
+	arg_alloc_fn_t   arg_alloc_fn;
 	void            *alloc_arg;
 	arg_free_fn_t    arg_free_fn;
 	void            *free_arg;
@@ -633,7 +634,6 @@ dlck_engine_join_all_no_error(struct dlck_engine *engine, struct dlck_exec *de)
  *
  * \param[in] engine		Engine to run the created ULTs on.
  * \param[in] exec_one		Function to run in the ULTs.
- * \param[in] arg_alloc_fn	Function to allocate arguments for an ULT.
  * \param[in,out] de		Execution state to store the created resources.
  *
  * \retval DER_SUCCESS	Success.
@@ -641,8 +641,7 @@ dlck_engine_join_all_no_error(struct dlck_engine *engine, struct dlck_exec *de)
  * \retval -DER_*	Other error.
  */
 static int
-dlck_engine_targets_start(struct dlck_engine *engine, dlck_ult_func exec_one,
-			  arg_alloc_fn_t arg_alloc_fn, struct dlck_exec *de)
+dlck_engine_targets_start(struct dlck_engine *engine, dlck_ult_func exec_one, struct dlck_exec *de)
 {
 	int rc = DER_SUCCESS;
 
@@ -663,7 +662,7 @@ dlck_engine_targets_start(struct dlck_engine *engine, dlck_ult_func exec_one,
 
 	for (int i = 0; i < engine->targets; ++i) {
 		/** prepare arguments */
-		rc = arg_alloc_fn(engine, i, de->alloc_arg, &de->ult_args[i]);
+		rc = de->arg_alloc_fn(engine, i, de->alloc_arg, &de->ult_args[i]);
 		if (rc != DER_SUCCESS) {
 			goto fail_join_and_free;
 		}
@@ -742,12 +741,13 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 	int              rc;
 
 	/** initialize batch */
+	de.arg_alloc_fn = arg_alloc_fn;
 	de.arg_free_fn = arg_free_fn;
 	de.alloc_arg   = alloc_arg;
 	de.free_arg    = free_arg;
 
 	CK_PRINT(ck, "Start targets... ");
-	rc = dlck_engine_targets_start(engine, exec_one, arg_alloc_fn, &de);
+	rc = dlck_engine_targets_start(engine, exec_one, &de);
 	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
 		return rc;
