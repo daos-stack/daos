@@ -34,8 +34,12 @@ import sys
 import traceback
 from copy import deepcopy
 
+from SCons.SConf import SetCacheMode
 from SCons.Script import BUILD_TARGETS, Dir, Exit, GetOption, SetOption, WhereIs
 from SCons.Variables import BoolVariable, EnumVariable, ListVariable, PathVariable
+
+
+TEST_DEPENDENCIES = ('slurm',)
 
 
 class DownloadFailure(Exception):
@@ -473,6 +477,7 @@ class PreReqComponent():
         self.download_deps = False
         self.fetch_only = False
         self.build_deps = False
+        self.build_test_deps = GetOption('build_test_deps') in ('yes', 'only')
         self.__parse_build_deps()
         self._replace_env(LIBTOOLIZE='libtoolize')
         self.__check_only = GetOption('check_only')
@@ -599,7 +604,7 @@ class PreReqComponent():
                        'lz4', 'isal', 'isal_crypto', 'argobots']
         client_reqs = ['fused', 'json-c', 'capstone', 'aio']
         server_reqs = ['pmdk', 'spdk', 'ipmctl']
-        test_reqs = ['cmocka', 'slurm']
+        test_reqs = ['cmocka']
 
         reqs = []
         reqs = common_reqs
@@ -614,6 +619,10 @@ class PreReqComponent():
         if GetOption('build_deps') == 'only':
             # Optionally, limit the deps we build in this pass
             reqs = self.__env.get('DEPS')
+        if GetOption('build_test_deps') == 'only':
+            reqs = []
+        if self.build_test_deps:
+            reqs = list(reqs) + list(TEST_DEPENDENCIES)
 
         try:
             # pylint: disable-next=import-outside-toplevel
@@ -725,6 +734,8 @@ class PreReqComponent():
 
     def __parse_build_deps(self):
         """Parse the build dependencies command line flag"""
+        if GetOption('build_test_deps') == 'only':
+            return
         build_deps = GetOption('build_deps')
         skip_download = GetOption('skip_download')
         if build_deps in ('fetch',):
@@ -777,8 +788,16 @@ class PreReqComponent():
         if not kw.get('static_libs', False):
             if 'all' in self.installed or name in self.installed:
                 use_installed = True
+        if name in TEST_DEPENDENCIES and self.build_test_deps:
+            use_installed = name in self.installed
         comp = _Component(self, name, use_installed, **kw)
         self.__defined[name] = comp
+
+    def can_build(self, name):
+        """Return whether source building is enabled for a component."""
+        if name in TEST_DEPENDENCIES:
+            return self.build_test_deps
+        return self.build_deps
 
     def server_requested(self):
         """Return True if server build is requested"""
@@ -1149,7 +1168,7 @@ class _Component():  # pylint: disable=too-many-instance-attributes
 
         # Source code is retrieved using retriever
         if not (self.prereqs.download_deps or self.prereqs.fetch_only):
-            if self.prereqs.build_deps:
+            if self.prereqs.can_build(self.name) and GetOption('skip_download'):
                 print("Assuming sources have been downloaded already")
                 return
 
@@ -1228,7 +1247,17 @@ class _Component():  # pylint: disable=too-many-instance-attributes
             return
         print(msg)
 
-    def has_missing_targets(self, env, comp_path=None):
+    def has_missing_targets(self, env, comp_path=None, refresh=False):
+        """Check targets, optionally bypassing cached configure results."""
+        if not refresh:
+            return self._has_missing_targets(env, comp_path)
+        SetCacheMode('force')
+        try:
+            return self._has_missing_targets(env, comp_path)
+        finally:
+            SetCacheMode(GetOption('config'))
+
+    def _has_missing_targets(self, env, comp_path=None):
         """Check for expected build targets (e.g. libraries or headers)"""
         # pylint: disable=too-many-return-statements
         if self.targets_found:
@@ -1521,11 +1550,12 @@ class _Component():  # pylint: disable=too-many-instance-attributes
             self._check_installed_package(envcopy)
             return False
 
-        build_dep = self.prereqs.build_deps
+        build_dep = self.prereqs.can_build(self.name)
         if self.use_installed:
             print(f"{self.name} should be installed")
             build_dep = False
-        if self.component_prefix and os.path.exists(self.component_prefix):
+        prefix_exists = bool(self.component_prefix and os.path.exists(self.component_prefix))
+        if prefix_exists:
             print(f"{self.name} already has a build directory")
             build_dep = False
 
@@ -1539,7 +1569,7 @@ class _Component():  # pylint: disable=too-many-instance-attributes
                     print(f"{self.name} is not actually installed, building...")
                     build_dep = False
         else:
-            missing_targets = self.has_missing_targets(envcopy)
+            missing_targets = self.has_missing_targets(envcopy, refresh=prefix_exists)
 
         if build_dep:
 
@@ -1572,7 +1602,7 @@ class _Component():  # pylint: disable=too-many-instance-attributes
         self.set_environment(envcopy, self.libs)
         if changes:
             self._patch_rpaths()
-        if self.has_missing_targets(envcopy) and not self.__dry_run:
+        if self.has_missing_targets(envcopy, refresh=changes) and not self.__dry_run:
             raise MissingTargets(self.name, None)
         return changes
 

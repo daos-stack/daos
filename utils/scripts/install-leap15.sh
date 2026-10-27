@@ -17,6 +17,10 @@ arch=$(uname -i)
 dnf_install_args="${1:-}"
 
 : "${PYTHON_VERSION:=3.11}"
+case "${INSTALL_TEST_DEPS:-false}" in
+    true|false) ;;
+    *) echo 'INSTALL_TEST_DEPS must be true or false' >&2; exit 1 ;;
+esac
 
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
@@ -27,7 +31,6 @@ dnf --nodocs install ${dnf_install_args} \
     cpio \
     createrepo_c \
     cunit-devel \
-    dbus-1-devel \
     fdupes \
     flex \
     gcc \
@@ -39,7 +42,6 @@ dnf --nodocs install ${dnf_install_args} \
     hwloc-devel \
     libaio-devel \
     libasan8 \
-    libbpf-devel \
     libcmocka-devel \
     libcapstone-devel \
     libevent-devel \
@@ -47,7 +49,6 @@ dnf --nodocs install ${dnf_install_args} \
     libiscsi-devel \
     libjson-c-devel \
     liblz4-devel \
-    libmariadb-devel \
     libndctl-devel \
     libnl3-devel \
     libnuma-devel \
@@ -64,7 +65,6 @@ dnf --nodocs install ${dnf_install_args} \
     libyaml-devel \
     lua-lmod \
     make \
-    munge-devel \
     nasm \
     openmpi3-devel \
     pandoc \
@@ -78,6 +78,15 @@ dnf --nodocs install ${dnf_install_args} \
     valgrind-devel \
     which \
     yasm
+
+if [[ "${INSTALL_TEST_DEPS:-false}" = true ]]; then
+    # shellcheck disable=SC2086
+    dnf --nodocs install ${dnf_install_args} \
+        dbus-1-devel \
+        libbpf-devel \
+        libmariadb-devel \
+        munge-devel
+fi
 
 if [[ "${INSTALL_BUILD_CI_ONLY:-}" != "true" ]]; then
     # Optional packages for full-featured images; can be skipped in essential-only mode.

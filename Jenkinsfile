@@ -828,6 +828,7 @@ pipeline {
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
                                                 ' --target build-ci' +
+                                                ' --build-arg INSTALL_TEST_DEPS=true' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
@@ -843,6 +844,14 @@ pipeline {
                                            cp -- "$@" rpms/deps/
                                        fi
                                '''
+                                    sh label: 'Install, build and package test dependencies',
+                                       script: '''
+                                           set -e
+                                           utils/build/install_deps.sh --install-range=test-deps el9
+                                           bash utils/build/build_test_deps.sh TARGET_TYPE=release
+                                           utils/build/build_packages.sh --rpm-suffix=el9 \
+                                           --build-range=test-deps rpms
+                                       '''
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
@@ -900,6 +909,7 @@ pipeline {
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
+                                                ' --build-arg INSTALL_TEST_DEPS=true' +
                                                 ' --build-arg POINT_RELEASE=.6' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
@@ -914,6 +924,14 @@ pipeline {
                                            cp -- "$@" rpms/deps/
                                        fi
                                '''
+                                    sh label: 'Install, build and package test dependencies',
+                                       script: '''
+                                           set -e
+                                           utils/build/install_deps.sh --install-range=test-deps suse.lp156
+                                           bash utils/build/build_test_deps.sh TARGET_TYPE=release
+                                           utils/build/build_packages.sh --rpm-suffix=suse.lp156 \
+                                           --build-range=test-deps rpms
+                                       '''
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',

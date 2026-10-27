@@ -60,13 +60,6 @@ export daos_spdk_full="${daos_spdk_version}-${daos_spdk_release}"
 export fused_version="1.0.0"
 export fused_release="3${distro_name}"
 export fused_full="${fused_version}-${fused_release}"
-export slurm_version="26.05.4"
-export slurm_release="3${distro_name}"
-export slurm_full="${slurm_version}-${slurm_release}"
-export slurm_lib="slurm"
-export slurm_dbd="slurm-slurmdbd"
-set_lib_name slurm dev slurm slurm slurm
-export slurm_dev
 
 set_lib_name openmpi lib openmpi openmpi3 openmpi
 export openmpi_lib
@@ -145,3 +138,17 @@ if [[ "${DISTRO:-el9}" =~ suse ]]; then
   lmod="lua-lmod"
 fi
 export lmod
+
+# DAOS tests dependencies
+export slurm_version="26.05.4"
+export slurm_release="3${distro_name}"
+export slurm_full="${slurm_version}-${slurm_release}"
+export slurm_lib="slurm"
+export slurm_dbd="slurm-slurmdbd"
+export slurm_ctld="slurm-slurmctld"
+export slurm_slurmd="slurm-slurmd"
+export slurm_examples="slurm-example-configs"
+set_lib_name slurm dev slurm slurm slurm
+export slurm_dev
+set_lib_name slurm lib slurm slurm slurm
+export slurm_lib

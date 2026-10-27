@@ -11,7 +11,7 @@ set -euo pipefail
 
 usage() {
     cat <<EOF
-Usage: ${0##*/} [<RPM_SUFFIX>]
+Usage: ${0##*/} [--install-range=deps|test-deps|all] [<RPM_SUFFIX>]
        ${0##*/} -h | --help
 
 This script can be used only on el9 and leap/sles 15 systems.
@@ -25,6 +25,8 @@ Arguments:
                          auto-detected from /etc/os-release.
 
 Options:
+    --install-range     Select ordinary (deps or all) or test-only dependencies.
+                        Default: deps. Only test-deps installs test dependencies.
     -h, --help           Show this help and exit
 
 Environment:
@@ -40,12 +42,24 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 source "${script_dir}/build_utils.sh"
 rpms_dir="$(cd "${script_dir}/../rpms" >/dev/null 2>&1 && pwd)"
 
-if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-    usage
-    exit 0
-fi
-
-rpm_suffix="${1:-$(detect_rpm_suffix)}"
+install_range=deps
+rpm_suffix=
+for arg in "$@"; do
+    case "${arg}" in
+        -h|--help) usage; exit 0 ;;
+        --install-range=*) install_range="${arg#*=}" ;;
+        --*) echo "Unknown option: ${arg}" >&2; exit 1 ;;
+        *)
+            [[ -z "${rpm_suffix}" ]] || { echo 'Too many arguments' >&2; exit 1; }
+            rpm_suffix="${arg}"
+            ;;
+    esac
+done
+case "${install_range}" in
+    deps|test-deps|all) ;;
+    *) echo 'Invalid --install-range' >&2; exit 1 ;;
+esac
+rpm_suffix="${rpm_suffix:-$(detect_rpm_suffix)}"
 validate_rpm_suffix "${rpm_suffix}"
 
 id
@@ -74,6 +88,7 @@ if [ -n "${DAOS_DEPS_EXT_REPO:-}" ]; then
 fi
 
 export DISTRO="${rpm_suffix:-}"
+if [[ "${install_range}" != test-deps ]]; then
 libfabric_pkg="$("${rpms_dir}/package_version.sh" libfabric dev)"
 mercury_pkg="$("${rpms_dir}/package_version.sh" mercury dev)"
 argobots_pkg="$("${rpms_dir}/package_version.sh" argobots dev)"
@@ -82,8 +97,6 @@ isal_pkg="$("${rpms_dir}/package_version.sh" isal dev)"
 isal_crypto_pkg="$("${rpms_dir}/package_version.sh" isal_crypto dev)"
 daos_spdk_pkg="$("${rpms_dir}/package_version.sh" daos_spdk dev)"
 pmdk_pkg="$("${rpms_dir}/package_version.sh" pmdk dev pmemobj)"
-slurm_pkg="$("${rpms_dir}/package_version.sh" slurm dev)"
-slurm_dbd_pkg="$("${rpms_dir}/package_version.sh" slurm dbd)"
 
 sudo dnf install --allowerasing -y "${libfabric_pkg}" || echo "${libfabric_pkg} not available"
 sudo dnf install --allowerasing -y "${mercury_pkg}" || echo "${mercury_pkg} not available"
@@ -93,5 +106,14 @@ sudo dnf install --allowerasing -y "${fused_pkg}" || echo "${fused_pkg} not avai
 sudo dnf install --allowerasing -y "${pmdk_pkg}" || echo "${pmdk_pkg} not available"
 sudo dnf install --allowerasing -y "${isal_pkg}" || echo "${isal_pkg} not available"
 sudo dnf install --allowerasing -y "${isal_crypto_pkg}" || echo "${isal_crypto_pkg} not available"
-sudo dnf install --allowerasing -y "${slurm_pkg}" || echo "${slurm_pkg} not available"
-sudo dnf install --allowerasing -y "${slurm_dbd_pkg}" || echo "${slurm_dbd_pkg} not available"
+fi
+
+if [[ "${install_range}" = test-deps ]]; then
+    test_packages=()
+    for package_type in lib dev dbd ctld slurmd examples; do
+        package="$("${rpms_dir}/package_version.sh" slurm "${package_type}")"
+        test_packages+=("${package}")
+    done
+    sudo dnf install --allowerasing -y "${test_packages[@]}" || \
+        echo 'Slurm packages not available'
+fi

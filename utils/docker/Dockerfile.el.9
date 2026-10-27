@@ -89,8 +89,9 @@ FROM basic AS build-ci
 # Install minimal set of packages for building DAOS with gcc compiler and
 # no Java support.
 ARG INSTALL_SCRIPT_SUFFIX
+ARG INSTALL_TEST_DEPS=false
 RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target=/tmp/daos/install.sh \
-    INSTALL_BUILD_CI_ONLY="true" /tmp/daos/install.sh && \
+    INSTALL_BUILD_CI_ONLY="true" INSTALL_TEST_DEPS="$INSTALL_TEST_DEPS" /tmp/daos/install.sh && \
     dnf clean all
 
 # Add DAOS user

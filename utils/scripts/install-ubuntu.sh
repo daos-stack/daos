@@ -18,6 +18,10 @@ arch=$(uname -i)
 apt_get_install_args="${1:-}"
 
 : "${PYTHON_VERSION:=3}"
+case "${INSTALL_TEST_DEPS:-false}" in
+    true|false) ;;
+    *) echo 'INSTALL_TEST_DEPS must be true or false' >&2; exit 1 ;;
+esac
 
 # shellcheck disable=SC2086
 apt-get install ${apt_get_install_args} \
@@ -33,12 +37,10 @@ apt-get install ${apt_get_install_args} \
     kmod \
     libaio-dev \
     libasan6 \
-    libbpf-dev \
     libboost-dev \
     libcapstone-dev \
     libcmocka-dev \
     libcunit1-dev \
-    libdbus-1-dev \
     libdaxctl-dev \
     libfuse3-dev \
     libgoogle-perftools-dev \
@@ -46,9 +48,6 @@ apt-get install ${apt_get_install_args} \
     libibverbs-dev \
     libjson-c-dev \
     liblz4-dev \
-    libmariadb-dev \
-    libmariadb-dev-compat \
-    libmunge-dev \
     libndctl-dev \
     libnuma-dev \
     libopenmpi-dev \
@@ -78,6 +77,16 @@ apt-get install ${apt_get_install_args} \
     valgrind \
     libncurses-dev \
     yasm
+
+if [[ "${INSTALL_TEST_DEPS:-false}" = true ]]; then
+    # shellcheck disable=SC2086
+    apt-get install ${apt_get_install_args} \
+        libbpf-dev \
+        libdbus-1-dev \
+        libmariadb-dev \
+        libmariadb-dev-compat \
+        libmunge-dev
+fi
 
 sudo gem install fpm
 
