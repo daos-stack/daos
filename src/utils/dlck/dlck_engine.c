@@ -743,8 +743,8 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 	/** initialize batch */
 	de.arg_alloc_fn = arg_alloc_fn;
 	de.arg_free_fn = arg_free_fn;
-	de.alloc_arg   = alloc_arg;
-	de.free_arg    = free_arg;
+	de.alloc_arg    = alloc_arg;
+	de.free_arg     = free_arg;
 
 	CK_PRINT(ck, "Start targets... ");
 	rc = dlck_engine_targets_start(engine, exec_one, &de);
