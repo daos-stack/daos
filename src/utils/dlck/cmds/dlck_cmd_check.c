@@ -170,12 +170,8 @@ conts_process(struct xstream_arg *xa, daos_handle_t poh, struct checker *ck)
  * \param[in]	xa	Target's arguments.
  * \param[in]	file	File to process.
  * \param[in]	ck	Checker.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_NOMEM	Out of memory.
- * \retval -DER_*	Other errors.
  */
-static int
+static void
 pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 {
 	struct checker *main_ck = &xa->ctrl->checker;
@@ -187,7 +183,7 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 					xa->xs->tgt_id);
 	CK_PRINTL_RC(ck, rc, "VOS file allocation");
 	if (rc != DER_SUCCESS) {
-		return rc;
+		return;
 	}
 
 	/** generate a VOS file path */
@@ -195,7 +191,7 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 			  &path);
 	if (rc != DER_SUCCESS) {
 		CK_PRINTL_RC(ck, rc, "VOS file path allocation failed");
-		return rc;
+		return;
 	}
 
 	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, ck, &poh);
@@ -208,14 +204,6 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 		(void)vos_pool_close(poh);
 	}
 	D_FREE(path);
-
-	/** check */
-	if (rc != DER_SUCCESS) {
-		/** ignore a possible error from the unlock */
-		return rc;
-	}
-
-	return DER_SUCCESS;
 }
 
 /**
@@ -249,7 +237,7 @@ exec_one(void *arg)
 		}
 
 		/** check the pool */
-		rc = pool_process(xa, file, &ck);
+		pool_process(xa, file, &ck);
 		/** Continue to the next pool regardless of the result. */
 
 		/** close the logfile */
