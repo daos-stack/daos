@@ -2874,7 +2874,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 	uint64_t			 committed_tx = 0;
 	unsigned int			 max_iod_per_page;
 	unsigned int			 tot_pgs = 0, flushed_pgs = 0;
-	int				 inflight = 0;
+	int				 in_flight = 0;
 	int				 i, rc = 0;
 
 	D_ASSERT(store != NULL);
@@ -2911,7 +2911,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 
 	do {
 		/** first try to add up to MAX_INFLIGHT_SETS to the waiting queue */
-		while (inflight < MAX_INFLIGHT_SETS && !d_list_empty(dirty_list)) {
+		while (in_flight < MAX_INFLIGHT_SETS && !d_list_empty(dirty_list)) {
 			chkpt_data =
 			    d_list_pop_entry(&free_list, struct umem_checkpoint_data, cd_link);
 
@@ -2984,7 +2984,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 
 			chkpt_insert_sorted(store, chkpt_data, &waiting_list);
 
-			inflight++;
+			in_flight++;
 		}
 
 		chkpt_data = d_list_pop_entry(&waiting_list, struct umem_checkpoint_data, cd_link);
@@ -3030,7 +3030,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 			break;
 		}
 
-	} while (inflight != 0 || !d_list_empty(dirty_list));
+	} while (in_flight != 0 || !d_list_empty(dirty_list));
 
 	return rc;
 }

@@ -1084,6 +1084,52 @@ object_deleted_by_aggregation_and_gc_mid_yield_between_chunks(void **state)
 }
 
 static int
+test_yield_deletes_sv_version(void *arg)
+{
+	struct sts_context	*ctx = arg;
+	daos_epoch_range_t	epr = {.epr_lo = 0, .epr_hi = 3};
+	int			rc;
+
+	/** Advance the sequence number for each yield mimicking a normal system. */
+	scrub_sched_seq++;
+	if (ctx->tsc_iter_deleted)
+		return 0;
+
+	assert_int_equal(ctx->tsc_scrub_ctx.sc_epoch, 1);
+	ctx->tsc_iter_deleted = true;
+
+	rc = vos_aggregate(ctx->tsc_coh, &epr, NULL, NULL,
+			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
+	assert_success(rc);
+
+	assert_int_equal(VOS_ITER_SINGLE,
+			 vos_iter_validate(ctx->tsc_scrub_ctx.sc_vos_iter_handle));
+
+	return 0;
+}
+
+static void
+sv_version_deleted_during_scrub_yield(void **state)
+{
+	struct sts_context *ctx = *state;
+
+#if !FAULT_INJECTION
+	skip();
+#endif
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 3, true);
+
+	ctx->tsc_yield_fn  = test_yield_deletes_sv_version;
+	ctx->tsc_sleep_fn  = mock_sleep_nop;
+	ctx->tsc_sched_arg = ctx;
+	sts_ctx_do_scrub(ctx);
+
+	assert_true(ctx->tsc_iter_deleted);
+	assert_rc_equal(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1), -DER_NONEXIST);
+	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 3));
+}
+
+static int
 sts_setup_with_sched(void **state)
 {
 	sts_setup(state);
@@ -1147,6 +1193,8 @@ static const struct CMUnitTest scrubbing_tests[] = {
     {"CSUM_SCRUBBING_15: DAOS-19721 - object deleted during multi-chunk checksum scrub",
      object_deleted_by_aggregation_and_gc_mid_yield_between_chunks, sts_setup_with_sched,
      sts_teardown_with_sched},
+    {"CSUM_SCRUBBING_16: DAOS-19721 - single-value version deleted during scrub yield",
+	 sv_version_deleted_during_scrub_yield, sts_setup_with_sched, sts_teardown_with_sched},
 };
 
 int
