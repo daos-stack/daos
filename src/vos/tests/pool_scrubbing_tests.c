@@ -1086,9 +1086,9 @@ object_deleted_by_aggregation_and_gc_mid_yield_between_chunks(void **state)
 static int
 test_yield_deletes_sv_version(void *arg)
 {
-	struct sts_context	*ctx = arg;
-	daos_epoch_range_t	epr = {.epr_lo = 0, .epr_hi = 3};
-	int			rc;
+	struct sts_context *ctx = arg;
+	daos_epoch_range_t  epr = {.epr_lo = 0, .epr_hi = 3};
+	int                 rc;
 
 	/** Advance the sequence number for each yield mimicking a normal system. */
 	scrub_sched_seq++;
@@ -1102,8 +1102,7 @@ test_yield_deletes_sv_version(void *arg)
 			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
 	assert_success(rc);
 
-	assert_int_equal(VOS_ITER_SINGLE,
-			 vos_iter_validate(ctx->tsc_scrub_ctx.sc_vos_iter_handle));
+	assert_int_equal(VOS_ITER_SINGLE, vos_iter_validate(ctx->tsc_scrub_ctx.sc_vos_iter_handle));
 
 	return 0;
 }
@@ -1194,7 +1193,7 @@ static const struct CMUnitTest scrubbing_tests[] = {
      object_deleted_by_aggregation_and_gc_mid_yield_between_chunks, sts_setup_with_sched,
      sts_teardown_with_sched},
     {"CSUM_SCRUBBING_16: DAOS-19721 - single-value version deleted during scrub yield",
-	 sv_version_deleted_during_scrub_yield, sts_setup_with_sched, sts_teardown_with_sched},
+     sv_version_deleted_during_scrub_yield, sts_setup_with_sched, sts_teardown_with_sched},
 };
 
 int

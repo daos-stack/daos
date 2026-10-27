@@ -2874,7 +2874,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 	uint64_t			 committed_tx = 0;
 	unsigned int			 max_iod_per_page;
 	unsigned int			 tot_pgs = 0, flushed_pgs = 0;
-	int				 in_flight = 0;
+	int                              in_flight = 0;
 	int				 i, rc = 0;
 
 	D_ASSERT(store != NULL);
