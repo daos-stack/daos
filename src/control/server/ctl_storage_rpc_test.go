@@ -3556,6 +3556,69 @@ func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
 	}
 }
 
+func TestServer_CtlSvc_RemoveSuperblock(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req        *ctlpb.RemoveSuperblockReq
+		numEngines int
+		notStarted bool
+		expErr     error
+		expResp    *ctlpb.RemoveSuperblockResp
+	}{
+		"nil request": {
+			expErr: errNilReq,
+		},
+		"missing engine index": {
+			req:        &ctlpb.RemoveSuperblockReq{EngineIndex: 1},
+			numEngines: 1,
+			notStarted: true,
+			expErr:     errors.New("engine with index 1 not found"),
+		},
+		"engine still running": {
+			req:        &ctlpb.RemoveSuperblockReq{EngineIndex: 0},
+			numEngines: 1,
+			expErr:     errors.New("engine 0 is still running"),
+		},
+		"success; engine 0 stopped": {
+			req:        &ctlpb.RemoveSuperblockReq{EngineIndex: 0},
+			numEngines: 1,
+			notStarted: true,
+			expResp:    &ctlpb.RemoveSuperblockResp{},
+		},
+		"success; engine 1 stopped": {
+			req:        &ctlpb.RemoveSuperblockReq{EngineIndex: 1},
+			numEngines: 2,
+			notStarted: true,
+			expResp:    &ctlpb.RemoveSuperblockResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			engineCfgs := []*engine.Config{}
+			for idx := 0; idx < tc.numEngines; idx++ {
+				ec := engine.MockConfig().WithStorage(
+					storage.NewTierConfig().WithStorageClass(storage.ClassDcpm.String()),
+				)
+				ec.Index = uint32(idx)
+				engineCfgs = append(engineCfgs, ec)
+			}
+			serverCfg := config.DefaultServer().WithEngines(engineCfgs...)
+			cs := mockControlService(t, log, serverCfg, nil, nil, nil, tc.notStarted)
+
+			resp, err := cs.RemoveSuperblock(test.Context(t), tc.req)
+			test.CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, resp, test.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 	const (
 		clusterSize     uint64 = 32 * humanize.MiByte

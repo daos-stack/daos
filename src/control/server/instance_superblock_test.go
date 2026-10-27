@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -127,5 +128,51 @@ func TestServer_Instance_superblockPath(t *testing.T) {
 
 			test.AssertEqual(t, tc.expPath, result, "")
 		})
+	}
+}
+
+func TestServer_Instance_RemoveSuperblock(t *testing.T) {
+	testDir, cleanup := test.CreateTestDir(t)
+	defer cleanup()
+
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	if err := os.MkdirAll(filepath.Join(testDir, "one"), 0777); err != nil {
+		t.Fatal(err)
+	}
+	cfg := engine.MockConfig().
+		WithStorage(
+			storage.NewTierConfig().
+				WithStorageClass("ram").
+				WithScmRamdiskSize(1).
+				WithScmMountPoint("one"),
+		)
+	sp := storage.NewProvider(log, 0, &cfg.Storage, nil, nil, nil, nil)
+	ei := newTestEngine(log, false, sp, cfg)
+	ei.fsRoot = testDir
+	ei._superblock = &Superblock{System: t.Name()}
+
+	sbPath := ei.superblockPath()
+	if err := os.WriteFile(sbPath, []byte("fake-superblock"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ei.RemoveSuperblock(); err != nil {
+		t.Fatalf("unexpected error removing existing superblock: %s", err)
+	}
+	if ei._superblock != nil {
+		t.Fatal("expected in-memory superblock to be cleared")
+	}
+	if _, err := os.Stat(sbPath); !os.IsNotExist(err) {
+		t.Fatalf("expected superblock file to be removed, stat err: %v", err)
+	}
+
+	// Removing an already-removed superblock surfaces a not-exist error; callers
+	// (e.g. eraseEngineFormat, ControlService.RemoveSuperblock) are expected to
+	// tolerate this rather than treat it as fatal.
+	err := ei.RemoveSuperblock()
+	if !os.IsNotExist(err) {
+		t.Fatalf("expected not-exist error removing already-removed superblock, got: %v", err)
 	}
 }

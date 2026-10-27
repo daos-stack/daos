@@ -11,6 +11,7 @@ package server
 import (
 	"fmt"
 	"math"
+	"os"
 	"os/user"
 	"strconv"
 
@@ -1306,4 +1307,34 @@ func (cs *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.N
 	}
 
 	return resp, nil
+}
+
+// RemoveSuperblock removes an engine's superblock to prepare it for reformat.
+//
+// Intended for recovery after an admin has manually resolved a storage failure (e.g.
+// replaced a failed SSD) while the engine is stopped, so that a format is required on
+// next engine start rather than requiring manual filesystem access to the superblock.
+func (cs *ControlService) RemoveSuperblock(ctx context.Context, req *ctlpb.RemoveSuperblockReq) (*ctlpb.RemoveSuperblockResp, error) {
+	if req == nil {
+		return nil, errNilReq
+	}
+
+	engines := cs.harness.Instances()
+	engineIndex := req.GetEngineIndex()
+
+	if len(engines) <= int(engineIndex) {
+		return nil, errors.Errorf("engine with index %d not found", engineIndex)
+	}
+	eng := engines[engineIndex]
+
+	if eng.IsStarted() {
+		return nil, errors.Errorf("engine %d is still running; stop daos_server before "+
+			"removing its superblock", engineIndex)
+	}
+
+	if err := eng.RemoveSuperblock(); err != nil && !os.IsNotExist(err) {
+		return nil, errors.Wrapf(err, "engine %d", engineIndex)
+	}
+
+	return &ctlpb.RemoveSuperblockResp{}, nil
 }
