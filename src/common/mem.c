@@ -3014,7 +3014,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 			pinfo = chkpt_data->cd_pages[i];
 			page_flush_completion(cache, pinfo);
 		}
-		inflight--;
+		in_flight--;
 
 		flushed_pgs += chkpt_data->cd_nr_pages;
 		if (stats) {
