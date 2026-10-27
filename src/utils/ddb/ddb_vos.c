@@ -1320,26 +1320,28 @@ out:
 }
 
 /*
- * Fetch the record data for a single checksum-verification segment (either the whole single
- * value, or one physical recx/epoch segment of an array value) into a freshly allocated
- * buffer in \a sgl. Uses the same 2-pass vos_obj_fetch() pattern as dv_dump_value(): the first
- * pass discovers the record size, the second pass fetches the data.
+ * Fetch the record data of a single checksum-verification segment (a whole single value, or
+ * one recx/epoch segment of an array value) into a newly allocated buffer in \a sgl.
  *
- * Returns -DER_CSUM, like csum_recx_check_chunks(), when the checksummed value has no data
- * behind it (inconsistent checksum metadata).
+ * On success, the caller owns sgl->sg_iovs[0].iov_buf and must release it with D_FREE().
+ * On failure, no buffer is left allocated.
+ *
+ * Returns -DER_CSUM if the checksummed value has no data behind it.
  */
 static int
 fetch_check_value(daos_handle_t coh, daos_unit_oid_t *oid, daos_key_t *dkey, daos_iod_t *iod,
 		  daos_epoch_t epoch, d_sg_list_t *sgl)
 {
-	size_t data_size;
-	int    rc;
+	daos_key_t *akey = &iod->iod_name;
+	size_t      data_size;
+	int         rc;
 
 	iod->iod_size = 0;
 	rc            = vos_obj_fetch(coh, *oid, epoch, 0, dkey, 1, iod, NULL);
 	if (!SUCCESS(rc)) {
-		D_ERROR("vos_obj_fetch (size) for csum check of " DF_UOID " failed: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("vos_obj_fetch (size) for csum check of " DF_CSUM_LOC " failed: " DF_RC
+			"\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 		return rc;
 	}
 
@@ -1352,9 +1354,9 @@ fetch_check_value(daos_handle_t coh, daos_unit_oid_t *oid, daos_key_t *dkey, dao
 		data_size = 0;
 
 	if (data_size == 0) {
-		D_ERROR("Checksum check of " DF_UOID " failed: inconsistent checksum metadata "
+		D_ERROR("Checksum check of " DF_CSUM_LOC " failed: inconsistent checksum metadata "
 			"(no data stored at epoch " DF_X64 " for a checksummed value)\n",
-			DP_UOID(*oid), epoch);
+			DP_CSUM_LOC(oid, dkey, akey), epoch);
 		return -DER_CSUM;
 	}
 
@@ -1365,8 +1367,9 @@ fetch_check_value(daos_handle_t coh, daos_unit_oid_t *oid, daos_key_t *dkey, dao
 
 	rc = vos_obj_fetch(coh, *oid, epoch, 0, dkey, 1, iod, sgl);
 	if (!SUCCESS(rc)) {
-		D_ERROR("vos_obj_fetch (data) for csum check of " DF_UOID " failed: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("vos_obj_fetch (data) for csum check of " DF_CSUM_LOC " failed: " DF_RC
+			"\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 		D_FREE(sgl->sg_iovs[0].iov_buf);
 	}
 
@@ -1374,10 +1377,9 @@ fetch_check_value(daos_handle_t coh, daos_unit_oid_t *oid, daos_key_t *dkey, dao
 }
 
 /*
- * Create an independent copy of \a src (metadata + checksum bytes) in a single D_ALLOC'd
- * struct+buffer, matching daos_csummer_calc_key()'s allocation pattern. The result is freed by
- * the caller with a plain D_FREE() -- it is not a daos_csummer-owned allocation, so
- * daos_csummer_free_ci()/_ic() must not be used on it.
+ * Create an independent copy of \a src (metadata + checksum bytes).
+ * On success, the caller must release the copy with D_FREE(). On failure, nothing is allocated
+ * and \a snapshot is left untouched.
  */
 static int
 snapshot_csum_info(struct dcs_csum_info *src, struct dcs_csum_info **snapshot)
@@ -1404,15 +1406,14 @@ snapshot_csum_info(struct dcs_csum_info *src, struct dcs_csum_info **snapshot)
 }
 
 /*
- * Recompute the checksum of one segment's currently stored data and compare it against the
- * checksum info already fetched from disk (\a ci). Returns 0 if the checksums match, -DER_CSUM
- * if they differ or if no data is stored behind \a ci (inconsistent checksum metadata, already
- * logged by fetch_check_value()), or another negative rc on a hard I/O/system error.
+ * Verify that the checksum of the data currently stored for one segment matches \a ci.
  *
- * On a -DER_CSUM mismatch, *got_csum is set to an independent snapshot of the recomputed
- * checksum (to be freed by the caller with D_FREE()), or left NULL when that snapshot could not
- * be allocated (the mismatch is then logged) or when no data was found behind \a ci in the first
- * place; left NULL on a match or any other error.
+ * Returns:
+ *   0           The checksums match.
+ *   -DER_CSUM   The checksums differ, or no data is stored behind \a ci. On a mismatch,
+ *               *got_csum is set to a copy of the recomputed checksum, which the caller must
+ *               release with D_FREE(). It stays NULL if the copy could not be allocated.
+ *   other < 0   I/O or system error. *got_csum is NULL.
  */
 static int
 verify_segment_csum(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
@@ -1421,6 +1422,7 @@ verify_segment_csum(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, d
 	struct daos_csummer  *csummer       = NULL;
 	struct dcs_iod_csums *got_iod_csums = NULL;
 	d_sg_list_t           sgl           = {0};
+	daos_key_t           *akey          = &iod->iod_name;
 	int                   rc;
 
 	*got_csum = NULL;
@@ -1454,9 +1456,9 @@ verify_segment_csum(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, d
 		rc = snapshot_csum_info(&got_iod_csums->ic_data[0], got_csum);
 		if (!SUCCESS(rc))
 			/* the mismatch cannot be reported through got_csum: log it instead */
-			D_ERROR("Checksum mismatch of " DF_UOID " detected, but its recomputed "
+			D_ERROR("Checksum mismatch of " DF_CSUM_LOC " detected, but its recomputed "
 				"checksum cannot be reported: " DF_RC "\n",
-				DP_UOID(*oid), DP_RC(rc));
+				DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 		rc = -DER_CSUM;
 	}
 
@@ -1469,6 +1471,20 @@ out:
 	return rc;
 }
 
+/*
+ * Verify the checksum of a single value and report the result through \a check_cb.
+ *
+ * The callback is invoked after the value has been verified, whether its checksum matches or not
+ * (with the recomputed checksum on a mismatch), or straight away when the value has no checksum.
+ * It is not invoked if the fetch or the verification fails, the checksum metadata is inconsistent
+ * or a detected mismatch cannot be reported.
+ *
+ * Returns:
+ *   0           The checksum matches, or the value has no checksum.
+ *   -DER_CSUM   The checksum is mismatched or its metadata is inconsistent.
+ *   other < 0   I/O or system error, or error returned by the callback (it takes precedence
+ *               over -DER_CSUM).
+ */
 static int
 check_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
 	      daos_epoch_t epoch, dv_check_csum_cb check_cb, void *cb_arg)
@@ -1487,8 +1503,8 @@ check_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_io
 
 	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
 	if (!SUCCESS(rc)) {
-		D_ERROR("vos_fetch_begin for csum check of " DF_UOID " failed: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("vos_fetch_begin for csum check of " DF_CSUM_LOC " failed: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 		goto out;
 	}
 
@@ -1508,9 +1524,9 @@ check_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_io
 	/* For a single value, if the checksum-info list is not empty, it can only have one entry
 	 * by construction. */
 	if (csum_nr != 1) {
-		D_ERROR("Checksum check of SV entry " DF_UOID " failed: "
+		D_ERROR("Checksum check of SV entry " DF_CSUM_LOC " failed: "
 			"inconsistent checksum metadata (expected 1, got %" PRIu32 ")\n",
-			DP_UOID(*oid), csum_nr);
+			DP_CSUM_LOC(oid, dkey, akey), csum_nr);
 		D_GOTO(out_fetch_end, rc = -DER_CSUM);
 	}
 	ci = dcs_csum_info_get(cil, 0);
@@ -1520,7 +1536,8 @@ check_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_io
 
 	rc = verify_segment_csum(coh, dkey, oid, iod, sv_epoch, ci, &got_csum);
 	if (rc == -DER_CSUM) {
-		D_DEBUG(DB_IO, "Checksum mismatch of " DF_UOID "\n", DP_UOID(*oid));
+		D_DEBUG(DB_IO, "Checksum mismatch of " DF_CSUM_LOC "\n",
+			DP_CSUM_LOC(oid, dkey, akey));
 		/* got_csum != NULL is the mismatch signal of the callback: without it, the
 		 * mismatch is only reported by the return code and the callback is not invoked. */
 		if (got_csum == NULL)
@@ -1528,15 +1545,15 @@ check_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_io
 		rc = -DER_SUCCESS;
 	}
 	if (!SUCCESS(rc)) {
-		D_ERROR("Checksum verification of " DF_UOID " failed: " DF_RC "\n", DP_UOID(*oid),
-			DP_RC(rc));
+		D_ERROR("Checksum verification of " DF_CSUM_LOC " failed: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 		goto out_fetch_end;
 	}
 
 	rc = check_cb(cb_arg, NULL, sv_epoch, cil, &got_csum);
 	if (!SUCCESS(rc))
-		D_DEBUG(DB_IO, "Csum check callback for " DF_UOID " returned: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("Csum check callback for " DF_CSUM_LOC " returned: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 
 out_fetch_end:
 	rc = vos_fetch_end(ioh, NULL, rc);
@@ -1548,6 +1565,22 @@ out:
 	return rc;
 }
 
+/*
+ * Verify the checksums of all the extents of an array value and report the result through
+ * \a check_cb.
+ *
+ * The callback is invoked once, after all the extents have been verified, whether their checksums
+ * match or not (with the recomputed checksum of each mismatched extent), or straight away when the
+ * array has no checksum. It is not invoked if the fetch or a verification fails, the checksum
+ * metadata is inconsistent or a detected mismatch cannot be reported.
+ *
+ * Returns:
+ *   0           All the checksums match, or the array has no checksum.
+ *   -DER_CSUM   At least one extent has a mismatched checksum, or the checksum metadata is
+ *               inconsistent.
+ *   other < 0   I/O or system error, or error returned by the callback (it takes precedence
+ *               over -DER_CSUM).
+ */
 static int
 check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
 		daos_epoch_t epoch, dv_check_csum_cb check_cb, void *cb_arg)
@@ -1567,8 +1600,8 @@ check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_
 
 	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
 	if (!SUCCESS(rc)) {
-		D_ERROR("vos_fetch_begin for csum check of " DF_UOID " failed: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("vos_fetch_begin for csum check of " DF_CSUM_LOC " failed: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 		goto out;
 	}
 
@@ -1592,9 +1625,9 @@ check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_
 	 * non-hole extent of a checksummed akey, while akey_fetch_recx() records one recx per such
 	 * extent.  A mismatch can only come from corrupted metadata or a broken VOS invariant. */
 	if (rel == NULL || csum_nr != rel->re_nr) {
-		D_ERROR("Checksum check of RECX " DF_UOID " failed: "
+		D_ERROR("Checksum check of RECX " DF_CSUM_LOC " failed: "
 			"inconsistent checksum metadata (expected %" PRIu32 ", got %" PRIu32 ")\n",
-			DP_UOID(*oid), rel != NULL ? rel->re_nr : 0, csum_nr);
+			DP_CSUM_LOC(oid, dkey, akey), rel != NULL ? rel->re_nr : 0, csum_nr);
 		D_GOTO(out_rel, rc = -DER_CSUM);
 	}
 
@@ -1622,8 +1655,8 @@ check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_
 
 		rc = verify_segment_csum(coh, dkey, oid, &seg_iod, rep->re_ep, ci, &got_csums[i]);
 		if (rc == -DER_CSUM) {
-			D_DEBUG(DB_IO, "Checksum mismatch of " DF_UOID " " DF_RECX "\n",
-				DP_UOID(*oid), DP_RECX(rep->re_recx));
+			D_DEBUG(DB_IO, "Checksum mismatch of " DF_CSUM_LOC " " DF_RECX "\n",
+				DP_CSUM_LOC(oid, dkey, akey), DP_RECX(rep->re_recx));
 			/* got_csums[i] != NULL is the mismatch signal of the callback: without it,
 			 * the mismatch is only reported by the return code and the callback is not
 			 * invoked. */
@@ -1634,17 +1667,17 @@ check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_
 			continue;
 		}
 		if (!SUCCESS(rc)) {
-			D_ERROR("Checksum verification of " DF_UOID " " DF_RECX " failed: " DF_RC
-				"\n",
-				DP_UOID(*oid), DP_RECX(rep->re_recx), DP_RC(rc));
+			D_ERROR("Checksum verification of " DF_CSUM_LOC " " DF_RECX
+				" failed: " DF_RC "\n",
+				DP_CSUM_LOC(oid, dkey, akey), DP_RECX(rep->re_recx), DP_RC(rc));
 			goto out_got_csums;
 		}
 	}
 
 	rc = check_cb(cb_arg, rel, 0, cil, got_csums);
 	if (!SUCCESS(rc))
-		D_DEBUG(DB_IO, "Csum check callback for " DF_UOID " returned: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("Csum check callback for " DF_CSUM_LOC " returned: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 
 out_got_csums:
 	for (i = 0; i < csum_nr; i++)

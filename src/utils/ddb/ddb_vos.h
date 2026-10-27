@@ -171,8 +171,8 @@ int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb
  *                  rely on every entry passing ci_is_valid() and having a checksum type known to
  *                  the checksum library (daos_mhash_type2algo()). Valid only for the duration of
  *                  the callback.
- * @return          0 on success; a negative error code is propagated back to the caller of
- *                  dv_dump_csum().
+ * @retval          0 on success
+ * @retval          -DER_* error code, propagated back to the caller of dv_dump_csum()
  */
 typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel,
 			       daos_epoch_t sv_epoch, struct dcs_ci_list *cil);
@@ -213,9 +213,10 @@ dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
  * @param sv_epoch    Actual stored epoch of the single value. Non-zero for single-value akeys
  *                    when an SV was found within the requested epoch range; 0 for array akeys
  *                    or when no SV was found (hole or -DER_NONEXIST).
- * @param cil         Checksum info list; every entry passes ci_is_valid() and has a checksum
- *                    type known to the checksum library (daos_mhash_type2algo()). Valid only for
- *                    the duration of the callback.
+ * @param cil         Checksum info list. dv_check_csum() has already checked it, so the callback
+ *                    can rely on every entry passing ci_is_valid() and having a checksum type
+ *                    known to the checksum library (daos_mhash_type2algo()). Valid only for the
+ *                    duration of the callback.
  * @param got_csums   Array of cil->dcl_csum_infos_nr struct dcs_csum_info pointers, aligned 1:1
  *                    with recx_rel->re_items for array akeys (a single pointer for single-value
  *                    akeys). got_csums[i] holds the checksum recomputed from the currently
@@ -224,8 +225,9 @@ dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
  *                    as the mismatch flag for entry i. NULL (the whole array) when cil has 0
  *                    entries (nothing to verify). Valid only for the duration of the callback;
  *                    the caller must not free it.
- * @return            0 on success; a negative error code is propagated back to the caller of
- *                    dv_check_csum().
+ * @retval            0 on success, including when mismatches are reported through \a got_csums
+ * @retval            -DER_* error code, propagated back to the caller of dv_check_csum(); it takes
+ *                    precedence over the -DER_CSUM returned for a reported mismatch
  */
 typedef int (*dv_check_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel,
 				daos_epoch_t sv_epoch, struct dcs_ci_list *cil,
@@ -241,18 +243,22 @@ typedef int (*dv_check_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel
  * @param epoch     Epoch for the fetch. For single-value akeys, controls which version is
  *                  checked - pass DAOS_EPOCH_MAX to check the latest, or a snapshot epoch to
  *                  check an earlier version. For array akeys, selects the visible extent set.
- * @param check_cb  Callback invoked with the result. If NULL, the function returns 0 without
- *                  opening the container or calling VOS.
+ * @param check_cb  Callback invoked with the result, at most once per call. If NULL, the function
+ *                  returns 0 without opening the container or calling VOS. It is not invoked if
+ *                  the container cannot be opened, the fetch or the verification fails, the
+ *                  checksum metadata is inconsistent or a detected mismatch cannot be reported.
  * @param cb_arg    Opaque argument forwarded to \a check_cb.
- * @return          0 on success (no checksum found, or all checksum(s) matched); -DER_CSUM if
- *                  at least one checksum entry did not match the stored data, if the fetched
- *                  checksum metadata is inconsistent (e.g. a checksum-info count that does not
- *                  match the stored entries, an invalid checksum info, an unknown checksum type,
- *                  or a stored checksum with no data behind it; nothing is verified and
- *                  \a check_cb is not invoked), or if a mismatch was detected but the recomputed
- *                  checksum could not be allocated to report it through \a check_cb (not invoked
- *                  either; the mismatch is logged); another negative error code on I/O or system
- *                  errors.
+ * @retval          0 on success: no checksum found, or all checksum(s) matched the stored data
+ * @retval          -DER_CSUM if at least one checksum entry did not match the stored data
+ *                  (\a check_cb is invoked first, with the recomputed checksum(s)); if the fetched
+ *                  checksum metadata is inconsistent, e.g. a checksum-info count that does not
+ *                  match the stored entries, an invalid checksum info, an unknown checksum type
+ *                  or a stored checksum with no data behind it (nothing is verified and
+ *                  \a check_cb is not invoked); or if a mismatch was detected but the
+ *                  recomputed checksum could not be allocated to report it through \a check_cb
+ *                  (not invoked either; the mismatch is logged)
+ * @retval          -DER_* other errors, including the one returned by \a check_cb, which takes
+ *                  precedence over -DER_CSUM
  */
 int
 dv_check_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,

@@ -758,10 +758,7 @@ csum_test_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_
 
 /*
  * Write one checksummed value/segment, optionally corrupting the stored checksum of one of its
- * chunks (flips the first byte of chunk \a corrupt_chunk_idx; -1 leaves all checksums valid)
- * before writing it to VOS. Shared by csum_test_corrupt_sv_setup() (called once),
- * csum_test_corrupt_recx_setup() (called once per overlapping segment) and
- * csum_test_partial_recx_setup() (called once per extent of each object).
+ * chunks before writing it to VOS.
  */
 static void
 write_maybe_corrupt(struct daos_csummer *csummer, daos_handle_t coh, daos_unit_oid_t oid,
