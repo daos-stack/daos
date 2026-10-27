@@ -9638,6 +9638,35 @@ ds_pool_target_status(struct ds_pool *pool, uint32_t id)
 	return (int)target->ta_comp.co_status;
 }
 
+/*
+ * Check if the target (or any target of \a rank if \a tgt_idx is -1) has been
+ * excluded (DOWN/DOWNOUT) in the current pool map.
+ */
+bool
+ds_pool_tgt_excluded(struct ds_pool *pool, d_rank_t rank, int tgt_idx)
+{
+	struct pool_target *tgts     = NULL;
+	bool                excluded = false;
+	int                 nr;
+	int                 i;
+
+	if (unlikely(pool->sp_map == NULL))
+		return false;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	nr = pool_map_find_target_by_rank_idx(pool->sp_map, rank, tgt_idx, &tgts);
+	for (i = 0; i < nr; i++) {
+		if (tgts[i].ta_comp.co_status == PO_COMP_ST_DOWN ||
+		    tgts[i].ta_comp.co_status == PO_COMP_ST_DOWNOUT) {
+			excluded = true;
+			break;
+		}
+	}
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	return excluded;
+}
+
 /* Check if the target(by id) matched the status */
 int
 ds_pool_target_status_check(struct ds_pool *pool, uint32_t id, uint8_t matched_status,
