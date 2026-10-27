@@ -32,7 +32,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/provider/system"
 	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -40,6 +39,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/mount"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const defaultRdbSize uint64 = uint64(daos.DefaultDaosMdCapSize)
@@ -2583,7 +2583,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			if tc.scmMounted {
 				getFsRetStr = "ext4"
 			}
-			smsc := &system.MockSysConfig{
+			smsc := &sysprov.MockSysConfig{
 				IsMountedBool:  tc.scmMounted,
 				GetfsStr:       getFsRetStr,
 				SourceToTarget: devToMount,
@@ -2595,20 +2595,20 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				if !tc.tmpfsEmpty {
 					avail--
 				}
-				smsc.GetfsUsageResps = []system.GetfsUsageRetval{
+				smsc.GetfsUsageResps = []sysprov.GetfsUsageRetval{
 					{
 						Total: total,
 						Avail: avail,
 					},
 				}
 			}
-			sysProv := system.NewMockSysProvider(log, smsc)
+			sysProv := sysprov.NewMockSysProvider(log, smsc)
 			mounter := mount.NewProvider(log, sysProv)
 			scmProv := scm.NewProvider(&scm.ProviderConfig{
 				Log:       log,
 				Sys:       sysProv,
 				Mounter:   mounter,
-				KernelCfg: system.KernelConfig{},
+				KernelCfg: sysprov.KernelConfig{},
 			})
 			bdevProv := bdev.NewMockProvider(log, nil)
 			if tc.getSysMemInfo == nil {
@@ -2781,23 +2781,9 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 	}
 }
 
-// mockFormatMetadataEngine is a minimal Engine double used to exercise
+// newMockFormatMetadataEngine builds a MockInstance used to exercise
 // ControlService.formatMetadata() in isolation.
-type mockFormatMetadataEngine struct {
-	MockInstance
-	idx      uint32
-	provider *storage.Provider
-}
-
-func (m *mockFormatMetadataEngine) Index() uint32 {
-	return m.idx
-}
-
-func (m *mockFormatMetadataEngine) GetStorage() *storage.Provider {
-	return m.provider
-}
-
-func newMockFormatMetadataEngine(log logging.Logger, idx uint32, mdPath string, superblockMissing bool) *mockFormatMetadataEngine {
+func newMockFormatMetadataEngine(log logging.Logger, idx uint32, mdPath string, superblockMissing bool) *MockInstance {
 	cfg := &storage.Config{ControlMetadata: storage.ControlMetadata{Path: mdPath}}
 	sysProv := sysprov.NewMockSysProvider(log, nil)
 	storProv := storage.MockProvider(log, int(idx), cfg, sysProv, nil, nil, nil)
@@ -2816,11 +2802,7 @@ func newMockFormatMetadataEngine(log logging.Logger, idx uint32, mdPath string, 
 		storProv = storage.MockProvider(log, int(idx), cfg, sysProv, nil, nil, nil)
 	}
 
-	return &mockFormatMetadataEngine{
-		MockInstance: *NewMockInstance(&MockInstanceConfig{Index: idx}),
-		idx:          idx,
-		provider:     storProv,
-	}
+	return NewMockInstance(&MockInstanceConfig{Index: idx, StorageProvider: storProv})
 }
 
 func TestServer_CtlSvc_formatMetadata(t *testing.T) {
@@ -2972,38 +2954,14 @@ func Test_notifyStorageReady(t *testing.T) {
 			notifyCalls := 0
 			var capturedRank *ranklist.Rank
 
-			// Create a mock engine that tracks NotifyStorageReady calls
-			mockEngine := &struct {
-				MockInstance
-				awaitingFormat bool
-			}{
-				MockInstance: MockInstance{
-					cfg: MockInstanceConfig{
-						Index: 0,
-					},
+			engine := NewMockInstance(&MockInstanceConfig{
+				Index:          0,
+				AwaitingFormat: tc.awaitingFormat,
+				NotifyStorageReadyFn: func(rank *ranklist.Rank) {
+					notifyCalls++
+					capturedRank = rank
 				},
-				awaitingFormat: tc.awaitingFormat,
-			}
-
-			// Override the isAwaitingFormat method
-			mockIsAwaitingFormat := func() bool {
-				return mockEngine.awaitingFormat
-			}
-			_ = mockIsAwaitingFormat
-
-			// Override NotifyStorageReady to capture calls
-			mockNotifyStorageReady := func(rank *ranklist.Rank) {
-				notifyCalls++
-				capturedRank = rank
-			}
-			_ = mockNotifyStorageReady
-
-			// Create a custom engine interface with overridden methods
-			engine := &testNotifyEngine{
-				MockInstance:         mockEngine.MockInstance,
-				isAwaitingFormatFn:   mockIsAwaitingFormat,
-				notifyStorageReadyFn: mockNotifyStorageReady,
-			}
+			})
 
 			req := &ctlpb.StorageFormatReq{
 				Replace: tc.replace,
@@ -3047,25 +3005,101 @@ func Test_notifyStorageReady(t *testing.T) {
 	}
 }
 
-// testNotifyEngine is a test helper that allows overriding specific methods
-type testNotifyEngine struct {
-	MockInstance
-	isAwaitingFormatFn   func() bool
-	notifyStorageReadyFn func(*ranklist.Rank)
-}
+func TestServer_CtlSvc_StorageFormatStatus(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notStarted []bool // per-engine stopped/started state, see mockControlService
+		awaitFmt   []bool // per-engine isAwaitingFormat() state to apply
+		expResp    *ctlpb.StorageFormatStatusResp
+	}{
+		"single engine awaiting format": {
+			notStarted: []bool{true},
+			awaitFmt:   []bool{true},
+			expResp: &ctlpb.StorageFormatStatusResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: true,
+						State:          "AwaitingFormat",
+					},
+				},
+			},
+		},
+		"single engine already started": {
+			notStarted: []bool{false},
+			awaitFmt:   []bool{false},
+			expResp: &ctlpb.StorageFormatStatusResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: false,
+						State:          system.MemberStateReady.String(),
+					},
+				},
+			},
+		},
+		"single engine stopped, not awaiting format": {
+			notStarted: []bool{true},
+			awaitFmt:   []bool{false},
+			expResp: &ctlpb.StorageFormatStatusResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: false,
+						State:          system.MemberStateStopped.String(),
+					},
+				},
+			},
+		},
+		"mixed engine states": {
+			notStarted: []bool{true, false},
+			awaitFmt:   []bool{true, false},
+			expResp: &ctlpb.StorageFormatStatusResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: true,
+						State:          "AwaitingFormat",
+					},
+					{
+						Instanceidx:    1,
+						AwaitingFormat: false,
+						State:          system.MemberStateReady.String(),
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
-func (e *testNotifyEngine) isAwaitingFormat() bool {
-	if e.isAwaitingFormatFn != nil {
-		return e.isAwaitingFormatFn()
-	}
-	return e.MockInstance.isAwaitingFormat()
-}
+			engineCfgs := make([]*engine.Config, len(tc.notStarted))
+			for i := range engineCfgs {
+				engineCfgs[i] = engine.MockConfig().WithTargetCount(1)
+			}
+			cfg := config.DefaultServer().WithEngines(engineCfgs...)
 
-func (e *testNotifyEngine) NotifyStorageReady(rank *ranklist.Rank) {
-	if e.notifyStorageReadyFn != nil {
-		e.notifyStorageReadyFn(rank)
-	} else {
-		e.MockInstance.NotifyStorageReady(rank)
+			cs := mockControlService(t, log, cfg, nil, nil, nil, tc.notStarted...)
+
+			for i, e := range cs.harness.Instances() {
+				ei := e.(*EngineInstance)
+				if tc.awaitFmt[i] {
+					ei.waitFormat.SetTrue()
+				} else {
+					ei.waitFormat.SetFalse()
+				}
+			}
+
+			resp, err := cs.StorageFormatStatus(test.Context(t), &ctlpb.StorageFormatStatusReq{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.expResp.EngineStatus, resp.EngineStatus,
+				protocmp.Transform()); diff != "" {
+				t.Fatalf("unexpected engine status (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -4797,50 +4831,48 @@ func TestStorageFormat_isAwaitingFormat_GuardsNotifyStorageReady(t *testing.T) {
 
 type mockEngineWithNotify struct {
 	MockInstance
-	idx              uint32
-	awaitingFormat   bool
-	notifyChan       chan int
-	notifyMu         *sync.Mutex
-	notifyCallCount  *int
-	storageReady     chan struct{}
-	storageReadyOnce sync.Once
+	idx            uint32
+	awaitingFormat bool
 }
 
 func newMockEngineWithNotify(idx int, awaitingFormat bool, notifyChan chan int, notifyMu *sync.Mutex, notifyCallCount *int) *mockEngineWithNotify {
 	m := &mockEngineWithNotify{
-		MockInstance:    *NewMockInstance(nil),
-		idx:             uint32(idx),
-		awaitingFormat:  awaitingFormat,
-		notifyChan:      notifyChan,
-		notifyMu:        notifyMu,
-		notifyCallCount: notifyCallCount,
-		storageReady:    make(chan struct{}),
+		idx:            uint32(idx),
+		awaitingFormat: awaitingFormat,
 	}
-	m.cfg.Index = uint32(idx)
+	cfg := engine.MockConfig().WithStorage(
+		storage.NewTierConfig().
+			WithStorageClass("dcpm").
+			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", idx)).
+			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", idx)),
+	)
+	log := logging.NewCommandLineLogger()
+	sysProv := sysprov.NewMockSysProvider(log, nil)
+	scmProv := scm.NewProvider(&scm.ProviderConfig{
+		Log:     log,
+		Sys:     sysProv,
+		Mounter: mount.NewProvider(log, sysProv),
+	})
+	m.MockInstance = *NewMockInstance(&MockInstanceConfig{
+		Index:           uint32(idx),
+		AwaitingFormat:  awaitingFormat,
+		StorageProvider: storage.MockProvider(log, idx, &cfg.Storage, sysProv, scmProv, nil, nil),
+		NotifyStorageReadyFn: func(_ *ranklist.Rank) {
+			notifyMu.Lock()
+			*notifyCallCount++
+			notifyMu.Unlock()
+
+			select {
+			case notifyChan <- idx:
+			default:
+			}
+		},
+	})
 	return m
 }
 
 func (m *mockEngineWithNotify) Index() uint32 {
 	return m.idx
-}
-
-func (m *mockEngineWithNotify) isAwaitingFormat() bool {
-	return m.awaitingFormat
-}
-
-func (m *mockEngineWithNotify) NotifyStorageReady(_ *ranklist.Rank) {
-	m.notifyMu.Lock()
-	*m.notifyCallCount++
-	m.notifyMu.Unlock()
-
-	select {
-	case m.notifyChan <- int(m.idx):
-	default:
-	}
-
-	m.storageReadyOnce.Do(func() {
-		close(m.storageReady)
-	})
 }
 
 func (m *mockEngineWithNotify) StorageFormatSCM(_ context.Context, _ bool) *ctlpb.ScmMountResult {
@@ -4860,31 +4892,6 @@ func (m *mockEngineWithNotify) StorageFormatSCM(_ context.Context, _ bool) *ctlp
 			Info:   "SCM is already formatted",
 		},
 	}
-}
-
-func (m *mockEngineWithNotify) GetStorage() *storage.Provider {
-	// Create a minimal mock provider with necessary components
-	cfg := engine.MockConfig().WithStorage(
-		storage.NewTierConfig().
-			WithStorageClass("dcpm").
-			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", m.idx)).
-			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", m.idx)),
-	)
-
-	// Create logger for mock sys provider
-	log := logging.NewCommandLineLogger()
-
-	// Create minimal mock sys and SCM providers needed for formatMetadata
-	sysProv := system.NewMockSysProvider(log, nil)
-	mounter := mount.NewProvider(log, sysProv)
-	scmProv := scm.NewProvider(&scm.ProviderConfig{
-		Log:     log,
-		Sys:     sysProv,
-		Mounter: mounter,
-	})
-
-	// Return minimal mock provider
-	return storage.MockProvider(log, int(m.idx), &cfg.Storage, sysProv, scmProv, nil, nil)
 }
 
 func (m *mockEngineWithNotify) newCret(addr string, err error) *ctlpb.NvmeControllerResult {
