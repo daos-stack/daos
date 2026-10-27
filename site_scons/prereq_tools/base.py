@@ -1206,7 +1206,7 @@ class _Component():  # pylint: disable=too-many-instance-attributes
         return False
 
     def _parse_config(self, env, opts, comp_path=None):
-        """Parse a pkg-config file"""
+        """Parse a pkg-config file, retaining library search paths for runtime linking."""
         if self.pkgconfig is None:
             return
 
@@ -1229,8 +1229,13 @@ class _Component():  # pylint: disable=too-many-instance-attributes
             if not path_found:
                 return
 
+        def merge_flags(config_env, output, unique):
+            flags = config_env.ParseFlags(output)
+            flags.setdefault('RPATH_FULL', []).extend(flags.get('LIBPATH', []))
+            return config_env.MergeFlags(flags, unique)
+
         try:
-            env.ParseConfig(f'pkg-config {opts} {self.pkgconfig}')
+            env.ParseConfig(f'pkg-config {opts} {self.pkgconfig}', merge_flags)
         except OSError:
             return
 
