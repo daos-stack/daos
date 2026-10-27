@@ -216,8 +216,8 @@ struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
 void ds_cont_hdl_put(struct ds_cont_hdl *hdl);
 void ds_cont_hdl_get(struct ds_cont_hdl *hdl);
 
-int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
-			       int n_pool_hdls, crt_context_t ctx);
+int
+     ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls);
 int ds_cont_local_close(uuid_t cont_hdl_uuid);
 
 int ds_cont_child_start_all(struct ds_pool_child *pool_child);
