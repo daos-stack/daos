@@ -1525,8 +1525,7 @@ find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 }
 
 static int
-cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs, int nrecs, crt_context_t ctx,
-		bool remotely);
+cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs, int nrecs, bool remotely);
 
 static int
 evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, struct ds_pool_hdl *pool_hdl,
@@ -1557,7 +1556,7 @@ evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, struct ds_pool_hdl 
 		goto out;
 	}
 
-	rc = cont_close_hdls(cont->c_svc, arg.fha_buf.rb_recs, arg.fha_buf.rb_nrecs, ctx, remotely);
+	rc = cont_close_hdls(cont->c_svc, arg.fha_buf.rb_recs, arg.fha_buf.rb_nrecs, remotely);
 
 out:
 	recs_buf_fini(&arg.fha_buf);
@@ -2979,8 +2978,7 @@ out:
 }
 
 static int
-cont_close_recs(crt_context_t ctx, struct cont_svc *svc,
-		struct cont_tgt_close_rec recs[], int nrecs)
+cont_close_recs(struct cont_svc *svc, struct cont_tgt_close_rec recs[], int nrecs)
 {
 	int	i;
 	int	rc = 0;
@@ -3020,7 +3018,7 @@ out:
 
 static int
 cont_close_one_hdl(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont_svc *svc,
-		   crt_context_t ctx, const uuid_t uuid)
+		   const uuid_t uuid)
 {
 	d_iov_t			key;
 	d_iov_t			value;
@@ -3057,8 +3055,7 @@ out:
 
 /* Close an array of handles, possibly belonging to different containers. */
 static int
-cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs, int nrecs, crt_context_t ctx,
-		bool remotely)
+cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs, int nrecs, bool remotely)
 {
 	struct rdb_tx		tx;
 	struct d_hash_table	txs_nhc;	/* TX per-container number of handles cache (HT). */
@@ -3073,7 +3070,7 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs, int nrecs
 		nrecs, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce);
 
 	if (remotely) {
-		rc = cont_close_recs(ctx, svc, recs, nrecs);
+		rc = cont_close_recs(svc, recs, nrecs);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_CONT ": failed to close %d recs",
 				 DP_CONT(svc->cs_pool_uuid, NULL), nrecs);
@@ -3096,7 +3093,7 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs, int nrecs
 		DP_CONT(svc->cs_pool_uuid, NULL), num_tx);
 
 	for (i = 0; i < nrecs; i++) {
-		rc = cont_close_one_hdl(&tx, &txs_nhc, svc, ctx, recs[i].tcr_hdl);
+		rc = cont_close_one_hdl(&tx, &txs_nhc, svc, recs[i].tcr_hdl);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": failed to close handle: "DF_UUID", "DF_RC"\n",
 				DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[i].tcr_hdl),
@@ -3196,11 +3193,11 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	D_DEBUG(DB_MD, DF_CONT ": closing: hdl=" DF_UUID " hce=" DF_U64 "\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, in->ci_uuid), DP_UUID(rec.tcr_hdl), rec.tcr_hce);
 
-	rc = cont_close_recs(rpc->cr_ctx, cont->c_svc, &rec, 1 /* nrecs */);
+	rc = cont_close_recs(cont->c_svc, &rec, 1 /* nrecs */);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = cont_close_one_hdl(tx, NULL /* nhc */, cont->c_svc, rpc->cr_ctx, rec.tcr_hdl);
+	rc = cont_close_one_hdl(tx, NULL /* nhc */, cont->c_svc, rec.tcr_hdl);
 
 	/* On success update modify time (except if open specified read-only metadata stats) */
 	if (rc == 0 && !(chdl.ch_flags & DAOS_COO_RO_MDSTATS))
@@ -3854,7 +3851,8 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (qbits & DAOS_CO_QUERY_TGT) {
 		/* need RF if user query cont_info */
 		qbits |= (DAOS_CO_QUERY_PROP_REDUN_FAC | DAOS_CO_QUERY_PROP_REDUN_LVL);
-		rc = cont_query_bcast(rpc->cr_ctx, cont, in->ci_pool_hdl, in->ci_hdl);
+		rc = cont_query_bcast(dss_get_module_info()->dmi_ctx, cont, in->ci_pool_hdl,
+				      in->ci_hdl);
 		if (rc)
 			return rc;
 	}
@@ -4528,8 +4526,7 @@ close_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
  * and managed by local container services.
  */
 int
-ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls,
-			   crt_context_t ctx)
+ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls)
 {
 	struct cont_svc		       *svc;
 	struct rdb_tx			tx;
@@ -4566,7 +4563,7 @@ ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls,
 		goto out_buf;
 
 	if (arg.cia_buf.rb_nrecs > 0)
-		rc = cont_close_hdls(svc, arg.cia_buf.rb_recs, arg.cia_buf.rb_nrecs, ctx,
+		rc = cont_close_hdls(svc, arg.cia_buf.rb_recs, arg.cia_buf.rb_nrecs,
 				     true /* remotely */);
 
 out_buf:
