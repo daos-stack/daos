@@ -223,10 +223,7 @@ func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
 }
 
 // The Control API calls made in configGenCmd.confGen() are already well tested so just do some
-// sanity checking here to prevent regressions. Test cases include verification that:
-// - PMem scan is skipped when using tmpfs SCM mode (--use-tmpfs-scm flag)
-// - PMem scan is skipped when using MD-on-SSD mode (--control-metadata-path flag)
-// - PMem scan is performed in normal mode (backward compatibility)
+// sanity checking here to prevent regressions.
 func TestDaosServer_Auto_confGen(t *testing.T) {
 	eth0 := &control.HostFabricInterface{
 		Provider: "ofi+tcp", Device: "eth0", NumaNode: 0, NetDevClass: 1, Priority: 2,
@@ -675,27 +672,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				return tc.hf, tc.hfErr
 			}
 
-			// Record the useTmpfsSCM/extMetadataPath values forwarded to getStorage
-			// (getLocalStorage in production) so the deployment-mode-dependent PMem
-			// scan behavior described in the comment above can be verified.
-			var getStorageCalled bool
-			var gotUseTmpfsSCM bool
-			var gotExtMetadataPath string
-			getStorage := func(_ context.Context, _ logging.Logger, _ bool, useTmpfsSCM bool, extMetadataPath string) (*control.HostStorage, error) {
-				getStorageCalled = true
-				gotUseTmpfsSCM = useTmpfsSCM
-				gotExtMetadataPath = extMetadataPath
+			getStorage := func(_ context.Context, _ logging.Logger, _, _ bool) (*control.HostStorage, error) {
 				return tc.hs, tc.hsErr
-			}
-
-			verifyGetStorageArgs := func() {
-				if !getStorageCalled {
-					return
-				}
-				test.AssertEqual(t, tc.tmpfsSCM, gotUseTmpfsSCM,
-					"useTmpfsSCM value passed to getStorage")
-				test.AssertEqual(t, tc.extMetadataPath, gotExtMetadataPath,
-					"extMetadataPath value passed to getStorage")
 			}
 
 			if tc.expOutPrefix != "" {
@@ -703,7 +681,6 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				if gotErr != nil {
 					t.Fatal(gotErr)
 				}
-				verifyGetStorageArgs()
 				if len(buf.String()) == 0 {
 					t.Fatal("no output from config generate print function")
 				}
@@ -717,7 +694,6 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 
 			gotCfg, gotErr := cmd.confGen(test.Context(t), getFabric, getStorage)
 			test.CmpErr(t, tc.expErr, gotErr)
-			verifyGetStorageArgs()
 			if tc.expErr != nil {
 				return
 			}
@@ -738,6 +714,59 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			if diff := cmp.Diff(tc.expCfg, gotCfg, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected config generated (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+// TestDaosServer_Auto_confGen_pmemInConfig verifies that confGen() derives the pmemInConfig
+// value forwarded to getStorage() (getLocalStorage() in production) correctly: PMem discovery
+// should be skipped (pmemInConfig == false) whenever tmpfs SCM is requested (which includes
+// MD-on-SSD, as it requires tmpfs SCM), and performed otherwise.
+func TestDaosServer_Auto_confGen_pmemInConfig(t *testing.T) {
+	errStop := errors.New("stop after getStorage")
+
+	for name, tc := range map[string]struct {
+		tmpfsSCM        bool
+		extMetadataPath string
+		expPMemInConfig bool
+	}{
+		"pmem scm": {
+			expPMemInConfig: true,
+		},
+		"tmpfs scm": {
+			tmpfsSCM:        true,
+			expPMemInConfig: false,
+		},
+		"tmpfs scm; md-on-ssd": {
+			tmpfsSCM:        true,
+			extMetadataPath: "/opt/daos_md",
+			expPMemInConfig: false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			cmd := &configGenCmd{}
+			cmd.MgmtSvcReplicas = "localhost"
+			cmd.NetClass = "infiniband"
+			cmd.UseTmpfsSCM = tc.tmpfsSCM
+			cmd.ExtMetadataPath = tc.extMetadataPath
+			cmd.Logger = log
+
+			getFabric := func(_ context.Context, _ logging.Logger, _ string) (*control.HostFabric, error) {
+				return &control.HostFabric{}, nil
+			}
+			var gotPMemInConfig bool
+			getStorage := func(_ context.Context, _ logging.Logger, _, pmemInConfig bool) (*control.HostStorage, error) {
+				gotPMemInConfig = pmemInConfig
+				return nil, errStop
+			}
+
+			_, err := cmd.confGen(test.Context(t), getFabric, getStorage)
+			test.CmpErr(t, errStop, err)
+			test.AssertEqual(t, tc.expPMemInConfig, gotPMemInConfig,
+				"pmemInConfig passed to getStorage")
 		})
 	}
 }
