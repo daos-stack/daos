@@ -45,6 +45,31 @@ crt_proc_struct_pool_target_addr(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 static int
+crt_proc_struct_pool_discard_rank_state(crt_proc_t proc, crt_proc_op_t proc_op,
+					struct pool_discard_rank_state *state)
+{
+	int rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &state->pdrs_rank);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &state->pdrs_phase);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, proc_op, &state->pdrs_done_age_sec);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_int32_t(proc, proc_op, &state->pdrs_status);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
 crt_proc_struct_rsvc_hint(crt_proc_t proc, crt_proc_op_t proc_op,
 			  struct rsvc_hint *hint)
 {
@@ -196,6 +221,12 @@ CRT_RPC_DEFINE(pool_filter_cont, DAOS_ISEQ_POOL_FILTER_CONT, DAOS_OSEQ_POOL_FILT
 CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO, DAOS_OSEQ_POOL_QUERY_INFO)
 CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP, DAOS_OSEQ_POOL_TGT_QUERY_MAP)
 CRT_RPC_DEFINE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT_DISCARD)
+CRT_RPC_DEFINE(pool_discard, DAOS_ISEQ_POOL_DISCARD, DAOS_OSEQ_POOL_DISCARD)
+CRT_RPC_DEFINE(pool_discard_query, DAOS_ISEQ_POOL_DISCARD_QUERY, DAOS_OSEQ_POOL_DISCARD_QUERY)
+CRT_RPC_DEFINE(pool_tgt_discard_manual, DAOS_ISEQ_POOL_TGT_DISCARD_MANUAL,
+	       DAOS_OSEQ_POOL_TGT_DISCARD_MANUAL)
+CRT_RPC_DEFINE(pool_tgt_discard_query, DAOS_ISEQ_POOL_TGT_DISCARD_QUERY,
+	       DAOS_OSEQ_POOL_TGT_DISCARD_QUERY)
 CRT_RPC_DEFINE(pool_rebuild_stop, DAOS_ISEQ_POOL_REBUILD_STOP, DAOS_OSEQ_POOL_REBUILD_STOP)
 CRT_RPC_DEFINE(pool_rebuild_start, DAOS_ISEQ_POOL_REBUILD_START, DAOS_OSEQ_POOL_REBUILD_START)
 CRT_RPC_DEFINE(pool_tgt_warmup, DAOS_ISEQ_POOL_TGT_WARMUP, DAOS_OSEQ_POOL_TGT_WARMUP)

@@ -99,6 +99,10 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 struct pool_target_addr_list *target_addrs,
 				 pool_comp_state_t state, size_t scm_size, size_t nvme_size,
 				 size_t meta_size, bool skip_rf_check);
+int ds_mgmt_pool_discard(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			 struct pool_target_addr_list *target_addrs, uint32_t quiesce_sec);
+int ds_mgmt_pool_discard_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t *ranks,
+			       struct pool_discard_rank_state *states);
 int
 ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint32_t reint_rank,
 			 struct pool_target_id_list *reint_list);

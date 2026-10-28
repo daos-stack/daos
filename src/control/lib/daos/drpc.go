@@ -92,6 +92,8 @@ func (m MgmtMethod) String() string {
 		MethodPoolDrain:            "PoolDrain",
 		MethodPoolExtend:           "PoolExtend",
 		MethodPoolReintegrate:      "PoolReintegrate",
+		MethodPoolDiscard:          "PoolDiscard",
+		MethodPoolDiscardQuery:     "PoolDiscardQuery",
 		MethodBioHealth:            "BioHealth",
 		MethodSetUp:                "SetUp",
 		MethodSmdDevs:              "SmdDevs",
@@ -155,6 +157,10 @@ const (
 	MethodPoolDrain MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DRAIN
 	// MethodPoolReintegrate is a ModuleMgmt method for reintegrating pool ranks
 	MethodPoolReintegrate MgmtMethod = C.DRPC_METHOD_MGMT_POOL_REINT
+	// MethodPoolDiscard is a ModuleMgmt method for discarding DOWNOUT pool ranks
+	MethodPoolDiscard MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DISCARD
+	// MethodPoolDiscardQuery is a ModuleMgmt method for querying a pool discard
+	MethodPoolDiscardQuery MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DISCARD_QUERY
 	// MethodPoolExtend is a ModuleMgmt method for extending pool
 	MethodPoolExtend MgmtMethod = C.DRPC_METHOD_MGMT_POOL_EXTEND
 	// MethodBioHealth is a ModuleMgmt method

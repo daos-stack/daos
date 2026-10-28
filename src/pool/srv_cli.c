@@ -1081,6 +1081,116 @@ dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_
 	return dsc_pool_svc_call(pool_uuid, ranks, cbs, &arg, deadline);
 }
 
+struct pool_discard_arg {
+	struct pool_target_addr_list *pda_addrs;
+	uint32_t                      pda_quiesce_sec;
+};
+
+static int
+pool_discard_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_discard_arg *arg = varg;
+	struct pool_discard_in  *in  = crt_req_get(rpc);
+
+	in->pdci_addrs.ca_arrays = arg->pda_addrs->pta_addrs;
+	in->pdci_addrs.ca_count  = arg->pda_addrs->pta_number;
+	in->pdci_quiesce_sec     = arg->pda_quiesce_sec;
+	return 0;
+}
+
+static int
+pool_discard_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_discard_out *out = crt_reply_get(rpc);
+	int                      rc  = out->pdco_op.po_rc;
+
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": pool discard failed", DP_UUID(pool_uuid));
+	return rc;
+}
+
+static struct dsc_pool_svc_call_cbs pool_discard_cbs = {
+	.pscc_op      = POOL_DISCARD,
+	.pscc_init    = pool_discard_init,
+	.pscc_consume = pool_discard_consume,
+	.pscc_fini    = NULL
+};
+
+/**
+ * Ask the PS leader to start an admin-initiated discard (asynchronous on the
+ * involved ranks; poll the progress with dsc_pool_svc_discard_query()).
+ */
+int
+dsc_pool_svc_discard(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline,
+		     struct pool_target_addr_list *addrs, uint32_t quiesce_sec)
+{
+	struct pool_discard_arg arg = {.pda_addrs       = addrs,
+				       .pda_quiesce_sec = quiesce_sec};
+
+	return dsc_pool_svc_call(pool_uuid, svc_ranks, &pool_discard_cbs, &arg, deadline);
+}
+
+struct pool_discard_query_arg {
+	d_rank_list_t		       *pdqa_ranks;
+	/* out: caller-allocated array of pdqa_ranks->rl_nr entries */
+	struct pool_discard_rank_state *pdqa_states;
+};
+
+static int
+pool_discard_query_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_discard_query_arg *arg = varg;
+	struct pool_discard_query_in  *in  = crt_req_get(rpc);
+
+	in->pdqi_ranks.ca_arrays = arg->pdqa_ranks->rl_ranks;
+	in->pdqi_ranks.ca_count  = arg->pdqa_ranks->rl_nr;
+	return 0;
+}
+
+static int
+pool_discard_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_discard_query_arg *arg = varg;
+	struct pool_discard_query_out *out = crt_reply_get(rpc);
+	int                            rc  = out->pdqo_op.po_rc;
+
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": pool discard query failed", DP_UUID(pool_uuid));
+		return rc;
+	}
+	if (out->pdqo_states.ca_count != arg->pdqa_ranks->rl_nr) {
+		D_ERROR(DF_UUID ": unexpected discard query reply: %zu states for %u ranks\n",
+			DP_UUID(pool_uuid), (size_t)out->pdqo_states.ca_count,
+			arg->pdqa_ranks->rl_nr);
+		return -DER_PROTO;
+	}
+	/* Copy out before the reply buffer is released. */
+	memcpy(arg->pdqa_states, out->pdqo_states.ca_arrays,
+	       sizeof(*arg->pdqa_states) * out->pdqo_states.ca_count);
+	return 0;
+}
+
+static struct dsc_pool_svc_call_cbs pool_discard_query_cbs = {
+	.pscc_op      = POOL_DISCARD_QUERY,
+	.pscc_init    = pool_discard_query_init,
+	.pscc_consume = pool_discard_query_consume,
+	.pscc_fini    = NULL
+};
+
+/**
+ * Collect the per-rank progress of an admin-initiated discard from the PS
+ * leader. \a states must have room for \a ranks->rl_nr entries.
+ */
+int
+dsc_pool_svc_discard_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline,
+			   d_rank_list_t *ranks, struct pool_discard_rank_state *states)
+{
+	struct pool_discard_query_arg arg = {.pdqa_ranks  = ranks,
+					     .pdqa_states = states};
+
+	return dsc_pool_svc_call(pool_uuid, svc_ranks, &pool_discard_query_cbs, &arg, deadline);
+}
+
 struct pool_update_acl_arg {
 	struct daos_acl *puaa_acl;
 };

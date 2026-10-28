@@ -459,6 +459,65 @@ mock_ds_mgmt_tgt_update_setup(void)
 	uuid_clear(ds_mgmt_target_update_uuid);
 }
 
+int     ds_mgmt_pool_discard_return;
+uuid_t  ds_mgmt_pool_discard_uuid;
+uint32_t                ds_mgmt_pool_discard_ntargets;
+uint32_t                ds_mgmt_pool_discard_quiesce_sec;
+struct pool_target_addr ds_mgmt_pool_discard_addrs[MOCK_DISCARD_ADDRS_MAX];
+int
+ds_mgmt_pool_discard(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		     struct pool_target_addr_list *target_addrs, uint32_t quiesce_sec)
+{
+	uint32_t i;
+
+	uuid_copy(ds_mgmt_pool_discard_uuid, pool_uuid);
+	ds_mgmt_pool_discard_ntargets    = target_addrs->pta_number;
+	ds_mgmt_pool_discard_quiesce_sec = quiesce_sec;
+	for (i = 0; i < target_addrs->pta_number && i < MOCK_DISCARD_ADDRS_MAX; i++)
+		ds_mgmt_pool_discard_addrs[i] = target_addrs->pta_addrs[i];
+	return ds_mgmt_pool_discard_return;
+}
+
+void
+mock_ds_mgmt_pool_discard_setup(void)
+{
+	ds_mgmt_pool_discard_return = 0;
+	uuid_clear(ds_mgmt_pool_discard_uuid);
+	ds_mgmt_pool_discard_ntargets    = 0;
+	ds_mgmt_pool_discard_quiesce_sec = 0;
+	memset(ds_mgmt_pool_discard_addrs, 0, sizeof(ds_mgmt_pool_discard_addrs));
+}
+
+int     ds_mgmt_pool_discard_query_return;
+uuid_t  ds_mgmt_pool_discard_query_uuid;
+uint32_t                        ds_mgmt_pool_discard_query_nranks;
+struct pool_discard_rank_state *ds_mgmt_pool_discard_query_states_out;
+int
+ds_mgmt_pool_discard_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t *ranks,
+			   struct pool_discard_rank_state *states)
+{
+	uint32_t i;
+
+	uuid_copy(ds_mgmt_pool_discard_query_uuid, pool_uuid);
+	ds_mgmt_pool_discard_query_nranks = ranks->rl_nr;
+	for (i = 0; i < ranks->rl_nr; i++) {
+		if (ds_mgmt_pool_discard_query_states_out != NULL)
+			states[i] = ds_mgmt_pool_discard_query_states_out[i];
+		else
+			states[i].pdrs_rank = ranks->rl_ranks[i];
+	}
+	return ds_mgmt_pool_discard_query_return;
+}
+
+void
+mock_ds_mgmt_pool_discard_query_setup(void)
+{
+	ds_mgmt_pool_discard_query_return = 0;
+	uuid_clear(ds_mgmt_pool_discard_query_uuid);
+	ds_mgmt_pool_discard_query_nranks     = 0;
+	ds_mgmt_pool_discard_query_states_out = NULL;
+}
+
 int     ds_mgmt_pool_extend_return;
 uuid_t  ds_mgmt_pool_extend_uuid;
 int

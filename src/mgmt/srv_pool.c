@@ -480,6 +480,38 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	return rc;
 }
 
+/*
+ * Start an admin-initiated discard ("dmg pool discard"): a preparation step
+ * that empties DOWN/DOWNOUT ranks and waits out the NVMe GC before their
+ * data-sync reintegration. Asynchronous on the involved ranks; progress is
+ * polled with ds_mgmt_pool_discard_query().
+ */
+int
+ds_mgmt_pool_discard(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		     struct pool_target_addr_list *target_addrs, uint32_t quiesce_sec)
+{
+	D_DEBUG(DB_MGMT, "Discarding pool " DF_UUID ": ntargets %d quiesce %u\n",
+		DP_UUID(pool_uuid), target_addrs->pta_number, quiesce_sec);
+
+	return dsc_pool_svc_discard(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), target_addrs,
+				    quiesce_sec);
+}
+
+/*
+ * Collect the per-rank progress of an admin-initiated discard. \a states
+ * must have room for \a ranks->rl_nr entries.
+ */
+int
+ds_mgmt_pool_discard_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t *ranks,
+			   struct pool_discard_rank_state *states)
+{
+	D_DEBUG(DB_MGMT, "Querying discard state of pool " DF_UUID ": nranks %u\n",
+		DP_UUID(pool_uuid), ranks->rl_nr);
+
+	return dsc_pool_svc_discard_query(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), ranks,
+					  states);
+}
+
 /* Get container list from the pool service for the specified pool */
 int
 ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
