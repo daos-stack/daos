@@ -99,13 +99,21 @@ RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target
 # opensuse-oss for lua53, lua53-luaterm,, sqlite3-tcl, tcl
 # opensuse-devel-languages-lua for lua53-luafilesystem, lua53-luaposix
 ARG JENKINS_URL
-RUN if [ -n "$JENKINS_URL" ]; then \
-    dnf -y remove lua-lmod; \
-    dnf -y --nogpgcheck install lua-lmod --repo '*lua*' \
-        --repo '*network-cluster*' --repo '*oss-proxy*' && \
-        dnf clean all; \
-    fi
-    
+RUN set -eu; \
+    dnf -y remove lua-lmod || true; \
+    if [ -n "$JENKINS_URL" ]; then \
+        dnf -y --nogpgcheck install lua-lmod --repo '*lua*' \
+            --repo '*network-cluster*' --repo '*oss-proxy*'; \
+    else \
+        dnf -y config-manager --add-repo \
+            https://download.opensuse.org/repositories/network:/cluster/15.6/network:cluster.repo; \
+        dnf -y config-manager --add-repo \
+            https://download.opensuse.org/repositories/devel:/languages:/lua/15.6/devel:languages:lua.repo; \
+        dnf -y --nogpgcheck install lua-lmod; \
+    fi; \
+    rpm -q --qf '%{VERSION}-%{RELEASE}\n' lua-lmod; \
+    dnf clean all
+
 # Add DAOS users
 ARG UID=1000
 RUN --mount=type=bind,source=utils/scripts/helpers/daos-server-user-setup.sh,target=/tmp/daos/daos-server-user-setup.sh \
