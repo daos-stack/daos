@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -764,8 +765,11 @@ query_write:
 					/** Go ahead and save timestamps for
 					 * things we read
 					 */
-					vos_ts_set_update(query->qt_ts_set,
-							  obj_epr.epr_hi);
+					if (!vos_ts_set_update(query->qt_ts_set, obj_epr.epr_hi)) {
+						rc = -DER_TX_RESTART;
+						break;
+					}
+
 					vos_ts_set_restore(query->qt_ts_set,
 							   &akey_save);
 					continue;
@@ -776,7 +780,11 @@ query_write:
 		if (rc == -DER_NONEXIST &&
 		    query->qt_flags & VOS_GET_DKEY) {
 			/** Go ahead and save timestamps for things we read */
-			vos_ts_set_update(query->qt_ts_set, obj_epr.epr_hi);
+			if (!vos_ts_set_update(query->qt_ts_set, obj_epr.epr_hi)) {
+				rc = -DER_TX_RESTART;
+				break;
+			}
+
 			vos_ts_set_restore(query->qt_ts_set, &dkey_save);
 			continue;
 		}
@@ -801,8 +809,10 @@ out:
 			rc = -DER_TX_RESTART;
 	}
 
-	if (rc == 0 || rc == -DER_NONEXIST)
-		vos_ts_set_update(query->qt_ts_set, obj_epr.epr_hi);
+	if (rc == 0 || rc == -DER_NONEXIST) {
+		if (!vos_ts_set_update(query->qt_ts_set, obj_epr.epr_hi))
+			rc = -DER_TX_RESTART;
+	}
 
 	vos_ts_set_free(query->qt_ts_set);
 free_query:

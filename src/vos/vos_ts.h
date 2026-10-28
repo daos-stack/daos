@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -682,27 +683,67 @@ vos_ts_copy(daos_epoch_t *dest_epc, struct dtx_id *dest_id,
 }
 
 /** Internal API to update low read timestamp and tx id */
-static inline void
-vos_ts_rl_update(struct vos_ts_entry *entry, daos_epoch_t read_time,
-		 const struct dtx_id *tx_id)
+static inline int
+vos_ts_rl_update(struct vos_ts_entry *entry, daos_epoch_t read_time, const struct dtx_id *tx_id)
 {
 	if (entry == NULL || read_time < entry->te_ts.tp_ts_rl)
-		return;
+		return 0;
+
+	/*
+	 * Different servers may generate the same timestamp that may be used as
+	 * the epoch for different distributed transactions. So do NOT update if
+	 * "read_time == entry->te_ts.tp_ts_rl" to avoid lost read timestamp for
+	 * others by race. In theory, two read transactions do not conflict with
+	 * each other, but read maybe just part of the transaction. Since we can
+	 * keep only one on such entry, then have to request another to restart.
+	 * That may cause some fake conflict, but correctness is more important.
+	 */
+	if (read_time == entry->te_ts.tp_ts_rl) {
+		if (likely(daos_dti_equal(tx_id, &entry->te_ts.tp_tx_rl)))
+			return 0;
+
+		/* It is very rare, so warning message will not be much trouble. */
+		D_WARN("Refuse low read-TS update with the same epoch " DF_X64 " from multiple "
+		       "sponsors: " DF_DTI " vs " DF_DTI "\n",
+		       read_time, DP_DTI(tx_id), DP_DTI(&entry->te_ts.tp_tx_rl));
+		return -DER_TX_RESTART;
+	}
 
 	vos_ts_copy(&entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
 		    read_time, tx_id);
+	return 0;
 }
 
 /** Internal API to update high read timestamp and tx id */
-static inline void
-vos_ts_rh_update(struct vos_ts_entry *entry, daos_epoch_t read_time,
-		 const struct dtx_id *tx_id)
+static inline int
+vos_ts_rh_update(struct vos_ts_entry *entry, daos_epoch_t read_time, const struct dtx_id *tx_id)
 {
 	if (entry == NULL || read_time < entry->te_ts.tp_ts_rh)
-		return;
+		return 0;
+
+	/*
+	 * Different servers may generate the same timestamp that may be used as
+	 * the epoch for different distributed transactions. So do NOT update if
+	 * "read_time == entry->te_ts.tp_ts_rh" to avoid lost read timestamp for
+	 * others by race. In theory, two read transactions do not conflict with
+	 * each other, but read maybe just part of the transaction. Since we can
+	 * keep only one on such entry, then have to request another to restart.
+	 * That may cause some fake conflict, but correctness is more important.
+	 */
+	if (read_time == entry->te_ts.tp_ts_rh) {
+		if (likely(daos_dti_equal(tx_id, &entry->te_ts.tp_tx_rh)))
+			return 0;
+
+		/* It is very rare, so warning message will not be much trouble. */
+		D_WARN("Refuse high read-TS update with the same epoch " DF_X64 " from multiple "
+		       "sponsors: " DF_DTI " vs " DF_DTI "\n",
+		       read_time, DP_DTI(tx_id), DP_DTI(&entry->te_ts.tp_tx_rh));
+		return -DER_TX_RESTART;
+	}
 
 	vos_ts_copy(&entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh,
 		    read_time, tx_id);
+	return 0;
 }
 
 /** Internal API to check read conflict of a given entry */
@@ -784,24 +825,27 @@ vos_ts_set_append_cflags(struct vos_ts_set *ts_set, uint16_t flags)
 
 /** Update the read timestamps for the set after a successful operation
  *
- *  \param[in]	ts_set		The timestamp set
- *  \param[in]	read_time	The new read timestamp
+ * \param[in]	ts_set		The timestamp set
+ * \param[in]	read_time	The new read timestamp
+ *
+ * \return	true on success, false if need to restart.
  */
-static inline void
+static inline bool
 vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 {
-	struct vos_ts_set_entry	*se;
-	int			 i;
-	uint16_t		 read_level;
+	struct vos_ts_set_entry *se;
+	uint16_t                 read_level;
+	int                      i;
+	int                      rc;
 
 	if (!vos_ts_in_tx(ts_set))
-		return;
+		return true;
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_NO_READ_TS))
-		return;
+		return true;
 
 	if ((ts_set->ts_cflags & VOS_TS_READ_MASK) == 0)
-		return;
+		return true;
 
 	if (ts_set->ts_max_type < ts_set->ts_rd_level)
 		read_level = ts_set->ts_max_type;
@@ -812,16 +856,16 @@ vos_ts_set_update(struct vos_ts_set *ts_set, daos_epoch_t read_time)
 		se = &ts_set->ts_entries[i];
 
 		if (se->se_etype > read_level)
-			continue; /** We would have updated the high
-				   *  timestamp at a higher level
-				   */
+			continue;
 
-		if (se->se_etype == read_level)
-			vos_ts_rl_update(se->se_entry, read_time,
-					 &ts_set->ts_tx_id);
-		vos_ts_rh_update(se->se_entry, read_time,
-				 &ts_set->ts_tx_id);
+		rc = vos_ts_rh_update(se->se_entry, read_time, &ts_set->ts_tx_id);
+		if (rc == 0 && se->se_etype == read_level)
+			rc = vos_ts_rl_update(se->se_entry, read_time, &ts_set->ts_tx_id);
+		if (rc != 0)
+			return false;
 	}
+
+	return true;
 }
 
 static inline void
