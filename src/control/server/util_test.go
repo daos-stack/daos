@@ -195,6 +195,21 @@ func setupSvcDrpcClient(svc *mgmtSvc, engineIdx int, mdc *mockDrpcClient) {
 	}
 }
 
+// mockTestStorageConfig returns a storage config with an SCM tier mounted under a t.TempDir(), so
+// that code paths touching the real filesystem operate on a throwaway directory rather than falling
+// back to the hardcoded "/mnt/daos" default.
+func mockTestStorageConfig(t *testing.T) *storage.Config {
+	t.Helper()
+
+	return &storage.Config{
+		Tiers: storage.TierConfigs{
+			storage.NewTierConfig().
+				WithStorageClass("ram").
+				WithScmMountPoint(t.TempDir()),
+		},
+	}
+}
+
 // newTestEngine returns an EngineInstance configured for testing.
 func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, engineCfg ...*engine.Config) *EngineInstance {
 	if len(engineCfg) == 0 {
@@ -264,7 +279,7 @@ func newTestMgmtSvcWithProvider(t *testing.T, log logging.Logger, provider *stor
 // properly set up as an MS.
 func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	return newTestMgmtSvcWithProvider(t, log,
-		storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+		storage.MockProvider(log, 0, mockTestStorageConfig(t), nil, nil, nil, nil))
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
@@ -272,7 +287,7 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 // configured as a MS replica.
 func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool) *mgmtSvc {
 	harness := NewEngineHarness(log)
-	provider := storage.MockProvider(log, 0, nil, nil, nil, nil, nil)
+	provider := storage.MockProvider(log, 0, mockTestStorageConfig(t), nil, nil, nil, nil)
 
 	for i := 0; i < count; i++ {
 		srv := newTestEngine(log, i == 0 && isAP, provider)
@@ -335,7 +350,7 @@ func setupAddTestEngine(t *testing.T, log logging.Logger, h *EngineHarness, isRu
 		rank = ranks[0]
 	}
 
-	ei := newTestEngine(log, false, storage.MockProvider(log, 0, nil, nil, nil, nil, nil))
+	ei := newTestEngine(log, false, storage.MockProvider(log, 0, mockTestStorageConfig(t), nil, nil, nil, nil))
 	setupTestEngine(t, ei, rank, !isRunning)
 
 	if err := h.AddInstance(ei); err != nil {
