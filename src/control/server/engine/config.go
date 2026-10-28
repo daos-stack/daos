@@ -50,6 +50,25 @@ type FabricConfig struct {
 	AuthKey               string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
 }
 
+// Normalize adjusts the format of the fabric configuration strings that are exported to CaRT.
+func (fc *FabricConfig) Normalize() {
+	normalizeMultiprov := func(multiProvStr string) string {
+		strs := strings.Split(multiProvStr, MultiProviderSeparator)
+		result := []string{}
+		for _, s := range strs {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				result = append(result, s)
+			}
+		}
+		return strings.Join(result, MultiProviderSeparator)
+	}
+
+	fc.Provider = normalizeMultiprov(fc.Provider)
+	fc.Interface = normalizeMultiprov(fc.Interface)
+	fc.InterfacePort = normalizeMultiprov(fc.InterfacePort)
+}
+
 // GetPrimaryProvider parses the primary provider from the Provider string.
 func (fc *FabricConfig) GetPrimaryProvider() (string, error) {
 	providers, err := fc.GetProviders()
@@ -76,15 +95,10 @@ func (fc *FabricConfig) GetProviders() ([]string, error) {
 
 func splitMultiProviderStr(str string) []string {
 	strs := strings.Split(str, MultiProviderSeparator)
-	result := make([]string, 0)
-	for _, s := range strs {
-		trimmed := strings.TrimSpace(s)
-		if trimmed != "" {
-			result = append(result, trimmed)
-		}
+	if len(strs) == 1 && strs[0] == "" {
+		return nil
 	}
-
-	return result
+	return strs
 }
 
 // GetNumProviders gets the number of fabric providers configured.
@@ -121,7 +135,7 @@ func (fc *FabricConfig) GetInterfaces() ([]string, error) {
 }
 
 // GetInterfacePorts parses the InterfacePort string to one or more ports.
-func (fc *FabricConfig) GetInterfacePorts() ([]int, error) {
+func (fc *FabricConfig) GetInterfacePorts() ([]uint, error) {
 	if fc == nil {
 		return nil, errors.New("FabricConfig is nil")
 	}
@@ -131,13 +145,13 @@ func (fc *FabricConfig) GetInterfacePorts() ([]int, error) {
 		return nil, errors.New("fabric_iface_port not set")
 	}
 
-	ports := make([]int, 0)
+	ports := make([]uint, 0)
 	for _, str := range portStrs {
-		intPort, err := strconv.Atoi(str)
+		uint64Port, err := strconv.ParseUint(str, 10, 16)
 		if err != nil {
-			return nil, err
+			return nil, errors.Errorf("fabric_iface_port item %q: must be an integer in the range 1-65535", str)
 		}
-		ports = append(ports, intPort)
+		ports = append(ports, uint(uint64Port)) // OK to truncate to 32 bits
 	}
 	return ports, nil
 }
@@ -325,6 +339,7 @@ func (c *Config) Validate() error {
 		return errors.New("target count must be nonzero")
 	}
 
+	c.Fabric.Normalize()
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}

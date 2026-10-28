@@ -427,7 +427,7 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 		for _, hn := range temp[2 : len(temp)-2] {
 			hnFields := strings.Fields(hn)
 			if len(hnFields) < 4 {
-				continue
+				break // we're outside the rank table
 			}
 			hn = strings.ReplaceAll(hnFields[3][1:], domainName[0], "")
 			hn = strings.TrimSuffix(hn, ".")

@@ -586,6 +586,14 @@ func TestConfig_FabricValidation(t *testing.T) {
 			},
 			expErr: errors.New("fabric_iface_port"),
 		},
+		"signed positive port number": {
+			cfg: FabricConfig{
+				Provider:      "foo",
+				Interface:     "bar",
+				InterfacePort: "+42",
+			},
+			expErr: errors.New("fabric_iface_port"),
+		},
 		"success": {
 			cfg: FabricConfig{
 				Provider:      "foo",
@@ -758,6 +766,56 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	}
 }
 
+func TestEngine_FabricConfig_Normalize(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg    *FabricConfig
+		expCfg *FabricConfig
+	}{
+		"unchanged": {
+			cfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs", "ofi+tcp"),
+				Interface:     multiProviderString("if0", "if1"),
+				InterfacePort: multiProviderString("1234", "5678"),
+			},
+			expCfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs", "ofi+tcp"),
+				Interface:     multiProviderString("if0", "if1"),
+				InterfacePort: multiProviderString("1234", "5678"),
+			},
+		},
+		"trim whitespace": {
+			cfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs ", "   ofi+tcp "),
+				Interface:     multiProviderString("      if0 ", " if1"),
+				InterfacePort: multiProviderString("\t1234 ", "\n5678    "),
+			},
+			expCfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs", "ofi+tcp"),
+				Interface:     multiProviderString("if0", "if1"),
+				InterfacePort: multiProviderString("1234", "5678"),
+			},
+		},
+		"remove empty elements": {
+			cfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs", "ofi+tcp", ""),
+				Interface:     multiProviderString("if0", "", "if1"),
+				InterfacePort: multiProviderString("", "1234", "5678"),
+			},
+			expCfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs", "ofi+tcp"),
+				Interface:     multiProviderString("if0", "if1"),
+				InterfacePort: multiProviderString("1234", "5678"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.cfg.Normalize()
+
+			test.CmpAny(t, "updated FabricConfig", tc.expCfg, tc.cfg)
+		})
+	}
+}
+
 func TestFabricConfig_GetProviders(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg          *FabricConfig
@@ -780,12 +838,6 @@ func TestFabricConfig_GetProviders(t *testing.T) {
 		"multi": {
 			cfg: &FabricConfig{
 				Provider: multiProviderString("p1", "p2", "p3"),
-			},
-			expProviders: []string{"p1", "p2", "p3"},
-		},
-		"excessive whitespace": {
-			cfg: &FabricConfig{
-				Provider: multiProviderString(" ", " p1 ", "  p2 ", "p3"),
 			},
 			expProviders: []string{"p1", "p2", "p3"},
 		},
@@ -889,12 +941,6 @@ func TestFabricConfig_GetInterfaces(t *testing.T) {
 			},
 			expInterfaces: []string{"net1", "net2", "net3"},
 		},
-		"excessive whitespace": {
-			cfg: &FabricConfig{
-				Interface: multiProviderString(" net1  ", "", "    net2", "net3", ""),
-			},
-			expInterfaces: []string{"net1", "net2", "net3"},
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			interfaces, err := tc.cfg.GetInterfaces()
@@ -945,7 +991,7 @@ func TestFabricConfig_GetPrimaryInterface(t *testing.T) {
 func TestFabricConfig_GetInterfacePorts(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg      *FabricConfig
-		expPorts []int
+		expPorts []uint
 		expErr   error
 	}{
 		"nil": {
@@ -959,25 +1005,31 @@ func TestFabricConfig_GetInterfacePorts(t *testing.T) {
 			cfg: &FabricConfig{
 				InterfacePort: "1234",
 			},
-			expPorts: []int{1234},
+			expPorts: []uint{1234},
 		},
 		"multi": {
 			cfg: &FabricConfig{
-				InterfacePort: multiProviderString("1234", "5678", "9012"),
+				InterfacePort: multiProviderString("1234", "5678", "9012", "65535"),
 			},
-			expPorts: []int{1234, 5678, 9012},
+			expPorts: []uint{1234, 5678, 9012, 65535},
 		},
 		"excessive whitespace": {
 			cfg: &FabricConfig{
 				InterfacePort: multiProviderString("1234   ", "  5678  ", "", " 9012"),
 			},
-			expPorts: []int{1234, 5678, 9012},
+			expErr: errors.New("fabric_iface_port item \"1234   \""),
 		},
 		"non-integer port": {
 			cfg: &FabricConfig{
 				InterfacePort: multiProviderString("1234", "a123"),
 			},
-			expErr: errors.New("strconv.Atoi"),
+			expErr: errors.New("fabric_iface_port item \"a123\""),
+		},
+		"over 16 bits": {
+			cfg: &FabricConfig{
+				InterfacePort: multiProviderString("65536", "1234"),
+			},
+			expErr: errors.New("fabric_iface_port item \"65536\""),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
