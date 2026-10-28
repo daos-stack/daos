@@ -34,6 +34,8 @@
 #define REBUILD_SEND_BATCH_MIN         (REBUILD_SEND_LIMIT / 4)
 /* Maximum seconds to wait for a batch to fill before flushing anyway. */
 #define REBUILD_SEND_BATCH_TIMEOUT_SEC 1
+/* Max time FAIL_RECLAIM waits for reintegration pre-discard before giving up */
+#define REBUILD_DISCARD_WAIT_MAX_SECS  600
 
 struct rebuild_send_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
@@ -1299,6 +1301,14 @@ out:
 	return rc;
 }
 
+static bool
+rebuild_discard_wait_stop(void *arg)
+{
+	struct rebuild_tgt_pool_tracker *rpt = arg;
+
+	return rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done;
+}
+
 /**
  * Wait for pool map and setup global status, then spawn scanners for all
  * service xsteams
@@ -1354,22 +1364,12 @@ do_scan:
 	if (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
 		uint32_t wait_secs = 0;
 
-		for (;;) {
-			if (rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done ||
-			    rpt->rt_pool->sp_stopping)
-				D_GOTO(out, rc = -DER_SHUTDOWN);
-
-			if (atomic_load(&rpt->rt_pool->sp_discarding) == 0)
-				break;
-
-			if (wait_secs % 60 == 0)
-				D_INFO(DF_RB " wait for reintegration discard before fail reclaim, "
-					     "waited %u seconds\n",
-				       DP_RB_RPT(rpt), wait_secs);
-			rc = dss_sleep(1000);
-			if (rc != 0)
-				D_GOTO(out, rc);
-			wait_secs++;
+		rc = ds_pool_wait_discard(rpt->rt_pool, REBUILD_DISCARD_WAIT_MAX_SECS, false,
+					  rebuild_discard_wait_stop, rpt, &wait_secs);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_RB " wait for reintegration discard failed after %u secs",
+				 DP_RB_RPT(rpt), wait_secs);
+			D_GOTO(out, rc);
 		}
 		if (wait_secs > 0)
 			D_INFO(DF_RB " reintegration discard finished after %u seconds, "

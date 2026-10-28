@@ -73,27 +73,35 @@ and C and their metadata to target-3.
 can compute out surviving replicas of these objects, and rebuild these objects
 by pulling data from these replicas.
 
-### Reintegration pre-discard and failed rebuild cleanup
+### Reintegration cleanup and ordering
 
-Reintegration starts an asynchronous pre-discard before marking targets UP.
-The pre-discard runs independently of the rebuild task and may still be running
-when the administrator stops that reintegration. An admin-stopped reintegration
-does not revert the pool map, so its targets stay UP, and the following
-FAIL_RECLAIM is broadcast to those UP targets to clean up their incomplete data.
-Before starting its local scanners, FAIL_RECLAIM waits for the pool's local
-pre-discard to finish so that the two discards do not run concurrently on the
-same targets. The wait exits if the task is aborted or finished, or the pool
-is stopping.
+Three mechanisms remove data from targets during reintegration:
+- **Pre-discard** (`pool_discard`, DATA_SYNC reint and extend): asynchronous, per engine,
+  epoch range [0, MAX]; issued before the map marks targets UP. Tracked by `sp_discarding`.
+- **RECLAIM**: after a successful rebuild; removes shards no longer in the layout, [0, E].
+- **FAIL_RECLAIM**: after a failed or stopped rebuild. Scans only targets the map still
+  treats as scannable (UPIN/DRAIN, plus UP when `rgt_include_up` is set for an admin
+  stop) and discards [0, E] of shards not in the pre-rebuild layout. Targets reverted by
+  a non-retryable failure are not scanned; their partial data is removed by the next
+  reintegration's pre-discard.
 
-This wait requires pre-discard completion, not success: FAIL_RECLAIM may still
-need to clean up after a failed pre-discard. Other scan operations skip UP targets;
-reintegration migration separately waits for pre-discard before writing data.
+| Outcome               | Map change                   | Cleanup      | UP targets scanned by FAIL_RECLAIM? | Next                         |
+|-----------------------|------------------------------|--------------|-------------------------------------|------------------------------|
+| Success               | UP -> UPIN (before RECLAIM)  | RECLAIM      | n/a                                 | done                         |
+| Non-retryable failure | revert (before FAIL_RECLAIM) | FAIL_RECLAIM | no (reverted)                       | no-op retry                  |
+| Retryable failure     | none                         | FAIL_RECLAIM | no (`include_up` unset)             | retry at same map version    |
+| Admin stop            | none                         | FAIL_RECLAIM | yes (`rgt_include_up`)              | parked until `rebuild start` |
 
-RECLAIM and FAIL_RECLAIM scan objects up to their reclaim epoch when no layout
-upgrade is involved (`rt_new_layout_ver == 0`). Layout upgrade cleanup retains
-the maximum scan epoch so that obsolete layout entries are not filtered out.
-Epoch-range discard preserves data newer than the reclaim epoch. Other rebuild
-operations retain their existing scan range.
+Ordering against pre-discard:
+- Pre-discard refuses to start while the pool is rebuilding (`-DER_BUSY`).
+- Reintegration migration (`migrate_ult`) and reintegrating client writes wait for it.
+- FAIL_RECLAIM waits for it to *complete* (success not required) before scanning, because
+  after an admin stop the targets stay UP and both would discard the same objects. The
+  wait exits on abort, finish, or pool stop, and fails with `-DER_TIMEDOUT` after
+  `REBUILD_DISCARD_WAIT_MAX_SECS` so a stuck pre-discard cannot block it forever.
+
+Epoch range: RECLAIM and FAIL_RECLAIM iterate objects only up to E when
+`rt_new_layout_ver == 0`; layout-upgrade cleanup keeps [0, MAX] to see obsolete layout entries.
 
 ### Multiple pool and targets rebuild
 

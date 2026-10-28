@@ -427,6 +427,9 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
 int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
+int
+ds_pool_wait_discard(struct ds_pool *pool, uint32_t timeout_secs, bool fail_on_error,
+		     bool (*should_stop)(void *arg), void *stop_arg, uint32_t *waited_secs);
 
 int
 ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);
