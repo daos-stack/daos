@@ -38,6 +38,32 @@ enum crt_rpc_flags_internal {
 	CRT_RPC_FLAG_COLL = (1U << 16),
 	/* flag of targeting primary group */
 	CRT_RPC_FLAG_PRIMARY_GRP = (1U << 17),
+	/* Legacy pre 3.0 flag of using deadlines instead of timeouts in RPC headers */
+	CRT_RPC_FLAG_DEADLINES_USED_LEGACY = (1U << 18),
+};
+
+/* Legacy pre 3.0 common RPC header used for both request and response */
+struct crt_common_hdr_legacy {
+	uint32_t cch_opc;
+	/* RPC request flag, see enum crt_rpc_flags_internal */
+	uint32_t cch_flags;
+	/* HLC timestamp */
+	uint64_t cch_hlc;
+	/* RPC id */
+	uint64_t cch_rpcid;
+	/* destination rank in default primary group */
+	d_rank_t cch_dst_rank;
+	/* originator rank in default primary group */
+	d_rank_t cch_src_rank;
+	/* destination tag */
+	uint32_t cch_dst_tag;
+
+	/* used in crp_reply_hdr to propagate rpc failure back to sender */
+	/* TODO: workaround for DAOS-13973 */
+	union {
+		uint32_t cch_src_deadline_sec;
+		uint32_t cch_rc;
+	};
 };
 
 struct crt_corpc_hdr {

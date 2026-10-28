@@ -22,6 +22,10 @@
 
 #include <stdatomic.h>
 
+/** Legacy HG RPC ID, pre 3.0 **/
+#define CRT_HG_RPCID_LEGACY         (0xDA036868)
+#define CRT_HG_ONEWAY_RPCID_LEGACY  (0xDA036869)
+
 /** the shared HG RPC ID used for all CRT opc */
 #define CRT_HG_RPCID                (0xDA03686A)
 #define CRT_HG_ONEWAY_RPCID         (0xDA03686B)
