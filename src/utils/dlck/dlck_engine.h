@@ -150,13 +150,17 @@ struct xstream_arg {
 	struct checker_status status;
 };
 
-static inline void
-dlck_uadd_no_overflow(unsigned a, unsigned b, unsigned *result)
+static inline unsigned
+dlck_uadd_no_overflow(unsigned a, unsigned b)
 {
+	unsigned result;
+
 	/** safeguard against integer overflow */
-	if (__builtin_uadd_overflow(a, b, result)) {
-		*result = UINT_MAX;
+	if (__builtin_uadd_overflow(a, b, &result)) {
+		result = UINT_MAX;
 	}
+
+	return result;
 }
 
 static inline void
@@ -168,19 +172,17 @@ dlck_status_set_rc(struct checker_status *status, int rc)
 	}
 }
 
-#define DLCK_UINT_ADD_AND_CLEAR(SUM, ADDEND)                                                       \
-	do {                                                                                       \
-		dlck_uadd_no_overflow((SUM), (ADDEND), &(SUM));                                    \
-		(ADDEND) = 0;                                                                      \
-	} while (0)
-
 static inline void
 dlck_status_set(struct checker_status *status, struct checker_status *cks)
 {
-	DLCK_UINT_ADD_AND_CLEAR(status->warnings_num, cks->warnings_num);
-	DLCK_UINT_ADD_AND_CLEAR(status->errors_num, cks->errors_num);
-
+	/** Update the \p status with the information from \p cks. */
+	status->warnings_num = dlck_uadd_no_overflow(status->warnings_num, cks->warnings_num);
+	status->errors_num   = dlck_uadd_no_overflow(status->errors_num, cks->errors_num);
 	dlck_status_set_rc(status, cks->rc);
+
+	/** Clear the information in \p cks. */
+	cks->warnings_num = 0;
+	cks->errors_num   = 0;
 	cks->rc = DER_SUCCESS;
 }
 
