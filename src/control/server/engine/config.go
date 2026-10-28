@@ -213,12 +213,6 @@ func (fc *FabricConfig) Validate() error {
 		return err
 	}
 
-	for _, p := range ports {
-		if p < 0 {
-			return errors.New("fabric_iface_port cannot be negative")
-		}
-	}
-
 	if len(interfaces) != numProv || len(ports) != numProv {
 		return errors.Errorf("provider, fabric_iface and fabric_iface_port must include the same number of items delimited by %q", MultiProviderSeparator)
 	}
