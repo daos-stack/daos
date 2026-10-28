@@ -43,6 +43,20 @@ struct ds_pool_map_bc {
 };
 
 /*
+ * Phase of the local pool discard flow (ds_pool.sp_discard_phase). Also the
+ * wire/user-facing "phase" of the discard queries (pool_discard_rank_state
+ * and "dmg pool query-discard"): a completed discard parks in DONE or FAILED
+ * until the engine restarts (back to NEVER) or a new discard starts over.
+ */
+enum ds_pool_discard_phase {
+	DS_POOL_DISCARD_NEVER = 0,	/* no discard since the engine started */
+	DS_POOL_DISCARD_DISCARDING,	/* VOS discard in progress */
+	DS_POOL_DISCARD_QUIESCING,	/* discard done, waiting for NVMe GC to settle */
+	DS_POOL_DISCARD_DONE,		/* last discard (incl. quiesce) succeeded */
+	DS_POOL_DISCARD_FAILED,		/* last discard failed (see sp_discard_status) */
+};
+
+/*
  * Pool object
  *
  * Caches per-pool information, such as the pool map.
@@ -100,6 +114,15 @@ struct ds_pool {
 	ATOMIC int               sp_rebuild_enum;
 
 	int			sp_discard_status;
+	/*
+	 * Phase of the local discard flow (values: enum ds_pool_discard_phase),
+	 * and the local time (daos_getmtime_coarse()) when the last discard,
+	 * including the NVMe GC quiesce of a manual discard, completed
+	 * successfully; 0 = never since the engine started. Both are only
+	 * mutated by the discard handlers/ULT in srv_target.c.
+	 */
+	uint32_t		sp_discard_phase;
+	uint64_t		sp_discard_done_time;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
 
@@ -299,6 +322,11 @@ int
 	 dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 					  struct pool_target_addr_list *target_list, pool_comp_state_t state,
 					  bool skip_rf_check);
+
+int dsc_pool_svc_discard(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline,
+			 struct pool_target_addr_list *addrs, uint32_t quiesce_sec);
+int dsc_pool_svc_discard_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline,
+			       d_rank_list_t *ranks, struct pool_discard_rank_state *states);
 
 uint32_t ds_pool_get_vos_df_version_default(void);
 int

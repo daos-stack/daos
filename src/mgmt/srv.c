@@ -105,6 +105,12 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_REINT:
 		ds_mgmt_drpc_pool_reintegrate(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_POOL_DISCARD:
+		ds_mgmt_drpc_pool_discard(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_POOL_DISCARD_QUERY:
+		ds_mgmt_drpc_pool_discard_query(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_POOL_EXTEND:
 		ds_mgmt_drpc_pool_extend(drpc_req, drpc_resp);
 		break;

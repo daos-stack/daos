@@ -49,6 +49,10 @@ service MgmtSvc {
 	rpc PoolExtend(PoolExtendReq) returns (PoolExtendResp) {}
 	// Reintegrate a pool target.
 	rpc PoolReintegrate(PoolReintReq) returns (PoolReintResp) {}
+	// Discard DOWN/DOWNOUT ranks of a DAOS pool (preparation before reintegration)
+	rpc PoolDiscard(PoolDiscardReq) returns (PoolDiscardResp) {}
+	// Query the per-rank progress of a pool discard
+	rpc PoolDiscardQuery(PoolDiscardQueryReq) returns (PoolDiscardQueryResp) {}
 	// PoolQuery queries a DAOS pool.
 	rpc PoolQuery(PoolQueryReq) returns (PoolQueryResp) {}
 	// PoolQueryTarget queries a DAOS storage target.
