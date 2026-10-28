@@ -117,21 +117,21 @@ typedef void (*arg_free_fn_t)(void *custom, void **arg);
  * The \p arg_alloc_func and \p arg_free_fn are called to allocate and free arguments respectively.
  * Each of ULTs has a separate arguments allocated for its own use.
  *
- * \param[in]	engine		Engine to run the created ULTs.
- * \param[in]	exec_one	Function to run in the ULTs.
- * \param[in]	arg_alloc_fn	Function to allocate arguments for an ULT.
- * \param[in]	alloc_arg	Custom parameters for \p arg_alloc_fn.
- * \param[in]	arg_free_fn	Function to free arguments.
- * \param[in]	free_arg	Custom parameters for \p arg_free_fn.
- * \param[in]	checker		Checker.
+ * \param[in]	engine			Engine to run the created ULTs.
+ * \param[in]	exec_one		Function to run in the ULTs.
+ * \param[in]	arg_alloc_fn		Function to allocate arguments for an ULT.
+ * \param[in]	arg_alloc_fn_arg	Custom parameters for \p arg_alloc_fn.
+ * \param[in]	arg_free_fn		Function to free arguments.
+ * \param[in]	arg_free_fn_arg		Custom parameters for \p arg_free_fn.
+ * \param[in]	checker			Checker.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Error.
  */
 int
 dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
-		     arg_alloc_fn_t arg_alloc_fn, void *alloc_arg, arg_free_fn_t arg_free_fn,
-		     void *free_arg, struct checker *ck);
+		     arg_alloc_fn_t arg_alloc_fn, void *arg_alloc_fn_arg, arg_free_fn_t arg_free_fn,
+		     void *arg_free_fn_arg, struct checker *ck);
 
 #define DLCK_XSTREAM_PROGRESS_END UINT_MAX
 
@@ -162,10 +162,6 @@ dlck_uadd_no_overflow(unsigned a, unsigned b, unsigned *result)
 static inline void
 dlck_status_set_rc(struct checker_status *status, int rc)
 {
-	if (rc == DER_SUCCESS) {
-		return;
-	}
-
 	/** do not overwrite the first error found */
 	if (status->rc == DER_SUCCESS) {
 		status->rc = rc;

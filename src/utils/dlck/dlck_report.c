@@ -41,7 +41,7 @@ get_separator()
 static void
 dlck_report_status(struct checker_status *st, struct checker *ck)
 {
-	if (st->errors_num + st->warnings_num != 0) {
+	if (st->errors_num != 0 || st->warnings_num != 0) {
 		ck_common_printf(ck, "%u error(s), %u warning(s)", st->errors_num,
 				 st->warnings_num);
 

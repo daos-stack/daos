@@ -589,9 +589,9 @@ struct dlck_exec {
 	struct dlck_ult *ults;
 	void           **ult_args;
 	arg_alloc_fn_t   arg_alloc_fn;
-	void            *alloc_arg;
+	void            *arg_alloc_fn_arg;
 	arg_free_fn_t    arg_free_fn;
-	void            *free_arg;
+	void            *arg_free_fn_arg;
 };
 
 /**
@@ -622,7 +622,7 @@ dlck_engine_join_all_no_error(struct dlck_engine *engine, struct dlck_exec *de)
 
 			(void)ABT_thread_free(&de->ults[i].thread);
 		}
-		(void)de->arg_free_fn(de->free_arg, &de->ult_args[i]);
+		(void)de->arg_free_fn(de->arg_free_fn_arg, &de->ult_args[i]);
 	}
 
 	D_FREE(de->ult_args);
@@ -662,7 +662,7 @@ dlck_engine_targets_start(struct dlck_engine *engine, dlck_ult_func exec_one, st
 
 	for (int i = 0; i < engine->targets; ++i) {
 		/** prepare arguments */
-		rc = de->arg_alloc_fn(engine, i, de->alloc_arg, &de->ult_args[i]);
+		rc = de->arg_alloc_fn(engine, i, de->arg_alloc_fn_arg, &de->ult_args[i]);
 		if (rc != DER_SUCCESS) {
 			goto fail_join_and_free;
 		}
@@ -716,7 +716,7 @@ dlck_engine_targets_stop(struct dlck_engine *engine, struct dlck_exec *de)
 			goto fail_join_and_free;
 		}
 
-		de->arg_free_fn(de->free_arg, &de->ult_args[i]);
+		de->arg_free_fn(de->arg_free_fn_arg, &de->ult_args[i]);
 	}
 
 	D_FREE(de->ult_args);
@@ -734,8 +734,8 @@ fail_join_and_free:
 
 int
 dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
-		     arg_alloc_fn_t arg_alloc_fn, void *alloc_arg, arg_free_fn_t arg_free_fn,
-		     void *free_arg, struct checker *ck)
+		     arg_alloc_fn_t arg_alloc_fn, void *arg_alloc_fn_arg, arg_free_fn_t arg_free_fn,
+		     void *arg_free_fn_arg, struct checker *ck)
 {
 	struct dlck_exec de = {0};
 	int              rc;
@@ -743,8 +743,8 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 	/** initialize batch */
 	de.arg_alloc_fn = arg_alloc_fn;
 	de.arg_free_fn = arg_free_fn;
-	de.alloc_arg    = alloc_arg;
-	de.free_arg     = free_arg;
+	de.arg_alloc_fn_arg = arg_alloc_fn_arg;
+	de.arg_free_fn_arg  = arg_free_fn_arg;
 
 	CK_PRINT(ck, "Start targets... ");
 	rc = dlck_engine_targets_start(engine, exec_one, &de);
