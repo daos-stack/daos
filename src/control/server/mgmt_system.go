@@ -1823,6 +1823,10 @@ func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) err
 		svc.log.Tracef("sending erase RPC to peer %s", peer.String())
 		peerReq := new(control.SystemEraseReq)
 		peerReq.AddHost(peer.String())
+		// Explicitly set the system name rather than relying on svc.rpcClient's
+		// configured default, so the forwarded request is correctly scoped even if
+		// that default is ever left unset.
+		peerReq.SetSystem(svc.sysdb.SystemName())
 
 		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
 			// A connection error here can't be distinguished from "peer never
