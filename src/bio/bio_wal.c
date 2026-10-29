@@ -1220,17 +1220,12 @@ write_header(struct bio_meta_context *mc, struct bio_io_context *ioc, void *hdr,
 static int
 wal_flush_header(struct bio_meta_context *mc, uint64_t ckp_id, uint32_t ckp_blks)
 {
-	struct wal_super_info	*si = &mc->mc_wal_info;
-	struct wal_header	*hdr = &si->si_header;
-
-	/* WAL header is up-to-date */
-	if (ckp_id == hdr->wh_ckp_id && ckp_blks == hdr->wh_ckp_blks &&
-	    si->si_commit_id == hdr->wh_commit_id && si->si_commit_blks == hdr->wh_commit_blks)
-		return 0;
+	struct wal_super_info *si  = &mc->mc_wal_info;
+	struct wal_header     *hdr = &si->si_header;
 
 	hdr->wh_ckp_id      = ckp_id;
 	hdr->wh_ckp_blks    = ckp_blks;
-	hdr->wh_commit_id = si->si_commit_id;
+	hdr->wh_commit_id   = si->si_commit_id;
 	hdr->wh_commit_blks = si->si_commit_blks;
 
 	return write_header(mc, mc->mc_wal, hdr, sizeof(*hdr), &hdr->wh_csum);
@@ -1241,6 +1236,10 @@ bio_wal_flush_header(struct bio_meta_context *mc)
 {
 	struct wal_super_info *si  = &mc->mc_wal_info;
 	struct wal_header     *hdr = &si->si_header;
+
+	/* WAL header is up-to-date */
+	if (si->si_commit_id == hdr->wh_commit_id && si->si_commit_blks == hdr->wh_commit_blks)
+		return 0;
 
 	D_ASSERT(wal_id_cmp(si, hdr->wh_ckp_id, si->si_ckp_id) >= 0);
 	/*
