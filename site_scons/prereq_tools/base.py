@@ -34,7 +34,7 @@ import sys
 import traceback
 from copy import deepcopy
 
-from SCons.Script import BUILD_TARGETS, Dir, Exit, GetOption, SetOption, WhereIs
+from SCons.Script import BUILD_TARGETS, Delete, Dir, Exit, GetOption, SetOption, WhereIs
 from SCons.Variables import BoolVariable, EnumVariable, ListVariable, PathVariable
 
 
@@ -628,6 +628,12 @@ class PreReqComponent():
         except Exception as old:
             raise BadScript("components", traceback.format_exc()) from old
 
+        if GetOption('clean'):
+            if GetOption('build_deps') != 'no':
+                self.__env.Execute(Delete(self.__build_dir))
+                self.__env.Execute(Delete(self.prereq_prefix))
+            return
+
         # Go ahead and prebuild some components
         for comp in reqs:
             if self.fetch_only:
@@ -843,6 +849,8 @@ class PreReqComponent():
                 raise MissingDefinition(comp)
             if comp in self.__errors:
                 raise self.__errors[comp]
+            if GetOption('clean'):
+                continue
             comp_def = self.__defined[comp]
             if headers_only:
                 needed_libs = None
@@ -853,8 +861,6 @@ class PreReqComponent():
                     continue
                 # checkout and build done previously
                 comp_def.set_environment(env, needed_libs)
-                if GetOption('clean'):
-                    continue
                 if self.__required[comp]:
                     changes = True
                 continue
