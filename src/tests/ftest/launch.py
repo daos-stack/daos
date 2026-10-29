@@ -291,6 +291,11 @@ class Launch():
             message = f"Error setting up test environment: {str(error)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
+        # Make a common daos log directory locally accessible when running all tests
+        if os.path.exists(test_env.common_dir):
+            os.rmdir(test_env.common_dir)
+        os.makedirs(test_env.common_dir, exist_ok=True)
+
         # Define the directory in which to create modified test yaml files
         if args.yaml_directory is None:
             # By default place generated yaml files in a launch job results subdirectory.
@@ -359,7 +364,8 @@ class Launch():
         try:
             group.update_test_yaml(
                 logger, args.scm_size, args.scm_mount, args.extra_yaml,
-                args.timeout_multiplier, args.override, args.verbose, args.include_localhost)
+                args.timeout_multiplier, args.override, args.verbose, args.include_localhost,
+                os.path.join(test_env.common_dir, "storage.yaml"))
         except (RunException, YamlException) as e:
             message = f"Error modifying the test yaml files: {e}"
             status |= self.get_exit_status(1, message, "Setup", sys.exc_info())
