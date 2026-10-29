@@ -5,6 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
+# pylint: disable=too-many-locals
 
 import getpass
 import os
@@ -1482,8 +1483,30 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     # ${DAOS_TEST_APP_SRC}/suse             =>  apps built with suse and gnu-mpich
     # pylint: disable-next=wrong-spelling-in-comment,fixme
     # ${DAOS_TEST_APP_SRC}/suse/intelmpi    =>  apps built with suse and intelmpi
-    if "suse" in detect().name.lower() and os.environ.get("DAOS_TEST_MODE") is None:
-        os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "suse")
+    os_info = detect()
+    os_name = (os_info.name or "").lower()
+    os_version = str(os_info.version or "").strip()
+
+    # Fallback for cases where avocado detect() returns unknown/0.
+    if (not os_name or os_name == "unknown" or not os_version or os_version == "0") \
+            and os.path.exists("/etc/os-release"):
+        os_release = {}
+        with open("/etc/os-release", "r", encoding="utf-8") as fd:
+            for line in fd:
+                if "=" not in line:
+                    continue
+                key, value = line.rstrip().split("=", 1)
+                os_release[key] = value.strip().strip('"')
+        os_name = (os_release.get("NAME") or os_release.get("ID") or os_name).lower()
+        os_version = (os_release.get("VERSION_ID") or os_version).strip()
+
+    if os.environ.get("DAOS_TEST_MODE") is None:
+        if "suse" in os_name:
+            os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "suse")
+        elif os_version == "9":
+            os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "el9")
+        elif os_version == "8":
+            os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "el8")
     if "mpi/latest" in mpi_module and os.environ.get("DAOS_TEST_MODE") is None:
         os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "intelmpi")
         os.environ["I_MPI_OFI_LIBRARY_INTERNAL"] = "0"
