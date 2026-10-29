@@ -355,6 +355,8 @@ static int
 vos_iter_validate_internal(struct vos_iterator *iter)
 {
 	daos_anchor_t     *anchor;
+	daos_anchor_t      saved;
+	vos_iter_entry_t   ent;
 	int                rc;
 	struct dtx_handle *old;
 	bool               is_sysdb = !!iter->it_for_sysdb;
@@ -386,16 +388,25 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 		anchor = &iter->it_anchors->ia_sv;
 		break;
 	case VOS_ITER_RECX:
-		anchor = &iter->it_anchors->ia_sv;
+		anchor = &iter->it_anchors->ia_ev;
 		break;
 	default:
 		D_ASSERTF(0, "Unexpected iterator type %d\n", iter->it_type);
 	}
 
-	old = vos_dth_get(is_sysdb);
+	saved = *anchor;
+	old   = vos_dth_get(is_sysdb);
 	vos_dth_set(iter->it_dth, is_sysdb);
 	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
+	/* SV probe moves past a deleted entry without updating the anchor */
+	if (rc == 0 && iter->it_type == VOS_ITER_SINGLE)
+		rc = iter->it_ops->iop_fetch(iter, &ent, anchor);
 	vos_dth_set(old, is_sysdb);
+
+	/* Probes land on the next entry if ours is gone; unsorted evtree probe is exact */
+	if (rc == 0 && iter->it_type != VOS_ITER_RECX && !vos_anchor_is_zero(&saved) &&
+	    memcmp(saved.da_buf, anchor->da_buf, sizeof(saved.da_buf)) != 0)
+		rc = -DER_NONEXIST;
 
 	if (rc == 0)
 		return 0;

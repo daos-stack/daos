@@ -785,9 +785,20 @@ pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 		return 0;
 
 	if (!UMOFF_IS_NULL(umoff)) {
-		int	rc;
-
-		rc = pmemobj_tx_free(umem_off2id(umm, umoff));
+		int     rc;
+		PMEMoid oid = umem_off2id(umm, umoff);
+#if FAULT_INJECTION
+		if (DAOS_FAIL_CHECK(DAOS_MEM_PMEM_FREE_POISON)) {
+			void  *ptr  = pmemobj_direct(oid);
+			size_t size = pmemobj_alloc_usable_size(oid);
+			/* Poison freed memory to expose use-after-free. */
+			rc = pmemobj_tx_xadd_range_direct(ptr, size, POBJ_XADD_ASSUME_INITIALIZED);
+			if (rc != 0)
+				return umem_tx_errno(rc);
+			memset(ptr, (uint8_t)daos_fail_value_get(), size);
+		}
+#endif
+		rc = pmemobj_tx_free(oid);
 		return rc ? umem_tx_errno(rc) : 0;
 	}
 
