@@ -14,7 +14,7 @@ Usage: ${0##*/} [options] [<PKG_OUTPUT_DIR>]
 Build DAOS/dependency packages with fpm, verifying them afterwards.
 
 Args:
-    PKG_OUTPUT_DIR   Path under which "deps" and "daos" package dirs are
+    PKG_OUTPUT_DIR   Full path under which "deps" and "daos" package dirs are
                      created and populated.
                      Default for RPM builds: <repo_root>/rpms; for non-RPM
                      builds: .
@@ -40,6 +40,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 repo_root="$(cd "${script_dir}/../.." >/dev/null 2>&1 && pwd)"
 # shellcheck source=utils/build/build_utils.sh
 source "${script_dir}/build_utils.sh"
+# shellcheck source=utils/build/build_packages_utils.sh
+source "${script_dir}/build_packages_utils.sh"
 
 build_range=all
 rpm_suffix=
@@ -76,6 +78,12 @@ for arg in "$@"; do
 done
 verify_mode="${verify_mode:--Werror}"
 
+if [ "${#positional_args[@]}" -gt 1 ]; then
+  echo "ERROR: at most one PKG_OUTPUT_DIR argument is allowed" >&2
+  usage >&2
+  exit 1
+fi
+
 case "${build_range}" in
   deps | daos | all)
     ;;
@@ -86,7 +94,7 @@ case "${build_range}" in
 esac
 
 if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
-  rpm_suffix="${rpm_suffix:-$(detect_rpm_suffix)}"
+  rpm_suffix="${rpm_suffix:-$(detect_rpm_suffix)}" || exit $?
   validate_rpm_suffix "${rpm_suffix}"
   DISTRO="${rpm_suffix}"
 else
@@ -109,37 +117,30 @@ elif [ -n "${rpm_suffix}" ]; then
 else
   pkg_output_dir=.
 fi
+PACKAGE_OUTPUT_DIR="${pkg_output_dir}"
+export PACKAGE_OUTPUT_DIR
 
-prepare_package_build_stage() {
+prepare_rpms_stage() {
   if [ -n "${rpm_suffix}" ]; then
-    local stage="${1-}"
-    case "${stage}" in
-        ""|"."|".."|*/*)
-            echo "ERROR: invalid RPM stage name: '${stage}'" >&2
-            exit 1
-            ;;
-    esac
+    unset PACKAGE_OUTPUT_DIR
     PACKAGE_OUTPUT_DIR="${pkg_output_dir}/${1}"
     rm -f "${PACKAGE_OUTPUT_DIR}"/*.rpm
     mkdir -p "${PACKAGE_OUTPUT_DIR}"
-  else
-    PACKAGE_OUTPUT_DIR="${pkg_output_dir}"
+    export PACKAGE_OUTPUT_DIR
   fi
-  export PACKAGE_OUTPUT_DIR
 }
 
-# Runs verify_packages.sh against $pkg_output_dir/$1 when applicable.
+# Runs verify_packages against $pkg_output_dir/$1 when applicable.
 verify_rpm_stage() {
   if [ -n "${rpm_suffix}" ] &&
     compgen -G "${pkg_output_dir}/${1}/*.rpm" > /dev/null; then
-    "${script_dir}/verify_packages.sh" "${verify_mode}" \
-      "--rpm-suffix=${rpm_suffix}" "${pkg_output_dir}/${1}"
+    verify_packages "${verify_mode}" "${rpm_suffix}" "${pkg_output_dir}/${1}"
   fi
 }
 
 source utils/sl/setup_local.sh
 if [[ "${build_range}" =~ deps|all ]]; then
-  prepare_package_build_stage deps
+  prepare_rpms_stage deps
   utils/rpms/argobots.sh
   utils/rpms/fused.sh
   utils/rpms/isa-l.sh
@@ -156,7 +157,7 @@ if [[ "${build_range}" =~ deps|all ]]; then
 fi
 
 if [[ "${build_range}" =~ daos|all ]]; then
-  prepare_package_build_stage daos
+  prepare_rpms_stage daos
   utils/rpms/daos.sh
   verify_rpm_stage daos
 fi

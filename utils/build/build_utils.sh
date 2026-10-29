@@ -6,17 +6,10 @@
 # Shared helpers sourced by the other utils/build/*.sh scripts.
 # Not meant to be executed directly.
 
-check_scons() {
-    [[ -n $(command -v scons 2>/dev/null) ]] || {
-        echo "ERROR: 'scons' not found on PATH." >&2
-        exit 1
-    }
-}
-
 # Maps the running OS (from /etc/os-release) to the RPM suffix used by DAOS;
 detect_rpm_suffix() {
     # shellcheck source=/dev/null
-    . /etc/os-release
+    (. /etc/os-release
     case "${ID:-}" in
         rocky | rhel | almalinux)
             echo "el${VERSION_ID%%.*}"
@@ -29,6 +22,7 @@ detect_rpm_suffix() {
             return 1
             ;;
     esac
+    )
 }
 
 validate_rpm_suffix() {
