@@ -604,6 +604,186 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 }
 
+static void
+check_mtime(int dirfd, const char *path, int flags, const struct timespec *expected)
+{
+	struct stat stbuf;
+	int         rc;
+
+	rc = fstatat(dirfd, path, &stbuf, flags);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_mtim.tv_sec, expected->tv_sec);
+	assert_int_equal(stbuf.st_mtim.tv_nsec, expected->tv_nsec);
+}
+
+/* mtime was updated to the current time, not to the UTIME_NOW marker */
+static void
+check_mtime_now(int dirfd, const char *path, const struct timespec *old)
+{
+	struct stat stbuf;
+	int         rc;
+
+	rc = fstatat(dirfd, path, &stbuf, 0);
+	assert_return_code(rc, errno);
+	assert_true(stbuf.st_mtim.tv_nsec >= 0 && stbuf.st_mtim.tv_nsec < 1000000000L);
+	assert_true(timespec_gt(stbuf.st_mtim, *old));
+}
+
+/* utimensat()/futimens() on an absolute path, on a fd, and with UTIME_NOW/UTIME_OMIT. */
+static void
+check_utimens(int root, const char *name, const char *abs_path)
+{
+	struct timespec old = {.tv_sec = time(NULL) - 1000, .tv_nsec = 500};
+	struct timespec times[2];
+	int             fd;
+	int             rc;
+
+	/* explicit times */
+	times[0] = old;
+	times[1] = old;
+	rc       = utimensat(root, name, times, 0);
+	assert_return_code(rc, errno);
+	check_mtime(root, name, 0, &old);
+
+	/* UTIME_OMIT on mtime leaves it alone */
+	times[0].tv_nsec = UTIME_NOW;
+	times[1].tv_nsec = UTIME_OMIT;
+	rc               = utimensat(root, name, times, 0);
+	assert_return_code(rc, errno);
+	check_mtime(root, name, 0, &old);
+
+	/* both UTIME_OMIT is a no-op */
+	times[0].tv_nsec = UTIME_OMIT;
+	rc               = utimensat(AT_FDCWD, abs_path, times, 0);
+	assert_return_code(rc, errno);
+	check_mtime(root, name, 0, &old);
+
+	/* UTIME_NOW on mtime sets the current time */
+	times[1].tv_sec  = 0;
+	times[1].tv_nsec = UTIME_NOW;
+	rc               = utimensat(AT_FDCWD, abs_path, times, 0);
+	assert_return_code(rc, errno);
+	check_mtime_now(root, name, &old);
+
+	/* out of range nsec */
+	times[0]         = old;
+	times[1].tv_sec  = old.tv_sec;
+	times[1].tv_nsec = 1000000000L;
+	rc               = utimensat(root, name, times, 0);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, EINVAL);
+
+	/* DAOS-19755: NULL times on an absolute path */
+	rc = utimensat(AT_FDCWD, abs_path, (struct timespec[2]){old, old}, 0);
+	assert_return_code(rc, errno);
+	rc = utimensat(AT_FDCWD, abs_path, NULL, 0);
+	assert_return_code(rc, errno);
+	check_mtime_now(root, name, &old);
+
+	/* the same through futimens() */
+	fd = openat(root, name, O_RDWR);
+	assert_return_code(fd, errno);
+
+	times[0] = old;
+	times[1] = old;
+	rc       = futimens(fd, times);
+	assert_return_code(rc, errno);
+	check_mtime(root, name, 0, &old);
+
+	times[0].tv_nsec = UTIME_NOW;
+	times[1].tv_nsec = UTIME_OMIT;
+	rc               = futimens(fd, times);
+	assert_return_code(rc, errno);
+	check_mtime(root, name, 0, &old);
+
+	times[1].tv_sec  = 0;
+	times[1].tv_nsec = UTIME_NOW;
+	rc               = futimens(fd, times);
+	assert_return_code(rc, errno);
+	check_mtime_now(root, name, &old);
+
+	times[1].tv_nsec = -1;
+	rc               = futimens(fd, times);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, EINVAL);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+}
+
+/* DAOS-19755/DAOS-19757: utimensat() and futimens() honor NULL times, UTIME_NOW, UTIME_OMIT and
+ * AT_SYMLINK_NOFOLLOW both in the container and on a path outside of it.
+ */
+void
+do_utimens(void **state)
+{
+	struct timespec old = {.tv_sec = time(NULL) - 2000, .tv_nsec = 700};
+	struct timespec target_mtime;
+	struct stat     stbuf;
+	char            path[512];
+	char            out_file[256];
+	char            out_link[256];
+	size_t          len;
+	int             root;
+	int             fd;
+	int             rc;
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	len = snprintf(path, sizeof(path), "%s/utimens_file", test_dir);
+	assert_true(len < sizeof(path));
+	fd = openat(root, "utimens_file", O_RDWR | O_CREAT | O_TRUNC, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	check_utimens(root, "utimens_file", path);
+
+	rc = unlinkat(root, "utimens_file", 0);
+	assert_return_code(rc, errno);
+	rc = close(root);
+	assert_return_code(rc, errno);
+
+	/* a path outside of the container is handed to libc */
+	len = snprintf(out_file, sizeof(out_file), "/tmp/dfuse_test_utimens_%d", getpid());
+	assert_true(len < sizeof(out_file));
+	len = snprintf(out_link, sizeof(out_link), "/tmp/dfuse_test_utimens_link_%d", getpid());
+	assert_true(len < sizeof(out_link));
+	/* cmocka has no teardown here, so an aborted run can leave these behind */
+	unlink(out_link);
+	unlink(out_file);
+
+	fd = open(out_file, O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	root = open("/tmp", O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	check_utimens(root, out_file + strlen("/tmp/"), out_file);
+
+	/* AT_SYMLINK_NOFOLLOW changes the link, not its target */
+	rc = symlink(out_file, out_link);
+	assert_return_code(rc, errno);
+	rc = stat(out_file, &stbuf);
+	assert_return_code(rc, errno);
+	target_mtime = stbuf.st_mtim;
+
+	rc = utimensat(AT_FDCWD, out_link, (struct timespec[2]){old, old}, AT_SYMLINK_NOFOLLOW);
+	assert_return_code(rc, errno);
+	check_mtime(AT_FDCWD, out_link, AT_SYMLINK_NOFOLLOW, &old);
+	check_mtime(AT_FDCWD, out_file, 0, &target_mtime);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+	rc = unlink(out_link);
+	assert_return_code(rc, errno);
+	rc = unlink(out_file);
+	assert_return_code(rc, errno);
+}
+
 static int
 get_dir_num_entry(DIR *dirp)
 {
@@ -2520,6 +2700,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			printf("=====================\n");
 			const struct CMUnitTest metadata_tests[] = {
 			    cmocka_unit_test(do_mtime),
+			    cmocka_unit_test(do_utimens),
 			};
 			nr_failed += cmocka_run_group_tests(metadata_tests, NULL, NULL);
 			break;

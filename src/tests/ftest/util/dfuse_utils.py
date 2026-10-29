@@ -1,6 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -31,6 +31,8 @@ class DfuseCommand(ExecutableCommand):
         self.sys_name = FormattedParameter("--sys-name {}")
         self.thread_count = FormattedParameter("--thread-count {}")
         self.eq_count = FormattedParameter("--eq-count {}")
+        self.max_background = FormattedParameter("--max-background {}")
+        self.congestion_threshold = FormattedParameter("--congestion-threshold {}")
         self.foreground = FormattedParameter("--foreground", False)
         self.enable_caching = FormattedParameter("--enable-caching", False)
         self.enable_wb_cache = FormattedParameter("--enable-wb-cache", False)
