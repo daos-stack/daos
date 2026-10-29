@@ -1031,6 +1031,12 @@ func TestFabricConfig_GetInterfacePorts(t *testing.T) {
 			},
 			expErr: errors.New("fabric_iface_port item \"65536\""),
 		},
+		"zero": {
+			cfg: &FabricConfig{
+				InterfacePort: multiProviderString("5678", "0", "1234"),
+			},
+			expErr: errors.New("fabric_iface_port item \"0\""),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			ports, err := tc.cfg.GetInterfacePorts()

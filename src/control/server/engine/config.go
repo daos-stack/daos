@@ -148,7 +148,7 @@ func (fc *FabricConfig) GetInterfacePorts() ([]uint, error) {
 	ports := make([]uint, 0)
 	for _, str := range portStrs {
 		uint64Port, err := strconv.ParseUint(str, 10, 16)
-		if err != nil {
+		if err != nil || uint64Port == 0 {
 			return nil, errors.Errorf("fabric_iface_port item %q: must be an integer in the range 1-65535", str)
 		}
 		ports = append(ports, uint(uint64Port)) // OK to truncate to 32 bits
