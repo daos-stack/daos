@@ -130,7 +130,7 @@ struct pool_component {
  * (normally 1), so co_fseq == co_ver is a unique baseline mark.
  *
  * Neither co_fseq nor co_ver is touched by MAP_REINT, MAP_EXTEND, MAP_ADD_IN, or
- * MAP_REVERT_REBUILD (baseline branch also restores co_in_ver = co_ver), so this
+ * MAP_REVERT_REBUILD, so this
  * invariant survives a baseline reint -> revert-failure round trip: a baseline that
  * failed to reintegrate is still classified as baseline.
  */
@@ -141,17 +141,37 @@ pool_comp_is_creation_downout(struct pool_component *comp)
 }
 
 /**
+ * True if the component has never been a member of any object layout, i.e. it was added by
+ * MAP_EXTEND (co_fseq < co_ver, as gen_pool_buf() initializes co_fseq to 1 and co_ver to the
+ * extend map version) and has never become UPIN:
+ * - NEW: not extended yet.
+ * - UP: being extended, or being reintegrated after the following.
+ * - DOWN/DOWNOUT: excluded while being extended. MAP_EXCLUDE keeps its co_fseq, so it stays
+ *   out of the layouts, see comp_is_skipped(), and it is not a failure for the RF check, as
+ *   it never held any authoritative data.
+ * Once it is UPIN, it is a layout member, and MAP_EXCLUDE/MAP_DRAIN bump its co_fseq above
+ * co_ver, so co_fseq < co_ver of an UPIN component does not mean unplaced.
+ */
+static inline bool
+pool_comp_is_unplaced(struct pool_component *comp)
+{
+	return comp->co_status != PO_COMP_ST_UPIN && comp->co_fseq < comp->co_ver;
+}
+
+/**
  * True if the component is a DOWNOUT that resulted from a real failure and rebuild.
  *
  * PO_COMPF_DOWN2OUT is set only by update_tgt_down_drain_to_downout(), which requires the
- * comp to have gone through UPIN -> DOWN, i.e. through MAP_EXCLUDE which bumps co_fseq
- * strictly above co_ver. So a DOWN2OUT comp always has co_fseq > co_ver and is by
- * construction not a creation-time DOWNOUT. DOWN2OUT alone suffices.
+ * comp to have gone through DOWN. A placed comp gets DOWN through MAP_EXCLUDE of UPIN, which
+ * bumps co_fseq strictly above co_ver, so it is not a creation-time DOWNOUT. An unplaced comp
+ * excluded while being extended keeps co_fseq < co_ver, it never held data, so it is not a
+ * failure.
  */
 static inline bool
 pool_comp_is_failed_downout(struct pool_component *comp)
 {
-	return comp->co_status == PO_COMP_ST_DOWNOUT && (comp->co_flags & PO_COMPF_DOWN2OUT);
+	return comp->co_status == PO_COMP_ST_DOWNOUT && (comp->co_flags & PO_COMPF_DOWN2OUT) &&
+	       !pool_comp_is_unplaced(comp);
 }
 
 /**
@@ -163,7 +183,22 @@ static inline bool
 pool_comp_is_drain_downout(struct pool_component *comp)
 {
 	return comp->co_status == PO_COMP_ST_DOWNOUT && !(comp->co_flags & PO_COMPF_DOWN2OUT) &&
-	       !pool_comp_is_creation_downout(comp);
+	       !pool_comp_is_creation_downout(comp) && !pool_comp_is_unplaced(comp);
+}
+
+/**
+ * True if the component is being reintegrated (UP) from DOWNOUT, either a real DOWNOUT
+ * (co_fseq > co_ver) or a creation-time DOWNOUT (co_fseq == co_ver), i.e. neither from DOWN
+ * (DOWN2UP) nor from NEW (extend, co_fseq < co_ver). Placement always remaps such a component
+ * in the pre-reintegration layout, so it never holds authoritative data, and its data stays on
+ * the spare targets. Failing it only aborts the reintegration: it goes back to DOWNOUT with its
+ * co_fseq, the placement remap order key, unchanged.
+ */
+static inline bool
+pool_comp_is_downout2up(struct pool_component *comp)
+{
+	return comp->co_status == PO_COMP_ST_UP && !(comp->co_flags & PO_COMPF_DOWN2UP) &&
+	       comp->co_fseq >= comp->co_ver;
 }
 
 /** a leaf of pool map */
@@ -368,6 +403,16 @@ update_dom_status_by_tgt_id(struct pool_map *map, uint32_t tgt_id, uint32_t stat
 			    uint32_t version, bool *updated, bool for_revert);
 bool
 pool_map_node_status_match(struct pool_domain *dom, unsigned int status);
+uint32_t
+pool_map_tgts_changed_after(struct pool_map *map, struct pool_target_id_list *tgts, uint32_t ver);
+uint32_t
+pool_map_tgts_dropped_after(struct pool_map *map, uint32_t ver);
+uint32_t
+pool_map_rebuild_stale_ver(struct pool_map *map, struct pool_target_id_list *tgts, uint32_t ver);
+uint32_t
+pool_map_comp_lost_status(struct pool_component *comp);
+void
+pool_map_comp_mark_lost(struct pool_map *map, struct pool_component *comp, uint32_t status);
 
 struct pool_domain *
 pool_map_find_dom_by_rank(struct pool_map *map, uint32_t rank);

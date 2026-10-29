@@ -24,7 +24,8 @@
  * an interior index would change the jump hash modulus and thus rewrite the layout of objects
  * that were already placed.
  *
- * NEW is never a member, so it is always skipped.
+ * NEW is never a member, so it is always skipped. Neither is a DOWN/DOWNOUT component that
+ * was excluded while being extended (co_fseq < co_ver, see pool_comp_is_unplaced()).
  *
  * UP must distinguish a not-yet-joined addition from a reintegration, using the
  * (co_fseq, co_ver) pair. Neither field is touched by MAP_REINT or MAP_EXTEND on the UP
@@ -48,6 +49,14 @@ static bool
 comp_is_skipped(struct pool_component *comp, uint32_t allow_version, enum layout_gen_mode gen_mode)
 {
 	if (comp->co_status == PO_COMP_ST_NEW)
+		return true;
+
+	/*
+	 * Excluded while being extended, it never joined any layout, see
+	 * pool_comp_is_unplaced(). MAP_EXCLUDE keeps its co_fseq for this.
+	 */
+	if ((comp->co_status == PO_COMP_ST_DOWN || comp->co_status == PO_COMP_ST_DOWNOUT) &&
+	    pool_comp_is_unplaced(comp))
 		return true;
 
 	if (comp->co_status == PO_COMP_ST_UP && comp->co_fseq < comp->co_ver) {

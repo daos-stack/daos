@@ -2043,7 +2043,7 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 			if (child->do_comp.co_status &
 			    (PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
 				if (child->do_comp.co_status == PO_COMP_ST_DOWN)
-					child->do_comp.co_flags = PO_COMPF_DOWN2UP;
+					child->do_comp.co_flags |= PO_COMPF_DOWN2UP;
 				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u\n",
 					child->do_comp.co_rank, child->do_comp.co_id,
 					child->do_comp.co_status, status);
@@ -2062,6 +2062,8 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u\n",
 					child->do_comp.co_rank, child->do_comp.co_id,
 					child->do_comp.co_status, status);
+				/* same as a target, see update_tgt_up_to_upin() */
+				child->do_comp.co_flags &= ~(PO_COMPF_DOWN2UP | PO_COMPF_DOWN2OUT);
 				child->do_comp.co_status = status;
 				child->do_comp.co_in_ver = version;
 				*updated = true;
@@ -2398,6 +2400,213 @@ pool_map_node_status_match(struct pool_domain *dom, unsigned int status)
 	return true;
 }
 
+/**
+ * Check whether the status of any target in \a tgts has been changed after pool map version
+ * \a ver, e.g. a reintegrating (DOWNOUT->UP) target is reverted to DOWNOUT by an exclude,
+ * then is reintegrated (UP) again, a reintegrating DOWN2UP target is excluded (DOWN), or a
+ * draining target is excluded (DOWN). A rebuild task of these targets that has been computed
+ * with map version \a ver is stale in that case.
+ *
+ * The version of the last status change of a target is the max of co_fseq and
+ * co_in_ver/co_out_ver (they share the same field), as co_fseq is kept by some changes, e.g.
+ * UP->DOWNOUT. UPIN/NEW targets are not rebuilt by the task.
+ *
+ * \return	the max version of such changes, or 0 if there is none.
+ */
+uint32_t
+pool_map_tgts_changed_after(struct pool_map *map, struct pool_target_id_list *tgts, uint32_t ver)
+{
+	uint32_t changed_ver = 0;
+	int      i;
+
+	for (i = 0; tgts != NULL && i < tgts->pti_number; i++) {
+		struct pool_target *target = NULL;
+		uint32_t            tgt_ver;
+
+		if (pool_map_find_target(map, tgts->pti_ids[i].pti_id, &target) <= 0)
+			continue;
+
+		if (target->ta_comp.co_status & (PO_COMP_ST_UPIN | PO_COMP_ST_NEW))
+			continue;
+
+		tgt_ver = max(target->ta_comp.co_fseq, target->ta_comp.co_in_ver);
+
+		if (tgt_ver > ver && tgt_ver > changed_ver)
+			changed_ver = tgt_ver;
+	}
+
+	return changed_ver;
+}
+
+/**
+ * Check whether the layouts of the pool have been changed after pool map version \a ver in
+ * a way that is not covered by a rebuild of its own, i.e. a target status has been changed
+ * to DOWNOUT, to DOWN while being unplaced (see pool_comp_is_unplaced()), to DRAIN or to UP
+ * after \a ver.
+ *
+ * A rebuild task computes the layouts with pool map version \a ver, it may migrate data to
+ * any UP target of the POST_REBUILD layouts, not only to the targets of the task, e.g. to an
+ * extending or a DOWNOUT->UP reintegrating target. If such a target is excluded, it is
+ * dropped from the layouts with its co_fseq kept, i.e. reverted to DOWNOUT or unplaced DOWN,
+ * so the rebuild of the exclusion has nothing to do, and the shards that the task has
+ * migrated to it would be lost once the task is finished. A placed DOWN target is rebuilt by
+ * its own rebuild, which also covers such shards, so it is not checked here.
+ *
+ * A target that starts draining after \a ver is checked as well (by its co_fseq): it is
+ * dropped from the layouts of the shards that are still being rebuilt, e.g. the shards that
+ * the task is migrating to it as a spare of a DOWN target are moved to the next spare, so it
+ * misses the updates of them, while it holds them again (readable) once the task turns the
+ * DOWN target into DOWNOUT, as the spare failed after the DOWN target.
+ *
+ * Likewise a target that is reintegrated or extended (UP) after \a ver is checked (by its
+ * co_in_ver): it takes over the shards of the layouts as a reintegrating target, so the
+ * spare that the task is migrating a shard to may be dropped from the write layout and miss
+ * the updates, while it is readable again once the task is finished.
+ *
+ * co_out_ver of a DOWNOUT target is also bumped by MAP_FINISH_REBUILD of a DOWN/DRAIN
+ * target. As there is only one running rebuild task of a pool, it is the task itself, while
+ * a queued task of an older version just starts with the newer version, which is harmless.
+ *
+ * \return	the max version of such changes, or 0 if there is none.
+ */
+uint32_t
+pool_map_tgts_dropped_after(struct pool_map *map, uint32_t ver)
+{
+	struct pool_target *targets     = pool_map_targets(map);
+	unsigned int        nr          = pool_map_target_nr(map);
+	uint32_t            dropped_ver = 0;
+	unsigned int        i;
+
+	for (i = 0; targets != NULL && i < nr; i++) {
+		struct pool_component *comp = &targets[i].ta_comp;
+		uint32_t               comp_ver;
+
+		if (comp->co_status == PO_COMP_ST_DRAIN)
+			comp_ver = comp->co_fseq;
+		else if (comp->co_status == PO_COMP_ST_UP)
+			comp_ver = comp->co_in_ver;
+		else if (comp->co_status == PO_COMP_ST_DOWNOUT ||
+			 (comp->co_status == PO_COMP_ST_DOWN && pool_comp_is_unplaced(comp)))
+			comp_ver = comp->co_out_ver;
+		else
+			continue;
+
+		if (comp_ver > ver && comp_ver > dropped_ver)
+			dropped_ver = comp_ver;
+	}
+
+	return dropped_ver;
+}
+
+/**
+ * The version from which a rebuild task of \a tgts computed with pool map version \a ver
+ * is stale, see pool_map_tgts_changed_after() and pool_map_tgts_dropped_after(). The task
+ * should be aborted, its finish should be rejected, and it should be retried with the
+ * returned version.
+ *
+ * \return	the max version of such changes, or 0 if the task is not stale.
+ */
+uint32_t
+pool_map_rebuild_stale_ver(struct pool_map *map, struct pool_target_id_list *tgts, uint32_t ver)
+{
+	uint32_t changed_ver = pool_map_tgts_changed_after(map, tgts, ver);
+	uint32_t dropped_ver = pool_map_tgts_dropped_after(map, ver);
+
+	return max(changed_ver, dropped_ver);
+}
+
+/**
+ * The status that a component (target or rank) whose storage is lost should be marked as by
+ * the checker, the same as MAP_EXCLUDE does, see update_one_tgt():
+ * - NEW: unchanged. Placement skips a NEW component, it never holds data, while a placed DOWN
+ *   or DOWNOUT one is a member of the layout, so changing it would change the existing layouts.
+ * - DOWNOUT->UP reintegrating: DOWNOUT, it only aborts the reintegration.
+ * - DOWN, DOWNOUT: unchanged.
+ * - Others, e.g. UPIN, DRAIN, DOWN->UP or extending UP: DOWN, to be rebuilt.
+ */
+uint32_t
+pool_map_comp_lost_status(struct pool_component *comp)
+{
+	switch (comp->co_status) {
+	case PO_COMP_ST_NEW:
+	case PO_COMP_ST_DOWN:
+	case PO_COMP_ST_DOWNOUT:
+		return comp->co_status;
+	default:
+		return pool_comp_is_downout2up(comp) ? PO_COMP_ST_DOWNOUT : PO_COMP_ST_DOWN;
+	}
+}
+
+/**
+ * Mark a component (target or rank) of \a map whose storage is lost as \a status, which is
+ * returned by pool_map_comp_lost_status() for a target, or derived from its targets for a rank,
+ * and bump the map version.
+ *
+ * co_fseq is the placement remap order key, it must be kept for a DOWNOUT->UP reintegrating
+ * component reverted to DOWNOUT, the same as MAP_EXCLUDE, otherwise the layouts of the objects
+ * that have shards remapped from it would be changed. It must be kept for an extending
+ * (unplaced) component too, so placement still skips it, see pool_comp_is_unplaced().
+ * co_out_ver records the version of the change instead. Others, including a DRAIN component,
+ * get a new co_fseq as a new failure. The ancestor domains of a rank are changed in the same
+ * way once all their children are DOWN/DOWNOUT.
+ */
+static void
+comp_mark_lost(struct pool_component *comp, uint32_t status, uint32_t ver)
+{
+	if (pool_comp_is_downout2up(comp) || pool_comp_is_unplaced(comp))
+		comp->co_out_ver = ver;
+	else
+		comp->co_fseq = ver;
+	comp->co_status = status;
+}
+
+/*
+ * Mark the ancestor domains of \a comp whose children are all DOWN/DOWNOUT as \a status, the
+ * same as update_dom_status() for MAP_EXCLUDE. Return whether \a comp is under \a domain.
+ */
+static bool
+dom_mark_lost_ancestors(struct pool_domain *domain, struct pool_component *comp, uint32_t status,
+			uint32_t ver)
+{
+	int i;
+
+	if (&domain->do_comp == comp)
+		return true;
+
+	for (i = 0; domain->do_children != NULL && i < domain->do_child_nr; i++) {
+		struct pool_domain *child = &domain->do_children[i];
+
+		if (!dom_mark_lost_ancestors(child, comp, status, ver))
+			continue;
+
+		if (&child->do_comp != comp && child->do_comp.co_status != status &&
+		    child_status_check(child, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT))
+			comp_mark_lost(&child->do_comp, status, ver);
+		return true;
+	}
+	return false;
+}
+
+void
+pool_map_comp_mark_lost(struct pool_map *map, struct pool_component *comp, uint32_t status)
+{
+	uint32_t ver;
+
+	D_ASSERTF(status == PO_COMP_ST_DOWN || status == PO_COMP_ST_DOWNOUT, "%u\n", status);
+	if (comp->co_status == status)
+		return;
+
+	ver = pool_map_bump_version(map);
+	comp_mark_lost(comp, status, ver);
+	/*
+	 * The upper level domains (e.g. a node domain added by the same extension) must be
+	 * changed as well, otherwise e.g. an extending (unplaced) one is still UP and joins the
+	 * layouts while its only rank is skipped by placement.
+	 */
+	if (comp->co_type != PO_COMP_TP_TARGET && map->po_tree != NULL)
+		dom_mark_lost_ancestors(map->po_tree, comp, status, ver);
+}
+
 static void
 fseq_sort_op_swap(void *array, int a, int b)
 {
@@ -2554,7 +2763,9 @@ update_failed_cnt_helper(struct pool_domain *dom,
 
 	if (dom->do_children == NULL) {
 		for (i = 0; i < dom->do_target_nr; ++i) {
-			if (pool_target_is_down(&dom->do_targets[i]))
+			/* an unplaced target never held data, see pool_comp_is_unplaced() */
+			if (pool_target_is_down(&dom->do_targets[i]) &&
+			    !pool_comp_is_unplaced(&dom->do_targets[i].ta_comp))
 				num_failed++;
 		}
 	} else {
@@ -2719,7 +2930,9 @@ pmap_fail_stat_fini(struct pmap_fail_stat *stat)
 static bool
 pmap_comp_failed(struct pool_component *comp)
 {
-	return (comp->co_status == PO_COMP_ST_DOWN) || pool_comp_is_failed_downout(comp);
+	/* an unplaced target never held data, see pool_comp_is_unplaced() */
+	return (comp->co_status == PO_COMP_ST_DOWN && !pool_comp_is_unplaced(comp)) ||
+	       pool_comp_is_failed_downout(comp);
 }
 
 static bool

@@ -2922,6 +2922,1000 @@ no_hidden_peer_source(void **state)
 	assert_true(st.peered > st.relocated);
 }
 
+static struct pool_target *
+jtc_find_target(struct jm_test_ctx *ctx, uint32_t id)
+{
+	struct pool_target *tgt = NULL;
+
+	assert_int_equal(1, pool_map_find_target(ctx->po_map, id, &tgt));
+	return tgt;
+}
+
+/* apply @opc to targets [@start, @start + @nr) in a single update, as a rank exclusion does */
+static void
+jtc_update_targets(struct jm_test_ctx *ctx, int opc, uint32_t start, uint32_t nr, bool exclude_rank)
+{
+	struct pool_target_id_list tgts;
+	uint32_t                   i;
+
+	D_ALLOC_ARRAY(tgts.pti_ids, nr);
+	assert_non_null(tgts.pti_ids);
+	tgts.pti_number = nr;
+	for (i = 0; i < nr; i++)
+		tgts.pti_ids[i].pti_id = start + i;
+
+	assert_success(ds_pool_map_tgts_update(NULL, ctx->po_map, &tgts, opc, exclude_rank, NULL,
+					       ctx->enable_print_debug_msgs));
+	D_FREE(tgts.pti_ids);
+
+	ctx->ver = pool_map_get_version(ctx->po_map);
+	pool_map_update_failed_cnt(ctx->po_map);
+	assert_success(pool_map_set_version(ctx->po_map, ctx->ver));
+	pl_map_update(ctx->pl_uuid, ctx->po_map, false, PL_TYPE_JUMP_MAP);
+}
+
+static uint32_t
+jtc_tgt_changed_after(struct jm_test_ctx *ctx, uint32_t id, uint32_t ver)
+{
+	struct pool_target_id      tgt_id = {.pti_id = id};
+	struct pool_target_id_list tgts   = {.pti_number = 1, .pti_ids = &tgt_id};
+
+	return pool_map_tgts_changed_after(ctx->po_map, &tgts, ver);
+}
+
+/*
+ * The co_fseq of a target is the remap order key of the placement. Excluding a target which is
+ * being reintegrated from DOWNOUT only aborts the reintegration, as the data was never moved
+ * back to it, so it has to go back to DOWNOUT with its co_fseq unchanged, as MAP_REVERT_REBUILD
+ * does. Only a target which really holds data gets a new co_fseq on exclusion, i.e. a UPIN one,
+ * or a DOWN2UP one, which was not remapped before it failed.
+ */
+static void
+exclude_reintegrating_target_keeps_fseq(void **state)
+{
+	struct jm_test_ctx  ctx;
+	struct pool_target *tgt;
+	struct pool_domain *dom;
+	uint32_t            fseq, flags, reint_ver, task_ver, dom_fseq;
+	uint32_t            i;
+
+	jtc_init(&ctx, 4, 1, 4, OC_RP_2G1, g_verbose);
+
+	/* DOWNOUT -> UP -> excluded: back to DOWNOUT with the same fseq */
+	jtc_set_status_on_target(&ctx, DOWN, 0);
+	jtc_set_status_on_target(&ctx, DOWNOUT, 0);
+	tgt   = jtc_find_target(&ctx, 0);
+	fseq  = tgt->ta_comp.co_fseq;
+	flags = tgt->ta_comp.co_flags;
+	assert_int_equal(flags, PO_COMPF_DOWN2OUT);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 0, ctx.ver), 0);
+
+	jtc_set_status_on_target(&ctx, UP, 0);
+	reint_ver = ctx.ver;
+	task_ver  = reint_ver;
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_UP);
+	assert_int_equal(tgt->ta_comp.co_in_ver, reint_ver);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 0, reint_ver), 0);
+
+	jtc_set_status_on_target(&ctx, DOWN, 0);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+	assert_int_equal(tgt->ta_comp.co_fseq, fseq);
+	assert_int_equal(tgt->ta_comp.co_flags, flags);
+	assert_int_equal(tgt->ta_comp.co_out_ver, ctx.ver);
+	assert_true(ctx.ver > reint_ver);
+	/* a rebuild of the reintegration version is stale, but not one of the new version */
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 0, reint_ver), ctx.ver);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 0, ctx.ver), 0);
+
+	/* excluding it again is a no-op */
+	reint_ver = ctx.ver;
+	assert_success(ds_pool_map_tgts_update(
+	    NULL, ctx.po_map,
+	    &(struct pool_target_id_list){.pti_number = 1,
+					  .pti_ids    = &(struct pool_target_id){.pti_id = 0}},
+	    MAP_EXCLUDE, false, NULL, false));
+	assert_int_equal(pool_map_get_version(ctx.po_map), reint_ver);
+	assert_int_equal(tgt->ta_comp.co_fseq, fseq);
+
+	/*
+	 * and it can be reintegrated again, the rebuild of the first reintegration is still stale,
+	 * though the target is UP again
+	 */
+	jtc_set_status_on_target(&ctx, UP, 0);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_UP);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 0, task_ver), ctx.ver);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 0, ctx.ver), 0);
+	jtc_set_status_on_target(&ctx, UPIN, 0);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_UPIN);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 0, 0), 0);
+
+	/* DOWN -> UP (DOWN2UP) -> excluded: DOWN with a new fseq, as before */
+	jtc_set_status_on_target(&ctx, DOWN, 1);
+	tgt  = jtc_find_target(&ctx, 1);
+	fseq = tgt->ta_comp.co_fseq;
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 1, fseq), 0);
+	jtc_set_status_on_target(&ctx, UP, 1);
+	task_ver = ctx.ver;
+	assert_true(tgt->ta_comp.co_flags & PO_COMPF_DOWN2UP);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 1, task_ver), 0);
+	jtc_set_status_on_target(&ctx, DOWN, 1);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(tgt->ta_comp.co_fseq, ctx.ver);
+	assert_true(tgt->ta_comp.co_fseq > fseq);
+	/* the rebuild of the DOWN2UP reintegration is stale as well */
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 1, task_ver), ctx.ver);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 1, ctx.ver), 0);
+
+	/* UPIN -> excluded: DOWN with a new fseq, as before */
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 2, 0), 0);
+	jtc_set_status_on_target(&ctx, DOWN, 2);
+	tgt = jtc_find_target(&ctx, 2);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(tgt->ta_comp.co_fseq, ctx.ver);
+	/* not stale for the rebuild of the exclusion */
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 2, ctx.ver), 0);
+
+	/* UPIN -> DRAIN: not stale for the rebuild of the drain */
+	jtc_update_targets(&ctx, MAP_DRAIN, 3, 1, false);
+	tgt = jtc_find_target(&ctx, 3);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DRAIN);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 3, ctx.ver), 0);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 3, ctx.ver - 1), ctx.ver);
+
+	/* the same for a whole rank (rank 3, targets 12 - 15) excluded by SWIM */
+	dom = pool_map_find_dom_by_rank(ctx.po_map, 3);
+	assert_non_null(dom);
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 12, 4, true);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_DOWN);
+	jtc_update_targets(&ctx, MAP_FINISH_REBUILD, 12, 4, true);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_DOWNOUT);
+	dom_fseq = dom->do_comp.co_fseq;
+	jtc_update_targets(&ctx, MAP_REINT, 12, 4, false);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_UP);
+	reint_ver = ctx.ver;
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 12, 4, true);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_DOWNOUT);
+	assert_int_equal(dom->do_comp.co_fseq, dom_fseq);
+	for (i = 12; i < 16; i++) {
+		tgt = jtc_find_target(&ctx, i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+		assert_true(tgt->ta_comp.co_fseq <= dom_fseq);
+		assert_true(jtc_tgt_changed_after(&ctx, i, reint_ver) > reint_ver);
+	}
+
+	jtc_fini(&ctx);
+}
+
+/*
+ * Excluding a reintegrating creation-time DOWNOUT target reverts it to DOWNOUT, keeps it as a
+ * creation-time DOWNOUT, and makes the reintegration stale.
+ */
+static void
+exclude_reintegrating_creation_downout(void **state)
+{
+	struct jm_test_ctx  ctx;
+	struct pool_target *tgt;
+	uint32_t            reint_ver;
+
+	jtc_init(&ctx, 4, 1, 4, OC_RP_2G1, g_verbose);
+
+	tgt                    = jtc_find_target(&ctx, 0);
+	tgt->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
+	tgt->ta_comp.co_fseq   = tgt->ta_comp.co_ver;
+	tgt->ta_comp.co_in_ver = tgt->ta_comp.co_ver;
+	tgt->ta_comp.co_flags  = 0;
+	assert_true(pool_comp_is_creation_downout(&tgt->ta_comp));
+
+	jtc_update_targets(&ctx, MAP_REINT, 0, 1, false);
+	reint_ver = ctx.ver;
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_UP);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 0, reint_ver), 0);
+
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 0, 1, false);
+	assert_true(ctx.ver > reint_ver);
+	assert_true(pool_comp_is_creation_downout(&tgt->ta_comp));
+	assert_false(pool_comp_is_failed_downout(&tgt->ta_comp));
+	assert_int_equal(tgt->ta_comp.co_out_ver, ctx.ver);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 0, reint_ver), ctx.ver);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 0, ctx.ver), 0);
+
+	/* the rebuild of the first reintegration is still stale after reintegrating it again */
+	jtc_update_targets(&ctx, MAP_REINT, 0, 1, false);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_UP);
+	assert_true(jtc_tgt_changed_after(&ctx, 0, reint_ver) > reint_ver);
+	jtc_update_targets(&ctx, MAP_REVERT_REBUILD, 0, 1, false);
+	assert_true(pool_comp_is_creation_downout(&tgt->ta_comp));
+
+	jtc_fini(&ctx);
+}
+
+/* number of shards that differ between two layouts of the same object */
+static uint32_t
+jtc_layout_diff(struct pl_obj_layout *l1, struct pl_obj_layout *l2)
+{
+	uint32_t diff = 0;
+	int      i;
+
+	if (l1->ol_nr != l2->ol_nr || l1->ol_grp_nr != l2->ol_grp_nr ||
+	    l1->ol_grp_size != l2->ol_grp_size)
+		return max(l1->ol_nr, l2->ol_nr);
+
+	for (i = 0; i < l1->ol_nr; i++) {
+		struct pl_obj_shard *s1 = &l1->ol_shards[i];
+		struct pl_obj_shard *s2 = &l2->ol_shards[i];
+
+		if (s1->po_target != s2->po_target || s1->po_shard != s2->po_shard ||
+		    s1->po_rebuilding != s2->po_rebuilding ||
+		    s1->po_reintegrating != s2->po_reintegrating)
+			diff++;
+	}
+
+	return diff;
+}
+
+/*
+ * Excluding a reintegrating target, while other DOWNOUT targets with interleaved fseqs exist,
+ * has to restore the exact layouts from before the reintegration, and has nothing to rebuild.
+ */
+static void
+_exclude_reintegrating_target_keeps_layout(uint32_t domain_nr, uint32_t target_nr,
+					   daos_oclass_id_t oc, uint32_t obj_nr)
+{
+	struct jm_test_ctx     ctx;
+	struct pl_obj_layout **before;
+	struct pool_target    *tgt;
+	uint32_t              *fseqs;
+	uint32_t               tgt_ids[32];
+	uint32_t               shard_ids[32];
+	uint32_t               ver;
+	uint32_t               diff = 0;
+	uint32_t               i, o;
+
+	jtc_init(&ctx, domain_nr, 1, target_nr, oc, g_verbose);
+
+	/* rank 0 and rank 1 fail target by target, with interleaved fseqs, then rebuilt */
+	for (i = 0; i < target_nr; i++) {
+		jtc_set_status_on_target(&ctx, DOWN, i);
+		jtc_set_status_on_target(&ctx, DOWN, target_nr + i);
+	}
+	for (i = 0; i < 2 * target_nr; i++)
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+
+	D_ALLOC_ARRAY(fseqs, target_nr);
+	assert_non_null(fseqs);
+	for (i = 0; i < target_nr; i++)
+		fseqs[i] = jtc_find_target(&ctx, i)->ta_comp.co_fseq;
+
+	D_ALLOC_ARRAY(before, obj_nr);
+	assert_non_null(before);
+	for (o = 0; o < obj_nr; o++) {
+		daos_obj_id_t oid;
+
+		jtc_wb_gen_oid(&oid, o, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &before[o]));
+	}
+
+	/* reintegrate rank 0, then it is excluded again before the reintegration is done */
+	for (i = 0; i < target_nr; i++)
+		jtc_set_status_on_target(&ctx, UP, i);
+	for (i = 0; i < target_nr; i++)
+		jtc_set_status_on_target(&ctx, DOWN, i);
+
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+		assert_int_equal(tgt->ta_comp.co_fseq, fseqs[i]);
+	}
+
+	for (o = 0; o < obj_nr; o++) {
+		struct pl_obj_layout *layout;
+		struct daos_obj_md    md = {0};
+		daos_obj_id_t         oid;
+		int                   rc;
+
+		jtc_wb_gen_oid(&oid, o, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &layout));
+		assert_int_equal(jtc_layout_diff(before[o], layout), 0);
+		pl_obj_layout_free(layout);
+
+		assert_success(jtc_place_mode(&ctx, oid, DAOS_OO_RO, &layout));
+		assert_int_equal(jtc_layout_diff(before[o], layout), 0);
+		pl_obj_layout_free(layout);
+
+		/* the rebuild for the exclusion has nothing to do */
+		md.omd_id  = oid;
+		md.omd_ver = ctx.ver;
+		rc         = pl_obj_find_rebuild(ctx.pl_map, PLT_LAYOUT_VERSION, &md, NULL, ctx.ver,
+						 tgt_ids, shard_ids, ARRAY_SIZE(tgt_ids));
+		assert_int_equal(rc, 0);
+	}
+
+	/*
+	 * Sanity check of the scenario: with a new fseq for the excluded targets, as the
+	 * exclusion of a reintegrating target used to do, the layouts would change.
+	 */
+	ver = ctx.ver;
+	for (i = 0; i < target_nr; i++)
+		jtc_find_target(&ctx, i)->ta_comp.co_fseq = ver + 1 + i;
+	ctx.ver = ver + target_nr;
+	assert_success(pool_map_set_version(ctx.po_map, ctx.ver));
+	pl_map_update(ctx.pl_uuid, ctx.po_map, false, PL_TYPE_JUMP_MAP);
+	for (o = 0; o < obj_nr; o++) {
+		struct pl_obj_layout *layout;
+		daos_obj_id_t         oid;
+
+		jtc_wb_gen_oid(&oid, o, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &layout));
+		diff += jtc_layout_diff(before[o], layout);
+		pl_obj_layout_free(layout);
+	}
+	print_message("%u shards would be moved by a new fseq\n", diff);
+	assert_true(diff > 0);
+
+	for (o = 0; o < obj_nr; o++)
+		pl_obj_layout_free(before[o]);
+	D_FREE(before);
+	D_FREE(fseqs);
+	jtc_fini(&ctx);
+}
+
+static void
+exclude_reintegrating_target_keeps_layout(void **state)
+{
+	_exclude_reintegrating_target_keeps_layout(8, 4, OC_RP_3G2, 500);
+	_exclude_reintegrating_target_keeps_layout(10, 4, OC_EC_4P2G2, 500);
+}
+
+/*
+ * Excluding a draining target, it goes DOWN with a new co_fseq, the same as an UPIN target, and
+ * its data will be rebuilt from the other replicas. The drain is stale, and it can not be
+ * reverted to UPIN anymore.
+ */
+static void
+_exclude_draining_target(uint32_t domain_nr, uint32_t target_nr, daos_oclass_id_t oc,
+			 uint32_t obj_nr)
+{
+	struct jm_test_ctx  ctx;
+	struct pool_target *tgt;
+	struct pool_domain *dom;
+	uint32_t            tgt_ids[32];
+	uint32_t            shard_ids[32];
+	uint32_t           *fseqs;
+	uint32_t            drain_ver;
+	uint32_t            rebuild_nr = 0;
+	uint32_t            i, o;
+	int                 s;
+
+	jtc_init(&ctx, domain_nr, 1, target_nr, oc, g_verbose);
+
+	/* drain rank 0 */
+	jtc_update_targets(&ctx, MAP_DRAIN, 0, target_nr, false);
+	drain_ver = ctx.ver;
+	D_ALLOC_ARRAY(fseqs, target_nr);
+	assert_non_null(fseqs);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DRAIN);
+		assert_int_equal(jtc_tgt_changed_after(&ctx, i, drain_ver), 0);
+	}
+
+	/* rank 0 is excluded by SWIM during draining */
+	dom = pool_map_find_dom_by_rank(ctx.po_map, 0);
+	assert_non_null(dom);
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 0, target_nr, true);
+	assert_true(ctx.ver > drain_ver);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_DOWN);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+		/* a new failure */
+		assert_true(tgt->ta_comp.co_fseq > drain_ver);
+		assert_true(tgt->ta_comp.co_fseq <= ctx.ver);
+		fseqs[i] = tgt->ta_comp.co_fseq;
+		/* the drain is stale, but not the rebuild of the exclusion */
+		assert_true(jtc_tgt_changed_after(&ctx, i, drain_ver) > drain_ver);
+		assert_int_equal(jtc_tgt_changed_after(&ctx, i, ctx.ver), 0);
+	}
+
+	/* no shard is on the DOWN targets, and their data has to be rebuilt */
+	for (o = 0; o < obj_nr; o++) {
+		struct pl_obj_layout *layout;
+		struct daos_obj_md    md = {0};
+		daos_obj_id_t         oid;
+		int                   rc;
+
+		jtc_wb_gen_oid(&oid, o, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &layout));
+		for (s = 0; s < layout->ol_nr; s++) {
+			struct pl_obj_shard *shard = &layout->ol_shards[s];
+
+			assert_int_equal(shard->po_shard, s);
+			assert_true(shard->po_target >= target_nr ||
+				    shard->po_target == (uint32_t)-1);
+		}
+		pl_obj_layout_free(layout);
+
+		md.omd_id  = oid;
+		md.omd_ver = ctx.ver;
+		rc         = pl_obj_find_rebuild(ctx.pl_map, PLT_LAYOUT_VERSION, &md, NULL, ctx.ver,
+						 tgt_ids, shard_ids, ARRAY_SIZE(tgt_ids));
+		assert_true(rc >= 0);
+		rebuild_nr += rc;
+	}
+	assert_true(rebuild_nr > 0);
+
+	/* a failed drain can not revert the DOWN targets to UPIN */
+	jtc_update_targets(&ctx, MAP_REVERT_REBUILD, 0, target_nr, false);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+		assert_int_equal(tgt->ta_comp.co_fseq, fseqs[i]);
+	}
+
+	/* excluding them again is a no-op */
+	drain_ver = ctx.ver;
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 0, target_nr, true);
+	assert_int_equal(ctx.ver, drain_ver);
+
+	/* the rebuild of the exclusion finishes */
+	jtc_update_targets(&ctx, MAP_FINISH_REBUILD, 0, target_nr, true);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_DOWNOUT);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+		assert_int_equal(tgt->ta_comp.co_fseq, fseqs[i]);
+	}
+
+	D_FREE(fseqs);
+	jtc_fini(&ctx);
+}
+
+static void
+exclude_draining_target(void **state)
+{
+	struct jm_test_ctx  ctx;
+	struct pool_target *tgt;
+	uint32_t            drain_ver;
+
+	/* a single draining target excluded by dmg */
+	jtc_init(&ctx, 4, 1, 4, OC_RP_2G1, g_verbose);
+	jtc_update_targets(&ctx, MAP_DRAIN, 1, 1, false);
+	drain_ver = ctx.ver;
+	tgt       = jtc_find_target(&ctx, 1);
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 1, 1, false);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(tgt->ta_comp.co_fseq, ctx.ver);
+	assert_int_equal(jtc_tgt_changed_after(&ctx, 1, drain_ver), ctx.ver);
+	/* the rank is not changed by a target exclusion */
+	assert_int_equal(pool_map_find_dom_by_rank(ctx.po_map, 0)->do_comp.co_status,
+			 PO_COMP_ST_UPIN);
+	jtc_fini(&ctx);
+
+	_exclude_draining_target(8, 4, OC_RP_3G2, 500);
+	_exclude_draining_target(10, 4, OC_EC_4P2G2, 500);
+}
+
+/*
+ * A draining target is still readable and writable, so it is not a failure for the RF check.
+ * Once it fails (DRAIN->DOWN), it is a new failure since its new co_fseq. So is a DOWN->UP
+ * reintegration reverted back to DOWN.
+ */
+static void
+rf_verify_exclude_draining_target(void **state)
+{
+	struct jm_test_ctx  ctx;
+	struct pool_target *tgt;
+	uint32_t            drain_ver, down_ver;
+
+	jtc_init(&ctx, 4, 1, 4, OC_RP_2G1, g_verbose);
+	jtc_update_targets(&ctx, MAP_DRAIN, 1, 1, false);
+	drain_ver = ctx.ver;
+	assert_success(pool_map_rf_verify(ctx.po_map, drain_ver, DAOS_PROP_CO_REDUN_RANK, 0));
+
+	/* fails after the container has seen the drain, it is a new failure */
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 1, 1, false);
+	tgt = jtc_find_target(&ctx, 1);
+	assert_int_equal(tgt->ta_comp.co_fseq, ctx.ver);
+	assert_int_equal(pool_map_rf_verify(ctx.po_map, drain_ver, DAOS_PROP_CO_REDUN_RANK, 0),
+			 -DER_RF);
+	assert_success(pool_map_rf_verify(ctx.po_map, drain_ver, DAOS_PROP_CO_REDUN_RANK, 1));
+	/* but not once the container has seen the failure */
+	assert_success(pool_map_rf_verify(ctx.po_map, ctx.ver, DAOS_PROP_CO_REDUN_RANK, 0));
+	jtc_fini(&ctx);
+
+	/*
+	 * DOWN -> UP -> reverted to DOWN, it is a new failure, the data written to it while it was
+	 * UP is lost.
+	 */
+	jtc_init(&ctx, 4, 1, 4, OC_RP_2G1, g_verbose);
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 1, 1, false);
+	down_ver = ctx.ver;
+	assert_int_equal(pool_map_rf_verify(ctx.po_map, down_ver - 1, DAOS_PROP_CO_REDUN_RANK, 0),
+			 -DER_RF);
+	assert_success(pool_map_rf_verify(ctx.po_map, down_ver, DAOS_PROP_CO_REDUN_RANK, 0));
+
+	jtc_update_targets(&ctx, MAP_REINT, 1, 1, false);
+	jtc_update_targets(&ctx, MAP_REVERT_REBUILD, 1, 1, false);
+	tgt = jtc_find_target(&ctx, 1);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(tgt->ta_comp.co_fseq, ctx.ver);
+	assert_int_equal(tgt->ta_comp.co_out_ver, ctx.ver);
+	assert_int_equal(pool_map_rf_verify(ctx.po_map, down_ver, DAOS_PROP_CO_REDUN_RANK, 0),
+			 -DER_RF);
+	assert_success(pool_map_rf_verify(ctx.po_map, ctx.ver, DAOS_PROP_CO_REDUN_RANK, 0));
+	jtc_fini(&ctx);
+}
+
+/*
+ * The checker marks a target whose storage is lost by pool_map_comp_lost_status() and
+ * pool_map_comp_mark_lost(), they must end up the same as MAP_EXCLUDE: a DOWNOUT->UP target
+ * goes back to DOWNOUT with co_fseq kept, so the layouts are not changed, a DRAIN target goes
+ * DOWN with a new co_fseq. A NEW target is kept as NEW.
+ */
+static void
+chk_mark_lost_same_as_exclude(void **state)
+{
+	struct jm_test_ctx    ex, chk;
+	struct pool_target   *ex_tgt, *chk_tgt;
+	struct pool_component new_comp = {.co_status = PO_COMP_ST_NEW};
+	uint32_t              status, ver;
+	int                   i;
+	/* DOWNOUT->UP, DRAIN, UPIN, DOWN->UP targets */
+	const uint32_t        tgts[] = {0, 1, 2, 3};
+
+	jtc_init(&ex, 4, 1, 4, OC_RP_2G1, g_verbose);
+	jtc_init(&chk, 4, 1, 4, OC_RP_2G1, g_verbose);
+	for (i = 0; i < 2; i++) {
+		struct jm_test_ctx *ctx = i == 0 ? &ex : &chk;
+
+		jtc_set_status_on_target(ctx, DOWN, tgts[0]);
+		jtc_set_status_on_target(ctx, DOWNOUT, tgts[0]);
+		jtc_set_status_on_target(ctx, UP, tgts[0]);
+		jtc_update_targets(ctx, MAP_DRAIN, tgts[1], 1, false);
+		jtc_set_status_on_target(ctx, DOWN, tgts[3]);
+		jtc_update_targets(ctx, MAP_REINT, tgts[3], 1, false);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(tgts); i++) {
+		jtc_update_targets(&ex, MAP_EXCLUDE, tgts[i], 1, false);
+
+		chk_tgt = jtc_find_target(&chk, tgts[i]);
+		status  = pool_map_comp_lost_status(&chk_tgt->ta_comp);
+		pool_map_comp_mark_lost(chk.po_map, &chk_tgt->ta_comp, status);
+		ver = pool_map_get_version(chk.po_map);
+
+		ex_tgt = jtc_find_target(&ex, tgts[i]);
+		assert_int_equal(chk_tgt->ta_comp.co_status, ex_tgt->ta_comp.co_status);
+		/* the map versions differ, so a new co_fseq is the version of the change */
+		if (ex_tgt->ta_comp.co_fseq == ex.ver) {
+			assert_int_equal(chk_tgt->ta_comp.co_fseq, ver);
+		} else {
+			assert_int_equal(chk_tgt->ta_comp.co_fseq, ex_tgt->ta_comp.co_fseq);
+			assert_int_equal(chk_tgt->ta_comp.co_out_ver, ver);
+		}
+		assert_int_equal(chk_tgt->ta_comp.co_flags, ex_tgt->ta_comp.co_flags);
+
+		/* already lost, nothing changes */
+		assert_int_equal(pool_map_comp_lost_status(&chk_tgt->ta_comp),
+				 chk_tgt->ta_comp.co_status);
+		pool_map_comp_mark_lost(chk.po_map, &chk_tgt->ta_comp, chk_tgt->ta_comp.co_status);
+		assert_int_equal(pool_map_get_version(chk.po_map), ver);
+	}
+	assert_int_equal(jtc_find_target(&chk, tgts[0])->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+	assert_int_equal(jtc_find_target(&chk, tgts[1])->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(jtc_find_target(&chk, tgts[2])->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(jtc_find_target(&chk, tgts[3])->ta_comp.co_status, PO_COMP_ST_DOWN);
+
+	assert_int_equal(pool_map_comp_lost_status(&new_comp), PO_COMP_ST_NEW);
+
+	jtc_fini(&ex);
+	jtc_fini(&chk);
+}
+
+/* give the unplaced DOWN domains under @dom a new fseq, as a real failure does */
+static void
+jtc_dom_bump_unplaced_fseq(struct pool_domain *dom, uint32_t fseq)
+{
+	int i;
+
+	if (dom->do_comp.co_status == PO_COMP_ST_DOWN && pool_comp_is_unplaced(&dom->do_comp))
+		dom->do_comp.co_fseq = fseq;
+	for (i = 0; dom->do_children != NULL && i < dom->do_child_nr; i++)
+		jtc_dom_bump_unplaced_fseq(&dom->do_children[i], fseq);
+}
+
+/* extend the pool by one rank of @target_nr targets, return the id of its first target */
+static uint32_t
+jtc_extend_rank(struct jm_test_ctx *ctx, uint32_t target_nr)
+{
+	uint32_t first = ctx->domain_nr * target_nr;
+	uint32_t i;
+
+	assert_success(jtc_pool_map_extend(ctx, 1, 1, target_nr));
+	for (i = first; i < first + target_nr; i++)
+		jtc_set_status_on_target(ctx, EXTEND, i);
+	return first;
+}
+
+/*
+ * A target being extended (NEW->UP, co_fseq < co_ver) has never been a member of any layout,
+ * placement skips it. Excluding it, it goes DOWN with its co_fseq kept, so it is still skipped
+ * and the layouts of the existing objects are not changed, the data is still on the original
+ * targets. It is not a failure for the RF check either. A later reintegration of it is a new
+ * extension.
+ */
+static void
+_exclude_extending_rank(uint32_t domain_nr, uint32_t target_nr, daos_oclass_id_t oc,
+			uint32_t obj_nr)
+{
+	struct jm_test_ctx     ctx;
+	struct pl_obj_layout **before;
+	struct pool_target    *tgt;
+	struct pool_domain    *dom;
+	uint32_t               tgt_ids[32];
+	uint32_t               shard_ids[32];
+	uint32_t              *fseqs;
+	uint32_t               first, rank, dom_fseq, ext_ver, ver;
+	uint32_t               diff = 0;
+	uint32_t               i, o;
+
+	jtc_init(&ctx, domain_nr, 1, target_nr, oc, g_verbose);
+	D_ALLOC_ARRAY(before, obj_nr);
+	assert_non_null(before);
+	for (o = 0; o < obj_nr; o++) {
+		daos_obj_id_t oid;
+
+		jtc_wb_gen_oid(&oid, o, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &before[o]));
+	}
+
+	rank  = domain_nr;
+	first = jtc_extend_rank(&ctx, target_nr);
+	dom   = pool_map_find_dom_by_rank(ctx.po_map, rank);
+	assert_non_null(dom);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_UP);
+	assert_true(pool_comp_is_unplaced(&dom->do_comp));
+	dom_fseq = dom->do_comp.co_fseq;
+	ext_ver  = ctx.ver;
+	D_ALLOC_ARRAY(fseqs, target_nr);
+	assert_non_null(fseqs);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, first + i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_UP);
+		assert_true(pool_comp_is_unplaced(&tgt->ta_comp));
+		fseqs[i] = tgt->ta_comp.co_fseq;
+	}
+
+	/* the extending rank is excluded by SWIM */
+	jtc_update_targets(&ctx, MAP_EXCLUDE, first, target_nr, true);
+	assert_true(ctx.ver > ext_ver);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(dom->do_comp.co_fseq, dom_fseq);
+	assert_true(pool_comp_is_unplaced(&dom->do_comp));
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, first + i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+		assert_int_equal(tgt->ta_comp.co_fseq, fseqs[i]);
+		assert_in_range(tgt->ta_comp.co_out_ver, ext_ver + 1, ctx.ver);
+		assert_true(pool_comp_is_unplaced(&tgt->ta_comp));
+		/* the extension is stale, but not the rebuild of the exclusion */
+		assert_true(jtc_tgt_changed_after(&ctx, first + i, ext_ver) > ext_ver);
+		assert_int_equal(jtc_tgt_changed_after(&ctx, first + i, ctx.ver), 0);
+	}
+	/* not a failure for the RF check, it never held data */
+	assert_int_equal(pool_map_get_failed_cnt(ctx.po_map, PO_COMP_TP_RANK), 0);
+	assert_success(pool_map_rf_verify(ctx.po_map, ext_ver, DAOS_PROP_CO_REDUN_RANK, 0));
+	assert_success(pool_map_rf_verify(ctx.po_map, 1, DAOS_PROP_CO_REDUN_RANK, 0));
+
+	/* layouts are not changed, and the rebuild of the exclusion has nothing to do */
+	for (o = 0; o < obj_nr; o++) {
+		struct pl_obj_layout *layout;
+		struct daos_obj_md    md = {0};
+		daos_obj_id_t         oid;
+		int                   rc;
+
+		jtc_wb_gen_oid(&oid, o, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &layout));
+		assert_int_equal(jtc_layout_diff(before[o], layout), 0);
+		pl_obj_layout_free(layout);
+
+		assert_success(jtc_place_mode(&ctx, oid, DAOS_OO_RO, &layout));
+		assert_int_equal(jtc_layout_diff(before[o], layout), 0);
+		pl_obj_layout_free(layout);
+
+		md.omd_id  = oid;
+		md.omd_ver = ctx.ver;
+		rc         = pl_obj_find_rebuild(ctx.pl_map, PLT_LAYOUT_VERSION, &md, NULL, ctx.ver,
+						 tgt_ids, shard_ids, ARRAY_SIZE(tgt_ids));
+		assert_int_equal(rc, 0);
+	}
+
+	/* the extension is reverted, the excluded targets stay DOWN */
+	jtc_update_targets(&ctx, MAP_REVERT_REBUILD, first, target_nr, true);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, first + i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+		assert_int_equal(tgt->ta_comp.co_fseq, fseqs[i]);
+	}
+
+	/* the rebuild of the exclusion finishes */
+	jtc_update_targets(&ctx, MAP_FINISH_REBUILD, first, target_nr, true);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_DOWNOUT);
+	assert_int_equal(dom->do_comp.co_fseq, dom_fseq);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, first + i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+		assert_int_equal(tgt->ta_comp.co_fseq, fseqs[i]);
+		assert_true(pool_comp_is_unplaced(&tgt->ta_comp));
+		assert_false(pool_comp_is_failed_downout(&tgt->ta_comp));
+		assert_false(pool_comp_is_drain_downout(&tgt->ta_comp));
+	}
+	assert_success(pool_map_rf_verify(ctx.po_map, 1, DAOS_PROP_CO_REDUN_RANK, 0));
+
+	/* reintegrated, it is a new extension, skipped until it is UPIN */
+	jtc_update_targets(&ctx, MAP_REINT, first, target_nr, true);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_UP);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, first + i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_UP);
+		assert_true(pool_comp_is_unplaced(&tgt->ta_comp));
+		assert_false(pool_comp_is_downout2up(&tgt->ta_comp));
+	}
+	for (o = 0; o < obj_nr; o++) {
+		struct pl_obj_layout *layout;
+		daos_obj_id_t         oid;
+
+		jtc_wb_gen_oid(&oid, o, oc);
+		assert_success(jtc_place_mode(&ctx, oid, DAOS_OO_RO, &layout));
+		assert_int_equal(jtc_layout_diff(before[o], layout), 0);
+		pl_obj_layout_free(layout);
+	}
+
+	/* the reintegration fails, back to DOWNOUT, not NEW */
+	jtc_update_targets(&ctx, MAP_REVERT_REBUILD, first, target_nr, true);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_DOWNOUT);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, first + i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+		assert_int_equal(tgt->ta_comp.co_fseq, fseqs[i]);
+		assert_true(pool_comp_is_unplaced(&tgt->ta_comp));
+	}
+
+	/* excluded again during the reintegration, back to DOWN */
+	jtc_update_targets(&ctx, MAP_REINT, first, target_nr, true);
+	jtc_update_targets(&ctx, MAP_EXCLUDE, first, target_nr, true);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_DOWN);
+	for (i = 0; i < target_nr; i++) {
+		tgt = jtc_find_target(&ctx, first + i);
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+		assert_int_equal(tgt->ta_comp.co_fseq, fseqs[i]);
+	}
+	for (o = 0; o < obj_nr; o++) {
+		struct pl_obj_layout *layout;
+		daos_obj_id_t         oid;
+
+		jtc_wb_gen_oid(&oid, o, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &layout));
+		assert_int_equal(jtc_layout_diff(before[o], layout), 0);
+		pl_obj_layout_free(layout);
+	}
+
+	/*
+	 * Sanity check of the scenario: with a new fseq for the excluded targets, as the
+	 * exclusion of an extending target used to do, the layouts would change.
+	 */
+	ver = ctx.ver;
+	for (i = 0; i < target_nr; i++)
+		jtc_find_target(&ctx, first + i)->ta_comp.co_fseq = ver + 1 + i;
+	assert_int_equal(pool_map_find_domain(ctx.po_map, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &dom),
+			 1);
+	jtc_dom_bump_unplaced_fseq(dom, ver + 1);
+	ctx.ver = ver + target_nr;
+	assert_success(pool_map_set_version(ctx.po_map, ctx.ver));
+	pl_map_update(ctx.pl_uuid, ctx.po_map, false, PL_TYPE_JUMP_MAP);
+	for (o = 0; o < obj_nr; o++) {
+		struct pl_obj_layout *layout;
+		daos_obj_id_t         oid;
+
+		jtc_wb_gen_oid(&oid, o, oc);
+		assert_success(jtc_place_mode(&ctx, oid, 0, &layout));
+		diff += jtc_layout_diff(before[o], layout);
+		pl_obj_layout_free(layout);
+	}
+	print_message("%u shards would be moved by a new fseq\n", diff);
+	assert_true(diff > 0);
+
+	for (o = 0; o < obj_nr; o++)
+		pl_obj_layout_free(before[o]);
+	D_FREE(before);
+	D_FREE(fseqs);
+	jtc_fini(&ctx);
+}
+
+/* count the shards that a rebuild of version @ver migrates to targets [@first, @first + @nr) */
+static uint32_t
+jtc_rebuild_to_targets(struct jm_test_ctx *ctx, daos_oclass_id_t oc, uint32_t obj_nr, uint32_t ver,
+		       uint32_t first, uint32_t nr)
+{
+	uint32_t tgt_ids[32];
+	uint32_t shard_ids[32];
+	uint32_t cnt = 0;
+	uint32_t o;
+	int      i, rc;
+
+	for (o = 0; o < obj_nr; o++) {
+		struct daos_obj_md md = {0};
+
+		jtc_wb_gen_oid(&md.omd_id, o, oc);
+		md.omd_ver = ver;
+		rc = pl_obj_find_rebuild(ctx->pl_map, PLT_LAYOUT_VERSION, &md, NULL, ver, tgt_ids,
+					 shard_ids, ARRAY_SIZE(tgt_ids));
+		assert_true(rc >= 0);
+		for (i = 0; i < rc; i++)
+			if (tgt_ids[i] >= first && tgt_ids[i] < first + nr)
+				cnt++;
+	}
+	return cnt;
+}
+
+/*
+ * A rebuild task may migrate data to any UP target of the POST_REBUILD layouts, not only to the
+ * targets of the task. While a rank is being extended, another rank fails, the rebuild of the
+ * failure may migrate shards to the extending rank. If the extending rank is excluded then, it
+ * goes DOWN with its co_fseq kept and is skipped by placement, so the rebuild of its exclusion
+ * has nothing to do. The rebuild of the failure has to be detected as stale and retried with the
+ * new version, otherwise the shards migrated to the extending rank would be lost. The same for a
+ * DOWNOUT->UP reintegrating target reverted to DOWNOUT. A placed DOWN target is rebuilt by its
+ * own rebuild, so it does not make other rebuilds stale. A target drained or reintegrated after
+ * the rebuild version may drop the spare the rebuild is migrating data to from the write
+ * layouts, so it makes the rebuild stale too.
+ */
+static void
+dropped_target_stales_rebuild(void **state)
+{
+	struct jm_test_ctx         ctx;
+	struct pool_target_id      ids[4];
+	struct pool_target_id_list tgts      = {.pti_number = 4, .pti_ids = ids};
+	daos_oclass_id_t           oc        = OC_RP_3G2;
+	uint32_t                   domain_nr = 8, target_nr = 4, obj_nr = 2000;
+	uint32_t                   first, fail_ver, drop_ver            = 0, ver;
+	uint32_t                   i;
+
+	jtc_init(&ctx, domain_nr, 1, target_nr, oc, g_verbose);
+	first = jtc_extend_rank(&ctx, target_nr);
+
+	/* rank 0 fails during the extension, its rebuild migrates shards to the extending rank */
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 0, target_nr, true);
+	fail_ver = ctx.ver;
+	assert_true(jtc_rebuild_to_targets(&ctx, oc, obj_nr, fail_ver, first, target_nr) > 0);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, fail_ver), 0);
+	/* the extension itself happened after version 0 */
+	assert_true(pool_map_tgts_dropped_after(ctx.po_map, 0) > 0);
+
+	/* the extending rank is excluded */
+	jtc_update_targets(&ctx, MAP_EXCLUDE, first, target_nr, true);
+	for (i = 0; i < target_nr; i++) {
+		struct pool_target *tgt = jtc_find_target(&ctx, first + i);
+
+		assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+		assert_true(pool_comp_is_unplaced(&tgt->ta_comp));
+		drop_ver      = max(drop_ver, tgt->ta_comp.co_out_ver);
+		ids[i].pti_id = i;
+	}
+	assert_true(drop_ver > fail_ver);
+
+	/* none of the targets of the rebuild of rank 0 is changed, but the rebuild is stale */
+	assert_int_equal(pool_map_tgts_changed_after(ctx.po_map, &tgts, fail_ver), 0);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, fail_ver), drop_ver);
+	assert_int_equal(pool_map_rebuild_stale_ver(ctx.po_map, &tgts, fail_ver), drop_ver);
+	/* retried with the new version, it is not stale and does not migrate to the dropped rank */
+	assert_int_equal(pool_map_rebuild_stale_ver(ctx.po_map, &tgts, drop_ver), 0);
+	assert_int_equal(jtc_rebuild_to_targets(&ctx, oc, obj_nr, ctx.ver, first, target_nr), 0);
+	jtc_fini(&ctx);
+
+	/* a DOWNOUT->UP reintegrating target reverted to DOWNOUT by an exclusion */
+	jtc_init(&ctx, domain_nr, 1, target_nr, oc, g_verbose);
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 5, 1, false);
+	jtc_update_targets(&ctx, MAP_FINISH_REBUILD, 5, 1, false);
+	jtc_update_targets(&ctx, MAP_REINT, 5, 1, false);
+	ver = ctx.ver;
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), 0);
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 5, 1, false);
+	assert_int_equal(jtc_find_target(&ctx, 5)->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), ctx.ver);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ctx.ver), 0);
+
+	/* UPIN->DOWN is rebuilt by its own rebuild */
+	ver = ctx.ver;
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 9, 1, false);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), 0);
+
+	/* so is DRAIN->DOWN */
+	jtc_update_targets(&ctx, MAP_DRAIN, 13, 1, false);
+	ver = ctx.ver;
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 13, 1, false);
+	assert_int_equal(jtc_find_target(&ctx, 13)->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), 0);
+
+	/* and DOWN2UP->DOWN */
+	jtc_update_targets(&ctx, MAP_REINT, 9, 1, false);
+	ver = ctx.ver;
+	jtc_update_targets(&ctx, MAP_EXCLUDE, 9, 1, false);
+	assert_int_equal(jtc_find_target(&ctx, 9)->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), 0);
+
+	/* a drain after the version may drop the spare the rebuild is migrating data to */
+	ver = ctx.ver;
+	jtc_update_targets(&ctx, MAP_DRAIN, 17, 1, false);
+	assert_int_equal(jtc_find_target(&ctx, 17)->ta_comp.co_status, PO_COMP_ST_DRAIN);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), ctx.ver);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ctx.ver), 0);
+
+	/* so may a reintegration */
+	jtc_update_targets(&ctx, MAP_FINISH_REBUILD, 17, 1, false);
+	assert_int_equal(jtc_find_target(&ctx, 17)->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
+	ver = ctx.ver;
+	jtc_update_targets(&ctx, MAP_REINT, 17, 1, false);
+	assert_int_equal(jtc_find_target(&ctx, 17)->ta_comp.co_status, PO_COMP_ST_UP);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ver), ctx.ver);
+	assert_int_equal(pool_map_tgts_dropped_after(ctx.po_map, ctx.ver), 0);
+	jtc_fini(&ctx);
+}
+
+static void
+exclude_extending_target(void **state)
+{
+	struct jm_test_ctx    ex, chk;
+	struct pool_target   *tgt, *chk_tgt;
+	struct pool_domain   *dom;
+	uint32_t              first, fseq, ver;
+	uint32_t              status;
+	struct pool_component new_comp = {.co_status = PO_COMP_ST_NEW, .co_ver = 2};
+
+	/* a NEW target is not changed by an exclusion */
+	jtc_init(&ex, 4, 1, 4, OC_RP_2G1, g_verbose);
+	assert_success(jtc_pool_map_extend(&ex, 1, 1, 4));
+	ver = pool_map_get_version(ex.po_map);
+	jtc_update_targets(&ex, MAP_EXCLUDE, 16, 1, false);
+	assert_int_equal(pool_map_get_version(ex.po_map), ver);
+	assert_int_equal(jtc_find_target(&ex, 16)->ta_comp.co_status, PO_COMP_ST_NEW);
+	jtc_fini(&ex);
+
+	/* a single extending target excluded by dmg, the same by the checker */
+	jtc_init(&ex, 4, 1, 4, OC_RP_2G1, g_verbose);
+	jtc_init(&chk, 4, 1, 4, OC_RP_2G1, g_verbose);
+	first = jtc_extend_rank(&ex, 4);
+	assert_int_equal(jtc_extend_rank(&chk, 4), first);
+
+	tgt  = jtc_find_target(&ex, first + 1);
+	fseq = tgt->ta_comp.co_fseq;
+	jtc_update_targets(&ex, MAP_EXCLUDE, first + 1, 1, false);
+	assert_int_equal(tgt->ta_comp.co_status, PO_COMP_ST_DOWN);
+	assert_int_equal(tgt->ta_comp.co_fseq, fseq);
+	assert_int_equal(tgt->ta_comp.co_out_ver, ex.ver);
+	assert_int_equal(pool_map_get_failed_cnt(ex.po_map, PO_COMP_TP_RANK), 0);
+	assert_success(pool_map_rf_verify(ex.po_map, 1, DAOS_PROP_CO_REDUN_RANK, 0));
+	/* the rank is not changed by a target exclusion */
+	dom = pool_map_find_dom_by_rank(ex.po_map, 4);
+	assert_int_equal(dom->do_comp.co_status, PO_COMP_ST_UP);
+
+	chk_tgt = jtc_find_target(&chk, first + 1);
+	status  = pool_map_comp_lost_status(&chk_tgt->ta_comp);
+	assert_int_equal(status, PO_COMP_ST_DOWN);
+	pool_map_comp_mark_lost(chk.po_map, &chk_tgt->ta_comp, status);
+	assert_int_equal(chk_tgt->ta_comp.co_status, tgt->ta_comp.co_status);
+	assert_int_equal(chk_tgt->ta_comp.co_fseq, tgt->ta_comp.co_fseq);
+	assert_int_equal(chk_tgt->ta_comp.co_flags, tgt->ta_comp.co_flags);
+	assert_int_equal(chk_tgt->ta_comp.co_out_ver, pool_map_get_version(chk.po_map));
+	jtc_fini(&ex);
+	jtc_fini(&chk);
+
+	assert_true(pool_comp_is_unplaced(&new_comp));
+
+	_exclude_extending_rank(8, 4, OC_RP_3G2, 500);
+	_exclude_extending_rank(10, 4, OC_EC_4P2G2, 500);
+}
+
 /*
  * ------------------------------------------------
  * End Test Cases
@@ -3012,8 +4006,8 @@ creation_downout_classifier(void **state)
 
 	/*
 	 * Baseline reint failure round-trip: MAP_REVERT_REBUILD's baseline
-	 * branch restores co_in_ver = co_ver and leaves co_fseq alone, so the
-	 * baseline classifier is still true after a failed reint attempt.
+	 * branch leaves co_fseq alone, so the baseline classifier is still true
+	 * after a failed reint attempt.
 	 */
 	memset(&comp, 0, sizeof(comp));
 	comp.co_status = PO_COMP_ST_DOWNOUT;
@@ -3101,12 +4095,12 @@ revert_rebuild_three_way(void **state)
 	assert_int_equal(tgt0->ta_comp.co_in_ver, 0);
 
 	/*
-	 * tgt1: baseline reint revert -> DOWNOUT, co_in_ver restored to
-	 * co_ver so the (fseq == co_ver == co_in_ver) baseline invariant is
-	 * intact. co_fseq must be untouched to preserve the classifier.
+	 * tgt1: baseline reint revert -> DOWNOUT, co_out_ver records the
+	 * revert version, see pool_map_tgts_dropped_after(). co_fseq must be
+	 * untouched to preserve the classifier.
 	 */
 	assert_int_equal(tgt1->ta_comp.co_status, PO_COMP_ST_DOWNOUT);
-	assert_int_equal(tgt1->ta_comp.co_in_ver, tgt1->ta_comp.co_ver);
+	assert_true(tgt1->ta_comp.co_out_ver > tgt1->ta_comp.co_ver);
 	assert_int_equal(tgt1->ta_comp.co_fseq, tgt1->ta_comp.co_ver);
 	assert_true(pool_comp_is_creation_downout(&tgt1->ta_comp));
 	assert_false(pool_comp_is_failed_downout(&tgt1->ta_comp));
@@ -4045,6 +5039,7 @@ basic_down2up_test(void **state)
 
 #define WIP(dsc, test) { "WIP PLACEMENT "STR(__COUNTER__)" ("#test"): " dsc, \
 			  test, placement_test_setup, placement_test_teardown }
+
 #define T(dsc, test) { "PLACEMENT "STR(__COUNTER__)" ("#test"): " dsc, test, \
 			  placement_test_setup, placement_test_teardown }
 
@@ -4142,6 +5137,14 @@ static const struct CMUnitTest tests[] = {
       extension_preserves_read_sources),
     T("no hidden peer source", no_hidden_peer_source),
     T("relocation peer allocation failure", relocation_peer_alloc_failure),
+    T("exclude reintegrating target keeps fseq", exclude_reintegrating_target_keeps_fseq),
+    T("exclude reintegrating creation-time DOWNOUT target", exclude_reintegrating_creation_downout),
+    T("exclude reintegrating target keeps layout", exclude_reintegrating_target_keeps_layout),
+    T("exclude draining target", exclude_draining_target),
+    T("RF check of excluded draining target", rf_verify_exclude_draining_target),
+    T("checker marks lost targets the same as exclude", chk_mark_lost_same_as_exclude),
+    T("exclude extending target", exclude_extending_target),
+    T("dropped target stales rebuild", dropped_target_stales_rebuild),
 };
 
 int
