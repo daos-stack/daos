@@ -14,8 +14,6 @@
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
-#include "../../placement/tests/place_obj_common.h"
-
 /* Tests relying on DAOS fault injection cannot run on builds that compile it out (release) */
 #if FAULT_INJECTION
 #define FAULT_INJECTION_REQUIRED()                                                                 \
@@ -1170,6 +1168,7 @@ pool_flags_tests(void **state)
 	assert_success(dv_pool_close(ctx.dc_poh));
 }
 
+/** Number of hexadecimal characters of a sha256 digest. */
 #define SHA256_DIGEST_LEN 64
 
 struct file_state {
@@ -1184,6 +1183,10 @@ struct file_state {
  * Use sha256sum utility to get the sha256 digest of the file.
  *
  * \note sha256sum was used to avoid introducing libcrypto dependency.
+ *
+ * \param[in]	file	Path of the file to get the digest of.
+ * \param[out]	digest	Hexadecimal digest of the file: exactly SHA256_DIGEST_LEN characters,
+ *			without a terminating null byte.
  */
 static void
 sha256sum(const char *file, char digest[SHA256_DIGEST_LEN])
@@ -1195,7 +1198,7 @@ sha256sum(const char *file, char digest[SHA256_DIGEST_LEN])
 	assert_non_null(fp);
 
 	/** sha256sum prints: <64 hex chars>  <filename> */
-	assert_int_equal(fscanf(fp, "%" STR(SHA256_DIGEST_LEN) "s", digest), 1);
+	assert_int_equal(fread(digest, 1, SHA256_DIGEST_LEN, fp), SHA256_DIGEST_LEN);
 
 	pclose(fp);
 }
