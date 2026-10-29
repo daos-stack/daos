@@ -40,6 +40,11 @@ int
 heap_check(void *heap_start, uint64_t heap_size);
 int
 heap_get_max_nemb(struct palloc_heap *heap);
+void
+heap_get_mb_limits_v2(struct palloc_heap *heap, uint32_t *nemb_max, uint32_t *emb_max,
+		      uint32_t *soe_rsrv);
+void
+heap_get_soemb_ids_v2(struct palloc_heap *heap, uint32_t *ids, uint32_t max_ids, uint32_t *count);
 int
 heap_create_alloc_class_buckets(struct palloc_heap *heap, struct alloc_class *c);
 int
@@ -61,7 +66,7 @@ heap_soemb_active_iter_init(struct palloc_heap *heap);
 uint32_t
 heap_soemb_active_get(struct palloc_heap *heap);
 void
-heap_soemb_active_update(struct palloc_heap *heap);
+heap_soemb_active_set(struct palloc_heap *heap);
 int
 heap_ensure_zone0_initialized(struct palloc_heap *heap);
 int
@@ -152,6 +157,8 @@ struct heap_zone_limits {
 	unsigned nzones_cache;
 	unsigned nzones_ne_max;
 	unsigned nzones_e_max;
+	unsigned nzones_soe_rsrv;
+	bool     dkey_pinning;
 };
 
 uint32_t

@@ -653,6 +653,81 @@ umempobj_get_mbusage(struct umem_pool *ph_p, uint32_t mb_id, daos_size_t *curr_a
 	return rc;
 }
 
+/** Obtain the memory bucket zone limits of the pool: the max number of
+ *  non-evictable and evictable memory buckets and the reserved SOEMB count.
+ *
+ *  \param	ph_p[IN]		Pointer to the persistent object.
+ *  \param	nemb_max[IN|OUT]	Max non-evictable memory buckets.
+ *  \param	emb_max[IN|OUT]		Max usable evictable memory buckets
+ *					(excludes the reserved SOEMBs).
+ *  \param	soe_rsrv[IN|OUT]	Reserved SOEMB count.
+ *
+ *  \return	zero on success and non-zero on failure.
+ */
+int
+umempobj_get_mb_limits(struct umem_pool *ph_p, uint32_t *nemb_max, uint32_t *emb_max,
+		       uint32_t *soe_rsrv)
+{
+	struct dav_heap_mb_limits lim;
+	int                       rc = 0;
+
+	switch (ph_p->up_store.store_type) {
+	case DAOS_MD_PMEM:
+	case DAOS_MD_BMEM:
+	case DAOS_MD_ADMEM:
+		rc = -DER_INVAL;
+		break;
+	case DAOS_MD_BMEM_V2:
+		rc = dav_get_heap_mb_limits_v2((dav_obj_t *)ph_p->up_priv, &lim);
+		if (rc == 0) {
+			*nemb_max = lim.dhml_nemb_max;
+			*emb_max  = lim.dhml_emb_max;
+			*soe_rsrv = lim.dhml_soe_rsrv;
+		} else
+			rc = daos_errno2der(errno);
+		break;
+	default:
+		D_ASSERTF(0, "bad daos_md_backend %d\n", ph_p->up_store.store_type);
+		break;
+	}
+
+	return rc;
+}
+
+/** Obtain the mb ids of the evictable memory buckets currently reserved as
+ *  active spill-over evictable buckets (SOEMBs).
+ *
+ *  \param	ph_p[IN]	Pointer to the persistent object.
+ *  \param	ids[OUT]	Array to receive the SOEMB ids.
+ *  \param	max_ids[IN]	Capacity of the ids array.
+ *  \param	count[OUT]	Number of ids written.
+ *
+ *  \return	zero on success and non-zero on failure.
+ */
+int
+umempobj_get_soemb_ids(struct umem_pool *ph_p, uint32_t *ids, uint32_t max_ids, uint32_t *count)
+{
+	int rc = 0;
+
+	switch (ph_p->up_store.store_type) {
+	case DAOS_MD_PMEM:
+	case DAOS_MD_BMEM:
+	case DAOS_MD_ADMEM:
+		rc = -DER_INVAL;
+		break;
+	case DAOS_MD_BMEM_V2:
+		rc = dav_get_soemb_ids_v2((dav_obj_t *)ph_p->up_priv, ids, max_ids, count);
+		if (rc)
+			rc = daos_errno2der(errno);
+		break;
+	default:
+		D_ASSERTF(0, "bad daos_md_backend %d\n", ph_p->up_store.store_type);
+		break;
+	}
+
+	return rc;
+}
+
 /** Force GC within the heap to optimize umem_cache usage. This is only
  *  with DAV v2 allocator.
  *

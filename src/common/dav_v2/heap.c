@@ -69,7 +69,7 @@ struct mbrt {
 	struct recycler      *recyclers[MAX_ALLOCATION_CLASSES];
 	bool                  laf[MAX_ALLOCATION_CLASSES]; /* last allocation failed? */
 	bool                  laf_updated;
-	bool                  is_global_mbrt;
+	bool                           is_soe_mb;
 	bool                  is_evictable;
 };
 
@@ -97,12 +97,26 @@ struct mbrt_qbs {
 };
 
 #define SOEMB_ACTIVE_CNT 3
+/* Extra cache page kept free so a demoted SOEMB can be replaced without
+ * stealing zone0's non-evictable page.
+ */
+#define SOEMB_REPLACE_RSRV     1
+/* Evictable working pages the cache must host at once (object MB + dkey MB)
+ * for dkey-based bucket pinning to be enabled.
+ */
+#define UMEM_CACHE_MIN_EV_DKEY 2
+
+struct soemb_slot {
+	struct mbrt            *mb;
+	struct umem_pin_handle *pin;
+};
 
 struct soemb_rt {
-	struct mbrt    *svec[SOEMB_ACTIVE_CNT];
-	int             cur_idx;
-	int             far_idx;
-	struct mbrt_qbs qbs;
+	struct soemb_slot svec[SOEMB_ACTIVE_CNT];
+	int               cur_idx;
+	bool              demote_pending;
+	unsigned          promote_waiters;
+	void             *promote_wq;
 };
 
 struct heap_rt {
@@ -113,6 +127,8 @@ struct heap_rt {
 	unsigned                       nzones;
 	unsigned                       nzones_e;
 	unsigned                       nzones_ne;
+	unsigned                       nzones_soe_rsrv;
+	bool                           dkey_pinning;
 	unsigned                       zones_exhausted;
 	unsigned                       zones_exhausted_e;
 	unsigned                       zones_exhausted_ne;
@@ -131,7 +147,6 @@ struct heap_rt {
 	struct mbrt                   *active_evictable_mb;
 	struct mbrt_qbs                emb_qbs;
 	struct soemb_rt                smbrt;
-	unsigned int                   soemb_cnt;
 };
 
 static void
@@ -423,30 +438,34 @@ mbrt_qbs_getmb(struct mbrt_qbs *qb, int force)
 	return mb;
 }
 
-static struct mbrt *
-mbrt_qbs_getmb_ue(struct mbrt_qbs *qb)
+static int
+soemb_init(struct soemb_rt *smbrt, struct umem_store *store)
 {
-	struct mbrt *mb = NULL;
-	if ((mb = TAILQ_FIRST(&qb->mb_ue)) != NULL) {
-		TAILQ_REMOVE(&qb->mb_ue, mb, mb_link);
-		mb->qptr = NULL;
+	memset(smbrt->svec, 0, sizeof(smbrt->svec));
+	smbrt->cur_idx         = 0;
+	smbrt->demote_pending  = false;
+	smbrt->promote_waiters = 0;
+	smbrt->promote_wq      = NULL;
+	return store->stor_ops->so_waitqueue_create(&smbrt->promote_wq);
+}
+
+static void
+soemb_fini(struct soemb_rt *smbrt, struct umem_store *store)
+{
+	int i;
+
+	for (i = 0; i < SOEMB_ACTIVE_CNT; i++) {
+		if (smbrt->svec[i].mb == NULL)
+			continue;
+		umem_cache_unpin(store, smbrt->svec[i].pin);
+		smbrt->svec[i].mb  = NULL;
+		smbrt->svec[i].pin = NULL;
 	}
-	return mb;
-}
 
-static void
-soemb_init(struct soemb_rt *smbrt)
-{
-	memset(smbrt->svec, 0, sizeof(struct mbrt *) * SOEMB_ACTIVE_CNT);
-	mbrt_qbs_init(&smbrt->qbs);
-	smbrt->cur_idx = 0;
-	smbrt->far_idx = 0;
-}
-
-static void
-soemb_fini(struct soemb_rt *smbrt)
-{
-	mbrt_qbs_fini(&smbrt->qbs);
+	D_ASSERT(smbrt->promote_waiters == 0);
+	if (smbrt->promote_wq != NULL)
+		store->stor_ops->so_waitqueue_destroy(smbrt->promote_wq);
+	smbrt->promote_wq = NULL;
 }
 
 static void
@@ -635,7 +654,6 @@ heap_mbrt_init(struct palloc_heap *heap)
 	rt->mb_create_wq        = NULL;
 	rt->mb_pressure         = 0;
 	rt->empty_nemb_cnt      = 0;
-	rt->soemb_cnt           = 0;
 	rt->empty_nemb_gcth     = HEAP_NEMB_EMPTY_THRESHOLD;
 
 	d_getenv_uint("DAOS_NEMB_EMPTY_RECYCLE_THRESHOLD", &rt->empty_nemb_gcth);
@@ -748,14 +766,12 @@ heap_mbrt_setmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t usage
 		return;
 	}
 
-	if (!heap_mbrt_ismb_evictable(heap, zone_id)) {
-		mbrt_qbs_insertmb(&heap->rt->smbrt.qbs, mb);
+	if (!heap_mbrt_ismb_evictable(heap, zone_id))
 		return;
-	}
 
 	mb->space_usage = usage;
 
-	if (heap->rt->active_evictable_mb == mb)
+	if (heap->rt->active_evictable_mb == mb || mb->is_soe_mb)
 		return;
 
 	if (mb->qptr)
@@ -803,7 +819,7 @@ heap_mbrt_incrmb_usage(struct palloc_heap *heap, uint32_t zone_id, int size)
 
 	mb->space_usage += size;
 
-	if (heap->rt->active_evictable_mb == mb)
+	if (heap->rt->active_evictable_mb == mb || mb->is_soe_mb)
 		return;
 
 	if (heap_mbrt_ismb_evictable(heap, zone_id)) {
@@ -812,8 +828,7 @@ heap_mbrt_incrmb_usage(struct palloc_heap *heap, uint32_t zone_id, int size)
 			heap_zinfo_set_usage(heap, zone_id, hint);
 		if (hint <= MB_U30_HINT)
 			heap->rt->mb_pressure = 0;
-	} else
-		hint = mbrt_qbs_update_mb(&heap->rt->smbrt.qbs, mb);
+	}
 }
 
 static int
@@ -879,83 +894,38 @@ heap_soemb_active_iter_init(struct palloc_heap *heap)
 	heap->rt->smbrt.cur_idx = 0;
 }
 
-static int
-heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id);
-
-static struct mbrt *
-heap_soemb_passive_get(struct palloc_heap *heap)
-{
-	struct soemb_rt *smbrt = &heap->rt->smbrt;
-	struct mbrt     *mb    = NULL;
-	int              ret;
-	uint32_t         mb_id;
-
-	mb = mbrt_qbs_getmb(&smbrt->qbs, 0);
-	if (mb)
-		return mb;
-
-	ret = heap_create_soe_mb(heap, &mb_id);
-	if (ret == 0)
-		return heap_mbrt_get_mb(heap, mb_id);
-
-	mb = mbrt_qbs_getmb(&smbrt->qbs, 1);
-	if (mb)
-		return mb;
-
-	return 0;
-}
-
 uint32_t
 heap_soemb_active_get(struct palloc_heap *heap)
 {
 	struct soemb_rt *smbrt = &heap->rt->smbrt;
-	struct mbrt     *mb    = NULL;
+	struct mbrt     *mb;
 
 	if (heap->rt->nzones_e == 0)
 		return 0;
 
-	if (smbrt->cur_idx > smbrt->far_idx)
-		smbrt->far_idx = smbrt->cur_idx;
-
-	if (smbrt->cur_idx < SOEMB_ACTIVE_CNT) {
-		mb = smbrt->svec[smbrt->cur_idx];
-		if (mb == NULL) {
-			mb = heap_soemb_passive_get(heap);
-			if (mb == NULL)
-				return 0;
-			smbrt->svec[smbrt->cur_idx] = mb;
-		}
-		if (mb) {
-			smbrt->cur_idx++;
-			return mb->mb_id;
-		}
+	if (smbrt->cur_idx >= heap->rt->nzones_soe_rsrv) {
+		/* Active SOEMBs are exhausted? Trigger SOEMB demote. */
+		if (smbrt->cur_idx)
+			smbrt->demote_pending = true;
+		return 0;
 	}
-	return 0;
-}
 
-void
-heap_soemb_active_update(struct palloc_heap *heap)
-{
-	int              i;
-	struct mbrt     *mb    = NULL;
-	struct soemb_rt *smbrt = &heap->rt->smbrt;
-
-	if (heap->rt->nzones_e == 0)
-		return;
-
-	if (smbrt->far_idx > 1) {
-		mb = smbrt->svec[0];
-		if (mb)
-			mbrt_qbs_insertmb(&smbrt->qbs, mb);
-
-		for (i = 1; i < SOEMB_ACTIVE_CNT; i++) {
-			smbrt->svec[i - 1] = smbrt->svec[i];
-		}
-
-		smbrt->svec[SOEMB_ACTIVE_CNT - 1] = NULL;
-		smbrt->far_idx                    = 0;
+	mb = smbrt->svec[smbrt->cur_idx].mb;
+	if (mb == NULL) {
+		smbrt->demote_pending = true;
+		return 0;
 	}
-	smbrt->cur_idx = 0;
+
+	/*
+	 * Spilling into the last reserved SOEMB (an earlier SOEMBs are
+	 * already full) flags the oldest for demotion.
+	 */
+	if (smbrt->cur_idx >= 1 && smbrt->cur_idx + 1 == heap->rt->nzones_soe_rsrv)
+		smbrt->demote_pending = true;
+
+	smbrt->cur_idx++;
+
+	return mb->mb_id;
 }
 
 void
@@ -1459,10 +1429,6 @@ heap_mark_zone_unused(struct palloc_heap *heap, uint32_t zone_id)
 
 	D_ASSERT(is_evictable == false);
 
-	if (heap_mbrt_ismb_localrt(heap, zone_id)) {
-		heap->rt->soemb_cnt--;
-		VALGRIND_DO_DESTROY_MEMPOOL_COND(ZID_TO_ZONE(&heap->layout_info, zone_id));
-	}
 	heap_mark_zone_unused_transient(heap, zone_id);
 	rg.cr_off = GET_ZONE_OFFSET(zone_id);
 	rg.cr_size =
@@ -1985,8 +1951,9 @@ heap_cleanup(struct palloc_heap *heap)
 		}
 	}
 #endif
+	/* unpin active SOEMBs before heap_mbrt_fini() frees rt->mbs */
+	soemb_fini(&heap->rt->smbrt, heap->layout_info.store);
 	heap_mbrt_fini(heap);
-	soemb_fini(&heap->rt->smbrt);
 
 	D_FREE(rt);
 	heap->rt = NULL;
@@ -2144,6 +2111,8 @@ heap_boot(struct palloc_heap *heap, void *mmap_base, uint64_t heap_size, uint64_
 	h->nzones             = hzl.nzones_heap;
 	h->nzones_ne          = hzl.nzones_ne_max;
 	h->nzones_e           = hzl.nzones_e_max;
+	h->nzones_soe_rsrv    = hzl.nzones_soe_rsrv;
+	h->dkey_pinning       = hzl.dkey_pinning;
 	h->zones_exhausted    = 0;
 	h->zones_exhausted_e  = 0;
 	h->zones_exhausted_ne = 0;
@@ -2154,8 +2123,6 @@ heap_boot(struct palloc_heap *heap, void *mmap_base, uint64_t heap_size, uint64_
 	h->nlocks = On_valgrind ? MAX_RUN_LOCKS_VG : MAX_RUN_LOCKS;
 	for (unsigned i = 0; i < h->nlocks; ++i)
 		util_mutex_init(&h->run_locks[i]);
-
-	soemb_init(&h->smbrt);
 
 	heap->rt = h;
 
@@ -2172,8 +2139,16 @@ heap_boot(struct palloc_heap *heap, void *mmap_base, uint64_t heap_size, uint64_
 	if (err)
 		goto error_mbrt_init;
 
+	err = soemb_init(&h->smbrt, p_ops->umem_store);
+	if (err) {
+		err = daos_der2errno(err);
+		goto error_soembrt_init;
+	}
+
 	return 0;
 
+error_soembrt_init:
+	heap_mbrt_fini(heap);
 error_mbrt_init:
 	if (h->alloc_classes_default)
 		alloc_class_collection_delete(h->alloc_classes_default);
@@ -2206,6 +2181,32 @@ int
 heap_get_max_nemb(struct palloc_heap *heap)
 {
 	return heap->rt->nzones_ne;
+}
+
+void
+heap_get_mb_limits_v2(struct palloc_heap *heap, uint32_t *nemb_max, uint32_t *emb_max,
+		      uint32_t *soe_rsrv)
+{
+	*nemb_max = heap->rt->nzones_ne;
+	/* Report the evictable buckets usable by callers, i.e. excluding the
+	 * ones reserved as active spill-over evictable buckets (SOEMBs).
+	 */
+	*emb_max  = heap->rt->nzones_e - heap->rt->nzones_soe_rsrv;
+	*soe_rsrv = heap->rt->nzones_soe_rsrv;
+}
+
+void
+heap_get_soemb_ids_v2(struct palloc_heap *heap, uint32_t *ids, uint32_t max_ids, uint32_t *count)
+{
+	struct soemb_rt *smbrt = &heap->rt->smbrt;
+	uint32_t         n     = 0;
+	int              i;
+
+	for (i = 0; i < heap->rt->nzones_soe_rsrv && n < max_ids; i++) {
+		if (smbrt->svec[i].mb != NULL)
+			ids[n++] = smbrt->svec[i].mb->mb_id;
+	}
+	*count = n;
 }
 
 /*
@@ -2252,8 +2253,6 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	struct umem_pin_handle *pin_handle = NULL;
 	struct umem_store      *store      = heap->layout_info.store;
 	struct mbrt            *mb;
-
-	D_ASSERT(heap->rt->active_evictable_mb == NULL);
 
 	if (heap->rt->zones_exhausted_e >= heap->rt->nzones_e)
 		return -1;
@@ -2353,91 +2352,40 @@ out:
 	return rc;
 }
 
-static int
-heap_create_soe_mb(struct palloc_heap *heap, uint32_t *mb_id)
+/*
+ * heap_evictable_mb_pick -- (internal) obtain an evictable memory bucket
+ *	runtime, either from the evictable MB pool or by creating a new one.
+ *	Shared core used by both the active evictable MB selection and the
+ *	active SOEMB promotion. May return NULL under memory pressure.
+ */
+static struct mbrt *
+heap_evictable_mb_pick(struct palloc_heap *heap)
 {
-	uint32_t                zone_id;
-	struct umem_cache_range rg = {0};
-	int                     rc;
-	struct zone            *z;
-	struct mbrt            *mb;
+	struct mbrt *mb;
+	uint32_t     mb_id = 0;
+	int          ret;
 
-	if (heap->rt->zones_exhausted_ne >= heap->rt->nzones_ne)
-		return -1;
+retry:
+	mb = mbrt_qbs_getmb(&heap->rt->emb_qbs, 0);
+	if (mb)
+		return mb;
 
-	rc = heap_get_next_unused_zone(heap, &zone_id);
-	if (rc) {
-		D_ERROR("Failed to obtain free zone for evictable mb");
-		rc    = -1;
-		errno = ENOMEM;
-		goto out;
+	ret = heap_create_evictable_mb(heap, &mb_id);
+	if (ret >= 0) {
+		if (ret)
+			goto retry;
+		return heap_mbrt_get_mb(heap, mb_id);
 	}
 
-	mb = heap_mbrt_setup_mb(heap, zone_id);
-	if (mb == NULL) {
-		ERR("Failed to setup mbrt for zone %u\n", zone_id);
-		rc    = -1;
-		errno = ENOMEM;
-		goto out;
-	}
-
-	heap_mark_zone_used_transient(heap, mb, zone_id, false);
-
-	/* Create a umem cache map for the new zone */
-	rg.cr_off = GET_ZONE_OFFSET(zone_id);
-	rg.cr_size =
-	    ((heap->size - rg.cr_off) > ZONE_MAX_SIZE) ? ZONE_MAX_SIZE : heap->size - rg.cr_off;
-
-	rc = umem_cache_map(heap->layout_info.store, &rg, 1);
-	if (rc != 0) {
-		ERR("Failed to map zone %u to umem cache\n", zone_id);
-		errno = daos_der2errno(rc);
-		goto error;
-	}
-
-	D_DEBUG(DB_TRACE, "Creating evictable zone %d\n", zone_id);
-
-	z = ZID_TO_ZONE(&heap->layout_info, zone_id);
-	VALGRIND_DO_CREATE_MEMPOOL(z, 0, 0);
-	VALGRIND_DO_MAKE_MEM_UNDEFINED(z, rg.cr_size);
-	if (rg.cr_size != ZONE_MAX_SIZE)
-		VALGRIND_DO_MAKE_MEM_NOACCESS(z + rg.cr_size, (ZONE_MAX_SIZE - rg.cr_size));
-
-	memset(z, 0, rg.cr_size);
-
-	/* ignore zone and chunk headers */
-	VALGRIND_ADD_TO_GLOBAL_TX_IGNORE(z, sizeof(z->header) + sizeof(z->chunk_headers));
-
-	heap_zone_init(heap, zone_id, 0, ZONE_SOE_MB);
-	rc = heap_mbrt_mb_reclaim_garbage(heap, zone_id);
-	if (rc) {
-		ERR("Failed to initialize evictable zone %u", zone_id);
-		goto error;
-	}
-	heap_mark_zone_used_persist(heap, zone_id);
-
-	*mb_id = zone_id;
-	rc     = 0;
-	heap_incr_empty_nemb_cnt(heap);
-	heap->rt->soemb_cnt++;
-	goto out;
-
-error:
-	heap_mark_zone_unused_transient(heap, zone_id);
-	heap_mbrt_cleanup_mb(mb);
-	rc = -1;
-
-out:
-	return rc;
+	heap->rt->mb_pressure = 1;
+	return mbrt_qbs_getmb(&heap->rt->emb_qbs, 1);
 }
 
 int
 heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 {
-	struct mbrt       *mb;
-	int                ret;
+	struct mbrt *mb;
 
-retry:
 	if (heap->rt->active_evictable_mb != NULL) {
 		if ((heap->rt->mb_pressure) ||
 		    (heap->rt->active_evictable_mb->space_usage <= MB_U75)) {
@@ -2450,35 +2398,110 @@ retry:
 	}
 	heap->rt->mb_pressure = 0;
 
-	mb = mbrt_qbs_getmb(&heap->rt->emb_qbs, 0);
-	if (mb)
-		goto out;
-
-	if ((ret = heap_create_evictable_mb(heap, mb_id)) >= 0) {
-		if (ret)
-			goto retry;
-		mb = heap_mbrt_get_mb(heap, *mb_id);
-		D_ASSERT(mb != NULL);
-		if (heap->rt->active_evictable_mb) {
-			mbrt_qbs_insertmb(&heap->rt->emb_qbs, mb);
-			*mb_id   = heap->rt->active_evictable_mb->mb_id;
-			return 0;
-		}
-		goto out;
-	}
-	mb = mbrt_qbs_getmb(&heap->rt->emb_qbs, 1);
-
-	heap->rt->mb_pressure = 1;
-
+	mb = heap_evictable_mb_pick(heap);
 	if (mb == NULL) {
-		D_ERROR("Failed to get an evictable MB");
+		D_ERROR("failed to get an active evictable MB");
 		*mb_id = 0;
 		return 0;
 	}
-out:
+
+	/*
+	 * heap_evictable_mb_pick() may have yielded while creating a new MB,
+	 * during which another ULT could have installed the active evictable
+	 * MB. If so, return the freshly obtained MB to the pool and reuse the
+	 * active one.
+	 */
+	if (heap->rt->active_evictable_mb != NULL) {
+		mbrt_qbs_insertmb(&heap->rt->emb_qbs, mb);
+		*mb_id = heap->rt->active_evictable_mb->mb_id;
+		return 0;
+	}
+
 	heap->rt->active_evictable_mb = mb;
 	*mb_id                        = mb->mb_id;
 	return 0;
+}
+
+/*
+ * heap_soemb_active_set -- at transaction begin, first demote the oldest active
+ *	SOEMB if the previous transaction flagged it, then (re)populate the active
+ *	SOEMB list with pinned evictable memory buckets. The work is serialized
+ *	across ULTs via a wait queue so that only one ULT performs it at a time
+ *	while the others wait for it to complete.
+ */
+void
+heap_soemb_active_set(struct palloc_heap *heap)
+{
+	struct soemb_rt        *smbrt = &heap->rt->smbrt;
+	struct umem_store      *store = heap->layout_info.store;
+	struct umem_cache_range rg    = {0};
+	struct umem_pin_handle *pin;
+	struct mbrt            *mb;
+	int                     i, rc;
+
+	/* No SOEMB reserved (e.g. small cache): nothing to promote or demote. */
+	if (heap->rt->nzones_e == 0 || heap->rt->nzones_soe_rsrv == 0)
+		return;
+
+	smbrt->promote_waiters++;
+	if (smbrt->promote_waiters > 1) {
+		D_ASSERT(store->stor_ops->so_waitqueue_wait != NULL);
+		store->stor_ops->so_waitqueue_wait(smbrt->promote_wq, false);
+		goto out;
+	}
+
+	/*
+	 * Demote the oldest active SOEMB flagged by the previous transaction,
+	 * returning it to the evictable MB pool; the vacated slot is refilled by
+	 * the loop below.
+	 */
+	if (smbrt->demote_pending) {
+		D_ASSERT(heap->rt->nzones_soe_rsrv > 0);
+		mb = smbrt->svec[0].mb;
+		if (mb != NULL) {
+			mb->is_soe_mb = false;
+			umem_cache_unpin(store, smbrt->svec[0].pin);
+			mbrt_qbs_insertmb(&heap->rt->emb_qbs, mb);
+		}
+		for (i = 1; i < heap->rt->nzones_soe_rsrv; i++)
+			smbrt->svec[i - 1] = smbrt->svec[i];
+		smbrt->svec[heap->rt->nzones_soe_rsrv - 1].mb  = NULL;
+		smbrt->svec[heap->rt->nzones_soe_rsrv - 1].pin = NULL;
+		smbrt->demote_pending                          = false;
+	}
+
+	for (i = 0; i < heap->rt->nzones_soe_rsrv; i++) {
+		if (smbrt->svec[i].mb != NULL)
+			continue;
+
+		mb = heap_evictable_mb_pick(heap);
+		if (mb == NULL) {
+			D_ERROR("failed to pick an evictable mb as soemb");
+			break;
+		}
+
+		rg.cr_off  = GET_ZONE_OFFSET(mb->mb_id);
+		rg.cr_size = ((heap->size - rg.cr_off) > ZONE_MAX_SIZE) ? ZONE_MAX_SIZE
+									: heap->size - rg.cr_off;
+		pin        = NULL;
+
+		mb->is_soe_mb = true;
+		rc            = umem_cache_pin(store, &rg, 1, false, &pin);
+		if (rc) {
+			mbrt_qbs_insertmb(&heap->rt->emb_qbs, mb);
+			break;
+		}
+		smbrt->svec[i].mb  = mb;
+		smbrt->svec[i].pin = pin;
+	}
+
+out:
+	D_ASSERT(smbrt->promote_waiters > 0);
+	smbrt->promote_waiters--;
+	if (smbrt->promote_waiters) {
+		D_ASSERT(store->stor_ops->so_waitqueue_wakeup != NULL);
+		store->stor_ops->so_waitqueue_wakeup(smbrt->promote_wq, false);
+	}
 }
 
 uint32_t
@@ -2551,7 +2574,6 @@ heap_load_nonevictable_zones(struct palloc_heap *heap)
 	int          i, rc;
 	bool         allotted, evictable;
 	struct zone *zone;
-	struct mbrt *mb;
 
 	for (i = 1; i < heap->rt->zones_exhausted; i++) {
 		heap_zinfo_get(heap, i, &allotted, &evictable);
@@ -2563,16 +2585,6 @@ heap_load_nonevictable_zones(struct palloc_heap *heap)
 				return rc;
 			zone = ZID_TO_ZONE(&heap->layout_info, i);
 			D_ASSERT((zone->header.flags & ZONE_EVICTABLE_MB) == 0);
-			if (zone->header.flags & ZONE_SOE_MB) {
-				mb = heap_mbrt_setup_mb(heap, i);
-				if (mb == NULL) {
-					D_ERROR("failed to load soe mb");
-					return ENOMEM;
-				}
-				heap_mbrt_setmb_nonevictable(heap, mb, i);
-				mbrt_qbs_insertmb(&heap->rt->smbrt.qbs, mb);
-				heap->rt->soemb_cnt++;
-			}
 			if (!zone->header.sp_usage)
 				heap_incr_empty_nemb_cnt(heap);
 			heap_mbrt_incrmb_usage(heap, i, zone->header.sp_usage);
@@ -2733,6 +2745,7 @@ struct heap_zone_limits
 heap_get_zone_limits(uint64_t heap_size, uint64_t cache_size, uint32_t nemb_pct)
 {
 	struct heap_zone_limits zd = {0};
+	unsigned                ne_budget, avail, soe_total;
 
 	D_ASSERT(nemb_pct <= 100);
 
@@ -2756,11 +2769,37 @@ heap_get_zone_limits(uint64_t heap_size, uint64_t cache_size, uint32_t nemb_pct)
 		return zd;
 	}
 
-	zd.nzones_ne_max = (((unsigned long)zd.nzones_cache * nemb_pct) / 100);
-	if (!zd.nzones_ne_max)
-		zd.nzones_ne_max = UMEM_CACHE_MIN_PAGES;
+	ne_budget = (((unsigned long)zd.nzones_cache * nemb_pct) / 100);
+	if (!ne_budget)
+		ne_budget = UMEM_CACHE_MIN_PAGES;
 
-	zd.nzones_e_max = zd.nzones_heap - zd.nzones_ne_max;
+	/*
+	 * Carve the spill-over evictable buckets (SOEMB) out of the non-evictable
+	 * budget: up to SOEMB_ACTIVE_CNT active slots plus one replacement slot
+	 * (SOEMB_REPLACE_RSRV). 'avail' is the budget left after reserving zone0
+	 * (UMEM_CACHE_MIN_PAGES non-evictable pages), so SOEMB is enabled only if
+	 * at least one active slot plus the replacement slot fit.
+	 */
+	avail = ne_budget - UMEM_CACHE_MIN_PAGES;
+	if (avail >= 1 + SOEMB_REPLACE_RSRV) {
+		soe_total = SOEMB_ACTIVE_CNT + SOEMB_REPLACE_RSRV;
+		if (soe_total > avail)
+			soe_total = avail;
+		zd.nzones_soe_rsrv = soe_total - SOEMB_REPLACE_RSRV;
+	} else {
+		soe_total          = 0;
+		zd.nzones_soe_rsrv = 0;
+	}
+
+	zd.nzones_ne_max = ne_budget - soe_total;
+	zd.nzones_e_max  = zd.nzones_heap - zd.nzones_ne_max;
+
+	/*
+	 * dkey-based bucket pinning needs two evictable working pages resident at
+	 * once (one for the object MB, one for the dkey MB). The evictable working
+	 * set in the cache is whatever the non-evictable budget leaves behind.
+	 */
+	zd.dkey_pinning = (zd.nzones_cache - ne_budget) >= UMEM_CACHE_MIN_EV_DKEY;
 
 	return zd;
 }
@@ -2775,57 +2814,6 @@ int
 heap_decr_empty_nemb_cnt(struct palloc_heap *heap)
 {
 	return heap->rt->empty_nemb_cnt ? --heap->rt->empty_nemb_cnt : 0;
-}
-
-static void
-heap_recycle_soembs(struct palloc_heap *heap)
-{
-	struct mbrt        *mb;
-	struct bucket      *defb, *b;
-	struct memory_block m = MEMORY_BLOCK_NONE;
-	int                 i, rc;
-
-	for (i = 0; i < SOEMB_ACTIVE_CNT; i++) {
-		mb = heap->rt->smbrt.svec[i];
-		if (mb && (mb->space_usage == 0)) {
-			mbrt_qbs_insertmb(&heap->rt->smbrt.qbs, mb);
-			heap->rt->smbrt.svec[i] = NULL;
-		}
-	}
-
-	while ((mb = mbrt_qbs_getmb_ue(&heap->rt->smbrt.qbs)) != NULL) {
-		defb = mbrt_bucket_acquire(mb, DEFAULT_ALLOC_CLASS_ID);
-		if (!mb->garbage_reclaimed) {
-			heap_reclaim_zone_garbage(heap, defb, mb->mb_id);
-			mb->garbage_reclaimed = 1;
-		}
-		mbrt_bucket_release(defb);
-		for (i = 0; i < MAX_ALLOCATION_CLASSES; i++) {
-			if (mb->buckets[i] == NULL)
-				continue;
-			b = bucket_acquire(mb->buckets[i]);
-			heap_detach_and_try_discard_run(heap, b);
-			mbrt_bucket_release(b);
-		}
-		defb = mbrt_bucket_acquire(mb, DEFAULT_ALLOC_CLASS_ID);
-		heap_reclaim_garbage(heap, defb);
-		m          = MEMORY_BLOCK_NONE;
-		m.size_idx = MAX_CHUNK;
-		if (bucket_alloc_block(defb, &m) == 0) {
-			rc = heap_mark_zone_unused(heap, m.zone_id);
-			if (rc)
-				mbrt_qbs_insertmb_force(&heap->rt->smbrt.qbs, mb, MB_U0_HINT);
-			else
-				heap->rt->empty_nemb_cnt--;
-			mbrt_bucket_release(defb);
-			heap_mbrt_cleanup_mb(mb);
-		} else {
-			mbrt_bucket_release(defb);
-			mbrt_qbs_insertmb_force(&heap->rt->smbrt.qbs, mb, MB_U0_HINT);
-		}
-	}
-
-	return;
 }
 
 int
@@ -2847,8 +2835,6 @@ heap_force_recycle(struct palloc_heap *heap)
 			return 0;
 		}
 	}
-
-	heap_recycle_soembs(heap);
 
 	defb = mbrt_bucket_acquire(mb, DEFAULT_ALLOC_CLASS_ID);
 	while (heap_reclaim_next_ne(heap, &zone_id) == 0) {
