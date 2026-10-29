@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
@@ -24,6 +25,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -31,6 +33,11 @@ import (
 var storageHashOpts = hashstructure.HashOptions{
 	SlicesAsSets: true,
 }
+
+// replaceMSCheckTimeout bounds how long checkFormatReq() will wait for the
+// target host's MS/engine to become reachable before giving up, when
+// verifying a storage format --replace request.
+const replaceMSCheckTimeout = 15 * time.Second
 
 // HostStorage describes a host storage configuration which
 // may apply to one or more hosts.
@@ -310,8 +317,9 @@ type (
 	// StorageFormatReq contains the parameters for a storage format request.
 	StorageFormatReq struct {
 		unaryRequest
-		Reformat bool `json:"reformat"`
-		Replace  bool `json:"replace"`
+		Reformat bool   `json:"reformat"`
+		Replace  bool   `json:"replace"`
+		Rank     uint32 `json:"rank"` // Specific rank to replace (only valid with replace=true)
 	}
 
 	// StorageFormatResp contains the response from a storage format request.
@@ -385,17 +393,44 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 	return sfr.HostStorage.Add(hr.Addr, hs)
 }
 
-// checkFormatReq performs some validation to determine whether or not the
-// system should be erased before allowing a format request for the hosts
-// in the request. The goal is to prevent reformatting a running system while
-// allowing (re-)format of hosts that are not participating as MS replicas.
-// When Replace is true, the request targets a single rank being replaced
-// after metadata loss, so the MS replica check is bypassed; control_metadata
-// is still (re-)formatted on the control plane for that rank if needed.
+// replaceableMemberFilter defines the state(s) in which a rank may legitimately be targeted
+// by storage format --replace: already excluded from the system, cleanly stopped, or left
+// down by a failure (errored exit or unresponsive to RPCs).
+const replaceableMemberFilter = system.MemberStateExcluded | system.MemberStateStopped |
+	system.MemberStateErrored | system.MemberStateUnresponsive
+
+var errReplaceRankActive = errors.New("--replace is only valid for a rank that is not an active " +
+	"system member")
+
+// checkReplaceRank verifies that an explicitly-requested --replace rank is a
+// legitimate candidate for replacement: it must exist on the target host and
+// must currently be in a non-active, non-admin-excluded state.
+func checkReplaceRank(host string, rank ranklist.Rank, members system.Members) error {
+	if rank == ranklist.NilRank {
+		return nil // auto-detect path, unaffected by this check
+	}
+
+	for _, m := range members {
+		if m.Rank != rank {
+			continue
+		}
+		if m.State&replaceableMemberFilter == 0 {
+			return errors.Wrapf(errReplaceRankActive,
+				"replace rank %d on host %s is currently %s", rank, host, m.State)
+		}
+		return nil
+	}
+
+	return errors.Errorf("replace rank %d not found on host %s", rank, host)
+}
+
+// checkFormatReq performs some validation to determine whether or not the system should be erased
+// before allowing a format request for the hosts in the request. The goal is to prevent
+// reformatting a running system while allowing (re-)format of hosts that are not participating as
+// MS replicas. When Replace is true, the request targets a single rank being replaced after
+// metadata loss, so the MS replica check is bypassed; control_metadata is still (re-)formatted on
+// the control plane for that rank if needed.
 func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFormatReq) error {
-	// Skip MS replica checks when replacing a single rank; the request is
-	// restricted to exactly one host and control_metadata format for that
-	// rank is handled separately by the control plane.
 	if req.Replace {
 		hosts, err := common.ParseHostList(req.HostList, build.DefaultControlPort)
 		if err != nil {
@@ -404,7 +439,35 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 		if len(hosts) != 1 {
 			return errors.New("replace option requires exactly one host in hostlist")
 		}
-		return nil
+
+		// In replace mode expect MS to become reachable in case the admin issued the
+		// command while the engine/MS was still coming up.
+		sysReq := &SystemQueryReq{}
+		sysReq.SetTimeout(replaceMSCheckTimeout)
+		sysReq.AddHost(hosts[0])
+
+		rank := ranklist.Rank(req.Rank)
+		if rank == ranklist.NilRank {
+			// Auto-detect: restrict the search to ranks hosted on the target host.
+			hs, err := hostlist.CreateSet(hosts[0])
+			if err != nil {
+				return err
+			}
+			sysReq.SetHosts(hs)
+		} else {
+			// Explicit rank may be registered under a different host than the one
+			// replacing it (e.g. the original host is gone), so query by rank.
+			rs := ranklist.NewRankSet()
+			rs.Add(rank)
+			sysReq.SetRanks(rs)
+		}
+
+		sysResp, err := SystemQuery(ctx, rpcClient, sysReq)
+		if err != nil {
+			return err
+		}
+
+		return checkReplaceRank(hosts[0], rank, sysResp.Members)
 	}
 
 	reqHosts, err := common.ParseHostList(req.HostList, build.DefaultControlPort)

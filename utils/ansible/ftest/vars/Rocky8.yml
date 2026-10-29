@@ -62,7 +62,6 @@ daos_server_deps:
     - compat-hwloc1
     - dpdk
     - ipmctl
-    - libipmctl
     - libpmemobj
     - libuuid
     - lz4-libs
