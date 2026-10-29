@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,7 +24,7 @@ func run_self_test(sizes *C.struct_st_size_params, numSizes C.int, repCount C.in
 	sizeLatencies ****C.struct_st_latency, bufAlignment C.int16_t) C.int {
 	return C.run_self_test(sizes, numSizes, repCount, maxInflight, groupName,
 		optMsEndpoints, numOptMsEndpoints, tgtEndpoints, numTgtEndpoints,
-		msEndpoints, numMsEndpoints, sizeLatencies, bufAlignment, nil, true, true)
+		msEndpoints, numMsEndpoints, sizeLatencies, bufAlignment, nil, true, true, false)
 }
 
 func self_test_fini(agent_used C.bool) {

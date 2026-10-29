@@ -15,12 +15,12 @@ DAOS uses two types of network communication between nodes:
   for communication between DAOS clients and DAOS servers.
   CaRT relies on the [Mercury](https://mercury-hpc.github.io/user/overview/)
   RPC framework, which provides RDMA transfer capabilities if the underlying
-  high performance fabric supports it.
+  high-performance fabric supports it.
 
-When designing a DAOS solution, one question that needs to be decided
-early on is if the control plane traffic will be using the same physical
-network as the data plane (for example, and IP-over-IB interface on the
-InfiniBand NIC in an InfiniBand network), or if the control plane will use
+When planning the deployment of a DAOS system, one question that needs to be decided
+early on is whether the control plane traffic will use the same physical
+network as the data plane (for example, an IP-over-IB interface on the
+InfiniBand NIC in an InfiniBand network), or whether the control plane will use
 a separate physical network (like an administrative Ethernet network).
 
 * For example, if there is a reliable 25GbE management network over which
@@ -34,16 +34,16 @@ a separate physical network (like an administrative Ethernet network).
   servers, clients and admin nodes can communicate with each other.
 
 The control plane network is configured in the `daos_server.yml`,
-`daos_agent.yml` and
-`daos_control.yml` files, by using the IP addresses (or hostnames) of
-either then nodes' management network interface or an IP-over-IB interface
+`daos_agent.yml`, and
+`daos_control.yml` files by using the IP addresses (or hostnames) of
+either the nodes' management network interfaces or an IP-over-IB interface
 of their high-speed NICs in the control plane configuration sections.
 The settings in these three configuration files must be consistent.
 
 Given an 8-node cluster of nodes n[0001-0008], where:
 
 - nodes n[0001,0004,0008] are defined as management service replicas, and
-- the '-ibs1' node name suffix represents and IP-over-IB interface,
+- the '-ibs1' node name suffix represents an IP-over-IB interface,
 
 the following example would designate a control plane network using
 the IP-over-IB interface:
@@ -75,9 +75,9 @@ hostlist:
 
 !!! note
     On dual-socket DAOS servers with two InfiniBand NICs, the second InfiniBand
-    NIC also has an IP-over-IB interface, address and name (which is used by the
+    NIC also has an IP-over-IB interface, address, and name (which are used by the
     DAOS engines).
-    By default the DAOS control plane (`daos_server` process)
+    By default, the DAOS control plane (`daos_server` process)
     binds to 0.0.0.0, so it listens on all network interfaces.
     To limit the control plane to a specific interface, the `control_iface:`
     setting in the `daos_server.yml` configuration file can be used.
@@ -96,22 +96,28 @@ InfiniBand networks.
 
 ## Mercury installation
 
-The CaRT layer that is used by the DAOS _data plane_ is part of the main
-DAOS RPM packages. CaRT uses the Mercury RPC framework, which is provided
-as separate RPMs within the DAOS packages directory.
+The CaRT layer used by the DAOS _data plane_ is part of the main
+DAOS RPM packages. CaRT in turn uses the Mercury RPC framework,
+which is provided as separate RPMs within the DAOS packages directory.
 For NVIDIA based InfiniBand and RoCE Ethernet fabrics, Mercury's
 [UCX](https://openucx.org/) backend is the recommended plugin.
 For all other fabrics, Mercury's
 [libfabric](https://ofiwg.github.io/libfabric/) backend is used.
-DAOS Version 2.9 uses Mercury Version 2.4.1.
+
+!!! info
+    DAOS version 2.9 uses Mercury version 2.4.1.
 
 Mercury backends are dynamically loaded, and there is no RPM dependency
-in the base `mercury` RPM for a specific backend. Depending on the intended
-fabric provider, the corresponding Mercury backend RPM (`mercury-libfabric`
-or `mercury-ucx`) must be explicitly installed.
+in the base `mercury` RPM on a specific backend
 (The base `mercury` RPM will be automatically installed,
 because the DAOS RPMs have an RPM dependency on `mercury`).
-It is possible to install both Mercury backends on the same node.
+Depending on the intended
+fabric provider, the corresponding Mercury backend RPM (`mercury-libfabric`
+or `mercury-ucx`) must be explicitly installed.
+
+!!! note
+    `mercury-libfabric` will be installed by default if `mercury-ucx` is not installed.
+    It is also possible to install both Mercury backends on the same node.
 
 Failing to install the Mercury backend that corresponds to the fabric
 provider configured in `daos_server.yml` will result in a runtime error,
@@ -130,14 +136,14 @@ host software stack before installing DAOS to satisfy these dependencies.
 
 ## Fabric host software stack installation
 
-Each high performance fabric typically provides its own host software stack.
+Each high-performance fabric typically provides its own host software stack.
 To get support from the fabric vendor in case of networking issues,
 it is vital that a supported version of the vendor-provided host software
 stack is used. Linux distributions' "inbox" versions are often outdated
 and vendor support will not be available until the system is
-updated to recent levels of the vendor-provided hosts software stack.
+updated to a recent version of the vendor-provided host software stack.
 
-This means that for NVIDIA-provided fabrics a recent version
+This means that for NVIDIA-provided fabrics, a recent version
 of the DOCA-OFED stack must be installed, which will provide the UCX
 libraries that are required by the `mercury-ucx` backend RPM.
 
@@ -150,15 +156,75 @@ that can be used, for example when running on generic Ethernet interfaces.
 The following section contains details on the versions of libfabric that
 are used with the various fabric providers.
 
-Details on the exact levels of the fabric host software stacks
+Details about the exact versions of the fabric host software stacks
 that have been validated with DAOS can be found in the
-[DAOS 2.9 Support Matrix](https://docs.daos.io/v2.9/release/support_matrix/),
+[DAOS Support Matrix](../release/support_matrix.md),
 which also provides more information and references
-for the supported high performance fabrics.
+for the supported high-performance fabrics.
+
+### UCX Fabric Support
+
+For NVIDIA InfiniBand and RoCE fabrics, DAOS supports
+[UCX](https://www.openucx.org/) as an alternative to the default
+[libfabric](https://ofiwg.github.io/libfabric/) network stack.
+The UCX provider is fully supported since DAOS 2.4.
+
+To enable DAOS UCX support on NVIDIA InfiniBand or RoCE fabrics,
+the following steps are needed:
+
+* A supported version of DOCA-OFED must be installed _before_
+  DAOS is installed on all DAOS servers and clients. DAOS only supports
+  the NVIDIA-provided DOCA-OFED stack for UCX, not Linux inbox drivers
+  or distribution packages.
+  Refer to the [DAOS Support Matrix](../release/support_matrix.md)
+  for information about supported DOCA-OFED releases.
+
+* The `mercury-ucx` RPM package must be **manually** selected for
+  installation. The base `mercury` RPM package ships by default with the
+  `mercury-libfabric` package unless `mercury-ucx` is also installed.
+  The `mercury-ucx` RPM contains the UCX plugin that is required for
+  enabling UCX support.
+  This RPM **must** be installed when UCX needs to be used. Attempts to
+  install this RPM on systems without the required UCX packages will fail.
+
+* When installing DAOS, explicitly list the `mercury-ucx` RPM package
+  if it was not already installed in the previous step.
+  For example, using the `dnf` package manager on EL9:
+  ```bash
+  # on DAOS_ADMIN nodes:
+  dnf install mercury-ucx daos-admin
+
+  # on DAOS_SERVER nodes:
+  dnf install mercury-ucx daos-server
+
+  # on DAOS_CLIENT nodes:
+  dnf install mercury-ucx daos-client
+  ```
+
+After UCX support has been enabled by installing the `mercury-ucx`
+package, the network provider in the DAOS server's
+configuration file (`/etc/daos/daos_server.yml`) should be changed.
+A sample YAML file is available on [GitHub][daos_server_ucx_yml].
+The recommended setting for UCX is `provider: ucx+dc_x` (see the following
+sections).
+
+Verify the installation and provider configuration before starting the
+system. On each DAOS server, run:
+
+```bash
+daos_server network scan
+```
+
+The output should list `ucx+dc_x` for the configured InfiniBand or RoCE
+interface. On each DAOS client, run `daos_agent net-scan` and verify that
+`ucx+dc_x` is listed for the expected interface. If the provider is missing,
+check that the DOCA-OFED stack and `mercury-ucx` are installed on that node.
+
+[daos_server_ucx_yml]: https://github.com/daos-stack/daos/blob/master/utils/config/examples/daos_server_ucx.yml
 
 ## NIC firmware update
 
-The adapter firmware on the Network Interface Cards (NICs) of the high speed
+The adapter firmware on the Network Interface Cards (NICs) of the high-speed
 fabric is a critical component of any parallel storage system,
 and DAOS is no exception.
 Backlevel firmware or inconsistent firmware levels across nodes in the
@@ -169,11 +235,11 @@ Refer to the respective fabric's documentation for details.
 
 ## Multiple NICs per host
 
-Both DAOS server and DAOC clients may have more than one high-speed NIC,
+Both DAOS servers and DAOS clients may have more than one high-speed NIC,
 with IP addresses in the same network range.
 Some `sysctl` configuration is needed to ensure proper operation in such
 scenarios, in particular around ARP resolution.  This is discussed in the
-[Predeployment checklist](https://docs.daos.io/v2.9/admin/predeployment_check/#multi-railnic-setup).
+[Pre-deployment Checklist](predeployment_check.md#multi-railnic-setup).
 
 ## Provider selection and configuration
 
@@ -304,17 +370,18 @@ localhost
         ucx+dc_mlx5  ibs1
 ```
 
-Unless they are also DAOS servers or DAOS clients, DAOS _admin nodes_
+Unless they are also configured as DAOS servers or DAOS clients, DAOS _admin nodes_
 only use the control plane, so fabric provider configuration
 does not apply to the admin node role.
 
 ### Generic TCP Fabrics with libfabric TCP
 
-DAOS should run over any standard TCP/IP network, using the libfabric
+DAOS can run over any standard TCP/IP network, using the libfabric
 `ofi+tcp` provider. This provider does **not** support RDMA transfers,
-and the operating system's TCP stack is used which typically implies
+and instead emulates this capability by using the standard operating
+system's TCP stack, which typically implies
 higher CPU utilization, higher latency, and lower bandwidth than
- the other providers. The TCP provider should only be used on fabrics
+the other providers. The TCP provider should only be used on fabrics
 where none of the other fabric providers can be used.
 
 The required configuration in the `daos_server.yml` file is minimal:
@@ -331,7 +398,7 @@ engines:
 
 To achieve good performance over TCP, the operating system's TCP/IP stack
 has to be tuned for performance. To benefit from the performance of modern
-fabrics like 400Gbps Ethernet, larger settings than the OS defaults are
+fabrics such as 400Gbps Ethernet, larger settings than the OS defaults are
 often needed for many of the networking settings. In particular,
 the TCP buffer sizes in `net.ipv4` (and the corresponding
 settings in `net.core`) as well as other performance-related
@@ -340,7 +407,7 @@ made persistent, for example through a configuration file in `/etc/sysctl.d/`.
 
 In addition to `sysctl` tuning, the **MTU size** of all network interfaces
 in the fabric should be set to the largest supported value.
-On native Ethernet fabrics, this is typically MTU=9000.
+On native Ethernet fabrics, this is typically `MTU=9000`.
 The MTU can be set in network interface configuration files like
 `/etc/sysconfig/network-scripts/ifcfg-eth0`
 or an equivalent `nmcli` configuration.
@@ -357,14 +424,14 @@ and a current DOCA-OFED level has to be installed on all hosts.
 Note that while the `ofi+verbs` provider _should_ also support RoCE,
 the verbs provider has scalability limitations and is not recommended.
 
-Many NVIDIA network adapters like ConnectX-7 are
-Virtual Protocol Interface (VPI) adapters: Each port can be set
+Many NVIDIA network adapters, such as ConnectX-7, are
+Virtual Protocol Interface (VPI) adapters. Each port can be set
 to either InfiniBand mode (mode 1) or Ethernet mode (mode 2).
 By default, all ports are set to InfiniBand. To change a port to
-Ethernet, make sure that the `mst`  package is installed (it should
-be part of the DOCA-OFED installation), and run the following steps
-to determine the device name of the port to be changed,
-change the link type, and reboot the node to make the change effective.
+Ethernet, make sure that the `mst` package is installed (it should
+be part of the DOCA-OFED installation), and run the following steps to
+determine the device name of the port to be changed, change the link type,
+and reboot the node to make the change effective.
 For example, with ConnectX-7 adapters (MT4129):
 
 ```bash
@@ -381,7 +448,7 @@ DEV="mt4129_pciconf0"
 mlxconfig -d /dev/mst/$DEV query | grep LINK_TYPE
 ```
 
-The recommendations in the "TCP" section regarding OS-level tuning of the
+The recommendations in the [TCP section](#generic-tcp-fabrics-with-libfabric-tcp) regarding OS-level tuning of the
 TCP stack (`sysctl` settings, MTU size) are also beneficial for a RoCE setup.
 There will likely be other traffic on the high-speed Ethernet interfaces
 that will benefit from this tuning, even if the RoCE transport itself does
@@ -408,11 +475,11 @@ engines:
   - UCX_IB_FORK_INIT=n
 ```
 
-Depending on the size of the fabric, other settings like the CaRT timeout
+Depending on the size of the fabric, other settings, such as the CaRT timeout,
 (set with `crt_timeout:` in the global section of the `daos_server.yml` file)
 and/or the SWIM timeout settings (set as `SWIM_*` environment variables
 within the `env_vars:` section of both engines) may also need to be adjusted.
-But these settings depend on the cluster size and fabric details,
+These settings depend on the cluster size and fabric details,
 and there is no general recommendation to deviate from the defaults.
 
 ### NVIDIA InfiniBand with DOCA-OFED and UCX
@@ -444,105 +511,155 @@ engines:
 ### HPE Slingshot with libfabric CXI
 
 The recommended provider for Slingshot fabrics is `ofi+cxi`,
-and a current level of the
-[HPE Slingshot Host Software (SHS) stack](https://support.hpe.com/km/search#tab=All&q=slingshot%2014.0.1)
-has to be installed on all hosts.
+and a current level of the [HPE Slingshot Host Software (SHS) stack][hpe_shs]
+has to be installed on all hosts. The settings below apply to SHS 14.0 and later.
 
-The SHS stack includes its own libfabric version,
+The SHS stack includes its own version of libfabric,
 which gets installed into `/opt/cray/libfabric/<version>/lib64/`.
 For DAOS engines and DAOS clients to use the SHS version of libfabric,
 the `LD_LIBRARY_PATH` needs to be set to point to this path.
 On the DAOS servers, this is done in the `env_vars` section of the engines.
 
 The following example of the network-related configuration settings for Slingshot
-in `daos_server.yml` also includes several libfabric and Mercury tunables.
+in `daos_server.yml` also includes libfabric and Mercury tunables.
 While the detailed settings depend on the size of the system,
 this is a good starting point for Slingshot environments.
 
 ```yaml
 provider: ofi+cxi
+fabric_auth_key: "4:64512:65535" # Client VNI range to accept <svc_id:vni_min:vni_max>
 
 engines:
 -
-  fabric_iface: hsn0
+  fabric_iface: hsn0 
+  fabric_iface_port: 128 # Valid CXI PIDs are in the range [0-510] (see fi_cxi manpage)
 
   env_vars:
-  - D_MRECV_BUF=16
-  - D_MRECV_BUF_COPY=4
-  - FI_CXI_OFLOW_BUF_SIZE=8388608
-  - FI_CXI_OPTIMIZED_MRS=0
-  - FI_CXI_RDZV_THRESHOLD=20480
-  - FI_CXI_REQ_BUF_MIN_POSTED=8
-  - FI_CXI_REQ_BUF_SIZE=8388608
-  - FI_CXI_RX_MATCH_MODE=hybrid
-  - FI_MR_CACHE_MONITOR=disabled
-  - FI_CXI_DEFAULT_CQ_SIZE=131072
-  - LD_LIBRARY_PATH=/opt/cray/libfabric/2.3.1/lib64
-  - NA_OFI_SKIP_DOMAIN_OPS=1
-  - SWIM_TRAFFIC_CLASS=low_latency
+  - D_MRECV_BUF=16     # Number of preposted multi-recv buffers
+  - D_MRECV_BUF_COPY=4 # Remaining buffer threshold until start of payload copy
+  - FI_CXI_RDZV_THRESHOLD=20480   # Needed when CXI RNR is disabled
+  - FI_CXI_OFLOW_BUF_SIZE=8388608 # Needed when CXI RNR is disabled
+  - FI_CXI_REQ_BUF_MIN_POSTED=8   # Needed when CXI RNR is disabled
+  - FI_CXI_REQ_BUF_SIZE=8388608   # Needed when CXI RNR is disabled
+  - FI_CXI_RX_MATCH_MODE=hybrid   # Needed when CXI RNR is disabled
+  - LD_LIBRARY_PATH=/opt/cray/libfabric/2.3.1/lib64 # Path to the SHS version of libfabric
+  - FI_CXI_OPTIMIZED_MRS=0         # Needed with mercury <= v2.4.1
+  - NA_OFI_SKIP_DOMAIN_OPS=1       # Needed with mercury <= v2.4.1
+  - SWIM_TRAFFIC_CLASS=low_latency # Separate traffic for SWIM messages
 -
   fabric_iface: hsn1
+  fabric_iface_port: 256
 
   env_vars:
-  - D_MRECV_BUF=16
-  - D_MRECV_BUF_COPY=4
-  - FI_CXI_OFLOW_BUF_SIZE=8388608
-  - FI_CXI_OPTIMIZED_MRS=0
-  - FI_CXI_RDZV_THRESHOLD=20480
-  - FI_CXI_REQ_BUF_MIN_POSTED=8
-  - FI_CXI_REQ_BUF_SIZE=8388608
-  - FI_CXI_RX_MATCH_MODE=hybrid
-  - FI_MR_CACHE_MONITOR=disabled
-  - FI_CXI_DEFAULT_CQ_SIZE=131072
-  - LD_LIBRARY_PATH=/opt/cray/libfabric/2.3.1/lib64
-  - NA_OFI_SKIP_DOMAIN_OPS=1
-  - SWIM_TRAFFIC_CLASS=low_latency
+  - [...] # Identical to settings above
 ```
 
 The cache monitor for the memory registration (MR) cache for RDMA transfers
 is one of the key settings for Slingshot.
 Refer to the "kdreg2" sections in the HPE Slingshot
-[Host Software Installation and Configuration Guide](https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008086en_us&page=install/kdreg2_introduction.html)
-and
-[Host Software Administration Guide](https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008089en_us&page=operations/kdreg2_configuration.html).
+[Host Software Installation and Configuration Guide][hpe_shs_kdreg2]
+and [Host Software Administration Guide][hpe_shs_admin_kdreg2].
 
-On the DAOS servers, the recommendation is to disable `FI_MR_CACHE_MONITOR`.
+On the DAOS servers, the MR cache monitor is disabled by default (`FI_MR_CACHE_MONITOR=disabled`).
 On the DAOS clients, the recommendation is to use the `kdreg2` cache monitor.
 The following tunables should be set in the user environment
 on all DAOS client nodes
-(for example through /etc/environment, /etc/profile.env, or a systemd service).
-See the `DAOS` section in the
-[Host Software User Guide)](https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008090en_us&page=user/daos.html):
+(for example, through `/etc/environment`, `/etc/profile.env`, or a systemd service).
+See the `DAOS` section in the [Host Software User Guide][hpe_shs_daos]:
 
 ```
-LD_LIBRARY_PATH=/opt/cray/libfabric/2.3.1/lib64
 FI_CXI_RX_MATCH_MODE=hybrid
 FI_MR_CACHE_MONITOR=kdreg2
-FI_CXI_DEFAULT_CQ_SIZE=131072
 ```
 
-It may also be beneficial to adjust the
-`FI_MR_CACHE_MAX_SIZE` and `FI_MR_CACHE_MAX_COUNT`
-tunables.
+Note that setting `FI_CXI_RX_MATCH_MODE=hybrid` globally (when RNR is disabled) may affect
+performance of all client applications (including MPI applications). In this particular case,
+a more fine-grained alternative is to rely on custom modulefiles that can be loaded when DAOS
+must be used. It may also be beneficial to adjust the `FI_MR_CACHE_MAX_SIZE` and 
+`FI_MR_CACHE_MAX_COUNT` tunables.
 
-General TCP and Ethernet tuning recommanedations for Slingshot can be found
+General TCP and Ethernet tuning recommendations for Slingshot can be found
 in the _TCP performance tuning_ and _Ethernet tuning_ sections of the
-[HPE Slingshot Host Software Administration Guide](https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008089en_us&page=performance/slingshot-eth-tuning.html).
+[HPE Slingshot Host Software Administration Guide][hpe_shs_tcp].
 The tuning script referenced therein is located in
 `/opt/slingshot/utils/<version>/bin/slingshot-eth-tuning`.
 
+#### VNI Configuration
+
+!!! note
+    The following section currently only applies to PBS environments.
+
+To isolate RDMA traffic between DAOS clients, it is highly recommended for security to enable VNIs 
+(Virtual Network Identifiers). A VNI is a protection key used by the Slingshot network to
+provide isolation between applications. Because VNIs define an isolated PID space for a given NIC,
+endpoints must use the same VNI in order to communicate. To allow this type of communication between
+DAOS clients and servers, a VNI range must be properly configured on servers and client nodes
+must be configured to only select a VNI within that specified range.
+
+This is done in multiple steps:
+- A CXI service ([see documentation][hpe_shs_cxi_service]) that accepts a
+  range of VNIs must first be configured on DAOS server nodes. This is done by
+  using the `cxi_service` command. This command has been augmented in SHS 14.0 to specify
+  VNI ranges in its yaml configuration file:
+  ```yaml
+  vnis:
+    vni_min: 64512
+    vni_max: 65535
+  ```
+  One can then create a CXI service by running `cxi_service create -y <service_yaml_file>`, which produces a new CXI service identifier.
+- The second step is to configure DAOS servers to use the specified VNI range and CXI service.
+  This is controlled by the `fabric_auth_key` parameter in the `daos_server.yml` file. For example:
+  ```yaml
+  fabric_auth_key: "4:64512:65535" # Client VNI range to accept <svc_id:vni_min:vni_max>
+  ```
+  where 4 is the CXI service identifier, and 64512 and 65535 are the minimum and maximum VNIs, respectively.
+- The third step is to configure the `vnid` service (see [VNI range documentation][hpe_vnid_range] 
+  for additional details) that interacts with the PBS scheduler and the PALS daemons running on the 
+  compute nodes. One must first resize the default application pool to accommodate the desired VNI 
+  range (which usually spans the entire VNI range) and create a new pool by running the following
+  command:
+  ```bash
+  vnidctrl --url <vnid_url> pool update "applications" 1024 64511 "applications"
+  vnidctrl --url <vnid_url> pool create "daos" 64512 65535 "jobs"
+  ```
+  Effectively, this command creates a new pool named "daos" with the specified VNI range, `"jobs"` 
+  meaning that the VNIs allocated from that pool are per job.
+- Finally, one can test the configuration by running the following command within a PBS job:
+  ```bash
+  mpiexec --daos env | grep SLING
+  SLINGSHOT_VNIS=1116,1115,64529
+  SLINGSHOT_DEVICES=cxi0
+  SLINGSHOT_SVC_IDS=5
+  ```
+  Note the `--daos` flag passed to the `mpiexec` command, which ensures that the DAOS VNI (the third VNI in the `SLINGSHOT_VNIS` list) is set.
+
+!!! warning
+  Through this method, all `daos` commands and applications that interact with DAOS can only be
+  run within a PBS job and mpiexec must be used with the `--daos` flag to ensure proper DAOS VNI 
+  configuration.
+
+[hpe_shs]: https://support.hpe.com/km/search#tab=All&q=slingshot%2014.0.1
+[hpe_shs_cxi_service]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008089en_us&page=operations/cxi_services.html
+[hpe_shs_params]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008090en_us&page=user/libfabric_runtime_configurable_parameters.html
+[hpe_shs_kdreg2]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008086en_us&page=install/kdreg2_introduction.html
+[hpe_shs_admin_kdreg2]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008089en_us&page=operations/kdreg2_configuration.html
+[hpe_shs_daos]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008090en_us&page=user/daos.html
+[hpe_shs_tcp]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008089en_us&page=performance/slingshot-eth-tuning.html
+[hpe_vnid_range]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00007635en_us&page=common/wlm/VNI_range_overlap_risk.html
+
 ### Cornelis Omni-Path with libfabric TCP or VERBS
 
-For Omni-Path fabrics, the libfabric `psm2` and `opx` providers that are available for
-MPI message-passing applicationos cannot be used with DAOS due to some functional gaps.
+For Omni-Path fabrics, the libfabric `psm2` and `opx` providers, which are
+available for MPI message-passing applications, cannot be used with DAOS due
+to some functional gaps.
 
 The libfabric `tcp` provider is supported on Omni-Path.
 As with all high-speed fabrics, the MTU size is important to achieve good performance
 with TCP. The default MTU size on Omni-Path is 2048, but it can be increased to 10240
-by editing the configuration file of the Omni-Path fabric manager `/etc/opa-fm/opafm.xml`
+by editing the configuration file for the Omni-Path fabric manager `/etc/opa-fm/opafm.xml`
 and restarting the fabric manager (`systemctl restart opafm`). In the default
 configuration, there is a single MulticastGroup and its MTU needs to be changed
-to 10240. If multiple MulticastGroups exist change the MTU for all of them:
+to 10240. If multiple MulticastGroups exist, change the MTU for all of them:
 
 ```xml
 <MulticastGroup>
@@ -564,11 +681,11 @@ show an MTU size of 10236 (10240 minus a 4-byte header):
 9: ibs3d1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 10236 qdisc mq state UP group default qlen 1000
 ```
 
-This MTU change will enable line rate performance on Omni-Path 100 fabrics.
+This MTU change will enable line-rate performance on Omni-Path 100 fabrics.
 But it will not be possible to saturate the 400Gbps link bandwidth of
 Omni-Path CN5000 fabrics with TCP, even with the increased MTU size.
 
-Cornelis has implemented a verbs API over CN5000, and the `ofi+verbs`
+Cornelis has implemented a Verbs API over CN5000, and the `ofi+verbs`
 provider is the recommended provider for DAOS on CN5000.
 To achieve the best performance, it is recommended to enable the Cornelis
 _HFI service_ (previously called _Bulk Transfer Service (BTS)_)
@@ -607,4 +724,3 @@ and/or the SWIM timeout settings (set as `SWIM_*` environment variables
 within the `env_vars:` section of both engines) may also need to be adjusted.
 But these settings depend on the cluster size and fabric details,
 and there is no general recommendation to deviate from the defaults.
-

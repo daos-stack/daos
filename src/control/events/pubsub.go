@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -105,7 +106,7 @@ func NewPubSub(parent context.Context, log logging.Logger) *PubSub {
 		events:            make(chan *RASEvent),
 		subscribers:       make(chan *subscriber),
 		handlers:          make(map[RASTypeID][]Handler),
-		filterUpdates:     make(chan *filterUpdate),
+		filterUpdates:     make(chan *filterUpdate, 10),
 		dbncCtrl:          make(dbncCtrl),
 		dbncCtrlMsgs:      make(chan *dbncCtrlMsg),
 		dbncEvts:          make(dbncEvts),

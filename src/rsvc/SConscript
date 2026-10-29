@@ -17,6 +17,10 @@ def scons():
     ds_rsvc = denv.d_library('rsvc', ['srv.c', 'srv_common.c', 'rpc.c'], install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_rsvc)
 
+    # tests
+    if prereqs.test_requested():
+        SConscript('tests/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

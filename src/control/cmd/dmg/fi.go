@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -130,7 +131,7 @@ func (cmd *addCheckerReportCmd) Execute(_ []string) (errOut error) {
 	)
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, nil)
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -191,7 +192,7 @@ func (cmd *mgmtSvcPoolFaultCmd) Execute([]string) (errOut error) {
 	)
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, nil)
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -221,7 +222,7 @@ func (cmd *poolSvcFaultCmd) Execute([]string) (errOut error) {
 	)
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, nil)
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {

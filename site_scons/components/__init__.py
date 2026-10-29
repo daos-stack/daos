@@ -262,11 +262,6 @@ def define_common(reqs):
 
     reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
 
-    if ARM_PLATFORM:
-        reqs.define('ipmctl', skip_arch=True)
-    else:
-        reqs.define('ipmctl', package='ipmctl')
-
 
 def define_ompi(reqs):
     """OMPI and related components"""

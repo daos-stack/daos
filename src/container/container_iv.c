@@ -486,7 +486,8 @@ again:
 				/* convert to more specific errno */
 				if (rc == -DER_NONEXIST)
 					rc = -DER_CONT_NONEXIST;
-				DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_CONT_NONEXIST,
+				DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_CONT_NONEXIST ||
+					      rc == -DER_CONT_DESTROYING,
 					  DLOG_INFO, DLOG_ERR, rc,
 					  DF_CONT " create IV_CONT_PROP iv entry failed",
 					  DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid));
@@ -548,7 +549,11 @@ again:
 
 				rc = ds_cont_ec_agg_eph_rdb_lookup(entry->ns->iv_pool_uuid,
 								   civ_key->cont_uuid, &ec_agg_eph);
-				if (rc == 0) {
+				if (rc == -DER_NONEXIST) {
+					/* Distinguish a missing container from a missing IV entry.
+					 */
+					rc = -DER_CONT_NONEXIST;
+				} else if (rc == 0) {
 					uuid_copy(iv_entry.cont_uuid, civ_key->cont_uuid);
 					iv_entry.iv_track_eph.ite_ec_agg_eph  = ec_agg_eph;
 					iv_entry.iv_track_eph.ite_rank = dss_self_rank();
