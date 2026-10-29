@@ -546,9 +546,19 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	 * after pool map changed. Under both cases, the DTX resync that is triggered for pool
 	 * map changes (@for_all is false) should not handle such DTX to avoid making conflict
 	 * commit/abort decision (against regular IO handler) by race.
+	 *
+	 * But if the DTX entry was generated before current engine start (its epoch is older
+	 * than the engine start epoch), then there is no in-processing IO handler for it. Such
+	 * DTX entry must be handled by current resync. Otherwise, if the engine (as the DTX
+	 * leader) was restarted quickly without pool map change, the DTX entries that have been
+	 * replied to client (as committable) but not yet committed before the restart would be
+	 * never committed, the subsequent reads will return the stale data.
 	 */
-	if ((ent->ie_dtx_ver > dra->resync_version) ||
-	    (ent->ie_dtx_ver == dra->resync_version && !dra->for_all))
+	if (ent->ie_dtx_ver > dra->resync_version)
+		return 0;
+
+	if (ent->ie_dtx_ver == dra->resync_version && !dra->for_all &&
+	    ent->ie_epoch >= dss_get_start_epoch())
 		return 0;
 
 	if (ent->ie_dtx_tgt_cnt == 0)

@@ -1497,7 +1497,16 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			 */
 			return dtx_inprogress(dae, dth, false, true, 1);
 
-		/* For stand-alone read on leader, ignore non-committed DTX. */
+		/*
+		 * For stand-alone read on leader, if the DTX was generated with newer pool map
+		 * version than the resync version, then the DTX resync (which may commit such
+		 * DTX that has been replied to client as committable before leader restart) is
+		 * not yet done, return -DER_INPROGRESS to make the client to retry. Otherwise,
+		 * ignore the non-committed DTX.
+		 */
+		if (DAE_VER(dae) > cont->vc_dtx_resync_ver)
+			return dtx_inprogress(dae, dth, false, true, 7);
+
 		return ALB_UNAVAILABLE;
 	}
 
