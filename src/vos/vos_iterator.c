@@ -398,13 +398,13 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 	old   = vos_dth_get(is_sysdb);
 	vos_dth_set(iter->it_dth, is_sysdb);
 	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
-	/* SV probe moves past a deleted entry without updating the anchor */
-	if (rc == 0 && iter->it_type == VOS_ITER_SINGLE)
+	/* SV and sorted evtree probes move past a deleted or split entry without updating it */
+	if (rc == 0 && (iter->it_type == VOS_ITER_SINGLE || iter->it_type == VOS_ITER_RECX))
 		rc = iter->it_ops->iop_fetch(iter, &ent, anchor);
 	vos_dth_set(old, is_sysdb);
 
-	/* Probes land on the next entry if ours is gone; unsorted evtree probe is exact */
-	if (rc == 0 && iter->it_type != VOS_ITER_RECX && !vos_anchor_is_zero(&saved) &&
+	/* Probes land on the next entry if ours is gone */
+	if (rc == 0 && !vos_anchor_is_zero(&saved) &&
 	    memcmp(saved.da_buf, anchor->da_buf, sizeof(saved.da_buf)) != 0)
 		rc = -DER_NONEXIST;
 
