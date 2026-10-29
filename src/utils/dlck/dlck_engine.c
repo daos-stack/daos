@@ -741,7 +741,7 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 	int              rc;
 
 	/** initialize batch */
-	de.arg_alloc_fn = arg_alloc_fn;
+	de.arg_alloc_fn     = arg_alloc_fn;
 	de.arg_free_fn = arg_free_fn;
 	de.arg_alloc_fn_arg = arg_alloc_fn_arg;
 	de.arg_free_fn_arg  = arg_free_fn_arg;

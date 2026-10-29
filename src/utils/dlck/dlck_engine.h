@@ -183,7 +183,7 @@ dlck_status_set(struct checker_status *status, struct checker_status *cks)
 	/** Clear the information in \p cks. */
 	cks->warnings_num = 0;
 	cks->errors_num   = 0;
-	cks->rc = DER_SUCCESS;
+	cks->rc           = DER_SUCCESS;
 }
 
 /**
