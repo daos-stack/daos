@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2017-2024, Intel Corporation */
+/*
+ * Copyright 2017-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
+ */
 
 /*
  * stats.c -- implementation of statistics
@@ -80,4 +83,19 @@ DAV_FUNC_EXPORT int
 dav_get_heap_mb_stats_v2(dav_obj_t *pop, uint32_t mb_id, struct dav_heap_mb_stats *st)
 {
 	return heap_mbrt_getmb_usage(pop->do_heap, mb_id, &st->dhms_allocated, &st->dhms_maxsz);
+}
+
+DAV_FUNC_EXPORT int
+dav_get_heap_mb_limits_v2(dav_obj_t *pop, struct dav_heap_mb_limits *lim)
+{
+	heap_get_mb_limits_v2(pop->do_heap, &lim->dhml_nemb_max, &lim->dhml_emb_max,
+			      &lim->dhml_soe_rsrv);
+	return 0;
+}
+
+DAV_FUNC_EXPORT int
+dav_get_soemb_ids_v2(dav_obj_t *pop, uint32_t *ids, uint32_t max_ids, uint32_t *count)
+{
+	heap_get_soemb_ids_v2(pop->do_heap, ids, max_ids, count);
+	return 0;
 }

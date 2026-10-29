@@ -29,11 +29,16 @@
 #include "utest_common.h"
 
 #define NEMB_RATIO (0.8)
+/*
+ * Zones carved out of the non-evictable budget to reserve SOEMBs when the heap
+ * size exceeds the cache size (dav_v2 SOEMB_ACTIVE_CNT + SOEMB_REPLACE_RSRV).
+ */
+#define SOEMB_RSV_ZONES (4)
 #define MB_SIZE    (16 * 1024 * 1024)
 
 /** Build a single-bucket allocation request for the given bucket id. */
 #define BKT_REQ(id)                                                                                \
-	(&(umem_bucket_req_t){.ubr_bkt_ids = &(uint32_t){id}, .ubr_bkt_cnt = 1, .ubr_bkt_max = 0})
+	(&(umem_bucket_req_t){.ubr_bkt_ids = &(uint32_t){id}, .ubr_bkt_cnt = 1, .ubr_bkt_max = 1})
 
 struct test_arg {
 	struct utest_context	*ta_utx;
@@ -2549,8 +2554,12 @@ test_umempobj_nemb_usage(void **state)
 		*ptr       = prev_umoff;
 		prev_umoff = umoff;
 	}
-	/* 80% nemb when heap size greater than cache size */
-	assert_int_equal(num, 12);
+	/*
+	 * 80% nemb when heap size greater than cache size: 80% of 15 zones is 12,
+	 * minus the SOEMB reservation (SOEMB_ACTIVE_CNT + SOEMB_REPLACE_RSRV = 4)
+	 * carved out of the non-evictable budget, leaves 8.
+	 */
+	assert_int_equal(num, 8);
 	print_message("Number of allocations is %d\n", num);
 
 	for (--num;; num--) {
@@ -2629,8 +2638,8 @@ test_umempobj_heap_mb_stats(void **state)
 	uma.uma_pool = umempobj_create(name, "heap_mb_stats", UMEMPOBJ_ENABLE_STATS, scm_size, 0666,
 				       &ustore_tmp);
 	assert_ptr_not_equal(uma.uma_pool, NULL);
-	maxsz_exp   = (uint64_t)(scm_size / MB_SIZE * NEMB_RATIO) * MB_SIZE;
-	maxsz_alloc = ((uint64_t)(((scm_size / MB_SIZE) * NEMB_RATIO))) * MB_SIZE;
+	maxsz_exp   = ((uint64_t)(scm_size / MB_SIZE * NEMB_RATIO) - SOEMB_RSV_ZONES) * MB_SIZE;
+	maxsz_alloc = ((uint64_t)((scm_size / MB_SIZE) * NEMB_RATIO) - SOEMB_RSV_ZONES) * MB_SIZE;
 
 	umem_class_init(&uma, &umm);
 
