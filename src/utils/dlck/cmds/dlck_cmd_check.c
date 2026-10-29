@@ -175,8 +175,12 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 	struct checker *main_ck = &xa->ctrl->checker;
 	char         *path;
 	bool            fi_reenable;
-	const uint64_t  exp_fail_locs[] = {DLCK_FAULT_POOL_OPEN_UMEM, DLCK_FAULT_POOL_OPEN_MAGIC,
-					   DLCK_FAULT_POOL_OPEN_VERSION, DLCK_FAULT_POOL_OPEN_UUID,
+	const uint64_t  exp_fail_locs[] = {DLCK_FAULT_POOL_NVME_HEALTH,
+					   DLCK_FAULT_POOL_OPEN_BIO,
+					   DLCK_FAULT_POOL_OPEN_UMEM,
+					   DLCK_FAULT_POOL_OPEN_MAGIC,
+					   DLCK_FAULT_POOL_OPEN_VERSION,
+					   DLCK_FAULT_POOL_OPEN_UUID,
 					   0};
 	daos_handle_t poh;
 	int           rc;

@@ -325,6 +325,10 @@ static inline uint64_t
 checker_fi_proxy(uint64_t fail_loc_in)
 {
 	switch (fail_loc_in) {
+	case DLCK_FAULT_POOL_NVME_HEALTH:
+		return DAOS_FAULT_POOL_NVME_HEALTH;
+	case DLCK_FAULT_POOL_OPEN_BIO:
+		return DAOS_FAULT_POOL_OPEN_BIO;
 	case DLCK_FAULT_POOL_OPEN_UMEM:
 		return DAOS_FAULT_POOL_OPEN_UMEM;
 	case DLCK_FAULT_POOL_OPEN_MAGIC:
