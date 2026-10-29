@@ -1,5 +1,7 @@
 # Custom Slurm Dependency RPMs
 
+<!-- Copyright 2026 Hewlett Packard Enterprise Development LP -->
+
 Slurm is a DAOS test dependency, pinned in `utils/build.config`. Source builds
 use the existing Git retriever and accept patches listed under
 `[patch_versions]` as `slurm=...`, stored in `deps/patches/slurm/`.

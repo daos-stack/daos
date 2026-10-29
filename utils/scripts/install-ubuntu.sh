@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # (C) Copyright 2025 Google LLC
+# Copyright 2026 Hewlett Packard Enterprise Development LP
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.

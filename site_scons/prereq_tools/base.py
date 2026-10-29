@@ -38,7 +38,6 @@ from SCons.SConf import SetCacheMode
 from SCons.Script import BUILD_TARGETS, Dir, Exit, GetOption, SetOption, WhereIs
 from SCons.Variables import BoolVariable, EnumVariable, ListVariable, PathVariable
 
-
 TEST_DEPENDENCIES = ('slurm',)
 
 
@@ -458,7 +457,7 @@ def ensure_dir_exists(dirname, dry_run):
         raise IOError(errno.ENOTDIR, 'Not a directory', dirname)
 
 
-# pylint: disable-next=function-redefined
+# pylint: disable-next=function-redefined,too-many-public-methods
 class PreReqComponent():
     """A class for defining and managing external components required by a project.
 

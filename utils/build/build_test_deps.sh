@@ -1,7 +1,12 @@
 #!/bin/bash
+# Copyright 2026 Hewlett Packard Enterprise Development LP
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+# shellcheck source=utils/build/build_utils.sh
 source "${script_dir}/build_utils.sh"
 
 if [[ "${1:-}" = -h || "${1:-}" = --help ]]; then

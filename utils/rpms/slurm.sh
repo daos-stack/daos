@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2026 Hewlett Packard Enterprise Development LP
+
 set -eEuo pipefail
 root="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 # shellcheck source=utils/rpms/fpm_common.sh
