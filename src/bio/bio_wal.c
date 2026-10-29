@@ -1216,23 +1216,38 @@ write_header(struct bio_meta_context *mc, struct bio_io_context *ioc, void *hdr,
 	return 0;
 }
 
-int
-bio_wal_flush_header(struct bio_meta_context *mc)
+/* Persist the header with the given checkpoint ID and the current commit ID */
+static int
+wal_flush_header(struct bio_meta_context *mc, uint64_t ckp_id, uint32_t ckp_blks)
 {
-	struct wal_super_info	*si = &mc->mc_wal_info;
-	struct wal_header	*hdr = &si->si_header;
+	struct wal_super_info *si  = &mc->mc_wal_info;
+	struct wal_header     *hdr = &si->si_header;
 
-	/* WAL header is up-to-date */
-	if (si->si_ckp_id == hdr->wh_ckp_id && si->si_ckp_blks == hdr->wh_ckp_blks &&
-	    si->si_commit_id == hdr->wh_commit_id && si->si_commit_blks == hdr->wh_commit_blks)
-		return 0;
-
-	hdr->wh_ckp_id = si->si_ckp_id;
-	hdr->wh_ckp_blks = si->si_ckp_blks;
-	hdr->wh_commit_id = si->si_commit_id;
+	hdr->wh_ckp_id      = ckp_id;
+	hdr->wh_ckp_blks    = ckp_blks;
+	hdr->wh_commit_id   = si->si_commit_id;
 	hdr->wh_commit_blks = si->si_commit_blks;
 
 	return write_header(mc, mc->mc_wal, hdr, sizeof(*hdr), &hdr->wh_csum);
+}
+
+int
+bio_wal_flush_header(struct bio_meta_context *mc)
+{
+	struct wal_super_info *si  = &mc->mc_wal_info;
+	struct wal_header     *hdr = &si->si_header;
+
+	/* WAL header is up-to-date */
+	if (si->si_commit_id == hdr->wh_commit_id && si->si_commit_blks == hdr->wh_commit_blks)
+		return 0;
+
+	D_ASSERT(wal_id_cmp(si, hdr->wh_ckp_id, si->si_ckp_id) >= 0);
+	/*
+	 * Keep the checkpoint ID in the header. si_ckp_id is updated only after the unmap, so it
+	 * could be older than the one a concurrent bio_wal_checkpoint() is persisting, and writing
+	 * it would roll the header back over an already unmapped WAL region.
+	 */
+	return wal_flush_header(mc, hdr->wh_ckp_id, hdr->wh_ckp_blks);
 }
 
 static int
@@ -1963,10 +1978,8 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purged
 	unmap_start = id2off(wal_next_id(si, si->si_ckp_id, si->si_ckp_blks));
 	unmap_end = id2off(wal_next_id(si, tx_id, blk_desc.bd_blks));
 
-	si->si_ckp_id = tx_id;
-	si->si_ckp_blks = blk_desc.bd_blks;
-	/* Flush the WAL header */
-	rc = bio_wal_flush_header(mc);
+	/* Persist the new checkpoint ID in the header first */
+	rc = wal_flush_header(mc, tx_id, blk_desc.bd_blks);
 	if (rc) {
 		DL_ERROR(rc, "Flush WAL header failed.");
 		goto out;
@@ -1976,6 +1989,10 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purged
 	rc = unmap_wal(mc, unmap_start, unmap_end, purged_blks);
 	if (rc) /* Wakeup waiters even if unmap failed */
 		DL_ERROR(rc, "Unmap checkpointed region failed.");
+
+	/* The WAL space can be reused only after the unmap, so update the in-memory ID now */
+	si->si_ckp_id   = tx_id;
+	si->si_ckp_blks = blk_desc.bd_blks;
 
 	wakeup_reserve_waiters(si, false);
 out:
