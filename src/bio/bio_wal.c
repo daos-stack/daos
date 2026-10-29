@@ -1216,6 +1216,7 @@ write_header(struct bio_meta_context *mc, struct bio_io_context *ioc, void *hdr,
 	return 0;
 }
 
+/* Persist the header with the given checkpoint ID and the current commit ID */
 static int
 wal_flush_header(struct bio_meta_context *mc, uint64_t ckp_id, uint32_t ckp_blks)
 {
@@ -1238,9 +1239,16 @@ wal_flush_header(struct bio_meta_context *mc, uint64_t ckp_id, uint32_t ckp_blks
 int
 bio_wal_flush_header(struct bio_meta_context *mc)
 {
-	struct wal_super_info *si = &mc->mc_wal_info;
+	struct wal_super_info *si  = &mc->mc_wal_info;
+	struct wal_header     *hdr = &si->si_header;
 
-	return wal_flush_header(mc, si->si_ckp_id, si->si_ckp_blks);
+	D_ASSERT(wal_id_cmp(si, hdr->wh_ckp_id, si->si_ckp_id) >= 0);
+	/*
+	 * Keep the checkpoint ID in the header. si_ckp_id is updated only after the unmap, so it
+	 * could be older than the one a concurrent bio_wal_checkpoint() is persisting, and writing
+	 * it would roll the header back over an already unmapped WAL region.
+	 */
+	return wal_flush_header(mc, hdr->wh_ckp_id, hdr->wh_ckp_blks);
 }
 
 static int

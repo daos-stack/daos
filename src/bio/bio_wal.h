@@ -145,8 +145,12 @@ struct wal_trans_tail {
 
 /* In-memory WAL super information */
 struct wal_super_info {
-	struct wal_header	si_header;	/* WAL blob header */
-	uint64_t		si_ckp_id;	/* Last check-pointed ID */
+	/* WAL blob header, the content being (or already) persisted. The checkpoint ID in it is
+	 * moved forward by bio_wal_checkpoint() before the unmap, so it can be ahead of si_ckp_id.
+	 */
+	struct wal_header       si_header;
+	/* Last check-pointed ID, WAL space up to it is reusable. Updated after the unmap. */
+	uint64_t                si_ckp_id;
 	uint64_t		si_commit_id;	/* Last committed ID */
 	uint32_t		si_ckp_blks;	/* Blocks used by last check-pointed ID */
 	uint32_t		si_commit_blks;	/* Blocks used by last committed ID */
