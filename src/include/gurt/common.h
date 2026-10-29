@@ -809,6 +809,33 @@ d_timeleft_ns(const struct timespec *expiration)
 	return ns;
 }
 
+static inline uint64_t
+crt_realtime_sec(void)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_REALTIME_COARSE, &now);
+	return (uint64_t)now.tv_sec;
+}
+
+static inline int64_t
+crt_deadline_to_timeout(uint64_t deadline_sec)
+{
+	uint64_t now_sec = crt_realtime_sec();
+	uint64_t timeout_sec;
+
+	if (deadline_sec <= now_sec)
+		return -1;
+	timeout_sec = deadline_sec - now_sec - 1;
+	return timeout_sec > UINT32_MAX ? UINT32_MAX : (int64_t)timeout_sec;
+}
+
+static inline uint64_t
+crt_timeout_to_deadline(uint32_t timeout_sec)
+{
+	return crt_realtime_sec() + (uint64_t)timeout_sec + 1;
+}
+
 static inline struct timespec
 d_time_elapsed(const struct timespec start)
 {

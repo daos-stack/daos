@@ -95,9 +95,12 @@ struct __attribute__((packed)) crt_hdr_common {
 	uint64_t                chc_rpcid;
 };
 
+/* rank:tag are packed as (rank << 8) | tag:
+ *  upper 24 bits - rank
+ *  lower  8 bits - tag
+ */
 union crt_dst_rank_tag {
 	uint32_t packed;
-	uint8_t  bytes[4];
 };
 
 struct __attribute__((packed)) crt_req_hdr {
@@ -138,33 +141,6 @@ crt_req_dst_set(struct crt_req_hdr *hdr, uint32_t rank, uint32_t tag)
 		return -DER_INVAL;
 	hdr->crh_dst.packed = (rank << 8) | tag;
 	return 0;
-}
-
-static inline uint64_t
-crt_realtime_sec(void)
-{
-	struct timespec now;
-
-	clock_gettime(CLOCK_REALTIME_COARSE, &now);
-	return (uint64_t)now.tv_sec;
-}
-
-static inline int64_t
-crt_deadline_to_timeout(uint64_t deadline_sec)
-{
-	uint64_t now_sec = crt_realtime_sec();
-	uint64_t timeout_sec;
-
-	if (deadline_sec <= now_sec)
-		return -1;
-	timeout_sec = deadline_sec - now_sec - 1;
-	return timeout_sec > UINT32_MAX ? UINT32_MAX : (int64_t)timeout_sec;
-}
-
-static inline uint64_t
-crt_timeout_to_deadline(uint32_t timeout_sec)
-{
-	return crt_realtime_sec() + (uint64_t)timeout_sec + 1;
 }
 
 typedef enum {
