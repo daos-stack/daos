@@ -401,6 +401,11 @@ int dsc_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t de
 			     char *machine, uint32_t *count);
 
 int ds_pool_target_status(struct ds_pool *pool, uint32_t id);
+
+/** Check if the target (any target of \a rank if \a tgt_idx is -1) is DOWN/DOWNOUT */
+bool
+		 ds_pool_tgt_excluded(struct ds_pool *pool, d_rank_t rank, int tgt_idx);
+
 int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);
 int ds_pool_mark_connectable(struct ds_pool_svc *ds_svc);
