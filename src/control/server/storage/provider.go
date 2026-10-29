@@ -575,9 +575,12 @@ func setHotplugRange(ctx context.Context, log logging.Logger, getTopo topologyGe
 	switch {
 	case req.VMDEnabled:
 		log.Debug("hotplug bus-id filter allows all as vmd is enabled")
+		// VMD backing devices use a different domain to their NUMA node, so the
+		// domain is ignored for hotplug matching.
 		domain = 0x0000
 		begin = 0x00
 		end = 0xFF
+		req.HotplugIgnoreDomain = true
 	case tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero():
 		log.Debugf("received user-specified hotplug bus-id range %q", tier.Bdev.BusidRange)
 		domain = tier.Bdev.BusidRange.LowAddress.Domain
@@ -593,10 +596,8 @@ func setHotplugRange(ctx context.Context, log logging.Logger, getTopo topologyGe
 		}
 	}
 
-	// VMD backing devices use a different domain to their NUMA node, so the domain is
-	// ignored (in addition to any explicit user request to match any domain).
 	domainStr := fmt.Sprintf("%04X", domain)
-	if req.VMDEnabled || req.HotplugIgnoreDomain {
+	if req.HotplugIgnoreDomain {
 		domainStr = "any"
 	}
 	log.Infof("NUMA %d: hotplug domain=%s, bus-ids=%02X-%02X", numaNode, domainStr, begin, end)

@@ -372,9 +372,11 @@ func hotplugPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 			Domain: req.HotplugBusidDomain,
 			Begin:  req.HotplugBusidBegin,
 			End:    req.HotplugBusidEnd,
-			// Ignore domain for VMD (backing devices use a different domain to their
-			// NUMA node) or when the user requested matching across all domains.
-			IgnoreDomain: req.VMDEnabled || req.HotplugIgnoreDomain,
+			// HotplugIgnoreDomain is the final resolved decision made in
+			// setHotplugRange(), covering both VMD (backing devices use a
+			// different domain to their NUMA node) and an explicit user
+			// request to match across all domains.
+			IgnoreDomain: req.HotplugIgnoreDomain,
 		},
 	})
 }
