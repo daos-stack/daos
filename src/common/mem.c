@@ -785,9 +785,20 @@ pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 		return 0;
 
 	if (!UMOFF_IS_NULL(umoff)) {
-		int	rc;
-
-		rc = pmemobj_tx_free(umem_off2id(umm, umoff));
+		int     rc;
+		PMEMoid oid = umem_off2id(umm, umoff);
+#if FAULT_INJECTION
+		if (DAOS_FAIL_CHECK(DAOS_MEM_PMEM_FREE_POISON)) {
+			void  *ptr  = pmemobj_direct(oid);
+			size_t size = pmemobj_alloc_usable_size(oid);
+			/* Poison freed memory to expose use-after-free. */
+			rc = pmemobj_tx_xadd_range_direct(ptr, size, POBJ_XADD_ASSUME_INITIALIZED);
+			if (rc != 0)
+				return umem_tx_errno(rc);
+			memset(ptr, (uint8_t)daos_fail_value_get(), size);
+		}
+#endif
+		rc = pmemobj_tx_free(oid);
 		return rc ? umem_tx_errno(rc) : 0;
 	}
 
@@ -2863,7 +2874,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 	uint64_t			 committed_tx = 0;
 	unsigned int			 max_iod_per_page;
 	unsigned int			 tot_pgs = 0, flushed_pgs = 0;
-	int				 inflight = 0;
+	int                              in_flight = 0;
 	int				 i, rc = 0;
 
 	D_ASSERT(store != NULL);
@@ -2900,7 +2911,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 
 	do {
 		/** first try to add up to MAX_INFLIGHT_SETS to the waiting queue */
-		while (inflight < MAX_INFLIGHT_SETS && !d_list_empty(dirty_list)) {
+		while (in_flight < MAX_INFLIGHT_SETS && !d_list_empty(dirty_list)) {
 			chkpt_data =
 			    d_list_pop_entry(&free_list, struct umem_checkpoint_data, cd_link);
 
@@ -2973,7 +2984,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 
 			chkpt_insert_sorted(store, chkpt_data, &waiting_list);
 
-			inflight++;
+			in_flight++;
 		}
 
 		chkpt_data = d_list_pop_entry(&waiting_list, struct umem_checkpoint_data, cd_link);
@@ -3003,7 +3014,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 			pinfo = chkpt_data->cd_pages[i];
 			page_flush_completion(cache, pinfo);
 		}
-		inflight--;
+		in_flight--;
 
 		flushed_pgs += chkpt_data->cd_nr_pages;
 		if (stats) {
@@ -3019,7 +3030,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 			break;
 		}
 
-	} while (inflight != 0 || !d_list_empty(dirty_list));
+	} while (in_flight != 0 || !d_list_empty(dirty_list));
 
 	return rc;
 }
