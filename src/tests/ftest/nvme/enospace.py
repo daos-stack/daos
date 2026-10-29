@@ -340,10 +340,13 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             return pydaos.DaosErrorCode(err_no).name
 
         logfile_glob = log_file + r".*[0-9]"
+        self.log.info("Checking %s on %s for errors:", logfile_glob, self.hostlist_clients)
         errors_count = get_errors_count(self.log, self.hostlist_clients, logfile_glob)
         for error in self.expected_errors:
             if error not in errors_count:
                 errors_count[error] = 0
+        for error in errors_count:
+            self.log.info("  %s [%s]: %s", err_to_str(error), error, errors_count[error])
 
         if errors_count[self.DER_NOSPACE] <= 0:
             self.fail(
@@ -741,30 +744,32 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Repeat the test in loop.
         for _loop in range(10):
-            self.log.info("-------enospc_no_aggregation Loop--------- %d", _loop)
-            # Fill 75% of SCM pool
-            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=40)
-
+            self.log_step(f"Loop {_loop}: Starting Auto_Write to fill SCM to 75% usage")
+            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
             self.log.info(self.pool.pool_percentage_used())
 
+            self.log_step(f"Loop {_loop}: Starting Auto_Write to fill SCM to +10% usage")
             log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
             try:
-                # Fill 45% more to SCM ,which should Fail because no SCM space
                 self.start_ior_load(
-                    storage='SCM', operation="Auto_Write", percent=45, log_file=log_file)
+                    storage='SCM', operation="Auto_Write", percent=10, log_file=log_file)
             except TestFail:
-                self.log.info('Expected to fail because of DER_NOSPACE')
-            else:
-                self.fail('This test suppose to fail because of DER_NOSPACE'
-                          'but it got Passed')
+                self.log.info(
+                    "Auto_Write to fill SCM to +10%% usage expected to fail due to DER_NOSPACE: %s",
+                    self.result)
+            finally:
+                self.log.info(self.pool.pool_percentage_used())
 
-            # Verify DER_NO_SPACE error count is expected and no other Error in client log.
+            # Verify DER_NOSPACE error count is expected and no other Error in client log.
+            self.log_step(f"Loop {_loop}: Verifying DER_NOSPACE in client log")
             self.verify_enospace_log(log_file)
 
             # Delete all the containers
+            self.log_step(f"Loop {_loop}: Deleting all containers")
             self.delete_all_containers(self.pool)
 
             # Wait for the SCM space to be released. (Usage goes below 60%)
+            self.log_step(f"Loop {_loop}: Waiting for SCM space to be released")
             scm_released = False
             pool_usage = None
             for count in range(6):
@@ -776,10 +781,13 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                     break
 
             # Verify that the SCM usage has gone down below 60%.
+            self.log_step(f"Loop {_loop}: Verifying SCM space has been released")
             if not scm_released:
                 msg = (f"Pool SCM used percentage should be < 60%. Actual = "
                        f"{pool_usage['scm']}")
                 self.fail(msg)
 
         # Run last IO
+        self.log_step(r"Starting Auto_Write to fill SCM to 1% usage")
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
+        self.log.info("Test passed")
