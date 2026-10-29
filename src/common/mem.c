@@ -2124,10 +2124,9 @@ struct umem_page_info {
 	uint64_t pi_last_checkpoint;
 	/** Highest transaction ID of writes to the page */
 	uint64_t pi_last_inflight;
-	/** While the page is on ca_pgs_flushing: the highest checkpoint ID known to be durable in
-	 *  the MD blob, i.e. pi_last_checkpoint before the ongoing flush started. The flush bumps
-	 *  pi_last_checkpoint before the data is written, so it can't tell what is durable. Flushes
-	 *  of a page are serialized (pi_io), so the previous flush has completed by then.
+	/** The highest checkpoint ID known to be durable in the MD blob. pi_last_checkpoint is
+	 *  bumped when a flush starts, before the data is written, so it is not durable until
+	 *  the flush completes successfully (page_flush_completion()).
 	 */
 	uint64_t  pi_durable_ckpt;
 	/** link to global LRU lists, or global free page list, or global pinned list */
@@ -2842,13 +2841,17 @@ chkpt_insert_sorted(struct umem_store *store, struct umem_checkpoint_data *chkpt
 }
 
 static void
-page_flush_completion(struct umem_cache *cache, struct umem_page_info *pinfo)
+page_flush_completion(struct umem_cache *cache, struct umem_page_info *pinfo, int rc)
 {
 	D_ASSERT(d_list_empty(&pinfo->pi_dirty_link));
 	D_ASSERT(pinfo->pi_io == 1);
 	pinfo->pi_io = 0;
 	D_ASSERT(!d_list_empty(&pinfo->pi_flush_link));
 	d_list_del_init(&pinfo->pi_flush_link);
+
+	/* pi_last_checkpoint was bumped when the flush started, it is durable only now */
+	if (rc == 0)
+		pinfo->pi_durable_ckpt = pinfo->pi_last_checkpoint;
 
 	if (is_page_dirty(pinfo))
 		d_list_add_tail(&pinfo->pi_dirty_link, &cache->ca_pgs_dirty);
@@ -2899,13 +2902,6 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 		pinfo->pi_io = 1;
 		D_ASSERT(d_list_empty(&pinfo->pi_flush_link));
 		d_list_add_tail(&pinfo->pi_flush_link, &cache->ca_pgs_flushing);
-		/*
-		 * Record pi_last_checkpoint as it was before this flush bumps it. An evicting page
-		 * is already bumped (so it is clean) and recorded by cache_flush_page(), while a
-		 * checkpoint page is still dirty and gets bumped later, after so_flush_prep().
-		 */
-		if (is_page_dirty(pinfo))
-			pinfo->pi_durable_ckpt = pinfo->pi_last_checkpoint;
 		tot_pgs++;
 
 		if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_last_inflight, *chkpt_id) > 0)
@@ -3015,7 +3011,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 		rc = store->stor_ops->so_flush_post(chkpt_data->cd_fh, rc);
 		for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
 			pinfo = chkpt_data->cd_pages[i];
-			page_flush_completion(cache, pinfo);
+			page_flush_completion(cache, pinfo, rc);
 		}
 		inflight--;
 
@@ -3279,14 +3275,7 @@ cache_flush_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	d_list_del_init(&pinfo->pi_dirty_link);
 	d_list_add_tail(&pinfo->pi_dirty_link, &dirty_list);
 
-	/*
-	 * Bump the last checkpoint ID beforehand, since cache_flush_pages() could yield before
-	 * bumping the last checkpoint ID. Keep the old (durable) value for umem_cache_checkpoint(),
-	 * to know which txs this flush may not cover.
-	 */
 	D_ASSERT(is_page_dirty(pinfo));
-	pinfo->pi_durable_ckpt    = pinfo->pi_last_checkpoint;
-	pinfo->pi_last_checkpoint = pinfo->pi_last_inflight;
 
 	arg.wca_cache = cache;
 	arg.wca_pinfo = pinfo;
