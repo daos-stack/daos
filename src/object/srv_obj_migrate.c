@@ -3940,6 +3940,14 @@ struct migrate_ult_arg {
 	uint32_t	version;
 };
 
+static bool
+migrate_discard_wait_stop(void *arg)
+{
+	struct migrate_pool_tls *pool_tls = arg;
+
+	return pool_tls->mpt_fini;
+}
+
 static void
 migrate_ult(void *arg)
 {
@@ -3949,21 +3957,15 @@ migrate_ult(void *arg)
 
 	D_ASSERT(pool_tls != NULL);
 	pool = pool_tls->mpt_pool;
-	while (atomic_load(&pool->spc_pool->sp_discarding) != 0) {
-		D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n", DP_RB_MPT(pool_tls));
-		dss_sleep(2 * 1000);
-		if (pool_tls->mpt_fini)
-			D_GOTO(out, rc);
-
-		ABT_mutex_lock(pool->spc_pool->sp_mutex);
-		if (pool->spc_pool->sp_discard_status) {
-			rc = pool->spc_pool->sp_discard_status;
-			ABT_mutex_unlock(pool->spc_pool->sp_mutex);
-			D_DEBUG(DB_REBUILD, DF_RB ": discard failure: " DF_RC "\n",
-				DP_RB_MPT(pool_tls), DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-		ABT_mutex_unlock(pool->spc_pool->sp_mutex);
+	rc   = ds_pool_wait_discard(pool->spc_pool, 0, true, migrate_discard_wait_stop, pool_tls,
+				    NULL);
+	if (rc != 0) {
+		/* a finished migration is not an error */
+		if (rc == -DER_SHUTDOWN)
+			rc = 0;
+		else
+			DL_ERROR(rc, DF_RB ": wait for discard failed", DP_RB_MPT(pool_tls));
+		D_GOTO(out, rc);
 	}
 
 	rc =
