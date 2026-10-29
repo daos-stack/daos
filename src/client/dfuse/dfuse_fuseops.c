@@ -571,27 +571,24 @@ dfuse_cb_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl     *oh;
 	struct dfuse_inode_entry *inode;
+	int                       rc;
 
 	D_ASSERT(fi != NULL);
 	oh    = (struct dfuse_obj_hdl *)fi->fh;
 	inode = oh->doh_ie;
 
 	DFUSE_IE_WFLUSH(inode);
-	DFUSE_REPLY_ZERO(inode, req);
+	rc = dfuse_wb_error_check(oh);
+	if (rc != 0)
+		DFUSE_REPLY_ERR_RAW(inode, req, rc);
+	else
+		DFUSE_REPLY_ZERO(inode, req);
 }
 
 static void
 dfuse_cb_fdatasync(fuse_req_t req, fuse_ino_t ino, int datasync, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl     *oh;
-	struct dfuse_inode_entry *inode;
-
-	D_ASSERT(fi != NULL);
-	oh    = (struct dfuse_obj_hdl *)fi->fh;
-	inode = oh->doh_ie;
-
-	DFUSE_IE_WFLUSH(inode);
-	DFUSE_REPLY_ZERO(inode, req);
+	dfuse_cb_flush(req, ino, fi);
 }
 
 /* dfuse ops that are used for accessing dfs mounts */
