@@ -76,6 +76,7 @@ if [[ $1 == reset ]]; then
 	set -x
 	PCI_ALLOWED=${_PCI_ALLOWED}		\
 	PCI_BLOCKED=${_PCI_BLOCKED}		\
+	DEV_TYPE=${_DEV_TYPE}			\
 	PATH=/sbin:${PATH}			\
 	${scriptpath} reset
 	set +x
@@ -87,6 +88,7 @@ else
 	HUGENODE=${_HUGENODE} 			\
 	TARGET_USER=${_TARGET_USER}		\
 	DRIVER_OVERRIDE=${_DRIVER_OVERRIDE}	\
+	DEV_TYPE=${_DEV_TYPE}			\
 	PATH=/sbin:${PATH}			\
 	${scriptpath}
 	set +x
