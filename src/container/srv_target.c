@@ -2839,10 +2839,12 @@ ds_cont_eph_report(struct ds_pool *pool)
 		}
 
 		/* if aggregation enabled, make sure to report ec_agg_eph at the start phase
-		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero.
+		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero. Also report a
+		 * zero min_ec_agg_eph after a target of this rank is reintegrated, so that the
+		 * leader knows some target waits for the boundary.
 		 */
 		if (min_ec_agg_eph == DAOS_EPOCH_MAX || min_stable_eph == DAOS_EPOCH_MAX ||
-		    (ec_eph->cte_last_ec_agg_epoch != 0 &&
+		    (min_ec_agg_eph != 0 && ec_eph->cte_last_ec_agg_epoch != 0 &&
 		     min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
 		     min_stable_eph <= ec_eph->cte_last_stable_epoch)) {
 			if (min_ec_agg_eph > 0 && min_stable_eph > 0 &&
