@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
@@ -210,11 +212,15 @@ func (ur *UnaryResponse) findMSResponse() (*HostResponse, error) {
 
 	// As we may have sent the request to multiple MS replicas, just pick
 	// through the responses to find ether the one that succeeded, or the one
-	// with the highest data version.
-	// If none succeeded, return the error from the last response.
+	// with the highest data version. If none succeeded, prefer a routing
+	// error, which says where to retry, over the error from the last response.
 	var msResp *HostResponse
 	var maxResp *HostResponse
+	var routeResp *HostResponse
 	for _, msResp = range ur.Responses {
+		if msResp != nil && routeResp == nil && system.IsRoutingError(msResp.Error) {
+			routeResp = msResp
+		}
 		if msResp == nil || msResp.Error != nil || msResp.Message == nil {
 			continue
 		}
@@ -224,11 +230,13 @@ func (ur *UnaryResponse) findMSResponse() (*HostResponse, error) {
 		}
 	}
 
-	// If we found a response with a higher data version, then we
-	// know that it's a valid response and can bypass the rest of
-	// the error-checking logic.
-	if maxResp != nil && maxResp != msResp {
+	if maxResp != nil {
 		return maxResp, nil
+	}
+
+	if routeResp != nil {
+		ur.debugf("%s: err: %s", routeResp.Addr, routeResp.Error)
+		return nil, routeResp.Error
 	}
 
 	if msResp == nil {
@@ -259,6 +267,9 @@ func (ur *UnaryResponse) getMSError() error {
 func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 	msr, err := ur.findMSResponse()
 	if err != nil {
+		if IsConnErr(err) {
+			return nil, errors.Wrap(errMSConnectionFailure, err.Error())
+		}
 		return nil, err
 	}
 
@@ -272,9 +283,6 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 func convertMSResponse(ur *UnaryResponse, out interface{}) error {
 	msResp, err := ur.getMSResponse()
 	if err != nil {
-		if IsConnErr(err) {
-			return errors.Wrap(errMSConnectionFailure, err.Error())
-		}
 		return err
 	}
 

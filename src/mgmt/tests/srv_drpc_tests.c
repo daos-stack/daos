@@ -1557,6 +1557,77 @@ test_drpc_pool_query_rebuild_done_success(void **state)
 	D_FREE(resp.body.data);
 }
 
+static Mgmt__PoolQueryResp *
+unpack_query_resp(Drpc__Response *resp)
+{
+	Mgmt__PoolQueryResp *pq_resp;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	pq_resp = mgmt__pool_query_resp__unpack(NULL, resp->body.len, resp->body.data);
+	assert_non_null(pq_resp);
+	assert_int_equal(pq_resp->status, 0);
+	return pq_resp;
+}
+
+static void
+test_drpc_pool_query_with_props(void **state)
+{
+	Drpc__Call           call = DRPC__CALL__INIT;
+	Drpc__Response       resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolQueryReq   req  = MGMT__POOL_QUERY_REQ__INIT;
+	Mgmt__PoolQueryResp *pq_resp;
+	daos_pool_info_t     exp_info = {0};
+
+	init_test_pool_info(&exp_info);
+	ds_mgmt_pool_query_info_out  = exp_info;
+	ds_mgmt_pool_query_self_heal = DAOS_SELF_HEAL_AUTO_EXCLUDE;
+
+	req.id                    = TEST_UUID;
+	req.query_mask            = DEFAULT_QUERY_BITS;
+	req.properties            = alloc_prop_msg_list(1);
+	req.n_properties          = 1;
+	req.properties[0]->number = DAOS_PROP_PO_SELF_HEAL;
+	pack_pool_query_req(&call, &req);
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	assert_int_equal(ds_mgmt_pool_query_prop_type, DAOS_PROP_PO_SELF_HEAL);
+	pq_resp = unpack_query_resp(&resp);
+	assert_int_equal(pq_resp->n_properties, 1);
+	assert_int_equal(pq_resp->properties[0]->number, DAOS_PROP_PO_SELF_HEAL);
+	assert_int_equal(pq_resp->properties[0]->value_case, MGMT__POOL_PROPERTY__VALUE_NUMVAL);
+	assert_int_equal(pq_resp->properties[0]->numval, DAOS_SELF_HEAL_AUTO_EXCLUDE);
+	mgmt__pool_query_resp__free_unpacked(pq_resp, NULL);
+
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_query_without_props(void **state)
+{
+	Drpc__Call           call = DRPC__CALL__INIT;
+	Drpc__Response       resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolQueryResp *pq_resp;
+	daos_pool_info_t     exp_info = {0};
+
+	init_test_pool_info(&exp_info);
+	ds_mgmt_pool_query_info_out = exp_info;
+
+	setup_pool_query_drpc_call(&call, TEST_UUID, 0);
+
+	ds_mgmt_drpc_pool_query(&call, &resp);
+
+	assert_int_equal(ds_mgmt_pool_query_prop_type, 0);
+	pq_resp = unpack_query_resp(&resp);
+	assert_int_equal(pq_resp->n_properties, 0);
+	mgmt__pool_query_resp__free_unpacked(pq_resp, NULL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
 static void
 test_drpc_pool_query_rebuild_busy_success(void **state)
 {
@@ -3622,6 +3693,8 @@ main(void)
 	    QUERY_TEST(test_drpc_pool_query_mgmt_svc_fails),
 	    QUERY_TEST(test_drpc_pool_query_rebuild_idle_success),
 	    QUERY_TEST(test_drpc_pool_query_rebuild_done_success),
+	    QUERY_TEST(test_drpc_pool_query_with_props),
+	    QUERY_TEST(test_drpc_pool_query_without_props),
 	    QUERY_TEST(test_drpc_pool_query_rebuild_busy_success),
 	    QUERY_TEST(test_drpc_pool_query_rebuild_idle_err),
 	    QUERY_TEST(test_drpc_pool_query_rebuild_done_err),

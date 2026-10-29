@@ -202,6 +202,20 @@ func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
 	return svc.sysdb.CheckReplica()
 }
 
+// checkForwardedReplicaRequest performs sanity-checking on a request that must
+// be run on a MS replica and forwarded to one of its engines. A replica without
+// a running engine redirects the caller to its peers instead of failing.
+func (svc *mgmtSvc) checkForwardedReplicaRequest(req proto.Message) error {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return err
+	}
+
+	if svc.harness.hasReadyEngine() {
+		return nil
+	}
+	return &system.ErrNoEngine{Replicas: svc.sysdb.PeerReplicas()}
+}
+
 // startLeaderLoops kicks off the leader-only processing loops
 // that will be canceled on leadership loss.
 func (svc *mgmtSvc) startLeaderLoops(ctx context.Context) {

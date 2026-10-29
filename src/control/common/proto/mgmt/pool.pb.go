@@ -1592,6 +1592,7 @@ type PoolQueryReq struct {
 	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	SvcRanks      []uint32               `protobuf:"varint,3,rep,packed,name=svc_ranks,json=svcRanks,proto3" json:"svc_ranks,omitempty"` // List of pool service ranks
 	QueryMask     uint64                 `protobuf:"varint,4,opt,name=query_mask,json=queryMask,proto3" json:"query_mask,omitempty"`     // Bitmask of pool query options
+	Properties    []*PoolProperty        `protobuf:"bytes,5,rep,name=properties,proto3" json:"properties,omitempty"`                     // Pool properties to return with the query
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1652,6 +1653,13 @@ func (x *PoolQueryReq) GetQueryMask() uint64 {
 		return x.QueryMask
 	}
 	return 0
+}
+
+func (x *PoolQueryReq) GetProperties() []*PoolProperty {
+	if x != nil {
+		return x.Properties
+	}
+	return nil
 }
 
 // StorageUsageStats represents usage statistics for a storage subsystem.
@@ -1850,7 +1858,7 @@ type PoolQueryResp struct {
 	MemFileBytes      uint64                 `protobuf:"varint,21,opt,name=mem_file_bytes,json=memFileBytes,proto3" json:"mem_file_bytes,omitempty"`                 // per-pool accumulated value of memory file sizes
 	DeadRanks         string                 `protobuf:"bytes,22,opt,name=dead_ranks,json=deadRanks,proto3" json:"dead_ranks,omitempty"`                             // optional set of dead ranks
 	MdOnSsdActive     bool                   `protobuf:"varint,23,opt,name=md_on_ssd_active,json=mdOnSsdActive,proto3" json:"md_on_ssd_active,omitempty"`            // MD-on-SSD mode flag
-	SelfHealPolicy    string                 `protobuf:"bytes,24,opt,name=self_heal_policy,json=selfHealPolicy,proto3" json:"self_heal_policy,omitempty"`            // pool property self_heal value
+	Properties        []*PoolProperty        `protobuf:"bytes,24,rep,name=properties,proto3" json:"properties,omitempty"`                                            // requested pool properties
 	SysSelfHealPolicy string                 `protobuf:"bytes,25,opt,name=sys_self_heal_policy,json=sysSelfHealPolicy,proto3" json:"sys_self_heal_policy,omitempty"` // system property self_heal value
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
@@ -2040,11 +2048,11 @@ func (x *PoolQueryResp) GetMdOnSsdActive() bool {
 	return false
 }
 
-func (x *PoolQueryResp) GetSelfHealPolicy() string {
+func (x *PoolQueryResp) GetProperties() []*PoolProperty {
 	if x != nil {
-		return x.SelfHealPolicy
+		return x.Properties
 	}
-	return ""
+	return nil
 }
 
 func (x *PoolQueryResp) GetSysSelfHealPolicy() string {
@@ -3834,13 +3842,16 @@ const file_mgmt_pool_proto_rawDesc = "" +
 	"containers\x18\x02 \x03(\v2\x17.mgmt.ListContResp.ContR\n" +
 	"containers\x1a\x1a\n" +
 	"\x04Cont\x12\x12\n" +
-	"\x04uuid\x18\x01 \x01(\tR\x04uuid\"l\n" +
+	"\x04uuid\x18\x01 \x01(\tR\x04uuid\"\xa0\x01\n" +
 	"\fPoolQueryReq\x12\x10\n" +
 	"\x03sys\x18\x01 \x01(\tR\x03sys\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x1b\n" +
 	"\tsvc_ranks\x18\x03 \x03(\rR\bsvcRanks\x12\x1d\n" +
 	"\n" +
-	"query_mask\x18\x04 \x01(\x04R\tqueryMask\"\xac\x01\n" +
+	"query_mask\x18\x04 \x01(\x04R\tqueryMask\x122\n" +
+	"\n" +
+	"properties\x18\x05 \x03(\v2\x12.mgmt.PoolPropertyR\n" +
+	"properties\"\xac\x01\n" +
 	"\x11StorageUsageStats\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x04R\x05total\x12\x12\n" +
 	"\x04free\x18\x02 \x01(\x04R\x04free\x12\x10\n" +
@@ -3864,7 +3875,7 @@ const file_mgmt_pool_proto_rawDesc = "" +
 	"\aSTOPPED\x10\x04\x12\v\n" +
 	"\aFAILING\x10\x05\x12\n" +
 	"\n" +
-	"\x06FAILED\x10\x06\"\x89\a\n" +
+	"\x06FAILED\x10\x06\"\x93\a\n" +
 	"\rPoolQueryResp\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\x05R\x06status\x12\x12\n" +
 	"\x04uuid\x18\x02 \x01(\tR\x04uuid\x12\x14\n" +
@@ -3891,8 +3902,10 @@ const file_mgmt_pool_proto_rawDesc = "" +
 	"\x0emem_file_bytes\x18\x15 \x01(\x04R\fmemFileBytes\x12\x1d\n" +
 	"\n" +
 	"dead_ranks\x18\x16 \x01(\tR\tdeadRanks\x12'\n" +
-	"\x10md_on_ssd_active\x18\x17 \x01(\bR\rmdOnSsdActive\x12(\n" +
-	"\x10self_heal_policy\x18\x18 \x01(\tR\x0eselfHealPolicy\x12/\n" +
+	"\x10md_on_ssd_active\x18\x17 \x01(\bR\rmdOnSsdActive\x122\n" +
+	"\n" +
+	"properties\x18\x18 \x03(\v2\x12.mgmt.PoolPropertyR\n" +
+	"properties\x12/\n" +
 	"\x14sys_self_heal_policy\x18\x19 \x01(\tR\x11sysSelfHealPolicyJ\x04\b\t\x10\n" +
 	"R\vtotal_nodes\"\x7f\n" +
 	"\fPoolProperty\x12\x16\n" +
@@ -4108,25 +4121,27 @@ var file_mgmt_pool_proto_depIdxs = []int32{
 	27, // 0: mgmt.PoolCreateReq.properties:type_name -> mgmt.PoolProperty
 	50, // 1: mgmt.ListPoolsResp.pools:type_name -> mgmt.ListPoolsResp.Pool
 	51, // 2: mgmt.ListContResp.containers:type_name -> mgmt.ListContResp.Cont
-	0,  // 3: mgmt.StorageUsageStats.media_type:type_name -> mgmt.StorageMediaType
-	2,  // 4: mgmt.PoolRebuildStatus.state:type_name -> mgmt.PoolRebuildStatus.State
-	2,  // 5: mgmt.PoolRebuildStatus.derived_state:type_name -> mgmt.PoolRebuildStatus.State
-	25, // 6: mgmt.PoolQueryResp.rebuild:type_name -> mgmt.PoolRebuildStatus
-	24, // 7: mgmt.PoolQueryResp.tier_stats:type_name -> mgmt.StorageUsageStats
-	1,  // 8: mgmt.PoolQueryResp.state:type_name -> mgmt.PoolServiceState
-	27, // 9: mgmt.PoolSetPropReq.properties:type_name -> mgmt.PoolProperty
-	27, // 10: mgmt.PoolGetPropReq.properties:type_name -> mgmt.PoolProperty
-	27, // 11: mgmt.PoolGetPropResp.properties:type_name -> mgmt.PoolProperty
-	0,  // 12: mgmt.StorageTargetUsage.media_type:type_name -> mgmt.StorageMediaType
-	3,  // 13: mgmt.PoolQueryTargetInfo.state:type_name -> mgmt.PoolQueryTargetInfo.TargetState
-	34, // 14: mgmt.PoolQueryTargetInfo.space:type_name -> mgmt.StorageTargetUsage
-	35, // 15: mgmt.PoolQueryTargetResp.infos:type_name -> mgmt.PoolQueryTargetInfo
-	4,  // 16: mgmt.PoolRevokeClientReq.evict_mode:type_name -> mgmt.PoolRevokeClientReq.EvictMode
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	27, // 3: mgmt.PoolQueryReq.properties:type_name -> mgmt.PoolProperty
+	0,  // 4: mgmt.StorageUsageStats.media_type:type_name -> mgmt.StorageMediaType
+	2,  // 5: mgmt.PoolRebuildStatus.state:type_name -> mgmt.PoolRebuildStatus.State
+	2,  // 6: mgmt.PoolRebuildStatus.derived_state:type_name -> mgmt.PoolRebuildStatus.State
+	25, // 7: mgmt.PoolQueryResp.rebuild:type_name -> mgmt.PoolRebuildStatus
+	24, // 8: mgmt.PoolQueryResp.tier_stats:type_name -> mgmt.StorageUsageStats
+	1,  // 9: mgmt.PoolQueryResp.state:type_name -> mgmt.PoolServiceState
+	27, // 10: mgmt.PoolQueryResp.properties:type_name -> mgmt.PoolProperty
+	27, // 11: mgmt.PoolSetPropReq.properties:type_name -> mgmt.PoolProperty
+	27, // 12: mgmt.PoolGetPropReq.properties:type_name -> mgmt.PoolProperty
+	27, // 13: mgmt.PoolGetPropResp.properties:type_name -> mgmt.PoolProperty
+	0,  // 14: mgmt.StorageTargetUsage.media_type:type_name -> mgmt.StorageMediaType
+	3,  // 15: mgmt.PoolQueryTargetInfo.state:type_name -> mgmt.PoolQueryTargetInfo.TargetState
+	34, // 16: mgmt.PoolQueryTargetInfo.space:type_name -> mgmt.StorageTargetUsage
+	35, // 17: mgmt.PoolQueryTargetResp.infos:type_name -> mgmt.PoolQueryTargetInfo
+	4,  // 18: mgmt.PoolRevokeClientReq.evict_mode:type_name -> mgmt.PoolRevokeClientReq.EvictMode
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_mgmt_pool_proto_init() }

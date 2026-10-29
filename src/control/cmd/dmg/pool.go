@@ -763,21 +763,22 @@ type poolQueryCmd struct {
 	poolCmd
 	HealthOnly       bool `short:"t" long:"health-only" description:"Only perform pool health related queries"`
 	ShowEnabledRanks bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
-	NoSelfHealCheck  bool `long:"no-self-heal-check" description:"Disable self_heal pool property check"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
 func (cmd *poolQueryCmd) Execute(args []string) error {
+	selfHeal, err := daos.PoolProperties().GetProperty("self_heal")
+	if err != nil {
+		return err
+	}
 	req := &control.PoolQueryReq{
-		ID:        cmd.PoolID().String(),
-		QueryMask: daos.DefaultPoolQueryMask,
+		ID:         cmd.PoolID().String(),
+		QueryMask:  daos.DefaultPoolQueryMask,
+		Properties: []*daos.PoolProperty{selfHeal},
 	}
 
 	if cmd.HealthOnly {
 		req.QueryMask = daos.HealthOnlyPoolQueryMask
-	}
-	if !cmd.NoSelfHealCheck {
-		req.QueryMask.SetOptions(daos.PoolQueryOptionSelfHealPolicy)
 	}
 	if cmd.ShowEnabledRanks {
 		req.QueryMask.SetOptions(daos.PoolQueryOptionEnabledEngines)
@@ -790,7 +791,6 @@ func (cmd *poolQueryCmd) Execute(args []string) error {
 		if resp != nil {
 			poolInfo = &resp.PoolInfo
 		}
-		// NOTE: Self heal policy info not returned in JSON response.
 		return cmd.OutputJSON(poolInfo, err)
 	}
 

@@ -273,6 +273,19 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 	return ctx.Err()
 }
 
+// hasReadyEngine returns true if at least one instance can service dRPC calls.
+func (h *EngineHarness) hasReadyEngine() bool {
+	h.RLock()
+	defer h.RUnlock()
+
+	for _, ei := range h.instances {
+		if ei.IsReady() {
+			return true
+		}
+	}
+	return false
+}
+
 // readyRanks returns rank assignment of configured harness instances that are
 // in a ready state. Rank assignments can be nil.
 func (h *EngineHarness) readyRanks() []ranklist.Rank {

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -78,6 +79,9 @@ func TestProto_AnnotateError(t *testing.T) {
 		LeaderHint: "foo.bar.baz",
 		Replicas:   []string{"a", "b", "c"},
 	}
+	testEngineUnavailable := &system.ErrNoEngine{
+		Replicas: []string{"b", "c"},
+	}
 	testPoolNotFound := system.ErrPoolLabelNotFound("foo")
 
 	for name, tc := range map[string]struct {
@@ -110,6 +114,10 @@ func TestProto_AnnotateError(t *testing.T) {
 		"wrap/unwrap ErrNotLeader": {
 			err:    testNotLeader,
 			expErr: testNotLeader,
+		},
+		"wrap/unwrap ErrNoEngine": {
+			err:    testEngineUnavailable,
+			expErr: testEngineUnavailable,
 		},
 		"wrap/unwrap ErrPoolNotFound": {
 			err:    testPoolNotFound,

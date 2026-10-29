@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,7 +30,9 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	if err := pretty.PrintPoolInfo(&pqr.PoolInfo, out); err != nil {
 		return err
 	}
-	pretty.PrintPoolSelfHealDisable(pqr.PoolInfo.SelfHealPolicy, pqr.SysSelfHealPolicy, out)
+	if pqr.SelfHealPolicy != "" {
+		pretty.PrintPoolSelfHealDisable(pqr.SelfHealPolicy, pqr.SysSelfHealPolicy, out)
+	}
 
 	return nil
 }

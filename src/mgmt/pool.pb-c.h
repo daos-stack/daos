@@ -771,10 +771,15 @@ struct  _Mgmt__PoolQueryReq
    * Bitmask of pool query options
    */
   uint64_t query_mask;
+  /*
+   * Pool properties to return with the query
+   */
+  size_t n_properties;
+  Mgmt__PoolProperty **properties;
 };
 #define MGMT__POOL_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0, 0,NULL }
 
 
 /*
@@ -917,9 +922,10 @@ struct  _Mgmt__PoolQueryResp
    */
   protobuf_c_boolean md_on_ssd_active;
   /*
-   * pool property self_heal value
+   * requested pool properties
    */
-  char *self_heal_policy;
+  size_t n_properties;
+  Mgmt__PoolProperty **properties;
   /*
    * system property self_heal value
    */
@@ -927,7 +933,7 @@ struct  _Mgmt__PoolQueryResp
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating, 0, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, 0, 0,NULL, (char *)protobuf_c_empty_string }
 
 
 typedef enum {

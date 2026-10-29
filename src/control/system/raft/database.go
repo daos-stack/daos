@@ -338,6 +338,11 @@ func (db *Database) PeerAddrs() ([]*net.TCPAddr, error) {
 	return peers, nil
 }
 
+// PeerReplicas returns the addresses of this system's replication peers.
+func (db *Database) PeerReplicas() []string {
+	return db.cfg.stringReplicas(db.replicaAddr)
+}
+
 // IsReplica returns true if the system is configured as a replica.
 func (db *Database) IsReplica() bool {
 	return db != nil && db.replicaAddr != nil

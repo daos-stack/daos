@@ -89,7 +89,7 @@ func TestMgmt_ListContainers(t *testing.T) {
 					events.NewPubSub(test.Context(t), log))
 			},
 			req:    validListContReq(),
-			expErr: FaultHarnessNotStarted,
+			expErr: &system.ErrNoEngine{},
 		},
 		"drpc error": {
 			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
@@ -192,7 +192,7 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 					events.NewPubSub(test.Context(t), log))
 			},
 			req:    validContSetOwnerReq(),
-			expErr: FaultHarnessNotStarted,
+			expErr: &system.ErrNoEngine{},
 		},
 		"drpc error": {
 			setupDrpc: func(t *testing.T, svc *mgmtSvc) {

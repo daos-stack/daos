@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -377,9 +378,10 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		}
 	}
 
-	// Copy the starting hostlist to use for reset on retry later.
-	startHostList := make([]string, len(req.getHostList()))
-	copy(startHostList, req.getHostList())
+	// Where a retry restarts the leader search: the starting candidates
+	// until a routing error names the replicas.
+	searchHosts := make([]string, len(req.getHostList()))
+	copy(searchHosts, req.getHostList())
 
 	isHardFailure := func(err error, reqCtx context.Context) bool {
 		if err == nil {
@@ -461,9 +463,12 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			// send the retry. In the event that the hint was
 			// empty (as can happen during an election), just send
 			// the retry to all of the replicas.
+			if len(e.Replicas) > 0 {
+				searchHosts = e.Replicas
+			}
 			if e.LeaderHint == "" {
 				if len(e.Replicas) > 0 {
-					req.SetHostList(e.Replicas)
+					req.SetHostList(searchHosts)
 				}
 				break
 			}
@@ -474,7 +479,15 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			// One of them should be the current leader and will
 			// service the request.
 			if len(e.Replicas) > 0 {
-				req.SetHostList(e.Replicas)
+				searchHosts = e.Replicas
+				req.SetHostList(searchHosts)
+			}
+		case *system.ErrNoEngine:
+			// The replica has no engine to forward the request to;
+			// its peers may.
+			if len(e.Replicas) > 0 {
+				searchHosts = e.Replicas
+				req.SetHostList(searchHosts)
 			}
 		default:
 			// As long as the outer context hasn't timed out, we
@@ -492,9 +505,8 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			// is retryable, but doesn't define its own retry logic,
 			// just break out so it can be tried again as usual.
 			if req.canRetry(err, try) {
-				// Reset the hostlist to the starting hostlist, in order
-				// to restart the search for the current MS leader.
-				req.SetHostList(startHostList)
+				// Restart the search for the current MS leader.
+				req.SetHostList(searchHosts)
 				break
 			}
 

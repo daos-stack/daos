@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,7 +19,7 @@ import (
 // ListContainers forwards a gRPC request to the DAOS I/O Engine to retrieve a pool's
 // list of containers.
 func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq) (*mgmtpb.ListContResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkForwardedReplicaRequest(req); err != nil {
 		return nil, err
 	}
 
@@ -38,7 +38,7 @@ func (svc *mgmtSvc) ListContainers(ctx context.Context, req *mgmtpb.ListContReq)
 
 // ContSetOwner forwards a gRPC request to the DAOS I/O Engine to change a container's ownership.
 func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerReq) (*mgmtpb.DaosResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkForwardedReplicaRequest(req); err != nil {
 		return nil, err
 	}
 

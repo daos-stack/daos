@@ -29,13 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-/*
-#include <stdint.h>
-
-#include <daos_pool.h>
-*/
-import "C"
-
 const (
 	// DefaultPoolScmRatio defines the default SCM:NVMe ratio for
 	// requests that do not specify one.
@@ -1075,7 +1068,7 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintRe
 
 // PoolQuery forwards a pool query request to the I/O Engine.
 func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*mgmtpb.PoolQueryResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkForwardedReplicaRequest(req); err != nil {
 		return nil, err
 	}
 
@@ -1096,18 +1089,15 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	// Preserve compatibility with pre-2.6 callers.
 	resp.Leader = resp.SvcLdr
 
-	// Retrieve system self-heal property. Assume default value where all flags are set if
-	// property isn't present.
+	// Assume the default system self-heal policy if the property isn't set.
 	resp.SysSelfHealPolicy = daos.DefaultSysSelfHealFlagsStr
-	if req.QueryMask&C.DPI_SELF_HEAL_POLICY != 0 {
-		if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
-			svc.log.Debugf(err.Error())
-		} else if err != nil {
-			return nil, err
-		} else {
-			svc.log.Debugf("system self-heal: %s", selfHeal)
-			resp.SysSelfHealPolicy = selfHeal
-		}
+	if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
+		svc.log.Debugf(err.Error())
+	} else if err != nil {
+		return nil, err
+	} else {
+		svc.log.Debugf("system self-heal: %s", selfHeal)
+		resp.SysSelfHealPolicy = selfHeal
 	}
 
 	return resp, nil
@@ -1115,7 +1105,7 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 
 // PoolQueryTarget forwards a pool query targets request to the I/O Engine.
 func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTargetReq) (*mgmtpb.PoolQueryTargetResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkForwardedReplicaRequest(req); err != nil {
 		return nil, err
 	}
 
@@ -1272,7 +1262,7 @@ func (svc *mgmtSvc) PoolSetProp(parent context.Context, req *mgmtpb.PoolSetPropR
 
 // PoolGetProp forwards a request to the I/O Engine to get pool properties.
 func (svc *mgmtSvc) PoolGetProp(ctx context.Context, req *mgmtpb.PoolGetPropReq) (*mgmtpb.PoolGetPropResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkForwardedReplicaRequest(req); err != nil {
 		return nil, err
 	}
 
@@ -1302,7 +1292,7 @@ func (svc *mgmtSvc) PoolGetProp(ctx context.Context, req *mgmtpb.PoolGetPropReq)
 
 // PoolGetACL forwards a request to the I/O Engine to fetch a pool's Access Control List
 func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgmtpb.ACLResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkForwardedReplicaRequest(req); err != nil {
 		return nil, err
 	}
 

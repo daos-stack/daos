@@ -83,6 +83,24 @@ func IsNotReplica(err error) bool {
 	return ok
 }
 
+// ErrNoEngine indicates that a request was made to a Management
+// Service replica that has no running engine to forward it to.
+type ErrNoEngine struct {
+	Replicas []string
+}
+
+func (err *ErrNoEngine) Error() string {
+	return fmt.Sprintf("no running engine on this %s replica (try one of %s)",
+		build.ManagementServiceName, strings.Join(err.Replicas, ","))
+}
+
+// IsNoEngine returns a boolean indicating whether or not the
+// supplied error is an instance of ErrNoEngine.
+func IsNoEngine(err error) bool {
+	_, ok := errors.Cause(err).(*ErrNoEngine)
+	return ok
+}
+
 // ErrNotLeader indicates that a request was made to a control plane
 // instance that is not the current Management Service Leader.
 type ErrNotLeader struct {
@@ -100,6 +118,12 @@ func (err *ErrNotLeader) Error() string {
 func IsNotLeader(err error) bool {
 	_, ok := errors.Cause(err).(*ErrNotLeader)
 	return ok
+}
+
+// IsRoutingError returns a boolean indicating whether or not the
+// supplied error tells the caller which hosts to retry.
+func IsRoutingError(err error) bool {
+	return IsNotReplica(err) || IsNotLeader(err) || IsNoEngine(err)
 }
 
 // ErrMemberExists indicates the failure of an operation that

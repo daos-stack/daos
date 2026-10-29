@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +35,9 @@ const (
 	// AnnotatedSystemErrNotReplica defines an identifier for ErrNotReplica errors
 	// serialized as gRPC status metadata.
 	AnnotatedSystemErrNotReplica = "proto.system.ErrNotReplica"
+	// AnnotatedSystemErrNoEngine defines an identifier for ErrNoEngine
+	// errors serialized as gRPC status metadata.
+	AnnotatedSystemErrNoEngine = "proto.system.ErrNoEngine"
 	// AnnotatedSystemErrPoolNotFound defines an identifier for ErrPoolNotFound errors
 	// serialized as gRPC status metadata.
 	AnnotatedSystemErrPoolNotFound = "proto.system.ErrPoolNotFound"
@@ -50,6 +54,8 @@ func ErrFromMeta(meta map[string]string, errType error) error {
 	case *fault.Fault:
 		err = json.Unmarshal(jm, et)
 	case *system.ErrNotReplica:
+		err = json.Unmarshal([]byte(meta["Replicas"]), &et.Replicas)
+	case *system.ErrNoEngine:
 		err = json.Unmarshal([]byte(meta["Replicas"]), &et.Replicas)
 	case *system.ErrNotLeader:
 		et.LeaderHint = meta["LeaderHint"]
@@ -114,6 +120,18 @@ func AnnotateError(in error) error {
 				"Replicas": string(data),
 			},
 		}
+	case *system.ErrNoEngine:
+		data, err := json.Marshal(et.Replicas)
+		if err != nil {
+			break
+		}
+		details = &errdetails.ErrorInfo{
+			Reason: AnnotatedSystemErrNoEngine,
+			Domain: "DAOS",
+			Metadata: map[string]string{
+				"Replicas": string(data),
+			},
+		}
 	case *system.ErrNotLeader:
 		data, err := json.Marshal(et.Replicas)
 		if err != nil {
@@ -173,6 +191,8 @@ func UnwrapError(st *status.Status) error {
 				return daos.Status(i)
 			case AnnotatedSystemErrNotReplica:
 				return ErrFromMeta(t.Metadata, new(system.ErrNotReplica))
+			case AnnotatedSystemErrNoEngine:
+				return ErrFromMeta(t.Metadata, new(system.ErrNoEngine))
 			case AnnotatedSystemErrNotLeader:
 				return ErrFromMeta(t.Metadata, new(system.ErrNotLeader))
 			case AnnotatedSystemErrPoolNotFound:

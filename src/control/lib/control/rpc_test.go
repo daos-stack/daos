@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +13,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -466,6 +468,122 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 				},
 			},
 			expErr: errors.New("max retries"),
+		},
+		"routing error wins over a slower non-routing error": {
+			timeout: 5 * time.Second,
+			req: &testRequest{
+				HostList: []string{"host00:10001", "host02:10001"},
+				toMS:     true,
+				rpcFn: func(_ context.Context, cc *grpc.ClientConn) (proto.Message, error) {
+					switch cc.Target() {
+					case "host00:10001":
+						return nil, errNotReplica
+					case "host02:10001":
+						time.Sleep(10 * time.Millisecond)
+						return nil, errors.New("engine not started")
+					}
+					return defaultMessage, nil
+				},
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    "host01:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host05:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host07:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host08:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host09:10001",
+						Message: defaultMessage,
+					},
+				},
+			},
+		},
+		"request to replica without an engine is redirected to its peers": {
+			timeout: 5 * time.Second,
+			req: &testRequest{
+				HostList: []string{"host01:10001"},
+				toMS:     true,
+				rpcFn: func(_ context.Context, cc *grpc.ClientConn) (proto.Message, error) {
+					if cc.Target() == "host01:10001" {
+						return nil, &system.ErrNoEngine{Replicas: nonLeaderReplicas[1:]}
+					}
+					return defaultMessage, nil
+				},
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    "host05:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host07:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host09:10001",
+						Message: defaultMessage,
+					},
+				},
+			},
+		},
+		"retry after discovering replicas goes to the replicas": {
+			timeout: 5 * time.Second,
+			req: &testRequest{
+				HostList: []string{"host00:10001"},
+				toMS:     true,
+				rpcFn: func() unaryRPC {
+					var nonReplicaCalls, replicaCalls atomic.Int32
+					return func(_ context.Context, cc *grpc.ClientConn) (proto.Message, error) {
+						if cc.Target() == "host00:10001" {
+							if nonReplicaCalls.Add(1) > 1 {
+								return nil, errUnimplemented
+							}
+							return nil, errNotReplica
+						}
+						if replicaCalls.Add(1) <= int32(len(replicaHosts)) {
+							return nil, errors.New("transient")
+						}
+						return defaultMessage, nil
+					}
+				}(),
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    "host01:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host05:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host07:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host08:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host09:10001",
+						Message: defaultMessage,
+					},
+				},
+			},
 		},
 		"request to non-replicas eventually discovers at least one replica": {
 			req: &testRequest{

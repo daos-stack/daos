@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func defResCmpOpts() []cmp.Option {
@@ -141,6 +143,70 @@ func TestControl_getMSResponse(t *testing.T) {
 		"nil response message": {
 			resp:   MockMSResponse("host1", nil, nil),
 			expErr: errors.New("message was nil"),
+		},
+		"all errors; last error returned": {
+			resp: &UnaryResponse{
+				fromMS: true,
+				Responses: []*HostResponse{
+					{
+						Addr:  "host1",
+						Error: errors.New("first"),
+					},
+					{
+						Addr:  "host2",
+						Error: errors.New("last"),
+					},
+				},
+			},
+			expErr: errors.New("last"),
+		},
+		"all errors; routing error preferred": {
+			resp: &UnaryResponse{
+				fromMS: true,
+				Responses: []*HostResponse{
+					{
+						Addr:  "host1",
+						Error: errors.New("first"),
+					},
+					{
+						Addr:  "host2",
+						Error: &system.ErrNotReplica{Replicas: []string{"host3"}},
+					},
+					{
+						Addr:  "host3",
+						Error: errors.New("last"),
+					},
+				},
+			},
+			expErr: &system.ErrNotReplica{Replicas: []string{"host3"}},
+		},
+		"routing error preferred over later nil message": {
+			resp: &UnaryResponse{
+				fromMS: true,
+				Responses: []*HostResponse{
+					{
+						Addr:  "host1",
+						Error: &system.ErrNotReplica{Replicas: []string{"host3"}},
+					},
+					{
+						Addr: "host2",
+					},
+				},
+			},
+			expErr: &system.ErrNotReplica{Replicas: []string{"host3"}},
+		},
+		"routing error preferred over later nil response": {
+			resp: &UnaryResponse{
+				fromMS: true,
+				Responses: []*HostResponse{
+					{
+						Addr:  "host1",
+						Error: &system.ErrNotReplica{Replicas: []string{"host3"}},
+					},
+					nil,
+				},
+			},
+			expErr: &system.ErrNotReplica{Replicas: []string{"host3"}},
 		},
 		"mixed versioned and non-versioned responses": {
 			// NB: This is a weird "can't happen" situation, but
