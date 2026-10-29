@@ -1170,11 +1170,12 @@ pool_flags_tests(void **state)
 	assert_success(dv_pool_close(ctx.dc_poh));
 }
 
+/** Number of hexadecimal characters of a sha256 digest, without the terminating null byte. */
 #define SHA256_DIGEST_LEN 64
 
 struct file_state {
 	struct stat stat;
-	char        digest[SHA256_DIGEST_LEN];
+	char        digest[SHA256_DIGEST_LEN + 1];
 };
 
 #define FILE_STATE_PRE  0
@@ -1184,9 +1185,13 @@ struct file_state {
  * Use sha256sum utility to get the sha256 digest of the file.
  *
  * \note sha256sum was used to avoid introducing libcrypto dependency.
+ *
+ * \param[in]	file	Path of the file to get the digest of.
+ * \param[out]	digest	Hexadecimal digest of the file: SHA256_DIGEST_LEN characters followed by
+ *			the terminating null byte.
  */
 static void
-sha256sum(const char *file, char digest[SHA256_DIGEST_LEN])
+sha256sum(const char *file, char digest[SHA256_DIGEST_LEN + 1])
 {
 	char cmd[1024];
 	snprintf(cmd, sizeof(cmd), "sha256sum \"%s\"", file);
