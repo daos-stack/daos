@@ -14,6 +14,7 @@ def build_dlck_test_helper(henv):
 
     srcs = [
         'dlck_test_helper.c',
+        'dlck_test_helper_args.c',
         '../dlck_abt.c',
         '../dlck_args_engine.c',
         '../dlck_args_files.c',
