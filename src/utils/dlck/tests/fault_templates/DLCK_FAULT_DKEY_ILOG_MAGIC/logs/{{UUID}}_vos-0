@@ -1,0 +1,76 @@
+VOS file allocation: ok.
+Check pool:
+	path: /dev/shm/daos/{{UUID}}/vos-0
+	uuid: {{UUID}}
+- NVMe devices (if applicable): ok.
+- Open the pool: ok.
+- Magic... ok.
+- Version... ok.
+- UUID... ok.
+- Containers tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xa7a4c0)... ok.
+- Containers tree: ok.
+- Pool extension (off=0x400550)...
+- Pool extension (off=0x400550): ok.
+- Garbage collector's tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Empty tree
+- Garbage collector's tree: ok.
+Check pool: ok.
+Check container:
+	uuid: {{UUID}}
+- uuid... ok.
+- Padding (cd_pad)... ok.
+- Padding (cd_used)... ok.
+- Reserved (cd_reserv_upgrade)... ok.
+- Object index tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xa7aac0)... ok.
+--- Record fetch (off=0xac0840)... ok.
+---- Object (oid=1906494877.1368755382.0.0)... 
+----- ILOG... ok.
+---- Object (oid=1906494877.1368755382.0.0)... ok.
+--- Record fetch (off=0xac07c0)... ok.
+---- Object (oid=564146955.628115952.0.0)... 
+----- ILOG... ok.
+---- Object (oid=564146955.628115952.0.0)... ok.
+- Object index tree: ok.
+- Active DTX blob list...
+-- DTX blob (off=0x51c750)... 
+--- Magic... ok.
+--- 2 active entries:
+---- [0] ID (dae_xid)... ok.
+---- [0] LID (dae_lid)... ok.
+---- [0] Append to active DTX tree... ok.
+---- [1] ID (dae_xid)... ok.
+---- [1] LID (dae_lid)... ok.
+---- [1] Append to active DTX tree... ok.
+-- DTX blob (off=0x51c750)... ok.
+- Active DTX blob list: ok.
+Check container: ok.
+Check oid: 1906494877.1368755382.0.0...
+- Dkey tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xb41940)... ok.
+--- Record fetch (off=0xb01a00)... ok.
+---- DKEY: [8] 'uint64:1079023891'... 
+----- ILOG... error: invalid magic (0x46).
+---- error: DKEY: [8] 'uint64:1079023891'... : DER_DF_INVAL(-2022): 'Unsupported durable format'
+- error: Dkey tree: DER_DF_INVAL(-2022): 'Unsupported durable format'
+error: Check oid: 1906494877.1368755382.0.0: DER_DF_INVAL(-2022): 'Unsupported durable format'
+Check oid: 564146955.628115952.0.0...
+- Dkey tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xb418c0)... ok.
+--- Record fetch (off=0xb01940)... ok.
+---- DKEY: [8] 'uint64:449106296'... 
+----- ILOG... error: invalid magic (0x36).
+---- error: DKEY: [8] 'uint64:449106296'... : DER_DF_INVAL(-2022): 'Unsupported durable format'
+- error: Dkey tree: DER_DF_INVAL(-2022): 'Unsupported durable format'
+error: Check oid: 564146955.628115952.0.0: DER_DF_INVAL(-2022): 'Unsupported durable format'

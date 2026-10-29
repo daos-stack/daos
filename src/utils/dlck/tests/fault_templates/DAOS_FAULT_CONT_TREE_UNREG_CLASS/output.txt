@@ -1,0 +1,19 @@
+Effective user: root
+Log directory: {{LOG_DIR}}
+Start the engine... ok.
+Create pools directories... ok.
+Start targets... ok.
+Wait for targets to stop...
+error: [0] pool      {{UUID}} check result: DER_NONEXIST(-1005): 'The specified entity does not exist'
+Wait for targets to stop: ok.
+Stop the engine... ok.
+===============================
+Targets:
+===============================
+[0] result: 1 error(s), 0 warning(s).
+[1] result: ok.
+[2] result: ok.
+[3] result: ok.
+===============================
+Total: 1 error(s), 0 warning(s).
+===============================
