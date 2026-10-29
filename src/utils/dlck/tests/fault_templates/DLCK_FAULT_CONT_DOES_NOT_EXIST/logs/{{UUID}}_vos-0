@@ -1,0 +1,26 @@
+VOS file allocation: ok.
+Check pool:
+	path: /dev/shm/daos/{{UUID}}/vos-0
+	uuid: {{UUID}}
+- NVMe devices (if applicable): ok.
+- Open the pool: ok.
+- Magic... ok.
+- Version... ok.
+- UUID... ok.
+- Containers tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xa7a4c0)... ok.
+- Containers tree: ok.
+- Pool extension (off=0x400550)...
+- Pool extension (off=0x400550): ok.
+- Garbage collector's tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Empty tree
+- Garbage collector's tree: ok.
+Check pool: ok.
+Check container:
+	uuid: {{UUID}}
+- Container does not exist.
+error: Check container: DER_INVAL(-1003): 'Invalid parameters'

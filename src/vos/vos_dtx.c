@@ -3640,7 +3640,7 @@ vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck)
 	int				 i;
 
 	if (IS_CHECKER(ck) && UMOFF_IS_NULL(dbd_off)) {
-		CK_PRINT(ck, "No DTX blobs.\n");
+		CK_PRINTF(ck, "No DTX blobs.\n");
 	}
 
 	while (!UMOFF_IS_NULL(dbd_off)) {
@@ -3654,7 +3654,7 @@ vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck)
 		if (IS_NOT_CHECKER(ck)) {
 			D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
 		} else {
-			CK_PRINT(ck, "Magic... ");
+			CK_PRINTF(ck, "Magic... ");
 			if (dbd->dbd_magic != DTX_ACT_BLOB_MAGIC ||
 			    DAOS_FAIL_CHECK(DAOS_FAULT_DBD_MAGIC)) {
 				CK_APPENDFL_ERR(ck, "invalid (%#x)", dbd->dbd_magic);
@@ -3683,8 +3683,8 @@ vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck)
 				/** Check flags since this structure has no magic. */
 				if ((dae_df->dae_flags & ~DTE_FLAGS_VALID) != 0 ||
 				    DAOS_FAIL_CHECK(DAOS_FAULT_DAE_INV_FLAGS)) {
-					CK_PRINTF(ck, "[%d] invalid flags (%#" PRIx16 ")\n", i,
-						  dae_df->dae_flags);
+					CK_PRINTF_ERR(ck, "[%d] invalid flags (%#" PRIx16 ")\n", i,
+						      dae_df->dae_flags);
 					D_GOTO(out, rc = -DER_IO);
 				}
 			}
@@ -3696,7 +3696,7 @@ vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck)
 
 			CK_PRINTF(ck, "[%d] ID (dae_xid)... ", i);
 			if (daos_is_zero_dti(&dae_df->dae_xid)) {
-				CK_APPENDL_WARN(ck, "zero");
+				CK_APPENDFL_WARN(ck, "zero");
 				D_WARN("Hit zero active DTX entry.\n");
 				continue;
 			}
@@ -3840,8 +3840,8 @@ vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck)
 
 		if (unlikely(dbd_count != dbd->dbd_count) ||
 		    DAOS_FAIL_CHECK(DAOS_FAULT_DBD_COUNT)) {
-			CK_PRINTF(ck, CK_DBD_FMT "expected %d active entries, but found %d.\n",
-				  dbd_off, dbd->dbd_count, dbd_count);
+			CK_PRINTF_ERR(ck, CK_DBD_FMT "expected %d active entries, but found %d.\n",
+				      dbd_off, dbd->dbd_count, dbd_count);
 			D_ERROR("Unmatched active DTX count %d/%d, cap %d, idx %d for blob %p ("
 				UMOFF_PF"), head "UMOFF_PF", tail "UMOFF_PF" in pool "
 				DF_UUID" cont "DF_UUID"\n", dbd_count, dbd->dbd_count, dbd->dbd_cap,

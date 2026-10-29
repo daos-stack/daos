@@ -1,0 +1,5 @@
+Effective user: root
+Log directory: {{LOG_DIR}}
+Start the engine... ok.
+Create pools directories... error: Cannot create a pool directory: /dev/shm/daos/{{UUID}}/: DER_INVAL(-1003): 'Invalid parameters'
+error: DER_INVAL(-1003): 'Invalid parameters'
