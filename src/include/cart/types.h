@@ -56,7 +56,7 @@ typedef struct crt_init_options {
 	    /** whether or not to use expected sizes */
 	    cio_use_expected_size : 1, cio_use_unexpected_size : 1;
 
-	/** overrides the value of the environment variable CRT_CTX_NUM */
+	/** client context limit floor; CRT_CTX_NUM overrides it when set */
 	int		cio_ctx_max_num;
 
 	/** set credit limit */
