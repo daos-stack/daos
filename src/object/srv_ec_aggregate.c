@@ -1946,6 +1946,15 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 		goto out;
 	}
 
+	/* this target was excluded, it must not act as the parity leader any more */
+	if (ds_pool_tgt_excluded(agg_param->ap_cont->sc_pool->spc_pool, dss_self_rank(),
+				 dss_get_module_info()->dmi_tgt_id)) {
+		rc = -DER_OP_CANCELED;
+		DL_INFO(rc, DF_UOID " abort as target excluded", DP_UOID(entry->ae_oid));
+		update_vos = false;
+		goto out;
+	}
+
 	if (DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_FAIL))
 		D_GOTO(out, rc = -DER_DATA_LOSS);
 
