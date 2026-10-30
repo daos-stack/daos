@@ -40,6 +40,8 @@ type PoolCmd struct {
 	Exclude      poolExcludeCmd      `command:"exclude" description:"Exclude targets from a set of ranks"`
 	Drain        poolDrainCmd        `command:"drain" description:"Drain targets from a set of ranks"`
 	Reintegrate  poolReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate targets for a set of rank"`
+	Discard      poolDiscardCmd      `command:"discard" description:"Discard data of DOWN/DOWNOUT ranks before their reintegration (async; see query-discard)"`
+	QueryDiscard poolQueryDiscardCmd `command:"query-discard" description:"Query the per-rank progress of a pool discard"`
 	Query        poolQueryCmd        `command:"query" description:"Query a DAOS pool"`
 	QueryTargets poolQueryTargetsCmd `command:"query-targets" description:"Query pool target info"`
 	GetACL       poolGetACLCmd       `command:"get-acl" description:"Get a DAOS pool's Access Control List"`
@@ -756,6 +758,86 @@ func (cmd *poolReintegrateCmd) Execute(args []string) error {
 	cmd.Info(out.String())
 
 	return resp.Errors()
+}
+
+// poolDiscardCmd discards the data of DOWN/DOWNOUT ranks, a preparation step
+// before their reintegration: the massive unmaps and the in-device NVMe
+// garbage collection they trigger are waited out (quiesce) before the ranks
+// are brought back, so that the reintegration itself stays I/O-smooth.
+type poolDiscardCmd struct {
+	poolRanksCmd
+	TargetIdx  string `long:"target-idx" description:"Comma-separated list of target index(es) to be discarded on each rank; empty = all"`
+	QuiesceSec uint32 `long:"quiesce-sec" default:"180" description:"Seconds each rank waits after its discard for the NVMe garbage collection to settle (0 disables)"`
+}
+
+// Execute is run when poolDiscardCmd subcommand is activated
+func (cmd *poolDiscardCmd) Execute(args []string) error {
+	var idxList []uint32
+	if err := common.ParseNumberList(cmd.TargetIdx, &idxList); err != nil {
+		return errors.WithMessage(err, "parsing target list")
+	}
+
+	req := &control.PoolDiscardReq{
+		ID:         cmd.PoolID().String(),
+		Ranks:      cmd.RankList.Ranks(),
+		TargetIdx:  idxList,
+		QuiesceSec: cmd.QuiesceSec,
+	}
+
+	err := control.PoolDiscard(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, err)
+	}
+	if err != nil {
+		return err
+	}
+
+	cmd.Infof("Pool discard accepted on rank(s) %s; poll the progress with "+
+		"'dmg pool query-discard' and reintegrate once every rank reports done",
+		cmd.RankList.String())
+	return nil
+}
+
+// poolQueryDiscardCmd reports the per-rank progress of a pool discard.
+type poolQueryDiscardCmd struct {
+	poolRanksCmd
+}
+
+// Execute is run when poolQueryDiscardCmd subcommand is activated
+func (cmd *poolQueryDiscardCmd) Execute(args []string) error {
+	req := &control.PoolDiscardQueryReq{
+		ID:    cmd.PoolID().String(),
+		Ranks: cmd.RankList.Ranks(),
+	}
+
+	resp, err := control.PoolDiscardQuery(cmd.MustLogCtx(), cmd.ctlInvoker, req)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
+	}
+	if err != nil {
+		return err
+	}
+
+	for _, s := range resp.States {
+		var status string
+
+		switch s.Phase {
+		case control.PoolDiscardNever:
+			status = "no discard since engine start"
+		case control.PoolDiscardDiscarding:
+			status = "discarding"
+		case control.PoolDiscardQuiescing:
+			status = "quiescing (waiting for NVMe GC)"
+		case control.PoolDiscardDone:
+			status = fmt.Sprintf("done (%d sec ago)", s.DoneAgeSec)
+		case control.PoolDiscardFailed:
+			status = fmt.Sprintf("failed: %s", daos.Status(s.Status))
+		default:
+			status = fmt.Sprintf("unknown phase %d", s.Phase)
+		}
+		cmd.Infof("rank %d: %s", s.Rank, status)
+	}
+	return nil
 }
 
 // poolQueryCmd is the struct representing the command to query a DAOS pool.

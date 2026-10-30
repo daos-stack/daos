@@ -80,7 +80,13 @@
 	X(POOL_REBUILD_STOP, 0, &CQF_pool_rebuild_stop, ds_pool_rebuild_stop_handler, NULL)        \
 	X(POOL_REBUILD_START, 0, &CQF_pool_rebuild_start, ds_pool_rebuild_start_handler, NULL)     \
 	X(POOL_EVAL_SELF_HEAL, 0, &CQF_pool_eval_self_heal, ds_pool_eval_self_heal_handler, NULL)  \
-	X(POOL_RECOV_CONT, 0, &CQF_pool_recov_cont, ds_pool_recov_cont_handler, NULL)
+	X(POOL_RECOV_CONT, 0, &CQF_pool_recov_cont, ds_pool_recov_cont_handler, NULL)              \
+	X(POOL_DISCARD, 0, &CQF_pool_discard, ds_pool_discard_handler, NULL)                       \
+	X(POOL_DISCARD_QUERY, 0, &CQF_pool_discard_query, ds_pool_discard_query_handler, NULL)     \
+	X(POOL_TGT_DISCARD_MANUAL, 0, &CQF_pool_tgt_discard_manual,                                \
+	  ds_pool_tgt_discard_manual_handler, NULL)                                                \
+	X(POOL_TGT_DISCARD_QUERY, 0, &CQF_pool_tgt_discard_query,                                  \
+	  ds_pool_tgt_discard_query_handler, NULL)
 
 #define POOL_PROTO_RPC_LIST                                                                        \
 	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION)                                                 \
@@ -900,6 +906,59 @@ CRT_RPC_DECLARE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP, DAOS_OSEQ_POOL
 	((int32_t)			(ptdo_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT_DISCARD)
+
+/*
+ * POOL_DISCARD: admin-initiated pool discard (PS leader), a preparation step
+ * before the data-sync reintegration of DOWN/DOWNOUT ranks. See "dmg pool discard".
+ */
+#define DAOS_ISEQ_POOL_DISCARD		/* input fields */		\
+	((struct pool_op_in)		(pdci_op)		CRT_VAR) \
+	((struct pool_target_addr)	(pdci_addrs)		CRT_ARRAY) \
+	/* seconds to hold the rank quiesced after the discard (NVMe GC) */ \
+	((uint32_t)			(pdci_quiesce_sec)	CRT_VAR)
+
+#define DAOS_OSEQ_POOL_DISCARD		/* output fields */		\
+	((struct pool_op_out)		(pdco_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_discard, DAOS_ISEQ_POOL_DISCARD, DAOS_OSEQ_POOL_DISCARD)
+
+/* POOL_DISCARD_QUERY: per-rank progress of an admin-initiated pool discard */
+#define DAOS_ISEQ_POOL_DISCARD_QUERY	/* input fields */		\
+	((struct pool_op_in)		(pdqi_op)		CRT_VAR) \
+	((d_rank_t)			(pdqi_ranks)		CRT_ARRAY)
+
+#define DAOS_OSEQ_POOL_DISCARD_QUERY	/* output fields */		\
+	((struct pool_op_out)		(pdqo_op)		CRT_VAR) \
+	((struct pool_discard_rank_state) (pdqo_states)		CRT_ARRAY)
+
+CRT_RPC_DECLARE(pool_discard_query, DAOS_ISEQ_POOL_DISCARD_QUERY, DAOS_OSEQ_POOL_DISCARD_QUERY)
+
+/*
+ * POOL_TGT_DISCARD_MANUAL: PS leader -> single rank (unicast, reliable rc),
+ * carrying the admin-initiated discard. Unlike POOL_TGT_DISCARD (the
+ * reintegration path, which fully trusts the leader), the handler double
+ * checks its own pool map view before destroying any data.
+ */
+#define DAOS_ISEQ_POOL_TGT_DISCARD_MANUAL /* input fields */		 \
+	((uuid_t)			(ptdmi_uuid)		CRT_VAR) \
+	((struct pool_target_addr)	(ptdmi_addrs)		CRT_ARRAY) \
+	((uint32_t)			(ptdmi_quiesce_sec)	CRT_VAR)
+
+#define DAOS_OSEQ_POOL_TGT_DISCARD_MANUAL /* output fields */		 \
+	((int32_t)			(ptdmo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_tgt_discard_manual, DAOS_ISEQ_POOL_TGT_DISCARD_MANUAL,
+		DAOS_OSEQ_POOL_TGT_DISCARD_MANUAL)
+
+/* POOL_TGT_DISCARD_QUERY: PS leader -> single rank, local discard progress */
+#define DAOS_ISEQ_POOL_TGT_DISCARD_QUERY /* input fields */		 \
+	((uuid_t)			(ptdqi_uuid)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_TGT_DISCARD_QUERY /* output fields */		 \
+	((struct pool_discard_rank_state) (ptdqo_state)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_tgt_discard_query, DAOS_ISEQ_POOL_TGT_DISCARD_QUERY,
+		DAOS_OSEQ_POOL_TGT_DISCARD_QUERY)
 
 #define DAOS_ISEQ_POOL_REBUILD_STOP	/* input fields */       \
 	((struct pool_op_in)	(rstpi_op)		CRT_VAR)     \

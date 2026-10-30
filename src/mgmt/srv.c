@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -104,6 +104,12 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_POOL_REINT:
 		ds_mgmt_drpc_pool_reintegrate(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_POOL_DISCARD:
+		ds_mgmt_drpc_pool_discard(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_POOL_DISCARD_QUERY:
+		ds_mgmt_drpc_pool_discard_query(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_POOL_EXTEND:
 		ds_mgmt_drpc_pool_extend(drpc_req, drpc_resp);

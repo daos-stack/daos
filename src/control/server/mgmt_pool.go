@@ -1073,6 +1073,53 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReintRe
 	return resp, nil
 }
 
+// PoolDiscard implements the method defined for the Management Service:
+// discard DOWN/DOWNOUT ranks of a pool as a preparation step before their
+// reintegration (asynchronous on the ranks; poll with PoolDiscardQuery).
+func (svc *mgmtSvc) PoolDiscard(ctx context.Context, req *mgmtpb.PoolDiscardReq) (*mgmtpb.PoolDiscardResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	if err := svc.checkRanksExist(req.Ranks...); err != nil {
+		return nil, err
+	}
+
+	dResp, err := svc.makeLockedPoolServiceCall(ctx, daos.MethodPoolDiscard, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolDiscardResp{}
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// PoolDiscardQuery implements the method defined for the Management Service:
+// per-rank progress of a pool discard.
+func (svc *mgmtSvc) PoolDiscardQuery(ctx context.Context, req *mgmtpb.PoolDiscardQueryReq) (*mgmtpb.PoolDiscardQueryResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
+	if err := svc.checkRanksExist(req.Ranks...); err != nil {
+		return nil, err
+	}
+
+	dResp, err := svc.makePoolServiceCall(ctx, daos.MethodPoolDiscardQuery, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolDiscardQueryResp{}
+	if err := svc.unmarshalPB(dResp.Body, resp); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 // PoolQuery forwards a pool query request to the I/O Engine.
 func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*mgmtpb.PoolQueryResp, error) {
 	if err := svc.checkReplicaRequest(req); err != nil {

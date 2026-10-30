@@ -8299,6 +8299,322 @@ out:
 	return rc;
 }
 
+/*
+ * Strict validation of an admin-initiated discard against the authoritative
+ * pool map. Unlike pool_discard_filter_tgts() (which silently skips
+ * unqualified targets for the reintegration flow), a manual discard is
+ * all-or-nothing: any requested target not in DOWN/DOWNOUT fails the whole
+ * request, so that a typo in the rank list can never turn into a partial
+ * destructive operation. (DOWN is as legitimate as DOWNOUT here: e.g. ranks
+ * excluded without rebuild across a server upgrade; either way the data-sync
+ * reintegration would discard their data anyway.)
+ */
+static int
+pool_discard_leader_validate(struct pool_svc *svc, struct pool_target_addr_list *list)
+{
+	uint32_t allowed = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT;
+	int      i;
+	int      rc = 0;
+
+	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+	for (i = 0; i < list->pta_number; i++) {
+		struct pool_target_addr *addr = &list->pta_addrs[i];
+		struct pool_target      *tgts = NULL;
+		int                      tgt_nr;
+		int                      j;
+
+		tgt_nr = pool_map_find_target_by_rank_idx(svc->ps_pool->sp_map, addr->pta_rank,
+							  addr->pta_target, &tgts);
+		if (tgt_nr <= 0) {
+			if (addr->pta_target == (uint32_t)-1)
+				D_ERROR(DF_UUID ": discard rank %u target all: not in pool map\n",
+					DP_UUID(svc->ps_pool->sp_uuid), addr->pta_rank);
+			else
+				D_ERROR(DF_UUID ": discard rank %u target %u: not in pool map\n",
+					DP_UUID(svc->ps_pool->sp_uuid), addr->pta_rank,
+					addr->pta_target);
+			rc = -DER_NONEXIST;
+			break;
+		}
+		for (j = 0; j < tgt_nr; j++) {
+			if (!(tgts[j].ta_comp.co_status & allowed)) {
+				D_ERROR(DF_UUID ": discard rank %u target %u: status %u is not "
+						"DOWN/DOWNOUT, rejecting the whole request\n",
+					DP_UUID(svc->ps_pool->sp_uuid), addr->pta_rank,
+					tgts[j].ta_comp.co_index, tgts[j].ta_comp.co_status);
+				rc = -DER_INVAL;
+				break;
+			}
+		}
+		if (rc != 0)
+			break;
+	}
+	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+	return rc;
+}
+
+/* Send one POOL_TGT_DISCARD_MANUAL unicast to \a rank; returns the real rc. */
+static int
+pool_tgt_discard_manual_send(crt_context_t ctx, struct pool_svc *svc, d_rank_t rank,
+			     struct pool_target_addr_list *sub, uint32_t quiesce_sec)
+{
+	struct pool_tgt_discard_manual_in  *in;
+	struct pool_tgt_discard_manual_out *out;
+	crt_endpoint_t                      ep;
+	crt_rpc_t                          *rpc;
+	crt_opcode_t                        opc = POOL_TGT_DISCARD_MANUAL;
+	int                                 rc;
+
+	rc = ds_pool_encode_opc(&opc);
+	if (rc != 0)
+		return rc;
+
+	ep.ep_grp  = NULL;
+	ep.ep_rank = rank;
+	ep.ep_tag  = 0;
+	rc         = crt_req_create(ctx, &ep, opc, &rpc);
+	if (rc != 0)
+		return rc;
+	in = crt_req_get(rpc);
+	uuid_copy(in->ptdmi_uuid, svc->ps_uuid);
+	in->ptdmi_addrs.ca_arrays = sub->pta_addrs;
+	in->ptdmi_addrs.ca_count  = sub->pta_number;
+	in->ptdmi_quiesce_sec     = quiesce_sec;
+
+	rc = dss_rpc_send(rpc);
+	if (rc == 0) {
+		out = crt_reply_get(rpc);
+		rc  = out->ptdmo_rc;
+	}
+	crt_req_decref(rpc);
+	return rc;
+}
+
+/*
+ * Handler of POOL_DISCARD ("dmg pool discard"): validate the request against
+ * the authoritative pool map (all-or-nothing), then ask every involved rank
+ * to discard (unicast, async on the rank: discard + NVMe GC quiesce run in
+ * the background there; progress is polled via POOL_DISCARD_QUERY).
+ */
+void
+ds_pool_discard_handler(crt_rpc_t *rpc)
+{
+	struct pool_discard_in      *in  = crt_req_get(rpc);
+	struct pool_discard_out     *out = crt_reply_get(rpc);
+	struct pool_svc             *svc;
+	struct pool_target_addr_list list;
+	struct pool_target_addr     *sub = NULL;
+	int                          i;
+	int                          rc;
+
+	list.pta_number = in->pdci_addrs.ca_count;
+	list.pta_addrs  = in->pdci_addrs.ca_arrays;
+	if (list.pta_addrs == NULL || list.pta_number <= 0)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	rc = pool_svc_lookup_leader(in->pdci_op.pi_uuid, &svc, &out->pdco_op.po_hint);
+	if (rc != 0)
+		goto out;
+
+	D_INFO(DF_UUID ": manual discard request: ntargets %d quiesce %u sec\n",
+	       DP_UUID(svc->ps_uuid), list.pta_number, in->pdci_quiesce_sec);
+
+	/*
+	 * A manual discard only makes sense for the data-sync reintegration
+	 * mode (the reintegration discards the data anyway). In other modes
+	 * (e.g. no_data_sync) the data of DOWN ranks is expected to be
+	 * preserved for their return, so refuse to destroy it.
+	 */
+	if (svc->ps_pool->sp_reint_mode != DAOS_REINT_MODE_DATA_SYNC) {
+		D_ERROR(DF_UUID ": manual discard requires reintegration mode data_sync "
+				"(current mode %u)\n",
+			DP_UUID(svc->ps_uuid), svc->ps_pool->sp_reint_mode);
+		D_GOTO(out_svc, rc = -DER_INVAL);
+	}
+
+	rc = pool_discard_leader_validate(svc, &list);
+	if (rc != 0)
+		goto out_svc;
+
+	D_ALLOC_ARRAY(sub, list.pta_number);
+	if (sub == NULL)
+		D_GOTO(out_svc, rc = -DER_NOMEM);
+
+	/* One unicast per rank, carrying all its requested targets. */
+	for (i = 0; i < list.pta_number; i++) {
+		struct pool_target_addr_list sub_list;
+		d_rank_t                     rank = list.pta_addrs[i].pta_rank;
+		int                          n    = 0;
+		int                          j;
+
+		/* Ranks are handled at their first occurrence. */
+		for (j = 0; j < i; j++) {
+			if (list.pta_addrs[j].pta_rank == rank)
+				break;
+		}
+
+		/*
+		 * A previous entry (j) has the same rank, i.e. this rank was
+		 * already handled when it first occurred, so skip entry i.
+		 */
+		if (j < i)
+			continue;
+
+		for (j = 0; j < list.pta_number; j++) {
+			if (list.pta_addrs[j].pta_rank == rank)
+				sub[n++] = list.pta_addrs[j];
+		}
+		sub_list.pta_addrs  = sub;
+		sub_list.pta_number = n;
+
+		rc = pool_tgt_discard_manual_send(rpc->cr_ctx, svc, rank, &sub_list,
+						  in->pdci_quiesce_sec);
+		DS_POOL_LOG_PRINT(NOTE,
+				  DF_UUID ": manual discard %s on rank %u: ntargets %d "
+					  "quiesce %u sec: " DF_RC "\n",
+				  DP_UUID(svc->ps_uuid), rc == 0 ? "accepted" : "refused", rank, n,
+				  in->pdci_quiesce_sec, DP_RC(rc));
+		if (rc != 0) {
+			/*
+			 * Already accepted ranks keep discarding (harmless and
+			 * observable via POOL_DISCARD_QUERY); report the error
+			 * for the whole request.
+			 */
+			break;
+		}
+	}
+	D_FREE(sub);
+
+out_svc:
+	pool_svc_put_leader(svc);
+out:
+	out->pdco_op.po_rc = rc;
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pdci_op.pi_uuid), rpc,
+		DP_RC(rc));
+	crt_reply_send(rpc);
+}
+
+struct pool_discard_query_arg {
+	crt_context_t                   pdqa_ctx;
+	crt_opcode_t                    pdqa_opc;
+	uuid_t                          pdqa_uuid;
+	struct pool_discard_rank_state *pdqa_state;
+	ABT_future                      pdqa_future;
+};
+
+static void
+pool_tgt_discard_query_ult(void *data)
+{
+	struct pool_discard_query_arg     *arg   = data;
+	struct pool_discard_rank_state    *state = arg->pdqa_state;
+	struct pool_tgt_discard_query_in  *in;
+	struct pool_tgt_discard_query_out *out;
+	crt_endpoint_t                     ep;
+	crt_rpc_t                         *rpc;
+	int                                rc;
+
+	ep.ep_grp  = NULL;
+	ep.ep_rank = state->pdrs_rank;
+	ep.ep_tag  = 0;
+	rc         = crt_req_create(arg->pdqa_ctx, &ep, arg->pdqa_opc, &rpc);
+	if (rc != 0)
+		goto out;
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->ptdqi_uuid, arg->pdqa_uuid);
+	rc = dss_rpc_send(rpc);
+	if (rc == 0) {
+		out    = crt_reply_get(rpc);
+		*state = out->ptdqo_state;
+	}
+	crt_req_decref(rpc);
+
+out:
+	if (rc != 0) {
+		state->pdrs_phase  = DS_POOL_DISCARD_FAILED;
+		state->pdrs_status = rc;
+	}
+	ABT_future_set(arg->pdqa_future, NULL);
+}
+
+/*
+ * Handler of POOL_DISCARD_QUERY ("dmg pool query-discard"): collect the
+ * local discard progress of every requested rank via unicast queries.
+ */
+void
+ds_pool_discard_query_handler(crt_rpc_t *rpc)
+{
+	struct pool_discard_query_in   *in  = crt_req_get(rpc);
+	struct pool_discard_query_out  *out = crt_reply_get(rpc);
+	struct pool_svc                *svc;
+	struct pool_discard_rank_state *states = NULL;
+	struct pool_discard_query_arg  *args   = NULL;
+	ABT_future                      future = ABT_FUTURE_NULL;
+	crt_opcode_t                    opc    = POOL_TGT_DISCARD_QUERY;
+	d_rank_t                       *ranks  = in->pdqi_ranks.ca_arrays;
+	int                             nranks = in->pdqi_ranks.ca_count;
+	int                             i;
+	int                             rc;
+
+	if (ranks == NULL || nranks <= 0)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	rc = pool_svc_lookup_leader(in->pdqi_op.pi_uuid, &svc, &out->pdqo_op.po_hint);
+	if (rc != 0)
+		goto out;
+
+	D_ALLOC_ARRAY(states, nranks);
+	if (states == NULL)
+		D_GOTO(out_svc, rc = -DER_NOMEM);
+
+	D_ALLOC_ARRAY(args, nranks);
+	if (args == NULL)
+		D_GOTO(out_svc, rc = -DER_NOMEM);
+
+	rc = ds_pool_encode_opc(&opc);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ABT_future_create(nranks, NULL, &future);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_svc, rc = dss_abterr2der(rc));
+
+	for (i = 0; i < nranks; i++) {
+		states[i].pdrs_rank  = ranks[i];
+		states[i].pdrs_phase = DS_POOL_DISCARD_NEVER;
+		args[i].pdqa_ctx     = rpc->cr_ctx;
+		args[i].pdqa_opc     = opc;
+		args[i].pdqa_state   = &states[i];
+		args[i].pdqa_future  = future;
+		uuid_copy(args[i].pdqa_uuid, svc->ps_uuid);
+
+		rc = dss_ult_create(pool_tgt_discard_query_ult, &args[i], DSS_XS_SELF, 0, 0, NULL);
+		if (rc != 0) {
+			states[i].pdrs_phase  = DS_POOL_DISCARD_FAILED;
+			states[i].pdrs_status = rc;
+			ABT_future_set(future, NULL);
+		}
+	}
+
+	rc = ABT_future_wait(future);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
+	ABT_future_free(&future);
+
+	rc                         = 0;
+	out->pdqo_states.ca_arrays = states;
+	out->pdqo_states.ca_count  = nranks;
+
+out_svc:
+	pool_svc_put_leader(svc);
+out:
+	out->pdqo_op.po_rc = rc;
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pdqi_op.pi_uuid), rpc,
+		DP_RC(rc));
+	crt_reply_send(rpc);
+	D_FREE(args);
+	D_FREE(states);
+}
+
 void
 ds_pool_extend_handler(crt_rpc_t *rpc)
 {

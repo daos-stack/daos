@@ -2463,6 +2463,14 @@ out:
 struct tgt_discard_arg {
 	uuid_t			     pool_uuid;
 	uint64_t		     epoch;
+	/*
+	 * Seconds to wait after a successful discard for the in-device NVMe
+	 * garbage collection triggered by the massive unmaps to settle, with
+	 * sp_discarding still held. 0 = no quiesce. Only set by the manual
+	 * discard path (ds_pool_tgt_discard_manual_handler()); the
+	 * reintegration path (ds_pool_tgt_discard_handler()) keeps it 0.
+	 */
+	uint32_t                     quiesce_sec;
 	struct pool_target_addr_list tgt_list;
 };
 
@@ -2782,11 +2790,38 @@ ds_pool_tgt_discard_ult(void *data)
 				       arg, DSS_ULT_DEEP_STACK);
 	ABT_rwlock_unlock(pool->sp_recov_lock);
 
+	/*
+	 * Quiesce (manual discard only): the unmaps above leave the NVMe
+	 * devices busy with internal garbage collection well after they have
+	 * been acknowledged; reintegrating right away would contend with the
+	 * in-device GC and collapse I/O latency. Hold sp_discarding through
+	 * the wait so that a premature reintegration keeps being fenced.
+	 */
+	if (rc == 0 && arg->quiesce_sec > 0) {
+		uint64_t quiesce_end = daos_getmtime_coarse() + (uint64_t)arg->quiesce_sec * 1000;
+
+		pool->sp_discard_phase = DS_POOL_DISCARD_QUIESCING;
+		D_INFO(DF_UUID ": discard done, quiesce %u sec for NVMe GC\n",
+		       DP_UUID(arg->pool_uuid), arg->quiesce_sec);
+		while (daos_getmtime_coarse() < quiesce_end) {
+			if (pool->sp_stopping) {
+				rc = -DER_SHUTDOWN;
+				break;
+			}
+			dss_sleep(1000);
+		}
+	}
+
 	ABT_mutex_lock(pool->sp_mutex);
 	pool->sp_discard_status = rc;
+	pool->sp_discard_phase  = rc == 0 ? DS_POOL_DISCARD_DONE : DS_POOL_DISCARD_FAILED;
+	if (rc == 0)
+		pool->sp_discard_done_time = daos_getmtime_coarse();
 	discarding              = atomic_fetch_sub(&pool->sp_discarding, 1);
 	D_ASSERT(discarding == 1);
 	ABT_mutex_unlock(pool->sp_mutex);
+
+	D_INFO(DF_UUID ": discard finished: " DF_RC "\n", DP_UUID(arg->pool_uuid), DP_RC(rc));
 
 	ds_pool_put(pool);
 free:
@@ -2816,6 +2851,8 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	 */
 	uuid_copy(arg->pool_uuid, in->ptdi_uuid);
 	arg->epoch = DAOS_EPOCH_MAX;
+	arg->quiesce_sec = 0;
+
 	rc = ds_pool_lookup(arg->pool_uuid, &pool);
 	if (rc) {
 		D_INFO(DF_UUID" can not be found: %d\n", DP_UUID(arg->pool_uuid), rc);
@@ -2852,6 +2889,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 		D_GOTO(out_put, rc = -DER_BUSY);
 	}
 	pool->sp_discard_status = 0;
+	pool->sp_discard_phase  = DS_POOL_DISCARD_DISCARDING;
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	D_INFO(DF_UUID " discard is scheduled\n", DP_UUID(arg->pool_uuid));
@@ -2863,6 +2901,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	} else {
 		ABT_mutex_lock(pool->sp_mutex);
 		pool->sp_discard_status = rc;
+		pool->sp_discard_phase  = DS_POOL_DISCARD_FAILED;
 		atomic_fetch_sub(&pool->sp_discarding, 1);
 		ABT_mutex_unlock(pool->sp_mutex);
 	}
@@ -2875,6 +2914,269 @@ out:
 	crt_reply_send(rpc);
 	if (arg != NULL)
 		tgt_discard_arg_free(arg);
+}
+
+/*
+ * Best-effort refresh of the local pool map view from the IV master (the PS
+ * leader), waiting until it lands in pool->sp_map. This only helps a rank
+ * whose pool secondary group is still populated from an earlier (now stale)
+ * map: the fetch is routed to the master through that stale membership, and
+ * the master serves it without checking the requester's membership. A rank
+ * that never received a map cannot pull one -- its pool secondary group is
+ * empty (gp_self unset), so both crt_group_rank() and the IV fetch fail --
+ * which is exactly the state of a rank excluded before its first map push
+ * arrived (map distribution is push-based along the group tree, and excluded
+ * ranks are outside DC_POOL_GROUP_MAP_STATES). Callers must treat a failure
+ * here as "no local view", not as an error.
+ */
+static int
+pool_tgt_discard_map_refresh(struct ds_pool *pool)
+{
+	struct pool_map_refresh_ult_arg *arg;
+	ABT_eventual                     eventual;
+	int                             *status;
+	int                              rc;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		D_GOTO(out_eventual, rc = -DER_NOMEM);
+
+	/* UINT32_MAX defeats the freshness skip in ds_pool_map_refresh_ult(). */
+	arg->iua_pool_version = UINT32_MAX;
+	uuid_copy(arg->iua_pool_uuid, pool->sp_uuid);
+	arg->iua_eventual = eventual;
+
+	/* Pool IV fetches must run on xstream 0. */
+	rc = dss_ult_create(ds_pool_map_refresh_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+	if (rc != 0) {
+		D_FREE(arg);
+		D_GOTO(out_eventual, rc);
+	}
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	if (*status != 0)
+		rc = *status;
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+	return rc;
+}
+
+/*
+ * Self validation of the manual discard: only proceed when this rank believes
+ * itself unavailable (every local target in DOWN or DOWNOUT) in its own pool
+ * map view. A working rank by definition believes it is UPIN -- that belief
+ * is exactly what makes it accept I/O -- so it can always protect its data
+ * here even if the leader is buggy or the RPC is misrouted.
+ *
+ * When no local map view is available and none can be pulled, the leader's
+ * validation is trusted instead: the leader checked the targets against the
+ * authoritative rdb map immediately before sending this RPC, while a rank
+ * that still holds live data necessarily sits in the pool distribution group
+ * and holds a fresh map, so it can never reach this fallback. There is
+ * deliberately no way to skip this validation.
+ */
+static int
+pool_tgt_discard_self_validate(struct ds_pool *pool)
+{
+	struct pool_target *tgts = NULL;
+	d_rank_t            rank = dss_self_rank();
+	int                 tgt_nr;
+	int                 i;
+	int                 rc;
+
+	/* Best effort only; the map may be unpullable on this rank. */
+	rc = pool_tgt_discard_map_refresh(pool);
+	if (rc != 0) {
+		D_INFO(DF_UUID ": no authoritative map view available: " DF_RC "\n",
+		       DP_UUID(pool->sp_uuid), DP_RC(rc));
+		rc = 0;
+	}
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	if (pool->sp_map == NULL) {
+		D_NOTE(DF_UUID ": no local pool map view, trusting the leader that "
+			       "rank %u is excluded\n",
+		       DP_UUID(pool->sp_uuid), rank);
+		D_GOTO(out_lock, rc = 0);
+	}
+
+	tgt_nr = pool_map_find_target_by_rank_idx(pool->sp_map, rank, -1 /* all */, &tgts);
+	if (tgt_nr <= 0) {
+		D_ERROR(DF_UUID ": rank %u not found in the local pool map, "
+				"refusing manual discard\n",
+			DP_UUID(pool->sp_uuid), rank);
+		D_GOTO(out_lock, rc = -DER_NO_PERM);
+	}
+
+	for (i = 0; i < tgt_nr; i++) {
+		uint8_t status = tgts[i].ta_comp.co_status;
+
+		if (!(status & (PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT))) {
+			D_ERROR(DF_UUID ": local target %u of rank %u is in status %u, "
+					"not DOWN/DOWNOUT, refusing manual discard\n",
+				DP_UUID(pool->sp_uuid), tgts[i].ta_comp.co_index, rank, status);
+			D_GOTO(out_lock, rc = -DER_NO_PERM);
+		}
+	}
+
+out_lock:
+	ABT_rwlock_unlock(pool->sp_lock);
+	return rc;
+}
+
+/*
+ * Admin-initiated (manual) discard of the local pool data, unicast from the
+ * PS leader; see "dmg pool discard". Differences from the reintegration path
+ * (ds_pool_tgt_discard_handler()):
+ * - double checks the local pool map view before destroying any data;
+ * - quiesces for in->ptdmi_quiesce_sec after the discard (NVMe GC settling),
+ *   with sp_discarding held through the wait;
+ * - being a unicast reply, the returned rc is reliable (the CoRPC of the
+ *   reintegration path aggregates no reply without co_ops);
+ * - no ds_iv_ns_reint_prep(): purging the stale container IV cache is a
+ *   reintegration preparation, not part of the discard itself, and a manual
+ *   discard may happen long before the reintegration; the follow-up
+ *   reintegration sends POOL_TGT_DISCARD again, whose handler does the IV
+ *   cleanup at the right moment.
+ */
+void
+ds_pool_tgt_discard_manual_handler(crt_rpc_t *rpc)
+{
+	struct pool_tgt_discard_manual_in  *in  = crt_req_get(rpc);
+	struct pool_tgt_discard_manual_out *out = crt_reply_get(rpc);
+	struct pool_target_addr_list        pta_list;
+	struct tgt_discard_arg             *arg = NULL;
+	struct ds_pool                     *pool;
+	int                                 discarding = 0;
+	int                                 i;
+	int                                 rc;
+
+	pta_list.pta_number = in->ptdmi_addrs.ca_count;
+	pta_list.pta_addrs  = in->ptdmi_addrs.ca_arrays;
+
+	arg = tgt_discard_arg_alloc(&pta_list);
+	if (arg == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	uuid_copy(arg->pool_uuid, in->ptdmi_uuid);
+	arg->epoch       = DAOS_EPOCH_MAX;
+	arg->quiesce_sec = in->ptdmi_quiesce_sec;
+
+	D_INFO(DF_UUID ": manual discard request: ntargets %d quiesce %u sec\n",
+	       DP_UUID(arg->pool_uuid), pta_list.pta_number, arg->quiesce_sec);
+
+	/*
+	 * The unicast must only carry this rank's own targets; a mismatch
+	 * (e.g. a misrouted RPC) would otherwise turn into a vacuous discard
+	 * (pool_child_discard() matches by rank) reported as success.
+	 */
+	for (i = 0; i < pta_list.pta_number; i++) {
+		if (pta_list.pta_addrs[i].pta_rank != dss_self_rank()) {
+			D_ERROR(DF_UUID ": misdispatched: addr rank %u != self rank %u\n",
+				DP_UUID(arg->pool_uuid), pta_list.pta_addrs[i].pta_rank,
+				dss_self_rank());
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
+
+	/* Unlike the reintegration path, report a not-started pool as an
+	 * error instead of a silent no-op success.
+	 */
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	if (rc) {
+		D_ERROR(DF_UUID ": pool not started locally, cannot discard: %d\n",
+			DP_UUID(arg->pool_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = pool_tgt_discard_self_validate(pool);
+	if (rc != 0)
+		goto out_put;
+
+	if (ds_pool_is_rebuilding(pool)) {
+		D_INFO(DF_UUID " is rebuilding, refusing manual discard\n",
+		       DP_UUID(arg->pool_uuid));
+		D_GOTO(out_put, rc = -DER_BUSY);
+	}
+
+	ABT_mutex_lock(pool->sp_mutex);
+	if (!atomic_compare_exchange(&pool->sp_discarding, discarding, 1)) {
+		D_INFO(DF_UUID " discard is already in progress\n", DP_UUID(arg->pool_uuid));
+		ABT_mutex_unlock(pool->sp_mutex);
+		D_GOTO(out_put, rc = -DER_BUSY);
+	}
+	pool->sp_discard_status = 0;
+	pool->sp_discard_phase  = DS_POOL_DISCARD_DISCARDING;
+	ABT_mutex_unlock(pool->sp_mutex);
+
+	D_INFO(DF_UUID " manual discard is scheduled: ntargets %d quiesce %u sec\n",
+	       DP_UUID(arg->pool_uuid), pta_list.pta_number, arg->quiesce_sec);
+
+	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+	if (rc == 0) {
+		arg = NULL; /* taken over by ds_pool_tgt_discard_ult */
+	} else {
+		ABT_mutex_lock(pool->sp_mutex);
+		pool->sp_discard_status = rc;
+		pool->sp_discard_phase  = DS_POOL_DISCARD_FAILED;
+		atomic_fetch_sub(&pool->sp_discarding, 1);
+		ABT_mutex_unlock(pool->sp_mutex);
+	}
+out_put:
+	ds_pool_put(pool);
+out:
+	out->ptdmo_rc = rc;
+	D_DEBUG(DB_MD, DF_UUID ": replying manual discard rpc " DF_RC "\n", DP_UUID(in->ptdmi_uuid),
+		DP_RC(rc));
+	crt_reply_send(rpc);
+	if (arg != NULL)
+		tgt_discard_arg_free(arg);
+}
+
+/*
+ * Report the progress of the local discard flow. Used by the PS leader to
+ * serve POOL_DISCARD_QUERY ("dmg pool query-discard").
+ */
+void
+ds_pool_tgt_discard_query_handler(crt_rpc_t *rpc)
+{
+	struct pool_tgt_discard_query_in  *in    = crt_req_get(rpc);
+	struct pool_tgt_discard_query_out *out   = crt_reply_get(rpc);
+	struct pool_discard_rank_state    *state = &out->ptdqo_state;
+	struct ds_pool                    *pool;
+	uint64_t                           done_time;
+	int                                rc;
+
+	state->pdrs_rank = dss_self_rank();
+
+	rc = ds_pool_lookup(in->ptdqi_uuid, &pool);
+	if (rc) {
+		D_INFO(DF_UUID " can not be found: %d\n", DP_UUID(in->ptdqi_uuid), rc);
+		state->pdrs_phase  = DS_POOL_DISCARD_FAILED;
+		state->pdrs_status = rc;
+		goto reply;
+	}
+
+	ABT_mutex_lock(pool->sp_mutex);
+	state->pdrs_phase  = pool->sp_discard_phase;
+	state->pdrs_status = pool->sp_discard_status;
+	done_time          = pool->sp_discard_done_time;
+	ABT_mutex_unlock(pool->sp_mutex);
+	if (state->pdrs_phase == DS_POOL_DISCARD_DONE)
+		state->pdrs_done_age_sec = (daos_getmtime_coarse() - done_time) / 1000;
+	ds_pool_put(pool);
+reply:
+	D_DEBUG(DB_MD, DF_UUID ": replying discard query: phase %u status %d age " DF_U64 "\n",
+		DP_UUID(in->ptdqi_uuid), state->pdrs_phase, state->pdrs_status,
+		state->pdrs_done_age_sec);
+	crt_reply_send(rpc);
 }
 
 static int
