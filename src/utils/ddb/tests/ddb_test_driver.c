@@ -944,6 +944,91 @@ csum_test_partial_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_
 }
 
 /*
+ * Write buf filled with filler at the shared major epoch DVT_FAKE_MAJOR_EPOCH.  VOS_OF_REBUILD in
+ * flags makes it the later write (greater minor epoch).
+ */
+static void
+write_minor(struct dt_csum_ctx *csum_ctx, daos_handle_t coh, daos_unit_oid_t oid, uint64_t flags,
+	    daos_iod_t *iod, d_sg_list_t *sgl, char *buf, char filler,
+	    struct dcs_iod_csums **ic_out)
+{
+	int rc;
+
+	memset(buf, filler, iod->iod_recxs->rx_nr);
+	d_iov_set(sgl->sg_iovs, buf, iod->iod_recxs->rx_nr);
+
+	rc = daos_csummer_calc_iods(csum_ctx->dct_csummer, sgl, iod, NULL, 1, false, NULL, 0,
+				    ic_out);
+	assert_success(rc);
+	rc = vos_obj_update(coh, oid, DVT_FAKE_MAJOR_EPOCH, 0, flags, &g_dkeys[0], 1, iod, *ic_out,
+			    sgl);
+	assert_success(rc);
+}
+
+/*
+ * g_oids[DVT_FAKE_MINOR_OID_*]: overlapping extents with different minor epochs,
+ * see ddb_test_driver.h.
+ */
+static void
+csum_test_minor_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t *sgl)
+{
+	struct dt_csum_ctx    *csum_ctx = tctx->dvt_extra;
+	const uint64_t         size     = csum_ctx->dct_recx_size;
+	const uint64_t         chunk    = csum_ctx->dct_chunk_size;
+	struct dcs_iod_csums **minor_ics;
+	daos_unit_oid_t        uoid;
+	daos_iod_t             iod    = {0};
+	char                   filler = DVT_FAKE_MINOR_OID_FILLER;
+	daos_recx_t            recx;
+	char                  *buf;
+
+	/* Size of the allocated buffer equal to the largest extent: A of the MIDDLE test case */
+	D_ALLOC(buf, 3 * chunk);
+	assert_non_null(buf);
+
+	d_iov_set(&iod.iod_name, g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX],
+		  strlen(g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX]));
+	iod.iod_nr    = 1;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_size  = 1;
+	iod.iod_recxs = &recx;
+
+	/* HEAD: A=[0, S)@10.1, B=[0, S/2)@10.2 -> {B, A} */
+	uoid      = g_oids[DVT_FAKE_MINOR_OID_HEAD];
+	minor_ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_HEAD)];
+	recx      = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	write_minor(csum_ctx, coh, uoid, 0, &iod, sgl, buf, filler++, &minor_ics[0]);
+	recx = (daos_recx_t){.rx_idx = 0, .rx_nr = size / 2};
+	write_minor(csum_ctx, coh, uoid, VOS_OF_REBUILD, &iod, sgl, buf, filler++, &minor_ics[1]);
+
+	/* MIDDLE: A=[0, 3C)@10.1, B=[C, 2C)@10.2 -> {A, B, A}: A once per visible piece */
+	uoid      = g_oids[DVT_FAKE_MINOR_OID_MIDDLE];
+	minor_ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_MIDDLE)];
+	recx      = (daos_recx_t){.rx_idx = 0, .rx_nr = 3 * chunk};
+	write_minor(csum_ctx, coh, uoid, 0, &iod, sgl, buf, filler++, &minor_ics[0]);
+	recx = (daos_recx_t){.rx_idx = chunk, .rx_nr = chunk};
+	write_minor(csum_ctx, coh, uoid, VOS_OF_REBUILD, &iod, sgl, buf, filler++, &minor_ics[1]);
+
+	/* CHUNK: A=[0, S)@10.1, B=[C/4, C/2)@10.2 -> {A, B, A} */
+	uoid      = g_oids[DVT_FAKE_MINOR_OID_CHUNK];
+	minor_ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_CHUNK)];
+	recx      = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	write_minor(csum_ctx, coh, uoid, 0, &iod, sgl, buf, filler++, &minor_ics[0]);
+	recx = (daos_recx_t){.rx_idx = chunk / 4, .rx_nr = chunk / 4};
+	write_minor(csum_ctx, coh, uoid, VOS_OF_REBUILD, &iod, sgl, buf, filler++, &minor_ics[1]);
+
+	/* HIDDEN: B=[0, S/2)@10.1, A=[0, S)@10.2 -> {A}: B is entirely hidden by A */
+	uoid      = g_oids[DVT_FAKE_MINOR_OID_HIDDEN];
+	minor_ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_HIDDEN)];
+	recx      = (daos_recx_t){.rx_idx = 0, .rx_nr = size / 2};
+	write_minor(csum_ctx, coh, uoid, 0, &iod, sgl, buf, filler++, &minor_ics[0]);
+	recx = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	write_minor(csum_ctx, coh, uoid, VOS_OF_REBUILD, &iod, sgl, buf, filler++, &minor_ics[1]);
+
+	D_FREE(buf);
+}
+
+/*
  * Populate the VOS pool with test data for checksum tests.
  *
  * Requires tctx->dvt_poh to be a valid open pool handle. The caller is responsible for opening and
@@ -973,6 +1058,7 @@ ddb_test_csum_setup(void **state)
 	csum_ctx->dct_sv_ic_bad = NULL;
 	memset(&csum_ctx->dct_recx_ics_bad[0], 0, sizeof(csum_ctx->dct_recx_ics_bad));
 	memset(&csum_ctx->dct_part_ics[0][0], 0, sizeof(csum_ctx->dct_part_ics));
+	memset(&csum_ctx->dct_minor_ics[0][0], 0, sizeof(csum_ctx->dct_minor_ics));
 	rc = daos_csummer_init_with_type(&csum_ctx->dct_csummer, csum_ctx->dct_csum_type,
 					 csum_ctx->dct_chunk_size, 0);
 	assert_success(rc);
@@ -993,6 +1079,7 @@ ddb_test_csum_setup(void **state)
 	csum_test_corrupt_sv_setup(tctx, coh, &sgl);
 	csum_test_corrupt_recx_setup(tctx, coh, &sgl);
 	csum_test_partial_recx_setup(tctx, coh, &sgl);
+	csum_test_minor_recx_setup(tctx, coh, &sgl);
 
 	d_sgl_fini(&sgl, false);
 	vos_cont_close(coh);
@@ -1028,6 +1115,11 @@ ddb_test_csum_teardown(void **state)
 		for (ci_idx = 0; ci_idx < DVT_FAKE_PART_RECX_COUNT; ci_idx++)
 			daos_csummer_free_ic(csum_ctx->dct_csummer,
 					     &csum_ctx->dct_part_ics[oid_idx][ci_idx]);
+	}
+	for (oid_idx = 0; oid_idx < DVT_FAKE_MINOR_OID_COUNT; oid_idx++) {
+		for (ci_idx = 0; ci_idx < DVT_FAKE_MINOR_WRITE_COUNT; ci_idx++)
+			daos_csummer_free_ic(csum_ctx->dct_csummer,
+					     &csum_ctx->dct_minor_ics[oid_idx][ci_idx]);
 	}
 	daos_csummer_destroy(&csum_ctx->dct_csummer);
 

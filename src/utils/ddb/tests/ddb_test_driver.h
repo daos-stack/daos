@@ -92,6 +92,29 @@ struct dt_vos_pool_ctx {
 D_CASSERT(DVT_FAKE_PART_ICS_IDX(DVT_FAKE_PART_OID_BAD_VISIBLE) == 1);
 D_CASSERT(DVT_FAKE_PART_ICS_IDX(DVT_FAKE_PART_OID_BAD_HIDDEN) == DVT_FAKE_PART_OID_COUNT - 1);
 
+/*
+ * Recx fixture objects whose extents are all written at the same major epoch, as the operations of
+ * one distributed transaction are: they only differ by their minor epoch.  In the comments of the
+ * tests, X=[lo, hi)@E.m is the extent X written at the major epoch E (DVT_FAKE_MAJOR_EPOCH) with
+ * the m-th minor epoch: the first write is @E.1, the later one @E.2 and has the greater minor
+ * epoch.  -> {X, Y} is what the csum dump reports: one extent per visible piece, in offset order.
+ * With S = dct_recx_size (two chunks) and C = dct_chunk_size:
+ * - HEAD:   A=[0, S)@10.1, B=[0, S/2)@10.2     B overwrites the first chunk of A
+ * - MIDDLE: A=[0, 3C)@10.1, B=[C, 2C)@10.2     B splits A in two visible pieces
+ * - CHUNK:  A=[0, S)@10.1, B=[C/4, C/2)@10.2   B overwrites a part of the first chunk of A
+ * - HIDDEN: B=[0, S/2)@10.1, A=[0, S)@10.2     A hides B entirely
+ */
+#define DVT_FAKE_MAJOR_EPOCH        (10)
+#define DVT_FAKE_MINOR_WRITE_COUNT  (2)
+#define DVT_FAKE_MINOR_OID_COUNT    (4)
+#define DVT_FAKE_MINOR_OID_HEAD     (6)
+#define DVT_FAKE_MINOR_OID_MIDDLE   (7)
+#define DVT_FAKE_MINOR_OID_CHUNK    (8)
+#define DVT_FAKE_MINOR_OID_HIDDEN   (9)
+#define DVT_FAKE_MINOR_OID_FILLER   ('m')
+/* Row of dct_minor_ics holding the checksum infos of the object g_oids[oid] */
+#define DVT_FAKE_MINOR_ICS_IDX(oid) ((oid) - DVT_FAKE_MINOR_OID_HEAD)
+
 struct dt_csum_ctx {
 	uuid_t                dct_cont_uuid;
 	size_t                dct_sv_size;
@@ -104,6 +127,7 @@ struct dt_csum_ctx {
 	struct dcs_iod_csums *dct_sv_ic_bad;
 	struct dcs_iod_csums *dct_recx_ics_bad[DVT_FAKE_RECX_COUNT];
 	struct dcs_iod_csums *dct_part_ics[DVT_FAKE_PART_OID_COUNT][DVT_FAKE_PART_RECX_COUNT];
+	struct dcs_iod_csums *dct_minor_ics[DVT_FAKE_MINOR_OID_COUNT][DVT_FAKE_MINOR_WRITE_COUNT];
 };
 
 daos_unit_oid_t dvt_gen_uoid(uint32_t i);

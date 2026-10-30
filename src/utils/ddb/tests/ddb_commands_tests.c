@@ -1012,6 +1012,223 @@ write_csum_recx_tests(void **state)
 	dvt_fake_print_reset();
 }
 
+static void
+print_csum_recx_minor_tests(void **state)
+{
+	struct dt_vos_pool_ctx  *tctx     = *state;
+	struct dt_csum_ctx      *csum_ctx = tctx->dvt_extra;
+	struct ddb_ctx           ctx      = {0};
+	struct csum_dump_options opt      = {0};
+	const uint64_t           size     = csum_ctx->dct_recx_size;
+	const uint64_t           chunk    = csum_ctx->dct_chunk_size;
+	struct dcs_iod_csums   **ics;
+	daos_recx_t              a;
+	daos_recx_t              b;
+	char                     path[128]   = {0};
+	char                     line_a[512] = {0};
+	char                     line_b[512] = {0};
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_write_mode              = false;
+
+	opt.path  = path;
+	opt.epoch = DAOS_EPOCH_MAX;
+
+	/* HEAD: A=[0, S)@10.1, B=[0, S/2)@10.2 -> {B, A} */
+	a   = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	b   = (daos_recx_t){.rx_idx = 0, .rx_nr = size / 2};
+	ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_HEAD)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_HEAD],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &a);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_int_equal(printed_count("- Record Indexes: "), 2);
+	csum_test_recx_line_init(line_a, sizeof(line_a), &a, DVT_FAKE_MAJOR_EPOCH, ics[0]->ic_data);
+	csum_test_recx_line_init(line_b, sizeof(line_b), &b, DVT_FAKE_MAJOR_EPOCH, ics[1]->ic_data);
+	assert_strings_in_order(dvt_fake_print_buffer, line_b, line_a);
+	dvt_fake_print_reset();
+
+	/* MIDDLE: A=[0, 3C)@10.1, B=[C, 2C)@10.2 -> {A, B, A}: A once per visible piece */
+	a   = (daos_recx_t){.rx_idx = 0, .rx_nr = 3 * chunk};
+	b   = (daos_recx_t){.rx_idx = chunk, .rx_nr = chunk};
+	ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_MIDDLE)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_MIDDLE],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &a);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_int_equal(printed_count("- Record Indexes: "), 3);
+	csum_test_recx_line_init(line_a, sizeof(line_a), &a, DVT_FAKE_MAJOR_EPOCH, ics[0]->ic_data);
+	csum_test_recx_line_init(line_b, sizeof(line_b), &b, DVT_FAKE_MAJOR_EPOCH, ics[1]->ic_data);
+	assert_strings_in_order(dvt_fake_print_buffer, line_a, line_b, line_a);
+	dvt_fake_print_reset();
+
+	/* CHUNK: A=[0, S)@10.1, B=[C/4, C/2)@10.2 -> {A, B, A} */
+	a   = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	b   = (daos_recx_t){.rx_idx = chunk / 4, .rx_nr = chunk / 4};
+	ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_CHUNK)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_CHUNK],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &a);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_int_equal(printed_count("- Record Indexes: "), 3);
+	csum_test_recx_line_init(line_a, sizeof(line_a), &a, DVT_FAKE_MAJOR_EPOCH, ics[0]->ic_data);
+	csum_test_recx_line_init(line_b, sizeof(line_b), &b, DVT_FAKE_MAJOR_EPOCH, ics[1]->ic_data);
+	assert_strings_in_order(dvt_fake_print_buffer, line_a, line_b, line_a);
+	dvt_fake_print_reset();
+
+	/* HIDDEN: B=[0, S/2)@10.1, A=[0, S)@10.2 -> {A}: B is entirely hidden by A */
+	a   = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_HIDDEN)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_HIDDEN],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &a);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_int_equal(printed_count("- Record Indexes: "), 1);
+	csum_test_recx_line_init(line_a, sizeof(line_a), &a, DVT_FAKE_MAJOR_EPOCH, ics[1]->ic_data);
+	assert_printed_contains(line_a);
+	dvt_fake_print_reset();
+
+	/* HIDDEN at the major epoch: it alone selects the writes -> {A} */
+	opt.epoch = DVT_FAKE_MAJOR_EPOCH;
+	a         = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	ics       = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_HIDDEN)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_HIDDEN],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &a);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_int_equal(printed_count("- Record Indexes: "), 1);
+	csum_test_recx_line_init(line_a, sizeof(line_a), &a, DVT_FAKE_MAJOR_EPOCH, ics[1]->ic_data);
+	assert_printed_contains(line_a);
+	dvt_fake_print_reset();
+
+	/* HEAD before the major epoch: nothing is visible */
+	opt.epoch = DVT_FAKE_MAJOR_EPOCH - 1;
+	a         = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_HEAD],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &a);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_printed_contains("No checksum at RECX:");
+	assert_int_equal(printed_count("- Record Indexes: "), 0);
+	dvt_fake_print_reset();
+}
+
+static void
+write_csum_recx_minor_tests(void **state)
+{
+	char                    *path_dst = "/tmp/write_csum_recx_minor_test_output.dat";
+	struct dt_vos_pool_ctx  *tctx     = *state;
+	struct dt_csum_ctx      *csum_ctx = tctx->dvt_extra;
+	struct ddb_ctx           ctx      = {0};
+	struct csum_dump_options opt      = {0};
+	const uint64_t           size     = csum_ctx->dct_recx_size;
+	const uint64_t           chunk    = csum_ctx->dct_chunk_size;
+	struct dcs_iod_csums   **ics;
+	daos_recx_t              a;
+	daos_recx_t              b;
+	char                     path[128]   = {0};
+	char                     line_a[512] = {0};
+	char                     line_b[512] = {0};
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_io_ft.ddb_write_file    = csum_recx_fake_write_file;
+	ctx.dc_write_mode              = false;
+
+	opt.path  = path;
+	opt.epoch = DAOS_EPOCH_MAX;
+	opt.dst   = path_dst;
+
+	/* HEAD: A=[0, S)@10.1, B=[0, S/2)@10.2 -> {B, A} */
+	a   = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	b   = (daos_recx_t){.rx_idx = 0, .rx_nr = size / 2};
+	ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_HEAD)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_HEAD],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &a);
+	will_return(csum_recx_fake_write_file, path_dst);
+	will_return(csum_recx_fake_write_file, ics[1]->ic_data);
+	will_return(csum_recx_fake_write_file, ics[0]->ic_data);
+	will_return(csum_recx_fake_write_file, NULL);
+	will_return(csum_recx_fake_write_file, -DER_SUCCESS);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_printed_contains("Dumping checksum");
+	assert_int_equal(printed_count("- Record Indexes: "), 2);
+	csum_test_recx_line_init(line_a, sizeof(line_a), &a, DVT_FAKE_MAJOR_EPOCH, NULL);
+	csum_test_recx_line_init(line_b, sizeof(line_b), &b, DVT_FAKE_MAJOR_EPOCH, NULL);
+	assert_strings_in_order(dvt_fake_print_buffer, line_b, line_a);
+	dvt_fake_print_reset();
+
+	/* MIDDLE: A=[0, 3C)@10.1, B=[C, 2C)@10.2 -> {A, B, A}: A once per visible piece */
+	a   = (daos_recx_t){.rx_idx = 0, .rx_nr = 3 * chunk};
+	b   = (daos_recx_t){.rx_idx = chunk, .rx_nr = chunk};
+	ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_MIDDLE)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_MIDDLE],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &a);
+	will_return(csum_recx_fake_write_file, path_dst);
+	will_return(csum_recx_fake_write_file, ics[0]->ic_data);
+	will_return(csum_recx_fake_write_file, ics[1]->ic_data);
+	will_return(csum_recx_fake_write_file, ics[0]->ic_data);
+	will_return(csum_recx_fake_write_file, NULL);
+	will_return(csum_recx_fake_write_file, -DER_SUCCESS);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_printed_contains("Dumping checksum");
+	assert_int_equal(printed_count("- Record Indexes: "), 3);
+	csum_test_recx_line_init(line_a, sizeof(line_a), &a, DVT_FAKE_MAJOR_EPOCH, NULL);
+	csum_test_recx_line_init(line_b, sizeof(line_b), &b, DVT_FAKE_MAJOR_EPOCH, NULL);
+	assert_strings_in_order(dvt_fake_print_buffer, line_a, line_b, line_a);
+	dvt_fake_print_reset();
+
+	/* CHUNK: A=[0, S)@10.1, B=[C/4, C/2)@10.2 -> {A, B, A} */
+	a   = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	b   = (daos_recx_t){.rx_idx = chunk / 4, .rx_nr = chunk / 4};
+	ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_CHUNK)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_CHUNK],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &a);
+	will_return(csum_recx_fake_write_file, path_dst);
+	will_return(csum_recx_fake_write_file, ics[0]->ic_data);
+	will_return(csum_recx_fake_write_file, ics[1]->ic_data);
+	will_return(csum_recx_fake_write_file, ics[0]->ic_data);
+	will_return(csum_recx_fake_write_file, NULL);
+	will_return(csum_recx_fake_write_file, -DER_SUCCESS);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_printed_contains("Dumping checksum");
+	assert_int_equal(printed_count("- Record Indexes: "), 3);
+	csum_test_recx_line_init(line_a, sizeof(line_a), &a, DVT_FAKE_MAJOR_EPOCH, NULL);
+	csum_test_recx_line_init(line_b, sizeof(line_b), &b, DVT_FAKE_MAJOR_EPOCH, NULL);
+	assert_strings_in_order(dvt_fake_print_buffer, line_a, line_b, line_a);
+	dvt_fake_print_reset();
+
+	/* HIDDEN: B=[0, S/2)@10.1, A=[0, S)@10.2 -> {A}: B is entirely hidden by A */
+	a   = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_HIDDEN)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_HIDDEN],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &a);
+	will_return(csum_recx_fake_write_file, path_dst);
+	will_return(csum_recx_fake_write_file, ics[1]->ic_data);
+	will_return(csum_recx_fake_write_file, NULL);
+	will_return(csum_recx_fake_write_file, -DER_SUCCESS);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_printed_contains("Dumping checksum");
+	assert_int_equal(printed_count("- Record Indexes: "), 1);
+	csum_test_recx_line_init(line_a, sizeof(line_a), &a, DVT_FAKE_MAJOR_EPOCH, NULL);
+	assert_printed_contains(line_a);
+	dvt_fake_print_reset();
+
+	/* HIDDEN at the major epoch: it alone selects the writes -> {A} */
+	opt.epoch = DVT_FAKE_MAJOR_EPOCH;
+	a         = (daos_recx_t){.rx_idx = 0, .rx_nr = size};
+	ics       = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_HIDDEN)];
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_HIDDEN],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &a);
+	will_return(csum_recx_fake_write_file, path_dst);
+	will_return(csum_recx_fake_write_file, ics[1]->ic_data);
+	will_return(csum_recx_fake_write_file, NULL);
+	will_return(csum_recx_fake_write_file, -DER_SUCCESS);
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_printed_contains("Dumping checksum");
+	assert_int_equal(printed_count("- Record Indexes: "), 1);
+	csum_test_recx_line_init(line_a, sizeof(line_a), &a, DVT_FAKE_MAJOR_EPOCH, NULL);
+	assert_printed_contains(line_a);
+	dvt_fake_print_reset();
+}
+
 /*
  * --------------------------------------------------------------
  * End test functions
@@ -1119,6 +1336,8 @@ ddb_commands_tests_run()
 	    TEST_CSUM(write_csum_sv_tests),
 	    TEST_CSUM(print_csum_recx_tests),
 	    TEST_CSUM(write_csum_recx_tests),
+	    TEST_CSUM(print_csum_recx_minor_tests),
+	    TEST_CSUM(write_csum_recx_minor_tests),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands tests", tests,
