@@ -322,6 +322,18 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 				      "net/%s/quota_exceeded/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
 			DL_WARN(ret, "Failed to create quota exceeded counter");
+
+		ret = d_tm_add_metric(&ctx->cc_hg_inflight, D_TM_GAUGE,
+				      "RPCs forwarded to Mercury awaiting its completion", "rpcs",
+				      "net/%s/hg_inflight/ctx_%u", prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(ret, "Failed to create hg inflight gauge");
+
+		ret = d_tm_add_metric(&ctx->cc_hg_cancel_inflight, D_TM_GAUGE,
+				      "RPCs canceled in Mercury awaiting its completion", "rpcs",
+				      "net/%s/hg_cancel_inflight/ctx_%u", prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(ret, "Failed to create hg cancel inflight gauge");
 	}
 
 	if (crt_is_service() && crt_gdata.cg_auto_swim_disable == 0 &&
@@ -1202,6 +1214,10 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 				 "opc: %#x.\n",
 				 rc, rpc_priv->crp_pub.cr_opc);
 			crt_context_req_untrack(rpc_priv);
+		} else if (!rpc_priv->crp_hg_cancelled) {
+			rpc_priv->crp_hg_cancelled = 1;
+			if (crt_gdata.cg_use_sensors)
+				d_tm_inc_gauge(crt_ctx->cc_hg_cancel_inflight, 1);
 		}
 		crt_rpc_unlock(rpc_priv);
 		break;
