@@ -2798,10 +2798,18 @@ ds_pool_tgt_discard_ult(void *data)
 	 * the wait so that a premature reintegration keeps being fenced.
 	 */
 	if (rc == 0 && arg->quiesce_sec > 0) {
+		uint64_t quiesce_end = daos_getmtime_coarse() + (uint64_t)arg->quiesce_sec * 1000;
+
 		pool->sp_discard_phase = DS_POOL_DISCARD_QUIESCING;
 		D_INFO(DF_UUID ": discard done, quiesce %u sec for NVMe GC\n",
 		       DP_UUID(arg->pool_uuid), arg->quiesce_sec);
-		dss_sleep((uint64_t)arg->quiesce_sec * 1000);
+		while (daos_getmtime_coarse() < quiesce_end) {
+			if (pool->sp_stopping) {
+				rc = -DER_SHUTDOWN;
+				break;
+			}
+			dss_sleep(1000);
+		}
 	}
 
 	ABT_mutex_lock(pool->sp_mutex);
