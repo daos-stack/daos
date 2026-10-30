@@ -29,13 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-/*
-#include <stdint.h>
-
-#include <daos_pool.h>
-*/
-import "C"
-
 const (
 	// DefaultPoolScmRatio defines the default SCM:NVMe ratio for
 	// requests that do not specify one.
@@ -1102,18 +1095,9 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	// Preserve compatibility with pre-2.6 callers.
 	resp.Leader = resp.SvcLdr
 
-	// Retrieve system self-heal property. Assume default value where all flags are set if
-	// property isn't present.
-	resp.SysSelfHealPolicy = daos.DefaultSysSelfHealFlagsStr
-	if req.QueryMask&C.DPI_SELF_HEAL_POLICY != 0 {
-		if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
-			svc.log.Debugf(err.Error())
-		} else if err != nil {
-			return nil, err
-		} else {
-			svc.log.Debugf("system self-heal: %s", selfHeal)
-			resp.SysSelfHealPolicy = selfHeal
-		}
+	resp.SysSelfHealPolicy, err = svc.getSysSelfHeal()
+	if err != nil {
+		return nil, err
 	}
 
 	return resp, nil

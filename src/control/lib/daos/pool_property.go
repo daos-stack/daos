@@ -746,6 +746,16 @@ func (m PoolPropertyMap) GetProperty(name string) (*PoolProperty, error) {
 	return h.GetProperty(name), nil
 }
 
+// GetPropertyByNumber returns a *PoolProperty for the property number, if known.
+func (m PoolPropertyMap) GetPropertyByNumber(number uint32) (*PoolProperty, error) {
+	for name, h := range m {
+		if h.Property.Number == number {
+			return h.GetProperty(name), nil
+		}
+	}
+	return nil, errors.Errorf("unknown property number %d", number)
+}
+
 // PoolPropertyValue encapsulates the logic for storing a string or uint64
 // property value.
 type PoolPropertyValue struct {
