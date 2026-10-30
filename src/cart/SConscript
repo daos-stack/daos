@@ -67,9 +67,6 @@ def scons():
     # Mercury headers are needed for mercury boost headers inclusion
     env.require('mercury', headers_only=True)
 
-    # Needed in order to include src/object/obj_rpc.h
-    env.require('isal', headers_only=True)
-
     denv = env.Clone(LIBS=[])
 
     denv.AppendUnique(LIBS=['gurt'])

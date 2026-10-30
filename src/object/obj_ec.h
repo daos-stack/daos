@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,8 +11,6 @@
 #include <daos_types.h>
 #include <daos/object.h>
 #include <daos_obj.h>
-
-#include <isa-l.h>
 
 /** MAX number of data cells */
 #define OBJ_EC_MAX_K		(64)
