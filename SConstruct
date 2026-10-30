@@ -1,3 +1,4 @@
+"""Build DAOS"""
 import errno
 import os
 import subprocess  # nosec

@@ -1,3 +1,9 @@
+<!--
+   Copyright 2026 Hewlett Packard Enterprise Development LP
+
+   SPDX-License-Identifier: BSD-2-Clause-Patent
+-->
+
 # Custom Slurm Dependency RPMs
 
 Slurm is a DAOS test dependency, pinned in `utils/build.config`. Source builds
