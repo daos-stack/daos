@@ -17,6 +17,7 @@ timeouts:
   test_rebuild_35: 180
   test_rebuild_36: 200
   test_rebuild_37: 250
+  test_rebuild_38: 250
 
 server_config:
   name: daos_server
@@ -88,6 +89,7 @@ daos_tests:
     test_rebuild_35: DAOS_Rebuild_35
     test_rebuild_36: DAOS_Rebuild_36
     test_rebuild_37: DAOS_Rebuild_37
+    test_rebuild_38: DAOS_Rebuild_38
   daos_test:
     test_rebuild_0to10: r
     test_rebuild_12to15: r
@@ -113,6 +115,7 @@ daos_tests:
     test_rebuild_35: r
     test_rebuild_36: r
     test_rebuild_37: r
+    test_rebuild_38: r
   args:
     test_rebuild_0to10: -s3 -u subtests="0-10"
     test_rebuild_12to15: -s3 -u subtests="12-15"
@@ -121,7 +124,7 @@ daos_tests:
     test_rebuild_18: -s3 -u subtests="18"
     test_rebuild_19: -s3 -u subtests="19"
     test_rebuild_20: -s3 -u subtests="20"
-    test_rebuild_21: -s3 -u subtests="21"
+    test_rebuild_21: -s5 -u subtests="21"
     test_rebuild_22: -s3 -u subtests="22"
     test_rebuild_23: -s3 -u subtests="23"
     test_rebuild_24: -s3 -u subtests="24"
@@ -138,6 +141,7 @@ daos_tests:
     test_rebuild_35: -s5 -u subtests="35"
     test_rebuild_36: -s5 -u subtests="36"
     test_rebuild_37: -s5 -u subtests="37"
+    test_rebuild_38: -s5 -u subtests="38"
   stopped_ranks:
     test_rebuild_26: ["random"]
     test_rebuild_27: ["random"]

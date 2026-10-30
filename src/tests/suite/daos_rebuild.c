@@ -996,6 +996,54 @@ rebuild_io_post_cb(void *arg)
 	return 0;
 }
 
+/*
+ * Drive the client-side pool map refresh hint: with a stale client map, probe a
+ * known-live replica (shard 1; shard 0 is on the failed rank) until that engine
+ * is on a newer map and replies -DER_STALE, which seeds the refresh with it.
+ * Each probe before the failed rank is excluded just succeeds and leaves the
+ * client stale. Stops as soon as the seeded refresh advances our cached map,
+ * read locally (no RPC) so the check does not itself close the stale window.
+ */
+static void
+rebuild_hint_probe(test_arg_t *arg, daos_obj_id_t oid)
+{
+	struct ioreq    probe_req;
+	struct dc_pool *dcp;
+	char            dkey[32];
+	char            akey[32];
+	uint32_t        ver0 = 0;
+	int             i;
+
+	dcp = dc_hdl2pool(arg->pool.poh);
+	if (dcp != NULL) {
+		ver0 = dc_pool_get_version(dcp);
+		dc_pool_put(dcp);
+	}
+
+	ioreq_init(&probe_req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	sprintf(dkey, "dkey_%d_0", arg->index);
+	sprintf(akey, "akey_%d_0", arg->index);
+	for (i = 0; i < 30; i++) {
+		char     buf[64] = {0};
+		uint32_t ver     = ver0;
+
+		daos_fail_value_set(1);
+		daos_fail_loc_set(DAOS_OBJ_TRY_SPECIAL_SHARD | DAOS_FAIL_ONCE);
+		lookup_single(dkey, akey, 0, buf, sizeof(buf), DAOS_TX_NONE, &probe_req);
+
+		dcp = dc_hdl2pool(arg->pool.poh);
+		if (dcp != NULL) {
+			ver = dc_pool_get_version(dcp);
+			dc_pool_put(dcp);
+		}
+		if (ver > ver0)
+			break;
+		sleep(3);
+	}
+	daos_fail_loc_set(0);
+	ioreq_fini(&probe_req);
+}
+
 static void
 rebuild_master_failure(void **state)
 {
@@ -1023,9 +1071,24 @@ rebuild_master_failure(void **state)
 	/* prepare the data */
 	rebuild_io(arg, oids, 10 * OBJ_NR);
 
+	/*
+	 * Keep the client on its stale pool map: no_rebuild skips the harness
+	 * poll that would otherwise refresh it. The probe below then drives the
+	 * client-side pool map refresh (and its hint-rank seeding).
+	 */
+	arg->no_rebuild = 1;
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], true);
+	arg->no_rebuild = 0;
 
-	/* Verify the data */
+	/*
+	 * Exercise the client pool map refresh hint. The client stays stale
+	 * (no_rebuild skipped the harness poll); probe until the killed leader's
+	 * exclusion bumps the map (SWIM detect + PS re-election, ~a minute).
+	 */
+	rebuild_hint_probe(arg, oids[0]);
+
+	/* Let the rebuild finish, then verify the data with a current map. */
+	test_rebuild_wait(&arg, 1);
 	rebuild_io_verify(arg, oids, 10 * OBJ_NR);
 
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
@@ -1078,6 +1141,43 @@ rebuild_master_failure(void **state)
 
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
 	rebuild_io_verify(arg, oids, 10 * OBJ_NR);
+}
+
+/*
+ * Fast variant: exclude (not kill) a shard-host rank so the map bumps
+ * synchronously, exercising the client stale-map refresh and its hint-rank
+ * seeding in seconds without waiting on SWIM failure detection.
+ */
+static void
+rebuild_map_refresh_hint(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oids[OBJ_NR];
+	d_rank_t      exclude_rank = 1;
+	int           i;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], exclude_rank);
+	}
+
+	rebuild_io(arg, oids, OBJ_NR);
+
+	/* Stay stale (skip harness poll), then exclude the shard-0 host rank. */
+	arg->no_rebuild = 1;
+	rebuild_single_pool_rank(arg, exclude_rank, false);
+	arg->no_rebuild = 0;
+
+	rebuild_hint_probe(arg, oids[0]);
+
+	test_rebuild_wait(&arg, 1);
+	rebuild_io_verify(arg, oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, exclude_rank, false);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -1739,6 +1839,8 @@ static const struct CMUnitTest rebuild_tests[] = {
      rebuild_sub_6nodes_rf1_setup, rebuild_sub_teardown},
     {"REBUILD37: single engine scan lengthy hang", rebuild_long_scan_hang, rebuild_sub_setup,
      rebuild_sub_teardown},
+    {"REBUILD38: map refresh hint rank (fast, exclude)", rebuild_map_refresh_hint,
+     rebuild_sub_setup, rebuild_sub_teardown},
 };
 
 /* TODO: Enable aggregation once stable view rebuild is done. */
