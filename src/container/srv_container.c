@@ -87,6 +87,41 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 }
 
 static int
+cont_destroyer_init(struct cont_destroyer *destroyer)
+{
+	int rc;
+
+	D_INIT_LIST_HEAD(&destroyer->csd_idle);
+	D_INIT_LIST_HEAD(&destroyer->csd_bcasting);
+	D_INIT_LIST_HEAD(&destroyer->csd_bcasted);
+	destroyer->csd_ult      = ABT_THREAD_NULL;
+	destroyer->csd_inflight = 0;
+	destroyer->csd_stop     = false;
+
+	rc = ABT_mutex_create(&destroyer->csd_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create csd_mutex: %d\n", rc);
+		return dss_abterr2der(rc);
+	}
+
+	rc = ABT_cond_create(&destroyer->csd_cond);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create csd_cond: %d\n", rc);
+		ABT_mutex_free(&destroyer->csd_mutex);
+		return dss_abterr2der(rc);
+	}
+
+	return 0;
+}
+
+static void
+cont_destroyer_fini(struct cont_destroyer *destroyer)
+{
+	ABT_cond_free(&destroyer->csd_cond);
+	ABT_mutex_free(&destroyer->csd_mutex);
+}
+
+static int
 cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 	      struct ds_rsvc *rsvc)
 {
@@ -108,10 +143,14 @@ cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 		D_GOTO(err_rwlock, rc = dss_abterr2der(rc));
 	}
 
+	rc = cont_destroyer_init(&svc->cs_destroyer);
+	if (rc != 0)
+		goto err_mutex;
+
 	/* cs_root */
 	rc = rdb_path_init(&svc->cs_root);
 	if (rc != 0)
-		goto err_mutex;
+		goto err_destroyer;
 	rc = rdb_path_push(&svc->cs_root, &rdb_path_root_key);
 	if (rc != 0)
 		goto err_root;
@@ -150,6 +189,8 @@ err_uuids:
 	rdb_path_fini(&svc->cs_uuids);
 err_root:
 	rdb_path_fini(&svc->cs_root);
+err_destroyer:
+	cont_destroyer_fini(&svc->cs_destroyer);
 err_mutex:
 	ABT_mutex_free(&svc->cs_cont_ephs_mutex);
 err_rwlock:
@@ -165,8 +206,9 @@ cont_svc_fini(struct cont_svc *svc)
 	rdb_path_fini(&svc->cs_conts);
 	rdb_path_fini(&svc->cs_uuids);
 	rdb_path_fini(&svc->cs_root);
-	ABT_rwlock_free(&svc->cs_lock);
+	cont_destroyer_fini(&svc->cs_destroyer);
 	ABT_mutex_free(&svc->cs_cont_ephs_mutex);
+	ABT_rwlock_free(&svc->cs_lock);
 }
 
 int
@@ -198,6 +240,10 @@ ds_cont_svc_fini(struct cont_svc **svcp)
 
 static int cont_svc_eph_track_leader_start(struct cont_svc *svc);
 static void cont_svc_eph_track_leader_stop(struct cont_svc *svc);
+static int
+cont_destroyer_start(struct cont_svc *svc);
+static void
+cont_destroyer_stop(struct cont_svc *svc);
 
 int
 ds_cont_svc_step_up(struct cont_svc *svc)
@@ -209,15 +255,31 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	if (rc != 0)  {
 		D_ERROR(DF_UUID": pool lookup failed: "DF_RC"\n",
 			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
-		return rc;
+		goto err;
 	}
 	D_ASSERT(svc->cs_pool != NULL);
 
+	rc = cont_destroyer_start(svc);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": start cont destroyer failed", DP_UUID(svc->cs_pool_uuid));
+		goto err_pool;
+	}
+
 	rc = cont_svc_eph_track_leader_start(svc);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR(DF_UUID": start ec agg leader failed: "DF_RC"\n",
 			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+		goto err_destroyer;
+	}
 
+	return 0;
+
+err_destroyer:
+	cont_destroyer_stop(svc);
+err_pool:
+	ds_pool_put(svc->cs_pool);
+	svc->cs_pool = NULL;
+err:
 	return rc;
 }
 
@@ -225,6 +287,7 @@ void
 ds_cont_svc_step_down(struct cont_svc *svc)
 {
 	cont_svc_eph_track_leader_stop(svc);
+	cont_destroyer_stop(svc);
 	D_ASSERT(svc->cs_pool != NULL);
 	ds_pool_put(svc->cs_pool);
 	svc->cs_pool = NULL;
@@ -1290,30 +1353,39 @@ D_CASSERT(sizeof(struct cont_dbl_op_val) <= sizeof(((struct ds_pool_svc_op_val *
 D_CASSERT(offsetof(struct cont_dbl_op_val, cdv_uuid) == sizeof(uint32_t));
 
 static int
-cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
-		   const uuid_t cont_uuid)
+cont_destroy_bcast_create(struct cont_svc *svc, const uuid_t cont_uuid, crt_rpc_t **rpc_out)
 {
-	struct cont_tgt_destroy_in     *in;
-	struct cont_tgt_destroy_out    *out;
-	crt_rpc_t		       *rpc;
-	int				rc;
+	struct cont_tgt_destroy_in *in;
+	crt_rpc_t                  *rpc;
+	int                         rc;
 
-	D_DEBUG(DB_MD, DF_CONT": bcasting\n",
-		DP_CONT(svc->cs_pool_uuid, cont_uuid));
+	D_DEBUG(DB_MD, DF_CONT ": bcasting\n", DP_CONT(svc->cs_pool_uuid, cont_uuid));
 
-	rc = ds_cont_bcast_create(ctx, svc, CONT_TGT_DESTROY, &rpc);
+	if (DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_FAIL_POST))
+		return -DER_NOMEM;
+
+	rc = ds_cont_bcast_create(dss_get_module_info()->dmi_ctx, svc, CONT_TGT_DESTROY, &rpc);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		return rc;
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->tdi_pool_uuid, svc->cs_pool_uuid);
 	uuid_copy(in->tdi_uuid, cont_uuid);
 
-	rc = dss_rpc_send(rpc);
+	*rpc_out = rpc;
+	return 0;
+}
+
+/* Interpret the completion status (rc) and the reply of a CONT_TGT_DESTROY bcast. */
+static int
+cont_destroy_bcast_process_rc(struct cont_svc *svc, const uuid_t cont_uuid, crt_rpc_t *rpc, int rc)
+{
+	struct cont_tgt_destroy_out *out;
+
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_FAIL_CORPC))
 		rc = -DER_TIMEDOUT;
 	if (rc != 0)
-		D_GOTO(out_rpc, rc);
+		goto out;
 
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
@@ -1331,11 +1403,24 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 			 DP_CONT(svc->cs_pool_uuid, cont_uuid));
 	}
 
-out_rpc:
-	crt_req_decref(rpc);
 out:
-	D_DEBUG(DB_MD, DF_CONT": bcasted: %d\n",
-		DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+	D_DEBUG(DB_MD, DF_CONT ": bcasted: %d\n", DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+	return rc;
+}
+
+static int
+cont_destroy_bcast(struct cont_svc *svc, const uuid_t cont_uuid)
+{
+	crt_rpc_t *rpc;
+	int        rc;
+
+	rc = cont_destroy_bcast_create(svc, cont_uuid, &rpc);
+	if (rc != 0)
+		return rc;
+
+	rc = dss_rpc_send(rpc);
+	rc = cont_destroy_bcast_process_rc(svc, cont_uuid, rpc, rc);
+	crt_req_decref(rpc);
 	return rc;
 }
 
@@ -1567,6 +1652,43 @@ out:
 static void
 cont_track_eph_leader_delete(struct cont_svc *svc, uuid_t cont_uuid);
 
+/* Delete the entry in the container UUIDs KVS (if added during create). */
+static int
+cont_delete_label(struct rdb_tx *tx, struct cont *cont, const char *label, uuid_t pool_uuid,
+		  uuid_t cont_uuid)
+{
+	d_iov_t key;
+	d_iov_t val;
+	int     rc;
+
+	d_iov_set(&key, (char *)label, strnlen(label, DAOS_PROP_MAX_LABEL_BUF_LEN));
+	d_iov_set(&val, NULL, 0);
+	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
+	if (rc == -DER_NONEXIST)
+		return 0;
+	else if (rc != 0)
+		return rc;
+
+	/* Ensure the label is indeed ours. See the comment in cont_destroy_post. */
+	if (val.iov_len != sizeof(uuid_t)) {
+		D_ERROR(DF_CONT ": invalid UUID value: label=%s len=%zu\n",
+			DP_CONT(pool_uuid, cont_uuid), label, val.iov_len);
+		return -DER_IO;
+	}
+	if (uuid_compare(val.iov_buf, cont_uuid) != 0) {
+		D_DEBUG(DB_MD, DF_CONT ": not our label: label=%s uuid=" DF_UUID "\n",
+			DP_CONT(pool_uuid, cont_uuid), label, DP_UUID(val.iov_buf));
+		return 0;
+	}
+
+	rc = rdb_tx_delete(tx, &cont->c_svc->cs_uuids, &key);
+	if (rc != 0)
+		return rc;
+
+	D_DEBUG(DB_MD, DF_CONT ": deleted label: %s\n", DP_CONT(pool_uuid, cont_uuid), label);
+	return 0;
+}
+
 static int
 cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
 {
@@ -1577,6 +1699,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct d_ownership		owner;
 	uint32_t                        force;
 	struct daos_acl                *acl;
+	struct daos_prop_entry         *lbl_ent;
 
 	cont_destroy_in_get_data(rpc, &force, NULL);
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p force=%u\n",
@@ -1586,12 +1709,6 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
 	if (rc != 0)
 		goto out;
-	if (container_flags & CONTAINER_F_DESTROYING) {
-		D_DEBUG(DB_MD, DF_CONT ": already destroying\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
-		rc = 0;
-		goto out;
-	}
 
 	/* Reset recov_cont prop to notify on flight pool_recov_cont to retry. */
 	rc = ds_pool_prop_recov_cont_reset(tx, cont->c_svc->cs_rsvc);
@@ -1635,6 +1752,15 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		goto out_prop;
 
+	/* Delete the label (if any) in the container UUIDs KVS. */
+	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
+	if (lbl_ent != NULL) {
+		rc = cont_delete_label(tx, cont, lbl_ent->dpe_str, pool_hdl->sph_pool->sp_uuid,
+				       cont->c_uuid);
+		if (rc != 0)
+			goto out_prop;
+	}
+
 	container_flags |= CONTAINER_F_DESTROYING;
 	d_iov_set(&val, &container_flags, sizeof(container_flags));
 	rc = rdb_tx_update_critical(tx, &cont->c_prop, &ds_cont_prop_ghce, &val);
@@ -1646,23 +1772,30 @@ out:
 }
 
 static int
-cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uuid, crt_rpc_t *rpc)
+cont_lookup_internal(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
+		     bool include_destroying, struct cont **cont);
+
+/*
+ * Later half of a destroy attempt: consume the completed bcast of task and,
+ * if it succeeded, remove the container from the metadata.
+ */
+static int
+cont_destroy_post(struct cont_svc *svc, struct cont_destroyer_task *task)
 {
 	struct rdb_tx           tx;
 	struct cont            *cont;
-	d_iov_t                 key;
-	d_iov_t                 val;
-	int                     rc;
 	daos_prop_t            *prop = NULL;
 	struct daos_prop_entry *lbl_ent;
+	d_iov_t                 key;
+	uuid_t                  uuid;
+	int                     rc;
 	bool                    need_destroy_oid_oit_kvs = false;
 
-	if (DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_FAIL_POST)) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	uuid_copy(uuid, task->csdt_cont_uuid);
 
-	rc = cont_destroy_bcast(rpc->cr_ctx, svc, uuid);
+	rc = cont_destroy_bcast_process_rc(svc, uuid, task->csdt_rpc, task->csdt_bcast_rc);
+	crt_req_decref(task->csdt_rpc);
+	task->csdt_rpc = NULL;
 	if (rc != 0)
 		goto out;
 
@@ -1671,12 +1804,12 @@ cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uui
 		goto out;
 	ABT_rwlock_wrlock(svc->cs_lock);
 
-	rc = cont_lookup(&tx, svc, uuid, &cont);
+	rc = cont_lookup_internal(&tx, svc, uuid, true /* include_destroying */, &cont);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
 			/*
-			 * Because we released and reacquired svc->cs_lock when
-			 * calling cont_destroy_bcast above...
+			 * Because we released and reacquired svc->cs_lock
+			 * since the bcast was requested...
 			 */
 			D_DEBUG(DB_MD, DF_CONT ": already destroyed\n",
 				DP_CONT(svc->cs_pool_uuid, uuid));
@@ -1687,22 +1820,22 @@ cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uui
 
 	cont_track_eph_leader_delete(cont->c_svc, cont->c_uuid);
 
-        if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
-                need_destroy_oid_oit_kvs = true;
-        } else {
-                d_iov_t value;
+	if (svc->cs_pool->sp_global_version >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
+		need_destroy_oid_oit_kvs = true;
+	} else {
+		d_iov_t value;
 
-                d_iov_set(&value, NULL, 0);
+		d_iov_set(&value, NULL, 0);
 		rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
 		if (rc && rc != -DER_NONEXIST) {
 			DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
-				 DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
+				 DP_CONT(svc->cs_pool_uuid, cont->c_uuid));
 			goto out_cont;
 		}
 		/* There was a bug that oit oids might be created already see DAOS-14799 */
 		if (rc == 0)
 			need_destroy_oid_oit_kvs = true;
-        }
+	}
 
 	/* Destroy oit oids index KVS. */
 	if (need_destroy_oid_oit_kvs) {
@@ -1726,30 +1859,23 @@ cont_destroy_post(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, uuid_t uui
 	if (rc != 0)
 		goto out_cont;
 
-	/* Delete entry in container UUIDs KVS (if added during create) */
+	/*
+	 * Previous versions do not delete the label in cont_destroy. On the
+	 * other hand, if the label _has_ been deleted in cont_destroy, and
+	 * reused by a different container, the cont_delete_label call will
+	 * detect that by checking the container UUID, and keep the label
+	 * intact.
+	 */
 	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_LABEL, &prop, true);
 	if (rc != 0)
 		goto out_cont;
 	D_ASSERT(prop != NULL);
 	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
 	if (lbl_ent) {
-		d_iov_set(&key, lbl_ent->dpe_str,
-			  strnlen(lbl_ent->dpe_str, DAOS_PROP_MAX_LABEL_BUF_LEN));
-		d_iov_set(&val, NULL, 0);
-		rc = rdb_tx_lookup(&tx, &cont->c_svc->cs_uuids, &key, &val);
-		if (rc != -DER_NONEXIST) {
-			if (rc == 0) {
-				rc = rdb_tx_delete(&tx, &cont->c_svc->cs_uuids, &key);
-				if (rc != 0)
-					goto out_prop;
-				D_DEBUG(DB_MD, DF_CONT": deleted label: %s\n",
-					DP_CONT(pool_hdl->sph_pool->sp_uuid,
-						cont->c_uuid),
-						lbl_ent->dpe_str);
-			} else {
-				goto out_prop;
-			}
-		}
+		rc =
+		    cont_delete_label(&tx, cont, lbl_ent->dpe_str, svc->cs_pool_uuid, cont->c_uuid);
+		if (rc != 0)
+			goto out_prop;
 	}
 
 	/* Destroy the container attribute KVS. */
@@ -1768,9 +1894,413 @@ out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
 out:
-	D_DEBUG(DB_MD, DF_CONT ": replying: rpc=%p: " DF_RC "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": end: " DF_RC "\n", DP_CONT(svc->cs_pool_uuid, uuid), DP_RC(rc));
 	return rc;
+}
+
+/* Delay bounds (ms) between attempts of a failing destroy task. */
+#define CONT_DESTROYER_BACKOFF_MIN  1000
+#define CONT_DESTROYER_BACKOFF_MAX  60000
+
+/* Max number of CONT_TGT_DESTROY bcasts in flight. */
+#define CONT_DESTROYER_INFLIGHT_MAX 16
+
+static inline struct cont_pool_metrics *
+cont_destroyer_metrics(struct cont_svc *svc)
+{
+	return svc->cs_pool->sp_metrics[DAOS_CONT_MODULE];
+}
+
+static void
+cont_destroyer_task_put(struct cont_destroyer_task *task)
+{
+	D_ASSERT(task->csdt_ref > 0);
+	task->csdt_ref--;
+	if (task->csdt_ref == 0)
+		D_FREE(task);
+}
+
+static void
+cont_destroyer_task_remove(struct cont_destroyer_task *task)
+{
+	d_list_del_init(&task->csdt_link);
+	d_tm_dec_gauge(cont_destroyer_metrics(task->csdt_svc)->destroyer_tasks, 1);
+	if (task->csdt_rpc != NULL) {
+		crt_req_decref(task->csdt_rpc);
+		task->csdt_rpc = NULL;
+	}
+	cont_destroyer_task_put(task);
+}
+
+static void
+cont_destroyer_task_enqueue(struct cont_destroyer *destroyer, struct cont_destroyer_task *task)
+{
+	struct cont_destroyer_task *pos;
+
+	if (!d_list_empty(&task->csdt_link))
+		d_list_del_init(&task->csdt_link);
+	task->csdt_state = CONT_DESTROYER_TASK_IDLE;
+
+	/* Due times mostly increase, so search from the tail. */
+	d_list_for_each_entry_reverse(pos, &destroyer->csd_idle, csdt_link) {
+		if (pos->csdt_next_attempt <= task->csdt_next_attempt) {
+			d_list_add(&task->csdt_link, &pos->csdt_link);
+			return;
+		}
+	}
+	d_list_add(&task->csdt_link, &destroyer->csd_idle);
+}
+
+static struct cont_destroyer_task *
+cont_destroyer_task_lookup(struct cont_destroyer *destroyer, const uuid_t cont_uuid)
+{
+	d_list_t                   *lists[] = {&destroyer->csd_bcasting, &destroyer->csd_bcasted,
+					       &destroyer->csd_idle};
+	struct cont_destroyer_task *task;
+	int                         i;
+
+	for (i = 0; i < ARRAY_SIZE(lists); i++)
+		d_list_for_each_entry(task, lists[i], csdt_link)
+			if (uuid_compare(task->csdt_cont_uuid, cont_uuid) == 0)
+				return task;
+	return NULL;
+}
+
+static void
+cont_destroyer_task_done(struct cont_destroyer_task *task, int rc)
+{
+	struct cont_svc *svc = task->csdt_svc;
+
+	task->csdt_rc = rc;
+	task->csdt_attempts++;
+
+	if (rc == 0) {
+		cont_destroyer_task_remove(task);
+	} else {
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN, DB_MD, DLOG_ERR, rc,
+			  DF_CONT ": destroy attempt %u failed, retrying in %u ms",
+			  DP_CONT(svc->cs_pool_uuid, task->csdt_cont_uuid), task->csdt_attempts,
+			  task->csdt_backoff);
+		task->csdt_next_attempt = daos_getmtime_coarse() + task->csdt_backoff;
+		task->csdt_backoff =
+		    min(task->csdt_backoff * 2, (uint32_t)CONT_DESTROYER_BACKOFF_MAX);
+		cont_destroyer_task_enqueue(&svc->cs_destroyer, task);
+	}
+}
+
+static void
+cont_destroyer_bcast_cb(const struct crt_cb_info *info)
+{
+	struct cont_destroyer_task *task      = info->cci_arg;
+	struct cont_destroyer      *destroyer = &task->csdt_svc->cs_destroyer;
+
+	ABT_mutex_lock(destroyer->csd_mutex);
+	D_ASSERT(task->csdt_state == CONT_DESTROYER_TASK_BCASTING);
+	D_ASSERT(info->cci_rpc == task->csdt_rpc);
+	task->csdt_bcast_rc = info->cci_rc;
+	task->csdt_state    = CONT_DESTROYER_TASK_BCASTED;
+	d_list_move_tail(&task->csdt_link, &destroyer->csd_bcasted);
+	destroyer->csd_inflight--;
+	ABT_cond_broadcast(destroyer->csd_cond);
+	cont_destroyer_task_put(task); /* from cont_destroyer_ult */
+	ABT_mutex_unlock(destroyer->csd_mutex);
+}
+
+static int
+cont_destroy_bcast_send(struct cont_svc *svc, struct cont_destroyer_task *task)
+{
+	crt_rpc_t *rpc;
+	int        rc;
+
+	rc = cont_destroy_bcast_create(svc, task->csdt_cont_uuid, &rpc);
+	if (rc != 0)
+		return rc;
+
+	crt_req_addref(rpc);
+	task->csdt_rpc = rpc;
+
+	rc = crt_req_send(rpc, cont_destroyer_bcast_cb, task);
+	if (rc != 0) {
+		task->csdt_rpc = NULL;
+		crt_req_decref(rpc);
+	}
+
+	return rc;
+}
+
+static void
+cont_destroyer_ult(void *arg)
+{
+	struct cont_svc            *svc       = arg;
+	struct cont_destroyer      *destroyer = &svc->cs_destroyer;
+	struct cont_destroyer_task *task;
+	struct cont_destroyer_task *tmp;
+	struct timespec             deadline;
+	uint64_t                    now;
+	int                         rc;
+
+	ABT_mutex_lock(destroyer->csd_mutex);
+
+	while (!destroyer->csd_stop) {
+		/* First, is there a bcasted task? */
+		if (!d_list_empty(&destroyer->csd_bcasted)) {
+			task = d_list_entry(destroyer->csd_bcasted.next, struct cont_destroyer_task,
+					    csdt_link);
+			ABT_mutex_unlock(destroyer->csd_mutex);
+
+			rc = cont_destroy_post(svc, task);
+
+			ABT_mutex_lock(destroyer->csd_mutex);
+			cont_destroyer_task_done(task, rc);
+			ABT_cond_broadcast(destroyer->csd_cond);
+			continue;
+		}
+
+		now = daos_getmtime_coarse();
+
+		/* Then, is the earliest idle task due, and is there a free in-flight slot? */
+		if (d_list_empty(&destroyer->csd_idle))
+			task = NULL;
+		else
+			task = d_list_entry(destroyer->csd_idle.next, struct cont_destroyer_task,
+					    csdt_link);
+		if (task != NULL && task->csdt_next_attempt <= now &&
+		    destroyer->csd_inflight < CONT_DESTROYER_INFLIGHT_MAX) {
+			task->csdt_state = CONT_DESTROYER_TASK_BCASTING;
+			task->csdt_ref++; /* for cont_destroyer_bcast_cb */
+			d_list_move_tail(&task->csdt_link, &destroyer->csd_bcasting);
+			destroyer->csd_inflight++;
+			ABT_mutex_unlock(destroyer->csd_mutex);
+
+			rc = cont_destroy_bcast_send(svc, task);
+
+			ABT_mutex_lock(destroyer->csd_mutex);
+			if (rc != 0) {
+				destroyer->csd_inflight--;
+				cont_destroyer_task_put(task);
+				cont_destroyer_task_done(task, rc);
+				ABT_cond_broadcast(destroyer->csd_cond);
+			}
+			continue;
+		}
+
+		/* Finally, wait until the earliest idle task is due or for the next event. */
+		if (task != NULL && task->csdt_next_attempt > now) {
+			clock_gettime(CLOCK_REALTIME, &deadline);
+			d_timeinc(&deadline, (task->csdt_next_attempt - now) * NSEC_PER_MSEC);
+			ABT_cond_timedwait(destroyer->csd_cond, destroyer->csd_mutex, &deadline);
+		} else {
+			ABT_cond_wait(destroyer->csd_cond, destroyer->csd_mutex);
+		}
+	}
+
+	while (destroyer->csd_inflight > 0)
+		ABT_cond_wait(destroyer->csd_cond, destroyer->csd_mutex);
+	D_ASSERT(d_list_empty(&destroyer->csd_bcasting));
+	d_list_for_each_entry_safe(task, tmp, &destroyer->csd_bcasted, csdt_link) {
+		D_ASSERTF(task->csdt_ref == 1, "%d\n", task->csdt_ref);
+		cont_destroyer_task_remove(task);
+	}
+	d_list_for_each_entry_safe(task, tmp, &destroyer->csd_idle, csdt_link) {
+		D_ASSERTF(task->csdt_ref == 1, "%d\n", task->csdt_ref);
+		cont_destroyer_task_remove(task);
+	}
+	ABT_mutex_unlock(destroyer->csd_mutex);
+}
+
+/*
+ * Queue a destroy task for cont_uuid (if no existing task for the same UUID).
+ * If wait is true, block until a new attempt of the task completes and return
+ * its result; otherwise return immediately. A failed attempt does not remove
+ * the task: the destroyer keeps retrying it in the background.
+ */
+static int
+cont_destroyer_request(struct cont_svc *svc, uuid_t cont_uuid, bool wait)
+{
+	struct cont_destroyer      *destroyer = &svc->cs_destroyer;
+	struct cont_destroyer_task *task;
+	uint32_t                    attempts;
+	int                         rc = 0;
+
+	ABT_mutex_lock(destroyer->csd_mutex);
+	D_ASSERT(!destroyer->csd_stop);
+
+	task = cont_destroyer_task_lookup(destroyer, cont_uuid);
+	if (task != NULL)
+		goto found;
+
+	D_ALLOC_PTR(task);
+	if (task == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	D_INIT_LIST_HEAD(&task->csdt_link);
+	task->csdt_svc = svc;
+	uuid_copy(task->csdt_cont_uuid, cont_uuid);
+	task->csdt_ref     = 1; /* the list's */
+	task->csdt_backoff = CONT_DESTROYER_BACKOFF_MIN;
+	cont_destroyer_task_enqueue(destroyer, task);
+	d_tm_inc_gauge(cont_destroyer_metrics(svc)->destroyer_tasks, 1);
+	ABT_cond_broadcast(destroyer->csd_cond);
+
+found:
+	if (!wait)
+		goto out;
+
+	/* Make the task due now. */
+	if (task->csdt_state == CONT_DESTROYER_TASK_IDLE &&
+	    task->csdt_next_attempt > daos_getmtime_coarse()) {
+		task->csdt_next_attempt = 0;
+		cont_destroyer_task_enqueue(destroyer, task);
+		ABT_cond_broadcast(destroyer->csd_cond);
+	}
+
+	/* Wait for a new attempt to complete, so that we have a valid result. */
+	task->csdt_ref++;
+	attempts = task->csdt_attempts;
+	while (task->csdt_attempts == attempts)
+		ABT_cond_wait(destroyer->csd_cond, destroyer->csd_mutex);
+	rc = task->csdt_rc;
+	cont_destroyer_task_put(task);
+
+out:
+	ABT_mutex_unlock(destroyer->csd_mutex);
+	return rc;
+}
+
+struct cont_destroyer_iter_args {
+	struct cont_svc *cdia_svc;
+	struct rdb_tx   *cdia_tx;
+	int              cdia_count;
+};
+
+static int
+cont_destroyer_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+{
+	struct cont_destroyer_iter_args *args = varg;
+	struct cont_svc                 *svc  = args->cdia_svc;
+	uuid_t                           cont_uuid;
+	rdb_path_t                       prop;
+	container_flags_t                flags;
+	d_iov_t                          k;
+	d_iov_t                          v;
+	int                              rc;
+
+	if (key->iov_len != sizeof(uuid_t)) {
+		D_ERROR(DF_UUID ": invalid key size: key=" DF_U64 "\n", DP_UUID(svc->cs_pool_uuid),
+			key->iov_len);
+		return -DER_IO;
+	}
+	uuid_copy(cont_uuid, key->iov_buf);
+
+	d_iov_set(&k, cont_uuid, sizeof(uuid_t));
+	rc = rdb_path_clone(&svc->cs_conts, &prop);
+	if (rc != 0)
+		return rc;
+	rc = rdb_path_push(&prop, &k);
+	if (rc != 0) {
+		rdb_path_fini(&prop);
+		return rc;
+	}
+
+	d_iov_set(&v, &flags, sizeof(flags));
+	rc = rdb_tx_lookup(args->cdia_tx, &prop, &ds_cont_prop_ghce, &v);
+	rdb_path_fini(&prop);
+	if (rc != 0)
+		return rc;
+	if (!(flags & CONTAINER_F_DESTROYING))
+		return 0;
+
+	D_DEBUG(DB_MD, DF_CONT ": request destruction\n", DP_CONT(svc->cs_pool_uuid, cont_uuid));
+
+	rc = cont_destroyer_request(svc, cont_uuid, false /* wait */);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_CONT ": failed to schedule destruction on step-up",
+			 DP_CONT(svc->cs_pool_uuid, cont_uuid));
+		return rc;
+	}
+
+	args->cdia_count++;
+
+	/* Since we haven't yielded, no need to call rdb_tx_revalidate. */
+	return 0;
+}
+
+/*
+ * Start the destroyer ULT, then scan the container KVS and request the
+ * destruction of all DESTROYING containers.
+ */
+static int
+cont_destroyer_start(struct cont_svc *svc)
+{
+	struct cont_destroyer          *destroyer = &svc->cs_destroyer;
+	struct rdb_tx                   tx;
+	struct cont_destroyer_iter_args args = {0};
+	int                             rc;
+
+	ABT_mutex_lock(destroyer->csd_mutex);
+	D_ASSERT(!destroyer->csd_stop);
+	D_ASSERT(d_list_empty(&destroyer->csd_idle));
+	D_ASSERT(d_list_empty(&destroyer->csd_bcasting));
+	D_ASSERT(d_list_empty(&destroyer->csd_bcasted));
+	D_ASSERT(destroyer->csd_inflight == 0);
+	D_ASSERT(destroyer->csd_ult == ABT_THREAD_NULL);
+	ABT_mutex_unlock(destroyer->csd_mutex);
+
+	rc = dss_ult_create(cont_destroyer_ult, svc, DSS_XS_SYS, 0, 0, &destroyer->csd_ult);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to start destroyer", DP_UUID(svc->cs_pool_uuid));
+		return rc;
+	}
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		goto err_ult;
+	ABT_rwlock_rdlock(svc->cs_lock);
+
+	args.cdia_svc   = svc;
+	args.cdia_count = 0;
+	args.cdia_tx    = &tx;
+
+	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* backward */, cont_destroyer_iter_cb,
+			    &args);
+
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": failed to scan containers", DP_UUID(svc->cs_pool_uuid));
+		goto err_ult;
+	}
+
+	if (args.cdia_count > 0)
+		D_DEBUG(DB_MD, DF_UUID ": requested %d container destructions\n",
+			DP_UUID(svc->cs_pool_uuid), args.cdia_count);
+	return 0;
+
+err_ult:
+	cont_destroyer_stop(svc);
+	return rc;
+}
+
+static void
+cont_destroyer_stop(struct cont_svc *svc)
+{
+	struct cont_destroyer *destroyer = &svc->cs_destroyer;
+
+	ABT_mutex_lock(destroyer->csd_mutex);
+	destroyer->csd_stop = true;
+	ABT_cond_broadcast(destroyer->csd_cond);
+	ABT_mutex_unlock(destroyer->csd_mutex);
+
+	/* The ULT drops all tasks on its way out. */
+	ABT_thread_free(&destroyer->csd_ult);
+	destroyer->csd_ult = ABT_THREAD_NULL;
+
+	ABT_mutex_lock(destroyer->csd_mutex);
+	D_ASSERT(d_list_empty(&destroyer->csd_idle));
+	D_ASSERT(d_list_empty(&destroyer->csd_bcasted));
+	destroyer->csd_stop = false;
+	ABT_mutex_unlock(destroyer->csd_mutex);
 }
 
 struct cont_track_eph_leader *
@@ -2052,11 +2582,10 @@ cont_agg_eph_load(struct cont_svc *svc, uuid_t cont_uuid, uint64_t *ec_agg_eph)
 	}
 
 	ABT_rwlock_rdlock(svc->cs_lock);
-	rc = cont_lookup_active(&tx, svc, cont_uuid, &cont);
+	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
 		DL_CDEBUG(rc != -DER_NONEXIST && rc != -DER_CONT_DESTROYING, DLOG_ERR, DB_MD, rc,
-			  DF_CONT ": cont_lookup_active failed",
-			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
+			  DF_CONT ": cont_lookup failed", DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -2522,13 +3051,6 @@ err:
 int
 cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 {
-	return cont_lookup_internal(tx, svc, uuid, true /* include_destroying */, cont);
-}
-
-int
-cont_lookup_active(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
-		   struct cont **cont)
-{
 	return cont_lookup_internal(tx, svc, uuid, false /* include_destroying */, cont);
 }
 
@@ -2660,8 +3182,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 	d_iov_t			key;
 	d_iov_t			value;
 	daos_prop_t	       *prop = NULL;
-	struct container_hdl	chdl;
-	container_flags_t       container_flags;
+	struct container_hdl     chdl;
 	char			zero = 0;
 	int                     rc   = 0;
 	struct d_ownership	owner;
@@ -2748,18 +3269,6 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, cr
 			daos_prop_free(prop);
 			D_GOTO(out, rc);
 		}
-	}
-
-	d_iov_set(&value, &container_flags, sizeof(container_flags));
-	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_ghce, &value);
-	if (rc != 0) {
-		daos_prop_free(prop);
-		goto out;
-	}
-	if (container_flags & CONTAINER_F_DESTROYING) {
-		rc = -DER_CONT_DESTROYING;
-		daos_prop_free(prop);
-		goto out;
 	}
 
 	get_cont_prop_access_info(prop, &owner, &acl);
@@ -4607,7 +5116,8 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	(void)val;
 
 	if (key->iov_len != sizeof(uuid_t)) {
-		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
+		D_ERROR(DF_UUID ": invalid key size: key=" DF_U64 "\n", DP_UUID(ap->pool_uuid),
+			key->iov_len);
 		return -DER_IO;
 	}
 
@@ -4911,9 +5421,11 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	/* Lookup container, see if it matches filter specification before adding to ap->conts[] */
 	rc = cont_lookup(ap->tx, ap->svc, cont_uuid, &cont);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
-			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+	if (rc == -DER_CONT_DESTROYING) {
+		/* Continue iterating. */
+		return 0;
+	} else if (rc != 0) {
+		DL_INFO(rc, DF_CONT ": look up container", DP_CONT(ap->pool_uuid, cont_uuid));
 		return rc;
 	}
 
@@ -4942,7 +5454,6 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	}
 
 	pcinfo = &ap->conts[ap->ncont];
-	ap->ncont++;
 	uuid_copy(pcinfo->pci_id.pci_uuid, cont_uuid);
 
 	/* TODO: Specify client cont_proto_version. This is invoked from a pool client RPC */
@@ -4958,6 +5469,7 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_prop_read() failed, "DF_RC"\n",
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		memset(&pcinfo->pci_cinfo, 0, sizeof(pcinfo->pci_cinfo));
 		goto out_cont;
 	}
 
@@ -4967,6 +5479,8 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			DAOS_PROP_LABEL_MAX_LEN);
 		pcinfo->pci_id.pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 	}
+
+	ap->ncont++;
 
 	daos_prop_free(prop);
 
@@ -5083,9 +5597,11 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		DP_CONT(ap->pool_uuid, cont_uuid));
 
 	rc = cont_lookup(ap->tx, ap->svc, cont_uuid, &cont);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
-			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+	if (rc == -DER_CONT_DESTROYING) {
+		/* Continue iterating. */
+		return 0;
+	} else if (rc != 0) {
+		DL_INFO(rc, DF_CONT ": look up container", DP_CONT(ap->pool_uuid, cont_uuid));
 		return rc;
 	}
 
@@ -5419,8 +5935,7 @@ ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx)
 
 	rc = cont_lookup(tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
-			DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+		DL_INFO(rc, DF_CONT ": look up container", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out, rc);
 	}
 
@@ -5723,8 +6238,7 @@ ds_cont_prop_iv_update(struct cont_svc *svc, uuid_t cont_uuid)
 	ABT_rwlock_rdlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed to look container: %d\n",
-			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		DL_INFO(rc, DF_CONT ": look up container", DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -5977,7 +6491,12 @@ out_lock:
 			uuid = &in->ci_uuid;
 		}
 
-		rc = cont_destroy_post(pool_hdl, svc, *uuid, rpc);
+		rc = cont_destroyer_request(svc, *uuid, true /* wait */);
+		if (rc != 0) {
+			DL_INFO(rc, DF_CONT ": unable to request container destroy",
+				DP_CONT(pool_hdl->sph_pool->sp_uuid, *uuid));
+			goto out;
+		}
 	}
 
 out:
@@ -6344,8 +6863,8 @@ ds_cont_set_prop_srv_handler(crt_rpc_t *rpc)
 	else /* CONT_PROP_SET_BYLABEL */
 		rc = cont_lookup_bylabel(&tx, svc, cont_label, &cont);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": failed to look up container '%s'", DP_UUID(pool_uuid),
-			 cont_id);
+		DL_INFO(rc, DF_UUID ": failed to look up container '%s'", DP_UUID(pool_uuid),
+			cont_id);
 		D_GOTO(out_lock, rc);
 	}
 
@@ -6399,10 +6918,10 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 		D_GOTO(out_put, rc);
 
 	ABT_rwlock_rdlock(svc->cs_lock);
-	rc = cont_lookup_active(&tx, svc, cont_uuid, &cont);
+	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
 		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_CONT_DESTROYING, DLOG_INFO, DLOG_ERR,
-			  rc, DF_CONT " cont_lookup_active failed", DP_CONT(pool_uuid, cont_uuid));
+			  rc, DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
 	}
 
@@ -6530,7 +7049,7 @@ ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid)
 		/* Forbid to destroy non-orphan container. */
 		D_GOTO(out, rc = -DER_BUSY);
 
-	rc = cont_destroy_bcast(dss_get_module_info()->dmi_ctx, svc, uuid);
+	rc = cont_destroy_bcast(svc, uuid);
 	if (rc == 0)
 		cont_track_eph_leader_delete(svc, uuid);
 
