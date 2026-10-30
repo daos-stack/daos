@@ -41,6 +41,22 @@ args_workload_init(struct dlck_helper_workload_args *args)
 	args->updates_num = DLCK_HELPER_DEFAULT_UPDATES_NUM;
 }
 
+static int
+args_workload_check(struct argp_state *state, struct dlck_helper_workload_args *args)
+{
+	if (args->oids_num == 0) {
+		RETURN_FAIL(state, EINVAL, "oids_num > 0 is required.");
+	}
+	if (args->keys_num == 0) {
+		RETURN_FAIL(state, EINVAL, "keys_num > 0 is required.");
+	}
+	if (args->updates_num == 0) {
+		RETURN_FAIL(state, EINVAL, "updates_num > 0 is required.");
+	}
+
+	return 0;
+}
+
 error_t
 args_workload_parser(int key, char *arg, struct argp_state *state)
 {
@@ -53,6 +69,7 @@ args_workload_parser(int key, char *arg, struct argp_state *state)
 		args_workload_init(args);
 		return 0;
 	case ARGP_KEY_END:
+		return args_workload_check(state, args);
 	case ARGP_KEY_SUCCESS:
 	case ARGP_KEY_FINI:
 		return 0;
