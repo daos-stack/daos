@@ -1,7 +1,5 @@
 # Custom Slurm Dependency RPMs
 
-<!-- Copyright 2026 Hewlett Packard Enterprise Development LP -->
-
 Slurm is a DAOS test dependency, pinned in `utils/build.config`. Source builds
 use the existing Git retriever and accept patches listed under
 `[patch_versions]` as `slurm=...`, stored in `deps/patches/slurm/`.
@@ -15,7 +13,7 @@ MUNGE and hwloc development packages first (`munge-devel hwloc-devel` on EL9
 and Leap, `libmunge-dev libhwloc-dev` on Ubuntu). Accounting support also requires
 MariaDB client development files providing `/usr/bin/mysql_config`: `mariadb-devel`
 on EL9, `libmariadb-devel` on Leap, and `libmariadb-dev libmariadb-dev-compat` on
-Ubuntu. Set `INSTALL_TEST_DEPS=true` when running the image setup scripts to
+Ubuntu. Set `INSTALL_BUILD_TEST_DEPS=true` when running the image setup scripts to
 include the test-only build prerequisites; they are disabled by default.
 Optional plugins are detected by Slurm's configure script. Cgroup-v2 support
 requires libbpf and D-Bus development packages: `libbpf-devel dbus-devel` on
@@ -30,11 +28,23 @@ components from their pinned Git sources:
 
 ```sh
 utils/build/install_deps.sh --install-range=test-deps
-bash utils/build/build_test_deps.sh PREFIX="$PWD/install"
+bash utils/build/build_deps.sh --build-range=test-deps TEST_DEPS=slurm PREFIX="$PWD/install"
 ```
 
 The build wrapper uses `--build-test-deps=only`, reuses installed components,
 and exits before compiling DAOS. Ordinary dependency builds do not enable Slurm.
+
+`TEST_DEPS` selects a comma-separated list of test components and defaults to
+`all`. Use `TEST_DEPS=slurm` to select only Slurm, or `TEST_DEPS=none` to select
+no test components. Unknown component names are rejected. Selection does not
+enable building: `--build-test-deps=yes` or `--build-test-deps=only` is still
+required, even with `TEST_DEPS=all`.
+
+The equivalent direct SCons invocation is:
+
+```sh
+scons --build-test-deps=only TEST_DEPS=slurm USE_INSTALLED=all PREFIX="$PWD/install"
+```
 
 SCons writes `SL_SLURM_PREFIX` to `.build_vars.sh`. Slurm is configured for its
 final `/usr` paths and installed via `DESTDIR` into that dependency prefix;

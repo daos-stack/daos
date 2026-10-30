@@ -828,7 +828,7 @@ pipeline {
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
                                                 ' --target build-ci' +
-                                                ' --build-arg INSTALL_TEST_DEPS=true' +
+                                                ' --build-arg INSTALL_BUILD_TEST_DEPS=true' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
@@ -848,7 +848,7 @@ pipeline {
                                        script: '''
                                            set -e
                                            utils/build/install_deps.sh --install-range=test-deps el9
-                                           bash utils/build/build_test_deps.sh TARGET_TYPE=release
+                                           bash utils/build/build_deps.sh --build-range=test-deps TARGET_TYPE=release
                                            utils/build/build_packages.sh --rpm-suffix=el9 \
                                            --build-range=test-deps rpms
                                        '''
@@ -909,7 +909,7 @@ pipeline {
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
-                                                ' --build-arg INSTALL_TEST_DEPS=true' +
+                                                ' --build-arg INSTALL_BUILD_TEST_DEPS=true' +
                                                 ' --build-arg POINT_RELEASE=.6' +
                                                 " --build-arg PYTHON_VERSION=${env.PYTHON_VERSION}"
                         }
@@ -928,7 +928,7 @@ pipeline {
                                        script: '''
                                            set -e
                                            utils/build/install_deps.sh --install-range=test-deps suse.lp156
-                                           bash utils/build/build_test_deps.sh TARGET_TYPE=release
+                                           bash utils/build/build_deps.sh --build-range=test-deps TARGET_TYPE=release
                                            utils/build/build_packages.sh --rpm-suffix=suse.lp156 \
                                            --build-range=test-deps rpms
                                        '''

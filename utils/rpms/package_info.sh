@@ -140,8 +140,8 @@ fi
 export lmod
 
 # DAOS tests dependencies
-export slurm_version="26.05.4"
-export slurm_release="3${distro_name}"
+export slurm_version="26.05.4-1"
+export slurm_release="1${distro_name}"
 export slurm_full="${slurm_version}-${slurm_release}"
 export slurm_lib="slurm"
 export slurm_dbd="slurm-slurmdbd"

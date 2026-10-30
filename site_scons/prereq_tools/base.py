@@ -614,6 +614,7 @@ class PreReqComponent():
         if self.client_requested():
             reqs.extend(client_reqs)
         opts.Add(ListVariable('DEPS', "Dependencies to build by default", 'all', reqs))
+        opts.Add(ListVariable('TEST_DEPS', "Test dependencies to build", 'all', TEST_DEPENDENCIES))
         opts.Update(self.__env)
         if GetOption('build_deps') == 'only':
             # Optionally, limit the deps we build in this pass
@@ -621,7 +622,7 @@ class PreReqComponent():
         if GetOption('build_test_deps') == 'only':
             reqs = []
         if self.build_test_deps:
-            reqs = list(reqs) + list(TEST_DEPENDENCIES)
+            reqs = list(reqs) + list(self.__env['TEST_DEPS'])
 
         try:
             # pylint: disable-next=import-outside-toplevel
