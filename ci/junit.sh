@@ -308,3 +308,5 @@ set -E
 
 # set an error trap to create a junit result for any unhandled error
 trap 'junit_on_error $?' ERR
+
+# SRE-4015: stack layer 2 marker, no functional effect.  Remove with the stack.
