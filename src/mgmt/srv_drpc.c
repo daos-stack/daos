@@ -1040,9 +1040,9 @@ out:
 void
 ds_mgmt_drpc_pool_discard(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc            alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Mgmt__PoolDiscardReq        *req   = NULL;
-	Mgmt__PoolDiscardResp        resp  = MGMT__POOL_DISCARD_RESP__INIT;
+	struct drpc_alloc            alloc     = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__PoolDiscardReq        *req       = NULL;
+	Mgmt__PoolDiscardResp        resp      = MGMT__POOL_DISCARD_RESP__INIT;
 	struct pool_target_addr_list addr_list = {0};
 	d_rank_list_t               *svc_ranks = NULL;
 	uuid_t                       uuid;
@@ -1054,8 +1054,7 @@ ds_mgmt_drpc_pool_discard(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	size_t                       n = 0;
 	int                          rc;
 
-	req = mgmt__pool_discard_req__unpack(&alloc.alloc, drpc_req->body.len,
-					     drpc_req->body.data);
+	req = mgmt__pool_discard_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (pool discard)\n");
@@ -1099,8 +1098,8 @@ ds_mgmt_drpc_pool_discard(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = ds_mgmt_pool_discard(uuid, svc_ranks, &addr_list, req->quiesce_sec);
 
 	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc,
-		  DF_UUID ": manual discard: nranks=%zu quiesce=%u", DP_UUID(uuid),
-		  req->n_ranks, req->quiesce_sec);
+		  DF_UUID ": manual discard: nranks=%zu quiesce=%u", DP_UUID(uuid), req->n_ranks,
+		  req->quiesce_sec);
 
 	d_rank_list_free(svc_ranks);
 
@@ -1124,19 +1123,19 @@ out:
 void
 ds_mgmt_drpc_pool_discard_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc                      alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Mgmt__PoolDiscardQueryReq             *req   = NULL;
-	Mgmt__PoolDiscardQueryResp             resp  = MGMT__POOL_DISCARD_QUERY_RESP__INIT;
+	struct drpc_alloc                       alloc      = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__PoolDiscardQueryReq              *req        = NULL;
+	Mgmt__PoolDiscardQueryResp              resp       = MGMT__POOL_DISCARD_QUERY_RESP__INIT;
 	Mgmt__PoolDiscardQueryResp__RankState **state_ptrs = NULL;
 	Mgmt__PoolDiscardQueryResp__RankState  *state_bufs = NULL;
-	struct pool_discard_rank_state        *states     = NULL;
-	d_rank_list_t                         *svc_ranks  = NULL;
-	d_rank_list_t                          ranks;
-	uuid_t                                 uuid;
-	uint8_t                               *body;
-	size_t                                 len;
-	size_t                                 i;
-	int                                    rc;
+	struct pool_discard_rank_state         *states     = NULL;
+	d_rank_list_t                          *svc_ranks  = NULL;
+	d_rank_list_t                           ranks;
+	uuid_t                                  uuid;
+	uint8_t                                *body;
+	size_t                                  len;
+	size_t                                  i;
+	int                                     rc;
 
 	req = mgmt__pool_discard_query_req__unpack(&alloc.alloc, drpc_req->body.len,
 						   drpc_req->body.data);
@@ -1198,12 +1197,12 @@ ds_mgmt_drpc_pool_discard_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	for (i = 0; i < req->n_ranks; i++) {
 		mgmt__pool_discard_query_resp__rank_state__init(&state_bufs[i]);
-		state_bufs[i].rank         = states[i].pdrs_rank;
-		state_bufs[i].phase        = (Mgmt__PoolDiscardQueryResp__RankState__Phase)
-					     states[i].pdrs_phase;
+		state_bufs[i].rank = states[i].pdrs_rank;
+		state_bufs[i].phase =
+		    (Mgmt__PoolDiscardQueryResp__RankState__Phase)states[i].pdrs_phase;
 		state_bufs[i].done_age_sec = states[i].pdrs_done_age_sec;
 		state_bufs[i].status       = states[i].pdrs_status;
-		state_ptrs[i] = &state_bufs[i];
+		state_ptrs[i]              = &state_bufs[i];
 	}
 	resp.n_states = req->n_ranks;
 	resp.states   = state_ptrs;

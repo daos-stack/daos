@@ -2932,10 +2932,10 @@ out:
 static int
 pool_tgt_discard_map_refresh(struct ds_pool *pool)
 {
-	struct pool_map_refresh_ult_arg	*arg;
-	ABT_eventual			 eventual;
-	int				*status;
-	int				 rc;
+	struct pool_map_refresh_ult_arg *arg;
+	ABT_eventual                     eventual;
+	int                             *status;
+	int                              rc;
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
@@ -2948,7 +2948,7 @@ pool_tgt_discard_map_refresh(struct ds_pool *pool)
 	/* UINT32_MAX defeats the freshness skip in ds_pool_map_refresh_ult(). */
 	arg->iua_pool_version = UINT32_MAX;
 	uuid_copy(arg->iua_pool_uuid, pool->sp_uuid);
-	arg->iua_eventual     = eventual;
+	arg->iua_eventual = eventual;
 
 	/* Pool IV fetches must run on xstream 0. */
 	rc = dss_ult_create(ds_pool_map_refresh_ult, arg, DSS_XS_SYS, 0, 0, NULL);
@@ -2994,22 +2994,24 @@ pool_tgt_discard_self_validate(struct ds_pool *pool)
 	/* Best effort only; the map may be unpullable on this rank. */
 	rc = pool_tgt_discard_map_refresh(pool);
 	if (rc != 0) {
-		D_INFO(DF_UUID ": no authoritative map view available: "
-		       DF_RC "\n", DP_UUID(pool->sp_uuid), DP_RC(rc));
+		D_INFO(DF_UUID ": no authoritative map view available: " DF_RC "\n",
+		       DP_UUID(pool->sp_uuid), DP_RC(rc));
 		rc = 0;
 	}
 
 	ABT_rwlock_rdlock(pool->sp_lock);
 	if (pool->sp_map == NULL) {
 		D_NOTE(DF_UUID ": no local pool map view, trusting the leader that "
-		       "rank %u is excluded\n", DP_UUID(pool->sp_uuid), rank);
+			       "rank %u is excluded\n",
+		       DP_UUID(pool->sp_uuid), rank);
 		D_GOTO(out_lock, rc = 0);
 	}
 
 	tgt_nr = pool_map_find_target_by_rank_idx(pool->sp_map, rank, -1 /* all */, &tgts);
 	if (tgt_nr <= 0) {
 		D_ERROR(DF_UUID ": rank %u not found in the local pool map, "
-			"refusing manual discard\n", DP_UUID(pool->sp_uuid), rank);
+				"refusing manual discard\n",
+			DP_UUID(pool->sp_uuid), rank);
 		D_GOTO(out_lock, rc = -DER_NO_PERM);
 	}
 
@@ -3018,7 +3020,7 @@ pool_tgt_discard_self_validate(struct ds_pool *pool)
 
 		if (!(status & (PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT))) {
 			D_ERROR(DF_UUID ": local target %u of rank %u is in status %u, "
-				"not DOWN/DOWNOUT, refusing manual discard\n",
+					"not DOWN/DOWNOUT, refusing manual discard\n",
 				DP_UUID(pool->sp_uuid), tgts[i].ta_comp.co_index, rank, status);
 			D_GOTO(out_lock, rc = -DER_NO_PERM);
 		}
@@ -3047,14 +3049,14 @@ out_lock:
 void
 ds_pool_tgt_discard_manual_handler(crt_rpc_t *rpc)
 {
-	struct pool_tgt_discard_manual_in  *in = crt_req_get(rpc);
+	struct pool_tgt_discard_manual_in  *in  = crt_req_get(rpc);
 	struct pool_tgt_discard_manual_out *out = crt_reply_get(rpc);
-	struct pool_target_addr_list	    pta_list;
-	struct tgt_discard_arg		   *arg = NULL;
-	struct ds_pool			   *pool;
-	int				    discarding = 0;
-	int				    i;
-	int				    rc;
+	struct pool_target_addr_list        pta_list;
+	struct tgt_discard_arg             *arg = NULL;
+	struct ds_pool                     *pool;
+	int                                 discarding = 0;
+	int                                 i;
+	int                                 rc;
 
 	pta_list.pta_number = in->ptdmi_addrs.ca_count;
 	pta_list.pta_addrs  = in->ptdmi_addrs.ca_arrays;
@@ -3131,8 +3133,8 @@ out_put:
 	ds_pool_put(pool);
 out:
 	out->ptdmo_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID ": replying manual discard rpc " DF_RC "\n",
-		DP_UUID(in->ptdmi_uuid), DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": replying manual discard rpc " DF_RC "\n", DP_UUID(in->ptdmi_uuid),
+		DP_RC(rc));
 	crt_reply_send(rpc);
 	if (arg != NULL)
 		tgt_discard_arg_free(arg);
@@ -3147,10 +3149,10 @@ ds_pool_tgt_discard_query_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_discard_query_in  *in    = crt_req_get(rpc);
 	struct pool_tgt_discard_query_out *out   = crt_reply_get(rpc);
-	struct pool_discard_rank_state	  *state = &out->ptdqo_state;
-	struct ds_pool			  *pool;
-	uint64_t			   done_time;
-	int				   rc;
+	struct pool_discard_rank_state    *state = &out->ptdqo_state;
+	struct ds_pool                    *pool;
+	uint64_t                           done_time;
+	int                                rc;
 
 	state->pdrs_rank = dss_self_rank();
 

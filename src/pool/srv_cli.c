@@ -1109,12 +1109,10 @@ pool_discard_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	return rc;
 }
 
-static struct dsc_pool_svc_call_cbs pool_discard_cbs = {
-	.pscc_op      = POOL_DISCARD,
-	.pscc_init    = pool_discard_init,
-	.pscc_consume = pool_discard_consume,
-	.pscc_fini    = NULL
-};
+static struct dsc_pool_svc_call_cbs pool_discard_cbs = {.pscc_op      = POOL_DISCARD,
+							.pscc_init    = pool_discard_init,
+							.pscc_consume = pool_discard_consume,
+							.pscc_fini    = NULL};
 
 /**
  * Ask the PS leader to start an admin-initiated discard (asynchronous on the
@@ -1124,14 +1122,13 @@ int
 dsc_pool_svc_discard(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline,
 		     struct pool_target_addr_list *addrs, uint32_t quiesce_sec)
 {
-	struct pool_discard_arg arg = {.pda_addrs       = addrs,
-				       .pda_quiesce_sec = quiesce_sec};
+	struct pool_discard_arg arg = {.pda_addrs = addrs, .pda_quiesce_sec = quiesce_sec};
 
 	return dsc_pool_svc_call(pool_uuid, svc_ranks, &pool_discard_cbs, &arg, deadline);
 }
 
 struct pool_discard_query_arg {
-	d_rank_list_t		       *pdqa_ranks;
+	d_rank_list_t                  *pdqa_ranks;
 	/* out: caller-allocated array of pdqa_ranks->rl_nr entries */
 	struct pool_discard_rank_state *pdqa_states;
 };
@@ -1170,12 +1167,11 @@ pool_discard_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	return 0;
 }
 
-static struct dsc_pool_svc_call_cbs pool_discard_query_cbs = {
-	.pscc_op      = POOL_DISCARD_QUERY,
-	.pscc_init    = pool_discard_query_init,
-	.pscc_consume = pool_discard_query_consume,
-	.pscc_fini    = NULL
-};
+static struct dsc_pool_svc_call_cbs pool_discard_query_cbs = {.pscc_op   = POOL_DISCARD_QUERY,
+							      .pscc_init = pool_discard_query_init,
+							      .pscc_consume =
+								  pool_discard_query_consume,
+							      .pscc_fini = NULL};
 
 /**
  * Collect the per-rank progress of an admin-initiated discard from the PS
@@ -1185,8 +1181,7 @@ int
 dsc_pool_svc_discard_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline,
 			   d_rank_list_t *ranks, struct pool_discard_rank_state *states)
 {
-	struct pool_discard_query_arg arg = {.pdqa_ranks  = ranks,
-					     .pdqa_states = states};
+	struct pool_discard_query_arg arg = {.pdqa_ranks = ranks, .pdqa_states = states};
 
 	return dsc_pool_svc_call(pool_uuid, svc_ranks, &pool_discard_query_cbs, &arg, deadline);
 }

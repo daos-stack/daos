@@ -459,8 +459,8 @@ mock_ds_mgmt_tgt_update_setup(void)
 	uuid_clear(ds_mgmt_target_update_uuid);
 }
 
-int     ds_mgmt_pool_discard_return;
-uuid_t  ds_mgmt_pool_discard_uuid;
+int                     ds_mgmt_pool_discard_return;
+uuid_t                  ds_mgmt_pool_discard_uuid;
 uint32_t                ds_mgmt_pool_discard_ntargets;
 uint32_t                ds_mgmt_pool_discard_quiesce_sec;
 struct pool_target_addr ds_mgmt_pool_discard_addrs[MOCK_DISCARD_ADDRS_MAX];
@@ -488,8 +488,8 @@ mock_ds_mgmt_pool_discard_setup(void)
 	memset(ds_mgmt_pool_discard_addrs, 0, sizeof(ds_mgmt_pool_discard_addrs));
 }
 
-int     ds_mgmt_pool_discard_query_return;
-uuid_t  ds_mgmt_pool_discard_query_uuid;
+int                             ds_mgmt_pool_discard_query_return;
+uuid_t                          ds_mgmt_pool_discard_query_uuid;
 uint32_t                        ds_mgmt_pool_discard_query_nranks;
 struct pool_discard_rank_state *ds_mgmt_pool_discard_query_states_out;
 int
