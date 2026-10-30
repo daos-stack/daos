@@ -945,6 +945,16 @@ ut_hdr_write(struct bio_io_context *ioc, void *hdr, unsigned int hdr_sz)
 }
 
 static void
+ut_wal_hdr_write(struct bio_ut_args *args, struct wal_header *hdr, bool fix_csum)
+{
+	struct bio_meta_context *mc = args->bua_mc;
+
+	if (fix_csum)
+		ut_hdr_csum(mc, hdr, sizeof(*hdr), &hdr->wh_csum);
+	ut_hdr_write(mc->mc_wal, hdr, sizeof(*hdr));
+}
+
+static void
 ut_meta_hdr_write(struct bio_ut_args *args, struct meta_header *hdr, bool fix_csum)
 {
 	struct bio_meta_context *mc = args->bua_mc;
@@ -952,6 +962,36 @@ ut_meta_hdr_write(struct bio_ut_args *args, struct meta_header *hdr, bool fix_cs
 	if (fix_csum)
 		ut_hdr_csum(mc, hdr, sizeof(*hdr), &hdr->mh_csum);
 	ut_hdr_write(mc->mc_meta, hdr, sizeof(*hdr));
+}
+
+/*
+ * Stage a forged WAL header on the blob (the open session keeps its in-memory copy) and verify the
+ * headers. The forged header is left on the blob: the pool is destroyed by the teardown of the
+ * test.
+ */
+static void
+ut_wal_hdr_forge(struct bio_ut_args *args, struct wal_header *forged, bool fix_csum, int exp_rc)
+{
+	int rc;
+
+	ut_wal_hdr_write(args, forged, fix_csum);
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, args->bua_pool_id, args->bua_mc_flags);
+	assert_rc_equal(rc, exp_rc);
+}
+
+/* Restore the original header and check its consistency and usability */
+static void
+ut_wal_hdr_restore(struct bio_ut_args *args)
+{
+	int rc;
+
+	ut_wal_hdr_write(args, &args->bua_mc->mc_wal_info.si_header, false);
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, args->bua_pool_id, args->bua_mc_flags);
+	assert_rc_equal(rc, 0);
+
+	/* Check the session can still be closed and opened */
+	ut_mc_close(args);
+	ut_mc_open(args);
 }
 
 /*
@@ -1055,6 +1095,193 @@ wal_ut_hdr_verify_ok(void **state)
 	uuid_generate(unknown_id);
 	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, unknown_id, 0);
 	assert_rc_equal(rc, -DER_NONEXIST);
+}
+
+static void
+wal_ut_bad_wal_hdr(void **state)
+{
+	struct bio_ut_args *args    = *state;
+	struct wal_header  *hdr_bkp = &args->bua_mc->mc_wal_info.si_header;
+	struct wal_header   hdr_tmp;
+	uint32_t            off, blks;
+
+	/*
+	 * Leave the initial position so that the IDs and block counts are not zero. The
+	 * last transaction is check-pointed: both IDs denote it and the WAL region in
+	 * use is empty.
+	 */
+	ut_fill_wal(args, 10, NULL);
+	assert_int_equal(hdr_bkp->wh_version, BIO_WAL_VERSION);
+	assert_true(hdr_bkp->wh_ckp_id != 0 && hdr_bkp->wh_ckp_blks != 0);
+	assert_true(hdr_bkp->wh_commit_id != 0 && hdr_bkp->wh_commit_blks != 0);
+	assert_int_equal(hdr_bkp->wh_ckp_id, hdr_bkp->wh_commit_id);
+	assert_int_equal(hdr_bkp->wh_ckp_blks, hdr_bkp->wh_commit_blks);
+	off  = id2off(hdr_bkp->wh_ckp_id);
+	blks = hdr_bkp->wh_ckp_blks;
+	assert_true(blks >= 2 && off >= 8 && off + blks + 16 < hdr_bkp->wh_tot_blks);
+
+	/* Header checks of the loader: magic, version, checksum */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_magic = ~BIO_WAL_MAGIC;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_UNINIT);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_version = BIO_WAL_VERSION + 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INCOMPT);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_csum ^= 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, false, -DER_CSUM);
+
+	/* Geometry */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_blk_bytes = 0;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_blk_bytes = 512;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_tot_blks = 0;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_tot_blks = WAL_ID_OFF_MAX + 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Transaction IDs and block counts beyond the WAL capacity */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_id = hdr_tmp.wh_commit_id = hdr_bkp->wh_tot_blks;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_commit_id = hdr_bkp->wh_tot_blks;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_blks = hdr_bkp->wh_tot_blks + 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_commit_blks = hdr_bkp->wh_tot_blks + 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Initial position (no blocks) with a non-zero ID */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_blks = 0;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_commit_blks = 0;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Checkpoint ahead of the last commit */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_id = hdr_bkp->wh_commit_id + 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Sequence overflow: a checkpoint in the last sequence precedes a commit in sequence 0 */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_id = seqoff2id(WAL_ID_SEQ_MAX, off);
+	ut_wal_hdr_forge(args, &hdr_tmp, true, 0);
+
+	/* No sequence overflow exception when the commit is beyond sequence 0 */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_id      = seqoff2id(WAL_ID_SEQ_MAX, hdr_bkp->wh_tot_blks - 2);
+	hdr_tmp.wh_ckp_blks    = 4;
+	hdr_tmp.wh_commit_id   = seqoff2id(1, 1);
+	hdr_tmp.wh_commit_blks = 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* The same transaction with two sizes */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_commit_blks = blks + 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Checkpoint ending beyond the end of the last commit */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_blks    = 4;
+	hdr_tmp.wh_commit_id   = seqoff2id(0, off + 1);
+	hdr_tmp.wh_commit_blks = 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Checkpoint with nothing committed */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_id      = seqoff2id(0, 0);
+	hdr_tmp.wh_ckp_blks    = 5;
+	hdr_tmp.wh_commit_id   = 0;
+	hdr_tmp.wh_commit_blks = 0;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Checkpoint in the last sequence with nothing committed */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_id      = seqoff2id(WAL_ID_SEQ_MAX, off);
+	hdr_tmp.wh_ckp_blks    = 4;
+	hdr_tmp.wh_commit_id   = 0;
+	hdr_tmp.wh_commit_blks = 0;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Everything check-pointed with two different transactions */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_blks    = 4;
+	hdr_tmp.wh_commit_id   = seqoff2id(0, off + 2);
+	hdr_tmp.wh_commit_blks = 2;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Committed transaction starting inside the check-pointed one */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_commit_id = seqoff2id(0, off + 1);
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* WAL region of more than one lap: unused position ahead in the next sequence */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_commit_id   = seqoff2id(1, off + blks);
+	hdr_tmp.wh_commit_blks = 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* WAL region of more than one lap: unused position two sequences ahead */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_commit_id   = seqoff2id(2, off);
+	hdr_tmp.wh_commit_blks = 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* WAL region crossing the sequence overflow, check-pointed ID not in the last sequence */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_id      = seqoff2id(WAL_ID_SEQ_MAX - 1, hdr_bkp->wh_tot_blks - 2);
+	hdr_tmp.wh_ckp_blks    = 4;
+	hdr_tmp.wh_commit_id   = seqoff2id(WAL_ID_SEQ_MAX, hdr_bkp->wh_tot_blks - 3);
+	hdr_tmp.wh_commit_blks = 3;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Full WAL: the unused position is one lap after the end of the checkpoint */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_commit_id = seqoff2id(1, off);
+	ut_wal_hdr_forge(args, &hdr_tmp, true, 0);
+
+	/* Nearly full WAL: the checkpoint wraps the WAL end, so two sequences ahead is one lap */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_id      = seqoff2id(0, hdr_bkp->wh_tot_blks - 2);
+	hdr_tmp.wh_ckp_blks    = 4;
+	hdr_tmp.wh_commit_id   = seqoff2id(2, 0);
+	hdr_tmp.wh_commit_blks = 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, 0);
+
+	/* Sequence overflow with the check-pointed transaction wrapping the WAL */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_id   = seqoff2id(WAL_ID_SEQ_MAX, hdr_bkp->wh_tot_blks - 2);
+	hdr_tmp.wh_ckp_blks = 4;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, 0);
+
+	/* Sequence overflow with the committed transaction wrapping the WAL */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_ckp_id      = seqoff2id(WAL_ID_SEQ_MAX, off);
+	hdr_tmp.wh_commit_id   = seqoff2id(WAL_ID_SEQ_MAX, hdr_bkp->wh_tot_blks - 2);
+	hdr_tmp.wh_commit_blks = 4;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, 0);
+
+	/* Check the original header is still valid */
+	ut_wal_hdr_restore(args);
 }
 
 static void
@@ -1169,6 +1396,8 @@ static const struct CMUnitTest wal_uts[] = {
     {"wal log wraps many", wal_ut_wrap_many, NULL, NULL},
     {"holes on replay", wal_ut_holes, NULL, NULL},
     {"header verify on consistent headers", wal_ut_hdr_verify_ok, wal_ut_hdr_pool_setup,
+     wal_ut_hdr_pool_teardown},
+    {"header verify on inconsistent wal header", wal_ut_bad_wal_hdr, wal_ut_hdr_pool_setup,
      wal_ut_hdr_pool_teardown},
     {"header verify on inconsistent meta header", wal_ut_bad_meta_hdr, wal_ut_hdr_pool_setup,
      wal_ut_hdr_pool_teardown},

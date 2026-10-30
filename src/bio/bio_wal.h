@@ -111,6 +111,35 @@ struct wal_header_v1 {
 	uint32_t wh_csum;        /* Checksum of this header */
 };
 
+/* WAL transaction ID: a sequence number over a block offset */
+#define WAL_ID_BITS     64 /* Never change this */
+#define WAL_ID_OFF_BITS 32
+#define WAL_ID_SEQ_BITS (WAL_ID_BITS - WAL_ID_OFF_BITS)
+#define WAL_ID_OFF_MAX  ((1ULL << WAL_ID_OFF_BITS) - 1)
+#define WAL_ID_SEQ_MAX  ((1ULL << WAL_ID_SEQ_BITS) - 1)
+#define WAL_ID_OFF_MASK WAL_ID_OFF_MAX
+#define WAL_ID_SEQ_MASK WAL_ID_SEQ_MAX
+
+/* Low WAL_ID_BITS bits of ID is block offset within the WAL */
+static inline uint32_t
+id2off(uint64_t tx_id)
+{
+	return tx_id & WAL_ID_OFF_MASK;
+}
+
+/* High WAL_ID_SEQ_BITS bits of ID is sequence number which increase by 1 once WAL wraps */
+static inline uint32_t
+id2seq(uint64_t tx_id)
+{
+	return (tx_id >> WAL_ID_OFF_BITS) & WAL_ID_SEQ_MASK;
+}
+
+static inline uint64_t
+seqoff2id(uint32_t seq, uint32_t off)
+{
+	return ((uint64_t)seq << WAL_ID_OFF_BITS) + off;
+}
+
 /*
  * WAL transaction starts with a header (wal_trans_head), and there will one or multiple
  * entries (wal_trans_entry) being placed immediately after the header, the payload data
@@ -199,6 +228,11 @@ void wal_close(struct bio_meta_context *mc);
  */
 int
 meta_hdr_check(struct bio_meta_context *mc, enum bio_mc_flags flags);
+
+/*
+ * Loader checks (magic, version, checksum), then the checks of wal_hdr_verify(). Must follow a
+ * successful meta_hdr_check() on @mc, whose checksum context it uses.
+ */
 int
 wal_hdr_check(struct bio_meta_context *mc);
 
