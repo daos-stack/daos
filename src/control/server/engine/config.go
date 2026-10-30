@@ -40,7 +40,7 @@ const (
 type FabricConfig struct {
 	Provider        string `yaml:"provider,omitempty" cmdEnv:"D_PROVIDER"`
 	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"D_INTERFACE"`
-	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"D_PORT,nonzero"`
+	InterfacePort   string `yaml:"fabric_iface_port,omitempty" cmdEnv:"D_PORT"`
 	NumaNodeIndex   uint   `yaml:"-"`
 	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
@@ -48,6 +48,25 @@ type FabricConfig struct {
 	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
 	DisableSRX            bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
 	AuthKey               string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
+}
+
+// Normalize adjusts the format of the fabric configuration strings that are exported to CaRT.
+func (fc *FabricConfig) Normalize() {
+	normalizeMultiprov := func(multiProvStr string) string {
+		strs := strings.Split(multiProvStr, MultiProviderSeparator)
+		result := []string{}
+		for _, s := range strs {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				result = append(result, s)
+			}
+		}
+		return strings.Join(result, MultiProviderSeparator)
+	}
+
+	fc.Provider = normalizeMultiprov(fc.Provider)
+	fc.Interface = normalizeMultiprov(fc.Interface)
+	fc.InterfacePort = normalizeMultiprov(fc.InterfacePort)
 }
 
 // GetPrimaryProvider parses the primary provider from the Provider string.
@@ -76,15 +95,10 @@ func (fc *FabricConfig) GetProviders() ([]string, error) {
 
 func splitMultiProviderStr(str string) []string {
 	strs := strings.Split(str, MultiProviderSeparator)
-	result := make([]string, 0)
-	for _, s := range strs {
-		trimmed := strings.TrimSpace(s)
-		if trimmed != "" {
-			result = append(result, trimmed)
-		}
+	if len(strs) == 1 && strs[0] == "" {
+		return nil
 	}
-
-	return result
+	return strs
 }
 
 // GetNumProviders gets the number of fabric providers configured.
@@ -121,16 +135,25 @@ func (fc *FabricConfig) GetInterfaces() ([]string, error) {
 }
 
 // GetInterfacePorts parses the InterfacePort string to one or more ports.
-func (fc *FabricConfig) GetInterfacePorts() ([]int, error) {
+func (fc *FabricConfig) GetInterfacePorts() ([]uint, error) {
 	if fc == nil {
 		return nil, errors.New("FabricConfig is nil")
 	}
 
-	if fc.InterfacePort == 0 {
+	portStrs := splitMultiProviderStr(fc.InterfacePort)
+	if len(portStrs) == 0 {
 		return nil, errors.New("fabric_iface_port not set")
 	}
 
-	return []int{fc.InterfacePort}, nil
+	ports := make([]uint, 0)
+	for _, str := range portStrs {
+		uint64Port, err := strconv.ParseUint(str, 10, 16)
+		if err != nil || uint64Port == 0 {
+			return nil, errors.Errorf("fabric_iface_port item %q: must be an integer in the range 1-65535", str)
+		}
+		ports = append(ports, uint(uint64Port)) // OK to truncate to 32 bits
+	}
+	return ports, nil
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -145,7 +168,7 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.Interface == "" {
 		fc.Interface = other.Interface
 	}
-	if fc.InterfacePort == 0 {
+	if fc.InterfacePort == "" {
 		fc.InterfacePort = other.InterfacePort
 	}
 	if fc.CrtTimeout == 0 {
@@ -190,13 +213,7 @@ func (fc *FabricConfig) Validate() error {
 		return err
 	}
 
-	for _, p := range ports {
-		if p < 0 {
-			return errors.New("fabric_iface_port cannot be negative")
-		}
-	}
-
-	if len(interfaces) != numProv { // TODO SRS-31: check num ports when multiprovider fully enabled: || len(ports) != numProv {
+	if len(interfaces) != numProv || len(ports) != numProv {
 		return errors.Errorf("provider, fabric_iface and fabric_iface_port must include the same number of items delimited by %q", MultiProviderSeparator)
 	}
 
@@ -701,7 +718,7 @@ func (c *Config) WithFabricInterface(iface string) *Config {
 
 // WithFabricInterfacePort sets the numeric interface port to be used by this instance.
 func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
-	c.Fabric.InterfacePort = ifacePort
+	c.Fabric.InterfacePort = fmt.Sprintf("%d", ifacePort)
 	return c
 }
 
