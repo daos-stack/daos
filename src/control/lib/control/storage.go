@@ -446,21 +446,16 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 		sysReq.SetTimeout(replaceMSCheckTimeout)
 		sysReq.AddHost(hosts[0])
 
+		// Replace is a local, same-host-only operation: the control address must match
+		// between the old and new engine for the join to succeed, so restrict the
+		// search to ranks hosted on the target host regardless of whether --rank was
+		// given explicitly or is being auto-detected.
 		rank := ranklist.Rank(req.Rank)
-		if rank == ranklist.NilRank {
-			// Auto-detect: restrict the search to ranks hosted on the target host.
-			hs, err := hostlist.CreateSet(hosts[0])
-			if err != nil {
-				return err
-			}
-			sysReq.SetHosts(hs)
-		} else {
-			// Explicit rank may be registered under a different host than the one
-			// replacing it (e.g. the original host is gone), so query by rank.
-			rs := ranklist.NewRankSet()
-			rs.Add(rank)
-			sysReq.SetRanks(rs)
+		hs, err := hostlist.CreateSet(hosts[0])
+		if err != nil {
+			return err
 		}
+		sysReq.SetHosts(hs)
 
 		sysResp, err := SystemQuery(ctx, rpcClient, sysReq)
 		if err != nil {

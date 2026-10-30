@@ -206,9 +206,11 @@ func TestStorageCommands(t *testing.T) {
 				printRequest(t, func() *control.SystemQueryReq {
 					req := &control.SystemQueryReq{}
 					req.SetHostList([]string{"foo1.com:10001"})
-					rs := ranklist.NewRankSet()
-					rs.Add(5)
-					req.SetRanks(rs)
+					hs, err := hostlist.CreateSet("foo1.com:10001")
+					if err != nil {
+						t.Fatal(err)
+					}
+					req.SetHosts(hs)
 					return req
 				}()),
 				printRequest(t, func() *control.StorageFormatReq {
@@ -234,9 +236,11 @@ func TestStorageCommands(t *testing.T) {
 				printRequest(t, func() *control.SystemQueryReq {
 					req := &control.SystemQueryReq{}
 					req.SetHostList([]string{"foo1.com:10001"})
-					rs := ranklist.NewRankSet()
-					rs.Add(0)
-					req.SetRanks(rs)
+					hs, err := hostlist.CreateSet("foo1.com:10001")
+					if err != nil {
+						t.Fatal(err)
+					}
+					req.SetHosts(hs)
 					return req
 				}()),
 				printRequest(t, func() *control.StorageFormatReq {
