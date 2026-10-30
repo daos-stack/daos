@@ -84,6 +84,12 @@
 		}                                                                                  \
 	} while (0)
 
+#define assert_string_not_contains(str, substr)                                                    \
+	do {                                                                                       \
+		if (strstr(str, substr) != NULL)                                                   \
+			fail_msg("'%s' unexpectedly found in '%s'", substr, str);                  \
+	} while (0)
+
 #define assert_invalid(x) assert_rc_equal(-DER_INVAL, (x))
 #define assert_nonexist(x) assert_rc_equal(-DER_NONEXIST, (x))
 
