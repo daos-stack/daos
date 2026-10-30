@@ -151,6 +151,8 @@ dtx_update(daos_handle_t coh, uuid_t dti_uuid, struct io *io, bool is_leader, bo
 	if (rc == -DER_NO_PERM) {
 		/** Current implementation does not track already used paths so the same path may be
 		 * reused with a different data type which is not allowed. */
+
+		(void)dtx_end(dth, NULL, rc);
 		return;
 	}
 	assert(rc == 0);
