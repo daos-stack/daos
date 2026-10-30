@@ -1,0 +1,17 @@
+Effective user: root
+Log directory: {{LOG_DIR}}
+Start the engine... ok.
+Create pools directories... ok.
+Start targets... ok.
+Wait for targets to stop...
+[0] pool      {{UUID}} check resultok (52 warning(s)).
+[0] container {{UUID}} check resultok (52 warning(s)).
+Wait for targets to stop: ok.
+Stop the engine... ok.
+===============================
+Targets:
+===============================
+[0] result: ok.
+===============================
+Total: 52 warning(s).
+===============================
