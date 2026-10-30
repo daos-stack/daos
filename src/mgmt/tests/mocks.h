@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -98,22 +98,24 @@ void mock_ds_mgmt_pool_get_prop_teardown(void);
 /*
  * Mock ds_mgmt_pool_discard
  */
-#define MOCK_DISCARD_ADDRS_MAX	16
-extern int		ds_mgmt_pool_discard_return;
-extern uuid_t		ds_mgmt_pool_discard_uuid;
-extern uint32_t		ds_mgmt_pool_discard_ntargets;
-extern uint32_t		ds_mgmt_pool_discard_quiesce_sec;
-extern struct pool_target_addr	ds_mgmt_pool_discard_addrs[MOCK_DISCARD_ADDRS_MAX];
-void mock_ds_mgmt_pool_discard_setup(void);
+#define MOCK_DISCARD_ADDRS_MAX 16
+extern int                     ds_mgmt_pool_discard_return;
+extern uuid_t                  ds_mgmt_pool_discard_uuid;
+extern uint32_t                ds_mgmt_pool_discard_ntargets;
+extern uint32_t                ds_mgmt_pool_discard_quiesce_sec;
+extern struct pool_target_addr ds_mgmt_pool_discard_addrs[MOCK_DISCARD_ADDRS_MAX];
+void
+				       mock_ds_mgmt_pool_discard_setup(void);
 
 /*
  * Mock ds_mgmt_pool_discard_query
  */
-extern int		ds_mgmt_pool_discard_query_return;
-extern uuid_t		ds_mgmt_pool_discard_query_uuid;
-extern uint32_t		ds_mgmt_pool_discard_query_nranks;
-extern struct pool_discard_rank_state	*ds_mgmt_pool_discard_query_states_out;
-void mock_ds_mgmt_pool_discard_query_setup(void);
+extern int                             ds_mgmt_pool_discard_query_return;
+extern uuid_t                          ds_mgmt_pool_discard_query_uuid;
+extern uint32_t                        ds_mgmt_pool_discard_query_nranks;
+extern struct pool_discard_rank_state *ds_mgmt_pool_discard_query_states_out;
+void
+					 mock_ds_mgmt_pool_discard_query_setup(void);
 
 /*
  * Mock ds_mgmt_pool_extend

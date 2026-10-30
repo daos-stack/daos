@@ -216,16 +216,16 @@ struct pool_target_addr_list {
  * POOL_DISCARD_QUERY / POOL_TGT_DISCARD_QUERY (see "dmg pool discard").
  */
 struct pool_discard_rank_state {
-	d_rank_t	pdrs_rank;
+	d_rank_t pdrs_rank;
 	/**
 	 * enum ds_pool_discard_phase: 0 never (since engine start),
 	 * 1 discarding, 2 quiescing, 3 done, 4 failed
 	 */
-	uint32_t	pdrs_phase;
+	uint32_t pdrs_phase;
 	/** seconds since the completion; only meaningful when phase is done */
-	uint64_t	pdrs_done_age_sec;
+	uint64_t pdrs_done_age_sec;
 	/** error of the last discard; only meaningful when phase is failed */
-	int32_t		pdrs_status;
+	int32_t  pdrs_status;
 };
 
 int

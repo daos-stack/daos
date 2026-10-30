@@ -2294,8 +2294,8 @@ drpc_pool_discard_setup(void **state)
 static void
 pack_pool_discard_req(Drpc__Call *call, Mgmt__PoolDiscardReq *req)
 {
-	size_t	len;
-	uint8_t	*body;
+	size_t   len;
+	uint8_t *body;
 
 	len = mgmt__pool_discard_req__get_packed_size(req);
 	D_ALLOC(body, len);
@@ -2304,7 +2304,7 @@ pack_pool_discard_req(Drpc__Call *call, Mgmt__PoolDiscardReq *req)
 	mgmt__pool_discard_req__pack(req, body);
 
 	call->body.data = body;
-	call->body.len = len;
+	call->body.len  = len;
 }
 
 static void
@@ -2340,8 +2340,8 @@ expect_drpc_discard_resp_with_status(Drpc__Response *resp, int exp_status)
 static void
 test_drpc_pool_discard_bad_uuid(void **state)
 {
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
 
 	setup_discard_drpc_call(&call, "BAD", 2, 3, 180);
 
@@ -2356,8 +2356,8 @@ test_drpc_pool_discard_bad_uuid(void **state)
 static void
 test_drpc_pool_discard_no_ranks(void **state)
 {
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
 
 	setup_discard_drpc_call(&call, TEST_UUID, 0, 0, 180);
 
@@ -2372,8 +2372,8 @@ test_drpc_pool_discard_no_ranks(void **state)
 static void
 test_drpc_pool_discard_mgmt_svc_fails(void **state)
 {
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
 
 	setup_discard_drpc_call(&call, TEST_UUID, 2, 3, 180);
 	ds_mgmt_pool_discard_return = -DER_MISC;
@@ -2389,10 +2389,10 @@ test_drpc_pool_discard_mgmt_svc_fails(void **state)
 static void
 test_drpc_pool_discard_success(void **state)
 {
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-	uuid_t		exp_uuid;
-	size_t		i;
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
+	uuid_t         exp_uuid;
+	size_t         i;
 
 	setup_discard_drpc_call(&call, TEST_UUID, 2, 3, 180);
 
@@ -2418,9 +2418,9 @@ test_drpc_pool_discard_success(void **state)
 static void
 test_drpc_pool_discard_all_targets(void **state)
 {
-	Drpc__Call	call = DRPC__CALL__INIT;
-	Drpc__Response	resp = DRPC__RESPONSE__INIT;
-	size_t		i;
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
+	size_t         i;
 
 	/* No target indexes given: every rank gets one wildcard address. */
 	setup_discard_drpc_call(&call, TEST_UUID, 2, 0, 0);
@@ -2456,8 +2456,8 @@ drpc_pool_discard_query_setup(void **state)
 static void
 pack_pool_discard_query_req(Drpc__Call *call, Mgmt__PoolDiscardQueryReq *req)
 {
-	size_t	len;
-	uint8_t	*body;
+	size_t   len;
+	uint8_t *body;
 
 	len = mgmt__pool_discard_query_req__get_packed_size(req);
 	D_ALLOC(body, len);
@@ -2466,7 +2466,7 @@ pack_pool_discard_query_req(Drpc__Call *call, Mgmt__PoolDiscardQueryReq *req)
 	mgmt__pool_discard_query_req__pack(req, body);
 
 	call->body.data = body;
-	call->body.len = len;
+	call->body.len  = len;
 }
 
 static void
@@ -2498,8 +2498,8 @@ get_drpc_discard_query_resp_with_status(Drpc__Response *resp, int exp_status)
 static void
 test_drpc_pool_discard_query_bad_uuid(void **state)
 {
-	Drpc__Call		    call = DRPC__CALL__INIT;
-	Drpc__Response		    resp = DRPC__RESPONSE__INIT;
+	Drpc__Call                  call = DRPC__CALL__INIT;
+	Drpc__Response              resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolDiscardQueryResp *pdq_resp;
 
 	setup_discard_query_drpc_call(&call, "BAD", 3);
@@ -2517,8 +2517,8 @@ test_drpc_pool_discard_query_bad_uuid(void **state)
 static void
 test_drpc_pool_discard_query_no_ranks(void **state)
 {
-	Drpc__Call		    call = DRPC__CALL__INIT;
-	Drpc__Response		    resp = DRPC__RESPONSE__INIT;
+	Drpc__Call                  call = DRPC__CALL__INIT;
+	Drpc__Response              resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolDiscardQueryResp *pdq_resp;
 
 	setup_discard_query_drpc_call(&call, TEST_UUID, 0);
@@ -2536,8 +2536,8 @@ test_drpc_pool_discard_query_no_ranks(void **state)
 static void
 test_drpc_pool_discard_query_mgmt_svc_fails(void **state)
 {
-	Drpc__Call		    call = DRPC__CALL__INIT;
-	Drpc__Response		    resp = DRPC__RESPONSE__INIT;
+	Drpc__Call                  call = DRPC__CALL__INIT;
+	Drpc__Response              resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolDiscardQueryResp *pdq_resp;
 
 	setup_discard_query_drpc_call(&call, TEST_UUID, 3);
@@ -2545,8 +2545,8 @@ test_drpc_pool_discard_query_mgmt_svc_fails(void **state)
 
 	ds_mgmt_drpc_pool_discard_query(&call, &resp);
 
-	pdq_resp = get_drpc_discard_query_resp_with_status(&resp,
-							   ds_mgmt_pool_discard_query_return);
+	pdq_resp =
+	    get_drpc_discard_query_resp_with_status(&resp, ds_mgmt_pool_discard_query_return);
 	assert_int_equal(pdq_resp->n_states, 0);
 
 	mgmt__pool_discard_query_resp__free_unpacked(pdq_resp, NULL);
@@ -2563,26 +2563,26 @@ test_drpc_pool_discard_query_success(void **state)
 	 * constants can seed the mocked engine-side states directly.
 	 */
 	struct pool_discard_rank_state mock_states[] = {
-		{
-			.pdrs_rank  = 0,
-			.pdrs_phase = MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__DISCARDING,
-		},
-		{
-			.pdrs_rank         = 1,
-			.pdrs_phase        = MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__DONE,
-			.pdrs_done_age_sec = 42,
-		},
-		{
-			.pdrs_rank   = 2,
-			.pdrs_phase  = MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__FAILED,
-			.pdrs_status = -DER_NO_PERM,
-		},
+	    {
+		.pdrs_rank  = 0,
+		.pdrs_phase = MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__DISCARDING,
+	    },
+	    {
+		.pdrs_rank         = 1,
+		.pdrs_phase        = MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__DONE,
+		.pdrs_done_age_sec = 42,
+	    },
+	    {
+		.pdrs_rank   = 2,
+		.pdrs_phase  = MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__FAILED,
+		.pdrs_status = -DER_NO_PERM,
+	    },
 	};
-	Drpc__Call		    call = DRPC__CALL__INIT;
-	Drpc__Response		    resp = DRPC__RESPONSE__INIT;
+	Drpc__Call                  call = DRPC__CALL__INIT;
+	Drpc__Response              resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolDiscardQueryResp *pdq_resp;
-	uuid_t			    exp_uuid;
-	size_t			    i;
+	uuid_t                      exp_uuid;
+	size_t                      i;
 
 	setup_discard_query_drpc_call(&call, TEST_UUID, 3);
 	ds_mgmt_pool_discard_query_states_out = mock_states;
@@ -3866,11 +3866,9 @@ test_drpc_check_act_success(void **state)
 
 #define REINT_TEST(x)           cmocka_unit_test(x)
 
-#define POOL_DISCARD_TEST(x)       cmocka_unit_test_setup(x, \
-						drpc_pool_discard_setup)
+#define POOL_DISCARD_TEST(x)       cmocka_unit_test_setup(x, drpc_pool_discard_setup)
 
-#define POOL_DISCARD_QUERY_TEST(x) cmocka_unit_test_setup(x, \
-						drpc_pool_discard_query_setup)
+#define POOL_DISCARD_QUERY_TEST(x) cmocka_unit_test_setup(x, drpc_pool_discard_query_setup)
 
 #define POOL_CREATE_TEST(x)	cmocka_unit_test(x)
 
