@@ -443,6 +443,10 @@ main(int argc, char **argv)
 
 	dlck_helper_args_parse(argc, argv, &args);
 
+	if (args.workload.verbose) {
+		(void)daos_debug_init_ex(DAOS_LOG_DEFAULT, DLOG_ERR);
+	}
+
 	rc = setup(&args, &bundle);
 	if (rc != DER_SUCCESS) {
 		goto fail_args_free;

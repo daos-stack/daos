@@ -13,6 +13,8 @@ struct dlck_helper_workload_args {
 	unsigned int oids_num;
 	unsigned int keys_num;
 	unsigned int updates_num;
+
+	bool         verbose;
 };
 
 struct dlck_helper_args {

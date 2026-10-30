@@ -29,6 +29,10 @@ static struct argp_option args_workload_options[] = {
      "Number of keys to use. Default: " STRINGIFY(DLCK_HELPER_DEFAULT_KEYS_NUM) "."},
     {"updates_num", KEY_WORKLOAD_UPDATES_NUM, "N", 0,
      "Number of updates to make. Default: " STRINGIFY(DLCK_HELPER_DEFAULT_UPDATES_NUM) "."},
+    /** this is expected to be necessary only while solving issues with the tool itself so it seems
+       to fit better with a different group */
+    {"verbose", KEY_COMMON_VERBOSE, 0, 0,
+     "Print DAOS log messages. All standard environment variables apply.", GROUP_AUTOMAGIC},
     {0}};
 
 static void
@@ -39,6 +43,7 @@ args_workload_init(struct dlck_helper_workload_args *args)
 	args->oids_num    = DLCK_HELPER_DEFAULT_OIDS_NUM;
 	args->keys_num    = DLCK_HELPER_DEFAULT_KEYS_NUM;
 	args->updates_num = DLCK_HELPER_DEFAULT_UPDATES_NUM;
+	args->verbose     = false;
 }
 
 static int
@@ -85,6 +90,9 @@ args_workload_parser(int key, char *arg, struct argp_state *state)
 		break;
 	case KEY_WORKLOAD_UPDATES_NUM:
 		rc = parse_unsigned(arg, &args->updates_num, state);
+		break;
+	case KEY_COMMON_VERBOSE:
+		args->verbose = true;
 		break;
 	default:
 		return ARGP_ERR_UNKNOWN;
