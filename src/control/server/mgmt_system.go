@@ -1953,9 +1953,19 @@ func (svc *mgmtSvc) dumpGoroutineStacks(reason string) {
 	svc.log.Errorf("System Erase: dumping goroutine stacks (%s):\n%s", reason, buf)
 }
 
-// execControlPlaneRestart drains the gRPC server via GracefulStop() (falling back to a
-// forced Stop() after svc.gracefulStopTimeout), then exec()s to restart the control
-// plane process.
+// execControlPlaneRestart drains the gRPC server via GracefulStop(), falling back to
+// exec()ing to restart the control plane process after svc.gracefulStopTimeout if the
+// drain hasn't completed by then.
+//
+// A forced grpcServer.Stop() is deliberately *not* attempted as a fallback here: Stop()
+// and GracefulStop() share the same internal server mutex/condvar/connection bookkeeping
+// (see grpc's Server.stop()), so calling Stop() while GracefulStop() is still draining
+// just queues behind the same lock and blocks on the same "all connections closed"
+// condition rather than forcing anything independently. If GracefulStop() is stuck (e.g.
+// a peer keeps a connection open rather than closing it in response to drain), Stop()
+// will be stuck too, so it only adds a wasted extra wait before exec() proceeds anyway.
+// exec() itself terminates this process image and the kernel closes all of its sockets,
+// which is sufficient to tear down the gRPC server's listeners/connections.
 func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
 	scheduledAt := time.Now()
 
@@ -1970,26 +1980,9 @@ func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
 		svc.log.Debugf("System Erase: gRPC server drained cleanly after %s [role=%s]",
 			time.Since(scheduledAt), leaderStr)
 	case <-time.After(svc.gracefulStopTimeout):
-		svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, forcing stop [role=%s]",
+		svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, proceeding to exec anyway [role=%s]",
 			svc.gracefulStopTimeout, leaderStr)
 		svc.dumpGoroutineStacks("GracefulStop() timed out")
-
-		stopDone := make(chan struct{})
-		go func() {
-			svc.log.Debugf("System Erase: calling Stop() [role=%s]", leaderStr)
-			svc.grpcServer.Stop()
-			svc.log.Debugf("System Erase: Stop() returned after %s [role=%s]",
-				time.Since(scheduledAt), leaderStr)
-			close(stopDone)
-		}()
-
-		select {
-		case <-stopDone:
-		case <-time.After(svc.gracefulStopTimeout):
-			svc.log.Errorf("System Erase: Stop() itself did not return within %s, proceeding to exec anyway [role=%s]",
-				svc.gracefulStopTimeout, leaderStr)
-			svc.dumpGoroutineStacks("Stop() timed out")
-		}
 	}
 
 	svc.log.Infof("System Erase: exec'ing %s to restart control plane after %s total drain [role=%s]",
