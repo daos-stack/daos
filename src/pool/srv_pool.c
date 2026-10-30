@@ -8493,6 +8493,49 @@ out:
 	crt_reply_send(rpc);
 }
 
+struct pool_discard_query_arg {
+	crt_context_t                   pdqa_ctx;
+	crt_opcode_t                    pdqa_opc;
+	uuid_t                          pdqa_uuid;
+	struct pool_discard_rank_state *pdqa_state;
+	ABT_future                      pdqa_future;
+};
+
+static void
+pool_tgt_discard_query_ult(void *data)
+{
+	struct pool_discard_query_arg     *arg = data;
+	struct pool_discard_rank_state    *state = arg->pdqa_state;
+	struct pool_tgt_discard_query_in  *in;
+	struct pool_tgt_discard_query_out *out;
+	crt_endpoint_t                    ep;
+	crt_rpc_t                        *rpc;
+	int                               rc;
+
+	ep.ep_grp  = NULL;
+	ep.ep_rank = state->pdrs_rank;
+	ep.ep_tag  = 0;
+	rc = crt_req_create(arg->pdqa_ctx, &ep, arg->pdqa_opc, &rpc);
+	if (rc != 0)
+		goto out;
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->ptdqi_uuid, arg->pdqa_uuid);
+	rc = dss_rpc_send(rpc);
+	if (rc == 0) {
+		out = crt_reply_get(rpc);
+		*state = out->ptdqo_state;
+	}
+	crt_req_decref(rpc);
+
+out:
+	if (rc != 0) {
+		state->pdrs_phase  = DS_POOL_DISCARD_FAILED;
+		state->pdrs_status = rc;
+	}
+	ABT_future_set(arg->pdqa_future, NULL);
+}
+
 /*
  * Handler of POOL_DISCARD_QUERY ("dmg pool query-discard"): collect the
  * local discard progress of every requested rank via unicast queries.
@@ -8504,6 +8547,9 @@ ds_pool_discard_query_handler(crt_rpc_t *rpc)
 	struct pool_discard_query_out	*out = crt_reply_get(rpc);
 	struct pool_svc			*svc;
 	struct pool_discard_rank_state	*states = NULL;
+	struct pool_discard_query_arg	*args = NULL;
+	ABT_future                       future = ABT_FUTURE_NULL;
+	crt_opcode_t                     opc = POOL_TGT_DISCARD_QUERY;
 	d_rank_t			*ranks   = in->pdqi_ranks.ca_arrays;
 	int				 nranks  = in->pdqi_ranks.ca_count;
 	int				 i;
@@ -8520,44 +8566,42 @@ ds_pool_discard_query_handler(crt_rpc_t *rpc)
 	if (states == NULL)
 		D_GOTO(out_svc, rc = -DER_NOMEM);
 
-	for (i = 0; i < nranks; i++) {
-		struct pool_tgt_discard_query_in  *tin;
-		struct pool_tgt_discard_query_out *tout;
-		crt_endpoint_t			   ep;
-		crt_rpc_t			  *trpc;
-		crt_opcode_t			   opc = POOL_TGT_DISCARD_QUERY;
+	D_ALLOC_ARRAY(args, nranks);
+	if (args == NULL)
+		D_GOTO(out_svc, rc = -DER_NOMEM);
 
+	rc = ds_pool_encode_opc(&opc);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ABT_future_create(nranks, NULL, &future);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_svc, rc = dss_abterr2der(rc));
+
+	for (i = 0; i < nranks; i++) {
 		states[i].pdrs_rank  = ranks[i];
 		states[i].pdrs_phase = DS_POOL_DISCARD_NEVER;
+		args[i].pdqa_ctx    = rpc->cr_ctx;
+		args[i].pdqa_opc    = opc;
+		args[i].pdqa_state  = &states[i];
+		args[i].pdqa_future = future;
+		uuid_copy(args[i].pdqa_uuid, svc->ps_uuid);
 
-		rc = ds_pool_encode_opc(&opc);
-		if (rc != 0)
-			break;
-		ep.ep_grp  = NULL;
-		ep.ep_rank = ranks[i];
-		ep.ep_tag  = 0;
-		rc = crt_req_create(rpc->cr_ctx, &ep, opc, &trpc);
-		if (rc != 0)
-			break;
-		tin = crt_req_get(trpc);
-		uuid_copy(tin->ptdqi_uuid, svc->ps_uuid);
-		rc = dss_rpc_send(trpc);
-		if (rc == 0) {
-			tout      = crt_reply_get(trpc);
-			states[i] = tout->ptdqo_state;
-		} else {
-			/* Rank unreachable: report it in its state entry. */
+		rc = dss_ult_create(pool_tgt_discard_query_ult, &args[i], DSS_XS_SELF, 0, 0, NULL);
+		if (rc != 0) {
 			states[i].pdrs_phase  = DS_POOL_DISCARD_FAILED;
 			states[i].pdrs_status = rc;
-			rc                    = 0;
+			ABT_future_set(future, NULL);
 		}
-		crt_req_decref(trpc);
 	}
 
-	if (rc == 0) {
-		out->pdqo_states.ca_arrays = states;
-		out->pdqo_states.ca_count  = nranks;
-	}
+	rc = ABT_future_wait(future);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
+	ABT_future_free(&future);
+
+	rc = 0;
+	out->pdqo_states.ca_arrays = states;
+	out->pdqo_states.ca_count  = nranks;
 
 out_svc:
 	pool_svc_put_leader(svc);
@@ -8566,6 +8610,7 @@ out:
 	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pdqi_op.pi_uuid),
 		rpc, DP_RC(rc));
 	crt_reply_send(rpc);
+	D_FREE(args);
 	D_FREE(states);
 }
 
