@@ -74,7 +74,7 @@ func RecoverLocalReplica(log logging.Logger, cfg *DatabaseConfig) error {
 		return errors.Wrap(err, "failed to check for existing state")
 	}
 	if !isReplica {
-		return &system.ErrNotReplica{Replicas: cfg.stringReplicas()}
+		return cfg.errNotReplica()
 	}
 
 	db, err := NewDatabase(log, cfg)

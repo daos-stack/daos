@@ -119,9 +119,9 @@ type (
 
 const (
 	// DefaultPoolQueryMask defines the default pool query mask.
-	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DEAD | C.DPI_SELF_HEAL_POLICY))
+	DefaultPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_ENGINES_DEAD))
 	// HealthOnlyPoolQueryMask defines the mask for health-only queries.
-	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE | C.DPI_SELF_HEAL_POLICY))
+	HealthOnlyPoolQueryMask = PoolQueryMask(^uint64(0) &^ (C.DPI_ENGINES_ENABLED | C.DPI_SPACE))
 
 	// PoolQueryOptionSpace retrieves storage space usage as part of the pool query.
 	PoolQueryOptionSpace PoolQueryOption = "space"
@@ -133,8 +133,6 @@ const (
 	PoolQueryOptionDisabledEngines PoolQueryOption = "disabled_engines"
 	// PoolQueryOptionDeadEngines retrieves dead engines as part of the pool query.
 	PoolQueryOptionDeadEngines PoolQueryOption = "dead_engines"
-	// PoolQueryOptionSelfHealPolicy retrieves self_heal_policy in addition to the pool query.
-	PoolQueryOptionSelfHealPolicy PoolQueryOption = "self_heal_policy"
 
 	// PoolConnectFlagReadOnly indicates that the connection is read-only.
 	PoolConnectFlagReadOnly PoolConnectFlag = C.DAOS_PC_RO
@@ -169,7 +167,6 @@ var poolQueryOptMap = map[C.int]PoolQueryOption{
 	C.DPI_ENGINES_ENABLED:  PoolQueryOptionEnabledEngines,
 	C.DPI_ENGINES_DISABLED: PoolQueryOptionDisabledEngines,
 	C.DPI_ENGINES_DEAD:     PoolQueryOptionDeadEngines,
-	C.DPI_SELF_HEAL_POLICY: PoolQueryOptionSelfHealPolicy,
 }
 
 func resolvePoolQueryOpt(name PoolQueryOption) (C.int, error) {

@@ -128,7 +128,7 @@ int ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
 		   d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks, uint64_t deadline,
-		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		   daos_pool_info_t *pool_info, daos_prop_t *prop, uint32_t *pool_layout_ver,
 		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes);
 int
     ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
