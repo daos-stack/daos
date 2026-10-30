@@ -1,0 +1,12 @@
+VOS file allocation: ok.
+Check pool:
+	path: /dev/shm/daos/{{UUID}}/vos-0
+	uuid: {{UUID}}
+- NVMe devices (if applicable): ok.
+- Open the pool: ok.
+- Magic... ok.
+- Version... ok.
+- UUID... ok.
+- Containers tree...
+-- error: Tree class... Unregistered class id 14
+- error: Containers tree: DER_NONEXIST(-1005): 'The specified entity does not exist'

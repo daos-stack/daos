@@ -1,0 +1,7 @@
+Effective user: root
+Log directory: {{LOG_DIR}}
+Start the engine... ok.
+Create pools directories... ok.
+Start targets... ok.
+Wait for targets to stop...
+error: Wait for targets to stop: DER_DF_INVAL(-2022): 'Unsupported durable format'

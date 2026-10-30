@@ -1,0 +1,48 @@
+VOS file allocation: ok.
+Check pool:
+	path: /dev/shm/daos/{{UUID}}/vos-0
+	uuid: {{UUID}}
+- NVMe devices (if applicable): ok.
+- Open the pool: ok.
+- Magic... ok.
+- Version... ok.
+- UUID... ok.
+- Containers tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xa7a4c0)... ok.
+- Containers tree: ok.
+- Pool extension (off=0x400550)... ok.
+- Garbage collector's tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Empty tree
+- Garbage collector's tree: ok.
+Check pool: ok.
+Check container:
+	uuid: {{UUID}}
+- uuid... ok.
+- Padding (cd_pad)... ok.
+- Padding (cd_used)... ok.
+- Reserved (cd_reserv_upgrade)... ok.
+- Object index tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xa804c0)... ok.
+--- Record fetch (off=0xa8d540)... ok.
+---- Object (oid=1185667690.2136093645.0.0)... 
+----- ILOG... ok.
+---- Object (oid=1185667690.2136093645.0.0)... ok.
+--- Record fetch (off=0xa8d4c0)... ok.
+---- Object (oid=471378945.1581695481.0.0)... 
+----- ILOG... ok.
+---- Object (oid=471378945.1581695481.0.0)... ok.
+- Object index tree: ok.
+- Active DTX blob list...
+-- DTX blob (off=0x4c6750)... 
+--- Magic... ok.
+--- 7 active entries:
+---- [0] ID (dae_xid)... ok.
+---- [0] LID (dae_lid)... error: cannot append to the active DTX table (dae_lid=2, dae_epoch=0x28d613ee6f540001)
+- error: Active DTX blob list: DER_IO(-2001): 'I / O error'
+error: Check container: DER_IO(-2001): 'I / O error'

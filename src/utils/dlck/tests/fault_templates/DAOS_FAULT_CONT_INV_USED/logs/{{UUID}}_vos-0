@@ -1,0 +1,79 @@
+VOS file allocation: ok.
+Check pool:
+	path: /dev/shm/daos/{{UUID}}/vos-0
+	uuid: {{UUID}}
+- NVMe devices (if applicable): ok.
+- Open the pool: ok.
+- Magic... ok.
+- Version... ok.
+- UUID... ok.
+- Containers tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xa7a4c0)... ok.
+- Containers tree: ok.
+- Pool extension (off=0x400550)... ok.
+- Garbage collector's tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Empty tree
+- Garbage collector's tree: ok.
+Check pool: ok.
+Check container:
+	uuid: {{UUID}}
+- uuid... ok.
+- Padding (cd_pad)... ok.
+- Padding (cd_used)... warning: non-zero (0)
+ok.
+- Reserved (cd_reserv_upgrade)... ok.
+- Object index tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xa804c0)... ok.
+--- Record fetch (off=0xa8d540)... ok.
+---- Object (oid=1185667690.2136093645.0.0)... 
+----- ILOG... ok.
+---- Object (oid=1185667690.2136093645.0.0)... ok.
+--- Record fetch (off=0xa8d4c0)... ok.
+---- Object (oid=471378945.1581695481.0.0)... 
+----- ILOG... ok.
+---- Object (oid=471378945.1581695481.0.0)... ok.
+- Object index tree: ok.
+- Active DTX blob list...
+-- DTX blob (off=0x4c6750)... 
+--- Magic... ok.
+--- 7 active entries:
+---- [0] ID (dae_xid)... ok.
+---- [0] LID (dae_lid)... ok.
+---- [0] Append to active DTX tree... ok.
+---- [1] ID (dae_xid)... ok.
+---- [1] LID (dae_lid)... ok.
+---- [1] Append to active DTX tree... ok.
+---- [2] flagged invalid.
+---- [3] ID (dae_xid)... ok.
+---- [3] LID (dae_lid)... ok.
+---- [3] Append to active DTX tree... ok.
+---- [4] flagged invalid.
+---- [5] ID (dae_xid)... ok.
+---- [5] LID (dae_lid)... ok.
+---- [5] Append to active DTX tree... ok.
+---- [6] ID (dae_xid)... ok.
+---- [6] LID (dae_lid)... ok.
+---- [6] Append to active DTX tree... ok.
+-- DTX blob (off=0x4c6750)... ok.
+- Active DTX blob list: ok.
+Check container: ok.
+Check oid: 1185667690.2136093645.0.0...
+- Dkey tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xafdf80)... ok.
+- Dkey tree: ok.
+Check oid: 1185667690.2136093645.0.0: ok.
+Check oid: 471378945.1581695481.0.0...
+- Dkey tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xafdda0)... ok.
+- Dkey tree: ok.
+Check oid: 471378945.1581695481.0.0: ok.

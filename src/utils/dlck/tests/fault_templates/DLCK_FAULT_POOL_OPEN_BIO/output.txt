@@ -1,0 +1,8 @@
+Effective user: root
+Log directory: {{LOG_DIR}}
+Start the engine... ok.
+Create pools directories... ok.
+Start targets... ok.
+Wait for targets to stop...
+[0] pool      {{UUID}} check result: ok.
+error: Wait for targets to stop: DER_INVAL(-1003): 'Invalid parameters'
