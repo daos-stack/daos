@@ -12,6 +12,7 @@
 #define KEY_WORKLOAD_OIDS_NUM           'b'
 #define KEY_WORKLOAD_KEYS_NUM           'k'
 #define KEY_WORKLOAD_UPDATES_NUM        'u'
+#define KEY_WORKLOAD_CREATE_POOLS       'c'
 
 #define GROUP_WORKLOAD                  2
 
@@ -29,6 +30,8 @@ static struct argp_option args_workload_options[] = {
      "Number of keys to use. Default: " STRINGIFY(DLCK_HELPER_DEFAULT_KEYS_NUM) "."},
     {"updates_num", KEY_WORKLOAD_UPDATES_NUM, "N", 0,
      "Number of updates to make. Default: " STRINGIFY(DLCK_HELPER_DEFAULT_UPDATES_NUM) "."},
+    {"create_pools", KEY_WORKLOAD_CREATE_POOLS, 0, 0,
+     "Create pools before attempting to populate them."},
     /** this is expected to be necessary only while solving issues with the tool itself so it seems
        to fit better with a different group */
     {"verbose", KEY_COMMON_VERBOSE, 0, 0,
@@ -93,6 +96,9 @@ args_workload_parser(int key, char *arg, struct argp_state *state)
 		break;
 	case KEY_COMMON_VERBOSE:
 		args->verbose = true;
+		break;
+	case KEY_WORKLOAD_CREATE_POOLS:
+		args->create_pools = true;
 		break;
 	default:
 		return ARGP_ERR_UNKNOWN;

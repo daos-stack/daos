@@ -262,6 +262,24 @@ cont_process(struct xstream_state *xst, uuid_t co_uuid)
 	cont_teardown(xst);
 }
 
+static int
+create_pool(struct xstream_state *xst, uuid_t po_uuid)
+{
+	static const daos_size_t scm_sz = 256 * 1024 * 1024; /* 256 MiB */
+	char                     uuid_str[UUID_STR_LEN];
+	char                    *path;
+	int                      rc;
+
+	uuid_unparse(po_uuid, uuid_str);
+	D_ASPRINTF(path, "%s/%s/vos-%d", xst->args_engine->storage_path, uuid_str, xst->xs->tgt_id);
+	assert(path != NULL);
+
+	rc = vos_pool_create(path, po_uuid, scm_sz, 0, 0, 0, 0, NULL);
+	D_FREE(path);
+
+	return rc;
+}
+
 static void
 exec_one(void *arg)
 {
@@ -273,6 +291,14 @@ exec_one(void *arg)
 		/** do not process the given file if the target is not requested */
 		if (dlck_bitmap_isclr32(file->targets_bitmap, xst->xs->tgt_id)) {
 			continue;
+		}
+
+		if (xst->args_workload->create_pools) {
+			rc = create_pool(xst, file->po_uuid);
+			if (rc != DER_SUCCESS) {
+				xst->rc = rc;
+				break;
+			}
 		}
 
 		rc = dlck_pool_open(xst->args_engine->storage_path, file->po_uuid, xst->xs->tgt_id,

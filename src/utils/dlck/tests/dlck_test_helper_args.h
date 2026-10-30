@@ -15,6 +15,7 @@ struct dlck_helper_workload_args {
 	unsigned int updates_num;
 
 	bool         verbose;
+	bool         create_pools;
 };
 
 struct dlck_helper_args {
