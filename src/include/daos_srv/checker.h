@@ -366,6 +366,9 @@ checker_fi_proxy(uint64_t fail_loc_in)
  * programmatically set fault can take effect. Call the \ref checker_fi_exit() function after
  * exiting the tested code.
  *
+ * Note: Proxy faults require the process to have just one execution stream. Mutlitple execution
+ * streams are not supported.
+ *
  * \param[in] exp_fail_locs	NULL-terminated array of expected fault locations.
  * \param[out] re_enable	Whether to re-enable fault injection on \ref checker_fi_exit().
  */

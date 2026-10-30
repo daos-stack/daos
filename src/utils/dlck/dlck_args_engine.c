@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,6 +39,12 @@ args_engine_check(struct argp_state *state, struct dlck_args_engine *args)
 {
 	if (args->storage_path == NULL) {
 		RETURN_FAIL(state, EINVAL, "Storage path not provided");
+	}
+
+	if (d_fault_inject_is_enabled()) {
+		if (args->targets > 1) {
+			RETURN_FAIL(state, EINVAL, "Fault injection requires targets == 1");
+		}
 	}
 
 	return 0;
