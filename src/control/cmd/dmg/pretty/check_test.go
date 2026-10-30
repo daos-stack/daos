@@ -83,19 +83,32 @@ No reports to display.
 						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
 						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
 						StartTime: checkTime,
-						Targets: []*control.SystemCheckTargetInfo{
+						Ranks: []*control.SystemCheckRankInfo{
 							{
-								Target: 1,
-								Status: chk.CheckInstStatus_CIS_FAILED.String(),
+								Rank:   0,
+								Status: chkpb.CheckPoolStatus_CPS_FAILED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Target: 1,
+										Status: chk.CheckInstStatus_CIS_FAILED.String(),
+									},
+									{
+										Target: 2,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+								},
 							},
 							{
-								Target: 2,
-								Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
-							},
-							{
-								Target: 3,
 								Rank:   1,
-								Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+								Status: chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Target: 3,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+								},
 							},
 						},
 					},
@@ -104,18 +117,25 @@ No reports to display.
 						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
 						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
 						StartTime: checkTime,
-						Targets: []*control.SystemCheckTargetInfo{
+						Ranks: []*control.SystemCheckRankInfo{
 							{
-								Target: 4,
-								Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
-							},
-							{
-								Target: 5,
-								Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
-							},
-							{
-								Target: 6,
-								Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+								Rank:   0,
+								Status: chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Target: 4,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+									{
+										Target: 5,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+									{
+										Target: 6,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+								},
 							},
 						},
 					},
@@ -124,21 +144,42 @@ No reports to display.
 						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
 						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
 						StartTime: checkTime,
-						Targets: []*control.SystemCheckTargetInfo{
+						Ranks: []*control.SystemCheckRankInfo{
 							{
 								Rank:   3,
-								Target: 7,
-								Status: chk.CheckInstStatus_CIS_IMPLICATED.String(),
+								Status: chkpb.CheckPoolStatus_CPS_IMPLICATED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_POOL_LIST.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Rank:   3,
+										Target: 7,
+										Status: chk.CheckInstStatus_CIS_IMPLICATED.String(),
+									},
+								},
 							},
 							{
 								Rank:   2,
-								Target: 8,
-								Status: chk.CheckInstStatus_CIS_STOPPED.String(),
+								Status: chkpb.CheckPoolStatus_CPS_STOPPED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_POOL_CLEANUP.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Rank:   2,
+										Target: 8,
+										Status: chk.CheckInstStatus_CIS_STOPPED.String(),
+									},
+								},
 							},
 							{
 								Rank:   1,
-								Target: 9,
-								Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+								Status: chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Rank:   1,
+										Target: 9,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+								},
 							},
 						},
 					},
@@ -146,21 +187,27 @@ No reports to display.
 						UUID:   "pool-5",
 						Status: chkpb.CheckPoolStatus_CPS_UNCHECKED.String(),
 						Phase:  chkpb.CheckScanPhase_CSP_PREPARE.String(),
-						Targets: []*control.SystemCheckTargetInfo{
+						Ranks: []*control.SystemCheckRankInfo{
 							{
-								Rank:   1,
-								Target: 10,
-								Status: chk.CheckInstStatus_CIS_RUNNING.String(),
-							},
-							{
-								Rank:   1,
-								Target: 11,
-								Status: chk.CheckInstStatus_CIS_PAUSED.String(),
-							},
-							{
-								Rank:   1,
-								Target: 12,
-								Status: chk.CheckInstStatus_CIS_RUNNING.String(),
+								Rank: 1,
+								// No status/phase data
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Rank:   1,
+										Target: 10,
+										Status: chk.CheckInstStatus_CIS_RUNNING.String(),
+									},
+									{
+										Rank:   1,
+										Target: 11,
+										Status: chk.CheckInstStatus_CIS_PAUSED.String(),
+									},
+									{
+										Rank:   1,
+										Target: 12,
+										Status: chk.CheckInstStatus_CIS_RUNNING.String(),
+									},
+								},
 							},
 						},
 					},
@@ -218,24 +265,31 @@ DAOS System Checker Info
   Checked 4 pools
 
 Per-Pool Checker Info:
-  Pool pool-1: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
-    Rank 0 target status:
+  Pool pool-1: 2 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+    Rank 0, status: CPS_FAILED, phase: CSP_DONE
+    - Target status:
       CIS_COMPLETED: [2]
       CIS_FAILED: [1]
-    Rank 1 target status:
+    Rank 1, status: CPS_CHECKED, phase: CSP_DONE
+    - Target status:
       CIS_COMPLETED: [3]
-  Pool pool-2: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
-    Rank 0 target status:
+  Pool pool-2: 1 rank, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+    Rank 0, status: CPS_CHECKED, phase: CSP_DONE
+    - Target status:
       CIS_COMPLETED: [4-6]
-  Pool pool-3: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
-    Rank 1 target status:
+  Pool pool-3: 3 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+    Rank 1, status: CPS_CHECKED, phase: CSP_DONE
+    - Target status:
       CIS_COMPLETED: [9]
-    Rank 2 target status:
+    Rank 2, status: CPS_STOPPED, phase: CSP_POOL_CLEANUP
+    - Target status:
       CIS_STOPPED: [8]
-    Rank 3 target status:
+    Rank 3, status: CPS_IMPLICATED, phase: CSP_POOL_LIST
+    - Target status:
       CIS_IMPLICATED: [7]
-  Pool pool-5: 0 ranks, status: CPS_UNCHECKED, phase: CSP_PREPARE
-    Rank 1 target status:
+  Pool pool-5: 1 rank, status: CPS_UNCHECKED, phase: CSP_PREPARE
+    Rank 1, status: UNKNOWN, phase: UNKNOWN
+    - Target status:
       CIS_PAUSED: [11]
       CIS_RUNNING: [10,12]
 

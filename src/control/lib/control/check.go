@@ -483,6 +483,14 @@ type SystemCheckStatistics struct {
 	NumFailed   uint32 `json:"num_inconsist_failed"`
 }
 
+// SystemCheckRankInfo provides some basic information about the status of the check on a rank.
+type SystemCheckRankInfo struct {
+	Rank    ranklist.Rank            `json:"rank"`
+	Status  string                   `json:"status"`
+	Phase   string                   `json:"phase"`
+	Targets []*SystemCheckTargetInfo `json:"targets"`
+}
+
 // SystemCheckTargetInfo contains check info for an individual target.
 type SystemCheckTargetInfo struct {
 	Rank      ranklist.Rank          `json:"rank"`
@@ -494,11 +502,7 @@ type SystemCheckTargetInfo struct {
 	Stats     *SystemCheckStatistics `json:"statistics"`
 }
 
-func startTimeString(t time.Time) string {
-	return common.FormatTime(t)
-}
-
-func stopTimeString(t time.Time) string {
+func timeString(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
@@ -514,33 +518,29 @@ func (t *SystemCheckTargetInfo) MarshalJSON() ([]byte, error) {
 		Remaining float64 `json:"remaining,omitempty"`
 	}{
 		toJSON:    (*toJSON)(t),
-		StartTime: startTimeString(t.StartTime),
-		StopTime:  stopTimeString(t.StopTime),
+		StartTime: timeString(t.StartTime),
+		StopTime:  timeString(t.StopTime),
 		Remaining: t.Remaining.Seconds(),
 	})
 }
 
-type rawRankMap map[ranklist.Rank]*mgmtpb.CheckQueryPool
+type RawRankMap map[ranklist.Rank]*mgmtpb.CheckQueryPool
 
 type SystemCheckPoolInfo struct {
-	RawRankInfo rawRankMap               `json:"-"`
-	UUID        string                   `json:"uuid"`
-	Label       string                   `json:"label,omitempty"`
-	Status      string                   `json:"status"`
-	Phase       string                   `json:"phase"`
-	StartTime   time.Time                `json:"-"`
-	StopTime    time.Time                `json:"-"`
-	Remaining   time.Duration            `json:"-"`
-	Targets     []*SystemCheckTargetInfo `json:"targets"`
+	RawRankInfo RawRankMap             `json:"-"`
+	UUID        string                 `json:"uuid"`
+	Label       string                 `json:"label,omitempty"`
+	Status      string                 `json:"status"`
+	Phase       string                 `json:"phase"`
+	StartTime   time.Time              `json:"-"`
+	StopTime    time.Time              `json:"-"`
+	Remaining   time.Duration          `json:"-"`
+	Ranks       []*SystemCheckRankInfo `json:"ranks"`
 }
 
 // rankCount excludes the entry whose rank cannot be identified.
 func (p *SystemCheckPoolInfo) rankCount() int {
-	count := len(p.RawRankInfo)
-	if _, found := p.RawRankInfo[ranklist.NilRank]; found {
-		count--
-	}
-	return count
+	return len(p.Ranks)
 }
 
 func (p *SystemCheckPoolInfo) MarshalJSON() ([]byte, error) {
@@ -554,8 +554,8 @@ func (p *SystemCheckPoolInfo) MarshalJSON() ([]byte, error) {
 	}{
 		toJSON:    (*toJSON)(p),
 		RankCount: p.rankCount(),
-		StartTime: startTimeString(p.StartTime),
-		StopTime:  stopTimeString(p.StopTime),
+		StartTime: timeString(p.StartTime),
+		StopTime:  timeString(p.StopTime),
 		Remaining: p.Remaining.Seconds(),
 	})
 }
@@ -571,8 +571,8 @@ func (p *SystemCheckPoolInfo) String() string {
 	if !p.StartTime.IsZero() {
 		timeStr = fmt.Sprintf(", started: %s%s", common.FormatTime(p.StartTime), remainingOrStopTime)
 	}
-	return fmt.Sprintf("Pool %s: %d ranks, status: %s, phase: %s%s",
-		p.UUID, p.rankCount(), p.Status, p.Phase, timeStr)
+	return fmt.Sprintf("Pool %s: %d %s, status: %s, phase: %s%s",
+		p.UUID, p.rankCount(), common.Pluralise("rank", p.rankCount()), p.Status, p.Phase, timeStr)
 }
 
 func (p *SystemCheckPoolInfo) Unchecked() bool {
@@ -614,9 +614,19 @@ func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckP
 	pools := make(map[string]*SystemCheckPoolInfo)
 
 	for _, pbPool := range pbPools {
+		poolRank := getQueryPoolRank(pbPool)
+		var rankInfo *SystemCheckRankInfo
+		if poolRank != ranklist.NilRank {
+			rankInfo = &SystemCheckRankInfo{
+				Rank:   poolRank,
+				Status: pbPool.Status.String(),
+				Phase:  pbPool.Phase.String(),
+			}
+		}
+
 		if _, found := pools[pbPool.Uuid]; !found {
 			pools[pbPool.Uuid] = &SystemCheckPoolInfo{
-				RawRankInfo: make(rawRankMap),
+				RawRankInfo: make(RawRankMap),
 				UUID:        pbPool.Uuid,
 				// For the moment, ignore potential differences in these details
 				// across multiple ranks.
@@ -627,6 +637,11 @@ func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckP
 				Remaining: remainingDuration(isPoolCheckInProgress(pbPool.Status), pbPool.Time.MiscTime),
 			}
 		}
+
+		if rankInfo == nil {
+			continue
+		}
+
 		for _, pbTarget := range pbPool.Targets {
 			tInfo := &SystemCheckTargetInfo{
 				Rank:      ranklist.Rank(pbTarget.Rank),
@@ -642,20 +657,32 @@ func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckP
 					NumFailed:   pbTarget.Inconsistency.Failed,
 				},
 			}
-			pools[pbPool.Uuid].Targets = append(pools[pbPool.Uuid].Targets, tInfo)
+			rankInfo.Targets = append(rankInfo.Targets, tInfo)
 		}
-		pools[pbPool.Uuid].RawRankInfo[getQueryPoolRank(pbPool)] = pbPool
-	}
 
-	for _, pool := range pools {
-		sortedTargets := pool.Targets
+		sortedTargets := rankInfo.Targets
 		sort.Slice(sortedTargets, func(i, j int) bool {
 			if sortedTargets[i].Rank == sortedTargets[j].Rank {
 				return sortedTargets[i].Target < sortedTargets[j].Target
 			}
 			return sortedTargets[i].Rank < sortedTargets[j].Rank
 		})
-		pool.Targets = sortedTargets
+		rankInfo.Targets = sortedTargets
+
+		pools[pbPool.Uuid].Ranks = append(pools[pbPool.Uuid].Ranks, rankInfo)
+
+		pools[pbPool.Uuid].RawRankInfo[poolRank] = pbPool
+	}
+
+	for _, pool := range pools {
+		sortedRanks := pool.Ranks
+		sort.Slice(sortedRanks, func(i, j int) bool {
+			if sortedRanks[i].Rank == sortedRanks[j].Rank {
+				return sortedRanks[i].Rank < sortedRanks[j].Rank
+			}
+			return sortedRanks[i].Rank < sortedRanks[j].Rank
+		})
+		pool.Ranks = sortedRanks
 	}
 
 	return pools

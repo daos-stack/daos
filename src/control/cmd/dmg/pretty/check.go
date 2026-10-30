@@ -74,24 +74,23 @@ func countResultPools(resp *control.SystemCheckQueryResp) (int, int) {
 	return len(checkedMap), len(uncheckedMap)
 }
 
-func printSystemCheckTargetInfo(out io.Writer, targets []*control.SystemCheckTargetInfo) {
+func printSystemCheckTargetInfo(out io.Writer, pool *control.SystemCheckPoolInfo) {
 	byRank := make(map[ranklist.Rank]map[string][]*control.SystemCheckTargetInfo)
 	allStatus := make(map[string]struct{})
 
-	for _, t := range targets {
-		if _, ok := byRank[t.Rank]; !ok {
-			byRank[t.Rank] = make(map[string][]*control.SystemCheckTargetInfo)
+	for _, r := range pool.Ranks {
+		if _, ok := byRank[r.Rank]; !ok {
+			byRank[r.Rank] = make(map[string][]*control.SystemCheckTargetInfo)
 		}
-		byRank[t.Rank][t.Status] = append(byRank[t.Rank][t.Status], t)
-		allStatus[t.Status] = struct{}{}
+
+		for _, t := range r.Targets {
+			byRank[r.Rank][t.Status] = append(byRank[r.Rank][t.Status], t)
+			allStatus[t.Status] = struct{}{}
+		}
 	}
 
-	sortedRanks := make([]ranklist.Rank, 0, len(byRank))
-	for r := range byRank {
-		sortedRanks = append(sortedRanks, r)
-	}
-	sort.Slice(sortedRanks, func(i, j int) bool {
-		return sortedRanks[i] < sortedRanks[j]
+	sort.Slice(pool.Ranks, func(i, j int) bool {
+		return pool.Ranks[i].Rank < pool.Ranks[j].Rank
 	})
 
 	sortedStatus := make([]string, 0, len(allStatus))
@@ -114,11 +113,18 @@ func printSystemCheckTargetInfo(out io.Writer, targets []*control.SystemCheckTar
 	}
 
 	iw := txtfmt.NewIndentWriter(out)
-	for _, r := range sortedRanks {
-		fmt.Fprintf(iw, "Rank %d target status:\n", r)
+	for _, r := range pool.Ranks {
+		unknownIfEmpty := func(in string) string {
+			if in == "" {
+				return "UNKNOWN"
+			}
+			return in
+		}
+		fmt.Fprintf(iw, "Rank %d, status: %s, phase: %s\n", r.Rank, unknownIfEmpty(r.Status), unknownIfEmpty(r.Phase))
 
+		fmt.Fprintf(iw, "- Target status:\n")
 		iw2 := txtfmt.NewIndentWriter(iw)
-		statusMap := byRank[r]
+		statusMap := byRank[r.Rank]
 		for _, s := range sortedStatus {
 			targets, ok := statusMap[s]
 			if !ok {
@@ -142,7 +148,7 @@ func printSystemCheckPoolInfo(out io.Writer, pools []*control.SystemCheckPoolInf
 			fmt.Fprintf(iw, "%+v\n", pool)
 
 			if verbose {
-				printSystemCheckTargetInfo(iw, pool.Targets)
+				printSystemCheckTargetInfo(iw, pool)
 			}
 		}
 	}
