@@ -82,6 +82,26 @@ struct dt_vos_pool_ctx {
 /* Row of dct_part_ics holding the checksum infos of the object g_oids[oid] */
 #define DVT_FAKE_PART_ICS_IDX(oid)          ((oid) - DVT_FAKE_PART_OID_VALID)
 
+/*
+ * Recx fixture objects whose extents are all written at the same major epoch, as the operations of
+ * one distributed transaction are: they only differ by their minor epoch, and the later write is
+ * the second of dct_minor_ics[row].  With S = dct_recx_size (two chunks) and C = dct_chunk_size:
+ *   HEAD:   A=[0, S) then B=[0, S/2)       B overwrites the first chunk of A
+ *   MIDDLE: A=[0, 3C) then B=[C, 2C)       B splits A in two visible pieces
+ *   CHUNK:  A=[0, S) then B=[C/4, C/2)     B overwrites a part of the first chunk of A
+ *   HIDDEN: B=[0, S/2) then A=[0, S)       A hides B entirely
+ */
+#define DVT_FAKE_MINOR_EPOCH                (10)
+#define DVT_FAKE_MINOR_WRITE_COUNT          (2)
+#define DVT_FAKE_MINOR_OID_COUNT            (4)
+#define DVT_FAKE_MINOR_OID_HEAD             (6)
+#define DVT_FAKE_MINOR_OID_MIDDLE           (7)
+#define DVT_FAKE_MINOR_OID_CHUNK            (8)
+#define DVT_FAKE_MINOR_OID_HIDDEN           (9)
+#define DVT_FAKE_MINOR_OID_FILLER           ('m')
+/* Row of dct_minor_ics holding the checksum infos of the object g_oids[oid] */
+#define DVT_FAKE_MINOR_ICS_IDX(oid)         ((oid) - DVT_FAKE_MINOR_OID_HEAD)
+
 struct dt_csum_ctx {
 	uuid_t                dct_cont_uuid;
 	size_t                dct_sv_size;
@@ -92,6 +112,8 @@ struct dt_csum_ctx {
 	struct dcs_iod_csums *dct_sv_ics[DVT_FAKE_SV_COUNT];
 	struct dcs_iod_csums *dct_recx_ics[DVT_FAKE_RECX_COUNT];
 	struct dcs_iod_csums *dct_part_ics[DVT_FAKE_PART_OID_COUNT][DVT_FAKE_PART_RECX_COUNT];
+	/* checksum infos of the first and second write of each DVT_FAKE_MINOR_OID_* object */
+	struct dcs_iod_csums *dct_minor_ics[DVT_FAKE_MINOR_OID_COUNT][DVT_FAKE_MINOR_WRITE_COUNT];
 };
 
 daos_unit_oid_t dvt_gen_uoid(uint32_t i);
