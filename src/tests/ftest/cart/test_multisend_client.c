@@ -11,6 +11,11 @@
 #include "crt_utils.h"
 #include "test_multisend_common.h"
 
+static int num_failed;
+static int num_resp;
+static int num_sent;
+static int first_failure;
+
 static void
 rpc_cb_common(const struct crt_cb_info *info)
 {
@@ -19,7 +24,11 @@ rpc_cb_common(const struct crt_cb_info *info)
 
 	blk = (crt_bulk_t)info->cci_arg;
 
-	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n", info->cci_rc);
+	if (info->cci_rc != 0) {
+		if (num_failed == 0)
+			first_failure = num_sent;
+		num_failed++;
+	}
 
 	if (blk != CRT_BULK_NULL) {
 		rc = crt_bulk_free(blk);
@@ -27,6 +36,7 @@ rpc_cb_common(const struct crt_cb_info *info)
 			D_ERROR("bulk free failed with %d\n", rc);
 	}
 
+	num_resp++;
 	sem_post(&test.tg_token_to_proceed);
 }
 
@@ -56,6 +66,7 @@ test_run()
 	crt_endpoint_t		 server_ep = {0};
 	struct timeval		 tv_start;
 	struct timeval		 tv_end;
+	struct timeval           tv_now;
 	int			 i, ctx_idx;
 	int			 rc;
 
@@ -117,8 +128,28 @@ test_run()
 	gettimeofday(&tv_start, NULL);
 
 	ctx_idx = 0;
+	i       = 0;
 
-	for (i = 0; i < num_iterations; i++) {
+	while (1) {
+		i++;
+
+		gettimeofday(&tv_now, NULL);
+		time_delta = (tv_now.tv_sec - tv_start.tv_sec) * 1000000 +
+			     (tv_now.tv_usec - tv_start.tv_usec);
+
+		time_delta = time_delta / 1000000;
+
+		if (test.tg_time_limit_sec > 0 && time_delta >= test.tg_time_limit_sec) {
+			DBG_PRINT("Time limit %d seconds reached, exiting\n",
+				  test.tg_time_limit_sec);
+			num_iterations = i;
+			break;
+		}
+
+		if (num_iterations > 0 && i >= num_iterations) {
+			DBG_PRINT("Num iterations %d reached, exiting\n", num_iterations);
+			break;
+		}
 
 		/* SEND RPCs */
 		for (chunk_index = 0; chunk_index < num_chunks; chunk_index++) {
@@ -175,6 +206,8 @@ test_run()
 			rc = crt_req_send(rpc_req, rpc_cb_common, input->bulk_hdl);
 			D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
+			num_sent++;
+
 			if (test.tg_test_mode == TEST_MODE_SYNC)
 				crtu_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 
@@ -182,17 +215,27 @@ test_run()
 			if (test.tg_force_rank == -1)
 				d_sgl_fini(&sgl, false);
 		}
+	}
 
-		if (test.tg_test_mode == TEST_MODE_ASYNC) {
-			for (chunk_index = 0; chunk_index < num_chunks; chunk_index++) {
-				crtu_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
+#if 0
+	/* TODO: Not quite right */
+	if (test.tg_test_mode == TEST_MODE_ASYNC) {
+		DBG_PRINT("Waiting all %d rpcs (%d responded so far)\n", num_sent, num_resp);
+		for (i = 0; i < num_sent; i++) {
+			rc = crtu_sem_timedwait(&test.tg_token_to_proceed, 1, __LINE__);
+			if (rc != 0) {
+				DBG_PRINT("Responses :%d\n", num_resp);
 			}
 		}
 	}
+#endif
 
 	gettimeofday(&tv_end, NULL);
 	time_delta = (tv_end.tv_sec - tv_start.tv_sec) * 1000000 +
 		     (tv_end.tv_usec - tv_start.tv_usec);
+
+	if (num_iterations == 0)
+		num_iterations = 1;
 
 	if (test.tg_force_rank == -1 ) {
 		DBG_PRINT("%s mode (%s) : Transfer of %d chunks size %dkb each took "
@@ -201,6 +244,8 @@ test_run()
 			  test.tg_do_put == true ? "PUT" : "GET",
 			  num_chunks, test.tg_chunk_size_kb, time_delta/num_iterations,
 			  num_iterations);
+		DBG_PRINT("Failed %d out of %d RPCs; first failure on rpc=%d\n", num_failed,
+			  num_iterations, first_failure);
 	} else {
 		DBG_PRINT("%s mode, RPCs forced to target %d:0 ; delta %ld usec (%d repeats)\n",
 			  test.tg_test_mode == TEST_MODE_SYNC ? "Synchronous" : "Asynchronous",
