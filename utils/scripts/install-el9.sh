@@ -15,6 +15,10 @@ set -e
 dnf_install_args="${1:-}"
 
 : "${PYTHON_VERSION:=3.11}"
+case "${INSTALL_BUILD_TEST_DEPS:-false}" in
+    true|false) ;;
+    *) echo 'INSTALL_BUILD_TEST_DEPS must be true or false' >&2; exit 1 ;;
+esac
 
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
@@ -78,6 +82,16 @@ dnf --nodocs install ${dnf_install_args} \
     which \
     ncurses-devel \
     yasm
+
+if [[ "${INSTALL_BUILD_TEST_DEPS:-false}" = true ]]; then
+    # slurm build dependencies    
+    # shellcheck disable=SC2086
+    dnf --nodocs install ${dnf_install_args} \
+        dbus-devel \
+        libbpf-devel \
+        mariadb-devel \
+        munge-devel
+fi
 
 if [[ "${INSTALL_BUILD_CI_ONLY:-}" != "true" ]]; then
     # Optional packages for full-featured images; can be skipped in essential-only mode.

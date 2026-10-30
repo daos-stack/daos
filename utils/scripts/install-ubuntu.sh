@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # (C) Copyright 2025 Google LLC
+# Copyright 2026 Hewlett Packard Enterprise Development LP
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -18,6 +19,10 @@ arch=$(uname -i)
 apt_get_install_args="${1:-}"
 
 : "${PYTHON_VERSION:=3}"
+case "${INSTALL_BUILD_TEST_DEPS:-false}" in
+    true|false) ;;
+    *) echo 'INSTALL_BUILD_TEST_DEPS must be true or false' >&2; exit 1 ;;
+esac
 
 # shellcheck disable=SC2086
 apt-get install ${apt_get_install_args} \
@@ -73,6 +78,17 @@ apt-get install ${apt_get_install_args} \
     valgrind \
     libncurses-dev \
     yasm
+
+if [[ "${INSTALL_BUILD_TEST_DEPS:-false}" = true ]]; then
+    # slurm build dependencies
+    # shellcheck disable=SC2086
+    apt-get install ${apt_get_install_args} \
+        libbpf-dev \
+        libdbus-1-dev \
+        libmariadb-dev \
+        libmariadb-dev-compat \
+        libmunge-dev
+fi
 
 sudo gem install fpm
 

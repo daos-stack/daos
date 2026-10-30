@@ -20,8 +20,8 @@ Args:
                      builds: .
 
 Options:
-    --build-range=[deps|daos|all]
-                     What to build. Default: all
+    --build-range=[deps|test-deps|daos|all]
+             What to build. Default: all (excludes test dependencies).
     --rpm-suffix=[el9|suse.lp155|suse.lp156]
                      RPM distribution suffix. Auto-detected from
                      /etc/os-release when omitted.
@@ -77,10 +77,10 @@ done
 verify_mode="${verify_mode:--Werror}"
 
 case "${build_range}" in
-  deps | daos | all)
+  deps | test-deps | daos | all)
     ;;
   *)
-    echo "ERROR: --build-range must be deps, daos, or all (got: ${build_range})" >&2
+    echo "ERROR: --build-range must be deps, test-deps, daos, or all (got: ${build_range})" >&2
     exit 1
     ;;
 esac
@@ -120,7 +120,9 @@ prepare_package_build_stage() {
             ;;
     esac
     PACKAGE_OUTPUT_DIR="${pkg_output_dir}/${1}"
-    rm -f "${PACKAGE_OUTPUT_DIR}"/*.rpm
+    if [[ "${build_range}" != test-deps ]]; then
+      rm -f "${PACKAGE_OUTPUT_DIR}"/*.rpm
+    fi
     mkdir -p "${PACKAGE_OUTPUT_DIR}"
   else
     PACKAGE_OUTPUT_DIR="${pkg_output_dir}"
@@ -138,7 +140,7 @@ verify_rpm_stage() {
 }
 
 source utils/sl/setup_local.sh
-if [[ "${build_range}" =~ deps|all ]]; then
+if [[ "${build_range}" = deps || "${build_range}" = all ]]; then
   prepare_package_build_stage deps
   utils/rpms/argobots.sh
   utils/rpms/fused.sh
@@ -153,6 +155,12 @@ if [[ "${build_range}" =~ deps|all ]]; then
   else
     verify_rpm_stage deps
   fi
+fi
+
+if [[ "${build_range}" = test-deps ]]; then
+  prepare_package_build_stage deps
+  bash utils/rpms/slurm.sh
+  verify_rpm_stage deps
 fi
 
 if [[ "${build_range}" =~ daos|all ]]; then
