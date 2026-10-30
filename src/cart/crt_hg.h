@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -12,7 +12,6 @@
 #define __CRT_HG_H__
 
 #include <gurt/list.h>
-
 #include <mercury.h>
 #include <mercury_types.h>
 #include <mercury_macros.h>
