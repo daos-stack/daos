@@ -224,6 +224,10 @@
     - cmd: ["src/utils/dlck/tests/dlck_checker_common_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_checker_main_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_checker_worker_ut"]
+- name: dlck_fault_injection
+  sudo: True
+  tests:
+    - cmd: ["src/utils/dlck/tests/run_fault_injection.py"]
 - name: Source metadata testing
   memcheck: False
   asan: False
