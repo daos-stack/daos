@@ -534,6 +534,15 @@ type SystemCheckPoolInfo struct {
 	Targets     []*SystemCheckTargetInfo `json:"targets"`
 }
 
+// rankCount excludes the entry whose rank cannot be identified.
+func (p *SystemCheckPoolInfo) rankCount() int {
+	count := len(p.RawRankInfo)
+	if _, found := p.RawRankInfo[ranklist.NilRank]; found {
+		count--
+	}
+	return count
+}
+
 func (p *SystemCheckPoolInfo) MarshalJSON() ([]byte, error) {
 	type toJSON SystemCheckPoolInfo
 	return json.Marshal(&struct {
@@ -544,7 +553,7 @@ func (p *SystemCheckPoolInfo) MarshalJSON() ([]byte, error) {
 		Remaining float64 `json:"remaining,omitempty"`
 	}{
 		toJSON:    (*toJSON)(p),
-		RankCount: len(p.RawRankInfo),
+		RankCount: p.rankCount(),
 		StartTime: startTimeString(p.StartTime),
 		StopTime:  stopTimeString(p.StopTime),
 		Remaining: p.Remaining.Seconds(),
@@ -563,7 +572,7 @@ func (p *SystemCheckPoolInfo) String() string {
 		timeStr = fmt.Sprintf(", started: %s%s", common.FormatTime(p.StartTime), remainingOrStopTime)
 	}
 	return fmt.Sprintf("Pool %s: %d ranks, status: %s, phase: %s%s",
-		p.UUID, len(p.RawRankInfo), p.Status, p.Phase, timeStr)
+		p.UUID, p.rankCount(), p.Status, p.Phase, timeStr)
 }
 
 func (p *SystemCheckPoolInfo) Unchecked() bool {
