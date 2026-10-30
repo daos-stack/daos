@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,8 +16,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/proto/chk"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 func TestPretty_PrintCheckQueryResp(t *testing.T) {
@@ -81,23 +83,133 @@ No reports to display.
 						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
 						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
 						StartTime: checkTime,
+						Ranks: []*control.SystemCheckRankInfo{
+							{
+								Rank:   0,
+								Status: chkpb.CheckPoolStatus_CPS_FAILED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Target: 1,
+										Status: chk.CheckInstStatus_CIS_FAILED.String(),
+									},
+									{
+										Target: 2,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+								},
+							},
+							{
+								Rank:   1,
+								Status: chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Target: 3,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+								},
+							},
+						},
 					},
 					"pool-2": {
 						UUID:      "pool-2",
 						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
 						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
 						StartTime: checkTime,
+						Ranks: []*control.SystemCheckRankInfo{
+							{
+								Rank:   0,
+								Status: chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Target: 4,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+									{
+										Target: 5,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+									{
+										Target: 6,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+								},
+							},
+						},
 					},
 					"pool-3": {
 						UUID:      "pool-3",
 						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
 						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
 						StartTime: checkTime,
+						Ranks: []*control.SystemCheckRankInfo{
+							{
+								Rank:   3,
+								Status: chkpb.CheckPoolStatus_CPS_IMPLICATED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_POOL_LIST.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Rank:   3,
+										Target: 7,
+										Status: chk.CheckInstStatus_CIS_IMPLICATED.String(),
+									},
+								},
+							},
+							{
+								Rank:   2,
+								Status: chkpb.CheckPoolStatus_CPS_STOPPED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_POOL_CLEANUP.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Rank:   2,
+										Target: 8,
+										Status: chk.CheckInstStatus_CIS_STOPPED.String(),
+									},
+								},
+							},
+							{
+								Rank:   1,
+								Status: chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+								Phase:  chkpb.CheckScanPhase_CSP_DONE.String(),
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Rank:   1,
+										Target: 9,
+										Status: chk.CheckInstStatus_CIS_COMPLETED.String(),
+									},
+								},
+							},
+						},
 					},
 					"pool-5": {
 						UUID:   "pool-5",
 						Status: chkpb.CheckPoolStatus_CPS_UNCHECKED.String(),
 						Phase:  chkpb.CheckScanPhase_CSP_PREPARE.String(),
+						Ranks: []*control.SystemCheckRankInfo{
+							{
+								Rank: 1,
+								// No status/phase data
+								Targets: []*control.SystemCheckTargetInfo{
+									{
+										Rank:   1,
+										Target: 10,
+										Status: chk.CheckInstStatus_CIS_RUNNING.String(),
+									},
+									{
+										Rank:   1,
+										Target: 11,
+										Status: chk.CheckInstStatus_CIS_PAUSED.String(),
+									},
+									{
+										Rank:   1,
+										Target: 12,
+										Status: chk.CheckInstStatus_CIS_RUNNING.String(),
+									},
+								},
+							},
+						},
 					},
 				},
 				Reports: []*control.SystemCheckReport{
@@ -108,6 +220,8 @@ No reports to display.
 							Action:   chkpb.CheckInconsistAction_CIA_IGNORE,
 							Msg:      "message 1",
 							PoolUuid: "pool-1",
+							Rank:     2,
+							Target:   0,
 						},
 					},
 					{
@@ -117,6 +231,7 @@ No reports to display.
 							Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
 							Msg:      "message 2",
 							PoolUuid: "pool-2",
+							Rank:     uint32(ranklist.NilRank),
 						},
 					},
 					{
@@ -126,6 +241,8 @@ No reports to display.
 							Action:   chkpb.CheckInconsistAction_CIA_TRUST_PS,
 							Msg:      "message 3",
 							PoolUuid: "pool-3",
+							Rank:     2,
+							Target:   4,
 						},
 					},
 					{
@@ -148,15 +265,40 @@ DAOS System Checker Info
   Checked 4 pools
 
 Per-Pool Checker Info:
-  Pool pool-1: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
-  Pool pool-2: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
-  Pool pool-3: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
-  Pool pool-5: 0 ranks, status: CPS_UNCHECKED, phase: CSP_PREPARE
+  Pool pool-1: 2 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+    Rank 0, status: CPS_FAILED, phase: CSP_DONE
+    - Target status:
+      CIS_COMPLETED: [2]
+      CIS_FAILED: [1]
+    Rank 1, status: CPS_CHECKED, phase: CSP_DONE
+    - Target status:
+      CIS_COMPLETED: [3]
+  Pool pool-2: 1 rank, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+    Rank 0, status: CPS_CHECKED, phase: CSP_DONE
+    - Target status:
+      CIS_COMPLETED: [4-6]
+  Pool pool-3: 3 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+    Rank 1, status: CPS_CHECKED, phase: CSP_DONE
+    - Target status:
+      CIS_COMPLETED: [9]
+    Rank 2, status: CPS_STOPPED, phase: CSP_POOL_CLEANUP
+    - Target status:
+      CIS_STOPPED: [8]
+    Rank 3, status: CPS_IMPLICATED, phase: CSP_POOL_LIST
+    - Target status:
+      CIS_IMPLICATED: [7]
+  Pool pool-5: 1 rank, status: CPS_UNCHECKED, phase: CSP_PREPARE
+    Rank 1, status: UNKNOWN, phase: UNKNOWN
+    - Target status:
+      CIS_PAUSED: [11]
+      CIS_RUNNING: [10,12]
 
 Inconsistency Reports:
   ID:         0x1
   Class:      POOL_BAD_SVCL
   Message:    message 1
+  Rank:       2
+  Target:     0
   Pool:       pool-1
   Resolution: IGNORE
 
@@ -169,12 +311,16 @@ Inconsistency Reports:
   ID:         0x3
   Class:      POOL_LESS_SVC_WITHOUT_QUORUM
   Message:    message 3
+  Rank:       2
+  Target:     4
   Pool:       pool-3
   Resolution: TRUST_PS
 
   ID:         0x4
   Class:      POOL_NONEXIST_ON_ENGINE
   Message:    message 4
+  Rank:       0
+  Target:     0
   Pool:       pool-4
   Resolution: DISCARD (dry run - not applied)
 
@@ -595,6 +741,8 @@ Inconsistency Reports:
   ID:         0x1
   Class:      POOL_BAD_LABEL
   Message:    message 1
+  Rank:       0
+  Target:     0
   Pool:       pool-1
   Potential resolution actions:
     0: trust MS details

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
@@ -73,6 +74,68 @@ func countResultPools(resp *control.SystemCheckQueryResp) (int, int) {
 	return len(checkedMap), len(uncheckedMap)
 }
 
+func printSystemCheckTargetInfo(out io.Writer, pool *control.SystemCheckPoolInfo) {
+	byRank := make(map[ranklist.Rank]map[string][]*control.SystemCheckTargetInfo)
+	allStatus := make(map[string]struct{})
+
+	for _, r := range pool.Ranks {
+		if _, ok := byRank[r.Rank]; !ok {
+			byRank[r.Rank] = make(map[string][]*control.SystemCheckTargetInfo)
+		}
+
+		for _, t := range r.Targets {
+			byRank[r.Rank][t.Status] = append(byRank[r.Rank][t.Status], t)
+			allStatus[t.Status] = struct{}{}
+		}
+	}
+
+	sort.Slice(pool.Ranks, func(i, j int) bool {
+		return pool.Ranks[i].Rank < pool.Ranks[j].Rank
+	})
+
+	sortedStatus := make([]string, 0, len(allStatus))
+	for s := range allStatus {
+		sortedStatus = append(sortedStatus, s)
+	}
+	sort.Slice(sortedStatus, func(i, j int) bool {
+		return sortedStatus[i] < sortedStatus[j]
+	})
+
+	condensedTargetString := func(targets []*control.SystemCheckTargetInfo) string {
+		targetSet := ranklist.NewRankSet()
+		for _, target := range targets {
+			targetSet.Add(ranklist.Rank(target.Target))
+		}
+		if len(targets) == 1 {
+			return "[" + targetSet.String() + "]"
+		}
+		return targetSet.RangedString()
+	}
+
+	iw := txtfmt.NewIndentWriter(out)
+	for _, r := range pool.Ranks {
+		unknownIfEmpty := func(in string) string {
+			if in == "" {
+				return "UNKNOWN"
+			}
+			return in
+		}
+		fmt.Fprintf(iw, "Rank %d, status: %s, phase: %s\n", r.Rank, unknownIfEmpty(r.Status), unknownIfEmpty(r.Phase))
+
+		fmt.Fprintf(iw, "- Target status:\n")
+		iw2 := txtfmt.NewIndentWriter(iw)
+		statusMap := byRank[r.Rank]
+		for _, s := range sortedStatus {
+			targets, ok := statusMap[s]
+			if !ok {
+				continue
+			}
+
+			fmt.Fprintf(iw2, "%s: %s\n", s, condensedTargetString(targets))
+		}
+	}
+}
+
 func printSystemCheckPoolInfo(out io.Writer, pools []*control.SystemCheckPoolInfo, verbose bool) {
 	if verbose {
 		fmt.Fprintln(out, "\nPer-Pool Checker Info:")
@@ -80,8 +143,13 @@ func printSystemCheckPoolInfo(out io.Writer, pools []*control.SystemCheckPoolInf
 		fmt.Fprintln(out, "\nUnchecked Pools:")
 	}
 	for _, pool := range pools {
+		iw := txtfmt.NewIndentWriter(out)
 		if verbose || pool.Unchecked() {
-			fmt.Fprintf(out, "  %+v\n", pool)
+			fmt.Fprintf(iw, "%+v\n", pool)
+
+			if verbose {
+				printSystemCheckTargetInfo(iw, pool)
+			}
 		}
 	}
 }
@@ -241,6 +309,10 @@ func printInconsistencyReportsVerbose(out io.Writer, resp *control.SystemCheckQu
 		fmt.Fprintf(iw, "ID:         0x%x\n", report.Seq)
 		fmt.Fprintf(iw, "Class:      %s\n", cls)
 		fmt.Fprintf(iw, "Message:    %s\n", report.Msg)
+		if ranklist.Rank(report.Rank) != ranklist.NilRank {
+			fmt.Fprintf(iw, "Rank:       %d\n", report.Rank)
+			fmt.Fprintf(iw, "Target:     %d\n", report.Target)
+		}
 		fmt.Fprintf(iw, "Pool:       %s\n", checkerPoolID(report, true))
 		if report.ContUuid != "" {
 			fmt.Fprintf(iw, "Container:  %s\n", checkerContID(report, true))
