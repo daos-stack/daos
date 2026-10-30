@@ -2030,6 +2030,9 @@ aggregate_38(void **state)
 	recx.rx_nr  = 100;
 	update_value(arg, oid, 20, 0, dkey, akey, DAOS_IOD_ARRAY, 1, &recx, buf);
 
+	/* free the buffer as quickly as possible to avoid a memory leak if the test fails */
+	D_FREE(buf);
+
 	/* Batch 1 at epoch 10: pack [0,100)@2, stop with anchor on [100,1000)@1 */
 	ea.ea_stop_at = 1;
 	agg_enum_visible(arg, oid, dkey, akey, enum_eph, &anchors, &ea);
@@ -2076,7 +2079,6 @@ aggregate_38(void **state)
 				 i, enum_eph);
 	}
 
-	D_FREE(buf);
 	cleanup();
 }
 
