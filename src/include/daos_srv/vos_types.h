@@ -307,7 +307,12 @@ enum {
 	VOS_OF_EC = (1 << 19),
 	/** Update from rebuild */
 	VOS_OF_REBUILD = (1 << 20),
-	/** Only query for checksums: no data fetched, checksums kept whole (see save_csum()) */
+	/**
+	 * Only query for checksums: no data is fetched and the checksums are kept whole (see
+	 * save_csum()). The recx list holds the whole physical extents, the checksum info list
+	 * (empty when the akey has no checksum) their checksums, and vos_ioh_recx_copy() copies
+	 * their data.
+	 */
 	VOS_OF_FETCH_CSUM = (1 << 21),
 };
 

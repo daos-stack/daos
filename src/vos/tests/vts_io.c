@@ -3266,10 +3266,17 @@ io_csum_sv_epoch(void **state)
 	D_FREE(buf);
 }
 
+/**
+ * Helper: write the \a recx_nr records of \a rec_size bytes starting at the index \a recx_idx at
+ * \a epoch with the update flags \a flags and the checksum computed by \a csummer, returned in
+ * \a p_ic. The written bytes are returned in \a p_buf, to be freed by the caller, unless it is
+ * NULL.
+ */
 static void
-io_csum_update_recx(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *dkey,
-		    const daos_key_t *akey, uint64_t recx_idx, size_t recx_size,
-		    struct daos_csummer *csummer, struct dcs_iod_csums **p_ic)
+io_csum_update_recx_data(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
+			 daos_key_t *dkey, const daos_key_t *akey, uint64_t recx_idx,
+			 size_t recx_nr, size_t rec_size, struct daos_csummer *csummer,
+			 struct dcs_iod_csums **p_ic, char **p_buf)
 {
 	char       *buf;
 	daos_iod_t  iod;
@@ -3277,36 +3284,49 @@ io_csum_update_recx(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *dk
 	d_sg_list_t sgl;
 	int         rc;
 
-	D_ALLOC(buf, recx_size);
+	D_ALLOC(buf, recx_nr * rec_size);
 	assert_non_null(buf);
 
 	recx.rx_idx = recx_idx;
-	recx.rx_nr  = recx_size;
+	recx.rx_nr  = recx_nr;
 
 	iod.iod_type  = DAOS_IOD_ARRAY;
 	iod.iod_name  = *akey;
 	iod.iod_recxs = &recx;
-	iod.iod_size  = 1;
+	iod.iod_size  = rec_size;
 	iod.iod_nr    = 1;
 
 	/* Fill the buffer with random letters */
-	dts_buf_render(&buf[0], recx_size);
+	dts_buf_render(&buf[0], recx_nr * rec_size);
 	rc = d_sgl_init(&sgl, 1);
 	assert_rc_equal(rc, 0);
-	d_iov_set(sgl.sg_iovs, &buf[0], recx_size);
+	d_iov_set(sgl.sg_iovs, &buf[0], recx_nr * rec_size);
 
 	/* Compute update buffer checksum */
 	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false, NULL, 0, p_ic);
 	assert_rc_equal(rc, 0);
 
 	/* Write/Update and update mocking counters */
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, 0, dkey, 1, &iod, *p_ic, &sgl);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, flags, dkey, 1, &iod, *p_ic,
+			    &sgl);
 	assert_rc_equal(rc, 0);
 	inc_cntr(arg->ta_flags);
 
 	/* Cleanup */
 	d_sgl_fini(&sgl, false);
-	D_FREE(buf);
+	if (p_buf != NULL)
+		*p_buf = buf;
+	else
+		D_FREE(buf);
+}
+
+static void
+io_csum_update_recx(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *dkey,
+		    const daos_key_t *akey, uint64_t recx_idx, size_t recx_size,
+		    struct daos_csummer *csummer, struct dcs_iod_csums **p_ic)
+{
+	io_csum_update_recx_data(arg, epoch, 0, dkey, akey, recx_idx, recx_size, 1, csummer, p_ic,
+				 NULL);
 }
 
 /*
@@ -3701,6 +3721,732 @@ io_csum_fetch_recx_partial(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
+/** Number of akeys of the VOS402.x tests */
+#define CSUM_COPY_AKEY_MAX 4
+
+/** Keys and record size of the VOS402.x tests */
+struct csum_copy_keys {
+	daos_key_t dkey;
+	daos_key_t akey[CSUM_COPY_AKEY_MAX];
+	char       dkey_name[UPDATE_DKEY_SIZE];
+	char       akey_name[CSUM_COPY_AKEY_MAX][UPDATE_AKEY_SIZE];
+	/** size of the records in bytes, 1 unless the test changes it */
+	size_t     rec_size;
+};
+
+/** Expected entry of the recx list of a VOS_OF_FETCH_CSUM fetch, with the bytes of its extent */
+struct csum_copy_expect {
+	daos_off_t   cce_idx;
+	daos_size_t  cce_nr;
+	daos_epoch_t cce_ep;
+	/** bytes written for the whole physical extent, cce_nr records */
+	const char  *cce_data;
+};
+
+static void
+io_csum_copy_keys_init(struct io_test_args *arg, struct csum_copy_keys *keys)
+{
+	int i;
+
+	assert_true(arg->dkey_size <= UPDATE_DKEY_SIZE);
+	assert_true(arg->akey_size <= UPDATE_AKEY_SIZE);
+
+	keys->rec_size = 1;
+	vts_key_gen(&keys->dkey_name[0], arg->dkey_size, true, arg);
+	set_iov(&keys->dkey, &keys->dkey_name[0],
+		is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	for (i = 0; i < CSUM_COPY_AKEY_MAX; i++) {
+		vts_key_gen(&keys->akey_name[i][0], arg->akey_size, false, arg);
+		set_iov(&keys->akey[i], &keys->akey_name[i][0],
+			is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+	}
+}
+
+/**
+ * Helper: write the records [recx_idx, recx_idx + recx_nr) of the akey \a akey_idx with a
+ * checksum, see io_csum_update_recx_data(). Returns the bytes written, to be freed by the caller.
+ */
+static char *
+io_csum_write(struct io_test_args *arg, struct daos_csummer *csummer, struct csum_copy_keys *keys,
+	      int akey_idx, daos_epoch_t epoch, uint64_t flags, uint64_t recx_idx, size_t recx_nr)
+{
+	struct dcs_iod_csums *ic  = NULL;
+	char                 *buf = NULL;
+
+	io_csum_update_recx_data(arg, epoch, flags, &keys->dkey, &keys->akey[akey_idx], recx_idx,
+				 recx_nr, keys->rec_size, csummer, &ic, &buf);
+	daos_csummer_free_ic(csummer, &ic);
+
+	return buf;
+}
+
+/**
+ * Helper: regular fetch of the records [recx_idx, recx_idx + recx_nr) of the akey \a akey_idx at
+ * \a epoch. Returns the bytes fetched, to be freed by the caller.
+ */
+static char *
+io_csum_regular_fetch(struct io_test_args *arg, struct csum_copy_keys *keys, int akey_idx,
+		      daos_epoch_t epoch, uint64_t recx_idx, size_t recx_nr)
+{
+	daos_recx_t recx;
+	daos_iod_t  iod;
+	d_sg_list_t sgl;
+	char       *buf;
+	int         rc;
+
+	D_ALLOC(buf, recx_nr * keys->rec_size);
+	assert_non_null(buf);
+
+	recx.rx_idx   = recx_idx;
+	recx.rx_nr    = recx_nr;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_name  = keys->akey[akey_idx];
+	iod.iod_recxs = &recx;
+	iod.iod_size  = keys->rec_size;
+	iod.iod_nr    = 1;
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_success(rc);
+	d_iov_set(sgl.sg_iovs, buf, recx_nr * keys->rec_size);
+
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, &keys->dkey, 1, &iod, &sgl);
+	assert_success(rc);
+
+	d_sgl_fini(&sgl, false);
+
+	return buf;
+}
+
+/**
+ * Helper: check that \a ci is the checksum of the bytes \a buf of the \a nr records of \a rec_size
+ * bytes of the extent starting at the index \a idx
+ */
+static void
+io_csum_recompute_check(struct daos_csummer *csummer, const daos_key_t *akey, uint64_t idx,
+			size_t nr, size_t rec_size, void *buf, struct dcs_csum_info *ci)
+{
+	struct dcs_iod_csums *ic = NULL;
+	daos_recx_t           recx;
+	daos_iod_t            iod;
+	d_sg_list_t           sgl;
+	int                   rc;
+
+	recx.rx_idx   = idx;
+	recx.rx_nr    = nr;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_name  = *akey;
+	iod.iod_recxs = &recx;
+	iod.iod_size  = rec_size;
+	iod.iod_nr    = 1;
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_success(rc);
+	d_iov_set(sgl.sg_iovs, buf, nr * rec_size);
+
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false, NULL, 0, &ic);
+	assert_success(rc);
+	assert_true(daos_csummer_compare_csum_info(csummer, ic->ic_data, ci));
+
+	daos_csummer_free_ic(csummer, &ic);
+	d_sgl_fini(&sgl, false);
+}
+
+/**
+ * Helper: fetch the records [recx_idx, recx_idx + recx_nr) of the akey \a akey_idx at
+ * DAOS_EPOCH_MAX with VOS_OF_FETCH_CSUM and check the entries listed. For each of them,
+ * vos_ioh_recx_copy() shall return the bytes written for its whole physical extent, and these
+ * bytes shall have the checksum stored for the entry. The entries are copied twice and in reverse
+ * order, to check that copying does not alter the handle.
+ */
+static void
+io_csum_copy_check(struct io_test_args *arg, struct daos_csummer *csummer,
+		   struct csum_copy_keys *keys, int akey_idx, uint64_t recx_idx, size_t recx_nr,
+		   const struct csum_copy_expect *cce, unsigned int cce_nr)
+{
+	struct daos_recx_ep_list *rel;
+	struct dcs_ci_list       *cil;
+	daos_recx_t               recx;
+	daos_iod_t                iod;
+	daos_handle_t             ioh;
+	d_iov_t                   iov;
+	char                     *buf;
+	size_t                    buf_len = 0;
+	unsigned int              pass;
+	unsigned int              i;
+	int                       rc;
+
+	recx.rx_idx   = recx_idx;
+	recx.rx_nr    = recx_nr;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_name  = keys->akey[akey_idx];
+	iod.iod_recxs = &recx;
+	iod.iod_size  = keys->rec_size;
+	iod.iod_nr    = 1;
+
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, &keys->dkey, 1, &iod,
+			     VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	assert_success(rc);
+
+	rel = vos_ioh2recx_list(ioh);
+	assert_non_null(rel);
+	assert_int_equal(rel->re_nr, cce_nr);
+	cil = vos_ioh2ci(ioh);
+	assert_non_null(cil);
+	assert_int_equal(cil->dcl_csum_infos_nr, cce_nr);
+
+	for (i = 0; i < cce_nr; i++) {
+		assert_int_equal(rel->re_items[i].re_recx.rx_idx, cce[i].cce_idx);
+		assert_int_equal(rel->re_items[i].re_recx.rx_nr, cce[i].cce_nr);
+		assert_int_equal(rel->re_items[i].re_ep, cce[i].cce_ep);
+		assert_int_equal(rel->re_items[i].re_rec_size, keys->rec_size);
+		buf_len = MAX(buf_len, cce[i].cce_nr * keys->rec_size);
+	}
+
+	/* the buffer is larger than any extent: only iov_len tells how much was copied */
+	buf_len += 16;
+	D_ALLOC(buf, buf_len);
+	assert_non_null(buf);
+
+	for (pass = 0; pass < 2; pass++) {
+		for (i = cce_nr; i-- > 0;) {
+			size_t len = cce[i].cce_nr * keys->rec_size;
+
+			memset(buf, 0xA5, buf_len);
+			d_iov_set(&iov, buf, buf_len);
+			rc = vos_ioh_recx_copy(ioh, i, &iov);
+			assert_success(rc);
+			assert_int_equal(iov.iov_len, len);
+			assert_memory_equal(buf, cce[i].cce_data, len);
+			io_csum_recompute_check(csummer, &keys->akey[akey_idx], cce[i].cce_idx,
+						cce[i].cce_nr, keys->rec_size, buf,
+						dcs_csum_info_get(cil, i));
+		}
+	}
+
+	D_FREE(buf);
+	daos_recx_ep_list_free(rel, iod.iod_nr);
+	rc = vos_fetch_end(ioh, NULL, 0);
+	assert_success(rc);
+}
+
+/*
+ * Verify that vos_ioh_recx_copy() returns the bytes of the whole physical extent of every entry
+ * listed by VOS_OF_FETCH_CSUM, when extents written at distinct major epochs hide a part of it.
+ * The chunk size is 64 bytes.
+ *	1. leading overwrite: W2 hides the first chunk of W1.
+ *	2. fetch range clip: the fetched range starts in the second chunk of W1.
+ *	3. middle overwrite: W2 splits W1 into two visible pieces of the same physical extent.
+ *	4. no overlap: W1 and W2 are side by side.
+ */
+static void
+io_csum_copy_distinct_epochs(void **state)
+{
+	const enum DAOS_HASH_TYPE csum_type  = HASH_TYPE_CRC32;
+	const size_t              chunk_size = 1u << 6;
+
+	struct io_test_args      *arg = *state;
+	struct csum_copy_keys     keys;
+	struct daos_csummer      *csummer;
+	char                     *w1;
+	char                     *w2;
+	int                       rc;
+
+	io_csum_copy_keys_init(arg, &keys);
+	rc = daos_csummer_init_with_type(&csummer, csum_type, chunk_size, 0);
+	assert_success(rc);
+
+	/* 1. W1 [0, 128) @1, W2 [0, 64) @2, fetch [0, 128) -> {W2, W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 0, 1, 0, 0, 2 * chunk_size);
+	w2 = io_csum_write(arg, csummer, &keys, 0, 2, 0, 0, chunk_size);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, chunk_size, 2, w2},
+		    {0, 2 * chunk_size, 1, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 0, 0, 2 * chunk_size, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	/* 2. W1 [0, 128) @1, fetch [64, 128) -> {W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 1, 1, 0, 0, 2 * chunk_size);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, 2 * chunk_size, 1, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 1, chunk_size, chunk_size, cce,
+				   ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+
+	/* 3. W1 [0, 192) @1, W2 [64, 128) @2, fetch [0, 192) -> {W1, W2, W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 2, 1, 0, 0, 3 * chunk_size);
+	w2 = io_csum_write(arg, csummer, &keys, 2, 2, 0, chunk_size, chunk_size);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, 3 * chunk_size, 1, w1},
+		    {chunk_size, chunk_size, 2, w2},
+		    {0, 3 * chunk_size, 1, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 2, 0, 3 * chunk_size, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	/* 4. W1 [0, 64) @1, W2 [64, 128) @2, fetch [0, 128) -> {W1, W2} */
+	w1 = io_csum_write(arg, csummer, &keys, 3, 1, 0, 0, chunk_size);
+	w2 = io_csum_write(arg, csummer, &keys, 3, 2, 0, chunk_size, chunk_size);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, chunk_size, 1, w1},
+		    {chunk_size, chunk_size, 2, w2},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 3, 0, 2 * chunk_size, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	daos_csummer_destroy(&csummer);
+}
+
+/*
+ * Same as VOS402.1, but the extents are written at the same major epoch, as the updates of a
+ * distributed transaction are. They only differ by their minor epoch: without a DTX handle, an
+ * update has the minor epoch VOS_SUB_OP_MAX, and a VOS_OF_REBUILD update the greater
+ * EVT_REBUILD_MINOR_MIN, so the second write of each case is the later one.
+ *	1. leading overwrite: W2 hides the first chunk of W1.
+ *	2. middle overwrite: W2 splits W1 into two visible pieces of the same physical extent.
+ *	3. hidden extent: W2 is entirely hidden by W1, so only W1 is listed.
+ *	4. overwrite inside a chunk: W2 only hides a part of the first chunk of W1.
+ *
+ * Re-reading the data of an entry by (epoch, range) would return the bytes of the later extents
+ * for the hidden part: they can't have the checksum stored for the entry.
+ */
+static void
+io_csum_copy_same_epoch(void **state)
+{
+	const enum DAOS_HASH_TYPE csum_type  = HASH_TYPE_CRC32;
+	const size_t              chunk_size = 1u << 6;
+	const daos_epoch_t        epoch      = 10;
+
+	struct io_test_args      *arg = *state;
+	struct csum_copy_keys     keys;
+	struct daos_csummer      *csummer;
+	char                     *w1;
+	char                     *w2;
+	char                     *fetched;
+	int                       rc;
+
+	io_csum_copy_keys_init(arg, &keys);
+	rc = daos_csummer_init_with_type(&csummer, csum_type, chunk_size, 0);
+	assert_success(rc);
+
+	/* 1. W1 [0, 128), W2 [0, 64), fetch [0, 128) -> {W2, W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 0, epoch, 0, 0, 2 * chunk_size);
+	w2 = io_csum_write(arg, csummer, &keys, 0, epoch, VOS_OF_REBUILD, 0, chunk_size);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, chunk_size, epoch, w2},
+		    {0, 2 * chunk_size, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 0, 0, 2 * chunk_size, cce, ARRAY_SIZE(cce));
+	}
+	/* a regular fetch at this epoch returns W2 in place of the first chunk of W1 */
+	fetched = io_csum_regular_fetch(arg, &keys, 0, epoch, 0, 2 * chunk_size);
+	assert_memory_equal(fetched, w2, chunk_size);
+	assert_memory_equal(fetched + chunk_size, w1 + chunk_size, chunk_size);
+	assert_memory_not_equal(fetched, w1, 2 * chunk_size);
+	D_FREE(fetched);
+	D_FREE(w1);
+	D_FREE(w2);
+
+	/* 2. W1 [0, 192), W2 [64, 128), fetch [0, 192) -> {W1, W2, W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 1, epoch, 0, 0, 3 * chunk_size);
+	w2 = io_csum_write(arg, csummer, &keys, 1, epoch, VOS_OF_REBUILD, chunk_size, chunk_size);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, 3 * chunk_size, epoch, w1},
+		    {chunk_size, chunk_size, epoch, w2},
+		    {0, 3 * chunk_size, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 1, 0, 3 * chunk_size, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	/* 3. W2 [0, 64), W1 [0, 128), fetch [0, 128) -> {W1} */
+	w2 = io_csum_write(arg, csummer, &keys, 2, epoch, 0, 0, chunk_size);
+	w1 = io_csum_write(arg, csummer, &keys, 2, epoch, VOS_OF_REBUILD, 0, 2 * chunk_size);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, 2 * chunk_size, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 2, 0, 2 * chunk_size, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	/* 4. W1 [0, 128), W2 [16, 32), fetch [0, 128) -> {W1, W2, W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 3, epoch, 0, 0, 2 * chunk_size);
+	w2 = io_csum_write(arg, csummer, &keys, 3, epoch, VOS_OF_REBUILD, chunk_size / 4,
+			   chunk_size / 4);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, 2 * chunk_size, epoch, w1},
+		    {chunk_size / 4, chunk_size / 4, epoch, w2},
+		    {0, 2 * chunk_size, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 3, 0, 2 * chunk_size, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	daos_csummer_destroy(&csummer);
+}
+
+/*
+ * Same as VOS402.2 with a chunk size of 4096 bytes, so that the extents are written to NVMe when
+ * the pool has a data blob (VOS_BDEV_CLASS=AIO): the extents are copied from the media with the
+ * whole chunks read back.
+ *	1. leading overwrite: W2 hides the first chunk of W1.
+ *	2. middle overwrite: W2 splits W1 into two visible pieces of the same physical extent.
+ *	3. W2 hides the first 1000 bytes of W1: its visible piece starts in the middle of a block.
+ *	4. the fetch range starts in the middle of the first block of W1.
+ */
+static void
+io_csum_copy_large(void **state)
+{
+	const enum DAOS_HASH_TYPE csum_type  = HASH_TYPE_CRC32;
+	const size_t              chunk_size = 1u << 12;
+	const daos_epoch_t        epoch      = 10;
+
+	struct io_test_args      *arg = *state;
+	struct csum_copy_keys     keys;
+	struct daos_csummer      *csummer;
+	char                     *w1;
+	char                     *w2;
+	int                       rc;
+
+	io_csum_copy_keys_init(arg, &keys);
+	rc = daos_csummer_init_with_type(&csummer, csum_type, chunk_size, 0);
+	assert_success(rc);
+
+	/* 1. W1 [0, 8192), W2 [0, 4096), fetch [0, 8192) -> {W2, W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 0, epoch, 0, 0, 2 * chunk_size);
+	w2 = io_csum_write(arg, csummer, &keys, 0, epoch, VOS_OF_REBUILD, 0, chunk_size);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, chunk_size, epoch, w2},
+		    {0, 2 * chunk_size, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 0, 0, 2 * chunk_size, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	/* 2. W1 [0, 12288), W2 [4096, 8192), fetch [0, 12288) -> {W1, W2, W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 1, epoch, 0, 0, 3 * chunk_size);
+	w2 = io_csum_write(arg, csummer, &keys, 1, epoch, VOS_OF_REBUILD, chunk_size, chunk_size);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, 3 * chunk_size, epoch, w1},
+		    {chunk_size, chunk_size, epoch, w2},
+		    {0, 3 * chunk_size, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 1, 0, 3 * chunk_size, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	/*
+	 * 3. W1 [0, 12288), W2 [0, 1000), fetch [0, 12288) -> {W2, W1}: the visible piece of W1,
+	 *    on NVMe, starts in the middle of a block and of a chunk
+	 */
+	w1 = io_csum_write(arg, csummer, &keys, 2, epoch, 0, 0, 3 * chunk_size);
+	w2 = io_csum_write(arg, csummer, &keys, 2, epoch, VOS_OF_REBUILD, 0, 1000);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, 1000, epoch, w2},
+		    {0, 3 * chunk_size, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 2, 0, 3 * chunk_size, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	/* 4. W1 [0, 8192), fetch [1500, 6000) -> {W1}: the fetch range starts in the middle of a
+	 * block */
+	w1 = io_csum_write(arg, csummer, &keys, 3, epoch, 0, 0, 2 * chunk_size);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, 2 * chunk_size, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 3, 1500, 4500, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+
+	daos_csummer_destroy(&csummer);
+}
+
+/*
+ * Same as VOS402.2 with records of 4 bytes, so that the byte offsets and lengths of the extents
+ * are four times their record indexes and numbers. The chunk size is 64 bytes, i.e. 16 records.
+ *	1. leading overwrite: W2 hides the first chunk of W1.
+ *	2. middle overwrite: W2 splits W1 into two visible pieces of the same physical extent.
+ *	3. W1 starts in the middle of a chunk, and so does its second visible piece.
+ *	4. the fetch range starts inside W1.
+ */
+static void
+io_csum_copy_rec_size(void **state)
+{
+	const enum DAOS_HASH_TYPE csum_type = HASH_TYPE_CRC32;
+	const size_t              rec_size  = 4;
+	const size_t              chunk_nr  = 16;
+	const daos_epoch_t        epoch     = 10;
+
+	struct io_test_args      *arg = *state;
+	struct csum_copy_keys     keys;
+	struct daos_csummer      *csummer;
+	char                     *w1;
+	char                     *w2;
+	int                       rc;
+
+	io_csum_copy_keys_init(arg, &keys);
+	keys.rec_size = rec_size;
+	rc            = daos_csummer_init_with_type(&csummer, csum_type, chunk_nr * rec_size, 0);
+	assert_success(rc);
+
+	/* 1. W1 [0, 32), W2 [0, 16), fetch [0, 32) -> {W2, W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 0, epoch, 0, 0, 2 * chunk_nr);
+	w2 = io_csum_write(arg, csummer, &keys, 0, epoch, VOS_OF_REBUILD, 0, chunk_nr);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, chunk_nr, epoch, w2},
+		    {0, 2 * chunk_nr, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 0, 0, 2 * chunk_nr, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	/* 2. W1 [0, 48), W2 [16, 32), fetch [0, 48) -> {W1, W2, W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 1, epoch, 0, 0, 3 * chunk_nr);
+	w2 = io_csum_write(arg, csummer, &keys, 1, epoch, VOS_OF_REBUILD, chunk_nr, chunk_nr);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, 3 * chunk_nr, epoch, w1},
+		    {chunk_nr, chunk_nr, epoch, w2},
+		    {0, 3 * chunk_nr, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 1, 0, 3 * chunk_nr, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	/* 3. W1 [5, 45), W2 [10, 20), fetch [5, 45) -> {W1, W2, W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 2, epoch, 0, 5, 40);
+	w2 = io_csum_write(arg, csummer, &keys, 2, epoch, VOS_OF_REBUILD, 10, 10);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {5, 40, epoch, w1},
+		    {10, 10, epoch, w2},
+		    {5, 40, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 2, 5, 40, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+	D_FREE(w2);
+
+	/* 4. W1 [0, 48), fetch [20, 40) -> {W1} */
+	w1 = io_csum_write(arg, csummer, &keys, 3, epoch, 0, 0, 3 * chunk_nr);
+	{
+		const struct csum_copy_expect cce[] = {
+		    {0, 3 * chunk_nr, epoch, w1},
+		};
+
+		io_csum_copy_check(arg, csummer, &keys, 3, 20, 20, cce, ARRAY_SIZE(cce));
+	}
+	D_FREE(w1);
+
+	daos_csummer_destroy(&csummer);
+}
+
+/*
+ * Verify that vos_ioh_recx_copy() copes with more entries than the array of extents of the fetch
+ * handle holds initially: 20 extents written side by side at distinct epochs are all copied back.
+ */
+static void
+io_csum_copy_many(void **state)
+{
+	enum { EXTENTS_NB = 20 };
+	const enum DAOS_HASH_TYPE csum_type  = HASH_TYPE_CRC32;
+	const size_t              chunk_size = 1u << 6;
+
+	struct io_test_args      *arg = *state;
+	struct csum_copy_keys     keys;
+	struct daos_csummer      *csummer;
+	struct csum_copy_expect   cce[EXTENTS_NB];
+	char                     *w[EXTENTS_NB];
+	int                       i;
+	int                       rc;
+
+	io_csum_copy_keys_init(arg, &keys);
+	rc = daos_csummer_init_with_type(&csummer, csum_type, chunk_size, 0);
+	assert_success(rc);
+
+	for (i = 0; i < EXTENTS_NB; i++) {
+		w[i] = io_csum_write(arg, csummer, &keys, 0, i + 1, 0, i * chunk_size, chunk_size);
+		cce[i] = (struct csum_copy_expect){i * chunk_size, chunk_size, i + 1, w[i]};
+	}
+
+	io_csum_copy_check(arg, csummer, &keys, 0, 0, EXTENTS_NB * chunk_size, cce, EXTENTS_NB);
+
+	for (i = 0; i < EXTENTS_NB; i++)
+		D_FREE(w[i]);
+	daos_csummer_destroy(&csummer);
+}
+
+/*
+ * Verify the errors of vos_ioh_recx_copy():
+ *	1. an index out of the entries listed, a NULL destination and a buffer that is too small;
+ *	   a failed copy does not change the destination.
+ *	2. a fetch handle that was not opened with VOS_OF_FETCH_CSUM.
+ *	3. a single value, that lists no extent.
+ */
+static void
+io_csum_copy_errors(void **state)
+{
+	const enum DAOS_HASH_TYPE csum_type  = HASH_TYPE_CRC32;
+	const size_t              chunk_size = 1u << 6;
+
+	struct io_test_args      *arg = *state;
+	struct csum_copy_keys     keys;
+	struct daos_csummer      *csummer;
+	struct daos_recx_ep_list *rel;
+	struct dcs_iod_csums     *ic = NULL;
+	daos_recx_t               recx;
+	daos_iod_t                iod;
+	d_sg_list_t               sgl;
+	daos_handle_t             ioh;
+	d_iov_t                   iov;
+	char                     *w1;
+	char                     *buf;
+	const size_t              w1_size = 2 * chunk_size;
+	int                       rc;
+
+	io_csum_copy_keys_init(arg, &keys);
+	rc = daos_csummer_init_with_type(&csummer, csum_type, chunk_size, 0);
+	assert_success(rc);
+
+	D_ALLOC(buf, w1_size);
+	assert_non_null(buf);
+
+	w1 = io_csum_write(arg, csummer, &keys, 0, 1, 0, 0, w1_size);
+
+	recx.rx_idx   = 0;
+	recx.rx_nr    = w1_size;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_name  = keys.akey[0];
+	iod.iod_recxs = &recx;
+	iod.iod_size  = 1;
+	iod.iod_nr    = 1;
+
+	/* 1. VOS_OF_FETCH_CSUM handle, one entry listed */
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, &keys.dkey, 1, &iod,
+			     VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	assert_success(rc);
+	rel = vos_ioh2recx_list(ioh);
+	assert_non_null(rel);
+	assert_int_equal(rel->re_nr, 1);
+
+	d_iov_set(&iov, buf, w1_size);
+	rc = vos_ioh_recx_copy(ioh, 1, &iov);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = vos_ioh_recx_copy(ioh, UINT_MAX, &iov);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = vos_ioh_recx_copy(ioh, 0, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	d_iov_set(&iov, NULL, w1_size);
+	rc = vos_ioh_recx_copy(ioh, 0, &iov);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	memset(buf, 0x5A, w1_size);
+	d_iov_set(&iov, buf, w1_size - 1);
+	rc = vos_ioh_recx_copy(ioh, 0, &iov);
+	assert_rc_equal(rc, -DER_OVERFLOW);
+	assert_int_equal(iov.iov_len, w1_size - 1);
+	assert_true(buf[0] == 0x5A && buf[w1_size - 1] == 0x5A);
+
+	/* the exact size is enough */
+	d_iov_set(&iov, buf, w1_size);
+	rc = vos_ioh_recx_copy(ioh, 0, &iov);
+	assert_success(rc);
+	assert_int_equal(iov.iov_len, w1_size);
+	assert_memory_equal(buf, w1, w1_size);
+
+	daos_recx_ep_list_free(rel, iod.iod_nr);
+	rc = vos_fetch_end(ioh, NULL, 0);
+	assert_success(rc);
+
+	/* 2. handle without VOS_OF_FETCH_CSUM */
+	iod.iod_size = DAOS_REC_ANY;
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, &keys.dkey, 1, &iod,
+			     VOS_OF_FETCH_SIZE_ONLY, NULL, &ioh, NULL);
+	assert_success(rc);
+	d_iov_set(&iov, buf, w1_size);
+	rc = vos_ioh_recx_copy(ioh, 0, &iov);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = vos_fetch_end(ioh, NULL, 0);
+	assert_success(rc);
+
+	/* 3. single value */
+	iod.iod_type  = DAOS_IOD_SINGLE;
+	iod.iod_name  = keys.akey[1];
+	iod.iod_recxs = NULL;
+	iod.iod_size  = w1_size;
+	rc            = d_sgl_init(&sgl, 1);
+	assert_success(rc);
+	d_iov_set(sgl.sg_iovs, w1, w1_size);
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false, NULL, 0, &ic);
+	assert_success(rc);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, 1, 0, 0, &keys.dkey, 1, &iod, ic, &sgl);
+	assert_success(rc);
+	inc_cntr(arg->ta_flags);
+	daos_csummer_free_ic(csummer, &ic);
+	d_sgl_fini(&sgl, false);
+
+	iod.iod_size = 0;
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, &keys.dkey, 1, &iod,
+			     VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	assert_success(rc);
+	assert_int_equal(vos_ioh2ci_nr(ioh), 1);
+	d_iov_set(&iov, buf, w1_size);
+	rc = vos_ioh_recx_copy(ioh, 0, &iov);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = vos_fetch_end(ioh, NULL, 0);
+	assert_success(rc);
+
+	D_FREE(w1);
+	D_FREE(buf);
+	daos_csummer_destroy(&csummer);
+}
+
 static const struct CMUnitTest iterator_tests[] = {
     {"VOS220: 100K update/fetch/verify test", io_multiple_dkey, NULL, NULL},
     {"VOS240.0: KV Iter tests (for dkey)", io_iter_test, NULL, NULL},
@@ -3742,6 +4488,18 @@ static const struct CMUnitTest io_tests[] = {
      io_csum_fetch_recx_missing_csum, NULL, NULL},
     {"VOS401.3: Fetch checksum of partially visible array extents", io_csum_fetch_recx_partial,
      NULL, NULL},
+    {"VOS402.1: Copy the extents listed by a checksum fetch, distinct major epochs",
+     io_csum_copy_distinct_epochs, NULL, NULL},
+    {"VOS402.2: Copy the extents listed by a checksum fetch, same major epoch",
+     io_csum_copy_same_epoch, NULL, NULL},
+    {"VOS402.3: Copy the extents listed by a checksum fetch, 4 KiB chunks", io_csum_copy_large,
+     NULL, NULL},
+    {"VOS402.4: Copy the extents listed by a checksum fetch, errors", io_csum_copy_errors, NULL,
+     NULL},
+    {"VOS402.5: Copy the extents listed by a checksum fetch, many extents", io_csum_copy_many, NULL,
+     NULL},
+    {"VOS402.6: Copy the extents listed by a checksum fetch, 4 bytes records",
+     io_csum_copy_rec_size, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {
