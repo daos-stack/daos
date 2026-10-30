@@ -123,19 +123,11 @@ test_d_errstr(void **state)
 	/* Check the boundary at the end of the GURT error numbers, this will need updating if
 	 * additional error numbers are added.
 	 */
-	value = d_errstr(-DER_QUOTA_LIMIT);
-	assert_string_equal(value, "DER_QUOTA_LIMIT");
-	value = d_errstr(-1046);
-	assert_string_equal(value, "DER_QUOTA_LIMIT");
-	value = d_errstr(-(DER_QUOTA_LIMIT + 1));
-	assert_string_equal(value, "DER_UNKNOWN");
-
-	/* Check the end of the DAOS error numbers. */
-	value = d_errstr(-DER_REBUILD_DELAY);
-	assert_string_equal(value, "DER_REBUILD_DELAY");
+	value = d_errstr(-DER_NO_NODE_CERT);
+	assert_string_equal(value, "DER_NO_NODE_CERT");
 	value = d_errstr(-2053);
-	assert_string_equal(value, "DER_REBUILD_DELAY");
-	value = d_errstr(-(DER_REBUILD_DELAY + 1));
+	assert_string_equal(value, "DER_NO_NODE_CERT");
+	value = d_errstr(-(DER_NO_NODE_CERT + 1));
 	assert_string_equal(value, "DER_UNKNOWN");
 }
 

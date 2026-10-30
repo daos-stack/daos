@@ -782,6 +782,12 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 	}
 	log.Debug(msg)
 
+	if cfg.TransportConfig != nil {
+		if err = cfg.TransportConfig.Validate(); err != nil {
+			return errors.Wrap(err, "transport config validation failed")
+		}
+	}
+
 	// Append the user-friendly message to any error.
 	defer func() {
 		if err != nil && !fault.HasResolution(err) {
