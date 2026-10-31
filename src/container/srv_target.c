@@ -472,8 +472,8 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		 */
 		uint64_t msecs = 2000;
 
-		/* Reuse the vos aggregation ULT to periodically query the stable epoch,
-		 * ds_cont_eph_report() will read & report the epoch through IV.
+		/* Reuse the vos aggregation ULT to periodically cache the local stable epoch;
+		 * the PS/CS leader reads it via the CONT_TGT_TRACK_EPOCH CoRPC.
 		 */
 		if (param->ap_vos_agg && cont->sc_query_stable_eph != NULL)
 			*cont->sc_query_stable_eph = vos_cont_get_local_stable_epoch(cont->sc_hdl);
@@ -2184,6 +2184,127 @@ ds_cont_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
+struct xstream_track_eph {
+	uuid_t		xte_pool_uuid;
+	uuid_t		xte_cont_uuid;
+	daos_epoch_t	xte_ec_agg_eph;
+	daos_epoch_t	xte_stable_eph;
+};
+
+static int
+cont_track_eph_query_one(void *vin)
+{
+	struct dss_coll_stream_args *reduce    = vin;
+	struct dss_stream_arg_type  *streams   = reduce->csa_streams;
+	struct dss_module_info      *info      = dss_get_module_info();
+	int                          tid       = info->dmi_tgt_id;
+	struct xstream_track_eph    *pack_args = streams[tid].st_arg;
+	struct ds_cont_child        *cont_child = NULL;
+	int                          rc;
+
+	rc = ds_cont_child_lookup(pack_args->xte_pool_uuid, pack_args->xte_cont_uuid, &cont_child);
+	if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING || rc == -DER_SHUTDOWN) {
+		/* No usable local container child: report the current HLC so this target
+		 * does not block the PS/CS leader from advancing the global stable epoch.
+		 * Whether the container really exists is decided only from RDB on the leader.
+		 */
+		pack_args->xte_ec_agg_eph = d_hlc_get();
+		pack_args->xte_stable_eph = pack_args->xte_ec_agg_eph;
+		return 0;
+	}
+	if (rc != 0)
+		return rc;
+
+	pack_args->xte_ec_agg_eph =
+	    cont_child->sc_query_ec_agg_eph != NULL ? *cont_child->sc_query_ec_agg_eph : 0;
+	pack_args->xte_stable_eph =
+	    cont_child->sc_query_stable_eph != NULL ? *cont_child->sc_query_stable_eph : 0;
+	ds_cont_child_put(cont_child);
+	return 0;
+}
+
+static void
+ds_cont_track_eph_coll_reduce(void *a_args, void *s_args)
+{
+	struct xstream_track_eph	*aggregator = a_args;
+	struct xstream_track_eph	*stream     = s_args;
+
+	aggregator->xte_ec_agg_eph = MIN(aggregator->xte_ec_agg_eph, stream->xte_ec_agg_eph);
+	aggregator->xte_stable_eph = MIN(aggregator->xte_stable_eph, stream->xte_stable_eph);
+}
+
+static int
+ds_cont_track_eph_stream_alloc(struct dss_stream_arg_type *args, void *a_arg)
+{
+	struct xstream_track_eph	*rarg = a_arg;
+
+	D_ALLOC(args->st_arg, sizeof(struct xstream_track_eph));
+	if (args->st_arg == NULL)
+		return -DER_NOMEM;
+	memcpy(args->st_arg, rarg, sizeof(struct xstream_track_eph));
+
+	return 0;
+}
+
+static void
+ds_cont_track_eph_stream_free(struct dss_stream_arg_type *c_args)
+{
+	D_ASSERT(c_args->st_arg != NULL);
+	D_FREE(c_args->st_arg);
+}
+
+/* Report the per-target EC aggregation epoch and stable epoch to the PS/CS leader. */
+void
+ds_cont_tgt_track_eph_handler(crt_rpc_t *rpc)
+{
+	struct cont_tgt_track_eph_in	*in  = crt_req_get(rpc);
+	struct cont_tgt_track_eph_out	*out = crt_reply_get(rpc);
+	struct dss_coll_ops		 coll_ops = { 0 };
+	struct dss_coll_args		 coll_args = { 0 };
+	struct xstream_track_eph	 pack_args = { 0 };
+	int				 rc;
+
+	coll_ops.co_func		= cont_track_eph_query_one;
+	coll_ops.co_reduce		= ds_cont_track_eph_coll_reduce;
+	coll_ops.co_reduce_arg_alloc	= ds_cont_track_eph_stream_alloc;
+	coll_ops.co_reduce_arg_free	= ds_cont_track_eph_stream_free;
+
+	uuid_copy(pack_args.xte_pool_uuid, in->tti_pool_uuid);
+	uuid_copy(pack_args.xte_cont_uuid, in->tti_cont_uuid);
+	pack_args.xte_ec_agg_eph	= DAOS_EPOCH_MAX;
+	pack_args.xte_stable_eph	= DAOS_EPOCH_MAX;
+
+	coll_args.ca_aggregator		= &pack_args;
+	coll_args.ca_func_args		= &coll_args.ca_stream_args;
+
+	rc = ds_pool_task_collective_reduce(in->tti_pool_uuid,
+					    PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+					    &coll_ops, &coll_args, 0);
+
+	out->tto_ec_agg_eph	= pack_args.xte_ec_agg_eph;
+	out->tto_stable_eph	= pack_args.xte_stable_eph;
+	out->tto_rc		= rc;
+
+	D_DEBUG(DB_MD,
+		DF_CONT ": reply track eph rpc %p ec_agg " DF_X64 " stable " DF_X64 " rc %d\n",
+		DP_CONT(in->tti_pool_uuid, in->tti_cont_uuid), rpc, out->tto_ec_agg_eph,
+		out->tto_stable_eph, rc);
+	crt_reply_send(rpc);
+}
+
+int
+ds_cont_tgt_track_eph_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct cont_tgt_track_eph_out	*out_source = crt_reply_get(source);
+	struct cont_tgt_track_eph_out	*out_result = crt_reply_get(result);
+
+	out_result->tto_ec_agg_eph = MIN(out_result->tto_ec_agg_eph, out_source->tto_ec_agg_eph);
+	out_result->tto_stable_eph = MIN(out_result->tto_stable_eph, out_source->tto_stable_eph);
+	if (out_source->tto_rc != 0 && out_result->tto_rc == 0)
+		out_result->tto_rc = out_source->tto_rc;
+	return 0;
+}
+
 struct cont_snap_args {
 	uuid_t		 pool_uuid;
 	uuid_t		 cont_uuid;
@@ -2776,114 +2897,6 @@ cont_tgt_track_eph_init(struct ds_cont_child *cont_child)
 		DP_UUID(cont_child->sc_uuid), arg.tgt_idx);
 	cont_child->sc_query_ec_agg_eph = arg.ec_agg_eph;
 	cont_child->sc_query_stable_eph = arg.stable_eph;
-
-	return rc;
-}
-
-/* Report the per-container EC aggregation epoch & stable epoch to PS leader through IV */
-int
-ds_cont_eph_report(struct ds_pool *pool)
-{
-	struct cont_track_eph	*ec_eph;
-	struct cont_track_eph	*tmp;
-	int                      rc, ret, *failed_tgts = NULL;
-	int                      cont_num = 0;
-	unsigned int             failed_tgts_nr;
-
-	D_ASSERT(pool != NULL && pool->sp_map != NULL);
-	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid, &failed_tgts, &failed_tgts_nr);
-	if (rc) {
-		D_DEBUG(DB_MD, DF_UUID ": Failed to get index", DP_UUID(pool->sp_uuid));
-		return rc;
-	}
-
-	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list, cte_list) {
-		daos_epoch_t min_ec_agg_eph;
-		daos_epoch_t min_stable_eph;
-		int          i;
-
-		cont_num++;
-		if (dss_ult_exiting(pool->sp_ec_ephs_req))
-			break;
-
-		if (ec_eph->cte_ref == 0) {
-			cont_track_eph_destroy(ec_eph);
-			continue;
-		}
-
-		min_ec_agg_eph = DAOS_EPOCH_MAX;
-		min_stable_eph = DAOS_EPOCH_MAX;
-		for (i = 0; i < ec_eph->cte_ephs_cnt; i++) {
-			bool is_failed_tgts = false;
-			int  j;
-
-			for (j = 0; j < failed_tgts_nr; j++) {
-				if (failed_tgts[j] == i) {
-					is_failed_tgts = true;
-					break;
-				}
-			}
-
-			if (!is_failed_tgts) {
-				min_ec_agg_eph =
-				    min(min_ec_agg_eph, ec_eph->cte_tgt_ec_agg_ephs[i]);
-				min_stable_eph =
-				    min(min_stable_eph, ec_eph->cte_tgt_stable_ephs[i]);
-			}
-		}
-
-		if (min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
-		    min_stable_eph <= ec_eph->cte_last_stable_epoch &&
-		    pool->sp_reclaim == DAOS_RECLAIM_DISABLED) {
-			if (cont_num % 10 == 0)
-				dss_sleep(0);
-			continue;
-		}
-
-		/* if aggregation enabled, make sure to report ec_agg_eph at the start phase
-		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero.
-		 */
-		if (min_ec_agg_eph == DAOS_EPOCH_MAX || min_stable_eph == DAOS_EPOCH_MAX ||
-		    (ec_eph->cte_last_ec_agg_epoch != 0 &&
-		     min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
-		     min_stable_eph <= ec_eph->cte_last_stable_epoch)) {
-			if (min_ec_agg_eph > 0 && min_stable_eph > 0 &&
-			    (min_ec_agg_eph < ec_eph->cte_last_ec_agg_epoch ||
-			     min_stable_eph < ec_eph->cte_last_stable_epoch))
-				D_ERROR("ignore for now, min_ec_agg_eph " DF_X64 " < " DF_X64 ", "
-					"or min_stable_eph " DF_X64 " < " DF_X64 ", " DF_UUID "\n",
-					min_ec_agg_eph, ec_eph->cte_last_ec_agg_epoch,
-					min_stable_eph, ec_eph->cte_last_stable_epoch,
-					DP_UUID(ec_eph->cte_cont_uuid));
-			else
-				D_DEBUG(DB_MD,
-					"Skip ec_agg_eph " DF_X64 "/" DF_X64 ", "
-					"stable_eph " DF_X64 "/" DF_X64 ", " DF_UUID "\n",
-					min_ec_agg_eph, ec_eph->cte_last_ec_agg_epoch,
-					min_stable_eph, ec_eph->cte_last_stable_epoch,
-					DP_UUID(ec_eph->cte_cont_uuid));
-			if (cont_num % 10 == 0)
-				dss_sleep(0);
-			continue;
-		}
-
-		D_DEBUG(DB_MD, "Update ec_agg_eph " DF_X64 ", stable_eph " DF_X64 ", " DF_UUID "\n",
-			min_ec_agg_eph, min_stable_eph, DP_UUID(ec_eph->cte_cont_uuid));
-
-		ret =
-		    cont_iv_track_eph_update(pool->sp_iv_ns, ec_eph->cte_cont_uuid, min_ec_agg_eph,
-					     min_stable_eph, pool->sp_ec_ephs_req);
-		if (ret == 0) {
-			ec_eph->cte_last_ec_agg_epoch = min_ec_agg_eph;
-			ec_eph->cte_last_stable_epoch = min_stable_eph;
-		} else {
-			rc = ret;
-			DL_CDEBUG(rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST, DB_MD, DLOG_ERR,
-				  rc, DF_CONT ": Failed to update EC agg report IV.",
-				  DP_CONT(pool->sp_uuid, ec_eph->cte_cont_uuid));
-		}
-	}
-	D_FREE(failed_tgts);
 
 	return rc;
 }

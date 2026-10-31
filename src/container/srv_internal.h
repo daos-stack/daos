@@ -58,23 +58,18 @@ dsm_tls_get()
 
 extern bool ec_agg_disabled;
 
-struct rank_eph {
-	d_rank_t	re_rank;
-	daos_epoch_t	re_ec_agg_eph;
-	daos_epoch_t	re_stable_eph;
-	uint64_t        re_ec_agg_eph_update_ts; /* re_ec_agg_eph update timestamp */
-};
-
 /* container EC aggregation epoch and stable epoch control descriptor, which is only on leader */
 struct cont_track_eph_leader {
 	uuid_t			cte_cont_uuid;
 	daos_epoch_t		cte_current_ec_agg_eph;
 	daos_epoch_t		cte_current_stable_eph;
 	daos_epoch_t             cte_rdb_ec_agg_eph; /* EC agg epoch in RDB */
-	struct rank_eph		*cte_server_ephs;
 	d_list_t                 cte_list;
-	int                      cte_servers_num;
 	uint32_t                 cte_deleted : 1;
+	/* Set while the container still exists in RDB during a sync round; entries left
+	 * unseen are for containers removed from RDB and get destroyed.
+	 */
+	uint32_t                 cte_seen : 1;
 	/* Time when this leader started tracking the container. A boundary jump larger
 	 * than the tracking age cannot have been observed by this leader, it comes from
 	 * the stale epoch loaded from rdb at leader step-up, so it is not a real stall.
@@ -225,8 +220,6 @@ int
 		       struct container_hdl *hdl, crt_rpc_t *rpc);
 int ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 		     daos_prop_t **prop_out);
-int ds_cont_leader_update_track_eph(uuid_t pool_uuid, uuid_t cont_uuid,
-				    d_rank_t rank, daos_epoch_t agg_eph, daos_epoch_t stable_eph);
 
 /* srv_epoch.c */
 int
@@ -266,6 +259,9 @@ int ds_cont_tgt_close_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_cont_tgt_query_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
+void ds_cont_tgt_track_eph_handler(crt_rpc_t *rpc);
+int ds_cont_tgt_track_eph_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				     void *priv);
 void ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 					   void *priv);
@@ -309,9 +305,6 @@ int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop, bool sync
 int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);
-int
-cont_iv_track_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
-			 daos_epoch_t stable_eph, struct sched_request *req);
 int
       cont_iv_track_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
 				daos_epoch_t stable_eph, struct sched_request *req);

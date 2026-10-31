@@ -94,6 +94,8 @@
 	  ds_cont_tgt_epoch_aggregate_handler, &ds_cont_tgt_epoch_aggregate_co_ops)                \
 	X(CONT_TGT_SNAPSHOT_NOTIFY, 0, &CQF_cont_tgt_snapshot_notify,                              \
 	  ds_cont_tgt_snapshot_notify_handler, &ds_cont_tgt_snapshot_notify_co_ops)                \
+	X(CONT_TGT_TRACK_EPOCH, 0, &CQF_cont_tgt_track_eph, ds_cont_tgt_track_eph_handler,         \
+	  &ds_cont_tgt_track_eph_co_ops)                                                           \
 	X(CONT_PROP_SET_BYLABEL, 0, &CQF_cont_prop_set_bylabel, ds_cont_set_prop_srv_handler, NULL)
 
 /* Define for RPC enum population below */
@@ -921,6 +923,18 @@ struct cont_tgt_close_rec {
 	((daos_epoch_t)		(tqo_hae)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_tgt_query, DAOS_ISEQ_TGT_QUERY, DAOS_OSEQ_TGT_QUERY)
+
+#define DAOS_ISEQ_CONT_TGT_TRACK_EPOCH /* input fields */	 \
+	((uuid_t)		(tti_pool_uuid)		CRT_VAR) \
+	((uuid_t)		(tti_cont_uuid)		CRT_VAR)
+
+#define DAOS_OSEQ_CONT_TGT_TRACK_EPOCH /* output fields */	 \
+	((int32_t)		(tto_rc)		CRT_VAR) \
+	((int32_t)		(tto_pad32)		CRT_VAR) \
+	((daos_epoch_t)		(tto_ec_agg_eph)	CRT_VAR) \
+	((daos_epoch_t)		(tto_stable_eph)	CRT_VAR)
+
+CRT_RPC_DECLARE(cont_tgt_track_eph, DAOS_ISEQ_CONT_TGT_TRACK_EPOCH, DAOS_OSEQ_CONT_TGT_TRACK_EPOCH)
 
 #define DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE /* input fields */	 \
 	((uuid_t)		(tai_cont_uuid)		CRT_VAR) \
