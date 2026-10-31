@@ -697,8 +697,14 @@ func (resp *SystemEraseResp) Errors() error {
 
 // checkSystemErase queries system to interrogate membership before deciding
 // whether a system erase is appropriate.
-func checkSystemErase(ctx context.Context, rpcClient UnaryInvoker) error {
-	resp, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{FailOnUnavailable: true})
+func checkSystemErase(ctx context.Context, rpcClient UnaryInvoker, sys string) error {
+	// sys is the request's raw (unversioned) system name; pass it through unmodified so
+	// SystemQuery's own getSystem() resolution (req.Sys, falling back to rpcClient's
+	// configured system name, then the build default) appends the version suffix exactly
+	// once, matching the resolution SystemErase itself performs below.
+	queryReq := &SystemQueryReq{FailOnUnavailable: true}
+	queryReq.SetSystem(sys)
+	resp, err := SystemQuery(ctx, rpcClient, queryReq)
 	if err != nil {
 		// If the AP hasn't been started, it will respond as if it
 		// is not a replica.
@@ -737,7 +743,11 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	if err := checkSystemErase(ctx, rpcClient); err != nil {
+	// Pass through the request's raw system name (not the version-suffixed form) so
+	// checkSystemErase's internal query resolves it through the same fallback chain
+	// (request -> rpcClient config -> build default) without double-appending the
+	// version suffix.
+	if err := checkSystemErase(ctx, rpcClient, req.Sys); err != nil {
 		return nil, err
 	}
 
