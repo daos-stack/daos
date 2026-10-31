@@ -103,10 +103,80 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				TierProps: []BdevTierProperties{
 					{Class: ClassNvme},
 				},
-				Hostname:          hostname,
-				HotplugEnabled:    true,
-				HotplugBusidBegin: 0x70,
-				HotplugBusidEnd:   0x7f,
+				Hostname:            hostname,
+				HotplugEnabled:      true,
+				HotplugBusidBegin:   0x70,
+				HotplugBusidEnd:     0x7f,
+				HotplugIgnoreDomain: true,
+			},
+		},
+		"range specified; non-zero pci domain": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevBusidRange("0001:0x70-0x7f"),
+				},
+				EnableHotplug: true,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:           hostname,
+				HotplugEnabled:     true,
+				HotplugBusidDomain: 0x0001,
+				HotplugBusidBegin:  0x70,
+				HotplugBusidEnd:    0x7f,
+			},
+		},
+		"range unspecified; non-zero pci domain": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				EnableHotplug: true,
+				NumaNodeIndex: 2,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:           hostname,
+				HotplugEnabled:     true,
+				HotplugBusidDomain: 0x0001,
+				HotplugBusidBegin:  0x80,
+				HotplugBusidEnd:    0x8f,
+			},
+		},
+		"range specified; all domains": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevBusidRange("0x00-0xff"),
+				},
+				EnableHotplug: true,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:            hostname,
+				HotplugEnabled:      true,
+				HotplugBusidBegin:   0x00,
+				HotplugBusidEnd:     0xff,
+				HotplugIgnoreDomain: true,
 			},
 		},
 		"range specified; vmd enabled": {

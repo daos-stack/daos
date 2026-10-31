@@ -569,27 +569,38 @@ func (p *Provider) FormatBdevTiers(ctrlrs NvmeControllers) (results []BdevTierFo
 // setHotplugRange sets request parameters related to bus-id range limits to restrict hotplug
 // actions of engine to a set of ssd devices.
 func setHotplugRange(ctx context.Context, log logging.Logger, getTopo topologyGetter, numaNode uint, tier *TierConfig, req *BdevWriteConfigRequest) error {
+	var domain uint16
 	var begin, end uint8
 
 	switch {
 	case req.VMDEnabled:
 		log.Debug("hotplug bus-id filter allows all as vmd is enabled")
+		domain = 0x0000
 		begin = 0x00
 		end = 0xFF
 	case tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero():
 		log.Debugf("received user-specified hotplug bus-id range %q", tier.Bdev.BusidRange)
+		domain = tier.Bdev.BusidRange.LowAddress.Domain
 		begin = tier.Bdev.BusidRange.LowAddress.Bus
 		end = tier.Bdev.BusidRange.HighAddress.Bus
+		req.HotplugIgnoreDomain = tier.Bdev.BusidRange.IgnoreDomain
 	default:
 		var err error
 		log.Debug("generating hotplug bus-id range based on hardware topology")
-		begin, end, err = getNumaNodeBusidRange(ctx, getTopo, numaNode)
+		domain, begin, end, err = getNumaNodeBusidRange(ctx, getTopo, numaNode)
 		if err != nil {
 			return errors.Wrapf(err, "get busid range limits")
 		}
 	}
 
-	log.Infof("NUMA %d: hotplug bus-ids %X-%X", numaNode, begin, end)
+	// VMD backing devices use a different domain to their NUMA node, so the domain is
+	// ignored (in addition to any explicit user request to match any domain).
+	domainStr := fmt.Sprintf("%04X", domain)
+	if req.VMDEnabled || req.HotplugIgnoreDomain {
+		domainStr = "any"
+	}
+	log.Infof("NUMA %d: hotplug domain=%s, bus-ids=%02X-%02X", numaNode, domainStr, begin, end)
+	req.HotplugBusidDomain = domain
 	req.HotplugBusidBegin = begin
 	req.HotplugBusidEnd = end
 

@@ -486,8 +486,16 @@
 #    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
 #    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
+#    # On multi-root-complex platforms, each NUMA node/socket may use a distinct, non-zero
+#    # PCI domain (segment): prefix the range with a hexadecimal domain and colon to
+#    # restrict matching to that domain. Omitting the domain prefix matches the bus-ID
+#    # range in any PCI domain (also used for backward compatibility with configs/upgrades
+#    # predating PCI-domain-aware hotplug filtering). If a NUMA node's PCI buses span more
+#    # than one domain, either restrict the range to one domain or set disable_hotplug.
 #    bdev_busid_range: 0x80-0x8f
 #    #bdev_busid_range: 128-143
+#    #bdev_busid_range: 0001:0x80-0x8f
+#    #bdev_busid_range: 0x00-0xff
 #
 #    # Optional explicit nvme-class bdev tier role assignments will
 #    # define the roles and responsibilities of this bdev tier.
@@ -669,8 +677,16 @@
 #    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
 #    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
+#    # On multi-root-complex platforms, each NUMA node/socket may use a distinct, non-zero
+#    # PCI domain (segment): prefix the range with a hexadecimal domain and colon to
+#    # restrict matching to that domain. Omitting the domain prefix matches the bus-ID
+#    # range in any PCI domain (also used for backward compatibility with configs/upgrades
+#    # predating PCI-domain-aware hotplug filtering). If a NUMA node's PCI buses span more
+#    # than one domain, either restrict the range to one domain or set disable_hotplug.
 #    #bdev_busid_range: 0xd0-0xdf
 #    #bdev_busid_range: 208-223
+#    #bdev_busid_range: 0001:0xd0-0xdf
+#    #bdev_busid_range: 0x00-0xff
 #
 #    # See about bdev_roles above.
 #    bdev_roles: [wal, meta, data]
