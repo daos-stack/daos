@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	sectest "github.com/daos-stack/daos/src/control/security/test"
 )
 
@@ -23,15 +25,17 @@ func TestSecurity_GeneratePoolCA(t *testing.T) {
 	for name, tc := range map[string]struct {
 		validity    time.Duration
 		expNotAfter time.Time
+		expErr      error
 	}{
 		"full term of the root": {validity: 0, expNotAfter: root.NotAfter},
-		"clipped to the root":   {validity: 48 * time.Hour, expNotAfter: root.NotAfter},
+		"outlasts the root":     {validity: 48 * time.Hour, expErr: errors.New(`pool CA: lifetime ends`)},
 		"shorter than the root": {validity: time.Hour, expNotAfter: time.Now().Add(time.Hour)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			ca, err := GeneratePoolCA(poolUUID, root, rootKey, tc.validity)
-			if err != nil {
-				t.Fatal(err)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
 			}
 			parsed, err := ParsePoolCACert(ca.CertPEM)
 			if err != nil {
@@ -68,17 +72,19 @@ func TestSecurity_IssueClientCerts_Validity(t *testing.T) {
 	for name, tc := range map[string]struct {
 		validity    time.Duration
 		expNotAfter time.Time
+		expErr      error
 	}{
-		"default, clipped to the CA": {validity: 0, expNotAfter: poolCA.Cert.NotAfter},
-		"clipped to the CA":          {validity: 48 * time.Hour, expNotAfter: poolCA.Cert.NotAfter},
-		"shorter than the CA":        {validity: time.Hour, expNotAfter: now.Add(time.Hour)},
+		"default is the CA's term": {validity: 0, expNotAfter: poolCA.Cert.NotAfter},
+		"outlasts the CA":          {validity: 48 * time.Hour, expErr: errors.New(`client cert "node:m": lifetime ends`)},
+		"shorter than the CA":      {validity: time.Hour, expNotAfter: now.Add(time.Hour)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			certs, err := IssueClientCerts(&IssueClientCertsReq{
 				CACert: poolCA.Cert, CAKey: poolCA.Key, Nodes: []string{"m"}, Validity: tc.validity,
 			})
-			if err != nil {
-				t.Fatal(err)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
 			}
 			ic := certs[0]
 			if err := VerifyNodeCertChain(ic.Cert, root, poolCA.CertPEM, now.Add(time.Second)); err != nil {

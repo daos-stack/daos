@@ -23,9 +23,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// DefaultClientCertValidity is the client certificate lifetime when none is requested.
-const DefaultClientCertValidity = 365 * 24 * time.Hour
-
 // IssuedCert is a freshly minted certificate and its private key.
 type IssuedCert struct {
 	Cert    *x509.Certificate
@@ -54,24 +51,33 @@ func (c *IssuedCert) Write(certPath, keyPath string) error {
 	return nil
 }
 
-// clipNotAfter bounds validity to the signer's NotAfter; validity <= 0 means the signer's full term.
-func clipNotAfter(notBefore time.Time, validity time.Duration, signer *x509.Certificate) time.Time {
-	if validity <= 0 || notBefore.Add(validity).After(signer.NotAfter) {
-		return signer.NotAfter
+// certNotAfter resolves validity against the signer's term; validity <= 0 means the signer's full term.
+func certNotAfter(notBefore time.Time, validity time.Duration, signer *x509.Certificate) (time.Time, error) {
+	if validity <= 0 {
+		return signer.NotAfter, nil
 	}
-	return notBefore.Add(validity)
+	notAfter := notBefore.Add(validity)
+	if notAfter.After(signer.NotAfter) {
+		return time.Time{}, errors.Errorf("lifetime ends %s, after %q expires at %s",
+			notAfter.Format(time.RFC3339), signer.Subject.CommonName, signer.NotAfter.Format(time.RFC3339))
+	}
+	return notAfter, nil
 }
 
 // GeneratePoolCA mints the intermediate CA for poolUUID, signed by the DAOS CA.
 func GeneratePoolCA(poolUUID uuid.UUID, daosCACert *x509.Certificate, daosCAKey crypto.PrivateKey, validity time.Duration) (*IssuedCert, error) {
 	now := time.Now()
+	notAfter, err := certNotAfter(now, validity, daosCACert)
+	if err != nil {
+		return nil, errors.Wrap(err, "pool CA")
+	}
 	tmpl := &x509.Certificate{
 		Subject: pkix.Name{
 			CommonName:   poolCACommonName(poolUUID),
 			Organization: []string{"DAOS"},
 		},
 		NotBefore:             now.Add(-DefaultCertMaxClockSkew),
-		NotAfter:              clipNotAfter(now, validity, daosCACert),
+		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
@@ -141,7 +147,7 @@ type IssueClientCertsReq struct {
 	Tenants []string // CN = tenant:<name>; mutually exclusive with Nodes
 
 	Watermarks CertWatermarks
-	Validity   time.Duration // zero means DefaultClientCertValidity
+	Validity   time.Duration // zero means the pool CA's remaining term
 }
 
 // Validate checks the requested identities.
@@ -180,11 +186,6 @@ func IssueClientCerts(req *IssueClientCertsReq) ([]*ClientCert, error) {
 	if err := VerifyCertKey(req.CAKey, req.CACert); err != nil {
 		return nil, errors.Wrap(err, "pool CA")
 	}
-	validity := req.Validity
-	if validity <= 0 {
-		validity = DefaultClientCertValidity
-	}
-
 	type target struct{ name, cn string }
 	var targets []target
 	for _, n := range req.Nodes {
@@ -199,8 +200,11 @@ func IssueClientCerts(req *IssueClientCertsReq) ([]*ClientCert, error) {
 	var out []*ClientCert
 	for _, tgt := range targets {
 		notBefore := advanceCertWatermark(req.Watermarks, tgt.cn, now)
-		ic, err := issueClientCert(tgt.cn, req.CACert, req.CAKey,
-			notBefore, clipNotAfter(notBefore, validity, req.CACert))
+		notAfter, err := certNotAfter(notBefore, req.Validity, req.CACert)
+		if err != nil {
+			return nil, errors.Wrapf(err, "client cert %q", tgt.cn)
+		}
+		ic, err := issueClientCert(tgt.cn, req.CACert, req.CAKey, notBefore, notAfter)
 		if err != nil {
 			return nil, err
 		}
