@@ -2510,6 +2510,9 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 
+	noEngine := newTestMgmtSvc(t, log)
+	setupTestEngine(t, noEngine.harness.instances[0].(*EngineInstance), 0, true)
+
 	allRanksDown := newTestMgmtSvc(t, log)
 	downRanksPool := test.MockUUID(9)
 	addTestPools(t, allRanksDown.sysdb, downRanksPool)
@@ -2549,6 +2552,13 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				Id: mockUUID,
 			},
 			expErr: errors.New("send failure"),
+		},
+		"engine stopped": {
+			mgmtSvc: noEngine,
+			req: &mgmtpb.PoolQueryReq{
+				Id: mockUUID,
+			},
+			expErr: &system.ErrReplicaNoEngine{},
 		},
 		"garbage resp": {
 			req: &mgmtpb.PoolQueryReq{
