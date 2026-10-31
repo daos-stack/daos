@@ -1974,8 +1974,8 @@ vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae,
 }
 
 int
-vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_cos_key *dck, bool for_refresh)
+vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32_t *pm_ver,
+	      struct dtx_cos_key *dck, enum dtx_check_intent intent)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae;
@@ -2027,7 +2027,8 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (vos_dae_is_abort(dae))
 			return -DER_NONEXIST;
 
-		if (for_refresh) {
+		switch (intent) {
+		case DCI_REFRESH:
 			dae->dae_maybe_shared = 1;
 			/*
 			 * If DTX_REFRESH happened on current DTX entry but it was not marked
@@ -2037,7 +2038,8 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			 */
 			if (!(DAE_FLAGS(dae) & DTE_LEADER))
 				return -DER_INPROGRESS;
-		} else {
+			break;
+		case DCI_RESENT:
 			/* Not committable yet, related RPC handler ULT is still running. */
 			if (dae->dae_dth != NULL)
 				return -DER_INPROGRESS;
@@ -2057,12 +2059,25 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 						return -DER_TX_RESTART;
 				}
 			}
+			break;
+		case DCI_RESYNC:
+			/*
+			 * Mark the DTX as being checked by (new) leader. It is in DRAM only.
+			 * If the engine is restarted, then will be handled via new DTX resync.
+			 */
+			if (pm_ver != NULL && dae->dae_known_max_version < *pm_ver)
+				dae->dae_known_max_version = *pm_ver;
+			if (dae->dae_dth != NULL || dae->dae_preparing)
+				return -DER_INPROGRESS;
+			break;
+		default:
+			break;
 		}
 
 		if (!vos_dae_is_prepare(dae))
 			return DTX_ST_INITED;
 
-		if (pm_ver == NULL)
+		if (pm_ver == NULL || intent != DCI_RESENT)
 			return DTX_ST_PREPARED;
 
 		if (*pm_ver <= cont->vc_dtx_resync_ver)
@@ -2732,13 +2747,14 @@ out:
 }
 
 int
-vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force)
+vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, uint32_t version,
+		       bool force)
 {
 	struct dtx_handle      *dth;
-	struct dtx_id           xid        = DAE_XID(dae);
-	daos_epoch_t            epoch      = DAE_EPOCH(dae);
-	uint64_t                start_time = dae->dae_start_time;
-	uint32_t                version    = DAE_VER(dae);
+	struct dtx_id           xid         = DAE_XID(dae);
+	daos_epoch_t            epoch       = DAE_EPOCH(dae);
+	uint64_t                start_time  = dae->dae_start_time;
+	uint32_t                dtx_version = DAE_VER(dae);
 	struct umem_instance   *umm;
 	struct umem_pin_handle *pin_hdl = NULL;
 	d_iov_t                 kiov;
@@ -2769,8 +2785,12 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 			D_GOTO(abort_tx, rc = -DER_NONEXIST);
 
 		if (dae->dae_start_time != start_time || DAE_EPOCH(dae) != epoch ||
-		    DAE_VER(dae) != version)
+		    DAE_VER(dae) != dtx_version)
 			D_GOTO(abort_tx, rc = -DER_NONEXIST);
+
+		/* Recovery may have fenced this entry while pinning or reserving WAL space. */
+		if (version != 0 && version < dae->dae_known_max_version)
+			D_GOTO(abort_tx, rc = -DER_NO_PERM);
 
 		if (vos_dae_is_commit(dae) || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
 			D_GOTO(abort_tx, rc = -DER_NO_PERM);
@@ -2882,8 +2902,20 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch, uint32_
 	if (epoch != DAOS_EPOCH_MAX && epoch != DAE_EPOCH(dae))
 		D_GOTO(out, rc = -DER_NONEXIST);
 
-	if (version != 0 && version < DAE_VER(dae))
-		D_GOTO(out, rc = -DER_NONEXIST);
+	if (version != 0) {
+		if (version < DAE_VER(dae))
+			D_GOTO(out, rc = -DER_NONEXIST);
+
+		/*
+		 * The DTX_CHECK with new version is the new leader for current DTX, forbid abort
+		 * from old leader to avoid double control (with different commit/abort decision).
+		 */
+		if (version < dae->dae_known_max_version) {
+			D_WARN("Forbid to abort DTX " DF_DTI " with version %u, %u (old) vs %u\n",
+			       DP_DTI(dti), DAE_VER(dae), version, dae->dae_known_max_version);
+			D_GOTO(out, rc = -DER_NO_PERM);
+		}
+	}
 
 	if (unlikely(dae->dae_preparing)) {
 		/*
@@ -2895,7 +2927,7 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch, uint32_
 		D_WARN("Trying to abort in preparing DTX "DF_DTI" by race\n", DP_DTI(dti));
 		dae->dae_aborting = 1;
 	} else {
-		rc = vos_dtx_abort_internal(cont, dae, false);
+		rc = vos_dtx_abort_internal(cont, dae, version, false);
 	}
 
 out:
@@ -3898,7 +3930,7 @@ out:
 		if (dae != NULL) {
 			if (unlikely(dae->dae_preparing && dae->dae_aborting)) {
 				dae->dae_preparing = 0;
-				rc = vos_dtx_abort_internal(cont, dae, true);
+				rc                 = vos_dtx_abort_internal(cont, dae, 0, true);
 				DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
 					  "Delay abort DTX " DF_DTI " (2)", DP_DTI(&dth->dth_xid));
 

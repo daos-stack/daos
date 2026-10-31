@@ -483,6 +483,8 @@ struct vos_dtx_act_ent {
 
 	/* The capacity of dae_oids if it points to new allocated area. */
 	uint32_t                         dae_oid_cap;
+	/* The known max version used by DTX check. Abort DTX with old version will be refused. */
+	uint32_t                         dae_known_max_version;
 
 	unsigned int			 dae_committable:1,
 					 dae_committing:1,
@@ -836,7 +838,8 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
 
 int
-vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force);
+vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, uint32_t version,
+		       bool force);
 
 void
 vos_dtx_post_handle(struct vos_container *cont,

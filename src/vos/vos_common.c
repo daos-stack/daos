@@ -371,7 +371,7 @@ cancel:
 		dae = dth->dth_ent;
 		if (dae != NULL) {
 			if (unlikely(dae->dae_preparing && dae->dae_aborting)) {
-				rc = vos_dtx_abort_internal(cont, dae, true);
+				rc = vos_dtx_abort_internal(cont, dae, 0, true);
 				D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
 					 "Delay abort DTX "DF_DTI" (1): rc = %d\n",
 					 DP_DTI(&dth->dth_xid), rc);
