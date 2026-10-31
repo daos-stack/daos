@@ -73,6 +73,28 @@ and C and their metadata to target-3.
 can compute out surviving replicas of these objects, and rebuild these objects
 by pulling data from these replicas.
 
+### Reintegration pre-discard and failed rebuild cleanup
+
+Reintegration starts an asynchronous pre-discard before marking targets UP.
+The pre-discard runs independently of the rebuild task and may still be running
+when the administrator stops that reintegration. An admin-stopped reintegration
+does not revert the pool map, so its targets stay UP, and the following
+FAIL_RECLAIM is broadcast to those UP targets to clean up their incomplete data.
+Before starting its local scanners, FAIL_RECLAIM waits for the pool's local
+pre-discard to finish so that the two discards do not run concurrently on the
+same targets. The wait exits if the task is aborted or finished, or the pool
+is stopping.
+
+This wait requires pre-discard completion, not success: FAIL_RECLAIM may still
+need to clean up after a failed pre-discard. Other scan operations skip UP targets;
+reintegration migration separately waits for pre-discard before writing data.
+
+RECLAIM and FAIL_RECLAIM scan objects up to their reclaim epoch when no layout
+upgrade is involved (`rt_new_layout_ver == 0`). Layout upgrade cleanup retains
+the maximum scan epoch so that obsolete layout entries are not filtered out.
+Epoch-range discard preserves data newer than the reclaim epoch. Other rebuild
+operations retain their existing scan range.
+
 ### Multiple pool and targets rebuild
 
 In a large-scale storage cluster, multiple failures might occur
