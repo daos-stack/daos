@@ -83,10 +83,12 @@ class OSAOnlineDrain(OSAUtils):
             pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # Get initial total space (scm+nvme)
-            initial_total_space = self.pool.get_total_space(refresh=True)
-            output = self.pool.drain(ranks, t_string)
+            initial_total_space = self.pool.get_total_space()
+            # Use a different dmg command for the drain operation
+            drain_dmg = self.get_dmg_command().copy()
+            output = drain_dmg.pool_drain(pool=self.pool.identifier, ranks=ranks, tgt_idx=t_string)
             self.print_and_assert_on_rebuild_failure(output)
-            total_space_after_drain = self.pool.get_total_space(refresh=True)
+            total_space_after_drain = self.pool.get_total_space()
 
             pver_drain = self.pool.get_version(True)
             self.log.info("Pool Version after drain %s", pver_drain)
