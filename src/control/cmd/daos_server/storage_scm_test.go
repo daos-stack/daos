@@ -517,6 +517,7 @@ func TestDaosServer_scanSCM(t *testing.T) {
 		sockID             *uint
 		cfg                *config.Server
 		ignoreCfg          bool
+		pmemInConfig       bool
 		smbc               scm.MockBackendConfig
 		expErr             error
 		expResp            *storage.ScmScanResponse
@@ -524,6 +525,7 @@ func TestDaosServer_scanSCM(t *testing.T) {
 		expNamespacesCalls []int
 	}{
 		"normal scan": {
+			pmemInConfig: true,
 			smbc: scm.MockBackendConfig{
 				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
 				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
@@ -536,6 +538,7 @@ func TestDaosServer_scanSCM(t *testing.T) {
 			},
 		},
 		"failed scan": {
+			pmemInConfig: true,
 			smbc: scm.MockBackendConfig{
 				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
 				GetNamespacesErr: errors.New("fail"),
@@ -545,13 +548,48 @@ func TestDaosServer_scanSCM(t *testing.T) {
 			expErr:             errors.New("fail"),
 		},
 		"single socket scan": {
-			sockID: &zero,
+			sockID:       &zero,
+			pmemInConfig: true,
 			smbc: scm.MockBackendConfig{
 				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
 				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
 			expNamespacesCalls: []int{0},
 			expModulesCalls:    []int{0},
+			expResp: &storage.ScmScanResponse{
+				Modules:    storage.ScmModules{storage.MockScmModule(0)},
+				Namespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+			},
+		},
+		"pmem not in config; get modules fails; error swallowed": {
+			pmemInConfig: false,
+			smbc: scm.MockBackendConfig{
+				GetModulesErr: errors.New("no ipmctl installed"),
+			},
+			expModulesCalls: []int{-1},
+			expResp: &storage.ScmScanResponse{
+				Modules:    storage.ScmModules{},
+				Namespaces: storage.ScmNamespaces{},
+			},
+		},
+		"pmem not in config; get namespaces fails; error not swallowed": {
+			pmemInConfig: false,
+			smbc: scm.MockBackendConfig{
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+				GetNamespacesErr: errors.New("fail"),
+			},
+			expNamespacesCalls: []int{-1},
+			expModulesCalls:    []int{-1},
+			expErr:             errors.New("fail"),
+		},
+		"pmem not in config; scan succeeds": {
+			pmemInConfig: false,
+			smbc: scm.MockBackendConfig{
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+			},
+			expNamespacesCalls: []int{-1},
+			expModulesCalls:    []int{-1},
 			expResp: &storage.ScmScanResponse{
 				Modules:    storage.ScmModules{storage.MockScmModule(0)},
 				Namespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
@@ -575,7 +613,7 @@ func TestDaosServer_scanSCM(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			resp, err := scanPMem(&cmd)
+			resp, err := scanPMem(&cmd, tc.pmemInConfig)
 			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResp, resp); diff != "" {

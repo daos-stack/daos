@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/defaults/topology"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // configCmd is the struct representing the top-level config subcommand.
@@ -56,9 +57,9 @@ func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*
 	return hf, nil
 }
 
-type getStorageFn func(context.Context, logging.Logger, bool) (*control.HostStorage, error)
+type getStorageFn func(context.Context, logging.Logger, bool, bool) (*control.HostStorage, error)
 
-func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*control.HostStorage, error) {
+func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool, pmemInConfig bool) (*control.HostStorage, error) {
 	var err error
 	snc := &scanNVMeCmd{
 		SkipPrep: skipPrep,
@@ -80,18 +81,24 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		return nil, errors.Wrap(errNvme, "nvme scan")
 	}
 
-	ssc := &scanSCMCmd{
-		scmCmd: scmCmd{},
-	}
-	ssc.Logger = log
+	// Only discover PMem if the generated config may use it: with tmpfs SCM (including
+	// MD-on-SSD, which requires tmpfs SCM) the results would be ignored and a missing
+	// ipmctl binary would be a spurious failure.
+	scmResp := &storage.ScmScanResponse{}
+	if pmemInConfig {
+		ssc := &scanSCMCmd{
+			scmCmd: scmCmd{},
+		}
+		ssc.Logger = log
 
-	if err := ssc.initWith(initScmCmd); err != nil {
-		return nil, errors.Wrap(err, "scm init")
-	}
+		if err := ssc.initWith(initScmCmd); err != nil {
+			return nil, errors.Wrap(err, "scm init")
+		}
 
-	scmResp, errScm := scanPMem(ssc)
-	if errScm != nil {
-		return nil, errors.Wrap(errScm, "scm scan")
+		var errScm error
+		if scmResp, errScm = scanPMem(ssc, pmemInConfig); errScm != nil {
+			return nil, errors.Wrap(errScm, "scm scan")
+		}
 	}
 
 	// Reload to pick up any changes after scanNVMe (which may implicitly call prepNVMe).
@@ -123,7 +130,11 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 
 	cmd.Debugf("fetched host fabric info on localhost: %+v", hf)
 
-	hs, err := getStorage(ctx, cmd.Logger, cmd.SkipPrep)
+	// PMem is only expected if neither tmpfs SCM nor MD-on-SSD was requested (MD-on-SSD
+	// requires tmpfs SCM), otherwise failing to discover PMem (e.g. missing ipmctl binary)
+	// mustn't be fatal.
+	pmemInConfig := !cmd.UseTmpfsSCM
+	hs, err := getStorage(ctx, cmd.Logger, cmd.SkipPrep, pmemInConfig)
 	if err != nil {
 		return nil, err
 	}

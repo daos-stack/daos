@@ -668,16 +668,16 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			log.SetLevel(logging.LogLevelInfo)
 			cmd.Logger = log
 
-			gf := func(_ context.Context, _ logging.Logger, _ string) (*control.HostFabric, error) {
+			getFabric := func(_ context.Context, _ logging.Logger, _ string) (*control.HostFabric, error) {
 				return tc.hf, tc.hfErr
 			}
 
-			gs := func(_ context.Context, _ logging.Logger, _ bool) (*control.HostStorage, error) {
+			getStorage := func(_ context.Context, _ logging.Logger, _, _ bool) (*control.HostStorage, error) {
 				return tc.hs, tc.hsErr
 			}
 
 			if tc.expOutPrefix != "" {
-				gotErr := cmd.confGenPrint(test.Context(t), gf, gs)
+				gotErr := cmd.confGenPrint(test.Context(t), getFabric, getStorage)
 				if gotErr != nil {
 					t.Fatal(gotErr)
 				}
@@ -692,7 +692,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				return
 			}
 
-			gotCfg, gotErr := cmd.confGen(test.Context(t), gf, gs)
+			gotCfg, gotErr := cmd.confGen(test.Context(t), getFabric, getStorage)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -714,6 +714,59 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			if diff := cmp.Diff(tc.expCfg, gotCfg, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected config generated (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+// TestDaosServer_Auto_confGen_pmemInConfig verifies that confGen() derives the pmemInConfig
+// value forwarded to getStorage() (getLocalStorage() in production) correctly: PMem discovery
+// should be skipped (pmemInConfig == false) whenever tmpfs SCM is requested (which includes
+// MD-on-SSD, as it requires tmpfs SCM), and performed otherwise.
+func TestDaosServer_Auto_confGen_pmemInConfig(t *testing.T) {
+	errStop := errors.New("stop after getStorage")
+
+	for name, tc := range map[string]struct {
+		tmpfsSCM        bool
+		extMetadataPath string
+		expPMemInConfig bool
+	}{
+		"pmem scm": {
+			expPMemInConfig: true,
+		},
+		"tmpfs scm": {
+			tmpfsSCM:        true,
+			expPMemInConfig: false,
+		},
+		"tmpfs scm; md-on-ssd": {
+			tmpfsSCM:        true,
+			extMetadataPath: "/opt/daos_md",
+			expPMemInConfig: false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			cmd := &configGenCmd{}
+			cmd.MgmtSvcReplicas = "localhost"
+			cmd.NetClass = "infiniband"
+			cmd.UseTmpfsSCM = tc.tmpfsSCM
+			cmd.ExtMetadataPath = tc.extMetadataPath
+			cmd.Logger = log
+
+			getFabric := func(_ context.Context, _ logging.Logger, _ string) (*control.HostFabric, error) {
+				return &control.HostFabric{}, nil
+			}
+			var gotPMemInConfig bool
+			getStorage := func(_ context.Context, _ logging.Logger, _, pmemInConfig bool) (*control.HostStorage, error) {
+				gotPMemInConfig = pmemInConfig
+				return nil, errStop
+			}
+
+			_, err := cmd.confGen(test.Context(t), getFabric, getStorage)
+			test.CmpErr(t, errStop, err)
+			test.AssertEqual(t, tc.expPMemInConfig, gotPMemInConfig,
+				"pmemInConfig passed to getStorage")
 		})
 	}
 }
