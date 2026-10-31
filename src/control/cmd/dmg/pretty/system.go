@@ -131,10 +131,13 @@ func PrintSystemQueryResponse(out, outErr io.Writer, resp *control.SystemQueryRe
 		return errors.Errorf("nil %T", resp)
 	}
 
+	cfg := getPrintConfig(opts...)
 	switch {
+	case len(resp.Members) == 0 && cfg.WholeSystem:
+		fmt.Fprintln(out, "No ranks have joined the system. Formatted engines wait for dmg system initialize.")
 	case len(resp.Members) == 0:
 		fmt.Fprintln(out, "Query matches no ranks in system")
-	case getPrintConfig(opts...).Verbose:
+	case cfg.Verbose:
 		printSystemQueryVerbose(out, resp.Members)
 	default:
 		if err := printSystemQuery(out, resp.Members, &resp.AbsentRanks); err != nil {
@@ -191,6 +194,29 @@ func printSystemResults(out, outErr io.Writer, results system.MemberResults, abs
 // supplied SystemStartResp struct and writes it to the supplied io.Writer.
 func PrintSystemStartResponse(out, outErr io.Writer, resp *control.SystemStartResp) error {
 	return printSystemResults(out, outErr, resp.Results, &resp.AbsentHosts, &resp.AbsentRanks)
+}
+
+// PrintSystemStartHostsResponse generates a human-readable representation of the
+// supplied SystemStartHostsResp struct and writes it to the supplied io.Writer.
+func PrintSystemStartHostsResponse(out, outErr io.Writer, resp *control.SystemStartHostsResp) {
+	results := resp.Results
+	hosts := make(map[string]struct{})
+	ranks := ranklist.NewRankSet()
+	for _, r := range results {
+		if r.Errored {
+			fmt.Fprintf(outErr, "%s: %s\n", r.Addr, r.Msg)
+			continue
+		}
+		ranks.Add(r.Rank)
+		hosts[r.Addr] = struct{}{}
+	}
+
+	if ranks.Count() == 0 {
+		fmt.Fprintln(out, "No engines joined")
+		return
+	}
+	fmt.Fprintf(out, "%s joined on %s\n", english.Plural(ranks.Count(), "engine", ""),
+		english.Plural(len(hosts), "host", ""))
 }
 
 // PrintSystemStopResponse generates a human-readable representation of the

@@ -31,7 +31,7 @@ var File_ctl_ctl_proto protoreflect.FileDescriptor
 
 const file_ctl_ctl_proto_rawDesc = "" +
 	"\n" +
-	"\rctl/ctl.proto\x12\x03ctl\x1a\x11ctl/storage.proto\x1a\x11ctl/network.proto\x1a\rctl/smd.proto\x1a\x0fctl/ranks.proto\x1a\x10ctl/server.proto\x1a\x11ctl/support.proto\x1a\x0fctl/check.proto2\xbf\x06\n" +
+	"\rctl/ctl.proto\x12\x03ctl\x1a\x11ctl/storage.proto\x1a\x11ctl/network.proto\x1a\rctl/smd.proto\x1a\x0fctl/ranks.proto\x1a\x10ctl/server.proto\x1a\x11ctl/support.proto\x1a\x0fctl/check.proto2\xfe\x06\n" +
 	"\x06CtlSvc\x12:\n" +
 	"\vStorageScan\x12\x13.ctl.StorageScanReq\x1a\x14.ctl.StorageScanResp\"\x00\x12@\n" +
 	"\rStorageFormat\x12\x15.ctl.StorageFormatReq\x1a\x16.ctl.StorageFormatResp\"\x00\x12>\n" +
@@ -45,7 +45,8 @@ const file_ctl_ctl_proto_rawDesc = "" +
 	"\tStopRanks\x12\r.ctl.RanksReq\x1a\x0e.ctl.RanksResp\"\x00\x123\n" +
 	"\x10ResetFormatRanks\x12\r.ctl.RanksReq\x1a\x0e.ctl.RanksResp\"\x00\x12-\n" +
 	"\n" +
-	"StartRanks\x12\r.ctl.RanksReq\x1a\x0e.ctl.RanksResp\"\x00\x127\n" +
+	"StartRanks\x12\r.ctl.RanksReq\x1a\x0e.ctl.RanksResp\"\x00\x12=\n" +
+	"\fStartEngines\x12\x14.ctl.StartEnginesReq\x1a\x15.ctl.StartEnginesResp\"\x00\x127\n" +
 	"\n" +
 	"CollectLog\x12\x12.ctl.CollectLogReq\x1a\x13.ctl.CollectLogResp\"\x00\x12F\n" +
 	"\x11CheckEngineRepair\x12\x16.ctl.CheckEngineActReq\x1a\x17.ctl.CheckEngineActResp\"\x00B9Z7github.com/daos-stack/daos/src/control/common/proto/ctlb\x06proto3"
@@ -60,19 +61,21 @@ var file_ctl_ctl_proto_goTypes = []any{
 	(*SmdManageReq)(nil),       // 6: ctl.SmdManageReq
 	(*SetLogMasksReq)(nil),     // 7: ctl.SetLogMasksReq
 	(*RanksReq)(nil),           // 8: ctl.RanksReq
-	(*CollectLogReq)(nil),      // 9: ctl.CollectLogReq
-	(*CheckEngineActReq)(nil),  // 10: ctl.CheckEngineActReq
-	(*StorageScanResp)(nil),    // 11: ctl.StorageScanResp
-	(*StorageFormatResp)(nil),  // 12: ctl.StorageFormatResp
-	(*NvmeRebindResp)(nil),     // 13: ctl.NvmeRebindResp
-	(*NvmeAddDeviceResp)(nil),  // 14: ctl.NvmeAddDeviceResp
-	(*NetworkScanResp)(nil),    // 15: ctl.NetworkScanResp
-	(*SmdQueryResp)(nil),       // 16: ctl.SmdQueryResp
-	(*SmdManageResp)(nil),      // 17: ctl.SmdManageResp
-	(*SetLogMasksResp)(nil),    // 18: ctl.SetLogMasksResp
-	(*RanksResp)(nil),          // 19: ctl.RanksResp
-	(*CollectLogResp)(nil),     // 20: ctl.CollectLogResp
-	(*CheckEngineActResp)(nil), // 21: ctl.CheckEngineActResp
+	(*StartEnginesReq)(nil),    // 9: ctl.StartEnginesReq
+	(*CollectLogReq)(nil),      // 10: ctl.CollectLogReq
+	(*CheckEngineActReq)(nil),  // 11: ctl.CheckEngineActReq
+	(*StorageScanResp)(nil),    // 12: ctl.StorageScanResp
+	(*StorageFormatResp)(nil),  // 13: ctl.StorageFormatResp
+	(*NvmeRebindResp)(nil),     // 14: ctl.NvmeRebindResp
+	(*NvmeAddDeviceResp)(nil),  // 15: ctl.NvmeAddDeviceResp
+	(*NetworkScanResp)(nil),    // 16: ctl.NetworkScanResp
+	(*SmdQueryResp)(nil),       // 17: ctl.SmdQueryResp
+	(*SmdManageResp)(nil),      // 18: ctl.SmdManageResp
+	(*SetLogMasksResp)(nil),    // 19: ctl.SetLogMasksResp
+	(*RanksResp)(nil),          // 20: ctl.RanksResp
+	(*StartEnginesResp)(nil),   // 21: ctl.StartEnginesResp
+	(*CollectLogResp)(nil),     // 22: ctl.CollectLogResp
+	(*CheckEngineActResp)(nil), // 23: ctl.CheckEngineActResp
 }
 var file_ctl_ctl_proto_depIdxs = []int32{
 	0,  // 0: ctl.CtlSvc.StorageScan:input_type -> ctl.StorageScanReq
@@ -87,24 +90,26 @@ var file_ctl_ctl_proto_depIdxs = []int32{
 	8,  // 9: ctl.CtlSvc.StopRanks:input_type -> ctl.RanksReq
 	8,  // 10: ctl.CtlSvc.ResetFormatRanks:input_type -> ctl.RanksReq
 	8,  // 11: ctl.CtlSvc.StartRanks:input_type -> ctl.RanksReq
-	9,  // 12: ctl.CtlSvc.CollectLog:input_type -> ctl.CollectLogReq
-	10, // 13: ctl.CtlSvc.CheckEngineRepair:input_type -> ctl.CheckEngineActReq
-	11, // 14: ctl.CtlSvc.StorageScan:output_type -> ctl.StorageScanResp
-	12, // 15: ctl.CtlSvc.StorageFormat:output_type -> ctl.StorageFormatResp
-	13, // 16: ctl.CtlSvc.StorageNvmeRebind:output_type -> ctl.NvmeRebindResp
-	14, // 17: ctl.CtlSvc.StorageNvmeAddDevice:output_type -> ctl.NvmeAddDeviceResp
-	15, // 18: ctl.CtlSvc.NetworkScan:output_type -> ctl.NetworkScanResp
-	16, // 19: ctl.CtlSvc.SmdQuery:output_type -> ctl.SmdQueryResp
-	17, // 20: ctl.CtlSvc.SmdManage:output_type -> ctl.SmdManageResp
-	18, // 21: ctl.CtlSvc.SetEngineLogMasks:output_type -> ctl.SetLogMasksResp
-	19, // 22: ctl.CtlSvc.PrepShutdownRanks:output_type -> ctl.RanksResp
-	19, // 23: ctl.CtlSvc.StopRanks:output_type -> ctl.RanksResp
-	19, // 24: ctl.CtlSvc.ResetFormatRanks:output_type -> ctl.RanksResp
-	19, // 25: ctl.CtlSvc.StartRanks:output_type -> ctl.RanksResp
-	20, // 26: ctl.CtlSvc.CollectLog:output_type -> ctl.CollectLogResp
-	21, // 27: ctl.CtlSvc.CheckEngineRepair:output_type -> ctl.CheckEngineActResp
-	14, // [14:28] is the sub-list for method output_type
-	0,  // [0:14] is the sub-list for method input_type
+	9,  // 12: ctl.CtlSvc.StartEngines:input_type -> ctl.StartEnginesReq
+	10, // 13: ctl.CtlSvc.CollectLog:input_type -> ctl.CollectLogReq
+	11, // 14: ctl.CtlSvc.CheckEngineRepair:input_type -> ctl.CheckEngineActReq
+	12, // 15: ctl.CtlSvc.StorageScan:output_type -> ctl.StorageScanResp
+	13, // 16: ctl.CtlSvc.StorageFormat:output_type -> ctl.StorageFormatResp
+	14, // 17: ctl.CtlSvc.StorageNvmeRebind:output_type -> ctl.NvmeRebindResp
+	15, // 18: ctl.CtlSvc.StorageNvmeAddDevice:output_type -> ctl.NvmeAddDeviceResp
+	16, // 19: ctl.CtlSvc.NetworkScan:output_type -> ctl.NetworkScanResp
+	17, // 20: ctl.CtlSvc.SmdQuery:output_type -> ctl.SmdQueryResp
+	18, // 21: ctl.CtlSvc.SmdManage:output_type -> ctl.SmdManageResp
+	19, // 22: ctl.CtlSvc.SetEngineLogMasks:output_type -> ctl.SetLogMasksResp
+	20, // 23: ctl.CtlSvc.PrepShutdownRanks:output_type -> ctl.RanksResp
+	20, // 24: ctl.CtlSvc.StopRanks:output_type -> ctl.RanksResp
+	20, // 25: ctl.CtlSvc.ResetFormatRanks:output_type -> ctl.RanksResp
+	20, // 26: ctl.CtlSvc.StartRanks:output_type -> ctl.RanksResp
+	21, // 27: ctl.CtlSvc.StartEngines:output_type -> ctl.StartEnginesResp
+	22, // 28: ctl.CtlSvc.CollectLog:output_type -> ctl.CollectLogResp
+	23, // 29: ctl.CtlSvc.CheckEngineRepair:output_type -> ctl.CheckEngineActResp
+	15, // [15:30] is the sub-list for method output_type
+	0,  // [0:15] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name

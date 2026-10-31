@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,12 +34,13 @@ var defaultMessage = &MockMessage{}
 
 type testRequest struct {
 	retryableRequest
-	rpcFn    unaryRPC
-	toMS     bool
-	HostList []string
-	Deadline time.Time
-	Timeout  time.Duration
-	Sys      string
+	rpcFn      unaryRPC
+	toMS       bool
+	HostList   []string
+	Deadline   time.Time
+	Timeout    time.Duration
+	NoDeadline bool
+	Sys        string
 }
 
 func (tr *testRequest) isMSRequest() bool {
@@ -66,6 +68,14 @@ func (tr *testRequest) getTimeout() time.Duration {
 	return tr.Timeout
 }
 
+func (tr *testRequest) SetNoDeadline() {
+	tr.NoDeadline = true
+}
+
+func (tr *testRequest) noDeadline() bool {
+	return tr.NoDeadline
+}
+
 func (tr *testRequest) SetSystem(sys string) {
 	tr.Sys = sys
 }
@@ -83,6 +93,34 @@ func (tr *testRequest) getRPC() unaryRPC {
 type ctxCancel struct {
 	ctx    context.Context
 	cancel context.CancelFunc
+}
+
+func TestControl_setDeadlineIfUnset(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req         *testRequest
+		expDeadline bool
+	}{
+		"default": {
+			req:         &testRequest{},
+			expDeadline: true,
+		},
+		"request deadline": {
+			req:         &testRequest{Deadline: time.Now().Add(time.Hour)},
+			expDeadline: true,
+		},
+		"no deadline": {
+			req: &testRequest{NoDeadline: true},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := setDeadlineIfUnset(test.Context(t), tc.req)
+			defer cancel()
+
+			if _, hasDeadline := ctx.Deadline(); hasDeadline != tc.expDeadline {
+				t.Fatalf("expected deadline %v, got %v", tc.expDeadline, hasDeadline)
+			}
+		})
+	}
 }
 
 func TestControl_InvokeUnaryRPCAsync(t *testing.T) {

@@ -29,6 +29,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	MgmtSvc_Join_FullMethodName                     = "/mgmt.MgmtSvc/Join"
+	MgmtSvc_EnginePreflight_FullMethodName          = "/mgmt.MgmtSvc/EnginePreflight"
 	MgmtSvc_ClusterEvent_FullMethodName             = "/mgmt.MgmtSvc/ClusterEvent"
 	MgmtSvc_LeaderQuery_FullMethodName              = "/mgmt.MgmtSvc/LeaderQuery"
 	MgmtSvc_PoolCreate_FullMethodName               = "/mgmt.MgmtSvc/PoolCreate"
@@ -62,6 +63,8 @@ const (
 	MgmtSvc_SystemQuery_FullMethodName              = "/mgmt.MgmtSvc/SystemQuery"
 	MgmtSvc_SystemStop_FullMethodName               = "/mgmt.MgmtSvc/SystemStop"
 	MgmtSvc_SystemStart_FullMethodName              = "/mgmt.MgmtSvc/SystemStart"
+	MgmtSvc_SystemInitialize_FullMethodName         = "/mgmt.MgmtSvc/SystemInitialize"
+	MgmtSvc_SystemExtend_FullMethodName             = "/mgmt.MgmtSvc/SystemExtend"
 	MgmtSvc_SystemExclude_FullMethodName            = "/mgmt.MgmtSvc/SystemExclude"
 	MgmtSvc_SystemDrain_FullMethodName              = "/mgmt.MgmtSvc/SystemDrain"
 	MgmtSvc_SystemRebuildManage_FullMethodName      = "/mgmt.MgmtSvc/SystemRebuildManage"
@@ -102,6 +105,8 @@ const (
 type MgmtSvcClient interface {
 	// Join the server described by JoinReq to the system.
 	Join(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*JoinResp, error)
+	// Report what a server needs to decide whether to start an engine on boot.
+	EnginePreflight(ctx context.Context, in *EnginePreflightReq, opts ...grpc.CallOption) (*EnginePreflightResp, error)
 	// ClusterEvent notify MS of a RAS event in the cluster.
 	ClusterEvent(ctx context.Context, in *shared.ClusterEventReq, opts ...grpc.CallOption) (*shared.ClusterEventResp, error)
 	// LeaderQuery provides a mechanism for clients to discover
@@ -169,6 +174,10 @@ type MgmtSvcClient interface {
 	SystemStop(ctx context.Context, in *SystemStopReq, opts ...grpc.CallOption) (*SystemStopResp, error)
 	// Start DAOS system (restart data-plane instances)
 	SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error)
+	// Start engines on formatted hosts to form a new DAOS system
+	SystemInitialize(ctx context.Context, in *SystemInitializeReq, opts ...grpc.CallOption) (*SystemInitializeResp, error)
+	// Start engines on formatted hosts to join an existing DAOS system
+	SystemExtend(ctx context.Context, in *SystemExtendReq, opts ...grpc.CallOption) (*SystemExtendResp, error)
 	// Exclude DAOS ranks
 	SystemExclude(ctx context.Context, in *SystemExcludeReq, opts ...grpc.CallOption) (*SystemExcludeResp, error)
 	// Drain or reintegrate DAOS ranks from all pools
@@ -233,6 +242,16 @@ func (c *mgmtSvcClient) Join(ctx context.Context, in *JoinReq, opts ...grpc.Call
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(JoinResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_Join_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) EnginePreflight(ctx context.Context, in *EnginePreflightReq, opts ...grpc.CallOption) (*EnginePreflightResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnginePreflightResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_EnginePreflight_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -569,6 +588,26 @@ func (c *mgmtSvcClient) SystemStart(ctx context.Context, in *SystemStartReq, opt
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemInitialize(ctx context.Context, in *SystemInitializeReq, opts ...grpc.CallOption) (*SystemInitializeResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SystemInitializeResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_SystemInitialize_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) SystemExtend(ctx context.Context, in *SystemExtendReq, opts ...grpc.CallOption) (*SystemExtendResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SystemExtendResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_SystemExtend_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) SystemExclude(ctx context.Context, in *SystemExcludeReq, opts ...grpc.CallOption) (*SystemExcludeResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SystemExcludeResp)
@@ -832,6 +871,8 @@ func (c *mgmtSvcClient) FaultInjectMgmtPoolFault(ctx context.Context, in *chk.Fa
 type MgmtSvcServer interface {
 	// Join the server described by JoinReq to the system.
 	Join(context.Context, *JoinReq) (*JoinResp, error)
+	// Report what a server needs to decide whether to start an engine on boot.
+	EnginePreflight(context.Context, *EnginePreflightReq) (*EnginePreflightResp, error)
 	// ClusterEvent notify MS of a RAS event in the cluster.
 	ClusterEvent(context.Context, *shared.ClusterEventReq) (*shared.ClusterEventResp, error)
 	// LeaderQuery provides a mechanism for clients to discover
@@ -899,6 +940,10 @@ type MgmtSvcServer interface {
 	SystemStop(context.Context, *SystemStopReq) (*SystemStopResp, error)
 	// Start DAOS system (restart data-plane instances)
 	SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error)
+	// Start engines on formatted hosts to form a new DAOS system
+	SystemInitialize(context.Context, *SystemInitializeReq) (*SystemInitializeResp, error)
+	// Start engines on formatted hosts to join an existing DAOS system
+	SystemExtend(context.Context, *SystemExtendReq) (*SystemExtendResp, error)
 	// Exclude DAOS ranks
 	SystemExclude(context.Context, *SystemExcludeReq) (*SystemExcludeResp, error)
 	// Drain or reintegrate DAOS ranks from all pools
@@ -961,6 +1006,9 @@ type UnimplementedMgmtSvcServer struct{}
 
 func (UnimplementedMgmtSvcServer) Join(context.Context, *JoinReq) (*JoinResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method Join not implemented")
+}
+func (UnimplementedMgmtSvcServer) EnginePreflight(context.Context, *EnginePreflightReq) (*EnginePreflightResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method EnginePreflight not implemented")
 }
 func (UnimplementedMgmtSvcServer) ClusterEvent(context.Context, *shared.ClusterEventReq) (*shared.ClusterEventResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClusterEvent not implemented")
@@ -1060,6 +1108,12 @@ func (UnimplementedMgmtSvcServer) SystemStop(context.Context, *SystemStopReq) (*
 }
 func (UnimplementedMgmtSvcServer) SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method SystemStart not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemInitialize(context.Context, *SystemInitializeReq) (*SystemInitializeResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method SystemInitialize not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemExtend(context.Context, *SystemExtendReq) (*SystemExtendResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method SystemExtend not implemented")
 }
 func (UnimplementedMgmtSvcServer) SystemExclude(context.Context, *SystemExcludeReq) (*SystemExcludeResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method SystemExclude not implemented")
@@ -1171,6 +1225,24 @@ func _MgmtSvc_Join_Handler(srv interface{}, ctx context.Context, dec func(interf
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MgmtSvcServer).Join(ctx, req.(*JoinReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_EnginePreflight_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnginePreflightReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).EnginePreflight(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_EnginePreflight_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).EnginePreflight(ctx, req.(*EnginePreflightReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1769,6 +1841,42 @@ func _MgmtSvc_SystemStart_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemInitialize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemInitializeReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemInitialize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_SystemInitialize_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemInitialize(ctx, req.(*SystemInitializeReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_SystemExtend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemExtendReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemExtend(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_SystemExtend_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemExtend(ctx, req.(*SystemExtendReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_SystemExclude_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SystemExcludeReq)
 	if err := dec(in); err != nil {
@@ -2231,6 +2339,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtSvc_Join_Handler,
 		},
 		{
+			MethodName: "EnginePreflight",
+			Handler:    _MgmtSvc_EnginePreflight_Handler,
+		},
+		{
 			MethodName: "ClusterEvent",
 			Handler:    _MgmtSvc_ClusterEvent_Handler,
 		},
@@ -2361,6 +2473,14 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemStart",
 			Handler:    _MgmtSvc_SystemStart_Handler,
+		},
+		{
+			MethodName: "SystemInitialize",
+			Handler:    _MgmtSvc_SystemInitialize_Handler,
+		},
+		{
+			MethodName: "SystemExtend",
+			Handler:    _MgmtSvc_SystemExtend_Handler,
 		},
 		{
 			MethodName: "SystemExclude",

@@ -60,6 +60,9 @@ type EngineInstance struct {
 	storage         *storage.Provider
 	waitFormat      atm.Bool
 	storageReady    chan struct{}
+	waitStart       atm.Bool
+	startReady      chan bool
+	stopRequested   atm.Bool
 	waitDrpc        atm.Bool
 	drpcReady       chan *srvpb.NotifyReadyReq
 	ready           atm.Bool
@@ -67,6 +70,7 @@ type EngineInstance struct {
 	fsRoot          string
 	hostFaultDomain *system.FaultDomain
 	joinSystem      systemJoinFn
+	onAwaitStart    func()
 	replaceRank     atomic.Pointer[ranklist.Rank]
 	onAwaitFormat   []onAwaitFormatFn
 	onStorageReady  []onStorageReadyFn
@@ -80,7 +84,7 @@ type EngineInstance struct {
 	_drpcSocket      string
 	_cancelCtx       context.CancelFunc
 	_superblock      *Superblock
-	_lastErr         error // populated when harness receives signal
+	_exitErr         error
 	_lastHealthStats map[string]*ctlpb.BioHealthResp
 	// Guard against closing storageReady more than once for the current start attempt. Reset
 	// to false each time a new channel is created.
@@ -96,6 +100,7 @@ func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r
 		joinSystem:       jf,
 		drpcReady:        make(chan *srvpb.NotifyReadyReq, 1),
 		storageReady:     make(chan struct{}),
+		startReady:       make(chan bool, 1),
 		startRequested:   make(chan bool),
 		Publisher:        ps,
 		_lastHealthStats: make(map[string]*ctlpb.BioHealthResp),
@@ -109,10 +114,22 @@ func (ei *EngineInstance) WithHostFaultDomain(fd *system.FaultDomain) *EngineIns
 	return ei
 }
 
+// holdStart holds the engine's first start and calls fn once it is held.
+func (ei *EngineInstance) holdStart(fn func()) {
+	ei.onAwaitStart = fn
+	ei.waitStart.SetTrue()
+}
+
 // isAwaitingFormat indicates whether EngineInstance is waiting
 // for an administrator action to trigger a format.
 func (ei *EngineInstance) isAwaitingFormat() bool {
 	return ei.waitFormat.Load()
+}
+
+// isAwaitingStart indicates whether EngineInstance is waiting
+// for an administrator action to trigger an engine start.
+func (ei *EngineInstance) isAwaitingStart() bool {
+	return ei.waitStart.Load()
 }
 
 // IsStarted indicates whether EngineInstance is in a running state.
@@ -162,9 +179,24 @@ func (ei *EngineInstance) LocalState() system.MemberState {
 		return system.MemberStateStarting
 	case ei.isAwaitingFormat():
 		return system.MemberStateAwaitFormat
+	case ei.isAwaitingStart():
+		return system.MemberStateAwaitStart
 	default:
 		return system.MemberStateStopped
 	}
+}
+
+// getExitErr returns why the engine last exited; requestStart clears it.
+func (ei *EngineInstance) getExitErr() error {
+	ei.RLock()
+	defer ei.RUnlock()
+	return ei._exitErr
+}
+
+func (ei *EngineInstance) setExitErr(err error) {
+	ei.Lock()
+	defer ei.Unlock()
+	ei._exitErr = err
 }
 
 // setIndex sets the server index assigned by the harness.

@@ -117,6 +117,7 @@ func TestPretty_PrintSystemQueryResp(t *testing.T) {
 		absentRanks    string
 		selfHealPolicy string
 		verbose        bool
+		wholeSystem    bool
 		expPrintStr    string
 	}{
 		"empty response": {
@@ -124,6 +125,14 @@ func TestPretty_PrintSystemQueryResp(t *testing.T) {
 			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
 			expPrintStr: `
 Query matches no ranks in system
+`,
+		},
+		"empty response; nothing has joined": {
+			resp:           &control.SystemQueryResp{},
+			selfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
+			wholeSystem:    true,
+			expPrintStr: `
+No ranks have joined the system. Formatted engines wait for dmg system initialize.
 `,
 		},
 		"response with missing hosts and ranks": {
@@ -436,7 +445,7 @@ Unknown 3 ranks: 7-9
 			// pass the same io writer to standard and error stream
 			// parameters to mimic combined output seen on terminal
 			if err := PrintSystemQueryResponse(&bld, &bld, tc.resp,
-				PrintWithVerboseOutput(tc.verbose)); err != nil {
+				PrintWithVerboseOutput(tc.verbose), PrintWithWholeSystem(tc.wholeSystem)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -588,6 +597,65 @@ Rank Operation Result
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected results table (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintSystemStartHostsResponse(t *testing.T) {
+	joined := func(r uint32, addr string) *MemberResult {
+		mr := NewMemberResult(Rank(r), nil, MemberStateJoined, "start")
+		mr.Addr = addr
+		return mr
+	}
+	short := func(addr string, msg string) *MemberResult {
+		mr := NewMemberResult(NilRank, errors.New(msg), MemberStateErrored, "start")
+		mr.Addr = addr
+		return mr
+	}
+
+	for name, tc := range map[string]struct {
+		resp        *control.SystemStartHostsResp
+		expPrintStr string
+	}{
+		"empty response": {
+			resp: &control.SystemStartHostsResp{},
+			expPrintStr: `
+No engines joined
+`,
+		},
+		"all joined": {
+			resp: &control.SystemStartHostsResp{
+				Results: MemberResults{
+					joined(0, "foo-1:10001"), joined(1, "foo-1:10001"),
+					joined(2, "foo-2:10001"), joined(3, "foo-2:10001"),
+				},
+			},
+			expPrintStr: `
+4 engines joined on 2 hosts
+`,
+		},
+		"host short": {
+			resp: &control.SystemStartHostsResp{
+				Results: MemberResults{
+					joined(0, "foo-1:10001"), joined(1, "foo-1:10001"),
+					joined(2, "foo-2:10001"), short("foo-2:10001", "1 of 2 engines joined"),
+					short("foo-3:10001", "connection refused"),
+				},
+			},
+			expPrintStr: `
+foo-2:10001: 1 of 2 engines joined
+foo-3:10001: connection refused
+3 engines joined on 2 hosts
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			PrintSystemStartHostsResponse(&bld, &bld, tc.resp)
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected string output (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

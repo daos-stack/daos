@@ -102,6 +102,7 @@ type storageFormatCmd struct {
 	Force   bool    `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
 	Replace bool    `long:"replace" description:"Replace an excluded rank. Allows a DAOS engine instance to reclaim its old rank number after metadata is lost due to PMem or other storage media failure"`
 	Rank    *uint32 `long:"rank" description:"Specific rank to replace (only valid with --replace)"`
+	Start   bool    `long:"start" description:"Start the engines after formatting instead of waiting for dmg system initialize"`
 }
 
 // Execute is run when storageFormatCmd activates.
@@ -127,7 +128,7 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		rank = *cmd.Rank
 	}
 
-	req := &control.StorageFormatReq{Reformat: cmd.Force, Replace: cmd.Replace, Rank: rank}
+	req := &control.StorageFormatReq{Reformat: cmd.Force, Replace: cmd.Replace, Rank: rank, Start: cmd.Start}
 	req.SetHostList(cmd.getHostList())
 
 	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)

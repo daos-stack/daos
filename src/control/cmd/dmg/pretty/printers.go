@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,6 +38,8 @@ type (
 		ShowHostPorts bool
 		// LEDInfoOnly indicates that the output should only include LED related info.
 		LEDInfoOnly bool
+		// WholeSystem indicates that the response was not filtered by rank, host or state.
+		WholeSystem bool
 	}
 
 	// PrintConfigOption defines a config function.
@@ -53,6 +56,13 @@ type (
 func PrintWithVerboseOutput(verbose bool) PrintConfigOption {
 	return func(cfg *PrintConfig) {
 		cfg.Verbose = verbose
+	}
+}
+
+// PrintWithWholeSystem indicates that the response covers the whole system.
+func PrintWithWholeSystem(whole bool) PrintConfigOption {
+	return func(cfg *PrintConfig) {
+		cfg.WholeSystem = whole
 	}
 }
 

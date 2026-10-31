@@ -891,7 +891,7 @@ class TestWithServers(TestWithoutServers):
             self.start_agent_managers(force)
             self.register_cleanup(self.stop_agents)
 
-    def start_servers(self, server_groups=None, force=False):
+    def start_servers(self, server_groups=None, force=False, **kwargs):
         """Start the daos_server processes.
 
         Args:
@@ -903,6 +903,7 @@ class TestWithServers(TestWithoutServers):
                 file to define a single server group entry.
             force (bool, optional): whether or not to force starting the
                 servers. Defaults to False.
+            kwargs (dict): arguments for each server manager's start method
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an error starting the
@@ -912,7 +913,7 @@ class TestWithServers(TestWithoutServers):
         force_agent_start = False
         self.setup_servers(server_groups)
         if self.server_managers:
-            force_agent_start = self.start_server_managers(force)
+            force_agent_start = self.start_server_managers(force, **kwargs)
             self.register_cleanup(self.stop_servers)
         return force_agent_start
 
@@ -1233,12 +1234,13 @@ class TestWithServers(TestWithoutServers):
                 len(self.agent_managers))
 
     @fail_on(CommandFailure)
-    def start_server_managers(self, force=False):
+    def start_server_managers(self, force=False, **kwargs):
         """Start the daos_server processes on each specified list of hosts.
 
         Args:
             force (bool, optional): whether or not to force starting the
                 servers. Defaults to False.
+            kwargs (dict): arguments for each server manager's start method
 
         Returns:
             bool: whether or not to force the starting of the agents
@@ -1262,7 +1264,7 @@ class TestWithServers(TestWithoutServers):
             # Start the servers
             self.log.info("-" * 100)
             self.log.info("--- STARTING SERVERS ---")
-            self._start_manager_list("server", self.server_managers)
+            self._start_manager_list("server", self.server_managers, **kwargs)
 
             # Force agent restart whenever servers are restarted
             force_agent_start = True
@@ -1324,12 +1326,13 @@ class TestWithServers(TestWithoutServers):
 
         return status
 
-    def _start_manager_list(self, name, manager_list):
+    def _start_manager_list(self, name, manager_list, **kwargs):
         """Start each manager in the specified list.
 
         Args:
             name (str): manager name
             manager_list (list): list of SubprocessManager objects to start
+            kwargs (dict): arguments for each manager's start method
         """
         # We probably want to do this parallel if end up with multiple managers
         for manager in manager_list:
@@ -1337,7 +1340,7 @@ class TestWithServers(TestWithoutServers):
                 "Starting %s: group=%s, hosts=%s, config=%s",
                 name, manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
-            manager.start()
+            manager.start(**kwargs)
 
     def _list_server_manager_info(self):
         """Display information about the running servers."""
@@ -1854,4 +1857,4 @@ class TestWithServers(TestWithoutServers):
             self.hostfile_servers_slots,
             mgmt_svc_replicas
         )
-        self._start_manager_list("server", [self.server_managers[-1]])
+        self._start_manager_list("server", [self.server_managers[-1]], extend=True)

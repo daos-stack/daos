@@ -91,9 +91,12 @@ class DmgSystemReformatTest(TestWithServers):
                 count += 1
                 time.sleep(10)
 
+        self.log.info("Perform dmg system initialize on all system ranks:")
+        self.server_managers[-1].manager.timestamps["start"] = journalctl_time()
+        dmg.system_initialize()
+
         # Check that engine starts up again
         self.log.info("<SERVER> Waiting for the engines to start")
-        self.server_managers[-1].manager.timestamps["start"] = journalctl_time()
         self.server_managers[-1].detect_engine_start()
 
         # Check that we have cleared storage by checking pool list
