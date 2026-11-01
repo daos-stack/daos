@@ -81,9 +81,6 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool, pme
 		return nil, errors.Wrap(errNvme, "nvme scan")
 	}
 
-	// Only discover PMem if the generated config may use it: with tmpfs SCM (including
-	// MD-on-SSD, which requires tmpfs SCM) the results would be ignored and a missing
-	// ipmctl binary would be a spurious failure.
 	scmResp := &storage.ScmScanResponse{}
 	if pmemInConfig {
 		ssc := &scanSCMCmd{
@@ -96,7 +93,7 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool, pme
 		}
 
 		var errScm error
-		if scmResp, errScm = scanPMem(ssc, pmemInConfig); errScm != nil {
+		if scmResp, errScm = scanPMem(ssc); errScm != nil {
 			return nil, errors.Wrap(errScm, "scm scan")
 		}
 	}

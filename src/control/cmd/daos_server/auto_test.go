@@ -718,10 +718,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	}
 }
 
-// TestDaosServer_Auto_confGen_pmemInConfig verifies that confGen() derives the pmemInConfig
-// value forwarded to getStorage() (getLocalStorage() in production) correctly: PMem discovery
-// should be skipped (pmemInConfig == false) whenever tmpfs SCM is requested (which includes
-// MD-on-SSD, as it requires tmpfs SCM), and performed otherwise.
+// TestDaosServer_Auto_confGen_pmemInConfig verifies the pmemInConfig value forwarded by
+// confGen() to getStorage().
 func TestDaosServer_Auto_confGen_pmemInConfig(t *testing.T) {
 	errStop := errors.New("stop after getStorage")
 

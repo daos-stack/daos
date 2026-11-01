@@ -232,10 +232,7 @@ type scanSCMCmd struct {
 	scmCmd
 }
 
-// scanPMem scans for locally-attached PMem. pmemInConfig indicates whether PMem is
-// expected to be present (e.g. false for tmpfs/MD-on-SSD deployments), determining
-// whether a missing ipmctl binary is treated as fatal (see scm.Provider.Scan()).
-func scanPMem(cmd *scanSCMCmd, pmemInConfig bool) (*storage.ScmScanResponse, error) {
+func scanPMem(cmd *scanSCMCmd) (*storage.ScmScanResponse, error) {
 	cmd.Info("Scanning locally-attached PMem storage...")
 
 	if cmd.config != nil && cmd.SocketID == nil {
@@ -244,7 +241,7 @@ func scanPMem(cmd *scanSCMCmd, pmemInConfig bool) (*storage.ScmScanResponse, err
 
 	req := storage.ScmScanRequest{
 		SocketID:     cmd.SocketID,
-		PMemInConfig: pmemInConfig,
+		PMemInConfig: true,
 	}
 
 	cmd.Tracef("scm scan request: %+v", req)
@@ -254,7 +251,7 @@ func scanPMem(cmd *scanSCMCmd, pmemInConfig bool) (*storage.ScmScanResponse, err
 func (cmd *scanSCMCmd) Execute(_ []string) error {
 	cmd.Debugf("executing scan scm command: %+v", cmd)
 
-	resp, err := scanPMem(cmd, true)
+	resp, err := scanPMem(cmd)
 	if err != nil {
 		return err
 	}
