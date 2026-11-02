@@ -2053,6 +2053,10 @@ unregister_map_task(struct dc_pool *pool, tse_task_t *task)
  * mra_i is an index in the internal node array of a pool map. It is used to
  * perform a round robin of the array starting from a random element.
  *
+ * mra_hint_rank is a preferred first rank to query (e.g. the engine that
+ * returned -DER_STALE), or CRT_NO_RANK. It is consumed once, after which
+ * the normal round robin resumes.
+ *
  * mra_n is the number of "serious" errors at which we will fall back to
  * POOL_QUERY via dc_pool_query. "Serious" errors like -DER_NO_HDL or
  * -DER_NONEXIST are not "retryable" normally. In the case of
@@ -2066,10 +2070,7 @@ struct map_refresh_arg {
 	bool			mra_passive;
 	bool			mra_fallen_back;
 	unsigned int		mra_map_version;
-	int			mra_i;
-	/* Preferred first rank to query (e.g. the -DER_STALE replier), or
-	 * CRT_NO_RANK. Consumed once, then normal round robin resumes.
-	 */
+	int                     mra_i;
 	d_rank_t                mra_hint_rank;
 	int			mra_n;
 	struct d_backoff_seq	mra_backoff_seq;
