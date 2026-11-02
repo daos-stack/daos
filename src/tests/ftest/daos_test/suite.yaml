@@ -26,11 +26,13 @@ timeouts:
   test_daos_md_replication: 104
   test_daos_rebuild_simple: 3000
   test_daos_drain_simple: 3720
+  test_daos_drain_simple_16: 400
   test_daos_extend_simple: 3600
   test_daos_rebuild_interactive: 1485
   test_daos_oid_allocator: 640
   test_daos_checksum: 800
   test_daos_rebuild_ec: 10800
+  test_daos_rebuild_ec_5_9: 1100
   test_daos_aggregate_ec: 200
   test_daos_degraded_ec: 1900
   test_daos_dedup: 220
@@ -52,7 +54,11 @@ server_config:
         - D_LOG_FILE_APPEND_RANK=1
         - D_LOG_FLUSH=DEBUG
         - HG_LOG_LEVEL=warn
-        - HG_LOG_SUBSYS=hg,na,libfabric
+        - HG_LOG_SUBSYS=hg,na
+        - FI_LOG_LEVEL=info
+        - FI_LOG_PROV=verbs,ofi_rxm
+        - FI_LOG_SUBSYS=ep_ctrl,eq,cq
+        - D_LOG_STDERR_IN_LOG=1
         - DAOS_PIPELINE=1
       storage: auto
     1:
@@ -66,7 +72,11 @@ server_config:
         - D_LOG_FILE_APPEND_RANK=1
         - D_LOG_FLUSH=DEBUG
         - HG_LOG_LEVEL=warn
-        - HG_LOG_SUBSYS=hg,na,libfabric
+        - HG_LOG_SUBSYS=hg,na
+        - FI_LOG_LEVEL=info
+        - FI_LOG_PROV=verbs,ofi_rxm
+        - FI_LOG_SUBSYS=ep_ctrl,eq,cq
+        - D_LOG_STDERR_IN_LOG=1
         - DAOS_PIPELINE=1
       storage: auto
   transport_config:
@@ -107,11 +117,13 @@ daos_tests:
     test_daos_md_replication: 2
     test_daos_rebuild_simple: 1
     test_daos_drain_simple: 1
+    test_daos_drain_simple_16: 1
     test_daos_extend_simple: 1
     test_daos_rebuild_interactive: 1
     test_daos_oid_allocator: 1
     test_daos_checksum: 1
     test_daos_rebuild_ec: 1
+    test_daos_rebuild_ec_5_9: 1
     test_daos_aggregate_ec: 1
     test_daos_degraded_ec: 1
     test_daos_dedup: 1
@@ -137,9 +149,11 @@ daos_tests:
     test_daos_md_replication: DAOS_MD_Replication
     test_daos_rebuild_simple: DAOS_Rebuild_Simple
     test_daos_drain_simple: DAOS_Drain_Simple
+    test_daos_drain_simple_16: DAOS_Drain_Simple_16
     test_daos_oid_allocator: DAOS_OID_Allocator
     test_daos_checksum: DAOS_Checksum
     test_daos_rebuild_ec: DAOS_Rebuild_EC
+    test_daos_rebuild_ec_5_9: DAOS_Rebuild_EC_5_9
     test_daos_aggregate_ec: DAOS_Aggregate_EC
     test_daos_degraded_ec: DAOS_Degraded_EC
     test_daos_dedup: DAOS_Dedup
@@ -167,11 +181,13 @@ daos_tests:
     test_daos_md_replication: R
     test_daos_rebuild_simple: v
     test_daos_drain_simple: b
+    test_daos_drain_simple_16: b
     test_daos_extend_simple: B
     test_daos_rebuild_interactive: j
     test_daos_oid_allocator: O
     test_daos_checksum: z
     test_daos_rebuild_ec: S
+    test_daos_rebuild_ec_5_9: S
     test_daos_aggregate_ec: Z
     test_daos_degraded_ec: X
     test_daos_dedup: U
@@ -180,10 +196,12 @@ daos_tests:
   args:
     test_daos_ec_io: -l"EC_4P2G1"
     test_daos_rebuild_ec: -s5
+    test_daos_rebuild_ec_5_9: -s5 --subtests=5,9
     test_daos_md_replication: -s5
     test_daos_degraded_mode: -s7
     test_daos_rebuild_simple: -s3
     test_daos_drain_simple: -s3
+    test_daos_drain_simple_16: -s3 --subtests=16
     test_daos_extend_simple: -s3
     test_daos_rebuild_interactive: -s5
     test_daos_oid_allocator: -s5
@@ -197,6 +215,8 @@ daos_tests:
     test_daos_distributed_tx: 5
     test_daos_rebuild_simple: 21
     test_daos_drain_simple: 8
+    test_daos_drain_simple_16: 1
     test_daos_extend_simple: 5
     test_daos_rebuild_ec: 44
+    test_daos_rebuild_ec_5_9: 2
     test_daos_degraded_ec: 29
