@@ -54,6 +54,6 @@ ior_background:
   transfer_size: 1M
   flags: "-v -w -r -R -k -G 1 -F"
   block_size: '150G'
-  repetitions: 4   # 4 iterations of write + read for 30s each,
+  repetitions: 6   # 6 iterations of write + read for 30s each,
   sw_deadline: 30  # for a total of ~240s
   sw_wearout: 1
