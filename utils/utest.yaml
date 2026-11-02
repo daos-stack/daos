@@ -179,6 +179,10 @@
     - cmd: ["bin/eq_tests"]
     - cmd: ["bin/agent_tests"]
     - cmd: ["bin/job_tests"]
+- name: pool_client
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/pool/tests/pool_cli_tests"]
 - name: cart
   tsan: True
   base: "BUILD_DIR"
