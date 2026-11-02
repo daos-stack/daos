@@ -163,9 +163,8 @@ out:
 		D_FREE(report.timestamp);
 	chk_sg_free(report.act_details, report.n_act_details);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Check leader upcall for instance "DF_X64" for seq "DF_X64": "DF_RC"\n",
-		 gen, seq, DP_RC(rc));
+	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO, rc,
+		  "CHK upcall for instance " DF_X64 " with seq " DF_X64, gen, seq);
 
 	return rc;
 }

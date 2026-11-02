@@ -367,11 +367,13 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 		return rc;
 	}
 
+	/** register DTX module key */
+	dss_register_key(dtx_module.sm_key);
+
 	/** start an engine */
 	rc = dlck_engine_start(&args->engine, &engine);
 	if (rc != DER_SUCCESS) {
-		(void)ABT_finalize();
-		return rc;
+		goto fail_unregister;
 	}
 
 	if (d_list_empty(&args->files.list)) {
@@ -398,9 +400,6 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 		random_uuid(bundle->co_uuids[i], &seed);
 	}
 
-	/** register DTX module key */
-	dss_register_key(dtx_module.sm_key);
-
 	bundle->args_engine = &args->engine;
 	bundle->args_files  = &args->files;
 	bundle->engine      = engine;
@@ -410,6 +409,8 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 
 fail_engine_stop:
 	(void)dlck_engine_stop(engine);
+fail_unregister:
+	dss_unregister_key(dtx_module.sm_key);
 	(void)ABT_finalize();
 	return rc;
 }
@@ -420,21 +421,25 @@ teardown(struct bundle *bundle)
 	int rc_abt;
 	int rc;
 
-	dss_unregister_key(dtx_module.sm_key);
-
 	D_FREE(bundle->co_uuids);
 
 	rc = dlck_engine_stop(bundle->engine);
 	if (rc != DER_SUCCESS) {
-		(void)ABT_finalize();
-		return rc;
+		goto fail_unregister;
 	}
+
+	dss_unregister_key(dtx_module.sm_key);
 
 	rc_abt = ABT_finalize();
 	if (rc_abt != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc_abt);
 	}
 
+	return rc;
+
+fail_unregister:
+	dss_unregister_key(dtx_module.sm_key);
+	(void)ABT_finalize();
 	return rc;
 }
 
