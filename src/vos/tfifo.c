@@ -29,7 +29,7 @@
  *
  * tfifo_destroy(tq);		// Destroy TFIFO queue
  *
- * Resource holder must invoke tfifo_wakeup_next() after releasing the resource.
+ * Resource holder must invoke tfifo_wakeup() after releasing the resource.
  */
 
 #define D_LOGFAC DD_FAC(vos)
@@ -136,7 +136,7 @@ tfifo_create(unsigned int tiers)
 }
 
 void
-tfifo_wakeup_next(struct tfifo_queue *tq)
+tfifo_wakeup(struct tfifo_queue *tq)
 {
 	struct fifo_wait_queue *wq;
 	int                     i;
@@ -147,12 +147,36 @@ tfifo_wakeup_next(struct tfifo_queue *tq)
 	for (i = 0; i < tq->tq_tiers; i++) {
 		wq = &tq->tq_wait_queue[i];
 
+		/* Wakeup the waiter who is waiting for resource */
+		if (wq->fwq_acquired) {
+			ABT_mutex_lock(wq->fwq_mutex);
+			ABT_cond_broadcast(wq->fwq_cond_first);
+			ABT_mutex_unlock(wq->fwq_mutex);
+			break;
+		}
+		/* Stop ascending when current tier has waiters */
+		if (wq->fwq_waiters > 0)
+			break;
+	}
+}
+
+static void
+tfifo_wakeup_next(struct tfifo_queue *tq, unsigned int tier)
+{
+	struct fifo_wait_queue *wq;
+	int                     i;
+
+	for (i = tier; i < tq->tq_tiers; i++) {
+		wq = &tq->tq_wait_queue[i];
+
 		if (wq->fwq_waiters > 0) {
 			ABT_mutex_lock(wq->fwq_mutex);
-			if (wq->fwq_acquired)
+			if (wq->fwq_acquired) {
 				ABT_cond_broadcast(wq->fwq_cond_first);
-			else
+			} else {
 				ABT_cond_signal(wq->fwq_cond_fifo);
+				wq->fwq_acquired = 1;
+			}
 			ABT_mutex_unlock(wq->fwq_mutex);
 			break;
 		}
@@ -177,8 +201,9 @@ tfifo_enter(struct tfifo_queue *tq, unsigned int tier)
 		ABT_mutex_lock(wq->fwq_mutex);
 		ABT_cond_wait(wq->fwq_cond_fifo, wq->fwq_mutex);
 		ABT_mutex_unlock(wq->fwq_mutex);
+	} else {
+		wq->fwq_acquired = 1;
 	}
-	wq->fwq_acquired = 1;
 }
 
 void
@@ -194,7 +219,7 @@ tfifo_exit(struct tfifo_queue *tq, unsigned int tier)
 	D_ASSERT(wq->fwq_acquired);
 	wq->fwq_acquired = 0;
 
-	tfifo_wakeup_next(tq);
+	tfifo_wakeup_next(tq, tier);
 }
 
 void
