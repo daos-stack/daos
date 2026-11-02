@@ -5,11 +5,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from dfuse_utils import get_dfuse, start_dfuse
-from fio_test_base import FioBase
+from fio_utils import TestFio
 from ior_test_base import IorTestBase
 
 
-class EcodFaultInjection(IorTestBase, FioBase):
+class EcodFaultInjection(IorTestBase, TestFio):
     """EC Fault domains Test class.
 
     Test Class Description: To validate Erasure code object type classes with Fault injection.
@@ -57,5 +57,6 @@ class EcodFaultInjection(IorTestBase, FioBase):
         container.set_attr(attrs={'dfuse-direct-io-disable': 'on'})
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, pool, container)
-        self.fio_cmd.update_directory(dfuse.mount_dir.value)
-        self.execute_fio()
+        fio_cmd = self.get_fio_command()
+        fio_cmd.update_directory(dfuse.mount_dir.value)
+        fio_cmd.run()

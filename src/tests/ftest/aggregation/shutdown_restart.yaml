@@ -14,7 +14,6 @@ pool:
   svcn: 1
 container:
   type: POSIX
-  control_method: daos
 ior:
   api: "DFS"
   client_processes:

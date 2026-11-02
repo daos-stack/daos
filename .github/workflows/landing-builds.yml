@@ -55,7 +55,7 @@ jobs:
             with: rockylinux/rockylinux:9
             python: 3.11
           - distro: fedora
-            base: el.8
+            base: el.9
             with: fedora:38
             python: 3.11
           - distro: leap.15
@@ -69,7 +69,7 @@ jobs:
       PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -123,7 +123,7 @@ jobs:
       PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -183,7 +183,7 @@ jobs:
             with: rockylinux/rockylinux:9
             python: 3.11
           - distro: fedora
-            base: el.8
+            base: el.9
             with: fedora:38
             python: 3.11
           - distro: leap.15
@@ -198,7 +198,7 @@ jobs:
       PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -260,19 +260,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma.8, alma.9, rocky.8, ubuntu]
+        distro: [alma.9, rocky.9, ubuntu]
         include:
-          - distro: alma.8
-            base: el.8
-            with: almalinux:8
-            python: 3.11
           - distro: alma.9
             base: el.9
             with: almalinux:9
             python: 3.11
-          - distro: rocky.8
-            base: el.8
-            with: rockylinux/rockylinux:8
+          - distro: rocky.9
+            base: el.9
+            with: rockylinux/rockylinux:9
             python: 3.11
           - distro: ubuntu
             base: ubuntu
@@ -284,7 +280,7 @@ jobs:
       PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: 'recursive'
           fetch-depth: 500
@@ -369,16 +365,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [ubuntu, alma.8, leap.15]
+        distro: [ubuntu, alma.9, leap.15]
         compiler: [clang]
         include:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:noble
             python: 3
-          - distro: alma.8
-            base: el.8
-            with: almalinux:8
+          - distro: alma.9
+            base: el.9
+            with: almalinux:9
             python: 3.11
           - distro: leap.15
             base: leap.15
@@ -392,7 +388,7 @@ jobs:
       PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: 'recursive'
           fetch-depth: 500

@@ -43,7 +43,11 @@ clean_bin "${files[@]}"
 append_install_list "${files[@]}"
 
 ARCH="${isa}"
-DEPENDS=("(mercury-libfabric or mercury-ucx)")
+if [ "${OUTPUT_TYPE:-rpm}" = "rpm" ]; then
+	DEPENDS=("(mercury-libfabric or mercury-ucx)")
+else
+	DEPENDS=("mercury-libfabric | mercury-ucx")
+fi
 build_package "mercury"
 DEPENDS=()
 
@@ -73,7 +77,7 @@ TARGET_PATH="${includedir}"
 list_files files "${SL_MERCURY_PREFIX}/include/*.h"
 append_install_list "${files[@]}"
 
-TARGET_PATH="${libdir/pkgconfig}"
+TARGET_PATH="${libdir}/pkgconfig"
 list_files files "${SL_MERCURY_PREFIX}/lib64/pkgconfig/*.pc"
 replace_paths "${SL_MERCURY_PREFIX}" "${files[@]}"
 if [ -n "${SL_OFI_PREFIX:-}" ]; then

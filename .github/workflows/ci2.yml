@@ -36,7 +36,7 @@ jobs:
       PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: true
           fetch-depth: 500
@@ -91,7 +91,7 @@ jobs:
             base: el.9
             with: rockylinux/rockylinux:9
           - distro: fedora
-            base: el.8
+            base: el.9
             with: fedora:38
           - distro: leap.15
             base: leap.15
@@ -103,7 +103,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           submodules: true
           fetch-depth: 500

@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -68,7 +69,7 @@ class ManagementServiceResilience(TestWithServers):
 
     def create_pool(self):
         """Create a pool on the server group."""
-        self.add_pool(create=False)
+        self.pool = self.get_pool(create=False)
         self.pool.name.value = self.server_group
         self.log.info("*** creating pool")
         self.pool.create()

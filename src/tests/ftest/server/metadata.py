@@ -78,11 +78,11 @@ class ObjectMetadata(TestWithServers):
 
         """
         if svc_ops_enabled:
-            self.add_pool()
+            self.pool = self.get_pool()
         else:
             params = {}
             params['properties'] = "rd_fac:0,space_rb:0,svc_ops_enabled:0"
-            self.add_pool(**params)
+            self.pool = self.get_pool(**params)
         self.log.info("Created %s: svc ranks:", str(self.pool))
         for index, rank in enumerate(self.pool.svc_ranks):
             self.log.info("[%d]: %d", index, rank)

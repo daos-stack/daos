@@ -1,13 +1,155 @@
 # DAOS Version 2.8 Release Notes
 
+We are pleased to announce the release of DAOS version 2.8.
+
+## DAOS Version 2.8.1 (2026-10-26)
+
+The DAOS 2.8.1 release includes the
+[daos-2.8.1 RPM packages](https://packages.daos.io/v2.8.1/) and its prerequisites.
+
+### Known Issues and Limitations
+
+* An issue with the checksum scrubber has been observed that may cause DAOS engines
+  to assert and crash (DAOS-19721). Enabling the checksum scrubber is discouraged
+  until this issue has been fixed.
+
+### Bug fixes
+
+The DAOS 2.8.1 release includes the following fixes.
+
+* object -- fix EC selection and CPD layout refresh races (DAOS-19636):
+ Fix several race conditions in DAOS object I/O that could occur
+ when a layout refresh happens during rebuild or reintegration. Target selection,
+ shard identity, parity/degraded placement, and enumeration logic could use stale
+ layout data after a refresh.
+ The fix makes layout-dependent decisions version-aware and protected under cob\_lock,
+ revalidates shards against the current layout, preserves request identity fields
+ from a stable snapshot, and returns -DER\_STALE when a layout changes
+ so the operation can refresh and retry safely.
+
+* object -- fix a replica lookup and layout refresh race (DAOS-19636):
+ Fix a race in object replica lookup and layout refresh when using extended layouts,
+ where selection of the next replica could use stale shard information after an RPC failure.
+ The fix makes replica retry logic use the failed RPC’s physical shard index and group size,
+ reads layout metadata consistently under cob\_lock, and returns -DER\_STALE
+ when the layout changes so I/O retries with a refreshed layout.
+
+* mercury -- memory leak and performance degradation with UCX (DAOS-18988):
+ Update the mercury UCX plugin to make na\_ucx\_addr\_deserialize() behave like the OFI plugin
+ to look up the packed worker address in a cache and reuse the existing na\_ucx\_addr/ucp\_ep,
+ creating one only on miss. This fixes an issue where on continuous bulk transfers with UCX,
+ the client memory kept growing and performance slowed down due to always creating
+ a UCP endpoint and bypassing the cache.
+
+* object -- Erasure-coded I/O map merge could crash (DAOS-17681):
+ Merging the I/O maps of an EC object could trip an assertion or touch invalid
+ memory. The merge logic is corrected, with a new test that reproduces the original failure.
+
+* object -- Querying the max epoch inside a transaction could segfault (DAOS-19495):
+ A max-epoch query carries no dkey or akey, but the transaction layer still recorded it
+ as a one-entry read. Committing the transaction then dereferenced a NULL I/O descriptor
+ and crashed. Such queries are now recorded as an object-level read, and any read without a
+ dkey is treated the same way.
+
+* vos -- Conditional akey updates could be silently skipped (DAOS-19258):
+  When an akey conditional flag (INSERT/UPDATE) was combined with any other flag, such as a dkey
+  conditional or an internal EC flag, the akey condition was ignored and the update wrongly
+  succeeded instead of returning -DER\_EXIST or -DER\_NONEXIST. The condition is now always
+  evaluated.
+
+* array -- Shrinking to a chunk boundary left stale data (DAOS-19537):
+ Resizing an array to just past a chunk boundary (k * chunk\_size + 1) failed to clear records
+ beyond the new end of file, so later size queries still reported the old, larger size.
+ The trailing records are now punched correctly.
+
+* dfs -- Renaming a file onto itself destroyed it (DAOS-19542):
+ Calling rename (or exchange) with the same source and destination removed the file instead of
+ leaving it untouched. These self-operations are now a no-op and return success.
+
+* dfuse -- Read/write races could cause a stale EOF (DAOS-19449):
+ An end-of-file flag was being set without updating the read position, so a following read could
+ return nothing (zero-filled files or a SIGBUS through mmap), and writes could report a stale EOF
+ over freshly appended data. The flag is now managed together with the read position, closing
+ both cases.
+
+* dfuse -- Raised the interception mount limit to 32 (DAOS-18928):
+ More concurrent DAOS mounts can now use I/O interception, and exceeding the limit disables
+ interception gracefully instead of crashing.
+
+* rebuild -- Several correctness fixes (DAOS-19548):
+ Fixes three issues that could stall or skip data migration: the target used the wrong field to
+ detect DTX resync progress; a task that waited for the stable epoch could exit without migrating
+ its object; and merging queued rebuild tasks could keep a stale reclaim epoch, letting cleanup
+ run against too small a boundary.
+
+* placement -- Correct layout during rebuild on small pools (DAOS-19616):
+ Computing the in-flight ("current") layout directly could mishandle cascading shard relocation
+ on small configurations. The current layout is now derived from the pre- and post-rebuild layouts,
+ keeping the readable source target and adding the rebuild destination as a write-only peer.
+
+* cart -- SWIM false-death fix and configurable address family (DAOS-19148, DAOS-18972):
+  A stale suspicion was not cleared when a member rejoined with a new incarnation, which could mark
+  a healthy rank DEAD prematurely; the stale suspicion is now removed. Separately, a new
+  address-family hint (cio\_addr\_format / D\_ADDR\_FORMAT: unspec, ipv4, ipv6, native) lets
+  operators select IPv6 fabrics instead of always defaulting to IPv4.
+
+* rebuild -- Make rebuild data enumeration and migration transactionally consistent (DAOS-19616)
+
+    - Establish a stable-epoch barrier before rebuild scanning by waiting until the
+      global stable epoch reaches the rebuild cutoff. This ensures that transactions at or below
+      the cutoff have stable commit or abort outcomes before their data is enumerated. Without
+      this barrier, transaction recovery can change data visibility while scanning is in progress,
+      potentially causing rebuild to miss data. The barrier provides a stable transactional
+      boundary for reconstruction without requiring transactions to commit in epoch order.
+      It does not wait for every open transaction to commit or stop newer I/O; operations beyond
+      the rebuild cutoff can continue.
+    - Preserve epoch boundaries when merging extents. Do not merge adjacent extents with
+      different epochs during rebuild, so their original epoch associations are retained.
+
+    - Keep rebuild enumeration on a single source replica. Prevent enumeration from
+      switching between surviving replicas midway through the operation, avoiding inconsistencies
+      caused by differences in transaction visibility.
+
+* dfuse -- invalidate chunk read cache on write (DAOS-19735)
+  Fixes stale reads by invalidating cached chunks and pre-read buffers after writes
+  or truncation, including changes through another handle. It also honors disabled caching,
+  prevents stale cached EOF information, and corrects synchronization and cache-buffer lifetime
+  issues. Regression tests cover cache invalidation and concurrent access, while documentation
+  clarifies coherence limitations when mixing dfuse and interception-library I/O.
+
+* object -- fix client layout refresh races (DAOS-19636)
+  Fixes races where object-layout changes during rebuild or reintegration invalidate
+  shard mappings while requests are being prepared or dispatched. It protects layout accesses,
+  preserves consistent shard identities and EC indices, and retries requests when mappings
+  become stale. It also corrects enumeration-anchor handling, transaction participant
+  classification, and replica reselection across pool-map changes.
+
+* control -- Assorted management-plane fixes
+ (DAOS-19255, DAOS-19331, DAOS-19281):
+ Closed-connection errors are now reported as a clear Fault instead of a raw Go error; a swapped
+ directory/object-class pair in JSON output is corrected; and the misleading low storage-tier-ratio
+ warning is suppressed for MD-on-SSD pools, where a low ratio is normal.
+
+* client/tools -- Query retries and EC container clone
+ (DAOS-19378, DAOS-17681):
+ The client protocol-version query no longer tied its retry budget to the engine count, so
+ single-engine systems get a proper number of retries with clearer diagnostics. Cloning an EC
+ container with punched holes now reads from a consistent snapshot and copies via an I/O map,
+ avoiding uninitialized data in the destination.
+
+For details, please refer to the Github [release/2.8 commit
+history](https://github.com/daos-stack/daos/commits/release/2.8) and the
+associated [Jira tickets](https://daosio.atlassian.net/jira) as stated in the
+commit messages.
+
 ## DAOS Version 2.8.0 (2026-08-12)
 
-We are pleased to announce the release of DAOS version 2.8.
+The DAOS 2.8.0 release includes the
+[daos-2.8.0 RPM packages](https://packages.daos.io/v2.8.0/) and its prerequisites.
 
 ### General Support
 
-The DAOS 2.8.0 release includes the daos-2.8.0 RPM packages and its
-prerequisites. DAOS Version 2.8.0 supports the following environments:
+DAOS Version 2.8.0 supports the following environments:
 
 Architecture Support:
 
@@ -17,7 +159,7 @@ Operating System Support:
 
 * SLES 15 SP6 and SP7
 * openSUSE Leap 15.6
-* EL9.6/9.7 (RHEL, Rocky Linux, Alma Linux)
+* EL 9.6/9.7 (RHEL, Rocky Linux, Alma Linux)
 
 Fabric and Network Provider Support:
 
@@ -257,14 +399,14 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
 
 * Notable changes in the `daos_server.yml` configuration file:
 
-  - `access_points` is now deprecated; use `mgmt_svc_replicas` instead.
-  - A `control_iface` option is added to set a specific network interface for
-    the control plane listener (by default, it will listen on all interfaces)
-  - Configurations generated by `dmg config generate` now enable NVMe hotplug
-    by default.
-  - SPDK I/O-buffer tuning options are exposed to allow customization for
-    large NVMe disks: A new `spdk_iobuf` section allows to explicitly set
-    `small_pool_count` and `large_pool_count`.
+    - `access_points` is now deprecated; use `mgmt_svc_replicas` instead.
+    - A `control_iface` option is added to set a specific network interface for
+      the control plane listener (by default, it will listen on all interfaces)
+    - Configurations generated by `dmg config generate` now enable NVMe hotplug
+      by default.
+    - SPDK I/O-buffer tuning options are exposed to allow customization for
+      large NVMe disks: A new `spdk_iobuf` section allows to explicitly set
+      `small_pool_count` and `large_pool_count`.
 
 * The SPDK configuration is validated at engine start, and
   SPDK configuration updates that are not allowed require an explicit override.
@@ -308,7 +450,7 @@ Matrix](https://docs.daos.io/v2.8/release/support_matrix/)
   chooses chunk sizes aligned with complete EC stripes. Selection includes a
   practical minimum chunk size and RF3 handling.
 
-* `daos fs get-attr` reports the object OID, and `daos fs chmod` has been added.
+* A `daos fs chmod` command has been added.
 
 * Other DFS changes are fixes and hardening. They improve object-class
   reporting, update open directory handles after class changes, prevent EC

@@ -43,13 +43,11 @@ pool_reserved:
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  control_method: daos
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
   file_oclass: EC_2P1GX
   dir_oclass: RP_2GX
-  control_method: daos
 faults:
   fault_list:
     # - DAOS_DTX_LOST_RPC_REQUEST

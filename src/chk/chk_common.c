@@ -546,8 +546,8 @@ chk_pools_pause_cb(struct sys_db *db, char *table, d_iov_t *key, void *args, uns
 	struct chk_bookmark		 cbk;
 	int				 rc = 0;
 
-	if (!daos_is_valid_uuid_string(uuid_str, ctpa->ctpa_ins->ci_is_leader ? UUID_SST_UPPER
-									      : UUID_SST_LOWER))
+	if (!daos_is_valid_uuid_iov(key,
+				    ctpa->ctpa_ins->ci_is_leader ? UUID_SST_UPPER : UUID_SST_LOWER))
 		D_GOTO(out, rc = 0);
 
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
@@ -577,8 +577,8 @@ chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args, u
 	struct chk_bookmark             cbk;
 	int                             rc = 0;
 
-	if (!daos_is_valid_uuid_string(uuid_str, ctpa->ctpa_ins->ci_is_leader ? UUID_SST_UPPER
-									      : UUID_SST_LOWER))
+	if (!daos_is_valid_uuid_iov(key,
+				    ctpa->ctpa_ins->ci_is_leader ? UUID_SST_UPPER : UUID_SST_LOWER))
 		D_GOTO(out, rc = 0);
 
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
@@ -725,7 +725,7 @@ chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args,
 	int				 rc = 0;
 	uint8_t                          chk_ver;
 
-	if (!chk_is_valid_uuid_string(ins, uuid_str))
+	if (!chk_is_valid_uuid_iov(ins, key))
 		D_GOTO(out, rc = 0);
 
 	rc = chk_rpc_protocol(&chk_ver);

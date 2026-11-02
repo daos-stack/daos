@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -83,7 +83,7 @@ class MdtestBase(TestWithServers):
         """
         # Create a pool if one does not already exist
         if self.pool is None:
-            self.add_pool(connect=False)
+            self.pool = self.get_pool(connect=False)
         # create container
         if self.container is None:
             self.container = self.get_mdtest_container(self.pool)
