@@ -17,7 +17,7 @@ sequenceDiagram
   participant T as all pool ranks (engines)
   participant R as pool-service replicas (engines)
   D->>S: gRPC MgmtSvc.PoolCreate
-  S->>S: pick ranks, fault domains, sizes; sysdb.AddPoolService (state Creating, Raft)
+  S->>S: pick ranks, fault domains, sizes#59; sysdb.AddPoolService (state Creating, Raft)
   S->>E: dRPC DRPC_METHOD_MGMT_POOL_CREATE (207)
   E->>T: CaRT MGMT_TGT_CREATE (collective)
   T->>T: vos_pool_create per target
@@ -25,7 +25,7 @@ sequenceDiagram
   E->>R: CaRT POOL_CREATE to new leader
   R->>R: ds_pool_create_handler: init_pool_metadata in rdb tx
   E-->>S: PoolCreateResp (svc replicas, target ranks)
-  S->>S: ps.State = Ready; sysdb.UpdatePoolService
+  S->>S: ps.State = Ready#59; sysdb.UpdatePoolService
   S-->>D: PoolCreateResp
 ```
 
