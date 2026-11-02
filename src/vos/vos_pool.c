@@ -25,6 +25,7 @@
 #include <sys/resource.h>
 #include "vos_layout.h"
 #include "vos_internal.h"
+#include "tfifo.h"
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
@@ -226,6 +227,42 @@ vos_meta_load(struct umem_store *store, char *start, daos_off_t offset, daos_siz
 destroy_lock:
 	ABT_mutex_free(&mlc.mlc_lock);
 	return rc ? rc : mlc.mlc_rc;
+}
+
+static inline void *
+vos_tfifo_create(unsigned int tier)
+{
+	return tfifo_create(tier);
+}
+
+static inline void
+vos_tfifo_destroy(void *tq)
+{
+	tfifo_destroy(tq);
+}
+
+static inline void
+vos_tfifo_enter(void *tq, unsigned int tier)
+{
+	tfifo_enter(tq, tier);
+}
+
+static inline void
+vos_tfifo_exit(void *tq, unsigned int tier)
+{
+	tfifo_exit(tq, tier);
+}
+
+static inline void
+vos_tfifo_wait(void *tq, unsigned int tier)
+{
+	tfifo_wait(tq, tier);
+}
+
+static inline void
+vos_tfifo_wakeup_next(void *tq)
+{
+	tfifo_wakeup_next(tq);
 }
 
 struct vos_waitqueue {
@@ -633,20 +670,26 @@ vos_wal_id_cmp(struct umem_store *store, uint64_t id1, uint64_t id2)
 }
 
 struct umem_store_ops vos_store_ops = {
-	.so_waitqueue_create	= vos_waitqueue_create,
-	.so_waitqueue_destroy	= vos_waitqueue_destroy,
-	.so_waitqueue_wait	= vos_waitqueue_wait,
-	.so_waitqueue_wakeup	= vos_waitqueue_wakeup,
-	.so_load	= vos_meta_load,
-	.so_read	= vos_meta_readv,
-	.so_write	= vos_meta_writev,
-	.so_flush_prep	= vos_meta_flush_prep,
-	.so_flush_copy	= vos_meta_flush_copy,
-	.so_flush_post	= vos_meta_flush_post,
-	.so_wal_reserv	= vos_wal_reserve,
-	.so_wal_submit	= vos_wal_commit,
-	.so_wal_replay	= vos_wal_replay,
-	.so_wal_id_cmp	= vos_wal_id_cmp,
+    .so_tfifo_create      = vos_tfifo_create,
+    .so_tfifo_destroy     = vos_tfifo_destroy,
+    .so_tfifo_enter       = vos_tfifo_enter,
+    .so_tfifo_exit        = vos_tfifo_exit,
+    .so_tfifo_wait        = vos_tfifo_wait,
+    .so_tfifo_wakeup_next = vos_tfifo_wakeup_next,
+    .so_waitqueue_create  = vos_waitqueue_create,
+    .so_waitqueue_destroy = vos_waitqueue_destroy,
+    .so_waitqueue_wait    = vos_waitqueue_wait,
+    .so_waitqueue_wakeup  = vos_waitqueue_wakeup,
+    .so_load              = vos_meta_load,
+    .so_read              = vos_meta_readv,
+    .so_write             = vos_meta_writev,
+    .so_flush_prep        = vos_meta_flush_prep,
+    .so_flush_copy        = vos_meta_flush_copy,
+    .so_flush_post        = vos_meta_flush_post,
+    .so_wal_reserv        = vos_wal_reserve,
+    .so_wal_submit        = vos_wal_commit,
+    .so_wal_replay        = vos_wal_replay,
+    .so_wal_id_cmp        = vos_wal_id_cmp,
 };
 
 #define	CHKPT_TELEMETRY_DIR	"checkpoint"

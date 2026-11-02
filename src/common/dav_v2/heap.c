@@ -2308,7 +2308,7 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 
 	memset(z, 0, rg.cr_size);
 
-	rc = umem_cache_pin(heap->layout_info.store, &rg, 1, false, &pin_handle);
+	rc = umem_cache_pin(heap->layout_info.store, &rg, 1, 0, &pin_handle);
 	if (rc) {
 		errno = daos_der2errno(rc);
 		goto error;

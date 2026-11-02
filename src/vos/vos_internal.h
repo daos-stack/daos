@@ -2108,14 +2108,14 @@ update_page_stats(struct umem_store *store)
 
 static inline int
 vos_cache_pin(struct vos_pool *pool, struct umem_cache_range *ranges, int range_nr,
-	      bool for_sys, struct umem_pin_handle **pin_handle)
+	      unsigned int tier, struct umem_pin_handle **pin_handle)
 {
 	struct umem_store	*store = vos_pool2store(pool);
 	struct dtx_handle	*cur_dth;
 	int			 rc;
 
 	cur_dth = clear_cur_dth(pool);
-	rc = umem_cache_pin(store, ranges, range_nr, for_sys, pin_handle);
+	rc      = umem_cache_pin(store, ranges, range_nr, tier, pin_handle);
 	restore_cur_dth(pool, cur_dth);
 
 	update_page_stats(store);
