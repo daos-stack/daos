@@ -83,15 +83,23 @@ struct crt_corpc_hdr {
 	uint32_t		 coh_padding;
 };
 
+/* Header envelope structure contaniing major/minor/size */
 struct __attribute__((packed)) crt_hdr_envelope {
+	/* Major version */
 	uint8_t  che_major;
+	/* Minor version */
 	uint8_t  che_minor;
+	/* header size in bytes */
 	uint16_t che_header_bytes;
 };
 
+/* Common header structure shared by requests and replies */
 struct __attribute__((packed)) crt_hdr_common {
+	/* versioning */
 	struct crt_hdr_envelope chc_envelope;
+	/* Hybrid local clock */
 	uint64_t                chc_hlc;
+	/* RPC id: uniquely identifies rpc */
 	uint64_t                chc_rpcid;
 };
 
@@ -103,17 +111,51 @@ union crt_dst_rank_tag {
 	uint32_t packed;
 };
 
+/*
+ * Request header: 40 bytes
+ *
+ * Offset  Size  Field
+ *      0     4  version envelope: major, minor, header_bytes
+ *      4     8  HLC
+ *     12     8  RPC ID
+ *     20     4  opcode
+ *     24     4  request flags
+ *     28     4  source rank
+ *     32     4  absolute deadline, Unix seconds (uint32_t)
+ *     36     4  destination rank:tag
+ *     --    --
+ *     40
+ */
 struct __attribute__((packed)) crt_req_hdr {
+	/* common request/reply part of the header */
 	struct crt_hdr_common  crh_common;
+	/* RPC opcode */
 	uint32_t               crh_opc;
+	/* RPC request flag, see enum crt_rpc_flags_internal */
 	uint32_t               crh_flags;
+	/* source rank / RPC originator */
 	uint32_t               crh_src_rank;
+	/* destination rank:tag */
 	union crt_dst_rank_tag crh_dst;
+	/* absolute deadlines in seconds */
 	uint32_t               crh_deadline_unix_sec;
 };
 
+/*
+ * Reply header: 24 bytes
+ *
+ * Offset  Size  Field
+ *      0     4  version envelope: major, minor, header_bytes (24)
+ *      4     8  HLC
+ *     12     8  RPC ID
+ *     20     4  CaRT status
+ *     --    --
+ *     24
+ */
 struct __attribute__((packed)) crt_reply_hdr {
+	/* common request/reply part of the header */
 	struct crt_hdr_common crh_common;
+	/* returned status */
 	int32_t               crh_status;
 };
 

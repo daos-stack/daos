@@ -12,8 +12,10 @@
 
 #include "cart/crt_internal.h"
 
+/* Mercury class used to create processors for header encode/decode tests. */
 static hg_class_t *header_class;
 
+/* Initialize the in-memory Mercury transport used by the tests. */
 static int
 header_setup(void **state)
 {
@@ -23,6 +25,7 @@ header_setup(void **state)
 	return 0;
 }
 
+/* Release the Mercury class created by header_setup(). */
 static int
 header_teardown(void **state)
 {
@@ -31,12 +34,14 @@ header_teardown(void **state)
 	return 0;
 }
 
+/* Golden wire representation of a request header, including the envelope. */
 static const uint8_t request_bytes[CRT_REQ_HDR_V1_BYTES] = {
     0x01, 0x00, 0x28, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x11, 0x12,
     0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x21, 0x22, 0x23, 0x24, 0x00, 0x00, 0x03, 0x00,
     0x31, 0x32, 0x33, 0x34, 0x51, 0x42, 0x43, 0x44, 0x5d, 0x5e, 0x5f, 0x60,
 };
 
+/* Create a Mercury processor over a caller-provided wire buffer. */
 static hg_proc_t
 header_proc(void *buffer, size_t bytes, hg_proc_op_t op)
 {
@@ -47,6 +52,7 @@ header_proc(void *buffer, size_t bytes, hg_proc_op_t op)
 	return proc;
 }
 
+/* Decode a request header and optionally report the number of bytes consumed. */
 static int
 decode_request(void *buffer, size_t bytes, struct crt_req_hdr *hdr, size_t *used)
 {
@@ -59,9 +65,11 @@ decode_request(void *buffer, size_t bytes, struct crt_req_hdr *hdr, size_t *used
 	return rc;
 }
 
+/* Verify request-header fields survive encoding and decoding unchanged. */
 static void
 request_roundtrip(void **state)
 {
+	/* Sample request with representative routing, opcode, and deadline fields. */
 	struct crt_req_hdr request = {
 	    .crh_common =
 		{
@@ -96,6 +104,7 @@ request_roundtrip(void **state)
 	assert_int_equal(decoded.crh_deadline_unix_sec, request.crh_deadline_unix_sec);
 }
 
+/* Verify malformed request headers are rejected and valid extensions are skipped. */
 static void
 request_validation(void **state)
 {
@@ -139,11 +148,13 @@ request_validation(void **state)
 	memcpy(buffer, request_bytes, sizeof(request_bytes));
 }
 
+/* Verify reply status and shared fields round-trip for boundary status values. */
 static void
 reply_roundtrip(void **state)
 {
 	const int32_t        statuses[] = {0, -DER_TIMEDOUT, INT32_MIN, INT32_MAX, -1};
 	const uint8_t        prefix[]   = {1, 0, 24, 0};
+	/* Sample reply containing the shared timestamps/ID and a tested status. */
 	struct crt_reply_hdr reply      = {
 		 .crh_common =
                 {
@@ -183,6 +194,7 @@ reply_roundtrip(void **state)
 	}
 }
 
+/* Verify conversion between absolute deadlines and relative timeouts. */
 static void
 deadline_conversion(void **state)
 {
@@ -195,6 +207,7 @@ deadline_conversion(void **state)
 	assert_true(crt_timeout_to_deadline(2) >= now_sec + 3);
 }
 
+/* Verify destination rank/tag packing and reject values beyond their wire widths. */
 static void
 destination_rank_tag(void **state)
 {
