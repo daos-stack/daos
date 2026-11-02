@@ -3684,24 +3684,8 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 			nr = NR_ENUM;
 			rc = dfs_readdir_with_filter(dfs_mt, dir1, dpipe, anchor, &nr, dents, oids,
 						     csizes, &nr_scanned);
-			/*
-			 * It is still possible to get INPROGRESS even with the sleep, so let's just
-			 * skip the test in this case.
-			 */
-			if (rc == EINPROGRESS) {
-				print_message("dfs_readdir_with_filter() returned EINPROGRESS; "
-					      "skipping test!\n");
-				free(dents);
-				free(anchors);
-				free(oids);
-				free(csizes);
-				dfs_pipeline_destroy(dpipe);
-				rc = dfs_release(dir1);
-				assert_int_equal(rc, 0);
-				rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
-				assert_int_equal(rc, 0);
-				skip();
-			}
+			if (rc == EINPROGRESS)
+				goto skip_inprogress;
 			assert_int_equal(rc, 0);
 
 			nr_total += nr_scanned;
@@ -3737,6 +3721,8 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 
 		rc = dfs_readdir_with_filter(dfs_mt, dir1, dpipe, &full_anchor, &nr, dents, oids,
 					     csizes, &nr_scanned);
+		if (rc == EINPROGRESS)
+			goto skip_inprogress;
 		assert_int_equal(rc, 0);
 		nr_total += nr_scanned;
 		nr_matched += nr;
@@ -3757,6 +3743,24 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 	assert_int_equal(rc, 0);
 	rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
 	assert_int_equal(rc, 0);
+	return;
+
+skip_inprogress:
+	/*
+	 * It is still possible to get INPROGRESS even with the sleep, so let's just skip the test
+	 * in this case.
+	 */
+	print_message("dfs_readdir_with_filter() returned EINPROGRESS; skipping test!\n");
+	free(dents);
+	free(anchors);
+	free(oids);
+	free(csizes);
+	dfs_pipeline_destroy(dpipe);
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
+	assert_int_equal(rc, 0);
+	skip();
 }
 
 static void
