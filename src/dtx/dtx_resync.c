@@ -222,7 +222,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		      uint64_t dkey_hash, daos_epoch_t epoch, int *tgt_array, int *err)
 {
 	struct dtx_memberships	*mbs = dte->dte_mbs;
-	struct dtx_coll_entry	*dce = NULL;
+	struct dtx_coll_entry   *dce = NULL;
 	int			 rc = 0;
 
 	if (mbs->dm_flags & DMF_COLL_TARGET) {
@@ -256,7 +256,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 	case -DER_INPROGRESS:
 	case -DER_TIMEDOUT:
 		D_WARN("Other participants not sure about whether the "
-		       "DTX "DF_DTI" is committed or not, need retry.\n",
+		       "DTX " DF_DTI " is committed or not, need retry.\n",
 		       DP_DTI(&dte->dte_xid));
 		D_GOTO(out, rc = DSHR_NEED_RETRY);
 	case DTX_ST_PREPARED: {

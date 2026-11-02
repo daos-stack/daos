@@ -251,8 +251,8 @@ dtx_handler(crt_rpc_t *rpc)
 		if (din->di_dtx_array.ca_count != 1)
 			D_GOTO(out, rc = -DER_PROTO);
 
-		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				   NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays, NULL, NULL, NULL,
+				   false);
 		if (rc == DTX_ST_INITED) {
 			/* For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
 			 * return 'DTX_ST_INITED' to avoid interoperability trouble if related
