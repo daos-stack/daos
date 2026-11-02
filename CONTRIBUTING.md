@@ -6,7 +6,7 @@ section of the DAOS Community Wiki.
 
 ## Contacts
 
-For any questions, please post to our
+For questions about contributing, please post to our
 [user forum](https://daos.groups.io/g/daos)
 or the DAOS
 [slack channel](https://daos-stack.slack.com/).
