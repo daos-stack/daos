@@ -83,7 +83,17 @@ struct crt_corpc_hdr {
 	uint32_t		 coh_padding;
 };
 
-/* Header envelope structure contaniing major/minor/size */
+/* Header envelope structure containing major/minor/size:
+ *
+ * Bump the major version for incompatible wire-format changes, including
+ * removing, reordering, resizing, or changing the meaning of existing fields.
+ * Receivers must reject headers with an unsupported major version.
+ *
+ * Bump the minor version only for backward-compatible, append-only fields.
+ * Preserve existing fields and meanings, and use header_bytes so receivers
+ * can skip unknown trailing fields. New fields must be safe for older
+ * receivers to ignore.
+ */
 struct __attribute__((packed)) crt_hdr_envelope {
 	/* Major version */
 	uint8_t  che_major;
