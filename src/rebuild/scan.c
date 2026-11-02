@@ -34,6 +34,8 @@
 #define REBUILD_SEND_BATCH_MIN         (REBUILD_SEND_LIMIT / 4)
 /* Maximum seconds to wait for a batch to fill before flushing anyway. */
 #define REBUILD_SEND_BATCH_TIMEOUT_SEC 1
+/* Max time FAIL_RECLAIM waits for reintegration pre-discard before giving up */
+#define REBUILD_DISCARD_WAIT_MAX_SECS  600
 
 struct rebuild_send_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
@@ -1124,6 +1126,10 @@ next:
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
+	/* Upgrade cleanup must also visit obsolete layout entries beyond the reclaim epoch. */
+	if (rpt->rt_new_layout_ver == 0 &&
+	    (rpt->rt_rebuild_op == RB_OP_RECLAIM || rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM))
+		param.ip_epr.epr_hi = rpt->rt_reclaim_epoch;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	arg->snapshot_cnt = snapshot_cnt;
 	arg->cont_child = cont_child;
@@ -1295,6 +1301,14 @@ out:
 	return rc;
 }
 
+static bool
+rebuild_discard_wait_stop(void *arg)
+{
+	struct rebuild_tgt_pool_tracker *rpt = arg;
+
+	return rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done;
+}
+
 /**
  * Wait for pool map and setup global status, then spawn scanners for all
  * service xsteams
@@ -1342,6 +1356,27 @@ rebuild_scan_leader(void *data)
 	}
 
 do_scan:
+	/*
+	 * Reintegration pre-discard runs independently of the rebuild task and can outlive
+	 * an admin stop. The stopped reintegration targets stay UP and FAIL_RECLAIM scans
+	 * them, so it must wait before starting another discard on them.
+	 */
+	if (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		uint32_t wait_secs = 0;
+
+		rc = ds_pool_wait_discard(rpt->rt_pool, REBUILD_DISCARD_WAIT_MAX_SECS, false,
+					  rebuild_discard_wait_stop, rpt, &wait_secs);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_RB " wait for reintegration discard failed after %u secs",
+				 DP_RB_RPT(rpt), wait_secs);
+			D_GOTO(out, rc);
+		}
+		if (wait_secs > 0)
+			D_INFO(DF_RB " reintegration discard finished after %u seconds, "
+				     "start fail reclaim scan\n",
+			       DP_RB_RPT(rpt), wait_secs);
+	}
+
 	D_INFO(DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, rebuild_scanner, rpt,
