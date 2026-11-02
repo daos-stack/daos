@@ -709,7 +709,7 @@ crt_hg_process_header(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 	out->crp_req_hdr           = in->crp_req_hdr;
 	out->crp_reply_hdr.crh_common.chc_rpcid = in->crp_req_hdr.crh_common.chc_rpcid;
 	out->crp_deadline_sec                   = in->crp_req_hdr.crh_deadline_unix_sec;
-	timeout                                 = crt_deadline_to_timeout(out->crp_deadline_sec);
+	timeout                                 = d_deadline_to_timeout(out->crp_deadline_sec);
 	if (timeout == 0)
 		timeout = 1;
 	if (timeout < 0)

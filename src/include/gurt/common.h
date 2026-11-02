@@ -810,7 +810,7 @@ d_timeleft_ns(const struct timespec *expiration)
 }
 
 static inline uint64_t
-crt_realtime_sec(void)
+d_realtime_sec(void)
 {
 	struct timespec now;
 
@@ -819,9 +819,9 @@ crt_realtime_sec(void)
 }
 
 static inline int64_t
-crt_deadline_to_timeout(uint64_t deadline_sec)
+d_deadline_to_timeout(uint64_t deadline_sec)
 {
-	uint64_t now_sec = crt_realtime_sec();
+	uint64_t now_sec = d_realtime_sec();
 	uint64_t timeout_sec;
 
 	if (deadline_sec <= now_sec)
@@ -831,9 +831,9 @@ crt_deadline_to_timeout(uint64_t deadline_sec)
 }
 
 static inline uint64_t
-crt_timeout_to_deadline(uint32_t timeout_sec)
+d_timeout_to_deadline(uint32_t timeout_sec)
 {
-	return crt_realtime_sec() + (uint64_t)timeout_sec + 1;
+	return d_realtime_sec() + (uint64_t)timeout_sec + 1;
 }
 
 static inline struct timespec

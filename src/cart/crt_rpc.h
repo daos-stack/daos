@@ -782,7 +782,7 @@ crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 
 	if (rpc_priv->crp_timeout_sec == 0) {
 		rpc_priv->crp_timeout_sec = crt_gdata.cg_timeout;
-		rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
+		rpc_priv->crp_deadline_sec = d_timeout_to_deadline(rpc_priv->crp_timeout_sec);
 	}
 
 	rpc_priv->crp_timeout_ts = d_timeus_secdiff(rpc_priv->crp_timeout_sec);

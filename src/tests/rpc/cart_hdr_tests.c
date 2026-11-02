@@ -198,13 +198,13 @@ reply_roundtrip(void **state)
 static void
 deadline_conversion(void **state)
 {
-	uint64_t now_sec = crt_realtime_sec();
+	uint64_t now_sec = d_realtime_sec();
 
 	(void)state;
-	assert_int_equal(crt_deadline_to_timeout(0), -1);
-	assert_int_equal(crt_deadline_to_timeout(now_sec - 1), -1);
-	assert_int_equal(crt_deadline_to_timeout(UINT64_MAX), UINT32_MAX);
-	assert_true(crt_timeout_to_deadline(2) >= now_sec + 3);
+	assert_int_equal(d_deadline_to_timeout(0), -1);
+	assert_int_equal(d_deadline_to_timeout(now_sec - 1), -1);
+	assert_int_equal(d_deadline_to_timeout(UINT64_MAX), UINT32_MAX);
+	assert_true(d_timeout_to_deadline(2) >= now_sec + 3);
 }
 
 /* Verify destination rank/tag packing and reject values beyond their wire widths. */

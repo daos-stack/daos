@@ -256,7 +256,7 @@ crt_bulk_desc_expired(struct crt_bulk_desc *bulk_desc)
 	uint64_t             now_sec;
 	struct crt_rpc_priv *rpc_priv;
 
-	now_sec  = crt_realtime_sec();
+	now_sec  = d_realtime_sec();
 	rpc_priv = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv, crp_pub);
 
 	/* Deadline expired */

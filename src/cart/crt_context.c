@@ -1051,7 +1051,7 @@ crt_req_timeout_track(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_in_binheap == 1)
 		D_GOTO(out, rc = 0);
 
-	rpc_priv->crp_deadline_sec = crt_timeout_to_deadline(rpc_priv->crp_timeout_sec);
+	rpc_priv->crp_deadline_sec = d_timeout_to_deadline(rpc_priv->crp_timeout_sec);
 
 	/* add to binheap for timeout tracking */
 	RPC_ADDREF(rpc_priv); /* decref in crt_req_timeout_untrack */

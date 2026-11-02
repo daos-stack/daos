@@ -901,7 +901,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		/* Set child's deadline same as parent and calculate timeout left from it */
 		child_rpc_priv->crp_deadline_sec = rpc_priv->crp_deadline_sec;
 		{
-			int64_t timeout_sec = crt_deadline_to_timeout(rpc_priv->crp_deadline_sec);
+			int64_t timeout_sec = d_deadline_to_timeout(rpc_priv->crp_deadline_sec);
 
 			child_rpc_priv->crp_timeout_sec = timeout_sec > 0 ? timeout_sec : 1;
 		}
