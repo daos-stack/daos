@@ -895,9 +895,9 @@ d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 	unsigned int			i;		/* rank index */
 	unsigned int			j;		/* rank range index */
 
-	d_rank_list_sort(rank_list);
 	if ((rank_list == NULL) || (rank_list->rl_ranks == NULL) || (rank_list->rl_nr == 0))
 		return d_rank_range_list_alloc(0);
+	d_rank_list_sort(rank_list);
 
 	alloc_size = nranges = 1;
 	range_list = d_rank_range_list_alloc(alloc_size);

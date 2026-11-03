@@ -2750,6 +2750,56 @@ ds_pool_task_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(v
 	return ds_pool_collective(pool_uuid, ex_status, coll_func, arg, flags, false);
 }
 
+/**
+ * Wait until the pool's local pre-discard (sp_discarding) completes.
+ *
+ * \param[in]  pool		pool to wait on
+ * \param[in]  timeout_secs	give up with -DER_TIMEDOUT after this long, 0 for no timeout
+ * \param[in]  fail_on_error	return the discard failure status instead of just waiting for
+ *				completion
+ * \param[in]  should_stop	optional callback polled each iteration; if it returns true,
+ *				-DER_SHUTDOWN is returned
+ * \param[in]  stop_arg		argument of \a should_stop
+ * \param[out] waited_secs	optional, seconds spent waiting
+ */
+int
+ds_pool_wait_discard(struct ds_pool *pool, uint32_t timeout_secs, bool fail_on_error,
+		     bool (*should_stop)(void *arg), void *stop_arg, uint32_t *waited_secs)
+{
+	uint32_t waited = 0;
+	int      rc     = 0;
+
+	while (atomic_load(&pool->sp_discarding) != 0) {
+		if ((should_stop != NULL && should_stop(stop_arg)) || pool->sp_stopping) {
+			rc = -DER_SHUTDOWN;
+			break;
+		}
+		if (timeout_secs != 0 && waited >= timeout_secs) {
+			rc = -DER_TIMEDOUT;
+			break;
+		}
+		if (waited % 60 == 0)
+			D_INFO(DF_UUID " waiting for pre-discard, waited %u seconds\n",
+			       DP_UUID(pool->sp_uuid), waited);
+
+		rc = dss_sleep(1000);
+		if (rc != 0)
+			break;
+		waited++;
+
+		if (fail_on_error) {
+			ABT_mutex_lock(pool->sp_mutex);
+			rc = pool->sp_discard_status;
+			ABT_mutex_unlock(pool->sp_mutex);
+			if (rc != 0)
+				break;
+		}
+	}
+	if (waited_secs != NULL)
+		*waited_secs = waited;
+	return rc;
+}
+
 /* Discard the objects by epoch in this pool */
 static void
 ds_pool_tgt_discard_ult(void *data)
