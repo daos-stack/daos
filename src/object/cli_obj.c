@@ -1865,6 +1865,8 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		 * CRT_NO_RANK and normal round robin is used.
 		 */
 		rc = obj_pool_query_task(sched, obj, 0, obj_auxi->map_ver_reply_rank, &pool_task);
+		/* consume the hint once so a later all-timeout retry does not reuse it */
+		obj_auxi->map_ver_reply_rank = CRT_NO_RANK;
 		if (rc != 0)
 			D_GOTO(err, rc);
 	}

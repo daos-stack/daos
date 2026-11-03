@@ -1003,8 +1003,10 @@ rebuild_io_post_cb(void *arg)
  * Each probe before the failed rank is excluded just succeeds and leaves the
  * client stale. Stops as soon as the seeded refresh advances our cached map,
  * read locally (no RPC) so the check does not itself close the stale window.
+ * Returns true if the cached map advanced within the probe window (a refresh
+ * was observed), false if no refresh happened before the probe gave up.
  */
-static void
+static bool
 rebuild_hint_probe(test_arg_t *arg, daos_obj_id_t oid)
 {
 	struct ioreq    probe_req;
@@ -1012,6 +1014,7 @@ rebuild_hint_probe(test_arg_t *arg, daos_obj_id_t oid)
 	char            dkey[32];
 	char            akey[32];
 	uint32_t        ver0 = 0;
+	bool            refreshed = false;
 	int             i;
 
 	dcp = dc_hdl2pool(arg->pool.poh);
@@ -1036,12 +1039,15 @@ rebuild_hint_probe(test_arg_t *arg, daos_obj_id_t oid)
 			ver = dc_pool_get_version(dcp);
 			dc_pool_put(dcp);
 		}
-		if (ver > ver0)
+		if (ver > ver0) {
+			refreshed = true;
 			break;
+		}
 		sleep(3);
 	}
 	daos_fail_loc_set(0);
 	ioreq_fini(&probe_req);
+	return refreshed;
 }
 
 static void
@@ -1085,7 +1091,15 @@ rebuild_master_failure(void **state)
 	 * (no_rebuild skipped the harness poll); probe until the killed leader's
 	 * exclusion bumps the map (SWIM detect + PS re-election, ~a minute).
 	 */
-	rebuild_hint_probe(arg, oids[0]);
+	/*
+	 * Warn-only here: REBUILD21 relies on SWIM failure detection + PS
+	 * re-election timing, so the refresh may not land inside the probe
+	 * window on a loaded CI node. The deterministic assert lives in
+	 * REBUILD38 (exclude-based, synchronous map bump).
+	 */
+	if (!rebuild_hint_probe(arg, oids[0]))
+		print_message("WARNING: REBUILD21 observed no client pool map refresh "
+			      "within the probe window; hint seeding not exercised\n");
 
 	/* Let the rebuild finish, then verify the data with a current map. */
 	test_rebuild_wait(&arg, 1);
@@ -1154,6 +1168,7 @@ rebuild_map_refresh_hint(void **state)
 	test_arg_t   *arg = *state;
 	daos_obj_id_t oids[OBJ_NR];
 	d_rank_t      exclude_rank = 1;
+	bool          refreshed;
 	int           i;
 
 	if (!test_runable(arg, 4))
@@ -1171,7 +1186,19 @@ rebuild_map_refresh_hint(void **state)
 	rebuild_single_pool_rank(arg, exclude_rank, false);
 	arg->no_rebuild = 0;
 
-	rebuild_hint_probe(arg, oids[0]);
+	/*
+	 * Excluding shard 0's host bumps the map synchronously, so a refresh
+	 * must be observed within the probe window. A miss means the seeded
+	 * hint never drove a refresh (round-robin would have stalled on the
+	 * excluded UPIN rank's CaRT timeouts), so assert rather than warn.
+	 *
+	 * TODO: prove the hint rank itself was used (see choose_map_refresh_rank()).
+	 */
+	refreshed = rebuild_hint_probe(arg, oids[0]);
+	if (!refreshed)
+		print_message("WARNING: REBUILD38 observed no client pool map refresh "
+			      "within the probe window; hint seeding not exercised\n");
+	assert_true(refreshed);
 
 	test_rebuild_wait(&arg, 1);
 	rebuild_io_verify(arg, oids, OBJ_NR);

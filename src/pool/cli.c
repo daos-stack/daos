@@ -2100,6 +2100,13 @@ choose_map_refresh_rank(struct map_refresh_arg *arg)
 	 * Try the hinted rank first (e.g. the engine that returned -DER_STALE):
 	 * known-alive and known to hold a newer map. Consume it once, then fall
 	 * back to the round robin below.
+	 *
+	 * TODO: the suite tests only confirm that a refresh advanced the client
+	 * map, which the hint exercises by construction but does not prove the
+	 * hinted rank was the one queried. A future change could add a fail-loc
+	 * tripwire + counter here (incremented only on the hint branch) that the
+	 * engine side confirms and the test reads back, turning the by-construction
+	 * argument into an explicit "hint rank was used" assertion.
 	 */
 	if (arg->mra_hint_rank != CRT_NO_RANK) {
 		d_rank_t hint = arg->mra_hint_rank;
