@@ -422,6 +422,7 @@ CRT_RPC_DECLARE(obj_sync_v10, DAOS_ISEQ_OBJ_SYNC_V10, DAOS_OSEQ_OBJ_SYNC_V10)
 
 CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 
+/* clang-format off */
 #define DAOS_ISEQ_OBJ_EC_AGG	/* input fields */			\
 	((uuid_t)		(ea_pool_uuid)		CRT_VAR)	\
 	((uuid_t)		(ea_cont_uuid)		CRT_VAR)	\
@@ -467,6 +468,8 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 	((int32_t)		(er_status)		CRT_VAR) \
 	((uint32_t)		(er_map_ver)		CRT_VAR) \
 	((struct daos_req_comm_out) (er_comm_out)	CRT_VAR)
+
+/* clang-format on */
 
 CRT_RPC_DECLARE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 
