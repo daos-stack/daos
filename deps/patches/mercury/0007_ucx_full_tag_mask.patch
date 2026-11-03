@@ -1,0 +1,32 @@
+From 6a4ae79201604e19ebb34737511a1a06200a10d2 Mon Sep 17 00:00:00 2001
+From: Or Hayat <or.hayat@volumez.com>
+Date: Wed, 28 Oct 2026 10:23:50 +0200
+Subject: [PATCH] NA UCX: post expected receives with a full tag mask
+
+NA_UCX_TAG_MASK was a partial mask. UCX hashes an expected receive only
+when its mask is full; any other mask puts it on the worker's wildcard
+queue, and while that queue is non-empty every incoming tagged message is
+matched by a linear scan over all posted receives (ucp_tag_exp_search_all).
+
+NA tags are 32-bit and sent as (ucp_tag_t) tag, so the upper 32 bits are
+always zero and a full mask matches the same messages.
+---
+ src/na/na_ucx.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/na/na_ucx.c b/src/na/na_ucx.c
+index 255be76..a24b094 100644
+--- a/src/na/na_ucx.c
++++ b/src/na/na_ucx.c
+@@ -65,7 +65,7 @@
+ 
+ /* Reserved tags */
+ #define NA_UCX_AM_MSG_ID (0)
+-#define NA_UCX_TAG_MASK  ((uint64_t) 0x00000000FFFFFFFF)
++#define NA_UCX_TAG_MASK  ((ucp_tag_t) UINT64_MAX)
+ 
+ /* Op ID status bits */
+ #define NA_UCX_OP_COMPLETED (1 << 0)
+-- 
+2.50.1 (Apple Git-155)
+
