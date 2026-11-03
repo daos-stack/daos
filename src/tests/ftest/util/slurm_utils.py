@@ -12,7 +12,7 @@ from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 # pylint: disable=import-error,no-name-in-module
 from util.run_utils import run_local, run_remote
 
-PACKAGES = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']
+PACKAGES = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd', 'slurm-slurmdbd']
 W_LOCK = threading.Lock()
 
 
