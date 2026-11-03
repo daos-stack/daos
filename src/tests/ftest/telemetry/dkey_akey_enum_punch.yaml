@@ -18,3 +18,4 @@ server_config:
 
 pool:
   scm_size: 1G
+  properties: "rd_fac:0,space_rb:0"
