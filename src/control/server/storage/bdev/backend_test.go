@@ -889,6 +889,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 					Args: []string{"reset"},
 				},
@@ -909,6 +910,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2, 3)),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 					Args: []string{"reset"},
 				},
@@ -930,6 +932,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2)),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeVMD),
 					},
 					Args: []string{"reset"},
 				},
@@ -946,6 +949,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 					Args: []string{"reset"},
 				},
@@ -954,6 +958,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 				},
 			},
@@ -970,6 +975,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2, 3)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 					Args: []string{"reset"},
 				},
@@ -980,6 +986,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2, 3)),
 						fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 				},
 			},
@@ -995,6 +1002,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 					Args: []string{"reset"},
 				},
@@ -1004,6 +1012,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugepages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 				},
 			},
@@ -1022,6 +1031,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2, 3)),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 					Args: []string{"reset"},
 				},
@@ -1032,6 +1042,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2, 3)),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 				},
 			},
@@ -1048,6 +1059,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 					Args: []string{"reset"},
 				},
@@ -1056,6 +1068,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 				},
 			},
@@ -1073,6 +1086,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2)),
 						fmt.Sprintf("%s=%s", driverOverrideEnv, noDriver),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeVMD),
 					},
 				},
 				{
@@ -1081,6 +1095,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugepages),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2)),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeVMD),
 					},
 				},
 			},
@@ -1109,6 +1124,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 					Args: []string{"reset"},
 				},
@@ -1117,6 +1133,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugepages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 				},
 			},
@@ -1135,6 +1152,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", driverOverrideEnv, noDriver),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(3)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeVMD),
 					},
 				},
 				{
@@ -1143,6 +1161,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugepages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(3)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeVMD),
 					},
 				},
 			},
@@ -1166,6 +1185,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(5)),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeVMD),
 					},
 				},
 			},
@@ -1186,6 +1206,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 					Args: []string{"reset"},
 				},
@@ -1195,6 +1216,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugepages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeNVMe),
 					},
 				},
 			},
@@ -1217,6 +1239,7 @@ func TestBackend_prepare_reset(t *testing.T) {
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(2)),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4)),
+						fmt.Sprintf("%s=%s", devTypeEnv, devTypeVMD),
 					},
 				},
 			},

@@ -34,6 +34,8 @@
 #define REBUILD_SEND_BATCH_MIN         (REBUILD_SEND_LIMIT / 4)
 /* Maximum seconds to wait for a batch to fill before flushing anyway. */
 #define REBUILD_SEND_BATCH_TIMEOUT_SEC 1
+/* Max time FAIL_RECLAIM waits for reintegration pre-discard before giving up */
+#define REBUILD_DISCARD_WAIT_MAX_SECS  600
 
 struct rebuild_send_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
@@ -310,14 +312,6 @@ rebuild_objects_send_ult(void *data)
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
-
-	if (rpt->rt_stable_epoch == 0) {
-		rc = rpt_wait_rebuild_epoch(rpt);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed", DP_RB_RPT(rpt));
-			goto out;
-		}
-	}
 
 	D_ALLOC_ARRAY(oids, REBUILD_SEND_LIMIT);
 	if (oids == NULL)
@@ -741,16 +735,6 @@ rebuild_obj_ult(void *data)
 	struct rebuild_tgt_pool_tracker	*rpt = arg->rpt;
 	int                              rc;
 
-	if (rpt->rt_stable_epoch == 0) {
-		rc = rpt_wait_rebuild_epoch(rpt);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_RB " rpt_wait_rebuild_epoch failed, abort the rebuild",
-				 DP_RB_RPT(rpt));
-			rebuild_obj_record_failure(rpt, rc);
-			goto out;
-		}
-	}
-
 	rc = ds_migrate_object(rpt->rt_pool_uuid, rpt->rt_poh_uuid, rpt->rt_coh_uuid, arg->co_uuid,
 			       rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
 			       rpt->rt_rebuild_op, &arg->oid, &arg->epoch, &arg->punched_epoch,
@@ -759,7 +743,7 @@ rebuild_obj_ult(void *data)
 		DL_ERROR(rc, DF_RB " ds_migrate_object failed", DP_RB_RPT(rpt));
 		rebuild_obj_record_failure(rpt, rc);
 	}
-out:
+
 	rpt_put(rpt);
 	D_FREE(arg);
 }
@@ -995,6 +979,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	daos_unit_oid_t			oid = { 0 };
 	int				snapshot_cnt = 0;
 	int				rc;
+	uint32_t                         flags = 0;
+	daos_epoch_t                     lse;
 
 	if (uuid_compare(arg->co_uuid, entry->ie_couuid) == 0) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already scanned\n", DP_RB_RPT(rpt),
@@ -1002,6 +988,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return 0;
 	}
 
+again:
 	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_REBUILD, DF_RB " co_uuid " DF_UUID " already destroyed\n",
@@ -1029,6 +1016,50 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		D_GOTO(close, rc);
 	}
 
+	if (rpt->rt_rebuild_op == RB_OP_RECLAIM || rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		/*
+		 * For RB_OP_RECLAIM or RB_OP_FAIL_RECLAIM, it is unnecessary to wait stable
+		 * epoch, instead, just notify DTX logic in VOS to ignore non-committed DTX.
+		 */
+		flags = DTX_IGNORE_UNCOMMITTED;
+		goto next;
+	}
+
+	lse = vos_cont_get_local_stable_epoch(coh);
+	if (lse < rpt->rt_stable_epoch) {
+		if (cont_child->sc_pool->spc_remaining_wait_time == 0) {
+			D_ERROR(DF_RB " accumulated waiting time for local stable epoch " DF_X64
+				      " to exceed rebuild epoch " DF_X64
+				      " on the pool/container " DF_CONT
+				      " for more than 600 seconds, abort current rebuild.\n",
+				DP_RB_RPT(rpt), lse, rpt->rt_stable_epoch,
+				DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid));
+			D_GOTO(close, rc = -DER_TIMEDOUT);
+		}
+
+		/*
+		 * Global stable epoch maybe not refreshed if the container is (being) destroyed.
+		 * Close it (to release reference) before sleep to avoid being blocked for ever.
+		 */
+		cont_child->sc_pool->spc_remaining_wait_time--;
+		ds_cont_child_put(cont_child);
+		cont_child = NULL;
+		vos_cont_close(coh);
+
+		dss_sleep(1000);
+
+		if (rpt->rt_abort || rpt->rt_finishing) {
+			D_DEBUG(DB_REBUILD, DF_RB " " DF_UUID " rebuild abort %u/%u.\n",
+				DP_RB_RPT(rpt), DP_UUID(entry->ie_couuid), rpt->rt_abort,
+				rpt->rt_finishing);
+			*acts |= VOS_ITER_CB_ABORT;
+			return 1;
+		}
+
+		goto again;
+	}
+
+next:
 	/*
 	 * The container may has been closed by the application, but some resource (DRAM) occupied
 	 * by DTX may be not released because DTX resync was in-progress at that time. When arrive
@@ -1087,14 +1118,18 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	epoch.oe_value = rpt->rt_stable_epoch;
-	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
-		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
+
+	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver, &oid, NULL, 0, flags, NULL, &dth);
 	D_ASSERT(rc == 0);
-	memset(&param, 0, sizeof(param));
+
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
+	/* Upgrade cleanup must also visit obsolete layout entries beyond the reclaim epoch. */
+	if (rpt->rt_new_layout_ver == 0 &&
+	    (rpt->rt_rebuild_op == RB_OP_RECLAIM || rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM))
+		param.ip_epr.epr_hi = rpt->rt_reclaim_epoch;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	arg->snapshot_cnt = snapshot_cnt;
 	arg->cont_child = cont_child;
@@ -1111,13 +1146,13 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	dtx_end(dth, NULL, rc);
 
 close:
-	vos_cont_close(coh);
-
 	if (cont_child != NULL) {
 		cont_child->sc_rebuilding = 0;
 		ABT_cond_broadcast(cont_child->sc_rebuild_cond);
 		ds_cont_child_put(cont_child);
 	}
+
+	vos_cont_close(coh);
 
 	D_DEBUG(DB_REBUILD, DF_RB " " DF_UUID " iterate cont done: " DF_RC "\n", DP_RB_RPT(rpt),
 		DP_UUID(entry->ie_couuid), DP_RC(rc));
@@ -1198,6 +1233,14 @@ rebuild_scanner(void *data)
 		D_GOTO(out, rc = 0);
 	}
 
+	if (rpt->rt_stable_epoch == 0) {
+		rc = rpt_wait_rebuild_epoch(rpt);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_RB " failed to wait for rebuild epoch", DP_RB_RPT(rpt));
+			goto out;
+		}
+	}
+
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG)) {
 		/* Skip reclaim OP for HANG failure injection */
 		if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
@@ -1228,6 +1271,13 @@ rebuild_scanner(void *data)
 		}
 	}
 
+	/*
+	 * Usually, the diff between container local stable epoch and rebuild epoch will
+	 * be within 2 minutes unless it is quite busy. Let's wait for at most 10 minutes.
+	 * That is the total time for all containers in the pool.
+	 */
+	child->spc_remaining_wait_time = 600;
+
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	arg.rpt = rpt;
@@ -1249,6 +1299,14 @@ out:
 
 	D_DEBUG(DB_REBUILD, DF_RB " iterate pool done: " DF_RC "\n", DP_RB_RPT(rpt), DP_RC(rc));
 	return rc;
+}
+
+static bool
+rebuild_discard_wait_stop(void *arg)
+{
+	struct rebuild_tgt_pool_tracker *rpt = arg;
+
+	return rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done;
 }
 
 /**
@@ -1298,6 +1356,27 @@ rebuild_scan_leader(void *data)
 	}
 
 do_scan:
+	/*
+	 * Reintegration pre-discard runs independently of the rebuild task and can outlive
+	 * an admin stop. The stopped reintegration targets stay UP and FAIL_RECLAIM scans
+	 * them, so it must wait before starting another discard on them.
+	 */
+	if (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		uint32_t wait_secs = 0;
+
+		rc = ds_pool_wait_discard(rpt->rt_pool, REBUILD_DISCARD_WAIT_MAX_SECS, false,
+					  rebuild_discard_wait_stop, rpt, &wait_secs);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_RB " wait for reintegration discard failed after %u secs",
+				 DP_RB_RPT(rpt), wait_secs);
+			D_GOTO(out, rc);
+		}
+		if (wait_secs > 0)
+			D_INFO(DF_RB " reintegration discard finished after %u seconds, "
+				     "start fail reclaim scan\n",
+			       DP_RB_RPT(rpt), wait_secs);
+	}
+
 	D_INFO(DF_RB " scan collective begin\n", DP_RB_RPT(rpt));
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
 				       PO_COMP_ST_DOWNOUT, rebuild_scanner, rpt,
