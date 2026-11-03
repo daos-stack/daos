@@ -127,7 +127,7 @@ evt_off2node(struct evt_context *tcx, umem_off_t offset)
 	struct evt_node *node;
 
 	node = evt_off2ptr(tcx, offset);
-	D_ASSERT(node->tn_magic == EVT_NODE_MAGIC);
+	D_ASSERTEQ(node->tn_magic, EVT_NODE_MAGIC);
 
 	return node;
 }

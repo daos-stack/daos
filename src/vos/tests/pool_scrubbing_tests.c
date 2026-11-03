@@ -1,9 +1,13 @@
 /**
  * (C) Copyright 2020-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
+#ifndef VOS_STANDALONE
+#error "VOS_STANDALONE required"
+#endif
 
 #include <stddef.h>
 #include <setjmp.h>
@@ -17,6 +21,7 @@
 #include <daos_srv/vos.h>
 #include <fcntl.h>
 #include <daos/tests_lib.h>
+#include "vos_internal.h"
 
 /*
  * ms_between_periods is a helper function for determining how much time to wait between
@@ -203,6 +208,7 @@ struct sts_context {
 	void			*tsc_sched_arg;
 	int			 tsc_fd;
 	int			 tsc_expected_rc;
+	bool                     tsc_iter_deleted;
 };
 
 static void
@@ -992,50 +998,155 @@ sts_teardown(void **state)
 	return 0;
 }
 
+/**
+ * Test context for object deletion by aggregation and GC mid-yield between chunks.
+ */
+static uint64_t scrub_sched_seq;
+
+static uint64_t
+scrub_sched_seq_get(void)
+{
+	return scrub_sched_seq;
+}
+
+static int
+test_yield_deletes_object_by_aggregation_and_gc(void *arg)
+{
+	struct sts_context *ctx = arg;
+	daos_epoch_range_t  epr = {.epr_lo = 0, .epr_hi = DAOS_EPOCH_MAX - 1};
+	daos_unit_oid_t     deleted_oid;
+	daos_unit_oid_t     first_oid = {0};
+
+	/** Advance the sequence number for each yield mimicking a normal system. */
+	scrub_sched_seq++;
+
+	if (ctx->tsc_iter_deleted) {
+		return 0;
+	}
+
+	/** The first yield happens after scrubber has processed chunk #0 of OID 1. */
+	assert_int_equal(ctx->tsc_scrub_ctx.sc_bytes_scrubbed, ctx->tsc_chunk_size);
+	ctx->tsc_iter_deleted = true;
+	deleted_oid           = ctx->tsc_scrub_ctx.sc_cur_oid;
+	D_INFO("Delete object with OID: " DF_UOID "\n", DP_UOID(deleted_oid));
+
+	/** OIDs ought to come in order so the OID 1 ought to come first and this is
+	 *  the one planned to be deleted. */
+	set_test_oid(&first_oid, 1);
+	assert_int_equal(daos_unit_oid_compare(deleted_oid, first_oid), 0);
+
+	/** Punch, aggregate and collect the garbage. In the end, the OID is physically deleted. */
+	assert_success(vos_obj_punch(ctx->tsc_coh, deleted_oid, 2, 0, 0, NULL, 0, NULL, NULL));
+	assert_success(vos_aggregate(ctx->tsc_coh, &epr, NULL, NULL,
+				     VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE));
+	while (!vos_gc_pool_idle(ctx->tsc_poh))
+		assert_success(vos_gc_pool(ctx->tsc_poh, -1, NULL, NULL));
+
+	return 0;
+}
+
+static int
+mock_sleep_nop(void *arg, uint32_t msec)
+{
+	return 0;
+}
+
+static void
+object_deleted_by_aggregation_and_gc_mid_yield_between_chunks(void **state)
+{
+	struct sts_context *ctx = *state;
+
+#if !FAULT_INJECTION
+	skip();
+#endif
+	/** Two checksum chunks make the scrubber yield between chunks while it is still
+	 *  processing this object, so the callback can delete it before iteration resumes. */
+	ctx->tsc_data_len = ctx->tsc_chunk_size * 2;
+	/** Add two values. The later one is there so the iterator continues using its state
+	 *  after yield. */
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 1, false);
+	/** Ensure that scrubber works as expected on following nodes */
+	sts_ctx_update(ctx, 2, TEST_IOD_ARRAY_1, "dkey", "akey", 1, true);
+	sts_ctx_update(ctx, 3, TEST_IOD_ARRAY_1, "dkey", "akey", 1, true);
+	sts_ctx_update(ctx, 4, TEST_IOD_ARRAY_1, "dkey", "akey", 1, false);
+
+	/** Configure scrabber and call it. */
+	ctx->tsc_yield_fn  = test_yield_deletes_object_by_aggregation_and_gc;
+	ctx->tsc_sleep_fn  = mock_sleep_nop;
+	ctx->tsc_sched_arg = ctx;
+	sts_ctx_do_scrub(ctx);
+
+	assert_true(ctx->tsc_iter_deleted);
+	assert_rc_equal(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 1), -DER_NONEXIST);
+	assert_success(sts_ctx_fetch(ctx, 4, TEST_IOD_ARRAY_1, "dkey", "akey", 1));
+	assert_csum_error(sts_ctx_fetch(ctx, 3, TEST_IOD_ARRAY_1, "dkey", "akey", 1));
+	assert_csum_error(sts_ctx_fetch(ctx, 2, TEST_IOD_ARRAY_1, "dkey", "akey", 1));
+}
+
+static int
+sts_setup_with_sched(void **state)
+{
+	sts_setup(state);
+
+	/** Inject memory poisoning on free to expose use-after-free issues.
+	 *  The poisoning pattern is provided via the fail value. 0x21 is a pattern that
+	 * scrambles the EVT node’s flags in just the right way to trigger an assertion. */
+	daos_fail_loc_set(DAOS_MEM_PMEM_FREE_POISON | DAOS_FAIL_ALWAYS);
+	daos_fail_value_set(0x21);
+
+	scrub_sched_seq                     = 0;
+	vos_tls_get(true)->vtl_sched_seq_fn = scrub_sched_seq_get;
+
+	return 0;
+}
+
+static int
+sts_teardown_with_sched(void **state)
+{
+	vos_tls_get(true)->vtl_sched_seq_fn = NULL;
+	scrub_sched_seq                     = 0;
+
+	daos_fail_loc_reset();
+
+	return sts_teardown(state);
+}
+
 #define	TS(desc, test_fn) \
 	{ desc, test_fn, sts_setup, sts_teardown }
 
 static const struct CMUnitTest scrubbing_tests[] = {
-	TS("calculate time between periods", ms_between_periods_tests),
-	TS("CSUM_SCRUBBING_00: Only scrub when idle",
-	   lazy_scrubbing_only_when_idle),
-	TS("CSUM_SCRUBBING_01: SV with no corruption",
-	   scrubbing_with_no_corruption_sv),
-	TS("CSUM_SCRUBBING_02: Array with no corruption",
-	   scrubbing_with_no_corruption_array),
-	TS("CSUM_SCRUBBING_03: A single value corrupted",
-	   scrubbing_with_sv_corrupted),
-	TS("CSUM_SCRUBBING_04: A corrupted extent value",
-	   corrupted_extent),
-	TS("CSUM_SCRUBBING_05: Multiple corrupted extent values",
-	   scrubbing_with_arrays_corrupted),
-	TS("CSUM_SCRUBBING_06: Scrub multiple epochs",
-	   scrub_multiple_epochs),
-	TS("CSUM_SCRUBBING_06: Multiple keys, some corrupted values",
-	   scrubbing_with_multiple_akeys),
-	TS("CSUM_SCRUBBING_07: Multiple writes to same key, then corruption",
-	   scrubbing_with_good_akey_then_bad_akey),
-	TS("CSUM_SCRUBBING_08: Extent is deleted during scrub while yielding",
-	   extent_deleted_by_aggregation),
-	TS("CSUM_SCRUBBING_09.1: whole dkey is deleted during scrub while "
-	   "yielding",
-	   dkey_deleted_by_aggregation_with_multiple_extents),
-	TS("CSUM_SCRUBBING_09.2: whole dkey is deleted during scrub while "
-	   "yielding",
-	   dkey_deleted_by_aggregation_with_multiple_akeys),
-	TS("CSUM_SCRUBBING_09.3: Scrubbing has reference to container so "
-	   "vos_cont_destroy will return DER_BUSY.",
-	   container_deleted),
-	TS("CSUM_SCRUBBING_10: Scrubbing multiple objects",
-	   multiple_objects),
-	TS("CSUM_SCRUBBING_11: When threshold is 0, no drain happens",
-	   no_drain_target),
-	TS("CSUM_SCRUBBING_12: Scrubbing multiple overlapping extents",
-	   multiple_overlapping_extents),
-	TS("CSUM_SCRUBBING_13: Evict pool target when threshold is exceeded",
-	   drain_target),
-	TS("CSUM_SCRUBBING_14: Scrubber doesn't get stuck in lazy mode when system is busy and "
-	   "mode is changed to TIMED", scrubber_doesnot_get_stuck_in_lazy_mode),
+    TS("calculate time between periods", ms_between_periods_tests),
+    TS("CSUM_SCRUBBING_00: Only scrub when idle", lazy_scrubbing_only_when_idle),
+    TS("CSUM_SCRUBBING_01: SV with no corruption", scrubbing_with_no_corruption_sv),
+    TS("CSUM_SCRUBBING_02: Array with no corruption", scrubbing_with_no_corruption_array),
+    TS("CSUM_SCRUBBING_03: A single value corrupted", scrubbing_with_sv_corrupted),
+    TS("CSUM_SCRUBBING_04: A corrupted extent value", corrupted_extent),
+    TS("CSUM_SCRUBBING_05: Multiple corrupted extent values", scrubbing_with_arrays_corrupted),
+    TS("CSUM_SCRUBBING_06: Scrub multiple epochs", scrub_multiple_epochs),
+    TS("CSUM_SCRUBBING_06: Multiple keys, some corrupted values", scrubbing_with_multiple_akeys),
+    TS("CSUM_SCRUBBING_07: Multiple writes to same key, then corruption",
+       scrubbing_with_good_akey_then_bad_akey),
+    TS("CSUM_SCRUBBING_08: Extent is deleted during scrub while yielding",
+       extent_deleted_by_aggregation),
+    TS("CSUM_SCRUBBING_09.1: whole dkey is deleted during scrub while "
+       "yielding",
+       dkey_deleted_by_aggregation_with_multiple_extents),
+    TS("CSUM_SCRUBBING_09.2: whole dkey is deleted during scrub while "
+       "yielding",
+       dkey_deleted_by_aggregation_with_multiple_akeys),
+    TS("CSUM_SCRUBBING_09.3: Scrubbing has reference to container so "
+       "vos_cont_destroy will return DER_BUSY.",
+       container_deleted),
+    TS("CSUM_SCRUBBING_10: Scrubbing multiple objects", multiple_objects),
+    TS("CSUM_SCRUBBING_11: When threshold is 0, no drain happens", no_drain_target),
+    TS("CSUM_SCRUBBING_12: Scrubbing multiple overlapping extents", multiple_overlapping_extents),
+    TS("CSUM_SCRUBBING_13: Evict pool target when threshold is exceeded", drain_target),
+    TS("CSUM_SCRUBBING_14: Scrubber doesn't get stuck in lazy mode when system is busy and "
+       "mode is changed to TIMED",
+       scrubber_doesnot_get_stuck_in_lazy_mode),
+    {"CSUM_SCRUBBING_15: DAOS-19721 - object deleted during multi-chunk checksum scrub",
+     object_deleted_by_aggregation_and_gc_mid_yield_between_chunks, sts_setup_with_sched,
+     sts_teardown_with_sched},
 };
 
 int
@@ -1073,6 +1184,7 @@ main(int argc, char *argv[])
 		return rc;
 	}
 
+	d_register_alt_assert(mock_assert);
 	rc = run_scrubbing_tests(argc, argv);
 
 	vos_self_fini();
