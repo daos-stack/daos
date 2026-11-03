@@ -66,9 +66,7 @@ struct xstream_state {
 	/** run-time variables */
 	daos_handle_t            poh;
 	daos_handle_t            coh;
-	struct io                io;
-	/** output */
-	int                      rc;
+	struct io                         io;
 };
 
 static void
@@ -296,24 +294,21 @@ exec_one(void *arg)
 		if (xst->args_workload->create_pools) {
 			rc = create_pool(xst, file->po_uuid);
 			if (rc != DER_SUCCESS) {
-				xst->rc = rc;
-				break;
+				exit(EXIT_FAILURE);
 			}
 		}
 
 		rc = dlck_pool_open(xst->args_engine->storage_path, file->po_uuid, xst->xs->tgt_id,
 				    &xst->poh);
 		if (rc != DER_SUCCESS) {
-			xst->rc = rc;
-			break;
+			exit(EXIT_FAILURE);
 		}
 
 		cont_process(xst, xst->paths->co_uuid);
 
 		rc = vos_pool_close(xst->poh);
 		if (rc != DER_SUCCESS) {
-			xst->rc = rc;
-			break;
+			exit(EXIT_FAILURE);
 		}
 	}
 
