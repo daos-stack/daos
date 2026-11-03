@@ -418,15 +418,15 @@ struct shard_k2a_args {
 	daos_anchor_t		*ka_anchor;
 };
 
-/* Reduced from 9 to 8 to keep sizeof(obj_auxi_args) within TSE_TASK_ARG_LEN
- * after adding map_ver_reply_rank; EC 8P1 fan-out now allocates its tgt list.
- */
-#define OBJ_TGT_INLINE_NR       8
+#define OBJ_TGT_INLINE_NR       9
 #define OBJ_INLINE_BTIMAP	4
 
+/* Field order matters: sizeof(obj_auxi_args) + sizeof(daos_task_args) must fit
+ * in TSE_TASK_ARG_LEN with no slack. The pointer is placed before the 20-byte
+ * element inline array to avoid an alignment hole, and the dispatch flag shares
+ * a word with ort_grp_size.
+ */
 struct obj_req_tgts {
-	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
-	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
 	/* Shard target array, with (ort_grp_nr * ort_grp_size) targets.
 	 * If #targets <= OBJ_TGT_INLINE_NR then it points to ort_tgts_inline.
 	 * Within the array, [0, ort_grp_size - 1] is for the first group,
@@ -438,16 +438,18 @@ struct obj_req_tgts {
 	 * punch, all other cases with (ort_grp_nr == 1).
 	 */
 	struct daos_shard_tgt	*ort_shard_tgts;
-	uint32_t		 ort_grp_nr;
-	/* ort_grp_size is the size of the group that is sent as forwarded
-	 * shards
-	 */
-	uint32_t		 ort_grp_size;
+	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
+	struct daos_shard_tgt    ort_tgts_inline[OBJ_TGT_INLINE_NR];
+	uint32_t                 ort_grp_nr;
 	/* ort_start_shard is only for EC object, it is the start shard number
 	 * of the EC stripe. To facilitate calculate the offset of different
 	 * shards in the stripe.
 	 */
 	uint32_t		 ort_start_shard;
+	/* ort_grp_size is the size of the group that is sent as forwarded
+	 * shards
+	 */
+	uint32_t                 ort_grp_size : 31;
 	/* flag of server dispatch */
 	uint32_t		 ort_srv_disp:1;
 };
