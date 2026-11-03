@@ -12,83 +12,66 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"math/big"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/daos-stack/daos/src/control/common/test"
+	sectest "github.com/daos-stack/daos/src/control/security/test"
 )
 
-func TestSecurity_ParsePoPPayload(t *testing.T) {
+func marshalPoP(t *testing.T, p *PoPPayload) []byte {
+	t.Helper()
+
+	b, err := proto.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func TestSecurity_parsePoPPayload(t *testing.T) {
 	poolUUID := uuid.MustParse("12345678-1234-1234-1234-123456789abc")
 	handleUUID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
-	marshal := func(t *testing.T, p *PoPPayload) []byte {
-		t.Helper()
-		b, err := proto.Marshal(p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return b
-	}
+	timestamp := time.Date(2026, 4, 15, 14, 0, 29, 0, time.UTC)
 
 	for name, tc := range map[string]struct {
-		raw    func(t *testing.T) []byte
-		expErr bool
+		raw    []byte
+		expErr error
 	}{
-		"built by buildPoPPayload": {
-			raw: func(t *testing.T) []byte {
-				b, err := buildPoPPayload(poolUUID, handleUUID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				return b
-			},
+		"valid": {
+			raw: marshalPoP(t, &PoPPayload{PoolUuid: poolUUID[:], HandleUuid: handleUUID[:], Timestamp: timestamp.Unix()}),
 		},
 		"not a proto message": {
-			raw:    func(t *testing.T) []byte { return []byte{0xff, 0xff, 0xff, 0xff} },
-			expErr: true,
+			raw:    []byte{0xff, 0xff, 0xff, 0xff},
+			expErr: errors.New("unmarshaling PoP payload"),
 		},
 		"short pool UUID": {
-			raw: func(t *testing.T) []byte {
-				return marshal(t, &PoPPayload{PoolUuid: []byte{0x01}, HandleUuid: handleUUID[:], Timestamp: time.Now().Unix()})
-			},
-			expErr: true,
+			raw:    marshalPoP(t, &PoPPayload{PoolUuid: []byte{0x01}, HandleUuid: handleUUID[:], Timestamp: timestamp.Unix()}),
+			expErr: errors.New("pool UUID is 1 bytes, want 16"),
 		},
 		"short handle UUID": {
-			raw: func(t *testing.T) []byte {
-				return marshal(t, &PoPPayload{PoolUuid: poolUUID[:], HandleUuid: []byte{0x01}, Timestamp: time.Now().Unix()})
-			},
-			expErr: true,
+			raw:    marshalPoP(t, &PoPPayload{PoolUuid: poolUUID[:], HandleUuid: []byte{0x01}, Timestamp: timestamp.Unix()}),
+			expErr: errors.New("handle UUID is 1 bytes, want 16"),
 		},
 		"missing timestamp": {
-			raw: func(t *testing.T) []byte {
-				return marshal(t, &PoPPayload{PoolUuid: poolUUID[:], HandleUuid: handleUUID[:]})
-			},
-			expErr: true,
+			raw:    marshalPoP(t, &PoPPayload{PoolUuid: poolUUID[:], HandleUuid: handleUUID[:]}),
+			expErr: errors.New("timestamp 0 is not positive"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			before := time.Now().Unix()
-			parsed, err := parsePoPPayload(tc.raw(t))
-			if tc.expErr {
-				if err == nil {
-					t.Fatal("expected parse error, got nil")
-				}
+			parsed, err := parsePoPPayload(tc.raw)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
 				return
 			}
-			if err != nil {
-				t.Fatalf("parsePoPPayload: %v", err)
-			}
-			if parsed.PoolID() != poolUUID || parsed.HandleID() != handleUUID {
-				t.Errorf("UUID mismatch: %+v", parsed)
-			}
-			if ts := parsed.Timestamp; ts < before || ts > time.Now().Unix() {
-				t.Errorf("timestamp %d is not now", ts)
-			}
+
+			test.AssertEqual(t, poolUUID, parsed.PoolID(), "pool UUID")
+			test.AssertEqual(t, handleUUID, parsed.HandleID(), "handle UUID")
+			test.AssertTrue(t, timestamp.Equal(parsed.Time()), "timestamp")
 		})
 	}
 }
@@ -102,22 +85,33 @@ func TestSecurity_PoP_RoundTrip(t *testing.T) {
 	if _, err := rand.Read(payload); err != nil {
 		t.Fatal(err)
 	}
-
 	sig, err := signPoP(key, payload)
 	if err != nil {
-		t.Fatalf("signPoP: %v", err)
-	}
-	if err := verifyPoP(&key.PublicKey, payload, sig); err != nil {
-		t.Fatalf("verifyPoP: %v", err)
+		t.Fatal(err)
 	}
 	tampered := append([]byte{}, payload...)
 	tampered[0] ^= 0xff
-	if err := verifyPoP(&key.PublicKey, tampered, sig); err == nil {
-		t.Fatal("verifyPoP accepted a tampered payload")
+
+	for name, tc := range map[string]struct {
+		payload []byte
+		sig     []byte
+		expErr  error
+	}{
+		"valid":            {payload: payload, sig: sig},
+		"tampered payload": {payload: tampered, sig: sig, expErr: ErrCertInvalid},
+		"garbage sig":      {payload: payload, sig: []byte("sig"), expErr: ErrCertInvalid},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.CmpErr(t, tc.expErr, verifyPoP(&key.PublicKey, tc.payload, tc.sig))
+		})
 	}
 }
 
-func TestSecurity_PoP_RejectsOtherKeys(t *testing.T) {
+func TestSecurity_PoP_KeyTypes(t *testing.T) {
+	p384, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
 	p256, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -127,39 +121,21 @@ func TestSecurity_PoP_RejectsOtherKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	payload := []byte("payload")
-	for name, key := range map[string]crypto.Signer{"ECDSA P-256": p256, "RSA": rsaKey} {
+
+	for name, tc := range map[string]struct {
+		key    crypto.Signer
+		expErr error
+	}{
+		"P-384": {key: p384},
+		"P-256": {key: p256, expErr: errors.New("unsupported PoP key curve P-256")},
+		"RSA":   {key: rsaKey, expErr: errors.New("unsupported PoP key type")},
+	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := signPoP(key, payload); err == nil {
-				t.Error("signPoP accepted the key")
-			}
-			if err := verifyPoP(key.Public(), payload, []byte("sig")); err == nil {
-				t.Error("verifyPoP accepted the key")
-			}
-			if err := checkPoPKeyType(selfSignedCert(t, key)); !errors.Is(err, ErrCertInvalid) {
-				t.Errorf("checkPoPKeyType: expected %v, got %v", ErrCertInvalid, err)
-			}
+			sig, err := signPoP(tc.key, payload)
+			test.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, verifyPoP(tc.key.Public(), payload, sig))
+			cert := sectest.ParseCert(t, sectest.NewLeafForKey(t, "k", tc.key, nil, nil))
+			test.CmpErr(t, tc.expErr, checkPoPKeyType(cert))
 		})
 	}
-	p384, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := checkPoPKeyType(selfSignedCert(t, p384)); err != nil {
-		t.Errorf("checkPoPKeyType rejected P-384: %v", err)
-	}
-}
-
-func selfSignedCert(t *testing.T, key crypto.Signer) *x509.Certificate {
-	t.Helper()
-	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "k"},
-		NotBefore: time.Now(), NotAfter: time.Now().Add(time.Hour)}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, key.Public(), key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cert, err := x509.ParseCertificate(der)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cert
 }

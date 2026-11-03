@@ -166,7 +166,7 @@ type NodeCertInspection struct {
 	Validity error
 }
 
-// InspectNodeCert examines the deployment as the agent on machineName would use it at now.
+// InspectNodeCert examines the deployment as presented from machineName at now.
 func InspectNodeCert(dir string, poolUUID uuid.UUID, machineName string, now time.Time, skew time.Duration) *NodeCertInspection {
 	insp := inspectNodeCertFiles(dir, poolUUID)
 	if insp.Certificate != nil {
@@ -184,7 +184,7 @@ func (insp *NodeCertInspection) checkPolicy(machineName string, now time.Time, s
 	insp.Validity = checkCertValidity(insp.Certificate, now, skew)
 }
 
-// Err is the first problem the agent would hit; not-yet-valid is the server's call.
+// Err is the first problem that makes the deployment unusable; not-yet-valid is left to the server's clock.
 func (insp *NodeCertInspection) Err() error {
 	if err := insp.filesErr(); err != nil {
 		return err

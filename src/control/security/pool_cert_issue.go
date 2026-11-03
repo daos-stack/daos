@@ -15,12 +15,13 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 // IssuedCert is a freshly minted certificate and its private key.
@@ -33,22 +34,10 @@ type IssuedCert struct {
 
 // Write stores the certificate and key, replacing any existing files.
 func (c *IssuedCert) Write(certPath, keyPath string) error {
-	// A 0400 key cannot be overwritten in place.
-	for _, p := range []string{certPath, keyPath} {
-		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-			return errors.Wrapf(err, "removing %s", p)
-		}
-	}
-	if err := os.WriteFile(certPath, c.CertPEM, 0644); err != nil {
+	if err := common.WriteFileAtomic(certPath, c.CertPEM, 0644); err != nil {
 		return errors.Wrap(err, "writing certificate")
 	}
-	if err := os.WriteFile(keyPath, c.KeyPEM, 0400); err != nil {
-		if rmErr := os.Remove(certPath); rmErr != nil {
-			return errors.Wrapf(err, "writing private key (%s left behind: %s)", certPath, rmErr)
-		}
-		return errors.Wrap(err, "writing private key")
-	}
-	return nil
+	return errors.Wrap(common.WriteFileAtomic(keyPath, c.KeyPEM, 0400), "writing private key")
 }
 
 // certNotAfter resolves validity against the signer's term; validity <= 0 means the signer's full term.
@@ -159,9 +148,8 @@ func (req *IssueClientCertsReq) Validate() error {
 		return errors.New("node and tenant names are mutually exclusive")
 	}
 	for _, n := range req.Nodes {
-		// The agent reports the short host name; a dotted name can never match.
 		if strings.Contains(n, ".") {
-			return errors.Errorf("node name %q must be a short host name", n)
+			return errors.Errorf("node name %q must be a short host name (the AUTH_SYS machine name)", n)
 		}
 		if _, _, err := ParsePoolCertCN(PoolCertCNPrefixNode + n); err != nil {
 			return err

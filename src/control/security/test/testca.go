@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-// Package test mints the certificates production code cannot: roots, and CAs with arbitrary names.
+// Package test mints the certificates production code cannot: roots, CAs with arbitrary names, and leaves over foreign keys.
 package test
 
 import (
@@ -25,6 +25,11 @@ import (
 // NewCA returns a CA cert (PEM) and key, self-signed when parent is nil.
 func NewCA(t *testing.T, cn string, parent *x509.Certificate, parentKey *ecdsa.PrivateKey) ([]byte, *ecdsa.PrivateKey) {
 	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
 	tmpl := &x509.Certificate{
 		Subject:               pkix.Name{CommonName: cn},
 		NotBefore:             time.Now().Add(-time.Minute),
@@ -34,48 +39,47 @@ func NewCA(t *testing.T, cn string, parent *x509.Certificate, parentKey *ecdsa.P
 		IsCA:                  true,
 	}
 	if parent == nil {
-		return mint(t, tmpl, nil, nil)
+		return mint(t, tmpl, key, nil, nil), key
 	}
-	return mint(t, tmpl, parent, parentKey)
+	return mint(t, tmpl, key, parent, parentKey), key
 }
 
-// NewLeaf issues a client cert with a caller-chosen validity window.
-func NewLeaf(t *testing.T, cn string, parent *x509.Certificate, parentKey crypto.Signer, notBefore, notAfter time.Time) (certPEM, keyPEM []byte) {
+// NewLeafForKey issues a client cert (PEM) over key, self-signed when parent is nil.
+func NewLeafForKey(t *testing.T, cn string, key crypto.Signer, parent *x509.Certificate, parentKey crypto.Signer) []byte {
 	t.Helper()
+
 	tmpl := &x509.Certificate{
 		Subject:     pkix.Name{CommonName: cn},
-		NotBefore:   notBefore,
-		NotAfter:    notAfter,
+		NotBefore:   time.Now().Add(-time.Minute),
+		NotAfter:    time.Now().Add(time.Hour),
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}
-	certPEM, key := mint(t, tmpl, parent, parentKey)
-	return certPEM, KeyPEM(t, key)
+	return mint(t, tmpl, key, parent, parentKey)
 }
 
-func mint(t *testing.T, tmpl, parent *x509.Certificate, parentKey crypto.Signer) ([]byte, *ecdsa.PrivateKey) {
+func mint(t *testing.T, tmpl *x509.Certificate, key crypto.Signer, parent *x509.Certificate, parentKey crypto.Signer) []byte {
 	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
 		t.Fatal(err)
 	}
-	tmpl.SerialNumber, err = rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		t.Fatal(err)
-	}
+	tmpl.SerialNumber = serial
 	if parent == nil {
 		parent, parentKey = tmpl, key
 	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, parent, &key.PublicKey, parentKey)
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, parent, key.Public(), parentKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), key
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 }
 
 // KeyPEM encodes a private key as PKCS#8 PEM.
 func KeyPEM(t *testing.T, key crypto.PrivateKey) []byte {
 	t.Helper()
+
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
 		t.Fatal(err)
@@ -86,6 +90,7 @@ func KeyPEM(t *testing.T, key crypto.PrivateKey) []byte {
 // ParseCert parses the first CERTIFICATE block in a PEM bundle.
 func ParseCert(t *testing.T, certPEM []byte) *x509.Certificate {
 	t.Helper()
+
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
 		t.Fatal("pem.Decode returned nil block")
@@ -100,6 +105,7 @@ func ParseCert(t *testing.T, certPEM []byte) *x509.Certificate {
 // WriteCertFiles writes a cert and key with the permissions the loaders expect.
 func WriteCertFiles(t *testing.T, certPath, keyPath string, certPEM, keyPEM []byte) {
 	t.Helper()
+
 	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -111,6 +117,7 @@ func WriteCertFiles(t *testing.T, certPath, keyPath string, certPEM, keyPEM []by
 // WriteCAFiles writes a self-signed CA as test_ca.{crt,key} in dir.
 func WriteCAFiles(t *testing.T, dir string) (certPath, keyPath string) {
 	t.Helper()
+
 	certPEM, key := NewCA(t, "Test CA", nil, nil)
 	keyPEM := KeyPEM(t, key)
 	certPath = filepath.Join(dir, "test_ca.crt")
