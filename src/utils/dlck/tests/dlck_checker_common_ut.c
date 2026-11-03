@@ -11,7 +11,8 @@
 #include <cmocka.h>
 
 #include <daos_errno.h>
-#include <daos_srv/checker.h>
+#include <daos/debug.h>
+#include <daos/checker.h>
 
 #define FMT  "worker %d: %s"
 #define ARG0 42
