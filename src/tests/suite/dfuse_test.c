@@ -885,7 +885,7 @@ do_directory(void **state)
 	printf("File count is %d\n", rc);
 	assert_int_equal(rc, entry_count);
 
-	long           positions[entry_count];
+	long           positions[entry_count + 1];
 	struct dirent *ent;
 	i = 0;
 	rewinddir(dirp);
@@ -1060,7 +1060,7 @@ do_fdcallscheck(void **state)
 		use_dfuse = false;
 
 	env_ldpreload = getenv("LD_PRELOAD");
-	if (strstr(env_ldpreload, "libpil4dfs.so") != NULL)
+	if (env_ldpreload != NULL && strstr(env_ldpreload, "libpil4dfs.so") != NULL)
 		/* libioil cannot pass this test since low fds are only temporarily blocked */
 		with_pil4dfs = true;
 
