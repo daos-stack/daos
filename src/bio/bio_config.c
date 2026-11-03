@@ -72,6 +72,23 @@ cap_object(const struct spdk_json_val *val, void *out)
 	return 0;
 }
 
+/* Some DAOS config methods take an object "params" value, others (e.g.
+ * NVME_CONF_SET_HOTPLUG_RANGE) take an array "params" value, so the generic capture used by
+ * config_entry_decoders must accept either shape.
+ */
+static int
+cap_object_or_array(const struct spdk_json_val *val, void *out)
+{
+	const struct spdk_json_val **vptr = out;
+
+	if (val->type != SPDK_JSON_VAL_OBJECT_BEGIN && val->type != SPDK_JSON_VAL_ARRAY_BEGIN) {
+		return -DER_INVAL;
+	}
+
+	*vptr = val;
+	return 0;
+}
+
 
 static int
 cap_array_or_null(const struct spdk_json_val *val, void *out)
@@ -112,23 +129,44 @@ config_entry {
 static struct spdk_json_object_decoder
 config_entry_decoders[] = {
 	{"method", offsetof(struct config_entry, method), spdk_json_decode_string},
-	{"params", offsetof(struct config_entry, params), cap_object, true}
+	{"params", offsetof(struct config_entry, params), cap_object_or_array, true}
 };
 
-struct busid_range_info {
-	uint32_t domain;
+/* HOTPLUG_FILTER_MAX_ENTRIES caps the number of bdev_hotplug_range entries decoded from
+ * daos_nvme.conf. spdk_json_decode_array() requires a fixed-size output buffer.
+ */
+#define HOTPLUG_FILTER_MAX_ENTRIES 64
+
+struct hotplug_filter_entry {
+	uint32_t domain_begin;
+	uint32_t domain_end;
 	uint8_t  begin;
 	uint8_t  end;
-	/* Set for VMD, or when matching the bus-ID range in any PCI domain. */
-	bool     ignore_domain;
 };
 
-static struct spdk_json_object_decoder busid_range_decoders[] = {
-    {"domain", offsetof(struct busid_range_info, domain), spdk_json_decode_uint32, true},
-    {"begin", offsetof(struct busid_range_info, begin), spdk_json_decode_uint8},
-    {"end", offsetof(struct busid_range_info, end), spdk_json_decode_uint8},
-    {"ignore_domain", offsetof(struct busid_range_info, ignore_domain), spdk_json_decode_bool,
-     true},
+static struct spdk_json_object_decoder hotplug_filter_entry_decoders[] = {
+    {"domain_begin", offsetof(struct hotplug_filter_entry, domain_begin), spdk_json_decode_uint32},
+    {"domain_end", offsetof(struct hotplug_filter_entry, domain_end), spdk_json_decode_uint32},
+    {"begin", offsetof(struct hotplug_filter_entry, begin), spdk_json_decode_uint8},
+    {"end", offsetof(struct hotplug_filter_entry, end), spdk_json_decode_uint8},
+};
+
+static int
+decode_hotplug_filter_entry(const struct spdk_json_val *val, void *out)
+{
+	struct hotplug_filter_entry *entry = out;
+
+	return spdk_json_decode_object(val, hotplug_filter_entry_decoders,
+					SPDK_COUNTOF(hotplug_filter_entry_decoders), entry);
+}
+
+/* Fixed-size array of hotplug filter entries decoded from the bdev_hotplug_range config array.
+ * A device's hotplug event is accepted if it matches any entry; zero entries means allow-all
+ * (e.g. VMD, where no entries are written to the config at all).
+ */
+struct hotplug_filter_info {
+	struct hotplug_filter_entry entries[HOTPLUG_FILTER_MAX_ENTRIES];
+	size_t                      num_entries;
 };
 
 struct accel_props_info {
@@ -817,37 +855,120 @@ out:
 	return rc;
 }
 
-struct busid_range_info hotplug_busid_range = {};
+/* Caller responsible for freeing json_config_ctx if returned non-NULL */
+static int
+decode_daos_array(const char *nvme_conf, const char *method_name,
+		  spdk_json_decode_fn decode_entry_func, void *out, size_t max_size,
+		  size_t *out_size, size_t stride)
+{
+	struct json_config_ctx  *ctx;
+	struct spdk_json_val	*daos_data;
+	struct config_entry      cfg = {};
+	int			 rc = 0;
 
-/* Sentinel to detect a daos_nvme.conf without a "domain" key, i.e. written by a release
- * predating PCI-domain-aware hotplug filtering.
- */
-#define BUSID_RANGE_DOMAIN_UNSET UINT32_MAX
+	D_ASSERT(nvme_conf != NULL);
+	D_ASSERT(method_name != NULL);
+
+	D_ALLOC_PTR(ctx);
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	rc = read_config(nvme_conf, ctx);
+	if (rc != 0)
+		goto out;
+
+	/* Capture daos_data JSON object */
+	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
+			    SPDK_JSON_VAL_OBJECT_BEGIN);
+	if (rc < 0) {
+		D_ERROR("Failed to find 'daos_data' key: %s\n", spdk_strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	D_ASSERT(daos_data != NULL);
+
+	/* Capture config array in ctx */
+	rc = spdk_json_decode_object(daos_data, daos_data_decoders,
+				     SPDK_COUNTOF(daos_data_decoders), ctx);
+	if (rc < 0) {
+		D_ERROR("Failed to parse 'daos_data' entry: %s\n", spdk_strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	/* Get 'config' array first configuration entry */
+	ctx->config_it = spdk_json_array_first(ctx->config);
+	if (ctx->config_it == NULL) {
+		D_DEBUG(DB_MGMT, "%s entry not found in spdk bootstrap config\n", method_name);
+		D_GOTO(out, rc = JSON_NOT_FOUND);
+	}
+
+	while (ctx->config_it != NULL) {
+		rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
+					     SPDK_COUNTOF(config_entry_decoders), &cfg);
+		if (rc < 0) {
+			D_ERROR("Failed to decode 'config' entry: %s\n", spdk_strerror(-rc));
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+
+		if (strcmp(cfg.method, method_name) == 0)
+			break;
+
+		/* Move on to next subsystem config */
+		ctx->config_it = spdk_json_next(ctx->config_it);
+	}
+
+	if (ctx->config_it == NULL) {
+		D_DEBUG(DB_MGMT, "%s entry not found in spdk bootstrap config\n", method_name);
+		D_GOTO(out, rc = JSON_NOT_FOUND);
+	}
+
+	rc = spdk_json_decode_array(cfg.params, decode_entry_func, out, max_size, out_size,
+				    stride);
+	if (rc < 0) {
+		D_ERROR("Failed to decode '%s' entry: %s)\n", method_name, spdk_strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+out:
+	D_FREE(cfg.method);
+	D_FREE(ctx->values);
+	D_FREE(ctx->json_data);
+	D_FREE(ctx);
+	return rc;
+}
+
+static struct hotplug_filter_info hotplug_filter = {};
 
 static bool
 hotplug_filter_fn(const struct spdk_pci_addr *addr)
 {
-	if (hotplug_busid_range.end == 0 || hotplug_busid_range.begin > hotplug_busid_range.end) {
-		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %04X:%02X, invalid range\n",
+	size_t i;
+
+	if (hotplug_filter.num_entries == 0) {
+		D_DEBUG(DB_MGMT, "hotplug filter accept event on %04X:%02X, no entries configured\n",
 			addr->domain, addr->bus);
-		return true; /* allow if no or invalid range specified */
+		return true; /* allow all if no filter entries configured */
 	}
 
-	if ((hotplug_busid_range.ignore_domain || addr->domain == hotplug_busid_range.domain) &&
-	    addr->bus >= hotplug_busid_range.begin && addr->bus <= hotplug_busid_range.end) {
-		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %04X:%02X\n", addr->domain,
-			addr->bus);
-		return true;
+	for (i = 0; i < hotplug_filter.num_entries; i++) {
+		struct hotplug_filter_entry *entry = &hotplug_filter.entries[i];
+
+		if (addr->domain >= entry->domain_begin && addr->domain <= entry->domain_end &&
+		    addr->bus >= entry->begin && addr->bus <= entry->end) {
+			D_DEBUG(DB_MGMT, "hotplug filter accept event on %04X:%02X\n",
+				addr->domain, addr->bus);
+			return true;
+		}
 	}
 
-	D_DEBUG(DB_MGMT, "hotplug filter refuse event on bus-id %04X:%02X\n", addr->domain,
-		addr->bus);
+	D_DEBUG(DB_MGMT, "hotplug filter refuse event on %04X:%02X\n", addr->domain, addr->bus);
 	return false;
 }
 
 /**
- * Set hotplug bus-ID ranges in SPDK filter based on values read from JSON config file.
- * The PCI domain and bus-ID range will be used to filter hotplug events.
+ * Set hotplug PCI domain+bus-ID filter ranges in SPDK filter based on values read from JSON
+ * config file. A device's hotplug event is accepted if it matches any configured entry; zero
+ * entries (or no entry present in the config at all, e.g. VMD) means allow-all.
  *
  * \param[in]	nvme_conf	JSON config file path
  *
@@ -857,37 +978,29 @@ int
 bio_set_hotplug_filter(const char *nvme_conf)
 {
 	int	rc;
-	char    range[32];
+	size_t	i;
 
-	/* Reset to sentinel so a missing "domain" key (pre-PCI-domain-aware config) can be
-	 * distinguished from an explicit domain 0000, and treated as matching any domain.
-	 */
-	hotplug_busid_range = (struct busid_range_info){.domain = BUSID_RANGE_DOMAIN_UNSET};
+	hotplug_filter = (struct hotplug_filter_info){};
 
-	rc = decode_daos_object(nvme_conf, NVME_CONF_SET_HOTPLUG_RANGE, busid_range_decoders,
-				SPDK_COUNTOF(busid_range_decoders), &hotplug_busid_range);
+	rc = decode_daos_array(nvme_conf, NVME_CONF_SET_HOTPLUG_RANGE, decode_hotplug_filter_entry,
+			       hotplug_filter.entries, HOTPLUG_FILTER_MAX_ENTRIES,
+			       &hotplug_filter.num_entries, sizeof(struct hotplug_filter_entry));
 	if (rc != 0) {
 		if (rc == JSON_NOT_FOUND)
 			rc = 0;
 		return rc;
 	}
 
-	if (hotplug_busid_range.domain == BUSID_RANGE_DOMAIN_UNSET) {
-		hotplug_busid_range.domain        = 0;
-		hotplug_busid_range.ignore_domain = true;
+	for (i = 0; i < hotplug_filter.num_entries; i++) {
+		struct hotplug_filter_entry *entry = &hotplug_filter.entries[i];
+
+		D_INFO("'%s' entry %zu read from config: domain=%04X-%04X, bus-ids=%02X-%02X\n",
+		       NVME_CONF_SET_HOTPLUG_RANGE, i, entry->domain_begin, entry->domain_end,
+		       entry->begin, entry->end);
 	}
 
-	if (hotplug_busid_range.ignore_domain)
-		snprintf(range, sizeof(range), "domain=any, bus-ids=%02X-%02X",
-			 hotplug_busid_range.begin, hotplug_busid_range.end);
-	else
-		snprintf(range, sizeof(range), "domain=%04X, bus-ids=%02X-%02X",
-			 hotplug_busid_range.domain, hotplug_busid_range.begin,
-			 hotplug_busid_range.end);
-
-	D_INFO("'%s' read from config: %s\n", NVME_CONF_SET_HOTPLUG_RANGE, range);
-
-	D_DEBUG(DB_MGMT, "calling spdk_nvme_pcie_set_hotplug_filter, %s\n", range);
+	D_DEBUG(DB_MGMT, "calling spdk_nvme_pcie_set_hotplug_filter with %zu entries\n",
+		hotplug_filter.num_entries);
 	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
 
 	return 0;

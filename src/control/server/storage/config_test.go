@@ -257,15 +257,13 @@ func TestStorage_BdevDeviceList_FromJSON(t *testing.T) {
 	}
 }
 
-func TestStorage_parsePCIBusRange(t *testing.T) {
+func TestStorage_parseBusRange(t *testing.T) {
 	for name, tc := range map[string]struct {
-		rangeStr     string
-		bitSize      int
-		expDomain    uint16
-		expBegin     uint8
-		expEnd       uint8
-		expSpecified bool
-		expErr       error
+		rangeStr string
+		bitSize  int
+		expBegin uint8
+		expEnd   uint8
+		expErr   error
 	}{
 		"hexadecimal": {
 			rangeStr: "0x80-0x8f",
@@ -308,86 +306,37 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 			bitSize:  8,
 			expErr:   errors.New("value out of range"),
 		},
-		"domain prefixed": {
-			rangeStr:     "0001:0x80-0x8f",
-			expDomain:    0x0001,
-			expBegin:     0x80,
-			expEnd:       0x8f,
-			expSpecified: true,
-		},
-		"domain prefixed; decimal bus range": {
-			rangeStr:     "0001:128-143",
-			expDomain:    0x0001,
-			expBegin:     0x80,
-			expEnd:       0x8F,
-			expSpecified: true,
-		},
-		"domain prefixed; zero domain": {
-			rangeStr:     "0000:0x80-0x8f",
-			expDomain:    0x0000,
-			expBegin:     0x80,
-			expEnd:       0x8f,
-			expSpecified: true,
-		},
-		"invalid domain": {
-			rangeStr: "000g:0x80-0x8f",
-			expErr:   errors.New("parse busid range domain"),
-		},
 		"no domain; full bus range": {
 			rangeStr: "0x00-0xFF",
 			expBegin: 0x00,
 			expEnd:   0xFF,
 		},
-		"domain prefixed; full bus range": {
-			rangeStr:     "0001:0x00-0xFF",
-			expDomain:    0x0001,
-			expBegin:     0x00,
-			expEnd:       0xFF,
-			expSpecified: true,
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			domain, begin, end, specified, err := parsePCIBusRange(tc.rangeStr, tc.bitSize)
+			begin, end, err := parseBusRange(tc.rangeStr, tc.bitSize)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			test.AssertEqual(t, tc.expDomain, domain, "bad domain")
 			test.AssertEqual(t, tc.expBegin, begin, "bad beginning limit")
 			test.AssertEqual(t, tc.expEnd, end, "bad ending limit")
-			test.AssertEqual(t, tc.expSpecified, specified, "bad domain-specified flag")
 		})
 	}
 }
 
-func TestStorage_BdevBusRange_IgnoreDomain(t *testing.T) {
+func TestStorage_BdevBusRange_ToHotplugRange(t *testing.T) {
 	for name, tc := range map[string]struct {
-		rangeStr        string
-		expIgnoreDomain bool
-		expDomain       uint16
-		expStr          string
+		rangeStr string
+		expStr   string
 	}{
-		"no domain; partial range means ignore domain": {
-			rangeStr:        "0x80-0x8f",
-			expIgnoreDomain: true,
-			expStr:          "0x80-0x8f",
+		"partial bus range": {
+			rangeStr: "0x80-0x8f",
+			expStr:   "0x00:0x80-0x8f",
 		},
-		"no domain; full bus range means ignore domain": {
-			rangeStr:        "0x00-0xff",
-			expIgnoreDomain: true,
-			expStr:          "0x00-0xff",
-		},
-		"explicit domain; full bus range does not ignore domain": {
-			rangeStr:        "0001:0x00-0xff",
-			expIgnoreDomain: false,
-			expDomain:       0x0001,
-			expStr:          "0001:0x00-0xff",
-		},
-		"explicit zero domain; full bus range does not ignore domain": {
-			rangeStr:        "0000:0x00-0xff",
-			expIgnoreDomain: false,
-			expStr:          "0000:0x00-0xff",
+		"full bus range": {
+			rangeStr: "0x00-0xff",
+			expStr:   "0x00:0x00-0xff",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -396,9 +345,106 @@ func TestStorage_BdevBusRange_IgnoreDomain(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			test.AssertEqual(t, tc.expIgnoreDomain, br.IgnoreDomain, "bad ignore-domain flag")
-			test.AssertEqual(t, tc.expDomain, br.LowAddress.Domain, "bad domain")
-			test.AssertEqual(t, tc.expStr, br.String(), "bad string representation")
+			hr := br.ToHotplugRange()
+			test.AssertEqual(t, uint16(0x00), hr.LowAddress.Domain, "bad low domain")
+			test.AssertEqual(t, uint16(0x00), hr.HighAddress.Domain, "bad high domain")
+			test.AssertEqual(t, tc.expStr, hr.String(), "bad string representation")
+		})
+	}
+}
+
+func TestStorage_NewBdevHotplugRange(t *testing.T) {
+	for name, tc := range map[string]struct {
+		entryStr string
+		expDomLo uint16
+		expDomHi uint16
+		expBusLo uint8
+		expBusHi uint8
+		expErr   error
+	}{
+		"single domain, single bus-id, hex": {
+			entryStr: "0x00:0x80",
+			expBusLo: 0x80,
+			expBusHi: 0x80,
+		},
+		"single domain, full bus-id range, hex": {
+			entryStr: "0x01:0x00-0xFF",
+			expDomLo: 0x01,
+			expDomHi: 0x01,
+			expBusLo: 0x00,
+			expBusHi: 0xFF,
+		},
+		"domain range, bus-id range, hex": {
+			entryStr: "0x00-0x02:0x00-0x80",
+			expDomLo: 0x00,
+			expDomHi: 0x02,
+			expBusLo: 0x00,
+			expBusHi: 0x80,
+		},
+		"domain range, single bus-id, decimal rejected": {
+			entryStr: "0000-0001:128",
+			expErr:   errors.New("must be in hex (0x-prefixed) notation"),
+		},
+		"bus-id decimal without 0x prefix rejected": {
+			entryStr: "0x00:0008",
+			expErr:   errors.New("must be in hex (0x-prefixed) notation"),
+		},
+		"missing domain": {
+			entryStr: "0x80",
+			expErr:   errors.New("expected <domain>:<bus-id>"),
+		},
+		"missing bus-id": {
+			entryStr: "0x00:",
+			expErr:   errors.New("parse hotplug range bus-id"),
+		},
+		"reverse domain range": {
+			entryStr: "0x02-0x00:0x80",
+			expErr:   errors.New("begin > end"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			hr, err := NewBdevHotplugRange(tc.entryStr)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expDomLo, hr.LowAddress.Domain, "bad low domain")
+			test.AssertEqual(t, tc.expDomHi, hr.HighAddress.Domain, "bad high domain")
+			test.AssertEqual(t, tc.expBusLo, hr.LowAddress.Bus, "bad low bus-id")
+			test.AssertEqual(t, tc.expBusHi, hr.HighAddress.Bus, "bad high bus-id")
+		})
+	}
+}
+
+func TestStorage_BdevConfig_Validate_HotplugRangeMutualExclusion(t *testing.T) {
+	for name, tc := range map[string]struct {
+		busidRange    *BdevBusRange
+		hotplugRanges BdevHotplugRanges
+		expErr        error
+	}{
+		"neither set": {},
+		"only legacy busid_range set": {
+			busidRange: MustNewBdevBusRange("0x80-0x8f"),
+		},
+		"only hotplug_range set": {
+			hotplugRanges: BdevHotplugRanges{MustNewBdevHotplugRange("0x00:0x80-0x8f")},
+		},
+		"both set": {
+			busidRange:    MustNewBdevBusRange("0x80-0x8f"),
+			hotplugRanges: BdevHotplugRanges{MustNewBdevHotplugRange("0x00:0x80-0x8f")},
+			expErr:        errors.New("mutually exclusive"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bc := &BdevConfig{
+				DeviceList:    MustNewBdevDeviceList("0000:80:00.0"),
+				BusidRange:    tc.busidRange,
+				HotplugRanges: tc.hotplugRanges,
+			}
+
+			err := bc.Validate(ClassNvme)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

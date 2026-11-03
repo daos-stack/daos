@@ -9,9 +9,9 @@
 package storage
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -605,22 +605,19 @@ type (
 	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
 	BdevWriteConfigRequest struct {
 		pbin.ForwardableRequest
-		ConfigOutputPath    string
-		OwnerUID            int
-		OwnerGID            int
-		TierProps           []BdevTierProperties
-		HotplugEnabled      bool
-		HotplugBusidDomain  uint16
-		HotplugBusidBegin   uint8
-		HotplugBusidEnd     uint8
-		HotplugIgnoreDomain bool // bus-ID range matched in any PCI domain
-		Hostname            string
-		AccelProps          AccelProps
-		SpdkRpcSrvProps     SpdkRpcServer
-		AutoFaultyProps     BdevAutoFaulty
-		SpdkIobufProps      SpdkIobuf
-		VMDEnabled          bool
-		ScannedBdevs        NvmeControllers // VMD needs address mapping for backing devices.
+		ConfigOutputPath string
+		OwnerUID         int
+		OwnerGID         int
+		TierProps        []BdevTierProperties
+		HotplugEnabled   bool
+		HotplugRanges    BdevHotplugRanges // zero entries means allow-all
+		Hostname         string
+		AccelProps       AccelProps
+		SpdkRpcSrvProps  SpdkRpcServer
+		AutoFaultyProps  BdevAutoFaulty
+		SpdkIobufProps   SpdkIobuf
+		VMDEnabled       bool
+		ScannedBdevs     NvmeControllers // VMD needs address mapping for backing devices.
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.
@@ -656,49 +653,45 @@ type (
 	}
 )
 
-// getNumaNodeBusidRange sets range parameters in the input request either to user configured
-// values if provided in the server config file, or automatically derive them by querying
-// hardware configuration.
-func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numaNodeIdx uint) (uint16, uint8, uint8, error) {
-	topo, err := getTopology(ctx)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	if topo == nil {
-		return 0, 0, 0, errors.New("nil topology")
-	}
-
-	nodes := topo.NUMANodes
-	if len(nodes) <= int(numaNodeIdx) {
-		return 0, 0, 0, errors.Errorf("insufficient numa nodes in topology, want %d got %d",
-			numaNodeIdx+1, len(nodes))
+// deriveHotplugRangesFromBdevList auto-derives hotplug filter ranges that cover exactly the PCI
+// addresses in bdev_list: one entry per distinct PCI domain present, each spanning the lowest to
+// highest bus-ID seen for that domain. Unlike the prior NUMA/host-bridge-topology-based
+// derivation, this needs no hardware topology lookup (each bdev_list address already carries its
+// own domain) and always succeeds for any valid, non-empty bdev_list, including one spanning
+// several non-zero domains.
+func deriveHotplugRangesFromBdevList(bdevList *BdevDeviceList) (BdevHotplugRanges, error) {
+	if bdevList == nil || bdevList.Len() == 0 {
+		return nil, errors.New("empty bdev_list")
 	}
 
-	buses := nodes[numaNodeIdx].PCIBuses
-	if len(buses) == 0 {
-		return 0, 0, 0, errors.Errorf("no PCI buses found on numa node %d in topology",
-			numaNodeIdx)
-	}
-
-	// Take the lowest/highest bus across every host bridge range (not just the first/last,
-	// since enumeration order is not guaranteed), confirming all ranges share one domain.
-	domain := buses[0].LowAddress.Domain
-	lowBus, highBus := buses[0].LowAddress.Bus, buses[0].HighAddress.Bus
-	for _, bus := range buses {
-		for _, addr := range []hardware.PCIAddress{bus.LowAddress, bus.HighAddress} {
-			if addr.Domain != domain {
-				return 0, 0, 0, errors.Errorf(
-					"numa node %d spans multiple PCI domains (%04x and %04x), "+
-						"unable to derive a single hotplug bus-id range; set "+
-						"bdev_busid_range explicitly",
-					numaNodeIdx, domain, addr.Domain)
-			}
+	lowBus := make(map[uint16]uint8)
+	highBus := make(map[uint16]uint8)
+	var domains []uint16
+	for _, addr := range bdevList.Addresses() {
+		dom := addr.Domain
+		if lo, ok := lowBus[dom]; !ok {
+			lowBus[dom] = addr.Bus
+			highBus[dom] = addr.Bus
+			domains = append(domains, dom)
+		} else {
+			lowBus[dom] = min(lo, addr.Bus)
+			highBus[dom] = max(highBus[dom], addr.Bus)
 		}
-		lowBus = min(lowBus, bus.LowAddress.Bus)
-		highBus = max(highBus, bus.HighAddress.Bus)
 	}
 
-	return domain, lowBus, highBus, nil
+	sort.Slice(domains, func(i, j int) bool { return domains[i] < domains[j] })
+
+	ranges := make(BdevHotplugRanges, 0, len(domains))
+	for _, dom := range domains {
+		hr := &BdevHotplugRange{}
+		hr.LowAddress.Domain = dom
+		hr.HighAddress.Domain = dom
+		hr.LowAddress.Bus = lowBus[dom]
+		hr.HighAddress.Bus = highBus[dom]
+		ranges = append(ranges, hr)
+	}
+
+	return ranges, nil
 }
 
 // filterBdevScanResponse removes controllers that are not in the input list from the scan response.

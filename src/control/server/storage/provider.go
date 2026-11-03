@@ -20,8 +20,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 )
@@ -47,7 +45,6 @@ type Provider struct {
 	scm           ScmProvider
 	bdev          BdevProvider
 	vmdEnabled    bool
-	getTopology   topologyGetter
 }
 
 // DefaultProvider returns a provider populated with default parameters.
@@ -55,10 +52,8 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provid
 	if engineStorage == nil {
 		engineStorage = new(Config)
 	}
-	p := NewProvider(log, idx, engineStorage, system.DefaultProvider(),
+	return NewProvider(log, idx, engineStorage, system.DefaultProvider(),
 		NewScmForwarder(log), NewBdevForwarder(log), NewMetadataForwarder(log))
-	p.getTopology = hwloc.NewProvider(log).GetTopology
-	return p
 }
 
 // FormatControlMetadata formats the storage used for control metadata.
@@ -566,57 +561,38 @@ func (p *Provider) FormatBdevTiers(ctrlrs NvmeControllers) (results []BdevTierFo
 	return
 }
 
-// setHotplugRange sets request parameters related to bus-id range limits to restrict hotplug
-// actions of engine to a set of ssd devices.
-func setHotplugRange(ctx context.Context, log logging.Logger, getTopo topologyGetter, numaNode uint, tier *TierConfig, req *BdevWriteConfigRequest) error {
-	var domain uint16
-	var begin, end uint8
-
+// setHotplugRanges sets request parameters related to PCI domain+bus-ID range limits to restrict
+// hotplug actions of engine to a set of ssd devices.
+func setHotplugRanges(log logging.Logger, tier *TierConfig, req *BdevWriteConfigRequest) error {
 	switch {
 	case req.VMDEnabled:
-		log.Debug("hotplug bus-id filter allows all as vmd is enabled")
-		// VMD backing devices use a different domain to their NUMA node, so the
-		// domain is ignored for hotplug matching.
-		domain = 0x0000
-		begin = 0x00
-		end = 0xFF
-		req.HotplugIgnoreDomain = true
+		log.Debug("hotplug filter allows all as vmd is enabled (no ranges configured)")
+		req.HotplugRanges = nil
+	case len(tier.Bdev.HotplugRanges) > 0:
+		log.Debugf("using user-specified hotplug filter ranges %q", tier.Bdev.HotplugRanges)
+		req.HotplugRanges = tier.Bdev.HotplugRanges
 	case tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero():
-		log.Debugf("received user-specified hotplug bus-id range %q", tier.Bdev.BusidRange)
-		domain = tier.Bdev.BusidRange.LowAddress.Domain
-		begin = tier.Bdev.BusidRange.LowAddress.Bus
-		end = tier.Bdev.BusidRange.HighAddress.Bus
-		req.HotplugIgnoreDomain = tier.Bdev.BusidRange.IgnoreDomain
+		log.Debugf("using legacy hotplug bus-id range %q (PCI domain 0x00)",
+			tier.Bdev.BusidRange)
+		req.HotplugRanges = BdevHotplugRanges{tier.Bdev.BusidRange.ToHotplugRange()}
 	default:
-		var err error
-		log.Debug("generating hotplug bus-id range based on hardware topology")
-		domain, begin, end, err = getNumaNodeBusidRange(ctx, getTopo, numaNode)
+		log.Debug("auto-deriving hotplug filter ranges from bdev_list")
+		ranges, err := deriveHotplugRangesFromBdevList(tier.Bdev.DeviceList)
 		if err != nil {
-			return errors.Wrapf(err, "get busid range limits")
+			return errors.Wrap(err, "derive hotplug filter ranges from bdev_list")
 		}
+		req.HotplugRanges = ranges
 	}
 
-	domainStr := fmt.Sprintf("%04X", domain)
-	if req.HotplugIgnoreDomain {
-		domainStr = "any"
-	}
-	log.Infof("NUMA %d: hotplug domain=%s, bus-ids=%02X-%02X", numaNode, domainStr, begin, end)
-	req.HotplugBusidDomain = domain
-	req.HotplugBusidBegin = begin
-	req.HotplugBusidEnd = end
+	log.Infof("hotplug filter ranges: %q", req.HotplugRanges)
 
 	return nil
 }
 
-type topologyGetter func(ctx context.Context) (*hardware.Topology, error)
-
 // BdevWriteConfigRequestFromConfig returns a config write request derived from a storage config.
-func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config, vmdEnabled bool, getTopo topologyGetter) (*BdevWriteConfigRequest, error) {
+func BdevWriteConfigRequestFromConfig(log logging.Logger, cfg *Config, vmdEnabled bool) (*BdevWriteConfigRequest, error) {
 	if cfg == nil {
 		return nil, errors.New("received nil config")
-	}
-	if getTopo == nil {
-		return nil, errors.New("received nil GetTopology function")
 	}
 
 	hn, err := os.Hostname()
@@ -645,9 +621,9 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 			continue
 		}
 
-		// Populate hotplug bus-ID range limits when processing the first bdev tier.
-		if err := setHotplugRange(ctx, log, getTopo, cfg.NumaNodeIndex, tier, req); err != nil {
-			return nil, errors.Wrapf(err, "set busid range limits")
+		// Populate hotplug filter ranges when processing the first bdev tier.
+		if err := setHotplugRanges(log, tier, req); err != nil {
+			return nil, errors.Wrap(err, "set hotplug filter ranges")
 		}
 	}
 
@@ -662,11 +638,9 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger, ctrl
 	vmdEnabled := p.vmdEnabled
 	engineIndex := p.engineIndex
 	engineStorage := p.engineStorage
-	getTopology := p.getTopology
 	p.RUnlock()
 
-	req, err := BdevWriteConfigRequestFromConfig(ctx, log, engineStorage,
-		vmdEnabled, getTopology)
+	req, err := BdevWriteConfigRequestFromConfig(log, engineStorage, vmdEnabled)
 	if err != nil {
 		return errors.Wrap(err, "creating write config request")
 	}
@@ -765,10 +739,4 @@ func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemP
 		bdev:          bdev,
 		metadata:      meta,
 	}
-}
-
-// setTopologyGetter sets the topology getter function for the provider. This is
-// used in tests to inject a mock topology.
-func (p *Provider) setTopologyGetter(fn topologyGetter) {
-	p.getTopology = fn
 }

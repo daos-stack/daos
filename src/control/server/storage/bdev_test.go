@@ -8,7 +8,6 @@
 package storage
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -19,7 +18,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 func ctrlrsFromPCIAddrs(addrs ...string) NvmeControllers {
@@ -378,136 +376,55 @@ func Test_CalcMinHugepages(t *testing.T) {
 	}
 }
 
-func Test_getNumaNodeBusidRange(t *testing.T) {
-	numaNodeIdx := uint(0)
-
+func Test_deriveHotplugRangesFromBdevList(t *testing.T) {
 	for name, tc := range map[string]struct {
-		getTopoFn   topologyGetter
-		numaNodeIdx uint
-		expDomain   uint16
-		expBegin    uint8
-		expEnd      uint8
-		expErr      error
+		bdevList  *BdevDeviceList
+		expRanges []string
+		expErr    error
 	}{
-		"topology fetch fails": {
-			getTopoFn: func(_ context.Context) (*hardware.Topology, error) {
-				return nil, errors.New("fetch failed")
-			},
-			expErr: errors.New("fetch failed"),
+		"nil bdev_list": {
+			expErr: errors.New("empty bdev_list"),
 		},
-		"nil topology": {
-			getTopoFn: func(_ context.Context) (*hardware.Topology, error) {
-				return nil, nil
-			},
-			expErr: errors.New("nil topology"),
+		"empty bdev_list": {
+			bdevList: &BdevDeviceList{},
+			expErr:   errors.New("empty bdev_list"),
 		},
-		"insufficient numa nodes": {
-			getTopoFn: func(_ context.Context) (*hardware.Topology, error) {
-				return &hardware.Topology{
-					NUMANodes: map[uint]*hardware.NUMANode{},
-				}, nil
-			},
-			expErr: errors.New("insufficient numa nodes in topology, want 1 got 0"),
+		"single domain, single address": {
+			bdevList:  MustNewBdevDeviceList("0000:80:00.0"),
+			expRanges: []string{"0x00:0x80"},
 		},
-		"no pci buses": {
-			getTopoFn: func(_ context.Context) (*hardware.Topology, error) {
-				return &hardware.Topology{
-					NUMANodes: map[uint]*hardware.NUMANode{
-						0: hardware.MockNUMANode(0, 14),
-					},
-				}, nil
-			},
-			expErr: errors.New("no PCI buses found on numa node 0 in topology"),
+		"single domain, contiguous addresses": {
+			bdevList:  MustNewBdevDeviceList("0000:00:00.0", "0000:07:00.0"),
+			expRanges: []string{"0x00:0x00-0x07"},
 		},
-		"single contiguous range": {
-			getTopoFn: func(_ context.Context) (*hardware.Topology, error) {
-				return &hardware.Topology{
-					NUMANodes: map[uint]*hardware.NUMANode{
-						0: hardware.MockNUMANode(0, 14).WithPCIBuses(
-							[]*hardware.PCIBus{
-								{
-									LowAddress:  *hardware.MustNewPCIAddress("0000:00:00.0"),
-									HighAddress: *hardware.MustNewPCIAddress("0000:07:00.0"),
-								},
-							},
-						),
-					},
-				}, nil
-			},
-			expDomain: 0x0000,
-			expBegin:  0x00,
-			expEnd:    0x07,
+		"single domain, out of order addresses": {
+			bdevList:  MustNewBdevDeviceList("0000:4f:00.0", "0000:00:00.0", "0000:07:00.0"),
+			expRanges: []string{"0x00:0x00-0x4f"},
 		},
-		"multiple ranges in same domain, out of order": {
-			getTopoFn: func(_ context.Context) (*hardware.Topology, error) {
-				return &hardware.Topology{
-					NUMANodes: map[uint]*hardware.NUMANode{
-						0: hardware.MockNUMANode(0, 14).WithPCIBuses(
-							[]*hardware.PCIBus{
-								{
-									LowAddress:  *hardware.MustNewPCIAddress("0000:40:00.0"),
-									HighAddress: *hardware.MustNewPCIAddress("0000:4f:00.0"),
-								},
-								{
-									LowAddress:  *hardware.MustNewPCIAddress("0000:00:00.0"),
-									HighAddress: *hardware.MustNewPCIAddress("0000:07:00.0"),
-								},
-							},
-						),
-					},
-				}, nil
-			},
-			expDomain: 0x0000,
-			expBegin:  0x00,
-			expEnd:    0x4f,
+		"multiple domains": {
+			bdevList: MustNewBdevDeviceList("0000:00:00.0", "0000:07:00.0",
+				"0001:80:00.0", "0001:8f:00.0"),
+			expRanges: []string{"0x00:0x00-0x07", "0x01:0x80-0x8f"},
 		},
-		"multiple domains, mismatch only detectable mid-list": {
-			// First and last ranges share a domain; only the middle range
-			// differs, verifying that every range is checked rather than
-			// just the first and last.
-			getTopoFn: func(_ context.Context) (*hardware.Topology, error) {
-				return &hardware.Topology{
-					NUMANodes: map[uint]*hardware.NUMANode{
-						0: hardware.MockNUMANode(0, 14).WithPCIBuses(
-							[]*hardware.PCIBus{
-								{
-									LowAddress:  *hardware.MustNewPCIAddress("0000:00:00.0"),
-									HighAddress: *hardware.MustNewPCIAddress("0000:07:00.0"),
-								},
-								{
-									LowAddress:  *hardware.MustNewPCIAddress("0001:80:00.0"),
-									HighAddress: *hardware.MustNewPCIAddress("0001:8f:00.0"),
-								},
-								{
-									LowAddress:  *hardware.MustNewPCIAddress("0000:10:00.0"),
-									HighAddress: *hardware.MustNewPCIAddress("0000:17:00.0"),
-								},
-							},
-						),
-					},
-				}, nil
-			},
-			expErr: errors.New("numa node 0 spans multiple PCI domains (0000 and 0001), " +
-				"unable to derive a single hotplug bus-id range; set bdev_busid_range " +
-				"explicitly"),
+		"multiple domains, out of order": {
+			bdevList: MustNewBdevDeviceList("0001:8f:00.0", "0000:07:00.0",
+				"0001:80:00.0", "0000:00:00.0"),
+			expRanges: []string{"0x00:0x00-0x07", "0x01:0x80-0x8f"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotDomain, gotBegin, gotEnd, gotErr := getNumaNodeBusidRange(test.Context(t),
-				tc.getTopoFn, numaNodeIdx)
+			gotRanges, gotErr := deriveHotplugRangesFromBdevList(tc.bdevList)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			if gotDomain != tc.expDomain {
-				t.Fatalf("expected domain %#x, got %#x", tc.expDomain, gotDomain)
+			gotStrs := make([]string, len(gotRanges))
+			for i, r := range gotRanges {
+				gotStrs[i] = r.String()
 			}
-			if gotBegin != tc.expBegin {
-				t.Fatalf("expected begin %#x, got %#x", tc.expBegin, gotBegin)
-			}
-			if gotEnd != tc.expEnd {
-				t.Fatalf("expected end %#x, got %#x", tc.expEnd, gotEnd)
+			if diff := cmp.Diff(tc.expRanges, gotStrs); diff != "" {
+				t.Fatalf("unexpected ranges (-want +got):\n%s", diff)
 			}
 		})
 	}

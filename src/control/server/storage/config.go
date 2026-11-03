@@ -224,8 +224,21 @@ func (tc *TierConfig) WithBdevFileSize(size int) *TierConfig {
 }
 
 // WithBdevBusidRange sets the bus-ID range to be used to filter hot plug events.
+//
+// Deprecated: use WithBdevHotplugRange instead.
 func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 	tc.Bdev.BusidRange = MustNewBdevBusRange(rangeStr)
+	return tc
+}
+
+// WithBdevHotplugRange sets one or more PCI domain+bus-ID range entries to be used to filter
+// hot plug events.
+func (tc *TierConfig) WithBdevHotplugRange(entries ...string) *TierConfig {
+	ranges := make(BdevHotplugRanges, 0, len(entries))
+	for _, e := range entries {
+		ranges = append(ranges, MustNewBdevHotplugRange(e))
+	}
+	tc.Bdev.HotplugRanges = ranges
 	return tc
 }
 
@@ -779,11 +792,13 @@ func MustNewBdevDeviceList(devices ...string) *BdevDeviceList {
 }
 
 // BdevBusRange represents a bus-ID range to be used to filter hot plug events.
+//
+// Deprecated: use bdev_hotplug_range (BdevHotplugRange) instead. This legacy parameter has no PCI
+// domain concept; it is always interpreted as applying to PCI domain 0x00 specifically (see
+// ToHotplugRange and design/control/hotplug-pci-domain-design.md Section 4.2) — there is no
+// "any domain" fallback.
 type BdevBusRange struct {
 	hardware.PCIBus
-	// IgnoreDomain, when set, matches the bus-ID range in any PCI domain. Derived from a
-	// range with no domain prefix spanning the full bus-ID space 0x00-0xFF.
-	IgnoreDomain bool
 }
 
 func (br *BdevBusRange) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -792,18 +807,13 @@ func (br *BdevBusRange) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
-	dom, lo, hi, domSpecified, err := parsePCIBusRange(tmp, hardware.PCIAddrBusBitSize)
+	lo, hi, err := parseBusRange(tmp, hardware.PCIAddrBusBitSize)
 	if err != nil {
 		return errors.Wrapf(err, "failed to parse bus range %q", tmp)
 	}
 
-	br.LowAddress.Domain = dom
 	br.LowAddress.Bus = lo
-	br.HighAddress.Domain = dom
 	br.HighAddress.Bus = hi
-	// No domain prefix means match the bus-ID range in any PCI domain, for backward
-	// compatibility with pre-PCI-domain-aware configs/upgrades.
-	br.IgnoreDomain = !domSpecified
 
 	return nil
 }
@@ -816,11 +826,20 @@ func (br *BdevBusRange) String() string {
 	if br == nil {
 		return ""
 	}
-	if br.IgnoreDomain {
-		return fmt.Sprintf("0x%02x-0x%02x", br.LowAddress.Bus, br.HighAddress.Bus)
+	return fmt.Sprintf("0x%02x-0x%02x", br.LowAddress.Bus, br.HighAddress.Bus)
+}
+
+// ToHotplugRange converts the legacy bus-ID-only range to a single bdev_hotplug_range entry on
+// PCI domain 0x00, the only domain this legacy parameter understands.
+func (br *BdevBusRange) ToHotplugRange() *BdevHotplugRange {
+	if br == nil || br.IsZero() {
+		return nil
 	}
-	return fmt.Sprintf("%04x:0x%02x-0x%02x", br.LowAddress.Domain, br.LowAddress.Bus,
-		br.HighAddress.Bus)
+
+	hr := &BdevHotplugRange{}
+	hr.LowAddress.Bus = br.LowAddress.Bus
+	hr.HighAddress.Bus = br.HighAddress.Bus
+	return hr
 }
 
 // NewBdevBusRange creates a new BdevBusRange from a string.
@@ -842,6 +861,109 @@ func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
 		panic(err)
 	}
 	return br
+}
+
+// BdevHotplugRange represents a single PCI domain-range + bus-ID-range hotplug filter entry
+// (one element of bdev_hotplug_range). Domain and bus-ID are both mandatory, each independently
+// a single value or an inclusive range.
+type BdevHotplugRange struct {
+	hardware.PCIBus
+}
+
+// NewBdevHotplugRange parses a single "<domain>:<bus-id>" entry, where each side is either a
+// single identifier or an inclusive "<lo>-<hi>" range of identifiers, in hex (0x-prefixed) or
+// decimal notation.
+func NewBdevHotplugRange(entryStr string) (*BdevHotplugRange, error) {
+	parts := strings.SplitN(entryStr, ":", 2)
+	if len(parts) != 2 {
+		return nil, errors.Errorf(
+			"invalid hotplug range entry %q, expected <domain>:<bus-id>", entryStr)
+	}
+
+	domLo, domHi, err := parseHotplugIdentRange(parts[0], 16)
+	if err != nil {
+		return nil, errors.Wrapf(err, "parse hotplug range domain in %q", entryStr)
+	}
+
+	busLo, busHi, err := parseHotplugIdentRange(parts[1], hardware.PCIAddrBusBitSize)
+	if err != nil {
+		return nil, errors.Wrapf(err, "parse hotplug range bus-id in %q", entryStr)
+	}
+
+	hr := &BdevHotplugRange{}
+	hr.LowAddress.Domain = uint16(domLo)
+	hr.HighAddress.Domain = uint16(domHi)
+	hr.LowAddress.Bus = uint8(busLo)
+	hr.HighAddress.Bus = uint8(busHi)
+
+	return hr, nil
+}
+
+// MustNewBdevHotplugRange parses a single hotplug range entry string. Panics on error.
+func MustNewBdevHotplugRange(entryStr string) *BdevHotplugRange {
+	hr, err := NewBdevHotplugRange(entryStr)
+	if err != nil {
+		panic(err)
+	}
+	return hr
+}
+
+func (hr *BdevHotplugRange) String() string {
+	if hr == nil {
+		return ""
+	}
+
+	domStr := fmt.Sprintf("0x%02x", hr.LowAddress.Domain)
+	if hr.LowAddress.Domain != hr.HighAddress.Domain {
+		domStr = fmt.Sprintf("0x%02x-0x%02x", hr.LowAddress.Domain, hr.HighAddress.Domain)
+	}
+
+	busStr := fmt.Sprintf("0x%02x", hr.LowAddress.Bus)
+	if hr.LowAddress.Bus != hr.HighAddress.Bus {
+		busStr = fmt.Sprintf("0x%02x-0x%02x", hr.LowAddress.Bus, hr.HighAddress.Bus)
+	}
+
+	return domStr + ":" + busStr
+}
+
+// BdevHotplugRanges is a list of PCI domain+bus-ID hotplug filter entries (bdev_hotplug_range).
+// Every entry mandatorily specifies both a PCI domain and a bus-ID, each independently a single
+// value or an inclusive range.
+type BdevHotplugRanges []*BdevHotplugRange
+
+func (hrs *BdevHotplugRanges) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var raw []string
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+
+	ranges := make(BdevHotplugRanges, 0, len(raw))
+	for _, s := range raw {
+		hr, err := NewBdevHotplugRange(s)
+		if err != nil {
+			return err
+		}
+		ranges = append(ranges, hr)
+	}
+	*hrs = ranges
+
+	return nil
+}
+
+func (hrs BdevHotplugRanges) MarshalYAML() (interface{}, error) {
+	out := make([]string, len(hrs))
+	for i, hr := range hrs {
+		out[i] = hr.String()
+	}
+	return out, nil
+}
+
+func (hrs BdevHotplugRanges) String() string {
+	strs := make([]string, len(hrs))
+	for i, hr := range hrs {
+		strs[i] = hr.String()
+	}
+	return strings.Join(strs, ",")
 }
 
 // OptionBits is a type alias representing option flags as a bitset.
@@ -997,12 +1119,13 @@ func BdevRolesFromBits(bits int) BdevRoles {
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	DeviceList    *BdevDeviceList `yaml:"bdev_list,omitempty"`
-	DeviceCount   int             `yaml:"bdev_number,omitempty"`
-	FileSize      int             `yaml:"bdev_size,omitempty"`
-	BusidRange    *BdevBusRange   `yaml:"bdev_busid_range,omitempty"`
-	DeviceRoles   BdevRoles       `yaml:"bdev_roles,omitempty"`
-	NumaNodeIndex uint            `yaml:"-"`
+	DeviceList    *BdevDeviceList   `yaml:"bdev_list,omitempty"`
+	DeviceCount   int               `yaml:"bdev_number,omitempty"`
+	FileSize      int               `yaml:"bdev_size,omitempty"`
+	BusidRange    *BdevBusRange     `yaml:"bdev_busid_range,omitempty"`
+	HotplugRanges BdevHotplugRanges `yaml:"bdev_hotplug_range,omitempty"`
+	DeviceRoles   BdevRoles         `yaml:"bdev_roles,omitempty"`
+	NumaNodeIndex uint              `yaml:"-"`
 }
 
 func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
@@ -1025,6 +1148,12 @@ func (bc *BdevConfig) checkNonEmptyDevList(class Class) error {
 func (bc *BdevConfig) Validate(class Class) error {
 	if bc.FileSize < 0 {
 		return errors.New("negative bdev_size")
+	}
+
+	if bc.BusidRange != nil && !bc.BusidRange.IsZero() && len(bc.HotplugRanges) > 0 {
+		return errors.New(
+			"bdev_busid_range and bdev_hotplug_range are mutually exclusive; " +
+				"migrate fully to bdev_hotplug_range")
 	}
 
 	switch class {
@@ -1051,52 +1180,91 @@ func (bc *BdevConfig) Validate(class Class) error {
 	return nil
 }
 
-// parsePCIBusRange takes a string of format [<Domain>:]<Begin>-<End> and returns the domain,
-// begin and end values, plus whether a domain prefix was present in the input. The domain is
-// hexadecimal without a "0x" prefix (standard PCI BDF notation, e.g. "0001") and defaults to
-// 0x0000 when the prefix is omitted. Begin/end number base is detected from string prefixes
-// (e.g. 0x for hexadecimal); bitSize caps their return width (e.g. 8 for uint8).
-func parsePCIBusRange(numRange string, bitSize int) (uint16, uint8, uint8, bool, error) {
+// parseBusRange takes a string of format <Begin>-<End> and returns the begin and end values.
+// Number base is detected from string prefixes (e.g. 0x for hexadecimal); bitSize caps their
+// return width (e.g. 8 for uint8). This is the legacy bdev_busid_range grammar, with no PCI
+// domain concept.
+func parseBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 	if numRange == "" {
-		return 0, 0, 0, false, nil
+		return 0, 0, nil
 	}
 
-	var domain uint64
-	var domainSpecified bool
-	busRange := numRange
-
-	if sepIdx := strings.LastIndex(numRange, ":"); sepIdx != -1 {
-		domStr := numRange[:sepIdx]
-		busRange = numRange[sepIdx+1:]
-		domainSpecified = true
-
-		var err error
-		domain, err = strconv.ParseUint(domStr, 16, 16)
-		if err != nil {
-			return 0, 0, 0, false, errors.Wrapf(err, "parse busid range domain %q", numRange)
-		}
-	}
-
-	split := strings.Split(busRange, "-")
+	split := strings.Split(numRange, "-")
 	if len(split) != 2 {
-		return 0, 0, 0, false, errors.Errorf("invalid busid range %q", numRange)
+		return 0, 0, errors.Errorf("invalid busid range %q", numRange)
 	}
 
 	begin, err := strconv.ParseUint(split[0], 0, bitSize)
 	if err != nil {
-		return 0, 0, 0, false, errors.Wrapf(err, "parse busid range %q", numRange)
+		return 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
 	}
 
 	end, err := strconv.ParseUint(split[1], 0, bitSize)
 	if err != nil {
-		return 0, 0, 0, false, errors.Wrapf(err, "parse busid range %q", numRange)
+		return 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
 	}
 
 	if begin > end {
-		return 0, 0, 0, false, errors.Errorf("invalid busid range %q", numRange)
+		return 0, 0, errors.Errorf("invalid busid range %q", numRange)
 	}
 
-	return uint16(domain), uint8(begin), uint8(end), domainSpecified, nil
+	return uint8(begin), uint8(end), nil
+}
+
+// parseHotplugIdent parses a single bdev_hotplug_range identifier. Only hex ("0x"/"0X"-prefixed)
+// notation is accepted; decimal notation is not supported. bitSize caps the return width (e.g.
+// 16 for a PCI domain, 8 for a bus-ID).
+func parseHotplugIdent(ident string, bitSize int) (uint64, error) {
+	rest, ok := strings.CutPrefix(ident, "0x")
+	if !ok {
+		rest, ok = strings.CutPrefix(ident, "0X")
+	}
+	if !ok {
+		return 0, errors.Errorf("identifier %q must be in hex (0x-prefixed) notation", ident)
+	}
+	if rest == "" {
+		return 0, errors.New("empty identifier")
+	}
+
+	val, err := strconv.ParseUint(rest, 16, bitSize)
+	if err != nil {
+		return 0, errors.Wrapf(err, "parse identifier %q", ident)
+	}
+
+	return val, nil
+}
+
+// parseHotplugIdentRange parses either a single bdev_hotplug_range identifier or an inclusive
+// "<lo>-<hi>" range of identifiers, each independently in hex (0x-prefixed) notation.
+func parseHotplugIdentRange(numRange string, bitSize int) (uint64, uint64, error) {
+	if numRange == "" {
+		return 0, 0, errors.New("missing identifier or range")
+	}
+
+	split := strings.SplitN(numRange, "-", 2)
+	if len(split) == 1 {
+		val, err := parseHotplugIdent(split[0], bitSize)
+		if err != nil {
+			return 0, 0, err
+		}
+		return val, val, nil
+	}
+
+	lo, err := parseHotplugIdent(split[0], bitSize)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	hi, err := parseHotplugIdent(split[1], bitSize)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if lo > hi {
+		return 0, 0, errors.Errorf("invalid range %q, begin > end", numRange)
+	}
+
+	return lo, hi, nil
 }
 
 var accelOptFlags = optFlagMap{

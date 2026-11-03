@@ -98,17 +98,22 @@ type IobufParams struct {
 
 func (_ IobufParams) isSpdkSubsystemConfigParams() {}
 
-// HotplugBusidRangeParams specifies details for a storage.ConfSetHotplugBusidRange method.
-type HotplugBusidRangeParams struct {
-	Domain uint16 `json:"domain"`
-	Begin  uint8  `json:"begin"`
-	End    uint8  `json:"end"`
-	// IgnoreDomain retains pre-PCI-domain-awareness behavior of matching hotplug events on
-	// bus-ID range alone.
-	IgnoreDomain bool `json:"ignore_domain,omitempty"`
+// HotplugFilterEntry specifies a single PCI domain-range plus bus-ID-range entry used to
+// restrict hotplug events accepted by an engine. A single-value domain or bus-ID is expressed
+// with DomainBegin==DomainEnd or Begin==End respectively.
+type HotplugFilterEntry struct {
+	DomainBegin uint16 `json:"domain_begin"`
+	DomainEnd   uint16 `json:"domain_end"`
+	Begin       uint8  `json:"begin"`
+	End         uint8  `json:"end"`
 }
 
-func (_ HotplugBusidRangeParams) isDaosConfigParams() {}
+// HotplugFilterParams specifies details for a storage.ConfSetHotplugBusidRange method. The
+// method's params value is a JSON array of entries; a hotplug event is accepted if it matches
+// any entry. Zero entries results in all hotplug events being accepted (e.g. for VMD).
+type HotplugFilterParams []HotplugFilterEntry
+
+func (_ HotplugFilterParams) isDaosConfigParams() {}
 
 // AccelPropsParams specifies details for a storage.ConfSetAccelProps method.
 type AccelPropsParams storage.AccelProps
@@ -187,7 +192,7 @@ func (dc *DaosConfig) UnmarshalJSON(data []byte) error {
 
 	switch dc.Method {
 	case storage.ConfSetHotplugBusidRange:
-		dc.Params = &HotplugBusidRangeParams{}
+		dc.Params = &HotplugFilterParams{}
 	case storage.ConfSetAccelProps:
 		dc.Params = &AccelPropsParams{}
 	case storage.ConfSetSpdkRpcServer:
@@ -363,21 +368,28 @@ func (sc *SpdkConfig) WithSpdkIobufOpts(req *storage.BdevWriteConfigRequest) *Sp
 	return sc
 }
 
-// Add hotplug bus-ID range to DAOS config data for use by non-SPDK consumers in
-// engine e.g. BIO or VOS.
+// Add hotplug PCI domain+bus-ID filter ranges to DAOS config data for use by non-SPDK
+// consumers in engine e.g. BIO or VOS. When req.HotplugRanges is empty (e.g. VMD enabled),
+// the hotplug_busid_range method is not written at all, so the engine-side filter defaults
+// to allow-all.
 func hotplugPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
+	if len(req.HotplugRanges) == 0 {
+		return
+	}
+
+	params := make(HotplugFilterParams, 0, len(req.HotplugRanges))
+	for _, r := range req.HotplugRanges {
+		params = append(params, HotplugFilterEntry{
+			DomainBegin: r.LowAddress.Domain,
+			DomainEnd:   r.HighAddress.Domain,
+			Begin:       r.LowAddress.Bus,
+			End:         r.HighAddress.Bus,
+		})
+	}
+
 	data.Configs = append(data.Configs, &DaosConfig{
 		Method: storage.ConfSetHotplugBusidRange,
-		Params: &HotplugBusidRangeParams{
-			Domain: req.HotplugBusidDomain,
-			Begin:  req.HotplugBusidBegin,
-			End:    req.HotplugBusidEnd,
-			// HotplugIgnoreDomain is the final resolved decision made in
-			// setHotplugRange(), covering both VMD (backing devices use a
-			// different domain to their NUMA node) and an explicit user
-			// request to match across all domains.
-			IgnoreDomain: req.HotplugIgnoreDomain,
-		},
+		Params: &params,
 	})
 }
 
