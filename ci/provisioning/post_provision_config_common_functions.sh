@@ -404,8 +404,8 @@ post_provision_config_nodes() {
                      argobots cart daos daos-client daos-spdk dpdk \
                      libisa-l libpmemobj libpmemobj1 mercury mpich \
                      pmix protobuf-c spdk libfabric libpmem        \
-                     munge-libs munge slurm                        \
-                     slurm-example-configs slurmctld slurm-slurmmd
+                     munge-libs munge slurm slurm-example-configs  \
+                     slurm-slurmdbd slurmctld slurm-slurmmd
     fi
 
     cat /etc/os-release

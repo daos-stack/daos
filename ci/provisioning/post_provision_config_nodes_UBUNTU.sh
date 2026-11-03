@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #  Copyright 2020-2022 Intel Corporation.
-#  Copyright 2025 Hewlett Packard Enterprise Development LP
+#  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -14,8 +14,8 @@ post_provision_config_nodes() {
     #                 ompi argobots cart daos daos-client dpdk      \
     #                 fuse-libs libisa-l libpmemobj mercury mpich   \
     #                 pmix protobuf-c spdk libfabric libpmem        \
-    #                 munge-libs munge slurm                        \
-    #                 slurm-example-configs slurmctld slurm-slurmmd
+    #                 munge-libs munge slurm slurm-example-configs  \
+    #                 slurm-slurmdbd slurmctld slurm-slurmmd
     #fi
     codename=$(lsb_release -s -c)
     echo "$codename"

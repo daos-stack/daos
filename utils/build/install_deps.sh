@@ -44,7 +44,6 @@ rpms_dir="$(cd "${script_dir}/../rpms" >/dev/null 2>&1 && pwd)"
 
 install_range=deps
 rpm_suffix=
-test_dependency_packages=()
 for arg in "$@"; do
     case "${arg}" in
         -h|--help) usage; exit 0 ;;
@@ -109,6 +108,7 @@ sudo dnf install --allowerasing -y "${isal_pkg}" || echo "${isal_pkg} not availa
 sudo dnf install --allowerasing -y "${isal_crypto_pkg}" || echo "${isal_crypto_pkg} not available"
 fi
 
+test_dependency_packages=(slurm:lib slurm:dev slurm:dbd slurm:ctld slurm:slurmd slurm:examples)
 if [[ "${install_range}" = test-deps ]]; then
     test_packages=()
     for package_spec in "${test_dependency_packages[@]}"; do

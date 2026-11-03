@@ -13,9 +13,11 @@ import os
 import re
 import socket
 import sys
+import tempfile
 
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
+from util.file_utils import distribute_files
 from util.logger_utils import get_console_handler
 from util.package_utils import install_packages, remove_packages
 from util.run_utils import command_as_user, get_clush_command, run_remote
@@ -35,8 +37,14 @@ class SlurmSetup():
         '/etc/slurm/slurmdbd.conf.example']
     MUNGE_DIR = '/etc/munge'
     MUNGE_KEY = '/etc/munge/munge.key'
-    PACKAGE_LIST = ['slurm', 'slurm-slurmdbd', 'slurm-slurmctld', 'slurm-slurmd']
+    PACKAGE_LIST = ['slurm', 'slurm-slurmdbd', 'slurm-slurmctld', 'slurm-slurmd',
+                    'slurm-example-configs']
     SLURM_CONF = '/etc/slurm/slurm.conf'
+    SLURMCTLD_LOG_FILE = '/var/log/slurm/slurmctld.log'
+    SLURMCTLD_PID_FILE = '/var/spool/slurmctld/slurmctld.pid'
+    SLURMCTLD_SYSTEMD_OVERRIDE = (
+        '/run/systemd/system/slurmctld.service.d/override.conf')
+    SLURMD_LOG_FILE = '/var/log/slurm/slurmd.log'
     SLURM_LOG_DIR = '/var/log/slurm'
 
     def __init__(self, log, nodes, control_node, sudo=False):
@@ -180,24 +188,54 @@ class SlurmSetup():
         self._update_file_ownership(self.all_nodes, '/var/spool/slurm/ctld', user)
         self._update_file(self.all_nodes, '/var/spool/slurmctld', '775', user)
         self._remove_file(self.all_nodes, '/var/spool/slurmctld/clustername')
+        self._configure_slurmctld_service(user)
 
         # Restart slurmctld on the control node
         self._restart_systemctl(
-            self.control, 'slurmctld', '/var/log/slurm/slurmctld.log', self.SLURM_CONF)
+            self.control, 'slurmctld', self.SLURMCTLD_LOG_FILE, self.SLURM_CONF)
 
         # Restart slurmd on all nodes
         self._restart_systemctl(
-            self.all_nodes, 'slurmd', '/var/log/slurm/slurmd.log', self.SLURM_CONF)
+            self.all_nodes, 'slurmd', self.SLURMD_LOG_FILE, self.SLURM_CONF)
 
         # Update nodes to the idle state
         command = command_as_user(
             f'scontrol update nodename={str(self.nodes)} state=idle', self.root)
         result = run_remote(self.log, self.nodes, command)
         if not result.passed or debug:
-            self._display_debug(self.control, '/var/log/slurm/slurmctld.log', self.SLURM_CONF)
-            self._display_debug(self.all_nodes, '/var/log/slurm/slurmd.log', self.SLURM_CONF)
+            self._display_debug(self.control, self.SLURMCTLD_LOG_FILE, self.SLURM_CONF)
+            self._display_debug(self.all_nodes, self.SLURMD_LOG_FILE, self.SLURM_CONF)
         if not result.passed:
             raise SlurmSetupException(f'Error setting nodes to idle on {self.nodes}')
+
+    def _configure_slurmctld_service(self, user):
+        """Configure slurmctld to run as the Slurm user on the control node.
+
+        Args:
+            user (str): user account configured for Slurm
+
+        Raises:
+            SlurmSetupException: if the systemd override cannot be installed
+        """
+        override_dir = os.path.dirname(self.SLURMCTLD_SYSTEMD_OVERRIDE)
+        self._mkdir(self.control, override_dir)
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8') as override_file:
+            override_file.write(
+                f'[Service]\nUser={user}\nGroup={user}\n'
+                f'PIDFile={self.SLURMCTLD_PID_FILE}\n')
+            override_file.flush()
+            result = distribute_files(
+                self.log, self.control, override_file.name, self.SLURMCTLD_SYSTEMD_OVERRIDE,
+                mkdir=False, sudo=True, owner='root')
+        if not result.passed:
+            raise SlurmSetupException(
+                f'Error installing slurmctld systemd override on {result.failed_hosts}')
+
+        result = run_remote(
+            self.log, self.control, command_as_user('systemctl daemon-reload', self.root))
+        if not result.passed:
+            raise SlurmSetupException(
+                f'Error reloading systemd on {result.failed_hosts}')
 
     def _create_epilog_script(self, script):
         """Create epilog script to run after each job.
@@ -263,6 +301,22 @@ class SlurmSetup():
         self._modify_slurm_config_file(
             'slurm user', self.all_nodes, f's/SlurmUser=slurm/SlurmUser={slurm_user}/g',
             self.root)
+        self._modify_slurm_config_file(
+            'accounting storage type', self.all_nodes,
+            's|^[[:space:]]*#\\?[[:space:]]*AccountingStorageType[[:space:]]*=.*|'
+            'AccountingStorageType=accounting_storage/none|', self.root)
+        self._modify_slurm_config_file(
+            'slurmctld pid file', self.all_nodes,
+            f's|^[[:space:]]*#\\?[[:space:]]*SlurmctldPidFile[[:space:]]*=.*|'
+            f'SlurmctldPidFile={self.SLURMCTLD_PID_FILE}|', self.root)
+        tee_command = command_as_user(f'tee -a {self.SLURM_CONF}', self.root)
+        command = (
+            f"grep -q '^[[:space:]]*SlurmctldPidFile[[:space:]]*=' {self.SLURM_CONF} || "
+            f"echo 'SlurmctldPidFile={self.SLURMCTLD_PID_FILE}' | {tee_command}")
+        result = run_remote(self.log, self.all_nodes, command)
+        if not result.passed:
+            raise SlurmSetupException(
+                f'Error ensuring slurmctld pid file configuration on {result.failed_hosts}')
 
         # Update the config file with the removal of the NodeName entry
         self._modify_slurm_config_file(
@@ -273,19 +327,44 @@ class SlurmSetup():
             'epilog file', self.all_nodes,
             f's#EpilogSlurmctld=#EpilogSlurmctld={self.EPILOG_FILE}#g', self.root)
 
+        # Keep configured log paths consistent with the directories created for Slurm.
+        self._modify_slurm_config_file(
+            'slurmctld log file', self.all_nodes,
+            f's#^[[:space:]]*SlurmctldLogFile=.*#SlurmctldLogFile={self.SLURMCTLD_LOG_FILE}#',
+            self.root)
+        self._modify_slurm_config_file(
+            'slurmd log file', self.all_nodes,
+            f's#^[[:space:]]*SlurmdLogFile=.*#SlurmdLogFile={self.SLURMD_LOG_FILE}#',
+            self.root)
+
         # Update the config file with the slurm control node
         not_updated = self.all_nodes.copy()
         for control_keyword in ['SlurmctldHost', 'ControlMachine']:
-            command = f'grep {control_keyword} {self.SLURM_CONF}'
+            command = (f"grep -E '^[[:space:]]*{control_keyword}[[:space:]]*=' "
+                       f'{self.SLURM_CONF}')
             results = run_remote(self.log, self.all_nodes, command)
             if results.passed_hosts:
                 not_updated.remove(
                     self._modify_slurm_config_file(
                         'slurm control node', results.passed_hosts,
-                        f's/{control_keyword}=localhost/{control_keyword}={str(self.control)}/g',
+                        f's/^[[:space:]]*{control_keyword}[[:space:]]*=.*/'
+                        f'{control_keyword}={str(self.control)}/',
                         self.root))
         if not_updated:
             raise SlurmSetupException(f'Slurm control node not updated on {not_updated}')
+
+        control_host = str(self.control)
+        command = (
+            "awk -F= '/^[[:space:]]*(SlurmctldHost|ControlMachine)[[:space:]]*=/ "
+            f'{{ found=1; value=$2; gsub(/[[:space:]]/, "", value); '
+            f'if (value != "{control_host}") invalid=1 }} '
+            "END { exit !(found && !invalid) }' "
+            f'{self.SLURM_CONF}')
+        result = run_remote(self.log, self.all_nodes, command_as_user(command, self.root))
+        if not result.passed:
+            raise SlurmSetupException(
+                f'Slurm control node configuration does not match {control_host} '
+                f'on {result.failed_hosts}')
 
         # Update the config file with each node's socket/core/thread information
         self._update_slurm_config_sys_info()
@@ -452,9 +531,9 @@ class SlurmSetup():
         self.log.debug('Restarting %s on %s', service, nodes)
         for action in ('restart', 'enable'):
             command = command_as_user(f'systemctl {action} {service}', self.root)
-            result = run_remote(self.log, self.all_nodes, command)
+            result = run_remote(self.log, nodes, command)
             if not result.passed:
-                self._display_debug(result.failed_hosts, debug_log, debug_config)
+                self._display_debug(result.failed_hosts, debug_log, debug_config, service)
                 raise SlurmSetupException(f'Error restarting {service} on {result.failed_hosts}')
 
     def _active_systemctl(self, nodes, service, debug_log=None, debug_config=None):
@@ -479,14 +558,35 @@ class SlurmSetup():
             self.log.debug(f'{service} service not active on {result.failed_hosts}')
         return result.homogeneous and "/n".join(result.output[0].stdout) == "active"
 
-    def _display_debug(self, nodes, debug_log=None, debug_config=None):
+    def _display_debug(self, nodes, debug_log=None, debug_config=None, service=None):
         """Display debug information.
 
         Args:
             nodes (NodeSet): nodes on which to display the debug information
             debug_log (str, optional): log file to display. Defaults to None.
             debug_config (str, optional): config file to display. Defaults to None.
+            service (str, optional): systemd service for which to display status and journal.
         """
+        if service:
+            for description, command in (
+                    ('systemd status', f'systemctl status --no-pager --full {service}'),
+                    ('systemd journal', f'journalctl -b -u {service} --no-pager -n 100')):
+                self.log.debug('DEBUG: %s for %s:', description, service)
+                run_remote(
+                    self.log, nodes, command_as_user(f'{command} || true', self.root))
+        if service == 'slurmd':
+            for description, command in (
+                    ('systemd unit definition', 'systemctl cat slurmd'),
+                    ('systemd cgroup properties',
+                     'systemctl show slurmd -p Delegate -p ControlGroup -p FragmentPath'),
+                    ('PID 1 cgroup', 'cat /proc/1/cgroup'),
+                    ('cgroup v2 mount', 'findmnt -T /sys/fs/cgroup -o TARGET,FSTYPE,OPTIONS'),
+                    ('cgroup v2 controllers', 'cat /sys/fs/cgroup/cgroup.controllers'),
+                    ('cgroup v2 subtree controllers',
+                     'cat /sys/fs/cgroup/cgroup.subtree_control')):
+                self.log.debug('DEBUG: %s on %s:', description, nodes)
+                run_remote(
+                    self.log, nodes, command_as_user(f'{command} || true', self.root))
         if debug_log:
             self.log.debug('DEBUG: %s contents:', debug_log)
             command = command_as_user(f'cat {debug_log}', self.root)
