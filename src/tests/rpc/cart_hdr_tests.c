@@ -155,13 +155,13 @@ reply_roundtrip(void **state)
 	const int32_t        statuses[] = {0, -DER_TIMEDOUT, INT32_MIN, INT32_MAX, -1};
 	const uint8_t        prefix[]   = {1, 0, 24, 0};
 	/* Sample reply containing the shared timestamps/ID and a tested status. */
-	struct crt_reply_hdr reply      = {
-		 .crh_common =
-                {
-			 .chc_hlc   = 0x0807060504030201ULL,
-			 .chc_rpcid = 0x1817161514131211ULL,
-                },
-        };
+	struct crt_reply_hdr reply = {
+	    .crh_common =
+		{
+		    .chc_hlc   = 0x0807060504030201ULL,
+		    .chc_rpcid = 0x1817161514131211ULL,
+		},
+	};
 	struct crt_reply_hdr decoded;
 	uint8_t              buffer[CRT_REPLY_HDR_V1_BYTES];
 	hg_proc_t            proc;
