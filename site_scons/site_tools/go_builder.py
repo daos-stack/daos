@@ -8,6 +8,8 @@ import subprocess  # nosec B404
 from SCons.Script import Configure, Dir, Exit, File, GetOption, Glob, Scanner
 
 GO_COMPILER = 'go'
+# go list Deps per package directory; every file of a package shares one result
+_GO_PKG_DEPS = {}
 include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
 
 
@@ -23,15 +25,31 @@ def _is_valgrind_build(env):
     return True
 
 
+def _go_list(env, path_name):
+    """Run go list on a package or file under src/control"""
+    rc = subprocess.run([env.d_go_bin, 'list', '--json', '-mod=vendor', path_name],
+                        cwd='src/control', stdout=subprocess.PIPE, check=True, env=env['ENV'])
+    return json.loads(rc.stdout.decode('utf-8'))
+
+
+def _go_pkg_deps(env, pkg_dir):
+    """Return the deps of a package, including those of its build-tag-gated files"""
+    data = _go_list(env, f'./{pkg_dir}')
+    deps = set(data.get('Deps', []))
+    # A package listing skips files behind tags such as fault_injection, so list those one by one.
+    for name in data.get('IgnoredGoFiles', []):
+        deps.update(_go_list(env, os.path.join(pkg_dir, name)).get('Deps', []))
+    return sorted(deps)
+
+
 def _scan_go_file(node, env, _path):
     """Scanner for go code"""
     src_dir = os.path.dirname(str(node))
     includes = []
-    path_name = str(node)[12:]
-    rc = subprocess.run([env.d_go_bin, 'list', '--json', '-mod=vendor', path_name],
-                        cwd='src/control', stdout=subprocess.PIPE, check=True, env=env['ENV'])
-    data = json.loads(rc.stdout.decode('utf-8'))
-    for dep in data['Deps']:
+    pkg_dir = os.path.dirname(str(node)[12:])
+    if pkg_dir not in _GO_PKG_DEPS:
+        _GO_PKG_DEPS[pkg_dir] = _go_pkg_deps(env, pkg_dir)
+    for dep in _GO_PKG_DEPS[pkg_dir]:
         if not dep.startswith('github.com/daos-stack/daos'):
             continue
 
@@ -146,6 +164,8 @@ def generate(env):
     # Propagate useful GO environment variables from the caller
     if 'GOCACHE' in os.environ:
         env['ENV']['GOCACHE'] = os.environ['GOCACHE']
+    if 'GOCACHEPROG' in os.environ:
+        env['ENV']['GOCACHEPROG'] = os.environ['GOCACHEPROG']
 
     # Multiple go jobs can be running at once in scons via the -j option, there is no way to reserve
     # a number of scons job slots for a single command so if jobs is 1 then use that else use a
