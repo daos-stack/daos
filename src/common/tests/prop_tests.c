@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2020-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -491,6 +491,166 @@ test_daos_prop_valid_cont_success_no_val_check(void **state)
 	daos_prop_free(prop);
 }
 
+static void
+test_daos_prop_has_byteval_types(void **state)
+{
+	struct daos_prop_entry entry = {0};
+
+	entry.dpe_type = DAOS_PROP_PO_CA_CERT;
+	assert_true(daos_prop_has_byteval(&entry));
+
+	entry.dpe_type = DAOS_PROP_PO_LABEL;
+	assert_false(daos_prop_has_byteval(&entry));
+}
+
+static void
+test_daos_prop_byteval_set_round_trip(void **state)
+{
+	const uint8_t             payload[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03};
+	daos_prop_t              *prop;
+	struct daos_prop_entry   *entry;
+	struct daos_prop_byteval *bv;
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_CA_CERT;
+
+	assert_rc_equal(daos_prop_set_byteval(prop, DAOS_PROP_PO_CA_CERT, payload, sizeof(payload)),
+			0);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_CA_CERT);
+	assert_non_null(entry);
+	bv = entry->dpe_val_ptr;
+	assert_non_null(bv);
+	assert_int_equal(bv->dpb_len, sizeof(payload));
+	assert_memory_equal(bv->dpb_data, payload, sizeof(payload));
+
+	daos_prop_free(prop);
+}
+
+static void
+test_daos_prop_byteval_is_valid(void **state)
+{
+	const uint8_t             payload[] = {0xde, 0xad, 0xbe, 0xef};
+	struct daos_prop_entry    entry     = {.dpe_type = DAOS_PROP_PO_CA_CERT};
+	struct daos_prop_byteval *bv;
+
+	/* unset */
+	assert_true(daos_prop_byteval_is_valid(&entry));
+
+	/* well-formed */
+	assert_rc_equal(daos_prop_entry_set_byteval(&entry, payload, sizeof(payload)), 0);
+	assert_true(daos_prop_byteval_is_valid(&entry));
+	bv = entry.dpe_val_ptr;
+
+	/* empty must be NULL, not a zero-length blob */
+	bv->dpb_len = 0;
+	assert_false(daos_prop_byteval_is_valid(&entry));
+	bv->dpb_len = sizeof(payload);
+
+	/* length without data */
+	D_FREE(bv->dpb_data);
+	assert_false(daos_prop_byteval_is_valid(&entry));
+	D_ALLOC(bv->dpb_data, sizeof(payload));
+	assert_non_null(bv->dpb_data);
+
+	/* over the cap: the setter does not enforce it, the validator does */
+	bv->dpb_len = (size_t)DAOS_PROP_BYTEVAL_MAX_LEN + 1;
+	assert_false(daos_prop_byteval_is_valid(&entry));
+	bv->dpb_len = sizeof(payload);
+
+	assert_rc_equal(daos_prop_entry_set_byteval(&entry, NULL, 0), 0);
+	assert_null(entry.dpe_val_ptr);
+}
+
+static void
+test_daos_prop_valid_checks_byteval(void **state)
+{
+	const uint8_t             payload[] = {0xde, 0xad, 0xbe, 0xef};
+	daos_prop_t              *prop;
+	struct daos_prop_entry   *entry;
+	struct daos_prop_byteval *bv;
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+	entry           = &prop->dpp_entries[0];
+	entry->dpe_type = DAOS_PROP_PO_CERT_WATERMARKS;
+
+	assert_true(daos_prop_valid(prop, true, true));
+
+	assert_rc_equal(daos_prop_entry_set_byteval(entry, payload, sizeof(payload)), 0);
+	assert_true(daos_prop_valid(prop, true, true));
+
+	bv          = entry->dpe_val_ptr;
+	bv->dpb_len = (size_t)DAOS_PROP_BYTEVAL_MAX_LEN + 1;
+	assert_false(daos_prop_valid(prop, true, true));
+	bv->dpb_len = sizeof(payload);
+
+	daos_prop_free(prop);
+}
+
+static void
+test_daos_prop_byteval_dup_preserves_value(void **state)
+{
+	const uint8_t             payload[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
+	daos_prop_t              *src;
+	daos_prop_t              *dst;
+	struct daos_prop_entry   *src_entry;
+	struct daos_prop_entry   *dst_entry;
+	struct daos_prop_byteval *src_bv;
+	struct daos_prop_byteval *dst_bv;
+
+	src = daos_prop_alloc(1);
+	assert_non_null(src);
+	src->dpp_entries[0].dpe_type = DAOS_PROP_PO_CERT_WATERMARKS;
+	assert_rc_equal(
+	    daos_prop_set_byteval(src, DAOS_PROP_PO_CERT_WATERMARKS, payload, sizeof(payload)), 0);
+
+	dst = daos_prop_dup(src, true /* pool */, false /* input */);
+	assert_non_null(dst);
+
+	src_entry = daos_prop_entry_get(src, DAOS_PROP_PO_CERT_WATERMARKS);
+	dst_entry = daos_prop_entry_get(dst, DAOS_PROP_PO_CERT_WATERMARKS);
+	assert_non_null(src_entry);
+	assert_non_null(dst_entry);
+
+	src_bv = src_entry->dpe_val_ptr;
+	dst_bv = dst_entry->dpe_val_ptr;
+	assert_non_null(dst_bv);
+	assert_ptr_not_equal(src_bv, dst_bv);
+	assert_int_equal(dst_bv->dpb_len, sizeof(payload));
+	assert_memory_equal(dst_bv->dpb_data, payload, sizeof(payload));
+
+	daos_prop_free(src);
+	daos_prop_free(dst);
+}
+
+/* Empty byteval (NULL ptr / zero len) must round-trip through dup as NULL,
+ * not as -DER_NOMEM from a zero-size allocation.
+ */
+static void
+test_daos_prop_byteval_empty_dup(void **state)
+{
+	daos_prop_t            *src;
+	daos_prop_t            *dst;
+	struct daos_prop_entry *dst_entry;
+
+	src = daos_prop_alloc(1);
+	assert_non_null(src);
+	src->dpp_entries[0].dpe_type    = DAOS_PROP_PO_CA_CERT;
+	src->dpp_entries[0].dpe_val_ptr = NULL;
+
+	dst = daos_prop_dup(src, true /* pool */, false /* input */);
+	assert_non_null(dst);
+
+	dst_entry = daos_prop_entry_get(dst, DAOS_PROP_PO_CA_CERT);
+	assert_non_null(dst_entry);
+	assert_null(dst_entry->dpe_val_ptr);
+
+	daos_prop_free(src);
+	daos_prop_free(dst);
+}
+
 static int
 suite_setup(void **state)
 {
@@ -521,6 +681,12 @@ main(void)
 	    cmocka_unit_test(test_daos_prop_valid_duplicate_types),
 	    cmocka_unit_test(test_daos_prop_valid_pool_success_no_val_check),
 	    cmocka_unit_test(test_daos_prop_valid_cont_success_no_val_check),
+	    cmocka_unit_test(test_daos_prop_has_byteval_types),
+	    cmocka_unit_test(test_daos_prop_byteval_set_round_trip),
+	    cmocka_unit_test(test_daos_prop_byteval_is_valid),
+	    cmocka_unit_test(test_daos_prop_valid_checks_byteval),
+	    cmocka_unit_test(test_daos_prop_byteval_dup_preserves_value),
+	    cmocka_unit_test(test_daos_prop_byteval_empty_dup),
 	};
 
 	return cmocka_run_group_tests_name("common_prop", tests, suite_setup, suite_teardown);

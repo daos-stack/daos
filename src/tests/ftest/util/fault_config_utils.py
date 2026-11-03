@@ -146,6 +146,18 @@ FAULTS = {
         'probability_y': '20',
         'interval': '1',
         'max_faults': '10'},
+    'DAOS_RSVC_CREATE_SLOW': {
+        'id': '65702',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '1',
+        'max_faults': '1'},
+    'DAOS_MGMT_TGT_DESTROY_SLOW': {
+        'id': '65703',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '1',
+        'max_faults': '1'},
     'DAOS_CONT_DESTROY_FAIL_CORPC': {
         'id': '65637',
         'probability_x': '100',

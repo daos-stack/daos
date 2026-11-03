@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -797,7 +797,7 @@ int dc_mgmt_net_cfg_check(const char *name)
 }
 
 int
-dc_mgmt_get_iface(char *iface)
+dc_mgmt_get_iface(char *iface, size_t iface_size)
 {
 	int cpu;
 	int numa;
@@ -839,10 +839,11 @@ dc_mgmt_get_iface(char *iface)
 		D_ASSERT(numa_ifaces->ifaces[idx]->numa_node == numa);
 		info_g.numa_iface_idx_rr[i]++;
 
-		if (copy_str(iface, numa_ifaces->ifaces[idx]->interface) != 0) {
+		if (strnlen(numa_ifaces->ifaces[idx]->interface, iface_size) >= iface_size) {
 			D_ERROR("Interface string too long.\n");
 			return -DER_INVAL;
 		}
+		strncpy(iface, numa_ifaces->ifaces[idx]->interface, iface_size);
 		D_DEBUG(DB_MGMT, "Numa: %d, Interface Selected: IDX: %d, Name = %s\n", numa, idx,
 			iface);
 		break;

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -411,6 +411,11 @@ print_usage(const char *prog_name, const char *msg_sizes_str, int rep_count, int
 	    "        /tmp/group_name.attach_info_tmp, if prefix is specified, self_test will use\n"
 	    "        the address information in: prefix/group_name.attach_info_tmp.\n"
 	    "        Note the = sign in the option.\n"
+	    "\n"
+	    "  --dump-info\n"
+	    "      Short version: -d\n"
+	    "      Initialize CART, dump the self transport URI and attached group\n"
+	    "      summary, then exit cleanly without starting the self-test workload.\n"
 	    "\n"
 	    "  --use-daos-agent-env\n"
 	    "      Short version: -u\n"
@@ -929,6 +934,7 @@ int main(int argc, char *argv[])
 	bool                             randomize_eps     = false;
 	bool                             use_agent         = false;
 	bool                             no_sync           = false;
+	bool                             dump_info         = false;
 
 	ret = d_log_init();
 	if (ret != 0) {
@@ -950,10 +956,11 @@ int main(int argc, char *argv[])
 		    {"path", required_argument, 0, 'p'},
 		    {"use-daos-agent-env", no_argument, 0, 'u'},
 		    {"no-sync", no_argument, 0, 'n'},
+		    {"dump-info", no_argument, 0, 'd'},
 		    {"help", no_argument, 0, 'h'},
 		    {0, 0, 0, 0}};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:bhqp:un", long_options, NULL);
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:bdhqp:un", long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -1001,6 +1008,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'b':
 			output_megabits = 1;
+			break;
+		case 'd':
+			dump_info = true;
 			break;
 		case 'p':
 			attach_info_path = optarg;
@@ -1210,11 +1220,13 @@ int main(int argc, char *argv[])
 	ret = run_self_test(all_params, num_msg_sizes, rep_count, max_inflight, dest_name,
 			    ms_endpts_opt, num_ms_endpts_opt, tgt_endpts, num_tgt_endpts,
 			    &ms_endpts, &num_ms_endpts, &size_latencies, buf_alignment,
-			    attach_info_path, use_agent, no_sync);
+			    attach_info_path, use_agent, no_sync, dump_info);
 	if (ret != 0) {
-		DL_ERROR(ret, "run_self_test() failed");
 		D_GOTO(cleanup, ret);
 	}
+
+	if (dump_info)
+		D_GOTO(cleanup, ret);
 
 	/********************* Print the results *********************/
 	for (j = 0; j < num_msg_sizes; j++) {

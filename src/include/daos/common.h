@@ -928,6 +928,12 @@ enum {
 #define DAOS_CONT_DESTROY_FAIL_POST        (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa3)
 #define DAOS_CONT_DESTROY_AFTER_FORK       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa4)
 #define DAOS_POOL_TGT_UPDATE_SKIP_RF_CHECK (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa5)
+/** Delay a replicated service replica creation (RSVC_START handler) by the fail value in ms */
+#define DAOS_RSVC_CREATE_SLOW              (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa6)
+/** Delay a pool target destroy (MGMT_TGT_DESTROY handler) by the fail value in ms */
+#define DAOS_MGMT_TGT_DESTROY_SLOW         (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa7)
+/* target stops raising its EC aggregation boundary (stale puller epoch) */
+#define DAOS_CONT_EC_BOUNDARY_FREEZE       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa8)
 
 #define DAOS_CHK_CONT_ORPHAN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb0)
 #define DAOS_CHK_CONT_BAD_LABEL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb1)
@@ -987,6 +993,11 @@ enum {
 #define DAOS_FAULT_DAE_ALLOC               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x307)
 #define DAOS_FAULT_DBD_COUNT               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x308)
 #define DAOS_FAULT_OBJ_ILOG_MAGIC          (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x309)
+
+/** DDB fault injection */
+#define DDB_CSUM_NR_INJECT                 (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x400)
+#define DDB_CSUM_CHUNK_NR_INJECT           (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x402)
+#define DDB_CSUM_TYPE_INJECT               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x404)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 

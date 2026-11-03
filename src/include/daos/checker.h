@@ -174,6 +174,9 @@ checker_print_indent_inc(struct checker *ck)
 	if (IS_NOT_CHECKER(ck)) {
 		return;
 	}
+	D_ASSERTF(ck->ck_level < CHECKER_INDENT_MAX,
+		  "Cannot increase the indent level: %d >= %d (max)\n", ck->ck_level,
+		  CHECKER_INDENT_MAX);
 
 	if (ck->ck_level == CHECKER_INDENT_MAX) {
 		CK_PRINTF(ck, "Max indent reached.\n");
@@ -190,6 +193,9 @@ checker_print_indent_dec(struct checker *ck)
 	if (IS_NOT_CHECKER(ck)) {
 		return;
 	}
+
+	D_ASSERTF(ck->ck_level > 0, "Cannot decrease the indent level: %d <= 0 (min)\n",
+		  ck->ck_level);
 
 	if (ck->ck_level == 0) {
 		CK_PRINTF(ck, "Min indent reached.\n");

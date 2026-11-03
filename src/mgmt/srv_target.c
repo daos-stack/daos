@@ -830,6 +830,27 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	D_DEBUG(DB_MGMT, DF_UUID": record inserted to dpt_creates_ht\n",
 		DP_UUID(tca.tca_ptrec->dptr_uuid));
 
+	/*
+	 * Racing with any in-flight destroy of the same pool UUID is not allowed: it could destroy
+	 * the new targets or leave remnants of the previous attempt behind (DER_EXIST). Waiting
+	 * with our record already in dpt_creates_ht lets a destroy sent after this create cancel
+	 * us instead of running concurrently with us, hence the cancel check after each wake-up.
+	 */
+	ABT_mutex_lock(pooltgts->dpt_destroy_mutex);
+	while (d_hash_rec_find(&pooltgts->dpt_destroys_ht, tc_in->tc_pool_uuid, sizeof(uuid_t)) !=
+	       NULL) {
+		if (tca.tca_ptrec->cancel_create) {
+			D_DEBUG(DB_MGMT, DF_UUID ": canceled while waiting for in-flight destroy\n",
+				DP_UUID(tc_in->tc_pool_uuid));
+			ABT_mutex_unlock(pooltgts->dpt_destroy_mutex);
+			D_GOTO(out, rc = -DER_CANCELED);
+		}
+		D_INFO(DF_UUID ": waiting for in-flight target destroy before creating\n",
+		       DP_UUID(tc_in->tc_pool_uuid));
+		ABT_cond_wait(pooltgts->dpt_destroy_cv, pooltgts->dpt_destroy_mutex);
+	}
+	ABT_mutex_unlock(pooltgts->dpt_destroy_mutex);
+
 	tgt_scm_sz  = tc_in->tc_scm_size / dss_tgt_nr;
 	tgt_meta_sz = tc_in->tc_meta_size / dss_tgt_nr;
 	rc          = vos_pool_roundup_size(&tgt_scm_sz, &tgt_meta_sz);
@@ -1169,6 +1190,20 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	rc = ds_pool_stop(td_in->td_pool_uuid);
 	if (rc != 0)
 		goto out;
+
+	/*
+	 * Emulate a slow rank whose pool is stopped but whose target files are not removed yet
+	 * (the window in which a retried create of the same UUID used to hit DER_EXIST).
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_MGMT_TGT_DESTROY_SLOW)) {
+		uint64_t delay_ms = daos_fail_value_get();
+
+		if (delay_ms == 0)
+			delay_ms = DAOS_FAIL_DELAY_DEFAULT_MS;
+		D_INFO(DF_UUID ": fault injection: delaying target destroy by " DF_U64 " ms\n",
+		       DP_UUID(td_in->td_pool_uuid), delay_ms);
+		dss_sleep(delay_ms);
+	}
 
 	/** generate path to the target directory */
 	rc = ds_mgmt_file(dss_storage_path, td_in->td_pool_uuid, NULL, NULL, &path);
