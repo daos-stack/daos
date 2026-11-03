@@ -605,18 +605,15 @@ type (
 	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
 	BdevWriteConfigRequest struct {
 		pbin.ForwardableRequest
-		ConfigOutputPath   string
-		OwnerUID           int
-		OwnerGID           int
-		TierProps          []BdevTierProperties
-		HotplugEnabled     bool
-		HotplugBusidDomain uint16
-		HotplugBusidBegin  uint8
-		HotplugBusidEnd    uint8
-		// HotplugIgnoreDomain indicates that HotplugBusidDomain should be ignored and the
-		// bus-ID range matched in any PCI domain, e.g. when derived from a user-specified
-		// range that omits a domain prefix and spans the full bus-ID space 0x00-0xFF.
-		HotplugIgnoreDomain bool
+		ConfigOutputPath    string
+		OwnerUID            int
+		OwnerGID            int
+		TierProps           []BdevTierProperties
+		HotplugEnabled      bool
+		HotplugBusidDomain  uint16
+		HotplugBusidBegin   uint8
+		HotplugBusidEnd     uint8
+		HotplugIgnoreDomain bool // bus-ID range matched in any PCI domain
 		Hostname            string
 		AccelProps          AccelProps
 		SpdkRpcSrvProps     SpdkRpcServer
