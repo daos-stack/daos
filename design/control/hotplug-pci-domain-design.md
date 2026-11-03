@@ -11,7 +11,7 @@ Each DAOS engine's hotplug bus-ID filter restricts SPDK NVMe hotplug add/remove 
 
 This design makes the hotplug filter fully PCI-domain-aware and multi-domain-capable:
 
-- A new config parameter, **`bdev_hotplug_range`**, holds a **list** of filter entries. Every entry mandatorily specifies both a PCI domain and a bus-ID, each independently a single value or an inclusive range, in hex (`0x`-prefixed) or decimal notation.
+- A new config parameter, **`bdev_hotplug_range`**, holds a **list** of filter entries. Every entry mandatorily specifies both a PCI domain and a bus-ID, each independently a single value or an inclusive range, in hex (`0x`-prefixed) notation only.
 - The filter is derived, automatically or explicitly, depending on whether it is specified in the server config file.
 - If not specified then the filter is derived automatically to cover **exactly** the PCI addresses in the engine's `bdev_list`.
 - If specified manually in the config file it is allowed to have a broader range filter than just the `bdev_list` addresses.
@@ -36,7 +36,7 @@ A production dual-socket server had two engines, each pinned to a different NUMA
 
 1. Scope each engine's hotplug filter to the PCI domain(s) it actually owns, not just bus-ID, so a device is never claimed by the wrong engine purely due to a bus-ID collision across domains.
 2. In every `bdev_hotplug_range` entry, **both domain and bus-ID are mandatory** — each independently expressible as a single value or an inclusive range.
-3. Accept **hex (`0x`-prefixed) or decimal** notation for each identifier (domain or bus-ID value) independently, freely mixable within and across entries.
+3. Accept **hex (`0x`-prefixed) notation only** for each identifier (domain or bus-ID value) in config file entries — decimal notation is not supported.
 4. Support **multiple entries** per engine, so one engine can filter on several domain+bus-ID combinations at once.
 5. When no `bdev_hotplug_range`/`bdev_busid_range` is manually configured, **auto-derive the filter to match exactly the addresses in `bdev_list`** for the engine (generated under the hood from PCI topology), rather than the full NUMA/host-bridge topology (see Section 5 for the resulting limitation). An administrator may still manually configure `bdev_hotplug_range` to cover a broader range than `bdev_list` (e.g. to admit devices not yet present at format time); this is explicitly permitted, at the administrator's own risk (Section 5).
 6. Preserve existing VMD behavior while eliminating the `ignore_domain`/"any domain" special case entirely: a VMD-enabled engine configures **zero** `bdev_hotplug_range` entries (the SPDK `hotplug_busid_range` method is not invoked at all), which is equivalent to applying no PCI-address restriction — the same default-allow behavior already used whenever no filter is configured.
@@ -65,17 +65,16 @@ Three sources are evaluated in priority order by `setHotplugRange()`:
 entry       := domain-part ":" bus-part
 domain-part := identifier | identifier "-" identifier
 bus-part    := identifier | identifier "-" identifier
-identifier  := "0x" HEXDIGIT+ | DIGIT+
+identifier  := "0x" HEXDIGIT+
 ```
 
-Both `domain-part` and `bus-part` are **mandatory** in every entry — there is no bare `bus-part`-only form and no way to omit the domain. Ranges are inclusive at both ends.
+Both `domain-part` and `bus-part` are **mandatory** in every entry — there is no bare `bus-part`-only form and no way to omit the domain. Ranges are inclusive at both ends. Decimal notation is not accepted; every identifier must use the `0x`-prefixed hex form.
 
 | Entry                 | Domain                  | Bus-ID              | Meaning                                  |
 |-----------------------|--------------------------|----------------------|-------------------------------------------|
 | `0x00:0x80`           | `0x00`                   | `0x80`               | Single domain, single bus-ID              |
 | `0x01:0x00-0xFF`      | `0x01`                   | `0x00`-`0xFF`        | Single domain, full bus-ID range           |
 | `0x00-0x02:0x00-0x80` | `0x00`-`0x02`            | `0x00`-`0x80`        | Domain range, bus-ID range                 |
-| `0000-0001:128`       | `0000`-`0001` (decimal)  | `128` (decimal)      | Domain range, single bus-ID, decimal       |
 
 **Legacy parameter and migration:** `bdev_busid_range` (the original `<begin>-<end>` bus-ID-only syntax; no domain concept) is retained in the config schema as a deprecated, legacy alias. It is always interpreted as applying to PCI domain `0x00` specifically — there is no "any domain" fallback, and any domain prefix previously accepted by this parameter is no longer recognized; multi-domain configuration is now exclusively the responsibility of `bdev_hotplug_range`. Config load behavior:
 
@@ -123,7 +122,7 @@ VMD's external behavior is unchanged throughout.
 
 ## 8. Testing and Validation
 
-Unit test coverage, across `bdev_test.go`, `config_test.go`, `provider_test.go`, and `bdev/backend_json_test.go` (plus C-side hotplug filter tests), needs to include: `bdev_list`-based multi-domain/multi-entry derivation; legacy `bdev_busid_range` conversion to a single `bdev_hotplug_range` entry on domain `0x00`; the both-parameters-set validation error; overlapping-range validation; hex/decimal mixed-notation parsing; single-value vs. range parsing for both domain and bus-ID; multi-entry JSON config round-tripping; and VMD configuring zero `bdev_hotplug_range` entries (not an `ignore_domain` wildcard entry). Manual validation should be performed on Gen-12 HPE hardware with a single engine's `bdev_list` spanning 2+ non-zero PCI domains, confirming per-domain precision and that an address absent from `bdev_list` is correctly ignored (Section 5), plus a regression pass against the existing VMD hotplug test suite.
+Unit test coverage, across `bdev_test.go`, `config_test.go`, `provider_test.go`, and `bdev/backend_json_test.go` (plus C-side hotplug filter tests), needs to include: `bdev_list`-based multi-domain/multi-entry derivation; legacy `bdev_busid_range` conversion to a single `bdev_hotplug_range` entry on domain `0x00`; the both-parameters-set validation error; overlapping-range validation; hex-only notation parsing (including rejection of decimal input); single-value vs. range parsing for both domain and bus-ID; multi-entry JSON config round-tripping; and VMD configuring zero `bdev_hotplug_range` entries (not an `ignore_domain` wildcard entry). Manual validation should be performed on Gen-12 HPE hardware with a single engine's `bdev_list` spanning 2+ non-zero PCI domains, confirming per-domain precision and that an address absent from `bdev_list` is correctly ignored (Section 5), plus a regression pass against the existing VMD hotplug test suite.
 
 ## 9. Risks, Mitigations and Future Work
 
