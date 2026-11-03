@@ -125,9 +125,10 @@ vos_dtx_validation(struct dtx_handle *dth);
  * \param[in] dti		Pointer to the DTX identifier.
  * \param[in,out] epoch		Pointer to current epoch, if it is zero and if the DTX exists, then
  *				the DTX's epoch will be saved in it.
- * \param[out] pm_ver		Hold the DTX's pool map version.
+ * \param[in,out] pm_ver	For resync case, input the recovery's captured pool map version;
+ *				For resent case, it output DTX's pool map version.
  * \param[out] dck		Pointer to the key for CoS cache.
- * \param[in] for_refresh	It is for DTX_REFRESH or not.
+ * \param[in] intent		The purpose for check DTX.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -142,11 +143,12 @@ vos_dtx_validation(struct dtx_handle *dth);
  *				   about the existence of the DTX entry, need to
  *				   retry sometime later.
  *			DTX_ST_INITED	means that the DTX is just initialized but not prepared.
+ *			-DER_INPROGRESS means a resync check found an attached or preparing DTX.
  *			Other negative value if error.
  */
 int
-vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_cos_key *dck, bool for_refresh);
+vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32_t *pm_ver,
+	      struct dtx_cos_key *dck, enum dtx_check_intent intent);
 
 /**
  * Load participants information for the given DTX.
@@ -202,7 +204,7 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool keep_act
  * \param coh     [IN]	Container open handle.
  * \param dti     [IN]	The DTX identifiers to be aborted.
  * \param epoch   [IN]	The max epoch for the DTX to be aborted.
- * \param version [IN]	The max version for the DTX to be aborted.
+ * \param version [IN]	Pool map version authorizing the abort; zero bypasses version checks.
  *
  * \return		Zero on success, negative value if error.
  */

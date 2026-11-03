@@ -204,6 +204,7 @@ func (cfg *Server) updateServerConfig(cfgPtr **engine.Config) {
 
 	engineCfg := *cfgPtr
 	engineCfg.Fabric.Update(cfg.Fabric)
+	engineCfg.Fabric.Normalize()
 	engineCfg.SystemName = cfg.SystemName
 	engineCfg.SocketDir = cfg.SocketDir
 	engineCfg.Modules = cfg.Modules
@@ -408,11 +409,7 @@ func (cfg *Server) Load(log logging.Logger) error {
 		return errors.Errorf("invalid system name: %q", cfg.SystemName)
 	}
 
-	// TODO multiprovider: Remove when multiprovider is enabled
-	if cfg.Fabric.GetNumProviders() > 1 {
-		return errors.Errorf("fabric provider string %q includes more than one provider", cfg.Fabric.Provider)
-	}
-
+	cfg.Fabric.Normalize()
 	// propagate top-level settings to engine configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
