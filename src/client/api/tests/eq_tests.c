@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,6 +35,7 @@
 
 #define EQT_EV_COUNT		1000
 #define EQ_COUNT		5
+#define EQ_CTX_LIMIT            20
 #define EQT_SLEEP_INV		2
 
 #define DAOS_TEST_FMT	"-------- %s test_%s: %s\n"
@@ -1237,6 +1239,47 @@ out:
 	DAOS_TEST_EXIT(rc);
 }
 
+static void
+eq_test_ctx_limit(void **state)
+{
+	daos_handle_t eqs[EQ_CTX_LIMIT + 1] = {0};
+	int           ctx_num               = 0;
+	int           created               = 0;
+	int           rc;
+	int           destroy_rc = 0;
+	int           eq_destroy_rc;
+
+	rc = crt_context_num(&ctx_num);
+	while (rc == 0 && ctx_num < EQ_CTX_LIMIT) {
+		rc = daos_eq_create(&eqs[created]);
+		if (rc != 0)
+			break;
+		created++;
+		rc = crt_context_num(&ctx_num);
+	}
+
+	if (rc == 0) {
+		rc = daos_eq_create(&eqs[created]);
+		if (rc == 0) {
+			created++;
+			rc = crt_context_num(&ctx_num);
+		}
+	}
+
+	while (created > 0) {
+		created--;
+		eq_destroy_rc = daos_eq_destroy(eqs[created], DAOS_EQ_DESTROY_FORCE);
+		if (destroy_rc == 0)
+			destroy_rc = eq_destroy_rc;
+		if (eq_destroy_rc != 0)
+			print_error("Failed to destroy test EQ: %d\n", eq_destroy_rc);
+	}
+
+	assert_int_equal(rc, 0);
+	assert_int_equal(ctx_num, EQ_CTX_LIMIT);
+	assert_int_equal(destroy_rc, 0);
+}
+
 static int
 eq_ut_setup(void **state)
 {
@@ -1244,6 +1287,7 @@ eq_ut_setup(void **state)
 
 	d_setenv("D_INTERFACE", "lo", 1);
 	d_setenv("D_PROVIDER", "ofi+tcp", 1);
+	d_setenv("CRT_CTX_NUM", "20", 1);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0) {
@@ -1257,7 +1301,7 @@ eq_ut_setup(void **state)
 		return rc;
 	}
 
-	rc = daos_eq_lib_init(daos_crt_init_opt_get(false, 1));
+	rc = daos_eq_lib_init(daos_crt_init_opt_get(false, 0));
 	if (rc != 0) {
 		print_error("Failed daos_eq_lib_init: %d\n", rc);
 		return rc;
@@ -1282,18 +1326,17 @@ eq_ut_teardown(void **state)
 	return 0;
 }
 
-static const struct CMUnitTest eq_uts[] = {
-	{ "EQ_Test_1", eq_test_1, NULL, NULL},
-	{ "EQ_Test_2", eq_test_2, NULL, NULL},
-	{ "EQ_Test_3", eq_test_3, NULL, NULL},
-	{ "EQ_Test_4", eq_test_4, NULL, NULL},
-	{ "EQ_Test_5", eq_test_5, NULL, NULL},
-	{ "EQ_Test_6", eq_test_6, NULL, NULL},
-	{ "EQ_Test_7", eq_test_7, NULL, NULL},
-	{ "EQ_Test_8", eq_test_8, NULL, NULL},
-	{ "EQ_Test_9", eq_test_9, NULL, NULL},
-	{ "EQ_Test_10", eq_test_10, NULL, NULL}
-};
+static const struct CMUnitTest eq_uts[] = {{"EQ_Test_1", eq_test_1, NULL, NULL},
+					   {"EQ_Test_2", eq_test_2, NULL, NULL},
+					   {"EQ_Test_3", eq_test_3, NULL, NULL},
+					   {"EQ_Test_4", eq_test_4, NULL, NULL},
+					   {"EQ_Test_5", eq_test_5, NULL, NULL},
+					   {"EQ_Test_6", eq_test_6, NULL, NULL},
+					   {"EQ_Test_7", eq_test_7, NULL, NULL},
+					   {"EQ_Test_8", eq_test_8, NULL, NULL},
+					   {"EQ_Test_9", eq_test_9, NULL, NULL},
+					   {"EQ_Test_10", eq_test_10, NULL, NULL},
+					   {"EQ_Test_CTX_Limit", eq_test_ctx_limit, NULL, NULL}};
 
 int main(int argc, char **argv)
 {
