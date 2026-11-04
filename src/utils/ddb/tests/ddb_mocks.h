@@ -56,4 +56,25 @@ typedef char *(*d_asprintf2_fn_t)(int *rc, const char *fmt, ...);
 void
 mock_d_asprintf2_set(d_asprintf2_fn_t mock_fn);
 
+/** Signature of dw_open(), for installing a test-provided fake implementation. */
+typedef int (*dw_open_fn_t)(const char *path, const char *db_path, struct ddb_ctx *ctx,
+			    struct bio_meta_context **mc);
+
+/**
+ * Install mock_fn as __wrap_dw_open()'s implementation. Pass NULL to restore the real dw_open()
+ * passthrough.
+ */
+void
+mock_dw_open_set(dw_open_fn_t mock_fn);
+
+/** Signature of dw_close(), for installing a test-provided fake implementation. */
+typedef int (*dw_close_fn_t)(struct bio_meta_context *mc);
+
+/**
+ * Install mock_fn as __wrap_dw_close()'s implementation. Pass NULL to restore the real dw_close()
+ * passthrough.
+ */
+void
+mock_dw_close_set(dw_close_fn_t mock_fn);
+
 #endif /* DAOS_DDB_MOCKS_H */

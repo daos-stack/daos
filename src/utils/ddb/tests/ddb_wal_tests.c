@@ -5,22 +5,22 @@
  */
 
 /*
- * Tests of the ddb WAL API (dw_open()/dw_close(), DAOS-17817) against a real VOS pool.
+ * Tests of the WAL inspection commands (DAOS-17817) against a real VOS pool.
  *
  * Unlike the other ddb_tests groups, these groups initialize VOS once in their group setup and
  * hold that reference until the group teardown. This lets the same tests run against a PMEM VOS
  * (the default 'ddb' utest suite) and against a MD-on-SSD VOS (the 'ddb_md_on_ssd' utest suite,
  * where run_utest.py provides an AIO bdev with the META and WAL roles) without ever
- * re-initializing SPDK: the dw_open()/dw_close() calls only increase/decrease the VOS reference
- * count.
+ * re-initializing SPDK: the ddb_run_wal_open()/ddb_run_wal_close() calls only increase/decrease
+ * the VOS reference count.
  *
  * In MD-on-SSD mode, the SPDK re-initialization guard (ddb_spdk_reinit_wa.c) only lets the first
  * NVMe-backed session of the process proceed, whether it succeeds or not. Each group therefore
  * runs in its own process (ddb_tests --suites f, then --suites g) and holds the one and only
- * NVMe-backed dw_open() attempt of its process:
+ * NVMe-backed wal_open attempt of its process:
  * - group 'f' (ddb_wal_tests_run) opens a WAL session on a healthy pool;
  * - group 'g' (ddb_wal_bad_hdr_tests_run) stages a WAL header which is checksum-valid but
- *   inconsistent on its pool and checks that dw_open() refuses it without aborting.
+ *   inconsistent on its pool and checks that wal_open refuses it without aborting.
  */
 #include <errno.h>
 #include <fcntl.h>
@@ -38,7 +38,6 @@
 #include <vos_internal.h>
 #include <ddb.h>
 #include <ddb_common.h>
-#include <ddb_wal.h>
 
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
@@ -189,7 +188,7 @@ wal_bad_hdr_tests_setup(void **state)
 		/*
 		 * The fixture keeps its own BIO session open for the whole group: it holds the
 		 * original header in memory and, being read-only, never writes it back, while the
-		 * forged header staged on the blob is what dw_open() gets to verify.
+		 * forged header staged on the blob is what wal_open() gets to verify.
 		 */
 		assert_success(bio_mc_open(vos_xsctxt_get(), tctx->wt_pool_uuid, 0, &tctx->wt_mc));
 		assert_non_null(tctx->wt_mc);
@@ -237,13 +236,26 @@ wal_bad_hdr_tests_teardown(void **state)
  * -----------------------------------------------
  */
 
-/* A PMEM VOS target has no WAL: dw_open() must be refused and leave no session behind. */
+/* wal_close without a WAL session is an error, whatever the VOS mode. */
 static void
-dw_open_pmem_test(void **state)
+wal_close_no_session_test(void **state)
 {
-	struct wal_test_ctx     *tctx = *state;
-	struct ddb_ctx           ctx;
-	struct bio_meta_context *mc = NULL;
+	struct ddb_ctx ctx;
+
+	wal_test_ctx_init(&ctx);
+
+	assert_rc_equal(ddb_run_wal_close(&ctx), -DER_NO_HDL);
+	assert_printed_contains("No WAL session is open");
+	assert_false(ddb_wal_is_open(&ctx));
+}
+
+/* A PMEM VOS target has no WAL: wal_open must be refused and leave the context untouched. */
+static void
+wal_open_pmem_test(void **state)
+{
+	struct wal_test_ctx    *tctx = *state;
+	struct ddb_ctx          ctx;
+	struct wal_open_options wal_opt = {.path = tctx->wt_vos_path};
 
 	if (tctx->wt_md_on_ssd) {
 		print_message("Skipping PMEM-only test in MD-on-SSD mode\n");
@@ -252,25 +264,28 @@ dw_open_pmem_test(void **state)
 
 	wal_test_ctx_init(&ctx);
 
-	assert_rc_equal(dw_open(tctx->wt_vos_path, NULL, &ctx, &mc), -DER_NOTSUPPORTED);
-	assert_null(mc);
+	assert_rc_equal(ddb_run_wal_open(&ctx, &wal_opt), -DER_NOTSUPPORTED);
+	assert_printed_contains("is not a MD-on-SSD target");
+	assert_false(ddb_wal_is_open(&ctx));
+	assert_false(ctx.dc_write_mode);
 
-	/* The refusal is repeatable: nothing is left initialized by the failed attempt */
-	assert_rc_equal(dw_open(tctx->wt_vos_path, NULL, &ctx, &mc), -DER_NOTSUPPORTED);
-	assert_null(mc);
+	/* wal_close is still an error, and the pool commands are not blocked */
+	assert_rc_equal(ddb_run_wal_close(&ctx), -DER_NO_HDL);
+	assert_rc_equal(ddb_run_wal_open(&ctx, &wal_opt), -DER_NOTSUPPORTED);
 }
 
 /*
- * The one and only real WAL session of the process (MD-on-SSD only): open, close, check the pool
- * is left intact, then check the SPDK re-initialization guard.
+ * The one and only real WAL session of the process (MD-on-SSD only): open, check the mutual
+ * exclusion with the pool-lifecycle commands, close, then check the SPDK re-initialization guard.
  */
 static void
-dw_session_test(void **state)
+wal_session_test(void **state)
 {
-	struct wal_test_ctx     *tctx = *state;
-	struct ddb_ctx           ctx;
-	struct bio_meta_context *mc = NULL;
-	daos_handle_t            poh;
+	struct wal_test_ctx    *tctx = *state;
+	struct ddb_ctx          ctx;
+	struct wal_open_options wal_opt  = {.path = tctx->wt_vos_path};
+	struct open_options     open_opt = {.path = tctx->wt_vos_path};
+	daos_handle_t           poh;
 
 	if (!tctx->wt_md_on_ssd) {
 		print_message("Skipping MD-on-SSD-only test in PMEM mode\n");
@@ -280,12 +295,23 @@ dw_session_test(void **state)
 	wal_test_ctx_init(&ctx);
 
 	/* Open the WAL (no replay) */
-	assert_success(dw_open(tctx->wt_vos_path, NULL, &ctx, &mc));
-	assert_non_null(mc);
+	assert_success(ddb_run_wal_open(&ctx, &wal_opt));
+	assert_true(ddb_wal_is_open(&ctx));
+	assert_false(ctx.dc_write_mode);
+	assert_printed_contains("opened (no replay)");
+
+	/* A WAL session excludes another WAL session and the pool-lifecycle commands */
+	dvt_fake_print_reset();
+	assert_rc_equal(ddb_run_wal_open(&ctx, &wal_opt), -DER_BUSY);
+	assert_printed_contains("A WAL session is open");
+	assert_rc_equal(ddb_run_open(&ctx, &open_opt), -DER_BUSY);
+	assert_true(daos_handle_is_inval(ctx.dc_poh));
+	assert_true(ddb_wal_is_open(&ctx));
 
 	/* Close the WAL session */
-	assert_success(dw_close(mc));
-	mc = NULL;
+	assert_success(ddb_run_wal_close(&ctx));
+	assert_false(ddb_wal_is_open(&ctx));
+	assert_rc_equal(ddb_run_wal_close(&ctx), -DER_NO_HDL);
 
 	/* The pool is left intact and can still be opened (and replayed) by VOS */
 	assert_success(
@@ -294,23 +320,23 @@ dw_session_test(void **state)
 
 	/* Only one NVMe-backed session per process: the guard refuses the next one */
 	dvt_fake_print_reset();
-	assert_rc_equal(dw_open(tctx->wt_vos_path, NULL, &ctx, &mc), -DER_NO_SERVICE);
+	assert_rc_equal(ddb_run_wal_open(&ctx, &wal_opt), -DER_NO_SERVICE);
 	assert_printed_contains("SPDK cannot be re-initialized");
-	assert_null(mc);
+	assert_false(ddb_wal_is_open(&ctx));
 }
 
 /*
- * A WAL header with a valid checksum but an inconsistent content is refused by dw_open() with an
- * error instead of an abort (MD-on-SSD only). This is the one NVMe-backed dw_open() attempt of the
+ * A WAL header with a valid checksum but an inconsistent content is refused by wal_open with an
+ * error instead of an abort (MD-on-SSD only). This is the one NVMe-backed wal_open attempt of the
  * process, so the control check, once the original header is restored, goes through BIO directly.
  */
 static void
-dw_open_bad_hdr_test(void **state)
+wal_open_bad_hdr_test(void **state)
 {
-	struct wal_test_ctx     *tctx = *state;
-	struct ddb_ctx           ctx;
-	struct bio_meta_context *mc = NULL;
-	struct wal_header        hdr;
+	struct wal_test_ctx    *tctx = *state;
+	struct ddb_ctx          ctx;
+	struct wal_open_options wal_opt = {.path = tctx->wt_vos_path};
+	struct wal_header       hdr;
 
 	if (!tctx->wt_md_on_ssd) {
 		print_message("Skipping MD-on-SSD-only test in PMEM mode\n");
@@ -319,8 +345,11 @@ dw_open_bad_hdr_test(void **state)
 
 	wal_test_ctx_init(&ctx);
 
-	assert_rc_equal(dw_open(tctx->wt_vos_path, NULL, &ctx, &mc), -DER_DF_INVAL);
-	assert_null(mc);
+	assert_rc_equal(ddb_run_wal_open(&ctx, &wal_opt), -DER_DF_INVAL);
+	assert_printed_contains("Inconsistent meta or WAL header for '");
+	assert_printed_contains("wal_repair_hdr");
+	assert_false(ddb_wal_is_open(&ctx));
+	assert_false(ctx.dc_write_mode);
 
 	/* The forged header was the only cause */
 	hdr = tctx->wt_orig_hdr;
@@ -336,18 +365,19 @@ dw_open_bad_hdr_test(void **state)
 #define TEST(x) {#x, x, NULL, NULL}
 
 static const struct CMUnitTest wal_tests[] = {
-    TEST(dw_open_pmem_test),
-    TEST(dw_session_test),
+    TEST(wal_close_no_session_test),
+    TEST(wal_open_pmem_test),
+    TEST(wal_session_test),
 };
 
 static const struct CMUnitTest wal_bad_hdr_tests[] = {
-    TEST(dw_open_bad_hdr_test),
+    TEST(wal_open_bad_hdr_test),
 };
 
 int
 ddb_wal_tests_run(void)
 {
-	return cmocka_run_group_tests_name("DDB WAL API tests", wal_tests, wal_tests_setup,
+	return cmocka_run_group_tests_name("DDB WAL commands tests", wal_tests, wal_tests_setup,
 					   wal_tests_teardown);
 }
 
