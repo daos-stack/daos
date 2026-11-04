@@ -34,11 +34,11 @@ A production dual-socket server had two engines, each pinned to a different NUMA
 
 ### Goals
 
-1. Scope each engine's hotplug filter to the PCI domain(s) it actually owns, not just bus-ID, so a device is never claimed by the wrong engine purely due to a bus-ID collision across domains.
+1. Scope each engine's hotplug filter to the PCI domain(s) it has been assigned with PCI domain/segment and bus-ID, so a device is never claimed by the wrong engine due to a bus-ID collision across domains.
 2. In every `bdev_hotplug_range` entry, **both domain and bus-ID are mandatory** — each independently expressible as a single value or an inclusive range.
 3. Accept **hex (`0x`-prefixed) notation only** for each identifier (domain or bus-ID value) in config file entries — decimal notation is not supported.
 4. Support **multiple entries** per engine, so one engine can filter on several domain+bus-ID combinations at once.
-5. When no `bdev_hotplug_range`/`bdev_busid_range` is manually configured, **auto-derive the filter to match exactly the addresses in `bdev_list`** for the engine (generated under the hood from PCI topology), rather than the full NUMA/host-bridge topology (see Section 5 for the resulting limitation). An administrator may still manually configure `bdev_hotplug_range` to cover a broader range than `bdev_list` (e.g. to admit devices not yet present at format time); this is explicitly permitted, at the administrator's own risk (Section 5).
+5. When no `bdev_hotplug_range`/`bdev_busid_range` is manually configured, **auto-derive the filter to match exactly the addresses in `bdev_list`** for the engine (generated under the hood from PCI topology), rather than the full NUMA/host-bridge topology (see Section 5 for the resulting limitation). An administrator may manually configure `bdev_hotplug_range` to cover a broader range than `bdev_list` (e.g. to admit devices not yet present at format time); this is permitted but not advertised and as such is at the administrator's own risk (Section 5).
 6. Preserve existing VMD behavior while eliminating the `ignore_domain`/"any domain" special case entirely: a VMD-enabled engine configures **zero** `bdev_hotplug_range` entries (the SPDK `hotplug_busid_range` method is not invoked at all), which is equivalent to applying no PCI-address restriction — the same default-allow behavior already used whenever no filter is configured.
 7. Remain backward compatible with the existing, deprecated `bdev_busid_range` parameter: it continues to be accepted and is converted internally to a single `bdev_hotplug_range` entry **on PCI domain `0x00` specifically** (Section 4.2) — there is no "any domain" fallback for the legacy parameter.
 
