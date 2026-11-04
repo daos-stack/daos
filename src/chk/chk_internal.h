@@ -352,6 +352,8 @@ typedef int (*chk_co_rpc_cb_t)(struct chk_co_rpc_cb_args *cb_args);
 
 typedef void (*chk_pool_free_data_t)(void *data);
 
+typedef void (*chk_pool_renew_data_t)(void *data, uint32_t status);
+
 enum chk_start_flags {
 	/* Reset all check bookmarks, for leader, engines and all pools. */
 	CSF_RESET_ALL		= 1,
@@ -583,6 +585,7 @@ struct chk_pool_shard {
 	/* Link into chk_pool_rec::cpr_shard_list. */
 	d_list_t		 cps_link;
 	d_rank_t		 cps_rank;
+	uint32_t                 cps_status;
 	void			*cps_data;
 	chk_pool_free_data_t	 cps_free_cb;
 };
@@ -612,7 +615,7 @@ struct chk_pool_rec {
 	uint32_t cpr_started : 1, cpr_start_post : 1, cpr_stop : 1, cpr_done : 1, cpr_skip : 1,
 	    cpr_immutable : 1, cpr_dangling : 1, cpr_for_orphan : 1, cpr_notified_exit : 1,
 	    cpr_destroyed : 1, cpr_healthy : 1, cpr_delay_label : 1, cpr_exist_on_ms : 1,
-	    cpr_not_export_ps : 1, cpr_map_refreshed : 1, cpr_has_pending : 1;
+	    cpr_not_export_ps : 1, cpr_map_refreshed : 1;
 
 	int			 cpr_advice;
 	int			 cpr_refs;
@@ -627,6 +630,7 @@ struct chk_pool_rec {
 	uint64_t		 cpr_label_seq;
 	ABT_mutex		 cpr_mutex;
 	ABT_cond		 cpr_cond;
+	uint32_t                 cpr_query_status;
 };
 
 struct chk_pending_rec {
@@ -730,9 +734,9 @@ int chk_pools_update_bk(struct chk_instance *ins, uint32_t phase);
 int chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv);
 
 int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank,
-		       bool has_pending, struct chk_bookmark *bk, struct chk_instance *ins,
+		       uint32_t status, struct chk_bookmark *bk, struct chk_instance *ins,
 		       uint32_t *shard_nr, void *data, chk_pool_free_data_t free_cb,
-		       struct chk_pool_rec **cpr);
+		       chk_pool_renew_data_t renew_cb, struct chk_pool_rec **cpr);
 
 void chk_pool_shard_cleanup(struct chk_instance *ins);
 
@@ -749,8 +753,6 @@ int chk_set_policy(struct chk_instance *ins, uint64_t gen, uint32_t policy_nr,
 
 int chk_prop_prepare(d_rank_t leader, uint32_t flags, uint32_t policy_nr,
 		     struct chk_policy *policies, d_rank_list_t *ranks, struct chk_property *prop);
-
-uint32_t chk_pool_merge_status(uint32_t status_a, uint32_t status_b);
 
 void chk_ins_merge_info(uint32_t *status_dst, uint32_t status_src, uint32_t *phase_dst,
 			uint32_t phase_src, uint64_t *gen_dst, uint64_t gen_src);
@@ -911,6 +913,13 @@ void chk_vos_cleanup(void);
 	} while (0)
 
 /* clang-format on */
+
+static inline bool
+chk_pool_check_in_progress(uint32_t status)
+{
+	return status == CHK__CHECK_POOL_STATUS__CPS_CHECKING ||
+	       status == CHK__CHECK_POOL_STATUS__CPS_PENDING;
+}
 
 static inline bool
 chk_is_ins_reset(struct chk_instance *ins, uint32_t flags)
@@ -1277,12 +1286,12 @@ chk_uuid_unparse(struct chk_instance *ins, const uuid_t uuid, char *uuid_str)
 }
 
 static inline bool
-chk_is_valid_uuid_string(struct chk_instance *ins, const char *uuid_str)
+chk_is_valid_uuid_iov(struct chk_instance *ins, const d_iov_t *key)
 {
-	if (ins->ci_is_leader == 1 && daos_is_valid_uuid_string(uuid_str, UUID_SST_UPPER))
+	if (ins->ci_is_leader == 1 && daos_is_valid_uuid_iov(key, UUID_SST_UPPER))
 		return true;
 
-	if (ins->ci_is_leader == 0 && daos_is_valid_uuid_string(uuid_str, UUID_SST_LOWER))
+	if (ins->ci_is_leader == 0 && daos_is_valid_uuid_iov(key, UUID_SST_LOWER))
 		return true;
 
 	return false;

@@ -248,7 +248,13 @@ func ConfigureComponents(log logging.Logger, dbCfg *DatabaseConfig) (*RaftCompon
 		raftCfg.SnapshotInterval = dbCfg.RaftSnapshotInterval
 	}
 	raftCfg.HeartbeatTimeout = 2000 * time.Millisecond
+	if dbCfg.RaftHeartbeatTimeout > 0 {
+		raftCfg.HeartbeatTimeout = dbCfg.RaftHeartbeatTimeout
+	}
 	raftCfg.ElectionTimeout = 2000 * time.Millisecond
+	if dbCfg.RaftElectionTimeout > 0 {
+		raftCfg.ElectionTimeout = dbCfg.RaftElectionTimeout
+	}
 	raftCfg.LeaderLeaseTimeout = 1000 * time.Millisecond
 	// Set the local ID to the address of the replica.
 	raftCfg.LocalID = raft.ServerID(repAddr.String())

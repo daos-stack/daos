@@ -624,7 +624,7 @@ char_in_tests(char a, char *str, uint32_t str_len)
 	return false;
 }
 
-static int
+static void
 csum_test_sv_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t *sgl)
 {
 	struct dt_csum_ctx *csum_ctx;
@@ -638,64 +638,50 @@ csum_test_sv_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t 
 	csum_ctx = tctx->dvt_extra;
 
 	D_ALLOC(buf, csum_ctx->dct_sv_size);
-	if (buf == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	assert_non_null(buf);
 
-	d_iov_set(&iod.iod_name, g_akeys_str[0], strlen(g_akeys_str[0]));
+	d_iov_set(&iod.iod_name, g_akeys_str[DVT_FAKE_CSUM_AKEY_SV],
+		  strlen(g_akeys_str[DVT_FAKE_CSUM_AKEY_SV]));
 	iod.iod_nr    = 1;
 	iod.iod_type  = DAOS_IOD_SINGLE;
 	iod.iod_size  = csum_ctx->dct_sv_size;
 	iod.iod_recxs = NULL;
 
-	/* g_oids[0]: single value written without checksum */
-	memset(buf, 'a', csum_ctx->dct_sv_size);
+	/* g_oids[DVT_FAKE_CSUM_OID_NONE]: single value written without checksum */
+	memset(buf, DVT_FAKE_CSUM_OID_NONE_SV_FILLER, csum_ctx->dct_sv_size);
 	d_iov_set(sgl->sg_iovs, &buf[0], csum_ctx->dct_sv_size);
-	rc = vos_obj_update(coh, g_oids[0], 1, 0, 0, &g_dkeys[0], 1, &iod, NULL, sgl);
-	if (rc != 0)
-		goto out_buf;
+	rc = vos_obj_update(coh, g_oids[DVT_FAKE_CSUM_OID_NONE], 1, 0, 0, &g_dkeys[0], 1, &iod,
+			    NULL, sgl);
+	assert_success(rc);
 
 	/*
-	 * g_oids[1]: DVT_FAKE_SV_COUNT successive overwrites with distinct content and checksum.
-	 *   sv_idx 0: epoch 1, filler 'b'
-	 *   sv_idx 1: epoch 2, filler 'c'
+	 * g_oids[DVT_FAKE_CSUM_OID_VALID]: DVT_FAKE_SV_COUNT successive overwrites with distinct
+	 * content and checksum.
+	 *   sv_idx 0: epoch 1, filler DVT_FAKE_CSUM_OID_VALID_SV_FILLER
+	 *   sv_idx 1: epoch 2, filler DVT_FAKE_CSUM_OID_VALID_SV_FILLER + 1
 	 * Fetching at epoch N returns dct_sv_ics[N-1]; DAOS_EPOCH_MAX returns the last entry.
 	 */
 	epoch  = 1;
-	filler = 'b';
+	filler = DVT_FAKE_CSUM_OID_VALID_SV_FILLER;
 	for (sv_idx = 0; sv_idx < DVT_FAKE_SV_COUNT; sv_idx++) {
 		memset(buf, filler, csum_ctx->dct_sv_size);
 		d_iov_set(sgl->sg_iovs, &buf[0], csum_ctx->dct_sv_size);
 
 		rc = daos_csummer_calc_iods(csum_ctx->dct_csummer, sgl, &iod, NULL, 1, false, NULL,
 					    0, &csum_ctx->dct_sv_ics[sv_idx]);
-		if (rc != 0)
-			goto out_ics;
-		rc = vos_obj_update(coh, g_oids[1], epoch, 0, 0, &g_dkeys[0], 1, &iod,
-				    csum_ctx->dct_sv_ics[sv_idx], sgl);
-		if (rc != 0)
-			goto out_ics;
+		assert_success(rc);
+		rc = vos_obj_update(coh, g_oids[DVT_FAKE_CSUM_OID_VALID], epoch, 0, 0, &g_dkeys[0],
+				    1, &iod, csum_ctx->dct_sv_ics[sv_idx], sgl);
+		assert_success(rc);
 
 		epoch++;
 		filler++;
 	}
 
-out_ics:
-	if (rc != 0) {
-		for (sv_idx = 0; sv_idx < DVT_FAKE_SV_COUNT; sv_idx++) {
-			if (csum_ctx->dct_sv_ics[sv_idx] == NULL)
-				break;
-			daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ics[sv_idx]);
-		}
-	}
-out_buf:
 	D_FREE(buf);
-out:
-	return rc;
 }
 
-static int
+static void
 csum_test_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t *sgl)
 {
 	struct dt_csum_ctx *csum_ctx;
@@ -710,12 +696,10 @@ csum_test_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_
 	csum_ctx = tctx->dvt_extra;
 
 	D_ALLOC(buf, csum_ctx->dct_recx_size);
-	if (buf == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	assert_non_null(buf);
 
-	d_iov_set(&iod.iod_name, g_akeys_str[1], strlen(g_akeys_str[1]));
+	d_iov_set(&iod.iod_name, g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX],
+		  strlen(g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX]));
 	iod.iod_nr   = 1;
 	iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_size = 1;
@@ -730,28 +714,29 @@ csum_test_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_
 	 * partially, but VOS_OF_FETCH_CSUM records the full stored extent of recx 1.
 	 */
 
-	/* g_oids[0]: recxs written without checksum */
+	/* g_oids[DVT_FAKE_CSUM_OID_NONE]: recxs written without checksum */
 	epoch  = 1;
-	filler = 'c';
+	filler = DVT_FAKE_CSUM_OID_NONE_RECX_FILLER;
 	for (recx_idx = 0; recx_idx < DVT_FAKE_RECX_COUNT; recx_idx++) {
-		recx.rx_idx   = recx_idx * csum_ctx->dct_recx_size / 2;
+		recx.rx_idx   = recx_idx * csum_ctx->dct_recx_size / DVT_FAKE_RECX_COUNT;
 		iod.iod_recxs = &recx;
 
 		memset(buf, filler, csum_ctx->dct_recx_size);
 		d_iov_set(sgl->sg_iovs, &buf[0], csum_ctx->dct_recx_size);
 
-		rc = vos_obj_update(coh, g_oids[0], epoch, 0, 0, &g_dkeys[0], 1, &iod, NULL, sgl);
-		if (rc != 0)
-			goto out_buf;
+		rc = vos_obj_update(coh, g_oids[DVT_FAKE_CSUM_OID_NONE], epoch, 0, 0, &g_dkeys[0],
+				    1, &iod, NULL, sgl);
+		assert_success(rc);
 
 		epoch++;
 		filler++;
 	}
 
-	/* g_oids[1]: recxs written with checksum */
-	epoch = 1;
+	/* g_oids[DVT_FAKE_CSUM_OID_VALID]: recxs written with checksum */
+	epoch  = 1;
+	filler = DVT_FAKE_CSUM_OID_VALID_RECX_FILLER;
 	for (recx_idx = 0; recx_idx < DVT_FAKE_RECX_COUNT; recx_idx++) {
-		recx.rx_idx   = recx_idx * csum_ctx->dct_recx_size / 2;
+		recx.rx_idx   = recx_idx * csum_ctx->dct_recx_size / DVT_FAKE_RECX_COUNT;
 		iod.iod_recxs = &recx;
 
 		memset(buf, filler, csum_ctx->dct_recx_size);
@@ -759,30 +744,100 @@ csum_test_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_
 
 		rc = daos_csummer_calc_iods(csum_ctx->dct_csummer, sgl, &iod, NULL, 1, false, NULL,
 					    0, &csum_ctx->dct_recx_ics[recx_idx]);
-		if (rc)
-			goto out_ics;
-		rc = vos_obj_update(coh, g_oids[1], epoch, 0, 0, &g_dkeys[0], 1, &iod,
-				    csum_ctx->dct_recx_ics[recx_idx], sgl);
-		if (rc != 0)
-			goto out_ics;
+		assert_success(rc);
+		rc = vos_obj_update(coh, g_oids[DVT_FAKE_CSUM_OID_VALID], epoch, 0, 0, &g_dkeys[0],
+				    1, &iod, csum_ctx->dct_recx_ics[recx_idx], sgl);
+		assert_success(rc);
 
 		epoch++;
 		filler++;
 	}
 
-out_ics:
-	if (rc != 0) {
-		for (recx_idx = 0; recx_idx < DVT_FAKE_RECX_COUNT; recx_idx++) {
-			if (csum_ctx->dct_recx_ics[recx_idx] == NULL)
-				break;
-			daos_csummer_free_ic(csum_ctx->dct_csummer,
-					     &csum_ctx->dct_recx_ics[recx_idx]);
-		}
-	}
-out_buf:
 	D_FREE(buf);
-out:
-	return rc;
+}
+
+/*
+ * Write one checksummed value/segment, optionally corrupting the stored checksum of one of its
+ * chunks before writing it to VOS.
+ */
+static void
+write_maybe_corrupt(struct daos_csummer *csummer, daos_handle_t coh, daos_unit_oid_t oid,
+		    daos_epoch_t epoch, daos_iod_t *iod, d_sg_list_t *sgl, int corrupt_chunk_idx,
+		    struct dcs_iod_csums **ic_out)
+{
+	uint8_t *csum_buf;
+	int      rc;
+
+	rc = daos_csummer_calc_iods(csummer, sgl, iod, NULL, 1, false, NULL, 0, ic_out);
+	assert_success(rc);
+
+	if (corrupt_chunk_idx >= 0) {
+		D_ASSERT(corrupt_chunk_idx < (*ic_out)->ic_data->cs_nr);
+		csum_buf = ci_idx2csum((*ic_out)->ic_data, corrupt_chunk_idx);
+		csum_buf[0] ^= 0xff;
+	}
+
+	rc = vos_obj_update(coh, oid, epoch, 0, 0, &g_dkeys[0], 1, iod, *ic_out, sgl);
+	assert_success(rc);
+}
+
+/*
+ * g_oids[DVT_FAKE_PART_OID_VALID]: recx whose older extent is only partially visible.  With a
+ * record size of 1 and S = dct_recx_size (two dct_chunk_size chunks), the object stores under
+ * g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX]:
+ *   A = [0, S)   @ epoch 1 (two chunk checksums)
+ *   B = [0, S/2) @ epoch 2 (one chunk checksum), overwriting A's first chunk
+ * Fetching [0, S) at DAOS_EPOCH_MAX yields the recx list {B [0,S/2)@2, A [0,S)@1}: A is reported
+ * with its whole physical extent and its whole checksum info (checksums for both chunks), although
+ * only its second chunk is still visible.  Neither checksum is corrupted.
+ */
+static void
+csum_test_partial_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t *sgl)
+{
+	/* data byte of B, per row of dct_part_ics */
+	static const char b_fillers[DVT_FAKE_PART_OID_COUNT] = {
+	    DVT_FAKE_PART_OID_VALID_FILLER + 1,
+	};
+	struct dt_csum_ctx    *csum_ctx;
+	struct dcs_iod_csums **part_ics;
+	daos_iod_t             iod;
+	char                  *buf;
+	daos_recx_t            recx;
+	int                    oid;
+
+	csum_ctx = tctx->dvt_extra;
+
+	D_ALLOC(buf, csum_ctx->dct_recx_size);
+	assert_non_null(buf);
+
+	d_iov_set(&iod.iod_name, g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX],
+		  strlen(g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX]));
+	iod.iod_nr    = 1;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_size  = 1;
+	iod.iod_recxs = &recx;
+	recx.rx_idx   = 0;
+	recx.rx_nr    = csum_ctx->dct_recx_size;
+
+	/* A not corrupted */
+	memset(buf, DVT_FAKE_PART_OID_VALID_FILLER, recx.rx_nr);
+	d_iov_set(sgl->sg_iovs, &buf[0], recx.rx_nr);
+	part_ics = csum_ctx->dct_part_ics[DVT_FAKE_PART_ICS_IDX(DVT_FAKE_PART_OID_VALID)];
+	write_maybe_corrupt(csum_ctx->dct_csummer, coh, g_oids[DVT_FAKE_PART_OID_VALID], 1, &iod,
+			    sgl, -1, &part_ics[DVT_FAKE_PART_RECX_A]);
+
+	/* B never corrupted */
+	recx.rx_nr = csum_ctx->dct_recx_size / 2;
+	for (oid = DVT_FAKE_PART_OID_VALID; oid < DVT_FAKE_PART_OID_VALID + DVT_FAKE_PART_OID_COUNT;
+	     oid++) {
+		memset(buf, b_fillers[DVT_FAKE_PART_ICS_IDX(oid)], recx.rx_nr);
+		d_iov_set(sgl->sg_iovs, &buf[0], recx.rx_nr);
+		part_ics = csum_ctx->dct_part_ics[DVT_FAKE_PART_ICS_IDX(oid)];
+		write_maybe_corrupt(csum_ctx->dct_csummer, coh, g_oids[oid], 2, &iod, sgl, -1,
+				    &part_ics[DVT_FAKE_PART_RECX_B]);
+	}
+
+	D_FREE(buf);
 }
 
 /*
@@ -791,7 +846,7 @@ out:
  * Requires tctx->dvt_poh to be a valid open pool handle. The caller is responsible for opening and
  * closing that handle.
  */
-int
+void
 ddb_test_csum_setup(void **state)
 {
 	struct dt_vos_pool_ctx *tctx;
@@ -804,58 +859,36 @@ ddb_test_csum_setup(void **state)
 	tctx->dvt_extra = NULL;
 
 	D_ALLOC_PTR(csum_ctx);
-	if (csum_ctx == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	assert_non_null(csum_ctx);
+
 	csum_ctx->dct_sv_size    = DVT_FAKE_SV_SIZE;
 	csum_ctx->dct_recx_size  = DVT_FAKE_RECX_SIZE;
 	csum_ctx->dct_chunk_size = DVT_FAKE_CHUNK_SIZE;
 	csum_ctx->dct_csum_type  = DVT_FAKE_CSUM_TYPE;
 	memset(&csum_ctx->dct_sv_ics[0], 0, sizeof(csum_ctx->dct_sv_ics));
 	memset(&csum_ctx->dct_recx_ics[0], 0, sizeof(csum_ctx->dct_recx_ics));
+	memset(&csum_ctx->dct_part_ics[0][0], 0, sizeof(csum_ctx->dct_part_ics));
 	rc = daos_csummer_init_with_type(&csum_ctx->dct_csummer, csum_ctx->dct_csum_type,
 					 csum_ctx->dct_chunk_size, 0);
-	if (rc != 0)
-		goto out_csum_ctx;
+	assert_success(rc);
 	tctx->dvt_extra = csum_ctx;
 
 	rc = uuid_parse(g_csum_uuid_str, csum_ctx->dct_cont_uuid);
-	if (rc != 0)
-		goto out_csummer;
+	assert_success(rc);
 	rc = vos_cont_create(tctx->dvt_poh, csum_ctx->dct_cont_uuid);
-	if (rc != 0)
-		goto out_csummer;
+	assert_success(rc);
 	rc = vos_cont_open(tctx->dvt_poh, csum_ctx->dct_cont_uuid, &coh);
-	if (rc != 0)
-		goto out_cont_destroy;
+	assert_success(rc);
 
 	rc = d_sgl_init(&sgl, 1);
-	if (rc != 0)
-		goto out_cont_close;
+	assert_success(rc);
 
-	rc = csum_test_sv_setup(tctx, coh, &sgl);
-	if (rc != 0)
-		goto out_sgl;
-	rc = csum_test_recx_setup(tctx, coh, &sgl);
+	csum_test_sv_setup(tctx, coh, &sgl);
+	csum_test_recx_setup(tctx, coh, &sgl);
+	csum_test_partial_recx_setup(tctx, coh, &sgl);
 
-out_sgl:
 	d_sgl_fini(&sgl, false);
-out_cont_close:
 	vos_cont_close(coh);
-out_cont_destroy:
-	if (rc != 0)
-		vos_cont_destroy(tctx->dvt_poh, csum_ctx->dct_cont_uuid);
-out_csummer:
-	if (rc != 0)
-		daos_csummer_destroy(&csum_ctx->dct_csummer);
-out_csum_ctx:
-	if (rc != 0) {
-		D_FREE(csum_ctx);
-		tctx->dvt_extra = NULL;
-	}
-out:
-	return rc;
 }
 
 /*
@@ -870,6 +903,7 @@ ddb_test_csum_teardown(void **state)
 	struct dt_vos_pool_ctx *tctx;
 	struct dt_csum_ctx     *csum_ctx;
 	int                     ci_idx;
+	int                     oid_idx;
 
 	tctx     = *state;
 	csum_ctx = tctx->dvt_extra;
@@ -880,6 +914,11 @@ ddb_test_csum_teardown(void **state)
 		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_sv_ics[ci_idx]);
 	for (ci_idx = 0; ci_idx < DVT_FAKE_RECX_COUNT; ci_idx++)
 		daos_csummer_free_ic(csum_ctx->dct_csummer, &csum_ctx->dct_recx_ics[ci_idx]);
+	for (oid_idx = 0; oid_idx < DVT_FAKE_PART_OID_COUNT; oid_idx++) {
+		for (ci_idx = 0; ci_idx < DVT_FAKE_PART_RECX_COUNT; ci_idx++)
+			daos_csummer_free_ic(csum_ctx->dct_csummer,
+					     &csum_ctx->dct_part_ics[oid_idx][ci_idx]);
+	}
 	daos_csummer_destroy(&csum_ctx->dct_csummer);
 
 	vos_cont_destroy(tctx->dvt_poh, csum_ctx->dct_cont_uuid);

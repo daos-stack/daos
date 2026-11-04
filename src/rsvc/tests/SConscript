@@ -1,0 +1,14 @@
+"""Build rsvc tests"""
+
+
+def scons():
+    """Execute build"""
+    Import('denv')
+
+    tenv = denv.Clone()
+    tenv.d_test_program('rsvc_srv_tests', 'rsvc_srv_tests.c',
+                        LIBS=['daos_common', 'gurt', 'cmocka'])
+
+
+if __name__ == "SCons.Script":
+    scons()

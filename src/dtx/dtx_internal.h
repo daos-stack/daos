@@ -290,8 +290,9 @@ void dtx_cos_batched_del(struct ds_cont_child *cont, struct dtx_id xid[], bool r
 
 /* dtx_rpc.c */
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
-	      daos_epoch_t epoch);
-int dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch);
+	      daos_epoch_t epoch, uint32_t version);
+int dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch,
+		   uint32_t version);
 int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *check_list,
 			 d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list,
 			 uint32_t intent);

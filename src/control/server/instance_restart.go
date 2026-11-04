@@ -38,6 +38,7 @@ type engineRestartManager struct {
 	cfg            *config.Server
 	requestChan    chan engineRestartRequest
 	stopChan       chan struct{}
+	wg             sync.WaitGroup
 	lastRestart    map[ranklist.Rank]time.Time
 	pendingRestart map[ranklist.Rank]*time.Timer
 	mu             sync.RWMutex
@@ -116,7 +117,9 @@ func (mgr *engineRestartManager) requestRestart(rank ranklist.Rank, instance Eng
 // start begins processing restart requests. Function to be called once on server start-up.
 func (mgr *engineRestartManager) start(ctx context.Context) {
 	mgr.log.Debug("engine restart manager started")
+	mgr.wg.Add(1)
 	go func() {
+		defer mgr.wg.Done()
 		for {
 			select {
 			case <-ctx.Done():
@@ -160,10 +163,11 @@ func (mgr *engineRestartManager) clearRankRestartHistory(ranks []ranklist.Rank) 
 }
 
 // stop shuts down the restart manager. Function to be called once on server shutdown.
+// Blocks until the background goroutine started by start() has exited, so callers
+// can rely on stop() returning only once all manager state is quiesced.
 func (mgr *engineRestartManager) stop() {
 	mgr.log.Debug("stopping engine restart manager")
 	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
 
 	// Cancel all pending restart timers
 	for rank, timer := range mgr.pendingRestart {
@@ -173,6 +177,11 @@ func (mgr *engineRestartManager) stop() {
 	mgr.pendingRestart = make(map[ranklist.Rank]*time.Timer)
 
 	close(mgr.stopChan)
+	// Unlock before waiting so the background goroutine can complete any in-flight
+	// processRestartRequest() call that may be waiting on this same mutex.
+	mgr.mu.Unlock()
+
+	mgr.wg.Wait()
 }
 
 // newEngineRestartManager creates a new restart manager.

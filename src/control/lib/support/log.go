@@ -415,6 +415,7 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 	}
 	domainName := strings.Split(string(dName), "\n")
 
+	// TODO DAOS-19818: use the control API instead of parsing text.
 	cmd := strings.Join([]string{"dmg", "system", "query", "-v", "-o", configPath}, " ")
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
@@ -424,7 +425,11 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 
 	if len(temp) > 0 {
 		for _, hn := range temp[2 : len(temp)-2] {
-			hn = strings.ReplaceAll(strings.Fields(hn)[3][1:], domainName[0], "")
+			hnFields := strings.Fields(hn)
+			if len(hnFields) < 4 {
+				break // we're outside the rank table
+			}
+			hn = strings.ReplaceAll(hnFields[3][1:], domainName[0], "")
 			hn = strings.TrimSuffix(hn, ".")
 			hostNames = append(hostNames, hn)
 		}

@@ -381,7 +381,13 @@ Management Service for the DAOS system across the cluster).
 If not set explicitly on the commandline, default is the number of NUMA nodes detected on the host.
 Each generated engine section will specify a SCM storage tier (PMem or tmpfs) in addition to one or
 more NVMe storage tiers. All hardware components specified in an engine config section should be
-bound to the same NUMA node (PMem bdev, SSDs and host fabric interface).
+bound to the same NUMA node (PMem bdev, SSDs and host fabric interface). When fewer engines are
+requested than there are NUMA nodes with suitable storage and fabric hardware, the NUMA node(s)
+selected for the generated engine(s) are chosen primarily by fabric interface priority (as reported
+by network device class detection); the number of SSDs available on each candidate NUMA node is
+only used as a tie-breaker when multiple NUMA nodes have equally-prioritized fabric interfaces. This
+means a NUMA node with fewer SSDs may still be selected over one with more SSDs if its fabric
+interface has a higher priority.
 
 - `--scm-only` requests that a config without NVMe should be generated. This flag will override the
 command's normal behavior and should be used only in circumstances where NVMe SSDs are unavailable

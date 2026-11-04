@@ -49,8 +49,49 @@ progress_fn(void *arg)
 }
 
 static int
+self_test_dump_info(crt_group_t *grp, crt_context_t ctx, char *dest_name, char *attach_info_path,
+		    d_rank_list_t *rank_list, bool use_agent)
+{
+	char    *uri;
+	d_rank_t rank;
+	int      rc;
+	int      i;
+
+	rc = crt_context_uri_get(ctx, &uri);
+	D_ASSERTF(rc == 0, "crt_context_uri_get() failed; rc=%d\n", rc);
+
+	printf("\nDumping info:\n");
+	printf("----------------------------\n");
+	printf("self_uri: %s\n", uri);
+	free(uri);
+
+	printf("group: '%s'\n", dest_name);
+	printf("group size: %d\n", rank_list->rl_nr);
+	printf("daos_agent: %s\n", use_agent ? "yes" : "no");
+
+	if (!use_agent)
+		printf("attach_path: %s/%s.attach_info\n", attach_info_path, dest_name);
+
+	printf("ranks:\n");
+	for (i = 0; i < rank_list->rl_nr; i++) {
+		rank = rank_list->rl_ranks[i];
+		rc   = crt_rank_uri_get(grp, rank, 0, &uri);
+		if (rc != 0) {
+			DL_ERROR(rc, "crt_rank_uri_get() failed for rank=%d", rank);
+			continue;
+		}
+
+		printf("\t%d : %s\n", rank, uri);
+		free(uri);
+	}
+
+	printf("\n----------------------------\n\n");
+	return 0;
+}
+
+static int
 self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, pthread_t *tid,
-	       char *attach_info_path, bool listen, bool use_agent, bool no_sync)
+	       char *attach_info_path, bool listen, bool use_agent, bool no_sync, bool dump_info)
 {
 	uint32_t            init_flags = 0;
 	uint32_t            grp_size;
@@ -139,12 +180,6 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 
 	g_shutdown_flag = 0;
 
-	ret = pthread_create(tid, NULL, progress_fn, crt_ctx);
-	if (ret != 0) {
-		D_ERROR("failed to create progress thread: %s\n", strerror(errno));
-		return -DER_MISC;
-	}
-
 	ret = crt_group_size(*srv_grp, &grp_size);
 	D_ASSERTF(ret == 0, "crt_group_size() failed; rc=%d\n", ret);
 
@@ -156,6 +191,17 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx, crt_group_t **srv_grp, p
 	D_ASSERTF(rank_list->rl_nr == grp_size, "rank_list differs in size. expected %d got %d\n",
 		  grp_size, rank_list->rl_nr);
 
+	if (dump_info) {
+		ret = self_test_dump_info(*srv_grp, *crt_ctx, dest_name, attach_info_path,
+					  rank_list, use_agent);
+		return ret;
+	}
+
+	ret = pthread_create(tid, NULL, progress_fn, crt_ctx);
+	if (ret != 0) {
+		D_ERROR("failed to create progress thread: %s\n", strerror(errno));
+		return -DER_MISC;
+	}
 	/* waiting to sync with the following parameters
 	 * 0 - tag 0
 	 * 1 - total ctx
@@ -546,7 +592,7 @@ run_self_test(struct st_size_params all_params[], int num_msg_sizes, int rep_cou
 	      uint32_t num_ms_endpts_in, struct st_endpoint *endpts, uint32_t num_endpts,
 	      struct st_master_endpt **ms_endpts_out, uint32_t *num_ms_endpts_out,
 	      struct st_latency ****size_latencies_out, int16_t buf_alignment,
-	      char *attach_info_path, bool use_agent, bool no_sync)
+	      char *attach_info_path, bool use_agent, bool no_sync, bool dump_info)
 {
 	crt_context_t           crt_ctx;
 	crt_group_t            *srv_grp;
@@ -580,11 +626,12 @@ run_self_test(struct st_size_params all_params[], int num_msg_sizes, int rep_cou
 		listen = true;
 	/* Initialize CART */
 	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid, attach_info_path,
-			     listen /* run as server */, use_agent, no_sync);
-	if (ret != 0) {
-		D_ERROR("self_test_init failed; ret = %d\n", ret);
+			     listen /* run as server */, use_agent, no_sync, dump_info);
+	if (ret != 0)
 		D_GOTO(cleanup_nothread, ret);
-	}
+
+	if (dump_info)
+		D_GOTO(cart_cleanup, ret);
 
 	/* Get the group/rank/tag for this application (self_endpt) */
 	ret = crt_group_rank(NULL, &self_endpt.ep_rank);
@@ -786,6 +833,7 @@ cleanup_nothread:
 		*num_ms_endpts_out  = num_ms_endpts;
 	}
 
+cart_cleanup:
 	if (srv_grp != NULL && g_group_inited) {
 		cleanup_ret = crt_group_detach(srv_grp);
 		if (cleanup_ret != 0)

@@ -117,6 +117,20 @@ ck_report(void *arg, enum report_opts opts, const char *fmt, ...)
 
 	va_start(args, fmt);
 
+	if (opts & REPORT_RC) {
+		int rc = va_arg(args, int);
+
+		if (rc == 0) {
+			ck_report(arg, REPORT_MSG, "%s: %s.\n", fmt, CHECKER_OK_INFIX);
+		} else {
+			ck_report(arg, REPORT_ERROR, "%s: " DF_RC "\n", fmt, DP_RC(rc));
+		}
+
+		va_end(args);
+
+		return;
+	}
+
 	switch (opts & ~REPORT_FLAGS_MASK) {
 	case REPORT_ERROR:
 		ck_common_printf(ck, "%s%s", prefix, CHECKER_ERROR_INFIX);
@@ -264,6 +278,9 @@ checker_print_indent_inc(struct checker *ck)
 	if (IS_NOT_CHECKER(ck)) {
 		return;
 	}
+	D_ASSERTF(ck->ck_level < CHECKER_INDENT_MAX,
+		  "Cannot increase the indent level: %d >= %d (max)\n", ck->ck_level,
+		  CHECKER_INDENT_MAX);
 
 	if (ck->ck_level == CHECKER_INDENT_MAX) {
 		CK_PRINT(ck, "Max indent reached.\n");
@@ -280,6 +297,9 @@ checker_print_indent_dec(struct checker *ck)
 	if (IS_NOT_CHECKER(ck)) {
 		return;
 	}
+
+	D_ASSERTF(ck->ck_level > 0, "Cannot decrease the indent level: %d <= 0 (min)\n",
+		  ck->ck_level);
 
 	if (ck->ck_level == 0) {
 		CK_PRINT(ck, "Min indent reached.\n");

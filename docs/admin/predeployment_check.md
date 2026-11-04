@@ -173,6 +173,18 @@ set to 1.
 $ sysctl -w net.ipv4.conf.all.arp_ignore=1
 ```
 
+Linux must also be configured to use the outgoing interface's own IP address as
+the sender address of ARP requests. This is configured via the `arp_announce`
+parameter. Otherwise, when the kernel routes a packet from one IPoIB interface's
+address out of another interface in the same subnet, the ARP request advertises
+the first address with the second interface's hardware address. Peers then map
+that IP to the wrong RDMA device, and librdmacm connections to it are rejected
+(`RDMA_CM_EVENT_REJECTED`, reported by UCX as `Destination is unreachable`).
+
+```
+$ sysctl -w net.ipv4.conf.all.arp_announce=2
+```
+
 Finally, the `rp_filter` is set to 1 by default on several distributions (e.g. on
 CentOS 7 and EL 8) and should be set to either 0 or 2, with 2 being more secure. This is
 true even if the configuration uses a single logical subnet. <ifaces> must be replaced with

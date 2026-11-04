@@ -2,7 +2,6 @@
 
 . /etc/os-release
 
-YUM=dnf
 case "$ID_LIKE" in
     *rhel*)
         if [[ $VERSION_ID = [89].* ]]; then
@@ -30,21 +29,44 @@ fi
 
 set -uex
 
+dnf_retry() {
+    local retries=3
+    local rc=0
+
+    for ((attempt = 1; attempt <= retries; attempt++)); do
+        if ((rc != 0)); then
+            echo "dnf $* failed on attempt $((attempt - 1)) of $retries" \
+                 "(exit code: $rc); clearing metadata before retry" >&2
+            sudo dnf clean metadata || true
+            sleep $(((attempt - 1) * 15))
+        fi
+        if sudo dnf -y "$@"; then
+            return 0
+        fi
+
+        rc=$?
+    done
+
+    echo "dnf $* failed after $retries attempts (last exit code: $rc)" >&2
+
+    return "$rc"
+}
+
 echo "${PRETTY_NAME:-Unknown OS}"
 
-sudo $YUM -y install daos-client"$DAOS_PKG_VERSION"
+dnf_retry install daos-client"$DAOS_PKG_VERSION"
 if rpm -q daos-server; then
   echo "daos-server RPM should not be installed as a dependency of daos-client"
   exit 1
 fi
 
-if ! sudo $YUM -y history undo last; then
+if ! sudo dnf -y history undo last; then
     echo "Error trying to undo previous dnf transaction"
-    $YUM history
+    dnf history
     exit 1
 fi
-sudo $YUM -y erase "$OPENMPI_RPM"
-sudo $YUM -y install daos-client-tests"$DAOS_PKG_VERSION"
+sudo dnf -y erase "$OPENMPI_RPM"
+dnf_retry install daos-client-tests"$DAOS_PKG_VERSION"
 if rpm -q "$OPENMPI_RPM"; then
   echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-client-tests"
   exit 1
@@ -53,12 +75,12 @@ if ! rpm -q daos-admin; then
     echo "daos-admin should be installed as a dependency of daos-client-tests"
     exit 1
 fi
-if ! sudo $YUM -y history undo last; then
+if ! sudo dnf -y history undo last; then
     echo "Error trying to undo previous dnf transaction"
-    $YUM history
+    dnf history
     exit 1
 fi
-sudo $YUM -y install daos-server-tests"$DAOS_PKG_VERSION"
+dnf_retry install daos-server-tests"$DAOS_PKG_VERSION"
 if rpm -q "$OPENMPI_RPM"; then
   echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-server-tests"
   exit 1
@@ -67,12 +89,12 @@ if ! rpm -q daos-admin; then
     echo "daos-admin should be installed as a dependency of daos-server-tests"
     exit 1
 fi
-if ! sudo $YUM -y history undo last; then
+if ! sudo dnf -y history undo last; then
     echo "Error trying to undo previous dnf transaction"
-    $YUM history
+    dnf history
     exit 1
 fi
-sudo $YUM -y install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
+dnf_retry install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
 if ! rpm -q daos-client; then
   echo "daos-client RPM should be installed as a dependency of daos-client-tests-openmpi"
   exit 1
@@ -85,9 +107,9 @@ if ! rpm -q daos-client-tests; then
   echo "daos-client-tests RPM should be installed as a dependency of daos-client-tests-openmpi"
   exit 1
 fi
-if ! sudo $YUM -y history undo last; then
+if ! sudo dnf -y history undo last; then
     echo "Error trying to undo previous dnf transaction"
-    $YUM history
+    dnf history
     exit 1
 fi
 
@@ -105,7 +127,7 @@ fi
 sudo touch "${SERVER_CONFIG}"
 sudo touch "${AGENT_CONFIG}"
 
-sudo $YUM -y install daos-server"$DAOS_PKG_VERSION"
+dnf_retry install daos-server"$DAOS_PKG_VERSION"
 if rpm -q daos-client; then
   echo "daos-client RPM should not be installed as a dependency of daos-server"
   exit 1
@@ -116,7 +138,7 @@ if [ ! -f "${SERVER_CONFIG}.rpmnew" ]; then
   exit 1
 fi
 
-sudo $YUM -y install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
+dnf_retry install --exclude ompi daos-client-tests-openmpi"$DAOS_PKG_VERSION"
 if [ ! -f "${AGENT_CONFIG}.rpmnew" ]; then
   echo "A ${AGENT_CONFIG}.rpmnew file should exist after the daos-client-tests-openmpi install"
   ls -al /etc/daos/daos*
