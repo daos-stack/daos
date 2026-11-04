@@ -46,7 +46,7 @@ struct checker {
 	/** state */
 	uint8_t                ck_level;
 	char                  *ck_prefix;
-	int (*ck_indent_set)(struct checker *ck);
+	void (*ck_indent_set)(struct checker *ck);
 	/** output */
 	int (*ck_vprintf)(struct checker *ck, const char *fmt, va_list ap);
 	unsigned ck_warnings_num;

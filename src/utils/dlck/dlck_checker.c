@@ -76,7 +76,7 @@ dlck_checker_main_vprintf(struct checker *ck, const char *fmt, va_list args)
 	return rc;
 }
 
-static int
+static void
 dlck_checker_core_indent_set(struct dlck_checker_worker *dwc, int level)
 {
 	D_ASSERTF(level >= 0 && level <= CHECKER_INDENT_MAX, "Invalid indent level: %d\n", level);
@@ -88,15 +88,14 @@ dlck_checker_core_indent_set(struct dlck_checker_worker *dwc, int level)
 	} else {
 		dwc->prefix[0] = '\0';
 	}
-
-	return DER_SUCCESS;
 }
 
-static int
+static void
 dlck_checker_main_indent_set(struct checker *ck)
 {
 	struct dlck_checker_main *dcm = dlck_checker_main_get_custom(ck);
-	return dlck_checker_core_indent_set(&dcm->core, ck->ck_level);
+
+	dlck_checker_core_indent_set(&dcm->core, ck->ck_level);
 }
 
 int
@@ -164,11 +163,12 @@ dlck_checker_worker_get_custom(struct checker *ck)
 	return dcw;
 }
 
-static int
+static void
 dlck_checker_worker_indent_set(struct checker *ck)
 {
 	struct dlck_checker_worker *dcw = dlck_checker_worker_get_custom(ck);
-	return dlck_checker_core_indent_set(dcw, ck->ck_level);
+
+	dlck_checker_core_indent_set(dcw, ck->ck_level);
 }
 
 /**

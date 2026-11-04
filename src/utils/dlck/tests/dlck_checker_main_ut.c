@@ -250,7 +250,7 @@ test_main_indent_set_levels_zero_to_max(void **state)
 	int             indent_index;
 
 	for (ck->ck_level = 0; ck->ck_level <= CHECKER_INDENT_MAX; ck->ck_level++) {
-		assert_int_equal(ck->ck_indent_set(ck), DER_SUCCESS);
+		ck->ck_indent_set(ck);
 		if (ck->ck_level == 0) {
 			assert_string_equal(ck->ck_prefix, "");
 			continue;

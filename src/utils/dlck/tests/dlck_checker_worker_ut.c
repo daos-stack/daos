@@ -200,7 +200,7 @@ test_worker_CK_PRINTF_with_indent(void **state)
 	struct checker *ck = *state;
 
 	ck->ck_level = 2;
-	assert_int_equal(ck->ck_indent_set(ck), DER_SUCCESS);
+	ck->ck_indent_set(ck);
 	mock_vfprintf_check_output = 1;
 	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
 	expect_string(__wrap_vfprintf, fmt, "%sworker %d");

@@ -24,7 +24,7 @@ checker_vprintf(struct checker *ck, const char *fmt, va_list args)
 	return vfprintf(Mock_file_stream, fmt, args);
 }
 
-static int
+static void
 checker_indent_set(struct checker *ck)
 {
 	uint8_t ck_level = ck->ck_level;
@@ -32,7 +32,6 @@ checker_indent_set(struct checker *ck)
 	function_called();
 	check_expected_ptr(ck);
 	check_expected(ck_level);
-	return mock_type(int);
 }
 
 static int
@@ -289,7 +288,6 @@ expect_indent(struct checker *ck, int ck_level)
 	expect_function_call(checker_indent_set);
 	expect_value(checker_indent_set, ck, ck);
 	expect_value(checker_indent_set, ck_level, ck_level);
-	will_return(checker_indent_set, DER_SUCCESS);
 }
 
 static void
