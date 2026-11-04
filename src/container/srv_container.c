@@ -1752,7 +1752,8 @@ again:
 			}
 			D_DEBUG(DB_MD, DF_CONT ": EC boundary refresh in flight\n",
 				DP_CONT(svc->cs_pool_uuid, cont_uuid));
-			return -DER_BUSY;
+			/* Retryable, like cont_destroy_bcast() */
+			return -DER_TIMEDOUT;
 		}
 	}
 
