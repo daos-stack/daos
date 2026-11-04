@@ -10,6 +10,10 @@
 #include "bio_ut.h"
 #include "../../bio/bio_wal.h"
 
+#define UT_HDR_META_SZ           (128ULL << 20) /* 128 MB */
+/* Nine 16 MiB DAV zones: not a whole number of clusters, so the meta blob is rounded up */
+#define UT_HDR_UNALIGNED_META_SZ (144ULL << 20)
+
 /* Close the session, if a failed test left it opened, and destroy the pool */
 static int
 ut_mc_fini(struct bio_ut_args *args)
@@ -1024,8 +1028,6 @@ ut_meta_hdr_restore(struct bio_ut_args *args)
 	ut_mc_open(args);
 }
 
-#define UT_HDR_META_SZ (128ULL << 20) /* 128 MB */
-
 /* Size in bytes of the meta blob created for UT_HDR_META_SZ: a whole number of clusters */
 static uint64_t
 ut_meta_blob_size(void)
@@ -1041,6 +1043,12 @@ static int
 wal_ut_hdr_pool_setup(void **state)
 {
 	return ut_mc_init(*state, UT_HDR_META_SZ, UT_HDR_META_SZ, UT_HDR_META_SZ);
+}
+
+static int
+wal_ut_hdr_unaligned_pool_setup(void **state)
+{
+	return ut_mc_init(*state, UT_HDR_UNALIGNED_META_SZ, UT_HDR_META_SZ, UT_HDR_META_SZ);
 }
 
 static int
@@ -1095,6 +1103,23 @@ wal_ut_hdr_verify_ok(void **state)
 	uuid_generate(unknown_id);
 	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, unknown_id, 0);
 	assert_rc_equal(rc, -DER_NONEXIST);
+}
+
+static void
+wal_ut_hdr_verify_unaligned_meta(void **state)
+{
+	struct bio_ut_args *args = *state;
+	struct meta_header *hdr  = &args->bua_mc->mc_meta_hdr;
+	uint64_t            blob_blks;
+	int                 rc;
+
+	/* The meta blob is rounded up to whole clusters: the capacity does not fill it */
+	blob_blks =
+	    D_ALIGNUP(UT_HDR_UNALIGNED_META_SZ, (uint64_t)default_cluster_sz()) / hdr->mh_blk_bytes;
+	assert_true(hdr->mh_hdr_blks + hdr->mh_tot_blks < blob_blks);
+
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, args->bua_pool_id, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -1397,6 +1422,8 @@ static const struct CMUnitTest wal_uts[] = {
     {"holes on replay", wal_ut_holes, NULL, NULL},
     {"header verify on consistent headers", wal_ut_hdr_verify_ok, wal_ut_hdr_pool_setup,
      wal_ut_hdr_pool_teardown},
+    {"header verify on unaligned meta size", wal_ut_hdr_verify_unaligned_meta,
+     wal_ut_hdr_unaligned_pool_setup, wal_ut_hdr_pool_teardown},
     {"header verify on inconsistent wal header", wal_ut_bad_wal_hdr, wal_ut_hdr_pool_setup,
      wal_ut_hdr_pool_teardown},
     {"header verify on inconsistent meta header", wal_ut_bad_meta_hdr, wal_ut_hdr_pool_setup,
