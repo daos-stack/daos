@@ -127,7 +127,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				},
 			},
 		},
-		"range unspecified; auto-derived from bdev_list, single domain": {
+		"range unspecified; auto-derived from bdev_list, single domain, non-contiguous": {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					mockScmTier,
@@ -148,7 +148,33 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				Hostname:       hostname,
 				HotplugEnabled: true,
 				HotplugRanges: BdevHotplugRanges{
-					MustNewBdevHotplugRange("0x00:0x80-0x8f"),
+					MustNewBdevHotplugRange("0x00:0x80"),
+					MustNewBdevHotplugRange("0x00:0x8f"),
+				},
+			},
+		},
+		"range unspecified; auto-derived from bdev_list, single domain, contiguous": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList("0000:80:00.0", "0000:81:00.0"),
+				},
+				EnableHotplug: true,
+			},
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{
+						Class:      ClassNvme,
+						DeviceList: MustNewBdevDeviceList("0000:80:00.0", "0000:81:00.0"),
+					},
+				},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges: BdevHotplugRanges{
+					MustNewBdevHotplugRange("0x00:0x80-0x81"),
 				},
 			},
 		},

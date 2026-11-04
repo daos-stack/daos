@@ -394,22 +394,28 @@ func Test_deriveHotplugRangesFromBdevList(t *testing.T) {
 			expRanges: []string{"0x00:0x80"},
 		},
 		"single domain, contiguous addresses": {
-			bdevList:  MustNewBdevDeviceList("0000:00:00.0", "0000:07:00.0"),
-			expRanges: []string{"0x00:0x00-0x07"},
+			bdevList: MustNewBdevDeviceList("0000:80:00.0", "0000:81:00.0",
+				"0000:82:00.0"),
+			expRanges: []string{"0x00:0x80-0x82"},
 		},
-		"single domain, out of order addresses": {
-			bdevList:  MustNewBdevDeviceList("0000:4f:00.0", "0000:00:00.0", "0000:07:00.0"),
-			expRanges: []string{"0x00:0x00-0x4f"},
+		"single domain, non-contiguous addresses": {
+			bdevList:  MustNewBdevDeviceList("0000:00:00.0", "0000:07:00.0"),
+			expRanges: []string{"0x00:0x00", "0x00:0x07"},
+		},
+		"single domain, out of order addresses, mixed contiguity": {
+			bdevList: MustNewBdevDeviceList("0000:4f:00.0", "0000:00:00.0",
+				"0000:07:00.0", "0000:08:00.0"),
+			expRanges: []string{"0x00:0x00", "0x00:0x07-0x08", "0x00:0x4f"},
 		},
 		"multiple domains": {
 			bdevList: MustNewBdevDeviceList("0000:00:00.0", "0000:07:00.0",
 				"0001:80:00.0", "0001:8f:00.0"),
-			expRanges: []string{"0x00:0x00-0x07", "0x01:0x80-0x8f"},
+			expRanges: []string{"0x00:0x00", "0x00:0x07", "0x01:0x80", "0x01:0x8f"},
 		},
 		"multiple domains, out of order": {
 			bdevList: MustNewBdevDeviceList("0001:8f:00.0", "0000:07:00.0",
 				"0001:80:00.0", "0000:00:00.0"),
-			expRanges: []string{"0x00:0x00-0x07", "0x01:0x80-0x8f"},
+			expRanges: []string{"0x00:0x00", "0x00:0x07", "0x01:0x80", "0x01:0x8f"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

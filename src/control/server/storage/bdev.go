@@ -654,41 +654,57 @@ type (
 )
 
 // deriveHotplugRangesFromBdevList auto-derives hotplug filter ranges that cover exactly the PCI
-// addresses in bdev_list: one entry per distinct PCI domain present, each spanning the lowest to
-// highest bus-ID seen for that domain. Unlike the prior NUMA/host-bridge-topology-based
-// derivation, this needs no hardware topology lookup (each bdev_list address already carries its
-// own domain) and always succeeds for any valid, non-empty bdev_list, including one spanning
-// several non-zero domains.
+// addresses in bdev_list: within each distinct PCI domain present, consecutive bus-IDs are
+// collapsed into a single range entry, while non-contiguous bus-IDs produce separate entries, so
+// no bus-ID absent from bdev_list is ever admitted by the filter.
 func deriveHotplugRangesFromBdevList(bdevList *BdevDeviceList) (BdevHotplugRanges, error) {
 	if bdevList == nil || bdevList.Len() == 0 {
 		return nil, errors.New("empty bdev_list")
 	}
 
-	lowBus := make(map[uint16]uint8)
-	highBus := make(map[uint16]uint8)
+	busesByDomain := make(map[uint16]map[uint8]struct{})
 	var domains []uint16
 	for _, addr := range bdevList.Addresses() {
 		dom := addr.Domain
-		if lo, ok := lowBus[dom]; !ok {
-			lowBus[dom] = addr.Bus
-			highBus[dom] = addr.Bus
+		if _, ok := busesByDomain[dom]; !ok {
+			busesByDomain[dom] = make(map[uint8]struct{})
 			domains = append(domains, dom)
-		} else {
-			lowBus[dom] = min(lo, addr.Bus)
-			highBus[dom] = max(highBus[dom], addr.Bus)
 		}
+		busesByDomain[dom][addr.Bus] = struct{}{}
 	}
 
 	sort.Slice(domains, func(i, j int) bool { return domains[i] < domains[j] })
 
-	ranges := make(BdevHotplugRanges, 0, len(domains))
+	var ranges BdevHotplugRanges
 	for _, dom := range domains {
-		hr := &BdevHotplugRange{}
-		hr.LowAddress.Domain = dom
-		hr.HighAddress.Domain = dom
-		hr.LowAddress.Bus = lowBus[dom]
-		hr.HighAddress.Bus = highBus[dom]
-		ranges = append(ranges, hr)
+		buses := make([]uint8, 0, len(busesByDomain[dom]))
+		for bus := range busesByDomain[dom] {
+			buses = append(buses, bus)
+		}
+		sort.Slice(buses, func(i, j int) bool { return buses[i] < buses[j] })
+
+		// Collapse consecutive bus-IDs into a single range entry; a gap starts a new entry.
+		rangeLo := buses[0]
+		rangeHi := buses[0]
+		flush := func() {
+			hr := &BdevHotplugRange{}
+			hr.LowAddress.Domain = dom
+			hr.HighAddress.Domain = dom
+			hr.LowAddress.Bus = rangeLo
+			hr.HighAddress.Bus = rangeHi
+			ranges = append(ranges, hr)
+		}
+		for _, bus := range buses[1:] {
+			if rangeHi != 0xff && bus == rangeHi+1 {
+				rangeHi = bus
+				continue
+			}
+
+			flush()
+			rangeLo = bus
+			rangeHi = bus
+		}
+		flush()
 	}
 
 	return ranges, nil

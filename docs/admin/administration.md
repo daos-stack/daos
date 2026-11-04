@@ -740,8 +740,6 @@ PCI-domain/bus-ID filtering is applied at all, since VMD backing device addresse
 unrelated to the owning NUMA node's PCI domain.
 
 This filter is not intended to be configured manually, and admins should not need to set it.
-An experimental, undocumented override exists for edge cases; refer to the control plane
-storage source code for details if this is required.
 
 #### Identification
 
