@@ -1243,41 +1243,39 @@ static void
 eq_test_ctx_limit(void **state)
 {
 	daos_handle_t eqs[EQ_CTX_LIMIT + 1] = {0};
-	int           ctx_num               = 0;
-	int           created               = 0;
+	int           initial_ctx_num;
+	int           ctx_num;
+	int           i;
 	int           rc;
-	int           destroy_rc = 0;
-	int           eq_destroy_rc;
 
-	rc = crt_context_num(&ctx_num);
-	while (rc == 0 && ctx_num < EQ_CTX_LIMIT) {
-		rc = daos_eq_create(&eqs[created]);
-		if (rc != 0)
-			break;
-		created++;
+	rc = crt_context_num(&initial_ctx_num);
+	assert_int_equal(rc, 0);
+	assert_in_range(initial_ctx_num, 0, EQ_CTX_LIMIT - 1);
+
+	for (i = 0; i < EQ_CTX_LIMIT - initial_ctx_num; i++) {
+		rc = daos_eq_create(&eqs[i]);
+		assert_int_equal(rc, 0);
+
 		rc = crt_context_num(&ctx_num);
+		assert_int_equal(rc, 0);
+		assert_int_equal(ctx_num, initial_ctx_num + i + 1);
 	}
 
-	if (rc == 0) {
-		rc = daos_eq_create(&eqs[created]);
-		if (rc == 0) {
-			created++;
-			rc = crt_context_num(&ctx_num);
-		}
-	}
-
-	while (created > 0) {
-		created--;
-		eq_destroy_rc = daos_eq_destroy(eqs[created], DAOS_EQ_DESTROY_FORCE);
-		if (destroy_rc == 0)
-			destroy_rc = eq_destroy_rc;
-		if (eq_destroy_rc != 0)
-			print_error("Failed to destroy test EQ: %d\n", eq_destroy_rc);
-	}
-
+	/* An EQ beyond the context limit shares the global context. */
+	rc = daos_eq_create(&eqs[i]);
+	assert_int_equal(rc, 0);
+	rc = crt_context_num(&ctx_num);
 	assert_int_equal(rc, 0);
 	assert_int_equal(ctx_num, EQ_CTX_LIMIT);
-	assert_int_equal(destroy_rc, 0);
+
+	for (; i >= 0; i--) {
+		rc = daos_eq_destroy(eqs[i], DAOS_EQ_DESTROY_FORCE);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = crt_context_num(&ctx_num);
+	assert_int_equal(rc, 0);
+	assert_int_equal(ctx_num, initial_ctx_num);
 }
 
 static int
