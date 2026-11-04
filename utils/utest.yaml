@@ -179,6 +179,10 @@
     - cmd: ["bin/eq_tests"]
     - cmd: ["bin/agent_tests"]
     - cmd: ["bin/job_tests"]
+- name: pool_client
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/pool/tests/pool_cli_tests"]
 - name: cart
   tsan: True
   base: "BUILD_DIR"
@@ -217,6 +221,9 @@
   base: "BUILD_DIR"
   tests:
     - cmd: ["src/utils/dlck/tests/dlck_args_ut"]
+    - cmd: ["src/utils/dlck/tests/dlck_checker_common_ut"]
+    - cmd: ["src/utils/dlck/tests/dlck_checker_main_ut"]
+    - cmd: ["src/utils/dlck/tests/dlck_checker_worker_ut"]
 - name: Source metadata testing
   memcheck: False
   asan: False
