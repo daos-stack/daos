@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.9.100
-Release:       7%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 Obsoletes:     daos-firmware
 
@@ -65,7 +65,7 @@ BuildRequires: boost-devel
 %if %{with server}
 BuildRequires: libpmemobj-devel >= 2.1.3
 %endif
-BuildRequires: fused-devel
+BuildRequires: fused-devel >= 1.1.0
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
