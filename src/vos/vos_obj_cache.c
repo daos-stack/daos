@@ -593,13 +593,13 @@ vos_obj_incarnate(struct vos_object *obj, daos_epoch_range_t *epr, daos_epoch_t 
 		D_ASSERT(obj->obj_bkt_alloted);
 
 		if (p2->p2_bkt_ids[0] == UMEM_DEFAULT_MBKT_ID) {
-			p2->p2_bkt_ids[0] = obj->obj_bkt_ids[0];
 			rc = umem_tx_add_ptr(vos_cont2umm(cont), &p2->p2_bkt_ids[0],
 					     sizeof(p2->p2_bkt_ids[0]));
 			if (rc) {
 				DL_ERROR(rc, "Add bucket ID failed.");
 				return rc;
 			}
+			p2->p2_bkt_ids[0] = obj->obj_bkt_ids[0];
 		} else {
 			D_ASSERT(p2->p2_bkt_ids[0] == obj->obj_bkt_ids[0]);
 		}
