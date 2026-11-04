@@ -224,9 +224,6 @@ class PoolListConsolidationTest(TestWithServers):
         Args:
             pool (TestPool): Pool to check its directory.
             errors (list): Error list.
-
-        Returns:
-            list: Error list.
         """
         pool_paths = self.server_managers[0].get_vos_paths(pool)
         for pool_path in pool_paths:
@@ -235,8 +232,6 @@ class PoolListConsolidationTest(TestWithServers):
             if check_out[0]:
                 msg = f"Pool path still exists! Node without pool path = {check_out[1]}"
                 errors.append(msg)
-
-        return errors
 
     def test_orphan_pool_trust_ps(self):
         """Test orphan pool with trust PS (default option).
@@ -292,15 +287,14 @@ class PoolListConsolidationTest(TestWithServers):
 
         # 4. Verify that the pool directory is removed from the mount point.
         self.log_step("Verify that the pool directory is removed from the mount point")
-        errors = self.verify_pool_dir_removed(pool, errors=errors)
+        self.verify_pool_dir_removed(pool, errors=errors)
 
         # Don't try to destroy the pool during tearDown.
         pool.skip_cleanup()
 
         report_errors(test=self, errors=errors)
 
-    def remove_rdb_pool_replicas_md_on_ssd(self, pool, hosts, tmpfs_mounts,
-                                           remove_rdb_pool_count=None):
+    def remove_rdb_pool_replicas_md_on_ssd(self, pool, tmpfs_mounts, remove_rdb_pool_count=None):
         """Remove rdb-pool replicas from tmpfs mount points. MD-on-SSD case.
 
         MD-on-SSD case is more complex than PMEM case because we need to first load the pool
@@ -311,7 +305,6 @@ class PoolListConsolidationTest(TestWithServers):
 
         Args:
             pool (TestPool): Pool with the corrupted rdb-pool replicas.
-            hosts (list): List of hosts where the ranks are running.
             tmpfs_mounts (list): tmpfs mount points to load the pool dir into.
             remove_rdb_pool_count (int): Number of rdb-pool to remove. Defaults to None, which means
                 remove all discovered rdb-pool.
@@ -385,7 +378,7 @@ class PoolListConsolidationTest(TestWithServers):
         self.register_cleanup(self.clean_mounts, tmpfs_mounts=tmpfs_mounts)
 
         self.log_step("MD-on-SSD: Load pool dir to /mnt/daos2 and daos3 for all servers.")
-        for host in hosts:
+        for host in list(self.hostlist_servers):
             # We need to call ddb prov_mem for all servers, so use new DdbCommand object with
             # each host.
             ddb_command = DdbCommand(server_host=host, path=self.bin, vos_path='""')
@@ -402,7 +395,7 @@ class PoolListConsolidationTest(TestWithServers):
             self.log_step("Remove all discovered rdb-pool from /mnt/daos2 and /mnt/daos3")
         count = 0
         # Iterate both pool mount points of both ranks. I.e., 4 ranks total.
-        for host in hosts:
+        for host in list(self.hostlist_servers):
             for rdb_pool_path in new_rdb_pool_paths:
                 if remove_rdb_pool_count and count == remove_rdb_pool_count:
                     break
@@ -427,19 +420,16 @@ class PoolListConsolidationTest(TestWithServers):
                     check_out_after = check_file_exists(
                         hosts=node, filename=rdb_pool_path, sudo=True)
                     if check_out_after[0]:
-                        self.fail(
-                            f"rm_pool failed for {rdb_pool_path} on {host}! "
-                            f"result = {check_out_after[0]}")
+                        self.fail(f"rm_pool failed for {rdb_pool_path} on {host}!")
                     count += 1
 
         return orig_rdb_pool_paths
 
-    def remove_rdb_pool_replicas_pmem(self, pool, hosts, remove_rdb_pool_count=None):
+    def remove_rdb_pool_replicas_pmem(self, pool, remove_rdb_pool_count=None):
         """Remove rdb-pool replicas from <scm_mount>. PMEM case.
 
         Args:
             pool (TestPool): Pool with the corrupted rdb-pool replicas.
-            hosts (list): List of hosts where the ranks are running.
             remove_rdb_pool_count (int): Number of rdb-pool to remove. Defaults to None, which means
                 remove all discovered rdb-pool.
 
@@ -460,7 +450,7 @@ class PoolListConsolidationTest(TestWithServers):
         self.log.info("orig_rdb_pool_paths = %s", orig_rdb_pool_paths)
         count = 0
         # Iterate both pool mount points of both ranks. I.e., 4 ranks total.
-        for host in hosts:
+        for host in list(self.hostlist_servers):
             for rdb_pool_path in orig_rdb_pool_paths:
                 if remove_rdb_pool_count and count == remove_rdb_pool_count:
                     break
@@ -494,7 +484,6 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
-        hosts = list(self.hostlist_servers)
         md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
         tmpfs_mounts = ["/mnt/daos2", "/mnt/daos3"]
 
@@ -511,10 +500,10 @@ class PoolListConsolidationTest(TestWithServers):
 
         if md_on_ssd:
             orig_rdb_pool_paths = self.remove_rdb_pool_replicas_md_on_ssd(
-                pool=pool, hosts=hosts, tmpfs_mounts=tmpfs_mounts, remove_rdb_pool_count=2)
+                pool=pool, tmpfs_mounts=tmpfs_mounts, remove_rdb_pool_count=2)
         else:
             orig_rdb_pool_paths = self.remove_rdb_pool_replicas_pmem(
-                pool=pool, hosts=hosts, remove_rdb_pool_count=2)
+                pool=pool, remove_rdb_pool_count=2)
 
         self.log_step("Run DAOS checker under kinds of mode.")
         errors = self.chk_dist_checker(inconsistency="corrupted pool without quorum")
@@ -536,7 +525,7 @@ class PoolListConsolidationTest(TestWithServers):
         self.log_step(
             "Show that rdb-pool are recovered. i.e., three out of four ranks should have rdb-pool.")
         count = 0
-        for host in hosts:
+        for host in list(self.hostlist_servers):
             for rdb_pool_path in orig_rdb_pool_paths:
                 node = NodeSet(host)
                 check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
@@ -580,7 +569,6 @@ class PoolListConsolidationTest(TestWithServers):
         :avocado: tags=recovery,cat_recov,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_all_rdb
         """
-        hosts = list(self.hostlist_servers)
         md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
         tmpfs_mounts = ["/mnt/daos2", "/mnt/daos3"]
 
@@ -593,10 +581,9 @@ class PoolListConsolidationTest(TestWithServers):
         dmg_command.system_stop()
 
         if md_on_ssd:
-            self.remove_rdb_pool_replicas_md_on_ssd(
-                pool=pool, hosts=hosts, tmpfs_mounts=tmpfs_mounts)
+            self.remove_rdb_pool_replicas_md_on_ssd(pool=pool, tmpfs_mounts=tmpfs_mounts)
         else:
-            self.remove_rdb_pool_replicas_pmem(pool=pool, hosts=hosts)
+            self.remove_rdb_pool_replicas_pmem(pool=pool)
 
         self.log_step("Run DAOS checker under kinds of mode.")
         errors = []
@@ -608,7 +595,7 @@ class PoolListConsolidationTest(TestWithServers):
             errors.append(f"Pool still exists after running checker! {pools}")
 
         self.log_step("Verify that the pool directory was removed from the mount point.")
-        errors = self.verify_pool_dir_removed(pool, errors=errors)
+        self.verify_pool_dir_removed(pool, errors=errors)
 
         if md_on_ssd:
             errors.extend(self.clean_mounts(tmpfs_mounts=tmpfs_mounts))
