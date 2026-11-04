@@ -1035,9 +1035,23 @@ umem_tx_xadd_ptr(struct umem_instance *umm, void *ptr, size_t size,
 #define umem_tx_xadd(umm, umoff, size, flags)				\
 	umem_tx_xadd_range(umm, umoff, 0, size, flags)
 
+/**
+ * Unit test hook emulating a yield inside umem_tx_begin(). MD-on-SSD can yield while reserving WAL
+ * space for the outermost transaction, letting other ULTs modify the trees before the caller's
+ * transaction really starts. When set, \a cb is called (once, non-reentrantly) right before every
+ * outermost transaction begins, so a test can perform conflicting updates at exactly that point.
+ */
+typedef void (*umem_tx_yield_cb_t)(struct umem_instance *umm, void *arg);
+extern umem_tx_yield_cb_t umem_tx_yield_cb;
+void umem_tx_yield_hook_set(umem_tx_yield_cb_t cb, void *arg);
+void umem_tx_yield_hook_run(struct umem_instance *umm);
+
 static inline int
 umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {
+	if (umem_tx_yield_cb != NULL)
+		umem_tx_yield_hook_run(umm);
+
 	if (umm->umm_ops->mo_tx_begin)
 		return umm->umm_ops->mo_tx_begin(umm, txd);
 	else

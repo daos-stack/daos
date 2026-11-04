@@ -35,6 +35,34 @@ struct umem_tx_stage_item {
 	void		*txi_data;
 };
 
+umem_tx_yield_cb_t umem_tx_yield_cb;
+static void          *umem_tx_yield_arg;
+static bool           umem_tx_yield_running;
+
+void
+umem_tx_yield_hook_set(umem_tx_yield_cb_t cb, void *arg)
+{
+	umem_tx_yield_arg     = arg;
+	umem_tx_yield_running = false;
+	umem_tx_yield_cb  = cb;
+}
+
+void
+umem_tx_yield_hook_run(struct umem_instance *umm)
+{
+#ifdef DAOS_PMEM_BUILD
+	if (umem_tx_yield_running || umm->umm_ops->mo_tx_stage == NULL ||
+	    umm->umm_ops->mo_tx_stage() == UMEM_STAGE_WORK)
+		return;
+#else
+	return;
+#endif
+
+	umem_tx_yield_running = true;
+	umem_tx_yield_cb(umm, umem_tx_yield_arg);
+	umem_tx_yield_running = false;
+}
+
 #ifdef DAOS_PMEM_BUILD
 
 static int daos_md_backend = DAOS_MD_PMEM;
