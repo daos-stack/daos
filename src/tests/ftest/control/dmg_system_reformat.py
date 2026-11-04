@@ -102,22 +102,26 @@ class DmgSystemReformatTest(TestWithServers):
 
         self.log.info("Perform dmg storage format on all system ranks:")
 
-        # Record the start time before the first format attempt so that engine-start
-        # detection below covers engines that joined during an earlier retry, even if
-        # that attempt's dmg client call locally timed out before the server-side
-        # format/join sequence actually completed (see MD-on-SSD timing note below).
+        # Record the start time before the first format attempt, not just before the
+        # attempt that eventually returns. A retry's dmg client call can time out
+        # locally while the server-side format/join actually completes in the
+        # background during that same (earlier, seemingly-failed) attempt; if start_time
+        # were captured later, engine-start detection below could search a journalctl
+        # window beginning after those engine-start log lines already occurred.
         start_time = journalctl_time()
 
         # Calling storage format after system stop too soon would fail, so wait 10 sec
-        # and retry up to 4 times. Use a generous per-call client timeout since
-        # MD-on-SSD NVMe format plus engine startup/join can legitimately take longer
-        # than the previous 30 sec default, especially under loaded CI hardware; a
-        # client-side timeout here does not necessarily mean the server-side format
-        # failed, it may just still be in progress.
+        # and retry up to 4 times. Use the harness's storage_format_timeout (yaml
+        # overridden to 90 sec here) rather than the DmgCommand default, since MD-on-SSD
+        # NVMe format plus engine startup/join can legitimately take longer than the
+        # harness default, especially under loaded CI hardware; a client-side timeout
+        # here does not necessarily mean the server-side format failed, it may just
+        # still be in progress.
+        format_timeout = self.server_managers[0].storage_format_timeout.value
         count = 0
         while count < 4:
             try:
-                dmg.storage_format(timeout=90)
+                dmg.storage_format(timeout=format_timeout)
                 if dmg.result.exit_status != 0:
                     self.fail(
                         "Issues performing storage format: {}".format(

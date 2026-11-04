@@ -1,7 +1,12 @@
+launch:
+  !filter-only : /run/pool/default    # yamllint disable-line rule:colons
+
 hosts:
   test_servers: 3
   test_clients: 1
 timeout: 300
+server_manager:
+  storage_format_timeout: 90
 setup: !mux
   single_replica:
     mgmt_svc_replicas_qty: 1
