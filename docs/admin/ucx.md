@@ -12,7 +12,7 @@ the following steps are needed:
    DAOS is installed. This is the same for libfabric and for UCX:
    DAOS only supports the NVIDIA-provided DOCA-OFED stack,
    not the inbox drivers.
-   Refer to the [DAOS Support Matrix](https://docs.daos.io/v2.9/release/support_matrix)
+   Refer to the [DAOS Support Matrix](https://docs.daos.io/v2.8/release/support_matrix)
    for information about supported DOCA-OFED releases.
 
 *  The `mercury-ucx` RPM package needs to be **manually** selected for

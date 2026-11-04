@@ -2,7 +2,7 @@ hosts:
   test_servers: 2
   test_clients: 1
 
-timeout: 360
+timeout: 540
 
 server_config:
   name: daos_server
@@ -20,8 +20,8 @@ server_config:
       storage: auto
 
 pool:
-  scm_size: 2G
-  nvme_size: 20G
+  scm_size: 4G
+  nvme_size: 40G
 
 container:
   type: POSIX

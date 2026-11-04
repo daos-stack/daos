@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -126,7 +126,7 @@ class Test(avocadoTest):
         self._teardown_cancel = set()
         self._teardown_errors = []
         self.prefix = None
-        self.cancel_file = os.path.join(os.sep, "CIShare", "CI-skip-list-master")
+        self.cancel_file = os.path.join(os.sep, "CIShare", "CI-skip-list-release-2.8")
 
         # List of methods to call during tearDown to cleanup after the steps
         # Use the register_cleanup() method to add methods with optional arguments
@@ -194,6 +194,7 @@ class Test(avocadoTest):
             self.add_test_data("skip-list", skip_list)
             self.cancelForTicket(ticket)
 
+        self.log.info("Checking for test variant in skip list: %s", self.cancel_file)
         try:
             with open(self.cancel_file, encoding="utf-8") as skip_handle:
                 skip_list = skip_handle.readlines()
@@ -1725,53 +1726,6 @@ class TestWithServers(TestWithoutServers):
         """
         return add_pool(self, namespace, create, connect, dmg, **params)
 
-    def add_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
-        """Add a pool to the test case.
-
-        This method defines the common test pool creation sequence.
-
-        Args:
-            namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to POOL_NAMESPACE.
-            create (bool, optional): should the pool be created. Defaults to
-                True.
-            connect (bool, optional): should the pool be connected. Defaults to
-                True.
-            dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
-                calls test.get_dmg_command().
-            params (dict): name/value of attributes for which to call update(value, name).
-                See TestPool for available attributes.
-        """
-        self.pool = self.get_pool(namespace, create, connect, dmg, **params)
-
-    def add_pool_qty(self, quantity, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None):
-        """Add multiple pools to the test case.
-
-        This method requires self.pool to be defined as a list.  If self.pool is
-        undefined it will define it as a list.
-
-        Args:
-            quantity (int): number of pools to create
-            namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to POOL_NAMESPACE.
-            create (bool, optional): should the pool be created. Defaults to
-                True.
-            connect (bool, optional): should the pool be connected. Defaults to
-                True.
-            dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
-                calls test.get_dmg_command().
-
-        Raises:
-            TestFail: if self.pool is defined, but not as a list object.
-
-        """
-        if self.pool is None:
-            self.pool = []
-        if not isinstance(self.pool, list):
-            self.fail("add_pool_qty(): self.pool must be a list: {}".format(type(self.pool)))
-        for _ in range(quantity):
-            self.pool.append(self.get_pool(namespace, create, connect, dmg))
-
     def get_container(self, pool, namespace=CONT_NAMESPACE, create=True, daos=None, **params):
         """Create a TestContainer object.
 
@@ -1788,50 +1742,6 @@ class TestWithServers(TestWithoutServers):
             TestContainer: the created container.
         """
         return add_container(self, pool, namespace, create, daos, **params)
-
-    def add_container(self, pool, namespace=CONT_NAMESPACE, create=True, daos=None, **params):
-        """Add a container to the test case.
-
-        This method defines the common test container creation sequence.
-
-        Args:
-            pool (TestPool): pool in which to create the container.
-            namespace (str, optional): namespace for TestContainer parameters in the test yaml file.
-                Defaults to CONT_NAMESPACE.
-            create (bool, optional): should the container be created. Defaults to True.
-            daos (DaosCommand, optional): daos command object. Defaults to self.get_daos_command()
-            params (dict): name/value of attributes for which to call update(value, name).
-                See TestContainer for available attributes.
-        """
-        self.container = self.get_container(pool, namespace, create, daos, **params)
-
-    def add_container_qty(self, quantity, pool, namespace=CONT_NAMESPACE, create=True):
-        """Add multiple containers to the test case.
-
-        This method requires self.container to be defined as a list.
-        If self.container is undefined it will define it as a list.
-
-        Args:
-            quantity (int): number of containers to create
-            namespace (str, optional): namespace for TestContainer parameters in the
-                test yaml file. Defaults to None.
-            pool (TestPool): Pool object
-            create (bool, optional): should the container be created. Defaults to
-                True.
-
-        Raises:
-            TestFail: if self.pool is defined, but not as a list object.
-
-        """
-        if self.container is None:
-            self.container = []
-        if not isinstance(self.container, list):
-            self.fail(
-                "add_container_qty(): self.container must be a list: {}".format(
-                    type(self.container)))
-        for _ in range(quantity):
-            self.container.append(
-                self.get_container(pool=pool, namespace=namespace, create=create))
 
     def start_additional_servers(self, additional_servers, index=0, mgmt_svc_replicas=None):
         """Start additional servers.

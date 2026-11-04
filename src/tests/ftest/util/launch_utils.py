@@ -1,6 +1,6 @@
 """
   (C) Copyright 2022-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -45,6 +45,10 @@ def fault_injection_enabled(logger):
         bool: whether or not fault injection is enabled
     """
     logger.debug("-" * 80)
+    logger.debug("Checking if 'fault_status' utility is available:")
+    if not run_local(logger, "which fault_status").passed:
+        logger.debug("  Missing 'fault_status' command; assuming fault injection is enabled")
+        return True
     logger.debug("Checking for fault injection enablement via 'fault_status':")
     if run_local(logger, "fault_status").passed:
         logger.debug("  Fault injection is enabled")

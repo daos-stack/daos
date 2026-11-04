@@ -1,6 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -114,8 +114,8 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
     def prepare_attribute_test(self):
         """Prepare variables needed for the tests.
         """
-        self.add_pool()
-        self.add_container(self.pool)
+        self.pool = self.get_pool()
+        self.container = self.get_container(self.pool)
         self.container.open()
 
         expected_for_param = []

@@ -20,7 +20,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 ior: &ior_base
   flags: -w

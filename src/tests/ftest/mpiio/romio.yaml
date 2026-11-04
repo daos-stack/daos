@@ -16,6 +16,5 @@ pool:
   svcn: 1
 container:
   type: POSIX
-  control_method: daos
 romio:
   romio_repo: "romio/test/"

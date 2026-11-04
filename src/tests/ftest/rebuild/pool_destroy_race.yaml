@@ -35,7 +35,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   oclass: RP_2GX
 
 ior_write:

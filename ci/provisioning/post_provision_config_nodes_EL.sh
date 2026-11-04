@@ -6,17 +6,8 @@
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
 bootstrap_dnf() {
-set +e
-    systemctl enable postfix.service
-    systemctl start postfix.service
-    postfix_start_exit=$?
-    if [ $postfix_start_exit -ne 0 ]; then
-        echo "WARNING: Postfix not started: $postfix_start_exit"
-        systemctl status postfix.service
-        journalctl -xe -u postfix.service
-    fi
-set -e
-    # Seems to be needed to fix some issues.
+    # This must be the first DNF operation after image restore to avoid
+    # repeated noisy DNF logging in subsequent package operations.
     dnf -y reinstall sssd-common
 }
 
