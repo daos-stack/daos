@@ -14,6 +14,10 @@
 /* Nine 16 MiB DAV zones: not a whole number of clusters, so the meta blob is rounded up */
 #define UT_HDR_UNALIGNED_META_SZ (144ULL << 20)
 
+/* The version 1 headers share their leading fields with the version 2 ones (see the forges) */
+D_CASSERT(offsetof(struct wal_header_v1, wh_padding2) == offsetof(struct wal_header, wh_pool_id));
+D_CASSERT(offsetof(struct meta_header_v1, mh_padding) == offsetof(struct meta_header, mh_compat));
+
 /* Close the session, if a failed test left it opened, and destroy the pool */
 static int
 ut_mc_fini(struct bio_ut_args *args)
@@ -1052,6 +1056,13 @@ wal_ut_hdr_unaligned_pool_setup(void **state)
 }
 
 static int
+wal_ut_hdr_no_data_pool_setup(void **state)
+{
+	/* A regular pool created without data size has meta and WAL blobs only, like a RDB */
+	return ut_mc_init(*state, UT_HDR_META_SZ, UT_HDR_META_SZ, 0);
+}
+
+static int
 wal_ut_hdr_rdb_pool_setup(void **state)
 {
 	struct bio_ut_args *args = *state;
@@ -1123,17 +1134,49 @@ wal_ut_hdr_verify_unaligned_meta(void **state)
 }
 
 static void
-wal_ut_bad_wal_hdr(void **state)
+wal_ut_hdr_verify_no_data_blob(void **state)
 {
 	struct bio_ut_args *args    = *state;
-	struct wal_header  *hdr_bkp = &args->bua_mc->mc_wal_info.si_header;
-	struct wal_header   hdr_tmp;
-	uint32_t            off, blks;
+	struct meta_header *hdr_bkp = &args->bua_mc->mc_meta_hdr;
+	struct meta_header  hdr_tmp;
+	int                 rc;
+
+	assert_true(hdr_bkp->mh_data_blobid == SPDK_BLOBID_INVALID);
+
+	/* SMD records no data blob either (-DER_NONEXIST): consistent with the header */
+	rc = bio_mc_hdr_verify(args->bua_xs_ctxt, args->bua_pool_id, 0);
+	assert_rc_equal(rc, 0);
+
+	/* A data blob which SMD does not record for the pool */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_data_blobid = hdr_bkp->mh_meta_blobid;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Check the original header is still valid */
+	ut_meta_hdr_restore(args);
+}
+
+static void
+wal_ut_bad_wal_hdr(void **state)
+{
+	struct bio_ut_args  *args    = *state;
+	struct wal_header   *hdr_bkp = &args->bua_mc->mc_wal_info.si_header;
+	struct wal_header    hdr_tmp;
+	struct wal_header_v1 hdr_v1;
+	uint32_t             off;
+	uint32_t             blks;
 
 	/*
-	 * Leave the initial position so that the IDs and block counts are not zero. The
-	 * last transaction is check-pointed: both IDs denote it and the WAL region in
-	 * use is empty.
+	 * Commit 10 transactions and check-point the last one. The forged headers below are made
+	 * from a copy of the resulting header, which has the following properties:
+	 * - The IDs and the block counts are not zero: the position is not the initial one.
+	 * - The check-pointed and the committed transaction are the same one, with the same ID and
+	 *   block count, and the WAL region in use is empty.
+	 * - That transaction is in the first sequence, the WAL has not wrapped: off and blks are
+	 *   its offset and block count, from which the IDs of the forged headers are built with
+	 *   seqoff2id().
+	 * - There is room around it (see the assertions on off and blks) to place other
+	 *   transactions.
 	 */
 	ut_fill_wal(args, 10, NULL);
 	assert_int_equal(hdr_bkp->wh_version, BIO_WAL_VERSION);
@@ -1141,9 +1184,12 @@ wal_ut_bad_wal_hdr(void **state)
 	assert_true(hdr_bkp->wh_commit_id != 0 && hdr_bkp->wh_commit_blks != 0);
 	assert_int_equal(hdr_bkp->wh_ckp_id, hdr_bkp->wh_commit_id);
 	assert_int_equal(hdr_bkp->wh_ckp_blks, hdr_bkp->wh_commit_blks);
-	off  = id2off(hdr_bkp->wh_ckp_id);
+	assert_int_equal(id2seq(hdr_bkp->wh_ckp_id), 0);
+	off = id2off(hdr_bkp->wh_ckp_id);
+	assert_true(off >= 8);
 	blks = hdr_bkp->wh_ckp_blks;
-	assert_true(blks >= 2 && off >= 8 && off + blks + 16 < hdr_bkp->wh_tot_blks);
+	assert_true(blks >= 2);
+	assert_true(off + blks + 16 < hdr_bkp->wh_tot_blks);
 
 	/* Header checks of the loader: magic, version, checksum */
 	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
@@ -1157,6 +1203,18 @@ wal_ut_bad_wal_hdr(void **state)
 	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
 	hdr_tmp.wh_csum ^= 1;
 	ut_wal_hdr_forge(args, &hdr_tmp, false, -DER_CSUM);
+
+	/* Forge an unsupported version 1 header (DAOS 2.6 layout) */
+	memset(&hdr_v1, 0, sizeof(hdr_v1));
+	memcpy(&hdr_v1, hdr_bkp, offsetof(struct wal_header_v1, wh_padding2));
+	hdr_v1.wh_version = 1;
+	ut_hdr_csum(args->bua_mc, &hdr_v1, sizeof(hdr_v1), &hdr_v1.wh_csum);
+	memset(&hdr_tmp, 0, sizeof(hdr_tmp));
+	memcpy(&hdr_tmp, &hdr_v1, sizeof(hdr_v1));
+
+	/* load_wal_header() compares the checksum at the version 2 offset */
+	hdr_tmp.wh_csum = hdr_v1.wh_csum;
+	ut_wal_hdr_forge(args, &hdr_tmp, false, -DER_DF_INCOMPT);
 
 	/* Geometry */
 	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
@@ -1173,6 +1231,15 @@ wal_ut_bad_wal_hdr(void **state)
 
 	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
 	hdr_tmp.wh_tot_blks = WAL_ID_OFF_MAX + 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* Header of another target or pool */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_vos_id ^= 1;
+	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.wh_pool_id[0] ^= 1;
 	ut_wal_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
 
 	/* Transaction IDs and block counts beyond the WAL capacity */
@@ -1312,10 +1379,11 @@ wal_ut_bad_wal_hdr(void **state)
 static void
 wal_ut_bad_meta_hdr(void **state)
 {
-	struct bio_ut_args *args    = *state;
-	struct meta_header *hdr_bkp = &args->bua_mc->mc_meta_hdr;
-	struct meta_header  hdr_tmp;
-	uint64_t            blob_blks;
+	struct bio_ut_args   *args    = *state;
+	struct meta_header   *hdr_bkp = &args->bua_mc->mc_meta_hdr;
+	struct meta_header    hdr_tmp;
+	struct meta_header_v1 hdr_v1;
+	uint64_t              blob_blks;
 
 	assert_int_equal(hdr_bkp->mh_version, BIO_META_VERSION);
 	assert_true(hdr_bkp->mh_data_blobid != SPDK_BLOBID_INVALID);
@@ -1332,6 +1400,18 @@ wal_ut_bad_meta_hdr(void **state)
 	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
 	hdr_tmp.mh_csum ^= 1;
 	ut_meta_hdr_forge(args, &hdr_tmp, false, -DER_CSUM);
+
+	/* Forge an unsupported version 1 header (DAOS 2.6 layout) */
+	memset(&hdr_v1, 0, sizeof(hdr_v1));
+	memcpy(&hdr_v1, hdr_bkp, offsetof(struct meta_header_v1, mh_padding));
+	hdr_v1.mh_version = 1;
+	ut_hdr_csum(args->bua_mc, &hdr_v1, sizeof(hdr_v1), &hdr_v1.mh_csum);
+	memset(&hdr_tmp, 0, sizeof(hdr_tmp));
+	memcpy(&hdr_tmp, &hdr_v1, sizeof(hdr_v1));
+
+	/* load_meta_header() compares the checksum at the version 2 offset */
+	hdr_tmp.mh_csum = hdr_v1.mh_csum;
+	ut_meta_hdr_forge(args, &hdr_tmp, false, -DER_DF_INCOMPT);
 
 	/* No WAL blob: must be reported before any attempt to open the WAL blob */
 	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
@@ -1381,6 +1461,32 @@ wal_ut_bad_meta_hdr(void **state)
 	hdr_tmp.mh_tot_blks = 1ULL << 60;
 	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
 
+	/* Header of another blob, target or pool */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_meta_blobid = hdr_bkp->mh_wal_blobid;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_vos_id ^= 1;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_pool_id[0] ^= 1;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* WAL and data blob IDs other than the ones SMD records for the pool, or no data blob */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_wal_blobid = hdr_bkp->mh_meta_blobid;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_data_blobid = hdr_bkp->mh_wal_blobid;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	hdr_tmp.mh_data_blobid = SPDK_BLOBID_INVALID;
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
 	/* Check the original header is still valid */
 	ut_meta_hdr_restore(args);
 }
@@ -1424,6 +1530,8 @@ static const struct CMUnitTest wal_uts[] = {
      wal_ut_hdr_pool_teardown},
     {"header verify on unaligned meta size", wal_ut_hdr_verify_unaligned_meta,
      wal_ut_hdr_unaligned_pool_setup, wal_ut_hdr_pool_teardown},
+    {"header verify on pool without data blob", wal_ut_hdr_verify_no_data_blob,
+     wal_ut_hdr_no_data_pool_setup, wal_ut_hdr_pool_teardown},
     {"header verify on inconsistent wal header", wal_ut_bad_wal_hdr, wal_ut_hdr_pool_setup,
      wal_ut_hdr_pool_teardown},
     {"header verify on inconsistent meta header", wal_ut_bad_meta_hdr, wal_ut_hdr_pool_setup,
