@@ -732,49 +732,16 @@ be for testing or for accidental device eviction.
 - Restricting hotplug to a PCI domain/bus-ID range:
 
 When hotplug is enabled, each engine only reacts to hotplug events on NVMe SSDs whose PCI
-domain and bus-ID fall within one of a set of configured ranges. By default this filter is
-derived automatically from the engine's `bdev_list`, resolving each listed PCI address's
-domain and grouping addresses into per-domain bus-ID ranges; this is precise to exactly the
-devices the engine was formatted with and always succeeds, including on multi-root-complex
-platforms where a single engine's SSDs span more than one non-zero PCI domain.
+domain and bus-ID fall within one of a set of ranges that are derived automatically from the
+engine's `bdev_list`; this is precise to exactly the devices the engine was formatted with and
+always succeeds, including on multi-PCI-segment platforms where a single engine's SSDs span
+more than one non-zero PCI domain. If Volume Management Devices (VMD) are enabled, no
+PCI-domain/bus-ID filtering is applied at all, since VMD backing device addresses are
+unrelated to the owning NUMA node's PCI domain.
 
-To override the automatically derived filter, set `bdev_hotplug_range` on the `nvme` storage
-tier in the server config file, for example:
-
-```yaml
-  - class: nvme
-    bdev_list:
-    - 0000:5e:00.0
-    bdev_hotplug_range: ["0x00:0x5a-0x5f"]
-```
-
-`bdev_hotplug_range` is a list of one or more `"<domain>:<bus-id>"` entries. Both the domain
-and the bus-ID are **mandatory** in every entry, and either side may be a single hexadecimal
-(`0x`-prefixed) value or an inclusive `<lo>-<hi>` range; decimal notation is not accepted, for
-example:
-
-```yaml
-    bdev_hotplug_range: ["0x00:0x80", "0x01:0x00-0xff", "0x0000-0x0001:0x80"]
-```
-
-A hotplug event is accepted if it matches **any** configured entry. Setting
-`bdev_hotplug_range` explicitly is normally only required when an admin wants the filter to
-admit PCI addresses beyond the current `bdev_list` (e.g. anticipating spare slots to be
-populated later); this is supported, but **at the admin's own risk** — the control plane does
-not validate a manually-configured range against `bdev_list`, so a range wider than
-`bdev_list` can admit hotplug events for devices the engine was never formatted with, which it
-may not handle correctly.
-
-For backward compatibility, the legacy `bdev_busid_range` parameter (a bare `<begin>-<end>`
-bus-ID range, with no domain concept) is still accepted, and is always interpreted as applying
-to PCI domain `0x00` specifically — there is no "any domain" fallback, and any domain prefix
-previously accepted by this parameter is no longer recognized. `bdev_busid_range` and
-`bdev_hotplug_range` are mutually exclusive on the same storage tier; setting both causes a
-config validation error, and admins should migrate fully to `bdev_hotplug_range`.
-
-If Volume Management Devices (VMD) are enabled, no PCI-domain/bus-ID filtering is applied at
-all (VMD backing device addresses are unrelated to the owning NUMA node's PCI domain), so
-`bdev_hotplug_range`/`bdev_busid_range` should not be set in this case.
+This filter is not intended to be configured manually, and admins should not need to set it.
+An experimental, undocumented override exists for edge cases; refer to the control plane
+storage source code for details if this is required.
 
 #### Identification
 

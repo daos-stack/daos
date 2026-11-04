@@ -482,24 +482,6 @@
 #    # behind the VMD address. Also, 'disable_vmd' needs to be set to false.
 #    #bdev_list: ["0000:5d:05.5"]
 #
-#    # Optional override, will be automatically derived from bdev_list (per-PCI-domain
-#    # bus-ID ranges) if unset. Filter hot-pluggable devices by PCI domain+bus-ID by
-#    # specifying one or more "<domain>:<bus-id>" entries, where each side is a single
-#    # hexadecimal (0x-prefixed) value or an inclusive "<lo>-<hi>" range; decimal notation
-#    # is not accepted. Both the domain and the bus-ID are mandatory in every entry. A
-#    # hotplug event is accepted if it matches any entry. If VMD is enabled, no entries
-#    # should be set (VMD backing device addresses are unrelated to the owning NUMA
-#    # node's PCI domain), and the filter defaults to allow-all for this engine.
-#    bdev_hotplug_range: ["0x00:0x80-0x8f"]
-#    #bdev_hotplug_range: ["0x01:0x80-0x8f"]
-#    #bdev_hotplug_range: ["0x00:0x80-0x8f", "0x01:0x80-0x8f"]
-#
-#    # Deprecated: use bdev_hotplug_range instead. Legacy bus-ID-only range (no domain
-#    # concept); always applies to PCI domain 0x00 specifically. Mutually exclusive with
-#    # bdev_hotplug_range on the same tier.
-#    #bdev_busid_range: 0x80-0x8f
-#    #bdev_busid_range: 128-143
-#
 #    # Optional explicit nvme-class bdev tier role assignments will
 #    # define the roles and responsibilities of this bdev tier.
 #    # If DCPM class is defined for the first tier,
@@ -675,23 +657,6 @@
 #
 #    #class: nvme
 #    #bdev_list: ["0000:da:00.0", "0000:db:00.0"]  # generate regular nvme.conf
-#
-#    # Optional override, will be automatically derived from bdev_list (per-PCI-domain
-#    # bus-ID ranges) if unset. Filter hot-pluggable devices by PCI domain+bus-ID by
-#    # specifying one or more "<domain>:<bus-id>" entries, where each side is a single
-#    # hexadecimal (0x-prefixed) value or an inclusive "<lo>-<hi>" range; decimal notation
-#    # is not accepted. Both the domain and the bus-ID are mandatory in every entry. A
-#    # hotplug event is accepted if it matches any entry. If VMD is enabled, no entries
-#    # should be set (VMD backing device addresses are unrelated to the owning NUMA
-#    # node's PCI domain), and the filter defaults to allow-all for this engine.
-#    #bdev_hotplug_range: ["0001:0xd0-0xdf"]
-#    #bdev_hotplug_range: ["0001:0xd0-0xdf", "0000:0xd0-0xdf"]
-#
-#    # Deprecated: use bdev_hotplug_range instead. Legacy bus-ID-only range (no domain
-#    # concept); always applies to PCI domain 0x00 specifically. Mutually exclusive with
-#    # bdev_hotplug_range on the same tier.
-#    #bdev_busid_range: 0xd0-0xdf
-#    #bdev_busid_range: 208-223
 #
 #    # See about bdev_roles above.
 #    bdev_roles: [wal, meta, data]

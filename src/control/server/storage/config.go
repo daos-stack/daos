@@ -871,8 +871,8 @@ type BdevHotplugRange struct {
 }
 
 // NewBdevHotplugRange parses a single "<domain>:<bus-id>" entry, where each side is either a
-// single identifier or an inclusive "<lo>-<hi>" range of identifiers, in hex (0x-prefixed) or
-// decimal notation.
+// single identifier or an inclusive "<lo>-<hi>" range of identifiers, in hex (0x-prefixed)
+// notation.
 func NewBdevHotplugRange(entryStr string) (*BdevHotplugRange, error) {
 	parts := strings.SplitN(entryStr, ":", 2)
 	if len(parts) != 2 {

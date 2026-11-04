@@ -774,13 +774,62 @@ out:
 	return rc;
 }
 
+/* Locate the 'config' entry matching method_name in ctx->values. On success, populates *cfg
+ * (caller must D_FREE(cfg->method)). Returns JSON_NOT_FOUND if no match, else a negative DER.
+ */
+static int
+find_daos_config_entry(struct json_config_ctx *ctx, const char *method_name,
+		       struct config_entry *cfg)
+{
+	struct spdk_json_val *daos_data;
+	int		      rc;
+
+	/* Capture daos_data JSON object */
+	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
+			    SPDK_JSON_VAL_OBJECT_BEGIN);
+	if (rc < 0) {
+		D_ERROR("Failed to find 'daos_data' key: %s\n", spdk_strerror(-rc));
+		return -DER_INVAL;
+	}
+
+	D_ASSERT(daos_data != NULL);
+
+	/* Capture config array in ctx */
+	rc = spdk_json_decode_object(daos_data, daos_data_decoders,
+				     SPDK_COUNTOF(daos_data_decoders), ctx);
+	if (rc < 0) {
+		D_ERROR("Failed to parse 'daos_data' entry: %s\n", spdk_strerror(-rc));
+		return -DER_INVAL;
+	}
+
+	/* Get 'config' array first configuration entry */
+	ctx->config_it = spdk_json_array_first(ctx->config);
+
+	while (ctx->config_it != NULL) {
+		rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
+					     SPDK_COUNTOF(config_entry_decoders), cfg);
+		if (rc < 0) {
+			D_ERROR("Failed to decode 'config' entry: %s\n", spdk_strerror(-rc));
+			return -DER_INVAL;
+		}
+
+		if (strcmp(cfg->method, method_name) == 0)
+			return 0;
+
+		/* Move on to next subsystem config */
+		ctx->config_it = spdk_json_next(ctx->config_it);
+	}
+
+	D_DEBUG(DB_MGMT, "%s entry not found in spdk bootstrap config\n", method_name);
+	return JSON_NOT_FOUND;
+}
+
 /* Caller responsible for freeing json_config_ctx if returned non-NULL */
 static int
 decode_daos_object(const char *nvme_conf, const char *method_name,
 		   const struct spdk_json_object_decoder *decoders, size_t num_decoders, void *out)
 {
 	struct json_config_ctx  *ctx;
-	struct spdk_json_val	*daos_data;
 	struct config_entry      cfg = {};
 	int			 rc = 0;
 
@@ -795,55 +844,13 @@ decode_daos_object(const char *nvme_conf, const char *method_name,
 	if (rc != 0)
 		goto out;
 
-	/* Capture daos_data JSON object */
-	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
-			    SPDK_JSON_VAL_OBJECT_BEGIN);
-	if (rc < 0) {
-		D_ERROR("Failed to find 'daos_data' key: %s\n", spdk_strerror(-rc));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	D_ASSERT(daos_data != NULL);
-
-	/* Capture config array in ctx */
-	rc = spdk_json_decode_object(daos_data, daos_data_decoders,
-				     SPDK_COUNTOF(daos_data_decoders), ctx);
-	if (rc < 0) {
-		D_ERROR("Failed to parse 'daos_data' entry: %s\n", spdk_strerror(-rc));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	/* Get 'config' array first configuration entry */
-	ctx->config_it = spdk_json_array_first(ctx->config);
-	if (ctx->config_it == NULL) {
-		D_DEBUG(DB_MGMT, "%s entry not found in spdk bootstrap config\n", method_name);
-		D_GOTO(out, rc = JSON_NOT_FOUND);
-	}
-
-	while (ctx->config_it != NULL) {
-		rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
-					     SPDK_COUNTOF(config_entry_decoders), &cfg);
-		if (rc < 0) {
-			D_ERROR("Failed to decode 'config' entry: %s\n", spdk_strerror(-rc));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-
-		if (strcmp(cfg.method, method_name) == 0)
-			break;
-
-		/* Move on to next subsystem config */
-		ctx->config_it = spdk_json_next(ctx->config_it);
-	}
-
-	if (ctx->config_it == NULL) {
-		D_DEBUG(DB_MGMT, "%s entry not found in spdk bootstrap config\n", method_name);
-		D_GOTO(out, rc = JSON_NOT_FOUND);
-	}
+	rc = find_daos_config_entry(ctx, method_name, &cfg);
+	if (rc != 0)
+		goto out;
 
 	rc = spdk_json_decode_object(cfg.params, decoders, num_decoders, out);
 	if (rc < 0) {
-		D_ERROR("Failed to decode '%s' entry: %s)\n", NVME_CONF_SET_HOTPLUG_RANGE,
-			spdk_strerror(-rc));
+		D_ERROR("Failed to decode '%s' entry: %s)\n", method_name, spdk_strerror(-rc));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -862,7 +869,6 @@ decode_daos_array(const char *nvme_conf, const char *method_name,
 		  size_t *out_size, size_t stride)
 {
 	struct json_config_ctx  *ctx;
-	struct spdk_json_val	*daos_data;
 	struct config_entry      cfg = {};
 	int			 rc = 0;
 
@@ -877,50 +883,9 @@ decode_daos_array(const char *nvme_conf, const char *method_name,
 	if (rc != 0)
 		goto out;
 
-	/* Capture daos_data JSON object */
-	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
-			    SPDK_JSON_VAL_OBJECT_BEGIN);
-	if (rc < 0) {
-		D_ERROR("Failed to find 'daos_data' key: %s\n", spdk_strerror(-rc));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	D_ASSERT(daos_data != NULL);
-
-	/* Capture config array in ctx */
-	rc = spdk_json_decode_object(daos_data, daos_data_decoders,
-				     SPDK_COUNTOF(daos_data_decoders), ctx);
-	if (rc < 0) {
-		D_ERROR("Failed to parse 'daos_data' entry: %s\n", spdk_strerror(-rc));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	/* Get 'config' array first configuration entry */
-	ctx->config_it = spdk_json_array_first(ctx->config);
-	if (ctx->config_it == NULL) {
-		D_DEBUG(DB_MGMT, "%s entry not found in spdk bootstrap config\n", method_name);
-		D_GOTO(out, rc = JSON_NOT_FOUND);
-	}
-
-	while (ctx->config_it != NULL) {
-		rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
-					     SPDK_COUNTOF(config_entry_decoders), &cfg);
-		if (rc < 0) {
-			D_ERROR("Failed to decode 'config' entry: %s\n", spdk_strerror(-rc));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-
-		if (strcmp(cfg.method, method_name) == 0)
-			break;
-
-		/* Move on to next subsystem config */
-		ctx->config_it = spdk_json_next(ctx->config_it);
-	}
-
-	if (ctx->config_it == NULL) {
-		D_DEBUG(DB_MGMT, "%s entry not found in spdk bootstrap config\n", method_name);
-		D_GOTO(out, rc = JSON_NOT_FOUND);
-	}
+	rc = find_daos_config_entry(ctx, method_name, &cfg);
+	if (rc != 0)
+		goto out;
 
 	rc = spdk_json_decode_array(cfg.params, decode_entry_func, out, max_size, out_size,
 				    stride);
