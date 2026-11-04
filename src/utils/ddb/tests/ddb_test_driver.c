@@ -526,6 +526,8 @@ dvt_vos_insert_dtx_records(daos_handle_t coh, uint32_t nr, uint32_t committed_nr
 
 struct ddb_test_driver_arguments {
 	bool	 dtda_create_vos_file;
+	/* Test groups to run ('a'..'g', see main()); empty means all of them */
+	char     dtda_suites[16];
 };
 
 static int
@@ -533,6 +535,7 @@ ddb_test_driver_arguments_parse(uint32_t argc, char **argv, struct ddb_test_driv
 {
 	struct option   program_options[] = {{"create_vos", no_argument, NULL, 'c'},
 					     {"filter", required_argument, NULL, 'f'},
+					     {"suites", required_argument, NULL, 's'},
 					     {NULL}};
 	int		index = 0, opt;
 
@@ -540,7 +543,7 @@ ddb_test_driver_arguments_parse(uint32_t argc, char **argv, struct ddb_test_driv
 
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, "cf:", program_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "cf:s:", program_options, &index)) != -1) {
 		switch (opt) {
 		case 'c':
 			args->dtda_create_vos_file = true;
@@ -551,6 +554,13 @@ ddb_test_driver_arguments_parse(uint32_t argc, char **argv, struct ddb_test_driv
 #else
 			printf("Test filtering disabled at compile time.\n");
 #endif
+			break;
+		case 's':
+			if (strlen(optarg) >= sizeof(args->dtda_suites)) {
+				printf("Too many test suites: '%s'\n", optarg);
+				return -DER_INVAL;
+			}
+			strcpy(args->dtda_suites, optarg);
 			break;
 		case '?':
 			printf("'%c' is unknown\n", optopt);
@@ -940,7 +950,13 @@ int main(int argc, char *argv[])
 	if (rc != 0)
 		return -rc;
 
-	ddb_test_driver_arguments_parse(argc, argv, &args);
+	rc = ddb_test_driver_arguments_parse(argc, argv, &args);
+	if (rc != 0) {
+		printf("Usage: ddb_tests [-c|--create_vos] [-f|--filter <test>] "
+		       "[-s|--suites <a-g letters>]\n");
+		ddb_fini();
+		return 1;
+	}
 
 	setup_global_arrays();
 
@@ -949,16 +965,19 @@ int main(int argc, char *argv[])
 		goto done;
 	}
 
-#define RUN_TEST_SUIT(c, func)\
-	do {if (char_in_tests(c, test_suites, ARRAY_SIZE(test_suites))) \
-		rc += func(); } while (0)
+#define RUN_TEST_SUIT(c, func)                                                                     \
+	do {                                                                                       \
+		if (char_in_tests(c, args.dtda_suites, ARRAY_SIZE(args.dtda_suites)))              \
+			rc += func();                                                              \
+	} while (0)
 
-	char test_suites[] = "";
 	RUN_TEST_SUIT('a', ddb_parse_tests_run);
 	RUN_TEST_SUIT('b', ddb_vos_tests_run);
 	RUN_TEST_SUIT('c', ddb_commands_tests_run);
 	RUN_TEST_SUIT('d', ddb_commands_print_tests_run);
 	RUN_TEST_SUIT('e', ddb_path_tests_run);
+	RUN_TEST_SUIT('f', ddb_wal_tests_run);
+	RUN_TEST_SUIT('g', ddb_wal_bad_hdr_tests_run);
 
 done:
 	ddb_fini();
