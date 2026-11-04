@@ -26,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
@@ -94,6 +95,7 @@ type mgmtSvc struct {
 	gracefulStopTimeout time.Duration
 	loopWg              sync.WaitGroup
 	restartControlPlane func(myPath, leaderStr string)
+	transportConfig     *security.TransportConfig
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
@@ -111,6 +113,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		serialReqs:          make(batchReqChan),
 		groupUpdateReqs:     make(chan bool),
 		gracefulStopTimeout: defaultGracefulStopTimeout,
+		transportConfig:     security.DefaultServerTransportConfig(),
 	}
 	svc.restartControlPlane = svc.execControlPlaneRestart
 
