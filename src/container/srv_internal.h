@@ -77,6 +77,8 @@ struct cont_ec_agg {
 	d_list_t		ea_list;
 	int			ea_servers_num;
 	uint32_t                 ea_deleted : 1, ea_refreshing : 1,
+	    /* a destroy is in progress: stop boundary pushes, but keep tracking */
+	    ea_destroying   : 1,
 	    /* some rank waits for the boundary (reported 0 or nothing), see cont_agg_eph_sync() */
 	    ea_need_refresh : 1;
 };
@@ -311,8 +313,12 @@ int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);
 int
 cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph, struct sched_request *req);
+
+/* Keep ec_agg alive until return; ea_destroying stops retries, not an in-flight IV. */
 int
-cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph, struct sched_request *req);
+      cont_iv_ec_agg_eph_refresh(void *ns, struct cont_ec_agg *ec_agg, daos_epoch_t eph,
+				 struct sched_request *req);
+
 int cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid);
 
 /* srv_metrics.c*/
