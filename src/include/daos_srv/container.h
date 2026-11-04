@@ -129,8 +129,8 @@ struct ds_cont_child {
 	uint64_t		sc_ec_agg_eph_boundary;
 	/* The local EC aggregation epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
-	/* Used by ds_cont_eph_report() to query the minimum ec_agg_eph and stable_eph
-	 * from all local VOS.
+	/* Cached minimum ec_agg_eph and stable_eph from the local VOS, maintained by the
+	 * aggregation ULTs and reported to the PS/CS leader via the CONT_TGT_TRACK_EPOCH CoRPC.
 	 */
 	uint64_t		*sc_query_ec_agg_eph;
 	uint64_t		*sc_query_stable_eph;
@@ -294,8 +294,6 @@ int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
 struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
 int dsc_cont_get_props(daos_handle_t coh, struct cont_props *props);
 
-int
-     ds_cont_eph_report(struct ds_pool *pool);
 void ds_cont_track_eph_free(struct ds_pool *pool);
 
 void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);

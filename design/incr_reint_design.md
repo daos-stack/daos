@@ -154,22 +154,23 @@ issuing further queries.
 
 #### Engine-Wide Reporting to the PS Leader
 
-The existing per-pool epoch reporting ULT, which today reports the EC aggregation boundary every
-few seconds, is extended to also report the stable epoch. For every container the engine
-hosts, it scans the local container shards, skips the failed ones (targets in `DOWN` or
-`DOWNOUT` state) and takes the minimum local stable epoch among the remaining healthy shards.
-
-That engine-wide minimum is sent to the PS leader through a new IV class,
-`IV_CONT_TRACK_EPOCH_REPORT`, carried in the same message as the EC aggregation boundary epoch.
-Reusing the existing reporting path keeps the additional network and CPU cost of the design
-close to zero.
+Rather than having every engine push its epoch to the PS leader, the PS/CS leader pulls them.
+Each round the leader sends a collective RPC (`CONT_TGT_TRACK_EPOCH`) to all engines for a
+container. On every engine the RPC scans the local container shards, skips the failed ones
+(targets in `DOWN` or `DOWNOUT` state) and takes the minimum local stable epoch among the
+remaining healthy shards. A target that has no local container child returns its current HLC
+reading instead, so a missing shard never drags the minimum down and never blocks the leader
+from advancing the global stable epoch. The per-engine minimums are reduced to a single
+minimum in the RPC reply.
 
 #### Global Stable Epoch Calculation on the PS Leader
 
-On the PS leader engine, the per-container-service epoch tracking ULT is extended to
-maintain the stable epoch alongside the EC aggregation boundary. On each round it walks the
-epochs reported by all engines, ignores the ranks known to have failed, and picks the
-*system-wide minimum* local stable epoch as the new global stable epoch of the container.
+On the PS leader engine, the per-container-service epoch tracking ULT maintains the stable
+epoch alongside the EC aggregation boundary. The set of containers to track is taken only from
+the RDB (a container that does not exist or is being destroyed in the RDB is ignored). On each
+round it collects the minimum epochs returned by the `CONT_TGT_TRACK_EPOCH` collective RPC,
+which is already the *system-wide minimum* local stable epoch, and adopts it as the new global
+stable epoch of the container.
 
 Because the value is a minimum over all healthy shards, it is by construction an epoch below
 which every shard has already stabilized its data. The leader then broadcasts it to all

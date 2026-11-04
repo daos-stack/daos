@@ -1218,15 +1218,6 @@ eph_report_ult(void *data)
 				break;
 		}
 
-		/* Report EC agg epoch boundary */
-		rc = ds_cont_eph_report(pool);
-		if (rc) {
-			DL_CDEBUG(rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST, DB_MD, DLOG_ERR,
-				  rc, "Failed to report EC agg epoch.");
-			if (rc != -DER_CONT_NONEXIST && rc != -DER_NONEXIST)
-				sleep_intvl = EPH_REPORT_RETRY_INTVL;
-		}
-
 		if (eph_report_exiting(pool))
 			break;
 

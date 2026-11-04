@@ -593,30 +593,6 @@ out:
 	return rc;
 }
 
-/* Update the track epoch all servers to the leader */
-static int
-cont_iv_ent_track_eph_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
-			   d_sg_list_t *src)
-{
-	struct cont_iv_key	*civ_key = key2priv(key);
-	struct cont_iv_entry	*civ_ent = src->sg_iovs[0].iov_buf;
-	d_rank_t		rank;
-	int			rc;
-
-	rc = crt_group_rank(NULL, &rank);
-	if (rc)
-		return rc;
-
-	if (rank != entry->ns->iv_master_rank)
-		return -DER_IVCB_FORWARD;
-
-	rc = ds_cont_leader_update_track_eph(entry->ns->iv_pool_uuid, civ_key->cont_uuid,
-					     civ_ent->iv_track_eph.ite_rank,
-					     civ_ent->iv_track_eph.ite_ec_agg_eph,
-					     civ_ent->iv_track_eph.ite_stable_eph);
-	return rc;
-}
-
 /* Each server refresh the track epoch gotten from the leader */
 static int
 cont_iv_ent_track_eph_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
@@ -677,11 +653,6 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 						civ_key->cont_uuid,
 						&civ_ent->iv_snap.snaps[0],
 						civ_ent->iv_snap.snap_cnt);
-			if (rc)
-				D_GOTO(out, rc);
-		} else if (entry->iv_class->iv_class_id ==
-						IV_CONT_TRACK_EPOCH_REPORT) {
-			rc = cont_iv_ent_track_eph_update(entry, key, src);
 			if (rc)
 				D_GOTO(out, rc);
 		} else if (entry->iv_class->iv_class_id == IV_CONT_TRACK_EPOCH) {
@@ -1191,15 +1162,6 @@ cont_iv_track_eph_retry(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
 }
 
 int
-cont_iv_track_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
-			 daos_epoch_t stable_eph, struct sched_request *req)
-{
-	return cont_iv_track_eph_retry(ns, cont_uuid, ec_agg_eph, stable_eph,
-				       CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_NONE,
-				       IV_CONT_TRACK_EPOCH_REPORT, req);
-}
-
-int
 cont_iv_track_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t ec_agg_eph,
 			  daos_epoch_t stable_eph, struct sched_request *req)
 {
@@ -1293,10 +1255,6 @@ cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid)
 	rc = cont_iv_invalidate(ns, IV_CONT_PROP, cont_uuid, CRT_IV_SYNC_NONE);
 	if (rc != 0)
 		D_DEBUG(DB_MD, "delete prop "DF_UUID"\n", DP_UUID(cont_uuid));
-
-	rc = cont_iv_invalidate(ns, IV_CONT_TRACK_EPOCH_REPORT, cont_uuid, CRT_IV_SYNC_NONE);
-	if (rc != 0)
-		D_DEBUG(DB_MD, "delete agg epoch report "DF_UUID"\n", DP_UUID(cont_uuid));
 
 	rc = cont_iv_invalidate(ns, IV_CONT_TRACK_EPOCH, cont_uuid, CRT_IV_SYNC_NONE);
 	if (rc != 0)
@@ -1825,7 +1783,6 @@ ds_cont_iv_fini(void)
 	ds_iv_class_unregister(IV_CONT_SNAP);
 	ds_iv_class_unregister(IV_CONT_CAPA);
 	ds_iv_class_unregister(IV_CONT_PROP);
-	ds_iv_class_unregister(IV_CONT_TRACK_EPOCH_REPORT);
 	ds_iv_class_unregister(IV_CONT_TRACK_EPOCH);
 	return 0;
 }
@@ -1844,11 +1801,6 @@ ds_cont_iv_init(void)
 		D_GOTO(out, rc);
 
 	rc = ds_iv_class_register(IV_CONT_PROP, &iv_cache_ops, &cont_iv_ops);
-	if (rc)
-		D_GOTO(out, rc);
-
-	rc = ds_iv_class_register(IV_CONT_TRACK_EPOCH_REPORT, &iv_cache_ops,
-				  &cont_iv_ops);
 	if (rc)
 		D_GOTO(out, rc);
 
