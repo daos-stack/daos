@@ -998,6 +998,58 @@ free_mem:
 	return rc;
 }
 
+/*
+ * Cross-check the WAL and data blob IDs recorded in the meta header against the per-server
+ * metadata entries of the pool target. bio_mc_open() trusts the header for them (while
+ * bio_mc_destroy() trusts SMD), so a mismatch is a genuine inconsistency which would otherwise be
+ * reported as a bad header of the wrong blob, or go unnoticed.
+ */
+static int
+meta_hdr_smd_check(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_flags flags,
+		   struct meta_header *hdr)
+{
+	uint64_t blob_id = SPDK_BLOBID_INVALID;
+	int      rc;
+
+	if (flags & BIO_MC_FL_RDB)
+		rc = smd_rdb_get_blob(pool_id, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_WAL, &blob_id);
+	else
+		rc = smd_pool_get_blob(pool_id, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_WAL, &blob_id);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to find the WAL blob ID of pool " DF_UUID ", tgt %d",
+			 DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
+		return rc;
+	}
+
+	if (hdr->mh_wal_blobid != blob_id) {
+		D_ERROR("Meta header references WAL blob " DF_U64 " but SMD records blob " DF_U64
+			" for pool " DF_UUID ", tgt %d\n",
+			hdr->mh_wal_blobid, blob_id, DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
+		return -DER_DF_INVAL;
+	}
+
+	/* A RDB, and a pool created without data size, have no entry in the data table */
+	blob_id = SPDK_BLOBID_INVALID;
+	if (flags & BIO_MC_FL_RDB)
+		rc = smd_rdb_get_blob(pool_id, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_DATA, &blob_id);
+	else
+		rc = smd_pool_get_blob(pool_id, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_DATA, &blob_id);
+	if (rc != 0 && rc != -DER_NONEXIST) {
+		DL_ERROR(rc, "Failed to find the data blob ID of pool " DF_UUID ", tgt %d",
+			 DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
+		return rc;
+	}
+
+	if (hdr->mh_data_blobid != blob_id) {
+		D_ERROR("Meta header references data blob " DF_U64 " but SMD records blob " DF_U64
+			" for pool " DF_UUID ", tgt %d\n",
+			hdr->mh_data_blobid, blob_id, DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
+		return -DER_DF_INVAL;
+	}
+
+	return 0;
+}
+
 int
 bio_mc_hdr_verify(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_flags flags)
 {
@@ -1029,6 +1081,15 @@ bio_mc_hdr_verify(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_fl
 		D_DEBUG(DB_MGMT, "Invalid meta header for pool " DF_UUID ", xs %p: " DF_RC "\n",
 			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
 		goto close_meta_ioctxt;
+	}
+
+	/* Check the blob IDs before opening the WAL blob the header points to */
+	rc = meta_hdr_smd_check(xs_ctxt, pool_id, flags, &bio_mc->mc_meta_hdr);
+	if (rc != 0) {
+		D_DEBUG(DB_MGMT,
+			"Meta header of pool " DF_UUID ", xs %p doesn't match SMD: " DF_RC "\n",
+			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
+		goto close_meta;
 	}
 
 	rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, pool_id, flags, SMD_DEV_TYPE_WAL,

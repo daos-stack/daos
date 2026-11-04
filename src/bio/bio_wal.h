@@ -227,15 +227,16 @@ void wal_close(struct bio_meta_context *mc);
 /*
  * Read-only header checks: load and verify the meta (resp. WAL) header with the
  * meta (resp. WAL) I/O context of @mc, without upgrading or writing anything.
- * On success meta_hdr_check() leaves the checksum context initialized, to be
- * released with meta_close().
+ * The headers are also checked against the target, pool and blob the I/O
+ * context was opened for. On success meta_hdr_check() leaves the checksum
+ * context initialized, to be released with meta_close().
  */
 int
 meta_hdr_check(struct bio_meta_context *mc, enum bio_mc_flags flags);
 
 /*
  * Loader checks (magic, version, checksum), then the checks of wal_hdr_verify(). Must follow a
- * successful meta_hdr_check() on @mc, whose checksum context it uses.
+ * successful meta_hdr_check() on @mc, whose checksum context and meta header it uses.
  */
 int
 wal_hdr_check(struct bio_meta_context *mc);

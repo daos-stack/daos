@@ -2178,13 +2178,21 @@ meta_blob_blks(struct bio_io_context *ioc, uint64_t *blob_blks)
  * Content checks on a meta header which passed the magic, version and checksum checks of
  * load_meta_header(). They cover the invariants bio_mc_open() asserts on, so that an inconsistent
  * header can be reported instead of aborting, and the geometry which bio_meta_get_attr() hands to
- * VOS as is.
+ * VOS as is. They also check that the header belongs to the meta blob it was read from and to the
+ * target and pool it was loaded for.
  */
 static int
 meta_hdr_verify(struct meta_header *hdr, struct bio_io_context *ioc, enum bio_mc_flags flags)
 {
 	uint64_t blob_blks;
 	int      rc;
+
+	/* The identity fields below exist from version 2 on; later versions keep the layout */
+	if (hdr->mh_version < 2) {
+		D_ERROR("Unsupported meta header version %" PRIu32 " (version 2 layout required)\n",
+			hdr->mh_version);
+		return -DER_DF_INCOMPT;
+	}
 
 	/* bio_mc_open() asserts on a missing WAL blob and on a data blob of a RDB */
 	if (hdr->mh_wal_blobid == SPDK_BLOBID_INVALID) {
@@ -2213,6 +2221,26 @@ meta_hdr_verify(struct meta_header *hdr, struct bio_io_context *ioc, enum bio_mc
 		D_ERROR("Invalid meta capacity: tot_blks:" DF_U64 " in a blob of " DF_U64
 			" blocks of %d bytes, %d of them for the header\n",
 			hdr->mh_tot_blks, blob_blks, META_BLK_SZ, META_HDR_BLKS);
+		return -DER_DF_INVAL;
+	}
+
+	/* Identity: the blob the header was read from, the target and pool it was loaded for */
+	if (hdr->mh_meta_blobid != spdk_blob_get_id(ioc->bic_blob)) {
+		D_ERROR("Meta header references meta blob " DF_U64 " but was read from blob " DF_U64
+			"\n",
+			hdr->mh_meta_blobid, spdk_blob_get_id(ioc->bic_blob));
+		return -DER_DF_INVAL;
+	}
+
+	if (hdr->mh_vos_id != ioc->bic_xs_ctxt->bxc_tgt_id) {
+		D_ERROR("Meta header belongs to target %" PRIu32 ", expected target %" PRIu32 "\n",
+			hdr->mh_vos_id, ioc->bic_xs_ctxt->bxc_tgt_id);
+		return -DER_DF_INVAL;
+	}
+
+	if (uuid_compare(hdr->mh_pool_id, ioc->bic_pool_id) != 0) {
+		D_ERROR("Meta header belongs to pool " DF_UUID ", expected pool " DF_UUID "\n",
+			DP_UUID(hdr->mh_pool_id), DP_UUID(ioc->bic_pool_id));
 		return -DER_DF_INVAL;
 	}
 
@@ -2291,7 +2319,8 @@ wal_hdr_tx_verify(uint32_t tot_blks, const char *name, uint64_t id, uint32_t blk
  * load_wal_header(). A header which passes them can't trip the assertions of wal_open() and of
  * the ID arithmetic (wal_next_id(), wal_id_cmp(), wal_used_blks()), so that an inconsistent
  * header is reported instead of aborting. They also cover the format invariants on the two
- * transactions.
+ * transactions and the identity of the header (target vos_id and pool pool_id of the meta
+ * header).
  *
  * The ID arithmetic is checked in its geometric form: the WAL region used by the transactions
  * not check-pointed yet goes from the end of the check-pointed transaction (next_ckp_id) to the
@@ -2300,7 +2329,7 @@ wal_hdr_tx_verify(uint32_t tot_blks, const char *name, uint64_t id, uint32_t blk
  * committed transaction is its tail.
  */
 static int
-wal_hdr_verify(struct wal_header *hdr)
+wal_hdr_verify(struct wal_header *hdr, uint32_t vos_id, uuid_t pool_id)
 {
 	uint64_t next_ckp_id;
 	uint64_t unused_id;
@@ -2309,9 +2338,29 @@ wal_hdr_verify(struct wal_header *hdr)
 	int64_t  commit_dist;
 	int      rc;
 
+	/* The identity fields below exist from version 2 on; later versions keep the layout */
+	if (hdr->wh_version < 2) {
+		D_ERROR("Unsupported WAL header version %" PRIu32 " (version 2 layout required)\n",
+			hdr->wh_version);
+		return -DER_DF_INCOMPT;
+	}
+
 	if (hdr->wh_blk_bytes != WAL_BLK_SZ) {
 		D_ERROR("Invalid WAL block size: %" PRIu16 " (expected %d)\n", hdr->wh_blk_bytes,
 			WAL_BLK_SZ);
+		return -DER_DF_INVAL;
+	}
+
+	/* Identity: the target and pool the header was loaded for (see meta_hdr_verify()) */
+	if (hdr->wh_vos_id != vos_id) {
+		D_ERROR("WAL header belongs to target %" PRIu32 ", expected target %" PRIu32 "\n",
+			hdr->wh_vos_id, vos_id);
+		return -DER_DF_INVAL;
+	}
+
+	if (uuid_compare(hdr->wh_pool_id, pool_id) != 0) {
+		D_ERROR("WAL header belongs to pool " DF_UUID ", expected pool " DF_UUID "\n",
+			DP_UUID(hdr->wh_pool_id), DP_UUID(pool_id));
 		return -DER_DF_INVAL;
 	}
 
@@ -2438,7 +2487,8 @@ wal_hdr_check(struct bio_meta_context *mc)
 	if (rc)
 		return rc;
 
-	return wal_hdr_verify(&mc->mc_wal_info.si_header);
+	return wal_hdr_verify(&mc->mc_wal_info.si_header, mc->mc_meta_hdr.mh_vos_id,
+			      mc->mc_wal->bic_pool_id);
 }
 
 /*
