@@ -1152,6 +1152,11 @@ wal_ut_hdr_verify_no_data_blob(void **state)
 	hdr_tmp.mh_data_blobid = hdr_bkp->mh_meta_blobid;
 	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
 
+	/* No data blob, so no data SSD to compare: a stale one is not an inconsistency */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	uuid_generate(hdr_tmp.mh_data_devid);
+	ut_meta_hdr_forge(args, &hdr_tmp, true, 0);
+
 	/* Check the original header is still valid */
 	ut_meta_hdr_restore(args);
 }
@@ -1486,6 +1491,18 @@ wal_ut_bad_meta_hdr(void **state)
 	hdr_tmp.mh_data_blobid = SPDK_BLOBID_INVALID;
 	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
 
+	/*
+	 * A data blob on another SSD than the one SMD maps to the target (replaced SSD, damage), or
+	 * on none, whatever its blob ID.
+	 */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	uuid_generate(hdr_tmp.mh_data_devid);
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	uuid_clear(hdr_tmp.mh_data_devid);
+	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
 	/* Check the original header is still valid */
 	ut_meta_hdr_restore(args);
 }
@@ -1511,6 +1528,11 @@ wal_ut_rdb_flag_mismatch(void **state)
 	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
 	hdr_tmp.mh_data_blobid = hdr_bkp->mh_meta_blobid;
 	ut_meta_hdr_forge(args, &hdr_tmp, true, -DER_DF_INVAL);
+
+	/* The RDB of an engine has no data SSD: its SYS xstream has no data blobstore */
+	memcpy(&hdr_tmp, hdr_bkp, sizeof(hdr_tmp));
+	uuid_clear(hdr_tmp.mh_data_devid);
+	ut_meta_hdr_forge(args, &hdr_tmp, true, 0);
 
 	/* Check the original header is still valid */
 	ut_meta_hdr_restore(args);

@@ -1003,13 +1003,19 @@ free_mem:
  * metadata entries of the pool target. bio_mc_open() trusts the header for them (while
  * bio_mc_destroy() trusts SMD), so a mismatch is a genuine inconsistency which would otherwise be
  * reported as a bad header of the wrong blob, or go unnoticed.
+ *
+ * A blob ID only identifies a blob on the SSD hosting it, and the data blob is not opened here: the
+ * data SSD named by the header must be the one SMD maps to the target. Replacing an SSD changes
+ * that mapping, not the blob IDs. A RDB, and a pool created without data size, have no data blob,
+ * hence no data SSD to compare.
  */
 static int
 meta_hdr_smd_check(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_flags flags,
 		   struct meta_header *hdr)
 {
-	uint64_t blob_id = SPDK_BLOBID_INVALID;
-	int      rc;
+	struct smd_dev_info *dev_info = NULL;
+	uint64_t             blob_id  = SPDK_BLOBID_INVALID;
+	int                  rc;
 
 	if (flags & BIO_MC_FL_RDB)
 		rc = smd_rdb_get_blob(pool_id, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_WAL, &blob_id);
@@ -1047,7 +1053,27 @@ meta_hdr_smd_check(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_f
 		return -DER_DF_INVAL;
 	}
 
-	return 0;
+	/* No data blob, no data SSD to compare */
+	if (hdr->mh_data_blobid == SPDK_BLOBID_INVALID)
+		return 0;
+
+	rc = smd_dev_get_by_tgt(xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_DATA, &dev_info);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to find the data SSD of pool " DF_UUID ", tgt %d",
+			 DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
+		return rc;
+	}
+
+	if (uuid_compare(hdr->mh_data_devid, dev_info->sdi_id) != 0) {
+		D_ERROR("Meta header references data SSD " DF_UUID " but SMD records SSD " DF_UUID
+			" for pool " DF_UUID ", tgt %d\n",
+			DP_UUID(hdr->mh_data_devid), DP_UUID(dev_info->sdi_id), DP_UUID(pool_id),
+			xs_ctxt->bxc_tgt_id);
+		rc = -DER_DF_INVAL;
+	}
+	smd_dev_free_info(dev_info);
+
+	return rc;
 }
 
 int
