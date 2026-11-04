@@ -1043,8 +1043,10 @@ umem_tx_xadd_ptr(struct umem_instance *umm, void *ptr, size_t size,
  */
 typedef void (*umem_tx_yield_cb_t)(struct umem_instance *umm, void *arg);
 extern umem_tx_yield_cb_t umem_tx_yield_cb;
-void umem_tx_yield_hook_set(umem_tx_yield_cb_t cb, void *arg);
-void umem_tx_yield_hook_run(struct umem_instance *umm);
+void
+umem_tx_yield_hook_set(umem_tx_yield_cb_t cb, void *arg);
+void
+umem_tx_yield_hook_run(struct umem_instance *umm);
 
 static inline int
 umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)

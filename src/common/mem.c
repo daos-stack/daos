@@ -36,15 +36,15 @@ struct umem_tx_stage_item {
 };
 
 umem_tx_yield_cb_t umem_tx_yield_cb;
-static void          *umem_tx_yield_arg;
-static bool           umem_tx_yield_running;
+static void       *umem_tx_yield_arg;
+static bool        umem_tx_yield_running;
 
 void
 umem_tx_yield_hook_set(umem_tx_yield_cb_t cb, void *arg)
 {
 	umem_tx_yield_arg     = arg;
 	umem_tx_yield_running = false;
-	umem_tx_yield_cb  = cb;
+	umem_tx_yield_cb      = cb;
 }
 
 void

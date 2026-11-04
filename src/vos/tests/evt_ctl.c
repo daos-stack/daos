@@ -2407,10 +2407,10 @@ test_dyn_root_yield(void **state)
 }
 
 struct evt_tree_snap {
-	int		es_nr;
-	uint64_t	es_hash;
-	daos_size_t	es_scm_used;
-	struct evt_rect	es_first;
+	int             es_nr;
+	uint64_t        es_hash;
+	daos_size_t     es_scm_used;
+	struct evt_rect es_first;
 };
 
 static void
@@ -2418,17 +2418,17 @@ evt_tree_snap_take(struct test_arg *arg, daos_handle_t toh, struct evt_tree_snap
 {
 	struct evt_filter filter = {0};
 	struct evt_entry  ent;
-	daos_handle_t	  ih;
-	uint32_t	  inob;
-	int		  rc;
+	daos_handle_t     ih;
+	uint32_t          inob;
+	int               rc;
 
 	memset(snap, 0, sizeof(*snap));
-	filter.fr_ex.ex_lo = 0;
-	filter.fr_ex.ex_hi = DAOS_EPOCH_MAX;
+	filter.fr_ex.ex_lo   = 0;
+	filter.fr_ex.ex_hi   = DAOS_EPOCH_MAX;
 	filter.fr_epr.epr_lo = 0;
 	filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
-	filter.fr_epoch = DAOS_EPOCH_MAX;
-	rc = evt_iter_prepare(toh, EVT_ITER_COVERED, &filter, &ih);
+	filter.fr_epoch      = DAOS_EPOCH_MAX;
+	rc                   = evt_iter_prepare(toh, EVT_ITER_COVERED, &filter, &ih);
 	assert_rc_equal(rc, 0);
 
 	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
@@ -2436,8 +2436,8 @@ evt_tree_snap_take(struct test_arg *arg, daos_handle_t toh, struct evt_tree_snap
 		rc = evt_iter_fetch(ih, &inob, &ent, NULL);
 		assert_rc_equal(rc, 0);
 		if (snap->es_nr == 0) {
-			snap->es_first.rc_ex = ent.en_ext;
-			snap->es_first.rc_epc = ent.en_epoch;
+			snap->es_first.rc_ex        = ent.en_ext;
+			snap->es_first.rc_epc       = ent.en_epoch;
 			snap->es_first.rc_minor_epc = ent.en_minor_epc;
 		}
 		snap->es_nr++;
@@ -2446,7 +2446,7 @@ evt_tree_snap_take(struct test_arg *arg, daos_handle_t toh, struct evt_tree_snap
 		snap->es_hash = snap->es_hash * 31 + ent.en_epoch;
 		snap->es_hash = snap->es_hash * 31 + ent.en_minor_epc;
 		snap->es_hash = snap->es_hash * 31 + ent.en_addr.ba_off;
-		rc = evt_iter_next(ih);
+		rc            = evt_iter_next(ih);
 	}
 	assert_rc_equal(rc, -DER_NONEXIST);
 	rc = evt_iter_finish(ih);
@@ -2471,16 +2471,16 @@ evt_tree_snap_check(struct test_arg *arg, daos_handle_t toh, const struct evt_tr
 static void
 test_evt_tx_abort(void **state)
 {
-	struct test_arg	    *arg = *state;
+	struct test_arg     *arg = *state;
 	struct evt_tree_snap snap;
 	struct evt_tree_snap after;
 	struct evt_entry_in  entry = {0};
-	struct evt_extent    ext = {.ex_lo = 0, .ex_hi = 99};
-	daos_epoch_range_t   epr = {.epr_lo = 0, .epr_hi = 100};
-	struct evt_rect	     rect;
-	daos_handle_t	     toh;
-	int		     rc;
-	int		     i;
+	struct evt_extent    ext   = {.ex_lo = 0, .ex_hi = 99};
+	daos_epoch_range_t   epr   = {.epr_lo = 0, .epr_hi = 100};
+	struct evt_rect      rect;
+	daos_handle_t        toh;
+	int                  rc;
+	int                  i;
 
 	/* Fault injection is compiled out of release builds */
 	daos_fail_loc_set(DAOS_VOS_EVT_TX_ABORT | DAOS_FAIL_ALWAYS);
@@ -2509,9 +2509,9 @@ test_evt_tx_abort(void **state)
 	assert_rc_equal(rc, 0);
 	entry.ei_rect.rc_ex.ex_lo = 1000;
 	entry.ei_rect.rc_ex.ex_hi = 1003;
-	entry.ei_rect.rc_epc = 80;
-	entry.ei_bound = 80;
-	entry.ei_inob = 1;
+	entry.ei_rect.rc_epc      = 80;
+	entry.ei_bound            = 80;
+	entry.ei_inob             = 1;
 	evt_tree_snap_take(arg, toh, &snap);
 	daos_fail_loc_set(DAOS_VOS_EVT_TX_ABORT | DAOS_FAIL_ALWAYS);
 	rc = evt_insert(toh, &entry, NULL);
@@ -2553,25 +2553,25 @@ test_evt_tx_abort(void **state)
 	assert_rc_equal(rc, 0);
 }
 
-#define YLD_MAX_ENTS	128
-#define YLD_EXT_RANGE	256
+#define YLD_MAX_ENTS  128
+#define YLD_EXT_RANGE 256
 
 struct yld_ent {
-	bool		ye_valid;
-	uint64_t	ye_lo;
-	uint64_t	ye_hi;
-	daos_epoch_t	ye_epoch;
+	bool         ye_valid;
+	uint64_t     ye_lo;
+	uint64_t     ye_hi;
+	daos_epoch_t ye_epoch;
 };
 
 struct yld_ctx {
-	struct test_arg	*yc_arg;
-	daos_handle_t	 yc_toh;
-	struct yld_ent	 yc_ents[YLD_MAX_ENTS];
-	int		 yc_nr;
-	unsigned int	 yc_seed;
-	bool		 yc_hook_on;
-	bool		 yc_model_valid;
-	int		 yc_hook_calls;
+	struct test_arg *yc_arg;
+	daos_handle_t    yc_toh;
+	struct yld_ent   yc_ents[YLD_MAX_ENTS];
+	int              yc_nr;
+	unsigned int     yc_seed;
+	bool             yc_hook_on;
+	bool             yc_model_valid;
+	int              yc_hook_calls;
 };
 
 static char
@@ -2590,16 +2590,16 @@ static int
 yld_insert(struct yld_ctx *ctx)
 {
 	struct evt_entry_in entry = {0};
-	struct yld_ent	   *ye;
-	daos_epoch_t	    epoch;
-	uint64_t	    lo, len, i;
-	char		    buf[32];
-	int		    rc;
+	struct yld_ent     *ye;
+	daos_epoch_t        epoch;
+	uint64_t            lo, len, i;
+	char                buf[32];
+	int                 rc;
 
 	if (ctx->yc_nr >= YLD_MAX_ENTS)
 		return 0;
 
-	lo = yld_rand(ctx, YLD_EXT_RANGE);
+	lo  = yld_rand(ctx, YLD_EXT_RANGE);
 	len = 1 + yld_rand(ctx, 24);
 retry:
 	epoch = 1 + yld_rand(ctx, 100000);
@@ -2612,17 +2612,18 @@ retry:
 
 	entry.ei_rect.rc_ex.ex_lo = lo;
 	entry.ei_rect.rc_ex.ex_hi = lo + len - 1;
-	entry.ei_rect.rc_epc = epoch;
-	entry.ei_bound = epoch;
-	entry.ei_inob = 1;
-	rc = bio_alloc_init(ctx->yc_arg->ta_utx, &entry.ei_addr, buf, len);
+	entry.ei_rect.rc_epc      = epoch;
+	entry.ei_bound            = epoch;
+	entry.ei_inob             = 1;
+	rc                        = bio_alloc_init(ctx->yc_arg->ta_utx, &entry.ei_addr, buf, len);
 	assert_rc_equal(rc, 0);
 
-	/* Reserve the slot first (still invalid): the yield hook may add entries during evt_insert() */
-	ye = &ctx->yc_ents[ctx->yc_nr++];
+	/* Reserve the slot first (still invalid): the yield hook may add entries during
+	 * evt_insert() */
+	ye           = &ctx->yc_ents[ctx->yc_nr++];
 	ye->ye_valid = false;
-	ye->ye_lo = lo;
-	ye->ye_hi = lo + len - 1;
+	ye->ye_lo    = lo;
+	ye->ye_hi    = lo + len - 1;
 	ye->ye_epoch = epoch;
 
 	rc = evt_insert(ctx->yc_toh, &entry, NULL);
@@ -2638,9 +2639,9 @@ yld_delete(struct yld_ctx *ctx)
 {
 	struct yld_ent *ye;
 	struct evt_rect rect = {0};
-	int		rc;
-	int		idx;
-	int		i;
+	int             rc;
+	int             idx;
+	int             i;
 
 	if (ctx->yc_nr == 0)
 		return 0;
@@ -2653,8 +2654,8 @@ yld_delete(struct yld_ctx *ctx)
 
 	rect.rc_ex.ex_lo = ye->ye_lo;
 	rect.rc_ex.ex_hi = ye->ye_hi;
-	rect.rc_epc = ye->ye_epoch;
-	rc = evt_delete(ctx->yc_toh, &rect, NULL);
+	rect.rc_epc      = ye->ye_epoch;
+	rc               = evt_delete(ctx->yc_toh, &rect, NULL);
 	if (rc == 0) {
 		ye->ye_valid = false;
 	} else {
@@ -2671,12 +2672,12 @@ yld_remove_all(struct yld_ctx *ctx)
 {
 	struct evt_extent  ext = {.ex_lo = yld_rand(ctx, YLD_EXT_RANGE / 2)};
 	daos_epoch_range_t epr = {.epr_lo = 0, .epr_hi = 1 + yld_rand(ctx, 100000)};
-	int		   rc;
+	int                rc;
 
 	ext.ex_hi = ext.ex_lo + yld_rand(ctx, YLD_EXT_RANGE / 2);
 	/* Removal records change the visible set in ways the simple model does not track */
 	ctx->yc_model_valid = false;
-	rc = evt_remove_all(ctx->yc_toh, &ext, &epr);
+	rc                  = evt_remove_all(ctx->yc_toh, &ext, &epr);
 	assert_true(rc >= 0);
 	return 0;
 }
@@ -2686,7 +2687,7 @@ static void
 yld_hook(struct umem_instance *umm, void *data)
 {
 	struct yld_ctx *ctx = data;
-	int		n, i;
+	int             n, i;
 
 	if (!ctx->yc_hook_on)
 		return;
@@ -2705,12 +2706,12 @@ yld_verify(struct yld_ctx *ctx)
 {
 	struct evt_filter filter = {0};
 	struct evt_entry  ent;
-	daos_epoch_t	  seen[YLD_EXT_RANGE + 64];
-	daos_epoch_t	  expect[YLD_EXT_RANGE + 64];
-	daos_handle_t	  ih;
-	uint32_t	  inob;
-	uint64_t	  p;
-	int		  rc, i;
+	daos_epoch_t      seen[YLD_EXT_RANGE + 64];
+	daos_epoch_t      expect[YLD_EXT_RANGE + 64];
+	daos_handle_t     ih;
+	uint32_t          inob;
+	uint64_t          p;
+	int               rc, i;
 
 	memset(seen, 0, sizeof(seen));
 	memset(expect, 0, sizeof(expect));
@@ -2725,11 +2726,11 @@ yld_verify(struct yld_ctx *ctx)
 		}
 	}
 
-	filter.fr_ex.ex_lo = 0;
-	filter.fr_ex.ex_hi = DAOS_EPOCH_MAX;
+	filter.fr_ex.ex_lo   = 0;
+	filter.fr_ex.ex_hi   = DAOS_EPOCH_MAX;
 	filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
-	filter.fr_epoch = DAOS_EPOCH_MAX;
-	rc = evt_iter_prepare(ctx->yc_toh, EVT_ITER_VISIBLE, &filter, &ih);
+	filter.fr_epoch      = DAOS_EPOCH_MAX;
+	rc                   = evt_iter_prepare(ctx->yc_toh, EVT_ITER_VISIBLE, &filter, &ih);
 	assert_rc_equal(rc, 0);
 	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
 	while (rc == 0) {
@@ -2762,13 +2763,13 @@ yld_run(void **state, bool with_remove_all)
 {
 	struct test_arg *arg = *state;
 	struct yld_ctx  *ctx;
-	const char	*env = getenv("EVT_YIELD_SEED");
-	int		 rc, i, op;
+	const char      *env = getenv("EVT_YIELD_SEED");
+	int              rc, i, op;
 
 	D_ALLOC_PTR(ctx);
 	assert_non_null(ctx);
-	ctx->yc_arg = arg;
-	ctx->yc_seed = env != NULL ? atoi(env) : (unsigned int)time(NULL);
+	ctx->yc_arg         = arg;
+	ctx->yc_seed        = env != NULL ? atoi(env) : (unsigned int)time(NULL);
 	ctx->yc_model_valid = true;
 	print_message("yield stress seed=%u (set EVT_YIELD_SEED to replay)\n", ctx->yc_seed);
 
@@ -2798,7 +2799,7 @@ yld_run(void **state, bool with_remove_all)
 	/* Drain; everything must be freed exactly once */
 	umem_tx_yield_hook_set(NULL, NULL);
 	for (i = 0; i < ctx->yc_nr; i++) {
-		struct yld_ent *ye = &ctx->yc_ents[i];
+		struct yld_ent *ye   = &ctx->yc_ents[i];
 		struct evt_rect rect = {.rc_ex = {ye->ye_lo, ye->ye_hi}, .rc_epc = ye->ye_epoch};
 
 		if (!ye->ye_valid)
@@ -2855,8 +2856,8 @@ run_internal_tests(char *test_name)
 	     teardown_builtin},
 	    {"EVT022: evtree update transaction abort", test_evt_tx_abort, setup_builtin,
 	     teardown_builtin},
-	    {"EVT023: concurrent update during tx begin yield", test_evt_tx_begin_yield, setup_builtin,
-	     teardown_builtin},
+	    {"EVT023: concurrent update during tx begin yield", test_evt_tx_begin_yield,
+	     setup_builtin, teardown_builtin},
 	    {"EVT024: concurrent update/remove_all during tx begin yield",
 	     test_evt_tx_begin_yield_remove_all, setup_builtin, teardown_builtin},
 	    {NULL, NULL, NULL, NULL}};
