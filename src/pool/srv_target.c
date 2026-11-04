@@ -445,12 +445,6 @@ pool_child_recreate(struct ds_pool_child *child)
 		goto out;
 	}
 
-	rc = vos_pool_kill(child->spc_uuid, 0);
-	if (rc) {
-		DL_ERROR(rc, DF_UUID": Destroy VOS pool failed.", DP_UUID(child->spc_uuid));
-		goto pool_info;
-	}
-
 	/* If pool header is nonzero, pmemobj_create() will fail.
 	 * Therefore, reset the header in this case.
 	 */
