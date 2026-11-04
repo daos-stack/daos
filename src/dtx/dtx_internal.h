@@ -17,6 +17,8 @@
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 
+#include <cart/rpc_gen_macros.h>
+
 /*
  * RPC operation codes
  *

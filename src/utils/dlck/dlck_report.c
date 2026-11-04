@@ -67,7 +67,7 @@ dlck_report_results(struct checker_status *sts, unsigned targets, struct checker
 
 	/** print header */
 	DLCK_PRINT_SEPARATOR(ck);
-	CK_PRINT(ck, "Targets:\n");
+	CK_PRINTF(ck, "Targets:\n");
 	DLCK_PRINT_SEPARATOR(ck);
 
 	/** print records */
@@ -79,7 +79,7 @@ dlck_report_results(struct checker_status *sts, unsigned targets, struct checker
 
 	/** print footer */
 	DLCK_PRINT_SEPARATOR(ck);
-	CK_PRINT(ck, "Total: ");
+	CK_PRINTF(ck, "Total: ");
 	dlck_report_status(&total, ck);
 	DLCK_PRINT_SEPARATOR(ck);
 }

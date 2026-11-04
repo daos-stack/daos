@@ -10,14 +10,6 @@
 
 #define WAL_HDR_MAGIC		(0xc01d2019)
 
-#define WAL_ID_BITS		64			/* Never change this */
-#define WAL_ID_OFF_BITS		32
-#define WAL_ID_SEQ_BITS		(WAL_ID_BITS - WAL_ID_OFF_BITS)
-#define WAL_ID_OFF_MAX		((1ULL << WAL_ID_OFF_BITS) - 1)
-#define WAL_ID_SEQ_MAX		((1ULL << WAL_ID_SEQ_BITS) - 1)
-#define WAL_ID_OFF_MASK		WAL_ID_OFF_MAX
-#define WAL_ID_SEQ_MASK		WAL_ID_SEQ_MAX
-
 #define WAL_BLK_SZ		4096			/* 4k bytes, atomic block I/O */
 D_CASSERT(sizeof(struct wal_header) <= WAL_BLK_SZ);
 #define WAL_CSUM_LEN		sizeof(uint32_t)
@@ -103,26 +95,6 @@ meta_csum_len(struct bio_meta_context *mc)
 	D_ASSERT(csum_len == WAL_CSUM_LEN);
 
 	return csum_len;
-}
-
-/* Low WAL_ID_BITS bits of ID is block offset within the WAL */
-static inline uint32_t
-id2off(uint64_t tx_id)
-{
-	return tx_id & WAL_ID_OFF_MASK;
-}
-
-/* High WAL_ID_SEQ_BITS bits of ID is sequence number which increase by 1 once WAL wraps */
-static inline uint32_t
-id2seq(uint64_t tx_id)
-{
-	return (tx_id >> WAL_ID_OFF_BITS) & WAL_ID_SEQ_MASK;
-}
-
-static inline uint64_t
-seqoff2id(uint32_t seq, uint32_t off)
-{
-	return ((uint64_t)seq << WAL_ID_OFF_BITS) + off;
 }
 
 /* 0 on equal; -1 on (id1 < id2); +1 on (id1 > id2) */
@@ -1216,23 +1188,38 @@ write_header(struct bio_meta_context *mc, struct bio_io_context *ioc, void *hdr,
 	return 0;
 }
 
-int
-bio_wal_flush_header(struct bio_meta_context *mc)
+/* Persist the header with the given checkpoint ID and the current commit ID */
+static int
+wal_flush_header(struct bio_meta_context *mc, uint64_t ckp_id, uint32_t ckp_blks)
 {
-	struct wal_super_info	*si = &mc->mc_wal_info;
-	struct wal_header	*hdr = &si->si_header;
+	struct wal_super_info *si  = &mc->mc_wal_info;
+	struct wal_header     *hdr = &si->si_header;
 
-	/* WAL header is up-to-date */
-	if (si->si_ckp_id == hdr->wh_ckp_id && si->si_ckp_blks == hdr->wh_ckp_blks &&
-	    si->si_commit_id == hdr->wh_commit_id && si->si_commit_blks == hdr->wh_commit_blks)
-		return 0;
-
-	hdr->wh_ckp_id = si->si_ckp_id;
-	hdr->wh_ckp_blks = si->si_ckp_blks;
-	hdr->wh_commit_id = si->si_commit_id;
+	hdr->wh_ckp_id      = ckp_id;
+	hdr->wh_ckp_blks    = ckp_blks;
+	hdr->wh_commit_id   = si->si_commit_id;
 	hdr->wh_commit_blks = si->si_commit_blks;
 
 	return write_header(mc, mc->mc_wal, hdr, sizeof(*hdr), &hdr->wh_csum);
+}
+
+int
+bio_wal_flush_header(struct bio_meta_context *mc)
+{
+	struct wal_super_info *si  = &mc->mc_wal_info;
+	struct wal_header     *hdr = &si->si_header;
+
+	/* WAL header is up-to-date */
+	if (si->si_commit_id == hdr->wh_commit_id && si->si_commit_blks == hdr->wh_commit_blks)
+		return 0;
+
+	D_ASSERT(wal_id_cmp(si, hdr->wh_ckp_id, si->si_ckp_id) >= 0);
+	/*
+	 * Keep the checkpoint ID in the header. si_ckp_id is updated only after the unmap, so it
+	 * could be older than the one a concurrent bio_wal_checkpoint() is persisting, and writing
+	 * it would roll the header back over an already unmapped WAL region.
+	 */
+	return wal_flush_header(mc, hdr->wh_ckp_id, hdr->wh_ckp_blks);
 }
 
 static int
@@ -1963,10 +1950,8 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purged
 	unmap_start = id2off(wal_next_id(si, si->si_ckp_id, si->si_ckp_blks));
 	unmap_end = id2off(wal_next_id(si, tx_id, blk_desc.bd_blks));
 
-	si->si_ckp_id = tx_id;
-	si->si_ckp_blks = blk_desc.bd_blks;
-	/* Flush the WAL header */
-	rc = bio_wal_flush_header(mc);
+	/* Persist the new checkpoint ID in the header first */
+	rc = wal_flush_header(mc, tx_id, blk_desc.bd_blks);
 	if (rc) {
 		DL_ERROR(rc, "Flush WAL header failed.");
 		goto out;
@@ -1976,6 +1961,10 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purged
 	rc = unmap_wal(mc, unmap_start, unmap_end, purged_blks);
 	if (rc) /* Wakeup waiters even if unmap failed */
 		DL_ERROR(rc, "Unmap checkpointed region failed.");
+
+	/* The WAL space can be reused only after the unmap, so update the in-memory ID now */
+	si->si_ckp_id   = tx_id;
+	si->si_ckp_blks = blk_desc.bd_blks;
 
 	wakeup_reserve_waiters(si, false);
 out:
@@ -2230,6 +2219,192 @@ meta_hdr_verify(struct meta_header *hdr, struct bio_io_context *ioc, enum bio_mc
 	return 0;
 }
 
+/*
+ * Mirror of wal_next_id() on header values. The offset sum is computed in 64 bits since the
+ * caller only guarantees blks <= tot_blks <= WAL_ID_OFF_MAX; the "blks == 0 implies id == 0"
+ * rule asserted by wal_next_id() is checked by wal_hdr_tx_verify() instead.
+ */
+static uint64_t
+wal_hdr_next_id(uint32_t tot_blks, uint64_t id, uint32_t blks)
+{
+	uint64_t next_off;
+	uint32_t seq;
+
+	if (blks == 0)
+		return id;
+
+	next_off = (uint64_t)id2off(id) + blks;
+	seq      = id2seq(id);
+	if (next_off < tot_blks)
+		return seqoff2id(seq, next_off);
+
+	seq = (seq == WAL_ID_SEQ_MAX) ? 0 : (seq + 1);
+	return seqoff2id(seq, next_off - tot_blks);
+}
+
+/*
+ * Number of WAL laps, i.e. of sequence steps, from 'from_id' forward to 'to_id'. The sequence
+ * wraps from WAL_ID_SEQ_MAX to 0 (see wal_next_id()), which is one lap: 'from_id' > 'to_id' with
+ * a single lap between them is the sequence overflow handled by wal_id_cmp().
+ */
+static int64_t
+wal_hdr_span_regions(uint64_t from_id, uint64_t to_id)
+{
+	int64_t from_seq = id2seq(from_id);
+	int64_t to_seq   = id2seq(to_id);
+
+	if (from_seq <= to_seq)
+		return to_seq - from_seq;
+
+	return to_seq + (WAL_ID_SEQ_MAX + 1) - from_seq;
+}
+
+/*
+ * Bounds of a transaction [id, id + blks) of a WAL header, named 'name' in the messages. A zero
+ * block count denotes the initial position and has a zero ID (see wal_next_id()).
+ */
+static int
+wal_hdr_tx_verify(uint32_t tot_blks, const char *name, uint64_t id, uint32_t blks)
+{
+	if (id2off(id) >= tot_blks) {
+		D_ERROR("%s ID " DF_U64 " is beyond WAL capacity %" PRIu32 "\n", name, id,
+			tot_blks);
+		return -DER_DF_INVAL;
+	}
+
+	if (blks > tot_blks) {
+		D_ERROR("%s blocks %" PRIu32 " exceed WAL capacity %" PRIu32 "\n", name, blks,
+			tot_blks);
+		return -DER_DF_INVAL;
+	}
+
+	if (blks == 0 && id != 0) {
+		D_ERROR("%s ID " DF_U64 " with no blocks\n", name, id);
+		return -DER_DF_INVAL;
+	}
+
+	return 0;
+}
+
+/*
+ * Content checks on a WAL header which passed the magic, version and checksum checks of
+ * load_wal_header(). A header which passes them can't trip the assertions of wal_open() and of
+ * the ID arithmetic (wal_next_id(), wal_id_cmp(), wal_used_blks()), so that an inconsistent
+ * header is reported instead of aborting. They also cover the format invariants on the two
+ * transactions.
+ *
+ * The ID arithmetic is checked in its geometric form: the WAL region used by the transactions
+ * not check-pointed yet goes from the end of the check-pointed transaction (next_ckp_id) to the
+ * end of the committed one (unused_id, the next ID to reserve). It spans at most one lap of the
+ * WAL, its length (used_blks, the wal_used_blks() value) is within [0, tot_blks] and the
+ * committed transaction is its tail.
+ */
+static int
+wal_hdr_verify(struct wal_header *hdr)
+{
+	uint64_t next_ckp_id;
+	uint64_t unused_id;
+	int64_t  laps;
+	int64_t  used_blks;
+	int64_t  commit_dist;
+	int      rc;
+
+	if (hdr->wh_blk_bytes != WAL_BLK_SZ) {
+		D_ERROR("Invalid WAL block size: %" PRIu16 " (expected %d)\n", hdr->wh_blk_bytes,
+			WAL_BLK_SZ);
+		return -DER_DF_INVAL;
+	}
+
+	if (hdr->wh_tot_blks == 0 || hdr->wh_tot_blks > WAL_ID_OFF_MAX) {
+		D_ERROR("Invalid WAL capacity: " DF_U64 " blocks (max " DF_U64 ")\n",
+			hdr->wh_tot_blks, (uint64_t)WAL_ID_OFF_MAX);
+		return -DER_DF_INVAL;
+	}
+
+	rc = wal_hdr_tx_verify(hdr->wh_tot_blks, "Checkpoint", hdr->wh_ckp_id, hdr->wh_ckp_blks);
+	if (rc)
+		return rc;
+	next_ckp_id = wal_hdr_next_id(hdr->wh_tot_blks, hdr->wh_ckp_id, hdr->wh_ckp_blks);
+
+	rc = wal_hdr_tx_verify(hdr->wh_tot_blks, "Committed", hdr->wh_commit_id,
+			       hdr->wh_commit_blks);
+	if (rc)
+		return rc;
+	unused_id = wal_hdr_next_id(hdr->wh_tot_blks, hdr->wh_commit_id, hdr->wh_commit_blks);
+
+	if (hdr->wh_ckp_blks > 0 && hdr->wh_commit_blks == 0) {
+		D_ERROR("Checkpoint ID " DF_U64 " with blocks but no committed blocks\n",
+			hdr->wh_ckp_id);
+		return -DER_DF_INVAL;
+	}
+
+	if (hdr->wh_ckp_blks != 0 && hdr->wh_ckp_id == hdr->wh_commit_id &&
+	    hdr->wh_ckp_blks != hdr->wh_commit_blks) {
+		D_ERROR("Checkpoint blocks %" PRIu32 " != committed blocks %" PRIu32
+			" for the same transaction ID " DF_U64 "\n",
+			hdr->wh_ckp_blks, hdr->wh_commit_blks, hdr->wh_ckp_id);
+		return -DER_DF_INVAL;
+	}
+
+	laps = wal_hdr_span_regions(next_ckp_id, unused_id);
+	if (laps != 0 && laps != 1) {
+		D_ERROR("WAL region from checkpoint end ID " DF_U64 " to unused ID " DF_U64
+			" spans " DF_U64 " laps (expected 0 or 1)\n",
+			next_ckp_id, unused_id, (uint64_t)laps);
+		return -DER_DF_INVAL;
+	}
+
+	used_blks = laps * (int64_t)hdr->wh_tot_blks + id2off(unused_id) - id2off(next_ckp_id);
+	if (used_blks < 0) {
+		D_ERROR("Checkpoint end ID " DF_U64 " is beyond the unused ID " DF_U64 "\n",
+			next_ckp_id, unused_id);
+		return -DER_DF_INVAL;
+	}
+
+	if (used_blks > (int64_t)hdr->wh_tot_blks) {
+		D_ERROR("WAL region from checkpoint end ID " DF_U64 " to unused ID " DF_U64
+			" spans more than the capacity " DF_U64 "\n",
+			next_ckp_id, unused_id, hdr->wh_tot_blks);
+		return -DER_DF_INVAL;
+	}
+
+	/* Mirror of the wal_used_blks() assertion when everything is check-pointed */
+	if (used_blks == 0 && hdr->wh_ckp_id != hdr->wh_commit_id) {
+		D_ERROR("Everything is check-pointed up to ID " DF_U64 ", but committed ID " DF_U64
+			" != checkpoint ID " DF_U64 "\n",
+			next_ckp_id, hdr->wh_commit_id, hdr->wh_ckp_id);
+		return -DER_DF_INVAL;
+	}
+
+	/* Blocks from the end of the check-pointed transaction to the start of the committed one */
+	commit_dist = used_blks - hdr->wh_commit_blks;
+	if (hdr->wh_ckp_id != hdr->wh_commit_id && commit_dist < 0) {
+		D_ERROR("Committed ID " DF_U64 " with %" PRIu32 " blocks starts " DF_U64
+			" blocks before checkpoint end ID " DF_U64 "\n",
+			hdr->wh_commit_id, hdr->wh_commit_blks, (uint64_t)-commit_dist,
+			next_ckp_id);
+		return -DER_DF_INVAL;
+	}
+
+	/* Mirror of the wal_open() assertion */
+	if (hdr->wh_ckp_id > hdr->wh_commit_id &&
+	    wal_hdr_span_regions(hdr->wh_ckp_id, hdr->wh_commit_id) != 1) {
+		D_ERROR("Checkpoint ID " DF_U64 " > Committed ID " DF_U64 "\n", hdr->wh_ckp_id,
+			hdr->wh_commit_id);
+		return -DER_DF_INVAL;
+	}
+
+	/* Mirror of the first assertion of wal_used_blks(): its overflow mode follows wh_ckp_id */
+	if (next_ckp_id > unused_id && wal_hdr_span_regions(hdr->wh_ckp_id, unused_id) != 1) {
+		D_ERROR("WAL region from checkpoint end ID " DF_U64 " to unused ID " DF_U64
+			" crosses the sequence overflow while checkpoint ID " DF_U64 " does not\n",
+			next_ckp_id, unused_id, hdr->wh_ckp_id);
+		return -DER_DF_INVAL;
+	}
+
+	return 0;
+}
+
 int
 meta_hdr_check(struct bio_meta_context *mc, enum bio_mc_flags flags)
 {
@@ -2257,7 +2432,13 @@ out_csum:
 int
 wal_hdr_check(struct bio_meta_context *mc)
 {
-	return load_wal_header(mc);
+	int rc;
+
+	rc = load_wal_header(mc);
+	if (rc)
+		return rc;
+
+	return wal_hdr_verify(&mc->mc_wal_info.si_header);
 }
 
 /*
