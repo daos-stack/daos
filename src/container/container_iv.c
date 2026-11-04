@@ -1161,12 +1161,20 @@ cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
 
 static int
 cont_iv_track_eph_retry(void *ns, uuid_t cont_uuid, daos_epoch_t eph, unsigned int shortcut,
-			unsigned int sync_mode, uint32_t op, struct sched_request *req)
+			unsigned int sync_mode, uint32_t op, struct sched_request *req,
+			const struct cont_ec_agg *ec_agg)
 {
 	int sleep_ms = 1000; /* 1 second retry interval */
 	int rc       = 0;
 
 	while (1) {
+		if (ec_agg != NULL && ec_agg->ea_destroying) {
+			D_DEBUG(DB_MD, DF_UUID ": stop retired EC boundary refresh\n",
+				DP_UUID(cont_uuid));
+			rc = -DER_NONEXIST;
+			break;
+		}
+
 		rc =
 		    cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph, shortcut, sync_mode, op);
 		if (rc == 0)
@@ -1191,14 +1199,15 @@ int
 cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph, struct sched_request *req)
 {
 	return cont_iv_track_eph_retry(ns, cont_uuid, eph, CRT_IV_SHORTCUT_TO_ROOT,
-				       CRT_IV_SYNC_NONE, IV_CONT_AGG_EPOCH_REPORT, req);
+				       CRT_IV_SYNC_NONE, IV_CONT_AGG_EPOCH_REPORT, req, NULL);
 }
 
 int
-cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph, struct sched_request *req)
+cont_iv_ec_agg_eph_refresh(void *ns, struct cont_ec_agg *ec_agg, daos_epoch_t eph,
+			   struct sched_request *req)
 {
-	return cont_iv_track_eph_retry(ns, cont_uuid, eph, 0, CRT_IV_SYNC_EAGER,
-				       IV_CONT_AGG_EPOCH_BOUNDRY, req);
+	return cont_iv_track_eph_retry(ns, ec_agg->ea_cont_uuid, eph, 0, CRT_IV_SYNC_EAGER,
+				       IV_CONT_AGG_EPOCH_BOUNDRY, req, ec_agg);
 }
 
 int

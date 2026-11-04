@@ -1544,6 +1544,9 @@ out:
 static int
 cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid);
 
+static void
+cont_ec_agg_destroy_done(struct cont_svc *svc, uuid_t cont_uuid, bool destroyed);
+
 static int
 cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc,
 	     int cont_proto_ver)
@@ -1596,6 +1599,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		goto out_prop;
 
 	rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
+	cont_ec_agg_destroy_done(cont->c_svc, cont->c_uuid, rc == 0);
 	if (rc != 0)
 		goto out_prop;
 
@@ -1733,34 +1737,52 @@ out:
 	return rc;
 }
 
+/* Settle the EC boundary tracking after a destroy attempt: retire it on success, else resume. */
+static void
+cont_ec_agg_destroy_done(struct cont_svc *svc, uuid_t cont_uuid, bool destroyed)
+{
+	struct cont_ec_agg *ec_agg;
+
+	d_list_for_each_entry(ec_agg, &svc->cs_ec_agg_list, ea_list) {
+		if (uuid_compare(ec_agg->ea_cont_uuid, cont_uuid) != 0)
+			continue;
+		ec_agg->ea_destroying = 0;
+		if (destroyed)
+			ec_agg->ea_deleted = 1;
+	}
+}
+
 static int
 cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid)
 {
 	struct cont_ec_agg *ec_agg;
 	int                 retry = 0;
 
-	/* A boundary push may create VOS containers. Do not destroy until it completes,
-	 * but bound the wait (cs_lock may held) in case the push keeps retrying on an
-	 * unreachable rank.
+	/* Stop boundary push retries, but wait for an in-flight push before destroying:
+	 * it may create VOS containers. Bound the wait (cs_lock may be held) if the
+	 * current IV attempt does not complete. The entry is only retired by
+	 * cont_ec_agg_destroy_done() once the destroy succeeded.
 	 */
 again:
 	d_list_for_each_entry(ec_agg, &svc->cs_ec_agg_list, ea_list) {
+		if (uuid_compare(ec_agg->ea_cont_uuid, cont_uuid) == 0)
+			ec_agg->ea_destroying = 1;
+	}
+
+	d_list_for_each_entry(ec_agg, &svc->cs_ec_agg_list, ea_list) {
 		if (uuid_compare(ec_agg->ea_cont_uuid, cont_uuid) == 0 && ec_agg->ea_refreshing) {
 			if (retry++ < 30) {
-				dss_sleep(300 /* ms, 10s in total */);
+				dss_sleep(300 /* ms, 9s in total */);
 				goto again;
 			}
 			D_DEBUG(DB_MD, DF_CONT ": EC boundary refresh in flight\n",
 				DP_CONT(svc->cs_pool_uuid, cont_uuid));
+			cont_ec_agg_destroy_done(svc, cont_uuid, false);
 			return -DER_BUSY;
 		}
 	}
 
 	/* Defer freeing to cont_agg_eph_sync() to preserve its list iteration. */
-	d_list_for_each_entry(ec_agg, &svc->cs_ec_agg_list, ea_list) {
-		if (uuid_compare(ec_agg->ea_cont_uuid, cont_uuid) == 0)
-			ec_agg->ea_deleted = 1;
-	}
 	return 0;
 }
 
@@ -2172,14 +2194,14 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			}
 		}
 
-		if (ec_agg->ea_deleted)
+		if (ec_agg->ea_deleted || ec_agg->ea_destroying)
 			continue;
 
 		/* clear before the push (which yields), a request arriving meanwhile is kept */
 		ec_agg->ea_need_refresh = 0;
 		ec_agg->ea_refreshing   = 1;
-		rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg->ea_cont_uuid, min_eph,
-						svc->cs_ec_leader_ephs_req);
+		rc                    = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns, ec_agg, min_eph,
+								   svc->cs_ec_leader_ephs_req);
 		ec_agg->ea_refreshing = 0;
 		if (rc) {
 			DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
@@ -6338,8 +6360,10 @@ ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid)
 		D_GOTO(out, rc = -DER_BUSY);
 
 	rc = cont_ec_agg_delete(svc, uuid);
-	if (rc == 0)
+	if (rc == 0) {
 		rc = cont_destroy_bcast(dss_get_module_info()->dmi_ctx, svc, uuid);
+		cont_ec_agg_destroy_done(svc, uuid, rc == 0);
+	}
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
