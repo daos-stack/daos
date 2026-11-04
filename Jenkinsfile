@@ -1297,7 +1297,7 @@ pipeline {
                             name: 'Functional Hardware Medium MD on SSD',
                             runStage: shouldStageRun('Functional Hardware Medium MD on SSD'),
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: next_version(),
                             other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,-provider,-cb',
