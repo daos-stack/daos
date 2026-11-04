@@ -45,7 +45,8 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     exit 0
 fi
 
-rpm_suffix="${1:-$(detect_rpm_suffix)}"
+rpm_suffix="${1:-$(detect_rpm_suffix)}" || exit $?
+# The script can be used only on el9 and leap/sles 15
 validate_rpm_suffix "${rpm_suffix}"
 
 id
@@ -54,16 +55,15 @@ if [ "$(id -u)" = "0" ]; then
     exit 1
 fi
 
-# Configure a temporary dnf repository if DAOS_DEPS_EXT_REPO is set,
-# and clean it up on exit.
 cleanup() {
-    if [ -n "${DAOS_DEPS_EXT_REPO:-}" ]; then
+    if [ -n "${DAOS_DEPS_EXT_REPO:-}" ] && [ -n "${rpm_suffix:-}" ]; then
         sudo rm -f /etc/yum.repos.d/daos-deps-extra.repo
     fi
+    env
 }
-
 trap cleanup EXIT
-if [ -n "${DAOS_DEPS_EXT_REPO:-}" ]; then
+
+if [ -n "${DAOS_DEPS_EXT_REPO:-}" ] && [ -n "${rpm_suffix:-}" ]; then
     sudo tee /etc/yum.repos.d/daos-deps-extra.repo > /dev/null <<-EOF
 	[daos-deps-extra]
 	name=DAOS dependency RPMs extra repo
