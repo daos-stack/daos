@@ -67,7 +67,7 @@ daos_eq_lib_init(crt_init_options_t *crt_info)
 	if (d_dynamic_ctx_g) {
 		char iface[DAOS_SYS_INFO_STRING_MAX];
 
-		rc = dc_mgmt_get_iface(&iface[0]);
+		rc = dc_mgmt_get_iface(iface, sizeof(iface));
 		if (rc && rc != -DER_NONEXIST) {
 			D_ERROR("failed to get iface: " DF_RC "\n", DP_RC(rc));
 			D_GOTO(crt, rc);
@@ -656,7 +656,7 @@ daos_eq_create(daos_handle_t *eqh)
 	if (d_dynamic_ctx_g) {
 		char iface[DAOS_SYS_INFO_STRING_MAX];
 
-		rc = dc_mgmt_get_iface(&iface[0]);
+		rc = dc_mgmt_get_iface(iface, sizeof(iface));
 		if (rc && rc != -DER_NONEXIST) {
 			D_ERROR("failed to get iface: " DF_RC "\n", DP_RC(rc));
 			return rc;

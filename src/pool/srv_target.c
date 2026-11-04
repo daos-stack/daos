@@ -2222,23 +2222,18 @@ out:
 	return rc;
 }
 
-static void
-pool_tgt_query_handler(crt_rpc_t *rpc, int handler_version)
+void
+ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_query_in	*in = crt_req_get(rpc);
 	struct pool_tgt_query_out	*out = crt_reply_get(rpc);
-	struct ds_pool			*pool;
-	uint64_t			*mem_file_bytes;
+	struct ds_pool                  *pool;
 	int				 rc;
-
-	if (handler_version >= 7)
-		mem_file_bytes = &out->tqo_mem_file_bytes;
-	else
-		mem_file_bytes = NULL;
 
 	/* Single target query */
 	if (dss_get_module_info()->dmi_xs_id != 0) {
-		rc = pool_query_space(in->tqi_op.pi_uuid, &out->tqo_space, mem_file_bytes);
+		rc =
+		    pool_query_space(in->tqi_op.pi_uuid, &out->tqo_space, &out->tqo_mem_file_bytes);
 		goto out;
 	}
 
@@ -2250,39 +2245,13 @@ pool_tgt_query_handler(crt_rpc_t *rpc, int handler_version)
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	rc = pool_tgt_query(pool, &out->tqo_space, mem_file_bytes);
+	rc = pool_tgt_query(pool, &out->tqo_space, &out->tqo_mem_file_bytes);
 	if (rc != 0)
 		rc = 1;	/* For query aggregator */
 	ds_pool_put(pool);
 out:
 	out->tqo_rc = rc;
 	crt_reply_send(rpc);
-}
-
-void
-ds_pool_tgt_query_handler_v6(crt_rpc_t *rpc)
-{
-	pool_tgt_query_handler(rpc, 6);
-}
-
-void
-ds_pool_tgt_query_handler(crt_rpc_t *rpc)
-{
-	pool_tgt_query_handler(rpc, DAOS_POOL_VERSION);
-}
-
-int
-ds_pool_tgt_query_aggregator_v6(crt_rpc_t *source, crt_rpc_t *result, void *priv)
-{
-	struct pool_tgt_query_v6_out *out_source = crt_reply_get(source);
-	struct pool_tgt_query_v6_out *out_result = crt_reply_get(result);
-
-	out_result->tqo_rc += out_source->tqo_rc;
-	if (out_source->tqo_rc != 0)
-		return 0;
-
-	aggregate_pool_space(&out_result->tqo_space, NULL, &out_source->tqo_space, NULL);
-	return 0;
 }
 
 int
@@ -2779,6 +2748,56 @@ ds_pool_task_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(v
 			void *arg, uint32_t flags)
 {
 	return ds_pool_collective(pool_uuid, ex_status, coll_func, arg, flags, false);
+}
+
+/**
+ * Wait until the pool's local pre-discard (sp_discarding) completes.
+ *
+ * \param[in]  pool		pool to wait on
+ * \param[in]  timeout_secs	give up with -DER_TIMEDOUT after this long, 0 for no timeout
+ * \param[in]  fail_on_error	return the discard failure status instead of just waiting for
+ *				completion
+ * \param[in]  should_stop	optional callback polled each iteration; if it returns true,
+ *				-DER_SHUTDOWN is returned
+ * \param[in]  stop_arg		argument of \a should_stop
+ * \param[out] waited_secs	optional, seconds spent waiting
+ */
+int
+ds_pool_wait_discard(struct ds_pool *pool, uint32_t timeout_secs, bool fail_on_error,
+		     bool (*should_stop)(void *arg), void *stop_arg, uint32_t *waited_secs)
+{
+	uint32_t waited = 0;
+	int      rc     = 0;
+
+	while (atomic_load(&pool->sp_discarding) != 0) {
+		if ((should_stop != NULL && should_stop(stop_arg)) || pool->sp_stopping) {
+			rc = -DER_SHUTDOWN;
+			break;
+		}
+		if (timeout_secs != 0 && waited >= timeout_secs) {
+			rc = -DER_TIMEDOUT;
+			break;
+		}
+		if (waited % 60 == 0)
+			D_INFO(DF_UUID " waiting for pre-discard, waited %u seconds\n",
+			       DP_UUID(pool->sp_uuid), waited);
+
+		rc = dss_sleep(1000);
+		if (rc != 0)
+			break;
+		waited++;
+
+		if (fail_on_error) {
+			ABT_mutex_lock(pool->sp_mutex);
+			rc = pool->sp_discard_status;
+			ABT_mutex_unlock(pool->sp_mutex);
+			if (rc != 0)
+				break;
+		}
+	}
+	if (waited_secs != NULL)
+		*waited_secs = waited;
+	return rc;
 }
 
 /* Discard the objects by epoch in this pool */
