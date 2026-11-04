@@ -135,3 +135,15 @@ func ddb_run_dtx_aggr(ctx *C.struct_ddb_ctx, opts *C.struct_dtx_aggr_options) C.
 func ddb_run_csum_dump(ctx *C.struct_ddb_ctx, opts *C.struct_csum_dump_options) C.int {
 	return C.ddb_run_csum_dump(ctx, opts)
 }
+
+func ddb_wal_is_open(ctx *C.struct_ddb_ctx) C.bool {
+	return C.ddb_wal_is_open(ctx)
+}
+
+func ddb_run_wal_open(ctx *C.struct_ddb_ctx, opts *C.struct_wal_open_options) C.int {
+	return C.ddb_run_wal_open(ctx, opts)
+}
+
+func ddb_run_wal_close(ctx *C.struct_ddb_ctx) C.int {
+	return C.ddb_run_wal_close(ctx)
+}

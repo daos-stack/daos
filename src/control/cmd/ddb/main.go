@@ -69,6 +69,8 @@ var lifecycleCommands = []string{
 	"rm_pool",
 	"dev_list",
 	"dev_replace",
+	"wal_open",
+	"wal_close",
 }
 
 type cliOptions struct {
@@ -118,10 +120,14 @@ on NVMe devices, which requires additional preliminary steps before using ddb. S
 MODE section of the manpage for details.
 
 ddb can only initialize SPDK once per process for pools backed by an NVMe device. If a
-pool-lifecycle command (open, rm_pool, feature, dev_list, dev_replace, prov_mem, smd_sync) needs
-to access another NVMe-backed pool after SPDK has already been initialized once in this process,
-ddb reports an error instead of a crash; restart ddb and run that operation as a separate
-invocation. See the SPDK RE-INITIALIZATION section of the manpage for details.
+pool-lifecycle command (open, rm_pool, feature, dev_list, dev_replace, prov_mem, smd_sync,
+wal_open) needs to access another NVMe-backed pool after SPDK has already been initialized once
+in this process, ddb reports an error instead of a crash; restart ddb and run that operation as a
+separate invocation. See the SPDK RE-INITIALIZATION section of the manpage for details.
+
+In MD-on-SSD mode, the Write-Ahead Log (WAL) of a VOS target can be inspected without replaying
+it with the WAL commands (wal_open, wal_close). See the WAL INSPECTION section of the manpage for
+details.
 `
 
 const grumbleUnknownCmdErr = "unknown command, try 'help'"
@@ -306,6 +312,17 @@ func closePoolIfOpen(ctx *DdbContext, log *logging.LeveledLogger) {
 	}
 }
 
+func closeWalIfOpen(ctx *DdbContext, log *logging.LeveledLogger) {
+	if !ctx.WalIsOpen() {
+		return
+	}
+
+	log.Info("Closing WAL session...\n")
+	if err := ctx.WalClose(); err != nil {
+		log.Errorf("Error closing WAL session: %s\n", err)
+	}
+}
+
 func parseOpts(args []string, ctx *DdbContext) (cliOptions, *flags.Parser, error) {
 	var opts cliOptions
 	parser := flags.NewParser(&opts, flags.HelpFlag|flags.IgnoreUnknown|flags.PassAfterNonOption)
@@ -345,6 +362,9 @@ func run(ctx *DdbContext, log *logging.LeveledLogger, opts cliOptions, parser *f
 	}
 	defer cleanup()
 	app := createGrumbleApp(ctx)
+	// A WAL session only lives within one ddb process: make sure it is closed before
+	// the ddb context is finalized, whatever the mode (single command, -f file, interactive).
+	defer closeWalIfOpen(ctx, log)
 
 	// !slices.Contains(...) is always true today (parseOpts rejects this
 	// combo for a bare command); kept as a safe fallback if that ever changes.

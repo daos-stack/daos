@@ -31,6 +31,7 @@ func resetDdbStubs() {
 	ddb_init_RC = 0
 
 	ddb_pool_is_open_RC = false
+	ddb_wal_is_open_RC = false
 
 	ddb_run_ls_RC, ddb_run_ls_Fn = 0, nil
 	ddb_run_open_RC, ddb_run_open_Fn = 0, nil
@@ -60,6 +61,8 @@ func resetDdbStubs() {
 	ddb_run_prov_mem_RC, ddb_run_prov_mem_Fn = 0, nil
 	ddb_run_dtx_aggr_RC, ddb_run_dtx_aggr_Fn = 0, nil
 	ddb_run_csum_dump_RC, ddb_run_csum_dump_Fn = 0, nil
+	ddb_run_wal_open_RC, ddb_run_wal_open_Fn = 0, nil
+	ddb_run_wal_close_RC, ddb_run_wal_close_Fn = 0, nil
 }
 
 var ddb_init_RC C.int = 0
@@ -474,4 +477,38 @@ func ddb_run_csum_dump(_ *C.struct_ddb_ctx, opts *C.struct_csum_dump_options) C.
 		))
 	}
 	return ddb_run_csum_dump_RC
+}
+
+var ddb_wal_is_open_RC = false
+
+func ddb_wal_is_open(_ *C.struct_ddb_ctx) C.bool {
+	return C.bool(ddb_wal_is_open_RC)
+}
+
+var (
+	ddb_run_wal_open_RC C.int = 0
+	ddb_run_wal_open_Fn func(path string, dbPath string, writeMode bool) error
+)
+
+func ddb_run_wal_open(_ *C.struct_ddb_ctx, opts *C.struct_wal_open_options) C.int {
+	if ddb_run_wal_open_Fn != nil {
+		return fromGoErr(ddb_run_wal_open_Fn(
+			C.GoString(opts.path),
+			C.GoString(opts.db_path),
+			bool(opts.write_mode),
+		))
+	}
+	return ddb_run_wal_open_RC
+}
+
+var (
+	ddb_run_wal_close_RC C.int = 0
+	ddb_run_wal_close_Fn func() error
+)
+
+func ddb_run_wal_close(_ *C.struct_ddb_ctx) C.int {
+	if ddb_run_wal_close_Fn != nil {
+		return fromGoErr(ddb_run_wal_close_Fn())
+	}
+	return ddb_run_wal_close_RC
 }

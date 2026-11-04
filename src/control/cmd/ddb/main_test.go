@@ -395,6 +395,14 @@ func TestDdb_runDdb(t *testing.T) {
 			args:   []string{"-s", "/foo/vos-0", "dev_replace", "-p", "/db", "old-uuid", "new-uuid"},
 			expErr: ddbTestErr(`"dev_replace" manages its own pool lifecycle`),
 		},
+		"Reject top-level flags for wal_open (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "wal_open", "-p", "/db", "/foo/vos-0"},
+			expErr: ddbTestErr(`"wal_open" manages its own pool lifecycle`),
+		},
+		"Reject top-level flags for wal_close (pool-lifecycle command)": {
+			args:   []string{"-s", "/foo/vos-0", "wal_close"},
+			expErr: ddbTestErr(`"wal_close" manages its own pool lifecycle`),
+		},
 		"Init failure": {
 			args:   []string{"ls"},
 			expErr: ddbTestErr(ctxInitErr),
@@ -680,4 +688,78 @@ func TestDdb_closePoolIfOpen(t *testing.T) {
 		// Should not panic; the error is only logged.
 		closePoolIfOpen(ctx, log)
 	})
+}
+
+// TestDdb_closeWalIfOpen verifies that closeWalIfOpen only calls WalClose when a
+// WAL session is actually open, and that it tolerates a WalClose error (log only, no panic).
+func TestDdb_closeWalIfOpen(t *testing.T) {
+	log := logging.NewCommandLineLogger()
+
+	t.Run("WAL not open, wal_close not called", func(t *testing.T) {
+		ctx := newTestContext(t)
+		ddb_wal_is_open_RC = false
+		ddb_run_wal_close_Fn = func() error {
+			t.Fatal("WalClose should not be called when no WAL session is open")
+			return nil
+		}
+		closeWalIfOpen(ctx, log)
+	})
+
+	t.Run("WAL open, wal_close called", func(t *testing.T) {
+		ctx := newTestContext(t)
+		ddb_wal_is_open_RC = true
+		closeCalled := false
+		ddb_run_wal_close_Fn = func() error {
+			closeCalled = true
+			return nil
+		}
+		closeWalIfOpen(ctx, log)
+		test.AssertTrue(t, closeCalled, "expected WalClose to have been called when a WAL session is open")
+	})
+
+	t.Run("WAL open, wal_close returns error", func(t *testing.T) {
+		ctx := newTestContext(t)
+		ddb_wal_is_open_RC = true
+		ddb_run_wal_close_Fn = func() error {
+			return fmt.Errorf("wal_close failed")
+		}
+		// Should not panic; the error is only logged.
+		closeWalIfOpen(ctx, log)
+	})
+}
+
+// TestDdb_runClosesWal verifies that a WAL session left open by a command is closed
+// by run() before the ddb context is finalized, in single-command and command-file modes.
+func TestDdb_runClosesWal(t *testing.T) {
+	for name, args := range map[string]func(t *testing.T) []string{
+		"single command": func(_ *testing.T) []string {
+			return []string{"wal_open", "/foo/vos-0"}
+		},
+		"command file": func(t *testing.T) []string {
+			cmdFile := filepath.Join(t.TempDir(), "cmds.txt")
+			if err := os.WriteFile(cmdFile, []byte("wal_open /foo/vos-0\n"), 0644); err != nil {
+				t.Fatalf("failed to write command file: %v", err)
+			}
+			return []string{"--cmd_file=" + cmdFile}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := newTestContext(t)
+			ddb_run_wal_open_Fn = func(_, _ string, _ bool) error {
+				ddb_wal_is_open_RC = true
+				return nil
+			}
+			closeCalled := false
+			ddb_run_wal_close_Fn = func() error {
+				closeCalled = true
+				ddb_wal_is_open_RC = false
+				return nil
+			}
+			_, err := captureStdout(func() error {
+				return runDdb(ctx, args(t))
+			})
+			test.CmpErr(t, nil, err)
+			test.AssertTrue(t, closeCalled, "expected the WAL session to be closed at exit")
+		})
+	}
 }
