@@ -1,5 +1,5 @@
 %changelog
-* Wed Nov 04 2026  Kris Jacque <kris.jacque@hpe.com> - 2.8.2-1
+* Wed Nov 04 2026  Kris Jacque <kris.jacque@hpe.com> - 2.8.1-5
 - Remove build requirement for ipmctl. This package is now optional.
 
 * Mon Oct 19 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.8.1-4
