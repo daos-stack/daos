@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -79,6 +79,8 @@ dlck_checker_main_vprintf(struct checker *ck, const char *fmt, va_list args)
 static int
 dlck_checker_core_indent_set(struct dlck_checker_worker *dwc, int level)
 {
+	D_ASSERTF(level >= 0 && level <= CHECKER_INDENT_MAX, "Invalid indent level: %d\n", level);
+
 	memset(dwc->prefix, DLCK_PRINT_INDENT, CHECKER_INDENT_MAX);
 	if (level > 0) {
 		dwc->prefix[level]     = ' ';
