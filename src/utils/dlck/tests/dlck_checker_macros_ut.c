@@ -78,12 +78,30 @@ teardown(void **state)
 	} while (0)
 
 static void
+test_CK_PRINTF_without_args(void **state)
+{
+	struct checker *ck = *state;
+
+	vfprintf_expected_output("%sready", "-> ready");
+	CK_PRINTF(ck, "ready");
+}
+
+static void
 test_CK_PRINTF(void **state)
 {
 	struct checker *ck = *state;
 
 	vfprintf_expected_output("%sworker %d: %s", "-> worker 42: ready");
 	CK_PRINTF(ck, "worker %d: %s", 42, "ready");
+}
+
+static void
+test_CK_PRINTF_WO_PREFIX_without_args(void **state)
+{
+	struct checker *ck = *state;
+
+	vfprintf_expected_output("ready", "ready");
+	CK_PRINTF_WO_PREFIX(ck, "ready");
 }
 
 static void
@@ -157,12 +175,46 @@ test_CK_APPENDFL_WARN(void **state)
 }
 
 static void
+test_CK_APPENDFL_WARN_without_args(void **state)
+{
+	struct checker *ck = *state;
+
+	vfprintf_expected_output("warning: retry\n", "warning: retry\n");
+	CK_APPENDFL_WARN(ck, "retry");
+	assert_int_equal(ck->ck_warnings_num, INITIAL_WARNINGS + 1);
+
+	vfprintf_expected_output("warning: skipped\n", "warning: skipped\n");
+	CK_APPENDFL_WARN(ck, "skipped");
+	assert_int_equal(ck->ck_warnings_num, INITIAL_WARNINGS + 2);
+	ck->ck_warnings_num = INITIAL_WARNINGS;
+}
+
+static void
 test_CK_APPENDL(void **state)
 {
 	struct checker *ck = *state;
 
 	vfprintf_expected_output("ready\n", "ready\n");
 	CK_APPENDL(ck, "ready");
+}
+
+static void
+test_CK_PRINTFL_RC_success_without_args(void **state)
+{
+	struct checker *ck = *state;
+
+	vfprintf_expected_output("%scheck: ok.\n", "-> check: ok.\n");
+	CK_PRINTFL_RC(ck, DER_SUCCESS, "check");
+}
+
+static void
+test_CK_PRINTFL_RC_error_without_args(void **state)
+{
+	struct checker *ck = *state;
+
+	vfprintf_expected_output("%serror: check: " DF_RC "\n",
+				 "-> error: check: DER_IO(-2001): 'I / O error'\n");
+	CK_PRINTFL_RC(ck, -DER_IO, "check");
 }
 
 static void
@@ -350,32 +402,41 @@ test_checker_print_indent_dec_below_minimum(void **state)
 	{"DLCK_CHECKER_MACRO_" #ID ": " DESC, FUNC, NULL, NULL, NULL}
 
 static const struct CMUnitTest dlck_checker_macros_tests[] = {
-    DLCK_MACRO_TEST(101, "printf forwards arguments", test_CK_PRINTF),
-    DLCK_MACRO_TEST(102, "printf omits prefix", test_CK_PRINTF_WO_PREFIX),
-    DLCK_MACRO_TEST(103, "append ok", test_CK_APPENDL_OK),
-    DLCK_MACRO_TEST(104, "append successful rc", test_CK_APPENDL_RC_success),
-    DLCK_MACRO_TEST(105, "append error rc", test_CK_APPENDL_RC_error),
-    DLCK_MACRO_TEST(106, "append positive error rc", test_CK_APPENDL_RC_positive_error),
-    DLCK_MACRO_TEST(107, "append formatted error", test_CK_APPENDFL_ERR),
-    DLCK_MACRO_TEST(108, "formatted warnings increment count", test_CK_APPENDFL_WARN),
-    DLCK_MACRO_TEST(109, "append newline", test_CK_APPENDL),
-    DLCK_MACRO_TEST(110, "printf successful rc", test_CK_PRINTFL_RC_success),
-    DLCK_MACRO_TEST(111, "printf error rc", test_CK_PRINTFL_RC_error),
-    DLCK_MACRO_TEST_NO_FIXTURE(112, "output without checker is skipped",
+    DLCK_MACRO_TEST(101, "printf without arguments includes prefix", test_CK_PRINTF_without_args),
+    DLCK_MACRO_TEST(102, "printf forwards arguments", test_CK_PRINTF),
+    DLCK_MACRO_TEST(103, "printf without arguments omits prefix",
+		    test_CK_PRINTF_WO_PREFIX_without_args),
+    DLCK_MACRO_TEST(104, "printf omits prefix", test_CK_PRINTF_WO_PREFIX),
+    DLCK_MACRO_TEST(105, "append ok", test_CK_APPENDL_OK),
+    DLCK_MACRO_TEST(106, "append successful rc", test_CK_APPENDL_RC_success),
+    DLCK_MACRO_TEST(107, "append error rc", test_CK_APPENDL_RC_error),
+    DLCK_MACRO_TEST(108, "append positive error rc", test_CK_APPENDL_RC_positive_error),
+    DLCK_MACRO_TEST(109, "append formatted error", test_CK_APPENDFL_ERR),
+    DLCK_MACRO_TEST(110, "formatted warnings increment count", test_CK_APPENDFL_WARN),
+    DLCK_MACRO_TEST(111, "warnings without arguments increment count",
+		    test_CK_APPENDFL_WARN_without_args),
+    DLCK_MACRO_TEST(112, "append newline", test_CK_APPENDL),
+    DLCK_MACRO_TEST(113, "printf successful rc without arguments",
+		    test_CK_PRINTFL_RC_success_without_args),
+    DLCK_MACRO_TEST(114, "printf error rc without arguments",
+		    test_CK_PRINTFL_RC_error_without_args),
+    DLCK_MACRO_TEST(115, "printf successful rc", test_CK_PRINTFL_RC_success),
+    DLCK_MACRO_TEST(116, "printf error rc", test_CK_PRINTFL_RC_error),
+    DLCK_MACRO_TEST_NO_FIXTURE(117, "output without checker is skipped",
 			       test_CK_macros_without_checker),
-    DLCK_MACRO_TEST(113, "true condition reports yes", test_CK_ASSERT_true_with_checker),
-    DLCK_MACRO_TEST(114, "false condition reports no", test_CK_ASSERT_false_with_checker),
-    DLCK_MACRO_TEST_NO_FIXTURE(115, "true condition without checker",
+    DLCK_MACRO_TEST(118, "true condition reports yes", test_CK_ASSERT_true_with_checker),
+    DLCK_MACRO_TEST(119, "false condition reports no", test_CK_ASSERT_false_with_checker),
+    DLCK_MACRO_TEST_NO_FIXTURE(120, "true condition without checker",
 			       test_CK_ASSERT_true_without_checker),
-    DLCK_MACRO_TEST_NO_FIXTURE(116, "false condition without checker asserts",
+    DLCK_MACRO_TEST_NO_FIXTURE(121, "false condition without checker asserts",
 			       test_CK_ASSERT_false_without_checker),
-    DLCK_MACRO_TEST(117, "indent brackets body", test_CK_INDENT),
-    DLCK_MACRO_TEST(118, "nested indent restores levels", test_CK_INDENT_nested),
-    DLCK_MACRO_TEST(119, "indent reaches maximum", test_CK_INDENT_reaches_maximum),
-    DLCK_MACRO_TEST_NO_FIXTURE(120, "indent without checker runs body",
+    DLCK_MACRO_TEST(122, "indent brackets body", test_CK_INDENT),
+    DLCK_MACRO_TEST(123, "nested indent restores levels", test_CK_INDENT_nested),
+    DLCK_MACRO_TEST(124, "indent reaches maximum", test_CK_INDENT_reaches_maximum),
+    DLCK_MACRO_TEST_NO_FIXTURE(125, "indent without checker runs body",
 			       test_CK_INDENT_without_checker),
-    DLCK_MACRO_TEST(121, "indent beyond maximum asserts", test_CK_INDENT_exceeds_maximum),
-    DLCK_MACRO_TEST(122, "indent below minimum asserts",
+    DLCK_MACRO_TEST(126, "indent beyond maximum asserts", test_CK_INDENT_exceeds_maximum),
+    DLCK_MACRO_TEST(127, "indent below minimum asserts",
 		    test_checker_print_indent_dec_below_minimum),
 };
 
