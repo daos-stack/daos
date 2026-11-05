@@ -3714,7 +3714,7 @@ vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck)
 	/* The largest diff for above pairs 'max_eph - min_eph'. */
 	uint64_t			 diff = 0;
 	uint64_t			 start_time = daos_wallclock_secs();
-	int                              ck_level_cache = IS_CHECKER(ck) ? ck->ck_level : 0;
+	uint8_t                          ck_level_cache = IS_CHECKER(ck) ? ck->ck_level : 0;
 	int				 rc = 0;
 	int				 i;
 

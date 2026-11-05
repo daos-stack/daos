@@ -269,8 +269,6 @@ test_worker_indent_set_out_of_range(void **state)
 {
 	struct checker *ck = *state;
 
-	ck->ck_level = -1;
-	expect_assert_failure(ck->ck_indent_set(ck));
 	ck->ck_level = CHECKER_INDENT_MAX + 1;
 	expect_assert_failure(ck->ck_indent_set(ck));
 	ck->ck_level = 0;
