@@ -171,35 +171,49 @@ static void
 pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 {
 	struct checker *main_ck = &xa->ctrl->checker;
-	char         *path;
+	char           *path    = NULL;
 	daos_handle_t poh;
 	int           rc;
 
-	rc = dlck_pool_file_preallocate(xa->ctrl->engine.storage_path, file->po_uuid,
-					xa->xs->tgt_id);
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_POOL_PREALLOCATE)) { /** fault injection */
+		rc = daos_errno2der(daos_fail_value_get());
+	} else {
+		rc = dlck_pool_file_preallocate(xa->ctrl->engine.storage_path, file->po_uuid,
+						xa->xs->tgt_id);
+	}
 	CK_PRINTFL_RC(ck, rc, "VOS file allocation");
 	if (rc != DER_SUCCESS) {
-		return;
+		dlck_status_set_rc(&xa->status, rc);
+		goto report;
 	}
 
 	/** generate a VOS file path */
-	rc = ds_mgmt_file(xa->ctrl->engine.storage_path, file->po_uuid, VOS_FILE, &xa->xs->tgt_id,
-			  &path);
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_POOL_PATH_ALLOC)) { /** fault injection */
+		rc = daos_errno2der(daos_fail_value_get());
+	} else {
+		rc = ds_mgmt_file(xa->ctrl->engine.storage_path, file->po_uuid, VOS_FILE,
+				  &xa->xs->tgt_id, &path);
+	}
 	if (rc != DER_SUCCESS) {
 		CK_PRINTFL_RC(ck, rc, "VOS file path allocation failed");
-		return;
+		dlck_status_set_rc(&xa->status, rc);
+		goto report;
 	}
 
 	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, ck, &poh);
-	POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_status.warnings_num);
 	/** vos_pool_open_metrics() is fully instrumented, so rc is already accounted for in the
 	 * checker's status. */
 	dlck_status_set(&xa->status, &ck->ck_status);
+
+report:
+	POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_status.warnings_num);
 	if (rc == DER_SUCCESS) {
 		conts_process(xa, poh, ck);
 		(void)vos_pool_close(poh);
 	}
-	D_FREE(path);
+	if (path != NULL) {
+		D_FREE(path);
+	}
 }
 
 /**
