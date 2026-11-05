@@ -10,7 +10,7 @@ For questions about contributing, please post to our
 [user forum](https://daos.groups.io/g/daos)
 or to the DAOS
 [slack channel](https://daos-stack.slack.com/).
-Bugs should be reported through our
+Bugs should be reported through the
 [Jira issue tracker](https://jira.daos.io/),
 with a test case that reproduces the issue (when applicable)
 and [debug logs](./docs/debugging.md).
