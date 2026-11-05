@@ -8,6 +8,7 @@
 #define __DAOS_CHECKER_H__
 
 #include <stdarg.h>
+#include <daos/common.h>
 #include <gurt/common.h>
 
 #define CHECKER_INDENT_MAX 10
