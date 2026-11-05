@@ -344,14 +344,13 @@ ilog_is_punch(const struct ilog_entry *entry)
  * Validate ilog's root.
  *
  * \param[in] ilog_df
- * \param[in] report_fn		Report function.
- * \param[in] report_arg	Argument for the report function.
+ * \param[in] ck	Checker.
  *
  * \retval DER_SUCCESS		On success.
  * \retval -DER_DF_INVAL	Invalid ilog magic.
  */
 int
-ilog_root_is_valid(struct ilog_df *ilog_df, report_fn_t report_fn, void *report_arg);
+ilog_root_is_valid(struct ilog_df *ilog_df, struct checker *ck);
 
 /** Validate the provided ilog.
  *

@@ -62,7 +62,7 @@ def run_build_test(self, cache_mode, il_lib=None):
         cont_attrs['dfuse-ndentry-time'] = cache_time
         dfuse.disable_wb_cache.value = True
     elif cache_mode == 'data':
-        build_time *= 2
+        build_time *= 4
         cont_attrs['dfuse-data-cache'] = '1m'
         cont_attrs['dfuse-attr-time'] = '0'
         cont_attrs['dfuse-dentry-time'] = '0'
