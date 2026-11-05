@@ -101,7 +101,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				Hostname:       hostname,
 				HotplugEnabled: true,
 				HotplugRanges: BdevHotplugRanges{
-					MustNewBdevHotplugRange("0x00:0x70-0x7f"),
+					MustNewBdevHotplugRange("00:70-7f"),
 				},
 			},
 		},
@@ -110,7 +110,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				Tiers: TierConfigs{
 					mockScmTier,
 					NewTierConfig().WithStorageClass(ClassNvme.String()).
-						WithBdevHotplugRange("0x01:0x70-0x7f"),
+						WithBdevHotplugRange("01:70-7f"),
 				},
 				EnableHotplug: true,
 			},
@@ -123,7 +123,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				Hostname:       hostname,
 				HotplugEnabled: true,
 				HotplugRanges: BdevHotplugRanges{
-					MustNewBdevHotplugRange("0x01:0x70-0x7f"),
+					MustNewBdevHotplugRange("01:70-7f"),
 				},
 			},
 		},
@@ -148,8 +148,8 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				Hostname:       hostname,
 				HotplugEnabled: true,
 				HotplugRanges: BdevHotplugRanges{
-					MustNewBdevHotplugRange("0x00:0x80"),
-					MustNewBdevHotplugRange("0x00:0x8f"),
+					MustNewBdevHotplugRange("00:80"),
+					MustNewBdevHotplugRange("00:8f"),
 				},
 			},
 		},
@@ -174,7 +174,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				Hostname:       hostname,
 				HotplugEnabled: true,
 				HotplugRanges: BdevHotplugRanges{
-					MustNewBdevHotplugRange("0x00:0x80-0x81"),
+					MustNewBdevHotplugRange("00:80-81"),
 				},
 			},
 		},
@@ -199,8 +199,8 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				Hostname:       hostname,
 				HotplugEnabled: true,
 				HotplugRanges: BdevHotplugRanges{
-					MustNewBdevHotplugRange("0x00:0x80"),
-					MustNewBdevHotplugRange("0x01:0x80"),
+					MustNewBdevHotplugRange("00:80"),
+					MustNewBdevHotplugRange("01:80"),
 				},
 			},
 		},

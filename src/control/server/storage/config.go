@@ -830,7 +830,7 @@ func (br *BdevBusRange) String() string {
 }
 
 // ToHotplugRange converts the legacy bus-ID-only range to a single bdev_hotplug_range entry on
-// PCI domain 0x00, the only domain this legacy parameter understands.
+// PCI domain 0000, the only domain this legacy parameter understands.
 func (br *BdevBusRange) ToHotplugRange() *BdevHotplugRange {
 	if br == nil || br.IsZero() {
 		return nil
@@ -863,16 +863,18 @@ func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
 	return br
 }
 
-// BdevHotplugRange represents a single PCI domain-range + bus-ID-range hotplug filter entry
-// (one element of bdev_hotplug_range). Domain and bus-ID are both mandatory, each independently
-// a single value or an inclusive range.
+// BdevHotplugRange represents a single PCI domain + bus-ID-range hotplug filter entry (one
+// element of bdev_hotplug_range). Domain and bus-ID are both mandatory. Domain is always a
+// single value; bus-ID is a single value or an inclusive range.
 type BdevHotplugRange struct {
-	hardware.PCIBus
+	LowAddress  hardware.PCIAddress
+	HighAddress hardware.PCIAddress
 }
 
-// NewBdevHotplugRange parses a single "<domain>:<bus-id>" entry, where each side is either a
-// single identifier or an inclusive "<lo>-<hi>" range of identifiers, in hex (0x-prefixed)
-// notation.
+// NewBdevHotplugRange parses a single "<domain>:<bus-id>" entry. domain is a single PCI domain;
+// bus-id is either a single identifier or an inclusive "<lo>-<hi>" range of identifiers. Domain
+// ranges are not supported — only a single domain per entry. All identifiers are plain hex
+// (no "0x" prefix), matching ordinary PCI address formatting (e.g. "0000:3b:00.0").
 func NewBdevHotplugRange(entryStr string) (*BdevHotplugRange, error) {
 	parts := strings.SplitN(entryStr, ":", 2)
 	if len(parts) != 2 {
@@ -880,7 +882,13 @@ func NewBdevHotplugRange(entryStr string) (*BdevHotplugRange, error) {
 			"invalid hotplug range entry %q, expected <domain>:<bus-id>", entryStr)
 	}
 
-	domLo, domHi, err := parseHotplugIdentRange(parts[0], 16)
+	if strings.Contains(parts[0], "-") {
+		return nil, errors.Errorf(
+			"invalid hotplug range domain %q in %q, only a single domain is supported "+
+				"per entry", parts[0], entryStr)
+	}
+
+	dom, err := parseHotplugIdent(parts[0], 16)
 	if err != nil {
 		return nil, errors.Wrapf(err, "parse hotplug range domain in %q", entryStr)
 	}
@@ -891,8 +899,8 @@ func NewBdevHotplugRange(entryStr string) (*BdevHotplugRange, error) {
 	}
 
 	hr := &BdevHotplugRange{}
-	hr.LowAddress.Domain = uint16(domLo)
-	hr.HighAddress.Domain = uint16(domHi)
+	hr.LowAddress.Domain = uint16(dom)
+	hr.HighAddress.Domain = uint16(dom)
 	hr.LowAddress.Bus = uint8(busLo)
 	hr.HighAddress.Bus = uint8(busHi)
 
@@ -913,22 +921,17 @@ func (hr *BdevHotplugRange) String() string {
 		return ""
 	}
 
-	domStr := fmt.Sprintf("0x%02x", hr.LowAddress.Domain)
-	if hr.LowAddress.Domain != hr.HighAddress.Domain {
-		domStr = fmt.Sprintf("0x%02x-0x%02x", hr.LowAddress.Domain, hr.HighAddress.Domain)
-	}
-
-	busStr := fmt.Sprintf("0x%02x", hr.LowAddress.Bus)
+	busStr := fmt.Sprintf("%02x", hr.LowAddress.Bus)
 	if hr.LowAddress.Bus != hr.HighAddress.Bus {
-		busStr = fmt.Sprintf("0x%02x-0x%02x", hr.LowAddress.Bus, hr.HighAddress.Bus)
+		busStr = fmt.Sprintf("%02x-%02x", hr.LowAddress.Bus, hr.HighAddress.Bus)
 	}
 
-	return domStr + ":" + busStr
+	return fmt.Sprintf("%04x:%s", hr.LowAddress.Domain, busStr)
 }
 
 // BdevHotplugRanges is a list of PCI domain+bus-ID hotplug filter entries (bdev_hotplug_range).
-// Every entry mandatorily specifies both a PCI domain and a bus-ID, each independently a single
-// value or an inclusive range.
+// Every entry mandatorily specifies both a PCI domain (single value only) and a bus-ID (single
+// value or an inclusive range).
 type BdevHotplugRanges []*BdevHotplugRange
 
 func (hrs *BdevHotplugRanges) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -1211,31 +1214,24 @@ func parseBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 	return uint8(begin), uint8(end), nil
 }
 
-// parseHotplugIdent parses a single bdev_hotplug_range identifier. Only hex ("0x"/"0X"-prefixed)
-// notation is accepted; decimal notation is not supported. bitSize caps the return width (e.g.
-// 16 for a PCI domain, 8 for a bus-ID).
+// parseHotplugIdent parses a single bdev_hotplug_range identifier in plain hex notation,
+// matching ordinary PCI address formatting (no "0x" prefix, e.g. as used in "0000:3b:00.0").
+// bitSize caps the return width (e.g. 16 for a PCI domain, 8 for a bus-ID).
 func parseHotplugIdent(ident string, bitSize int) (uint64, error) {
-	rest, ok := strings.CutPrefix(ident, "0x")
-	if !ok {
-		rest, ok = strings.CutPrefix(ident, "0X")
-	}
-	if !ok {
-		return 0, errors.Errorf("identifier %q must be in hex (0x-prefixed) notation", ident)
-	}
-	if rest == "" {
+	if ident == "" {
 		return 0, errors.New("empty identifier")
 	}
 
-	val, err := strconv.ParseUint(rest, 16, bitSize)
+	val, err := strconv.ParseUint(ident, 16, bitSize)
 	if err != nil {
-		return 0, errors.Wrapf(err, "parse identifier %q", ident)
+		return 0, errors.Wrapf(err, "parse identifier %q, expected plain hex notation", ident)
 	}
 
 	return val, nil
 }
 
 // parseHotplugIdentRange parses either a single bdev_hotplug_range identifier or an inclusive
-// "<lo>-<hi>" range of identifiers, each independently in hex (0x-prefixed) notation.
+// "<lo>-<hi>" range of identifiers, each independently in plain hex notation.
 func parseHotplugIdentRange(numRange string, bitSize int) (uint64, uint64, error) {
 	if numRange == "" {
 		return 0, 0, errors.New("missing identifier or range")

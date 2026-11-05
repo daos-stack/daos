@@ -332,11 +332,11 @@ func TestStorage_BdevBusRange_ToHotplugRange(t *testing.T) {
 	}{
 		"partial bus range": {
 			rangeStr: "0x80-0x8f",
-			expStr:   "0x00:0x80-0x8f",
+			expStr:   "0000:80-8f",
 		},
 		"full bus range": {
 			rangeStr: "0x00-0xff",
-			expStr:   "0x00:0x00-0xff",
+			expStr:   "0000:00-ff",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -356,49 +356,44 @@ func TestStorage_BdevBusRange_ToHotplugRange(t *testing.T) {
 func TestStorage_NewBdevHotplugRange(t *testing.T) {
 	for name, tc := range map[string]struct {
 		entryStr string
-		expDomLo uint16
-		expDomHi uint16
+		expDom   uint16
 		expBusLo uint8
 		expBusHi uint8
 		expErr   error
 	}{
 		"single domain, single bus-id, hex": {
-			entryStr: "0x00:0x80",
+			entryStr: "00:80",
 			expBusLo: 0x80,
 			expBusHi: 0x80,
 		},
 		"single domain, full bus-id range, hex": {
-			entryStr: "0x01:0x00-0xFF",
-			expDomLo: 0x01,
-			expDomHi: 0x01,
+			entryStr: "01:00-ff",
+			expDom:   0x01,
 			expBusLo: 0x00,
-			expBusHi: 0xFF,
+			expBusHi: 0xff,
 		},
-		"domain range, bus-id range, hex": {
-			entryStr: "0x00-0x02:0x00-0x80",
-			expDomLo: 0x00,
-			expDomHi: 0x02,
-			expBusLo: 0x00,
-			expBusHi: 0x80,
+		"domain range rejected": {
+			entryStr: "00-02:00-80",
+			expErr:   errors.New("only a single domain is supported per entry"),
 		},
-		"domain range, single bus-id, decimal rejected": {
-			entryStr: "0000-0001:128",
-			expErr:   errors.New("must be in hex (0x-prefixed) notation"),
+		"0x-prefixed domain rejected": {
+			entryStr: "0x00:80",
+			expErr:   errors.New("parse hotplug range domain"),
 		},
-		"bus-id decimal without 0x prefix rejected": {
-			entryStr: "0x00:0008",
-			expErr:   errors.New("must be in hex (0x-prefixed) notation"),
+		"0x-prefixed bus-id rejected": {
+			entryStr: "00:0x80",
+			expErr:   errors.New("parse hotplug range bus-id"),
 		},
 		"missing domain": {
-			entryStr: "0x80",
+			entryStr: "80",
 			expErr:   errors.New("expected <domain>:<bus-id>"),
 		},
 		"missing bus-id": {
-			entryStr: "0x00:",
+			entryStr: "00:",
 			expErr:   errors.New("parse hotplug range bus-id"),
 		},
-		"reverse domain range": {
-			entryStr: "0x02-0x00:0x80",
+		"reverse bus-id range": {
+			entryStr: "00:80-00",
 			expErr:   errors.New("begin > end"),
 		},
 	} {
@@ -409,11 +404,35 @@ func TestStorage_NewBdevHotplugRange(t *testing.T) {
 				return
 			}
 
-			test.AssertEqual(t, tc.expDomLo, hr.LowAddress.Domain, "bad low domain")
-			test.AssertEqual(t, tc.expDomHi, hr.HighAddress.Domain, "bad high domain")
+			test.AssertEqual(t, tc.expDom, hr.LowAddress.Domain, "bad low domain")
+			test.AssertEqual(t, tc.expDom, hr.HighAddress.Domain, "bad high domain")
 			test.AssertEqual(t, tc.expBusLo, hr.LowAddress.Bus, "bad low bus-id")
 			test.AssertEqual(t, tc.expBusHi, hr.HighAddress.Bus, "bad high bus-id")
 		})
+	}
+}
+
+// TestStorage_BdevHotplugRange_JSON is a regression test for JSON marshal/unmarshal of
+// BdevHotplugRange.
+func TestStorage_BdevHotplugRange_JSON(t *testing.T) {
+	hr, err := NewBdevHotplugRange("0x01:0x00-0xFF")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &BdevWriteConfigRequest{HotplugRanges: BdevHotplugRanges{hr}}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal: %s", err)
+	}
+
+	gotReq := new(BdevWriteConfigRequest)
+	if err := json.Unmarshal(data, gotReq); err != nil {
+		t.Fatalf("unmarshal: %s", err)
+	}
+
+	if diff := cmp.Diff(req.HotplugRanges, gotReq.HotplugRanges); diff != "" {
+		t.Fatalf("unexpected hotplug ranges after round-trip (-want +got):\n%s", diff)
 	}
 }
 
@@ -428,11 +447,11 @@ func TestStorage_BdevConfig_Validate_HotplugRangeMutualExclusion(t *testing.T) {
 			busidRange: MustNewBdevBusRange("0x80-0x8f"),
 		},
 		"only hotplug_range set": {
-			hotplugRanges: BdevHotplugRanges{MustNewBdevHotplugRange("0x00:0x80-0x8f")},
+			hotplugRanges: BdevHotplugRanges{MustNewBdevHotplugRange("00:80-8f")},
 		},
 		"both set": {
 			busidRange:    MustNewBdevBusRange("0x80-0x8f"),
-			hotplugRanges: BdevHotplugRanges{MustNewBdevHotplugRange("0x00:0x80-0x8f")},
+			hotplugRanges: BdevHotplugRanges{MustNewBdevHotplugRange("00:80-8f")},
 			expErr:        errors.New("mutually exclusive"),
 		},
 	} {

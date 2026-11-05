@@ -151,7 +151,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					{
 						Method: "hotplug_busid_range",
 						Params: &HotplugFilterParams{
-							{DomainBegin: 0, DomainEnd: 0, Begin: 1, End: 1},
+							{Domain: 0, Begin: 1, End: 1},
 						},
 					},
 				}
@@ -269,7 +269,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					{
 						Method: "hotplug_busid_range",
 						Params: &HotplugFilterParams{
-							{DomainBegin: 0, DomainEnd: 0, Begin: 128, End: 143},
+							{Domain: 0, Begin: 0x80, End: 0x8f},
 						},
 					},
 				}
