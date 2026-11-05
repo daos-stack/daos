@@ -747,16 +747,16 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 	de.arg_free_fn = arg_free_fn;
 	de.custom      = custom;
 
-	CK_PRINT(ck, "Start targets... ");
+	CK_PRINTF(ck, "Start targets... ");
 	rc = dlck_engine_targets_start(engine, exec_one, arg_alloc_fn, &de);
 	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
 		return rc;
 	}
 
-	CK_PRINT(ck, STOP_TGT_STR "...\n");
+	CK_PRINTF(ck, STOP_TGT_STR "...\n");
 	rc = dlck_engine_targets_stop(engine, &de);
-	CK_PRINTL_RC(ck, rc, STOP_TGT_STR);
+	CK_PRINTFL_RC(ck, rc, STOP_TGT_STR);
 
 	return rc;
 }

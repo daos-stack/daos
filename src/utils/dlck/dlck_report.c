@@ -46,7 +46,7 @@ dlck_report_results(int *rcs, unsigned targets, unsigned warnings_num, struct ch
 {
 	/** print header */
 	DLCK_PRINT_SEPARATOR(ck);
-	CK_PRINT(ck, "Targets:\n");
+	CK_PRINTF(ck, "Targets:\n");
 	DLCK_PRINT_SEPARATOR(ck);
 
 	/** print records */
