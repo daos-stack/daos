@@ -1013,7 +1013,7 @@ rebuild_hint_probe(test_arg_t *arg, daos_obj_id_t oid)
 	struct dc_pool *dcp;
 	char            dkey[32];
 	char            akey[32];
-	uint32_t        ver0 = 0;
+	uint32_t        ver0      = 0;
 	bool            refreshed = false;
 	int             i;
 
