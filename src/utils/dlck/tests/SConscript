@@ -65,6 +65,18 @@ def build_dlck_checker_common_ut(henv):
                         LIBS=['gurt', 'cmocka'])
 
 
+def build_dlck_checker_macros_ut(henv):
+    """Build dlck_checker_macros_ut"""
+    henv.Append(OBJPREFIX="dlck_checker_macros_ut_")
+    henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vfprintf', '-Wl,--wrap=__vfprintf_chk',
+                                 '-Wl,--wrap=d_log_sync'])
+    henv.require('argobots', 'cmocka')
+
+    libs = ['gurt', 'daos_common_pmem', 'cmocka']
+    srcs = ['dlck_checker_macros_ut.c', 'dlck_checker_ut_mock.c']
+    henv.d_test_program('dlck_checker_macros_ut', srcs, LIBS=libs)
+
+
 def build_dlck_checker_main_ut(henv):
     """Build dlck_checker_main_ut"""
     henv.Append(OBJPREFIX="dlck_checker_main_ut_")
@@ -103,19 +115,6 @@ def build_dlck_checker_worker_ut(henv):
     henv.d_test_program('dlck_checker_worker_ut', srcs, LIBS=libs)
 
 
-def build_dlck_checker_macros_ut(henv):
-    """Build dlck_checker_macros_ut"""
-    henv.Append(OBJPREFIX="dlck_checker_macros_ut_")
-    henv.Append(CPPPATH=[Dir('../../../').srcnode()])
-    henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=vfprintf', '-Wl,--wrap=__vfprintf_chk',
-                                 '-Wl,--wrap=d_log_sync'])
-    henv.require('argobots', 'cmocka')
-
-    henv.d_test_program('dlck_checker_macros_ut',
-                        ['dlck_checker_macros_ut.c', 'dlck_checker_ut_mock.c'],
-                        LIBS=['gurt', 'daos_common_pmem', 'cmocka'])
-
-
 def scons():
     """Execute build"""
     Import('env')
@@ -123,9 +122,9 @@ def scons():
     build_dlck_test_helper(env.Clone())
     build_dlck_args_ut(env.Clone())
     build_dlck_checker_common_ut(env.Clone())
+    build_dlck_checker_macros_ut(env.Clone())
     build_dlck_checker_main_ut(env.Clone())
     build_dlck_checker_worker_ut(env.Clone())
-    build_dlck_checker_macros_ut(env.Clone())
 
 
 if __name__ == "SCons.Script":

@@ -189,7 +189,7 @@ checker_print_indent_dec(struct checker *ck)
 		return;
 	}
 
-	D_ASSERTF(ck->ck_level > 0, "Cannot decrease the indent level: %d <= 0 (min)\n",
+	D_ASSERTF(ck->ck_level > 0, "Cannot decrease the indent level: %d == 0 (min)\n",
 		  ck->ck_level);
 
 	ck->ck_level--;

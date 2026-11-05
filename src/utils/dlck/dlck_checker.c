@@ -94,7 +94,6 @@ static void
 dlck_checker_main_indent_set(struct checker *ck)
 {
 	struct dlck_checker_main *dcm = dlck_checker_main_get_custom(ck);
-
 	dlck_checker_core_indent_set(&dcm->core, ck->ck_level);
 }
 
@@ -167,7 +166,6 @@ static void
 dlck_checker_worker_indent_set(struct checker *ck)
 {
 	struct dlck_checker_worker *dcw = dlck_checker_worker_get_custom(ck);
-
 	dlck_checker_core_indent_set(dcw, ck->ck_level);
 }
 

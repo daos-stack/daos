@@ -63,14 +63,13 @@ teardown(void **state)
 	return 0;
 }
 
-static void
-vfprintf_expected_output(const char *fmt, const char *output)
-{
-	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
-	expect_string(__wrap_vfprintf, fmt, fmt);
-	expect_string(__wrap_vfprintf, output, output);
-	will_return(__wrap_vfprintf, strlen(output));
-}
+#define vfprintf_expected_output(FMT, OUTPUT)                                                      \
+	do {                                                                                       \
+		expect_value(__wrap_vfprintf, stream, Mock_file_stream);                           \
+		expect_string(__wrap_vfprintf, fmt, FMT);                                          \
+		expect_string(__wrap_vfprintf, output, OUTPUT);                                    \
+		will_return(__wrap_vfprintf, strlen(OUTPUT));                                      \
+	} while (0)
 
 static void
 test_CK_PRINTF_without_args(void **state)
@@ -158,6 +157,7 @@ test_CK_APPENDFL_WARN(void **state)
 	vfprintf_expected_output("warning: worker %d: %s\n", "warning: worker 43: skipped\n");
 	CK_APPENDFL_WARN(ck, "worker %d: %s", 43, "skipped");
 	assert_int_equal(ck->ck_warnings_num, 9);
+	ck->ck_warnings_num = 7;
 }
 
 static void
@@ -172,6 +172,7 @@ test_CK_APPENDFL_WARN_without_args(void **state)
 	vfprintf_expected_output("warning: skipped\n", "warning: skipped\n");
 	CK_APPENDFL_WARN(ck, "skipped");
 	assert_int_equal(ck->ck_warnings_num, 9);
+	ck->ck_warnings_num = 7;
 }
 
 static void
@@ -285,19 +286,17 @@ test_CK_ASSERT_false_without_checker(void **state)
 	expect_assert_failure(CK_ASSERT(ck, "valid: ", false));
 }
 
-static void
-expect_indent(struct checker *ck, int ck_level)
-{
-	expect_function_call(checker_indent_set);
-	expect_value(checker_indent_set, ck, ck);
-	expect_value(checker_indent_set, ck_level, ck_level);
-}
+#define expect_indent(CK, CK_LEVEL)                                                                \
+	do {                                                                                       \
+		expect_function_call(checker_indent_set);                                          \
+		expect_value(checker_indent_set, ck, CK);                                          \
+		expect_value(checker_indent_set, ck_level, CK_LEVEL);                              \
+	} while (0)
 
 static void
 test_CK_INDENT(void **state)
 {
-	struct checker *ck         = *state;
-	int             body_calls = 0;
+	struct checker *ck = *state;
 
 	expect_indent(ck, 1);
 	expect_function_call(test_CK_INDENT);
@@ -305,17 +304,14 @@ test_CK_INDENT(void **state)
 	CK_INDENT(ck, {
 		function_called();
 		assert_int_equal(ck->ck_level, 1);
-		body_calls++;
 	});
-	assert_int_equal(body_calls, 1);
 	assert_int_equal(ck->ck_level, 0);
 }
 
 static void
 test_CK_INDENT_nested(void **state)
 {
-	struct checker *ck         = *state;
-	int             body_calls = 0;
+	struct checker *ck = *state;
 
 	expect_indent(ck, 1);
 	expect_function_call(test_CK_INDENT_nested);
@@ -330,21 +326,17 @@ test_CK_INDENT_nested(void **state)
 		CK_INDENT(ck, {
 			function_called();
 			assert_int_equal(ck->ck_level, 2);
-			body_calls++;
 		});
 		function_called();
 		assert_int_equal(ck->ck_level, 1);
-		body_calls++;
 	});
-	assert_int_equal(body_calls, 2);
 	assert_int_equal(ck->ck_level, 0);
 }
 
 static void
 test_CK_INDENT_reaches_maximum(void **state)
 {
-	struct checker *ck         = *state;
-	int             body_calls = 0;
+	struct checker *ck = *state;
 
 	ck->ck_level = CHECKER_INDENT_MAX - 1;
 	expect_indent(ck, CHECKER_INDENT_MAX);
@@ -353,10 +345,9 @@ test_CK_INDENT_reaches_maximum(void **state)
 	CK_INDENT(ck, {
 		function_called();
 		assert_int_equal(ck->ck_level, CHECKER_INDENT_MAX);
-		body_calls++;
 	});
-	assert_int_equal(body_calls, 1);
 	assert_int_equal(ck->ck_level, CHECKER_INDENT_MAX - 1);
+	ck->ck_level = 0;
 }
 
 static void
@@ -380,6 +371,7 @@ test_CK_INDENT_exceeds_maximum(void **state)
 	expect_assert_failure(CK_INDENT(ck, body_calls++));
 	assert_int_equal(body_calls, 0);
 	assert_int_equal(ck->ck_level, CHECKER_INDENT_MAX);
+	ck->ck_level = 0;
 }
 
 static void
@@ -392,52 +384,39 @@ test_CK_INDENT_below_minimum(void **state)
 	assert_int_equal(ck->ck_level, 0);
 }
 
+#define TEST(ID, DESC, FUNC) {"DLCK_CHECKER_MACRO_" #ID ": " DESC, FUNC, setup, teardown, NULL}
+
 static const struct CMUnitTest dlck_checker_macros_tests[] = {
-	{"DLCK_CHECKER_MACRO_101: printf without arguments includes prefix",
-	 test_CK_PRINTF_without_args, setup, teardown, NULL},
-    {"DLCK_CHECKER_MACRO_102: printf forwards arguments", test_CK_PRINTF, setup, teardown, NULL},
-	{"DLCK_CHECKER_MACRO_103: printf without arguments omits prefix",
-	 test_CK_PRINTF_WO_PREFIX_without_args, setup, teardown, NULL},
-    {"DLCK_CHECKER_MACRO_104: printf omits prefix", test_CK_PRINTF_WO_PREFIX, setup, teardown,
-     NULL},
-    {"DLCK_CHECKER_MACRO_105: append ok", test_CK_APPEND_OK, setup, teardown, NULL},
-    {"DLCK_CHECKER_MACRO_106: append successful rc", test_CK_APPENDL_RC_success, setup, teardown,
-     NULL},
-    {"DLCK_CHECKER_MACRO_107: append error rc", test_CK_APPENDL_RC_error, setup, teardown, NULL},
-    {"DLCK_CHECKER_MACRO_108: append formatted error", test_CK_APPENDFL_ERR, setup, teardown, NULL},
-    {"DLCK_CHECKER_MACRO_109: formatted warnings increment count", test_CK_APPENDFL_WARN, setup,
-     NULL, NULL},
-	{"DLCK_CHECKER_MACRO_110: warnings without arguments increment count",
-	 test_CK_APPENDFL_WARN_without_args, setup, NULL, NULL},
-    {"DLCK_CHECKER_MACRO_111: append newline", test_CK_APPENDL, setup, teardown, NULL},
-	{"DLCK_CHECKER_MACRO_112: printf successful rc without arguments",
-	 test_CK_PRINTFL_RC_success_without_args, setup, teardown, NULL},
-	{"DLCK_CHECKER_MACRO_113: printf error rc without arguments",
-	 test_CK_PRINTFL_RC_error_without_args, setup, teardown, NULL},
-    {"DLCK_CHECKER_MACRO_114: printf successful rc", test_CK_PRINTFL_RC_success, setup, teardown,
-     NULL},
-    {"DLCK_CHECKER_MACRO_115: printf error rc", test_CK_PRINTFL_RC_error, setup, teardown, NULL},
+    TEST(101, "printf without arguments includes prefix", test_CK_PRINTF_without_args),
+    TEST(102, "printf forwards arguments", test_CK_PRINTF),
+    TEST(103, "printf without arguments omits prefix", test_CK_PRINTF_WO_PREFIX_without_args),
+    TEST(104, "printf omits prefix", test_CK_PRINTF_WO_PREFIX),
+    TEST(105, "append ok", test_CK_APPEND_OK),
+    TEST(106, "append successful rc", test_CK_APPENDL_RC_success),
+    TEST(107, "append error rc", test_CK_APPENDL_RC_error),
+    TEST(108, "append formatted error", test_CK_APPENDFL_ERR),
+    TEST(109, "formatted warnings increment count", test_CK_APPENDFL_WARN),
+    TEST(110, "warnings without arguments increment count", test_CK_APPENDFL_WARN_without_args),
+    TEST(111, "append newline", test_CK_APPENDL),
+    TEST(112, "printf successful rc without arguments", test_CK_PRINTFL_RC_success_without_args),
+    TEST(113, "printf error rc without arguments", test_CK_PRINTFL_RC_error_without_args),
+    TEST(114, "printf successful rc", test_CK_PRINTFL_RC_success),
+    TEST(115, "printf error rc", test_CK_PRINTFL_RC_error),
     {"DLCK_CHECKER_MACRO_116: output without checker is skipped", test_CK_macros_without_checker,
      NULL, NULL, NULL},
-    {"DLCK_CHECKER_MACRO_117: true condition reports yes", test_CK_ASSERT_true_with_checker, setup,
-     teardown, NULL},
-    {"DLCK_CHECKER_MACRO_118: false condition reports no", test_CK_ASSERT_false_with_checker, setup,
-     teardown, NULL},
+    TEST(117, "true condition reports yes", test_CK_ASSERT_true_with_checker),
+    TEST(118, "false condition reports no", test_CK_ASSERT_false_with_checker),
     {"DLCK_CHECKER_MACRO_119: true condition without checker", test_CK_ASSERT_true_without_checker,
      setup, NULL, NULL},
     {"DLCK_CHECKER_MACRO_120: false condition without checker asserts",
      test_CK_ASSERT_false_without_checker, setup, NULL, NULL},
-    {"DLCK_CHECKER_MACRO_121: indent brackets body", test_CK_INDENT, setup, teardown, NULL},
-    {"DLCK_CHECKER_MACRO_122: nested indent restores levels", test_CK_INDENT_nested, setup,
-     teardown, NULL},
-    {"DLCK_CHECKER_MACRO_123: indent reaches maximum", test_CK_INDENT_reaches_maximum, setup, NULL,
-     NULL},
+    TEST(121, "indent brackets body", test_CK_INDENT),
+    TEST(122, "nested indent restores levels", test_CK_INDENT_nested),
+    TEST(123, "indent reaches maximum", test_CK_INDENT_reaches_maximum),
     {"DLCK_CHECKER_MACRO_124: indent without checker runs body", test_CK_INDENT_without_checker,
      setup, NULL, NULL},
-    {"DLCK_CHECKER_MACRO_125: indent beyond maximum asserts", test_CK_INDENT_exceeds_maximum, setup,
-     NULL, NULL},
-    {"DLCK_CHECKER_MACRO_126: indent below minimum asserts", test_CK_INDENT_below_minimum, setup,
-     teardown, NULL},
+    TEST(125, "indent beyond maximum asserts", test_CK_INDENT_exceeds_maximum),
+    TEST(126, "indent below minimum asserts", test_CK_INDENT_below_minimum),
 };
 
 int
@@ -445,11 +424,20 @@ main(int argc, char **argv)
 {
 	d_register_alt_assert(mock_assert);
 #if CMOCKA_FILTER_SUPPORTED
-	char filter[1024];
+	char filter[256];
+
 	if (argc > 1) {
-		snprintf(filter, 1024, "*%s*", argv[1]);
+		int rc = snprintf(filter, sizeof(filter), "*%s*", argv[1]);
+
+		if (rc < 0 || (size_t)rc >= sizeof(filter)) {
+			fprintf(stderr, "Test filter is too long\n");
+			return 1;
+		}
 		cmocka_set_test_filter(filter);
 	}
+#else
+	(void)argc;
+	(void)argv;
 #endif
 	return cmocka_run_group_tests_name("dlck_checker_macros_ut", dlck_checker_macros_tests,
 					   NULL, NULL);
