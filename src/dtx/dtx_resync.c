@@ -19,20 +19,11 @@
 #include <abt.h>
 #include "dtx_internal.h"
 
-struct dtx_resync_entry {
-	d_list_t		dre_link;
-	daos_epoch_t		dre_epoch;
-	daos_unit_oid_t		dre_oid;
-	uint32_t		dre_inline_mbs:1;
-	uint64_t		dre_dkey_hash;
-	struct dtx_entry	dre_dte;
-};
-
 #define dre_xid		dre_dte.dte_xid
 
 struct dtx_resync_head {
-	d_list_t		drh_list;
-	int			drh_count;
+	d_list_t drh_list;
+	d_list_t drh_pending;
 };
 
 struct dtx_resync_args {
@@ -41,91 +32,43 @@ struct dtx_resync_args {
 	daos_epoch_t           epoch;
 	uint32_t               resync_version;
 	uint32_t               discard_version;
-	bool                   for_all;
 };
 
-static inline void
-dtx_dre_release(struct dtx_resync_head *drh, struct dtx_resync_entry *dre)
+static void
+dtx_resync_commit(struct ds_cont_child *cont, struct dtx_entry **dtes, struct dtx_resync_head *drh,
+		  int count)
 {
-	drh->drh_count--;
-	d_list_del(&dre->dre_link);
-	if (--(dre->dre_dte.dte_refs) == 0) {
-		if (dre->dre_inline_mbs == 0)
-			D_FREE(dre->dre_dte.dte_mbs);
-		D_FREE(dre);
-	}
-}
+	struct dtx_resync_entry *dre;
+	struct dtx_resync_entry *next;
+	int                      rc = 0;
+	int                      i;
 
-static int
-dtx_resync_commit(struct ds_cont_child *cont,
-		  struct dtx_resync_head *drh, int count)
-{
-	struct dtx_resync_entry		 *dre;
-	struct dtx_entry		**dtes = NULL;
-	struct dtx_cos_key		 *dcks = NULL;
-	int				  rc = 0;
-	int				  i = 0;
-	int				  j = 0;
+	D_ASSERT(count <= DTX_THRESHOLD_COUNT);
 
-	D_ASSERT(drh->drh_count >= count);
-
-	D_ALLOC_ARRAY(dtes, count);
-	if (dtes == NULL)
-		return -DER_NOMEM;
-
-	D_ALLOC_ARRAY(dcks, count);
-	if (dcks == NULL) {
-		D_FREE(dtes);
-		return -DER_NOMEM;
+	i = 0;
+	d_list_for_each_entry(dre, &drh->drh_list, dre_link) {
+		dtes[i] = &dre->dre_dte;
+		if (++i >= count)
+			break;
 	}
 
-	for (i = 0; i < count; i++) {
-		dre = d_list_entry(drh->drh_list.next,
-				   struct dtx_resync_entry, dre_link);
+	rc = dtx_commit(cont, dtes, NULL, count, false);
+	if (rc < 0)
+		D_ERROR("Failed to commit for DTX resync: " DF_RC "\n", DP_RC(rc));
 
-		/* Someone (the DTX owner or batched commit ULT) may have
-		 * committed or aborted the DTX during we handling other
-		 * DTXs. So double check the status before current commit.
-		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, DCI_DEFAULT);
-
-		/*
-		 * Skip this DTX since it has been committed or aggregated.
-		 * If we failed to check the status, then assume that it is
-		 * not committed, then commit it (again), that is harmless.
-		 */
-		if (rc != DTX_ST_COMMITTED && rc != -DER_NONEXIST) {
-			dtes[j] = dtx_entry_get(&dre->dre_dte);
-			dcks[j].oid = dre->dre_oid;
-			dcks[j].dkey_hash = dre->dre_dkey_hash;
-			j++;
+	i = 0;
+	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
+		if (rc < 0) {
+			dre->dre_err = rc;
+			d_list_del(&dre->dre_link);
+			d_list_add_tail(&dre->dre_link, &drh->drh_pending);
+		} else {
+			dtx_dre_release(dre);
 		}
 
-		dtx_dre_release(drh, dre);
+		if (++i >= count)
+			break;
 	}
-
-	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j, true);
-		if (rc < 0)
-			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
-				DP_RC(rc));
-
-		for (i = 0; i < j; i++) {
-			D_ASSERT(dtes[i]->dte_refs == 1);
-
-			dre = d_list_entry(dtes[i], struct dtx_resync_entry,
-					   dre_dte);
-			if (dre->dre_inline_mbs == 0)
-				D_FREE(dre->dre_dte.dte_mbs);
-			D_FREE(dre);
-		}
-	} else {
-		rc = 0;
-	}
-
-	D_FREE(dtes);
-	D_FREE(dcks);
-	return rc;
 }
 
 static int
@@ -219,42 +162,36 @@ dtx_verify_groups(struct ds_pool *pool, struct dtx_memberships *mbs,
 
 static int
 dtx_resync_local_check(struct ds_cont_child *cont, struct dtx_id *xid, uint32_t version,
-		       bool refresh, bool post)
+		       uint32_t intent)
 {
 	int rc;
 
-	rc = vos_dtx_check(cont->sc_hdl, xid, NULL, post ? NULL : &version, NULL,
-			   post ? DCI_DEFAULT : DCI_RESYNC);
+	rc = vos_dtx_check(cont->sc_hdl, xid, NULL, &version, NULL, intent);
 	if (rc == -DER_NONEXIST)
 		return DSHR_IGNORE;
 
-	if (rc == -DER_INPROGRESS) {
-		if (!refresh && !post)
-			dss_sleep(10);
-		return DSHR_NEED_RETRY;
-	}
-
-	if (rc < 0)
-		return rc;
-
-	switch (rc) {
-	case DTX_ST_INITED:
-		if (refresh)
-			return DSHR_IGNORE;
-		/* Fall through. */
-	case DTX_ST_PREPARED:
-		return 0;
-	default:
+	if (rc == -DER_INPROGRESS)
+		/*
+		 * For resync case, "-DER_INPROGRESS" means that current DTX is being processed:
+		 * committing, aborting or preparing. Anyway, DTX resync will ignore it to avoid
+		 * conflict.
+		 */
 		return DSHR_IGNORE;
-	}
+
+	if (rc == DTX_ST_PREPARED)
+		return 0;
+
+	return rc < 0 ? rc : DSHR_IGNORE;
 }
 
-int
-dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_unit_oid_t oid,
-		      uint64_t dkey_hash, daos_epoch_t epoch, int *tgt_array, int *err)
+static int
+dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_resync_entry *dre, int *tgt_array,
+		      int *err)
 {
+	struct dtx_entry       *dte     = &dre->dre_dte;
 	struct dtx_memberships *mbs     = dte->dte_mbs;
 	struct dtx_coll_entry  *dce     = NULL;
+	daos_epoch_t            epoch   = dre->dre_epoch;
 	uint32_t                version = cont->sc_pool->spc_map_version;
 	int                     rc      = 0;
 
@@ -263,12 +200,12 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 	 * So check it locally before senting out CHECK RPCs to remote targets. Similarly,
 	 * double check locally after CHECK RPC replied.
 	 */
-	rc = dtx_resync_local_check(cont, &dte->dte_xid, version, tgt_array == NULL, false);
+	rc = dtx_resync_local_check(cont, &dte->dte_xid, version, DCI_RESYNC_LEADER);
 	if (rc != 0)
 		goto out;
 
 	if (mbs->dm_flags & DMF_COLL_TARGET) {
-		rc = dtx_coll_prep(cont->sc_pool_uuid, oid, &dte->dte_xid, mbs,
+		rc = dtx_coll_prep(cont->sc_pool_uuid, dre->dre_oid, &dte->dte_xid, mbs,
 				   dss_get_module_info()->dmi_tgt_id, dte->dte_ver, version, true,
 				   true, &dce);
 		if (rc != 0) {
@@ -336,7 +273,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before next action.
 		 */
-		rc = dtx_resync_local_check(cont, &dte->dte_xid, version, tgt_array == NULL, true);
+		rc = dtx_resync_local_check(cont, &dte->dte_xid, version, DCI_RESYNC_ABORT);
 		if (rc != 0)
 			goto out;
 
@@ -379,35 +316,94 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 	}
 
 out:
-	if (rc == DSHR_NEED_COMMIT && mbs->dm_flags & DMF_COLL_TARGET) {
-		struct dtx_cos_key	dck;
-
-		dck.oid = oid;
-		dck.dkey_hash = dkey_hash;
-		rc = dtx_coll_commit(cont, dce, &dck, true);
+	if (rc == DSHR_NEED_COMMIT) {
+		/*
+		 * IO handler for resent may have changed the DTX by race, re-check it locally.
+		 * If current DTX has already been committed or be marked as committable by IO
+		 * handler locally, then DTX resync logic will skip it.
+		 */
+		rc = dtx_resync_local_check(cont, &dte->dte_xid, version, DCI_RESYNC_COMMIT);
+		if (rc == 0) {
+			rc = DSHR_NEED_COMMIT;
+			if (dce != NULL)
+				dre->dre_dce = dtx_coll_entry_get(dce);
+		}
 	}
 
 	dtx_coll_entry_put(dce);
 	return rc;
 }
 
+int
+dtx_handle_resync_pending(struct ds_cont_child *cont, d_list_t *head, uint32_t seq,
+			  struct sched_request *sr)
+{
+	struct dtx_resync_entry *dre;
+	struct dtx_resync_entry *next;
+	struct dtx_entry        *dte;
+	int                      rc;
+
+	d_list_for_each_entry_safe(dre, next, head, dre_link) {
+		if (dre->dre_seq == seq)
+			break;
+
+		dre->dre_seq = seq;
+
+		if (dre->dre_dce != NULL) {
+			rc = dtx_coll_commit(cont, dre->dre_dce, NULL, false);
+		} else {
+			/*
+			 * Some DTX entries in the resync pending list may have been committed
+			 * successfully, but not easy to distinguish them when added them into
+			 * the pending list. Let's re-commit one by one to filter out them. It
+			 * maybe inefficient, but consider that the case of DTX commit failure
+			 * during DTX resync is very rare, then it is no matter.
+			 */
+			dte = &dre->dre_dte;
+			rc  = dtx_commit(cont, &dte, NULL, 1, false);
+		}
+
+		if (rc == 0) {
+			dtx_dre_release(dre);
+		} else {
+			/*
+			 * If failed to commit, move it to the tail of cont::sc_dtx_resync_pending
+			 * and re-commit next time via batched commit logic.
+			 */
+			dre->dre_err = rc;
+			d_list_del(&dre->dre_link);
+			d_list_add_tail(&dre->dre_link, &cont->sc_dtx_resync_pending);
+		}
+
+		if (sr != NULL && dss_ult_exiting(sr))
+			return -DER_SHUTDOWN;
+	}
+
+	return 0;
+}
+
 static int
 dtx_status_handle(struct dtx_resync_args *dra)
 {
-	struct ds_cont_child		*cont = dra->cont;
-	struct dtx_resync_head		*drh = &dra->tables;
-	struct dtx_resync_entry		*dre;
-	struct dtx_resync_entry		*next;
-	struct dtx_memberships		*mbs;
-	struct ds_pool			*pool = cont->sc_pool->spc_pool;
-	int				*tgt_array = NULL;
-	int				 tgt_cnt;
-	int				 count = 0;
-	int				 err = 0;
-	int				 rc;
+	struct dtx_resync_entry *dre;
+	struct dtx_resync_entry *next;
+	struct dtx_memberships  *mbs;
+	struct ds_cont_child    *cont      = dra->cont;
+	struct dtx_resync_head  *drh       = &dra->tables;
+	struct ds_pool          *pool      = cont->sc_pool->spc_pool;
+	struct dtx_entry       **dtes      = NULL;
+	int                     *tgt_array = NULL;
+	int                      tgt_cnt;
+	int                      count = 0;
+	int                      err   = 0;
+	int                      rc;
 
-	if (drh->drh_count == 0)
+	if (d_list_empty(&drh->drh_list))
 		goto out;
+
+	D_ALLOC_ARRAY(dtes, DTX_THRESHOLD_COUNT);
+	if (dtes == NULL)
+		D_GOTO(out, err = -DER_NOMEM);
 
 	ABT_rwlock_rdlock(pool->sp_lock);
 	tgt_cnt = pool_map_target_nr(pool->sp_map);
@@ -430,7 +426,7 @@ again:
 				D_ERROR("Failed to discard stale DTX "DF_DTI" with ver %d/%d: "
 					DF_RC"\n", DP_DTI(&dre->dre_xid), dre->dre_dte.dte_ver,
 					dra->discard_version, DP_RC(err));
-			dtx_dre_release(drh, dre);
+			dtx_dre_release(dre);
 			continue;
 		}
 
@@ -443,7 +439,7 @@ again:
 					       DF_DTI" (ver = %u/%u/%u): rc = %d, skip it.\n",
 					       DP_DTI(&dre->dre_xid), dra->resync_version,
 					       dra->discard_version, dre->dre_dte.dte_ver, rc);
-				dtx_dre_release(drh, dre);
+				dtx_dre_release(dre);
 				continue;
 			}
 		}
@@ -466,18 +462,29 @@ again:
 					DF_DTI" (ver = %u/%u/%u) skip it.\n",
 					DP_DTI(&dre->dre_xid), dra->resync_version,
 					dra->discard_version, dre->dre_dte.dte_ver);
-			dtx_dre_release(drh, dre);
+			dtx_dre_release(dre);
 			continue;
 		}
 
-		rc = dtx_status_handle_one(cont, &dre->dre_dte, dre->dre_oid, dre->dre_dkey_hash,
-					   dre->dre_epoch, tgt_array, &err);
+		rc = dtx_status_handle_one(cont, dre, tgt_array, &err);
 
 		if (unlikely(cont->sc_stopping))
 			D_GOTO(out, err = -DER_CANCELED);
 
 		switch (rc) {
 		case DSHR_NEED_COMMIT:
+			if (mbs->dm_flags & DMF_COLL_TARGET) {
+				rc = dtx_coll_commit(cont, dre->dre_dce, NULL, false);
+				if (rc != 0) {
+					dre->dre_err = rc;
+					d_list_del(&dre->dre_link);
+					d_list_add_tail(&dre->dre_link, &drh->drh_pending);
+				} else {
+					dtx_dre_release(dre);
+				}
+				continue;
+			}
+
 			goto commit;
 		case DSHR_NEED_RETRY:
 			d_list_del(&dre->dre_link);
@@ -487,7 +494,7 @@ again:
 		case DSHR_ABORT_FAILED:
 		case DSHR_CORRUPT:
 		default:
-			dtx_dre_release(drh, dre);
+			dtx_dre_release(dre);
 			continue;
 		}
 
@@ -496,17 +503,13 @@ commit:
 			DF_DTI", try to commit it.\n", DP_DTI(&dre->dre_xid));
 
 		if (++count >= DTX_THRESHOLD_COUNT) {
-			rc = dtx_resync_commit(cont, drh, count);
-			if (rc < 0)
-				err = rc;
+			dtx_resync_commit(cont, dtes, drh, count);
 			count = 0;
 		}
 	}
 
 	if (count > 0) {
-		rc = dtx_resync_commit(cont, drh, count);
-		if (rc < 0)
-			err = rc;
+		dtx_resync_commit(cont, dtes, drh, count);
 		count = 0;
 	}
 
@@ -516,10 +519,29 @@ commit:
 
 out:
 	D_FREE(tgt_array);
+	D_FREE(dtes);
+
+	/* Handle former left pending committable DTX entries. */
+	if (!dtx_cont_opened(cont) && unlikely(!d_list_empty(&cont->sc_dtx_resync_pending))) {
+		while ((dre = d_list_pop_entry(&drh->drh_list, struct dtx_resync_entry,
+					       dre_link)) != NULL) {
+			dre->dre_seq = 0;
+			d_list_add_tail(&dre->dre_link, &drh->drh_pending);
+		}
+	}
+
+	/* Try to re-commit those pending DTX entries before exit DTX resync. */
+	dtx_handle_resync_pending(cont, &drh->drh_pending, 1, NULL);
+
+	if (unlikely(!d_list_empty(&cont->sc_dtx_resync_pending)) && err == 0) {
+		dre = d_list_entry(cont->sc_dtx_resync_pending.next, struct dtx_resync_entry,
+				   dre_link);
+		err = dre->dre_err;
+	}
 
 	while ((dre = d_list_pop_entry(&drh->drh_list, struct dtx_resync_entry,
 				       dre_link)) != NULL)
-		dtx_dre_release(drh, dre);
+		dtx_dre_release(dre);
 
 	if (err >= 0 && dra->resync_version != dra->discard_version)
 		/* Drain old committable DTX to help subsequent rebuild. */
@@ -572,12 +594,17 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	/*
 	 * The DTX version maybe refreshed via obj_handle_resend(). It means that either the
 	 * DTX is generated against the latest pool map or related IO RPC is resent by client
-	 * after pool map changed. Under both cases, the DTX resync that is triggered for pool
-	 * map changes (@for_all is false) should not handle such DTX to avoid making conflict
-	 * commit/abort decision (against regular IO handler) by race.
+	 * after pool map changed. Under both cases, DTX resync should not handle such DTX to
+	 * avoid making conflict commit/abort decision (against regular IO handler) by race.
+	 *
+	 * But for the case of engine restart quickly (without pool map change), DTX resync
+	 * that is triggered by the initial pool map from PS leader needs to handle all the
+	 * DTX entries before engine restart. Because DTX 'committable' status is cached in
+	 * DRAM and will be lost after engine restart. If do not synchronize them, related
+	 * IO (both regular and rebuild) may miss the latest valid data.
 	 */
 	if ((ent->ie_dtx_ver > dra->resync_version) ||
-	    (ent->ie_dtx_ver == dra->resync_version && !dra->for_all))
+	    (ent->ie_dtx_ver == dra->resync_version && ent->ie_epoch > dss_get_start_epoch()))
 		return 0;
 
 	if (ent->ie_dtx_tgt_cnt == 0)
@@ -629,13 +656,12 @@ out:
 	dte->dte_xid = ent->ie_dtx_xid;
 	dte->dte_refs = 1;
 	d_list_add_tail(&dre->dre_link, &dra->tables.drh_list);
-	dra->tables.drh_count++;
 
 	return 0;
 }
 
 int
-dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block)
+dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver)
 {
 	struct ds_pool			*pool;
 	struct pool_target		*target;
@@ -644,16 +670,17 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 	int				 rc = 0;
 	int				 rc1 = 0;
 
-	D_DEBUG(DB_MD, "Enter DTX resync (%s) for " DF_UUID "/" DF_UUID " with ver %u\n",
-		block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
+	D_DEBUG(DB_MD, "Enter DTX resync for " DF_UUID "/" DF_UUID " with ver %u\n",
+		DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 
 	crt_group_rank(NULL, &myrank);
 
 	pool = cont->sc_pool->spc_pool;
 	if (pool->sp_disable_dtx_resync) {
-		D_DEBUG(DB_MD, "Skip DTX resync (%s) for " DF_UUID "/" DF_UUID " with ver %u\n",
-			block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid),
-			DP_UUID(cont->sc_uuid), ver);
+		/* Directly set resync version when DTX resync is disabled. */
+		vos_set_dtx_resync_version(cont->sc_hdl, ver);
+		D_DEBUG(DB_MD, "Skip DTX resync for " DF_UUID "/" DF_UUID " with ver %u\n",
+			DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 		goto out;
 	}
 
@@ -673,10 +700,6 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 	ABT_mutex_lock(cont->sc_mutex);
 
 	while (cont->sc_dtx_resyncing) {
-		if (!block) {
-			ABT_mutex_unlock(cont->sc_mutex);
-			goto out;
-		}
 		D_DEBUG(DB_TRACE, "Waiting for resync of " DF_UUID "\n", DP_UUID(cont->sc_uuid));
 		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 	}
@@ -684,6 +707,7 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 	if (myrank == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
 		dss_set_start_epoch();
 		vos_dtx_cache_reset(cont->sc_hdl, true);
+		cont->sc_dtx_indexed = 0;
 
 		while (1) {
 			rc = vos_dtx_cmt_reindex(cont->sc_hdl);
@@ -704,12 +728,7 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 	dra.resync_version = ver;
 	dra.epoch = d_hlc_get();
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
-	dra.tables.drh_count = 0;
-
-	if (block)
-		dra.for_all = false;
-	else
-		dra.for_all = true;
+	D_INIT_LIST_HEAD(&dra.tables.drh_pending);
 
 	/*
 	 * Trigger DTX reindex. That will avoid DTX_CHECK from others being blocked.
@@ -724,8 +743,8 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 		}
 	}
 
-	D_DEBUG(DB_MD, "Start DTX resync (%s) scan for " DF_UUID "/" DF_UUID " with ver %u\n",
-		block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
+	D_DEBUG(DB_MD, "Start DTX resync scan for " DF_UUID "/" DF_UUID " with ver %u\n",
+		DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 
 	rc = ds_cont_iter(po_hdl, cont->sc_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX, 0);
 
@@ -743,9 +762,8 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool 
 		vos_set_dtx_resync_version(cont->sc_hdl, ver);
 
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MD, rc,
-		  "Stop DTX resync (%s) scan for " DF_UUID "/" DF_UUID " with ver %u",
-		  block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid),
-		  ver);
+		  "Stop DTX resync scan for " DF_UUID "/" DF_UUID " with ver %u",
+		  DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 
 fail:
 	ABT_mutex_lock(cont->sc_mutex);
@@ -755,9 +773,8 @@ fail:
 
 out:
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MD, rc,
-		  "Exit DTX resync (%s) scan for " DF_UUID "/" DF_UUID " with ver %u",
-		  block ? "sync" : "async", DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid),
-		  ver);
+		  "Exit DTX resync scan for " DF_UUID "/" DF_UUID " with ver %u",
+		  DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 
 	return rc > 0 ? 0 : rc;
 }
@@ -781,8 +798,12 @@ container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return 0;
 
 	rc = ds_cont_child_lookup(arg->pool_uuid, entry->ie_couuid, &cont);
-	if (rc != 0)
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST || rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING ||
+		    rc == -DER_SHUTDOWN)
+			rc = 0;
 		goto out;
+	}
 
 	uuid_copy(scan_arg->co_uuid, entry->ie_couuid);
 	if (arg->for_orphan) {
@@ -795,7 +816,7 @@ again:
 			goto again;
 		}
 	} else {
-		rc = dtx_resync(iter_param->ip_hdl, cont, arg->version, true);
+		rc = dtx_resync(iter_param->ip_hdl, cont, arg->version);
 	}
 	if (rc == 0)
 		/* Since dtx_{cleanup,resync} might yield, let's reprobe anyway */
@@ -814,37 +835,32 @@ out:
 static int
 dtx_resync_one(void *data)
 {
-	struct dtx_scan_args		*arg = data;
-	struct ds_pool_child		*child;
-	vos_iter_param_t		*param = NULL;
-	struct vos_iter_anchors		*anchor = NULL;
-	struct dtx_container_scan_arg	 cb_arg = { 0 };
-	int				 rc;
+	struct ds_pool_child         *child;
+	struct dtx_scan_args         *arg    = data;
+	vos_iter_param_t              param  = {0};
+	struct vos_iter_anchors       anchor = {0};
+	struct dtx_container_scan_arg cb_arg = {0};
+	int                           rc;
 
 	child = ds_pool_child_lookup(arg->pool_uuid);
-	if (child == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
+	if (child == NULL) {
+		D_WARN("Cannot find pool " DF_UUID " for rebuild with version %u\n",
+		       DP_UUID(arg->pool_uuid), arg->version);
+		/* Pool may be destroyed or stopped by race, return 0 instead of failure. */
+		D_GOTO(out, rc = 0);
+	}
 
 	if (unlikely(child->spc_no_storage))
 		D_GOTO(out, rc = 0);
 
-	D_ALLOC_PTR(param);
-	if (param == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	cb_arg.arg     = *arg;
+	param.ip_hdl   = child->spc_hdl;
+	param.ip_flags = VOS_IT_FOR_MIGRATION;
 
-	D_ALLOC_PTR(anchor);
-	if (anchor == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	cb_arg.arg = *arg;
-	param->ip_hdl = child->spc_hdl;
-	param->ip_flags = VOS_IT_FOR_MIGRATION;
-	rc = vos_iterate(param, VOS_ITER_COUUID, false, anchor,
-			 container_scan_cb, NULL, &cb_arg, NULL);
+	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor, container_scan_cb, NULL, &cb_arg,
+			 NULL);
 
 out:
-	D_FREE(param);
-	D_FREE(anchor);
 	if (child != NULL)
 		ds_pool_child_put(child);
 
@@ -857,10 +873,12 @@ out:
 void
 dtx_resync_ult(void *data)
 {
-	struct dtx_scan_args	*arg = data;
-	struct ds_pool		*pool = NULL;
-	int			rc;
+	struct dtx_scan_args *arg   = data;
+	struct ds_pool       *pool  = NULL;
+	int                   retry = 0;
+	int                   rc;
 
+again:
 	rc = ds_pool_lookup(arg->pool_uuid, &pool);
 	if (rc != 0) {
 		D_WARN("Cannot find the pool "DF_UUID" for DTX resync: "DF_RC"\n",
@@ -874,27 +892,44 @@ dtx_resync_ult(void *data)
 			arg->version);
 		goto out;
 	}
-	D_DEBUG(DB_MD, DF_UUID" update dtx resync version %u->%u\n",
-		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
-		arg->version);
 
 	/* Delay 5 seconds for DTX resync. */
 	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
 		dss_sleep(5 * 1000);
 
+	D_DEBUG(DB_MD, DF_UUID " start dtx resync: version %u vs %u, retry %d times.\n",
+		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version, arg->version, retry);
+
 	rc = ds_pool_thread_collective(arg->pool_uuid, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
 				       PO_COMP_ST_NEW, dtx_resync_one, arg, DSS_ULT_DEEP_STACK);
-	if (rc) {
-		/* If dtx resync fails, then let's still update
-		 * sp_dtx_resync_version, so the rebuild can go ahead,
-		 * though it might fail, instead of hanging here.
+	if (rc != 0) {
+		D_ERROR("Failed to resync DTX for pool " DF_UUID " version %u: " DF_RC "\n",
+			DP_UUID(arg->pool_uuid), arg->version, DP_RC(rc));
+		/*
+		 * NOTE: Do not update sp_dtx_resync_version if DTX resync failed; otherwise
+		 *	 subsequent rebuild may lost data silently that must be avoided.
+		 *
+		 *	 If pool map was refreshed during current DTX resync, then it is no matter
+		 *	 to failout since the DTX resync for new pool map is on the way. Otherwise
+		 *	 let's retry DTX resync until done or pool shutdown or destroyed.
 		 */
-		D_ERROR("dtx resync collective "DF_UUID" %d.\n",
-			DP_UUID(arg->pool_uuid), rc);
+		if (pool->sp_map_version > arg->version)
+			goto out;
+
+		ds_pool_put(pool);
+		pool = NULL;
+
+		dss_sleep(1000);
+		retry++;
+
+		goto again;
 	}
 
-	if (pool->sp_dtx_resync_version < arg->version)
+	if (pool->sp_dtx_resync_version < arg->version) {
+		D_DEBUG(DB_MD, DF_UUID " update dtx resync version %u->%u\n",
+			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version, arg->version);
 		pool->sp_dtx_resync_version = arg->version;
+	}
 
 out:
 	if (pool != NULL)

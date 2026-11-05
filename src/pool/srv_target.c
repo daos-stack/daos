@@ -514,6 +514,7 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	char			*path;
 	int			 rc;
 	struct ds_pool_flags_arg set_args = {0};
+	uint32_t                 flags;
 
 	D_ASSERTF(*child->spc_state == POOL_CHILD_NEW, "state:%u", *child->spc_state);
 	D_ASSERT(!d_list_empty(&child->spc_list));
@@ -531,8 +532,12 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto out;
 
 	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
-	rc = vos_pool_open_metrics(path, child->spc_uuid,
-				   VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH | VOS_POF_EXTERNAL_CHKPT,
+
+	flags = VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH | VOS_POF_EXTERNAL_CHKPT;
+	if (ds_pool_restricted(child->spc_pool, false))
+		flags |= VOS_POF_FOR_CHECK;
+
+	rc = vos_pool_open_metrics(path, child->spc_uuid, flags,
 				   child->spc_metrics[DAOS_VOS_MODULE], NULL, &child->spc_hdl);
 
 	D_FREE(path);
@@ -2186,9 +2191,11 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       DP_UUID(pool->sp_uuid), map_version_before, map_version);
 	}
 
-	if (map_updated && !ds_pool_restricted(pool, false)) {
-		struct dtx_scan_args	*arg;
-		int ret;
+	if ((map_updated || (pool->sp_map_version == map_version && pool->sp_retry_dtx_resync)) &&
+	    !ds_pool_restricted(pool, false)) {
+		struct dtx_scan_args *arg;
+
+		pool->sp_retry_dtx_resync = 1;
 
 		D_ALLOC_PTR(arg);
 		if (arg == NULL)
@@ -2196,12 +2203,13 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 
 		uuid_copy(arg->pool_uuid, pool->sp_uuid);
 		arg->version = pool->sp_map_version;
-		ret = dss_ult_create(dtx_resync_ult, arg, DSS_XS_SYS,
-				     0, 0, NULL);
-		if (ret) {
-			/* Ignore DTX resync failure that is not fatal. */
-			D_WARN("dtx_resync_ult failure %d\n", ret);
+		rc           = dss_ult_create(dtx_resync_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+		if (rc != 0) {
+			D_ERROR("Fail to start DTX resync ULT for " DF_UUID ": version %u, rd %d\n",
+				DP_UUID(pool->sp_uuid), pool->sp_map_version, rc);
 			D_FREE(arg);
+		} else {
+			pool->sp_retry_dtx_resync = 0;
 		}
 	} else {
 		/* This should be a D_DEBUG eventually. */
