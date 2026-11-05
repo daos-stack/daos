@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -699,6 +699,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		/* Formerly a side effect of building the debug log string; keep it unconditional */
 		if ((*ranks)->rl_nr > 0)
 			d_rank_list_sort(*ranks);
+
 		dc_pool_log_ranks(pool->dp_pool, *ranks, get_enabled);
 	}
 
