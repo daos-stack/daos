@@ -10,7 +10,7 @@ import json
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec
 import tempfile
 from enum import Enum
 from pathlib import Path
