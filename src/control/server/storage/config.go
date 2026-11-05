@@ -867,7 +867,8 @@ func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
 // (one element of bdev_hotplug_range). Domain and bus-ID are both mandatory, each independently
 // a single value or an inclusive range.
 type BdevHotplugRange struct {
-	hardware.PCIBus
+	LowAddress  hardware.PCIAddress
+	HighAddress hardware.PCIAddress
 }
 
 // NewBdevHotplugRange parses a single "<domain>:<bus-id>" entry, where each side is either a

@@ -417,6 +417,30 @@ func TestStorage_NewBdevHotplugRange(t *testing.T) {
 	}
 }
 
+// TestStorage_BdevHotplugRange_JSON is a regression test for JSON marshal/unmarshal of
+// BdevHotplugRange.
+func TestStorage_BdevHotplugRange_JSON(t *testing.T) {
+	hr, err := NewBdevHotplugRange("0x01:0x00-0xFF")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &BdevWriteConfigRequest{HotplugRanges: BdevHotplugRanges{hr}}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal: %s", err)
+	}
+
+	gotReq := new(BdevWriteConfigRequest)
+	if err := json.Unmarshal(data, gotReq); err != nil {
+		t.Fatalf("unmarshal: %s", err)
+	}
+
+	if diff := cmp.Diff(req.HotplugRanges, gotReq.HotplugRanges); diff != "" {
+		t.Fatalf("unexpected hotplug ranges after round-trip (-want +got):\n%s", diff)
+	}
+}
+
 func TestStorage_BdevConfig_Validate_HotplugRangeMutualExclusion(t *testing.T) {
 	for name, tc := range map[string]struct {
 		busidRange    *BdevBusRange
