@@ -342,6 +342,7 @@ def define_components(reqs):
                 retriever=GitRepoRetriever(),
                 commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
+                           '-Dexamples=False', '-Dtests=False',
                            '--default-library', 'static', '../fused'],
                           ['meson', 'setup', '--reconfigure', '../fused'],
                           ['ninja', 'install']],
