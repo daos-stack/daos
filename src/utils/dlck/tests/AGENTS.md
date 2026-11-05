@@ -54,6 +54,9 @@
 - For strings: `expect_string()` with `check_expected()`.
 - For pointers: `expect_value()` with `check_expected_ptr()`. This CMocka version does not provide
   `expect_ptr()`.
+- Define helpers that register CMocka `expect_*()` expectations as macros, not functions. CMocka
+  records the expectation's source location, so a function helper makes unconsumed-expectation
+  diagnostics point to the helper instead of the test call site.
 
 ## Strict Mocks
 
