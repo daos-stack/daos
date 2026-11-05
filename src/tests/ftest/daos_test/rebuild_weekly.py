@@ -17,7 +17,7 @@ class DaosCoreTestRebuildWeekly(DaosCoreBase):
         """Jira ID: DAOS-19842
 
         Test Description:
-            Run daos_test -k -s5: all the REBUILD_WEEKLYn subtests of
+            Run daos_test -k -s5: all the REBUILD_WEEKLY sub-tests of
             src/tests/suite/daos_rebuild_weekly.c, which are too slow to run
             on every PR.
 
