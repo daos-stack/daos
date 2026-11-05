@@ -8,7 +8,7 @@ section of the DAOS Community Wiki.
 
 For questions about contributing, please post to our
 [user forum](https://daos.groups.io/g/daos)
-or the DAOS
+or to the DAOS
 [slack channel](https://daos-stack.slack.com/).
 Bugs should be reported through our
 [Jira issue tracker](https://jira.daos.io/),
