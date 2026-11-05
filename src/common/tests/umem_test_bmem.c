@@ -81,6 +81,37 @@ struct umem_store_ops _store_ops = {
 struct umem_store ustore = { .stor_size = POOL_SIZE, .stor_ops = &_store_ops,
 			     .store_type = DAOS_MD_BMEM };
 
+static inline void *
+tfifo_create(unsigned int tier)
+{
+	return (void *)(UINT64_MAX);
+}
+
+static inline void
+tfifo_destroy(void *tq)
+{
+}
+
+static inline void
+tfifo_enter(void *tq, unsigned int tier)
+{
+}
+
+static inline void
+tfifo_exit(void *tq, unsigned int tier)
+{
+}
+
+static inline void
+tfifo_wait(void *tq, unsigned int tier)
+{
+}
+
+static inline void
+tfifo_wakeup_next(void *tq)
+{
+}
+
 static int
 waitqueue_create(void **wq)
 {
@@ -170,6 +201,12 @@ wal_replay(struct umem_store *store,
 }
 
 struct umem_store_ops _store_ops_v2 = {
+    .so_tfifo_create      = tfifo_create,
+    .so_tfifo_destroy     = tfifo_destroy,
+    .so_tfifo_enter       = tfifo_enter,
+    .so_tfifo_exit        = tfifo_exit,
+    .so_tfifo_wait        = tfifo_wait,
+    .so_tfifo_wakeup_next = tfifo_wakeup_next,
     .so_waitqueue_create  = waitqueue_create,
     .so_waitqueue_destroy = waitqueue_destroy,
     .so_waitqueue_wait    = waitqueue_wait,

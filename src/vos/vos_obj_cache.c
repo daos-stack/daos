@@ -1132,7 +1132,7 @@ vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
 		ranges[i].cr_size = vos_pool2store(pool)->cache->ca_page_sz;
 	}
 
-	rc = vos_cache_pin(pool, ranges, bkts->vba_cnt, false, pin_hdl);
+	rc = vos_cache_pin(pool, ranges, bkts->vba_cnt, 0, pin_hdl);
 	if (rc)
 		DL_ERROR(rc, "Failed to pin %u ranges.", bkts->vba_cnt);
 

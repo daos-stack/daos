@@ -563,6 +563,37 @@ test_many_writes(void **state)
 	umem_cache_free(&arg->ta_store);
 }
 
+static inline void *
+tfifo_create(unsigned int tier)
+{
+	return (void *)(UINT64_MAX);
+}
+
+static inline void
+tfifo_destroy(void *tq)
+{
+}
+
+static inline void
+tfifo_enter(void *tq, unsigned int tier)
+{
+}
+
+static inline void
+tfifo_exit(void *tq, unsigned int tier)
+{
+}
+
+static inline void
+tfifo_wait(void *tq, unsigned int tier)
+{
+}
+
+static inline void
+tfifo_wakeup_next(void *tq)
+{
+}
+
 static int
 waitqueue_create(void **wq)
 {
@@ -592,15 +623,21 @@ store_load(struct umem_store *store, char *start_addr, daos_off_t offset, daos_s
 }
 
 static struct umem_store_ops p2_ops = {
-	.so_waitqueue_create	= waitqueue_create,
-	.so_waitqueue_destroy	= waitqueue_destroy,
-	.so_waitqueue_wait	= waitqueue_wait,
-	.so_waitqueue_wakeup	= waitqueue_wakeup,
-	.so_load		= store_load,
-	.so_flush_prep		= flush_prep,
-	.so_flush_copy		= flush_copy,
-	.so_flush_post		= flush_post,
-	.so_wal_id_cmp		= wal_id_cmp,
+    .so_tfifo_create      = tfifo_create,
+    .so_tfifo_destroy     = tfifo_destroy,
+    .so_tfifo_enter       = tfifo_enter,
+    .so_tfifo_exit        = tfifo_exit,
+    .so_tfifo_wait        = tfifo_wait,
+    .so_tfifo_wakeup_next = tfifo_wakeup_next,
+    .so_waitqueue_create  = waitqueue_create,
+    .so_waitqueue_destroy = waitqueue_destroy,
+    .so_waitqueue_wait    = waitqueue_wait,
+    .so_waitqueue_wakeup  = waitqueue_wakeup,
+    .so_load              = store_load,
+    .so_flush_prep        = flush_prep,
+    .so_flush_copy        = flush_copy,
+    .so_flush_post        = flush_post,
+    .so_wal_id_cmp        = wal_id_cmp,
 };
 
 #define PAGE_NUM_MD	20
@@ -645,7 +682,7 @@ test_p2_basic(void **state)
 	/* Load single page */
 	rg.cr_off	= cache->ca_base_off;
 	rg.cr_size	= UMEM_CACHE_PAGE_SZ;
-	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
+	rc              = umem_cache_load(&arg->ta_store, &rg, 1, 0);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 1);
 	assert_ptr_equal(umem_cache_off2ptr(&arg->ta_store, cache->ca_base_off), cache->ca_base);
@@ -663,14 +700,14 @@ test_p2_basic(void **state)
 	/* Load multiple pages */
 	rg.cr_off	= cache->ca_base_off + (PAGE_NUM_MAX_NE - 1) * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= 3 * UMEM_CACHE_PAGE_SZ;
-	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
+	rc              = umem_cache_load(&arg->ta_store, &rg, 1, 0);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 3);
 
 	/* Pin multiple pages */
 	rg.cr_off	= cache->ca_base_off + (PAGE_NUM_MAX_NE - 1) * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= 2 * UMEM_CACHE_PAGE_SZ;
-	rc = umem_cache_pin(&arg->ta_store, &rg, 1, false, &pin_hdl);
+	rc              = umem_cache_pin(&arg->ta_store, &rg, 1, 0, &pin_hdl);
 	assert_rc_equal(rc, 0);
 	assert_non_null(pin_hdl);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 1);
@@ -713,14 +750,14 @@ test_p2_evict(void **state)
 	/* Load all non-evictable pages */
 	rg.cr_off	= cache->ca_base_off;
 	rg.cr_size	= PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ;
-	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
+	rc              = umem_cache_load(&arg->ta_store, &rg, 1, 0);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], PAGE_NUM_MAX_NE);
 
 	/* Load more pages to fill the cache */
 	rg.cr_off	= cache->ca_base_off + PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= (PAGE_NUM_MEM - PAGE_NUM_MAX_NE) * UMEM_CACHE_PAGE_SZ;
-	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
+	rc              = umem_cache_load(&arg->ta_store, &rg, 1, 0);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], PAGE_NUM_MAX_NE);
 
@@ -734,7 +771,7 @@ test_p2_evict(void **state)
 	/* Pin an unmapped page to trigger eviction */
 	rg.cr_off	= cache->ca_base_off + PAGE_NUM_MEM * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= 100;
-	rc = umem_cache_pin(&arg->ta_store, &rg, 1, false, &pin_hdl);
+	rc              = umem_cache_pin(&arg->ta_store, &rg, 1, 0, &pin_hdl);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 1);
 

@@ -1032,7 +1032,7 @@ dkey_bkt_iter_pin(struct vos_object *obj, struct vos_krec_df *krec,
 
 	rg.cr_off  = umem_get_mb_base_offset(vos_pool2umm(pool), vos_bkt_id_raw(bkt_id));
 	rg.cr_size = store->cache->ca_page_sz;
-	rc         = vos_cache_pin(pool, &rg, 1, false, pin_hdl);
+	rc         = vos_cache_pin(pool, &rg, 1, 0, pin_hdl);
 	if (rc)
 		DL_ERROR(rc, "Failed to pin dkey bucket:%u for object:" DF_UOID ".", bkt_id,
 			 DP_UOID(obj->obj_id));
