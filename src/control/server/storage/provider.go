@@ -562,22 +562,42 @@ func (p *Provider) FormatBdevTiers(ctrlrs NvmeControllers) (results []BdevTierFo
 }
 
 // setHotplugRanges sets request parameters related to PCI domain+bus-ID range limits to restrict
-// hotplug actions of engine to a set of ssd devices.
-func setHotplugRanges(log logging.Logger, tier *TierConfig, req *BdevWriteConfigRequest) error {
-	switch {
-	case req.VMDEnabled:
+// hotplug actions of engine to a set of ssd devices. bdevCfgs covers every bdev tier configured
+// for the engine; manual ranges may be set on any one tier but apply engine-wide, and
+// auto-derivation (when no manual range is set on any tier) uses the combined bdev_list of every
+// tier, not just the first, so devices in e.g. tier 2+ roles (meta/data) are not excluded.
+func setHotplugRanges(log logging.Logger, bdevCfgs TierConfigs, req *BdevWriteConfigRequest) error {
+	if req.VMDEnabled {
 		log.Debug("hotplug filter allows all as vmd is enabled (no ranges configured)")
 		req.HotplugRanges = nil
-	case len(tier.Bdev.HotplugRanges) > 0:
-		log.Debugf("using user-specified hotplug filter ranges %q", tier.Bdev.HotplugRanges)
-		req.HotplugRanges = tier.Bdev.HotplugRanges
-	case tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero():
-		log.Debugf("using legacy hotplug bus-id range %q (PCI domain 0x00)",
-			tier.Bdev.BusidRange)
-		req.HotplugRanges = BdevHotplugRanges{tier.Bdev.BusidRange.ToHotplugRange()}
+		return nil
+	}
+
+	var manualTier *TierConfig
+	for _, tier := range bdevCfgs {
+		if len(tier.Bdev.HotplugRanges) == 0 && (tier.Bdev.BusidRange == nil ||
+			tier.Bdev.BusidRange.IsZero()) {
+			continue
+		}
+		if manualTier != nil {
+			return errors.New("bdev_hotplug_range/bdev_busid_range may only be set " +
+				"on one bdev tier per engine")
+		}
+		manualTier = tier
+	}
+
+	switch {
+	case manualTier != nil && len(manualTier.Bdev.HotplugRanges) > 0:
+		log.Debugf("using user-specified hotplug filter ranges %q",
+			manualTier.Bdev.HotplugRanges)
+		req.HotplugRanges = manualTier.Bdev.HotplugRanges
+	case manualTier != nil:
+		log.Debugf("using legacy hotplug bus-id range %q (PCI domain 0000)",
+			manualTier.Bdev.BusidRange)
+		req.HotplugRanges = BdevHotplugRanges{manualTier.Bdev.BusidRange.ToHotplugRange()}
 	default:
-		log.Debug("auto-deriving hotplug filter ranges from bdev_list")
-		ranges, err := deriveHotplugRangesFromBdevList(tier.Bdev.DeviceList)
+		log.Debug("auto-deriving hotplug filter ranges from bdev_list of all bdev tiers")
+		ranges, err := deriveHotplugRangesFromBdevList(bdevCfgs.NVMeBdevs())
 		if err != nil {
 			return errors.Wrap(err, "derive hotplug filter ranges from bdev_list")
 		}
@@ -614,15 +634,13 @@ func BdevWriteConfigRequestFromConfig(log logging.Logger, cfg *Config, vmdEnable
 		SpdkIobufProps:   cfg.SpdkIobufProps,
 	}
 
-	for idx, tier := range cfg.Tiers.BdevConfigs() {
+	bdevCfgs := cfg.Tiers.BdevConfigs()
+	for _, tier := range bdevCfgs {
 		req.TierProps = append(req.TierProps, BdevTierPropertiesFromConfig(tier))
+	}
 
-		if !req.HotplugEnabled || idx != 0 {
-			continue
-		}
-
-		// Populate hotplug filter ranges when processing the first bdev tier.
-		if err := setHotplugRanges(log, tier, req); err != nil {
+	if req.HotplugEnabled && len(bdevCfgs) > 0 {
+		if err := setHotplugRanges(log, bdevCfgs, req); err != nil {
 			return nil, errors.Wrap(err, "set hotplug filter ranges")
 		}
 	}

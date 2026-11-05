@@ -214,6 +214,40 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			},
 			expErr: errors.New("empty bdev_list"),
 		},
+		"range unspecified; auto-derived across multiple bdev tiers": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList("0000:e3:00.0"),
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList("0000:e5:00.0", "0000:e6:00.0",
+							"0000:e7:00.0"),
+				},
+				EnableHotplug: true,
+			},
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{
+						Class:      ClassNvme,
+						DeviceList: MustNewBdevDeviceList("0000:e3:00.0"),
+					},
+					{
+						Class: ClassNvme,
+						DeviceList: MustNewBdevDeviceList("0000:e5:00.0",
+							"0000:e6:00.0", "0000:e7:00.0"),
+					},
+				},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges: BdevHotplugRanges{
+					MustNewBdevHotplugRange("00:e3"),
+					MustNewBdevHotplugRange("00:e5-e7"),
+				},
+			},
+		},
 		"range specified; vmd enabled": {
 			cfg: &Config{
 				Tiers: TierConfigs{
@@ -235,6 +269,19 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				VMDEnabled:     true,
 				HotplugRanges:  nil,
 			},
+		},
+		"range specified on more than one bdev tier": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevHotplugRange("00:70-7f"),
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevHotplugRange("01:70-7f"),
+				},
+				EnableHotplug: true,
+			},
+			expErr: errors.New("may only be set on one bdev tier"),
 		},
 		"range unspecified; vmd enabled": {
 			cfg: &Config{

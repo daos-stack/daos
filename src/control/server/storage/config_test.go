@@ -415,7 +415,7 @@ func TestStorage_NewBdevHotplugRange(t *testing.T) {
 // TestStorage_BdevHotplugRange_JSON is a regression test for JSON marshal/unmarshal of
 // BdevHotplugRange.
 func TestStorage_BdevHotplugRange_JSON(t *testing.T) {
-	hr, err := NewBdevHotplugRange("0x01:0x00-0xFF")
+	hr, err := NewBdevHotplugRange("01:00-ff")
 	if err != nil {
 		t.Fatal(err)
 	}
