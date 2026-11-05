@@ -45,10 +45,8 @@ int
 int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
 		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
 int ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc);
-int ds_cont_tgt_close(uuid_t pool_uuid, uuid_t hdl_uuid);
-int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
-		     uint32_t status_pm_ver);
+int
+ds_cont_tgt_close(uuid_t pool_uuid, uuid_t hdl_uuid);
 int
 ds_cont_srv_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid);
 void
@@ -155,6 +153,10 @@ struct ds_cont_child {
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	int                      sc_ec_agg_updates;
+	/* The cache for local stable epoch, stop refreshing if >= the latest rebuild epoch. */
+	daos_epoch_t             sc_local_stable_epoch;
+	/* Last timestamp for delay rebuild operations because of old LSE or rebuild epoch. */
+	uint64_t                 sc_rebuild_delay_ts;
 };
 
 struct agg_param {

@@ -1079,6 +1079,14 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 		D_GOTO(error, rc = crt_hgret_2_der(hg_ret));
 	}
 
+	/* cache self address */
+	hg_ret = HG_Addr_self(hg_ctx->chc_hgcla, &hg_ctx->chc_self_addr);
+	if (hg_ret != HG_SUCCESS) {
+		hg_ctx->chc_self_addr = HG_ADDR_NULL;
+		D_ERROR("HG_Addr_self() failed; hg_ret: %d\n", hg_ret);
+		D_GOTO(error, rc = crt_hgret_2_der(hg_ret));
+	}
+
 	rc = crt_hg_pool_init(hg_ctx);
 	if (rc != 0) {
 		D_ERROR("crt_hg_pool_init() failed, context idx %d hg_ctx %p, "
@@ -1121,6 +1129,17 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	int         rc = DER_SUCCESS;
 
 	crt_hg_pool_fini(hg_ctx);
+
+	/* Free the cached self address while the HG class is still valid */
+	if (hg_ctx->chc_self_addr != HG_ADDR_NULL) {
+		D_ASSERT(hg_ctx->chc_hgcla != NULL);
+
+		hg_ret = HG_Addr_free(hg_ctx->chc_hgcla, hg_ctx->chc_self_addr);
+		if (hg_ret != HG_SUCCESS)
+			D_WARN("HG_Addr_free(self) failed, hg_ret: " DF_HG_RC "\n",
+			       DP_HG_RC(hg_ret));
+		hg_ctx->chc_self_addr = HG_ADDR_NULL;
+	}
 
 	if (hg_ctx->chc_epfd > 0) {
 		rc = close(hg_ctx->chc_epfd);
@@ -1202,15 +1221,13 @@ crt_hg_republish_diags(struct crt_hg_context *hg_ctx)
 int
 crt_rpc_handler_common(hg_handle_t hg_hdl)
 {
-	struct crt_context	*crt_ctx;
-	struct crt_hg_context	*hg_ctx;
+	struct crt_context      *crt_ctx;
 	const struct hg_info	*hg_info;
 	struct crt_rpc_priv	*rpc_priv;
 	crt_rpc_t		*rpc_pub;
 	crt_opcode_t		 opc;
 	crt_proc_t		 proc = NULL;
-	struct crt_opc_info	*opc_info = NULL;
-	hg_return_t		 hg_ret = HG_SUCCESS;
+	struct crt_opc_info     *opc_info    = NULL;
 	bool			 is_coll_req = false;
 	int			 rc = 0;
 	struct crt_rpc_priv	 rpc_tmp = {0};
@@ -1218,20 +1235,17 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	hg_info = HG_Get_info(hg_hdl);
 	if (unlikely(hg_info == NULL)) {
 		D_ERROR("HG_Get_info failed.\n");
-		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
+		return HG_PROTOCOL_ERROR;
 	}
 
 	crt_ctx = HG_Context_get_data(hg_info->context);
 	if (unlikely(crt_ctx == NULL)) {
 		D_ERROR("HG_Context_get_data failed.\n");
-		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
+		return HG_PROTOCOL_ERROR;
 	}
-	hg_ctx = &crt_ctx->cc_hg_ctx;
-	D_ASSERT(hg_ctx->chc_hgcla == hg_info->hg_class);
-	D_ASSERT(hg_ctx->chc_hgctx == hg_info->context);
 
-	rpc_tmp.crp_hg_addr = hg_info->addr;
-	rpc_tmp.crp_hg_hdl = hg_hdl;
+	rpc_tmp.crp_hg_addr    = hg_info->addr;
+	rpc_tmp.crp_hg_hdl     = hg_hdl;
 	rpc_tmp.crp_pub.cr_ctx = crt_ctx;
 
 	CRT_METRIC_INC(crt_ctx, CM_RPC_RECV);
@@ -1239,12 +1253,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rc = crt_hg_unpack_header(hg_hdl, &rpc_tmp, &proc);
 	if (unlikely(rc != 0)) {
 		D_ERROR("crt_hg_unpack_header failed, rc: %d.\n", rc);
-		crt_hg_reply_error_send(&rpc_tmp, -DER_MISC);
-		/** safe to return here because relevant portion of rpc_tmp is
-		 * already serialized by Mercury. Same for below.
-		 */
-		HG_Destroy(rpc_tmp.crp_hg_hdl);
-		D_GOTO(out, hg_ret = HG_SUCCESS);
+		D_GOTO(reply_error, rc = -DER_MISC);
 	}
 
 	D_ASSERT(proc != NULL);
@@ -1258,12 +1267,10 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		if (rc == -DER_NOMEM)
 			rc = -DER_DOS; /* don't log as we are oom already */
 		else
-			D_ERROR("crt_rpc_priv_alloc() failed, rc: %d.\n", rc);
+			DL_ERROR(rc, "crt_rpc_priv_alloc() failed");
 
-		crt_hg_reply_error_send(&rpc_tmp, rc);
 		crt_hg_unpack_cleanup(proc);
-		HG_Destroy(rpc_tmp.crp_hg_hdl);
-		D_GOTO(out, hg_ret = HG_SUCCESS);
+		D_GOTO(reply_error, rc = -DER_MISC);
 	}
 
 	opc_info = rpc_priv->crp_opc_info;
@@ -1278,10 +1285,9 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	if (unlikely(rc != 0)) {
 		RPC_WARN(rpc_priv, "RPC expired. Deadline was %d\n", rpc_priv->crp_deadline_sec);
 
-		crt_hg_reply_error_send(&rpc_tmp, -DER_TIMEDOUT);
 		crt_hg_unpack_cleanup(proc);
-		HG_Destroy(rpc_tmp.crp_hg_hdl);
-		D_GOTO(out, hg_ret = HG_SUCCESS);
+		crt_rpc_priv_free(rpc_priv);
+		D_GOTO(reply_error, rc = -DER_TIMEDOUT);
 	}
 
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
@@ -1293,10 +1299,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
 
-	RPC_TRACE(DB_ALL, rpc_priv,
-		  "(opc: %#x rpc_pub: %p) allocated per RPC request received.\n",
-		  rpc_priv->crp_opc_info->coi_opc,
-		  &rpc_priv->crp_pub);
+	RPC_TRACE(DB_ALL, rpc_priv, "(opc: %#x rpc_pub: %p) allocated per RPC request received.\n",
+		  rpc_priv->crp_opc_info->coi_opc, &rpc_priv->crp_pub);
 
 	crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
 
@@ -1312,40 +1316,41 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 			rpc_pub->cr_ep.ep_grp = NULL;
 			/* TODO lookup by rpc_priv->crp_req_hdr.cch_grp_id */
 		} else {
-			DHL_ERROR(rpc_priv, rc, "_unpack_body failed, opc: %#x", rpc_pub->cr_opc);
-			crt_hg_reply_error_send(rpc_priv, -DER_MISC);
-			D_GOTO(decref, hg_ret = HG_SUCCESS);
+			DHL_ERROR(rpc_priv, rc, "crt_hg_unpack_body failed, opc: %#x",
+				  rpc_pub->cr_opc);
+			D_GOTO(reply_error_decref, rc = -DER_MISC);
 		}
 	} else {
 		crt_hg_unpack_cleanup(proc);
 	}
 
-	if (unlikely(opc_info->coi_rpc_cb == NULL)) {
-		D_ERROR("NULL crp_hg_hdl, opc: %#x.\n", opc);
-		crt_hg_reply_error_send(rpc_priv, -DER_UNREG);
-		D_GOTO(decref, hg_ret = HG_SUCCESS);
-	}
+	if (unlikely(opc_info->coi_rpc_cb == NULL))
+		D_GOTO(reply_error_decref, rc = -DER_UNREG);
 
-	if (unlikely(rpc_priv->crp_fail_hlc)) {
-		crt_hg_reply_error_send(rpc_priv, -DER_HLC_SYNC);
-		D_GOTO(decref, hg_ret = HG_SUCCESS);
-	}
+	if (unlikely(rpc_priv->crp_fail_hlc))
+		D_GOTO(reply_error_decref, rc = -DER_HLC_SYNC);
 
 	if (!is_coll_req)
 		rc = crt_rpc_common_hdlr(rpc_priv);
 	else
 		rc = crt_corpc_common_hdlr(rpc_priv);
+
 	if (unlikely(rc != 0)) {
 		RPC_INFO(rpc_priv, "failed to invoke RPC handler, rc: " DF_RC "\n", DP_RC(rc));
-		crt_hg_reply_error_send(rpc_priv, rc);
-		D_GOTO(decref, hg_ret = HG_SUCCESS);
+		D_GOTO(reply_error_decref, rc);
 	}
 
-decref:
-	if (rc != 0)
-		RPC_DECREF(rpc_priv);
-out:
-	return hg_ret;
+	return HG_SUCCESS;
+
+reply_error_decref:
+	crt_hg_reply_error_send(rpc_priv, rc);
+	RPC_DECREF(rpc_priv);
+	return HG_SUCCESS;
+
+reply_error:
+	crt_hg_reply_error_send(&rpc_tmp, rc);
+	HG_Destroy(rpc_tmp.crp_hg_hdl);
+	return HG_SUCCESS;
 }
 
 int
@@ -2249,15 +2254,38 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 		    hg_ctx->chc_hgctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
 		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
 		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
-	else
-		hg_ret = HG_Bulk_transfer_id(
-		    hg_ctx->chc_hgctx, crt_hg_bulk_transfer_cb, bulk_cbinfo, hg_bulk_op,
-		    rpc_priv->crp_hg_addr, HG_Get_info(rpc_priv->crp_hg_hdl)->context_id,
-		    remote_bulk, bulk_desc->bd_remote_off, local_bulk, bulk_desc->bd_local_off,
-		    bulk_desc->bd_len, opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
+	else {
+		hg_addr_t remote_addr = rpc_priv->crp_hg_addr;
+		int       remote_ctx_idx;
+
+		if (rpc_priv->crp_hg_hdl != HG_HANDLE_NULL) {
+			remote_ctx_idx = HG_Get_info(rpc_priv->crp_hg_hdl)->context_id;
+			remote_addr    = rpc_priv->crp_hg_addr;
+		} else {
+			/*
+			 * CoRPC executing on the root node (self) does not have a mercury handle.
+			 * Use cached self address instead in such cases
+			 **/
+
+			/* regular RPCs must have a valid handle */
+			if (!rpc_priv->crp_coll) {
+				RPC_ERROR(rpc_priv, "Unexpected crp_hg_hdl=NULL\n");
+				D_ASSERT(0);
+			}
+
+			remote_ctx_idx = ctx->cc_idx;
+			remote_addr    = hg_ctx->chc_self_addr;
+		}
+
+		hg_ret = HG_Bulk_transfer_id(hg_ctx->chc_hgctx, crt_hg_bulk_transfer_cb,
+					     bulk_cbinfo, hg_bulk_op, remote_addr, remote_ctx_idx,
+					     remote_bulk, bulk_desc->bd_remote_off, local_bulk,
+					     bulk_desc->bd_local_off, bulk_desc->bd_len,
+					     opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
+	}
+
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: " DF_HG_RC "\n",
-			DP_HG_RC(hg_ret));
+		D_ERROR("HG_Bulk_(bind)transfer failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
 		D_FREE(bulk_cbinfo);
 		D_FREE(bulk_desc_dup);
 		rc = crt_hgret_2_der(hg_ret);

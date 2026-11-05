@@ -2,7 +2,7 @@ hosts:
   test_servers: 2
   test_clients: 1
 
-timeout: 285
+timeout: 600
 
 server_config:
   name: daos_server
@@ -26,6 +26,3 @@ setup:
 
 pool:
   size: 100G
-
-container:
-  control_method: daos

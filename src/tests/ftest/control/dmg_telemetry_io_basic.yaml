@@ -24,7 +24,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 block_sizes: [10M, 500M]
 transfer_sizes: [256K, 1M]

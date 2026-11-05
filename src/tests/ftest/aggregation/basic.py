@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -77,7 +78,7 @@ class DaosAggregationBasic(IorTestBase):
 
         self.log.info("Space used by first ior = %s", space_used_by_ior)
         self.log.info("Free space after first ior = %s", free_space_after_first_ior)
-        self.assertTrue(free_space_after_first_ior < initial_free_space,
+        self.assertLess(free_space_after_first_ior, initial_free_space,
                         "IOR run was not successful.")
 
         # Run ior the second time on the same pool and container, so another
@@ -89,8 +90,9 @@ class DaosAggregationBasic(IorTestBase):
 
         # Verify the free space after second ior is less at least twice the
         # size of space_used_by_ior from initial_free_space
-        self.assertTrue(free_space_after_second_ior <= (initial_free_space - space_used_by_ior * 2),
-                        "Running IOR the 2nd time using same file option did not succeed.")
+        self.assertLessEqual(free_space_after_second_ior,
+                             (initial_free_space - space_used_by_ior * 2),
+                             "Running IOR the 2nd time using same file option did not succeed.")
 
         # Enable the aggregation
         self.pool.set_property("reclaim", "time")
@@ -104,5 +106,5 @@ class DaosAggregationBasic(IorTestBase):
         # Verify the space taken by second ior is reclaimed after aggregation
         # (logical locations will be overwritten as part of aggregation)
         # The free space should be equal to the free space after initial run.
-        self.assertTrue(free_space_after_aggregate == free_space_after_first_ior,
-                        "Aggregation did not reclaim the space")
+        self.assertEqual(free_space_after_aggregate, free_space_after_first_ior,
+                         "Aggregation did not reclaim the space")

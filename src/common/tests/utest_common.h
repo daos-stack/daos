@@ -1,11 +1,13 @@
 /**
  * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #include <daos/mem.h>
 
 #define UTEST_POOL_NAME_MAX	255
+#define POOL_SIZE               (1024 * 1024 * 1024ULL)
 
 struct utest_context;
 
@@ -174,3 +176,10 @@ int utest_check_mem_increase(struct utest_context *utx);
  */
 int utest_check_mem_initial_status(struct utest_context *utx);
 
+/** Check transaction failure with NO_ABROT flag
+ *  \param	utx[IN]	utest_context
+ *
+ *  \return 0 on success
+ */
+int
+utest_tx_fail_no_abort(struct utest_context *utx);

@@ -516,8 +516,7 @@ class PreReqComponent():
                               ['warning', 'warn', 'error'], ignorecase=2))
         opts.Add(('SANITIZERS', 'Instrument C code with Google Sanitizers', None))
         opts.Add(BoolVariable('BUILD_GO_VALGRIND',
-                              'Build Go artifacts with the Go "valgrind" tag for Memcheck '
-                              '(also drops -race; ignored for release)',
+                              'Build Go artifacts with the Go "valgrind" tag for Memcheck',
                               False))
         opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests', False))
         opts.Add(BoolVariable('CRT_PP', 'Preprocess CaRT sources', False))
@@ -596,10 +595,10 @@ class PreReqComponent():
 
     def run_build(self, opts):
         """Build and dependencies"""
-        common_reqs = ['ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
+        common_reqs = ['ofi', 'ucx', 'hwloc', 'mercury', 'uuid', 'crypto', 'protobufc',
                        'lz4', 'isal', 'isal_crypto', 'argobots']
         client_reqs = ['fused', 'json-c', 'capstone', 'aio']
-        server_reqs = ['pmdk', 'spdk', 'ipmctl']
+        server_reqs = ['pmdk', 'spdk']
         test_reqs = ['cmocka']
 
         reqs = []
@@ -612,6 +611,12 @@ class PreReqComponent():
             reqs.extend(client_reqs)
         opts.Add(ListVariable('DEPS', "Dependencies to build by default", 'all', reqs))
         opts.Update(self.__env)
+
+        unknown = opts.UnknownVariables()
+        if unknown:
+            print(f"ERROR: Unknown scons variable(s): {', '.join(sorted(unknown))}")
+            Exit(1)
+
         if GetOption('build_deps') == 'only':
             # Optionally, limit the deps we build in this pass
             reqs = self.__env.get('DEPS')

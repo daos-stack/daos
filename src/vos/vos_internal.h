@@ -491,6 +491,8 @@ struct vos_dtx_act_ent {
 
 	/* The capacity of dae_oids if it points to new allocated area. */
 	uint32_t                         dae_oid_cap;
+	/* The known max version used by DTX check. Abort DTX with old version will be refused. */
+	uint32_t                         dae_known_max_version;
 
 	unsigned int			 dae_committable:1,
 					 dae_committing:1,
@@ -522,15 +524,6 @@ struct vos_dtx_act_ent {
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
-
-struct vos_dtx_cmt_ent {
-	struct vos_dtx_cmt_ent_df dce_base;
-	uint32_t                  dce_invalid : 1;
-};
-
-#define DCE_XID(dce)		((dce)->dce_base.dce_xid)
-#define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
-#define DCE_CMT_TIME(dce)	((dce)->dce_base.dce_cmt_time)
 
 #define EVT_DESC_MAGIC          0xbeefdead
 
@@ -725,13 +718,13 @@ vos_obj_tab_register();
  * DTX table destroy
  * Called from vos_cont_destroy
  *
- * \param umm		[IN]	Instance of an unified memory class.
+ * \param pool		[IN]	The pool that holds the container.
  * \param cont_df	[IN]	Pointer to the on-disk VOS container.
  *
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_table_destroy(struct umem_instance *umm, struct vos_cont_df *cont_df);
+vos_dtx_table_destroy(struct vos_pool *pool, struct vos_cont_df *cont_df);
 
 /**
  * Register dbtree class for DTX table.
@@ -836,31 +829,30 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p);
+vos_dtx_prepared(struct dtx_handle *dth, bool *cmt);
 
 int
-vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
-			int count, daos_epoch_t epoch, bool keep_act, bool rm_cos[],
-			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
+vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[], int count,
+			daos_epoch_t epoch, bool keep_act, bool rm_cos[],
+			struct vos_dtx_act_ent **daes, bool cmts[]);
 
 int
 vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force);
 
 void
-vos_dtx_post_handle(struct vos_container *cont,
-		    struct vos_dtx_act_ent **daes,
-		    struct vos_dtx_cmt_ent **dces,
+vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes, bool cmts[],
 		    int count, bool abort, bool rollback, bool keep_act);
 
 /**
  * Establish indexed active DTX table in DRAM.
  *
  * \param cont	[IN]	Pointer to the container.
+ * \param ck	[IN]	Checker structure.
  *
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_act_reindex(struct vos_container *cont);
+vos_dtx_act_reindex(struct vos_container *cont, struct checker *ck);
 
 int
 vos_dtx_record_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t oid);
@@ -1232,6 +1224,8 @@ struct vos_iter_ops {
 	/** Delete the record that the cursor points to */
 	int	(*iop_process)(struct vos_iterator *iter, vos_iter_proc_op_t op,
 			       void *args);
+	/** Check the current record */
+	int (*iop_check)(struct vos_iterator *iter, struct checker *ck);
 	/**
 	 * Optional, the iterator has no element.
 	 *

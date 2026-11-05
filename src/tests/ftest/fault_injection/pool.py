@@ -1,10 +1,11 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from random import randint
+from random import choice
 
 from apricot import TestWithServers
 from exception_utils import CommandFailure
@@ -60,32 +61,26 @@ class PoolServicesFaultInjection(TestWithServers):
         self.look_missed_request(self.container.daos.result.stderr)
 
     def exclude_and_reintegrate(self):
-        """Exclude a random server from the pool.
+        """Exclude a random pool rank, wait for rebuild, reintegrate it, wait again.
 
-        Wait for rebuild
-        Reintegrate the server back
-        Wait for rebuild
+        Each dmg call uses --wait so it blocks until the triggered rebuild
+        completes; the missed-request check inspects the cumulative dmg stderr
+        from the op and its rebuild polling.
 
-        Due to the nature of how wait_for_rebuild_to_start/end() is coded
-        we can only get the last dmg command output.
+        The rank is picked from the pool's *enabled* ranks rather than from
+        the host index range — the pool's --nranks may be smaller than the
+        cluster's rank count, so not every host index maps to an in-pool rank.
         """
-        server_to_exclude = randint(0, len(self.hostlist_servers) - 1)  # nosec
-        self.pool.exclude([server_to_exclude])
+        query = self.pool.dmg.pool_query(self.pool.identifier, show_enabled=True)
+        enabled_ranks = query["response"].get("enabled_ranks") or []
+        if not enabled_ranks:
+            self.fail("Pool has no enabled ranks; cannot run exclude/reintegrate.")
+
+        rank_to_exclude = choice(enabled_ranks)  # nosec
+        self.pool.exclude([rank_to_exclude], wait=True)
         self.look_missed_request(self.pool.dmg.result.stderr)
 
-        self.pool.wait_for_rebuild_to_start()
-        self.look_missed_request(self.pool.dmg.result.stderr)
-
-        self.pool.wait_for_rebuild_to_end()
-        self.look_missed_request(self.pool.dmg.result.stderr)
-
-        self.pool.reintegrate(str(server_to_exclude))
-        self.look_missed_request(self.pool.dmg.result.stderr)
-
-        self.pool.wait_for_rebuild_to_start()
-        self.look_missed_request(self.pool.dmg.result.stderr)
-
-        self.pool.wait_for_rebuild_to_end()
+        self.pool.reintegrate(str(rank_to_exclude), wait=True)
         self.look_missed_request(self.pool.dmg.result.stderr)
 
     def _clean(self):

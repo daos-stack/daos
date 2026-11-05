@@ -124,6 +124,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
 		if (rc)
 			D_GOTO(decref, rc);
+		active_ie_set_truncated(ie, false);
 		dfuse_dcache_evict(oh->doh_ie);
 	}
 
@@ -242,12 +243,11 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		dfuse_inode_decref(dfuse_info, oh->doh_parent_dir);
 	}
 	if (ie) {
-		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
-						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
-
-		if (rc != 0 && rc != -ENOENT)
-			DHS_ERROR(ie, -rc, "inval_entry() error");
-		dfuse_inode_decref(dfuse_info, ie);
+		rc = dfuse_mark_inval_entry(ie->ie_parent, ie->ie_name, ie);
+		if (rc) {
+			DHS_ERROR(ie, rc, "dfuse_mark_inval_entry() failed");
+			dfuse_inode_decref(dfuse_info, ie);
+		}
 	}
 	dfuse_oh_free(dfuse_info, oh);
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include <argp.h>
 #include <uuid/uuid.h>
-#include <daos_srv/checker.h>
+#include <daos/checker.h>
 #include <gurt/list.h>
 
 #define _STRINGIFY(x)                   #x

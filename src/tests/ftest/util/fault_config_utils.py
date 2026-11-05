@@ -1,5 +1,6 @@
 """
   (C) Copyright 2019-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -145,6 +146,18 @@ FAULTS = {
         'probability_y': '20',
         'interval': '1',
         'max_faults': '10'},
+    'DAOS_RSVC_CREATE_SLOW': {
+        'id': '65702',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '1',
+        'max_faults': '1'},
+    'DAOS_MGMT_TGT_DESTROY_SLOW': {
+        'id': '65703',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '1',
+        'max_faults': '1'},
     'DAOS_CONT_DESTROY_FAIL_CORPC': {
         'id': '65637',
         'probability_x': '100',
@@ -331,4 +344,9 @@ class FaultInjection():
             result = run_local(log, command)
         if not result.passed:
             error_list.append(f"Error removing fault injection file {self.fault_file}")
+
+        # Unset the local and environment reference since the file is gone
+        self.fault_file = None
+        del os.environ["D_FI_CONFIG"]
+
         return error_list

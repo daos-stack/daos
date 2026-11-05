@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,8 +33,8 @@ class RbldWithIO(TestWithServers):
         :avocado: tags=RbldWithIO,test_rebuild_with_io
         """
         # Get the test params
-        self.add_pool(create=False)
-        self.add_container(self.pool, create=False)
+        self.pool = self.get_pool(create=False)
+        self.container = self.get_container(self.pool, create=False)
         targets = self.server_managers[0].get_config_value("targets")
         # data = self.params.get("datasize", "/run/testparams/*")
         rank = self.params.get("rank", "/run/testparams/*")

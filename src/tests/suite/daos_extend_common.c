@@ -126,7 +126,7 @@ dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kil
 	d_rank_t             extend_rank = 3;
 	char                 str[37];
 	daos_obj_id_t        oids[EXTEND_OBJ_NR];
-	struct extend_cb_arg cb_arg;
+	struct extend_cb_arg cb_arg = {0};
 	dfs_attr_t           attr = {};
 	int                  rc;
 

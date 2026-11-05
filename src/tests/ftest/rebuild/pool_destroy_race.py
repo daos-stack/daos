@@ -7,7 +7,6 @@
 from apricot import TestWithServers
 from ior_utils import write_data
 from test_utils_container import add_container
-from test_utils_pool import add_pool
 
 
 # pylint: disable=too-few-public-methods
@@ -35,7 +34,7 @@ class RbldPoolDestroyWithIO(TestWithServers):
           Re-create pool on remaining ranks.
 
         :avocado: tags=all,pr
-        :avocado: tags=cb,medium
+        :avocado: tags=cb,hw,medium
         :avocado: tags=pool,rebuild,ior
         :avocado: tags=RbldPoolDestroyWithIO,test_pool_destroy_with_io
         """
@@ -48,7 +47,7 @@ class RbldPoolDestroyWithIO(TestWithServers):
 
         # create pool
         self.log_step('Creating the first pool')
-        pool = add_pool(self)
+        pool = self.get_pool()
 
         # make sure pool looks good before we start
         checks = {
@@ -92,7 +91,7 @@ class RbldPoolDestroyWithIO(TestWithServers):
         # re-create the pool of full size to verify the space was reclaimed,
         # after re-starting the server on excluded rank
         self.log_step('Creating a second pool of the same size as the first')
-        pool = add_pool(self)
+        pool = self.get_pool()
         self.log_step('Verify the space was reclaimed')
         pool.query()
 

@@ -18,6 +18,9 @@ opt_tar=opt-daos.tar
 rm -f opt-daos-install.tar
 ln "$opt_tar" opt-daos-install.tar
 rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" .build_vars* opt-daos-install.tar utils requirements-utest.txt jenkins@"$NODE":build/
+# The NLT implementation lives in src/tests/nlt; ship it preserving the relative path so the
+# utils/node_local_test.py shim can import it.
+rsync -R -rlpt -z -e "ssh $SSH_KEY_ARGS" src/tests/nlt jenkins@"$NODE":build/
 
 ssh -T "$SSH_KEY_ARGS" jenkins@"$NODE" \
     "DAOS_HTTPS_PROXY=\"${DAOS_HTTPS_PROXY:-}\" \

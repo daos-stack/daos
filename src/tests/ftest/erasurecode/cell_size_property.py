@@ -68,7 +68,7 @@ class EcodCellSizeProperty(IorTestBase):
             # Run IOR for different Transfer size and container cell size.
             for tx_size, cont_cell in product(ior_transfer_sizes, cont_cell_sizes):
                 # Initial container
-                self.add_container(self.pool, create=False)
+                self.container = self.get_container(self.pool, create=False)
 
                 # Use the default pool property for container and do not update
                 if cont_cell != pool_prop_expected:

@@ -190,7 +190,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         #                 pool B : containerA, Updated,
         #                          containerB, None]}
         if self.pool_cont_dict[self.pool][0] is None:
-            self.add_container(self.pool, create=False)
+            self.container = self.get_container(self.pool, create=False)
             self.set_cont_class_properties(oclass)
             if self.test_with_checksum is False:
                 tmp = self.get_object_replica_value(oclass)
@@ -205,7 +205,7 @@ class OSAUtils(MdtestBase, IorTestBase):
                     and (self.pool_cont_dict[self.pool][3] is None)
                     and ("-w" in flags)):
                 # Write to the second container
-                self.add_container(self.pool, create=False)
+                self.container = self.get_container(self.pool, create=False)
                 self.set_cont_class_properties(oclass)
                 if self.test_with_checksum is False:
                     tmp = self.get_object_replica_value(oclass)
@@ -324,6 +324,22 @@ class OSAUtils(MdtestBase, IorTestBase):
             out_queue.put(exc)
             raise CommandFailure(exc)
 
+    def check_ranks(self, expect, data, key):
+        """Check the expected and actual rank lists are equal.
+
+        Args:
+            expect (list): list of ranks to expect
+            data (dict): dmg json response containing actual list of ranks
+            key (str): the dmg json response key used to access the actual list of ranks
+        """
+        actual = data["response"].get(key)
+        if expect is None:
+            self.assertIsNone(actual, f"Invalid {key} field: want=None, got={actual}")
+        else:
+            self.assertListEqual(
+                actual, expect, f"Invalid {key} field: want={expect}, got={actual}")
+        self.log.info("Check of %s passed: %s == %s", key, expect, actual)
+
     def cleanup_queue(self, out_queue=None):
         """Cleanup the existing thread queue.
 
@@ -438,7 +454,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.mdtest_cmd.dfs_destroy.update(False)
         create_container = 0
         if self.container is None:
-            self.add_container(self.pool, create=False)
+            self.container = self.get_container(self.pool, create=False)
             create_container = 1
         self.mdtest_cmd.dfs_oclass.update(oclass)
         self.set_cont_class_properties(oclass)
