@@ -12,5 +12,5 @@ or the DAOS
 [slack channel](https://daos-stack.slack.com/).
 Bugs should be reported through our
 [Jira issue tracker](https://jira.daos.io/),
-with a test case to reproduce the issue (when applicable)
+with a test case that reproduces the issue (when applicable)
 and [debug logs](./docs/debugging.md).
