@@ -242,6 +242,7 @@ struct rebuild_pool_tls {
 	d_list_t	rebuild_pool_list;
 	uint64_t	rebuild_pool_obj_count;
 	uint64_t	rebuild_pool_reclaim_obj_count;
+	uint64_t        rebuild_pool_reclaim_skipped;
 	unsigned int	rebuild_pool_ver;
 	uint32_t	rebuild_pool_gen;
 	uint64_t	rebuild_pool_leader_term;
