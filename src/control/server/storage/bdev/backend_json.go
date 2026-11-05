@@ -98,14 +98,12 @@ type IobufParams struct {
 
 func (_ IobufParams) isSpdkSubsystemConfigParams() {}
 
-// HotplugFilterEntry specifies a single PCI domain-range plus bus-ID-range entry used to
-// restrict hotplug events accepted by an engine. A single-value domain or bus-ID is expressed
-// with DomainBegin==DomainEnd or Begin==End respectively.
+// HotplugFilterEntry specifies a single PCI domain plus bus-ID-range entry used to restrict
+// hotplug events accepted by an engine. A single-value bus-ID is expressed with Begin==End.
 type HotplugFilterEntry struct {
-	DomainBegin uint16 `json:"domain_begin"`
-	DomainEnd   uint16 `json:"domain_end"`
-	Begin       uint8  `json:"begin"`
-	End         uint8  `json:"end"`
+	Domain uint16 `json:"domain"`
+	Begin  uint8  `json:"begin"`
+	End    uint8  `json:"end"`
 }
 
 // HotplugFilterParams specifies details for a storage.ConfSetHotplugBusidRange method. The
@@ -380,10 +378,9 @@ func hotplugPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 	params := make(HotplugFilterParams, 0, len(req.HotplugRanges))
 	for _, r := range req.HotplugRanges {
 		params = append(params, HotplugFilterEntry{
-			DomainBegin: r.LowAddress.Domain,
-			DomainEnd:   r.HighAddress.Domain,
-			Begin:       r.LowAddress.Bus,
-			End:         r.HighAddress.Bus,
+			Domain: r.LowAddress.Domain,
+			Begin:  r.LowAddress.Bus,
+			End:    r.HighAddress.Bus,
 		})
 	}
 

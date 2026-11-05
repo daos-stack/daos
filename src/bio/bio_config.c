@@ -138,15 +138,13 @@ config_entry_decoders[] = {
 #define HOTPLUG_FILTER_MAX_ENTRIES 64
 
 struct hotplug_filter_entry {
-	uint32_t domain_begin;
-	uint32_t domain_end;
+	uint32_t domain;
 	uint8_t  begin;
 	uint8_t  end;
 };
 
 static struct spdk_json_object_decoder hotplug_filter_entry_decoders[] = {
-    {"domain_begin", offsetof(struct hotplug_filter_entry, domain_begin), spdk_json_decode_uint32},
-    {"domain_end", offsetof(struct hotplug_filter_entry, domain_end), spdk_json_decode_uint32},
+    {"domain", offsetof(struct hotplug_filter_entry, domain), spdk_json_decode_uint32},
     {"begin", offsetof(struct hotplug_filter_entry, begin), spdk_json_decode_uint8},
     {"end", offsetof(struct hotplug_filter_entry, end), spdk_json_decode_uint8},
 };
@@ -918,8 +916,8 @@ hotplug_filter_fn(const struct spdk_pci_addr *addr)
 	for (i = 0; i < hotplug_filter.num_entries; i++) {
 		struct hotplug_filter_entry *entry = &hotplug_filter.entries[i];
 
-		if (addr->domain >= entry->domain_begin && addr->domain <= entry->domain_end &&
-		    addr->bus >= entry->begin && addr->bus <= entry->end) {
+		if (addr->domain == entry->domain && addr->bus >= entry->begin &&
+		    addr->bus <= entry->end) {
 			D_DEBUG(DB_MGMT, "hotplug filter accept event on %04X:%02X\n",
 				addr->domain, addr->bus);
 			return true;
@@ -959,9 +957,8 @@ bio_set_hotplug_filter(const char *nvme_conf)
 	for (i = 0; i < hotplug_filter.num_entries; i++) {
 		struct hotplug_filter_entry *entry = &hotplug_filter.entries[i];
 
-		D_INFO("'%s' entry %zu read from config: domain=%04X-%04X, bus-ids=%02X-%02X\n",
-		       NVME_CONF_SET_HOTPLUG_RANGE, i, entry->domain_begin, entry->domain_end,
-		       entry->begin, entry->end);
+		D_INFO("'%s' entry %zu read from config: domain=%04X, bus-ids=%02X-%02X\n",
+		       NVME_CONF_SET_HOTPLUG_RANGE, i, entry->domain, entry->begin, entry->end);
 	}
 
 	D_DEBUG(DB_MGMT, "calling spdk_nvme_pcie_set_hotplug_filter with %zu entries\n",

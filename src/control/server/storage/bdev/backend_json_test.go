@@ -134,7 +134,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				{
 					Method: storage.ConfSetHotplugBusidRange,
 					Params: &HotplugFilterParams{
-						{DomainBegin: 0, DomainEnd: 0, Begin: 138, End: 143},
+						{Domain: 0, Begin: 0x8a, End: 0x8f},
 					},
 				},
 			},
@@ -143,13 +143,13 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			class:         storage.ClassNvme,
 			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			enableHotplug: true,
-			hotplugRanges: []string{"0x0001:0x8a-0x8f"},
+			hotplugRanges: []string{"0001:8a-8f"},
 			expBdevCfgs:   multiCtrlrConfs(0, true),
 			expDaosCfgs: []*DaosConfig{
 				{
 					Method: storage.ConfSetHotplugBusidRange,
 					Params: &HotplugFilterParams{
-						{DomainBegin: 0x0001, DomainEnd: 0x0001, Begin: 138, End: 143},
+						{Domain: 0x0001, Begin: 0x8a, End: 0x8f},
 					},
 				},
 			},
