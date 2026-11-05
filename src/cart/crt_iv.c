@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1484,7 +1484,8 @@ crt_hdlr_iv_fetch_aux(void *arg)
 			D_GOTO(reply_direct, rc);
 		}
 	} else {
-		D_ERROR("ERROR happened: "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_CONT_NONEXIST || rc == -DER_NONEXIST,
+			  DB_TRACE, DLOG_ERR, rc, "ERROR happened.");
 		D_GOTO(reply_direct, rc);
 	}
 
