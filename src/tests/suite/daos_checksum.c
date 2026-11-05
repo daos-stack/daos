@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -346,8 +347,8 @@ checksum_disabled(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
-	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
-		skip();
+	if (csum_ec_enabled())
+		test_runable_or_skip(*state, csum_ec_grp_size());
 
 	/**
 	 * Setup
@@ -388,8 +389,8 @@ io_with_server_side_verify(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
-		skip();
+	if (csum_ec_enabled())
+		test_runable_or_skip(*state, csum_ec_grp_size());
 
 	/**
 	 * Setup
@@ -491,8 +492,8 @@ test_fetch_array(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
-		skip();
+	if (csum_ec_enabled())
+		test_runable_or_skip(*state, csum_ec_grp_size());
 
 	/**
 	 * Setup
@@ -1309,8 +1310,8 @@ single_value(void **state)
 {
 	FAULT_INJECTION_REQUIRED();
 
-	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
-		skip();
+	if (csum_ec_enabled())
+		test_runable_or_skip(*state, csum_ec_grp_size());
 
 	print_message("test small single-value\n");
 	single_value_test(state, false);
@@ -1327,8 +1328,8 @@ dtx_with_csum(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
-	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
-		skip();
+	if (csum_ec_enabled())
+		test_runable_or_skip(arg, csum_ec_grp_size());
 
 	setup_from_test_args(&ctx, arg);
 	setup_simple_data(&ctx);
@@ -1796,8 +1797,7 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	d_rank_list_t		*affected_engines = NULL;
 	int			 rc;
 
-	if (!test_runable(*state, 3))
-		skip();
+	test_runable_or_skip(*state, 3);
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, chunksize,
@@ -2524,9 +2524,7 @@ ec_chunk_plus_one(void **state)
 {
 	const uint32_t ec_chunk_plus_one = 1024 * 1024 + 1;
 
-	if (!test_runable(*state, 3))
-		skip();
-
+	test_runable_or_skip(*state, 3);
 
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.oclass = OC_EC_2P1G1,
@@ -2546,8 +2544,7 @@ ec_two_chunk_plus_one(void **state)
 {
 	const uint32_t ec_chunk_plus_one = 2 * 1024 * 1024 + 1;
 
-	if (!test_runable(*state, 3))
-		skip();
+	test_runable_or_skip(*state, 3);
 
 	ARRAY_UPDATE_FETCH_TESTCASE(state, {
 		.oclass = OC_EC_2P1G1,
@@ -2569,8 +2566,8 @@ basic_scrubbing_test(void **state, char *scrub_freq)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
-	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
-		skip();
+	if (csum_ec_enabled())
+		test_runable_or_skip(*state, csum_ec_grp_size());
 
 	/**
 	 * Setup
@@ -2638,8 +2635,8 @@ multiple_ec_singv_csum(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
-		skip();
+	if (csum_ec_enabled())
+		test_runable_or_skip(arg, csum_ec_grp_size());
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, dts_csum_prop_type, true, 0, oc);
@@ -2715,8 +2712,8 @@ multiple_ec_singv_csum_with_iod_size_0(void **state)
 	size_t               len[3];
 	int                  i, rc;
 
-	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
-		skip();
+	if (csum_ec_enabled())
+		test_runable_or_skip(arg, csum_ec_grp_size());
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, dts_csum_prop_type, true, 0, oc);
