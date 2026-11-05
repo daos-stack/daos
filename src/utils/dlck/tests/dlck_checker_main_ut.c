@@ -19,7 +19,7 @@
 
 #include <abt.h>
 #include <daos_srv/daos_engine.h>
-#include <daos_srv/checker.h>
+#include <daos/checker.h>
 
 #include "../dlck_checker.h"
 #include "dlck_checker_ut_mock.h"

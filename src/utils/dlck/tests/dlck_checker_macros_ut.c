@@ -12,6 +12,9 @@
 #include <string.h>
 #include <cmocka.h>
 
+#include <daos/debug.h>
+#include <daos/checker.h>
+
 #include "dlck_checker_ut_mock.h"
 
 static struct checker Checker;
@@ -70,12 +73,12 @@ vfprintf_expected_output(const char *fmt, const char *output)
 }
 
 static void
-test_CK_PRINT(void **state)
+test_CK_PRINTF_without_args(void **state)
 {
 	struct checker *ck = *state;
 
 	vfprintf_expected_output("%sready", "-> ready");
-	CK_PRINT(ck, "ready");
+	CK_PRINTF(ck, "ready");
 }
 
 static void
@@ -88,12 +91,12 @@ test_CK_PRINTF(void **state)
 }
 
 static void
-test_CK_PRINT_WO_PREFIX(void **state)
+test_CK_PRINTF_WO_PREFIX_without_args(void **state)
 {
 	struct checker *ck = *state;
 
 	vfprintf_expected_output("ready", "ready");
-	CK_PRINT_WO_PREFIX(ck, "ready");
+	CK_PRINTF_WO_PREFIX(ck, "ready");
 }
 
 static void
@@ -158,16 +161,16 @@ test_CK_APPENDFL_WARN(void **state)
 }
 
 static void
-test_CK_APPENDL_WARN(void **state)
+test_CK_APPENDFL_WARN_without_args(void **state)
 {
 	struct checker *ck = *state;
 
 	vfprintf_expected_output("warning: retry\n", "warning: retry\n");
-	CK_APPENDL_WARN(ck, "retry");
+	CK_APPENDFL_WARN(ck, "retry");
 	assert_int_equal(ck->ck_warnings_num, 8);
 
 	vfprintf_expected_output("warning: skipped\n", "warning: skipped\n");
-	CK_APPENDL_WARN(ck, "skipped");
+	CK_APPENDFL_WARN(ck, "skipped");
 	assert_int_equal(ck->ck_warnings_num, 9);
 }
 
@@ -181,23 +184,23 @@ test_CK_APPENDL(void **state)
 }
 
 static void
-test_CK_PRINTL_RC_success(void **state)
+test_CK_PRINTFL_RC_success_without_args(void **state)
 {
 	struct checker *ck = *state;
 
 	vfprintf_expected_output("%scheck: ok.\n", "-> check: ok.\n");
-	CK_PRINTL_RC(ck, DER_SUCCESS, "check");
+	CK_PRINTFL_RC(ck, DER_SUCCESS, "check");
 }
 
 static void
-test_CK_PRINTL_RC_error(void **state)
+test_CK_PRINTFL_RC_error_without_args(void **state)
 {
 	struct checker *ck = *state;
 	char            output[128];
 
 	snprintf(output, sizeof(output), "-> error: check: " DF_RC "\n", DP_RC(-DER_IO));
 	vfprintf_expected_output("%serror: check: " DF_RC "\n", output);
-	CK_PRINTL_RC(ck, -DER_IO, "check");
+	CK_PRINTFL_RC(ck, -DER_IO, "check");
 }
 
 static void
@@ -227,19 +230,19 @@ test_CK_macros_without_checker(void **state)
 	int             evaluations = 0;
 
 	(void)state;
-	CK_PRINT(ck, "ready");
+	CK_PRINTF(ck, "ready");
 	CK_PRINTF(ck, "%d", ++evaluations);
-	CK_PRINT_WO_PREFIX(ck, "ready");
+	CK_PRINTF_WO_PREFIX(ck, "ready");
 	CK_PRINTF_WO_PREFIX(ck, "%d", ++evaluations);
 	CK_APPENDL_OK(ck);
 	CK_APPENDL_RC(ck, DER_SUCCESS);
 	CK_APPENDL_RC(ck, -DER_IO);
 	CK_APPENDFL_ERR(ck, "%d", ++evaluations);
 	CK_APPENDFL_WARN(ck, "%d", ++evaluations);
-	CK_APPENDL_WARN(ck, "retry");
+	CK_APPENDFL_WARN(ck, "retry");
 	CK_APPENDL(ck, "ready");
-	CK_PRINTL_RC(ck, DER_SUCCESS, "check");
-	CK_PRINTL_RC(ck, -DER_IO, "check");
+	CK_PRINTFL_RC(ck, DER_SUCCESS, "check");
+	CK_PRINTFL_RC(ck, -DER_IO, "check");
 	CK_PRINTFL_RC(ck, DER_SUCCESS, "%d", ++evaluations);
 	CK_PRINTFL_RC(ck, -DER_IO, "%d", ++evaluations);
 	assert_int_equal(evaluations, 0);
@@ -390,9 +393,11 @@ test_CK_INDENT_below_minimum(void **state)
 }
 
 static const struct CMUnitTest dlck_checker_macros_tests[] = {
-    {"DLCK_CHECKER_MACRO_101: print includes prefix", test_CK_PRINT, setup, teardown, NULL},
+	{"DLCK_CHECKER_MACRO_101: printf without arguments includes prefix",
+	 test_CK_PRINTF_without_args, setup, teardown, NULL},
     {"DLCK_CHECKER_MACRO_102: printf forwards arguments", test_CK_PRINTF, setup, teardown, NULL},
-    {"DLCK_CHECKER_MACRO_103: print omits prefix", test_CK_PRINT_WO_PREFIX, setup, teardown, NULL},
+	{"DLCK_CHECKER_MACRO_103: printf without arguments omits prefix",
+	 test_CK_PRINTF_WO_PREFIX_without_args, setup, teardown, NULL},
     {"DLCK_CHECKER_MACRO_104: printf omits prefix", test_CK_PRINTF_WO_PREFIX, setup, teardown,
      NULL},
     {"DLCK_CHECKER_MACRO_105: append ok", test_CK_APPEND_OK, setup, teardown, NULL},
@@ -402,11 +407,13 @@ static const struct CMUnitTest dlck_checker_macros_tests[] = {
     {"DLCK_CHECKER_MACRO_108: append formatted error", test_CK_APPENDFL_ERR, setup, teardown, NULL},
     {"DLCK_CHECKER_MACRO_109: formatted warnings increment count", test_CK_APPENDFL_WARN, setup,
      NULL, NULL},
-    {"DLCK_CHECKER_MACRO_110: warnings increment count", test_CK_APPENDL_WARN, setup, NULL, NULL},
+	{"DLCK_CHECKER_MACRO_110: warnings without arguments increment count",
+	 test_CK_APPENDFL_WARN_without_args, setup, NULL, NULL},
     {"DLCK_CHECKER_MACRO_111: append newline", test_CK_APPENDL, setup, teardown, NULL},
-    {"DLCK_CHECKER_MACRO_112: print successful rc", test_CK_PRINTL_RC_success, setup, teardown,
-     NULL},
-    {"DLCK_CHECKER_MACRO_113: print error rc", test_CK_PRINTL_RC_error, setup, teardown, NULL},
+	{"DLCK_CHECKER_MACRO_112: printf successful rc without arguments",
+	 test_CK_PRINTFL_RC_success_without_args, setup, teardown, NULL},
+	{"DLCK_CHECKER_MACRO_113: printf error rc without arguments",
+	 test_CK_PRINTFL_RC_error_without_args, setup, teardown, NULL},
     {"DLCK_CHECKER_MACRO_114: printf successful rc", test_CK_PRINTFL_RC_success, setup, teardown,
      NULL},
     {"DLCK_CHECKER_MACRO_115: printf error rc", test_CK_PRINTFL_RC_error, setup, teardown, NULL},

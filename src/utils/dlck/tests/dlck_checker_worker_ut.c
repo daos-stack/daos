@@ -15,7 +15,9 @@
 #include <abt.h>
 #include <cmocka.h>
 
-#include <daos_srv/checker.h>
+#include <daos/debug.h>
+#include <daos/checker.h>
+#include <daos/common.h>
 
 #include "../dlck_checker.h"
 #include "dlck_checker_ut_mock.h"
