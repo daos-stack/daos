@@ -31,7 +31,7 @@ static int
 setup(void **state)
 {
 	*state                     = &worker_checker_state;
-	mock_vfprintf_check_output = 0;
+	mock_vfprintf_check_output = false;
 	mock_worker_fclose_rc      = 0;
 	return 0;
 }
@@ -186,7 +186,7 @@ test_worker_vprintf_success(void **state)
 {
 	struct checker *ck = *state;
 
-	mock_vfprintf_check_output = 1;
+	mock_vfprintf_check_output = true;
 	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
 	expect_string(__wrap_vfprintf, fmt, "worker %d: %s");
 	expect_string(__wrap_vfprintf, output, "worker 42: ready");
@@ -203,7 +203,7 @@ test_worker_CK_PRINTF_with_indent(void **state)
 
 	ck->ck_level = 2;
 	ck->ck_indent_set(ck);
-	mock_vfprintf_check_output = 1;
+	mock_vfprintf_check_output = true;
 	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
 	expect_string(__wrap_vfprintf, fmt, "%sworker %d");
 	expect_string(__wrap_vfprintf, output, "-- worker 42");

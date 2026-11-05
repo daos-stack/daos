@@ -30,7 +30,7 @@ static int
 setup(void **state)
 {
 	*state                     = &main_checker_state;
-	mock_vfprintf_check_output = 0;
+	mock_vfprintf_check_output = false;
 	return 0;
 }
 
@@ -115,7 +115,7 @@ test_vprintf_vfprintf_positive(void **state)
 {
 	struct checker *ck = *state;
 
-	mock_vfprintf_check_output = 1;
+	mock_vfprintf_check_output = true;
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
 	expect_value(__wrap_vfprintf, stream, stdout);
