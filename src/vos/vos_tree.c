@@ -367,8 +367,7 @@ ktr_node_alloc(struct btr_instance *tins, int size)
 }
 
 static int
-ktr_df_rec_check(struct btr_instance *tins, struct btr_record *rec, report_fn_t report_fn,
-		 void *report_arg)
+ktr_df_rec_check(struct btr_instance *tins, struct btr_record *rec, struct checker *ck)
 {
 	/** NOP. TBD. */
 	return 0;
