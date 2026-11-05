@@ -2,6 +2,33 @@
 
 We are pleased to announce the release of DAOS version 2.6.
 
+## DAOS Version 2.6.5.p3 (2026-11-04)
+
+The DAOS 2.6.5.p3 release includes the daos-2.6.5.p3 RPM packages and their prerequisites.
+It contains the following updates on top of DAOS 2.6.5.p2:
+
+### Bug fixes and improvements
+
+The DAOS 2.6.5.p3 release includes fixes and improvements in the following areas:
+
+#### Container
+
+* Restore erasure-coded (EC) aggregation boundaries for reintegrated or newly added targets,
+  preventing aggregation and space reclamation from stalling (DAOS-19591).
+
+#### Object
+
+* Release the container-handle reference if lightweight object I/O initialization fails due to
+  an empty or stale pool map, preventing container shutdown from being blocked (DAOS-19116).
+
+#### DFuse
+
+* Increase the number of simultaneous dfuse mounts supported by the interception library from
+  8 to 32. Disable interception rather than aborting if more than 32 mounts are discovered
+  (DAOS-18928).
+* Support a NULL `times` argument in intercepted `utimensat()` calls, updating file timestamps to
+  the current time (DAOS-16638).
+
 ## DAOS Version 2.6.5.p2 (2026-08-03)
 
 The DAOS 2.6.5.p2 release includes the daos-2.6.5.p2 RPM packages and their prerequisites.
