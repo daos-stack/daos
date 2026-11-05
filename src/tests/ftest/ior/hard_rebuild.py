@@ -1,8 +1,10 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from avocado.core.exceptions import TestFail
 from ec_utils import ErasureCodeIor
 
 
@@ -72,3 +74,14 @@ class EcodIorHardRebuild(ErasureCodeIor):
         # Read IOR data and verify for EC object again EC data was written with +2 parity so after
         # killing Two servers data should be intact and no data corruption observed.
         self.ior_read_dataset(parity=2)
+
+        # Verify the container can be destroyed; retry if necessary
+        retry = 3
+        while retry > 0:
+            try:
+                self.container.destroy()
+                break
+            except TestFail as error:
+                retry -= 1
+                if retry == 0 or 'DER_BUSY' not in str(error):
+                    raise error
