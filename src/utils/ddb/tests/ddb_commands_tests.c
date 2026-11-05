@@ -1013,6 +1013,153 @@ write_csum_recx_tests(void **state)
 }
 
 /*
+ * g_oids[DVT_FAKE_MINOR_OID_*]: extents written at the same major epoch, with distinct minor
+ * epochs. The command only knows the major epoch: it prints one line per visible piece, in the
+ * order VOS lists them, each one with the whole extent and all the checksums of its write. A
+ * piece of an extent split by a newer one is printed again with the same extent and checksums, and
+ * an extent entirely hidden by a newer one is not printed. With a destination file, the file holds
+ * the checksums in the same order and the lines have no checksum.
+ */
+static void
+csum_dump_recx_minor(void **state, bool to_file)
+{
+	char                    *path_dst = "/tmp/csum_dump_recx_minor_test_output.dat";
+	struct dt_vos_pool_ctx  *tctx     = *state;
+	struct dt_csum_ctx      *csum_ctx = tctx->dvt_extra;
+	struct ddb_ctx           ctx      = {0};
+	struct csum_dump_options opt      = {0};
+	const uint64_t           size     = csum_ctx->dct_recx_size;
+	const uint64_t           chunk    = csum_ctx->dct_chunk_size;
+	/* per object: the extent named by the path, which has to be an extent stored in VOS (the
+	 * first write A, or the second one of HIDDEN), then the lines printed in order and, for
+	 * each one, the write of the object that holds the extent
+	 */
+	struct {
+		daos_recx_t  path;
+		unsigned int nr;
+		struct {
+			daos_recx_t recx;
+			int         write;
+		} lines[3];
+	} scenarios[DVT_FAKE_MINOR_OID_COUNT] = {
+	    /* HEAD, A=[0, S) then B=[0, S/2) */
+	    {{.rx_idx = 0, .rx_nr = size},
+	     2,
+	     {{{.rx_idx = 0, .rx_nr = size / 2}, 1}, {{.rx_idx = 0, .rx_nr = size}, 0}}},
+	    /* MIDDLE, A=[0, 3C) then B=[C, 2C) */
+	    {{.rx_idx = 0, .rx_nr = 3 * chunk},
+	     3,
+	     {{{.rx_idx = 0, .rx_nr = 3 * chunk}, 0},
+	      {{.rx_idx = chunk, .rx_nr = chunk}, 1},
+	      {{.rx_idx = 0, .rx_nr = 3 * chunk}, 0}}},
+	    /* CHUNK, A=[0, S) then B=[C/4, C/2) */
+	    {{.rx_idx = 0, .rx_nr = size},
+	     3,
+	     {{{.rx_idx = 0, .rx_nr = size}, 0},
+	      {{.rx_idx = chunk / 4, .rx_nr = chunk / 4}, 1},
+	      {{.rx_idx = 0, .rx_nr = size}, 0}}},
+	    /* HIDDEN, B=[0, S/2) then A=[0, S) */
+	    {{.rx_idx = 0, .rx_nr = size}, 1, {{{.rx_idx = 0, .rx_nr = size}, 1}}},
+	};
+	daos_recx_t hidden = {.rx_idx = 0, .rx_nr = size / 2};
+	char        path[128];
+	char        lines[3][512];
+	int         row;
+	int         i;
+
+	ctx.dc_poh                     = tctx->dvt_poh;
+	ctx.dc_io_ft.ddb_print_error   = dvt_fake_print;
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+	ctx.dc_io_ft.ddb_write_file    = csum_recx_fake_write_file;
+	ctx.dc_write_mode              = false;
+
+	opt.path  = path;
+	opt.epoch = DAOS_EPOCH_MAX;
+	opt.dst   = to_file ? path_dst : NULL;
+
+	for (row = 0; row < DVT_FAKE_MINOR_OID_COUNT; row++) {
+		unsigned int nr = scenarios[row].nr;
+
+		csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_HEAD + row],
+					 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX],
+					 &scenarios[row].path);
+
+		if (to_file) {
+			will_return(csum_recx_fake_write_file, path_dst);
+			for (i = 0; i < nr; i++)
+				will_return(
+				    csum_recx_fake_write_file,
+				    csum_ctx->dct_minor_ics[row][scenarios[row].lines[i].write]
+					->ic_data);
+			will_return(csum_recx_fake_write_file, NULL);
+			will_return(csum_recx_fake_write_file, -DER_SUCCESS);
+		}
+		assert_success(ddb_run_csum_dump(&ctx, &opt));
+
+		for (i = 0; i < nr; i++) {
+			struct dcs_iod_csums *ic =
+			    csum_ctx->dct_minor_ics[row][scenarios[row].lines[i].write];
+
+			csum_test_recx_line_init(
+			    lines[i], sizeof(lines[i]), &scenarios[row].lines[i].recx,
+			    DVT_FAKE_MINOR_EPOCH, to_file ? NULL : ic->ic_data);
+		}
+		assert_int_equal(printed_count("- Record Indexes: "), nr);
+		if (nr == 2)
+			assert_strings_in_order(dvt_fake_print_buffer, lines[0], lines[1]);
+		else if (nr == 3)
+			assert_strings_in_order(dvt_fake_print_buffer, lines[0], lines[1],
+						lines[2]);
+		else
+			assert_printed_contains(lines[0]);
+		/* an extent split in two visible pieces is printed twice, with the same checksums
+		 */
+		if (nr == 3)
+			assert_int_equal(printed_count(lines[0]), 2);
+		if (to_file)
+			assert_printed_contains("Dumping checksum");
+		dvt_fake_print_reset();
+	}
+
+	/* HIDDEN: B is not printed, whatever the epoch selects */
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_HIDDEN],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &scenarios[3].path);
+	opt.epoch = DVT_FAKE_MINOR_EPOCH;
+	if (to_file) {
+		will_return(csum_recx_fake_write_file, path_dst);
+		will_return(csum_recx_fake_write_file, csum_ctx->dct_minor_ics[3][1]->ic_data);
+		will_return(csum_recx_fake_write_file, NULL);
+		will_return(csum_recx_fake_write_file, -DER_SUCCESS);
+	}
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	csum_test_recx_line_init(lines[0], sizeof(lines[0]), &hidden, DVT_FAKE_MINOR_EPOCH, NULL);
+	assert_int_equal(printed_count("- Record Indexes: "), 1);
+	assert_null(strstr(dvt_fake_print_buffer, lines[0]));
+	dvt_fake_print_reset();
+
+	/* nothing is visible before the major epoch of the extents */
+	csum_test_recx_path_init(path, sizeof(path), &g_oids[DVT_FAKE_MINOR_OID_HEAD],
+				 g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX], &scenarios[0].path);
+	opt.epoch = DVT_FAKE_MINOR_EPOCH - 1;
+	assert_success(ddb_run_csum_dump(&ctx, &opt));
+	assert_printed_contains("No checksum at RECX:");
+	assert_int_equal(printed_count("- Record Indexes: "), 0);
+	dvt_fake_print_reset();
+}
+
+static void
+print_csum_recx_minor_tests(void **state)
+{
+	csum_dump_recx_minor(state, false);
+}
+
+static void
+write_csum_recx_minor_tests(void **state)
+{
+	csum_dump_recx_minor(state, true);
+}
+
+/*
  * --------------------------------------------------------------
  * End test functions
  * --------------------------------------------------------------
@@ -1119,6 +1266,8 @@ ddb_commands_tests_run()
 	    TEST_CSUM(write_csum_sv_tests),
 	    TEST_CSUM(print_csum_recx_tests),
 	    TEST_CSUM(write_csum_recx_tests),
+	    TEST_CSUM(print_csum_recx_minor_tests),
+	    TEST_CSUM(write_csum_recx_minor_tests),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands tests", tests,

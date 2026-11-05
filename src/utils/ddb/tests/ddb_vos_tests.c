@@ -1659,6 +1659,120 @@ dump_csum_recx_tests(void **state)
 	assert_rc_equal(-DER_INVAL, rc);
 }
 
+/* Entry expected in the recx list of a dump of a g_oids[DVT_FAKE_MINOR_OID_*] object */
+struct minor_entry {
+	uint64_t me_idx;
+	uint64_t me_nr;
+	/* write of the object whose whole extent and checksum info the entry reports */
+	int      me_write;
+};
+
+struct minor_expect {
+	struct dt_csum_ctx *mx_csum_ctx;
+	/* row of dct_minor_ics holding the checksum infos of the object */
+	int                 mx_row;
+	unsigned int        mx_nr;
+	struct minor_entry  mx_entries[3];
+};
+
+/*
+ * g_oids[DVT_FAKE_MINOR_OID_*]: extents written at the same major epoch, with distinct minor
+ * epochs.
+ * result: the entries of the struct minor_expect, in this order, all of them at the major epoch
+ * DVT_FAKE_MINOR_EPOCH and each one with the whole extent and the whole checksum info of its write.
+ */
+static int
+dump_csum_recx_minor_cb(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
+			struct dcs_ci_list *cil)
+{
+	struct minor_expect *mx = cb_args;
+	unsigned int         i;
+
+	assert_non_null(mx);
+	assert_int_equal(sv_epoch, 0);
+	assert_non_null(recx_rel);
+	assert_csum_recx_consistent(recx_rel, cil);
+	assert_int_equal(recx_rel->re_nr, mx->mx_nr);
+
+	for (i = 0; i < mx->mx_nr; i++) {
+		struct minor_entry  *ent = &mx->mx_entries[i];
+		struct daos_recx_ep *rep = &recx_rel->re_items[i];
+
+		assert_int_equal(rep->re_recx.rx_idx, ent->me_idx);
+		assert_int_equal(rep->re_recx.rx_nr, ent->me_nr);
+		assert_int_equal(rep->re_ep, DVT_FAKE_MINOR_EPOCH);
+		assert_true(daos_csummer_compare_csum_info(
+		    mx->mx_csum_ctx->dct_csummer, dcs_csum_info_get(cil, i),
+		    mx->mx_csum_ctx->dct_minor_ics[mx->mx_row][ent->me_write]->ic_data));
+	}
+
+	return 0;
+}
+
+/*
+ * Extents written at the same major epoch, as the operations of one distributed transaction are,
+ * only differ by their minor epoch. The dump reports the major epoch only, so it lists every
+ * visible piece with the whole extent and the whole checksum info of its write, as it does for
+ * distinct major epochs.
+ */
+static void
+dump_csum_recx_minor_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	const uint64_t          size     = csum_ctx->dct_recx_size;
+	const uint64_t          chunk    = csum_ctx->dct_chunk_size;
+	struct dv_tree_path     path     = {0};
+	struct minor_expect     mx[DVT_FAKE_MINOR_OID_COUNT];
+	int                     row;
+	int                     rc;
+
+	/* HEAD, A=[0, S) then B=[0, S/2): B, then A with its two chunks although half of it is
+	 * hidden */
+	mx[0] = (struct minor_expect){csum_ctx, 0, 2, {{0, size / 2, 1}, {0, size, 0}}};
+	/* MIDDLE, A=[0, 3C) then B=[C, 2C): A is listed once for each of its two visible pieces */
+	mx[1] = (struct minor_expect){
+	    csum_ctx, 1, 3, {{0, 3 * chunk, 0}, {chunk, chunk, 1}, {0, 3 * chunk, 0}}};
+	/* CHUNK, A=[0, S) then B=[C/4, C/2): B overwrites a part of the first chunk of A */
+	mx[2] = (struct minor_expect){
+	    csum_ctx, 2, 3, {{0, size, 0}, {chunk / 4, chunk / 4, 1}, {0, size, 0}}};
+	/* HIDDEN, B=[0, S/2) then A=[0, S): B is entirely hidden by A and not listed */
+	mx[3] = (struct minor_expect){csum_ctx, 3, 1, {{0, size, 1}}};
+
+	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
+	path.vtp_dkey        = g_dkeys[0];
+	path.vtp_akey        = g_akeys[DVT_FAKE_CSUM_AKEY_RECX]; /* array value type */
+	path.vtp_is_recx     = true;
+	path.vtp_recx.rx_idx = 0;
+	path.vtp_recx.rx_nr  = 3 * chunk;
+
+	for (row = 0; row < DVT_FAKE_MINOR_OID_COUNT; row++) {
+		path.vtp_oid = g_oids[DVT_FAKE_MINOR_OID_HEAD + row];
+
+		rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_csum_recx_minor_cb,
+				  &mx[row]);
+		assert_success(rc);
+
+		/* the major epoch of the extents is all that selects them */
+		rc = dv_dump_csum(tctx->dvt_poh, &path, DVT_FAKE_MINOR_EPOCH,
+				  dump_csum_recx_minor_cb, &mx[row]);
+		assert_success(rc);
+
+		/* nothing is visible before it */
+		rc = dv_dump_csum(tctx->dvt_poh, &path, DVT_FAKE_MINOR_EPOCH - 1,
+				  dump_csum_recx_cb_005, NULL);
+		assert_success(rc);
+	}
+
+	/* HEAD, range [C, 2C): B is out of the range, A is listed with its whole extent */
+	path.vtp_oid         = g_oids[DVT_FAKE_MINOR_OID_HEAD];
+	path.vtp_recx.rx_idx = chunk;
+	path.vtp_recx.rx_nr  = chunk;
+	mx[0]                = (struct minor_expect){csum_ctx, 0, 1, {{0, size, 0}}};
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_csum_recx_minor_cb, &mx[0]);
+	assert_success(rc);
+}
+
 static void
 mock_csum_path_base(struct dv_tree_path *path, struct dt_csum_ctx *csum_ctx)
 {
@@ -1869,6 +1983,7 @@ const struct CMUnitTest dv_test_cases[] = {
     TEST_CSUM(dump_csum_error_tests),
     TEST_CSUM(dump_csum_sv_tests),
     TEST_CSUM(dump_csum_recx_tests),
+    TEST_CSUM(dump_csum_recx_minor_tests),
     TEST_CSUM_FI(dump_csum_sv_inconsistent_tests),
     TEST_CSUM_FI(dump_csum_recx_inconsistent_tests),
 };

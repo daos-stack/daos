@@ -841,6 +841,77 @@ csum_test_partial_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_
 }
 
 /*
+ * Write the extent of \a iod at DVT_FAKE_MINOR_EPOCH with its checksum, returned in \a ic_out.
+ * Without a DTX handle, a regular update has the minor epoch VOS_SUB_OP_MAX and a VOS_OF_REBUILD
+ * update the greater EVT_REBUILD_MINOR_MIN, so an extent written with VOS_OF_REBUILD after another
+ * one is a later write of the same major epoch, as the second operation of a distributed
+ * transaction is.
+ */
+static void
+write_minor(struct dt_csum_ctx *csum_ctx, daos_handle_t coh, daos_unit_oid_t oid, uint64_t flags,
+	    daos_iod_t *iod, d_sg_list_t *sgl, char *buf, char filler,
+	    struct dcs_iod_csums **ic_out)
+{
+	int rc;
+
+	memset(buf, filler, iod->iod_recxs->rx_nr);
+	d_iov_set(sgl->sg_iovs, buf, iod->iod_recxs->rx_nr);
+
+	rc = daos_csummer_calc_iods(csum_ctx->dct_csummer, sgl, iod, NULL, 1, false, NULL, 0,
+				    ic_out);
+	assert_success(rc);
+	rc = vos_obj_update(coh, oid, DVT_FAKE_MINOR_EPOCH, 0, flags, &g_dkeys[0], 1, iod, *ic_out,
+			    sgl);
+	assert_success(rc);
+}
+
+/*
+ * g_oids[DVT_FAKE_MINOR_OID_*]: recxs written at the same major epoch with distinct minor epochs,
+ * see the layouts in ddb_test_driver.h.  Record size 1; every checksum is computed from the data
+ * written, so every extent is healthy.  Each write has its own data byte, DVT_FAKE_MINOR_OID_FILLER
+ * + 2 * row + write.
+ */
+static void
+csum_test_minor_recx_setup(struct dt_vos_pool_ctx *tctx, daos_handle_t coh, d_sg_list_t *sgl)
+{
+	struct dt_csum_ctx *csum_ctx = tctx->dvt_extra;
+	const uint64_t      size     = csum_ctx->dct_recx_size;
+	const uint64_t      chunk    = csum_ctx->dct_chunk_size;
+	/* the extents of each object, in the order they are written */
+	daos_recx_t         recxs[DVT_FAKE_MINOR_OID_COUNT][DVT_FAKE_MINOR_WRITE_COUNT] = {
+            {{.rx_idx = 0, .rx_nr = size}, {.rx_idx = 0, .rx_nr = size / 2}},
+            {{.rx_idx = 0, .rx_nr = 3 * chunk}, {.rx_idx = chunk, .rx_nr = chunk}},
+            {{.rx_idx = 0, .rx_nr = size}, {.rx_idx = chunk / 4, .rx_nr = chunk / 4}},
+            {{.rx_idx = 0, .rx_nr = size / 2}, {.rx_idx = 0, .rx_nr = size}},
+        };
+	daos_iod_t iod = {0};
+	char      *buf;
+	int        row;
+	int        write;
+
+	D_ALLOC(buf, 3 * chunk);
+	assert_non_null(buf);
+
+	d_iov_set(&iod.iod_name, g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX],
+		  strlen(g_akeys_str[DVT_FAKE_CSUM_AKEY_RECX]));
+	iod.iod_nr   = 1;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+
+	for (row = 0; row < DVT_FAKE_MINOR_OID_COUNT; row++) {
+		for (write = 0; write < DVT_FAKE_MINOR_WRITE_COUNT; write++) {
+			iod.iod_recxs = &recxs[row][write];
+			write_minor(csum_ctx, coh, g_oids[DVT_FAKE_MINOR_OID_HEAD + row],
+				    write == 0 ? 0 : VOS_OF_REBUILD, &iod, sgl, buf,
+				    DVT_FAKE_MINOR_OID_FILLER + 2 * row + write,
+				    &csum_ctx->dct_minor_ics[row][write]);
+		}
+	}
+
+	D_FREE(buf);
+}
+
+/*
  * Populate the VOS pool with test data for checksum tests.
  *
  * Requires tctx->dvt_poh to be a valid open pool handle. The caller is responsible for opening and
@@ -868,6 +939,7 @@ ddb_test_csum_setup(void **state)
 	memset(&csum_ctx->dct_sv_ics[0], 0, sizeof(csum_ctx->dct_sv_ics));
 	memset(&csum_ctx->dct_recx_ics[0], 0, sizeof(csum_ctx->dct_recx_ics));
 	memset(&csum_ctx->dct_part_ics[0][0], 0, sizeof(csum_ctx->dct_part_ics));
+	memset(&csum_ctx->dct_minor_ics[0][0], 0, sizeof(csum_ctx->dct_minor_ics));
 	rc = daos_csummer_init_with_type(&csum_ctx->dct_csummer, csum_ctx->dct_csum_type,
 					 csum_ctx->dct_chunk_size, 0);
 	assert_success(rc);
@@ -886,6 +958,7 @@ ddb_test_csum_setup(void **state)
 	csum_test_sv_setup(tctx, coh, &sgl);
 	csum_test_recx_setup(tctx, coh, &sgl);
 	csum_test_partial_recx_setup(tctx, coh, &sgl);
+	csum_test_minor_recx_setup(tctx, coh, &sgl);
 
 	d_sgl_fini(&sgl, false);
 	vos_cont_close(coh);
@@ -918,6 +991,11 @@ ddb_test_csum_teardown(void **state)
 		for (ci_idx = 0; ci_idx < DVT_FAKE_PART_RECX_COUNT; ci_idx++)
 			daos_csummer_free_ic(csum_ctx->dct_csummer,
 					     &csum_ctx->dct_part_ics[oid_idx][ci_idx]);
+	}
+	for (oid_idx = 0; oid_idx < DVT_FAKE_MINOR_OID_COUNT; oid_idx++) {
+		for (ci_idx = 0; ci_idx < DVT_FAKE_MINOR_WRITE_COUNT; ci_idx++)
+			daos_csummer_free_ic(csum_ctx->dct_csummer,
+					     &csum_ctx->dct_minor_ics[oid_idx][ci_idx]);
 	}
 	daos_csummer_destroy(&csum_ctx->dct_csummer);
 
