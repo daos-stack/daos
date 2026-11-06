@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1106,4 +1107,18 @@ func formatBytestring(in string, sb *strings.Builder) {
 			sb.WriteString(" ")
 		}
 	}
+}
+
+// dumpGoroutineStacks logs the stacks of all running goroutines, for diagnosing hangs.
+func dumpGoroutineStacks(log logging.Logger, reason string) {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			buf = buf[:n]
+			break
+		}
+		buf = make([]byte, 2*len(buf))
+	}
+	log.Errorf("dumping goroutine stacks (%s):\n%s", reason, buf)
 }

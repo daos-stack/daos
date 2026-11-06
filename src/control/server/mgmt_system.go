@@ -1823,6 +1823,10 @@ func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) err
 		svc.log.Tracef("sending erase RPC to peer %s", peer.String())
 		peerReq := new(control.SystemEraseReq)
 		peerReq.AddHost(peer.String())
+		// Explicitly set the system name rather than relying on svc.rpcClient's
+		// configured default, so the forwarded request is correctly scoped even if
+		// that default is ever left unset.
+		peerReq.SetSystem(svc.sysdb.SystemName())
 
 		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
 			// A connection error here can't be distinguished from "peer never
@@ -1934,9 +1938,9 @@ func (svc *mgmtSvc) scheduleControlPlaneRestart(leaderStr string) error {
 	return nil
 }
 
-// execControlPlaneRestart drains the gRPC server via GracefulStop() (falling back to a
-// forced Stop() after svc.gracefulStopTimeout), then exec()s to restart the control
-// plane process.
+// execControlPlaneRestart drains the gRPC server via GracefulStop(), falling back to
+// exec()ing to restart the control plane process after svc.gracefulStopTimeout if the
+// drain hasn't completed by then.
 func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
 	scheduledAt := time.Now()
 
@@ -1951,9 +1955,12 @@ func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
 		svc.log.Debugf("System Erase: gRPC server drained cleanly after %s [role=%s]",
 			time.Since(scheduledAt), leaderStr)
 	case <-time.After(svc.gracefulStopTimeout):
-		svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, forcing stop [role=%s]",
+		svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, proceeding to exec anyway [role=%s]",
 			svc.gracefulStopTimeout, leaderStr)
-		svc.grpcServer.Stop()
+		// No forced Stop() fallback: it shares GracefulStop()'s lock/condvar, so it
+		// couldn't force anything independently; exec() below tears down the
+		// listeners/connections via the kernel regardless.
+		dumpGoroutineStacks(svc.log, "GracefulStop() timed out")
 	}
 
 	svc.log.Infof("System Erase: exec'ing %s to restart control plane after %s total drain [role=%s]",

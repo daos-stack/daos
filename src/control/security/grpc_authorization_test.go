@@ -65,7 +65,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/Join":                     {ComponentServer},
 		"/mgmt.MgmtSvc/ClusterEvent":             {ComponentServer},
 		"/mgmt.MgmtSvc/LeaderQuery":              {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemQuery":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemQuery":              {ComponentAdmin, ComponentServer},
 		"/mgmt.MgmtSvc/SystemStop":               {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemErase":              {ComponentAdmin, ComponentServer},
 		"/mgmt.MgmtSvc/SystemStart":              {ComponentAdmin},
