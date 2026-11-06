@@ -186,6 +186,18 @@ class ExecutableCommand(CommandWithParameters):
         self.exit_status_exception = original_value
 
     @contextlib.contextmanager
+    def verbosity(self, value):
+        """Temporarily set the verbosity for the command.
+
+        Args:
+            value (bool): whether or not to enable verbose output
+        """
+        original_value = self.verbose
+        self.verbose = value
+        yield
+        self.verbose = original_value
+
+    @contextlib.contextmanager
     def as_user(self, user):
         """Temporarily run commands as a different user.
 
