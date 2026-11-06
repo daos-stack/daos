@@ -3206,7 +3206,7 @@ io_csum_sv_epoch(void **state)
 	daos_csummer_free_ic(csummer, &ic);
 
 	/*
-	 * Case 1: EPOCH_MAX — the LE probe finds the latest stored epoch (20).
+	 * Case 1: EPOCH_MAX - the LE probe finds the latest stored epoch (20).
 	 */
 	iod.iod_size = 0;
 	rc           = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, &dkey, 1, &iod,
@@ -3219,7 +3219,7 @@ io_csum_sv_epoch(void **state)
 	assert_rc_equal(rc, 0);
 
 	/*
-	 * Case 2: intermediate epoch (15) — the LE probe resolves to the nearest earlier version,
+	 * Case 2: intermediate epoch (15) - the LE probe resolves to the nearest earlier version,
 	 * which was stored at epoch 10.
 	 */
 	iod.iod_size = 0;
@@ -3233,7 +3233,7 @@ io_csum_sv_epoch(void **state)
 	assert_rc_equal(rc, 0);
 
 	/*
-	 * Case 3: exact stored epoch (10) — the LE probe lands exactly on the stored epoch;
+	 * Case 3: exact stored epoch (10) - the LE probe lands exactly on the stored epoch;
 	 * vos_ioh2sv_epoch() returns 10.
 	 */
 	iod.iod_size = 0;
@@ -3247,7 +3247,7 @@ io_csum_sv_epoch(void **state)
 	assert_rc_equal(rc, 0);
 
 	/*
-	 * Case 4: epoch before any write (9) — vos_obj_hold() finds no visible key at epoch 9,
+	 * Case 4: epoch before any write (9) - vos_obj_hold() finds no visible key at epoch 9,
 	 * short-circuits before reaching akey_fetch_single(), and vos_fetch_begin() returns a valid
 	 * ioh with an empty result. vos_ioh2sv_epoch() returns 0 (ic_sv_epoch was never set).
 	 */
@@ -3315,9 +3315,9 @@ io_csum_update_recx(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *dk
  *
  * Write layout (chunk_size = 64 bytes):
  *   Write 1: offset 0, length 128 (chunk-aligned)
- *            spans chunks [0,64) and [64,128) → cs_nr = 2
+ *            spans chunks [0,64) and [64,128) -> cs_nr = 2
  *   Write 2: offset 32, length 128 (not chunk-aligned)
- *            spans chunks [32,64), [64,128), and [128,160) → cs_nr = 3
+ *            spans chunks [32,64), [64,128), and [128,160) -> cs_nr = 3
  *
  * After fetching, the checksum info list must contain one entry per write
  * with cs_nr equal to the number of chunks it spans, and the checksums must
@@ -3359,10 +3359,10 @@ io_csum_fetch_recx(void **state)
 	rc = daos_csummer_init_with_type(&csummer, csum_type, csum_chunk_size, 0);
 	assert_rc_equal(rc, 0);
 
-	/* Write 1: chunk-aligned at offset 0, epoch 1 → cs_nr=2 */
+	/* Write 1: chunk-aligned at offset 0, epoch 1 -> cs_nr=2 */
 	io_csum_update_recx(arg, 1, &dkey, &akey, 0, recx_size, csummer, &ic[0]);
 
-	/* Write 2: non-aligned at offset recx2_idx=32, epoch 2 → cs_nr=3 */
+	/* Write 2: non-aligned at offset recx2_idx=32, epoch 2 -> cs_nr=3 */
 	io_csum_update_recx(arg, 2, &dkey, &akey, recx2_idx, recx_size, csummer, &ic[1]);
 
 	/* Fetch recx and checksums info */
@@ -3393,7 +3393,7 @@ io_csum_fetch_recx(void **state)
 	assert_non_null(cil);
 	assert_int_equal(cil->dcl_csum_infos_nr, 2);
 
-	/* Write 1: chunk-aligned → 2 chunks → cs_nr=2 */
+	/* Write 1: chunk-aligned -> 2 chunks -> cs_nr=2 */
 	ci = dcs_csum_info_get(cil, 0);
 	assert_true(ci_is_valid(ci));
 	assert_int_equal(ci->cs_nr, 2);
@@ -3401,7 +3401,7 @@ io_csum_fetch_recx(void **state)
 	assert_int_equal(hf->cf_type, csum_type);
 	assert_true(daos_csummer_compare_csum_info(csummer, ic[0]->ic_data, ci));
 
-	/* Write 2: non-aligned start at recx2_idx=32 → spans 3 chunks → cs_nr=3 */
+	/* Write 2: non-aligned start at recx2_idx=32 -> spans 3 chunks -> cs_nr=3 */
 	ci = dcs_csum_info_get(cil, 1);
 	assert_true(ci_is_valid(ci));
 	assert_int_equal(ci->cs_nr, 3);
