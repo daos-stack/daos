@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -473,6 +474,13 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			// the error should give us the list of replicas to try.
 			// One of them should be the current leader and will
 			// service the request.
+			if len(e.Replicas) > 0 {
+				req.SetHostList(e.Replicas)
+			}
+		case *system.ErrReplicaNoEngine:
+			// The replica has indicated that it does not have a running
+			// engine to service the request. We can retry the request on
+			// one of the other replicas.
 			if len(e.Replicas) > 0 {
 				req.SetHostList(e.Replicas)
 			}
