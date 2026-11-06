@@ -1065,7 +1065,7 @@ rgt_up_dom_included(struct rebuild_global_pool_tracker *rgt, struct pool_domain 
  * its own rebuild status by IV.
  */
 static void
-rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
+rebuild_leader_status_check(struct ds_pool *pool, uint32_t op, struct pool_target_id_list *tgts,
 			    struct rebuild_global_pool_tracker *rgt)
 {
 	uint64_t              check_cnt      = 0;
@@ -1099,6 +1099,40 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t op,
 
 		check_cnt++;
 		ABT_rwlock_rdlock(pool->sp_lock);
+		/* The status of a target of this rebuild has been changed after the rebuild
+		 * version, e.g. a reintegrating target is reverted to DOWNOUT by an exclude, which
+		 * changes the layouts of the objects, or any target that this rebuild may have
+		 * migrated data to has been dropped from the layouts without a rebuild of its own,
+		 * e.g. an extending target is excluded, or a target is drained/reintegrated after
+		 * the rebuild version, which may drop the spare this rebuild is migrating data to
+		 * from the write layouts, abort and retry with the new version.
+		 */
+		if (rgt->rgt_opc == RB_OP_REBUILD) {
+			uint32_t changed_ver;
+			uint32_t dropped_ver;
+
+			changed_ver =
+			    pool_map_tgts_changed_after(pool->sp_map, tgts, rgt->rgt_rebuild_ver);
+			dropped_ver =
+			    pool_map_tgts_dropped_after(pool->sp_map, rgt->rgt_rebuild_ver);
+			if (changed_ver != 0 || dropped_ver != 0) {
+				/*
+				 * The retry rebuilds the targets by their status at the new
+				 * version, which might be the opposite of this rebuild, e.g. the
+				 * exclusion rebuild of an extending target instead of the
+				 * extension, log the reason to make it clear.
+				 */
+				D_INFO(DF_RB ": abort stale rebuild, retry with ver %u, target of "
+					     "the rebuild changed at ver %u, target dropped from "
+					     "layouts (e.g. extension aborted) at ver %u\n",
+				       DP_RB_RGT(rgt), max(changed_ver, dropped_ver), changed_ver,
+				       dropped_ver);
+				ABT_rwlock_unlock(pool->sp_lock);
+				rgt->rgt_abort           = 1;
+				rgt->rgt_status.rs_errno = -DER_STALE;
+				goto done;
+			}
+		}
 		rc = map_ranks_init(pool->sp_map,
 				    PO_COMP_ST_UP | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
 					PO_COMP_ST_NEW,
@@ -1840,6 +1874,29 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	}
 	leader_rank = dss_self_rank();
 
+	/* The status of some targets of the task have been changed after the task version, e.g. a
+	 * reintegrating target is reverted to DOWNOUT by an exclude, then reintegrated again, or
+	 * some targets have been dropped from the layouts, e.g. an extending target is excluded,
+	 * or some targets have been drained/reintegrated, so the layouts of the task version are
+	 * stale. Rebuild with the version of the change
+	 * instead, otherwise it will be aborted by rebuild_leader_status_check() or rejected on
+	 * finish again and again. It might also be a retry of an aborted one, see
+	 * rebuild_leader_status_check().
+	 */
+	if (task->dst_rebuild_op == RB_OP_REBUILD) {
+		uint32_t changed_ver;
+
+		ABT_rwlock_rdlock(pool->sp_lock);
+		changed_ver =
+		    pool_map_rebuild_stale_ver(pool->sp_map, &task->dst_tgts, task->dst_map_ver);
+		ABT_rwlock_unlock(pool->sp_lock);
+		if (changed_ver != 0) {
+			D_INFO(DF_UUID ": bump rebuild ver %u -> %u, target changed after it\n",
+			       DP_UUID(pool->sp_uuid), task->dst_map_ver, changed_ver);
+			task->dst_map_ver = changed_ver;
+		}
+	}
+
 	/* If this happened due to leader switch, then do not need update generation.
 	 * If on the same PS leader, it retry the rebuild/reclaim on same version, should bump
 	 * the generation.
@@ -2326,7 +2383,7 @@ rebuild_task_ult(void *arg)
 
 	rc = 0;
 	/* Start leader tracking ULT to wait until rebuild finished */
-	rebuild_leader_status_check(pool, task->dst_rebuild_op, rgt);
+	rebuild_leader_status_check(pool, task->dst_rebuild_op, &task->dst_tgts, rgt);
 done:
 	D_ASSERT(rgt != NULL);
 	if (!is_rebuild_global_done(rgt)) {
@@ -2354,7 +2411,13 @@ done:
 		if (task->dst_rebuild_op == RB_OP_REBUILD) {
 			rebuild_log_finish_scope(pool, task, rgt);
 			rc = ds_pool_tgt_finish_rebuild(pool->sp_uuid, &task->dst_tgts,
-							&obj_reclaim_ver);
+							rgt->rgt_rebuild_ver, &obj_reclaim_ver);
+			/* The status of some targets were changed after the rebuild version,
+			 * the rebuilt data is stale, fail it to cleanup by Fail_reclaim and
+			 * retry.
+			 */
+			if (rc == -DER_STALE)
+				rgt->rgt_status.rs_errno = rc;
 		}
 		DL_INFO(rc, DF_RB " finish rebuild %d", DP_RB_RGT(rgt),
 			task->dst_tgts.pti_ids[0].pti_id);
@@ -2422,6 +2485,50 @@ pool_is_rebuilding(uuid_t pool_uuid)
 			return true;
 	}
 	return false;
+}
+
+/**
+ * Check whether the reintegration of \a tgts can be started, called by the PS leader with the
+ * pool map \a map to be updated. It is rejected if any target is in a running rebuild task,
+ * and its status has been changed after the version of the task, e.g. a reintegrating target is
+ * reverted to DOWNOUT by an exclude, so the task is stale for it and will be aborted. The
+ * reintegration should be retried after the abort of the stale task.
+ *
+ * NB: the PS and the rebuild tasks (rebuild_ults) run on the same xstream.
+ *
+ * \return	0 if it can be started, -DER_BUSY if not.
+ */
+int
+ds_rebuild_reint_check(uuid_t pool_uuid, struct pool_map *map, struct pool_target_id_list *tgts)
+{
+	struct rebuild_task *task;
+	int                  i;
+
+	d_list_for_each_entry(task, &rebuild_gst.rg_running_list, dst_list) {
+		if (uuid_compare(task->dst_pool_uuid, pool_uuid) != 0 ||
+		    task->dst_rebuild_op != RB_OP_REBUILD)
+			continue;
+
+		for (i = 0; i < tgts->pti_number; i++) {
+			struct pool_target_id_list tgt = {.pti_number = 1,
+							  .pti_ids    = &tgts->pti_ids[i]};
+			uint32_t                   changed_ver;
+
+			if (!rebuild_tgt_in_list(&task->dst_tgts, tgts->pti_ids[i].pti_id))
+				continue;
+
+			changed_ver = pool_map_tgts_changed_after(map, &tgt, task->dst_map_ver);
+			if (changed_ver != 0) {
+				D_INFO(DF_UUID ": reject reintegrating target %u, its rebuild ver "
+					       "%u is stale, changed at ver %u\n",
+				       DP_UUID(pool_uuid), tgts->pti_ids[i].pti_id,
+				       task->dst_map_ver, changed_ver);
+				return -DER_BUSY;
+			}
+		}
+	}
+
+	return 0;
 }
 
 #define REBUILD_MAX_INFLIGHT	10

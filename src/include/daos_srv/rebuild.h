@@ -104,4 +104,6 @@ int
 ds_rebuild_admin_stop(struct ds_pool *pool, uint32_t force);
 int
 ds_rebuild_admin_start(struct ds_pool *pool);
+int
+ds_rebuild_reint_check(uuid_t pool_uuid, struct pool_map *map, struct pool_target_id_list *tgts);
 #endif

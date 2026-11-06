@@ -538,12 +538,23 @@ chk_engine_pm_dangling_ult(void *args)
 	int                          result    = 0;
 	int                          rc        = 0;
 
-	D_ASSERTF(status == PO_COMP_ST_DOWNOUT || status == PO_COMP_ST_DOWN,
+	D_ASSERTF(status == PO_COMP_ST_DOWNOUT || status == PO_COMP_ST_DOWN ||
+		      status == PO_COMP_ST_NEW,
 		  "Unexpected pool map status %u\n", status);
 
 	cla = CHK__CHECK_INCONSIST_CLASS__CIC_ENGINE_HAS_NO_STORAGE;
 	act = prop->cp_policies[cla];
 	cbk->cb_statistics.cs_total++;
+
+	/*
+	 * A dangling NEW entry is kept as NEW, see pool_map_comp_lost_status(), only report it.
+	 * It is not used by placement, so the subsequent check does not need to be skipped.
+	 */
+	if (status == PO_COMP_ST_NEW) {
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		cbk->cb_statistics.cs_ignored++;
+		goto report;
+	}
 
 	switch (act) {
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
@@ -560,8 +571,7 @@ chk_engine_pm_dangling_ult(void *args)
 		 *	 subsequent step. Here we only fix the inconsistency in DRAM.
 		 */
 		cpr->cpr_map_refreshed = 1;
-		comp->co_status = status;
-		comp->co_fseq = pool_map_bump_version(map);
+		pool_map_comp_mark_lost(map, comp, status);
 		cbk->cb_statistics.cs_repaired++;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
@@ -684,8 +694,7 @@ report:
 		 *	 subsequent step. Here we only fix the inconsistency in DRAM.
 		 */
 		cpr->cpr_map_refreshed = 1;
-		comp->co_status = status;
-		comp->co_fseq = pool_map_bump_version(map);
+		pool_map_comp_mark_lost(map, comp, status);
 		cbk->cb_statistics.cs_repaired++;
 		break;
 	}
@@ -894,8 +903,8 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 			if (comp->co_index >= mbs->cpm_tgt_nr ||
 			    mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_NONEXIST ||
 			    mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_EMPTY)
-				/* Dangling new entry in pool map, directly mark as 'DOWNOUT'. */
-				rc = chk_engine_pm_dangling(cpr, map, comp, PO_COMP_ST_DOWNOUT);
+				/* Dangling new entry in pool map, keep it as 'NEW'. */
+				rc = chk_engine_pm_dangling(cpr, map, comp, PO_COMP_ST_NEW);
 			break;
 		default:
 			D_WARN(DF_ENGINE" hit knownn pool target status %u for "DF_UUIDF
@@ -912,9 +921,11 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 			    mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_EMPTY)
 				/*
 				 * Some data may be on the lost target, mark as 'DOWN' that
-				 * will be handled via rebuild in subsequent process.
+				 * will be handled via rebuild in subsequent process, or revert
+				 * a reintegrating one to 'DOWNOUT'.
 				 */
-				rc = chk_engine_pm_dangling(cpr, map, comp, PO_COMP_ST_DOWN);
+				rc = chk_engine_pm_dangling(cpr, map, comp,
+							    pool_map_comp_lost_status(comp));
 			else if (mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_NORMAL &&
 				 unknown)
 				/*
@@ -983,6 +994,7 @@ chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map)
 	int			 rc = 0;
 	int			 i;
 	int			 j;
+	uint32_t                 status;
 	bool			 down;
 
 	rank_nr = pool_map_find_ranks(map, PO_COMP_ID_ALL, &doms);
@@ -1008,8 +1020,8 @@ chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map)
 				/* Do nothing. */
 				break;
 			case PO_COMP_ST_NEW:
-				/* Dangling new entry in pool map, directly mark as 'DOWNOUT'. */
-				rc = chk_engine_pm_dangling(cpr, map, t_comp, PO_COMP_ST_DOWNOUT);
+				/* Dangling new entry in pool map, keep it as 'NEW'. */
+				rc = chk_engine_pm_dangling(cpr, map, t_comp, PO_COMP_ST_NEW);
 				break;
 			default:
 				D_WARN(DF_ENGINE" hit knownn pool target status %u for "DF_UUIDF
@@ -1020,12 +1032,15 @@ chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map)
 			case PO_COMP_ST_UP:
 			case PO_COMP_ST_UPIN:
 			case PO_COMP_ST_DRAIN:
-				down = true;
 				/*
 				 * Some data may be on the lost target, mark as 'DOWN' that
-				 * will be handled via rebuild in subsequent process.
+				 * will be handled via rebuild in subsequent process, or revert
+				 * a reintegrating one to 'DOWNOUT'.
 				 */
-				rc = chk_engine_pm_dangling(cpr, map, t_comp, PO_COMP_ST_DOWN);
+				status = pool_map_comp_lost_status(t_comp);
+				if (status == PO_COMP_ST_DOWN)
+					down = true;
+				rc = chk_engine_pm_dangling(cpr, map, t_comp, status);
 				break;
 			}
 
@@ -1041,9 +1056,13 @@ chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map)
 		 * NOTE: When we arrive here, all the pool membership information have already been
 		 *	 scanned via chk_engine_pool_mbs_one(). No service for this pool is started
 		 *	 on the rank (dangling parent domain). So it is safe to "DOWN{OUT}" it.
+		 *	 A NEW rank (with NEW targets) is kept as 'NEW', the same as its targets.
 		 */
-		rc = chk_engine_pm_dangling(cpr, map, r_comp,
-					    down ? PO_COMP_ST_DOWN : PO_COMP_ST_DOWNOUT);
+		if (r_comp->co_status == PO_COMP_ST_NEW)
+			status = PO_COMP_ST_NEW;
+		else
+			status = down ? PO_COMP_ST_DOWN : PO_COMP_ST_DOWNOUT;
+		rc = chk_engine_pm_dangling(cpr, map, r_comp, status);
 		if (rc != 0)
 			goto out;
 
