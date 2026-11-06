@@ -1626,6 +1626,9 @@ pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool)
 	pool->vp_rdb = !!(flags & VOS_POF_RDB);
 	pool->vp_ext_chkpt = !!(flags & VOS_POF_EXTERNAL_CHKPT);
 
+	if (flags & VOS_POF_FOR_CHECK)
+		pool->vp_for_check = 1;
+
 	/*
 	 * Insert the pool into the uuid hash table before full opened, because subsequent
 	 * pool_open process maybe yield and other pool_lookup for the same UUID will find
@@ -1811,11 +1814,14 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 			vos_pool_decref(pool);
 			return -DER_BUSY;
 		}
-		if (!(flags & VOS_POF_FOR_CHECK_QUERY) &&
-		    ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
+		if (!(flags & VOS_POF_FOR_CHECK) && ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
 			vos_pool_decref(pool);
 			return -DER_BUSY;
 		}
+
+		if (flags & VOS_POF_FOR_CHECK)
+			pool->vp_for_check = 1;
+
 		pool->vp_opened++;
 		*poh = vos_pool2hdl(pool);
 		return 0;

@@ -284,7 +284,8 @@ ddb_test_setup_vos(void **state)
 
 	assert_success(ddb_test_pool_setup(tctx));
 
-	assert_success(vos_pool_open(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, &poh));
+	assert_success(
+	    vos_pool_open(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, VOS_POF_FOR_CHECK, &poh));
 
 	if (DAOS_ON_VALGRIND || DDB_FORCE_VALGRIND)
 		/* smaller test data for valgrind */
@@ -588,7 +589,8 @@ create_test_vos_file()
 		print_error("Unable to setup pool: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
-	assert_success(vos_pool_open(tctx.dvt_pmem_file, tctx.dvt_pool_uuid, 0, &poh));
+	assert_success(
+	    vos_pool_open(tctx.dvt_pmem_file, tctx.dvt_pool_uuid, VOS_POF_FOR_CHECK, &poh));
 	dvt_insert_data(poh, conts, objs, dkeys, akeys, &tctx);
 
 	assert_success(vos_cont_open(poh, g_uuids[0], &coh));
