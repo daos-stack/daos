@@ -1,8 +1,10 @@
 """
   (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from avocado.core.exceptions import TestFail
 from ec_utils import ErasureCodeIor
 
 
@@ -42,6 +44,7 @@ class EcodIorHardRebuild(ErasureCodeIor):
 
         # Kill last server rank
         self.rank_to_kill = [self.server_count - 1]
+        self.log_step(f"Kill last server rank: {self.rank_to_kill}")
 
         # Run only object type which matches the server count and remove other objects
         tmp_obj_class = []
@@ -52,6 +55,7 @@ class EcodIorHardRebuild(ErasureCodeIor):
 
         # Write IOR data set with different EC object. kill single server while IOR Write phase
         # is in progress.
+        self.log_step(f"Write IOR data set with {self.obj_class} object")
         self.ior_write_dataset()
 
         # Do not change the stoneWallingStatusFile during read
@@ -69,6 +73,20 @@ class EcodIorHardRebuild(ErasureCodeIor):
         self.set_online_rebuild = True
         # Kill another server rank
         self.rank_to_kill = [self.server_count - 2]
+        self.log_step(f"Kill another server rank: {self.rank_to_kill}")
         # Read IOR data and verify for EC object again EC data was written with +2 parity so after
         # killing Two servers data should be intact and no data corruption observed.
         self.ior_read_dataset(parity=2)
+
+        # Verify the container can be destroyed; retry if necessary
+        self.log_step(f"Verify the {self.nvme_local_cont} container can be destroyed")
+        retry = 3
+        while retry > 0:
+            try:
+                self.nvme_local_cont.destroy()
+                break
+            except TestFail as error:
+                retry -= 1
+                if retry == 0 or 'DER_BUSY' not in str(error):
+                    raise error
+        self.log.info("Test passed")
