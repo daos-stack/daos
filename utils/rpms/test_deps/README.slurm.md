@@ -6,9 +6,9 @@
 
 # Slurm Test Dependency
 
-Slurm is currently the first DAOS functional-test dependency built through the
-test-dependency path, with its custom RPM packaging scripts under
-`utils/rpms/test_deps/`. Its source revision is pinned in `utils/build.config`;
+Slurm is a DAOS functional-test dependency built through the test-dependency
+path, with its custom RPM packaging scripts under `utils/rpms/test_deps/`. Its
+source revision is pinned in `utils/build.config`;
 update `slurm_version` in `utils/rpms/package_info.sh` with the source tag and
 increment `slurm_release` when changing the build or packaging.
 

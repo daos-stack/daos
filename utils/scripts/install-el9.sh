@@ -15,7 +15,8 @@ set -e
 dnf_install_args="${1:-}"
 
 : "${PYTHON_VERSION:=3.11}"
-case "${INSTALL_BUILD_TEST_DEPS:-false}" in
+: "${INSTALL_BUILD_TEST_DEPS:=false}"
+case "${INSTALL_BUILD_TEST_DEPS}" in
     true|false) ;;
     *) echo 'INSTALL_BUILD_TEST_DEPS must be true or false' >&2; exit 1 ;;
 esac
@@ -83,7 +84,7 @@ dnf --nodocs install ${dnf_install_args} \
     ncurses-devel \
     yasm
 
-if [[ "${INSTALL_BUILD_TEST_DEPS:-false}" = true ]]; then
+if [[ "${INSTALL_BUILD_TEST_DEPS}" = true ]]; then
     # slurm build dependencies
     # shellcheck disable=SC2086
     dnf --nodocs install ${dnf_install_args} \
