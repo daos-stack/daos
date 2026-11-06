@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -203,7 +203,7 @@ def create_override_config(logger, hosts, service, user, service_command, servic
     override_contents = [
         "[Service]",
         "ExecStart=",
-        f"ExecStart={service_command} start -o {service_config}"
+        f"ExecStart={service_command} start -o {service_config} --auto-format"
     ]
     if path:
         override_contents.append(f'Environment="PATH={path}"')
