@@ -26,6 +26,14 @@ struct vos_sv_addr {
 	bio_addr_t	sa_addr;	/* SV payload address */
 };
 
+/** Whole physical extent of an array entry listed by a VOS_OF_FETCH_CSUM fetch */
+struct vos_ext_addr {
+	/** address of the first byte of the physical extent */
+	bio_addr_t ea_addr;
+	/** length of the physical extent in bytes */
+	uint64_t   ea_len;
+};
+
 /** I/O context */
 struct vos_io_context {
 	EVT_ENT_ARRAY_LG_PTR(ic_ent_array);
@@ -93,6 +101,13 @@ struct vos_io_context {
 	 * by vos_ioh2recx_list() and shall free it by daos_recx_ep_list_free().
 	 */
 	struct daos_recx_ep_list *ic_recx_lists;
+	/**
+	 * Whole physical extents of the entries of the recx list of a VOS_OF_FETCH_CSUM fetch, in
+	 * the same order, see vos_ioh_recx_copy(). Owned by the I/O context.
+	 */
+	struct vos_ext_addr      *ic_ext_addrs;
+	unsigned int              ic_ext_addr_nr;
+	unsigned int              ic_ext_addr_cap;
 };
 
 struct dedup_entry {
@@ -599,6 +614,7 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 		bio_iod_free(ioc->ic_biod);
 
 	dcs_csum_info_list_fini(&ioc->ic_csum_list);
+	D_FREE(ioc->ic_ext_addrs);
 
 	if (ioc->ic_obj)
 		vos_obj_release(ioc->ic_obj, 0, evict);
@@ -1063,6 +1079,41 @@ save_recx(struct vos_io_context *ioc, uint64_t rx_idx, uint64_t rx_nr,
 	return daos_recx_ep_add(recx_list, &recx_ep);
 }
 
+/**
+ * Save the address and length of the whole physical extent of \a ent, so that vos_ioh_recx_copy()
+ * can copy it later. Must be called along with save_recx(), to keep both lists in the same order.
+ */
+static int
+save_ext_addr(struct vos_io_context *ioc, const struct evt_entry *ent, uint32_t rec_size)
+{
+	struct vos_ext_addr *ea;
+
+	if (ioc->ic_ext_addr_nr == ioc->ic_ext_addr_cap) {
+		struct vos_ext_addr *addrs;
+		unsigned int cap = (ioc->ic_ext_addr_cap == 0) ? 8 : ioc->ic_ext_addr_cap * 2;
+
+		D_REALLOC_ARRAY(addrs, ioc->ic_ext_addrs, ioc->ic_ext_addr_cap, cap);
+		if (addrs == NULL)
+			return -DER_NOMEM;
+		ioc->ic_ext_addrs    = addrs;
+		ioc->ic_ext_addr_cap = cap;
+	}
+
+	ea          = &ioc->ic_ext_addrs[ioc->ic_ext_addr_nr++];
+	ea->ea_addr = ent->en_addr;
+	/*
+	 * en_addr is the address of the first byte of en_sel_ext, the visible part of the extent
+	 * (see evt_entry_fill() and evt_split_entry()): go back to the first byte of the whole
+	 * extent. A gang address is not a linear offset, but the descriptor of scattered
+	 * allocations.
+	 */
+	if (!BIO_ADDR_IS_GANG(&ea->ea_addr))
+		ea->ea_addr.ba_off -= (ent->en_sel_ext.ex_lo - ent->en_ext.ex_lo) * rec_size;
+	ea->ea_len = (ent->en_ext.ex_hi - ent->en_ext.ex_lo + 1) * rec_size;
+
+	return 0;
+}
+
 /** Fetch an extent from an akey */
 static int
 akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
@@ -1218,6 +1269,9 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			ex_lo = ent->en_ext.ex_lo;
 			ex_nr = ent->en_ext.ex_hi - ex_lo + 1;
 			rc    = save_recx(ioc, ex_lo, ex_nr, ent->en_epoch, inob, DRT_NORMAL);
+			if (rc != 0)
+				goto failed;
+			rc = save_ext_addr(ioc, ent, inob);
 			if (rc != 0)
 				goto failed;
 		} else {
@@ -2858,6 +2912,47 @@ daos_epoch_t
 vos_ioh2sv_epoch(daos_handle_t ioh)
 {
 	return vos_ioh2ioc(ioh)->ic_sv_epoch;
+}
+
+int
+vos_ioh_recx_copy(daos_handle_t ioh, unsigned int idx, d_iov_t *iov_out)
+{
+	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
+	struct vos_ext_addr   *ea;
+	struct vos_pool       *pool;
+	size_t                 old_len;
+	int                    rc;
+
+	if (!ioc->ic_csum_fetch) {
+		D_ERROR("The fetch handle was not opened with VOS_OF_FETCH_CSUM\n");
+		return -DER_INVAL;
+	}
+
+	if (idx >= ioc->ic_ext_addr_nr) {
+		D_ERROR("Invalid extent index %u, %u extent(s) listed\n", idx, ioc->ic_ext_addr_nr);
+		return -DER_INVAL;
+	}
+
+	if (iov_out == NULL || iov_out->iov_buf == NULL) {
+		D_ERROR("Invalid destination buffer\n");
+		return -DER_INVAL;
+	}
+
+	ea = &ioc->ic_ext_addrs[idx];
+	if (BIO_ADDR_IS_GANG(&ea->ea_addr))
+		return -DER_NOTSUPPORTED;
+	if (iov_out->iov_buf_len < ea->ea_len)
+		return -DER_OVERFLOW;
+
+	pool    = ioc->ic_cont->vc_pool;
+	old_len = iov_out->iov_len;
+	/* iov_len is the size of the copy in vos_media_read() */
+	iov_out->iov_len = ea->ea_len;
+	rc = vos_media_read(vos_data_ioctxt(pool), &pool->vp_umm, ea->ea_addr, iov_out);
+	if (rc != 0)
+		iov_out->iov_len = old_len;
+
+	return rc;
 }
 
 struct bio_sglist *

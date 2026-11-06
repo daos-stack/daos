@@ -1128,6 +1128,36 @@ daos_epoch_t
 vos_ioh2sv_epoch(daos_handle_t ioh);
 
 /**
+ * Copy the data of a whole physical extent listed by a VOS_OF_FETCH_CSUM fetch.
+ *
+ * Each entry of the recx list (vos_ioh2recx_list()) of such a fetch describes a whole physical
+ * extent, the one the visible piece listed belongs to, even if newer extents, possibly written at
+ * the same major epoch, hide a part of it. So does the entry of the checksum info list
+ * (vos_ioh2ci()) at the same index, but that list is empty when the akey has no checksum. This
+ * function copies the bytes of that whole extent, i.e. the data its checksums were computed on,
+ * wherever the extent is stored. An extent split by a newer one is listed once per visible piece,
+ * and each of its entries copies the same bytes.
+ *
+ * The handle is not modified: any entry can be copied, in any order, until vos_fetch_end().
+ *
+ * \param ioh		[IN]	The I/O handle of a vos_fetch_begin() with VOS_OF_FETCH_CSUM.
+ * \param idx		[IN]	Index of the entry in the recx list, and in the checksum info list
+ *				if it is not empty.
+ * \param iov_out	[IN,OUT] Destination: iov_buf and iov_buf_len are set by the caller, the
+ *				 buffer shall hold re_recx.rx_nr * re_rec_size bytes of the entry.
+ *				 iov_len is set to the number of bytes copied, and left unchanged
+ *				 on error.
+ *
+ * \return			Zero on success, -DER_INVAL if the handle was not opened with
+ *				VOS_OF_FETCH_CSUM, if \a idx is out of range (an SV fetch lists
+ *				no extent) or if the destination is NULL, -DER_OVERFLOW if the
+ *				buffer is too small, -DER_NOTSUPPORTED if the extent is a gang
+ *				address, or a negative value if the media read fails.
+ */
+int
+vos_ioh_recx_copy(daos_handle_t ioh, unsigned int idx, d_iov_t *iov_out);
+
+/**
  * Get the scatter/gather list associated with a given I/O descriptor.
  *
  * \param ioh	[IN]	The I/O handle.
