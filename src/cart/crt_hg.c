@@ -1420,10 +1420,11 @@ mem_free:
 static hg_return_t
 crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 {
-	crt_rpc_t		*rpc_pub;
-	struct crt_rpc_priv	*rpc_priv = hg_cbinfo->arg;
-	hg_return_t		hg_ret = HG_SUCCESS;
-	int			rc = 0;
+	crt_rpc_t           *rpc_pub;
+	struct crt_rpc_priv *rpc_priv = hg_cbinfo->arg;
+	struct crt_context  *crt_ctx;
+	hg_return_t          hg_ret = HG_SUCCESS;
+	int                  rc     = 0;
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(hg_cbinfo->type == HG_CB_FORWARD);
@@ -1431,6 +1432,14 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_rpc_lock(rpc_priv);
 
 	rpc_pub = &rpc_priv->crp_pub;
+	crt_ctx = rpc_pub->cr_ctx;
+
+	if (crt_gdata.cg_use_sensors) {
+		d_tm_dec_gauge(crt_ctx->cc_hg_inflight, 1);
+		if (rpc_priv->crp_hg_cancelled)
+			d_tm_dec_gauge(crt_ctx->cc_hg_cancel_inflight, 1);
+	}
+
 	if (crt_rpc_completed(rpc_priv)) {
 		crt_rpc_unlock(rpc_priv);
 		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
@@ -1522,9 +1531,12 @@ out:
 void
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t	hg_ret;
+	struct crt_context *crt_ctx;
+	hg_return_t         hg_ret;
 
 	D_ASSERT(rpc_priv != NULL);
+
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	/* take a ref ahead to make sure rpc_priv be valid even if timeout
 	 * happen before HG_Forward returns (it is possible due to blocking
@@ -1532,9 +1544,14 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 	 */
 	RPC_ADDREF(rpc_priv);
 
+	/* Counted before HG_Forward since the callback may run before it returns. */
+	if (crt_gdata.cg_use_sensors)
+		d_tm_inc_gauge(crt_ctx->cc_hg_inflight, 1);
 	hg_ret = HG_Forward(rpc_priv->crp_hg_hdl, crt_hg_req_send_cb, rpc_priv,
 			    &rpc_priv->crp_pub.cr_input);
 	if (hg_ret != HG_SUCCESS) {
+		if (crt_gdata.cg_use_sensors)
+			d_tm_dec_gauge(crt_ctx->cc_hg_inflight, 1);
 		RPC_ERROR(rpc_priv,
 			  "HG_Forward failed, hg_ret: " DF_HG_RC "\n",
 			  DP_HG_RC(hg_ret));

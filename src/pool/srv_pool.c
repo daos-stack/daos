@@ -235,6 +235,7 @@ struct pool_svc {
 	uint32_t                ps_ops_enabled;        /* cached ds_pool_prop_svc_ops_enabled */
 	uint32_t                ps_ops_max;            /* cached ds_pool_prop_svc_ops_max */
 	uint32_t                ps_ops_age;            /* cached ds_pool_prop_svc_ops_age */
+	uint64_t                ps_map_dist_count;     /* pool_svc_map_dist_cb call counter */
 };
 
 /* Pool service failed to start */
@@ -2700,11 +2701,18 @@ static int
 pool_svc_map_dist_cb(struct ds_rsvc *rsvc, uint32_t *version)
 {
 	struct pool_svc        *svc = pool_svc_obj(rsvc);
-	struct pool_metrics    *metrics;
+	struct pool_metrics    *metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
 	struct rdb_tx		tx;
 	struct pool_buf	       *map_buf = NULL;
 	uint32_t		map_version;
+	uint64_t                count;
 	int			rc;
+
+	/* Record when this call begins and bump the per-call counter. */
+	d_tm_record_timestamp(metrics->map_dist_begin);
+	count = ++svc->ps_map_dist_count;
+	/* Phase 0: beginning. */
+	d_tm_set_gauge(metrics->map_dist_state, count << 2);
 
 	/* Read the pool map into map_buf and map_version. */
 	rc = rdb_tx_begin(rsvc->s_db, rsvc->s_term, &tx);
@@ -2719,6 +2727,8 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc, uint32_t *version)
 		goto out;
 	}
 
+	/* Phase 1: about to call ds_pool_iv_map_update. */
+	d_tm_set_gauge(metrics->map_dist_state, (count << 2) | 1);
 	rc = ds_pool_iv_map_update(svc->ps_pool, map_buf, map_version);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": failed to distribute pool map %u", DP_UUID(svc->ps_uuid),
@@ -2728,9 +2738,10 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc, uint32_t *version)
 
 	*version = map_version;
 
-	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
 	d_tm_set_counter(metrics->map_version, map_version);
 out:
+	/* Phase 2: erred, or phase 3: successful. */
+	d_tm_set_gauge(metrics->map_dist_state, (count << 2) | (rc != 0 ? 2 : 3));
 	if (map_buf != NULL)
 		D_FREE(map_buf);
 	return rc;
