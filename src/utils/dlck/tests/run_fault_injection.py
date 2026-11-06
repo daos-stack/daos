@@ -9,7 +9,6 @@ import argparse
 import json
 import os
 import re
-import shutil
 import subprocess  # nosec
 import tempfile
 from enum import Enum
@@ -31,7 +30,7 @@ against the template.
 
 FAULT is a fault name (e.g. DLCK_FAULT_GETGRNAM) or its id (e.g. 131329).
 Without FAULT, every fault in the template is run.
-Expected results live in fault_templates/FAULT/output.txt and fault_templates/FAULT/logs/.
+Expected results live in fault_templates/FAULT/: output.txt and the log files next to it.
 Template placeholders:
   {{UUID}}      any UUID (e.g. the pool UUID)
   {{STORAGE}}   storage path (e.g. /dev/shm/daos or /mnt/daos)
@@ -178,9 +177,9 @@ class TemplateMatcher:
         return errors
 
     @classmethod
-    def compare_logs(cls, expected_dir, actual_dir):
+    def compare_logs(cls, expected_files, actual_dir):
         """Match log files by name and compare their contents."""
-        expected = {p.name: p for p in expected_dir.iterdir()} if expected_dir.is_dir() else {}
+        expected = {p.name: p for p in expected_files}
         actual = ({cls.normalize(p.name): p for p in actual_dir.iterdir()}
                   if actual_dir.is_dir() else {})
         errors = []
@@ -200,27 +199,32 @@ class FaultTemplate:
     def __init__(self, path):
         self._path = path
         self._output_file = path / "output.txt"
-        self._logs_dir = path / "logs"
 
     def exists(self):
         """Does the given template exist?"""
         return self._output_file.is_file()
 
+    def _log_files(self):
+        """Return the log files stored next to the output file."""
+        if not self._path.is_dir():
+            return []
+        return [p for p in self._path.iterdir() if p.is_file() and p != self._output_file]
+
     def update(self, output, logs_dir):
         """Store the normalized output and log files as the template."""
-        shutil.rmtree(self._logs_dir, ignore_errors=True)
         self._path.mkdir(parents=True, exist_ok=True)
+        for old_log in self._log_files():
+            old_log.unlink()
         self._output_file.write_text(TemplateMatcher.normalize(output))
         if logs_dir.is_dir():
-            self._logs_dir.mkdir()
             for log in logs_dir.iterdir():
                 name = TemplateMatcher.normalize(log.name)
-                (self._logs_dir / name).write_text(TemplateMatcher.normalize(log.read_text()))
+                (self._path / name).write_text(TemplateMatcher.normalize(log.read_text()))
 
     def compare(self, output, logs_dir):
         """Return mismatch messages between this template and the actual output and logs."""
         errors = TemplateMatcher.compare_text("output.txt", self._output_file.read_text(), output)
-        errors += TemplateMatcher.compare_logs(self._logs_dir, logs_dir)
+        errors += TemplateMatcher.compare_logs(self._log_files(), logs_dir)
         return errors
 
 
