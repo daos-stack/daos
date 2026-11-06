@@ -68,6 +68,8 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_share_tbd_count = 0;
 	dth->dth_shares_inited = 1;
 
+	vos_set_dtx_resync_version(coh, VTS_DTX_VER);
+
 	vos_dtx_rsrvd_init(dth);
 	rc = vos_dtx_attach(dth, false, false);
 	assert_rc_equal(rc, 0);
@@ -334,7 +336,8 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	xid = dth->dth_xid;
 
-	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, &recovery_version, NULL, DCI_RESYNC);
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, &recovery_version, NULL,
+			   DCI_RESYNC_FOLLOWER);
 	assert_rc_equal(rc, -DER_INPROGRESS);
 
 	/* The update DTX is 'prepared'. */
@@ -350,7 +353,9 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 
 	/* An older check must not lower the recovery fence installed while the DTX was busy. */
 	recovery_version = VTS_DTX_VER;
-	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, &recovery_version, NULL, DCI_RESYNC);
+
+	rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid, NULL, &recovery_version, NULL,
+			   DCI_RESYNC_FOLLOWER);
 	assert_int_equal(rc, DTX_ST_PREPARED);
 	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch, VTS_DTX_VER);
 	assert_rc_equal(rc, -DER_NO_PERM);

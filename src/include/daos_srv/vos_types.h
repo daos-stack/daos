@@ -97,8 +97,8 @@ enum vos_pool_open_flags {
 	VOS_POF_RDB = (1 << 4),
 	/** SYS DB pool */
 	VOS_POF_SYSDB = (1 << 5),
-	/** Open the pool for daos check query, that will bypass EXEL flags. */
-	VOS_POF_FOR_CHECK_QUERY = (1 << 6),
+	/** Open the pool for check (or under restricted mode), compatible with VOS_POF_EXCL. */
+	VOS_POF_FOR_CHECK = (1 << 6),
 	/** Open the pool for feature fetch/update, that will skip VEA load */
 	VOS_POF_FOR_FEATURE_FLAG = (1 << 7),
 	/** To identify this is a recreate operation. */
