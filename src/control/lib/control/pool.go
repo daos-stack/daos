@@ -206,7 +206,7 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		// These pool errors can be retried.
 		case daos.TimedOut, daos.GroupVersionMismatch,
 			daos.TryAgain, daos.OutOfGroup, daos.Unreachable,
-			daos.Excluded:
+			daos.Excluded, daos.MercuryError:
 			return true
 		default:
 			return false
