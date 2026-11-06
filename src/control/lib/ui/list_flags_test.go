@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -169,7 +170,7 @@ func TestUI_MemberStateSetFlag(t *testing.T) {
 			},
 		},
 		"full list": {
-			arg: "Joined,Excluded,Stopped,Stopping,Ready,Starting,AwaitFormat,AdminExcluded,Errored,Unresponsive,CheckerStarted",
+			arg: "Joined,Excluded,Stopped,Stopping,Ready,Starting,AwaitFormat,AdminExcluded,Errored,Unresponsive,CheckerStarted,AwaitStart",
 			expFlag: &ui.MemberStateSetFlag{
 				States: system.MemberState(int(system.MemberStateMax) - 1),
 			},
@@ -205,8 +206,8 @@ func TestUI_MemberStateSetFlag_Complete(t *testing.T) {
 	}{
 		"empty string; suggest all": {
 			expComplStrs: []string{
-				"AdminExcluded", "AwaitFormat", "CheckerStarted", "Errored", "Excluded",
-				"Joined", "Ready", "Starting", "Stopped", "Stopping",
+				"AdminExcluded", "AwaitFormat", "AwaitStart", "CheckerStarted", "Errored",
+				"Excluded", "Joined", "Ready", "Starting", "Stopped", "Stopping",
 				"Unresponsive",
 			},
 		},
@@ -226,7 +227,7 @@ func TestUI_MemberStateSetFlag_Complete(t *testing.T) {
 			arg: "Starting,",
 			expComplStrs: []string{
 				"Starting,AdminExcluded", "Starting,AwaitFormat",
-				"Starting,CheckerStarted",
+				"Starting,AwaitStart", "Starting,CheckerStarted",
 				"Starting,Errored", "Starting,Excluded", "Starting,Joined",
 				"Starting,Ready", "Starting,Stopped", "Starting,Stopping",
 				"Starting,Unresponsive",

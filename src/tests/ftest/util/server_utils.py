@@ -119,11 +119,12 @@ class DaosServerManager(SubprocessManager):
         # Server states
         self._states = {
             "all": [
-                "awaitformat", "starting", "ready", "joined", "stopping",
+                "awaitformat", "awaitstart", "starting", "ready", "joined", "stopping",
                 "stopped", "excluded", "errored", "unresponsive", "unknown"],
             "running": ["ready", "joined"],
             "stopped": [
-                "stopping", "stopped", "excluded", "errored", "unresponsive", "unknown"],
+                "awaitstart", "stopping", "stopped", "excluded", "errored", "unresponsive",
+                "unknown"],
             "errored": ["errored"],
         }
 
@@ -631,7 +632,7 @@ class DaosServerManager(SubprocessManager):
         if cmd_list:
             run_remote(self.log, self._hosts, "; ".join(cmd_list), verbose=verbose)
 
-    def restart(self, hosts, wait=False):
+    def restart(self, hosts, wait=False, start_ranks=True):
         """Restart the specified servers after a stop.
 
            The servers must have been previously formatted and started.
@@ -640,16 +641,23 @@ class DaosServerManager(SubprocessManager):
             hosts (NodeSet): hosts on which to restart the servers.
             wait (bool, optional): Whether or not to wait until the servers have joined. Defaults to
                 False.
+            start_ranks (bool, optional): Whether or not to start the ranks on the restarted
+                servers, which stay stopped otherwise if they were stopped with dmg system stop.
+                Defaults to True.
         """
         orig_hosts = self.manager.hosts.copy()
         self.manager.assign_hosts(hosts)
         orig_pattern = self.manager.job.pattern
         orig_count = self.manager.job.pattern_count
-        self.manager.job.update_pattern("normal", len(hosts))
+        self.manager.job.update_pattern("listening", len(hosts))
         try:
             self.manager.run()
 
+            if not start_ranks:
+                return
+
             host_ranks = self.get_host_ranks(hosts)
+            self.dmg.system_start(ranks=list_to_str(host_ranks))
             self.update_expected_states(host_ranks, ["joined"])
 
             if not wait:
@@ -665,8 +673,15 @@ class DaosServerManager(SubprocessManager):
             self.manager.assign_hosts(orig_hosts)
             self.manager.job.update_pattern(orig_pattern, orig_count)
 
-    def start(self):
-        """Start the server through the job manager."""
+    def start(self, extend=False, start_engines=False):
+        """Start the server through the job manager.
+
+        Args:
+            extend (bool, optional): whether these hosts join a system that is already
+                initialized. Defaults to False.
+            start_engines (bool, optional): format with --start so the engines join without
+                dmg system initialize. Defaults to False.
+        """
         # Prepare the servers
         self.prepare()
 
@@ -679,7 +694,17 @@ class DaosServerManager(SubprocessManager):
 
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        self.storage_format()
+        self.storage_format(start=start_engines)
+
+        # Start the engines and wait for them to join
+        if not start_engines:
+            timeout = f"{self.manager.job.pattern_timeout.value}s"
+            if extend:
+                self.log.info("<SERVER> Extending the system to hosts: <%s>", self.dmg.hostlist)
+                self.dmg.system_extend(hosts=self._hosts, timeout=timeout)
+            else:
+                self.log.info("<SERVER> Initializing hosts: <%s>", self.dmg.hostlist)
+                self.dmg.system_initialize(hosts=self._hosts, timeout=timeout)
 
         # Wait for all the engines to start
         self.detect_engine_start()
@@ -965,6 +990,34 @@ class DaosServerManager(SubprocessManager):
         # Stop a random rank
         random_rank = random.choice(candidate_ranks)  # nosec
         return self.stop_ranks([random_rank], force=force)
+
+    def kill_ranks(self, ranks):
+        """Kill the engine process serving each rank, so its peers see it die.
+
+        A dmg system stop leaves the system at once and is not a death to the other
+        engines; swim only reports a rank that went away without one.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to kill
+
+        Raises:
+            ServerFailed: if an engine process was not killed
+        """
+        members = self.dmg.system_query()["response"]["members"]
+        ports = [int(params.get_value("fabric_iface_port"))
+                 for params in self.manager.job.yaml.engine_params]
+        for rank in ranks:
+            host = self.get_host(rank)
+            uri = next(member["fabric_uri"] for member in members if member["rank"] == rank)
+            index = ports.index(int(uri.rsplit(":", 1)[1]))
+            self.log.info("Killing rank %s: engine %s on %s", rank, index, host)
+            # No spaces: the harness hands the pattern to pkill unquoted.
+            detected, running = stop_processes(
+                self.log, NodeSet(host), f".*daos_engine.*-I.{index}.-r.*", force=True,
+                full_command=True)
+            if not detected or running:
+                raise ServerFailed(f"Rank {rank} (engine {index} on {host}) was not killed")
+        self.update_expected_states(ranks, ["errored", "excluded"])
 
     def start_ranks(self, ranks):
         """Start the specific server ranks.

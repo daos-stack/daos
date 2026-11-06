@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +15,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
@@ -30,6 +32,8 @@ func TestSystem_Member_Stringify(t *testing.T) {
 		MemberStateErrored,
 		MemberStateUnresponsive,
 		MemberStateAdminExcluded,
+		MemberStateCheckerStarted,
+		MemberStateAwaitStart,
 	}
 
 	strs := []string{
@@ -44,6 +48,8 @@ func TestSystem_Member_Stringify(t *testing.T) {
 		"Errored",
 		"Unresponsive",
 		"AdminExcluded",
+		"CheckerStarted",
+		"AwaitStart",
 	}
 
 	for i, state := range states {
@@ -118,6 +124,11 @@ func TestSystem_MemberResult_Convert(t *testing.T) {
 
 	test.CmpErr(t, errors.New("failed ranks 1-2"), mrsIn.Errors())
 	test.CmpErr(t, nil, mrsOut.Errors())
+
+	hostRes := NewMemberResult(ranklist.NilRank, errors.New("unreachable"), MemberStateErrored)
+	hostRes.Addr = "foo-1:10001"
+	mrsHost := append(mrsIn, hostRes)
+	test.CmpErr(t, errors.New("failed ranks 1-2; failed host foo-1:10001"), mrsHost.Errors())
 
 	if err := convert.Types(mrsIn, &mrsOut); err != nil {
 		t.Fatal(err)

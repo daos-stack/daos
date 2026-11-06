@@ -11,7 +11,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -20,7 +22,10 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -41,10 +46,16 @@ type Engine interface {
 	tryDrpc(context.Context, drpc.Method) *system.MemberResult
 	requestStart(context.Context)
 	isAwaitingFormat() bool
+	isAwaitingStart() bool
+	getExitErr() error
+	getSuperblock() *Superblock
 
 	// These methods should probably be replaced by callbacks.
 	NotifyDrpcReady(*srvpb.NotifyReadyReq)
 	NotifyStorageReady(*ranklist.Rank)
+	NotifyStartReady()
+	abortStart()
+	holdStart(func())
 
 	// These methods should probably be refactored out into functions that
 	// accept the engine instance as a parameter.
@@ -72,14 +83,21 @@ type Engine interface {
 	SetLastHealthStats(string, *ctlpb.BioHealthResp)
 }
 
+type preflightFn func(context.Context, *control.EnginePreflightReq) (*control.EnginePreflightResp, error)
+
+// preflightBatchDelay lets instances reaching the gate together share one request.
+var preflightBatchDelay = time.Second
+
 // EngineHarness is responsible for managing Engine instances.
 type EngineHarness struct {
 	sync.RWMutex
-	log           logging.Logger
-	instances     []Engine
-	started       atm.Bool
-	faultDomain   *system.FaultDomain
-	onDrpcFailure []onDrpcFailureFn
+	log            logging.Logger
+	instances      []Engine
+	started        atm.Bool
+	faultDomain    *system.FaultDomain
+	onDrpcFailure  []onDrpcFailureFn
+	preflight      preflightFn
+	preflightBatch map[uint32]Engine // instances at the start gate awaiting a result
 }
 
 // NewEngineHarness returns an initialized *EngineHarness.
@@ -93,6 +111,12 @@ func NewEngineHarness(log logging.Logger) *EngineHarness {
 // WithFaultDomain adds a fault domain to the EngineHarness.
 func (h *EngineHarness) WithFaultDomain(fd *system.FaultDomain) *EngineHarness {
 	h.faultDomain = fd
+	return h
+}
+
+// WithPreflight holds each instance's first start until fn says it may start.
+func (h *EngineHarness) WithPreflight(fn preflightFn) *EngineHarness {
+	h.preflight = fn
 	return h
 }
 
@@ -144,9 +168,102 @@ func (h *EngineHarness) AddInstance(ei Engine) error {
 	if indexSetter, ok := ei.(interface{ setIndex(uint32) }); ok {
 		indexSetter.setIndex(uint32(len(h.instances)))
 	}
-
 	h.instances = append(h.instances, ei)
 	return nil
+}
+
+// holdStarts gates every instance's first start on a preflight result.
+func (h *EngineHarness) holdStarts(ctx context.Context) {
+	for _, ei := range h.Instances() {
+		ei := ei
+		ei.holdStart(func() { h.queuePreflight(ctx, ei) })
+	}
+}
+
+// queuePreflight adds a held instance to the next preflight request.
+func (h *EngineHarness) queuePreflight(ctx context.Context, ei Engine) {
+	h.Lock()
+	defer h.Unlock()
+
+	if h.preflightBatch == nil {
+		h.preflightBatch = make(map[uint32]Engine)
+		time.AfterFunc(preflightBatchDelay, func() {
+			h.Lock()
+			batch := h.preflightBatch
+			h.preflightBatch = nil
+			h.Unlock()
+			h.runPreflight(ctx, batch)
+		})
+	}
+	h.preflightBatch[ei.Index()] = ei
+}
+
+// runPreflight asks the MS about the batched instances and releases those
+// that may start.
+func (h *EngineHarness) runPreflight(ctx context.Context, batch map[uint32]Engine) {
+	req := new(control.EnginePreflightReq)
+	for idx, ei := range batch {
+		rank, err := ei.GetRank()
+		if err != nil {
+			rank = ranklist.NilRank
+		}
+		req.Engines = append(req.Engines, &control.PreflightEngine{Idx: idx, Rank: rank})
+	}
+	sort.Slice(req.Engines, func(i, j int) bool { return req.Engines[i].Idx < req.Engines[j].Idx })
+
+	since := time.Now()
+	var resp *control.EnginePreflightResp
+	for {
+		var err error
+		resp, err = h.preflight(ctx, req)
+		if err == nil {
+			break
+		}
+		switch {
+		case ctx.Err() != nil:
+			return
+		case fault.IsFaultCode(errors.Cause(err), code.ClientRpcTimeout):
+			h.log.Errorf("engine start pending since %s: management service unreachable",
+				since.Format(time.Stamp))
+		default:
+			h.log.Errorf("engine start held: %s", err)
+			return
+		}
+	}
+
+	if ctx.Err() != nil {
+		return
+	}
+	results := make(map[uint32]*control.PreflightResult, len(resp.Engines))
+	for _, res := range resp.Engines {
+		if _, ok := batch[res.Idx]; !ok {
+			h.log.Errorf("preflight result for unknown instance %d", res.Idx)
+			continue
+		}
+		results[res.Idx] = res
+	}
+	for _, e := range req.Engines {
+		ei := batch[e.Idx]
+		res, ok := results[e.Idx]
+		if !ok {
+			h.log.Errorf("instance %d: no preflight result; start held", e.Idx)
+			continue
+		}
+		if !ei.isAwaitingStart() {
+			h.log.Debugf("instance %d: preflight result ignored; already released", e.Idx)
+			continue
+		}
+		if rank, _ := ei.GetRank(); !rank.Equals(e.Rank) {
+			h.log.Noticef("instance %d: preflight result for rank %s ignored; now rank %s and asking again",
+				e.Idx, e.Rank, rank)
+			continue
+		}
+		if res.Start {
+			ei.NotifyStartReady()
+			continue
+		}
+		h.log.Infof("instance %d: %s", e.Idx, res.Reason)
+	}
 }
 
 type onDrpcFailureFn func(ctx context.Context, err error)
@@ -261,6 +378,9 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 	h.started.SetTrue()
 	defer h.started.SetFalse()
 
+	if h.preflight != nil {
+		h.holdStarts(ctx)
+	}
 	for _, ei := range h.Instances() {
 		ei.Run(ctx)
 	}

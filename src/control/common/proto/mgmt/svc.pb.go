@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -450,6 +450,103 @@ func (x *JoinResp) GetDaosVersion() uint32 {
 	return 0
 }
 
+// EnginePreflightReq asks what a server needs to know before it launches engines.
+type EnginePreflightReq struct {
+	state         protoimpl.MessageState       `protogen:"open.v1"`
+	Sys           string                       `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"` // DAOS system name
+	Engines       []*EnginePreflightReq_Engine `protobuf:"bytes,2,rep,name=engines,proto3" json:"engines,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnginePreflightReq) Reset() {
+	*x = EnginePreflightReq{}
+	mi := &file_mgmt_svc_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnginePreflightReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnginePreflightReq) ProtoMessage() {}
+
+func (x *EnginePreflightReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_svc_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnginePreflightReq.ProtoReflect.Descriptor instead.
+func (*EnginePreflightReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *EnginePreflightReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *EnginePreflightReq) GetEngines() []*EnginePreflightReq_Engine {
+	if x != nil {
+		return x.Engines
+	}
+	return nil
+}
+
+type EnginePreflightResp struct {
+	state         protoimpl.MessageState        `protogen:"open.v1"`
+	Engines       []*EnginePreflightResp_Engine `protobuf:"bytes,1,rep,name=engines,proto3" json:"engines,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnginePreflightResp) Reset() {
+	*x = EnginePreflightResp{}
+	mi := &file_mgmt_svc_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnginePreflightResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnginePreflightResp) ProtoMessage() {}
+
+func (x *EnginePreflightResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_svc_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnginePreflightResp.ProtoReflect.Descriptor instead.
+func (*EnginePreflightResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *EnginePreflightResp) GetEngines() []*EnginePreflightResp_Engine {
+	if x != nil {
+		return x.Engines
+	}
+	return nil
+}
+
 type LeaderQueryReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Sys           string                 `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`     // System name.
@@ -460,7 +557,7 @@ type LeaderQueryReq struct {
 
 func (x *LeaderQueryReq) Reset() {
 	*x = LeaderQueryReq{}
-	mi := &file_mgmt_svc_proto_msgTypes[5]
+	mi := &file_mgmt_svc_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -472,7 +569,7 @@ func (x *LeaderQueryReq) String() string {
 func (*LeaderQueryReq) ProtoMessage() {}
 
 func (x *LeaderQueryReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[5]
+	mi := &file_mgmt_svc_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -485,7 +582,7 @@ func (x *LeaderQueryReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaderQueryReq.ProtoReflect.Descriptor instead.
 func (*LeaderQueryReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{5}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *LeaderQueryReq) GetSys() string {
@@ -513,7 +610,7 @@ type LeaderQueryResp struct {
 
 func (x *LeaderQueryResp) Reset() {
 	*x = LeaderQueryResp{}
-	mi := &file_mgmt_svc_proto_msgTypes[6]
+	mi := &file_mgmt_svc_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -525,7 +622,7 @@ func (x *LeaderQueryResp) String() string {
 func (*LeaderQueryResp) ProtoMessage() {}
 
 func (x *LeaderQueryResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[6]
+	mi := &file_mgmt_svc_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -538,7 +635,7 @@ func (x *LeaderQueryResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaderQueryResp.ProtoReflect.Descriptor instead.
 func (*LeaderQueryResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{6}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *LeaderQueryResp) GetCurrentLeader() string {
@@ -574,7 +671,7 @@ type GetAttachInfoReq struct {
 
 func (x *GetAttachInfoReq) Reset() {
 	*x = GetAttachInfoReq{}
-	mi := &file_mgmt_svc_proto_msgTypes[7]
+	mi := &file_mgmt_svc_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -586,7 +683,7 @@ func (x *GetAttachInfoReq) String() string {
 func (*GetAttachInfoReq) ProtoMessage() {}
 
 func (x *GetAttachInfoReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[7]
+	mi := &file_mgmt_svc_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -599,7 +696,7 @@ func (x *GetAttachInfoReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttachInfoReq.ProtoReflect.Descriptor instead.
 func (*GetAttachInfoReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{7}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *GetAttachInfoReq) GetSys() string {
@@ -647,7 +744,7 @@ type ClientNetHint struct {
 
 func (x *ClientNetHint) Reset() {
 	*x = ClientNetHint{}
-	mi := &file_mgmt_svc_proto_msgTypes[8]
+	mi := &file_mgmt_svc_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -659,7 +756,7 @@ func (x *ClientNetHint) String() string {
 func (*ClientNetHint) ProtoMessage() {}
 
 func (x *ClientNetHint) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[8]
+	mi := &file_mgmt_svc_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -672,7 +769,7 @@ func (x *ClientNetHint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientNetHint.ProtoReflect.Descriptor instead.
 func (*ClientNetHint) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{8}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ClientNetHint) GetProvider() string {
@@ -743,7 +840,7 @@ type FabricInterface struct {
 
 func (x *FabricInterface) Reset() {
 	*x = FabricInterface{}
-	mi := &file_mgmt_svc_proto_msgTypes[9]
+	mi := &file_mgmt_svc_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -755,7 +852,7 @@ func (x *FabricInterface) String() string {
 func (*FabricInterface) ProtoMessage() {}
 
 func (x *FabricInterface) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[9]
+	mi := &file_mgmt_svc_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -768,7 +865,7 @@ func (x *FabricInterface) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FabricInterface.ProtoReflect.Descriptor instead.
 func (*FabricInterface) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{9}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *FabricInterface) GetNumaNode() uint32 {
@@ -809,7 +906,7 @@ type FabricInterfaces struct {
 
 func (x *FabricInterfaces) Reset() {
 	*x = FabricInterfaces{}
-	mi := &file_mgmt_svc_proto_msgTypes[10]
+	mi := &file_mgmt_svc_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -821,7 +918,7 @@ func (x *FabricInterfaces) String() string {
 func (*FabricInterfaces) ProtoMessage() {}
 
 func (x *FabricInterfaces) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[10]
+	mi := &file_mgmt_svc_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -834,7 +931,7 @@ func (x *FabricInterfaces) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FabricInterfaces.ProtoReflect.Descriptor instead.
 func (*FabricInterfaces) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{10}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *FabricInterfaces) GetNumaNode() uint32 {
@@ -863,7 +960,7 @@ type BuildInfo struct {
 
 func (x *BuildInfo) Reset() {
 	*x = BuildInfo{}
-	mi := &file_mgmt_svc_proto_msgTypes[11]
+	mi := &file_mgmt_svc_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -875,7 +972,7 @@ func (x *BuildInfo) String() string {
 func (*BuildInfo) ProtoMessage() {}
 
 func (x *BuildInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[11]
+	mi := &file_mgmt_svc_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -888,7 +985,7 @@ func (x *BuildInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuildInfo.ProtoReflect.Descriptor instead.
 func (*BuildInfo) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{11}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *BuildInfo) GetMajor() uint32 {
@@ -939,7 +1036,7 @@ type GetAttachInfoResp struct {
 
 func (x *GetAttachInfoResp) Reset() {
 	*x = GetAttachInfoResp{}
-	mi := &file_mgmt_svc_proto_msgTypes[12]
+	mi := &file_mgmt_svc_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -951,7 +1048,7 @@ func (x *GetAttachInfoResp) String() string {
 func (*GetAttachInfoResp) ProtoMessage() {}
 
 func (x *GetAttachInfoResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[12]
+	mi := &file_mgmt_svc_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -964,7 +1061,7 @@ func (x *GetAttachInfoResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttachInfoResp.ProtoReflect.Descriptor instead.
 func (*GetAttachInfoResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{12}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetAttachInfoResp) GetStatus() int32 {
@@ -1046,7 +1143,7 @@ type PrepShutdownReq struct {
 
 func (x *PrepShutdownReq) Reset() {
 	*x = PrepShutdownReq{}
-	mi := &file_mgmt_svc_proto_msgTypes[13]
+	mi := &file_mgmt_svc_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1058,7 +1155,7 @@ func (x *PrepShutdownReq) String() string {
 func (*PrepShutdownReq) ProtoMessage() {}
 
 func (x *PrepShutdownReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[13]
+	mi := &file_mgmt_svc_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1071,7 +1168,7 @@ func (x *PrepShutdownReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepShutdownReq.ProtoReflect.Descriptor instead.
 func (*PrepShutdownReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{13}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PrepShutdownReq) GetRank() uint32 {
@@ -1090,7 +1187,7 @@ type PingRankReq struct {
 
 func (x *PingRankReq) Reset() {
 	*x = PingRankReq{}
-	mi := &file_mgmt_svc_proto_msgTypes[14]
+	mi := &file_mgmt_svc_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1102,7 +1199,7 @@ func (x *PingRankReq) String() string {
 func (*PingRankReq) ProtoMessage() {}
 
 func (x *PingRankReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[14]
+	mi := &file_mgmt_svc_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1115,7 +1212,7 @@ func (x *PingRankReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingRankReq.ProtoReflect.Descriptor instead.
 func (*PingRankReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{14}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PingRankReq) GetRank() uint32 {
@@ -1136,7 +1233,7 @@ type SetRankReq struct {
 
 func (x *SetRankReq) Reset() {
 	*x = SetRankReq{}
-	mi := &file_mgmt_svc_proto_msgTypes[15]
+	mi := &file_mgmt_svc_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1148,7 +1245,7 @@ func (x *SetRankReq) String() string {
 func (*SetRankReq) ProtoMessage() {}
 
 func (x *SetRankReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[15]
+	mi := &file_mgmt_svc_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1161,7 +1258,7 @@ func (x *SetRankReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetRankReq.ProtoReflect.Descriptor instead.
 func (*SetRankReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{15}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SetRankReq) GetRank() uint32 {
@@ -1197,7 +1294,7 @@ type PoolMonitorReq struct {
 
 func (x *PoolMonitorReq) Reset() {
 	*x = PoolMonitorReq{}
-	mi := &file_mgmt_svc_proto_msgTypes[16]
+	mi := &file_mgmt_svc_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1209,7 +1306,7 @@ func (x *PoolMonitorReq) String() string {
 func (*PoolMonitorReq) ProtoMessage() {}
 
 func (x *PoolMonitorReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[16]
+	mi := &file_mgmt_svc_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1222,7 +1319,7 @@ func (x *PoolMonitorReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolMonitorReq.ProtoReflect.Descriptor instead.
 func (*PoolMonitorReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{16}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *PoolMonitorReq) GetSys() string {
@@ -1264,7 +1361,7 @@ type ClientTelemetryReq struct {
 
 func (x *ClientTelemetryReq) Reset() {
 	*x = ClientTelemetryReq{}
-	mi := &file_mgmt_svc_proto_msgTypes[17]
+	mi := &file_mgmt_svc_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1276,7 +1373,7 @@ func (x *ClientTelemetryReq) String() string {
 func (*ClientTelemetryReq) ProtoMessage() {}
 
 func (x *ClientTelemetryReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[17]
+	mi := &file_mgmt_svc_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1289,7 +1386,7 @@ func (x *ClientTelemetryReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientTelemetryReq.ProtoReflect.Descriptor instead.
 func (*ClientTelemetryReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{17}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ClientTelemetryReq) GetSys() string {
@@ -1323,7 +1420,7 @@ type ClientTelemetryResp struct {
 
 func (x *ClientTelemetryResp) Reset() {
 	*x = ClientTelemetryResp{}
-	mi := &file_mgmt_svc_proto_msgTypes[18]
+	mi := &file_mgmt_svc_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1335,7 +1432,7 @@ func (x *ClientTelemetryResp) String() string {
 func (*ClientTelemetryResp) ProtoMessage() {}
 
 func (x *ClientTelemetryResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[18]
+	mi := &file_mgmt_svc_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1348,7 +1445,7 @@ func (x *ClientTelemetryResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientTelemetryResp.ProtoReflect.Descriptor instead.
 func (*ClientTelemetryResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{18}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ClientTelemetryResp) GetStatus() int32 {
@@ -1374,7 +1471,7 @@ type GetGroupStatusReq struct {
 
 func (x *GetGroupStatusReq) Reset() {
 	*x = GetGroupStatusReq{}
-	mi := &file_mgmt_svc_proto_msgTypes[19]
+	mi := &file_mgmt_svc_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1386,7 +1483,7 @@ func (x *GetGroupStatusReq) String() string {
 func (*GetGroupStatusReq) ProtoMessage() {}
 
 func (x *GetGroupStatusReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[19]
+	mi := &file_mgmt_svc_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1399,7 +1496,7 @@ func (x *GetGroupStatusReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGroupStatusReq.ProtoReflect.Descriptor instead.
 func (*GetGroupStatusReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{19}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetGroupStatusReq) GetMapVersion() uint32 {
@@ -1419,7 +1516,7 @@ type GetGroupStatusResp struct {
 
 func (x *GetGroupStatusResp) Reset() {
 	*x = GetGroupStatusResp{}
-	mi := &file_mgmt_svc_proto_msgTypes[20]
+	mi := &file_mgmt_svc_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1431,7 +1528,7 @@ func (x *GetGroupStatusResp) String() string {
 func (*GetGroupStatusResp) ProtoMessage() {}
 
 func (x *GetGroupStatusResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[20]
+	mi := &file_mgmt_svc_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1444,7 +1541,7 @@ func (x *GetGroupStatusResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGroupStatusResp.ProtoReflect.Descriptor instead.
 func (*GetGroupStatusResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{20}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetGroupStatusResp) GetStatus() int32 {
@@ -1472,7 +1569,7 @@ type GroupUpdateReq_Engine struct {
 
 func (x *GroupUpdateReq_Engine) Reset() {
 	*x = GroupUpdateReq_Engine{}
-	mi := &file_mgmt_svc_proto_msgTypes[21]
+	mi := &file_mgmt_svc_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1484,7 +1581,7 @@ func (x *GroupUpdateReq_Engine) String() string {
 func (*GroupUpdateReq_Engine) ProtoMessage() {}
 
 func (x *GroupUpdateReq_Engine) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[21]
+	mi := &file_mgmt_svc_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1521,6 +1618,118 @@ func (x *GroupUpdateReq_Engine) GetIncarnation() uint64 {
 	return 0
 }
 
+type EnginePreflightReq_Engine struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Idx           uint32                 `protobuf:"varint,1,opt,name=idx,proto3" json:"idx,omitempty"`   // instance index on the requesting server
+	Rank          uint32                 `protobuf:"varint,2,opt,name=rank,proto3" json:"rank,omitempty"` // engine rank, MAX_UINT32 if it has never joined
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnginePreflightReq_Engine) Reset() {
+	*x = EnginePreflightReq_Engine{}
+	mi := &file_mgmt_svc_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnginePreflightReq_Engine) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnginePreflightReq_Engine) ProtoMessage() {}
+
+func (x *EnginePreflightReq_Engine) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_svc_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnginePreflightReq_Engine.ProtoReflect.Descriptor instead.
+func (*EnginePreflightReq_Engine) Descriptor() ([]byte, []int) {
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{5, 0}
+}
+
+func (x *EnginePreflightReq_Engine) GetIdx() uint32 {
+	if x != nil {
+		return x.Idx
+	}
+	return 0
+}
+
+func (x *EnginePreflightReq_Engine) GetRank() uint32 {
+	if x != nil {
+		return x.Rank
+	}
+	return 0
+}
+
+type EnginePreflightResp_Engine struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Idx           uint32                 `protobuf:"varint,1,opt,name=idx,proto3" json:"idx,omitempty"`      // instance index from the request
+	Start         bool                   `protobuf:"varint,2,opt,name=start,proto3" json:"start,omitempty"`  // whether the engine should start now
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"` // why it should wait, empty if it should start
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnginePreflightResp_Engine) Reset() {
+	*x = EnginePreflightResp_Engine{}
+	mi := &file_mgmt_svc_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnginePreflightResp_Engine) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnginePreflightResp_Engine) ProtoMessage() {}
+
+func (x *EnginePreflightResp_Engine) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_svc_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnginePreflightResp_Engine.ProtoReflect.Descriptor instead.
+func (*EnginePreflightResp_Engine) Descriptor() ([]byte, []int) {
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{6, 0}
+}
+
+func (x *EnginePreflightResp_Engine) GetIdx() uint32 {
+	if x != nil {
+		return x.Idx
+	}
+	return 0
+}
+
+func (x *EnginePreflightResp_Engine) GetStart() bool {
+	if x != nil {
+		return x.Start
+	}
+	return false
+}
+
+func (x *EnginePreflightResp_Engine) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 type GetAttachInfoResp_RankUri struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Rank          uint32                 `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
@@ -1533,7 +1742,7 @@ type GetAttachInfoResp_RankUri struct {
 
 func (x *GetAttachInfoResp_RankUri) Reset() {
 	*x = GetAttachInfoResp_RankUri{}
-	mi := &file_mgmt_svc_proto_msgTypes[22]
+	mi := &file_mgmt_svc_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1545,7 +1754,7 @@ func (x *GetAttachInfoResp_RankUri) String() string {
 func (*GetAttachInfoResp_RankUri) ProtoMessage() {}
 
 func (x *GetAttachInfoResp_RankUri) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_svc_proto_msgTypes[22]
+	mi := &file_mgmt_svc_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1558,7 +1767,7 @@ func (x *GetAttachInfoResp_RankUri) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAttachInfoResp_RankUri.ProtoReflect.Descriptor instead.
 func (*GetAttachInfoResp_RankUri) Descriptor() ([]byte, []int) {
-	return file_mgmt_svc_proto_rawDescGZIP(), []int{12, 0}
+	return file_mgmt_svc_proto_rawDescGZIP(), []int{14, 0}
 }
 
 func (x *GetAttachInfoResp_RankUri) GetRank() uint32 {
@@ -1634,7 +1843,19 @@ const file_mgmt_svc_proto_rawDesc = "" +
 	"\x05State\x12\x06\n" +
 	"\x02IN\x10\x00\x12\a\n" +
 	"\x03OUT\x10\x01\x12\t\n" +
-	"\x05CHECK\x10\x02\"8\n" +
+	"\x05CHECK\x10\x02\"\x91\x01\n" +
+	"\x12EnginePreflightReq\x12\x10\n" +
+	"\x03sys\x18\x01 \x01(\tR\x03sys\x129\n" +
+	"\aengines\x18\x02 \x03(\v2\x1f.mgmt.EnginePreflightReq.EngineR\aengines\x1a.\n" +
+	"\x06Engine\x12\x10\n" +
+	"\x03idx\x18\x01 \x01(\rR\x03idx\x12\x12\n" +
+	"\x04rank\x18\x02 \x01(\rR\x04rank\"\x9b\x01\n" +
+	"\x13EnginePreflightResp\x12:\n" +
+	"\aengines\x18\x01 \x03(\v2 .mgmt.EnginePreflightResp.EngineR\aengines\x1aH\n" +
+	"\x06Engine\x12\x10\n" +
+	"\x03idx\x18\x01 \x01(\rR\x03idx\x12\x14\n" +
+	"\x05start\x18\x02 \x01(\bR\x05start\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"8\n" +
 	"\x0eLeaderQueryReq\x12\x10\n" +
 	"\x03sys\x18\x01 \x01(\tR\x03sys\x12\x14\n" +
 	"\x05hosts\x18\x02 \x01(\tR\x05hosts\"x\n" +
@@ -1731,48 +1952,54 @@ func file_mgmt_svc_proto_rawDescGZIP() []byte {
 }
 
 var file_mgmt_svc_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_mgmt_svc_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_mgmt_svc_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_mgmt_svc_proto_goTypes = []any{
-	(JoinResp_State)(0),               // 0: mgmt.JoinResp.State
-	(*DaosResp)(nil),                  // 1: mgmt.DaosResp
-	(*GroupUpdateReq)(nil),            // 2: mgmt.GroupUpdateReq
-	(*GroupUpdateResp)(nil),           // 3: mgmt.GroupUpdateResp
-	(*JoinReq)(nil),                   // 4: mgmt.JoinReq
-	(*JoinResp)(nil),                  // 5: mgmt.JoinResp
-	(*LeaderQueryReq)(nil),            // 6: mgmt.LeaderQueryReq
-	(*LeaderQueryResp)(nil),           // 7: mgmt.LeaderQueryResp
-	(*GetAttachInfoReq)(nil),          // 8: mgmt.GetAttachInfoReq
-	(*ClientNetHint)(nil),             // 9: mgmt.ClientNetHint
-	(*FabricInterface)(nil),           // 10: mgmt.FabricInterface
-	(*FabricInterfaces)(nil),          // 11: mgmt.FabricInterfaces
-	(*BuildInfo)(nil),                 // 12: mgmt.BuildInfo
-	(*GetAttachInfoResp)(nil),         // 13: mgmt.GetAttachInfoResp
-	(*PrepShutdownReq)(nil),           // 14: mgmt.PrepShutdownReq
-	(*PingRankReq)(nil),               // 15: mgmt.PingRankReq
-	(*SetRankReq)(nil),                // 16: mgmt.SetRankReq
-	(*PoolMonitorReq)(nil),            // 17: mgmt.PoolMonitorReq
-	(*ClientTelemetryReq)(nil),        // 18: mgmt.ClientTelemetryReq
-	(*ClientTelemetryResp)(nil),       // 19: mgmt.ClientTelemetryResp
-	(*GetGroupStatusReq)(nil),         // 20: mgmt.GetGroupStatusReq
-	(*GetGroupStatusResp)(nil),        // 21: mgmt.GetGroupStatusResp
-	(*GroupUpdateReq_Engine)(nil),     // 22: mgmt.GroupUpdateReq.Engine
-	(*GetAttachInfoResp_RankUri)(nil), // 23: mgmt.GetAttachInfoResp.RankUri
+	(JoinResp_State)(0),                // 0: mgmt.JoinResp.State
+	(*DaosResp)(nil),                   // 1: mgmt.DaosResp
+	(*GroupUpdateReq)(nil),             // 2: mgmt.GroupUpdateReq
+	(*GroupUpdateResp)(nil),            // 3: mgmt.GroupUpdateResp
+	(*JoinReq)(nil),                    // 4: mgmt.JoinReq
+	(*JoinResp)(nil),                   // 5: mgmt.JoinResp
+	(*EnginePreflightReq)(nil),         // 6: mgmt.EnginePreflightReq
+	(*EnginePreflightResp)(nil),        // 7: mgmt.EnginePreflightResp
+	(*LeaderQueryReq)(nil),             // 8: mgmt.LeaderQueryReq
+	(*LeaderQueryResp)(nil),            // 9: mgmt.LeaderQueryResp
+	(*GetAttachInfoReq)(nil),           // 10: mgmt.GetAttachInfoReq
+	(*ClientNetHint)(nil),              // 11: mgmt.ClientNetHint
+	(*FabricInterface)(nil),            // 12: mgmt.FabricInterface
+	(*FabricInterfaces)(nil),           // 13: mgmt.FabricInterfaces
+	(*BuildInfo)(nil),                  // 14: mgmt.BuildInfo
+	(*GetAttachInfoResp)(nil),          // 15: mgmt.GetAttachInfoResp
+	(*PrepShutdownReq)(nil),            // 16: mgmt.PrepShutdownReq
+	(*PingRankReq)(nil),                // 17: mgmt.PingRankReq
+	(*SetRankReq)(nil),                 // 18: mgmt.SetRankReq
+	(*PoolMonitorReq)(nil),             // 19: mgmt.PoolMonitorReq
+	(*ClientTelemetryReq)(nil),         // 20: mgmt.ClientTelemetryReq
+	(*ClientTelemetryResp)(nil),        // 21: mgmt.ClientTelemetryResp
+	(*GetGroupStatusReq)(nil),          // 22: mgmt.GetGroupStatusReq
+	(*GetGroupStatusResp)(nil),         // 23: mgmt.GetGroupStatusResp
+	(*GroupUpdateReq_Engine)(nil),      // 24: mgmt.GroupUpdateReq.Engine
+	(*EnginePreflightReq_Engine)(nil),  // 25: mgmt.EnginePreflightReq.Engine
+	(*EnginePreflightResp_Engine)(nil), // 26: mgmt.EnginePreflightResp.Engine
+	(*GetAttachInfoResp_RankUri)(nil),  // 27: mgmt.GetAttachInfoResp.RankUri
 }
 var file_mgmt_svc_proto_depIdxs = []int32{
-	22, // 0: mgmt.GroupUpdateReq.engines:type_name -> mgmt.GroupUpdateReq.Engine
+	24, // 0: mgmt.GroupUpdateReq.engines:type_name -> mgmt.GroupUpdateReq.Engine
 	0,  // 1: mgmt.JoinResp.state:type_name -> mgmt.JoinResp.State
-	10, // 2: mgmt.FabricInterfaces.ifaces:type_name -> mgmt.FabricInterface
-	23, // 3: mgmt.GetAttachInfoResp.rank_uris:type_name -> mgmt.GetAttachInfoResp.RankUri
-	9,  // 4: mgmt.GetAttachInfoResp.client_net_hint:type_name -> mgmt.ClientNetHint
-	23, // 5: mgmt.GetAttachInfoResp.secondary_rank_uris:type_name -> mgmt.GetAttachInfoResp.RankUri
-	9,  // 6: mgmt.GetAttachInfoResp.secondary_client_net_hints:type_name -> mgmt.ClientNetHint
-	12, // 7: mgmt.GetAttachInfoResp.build_info:type_name -> mgmt.BuildInfo
-	11, // 8: mgmt.GetAttachInfoResp.numa_fabric_interfaces:type_name -> mgmt.FabricInterfaces
-	9,  // [9:9] is the sub-list for method output_type
-	9,  // [9:9] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	25, // 2: mgmt.EnginePreflightReq.engines:type_name -> mgmt.EnginePreflightReq.Engine
+	26, // 3: mgmt.EnginePreflightResp.engines:type_name -> mgmt.EnginePreflightResp.Engine
+	12, // 4: mgmt.FabricInterfaces.ifaces:type_name -> mgmt.FabricInterface
+	27, // 5: mgmt.GetAttachInfoResp.rank_uris:type_name -> mgmt.GetAttachInfoResp.RankUri
+	11, // 6: mgmt.GetAttachInfoResp.client_net_hint:type_name -> mgmt.ClientNetHint
+	27, // 7: mgmt.GetAttachInfoResp.secondary_rank_uris:type_name -> mgmt.GetAttachInfoResp.RankUri
+	11, // 8: mgmt.GetAttachInfoResp.secondary_client_net_hints:type_name -> mgmt.ClientNetHint
+	14, // 9: mgmt.GetAttachInfoResp.build_info:type_name -> mgmt.BuildInfo
+	13, // 10: mgmt.GetAttachInfoResp.numa_fabric_interfaces:type_name -> mgmt.FabricInterfaces
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_mgmt_svc_proto_init() }
@@ -1786,7 +2013,7 @@ func file_mgmt_svc_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mgmt_svc_proto_rawDesc), len(file_mgmt_svc_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   23,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -229,9 +230,9 @@ func (c *Client) dialOptions() ([]grpc.DialOption, error) {
 
 // setDeadlineIfUnset sets a deadline on the context unless there is already
 // one set. If the request does not define a specific deadline, then the
-// default timeout is used.
+// default timeout is used unless the request has opted out of a deadline.
 func setDeadlineIfUnset(parent context.Context, req UnaryRequest) (context.Context, context.CancelFunc) {
-	if _, hasDeadline := parent.Deadline(); hasDeadline {
+	if _, hasDeadline := parent.Deadline(); hasDeadline || req.noDeadline() {
 		return parent, func() {}
 	}
 

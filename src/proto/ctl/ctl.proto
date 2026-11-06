@@ -48,6 +48,8 @@ service CtlSvc {
 	rpc ResetFormatRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
+	// Start DAOS I/O Engines on a host by instance index. (gRPC fanout)
+	rpc StartEngines(StartEnginesReq) returns (StartEnginesResp) {}
 	// Perform a Log collection on Servers for support/debug purpose
 	rpc CollectLog (CollectLogReq) returns (CollectLogResp) {};
 	// Send the desired action to repair an inconsistency on a given engine.

@@ -21,6 +21,10 @@ typedef struct _Mgmt__SystemStopReq Mgmt__SystemStopReq;
 typedef struct _Mgmt__SystemStopResp Mgmt__SystemStopResp;
 typedef struct _Mgmt__SystemStartReq Mgmt__SystemStartReq;
 typedef struct _Mgmt__SystemStartResp Mgmt__SystemStartResp;
+typedef struct _Mgmt__SystemInitializeReq Mgmt__SystemInitializeReq;
+typedef struct _Mgmt__SystemInitializeResp Mgmt__SystemInitializeResp;
+typedef struct _Mgmt__SystemExtendReq Mgmt__SystemExtendReq;
+typedef struct _Mgmt__SystemExtendResp Mgmt__SystemExtendResp;
 typedef struct _Mgmt__SystemExcludeReq Mgmt__SystemExcludeReq;
 typedef struct _Mgmt__SystemExcludeResp Mgmt__SystemExcludeResp;
 typedef struct _Mgmt__SystemDrainReq Mgmt__SystemDrainReq;
@@ -195,6 +199,88 @@ struct  _Mgmt__SystemStartResp
 #define MGMT__SYSTEM_START_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_start_resp__descriptor) \
     , 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+
+
+/*
+ * SystemInitializeReq supplies system initialize parameters.
+ */
+struct  _Mgmt__SystemInitializeReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system name
+   */
+  char *sys;
+  /*
+   * hostset to start engines on
+   */
+  char *hosts;
+  /*
+   * seconds to wait for engines to join (0: no limit)
+   */
+  uint32_t join_timeout;
+};
+#define MGMT__SYSTEM_INITIALIZE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_initialize_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+
+
+/*
+ * SystemInitializeResp returns results of attempts to start and join engines.
+ */
+struct  _Mgmt__SystemInitializeResp
+{
+  ProtobufCMessage base;
+  /*
+   * joined ranks, or the host that fell short
+   */
+  size_t n_results;
+  Shared__RankResult **results;
+};
+#define MGMT__SYSTEM_INITIALIZE_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_initialize_resp__descriptor) \
+    , 0,NULL }
+
+
+/*
+ * SystemExtendReq supplies system extend parameters.
+ */
+struct  _Mgmt__SystemExtendReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system name
+   */
+  char *sys;
+  /*
+   * hostset to start engines on
+   */
+  char *hosts;
+  /*
+   * seconds to wait for engines to join (0: no limit)
+   */
+  uint32_t join_timeout;
+};
+#define MGMT__SYSTEM_EXTEND_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_extend_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+
+
+/*
+ * SystemExtendResp returns results of attempts to start and join engines.
+ */
+struct  _Mgmt__SystemExtendResp
+{
+  ProtobufCMessage base;
+  /*
+   * joined ranks, or the host that fell short
+   */
+  size_t n_results;
+  Shared__RankResult **results;
+};
+#define MGMT__SYSTEM_EXTEND_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__system_extend_resp__descriptor) \
+    , 0,NULL }
 
 
 /*
@@ -766,6 +852,82 @@ Mgmt__SystemStartResp *
 void   mgmt__system_start_resp__free_unpacked
                      (Mgmt__SystemStartResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__SystemInitializeReq methods */
+void   mgmt__system_initialize_req__init
+                     (Mgmt__SystemInitializeReq         *message);
+size_t mgmt__system_initialize_req__get_packed_size
+                     (const Mgmt__SystemInitializeReq   *message);
+size_t mgmt__system_initialize_req__pack
+                     (const Mgmt__SystemInitializeReq   *message,
+                      uint8_t             *out);
+size_t mgmt__system_initialize_req__pack_to_buffer
+                     (const Mgmt__SystemInitializeReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__SystemInitializeReq *
+       mgmt__system_initialize_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__system_initialize_req__free_unpacked
+                     (Mgmt__SystemInitializeReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__SystemInitializeResp methods */
+void   mgmt__system_initialize_resp__init
+                     (Mgmt__SystemInitializeResp         *message);
+size_t mgmt__system_initialize_resp__get_packed_size
+                     (const Mgmt__SystemInitializeResp   *message);
+size_t mgmt__system_initialize_resp__pack
+                     (const Mgmt__SystemInitializeResp   *message,
+                      uint8_t             *out);
+size_t mgmt__system_initialize_resp__pack_to_buffer
+                     (const Mgmt__SystemInitializeResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__SystemInitializeResp *
+       mgmt__system_initialize_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__system_initialize_resp__free_unpacked
+                     (Mgmt__SystemInitializeResp *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__SystemExtendReq methods */
+void   mgmt__system_extend_req__init
+                     (Mgmt__SystemExtendReq         *message);
+size_t mgmt__system_extend_req__get_packed_size
+                     (const Mgmt__SystemExtendReq   *message);
+size_t mgmt__system_extend_req__pack
+                     (const Mgmt__SystemExtendReq   *message,
+                      uint8_t             *out);
+size_t mgmt__system_extend_req__pack_to_buffer
+                     (const Mgmt__SystemExtendReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__SystemExtendReq *
+       mgmt__system_extend_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__system_extend_req__free_unpacked
+                     (Mgmt__SystemExtendReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__SystemExtendResp methods */
+void   mgmt__system_extend_resp__init
+                     (Mgmt__SystemExtendResp         *message);
+size_t mgmt__system_extend_resp__get_packed_size
+                     (const Mgmt__SystemExtendResp   *message);
+size_t mgmt__system_extend_resp__pack
+                     (const Mgmt__SystemExtendResp   *message,
+                      uint8_t             *out);
+size_t mgmt__system_extend_resp__pack_to_buffer
+                     (const Mgmt__SystemExtendResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__SystemExtendResp *
+       mgmt__system_extend_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__system_extend_resp__free_unpacked
+                     (Mgmt__SystemExtendResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__SystemExcludeReq methods */
 void   mgmt__system_exclude_req__init
                      (Mgmt__SystemExcludeReq         *message);
@@ -1197,6 +1359,18 @@ typedef void (*Mgmt__SystemStartReq_Closure)
 typedef void (*Mgmt__SystemStartResp_Closure)
                  (const Mgmt__SystemStartResp *message,
                   void *closure_data);
+typedef void (*Mgmt__SystemInitializeReq_Closure)
+                 (const Mgmt__SystemInitializeReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__SystemInitializeResp_Closure)
+                 (const Mgmt__SystemInitializeResp *message,
+                  void *closure_data);
+typedef void (*Mgmt__SystemExtendReq_Closure)
+                 (const Mgmt__SystemExtendReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__SystemExtendResp_Closure)
+                 (const Mgmt__SystemExtendResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__SystemExcludeReq_Closure)
                  (const Mgmt__SystemExcludeReq *message,
                   void *closure_data);
@@ -1286,6 +1460,10 @@ extern const ProtobufCMessageDescriptor mgmt__system_stop_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_stop_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_start_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_start_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__system_initialize_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__system_initialize_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__system_extend_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__system_extend_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_exclude_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_exclude_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__system_drain_req__descriptor;

@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -61,6 +61,29 @@ message JoinResp {
 	bool localJoin = 5;	// Join processed locally.
 	uint32 map_version = 6; // Join processed in this version of the system map.
 	uint32 daos_version = 7; // DAOS version that system supported.
+}
+
+// EnginePreflightReq asks what a server needs to know before it launches engines.
+message EnginePreflightReq
+{
+	message Engine
+	{
+		uint32 idx  = 1; // instance index on the requesting server
+		uint32 rank = 2; // engine rank, MAX_UINT32 if it has never joined
+	}
+	string          sys     = 1; // DAOS system name
+	repeated Engine engines = 2;
+}
+
+message EnginePreflightResp
+{
+	message Engine
+	{
+		uint32 idx    = 1; // instance index from the request
+		bool   start  = 2; // whether the engine should start now
+		string reason = 3; // why it should wait, empty if it should start
+	}
+	repeated Engine engines = 1;
 }
 
 message LeaderQueryReq {

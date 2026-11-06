@@ -232,6 +232,9 @@ bring-up DAOS servers and clients.
 	  -----             ----------- ------------
 	  boro-[8,35,52-53] 1           0
 
+	$ dmg system initialize
+	4 engines joined on 4 hosts
+
 	$ dmg pool create --size 10G Pool2
 	$ daos cont create --type POSIX --oclass RP_3G1 --properties rd_fac:2 Pool2 Cont2
 	$ daos pool list-cont Pool2

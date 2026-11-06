@@ -788,6 +788,7 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/storage/format/*", "format")
                 self.verbose = FormattedParameter("--verbose", False)
                 self.force = FormattedParameter("--force", False)
+                self.start = FormattedParameter("--start", False)
 
         class QuerySubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage query command."""
@@ -891,8 +892,12 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.EraseSubCommand()
             elif self.sub_command.value == "exclude":
                 self.sub_command_class = self.ExcludeSubCommand()
+            elif self.sub_command.value == "extend":
+                self.sub_command_class = self.ExtendSubCommand()
             elif self.sub_command.value == "get-prop":
                 self.sub_command_class = self.GetPropSubCommand()
+            elif self.sub_command.value == "initialize":
+                self.sub_command_class = self.InitializeSubCommand()
             elif self.sub_command.value == "leader-query":
                 self.sub_command_class = self.LeaderQuerySubCommand()
             elif self.sub_command.value == "list-pools":
@@ -957,6 +962,15 @@ class DmgCommandBase(YamlCommand):
                 self.ranks = FormattedParameter("--ranks={}")
                 self.rank_hosts = FormattedParameter("--rank-hosts={}")
 
+        class ExtendSubCommand(CommandWithParameters):
+            """Defines an object for the dmg system extend command."""
+
+            def __init__(self):
+                """Create a dmg system extend command object."""
+                super().__init__("/run/dmg/system/extend/*", "extend")
+                self.host_list = FormattedParameter("--host-list={}", None)
+                self.timeout = FormattedParameter("--timeout={}", None)
+
         class GetPropSubCommand(CommandWithParameters):
             """Defines an object for the dmg system get-prop command."""
 
@@ -964,6 +978,15 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg system get-prop command object."""
                 super().__init__("/run/dmg/system/get-prop/*", "get-prop")
                 self.properties = BasicParameter(None, position=1)
+
+        class InitializeSubCommand(CommandWithParameters):
+            """Defines an object for the dmg system initialize command."""
+
+            def __init__(self):
+                """Create a dmg system initialize command object."""
+                super().__init__("/run/dmg/system/initialize/*", "initialize")
+                self.host_list = FormattedParameter("--host-list={}", None)
+                self.timeout = FormattedParameter("--timeout={}", None)
 
         class LeaderQuerySubCommand(CommandWithParameters):
             """Defines an object for the dmg system leader-query command."""

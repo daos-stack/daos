@@ -21,6 +21,10 @@ typedef struct _Mgmt__GroupUpdateReq__Engine Mgmt__GroupUpdateReq__Engine;
 typedef struct _Mgmt__GroupUpdateResp Mgmt__GroupUpdateResp;
 typedef struct _Mgmt__JoinReq Mgmt__JoinReq;
 typedef struct _Mgmt__JoinResp Mgmt__JoinResp;
+typedef struct _Mgmt__EnginePreflightReq Mgmt__EnginePreflightReq;
+typedef struct _Mgmt__EnginePreflightReq__Engine Mgmt__EnginePreflightReq__Engine;
+typedef struct _Mgmt__EnginePreflightResp Mgmt__EnginePreflightResp;
+typedef struct _Mgmt__EnginePreflightResp__Engine Mgmt__EnginePreflightResp__Engine;
 typedef struct _Mgmt__LeaderQueryReq Mgmt__LeaderQueryReq;
 typedef struct _Mgmt__LeaderQueryResp Mgmt__LeaderQueryResp;
 typedef struct _Mgmt__GetAttachInfoReq Mgmt__GetAttachInfoReq;
@@ -211,6 +215,73 @@ struct  _Mgmt__JoinResp
 #define MGMT__JOIN_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_resp__descriptor) \
     , 0, 0, MGMT__JOIN_RESP__STATE__IN, (char *)protobuf_c_empty_string, 0, 0, 0 }
+
+
+struct  _Mgmt__EnginePreflightReq__Engine
+{
+  ProtobufCMessage base;
+  /*
+   * instance index on the requesting server
+   */
+  uint32_t idx;
+  /*
+   * engine rank, MAX_UINT32 if it has never joined
+   */
+  uint32_t rank;
+};
+#define MGMT__ENGINE_PREFLIGHT_REQ__ENGINE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__engine_preflight_req__engine__descriptor) \
+    , 0, 0 }
+
+
+/*
+ * EnginePreflightReq asks what a server needs to know before it launches engines.
+ */
+struct  _Mgmt__EnginePreflightReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system name
+   */
+  char *sys;
+  size_t n_engines;
+  Mgmt__EnginePreflightReq__Engine **engines;
+};
+#define MGMT__ENGINE_PREFLIGHT_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__engine_preflight_req__descriptor) \
+    , (char *)protobuf_c_empty_string, 0,NULL }
+
+
+struct  _Mgmt__EnginePreflightResp__Engine
+{
+  ProtobufCMessage base;
+  /*
+   * instance index from the request
+   */
+  uint32_t idx;
+  /*
+   * whether the engine should start now
+   */
+  protobuf_c_boolean start;
+  /*
+   * why it should wait, empty if it should start
+   */
+  char *reason;
+};
+#define MGMT__ENGINE_PREFLIGHT_RESP__ENGINE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__engine_preflight_resp__engine__descriptor) \
+    , 0, 0, (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__EnginePreflightResp
+{
+  ProtobufCMessage base;
+  size_t n_engines;
+  Mgmt__EnginePreflightResp__Engine **engines;
+};
+#define MGMT__ENGINE_PREFLIGHT_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__engine_preflight_resp__descriptor) \
+    , 0,NULL }
 
 
 struct  _Mgmt__LeaderQueryReq
@@ -662,6 +733,50 @@ Mgmt__JoinResp *
 void   mgmt__join_resp__free_unpacked
                      (Mgmt__JoinResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__EnginePreflightReq__Engine methods */
+void   mgmt__engine_preflight_req__engine__init
+                     (Mgmt__EnginePreflightReq__Engine         *message);
+/* Mgmt__EnginePreflightReq methods */
+void   mgmt__engine_preflight_req__init
+                     (Mgmt__EnginePreflightReq         *message);
+size_t mgmt__engine_preflight_req__get_packed_size
+                     (const Mgmt__EnginePreflightReq   *message);
+size_t mgmt__engine_preflight_req__pack
+                     (const Mgmt__EnginePreflightReq   *message,
+                      uint8_t             *out);
+size_t mgmt__engine_preflight_req__pack_to_buffer
+                     (const Mgmt__EnginePreflightReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__EnginePreflightReq *
+       mgmt__engine_preflight_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__engine_preflight_req__free_unpacked
+                     (Mgmt__EnginePreflightReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__EnginePreflightResp__Engine methods */
+void   mgmt__engine_preflight_resp__engine__init
+                     (Mgmt__EnginePreflightResp__Engine         *message);
+/* Mgmt__EnginePreflightResp methods */
+void   mgmt__engine_preflight_resp__init
+                     (Mgmt__EnginePreflightResp         *message);
+size_t mgmt__engine_preflight_resp__get_packed_size
+                     (const Mgmt__EnginePreflightResp   *message);
+size_t mgmt__engine_preflight_resp__pack
+                     (const Mgmt__EnginePreflightResp   *message,
+                      uint8_t             *out);
+size_t mgmt__engine_preflight_resp__pack_to_buffer
+                     (const Mgmt__EnginePreflightResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__EnginePreflightResp *
+       mgmt__engine_preflight_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__engine_preflight_resp__free_unpacked
+                     (Mgmt__EnginePreflightResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__LeaderQueryReq methods */
 void   mgmt__leader_query_req__init
                      (Mgmt__LeaderQueryReq         *message);
@@ -989,6 +1104,18 @@ typedef void (*Mgmt__JoinReq_Closure)
 typedef void (*Mgmt__JoinResp_Closure)
                  (const Mgmt__JoinResp *message,
                   void *closure_data);
+typedef void (*Mgmt__EnginePreflightReq__Engine_Closure)
+                 (const Mgmt__EnginePreflightReq__Engine *message,
+                  void *closure_data);
+typedef void (*Mgmt__EnginePreflightReq_Closure)
+                 (const Mgmt__EnginePreflightReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__EnginePreflightResp__Engine_Closure)
+                 (const Mgmt__EnginePreflightResp__Engine *message,
+                  void *closure_data);
+typedef void (*Mgmt__EnginePreflightResp_Closure)
+                 (const Mgmt__EnginePreflightResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__LeaderQueryReq_Closure)
                  (const Mgmt__LeaderQueryReq *message,
                   void *closure_data);
@@ -1053,6 +1180,10 @@ extern const ProtobufCMessageDescriptor mgmt__group_update_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__join_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__join_resp__descriptor;
 extern const ProtobufCEnumDescriptor    mgmt__join_resp__state__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__engine_preflight_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__engine_preflight_req__engine__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__engine_preflight_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__engine_preflight_resp__engine__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__leader_query_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor;
