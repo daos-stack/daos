@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,7 +11,7 @@
 
 #include "dlck_args.h"
 
-#define DLCK_POOL_OPEN_FLAGS (VOS_POF_EXCL | VOS_POF_FOR_FEATURE_FLAG)
+#define DLCK_POOL_OPEN_FLAGS (VOS_POF_EXCL | VOS_POF_FOR_FEATURE_FLAG | VOS_POF_FOR_CHECK)
 
 /**
  * Create a directory for the pool.

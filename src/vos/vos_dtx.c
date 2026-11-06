@@ -1271,6 +1271,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	struct vos_container		*cont;
 	struct vos_dtx_act_ent		*dae = NULL;
 	bool				 found;
+	uint64_t                         now;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -1316,8 +1317,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		  DF_U64 ", boundary " DF_U64 "\n", entry, epoch, cont->vc_solo_dtx_epoch);
 
 	if (intent == DAOS_INTENT_PURGE) {
-		uint32_t	age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
-		uint64_t	now;
+		uint32_t age = d_hlc_age2sec(DAE_XID(dae).dti_hlc);
 
 		/*
 		 * Don't print warning message for fresh record, since INTENT_PURGE could
@@ -1332,8 +1332,9 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			return ALB_AVAILABLE_DIRTY;
 
 		/* VOS aggregation is trying to reclaim data record being referenced by DTX */
-		D_WARN("DTX "DF_DTI" (state:%u, flags:%x, age:%u, type:%u) is still inuse!\n",
-		       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), DAE_FLAGS(dae), age, type);
+		D_WARN(DF_DTI " in " DF_CONT " (state:%u, flags:%x, age:%u, type:%u) is busy!\n",
+		       DP_DTI(&DAE_XID(dae)), DP_CONT(cont->vc_id, cont->vc_pool->vp_id),
+		       vos_dtx_status(dae), DAE_FLAGS(dae), age, type);
 
 		cont->vc_agg_busy_ts = now;
 		return ALB_AVAILABLE_DIRTY;
@@ -1428,6 +1429,23 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 				if (unlikely(dsp->dsp_status != 0))
 					return dsp->dsp_status;
 
+				/*
+				 * Initial DTX resync (after engine quick restart) is not completed,
+				 * Former committable DTX maybe not re-synchronized yet, need retry.
+				 */
+				if (unlikely(cont->vc_dtx_resync_ver == 0)) {
+					now = daos_gettime_coarse();
+					if (now - cont->vc_dtx_resync_ts > 30) {
+						D_WARN(DF_CONT ": DTX resync for initial pool map "
+							       "blocks " DF_DTI " > 30 sec (1).\n",
+						       DP_CONT(cont->vc_id, cont->vc_pool->vp_id),
+						       DP_DTI(&DAE_XID(dae)));
+						cont->vc_dtx_resync_ts = now;
+					}
+
+					return dtx_inprogress(dae, dth, true, false, 10);
+				}
+
 				if (!dtx_is_valid_handle(dth) ||
 				    intent == DAOS_INTENT_IGNORE_NONCOMMITTED)
 					return ALB_UNAVAILABLE;
@@ -1446,6 +1464,23 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	 */
 
 	if (intent == DAOS_INTENT_IGNORE_NONCOMMITTED) {
+		/*
+		 * Initial DTX resync (after engine quick restart) is not completed,
+		 * Former committable DTX maybe not re-synchronized yet, need retry.
+		 */
+		if (unlikely(cont->vc_dtx_resync_ver == 0)) {
+			now = daos_gettime_coarse();
+			if (now - cont->vc_dtx_resync_ts > 30) {
+				D_WARN(DF_CONT ": DTX resync for initial pool map blocks " DF_DTI
+					       " > 30 sec (2).\n",
+				       DP_CONT(cont->vc_id, cont->vc_pool->vp_id),
+				       DP_DTI(&DAE_XID(dae)));
+				cont->vc_dtx_resync_ts = now;
+			}
+
+			return dtx_inprogress(dae, dth, false, false, 11);
+		}
+
 		/* For transactional read, has to wait the non-committed
 		 * modification to guarantee the transaction semantics.
 		 */
@@ -1484,6 +1519,23 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
 			return dtx_inprogress(dae, dth, false, true, 6);
+
+		/*
+		 * Initial DTX resync (after engine quick restart) is not completed,
+		 * Former committable DTX maybe not re-synchronized yet, let's retry.
+		 */
+		if (unlikely(cont->vc_dtx_resync_ver == 0)) {
+			now = daos_gettime_coarse();
+			if (now - cont->vc_dtx_resync_ts > 30) {
+				D_WARN(DF_CONT ": DTX resync for initial pool map blocks " DF_DTI
+					       " > 30 sec (3).\n",
+				       DP_CONT(cont->vc_id, cont->vc_pool->vp_id),
+				       DP_DTI(&DAE_XID(dae)));
+				cont->vc_dtx_resync_ts = now;
+			}
+
+			return dtx_inprogress(dae, dth, false, true, 12);
+		}
 
 		/*
 		 * For transactional read, has to wait the non-committed
@@ -1979,6 +2031,13 @@ vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae,
 	return 0;
 }
 
+#define dtx_check_prepare(dae)                                                                     \
+	do {                                                                                       \
+		if (dae->dae_dth != NULL || dae->dae_preparing)                                    \
+			return -DER_INPROGRESS;                                                    \
+		D_ASSERT(dae->dae_prepared);                                                       \
+	} while (0)
+
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32_t *pm_ver,
 	      struct dtx_cos_key *dck, enum dtx_check_intent intent)
@@ -2052,6 +2111,10 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32
 		switch (intent) {
 		case DCI_REFRESH:
 			dae->dae_maybe_shared = 1;
+
+			if (!vos_dae_is_prepare(dae))
+				return DTX_ST_INITED;
+
 			/*
 			 * If DTX_REFRESH happened on current DTX entry but it was not marked
 			 * as leader, then there must be leader switch and the DTX resync has
@@ -2060,60 +2123,144 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32
 			 */
 			if (!(DAE_FLAGS(dae) & DTE_LEADER))
 				return -DER_INPROGRESS;
-			break;
-		case DCI_RESENT:
-			/* Not committable yet, related RPC handler ULT is still running. */
-			if (dae->dae_dth != NULL)
+
+			D_ASSERT(pm_ver != NULL);
+
+			if (*pm_ver <= cont->vc_dtx_resync_ver)
+				return DTX_ST_PREPARED;
+
+			/*
+			 * Before DTX resync completed, it is not sure whether related DTX is
+			 * committable or not, then have to ask DTX refresh sponsor to retry.
+			 */
+			return -DER_INPROGRESS;
+		case DCI_RESENT_LEADER:
+			/*
+			 * Leader just restarted without initial DTX resync yet. It is unknown
+			 * whether the DTX was former committable or not. Needs to retry later.
+			 */
+			if (unlikely(cont->vc_dtx_resync_ver == 0)) {
+				uint64_t now = daos_gettime_coarse();
+
+				if (now - cont->vc_dtx_resync_ts > 30) {
+					D_WARN(DF_CONT ": wait DTX (" DF_DTI ") resync for initial "
+						       " pool map for more than 30 sec.\n",
+					       DP_CONT(cont->vc_id, cont->vc_pool->vp_id),
+					       DP_DTI(&DAE_XID(dae)));
+					cont->vc_dtx_resync_ts = now;
+				}
+
+				return -DER_INPROGRESS;
+			}
+
+			/* Race with DTX resync, retry sometime later. */
+			if (unlikely(dae->dae_to_be_abort))
 				return -DER_INPROGRESS;
 
-			if (pm_ver != NULL)
-				*pm_ver = DAE_VER(dae);
+			/* Fall through */
+		case DCI_RESENT_FOLLOWER:
+			/* Not committable yet, related RPC handler ULT is still running. */
+			dtx_check_prepare(dae);
 
-			if (epoch != NULL) {
-				daos_epoch_t e = *epoch;
+			D_ASSERT(pm_ver != NULL);
+			D_ASSERT(epoch != NULL);
 
-				*epoch = DAE_EPOCH(dae);
-				if (e != 0) {
-					if (e > DAE_EPOCH(dae))
-						return -DER_MISMATCH;
+			*pm_ver = DAE_VER(dae);
 
-					if (e < DAE_EPOCH(dae))
-						return -DER_TX_RESTART;
+			if (*epoch != 0) {
+				if (*epoch > DAE_EPOCH(dae)) {
+					*epoch = DAE_EPOCH(dae);
+					return -DER_MISMATCH;
 				}
+
+				if (*epoch < DAE_EPOCH(dae))
+					return -DER_TX_RESTART;
 			}
-			break;
-		case DCI_RESYNC:
+
+			*epoch = DAE_EPOCH(dae);
+
+			return DTX_ST_PREPARED;
+		case DCI_RESYNC_LEADER:
+			/* For leader, check resent IO before marking dae_known_max_version. */
+			dtx_check_prepare(dae);
+
+			D_ASSERT(pm_ver != NULL);
+
 			/*
 			 * Mark the DTX as being checked by (new) leader. It is in DRAM only.
 			 * If the engine is restarted, then will be handled via new DTX resync.
 			 */
-			if (pm_ver != NULL && dae->dae_known_max_version < *pm_ver)
+			if (dae->dae_known_max_version < *pm_ver) {
 				dae->dae_known_max_version = *pm_ver;
+				dae->dae_to_be_abort       = 0;
+			}
 
-			if (dae->dae_dth != NULL || dae->dae_preparing)
+			return DTX_ST_PREPARED;
+		case DCI_RESYNC_COMMIT:
+			/*
+			 * IO handler for resent RPC may touch new target during rebuild/reint, and
+			 * DTX membership may be changed. So DTX resync logic should not commit it
+			 * when detect race IO handler for resent.
+			 */
+			dtx_check_prepare(dae);
+
+			/* Mark committable, then subsequent IO handler for resent will skip it. */
+			dae->dae_committable = 1;
+
+			return DTX_ST_PREPARED;
+		case DCI_RESYNC_ABORT:
+			/*
+			 * IO handler for resent RPC may touch new target during rebuild/reint, and
+			 * DTX membership may be changed. So DTX resync logic should not abort it
+			 * when detect race IO handler for resent.
+			 */
+			dtx_check_prepare(dae);
+
+			D_ASSERT(pm_ver != NULL);
+
+			if (unlikely(*pm_ver < DAE_VER(dae) ||
+				     *pm_ver < dae->dae_known_max_version))
 				return -DER_INPROGRESS;
-			break;
+
+			/* Mark to_be_abort, then subsequent IO handler for resent will retry. */
+			dae->dae_to_be_abort = 1;
+
+			return DTX_ST_PREPARED;
+		case DCI_RESYNC_FOLLOWER:
+			D_ASSERT(pm_ver != NULL);
+
+			/*
+			 * Mark the DTX as being checked by (new) leader. It is in DRAM only.
+			 * If the engine is restarted, then will be handled via new DTX resync.
+			 */
+			if (dae->dae_known_max_version < *pm_ver) {
+				dae->dae_known_max_version = *pm_ver;
+				dae->dae_to_be_abort       = 0;
+			}
+
+			/*
+			 * For non-leader, check resent IO after marking dae_known_max_version
+			 * to avoid being aborted on non-leader by stale ABORT RPC during wait
+			 * for DTX resync retry.
+			 *
+			 * Fall through.
+			 */
 		default:
-			break;
+			dtx_check_prepare(dae);
+
+			return DTX_ST_PREPARED;
 		}
-
-		if (!vos_dae_is_prepare(dae))
-			return DTX_ST_INITED;
-
-		if (pm_ver == NULL || intent != DCI_RESENT)
-			return DTX_ST_PREPARED;
-
-		if (*pm_ver <= cont->vc_dtx_resync_ver)
-			return DTX_ST_PREPARED;
-
-		/*
-		 * Before DTX resync completed, it is not sure whether related DTX is
-		 * committable or not, then have to ask DTX refresh sponsor to retry.
-		 */
-		return -DER_INPROGRESS;
 	}
 
 	if (rc == -DER_NONEXIST) {
+		/*
+		 * For DTX resync on leader, if the DTX is not in active table any longer, then do
+		 * not care whether it is committed or not.
+		 */
+		if (intent == DCI_RESYNC_LEADER || intent == DCI_RESYNC_COMMIT ||
+		    intent == DCI_RESYNC_ABORT)
+			return -DER_NONEXIST;
+
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
 		if (rc == 0) {
 			struct vos_dtx_cmt_ent	*dce;
@@ -2904,7 +3051,8 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch, uint32_
 			D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
-	dth = dae->dae_dth;
+	dth                  = dae->dae_dth;
+	dae->dae_to_be_abort = 0;
 
 	if (dae->dae_preparing) {
 		dae->dae_aborting = 1;
@@ -3528,6 +3676,14 @@ vos_dtx_act_reindex(struct vos_container *cont)
 	uint64_t			 start_time = daos_wallclock_secs();
 	int				 rc = 0;
 	int				 i;
+
+	/* If active DTX table is empty, then treat it as new created one. */
+	if (UMOFF_IS_NULL(dbd_off)) {
+		cont->vc_dtx_reindex_eph_diff = 0;
+		if (cont->vc_dtx_resync_ver == 0)
+			cont->vc_dtx_resync_ver = 1;
+		goto out;
+	}
 
 	while (!UMOFF_IS_NULL(dbd_off)) {
 		int	dbd_count = 0;
