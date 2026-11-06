@@ -257,7 +257,7 @@ func TestStorage_BdevDeviceList_FromJSON(t *testing.T) {
 	}
 }
 
-func TestStorage_parsePCIBusRange(t *testing.T) {
+func TestStorage_parseBusRange(t *testing.T) {
 	for name, tc := range map[string]struct {
 		rangeStr string
 		bitSize  int
@@ -306,9 +306,14 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 			bitSize:  8,
 			expErr:   errors.New("value out of range"),
 		},
+		"no domain; full bus range": {
+			rangeStr: "0x00-0xFF",
+			expBegin: 0x00,
+			expEnd:   0xFF,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			begin, end, err := parsePCIBusRange(tc.rangeStr, tc.bitSize)
+			begin, end, err := parseBusRange(tc.rangeStr, tc.bitSize)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -316,6 +321,149 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 
 			test.AssertEqual(t, tc.expBegin, begin, "bad beginning limit")
 			test.AssertEqual(t, tc.expEnd, end, "bad ending limit")
+		})
+	}
+}
+
+func TestStorage_BdevBusRange_ToHotplugRange(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rangeStr string
+		expStr   string
+	}{
+		"partial bus range": {
+			rangeStr: "0x80-0x8f",
+			expStr:   "0000:80-8f",
+		},
+		"full bus range": {
+			rangeStr: "0x00-0xff",
+			expStr:   "0000:00-ff",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			br, err := NewBdevBusRange(tc.rangeStr)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			hr := br.ToHotplugRange()
+			test.AssertEqual(t, uint16(0x00), hr.LowAddress.Domain, "bad low domain")
+			test.AssertEqual(t, uint16(0x00), hr.HighAddress.Domain, "bad high domain")
+			test.AssertEqual(t, tc.expStr, hr.String(), "bad string representation")
+		})
+	}
+}
+
+func TestStorage_NewBdevHotplugRange(t *testing.T) {
+	for name, tc := range map[string]struct {
+		entryStr string
+		expDom   uint16
+		expBusLo uint8
+		expBusHi uint8
+		expErr   error
+	}{
+		"single domain, single bus-id, hex": {
+			entryStr: "00:80",
+			expBusLo: 0x80,
+			expBusHi: 0x80,
+		},
+		"single domain, full bus-id range, hex": {
+			entryStr: "01:00-ff",
+			expDom:   0x01,
+			expBusLo: 0x00,
+			expBusHi: 0xff,
+		},
+		"domain range rejected": {
+			entryStr: "00-02:00-80",
+			expErr:   errors.New("only a single domain is supported per entry"),
+		},
+		"0x-prefixed domain rejected": {
+			entryStr: "0x00:80",
+			expErr:   errors.New("parse hotplug range domain"),
+		},
+		"0x-prefixed bus-id rejected": {
+			entryStr: "00:0x80",
+			expErr:   errors.New("parse hotplug range bus-id"),
+		},
+		"missing domain": {
+			entryStr: "80",
+			expErr:   errors.New("expected <domain>:<bus-id>"),
+		},
+		"missing bus-id": {
+			entryStr: "00:",
+			expErr:   errors.New("parse hotplug range bus-id"),
+		},
+		"reverse bus-id range": {
+			entryStr: "00:80-00",
+			expErr:   errors.New("begin > end"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			hr, err := NewBdevHotplugRange(tc.entryStr)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expDom, hr.LowAddress.Domain, "bad low domain")
+			test.AssertEqual(t, tc.expDom, hr.HighAddress.Domain, "bad high domain")
+			test.AssertEqual(t, tc.expBusLo, hr.LowAddress.Bus, "bad low bus-id")
+			test.AssertEqual(t, tc.expBusHi, hr.HighAddress.Bus, "bad high bus-id")
+		})
+	}
+}
+
+// TestStorage_BdevHotplugRange_JSON is a regression test for JSON marshal/unmarshal of
+// BdevHotplugRange.
+func TestStorage_BdevHotplugRange_JSON(t *testing.T) {
+	hr, err := NewBdevHotplugRange("0x01:0x00-0xFF")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &BdevWriteConfigRequest{HotplugRanges: BdevHotplugRanges{hr}}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal: %s", err)
+	}
+
+	gotReq := new(BdevWriteConfigRequest)
+	if err := json.Unmarshal(data, gotReq); err != nil {
+		t.Fatalf("unmarshal: %s", err)
+	}
+
+	if diff := cmp.Diff(req.HotplugRanges, gotReq.HotplugRanges); diff != "" {
+		t.Fatalf("unexpected hotplug ranges after round-trip (-want +got):\n%s", diff)
+	}
+}
+
+func TestStorage_BdevConfig_Validate_HotplugRangeMutualExclusion(t *testing.T) {
+	for name, tc := range map[string]struct {
+		busidRange    *BdevBusRange
+		hotplugRanges BdevHotplugRanges
+		expErr        error
+	}{
+		"neither set": {},
+		"only legacy busid_range set": {
+			busidRange: MustNewBdevBusRange("0x80-0x8f"),
+		},
+		"only hotplug_range set": {
+			hotplugRanges: BdevHotplugRanges{MustNewBdevHotplugRange("00:80-8f")},
+		},
+		"both set": {
+			busidRange:    MustNewBdevBusRange("0x80-0x8f"),
+			hotplugRanges: BdevHotplugRanges{MustNewBdevHotplugRange("00:80-8f")},
+			expErr:        errors.New("mutually exclusive"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bc := &BdevConfig{
+				DeviceList:    MustNewBdevDeviceList("0000:80:00.0"),
+				BusidRange:    tc.busidRange,
+				HotplugRanges: tc.hotplugRanges,
+			}
+
+			err := bc.Validate(ClassNvme)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
