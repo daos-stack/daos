@@ -9651,10 +9651,9 @@ ds_pool_tgt_excluded(struct ds_pool *pool, d_rank_t rank, int tgt_idx)
 	int                 nr;
 	int                 i;
 
-	if (unlikely(pool->sp_map == NULL))
-		return false;
-
 	ABT_rwlock_rdlock(pool->sp_lock);
+	if (unlikely(pool->sp_map == NULL))
+		goto out;
 	nr = pool_map_find_target_by_rank_idx(pool->sp_map, rank, tgt_idx, &tgts);
 	for (i = 0; i < nr; i++) {
 		excluded = tgts[i].ta_comp.co_status == PO_COMP_ST_DOWN ||
@@ -9662,6 +9661,7 @@ ds_pool_tgt_excluded(struct ds_pool *pool, d_rank_t rank, int tgt_idx)
 		if (!excluded)
 			break;
 	}
+out:
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return excluded;
