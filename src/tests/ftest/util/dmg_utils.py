@@ -1413,7 +1413,7 @@ class DmgCommand(DmgCommandBase):
                 data[rank] = info[1].strip()
         return data
 
-    def system_stop(self, force=False, ranks=None):
+    def system_stop(self, force=False, ranks=None, full=None):
         """Stop the system.
 
         Args:
@@ -1429,7 +1429,7 @@ class DmgCommand(DmgCommandBase):
             dict: a dictionary of host ranks and their unique states.
 
         """
-        self._get_result(("system", "stop"), force=force, ranks=ranks)
+        self._get_result(("system", "stop"), force=force, ranks=ranks, full=full)
 
         # Populate a dictionary with host set keys for each unique state, ex:
         #   Rank Operation Result
