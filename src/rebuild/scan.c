@@ -1016,6 +1016,8 @@ next:
 	if (unlikely(cont_child->sc_dtx_delay_reset == 1)) {
 		stop_dtx_reindex_ult(cont_child, true);
 		vos_dtx_cache_reset(cont_child->sc_hdl, false);
+		cont_child->sc_dtx_delay_reset = 0;
+		cont_child->sc_dtx_indexed     = 0;
 	}
 
 	cont_child->sc_rebuilding = 1;
