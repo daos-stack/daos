@@ -1,6 +1,6 @@
 """
 (C) Copyright 2018-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -127,7 +127,7 @@ class HostInfo():
         log.info("mgmt_svc_replicas:   %s", self.mgmt_svc_replicas)
 
     def set_hosts(self, log, control_host, server_hosts, server_partition, server_reservation,
-                  client_hosts, client_partition, client_reservation, include_local_host=False):
+                  client_hosts, client_partition, client_reservation):
         """Set the host information.
 
         Args:
@@ -139,8 +139,6 @@ class HostInfo():
             client_hosts (object): hosts to define as clients
             client_partition (str): client partition name
             client_reservation (str): client reservation name
-            include_local_host (bool, optional): option to include the local host as a client.
-                Defaults to False.
 
         Raises:
             HostException: if there is a problem obtaining the hosts
@@ -155,11 +153,12 @@ class HostInfo():
             raise HostException("Error defining the server hosts") from error
 
         try:
+            # Always include localhost in the client list so it is setup correctly.
             self._clients = HostRole(
                 client_hosts, client_partition, client_reservation,
                 get_partition_hosts(log, control_host, client_partition),
                 get_reservation_hosts(log, control_host, client_reservation),
-                include_local_host)
+                True)
         except SlurmFailed as error:
             raise HostException("Error defining the server hosts") from error
 
