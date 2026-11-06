@@ -394,8 +394,7 @@ dfs_test_ec_short_read(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	/* less than 1 EC stripe */
 	dfs_test_short_read_internal(state, OC_EC_4P2G1,

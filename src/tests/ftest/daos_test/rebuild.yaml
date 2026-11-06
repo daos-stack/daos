@@ -121,7 +121,7 @@ daos_tests:
     test_rebuild_18: -s3 -u subtests="18"
     test_rebuild_19: -s3 -u subtests="19"
     test_rebuild_20: -s3 -u subtests="20"
-    test_rebuild_21: -s3 -u subtests="21"
+    test_rebuild_21: -s5 -u subtests="21"
     test_rebuild_22: -s3 -u subtests="22"
     test_rebuild_23: -s3 -u subtests="23"
     test_rebuild_24: -s3 -u subtests="24"

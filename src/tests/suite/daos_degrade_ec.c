@@ -145,8 +145,7 @@ degrade_ec_internal(void **state, int *shards, int shards_nr, int write_type)
 	d_rank_t	ranks[4] = { -1 };
 	int		idx = 0;
 
-	if (!test_runable(arg, DEGRADE_RANK_SIZE))
-		return;
+	test_runable_or_skip(arg, DEGRADE_RANK_SIZE);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	degrade_ec_write(arg, oid, write_type);
@@ -396,8 +395,7 @@ degrade_multi_conts_agg(void **state)
 	int		 i;
 	int		 rc;
 
-	if (!test_runable(arg, DEGRADE_RANK_SIZE))
-		return;
+	test_runable_or_skip(arg, DEGRADE_RANK_SIZE);
 
 	FAULT_INJECTION_REQUIRED();
 
@@ -493,8 +491,7 @@ degrade_ec_partial_update_agg(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	data = (char *)malloc(EC_CELL_SIZE);
 	assert_true(data != NULL);
@@ -546,8 +543,7 @@ degrade_ec_agg(void **state)
 	char		*data;
 	char		*verify_data;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	data = (char *)malloc(EC_CELL_SIZE);
 	assert_true(data != NULL);
@@ -614,7 +610,7 @@ degrade_ec_update(void **state)
 #define TEST_EC_STRIPE_SIZE	(1 * 1024 * 1024 * 4)
 
 	if (!test_runable(arg, 6) || (arg->srv_ntgts / arg->srv_nnodes) < 2)
-		return;
+		skip();
 
 	print_message("test 1 - DER_NEED_TX case\n");
 	data = (char *)malloc(TEST_EC_STRIPE_SIZE);
@@ -689,8 +685,7 @@ degrade_ec_agg_punch(void **state, int shard)
 	char		*data;
 	char		*verify_data;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	data = (char *)malloc(EC_CELL_SIZE);
 	assert_true(data != NULL);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -163,8 +163,7 @@ dfs_extend_drain_common(void **state, int opc, uint32_t objclass,
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	attr.da_props = daos_prop_alloc(2);
 	assert_non_null(attr.da_props);

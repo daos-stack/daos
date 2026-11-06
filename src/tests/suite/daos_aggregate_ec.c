@@ -1,4 +1,6 @@
-/** * (C) Copyright 2020-2022 Intel Corporation.
+/**
+ * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -845,8 +847,7 @@ test_all_ec_agg(void **statep)
 	test_arg_t		*arg = *statep;
 	struct ec_agg_test_ctx	 ctx = { 0 };
 
-	if (!test_runable(arg, 5))
-		return;
+	test_runable_or_skip(arg, 5);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
 	setup_ec_agg_tests(statep, &ctx);
@@ -892,8 +893,7 @@ fetch_snap_with_agg(void **statep)
 	bool			 snap_higher = false;
 	int			 rc;
 
-	if (!test_runable(arg, 4))
-		skip();
+	test_runable_or_skip(arg, 4);
 
 	FAULT_INJECTION_REQUIRED();
 

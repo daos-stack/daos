@@ -77,8 +77,7 @@ rebuild_dkeys(void **state)
 	int			i;
 	int			rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -133,8 +132,7 @@ rebuild_akeys(void **state)
 	int			i;
 	int			rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -189,8 +187,7 @@ rebuild_indexes(void **state)
 	int			j;
 	int			rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -239,8 +236,7 @@ rebuild_snap_update_recs(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -304,8 +300,7 @@ rebuild_snap_punch_recs(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -363,8 +358,7 @@ rebuild_snap_update_keys(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -448,8 +442,7 @@ rebuild_snap_punch_keys(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -552,8 +545,7 @@ rebuild_snap_punch_empty(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
@@ -629,8 +621,7 @@ rebuild_multiple(void **state)
 	int		k;
 	int		rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -677,8 +668,7 @@ rebuild_large_rec(void **state)
 	char			buffer[LARGE_BUFFER_SIZE];
 	int			rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -731,8 +721,7 @@ rebuild_objects(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	for (i = 0; i < OBJ_NR; i++) {
@@ -777,8 +766,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 	int		rc = 0;
 	char		buffer[32];
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -896,8 +884,7 @@ rebuild_large_object(void **state)
 	int		j;
 	int		rc = 0;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	for (i = 0; i < 5; i++) {
@@ -1000,8 +987,7 @@ rebuild_large_snap(void **state)
 	daos_epoch_t	snap_epoch[100];
 	int		i;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -1036,8 +1022,7 @@ rebuild_full_shards(void **state)
 	struct ioreq	req;
 	int		i;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	/* require 4 nodes and 8 targets per node */
@@ -1082,8 +1067,7 @@ rebuild_punch_recs(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -1123,8 +1107,7 @@ rebuild_multiple_group(void **state)
 	int			i;
 	int			rc;
 
-	if (!test_runable(arg, 7))
-		return;
+	test_runable_or_skip(arg, 7);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, OC_RP_2G4, 0, 0, arg->myrank);
@@ -1185,8 +1168,7 @@ rebuild_with_large_offset(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -1234,8 +1216,7 @@ rebuild_with_large_key(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -1284,8 +1265,7 @@ rebuild_with_dfs_open_create_punch(void **state)
 	daos_size_t	chunk_size = 1048576;
 	int		rc;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	T_BEGIN();
 	dfs_attr_t attr = {};
@@ -1375,8 +1355,7 @@ rebuild_many_objects_with_failure(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	T_BEGIN();
 	D_ALLOC_ARRAY(oids, 8000);
@@ -1468,9 +1447,7 @@ rebuild_object_with_csum_error(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 3)) {
-		skip();
-	}
+	test_runable_or_skip(arg, 3);
 
 	T_BEGIN();
 
@@ -1755,8 +1732,7 @@ rebuild_with_dfs_inflight_append(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	T_BEGIN();
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
@@ -1818,8 +1794,7 @@ rebuild_with_dfs_inflight_punch(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	T_BEGIN();
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
@@ -1904,8 +1879,7 @@ rebuild_with_dfs_inflight_append_punch(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	T_BEGIN();
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
@@ -1983,8 +1957,7 @@ rebuild_with_dfs_inflight_punch_create(void **state)
 	struct stat	st;
 	int		rc;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	T_BEGIN();
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");

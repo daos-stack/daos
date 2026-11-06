@@ -1229,8 +1229,7 @@ ec_array_key_query(void **state)
 	int			rc;
 
 	par_barrier(PAR_COMM_WORLD);
-	if (!test_runable(arg, 6))
-		skip();
+	test_runable_or_skip(arg, 6);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, typeb, 0, arg->myrank);
 

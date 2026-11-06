@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,8 +32,7 @@ upgrade_ec_parity_rotate(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	if (arg->myrank == 0) {
 		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -99,8 +99,7 @@ upgrade_ec_parity_rotate_single_dkey(void **state)
 	char		buf[10];
 	int		rc;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	if (arg->myrank == 0) {
 		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,

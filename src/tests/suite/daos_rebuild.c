@@ -47,8 +47,7 @@ rebuild_drop_scan(void **state)
 	int              rc;
 	int              i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -86,8 +85,7 @@ rebuild_retry_rebuild(void **state)
 	int		tgt = DEFAULT_FAIL_TGT;
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -119,8 +117,7 @@ rebuild_retry_for_stale_pool(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -157,8 +154,7 @@ rebuild_drop_obj(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -189,8 +185,7 @@ rebuild_update_failed(void **state)
 	int		tgt = DEFAULT_FAIL_TGT;
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -220,8 +215,7 @@ rebuild_multiple_pools(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	args[0] = arg;
 	/* create/connect another pool */
@@ -320,8 +314,7 @@ rebuild_destroy_container(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	/* create/connect another pool */
 	rc = rebuild_pool_create(&new_arg, arg, SETUP_CONT_CONNECT, NULL);
@@ -352,8 +345,7 @@ rebuild_close_container(void **state)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	/* create/connect another pool */
 	rc = rebuild_pool_create(&new_arg, arg, SETUP_CONT_CONNECT, NULL);
@@ -418,8 +410,7 @@ rebuild_destroy_pool_internal(void **state, uint64_t fail_loc)
 	int		i;
 	int		rc;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	rc = rebuild_pool_create(&new_arg, arg, SETUP_CONT_CONNECT, NULL);
 	if (rc)
@@ -466,8 +457,7 @@ rebuild_iv_tgt_fail(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -498,8 +488,7 @@ rebuild_tgt_start_fail(void **state)
 	d_rank_t	exclude_rank = 0;
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -528,8 +517,7 @@ rebuild_send_objects_fail(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -598,8 +586,7 @@ rebuild_tgt_pool_disconnect_internal(void **state, unsigned int fail_loc)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -668,8 +655,7 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -720,8 +706,7 @@ rebuild_offline(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -751,8 +736,7 @@ rebuild_offline_empty(void **state)
 	test_arg_t	*new_arg = NULL;
 	int		rc;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	rc = rebuild_pool_create(&new_arg, arg, SETUP_POOL_CREATE, NULL);
 	if (rc)
@@ -794,7 +778,7 @@ rebuild_master_change_during_scan(void **state)
 	int		i;
 
 	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr == 1)
-		return;
+		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -825,7 +809,7 @@ rebuild_master_change_during_rebuild(void **state)
 	int		i;
 
 	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr == 1)
-		return;
+		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -875,7 +859,7 @@ rebuild_nospace(void **state)
 	int		i;
 
 	if (!test_runable(arg, 6) || true) /* skip for now */
-		return;
+		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -912,8 +896,7 @@ rebuild_multiple_tgts(void **state)
 	int		rc;
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
 				arg->myrank);
@@ -1010,7 +993,7 @@ rebuild_master_failure(void **state)
 	/* need 5 svc replicas, as will kill the leader 2 times */
 	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 5) {
 		print_message("testing skipped ...\n");
-		return;
+		skip();
 	}
 
 	test_get_leader(arg, &ranks_to_kill[0]);
@@ -1088,8 +1071,7 @@ rebuild_multiple_failures(void **state)
 	daos_obj_id_t	cb_arg_oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -1128,7 +1110,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	int		rc;
 
 	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 5)
-		return;
+		skip();
 
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R2S_SPEC_RANK, 0, 0,
 				arg->myrank);
@@ -1190,7 +1172,7 @@ rebuild_fail_all_replicas(void **state)
 	 */
 	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 7) {
 		print_message("need at least 7 svcs, -s7\n");
-		return;
+		skip();
 	}
 
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
@@ -1238,8 +1220,7 @@ multi_pools_rebuild_concurrently(void **state)
 	int			i;
 	int			rc;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	memset(args, 0, sizeof(args[0]) * POOL_NUM * CONT_PER_POOL);
 	for (i = 0; i < POOL_NUM * CONT_PER_POOL; i++) {
@@ -1302,8 +1283,7 @@ rebuild_kill_rank_during_rebuild(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
@@ -1345,7 +1325,7 @@ rebuild_kill_PS_leader_during_rebuild(void **state)
 
 	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 5) {
 		print_message("need at least 5 svcs, -s5\n");
-		return;
+		skip();
 	}
 
 	test_get_leader(arg, &leader);
@@ -1409,8 +1389,7 @@ reintegrate_failure_and_retry(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	for (i = 0; i < 20; i++)
 		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3GX, 0,
@@ -1445,7 +1424,7 @@ rebuild_kill_more_RF_ranks(void **state)
 
 	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 7) {
 		print_message("need at least 7 svcs, -s7\n");
-		return;
+		skip();
 	}
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -1500,8 +1479,7 @@ rebuild_delay_and_reintegrate(void **state)
 	int		rc;
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude\\;delay_rebuild");
 	assert_rc_equal(rc, 0);
@@ -1534,8 +1512,7 @@ rebuild_delay_and_extend(void **state)
 	int		rc;
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude\\;delay_rebuild");
 	assert_rc_equal(rc, 0);
@@ -1572,8 +1549,7 @@ rebuild_cont_destroy_and_reintegrate(void **state)
 	int		rc;
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
@@ -1602,8 +1578,7 @@ rebuild_incr_reint_basic(void **state)
 	int		rc;
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration", "incremental");
 	assert_rc_equal(rc, 0);
@@ -1640,7 +1615,7 @@ rebuild_long_scan_hang(void **state)
 
 	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 5) {
 		print_message("need at least 5 svcs, -s5\n");
-		return;
+		skip();
 	}
 
 	print_message("inject DAOS_REBUILD_TGT_SCAN_HANG fault into engine rank %u\n", fault_rank);
