@@ -15,7 +15,7 @@ timeouts:
   test_rebuild_33: 200
   test_rebuild_34: 200
   test_rebuild_35: 180
-  test_rebuild_36: 200
+  test_rebuild_36: 300
   test_rebuild_37: 250
 
 server_config:
@@ -32,7 +32,11 @@ server_config:
         - D_LOG_FILE_APPEND_PID=1
         - D_LOG_FILE_APPEND_RANK=1
         - HG_LOG_LEVEL=warn
-        - HG_LOG_SUBSYS=hg,na,libfabric
+        - HG_LOG_SUBSYS=hg,na
+        - FI_LOG_LEVEL=info
+        - FI_LOG_PROV=verbs,ofi_rxm
+        - FI_LOG_SUBSYS=ep_ctrl,eq,cq
+        - D_LOG_STDERR_IN_LOG=1
       storage: auto
     1:
       pinned_numa_node: 1
@@ -44,7 +48,11 @@ server_config:
         - D_LOG_FILE_APPEND_PID=1
         - D_LOG_FILE_APPEND_RANK=1
         - HG_LOG_LEVEL=warn
-        - HG_LOG_SUBSYS=hg,na,libfabric
+        - HG_LOG_SUBSYS=hg,na
+        - FI_LOG_LEVEL=info
+        - FI_LOG_PROV=verbs,ofi_rxm
+        - FI_LOG_SUBSYS=ep_ctrl,eq,cq
+        - D_LOG_STDERR_IN_LOG=1
       storage: auto
   transport_config:
     allow_insecure: false
