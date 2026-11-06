@@ -755,6 +755,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	D_INIT_LIST_HEAD(&cont->sc_dtx_cos_list);
 	D_INIT_LIST_HEAD(&cont->sc_dtx_coll_list);
 	D_INIT_LIST_HEAD(&cont->sc_dtx_batched_list);
+	D_INIT_LIST_HEAD(&cont->sc_dtx_resync_pending);
 
 	rc = cont_tgt_track_eph_init(cont);
 	if (rc != 0) {
@@ -788,6 +789,14 @@ cont_child_free_ref(struct daos_llink *llink)
 
 	D_DEBUG(DB_MD, DF_CONT": freeing\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+
+	if (unlikely(!d_list_empty(&cont->sc_dtx_resync_pending))) {
+		struct dtx_resync_entry *dre;
+
+		while ((dre = d_list_pop_entry(&cont->sc_dtx_resync_pending,
+					       struct dtx_resync_entry, dre_link)) != NULL)
+			dtx_dre_release(dre);
+	}
 
 	cont_tgt_track_eph_fini(cont);
 	vos_cont_close(cont->sc_hdl);
@@ -1092,6 +1101,9 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		ds_cont_child_get(cont_child);
 		if (started)
 			*started = true;
+
+		vos_set_dtx_resync_version(cont_child->sc_hdl,
+					   pool_child->spc_pool->sp_dtx_resync_version, false);
 	}
 
 	if (!rc && cont_out != NULL) {
@@ -1650,22 +1662,6 @@ ds_cont_child_put(struct ds_cont_child *cont)
 	cont_child_put(tls->dt_cont_cache, cont);
 }
 
-static void
-ds_dtx_resync(void *arg)
-{
-	struct ds_cont_child *cont = arg;
-	int                   rc;
-
-	rc = dtx_resync(cont->sc_pool->spc_hdl, cont, cont->sc_pool->spc_map_version, false);
-	if (rc != 0)
-		D_WARN("Fail to resync some DTX(s) for the pool/cont " DF_UUID "/" DF_UUID
-		       " that may affect subsequent "
-		       "operations: rc = " DF_RC "\n",
-		       DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), DP_RC(rc));
-
-	ds_cont_child_put(cont);
-}
-
 int
 ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid, bool locked,
 			  struct ds_cont_child **cont)
@@ -1818,33 +1814,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	added = true;
 
-	/* It is possible to sync DTX status before destroy the CoS for close
-	 * the container. But that may be not enough. Because the server may
-	 * crashed before closing the container. Then the DTXs' status in the
-	 * CoS cache will be lost. So we need to re-sync the DTXs status when
-	 * open the container for the first time (not for cached open handle).
-	 *
-	 * On the other hand, even if we skip the DTX sync before destroy the
-	 * CoS cache when close the container, resync DTX when open container
-	 * is enough to guarantee related data records' visibility. That also
-	 * simplify the DTX logic.
-	 *
-	 * XXX: The logic is related with DAOS server re-intergration, but we
-	 *	do not support that currently. Then resync DTX when container
-	 *	open will be used as temporary solution for DTX related logic.
-	 *
-	 * We do not trigger dtx_resync() when start the server. Because:
-	 * 1. Currently, we do not support server re-integrate after restart.
-	 * 2. A server may has multiple pools and each pool may has multiple
-	 *    containers. These containers may not related with one another.
-	 *    Make all the DTXs resync together during the server start will
-	 *    cause the DTX resync time to be much longer than resync against
-	 *    single container just when use (open) it. On the other hand, if
-	 *    some servers are ready for dtx_resync, but others may not start
-	 *    yet, then the ready ones may have to wait or failed dtx_resync.
-	 *    Both cases are not expected.
-	 */
-
 	cont->sc_open++;
 	if (cont->sc_open > 1)
 		goto opened;
@@ -1865,13 +1834,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			  DP_UUID(cont_uuid), cont->sc_open);
 		cont->sc_open--;
 		D_GOTO(err_cont, rc);
-	}
-
-	ds_cont_child_get(cont);
-	rc = dss_ult_create(ds_dtx_resync, cont, DSS_XS_SELF, 0, 0, NULL);
-	if (rc != 0) {
-		ds_cont_child_put(cont);
-		D_GOTO(err_dtx, rc);
 	}
 
 	rc = ds_cont_csummer_init(cont);
