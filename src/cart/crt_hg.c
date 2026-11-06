@@ -1253,11 +1253,12 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rc = crt_hg_unpack_header(hg_hdl, &rpc_tmp, &proc);
 	if (unlikely(rc != 0)) {
 		D_ERROR("crt_hg_unpack_header failed, rc: %d.\n", rc);
-		D_GOTO(reply_error, rc = -DER_MISC);
+		HG_Destroy(rpc_tmp.crp_hg_hdl);
+		return HG_PROTOCOL_ERROR;
 	}
 
 	D_ASSERT(proc != NULL);
-	opc                    = rpc_tmp.crp_req_hdr.cch_opc;
+	opc                    = rpc_tmp.crp_req_hdr.crh_opc;
 	rpc_tmp.crp_pub.cr_opc = opc;
 
 	/* allocate rpc struct for a given opcode; in/out size will vary per opc */
@@ -1276,14 +1277,11 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	opc_info = rpc_priv->crp_opc_info;
 	rpc_pub = &rpc_priv->crp_pub;
 
-	/* populate rpc_priv based on raw header values in rpc_tmp.
-	 * perform conversion to either a timeout or deadline based on header
-	 * feature flag and set rpc_priv fields accordingly
-	 * returns error if an rpc is determined to be expired already
-	 */
+	/* Populate RPC state and reject requests whose absolute deadline has expired. */
 	rc = crt_hg_process_header(&rpc_tmp, rpc_priv);
 	if (unlikely(rc != 0)) {
-		RPC_WARN(rpc_priv, "RPC expired. Deadline was %d\n", rpc_priv->crp_deadline_sec);
+		RPC_WARN(rpc_priv, "RPC expired. Deadline was " DF_U64 " seconds\n",
+			 rpc_priv->crp_deadline_sec);
 
 		crt_hg_unpack_cleanup(proc);
 		crt_rpc_priv_free(rpc_priv);
@@ -1296,8 +1294,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 
 	rpc_priv->crp_fail_hlc = rpc_tmp.crp_fail_hlc;
-	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
-	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
+	rpc_pub->cr_ep.ep_rank = crt_req_dst_rank(&rpc_priv->crp_req_hdr);
+	rpc_pub->cr_ep.ep_tag  = crt_req_dst_tag(&rpc_priv->crp_req_hdr);
 
 	RPC_TRACE(DB_ALL, rpc_priv, "(opc: %#x rpc_pub: %p) allocated per RPC request received.\n",
 		  rpc_priv->crp_opc_info->coi_opc, &rpc_priv->crp_pub);
@@ -1313,8 +1311,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		rc = crt_hg_unpack_body(rpc_priv, proc);
 		if (rc == 0) {
 			rpc_priv->crp_input_got = 1;
-			rpc_pub->cr_ep.ep_grp = NULL;
-			/* TODO lookup by rpc_priv->crp_req_hdr.cch_grp_id */
+			rpc_pub->cr_ep.ep_grp   = NULL;
 		} else {
 			DHL_ERROR(rpc_priv, rc, "crt_hg_unpack_body failed, opc: %#x",
 				  rpc_pub->cr_opc);
@@ -1522,7 +1519,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 			hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle, &rpc_pub->cr_output);
 			if (hg_ret == HG_SUCCESS) {
 				rpc_priv->crp_output_got = 1;
-				rc = rpc_priv->crp_reply_hdr.cch_rc;
+				rc                       = rpc_priv->crp_reply_hdr.crh_status;
 			} else {
 				rc = crt_hgret_2_der(hg_ret);
 				RPC_ERROR(rpc_priv, "HG_Get_output failed, hg_ret: " DF_HG_RC "\n",
@@ -1708,7 +1705,7 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	D_ASSERT(error_code != 0);
 
 	hg_out_struct = &rpc_priv->crp_pub.cr_output;
-	rpc_priv->crp_reply_hdr.cch_rc = error_code;
+	rpc_priv->crp_reply_hdr.crh_status = error_code;
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, NULL, NULL, hg_out_struct);
 	if (hg_ret != HG_SUCCESS) {
 		CRT_METRIC_INC(crt_ctx, CM_RPC_REPLY_FAILED);
