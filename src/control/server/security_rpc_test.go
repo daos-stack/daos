@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2022 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
@@ -29,7 +31,11 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
+	sectest "github.com/daos-stack/daos/src/control/security/test"
 )
+
+// testMachineName is the node name baked into the test cert chain.
+const testMachineName = "testnode"
 
 func TestSrvSecurityModule_ID(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
@@ -362,4 +368,174 @@ func TestSrvSecurityModule_ValidateCred_Secure_BadVerifier(t *testing.T) {
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
 		Status: int32(daos.NoPermission),
 	})
+}
+
+type nodeCertHarness struct {
+	mod      *SecurityModule
+	poolUUID uuid.UUID
+	poolCA   []byte
+	certDir  string
+	log      logging.Logger
+}
+
+func newNodeCertHarness(t *testing.T, log logging.Logger, maxSkew time.Duration) *nodeCertHarness {
+	t.Helper()
+
+	tmpDir, cleanup := test.CreateTestDir(t)
+	t.Cleanup(cleanup)
+
+	poolUUID := uuid.MustParse("12345678-1234-1234-1234-123456789abc")
+	rootPEM, rootKey := sectest.NewCA(t, "Test DAOS CA", nil, nil)
+	poolCA, err := security.GeneratePoolCA(poolUUID, sectest.ParseCert(t, rootPEM), rootKey, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h := &nodeCertHarness{
+		poolUUID: poolUUID,
+		poolCA:   poolCA.CertPEM,
+		certDir:  tmpDir,
+		log:      log,
+	}
+
+	leafPEM, leafKeyPEM := sectest.NewLeaf(t, security.PoolCertCNPrefixNode+testMachineName,
+		poolCA.Cert, poolCA.Key, time.Now().Add(-time.Minute), time.Now().Add(time.Hour))
+	certPath, keyPath := security.NodeCertPaths(tmpDir, poolUUID)
+	sectest.WriteCertFiles(t, certPath, keyPath, leafPEM, leafKeyPEM)
+
+	caPath := filepath.Join(tmpDir, "daosCA.crt")
+	if err := os.WriteFile(caPath, rootPEM, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tc := &security.TransportConfig{}
+	tc.CARootPath = caPath
+	tc.CertMaxClockSkew = maxSkew
+	h.mod = NewSecurityModule(log, tc)
+
+	return h
+}
+
+func (h *nodeCertHarness) validReq(t *testing.T, handle uuid.UUID) *auth.ValidateNodeCertReq {
+	t.Helper()
+
+	loader := security.NewNodeCertLoader(h.certDir)
+	cert, pop, payload, err := loader.CertAndPoP(h.log, h.poolUUID, handle, testMachineName)
+	if err != nil {
+		t.Fatalf("CertAndPoP: %v", err)
+	}
+	return &auth.ValidateNodeCertReq{
+		PoolCa:      h.poolCA,
+		NodeCert:    cert.PEM,
+		PopSig:      pop,
+		PopPayload:  payload,
+		PoolUuid:    h.poolUUID[:],
+		MachineName: testMachineName,
+	}
+}
+
+func (h *nodeCertHarness) callValidate(t *testing.T, req *auth.ValidateNodeCertReq) *auth.ValidateNodeCertResp {
+	t.Helper()
+
+	body, err := proto.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	respBytes, err := h.mod.processValidateNodeCert(body)
+	if err != nil {
+		t.Fatalf("processValidateNodeCert: %v", err)
+	}
+	resp := &auth.ValidateNodeCertResp{}
+	if err := proto.Unmarshal(respBytes, resp); err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+func TestSrvSecurityModule_ValidateNodeCert_StatusMapping(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	h := newNodeCertHarness(t, log, security.DefaultCertMaxClockSkew)
+	handle := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+	for name, tc := range map[string]struct {
+		mutate    func(*auth.ValidateNodeCertReq)
+		expStatus daos.Status
+	}{
+		"valid": {
+			mutate:    func(r *auth.ValidateNodeCertReq) {},
+			expStatus: daos.Status(0),
+		},
+		"garbage cert": {
+			mutate:    func(r *auth.ValidateNodeCertReq) { r.NodeCert = []byte("not a PEM") },
+			expStatus: daos.BadCert,
+		},
+		"machine name mismatch": {
+			mutate:    func(r *auth.ValidateNodeCertReq) { r.MachineName = "someone-else" },
+			expStatus: daos.BadCert,
+		},
+		"tampered payload": {
+			mutate: func(r *auth.ValidateNodeCertReq) {
+				r.PopPayload = r.PopPayload[:8]
+			},
+			expStatus: daos.NoPermission,
+		},
+		"payload bound to other pool": {
+			mutate: func(r *auth.ValidateNodeCertReq) {
+				other := uuid.MustParse("99999999-9999-9999-9999-999999999999")
+				r.PoolUuid = other[:]
+			},
+			expStatus: daos.NoPermission,
+		},
+		"unreadable watermarks": {
+			mutate: func(r *auth.ValidateNodeCertReq) {
+				r.CertWatermarks = []byte("{not json")
+			},
+			expStatus: daos.IOError,
+		},
+		"revoked by watermark": {
+			mutate: func(r *auth.ValidateNodeCertReq) {
+				r.CertWatermarks = []byte(fmt.Sprintf("{%q:%q}", security.PoolCertCNPrefixNode+testMachineName, time.Now().Add(time.Minute).Format(time.RFC3339)))
+			},
+			expStatus: daos.BadCert,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := h.validReq(t, handle)
+			tc.mutate(req)
+			resp := h.callValidate(t, req)
+			test.AssertEqual(t, resp.Status, int32(tc.expStatus), "status didn't match")
+		})
+	}
+}
+
+func TestSrvSecurityModule_ValidateNodeCert_Stale(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	h := newNodeCertHarness(t, log, time.Nanosecond)
+	req := h.validReq(t, uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"))
+	resp := h.callValidate(t, req)
+	test.AssertEqual(t, resp.Status, int32(daos.NoPermission), "status didn't match")
+}
+
+func TestSrvSecurityModule_ValidateNodeCert_BadDAOSCA(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	h := newNodeCertHarness(t, log, security.DefaultCertMaxClockSkew)
+	h.mod.config.CARootPath = "/nonexistent/daosCA.crt"
+	resp := h.callValidate(t, h.validReq(t, uuid.New()))
+	test.AssertEqual(t, resp.Status, int32(daos.NoCert), "status didn't match")
+}
+
+func TestSrvSecurityModule_ValidateNodeCert_BadBody(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	h := newNodeCertHarness(t, log, security.DefaultCertMaxClockSkew)
+	if _, err := h.mod.processValidateNodeCert([]byte("junk that is not a proto")); err == nil {
+		t.Fatal("expected error for unparsable body")
+	}
 }
