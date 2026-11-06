@@ -21,7 +21,7 @@ import groovy.transform.Field
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@ryon-jensen/SRE-4189-run-ci-sha') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -711,6 +711,13 @@ pipeline {
     }
 
     stages {
+        // Must run before any stage that executes scripts from the PR
+        stage('Check /run-ci Commit') {
+            when { changeRequest() }
+            steps {
+                runCiShaCheck()
+            }
+        }
         stage('Prepare') {
             parallel {
                 stage('Set Description') {
