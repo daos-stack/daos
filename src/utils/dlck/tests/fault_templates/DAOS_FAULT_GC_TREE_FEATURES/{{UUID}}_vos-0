@@ -15,5 +15,6 @@ Check pool:
 - Pool extension (off=0x400550)... ok.
 - Garbage collector's tree...
 -- Tree class... ok.
--- error: Tree features... Unsupported features 1/3
+-- Tree features... error: Unsupported features 1/3
+
 - error: Garbage collector's tree: DER_PROTO(-1014): 'Incompatible protocol'

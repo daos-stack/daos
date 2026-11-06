@@ -14,5 +14,6 @@ Check pool:
 - Containers tree: ok.
 - Pool extension (off=0x400550)... ok.
 - Garbage collector's tree...
--- error: Tree class... Unregistered class id 28
+-- Tree class... error: Unregistered class id 28
+
 - error: Garbage collector's tree: DER_NONEXIST(-1005): 'The specified entity does not exist'

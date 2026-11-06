@@ -8,5 +8,6 @@ Check pool:
 - Version... ok.
 - UUID... ok.
 - Containers tree...
--- error: Tree class... Invalid class id: 14
+-- Tree class... error: Invalid class id: 14
+
 - error: Containers tree: DER_INVAL(-1003): 'Invalid parameters'

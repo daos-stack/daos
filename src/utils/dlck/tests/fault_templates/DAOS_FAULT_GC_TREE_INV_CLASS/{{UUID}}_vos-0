@@ -14,5 +14,6 @@ Check pool:
 - Containers tree: ok.
 - Pool extension (off=0x400550)... ok.
 - Garbage collector's tree...
--- error: Tree class... Invalid class id: 28
+-- Tree class... error: Invalid class id: 28
+
 - error: Garbage collector's tree: DER_INVAL(-1003): 'Invalid parameters'
