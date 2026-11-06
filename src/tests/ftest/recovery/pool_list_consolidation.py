@@ -378,7 +378,7 @@ class PoolListConsolidationTest(TestWithServers):
         self.register_cleanup(self.clean_mounts, tmpfs_mounts=tmpfs_mounts)
 
         self.log_step("MD-on-SSD: Load pool dir to /mnt/daos2 and daos3 for all servers.")
-        for host in list(self.hostlist_servers):
+        for host in self.hostlist_servers:
             # We need to call ddb prov_mem for all servers, so use new DdbCommand object with
             # each host.
             ddb_command = DdbCommand(server_host=host, path=self.bin, vos_path='""')
@@ -395,7 +395,7 @@ class PoolListConsolidationTest(TestWithServers):
             self.log_step("Remove all discovered rdb-pool from /mnt/daos2 and /mnt/daos3")
         count = 0
         # Iterate both pool mount points of both ranks. I.e., 4 ranks total.
-        for host in list(self.hostlist_servers):
+        for host in self.hostlist_servers:
             for rdb_pool_path in new_rdb_pool_paths:
                 if remove_rdb_pool_count and count == remove_rdb_pool_count:
                     break
@@ -450,7 +450,7 @@ class PoolListConsolidationTest(TestWithServers):
         self.log.info("orig_rdb_pool_paths = %s", orig_rdb_pool_paths)
         count = 0
         # Iterate both pool mount points of both ranks. I.e., 4 ranks total.
-        for host in list(self.hostlist_servers):
+        for host in self.hostlist_servers:
             for rdb_pool_path in orig_rdb_pool_paths:
                 if remove_rdb_pool_count and count == remove_rdb_pool_count:
                     break
@@ -525,7 +525,7 @@ class PoolListConsolidationTest(TestWithServers):
         self.log_step(
             "Show that rdb-pool are recovered. i.e., three out of four ranks should have rdb-pool.")
         count = 0
-        for host in list(self.hostlist_servers):
+        for host in self.hostlist_servers:
             for rdb_pool_path in orig_rdb_pool_paths:
                 node = NodeSet(host)
                 check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
