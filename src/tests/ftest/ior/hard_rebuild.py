@@ -79,11 +79,11 @@ class EcodIorHardRebuild(ErasureCodeIor):
         self.ior_read_dataset(parity=2)
 
         # Verify the container can be destroyed; retry if necessary
-        self.log_step("Verify the container can be destroyed; retry if necessary")
+        self.log_step(f"Verify the {self.nvme_local_cont} container can be destroyed")
         retry = 3
         while retry > 0:
             try:
-                self.container.destroy()
+                self.nvme_local_cont.destroy()
                 break
             except TestFail as error:
                 retry -= 1
