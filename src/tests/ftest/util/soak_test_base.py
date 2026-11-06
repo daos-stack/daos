@@ -1,6 +1,6 @@
 """
 (C) Copyright 2019-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -447,6 +447,8 @@ class SoakTestBase(TestWithServers):
                     elif "vpic" in job:
                         commands = create_app_cmdline(self, job, pool, ppn, npj)
                     elif "lammps" in job:
+                        commands = create_app_cmdline(self, job, pool, ppn, npj)
+                    elif "e3smio" in job:
                         commands = create_app_cmdline(self, job, pool, ppn, npj)
                     elif "macsio" in job:
                         commands = create_macsio_cmdline(self, job, pool, ppn, npj)
