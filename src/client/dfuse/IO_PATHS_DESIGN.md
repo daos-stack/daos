@@ -430,6 +430,17 @@ Why this works:
 5. Any path calling `DFUSE_IE_WFLUSH` (for example read/getattr/close paths) waits for step 4 on all
    prior writes before proceeding.
 
+### 7.4.1 Asynchronous write-back error reporting
+
+- A failed wb write is logged and recorded on the inode (`ie_wb_error`, `ie_wb_error_seq`) by
+  `dfuse_wb_error_record()` before the shared lock is released, so a following `DFUSE_IE_WFLUSH`
+  always observes it.
+- Each open handle keeps a cursor (`doh_wb_error_seq`), sampled at open/create/lookup.
+- `dfuse_cb_flush()` (also used for fsync/fdatasync) calls `DFUSE_IE_WFLUSH`, then
+  `dfuse_wb_error_check()`, which returns the latest error once per handle if the inode sequence
+  is newer than the handle cursor. Later opens do not see earlier errors.
+- Error state is kept in the in-memory inode entry and is lost if the inode is forgotten.
+
 ### 7.5 What this guarantees and what it does not
 
 Guaranteed:
