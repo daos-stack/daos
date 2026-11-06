@@ -42,24 +42,27 @@ def run_build_test(self, cache_mode, il_lib=None):
     dfuse = get_dfuse(self, self.hostlist_clients)
 
     if cache_mode == 'writeback':
+        build_time *= 2
         cont_attrs['dfuse-data-cache'] = '1m'
         cont_attrs['dfuse-attr-time'] = cache_time
         cont_attrs['dfuse-dentry-time'] = cache_time
         cont_attrs['dfuse-ndentry-time'] = cache_time
     elif cache_mode == 'writethrough':
+        build_time *= 2
         cont_attrs['dfuse-data-cache'] = '1m'
         cont_attrs['dfuse-attr-time'] = cache_time
         cont_attrs['dfuse-dentry-time'] = cache_time
         cont_attrs['dfuse-ndentry-time'] = cache_time
         dfuse.disable_wb_cache.value = True
     elif cache_mode == 'metadata':
+        build_time *= 2
         cont_attrs['dfuse-data-cache'] = '1m'
         cont_attrs['dfuse-attr-time'] = cache_time
         cont_attrs['dfuse-dentry-time'] = cache_time
         cont_attrs['dfuse-ndentry-time'] = cache_time
         dfuse.disable_wb_cache.value = True
     elif cache_mode == 'data':
-        build_time *= 2
+        build_time *= 4
         cont_attrs['dfuse-data-cache'] = '1m'
         cont_attrs['dfuse-attr-time'] = '0'
         cont_attrs['dfuse-dentry-time'] = '0'

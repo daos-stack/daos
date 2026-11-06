@@ -32,7 +32,7 @@ class DFuse():
     # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
                  caching=True, wbcache=True, multi_user=False, ro=False, dump_h=False,
-                 read_h=False, file_h=None):
+                 read_h=False, file_h=None, extra_args=None):
         if mount_path:
             self.dir = mount_path
         else:
@@ -63,6 +63,7 @@ class DFuse():
         self.dump_h = dump_h
         self.read_h = read_h
         self.file_h = file_h
+        self.extra_args = extra_args or []
 
         self.valgrind = None
         os.makedirs(self.dir, exist_ok=True)
@@ -141,6 +142,8 @@ class DFuse():
 
         if self._ro:
             cmd.append('--read-only')
+
+        cmd.extend(self.extra_args)
 
         if self.uns_path:
             cmd.extend(['--path', self.uns_path])
