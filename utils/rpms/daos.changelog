@@ -1,4 +1,7 @@
 %changelog
+* Thu Nov 05 2026 Jerome Soumagne <jerome.soumagne@hpe.com> - 2.8.1-5
+- Remove boost-devel dependency (now uses internal headers)
+
 * Mon Oct 19 2026 Phillip Henderson <phillip.henderson@hpe.com> 2.8.1-4
 - Fourth release candidate for 2.8.1
 

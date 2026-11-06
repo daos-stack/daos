@@ -25,7 +25,7 @@
 
 Name:          daos
 Version:       2.8.1
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -55,11 +55,9 @@ BuildRequires: bullseye
 %if (0%{?rhel} >= 8)
 BuildRequires: argobots-devel >= %{argobots_version}
 BuildRequires: json-c-devel
-BuildRequires: boost-python3-devel
 %else
 BuildRequires: libabt-devel >= %{argobots_version}
 BuildRequires: libjson-c-devel
-BuildRequires: boost-devel
 %endif
 %if %{with server}
 BuildRequires: libpmemobj-devel >= 2.1.3
