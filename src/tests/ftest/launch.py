@@ -740,7 +740,7 @@ def main():
         args.overwrite_config = True    # to ensure CI expected path is used for test results
         args.process_cores = True
         args.rename = True
-        args.sparse = True
+        args.sparse = False
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
         args.slurm_install = True
