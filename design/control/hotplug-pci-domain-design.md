@@ -51,7 +51,7 @@ A production dual-socket server had two engines, each pinned to a different NUMA
 
 ### 4.1 Filter resolution order
 
-Three sources are evaluated in priority order by `setHotplugRange()`:
+Three sources are evaluated in priority order by `setHotplugRanges()`:
 
 1. If `VMDEnabled`, **no `bdev_hotplug_range` entries are configured at all** — the SPDK `hotplug_busid_range` method is simply not invoked, so the filter defaults to allow-all for this engine (VMD backing devices may use a synthetic domain unrelated to their NUMA node, so no PCI-domain/bus-ID restriction is meaningful here).
 2. Otherwise, an explicit `bdev_hotplug_range` (or legacy `bdev_busid_range`, converted per Section 4.2) is used if present.
@@ -80,14 +80,15 @@ Both `domain-part` and `bus-part` are **mandatory** in every entry — there is 
 - If only `bdev_busid_range` is set, it is converted to a single-entry `bdev_hotplug_range` with the parsed `begin`-`end` bus-ID range on domain `0000`.
 - If only `bdev_hotplug_range` is set, it is used as-is.
 - If **both** are set for the same storage tier, config validation fails with an explicit error naming the tier — administrators must migrate fully to `bdev_hotplug_range` rather than mixing the two parameters.
+- The filter is engine-wide rather than per-tier, so `bdev_hotplug_range`/`bdev_busid_range` may be set manually on **at most one** of an engine's bdev tiers; setting either on more than one bdev tier is likewise rejected at config validation time (`TierConfigs.Validate()`).
 
 ### 4.3 Auto-derivation
 
-When neither `VMDEnabled` nor an explicit `bdev_hotplug_range`/`bdev_busid_range` is configured, the filter is auto-derived directly from the engine's configured `bdev_list`, using PCI topology information to resolve each `bdev_list` address's domain: emit multiple `bdev_hotplug_range` entries per domain covering contiguous and non-contiguous ranges of `bdev_list` addresses. This replaces NUMA-node/host-bridge-topology-based derivation (which could be broader than what the engine owns, or fail outright on a NUMA node whose host bridges span multiple domains) with a derivation that is always precise and always succeeds for any valid `bdev_list`, including one spanning several non-zero domains. An administrator may instead manually configure `bdev_hotplug_range` (or legacy `bdev_busid_range`) to cover a range broader than `bdev_list`; manual configuration always takes priority over auto-derivation and is not validated against `bdev_list` (Section 5).
+When neither `VMDEnabled` nor an explicit `bdev_hotplug_range`/`bdev_busid_range` is configured, the filter is auto-derived directly from the combined `bdev_list` of every nvme-class bdev tier configured for the engine (not just the first tier, since an engine may have several, e.g. separate `wal` and `meta`/`data` tiers): within each distinct PCI domain present, consecutive bus-IDs are collapsed into a single range entry, while non-contiguous bus-IDs produce separate entries. This replaces NUMA-node/host-bridge-topology-based derivation (which could be broader than what the engine owns, or fail outright on a NUMA node whose host bridges span multiple domains) with a derivation that is always precise and always succeeds for any valid `bdev_list`, including one spanning several non-zero domains — subject to the `HOTPLUG_FILTER_MAX_ENTRIES` (64) cap on decoded entries per engine (Section 5). An administrator may instead manually configure `bdev_hotplug_range` (or legacy `bdev_busid_range`, on at most one bdev tier) to cover a range broader than `bdev_list`; manual configuration always takes priority over auto-derivation and is not validated against `bdev_list` (Section 5).
 
 ### 4.4 Wire format and SPDK/C filter
 
-`BdevWriteConfigRequest`/`HotplugFilterParams` (SPDK JSON config) carry a slice of entries, each with a single domain and a bus-ID range (`Domain`/`Begin`/`End` — no `IgnoreDomain` field, which is removed entirely), rather than a single object with a flag; a single `hotplug_busid_range` SPDK config method call takes an array parameter (zero or more entries), keeping one point of truth for the filter config. On the engine, `struct hotplug_filter_info` (`bio_config.c`) becomes an array + count of `{domain, begin, end}` entries (`ignore_domain` removed), decoded via `spdk_json_decode_array` (an existing pattern elsewhere in this file). `hotplug_filter_fn()` loops over all entries, accepting a device if **any** entry matches:
+`BdevWriteConfigRequest`/`HotplugFilterParams` (SPDK JSON config) carry a slice of entries, each with a single domain and a bus-ID range (`Domain`/`Begin`/`End` — no `IgnoreDomain` field, which is removed entirely), rather than a single object with a flag; a single `hotplug_busid_range` SPDK config method call takes an array parameter (zero or more entries), keeping one point of truth for the filter config. On the engine, `struct hotplug_filter_info` (`bio_config.c`) becomes an array + count of `{domain, begin, end}` entries (`ignore_domain` removed), decoded via `spdk_json_decode_array` through this PR's new `decode_daos_array()` helper. `hotplug_filter_fn()` loops over all entries, accepting a device if **any** entry matches:
 
 ```c
 addr->domain == entry->domain && entry->begin <= addr->bus <= entry->end
@@ -110,18 +111,18 @@ No existing field is removed; `bdev_busid_range` remains valid, always interpret
 
 On the `daos_nvme.conf` (engine JSON config) side, **no backward-compatible matching of older on-disk shapes is implemented**. The prior design's `ignore_domain`/absent-key-defaults-to-a-guessed-domain behavior is exactly the class of lenient, ambiguous matching that caused DAOS-19772 (Section 2.2) — an engine silently accepting a hotplug event it should not have claimed. Reintroducing that kind of guesswork purely to tolerate an old-shape config file would reintroduce the same risk. Instead:
 
-- The control plane regenerates `daos_nvme.conf` with the current `hotplug_busid_range` array shape on every engine start via `WriteNvmeConfig`/`UpgradeBdevConfig`, so in normal operation the engine never encounters an older shape.
+- The control plane regenerates `daos_nvme.conf` with the current `hotplug_busid_range` array shape at format time (`WriteNvmeConfig`) and, at engine start, whenever the existing file cannot be parsed (`UpgradeBdevConfig` falls back to `WriteNvmeConfig`), so in normal operation the engine never encounters an older shape.
 - `ControlMetadata.AllowSpdkConfOverride` is not supported in combination with a `daos_nvme.conf` predating this design — administrators using the override must regenerate the file (disable the override once, let the control plane rewrite it, then re-enable if still required) before upgrading to an engine binary that expects the array shape. This is a deliberate restriction, not an oversight.
 
 VMD's external behavior is unchanged throughout.
 
 ## 7. External Interfaces
 
-- `daos_server.yml` gains a new `bdev_hotplug_range` parameter (mandatory-domain, multi-entry list syntax); the existing `bdev_busid_range` parameter is kept as a deprecated legacy alias (Section 4.2). No `dmg`/API surface changes — this is purely an engine-config and SPDK-filter-internal change.
+- `daos_server.yml` does not document `bdev_hotplug_range` (it is an undocumented, experimental escape hatch — Section 5); the existing `bdev_busid_range` example is removed from `daos_server.yml`, though the parameter itself is kept as a deprecated legacy alias (Section 4.2). No `dmg`/API surface changes — this is purely an engine-config and SPDK-filter-internal change.
 
 ## 8. Testing and Validation
 
-Unit test coverage, across `bdev_test.go`, `config_test.go`, `provider_test.go`, and `bdev/backend_json_test.go` (plus C-side hotplug filter tests), needs to include: `bdev_list`-based multi-domain/multi-entry derivation; legacy `bdev_busid_range` conversion to a single `bdev_hotplug_range` entry on domain `0000`; the both-parameters-set validation error; overlapping-range validation; plain-hex notation parsing (including rejection of decimal input and rejection of domain ranges); single-value vs. range parsing for bus-ID; multi-entry JSON config round-tripping; and VMD configuring zero `bdev_hotplug_range` entries (not an `ignore_domain` wildcard entry). Manual validation should be performed on Gen-12 HPE hardware with a single engine's `bdev_list` spanning 2+ non-zero PCI domains, confirming per-domain precision and that an address absent from `bdev_list` is correctly ignored (Section 5), plus a regression pass against the existing VMD hotplug test suite.
+Unit test coverage, across `bdev_test.go`, `config_test.go`, `provider_test.go`, and `bdev/backend_json_test.go`/`bdev/backend_class_test.go`, includes: `bdev_list`-based multi-domain/multi-entry derivation across all of an engine's bdev tiers; legacy `bdev_busid_range` conversion to a single `bdev_hotplug_range` entry on domain `0000`; the both-parameters-set validation error (and the analogous error when manual ranges are set on more than one bdev tier); plain-hex notation parsing (including rejection of decimal input and rejection of domain ranges); single-value vs. range parsing for bus-ID; multi-entry JSON config round-tripping; and VMD configuring zero `bdev_hotplug_range` entries (not an `ignore_domain` wildcard entry). There is no dedicated C-side unit test for `hotplug_filter_fn()`; manual validation should be performed on Gen-12 HPE hardware with a single engine's `bdev_list` spanning 2+ non-zero PCI domains, confirming per-domain precision and that an address absent from `bdev_list` is correctly ignored (Section 5).
 
 ## 9. Risks, Mitigations and Future Work
 

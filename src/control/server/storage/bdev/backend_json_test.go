@@ -154,6 +154,22 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				},
 			},
 		},
+		"multiple controllers; hotplug enabled; multiple ranges on the same pci domain": {
+			class:         storage.ClassNvme,
+			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			enableHotplug: true,
+			hotplugRanges: []string{"0001:00-07", "0001:70-7f"},
+			expBdevCfgs:   multiCtrlrConfs(0, true),
+			expDaosCfgs: []*DaosConfig{
+				{
+					Method: storage.ConfSetHotplugBusidRange,
+					Params: &HotplugFilterParams{
+						{Domain: 0x0001, Begin: 0x00, End: 0x07},
+						{Domain: 0x0001, Begin: 0x70, End: 0x7f},
+					},
+				},
+			},
+		},
 		"multiple controllers; hotplug and vmd enabled": {
 			class:         storage.ClassNvme,
 			enableVmd:     true,

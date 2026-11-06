@@ -363,6 +363,18 @@ func (tcs TierConfigs) Validate() error {
 		}
 	}
 
+	manualTiers := 0
+	for _, cfg := range tcs.BdevConfigs() {
+		if len(cfg.Bdev.HotplugRanges) > 0 || (cfg.Bdev.BusidRange != nil &&
+			!cfg.Bdev.BusidRange.IsZero()) {
+			manualTiers++
+		}
+	}
+	if manualTiers > 1 {
+		return errors.New("bdev_hotplug_range/bdev_busid_range may only be set " +
+			"on one bdev tier per engine")
+	}
+
 	return tcs.validateBdevRoles()
 }
 
@@ -880,12 +892,6 @@ func NewBdevHotplugRange(entryStr string) (*BdevHotplugRange, error) {
 	if len(parts) != 2 {
 		return nil, errors.Errorf(
 			"invalid hotplug range entry %q, expected <domain>:<bus-id>", entryStr)
-	}
-
-	if strings.Contains(parts[0], "-") {
-		return nil, errors.Errorf(
-			"invalid hotplug range domain %q in %q, only a single domain is supported "+
-				"per entry", parts[0], entryStr)
 	}
 
 	dom, err := parseHotplugIdent(parts[0], 16)

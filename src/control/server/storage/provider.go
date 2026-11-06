@@ -563,9 +563,10 @@ func (p *Provider) FormatBdevTiers(ctrlrs NvmeControllers) (results []BdevTierFo
 
 // setHotplugRanges sets request parameters related to PCI domain+bus-ID range limits to restrict
 // hotplug actions of engine to a set of ssd devices. bdevCfgs covers every bdev tier configured
-// for the engine; manual ranges may be set on any one tier but apply engine-wide, and
-// auto-derivation (when no manual range is set on any tier) uses the combined bdev_list of every
-// tier, not just the first, so devices in e.g. tier 2+ roles (meta/data) are not excluded.
+// for the engine; manual ranges may be set on any one tier but apply engine-wide (enforced as at
+// most one tier by TierConfigs.Validate()), and auto-derivation (when no manual range is set on
+// any tier) uses the combined bdev_list of every tier, not just the first, so devices in e.g.
+// tier 2+ roles (meta/data) are not excluded.
 func setHotplugRanges(log logging.Logger, bdevCfgs TierConfigs, req *BdevWriteConfigRequest) error {
 	if req.VMDEnabled {
 		log.Debug("hotplug filter allows all as vmd is enabled (no ranges configured)")
@@ -575,15 +576,11 @@ func setHotplugRanges(log logging.Logger, bdevCfgs TierConfigs, req *BdevWriteCo
 
 	var manualTier *TierConfig
 	for _, tier := range bdevCfgs {
-		if len(tier.Bdev.HotplugRanges) == 0 && (tier.Bdev.BusidRange == nil ||
-			tier.Bdev.BusidRange.IsZero()) {
-			continue
+		if len(tier.Bdev.HotplugRanges) > 0 || (tier.Bdev.BusidRange != nil &&
+			!tier.Bdev.BusidRange.IsZero()) {
+			manualTier = tier
+			break
 		}
-		if manualTier != nil {
-			return errors.New("bdev_hotplug_range/bdev_busid_range may only be set " +
-				"on one bdev tier per engine")
-		}
-		manualTier = tier
 	}
 
 	switch {
@@ -592,9 +589,14 @@ func setHotplugRanges(log logging.Logger, bdevCfgs TierConfigs, req *BdevWriteCo
 			manualTier.Bdev.HotplugRanges)
 		req.HotplugRanges = manualTier.Bdev.HotplugRanges
 	case manualTier != nil:
-		log.Debugf("using legacy hotplug bus-id range %q (PCI domain 0000)",
-			manualTier.Bdev.BusidRange)
+		log.Noticef("using deprecated bdev_busid_range %q (applies to PCI domain 0000 "+
+			"only; use bdev_hotplug_range instead)", manualTier.Bdev.BusidRange)
 		req.HotplugRanges = BdevHotplugRanges{manualTier.Bdev.BusidRange.ToHotplugRange()}
+	case !bdevCfgs.HaveRealNVMe() && bdevCfgs.HaveEmulatedNVMe():
+		// Only emulated bdevs (class file or kdev): there is no PCI address to derive
+		// a filter from.
+		log.Debug("emulated bdevs only: no hotplug filter ranges configured")
+		req.HotplugRanges = nil
 	default:
 		log.Debug("auto-deriving hotplug filter ranges from bdev_list of all bdev tiers")
 		ranges, err := deriveHotplugRangesFromBdevList(bdevCfgs.NVMeBdevs())

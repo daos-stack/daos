@@ -374,7 +374,7 @@ func TestStorage_NewBdevHotplugRange(t *testing.T) {
 		},
 		"domain range rejected": {
 			entryStr: "00-02:00-80",
-			expErr:   errors.New("only a single domain is supported per entry"),
+			expErr:   errors.New("parse hotplug range domain"),
 		},
 		"0x-prefixed domain rejected": {
 			entryStr: "0x00:80",
@@ -738,6 +738,40 @@ storage:
   bdev_list: [0000:80:00.0]
   bdev_roles: [foobar]`,
 			expUnmarshalErr: errors.New("unknown option flag"),
+		},
+		"hotplug range specified on more than one bdev tier": {
+			input: `
+storage:
+-
+  class: ram
+  scm_size: 16
+  scm_mount: /mnt/daos
+-
+  class: nvme
+  bdev_list: [0000:80:00.0]
+  bdev_hotplug_range: ["00:70-7f"]
+-
+  class: nvme
+  bdev_list: [0000:81:00.0]
+  bdev_hotplug_range: ["01:70-7f"]`,
+			expValidateErr: errors.New("may only be set on one bdev tier"),
+		},
+		"legacy busid range specified on more than one bdev tier": {
+			input: `
+storage:
+-
+  class: ram
+  scm_size: 16
+  scm_mount: /mnt/daos
+-
+  class: nvme
+  bdev_list: [0000:80:00.0]
+  bdev_busid_range: "0x70-0x7f"
+-
+  class: nvme
+  bdev_list: [0000:81:00.0]
+  bdev_busid_range: "0x80-0x8f"`,
+			expValidateErr: errors.New("may only be set on one bdev tier"),
 		},
 		"roles specified; dcpm scm class; illegal roles": {
 			input: `

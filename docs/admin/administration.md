@@ -733,11 +733,12 @@ be for testing or for accidental device eviction.
 
 When hotplug is enabled, each engine only reacts to hotplug events on NVMe SSDs whose PCI
 domain and bus-ID fall within one of a set of ranges that are derived automatically from the
-engine's `bdev_list`; this is precise to exactly the devices the engine was formatted with and
-always succeeds, including on multi-PCI-segment platforms where a single engine's SSDs span
-more than one non-zero PCI domain. If Volume Management Devices (VMD) are enabled, no
-PCI-domain/bus-ID filtering is applied at all, since VMD backing device addresses are
-unrelated to the owning NUMA node's PCI domain.
+combined `bdev_list` of all of the engine's nvme-class storage tiers; this matches exactly the
+devices the engine was formatted with (up to a fixed limit of 64 filter entries per engine),
+including on multi-PCI-segment platforms where a single engine's SSDs span more than one
+non-zero PCI domain. If Volume Management Devices (VMD) are enabled, no PCI-domain/bus-ID
+filtering is applied at all, since VMD backing device addresses are unrelated to the owning
+NUMA node's PCI domain.
 
 This filter is not intended to be configured manually, and admins should not need to set it.
 

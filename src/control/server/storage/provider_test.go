@@ -270,7 +270,29 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				HotplugRanges:  nil,
 			},
 		},
+		"range unspecified; emulated nvme only (no pci addresses to derive from)": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassFile.String()).
+						WithBdevDeviceList("/tmp/daos-bdev0"),
+				},
+				EnableHotplug: true,
+			},
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassFile, DeviceList: MustNewBdevDeviceList("/tmp/daos-bdev0")},
+				},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges:  nil,
+			},
+		},
 		"range specified on more than one bdev tier": {
+			// Config-time validation (TierConfigs.Validate()) rejects this; here
+			// setHotplugRanges() picks the first bdev tier's manual range.
 			cfg: &Config{
 				Tiers: TierConfigs{
 					mockScmTier,
@@ -281,7 +303,19 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				},
 				EnableHotplug: true,
 			},
-			expErr: errors.New("may only be set on one bdev tier"),
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+					{Class: ClassNvme},
+				},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges: BdevHotplugRanges{
+					MustNewBdevHotplugRange("00:70-7f"),
+				},
+			},
 		},
 		"range unspecified; vmd enabled": {
 			cfg: &Config{
