@@ -421,7 +421,7 @@ class Test():
                 try:
                     path = path_info[value]
                 except KeyError as exception:
-                    print(f"Invalid path_info key {value} in configuration for {self.name}")
+                    print(f"Invalid path_info key {value} in configuration")
                     raise exception
                 entry = entry.replace(key, path)
             new_cmd.append(entry)
