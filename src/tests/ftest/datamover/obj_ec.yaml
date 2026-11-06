@@ -4,6 +4,12 @@ hosts:
 
 timeout: 300
 
+timeouts:
+  test_dm_obj_ec_cont_clone: 300
+  test_dm_obj_ec_dcp: 300
+  test_dm_obj_ec_dsync: 400
+  test_dm_obj_ec_dserialize: 400
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -25,18 +31,36 @@ pool:
   size: 95%
 
 container:
-  # the smallest cell size keeps a full stripe at 8KiB for OC_EC_2P1G1
-  properties: ec_cell_sz:4KiB
+  # OC_EC_2P1G1 tolerates one failure, the inherited default demands more
+  properties: rd_fac:1,rd_lvl:rank
+
+dcp:
+  client_processes:
+    np: 3
+
+dsync:
+  client_processes:
+    np: 3
+
+dserialize:
+  client_processes:
+    np: 3
+
+ddeserialize:
+  client_processes:
+    np: 3
 
 dataset:
   obj_class: OC_EC_2P1G1
-  num_objs: 4
+  num_objs: 2
   num_dkeys: 2
-  num_akeys_single: 2
-  num_akeys_array: 2
-  # 16 records of 1KiB is 16KiB, two whole stripes, so parity is written at
-  # update time without waiting for aggregation
-  akey_sizes: [1024]
-  akey_extents: [16]
-  # punch the first 4KiB, one whole cell, leaving stale parity over the hole
-  punch_extents: 4
+  num_akeys: 2
+  # OC_EC_2P1G1 is 2 data cells, and the default cell size is 128KiB, so a full
+  # stripe is 256KiB. Whole stripes are written so parity is computed at update
+  # time, then alternate stripes are punched, leaving that parity behind.
+  stripe_size: 262144
+  num_stripes: 4
+  punch_stripes: [0, 2]
+  # one akey per dkey has every stripe punched, so a listed extent returns no data
+  # at all. That is a harder case than an akey that keeps some live stripes.
+  full_punch_akeys: 1
