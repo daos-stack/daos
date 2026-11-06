@@ -66,3 +66,4 @@ utils/githooks/*.d/*-user-*
 src/include/daos_version.h
 utils/rpms/mock.cfg
 trivy-report-daos.txt
+.gitcommittemplate.txt
