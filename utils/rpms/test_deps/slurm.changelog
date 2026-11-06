@@ -1,0 +1,2 @@
+* Tue Oct 13 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 26.05.4-1-1
+- Build Slurm clients, plugins, daemons, development files and examples for DAOS testing.
