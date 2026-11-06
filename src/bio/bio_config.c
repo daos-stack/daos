@@ -1020,8 +1020,8 @@ static struct spdk_json_object_decoder nvme_ns_decoders[] = {
 int
 bio_decode_bdev_params(struct bio_dev_info *b_info, const void *json, int json_size)
 {
-	char                      *tmp       = NULL;
-	char                      *end1      = NULL;
+	const char                *tmp       = NULL;
+	const char                *end1      = NULL;
 	ssize_t                    rc        = 0;
 	char                      *json_data = NULL;
 	struct json_bdev_nvme_ctx *ctx;

@@ -287,7 +287,7 @@ json_write_traddr_cb(void *cb_ctx, const void *data, size_t size)
 {
 	struct bio_dev_info *b_info = cb_ctx;
 	char                *prefix = "traddr\": \"";
-	char                *traddr, *end;
+	const char          *traddr, *end;
 
 	D_ASSERT(b_info != NULL);
 	/* traddr is already generated */

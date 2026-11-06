@@ -359,7 +359,7 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 	char       *link_name   = NULL;
 	char       *lookup_path = NULL;
 	int         name_length;
-	char       *suffix_start;
+	const char *suffix_start;
 	dfs_obj_t  *link;
 
 	if (ds3b == NULL)
