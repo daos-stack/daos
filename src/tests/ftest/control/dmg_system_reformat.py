@@ -103,7 +103,7 @@ class DmgSystemReformatTest(TestWithServers):
         self.log.info("Perform dmg storage format on all system ranks:")
 
         # Record the start time before the first format attempt, not just before the
-        # attempt that eventually returns. A retry's dmg client call can time out
+        # attempt that eventually returns. The dmg client call for a retry can time out
         # locally while the server-side format/join actually completes in the
         # background during that same (earlier, seemingly-failed) attempt; if start_time
         # were captured later, engine-start detection below could search a journalctl
