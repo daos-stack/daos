@@ -8,7 +8,6 @@ import time
 
 from ior_utils import write_data
 from telemetry_test_base import TestWithTelemetry
-from test_utils_pool import add_pool
 
 
 class WalMetrics(TestWithTelemetry):
@@ -36,7 +35,7 @@ class WalMetrics(TestWithTelemetry):
         wal_metrics = list(self.telemetry.ENGINE_POOL_VOS_WAL_METRICS)
 
         self.log_step('Creating a pool (dmg pool create)')
-        add_pool(self)
+        self.get_pool()
 
         self.log_step(
             'Collect WAL commit metrics after creating a pool (dmg telemetry metrics query)')
@@ -83,7 +82,7 @@ class WalMetrics(TestWithTelemetry):
         wal_metrics = list(self.telemetry.ENGINE_POOL_VOS_WAL_REPLAY_METRICS)
 
         self.log_step('Creating a pool (dmg pool create)')
-        add_pool(self)
+        self.get_pool()
 
         self.log_step(
             'Collect WAL replay metrics after creating a pool (dmg telemetry metrics query)')
@@ -143,7 +142,7 @@ class WalMetrics(TestWithTelemetry):
         wal_metrics = list(self.telemetry.ENGINE_POOL_CHECKPOINT_METRICS)
 
         self.log_step('Creating a pool with check pointing disabled (dmg pool create)')
-        add_pool(self, properties='rd_fac:0,space_rb:0,checkpoint:disabled')
+        self.get_pool(properties='rd_fac:0,space_rb:0,checkpoint:disabled')
 
         self.log_step(
             'Collect WAL checkpoint metrics after creating a pool w/o check pointing '
@@ -160,8 +159,8 @@ class WalMetrics(TestWithTelemetry):
             self.fail('WAL check point metrics not zero after creating a pool w/o check pointing')
 
         self.log_step('Creating a pool with timed check pointing (dmg pool create)')
-        pool = add_pool(
-            self, properties=f'rd_fac:0,space_rb:0,checkpoint:timed,checkpoint_freq:{frequency}')
+        pool = self.get_pool(
+            properties=f'rd_fac:0,space_rb:0,checkpoint:timed,checkpoint_freq:{frequency}')
 
         self.log_step(
             'Collect WAL checkpoint metrics after creating a pool w/ check pointing '

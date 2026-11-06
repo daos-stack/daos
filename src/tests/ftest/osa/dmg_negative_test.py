@@ -1,10 +1,10 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 
 
 class OSADmgNegativeTest(OSAUtils):
@@ -68,7 +68,7 @@ class OSADmgNegativeTest(OSAUtils):
 
         for index in range(0, num_pool):
             self.log.info("=> Creating pool %s", index + 1)
-            pool_list.append(add_pool(self, create=False, connect=False))
+            pool_list.append(self.get_pool(create=False, connect=False))
             # Split total SCM and NVME size for creating multiple pools.
             pool_list[-1].scm_size.value = int(pool_list[-1].scm_size.value / num_pool)
             pool_list[-1].nvme_size.value = int(pool_list[-1].nvme_size.value / num_pool)
