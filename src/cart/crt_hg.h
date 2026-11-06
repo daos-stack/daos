@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -136,6 +136,7 @@ struct crt_hg_context {
 	bool               chc_shared_hg_class;
 	hg_class_t        *chc_hgcla;              /* HG class */
 	hg_context_t      *chc_hgctx;              /* HG context */
+	hg_addr_t             chc_self_addr;          /* cached self address */
 	hg_class_t        *chc_bulkcla;            /* bulk class */
 	hg_context_t      *chc_bulkctx;            /* bulk context */
 	struct crt_hg_pool chc_hg_pool;            /* HG handle pool */
