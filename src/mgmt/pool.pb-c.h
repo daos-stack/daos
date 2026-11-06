@@ -29,6 +29,11 @@ typedef struct _Mgmt__PoolExtendReq Mgmt__PoolExtendReq;
 typedef struct _Mgmt__PoolExtendResp Mgmt__PoolExtendResp;
 typedef struct _Mgmt__PoolReintReq Mgmt__PoolReintReq;
 typedef struct _Mgmt__PoolReintResp Mgmt__PoolReintResp;
+typedef struct _Mgmt__PoolDiscardReq Mgmt__PoolDiscardReq;
+typedef struct _Mgmt__PoolDiscardResp Mgmt__PoolDiscardResp;
+typedef struct _Mgmt__PoolDiscardQueryReq Mgmt__PoolDiscardQueryReq;
+typedef struct _Mgmt__PoolDiscardQueryResp Mgmt__PoolDiscardQueryResp;
+typedef struct _Mgmt__PoolDiscardQueryResp__RankState Mgmt__PoolDiscardQueryResp__RankState;
 typedef struct _Mgmt__ListPoolsReq Mgmt__ListPoolsReq;
 typedef struct _Mgmt__ListPoolsResp Mgmt__ListPoolsResp;
 typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
@@ -66,6 +71,34 @@ typedef struct _Mgmt__PoolRevokeClientResp Mgmt__PoolRevokeClientResp;
 
 /* --- enums --- */
 
+/*
+ * Phase of the local discard flow of one rank. A completed
+ * discard parks in DONE or FAILED until the engine restarts
+ * (back to NEVER) or a new discard starts over.
+ */
+typedef enum _Mgmt__PoolDiscardQueryResp__RankState__Phase {
+  /*
+   * no discard since the engine started
+   */
+  MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__NEVER = 0,
+  /*
+   * VOS discard in progress
+   */
+  MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__DISCARDING = 1,
+  /*
+   * discard done, waiting for NVMe GC to settle
+   */
+  MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__QUIESCING = 2,
+  /*
+   * last discard succeeded; done_age_sec is valid
+   */
+  MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__DONE = 3,
+  /*
+   * last discard failed; status is valid
+   */
+  MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__FAILED = 4
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE)
+} Mgmt__PoolDiscardQueryResp__RankState__Phase;
 typedef enum _Mgmt__PoolRebuildStatus__State {
   MGMT__POOL_REBUILD_STATUS__STATE__BUSY = 0,
   MGMT__POOL_REBUILD_STATUS__STATE__IDLE = 1,
@@ -620,6 +653,131 @@ struct  _Mgmt__PoolReintResp
 #define MGMT__POOL_REINT_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reint_resp__descriptor) \
     , 0 }
+
+
+/*
+ * PoolDiscardReq starts an admin-initiated discard of DOWN/DOWNOUT ranks, a
+ * preparation step before their data-sync reintegration. Asynchronous on the
+ * involved ranks; poll the progress with PoolDiscardQuery.
+ */
+struct  _Mgmt__PoolDiscardReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * uuid or label of the pool
+   */
+  char *id;
+  /*
+   * ranks to discard
+   */
+  size_t n_ranks;
+  uint32_t *ranks;
+  /*
+   * target indexes within each rank; empty = all
+   */
+  size_t n_target_idx;
+  uint32_t *target_idx;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
+  /*
+   * seconds to quiesce after the discard (NVMe GC settling)
+   */
+  uint32_t quiesce_sec;
+};
+#define MGMT__POOL_DISCARD_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_discard_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0 }
+
+
+/*
+ * PoolDiscardResp returns the acceptance state of the discard request.
+ */
+struct  _Mgmt__PoolDiscardResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+};
+#define MGMT__POOL_DISCARD_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_discard_resp__descriptor) \
+    , 0 }
+
+
+/*
+ * PoolDiscardQueryReq requests the per-rank progress of an admin-initiated
+ * discard.
+ */
+struct  _Mgmt__PoolDiscardQueryReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * uuid or label of the pool
+   */
+  char *id;
+  /*
+   * ranks to query
+   */
+  size_t n_ranks;
+  uint32_t *ranks;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
+};
+#define MGMT__POOL_DISCARD_QUERY_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_discard_query_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
+
+
+struct  _Mgmt__PoolDiscardQueryResp__RankState
+{
+  ProtobufCMessage base;
+  uint32_t rank;
+  Mgmt__PoolDiscardQueryResp__RankState__Phase phase;
+  /*
+   * seconds since completion; only valid when phase = DONE
+   */
+  uint64_t done_age_sec;
+  /*
+   * DAOS error code; only valid when phase = FAILED
+   */
+  int32_t status;
+};
+#define MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_discard_query_resp__rank_state__descriptor) \
+    , 0, MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__NEVER, 0, 0 }
+
+
+/*
+ * PoolDiscardQueryResp returns the per-rank discard progress.
+ */
+struct  _Mgmt__PoolDiscardQueryResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  size_t n_states;
+  Mgmt__PoolDiscardQueryResp__RankState **states;
+};
+#define MGMT__POOL_DISCARD_QUERY_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_discard_query_resp__descriptor) \
+    , 0, 0,NULL }
 
 
 /*
@@ -1710,6 +1868,85 @@ Mgmt__PoolReintResp *
 void   mgmt__pool_reint_resp__free_unpacked
                      (Mgmt__PoolReintResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__PoolDiscardReq methods */
+void   mgmt__pool_discard_req__init
+                     (Mgmt__PoolDiscardReq         *message);
+size_t mgmt__pool_discard_req__get_packed_size
+                     (const Mgmt__PoolDiscardReq   *message);
+size_t mgmt__pool_discard_req__pack
+                     (const Mgmt__PoolDiscardReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_discard_req__pack_to_buffer
+                     (const Mgmt__PoolDiscardReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolDiscardReq *
+       mgmt__pool_discard_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_discard_req__free_unpacked
+                     (Mgmt__PoolDiscardReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolDiscardResp methods */
+void   mgmt__pool_discard_resp__init
+                     (Mgmt__PoolDiscardResp         *message);
+size_t mgmt__pool_discard_resp__get_packed_size
+                     (const Mgmt__PoolDiscardResp   *message);
+size_t mgmt__pool_discard_resp__pack
+                     (const Mgmt__PoolDiscardResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_discard_resp__pack_to_buffer
+                     (const Mgmt__PoolDiscardResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolDiscardResp *
+       mgmt__pool_discard_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_discard_resp__free_unpacked
+                     (Mgmt__PoolDiscardResp *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolDiscardQueryReq methods */
+void   mgmt__pool_discard_query_req__init
+                     (Mgmt__PoolDiscardQueryReq         *message);
+size_t mgmt__pool_discard_query_req__get_packed_size
+                     (const Mgmt__PoolDiscardQueryReq   *message);
+size_t mgmt__pool_discard_query_req__pack
+                     (const Mgmt__PoolDiscardQueryReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_discard_query_req__pack_to_buffer
+                     (const Mgmt__PoolDiscardQueryReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolDiscardQueryReq *
+       mgmt__pool_discard_query_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_discard_query_req__free_unpacked
+                     (Mgmt__PoolDiscardQueryReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolDiscardQueryResp__RankState methods */
+void   mgmt__pool_discard_query_resp__rank_state__init
+                     (Mgmt__PoolDiscardQueryResp__RankState         *message);
+/* Mgmt__PoolDiscardQueryResp methods */
+void   mgmt__pool_discard_query_resp__init
+                     (Mgmt__PoolDiscardQueryResp         *message);
+size_t mgmt__pool_discard_query_resp__get_packed_size
+                     (const Mgmt__PoolDiscardQueryResp   *message);
+size_t mgmt__pool_discard_query_resp__pack
+                     (const Mgmt__PoolDiscardQueryResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_discard_query_resp__pack_to_buffer
+                     (const Mgmt__PoolDiscardQueryResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolDiscardQueryResp *
+       mgmt__pool_discard_query_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_discard_query_resp__free_unpacked
+                     (Mgmt__PoolDiscardQueryResp *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__ListPoolsReq methods */
 void   mgmt__list_pools_req__init
                      (Mgmt__ListPoolsReq         *message);
@@ -2349,6 +2586,21 @@ typedef void (*Mgmt__PoolReintReq_Closure)
 typedef void (*Mgmt__PoolReintResp_Closure)
                  (const Mgmt__PoolReintResp *message,
                   void *closure_data);
+typedef void (*Mgmt__PoolDiscardReq_Closure)
+                 (const Mgmt__PoolDiscardReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolDiscardResp_Closure)
+                 (const Mgmt__PoolDiscardResp *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolDiscardQueryReq_Closure)
+                 (const Mgmt__PoolDiscardQueryReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolDiscardQueryResp__RankState_Closure)
+                 (const Mgmt__PoolDiscardQueryResp__RankState *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolDiscardQueryResp_Closure)
+                 (const Mgmt__PoolDiscardQueryResp *message,
+                  void *closure_data);
 typedef void (*Mgmt__ListPoolsReq_Closure)
                  (const Mgmt__ListPoolsReq *message,
                   void *closure_data);
@@ -2470,6 +2722,12 @@ extern const ProtobufCMessageDescriptor mgmt__pool_extend_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_reint_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_reint_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_discard_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_discard_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_discard_query_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_discard_query_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_discard_query_resp__rank_state__descriptor;
+extern const ProtobufCEnumDescriptor    mgmt__pool_discard_query_resp__rank_state__phase__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__pool__descriptor;

@@ -1781,6 +1781,274 @@ func TestServer_MgmtSvc_PoolReintegrate(t *testing.T) {
 	}
 }
 
+func TestServer_MgmtSvc_PoolDiscard(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, log)
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
+	notAP := newTestMgmtSvc(t, log)
+
+	for name, tc := range map[string]struct {
+		nilReq      bool
+		getMockDrpc func(error) *mockDrpcClient
+		ms          *mgmtSvc
+		members     system.Members
+		reqIn       *mgmtpb.PoolDiscardReq
+		drpcResp    *mgmtpb.PoolDiscardResp
+		expDrpcReq  *mgmtpb.PoolDiscardReq
+		expErr      error
+	}{
+		"nil request": {
+			nilReq: true,
+			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			reqIn:  &mgmtpb.PoolDiscardReq{Id: mockUUID, Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
+		},
+		"missing superblock": {
+			ms:     missingSB,
+			expErr: errNotReplica,
+		},
+		"not MS replica": {
+			ms:     notAP,
+			expErr: errNotReplica,
+		},
+		"dRPC send fails": {
+			expErr: errors.New("send failure"),
+		},
+		"garbage resp": {
+			getMockDrpc: func(err error) *mockDrpcClient {
+				// dRPC call returns junk in the message body
+				badBytes := makeBadBytes(42)
+
+				return getMockDrpcClientBytes(badBytes, err)
+			},
+			expErr: errors.New("unmarshal"),
+		},
+		"missing uuid": {
+			reqIn:  &mgmtpb.PoolDiscardReq{Ranks: []uint32{1}},
+			expErr: errors.New("empty pool id"),
+		},
+		"unknown ranks": {
+			reqIn:  &mgmtpb.PoolDiscardReq{Id: mockUUID, Ranks: []uint32{1, 5}},
+			expErr: errors.New("pool request contains invalid rank: 5"),
+		},
+		"successful discard": {
+			drpcResp: &mgmtpb.PoolDiscardResp{},
+			// Expect the svc ranks to be filled in from the PS entry.
+			expDrpcReq: &mgmtpb.PoolDiscardReq{
+				Sys:        build.DefaultSystemName,
+				SvcRanks:   mockSvcRanks,
+				Id:         mockUUID,
+				Ranks:      []uint32{1, 2},
+				TargetIdx:  []uint32{1, 2},
+				QuiesceSec: 180,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf.Reset()
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.reqIn == nil && !tc.nilReq {
+				tc.reqIn = &mgmtpb.PoolDiscardReq{
+					Id:         mockUUID,
+					Ranks:      []uint32{1, 2},
+					TargetIdx:  []uint32{1, 2},
+					QuiesceSec: 180,
+				}
+			}
+			if tc.members == nil {
+				tc.members = system.Members{
+					mockMember(t, 1, 2, "joined"),
+					mockMember(t, 2, 2, "joined"),
+					mockMember(t, 3, 1, "joined"),
+				}
+			}
+			if tc.ms == nil {
+				tc.ms = mgmtSystemTestSetup(t, log, tc.members, nil)
+			} else {
+				for _, m := range tc.members {
+					if _, err := tc.ms.membership.Add(m); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			addTestPoolService(t, tc.ms.sysdb, mockPoolService)
+
+			if tc.getMockDrpc == nil {
+				tc.getMockDrpc = func(err error) *mockDrpcClient {
+					return getMockDrpcClient(tc.drpcResp, err)
+				}
+			}
+			mdc := tc.getMockDrpc(tc.expErr)
+			setupSvcDrpcClient(tc.ms, 0, mdc)
+
+			if tc.reqIn != nil && tc.reqIn.Sys == "" {
+				tc.reqIn.Sys = build.DefaultSystemName
+			}
+
+			gotResp, gotErr := tc.ms.PoolDiscard(test.Context(t), tc.reqIn)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := test.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.drpcResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+
+			// Check the forwarded dRPC request is completed from the PS entry.
+			lastDiscardReq := new(mgmtpb.PoolDiscardReq)
+			if err := proto.Unmarshal(getLastMockCall(mdc).Body, lastDiscardReq); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.expDrpcReq, lastDiscardReq, test.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected final dRPC request (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_MgmtSvc_PoolDiscardQuery(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, log)
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
+	notAP := newTestMgmtSvc(t, log)
+
+	for name, tc := range map[string]struct {
+		nilReq      bool
+		getMockDrpc func(error) *mockDrpcClient
+		ms          *mgmtSvc
+		members     system.Members
+		reqIn       *mgmtpb.PoolDiscardQueryReq
+		drpcResp    *mgmtpb.PoolDiscardQueryResp
+		expDrpcReq  *mgmtpb.PoolDiscardQueryReq
+		expErr      error
+	}{
+		"nil request": {
+			nilReq: true,
+			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			reqIn:  &mgmtpb.PoolDiscardQueryReq{Id: mockUUID, Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
+		},
+		"missing superblock": {
+			ms:     missingSB,
+			expErr: errNotReplica,
+		},
+		"not MS replica": {
+			ms:     notAP,
+			expErr: errNotReplica,
+		},
+		"dRPC send fails": {
+			expErr: errors.New("send failure"),
+		},
+		"garbage resp": {
+			getMockDrpc: func(err error) *mockDrpcClient {
+				// dRPC call returns junk in the message body
+				badBytes := makeBadBytes(42)
+
+				return getMockDrpcClientBytes(badBytes, err)
+			},
+			expErr: errors.New("unmarshal"),
+		},
+		"missing uuid": {
+			reqIn:  &mgmtpb.PoolDiscardQueryReq{Ranks: []uint32{1}},
+			expErr: errors.New("empty pool id"),
+		},
+		"unknown ranks": {
+			reqIn:  &mgmtpb.PoolDiscardQueryReq{Id: mockUUID, Ranks: []uint32{1, 5}},
+			expErr: errors.New("pool request contains invalid rank: 5"),
+		},
+		"successful query": {
+			drpcResp: &mgmtpb.PoolDiscardQueryResp{
+				States: []*mgmtpb.PoolDiscardQueryResp_RankState{
+					{
+						Rank:  1,
+						Phase: mgmtpb.PoolDiscardQueryResp_RankState_QUIESCING,
+					},
+					{
+						Rank:       2,
+						Phase:      mgmtpb.PoolDiscardQueryResp_RankState_DONE,
+						DoneAgeSec: 42,
+					},
+				},
+			},
+			// Expect the svc ranks to be filled in from the PS entry.
+			expDrpcReq: &mgmtpb.PoolDiscardQueryReq{
+				Sys:      build.DefaultSystemName,
+				SvcRanks: mockSvcRanks,
+				Id:       mockUUID,
+				Ranks:    []uint32{1, 2},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			buf.Reset()
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.reqIn == nil && !tc.nilReq {
+				tc.reqIn = &mgmtpb.PoolDiscardQueryReq{
+					Id:    mockUUID,
+					Ranks: []uint32{1, 2},
+				}
+			}
+			if tc.members == nil {
+				tc.members = system.Members{
+					mockMember(t, 1, 2, "joined"),
+					mockMember(t, 2, 2, "joined"),
+					mockMember(t, 3, 1, "joined"),
+				}
+			}
+			if tc.ms == nil {
+				tc.ms = mgmtSystemTestSetup(t, log, tc.members, nil)
+			} else {
+				for _, m := range tc.members {
+					if _, err := tc.ms.membership.Add(m); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			addTestPoolService(t, tc.ms.sysdb, mockPoolService)
+
+			if tc.getMockDrpc == nil {
+				tc.getMockDrpc = func(err error) *mockDrpcClient {
+					return getMockDrpcClient(tc.drpcResp, err)
+				}
+			}
+			mdc := tc.getMockDrpc(tc.expErr)
+			setupSvcDrpcClient(tc.ms, 0, mdc)
+
+			if tc.reqIn != nil && tc.reqIn.Sys == "" {
+				tc.reqIn.Sys = build.DefaultSystemName
+			}
+
+			gotResp, gotErr := tc.ms.PoolDiscardQuery(test.Context(t), tc.reqIn)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := test.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.drpcResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+
+			// Check the forwarded dRPC request is completed from the PS entry.
+			lastQueryReq := new(mgmtpb.PoolDiscardQueryReq)
+			if err := proto.Unmarshal(getLastMockCall(mdc).Body, lastQueryReq); err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.expDrpcReq, lastQueryReq, test.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected final dRPC request (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestServer_MgmtSvc_PoolExclude(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, log)

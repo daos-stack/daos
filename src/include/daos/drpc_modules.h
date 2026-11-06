@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,6 +80,8 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_POOL_REBUILD_START     = 250,
 	DRPC_METHOD_MGMT_POOL_REBUILD_STOP      = 251,
 	DRPC_METHOD_MGMT_POOL_SELF_HEAL_EVAL    = 252,
+	DRPC_METHOD_MGMT_POOL_DISCARD           = 253,
+	DRPC_METHOD_MGMT_POOL_DISCARD_QUERY     = 254,
 
 	NUM_DRPC_MGMT_METHODS /* Must be last */
 };

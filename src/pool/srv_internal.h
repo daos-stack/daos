@@ -244,6 +244,14 @@ int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
 void ds_pool_tgt_query_map_handler(crt_rpc_t *rpc);
 void ds_pool_tgt_discard_handler(crt_rpc_t *rpc);
 void
+ds_pool_tgt_discard_manual_handler(crt_rpc_t *rpc);
+void
+ds_pool_tgt_discard_query_handler(crt_rpc_t *rpc);
+void
+ds_pool_discard_handler(crt_rpc_t *rpc);
+void
+ds_pool_discard_query_handler(crt_rpc_t *rpc);
+void
 ds_pool_rebuild_stop_handler(crt_rpc_t *rpc);
 void
 ds_pool_rebuild_start_handler(crt_rpc_t *rpc);
