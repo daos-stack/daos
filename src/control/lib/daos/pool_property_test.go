@@ -383,3 +383,32 @@ func TestDaos_PoolProperties(t *testing.T) {
 		})
 	}
 }
+
+func TestDaos_PoolPropertyMap_GetPropertyByNumber(t *testing.T) {
+	for name, tc := range map[string]struct {
+		number  uint32
+		expName string
+		expErr  error
+	}{
+		"self_heal": {
+			number:  daos.PoolPropertySelfHealing,
+			expName: "self_heal",
+		},
+		"unknown": {
+			number: 0,
+			expErr: errors.New("unknown property number"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			prop, err := daos.PoolProperties().GetPropertyByNumber(tc.number)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expName, prop.Name); diff != "" {
+				t.Fatalf("unexpected property name (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

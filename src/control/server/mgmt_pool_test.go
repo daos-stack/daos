@@ -2510,6 +2510,9 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 
+	noEngine := newTestMgmtSvc(t, log)
+	setupTestEngine(t, noEngine.harness.instances[0].(*EngineInstance), 0, true)
+
 	allRanksDown := newTestMgmtSvc(t, log)
 	downRanksPool := test.MockUUID(9)
 	addTestPools(t, allRanksDown.sysdb, downRanksPool)
@@ -2550,6 +2553,13 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 			},
 			expErr: errors.New("send failure"),
 		},
+		"engine stopped": {
+			mgmtSvc: noEngine,
+			req: &mgmtpb.PoolQueryReq{
+				Id: mockUUID,
+			},
+			expErr: &system.ErrReplicaNoEngine{},
+		},
 		"garbage resp": {
 			req: &mgmtpb.PoolQueryReq{
 				Id: mockUUID,
@@ -2576,7 +2586,7 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 			expResp: &mgmtpb.PoolQueryResp{
 				State:             mgmtpb.PoolServiceState_Ready,
 				Uuid:              mockUUID,
-				SysSelfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
+				SysSelfHealPolicy: "pool_rebuild",
 			},
 		},
 		"successful query (includes pre-2.6 Leader field)": {
@@ -2596,7 +2606,7 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				Uuid:              mockUUID,
 				SvcLdr:            42,
 				Leader:            42,
-				SysSelfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
+				SysSelfHealPolicy: "pool_rebuild",
 			},
 		},
 		"successful query; mdonssd enabled": {
@@ -2615,25 +2625,13 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				State:             mgmtpb.PoolServiceState_Ready,
 				Uuid:              mockUUID,
 				MemFileBytes:      humanize.GiByte,
-				SysSelfHealPolicy: daos.DefaultSysSelfHealFlagsStr,
-			},
-		},
-		"successful query; sys self-heal prop fetch": {
-			req: &mgmtpb.PoolQueryReq{
-				Id:        mockUUID,
-				QueryMask: uint64(daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy)),
-			},
-			expResp: &mgmtpb.PoolQueryResp{
-				State:             mgmtpb.PoolServiceState_Ready,
-				Uuid:              mockUUID,
 				SysSelfHealPolicy: "pool_rebuild",
 			},
 		},
-		"successful query; sys self-heal prop fetch; missing system property": {
+		"successful query; system self-heal property unset": {
 			missingSelfHealSysProp: true,
 			req: &mgmtpb.PoolQueryReq{
-				Id:        mockUUID,
-				QueryMask: uint64(daos.MustNewPoolQueryMask(daos.PoolQueryOptionSelfHealPolicy)),
+				Id: mockUUID,
 			},
 			expResp: &mgmtpb.PoolQueryResp{
 				State:             mgmtpb.PoolServiceState_Ready,

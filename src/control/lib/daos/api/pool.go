@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -162,9 +163,9 @@ func newPoolInfo(cpi *C.daos_pool_info_t) *daos.PoolInfo {
 	return poolInfo
 }
 
-func poolInfoFromProps(pi *daos.PoolInfo, propEntries []C.struct_daos_prop_entry) {
+func poolInfoFromProps(pi *daos.PoolInfo, propEntries []C.struct_daos_prop_entry) error {
 	if pi == nil || len(propEntries) == 0 {
-		return
+		return nil
 	}
 
 	for _, entry := range propEntries {
@@ -174,15 +175,24 @@ func poolInfoFromProps(pi *daos.PoolInfo, propEntries []C.struct_daos_prop_entry
 		case C.DAOS_PROP_PO_SVC_LIST:
 			rlPtr := C.get_dpe_val_ptr(&entry)
 			if rlPtr == nil {
-				return
+				return nil
 			}
 			rs, err := rankSetFromC((*C.d_rank_list_t)(rlPtr))
 			if err != nil {
-				return
+				return nil
 			}
 			pi.ServiceReplicas = rs.Ranks()
+		case C.DAOS_PROP_PO_SELF_HEAL:
+			prop, err := daos.PoolProperties().GetPropertyByNumber(daos.PoolPropertySelfHealing)
+			if err != nil {
+				return err
+			}
+			prop.Value.SetNumber(uint64(C.get_dpe_val(&entry)))
+			pi.SelfHealPolicy = prop.StringValue()
 		}
 	}
+
+	return nil
 }
 
 // Disconnect signals that the client no longer needs the DAOS pool
@@ -357,13 +367,14 @@ func PoolQuery(ctx context.Context, sysName, poolID string, queryMask daos.PoolQ
 	}()
 
 	// Query for some additional information stored as properties.
-	queryProps := C.daos_prop_alloc(2)
+	queryProps := C.daos_prop_alloc(3)
 	if queryProps == nil {
 		return nil, errors.Wrap(daos.NoMemory, "failed to allocate property list")
 	}
 	propEntries := unsafe.Slice(queryProps.dpp_entries, queryProps.dpp_nr)
 	propEntries[0].dpe_type = C.DAOS_PROP_PO_LABEL
 	propEntries[1].dpe_type = C.DAOS_PROP_PO_SVC_LIST
+	propEntries[2].dpe_type = C.DAOS_PROP_PO_SELF_HEAL
 	defer func() {
 		C.daos_prop_free(queryProps)
 	}()
@@ -397,7 +408,9 @@ func PoolQuery(ctx context.Context, sysName, poolID string, queryMask daos.PoolQ
 
 	poolInfo := newPoolInfo(&cPoolInfo)
 	poolInfo.QueryMask = queryMask
-	poolInfoFromProps(poolInfo, propEntries)
+	if err := poolInfoFromProps(poolInfo, propEntries); err != nil {
+		return nil, err
+	}
 
 	if enabledRanks != nil {
 		poolInfo.EnabledRanks, err = rankSetFromC(enabledRanks)

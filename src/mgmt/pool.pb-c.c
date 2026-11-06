@@ -3610,7 +3610,7 @@ const ProtobufCMessageDescriptor mgmt__list_cont_resp__descriptor =
   (ProtobufCMessageInit) mgmt__list_cont_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_query_req__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__pool_query_req__field_descriptors[5] =
 {
   {
     "sys",
@@ -3660,9 +3660,22 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_req__field_descriptors[4]
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "properties",
+    5,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__PoolQueryReq, n_properties),
+    offsetof(Mgmt__PoolQueryReq, properties),
+    &mgmt__pool_property__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_query_req__field_indices_by_name[] = {
   1,   /* field[1] = id */
+  4,   /* field[4] = properties */
   3,   /* field[3] = query_mask */
   2,   /* field[2] = svc_ranks */
   0,   /* field[0] = sys */
@@ -3670,7 +3683,7 @@ static const unsigned mgmt__pool_query_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_query_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_query_req__descriptor =
 {
@@ -3680,7 +3693,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_req__descriptor =
   "Mgmt__PoolQueryReq",
   "mgmt",
   sizeof(Mgmt__PoolQueryReq),
-  4,
+  5,
   mgmt__pool_query_req__field_descriptors,
   mgmt__pool_query_req__field_indices_by_name,
   1,  mgmt__pool_query_req__number_ranges,
@@ -4198,14 +4211,14 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[2
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "self_heal_policy",
+    "properties",
     24,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolQueryResp, self_heal_policy),
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__PoolQueryResp, n_properties),
+    offsetof(Mgmt__PoolQueryResp, properties),
+    &mgmt__pool_property__descriptor,
     NULL,
-    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -4233,9 +4246,9 @@ static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
   21,   /* field[21] = md_on_ssd_active */
   19,   /* field[19] = mem_file_bytes */
   13,   /* field[13] = pool_layout_ver */
+  22,   /* field[22] = properties */
   18,   /* field[18] = query_mask */
   6,   /* field[6] = rebuild */
-  22,   /* field[22] = self_heal_policy */
   15,   /* field[15] = state */
   0,   /* field[0] = status */
   16,   /* field[16] = svc_ldr */

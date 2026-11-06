@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -147,6 +148,7 @@ var (
 		Version:         2,
 		ServiceLeader:   1,
 		ServiceReplicas: []ranklist.Rank{0, 1, 2},
+		SelfHealPolicy:  daos.DefaultPoolSelfHealStr,
 		EnabledRanks:    ranklist.MustCreateRankSet("0,2"),
 		DisabledRanks:   ranklist.MustCreateRankSet("1"),
 		Rebuild: &daos.PoolRebuildStatus{
@@ -335,6 +337,19 @@ func daos_pool_query(poolHdl C.daos_handle_t, rankList **C.d_rank_list_t, retPoo
 			case C.DAOS_PROP_PO_SVC_LIST:
 				rlPtr := ranklistFromGo(ranklist.RankSetFromRanks(daos_pool_query_PoolInfo.ServiceReplicas))
 				C.set_dpe_val_ptr(&propEntries[i], (unsafe.Pointer)(rlPtr))
+			case C.DAOS_PROP_PO_SELF_HEAL:
+				prop, err := daos.PoolProperties().GetPropertyByNumber(daos.PoolPropertySelfHealing)
+				if err != nil {
+					panic(err)
+				}
+				if err := prop.SetValue(daos_pool_query_PoolInfo.SelfHealPolicy); err != nil {
+					panic(err)
+				}
+				val, err := prop.Value.GetNumber()
+				if err != nil {
+					panic(err)
+				}
+				C.set_dpe_val(&propEntries[i], C.uint64_t(val))
 			}
 		}
 	}

@@ -29,13 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-/*
-#include <stdint.h>
-
-#include <daos_pool.h>
-*/
-import "C"
-
 const (
 	// DefaultPoolScmRatio defines the default SCM:NVMe ratio for
 	// requests that do not specify one.
@@ -85,7 +78,13 @@ func (svc *mgmtSvc) makePoolServiceCall(ctx context.Context, method drpc.Method,
 		req.SetSvcRanks(rl)
 	}
 
-	return svc.harness.CallDrpc(ctx, method, req)
+	dResp, err := svc.harness.CallDrpc(ctx, method, req)
+	if fault.IsFaultCode(err, code.ServerDataPlaneNotStarted) {
+		// This replica cannot service a pool request without an engine,
+		// so the client should retry on another replica.
+		return nil, &system.ErrReplicaNoEngine{Replicas: svc.sysdb.PeerReplicas()}
+	}
+	return dResp, err
 }
 
 // resolvePoolID implements a handler for resolving a user-friendly Pool ID into
@@ -1096,18 +1095,9 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	// Preserve compatibility with pre-2.6 callers.
 	resp.Leader = resp.SvcLdr
 
-	// Retrieve system self-heal property. Assume default value where all flags are set if
-	// property isn't present.
-	resp.SysSelfHealPolicy = daos.DefaultSysSelfHealFlagsStr
-	if req.QueryMask&C.DPI_SELF_HEAL_POLICY != 0 {
-		if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
-			svc.log.Debugf(err.Error())
-		} else if err != nil {
-			return nil, err
-		} else {
-			svc.log.Debugf("system self-heal: %s", selfHeal)
-			resp.SysSelfHealPolicy = selfHeal
-		}
+	resp.SysSelfHealPolicy, err = svc.getSysSelfHeal()
+	if err != nil {
+		return nil, err
 	}
 
 	return resp, nil
