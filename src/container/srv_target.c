@@ -56,14 +56,14 @@ cont2req(struct ds_cont_child *cont, bool vos_agg)
  * owners of the shards) to remove their replicas, which corrupts the real data.
  */
 static bool
-cont_tgt_excluded(struct ds_cont_child *cont, const char *action)
+cont_tgt_excluded(struct ds_cont_child *cont)
 {
 	if (!ds_pool_tgt_excluded(cont->sc_pool->spc_pool, dss_self_rank(),
 				  dss_get_module_info()->dmi_tgt_id))
 		return false;
 
-	D_DEBUG(DB_EPC, DF_CONT ": %s EC aggregation on excluded target.\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), action);
+	D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation on excluded target.\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 	return true;
 }
 
@@ -78,10 +78,6 @@ agg_rate_ctl(void *arg)
 
 	/* Abort current round of aggregation */
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
-		return -1;
-
-	/* Abort an in-flight EC aggregation round once this target gets excluded */
-	if (!param->ap_vos_agg && cont_tgt_excluded(cont, "abort"))
 		return -1;
 
 	/*
@@ -236,7 +232,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
-	if (!vos_agg && cont_tgt_excluded(cont, "skip"))
+	if (!vos_agg && cont_tgt_excluded(cont))
 		return false;
 
 	if (vos_agg) {
