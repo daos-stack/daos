@@ -26,7 +26,8 @@ BUILD_DIR = Path(json.loads((TESTS_DIR.parents[3] / ".build_vars.json").read_tex
 
 
 # usage and arguments
-USAGE = """Run dlck with one fault from fault_injection_dlck.yaml enabled and compare the results against the template.
+USAGE = """Run dlck with one fault from fault_injection_dlck.yaml enabled and compare the results \
+against the template.
 
 FAULT is a fault name (e.g. DLCK_FAULT_GETGRNAM) or its id (e.g. 131329).
 Without FAULT, every fault in the template is run.
@@ -36,14 +37,14 @@ Template placeholders:
   {{STORAGE}}   storage path (e.g. /dev/shm/daos or /mnt/daos)
   {{LOG_DIR}}   dlck temporary log directory
 """  # noqa: E501 line too long
-Parser = argparse.ArgumentParser(description=USAGE,
+PARSER = argparse.ArgumentParser(description=USAGE,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-Parser.add_argument("--dlck", default=str(DEFAULT_DLCK), help="path to the dlck binary")
-Parser.add_argument("--storage", default="/mnt/daos", help="dlck --storage argument")
-Parser.add_argument("--nvme", default=None, help="dlck --nvme argument")
-Parser.add_argument("--update", action="store_true",
+PARSER.add_argument("--dlck", default=str(DEFAULT_DLCK), help="path to the dlck binary")
+PARSER.add_argument("--storage", default="/mnt/daos", help="dlck --storage argument")
+PARSER.add_argument("--nvme", default=None, help="dlck --nvme argument")
+PARSER.add_argument("--update", action="store_true",
                     help="store the results of this run as the template")
-Parser.add_argument("faults", nargs="*", metavar="FAULT",
+PARSER.add_argument("faults", nargs="*", metavar="FAULT",
                     help="fault name or id (default: all faults in the template)")
 
 
@@ -72,6 +73,7 @@ class FaultCatalog:
 
     @property
     def faults(self):
+        """Return the complete dictionary of faults (id, name) in the catalog."""
         return self._faults
 
     def _read_faults(self):
@@ -108,7 +110,7 @@ class DlckTestHelperRunner:
                "--storage", self._storage, "--create_pools", "--verbose", "--targets", "1"]
         env = dict(os.environ, DLCK_NO_NVME="1")
         proc = subprocess.run(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              text=True)
+                              text=True, check=False)
         if proc.returncode != 0:
             raise SystemExit(f"dlck_test_helper failed with exit code {proc.returncode}\n\n"
                              f"{proc.stderr}\n\n{proc.stdout}")
@@ -132,6 +134,7 @@ class DlckRunner:
         self._nvme = nvme
 
     def has_nvme(self):
+        """Return True if an NVMe device is specified."""
         return self._nvme is not None
 
     def run(self, config):
@@ -142,7 +145,7 @@ class DlckRunner:
         if self._nvme is not None:
             cmd += ["--nvme", self._nvme]
         proc = subprocess.run(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              text=True)
+                              text=True, check=False)
         return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -200,6 +203,7 @@ class FaultTemplate:
         self._logs_dir = path / "logs"
 
     def exists(self):
+        """Does the given template exist?"""
         return self._output_file.is_file()
 
     def update(self, output, logs_dir):
@@ -224,6 +228,7 @@ class FaultInjectionTest:
     """Runs faults through dlck and compares or stores the results."""
 
     class ReturnCode(Enum):
+        """Return codes for the fault injection test."""
         OK = 0
         FAIL = 1
         NO_TEMPLATE = 2
@@ -272,11 +277,8 @@ class FaultInjectionTest:
             print(f"--- {log.relative_to(logs_dir)} ---")
             print(log.read_text())
 
-    def run_fault(self, fault):
-        """Run one fault and return its ReturnCode."""
-
-        # generate result directory and config for the fault
-        fault_id, name = fault
+    def _skip_code(self, name):
+        """Return the ReturnCode for a fault that must be skipped, or None to run it."""
         if name in FaultCatalog.UNSUPPORTED_FAULTS:
             print(f"fault: {name} is not supported by this script")
             return self.ReturnCode.NOT_SUPPORTED
@@ -286,6 +288,22 @@ class FaultInjectionTest:
         if name in FaultCatalog.DISABLED_FAULTS:
             print(f"fault: {name} is disabled")
             return self.ReturnCode.DISABLED
+        template_dir = self._templates_dir / name
+        if not self._update and not FaultTemplate(template_dir).exists():
+            print(f"fault: {name}, no template in {template_dir} (run with --update to create it)")
+            return self.ReturnCode.NO_TEMPLATE
+        return None
+
+    def run_fault(self, fault):
+        """Run one fault test."""
+
+        fault_id, name = fault
+        # skip faults that cannot run here
+        skip_code = self._skip_code(name)
+        if skip_code is not None:
+            return skip_code
+
+        # generate result directory and config for the fault
         result_dir = Path(tempfile.mkdtemp(prefix=f"{name}_"))
         config = result_dir / "fault_injection_dlck.yaml"
         config.write_text(self._make_config(fault_id))
@@ -315,11 +333,6 @@ class FaultInjectionTest:
             print(f"template updated: {template_dir}")
             return self.ReturnCode.OK
 
-        # check if template exists
-        if not template.exists():
-            print(f"fault: {name}, no template in {template_dir} (run with --update to create it)")
-            return self.ReturnCode.NO_TEMPLATE
-
         errors = template.compare(output, logs_dir)
         if errors:
             print("FAIL")
@@ -331,7 +344,8 @@ class FaultInjectionTest:
 
 
 def main():
-    args = Parser.parse_args()
+    """Main entry point for the fault injection test script."""
+    args = PARSER.parse_args()
     catalog = FaultCatalog(TEMPLATE_CONFIG)
     helper = DlckTestHelperRunner(args.storage)
     runner = DlckRunner(Path(args.dlck).resolve(), helper.POOL_UUID, args.storage)
