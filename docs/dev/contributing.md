@@ -126,3 +126,24 @@ CC: User Name <user@domain.com>
 
 DAOS uses the common fork & merge workflow used by most GitHub-hosted projects.
 Please refer to the [online GitHub documentation](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/proposing-changes-to-your-work-with-pull-requests).
+
+### CI for pull requests from contributors without write access
+
+CI runs automatically for pull requests opened by users with Write or Admin
+access to the repository. For all other pull requests, CI only runs after a
+user with Write or Admin access reviews the changes and comments:
+
+```text
+/run-ci <commit-sha>
+```
+
+The build only runs if the pull request head still matches `<commit-sha>`
+(7 to 40 hexadecimal characters). If more commits have been pushed, the build
+fails before running any code from the pull request, and a new `/run-ci`
+comment with the new head is needed. A bare `/run-ci` builds the current head
+without this check. New commits never start a build on their own, and commit
+pragmas are honored once a build starts.
+
+Reviewers should check every file that CI executes before commenting
+`/run-ci`, including build and test scripts, `ci/`, `utils/` and Dockerfiles,
+because the build runs that code on lab systems.
