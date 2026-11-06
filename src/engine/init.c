@@ -994,26 +994,25 @@ static int arg_strtoul(const char *str, unsigned int *value, const char *opt)
 static void
 parse(int argc, char **argv)
 {
-	struct	option opts[] = {
-		{ "cores",		required_argument,	NULL,	'c' },
-		{ "socket_dir",		required_argument,	NULL,	'd' },
-		{ "firstcore",		required_argument,	NULL,	'f' },
-		{ "group",		required_argument,	NULL,	'g' },
-		{ "help",		no_argument,		NULL,	'h' },
-		{ "modules",		required_argument,	NULL,	'm' },
-		{ "nvme",		required_argument,	NULL,	'n' },
-		{ "pinned_numa_node",	required_argument,	NULL,	'p' },
-		{ "mem_size",		required_argument,	NULL,	'r' },
-		{ "hugepage_size",	required_argument,	NULL,	'H' },
-		{ "targets",		required_argument,	NULL,	't' },
-		{ "storage",		required_argument,	NULL,	's' },
-		{ "xshelpernr",		required_argument,	NULL,	'x' },
-		{ "instance_idx",	required_argument,	NULL,	'I' },
-		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
-		{ "storage_tiers",	required_argument,	NULL,	'T' },
-		{ "check",		no_argument,		NULL,	'C' },
-		{ NULL,			0,			NULL,	0}
-	};
+	struct option opts[] = {{"cores", required_argument, NULL, 'c'},
+				{"socket_dir", required_argument, NULL, 'd'},
+				{"firstcore", required_argument, NULL, 'f'},
+				{"group", required_argument, NULL, 'g'},
+				{"help", no_argument, NULL, 'h'},
+				{"modules", required_argument, NULL, 'm'},
+				{"nvme", required_argument, NULL, 'n'},
+				{"pinned_numa_node", required_argument, NULL, 'p'},
+				{"mem_size", required_argument, NULL, 'r'},
+				{"hugepage_size", required_argument, NULL, 'H'},
+				{"targets", required_argument, NULL, 't'},
+				{"storage", required_argument, NULL, 's'},
+				{"xshelpernr", required_argument, NULL, 'x'},
+				{"instance_idx", required_argument, NULL, 'I'},
+				{"bypass_health_chk", no_argument, NULL, 'b'},
+				{"storage_tiers", required_argument, NULL, 'T'},
+				{"nr_sec_ctx", required_argument, NULL, 'S'},
+				{"check", no_argument, NULL, 'C'},
+				{NULL, 0, NULL, 0}};
 	int	rc = 0;
 	int	c;
 	bool	spec_mod = false;
@@ -1022,8 +1021,8 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:C",
-				opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:S:C:", opts, NULL)) !=
+	       -1) {
 		switch (c) {
 		case 'm':
 			if (dss_check_mode) {
@@ -1093,6 +1092,9 @@ parse(int argc, char **argv)
 				printf("Requires 1 to 4 tiers\n");
 				rc = -DER_INVAL;
 			}
+			break;
+		case 'S':
+			rc = arg_strtoul(optarg, &dss_sec_xs_nr, "\"-S\"");
 			break;
 		case 'C':
 			dss_check_mode = true;

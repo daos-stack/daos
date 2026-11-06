@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -109,8 +109,7 @@ struct dss_xstream {
 	/* Cart progress timeout in micro-seconds */
 	unsigned int		dx_timeout;
 	bool			dx_main_xs;	/* true for main XS */
-	bool			dx_comm;	/* true with cart context */
-	bool			dx_iofw;	/* true for DSS_XS_IOFW XS */
+	bool                    dx_comm;        /* true with primary cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 	struct mem_stats        dx_mem_stats;   /* memory usages stats on this xstream */
 	bool			dx_progress_started;	/* Network poll started */
@@ -157,6 +156,8 @@ extern int                   dss_numa_node;
 extern int                   dss_numa_nr;
 /** number of system XS */
 extern unsigned int          dss_sys_xs_nr;
+/** Number of secondary cart context XS */
+extern unsigned int          dss_sec_xs_nr;
 /** Flag of helper XS as a pool */
 extern bool                  dss_helper_pool;
 /** Cached numa information */
@@ -334,8 +335,7 @@ void ds_iv_init(void);
 void ds_iv_fini(void);
 
 /** Total number of XS */
-#define DSS_XS_NR_TOTAL						\
-	(dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)
+#define DSS_XS_NR_TOTAL (dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr + dss_sec_xs_nr)
 /** Total number of cart contexts created */
 #define DSS_CTX_NR_TOTAL                                                                           \
 	(DAOS_TGT0_OFFSET + dss_tgt_nr +                                                           \
@@ -351,33 +351,6 @@ void ds_iv_fini(void);
 #define DSS_SYS_XS_NAME_FMT     "daos_sys_%d"
 #define DSS_IO_XS_NAME_FMT      "daos_io_%d"
 #define DSS_OFFLOAD_XS_NAME_FMT "daos_off_%d"
-
-/**
- * get the VOS target ID of xstream.
- *
- * \param[in]	xs_id	xstream ID
- *
- * \return		VOS target ID (-1 for system XS).
- */
-static inline int
-dss_xs2tgt(int xs_id)
-{
-	D_ASSERTF(xs_id >= 0 && xs_id < DSS_XS_NR_TOTAL,
-		  "invalid xs_id %d, dss_tgt_nr %d, "
-		  "dss_tgt_offload_xs_nr %d.\n",
-		  xs_id, dss_tgt_nr, dss_tgt_offload_xs_nr);
-	if (dss_helper_pool) {
-		if (xs_id < dss_sys_xs_nr ||
-		    xs_id >= dss_sys_xs_nr + dss_tgt_nr)
-			return -1;
-		return xs_id - dss_sys_xs_nr;
-	}
-
-	if (xs_id < dss_sys_xs_nr)
-		return -1;
-	return (xs_id - dss_sys_xs_nr) /
-	       (dss_tgt_offload_xs_nr / dss_tgt_nr + 1);
-}
 
 static inline bool
 dss_xstream_has_nvme(struct dss_xstream *dx)
