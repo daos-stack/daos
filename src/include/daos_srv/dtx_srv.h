@@ -442,7 +442,7 @@ struct dtx_scan_args {
 };
 
 int dtx_cleanup_orphan(uuid_t po_uuid, uint32_t pm_ver);
-int dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block);
+int dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver);
 void dtx_resync_ult(void *arg);
 /* clang-format on */
 
