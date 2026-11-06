@@ -50,9 +50,11 @@ build/*/*/src/utils/dlck/tests/dlck_args_ut,
 build/*/*/src/utils/dlck/tests/dlck_checker_common_ut,
 build/*/*/src/utils/dlck/tests/dlck_checker_main_ut,
 build/*/*/src/utils/dlck/tests/dlck_checker_worker_ut,
+build/*/*/src/utils/dlck/tests/dlck_test_helper,
 src/common/tests/btree.sh,
 src/control/run_go_tests.sh,
 src/rdb/raft_tests/raft_tests.py,
-src/vos/tests/evt_ctl.sh
-src/control/lib/netdetect/netdetect.go
-src/include/**
+src/vos/tests/evt_ctl.sh,
+src/control/lib/netdetect/netdetect.go,
+src/include/**,
+src/utils/dlck/test/fault_templates/**
