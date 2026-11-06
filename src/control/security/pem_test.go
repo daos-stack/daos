@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,8 +15,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
+	sectest "github.com/daos-stack/daos/src/control/security/test"
 )
 
 func TestLoadPEMData(t *testing.T) {
@@ -204,6 +207,35 @@ func TestSecurity_Pem_ValidateCertDirectory(t *testing.T) {
 			err := ValidateCertDirectory(path)
 
 			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestSecurity_LoadCertAndKey(t *testing.T) {
+	dir, cleanup := test.CreateTestDir(t)
+	defer cleanup()
+	certPath, keyPath := sectest.WriteCAFiles(t, dir)
+
+	for name, tc := range map[string]struct {
+		certPath string
+		keyPath  string
+		expErr   error
+	}{
+		"success":      {certPath: certPath, keyPath: keyPath},
+		"missing cert": {certPath: filepath.Join(dir, "missing.crt"), keyPath: keyPath, expErr: errors.New("loading certificate")},
+		"missing key":  {certPath: certPath, keyPath: filepath.Join(dir, "missing.key"), expErr: errors.New("loading private key")},
+		"key as cert":  {certPath: keyPath, keyPath: keyPath, expErr: errors.New("loading certificate")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cert, key, err := LoadCertAndKey(tc.certPath, tc.keyPath)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if err := VerifyCertKey(key, cert); err != nil {
+				t.Fatal(err)
+			}
 		})
 	}
 }

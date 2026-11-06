@@ -109,8 +109,11 @@ func PrintStructs(name string, i interface{}) {
 // WriteFileAtomic mimics ioutil.WriteFile, but it makes sure the file is
 // either successfully written persistently or untouched.
 func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
-	// Write a staging file.
+	// A staging file left by an interrupted write may be read-only.
 	staging := path + ".staging"
+	if err := os.Remove(staging); err != nil && !os.IsNotExist(err) {
+		return errors.WithStack(err)
+	}
 	if err := writeFile(staging, data, perm); err != nil {
 		return errors.WithStack(err)
 	}
