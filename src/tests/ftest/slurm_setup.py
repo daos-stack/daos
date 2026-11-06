@@ -220,9 +220,7 @@ class SlurmSetup():
         override_dir = os.path.dirname(self.SLURMCTLD_SYSTEMD_OVERRIDE)
         self._mkdir(self.control, override_dir)
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8') as override_file:
-            override_file.write(
-                f'[Service]\nUser={user}\nGroup={user}\n'
-                f'PIDFile={self.SLURMCTLD_PID_FILE}\n')
+            override_file.write(f'[Service]\nUser={user}\nGroup={user}\n')
             override_file.flush()
             result = distribute_files(
                 self.log, self.control, override_file.name, self.SLURMCTLD_SYSTEMD_OVERRIDE,
