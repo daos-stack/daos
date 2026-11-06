@@ -16,6 +16,10 @@
 - Don't reproduce the production algorithm in assertions.
 - Choose the smallest suitable suite and dependency boundary.
 - Separate module and header-macro tests.
+- Give every test function at least one concise comment line describing the behavior it verifies.
+- For suites with repeated CMocka registration fields, define small registration macros for common
+  fixture variants (for example, with setup/teardown and without a fixture). Keep IDs sequential and
+  derive the test name from the ID and function name so table entries stay concise and consistent.
 - For meaningful paths, prepare inputs and expectations, call the production entry point, then
   assert result and state. Cover success and relevant failures, not every theoretical branch.
 - Assert the correct error mapping and cleanup.
