@@ -950,6 +950,8 @@ enum {
 #define DAOS_CHK_VERIFY_CONT_SHARDS     (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xba)
 #define DAOS_CHK_ORPHAN_POOL_SHARD        (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xbb)
 #define DAOS_CHK_REPORT_FAILURE            (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xbc)
+/** Force an evtree update to fail after modifying the tree so its transaction aborts */
+#define DAOS_VOS_EVT_TX_ABORT              (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xbd)
 
 #define DAOS_MGMT_FAIL_CREATE_QUERY       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xe0)
 
