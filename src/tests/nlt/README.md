@@ -25,6 +25,14 @@ basis for two CI stages. The entry point is
 
 `python -m nlt ...` works too.
 
+### Memory checking
+
+The checker is picked from the install. If DAOS was built with `SANITIZERS=address`
+(what the "NLT" CI stage uses), NLT runs everything natively with ASan: commands that would
+have run under valgrind get leak checking and their own report file, and NLT re-execs itself with the
+ASan runtime preloaded so pydaos and the interception libraries load. Otherwise `--memcheck` runs
+commands under valgrind, which needs the Go binaries built with `BUILD_GO_VALGRIND=1`.
+
 ### Suites
 
 Tests too slow or too disk-hungry for CI are kept out of the default run and only execute
@@ -52,7 +60,7 @@ single file so you rarely need to open the raw logs:
   `logfile:line` reference;
 - remaining log-analysis findings grouped per test, plus a `server-wide / shared logs` group
   for findings from the shared server log;
-- valgrind/memcheck notes and the slowest tests.
+- valgrind/memcheck or ASan notes and the slowest tests.
 
 Disable it with `--summary ""`.
 
@@ -65,6 +73,7 @@ The machine-readable artifacts are still produced for the Jenkins plugins:
 | `nlt-server-leaks.json`  | server memory-leak findings                          |
 | `nlt-client-leaks.json`  | client leak findings (FI runs)                       |
 | `dnt.*.memcheck.xml`     | valgrind output                                      |
+| `nlt_logs/<class>/dnt_asan.*` | ASan reports (sanitizer builds)                 |
 | `nlt_logs/<class>/`      | raw `dnt*.log` DAOS/DFuse logs                        |
 
 By default only logs that produced a finding are kept (and fault-injection keeps only the

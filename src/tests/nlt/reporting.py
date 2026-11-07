@@ -301,7 +301,12 @@ class WarningsFactory():
         lines.append(f'# NLT summary: {verdict}')
         lines.append('')
         if args is not None:
-            build = 'valgrind/memcheck' if getattr(args, 'memcheck', 'no') != 'no' else 'standard'
+            if conf is not None and getattr(conf, 'sanitizers', False):
+                build = 'ASan'
+            elif getattr(args, 'memcheck', 'no') != 'no':
+                build = 'valgrind/memcheck'
+            else:
+                build = 'standard'
             lines.append(f'- Mode: `{getattr(args, "mode", None)}`  '
                          f'Class: `{getattr(args, "class_name", None)}`  Build: {build}')
         lines.append(f'- Host: `{socket.gethostname()}`')
@@ -342,9 +347,14 @@ class WarningsFactory():
                 lines.append('')
 
         if conf is not None and getattr(conf, 'valgrind_errors', False):
-            lines.append('## Valgrind')
-            lines.append('')
-            lines.append('- Valgrind/memcheck errors detected; see `*memcheck.xml`.')
+            if getattr(conf, 'sanitizers', False):
+                lines.append('## Sanitizers')
+                lines.append('')
+                lines.append('- ASan errors detected; see `dnt_asan.*`.')
+            else:
+                lines.append('## Valgrind')
+                lines.append('')
+                lines.append('- Valgrind/memcheck errors detected; see `*memcheck.xml`.')
             lines.append('')
 
         if timed:
