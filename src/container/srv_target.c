@@ -49,6 +49,23 @@ cont2req(struct ds_cont_child *cont, bool vos_agg)
 	return vos_agg ? cont->sc_agg_req : cont->sc_ec_agg_req;
 }
 
+static void
+cont_query_stable_epoch(struct agg_param *param, bool force)
+{
+	struct ds_cont_child *cont = param->ap_cont;
+	uint64_t              now;
+
+	if (!param->ap_vos_agg || cont->sc_query_stable_eph == NULL)
+		return;
+
+	now = sched_cur_msec();
+	if (!force && now - param->ap_stable_eph_query_msec < 2000)
+		return;
+
+	*cont->sc_query_stable_eph      = vos_cont_get_local_stable_epoch(cont->sc_hdl);
+	param->ap_stable_eph_query_msec = now;
+}
+
 int
 agg_rate_ctl(void *arg)
 {
@@ -68,6 +85,9 @@ agg_rate_ctl(void *arg)
 	 **/
 	if (ds_pool_is_rebuilding(pool) && cont->sc_ec_agg_active && !param->ap_vos_agg)
 		return -1;
+
+	/* Keep LSE reporting current while a long VOS aggregation pass yields. */
+	cont_query_stable_epoch(param, false);
 
 	/* When system is idle or under space pressure, let aggregation run in tight mode */
 	if (!dss_xstream_is_busy() || sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
@@ -475,8 +495,7 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		/* Reuse the vos aggregation ULT to periodically query the stable epoch,
 		 * ds_cont_eph_report() will read & report the epoch through IV.
 		 */
-		if (param->ap_vos_agg && cont->sc_query_stable_eph != NULL)
-			*cont->sc_query_stable_eph = vos_cont_get_local_stable_epoch(cont->sc_hdl);
+		cont_query_stable_epoch(param, true);
 
 		if (!cont_aggregate_runnable(cont, req, param->ap_vos_agg))
 			goto next;
