@@ -380,6 +380,14 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type s
 		D_DEBUG(DB_MGMT, "Successfully deleted blobID "DF_U64" for "
 			"pool:"DF_UUID" xs:%p\n", blob_id, DP_UUID(uuid),
 			xs_ctxt);
+		/*
+		 * During target recreation, keep the old SMD mapping until all
+		 * stale blobs have been deleted. It is replaced when the new
+		 * blob is assigned.
+		 */
+		if (flags & BIO_MC_FL_RECREATE)
+			goto done;
+
 		if (flags & BIO_MC_FL_RDB)
 			rc = smd_rdb_del_tgt(uuid, xs_ctxt->bxc_tgt_id, st);
 		else
@@ -390,6 +398,7 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type s
 				xs_ctxt->bxc_tgt_id, rc);
 	}
 
+done:
 	bio_bs_unhold(bbs);
 	blob_cp_arg_fini(ba);
 	return rc;
@@ -507,7 +516,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 		rc = smd_pool_get_blob(uuid, xs_ctxt->bxc_tgt_id, st, &blob_id1);
 	}
 
-	if (rc == 0) {
+	if (rc == 0 && !(flags & BIO_MC_FL_RECREATE)) {
 		D_ERROR(DF_UUID": Duplicated blob:"DF_U64" st:%u\n", DP_UUID(uuid), blob_id1, st);
 		return -DER_EXIST;
 	}
@@ -992,6 +1001,80 @@ close_meta_ioctxt:
 	rc1 = bio_ioctxt_close(bio_mc->mc_meta);
 	if (rc1)
 		D_ERROR("Failed to close meta ioctxt. %d\n", rc1);
+free_mem:
+	D_FREE(bio_mc);
+
+	return rc;
+}
+
+int
+bio_mc_hdr_verify(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_flags flags)
+{
+	struct bio_meta_context *bio_mc;
+	int                      tmp;
+	int                      rc;
+
+	D_ASSERT(xs_ctxt != NULL);
+
+	/* No meta/WAL blob to verify */
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		return 0;
+
+	D_ALLOC_PTR(bio_mc);
+	if (bio_mc == NULL)
+		return -DER_NOMEM;
+
+	rc = __bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, pool_id, flags, SMD_DEV_TYPE_META,
+			       SPDK_BLOBID_INVALID);
+	if (rc != 0) {
+		D_DEBUG(DB_MGMT,
+			"Failed to open meta ioctxt for pool " DF_UUID ", xs %p: " DF_RC "\n",
+			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
+		goto free_mem;
+	}
+
+	rc = meta_hdr_check(bio_mc, flags);
+	if (rc != 0) {
+		D_DEBUG(DB_MGMT, "Invalid meta header for pool " DF_UUID ", xs %p: " DF_RC "\n",
+			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
+		goto close_meta_ioctxt;
+	}
+
+	rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, pool_id, flags, SMD_DEV_TYPE_WAL,
+			       bio_mc->mc_meta_hdr.mh_wal_blobid);
+	if (rc != 0) {
+		D_DEBUG(DB_MGMT,
+			"Failed to open wal ioctxt for pool " DF_UUID ", xs %p: " DF_RC "\n",
+			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
+		goto close_meta;
+	}
+
+	rc = wal_hdr_check(bio_mc);
+	if (rc != 0)
+		D_DEBUG(DB_MGMT, "Invalid wal header for pool " DF_UUID ", xs %p: " DF_RC "\n",
+			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
+
+	/* A close failure is only an error when it is the status being returned */
+	tmp = bio_ioctxt_close(bio_mc->mc_wal);
+	if (tmp != 0) {
+		DL_CDEBUG(rc == 0, DLOG_ERR, DB_MGMT, tmp,
+			  "Failed to close wal ioctxt for pool " DF_UUID ", xs %p",
+			  DP_UUID(pool_id), xs_ctxt);
+		if (rc == 0)
+			rc = tmp;
+	}
+close_meta:
+	meta_close(bio_mc);
+close_meta_ioctxt:
+	/* A close failure is only an error when it is the status being returned */
+	tmp = bio_ioctxt_close(bio_mc->mc_meta);
+	if (tmp != 0) {
+		DL_CDEBUG(rc == 0, DLOG_ERR, DB_MGMT, tmp,
+			  "Failed to close meta ioctxt for pool " DF_UUID ", xs %p",
+			  DP_UUID(pool_id), xs_ctxt);
+		if (rc == 0)
+			rc = tmp;
+	}
 free_mem:
 	D_FREE(bio_mc);
 

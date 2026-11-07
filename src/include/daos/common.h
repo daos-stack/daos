@@ -934,6 +934,8 @@ enum {
 #define DAOS_MGMT_TGT_DESTROY_SLOW         (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa7)
 /* target stops raising its EC aggregation boundary (stale puller epoch) */
 #define DAOS_CONT_EC_BOUNDARY_FREEZE       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa8)
+/* Poison memory on free to expose use-after-free bugs */
+#define DAOS_MEM_PMEM_FREE_POISON          (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa9)
 
 #define DAOS_CHK_CONT_ORPHAN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb0)
 #define DAOS_CHK_CONT_BAD_LABEL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb1)
@@ -996,7 +998,9 @@ enum {
 
 /** DDB fault injection */
 #define DDB_CSUM_NR_INJECT                 (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x400)
+#define DDB_CSUM_NO_DATA_INJECT            (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x401)
 #define DDB_CSUM_CHUNK_NR_INJECT           (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x402)
+#define DDB_CSUM_SNAPSHOT_NOMEM_INJECT     (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x403)
 #define DDB_CSUM_TYPE_INJECT               (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x404)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
