@@ -42,7 +42,7 @@ pool_create_all(void **state)
 
 	/** create container */
 	print_message("creating pool synchronously ... ");
-	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+	rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
 			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */,
 			     arg->pool.svc /* svc */, uuid);
 	assert_rc_equal(rc, 0);
@@ -52,7 +52,7 @@ pool_create_all(void **state)
 
 	/** destroy container */
 	print_message("destroying pool synchronously ... ");
-	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	rc = ctl_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	assert_rc_equal(rc, 0);
 
 	print_message("success\n");
@@ -344,7 +344,7 @@ pool_create_and_destroy_retry(void **state)
 
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_CREATE_FAIL_CORPC | DAOS_FAIL_ONCE);
 	print_message("creating pool synchronously ... ");
-	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+	rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
 			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */,
 			     arg->pool.svc /* svc */, uuid);
 	assert_rc_equal(rc, 0);
@@ -352,7 +352,7 @@ pool_create_and_destroy_retry(void **state)
 
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE);
 	print_message("destroying pool synchronously ... ");
-	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	rc = ctl_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
@@ -434,7 +434,7 @@ pool_create_steps_down_from_up_empty(void **state)
 	rank = -1;
 	svc.rl_ranks = &rank;
 	svc.rl_nr = 1;
-	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+	rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
 			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */, &svc, uuid);
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
@@ -442,7 +442,7 @@ pool_create_steps_down_from_up_empty(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 
 	print_message("destroying pool synchronously ... ");
-	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	rc = ctl_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 }
@@ -464,7 +464,7 @@ pool_destroy_disconnect_all(void **state)
 		return;
 
 	print_message("creating pool synchronously ... ");
-	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+	rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
 			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */, arg->pool.svc, uuid);
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
@@ -476,7 +476,7 @@ pool_destroy_disconnect_all(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_EVICT_FAIL | DAOS_FAIL_ONCE);
 
 	print_message("destroying pool synchronously ... ");
-	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	rc = ctl_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	/*
 	 * TODO: This only triggers the pool_tgt_disconnect_all code path, but
 	 * can't verify that the pool is completed destroyed.
@@ -512,13 +512,13 @@ pool_destroy_cancel_rfcheck(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_RFCHECK_FAIL | DAOS_FAIL_ALWAYS);
 
 	print_message("creating pool synchronously ... ");
-	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+	rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
 			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */, arg->pool.svc, uuid);
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
 	print_message("destroying pool synchronously ... ");
-	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	rc = ctl_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
@@ -540,7 +540,7 @@ pool_create_query_fail(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MGMT_FAIL_CREATE_QUERY | DAOS_FAIL_ONCE);
 
 	print_message("creating pool synchronously ... ");
-	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+	rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
 			     MIN_SCM_SIZE, 0 /* nvme size */, NULL /* prop */, arg->pool.svc, uuid);
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = " DF_UUIDF "\n", DP_UUID(uuid));
@@ -548,7 +548,7 @@ pool_create_query_fail(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 
 	print_message("destroying pool synchronously ... ");
-	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	rc = ctl_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 }

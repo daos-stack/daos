@@ -1,0 +1,808 @@
+/**
+ * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+
+#include <pwd.h>
+#include <grp.h>
+#include <stdlib.h>
+
+#include <daos/common.h>
+#include <daos/tests_lib.h>
+#include <daos.h>
+#include <daos_srv/bio.h>
+#include <daos/libdaos_control.h>
+
+/*
+ * control_types.h declares DAOS_MAX_TARGETS_PER_DEVICE as a standalone copy of
+ * the BIO target-per-device cap so it can live in a client-side public header
+ * without pulling in daos_srv/bio.h. This TU is one of the few places that
+ * sees both headers; catch drift at compile time.
+ */
+D_CASSERT(DAOS_MAX_TARGETS_PER_DEVICE == BIO_MAX_VOS_TGT_CNT);
+D_CASSERT(sizeof(((device_list *)0)->dl_state) == DAOS_DEV_STATE_MAX_LEN);
+
+/*
+ * Log a non-zero rc from a daos_control_* call to the cart log so it shows
+ * up alongside server-side errors. The Go library also logs the underlying
+ * error string to stderr (see libdaos_control's logger setup), but logging
+ * here keeps the failure grep-able in the cart log too. Returns rc so the
+ * helper can be wrapped inline around the daos_control_* call.
+ */
+static inline int
+ctl_log_rc(int rc, const char *call_name)
+{
+	if (rc != 0)
+		D_ERROR("%s failed, " DF_RC "\n", call_name, DP_RC(rc));
+	return rc;
+}
+
+/* Initialize a per-call control context. */
+static int
+ctl_ctx_init(const char *cfg, uintptr_t *ctx)
+{
+	const char                   *log_file  = getenv("DAOS_TEST_CONTROL_LOG_FILE");
+	const char                   *log_level = getenv("DAOS_TEST_CONTROL_LOG_LEVEL");
+	struct daos_control_init_args args      = {
+		 .dcia_config_file = cfg,
+		 .dcia_log_file    = log_file ? log_file : "/tmp/libdaos_control.log",
+		 .dcia_log_level   = log_level ? log_level : "debug",
+        };
+	int rc;
+
+	rc = daos_control_init(&args, ctx);
+	if (rc != 0)
+		*ctx = 0;
+
+	return ctl_log_rc(rc, "daos_control_init");
+}
+
+/* Finalize a per-call control context. */
+static void
+ctl_ctx_fini(uintptr_t ctx)
+{
+	if (ctx != 0)
+		daos_control_fini(ctx);
+}
+
+int
+ctl_pool_set_prop(const char *dmg_config_file, const char *prop_name, const char *prop_value,
+		  const uuid_t pool_uuid)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_pool_set_prop(ctx, NULL, (uuid_t *)pool_uuid,
+						   (char *)prop_name, (char *)prop_value),
+			"daos_control_pool_set_prop");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_get_prop(const char *dmg_config_file, const char *label, const uuid_t uuid,
+		  const char *name, char **value)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	D_ASSERT(name != NULL);
+	D_ASSERT(value != NULL);
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(
+	    daos_control_pool_get_prop(ctx, (char *)label, (uuid_t *)uuid, (char *)name, value),
+	    "daos_control_pool_get_prop");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_create(const char *dmg_config_file, uid_t uid, gid_t gid, const char *grp,
+		const d_rank_list_t *tgts, daos_size_t scm_size, daos_size_t nvme_size,
+		daos_prop_t *prop, d_rank_list_t *svc, uuid_t uuid)
+{
+	daos_prop_t   *new_prop                           = NULL;
+	char           label[DAOS_PROP_LABEL_MAX_LEN + 1] = {0};
+	bool           need_label                         = true;
+	bool           need_rd_fac                        = true;
+	bool           need_space_rb                      = true;
+	uint32_t       orig_nr                            = 0;
+	uint32_t       extra                              = 0;
+	uint32_t       idx;
+	uintptr_t      ctx     = 0;
+	d_rank_list_t *svc_out = NULL;
+	int            rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	/*
+	 * Preserve pre-DAOS-17946 pool property defaults for the daos_test suite.
+	 * Post-17946 defaults (RF3, non-zero space_rb) break tests that create
+	 * containers with OC_S1 and assume no rebuild reserve. If the caller
+	 * hasn't set rd_fac or space_rb, force them to 0 here.
+	 */
+	if (prop != NULL && prop->dpp_nr > 0) {
+		orig_nr = prop->dpp_nr;
+		if (daos_prop_entry_get(prop, DAOS_PROP_PO_LABEL) != NULL)
+			need_label = false;
+		if (daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC) != NULL)
+			need_rd_fac = false;
+		if (daos_prop_entry_get(prop, DAOS_PROP_PO_SPACE_RB) != NULL)
+			need_space_rb = false;
+	}
+
+	if (need_label) {
+		char path[] = "/tmp/test_XXXXXX";
+		int  tmp_fd;
+
+		/* pool label is required, generate a unique one randomly */
+		tmp_fd = mkstemp(path);
+		if (tmp_fd < 0) {
+			D_ERROR("failed to generate unique label: %s\n", strerror(errno));
+			D_GOTO(out, rc = d_errno2der(errno));
+		}
+		close(tmp_fd);
+		unlink(path);
+
+		/* Copy label portion (after /tmp/) to properly sized buffer */
+		strncpy(label, &path[5], sizeof(label) - 1);
+		label[sizeof(label) - 1] = '\0';
+		extra++;
+	}
+	if (need_rd_fac)
+		extra++;
+	if (need_space_rb)
+		extra++;
+
+	if (extra > 0) {
+		new_prop = daos_prop_alloc(orig_nr + extra);
+		if (new_prop == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		if (orig_nr > 0) {
+			rc = daos_prop_copy(new_prop, prop);
+			if (rc != 0) {
+				daos_prop_free(new_prop);
+				new_prop = NULL;
+				D_GOTO(out, rc);
+			}
+		}
+
+		idx = orig_nr;
+		if (need_label) {
+			new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_LABEL;
+			D_STRNDUP(new_prop->dpp_entries[idx].dpe_str, label,
+				  DAOS_PROP_LABEL_MAX_LEN);
+			if (new_prop->dpp_entries[idx].dpe_str == NULL) {
+				daos_prop_free(new_prop);
+				new_prop = NULL;
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			idx++;
+		}
+		if (need_rd_fac) {
+			new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_REDUN_FAC;
+			new_prop->dpp_entries[idx].dpe_val  = 0;
+			idx++;
+		}
+		if (need_space_rb) {
+			new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SPACE_RB;
+			new_prop->dpp_entries[idx].dpe_val  = 0;
+			idx++;
+		}
+		prop = new_prop;
+	}
+
+	{
+		/*
+		 * NB: The original helper was written with a caller-supplied svc list,
+		 * but the new pool create wrapper was written to handle the allocations, as it's
+		 * a better API. New tests should use the wrapper API directly.
+		 */
+		struct daos_control_pool_create_args args = {
+		    .dcpa_uid       = uid,
+		    .dcpa_gid       = gid,
+		    .dcpa_grp       = grp,
+		    .dcpa_tgts      = (d_rank_list_t *)tgts,
+		    .dcpa_scm_size  = scm_size,
+		    .dcpa_nvme_size = nvme_size,
+		    .dcpa_prop      = prop,
+		    .dcpa_nsvc      = (svc != NULL) ? svc->rl_nr : 0,
+		};
+
+		rc = ctl_log_rc(daos_control_pool_create(
+				    ctx, &args, (svc != NULL) ? &svc_out : NULL, (uuid_t *)uuid),
+				"daos_control_pool_create");
+		if (rc == 0 && svc != NULL) {
+			if (svc_out == NULL) {
+				/* A successful create must report its service replicas. */
+				D_ERROR("pool create returned no svc replicas\n");
+				rc = -DER_INVAL;
+			} else {
+				uint32_t cap = svc->rl_nr;
+				uint32_t n   = svc_out->rl_nr;
+				uint32_t i;
+
+				if (n > cap)
+					n = cap;
+				for (i = 0; i < n; i++)
+					svc->rl_ranks[i] = svc_out->rl_ranks[i];
+				svc->rl_nr = n;
+			}
+		}
+		if (svc_out != NULL)
+			d_rank_list_free(svc_out);
+	}
+
+out:
+	if (new_prop != NULL)
+		daos_prop_free(new_prop);
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp, int force)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_pool_destroy(ctx, (uuid_t *)uuid, (char *)grp, force),
+			"daos_control_pool_destroy");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_evict(const char *dmg_config_file, const uuid_t uuid, const char *grp)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_pool_evict(ctx, (uuid_t *)uuid, (char *)grp),
+			"daos_control_pool_evict");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_update_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		    const char *ace)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_pool_update_ace(ctx, (uuid_t *)uuid, (char *)grp, (char *)ace),
+			"daos_control_pool_update_ace");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_delete_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		    const char *principal)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(
+	    daos_control_pool_delete_ace(ctx, (uuid_t *)uuid, (char *)grp, (char *)principal),
+	    "daos_control_pool_delete_ace");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_exclude(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
+		 int tgt_idx)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_pool_exclude(ctx, (uuid_t *)uuid, (char *)grp, rank, tgt_idx),
+			"daos_control_pool_exclude");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
+		     int tgt_idx)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(
+	    daos_control_pool_reintegrate(ctx, (uuid_t *)uuid, (char *)grp, rank, tgt_idx),
+	    "daos_control_pool_reintegrate");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_drain(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
+	       int tgt_idx)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_pool_drain(ctx, (uuid_t *)uuid, (char *)grp, rank, tgt_idx),
+			"daos_control_pool_drain");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_extend(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t *ranks,
+		int rank_nr)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_pool_extend(ctx, (uuid_t *)uuid, (char *)grp, ranks, rank_nr),
+			"daos_control_pool_extend");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_list(const char *dmg_config_file, const char *group, daos_size_t *npools,
+	      daos_mgmt_pool_info_t *pools)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	if (npools == NULL)
+		return -DER_INVAL;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_pool_list(ctx, (char *)group, npools, pools),
+			"daos_control_pool_list");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_rebuild_stop(const char *dmg_config_file, const uuid_t uuid, const char *grp, bool force)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(
+	    daos_control_pool_rebuild_stop(ctx, (uuid_t *)uuid, (char *)grp, force ? 1 : 0),
+	    "daos_control_pool_rebuild_stop");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_pool_rebuild_start(const char *dmg_config_file, const uuid_t uuid, const char *grp)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_pool_rebuild_start(ctx, (uuid_t *)uuid, (char *)grp),
+			"daos_control_pool_rebuild_start");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_storage_device_list(const char *dmg_config_file, int *ndisks, device_list *devices)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_storage_device_list(ctx, NULL, ndisks, devices),
+			"daos_control_storage_device_list");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_storage_set_nvme_fault(const char *dmg_config_file, char *host, const uuid_t uuid)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_storage_set_nvme_fault(ctx, host, (uuid_t *)uuid),
+			"daos_control_storage_set_nvme_fault");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_storage_query_device_health(const char *dmg_config_file, char *host, char *stats,
+				size_t stats_len, const uuid_t uuid)
+{
+	char      key[stats_len];
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	/*
+	 * The Go export requires that statsKey and statsOut are distinct
+	 * buffers.  Copy the key name into a local scratch buffer so the
+	 * output can be written back into the caller's stats buffer without
+	 * aliasing.
+	 */
+	strncpy(key, stats, stats_len - 1);
+	key[stats_len - 1] = '\0';
+
+	rc = ctl_log_rc(daos_control_storage_query_device_health(ctx, host, key, stats,
+								 (int)stats_len, (uuid_t *)uuid),
+			"daos_control_storage_query_device_health");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+verify_blobstore_state(int state, const char *state_str)
+{
+	if (strcasecmp(state_str, "FAULTY") == 0) {
+		if (state == BIO_BS_STATE_FAULTY)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "NORMAL") == 0) {
+		if (state == BIO_BS_STATE_NORMAL)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "TEARDOWN") == 0) {
+		if (state == BIO_BS_STATE_TEARDOWN)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "OUT") == 0) {
+		if (state == BIO_BS_STATE_OUT)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "SETUP") == 0) {
+		if (state == BIO_BS_STATE_SETUP)
+			return 0;
+	}
+
+	return 1;
+}
+
+int
+ctl_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_system_stop_rank(ctx, rank, force),
+			"daos_control_system_stop_rank");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_system_stop(const char *dmg_config_file, int force)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_system_stop(ctx, force), "daos_control_system_stop");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_system_start_rank(const char *dmg_config_file, d_rank_t rank)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc =
+	    ctl_log_rc(daos_control_system_start_rank(ctx, rank), "daos_control_system_start_rank");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_system_start(const char *dmg_config_file)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_system_start(ctx), "daos_control_system_start");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_system_reint_rank(const char *dmg_config_file, d_rank_t rank)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc =
+	    ctl_log_rc(daos_control_system_reint_rank(ctx, rank), "daos_control_system_reint_rank");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_system_exclude_rank(const char *dmg_config_file, d_rank_t rank)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_system_exclude_rank(ctx, rank),
+			"daos_control_system_exclude_rank");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_server_set_logmasks(const char *dmg_config_file, const char *masks, const char *streams,
+			const char *subsystems)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_server_set_logmasks(ctx, NULL, (char *)masks, (char *)streams,
+							 (char *)subsystems),
+			"daos_control_server_set_logmasks");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+const char *
+daos_target_state_enum_to_str(int state)
+{
+	switch (state) {
+	case DAOS_TS_UNKNOWN:
+		return "UNKNOWN";
+	case DAOS_TS_DOWN_OUT:
+		return "DOWNOUT";
+	case DAOS_TS_DOWN:
+		return "DOWN";
+	case DAOS_TS_UP:
+		return "UP";
+	case DAOS_TS_UP_IN:
+		return "UPIN";
+	case DAOS_TS_DRAIN:
+		return "DRAIN";
+	}
+
+	return "Undefined State";
+}
+
+int
+ctl_fault_inject(const char *dmg_config_file, uuid_t uuid, bool mgmt, const char *fault)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_fault_inject(ctx, (uuid_t *)uuid, mgmt ? 1 : 0, (char *)fault),
+			"daos_control_fault_inject");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_check_switch(const char *dmg_config_file, bool enable)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc =
+	    ctl_log_rc(daos_control_check_switch(ctx, enable ? 1 : 0), "daos_control_check_switch");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_check_start(const char *dmg_config_file, uint32_t flags, uint32_t pool_nr, uuid_t uuids[],
+		const char *policies)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_check_start(ctx, flags, pool_nr, uuids, (char *)policies),
+			"daos_control_check_start");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_check_stop(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[])
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_check_stop(ctx, pool_nr, uuids), "daos_control_check_stop");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_check_query(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[],
+		struct daos_check_info *dci)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_check_query(ctx, pool_nr, uuids, dci),
+			"daos_control_check_query");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_check_repair(ctx, seq, opt), "daos_control_check_repair");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_check_set_policy(const char *dmg_config_file, uint32_t flags, const char *policies)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_check_set_policy(ctx, flags, (char *)policies),
+			"daos_control_check_set_policy");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
