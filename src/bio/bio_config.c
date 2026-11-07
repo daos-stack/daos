@@ -89,7 +89,6 @@ cap_object_or_array(const struct spdk_json_val *val, void *out)
 	return 0;
 }
 
-
 static int
 cap_array_or_null(const struct spdk_json_val *val, void *out)
 {
@@ -126,11 +125,9 @@ config_entry {
 	struct spdk_json_val	*params;
 };
 
-static struct spdk_json_object_decoder
-config_entry_decoders[] = {
-	{"method", offsetof(struct config_entry, method), spdk_json_decode_string},
-	{"params", offsetof(struct config_entry, params), cap_object_or_array, true}
-};
+static struct spdk_json_object_decoder config_entry_decoders[] = {
+    {"method", offsetof(struct config_entry, method), spdk_json_decode_string},
+    {"params", offsetof(struct config_entry, params), cap_object_or_array, true}};
 
 /* HOTPLUG_FILTER_MAX_ENTRIES caps the number of bdev_hotplug_range entries decoded from
  * daos_nvme.conf. spdk_json_decode_array() requires a fixed-size output buffer.
@@ -155,7 +152,7 @@ decode_hotplug_filter_entry(const struct spdk_json_val *val, void *out)
 	struct hotplug_filter_entry *entry = out;
 
 	return spdk_json_decode_object(val, hotplug_filter_entry_decoders,
-					SPDK_COUNTOF(hotplug_filter_entry_decoders), entry);
+				       SPDK_COUNTOF(hotplug_filter_entry_decoders), entry);
 }
 
 /* Fixed-size array of hotplug filter entries decoded from the bdev_hotplug_range config array.
@@ -780,7 +777,7 @@ find_daos_config_entry(struct json_config_ctx *ctx, const char *method_name,
 		       struct config_entry *cfg)
 {
 	struct spdk_json_val *daos_data;
-	int		      rc;
+	int                   rc;
 
 	/* Capture daos_data JSON object */
 	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
@@ -827,9 +824,9 @@ static int
 decode_daos_object(const char *nvme_conf, const char *method_name,
 		   const struct spdk_json_object_decoder *decoders, size_t num_decoders, void *out)
 {
-	struct json_config_ctx  *ctx;
-	struct config_entry      cfg = {};
-	int			 rc = 0;
+	struct json_config_ctx *ctx;
+	struct config_entry     cfg = {};
+	int                     rc  = 0;
 
 	D_ASSERT(nvme_conf != NULL);
 	D_ASSERT(method_name != NULL);
@@ -866,9 +863,9 @@ decode_daos_array(const char *nvme_conf, const char *method_name,
 		  spdk_json_decode_fn decode_entry_func, void *out, size_t max_size,
 		  size_t *out_size, size_t stride)
 {
-	struct json_config_ctx  *ctx;
-	struct config_entry      cfg = {};
-	int			 rc = 0;
+	struct json_config_ctx *ctx;
+	struct config_entry     cfg = {};
+	int                     rc  = 0;
 
 	D_ASSERT(nvme_conf != NULL);
 	D_ASSERT(method_name != NULL);
@@ -885,8 +882,7 @@ decode_daos_array(const char *nvme_conf, const char *method_name,
 	if (rc != 0)
 		goto out;
 
-	rc = spdk_json_decode_array(cfg.params, decode_entry_func, out, max_size, out_size,
-				    stride);
+	rc = spdk_json_decode_array(cfg.params, decode_entry_func, out, max_size, out_size, stride);
 	if (rc < 0) {
 		D_ERROR("Failed to decode '%s' entry: %s)\n", method_name, spdk_strerror(-rc));
 		D_GOTO(out, rc = -DER_INVAL);
@@ -908,7 +904,8 @@ hotplug_filter_fn(const struct spdk_pci_addr *addr)
 	size_t i;
 
 	if (hotplug_filter.num_entries == 0) {
-		D_DEBUG(DB_MGMT, "hotplug filter accept event on %04X:%02X, no entries configured\n",
+		D_DEBUG(DB_MGMT,
+			"hotplug filter accept event on %04X:%02X, no entries configured\n",
 			addr->domain, addr->bus);
 		return true; /* allow all if no filter entries configured */
 	}
@@ -918,8 +915,8 @@ hotplug_filter_fn(const struct spdk_pci_addr *addr)
 
 		if (addr->domain == entry->domain && addr->bus >= entry->begin &&
 		    addr->bus <= entry->end) {
-			D_DEBUG(DB_MGMT, "hotplug filter accept event on %04X:%02X\n",
-				addr->domain, addr->bus);
+			D_DEBUG(DB_MGMT, "hotplug filter accept event on %04X:%02X\n", addr->domain,
+				addr->bus);
 			return true;
 		}
 	}
@@ -941,7 +938,7 @@ int
 bio_set_hotplug_filter(const char *nvme_conf)
 {
 	int	rc;
-	size_t	i;
+	size_t  i;
 
 	hotplug_filter = (struct hotplug_filter_info){};
 
