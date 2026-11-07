@@ -89,7 +89,7 @@ func (svc *mgmtSvc) enableChecker() error {
 
 func (svc *mgmtSvc) disableChecker() error {
 	if err := system.DelMgmtProperty(svc.sysdb, checkerEnabledKey); err != nil {
-		return errors.Wrap(err, "failed to delete checker policies")
+		return errors.Wrap(err, "failed to disable checker")
 	}
 	return nil
 }

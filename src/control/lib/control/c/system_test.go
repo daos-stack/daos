@@ -131,55 +131,123 @@ func TestControlC_SystemStartRank(t *testing.T) {
 
 // Whole-system stop: the request must carry an empty rank set.
 func TestControlC_SystemStop(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
-		UnaryResponse: control.MockMSResponse("host1", nil, &mgmtpb.SystemStopResp{
-			Results: []*sharedpb.RankResult{
-				{Rank: 0, State: "stopped"},
-				{Rank: 1, State: "stopped"},
+	for name, tc := range map[string]struct {
+		mic   *control.MockInvokerConfig
+		force bool
+		expRC int
+	}{
+		"success": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("host1", nil, &mgmtpb.SystemStopResp{
+					Results: []*sharedpb.RankResult{
+						{Rank: 0, State: "stopped"},
+						{Rank: 1, State: "stopped"},
+					},
+				}),
 			},
-		}),
-	})
-	handle := makeTestHandle(mi, log)
-	defer handle.Delete()
+			force: true,
+			expRC: 0,
+		},
+		"rpc failure": {
+			mic: &control.MockInvokerConfig{
+				UnaryError: daos.Unreachable,
+			},
+			expRC: int(daos.Unreachable),
+		},
+		"rank result errored": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("host1", nil, &mgmtpb.SystemStopResp{
+					Results: []*sharedpb.RankResult{
+						{Rank: 0, State: "stopped"},
+						{Rank: 1, Errored: true, Msg: "rank stop failed"},
+					},
+				}),
+			},
+			expRC: int(daos.MiscError),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
-	if rc := callSystemStop(handle, true); rc != 0 {
-		t.Fatalf("rc=%d, want 0", rc)
-	}
+			mi := control.NewMockInvoker(log, tc.mic)
+			handle := makeTestHandle(mi, log)
+			defer handle.Delete()
 
-	req := mi.SentReqs[0].(*control.SystemStopReq)
-	if req.Ranks.Count() != 0 {
-		t.Fatalf("Ranks=%s, want empty set for whole-system stop", req.Ranks.String())
-	}
-	if !req.Force {
-		t.Fatal("Force not propagated")
+			rc := callSystemStop(handle, tc.force)
+
+			if rc != tc.expRC {
+				t.Fatalf("expected RC %d, got %d", tc.expRC, rc)
+			}
+			if tc.expRC != 0 {
+				return
+			}
+			req := mi.SentReqs[0].(*control.SystemStopReq)
+			if req.Ranks.Count() != 0 {
+				t.Fatalf("Ranks=%s, want empty set for whole-system stop", req.Ranks.String())
+			}
+			if req.Force != tc.force {
+				t.Fatalf("Force=%t, want %t", req.Force, tc.force)
+			}
+		})
 	}
 }
 
 func TestControlC_SystemStart(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
-		UnaryResponse: control.MockMSResponse("host1", nil, &mgmtpb.SystemStartResp{
-			Results: []*sharedpb.RankResult{
-				{Rank: 0, State: "joined"},
-				{Rank: 1, State: "joined"},
+	for name, tc := range map[string]struct {
+		mic   *control.MockInvokerConfig
+		expRC int
+	}{
+		"success": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("host1", nil, &mgmtpb.SystemStartResp{
+					Results: []*sharedpb.RankResult{
+						{Rank: 0, State: "joined"},
+						{Rank: 1, State: "joined"},
+					},
+				}),
 			},
-		}),
-	})
-	handle := makeTestHandle(mi, log)
-	defer handle.Delete()
+			expRC: 0,
+		},
+		"rpc failure": {
+			mic: &control.MockInvokerConfig{
+				UnaryError: daos.Unreachable,
+			},
+			expRC: int(daos.Unreachable),
+		},
+		"rank result errored": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("host1", nil, &mgmtpb.SystemStartResp{
+					Results: []*sharedpb.RankResult{
+						{Rank: 0, State: "joined"},
+						{Rank: 1, Errored: true, Msg: "rank start failed"},
+					},
+				}),
+			},
+			expRC: int(daos.MiscError),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
-	if rc := callSystemStart(handle); rc != 0 {
-		t.Fatalf("rc=%d, want 0", rc)
-	}
+			mi := control.NewMockInvoker(log, tc.mic)
+			handle := makeTestHandle(mi, log)
+			defer handle.Delete()
 
-	req := mi.SentReqs[0].(*control.SystemStartReq)
-	if req.Ranks.Count() != 0 {
-		t.Fatalf("Ranks=%s, want empty set for whole-system start", req.Ranks.String())
+			rc := callSystemStart(handle)
+
+			if rc != tc.expRC {
+				t.Fatalf("expected RC %d, got %d", tc.expRC, rc)
+			}
+			if tc.expRC != 0 {
+				return
+			}
+			req := mi.SentReqs[0].(*control.SystemStartReq)
+			if req.Ranks.Count() != 0 {
+				t.Fatalf("Ranks=%s, want empty set for whole-system start", req.Ranks.String())
+			}
+		})
 	}
 }
 
