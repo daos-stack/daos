@@ -116,8 +116,8 @@ class CmockaUtils():
         return EnvironmentVariables({
             "CMOCKA_XML_FILE": os.path.join(self.cmocka_dir, "%g_cmocka_results.xml"),
             "CMOCKA_MESSAGE_OUTPUT": "xml",
-            # Route libdaos_control (the C-bindings backing dmg_* helpers in
-            # tests_dmg_helpers.c) log into DAOS_TEST_LOG_DIR. Every cmocka test
+            # Route libdaos_control (the C-bindings backing ctl_* helpers in
+            # tests_ctl_helpers.c) log into DAOS_TEST_LOG_DIR. Every cmocka test
             # links libdaos_control, so this belongs here rather than per-caller.
             # collection_utils.py sweeps DAOS_TEST_LOG_DIR after each test, so
             # the log gets archived. Without this, the C side falls back to

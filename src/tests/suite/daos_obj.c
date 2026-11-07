@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -611,8 +612,7 @@ int pool_storage_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 static int
 set_pool_reclaim_strategy(test_arg_t *arg, char *strategy)
 {
-	return dmg_pool_set_prop(arg->dmg_config, "reclaim",
-				 strategy, arg->pool.pool_uuid);
+	return ctl_pool_set_prop(arg->dmg_config, "reclaim", strategy, arg->pool.pool_uuid);
 }
 
 /**
@@ -3175,8 +3175,7 @@ tgt_idx_change_retry(void **state)
 
 		/** exclude target of the replica */
 		print_message("rank 0 excluding rank %u ...\n", rank);
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
-				      arg->group, rank, -1);
+		rc = ctl_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank, -1);
 		assert_success(rc);
 
 		/** progress the async IO (not must) */
@@ -3233,8 +3232,8 @@ tgt_idx_change_retry(void **state)
 
 	if (arg->myrank == 0) {
 		print_message("rank 0 adding rank %u ...\n", rank);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  rank, -1);
+		rc = ctl_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank,
+					  -1);
 		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
@@ -3275,8 +3274,7 @@ fetch_replica_unavail(void **state)
 
 	if (arg->myrank == 0) {
 		/** exclude the target of this obj's replicas */
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
-				      arg->group, rank, -1);
+		rc = ctl_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank, -1);
 		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
@@ -3294,8 +3292,8 @@ fetch_replica_unavail(void **state)
 		test_rebuild_wait(&arg, 1);
 
 		/* add back the excluded targets */
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  rank, -1);
+		rc = ctl_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank,
+					  -1);
 		assert_success(rc);
 
 		/* wait until reintegration is done */

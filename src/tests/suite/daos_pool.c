@@ -200,9 +200,9 @@ pool_exclude(void **state)
 	}
 	rank = info.pi_nnodes - 1;
 	print_message("rank 0 excluding rank %u... ", rank);
-	/* TODO: remove the loop, call dmg_pool_exclude passing in the rank just calculated? */
+	/* TODO: remove the loop, call ctl_pool_exclude passing in the rank just calculated? */
 	for (idx = 0; idx < arg->pool.svc->rl_nr; idx++) {
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+		rc = ctl_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 				      arg->pool.svc->rl_ranks[idx], tgt);
 		assert_success(rc);
 	}
@@ -723,7 +723,7 @@ pool_op_retry(void **state)
 	/* pool update ACL entry success committed, "lost" reply - duplicate RPC retry */
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
 	print_message("update pool ACL with entry=%s (retry / dup rpc detection)... ", ace);
-	rc = dmg_pool_update_ace(arg->dmg_config, arg->pool.pool_uuid, arg->group, ace);
+	rc = ctl_pool_update_ace(arg->dmg_config, arg->pool.pool_uuid, arg->group, ace);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
@@ -731,7 +731,7 @@ pool_op_retry(void **state)
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
 	print_message("delete pool ACL with principal=%s (retry / dup rpc detection)... ",
 		      principal);
-	rc = dmg_pool_delete_ace(arg->dmg_config, arg->pool.pool_uuid, arg->group, principal);
+	rc = ctl_pool_delete_ace(arg->dmg_config, arg->pool.pool_uuid, arg->group, principal);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
@@ -752,7 +752,7 @@ pool_op_retry(void **state)
 	/* pool evict success committed, "lost" reply - duplicate RPC retry */
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
 	print_message("evicting pool handles (retry / dup rpc detection)... ");
-	rc = dmg_pool_evict(arg->dmg_config, arg->pool.pool_uuid, arg->group);
+	rc = ctl_pool_evict(arg->dmg_config, arg->pool.pool_uuid, arg->group);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
@@ -774,7 +774,7 @@ pool_op_retry(void **state)
 #if 0
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ALWAYS);
 	print_message("draining rank %d target idx 0 ... ", info.pi_leader);
-	rc = dmg_pool_drain(arg->dmg_config, arg->pool.pool_uuid, arg->group, info.pi_leader, 0);
+	rc = ctl_pool_drain(arg->dmg_config, arg->pool.pool_uuid, arg->group, info.pi_leader, 0);
 	assert_rc_equal(rc, 0);
 	test_set_engine_fail_loc(arg, leader_rank, 0);
 	print_message("success\n");
@@ -816,7 +816,7 @@ pool_op_retry(void **state)
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ALWAYS);
 	print_message("test-fail update pool ACL with entry=%s (retry / dup rpc detection)... ",
 		      ace);
-	rc = dmg_pool_update_ace(arg->dmg_config, arg->pool.pool_uuid, arg->group, ace);
+	rc = ctl_pool_update_ace(arg->dmg_config, arg->pool.pool_uuid, arg->group, ace);
 	assert_rc_equal(rc, -DER_MISC);
 	test_set_engine_fail_loc(arg, leader_rank, 0);
 	print_message("success\n");
@@ -825,7 +825,7 @@ pool_op_retry(void **state)
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ALWAYS);
 	print_message("test-fail delete pool ACL with principal=%s (retry / dup rpc detection)... ",
 		      principal);
-	rc = dmg_pool_delete_ace(arg->dmg_config, arg->pool.pool_uuid, arg->group, principal);
+	rc = ctl_pool_delete_ace(arg->dmg_config, arg->pool.pool_uuid, arg->group, principal);
 	assert_rc_equal(rc, -DER_MISC);
 	test_set_engine_fail_loc(arg, leader_rank, 0);
 	print_message("success\n");
@@ -840,7 +840,7 @@ pool_op_retry(void **state)
 	/* pool evict failure committed, "lost" reply - duplicate RPC retry */
 	test_set_engine_fail_loc(arg, leader_rank, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ALWAYS);
 	print_message("test-fail to evict pool handles (retry / dup rpc detection)... ");
-	rc = dmg_pool_evict(arg->dmg_config, arg->pool.pool_uuid, arg->group);
+	rc = ctl_pool_evict(arg->dmg_config, arg->pool.pool_uuid, arg->group);
 	assert_rc_equal(rc, -DER_MISC);
 	test_set_engine_fail_loc(arg, leader_rank, 0);
 	print_message("success\n");
@@ -862,7 +862,7 @@ pool_op_retry(void **state)
 #if 0
 	test_set_engine_fail_loc(arg, info.pi_leader, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
 	print_message("draining rank %d target idx 0 ... ", info.pi_leader);
-	rc = dmg_pool_drain(arg->dmg_config, arg->pool.pool_uuid, arg->group, info.pi_leader, 0);
+	rc = ctl_pool_drain(arg->dmg_config, arg->pool.pool_uuid, arg->group, info.pi_leader, 0);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 #endif
@@ -2368,7 +2368,7 @@ reconf_notleader_handling(void **state)
 	 * leader's local membership.
 	 */
 	print_message("extending pool to rank %u\n", extend_rank);
-	rc = dmg_pool_extend(arg->dmg_config, arg->pool.pool_uuid, arg->group, &extend_rank, 1);
+	rc = ctl_pool_extend(arg->dmg_config, arg->pool.pool_uuid, arg->group, &extend_rank, 1);
 	assert_rc_equal(rc, 0);
 	print_message("waiting for rebuild to complete\n");
 	test_rebuild_wait(&arg, 1);

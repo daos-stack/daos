@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1832,8 +1833,8 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	rank_to_exclude = layout1->ol_shards[0]->os_shard_loc[0].sd_rank;
 	print_message("Excluding rank %d\n", rank_to_exclude);
 	disabled_nr = disabled_targets(arg, NULL /* affected_engines */);
-	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-			      layout1->ol_shards[0]->os_shard_loc[0].sd_rank, -1);
+	rc          = ctl_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				       layout1->ol_shards[0]->os_shard_loc[0].sd_rank, -1);
 	assert_success(rc);
 	after_disabled_nr = disabled_targets(arg, &affected_engines);
 	assert_true(disabled_nr < after_disabled_nr);
@@ -1869,8 +1870,8 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	daos_fail_loc_reset();
 	daos_fail_num_set(0);
 
-	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-				  rank_to_exclude, -1);
+	rc = ctl_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank_to_exclude,
+				  -1);
 	assert_success(rc);
 	after_disabled_nr = disabled_targets(arg, NULL);
 	assert_int_equal(disabled_nr, after_disabled_nr);
@@ -2576,10 +2577,9 @@ basic_scrubbing_test(void **state, char *scrub_freq)
 	 * Setup
 	 */
 	setup_from_test_args(&ctx, (test_arg_t *)*state);
-	rc = dmg_pool_set_prop(dmg_config_file, "scrub", "timed",
-			       ctx.test_arg->pool.pool_uuid);
+	rc = ctl_pool_set_prop(dmg_config_file, "scrub", "timed", ctx.test_arg->pool.pool_uuid);
 	assert_success(rc);
-	rc = dmg_pool_set_prop(dmg_config_file, "scrub_freq", scrub_freq,
+	rc = ctl_pool_set_prop(dmg_config_file, "scrub_freq", scrub_freq,
 			       ctx.test_arg->pool.pool_uuid);
 	assert_success(rc);
 

@@ -146,14 +146,14 @@ nvme_fault_reaction(void **state, int mode)
 	/**
 	 * Get the Total number of NVMe devices from all the servers.
 	 */
-	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
+	rc = ctl_storage_device_list(dmg_config_file, &ndisks, NULL);
 	assert_rc_equal(rc, 0);
 
 	/**
 	 * Get the Device info of all NVMe devices.
 	 */
 	D_ALLOC_ARRAY(devices, ndisks);
-	rc = dmg_storage_device_list(dmg_config_file, &ndisks, devices);
+	rc = ctl_storage_device_list(dmg_config_file, &ndisks, devices);
 	assert_rc_equal(rc, 0);
 
 	faulty_disk_idx = pick_faulty_device(devices, ndisks, rank);
@@ -191,13 +191,9 @@ nvme_fault_reaction(void **state, int mode)
 
 		/* create another offline pool*/
 		print_message("create another offline pool");
-		rc = dmg_pool_create(dmg_config_file,
-				     geteuid(), getegid(),
-				     arg->group, NULL /* tgts */,
-				     scm_size, nvme_size,
-				     NULL /* prop */,
-				     arg->pool.svc /* svc */,
-				     offline_pool_uuid);
+		rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), arg->group,
+				     NULL /* tgts */, scm_size, nvme_size, NULL /* prop */,
+				     arg->pool.svc /* svc */, offline_pool_uuid);
 		assert_rc_equal(rc, 0);
 	}
 
@@ -358,7 +354,7 @@ nvme_test_verify_device_stats(void **state)
 	/**
 	*Get the Total number of NVMe devices from all the servers.
 	*/
-	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
+	rc = ctl_storage_device_list(dmg_config_file, &ndisks, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Total Disks = %d\n", ndisks);
 
@@ -366,7 +362,7 @@ nvme_test_verify_device_stats(void **state)
 	*Get the Device info of all NVMe devices.
 	*/
 	D_ALLOC_ARRAY(devices, ndisks);
-	rc = dmg_storage_device_list(dmg_config_file, &ndisks, devices);
+	rc = ctl_storage_device_list(dmg_config_file, &ndisks, devices);
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < ndisks; i++)
 		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s\n", devices[i].dl_rank,
@@ -416,7 +412,7 @@ nvme_test_verify_device_stats(void **state)
 	*/
 	print_message("NVMe with UUID=" DF_UUIDF " on host=%s\" set to Faulty\n",
 		      DP_UUID(devices[rank_pos].dl_device_id), devices[rank_pos].dl_host);
-	rc = dmg_storage_set_nvme_fault(dmg_config_file, devices[rank_pos].dl_host,
+	rc = ctl_storage_set_nvme_fault(dmg_config_file, devices[rank_pos].dl_host,
 					devices[rank_pos].dl_device_id);
 	assert_rc_equal(rc, 0);
 	sleep(60);
@@ -426,7 +422,7 @@ nvme_test_verify_device_stats(void **state)
 	* Verify "FAULTY -> TEARDOWN" and "TEARDOWN -> OUT" device states found
 	* in server log.
 	*/
-	rc = dmg_storage_device_list(dmg_config_file, &ndisks, devices);
+	rc = ctl_storage_device_list(dmg_config_file, &ndisks, devices);
 	assert_rc_equal(rc, 0);
 
 	/* The device position could be changed, re-calculate the index */
@@ -496,7 +492,7 @@ nvme_test_get_blobstore_state(void **state)
 	/**
 	 * Get the total number of NVMe devices from all the servers.
 	 */
-	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
+	rc = ctl_storage_device_list(dmg_config_file, &ndisks, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Total Disks = %d\n", ndisks);
 
@@ -504,7 +500,7 @@ nvme_test_get_blobstore_state(void **state)
 	 * Get the Device info of all NVMe devices.
 	 */
 	D_ALLOC_ARRAY(devices, ndisks);
-	rc = dmg_storage_device_list(dmg_config_file, &ndisks, devices);
+	rc = ctl_storage_device_list(dmg_config_file, &ndisks, devices);
 	assert_rc_equal(rc, 0);
 	faulty_disk_idx = pick_faulty_device(devices, ndisks, rank);
 	if (faulty_disk_idx == -1) {
@@ -557,7 +553,7 @@ nvme_test_get_blobstore_state(void **state)
 	print_message("NVMe with UUID=" DF_UUIDF " on host=%s\" set to Faulty\n",
 		      DP_UUID(devices[faulty_disk_idx].dl_device_id),
 		      devices[faulty_disk_idx].dl_host);
-	rc = dmg_storage_set_nvme_fault(dmg_config_file, devices[faulty_disk_idx].dl_host,
+	rc = ctl_storage_set_nvme_fault(dmg_config_file, devices[faulty_disk_idx].dl_host,
 					devices[faulty_disk_idx].dl_device_id);
 	assert_rc_equal(rc, 0);
 
@@ -589,7 +585,7 @@ nvme_test_simulate_IO_error(void **state)
 	daos_size_t	size = 4 * 4096; /* record size */
 	char		*ow_buf;
 	char		*fbuf;
-	/* Scratch buffers for dmg_storage_query_device_health: oversized for
+	/* Scratch buffers for ctl_storage_query_device_health: oversized for
 	 * both the longest key name ("bio_write_errs") and any numeric counter
 	 * value we expect back. */
 	char             write_errors[32];
@@ -611,7 +607,7 @@ nvme_test_simulate_IO_error(void **state)
 	/*
 	 *  Get the Total number of NVMe devices from all the servers.
 	 */
-	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
+	rc = ctl_storage_device_list(dmg_config_file, &ndisks, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Total Disks = %d\n", ndisks);
 
@@ -619,7 +615,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Get the Device info of all NVMe devices
 	 */
 	D_ALLOC_ARRAY(devices, ndisks);
-	rc = dmg_storage_device_list(dmg_config_file, &ndisks, devices);
+	rc = ctl_storage_device_list(dmg_config_file, &ndisks, devices);
 	assert_rc_equal(rc, 0);
 
 	rank_pos = pick_faulty_device(devices, ndisks, rank);
@@ -683,7 +679,7 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	strncpy(write_errors, "bio_write_errs", sizeof(write_errors) - 1);
 	write_errors[sizeof(write_errors) - 1] = '\0';
-	rc = dmg_storage_query_device_health(dmg_config_file, devices[rank_pos].dl_host,
+	rc = ctl_storage_query_device_health(dmg_config_file, devices[rank_pos].dl_host,
 					     write_errors, sizeof(write_errors),
 					     devices[rank_pos].dl_device_id);
 	assert_rc_equal(rc, 0);
@@ -695,7 +691,7 @@ nvme_test_simulate_IO_error(void **state)
 	strncpy(read_errors, "bio_read_errs", sizeof(read_errors) - 1);
 	read_errors[sizeof(read_errors) - 1] = '\0';
 	rc =
-	    dmg_storage_query_device_health(dmg_config_file, devices[rank_pos].dl_host, read_errors,
+	    ctl_storage_query_device_health(dmg_config_file, devices[rank_pos].dl_host, read_errors,
 					    sizeof(read_errors), devices[rank_pos].dl_device_id);
 	assert_rc_equal(rc, 0);
 	print_message("Initial read_errors = %s\n", read_errors);
@@ -736,7 +732,7 @@ nvme_test_simulate_IO_error(void **state)
 	arg->expect_result = 0;
 	strncpy(check_errors, "bio_write_errs", sizeof(check_errors) - 1);
 	check_errors[sizeof(check_errors) - 1] = '\0';
-	rc = dmg_storage_query_device_health(dmg_config_file, devices[rank_pos].dl_host,
+	rc = ctl_storage_query_device_health(dmg_config_file, devices[rank_pos].dl_host,
 					     check_errors, sizeof(check_errors),
 					     devices[rank_pos].dl_device_id);
 	assert_rc_equal(rc, 0);
@@ -749,7 +745,7 @@ nvme_test_simulate_IO_error(void **state)
 	 */
 	strncpy(check_errors, "bio_read_errs", sizeof(check_errors) - 1);
 	check_errors[sizeof(check_errors) - 1] = '\0';
-	rc = dmg_storage_query_device_health(dmg_config_file, devices[rank_pos].dl_host,
+	rc = ctl_storage_query_device_health(dmg_config_file, devices[rank_pos].dl_host,
 					     check_errors, sizeof(check_errors),
 					     devices[rank_pos].dl_device_id);
 	assert_rc_equal(rc, 0);

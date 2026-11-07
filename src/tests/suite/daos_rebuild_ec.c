@@ -1807,7 +1807,7 @@ rcl_reint_ranks(struct rcl_ctx *ctx, d_rank_t *ranks, int nr, const char *stage)
 	if (arg->myrank == 0) {
 		for (i = 0; i < nr; i++) {
 			for (retry = 0; retry < 30; retry++) {
-				rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid,
+				rc = ctl_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid,
 							  arg->group, ranks[i], -1);
 				print_message("dmg pool reintegrate rank %u rc=%d\n", ranks[i], rc);
 				if (rc == 0)

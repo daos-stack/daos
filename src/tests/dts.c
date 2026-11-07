@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -50,11 +51,9 @@ engine_pool_init(struct credit_context *tsc)
 		char		str[37];
 
 		if (tsc_create_pool(tsc)) {
-			rc = dmg_pool_create(dmg_config_file, geteuid(),
-					     getegid(), NULL, NULL,
-					     tsc->tsc_scm_size,
-					     tsc->tsc_nvme_size,
-					     NULL, svc, tsc->tsc_pool_uuid);
+			rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), NULL, NULL,
+					     tsc->tsc_scm_size, tsc->tsc_nvme_size, NULL, svc,
+					     tsc->tsc_pool_uuid);
 			if (rc)
 				goto bcast;
 		}
@@ -88,8 +87,7 @@ engine_pool_fini(struct credit_context *tsc)
 	par_barrier(PAR_COMM_WORLD);
 
 	if (tsc->tsc_mpi_rank == 0 && tsc_create_pool(tsc)) {
-		rc = dmg_pool_destroy(dmg_config_file, tsc->tsc_pool_uuid,
-				      NULL, true);
+		rc = ctl_pool_destroy(dmg_config_file, tsc->tsc_pool_uuid, NULL, true);
 		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST || rc == -DER_MISC ||
 			  rc == -DER_TIMEDOUT, "rc="DF_RC"\n", DP_RC(rc));
 	}

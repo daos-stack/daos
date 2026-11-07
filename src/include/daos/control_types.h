@@ -67,7 +67,7 @@ struct daos_control_pool_create_args {
 /**
  * Maximum number of targets that can be attached to a single device. Must stay
  * in sync with BIO_MAX_VOS_TGT_CNT (daos_srv/bio.h) — enforced by a
- * D_CASSERT in src/common/tests_dmg_helpers.c, which sees both headers.
+ * D_CASSERT in src/common/tests_ctl_helpers.c, which sees both headers.
  */
 #define DAOS_MAX_TARGETS_PER_DEVICE    96
 
@@ -78,7 +78,7 @@ struct daos_control_pool_create_args {
 
 /**
  * Maximum NVMe device state name length (longest current value is "UNPLUGGED",
- * 9 chars + NUL). A D_CASSERT in src/common/tests_dmg_helpers.c pins this to
+ * 9 chars + NUL). A D_CASSERT in src/common/tests_ctl_helpers.c pins this to
  * the struct field width so the two stay in sync.
  */
 #define DAOS_DEV_STATE_MAX_LEN         10

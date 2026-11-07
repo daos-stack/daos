@@ -228,7 +228,7 @@ cr_fault_inject(uuid_t uuid, bool mgmt, const char *fault)
 	int	rc;
 
 	print_message("CR: injecting fault %s for pool " DF_UUID "\n", fault, DP_UUID(uuid));
-	rc = dmg_fault_inject(dmg_config_file, uuid, mgmt, fault);
+	rc = ctl_fault_inject(dmg_config_file, uuid, mgmt, fault);
 	if (rc != 0)
 		print_message("CR: pool " DF_UUID " inject fault %s failed: "DF_RC"\n",
 			       DP_UUID(uuid), fault, DP_RC(rc));
@@ -244,7 +244,7 @@ cr_mode_switch(bool enable)
 
 	print_message("CR: %s check mode\n", enable ? "enable" : "disable");
 	/* member states may not have settled yet after a system stop/start */
-	while ((rc = dmg_check_switch(dmg_config_file, enable)) == -DER_AGAIN &&
+	while ((rc = ctl_check_switch(dmg_config_file, enable)) == -DER_AGAIN &&
 	       time(NULL) < deadline)
 		sleep(1);
 	return rc;
@@ -254,14 +254,14 @@ static inline int
 cr_system_start(void)
 {
 	print_message("CR: starting system ...\n");
-	return dmg_system_start(dmg_config_file);
+	return ctl_system_start(dmg_config_file);
 }
 
 static inline int
 cr_system_stop(bool force)
 {
 	print_message("CR: stopping system with %s ...\n", force ? "force" : "non-force");
-	return dmg_system_stop(dmg_config_file, force);
+	return ctl_system_stop(dmg_config_file, force);
 }
 
 static inline int
@@ -270,13 +270,13 @@ cr_rank_reint(uint32_t rank, bool start)
 	int	rc;
 
 	print_message("CR: reintegrating the rank %u ...\n", rank);
-	rc = dmg_system_reint_rank(dmg_config_file, rank);
+	rc = ctl_system_reint_rank(dmg_config_file, rank);
 	if (rc != 0)
 		return rc;
 
 	if (start) {
 		print_message("CR: starting the rank %u ...\n", rank);
-		rc = dmg_system_start_rank(dmg_config_file, rank);
+		rc = ctl_system_start_rank(dmg_config_file, rank);
 	}
 
 	return rc;
@@ -325,7 +325,7 @@ cr_rank_exclude(test_arg_t *arg, struct daos_check_info *dci, struct test_pool *
 		return rc;
 
 	print_message("CR: stopping the rank %d ...\n", *rank);
-	rc = dmg_system_stop_rank(dmg_config_file, *rank, false);
+	rc = ctl_system_stop_rank(dmg_config_file, *rank, false);
 	if (rc != 0)
 		return rc;
 
@@ -333,7 +333,7 @@ cr_rank_exclude(test_arg_t *arg, struct daos_check_info *dci, struct test_pool *
 	cr_debug_set_params_nowait(arg, 0);
 
 	print_message("CR: excluding the rank %d ...\n", *rank);
-	rc = dmg_system_exclude_rank(dmg_config_file, *rank);
+	rc = ctl_system_exclude_rank(dmg_config_file, *rank);
 	if (rc == 0 && wait) {
 		print_message("CR: sleep 30 seconds for the rank death event\n");
 		sleep(30);
@@ -349,7 +349,7 @@ cr_check_start(uint32_t flags, uint32_t pool_nr, uuid_t uuids[], const char *pol
 		      policies != NULL ? policies : "(null)");
 	cr_dump_pools(pool_nr, uuids);
 
-	return dmg_check_start(dmg_config_file, flags, pool_nr, uuids, policies);
+	return ctl_check_start(dmg_config_file, flags, pool_nr, uuids, policies);
 }
 
 static inline int
@@ -357,7 +357,7 @@ cr_check_stop(uint32_t pool_nr, uuid_t uuids[])
 {
 	print_message("CR: stopping checker ...\n");
 	cr_dump_pools(pool_nr, uuids);
-	return dmg_check_stop(dmg_config_file, pool_nr, uuids);
+	return ctl_check_stop(dmg_config_file, pool_nr, uuids);
 }
 
 static inline int
@@ -365,7 +365,7 @@ cr_check_query(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci)
 {
 	print_message("CR: query checker ...\n");
 	cr_dump_pools(pool_nr, uuids);
-	return dmg_check_query(dmg_config_file, pool_nr, uuids, dci);
+	return ctl_check_query(dmg_config_file, pool_nr, uuids, dci);
 }
 
 static inline int
@@ -373,7 +373,7 @@ cr_check_repair(uint64_t seq, uint32_t action)
 {
 	print_message("CR: handle check interaction for seq %lu, action %u ...\n",
 		      (unsigned long)seq, action);
-	return dmg_check_repair(dmg_config_file, seq, action);
+	return ctl_check_repair(dmg_config_file, seq, action);
 }
 
 static inline int
@@ -381,7 +381,7 @@ cr_check_set_policy(uint32_t flags, const char *policies)
 {
 	print_message("CR: set checker policy with flags %x, policy %s ...\n",
 		      flags, policies != NULL ? policies : "(null)");
-	return dmg_check_set_policy(dmg_config_file, flags, policies);
+	return ctl_check_set_policy(dmg_config_file, flags, policies);
 }
 
 static struct daos_check_report_info *
@@ -457,9 +457,9 @@ cr_cleanup(test_arg_t *arg, struct test_pool *pools, uint32_t nr)
 			daos_pool_disconnect(pools[i].poh, NULL);
 		}
 
-		rc = dmg_pool_destroy(dmg_config_file, pools[i].pool_uuid, arg->group, 1);
+		rc = ctl_pool_destroy(dmg_config_file, pools[i].pool_uuid, arg->group, 1);
 		if (rc != 0 && rc != -DER_NONEXIST)
-			print_message("CR: dmg_pool_destroy failed: "DF_RC"\n", DP_RC(rc));
+			print_message("CR: ctl_pool_destroy failed: " DF_RC "\n", DP_RC(rc));
 	}
 }
 
@@ -475,7 +475,7 @@ cr_ins_wait(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci)
 	for (;;) {
 		cr_dci_fini(dci);
 
-		rc = dmg_check_query(dmg_config_file, pool_nr, uuids, dci);
+		rc = ctl_check_query(dmg_config_file, pool_nr, uuids, dci);
 		if (rc != 0)
 			print_message("CR: check query failed (" DF_RC "), retrying\n", DP_RC(rc));
 		else if (!cr_ins_status_init(dci->dci_status) &&
@@ -504,7 +504,7 @@ cr_pool_wait(uint32_t pool_nr, uuid_t uuids[], struct daos_check_info *dci)
 	for (;;) {
 		cr_dci_fini(dci);
 
-		rc = dmg_check_query(dmg_config_file, pool_nr, uuids, dci);
+		rc = ctl_check_query(dmg_config_file, pool_nr, uuids, dci);
 		if (rc != 0)
 			print_message("CR: check query failed (" DF_RC "), retrying\n", DP_RC(rc));
 		else if (!cr_ins_status_init(dci->dci_status) && dci->dci_pools != NULL &&
@@ -796,7 +796,7 @@ cr_pool_create(void **state, struct test_pool *pool, bool connect, uint32_t faul
 	}
 
 	print_message("CR: getting label for pool " DF_UUID "\n", DP_UUID(pool->pool_uuid));
-	rc = dmg_pool_get_prop(dmg_config_file, NULL, pool->pool_uuid, "label", &pool->label);
+	rc = ctl_pool_get_prop(dmg_config_file, NULL, pool->pool_uuid, "label", &pool->label);
 	if (rc != 0) {
 		print_message("CR: pool " DF_UUID " get label failed: "DF_RC"\n",
 			      DP_UUID(pool->pool_uuid), DP_RC(rc));
@@ -1199,7 +1199,7 @@ cr_start_specified(void **state)
 	for (i = 0; i < 3; i++) {
 		print_message("CR: getting label for pool " DF_UUID " after check\n",
 			      DP_UUID(pools[i].pool_uuid));
-		rc = dmg_pool_get_prop(dmg_config_file, pools[i].label, pools[i].pool_uuid, "label",
+		rc = ctl_pool_get_prop(dmg_config_file, pools[i].label, pools[i].pool_uuid, "label",
 				       &label);
 		assert_rc_equal(rc, 0);
 
@@ -1294,7 +1294,7 @@ cr_leader_interaction(void **state)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	rc = dmg_pool_list(dmg_config_file, arg->group, &pool_nr, &mgmt_pool);
+	rc = ctl_pool_list(dmg_config_file, arg->group, &pool_nr, &mgmt_pool);
 	assert_rc_equal(rc, 0);
 
 	assert_rc_equal(pool_nr, 1);
@@ -1496,7 +1496,7 @@ cr_repair_forall_leader(void **state)
 
 		print_message("CR: getting label for pool " DF_UUID " after check\n",
 			      DP_UUID(pools[i].pool_uuid));
-		rc = dmg_pool_get_prop(dmg_config_file, ms_label, pools[i].pool_uuid, "label",
+		rc = ctl_pool_get_prop(dmg_config_file, ms_label, pools[i].pool_uuid, "label",
 				       &ps_label);
 		assert_rc_equal(rc, 0);
 
@@ -1689,7 +1689,7 @@ cr_stop_leader_interaction(void **state)
 
 	print_message("CR: getting label for pool " DF_UUID " after check\n",
 		       DP_UUID(pool.pool_uuid));
-	rc = dmg_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
+	rc = ctl_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
 	assert_rc_equal(rc, 0);
 
 	D_ASSERTF(strcmp(label, pool.label) != 0,
@@ -1890,7 +1890,7 @@ cr_stop_specified(void **state)
 	for (i = 0; i < 3; i++) {
 		print_message("CR: getting label for pool " DF_UUID " after check\n",
 			      DP_UUID(pools[i].pool_uuid));
-		rc = dmg_pool_get_prop(dmg_config_file, pools[i].label, pools[i].pool_uuid, "label",
+		rc = ctl_pool_get_prop(dmg_config_file, pools[i].label, pools[i].pool_uuid, "label",
 				       &label);
 		assert_rc_equal(rc, 0);
 
@@ -2012,7 +2012,7 @@ cr_auto_reset(void **state)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	rc = dmg_pool_list(dmg_config_file, arg->group, &pool_nr, &mgmt_pool);
+	rc = ctl_pool_list(dmg_config_file, arg->group, &pool_nr, &mgmt_pool);
 	assert_rc_equal(rc, 0);
 
 	assert_rc_equal(pool_nr, 1);
@@ -2219,7 +2219,7 @@ cr_leader_resume(void **state)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	rc = dmg_pool_list(dmg_config_file, arg->group, &pool_nr, &mgmt_pool);
+	rc = ctl_pool_list(dmg_config_file, arg->group, &pool_nr, &mgmt_pool);
 	assert_rc_equal(rc, 0);
 
 	/* No pool will be found since the pool become orphan again and is not repaired. */
@@ -2348,7 +2348,7 @@ cr_engine_resume(void **state)
 
 	print_message("CR: getting label for pool " DF_UUID " after check\n",
 		      DP_UUID(pool.pool_uuid));
-	rc = dmg_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
+	rc = ctl_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
 	assert_rc_equal(rc, 0);
 
 	D_ASSERTF(strcmp(label, pool.label) != 0,
@@ -2569,7 +2569,7 @@ cr_failout(void **state)
 
 	print_message("CR: getting label for pool " DF_UUID " after check\n",
 		      DP_UUID(pool.pool_uuid));
-	rc = dmg_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
+	rc = ctl_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
 	assert_rc_equal(rc, 0);
 
 	D_ASSERTF(strcmp(label, pool.label) != 0,
@@ -2724,7 +2724,7 @@ cr_orphan_pool(void **state)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
-	rc = dmg_pool_list(dmg_config_file, arg->group, &pool_nr, mgmt_pools);
+	rc = ctl_pool_list(dmg_config_file, arg->group, &pool_nr, mgmt_pools);
 	assert_rc_equal(rc, 0);
 
 	assert_rc_equal(pool_nr, 2);
@@ -2970,7 +2970,7 @@ cr_engine_death(void **state)
 
 	print_message("CR: getting label for pool " DF_UUID " after check\n",
 		      DP_UUID(pool.pool_uuid));
-	rc = dmg_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
+	rc = ctl_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
 	assert_rc_equal(rc, 0);
 
 	D_ASSERTF(strcmp(label, pool.label) == 0,
@@ -3205,7 +3205,7 @@ cr_engine_rejoin_fail(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* The former excluded rank is not in the check ranks set, stop it explicitly. */
-	rc = dmg_system_stop_rank(dmg_config_file, rank, false);
+	rc = ctl_system_stop_rank(dmg_config_file, rank, false);
 	assert_rc_equal(rc, 0);
 
 	rc = cr_mode_switch(false);
@@ -3587,7 +3587,7 @@ cr_set_policy_after(void **state)
 
 		print_message("CR: getting label for pool " DF_UUID " after check\n",
 			      DP_UUID(pools[i].pool_uuid));
-		rc = dmg_pool_get_prop(dmg_config_file, ms_label, pools[i].pool_uuid, "label",
+		rc = ctl_pool_get_prop(dmg_config_file, ms_label, pools[i].pool_uuid, "label",
 				       &ps_label);
 		assert_rc_equal(rc, 0);
 
@@ -3683,7 +3683,7 @@ cr_handle_fail_pool2(void **state)
 	rc = cr_pool_create(state, &pool, false, TCC_NONE);
 	assert_rc_equal(rc, 0);
 
-	rc = dmg_pool_list(dmg_config_file, arg->group, &pool_nr, &mgmt_pool);
+	rc = ctl_pool_list(dmg_config_file, arg->group, &pool_nr, &mgmt_pool);
 	assert_rc_equal(rc, 0);
 
 	assert_rc_equal(pool_nr, 1);
@@ -3902,7 +3902,7 @@ cr_lost_rank0(void **state)
 	print_message("CR29: CR with rank 0 excluded at the beginning\n");
 
 	print_message("CR: excluding the rank 0 ...\n");
-	rc = dmg_system_exclude_rank(dmg_config_file, 0);
+	rc = ctl_system_exclude_rank(dmg_config_file, 0);
 	assert_rc_equal(rc, 0);
 
 	/* Wait a while for group membership synchornization. */
@@ -3999,7 +3999,7 @@ cr_leader_report_fail(void **state)
 
 	print_message("CR: getting label for pool " DF_UUID " after check\n",
 		      DP_UUID(pool.pool_uuid));
-	rc = dmg_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
+	rc = ctl_pool_get_prop(dmg_config_file, pool.label, pool.pool_uuid, "label", &label);
 	assert_rc_equal(rc, 0);
 
 	D_ASSERTF(strcmp(label, pool.label) != 0,

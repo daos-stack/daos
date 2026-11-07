@@ -87,7 +87,7 @@ def scons():
     tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c', 'daos_control'])
     tlibenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
 
-    tests_lib = tlibenv.d_library('daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])
+    tests_lib = tlibenv.d_library('daos_tests', ['tests_lib.c', 'tests_ctl_helpers.c'])
     Depends(tests_lib, daos_control_tgts)
 
     tlibenv.Install('$PREFIX/lib64/', tests_lib)

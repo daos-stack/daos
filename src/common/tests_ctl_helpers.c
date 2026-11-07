@@ -32,7 +32,7 @@ D_CASSERT(sizeof(((device_list *)0)->dl_state) == DAOS_DEV_STATE_MAX_LEN);
  * helper can be wrapped inline around the daos_control_* call.
  */
 static inline int
-dmg_log_rc(int rc, const char *call_name)
+ctl_log_rc(int rc, const char *call_name)
 {
 	if (rc != 0)
 		D_ERROR("%s failed, " DF_RC "\n", call_name, DP_RC(rc));
@@ -41,7 +41,7 @@ dmg_log_rc(int rc, const char *call_name)
 
 /* Initialize a per-call control context. */
 static int
-dmg_ctx_init(const char *cfg, uintptr_t *ctx)
+ctl_ctx_init(const char *cfg, uintptr_t *ctx)
 {
 	const char                   *log_file  = getenv("DAOS_TEST_CONTROL_LOG_FILE");
 	const char                   *log_level = getenv("DAOS_TEST_CONTROL_LOG_LEVEL");
@@ -56,38 +56,38 @@ dmg_ctx_init(const char *cfg, uintptr_t *ctx)
 	if (rc != 0)
 		*ctx = 0;
 
-	return dmg_log_rc(rc, "daos_control_init");
+	return ctl_log_rc(rc, "daos_control_init");
 }
 
 /* Finalize a per-call control context. */
 static void
-dmg_ctx_fini(uintptr_t ctx)
+ctl_ctx_fini(uintptr_t ctx)
 {
 	if (ctx != 0)
 		daos_control_fini(ctx);
 }
 
 int
-dmg_pool_set_prop(const char *dmg_config_file, const char *prop_name, const char *prop_value,
+ctl_pool_set_prop(const char *dmg_config_file, const char *prop_name, const char *prop_value,
 		  const uuid_t pool_uuid)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_pool_set_prop(ctx, NULL, (uuid_t *)pool_uuid,
+	rc = ctl_log_rc(daos_control_pool_set_prop(ctx, NULL, (uuid_t *)pool_uuid,
 						   (char *)prop_name, (char *)prop_value),
 			"daos_control_pool_set_prop");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_get_prop(const char *dmg_config_file, const char *label, const uuid_t uuid,
+ctl_pool_get_prop(const char *dmg_config_file, const char *label, const uuid_t uuid,
 		  const char *name, char **value)
 {
 	uintptr_t ctx = 0;
@@ -96,20 +96,20 @@ dmg_pool_get_prop(const char *dmg_config_file, const char *label, const uuid_t u
 	D_ASSERT(name != NULL);
 	D_ASSERT(value != NULL);
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(
+	rc = ctl_log_rc(
 	    daos_control_pool_get_prop(ctx, (char *)label, (uuid_t *)uuid, (char *)name, value),
 	    "daos_control_pool_get_prop");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_create(const char *dmg_config_file, uid_t uid, gid_t gid, const char *grp,
+ctl_pool_create(const char *dmg_config_file, uid_t uid, gid_t gid, const char *grp,
 		const d_rank_list_t *tgts, daos_size_t scm_size, daos_size_t nvme_size,
 		daos_prop_t *prop, d_rank_list_t *svc, uuid_t uuid)
 {
@@ -125,7 +125,7 @@ dmg_pool_create(const char *dmg_config_file, uid_t uid, gid_t gid, const char *g
 	d_rank_list_t *svc_out = NULL;
 	int            rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
@@ -223,7 +223,7 @@ dmg_pool_create(const char *dmg_config_file, uid_t uid, gid_t gid, const char *g
 		    .dcpa_nsvc      = (svc != NULL) ? svc->rl_nr : 0,
 		};
 
-		rc = dmg_log_rc(daos_control_pool_create(
+		rc = ctl_log_rc(daos_control_pool_create(
 				    ctx, &args, (svc != NULL) ? &svc_out : NULL, (uuid_t *)uuid),
 				"daos_control_pool_create");
 		if (rc == 0 && svc != NULL) {
@@ -250,156 +250,156 @@ dmg_pool_create(const char *dmg_config_file, uid_t uid, gid_t gid, const char *g
 out:
 	if (new_prop != NULL)
 		daos_prop_free(new_prop);
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp, int force)
+ctl_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp, int force)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_pool_destroy(ctx, (uuid_t *)uuid, (char *)grp, force),
+	rc = ctl_log_rc(daos_control_pool_destroy(ctx, (uuid_t *)uuid, (char *)grp, force),
 			"daos_control_pool_destroy");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_evict(const char *dmg_config_file, const uuid_t uuid, const char *grp)
+ctl_pool_evict(const char *dmg_config_file, const uuid_t uuid, const char *grp)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_pool_evict(ctx, (uuid_t *)uuid, (char *)grp),
+	rc = ctl_log_rc(daos_control_pool_evict(ctx, (uuid_t *)uuid, (char *)grp),
 			"daos_control_pool_evict");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_update_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+ctl_pool_update_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
 		    const char *ace)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_pool_update_ace(ctx, (uuid_t *)uuid, (char *)grp, (char *)ace),
+	rc = ctl_log_rc(daos_control_pool_update_ace(ctx, (uuid_t *)uuid, (char *)grp, (char *)ace),
 			"daos_control_pool_update_ace");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_delete_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+ctl_pool_delete_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
 		    const char *principal)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(
+	rc = ctl_log_rc(
 	    daos_control_pool_delete_ace(ctx, (uuid_t *)uuid, (char *)grp, (char *)principal),
 	    "daos_control_pool_delete_ace");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_exclude(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
+ctl_pool_exclude(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
 		 int tgt_idx)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_pool_exclude(ctx, (uuid_t *)uuid, (char *)grp, rank, tgt_idx),
+	rc = ctl_log_rc(daos_control_pool_exclude(ctx, (uuid_t *)uuid, (char *)grp, rank, tgt_idx),
 			"daos_control_pool_exclude");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
+ctl_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
 		     int tgt_idx)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(
+	rc = ctl_log_rc(
 	    daos_control_pool_reintegrate(ctx, (uuid_t *)uuid, (char *)grp, rank, tgt_idx),
 	    "daos_control_pool_reintegrate");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_drain(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
+ctl_pool_drain(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
 	       int tgt_idx)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_pool_drain(ctx, (uuid_t *)uuid, (char *)grp, rank, tgt_idx),
+	rc = ctl_log_rc(daos_control_pool_drain(ctx, (uuid_t *)uuid, (char *)grp, rank, tgt_idx),
 			"daos_control_pool_drain");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t *ranks,
+ctl_pool_extend(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t *ranks,
 		int rank_nr)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_pool_extend(ctx, (uuid_t *)uuid, (char *)grp, ranks, rank_nr),
+	rc = ctl_log_rc(daos_control_pool_extend(ctx, (uuid_t *)uuid, (char *)grp, ranks, rank_nr),
 			"daos_control_pool_extend");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_list(const char *dmg_config_file, const char *group, daos_size_t *npools,
+ctl_pool_list(const char *dmg_config_file, const char *group, daos_size_t *npools,
 	      daos_mgmt_pool_info_t *pools)
 {
 	uintptr_t ctx = 0;
@@ -408,95 +408,95 @@ dmg_pool_list(const char *dmg_config_file, const char *group, daos_size_t *npool
 	if (npools == NULL)
 		return -DER_INVAL;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_pool_list(ctx, (char *)group, npools, pools),
+	rc = ctl_log_rc(daos_control_pool_list(ctx, (char *)group, npools, pools),
 			"daos_control_pool_list");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_rebuild_stop(const char *dmg_config_file, const uuid_t uuid, const char *grp, bool force)
+ctl_pool_rebuild_stop(const char *dmg_config_file, const uuid_t uuid, const char *grp, bool force)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(
+	rc = ctl_log_rc(
 	    daos_control_pool_rebuild_stop(ctx, (uuid_t *)uuid, (char *)grp, force ? 1 : 0),
 	    "daos_control_pool_rebuild_stop");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_pool_rebuild_start(const char *dmg_config_file, const uuid_t uuid, const char *grp)
+ctl_pool_rebuild_start(const char *dmg_config_file, const uuid_t uuid, const char *grp)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_pool_rebuild_start(ctx, (uuid_t *)uuid, (char *)grp),
+	rc = ctl_log_rc(daos_control_pool_rebuild_start(ctx, (uuid_t *)uuid, (char *)grp),
 			"daos_control_pool_rebuild_start");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_storage_device_list(const char *dmg_config_file, int *ndisks, device_list *devices)
+ctl_storage_device_list(const char *dmg_config_file, int *ndisks, device_list *devices)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_storage_device_list(ctx, NULL, ndisks, devices),
+	rc = ctl_log_rc(daos_control_storage_device_list(ctx, NULL, ndisks, devices),
 			"daos_control_storage_device_list");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_storage_set_nvme_fault(const char *dmg_config_file, char *host, const uuid_t uuid)
+ctl_storage_set_nvme_fault(const char *dmg_config_file, char *host, const uuid_t uuid)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_storage_set_nvme_fault(ctx, host, (uuid_t *)uuid),
+	rc = ctl_log_rc(daos_control_storage_set_nvme_fault(ctx, host, (uuid_t *)uuid),
 			"daos_control_storage_set_nvme_fault");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_storage_query_device_health(const char *dmg_config_file, char *host, char *stats,
+ctl_storage_query_device_health(const char *dmg_config_file, char *host, char *stats,
 				size_t stats_len, const uuid_t uuid)
 {
 	char      key[stats_len];
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
@@ -509,11 +509,11 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host, char *s
 	strncpy(key, stats, stats_len - 1);
 	key[stats_len - 1] = '\0';
 
-	rc = dmg_log_rc(daos_control_storage_query_device_health(ctx, host, key, stats,
+	rc = ctl_log_rc(daos_control_storage_query_device_health(ctx, host, key, stats,
 								 (int)stats_len, (uuid_t *)uuid),
 			"daos_control_storage_query_device_health");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
@@ -549,121 +549,121 @@ verify_blobstore_state(int state, const char *state_str)
 }
 
 int
-dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force)
+ctl_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_system_stop_rank(ctx, rank, force),
+	rc = ctl_log_rc(daos_control_system_stop_rank(ctx, rank, force),
 			"daos_control_system_stop_rank");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_system_stop(const char *dmg_config_file, int force)
+ctl_system_stop(const char *dmg_config_file, int force)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_system_stop(ctx, force), "daos_control_system_stop");
+	rc = ctl_log_rc(daos_control_system_stop(ctx, force), "daos_control_system_stop");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank)
+ctl_system_start_rank(const char *dmg_config_file, d_rank_t rank)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
-	if (rc != 0)
-		return rc;
-
-	rc =
-	    dmg_log_rc(daos_control_system_start_rank(ctx, rank), "daos_control_system_start_rank");
-
-	dmg_ctx_fini(ctx);
-	return rc;
-}
-
-int
-dmg_system_start(const char *dmg_config_file)
-{
-	uintptr_t ctx = 0;
-	int       rc;
-
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
-	if (rc != 0)
-		return rc;
-
-	rc = dmg_log_rc(daos_control_system_start(ctx), "daos_control_system_start");
-
-	dmg_ctx_fini(ctx);
-	return rc;
-}
-
-int
-dmg_system_reint_rank(const char *dmg_config_file, d_rank_t rank)
-{
-	uintptr_t ctx = 0;
-	int       rc;
-
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
 	rc =
-	    dmg_log_rc(daos_control_system_reint_rank(ctx, rank), "daos_control_system_reint_rank");
+	    ctl_log_rc(daos_control_system_start_rank(ctx, rank), "daos_control_system_start_rank");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_system_exclude_rank(const char *dmg_config_file, d_rank_t rank)
+ctl_system_start(const char *dmg_config_file)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_system_exclude_rank(ctx, rank),
+	rc = ctl_log_rc(daos_control_system_start(ctx), "daos_control_system_start");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_system_reint_rank(const char *dmg_config_file, d_rank_t rank)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc =
+	    ctl_log_rc(daos_control_system_reint_rank(ctx, rank), "daos_control_system_reint_rank");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
+ctl_system_exclude_rank(const char *dmg_config_file, d_rank_t rank)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_system_exclude_rank(ctx, rank),
 			"daos_control_system_exclude_rank");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_server_set_logmasks(const char *dmg_config_file, const char *masks, const char *streams,
+ctl_server_set_logmasks(const char *dmg_config_file, const char *masks, const char *streams,
 			const char *subsystems)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_server_set_logmasks(ctx, NULL, (char *)masks, (char *)streams,
+	rc = ctl_log_rc(daos_control_server_set_logmasks(ctx, NULL, (char *)masks, (char *)streams,
 							 (char *)subsystems),
 			"daos_control_server_set_logmasks");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
@@ -689,120 +689,120 @@ daos_target_state_enum_to_str(int state)
 }
 
 int
-dmg_fault_inject(const char *dmg_config_file, uuid_t uuid, bool mgmt, const char *fault)
+ctl_fault_inject(const char *dmg_config_file, uuid_t uuid, bool mgmt, const char *fault)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_fault_inject(ctx, (uuid_t *)uuid, mgmt ? 1 : 0, (char *)fault),
+	rc = ctl_log_rc(daos_control_fault_inject(ctx, (uuid_t *)uuid, mgmt ? 1 : 0, (char *)fault),
 			"daos_control_fault_inject");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_check_switch(const char *dmg_config_file, bool enable)
+ctl_check_switch(const char *dmg_config_file, bool enable)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
 	rc =
-	    dmg_log_rc(daos_control_check_switch(ctx, enable ? 1 : 0), "daos_control_check_switch");
+	    ctl_log_rc(daos_control_check_switch(ctx, enable ? 1 : 0), "daos_control_check_switch");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_check_start(const char *dmg_config_file, uint32_t flags, uint32_t pool_nr, uuid_t uuids[],
+ctl_check_start(const char *dmg_config_file, uint32_t flags, uint32_t pool_nr, uuid_t uuids[],
 		const char *policies)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_check_start(ctx, flags, pool_nr, uuids, (char *)policies),
+	rc = ctl_log_rc(daos_control_check_start(ctx, flags, pool_nr, uuids, (char *)policies),
 			"daos_control_check_start");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_check_stop(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[])
+ctl_check_stop(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[])
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_check_stop(ctx, pool_nr, uuids), "daos_control_check_stop");
+	rc = ctl_log_rc(daos_control_check_stop(ctx, pool_nr, uuids), "daos_control_check_stop");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_check_query(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[],
+ctl_check_query(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[],
 		struct daos_check_info *dci)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_check_query(ctx, pool_nr, uuids, dci),
+	rc = ctl_log_rc(daos_control_check_query(ctx, pool_nr, uuids, dci),
 			"daos_control_check_query");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt)
+ctl_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_check_repair(ctx, seq, opt), "daos_control_check_repair");
+	rc = ctl_log_rc(daos_control_check_repair(ctx, seq, opt), "daos_control_check_repair");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
 
 int
-dmg_check_set_policy(const char *dmg_config_file, uint32_t flags, const char *policies)
+ctl_check_set_policy(const char *dmg_config_file, uint32_t flags, const char *policies)
 {
 	uintptr_t ctx = 0;
 	int       rc;
 
-	rc = dmg_ctx_init(dmg_config_file, &ctx);
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
 	if (rc != 0)
 		return rc;
 
-	rc = dmg_log_rc(daos_control_check_set_policy(ctx, flags, (char *)policies),
+	rc = ctl_log_rc(daos_control_check_set_policy(ctx, flags, (char *)policies),
 			"daos_control_check_set_policy");
 
-	dmg_ctx_fini(ctx);
+	ctl_ctx_fini(ctx);
 	return rc;
 }
