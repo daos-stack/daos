@@ -189,8 +189,8 @@ parse_target_idx(const char *vos_path, const regmatch_t *vp_match, uint32_t *tar
 }
 
 int
-parse_vos_file_parts(const char *vos_path, const char *db_path,
-		     struct vos_file_parts *vos_file_parts)
+ddb_parse_vos_file_parts(const char *vos_path, const char *db_path,
+			 struct vos_file_parts *vos_file_parts)
 {
 	regex_t                preg;
 	regmatch_t             match[MATCH_SIZE];

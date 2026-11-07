@@ -57,6 +57,7 @@ struct ddb_array {
  * @param path		VOS pool file path in the format "[/dir/]<pool-uuid>/(vos-N|rdb-pool)".
  * @param db_path	Path to the VOS metadata DB directory (SMD/NVMe). If NULL or empty,
  *			the DB directory is derived from the leading path component of path.
+ * @param ctx		DDB context.
  * @param poh		Pool handle set on success.
  * @param flags		Flags forwarded to vos_pool_open() (e.g. VOS_POF_FOR_FEATURE_FLAG to
  *			skip VEA load when only reading/writing pool feature flags).
@@ -65,8 +66,8 @@ struct ddb_array {
  * @return		0 on success, negative DER error code otherwise.
  */
 int
-dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
-	     bool write_mode);
+dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, daos_handle_t *poh,
+	     uint32_t flags, bool write_mode);
 int
 dv_pool_close(daos_handle_t poh);
 int
@@ -159,14 +160,19 @@ int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb
  * Callback invoked by dv_dump_csum() with the fetched checksum information.
  *
  * @param cb_arg    User-provided argument passed through from dv_dump_csum().
- * @param recx_rel  Recx/epoch list describing the stored extents. Non-NULL for array akeys;
- *                  NULL for single-value akeys. The caller must not free this pointer.
+ * @param recx_rel  Recx/epoch list describing the stored extents. NULL for single-value akeys,
+ *                  and for array akeys when no data extent is stored in the requested range at
+ *                  the requested epoch (\a cil is then empty). The caller must not free this
+ *                  pointer.
  * @param sv_epoch  Actual stored epoch of the single value. Non-zero for single-value akeys
  *                  when an SV was found within the requested epoch range; 0 for array akeys
  *                  or when no SV was found (hole or -DER_NONEXIST).
- * @param cil       Checksum info list. Valid only for the duration of the callback.
- * @return          0 on success; a negative error code is propagated back to the caller of
- *                  dv_dump_csum().
+ * @param cil       Checksum info list. dv_dump_csum() has already checked it, so the callback can
+ *                  rely on every entry passing ci_is_valid() and having a checksum type known to
+ *                  the checksum library (daos_mhash_type2algo()). Valid only for the duration of
+ *                  the callback.
+ * @retval          0 on success
+ * @retval          -DER_* error code, propagated back to the caller of dv_dump_csum()
  */
 typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel,
 			       daos_epoch_t sv_epoch, struct dcs_ci_list *cil);
@@ -178,16 +184,85 @@ typedef int (*dv_dump_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel,
  * @param path     VOS tree path identifying the container, object, dkey, and akey.
  *                 For array akeys, path->vtp_recx selects the extent to inspect.
  * @param epoch    Epoch for the fetch. For single-value akeys, controls which version is
- *                 returned — pass DAOS_EPOCH_MAX to get the latest, or a snapshot epoch to
+ *                 returned - pass DAOS_EPOCH_MAX to get the latest, or a snapshot epoch to
  *                 access an earlier version. For array akeys, selects the visible extent set.
  * @param dump_cb  Callback invoked with the result. If NULL, the function returns 0
- *                 without opening the container or calling VOS.
+ *                 without opening the container or calling VOS. It is not invoked if the
+ *                 container cannot be opened, the fetch fails or the checksum metadata is
+ *                 inconsistent.
  * @param cb_arg   Opaque argument forwarded to \a dump_cb.
- * @return         0 on success, or a negative error code.
+ * @retval         0 on success
+ * @retval         -DER_CSUM if the fetched checksum metadata is inconsistent, e.g. a
+ *                 checksum-info count that does not match the stored entries, an invalid checksum
+ *                 info or an unknown checksum type
+ * @retval         -DER_* other errors, including the one returned by \a dump_cb
  */
 int
 dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
 	     dv_dump_csum_cb dump_cb, void *cb_arg);
+
+/**
+ * Callback invoked by dv_check_csum() with the fetched checksum information and, for each
+ * checksum entry, whether the checksum recomputed from the currently stored data matches.
+ *
+ * @param cb_arg      User-provided argument passed through from dv_check_csum().
+ * @param recx_rel    Recx/epoch list describing the stored extents. NULL for single-value
+ *                    akeys, and for array akeys when no data extent is stored in the requested
+ *                    range at the requested epoch (\a cil is then empty). The caller must not
+ *                    free this pointer.
+ * @param sv_epoch    Actual stored epoch of the single value. Non-zero for single-value akeys
+ *                    when an SV was found within the requested epoch range; 0 for array akeys
+ *                    or when no SV was found (hole or -DER_NONEXIST).
+ * @param cil         Checksum info list. dv_check_csum() has already checked it, so the callback
+ *                    can rely on every entry passing ci_is_valid() and having a checksum type
+ *                    known to the checksum library (daos_mhash_type2algo()). Valid only for the
+ *                    duration of the callback.
+ * @param got_csums   Array of cil->dcl_csum_infos_nr struct dcs_csum_info pointers, aligned 1:1
+ *                    with recx_rel->re_items for array akeys (a single pointer for single-value
+ *                    akeys). got_csums[i] holds the checksum recomputed from the currently
+ *                    stored data when entry i failed verification against the stored data, and
+ *                    is NULL when entry i matched -- got_csums[i] != NULL therefore also serves
+ *                    as the mismatch flag for entry i. NULL (the whole array) when cil has 0
+ *                    entries (nothing to verify). Valid only for the duration of the callback;
+ *                    the caller must not free it.
+ * @retval            0 on success, including when mismatches are reported through \a got_csums
+ * @retval            -DER_* error code, propagated back to the caller of dv_check_csum(); it takes
+ *                    precedence over the -DER_CSUM returned for a reported mismatch
+ */
+typedef int (*dv_check_csum_cb)(void *cb_arg, struct daos_recx_ep_list *recx_rel,
+				daos_epoch_t sv_epoch, struct dcs_ci_list *cil,
+				struct dcs_csum_info **got_csums);
+
+/**
+ * Fetch the checksum information for the akey identified by \a path, recompute the checksum(s)
+ * from the currently stored data, and compare them against what is stored on disk.
+ *
+ * @param poh       Open pool handle.
+ * @param path      VOS tree path identifying the container, object, dkey, and akey.
+ *                  For array akeys, path->vtp_recx selects the extent to inspect.
+ * @param epoch     Epoch for the fetch. For single-value akeys, controls which version is
+ *                  checked - pass DAOS_EPOCH_MAX to check the latest, or a snapshot epoch to
+ *                  check an earlier version. For array akeys, selects the visible extent set.
+ * @param check_cb  Callback invoked with the result, at most once per call. If NULL, the function
+ *                  returns 0 without opening the container or calling VOS. It is not invoked if
+ *                  the container cannot be opened, the fetch or the verification fails, the
+ *                  checksum metadata is inconsistent or a detected mismatch cannot be reported.
+ * @param cb_arg    Opaque argument forwarded to \a check_cb.
+ * @retval          0 on success: no checksum found, or all checksum(s) matched the stored data
+ * @retval          -DER_CSUM if at least one checksum entry did not match the stored data
+ *                  (\a check_cb is invoked first, with the recomputed checksum(s)); if the fetched
+ *                  checksum metadata is inconsistent, e.g. a checksum-info count that does not
+ *                  match the stored entries, an invalid checksum info, an unknown checksum type
+ *                  or a stored checksum with no data behind it (nothing is verified and
+ *                  \a check_cb is not invoked); or if a mismatch was detected but the
+ *                  recomputed checksum could not be allocated to report it through \a check_cb
+ *                  (not invoked either; the mismatch is logged)
+ * @retval          -DER_* other errors, including the one returned by \a check_cb, which takes
+ *                  precedence over -DER_CSUM
+ */
+int
+dv_check_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	      dv_check_csum_cb check_cb, void *cb_arg);
 
 struct ddb_ilog_entry {
 	uint32_t	die_idx;
@@ -218,9 +293,7 @@ int dv_process_key_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key
 				daos_key_t *akey, enum ddb_ilog_op op);
 
 struct dv_dtx_committed_entry {
-	struct dtx_id	ddtx_id;
-	daos_epoch_t	ddtx_cmt_time;
-	daos_epoch_t	ddtx_epoch;
+	struct dtx_id ddtx_id;
 };
 
 struct dv_dtx_active_entry {
@@ -249,8 +322,9 @@ dv_dtx_active_entry_discard_invalid(daos_handle_t coh, struct dtx_id *dti, int *
 typedef int (*dv_smd_sync_complete)(void *cb_args, uuid_t pool_id, uint32_t vos_id,
 				    uint64_t blob_id, daos_size_t blob_size, uuid_t dev_id,
 				    enum smd_dev_type st);
-int dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete complete_cb,
-		void *cb_args);
+int
+dv_sync_smd(const char *nvme_conf, const char *db_path, struct ddb_ctx *ctx,
+	    dv_smd_sync_complete complete_cb, void *cb_args);
 
 typedef int (*dv_vea_extent_handler)(void *cb_arg, struct vea_free_extent *free_extent);
 int dv_enumerate_vea(daos_handle_t poh, dv_vea_extent_handler cb, void *cb_arg);
@@ -263,10 +337,11 @@ void dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj);
 int ddb_vtp_verify(daos_handle_t poh, struct dv_tree_path *vtp);
 
 int
-dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt);
+dv_dev_list(const char *db_path, struct ddb_ctx *ctx, d_list_t *dev_list, int *dev_cnt);
 int
-dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid);
+dv_dev_replace(const char *db_path, struct ddb_ctx *ctx, uuid_t old_devid, uuid_t new_devid);
 int
-dv_run_prov_mem(const char *db_path, const char *scm_mount, unsigned int scm_mount_size);
+dv_run_prov_mem(const char *db_path, struct ddb_ctx *ctx, const char *scm_mount,
+		unsigned int scm_mount_size);
 
 #endif /* DAOS_DDB_VOS_H */

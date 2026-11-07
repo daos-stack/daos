@@ -70,7 +70,7 @@ class RbldWidelyStriped(MdtestBase):
 
         # create 1st container
         self.log.info(">> Creating the first container")
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
         # start 1st mdtest run and let it complete
         self.log.info(">> Running mdtest to completion")
@@ -86,7 +86,7 @@ class RbldWidelyStriped(MdtestBase):
 
         # create 2nd container
         self.log.info(">> Creating the second container")
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
         # start 2nd mdtest job in the background
         self.log.info(">> Running the first mdtest job in the background")
@@ -110,7 +110,7 @@ class RbldWidelyStriped(MdtestBase):
 
         # create 3rd container
         self.log.info(">> Creating the third container")
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
         # start 3rd mdtest job in the background
         self.log.info(">> Running a second mdtest job in the background")

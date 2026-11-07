@@ -121,6 +121,7 @@ struct ds_pool {
 	uint32_t		 sp_reint_mode;
 	/* Hold wlock when recover container, rlock when handle container create/destroy RPC. */
 	ABT_rwlock               sp_recov_lock;
+	daos_epoch_t             sp_rebuild_epoch;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -193,6 +194,9 @@ struct ds_pool_child {
 	 * DAOS_TGT_TAG.
 	 */
 	void			*spc_metrics[DAOS_NR_MODULE];
+
+	/* The remaining time (seconds) for waiting container local stable epoch (LSE). */
+	int                      spc_remaining_wait_time;
 };
 
 struct ds_pool_svc_op_key {
@@ -297,9 +301,10 @@ int
 					  bool skip_rf_check);
 
 uint32_t ds_pool_get_vos_df_version_default(void);
-int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+int
+    ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 			    d_rank_list_t *target_addrs, int ndomains, uint32_t *domains,
-			    daos_prop_t *prop, d_rank_list_t **svc_addrs);
+			    daos_prop_t *prop, d_rank_list_t *downout_ranks, d_rank_list_t **svc_addrs);
 int ds_pool_svc_rf_to_nreplicas(int svc_rf);
 int ds_pool_svc_rf_from_nreplicas(int nreplicas);
 
@@ -422,6 +427,9 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
 int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
+int
+ds_pool_wait_discard(struct ds_pool *pool, uint32_t timeout_secs, bool fail_on_error,
+		     bool (*should_stop)(void *arg), void *stop_arg, uint32_t *waited_secs);
 
 int
 ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);

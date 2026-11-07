@@ -57,8 +57,7 @@ struct rebuild_tgt_pool_tracker {
 	/* number of obj records in rebuilt tree */
 	unsigned int		rt_rebuilt_obj_cnt;
 	d_rank_list_t		*rt_svc_list;
-	d_rank_t		rt_rank;
-	int			rt_errno;
+	d_rank_t                 rt_rank;
 	int			rt_refcount;
 	uint32_t		rt_tgts_num;
 	uint64_t		rt_leader_term;

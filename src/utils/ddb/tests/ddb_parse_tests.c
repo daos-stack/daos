@@ -59,20 +59,20 @@ parse_vos_file_parts_test_errors(void **state)
 	int                   rc;
 
 	/* Test invalid vos paths not respecting regex */
-	rc = parse_vos_file_parts("", NULL, &parts);
+	rc = ddb_parse_vos_file_parts("", NULL, &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	rc = parse_vos_file_parts("/mnt/daos", NULL, &parts);
+	rc = ddb_parse_vos_file_parts("/mnt/daos", NULL, &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	rc = parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR, NULL, &parts);
+	rc = ddb_parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR, NULL, &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	rc = parse_vos_file_parts("/mnt/daos/g2345678-1234-1234-1234-123456789012/vos-1", NULL,
-				  &parts);
+	rc = ddb_parse_vos_file_parts("/mnt/daos/g2345678-1234-1234-1234-123456789012/vos-1", NULL,
+				      &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	rc = parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-01", NULL, &parts);
+	rc = ddb_parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-01", NULL, &parts);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/* Test invalid VOS paths with too long VOS path */
@@ -81,7 +81,7 @@ parse_vos_file_parts_test_errors(void **state)
 	buf[0] = '/';
 	memcpy(&buf[VOS_PATH_SIZE + 1 - sizeof(MOCKED_VOS_PATH_STR)], MOCKED_VOS_PATH_STR,
 	       sizeof(MOCKED_VOS_PATH_STR));
-	rc = parse_vos_file_parts(buf, NULL, &parts);
+	rc = ddb_parse_vos_file_parts(buf, NULL, &parts);
 	D_FREE(buf);
 	assert_rc_equal(rc, -DER_EXCEEDS_PATH_LEN);
 
@@ -93,7 +93,7 @@ parse_vos_file_parts_test_errors(void **state)
 	memset(buf, 'a', DB_PATH_SIZE + 64);
 	buf[0] = '/';
 	memcpy(&buf[DB_PATH_SIZE], MOCKED_VOS_PATH_STR, sizeof(MOCKED_VOS_PATH_STR));
-	rc = parse_vos_file_parts(buf, NULL, &parts);
+	rc = ddb_parse_vos_file_parts(buf, NULL, &parts);
 	D_FREE(buf);
 	assert_rc_equal(rc, -DER_EXCEEDS_PATH_LEN);
 
@@ -104,17 +104,18 @@ parse_vos_file_parts_test_errors(void **state)
 	memset(buf, 'a', DB_PATH_SIZE);
 	buf[0]            = '/';
 	buf[DB_PATH_SIZE] = '\0';
-	rc = parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", buf, &parts);
+	rc = ddb_parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", buf, &parts);
 	D_FREE(buf);
 	assert_rc_equal(rc, -DER_EXCEEDS_PATH_LEN);
 
 	/* Test invalid vos paths with too long vos file name */
-	rc = parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-999999999999", NULL,
-				  &parts);
+	rc = ddb_parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-999999999999", NULL,
+				      &parts);
 	assert_rc_equal(rc, -DER_EXCEEDS_PATH_LEN);
 
 	/* Test invalid vos paths with invalid target idx */
-	rc = parse_vos_file_parts(MOCKED_POOL_UUID_STR "/vos-18446744073709551616", NULL, &parts);
+	rc = ddb_parse_vos_file_parts(MOCKED_POOL_UUID_STR "/vos-18446744073709551616", NULL,
+				      &parts);
 	/* Note: "vos-18446744073709551616" exceeds VOS_FILE_NAME_SIZE, so -DER_EXCEEDS_PATH_LEN
 	 * is returned before the target idx overflow (ULLONG_MAX + 1) is detected.
 	 * If VOS_FILE_NAME_SIZE is increased beyond the length of this filename, this assert
@@ -124,8 +125,8 @@ parse_vos_file_parts_test_errors(void **state)
 	assert_rc_equal(rc, -DER_EXCEEDS_PATH_LEN);
 
 	/* Test invalid vos paths with invalid target idx */
-	rc = parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-99999999999", NULL,
-				  &parts);
+	rc = ddb_parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-99999999999", NULL,
+				      &parts);
 	assert_rc_equal(rc, -DER_OVERFLOW);
 }
 
@@ -140,7 +141,7 @@ parse_vos_file_parts_test_success(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Test with root path */
-	rc = parse_vos_file_parts(MOCKED_VOS_PATH_STR, NULL, &parts);
+	rc = ddb_parse_vos_file_parts(MOCKED_VOS_PATH_STR, NULL, &parts);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(MOCKED_VOS_PATH_STR, parts.vf_vos_file_path);
 	assert_string_equal("/", parts.vf_db_path);
@@ -149,7 +150,7 @@ parse_vos_file_parts_test_success(void **state)
 	assert_int_equal(0, parts.vf_target_idx);
 
 	/* Test with absolute path */
-	rc = parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", NULL, &parts);
+	rc = ddb_parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", NULL, &parts);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", parts.vf_vos_file_path);
 	assert_string_equal("/mnt/daos", parts.vf_db_path);
@@ -158,8 +159,8 @@ parse_vos_file_parts_test_success(void **state)
 	assert_int_equal(0, parts.vf_target_idx);
 
 	/* Test with absolute path and multiple '/' path separators */
-	rc = parse_vos_file_parts("//////mnt////daos/////" MOCKED_POOL_UUID_STR "/////vos-0", NULL,
-				  &parts);
+	rc = ddb_parse_vos_file_parts("//////mnt////daos/////" MOCKED_POOL_UUID_STR "/////vos-0",
+				      NULL, &parts);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal("//////mnt////daos/////" MOCKED_POOL_UUID_STR "/////vos-0",
 			    parts.vf_vos_file_path);
@@ -170,7 +171,7 @@ parse_vos_file_parts_test_success(void **state)
 
 	/* Test with relative path */
 	memset(&parts, 0, sizeof(parts));
-	rc = parse_vos_file_parts("mnt/daos/" MOCKED_POOL_UUID_STR "/vos-42", NULL, &parts);
+	rc = ddb_parse_vos_file_parts("mnt/daos/" MOCKED_POOL_UUID_STR "/vos-42", NULL, &parts);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal("mnt/daos/" MOCKED_POOL_UUID_STR "/vos-42", parts.vf_vos_file_path);
 	assert_string_equal("mnt/daos", parts.vf_db_path);
@@ -179,7 +180,7 @@ parse_vos_file_parts_test_success(void **state)
 	assert_int_equal(42, parts.vf_target_idx);
 
 	/* Test with relative path */
-	rc = parse_vos_file_parts("./" MOCKED_POOL_UUID_STR "/rdb-pool", NULL, &parts);
+	rc = ddb_parse_vos_file_parts("./" MOCKED_POOL_UUID_STR "/rdb-pool", NULL, &parts);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal("./" MOCKED_POOL_UUID_STR "/rdb-pool", parts.vf_vos_file_path);
 	assert_string_equal(".", parts.vf_db_path);
@@ -189,7 +190,7 @@ parse_vos_file_parts_test_success(void **state)
 
 	/* Test with null db path */
 	memset(&parts, 1, sizeof(parts));
-	rc = parse_vos_file_parts(MOCKED_POOL_UUID_STR "/vos-909", NULL, &parts);
+	rc = ddb_parse_vos_file_parts(MOCKED_POOL_UUID_STR "/vos-909", NULL, &parts);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal(MOCKED_POOL_UUID_STR "/vos-909", parts.vf_vos_file_path);
 	assert_string_equal(".", parts.vf_db_path);
@@ -198,8 +199,8 @@ parse_vos_file_parts_test_success(void **state)
 	assert_int_equal(909, parts.vf_target_idx);
 
 	/* Test with different db path */
-	rc =
-	    parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", "/my/db/path", &parts);
+	rc = ddb_parse_vos_file_parts("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", "/my/db/path",
+				      &parts);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_string_equal("/mnt/daos/" MOCKED_POOL_UUID_STR "/vos-0", parts.vf_vos_file_path);
 	assert_string_equal("/my/db/path", parts.vf_db_path);

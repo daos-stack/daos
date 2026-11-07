@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -179,6 +180,18 @@ func TestSystem_GetUserProperties(t *testing.T) {
 			},
 			db: newAttrDb(map[string]string{
 				userPropPrefix + userProp.Key.String(): "db-value",
+			}),
+			expProps: map[string]string{
+				userProp.Key.String(): "db-value",
+			},
+		},
+		"user value db (other props set)": {
+			toGet: []string{
+				userProp.Key.String(),
+			},
+			db: newAttrDb(map[string]string{
+				userPropPrefix + userProp.Key.String(): "db-value",
+				userPropPrefix + compProp.Key.String(): "other-value",
 			}),
 			expProps: map[string]string{
 				userProp.Key.String(): "db-value",

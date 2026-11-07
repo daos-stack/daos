@@ -21,8 +21,9 @@ class NltStdoutWrapper():
 
     def __init__(self):
         self._stdout = sys.stdout
-        self._outputs = {}
+        self._original_stdout = sys.stdout
         sys.stdout = self
+        self._outputs = {}
 
     def write(self, value):
         """Print to stdout.  If this is the main thread then print it, always save it"""
@@ -49,7 +50,8 @@ class NltStdoutWrapper():
         self._stdout.flush()
 
     def __del__(self):
-        sys.stdout = self._stdout
+        """Restore original stream."""
+        sys.stdout = self._original_stdout
 
 
 class NltStderrWrapper():
@@ -57,8 +59,9 @@ class NltStderrWrapper():
 
     def __init__(self):
         self._stderr = sys.stderr
+        self._original_stderr = sys.stderr
+        sys.stdout = self
         self._outputs = {}
-        sys.stderr = self
 
     def write(self, value):
         """Print to stderr.  Always print it, always save it"""
@@ -80,7 +83,8 @@ class NltStderrWrapper():
         self._stderr.flush()
 
     def __del__(self):
-        sys.stderr = self._stderr
+        """Restore original stream."""
+        sys.stderr = self._original_stderr
 
 
 nlt_lp = None  # pylint: disable=invalid-name
@@ -161,7 +165,8 @@ def log_test(conf,
              ignore_busy=False,
              check_read=False,
              check_write=False,
-             check_fstat=False):
+             check_fstat=False,
+             defer_prune=False):
     """Run the log checker on filename, logging to stdout"""
     # pylint: disable=too-many-arguments
 
@@ -189,10 +194,6 @@ def log_test(conf,
 
     log_iter = nlt_lp.LogIter(filename)
 
-    # LogIter will have opened the file and seek through it as required, so start a background
-    # process to compress it in parallel with the log tracing.
-    conf.compress_file(filename)
-
     lto = nlt_lt.LogTest(log_iter, quiet=quiet)
 
     # Add the code coverage tracer.
@@ -207,36 +208,59 @@ def log_test(conf,
     if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
 
+    def _issue_total():
+        """Findings recorded so far, used to tell whether this log produced any."""
+        total = len(conf.wf.issues) if conf.wf else 0
+        if leak_wf is not None and leak_wf is not conf.wf:
+            total += len(leak_wf.issues)
+        return total
+
+    issues_before = _issue_total()
+    keep = getattr(conf.args, 'keep_logs', False)
     try:
-        lto.check_log_file(abort_on_warning=True,
-                           show_memleaks=show_memleaks,
-                           leak_wf=leak_wf)
-    except nlt_lt.LogCheckError:
-        pass
+        try:
+            lto.check_log_file(abort_on_warning=True,
+                               show_memleaks=show_memleaks,
+                               leak_wf=leak_wf)
+        except nlt_lt.LogCheckError:
+            pass
 
-    if skip_fi:
-        if not lto.fi_triggered:
-            raise NLTestNoFi
+        if skip_fi:
+            if not lto.fi_triggered:
+                raise NLTestNoFi
 
-    if check_read or check_write or check_fstat:
-        for line in log_iter.new_iter():
-            if line.function != "ioil_show_summary":
-                continue
-            print(line.get_msg())
+        if check_read or check_write or check_fstat:
+            for line in log_iter.new_iter():
+                if line.function != "ioil_show_summary":
+                    continue
+                print(line.get_msg())
 
-            # These numbers match the D_INFO log line in the ioil_show_summary function.
-            if check_read and int(line.get_field(3)) == 0:
-                raise NLTestIlZeroCall('read')
+                # These numbers match the D_INFO log line in the ioil_show_summary function.
+                if check_read and int(line.get_field(3)) == 0:
+                    raise NLTestIlZeroCall('read')
 
-            if check_write and int(line.get_field(5)) == 0:
-                raise NLTestIlZeroCall('write')
+                if check_write and int(line.get_field(5)) == 0:
+                    raise NLTestIlZeroCall('write')
 
-            if check_fstat and int(line.get_field(8)) == 0:
-                raise NLTestIlZeroCall('fstat')
+                if check_fstat and int(line.get_field(8)) == 0:
+                    raise NLTestIlZeroCall('fstat')
 
-    if conf.max_log_size and fstat.st_size > conf.max_log_size:
-        message = (f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
-                   + sizeof_fmt(conf.max_log_size))
-        conf.wf.add_test_case('logfile_size', failure=message)
+        if conf.max_log_size and fstat.st_size > conf.max_log_size:
+            message = (f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
+                       + sizeof_fmt(conf.max_log_size))
+            conf.wf.add_test_case('logfile_size', failure=message)
+    except Exception:  # pylint: disable=broad-exception-caught
+        # Preserve the log on any error/abort path (fault not injected, IL check, etc.).
+        keep = True
+        raise
+    finally:
+        # Keep a log only if it produced a finding (or --keep-logs).  Fault-injection logs are
+        # pruned by the fault-injection framework instead, once it knows if the run was of
+        # interest, so leave those untouched here.
+        if not defer_prune:
+            if keep or _issue_total() > issues_before:
+                conf.compress_file(filename)
+            else:
+                os.unlink(filename)
 
     return lto.fi_location

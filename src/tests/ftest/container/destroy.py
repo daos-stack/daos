@@ -66,7 +66,7 @@ class ContainerDestroyTest(TestWithServers):
 
         # Create a pool and a container.
         self.pool = self.get_pool()
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         # Open the container if required
         if open_container:

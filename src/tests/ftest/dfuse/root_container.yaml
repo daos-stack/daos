@@ -18,7 +18,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
   cont_count: 10
   tmp_file_name: test_file
   tmp_file_count: 2

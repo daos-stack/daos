@@ -6,6 +6,7 @@
 *
 !src
 !deps
+!utils/build
 !utils/build.config
 !utils/certs
 !utils/ci
@@ -20,6 +21,8 @@
 !utils/run_utest.py
 !utils/utest.yaml
 !utils/unit
+!utils/rpms
+!ci
 !SConstruct
 !VERSION
 !LICENSE

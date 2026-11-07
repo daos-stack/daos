@@ -26,16 +26,18 @@ struct vos_file_parts {
 
 /* Parse a path to a VOS file to get needed parts for initializing vos */
 int
-    parse_vos_file_parts(const char *vos_path, const char *db_path,
+ddb_parse_vos_file_parts(const char *vos_path, const char *db_path,
 			 struct vos_file_parts *vos_file_parts);
 
 /* See ddb_key_to_printable_buf for how the keys will be printed */
-int ddb_parse_key(const char *input, daos_key_t *key);
+int
+ddb_parse_key(const char *input, daos_key_t *key);
 
 /* Parse a string into the parts of a dtx_id. See DF_DTIF for how the format of the dtx_id is
  * expected to be.
  */
-int ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id);
+int
+ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id);
 
 /* Parse a string representing a date into a DTX commit time */
 int

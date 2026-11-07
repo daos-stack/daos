@@ -128,7 +128,7 @@ class NvmeFaultReintegrate(TestWithServers):
         # 3.
         self.log_step("Creating a pool and container with RF and starting IOR in a thread")
         self.pool = self.get_pool(connect=False)
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
         job_manager = get_job_manager(self, subprocess=None, timeout=120)
         thread_queue = Queue()

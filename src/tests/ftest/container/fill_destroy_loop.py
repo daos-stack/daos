@@ -1,13 +1,15 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
-  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
 from apricot import TestWithServers
-from general_utils import DaosTestError, bytes_to_human, human_to_bytes
+from exception_utils import CommandFailure
+from general_utils import bytes_to_human, human_to_bytes
+from ior_utils import write_data
 from run_utils import run_remote
 
 
@@ -21,26 +23,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
     :avocado: recursive
     """
 
-    DER_NOSPACE = "-1007"
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a BoundaryPoolContainerSpace object."""
-        super().__init__(*args, **kwargs)
-
-        self.test_loop = 0
-        self.reclaim_props = []
-        self.delta_bytes = 0
-
-    def setUp(self):
-        """Set up each test case."""
-        super().setUp()
-
-        self.test_loop = self.params.get("test_loop", "/run/pool/*", 0)
-        self.reclaim_props = self.params.get("reclaim_props", "/run/pool/*", [])
-
-        delta = self.params.get("delta", "/run/pool/*", "0")
-        self.delta_bytes = human_to_bytes(delta)
-        self.log.info("==> Set pool delta to %s (%i bytes)", delta, self.delta_bytes)
+    IOR_NOSPACE = "No space left on device"
 
     def check_server_logs(self):
         """Check if GC engine errors have occurred during the test
@@ -60,7 +43,10 @@ class BoundaryPoolContainerSpace(TestWithServers):
         err_regex += r"gc_reclaim_pool failed DER_NOSPACE.+$'"
         log_dir = os.path.dirname(self.server_managers[0].get_config_value("log_file"))
 
-        cmd = "find {} -type f -regextype egrep ".format(log_dir)
+        cmd = "find {} -type f ".format(log_dir)
+        if self.server_managers[0].manager.job.using_control_metadata:
+            cmd = "find {0} -path {0}/control_metadata -prune -o -type f ".format(log_dir)
+        cmd += r"-regextype egrep "
         cmd += r"-regex '.*/daos_server\.log\.[[:digit:]]+' "
         cmd += r"-exec grep -q -E -e " + err_regex + r" {} ';' -print"
         result = run_remote(self.log, self.hostlist_servers, cmd)
@@ -75,71 +61,97 @@ class BoundaryPoolContainerSpace(TestWithServers):
             0, len(hosts),
             "Unexpected errors occurred during garbage collection on hosts {}".format(hosts))
 
-    def write_pool_until_nospace(self, test_loop):
+    def write_pool_until_nospace(self, pool, test_loop):
         """write pool and container until pool is full.
 
         Args:
+            pool (TestPool): pool object to write data.
             test_loop (int): test loop for log info.
         """
+        delta = self.params.get("delta", "/run/test_config/*", "0")
+        delta_bytes = human_to_bytes(delta)
+        self.log.info("==> Set pool delta to %s (%i bytes)", delta, delta_bytes)
+
         # Create a container and get pool free space before write
-        container = self.get_container(self.pool)
-        free_space_init = self.pool.get_pool_free_space()
+        free_scm_space_init = pool.get_pool_free_space()
+        free_nvme_space_init = pool.get_pool_free_space("nvme")
+        container = self.get_container(pool)
         self.log.info("--%i.(3)Pool free space before writing data to container %s (%i bytes)",
-                      test_loop, bytes_to_human(free_space_init), free_space_init)
+                      test_loop, bytes_to_human(free_scm_space_init), free_scm_space_init)
 
         # Write random data to container until pool out of space
-        base_data_size = container.data_size.value
+        base_data_size = int(self.params.get("block_size", "/run/ior/*"))
+        num_of_processes = int(self.params.get("processes", "/run/ior/*"))
         data_written = 0
         while True:
-            new_data_size = self.random.randint(base_data_size * 0.5, base_data_size * 1.5)  # nosec
-            container.data_size.update(new_data_size, "data_size")
-
             try:
-                container.write_objects()
-            except DaosTestError as excep:
-                if self.DER_NOSPACE in str(excep):
+                write_data(self, container)
+            except CommandFailure as excep:
+                if self.IOR_NOSPACE in str(excep):
                     self.log.info(
-                        "--%i.(4)DER_NOSPACE %s detected, pool is unable for an additional"
-                        " %s (%i bytes) object", test_loop, self.DER_NOSPACE,
-                        bytes_to_human(container.data_size.value), container.data_size.value)
+                        "--%i.(4)DER_NOSPACE %s detected", test_loop, self.IOR_NOSPACE)
                     break
                 self.fail("Test-loop {0} exception while writing object: {1}".format(
                     test_loop, repr(excep)))
-            data_written += new_data_size
+            data_written += (base_data_size * num_of_processes)
 
         # display free space and data written
-        free_space_before_destroy = self.pool.get_pool_free_space()
+        free_scm_space_before_destroy = pool.get_pool_free_space()
         self.log.info(
             "--%i.(5) %s (%i bytes) written when pool is full.",
             test_loop, bytes_to_human(data_written), data_written)
 
         # display free space stats after destroy
         container.destroy()
-        free_space_after_destroy = self.pool.get_pool_free_space()
+        free_scm_space_after_destroy = pool.get_pool_free_space()
+
         self.log.info(
             "--%i.(6)Pool full, free space before container delete %s (%i bytes)",
-            test_loop, bytes_to_human(free_space_before_destroy), free_space_before_destroy)
+            test_loop, bytes_to_human(free_scm_space_before_destroy),
+            free_scm_space_before_destroy)
         self.log.info(
             "--%i.(7)Pool full, free space after container deleted %s (%i bytes)",
-            test_loop, bytes_to_human(free_space_after_destroy), free_space_after_destroy)
+            test_loop, bytes_to_human(free_scm_space_after_destroy),
+            free_scm_space_after_destroy)
 
         # sanity checks on free space
         self.assertGreater(
-            free_space_after_destroy, free_space_before_destroy,
+            free_scm_space_after_destroy, free_scm_space_before_destroy,
             "Deleting container did not free up pool space: "
             "loop={}, before={} ({} bytes), end={} ({} bytes)".format(
-                test_loop, bytes_to_human(free_space_before_destroy), free_space_before_destroy,
-                bytes_to_human(free_space_after_destroy), free_space_after_destroy))
+                test_loop, bytes_to_human(free_scm_space_before_destroy),
+                free_scm_space_before_destroy,
+                bytes_to_human(free_scm_space_after_destroy),
+                free_scm_space_after_destroy))
+
+        self.log.info(
+            "--%i.(8)Waiting for free space to be restored: %s (%i bytes) < %s (%i bytes)",
+            test_loop, bytes_to_human(free_scm_space_after_destroy),
+            free_scm_space_after_destroy,
+            bytes_to_human(free_scm_space_init - delta_bytes),
+            free_scm_space_init - delta_bytes)
+
+        # Check the SCM/NVME space is reclaimed after container deletion
+        if not pool.check_free_space(
+                expected_scm=f">={int(free_scm_space_init - delta_bytes)}",
+                expected_nvme=f">={int(free_nvme_space_init - delta_bytes)}",
+                timeout=120, interval=15):
+            self.log.error("Pool space not reclaimed after deleting all containers")
+
+        free_scm_space_after_destroy = pool.get_pool_free_space()
+
         self.assertAlmostEqual(
-            free_space_init, free_space_after_destroy, delta=self.delta_bytes,
+            free_scm_space_init, free_scm_space_after_destroy, delta=delta_bytes,
             msg="Deleting container did not restore all free pool space: "
             "loop={}, init={} ({} bytes), end={} ({} bytes)".format(
-                test_loop, bytes_to_human(free_space_init), free_space_init,
-                bytes_to_human(free_space_after_destroy), free_space_after_destroy))
+                test_loop, bytes_to_human(free_scm_space_init),
+                free_scm_space_init,
+                bytes_to_human(free_scm_space_after_destroy),
+                free_scm_space_after_destroy))
         self.log.debug(
             "Storage space leaked %s (%i bytes)",
-            bytes_to_human(abs(free_space_init - free_space_after_destroy)),
-            free_space_init - free_space_after_destroy)
+            bytes_to_human(abs(free_scm_space_init - free_scm_space_after_destroy)),
+            free_scm_space_init - free_scm_space_after_destroy)
 
     def test_fill_destroy_cont_loop(self):
         """JIRA ID: DAOS-8465
@@ -168,28 +180,35 @@ class BoundaryPoolContainerSpace(TestWithServers):
         :avocado: tags=container,pool,boundary_test
         :avocado: tags=BoundaryPoolContainerSpace,test_fill_destroy_cont_loop
         """
+        reclaim_props = []
+        test_loop = self.params.get("test_loop", "/run/test_config/*", 0)
+        reclaim_props = self.params.get("reclaim_props", "/run/test_config/*", [])
+
         # create pool
-        self.pool = self.get_pool()
+        self.log_step("Create Pool")
+        pool = self.get_pool()
 
-        for test_loop in range(1, self.test_loop + 1):
-            self.log.info("==>Starting test loop: %i ...", test_loop)
+        self.log_step("Starting test loops to fill and destroy container")
+        for loop_cnt in range(1, test_loop + 1):
+            self.log.info("==>Starting test loop: %i ...", loop_cnt)
 
-            if self.reclaim_props:
-                reclaim_prop = self.reclaim_props.pop(0)
+            if reclaim_props:
+                reclaim_prop = reclaim_props.pop(0)
                 self.log.info(
                     '--%i.(0)Set Pool reclaim properties to "%s"',
-                    test_loop, reclaim_prop)
-                self.pool.set_property("reclaim", reclaim_prop)
+                    loop_cnt, reclaim_prop)
+                pool.set_property("reclaim", reclaim_prop)
 
-            self.pool.set_query_data()
+            pool.set_query_data()
             self.log.info(
                 "--%i.(1)Query pool %s before write: %s",
-                test_loop, str(self.pool), self.pool.query_data)
-            free_space = self.pool.get_pool_free_space()
+                loop_cnt, str(pool), pool.query_data)
+            free_space = pool.get_pool_free_space()
             self.log.info(
                 "--%s.(2)Pool free space before container create: %s (%i bytes)",
                 test_loop, bytes_to_human(free_space), free_space)
 
-            self.write_pool_until_nospace(test_loop)
+            self.write_pool_until_nospace(pool, loop_cnt)
 
+        self.log_step("Check server logs for errors")
         self.check_server_logs()

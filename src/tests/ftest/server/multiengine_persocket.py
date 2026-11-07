@@ -226,7 +226,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
         # (6) Container create and attributes test
         self.log_step("Create a container and verify the attributes")
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
         self.container.open()
         attr_dict = self.create_data_set(num_attributes)
         try:

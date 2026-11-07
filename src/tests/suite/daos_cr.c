@@ -2108,9 +2108,6 @@ cr_shutdown(void **state)
 
 	print_message("CR10: checker shutdown\n");
 
-	/* Temporarily disable the test for DAOS-18537. */
-	skip();
-
 	cr_pause(state, false);
 }
 
@@ -2129,9 +2126,6 @@ cr_crash(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR11: checker crash\n");
-
-	/* Temporarily disable the test for DAOS-18537. */
-	skip();
 
 	cr_pause(state, true);
 }
@@ -2167,9 +2161,6 @@ cr_leader_resume(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR12: check leader resume from former stop/paused phase\n");
-
-	/* Temporarily disable the test for DAOS-18537. */
-	skip();
 
 	rc = cr_pool_create(state, &pool, false, class);
 	assert_rc_equal(rc, 0);
@@ -2295,9 +2286,6 @@ cr_engine_resume(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	print_message("CR13: check engine resume from former stop/paused phase\n");
-
-	/* Temporarily disable the test for DAOS-18537. */
-	skip();
 
 	rc = cr_pool_create(state, &pool, false, class);
 	assert_rc_equal(rc, 0);

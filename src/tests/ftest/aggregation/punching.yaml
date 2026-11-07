@@ -22,7 +22,6 @@ pool: !mux
     mem_ratio: 25
 container:
   type: POSIX
-  control_method: daos
 mdtest:
   client_processes:
     np: 2

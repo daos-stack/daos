@@ -80,12 +80,12 @@ Alternatively the packages can be installed via pip as root which will install o
 the user outside of a virtual environment, in which case `~/.local/bin` will need to be added to
 PATH.
 
- ```bash
- $ python3 -m venv venv
- $ source venv/bin/activate
- $ python3 -m pip --no-cache-dir install --upgrade pip
- $ python3 -m pip install -r requirements-build.txt
- ```
+```bash
+$ python3 -m venv venv
+$ source venv/bin/activate
+$ python3 -m pip --no-cache-dir install --upgrade pip
+$ python3 -m pip install -r requirements-build.txt
+```
 
 ## Build DAOS
 

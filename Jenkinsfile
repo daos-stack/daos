@@ -1,4 +1,5 @@
 #!/usr/bin/groovy
+/* groovylint-disable DuplicateListLiteral */
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
@@ -65,12 +66,12 @@ void updateRunStage() {
         'Functional Hardware Medium',
         'Functional Hardware Medium MD on SSD',
         'Functional Hardware Medium VMD',
-        'Functional Hardware Medium Verbs Provider',
-        'Functional Hardware Medium Verbs Provider MD on SSD',
-        'Functional Hardware Medium UCX Provider',
+        'Functional Hardware Medium Provider',
+        'Functional Hardware Medium Provider MD on SSD',
         'Functional Hardware Large',
         'Functional Hardware Large MD on SSD',
-        'Functional Cluster Box Medium MD on SSD'
+        'Functional Cluster Box Medium MD on SSD',
+        'Functional Cluster Box Medium Provider MD on SSD',
     ]
 
     // Initialize the run state of each stage using the parameter stage keys
@@ -215,12 +216,12 @@ void updateRunStage() {
             'Functional Hardware Medium': hwBuildStage,
             'Functional Hardware Medium MD on SSD': hwBuildStage,
             'Functional Hardware Medium VMD': hwBuildStage,
-            'Functional Hardware Medium Verbs Provider': hwBuildStage,
-            'Functional Hardware Medium Verbs Provider MD on SSD': hwBuildStage,
-            'Functional Hardware Medium UCX Provider': hwBuildStage,
+            'Functional Hardware Medium Provider': hwBuildStage,
+            'Functional Hardware Medium Provider MD on SSD': hwBuildStage,
             'Functional Hardware Large': hwBuildStage,
             'Functional Hardware Large MD on SSD': hwBuildStage,
             'Functional Cluster Box Medium MD on SSD': hwBuildStage,
+            'Functional Cluster Box Medium Provider MD on SSD': hwBuildStage,
             ]
         // Initially skip all the build stages
         for (stage in testBuildStage.values().toSet()) {
@@ -532,10 +533,10 @@ pipeline {
                             'parameter.')
         string(name: 'TestProvider',
                defaultValue: '',
-               description: 'Test-provider to use for the non-Provider Functional Hardware test ' +
-                            'stages.  Specifies the default provider to use the daos_server ' +
+               description: 'Test-provider to use for all Functional Hardware and Cluster Box ' +
+                            'test stages. Defines the default provider to use in the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
-                            '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
+                            '--provider argument; i.e. "ucx+dc_x", "ofi+verbs;ofi_rxm", "ofi+tcp")')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Build RPM and DEB packages, Skip unit tests.')
@@ -644,15 +645,12 @@ pipeline {
         booleanParam(name: bashName('Functional Hardware Medium VMD'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Medium VMD stage.')
-        booleanParam(name: bashName('Functional Hardware Medium Verbs Provider'),
+        booleanParam(name: bashName('Functional Hardware Medium Provider'),
                      defaultValue: false,
-                     description: 'Run the Functional Hardware Medium Verbs Provider stage.')
-        booleanParam(name: bashName('Functional Hardware Medium Verbs Provider MD on SSD'),
+                     description: 'Run the Functional Hardware Medium Provider stage.')
+        booleanParam(name: bashName('Functional Hardware Medium Provider MD on SSD'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD stage.')
-        booleanParam(name: bashName('Functional Hardware Medium UCX Provider'),
-                     defaultValue: false,
-                     description: 'Run the Functional Hardware Medium UCX Provider stage.')
+                     description: 'Run the Functional Hardware Medium Provider MD on SSD stage.')
         booleanParam(name: bashName('Functional Hardware Large'),
                      defaultValue: false,
                      description: 'Run the Functional Hardware Large stage.')
@@ -662,6 +660,9 @@ pipeline {
         booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Cluster Box test stage')
+        booleanParam(name: bashName('Functional Cluster Box Medium Provider MD on SSD'),
+                     defaultValue: true,
+                     description: 'Run the Functional Cluster Box Provider MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -679,16 +680,19 @@ pipeline {
                description: 'Label to use for Fault Injection (FI) tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
+               description: 'Label to use for the Functional Hardware Medium stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_nvme5 || ci_nvme5_only',
+               description: 'Label to use for the Functional Hardware Medium MD on SSD stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
+               description: 'Label to use for 5 node Functional Hardware Medium Provider stages')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_ofed5 || ci_nvme5_only',
+               description: 'Label to use for the Functional Hardware Medium Provider MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',
                description: 'Label to use for the Functional Hardware Medium VMD stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
-               defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
@@ -820,7 +824,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.9'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
+                                                                deps_build: true,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
                                                 ' --target build-ci' +
@@ -831,30 +835,35 @@ pipeline {
                     }
                     steps {
                         script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
+                            sh label: 'Collect dependency RPMs built into the image',
+                               script: '''
+                                       set -- /home/daos/rpms/deps/*.rpm
+                                       if [ -e "$1" ]; then
+                                           mkdir -p rpms/deps
+                                           cp -- "$@" rpms/deps/
+                                       fi
+                               '''
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
                                            build_deps: 'no',
                                            stash_opt: true,
+                                           scons_exe: 'utils/build/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
-                            // For non-release builds, create a separate build with the valgrind
-                            // tag for NLT memcheck testing.  This is necessary to avoid problems
-                            // caused by valgrind being confused by the Go runtime. We don't want
-                            // to use the valgrind build for normal testing because it is much slower.
-                            // BUILD_TYPE=dev is set for PR/dev builds in sconsArgs(), and
-                            // TARGET_TYPE=release is used to select pre-built cached prerequisites.
+                                                      ' TARGET_TYPE=release'))
+                            sh label: 'Build DAOS RPMs',
+                                script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
+                                    ' utils/build/build_packages.sh --rpm-suffix=el9' +
+                                    ' --build-range=daos rpms'
+                            // Go binaries need to be instrumented in order to work reliably
+                            // with valgrind. We do this in a separate build because we don't
+                            // want to ship the instrumented binaries.
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            build_deps: 'no',
+                                           scons_exe: 'utils/build/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' BUILD_GO_VALGRIND=1 PREFIX=/opt/daos TARGET_TYPE=release'))
+                                                      ' BUILD_GO_VALGRIND=1 TARGET_TYPE=release'))
                             sh label: 'Stash valgrind install tree for NLT',
                                 script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
                             stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
@@ -887,8 +896,8 @@ pipeline {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: false) +
+                                                                deps_build: true,
+                                                                parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +
@@ -897,19 +906,26 @@ pipeline {
                     }
                     steps {
                         script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
+                            sh label: 'Collect dependency RPMs built into the image',
+                               script: '''
+                                       set -- /home/daos/rpms/deps/*.rpm
+                                       if [ -e "$1" ]; then
+                                           mkdir -p rpms/deps
+                                           cp -- "$@" rpms/deps/
+                                       fi
+                               '''
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
                                            build_deps: 'no',
                                            stash_opt: true,
+                                           scons_exe: 'utils/build/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
+                                                      ' TARGET_TYPE=release'))
+                            sh label: 'Build DAOS RPMs',
+                                script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
+                                    ' utils/build/build_packages.sh --rpm-suffix=suse.lp156' +
+                                    ' --build-range=daos rpms'
                         }
                     }
                     post {
@@ -1002,7 +1018,7 @@ pipeline {
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh' +
                                                   ' --system-ram-reserved 4' +
-                                                  ' --max-log-size 1950MiB' +
+                                                  ' --max-log-size 2500MiB' +
                                                   ' --dfuse-dir /localhome/jenkins/' +
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
@@ -1124,6 +1140,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: 'memcheck',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
@@ -1137,6 +1154,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
@@ -1150,6 +1168,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'leap15.6'
                         ),
@@ -1163,6 +1182,7 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal,
                             image_version: 'sles15.7'
                         ),
@@ -1176,11 +1196,14 @@ pipeline {
                             stage_tags: 'vm',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
+                            provider: 'ofi+tcp',
                             job_status: job_status_internal
                         ),
                         'Fault injection testing': scriptedUnitTestStage(
                             name: 'Fault injection testing',
-                            runStage: shouldStageRun('Fault injection testing'),
+                            // Release builds compile out fault injection
+                            runStage: shouldStageRun('Fault injection testing') &&
+                                      !sconsArgs().contains('BUILD_TYPE=release'),
                             label: params.CI_FI_1_LABEL,
                             jobStatus: job_status_internal,
                             distro: 'el9',
@@ -1240,7 +1263,7 @@ pipeline {
                 }
             }
         } // stage('Test')
-        stage('Test Storage Prep on EL 8.8') {
+        stage('Test Storage Prep on EL 9') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
@@ -1274,6 +1297,7 @@ pipeline {
                             pragma_suffix: '-hw-medium',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
@@ -1284,9 +1308,10 @@ pipeline {
                             name: 'Functional Hardware Medium MD on SSD',
                             runStage: shouldStageRun('Functional Hardware Medium MD on SSD'),
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: next_version(),
-                            stage_tags: 'hw,medium,-provider',
+                            other_packages: 'mercury-libfabric mercury-ucx',
+                            stage_tags: 'hw,medium,-provider,-cb',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal,
@@ -1298,6 +1323,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-vmd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw_vmd,medium',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
@@ -1305,42 +1331,29 @@ pipeline {
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
-                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider',
-                            runStage: shouldStageRun('Functional Hardware Medium Verbs Provider'),
-                            pragma_suffix: '-hw-medium-verbs-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                        'Functional Hardware Medium Provider': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Provider',
+                            runStage: shouldStageRun('Functional Hardware Medium Provider'),
+                            pragma_suffix: '-hw-medium-provider',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
-                        'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium Verbs Provider MD on SSD',
-                            runStage: shouldStageRun('Functional Hardware Medium Verbs Provider MD on SSD'),
-                            pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                        'Functional Hardware Medium Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Hardware Medium Provider MD on SSD'),
+                            pragma_suffix: '-hw-medium-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_MD_ON_SSD_LABEL,
                             next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
+                            other_packages: 'mercury-libfabric mercury-ucx',
+                            stage_tags: 'hw,medium,provider,-cb',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            job_status: job_status_internal,
-                            image_version: 'el9.7'
-                        ),
-                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium UCX Provider',
-                            runStage: shouldStageRun('Functional Hardware Medium UCX Provider'),
-                            pragma_suffix: '-hw-medium-ucx-provider',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                            next_version: next_version(),
-                            stage_tags: 'hw,medium,provider',
-                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
@@ -1350,6 +1363,7 @@ pipeline {
                             pragma_suffix: '-hw-large',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
@@ -1362,6 +1376,7 @@ pipeline {
                             pragma_suffix: '-hw-large-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto_md_on_ssd',
@@ -1374,12 +1389,25 @@ pipeline {
                             pragma_suffix:'-cb-medium-md-on-ssd',
                             label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
                             next_version: next_version(),
-                            stage_tags: 'cb,medium',
+                            other_packages: 'mercury-libfabric mercury-ucx',
+                            stage_tags: 'cb,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto_md_on_ssd',
                             node_count: 5,
-                            run_if_pr: true,
-                            run_if_landing: false,
+                            job_status: job_status_internal,
+                            image_version: 'el9.7'
+                        ),
+                        'Functional Cluster Box Medium Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium Provider MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium Provider MD on SSD'),
+                            pragma_suffix:'-cb-medium-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL,
+                            next_version: next_version(),
+                            other_packages: 'mercury-libfabric mercury-ucx',
+                            stage_tags: 'cb,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
                             job_status: job_status_internal,
                             image_version: 'el9.7'
                         ),
@@ -1397,6 +1425,11 @@ pipeline {
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
+        }
+        cleanup {
+            // Need to clean the workspace to reduce disk space usage on
+            // Jenkins build agents
+            cleanWs()
         }
     } // post
 }

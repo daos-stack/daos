@@ -22,6 +22,10 @@
 #include "ddb_mgmt.h"
 #include "ddb_vos.h"
 #include "ddb_spdk.h"
+#include "ddb_spdk_reinit_wa.h"
+
+#define DF_CSUM_LOC                  DF_UOID " dkey " DF_KEY " akey " DF_KEY
+#define DP_CSUM_LOC(oid, dkey, akey) DP_UOID(*(oid)), DP_KEY(dkey), DP_KEY(akey)
 
 #define ddb_vos_iterate(param, iter_type, recursive, anchors, cb, args) \
 				vos_iterate(param, iter_type, recursive, \
@@ -40,7 +44,7 @@ create_vos_file_parts(const char *path, const char *db_path, struct vos_file_par
 		goto out;
 	}
 
-	rc = parse_vos_file_parts(path, db_path, vf);
+	rc = ddb_parse_vos_file_parts(path, db_path, vf);
 	if (SUCCESS(rc)) {
 		*vf_ptr = vf;
 	} else {
@@ -53,22 +57,26 @@ out:
 	return rc;
 }
 
-bool
-vmd_wa_can_proceed(struct ddb_ctx *ctx, const char *db_path);
-
 int
-dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t flags,
-	     bool write_mode)
+dv_pool_open(const char *path, const char *db_path, struct ddb_ctx *ctx, daos_handle_t *poh,
+	     uint32_t flags, bool write_mode)
 {
 	int                    rc;
 	struct vos_file_parts *vf;
+	bool                   can_proceed;
 
 	rc = create_vos_file_parts(path, db_path, &vf);
 	if (!SUCCESS(rc))
-		goto out;
+		return rc;
+
+	rc = dwa_can_proceed(ctx, vf->vf_db_path, &can_proceed);
+	if (!SUCCESS(rc))
+		goto out_vf;
+	if (!can_proceed)
+		D_GOTO(out_vf, rc = -DER_NO_SERVICE);
 
 	/**
-	 * When the user requests read‑only mode (write_mode == false), DDB itself will not attempt
+	 * When the user requests read-only mode (write_mode == false), DDB itself will not attempt
 	 * to modify the pool. However, PMEMOBJ performs several operations that do modify the pool
 	 * during open and/or close, for example:
 	 * - Internal bookkeeping required to ensure resilience in case of an ADR failure (SDS).
@@ -77,18 +85,16 @@ dv_pool_open(const char *path, const char *db_path, daos_handle_t *poh, uint32_t
 	 * the consistency of the pool.
 	 *
 	 * However, since none of these changes need to be persisted when the pool is opened in
-	 * read‑only mode (write_mode == false), we can work around this by mapping the pool using
-	 * copy‑on‑write. Copy‑on‑write allows pages to be read normally, but when a page is
+	 * read-only mode (write_mode == false), we can work around this by mapping the pool using
+	 * copy-on-write. Copy-on-write allows pages to be read normally, but when a page is
 	 * modified, a new private copy is allocated. As a result, any changes made to
 	 * the mapped memory do not propagate to the persistent medium.
 	 */
 	if (!write_mode) {
 		int cow_val = 1;
 		rc          = pmemobj_ctl_set(NULL, "copy_on_write.at_open", &cow_val);
-		if (rc != 0) {
-			rc = daos_errno2der(errno);
-			goto out_vf;
-		}
+		if (rc != 0)
+			D_GOTO(out_vf, rc = daos_errno2der(errno));
 	}
 
 	rc = vos_self_init(vf->vf_db_path, true, vf->vf_target_idx);
@@ -112,7 +118,6 @@ out_cow:
 	}
 out_vf:
 	D_FREE(vf);
-out:
 	return rc;
 }
 
@@ -122,15 +127,17 @@ dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx)
 	struct vos_file_parts *vf;
 	int                    flags = 0;
 	int                    rc;
+	bool                   can_proceed;
 
 	rc = create_vos_file_parts(path, db_path, &vf);
 	if (!SUCCESS(rc))
-		goto out;
+		return rc;
 
-	if (!vmd_wa_can_proceed(ctx, vf->vf_db_path)) {
-		rc = -DER_NO_SERVICE;
+	rc = dwa_can_proceed(ctx, vf->vf_db_path, &can_proceed);
+	if (!SUCCESS(rc))
 		goto out_vf;
-	}
+	if (!can_proceed)
+		D_GOTO(out_vf, rc = -DER_NO_SERVICE);
 
 	rc = vos_self_init(vf->vf_db_path, true, vf->vf_target_idx);
 	if (!SUCCESS(rc)) {
@@ -149,7 +156,6 @@ dv_pool_destroy(const char *path, const char *db_path, struct ddb_ctx *ctx)
 
 out_vf:
 	D_FREE(vf);
-out:
 	return rc;
 }
 
@@ -1093,73 +1099,184 @@ dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dum
 	return rc;
 }
 
+/*
+ * Sanity checks of a checksum info fetched from the pool before it is handed to a callback or a
+ * csummer.  ci_is_valid() covers the sizes, the count and the buffer.  However, the checksum type,
+ * also read from the pool, is not covered by it and must be known to the checksum library.
+ */
+static int
+csum_info_check(daos_unit_oid_t *oid, daos_key_t *dkey, daos_key_t *akey, struct dcs_csum_info *ci)
+{
+	uint32_t type;
+
+	if (!ci_is_valid(ci)) {
+		D_ERROR("Checksum metadata of " DF_CSUM_LOC " is inconsistent: "
+			"invalid checksum info\n",
+			DP_CSUM_LOC(oid, dkey, akey));
+		return -DER_CSUM;
+	}
+
+	type = ci->cs_type;
+	/* fault injection: forge a checksum type unknown to the checksum library */
+	if (DAOS_FAIL_CHECK(DDB_CSUM_TYPE_INJECT))
+		type = daos_fail_value_get();
+
+	if (daos_mhash_type2algo(type) == NULL) {
+		D_ERROR("Checksum metadata of " DF_CSUM_LOC " is inconsistent: "
+			"unknown checksum type %" PRIu32 "\n",
+			DP_CSUM_LOC(oid, dkey, akey), type);
+		return -DER_CSUM;
+	}
+
+	return -DER_SUCCESS;
+}
+
 static int
 dump_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
 	     daos_epoch_t epoch, dv_dump_csum_cb dump_cb, void *cb_arg)
 {
+	daos_key_t         *akey;
 	daos_handle_t       ioh;
 	struct dcs_ci_list *cil;
-	int                 cb_rc = 0;
+	uint32_t            csum_nr;
 	int                 rc;
+
+	D_ASSERT(iod != NULL);
+	akey = &iod->iod_name;
 
 	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
 	if (!SUCCESS(rc)) {
-		D_ERROR("vos_fetch_begin for csum dump of " DF_UOID " failed: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("vos_fetch_begin for csum dump of " DF_CSUM_LOC " failed: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 		goto out;
 	}
 
-	cil = vos_ioh2ci(ioh);
-	cb_rc = dump_cb(cb_arg, NULL, vos_ioh2sv_epoch(ioh), cil);
-	if (!SUCCESS(cb_rc))
-		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(cb_rc));
+	cil     = vos_ioh2ci(ioh);
+	csum_nr = cil->dcl_csum_infos_nr;
 
-	rc = vos_fetch_end(ioh, NULL, cb_rc);
-	if (!SUCCESS(rc) && rc != cb_rc)
-		D_ERROR("vos_fetch_end for csum dump of " DF_UOID " failed: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+	/* fault injection: forge an inconsistent checksum-info count */
+	if (DAOS_FAIL_CHECK(DDB_CSUM_NR_INJECT))
+		csum_nr = daos_fail_value_get();
 
+	/* For a single value, the checksum-info list is either empty or has exactly one entry by
+	 * construction. */
+	if (csum_nr != 0 && csum_nr != 1) {
+		D_ERROR("Checksum dump of SV entry " DF_CSUM_LOC " failed: "
+			"inconsistent checksum metadata (expected 0 or 1, got %" PRIu32 ")\n",
+			DP_CSUM_LOC(oid, dkey, akey), csum_nr);
+		D_GOTO(out_fetch_end, rc = -DER_CSUM);
+	}
+	if (csum_nr == 1) {
+		rc = csum_info_check(oid, dkey, akey, dcs_csum_info_get(cil, 0));
+		if (!SUCCESS(rc))
+			goto out_fetch_end;
+	}
+
+	rc = dump_cb(cb_arg, NULL, vos_ioh2sv_epoch(ioh), cil);
+	if (!SUCCESS(rc))
+		D_ERROR("Csum dump callback for " DF_CSUM_LOC " returned: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
+
+out_fetch_end:
+	rc = vos_fetch_end(ioh, NULL, rc);
 out:
-	if (!SUCCESS(cb_rc))
-		rc = cb_rc;
 	return rc;
+}
+
+static int
+csum_recx_check_chunks(daos_unit_oid_t *oid, daos_key_t *dkey, daos_key_t *akey,
+		       struct daos_recx_ep *rep, struct dcs_csum_info *ci)
+{
+	uint32_t csum_nr = ci->cs_nr;
+	uint32_t chunk_nr;
+
+	chunk_nr = daos_recx_calc_chunks(rep->re_recx, rep->re_rec_size, ci->cs_chunksize);
+
+	/* fault injection: forge a checksum not covering exactly the chunks of its extent */
+	if (DAOS_FAIL_CHECK(DDB_CSUM_CHUNK_NR_INJECT))
+		csum_nr = daos_fail_value_get();
+
+	if (csum_nr != chunk_nr) {
+		D_ERROR("Checksum metadata of RECX " DF_CSUM_LOC " " DF_RECX " is inconsistent: "
+			"checksum covers %" PRIu32 " chunks, extent has %" PRIu32 "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RECX(rep->re_recx), csum_nr, chunk_nr);
+		return -DER_CSUM;
+	}
+
+	return -DER_SUCCESS;
 }
 
 static int
 dump_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
 	       daos_epoch_t epoch, dv_dump_csum_cb dump_cb, void *cb_arg)
 {
+	daos_key_t               *akey;
 	daos_handle_t             ioh;
 	struct dcs_ci_list       *cil;
 	struct daos_recx_ep_list *rel;
-	int                       cb_rc = 0;
+	uint32_t                  csum_nr;
+	int                       i;
 	int                       rc;
+
+	D_ASSERT(iod != NULL);
+	akey = &iod->iod_name;
 
 	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
 	if (!SUCCESS(rc)) {
-		D_ERROR("vos_fetch_begin for csum dump of " DF_UOID " failed: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
+		D_ERROR("vos_fetch_begin for csum dump of " DF_CSUM_LOC " failed: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
 		goto out;
 	}
 
-	cil = vos_ioh2ci(ioh);
-	rel = vos_ioh2recx_list(ioh);
-	cb_rc = dump_cb(cb_arg, rel, 0, cil);
-	if (!SUCCESS(cb_rc))
-		D_DEBUG(DB_IO, "Csum dump callback for " DF_UOID " returned: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(cb_rc));
+	cil     = vos_ioh2ci(ioh);
+	csum_nr = cil->dcl_csum_infos_nr;
+	rel     = vos_ioh2recx_list(ioh); /* NULL when no extent is stored in the range/epoch */
 
+	/* fault injection: forge an inconsistent checksum-info count */
+	if (DAOS_FAIL_CHECK(DDB_CSUM_NR_INJECT))
+		csum_nr = daos_fail_value_get();
+
+	if (csum_nr == 0) {
+		/* no checksum stored: report the stored extents, if any, without checksum info */
+		rc = dump_cb(cb_arg, rel, 0, cil);
+		goto out_rel;
+	}
+
+	/* For an array value, if the checksum-info list is not empty, it can only have the same
+	 * number of entries as the recx list by construction: the checksum configuration is stored
+	 * at the root of the evtree, so evt_entry_csum_fill() reports a checksum info for every
+	 * non-hole extent of a checksummed akey, while akey_fetch_recx() records one recx per such
+	 * extent.  A mismatch can only come from corrupted metadata or a broken VOS invariant. */
+	if (rel == NULL || csum_nr != rel->re_nr) {
+		D_ERROR("Checksum dump of RECX " DF_CSUM_LOC " failed: "
+			"inconsistent checksum metadata (expected %" PRIu32 ", got %" PRIu32 ")\n",
+			DP_CSUM_LOC(oid, dkey, akey), rel != NULL ? rel->re_nr : 0, csum_nr);
+		D_GOTO(out_rel, rc = -DER_CSUM);
+	}
+
+	/* Likewise, each checksum info must be valid and cover exactly the chunks of its extent. */
+	for (i = 0; i < csum_nr; i++) {
+		struct dcs_csum_info *ci  = dcs_csum_info_get(cil, i);
+		struct daos_recx_ep  *rep = &rel->re_items[i];
+
+		rc = csum_info_check(oid, dkey, akey, ci);
+		if (!SUCCESS(rc))
+			goto out_rel;
+		rc = csum_recx_check_chunks(oid, dkey, akey, rep, ci);
+		if (!SUCCESS(rc))
+			goto out_rel;
+	}
+
+	rc = dump_cb(cb_arg, rel, 0, cil);
+	if (!SUCCESS(rc))
+		D_ERROR("Csum dump callback for " DF_CSUM_LOC " returned: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
+
+out_rel:
 	/* rel ownership is transferred by vos_ioh2recx_list(); free before vos_fetch_end. */
 	daos_recx_ep_list_free(rel, iod->iod_nr);
-	rc = vos_fetch_end(ioh, NULL, cb_rc);
-	if (!SUCCESS(rc) && rc != cb_rc)
-		D_ERROR("vos_fetch_end for csum dump of " DF_UOID " failed: " DF_RC "\n",
-			DP_UOID(*oid), DP_RC(rc));
-
+	rc = vos_fetch_end(ioh, NULL, rc);
 out:
-	if (!SUCCESS(cb_rc))
-		rc = cb_rc;
 	return rc;
 }
 
@@ -1198,6 +1315,418 @@ dv_dump_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
 
 	vos_cont_close(coh);
 
+out:
+	return rc;
+}
+
+/*
+ * Fetch the record data of a single checksum-verification segment (a whole single value, or
+ * one recx/epoch segment of an array value) into a newly allocated buffer in \a sgl.
+ *
+ * On success, the caller owns sgl->sg_iovs[0].iov_buf and must release it with D_FREE().
+ * On failure, no buffer is left allocated.
+ *
+ * Returns -DER_CSUM if the checksummed value has no data behind it.
+ */
+static int
+fetch_check_value(daos_handle_t coh, daos_unit_oid_t *oid, daos_key_t *dkey, daos_iod_t *iod,
+		  daos_epoch_t epoch, d_sg_list_t *sgl)
+{
+	daos_key_t *akey = &iod->iod_name;
+	size_t      data_size;
+	int         rc;
+
+	iod->iod_size = 0;
+	rc            = vos_obj_fetch(coh, *oid, epoch, 0, dkey, 1, iod, NULL);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_obj_fetch (size) for csum check of " DF_CSUM_LOC " failed: " DF_RC
+			"\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
+		return rc;
+	}
+
+	data_size = iod->iod_size;
+	if (iod->iod_type == DAOS_IOD_ARRAY)
+		data_size *= iod->iod_recxs[0].rx_nr;
+
+	/* fault injection: forge a checksummed value without data behind it */
+	if (DAOS_FAIL_CHECK(DDB_CSUM_NO_DATA_INJECT))
+		data_size = 0;
+
+	if (data_size == 0) {
+		D_ERROR("Checksum check of " DF_CSUM_LOC " failed: inconsistent checksum metadata "
+			"(no data stored at epoch " DF_X64 " for a checksummed value)\n",
+			DP_CSUM_LOC(oid, dkey, akey), epoch);
+		return -DER_CSUM;
+	}
+
+	D_ALLOC(sgl->sg_iovs[0].iov_buf, data_size);
+	if (sgl->sg_iovs[0].iov_buf == NULL)
+		return -DER_NOMEM;
+	sgl->sg_iovs[0].iov_buf_len = data_size;
+
+	rc = vos_obj_fetch(coh, *oid, epoch, 0, dkey, 1, iod, sgl);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_obj_fetch (data) for csum check of " DF_CSUM_LOC " failed: " DF_RC
+			"\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
+		D_FREE(sgl->sg_iovs[0].iov_buf);
+	}
+
+	return rc;
+}
+
+/*
+ * Create an independent copy of \a src (metadata + checksum bytes).
+ * On success, the caller must release the copy with D_FREE(). On failure, nothing is allocated
+ * and \a snapshot is left untouched.
+ */
+static int
+snapshot_csum_info(struct dcs_csum_info *src, struct dcs_csum_info **snapshot)
+{
+	struct dcs_csum_info *dst;
+	uint8_t              *buf;
+
+	/* fault injection: fail the allocation of the snapshot */
+	if (DAOS_FAIL_CHECK(DDB_CSUM_SNAPSHOT_NOMEM_INJECT))
+		return -DER_NOMEM;
+
+	D_ALLOC(dst, sizeof(*dst) + src->cs_buf_len);
+	if (dst == NULL)
+		return -DER_NOMEM;
+
+	/* &dst[1] is "one past the struct", i.e. the start of the trailing buffer allocated
+	 * above (struct dcs_csum_info has no flexible array member of its own). */
+	buf = (uint8_t *)&dst[1];
+	memcpy(buf, ci_idx2csum(src, 0), src->cs_buf_len);
+	ci_set(dst, buf, src->cs_buf_len, src->cs_len, src->cs_nr, src->cs_chunksize, src->cs_type);
+
+	*snapshot = dst;
+	return -DER_SUCCESS;
+}
+
+/*
+ * Verify that the checksum of the data currently stored for one segment matches \a ci.
+ *
+ * Returns:
+ *   0           The checksums match.
+ *   -DER_CSUM   The checksums differ, or no data is stored behind \a ci. On a mismatch,
+ *               *got_csum is set to a copy of the recomputed checksum, which the caller must
+ *               release with D_FREE(). It stays NULL if the copy could not be allocated.
+ *   other < 0   I/O or system error. *got_csum is NULL.
+ */
+static int
+verify_segment_csum(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+		    daos_epoch_t epoch, struct dcs_csum_info *ci, struct dcs_csum_info **got_csum)
+{
+	struct daos_csummer  *csummer       = NULL;
+	struct dcs_iod_csums *got_iod_csums = NULL;
+	d_sg_list_t           sgl           = {0};
+	daos_key_t           *akey          = &iod->iod_name;
+	int                   rc;
+
+	*got_csum = NULL;
+
+	rc = d_sgl_init(&sgl, 1);
+	if (!SUCCESS(rc))
+		goto out;
+
+	rc = fetch_check_value(coh, oid, dkey, iod, epoch, &sgl);
+	if (!SUCCESS(rc))
+		goto out_sgl;
+
+	rc = daos_csummer_init_with_type(&csummer, ci->cs_type, ci->cs_chunksize, 0);
+	if (!SUCCESS(rc)) {
+		D_ERROR("daos_csummer_init_with_type failed: " DF_RC "\n", DP_RC(rc));
+		goto out_sgl;
+	}
+	/* csummer is local to this call and destroyed below, so no save/restore is needed.
+	 * Only dcs_skip_key_calc is set: it's the only flag daos_csummer_calc_iods() (below)
+	 * consults -- dcs_skip_key_verify/dcs_skip_data_verify belong to other, unused-here
+	 * helpers. */
+	csummer->dcs_skip_key_calc = true;
+
+	rc = daos_csummer_calc_iods(csummer, &sgl, iod, NULL, 1, false, NULL, 0, &got_iod_csums);
+	if (!SUCCESS(rc)) {
+		D_ERROR("daos_csummer_calc_iods failed: " DF_RC "\n", DP_RC(rc));
+		goto out_csummer;
+	}
+
+	if (!daos_csummer_compare_csum_info(csummer, &got_iod_csums->ic_data[0], ci)) {
+		rc = snapshot_csum_info(&got_iod_csums->ic_data[0], got_csum);
+		if (!SUCCESS(rc))
+			/* the mismatch cannot be reported through got_csum: log it instead */
+			D_ERROR("Checksum mismatch of " DF_CSUM_LOC " detected, but its recomputed "
+				"checksum cannot be reported: " DF_RC "\n",
+				DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
+		rc = -DER_CSUM;
+	}
+
+	daos_csummer_free_ic(csummer, &got_iod_csums);
+out_csummer:
+	daos_csummer_destroy(&csummer);
+out_sgl:
+	d_sgl_fini(&sgl, true);
+out:
+	return rc;
+}
+
+/*
+ * Verify the checksum of a single value and report the result through \a check_cb.
+ *
+ * The callback is invoked after the value has been verified, whether its checksum matches or not
+ * (with the recomputed checksum on a mismatch), or straight away when the value has no checksum.
+ * It is not invoked if the fetch or the verification fails, the checksum metadata is inconsistent
+ * or a detected mismatch cannot be reported.
+ *
+ * Returns:
+ *   0           The checksum matches, or the value has no checksum.
+ *   -DER_CSUM   The checksum is mismatched or its metadata is inconsistent.
+ *   other < 0   I/O or system error, or error returned by the callback (it takes precedence
+ *               over -DER_CSUM).
+ */
+static int
+check_csum_sv(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+	      daos_epoch_t epoch, dv_check_csum_cb check_cb, void *cb_arg)
+{
+	daos_key_t           *akey;
+	daos_handle_t         ioh;
+	struct dcs_ci_list   *cil;
+	struct dcs_csum_info *ci;
+	struct dcs_csum_info *got_csum = NULL;
+	daos_epoch_t          sv_epoch;
+	uint32_t              csum_nr;
+	int                   rc;
+
+	D_ASSERT(iod != NULL);
+	akey = &iod->iod_name;
+
+	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_fetch_begin for csum check of " DF_CSUM_LOC " failed: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
+		goto out;
+	}
+
+	cil      = vos_ioh2ci(ioh);
+	csum_nr  = cil->dcl_csum_infos_nr;
+	sv_epoch = vos_ioh2sv_epoch(ioh);
+
+	/* fault injection: forge an inconsistent checksum-info count */
+	if (DAOS_FAIL_CHECK(DDB_CSUM_NR_INJECT))
+		csum_nr = daos_fail_value_get();
+
+	if (csum_nr == 0) {
+		rc = check_cb(cb_arg, NULL, sv_epoch, cil, NULL);
+		goto out_fetch_end;
+	}
+
+	/* For a single value, if the checksum-info list is not empty, it can only have one entry
+	 * by construction. */
+	if (csum_nr != 1) {
+		D_ERROR("Checksum check of SV entry " DF_CSUM_LOC " failed: "
+			"inconsistent checksum metadata (expected 1, got %" PRIu32 ")\n",
+			DP_CSUM_LOC(oid, dkey, akey), csum_nr);
+		D_GOTO(out_fetch_end, rc = -DER_CSUM);
+	}
+	ci = dcs_csum_info_get(cil, 0);
+	rc = csum_info_check(oid, dkey, akey, ci);
+	if (!SUCCESS(rc))
+		goto out_fetch_end;
+
+	rc = verify_segment_csum(coh, dkey, oid, iod, sv_epoch, ci, &got_csum);
+	if (rc == -DER_CSUM) {
+		D_DEBUG(DB_IO, "Checksum mismatch of " DF_CSUM_LOC "\n",
+			DP_CSUM_LOC(oid, dkey, akey));
+		/* got_csum != NULL is the mismatch signal of the callback: without it, the
+		 * mismatch is only reported by the return code and the callback is not invoked. */
+		if (got_csum == NULL)
+			goto out_fetch_end;
+		rc = -DER_SUCCESS;
+	}
+	if (!SUCCESS(rc)) {
+		D_ERROR("Checksum verification of " DF_CSUM_LOC " failed: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
+		goto out_fetch_end;
+	}
+
+	rc = check_cb(cb_arg, NULL, sv_epoch, cil, &got_csum);
+	if (!SUCCESS(rc))
+		D_ERROR("Csum check callback for " DF_CSUM_LOC " returned: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
+
+out_fetch_end:
+	rc = vos_fetch_end(ioh, NULL, rc);
+out:
+	/* got_csum != NULL is the mismatch signal; check before D_FREE() clears the pointer. */
+	if (SUCCESS(rc) && got_csum != NULL)
+		rc = -DER_CSUM;
+	D_FREE(got_csum);
+	return rc;
+}
+
+/*
+ * Verify the checksums of all the extents of an array value and report the result through
+ * \a check_cb.
+ *
+ * The callback is invoked once, after all the extents have been verified, whether their checksums
+ * match or not (with the recomputed checksum of each mismatched extent), or straight away when the
+ * array has no checksum. It is not invoked if the fetch or a verification fails, the checksum
+ * metadata is inconsistent or a detected mismatch cannot be reported.
+ *
+ * Returns:
+ *   0           All the checksums match, or the array has no checksum.
+ *   -DER_CSUM   At least one extent has a mismatched checksum, or the checksum metadata is
+ *               inconsistent.
+ *   other < 0   I/O or system error, or error returned by the callback (it takes precedence
+ *               over -DER_CSUM).
+ */
+static int
+check_csum_recx(daos_handle_t coh, daos_key_t *dkey, daos_unit_oid_t *oid, daos_iod_t *iod,
+		daos_epoch_t epoch, dv_check_csum_cb check_cb, void *cb_arg)
+{
+	daos_key_t               *akey;
+	daos_handle_t             ioh;
+	struct dcs_ci_list       *cil;
+	struct daos_recx_ep_list *rel;
+	struct dcs_csum_info    **got_csums = NULL;
+	uint32_t                  csum_nr;
+	bool                      csum_error = false;
+	int                       i;
+	int                       rc;
+
+	D_ASSERT(iod != NULL);
+	akey = &iod->iod_name;
+
+	rc = vos_fetch_begin(coh, *oid, epoch, dkey, 1, iod, VOS_OF_FETCH_CSUM, NULL, &ioh, NULL);
+	if (!SUCCESS(rc)) {
+		D_ERROR("vos_fetch_begin for csum check of " DF_CSUM_LOC " failed: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
+		goto out;
+	}
+
+	cil     = vos_ioh2ci(ioh);
+	csum_nr = cil->dcl_csum_infos_nr;
+	rel     = vos_ioh2recx_list(ioh); /* NULL when no extent is stored in the range/epoch */
+
+	/* fault injection: forge an inconsistent checksum-info count */
+	if (DAOS_FAIL_CHECK(DDB_CSUM_NR_INJECT))
+		csum_nr = daos_fail_value_get();
+
+	if (csum_nr == 0) {
+		/* no checksum stored: got_csums is left NULL, never allocated below */
+		rc = check_cb(cb_arg, rel, 0, cil, got_csums);
+		goto out_rel;
+	}
+
+	/* For an array value, if the checksum-info list is not empty, it can only have the same
+	 * number of entries as the recx list by construction: the checksum configuration is stored
+	 * at the root of the evtree, so evt_entry_csum_fill() reports a checksum info for every
+	 * non-hole extent of a checksummed akey, while akey_fetch_recx() records one recx per such
+	 * extent.  A mismatch can only come from corrupted metadata or a broken VOS invariant. */
+	if (rel == NULL || csum_nr != rel->re_nr) {
+		D_ERROR("Checksum check of RECX " DF_CSUM_LOC " failed: "
+			"inconsistent checksum metadata (expected %" PRIu32 ", got %" PRIu32 ")\n",
+			DP_CSUM_LOC(oid, dkey, akey), rel != NULL ? rel->re_nr : 0, csum_nr);
+		D_GOTO(out_rel, rc = -DER_CSUM);
+	}
+
+	D_ALLOC_ARRAY(got_csums, csum_nr);
+	if (got_csums == NULL)
+		D_GOTO(out_rel, rc = -DER_NOMEM);
+
+	for (i = 0; i < csum_nr; i++) {
+		struct dcs_csum_info *ci;
+		struct daos_recx_ep  *rep;
+		daos_iod_t            seg_iod;
+
+		rep = &rel->re_items[i];
+		ci  = dcs_csum_info_get(cil, i);
+		rc  = csum_info_check(oid, dkey, akey, ci);
+		if (!SUCCESS(rc))
+			goto out_got_csums;
+
+		rc = csum_recx_check_chunks(oid, dkey, akey, rep, ci);
+		if (!SUCCESS(rc))
+			goto out_got_csums;
+
+		seg_iod           = *iod;
+		seg_iod.iod_recxs = &rep->re_recx;
+
+		rc = verify_segment_csum(coh, dkey, oid, &seg_iod, rep->re_ep, ci, &got_csums[i]);
+		if (rc == -DER_CSUM) {
+			D_DEBUG(DB_IO, "Checksum mismatch of " DF_CSUM_LOC " " DF_RECX "\n",
+				DP_CSUM_LOC(oid, dkey, akey), DP_RECX(rep->re_recx));
+			/* got_csums[i] != NULL is the mismatch signal of the callback: without it,
+			 * the mismatch is only reported by the return code and the callback is not
+			 * invoked. */
+			if (got_csums[i] == NULL)
+				goto out_got_csums;
+			csum_error = true;
+			rc         = -DER_SUCCESS; /* continue checking other segments */
+			continue;
+		}
+		if (!SUCCESS(rc)) {
+			D_ERROR("Checksum verification of " DF_CSUM_LOC " " DF_RECX
+				" failed: " DF_RC "\n",
+				DP_CSUM_LOC(oid, dkey, akey), DP_RECX(rep->re_recx), DP_RC(rc));
+			goto out_got_csums;
+		}
+	}
+
+	rc = check_cb(cb_arg, rel, 0, cil, got_csums);
+	if (!SUCCESS(rc))
+		D_ERROR("Csum check callback for " DF_CSUM_LOC " returned: " DF_RC "\n",
+			DP_CSUM_LOC(oid, dkey, akey), DP_RC(rc));
+
+out_got_csums:
+	for (i = 0; i < csum_nr; i++)
+		D_FREE(got_csums[i]);
+	D_FREE(got_csums);
+out_rel:
+	/* rel ownership is transferred by vos_ioh2recx_list(); free before vos_fetch_end. */
+	daos_recx_ep_list_free(rel, iod->iod_nr);
+	rc = vos_fetch_end(ioh, NULL, rc);
+out:
+	if (SUCCESS(rc) && csum_error)
+		rc = -DER_CSUM;
+	return rc;
+}
+
+int
+dv_check_csum(daos_handle_t poh, struct dv_tree_path *path, daos_epoch_t epoch,
+	      dv_check_csum_cb check_cb, void *cb_arg)
+{
+	daos_handle_t coh;
+	daos_iod_t    iod = {0};
+	int           rc  = 0;
+
+	/* No-op when no callback is provided; the caller controls whether to consume results. */
+	if (check_cb == NULL)
+		goto out;
+
+	rc = vos_cont_open(poh, path->vtp_cont, &coh);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Opening container for csum check of " DF_UOID " failed: " DF_RC "\n",
+			DP_UOID(path->vtp_oid), DP_RC(rc));
+		goto out;
+	}
+
+	iod.iod_name  = path->vtp_akey;
+	iod.iod_recxs = &path->vtp_recx;
+	iod.iod_nr    = 1;
+	iod.iod_size  = 0;
+	if (path->vtp_is_recx) {
+		iod.iod_type = DAOS_IOD_ARRAY;
+		rc = check_csum_recx(coh, &path->vtp_dkey, &path->vtp_oid, &iod, epoch, check_cb,
+				     cb_arg);
+	} else {
+		iod.iod_type = DAOS_IOD_SINGLE;
+		rc = check_csum_sv(coh, &path->vtp_dkey, &path->vtp_oid, &iod, epoch, check_cb,
+				   cb_arg);
+	}
+
+	vos_cont_close(coh);
 out:
 	return rc;
 }
@@ -1512,15 +2041,11 @@ struct active_dtx_cb_arg {
 static int
 committed_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
 {
-	struct committed_dtx_cb_arg	*arg = cb_arg;
-	struct dv_dtx_committed_entry	 entry;
-	struct vos_dtx_cmt_ent		*ent = val->iov_buf;
-	int				 rc;
+	struct committed_dtx_cb_arg  *arg = cb_arg;
+	struct dv_dtx_committed_entry entry;
+	int                           rc;
 
-	entry.ddtx_id = ent->dce_base.dce_xid;
-	entry.ddtx_cmt_time = ent->dce_base.dce_cmt_time;
-	entry.ddtx_epoch = ent->dce_base.dce_epoch;
-
+	memcpy(&entry.ddtx_id, key->iov_buf, sizeof(struct dtx_id));
 	rc = arg->handler(&entry, arg->handler_arg);
 
 	return rc;
@@ -1733,8 +2258,8 @@ find_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_ite
 	return 0;
 }
 
-/* Note:
- * This can be improved by verifying the path in a single vos_iterate ... instead of 1 for
+/*
+ * Note: This can be improved by verifying the path in a single vos_iterate ... instead of 1 for
  * path part.
  */
 static bool
@@ -2050,37 +2575,48 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 }
 
 int
-dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete complete_cb,
-	    void *cb_args)
+dv_sync_smd(const char *nvme_conf, const char *db_path, struct ddb_ctx *ctx,
+	    dv_smd_sync_complete complete_cb, void *cb_args)
 {
-	struct dv_sync_cb_args	 sync_cb_args = {0};
-	int			 rc;
+	struct dv_sync_cb_args sync_cb_args = {0};
+	int                    rc;
+	bool                   can_proceed;
+
+	/*
+	 * vos_self_init_ext() below deliberately skips SPDK init (see the comment on that call).
+	 * ddbs_for_each_bio_blob_hdr() is the call that actually starts an SPDK app
+	 * (spdk_app_start()), initialized from nvme_conf -- not db_path (used only for VOS's own
+	 * sys db below) -- so the guard is checked unconditionally (NULL) here rather than by
+	 * probing <db_path>/daos_nvme.conf, which may have no relationship to nvme_conf.
+	 */
+	rc = dwa_can_proceed(ctx, NULL, &can_proceed);
+	if (!SUCCESS(rc))
+		return rc;
+	if (!can_proceed)
+		return -DER_NO_SERVICE;
 
 	/* don't initialize NVMe(spdk) within VOS. Will happen in ddb_spdk module */
 	rc = vos_self_init_ext(db_path, true, 0, false);
-
 	if (!SUCCESS(rc)) {
-		D_ERROR("VOS failed to initialize: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("VOS failed to initialize: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
 	rc = smd_init(vos_db_get());
 	if (!SUCCESS(rc)) {
-		D_ERROR("SMD failed to initialize: "DF_RC"\n", DP_RC(rc));
-		vos_self_fini();
-		return rc;
+		D_ERROR("SMD failed to initialize: " DF_RC "\n", DP_RC(rc));
+		goto out_self_fini;
 	}
 
 	sync_cb_args.sync_complete_cb = complete_cb;
-	sync_cb_args.sync_cb_args = cb_args;
+	sync_cb_args.sync_cb_args     = cb_args;
 	rc = ddbs_for_each_bio_blob_hdr(nvme_conf, sync_cb, &sync_cb_args);
-
 	if (rc == 0 && sync_cb_args.sync_rc != 0)
 		rc = sync_cb_args.sync_rc;
 
 	smd_fini();
+out_self_fini:
 	vos_self_fini();
-
 	return rc;
 }
 
@@ -2209,9 +2745,16 @@ dv_pool_get_flags(daos_handle_t poh, uint64_t *compat_flags, uint64_t *incompat_
 }
 
 int
-dv_dev_list(const char *db_path, d_list_t *dev_list, int *dev_cnt)
+dv_dev_list(const char *db_path, struct ddb_ctx *ctx, d_list_t *dev_list, int *dev_cnt)
 {
-	int rc;
+	int  rc;
+	bool can_proceed;
+
+	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
+	if (!SUCCESS(rc))
+		return rc;
+	if (!can_proceed)
+		return -DER_NO_SERVICE;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {
@@ -2242,11 +2785,18 @@ find_dev_info(d_list_t *dev_list, uuid_t dev_id)
 }
 
 int
-dv_dev_replace(const char *db_path, uuid_t old_devid, uuid_t new_devid)
+dv_dev_replace(const char *db_path, struct ddb_ctx *ctx, uuid_t old_devid, uuid_t new_devid)
 {
 	struct bio_dev_info *old_dev_info, *new_dev_info, *dev_info, *tmp;
 	d_list_t             dev_list;
 	int                  rc, dev_cnt = 0;
+	bool                 can_proceed;
+
+	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
+	if (!SUCCESS(rc))
+		return rc;
+	if (!can_proceed)
+		return -DER_NO_SERVICE;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {
@@ -2295,11 +2845,19 @@ out:
 }
 
 int
-dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs_mount_size)
+dv_run_prov_mem(const char *db_path, struct ddb_ctx *ctx, const char *tmpfs_mount,
+		unsigned int tmpfs_mount_size)
 {
 	int          rc;
 	bool         md_on_ssd;
+	bool         can_proceed;
 	unsigned int sz = tmpfs_mount_size;
+
+	rc = dwa_can_proceed(ctx, db_path, &can_proceed);
+	if (!SUCCESS(rc))
+		return rc;
+	if (!can_proceed)
+		return -DER_NO_SERVICE;
 
 	rc = vos_self_init(db_path, true, 0);
 	if (rc) {

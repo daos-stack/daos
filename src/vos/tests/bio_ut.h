@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,6 +33,7 @@ struct bio_ut_args {
 	struct bio_xs_context	*bua_xs_ctxt;
 	struct bio_meta_context	*bua_mc;
 	uuid_t			 bua_pool_id;
+	enum bio_mc_flags        bua_mc_flags;
 	unsigned int		 bua_seed;
 };
 

@@ -115,7 +115,7 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
         """Prepare variables needed for the tests.
         """
         self.pool = self.get_pool()
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
         self.container.open()
 
         expected_for_param = []

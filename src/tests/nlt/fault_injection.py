@@ -75,6 +75,7 @@ class AllocFailTestRun():
         self._stderr = None
         self._fi_loc = None
         self._cwd = cwd
+        self._issues_before = 0
 
         if loc:
             prefix = f'dnt_{loc:04d}_'
@@ -164,7 +165,65 @@ class AllocFailTestRun():
 
         self._post(self._sp.wait())
 
+    def _significant_issues(self, wf):
+        """Count findings that warrant keeping this iteration's log.
+
+        Injecting a fault legitimately makes the code log the allocation failure next to the
+        fault site, which cart_logtest reports as 'Logging allocation failure' plus a 'Fault
+        injection location' summary.  Those are expected consequences, not defects, so they are
+        still reported but do not by themselves retain the log.  Every other finding (leaks,
+        strict-mode warnings/errors, ...) does.
+        """
+        total = 0
+        for issue in wf.issues:
+            if issue.get('description') == 'Logging allocation failure':
+                continue
+            if issue.get('category') == 'Fault injection location':
+                continue
+            total += 1
+        return total
+
+    def _issue_total(self):
+        """Number of significant findings so far, used to tell if this iteration is of interest."""
+        total = self._significant_issues(self._aft.conf.wf)
+        if self._aft.wf is not self._aft.conf.wf:
+            total += self._significant_issues(self._aft.wf)
+        return total
+
+    def _prune_log(self, force_keep=False):
+        """Keep this iteration's log only if it is interesting; most fault locations are not.
+
+        A run is interesting if it crashed, if a check raised, or if it produced a finding.  A
+        clean run - including one where the fault was simply not injected (e.g. the reference run
+        and the many boundary iterations past the last allocation) - has no debugging value.
+        """
+        if self.returncode is None:
+            return
+        conf = self._aft.conf
+        interesting = force_keep or self.returncode < 0 \
+            or self._issue_total() > self._issues_before
+        if getattr(conf.args, 'keep_logs', False) or interesting:
+            conf.compress_file(self.log_file)
+        else:
+            try:
+                os.unlink(self.log_file)
+            except FileNotFoundError:
+                pass
+
     def _post(self, rc):
+        """Run the completion checks, then keep or drop this iteration's log."""
+        self._issues_before = self._issue_total()
+        keep = False
+        try:
+            self._post_checks(rc)
+        except Exception:
+            # A check raised (unexpected output/return code); keep the log for debugging.
+            keep = True
+            raise
+        finally:
+            self._prune_log(force_keep=keep)
+
+    def _post_checks(self, rc):
         """Helper function, called once after command is complete.
 
         This is where all the checks are performed.
@@ -217,7 +276,8 @@ class AllocFailTestRun():
                                     ignore_busy=self._aft.ignore_busy,
                                     quiet=True,
                                     skip_fi=True,
-                                    leak_wf=wf)
+                                    leak_wf=wf,
+                                    defer_prune=True)
             self.fault_injected = True
             assert self._fi_loc
         except NLTestNoFi:

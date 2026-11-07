@@ -735,6 +735,19 @@ class DaosCommand(DaosCommandBase):
         return self._get_json_result(
             ("container", "list-attrs"), pool=pool, cont=cont, sys_name=sys_name, verbose=verbose)
 
+    def container_del_attr(self, pool, cont, key, sys_name=None):
+        """Call daos container del-attr.
+
+        Args:
+            pool (str): Pool UUID or label.
+            cont (str): Container UUID or label.
+            key (str): Attribute to delete. If deleting multiple attributes, separate them with
+            comma.
+            sys_name (str, optional): DAOS system name context for servers. Defaults to None.
+        """
+        return self._get_result(
+            ("container", "del-attr"), pool=pool, cont=cont, key=key, sys_name=sys_name)
+
     def container_list_objects(self, pool, cont, sys_name=None):
         """Call daos container list-objects.
 

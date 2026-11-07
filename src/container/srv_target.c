@@ -2202,13 +2202,15 @@ cont_snap_update_one(void *vin)
 	struct ds_cont_child	*cont;
 	int			 rc;
 
-	/* The container should be exist on the system at this point, if non-exist on this target
-	 * it should be the case of reintegrate the container was destroyed ahead, so just
-	 * open_create the container here.
-	 */
-	rc = ds_cont_child_open_create(args->pool_uuid, args->cont_uuid, false, &cont);
-	if (rc != 0)
+	rc = ds_cont_child_lookup(args->pool_uuid, args->cont_uuid, &cont);
+	if (rc != 0) {
+		if (rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING) {
+			D_DEBUG(DB_MD, DF_CONT ": skip: " DF_RC "\n",
+				DP_CONT(args->pool_uuid, args->cont_uuid), DP_RC(rc));
+			rc = 0;
+		}
 		return rc;
+	}
 
 	if (args->snap_count == 0) {
 		if (cont->sc_snapshots != NULL) {
@@ -2839,10 +2841,12 @@ ds_cont_eph_report(struct ds_pool *pool)
 		}
 
 		/* if aggregation enabled, make sure to report ec_agg_eph at the start phase
-		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero.
+		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero. Also report a
+		 * zero min_ec_agg_eph after a target of this rank is reintegrated, so that the
+		 * leader knows some target waits for the boundary.
 		 */
 		if (min_ec_agg_eph == DAOS_EPOCH_MAX || min_stable_eph == DAOS_EPOCH_MAX ||
-		    (ec_eph->cte_last_ec_agg_epoch != 0 &&
+		    (min_ec_agg_eph != 0 && ec_eph->cte_last_ec_agg_epoch != 0 &&
 		     min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
 		     min_stable_eph <= ec_eph->cte_last_stable_epoch)) {
 			if (min_ec_agg_eph > 0 && min_stable_eph > 0 &&

@@ -35,6 +35,10 @@ var (
 		cmpopts.IgnoreUnexported(Member{}),
 		cmpopts.EquateApproxTime(time.Second),
 	}
+	memberCmpOptsNoTimestamp = []cmp.Option{
+		cmpopts.IgnoreUnexported(Member{}),
+		cmpopts.IgnoreFields(Member{}, "LastUpdate"),
+	}
 )
 
 func mockEvtEngineDied(t *testing.T, r uint32, inc uint64) *events.RASEvent {
@@ -748,15 +752,103 @@ func TestSystem_Membership_FindRankFromJoinRequest(t *testing.T) {
 		expRank    Rank
 		expErr     error
 	}{
-		"non-nil rank in request": {
+		"non-nil rank with matching member fields": {
+			req: &JoinRequest{
+				Rank:                    curMember.Rank,
+				UUID:                    newUUID,
+				ControlAddr:             curMember.Addr,
+				PrimaryFabricURI:        curMember.PrimaryFabricURI,
+				SecondaryFabricURIs:     curMember.SecondaryFabricURIs,
+				FabricContexts:          curMember.PrimaryFabricContexts,
+				SecondaryFabricContexts: curMember.SecondaryFabricContexts,
+				FaultDomain:             curMember.FaultDomain,
+			},
+			expRank: curMember.Rank,
+		},
+		"non-nil rank with identical UUID": {
+			req: &JoinRequest{
+				Rank:                    curMember.Rank,
+				UUID:                    curMember.UUID,
+				ControlAddr:             curMember.Addr,
+				PrimaryFabricURI:        curMember.PrimaryFabricURI,
+				SecondaryFabricURIs:     curMember.SecondaryFabricURIs,
+				FabricContexts:          curMember.PrimaryFabricContexts,
+				SecondaryFabricContexts: curMember.SecondaryFabricContexts,
+				FaultDomain:             curMember.FaultDomain,
+			},
+			expErr: ErrUuidExists(curMember.UUID),
+		},
+		"non-nil rank with non-matching control address": {
 			req: &JoinRequest{
 				Rank:             curMember.Rank,
-				UUID:             curMember.UUID,
-				ControlAddr:      curMember.Addr,
-				PrimaryFabricURI: curMember.Addr.String(),
+				UUID:             newUUID,
+				ControlAddr:      newMember.Addr,
+				PrimaryFabricURI: curMember.PrimaryFabricURI,
 				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      curMember.FaultDomain,
 			},
-			expErr: errors.New("unexpected rank"),
+			expErr: FaultJoinReplaceRankNotFound(1),
+		},
+		"non-nil rank with non-matching fabric URI": {
+			req: &JoinRequest{
+				Rank:             curMember.Rank,
+				UUID:             newUUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: newMember.PrimaryFabricURI,
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expErr: FaultJoinReplaceRankNotFound(1),
+		},
+		"non-nil rank with non-matching fault domain": {
+			req: &JoinRequest{
+				Rank:             curMember.Rank,
+				UUID:             newUUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.PrimaryFabricURI,
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      fd2,
+			},
+			expErr: FaultJoinReplaceRankNotFound(1),
+		},
+		"non-nil rank with multiple non-matching fields": {
+			req: &JoinRequest{
+				Rank:             curMember.Rank,
+				UUID:             newUUID,
+				ControlAddr:      newMember.Addr,
+				PrimaryFabricURI: newMember.PrimaryFabricURI,
+				FabricContexts:   newMember.PrimaryFabricContexts,
+				FaultDomain:      fd2,
+			},
+			expErr: FaultJoinReplaceRankNotFound(4),
+		},
+		"non-nil rank not found in membership": {
+			req: &JoinRequest{
+				Rank:             Rank(999),
+				UUID:             newUUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.PrimaryFabricURI,
+				FabricContexts:   curMember.PrimaryFabricContexts,
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expErr: errors.New("failed to find system member"),
+		},
+		"valid rank zero with matching fields": {
+			curMembers: []*Member{
+				MockMember(t, 0, MemberStateJoined).WithFaultDomain(fd1),
+				MockMember(t, 1, MemberStateJoined).WithFaultDomain(fd1),
+			},
+			req: &JoinRequest{
+				Rank:                    Rank(0),
+				UUID:                    newUUID,
+				ControlAddr:             defaultCurMembers[0].Addr,
+				PrimaryFabricURI:        defaultCurMembers[0].PrimaryFabricURI,
+				SecondaryFabricURIs:     defaultCurMembers[0].SecondaryFabricURIs,
+				FabricContexts:          defaultCurMembers[0].PrimaryFabricContexts,
+				SecondaryFabricContexts: defaultCurMembers[0].SecondaryFabricContexts,
+				FaultDomain:             defaultCurMembers[0].FaultDomain,
+			},
+			expRank: Rank(0),
 		},
 		"empty membership": {
 			curMembers: []*Member{},
@@ -898,7 +990,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 	newUUID := uuid.New()
 	newMember := MockMember(t, 2, MemberStateJoined).WithFaultDomain(fd2)
 	newMemberShallowFD := MockMember(t, 3, MemberStateJoined).WithFaultDomain(shallowFD)
-	adminExcludedMember := MockMember(t, 3, MemberStateAdminExcluded)
+	adminExcludedMember := MockMember(t, 3, MemberStateAdminExcluded).WithFaultDomain(fd2)
 
 	expMapVer := uint32(len(defaultCurMembers) + 1)
 
@@ -1067,6 +1159,22 @@ func TestSystem_Membership_Join(t *testing.T) {
 			},
 			expErr: FaultJoinMemberExists(newUUID, curMember.UUID),
 		},
+		"join with all fields matching except UUID; needs --replace; admin-excluded": {
+			curMembers: []*Member{
+				adminExcludedMember,
+			},
+			req: &JoinRequest{
+				Rank:                    NilRank,
+				UUID:                    newUUID,
+				ControlAddr:             adminExcludedMember.Addr,
+				PrimaryFabricURI:        adminExcludedMember.PrimaryFabricURI,
+				SecondaryFabricURIs:     adminExcludedMember.SecondaryFabricURIs,
+				FabricContexts:          adminExcludedMember.PrimaryFabricContexts,
+				SecondaryFabricContexts: adminExcludedMember.SecondaryFabricContexts,
+				FaultDomain:             adminExcludedMember.FaultDomain,
+			},
+			expErr: FaultJoinMemberExistsAdminExcluded(newUUID, adminExcludedMember.UUID),
+		},
 		"new member with bad fault domain depth": {
 			req: &JoinRequest{
 				Rank:             NilRank,
@@ -1216,7 +1324,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if diff := cmp.Diff(tc.expMembers, members, memberCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expMembers, members, memberCmpOptsNoTimestamp...); diff != "" {
 				t.Errorf("unexpected membership (-want, +got):\n%s\n", diff)
 			}
 		})

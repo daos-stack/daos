@@ -140,6 +140,10 @@ enum daos_pool_props {
 	DAOS_PROP_PO_SVC_OPS_ENABLED,
 	/** Metadata duplicate operations SVC_OPS KVS max entry age (seconds), default 300 */
 	DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
+	/** PEM intermediate CA bundle for per-pool node auth, default empty */
+	DAOS_PROP_PO_CA_CERT,
+	/** Per-CN cert revocation watermarks, default empty */
+	DAOS_PROP_PO_CERT_WATERMARKS,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -152,6 +156,8 @@ struct daos_prop_byteval {
 	/** Length of data */
 	size_t dpb_len;
 };
+
+#define DAOS_PROP_BYTEVAL_MAX_LEN       (1U << 20)
 
 #define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
@@ -908,9 +914,7 @@ bool
 daos_prop_has_ptr(struct daos_prop_entry *entry);
 
 /**
- * Check a DAOS prop entry for an opaque byte-array value. When true,
- * dpe_val_ptr is expected to point at a struct daos_prop_byteval owned
- * by the daos_prop_t.
+ * Check a DAOS prop entry for a byte-array value.
  *
  * \param[in]		entry		Entry to be checked.
  *
@@ -919,6 +923,17 @@ daos_prop_has_ptr(struct daos_prop_entry *entry);
  */
 bool
 daos_prop_has_byteval(struct daos_prop_entry *entry);
+
+/**
+ * Check whether a byteval-typed prop entry holds a well-formed value.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Value is valid.
+ *			false		Value is not valid.
+ */
+bool
+daos_prop_byteval_is_valid(struct daos_prop_entry *entry);
 
 /**
  * Check if a DAOS prop entry is set or not.

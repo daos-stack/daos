@@ -49,7 +49,7 @@ class DaosObjectQuery(TestWithServers):
         # Create a pool and a container. Specify --oclass, which will be used
         # when writing object.
         self.pool = self.get_pool()
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
         self.pool.connect()
         self.container.open(pool_handle=self.pool.pool.handle.value)
 

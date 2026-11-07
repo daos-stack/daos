@@ -546,9 +546,10 @@ ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 }
 
 int
-ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets, size_t scm_size,
-		    size_t nvme_size, size_t meta_size, daos_prop_t *prop, d_rank_list_t **svcp,
-		    int domains_nr, uint32_t *domains)
+ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, d_rank_list_t *targets,
+		    d_rank_list_t *downout_ranks, size_t scm_size, size_t nvme_size,
+		    size_t meta_size, daos_prop_t *prop, d_rank_list_t **svcp, int domains_nr,
+		    uint32_t *domains)
 {
 	return 0;
 }

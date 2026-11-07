@@ -198,7 +198,7 @@ def define_mercury(reqs):
                      '-DBUILD_TESTING_PERF:BOOL=ON',
                      '-DBUILD_TESTING_UNIT:BOOL=OFF',
                      '-DMERCURY_USE_BOOST_PP:BOOL=ON',
-                     '-DMERCURY_USE_SYSTEM_BOOST:BOOL=ON',
+                     '-DMERCURY_USE_SYSTEM_BOOST:BOOL=OFF',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
                      '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
                      '-DMERCURY_ENABLE_DEBUG:BOOL=ON',
@@ -215,7 +215,7 @@ def define_mercury(reqs):
             build_type = "Asan"
         elif 'thread' in sanitizers:
             build_type = "Tsan"
-        elif 'undefined' in sanitizers:
+        elif 'undefined_behavior' in sanitizers:
             build_type = "Ubsan"
     except KeyError:
         pass
@@ -230,7 +230,7 @@ def define_mercury(reqs):
                           ['make', 'install']],
                 libs=['mercury'],
                 pkgconfig='mercury',
-                requires=['boost', 'ofi', 'ucx'] + libs,
+                requires=['ofi', 'ucx'] + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 build_env={'CFLAGS': '-fstack-usage'})
@@ -248,8 +248,6 @@ def define_common(reqs):
 
     reqs.define('cunit', libs=['cunit'], headers=['CUnit/Basic.h'], package='CUnit-devel')
 
-    reqs.define('boost', headers=['boost/preprocessor.hpp'], package='boost-python36-devel')
-
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
     reqs.define('event', libs=['event'], package='libevent-devel')
@@ -261,11 +259,6 @@ def define_common(reqs):
     reqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'], package='libuuid-devel')
 
     reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
-
-    if ARM_PLATFORM:
-        reqs.define('ipmctl', skip_arch=True)
-    else:
-        reqs.define('ipmctl', package='ipmctl')
 
 
 def define_ompi(reqs):
@@ -349,6 +342,7 @@ def define_components(reqs):
                 retriever=GitRepoRetriever(),
                 commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
+                           '-Dexamples=False', '-Dtests=False',
                            '--default-library', 'static', '../fused'],
                           ['meson', 'setup', '--reconfigure', '../fused'],
                           ['ninja', 'install']],
@@ -421,6 +415,12 @@ def define_components(reqs):
                 patch_rpath=['lib64/daos_srv', 'bin'],
                 patch_rpath_exclusions=['libspdk.so', 'spdk-cli', 'spdk-rpc', 'spdk-mcp',
                                         'spdk-sma'],
+                # SPDK's python-based build path should use the toolchain already present
+                # in the build environment (uv/hatchling from the active virtual env)
+                # instead of creating isolated build environments.
+                # This is required in CI, where installation of additional
+                # tools/packages into the image during the build phase is not allowed.
+                build_env={'UV_NO_BUILD_ISOLATION': '1'},
                 requires=spdk_reqs)
 
     reqs.define('protobufc',

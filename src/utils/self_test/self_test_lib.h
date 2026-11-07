@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,7 +49,7 @@ run_self_test(struct st_size_params all_params[], int num_msg_sizes, int rep_cou
 	      uint32_t num_ms_endpts_in, struct st_endpoint *endpts, uint32_t num_endpts,
 	      struct st_master_endpt **ms_endpts_out, uint32_t *num_ms_endpts_out,
 	      struct st_latency ****size_latencies, int16_t buf_alignment, char *attach_info_path,
-	      bool use_agent, bool no_sync);
+	      bool use_agent, bool no_sync, bool dump_info);
 int
 st_compare_endpts(const void *a_in, const void *b_in);
 int

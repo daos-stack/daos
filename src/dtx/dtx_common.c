@@ -360,7 +360,7 @@ dtx_cleanup_internal(struct ds_cont_child *cont, struct sched_request *sr, uint3
 	D_ASSERT(d_list_empty(&abt_list));
 	D_ASSERT(d_list_empty(&act_list));
 
-	while ((sr == NULL || !dss_ult_exiting(sr)) && !d_list_empty(&dcca.dcca_st_list)) {
+	while ((sr == NULL || !dss_ult_exiting(sr)) && !d_list_empty(&dcca.dcca_pc_list)) {
 		dpci = d_list_pop_entry(&dcca.dcca_pc_list, struct dtx_partial_cmt_item, dpci_link);
 		dcca.dcca_pc_count--;
 
@@ -959,10 +959,10 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 	dth->dth_dkey_hash       = 0;
 
 	if (!(flags & DTX_LOCAL)) {
-		if (daos_is_zero_dti(dti))
-			return 0;
-
 		if (!dtx_epoch_chosen(epoch)) {
+			if (daos_is_zero_dti(dti))
+				return 0;
+
 			D_ERROR("initializing DTX " DF_DTI " with invalid epoch: value=" DF_U64
 				" first=" DF_U64 " flags=%x\n",
 				DP_DTI(dti), epoch->oe_value, epoch->oe_first, epoch->oe_flags);
@@ -970,6 +970,9 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, 
 		}
 		dth->dth_epoch       = epoch->oe_value;
 		dth->dth_epoch_bound = dtx_epoch_bound(epoch);
+
+		if (daos_is_zero_dti(dti))
+			return 0;
 	}
 
 	rc = vos_dtx_rsrvd_init(dth);
@@ -1044,7 +1047,8 @@ dtx_commit_large(daos_handle_t coh, struct dtx_id *dtis, int cnt, bool keep_act,
 		if (i + step > cnt)
 			step = cnt - i;
 
-		rc = vos_dtx_commit(coh, dtis + i, step, keep_act, rm_cos);
+		rc = vos_dtx_commit(coh, dtis + i, step, keep_act,
+				    rm_cos != NULL ? &rm_cos[i] : NULL);
 		if (rc >= 0) {
 			committed += rc;
 			i += step;
@@ -1227,6 +1231,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	    (dth->dth_dist || dth->dth_modification_cnt > 0)) {
 		result = vos_dtx_attach(dth, true, dth->dth_ent != NULL ? true : false);
 		if (unlikely(result < 0)) {
+			if (result == -DER_ALREADY)
+				goto out;
+
 			D_ERROR(DF_UUID": Fail to persistently store DTX "DF_DTI": "DF_RC"\n",
 				DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(result));
 			goto abort;
@@ -1356,9 +1363,9 @@ abort:
 		 */
 		vos_dtx_cleanup(dth, true);
 		if (dlh->dlh_coll)
-			dtx_coll_abort(cont, dlh->dlh_coll_entry, dth->dth_epoch);
+			dtx_coll_abort(cont, dlh->dlh_coll_entry, dth->dth_epoch, dth->dth_ver);
 		else
-			dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
+			dtx_abort(cont, &dth->dth_dte, dth->dth_epoch, dth->dth_ver);
 		aborted = true;
 	}
 
@@ -1476,8 +1483,11 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 	 * it persistently. Otherwise, the subsequent DTX resync may not find it as
 	 * to regard it as failed transaction and abort it.
 	 */
-	if (result == 0 && !dth->dth_active && (dth->dth_dist || dth->dth_modification_cnt > 0))
+	if (result == 0 && !dth->dth_active && (dth->dth_dist || dth->dth_modification_cnt > 0)) {
 		result = vos_dtx_attach(dth, true, dth->dth_ent != NULL ? true : false);
+		if (unlikely(result == -DER_ALREADY))
+			result = 0;
+	}
 
 	if (result < 0) {
 		if (dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
@@ -1898,7 +1908,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, false);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, DCI_RESENT);
 	switch (rc) {
 	case DTX_ST_INITED:
 		return -DER_INPROGRESS;

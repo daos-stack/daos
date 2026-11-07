@@ -40,7 +40,7 @@ class POSIXStatTest(IorTestBase):
         error_list = []
 
         self.pool = self.get_pool(connect=False)
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         idx = 1
         for block_size in block_sizes:
