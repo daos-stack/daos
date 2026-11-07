@@ -17,7 +17,7 @@ class SystemStartupTest(TestWithServers):
     """
 
     def setUp(self):
-        """Start servers on every host but the last, which test_extend adds."""
+        """Start servers on every host but the last, which test_dmg_system_extend adds."""
         super().setUp()
         self.extra_host = NodeSet(self.hostlist_servers[-1])
         self.start_servers({
@@ -38,7 +38,8 @@ class SystemStartupTest(TestWithServers):
         Returns:
             tuple: the host as a NodeSet and its rank
         """
-        host = NodeSet(self.server_managers[0].hosts.difference(self.mgmt_svc_replicas)[-1])
+        host = NodeSet(
+            self.random.choice(self.server_managers[0].hosts.difference(self.mgmt_svc_replicas)))
         return host, self.server_managers[0].get_host_ranks(host)[0]
 
     def restart_server(self, host):
@@ -93,13 +94,13 @@ class SystemStartupTest(TestWithServers):
         if self.server_managers[0].check_rank_state([rank], [state], checks):
             self.fail(f"Rank {rank} did not reach the {state} state")
 
-    def test_initialize(self):
+    def test_dmg_system_init(self):
         """Initialize is repeatable until a pool exists.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,system_startup
-        :avocado: tags=SystemStartupTest,test_initialize
+        :avocado: tags=SystemStartupTest,test_dmg_system_init
         """
         dmg = self.get_dmg_command()
         self.log_step("Initialize an initialized system without pools")
@@ -112,13 +113,13 @@ class SystemStartupTest(TestWithServers):
         if result.exit_status == 0 or "already initialized" not in result.stderr_text:
             self.fail("Initialize was not refused on a system with pools")
 
-    def test_extend(self):
+    def test_dmg_system_extend(self):
         """Extend starts the engines on a newly formatted host.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,system_startup
-        :avocado: tags=SystemStartupTest,test_extend
+        :avocado: tags=SystemStartupTest,test_dmg_system_extend
         """
         self.log_step(f"Format {self.extra_host} and extend the system to it")
         self.start_additional_servers(self.extra_host)

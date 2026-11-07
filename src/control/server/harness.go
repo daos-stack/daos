@@ -254,7 +254,7 @@ func (h *EngineHarness) runPreflight(ctx context.Context, batch map[uint32]Engin
 			continue
 		}
 		if rank, _ := ei.GetRank(); !rank.Equals(e.Rank) {
-			h.log.Noticef("instance %d: preflight result for rank %s ignored; now rank %s and asking again",
+			h.log.Noticef("instance %d: preflight result for rank %s ignored; superseded by request for rank %s",
 				e.Idx, e.Rank, rank)
 			continue
 		}
