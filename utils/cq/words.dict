@@ -219,6 +219,7 @@ getent
 getfattr
 getxattr
 gid
+globals
 groupadd
 groupdel
 groupname
@@ -269,6 +270,7 @@ launchable
 ldflags
 len
 libaio
+libasan
 libdaos
 libdfs
 libdts
@@ -370,6 +372,7 @@ prebuilding
 prebuilt
 predefine
 preload
+preloaded
 prepend
 prepended
 prepends

@@ -8,13 +8,18 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import glob
 import json
 import os
 import subprocess  # nosec
+import sys
 import tempfile
 from os.path import join
 
 from .base import CulmTimer, NLTestFail
+
+# Log base for sanitizer reports from processes not run through ValgrindHelper.
+SANITIZER_GLOBAL_LOG = 'dnt_asan.global'
 
 
 class NLTConf():
@@ -29,6 +34,8 @@ class NLTConf():
         self.args = None
         self.max_log_size = None
         self.valgrind_errors = False
+        self.sanitizers, self.asan_lib = sanitizer_runtime(self._bc['PREFIX'])
+        self.memcheck_tool = 'sanitizer' if self.sanitizers else 'valgrind'
         self.log_timer = CulmTimer()
         self.compress_timer = CulmTimer()
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
@@ -90,25 +97,88 @@ class NLTConf():
         self.compress_timer.stop()
 
 
-def load_conf(args):
-    """Load the build config file"""
+def find_build_vars():
+    """Return the path of the .build_vars.json file"""
     file_self = os.path.dirname(os.path.abspath(__file__))
-    json_file = None
     while True:
         new_file = join(file_self, '.build_vars.json')
         if os.path.exists(new_file):
-            json_file = new_file
-            break
+            return new_file
         file_self = os.path.dirname(file_self)
         if file_self == '/':
             raise NLTestFail('.build_vars.json file not found')
-    return NLTConf(json_file, args)
+
+
+def load_conf(args):
+    """Load the build config file"""
+    return NLTConf(find_build_vars(), args)
+
+
+def sanitizer_runtime(prefix):
+    """Return (sanitized, libasan path) for a DAOS install, based on what dfuse links against"""
+    # A preloaded libasan is listed without its '=>' path, so check without it.
+    env = os.environ.copy()
+    env.pop('LD_PRELOAD', None)
+    rc = subprocess.run(['ldd', join(prefix, 'bin', 'dfuse')], stdout=subprocess.PIPE,
+                        stderr=subprocess.DEVNULL, text=True, env=env, check=False)
+    for line in rc.stdout.splitlines():
+        if 'libasan.so' in line and '=>' in line:
+            return True, line.split('=>')[1].split()[0]
+    return False, None
+
+
+def sanitizer_log_dir(class_name):
+    """Return the directory sanitizer reports are written to, matching NLTConf.tmp_dir"""
+    if class_name:
+        return os.path.abspath(join('nlt_logs', class_name))
+    return os.path.abspath('.')
+
+
+def set_sanitizer_env(env, log_base, leaks=False):
+    """Set the ASan runtime options for a process; errors exit with 42 like valgrind is run with"""
+    # daos_common and daos_common_pmem are built from the same sources and the engine loads both,
+    # so only report ODR violations where the duplicate globals differ in size.
+    env['ASAN_OPTIONS'] = (f'exitcode=42:detect_leaks={int(leaks)}:detect_odr_violation=1:'
+                           f'log_path={log_base}')
+
+
+def sanitizer_reports(log_base):
+    """Return the sanitizer report files written for log_base"""
+    return sorted(glob.glob(f'{log_base}.*'))
+
+
+def setup_sanitizers(class_name):
+    """Prepare this process for a sanitizer build of DAOS.
+
+    pydaos is loaded into this process so the ASan runtime has to be preloaded before Python starts;
+    re-exec with it if it is not.  Child processes inherit the preload and the default options.
+    """
+    with open(find_build_vars(), 'r') as fd:
+        prefix = json.load(fd)['PREFIX']
+    sanitized, asan_lib = sanitizer_runtime(prefix)
+    if not sanitized:
+        return
+    set_sanitizer_env(os.environ, join(sanitizer_log_dir(class_name), SANITIZER_GLOBAL_LOG))
+    preload = os.environ.get('LD_PRELOAD', '')
+    if asan_lib and asan_lib not in preload.split(':'):
+        os.environ['LD_PRELOAD'] = ':'.join(filter(None, [asan_lib, preload]))
+        os.execv(sys.executable, getattr(sys, 'orig_argv', [sys.executable] + sys.argv))
+
+
+def il_preload(conf, lib):
+    """Return LD_PRELOAD for an interception library, keeping the ASan runtime first"""
+    path = join(conf['PREFIX'], 'lib64', lib)
+    if conf.asan_lib:
+        return f'{conf.asan_lib}:{path}'
+    return path
 
 
 def get_base_env(clean=False):
     """Return the base set of env vars needed for DAOS"""
     if clean:
         env = {}
+        if 'ASAN_OPTIONS' in os.environ:
+            env['ASAN_OPTIONS'] = os.environ['ASAN_OPTIONS']
     else:
         env = os.environ.copy()
     env['DD_MASK'] = 'all'
@@ -137,6 +207,8 @@ def get_base_env(clean=False):
 
 def check_memcheck_build(conf):
     """Fail early if the daos binary is not valgrind-tagged for a memcheck run."""
+    if conf.sanitizers:
+        return
     daos_bin = join(conf['PREFIX'], 'bin', 'daos')
     with open(daos_bin, 'rb') as fd:
         if b'runtime.valgrindRegisterStack' not in fd.read():

@@ -15,7 +15,8 @@ import time
 
 from .base import BoolRatchet, NLTestFail
 from .client import run_daos_cmd
-from .config import check_memcheck_build, load_conf
+from .config import (SANITIZER_GLOBAL_LOG, check_memcheck_build, load_conf, sanitizer_log_dir,
+                     sanitizer_reports)
 from .dfuse import needs_dfuse_with_opt
 from .fault_injection import (test_alloc_cont_create, test_alloc_fail, test_alloc_fail_cat,
                               test_alloc_fail_cont_create, test_alloc_fail_copy,
@@ -339,9 +340,16 @@ def run(wf, args):
     else:
         wf.add_test_case('Errors')
 
+    if conf.sanitizers:
+        reports = sanitizer_reports(os.path.join(sanitizer_log_dir(args.class_name),
+                                                 SANITIZER_GLOBAL_LOG))
+        if reports:
+            print(f'Sanitizer reports from processes not run under memcheck: {reports}')
+            conf.valgrind_errors = True
+
     if conf.valgrind_errors:
-        wf.add_test_case('Errors', 'Valgrind errors encountered')
-        print("Valgrind errors detected during execution")
+        wf.add_test_case('Errors', f'{conf.memcheck_tool} errors encountered')
+        print(f'{conf.memcheck_tool} errors detected during execution')
 
     wf_server.close()
     close_log_test(conf)
