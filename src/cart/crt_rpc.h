@@ -218,7 +218,9 @@ struct crt_rpc_priv {
 	    /* release input buffer early */
 	    crp_release_input_early : 1,
 	    /* rpc expired */
-	    crp_expired             : 1;
+	    crp_expired             : 1,
+	    /* Mercury cancel issued on timeout, awaiting lower-layer completion */
+	    crp_hg_cancelled        : 1;
 
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */

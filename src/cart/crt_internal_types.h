@@ -506,6 +506,10 @@ struct crt_context {
 	struct d_tm_node_t      *cc_net_glitches;
 	/** Stats gauge of reported SWIM delays */
 	struct d_tm_node_t      *cc_swim_delay;
+	/** Gauge of RPCs forwarded to Mercury awaiting its completion */
+	struct d_tm_node_t      *cc_hg_inflight;
+	/** Gauge of RPCs canceled in Mercury awaiting its completion */
+	struct d_tm_node_t      *cc_hg_cancel_inflight;
 
 	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
