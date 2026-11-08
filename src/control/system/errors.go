@@ -103,14 +103,18 @@ func IsNotLeader(err error) bool {
 }
 
 // ErrReplicaNoEngine indicates that a request was made to a Management Service
-// replica that has no running engines to service the request.
+// replica that has no running engines to service the request. Replicas lists
+// the other replicas the caller may retry.
 type ErrReplicaNoEngine struct {
 	Replicas []string
 }
 
 func (err *ErrReplicaNoEngine) Error() string {
-	return fmt.Sprintf("no running engine on %s replica (try one of %s)",
-		build.ManagementServiceName, strings.Join(err.Replicas, ","))
+	msg := fmt.Sprintf("no running engine on %s replica", build.ManagementServiceName)
+	if len(err.Replicas) == 0 {
+		return msg
+	}
+	return fmt.Sprintf("%s (try one of %s)", msg, strings.Join(err.Replicas, ","))
 }
 
 // IsReplicaNoEngine returns a boolean indicating whether or not the
