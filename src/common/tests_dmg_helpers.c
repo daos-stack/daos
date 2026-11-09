@@ -825,6 +825,14 @@ dmg_pool_create(const char *dmg_config_file,
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_REDUN_FAC);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=svc_rf:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
 	}
 
 	/* Temporarily use old pool property defaults due to DAOS-17946 */
