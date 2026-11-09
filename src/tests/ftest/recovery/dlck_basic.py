@@ -31,8 +31,8 @@ class DlckBasicTest(TestDlck):
         expected_error_found = any(error in output for error in expected_errors)
         warning_found = re.search(warning_pattern, output)
         if not (expected_error_found or warning_found):
-            return f"{fault_name}: no expected error found in dlck output: {output}"
-        return None
+            return [f"{fault_name}: no expected error found in dlck output: {output}"]
+        return []
 
     def test_dlck_basic(self):
         """Basic Test: Run 'dlck' command
@@ -62,7 +62,7 @@ class DlckBasicTest(TestDlck):
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
             # Mount 128G of memory-backed tmpfs for testing purposes
-            cmd = 'sudo "mkdir -p /mnt/dlck_test && ' \
+            cmd = 'sudo bash -c "mkdir -p /mnt/dlck_test && ' \
                   'mount -t tmpfs -o size=128G tmpfs /mnt/dlck_test"'
             run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
             # Display the tmpfs mount
@@ -113,7 +113,7 @@ class DlckBasicTest(TestDlck):
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
             # Mount 128G of memory-backed tmpfs for testing purposes
-            cmd = 'sudo "mkdir -p /mnt/dlck_test && ' \
+            cmd = 'sudo bash -c "mkdir -p /mnt/dlck_test && ' \
                   'mount -t tmpfs -o size=128G tmpfs /mnt/dlck_test"'
             run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
             # Display the tmpfs mount
@@ -140,9 +140,7 @@ class DlckBasicTest(TestDlck):
                              fault_inject_file)
             self.log_step("Run dlck command after injecting fault")
             result = dlck.run()
-            error = self.check_dlck_result(result, test_fault)
-            if error:
-                errors.append(error)
+            errors.append(self.check_dlck_result(result, test_fault))
 
         self.log_step("Perform dmg system start after running dlck command")
         dmg.system_start()
