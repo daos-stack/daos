@@ -836,8 +836,6 @@ pipeline {
                                                                 deps_build: true,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --target build-ci' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
@@ -847,7 +845,7 @@ pipeline {
                     steps {
                         script {
                             sh label: 'Collect dependency RPMs built into the image',
-                               script: ''' 
+                               script: '''
                                        set -- /home/daos/rpms/deps/*.rpm
                                        if [ -e "$1" ]; then
                                            mkdir -p rpms/deps
@@ -918,7 +916,7 @@ pipeline {
                     steps {
                         script {
                             sh label: 'Collect dependency RPMs built into the image',
-                               script: ''' 
+                               script: '''
                                        set -- /home/daos/rpms/deps/*.rpm
                                        if [ -e "$1" ]; then
                                            mkdir -p rpms/deps
@@ -1024,7 +1022,8 @@ pipeline {
                         // NLT memchecks the valgrind-tagged build, not the shared -race one.
                         unstash 'opt-daos-valgrind'
                         job_step_update(
-                            unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1').toInteger(),
+                            unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat',
+                                                                           def_val: '1').toInteger(),
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh' +
                                                   ' --system-ram-reserved 4' +
@@ -1033,6 +1032,7 @@ pipeline {
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
                                                   ' --class-name nlt' +
+                                                  /* groovylint-disable-next-line LineLength */
                                                   " --repeat ${cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1')}" +
                                                   /* groovylint-disable-next-line LineLength */
                                                   (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +

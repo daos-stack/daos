@@ -186,7 +186,7 @@ build_package() {
   fi
   rm -f "${pkgname}"
   # shellcheck disable=SC2068
-  fpm -s "${PACKAGE_TYPE}" -t "${output_type}" \
+  fpm --verbose -s "${PACKAGE_TYPE}" -t "${output_type}" \
   -p "${pkgname}" \
   --name "${name}" \
   --license "${LICENSE}" \
