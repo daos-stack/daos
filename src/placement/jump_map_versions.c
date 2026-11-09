@@ -664,7 +664,8 @@ dom_reset_full(struct pool_domain *dom, uint8_t *dom_bits, uint8_t *tgts_used,
 
 	/* check and reset all used tgts bits under the domain */
 	for (i = 0; i < dom->do_target_nr; i++) {
-		if (!isset(tgts_used, &dom->do_targets[i] - root->do_targets))
+		if (!isset(tgts_used, &dom->do_targets[i] - root->do_targets) &&
+		    !tgt_is_skipped(&dom->do_targets[i], allow_version, gen_mode))
 			return;
 	}
 	for (i = 0; i < dom->do_target_nr; i++)
