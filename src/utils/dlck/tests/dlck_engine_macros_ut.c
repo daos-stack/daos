@@ -96,7 +96,11 @@ static const struct CMUnitTest dlck_engine_macros_tests[] = {
 int
 main(int argc, char **argv)
 {
-	DLCK_UT_FILTER(argc, argv);
+	int rc = dlck_ut_filter(argc, argv);
+
+	if (rc != 0) {
+		return rc;
+	}
 
 	return cmocka_run_group_tests_name("dlck_engine_macros_ut", dlck_engine_macros_tests, NULL,
 					   NULL);

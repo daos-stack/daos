@@ -1230,14 +1230,17 @@ main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
+	rc = dlck_ut_filter(argc, argv);
+	if (rc != 0) {
+		return rc;
+	}
+
 	/** required by daos_fail_loc_set() to store the fault attributes */
 	rc = daos_fail_init();
 	if (rc != 0) {
 		fprintf(stderr, "ERROR: daos_fail_init() failed: %d\n", rc);
 		return 1;
 	}
-
-	DLCK_UT_FILTER(argc, argv);
 
 	rc = cmocka_run_group_tests_name("dlck_engine_ut", dlck_engine_tests, NULL, NULL);
 
