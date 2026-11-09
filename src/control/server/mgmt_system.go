@@ -828,15 +828,9 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		Absenthosts: missHosts.String(),
 	}
 
-	// Retrieve system self-heal property. Assume default value where all flags are set if
-	// property isn't present.
-	resp.SysSelfHealPolicy = daos.DefaultSysSelfHealFlagsStr
-	if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
-		svc.log.Debugf(err.Error())
-	} else if err != nil {
+	resp.SysSelfHealPolicy, err = svc.getSysSelfHeal()
+	if err != nil {
 		return nil, err
-	} else {
-		resp.SysSelfHealPolicy = selfHeal
 	}
 
 	if hitRanks.Count() == 0 {
@@ -1597,7 +1591,6 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 		return nil, err
 	}
 
-	// Retrieve system self-heal property. Assume a system property exists when running eval.
 	selfHeal, err := svc.getSysSelfHeal()
 	if err != nil {
 		return nil, err
@@ -1777,12 +1770,12 @@ func (svc *mgmtSvc) eraseLocalEngines() error {
 // fanout request targeting every rank except the leader and its replica peers (which
 // erase and restart themselves; see eraseLocalEngines()/eraseReplicas()). Must be called
 // before the raft DB is stopped, as rank/host resolution needs it.
-func (svc *mgmtSvc) getPeersAndFanout(ctx context.Context) ([]*net.TCPAddr, *fanoutRequest, *fanoutResponse, error) {
-	svc.log.Trace("gathering MS replica peer addresses")
-	peers, err := svc.sysdb.PeerAddrs()
+func (svc *mgmtSvc) getPeersAndFanout() ([]string, *fanoutRequest, *fanoutResponse, error) {
+	selfAddr, err := svc.sysdb.ReplicaAddr()
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	peers := svc.sysdb.PeerReplicas()
 	svc.log.Tracef("found %d MS replica peer(s): %v", len(peers), peers)
 
 	svc.log.Trace("preparing fanout request")
@@ -1791,16 +1784,7 @@ func (svc *mgmtSvc) getPeersAndFanout(ctx context.Context) ([]*net.TCPAddr, *fan
 		return nil, nil, nil, err
 	}
 
-	selfAddr, err := svc.sysdb.ReplicaAddr()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	selfAndPeerHosts := make([]string, 0, len(peers)+1)
-	selfAndPeerHosts = append(selfAndPeerHosts, selfAddr.String())
-	for _, peer := range peers {
-		selfAndPeerHosts = append(selfAndPeerHosts, peer.String())
-	}
-
+	selfAndPeerHosts := append([]string{selfAddr.String()}, peers...)
 	excludeRanks, _, err := svc.membership.CheckHosts(strings.Join(selfAndPeerHosts, ","),
 		build.DefaultControlPort)
 	if err != nil {
@@ -1816,21 +1800,21 @@ func (svc *mgmtSvc) getPeersAndFanout(ctx context.Context) ([]*net.TCPAddr, *fan
 
 // eraseReplicas sends erase requests to all MS replica peers, each of which erases its
 // own DB/engines synchronously before acking, then restarts itself.
-func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) error {
+func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []string) error {
 	svc.log.Trace("sending erase request to MS replica peers")
 
 	for _, peer := range peers {
-		svc.log.Tracef("sending erase RPC to peer %s", peer.String())
+		svc.log.Tracef("sending erase RPC to peer %s", peer)
 		peerReq := new(control.SystemEraseReq)
-		peerReq.AddHost(peer.String())
+		peerReq.AddHost(peer)
 
 		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
 			// A connection error here can't be distinguished from "peer never
 			// received the request", so treat it as a hard failure rather than
 			// assuming the peer erased itself.
-			return errors.Wrapf(err, "erase request to MS replica peer %s failed", peer.String())
+			return errors.Wrapf(err, "erase request to MS replica peer %s failed", peer)
 		}
-		svc.log.Tracef("peer %s acknowledged erase request", peer.String())
+		svc.log.Tracef("peer %s acknowledged erase request", peer)
 	}
 
 	return nil
@@ -1870,7 +1854,7 @@ func (svc *mgmtSvc) eraseNonReplicaEngines(ctx context.Context, fanReq *fanoutRe
 
 // eraseAllEngines runs on the leader to coordinate the erase across replicas and engines.
 func (svc *mgmtSvc) eraseAllEngines(ctx context.Context) (*mgmtpb.SystemEraseResp, error) {
-	peers, fanReq, fanResp, err := svc.getPeersAndFanout(ctx)
+	peers, fanReq, fanResp, err := svc.getPeersAndFanout()
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to determine path to self")
 	}

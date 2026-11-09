@@ -341,6 +341,7 @@ struct pool_query_arg {
 	d_rank_list_t   **pqa_disabled_ranks;
 	d_rank_list_t   **pqa_dead_ranks;
 	daos_pool_info_t *pqa_info;
+	daos_prop_t      *pqa_prop;
 	uint32_t         *pqa_layout_ver;
 	uint32_t         *pqa_upgrade_layout_ver;
 	crt_bulk_t        pqa_bulk;
@@ -361,7 +362,7 @@ pool_query_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	in = crt_req_get(rpc);
 	uuid_copy(in->pqi_op.pi_uuid, pool_uuid);
 	uuid_clear(in->pqi_op.pi_hdl);
-	query_bits = pool_query_bits(arg->pqa_info, NULL);
+	query_bits = pool_query_bits(arg->pqa_info, arg->pqa_prop);
 
 	rc = map_bulk_create(info->dmi_ctx, &arg->pqa_bulk, &arg->pqa_map_buf, arg->pqa_map_size);
 	if (rc != 0)
@@ -540,6 +541,8 @@ pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	    arg->pqa_enabled_ranks, arg->pqa_disabled_ranks, arg->pqa_dead_ranks, arg->pqa_info,
 	    pool_uuid, out->pqo_op.po_map_version, out->pqo_op.po_hint.sh_rank, &out->pqo_space,
 	    &out->pqo_rebuild_st, arg->pqa_map_buf, arg->pqa_info->pi_bits);
+	if (rc == 0 && arg->pqa_prop != NULL)
+		rc = daos_prop_copy(arg->pqa_prop, out->pqo_prop);
 	if (arg->pqa_layout_ver)
 		*arg->pqa_layout_ver = out->pqo_pool_layout_ver;
 	if (arg->pqa_upgrade_layout_ver)
@@ -580,6 +583,8 @@ static struct dsc_pool_svc_call_cbs pool_query_cbs = {
  * \param[out]		dead_ranks		Optional, storage ranks marked as DEAD by the SWIM
  *						protocol, but were not excluded from the system.
  * \param[in][out]	pool_info		Results of the pool query
+ * \param[in][out]	prop			Optional, properties to query (entry types set
+ *						by the caller, values filled in on success)
  * \param[in][out]	pool_layout_ver		Results of the current pool global version
  * \param[in][out]	upgrade_layout_ver	Results of the target latest pool global version
  *
@@ -593,7 +598,7 @@ static struct dsc_pool_svc_call_cbs pool_query_cbs = {
 int
 dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
 		   d_rank_list_t **enabled_ranks, d_rank_list_t **disabled_ranks,
-		   d_rank_list_t **dead_ranks, daos_pool_info_t *pool_info,
+		   d_rank_list_t **dead_ranks, daos_pool_info_t *pool_info, daos_prop_t *prop,
 		   uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver,
 		   uint64_t *mem_file_bytes)
 {
@@ -602,6 +607,7 @@ dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
 	    .pqa_disabled_ranks     = disabled_ranks,
 	    .pqa_dead_ranks         = dead_ranks,
 	    .pqa_info               = pool_info,
+	    .pqa_prop               = prop,
 	    .pqa_layout_ver         = pool_layout_ver,
 	    .pqa_upgrade_layout_ver = upgrade_layout_ver,
 	    .pqa_mem_file_bytes     = mem_file_bytes,

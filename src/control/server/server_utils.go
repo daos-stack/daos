@@ -851,10 +851,6 @@ func registerSubscriptions(srv *server) {
 func isSysSelfHealExcludeSet(svc *mgmtSvc) (bool, error) {
 	selfHeal, err := svc.getSysSelfHeal()
 	if err != nil {
-		if system.IsErrSystemAttrNotFound(err) {
-			// Assume default value where all flags are set if property isn't present.
-			return true, nil
-		}
 		return false, err
 	}
 

@@ -65,18 +65,38 @@ func printPoolTiersMdOnSsd(memFileBytes uint64, suss []*daos.StorageUsageStats, 
 	}
 }
 
-// PrintPoolSelfHealDisable compares system and pool self_heal flags and display disabled
+type (
+	// PrintConfig defines parameters for controlling formatter behavior.
+	PrintConfig struct {
+		// SysSelfHealPolicy is the system self_heal policy, if known.
+		SysSelfHealPolicy string
+	}
+
+	// PrintConfigOption defines a config function.
+	PrintConfigOption func(*PrintConfig)
+)
+
+// PrintWithSysSelfHealPolicy supplies the system self_heal policy for the
+// disabled-feature report.
+func PrintWithSysSelfHealPolicy(policy string) PrintConfigOption {
+	return func(cfg *PrintConfig) {
+		cfg.SysSelfHealPolicy = policy
+	}
+}
+
+// printPoolSelfHealDisable compares system and pool self_heal flags and displays disabled
 // features.
-func PrintPoolSelfHealDisable(poolSelfHeal, sysSelfHeal string, out io.Writer) {
+func printPoolSelfHealDisable(poolSelfHeal, sysSelfHeal string, out io.Writer) {
 	disabled := make(map[string][]string)
 
-	sysOffFlags := daos.SystemPropertySelfHealUnsetFlags(sysSelfHeal)
-	for _, sysOffFlag := range sysOffFlags {
-		switch sysOffFlag {
-		case "pool_exclude":
-			disabled["exclude"] = append(disabled["exclude"], "system")
-		case "pool_rebuild":
-			disabled["rebuild"] = append(disabled["rebuild"], "system")
+	if sysSelfHeal != "" {
+		for _, sysOffFlag := range daos.SystemPropertySelfHealUnsetFlags(sysSelfHeal) {
+			switch sysOffFlag {
+			case "pool_exclude":
+				disabled["exclude"] = append(disabled["exclude"], "system")
+			case "pool_rebuild":
+				disabled["rebuild"] = append(disabled["rebuild"], "system")
+			}
 		}
 	}
 
@@ -106,9 +126,13 @@ func PrintPoolSelfHealDisable(poolSelfHeal, sysSelfHeal string, out io.Writer) {
 
 // PrintPoolInfo generates a human-readable representation of the supplied
 // PoolInfo struct and writes it to the supplied io.Writer.
-func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
+func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer, opts ...PrintConfigOption) error {
 	if pi == nil {
 		return errors.Errorf("nil %T", pi)
+	}
+	var cfg PrintConfig
+	for _, opt := range opts {
+		opt(&cfg)
 	}
 	w := txtfmt.NewErrWriter(out)
 
@@ -156,6 +180,10 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 		} else {
 			printPoolTiersPMem(pi.TierStats, w, true)
 		}
+	}
+
+	if pi.SelfHealPolicy != "" {
+		printPoolSelfHealDisable(pi.SelfHealPolicy, cfg.SysSelfHealPolicy, w)
 	}
 
 	return w.Err
