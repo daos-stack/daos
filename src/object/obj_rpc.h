@@ -24,6 +24,8 @@
 #include <daos/object.h>
 #include <daos/rpc.h>
 
+#include <cart/rpc_gen_macros.h>
+
 #include "obj_ec.h"
 
 /*
