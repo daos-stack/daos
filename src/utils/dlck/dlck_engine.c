@@ -660,6 +660,11 @@ dlck_engine_targets_start(struct dlck_engine *engine, dlck_ult_func exec_one, st
 		return -DER_NOMEM;
 	}
 
+	/** ABT_THREAD_NULL may be != 0 so the zeroed handles have to be set explicitly */
+	for (int i = 0; i < engine->targets; ++i) {
+		de->ults[i].thread = ABT_THREAD_NULL;
+	}
+
 	for (int i = 0; i < engine->targets; ++i) {
 		/** prepare arguments */
 		rc = de->arg_alloc_fn(engine, i, de->arg_alloc_fn_arg, &de->ult_args[i]);
