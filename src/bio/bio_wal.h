@@ -235,7 +235,7 @@ meta_hdr_check(struct bio_meta_context *mc, enum bio_mc_flags flags);
 
 /*
  * Loader checks (magic, version, checksum), then the checks of wal_hdr_verify(). Must follow a
- * successful meta_hdr_check() on @mc, whose checksum context it uses.
+ * successful meta_hdr_check() on @mc, whose checksum context and meta header it uses.
  */
 int
 wal_hdr_check(struct bio_meta_context *mc);

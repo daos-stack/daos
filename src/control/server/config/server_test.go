@@ -287,7 +287,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-					WithBdevBusidRange("0x80-0x8f").
 					WithBdevDeviceRoles(storage.BdevRoleAll),
 			).
 			WithFabricInterface("ib0").
@@ -1667,10 +1666,10 @@ func TestServerConfig_Parsing(t *testing.T) {
 			expValidateErr: errors.New("valid PCI addresses"),
 		},
 		"bad busid range": {
-			// fail first engine storage
-			inTxt:       "    bdev_busid_range: 0x80-0x8f",
-			outTxt:      "    bdev_busid_range: 0x80-0x8g",
-			expParseErr: errors.New("\"0x8g\": invalid syntax"),
+			// fail first engine storage by injecting an invalid hotplug range
+			inTxt:       "    bdev_list: [\"0000:81:00.0\", \"0000:82:00.0\"]  # generate regular nvme.conf",
+			outTxt:      "    bdev_list: [\"0000:81:00.0\", \"0000:82:00.0\"]  # generate regular nvme.conf\n    bdev_hotplug_range: [\"00:80-8g\"]",
+			expParseErr: errors.New("\"8g\": invalid syntax"),
 		},
 		"additional empty storage tier": {
 			// Add empty storage tier to engine-0 and verify it is ignored.
