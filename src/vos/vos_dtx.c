@@ -4398,15 +4398,22 @@ vos_dtx_detach(struct dtx_handle *dth)
 
 	if (dae != NULL) {
 		D_ASSERT(dae->dae_dth == dth);
-		D_ASSERTF(!vos_dae_in_process(dae), "Unexpected DTX status %u when detach.\n",
-			  vos_dtx_status(dae));
+		D_ASSERTF(!dae->dae_preparing && !dae->dae_committing,
+			  "Unexpected DTX status %u when detach.\n", vos_dtx_status(dae));
 
 		/*
-		 * If a DTX entry is neither prepared, nor committable, nor committed,
-		 * then it should not exist in active DTX table after vos_dtx_detach.
+		 * Under md-on-ssd mode, someone (non-owner) may be aborting the DTX entry
+		 * but yield when pin the object or start backend TX. During such interval,
+		 * if the DTX owner triggers vos_dtx_detach(), it will see such 'aborting'
+		 * entry. Under such case, leave the DTX entry to the aboring ULT. As for
+		 * the other DTX that is neither prepared, nor committable, nor committed,
+		 * it will be directly removed from the active DTX table.
 		 */
-		if (!dae->dae_prepared && !dae->dae_committable && !dae->dae_committed)
+		if (!dae->dae_prepared && !dae->dae_committable && !dae->dae_committed &&
+		    !dae->dae_aborting) {
+			dth->dth_pinned = 0;
 			vos_dtx_cleanup_internal(dth);
+		}
 
 		dae->dae_dth = NULL;
 		dth->dth_ent = NULL;
