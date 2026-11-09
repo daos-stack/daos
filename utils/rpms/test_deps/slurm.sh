@@ -62,6 +62,20 @@ clean_slurm_bin() {
   done
 }
 
+# shellcheck disable=SC2016
+printf '%s\n' \
+  '#!/bin/sh' \
+  'set -e' \
+  'getent group slurm >/dev/null 2>&1 || groupadd --system slurm' \
+  'if ! getent passwd slurm >/dev/null 2>&1; then' \
+  '  nologin="$(command -v nologin || echo /sbin/nologin)"' \
+  '  useradd --system --gid slurm --home-dir /var/lib/slurm --no-create-home --shell "$nologin" slurm' \
+  'fi' \
+  'install -d -o slurm -g slurm -m 0755 /var/lib/slurm /var/log/slurm /var/spool/slurmctld' \
+  'install -d -o root -g root -m 0755 /var/spool/slurmd' \
+  > "${tmp}/slurm_setup"
+EXTRA_OPTS+=(--after-install "${tmp}/slurm_setup")
+
 stage_files "${bindir}" "${SL_SLURM_PREFIX}"/bin/*
 clean_slurm_bin "${files[@]}"
 stage_files "${libdir}" "${SL_SLURM_PREFIX}"/lib64/*.so*
@@ -100,13 +114,17 @@ for daemon in slurmctld slurmd slurmdbd; do
     stage_files "${libdir}/slurm" "${SL_SLURM_PREFIX}/lib64/slurm/accounting_storage_mysql.so"
     clean_slurm_bin "${files[@]}"
   fi
-  printf '#!/bin/sh\nif [ -d /run/systemd/system ]; then\n  systemctl daemon-reload || :\nfi\n' \
-    > "${tmp}/${daemon}_reload"
+  # shellcheck disable=SC2016
+  printf '#!/bin/sh\nif [ -d /run/systemd/system ]; then\n  systemctl daemon-reload || :\n  if [ "$1" -eq 1 ]; then\n    systemctl preset %s.service || :\n  fi\nfi\n' \
+    "${daemon}" > "${tmp}/${daemon}_reload"
   printf "#!/bin/sh\nif [ \"\$1\" = 0 ] && [ -d /run/systemd/system ]; then\n  systemctl --no-reload disable --now %s.service || :\nfi\n" \
     "${daemon}" > "${tmp}/${daemon}_remove"
+  # shellcheck disable=SC2016
+  printf '#!/bin/sh\nif [ -d /run/systemd/system ]; then\n  systemctl daemon-reload || :\n  if [ "$1" -gt 0 ]; then\n    systemctl try-restart %s.service || :\n  fi\nfi\n' \
+    "${daemon}" > "${tmp}/${daemon}_post_remove"
   EXTRA_OPTS+=(--after-install "${tmp}/${daemon}_reload"
               --before-remove "${tmp}/${daemon}_remove"
-              --after-remove "${tmp}/${daemon}_reload")
+              --after-remove "${tmp}/${daemon}_post_remove")
   DEPENDS=("${slurm_lib} = ${slurm_full}")
   EXTERNAL_DEPENDS=(systemd munge)
   build_package "slurm-${daemon}"

@@ -35,9 +35,11 @@ enable test dependencies. Packaging writes to the shared `rpms/deps` directory
 without deleting ordinary dependency RPMs. Custom packaging currently supports
 RPM only.
 
-The Slurm RPMs do not enable or start services. Functional-test setup supplies
-the cluster configuration and prepares MUNGE, service accounts, state, and log
-directories.
+The Slurm RPMs create the standard `slurm` system account and runtime
+directories, and apply the normal systemd preset and upgrade/removal lifecycle.
+They do not force services to start. Functional-test setup supplies the
+cluster-specific configuration and prepares MUNGE credentials and test-specific
+service overrides.
 
 See [SchedMD's administrator guide](https://slurm.schedmd.com/quickstart_admin.html#manual_build)
 and [Slurm sources](https://github.com/schedmd/slurm).
