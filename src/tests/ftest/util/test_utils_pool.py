@@ -39,6 +39,7 @@ def get_size_params(pool):
     """
     return {"size": None,
             "tier_ratio": None,
+            "mem_ratio": None,
             "scm_size": pool.scm_per_rank,
             "nvme_size": pool.nvme_per_rank}
 
