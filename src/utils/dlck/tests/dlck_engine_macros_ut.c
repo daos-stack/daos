@@ -17,6 +17,7 @@
 #include <daos_errno.h>
 
 #include "../dlck_engine.h"
+#include "dlck_ut.h"
 
 /** verify dlck_status_set_rc() ignores DER_SUCCESS and keeps the stored return code intact */
 static void
@@ -95,22 +96,8 @@ static const struct CMUnitTest dlck_engine_macros_tests[] = {
 int
 main(int argc, char **argv)
 {
-#if CMOCKA_FILTER_SUPPORTED
-	if (argc > 1) {
-		char filter[256];
-		int  rc = snprintf(filter, sizeof(filter), "*%s*", argv[1]);
+	DLCK_UT_FILTER(argc, argv);
 
-		if (rc > 0 && (size_t)rc < sizeof(filter)) {
-			cmocka_set_test_filter(filter);
-		} else {
-			fprintf(stderr, "ERROR: Test filter '%s' cannot be applied.\n", argv[1]);
-			return 1;
-		}
-	}
-#else
-	(void)argc;
-	(void)argv;
-#endif
 	return cmocka_run_group_tests_name("dlck_engine_macros_ut", dlck_engine_macros_tests, NULL,
 					   NULL);
 }

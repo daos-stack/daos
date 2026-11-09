@@ -25,6 +25,7 @@
 #include "../dlck_args.h"
 #include "../dlck_engine.h"
 #include "dlck_engine_ut_mock.h"
+#include "dlck_ut.h"
 
 #define TARGETS_MAX 3
 
@@ -1236,22 +1237,8 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-#if CMOCKA_FILTER_SUPPORTED
-	if (argc > 1) {
-		char filter[256];
+	DLCK_UT_FILTER(argc, argv);
 
-		rc = snprintf(filter, sizeof(filter), "*%s*", argv[1]);
-		if (rc > 0 && (size_t)rc < sizeof(filter)) {
-			cmocka_set_test_filter(filter);
-		} else {
-			fprintf(stderr, "ERROR: Test filter '%s' cannot be applied.\n", argv[1]);
-			return 1;
-		}
-	}
-#else
-	(void)argc;
-	(void)argv;
-#endif
 	rc = cmocka_run_group_tests_name("dlck_engine_ut", dlck_engine_tests, NULL, NULL);
 
 	daos_fail_fini();
