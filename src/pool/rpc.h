@@ -23,6 +23,8 @@
 #include <daos/pool_map.h>
 #include <daos/pool.h>
 
+#include <cart/rpc_gen_macros.h>
+
 /*
  * RPC operation codes
  *

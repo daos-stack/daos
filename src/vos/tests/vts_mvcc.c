@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2020-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1273,11 +1273,13 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 				expect_inprogress = true;
 			}
 		}
-		if (w->o_rtype == R_E && !e)
-			expected_wrc = -DER_EXIST;
-		else if (w->o_rtype == R_NE && e)
-			expected_wrc = -DER_NONEXIST;
 
+		if (re != we || same_tx) {
+			if (w->o_rtype == R_E && !e)
+				expected_wrc = -DER_EXIST;
+			else if (w->o_rtype == R_NE && e)
+				expected_wrc = -DER_NONEXIST;
+		}
 	}
 	print_message("  %s(%s, "DF_X64") (expect %s): ",
 		      w->o_name, wp, we, expect_inprogress ? "DER_INPROGRESS" :

@@ -8,7 +8,6 @@ from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosApiError
 from test_utils_container import add_container
-from test_utils_pool import add_pool
 
 RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
@@ -42,7 +41,7 @@ class Permission(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        pool = add_pool(self, create=False)
+        pool = self.get_pool(create=False)
         self.log.debug("Pool initialization successful")
         pool.create()
         self.log.debug("Pool Creation successful")

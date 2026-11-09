@@ -1814,14 +1814,15 @@ cont_track_eph_leader_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	eph_ldr->cte_servers_num = rank_nr;
 	eph_ldr->cte_current_ec_agg_eph = 0;
 	eph_ldr->cte_rdb_ec_agg_eph     = 0;
+	eph_ldr->cte_ec_agg_warn_slug_ts = daos_gettime_coarse();
 	for (i = 0; i < rank_nr; i++) {
 		eph_ldr->cte_server_ephs[i].re_rank = doms[i].do_comp.co_rank;
 		eph_ldr->cte_server_ephs[i].re_ec_agg_eph = 0;
 		eph_ldr->cte_server_ephs[i].re_stable_eph = 0;
-		eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts = daos_gettime_coarse();
+		eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts =
+		    eph_ldr->cte_ec_agg_warn_slug_ts;
 	}
 	d_list_add(&eph_ldr->cte_list, &cont_svc->cs_cont_ephs_leader_list);
-	eph_ldr->cte_ec_agg_warn_slug_ts = daos_gettime_coarse();
 	*leader_p = eph_ldr;
 out:
 	if (rc) {
@@ -1897,7 +1898,11 @@ retry:
 
 	for (i = 0; i < eph_ldr->cte_servers_num; i++) {
 		if (eph_ldr->cte_server_ephs[i].re_rank == rank) {
-			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < ec_agg_eph) {
+			/* A zero report means a target of this rank was just (re)started
+			 * and waits for the boundary, take it as is.
+			 */
+			if (eph_ldr->cte_server_ephs[i].re_ec_agg_eph < ec_agg_eph ||
+			    ec_agg_eph == 0) {
 				eph_ldr->cte_server_ephs[i].re_ec_agg_eph = ec_agg_eph;
 				eph_ldr->cte_server_ephs[i].re_ec_agg_eph_update_ts =
 				    daos_gettime_coarse();
@@ -2159,6 +2164,9 @@ out_lock:
 	return rc;
 }
 
+#define TRACK_EPH_INTV        (5ULL * 1000) /* ms interval to check */
+#define TRACK_EPH_RESEND_INTV 30            /* seconds between resends of unchanged boundary */
+
 static void
 cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 {
@@ -2169,6 +2177,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 	daos_epoch_t			 min_ec_agg_eph;
 	daos_epoch_t			 min_stable_eph;
 	uint64_t                         cur_ts;
+	bool                             resend;
 	int				 i;
 	int                              warn_slug_ranks = 8; /* 8 ranks at most */
 	int                              cont_num        = 0;
@@ -2207,8 +2216,12 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		min_ec_agg_eph = DAOS_EPOCH_MAX;
 		min_stable_eph = DAOS_EPOCH_MAX;
 		cur_ts         = daos_gettime_coarse();
-		if (ds_pool_is_rebuilding(pool) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
+		if (ds_pool_is_rebuilding(pool) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED) {
 			eph_ldr->cte_ec_agg_warn_slug_ts = cur_ts;
+			resend                           = false;
+		} else {
+			resend = true;
+		}
 		for (i = 0; i < eph_ldr->cte_servers_num; i++) {
 			d_rank_t rank = eph_ldr->cte_server_ephs[i].re_rank;
 
@@ -2235,13 +2248,20 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 				min_stable_eph = eph_ldr->cte_server_ephs[i].re_stable_eph;
 		}
 
+		/* A zero epoch means some (re)started target of that rank waits for the
+		 * boundary. Periodically resend even an unchanged boundary to it, once
+		 * rebuild is done and reclaim is enabled.
+		 */
+		resend = resend && min_ec_agg_eph == 0 &&
+			 cur_ts - eph_ldr->cte_refresh_ts >= TRACK_EPH_RESEND_INTV;
+
 		/* for reboot case the ea_rdb_eph possibly higher than min_eph */
 		if (min_ec_agg_eph < eph_ldr->cte_rdb_ec_agg_eph)
 			min_ec_agg_eph = eph_ldr->cte_rdb_ec_agg_eph;
 
 		if (min_ec_agg_eph == eph_ldr->cte_current_ec_agg_eph &&
 		    min_stable_eph == eph_ldr->cte_current_stable_eph &&
-		    eph_ldr->cte_current_ec_agg_eph != 0) {
+		    eph_ldr->cte_current_ec_agg_eph != 0 && !resend) {
 			if (cont_num % 10 == 0)
 				dss_sleep(0);
 			continue;
@@ -2261,8 +2281,8 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 
 		cur_eph = d_hlc2sec(eph_ldr->cte_current_ec_agg_eph);
 		new_eph = d_hlc2sec(min_ec_agg_eph);
-		if ((cur_ts > eph_ldr->cte_ec_agg_warn_slug_ts + 600) && cur_eph &&
-		    (new_eph > cur_eph) && (new_eph - cur_eph) >= 600)
+		if (cur_eph && (new_eph > cur_eph) && (new_eph - cur_eph) >= 600 &&
+		    (cur_ts - eph_ldr->cte_ec_agg_warn_slug_ts) >= (new_eph - cur_eph))
 			D_WARN(DF_CONT ": Sluggish EC boundary reporting. "
 				       "cur:" DF_U64 " new:" DF_U64 " gap:" DF_U64 "\n",
 			       DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid), cur_eph, new_eph,
@@ -2318,6 +2338,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 		}
 		eph_ldr->cte_current_ec_agg_eph = min_ec_agg_eph;
 		eph_ldr->cte_current_stable_eph = min_stable_eph;
+		eph_ldr->cte_refresh_ts         = daos_gettime_coarse();
 	}
 	ABT_mutex_unlock(svc->cs_cont_ephs_mutex);
 
@@ -2340,7 +2361,6 @@ ds_cont_svc_refresh_agg_eph(uuid_t pool_uuid)
 	return 0;
 }
 
-#define TRACK_EPH_INTV (5ULL * 1000) /* seconds interval to check*/
 static void
 cont_track_eph_leader_ult(void *arg)
 {

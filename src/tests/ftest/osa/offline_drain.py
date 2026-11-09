@@ -6,7 +6,6 @@
 """
 from nvme_utils import ServerFillUp
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
 
@@ -53,7 +52,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
+            pool[val] = self.get_pool(connect=False)
             self.pool = pool[val]
             self.pool.set_property("reclaim", "disabled")
             test_seq = self.ior_test_sequence[0]
