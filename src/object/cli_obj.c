@@ -1452,8 +1452,8 @@ obj_pool_query_cb(tse_task_t *task, void *data)
 }
 
 int
-obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
-		    unsigned int map_ver, tse_task_t **taskp)
+obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj, unsigned int map_ver,
+		    d_rank_t hint_rank, tse_task_t **taskp)
 {
 	tse_task_t		       *task;
 	struct dc_pool		       *pool;
@@ -1465,7 +1465,7 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 	D_ASSERT(pool != NULL);
 
 	dc_pool2hdl_noref(pool, &ph);
-	rc = dc_pool_create_map_refresh_task(ph, map_ver, sched, &task);
+	rc = dc_pool_create_map_refresh_task(ph, map_ver, hint_rank, sched, &task);
 	if (rc != 0)
 		return rc;
 
@@ -1854,7 +1854,19 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	int          rc;
 
 	if (pmap_stale) {
-		rc = obj_pool_query_task(sched, obj, 0, &pool_task);
+		/*
+		 * Seed the map refresh with the engine that supplied the newest
+		 * map version in this request's replies (for a stale query, the
+		 * one that returned the higher version with -DER_STALE): it is
+		 * provably alive and already ahead of our cached map, so the
+		 * refresh need not round robin onto ranks that may be excluded
+		 * (and possibly down) in our stale map. When no reply advanced our
+		 * map version (e.g. the contacted shards timed out), the hint is
+		 * CRT_NO_RANK and normal round robin is used.
+		 */
+		rc = obj_pool_query_task(sched, obj, 0, obj_auxi->map_ver_reply_rank, &pool_task);
+		/* consume the hint once so a later all-timeout retry does not reuse it */
+		obj_auxi->map_ver_reply_rank = CRT_NO_RANK;
 		if (rc != 0)
 			D_GOTO(err, rc);
 	}
@@ -3474,9 +3486,11 @@ merge_recx_create_one(d_list_t *prev, uint64_t offset, uint64_t size, daos_epoch
 }
 
 static bool
-recx_can_merge_with_boundary(daos_recx_t *recx, uint64_t offset,
-			     uint64_t size, uint64_t boundary)
+recx_can_merge_with_boundary(daos_recx_t *recx, uint64_t offset, uint64_t size, uint64_t boundary,
+			     bool same_epoch)
 {
+	if (!same_epoch && (DAOS_RECX_END(*recx) == offset || offset + size == recx->rx_idx))
+		return false;
 	if (!daos_recx_can_merge_with_offset_size(recx, offset, size))
 		return false;
 
@@ -3505,29 +3519,23 @@ merge_recx_insert(struct obj_auxi_list_recx *prev, d_list_t *head, uint64_t offs
 
 	while (size > 0) {
 		struct obj_auxi_list_recx	*new;
-		uint64_t			new_size;
-		daos_epoch_t			new_eph;
+		uint64_t                         new_size;
 
 		/* Split by boundary */
-		if (boundary > 0) {
+		if (boundary > 0)
 			new_size = min(roundup(offset + 1, boundary), end) - offset;
-			if ((offset % boundary) == 0 || prev == NULL)
-				new_eph = eph;
-			else
-				new_eph = max(prev->recx_eph, eph);
-		} else {
+		else
 			new_size = size;
-			new_eph = eph;
-		}
 
 		/* Check if merging with previous recx or creating new one. */
-		if (prev && recx_can_merge_with_boundary(&prev->recx, offset, new_size,
-							 boundary)) {
+		if (prev && recx_can_merge_with_boundary(&prev->recx, offset, new_size, boundary,
+							 prev->recx_eph == eph)) {
 			daos_recx_merge_with_offset_size(&prev->recx, offset, new_size);
-			prev->recx_eph = max(prev->recx_eph, new_eph);
+			prev->recx_eph = max(prev->recx_eph, eph);
 		} else {
-			new = merge_recx_create_one(prev == NULL ? head : &prev->recx_list,
-						    offset, new_size, new_eph);
+			/* prev may be an unrelated recx, so do not inherit its epoch */
+			new = merge_recx_create_one(prev == NULL ? head : &prev->recx_list, offset,
+						    new_size, eph);
 			if (new == NULL)
 				return -DER_NOMEM;
 			prev = new;
@@ -3554,8 +3562,9 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph, uin
 		offset, size, eph, boundary);
 
 	d_list_for_each_entry_safe(recx, tmp, head, recx_list) {
-		if (end < recx->recx.rx_idx ||
-		    daos_recx_can_merge_with_offset_size(&recx->recx, offset, size)) {
+		if (end <= recx->recx.rx_idx ||
+		    (offset != DAOS_RECX_END(recx->recx) &&
+		     daos_recx_can_merge_with_offset_size(&recx->recx, offset, size))) {
 			rc = merge_recx_insert(prev, head, offset, size, eph, boundary);
 			inserted = true;
 			break;
@@ -3576,8 +3585,8 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph, uin
 			continue;
 		}
 
-		if (recx_can_merge_with_boundary(&prev->recx, recx->recx.rx_idx,
-						 recx->recx.rx_nr, boundary)) {
+		if (recx_can_merge_with_boundary(&prev->recx, recx->recx.rx_idx, recx->recx.rx_nr,
+						 boundary, prev->recx_eph == recx->recx_eph)) {
 			daos_recx_merge(&recx->recx, &prev->recx);
 			prev->recx_eph = max(prev->recx_eph, recx->recx_eph);
 			d_list_del(&recx->recx_list);
@@ -3693,17 +3702,15 @@ obj_shard_list_obj_cb(struct shard_auxi_args *shard_auxi,
 	shard_arg = container_of(shard_auxi, struct shard_list_args, la_auxi);
 	ptr += iter_arg->merge_sgl_off;
 	D_ASSERTF(obj_arg->sgl->sg_iovs[0].iov_buf_len >=
-		  obj_arg->sgl->sg_iovs[0].iov_len +
-		  shard_arg->la_sgl->sg_iovs[0].iov_len,
-		  "buf size %zu/%zu shard buf size %zu shard %u "DF_OID" shard_nr %u merge_nr %u\n",
+		      iter_arg->merge_sgl_off + shard_arg->la_sgl->sg_iovs[0].iov_len,
+		  "buf size %zu/%zu shard buf size %zu shard %u " DF_OID
+		  " shard_nr %u merge_nr %u\n",
 		  obj_arg->sgl->sg_iovs[0].iov_buf_len, obj_arg->sgl->sg_iovs[0].iov_len,
 		  shard_arg->la_sgl->sg_iovs[0].iov_len, shard_auxi->shard,
 		  DP_OID(obj_auxi->obj->cob_md.omd_id), shard_arg->la_nr, iter_arg->merge_nr);
-	memcpy(ptr, shard_arg->la_sgl->sg_iovs[0].iov_buf,
-	       shard_arg->la_sgl->sg_iovs[0].iov_len);
-	obj_arg->sgl->sg_iovs[0].iov_len +=
-		shard_arg->la_sgl->sg_iovs[0].iov_len;
+	memcpy(ptr, shard_arg->la_sgl->sg_iovs[0].iov_buf, shard_arg->la_sgl->sg_iovs[0].iov_len);
 	iter_arg->merge_sgl_off += shard_arg->la_sgl->sg_iovs[0].iov_len;
+	obj_arg->sgl->sg_iovs[0].iov_len = iter_arg->merge_sgl_off;
 
 	kds += iter_arg->merge_nr;
 	for (i = 0; i < shard_arg->la_nr; i++)
@@ -3910,6 +3917,24 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 	return rc;
 }
 
+/*
+ * Return the rank currently hosting @shard in the object layout, or CRT_NO_RANK
+ * if the shard index is out of range. Used to identify the engine that replied
+ * with the newest pool map version so the map refresh can be seeded with it.
+ */
+static d_rank_t
+obj_shard_reply_rank(struct dc_object *obj, uint32_t shard)
+{
+	d_rank_t rank = CRT_NO_RANK;
+
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (shard < obj->cob_shards_nr)
+		rank = obj->cob_shards->do_shards[shard].do_target_rank;
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
+	return rank;
+}
+
 static int
 obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 		  struct obj_auxi_args *obj_auxi, void *cb_arg)
@@ -3928,8 +3953,27 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 	 * 2) if any shard failed, store it in obj_auxi->result, the
 	 *    un-retryable error with higher priority.
 	 */
-	if (obj_auxi->map_ver_reply < shard_auxi->map_ver)
+	if (obj_auxi->map_ver_reply < shard_auxi->map_ver) {
 		obj_auxi->map_ver_reply = shard_auxi->map_ver;
+		/*
+		 * A successful reply from this shard carried the newer map
+		 * version, so the shard's engine is alive and ahead of our cached
+		 * map. Record its rank to seed the pool map refresh. Failed or
+		 * timed-out shards (ret != 0) are skipped so the refresh is never
+		 * seeded with a possibly-down rank.
+		 */
+		if (ret == 0)
+			obj_auxi->map_ver_reply_rank =
+			    obj_shard_reply_rank(obj_auxi->obj, shard_auxi->shard);
+	}
+	/*
+	 * A -DER_STALE reply means this engine is alive and already on a newer
+	 * pool map: the ideal seed for the refresh. A down shard times out
+	 * instead, so it never reaches here.
+	 */
+	if (ret == -DER_STALE)
+		obj_auxi->map_ver_reply_rank =
+		    obj_shard_reply_rank(obj_auxi->obj, shard_auxi->shard);
 	if (ret == 0) {
 		if (obj_req_is_ec_cond_fetch(obj_auxi)) {
 			iter_arg->cond_fetch_exist = true;
@@ -5689,6 +5733,7 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 		obj_auxi->initial_shard = UINT32_MAX;
 	obj_auxi->opc = opc;
 	obj_auxi->map_ver_req = map_ver;
+	obj_auxi->map_ver_reply_rank = CRT_NO_RANK;
 	obj_auxi->obj_task = task;
 	obj_auxi->th = th;
 	obj_auxi->obj = obj;
@@ -7753,21 +7798,20 @@ shard_query_key_task(tse_task_t *task)
 
 	api_args = dc_task_get_args(auxi->obj_task);
 	if (args->kqa_dcts != NULL)
-		rc = dc_obj_shard_coll_query(obj_shard, epoch, api_args->flags, auxi->map_ver_req,
-					     obj, api_args->dkey, api_args->akey, api_args->recx,
-					     api_args->max_epoch, args->kqa_coh_uuid,
-					     args->kqa_cont_uuid, &args->kqa_dti,
-					     &auxi->map_ver_reply, args->kqa_dcts, args->kqa_dct_nr,
-					     auxi->cq_args.cqa_coa.coa_max_dct_sz,
-					     auxi->cq_args.cqa_cur.grp_nr, th, task,
-					     &auxi->max_delay, &args->kqa_auxi.enqueue_id);
+		rc = dc_obj_shard_coll_query(
+		    obj_shard, epoch, api_args->flags, auxi->map_ver_req, obj, api_args->dkey,
+		    api_args->akey, api_args->recx, api_args->max_epoch, args->kqa_coh_uuid,
+		    args->kqa_cont_uuid, &args->kqa_dti, &auxi->map_ver_reply,
+		    &auxi->map_ver_reply_rank, args->kqa_dcts, args->kqa_dct_nr,
+		    auxi->cq_args.cqa_coa.coa_max_dct_sz, auxi->cq_args.cqa_cur.grp_nr, th, task,
+		    &auxi->max_delay, &args->kqa_auxi.enqueue_id);
 	else
 		rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, auxi->map_ver_req,
 					    obj, api_args->dkey, api_args->akey, api_args->recx,
 					    api_args->max_epoch, args->kqa_coh_uuid,
 					    args->kqa_cont_uuid, &args->kqa_dti,
-					    &auxi->map_ver_reply, th, task, &auxi->max_delay,
-					    &args->kqa_auxi.enqueue_id);
+					    &auxi->map_ver_reply, &auxi->map_ver_reply_rank, th,
+					    task, &auxi->max_delay, &args->kqa_auxi.enqueue_id);
 
 	return rc;
 }
@@ -7905,6 +7949,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	}
 
 	obj_auxi->map_ver_reply = 0;
+	obj_auxi->map_ver_reply_rank = CRT_NO_RANK;
 	obj_auxi->map_ver_req = map_ver;
 
 	D_DEBUG(DB_IO, "Object Key Query "DF_OID" grp %d/%u map %u\n",

@@ -289,7 +289,7 @@ EOF
         fi
         mail_msg+="See Jenkins console: ${BUILD_URL:-}\n"
         if declare -F send_mail > /dev/null; then
-            send_mail "Infrastructure error in $STAGE_NAME" "$mail_msg" || true
+            send_mail "ERROR: Infrastructure error in $STAGE_NAME" "$mail_msg" || true
         fi
     fi
 
