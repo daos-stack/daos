@@ -194,7 +194,7 @@ daos_tests:
     test_daos_management: 4
     test_daos_pool: 9
     test_daos_container: 18
-    test_daos_distributed_tx: 5
+    test_daos_distributed_tx: 6
     test_daos_rebuild_simple: 21
     test_daos_drain_simple: 8
     test_daos_extend_simple: 5

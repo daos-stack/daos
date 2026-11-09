@@ -253,13 +253,7 @@ dtx_handler(crt_rpc_t *rpc)
 
 		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays, NULL,
 				   &din->di_version, NULL, DCI_RESYNC_FOLLOWER);
-		if (rc == DTX_ST_INITED) {
-			/* For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
-			 * return 'DTX_ST_INITED' to avoid interoperability trouble if related
-			 * request is from old server.
-			 */
-			rc = -DER_NONEXIST;
-		} else if (rc == -DER_INPROGRESS && !dtx_cont_opened(cont)) {
+		if (rc == -DER_INPROGRESS && !dtx_cont_opened(cont)) {
 			/* Trigger DTX re-index for subsequent (retry) DTX_CHECK. */
 			rc1 = start_dtx_reindex_ult(cont);
 			if (rc1 != 0)

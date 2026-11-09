@@ -644,8 +644,12 @@ dtx_batched_commit_one(void *arg)
 		int			  cnt;
 		int			  rc;
 
+		cont->sc_resync_pending = 1;
+
 		rc = dtx_handle_resync_pending(dbca->dbca_cont, &cont->sc_dtx_resync_pending,
 					       dbca->dbca_resync_seq++, dbca->dbca_commit_req);
+
+		cont->sc_resync_pending = 0;
 		if (rc != 0)
 			break;
 

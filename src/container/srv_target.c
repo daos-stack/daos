@@ -1080,6 +1080,9 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		ds_cont_child_get(cont_child);
 		if (started)
 			*started = true;
+
+		vos_set_dtx_resync_version(cont_child->sc_hdl,
+					   pool_child->spc_pool->sp_dtx_resync_version, false);
 	}
 
 	if (!rc && cont_out != NULL) {

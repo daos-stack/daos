@@ -68,7 +68,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_share_tbd_count = 0;
 	dth->dth_shares_inited = 1;
 
-	vos_set_dtx_resync_version(coh, VTS_DTX_VER);
+	vos_set_dtx_resync_version(coh, VTS_DTX_VER, true);
 
 	vos_dtx_rsrvd_init(dth);
 	rc = vos_dtx_attach(dth, false, false);

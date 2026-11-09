@@ -522,9 +522,9 @@ out:
 	D_FREE(dtes);
 
 	/* Handle former left pending committable DTX entries. */
-	if (!dtx_cont_opened(cont) && unlikely(!d_list_empty(&cont->sc_dtx_resync_pending))) {
-		while ((dre = d_list_pop_entry(&drh->drh_list, struct dtx_resync_entry,
-					       dre_link)) != NULL) {
+	if (!cont->sc_resync_pending && unlikely(!d_list_empty(&cont->sc_dtx_resync_pending))) {
+		while ((dre = d_list_pop_entry(&cont->sc_dtx_resync_pending,
+					       struct dtx_resync_entry, dre_link)) != NULL) {
 			dre->dre_seq = 0;
 			d_list_add_tail(&dre->dre_link, &drh->drh_pending);
 		}
@@ -602,6 +602,9 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	 * DTX entries before engine restart. Because DTX 'committable' status is cached in
 	 * DRAM and will be lost after engine restart. If do not synchronize them, related
 	 * IO (both regular and rebuild) may miss the latest valid data.
+	 *
+	 * Clock drift may cause epoch difference among servers, that is general issue for
+	 * dss_get_start_epoch(), will be considered in other independent ticket.
 	 */
 	if ((ent->ie_dtx_ver > dra->resync_version) ||
 	    (ent->ie_dtx_ver == dra->resync_version && ent->ie_epoch > dss_get_start_epoch()))
@@ -678,7 +681,7 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver)
 	pool = cont->sc_pool->spc_pool;
 	if (pool->sp_disable_dtx_resync) {
 		/* Directly set resync version when DTX resync is disabled. */
-		vos_set_dtx_resync_version(cont->sc_hdl, ver);
+		vos_set_dtx_resync_version(cont->sc_hdl, ver, true);
 		D_DEBUG(DB_MD, "Skip DTX resync for " DF_UUID "/" DF_UUID " with ver %u\n",
 			DP_UUID(cont->sc_pool_uuid), DP_UUID(cont->sc_uuid), ver);
 		goto out;
@@ -759,7 +762,7 @@ dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver)
 		rc = rc1;
 
 	if (rc >= 0)
-		vos_set_dtx_resync_version(cont->sc_hdl, ver);
+		vos_set_dtx_resync_version(cont->sc_hdl, ver, true);
 
 	DL_CDEBUG(rc != 0, DLOG_ERR, DB_MD, rc,
 		  "Stop DTX resync scan for " DF_UUID "/" DF_UUID " with ver %u",
@@ -903,8 +906,9 @@ again:
 	rc = ds_pool_thread_collective(arg->pool_uuid, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
 				       PO_COMP_ST_NEW, dtx_resync_one, arg, DSS_ULT_DEEP_STACK);
 	if (rc != 0) {
-		D_ERROR("Failed to resync DTX for pool " DF_UUID " version %u: " DF_RC "\n",
-			DP_UUID(arg->pool_uuid), arg->version, DP_RC(rc));
+		if (retry++ % 10 == 0)
+			D_ERROR("Fail to resync DTX for " DF_UUID " ver %u, tried %u: " DF_RC "\n",
+				DP_UUID(arg->pool_uuid), arg->version, retry, DP_RC(rc));
 		/*
 		 * NOTE: Do not update sp_dtx_resync_version if DTX resync failed; otherwise
 		 *	 subsequent rebuild may lost data silently that must be avoided.
@@ -918,9 +922,7 @@ again:
 
 		ds_pool_put(pool);
 		pool = NULL;
-
-		dss_sleep(1000);
-		retry++;
+		dss_sleep(3000);
 
 		goto again;
 	}

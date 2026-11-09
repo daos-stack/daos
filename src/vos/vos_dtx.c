@@ -3783,13 +3783,14 @@ cmt:
 }
 
 void
-vos_set_dtx_resync_version(daos_handle_t coh, uint32_t ver)
+vos_set_dtx_resync_version(daos_handle_t coh, uint32_t ver, bool force)
 {
 	struct vos_container *cont = vos_hdl2cont(coh);
+	umem_off_t            head = cont->vc_cont_df->cd_dtx_active_head;
 
 	D_ASSERT(cont != NULL);
 
-	if (likely(cont->vc_dtx_resync_ver < ver)) {
+	if (likely(cont->vc_dtx_resync_ver < ver) && (force || UMOFF_IS_NULL(head))) {
 		D_INFO("Update resync version %u => %u for container " DF_UUID "\n",
 		       cont->vc_dtx_resync_ver, ver, DP_UUID(cont->vc_id));
 		cont->vc_dtx_resync_ver = ver;
@@ -4397,6 +4398,15 @@ vos_dtx_detach(struct dtx_handle *dth)
 
 	if (dae != NULL) {
 		D_ASSERT(dae->dae_dth == dth);
+		D_ASSERTF(!vos_dae_in_process(dae), "Unexpected DTX status %u when detach.\n",
+			  vos_dtx_status(dae));
+
+		/*
+		 * If a DTX entry is neither prepared, nor committable, nor committed,
+		 * then it should not exist in active DTX table after vos_dtx_detach.
+		 */
+		if (!dae->dae_prepared && !dae->dae_committable && !dae->dae_committed)
+			vos_dtx_cleanup_internal(dth);
 
 		dae->dae_dth = NULL;
 		dth->dth_ent = NULL;

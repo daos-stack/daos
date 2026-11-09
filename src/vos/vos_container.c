@@ -555,6 +555,7 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 		}
 	}
 
+	cont->vc_dtx_resync_ts = daos_gettime_coarse();
 	if (pool->vp_for_check)
 		cont->vc_dtx_resync_ver = 1;
 
