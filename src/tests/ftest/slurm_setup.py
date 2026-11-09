@@ -307,14 +307,6 @@ class SlurmSetup():
             'slurmctld pid file', self.all_nodes,
             f's|^[[:space:]]*#\\?[[:space:]]*SlurmctldPidFile[[:space:]]*=.*|'
             f'SlurmctldPidFile={self.SLURMCTLD_PID_FILE}|', self.root)
-        tee_command = command_as_user(f'tee -a {self.SLURM_CONF}', self.root)
-        command = (
-            f"grep -q '^[[:space:]]*SlurmctldPidFile[[:space:]]*=' {self.SLURM_CONF} || "
-            f"echo 'SlurmctldPidFile={self.SLURMCTLD_PID_FILE}' | {tee_command}")
-        result = run_remote(self.log, self.all_nodes, command)
-        if not result.passed:
-            raise SlurmSetupException(
-                f'Error ensuring slurmctld pid file configuration on {result.failed_hosts}')
 
         # Update the config file with the removal of the NodeName entry
         self._modify_slurm_config_file(
@@ -350,19 +342,6 @@ class SlurmSetup():
                         self.root))
         if not_updated:
             raise SlurmSetupException(f'Slurm control node not updated on {not_updated}')
-
-        control_host = str(self.control)
-        command = (
-            "awk -F= '/^[[:space:]]*(SlurmctldHost|ControlMachine)[[:space:]]*=/ "
-            f'{{ found=1; value=$2; gsub(/[[:space:]]/, "", value); '
-            f'if (value != "{control_host}") invalid=1 }} '
-            "END { exit !(found && !invalid) }' "
-            f'{self.SLURM_CONF}')
-        result = run_remote(self.log, self.all_nodes, command_as_user(command, self.root))
-        if not result.passed:
-            raise SlurmSetupException(
-                f'Slurm control node configuration does not match {control_host} '
-                f'on {result.failed_hosts}')
 
         # Update the config file with each node's socket/core/thread information
         self._update_slurm_config_sys_info()
@@ -531,7 +510,7 @@ class SlurmSetup():
             command = command_as_user(f'systemctl {action} {service}', self.root)
             result = run_remote(self.log, nodes, command)
             if not result.passed:
-                self._display_debug(result.failed_hosts, debug_log, debug_config, service)
+                self._display_debug(result.failed_hosts, debug_log, debug_config)
                 raise SlurmSetupException(f'Error restarting {service} on {result.failed_hosts}')
 
     def _active_systemctl(self, nodes, service, debug_log=None, debug_config=None):
@@ -556,35 +535,14 @@ class SlurmSetup():
             self.log.debug(f'{service} service not active on {result.failed_hosts}')
         return result.homogeneous and "/n".join(result.output[0].stdout) == "active"
 
-    def _display_debug(self, nodes, debug_log=None, debug_config=None, service=None):
+    def _display_debug(self, nodes, debug_log=None, debug_config=None):
         """Display debug information.
 
         Args:
             nodes (NodeSet): nodes on which to display the debug information
             debug_log (str, optional): log file to display. Defaults to None.
             debug_config (str, optional): config file to display. Defaults to None.
-            service (str, optional): systemd service for which to display status and journal.
         """
-        if service:
-            for description, command in (
-                    ('systemd status', f'systemctl status --no-pager --full {service}'),
-                    ('systemd journal', f'journalctl -b -u {service} --no-pager -n 100')):
-                self.log.debug('DEBUG: %s for %s:', description, service)
-                run_remote(
-                    self.log, nodes, command_as_user(f'{command} || true', self.root))
-        if service == 'slurmd':
-            for description, command in (
-                    ('systemd unit definition', 'systemctl cat slurmd'),
-                    ('systemd cgroup properties',
-                     'systemctl show slurmd -p Delegate -p ControlGroup -p FragmentPath'),
-                    ('PID 1 cgroup', 'cat /proc/1/cgroup'),
-                    ('cgroup v2 mount', 'findmnt -T /sys/fs/cgroup -o TARGET,FSTYPE,OPTIONS'),
-                    ('cgroup v2 controllers', 'cat /sys/fs/cgroup/cgroup.controllers'),
-                    ('cgroup v2 subtree controllers',
-                     'cat /sys/fs/cgroup/cgroup.subtree_control')):
-                self.log.debug('DEBUG: %s on %s:', description, nodes)
-                run_remote(
-                    self.log, nodes, command_as_user(f'{command} || true', self.root))
         if debug_log:
             self.log.debug('DEBUG: %s contents:', debug_log)
             command = command_as_user(f'cat {debug_log}', self.root)
