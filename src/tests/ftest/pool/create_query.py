@@ -5,7 +5,6 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from test_utils_pool import add_pool
 
 
 class PoolCreateQueryTests(TestWithServers):
@@ -37,7 +36,7 @@ class PoolCreateQueryTests(TestWithServers):
         :avocado: tags=PoolCreateQueryTests,test_create_and_query
         """
         # Create pool
-        pool = add_pool(self)
+        pool = self.get_pool()
         epsilon_bytes = 1 << 20  # 1 MiB
         epsilon_scm_bytes = (
             ((1 << 24) * 8)  # 16 MiB * 8 tgts

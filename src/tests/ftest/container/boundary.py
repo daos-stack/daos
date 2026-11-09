@@ -42,7 +42,7 @@ class BoundaryTest(TestWithServers):
         self.io_obj_classs = self.params.get("obj_classs", '/run/container/execute_io/*')
         self.dmg = self.get_dmg_command()
 
-    def create_pool(self):
+    def __create_pool(self):
         """Get a test pool object and append to list.
 
         Returns:
@@ -90,7 +90,7 @@ class BoundaryTest(TestWithServers):
 
         """
         # Create pools in parallel
-        pool_manager = ThreadManager(self.create_pool, self.get_remaining_time() - 30)
+        pool_manager = ThreadManager(self.__create_pool, self.get_remaining_time() - 30)
         for _ in range(num_pools):
             pool_manager.add()
         self.log.info('Creating %d pools', num_pools)
