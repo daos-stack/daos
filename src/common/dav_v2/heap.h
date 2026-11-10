@@ -158,7 +158,6 @@ struct heap_zone_limits {
 	unsigned nzones_ne_max;
 	unsigned nzones_e_max;
 	unsigned nzones_soe_rsrv;
-	bool     dkey_pinning;
 };
 
 uint32_t

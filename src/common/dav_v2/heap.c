@@ -100,11 +100,7 @@ struct mbrt_qbs {
 /* Extra cache page kept free so a demoted SOEMB can be replaced without
  * stealing zone0's non-evictable page.
  */
-#define SOEMB_REPLACE_RSRV     1
-/* Evictable working pages the cache must host at once (object MB + dkey MB)
- * for dkey-based bucket pinning to be enabled.
- */
-#define UMEM_CACHE_MIN_EV_DKEY 2
+#define SOEMB_REPLACE_RSRV 1
 
 struct soemb_slot {
 	struct mbrt            *mb;
@@ -115,8 +111,7 @@ struct soemb_rt {
 	struct soemb_slot svec[SOEMB_ACTIVE_CNT];
 	int               cur_idx;
 	bool              demote_pending;
-	unsigned          promote_waiters;
-	void             *promote_wq;
+	bool              promote_busy;
 };
 
 struct heap_rt {
@@ -128,7 +123,6 @@ struct heap_rt {
 	unsigned                       nzones_e;
 	unsigned                       nzones_ne;
 	unsigned                       nzones_soe_rsrv;
-	bool                           dkey_pinning;
 	unsigned                       zones_exhausted;
 	unsigned                       zones_exhausted_e;
 	unsigned                       zones_exhausted_ne;
@@ -438,15 +432,13 @@ mbrt_qbs_getmb(struct mbrt_qbs *qb, int force)
 	return mb;
 }
 
-static int
-soemb_init(struct soemb_rt *smbrt, struct umem_store *store)
+static void
+soemb_init(struct soemb_rt *smbrt)
 {
 	memset(smbrt->svec, 0, sizeof(smbrt->svec));
-	smbrt->cur_idx         = 0;
-	smbrt->demote_pending  = false;
-	smbrt->promote_waiters = 0;
-	smbrt->promote_wq      = NULL;
-	return store->stor_ops->so_waitqueue_create(&smbrt->promote_wq);
+	smbrt->cur_idx        = 0;
+	smbrt->demote_pending = false;
+	smbrt->promote_busy   = false;
 }
 
 static void
@@ -462,10 +454,7 @@ soemb_fini(struct soemb_rt *smbrt, struct umem_store *store)
 		smbrt->svec[i].pin = NULL;
 	}
 
-	D_ASSERT(smbrt->promote_waiters == 0);
-	if (smbrt->promote_wq != NULL)
-		store->stor_ops->so_waitqueue_destroy(smbrt->promote_wq);
-	smbrt->promote_wq = NULL;
+	D_ASSERT(!smbrt->promote_busy);
 }
 
 static void
@@ -912,7 +901,9 @@ heap_soemb_active_get(struct palloc_heap *heap)
 
 	mb = smbrt->svec[smbrt->cur_idx].mb;
 	if (mb == NULL) {
-		smbrt->demote_pending = true;
+		/* Slot is being refilled; demote only if an earlier SOEMB was tried. */
+		if (smbrt->cur_idx)
+			smbrt->demote_pending = true;
 		return 0;
 	}
 
@@ -1075,7 +1066,7 @@ heap_zone_init(struct palloc_heap *heap, uint32_t zone_id, uint32_t first_chunk_
 	z->header = nhdr; /* write the entire header at once */
 
 	if (flags) {
-		D_ASSERT((flags == ZONE_EVICTABLE_MB) || (flags == ZONE_SOE_MB));
+		D_ASSERT(flags == ZONE_EVICTABLE_MB);
 		z->header.flags = flags;
 	}
 	mo_wal_persist(&heap->p_ops, &z->header, sizeof(z->header));
@@ -2112,7 +2103,6 @@ heap_boot(struct palloc_heap *heap, void *mmap_base, uint64_t heap_size, uint64_
 	h->nzones_ne          = hzl.nzones_ne_max;
 	h->nzones_e           = hzl.nzones_e_max;
 	h->nzones_soe_rsrv    = hzl.nzones_soe_rsrv;
-	h->dkey_pinning       = hzl.dkey_pinning;
 	h->zones_exhausted    = 0;
 	h->zones_exhausted_e  = 0;
 	h->zones_exhausted_ne = 0;
@@ -2139,16 +2129,10 @@ heap_boot(struct palloc_heap *heap, void *mmap_base, uint64_t heap_size, uint64_
 	if (err)
 		goto error_mbrt_init;
 
-	err = soemb_init(&h->smbrt, p_ops->umem_store);
-	if (err) {
-		err = daos_der2errno(err);
-		goto error_soembrt_init;
-	}
+	soemb_init(&h->smbrt);
 
 	return 0;
 
-error_soembrt_init:
-	heap_mbrt_fini(heap);
 error_mbrt_init:
 	if (h->alloc_classes_default)
 		alloc_class_collection_delete(h->alloc_classes_default);
@@ -2425,9 +2409,8 @@ heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 /*
  * heap_soemb_active_set -- at transaction begin, first demote the oldest active
  *	SOEMB if the previous transaction flagged it, then (re)populate the active
- *	SOEMB list with pinned evictable memory buckets. The work is serialized
- *	across ULTs via a wait queue so that only one ULT performs it at a time
- *	while the others wait for it to complete.
+ *	SOEMB list with pinned evictable memory buckets. Only one ULT promotes at
+ *	a time; others return immediately while a promotion is in progress.
  */
 void
 heap_soemb_active_set(struct palloc_heap *heap)
@@ -2443,12 +2426,9 @@ heap_soemb_active_set(struct palloc_heap *heap)
 	if (heap->rt->nzones_e == 0 || heap->rt->nzones_soe_rsrv == 0)
 		return;
 
-	smbrt->promote_waiters++;
-	if (smbrt->promote_waiters > 1) {
-		D_ASSERT(store->stor_ops->so_waitqueue_wait != NULL);
-		store->stor_ops->so_waitqueue_wait(smbrt->promote_wq, false);
-		goto out;
-	}
+	if (smbrt->promote_busy)
+		return;
+	smbrt->promote_busy = true;
 
 	/*
 	 * Demote the oldest active SOEMB flagged by the previous transaction,
@@ -2488,6 +2468,7 @@ heap_soemb_active_set(struct palloc_heap *heap)
 		mb->is_soe_mb = true;
 		rc            = umem_cache_pin(store, &rg, 1, false, &pin);
 		if (rc) {
+			mb->is_soe_mb = false;
 			mbrt_qbs_insertmb(&heap->rt->emb_qbs, mb);
 			break;
 		}
@@ -2495,13 +2476,7 @@ heap_soemb_active_set(struct palloc_heap *heap)
 		smbrt->svec[i].pin = pin;
 	}
 
-out:
-	D_ASSERT(smbrt->promote_waiters > 0);
-	smbrt->promote_waiters--;
-	if (smbrt->promote_waiters) {
-		D_ASSERT(store->stor_ops->so_waitqueue_wakeup != NULL);
-		store->stor_ops->so_waitqueue_wakeup(smbrt->promote_wq, false);
-	}
+	smbrt->promote_busy = false;
 }
 
 uint32_t
@@ -2793,13 +2768,6 @@ heap_get_zone_limits(uint64_t heap_size, uint64_t cache_size, uint32_t nemb_pct)
 
 	zd.nzones_ne_max = ne_budget - soe_total;
 	zd.nzones_e_max  = zd.nzones_heap - zd.nzones_ne_max;
-
-	/*
-	 * dkey-based bucket pinning needs two evictable working pages resident at
-	 * once (one for the object MB, one for the dkey MB). The evictable working
-	 * set in the cache is whatever the non-evictable budget leaves behind.
-	 */
-	zd.dkey_pinning = (zd.nzones_cache - ne_budget) >= UMEM_CACHE_MIN_EV_DKEY;
 
 	return zd;
 }

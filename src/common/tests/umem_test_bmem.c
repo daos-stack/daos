@@ -2542,7 +2542,7 @@ test_umempobj_nemb_usage(void **state)
 
 	umem_class_init(&uma, &umm);
 
-	/* Do allocation and verify that only 80% of 15 zones - MIN_SOEMB_CNT are allotted
+	/* Do allocation and verify that only 80% of 15 zones - SOEMB_RSV_ZONES are allotted
 	 * to non evictable MBs
 	 */
 	for (num = 0;; num++) {

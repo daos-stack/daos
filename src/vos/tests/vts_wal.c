@@ -1680,16 +1680,13 @@ wal_mb_utilization_tests(void **state)
 
 	/*
 	 * After reopen the SOEMBs are re-selected from the 30%-75% range and may
-	 * no longer be the same buckets chosen before. Force the selection with
-	 * a dummy transaction and fetch the active SOEMBs. umem_allot_mb_evictable()
-	 * never returns a currently active SOEMB, so exclude them from the
+	 * no longer be the same buckets chosen before, so fetch the active SOEMBs.
+	 * umem_allot_mb_evictable() never returns a currently active SOEMB, so
+	 * exclude them from the
 	 * expected ranges. Of the five buckets in the 30%-75% range (ainfo[1],
 	 * ainfo[5] and the soe_rsrv populated buckets), soe_rsrv are consumed as
 	 * SOEMBs, leaving the remaining two to be handed out to the test.
 	 */
-	umem_tx_begin(umm, NULL);
-	umem_tx_commit(umm);
-
 	rc = umempobj_get_soemb_ids(umm->umm_pool, soemb_ids, MDTEST_SOE_RSRV_CNT, &soemb_cnt);
 	assert_rc_equal(rc, 0);
 	assert_true(soemb_cnt == soe_rsrv);
@@ -2649,7 +2646,8 @@ wal_umempobj_mbusage_test(void **state)
 	ainfo[1].allow_spill = 0;
 	assert_true(ainfo[1].mb_id != 0);
 	alloc_bucket_to_full(umm, &ainfo[1], checkpoint_fn, &arg->ctx.tc_po_hdl);
-	free_bucket_by_pct(umm, &ainfo[1], 50, checkpoint_fn, &arg->ctx.tc_po_hdl);
+	/* Keep it in the 75-90% range so it is not pinned as a SOEMB on reopen. */
+	free_bucket_by_pct(umm, &ainfo[1], 15, checkpoint_fn, &arg->ctx.tc_po_hdl);
 
 	rc = umempobj_get_mbusage(umm->umm_pool, ainfo[0].mb_id, &allocated0, &maxsz0);
 	print_message("NE usage max_size = %lu allocated = %lu\n", maxsz0, allocated0);
@@ -3068,15 +3066,12 @@ p2_fill_test(void **state)
 	arg->checkpoint = false;
 
 	/*
-	 * SOEMBs are promoted lazily on the first transaction after reopen. Force the
-	 * promotion with a dummy transaction so they are loaded, then confirm that object0's
-	 * bucket is not one of the active SOEMBs - otherwise its page would already be
-	 * resident and the fetch below would not fault.
+	 * SOEMBs are pinned at pool open. Confirm that object0's bucket is not one
+	 * of the active SOEMBs - otherwise its page would already be resident and
+	 * the fetch below would not fault.
 	 */
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	umm  = vos_cont2umm(cont);
-	umem_tx_begin(umm, NULL);
-	umem_tx_commit(umm);
 	rc = umempobj_get_soemb_ids(umm->umm_pool, soemb_ids, MDTEST_SOE_RSRV_CNT, &soemb_cnt);
 	assert_rc_equal(rc, 0);
 	rc = vos_obj_acquire(cont, oids[0], false, &obj);
@@ -3271,10 +3266,6 @@ wal_no_soemb_spill_test(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	umm  = vos_cont2umm(cont);
 
-	/* Bootstrap SOEMB's active slots; tx_begin/commit alone triggers it. */
-	umem_tx_begin(umm, NULL);
-	umem_tx_commit(umm);
-
 	/* Fill 2 explicit buckets to ENOMEM so the capped request has no room. */
 	for (i = 0; i < 2; i++) {
 		ainfo[i].mb_id = umem_allot_mb_evictable(umm, 0);
@@ -3363,9 +3354,7 @@ wal_soemb_spill_order_test(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	umm  = vos_cont2umm(cont);
 
-	/* Step 1: bootstrap SOEMB's active slots and identify the spill-over buckets. */
-	umem_tx_begin(umm, NULL);
-	umem_tx_commit(umm);
+	/* Step 1: identify the spill-over buckets pinned at pool open. */
 	rc = umempobj_get_soemb_ids(umm->umm_pool, prev_ids, MDTEST_SOE_RSRV_CNT, &prev_cnt);
 	assert_rc_equal(rc, 0);
 	assert_true(prev_cnt == MDTEST_SOE_RSRV_CNT);
