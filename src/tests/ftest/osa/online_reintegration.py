@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +10,6 @@ import time
 
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
 
@@ -68,7 +67,7 @@ class OSAOnlineReintegration(OSAUtils):
             time.sleep(30)
 
         for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
+            pool[val] = self.get_pool(connect=False)
             pool[val].set_property("reclaim", "disabled")
 
         # Exclude and reintegrate the pool, rank and targets

@@ -16,8 +16,8 @@
 static inline bool
 crt_sgl_valid(d_sg_list_t *sgl)
 {
-	d_iov_t	*iov;
-	int		i;
+	d_iov_t *iov;
+	int      i;
 
 	if (sgl == NULL || sgl->sg_nr == 0) {
 		if (sgl == NULL)
@@ -129,6 +129,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		ret_hdl->hg_bulk_hdl = HG_BULK_NULL;
 		ret_hdl->crt_ctx     = crt_ctx;
 		ret_hdl->deferred    = true;
+
 		D_GOTO(out, rc = DER_SUCCESS);
 	}
 
@@ -137,6 +138,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 
 	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, &ret_hdl->hg_bulk_hdl);
 	if (rc != 0) {
+		CRT_METRIC_INC(ctx, CM_BULK_CREATE_FAILED);
 		D_ERROR("crt_hg_bulk_create() failed, rc: " DF_RC "\n", DP_RC(rc));
 		if (ret_hdl->iovs != NULL)
 			D_FREE(ret_hdl->iovs);
@@ -144,6 +146,8 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		D_FREE(ret_hdl);
 		D_GOTO(out, rc);
 	}
+
+	CRT_METRIC_INC(ctx, CM_BULK_CREATE);
 
 out:
 	if (rc == 0 && bulk_hdl)
@@ -175,6 +179,8 @@ crt_bulk_bind(crt_bulk_t crt_bulk, crt_context_t crt_ctx)
 	}
 
 out:
+	if (rc == 0)
+		CRT_METRIC_INC(ctx, CM_BULK_BOUND);
 	return rc;
 }
 
@@ -210,16 +216,6 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 	if (bulk == NULL) {
 		D_ERROR("invalid parameter, NULL bulk\n");
 		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	/* This can happen if D_QUOTA_BULKS is enabled on a client */
-	if (bulk->hg_bulk_hdl == HG_BULK_NULL) {
-		if (bulk->deferred) {
-			/* Treat as success */
-			D_GOTO(out, rc = DER_SUCCESS);
-		} else {
-			D_ASSERTF(0, "Bulk handle should not be NULL\n");
-		}
 	}
 
 	hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
