@@ -3701,6 +3701,213 @@ io_csum_fetch_recx_partial(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
+/** Helper: set \a iod as an array iod of the akey \a akey, with the recx [idx, idx + nr) */
+static void
+io_csum_array_iod(daos_iod_t *iod, daos_recx_t *recx, const daos_key_t *akey, uint64_t idx,
+		  uint64_t nr)
+{
+	recx->rx_idx   = idx;
+	recx->rx_nr    = nr;
+	iod->iod_type  = DAOS_IOD_ARRAY;
+	iod->iod_name  = *akey;
+	iod->iod_recxs = recx;
+	iod->iod_size  = 1;
+	iod->iod_nr    = 1;
+}
+
+/** Helper: set \a iod as the single value iod of the akey \a akey, of \a size bytes */
+static void
+io_csum_sv_iod(daos_iod_t *iod, const daos_key_t *akey, size_t size)
+{
+	iod->iod_type  = DAOS_IOD_SINGLE;
+	iod->iod_name  = *akey;
+	iod->iod_recxs = NULL;
+	iod->iod_size  = size;
+	iod->iod_nr    = 1;
+}
+
+/** Helper: write a single value of \a size bytes to the akey \a akey at \a epoch, with its csum */
+static void
+io_csum_update_sv(struct io_test_args *arg, daos_epoch_t epoch, daos_key_t *dkey,
+		  const daos_key_t *akey, size_t size, struct daos_csummer *csummer)
+{
+	struct dcs_iod_csums *ic = NULL;
+	daos_iod_t            iod;
+	d_sg_list_t           sgl;
+	char                 *buf;
+	int                   rc;
+
+	D_ALLOC(buf, size);
+	assert_non_null(buf);
+	dts_buf_render(&buf[0], size);
+	io_csum_sv_iod(&iod, akey, size);
+	rc = d_sgl_init(&sgl, 1);
+	assert_success(rc);
+	d_iov_set(sgl.sg_iovs, &buf[0], size);
+
+	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, false, NULL, 0, &ic);
+	assert_success(rc);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, 0, dkey, 1, &iod, ic, &sgl);
+	assert_success(rc);
+	inc_cntr(arg->ta_flags);
+
+	daos_csummer_free_ic(csummer, &ic);
+	d_sgl_fini(&sgl, false);
+	D_FREE(buf);
+}
+
+/** Helper: vos_fetch_begin() of the \a nr iods \a iods with \a flags shall fail with -DER_INVAL */
+static void
+io_csum_fetch_refused(struct io_test_args *arg, daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		      uint32_t flags, struct daos_recx_ep_list *shadows)
+{
+	daos_handle_t ioh = DAOS_HDL_INVAL;
+	int           rc;
+
+	rc = vos_fetch_begin(arg->ctx.tc_co_hdl, arg->oid, DAOS_EPOCH_MAX, dkey, nr, iods, flags,
+			     shadows, &ioh, NULL);
+	if (rc == 0)
+		vos_fetch_end(ioh, NULL, 0);
+	assert_rc_equal(rc, -DER_INVAL);
+}
+
+/*
+ * Verify that the invalid VOS_OF_FETCH_CSUM requests on arrays are refused with -DER_INVAL,
+ * whatever the data.
+ */
+static void
+io_csum_fetch_recx_invalid(void **state)
+{
+	enum { AKEY_NR = 3 };
+	const enum DAOS_HASH_TYPE csum_type  = HASH_TYPE_CRC32;
+	const size_t              chunk_size = 1u << 6; /* 64 bytes, one csum chunk */
+	const size_t              w1_size    = 2 * chunk_size;
+
+	struct io_test_args      *arg = *state;
+	struct daos_csummer      *csummer;
+	struct dcs_iod_csums     *ic          = NULL;
+	struct daos_recx_ep_list  shadow      = {0};
+	struct daos_recx_ep       shadow_item = {0};
+	daos_key_t                dkey;
+	daos_key_t                akey[AKEY_NR];
+	char                      dkey_name[UPDATE_DKEY_SIZE];
+	char                      akey_name[AKEY_NR][UPDATE_AKEY_SIZE];
+	daos_recx_t               recxs[2];
+	daos_iod_t                iods[2];
+	daos_handle_t             ioh;
+	int                       i;
+	int                       rc;
+
+	assert_true(arg->dkey_size <= UPDATE_DKEY_SIZE);
+	assert_true(arg->akey_size <= UPDATE_AKEY_SIZE);
+
+	/* Generate the dkey and the akeys of the test */
+	vts_key_gen(&dkey_name[0], arg->dkey_size, true, arg);
+	set_iov(&dkey, &dkey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	for (i = 0; i < AKEY_NR; i++) {
+		vts_key_gen(&akey_name[i][0], arg->akey_size, false, arg);
+		set_iov(&akey[i], &akey_name[i][0],
+			is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+	}
+
+	rc = daos_csummer_init_with_type(&csummer, csum_type, chunk_size, 0);
+	assert_success(rc);
+
+	/* The akey 0 has W1 [0, 2 * chunk_size) @1, the other akeys nothing */
+	io_csum_update_recx(arg, 1, &dkey, &akey[0], 0, w1_size, csummer, &ic);
+	daos_csummer_free_ic(csummer, &ic);
+
+	/* 1. two arrays, one with data */
+	io_csum_array_iod(&iods[0], &recxs[0], &akey[0], 0, w1_size);
+	io_csum_array_iod(&iods[1], &recxs[1], &akey[1], 0, w1_size);
+	io_csum_fetch_refused(arg, &dkey, 2, iods, VOS_OF_FETCH_CSUM, NULL);
+
+	/* 2. two arrays, without data */
+	io_csum_array_iod(&iods[0], &recxs[0], &akey[1], 0, w1_size);
+	io_csum_array_iod(&iods[1], &recxs[1], &akey[2], 0, w1_size);
+	io_csum_fetch_refused(arg, &dkey, 2, iods, VOS_OF_FETCH_CSUM, NULL);
+
+	/* 3. a shadow over the first chunk of W1, newer than W1: the second chunk is visible. */
+	io_csum_array_iod(&iods[0], &recxs[0], &akey[0], 0, w1_size);
+	shadow.re_nr               = 1;
+	shadow.re_total            = 1;
+	shadow.re_ep_valid         = true;
+	shadow.re_items            = &shadow_item;
+	shadow_item.re_recx.rx_idx = 0;
+	shadow_item.re_recx.rx_nr  = chunk_size;
+	shadow_item.re_ep          = 2;
+	io_csum_fetch_refused(arg, &dkey, 1, iods, VOS_OF_FETCH_CSUM, &shadow);
+
+	/* 4. VOS_OF_FETCH_RECX_LIST */
+	io_csum_fetch_refused(arg, &dkey, 1, iods, VOS_OF_FETCH_CSUM | VOS_OF_FETCH_RECX_LIST,
+			      NULL);
+
+	/* 5. an update */
+	io_csum_array_iod(&iods[0], &recxs[0], &akey[1], 0, w1_size);
+	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, 2, VOS_OF_FETCH_CSUM, &dkey, 1, iods,
+			      NULL, 0, &ioh, NULL);
+	if (rc == 0)
+		vos_update_end(ioh, 0, &dkey, 0, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	daos_csummer_destroy(&csummer);
+}
+
+/* Verify that VOS refuses a VOS_OF_FETCH_CSUM request of several iods, whatever their types */
+static void
+io_csum_fetch_iods_invalid(void **state)
+{
+	enum { AKEY_NR = 3 };
+	const enum DAOS_HASH_TYPE csum_type  = HASH_TYPE_CRC32;
+	const size_t              chunk_size = 1u << 6; /* 64 bytes, one csum chunk */
+	const size_t              size       = 2 * chunk_size;
+
+	struct io_test_args      *arg = *state;
+	struct daos_csummer      *csummer;
+	struct dcs_iod_csums     *ic = NULL;
+	daos_key_t                dkey;
+	daos_key_t                akey[AKEY_NR];
+	char                      dkey_name[UPDATE_DKEY_SIZE];
+	char                      akey_name[AKEY_NR][UPDATE_AKEY_SIZE];
+	daos_recx_t               recx;
+	daos_iod_t                iods[2];
+	int                       i;
+	int                       rc;
+
+	assert_true(arg->dkey_size <= UPDATE_DKEY_SIZE);
+	assert_true(arg->akey_size <= UPDATE_AKEY_SIZE);
+
+	/* Generate the dkey and the akeys of the test */
+	vts_key_gen(&dkey_name[0], arg->dkey_size, true, arg);
+	set_iov(&dkey, &dkey_name[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	for (i = 0; i < AKEY_NR; i++) {
+		vts_key_gen(&akey_name[i][0], arg->akey_size, false, arg);
+		set_iov(&akey[i], &akey_name[i][0],
+			is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+	}
+
+	rc = daos_csummer_init_with_type(&csummer, csum_type, chunk_size, 0);
+	assert_success(rc);
+
+	/* The akey 0 has the array W1 [0, 2 * chunk_size) @1, the akeys 1 and 2 a single value */
+	io_csum_update_recx(arg, 1, &dkey, &akey[0], 0, size, csummer, &ic);
+	daos_csummer_free_ic(csummer, &ic);
+	io_csum_update_sv(arg, 1, &dkey, &akey[1], size, csummer);
+	io_csum_update_sv(arg, 1, &dkey, &akey[2], size, csummer);
+
+	/* 1. an array and a single value */
+	io_csum_array_iod(&iods[0], &recx, &akey[0], 0, size);
+	io_csum_sv_iod(&iods[1], &akey[1], 0);
+	io_csum_fetch_refused(arg, &dkey, 2, iods, VOS_OF_FETCH_CSUM, NULL);
+
+	/* 2. two single values */
+	io_csum_sv_iod(&iods[0], &akey[1], 0);
+	io_csum_sv_iod(&iods[1], &akey[2], 0);
+	io_csum_fetch_refused(arg, &dkey, 2, iods, VOS_OF_FETCH_CSUM, NULL);
+
+	daos_csummer_destroy(&csummer);
+}
+
 static const struct CMUnitTest iterator_tests[] = {
     {"VOS220: 100K update/fetch/verify test", io_multiple_dkey, NULL, NULL},
     {"VOS240.0: KV Iter tests (for dkey)", io_iter_test, NULL, NULL},
@@ -3742,6 +3949,10 @@ static const struct CMUnitTest io_tests[] = {
      io_csum_fetch_recx_missing_csum, NULL, NULL},
     {"VOS401.3: Fetch checksum of partially visible array extents", io_csum_fetch_recx_partial,
      NULL, NULL},
+    {"VOS401.4: Refuse a checksum fetch of several arrays, with shadows or a recx list, an update",
+     io_csum_fetch_recx_invalid, NULL, NULL},
+    {"VOS401.5: Refuse a checksum fetch of several iods, whatever their types",
+     io_csum_fetch_iods_invalid, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {

@@ -639,6 +639,22 @@ vos_check_akeys(int iod_nr, daos_iod_t *iods)
 	return 0;
 }
 
+/**
+ * A VOS_OF_FETCH_CSUM fetch lists the extents in the recx list and their checksums in the checksum
+ * info list, in the same order, only for a request that is:
+ * - a fetch: the VOS_OF_FETCH_CSUM flag has no meaning for an update;
+ * - of one iod: each iod has its own recx list, but there is one checksum info list;
+ * - without shadow: it adds DRT_SHADOW entries, which have no checksum, to the recx list;
+ * - without VOS_OF_FETCH_RECX_LIST: it also fills the recx list, with the selected ranges.
+ */
+static bool
+vos_csum_fetch_valid(bool read_only, unsigned int iod_nr, const struct daos_recx_ep_list *shadows,
+		     uint32_t vos_flags)
+{
+	return read_only && iod_nr == 1 && shadows == NULL &&
+	       (vos_flags & VOS_OF_FETCH_RECX_LIST) == 0;
+}
+
 static int
 vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	       daos_epoch_t epoch, unsigned int iod_nr,
@@ -660,6 +676,16 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	      (VOS_OF_FETCH_SET_TS_ONLY | VOS_OF_FETCH_CHECK_EXISTENCE))) {
 		D_ERROR("Invalid iod_nr (0).\n");
 		rc = -DER_IO_INVAL;
+		goto error;
+	}
+
+	/* Refused before any allocation, whatever the data: a client chooses these flags */
+	if ((vos_flags & VOS_OF_FETCH_CSUM) &&
+	    !vos_csum_fetch_valid(read_only, iod_nr, shadows, vos_flags)) {
+		D_ERROR("VOS_OF_FETCH_CSUM needs a fetch of one iod, no shadow and no "
+			"VOS_OF_FETCH_RECX_LIST (update %d, iods %u, shadows %d, flags 0x%x)\n",
+			!read_only, iod_nr, shadows != NULL, vos_flags);
+		rc = -DER_INVAL;
 		goto error;
 	}
 
@@ -715,14 +741,6 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_ec = ((vos_flags & VOS_OF_EC) != 0);
 	ioc->ic_rebuild    = ((vos_flags & VOS_OF_REBUILD) != 0);
 	ioc->ic_csum_fetch = ((vos_flags & VOS_OF_FETCH_CSUM) != 0);
-	/* VOS_OF_FETCH_CSUM and VOS_OF_FETCH_RECX_LIST both write ic_recx_lists
-	 * with incompatible semantics (full stored extent vs. selected range) and
-	 * must not be combined.
-	 */
-	if (ioc->ic_csum_fetch && ioc->ic_save_recx) {
-		D_ERROR("VOS_OF_FETCH_CSUM and VOS_OF_FETCH_RECX_LIST are mutually exclusive\n");
-		D_GOTO(error, rc = -DER_INVAL);
-	}
 	ioc->ic_umoffs_cnt = 0;
 	ioc->ic_iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
