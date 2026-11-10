@@ -2082,14 +2082,19 @@ obj_local_rw_internal_wrap(crt_rpc_t *rpc, struct obj_io_context *ioc, struct dt
 	if (rc == 0)
 		rc = obj_local_rw_internal(rpc, ioc, iods, csums, offs, skips, nr, dth);
 
-	if (csums != NULL && csums != &csum && csums != orw->orw_iod_array.oia_iod_csums) {
+	if (csums != NULL && csums != orw->orw_iod_array.oia_iod_csums) {
 		int i;
 
+		/* obj_get_iods_offs_by_oid() allocates ic_data for single values even
+		 * when it fills the on-stack csum, so free it in that case too.
+		 */
 		for (i = 0; i < nr; i++) {
-			if (iods[i].iod_type == DAOS_IOD_SINGLE && csums[i].ic_data != NULL)
+			if (iods[i].iod_type == DAOS_IOD_SINGLE && csums[i].ic_data != NULL &&
+			    csums[i].ic_data != &csum_info)
 				D_FREE(csums[i].ic_data);
 		}
-		D_FREE(csums);
+		if (csums != &csum)
+			D_FREE(csums);
 	}
 	if (iods != NULL && iods != &iod && iods != orw->orw_iod_array.oia_iods)
 		D_FREE(iods);
@@ -5249,6 +5254,28 @@ out:
 			continue;
 
 		dcu = &dcsr->dcsr_update;
+		/* Must run before piods[i] is freed. csum[] is compacted alongside
+		 * piods[i], and obj_get_iods_offs_by_oid() allocates ic_data for single
+		 * values even when it fills the on-stack local_csums[i].
+		 */
+		if (pcsums != NULL && pcsums[i] != NULL &&
+		    pcsums[i] != dcu->dcu_iod_array.oia_iod_csums) {
+			struct dcs_iod_csums *csum = pcsums[i];
+			uint32_t              nr   = 0;
+			uint32_t              j;
+
+			if (piods != NULL && piods[i] != NULL && piod_nrs != NULL)
+				nr = piod_nrs[i];
+			for (j = 0; j < nr; j++) {
+				if (piods[i][j].iod_type == DAOS_IOD_SINGLE &&
+				    csum[j].ic_data != NULL && csum[j].ic_data != &pcsum_info[i])
+					D_FREE(csum[j].ic_data);
+			}
+
+			if (csum != &local_csums[i])
+				D_FREE(csum);
+		}
+
 		if (piods!= NULL && piods[i] != NULL && piods[i] != &local_iods[i] &&
 		    piods[i] != dcu->dcu_iod_array.oia_iods)
 			D_FREE(piods[i]);
@@ -5259,20 +5286,6 @@ out:
 
 		if (pskips != NULL && pskips[i] != NULL && pskips[i] != (uint8_t *)&local_skips[i])
 			D_FREE(pskips[i]);
-
-		if (pcsums != NULL && pcsums[i] != NULL && pcsums[i] != &local_csums[i] &&
-		    pcsums[i] != dcu->dcu_iod_array.oia_iod_csums) {
-			struct dcs_iod_csums	*csum = pcsums[i];
-			int j;
-
-			for (j = 0; j < dcu->dcu_iod_array.oia_oiod_nr; i++) {
-				if (dcu->dcu_iod_array.oia_iods[j].iod_type == DAOS_IOD_SINGLE &&
-				    csum[j].ic_data != NULL)
-					D_FREE(csum[j].ic_data);
-			}
-
-			D_FREE(csum);
-		}
 	}
 
 	if (piods != local_p_iods && piods != NULL)
