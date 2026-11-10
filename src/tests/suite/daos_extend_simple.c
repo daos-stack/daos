@@ -540,8 +540,8 @@ run_daos_extend_simple_test(int rank, int size, int *sub_tests, int sub_tests_si
 		sub_tests      = NULL;
 	}
 
-	run_daos_sub_tests_only("DAOS_Extend_Simple", extend_tests, ARRAY_SIZE(extend_tests),
-				sub_tests, sub_tests_size);
+	rc = run_daos_sub_tests_only("DAOS_Extend_Simple", extend_tests, ARRAY_SIZE(extend_tests),
+				     sub_tests, sub_tests_size);
 
 	par_barrier(PAR_COMM_WORLD);
 
