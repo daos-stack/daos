@@ -278,7 +278,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	D_ASPRINTF(log_dir_template, "%s/dlck_check_XXXXXX", ctrl->common.log_dir);
 	if (log_dir_template == NULL) {
 		rc = -DER_NOMEM;
-		CK_PRINTL_RC(ck, rc, "Cannot allocate log directory path");
+		CK_PRINTFL_RC(ck, rc, "Cannot allocate log directory path");
 		return rc;
 	}
 	/** create a log directory */
@@ -290,7 +290,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	}
 	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
-		CK_PRINTL_RC(ck, rc, "Cannot create log directory");
+		CK_PRINTFL_RC(ck, rc, "Cannot create log directory");
 		goto err_free_template;
 	}
 	CK_PRINTF(ck, "Log directory: %s\n", ctrl->log_dir);
