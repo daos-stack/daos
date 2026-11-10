@@ -174,8 +174,8 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 {
 	struct checker *main_ck = &xa->ctrl->checker;
 	char           *path    = NULL;
-	daos_handle_t poh;
-	int           rc;
+	daos_handle_t   poh;
+	int             rc;
 
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_POOL_PREALLOCATE)) { /** fault injection */
 		rc = daos_errno2der(daos_fail_value_get());
@@ -268,11 +268,11 @@ dlck_cmd_check(struct dlck_control *ctrl)
 {
 	D_ASSERT(ctrl != NULL);
 
-	struct checker     *ck                 = &ctrl->checker;
-	char               *log_dir_template   = NULL;
-	struct dlck_engine *engine             = NULL;
+	struct checker        *ck               = &ctrl->checker;
+	char                  *log_dir_template = NULL;
+	struct dlck_engine    *engine           = NULL;
 	struct checker_status *sts;
-	int                 rc;
+	int                    rc;
 
 	/** generate the log directory path template */
 	D_ASPRINTF(log_dir_template, "%s/dlck_check_XXXXXX", ctrl->common.log_dir);
