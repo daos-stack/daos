@@ -3312,6 +3312,9 @@ dc_tx_per_akey_existence_task(enum obj_rpc_opc opc, daos_handle_t oh, struct dc_
 	if (rc != 0)
 		goto fail;
 
+	/* Hold agg, aborting sub-tasks may complete and release it before the fail path. */
+	tse_task_addref(agg);
+
 	rc = tse_task_schedule(agg, false);
 	if (rc != 0)
 		goto fail;
@@ -3382,16 +3385,24 @@ out:
 			/* Drop the reference that is held via dc_tx_attach(). */
 			dc_tx_decref(tx);
 		} else {
-			rc = dc_task_depend(parent, 1, &agg);
-			if (rc != 0)
-				goto fail;
-
 			rc = tse_task_register_comp_cb(agg, dc_tx_per_akey_existence_agg_cb,
 						       &cb_args, sizeof(cb_args));
 			if (rc != 0)
 				goto fail;
 
-			tse_task_list_sched(&task_list, true);
+			rc = dc_task_depend(parent, 1, &agg);
+			if (rc != 0) {
+				/* Abort sub-tasks to complete agg, then agg_cb() will post the
+				 * parent and release the TX.
+				 */
+				tse_task_list_traverse(&task_list, shard_task_abort, &rc);
+			} else {
+				/* Reset status for the converted task. */
+				if (tx->tx_for_convert)
+					parent->dt_result = 0;
+
+				tse_task_list_sched(&task_list, true);
+			}
 		}
 	} else {
 		if (task != NULL)
@@ -3412,6 +3423,9 @@ fail:
 		/* Drop the reference that is held via dc_tx_attach(). */
 		dc_tx_decref(tx);
 	}
+
+	if (agg != NULL)
+		tse_task_decref(agg);
 
 	return rc;
 }
@@ -3494,7 +3508,9 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh, struct dc_tx 
 	if (rc != 0) {
 		D_ERROR("Fail to add dep on check existence task: "DF_RC"\n",
 			DP_RC(rc));
-		goto out;
+		/* dc_tx_check_existence_cb() will post the parent and release resources. */
+		tse_task_complete(task, rc);
+		return rc;
 	}
 
 	/* Reset status for the converted task. */
@@ -3739,7 +3755,10 @@ dc_tx_convert_cb(tse_task_t *task, void *data)
 		 */
 		task->dt_result = 0;
 
+		/* Hold TX, it may be closed and released via dc_tx_convert_post(). */
+		dc_tx_addref(tx);
 		rc = dc_tx_convert_post(tx, obj, opc, rc, 0);
+		dc_tx_decref(tx);
 	} else {
 		dc_tx_close_internal(tx);
 	}
@@ -3770,6 +3789,13 @@ dc_tx_convert_post(struct dc_tx *tx, struct dc_object *obj, enum obj_rpc_opc opc
 		if (result == 0 && tx->tx_has_cond)
 			return 0;
 	}
+
+	/*
+	 * The condition check task has posted (completed the task and closed the TX) on failure,
+	 * nothing to do. The caller must hold a reference on the TX.
+	 */
+	if (tx->tx_closed)
+		return result;
 
 	if (result != 0)
 		D_GOTO(out, rc = result);
