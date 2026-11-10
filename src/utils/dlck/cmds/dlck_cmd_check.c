@@ -343,7 +343,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	CK_APPENDL_RC(ck, rc);
 
 	/** Ignore an error for now to print the collected results. */
-	dlck_report_results(sts, ctrl->engine.targets, ctrl->warnings_num, ck);
+	dlck_report_results(sts, ctrl->engine.targets, ck);
 	D_FREE(sts);
 	D_FREE(log_dir_template);
 
