@@ -37,7 +37,7 @@ class ChangeFabricProvider(IorTestBase):
         result = self.server_managers[0].search_control_logs(txt)
         for data in result.output:
             if data.stdout:
-                for line in data.stdout:
+                for _ in data.stdout:
                     line_count += 1
             else:
                 self.log.info("No URI lines found")
@@ -65,7 +65,7 @@ class ChangeFabricProvider(IorTestBase):
                 num_clients += 1
             # Every client will have a list of engines and what provider they are using
             # Check this for one client
-            # The lines look like: rank provider://ip address
+            # The lines look like: rank provider://<ip address>
             elif re.match(r"^\d+\s+\S+://", line) and provider in line and num_clients == 1:
                 num_engines += 1
 
