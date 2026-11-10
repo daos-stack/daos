@@ -1052,27 +1052,20 @@ func TestSystem_Membership_Join(t *testing.T) {
 				MapVersion: expMapVer + 1,
 			},
 		},
-		// DAOS-15947 TODO: This should probably be refused as duplicate addresses/URIs
-		//                  rather than joining a new rank.
-		"rejoin identical member with new UUID and nil rank; replace not set": {
+		// Now refused as duplicate. Joining engine with addresses/URIs matching in database
+		// but with different UUID requires using the --replace option.
+		"join with all fields matching except UUID; needs --replace": {
 			req: &JoinRequest{
-				Rank:             NilRank,
-				UUID:             newUUID,
-				ControlAddr:      curMember.Addr,
-				PrimaryFabricURI: curMember.Addr.String(),
-				FaultDomain:      curMember.FaultDomain,
+				Rank:                    NilRank,
+				UUID:                    newUUID,
+				ControlAddr:             curMember.Addr,
+				PrimaryFabricURI:        curMember.PrimaryFabricURI,
+				SecondaryFabricURIs:     curMember.SecondaryFabricURIs,
+				FabricContexts:          curMember.PrimaryFabricContexts,
+				SecondaryFabricContexts: curMember.SecondaryFabricContexts,
+				FaultDomain:             curMember.FaultDomain,
 			},
-			expResp: &JoinResponse{
-				Created: true,
-				Member: func() *Member {
-					cm := *defaultCurMembers[0]
-					cm.UUID = newUUID
-					cm.Rank = 2
-					return &cm
-				}(),
-				PrevState:  MemberStateUnknown,
-				MapVersion: expMapVer,
-			},
+			expErr: FaultJoinMemberExists(newUUID, curMember.UUID),
 		},
 		"new member with bad fault domain depth": {
 			req: &JoinRequest{
