@@ -1052,27 +1052,20 @@ func TestSystem_Membership_Join(t *testing.T) {
 				MapVersion: expMapVer + 1,
 			},
 		},
-		// DAOS-15947 TODO: This should probably be refused as duplicate addresses/URIs
-		//                  rather than joining a new rank.
-		"rejoin identical member with new UUID and nil rank; replace not set": {
+		// Now refused as duplicate. Joining engine with addresses/URIs matching in database
+		// but with different UUID requires using the --replace option.
+		"join with all fields matching except UUID; needs --replace": {
 			req: &JoinRequest{
-				Rank:             NilRank,
-				UUID:             newUUID,
-				ControlAddr:      curMember.Addr,
-				PrimaryFabricURI: curMember.Addr.String(),
-				FaultDomain:      curMember.FaultDomain,
+				Rank:                    NilRank,
+				UUID:                    newUUID,
+				ControlAddr:             curMember.Addr,
+				PrimaryFabricURI:        curMember.PrimaryFabricURI,
+				SecondaryFabricURIs:     curMember.SecondaryFabricURIs,
+				FabricContexts:          curMember.PrimaryFabricContexts,
+				SecondaryFabricContexts: curMember.SecondaryFabricContexts,
+				FaultDomain:             curMember.FaultDomain,
 			},
-			expResp: &JoinResponse{
-				Created: true,
-				Member: func() *Member {
-					cm := *defaultCurMembers[0]
-					cm.UUID = newUUID
-					cm.Rank = 2
-					return &cm
-				}(),
-				PrevState:  MemberStateUnknown,
-				MapVersion: expMapVer,
-			},
+			expErr: FaultJoinMemberExists(newUUID, curMember.UUID),
 		},
 		"new member with bad fault domain depth": {
 			req: &JoinRequest{
@@ -1284,20 +1277,16 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 	}
 }
 
+func rankDomain(parent string, rank uint32) *FaultDomain {
+	parentFd := MustCreateFaultDomainFromString(parent)
+	member := &Member{
+		Rank:        Rank(rank),
+		FaultDomain: parentFd,
+	}
+	return MemberFaultDomain(member)
+}
+
 func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
-	testMemberWithFaultDomain := func(rank Rank, faultDomain *FaultDomain) *Member {
-		return &Member{
-			Rank:        rank,
-			FaultDomain: faultDomain,
-		}
-	}
-
-	rankDomain := func(parent string, rank uint32) *FaultDomain {
-		parentFd := MustCreateFaultDomainFromString(parent)
-		member := testMemberWithFaultDomain(Rank(rank), parentFd)
-		return MemberFaultDomain(member)
-	}
-
 	for name, tc := range map[string]struct {
 		tree       *FaultDomainTree
 		inputRanks []uint32
@@ -1578,6 +1567,143 @@ func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
+		})
+	}
+}
+
+func TestSystem_Membership_FaultDomainLevel(t *testing.T) {
+	for name, tc := range map[string]struct {
+		tree     *FaultDomainTree
+		expErr   error
+		expLevel int
+	}{
+		"nil tree": {
+			expErr: errors.New("uninitialized fault domain tree"),
+		},
+		"root only": {
+			tree:   NewFaultDomainTree(),
+			expErr: errors.New("domain tree has no fault domain level"),
+		},
+		"rank only": {
+			tree: NewFaultDomainTree(
+				rankDomain("/", 0),
+			),
+			expErr: errors.New("domain tree has no fault domain level"),
+		},
+		"no extra domain levels": {
+			tree: NewFaultDomainTree(
+				rankDomain("/rack0", 0),
+				rankDomain("/rack0", 1),
+				rankDomain("/rack1", 2),
+				rankDomain("/rack1", 3),
+				rankDomain("/rack1", 4),
+				rankDomain("/rack2", 5),
+			),
+			expLevel: 1,
+		},
+		"two domain levels": {
+			tree: NewFaultDomainTree(
+				rankDomain("/rack0/pdu0", 0),
+				rankDomain("/rack0/pdu1", 1),
+				rankDomain("/rack1/pdu2", 2),
+				rankDomain("/rack1/pdu3", 3),
+				rankDomain("/rack1/pdu3", 4),
+				rankDomain("/rack2/pdu4", 5),
+			),
+			expLevel: 2,
+		},
+		"three domain levels": {
+			tree: NewFaultDomainTree(
+				rankDomain("/geo0/rack0/pdu0", 0),
+				rankDomain("/geo0/rack0/pdu1", 1),
+				rankDomain("/geo1/rack1/pdu2", 2),
+				rankDomain("/geo1/rack1/pdu3", 3),
+				rankDomain("/geo1/rack1/pdu3", 4),
+				rankDomain("/geo2/rack2/pdu4", 5),
+			),
+			expLevel: 3,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			db := raft.MockDatabaseWithFaultDomainTree(t, log, tc.tree)
+			membership := NewMembership(log, db)
+
+			level, err := membership.FaultDomainLevel()
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expLevel, level, "unexpected fault domain level")
+		})
+	}
+}
+
+func TestSystem_Membership_DomainNr(t *testing.T) {
+	bigDomainTree := NewFaultDomainTree(
+		rankDomain("/geo0/rack0/pdu0", 0),
+		rankDomain("/geo0/rack0/pdu1", 1),
+		rankDomain("/geo0/rack1/pdu2", 2),
+		rankDomain("/geo0/rack1/pdu3", 3),
+		rankDomain("/geo0/rack1/pdu4", 4),
+		rankDomain("/geo1/rack2/pdu5", 5),
+	)
+	ranksSubset := []uint32{4, 0, 5, 3}
+	geoLevel := 1
+	rackLevel := 2
+	pduLevel := 3
+
+	for name, tc := range map[string]struct {
+		tree        *FaultDomainTree
+		inputRanks  []uint32
+		inputLevel  int
+		expDomainNr int
+		expErr      error
+	}{
+		"nil tree": {
+			expErr: errors.New("uninitialized fault domain tree"),
+		},
+		"no extra domain levels": {
+			tree: NewFaultDomainTree(
+				rankDomain("/rack0", 0),
+				rankDomain("/rack0", 1),
+				rankDomain("/rack1", 2),
+				rankDomain("/rack1", 3),
+				rankDomain("/rack1", 4),
+				rankDomain("/rack2", 5),
+			),
+			inputRanks:  []uint32{5, 1, 2, 3},
+			inputLevel:  1,
+			expDomainNr: 3,
+		},
+		"big domain tree: geo level": {
+			tree:        bigDomainTree,
+			inputRanks:  ranksSubset,
+			inputLevel:  geoLevel,
+			expDomainNr: 2,
+		},
+		"big domain tree: rack level": {
+			tree:        bigDomainTree,
+			inputRanks:  ranksSubset,
+			inputLevel:  rackLevel,
+			expDomainNr: 3,
+		},
+		"big domain tree: pdu level": {
+			tree:        bigDomainTree,
+			inputRanks:  ranksSubset,
+			inputLevel:  pduLevel,
+			expDomainNr: 4,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			db := raft.MockDatabaseWithFaultDomainTree(t, log, tc.tree)
+			membership := NewMembership(log, db)
+
+			domainNr, err := membership.DomainNr(tc.inputLevel, tc.inputRanks...)
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expDomainNr, domainNr, "unexpected domain number")
 		})
 	}
 }

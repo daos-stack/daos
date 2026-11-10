@@ -6970,6 +6970,14 @@ struct pool_svc_reconf_arg {
 	bool			sca_sync_remove;
 };
 
+static bool
+pool_svc_reconf_abort(void *arg)
+{
+	struct pool_svc_sched *reconf = arg;
+
+	return reconf->psc_canceled;
+}
+
 /* Must be used with pool_svc.ps_reconf_sched (see container_of below). */
 static void
 pool_svc_reconf_ult(void *varg)
@@ -7052,7 +7060,8 @@ pool_svc_reconf_ult(void *varg)
 		vos_df_version = ds_pool_get_vos_df_version(svc->ps_global_version);
 		D_ASSERTF(vos_df_version != 0, DF_UUID ": vos_df_version=0 global_version=%u\n",
 			  DP_UUID(svc->ps_uuid), svc->ps_global_version);
-		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, rdb_nbytes, vos_df_version);
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, rdb_nbytes, vos_df_version,
+				       pool_svc_reconf_abort, reconf);
 		if (reconf->psc_canceled) {
 			rc = -DER_OP_CANCELED;
 			goto out_to_add_remove;
@@ -8098,6 +8107,12 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 	ptdi_in->ptdi_addrs.ca_count  = list->pta_number;
 	uuid_copy(ptdi_in->ptdi_uuid, svc->ps_pool->sp_uuid);
 	rc = dss_rpc_send(rpc);
+	/* No corpc aggregation callback is registered, so ptdo_rc cannot report a send error. */
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID ": dss_rpc_send POOL_TGT_DISCARD",
+			 DP_UUID(svc->ps_pool->sp_uuid));
+		D_GOTO(decref, rc);
+	}
 
 	ptdi_out = crt_reply_get(rpc);
 	D_ASSERT(ptdi_out != NULL);
@@ -8106,6 +8121,7 @@ pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_li
 		D_ERROR(DF_UUID": pool discard failed: rc: %d\n",
 			DP_UUID(svc->ps_pool->sp_uuid), rc);
 
+decref:
 	crt_req_decref(rpc);
 
 out:
@@ -9500,6 +9516,35 @@ ds_pool_target_status(struct ds_pool *pool, uint32_t id)
 		return rc == 0 ? -DER_NONEXIST : rc;
 
 	return (int)target->ta_comp.co_status;
+}
+
+/*
+ * Check if the target has been excluded (DOWN/DOWNOUT) in the current pool
+ * map. If \a tgt_idx is -1, check if all the targets of \a rank have been
+ * excluded.
+ */
+bool
+ds_pool_tgt_excluded(struct ds_pool *pool, d_rank_t rank, int tgt_idx)
+{
+	struct pool_target *tgts     = NULL;
+	bool                excluded = false;
+	int                 nr;
+	int                 i;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	if (unlikely(pool->sp_map == NULL))
+		goto out;
+	nr = pool_map_find_target_by_rank_idx(pool->sp_map, rank, tgt_idx, &tgts);
+	for (i = 0; i < nr; i++) {
+		excluded = tgts[i].ta_comp.co_status == PO_COMP_ST_DOWN ||
+			   tgts[i].ta_comp.co_status == PO_COMP_ST_DOWNOUT;
+		if (!excluded)
+			break;
+	}
+out:
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	return excluded;
 }
 
 /* Check if the target(by id) matched the status */

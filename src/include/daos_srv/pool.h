@@ -401,6 +401,11 @@ int dsc_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t de
 			     char *machine, uint32_t *count);
 
 int ds_pool_target_status(struct ds_pool *pool, uint32_t id);
+
+/** Check if the target (all targets of \a rank if \a tgt_idx is -1) is DOWN/DOWNOUT */
+bool
+		 ds_pool_tgt_excluded(struct ds_pool *pool, d_rank_t rank, int tgt_idx);
+
 int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);
 int ds_pool_mark_connectable(struct ds_pool_svc *ds_svc);
@@ -426,6 +431,9 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
 int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
+int
+ds_pool_wait_discard(struct ds_pool *pool, uint32_t timeout_secs, bool fail_on_error,
+		     bool (*should_stop)(void *arg), void *stop_arg, uint32_t *waited_secs);
 
 int
 ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);
