@@ -3552,9 +3552,31 @@ btr_node_stat(struct btr_context *tcx, umem_off_t nd_off,
 static int
 btr_tree_stat(struct btr_context *tcx, struct btr_stat *stat)
 {
+	struct btr_rec_stat rs;
+	struct btr_record  *rec;
 	struct btr_root *root;
+	int                 rc;
 
 	memset(stat, 0, sizeof(*stat));
+
+	if (btr_has_embedded_value(tcx)) {
+		rec = &tcx->tc_record;
+		/** Use the fake record since only the user allocated part is stored
+		 *  in the tree root.
+		 */
+		rec->rec_off = tcx->tc_tins.ti_root->tr_node;
+		rc           = btr_rec_stat(tcx, rec, &rs);
+		if (rc != 0)
+			return rc;
+
+		stat->bs_rec_nr  = 1; /* embedded value counts as one record */
+		stat->bs_key_sum = rs.rs_ksize;
+		stat->bs_val_sum = rs.rs_vsize;
+		stat->bs_key_max = rs.rs_ksize;
+		stat->bs_val_max = rs.rs_vsize;
+
+		return 0;
+	}
 
 	root = tcx->tc_tins.ti_root;
 	if (!UMOFF_IS_NULL(root->tr_node)) {

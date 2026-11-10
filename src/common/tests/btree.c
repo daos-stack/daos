@@ -542,24 +542,38 @@ ik_btr_query(void **state)
 {
 	struct btr_attr		attr;
 	struct btr_stat		stat;
+	char                   *str        = tst_fn_val.optval;
+	uint64_t                exp_rec_nr = (str != NULL ? strtoul(str, NULL, 0) : 0);
 	int			rc;
-	char		outbuf[64];
+	char                    outbuf[128];
 
+	D_PRINT("Query\n");
 	rc = dbtree_query(ik_toh, &attr, &stat);
 	if (rc != 0) {
 		sprintf(outbuf, "Failed to query btree: %d\n", rc);
 		fail_msg("%s", outbuf);
 	}
-
 	D_PRINT("tree	[order=%d, depth=%d]\n", attr.ba_order, attr.ba_depth);
-	D_PRINT("node	[total="DF_U64"]\n"
-		"record [total="DF_U64"]\n"
-		"key	[total="DF_U64", max="DF_U64"]\n"
-		"val	[total="DF_U64", max="DF_U64"]\n",
-		stat.bs_node_nr, stat.bs_rec_nr,
-		stat.bs_key_sum, stat.bs_key_max,
-		stat.bs_val_sum, stat.bs_val_max);
+	D_PRINT("node	[total=" DF_U64 "]\n"
+		"record	[total=" DF_U64 "]\n"
+		"key	[total=" DF_U64 ", max=" DF_U64 "]\n"
+		"val	[total=" DF_U64 ", max=" DF_U64 "]\n",
+		stat.bs_node_nr, stat.bs_rec_nr, stat.bs_key_sum, stat.bs_key_max, stat.bs_val_sum,
+		stat.bs_val_max);
 
+	if (str != NULL) {
+		if (stat.bs_rec_nr != exp_rec_nr) {
+			sprintf(outbuf,
+				"Btree query reported unexpected number of records: " DF_U64
+				" != " DF_U64 " (expected)\n",
+				stat.bs_rec_nr, exp_rec_nr);
+			fail_msg("%s", outbuf);
+		} else {
+			D_PRINT("number of records as expected\n");
+		}
+	} else {
+		D_PRINT("no expected number of records provided\n");
+	}
 }
 
 static void
@@ -947,7 +961,7 @@ static struct option btr_ops[] = {
     {NULL, 0, NULL, 0},
 };
 
-#define BTR_SHORTOPTS "+S:R::M::C:Deocqu:f:d:r:qi:b:p:"
+#define BTR_SHORTOPTS "+S:R::M::C:Deocu:f:d:r:q::i:b:p:"
 
 /**
  * Execute test based on the given sequence of steps.
