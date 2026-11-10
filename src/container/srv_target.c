@@ -996,11 +996,11 @@ ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child)
 
 #define WAIT_EC_PAUSE_MAX 600
 
-void
+int
 ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeout)
 {
 	uint64_t start_time = daos_wallclock_secs();
-	int      wait_intv  = 10;
+	int      wait_intv  = 1;
 	int      waited     = 0;
 
 	D_DEBUG(DB_MD, DF_UUID "[%d]: wait for pausing EC aggregation\n",
@@ -1013,9 +1013,8 @@ ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeo
 		struct ds_cont_child *coc;
 		bool                  paused = true;
 
-		/* Wait for pausing aggregation
-		 * XXX: There is no global barrier so we always wait for at least 10 seconds to
-		 * lower the chance that remote targets are still running EC aggregation.
+		/* Wait for pausing aggregation on local targets, the global barrier is done by
+		 * the caller (rebuild).
 		 */
 		if (wait_intv > wait_timeout - waited)
 			wait_intv = wait_timeout - waited;
@@ -1029,12 +1028,12 @@ ds_cont_child_wait_ec_agg_pause(struct ds_pool_child *pool_child, int wait_timeo
 			}
 		}
 		if (paused)
-			return;
+			return 0;
 
 		waited = daos_wallclock_secs() - start_time;
 		if (waited >= wait_timeout) {
 			D_WARN("can't pause EC aggregation after %d seconds\n", waited);
-			return; /* XXX what can I do? */
+			return -DER_TIMEDOUT;
 		}
 
 		if (waited % 60 == 0) {
