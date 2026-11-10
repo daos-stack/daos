@@ -380,6 +380,14 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type s
 		D_DEBUG(DB_MGMT, "Successfully deleted blobID "DF_U64" for "
 			"pool:"DF_UUID" xs:%p\n", blob_id, DP_UUID(uuid),
 			xs_ctxt);
+		/*
+		 * During target recreation, keep the old SMD mapping until all
+		 * stale blobs have been deleted. It is replaced when the new
+		 * blob is assigned.
+		 */
+		if (flags & BIO_MC_FL_RECREATE)
+			goto done;
+
 		if (flags & BIO_MC_FL_RDB)
 			rc = smd_rdb_del_tgt(uuid, xs_ctxt->bxc_tgt_id, st);
 		else
@@ -390,6 +398,7 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type s
 				xs_ctxt->bxc_tgt_id, rc);
 	}
 
+done:
 	bio_bs_unhold(bbs);
 	blob_cp_arg_fini(ba);
 	return rc;
@@ -507,7 +516,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 		rc = smd_pool_get_blob(uuid, xs_ctxt->bxc_tgt_id, st, &blob_id1);
 	}
 
-	if (rc == 0) {
+	if (rc == 0 && !(flags & BIO_MC_FL_RECREATE)) {
 		D_ERROR(DF_UUID": Duplicated blob:"DF_U64" st:%u\n", DP_UUID(uuid), blob_id1, st);
 		return -DER_EXIST;
 	}

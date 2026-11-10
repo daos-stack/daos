@@ -12,6 +12,7 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
+#include <daos_srv/vos.h>
 
 #include <daos/pool_map.h>
 #include "rpc.h"
@@ -1755,16 +1756,35 @@ manage_target(bool start)
 		return;
 	}
 
-	d_list_for_each_entry(pool_info, &pool_list, spi_link) {
-		if (start)
-			rc = ds_pool_child_start(pool_info->spi_id, true);
-		else
-			rc = ds_pool_child_stop(pool_info->spi_id, false);
+	/*
+	 * Delete all stale blobs before recreating any pool. Otherwise a newly
+	 * created blob for one pool can reuse the stale blob ID of a later pool.
+	 * Keep the SMD mappings so pool recreation can read the original sizes
+	 * and replace the mappings with the new blob IDs.
+	 */
+	if (start) {
+		d_list_for_each_entry(pool_info, &pool_list, spi_link) {
+			rc = vos_pool_kill(pool_info->spi_id, VOS_POF_FOR_RECREATE);
+			if (rc < 0) {
+				DL_ERROR(rc, DF_UUID ": Failed to delete stale pool blobs.",
+					 DP_UUID(pool_info->spi_id));
+				break;
+			}
+		}
+	}
 
-		if (rc < 0) {
-			DL_ERROR(rc, DF_UUID": Failed to %s pool child.",
-				 DP_UUID(pool_info->spi_id), start ? "start" : "stop");
-			break;
+	if (rc == 0) {
+		d_list_for_each_entry(pool_info, &pool_list, spi_link) {
+			if (start)
+				rc = ds_pool_child_start(pool_info->spi_id, true);
+			else
+				rc = ds_pool_child_stop(pool_info->spi_id, false);
+
+			if (rc < 0) {
+				DL_ERROR(rc, DF_UUID ": Failed to %s pool child.",
+					 DP_UUID(pool_info->spi_id), start ? "start" : "stop");
+				break;
+			}
 		}
 	}
 
