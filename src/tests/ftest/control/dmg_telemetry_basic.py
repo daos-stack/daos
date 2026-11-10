@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -96,7 +97,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         """
         container_qty = self.params.get("container_qty", "/run/test/*", 1)
         open_close_qty = self.params.get("open_close_qty", "/run/test/*", 2)
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         self.pool.set_query_data()
         pool_leader_rank = self.pool.query_data["response"]["svc_ldr"]
         self.pool_leader_host = self.server_managers[0].get_host(pool_leader_rank)

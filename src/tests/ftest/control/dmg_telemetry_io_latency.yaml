@@ -17,7 +17,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 ior:
   block_size: 8M

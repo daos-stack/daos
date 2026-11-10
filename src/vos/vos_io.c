@@ -1721,7 +1721,8 @@ out:
 
 	if (rc == -DER_NONEXIST || rc == 0) {
 		vos_fetch_add_missing(ioc->ic_ts_set, dkey, iod_nr, iods);
-		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+		if (!vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
+			rc = -DER_TX_RESTART;
 	}
 
 	if (rc != 0) {
@@ -2022,7 +2023,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		else
 			akey_flags = ioc->ic_ts_set->ts_flags;
 
-		switch (akey_flags) {
+		switch (akey_flags & VOS_COND_AKEY_UPDATE_MASK) {
 		case VOS_OF_COND_AKEY_UPDATE:
 			update_cond = VOS_ILOG_COND_UPDATE;
 			break;
@@ -2663,8 +2664,10 @@ abort:
 	if (err == 0)
 		vos_ts_set_upgrade(ioc->ic_ts_set);
 
-	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0)
-		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+	if (err == -DER_NONEXIST || err == -DER_EXIST || err == 0) {
+		if (!vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi))
+			err = -DER_TX_RESTART;
+	}
 
 	if (err == 0)
 		vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);

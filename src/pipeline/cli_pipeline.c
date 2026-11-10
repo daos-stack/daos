@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2021-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,7 +32,7 @@ struct pipeline_auxi_args {
 
 struct shard_pipeline_run_args {
 	uint32_t                   pra_map_ver; /** I AM SETTING THIS BUT NOT USING IT */
-	uint32_t                   pra_shard;
+	uint32_t                   pra_grp_base; /** first shard of the group being enumerated */
 	uint32_t                   pra_target;
 
 	daos_pipeline_run_t       *pra_api_args;
@@ -46,7 +46,7 @@ struct shard_pipeline_run_args {
 
 /** shard completion call back arguments */
 struct pipeline_run_cb_args {
-	uint32_t             shard;
+	uint32_t             grp_base;
 	crt_rpc_t           *rpc;
 	unsigned int        *map_ver; /**
 				       * I AM SETTING THIS BUT NOT USING IT.
@@ -71,31 +71,66 @@ dc_pipeline_check(daos_pipeline_t *pipeline)
 	return d_pipeline_check(pipeline);
 }
 
+/** split anchors (daos_obj_anchor_split/set) are pinned to one shard group */
+static inline bool
+anchor_is_split(daos_anchor_t *anchor)
+{
+	return daos_anchor_get_flags(anchor) & (DIOF_TO_SPEC_SHARD | DIOF_TO_SPEC_GROUP);
+}
+
 static void
 anchor_check_eof(daos_anchor_t *anchor, struct daos_oclass_attr *oca, uint32_t total_shards,
 		 uint32_t total_replicas)
 {
-	uint32_t shard;
+	uint32_t grp_base;
 
-	if (!daos_anchor_is_eof(anchor) || daos_anchor_get_flags(anchor) & DIOF_TO_SPEC_SHARD) {
+	if (!daos_anchor_is_eof(anchor) || anchor_is_split(anchor)) {
 		/** anchor is not EOF or the user used split anchors (no need to advance shard) */
 		return;
 	}
 
-	shard = dc_obj_anchor2shard(anchor);
-	if (shard + total_replicas < total_shards) {
-		/** there are shards left; advancing to the next one */
-		shard += total_replicas;
+	grp_base = dc_obj_anchor2shard(anchor);
+	if (grp_base + total_replicas < total_shards) {
+		/** there are groups left; advancing to the next one */
+		grp_base += total_replicas;
 		daos_anchor_set_zero(anchor);
-		dc_obj_shard2anchor(anchor, shard);
+		dc_obj_shard2anchor(anchor, grp_base);
 	}
 }
 
 static bool
-first_ever_cb(daos_anchor_t *anchor, uint32_t shard)
+first_ever_cb(daos_anchor_t *anchor, uint32_t grp_base)
 {
-	return daos_anchor_is_zero(anchor) &&
-		(shard == 0 || (daos_anchor_get_flags(anchor) & DIOF_TO_SPEC_SHARD));
+	return daos_anchor_is_zero(anchor) && (grp_base == 0 || anchor_is_split(anchor));
+}
+
+/*
+ * Pick a usable replica of group @grp_idx, starting from a random one to spread
+ * the load; the enumeration anchor is replica independent so consecutive calls
+ * may land on different ones. Returns the index into layout->ol_shards. The
+ * layout may be extended (pl_map_extend) so its group size can exceed the
+ * object class replica count and an entry's po_shard may differ from its index.
+ */
+static int
+pipeline_grp_select_shard(struct pl_obj_layout *layout, daos_obj_id_t oid, uint32_t grp_idx)
+{
+	uint32_t grp_size  = layout->ol_grp_size;
+	uint32_t grp_start = grp_idx * grp_size;
+	uint32_t off       = d_rand() % grp_size;
+	uint32_t i;
+
+	for (i = 0; i < grp_size; i++) {
+		uint32_t             idx   = grp_start + (off + i) % grp_size;
+		struct pl_obj_shard *shard = &layout->ol_shards[idx];
+
+		if (shard->po_target == -1 || shard->po_shard == -1 || shard->po_rebuilding ||
+		    shard->po_reintegrating)
+			continue;
+		return idx;
+	}
+
+	D_ERROR(DF_OID ": no usable replica in shard group %u\n", DP_OID(oid), grp_idx);
+	return -DER_DATA_LOSS;
 }
 
 static int
@@ -198,7 +233,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		dst = (double *)api_args->sgl_agg->sg_iovs[i].iov_buf;
 		src = (double *)pro->pro_sgl_agg.sg_iovs[i].iov_buf;
 
-		if (first_ever_cb(api_args->anchor, cb_args->shard)) {
+		if (first_ever_cb(api_args->anchor, cb_args->grp_base)) {
 			/**
 			 * This is the first time ever that this callback is executed for
 			 * this particular pipeline run.
@@ -237,7 +272,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 	if (api_args->stats != NULL) {
 		/** user wants stats */
-		if (first_ever_cb(api_args->anchor, cb_args->shard)) {
+		if (first_ever_cb(api_args->anchor, cb_args->grp_base)) {
 			*api_args->stats = pro->stats;
 		} else {
 			api_args->stats->nr_objs += pro->stats.nr_objs;
@@ -333,7 +368,7 @@ shard_pipeline_run_task(tse_task_t *task)
 	/** -- call back function arguments */
 
 	crt_req_addref(req);
-	cb_args.shard        = args->pra_shard;
+	cb_args.grp_base     = args->pra_grp_base;
 	cb_args.rpc          = req;
 	cb_args.map_ver      = &args->pra_map_ver;
 	cb_args.api_args     = args->pra_api_args;
@@ -487,9 +522,9 @@ shard_pipeline_task_abort(tse_task_t *task, void *arg)
 
 static int
 queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout,
-			      struct pipeline_auxi_args *pipeline_auxi, int shard,
-			      unsigned int map_ver, daos_unit_oid_t oid, uuid_t coh_uuid,
-			      uuid_t cont_uuid)
+			      struct pipeline_auxi_args *pipeline_auxi, uint32_t grp_base,
+			      int shard_idx, unsigned int map_ver, daos_unit_oid_t oid,
+			      uuid_t coh_uuid, uuid_t cont_uuid)
 {
 	daos_pipeline_run_t             *api_args;
 	tse_sched_t                     *sched;
@@ -506,10 +541,10 @@ queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout
 	args                = tse_task_buf_embedded(task, sizeof(*args));
 	args->pra_api_args  = api_args;
 	args->pra_map_ver   = map_ver;
-	args->pra_shard     = shard;
+	args->pra_grp_base  = grp_base;
 	args->pra_oid       = oid;
 	args->pipeline_auxi = pipeline_auxi;
-	args->pra_target    = layout->ol_shards[shard].po_target;
+	args->pra_target    = layout->ol_shards[shard_idx].po_target;
 	uuid_copy(args->pra_coh_uuid, coh_uuid);
 	uuid_copy(args->pra_cont_uuid, cont_uuid);
 	rc = tse_task_register_deps(api_task, 1, &task);
@@ -608,7 +643,9 @@ dc_pipeline_run(tse_task_t *api_task)
 	struct shard_task_sched_args  sched_arg;
 	int                           total_shards;
 	int                           total_replicas;
-	int                           shard;
+	uint32_t                       grp_base;
+	uint32_t                       grp_idx;
+	int                            shard_idx;
 	struct pipeline_comp_cb_args  comp_cb_args;
 	uint16_t                       layout_gl_ver;
 
@@ -653,10 +690,19 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_GOTO(out, rc = -DER_NOTSUPPORTED);
 	}
 
-	/** Not supporting EC objects yet, so #groups x #replicas = #shards */
+	/**
+	 * Not supporting EC objects yet, so #groups x #replicas = #shards. The anchor encodes
+	 * groups as multiples of the object class replica count (daos_obj_anchor_split), which
+	 * is fixed, whereas the layout group size may be larger while shards are being
+	 * rebuilt/reintegrated (pl_map_extend). So decode with the former and index the layout
+	 * with the latter.
+	 */
 
-	total_replicas = layout->ol_grp_size;
-	total_shards   = layout->ol_grp_nr * total_replicas;
+	rc = dc_obj_get_grp_size(api_args->oh, &total_replicas);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	D_ASSERT(total_replicas > 0 && (uint32_t)total_replicas <= layout->ol_grp_size);
+	total_shards = layout->ol_grp_nr * total_replicas;
 
 	/**
 	 * Pipelines are read only for now, no transactions needed.
@@ -683,13 +729,22 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_GOTO(out, rc);
 	}
 
-	/** current shard */
+	/** current shard group (anchor carries its first shard) and the replica to send to */
 
-	shard           = dc_obj_anchor2shard(api_args->anchor);
+	grp_base = dc_obj_anchor2shard(api_args->anchor);
+	if (grp_base >= (uint32_t)total_shards || grp_base % total_replicas != 0) {
+		D_ERROR(DF_OID ": invalid anchor shard %u (total %d, group size %d)\n",
+			DP_OID(obj_md.omd_id), grp_base, total_shards, total_replicas);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	grp_idx   = grp_base / total_replicas;
+	shard_idx = pipeline_grp_select_shard(layout, obj_md.omd_id, grp_idx);
+	if (shard_idx < 0)
+		D_GOTO(out, rc = shard_idx);
 
 	/** object id */
 	oid.id_pub		= obj_md.omd_id;
-	oid.id_shard		= shard;
+	oid.id_shard            = layout->ol_shards[shard_idx].po_shard;
 	oid.id_layout_ver       = layout_gl_ver;
 	oid.id_padding		= 0;
 
@@ -698,8 +753,8 @@ dc_pipeline_run(tse_task_t *api_task)
 	shard_task_head = &pipeline_auxi->shard_task_head;
 	D_ASSERT(d_list_empty(shard_task_head));
 
-	rc = queue_shard_pipeline_run_task(api_task, layout, pipeline_auxi, shard, map_ver, oid,
-					   coh_uuid, cont_uuid);
+	rc = queue_shard_pipeline_run_task(api_task, layout, pipeline_auxi, grp_base, shard_idx,
+					   map_ver, oid, coh_uuid, cont_uuid);
 	if (rc)
 		D_GOTO(out, rc);
 

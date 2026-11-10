@@ -150,6 +150,7 @@ struct ec_agg_stripe_ud {
 	unsigned int		 asu_cell_cnt;  /* Count of cells        */
 	bool			 asu_recalc;    /* Should recalc parity  */
 	bool                     asu_write_par; /* Should write parity   */
+	int                      asu_tgt_id;    /* Originating VOS target, not the IOFW target */
 	daos_iod_t		 asu_iod;
 	d_iov_t			 asu_csum_iov;
 	struct dcs_iod_csums	*asu_iod_csums; /* iod csums */
@@ -615,8 +616,8 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	}
 	epoch = is_recalc ? stripe->as_hi_epoch :
 		entry->ae_par_extent.ape_epoch;
-	rc = dsc_obj_fetch(entry->ae_obj_hdl, epoch, &entry->ae_dkey, 1, &iod,
-			   &sgl, NULL, DIOF_FOR_EC_AGG, NULL, NULL);
+	rc    = dsc_obj_fetch(entry->ae_obj_hdl, epoch, &entry->ae_dkey, 1, &iod, &sgl, NULL,
+			      DIOF_FOR_EC_AGG | DIOF_EC_NO_DEGRADE, NULL, NULL);
 	if (rc)
 		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
@@ -1478,6 +1479,7 @@ retry:
 		ec_agg_in->ea_stripenum = entry->ae_cur_stripe.as_stripenum;
 		ec_agg_in->ea_map_ver =
 			agg_param->ap_pool_info.api_pool->sp_map_version;
+		ec_agg_in->ea_src_tgt             = stripe_ud->asu_tgt_id + 1;
 		ec_agg_in->ea_iod_csums.ca_arrays = NULL;
 		ec_agg_in->ea_iod_csums.ca_count = 0;
 		iod_csums = NULL;
@@ -1566,7 +1568,7 @@ out:
 	 * of all parity shards.
 	 * NB: it's OK if the only remote parity peer failed.
 	 */
-	rc = peer_updated > 0 ? 0 : peer_rc;
+	rc = peer_updated > 0 ? 0 : (peer_rc ?: rc);
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -1597,6 +1599,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 		return rc;
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
+	stripe_ud.asu_tgt_id = tid;
 	rc = dss_ult_create(agg_peer_update_ult, &stripe_ud,
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
@@ -1693,8 +1696,8 @@ agg_process_holes_ult(void *arg)
 		struct daos_csummer	*csummer;
 
 		rc = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_cur_stripe.as_hi_epoch,
-				   &entry->ae_dkey, 1, iod, &entry->ae_sgl,
-				   NULL, DIOF_FOR_EC_AGG, NULL, NULL);
+				   &entry->ae_dkey, 1, iod, &entry->ae_sgl, NULL,
+				   DIOF_FOR_EC_AGG | DIOF_EC_NO_DEGRADE, NULL, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
@@ -1771,6 +1774,7 @@ retry:
 		ec_rep_in->er_epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
 		ec_rep_in->er_epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
 		ec_rep_in->er_map_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
+		ec_rep_in->er_src_tgt             = stripe_ud->asu_tgt_id + 1;
 		ec_rep_in->er_bulk = bulk_hdl;
 		ec_rep_in->er_comm_in.req_in_enqueue_id = enqueue_id;
 		rc = dss_rpc_send(rpc);
@@ -1815,7 +1819,7 @@ out:
 	/* NB: before switching to DTX, any successful parity write is deemed as success
 	 * of all parity shards.
 	 */
-	rc = peer_updated > 0 ? 0 : peer_rc;
+	rc = peer_updated > 0 ? 0 : (peer_rc ?: rc);
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -1858,6 +1862,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 		goto out;
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
+	stripe_ud.asu_tgt_id = tid;
 
 	rc = dss_ult_create(agg_process_holes_ult, &stripe_ud,
 			    DSS_XS_IOFW, tid, 0, NULL);
@@ -2904,7 +2909,9 @@ update_hae:
 			return rc;
 		}
 
-		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
+		/* rescan replicas left for the leader so they keep holding back the boundary */
+		cont->sc_ec_agg_eph =
+		    max(cont->sc_ec_agg_eph, min(epr->epr_hi, ec_agg_param->ap_min_unagg_eph - 1));
 		if (!cont->sc_stopping && cont->sc_query_ec_agg_eph) {
 			uint64_t orig, cur, cur_eph;
 

@@ -486,6 +486,9 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             result = self.daos.container_query(**kwargs)
 
         elif self.control_method.value == self.USE_API:
+            # Need a pool handle to create a container with the API method
+            self.pool.connect()
+
             # pydaos.raw doesn't support create with a label
             if not self.silent.value:
                 self.log.info("Ignoring label for container created with API")

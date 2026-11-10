@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -266,6 +267,79 @@ small_io(void **state)
 	assert_rc_equal(rc, 0);
 	par_barrier(PAR_COMM_WORLD);
 } /* End small_io */
+
+#define BOUNDARY_CHUNK_SIZE (1024 * 1024)
+
+static void
+array_size_chunk_boundary_helper(void **state, daos_size_t target_size)
+{
+	test_arg_t      *arg = *state;
+	daos_obj_id_t    oid;
+	daos_handle_t    oh;
+	daos_array_iod_t iod = {};
+	daos_range_t     rg  = {};
+	d_sg_list_t      sgl = {};
+	d_iov_t          iov = {};
+	char             buf[BUFLEN];
+	daos_size_t      array_size;
+	daos_size_t      cell_size;
+	daos_size_t      chunk_size_actual;
+	int              rc;
+
+	par_barrier(PAR_COMM_WORLD);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
+
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, BOUNDARY_CHUNK_SIZE, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	memset(buf, 'A', sizeof(buf));
+	iod.arr_nr  = 1;
+	iod.arr_rgs = &rg;
+	rg.rg_idx   = target_size - 1;
+	rg.rg_len   = ARRAY_SIZE(buf);
+	sgl.sg_nr   = 1;
+	sgl.sg_iovs = &iov;
+	d_iov_set(&iov, buf, sizeof(buf));
+
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(array_size, rg.rg_idx + rg.rg_len);
+
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, target_size, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(array_size, target_size);
+
+	rc = daos_array_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_array_open(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW, &cell_size,
+			     &chunk_size_actual, &oh, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cell_size, 1);
+	assert_int_equal(chunk_size_actual, BOUNDARY_CHUNK_SIZE);
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(array_size, target_size);
+
+	rc = daos_array_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	par_barrier(PAR_COMM_WORLD);
+}
+
+static void
+array_size_first_record(void **state)
+{
+	array_size_chunk_boundary_helper(state, 1);
+}
+
+static void
+array_size_first_record_next_chunk(void **state)
+{
+	array_size_chunk_boundary_helper(state, BOUNDARY_CHUNK_SIZE + 1);
+}
 
 static int
 change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size)
@@ -1210,6 +1284,7 @@ ec_array_key_query(void **state)
 	par_barrier(PAR_COMM_WORLD);
 } /* End ec_array_key_query */
 
+/* clang-format off */
 static const struct CMUnitTest array_api_tests[] = {
 	{"Array 0 API: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
@@ -1235,7 +1310,12 @@ static const struct CMUnitTest array_api_tests[] = {
 	 truncate_array, async_disable, NULL},
 	{"Array 11: EC Array Key Query",
 	 ec_array_key_query, async_disable, NULL},
+	{"Array 12 API: shrink to first record",
+	 array_size_first_record, async_disable, NULL},
+	{"Array 13 API: shrink to first record of next chunk",
+	 array_size_first_record_next_chunk, async_disable, NULL},
 };
+/* clang-format on */
 
 static int
 daos_array_setup(void **state)

@@ -15,4 +15,3 @@ pool:
   size: 2G
 container:
   type: POSIX
-  control_method: daos

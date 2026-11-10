@@ -14,4 +14,3 @@ pool:
   nvme_size: 1073741824
 container:
   type: POSIX
-  control_method: daos

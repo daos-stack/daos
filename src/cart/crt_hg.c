@@ -846,6 +846,19 @@ crt_hg_class_init(crt_provider_t provider, int ctx_idx, bool primary, int iface_
 
 	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
+	/*
+	 * Forward the per-provider address-family preference to Mercury. The
+	 * default (CRT_AF_UNSPEC -> NA_ADDR_UNSPEC) preserves the original
+	 * behavior: Mercury's na_ofi plugin falls back to its per-provider
+	 * preference table (IPv4 for verbs/RoCE). Setting D_ADDR_FORMAT=ipv6
+	 * (or cio_addr_format="ipv6") instead steers libfabric's fabric scan
+	 * to enumerate IPv6 interfaces, which is required for IPv6-only
+	 * fabric NIC deployments. CRT_AF_* values are statically asserted to
+	 * match the corresponding NA_ADDR_* values in crt_init.c, so the
+	 * direct cast is safe.
+	 */
+	init_info.na_init_info.addr_format = (enum na_addr_format)prov_data->cpg_addr_format;
+
 	if (crt_provider_is_block_mode(provider) && !crt_gdata.cg_progress_busy)
 		init_info.na_init_info.progress_mode = 0;
 	else
@@ -1179,6 +1192,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_tmp.crp_hg_addr = hg_info->addr;
 	rpc_tmp.crp_hg_hdl = hg_hdl;
 	rpc_tmp.crp_pub.cr_ctx = crt_ctx;
+
+	CRT_METRIC_INC(crt_ctx, CM_RPC_RECV);
 
 	rc = crt_hg_unpack_header(hg_hdl, &rpc_tmp, &proc);
 	if (unlikely(rc != 0)) {
@@ -1597,22 +1612,28 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 int
 crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t	hg_ret;
-	int		rc = 0;
+	struct crt_context *crt_ctx;
+	hg_return_t         hg_ret;
+	int                 rc = 0;
 
 	D_ASSERT(rpc_priv != NULL);
+
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	/* corresponds to decref in crt_hg_reply_send_cb */
 	RPC_ADDREF(rpc_priv);
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);
 	if (hg_ret != HG_SUCCESS) {
+		CRT_METRIC_INC(crt_ctx, CM_RPC_REPLY_FAILED);
 		RPC_ERROR(rpc_priv, "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
 			  DP_HG_RC(hg_ret));
 		/* should success as addref above */
 		RPC_DECREF(rpc_priv);
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
+
+	CRT_METRIC_INC(crt_ctx, CM_RPC_REPLIED);
 
 	/* Release input buffer */
 	if (rpc_priv->crp_release_input_early && !rpc_priv->crp_forward) {
@@ -1631,8 +1652,11 @@ out:
 void
 crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 {
-	void	*hg_out_struct;
-	int	 hg_ret;
+	struct crt_context *crt_ctx;
+	void               *hg_out_struct;
+	int                 hg_ret;
+
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(error_code != 0);
@@ -1641,10 +1665,12 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	rpc_priv->crp_reply_hdr.cch_rc = error_code;
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, NULL, NULL, hg_out_struct);
 	if (hg_ret != HG_SUCCESS) {
+		CRT_METRIC_INC(crt_ctx, CM_RPC_REPLY_FAILED);
 		RPC_ERROR(rpc_priv,
 			  "HG_Respond failed, hg_ret: " DF_HG_RC "\n",
 			  DP_HG_RC(hg_ret));
 	} else {
+		CRT_METRIC_INC(crt_ctx, CM_RPC_REPLIED);
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "Sent CART level error message back to client. error_code: %d\n",
 			  error_code);

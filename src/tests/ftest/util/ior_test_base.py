@@ -1,5 +1,6 @@
 """
 (C) Copyright 2018-2024 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -52,11 +53,6 @@ class IorTestBase(TestWithServers):
         # Use the local host as a client for hostfile/dfuse if the client list is empty
         if not self.hostlist_clients:
             self.hostlist_clients = get_local_host()
-
-    def create_pool(self):
-        """Create a TestPool object to use with ior."""
-        # Get the pool params and create a pool
-        self.add_pool(connect=False)
 
     def create_cont(self):
         """Create a TestContainer object to be used to create container.
@@ -165,12 +161,11 @@ class IorTestBase(TestWithServers):
         """
         # Create a pool if one does not already exist
         if self.pool is None:
-            self.create_pool()
+            self.pool = self.get_pool(connect=False)
         # Create a container, if needed.
         # Don't pass uuid and pool handle to IOR.
         # It will not enable checksum feature
         if create_cont:
-            self.pool.connect()
             self.create_cont()
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.pool, self.container.uuid)
