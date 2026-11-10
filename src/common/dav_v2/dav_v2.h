@@ -306,6 +306,40 @@ struct dav_heap_mb_stats {
 int
 dav_get_heap_mb_stats_v2(dav_obj_t *pop, uint32_t mb_id, struct dav_heap_mb_stats *st);
 
+struct dav_heap_mb_limits {
+	uint32_t dhml_nemb_max;
+	uint32_t dhml_emb_max;
+	uint32_t dhml_soe_rsrv;
+};
+
+/**
+ * Returns the memory bucket zone limits of the pool: the maximum number of
+ * non-evictable and evictable memory buckets and the reserved SOEMB count.
+ *
+ * \param[in]           pop             pool handle
+ * \param[out]          lim             mb limits
+ *
+ * \return   0, success
+ *         < 0, error and errno is set to appropriate value.
+ */
+int
+dav_get_heap_mb_limits_v2(dav_obj_t *pop, struct dav_heap_mb_limits *lim);
+
+/**
+ * Returns the mb ids of the evictable memory buckets currently reserved as
+ * active spill-over evictable buckets (SOEMBs).
+ *
+ * \param[in]           pop             pool handle
+ * \param[out]          ids             array to receive the SOEMB ids
+ * \param[in]           max_ids         capacity of \p ids
+ * \param[out]          count           number of ids written
+ *
+ * \return   0, success
+ *         < 0, error and errno is set to appropriate value.
+ */
+int
+dav_get_soemb_ids_v2(dav_obj_t *pop, uint32_t *ids, uint32_t max_ids, uint32_t *count);
+
 /**
  * Allot an evictable memory bucket for tasks like new object creation
  *
