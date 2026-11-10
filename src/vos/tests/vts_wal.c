@@ -3072,8 +3072,9 @@ p2_fill_test(void **state)
 	 */
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	umm  = vos_cont2umm(cont);
-	rc = umempobj_get_soemb_ids(umm->umm_pool, soemb_ids, MDTEST_SOE_RSRV_CNT, &soemb_cnt);
+	rc   = umempobj_get_soemb_ids(umm->umm_pool, soemb_ids, MDTEST_SOE_RSRV_CNT, &soemb_cnt);
 	assert_rc_equal(rc, 0);
+
 	rc = vos_obj_acquire(cont, oids[0], false, &obj);
 	assert_rc_equal(rc, 0);
 	assert_false(id_in_list(obj->obj_bkt_id0, soemb_ids, (int)soemb_cnt));
