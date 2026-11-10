@@ -2923,6 +2923,59 @@ no_hidden_peer_source(void **state)
 }
 
 /*
+ * Extend ranks into existing nodes. The CURRENT layout skips the new targets, so the old
+ * targets of these nodes must still be reusable once they are all used, otherwise placing
+ * a wide object with node fault domain loops forever.
+ */
+static void
+_extend_rank_into_existing_node(daos_oclass_id_t oc, uint32_t obj_nr)
+{
+	struct jm_test_ctx ctx;
+	struct pool_buf   *buf;
+	uint32_t           ver;
+	uint32_t           i;
+	/* clang-format off */
+	uint32_t           tree[] = {0,       /* metadata */
+				     2, 1, 2, /* root */
+				     1, 0, 1, /* node 0 */
+				     1, 2, 1, /* node 2 */
+				     4, 5};   /* new ranks */
+	/* clang-format on */
+
+	jtc_init(&ctx, 4, 1, 2, OC_UNKNOWN, g_verbose);
+
+	ver = pool_map_get_version(ctx.po_map) + 1;
+	assert_success(gen_pool_buf(ctx.po_map, &buf, ver, ARRAY_SIZE(tree), 2, 4, tree, 2, NULL));
+	assert_success(pool_map_extend(ctx.po_map, ver, buf));
+	D_FREE(buf);
+
+	/* targets 8 - 11 are on the new ranks */
+	for (i = 8; i < 12; i++)
+		jtc_set_status_on_target(&ctx, POOL_EXTEND, i);
+
+	for (i = 0; i < obj_nr; i++) {
+		struct daos_obj_md    md     = {.omd_fdom_lvl = PO_COMP_TP_NODE};
+		struct pl_obj_layout *layout = NULL;
+
+		gen_oid(&md.omd_id, i + 1, UINT64_MAX, oc);
+		md.omd_ver = pool_map_get_version(ctx.po_map);
+		assert_success(pl_obj_place(ctx.pl_map, PLT_LAYOUT_VERSION, &md, 0, NULL, &layout));
+		pl_obj_layout_free(layout);
+	}
+
+	jtc_fini(&ctx);
+}
+
+static void
+extend_rank_into_existing_node(void **state)
+{
+	_extend_rank_into_existing_node(OC_RP_2GX, 100);
+	_extend_rank_into_existing_node(OC_RP_3GX, 100);
+	_extend_rank_into_existing_node(OC_EC_2P1GX, 100);
+	_extend_rank_into_existing_node(OC_EC_2P2GX, 100);
+}
+
+/*
  * ------------------------------------------------
  * End Test Cases
  * ------------------------------------------------
@@ -4142,6 +4195,7 @@ static const struct CMUnitTest tests[] = {
       extension_preserves_read_sources),
     T("no hidden peer source", no_hidden_peer_source),
     T("relocation peer allocation failure", relocation_peer_alloc_failure),
+    T("extend a rank into an existing node", extend_rank_into_existing_node),
 };
 
 int

@@ -158,7 +158,14 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 			resp = control.MockMSResponse("", system.ErrRaftUnavail, nil)
 			break
 		}
-		resp = control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{})
+		// Include excluded members for the ranks exercised by storage
+		// format --replace --rank tests so checkReplaceRank() finds them.
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{
+			Members: []*mgmtpb.SystemMember{
+				{Rank: 0, State: "excluded"},
+				{Rank: 5, State: "excluded"},
+			},
+		})
 	case *control.SystemCleanupReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemCleanupResp{})
 	case *control.LeaderQueryReq:

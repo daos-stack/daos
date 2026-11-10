@@ -740,7 +740,7 @@ pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
 		return -DER_NO_HDL;
 
 	sched = (task != NULL) ? tse_task2sched(task) : NULL;
-	rc = dc_pool_create_map_refresh_task(poh, pm_ver, sched, &ptask);
+	rc    = dc_pool_create_map_refresh_task(poh, pm_ver, CRT_NO_RANK, sched, &ptask);
 	if (rc != 0)
 		goto out;
 
@@ -1987,8 +1987,8 @@ out_resched:
 		D_DEBUG(DB_MD, DF_CONT ": resched: refresh_map=%d map_version=%u\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), refresh_map, map_version);
 		if (refresh_map) {
-			rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl,
-							     map_version, sched, &ptask);
+			rc = dc_pool_create_map_refresh_task(
+			    arg->coaa_cont->dc_pool_hdl, map_version, CRT_NO_RANK, sched, &ptask);
 			if (rc != 0)
 				goto out;
 

@@ -85,7 +85,13 @@ func (svc *mgmtSvc) makePoolServiceCall(ctx context.Context, method drpc.Method,
 		req.SetSvcRanks(rl)
 	}
 
-	return svc.harness.CallDrpc(ctx, method, req)
+	dResp, err := svc.harness.CallDrpc(ctx, method, req)
+	if fault.IsFaultCode(err, code.ServerDataPlaneNotStarted) {
+		// This replica cannot service a pool request without an engine,
+		// so the client should retry on another replica.
+		return nil, &system.ErrReplicaNoEngine{Replicas: svc.sysdb.PeerReplicas()}
+	}
+	return dResp, err
 }
 
 // resolvePoolID implements a handler for resolving a user-friendly Pool ID into
