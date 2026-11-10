@@ -387,12 +387,9 @@ cr_check_set_policy(uint32_t flags, const char *policies)
 static struct daos_check_report_info *
 cr_locate_dcri(struct daos_check_info *dci, struct daos_check_report_info *base, uuid_t uuid)
 {
-	struct daos_check_report_info   *last;
+	struct daos_check_report_info   *last  = &dci->dci_reports[dci->dci_report_nr - 1];
 	struct daos_check_report_info	*dcri = NULL;
 	bool				 found = false;
-
-	D_ASSERTF(dci->dci_report_nr > 0, "no check reports for pool " DF_UUID "\n", DP_UUID(uuid));
-	last = &dci->dci_reports[dci->dci_report_nr - 1];
 
 	if (base != NULL)
 		dcri = base + 1;

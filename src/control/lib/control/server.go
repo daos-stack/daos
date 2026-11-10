@@ -1,6 +1,5 @@
 //
 // (C) Copyright 2021-2023 Intel Corporation.
-// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -153,5 +152,6 @@ func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngi
 		}
 	}
 
+	rpcClient.Debugf("DAOS set engine log masks response: %+v", resp)
 	return resp, nil
 }

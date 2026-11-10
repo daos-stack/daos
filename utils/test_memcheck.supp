@@ -439,7 +439,6 @@
    ...
    fun:runtime.persistentalloc
 }
-
 {
    DAOS-16866
    Memcheck:Leak

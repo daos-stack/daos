@@ -264,12 +264,8 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 			member.Rank, member.PrimaryFabricURI, member.SecondaryFabricURIs, joinResponse.PrevState, member.State)
 	}
 
-	checkMode, err := svc.checkerIsEnabled()
-	if err != nil {
-		return nil, err
-	}
 	joinState := mgmtpb.JoinResp_IN
-	if checkMode {
+	if svc.checkerIsEnabled() {
 		joinState = mgmtpb.JoinResp_CHECK
 	}
 	resp := &mgmtpb.JoinResp{
