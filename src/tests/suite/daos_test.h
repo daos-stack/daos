@@ -391,6 +391,8 @@ int run_daos_int_rebuild_test(int rank, int size, int *tests, int test_size);
 int run_daos_inc_reint_test(int rank, int size, int *tests, int test_size);
 int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
+int run_daos_rebuild_weekly_test(int rank, int size, int *tests, int test_size);
+int rebuild_ec_setup_cell(void **state, int number, uint32_t rf, uint32_t cell_sz);
 int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 				    int sub_tests_size);
 int run_daos_upgrade_test(int rank, int size, int *sub_tests,

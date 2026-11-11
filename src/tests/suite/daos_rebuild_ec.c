@@ -255,8 +255,8 @@ rebuild_ec_multi_stripes(void **state)
 	reintegrate_pools_ranks(&arg, 1, &rank, 1, false);
 }
 
-static int
-rebuild_ec_setup(void  **state, int number, uint32_t rf)
+int
+rebuild_ec_setup_cell(void **state, int number, uint32_t rf, uint32_t cell_sz)
 {
 	test_arg_t	*arg;
 	daos_prop_t	*props = NULL;
@@ -274,13 +274,17 @@ rebuild_ec_setup(void  **state, int number, uint32_t rf)
 
 	arg = *state;
 	/* sustain 2 failure here */
-	props = daos_prop_alloc(3);
+	props                          = daos_prop_alloc(cell_sz ? 4 : 3);
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	props->dpp_entries[0].dpe_val = rf;
 	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
 	props->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_CRC32;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 	props->dpp_entries[2].dpe_val = DAOS_PROP_CO_CSUM_SV_ON;
+	if (cell_sz) {
+		props->dpp_entries[3].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+		props->dpp_entries[3].dpe_val  = cell_sz;
+	}
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, props);
@@ -293,6 +297,12 @@ rebuild_ec_setup(void  **state, int number, uint32_t rf)
 		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
 
 	return rc;
+}
+
+static int
+rebuild_ec_setup(void **state, int number, uint32_t rf)
+{
+	return rebuild_ec_setup_cell(state, number, rf, 0);
 }
 
 static int
@@ -1898,7 +1908,6 @@ rebuild_ec_reint_parity_epoch_inflation(void **state)
 	print_message("END %s\n", __FUNCTION__);
 }
 
-/** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
     {"REBUILD0: rebuild partial update with data tgt fail", rebuild_partial_fail_data,
      rebuild_ec_8nodes_rf1_setup, test_teardown},
