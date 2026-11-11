@@ -23,6 +23,7 @@
 #include "crt_hg.h"
 #include "crt_internal_types.h"
 #include "crt_internal_fns.h"
+#include "crt_mem.h"
 #include "crt_rpc.h"
 #include "crt_group.h"
 #include "crt_tree.h"

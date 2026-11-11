@@ -583,6 +583,20 @@ file_limit_bump(void)
 	D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
 }
 
+/* per provider, as the settings of a provider are applied once per process */
+static bool           g_mr_cache_enabled[CRT_PROV_COUNT];
+static crt_provider_t g_mr_cache_prov;
+
+int
+crt_mr_cache_check(void)
+{
+	if (!crt_initialized())
+		return -DER_UNINIT;
+
+	/* what CaRT set for the provider, see prov_settings_apply() */
+	return g_mr_cache_enabled[g_mr_cache_prov] ? 0 : -DER_NOTSUPPORTED;
+}
+
 int
 crt_mem_device_check(void)
 {
@@ -595,6 +609,9 @@ static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
 	uint32_t mrc_enable = 0;
+
+	if (primary)
+		g_mr_cache_prov = prov;
 
 	/* Avoid applying same settings multiple times */
 	if (g_prov_settings_applied[prov] == true)
@@ -618,6 +635,7 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 		mrc_enable = 0;
 
 	crt_env_get(CRT_MRC_ENABLE, &mrc_enable);
+	g_mr_cache_enabled[prov] = mrc_enable != 0;
 	if (mrc_enable == 0) {
 		D_INFO("Disabling MR CACHE\n");
 		d_setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
