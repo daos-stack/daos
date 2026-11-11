@@ -46,7 +46,11 @@ plugins:
       version_selector: true
 
 markdown_extensions:
-  - admonition
+  - pymdownx.superfences #  nesting of code and content blocks
+  - pymdownx.highlight # syntax highlighting of code blocks
+  - pymdownx.inlinehilite # syntax highlighting of inline code blocks
+  - pymdownx.snippets # code snippets
+  - admonition # collapsible blocks
   - footnotes
   - tables
   - toc:

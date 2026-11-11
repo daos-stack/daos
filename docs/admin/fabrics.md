@@ -211,8 +211,8 @@ sections).
 Verify the installation and provider configuration before starting the
 system. On each DAOS server, run:
 
-```bash
-daos_server network scan
+```console
+# daos_server network scan
 ```
 
 The output should list `ucx+dc_x` for the configured InfiniBand or RoCE
@@ -250,7 +250,7 @@ The `daos_server network scan` command displays all network interfaces that
 are recognized on a DAOS server for the provider that is set in the
 `daos_server.yml` configuration file:
 
-```
+```console
 # daos_server network scan
 DAOS Server config loaded from /etc/daos/daos_server.yml
 ---------
@@ -279,7 +279,7 @@ network interfaces, add the `--ignore-config` option. If an expected provider
 is missing in the `daos_server network scan --ignore-config` output,
 check if all the host software stack components are installed:
 
-```
+```console
 # daos_server network scan --ignore-config
 ---------
 localhost
@@ -341,7 +341,7 @@ recognized on the DAOS client for each of its network interfaces.
 If an expected provider is missing in the `daos_agent net-scan` output,
 check if all the host software stack components are installed:
 
-```
+```console
 # daos_agent net-scan
 ---------
 localhost
@@ -527,7 +527,7 @@ this is a good starting point for Slingshot environments.
 
 ```yaml
 provider: ofi+cxi
-fabric_auth_key: "4:64512:65535" # Client VNI range to accept <svc_id:vni_min:vni_max>
+fabric_auth_key: "4:64512" # Static VNI to use <svc_id:vni>
 
 engines:
 -
@@ -567,7 +567,7 @@ on all DAOS client nodes
 (for example, through `/etc/environment`, `/etc/profile.env`, or a systemd service).
 See the `DAOS` section in the [Host Software User Guide][hpe_shs_daos]:
 
-```
+```bash
 FI_CXI_RX_MATCH_MODE=hybrid
 FI_MR_CACHE_MONITOR=kdreg2
 ```
@@ -586,18 +586,45 @@ The tuning script referenced therein is located in
 
 #### VNI Configuration
 
-!!! note
-    The following section currently only applies to PBS environments.
-
 To isolate RDMA traffic between DAOS clients, it is highly recommended for security to enable VNIs 
 (Virtual Network Identifiers). A VNI is a protection key used by the Slingshot network to
 provide isolation between applications. Because VNIs define an isolated PID space for a given NIC,
-endpoints must use the same VNI in order to communicate. To allow this type of communication between
+endpoints must use the same VNI in order to communicate.
+There are two ways to configure VNIs for DAOS: static VNI configuration and VNI range configuration,
+the former being less secure than the latter.
+
+##### Static VNI Configuration
+
+There are two different way to configure a static VNI for DAOS clients and servers:
+
+1. The `fabric_auth_key` parameter in the `daos_server.yml` file can be set to a static VNI value, for example:
+```yaml
+fabric_auth_key: "4:64512" # Static VNI to use <svc_id:vni>
+```
+where 4 is the CXI service identifier, and 64512 is the static VNI to use.
+
+2. The `D_PROVIDER_AUTH_KEY` environment variable can be set to a static VNI value, for example:
+```bash
+D_PROVIDER_AUTH_KEY="4:64512"
+```
+
+Both methods presuppose that a valid CXI service has been created both on the DAOS servers and on the DAOS
+clients. The CXI service can be created by running the `cxi_service create` command, which produces a new
+CXI service identifier. (See the [HPE Slingshot Host Software Administration Guide][hpe_shs_cxi_service]
+for more details on creating a CXI service.)
+
+##### VNI Range Configuration
+
+!!! note
+    This section currently only applies to PBS environments.
+
+To allow this type of communication between
 DAOS clients and servers, a VNI range must be properly configured on servers and client nodes
 must be configured to only select a VNI within that specified range.
 
 This is done in multiple steps:
-- A CXI service ([see documentation][hpe_shs_cxi_service]) that accepts a
+
+1. A CXI service ([see documentation][hpe_shs_cxi_service]) that accepts a
   range of VNIs must first be configured on DAOS server nodes. This is done by
   using the `cxi_service` command. This command has been augmented in SHS 14.0 to specify
   VNI ranges in its yaml configuration file:
@@ -607,26 +634,29 @@ This is done in multiple steps:
     vni_max: 65535
   ```
   One can then create a CXI service by running `cxi_service create -y <service_yaml_file>`, which produces a new CXI service identifier.
-- The second step is to configure DAOS servers to use the specified VNI range and CXI service.
+
+2. The second step is to configure DAOS servers to use the specified VNI range and CXI service.
   This is controlled by the `fabric_auth_key` parameter in the `daos_server.yml` file. For example:
   ```yaml
   fabric_auth_key: "4:64512:65535" # Client VNI range to accept <svc_id:vni_min:vni_max>
   ```
   where 4 is the CXI service identifier, and 64512 and 65535 are the minimum and maximum VNIs, respectively.
-- The third step is to configure the `vnid` service (see [VNI range documentation][hpe_vnid_range] 
+
+3. The third step is to configure the `vnid` service (see [VNI range documentation][hpe_vnid_range] 
   for additional details) that interacts with the PBS scheduler and the PALS daemons running on the 
   compute nodes. One must first resize the default application pool to accommodate the desired VNI 
   range (which usually spans the entire VNI range) and create a new pool by running the following
   command:
-  ```bash
-  vnidctrl --url <vnid_url> pool update "applications" 1024 64511 "applications"
-  vnidctrl --url <vnid_url> pool create "daos" 64512 65535 "jobs"
+  ```console
+  # vnidctrl --url <vnid_url> pool update "applications" 1024 64511 "applications"
+  # vnidctrl --url <vnid_url> pool create "daos" 64512 65535 "jobs"
   ```
   Effectively, this command creates a new pool named "daos" with the specified VNI range, `"jobs"` 
   meaning that the VNIs allocated from that pool are per job.
-- Finally, one can test the configuration by running the following command within a PBS job:
-  ```bash
-  mpiexec --daos env | grep SLING
+
+4. Finally, one can test the configuration by running the following command within a PBS job:
+  ```console
+  $ mpiexec --daos env | grep SLING
   SLINGSHOT_VNIS=1116,1115,64529
   SLINGSHOT_DEVICES=cxi0
   SLINGSHOT_SVC_IDS=5
@@ -634,9 +664,9 @@ This is done in multiple steps:
   Note the `--daos` flag passed to the `mpiexec` command, which ensures that the DAOS VNI (the third VNI in the `SLINGSHOT_VNIS` list) is set.
 
 !!! warning
-  Through this method, all `daos` commands and applications that interact with DAOS can only be
-  run within a PBS job and mpiexec must be used with the `--daos` flag to ensure proper DAOS VNI 
-  configuration.
+    Through this method, all `daos` commands and applications that interact with DAOS can only be
+    run within a PBS job and mpiexec must be used with the `--daos` flag to ensure proper DAOS VNI 
+    configuration.
 
 [hpe_shs]: https://support.hpe.com/km/search#tab=All&q=slingshot%2014.0.1
 [hpe_shs_cxi_service]: https://support.hpe.com/hpesc/public/docDisplay?docId=dp00008089en_us&page=operations/cxi_services.html
@@ -676,7 +706,7 @@ After restarting the fabric manager, hosts will automatically pick up the
 increased MTU size, for example the `ip a show` command will
 show an MTU size of 10236 (10240 minus a 4-byte header):
 
-```
+```console
 # ip a show ibs3d1 | head -1
 9: ibs3d1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 10236 qdisc mq state UP group default qlen 1000
 ```
@@ -691,7 +721,7 @@ To achieve the best performance, it is recommended to enable the Cornelis
 _HFI service_ (previously called _Bulk Transfer Service (BTS)_)
 in the Omni-Path SuperNIC driver:
 
-```
+```bash
 cat /sys/module/hfi1/parameters/use_bulksvc
 echo "options hfi1 use_bulksvc=Y" >> /etc/modprobe.d/hfi1.conf
 
