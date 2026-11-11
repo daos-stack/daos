@@ -583,6 +583,14 @@ file_limit_bump(void)
 	D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
 }
 
+int
+crt_mem_device_check(void)
+{
+	if (!crt_initialized())
+		return -DER_UNINIT;
+	return crt_gdata.cg_mem_device ? 0 : -DER_NOTSUPPORTED;
+}
+
 static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
@@ -732,6 +740,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	CRT_ENV_OPT_GET(opt, mem_device, D_MEM_DEVICE);
 	crt_gdata.cg_mem_device = mem_device;
+	if (mem_device)
+		D_INFO("Enabling heterogeneous memory device support\n");
 
 	CRT_ENV_OPT_GET(opt, progress_legacy, D_PROGRESS_LEGACY);
 	crt_gdata.cg_progress_legacy = progress_legacy;

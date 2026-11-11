@@ -705,6 +705,39 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
 
 /**
+ * Check whether CaRT can create bulk handles for device memory: it requested memory device
+ * support from the transport (D_MEM_DEVICE or crt_init_options_t::cio_mem_device). Otherwise
+ * bulk handles for device memory fail with -DER_NOTSUPPORTED.
+ *
+ * \return                     0 if supported, -DER_UNINIT if CaRT is not initialized,
+ *                             -DER_NOTSUPPORTED otherwise
+ */
+int
+crt_mem_device_check(void);
+
+/**
+ * Create a bulk handle on the memory of a device (e.g. a GPU), or on host memory.
+ *
+ * \param[in] crt_ctx          CRT transport context
+ * \param[in] sgl              pointer to buffer segment list
+ * \param[in] bulk_perm        bulk permission, See \ref crt_bulk_perm_t
+ * \param[in] mem_dev          optional memory type and device of the buffers, NULL for
+ *                             host memory
+ * \param[out] bulk_hdl        created bulk handle
+ *
+ * A handle for device memory is always created, and the memory registered, by the calling
+ * thread, also when the context is over its bulk quota (D_QUOTA_BULKS), where a handle for
+ * host memory is deferred until the RPC is encoded.
+ *
+ * \return                     DER_SUCCESS on success, -DER_NOTSUPPORTED for device memory
+ *                             without memory device support (see crt_mem_device_check()),
+ *                             negative value on other errors
+ */
+int
+crt_bulk_create_with_mdev(crt_context_t crt_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
+			  const d_mem_dev_t *mem_dev, crt_bulk_t *bulk_hdl);
+
+/**
  * Bind bulk handle to local context, to associate the origin address of the
  * local context to the bulk handle.
  *
