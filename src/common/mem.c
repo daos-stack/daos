@@ -3458,7 +3458,6 @@ cache_pin_pages(struct umem_cache *cache, uint32_t *pages, int page_nr, unsigned
 	uint8_t                 *pin_bitmap = NULL, inline_bitmap[8];
 	unsigned int             bitmap_sz, tot_avail, rsrv_cnt;
 	int                      retry_cnt = 0, restart_cnt = 0;
-	bool                     inc_stats = true;
 
 	bitmap_sz = (page_nr + NBBY - 1) / NBBY;
 	if (bitmap_sz <= 8) {
@@ -3480,12 +3479,10 @@ restart:
 
 		/* The page isn't mapped */
 		if (pinfo == NULL)
-			break;
+			continue;
 
 		D_ASSERT(pinfo->pi_pg_id == pg_id);
 		D_ASSERT(pinfo->pi_mapped == 1);
-		if (inc_stats)
-			inc_cache_stats(cache, UMEM_CACHE_STATS_HIT);
 		cache_pin_page(cache, pinfo);
 		pinned++;
 		setbit(pin_bitmap, i);
@@ -3522,7 +3519,6 @@ restart:
 			drop_pages(cache, pages, page_nr, pin_bitmap);
 			/* Wait for pinned page being unpinned if any */
 			cache_tfifo_wait(cache, tier);
-			inc_stats = false;
 
 			restart_cnt++;
 			D_CDEBUG(restart_cnt % 20 == 0, DLOG_ERR, DB_TRACE,
@@ -3551,6 +3547,7 @@ restart:
 
 		if (isset(pin_bitmap, i)) {
 			D_ASSERT(pinfo != NULL);
+			inc_cache_stats(cache, UMEM_CACHE_STATS_HIT);
 			continue;
 		} else if (pinfo != NULL) {
 			/* The page is mapped by others while yielding */
