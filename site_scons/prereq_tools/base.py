@@ -506,6 +506,20 @@ class PreReqComponent():
                               PathVariable.PathIsDirCreate))
         opts.Add('USE_INSTALLED', 'Comma separated list of preinstalled dependencies', 'none')
         opts.Add(('MPI_PKG', 'Specifies name of pkg-config to load for MPI', None))
+        opts.Add(BoolVariable(
+            'BUILD_GPU_DIRECT',
+            'Enable GPU-direct memory support in UCX/libfabric prerequisites; '
+            'requires the GPU toolkit selected by CUDA_PREFIX (with gdrcopy) and/or '
+            'ROCM_PREFIX, and a compatible GPU driver stack.',
+            False))
+        opts.Add(PathVariable('CUDA_PREFIX', 'CUDA toolkit prefix, used with BUILD_GPU_DIRECT; '
+                              'set it empty to build without CUDA',
+                              '/usr/local/cuda', PathVariable.PathAccept))
+        opts.Add(PathVariable('GDRCOPY_PREFIX', 'gdrcopy prefix, used with BUILD_GPU_DIRECT '
+                              'and CUDA', '/usr', PathVariable.PathAccept))
+        opts.Add(PathVariable('ROCM_PREFIX', 'AMD ROCm prefix (e.g. /opt/rocm), used with '
+                              'BUILD_GPU_DIRECT; empty (default) builds without ROCm',
+                              '', PathVariable.PathAccept))
         opts.Add(EnumVariable('BUILD_TYPE', "Set the build type", 'release',
                               ['dev', 'debug', 'release'], ignorecase=1))
         opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
