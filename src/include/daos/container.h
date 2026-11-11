@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,6 +41,8 @@ struct dc_cont {
 	uint32_t		dc_min_ver;
 	uint32_t		dc_closing:1,
 				dc_slave:1; /* generated via g2l */
+	/** warned that device memory fetches from this container skip checksum verification */
+	bool dc_dev_mem_csum_warned;
 };
 
 static inline struct dc_cont *

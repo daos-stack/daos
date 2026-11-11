@@ -241,6 +241,12 @@ obj_metrics_alloc_internal(const char *path, int tgt_id, bool server)
 	if (rc)
 		D_WARN("Failed to create EC agg blocked counter: " DF_RC "\n", DP_RC(rc));
 
+	rc = d_tm_add_metric(&metrics->opm_gpu_direct, D_TM_COUNTER,
+			     "total number of successful GPU direct object operations", "ops",
+			     "%s/gpu_direct%s", path, tgt_path);
+	if (rc)
+		D_WARN("Failed to create GPU direct counter: " DF_RC "\n", DP_RC(rc));
+
 	return metrics;
 }
 

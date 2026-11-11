@@ -195,6 +195,8 @@ enum obj_rpc_flags {
 	ORF_CPD_RDONLY		= (1 << 25),
 	/* Use for rebuild fetch epoch selection */
 	ORF_FETCH_EPOCH_EC_AGG_BOUNDARY = (1 << 26),
+	/* Client bulk handles reference GPU memory. */
+	ORF_GPU_DIRECT		= (1 << 27),
 };
 /* clang-format on */
 

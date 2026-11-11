@@ -585,6 +585,19 @@ int daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 int dc_obj_init(void);
 void dc_obj_fini(void);
 
+/* clang-format off */
+/**
+ * Check the memory attributes of an I/O. \a mem_attrs can be NULL. When \a sgls is not NULL,
+ * every iov of sgls[i] must lie inside the region of mem_attrs[i].ma_handle, if any.
+ */
+int dc_obj_mem_attrs_valid(const daos_mem_attr_t *mem_attrs, d_sg_list_t *sgls, unsigned int nr);
+/** Copy memory attributes, taking a reference on their registered regions. */
+int dc_obj_mem_attrs_dup(const daos_mem_attr_t *mem_attrs, unsigned int nr,
+			 daos_mem_attr_t **dup);
+/** Free memory attributes created by dc_obj_mem_attrs_dup(). */
+void dc_obj_mem_attrs_free(daos_mem_attr_t *mem_attrs, unsigned int nr);
+/* clang-format on */
+
 int dc_obj_register_class(tse_task_t *task);
 int dc_obj_query_class(tse_task_t *task);
 int dc_obj_list_class(tse_task_t *task);

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -10,6 +11,7 @@
  * tests/suite/daos_obj.c
  */
 #define D_LOGFAC	DD_FAC(tests)
+#include <dlfcn.h>
 #include "daos_test.h"
 
 #include "daos_iotest.h"
@@ -5368,6 +5370,150 @@ io_57(void **state)
 	reintegrate_single_pool_rank(arg, 0, false);
 }
 
+/* CUDA runtime is loaded at run time so that daos_test has no CUDA build dependency */
+struct cuda_rt {
+	void *handle;
+	int (*get_count)(int *count);
+	int (*malloc_dev)(void **ptr, size_t size);
+	int (*free_dev)(void *ptr);
+	int (*memcpy_)(void *dst, const void *src, size_t size, int kind);
+};
+
+#define CUDA_MEMCPY_H2D 1
+#define CUDA_MEMCPY_D2H 2
+
+static bool
+cuda_rt_load(struct cuda_rt *rt)
+{
+	const char *libs[] = {"libcudart.so.12", "libcudart.so"};
+	int         count  = 0;
+	int         i;
+
+	memset(rt, 0, sizeof(*rt));
+	for (i = 0; i < ARRAY_SIZE(libs) && rt->handle == NULL; i++)
+		rt->handle = dlopen(libs[i], RTLD_NOW);
+	if (rt->handle == NULL)
+		return false;
+
+	rt->get_count  = dlsym(rt->handle, "cudaGetDeviceCount");
+	rt->malloc_dev = dlsym(rt->handle, "cudaMalloc");
+	rt->free_dev   = dlsym(rt->handle, "cudaFree");
+	rt->memcpy_    = dlsym(rt->handle, "cudaMemcpy");
+	if (rt->get_count && rt->malloc_dev && rt->free_dev && rt->memcpy_ &&
+	    rt->get_count(&count) == 0 && count > 0)
+		return true;
+
+	dlclose(rt->handle);
+	rt->handle = NULL;
+	return false;
+}
+
+/** GPU direct update/fetch round trip, data is verified through host copies. */
+static void
+io_gpu_direct(void **state)
+{
+	test_arg_t              *arg  = *state;
+	const size_t             size = 1024 * 1024;
+	struct cuda_rt           rt;
+	struct ioreq             req;
+	daos_obj_id_t            oid;
+	daos_key_t               dkey;
+	daos_iod_t               iod = {0};
+	d_sg_list_t              sgl = {0};
+	d_iov_t                  iov;
+	daos_mem_attr_t          attr = {0};
+	struct daos_oclass_attr *oca;
+	daos_prop_t             *prop;
+	daos_handle_t            coh;
+	uuid_t                   uuid;
+	char                     str[37];
+	void                    *dev_in  = NULL;
+	void                    *dev_out = NULL;
+	char                    *host_in;
+	char                    *host_out;
+	int                      rc;
+
+	if (getenv("D_MEM_DEVICE") == NULL) {
+		print_message("D_MEM_DEVICE is not set, skip\n");
+		skip();
+	}
+	/* GPU direct I/O rejects EC objects */
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+	oca = daos_oclass_attr_find(oid, NULL);
+	if (oca != NULL && daos_oclass_is_ec(oca)) {
+		print_message("EC object class, skip\n");
+		skip();
+	}
+	if (!cuda_rt_load(&rt)) {
+		print_message("no CUDA runtime or device, skip\n");
+		skip();
+	}
+
+	/*
+	 * GPU direct updates are rejected on containers with checksums, which are on by default,
+	 * so use a container without them.
+	 */
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+	prop->dpp_entries[0].dpe_val  = DAOS_PROP_CO_CSUM_OFF;
+	rc                            = daos_cont_create(arg->pool.poh, &uuid, prop, NULL);
+	assert_rc_equal(rc, 0);
+	daos_prop_free(prop);
+	uuid_unparse(uuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	oid = daos_test_oid_gen(coh, dts_obj_class, 0, 0, arg->myrank);
+
+	D_ALLOC(host_in, size);
+	assert_non_null(host_in);
+	D_ALLOC(host_out, size);
+	assert_non_null(host_out);
+	dts_buf_render(host_in, size);
+
+	assert_int_equal(rt.malloc_dev(&dev_in, size), 0);
+	assert_int_equal(rt.malloc_dev(&dev_out, size), 0);
+	assert_int_equal(rt.memcpy_(dev_in, host_in, size, CUDA_MEMCPY_H2D), 0);
+
+	ioreq_init(&req, coh, oid, DAOS_IOD_SINGLE, arg);
+
+	d_iov_set(&dkey, "gpu_dkey", strlen("gpu_dkey"));
+	d_iov_set(&iod.iod_name, "gpu_akey", strlen("gpu_akey"));
+	iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_size = size;
+	iod.iod_nr   = 1;
+	sgl.sg_nr    = 1;
+	sgl.sg_iovs  = &iov;
+
+	attr.ma_mem_type  = DAOS_MEM_TYPE_CUDA;
+	attr.ma_device_id = 0;
+
+	d_iov_set(&iov, dev_in, size);
+	rc = daos_obj_update_ma(req.oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, &attr, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&iov, dev_out, size);
+	rc = daos_obj_fetch_ma(req.oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, &attr, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	memset(host_out, 0, size);
+	assert_int_equal(rt.memcpy_(host_out, dev_out, size, CUDA_MEMCPY_D2H), 0);
+	assert_memory_equal(host_in, host_out, size);
+
+	punch_dkey("gpu_dkey", DAOS_TX_NONE, &req);
+	ioreq_fini(&req);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
+	assert_rc_equal(rc, 0);
+	rt.free_dev(dev_in);
+	rt.free_dev(dev_out);
+	dlclose(rt.handle);
+	D_FREE(host_in);
+	D_FREE(host_out);
+}
+
+/* clang-format off */
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -5482,7 +5628,10 @@ static const struct CMUnitTest io_tests[] = {
 	  io_56, async_disable, test_case_teardown},
 	{ "IO57: collective object query with rank_0 excluded",
 	  io_57, rebuild_sub_rf1_setup, test_teardown},
+	{ "IO58: GPU direct update/fetch (needs CUDA and D_MEM_DEVICE=1)",
+	  io_gpu_direct, async_disable, test_case_teardown},
 };
+/* clang-format on */
 
 int
 obj_setup_internal(void **state)

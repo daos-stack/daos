@@ -240,6 +240,29 @@ daos_eq_putref(struct daos_eq_private *eqx)
 	daos_hhash_link_putref(&eqx->eqx_hlink);
 }
 
+int
+daos_eq_net_domain(daos_handle_t eqh, daos_net_domain_t *domain)
+{
+	struct daos_eq_private *eqx;
+
+	if (domain == NULL)
+		return -DER_INVAL;
+
+	if (daos_handle_is_inval(eqh)) {
+		if (daos_eq_ctx == NULL)
+			return -DER_UNINIT;
+		*domain = daos_eq_ctx;
+		return 0;
+	}
+
+	eqx = daos_eq_lookup(eqh);
+	if (eqx == NULL)
+		return -DER_NONEXIST;
+	*domain = eqx->eqx_ctx;
+	daos_eq_putref(eqx);
+	return 0;
+}
+
 static void
 daos_eq_delete(struct daos_eq_private *eqx)
 {

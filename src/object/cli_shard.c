@@ -984,7 +984,12 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		if (is_ec_obj && reasb_req->orr_size_fetch)
 			goto out;
 
-		if (orwo->orw_sgls.ca_count > 0) {
+		if (orwo->orw_sgls.ca_count > 0 && (orw->orw_flags & ORF_GPU_DIRECT)) {
+			/* never copy into device memory with the CPU */
+			D_ERROR(DF_UOID " inline reply to a GPU direct fetch\n",
+				DP_UOID(orw->orw_oid));
+			rc = -DER_PROTO;
+		} else if (orwo->orw_sgls.ca_count > 0) {
 			/* inline transfer */
 			rc = daos_sgls_copy_data_out(rw_args->rwaa_sgls,
 						     orw->orw_nr,
@@ -1057,9 +1062,12 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		if (rc != 0)
 			goto out;
 
-		rc = rw_cb_csum_verify(rw_args);
-		if (rc != 0)
-			goto out;
+		/* GPU buffers can't be read by the CPU, so the data can't be verified */
+		if (!(orw->orw_flags & ORF_GPU_DIRECT)) {
+			rc = rw_cb_csum_verify(rw_args);
+			if (rc != 0)
+				goto out;
+		}
 
 		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
 			daos_iom_t			*reply_maps;
@@ -1226,7 +1234,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_dti_cos.ca_count = 0;
 	orw->orw_dti_cos.ca_arrays = NULL;
 
-	orw->orw_api_flags = api_args->flags;
+	/* DAOS_OBJ_IO_GPU_DIRECT is client only; the server reads these as condition flags */
+	orw->orw_api_flags   = api_args->flags & ~DAOS_OBJ_IO_GPU_DIRECT;
 	orw->orw_epoch = auxi->epoch.oe_value;
 	orw->orw_epoch_first = auxi->epoch.oe_first;
 	if (orw->orw_flags & ORF_FETCH_EPOCH_EC_AGG_BOUNDARY) {
@@ -1276,7 +1285,15 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			orw->orw_sgls.ca_count = 0;
 			orw->orw_sgls.ca_arrays = NULL;
 		} else {
-			/* Transfer data inline */
+			/*
+			 * Transfer data inline. Device memory must never get here: encoding or
+			 * decoding the RPC would read or write it with the CPU.
+			 */
+			if (sgls != NULL && (auxi->flags & ORF_GPU_DIRECT)) {
+				D_ERROR(DF_UOID " GPU direct I/O without a bulk handle\n",
+					DP_UOID(shard->do_id));
+				D_GOTO(out_req, rc = -DER_INVAL);
+			}
 			if (sgls != NULL)
 				orw->orw_sgls.ca_count = nr;
 			else

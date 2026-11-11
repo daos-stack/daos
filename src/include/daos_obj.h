@@ -15,6 +15,7 @@ extern "C" {
 
 #include <daos_types.h>
 #include <daos_event.h>
+#include <daos_mem.h>
 #include <daos_obj_class.h>
 #include <daos_prop.h>
 
@@ -802,6 +803,26 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       d_sg_list_t *sgls, daos_iom_t *ioms, daos_event_t *ev);
 
 /**
+ * Memory attributes variant of daos_obj_fetch(), for GPU and other device memory buffers.
+ *
+ * \param[in]	mem_attrs	Optional array of \a nr memory attributes, one per
+ *				sgl in \a sgls. Pass NULL for host memory.
+ *
+ * The I/O is a device memory (GPU direct) I/O if any entry of \a mem_attrs is device memory;
+ * there is no flag to pass. Host memory only I/O takes the regular path, including checksums
+ * and EC. Device memory I/O fails with -DER_NOTSUPPORTED on EC objects and when CaRT runs
+ * without memory device support (D_MEM_DEVICE unset, or a Mercury without bulk memory
+ * attributes), and a device memory update also in a transaction and on containers with
+ * checksums or dedup. A device memory fetch from a container with checksums is allowed, but the
+ * data is not verified, since the CPU cannot read the buffers; a warning is logged once per
+ * container handle. For what the calling thread needs (CUDA context) see daos_obj_update_ma().
+ */
+int
+daos_obj_fetch_ma(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_key_t *dkey,
+		  unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
+		  const daos_mem_attr_t *mem_attrs, daos_iom_t *ioms, daos_event_t *ev);
+
+/**
  * Insert or update object records stored in co-located arrays.
  *
  * \param[in]	oh	Object open handle.
@@ -853,6 +874,31 @@ int
 daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 		d_sg_list_t *sgls, daos_event_t *ev);
+
+/**
+ * Memory attributes variant of daos_obj_update(), for GPU and other device memory buffers.
+ *
+ * \param[in]	mem_attrs	Optional array of \a nr memory attributes, one per
+ *				sgl in \a sgls. Pass NULL for host memory.
+ *
+ * The I/O is a device memory (GPU direct) I/O if any entry of \a mem_attrs is device memory;
+ * there is no flag to pass. Host memory only I/O takes the regular path, including checksums
+ * and EC. Device memory I/O fails with -DER_NOTSUPPORTED on EC objects and when CaRT runs
+ * without memory device support (D_MEM_DEVICE unset, or a Mercury without bulk memory
+ * attributes), and a device memory update also in a transaction and on containers with
+ * checksums or dedup.
+ *
+ * Device memory is registered with the NIC by the calling thread, or, when an update is retried,
+ * by the thread that polls the event queue. Both must have what the device runtime needs of a
+ * registering thread. For CUDA that is a current context of the device
+ * (cuCtxSetCurrent()), where the transport makes CUDA calls to register: with the registration
+ * cache on, or on platforms that register through dma-buf. Without it the registration may fail,
+ * or a registered region may be registered again by every I/O.
+ */
+int
+daos_obj_update_ma(daos_handle_t oh, daos_handle_t th, uint64_t flags, daos_key_t *dkey,
+		   unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
+		   const daos_mem_attr_t *mem_attrs, daos_event_t *ev);
 
 /**
  * Distribution key enumeration.

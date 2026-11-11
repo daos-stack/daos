@@ -23,6 +23,7 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 #include "cli_csum.h"
+#include "cli_mem_attr.h"
 
 /**
  * Open an object shard (shard object), cache the open handle.
@@ -2179,9 +2180,8 @@ out:
 
 /* prepare the bulk handle(s) for obj request */
 int
-obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
-	      crt_bulk_perm_t bulk_perm, tse_task_t *task,
-	      crt_bulk_t **p_bulks)
+obj_bulk_prep(d_sg_list_t *sgls, daos_mem_attr_t *mem_attrs, unsigned int nr, bool bulk_bind,
+	      crt_bulk_perm_t bulk_perm, tse_task_t *task, crt_bulk_t **p_bulks)
 {
 	crt_bulk_t	*bulks;
 	int		 i = 0;
@@ -2196,8 +2196,19 @@ obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 	for (; sgls != NULL && i < nr; i++) {
 		if (sgls[i].sg_iovs != NULL &&
 		    sgls[i].sg_iovs[0].iov_buf != NULL) {
-			rc = crt_bulk_create(daos_task2ctx(task), &sgls[i],
-					     bulk_perm, &bulks[i]);
+			daos_mem_attr_t *mem_attr = mem_attrs == NULL ? NULL : &mem_attrs[i];
+			d_mem_dev_t      mdev;
+
+			rc = dc_obj_mem_attr_ctx_prep(mem_attr, daos_task2ctx(task));
+			if (rc != 0)
+				D_GOTO(out, rc);
+			/* the transport only needs the memory type and the device */
+			if (mem_attr != NULL) {
+				mdev.md_type      = (d_mem_type_t)mem_attr->ma_mem_type;
+				mdev.md_device_id = mem_attr->ma_device_id;
+			}
+			rc = crt_bulk_create_with_mdev(daos_task2ctx(task), &sgls[i], bulk_perm,
+						       mem_attr != NULL ? &mdev : NULL, &bulks[i]);
 			if (rc < 0)
 				D_GOTO(out, rc);
 			if (!bulk_bind)
@@ -2249,6 +2260,10 @@ obj_sgls_bulk_needed(struct obj_auxi_args *obj_auxi, d_sg_list_t *sgls, unsigned
 {
 	daos_size_t sgls_size;
 
+	/* GPU buffers cannot be inline-packed (CPU can't dereference them) */
+	if (obj_auxi->flags & ORF_GPU_DIRECT)
+		return true;
+
 	/* inline fetch needs to pack sgls buffer into RPC so uses it to check
 	 * if need bulk transferring.
 	 */
@@ -2262,20 +2277,29 @@ obj_sgls_bulk_needed(struct obj_auxi_args *obj_auxi, d_sg_list_t *sgls, unsigned
 
 static int
 obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
-		 unsigned int nr, bool update, bool bulk_bind,
+		 daos_mem_attr_t *mem_attrs, unsigned int nr, bool update, bool bulk_bind,
 		 tse_task_t *task, struct obj_auxi_args *obj_auxi)
 {
-	crt_bulk_perm_t		bulk_perm;
-	int			rc = 0;
+	daos_mem_attr_t *bulk_mem_attrs = NULL;
+	crt_bulk_perm_t  bulk_perm;
+	int              rc = 0;
 
 	if ((obj_auxi->io_retry && !obj_auxi->reasb_req.orr_size_fetched &&
 	     obj_auxi->bulks != NULL) || obj_auxi->reasb_req.orr_size_fetch || sgls == NULL)
 		return 0;
 
+	/*
+	 * EC reassembled sgls are host buffers. A copy made by obj_sgls_dup() keeps pointing at
+	 * the user buffers, since iovs are never merged for device memory or a registered region,
+	 * so it keeps the attributes.
+	 */
+	if (mem_attrs != NULL && !(obj_auxi->req_reasbed && sgls == obj_auxi->reasb_req.orr_sgls))
+		bulk_mem_attrs = mem_attrs;
+
 	if (obj_sgls_bulk_needed(obj_auxi, sgls, nr)) {
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
-		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
-				   &obj_auxi->bulks);
+		rc        = obj_bulk_prep(sgls, bulk_mem_attrs, nr, bulk_bind, bulk_perm, task,
+					  &obj_auxi->bulks);
 	}
 	obj_auxi->reasb_req.orr_size_fetched = 0;
 
@@ -2655,6 +2679,20 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			}
 		}
 
+		/*
+		 * On a retry the sgls may be a copy or reassembled, and the caller's attributes
+		 * may be gone, so check them once. The GPU flag follows the attributes, whatever
+		 * the caller passed in the flags (the task API does not go through
+		 * daos_obj_fetch_ma()).
+		 */
+		if (!obj_auxi->io_retry && !obj_auxi->req_reasbed) {
+			rc = dc_obj_mem_attrs_valid(f_args->mem_attrs, f_args->sgls, f_args->nr);
+			if (rc != 0)
+				D_GOTO(out, rc);
+			f_args->flags = dc_obj_mem_attrs_flags(
+			    f_args->mem_attrs, f_args->nr, f_args->flags & ~DAOS_OBJ_IO_GPU_DIRECT);
+		}
+
 		if ((!obj_auxi->io_retry && !obj_auxi->req_reasbed) ||
 		    size_fetch) {
 			if (!obj_key_valid(obj->cob_md.omd_id, f_args->dkey,
@@ -2695,6 +2733,15 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 					"DAOS_COND_AKEY_UPDATE | DAOS_COND_AKEY_INSERT\n");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
+		}
+
+		/* as for fetch: check the attributes once, and derive the GPU flag from them */
+		if (!obj_auxi->io_retry && !obj_auxi->req_reasbed) {
+			rc = dc_obj_mem_attrs_valid(u_args->mem_attrs, u_args->sgls, u_args->nr);
+			if (rc != 0)
+				D_GOTO(out, rc);
+			u_args->flags = dc_obj_mem_attrs_flags(
+			    u_args->mem_attrs, u_args->nr, u_args->flags & ~DAOS_OBJ_IO_GPU_DIRECT);
 		}
 
 		if (!obj_auxi->io_retry && !obj_auxi->req_reasbed) {
@@ -4883,6 +4930,37 @@ sgls_set_merged_bitmap(struct sgl_merge_ctx *ctx, d_sg_list_t *sg, uint32_t frag
 }
 
 /**
+ * Copy user-provided mem_attrs into task-owned memory so that the
+ * async task does not hold a dangling pointer after the caller returns.
+ */
+static int
+obj_mem_attrs_dup(struct obj_auxi_args *obj_auxi, daos_obj_rw_t *args)
+{
+	daos_mem_attr_t *dup;
+	int              rc;
+
+	if (args->mem_attrs == NULL || obj_auxi->mem_attrs_dup != NULL)
+		return 0;
+
+	rc = dc_obj_mem_attrs_dup(args->mem_attrs, args->nr, &dup);
+	if (rc != 0)
+		return rc;
+
+	/* Leave args->mem_attrs to the caller: the task may be rescheduled (e.g. by the array
+	 * layer) after obj_mem_attrs_dup_fini() frees the copy.
+	 */
+	obj_auxi->mem_attrs_dup = dup;
+	return 0;
+}
+
+static void
+obj_mem_attrs_dup_fini(struct obj_auxi_args *obj_auxi, unsigned int nr)
+{
+	dc_obj_mem_attrs_free(obj_auxi->mem_attrs_dup, nr);
+	obj_auxi->mem_attrs_dup = NULL;
+}
+
+/**
  * obj_sgls_dup - Normalize and optimize scatter-gather lists (SGLs)
  * @obj_auxi: Auxiliary object context
  * @args: DAOS object operation arguments
@@ -4929,12 +5007,21 @@ obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool updat
 	uint32_t             i, j, k, sgl_idx, bitmap_sz;
 	int                  rc  = 0;
 	struct sgl_merge_ctx ctx = {0};
-	bool                 merge_iov =
-            iov_frag_size == 0 ? false : obj_sgls_bulk_needed(obj_auxi, args->sgls, args->nr);
+	bool                 merge_iov;
 
 	sgls = args->sgls;
 	if (obj_auxi->req_dup_sgl || sgls == NULL)
 		return 0;
+
+	/*
+	 * The CPU cannot copy GPU buffers into a merged host buffer, and a registered region does
+	 * not cover a merged buffer. mem_attrs are only dup'ed later, so check the caller's copy.
+	 */
+	if (iov_frag_size == 0 || (obj_auxi->flags & ORF_GPU_DIRECT) ||
+	    dc_obj_mem_attrs_has_reg(args->mem_attrs, args->nr))
+		merge_iov = false;
+	else
+		merge_iov = obj_sgls_bulk_needed(obj_auxi, args->sgls, args->nr);
 
 	obj_auxi->req_dup_sgl = 1;
 	/* First pass: Analyze SGL structure and mark merge candidates */
@@ -5288,8 +5375,10 @@ obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 	}
 	obj_bulk_fini(obj_auxi);
 	obj_auxi_free_failed_tgt_list(obj_auxi);
-	if (!retry)
+	if (!retry) {
 		obj_dup_sgls_free(obj_auxi);
+		obj_mem_attrs_dup_fini(obj_auxi, obj_auxi->iod_nr);
+	}
 	obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
 	obj_auxi->req_reasbed = false;
 
@@ -6293,6 +6382,11 @@ obj_cond_fetch_prep(tse_task_t *task, struct obj_auxi_args *obj_auxi)
 	D_ASSERT(obj_auxi->cond_fetch_split == 0);
 	for (i = 0; i < args->nr; i++) {
 		fetch_flags = per_akey ? args->iods[i].iod_flags : args->flags;
+		/* as daos_obj_fetch_ma(), the GPU flag follows the memory attribute of the akey */
+		fetch_flags &= ~DAOS_OBJ_IO_GPU_DIRECT;
+		if (obj_auxi->mem_attrs_dup != NULL)
+			fetch_flags =
+			    dc_obj_mem_attrs_flags(&obj_auxi->mem_attrs_dup[i], 1, fetch_flags);
 		sgl = args->sgls != NULL ? &args->sgls[i] : NULL;
 		rc = dc_obj_fetch_task_create(args->oh, obj_auxi->th, fetch_flags, args->dkey, 1,
 					      0, &args->iods[i], sgl, NULL, NULL, NULL,
@@ -6301,6 +6395,12 @@ obj_cond_fetch_prep(tse_task_t *task, struct obj_auxi_args *obj_auxi)
 			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create failed, "DF_RC"\n",
 				task, DP_OID(obj_auxi->obj->cob_md.omd_id), DP_RC(rc));
 			goto out;
+		}
+		/* the parent task, and so its copy of the attributes, outlives the sub-task */
+		if (obj_auxi->mem_attrs_dup != NULL) {
+			daos_obj_fetch_t *sub_args = dc_task_get_args(sub_task);
+
+			sub_args->mem_attrs = &obj_auxi->mem_attrs_dup[i];
 		}
 
 		tse_task_addref(sub_task);
@@ -6351,6 +6451,22 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
+	if ((args->flags & DAOS_OBJ_IO_GPU_DIRECT) && obj_is_ec(obj)) {
+		D_ERROR("GPU direct I/O not supported on EC objects\n");
+		obj_decref(obj);
+		D_GOTO(out_task, rc = -DER_NOTSUPPORTED);
+	}
+
+	/* The CPU cannot read GPU buffers, so dc_rw_cb() does not verify the fetched data */
+	if ((args->flags & DAOS_OBJ_IO_GPU_DIRECT) &&
+	    daos_csummer_initialized(obj->cob_co->dc_csummer) &&
+	    !obj->cob_co->dc_dev_mem_csum_warned) {
+		obj->cob_co->dc_dev_mem_csum_warned = true;
+		D_WARN(DF_UUID ": data fetched into device memory is not verified against the "
+			       "checksums of the container (logged once per container handle)\n",
+		       DP_UUID(obj->cob_co->dc_uuid));
+	}
+
 	rc = obj_task_init(task, DAOS_OBJ_RPC_FETCH, map_ver, args->th,
 			   &obj_auxi, obj);
 	if (rc != 0) {
@@ -6358,9 +6474,19 @@ dc_obj_fetch_task(tse_task_t *task)
 		D_GOTO(out_task, rc);
 	}
 
+	obj_auxi->iod_nr = args->nr;
+	if (args->flags & DAOS_OBJ_IO_GPU_DIRECT)
+		obj_auxi->flags |= ORF_GPU_DIRECT;
+
 	rc = obj_sgls_dup(obj_auxi, args, false);
 	if (rc) {
 		D_ERROR(DF_OID" obj_sgls_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
+		D_GOTO(out_task, rc);
+	}
+
+	rc = obj_mem_attrs_dup(obj_auxi, args);
+	if (rc) {
+		D_ERROR(DF_OID " obj_mem_attrs_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
 		D_GOTO(out_task, rc);
 	}
 
@@ -6410,7 +6536,6 @@ dc_obj_fetch_task(tse_task_t *task)
 	}
 
 	obj_auxi->dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
-	obj_auxi->iod_nr = args->nr;
 
 	rc = obj_iom_state_init(obj_auxi, args);
 	if (rc != 0)
@@ -6458,8 +6583,8 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (!obj_auxi->is_ec_obj && (!obj_auxi->io_retry || obj_auxi->initial_shard == UINT32_MAX))
 		obj_auxi->initial_shard = obj_auxi->req_tgts.ort_shard_tgts[0].st_shard;
 
-	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr,
-			      false, false, task, obj_auxi);
+	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, obj_auxi->mem_attrs_dup, args->nr, false,
+			      false, task, obj_auxi);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
@@ -6568,6 +6693,22 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	uint32_t		shard_cnt;
 	int			rc;
 
+	if ((args->flags & DAOS_OBJ_IO_GPU_DIRECT) && obj_is_ec(obj)) {
+		D_ERROR("GPU direct I/O not supported on EC objects\n");
+		obj_decref(obj);
+		D_GOTO(out_task, rc = -DER_NOTSUPPORTED);
+	}
+
+	/* The CPU cannot checksum GPU buffers, and the server rejects an update
+	 * on a checksum-enabled container if the client sends no checksums.
+	 */
+	if ((args->flags & DAOS_OBJ_IO_GPU_DIRECT) &&
+	    daos_csummer_initialized(obj->cob_co->dc_csummer)) {
+		D_ERROR("GPU direct update not supported on containers with checksum or dedup\n");
+		obj_decref(obj);
+		D_GOTO(out_task, rc = -DER_NOTSUPPORTED);
+	}
+
 	rc = obj_task_init(task, DAOS_OBJ_RPC_UPDATE, map_ver, args->th,
 			   &obj_auxi, obj);
 	if (rc != 0) {
@@ -6575,13 +6716,36 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		D_GOTO(out_task, rc);
 	}
 
+	obj_auxi->iod_nr = args->nr;
+	if (args->flags & DAOS_OBJ_IO_GPU_DIRECT)
+		obj_auxi->flags |= ORF_GPU_DIRECT;
+
 	rc = obj_sgls_dup(obj_auxi, args, true);
 	if (rc) {
 		D_ERROR(DF_OID" obj_sgls_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
 		D_GOTO(out_task, rc);
 	}
 
+	rc = obj_mem_attrs_dup(obj_auxi, args);
+	if (rc) {
+		D_ERROR(DF_OID " obj_mem_attrs_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
+		D_GOTO(out_task, rc);
+	}
+
 	if (obj_auxi->tx_convert) {
+		/*
+		 * obj_comp_cb() is not registered for this run (see obj_task_init()), so nothing
+		 * else releases the copy of the attributes and its references on the handles. The
+		 * transaction does not use them.
+		 */
+		obj_mem_attrs_dup_fini(obj_auxi, obj_auxi->iod_nr);
+		if (obj_auxi->flags & ORF_GPU_DIRECT) {
+			D_ERROR("GPU direct update cannot be converted to a transaction\n");
+			/* dc_tx_convert() would have dropped the object reference */
+			obj_decref(obj);
+			D_GOTO(out_task, rc = -DER_NOTSUPPORTED);
+		}
+
 		if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed) {
 			args->iods = obj_auxi->reasb_req.orr_uiods;
 			args->sgls = obj_auxi->reasb_req.orr_usgls;
@@ -6592,7 +6756,6 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	}
 
 	obj_auxi->dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
-	obj_auxi->iod_nr = args->nr;
 	if (obj_is_ec(obj)) {
 		rc = obj_rw_req_reassemb(obj, args, NULL, obj_auxi);
 		if (rc) {
@@ -6637,10 +6800,13 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	 */
 	if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed)
 		args->sgls = obj_auxi->reasb_req.orr_sgls;
-	rc = obj_csum_update(obj, args, obj_auxi);
-	if (rc) {
-		D_ERROR("obj_csum_update error: "DF_RC"\n", DP_RC(rc));
-		goto out_task;
+	/* Skip checksum for GPU buffers — CPU cannot dereference them */
+	if (!(obj_auxi->flags & ORF_GPU_DIRECT)) {
+		rc = obj_csum_update(obj, args, obj_auxi);
+		if (rc) {
+			D_ERROR("obj_csum_update error: " DF_RC "\n", DP_RC(rc));
+			goto out_task;
+		}
 	}
 	if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed && obj_auxi->reasb_req.orr_single_tgt)
 		args->sgls = obj_auxi->reasb_req.orr_usgls;
@@ -6651,7 +6817,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
 		DP_OID(obj->cob_md.omd_id), obj_auxi->dkey_hash);
 
-	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, args->nr, true,
+	rc = obj_rw_bulk_prep(obj, args->iods, args->sgls, obj_auxi->mem_attrs_dup, args->nr, true,
 			      obj_auxi->req_tgts.ort_srv_disp, task, obj_auxi);
 	if (rc != 0)
 		goto out_task;
@@ -6679,9 +6845,16 @@ dc_obj_update_task(tse_task_t *task)
 	if (rc != 0)
 		goto comp;
 
-	if (daos_handle_is_valid(args->th))
+	if (daos_handle_is_valid(args->th)) {
+		if (args->flags & DAOS_OBJ_IO_GPU_DIRECT) {
+			D_ERROR("GPU direct update is not supported in a transaction\n");
+			obj_decref(obj);
+			D_GOTO(comp, rc = -DER_NOTSUPPORTED);
+		}
+
 		/* add the operation to DTX and complete immediately */
 		return dc_tx_attach(args->th, obj, DAOS_OBJ_RPC_UPDATE, task, 0, true);
+	}
 
 	/* submit the update */
 	return dc_obj_update(task, &epoch, map_ver, args, obj);
