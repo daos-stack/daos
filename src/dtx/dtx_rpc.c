@@ -1075,6 +1075,7 @@ again:
 		    dss_get_module_info()->dmi_tgt_id == target->ta_comp.co_index) {
 			d_list_del(&dsp->dsp_link);
 			if (for_io) {
+				dsp->dsp_status = -DER_INPROGRESS;
 				d_list_add_tail(&dsp->dsp_link, act_list);
 			} else {
 				D_WARN("Hit self leader for DTX " DF_DTI " when cleanup\n",
