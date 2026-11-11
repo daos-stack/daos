@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -734,6 +735,8 @@ typedef struct {
 	 * internal use only
 	 */
 	d_iov_t			*csum_iov;
+	/** Optional per-sgl memory attributes for GPU direct I/O (last to keep the ABI). */
+	const daos_mem_attr_t   *mem_attrs;
 } daos_obj_rw_t;
 
 /** fetch args struct */

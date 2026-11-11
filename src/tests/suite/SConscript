@@ -6,7 +6,7 @@ def scons():
     Import('denv', 'base_env')
 
     libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
-    libraries += ['uuid', 'cmocka', 'pthread', 'isal', 'dpar']
+    libraries += ['uuid', 'cmocka', 'pthread', 'isal', 'dpar', 'dl']
 
     dfuse_env = base_env.Clone()
     dfuse_env.compiler_setup()

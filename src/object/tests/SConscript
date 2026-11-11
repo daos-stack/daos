@@ -21,6 +21,9 @@ def scons():
                              '../../common/tests_lib.c'],
                             LIBS=['daos_common', 'cmocka', 'gurt', ])
 
+    unit_env.d_test_program(['cli_mem_attr_tests.c', '../cli_mem_attr.c'],
+                            LIBS=['daos_common', 'cart', 'cmocka', 'gurt', ])
+
 
 if __name__ == "SCons.Script":
     scons()

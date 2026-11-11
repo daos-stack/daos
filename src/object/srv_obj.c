@@ -442,6 +442,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			sgl_sent.sg_nr = sgl_sent.sg_nr_out = iov_idx - start;
 			bulk_iovs += sgl_sent.sg_nr;
 
+			/* the remote bulk may be device memory; the local one is host memory */
 again:
 			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, bulk_perm,
 					     &local_bulk);
@@ -2492,6 +2493,16 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	default:
 		lat = tls->ot_op_lat[opc];
 	}
+
+	if (opc == DAOS_OBJ_RPC_UPDATE || opc == DAOS_OBJ_RPC_TGT_UPDATE ||
+	    opc == DAOS_OBJ_RPC_FETCH) {
+		orw = crt_req_get(ioc->ioc_rpc);
+		if (orw->orw_flags & ORF_GPU_DIRECT) {
+			D_DEBUG(DB_IO, "GPU direct I/O, opc %u\n", opc);
+			d_tm_inc_counter(opm->opm_gpu_direct, 1);
+		}
+	}
+
 	d_tm_set_gauge(lat, time);
 }
 
