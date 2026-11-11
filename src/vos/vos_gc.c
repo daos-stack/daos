@@ -1039,7 +1039,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 	if (cont != NULL)
 		vos_cont_addref(cont);
 
-	rc = umem_tx_begin(&pool->vp_umm, NULL);
+	rc = vos_cache_tx_begin(pool);
 	if (rc) {
 		D_ERROR("Failed to start transacton for " DF_UUID ": " DF_RC "\n",
 			DP_UUID(pool->vp_id), DP_RC(rc));

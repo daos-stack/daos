@@ -1976,6 +1976,27 @@ vos_pool_is_evictable(struct vos_pool *pool)
 	return false;
 }
 
+/*
+ * This transaction begin wrapper is invoked for a phase 2 pool when a transaction may
+ * trigger NE growth, but umem_cache_pin() was not called beforehand (meaning the NE
+ * reserve was omitted).
+ */
+static inline int
+vos_cache_tx_begin(struct vos_pool *pool)
+{
+	int rc;
+
+	if (vos_pool_is_evictable(pool)) {
+		rc = umem_cache_ne_reserve(vos_pool2store(pool));
+		if (rc) {
+			DL_ERROR(rc, "NE reserve failed for pool:" DF_UUID "",
+				 DP_UUID(pool->vp_id));
+			return rc;
+		}
+	}
+	return umem_tx_begin(vos_pool2umm(pool), NULL);
+}
+
 int
 vos_obj_bkt_update(struct vos_object *obj, umem_off_t umoff, bool shared);
 
@@ -2115,6 +2136,12 @@ vos_cache_pin(struct vos_pool *pool, struct umem_cache_range *ranges, int range_
 	int			 rc;
 
 	cur_dth = clear_cur_dth(pool);
+	rc      = umem_cache_ne_reserve(store);
+	if (rc) {
+		DL_ERROR(rc, "NE reserve failed for pool:" DF_UUID "", DP_UUID(pool->vp_id));
+		restore_cur_dth(pool, cur_dth);
+		return rc;
+	}
 	rc      = umem_cache_pin(store, ranges, range_nr, tier, pin_handle);
 	restore_cur_dth(pool, cur_dth);
 

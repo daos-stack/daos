@@ -716,8 +716,8 @@ test_p2_basic(void **state)
 	umem_cache_unpin(&arg->ta_store, pin_hdl);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 0);
 
-	/* Reserve free pages */
-	rc = umem_cache_reserve(&arg->ta_store);
+	/* Reserve free pages for NE growth */
+	rc = umem_cache_ne_reserve(&arg->ta_store);
 	assert_rc_equal(rc, 0);
 
 	umem_cache_free(&arg->ta_store);

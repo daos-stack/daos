@@ -1407,6 +1407,7 @@ alloc_bucket_to_full(struct umem_instance *umm, struct bucket_alloc_info *ainfo,
 
 	rg.cr_off  = umem_get_mb_base_offset(umm, id);
 	rg.cr_size = 1;
+	assert_true(umem_cache_ne_reserve(&umm->umm_pool->up_store) == 0);
 	assert_true(umem_cache_pin(&umm->umm_pool->up_store, &rg, 1, 0, &p_hdl) == 0);
 
 	if (UMOFF_IS_NULL(ainfo->start_umoff)) {

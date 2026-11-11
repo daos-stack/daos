@@ -222,6 +222,7 @@ enum umem_page_stats {
 	UMEM_PG_STATS_NONEVICTABLE = 0,
 	UMEM_PG_STATS_PINNED,
 	UMEM_PG_STATS_FREE,
+	UMEM_PG_STATS_NE_RSRV,
 	UMEM_PG_STATS_MAX,
 };
 
@@ -266,6 +267,8 @@ struct umem_cache {
 	uint32_t         ca_bmap_sz;
 	/** Free list for unmapped page info */
 	d_list_t         ca_pgs_free;
+	/** Free pages reserved for potential NE growth */
+	d_list_t           ca_pgs_ne_rsrv;
 	/** Non-evictable & evictable dirty pages */
 	d_list_t         ca_pgs_dirty;
 	/** All Non-evictable[0] & evictable[1] pages */
@@ -412,6 +415,7 @@ enum {
 	UMEM_RSRV_TIER_TX = 0,
 	UMEM_RSRV_TIER_DKEY,
 	UMEM_RSRV_TIER_OBJ,
+	UMEM_RSRV_TIER_NE,
 	UMEM_RSRV_TIER_MAX,
 };
 
@@ -472,15 +476,13 @@ void
 umem_cache_unpin(struct umem_store *store, struct umem_pin_handle *pin_handle);
 
 /** Reserve few free pages for potential non-evictable zone grow within a transaction.
- *  Caller needs to ensure there is no CPU yielding after this call till transaction
- *  start.
  *
  *  \param[in]	store		The umem store
  *
  *  \return 0 on success
  */
 int
-umem_cache_reserve(struct umem_store *store);
+umem_cache_ne_reserve(struct umem_store *store);
 
 /** Inform umem cache the last committed ID.
  *

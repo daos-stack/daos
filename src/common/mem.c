@@ -2366,6 +2366,7 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	cache->ca_mode          = cmode;
 
 	D_INIT_LIST_HEAD(&cache->ca_pgs_free);
+	D_INIT_LIST_HEAD(&cache->ca_pgs_ne_rsrv);
 	D_INIT_LIST_HEAD(&cache->ca_pgs_dirty);
 	D_INIT_LIST_HEAD(&cache->ca_pgs_lru[0]);
 	D_INIT_LIST_HEAD(&cache->ca_pgs_lru[1]);
@@ -2450,6 +2451,26 @@ cache_push_free_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 {
 	d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_free);
 	cache->ca_pgs_stats[UMEM_PG_STATS_FREE] += 1;
+}
+
+static inline void
+cache_push_ne_rsrv(struct umem_cache *cache, struct umem_page_info *pinfo)
+{
+	d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_ne_rsrv);
+	cache->ca_pgs_stats[UMEM_PG_STATS_NE_RSRV] += 1;
+}
+
+static inline struct umem_page_info *
+cache_pop_ne_rsrv(struct umem_cache *cache)
+{
+	struct umem_page_info *pinfo;
+
+	pinfo = d_list_pop_entry(&cache->ca_pgs_ne_rsrv, struct umem_page_info, pi_lru_link);
+	if (pinfo != NULL) {
+		D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_NE_RSRV] > 0);
+		cache->ca_pgs_stats[UMEM_PG_STATS_NE_RSRV] -= 1;
+	}
+	return pinfo;
 }
 
 static inline void
@@ -3287,29 +3308,6 @@ cache_evict_page(struct umem_cache *cache)
 	return 0;
 }
 
-/* FIXME: Use allocator interface to get NE grow & SOE replacement reserve */
-static inline unsigned int
-tx_reserve_nr(struct umem_cache *cache)
-{
-	unsigned int rsrv_nr = 0;
-
-	if (!cache->ca_replay_done)
-		return rsrv_nr;
-
-	/* Few free pages are always reserved for potential non-evictable zone grow */
-	D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] <= cache->ca_max_ne_pages);
-
-	/* Reserve for potential NE zone grow */
-	rsrv_nr = cache->ca_max_ne_pages - cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE];
-	if (rsrv_nr > UMEM_CACHE_RSRVD_PAGES)
-		rsrv_nr = UMEM_CACHE_RSRVD_PAGES;
-
-	/* Reserve for potential SOE replacement */
-	rsrv_nr += 0;
-
-	return rsrv_nr;
-}
-
 static inline unsigned int
 tier_reserve_nr(struct umem_cache *cache, unsigned int tier)
 {
@@ -3324,7 +3322,8 @@ tier_reserve_nr(struct umem_cache *cache, unsigned int tier)
 		/* No extra reserve for dkey tier so far */
 		/* fallthrough */
 	case UMEM_RSRV_TIER_TX:
-		rsrv_nr += tx_reserve_nr(cache);
+		/* FIXME: Use allocator interface to get SOE replacement reserve nr */
+		rsrv_nr += 0;
 		break;
 	default:
 		D_ASSERT(0);
@@ -3334,39 +3333,46 @@ tier_reserve_nr(struct umem_cache *cache, unsigned int tier)
 	return rsrv_nr;
 }
 
+/*
+ * Grab a free page for E-page mapping triggered by umem_cache_map().
+ * This must be called by the new object allocation outside of a transaction (tx),
+ * and the caller must not have pinned any pages for the new object.
+ */
 static int
-cache_tx_reserve(struct umem_cache *cache, unsigned int extra_nr)
+cache_grab_page(struct umem_cache *cache)
 {
 	int rc = 0, retry_cnt = 0;
 
-	cache_tfifo_enter(cache, UMEM_RSRV_TIER_TX);
+	cache_tfifo_enter(cache, UMEM_RSRV_TIER_OBJ);
 
-	while (cache->ca_pgs_stats[UMEM_PG_STATS_FREE] <
-	       (tier_reserve_nr(cache, UMEM_RSRV_TIER_TX) + extra_nr)) {
+	while (cache->ca_pgs_stats[UMEM_PG_STATS_FREE] < 1) {
 		/* Evict unused E page if any */
 		if (!d_list_empty(&cache->ca_pgs_lru[1])) {
 			rc = cache_evict_page(cache);
-			if (rc && rc != -DER_AGAIN) {
+			if (rc && rc != -DER_AGAIN)
 				DL_ERROR(rc, "Evict page failed.");
-				break;
-			}
-			rc = 0;
-		} else {
-			D_ASSERT(!d_list_empty(&cache->ca_pgs_pinned));
+			else
+				rc = 0;
+		} else if (!d_list_empty(&cache->ca_pgs_pinned)) {
 			/* Wait for pinned page being unpinned */
-			cache_tfifo_wait(cache, UMEM_RSRV_TIER_TX);
+			cache_tfifo_wait(cache, UMEM_RSRV_TIER_OBJ);
+		} else {
+			rc = -DER_INVAL;
+			DL_ERROR(rc, "Grab page failed.");
 		}
 
 		retry_cnt++;
-		D_CDEBUG(retry_cnt % 20 == 0, DLOG_ERR, DB_TRACE,
-			 "%u retries of reserve %u pages. [ne:%u,pinned:%u,free:%u]\n", retry_cnt,
-			 tier_reserve_nr(cache, UMEM_RSRV_TIER_TX) + extra_nr,
-			 cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+		D_CDEBUG((retry_cnt % 20 == 0) || rc, DLOG_ERR, DB_TRACE,
+			 "%u retries of grab page. [ne:%u,ne_rsrv:%u,pinned:%u,free:%u]\n",
+			 retry_cnt, cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_NE_RSRV],
 			 cache->ca_pgs_stats[UMEM_PG_STATS_PINNED],
 			 cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
+		if (rc)
+			break;
 	}
 
-	cache_tfifo_exit(cache, UMEM_RSRV_TIER_TX);
+	cache_tfifo_exit(cache, UMEM_RSRV_TIER_OBJ);
 	return rc;
 }
 
@@ -3409,18 +3415,29 @@ retry:
 			continue;
 		}
 
-		if (is_id_evictable(cache, pg_id) && !grab_page) {
-			rc = cache_tx_reserve(cache, 1);
-			if (rc)
-				return rc;
+		if (is_id_evictable(cache, pg_id)) {
+			if (!grab_page) {
+				rc = cache_grab_page(cache);
+				if (rc)
+					return rc;
 
-			grab_page = true;
-			/* Re-check if the page is mapped after yield */
-			goto retry;
+				grab_page = true;
+				/* Re-check if the page is mapped after yield */
+				goto retry;
+			}
+			pinfo = cache_pop_free_page(cache);
+			D_ASSERT(pinfo != NULL);
+		} else if (cache->ca_pgs_stats[UMEM_PG_STATS_NE_RSRV]) {
+			pinfo = cache_pop_ne_rsrv(cache);
+			D_ASSERT(pinfo != NULL);
+		} else {
+			/* NE mapping happened on heap initialization */
+			pinfo = cache_pop_free_page(cache);
+			if (pinfo == NULL) {
+				D_ERROR("Failed to pop free page for NE mapping.\n");
+				return -DER_INVAL;
+			}
 		}
-
-		pinfo = cache_pop_free_page(cache);
-		D_ASSERT(pinfo != NULL);
 
 		cache_map_page(cache, pinfo, pg_id);
 		cache_add2lru(cache, pinfo);
@@ -3522,9 +3539,11 @@ restart:
 
 			restart_cnt++;
 			D_CDEBUG(restart_cnt % 20 == 0, DLOG_ERR, DB_TRACE,
-				 "%u/%u restart for %u pages [rsrv:%u,ne:%u,pinned:%u,free:%u]\n",
+				 "%u/%u restart for %u pages "
+				 "[rsrv:%u,ne:%u,ne_rsrv:%u,pinned:%u,free:%u]\n",
 				 retry_cnt, restart_cnt, page_nr, rsrv_cnt,
 				 cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+				 cache->ca_pgs_stats[UMEM_PG_STATS_NE_RSRV],
 				 cache->ca_pgs_stats[UMEM_PG_STATS_PINNED],
 				 cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
 
@@ -3533,9 +3552,10 @@ restart:
 
 		retry_cnt++;
 		D_CDEBUG(retry_cnt % 20 == 0, DLOG_ERR, DB_TRACE,
-			 "%u/%u retry for %u pages [rsrv:%u,ne:%u,pinned:%u,free:%u]\n", retry_cnt,
-			 restart_cnt, page_nr, rsrv_cnt,
+			 "%u/%u retry for %u pages [rsrv:%u,ne:%u,ne_rsrv:%u,pinned:%u,free:%u]\n",
+			 retry_cnt, restart_cnt, page_nr, rsrv_cnt,
 			 cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_NE_RSRV],
 			 cache->ca_pgs_stats[UMEM_PG_STATS_PINNED],
 			 cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
 	}
@@ -3798,15 +3818,75 @@ umem_cache_unpin(struct umem_store *store, struct umem_pin_handle *pin_handle)
 	D_FREE(pin_handle);
 }
 
-int
-umem_cache_reserve(struct umem_store *store)
+static inline unsigned int
+cache_ne_rsrv_nr(struct umem_cache *cache)
 {
-	struct umem_cache *cache = store->cache;
+	unsigned int rsrv_nr;
+
+	if (!cache->ca_replay_done)
+		return 0;
+
+	/* Few free pages are always reserved for potential non-evictable zone grow */
+	D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] <= cache->ca_max_ne_pages);
+
+	/* Reserve for potential NE zone growth */
+	rsrv_nr = cache->ca_max_ne_pages - cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE];
+	if (rsrv_nr > UMEM_CACHE_RSRVD_PAGES)
+		rsrv_nr = UMEM_CACHE_RSRVD_PAGES;
+
+	return rsrv_nr;
+}
+
+int
+umem_cache_ne_reserve(struct umem_store *store)
+{
+	struct umem_cache     *cache = store->cache;
+	struct umem_page_info *pinfo;
+	int                    rc = 0, retry_cnt = 0;
 
 	if (cache_mode(cache) == 1)
 		return 0;
 
-	return cache_tx_reserve(cache, 0);
+	cache_tfifo_enter(cache, UMEM_RSRV_TIER_NE);
+
+	while (cache->ca_pgs_stats[UMEM_PG_STATS_NE_RSRV] < cache_ne_rsrv_nr(cache)) {
+		if (cache->ca_pgs_stats[UMEM_PG_STATS_FREE]) {
+			pinfo = cache_pop_free_page(cache);
+			D_ASSERT(pinfo != NULL);
+			cache_push_ne_rsrv(cache, pinfo);
+			continue;
+		}
+
+		/* Evict unused E page if any */
+		if (!d_list_empty(&cache->ca_pgs_lru[1])) {
+			rc = cache_evict_page(cache);
+			if (rc && rc != -DER_AGAIN)
+				DL_ERROR(rc, "Evict page failed.");
+			else
+				rc = 0;
+		} else if (!d_list_empty(&cache->ca_pgs_pinned)) {
+			/* Wait for pinned page being unpinned */
+			cache_tfifo_wait(cache, UMEM_RSRV_TIER_NE);
+		} else {
+			rc = -DER_INVAL;
+			DL_ERROR(rc, "Failed to reserve for NE growth.");
+		}
+
+		retry_cnt++;
+		D_CDEBUG((retry_cnt % 20 == 0) || rc, DLOG_ERR, DB_TRACE,
+			 "%u retries %u pages NE reserve. [ne:%u,ne_rsrv:%u,pinned:%u,free:%u]\n",
+			 retry_cnt, cache_ne_rsrv_nr(cache),
+			 cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_NE_RSRV],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_PINNED],
+			 cache->ca_pgs_stats[UMEM_PG_STATS_FREE]);
+
+		if (rc)
+			break;
+	}
+
+	cache_tfifo_exit(cache, UMEM_RSRV_TIER_NE);
+	return rc;
 }
 
 uint32_t
