@@ -226,7 +226,8 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "scan"), verbose=verbose)
 
-    def storage_format(self, force=False, timeout=30, verbose=False, start=False):
+    def storage_format(self, force=False, timeout=30, verbose=False, start=False, replace=False,
+                       rank=None):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -241,6 +242,12 @@ class DmgCommand(DmgCommandBase):
                 operation.
             start (bool): start the engines after formatting instead of waiting
                 for dmg system initialize. Defaults to False
+            replace (bool): replace an excluded rank, allowing a DAOS engine instance to
+                reclaim its old rank number after metadata is lost due to PMem or other
+                storage media failure. Only valid with a single host in the hostlist.
+                Defaults to False
+            rank (int): specific rank to replace. Only valid with replace=True.
+                Defaults to None
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -254,7 +261,8 @@ class DmgCommand(DmgCommandBase):
         try:
             self.timeout = timeout
             self._get_result(
-                ("storage", "format"), force=force, verbose=verbose, start=start)
+                ("storage", "format"), force=force, verbose=verbose, start=start,
+                replace=replace, rank=rank)
         finally:
             self.timeout = saved_timeout
         return self.result
