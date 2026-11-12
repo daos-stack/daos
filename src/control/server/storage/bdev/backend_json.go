@@ -378,9 +378,9 @@ func hotplugPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 	params := make(HotplugFilterParams, 0, len(req.HotplugRanges))
 	for _, r := range req.HotplugRanges {
 		params = append(params, HotplugFilterEntry{
-			Domain: r.LowAddress.Domain,
-			Begin:  r.LowAddress.Bus,
-			End:    r.HighAddress.Bus,
+			Domain: r.Domain,
+			Begin:  r.Begin,
+			End:    r.End,
 		})
 	}
 

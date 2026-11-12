@@ -729,10 +729,9 @@ func deriveHotplugRangesFromBdevList(bdevList *BdevDeviceList) (BdevHotplugRange
 		rangeHi := buses[0]
 		flush := func() {
 			hr := &BdevHotplugRange{}
-			hr.LowAddress.Domain = dom
-			hr.HighAddress.Domain = dom
-			hr.LowAddress.Bus = rangeLo
-			hr.HighAddress.Bus = rangeHi
+			hr.Domain = dom
+			hr.Begin = rangeLo
+			hr.End = rangeHi
 			ranges = append(ranges, hr)
 		}
 		for _, bus := range buses[1:] {
