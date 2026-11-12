@@ -14,10 +14,8 @@
 #include "dlck_ut_abt_mock.h"
 
 /** sentinels */
-const ABT_mutex    Mock_mutex_handle = (ABT_mutex)0x1234;
-const ABT_pool     Mock_pool         = (ABT_pool)0x1234;
-const ABT_thread   Mock_thread       = (ABT_thread)0x5678;
-const ABT_eventual Mock_eventual     = (ABT_eventual)0x9abc;
+const ABT_mutex  Mock_mutex_handle = (ABT_mutex)0x1234;
+const ABT_thread Mock_thread       = (ABT_thread)0x5678;
 
 /** ABT mutex mocks */
 
@@ -200,8 +198,9 @@ dlck_xstream_free(struct dlck_xstream *xs)
 }
 
 /**
- * On success the created ULT is executed synchronously so that all its effects are observable
- * right after the call. The tests have to queue all the values consumed by the ULT body.
+ * On success the created ULT gets the queued thread handle and is executed synchronously so that
+ * all its effects are observable right after the call. The tests have to queue all the values
+ * consumed by the ULT body.
  */
 int
 dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult)
@@ -213,7 +212,7 @@ dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *u
 	int rc = mock_type(int);
 
 	if (rc == DER_SUCCESS) {
-		ult->thread = Mock_thread;
+		ult->thread = mock_ptr_type(ABT_thread);
 		func(arg);
 	}
 

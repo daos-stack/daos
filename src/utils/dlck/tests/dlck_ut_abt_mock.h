@@ -16,10 +16,8 @@
  */
 
 /** Sentinel handles installed and checked by the ABT mocks. */
-extern const ABT_mutex    Mock_mutex_handle;
-extern const ABT_pool     Mock_pool;
-extern const ABT_thread   Mock_thread;
-extern const ABT_eventual Mock_eventual;
+extern const ABT_mutex  Mock_mutex_handle;
+extern const ABT_thread Mock_thread;
 
 #define EXPECT_ABT_THREAD_JOIN(THREAD, RC)                                                         \
 	do {                                                                                       \
@@ -86,14 +84,17 @@ extern const ABT_eventual Mock_eventual;
 	} while (0)
 
 /**
- * Queue a dlck_ult_create() call. On DER_SUCCESS the mock stores Mock_thread in the ULT handle
+ * Queue a dlck_ult_create() call. On DER_SUCCESS the mock stores THREAD in the ULT handle
  * and runs the requested function synchronously, so all the expectations the ULT body consumes
  * have to be queued as well.
  */
-#define EXPECT_DLCK_ULT_CREATE(POOL, RC)                                                           \
+#define EXPECT_DLCK_ULT_CREATE(POOL, RC, THREAD)                                                   \
 	do {                                                                                       \
 		expect_value(dlck_ult_create, pool, POOL);                                         \
 		will_return(dlck_ult_create, RC);                                                  \
+		if ((RC) == DER_SUCCESS) {                                                         \
+			will_return(dlck_ult_create, THREAD);                                      \
+		}                                                                                  \
 	} while (0)
 
 #endif /* __DLCK_UT_ABT_MOCK_H__ */
