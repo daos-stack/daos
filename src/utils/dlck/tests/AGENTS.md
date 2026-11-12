@@ -18,6 +18,16 @@
   status on error. With no argument, the full suite runs.
 - Don't reproduce the production algorithm in assertions.
 - Choose the smallest suitable suite and dependency boundary.
+- If a function cannot be sensibly unit tested, consider splitting it at the module interface
+  instead of writing scenario-sized expectations. If the tested interface turns out to be dead
+  code, remove it instead of testing it.
+- Prefer test-local objects over file-scope buffers; keep file-scope buffers only for the payloads
+  returned by the allocation mock and shared by composite expectation macros.
+- When the tested code only stores or forwards a pointer, pass an opaque sentinel instead of
+  constructing a real object.
+- To use the DAOS fault injections, call `daos_fail_init()` in `main()` first. Trigger a fault
+  with `daos_fail_loc_set(<fault id> | DAOS_FAIL_ONCE)` and `daos_fail_value_set()`; reset the
+  fault location in the per-test teardown.
 - Separate module and header-macro tests.
 - Give every test function at least one concise comment line describing the behavior it verifies.
 - For suites with repeated CMocka registration fields, define small registration macros for common
@@ -57,6 +67,11 @@
 - For APIs returning status and an output handle, queue the handle only on success.
 - For mocks which are expected to set `errno` on error, queue an `errno` only on error.
 - Successful free APIs have to have fixed output effects, such as clearing a handle.
+- Use a distinct sentinel value for every distinct resource instance (for example a separate pool,
+  eventual, and thread per execution stream) so the tests catch the production code mixing up
+  resources; share a sentinel only between uses which can never meet.
+- The `ABT_*_NULL` constants may be non-zero; initialize the handles explicitly instead of relying
+  on zeroed memory.
 
 ## Checking Parameters
 
@@ -85,6 +100,15 @@
 - For I/O mocks check also printf-style formats.
 - Never use `__real_*()` variants.
 - Never pass fake `FILE *` values to real stdio.
+
+## DLCK Engine Tests
+
+- `dlck_engine_ut.c` compiles the engine implementation with the per-area mocks; `dlck_abt.c` is
+  replaced by the mocks entirely.
+- The `dlck_ult_create` mock runs the created ULT synchronously on success, so all the values the
+  ULT body consumes have to be queued before the call which creates it.
+- Transient ULTs created and freed within a single call site use the shared `Mock_thread`
+  sentinel; ULTs whose handles are stored and used later get per-stream sentinels.
 
 ## DLCK Checker Tests
 
