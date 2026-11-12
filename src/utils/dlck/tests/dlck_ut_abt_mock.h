@@ -21,16 +21,16 @@ extern const ABT_pool     Mock_pool;
 extern const ABT_thread   Mock_thread;
 extern const ABT_eventual Mock_eventual;
 
-#define EXPECT_ABT_THREAD_JOIN(THREAD, ABT_RC)                                                     \
+#define EXPECT_ABT_THREAD_JOIN(THREAD, RC)                                                         \
 	do {                                                                                       \
 		expect_value(__wrap_ABT_thread_join, thread, THREAD);                              \
-		will_return(__wrap_ABT_thread_join, ABT_RC);                                       \
+		will_return(__wrap_ABT_thread_join, RC);                                           \
 	} while (0)
 
-#define EXPECT_ABT_THREAD_FREE(HANDLE, ABT_RC)                                                     \
+#define EXPECT_ABT_THREAD_FREE(HANDLE, RC)                                                         \
 	do {                                                                                       \
 		expect_value(__wrap_ABT_thread_free, handle, HANDLE);                              \
-		will_return(__wrap_ABT_thread_free, ABT_RC);                                       \
+		will_return(__wrap_ABT_thread_free, RC);                                           \
 	} while (0)
 
 #define EXPECT_ABT_POOL_IS_EMPTY(POOL, IS_EMPTY)                                                   \
@@ -39,31 +39,31 @@ extern const ABT_eventual Mock_eventual;
 		will_return(__wrap_ABT_pool_is_empty, IS_EMPTY);                                   \
 	} while (0)
 
-#define EXPECT_ABT_EVENTUAL_CREATE(ABT_RC, EVENTUAL)                                               \
+#define EXPECT_ABT_EVENTUAL_CREATE(RC, EVENTUAL)                                                   \
 	do {                                                                                       \
-		will_return(__wrap_ABT_eventual_create, ABT_RC);                                   \
-		if ((ABT_RC) == ABT_SUCCESS) {                                                     \
+		will_return(__wrap_ABT_eventual_create, RC);                                       \
+		if ((RC) == ABT_SUCCESS) {                                                         \
 			will_return(__wrap_ABT_eventual_create, EVENTUAL);                         \
 		}                                                                                  \
 	} while (0)
 
-#define EXPECT_ABT_EVENTUAL_FREE(HANDLE, ABT_RC)                                                   \
+#define EXPECT_ABT_EVENTUAL_FREE(HANDLE, RC)                                                       \
 	do {                                                                                       \
 		expect_value(__wrap_ABT_eventual_free, handle, HANDLE);                            \
-		will_return(__wrap_ABT_eventual_free, ABT_RC);                                     \
+		will_return(__wrap_ABT_eventual_free, RC);                                         \
 	} while (0)
 
-#define EXPECT_ABT_EVENTUAL_SET(EVENTUAL, ABT_RC)                                                  \
+#define EXPECT_ABT_EVENTUAL_SET(EVENTUAL, RC)                                                      \
 	do {                                                                                       \
 		expect_value(__wrap_ABT_eventual_set, eventual, EVENTUAL);                         \
-		will_return(__wrap_ABT_eventual_set, ABT_RC);                                      \
+		will_return(__wrap_ABT_eventual_set, RC);                                          \
 	} while (0)
 
-#define EXPECT_ABT_EVENTUAL_TEST(EVENTUAL, ABT_RC, IS_READY)                                       \
+#define EXPECT_ABT_EVENTUAL_TEST(EVENTUAL, RC, IS_READY)                                           \
 	do {                                                                                       \
 		expect_value(__wrap_ABT_eventual_test, eventual, EVENTUAL);                        \
-		will_return(__wrap_ABT_eventual_test, ABT_RC);                                     \
-		if ((ABT_RC) == ABT_SUCCESS) {                                                     \
+		will_return(__wrap_ABT_eventual_test, RC);                                         \
+		if ((RC) == ABT_SUCCESS) {                                                         \
 			will_return(__wrap_ABT_eventual_test, IS_READY);                           \
 		}                                                                                  \
 	} while (0)
