@@ -608,7 +608,7 @@ following `daos_server` log entries to indicate the parameters are written to
 the engine's NVMe config:
 
 ```bash
-DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugBusidBegin:0 HotplugBusidEnd:0 Hostname:wolf-310.wolf.example.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
+DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugRanges:[] Hostname:wolf-310.wolf.example.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
 Writing NVMe config file for engine instance 0 to "/mnt/daos0/daos_nvme.conf"
 ```
 
@@ -728,6 +728,19 @@ dev-replace operation performed successfully on the following host: boro-11:1000
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
 be for testing or for accidental device eviction.
+
+- Restricting hotplug to a PCI domain/bus-ID range:
+
+When hotplug is enabled, each engine only reacts to hotplug events on NVMe SSDs whose PCI
+domain and bus-ID fall within one of a set of ranges that are derived automatically from the
+combined `bdev_list` of all of the engine's nvme-class storage tiers; this matches exactly the
+devices the engine was formatted with (up to a fixed limit of 64 filter entries per engine),
+including on multi-PCI-segment platforms where a single engine's SSDs span more than one
+non-zero PCI domain. If Volume Management Devices (VMD) are enabled, no PCI-domain/bus-ID
+filtering is applied at all, since VMD backing device addresses are unrelated to the owning
+NUMA node's PCI domain.
+
+This filter is not intended to be configured manually, and admins should not need to set it.
 
 #### Identification
 
@@ -1148,6 +1161,28 @@ or after an SSD failure in MD-on-SSD mode, storage for that rank will need to be
 metadata regenerated. If other hardware on the storage server has not changed, the old rank can be
 "reused" by formatting using the `dmg storage format --replace` option.
 
+#### Selecting the Rank to Replace
+
+By default, `dmg storage format --replace` auto-detects which excluded rank to reuse by matching
+the joining engine's control address, fabric URIs/contexts, and fault domain against the existing
+system membership. A specific rank may instead be supplied explicitly with `--rank`:
+
+```bash
+$ dmg storage format -l storage-server-16 --replace --rank 2
+```
+
+- `--rank` is only valid in combination with `--replace`; it is rejected otherwise.
+- When `--rank` is supplied, the Management Service verifies the given rank is excluded from all
+  pools it belongs to and that the joining engine's UUID differs from the existing member's (i.e.
+  this is a genuine replacement, not a duplicate join).
+- When `--rank` is omitted, the same validation is performed against whichever member is found to
+  match the joining engine's connection details; if no unique match can be found, the join is
+  rejected.
+- As a safety check, if the engine's on-disk superblock already has a valid rank assigned, the
+  replace request is refused with `cannot replace: superblock already has valid rank <N>
+  (reformat required)` rather than silently reusing or overwriting it. This guards against
+  accidentally running `--replace` against an engine that was never actually reset.
+
 #### PMem (DCPM) Failure Recovery Workflow
 
 An example workflow for PMem failure would be:
@@ -1177,11 +1212,15 @@ including superblocks separately from the data/meta/wal SSDs used for pool stora
     `dmg storage format --replace` workflow when hot-plug or online replacement is not available or
     not suitable for the failure scenario.
 
-**Key Improvement**: The `dmg storage format --replace` command now safely handles control metadata
-formatting in MD-on-SSD mode. When an engine's data/meta/wal SSD fails and is replaced offline,
-the administrator must manually remove the engine's superblock before restarting the server to 
-trigger a format request. The command then selectively removes only the failed engine's 
-control_metadata subdirectory, preserving healthy engines' metadata on the same host.
+`dmg storage format` (with or without `--replace`) safely handles control metadata formatting in
+MD-on-SSD mode. When an engine's data/meta/wal SSD fails and is replaced offline, the administrator
+must manually remove the engine's superblock before restarting the server to trigger a format
+request. The command then selectively reformats only the affected engine's control_metadata
+subdirectory, preserving healthy engines' metadata on the same host; `--replace` is only required if
+the engine should rejoin using its previous rank rather than a newly-assigned one. Reusing the
+previous rank is the common case (e.g. after swapping a failed SSD on the same hardware); a new rank
+is appropriate when the replacement should not inherit the old rank's identity, for example when
+permanently decommissioning that engine slot in favor of different hardware.
 
 An example workflow for SSD failure in MD-on-SSD mode would be:
 
@@ -1216,16 +1255,11 @@ An example workflow for SSD failure in MD-on-SSD mode would be:
 - **Before starting the server, administrator manually removes engine 0's superblock**: 
   `rm /path/to/control_metadata/daos_control/engine0/superblock`
 - Start `daos_server` and engine 0 detects missing superblock and prompts for format
-- Attempting to format without `--replace` flag will fail:
-  ```bash
-  $ dmg storage format -l storage-server-16
-  ERROR: Errors:
-    Hosts              Error
-    -----              -----
-    storage-server-16  engine metadata directories or superblocks are missing for engines [0]; 
-                       running format with missing subdirectories or superblocks is not supported
-  ```
-- `dmg storage format --replace` will succeed:
+- Formatting without `--replace` will succeed, but engine 0 will rejoin with a **new** rank rather
+  than reusing rank 2 (missing per-engine `control_metadata` subdirectories/superblocks are always
+  tolerated and recreated as needed, regardless of `--replace`; e.g. this is also the case
+  following a `dmg system erase`, which deliberately preserves the shared `control_metadata` root
+  while removing per-engine subdirectories). To reuse the old rank, use `--replace`:
   ```bash
   $ dmg storage format -l storage-server-16 --replace
   Format Summary:
@@ -1264,13 +1298,15 @@ An example workflow for SSD failure in MD-on-SSD mode would be:
     This path can be on any persistent local storage (dedicated SSD, shared device, or any mounted
     filesystem) and is separate from the data/meta/wal SSDs used for pool storage. When an engine's
     data/meta/wal SSD fails and is replaced offline, the administrator must manually remove the
-    failed engine's superblock **before restarting the server** to trigger a format request. This 
-    manual step allows `dmg storage format --replace` to reinitialize that engine's metadata and 
-    restore it with the old rank. If only a data/meta/wal SSD fails, the control_metadata path 
-    remains intact and the command will selectively remove only the subdirectories for engines with 
-    missing superblocks (i.e., only those where the administrator removed the superblock before 
-    server restart). If the control_metadata storage path itself becomes inaccessible, all engine 
-    metadata is lost and must be recreated during format replace.
+    failed engine's superblock **before restarting the server** to trigger a format request. Any
+    engine whose `control_metadata` subdirectory or superblock is found missing has its
+    subdirectory (re)created automatically, whether or not `--replace` is supplied; `--replace`
+    additionally causes the engine to rejoin with its previous rank instead of being assigned a
+    new one. If only a data/meta/wal SSD fails, the control_metadata path remains intact and the
+    command will selectively reformat only the subdirectories for engines with missing
+    superblocks (i.e., only those where the administrator removed the superblock before server
+    restart). If the control_metadata storage path itself becomes inaccessible, all engine
+    metadata is lost and must be recreated during format.
 
 !!! note
     `dmg storage format --replace` can not be used to replace a rank in `AdminExcluded` state. An
@@ -1420,7 +1456,7 @@ dmg system reintegrate -r <engine_rank>
 
 ### System Erase
 
-To erase the DAOS sorage configuration, the `dmg system erase`
+To erase the DAOS storage configuration, the `dmg system erase`
 command can be used. Before doing this, the affected engines need to be
 stopped by running `dmg system stop` (if necessary with the `--force` flag).
 The erase operation will destroy any pools that may still exist, and will
@@ -1436,6 +1472,78 @@ formatted again by running `dmg storage format`.
     `daos_server scm reset` which will completely reset the PMem.
     A reboot will be required to finalize the change of the PMem
     allocation goals.
+
+#### Manual Recovery if System Erase Fails
+
+If `dmg system erase` fails, times out, or is interrupted (for example, a host
+becomes unreachable mid-operation), the system may be left in a mixed state,
+with some ranks already erased and awaiting format and others still joined or
+stopped with their old storage configuration intact. Run `dmg system query -v`
+to identify which ranks have not yet reached the `AwaitFormat` state, then
+complete the following steps by hand on their hosts. This mirrors the "start
+from scratch" procedure described above under
+[Storage Reformat](#storage-reformat), bringing the affected hosts to the same
+end state a successful `dmg system erase` would have produced.
+
+1. Ensure `daos_server` is stopped on every affected host:
+
+   ```bash
+   $ systemctl stop daos_server
+   ```
+
+2. Wipe the storage holding the engine superblocks and, on Management Service
+   (MS) replica hosts, the system raft database, according to the configured
+   storage tier:
+
+    - **PMem (DCPM) mode** (no `control_metadata` path configured): unmount and
+      wipe the filesystem signature from each SCM device listed under
+      `scm_mount` in the host's `daos_server.yml`:
+
+      ```bash
+      $ umount /mnt/daos0
+      $ wipefs -a /dev/pmem0
+      ```
+
+      !!! note
+          This also removes the system raft database on MS replica hosts,
+          which is stored in a `control_raft/` subdirectory on the first
+          configured SCM mount.
+
+    - **MD-on-SSD mode** (`control_metadata.path` configured): remove the
+      entire control metadata directory, which holds both the per-engine
+      superblocks and, on MS replica hosts, the system raft database:
+
+      ```bash
+      $ rm -rf /path/to/control_metadata/daos_control
+      ```
+
+      !!! warning
+          Do not remove only part of this directory on a multi-engine host
+          unless intentionally preserving some engines' metadata; see
+          [Storage Format Replace](#storage-format-replace) for selective
+          recovery instead.
+
+3. Restart `daos_server` on each affected host:
+
+   ```bash
+   $ systemctl start daos_server
+   ```
+
+   Each engine should come up reporting "SCM format required" (`AwaitFormat`
+   state). Confirm with `dmg system query -v`.
+
+4. Once every rank reports `AwaitFormat`, reformat the system as normal:
+
+   ```bash
+   $ dmg storage format
+   ```
+
+!!! note
+    These steps perform by hand the same storage reset that `dmg system erase`
+    otherwise automates: stopping engines, wiping superblocks and the
+    control-plane metadata/raft database, and restarting into a state ready
+    for reformat. As with `dmg system erase` itself, this is destructive and
+    irreversible -- no pool or container data recovery is possible afterward.
 
 ### System Extension
 

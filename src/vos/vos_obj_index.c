@@ -220,39 +220,37 @@ oi_node_alloc(struct btr_instance *tins, int size)
 #define REP_OBJECT_FMT "Object (oid=" DF_UOID ")... "
 
 static int
-oi_rec_check(struct btr_instance *tins, struct btr_record *rec, report_fn_t report_fn,
-	     void *report_arg)
+oi_rec_check(struct btr_instance *tins, struct btr_record *rec, struct checker *ck)
 {
 	d_iov_t            val_iov;
 	struct vos_obj_df *obj;
 	int                rc;
 
-	report_fn(report_arg, REPORT_MSG, "Record fetch (off=%#lx)... ", rec->rec_off);
+	CK_PRINTF(ck, "Record fetch (off=%#lx)... ", rec->rec_off);
 	rc = tins->ti_ops->to_rec_fetch(tins, rec, NULL, &val_iov);
 	if (rc != DER_SUCCESS) {
-		report_fn(report_arg, REPORT_ERROR | REPORT_NO_PREFIX, DF_RC "\n", DP_RC(rc));
+		CK_APPENDL_RC(ck, rc);
 		return rc;
 	}
-	report_fn(report_arg, REPORT_MSG | REPORT_NO_PREFIX, CHECKER_OK_INFIX ".\n");
-
-	D_ASSERT(val_iov.iov_buf != NULL);
-	D_ASSERT(val_iov.iov_len == vos_obj_df_size((struct vos_pool *)tins->ti_priv));
+	if (val_iov.iov_buf == NULL) {
+		CK_APPENDFL_ERR(ck, "Invalid record: buffer is NULL");
+		return -DER_IO_INVAL;
+	}
+	if (val_iov.iov_len != vos_obj_df_size((struct vos_pool *)tins->ti_priv)) {
+		CK_APPENDFL_ERR(ck, "Invalid record size: expected %zu, got %zu",
+				vos_obj_df_size((struct vos_pool *)tins->ti_priv), val_iov.iov_len);
+		return -DER_IO_INVAL;
+	}
+	CK_APPENDL_OK(ck);
 
 	obj = val_iov.iov_buf;
 
-	report_fn(report_arg, REPORT_INDENT_INC, NULL);
-	report_fn(report_arg, REPORT_MSG, REP_OBJECT_FMT "\n", DP_UOID(obj->vo_id));
-	report_fn(report_arg, REPORT_INDENT_INC, NULL);
-	rc = ilog_root_is_valid(&obj->vo_ilog, report_fn, report_arg);
-	report_fn(report_arg, REPORT_INDENT_DEC, NULL);
-	if (rc == DER_SUCCESS) {
-		report_fn(report_arg, REPORT_MSG, REP_OBJECT_FMT CHECKER_OK_INFIX ".\n",
-			  DP_UOID(obj->vo_id));
-	} else {
-		report_fn(report_arg, REPORT_ERROR, REP_OBJECT_FMT DF_RC ".\n", DP_UOID(obj->vo_id),
-			  DP_RC(rc));
-	}
-	report_fn(report_arg, REPORT_INDENT_DEC, NULL);
+	checker_print_indent_inc(ck);
+	CK_PRINTF(ck, REP_OBJECT_FMT "\n", DP_UOID(obj->vo_id));
+	CK_INDENT(ck, rc = ilog_root_is_valid(&obj->vo_ilog, ck));
+	CK_PRINTF(ck, REP_OBJECT_FMT, DP_UOID(obj->vo_id));
+	CK_APPENDL_RC(ck, rc);
+	checker_print_indent_dec(ck);
 
 	return rc;
 }
@@ -890,6 +888,31 @@ exit:
 	return rc;
 }
 
+#define CK_DKEY_TREE_STR "Dkey tree"
+
+static int
+oi_iter_check(struct vos_iterator *iter, struct checker *ck)
+{
+	struct vos_oi_iter *oiter = iter2oiter(iter);
+	d_iov_t             iov;
+	struct vos_obj_df  *obj;
+	int                 rc;
+
+	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, NULL);
+	if (rc != DER_SUCCESS) {
+		return rc;
+	}
+
+	obj = (struct vos_obj_df *)iov.iov_buf;
+
+	CK_PRINTF(ck, CK_DKEY_TREE_STR "...\n");
+	CK_INDENT(ck, rc = dbtree_check_inplace(&obj->vo_tree, &oiter->oit_cont->vc_pool->vp_uma,
+						NULL, ck));
+	CK_PRINTFL_RC(ck, rc, CK_DKEY_TREE_STR);
+
+	return rc;
+}
+
 int
 oi_iter_check_punch(daos_handle_t ih)
 {
@@ -1030,13 +1053,14 @@ exit:
 }
 
 struct vos_iter_ops vos_oi_iter_ops = {
-	.iop_prepare		= oi_iter_prep,
-	.iop_nested_tree_fetch	= oi_iter_nested_tree_fetch,
-	.iop_finish		= oi_iter_fini,
-	.iop_probe		= oi_iter_probe,
-	.iop_next		= oi_iter_next,
-	.iop_fetch		= oi_iter_fetch,
-	.iop_process		= oi_iter_process,
+    .iop_prepare           = oi_iter_prep,
+    .iop_nested_tree_fetch = oi_iter_nested_tree_fetch,
+    .iop_finish            = oi_iter_fini,
+    .iop_probe             = oi_iter_probe,
+    .iop_next              = oi_iter_next,
+    .iop_fetch             = oi_iter_fetch,
+    .iop_process           = oi_iter_process,
+    .iop_check             = oi_iter_check,
 };
 
 bool

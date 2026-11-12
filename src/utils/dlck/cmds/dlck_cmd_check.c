@@ -39,6 +39,62 @@ struct bundle {
 	struct checker     *ck;
 };
 
+#define CK_OID_FMT "Check oid: " DF_UOID
+
+/**
+ * Target thread (worker). Check a single object.
+ *
+ * \param[in]	ih	Iterator handle.
+ * \param[in]	entry	Iterator entry.
+ * \param[in]	type	Iteration type.
+ * \param[in]	param	Unused.
+ * \param[in]	cb_arg	Bundle of arguments.
+ * \param[in]	acts	Unused.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Errors returned by vos_iter_check().
+ */
+static int
+obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct bundle  *bndl = cb_arg;
+	struct checker *ck   = bndl->ck;
+	int             rc;
+
+	CK_PRINTF(ck, CK_OID_FMT "...\n", DP_UOID(entry->ie_oid));
+	CK_INDENT(ck, rc = vos_iter_check(ih, ck));
+	CK_PRINTFL_RC(ck, rc, CK_OID_FMT, DP_UOID(entry->ie_oid));
+	dlck_status_set(&bndl->xa->status, &ck->ck_status);
+
+	/** continue checking other objects even if this one failed */
+	return 0;
+}
+
+/**
+ * Target thread (worker). Check objects of a single container.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	bndl	Bundle of arguments.
+ */
+static void
+objs_process(daos_handle_t coh, struct bundle *bndl)
+{
+	vos_iter_param_t        param   = {0};
+	struct vos_iter_anchors anchors = {0};
+	int                     rc;
+
+	param.ip_hdl        = coh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_flags      = VOS_IT_FOR_CHECK;
+
+	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchors, obj_process, NULL, bndl, NULL);
+
+	/** Just in case there is a problem with the iterator. Most of the issues are accounted for
+	 * in the callback. */
+	dlck_status_set_rc(&bndl->xa->status, rc);
+}
+
 /**
  * Target thread (worker). VOS iterator callback. Check a single container.
  *
@@ -64,8 +120,13 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	int                 rc;
 
 	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, ck, &coh);
-	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc, ck->ck_warnings_num);
+	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc,
+			   ck->ck_status.warnings_num);
+	/** vos_cont_open_ex() is fully instrumented, so rc is already accounted for in the
+	 * checker's status. */
+	dlck_status_set(&xa->status, &ck->ck_status);
 	if (rc == DER_SUCCESS) {
+		objs_process(coh, bndl);
 		(void)vos_cont_close(coh);
 	}
 
@@ -78,23 +139,25 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
  *
  * \param[in]	poh	Pool handle.
  * \param[in]	ck	Checker.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_*	Errors either from the VOS iterator or vos_cont_open_ex().
  */
-static int
+static void
 conts_process(struct xstream_arg *xa, daos_handle_t poh, struct checker *ck)
 {
 	vos_iter_param_t        param   = {0};
 	struct vos_iter_anchors anchors = {0};
 	struct bundle           cb_arg  = {.xa = xa, .ck = ck};
+	int                     rc;
 
 	param.ip_hdl        = poh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	param.ip_flags      = VOS_IT_FOR_CHECK;
 
-	return vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, cont_process, NULL, &cb_arg,
-			   NULL);
+	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, cont_process, NULL, &cb_arg,
+			 NULL);
+
+	/** Just in case there is a problem with the iterator. Most of the issues are accounted for
+	 * in the callback. */
+	dlck_status_set_rc(&xa->status, rc);
 }
 
 /**
@@ -103,50 +166,54 @@ conts_process(struct xstream_arg *xa, daos_handle_t poh, struct checker *ck)
  * \param[in]	xa	Target's arguments.
  * \param[in]	file	File to process.
  * \param[in]	ck	Checker.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_NOMEM	Out of memory.
- * \retval -DER_*	Other errors.
  */
-static int
+static void
 pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 {
 	struct checker *main_ck = &xa->ctrl->checker;
-	char         *path;
+	char           *path    = NULL;
 	daos_handle_t poh;
 	int           rc;
 
-	rc = dlck_pool_file_preallocate(xa->ctrl->engine.storage_path, file->po_uuid,
-					xa->xs->tgt_id);
-	CK_PRINTL_RC(ck, xa->rc, "VOS file allocation");
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_POOL_PREALLOCATE)) { /** fault injection */
+		rc = daos_errno2der(daos_fail_value_get());
+	} else {
+		rc = dlck_pool_file_preallocate(xa->ctrl->engine.storage_path, file->po_uuid,
+						xa->xs->tgt_id);
+	}
+	CK_PRINTFL_RC(ck, rc, "VOS file allocation");
 	if (rc != DER_SUCCESS) {
-		return rc;
+		dlck_status_set_rc(&xa->status, rc);
+		goto report;
 	}
 
 	/** generate a VOS file path */
-	rc = ds_mgmt_file(xa->ctrl->engine.storage_path, file->po_uuid, VOS_FILE, &xa->xs->tgt_id,
-			  &path);
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_POOL_PATH_ALLOC)) { /** fault injection */
+		rc = daos_errno2der(daos_fail_value_get());
+	} else {
+		rc = ds_mgmt_file(xa->ctrl->engine.storage_path, file->po_uuid, VOS_FILE,
+				  &xa->xs->tgt_id, &path);
+	}
 	if (rc != DER_SUCCESS) {
-		CK_PRINTL_RC(ck, xa->rc, "VOS file path allocation failed");
-		return rc;
+		CK_PRINTFL_RC(ck, rc, "VOS file path allocation failed");
+		dlck_status_set_rc(&xa->status, rc);
+		goto report;
 	}
 
 	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, ck, &poh);
-	if (rc == DER_SUCCESS) {
-		POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_warnings_num);
-		rc = conts_process(xa, poh, ck);
+	/** vos_pool_open_metrics() is fully instrumented, so rc is already accounted for in the
+	 * checker's status. */
+	dlck_status_set(&xa->status, &ck->ck_status);
 
+report:
+	POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_status.warnings_num);
+	if (rc == DER_SUCCESS) {
+		conts_process(xa, poh, ck);
 		(void)vos_pool_close(poh);
 	}
-	D_FREE(path);
-
-	/** check */
-	if (rc != DER_SUCCESS) {
-		/** ignore a possible error from the unlock */
-		return rc;
+	if (path != NULL) {
+		D_FREE(path);
 	}
-
-	return DER_SUCCESS;
 }
 
 /**
@@ -161,14 +228,6 @@ exec_one(void *arg)
 	struct checker      ck;
 	int                 rc;
 
-	/** initialize the daos_io_* thread */
-	rc = dlck_engine_xstream_init(xa->xs);
-	if (rc != DER_SUCCESS) {
-		xa->rc       = rc;
-		xa->progress = DLCK_XSTREAM_PROGRESS_END;
-		return;
-	}
-
 	d_list_for_each_entry(file, &xa->ctrl->files.list, link) {
 		/** do not process the given file if the target is not requested */
 		if (dlck_bitmap_isclr32(file->targets_bitmap, xa->xs->tgt_id)) {
@@ -182,15 +241,13 @@ exec_one(void *arg)
 					      file->po_uuid, xa->xs->tgt_id, main_ck, &ck);
 		if (rc != DER_SUCCESS) {
 			/** There is no point continuing without a logfile. */
-			dlck_xstream_set_rc(xa, rc);
+			dlck_status_set_rc(&xa->status, rc);
 			xa->progress = DLCK_XSTREAM_PROGRESS_END;
 			break;
 		}
 
 		/** check the pool */
-		rc = pool_process(xa, file, &ck);
-		dlck_xstream_set_rc(xa, rc);
-		dlck_uadd_no_overflow(xa->warnings_num, ck.ck_warnings_num, &xa->warnings_num);
+		pool_process(xa, file, &ck);
 		/** Continue to the next pool regardless of the result. */
 
 		/** close the logfile */
@@ -199,14 +256,6 @@ exec_one(void *arg)
 		/** report the progress to the main thread */
 		++xa->progress;
 	}
-
-	if (xa->rc != DER_SUCCESS) {
-		(void)dlck_engine_xstream_fini(xa->xs);
-		return;
-	}
-
-	rc = dlck_engine_xstream_fini(xa->xs);
-	dlck_xstream_set_rc(xa, rc);
 }
 
 /**
@@ -220,7 +269,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	struct checker     *ck                 = &ctrl->checker;
 	char                log_dir_template[] = "/tmp/dlck_check_XXXXXX";
 	struct dlck_engine *engine             = NULL;
-	int                *rcs;
+	struct checker_status *sts;
 	int                 rc;
 
 	/** create a log directory */
@@ -232,12 +281,12 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	}
 	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
-		CK_PRINTL_RC(ck, rc, "Cannot create log directory");
+		CK_PRINTFL_RC(ck, rc, "Cannot create log directory");
 		return rc;
 	}
 	CK_PRINTF(ck, "Log directory: %s\n", ctrl->log_dir);
 
-	CK_PRINT(ck, "Start the engine... ");
+	CK_PRINTF(ck, "Start the engine... ");
 	rc = dlck_engine_start(&ctrl->engine, &engine);
 	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
@@ -246,7 +295,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 
 	if (d_list_empty(&ctrl->files.list)) {
 		/** no files specified means all files are requested */
-		CK_PRINT(ck, "Read the list of pools... ");
+		CK_PRINTF(ck, "Read the list of pools... ");
 		rc = dlck_pool_list(&ctrl->files.list);
 		CK_APPENDL_RC(ck, rc);
 		if (rc != DER_SUCCESS) {
@@ -254,45 +303,45 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		}
 		/** no files exist */
 		if (d_list_empty(&ctrl->files.list)) {
-			CK_PRINT(ck, "No pools exist. Exiting...\n");
+			CK_PRINTF(ck, "No pools exist. Exiting...\n");
 			goto err_stop_engine;
 		}
 	}
 
-	CK_PRINT(ck, "Create pools directories... ");
+	CK_PRINTF(ck, "Create pools directories... ");
 	rc = dlck_pool_mkdir_all(ctrl->engine.storage_path, &ctrl->files.list, ck);
 	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
 		goto err_stop_engine;
 	}
 
-	/** allocate an array of return codes for targets */
-	D_ALLOC_ARRAY(rcs, ctrl->engine.targets);
-	if (rcs == NULL) {
+	/** allocate an array of return statuses for targets */
+	D_ALLOC_ARRAY(sts, ctrl->engine.targets);
+	if (sts == NULL) {
 		rc = -DER_NOMEM;
-		CK_PRINTL_RC(ck, rc, "");
+		CK_PRINTFL_RC(ck, rc, "");
 		goto err_stop_engine;
 	}
 
 	rc = dlck_engine_exec_all(engine, exec_one, dlck_engine_xstream_arg_alloc, ctrl,
-				  dlck_engine_xstream_arg_free, ck);
+				  dlck_engine_xstream_arg_free, sts, ck);
 	if (rc != DER_SUCCESS) {
-		goto err_free_rcs;
+		goto err_free_sts;
 	}
 
-	CK_PRINT(ck, "Stop the engine... ");
+	CK_PRINTF(ck, "Stop the engine... ");
 	rc = dlck_engine_stop(engine);
 	CK_APPENDL_RC(ck, rc);
 
 	/** Ignore an error for now to print the collected results. */
-	dlck_report_results(rcs, ctrl->engine.targets, ctrl->warnings_num, ck);
-	D_FREE(rcs);
+	dlck_report_results(sts, ctrl->engine.targets, ck);
+	D_FREE(sts);
 
 	/** Return the first encountered error. */
 	return rc;
 
-err_free_rcs:
-	D_FREE(rcs);
+err_free_sts:
+	D_FREE(sts);
 err_stop_engine:
 	(void)dlck_engine_stop(engine);
 

@@ -522,6 +522,8 @@ class PreReqComponent():
         opts.Add(BoolVariable('CRT_PP', 'Preprocess CaRT sources', False))
         opts.Add(BoolVariable('HEAP_PROFILER', 'Instrument C code with Gperftools Heap Profiler',
                               False))
+        opts.Add(ListVariable('PROVIDERS', "List of providers to build", 'all',
+                              ['all', 'ofi', 'ucx']))
 
         opts.Update(self.__env)
 
@@ -595,10 +597,15 @@ class PreReqComponent():
 
     def run_build(self, opts):
         """Build and dependencies"""
-        common_reqs = ['ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
+        common_reqs = ['hwloc', 'mercury', 'uuid', 'crypto', 'protobufc',
                        'lz4', 'isal', 'isal_crypto', 'argobots']
+        providers = self.__env.get('PROVIDERS')
+        if 'all' in providers:
+            common_reqs += ['ofi', 'ucx']
+        else:
+            common_reqs += providers
         client_reqs = ['fused', 'json-c', 'capstone', 'aio']
-        server_reqs = ['pmdk', 'spdk', 'ipmctl']
+        server_reqs = ['pmdk', 'spdk']
         test_reqs = ['cmocka']
 
         reqs = []
@@ -611,6 +618,12 @@ class PreReqComponent():
             reqs.extend(client_reqs)
         opts.Add(ListVariable('DEPS', "Dependencies to build by default", 'all', reqs))
         opts.Update(self.__env)
+
+        unknown = opts.UnknownVariables()
+        if unknown:
+            print(f"ERROR: Unknown scons variable(s): {', '.join(sorted(unknown))}")
+            Exit(1)
+
         if GetOption('build_deps') == 'only':
             # Optionally, limit the deps we build in this pass
             reqs = self.__env.get('DEPS')
@@ -1193,7 +1206,7 @@ class _Component():  # pylint: disable=too-many-instance-attributes
         return False
 
     def _parse_config(self, env, opts, comp_path=None):
-        """Parse a pkg-config file"""
+        """Parse a pkg-config file, retaining library search paths for runtime linking."""
         if self.pkgconfig is None:
             return
 
@@ -1216,8 +1229,13 @@ class _Component():  # pylint: disable=too-many-instance-attributes
             if not path_found:
                 return
 
+        def merge_flags(config_env, output, unique):
+            flags = config_env.ParseFlags(output)
+            flags.setdefault('RPATH_FULL', []).extend(flags.get('LIBPATH', []))
+            return config_env.MergeFlags(flags, unique)
+
         try:
-            env.ParseConfig(f'pkg-config {opts} {self.pkgconfig}')
+            env.ParseConfig(f'pkg-config {opts} {self.pkgconfig}', merge_flags)
         except OSError:
             return
 

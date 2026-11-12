@@ -253,6 +253,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	}
 
 	savedRanks := make(map[uint32]ranklist.Rank) // instance idx to system rank
+
 	for _, ei := range instances {
 		rank, err := ei.GetRank()
 		if err != nil {
@@ -263,10 +264,14 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		if ei.IsStarted() {
 			return nil, FaultInstancesNotStopped("reset format", rank)
 		}
-		if err := ei.RemoveSuperblock(); err != nil {
-			return nil, err
-		}
-		ei.requestStart(ctx)
+	}
+
+	if err := svc.harness.eraseEngineFormat(ctx, instances, eraseEngineFormatOpts{
+		stopFirst:         false,
+		wholeMetadataRoot: false,
+		restartNow:        true,
+	}); err != nil {
+		return nil, err
 	}
 
 	// ignore poll results as we gather state immediately after

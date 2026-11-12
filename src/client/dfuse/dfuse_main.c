@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2025 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -27,6 +27,13 @@
 #include <daos_uns.h>
 
 #include <gurt/common.h>
+
+/* FUSE background request limits, see dfuse_fuse_init().  Both are 16-bit fields in the FUSE
+ * INIT reply.
+ */
+#define DFUSE_MAX_BACKGROUND_DEFAULT 256
+#define DFUSE_BG_LIMIT_MAX           UINT16_MAX
+
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
  * presence makes pselect() return EINTR in the dfuse_bg() function which
  * is used to detect abnormal exit.
@@ -258,6 +265,30 @@ parse_mount_option(char *mnt_string, struct dfuse_info *dfuse_info, char *pool_n
 	}
 }
 
+/* Parse a FUSE background request limit, rejecting anything the INIT reply cannot carry rather
+ * than letting libfuse clamp it.
+ */
+static int
+parse_bg_limit(const char *opt, const char *arg, uint32_t *val)
+{
+	char *end;
+	long  v;
+
+	errno = 0;
+	v     = strtol(arg, &end, 10);
+	if (end == arg || *end != '\0') {
+		printf("Invalid --%s value '%s', not a number\n", opt, arg);
+		return -DER_INVAL;
+	}
+	if (errno == ERANGE || v < 1 || v > DFUSE_BG_LIMIT_MAX) {
+		printf("Invalid --%s value '%s', must be between 1 and %d\n", opt, arg,
+		       DFUSE_BG_LIMIT_MAX);
+		return -DER_INVAL;
+	}
+	*val = v;
+	return 0;
+}
+
 static void
 show_version(char *name)
 {
@@ -284,6 +315,8 @@ show_help(char *name)
 	    "\n"
 	    "	-t --thread-count=count	Total number of threads to use\n"
 	    "	-e --eq-count=count	Number of event queues to use\n"
+	    "	   --max-background=count	Maximum outstanding FUSE background requests\n"
+	    "	   --congestion-threshold=count	Background requests at which the kernel throttles\n"
 	    "	-f --foreground		Run in foreground\n"
 	    "	   --enable-caching	Enable all caching (default)\n"
 	    "	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
@@ -358,6 +391,14 @@ show_help(char *name)
 	    "  of fuse threads accordingly. The default value for --eq-count is 1.\n"
 	    "dfuse will also always run one main thread and one invalidation thread\n"
 	    "\n"
+	    "Background requests:\n"
+	    "--max-background (default %d) limits outstanding FUSE background requests:\n"
+	    "buffered reads and readahead of cached files, and async (libaio, io_uring)\n"
+	    "O_DIRECT I/O. Once --congestion-threshold (default three quarters of\n"
+	    "--max-background) is reached, the kernel stops asynchronous readahead.\n"
+	    "Each read in flight holds a 1MiB dfuse buffer. Without CAP_SYS_ADMIN the\n"
+	    "kernel may lower both, see the user guide.\n"
+	    "\n"
 	    "If dfuse is running in background mode (the default unless launched via mpirun)\n"
 	    "then it will stay in the foreground until the mount is registered with the\n"
 	    "kernel to allow appropriate error reporting.\n"
@@ -383,7 +424,7 @@ show_help(char *name)
 	    "  that establishes the pool and container connections to keep those alive.\n"
 	    "\n"
 	    "Version: %s\n",
-	    name, DAOS_VERSION);
+	    name, DFUSE_MAX_BACKGROUND_DEFAULT, DAOS_VERSION);
 }
 
 /*
@@ -431,6 +472,7 @@ main(int argc, char **argv)
 	int                rc2;
 	char              *path              = NULL;
 	bool               have_thread_count = false;
+	bool               have_cong_thresh  = false;
 	int                pos_index         = 0;
 	char		  *snap_name	     = NULL;
 	daos_epoch_t	   snap_epoch	     = 0;
@@ -443,6 +485,8 @@ main(int argc, char **argv)
 					     {"sys-name", required_argument, 0, 'G'},
 					     {"thread-count", required_argument, 0, 't'},
 					     {"eq-count", required_argument, 0, 'e'},
+					     {"max-background", required_argument, 0, 'x'},
+					     {"congestion-threshold", required_argument, 0, 'y'},
 					     {"foreground", no_argument, 0, 'f'},
 					     {"enable-caching", no_argument, 0, 'E'},
 					     {"enable-wb-cache", no_argument, 0, 'F'},
@@ -472,10 +516,11 @@ main(int argc, char **argv)
 	if (dfuse_info == NULL)
 		D_GOTO(out_debug, rc = -DER_NOMEM);
 
-	dfuse_info->di_caching     = true;
-	dfuse_info->di_wb_cache    = true;
-	dfuse_info->di_eq_count    = 1;
-	dfuse_info->di_local_flock = false;
+	dfuse_info->di_caching        = true;
+	dfuse_info->di_wb_cache       = true;
+	dfuse_info->di_eq_count       = 1;
+	dfuse_info->di_local_flock    = false;
+	dfuse_info->di_max_background = DFUSE_MAX_BACKGROUND_DEFAULT;
 	dfuse_info->di_dump_handles = false;
 	dfuse_info->di_read_handles = false;
 
@@ -531,6 +576,19 @@ main(int argc, char **argv)
 			break;
 		case 'e':
 			dfuse_info->di_eq_count = atoi(optarg);
+			break;
+		case 'x':
+			rc = parse_bg_limit("max-background", optarg,
+					    &dfuse_info->di_max_background);
+			if (rc != 0)
+				D_GOTO(out_debug, rc);
+			break;
+		case 'y':
+			rc = parse_bg_limit("congestion-threshold", optarg,
+					    &dfuse_info->di_congestion_threshold);
+			if (rc != 0)
+				D_GOTO(out_debug, rc);
+			have_cong_thresh = true;
 			break;
 		case 't':
 			dfuse_info->di_thread_count = atoi(optarg);
@@ -598,6 +656,17 @@ main(int argc, char **argv)
 	if (dfuse_info->di_dump_handles && dfuse_info->di_read_handles) {
 		printf("Cannot dump and read handles file at the same time\n");
 		show_help(argv[0]);
+		D_GOTO(out_debug, rc = -DER_INVAL);
+	}
+
+	/* Follow the kernel's own default ratio */
+	if (!have_cong_thresh)
+		dfuse_info->di_congestion_threshold =
+		    max(dfuse_info->di_max_background * 3 / 4, 1U);
+
+	if (dfuse_info->di_congestion_threshold > dfuse_info->di_max_background) {
+		printf("--congestion-threshold (%u) cannot exceed --max-background (%u)\n",
+		       dfuse_info->di_congestion_threshold, dfuse_info->di_max_background);
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 

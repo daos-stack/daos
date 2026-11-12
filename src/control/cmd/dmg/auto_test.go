@@ -272,10 +272,19 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Generate with both num-engines and allow-numa-imbalance (should error)",
+			"Generate with both num-engines and allow-numa-imbalance",
 			"config generate -a foo -e 4 --allow-numa-imbalance",
-			"",
-			errors.New("--num-engines and --allow-numa-imbalance flags are mutually exclusive"),
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.MgmtSvcReplicas = []string{"foo"}
+				req.ConfGenerateReq.NrEngines = 4
+				req.ConfGenerateReq.AllowNumaImbalance = true
+				return req
+			}()),
+			nil,
 		},
 		{
 			"Nonexistent subcommand",
@@ -605,7 +614,7 @@ engines:
     - "0000:03:00.0"
   provider: ofi+verbs
   fabric_iface: ib0
-  fabric_iface_port: 31416
+  fabric_iface_port: "31416"
   pinned_numa_node: 0
 - targets: 6
   nr_xs_helpers: 0
@@ -622,7 +631,7 @@ engines:
     - "0000:06:00.0"
   provider: ofi+verbs
   fabric_iface: ib1
-  fabric_iface_port: 32416
+  fabric_iface_port: "32416"
   pinned_numa_node: 1
 disable_vfio: false
 disable_vmd: false

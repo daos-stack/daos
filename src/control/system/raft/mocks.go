@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@
 package raft
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -163,6 +164,21 @@ func MockDatabase(t *testing.T, log logging.Logger) *Database {
 	return MockDatabaseWithAddr(t, log, common.LocalhostCtrlAddr())
 }
 
+// StartMockDatabase arms db's shutdown machinery (the shutdownCb/shutdownErrCh pair
+// consumed by Stop(), and the monitorLeadershipState() goroutine that services them) so
+// that a subsequent Stop() behaves like it would on a real, Start()-ed database, without
+// going through the full raft init/bootstrap that Start() itself performs (which would
+// replace the mock raftService installed by MockDatabase*() above with a real one).
+// ctx's cancellation (e.g. via t.Cleanup()) stops the goroutine if the test doesn't call
+// Stop() itself.
+func StartMockDatabase(t *testing.T, db *Database, ctx context.Context) {
+	t.Helper()
+
+	var dbCtx context.Context
+	dbCtx, db.shutdownCb = context.WithCancel(ctx)
+	go db.monitorLeadershipState(dbCtx)
+}
+
 // MockDatabaseWithFaultDomainTree creates a MockDatabase and sets the fault domain tree.
 func MockDatabaseWithFaultDomainTree(t *testing.T, log logging.Logger, tree *system.FaultDomainTree) *Database {
 	db := MockDatabase(t, log)
@@ -183,8 +199,10 @@ func TestDatabase(t *testing.T, log logging.Logger, replicas ...*net.TCPAddr) (*
 	}
 
 	db, err := NewDatabase(log, &DatabaseConfig{
-		Replicas: replicas,
-		RaftDir:  testDir + "/raft",
+		Replicas:             replicas,
+		RaftDir:              testDir + "/raft",
+		RaftHeartbeatTimeout: time.Second,
+		RaftElectionTimeout:  time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)

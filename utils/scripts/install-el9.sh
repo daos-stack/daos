@@ -19,7 +19,6 @@ dnf_install_args="${1:-}"
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
     binutils \
-    boost-python3-devel \
     bzip2 \
     capstone-devel \
     cmake \
@@ -50,7 +49,6 @@ dnf --nodocs install ${dnf_install_args} \
     libibverbs-devel \
     libiscsi-devel \
     libnl3-devel \
-    libpsm2-devel \
     librdmacm-devel \
     libtool \
     libtool-ltdl-devel \

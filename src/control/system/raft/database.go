@@ -114,6 +114,8 @@ type (
 		RaftSnapshotInterval  time.Duration
 		SystemName            string
 		ReadOnly              bool
+		RaftHeartbeatTimeout  time.Duration
+		RaftElectionTimeout   time.Duration
 	}
 
 	// GroupMap represents a version of the system membership map.
@@ -193,16 +195,14 @@ func (cfg *DatabaseConfig) stringReplicas(excludeAddrs ...*net.TCPAddr) (replica
 	return
 }
 
-func (cfg *DatabaseConfig) PeerReplicaAddrs() (peers []*net.TCPAddr) {
-	localAddr, _ := cfg.LocalReplicaAddr()
+func (cfg *DatabaseConfig) errNotReplica() error {
+	return &system.ErrNotReplica{Replicas: cfg.stringReplicas()}
+}
 
-	for _, r := range cfg.Replicas {
-		if common.CmpTCPAddr(r, localAddr) {
-			continue
-		}
-		peers = append(peers, r)
-	}
-	return
+// PeerReplicas returns the addresses of this system's replication peers.
+func (cfg *DatabaseConfig) PeerReplicas() []string {
+	localAddr, _ := cfg.LocalReplicaAddr()
+	return cfg.stringReplicas(localAddr)
 }
 
 // LocalReplicaAddr returns the address corresponding to the local MS replica,
@@ -215,7 +215,7 @@ func (cfg *DatabaseConfig) LocalReplicaAddr() (addr *net.TCPAddr, err error) {
 		}
 	}
 
-	return nil, &system.ErrNotReplica{Replicas: cfg.stringReplicas()}
+	return nil, cfg.errNotReplica()
 }
 
 // DBFilePath returns the path to the system database file.
@@ -305,7 +305,7 @@ func (db *Database) SystemName() string {
 // LeaderQuery returns the system leader, if known.
 func (db *Database) LeaderQuery() (leader string, replicas []string, err error) {
 	if !db.IsReplica() {
-		return "", nil, &system.ErrNotReplica{db.cfg.stringReplicas()}
+		return "", nil, db.cfg.errNotReplica()
 	}
 
 	return db.leaderHint(), db.cfg.stringReplicas(), nil
@@ -315,25 +315,14 @@ func (db *Database) LeaderQuery() (leader string, replicas []string, err error) 
 // the system is configured as a MS replica.
 func (db *Database) ReplicaAddr() (*net.TCPAddr, error) {
 	if !db.IsReplica() {
-		return nil, &system.ErrNotReplica{db.cfg.stringReplicas()}
+		return nil, db.cfg.errNotReplica()
 	}
 	return db.replicaAddr, nil
 }
 
-// PeerAddrs returns the addresses of this system's replication peers.
-func (db *Database) PeerAddrs() ([]*net.TCPAddr, error) {
-	myAddr, err := db.ReplicaAddr()
-	if err != nil {
-		return nil, err
-	}
-
-	var peers []*net.TCPAddr
-	for _, rep := range db.cfg.Replicas {
-		if !common.CmpTCPAddr(myAddr, rep) {
-			peers = append(peers, rep)
-		}
-	}
-	return peers, nil
+// PeerReplicas returns the addresses of this system's replication peers.
+func (db *Database) PeerReplicas() []string {
+	return db.cfg.stringReplicas(db.replicaAddr)
 }
 
 // IsReplica returns true if the system is configured as a replica.
@@ -357,7 +346,7 @@ func (db *Database) IsBootstrap() bool {
 // replica or the service is not running.
 func (db *Database) CheckReplica() error {
 	if !db.IsReplica() {
-		return &system.ErrNotReplica{db.cfg.stringReplicas()}
+		return db.cfg.errNotReplica()
 	}
 
 	if db.initialized.IsFalse() {
@@ -372,7 +361,7 @@ func (db *Database) CheckReplica() error {
 func errNotSysLeader(svc raftService, db *Database) error {
 	return &system.ErrNotLeader{
 		LeaderHint: string(svc.Leader()),
-		Replicas:   db.cfg.stringReplicas(db.replicaAddr),
+		Replicas:   db.PeerReplicas(),
 	}
 }
 
@@ -498,8 +487,35 @@ func (db *Database) Start(parent context.Context) error {
 
 // RemoveFiles destructively removes files associated with the system
 // database.
+//
+// The directory is renamed aside (a single atomic rename within the same
+// parent directory) before the renamed copy is removed. This guarantees that
+// even if the subsequent removal fails partway (e.g. a transient I/O error),
+// the original RaftDir path is already gone, so a following restart sees no
+// database at that path and bootstraps a fresh, empty one rather than
+// reloading stale, partially-erased raft state.
 func (db *Database) RemoveFiles() error {
-	return os.RemoveAll(db.cfg.RaftDir)
+	// Clear out any leftover from a prior failed removal before reusing the path.
+	stalePath := db.cfg.RaftDir + ".erasing"
+	if err := os.RemoveAll(stalePath); err != nil {
+		return errors.Wrapf(err, "removing stale leftover %s", stalePath)
+	}
+
+	if err := os.Rename(db.cfg.RaftDir, stalePath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return errors.Wrapf(err, "renaming %s aside before removal", db.cfg.RaftDir)
+	}
+
+	// RaftDir is already gone from this point, regardless of whether the
+	// following removal succeeds.
+	return os.RemoveAll(stalePath)
+}
+
+// RaftDir returns the configured path to the raft directory.
+func (db *Database) RaftDir() string {
+	return db.cfg.RaftDir
 }
 
 // Stop signals to the database that it should shutdown all background

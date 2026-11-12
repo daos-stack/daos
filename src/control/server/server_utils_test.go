@@ -518,8 +518,12 @@ func TestServer_prepBdevStorage_errors(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
-					mbp, nil),
+					sp, scm.NewProvider(&scm.ProviderConfig{
+						Log:       log,
+						Backend:   scm.NewMockBackend(nil),
+						Sys:       sp,
+						KernelCfg: sysprov.KernelConfig{},
+					}), mbp, nil),
 				srvCfg: cfg,
 			}
 
@@ -1402,8 +1406,12 @@ func TestServer_prepBdevStorage_setEngineMemSize(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
-					mbp, nil),
+					sp, scm.NewProvider(&scm.ProviderConfig{
+						Log:       log,
+						Backend:   scm.NewMockBackend(nil),
+						Sys:       sp,
+						KernelCfg: sysprov.KernelConfig{},
+					}), mbp, nil),
 				srvCfg: cfg,
 			}
 
@@ -1545,8 +1553,12 @@ func TestServer_cleanEngineSpdkResources(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, nil,
-					sp, scm.NewProvider(&scm.ProviderConfig{Log: log, Backend: scm.NewMockBackend(nil), Sys: sp}),
-					mbp, nil),
+					sp, scm.NewProvider(&scm.ProviderConfig{
+						Log:       log,
+						Backend:   scm.NewMockBackend(nil),
+						Sys:       sp,
+						KernelCfg: sysprov.KernelConfig{},
+					}), mbp, nil),
 				srvCfg: cfg,
 			}
 
@@ -2056,6 +2068,10 @@ func TestServer_processFabricProvider(t *testing.T) {
 			cfgFabric: "ucx+ud",
 			expFabric: "ucx+ud",
 		},
+		"multiprovider": {
+			cfgFabric: "ofi+verbs,ofi+tcp",
+			expFabric: "ofi+verbs;ofi_rxm,ofi+tcp",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := &config.Server{
@@ -2539,6 +2555,7 @@ func TestServer_handleEngineSelfTerminated_ErrorHandling(t *testing.T) {
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
+	defer pubSub.Close()
 
 	cfg := &config.Server{
 		DisableEngineAutoRestart: false,
@@ -2691,6 +2708,7 @@ func TestServer_registerSubscriptions_includesSelfTerminated(t *testing.T) {
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
+	defer pubSub.Close()
 
 	cfg := &config.Server{
 		DisableEngineAutoRestart: false,
@@ -2769,6 +2787,7 @@ func TestServer_registerLeaderSubscriptions_includesSelfTerminated(t *testing.T)
 
 	harness := NewEngineHarness(log)
 	pubSub := events.NewPubSub(ctx, log)
+	defer pubSub.Close()
 
 	svc := newTestMgmtSvc(t, log)
 
