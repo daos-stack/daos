@@ -86,12 +86,14 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	 * larger request with EIO. FUSE limits the size of a request in pages (256 by default),
 	 * which is 1MiB with 4KiB pages but 16MiB with 64KiB pages. Do not advertise more than the
 	 * buffers can hold, the kernel splits larger I/O into requests of at most this size.
-	 * The read size is limited with the max_read mount option, see dfuse_fs_start(), as
-	 * libfuse does not allow init() to change it.
+	 * The kernel enforces the max_read mount option set in dfuse_fs_start(), and libfuse
+	 * requires the value set here to be the same.
 	 */
 	if (conn->max_write == 0 || conn->max_write > DFUSE_MAX_READ)
 		conn->max_write = DFUSE_MAX_READ;
-	DFUSE_TRA_INFO(dfuse_info, "max write %#x (requested)", conn->max_write);
+	conn->max_read = DFUSE_MAX_READ;
+	DFUSE_TRA_INFO(dfuse_info, "max read %#x, max write %#x (requested)", conn->max_read,
+		       conn->max_write);
 
 	if (conn->capable & FUSE_CAP_PARALLEL_DIROPS)
 		conn->want |= FUSE_CAP_PARALLEL_DIROPS;
