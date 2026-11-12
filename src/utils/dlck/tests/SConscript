@@ -34,6 +34,8 @@ def build_dlck_engine_ut(henv):
 
     srcs = [
         'dlck_engine_ut.c',
+        'dlck_engine_ut_abt_mock.c',
+        'dlck_engine_ut_daos_mock.c',
         'dlck_engine_ut_mock.c',
         '../dlck_engine.c',
     ]
