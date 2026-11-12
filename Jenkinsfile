@@ -302,7 +302,7 @@ pipeline {
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
                defaultValue: '',
-               description: 'Test-tag to use for all the Functional test stages. Overrides '
+               description: 'Test-tag to use for all the Functional test stages. Overrides ' +
                             'the default test tags for this run (i.e. pr, daily_regression, ' +
                             'full_regression, etc.)')
         // The TestNvme and TestRepeat parameter definitions are purposely excluded. The functional
