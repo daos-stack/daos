@@ -24,6 +24,7 @@
 struct dtx_resync_head {
 	d_list_t drh_list;
 	d_list_t drh_pending;
+	int      drh_last_err;
 };
 
 struct dtx_resync_args {
@@ -185,8 +186,8 @@ dtx_resync_local_check(struct ds_cont_child *cont, struct dtx_id *xid, uint32_t 
 }
 
 static int
-dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_resync_entry *dre, int *tgt_array,
-		      int *err)
+dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_resync_head *drh,
+		      struct dtx_resync_entry *dre, int *tgt_array, int *err)
 {
 	struct dtx_entry       *dte     = &dre->dre_dte;
 	struct dtx_memberships *mbs     = dte->dte_mbs;
@@ -230,6 +231,11 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_resync_entry *dre, 
 	case -DER_HG:
 		D_WARN("Need retry resync for DTX " DF_DTI " because of " DF_RC "\n",
 		       DP_DTI(&dte->dte_xid), DP_RC(rc));
+
+		/* If repeatedly hit the same network failure, let's wait for a while before retry. */
+		if (drh->drh_last_err == rc)
+			dss_sleep(50);
+
 		/* Fall through. */
 	case -DER_INPROGRESS:
 	case -DER_TIMEDOUT:
@@ -316,6 +322,8 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_resync_entry *dre, 
 	}
 
 out:
+	drh->drh_last_err = rc;
+
 	if (rc == DSHR_NEED_COMMIT) {
 		/*
 		 * IO handler for resent may have changed the DTX by race, re-check it locally.
@@ -466,7 +474,7 @@ again:
 			continue;
 		}
 
-		rc = dtx_status_handle_one(cont, dre, tgt_array, &err);
+		rc = dtx_status_handle_one(cont, drh, dre, tgt_array, &err);
 
 		if (unlikely(cont->sc_stopping))
 			D_GOTO(out, err = -DER_CANCELED);
