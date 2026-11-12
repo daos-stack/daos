@@ -73,8 +73,8 @@ printf '%s\n' \
   'fi' \
   'install -d -o slurm -g slurm -m 0755 /var/lib/slurm /var/log/slurm /var/spool/slurmctld' \
   'install -d -o root -g root -m 0755 /var/spool/slurmd' \
+  '/sbin/ldconfig' \
   > "${tmp}/slurm_setup"
-EXTRA_OPTS+=(--after-install "${tmp}/slurm_setup")
 
 stage_files "${bindir}" "${SL_SLURM_PREFIX}"/bin/*
 clean_slurm_bin "${files[@]}"
@@ -94,7 +94,7 @@ if [[ -d "${SL_SLURM_PREFIX}/share/bash-completion" ]]; then
   stage_files "${datadir}" "${SL_SLURM_PREFIX}/share/bash-completion"
 fi
 printf '#!/bin/sh\n/sbin/ldconfig\n' > "${tmp}/slurm_ldconfig"
-EXTRA_OPTS+=(--after-install "${tmp}/slurm_ldconfig" --after-remove "${tmp}/slurm_ldconfig")
+EXTRA_OPTS+=(--after-install "${tmp}/slurm_setup" --after-remove "${tmp}/slurm_ldconfig")
 EXTERNAL_DEPENDS=(munge)
 build_package "${slurm_lib}"
 
