@@ -3505,9 +3505,8 @@ delete:
 }
 
 /** gather statistics from a tree node and all its children recursively. */
-static void
-btr_node_stat(struct btr_context *tcx, umem_off_t nd_off,
-	      struct btr_stat *stat)
+static int
+btr_node_stat(struct btr_context *tcx, umem_off_t nd_off, struct btr_stat *stat)
 {
 	struct btr_node *nd	= btr_off2ptr(tcx, nd_off);
 	bool		 leaf	= btr_node_is_leaf(tcx, nd_off);
@@ -3523,9 +3522,11 @@ btr_node_stat(struct btr_context *tcx, umem_off_t nd_off,
 			umem_off_t	child_off;
 
 			child_off = btr_node_child_at(tcx, nd_off, i);
-			btr_node_stat(tcx, child_off, stat);
+			rc        = btr_node_stat(tcx, child_off, stat);
+			if (rc != 0)
+				return rc;
 		}
-		return;
+		return 0;
 	}
 	/* leaf */
 	stat->bs_rec_nr += nd->tn_keyn;
@@ -3535,6 +3536,8 @@ btr_node_stat(struct btr_context *tcx, umem_off_t nd_off,
 
 		rec = btr_node_rec_at(tcx, nd_off, i);
 		rc = btr_rec_stat(tcx, rec, &rs);
+		if (rc != -DER_NOSYS)
+			return rc;
 		if (rc != 0)
 			continue;
 
@@ -3546,6 +3549,8 @@ btr_node_stat(struct btr_context *tcx, umem_off_t nd_off,
 		if (stat->bs_val_max < rs.rs_vsize)
 			stat->bs_val_max = rs.rs_vsize;
 	}
+
+	return 0;
 }
 
 /** scan all tree nodes and records, gather their stats */
@@ -3640,8 +3645,9 @@ dbtree_query(daos_handle_t toh, struct btr_attr *attr, struct btr_stat *stat)
 		attr->ba_count = btr_tree_count(tcx, root);
 	}
 
-	if (stat != NULL)
-		btr_tree_stat(tcx, stat);
+	if (stat != NULL) {
+		return btr_tree_stat(tcx, stat);
+	}
 
 	return 0;
 }
