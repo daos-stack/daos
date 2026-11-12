@@ -388,15 +388,15 @@ pipeline {
         booleanParam(name: bashName('Functional Hardware Large TCP MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large TCP MD on SSD stage.')
-        booleanParam(name: bashName('Functional Hardware Medium UCX MD on SSD'),
+        booleanParam(name: bashName('Functional Hardware Medium Verbs MD on SSD'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium UCX MD on SSD stage.')
-        booleanParam(name: bashName('Functional Hardware Medium UCX Provider MD on SSD'),
+                     description: 'Run the Functional Hardware Medium Verbs MD on SSD stage.')
+        booleanParam(name: bashName('Functional Hardware Medium Verbs Provider MD on SSD'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Medium UCX Provider MD on SSD stage.')
-        booleanParam(name: bashName('Functional Hardware Large UCX MD on SSD'),
+                     description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD stage.')
+        booleanParam(name: bashName('Functional Hardware Large Verbs MD on SSD'),
                      defaultValue: true,
-                     description: 'Run the Functional Hardware Large UCX MD on SSD stage.')
+                     description: 'Run the Functional Hardware Large Verbs MD on SSD stage.')
         booleanParam(name: bashName('Functional Cluster Box Medium MD on SSD'),
                      defaultValue: true,
                      description: 'Run the Functional Cluster Box Medium MD on SSD stage.')
