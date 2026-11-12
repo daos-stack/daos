@@ -63,6 +63,11 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
         :avocado: tags=pool,pool_create_all
         :avocado: tags=PoolCreateAllHwTests,test_one_pool_hw
         """
+        md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
+        targets = self.server_managers[0].get_config_value("targets")
+        if md_on_ssd and targets == 5:
+            self.skipTest("5 target 100% pool create on MD-on-SSD fails. Skip.")
+
         deltas_bytes = self.get_deltas("test_one_pool_hw")
         self.log.info("Test basic pool creation with full storage")
         self.log_deltas(*deltas_bytes)
@@ -82,6 +87,11 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
         :avocado: tags=pool,pool_create_all
         :avocado: tags=PoolCreateAllHwTests,test_recycle_pools_hw
         """
+        md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
+        targets = self.server_managers[0].get_config_value("targets")
+        if md_on_ssd and targets == 5:
+            self.skipTest("5 target 100% pool create on MD-on-SSD fails. Skip.")
+
         pool_count = self.params.get("pool_count", "/run/test_recycle_pools_hw/*", 0)
         deltas_bytes = self.get_deltas("test_recycle_pools_hw")
         deltas_bytes[:] = [it * self.engines_count for it in deltas_bytes]

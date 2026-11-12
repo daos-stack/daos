@@ -127,7 +127,19 @@ class VmdLedStatus(OSAUtils):
             self.log.info("Devices on hosts %s: %s", hosts, uuid_list)
             self.log.info("First device on hosts %s: %s", hosts, uuid_list[0])
             host = hosts.split(':')[0]
-            resp = set_device_faulty(self, self.dmg, host, uuid_list[0])
+
+            self.log.debug(f"## uuid_dict = {uuid_dict}; uuid_list[0] = {uuid_list[0]}")
+            device_values = uuid_dict[uuid_list[0]]
+            self.log.debug(f"## device_values = {device_values}")
+            has_sys_xs = device_values["has_sys_xs"]
+            self.log.debug(f"## has_sys_xs = {has_sys_xs}")
+
+            if not has_sys_xs:
+                resp = set_device_faulty(self, dmg=self.dmg, server=host, uuid=uuid_list[0])
+            else:
+                self.log.info("Device has_sys_xs is true. Skip this device and host.")
+                continue
+
             self.log.info("Sleeping for 15 seconds ...")
             time.sleep(15)
             self.log.info(resp)
@@ -136,3 +148,5 @@ class VmdLedStatus(OSAUtils):
             self.log.info("Sleeping for 60 seconds ...")
             time.sleep(60)
             self.log.info(resp)
+
+        self.log.debug("## End of test.")
