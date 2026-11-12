@@ -3078,6 +3078,7 @@ func TestServer_CtlSvc_StorageFormatStatus(t *testing.T) {
 	for name, tc := range map[string]struct {
 		notStarted []bool // per-engine stopped/started state, see mockControlService
 		awaitFmt   []bool // per-engine isAwaitingFormat() state to apply
+		awaitStart []bool // per-engine isAwaitingStart() state to apply
 		expResp    *ctlpb.StorageFormatStatusResp
 	}{
 		"single engine awaiting format": {
@@ -3089,6 +3090,20 @@ func TestServer_CtlSvc_StorageFormatStatus(t *testing.T) {
 						Instanceidx:    0,
 						AwaitingFormat: true,
 						State:          "AwaitingFormat",
+					},
+				},
+			},
+		},
+		"single engine awaiting start": {
+			notStarted: []bool{true},
+			awaitFmt:   []bool{false},
+			awaitStart: []bool{true},
+			expResp: &ctlpb.StorageFormatStatusResp{
+				EngineStatus: []*ctlpb.EngineFormatStatus{
+					{
+						Instanceidx:    0,
+						AwaitingFormat: false,
+						State:          "AwaitingStart",
 					},
 				},
 			},
@@ -3120,8 +3135,9 @@ func TestServer_CtlSvc_StorageFormatStatus(t *testing.T) {
 			},
 		},
 		"mixed engine states": {
-			notStarted: []bool{true, false},
-			awaitFmt:   []bool{true, false},
+			notStarted: []bool{true, false, true},
+			awaitFmt:   []bool{true, false, false},
+			awaitStart: []bool{false, false, true},
 			expResp: &ctlpb.StorageFormatStatusResp{
 				EngineStatus: []*ctlpb.EngineFormatStatus{
 					{
@@ -3133,6 +3149,11 @@ func TestServer_CtlSvc_StorageFormatStatus(t *testing.T) {
 						Instanceidx:    1,
 						AwaitingFormat: false,
 						State:          system.MemberStateReady.String(),
+					},
+					{
+						Instanceidx:    2,
+						AwaitingFormat: false,
+						State:          "AwaitingStart",
 					},
 				},
 			},
@@ -3156,6 +3177,11 @@ func TestServer_CtlSvc_StorageFormatStatus(t *testing.T) {
 					ei.waitFormat.SetTrue()
 				} else {
 					ei.waitFormat.SetFalse()
+				}
+				if i < len(tc.awaitStart) && tc.awaitStart[i] {
+					ei.waitStart.SetTrue()
+				} else {
+					ei.waitStart.SetFalse()
 				}
 			}
 

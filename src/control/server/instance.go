@@ -208,7 +208,7 @@ func (ei *EngineInstance) setExitErr(err error) {
 
 // LocalFormatState returns a finer-grained, format-centric state name than
 // LocalState, for use in format-status reporting: Stopped, ServerStarting,
-// AwaitingFormat, EnginesStarting, or Ready.
+// AwaitingFormat, AwaitingStart, EnginesStarting, or Ready.
 func (ei *EngineInstance) LocalFormatState() string {
 	switch {
 	case ei.IsReady():
@@ -219,6 +219,8 @@ func (ei *EngineInstance) LocalFormatState() string {
 		return "AwaitingFormat"
 	case ei.isServerStarting():
 		return "ServerStarting"
+	case ei.isAwaitingStart():
+		return "AwaitingStart"
 	default:
 		return "Stopped"
 	}

@@ -267,24 +267,27 @@ func TestServer_EngineInstance_updateIncarnation(t *testing.T) {
 
 type (
 	MockInstanceConfig struct {
-		CallDrpcResp        *drpc.Response
-		CallDrpcErr         error
-		GetRankResp         ranklist.Rank
-		GetRankErr          error
-		TargetCount         int
-		Index               uint32
-		Started             atm.Bool
-		Ready               atm.Bool
-		CheckerMode         atm.Bool
-		LocalState          system.MemberState
-		LocalFormatState    string
-		RemoveSuperblockErr error
-		SetupRankErr        error
-		StopErr             error
-		ExitErr             error
-		ScmTierConfig       *storage.TierConfig
-		ScanBdevTiersResult []storage.BdevTierScanResult
-		LastHealthStats     map[string]*ctlpb.BioHealthResp
+		CallDrpcResp         *drpc.Response
+		CallDrpcErr          error
+		GetRankResp          ranklist.Rank
+		GetRankErr           error
+		TargetCount          int
+		Index                uint32
+		Started              atm.Bool
+		Ready                atm.Bool
+		CheckerMode          atm.Bool
+		LocalState           system.MemberState
+		LocalFormatState     string
+		AwaitingFormat       bool
+		NotifyStorageReadyFn func(*ranklist.Rank)
+		StorageProvider      *storage.Provider
+		RemoveSuperblockErr  error
+		SetupRankErr         error
+		StopErr              error
+		ExitErr              error
+		ScmTierConfig        *storage.TierConfig
+		ScanBdevTiersResult  []storage.BdevTierScanResult
+		LastHealthStats      map[string]*ctlpb.BioHealthResp
 	}
 
 	MockInstance struct {

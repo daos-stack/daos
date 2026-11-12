@@ -64,6 +64,7 @@ func TestStorageCommands(t *testing.T) {
 				printRequest(t, systemQueryReq),
 				printRequest(t, &control.StorageFormatReq{Start: true, Rank: uint32(ranklist.NilRank)}),
 			}, " "),
+			nil,
 		},
 		{
 			"Format status",

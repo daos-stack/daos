@@ -1340,8 +1340,9 @@ Format Status:
 						{Instanceidx: 0, AwaitingFormat: false, State: "Stopped"},
 						{Instanceidx: 1, AwaitingFormat: false, State: "ServerStarting"},
 						{Instanceidx: 2, AwaitingFormat: true, State: "AwaitingFormat"},
-						{Instanceidx: 3, AwaitingFormat: false, State: "EnginesStarting"},
-						{Instanceidx: 4, AwaitingFormat: false, State: "Ready"},
+						{Instanceidx: 3, AwaitingFormat: false, State: "AwaitingStart"},
+						{Instanceidx: 4, AwaitingFormat: false, State: "EnginesStarting"},
+						{Instanceidx: 5, AwaitingFormat: false, State: "Ready"},
 					},
 				}
 				if err := hsm.Add("host1", hs); err != nil {
@@ -1356,8 +1357,9 @@ Format Status:
   host1 0      false           Stopped         
   host1 1      false           ServerStarting  
   host1 2      true            AwaitingFormat  
-  host1 3      false           EnginesStarting 
-  host1 4      false           Ready           
+  host1 3      false           AwaitingStart   
+  host1 4      false           EnginesStarting 
+  host1 5      false           Ready           
 `,
 		},
 	} {

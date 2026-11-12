@@ -570,6 +570,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 // reported by LocalFormatState():
 // Stopped (before anything starts) -> ServerStarting (format-readiness check
 // underway) -> AwaitingFormat (blocked waiting for admin to trigger format)
+// -> AwaitingStart (format complete, held pending an explicit start request)
 // -> EnginesStarting (once the engine process has been started, following
 // NotifyStorageReady()) -> Ready.
 func TestIOEngineInstance_localStateTransitions(t *testing.T) {
@@ -646,6 +647,19 @@ func TestIOEngineInstance_localStateTransitions(t *testing.T) {
 
 	if ei.isServerStarting() || ei.isAwaitingFormat() {
 		t.Fatal("expected both ServerStarting and AwaitingFormat flags to be cleared post-format")
+	}
+
+	// Every format is followed by a hold pending an explicit start
+	// request, so the instance should now report AwaitingStart rather
+	// than falling back to the generic Stopped state.
+	if !ei.isAwaitingStart() {
+		t.Fatal("expected isAwaitingStart() to be true after format completes")
+	}
+	if state := ei.LocalFormatState(); state != "AwaitingStart" {
+		t.Fatalf("expected AwaitingStart, got %s", state)
+	}
+	if state := ei.LocalState(); state != system.MemberStateAwaitStart {
+		t.Fatalf("expected MemberStateAwaitStart, got %s", state)
 	}
 
 	// Simulate the engine process having been exec'd by start().

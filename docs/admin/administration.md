@@ -1501,8 +1501,9 @@ engines have reached the `AwaitingFormat` state before issuing `dmg storage form
 `State` reflects the following local, format-centric engine lifecycle (narrower than the states
 reported by `dmg system query`): `Stopped` (engine process not running, no start requested),
 `ServerStarting` (start requested, not yet known whether format is required), `AwaitingFormat`
-(format required, waiting for an administrator to trigger it), `EnginesStarting` (format no longer
-required/awaited and the engine process has started, but has not yet reported ready), and `Ready`
+(format required, waiting for an administrator to trigger it), `AwaitingStart` (format no longer
+required/awaited, but the engine is held pending an explicit `dmg system start`), `EnginesStarting`
+(hold released and the engine process has started, but has not yet reported ready), and `Ready`
 (engine has started up successfully):
 
 ```bash
