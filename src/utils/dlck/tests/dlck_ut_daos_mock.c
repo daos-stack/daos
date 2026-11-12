@@ -146,12 +146,12 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 int
 bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 {
+	int rc;
+
 	assert_non_null(pctxt);
 	check_expected(tgt_id);
 	assert_false(self_polling);
-
-	int rc = mock_type(int);
-
+	rc = mock_type(int);
 	if (rc == DER_SUCCESS) {
 		*pctxt = mock_ptr_type(struct bio_xs_context *);
 	}

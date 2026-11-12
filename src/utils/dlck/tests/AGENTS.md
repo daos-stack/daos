@@ -5,6 +5,9 @@
 - Use `git commit --signoff` for every commit, including amended commits; each requires a
   `Signed-off-by` trailer.
 - Follow `.clang-format` for C/C++ and test tables. The column limit is 100; count tabs as 8.
+- Declare local variables at the top of the function. Keep a single empty line after the
+  declarations and before the final `return`; avoid empty lines between logically coupled
+  statements.
 - Describe behavior in comments in plain words; do not quote code or function signatures.
 
 ## Unit Tests

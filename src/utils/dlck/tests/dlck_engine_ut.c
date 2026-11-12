@@ -72,12 +72,12 @@ test_exec_one(void *arg)
 static int
 test_arg_alloc(struct dlck_engine *engine, int idx, void *custom, void **arg)
 {
+	int rc;
+
 	check_expected_ptr(engine);
 	check_expected(idx);
 	check_expected_ptr(custom);
-
-	int rc = mock_type(int);
-
+	rc = mock_type(int);
 	if (rc == DER_SUCCESS) {
 		*arg = mock_ptr_type(void *);
 	}

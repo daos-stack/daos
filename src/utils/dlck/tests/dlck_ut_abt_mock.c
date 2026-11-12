@@ -22,10 +22,10 @@ const ABT_thread Mock_thread       = (ABT_thread)0x5678;
 int
 __wrap_ABT_mutex_create(ABT_mutex *newmutex)
 {
+	int rc;
+
 	check_expected_ptr(newmutex);
-
-	int rc = mock_type(int);
-
+	rc = mock_type(int);
 	if (rc == ABT_SUCCESS) {
 		assert_non_null(newmutex);
 		*newmutex = mock_ptr_type(ABT_mutex);
@@ -37,15 +37,17 @@ __wrap_ABT_mutex_create(ABT_mutex *newmutex)
 int
 __wrap_ABT_mutex_free(ABT_mutex *mutex)
 {
+	ABT_mutex handle;
+	int       rc;
+
 	check_expected_ptr(mutex);
 	assert_non_null(mutex);
-	ABT_mutex handle = *mutex;
+	handle = *mutex;
 	check_expected_ptr(handle);
-
-	int rc = mock_type(int);
-
-	if (rc == ABT_SUCCESS)
+	rc = mock_type(int);
+	if (rc == ABT_SUCCESS) {
 		*mutex = ABT_MUTEX_NULL;
+	}
 
 	return rc;
 }
@@ -55,9 +57,7 @@ __wrap_ABT_mutex_lock(ABT_mutex mutex)
 {
 	check_expected_ptr(mutex);
 
-	int rc = mock_type(int);
-
-	return rc;
+	return mock_type(int);
 }
 
 int
@@ -65,9 +65,7 @@ __wrap_ABT_mutex_unlock(ABT_mutex mutex)
 {
 	check_expected_ptr(mutex);
 
-	int rc = mock_type(int);
-
-	return rc;
+	return mock_type(int);
 }
 
 /** ABT thread, pool, and eventual mocks */
@@ -83,14 +81,13 @@ __wrap_ABT_thread_join(ABT_thread thread)
 int
 __wrap_ABT_thread_free(ABT_thread *thread)
 {
+	ABT_thread handle;
+	int        rc;
+
 	assert_non_null(thread);
-
-	ABT_thread handle = *thread;
-
+	handle = *thread;
 	check_expected_ptr(handle);
-
-	int rc = mock_type(int);
-
+	rc = mock_type(int);
 	if (rc == ABT_SUCCESS) {
 		*thread = ABT_THREAD_NULL;
 	}
@@ -121,10 +118,10 @@ __wrap_ABT_pool_is_empty(ABT_pool pool, ABT_bool *is_empty)
 int
 __wrap_ABT_eventual_create(int nbytes, ABT_eventual *neweventual)
 {
+	int rc;
+
 	assert_non_null(neweventual);
-
-	int rc = mock_type(int);
-
+	rc = mock_type(int);
 	if (rc == ABT_SUCCESS) {
 		*neweventual = mock_ptr_type(ABT_eventual);
 	}
@@ -135,14 +132,13 @@ __wrap_ABT_eventual_create(int nbytes, ABT_eventual *neweventual)
 int
 __wrap_ABT_eventual_free(ABT_eventual *eventual)
 {
+	ABT_eventual handle;
+	int          rc;
+
 	assert_non_null(eventual);
-
-	ABT_eventual handle = *eventual;
-
+	handle = *eventual;
 	check_expected_ptr(handle);
-
-	int rc = mock_type(int);
-
+	rc = mock_type(int);
 	if (rc == ABT_SUCCESS) {
 		*eventual = ABT_EVENTUAL_NULL;
 	}
@@ -161,11 +157,11 @@ __wrap_ABT_eventual_set(ABT_eventual eventual, void *value, int nbytes)
 int
 __wrap_ABT_eventual_test(ABT_eventual eventual, void **value, ABT_bool *is_ready)
 {
+	int rc;
+
 	check_expected_ptr(eventual);
 	assert_non_null(is_ready);
-
-	int rc = mock_type(int);
-
+	rc = mock_type(int);
 	if (rc == ABT_SUCCESS) {
 		*is_ready = mock_type(ABT_bool);
 	}
@@ -178,10 +174,10 @@ __wrap_ABT_eventual_test(ABT_eventual eventual, void **value, ABT_bool *is_ready
 int
 dlck_xstream_create(struct dlck_xstream *xs)
 {
+	int rc;
+
 	check_expected_ptr(xs);
-
-	int rc = mock_type(int);
-
+	rc = mock_type(int);
 	if (rc == DER_SUCCESS) {
 		xs->pool = mock_ptr_type(ABT_pool);
 	}
@@ -205,12 +201,12 @@ dlck_xstream_free(struct dlck_xstream *xs)
 int
 dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult)
 {
+	int rc;
+
 	check_expected_ptr(pool);
 	assert_non_null(func);
 	assert_non_null(ult);
-
-	int rc = mock_type(int);
-
+	rc = mock_type(int);
 	if (rc == DER_SUCCESS) {
 		ult->thread = mock_ptr_type(ABT_thread);
 		func(arg);

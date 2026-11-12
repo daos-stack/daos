@@ -15,11 +15,11 @@
 void *
 __wrap_d_calloc(size_t nmemb, size_t size)
 {
+	void *ptr;
+
 	check_expected(nmemb);
 	check_expected(size);
-
-	void *ptr = mock_ptr_type(void *);
-
+	ptr = mock_ptr_type(void *);
 	if (ptr != NULL) {
 		memset(ptr, 0, nmemb * size);
 	}
