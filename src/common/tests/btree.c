@@ -543,7 +543,7 @@ ik_btr_query(void **state)
 	struct btr_attr		attr;
 	struct btr_stat		stat;
 	char                   *str        = tst_fn_val.optval;
-	uint64_t                exp_rec_nr = (str != NULL ? strtoul(str, NULL, 0) : 0);
+	uint64_t                exp_rec_nr = (str != NULL ? strtoul(str, NULL, 0) : UINT64_MAX);
 	int			rc;
 	char                    outbuf[128];
 
@@ -561,7 +561,7 @@ ik_btr_query(void **state)
 		stat.bs_node_nr, stat.bs_rec_nr, stat.bs_key_sum, stat.bs_key_max, stat.bs_val_sum,
 		stat.bs_val_max);
 
-	if (str != NULL) {
+	if (exp_rec_nr != UINT64_MAX) {
 		if (stat.bs_rec_nr != exp_rec_nr) {
 			sprintf(outbuf,
 				"Btree query reported unexpected number of records: " DF_U64
