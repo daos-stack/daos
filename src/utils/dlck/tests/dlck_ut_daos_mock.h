@@ -100,11 +100,11 @@ extern struct dss_module                vos_srv_module;
 		will_return(vos_sys_db_init, RC);                                                  \
 	} while (0)
 
-/** int sm_init(void) mock of vos_srv_module.sm_init */
+/** Mock of the vos_srv_module.sm_init callback. */
 int
 mock_sm_init(void);
 
-/** int sm_fini(void) mock of vos_srv_module.sm_fini */
+/** Mock of the vos_srv_module.sm_fini callback. */
 int
 mock_sm_fini(void);
 
