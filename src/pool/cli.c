@@ -2053,6 +2053,10 @@ unregister_map_task(struct dc_pool *pool, tse_task_t *task)
  * mra_i is an index in the internal node array of a pool map. It is used to
  * perform a round robin of the array starting from a random element.
  *
+ * mra_hint_rank is a preferred first rank to query (e.g. the engine that
+ * returned -DER_STALE), or CRT_NO_RANK. It is consumed once, after which
+ * the normal round robin resumes.
+ *
  * mra_n is the number of "serious" errors at which we will fall back to
  * POOL_QUERY via dc_pool_query. "Serious" errors like -DER_NO_HDL or
  * -DER_NONEXIST are not "retryable" normally. In the case of
@@ -2066,7 +2070,8 @@ struct map_refresh_arg {
 	bool			mra_passive;
 	bool			mra_fallen_back;
 	unsigned int		mra_map_version;
-	int			mra_i;
+	int                     mra_i;
+	d_rank_t                mra_hint_rank;
 	int			mra_n;
 	struct d_backoff_seq	mra_backoff_seq;
 };
@@ -2090,6 +2095,35 @@ choose_map_refresh_rank(struct map_refresh_arg *arg)
 	n = pool_map_find_ranks(arg->mra_pool->dp_map, PO_COMP_ID_ALL, &nodes);
 	/* There must be at least one rank. */
 	D_ASSERTF(n > 0, "%d\n", n);
+
+	/*
+	 * Try the hinted rank first (e.g. the engine that returned -DER_STALE):
+	 * known-alive and known to hold a newer map. Consume it once, then fall
+	 * back to the round robin below.
+	 *
+	 * TODO: the suite tests only confirm that a refresh advanced the client
+	 * map, which the hint exercises by construction but does not prove the
+	 * hinted rank was the one queried. A future change could add a fail-loc
+	 * tripwire + counter here (incremented only on the hint branch) that the
+	 * engine side confirms and the test reads back, turning the by-construction
+	 * argument into an explicit "hint rank was used" assertion.
+	 */
+	if (arg->mra_hint_rank != CRT_NO_RANK) {
+		d_rank_t hint = arg->mra_hint_rank;
+
+		arg->mra_hint_rank = CRT_NO_RANK;
+		for (i = 0; i < n; i++) {
+			if (nodes[i].do_comp.co_rank == hint &&
+			    nodes[i].do_comp.co_status == PO_COMP_ST_UPIN) {
+				arg->mra_i = i + 1;
+				D_DEBUG(DB_MD, DF_UUID ": using hint rank %u for map refresh\n",
+					DP_UUID(arg->mra_pool->dp_pool), hint);
+				return hint;
+			}
+		}
+		D_DEBUG(DB_MD, DF_UUID ": hint rank %u not usable (not UPIN), using round robin\n",
+			DP_UUID(arg->mra_pool->dp_pool), hint);
+	}
 
 	if (arg->mra_i == -1) {
 		/* Let i be a random integer in [0, n). */
@@ -2500,14 +2534,21 @@ out_pool:
  * In either case, the pool map refresh task may temporarily miss the latest
  * pool map version in certain scenarios, resulting in extra retries.
  *
+ * \a hint_rank optionally names a rank to query first (e.g. an engine that just
+ * returned -DER_STALE: provably alive and already on a newer map), so the
+ * refresh need not round robin onto ranks that may be down in the cached map.
+ * It is best effort: if the rank is not UPIN when the task runs, normal
+ * selection is used. Pass CRT_NO_RANK for no hint.
+ *
  * \param[in]	pool_hdl	pool handle
  * \param[in]	map_version	known pool map version
+ * \param[in]	hint_rank	preferred first rank to query, or CRT_NO_RANK
  * \param[in]	sched		scheduler
  * \param[out]	task		pool map refresh task
  */
 int
-dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version, tse_sched_t *sched,
-				tse_task_t **task)
+dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version, d_rank_t hint_rank,
+				tse_sched_t *sched, tse_task_t **task)
 {
 	struct dc_pool	       *pool;
 	tse_task_t	       *t;
@@ -2536,7 +2577,11 @@ dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version, ts
 	a->mra_fallen_back = false;
 	a->mra_map_version = map_version;
 	a->mra_i = -1;
+	a->mra_hint_rank   = hint_rank;
 	a->mra_n = 4;
+	if (hint_rank != CRT_NO_RANK)
+		D_DEBUG(DB_MD, DF_UUID ": %p: seeding map refresh with hint rank %u\n",
+			DP_UUID(pool->dp_pool), t, hint_rank);
 	rc = d_backoff_seq_init(&a->mra_backoff_seq, 0 /* nzeros */, 8 /* factor */,
 				1 << 10 /* next (us) */, 4 << 20 /* max (us) */);
 	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
