@@ -442,6 +442,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_VERBS_MD_ON_SSD_LABEL',
                defaultValue: 'ci_ofed9',
                description: 'Label to use for 9 node Functional Hardware Large Verbs MD on SSD stage')
+        string(name: 'FUNCTIONAL_CLUSTER_BOX_LABEL',
+               defaultValue: 'cluster_box',
+               description: 'Label to use for the Functional Cluster Box stages')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
