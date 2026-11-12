@@ -961,7 +961,7 @@ static struct option btr_ops[] = {
     {"find", required_argument, NULL, 'f'},
     {"delete", required_argument, NULL, 'd'},
     {"del_retain", required_argument, NULL, 'r'},
-    {"query", no_argument, NULL, 'q'},
+    {"query", optional_argument, NULL, 'q'},
     {"iterate", required_argument, NULL, 'i'},
     {"batch", required_argument, NULL, 'b'},
     {"perf", required_argument, NULL, 'p'},

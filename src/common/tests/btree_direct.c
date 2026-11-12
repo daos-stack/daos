@@ -561,15 +561,17 @@ sk_btr_query(void **state)
 {
 	struct btr_attr		attr;
 	struct btr_stat		stat;
+	char                   *str        = tst_fn_val.optval;
+	uint64_t                exp_rec_nr = (str != NULL ? strtoul(str, NULL, 0) : 0);
 	int			rc;
-	char		outbuf[64];
+	char                    outbuf[128];
 
+	D_PRINT("Query\n");
 	rc = dbtree_query(sk_toh, &attr, &stat);
 	if (rc != 0) {
 		sprintf(outbuf, "Failed to query btree: %d\n", rc);
 		fail_msg("%s", outbuf);
 	}
-
 	D_PRINT("tree   [order=%d, depth=%d]\n", attr.ba_order, attr.ba_depth);
 	D_PRINT("node   [total="DF_U64"]\n"
 		"record [total="DF_U64"]\n"
@@ -579,6 +581,19 @@ sk_btr_query(void **state)
 		stat.bs_key_sum, stat.bs_key_max,
 		stat.bs_val_sum, stat.bs_val_max);
 
+	if (str != NULL) {
+		if (stat.bs_rec_nr != exp_rec_nr) {
+			sprintf(outbuf,
+				"Btree query reported unexpected number of records: " DF_U64
+				" != " DF_U64 " (expected)\n",
+				stat.bs_rec_nr, exp_rec_nr);
+			fail_msg("%s", outbuf);
+		} else {
+			D_PRINT("number of records as expected\n");
+		}
+	} else {
+		D_PRINT("no expected number of records provided\n");
+	}
 }
 
 static void
@@ -911,6 +926,7 @@ sk_btr_batch_oper(void **state)
 		sk_btr_kv_operate(NULL);
 	}
 
+	tst_fn_val.optval = NULL;
 	sk_btr_query(NULL);
 
 	rc = sk_btr_check_order(kv, key_nr);
@@ -946,7 +962,10 @@ sk_btr_batch_oper(void **state)
 			sk_btr_kv_operate(NULL);
 		}
 	}
+
+	tst_fn_val.optval = NULL;
 	sk_btr_query(NULL);
+
 	sk_btr_destroy_keys(kv, key_nr);
 	D_FREE(kv);
 }
@@ -1074,14 +1093,14 @@ static struct option btr_ops[] = {
     {"find", required_argument, NULL, 'f'},
     {"delete", required_argument, NULL, 'd'},
     {"del_retain", required_argument, NULL, 'r'},
-    {"query", no_argument, NULL, 'q'},
+    {"query", optional_argument, NULL, 'q'},
     {"iterate", required_argument, NULL, 'i'},
     {"batch", required_argument, NULL, 'b'},
     {"perf", required_argument, NULL, 'p'},
     {NULL, 0, NULL, 0},
 };
 
-#define BTR_SHORTOPTS "+S:RM::C:Deocqu:f:d:r:qi:b:p:"
+#define BTR_SHORTOPTS "+S:RM::C:Deocu:f:d:r:q::i:b:p:"
 
 static void
 ts_group(void **state) {
