@@ -82,6 +82,18 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(dfuse_info, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(dfuse_info, "readahead %#x", conn->max_readahead);
 
+	/* dfuse allocates its read and write buffers with DFUSE_MAX_READ bytes and fails any
+	 * larger request with EIO. FUSE limits the size of a request in pages (256 by default),
+	 * which is 1MiB with 4KiB pages but 16MiB with 64KiB pages. Do not advertise more than the
+	 * buffers can hold, the kernel splits larger I/O into requests of at most this size.
+	 */
+	if (conn->max_write == 0 || conn->max_write > DFUSE_MAX_READ)
+		conn->max_write = DFUSE_MAX_READ;
+	if (conn->max_read == 0 || conn->max_read > DFUSE_MAX_READ)
+		conn->max_read = DFUSE_MAX_READ;
+	DFUSE_TRA_INFO(dfuse_info, "max read %#x, max write %#x (requested)", conn->max_read,
+		       conn->max_write);
+
 	if (conn->capable & FUSE_CAP_PARALLEL_DIROPS)
 		conn->want |= FUSE_CAP_PARALLEL_DIROPS;
 
