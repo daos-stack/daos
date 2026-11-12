@@ -184,8 +184,8 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 					   DLCK_FAULT_POOL_OPEN_VERSION,
 					   DLCK_FAULT_POOL_OPEN_UUID,
 					   0};
-	daos_handle_t poh;
-	int           rc;
+	daos_handle_t   poh;
+	int             rc;
 
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_POOL_PREALLOCATE)) { /** fault injection */
 		rc = daos_errno2der(daos_fail_value_get());
@@ -245,8 +245,6 @@ exec_one(void *arg)
 	d_list_for_each_entry(file, &xa->ctrl->files.list, link) {
 		/** do not process the given file if the target is not requested */
 		if (dlck_bitmap_isclr32(file->targets_bitmap, xa->xs->tgt_id)) {
-			/** report the progress to the main thread */
-			++xa->progress;
 			continue;
 		}
 
@@ -256,7 +254,6 @@ exec_one(void *arg)
 		if (rc != DER_SUCCESS) {
 			/** There is no point continuing without a logfile. */
 			dlck_status_set_rc(&xa->status, rc);
-			xa->progress = DLCK_XSTREAM_PROGRESS_END;
 			break;
 		}
 
@@ -266,9 +263,6 @@ exec_one(void *arg)
 
 		/** close the logfile */
 		dlck_checker_worker_fini(&ck);
-
-		/** report the progress to the main thread */
-		++xa->progress;
 	}
 }
 
@@ -280,11 +274,11 @@ dlck_cmd_check(struct dlck_control *ctrl)
 {
 	D_ASSERT(ctrl != NULL);
 
-	struct checker     *ck                 = &ctrl->checker;
-	char                log_dir_template[] = "/tmp/dlck_check_XXXXXX";
-	struct dlck_engine *engine             = NULL;
+	struct checker        *ck                 = &ctrl->checker;
+	char                   log_dir_template[] = "/tmp/dlck_check_XXXXXX";
+	struct dlck_engine    *engine             = NULL;
 	struct checker_status *sts;
-	int                 rc;
+	int                    rc;
 
 	/** create a log directory */
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_LOG_DIR)) { /** fault injection */

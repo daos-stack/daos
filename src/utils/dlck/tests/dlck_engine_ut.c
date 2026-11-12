@@ -44,8 +44,6 @@ static struct dlck_xstream     Xss_buf[TARGETS_MAX];
 static struct dlck_exec        Exec_buf;
 static struct dlck_ult         Ults_buf[TARGETS_MAX];
 static void                   *Ult_args_buf[TARGETS_MAX];
-static struct xstream_arg      Xa_buf;
-static struct dlck_control     Ctrl;
 
 /** per-target payloads and the custom arguments passed to the ULT argument callbacks */
 static int                     Payload[TARGETS_MAX];
@@ -302,8 +300,6 @@ setup(void **unused)
 	memset(&Exec_buf, 0, sizeof(Exec_buf));
 	memset(Ults_buf, 0, sizeof(Ults_buf));
 	memset(Ult_args_buf, 0, sizeof(Ult_args_buf));
-	memset(&Xa_buf, 0, sizeof(Xa_buf));
-	memset(&Ctrl, 0, sizeof(Ctrl));
 	memset(&Mock_dmi, 0, sizeof(Mock_dmi));
 
 	return 0;
@@ -324,33 +320,38 @@ teardown(void **unused)
 static void
 test_arg_alloc_success(void **unused)
 {
-	void *arg = NULL;
-	int   rc;
+	struct dlck_xstream xss[2] = {{.tgt_id = 0}, {.tgt_id = 1}};
+	struct dlck_engine  engine = {.targets = 2, .xss = xss};
+	struct xstream_arg  xa     = {0};
+	int                 ctrl;
+	void               *arg = NULL;
+	int                 rc;
 
-	engine_build(2);
-	EXPECT_D_CALLOC(1, sizeof(struct xstream_arg), &Xa_buf);
+	EXPECT_D_CALLOC(1, sizeof(struct xstream_arg), &xa);
 
-	rc = dlck_engine_xstream_arg_alloc(&Engine_buf, 1, &Ctrl, &arg);
+	rc = dlck_engine_xstream_arg_alloc(&engine, 1, &ctrl, &arg);
 
 	assert_int_equal(rc, DER_SUCCESS);
-	assert_ptr_equal(arg, &Xa_buf);
-	assert_ptr_equal(Xa_buf.ctrl, &Ctrl);
-	assert_ptr_equal(Xa_buf.engine, &Engine_buf);
-	assert_ptr_equal(Xa_buf.xs, &Xss_buf[1]);
-	assert_int_equal(Xa_buf.status.rc, DER_SUCCESS);
+	assert_ptr_equal(arg, &xa);
+	assert_ptr_equal(xa.ctrl, &ctrl);
+	assert_ptr_equal(xa.engine, &engine);
+	assert_ptr_equal(xa.xs, &xss[1]);
+	assert_int_equal(xa.status.rc, DER_SUCCESS);
 }
 
 /** verify an argument allocation failure is reported as -DER_NOMEM */
 static void
 test_arg_alloc_failure(void **unused)
 {
-	void *arg = NULL;
-	int   rc;
+	struct dlck_xstream xss[2] = {{.tgt_id = 0}, {.tgt_id = 1}};
+	struct dlck_engine  engine = {.targets = 2, .xss = xss};
+	int                 ctrl;
+	void               *arg = NULL;
+	int                 rc;
 
-	engine_build(2);
 	EXPECT_D_CALLOC(1, sizeof(struct xstream_arg), NULL);
 
-	rc = dlck_engine_xstream_arg_alloc(&Engine_buf, 1, &Ctrl, &arg);
+	rc = dlck_engine_xstream_arg_alloc(&engine, 1, &ctrl, &arg);
 
 	assert_int_equal(rc, -DER_NOMEM);
 	assert_null(arg);
@@ -372,15 +373,15 @@ test_arg_free_null(void **unused)
 static void
 test_arg_free_collects_outputs(void **unused)
 {
+	struct dlck_xstream   xss[2] = {{.tgt_id = 0}, {.tgt_id = 1}};
+	struct xstream_arg    xa     = {.xs = &xss[1]};
 	struct checker_status sts[2] = {{0}};
-	void                 *arg    = &Xa_buf;
+	void                 *arg    = &xa;
 
-	engine_build(2);
-	Xa_buf.xs                  = &Xss_buf[1];
-	Xa_buf.status.rc           = -DER_IO;
-	Xa_buf.status.warnings_num = 3;
-	Xa_buf.status.errors_num   = 2;
-	expect_value(__wrap_d_free, ptr, &Xa_buf);
+	xa.status.rc           = -DER_IO;
+	xa.status.warnings_num = 3;
+	xa.status.errors_num   = 2;
+	expect_value(__wrap_d_free, ptr, &xa);
 
 	dlck_engine_xstream_arg_free(sts, &arg);
 

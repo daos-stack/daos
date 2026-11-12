@@ -11,14 +11,6 @@
 
 #include "dlck_args.h"
 
-#if defined(__x86_64) || defined(_M_X64) || defined(__aarch64__) || defined(__riscv)
-#define CACHELINE_SIZE 64ULL
-#elif defined(__PPC64__)
-#define CACHELINE_SIZE 128ULL
-#else
-#error unable to recognize architecture at compile time
-#endif
-
 struct dlck_ult {
 	ABT_thread thread;
 };
@@ -212,8 +204,6 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
 		     arg_alloc_fn_t arg_alloc_fn, void *arg_alloc_fn_arg, arg_free_fn_t arg_free_fn,
 		     void *arg_free_fn_arg, struct checker *ck);
 
-#define DLCK_XSTREAM_PROGRESS_END UINT_MAX
-
 /**
  * @struct xstream_arg
  *
@@ -225,7 +215,6 @@ struct xstream_arg {
 	struct dlck_engine   *engine; /** Engine itself. */
 	struct dlck_xstream  *xs;     /** The execution stream the ULT is run in. */
 	/** out */
-	volatile unsigned     progress __attribute__((__aligned__(CACHELINE_SIZE)));
 	struct checker_status status;
 };
 
@@ -288,20 +277,5 @@ dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_pt
  */
 void
 dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg);
-
-/**
- * Read the progress of the given execution stream \p xa.
- *
- * \param[in]	xa		Execution stream.
- * \param[out]	progress	Progress read from \p xa.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_INVAL	Invalid mutex.
- */
-static inline void
-dlck_xstream_progress_get(struct xstream_arg *xa, unsigned *progress)
-{
-	*progress = xa->progress;
-}
 
 #endif /** __DLCK_ENGINE__ */

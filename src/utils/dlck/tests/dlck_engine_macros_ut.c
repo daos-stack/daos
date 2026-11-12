@@ -70,27 +70,12 @@ test_uadd_no_overflow_clamps(void **unused)
 	assert_int_equal(dlck_uadd_no_overflow(UINT_MAX - 1, 2), UINT_MAX);
 }
 
-/** verify dlck_xstream_progress_get() reads the current progress value */
-static void
-test_progress_get(void **unused)
-{
-	struct xstream_arg xa       = {.progress = 42};
-	unsigned           progress = 0;
-
-	dlck_xstream_progress_get(&xa, &progress);
-	assert_int_equal(progress, 42);
-}
-
 #define TEST(ID, FUNC) {"DLCK_ENGINE_MACRO_" #ID ": " #FUNC, FUNC, NULL, NULL, NULL}
 
 static const struct CMUnitTest dlck_engine_macros_tests[] = {
-    TEST(101, test_set_rc_ignores_success),
-    TEST(102, test_set_rc_records_first_error),
-    TEST(103, test_set_rc_keeps_first_error),
-    TEST(104, test_uadd_no_overflow_sum),
-    TEST(105, test_uadd_no_overflow_exact_max),
-    TEST(106, test_uadd_no_overflow_clamps),
-    TEST(107, test_progress_get),
+    TEST(101, test_set_rc_ignores_success),     TEST(102, test_set_rc_records_first_error),
+    TEST(103, test_set_rc_keeps_first_error),   TEST(104, test_uadd_no_overflow_sum),
+    TEST(105, test_uadd_no_overflow_exact_max), TEST(106, test_uadd_no_overflow_clamps),
 };
 
 int
