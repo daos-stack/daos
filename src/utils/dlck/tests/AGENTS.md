@@ -64,7 +64,9 @@
   `expect_ptr()`.
 - Define helpers that register CMocka `expect_*()` expectations as macros, not functions. CMocka
   records the expectation's source location, so a function helper makes unconsumed-expectation
-  diagnostics point to the helper instead of the test call site.
+  diagnostics point to the helper instead of the test call site. Define such a macro only when it
+  queues two or more coupled values or contains conditional queueing; write single
+  `expect_*()`/`will_return()` calls inline.
 
 ## Strict Mocks
 
@@ -82,8 +84,8 @@
 - `dlck_checker_main_ut.c` and `dlck_checker_worker_ut.c` compile the checker implementation
   into separate binaries with the shared checker payloads (`dlck_checker_ut_mock.c`) and the
   per-area mock files they need.
-- Use `EXPECT_CHECKER_D_CALLOC(Dcm)` or `EXPECT_CHECKER_D_CALLOC(Dcw)` for successful payload
-  allocation; use `expect_checker_d_calloc(sizeof(payload), NULL)` for failure.
+- Use `EXPECT_D_CALLOC(1, sizeof(payload), &payload)` for successful payload allocation;
+  use `EXPECT_D_CALLOC(1, sizeof(payload), NULL)` for failure.
 - Reset `mock_vfprintf_check_output` in per-test setup. `__wrap_vfprintf` always checks its format.;
   set the flag to also check rendered `va_list` output.
 - From the DAOS root, build/run a debug/gcc suite with:

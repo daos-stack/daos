@@ -33,8 +33,6 @@ extern const ABT_eventual Mock_eventual;
 		will_return(__wrap_ABT_thread_free, ABT_RC);                                       \
 	} while (0)
 
-#define EXPECT_ABT_THREAD_YIELD() will_return(__wrap_ABT_thread_yield, ABT_SUCCESS)
-
 #define EXPECT_ABT_POOL_IS_EMPTY(POOL, IS_EMPTY)                                                   \
 	do {                                                                                       \
 		expect_value(__wrap_ABT_pool_is_empty, pool, POOL);                                \

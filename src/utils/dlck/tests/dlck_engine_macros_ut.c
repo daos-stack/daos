@@ -23,10 +23,10 @@
 static void
 test_set_rc_ignores_success(void **unused)
 {
-	struct checker_status status = {.rc = DER_SUCCESS};
+	struct checker_status status = {.rc = -DER_DURATION_MISMATCH};
 
 	dlck_status_set_rc(&status, DER_SUCCESS);
-	assert_int_equal(status.rc, DER_SUCCESS);
+	assert_int_equal(status.rc, -DER_DURATION_MISMATCH);
 }
 
 /** verify dlck_status_set_rc() records the first error reported */

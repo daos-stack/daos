@@ -44,25 +44,13 @@ extern struct dss_module                vos_srv_module;
 		will_return(__wrap_dss_tls_init, DTLS);                                            \
 	} while (0)
 
-#define EXPECT_TLS_FINI(DTLS) expect_value(__wrap_dss_tls_fini, dtls, DTLS)
-
-#define EXPECT_TLS_GET(DTLS)  will_return(__wrap_dss_tls_get, DTLS)
-
 /** queue a complete dss_get_module_info() lookup resolving to Mock_dmi */
 #define EXPECT_GET_DMI()                                                                           \
 	do {                                                                                       \
-		EXPECT_TLS_GET(&Mock_dtls);                                                        \
+		will_return(__wrap_dss_tls_get, &Mock_dtls);                                       \
 		expect_value(__wrap_daos_get_module_key, index, daos_srv_modkey.dmk_index);        \
 		will_return(__wrap_daos_get_module_key, &daos_srv_modkey);                         \
 	} while (0)
-
-#define EXPECT_TLS_KEY_CREATE(ERRNO_RC) will_return(__wrap_ds_tls_key_create, ERRNO_RC)
-
-#define EXPECT_TLS_KEY_DELETE()         expect_function_call(__wrap_ds_tls_key_delete)
-
-#define EXPECT_REGISTER_KEY(KEY)        expect_value(__wrap_daos_register_key, key, KEY)
-
-#define EXPECT_UNREGISTER_KEY(KEY)      expect_value(__wrap_daos_unregister_key, key, KEY)
 
 /** BIO primitives */
 
@@ -75,8 +63,6 @@ extern struct dss_module                vos_srv_module;
 		expect_value(bio_nvme_init, tgt_nr, (ARGS)->targets);                              \
 		will_return(bio_nvme_init, RC);                                                    \
 	} while (0)
-
-#define EXPECT_BIO_NVME_FINI() expect_function_call(bio_nvme_fini)
 
 #define EXPECT_BIO_NVME_CONFIGURED(CONFIGURED)                                                     \
 	do {                                                                                       \
@@ -99,15 +85,7 @@ extern struct dss_module                vos_srv_module;
 		}                                                                                  \
 	} while (0)
 
-#define EXPECT_BIO_XSCTXT_FREE(CTXT) expect_value(bio_xsctxt_free, ctxt, CTXT)
-
 /** VOS and engine primitives */
-
-#define EXPECT_DBTREE_CLASSES(RC)    will_return(dss_register_dbtree_classes, RC)
-
-#define EXPECT_SM_INIT(RC)           will_return(mock_sm_init, RC)
-
-#define EXPECT_SM_FINI(RC)           will_return(mock_sm_fini, RC)
 
 #define EXPECT_VOS_TLS_INIT(TAGS, RC)                                                              \
 	do {                                                                                       \
@@ -115,16 +93,12 @@ extern struct dss_module                vos_srv_module;
 		will_return(vos_standalone_tls_init, RC);                                          \
 	} while (0)
 
-#define EXPECT_VOS_TLS_FINI() expect_function_call(vos_standalone_tls_fini)
-
 #define EXPECT_VOS_SYS_DB_INIT(ARGS, STORAGE_PATH, RC)                                             \
 	do {                                                                                       \
 		expect_string(vos_sys_db_init, nvme_conf, (ARGS)->nvme_conf);                      \
 		expect_string(vos_sys_db_init, storage_path, STORAGE_PATH);                        \
 		will_return(vos_sys_db_init, RC);                                                  \
 	} while (0)
-
-#define EXPECT_VOS_DB_FINI() expect_function_call(vos_db_fini)
 
 /** int sm_init(void) mock of vos_srv_module.sm_init */
 int

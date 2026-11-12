@@ -19,6 +19,4 @@
 		will_return(__wrap_d_calloc, PTR);                                                 \
 	} while (0)
 
-#define EXPECT_D_FREE(PTR) expect_value(__wrap_d_free, ptr, PTR)
-
 #endif /* __DLCK_UT_MEM_MOCK_H__ */

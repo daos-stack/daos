@@ -22,8 +22,4 @@ extern struct dlck_checker_worker Dcw;
 extern char                       Mock_log_file[];
 extern uuid_t                     Mock_pool_uuid;
 
-/* Queue expectations for a checker payload allocation; NULL simulates failure. */
-#define expect_checker_d_calloc(size, payload) EXPECT_D_CALLOC(1, size, payload)
-#define EXPECT_CHECKER_D_CALLOC(payload)       expect_checker_d_calloc(sizeof(payload), &(payload))
-
 #endif /* __DLCK_CHECKER_UT_MOCK_H__ */
