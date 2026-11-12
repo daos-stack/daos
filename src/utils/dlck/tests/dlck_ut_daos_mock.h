@@ -36,7 +36,7 @@ extern struct dss_module                vos_srv_module;
 
 /** TLS primitives */
 
-#define EXPECT_TLS_INIT(TAG, XS_ID, TGT_ID, DTLS)                                                  \
+#define EXPECT_DSS_TLS_INIT(TAG, XS_ID, TGT_ID, DTLS)                                              \
 	do {                                                                                       \
 		expect_value(__wrap_dss_tls_init, tag, TAG);                                       \
 		expect_value(__wrap_dss_tls_init, xs_id, XS_ID);                                   \
@@ -45,7 +45,7 @@ extern struct dss_module                vos_srv_module;
 	} while (0)
 
 /** queue a complete dss_get_module_info() lookup resolving to Mock_dmi */
-#define EXPECT_GET_DMI()                                                                           \
+#define EXPECT_DSS_GET_MODULE_INFO()                                                               \
 	do {                                                                                       \
 		will_return(__wrap_dss_tls_get, &Mock_dtls);                                       \
 		expect_value(__wrap_daos_get_module_key, index, daos_srv_modkey.dmk_index);        \
@@ -87,7 +87,7 @@ extern struct dss_module                vos_srv_module;
 
 /** VOS and engine primitives */
 
-#define EXPECT_VOS_TLS_INIT(TAGS, RC)                                                              \
+#define EXPECT_VOS_STANDALONE_TLS_INIT(TAGS, RC)                                                   \
 	do {                                                                                       \
 		expect_value(vos_standalone_tls_init, tags, TAGS);                                 \
 		will_return(vos_standalone_tls_init, RC);                                          \

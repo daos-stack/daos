@@ -70,7 +70,7 @@ extern const ABT_eventual Mock_eventual;
 
 /** dlck_abt.c replacements */
 
-#define EXPECT_XS_CREATE(XS, RC, POOL)                                                             \
+#define EXPECT_DLCK_XSTREAM_CREATE(XS, RC, POOL)                                                   \
 	do {                                                                                       \
 		expect_value(dlck_xstream_create, xs, XS);                                         \
 		will_return(dlck_xstream_create, RC);                                              \
@@ -79,7 +79,7 @@ extern const ABT_eventual Mock_eventual;
 		}                                                                                  \
 	} while (0)
 
-#define EXPECT_XS_FREE(XS, RC)                                                                     \
+#define EXPECT_DLCK_XSTREAM_FREE(XS, RC)                                                           \
 	do {                                                                                       \
 		expect_value(dlck_xstream_free, xs, XS);                                           \
 		will_return(dlck_xstream_free, RC);                                                \
@@ -90,7 +90,7 @@ extern const ABT_eventual Mock_eventual;
  * and runs the requested function synchronously, so all the expectations the ULT body consumes
  * have to be queued as well.
  */
-#define EXPECT_ULT_CREATE(POOL, RC)                                                                \
+#define EXPECT_DLCK_ULT_CREATE(POOL, RC)                                                           \
 	do {                                                                                       \
 		expect_value(dlck_ult_create, pool, POOL);                                         \
 		will_return(dlck_ult_create, RC);                                                  \
