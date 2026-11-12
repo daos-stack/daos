@@ -68,6 +68,8 @@
   diagnostics point to the helper instead of the test call site. Define such a macro only when it
   queues two or more coupled values or contains conditional queueing; write single
   `expect_*()`/`will_return()` calls inline.
+- Define such a macro next to the mock it feeds: in the area mock header for a shared mock, in
+  the test file for a test-local double or a suite-specific scenario composite.
 - Name an expectation macro after the full name of the mocked function (for example
   `EXPECT_DSS_TLS_INIT` for `dss_tls_init()`, not `EXPECT_TLS_INIT`).
 - Do not use reserved library prefixes (such as `ABT_`) in macro parameter names; they could
