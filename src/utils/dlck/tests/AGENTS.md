@@ -5,14 +5,14 @@
 - Use `git commit --signoff` for every commit, including amended commits; each requires a
   `Signed-off-by` trailer.
 - Follow `.clang-format` for C/C++ and test tables. The column limit is 100; count tabs as 8.
+- Describe behavior in comments in plain words; do not quote code or function signatures.
 
 ## Unit Tests
 
 - Use the CMocka framework.
-- Always add command-line CMocka filtering in each test binary's `main(int argc, char **argv)`.
-  Guard filtering with `#if CMOCKA_FILTER_SUPPORTED`. When `argc > 1`, wrap `argv[1]` in `*`
-  wildcards and call `cmocka_set_test_filter()` before running tests. With no argument, run the
-  full suite.
+- Always add command-line CMocka filtering in each test binary's `main(int argc, char **argv)`
+  by calling the shared `dlck_ut_filter()` helper from `dlck_ut.h` and returning its non-zero
+  status on error. With no argument, the full suite runs.
 - Don't reproduce the production algorithm in assertions.
 - Choose the smallest suitable suite and dependency boundary.
 - Separate module and header-macro tests.
@@ -67,6 +67,10 @@
   diagnostics point to the helper instead of the test call site. Define such a macro only when it
   queues two or more coupled values or contains conditional queueing; write single
   `expect_*()`/`will_return()` calls inline.
+- Name an expectation macro after the full name of the mocked function (for example
+  `EXPECT_DSS_TLS_INIT` for `dss_tls_init()`, not `EXPECT_TLS_INIT`).
+- Do not use reserved library prefixes (such as `ABT_`) in macro parameter names; they could
+  shadow a library identifier of the same name inside the macro body.
 
 ## Strict Mocks
 
