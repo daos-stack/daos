@@ -3,10 +3,9 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#ifndef __DLCK_ENGINE_UT_MOCK_H__
-#define __DLCK_ENGINE_UT_MOCK_H__
+#ifndef __DLCK_UT_DAOS_MOCK_H__
+#define __DLCK_UT_DAOS_MOCK_H__
 
-#include <abt.h>
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -14,12 +13,16 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/daos_engine.h>
 
-#include "../dlck_engine.h"
+#include "../dlck_args.h"
 
-/** Sentinel handles installed and checked by the mocks. */
-extern const ABT_pool                   Mock_pool;
-extern const ABT_thread                 Mock_thread;
-extern const ABT_eventual               Mock_eventual;
+/*
+ * Shared DAOS mocks: TLS, module keys, BIO, and VOS. Link dlck_ut_daos_mock.c and enable the
+ * TLS wraps (-Wl,--wrap=dss_tls_*, -Wl,--wrap=ds_tls_key_*, -Wl,--wrap=daos_*_key) for the calls
+ * controlled by the test binary. The BIO and VOS mocks are plain definitions of symbols not
+ * provided by the linked libraries.
+ */
+
+/** Sentinel NVMe context installed and checked by the BIO mocks. */
 extern struct bio_xs_context *const     Mock_xs_ctxt;
 
 /** Thread-local storage shared by all mocked execution streams. */
@@ -30,17 +33,6 @@ extern struct dss_module_info           Mock_dmi;
 extern struct dss_module_key            daos_srv_modkey;
 extern struct dss_module_key            vos_module_key;
 extern struct dss_module                vos_srv_module;
-
-/** allocation primitives */
-
-#define EXPECT_D_CALLOC(NMEMB, SIZE, PTR)                                                          \
-	do {                                                                                       \
-		expect_value(__wrap_d_calloc, nmemb, NMEMB);                                       \
-		expect_value(__wrap_d_calloc, size, SIZE);                                         \
-		will_return(__wrap_d_calloc, PTR);                                                 \
-	} while (0)
-
-#define EXPECT_D_FREE(PTR) expect_value(__wrap_d_free, ptr, PTR)
 
 /** TLS primitives */
 
@@ -71,57 +63,6 @@ extern struct dss_module                vos_srv_module;
 #define EXPECT_REGISTER_KEY(KEY)        expect_value(__wrap_daos_register_key, key, KEY)
 
 #define EXPECT_UNREGISTER_KEY(KEY)      expect_value(__wrap_daos_unregister_key, key, KEY)
-
-/** ABT primitives */
-
-#define EXPECT_ABT_THREAD_JOIN(THREAD, ABT_RC)                                                     \
-	do {                                                                                       \
-		expect_value(__wrap_ABT_thread_join, thread, THREAD);                              \
-		will_return(__wrap_ABT_thread_join, ABT_RC);                                       \
-	} while (0)
-
-#define EXPECT_ABT_THREAD_FREE(HANDLE, ABT_RC)                                                     \
-	do {                                                                                       \
-		expect_value(__wrap_ABT_thread_free, handle, HANDLE);                              \
-		will_return(__wrap_ABT_thread_free, ABT_RC);                                       \
-	} while (0)
-
-#define EXPECT_ABT_THREAD_YIELD() will_return(__wrap_ABT_thread_yield, ABT_SUCCESS)
-
-#define EXPECT_ABT_POOL_IS_EMPTY(POOL, IS_EMPTY)                                                   \
-	do {                                                                                       \
-		expect_value(__wrap_ABT_pool_is_empty, pool, POOL);                                \
-		will_return(__wrap_ABT_pool_is_empty, IS_EMPTY);                                   \
-	} while (0)
-
-#define EXPECT_ABT_EVENTUAL_CREATE(ABT_RC, EVENTUAL)                                               \
-	do {                                                                                       \
-		will_return(__wrap_ABT_eventual_create, ABT_RC);                                   \
-		if ((ABT_RC) == ABT_SUCCESS) {                                                     \
-			will_return(__wrap_ABT_eventual_create, EVENTUAL);                         \
-		}                                                                                  \
-	} while (0)
-
-#define EXPECT_ABT_EVENTUAL_FREE(HANDLE, ABT_RC)                                                   \
-	do {                                                                                       \
-		expect_value(__wrap_ABT_eventual_free, handle, HANDLE);                            \
-		will_return(__wrap_ABT_eventual_free, ABT_RC);                                     \
-	} while (0)
-
-#define EXPECT_ABT_EVENTUAL_SET(EVENTUAL, ABT_RC)                                                  \
-	do {                                                                                       \
-		expect_value(__wrap_ABT_eventual_set, eventual, EVENTUAL);                         \
-		will_return(__wrap_ABT_eventual_set, ABT_RC);                                      \
-	} while (0)
-
-#define EXPECT_ABT_EVENTUAL_TEST(EVENTUAL, ABT_RC, IS_READY)                                       \
-	do {                                                                                       \
-		expect_value(__wrap_ABT_eventual_test, eventual, EVENTUAL);                        \
-		will_return(__wrap_ABT_eventual_test, ABT_RC);                                     \
-		if ((ABT_RC) == ABT_SUCCESS) {                                                     \
-			will_return(__wrap_ABT_eventual_test, IS_READY);                           \
-		}                                                                                  \
-	} while (0)
 
 /** BIO primitives */
 
@@ -185,34 +126,6 @@ extern struct dss_module                vos_srv_module;
 
 #define EXPECT_VOS_DB_FINI() expect_function_call(vos_db_fini)
 
-/** dlck_abt.c replacements */
-
-#define EXPECT_XS_CREATE(XS, RC, POOL)                                                             \
-	do {                                                                                       \
-		expect_value(dlck_xstream_create, xs, XS);                                         \
-		will_return(dlck_xstream_create, RC);                                              \
-		if ((RC) == DER_SUCCESS) {                                                         \
-			will_return(dlck_xstream_create, POOL);                                    \
-		}                                                                                  \
-	} while (0)
-
-#define EXPECT_XS_FREE(XS, RC)                                                                     \
-	do {                                                                                       \
-		expect_value(dlck_xstream_free, xs, XS);                                           \
-		will_return(dlck_xstream_free, RC);                                                \
-	} while (0)
-
-/**
- * Queue a dlck_ult_create() call. On DER_SUCCESS the mock stores Mock_thread in the ULT handle
- * and runs the requested function synchronously, so all the expectations the ULT body consumes
- * have to be queued as well.
- */
-#define EXPECT_ULT_CREATE(POOL, RC)                                                                \
-	do {                                                                                       \
-		expect_value(dlck_ult_create, pool, POOL);                                         \
-		will_return(dlck_ult_create, RC);                                                  \
-	} while (0)
-
 /** int sm_init(void) mock of vos_srv_module.sm_init */
 int
 mock_sm_init(void);
@@ -221,4 +134,4 @@ mock_sm_init(void);
 int
 mock_sm_fini(void);
 
-#endif /* __DLCK_ENGINE_UT_MOCK_H__ */
+#endif /* __DLCK_UT_DAOS_MOCK_H__ */

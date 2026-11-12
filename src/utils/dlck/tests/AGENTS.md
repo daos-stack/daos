@@ -36,6 +36,10 @@
 
 ## Mocking Functions
 
+- Shared, per-area mock files (`dlck_ut_mem_mock.[ch]`, `dlck_ut_abt_mock.[ch]`,
+  `dlck_ut_stdio_mock.[ch]`, `dlck_ut_daos_mock.[ch]`) provide the mocks for memory, Argobots,
+  stdio, and DAOS respectively. Binaries compile only the areas they need and enable only the
+  wraps they use; suite-specific mock files keep only their own payloads and helpers.
 - CMocka tests control the behavior of mocks by populating their respective queues with values.
   All of these values have to be later consumed by the mocks. CMocka queues are maintained per
   mock.
@@ -76,7 +80,8 @@
   - `dlck_checker_common_ut.c` tests `ck_common_printf()` with a lightweight `ck_vprintf` callback.
     Do not initialize main or worker state for this callback-dispatch contract.
 - `dlck_checker_main_ut.c` and `dlck_checker_worker_ut.c` compile the checker implementation
-  into separate binaries with shared `dlck_checker_ut_mock.c`.
+  into separate binaries with the shared checker payloads (`dlck_checker_ut_mock.c`) and the
+  per-area mock files they need.
 - Use `EXPECT_CHECKER_D_CALLOC(Dcm)` or `EXPECT_CHECKER_D_CALLOC(Dcw)` for successful payload
   allocation; use `expect_checker_d_calloc(sizeof(payload), NULL)` for failure.
 - Reset `mock_vfprintf_check_output` in per-test setup. `__wrap_vfprintf` always checks its format.;

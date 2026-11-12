@@ -24,8 +24,10 @@
 
 #include "../dlck_args.h"
 #include "../dlck_engine.h"
-#include "dlck_engine_ut_mock.h"
 #include "dlck_ut.h"
+#include "dlck_ut_abt_mock.h"
+#include "dlck_ut_daos_mock.h"
+#include "dlck_ut_mem_mock.h"
 
 #define TARGETS_MAX 3
 

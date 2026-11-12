@@ -11,14 +11,68 @@
 #include <abt.h>
 #include <cmocka.h>
 
-#include "dlck_engine_ut_mock.h"
+#include "dlck_ut_abt_mock.h"
 
 /** sentinels */
-const ABT_pool     Mock_pool     = (ABT_pool)0x1234;
-const ABT_thread   Mock_thread   = (ABT_thread)0x5678;
-const ABT_eventual Mock_eventual = (ABT_eventual)0x9abc;
+const ABT_mutex    Mock_mutex_handle = (ABT_mutex)0x1234;
+const ABT_pool     Mock_pool         = (ABT_pool)0x1234;
+const ABT_thread   Mock_thread       = (ABT_thread)0x5678;
+const ABT_eventual Mock_eventual     = (ABT_eventual)0x9abc;
 
-/** ABT mocks */
+/** ABT mutex mocks */
+
+int
+__wrap_ABT_mutex_create(ABT_mutex *newmutex)
+{
+	check_expected_ptr(newmutex);
+
+	int rc = mock_type(int);
+
+	if (rc == ABT_SUCCESS) {
+		assert_non_null(newmutex);
+		*newmutex = mock_ptr_type(ABT_mutex);
+	}
+
+	return rc;
+}
+
+int
+__wrap_ABT_mutex_free(ABT_mutex *mutex)
+{
+	check_expected_ptr(mutex);
+	assert_non_null(mutex);
+	ABT_mutex handle = *mutex;
+	check_expected_ptr(handle);
+
+	int rc = mock_type(int);
+
+	if (rc == ABT_SUCCESS)
+		*mutex = ABT_MUTEX_NULL;
+
+	return rc;
+}
+
+int
+__wrap_ABT_mutex_lock(ABT_mutex mutex)
+{
+	check_expected_ptr(mutex);
+
+	int rc = mock_type(int);
+
+	return rc;
+}
+
+int
+__wrap_ABT_mutex_unlock(ABT_mutex mutex)
+{
+	check_expected_ptr(mutex);
+
+	int rc = mock_type(int);
+
+	return rc;
+}
+
+/** ABT thread, pool, and eventual mocks */
 
 int
 __wrap_ABT_thread_join(ABT_thread thread)

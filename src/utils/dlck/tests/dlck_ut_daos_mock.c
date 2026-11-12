@@ -14,7 +14,7 @@
 #include <daos_srv/vos.h>
 #include <engine/srv_internal.h>
 
-#include "dlck_engine_ut_mock.h"
+#include "dlck_ut_daos_mock.h"
 
 /** sentinels */
 struct bio_xs_context *const     Mock_xs_ctxt = (struct bio_xs_context *)0xdef0;

@@ -34,9 +34,9 @@ def build_dlck_engine_ut(henv):
 
     srcs = [
         'dlck_engine_ut.c',
-        'dlck_engine_ut_abt_mock.c',
-        'dlck_engine_ut_daos_mock.c',
-        'dlck_engine_ut_mock.c',
+        'dlck_ut_abt_mock.c',
+        'dlck_ut_daos_mock.c',
+        'dlck_ut_mem_mock.c',
         '../dlck_engine.c',
     ]
     henv.d_test_program('dlck_engine_ut', srcs, LIBS=libs)
@@ -110,7 +110,7 @@ def build_dlck_checker_macros_ut(henv):
     henv.require('argobots', 'cmocka')
 
     libs = ['gurt', 'daos_common_pmem', 'cmocka']
-    srcs = ['dlck_checker_macros_ut.c', 'dlck_checker_ut_mock.c']
+    srcs = ['dlck_checker_macros_ut.c', 'dlck_ut_stdio_mock.c']
     henv.d_test_program('dlck_checker_macros_ut', srcs, LIBS=libs)
 
 
@@ -129,6 +129,9 @@ def build_dlck_checker_main_ut(henv):
     srcs = [
         'dlck_checker_main_ut.c',
         'dlck_checker_ut_mock.c',
+        'dlck_ut_abt_mock.c',
+        'dlck_ut_mem_mock.c',
+        'dlck_ut_stdio_mock.c',
         '../dlck_checker.c',
     ]
     henv.d_test_program('dlck_checker_main_ut', srcs, LIBS=libs)
@@ -147,6 +150,8 @@ def build_dlck_checker_worker_ut(henv):
     srcs = [
         'dlck_checker_worker_ut.c',
         'dlck_checker_ut_mock.c',
+        'dlck_ut_mem_mock.c',
+        'dlck_ut_stdio_mock.c',
         '../dlck_checker.c'
     ]
     henv.d_test_program('dlck_checker_worker_ut', srcs, LIBS=libs)
