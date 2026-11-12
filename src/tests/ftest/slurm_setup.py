@@ -13,11 +13,9 @@ import os
 import re
 import socket
 import sys
-import tempfile
 
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
-from util.file_utils import distribute_files
 from util.logger_utils import get_console_handler
 from util.package_utils import install_packages, remove_packages
 from util.run_utils import command_as_user, get_clush_command, run_remote
@@ -42,8 +40,6 @@ class SlurmSetup():
     SLURM_CONF = '/etc/slurm/slurm.conf'
     SLURMCTLD_LOG_FILE = '/var/log/slurm/slurmctld.log'
     SLURMCTLD_PID_FILE = '/var/spool/slurmctld/slurmctld.pid'
-    SLURMCTLD_SYSTEMD_OVERRIDE = (
-        '/run/systemd/system/slurmctld.service.d/override.conf')
     SLURMD_LOG_FILE = '/var/log/slurm/slurmd.log'
     SLURM_LOG_DIR = '/var/log/slurm'
 
@@ -92,11 +88,10 @@ class SlurmSetup():
         if not result.passed:
             raise SlurmSetupException(f"Error installing slurm packages on {result.failed_hosts}")
 
-    def update_config(self, slurm_user, partition):
+    def update_config(self, partition):
         """Update the slurm config.
 
         Args:
-            slurm_user (str): user to define in the slurm config file
             partition (str): name of the slurm partition to include in the configuration
 
         Raises:
@@ -112,7 +107,7 @@ class SlurmSetup():
             self._copy_file(self.all_nodes, source, os.path.splitext(source)[0])
 
         # Update the config file on all hosts
-        self._update_slurm_config(slurm_user, partition)
+        self._update_slurm_config(partition)
 
     def start_munge(self, user):
         """Start munge.
@@ -167,11 +162,10 @@ class SlurmSetup():
         # Restart munge on all nodes
         self._restart_systemctl(self.all_nodes, 'munge')
 
-    def start_slurm(self, user, debug):
+    def start_slurm(self, debug):
         """Start slurm.
 
         Args:
-            user (str): user account to use with slurm
             debug (bool): whether or not to display slurm debug
 
         Raises:
@@ -180,15 +174,14 @@ class SlurmSetup():
         self.log.info("Starting slurm")
 
         self._mkdir(self.all_nodes, self.SLURM_LOG_DIR)
-        self._update_file_ownership(self.all_nodes, self.SLURM_LOG_DIR, user)
+        self._update_file_ownership(self.all_nodes, self.SLURM_LOG_DIR, 'slurm')
         self._mkdir(self.all_nodes, '/var/spool/slurmd')
         self._mkdir(self.all_nodes, '/var/spool/slurmctld')
         self._mkdir(self.all_nodes, '/var/spool/slurm/d')
         self._mkdir(self.all_nodes, '/var/spool/slurm/ctld')
-        self._update_file_ownership(self.all_nodes, '/var/spool/slurm/ctld', user)
-        self._update_file(self.all_nodes, '/var/spool/slurmctld', '775', user)
+        self._update_file_ownership(self.all_nodes, '/var/spool/slurm/ctld', 'slurm')
+        self._update_file(self.all_nodes, '/var/spool/slurmctld', '775', 'slurm')
         self._remove_file(self.all_nodes, '/var/spool/slurmctld/clustername')
-        self._configure_slurmctld_service(user)
 
         # Restart slurmctld on the control node
         self._restart_systemctl(
@@ -207,33 +200,6 @@ class SlurmSetup():
             self._display_debug(self.all_nodes, self.SLURMD_LOG_FILE, self.SLURM_CONF)
         if not result.passed:
             raise SlurmSetupException(f'Error setting nodes to idle on {self.nodes}')
-
-    def _configure_slurmctld_service(self, user):
-        """Configure slurmctld to run as the Slurm user on the control node.
-
-        Args:
-            user (str): user account configured for Slurm
-
-        Raises:
-            SlurmSetupException: if the systemd override cannot be installed
-        """
-        override_dir = os.path.dirname(self.SLURMCTLD_SYSTEMD_OVERRIDE)
-        self._mkdir(self.control, override_dir)
-        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8') as override_file:
-            override_file.write(f'[Service]\nUser={user}\nGroup={user}\n')
-            override_file.flush()
-            result = distribute_files(
-                self.log, self.control, override_file.name, self.SLURMCTLD_SYSTEMD_OVERRIDE,
-                mkdir=False, sudo=True, owner='root')
-        if not result.passed:
-            raise SlurmSetupException(
-                f'Error installing slurmctld systemd override on {result.failed_hosts}')
-
-        result = run_remote(
-            self.log, self.control, command_as_user('systemctl daemon-reload', self.root))
-        if not result.passed:
-            raise SlurmSetupException(
-                f'Error reloading systemd on {result.failed_hosts}')
 
     def _create_epilog_script(self, script):
         """Create epilog script to run after each job.
@@ -280,11 +246,10 @@ class SlurmSetup():
             raise SlurmSetupException(
                 f'Error copying {source} to {destination} on {str(result.failed_hosts)}')
 
-    def _update_slurm_config(self, slurm_user, partition):
+    def _update_slurm_config(self, partition):
         """Update the slurm config file.
 
         Args:
-            slurm_user (str): user to define in the slurm config file
             partition (str): name of the slurm partition to include in the configuration
 
         Raises:
@@ -295,10 +260,6 @@ class SlurmSetup():
             'slurm cluster name', self.all_nodes, 's/ClusterName=cluster/ClusterName=ci_cluster/g',
             self.root)
 
-        # Update the config file with the slurm user
-        self._modify_slurm_config_file(
-            'slurm user', self.all_nodes, f's/SlurmUser=slurm/SlurmUser={slurm_user}/g',
-            self.root)
         self._modify_slurm_config_file(
             'accounting storage type', self.all_nodes,
             's|^[[:space:]]*#\\?[[:space:]]*AccountingStorageType[[:space:]]*=.*|'
@@ -634,7 +595,7 @@ def main():
 
     # Edit the slurm conf files
     try:
-        slurm_setup.update_config(args.user, args.partition)
+        slurm_setup.update_config(args.partition)
     except SlurmSetupException as error:
         logger.error(str(error))
         sys.exit(1)
@@ -648,7 +609,7 @@ def main():
 
     # Slurm Start-up
     try:
-        slurm_setup.start_slurm(args.user, args.debug)
+        slurm_setup.start_slurm(args.debug)
     except SlurmSetupException as error:
         logger.error(str(error))
         sys.exit(1)
