@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2018-2021 Lei Huang.
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1034,7 +1035,7 @@ _Static_assert(sizeof(struct trampoline_t) * MAX_PATCH <= MIN_MEM_SIZE,
 /*
  * install_hook - Install hooks by setting up trampolines for all functions registered.
  *
- * aarch64 flavour: the instruction at the entry of a function (the second one if the first is a BTI
+ * aarch64 flavor: the instruction at the entry of a function (the second one if the first is a BTI
  * landing pad, which has to stay) is replaced by a direct branch to a bounce stub that jumps to the
  * new function. The displaced instruction is relocated into a trampoline, followed by a branch back
  * into the original function, and the trampoline is what callers of the "original" function get.
