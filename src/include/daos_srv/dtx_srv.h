@@ -212,16 +212,13 @@ struct dtx_leader_handle {
 	ABT_future			dlh_future;
 
 	int32_t				dlh_allow_failure;
-					/* Normal sub requests have been processed. */
-	uint32_t			dlh_normal_sub_done:1,
-					dlh_need_agg:1,
-					dlh_agg_done:1,
-					/* For collective DTX. */
-					dlh_coll:1,
-					/* Only forward RPC, but neither commit nor abort DTX. */
-					dlh_relay:1,
-					/* Drop conditional flags when forward RPC. */
-					dlh_drop_cond:1;
+
+	uint32_t dlh_normal_sub_done : 1 /* Normal sub requests have been processed. */,
+	    dlh_need_agg : 1, dlh_agg_done : 1, dlh_coll : 1 /* For collective DTX. */,
+	    dlh_relay        : 1 /* Only forward RPC, but neither commit nor abort DTX. */,
+	    dlh_drop_cond    : 1 /* Drop conditional flags when forward RPC. */,
+	    dlh_leader_delay : 1 /* Delay local modification until remote participants done. */;
+
 	/* Elements for collective DTX. */
 	struct dtx_coll_entry		*dlh_coll_entry;
 	/* How many normal sub request. */
@@ -283,6 +280,8 @@ enum dtx_flags {
 	DTX_LOCAL = (1 << 11),
 	/** Locally generate the epoch. */
 	DTX_EPOCH_OWNER = (1 << 12),
+	/** Delay local modification until remote participants done. */
+	DTX_LEADER_DELAY = (1 << 13),
 };
 
 enum dtx_check_intent {
@@ -347,6 +346,9 @@ int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	       struct dtx_cos_key *dcks, int count, bool has_cos);
+
+int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_t *oid,
+		   struct pool_target **p_tgt);
 
 int
 dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch, uint32_t version);
