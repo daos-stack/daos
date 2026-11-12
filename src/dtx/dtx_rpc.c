@@ -1044,7 +1044,7 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *che
 		}
 
 again:
-		rc = dtx_leader_get(pool, dsp->dsp_mbs, &dsp->dsp_oid, dsp->dsp_version, &target);
+		rc = dtx_leader_get(pool, dsp->dsp_mbs, &dsp->dsp_oid, &target);
 		if (rc < 0) {
 			/**
 			 * Currently, for EC object, if parity node is

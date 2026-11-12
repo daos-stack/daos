@@ -2406,10 +2406,9 @@ dtx_merge_check_result(int *tgt, int src)
 
 int
 dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_t *oid,
-	       uint32_t version, struct pool_target **p_tgt)
+	       struct pool_target **p_tgt)
 {
 	struct pl_map          *map    = NULL;
-	struct pool_target     *tmp    = NULL;
 	struct pl_obj_layout   *layout = NULL;
 	struct dtx_coll_target *dct;
 	struct daos_obj_md      md = {0};
@@ -2418,20 +2417,12 @@ dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_
 
 	D_ASSERT(mbs != NULL);
 
-	/* The first UPIN (and join before DTX) target is the (new) leader of the DTX. */
+	/* The first UPIN target will be the new leader of the DTX. */
 	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
 		rc = ds_pool_target_status_check(pool, mbs->dm_tgts[i].ddt_id,
 						 (uint8_t)PO_COMP_ST_UPIN, p_tgt);
-		if (rc < 0)
-			D_GOTO(out, rc);
-
-		if (rc == 1) {
-			if ((*p_tgt)->ta_comp.co_in_ver <= version)
-				D_GOTO(out, rc = 0);
-
-			if (tmp == NULL || tmp->ta_comp.co_in_ver > (*p_tgt)->ta_comp.co_in_ver)
-				tmp = *p_tgt;
-		}
+		if (rc == 1)
+			D_GOTO(out, rc = 0);
 	}
 
 	if (!(mbs->dm_flags & DMF_COLL_TARGET))
@@ -2463,30 +2454,13 @@ dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_
 			continue;
 
 		rc = pool_map_find_target(map->pl_poolmap, layout->ol_shards[i].po_target, p_tgt);
-		D_ASSERT(rc == 1);
-
-		if ((*p_tgt)->ta_comp.co_status != PO_COMP_ST_UPIN)
-			continue;
-
-		if ((*p_tgt)->ta_comp.co_in_ver <= version)
+		if (rc == 1 && (*p_tgt)->ta_comp.co_status == PO_COMP_ST_UPIN)
 			D_GOTO(out, rc = 0);
-
-		if (tmp == NULL || tmp->ta_comp.co_in_ver > (*p_tgt)->ta_comp.co_in_ver)
-			tmp = *p_tgt;
 	}
 
 	rc = -DER_NONEXIST;
 
 out:
-	/*
-	 * If all alive participants were in rebuild/reint when DTX happened,
-	 * then the first one that became UPIN will be the DTX (new) leader.
-	 */
-	if (rc == -DER_NONEXIST && tmp != NULL) {
-		*p_tgt = tmp;
-		rc     = 0;
-	}
-
 	if (layout != NULL)
 		pl_obj_layout_free(layout);
 

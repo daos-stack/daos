@@ -139,7 +139,7 @@ dtx_is_leader(struct ds_pool *pool, struct dtx_resync_args *dra,
 	if (mbs == NULL)
 		return 1;
 
-	rc = dtx_leader_get(pool, mbs, &dre->dre_oid, dre->dre_dte.dte_ver, &target);
+	rc = dtx_leader_get(pool, mbs, &dre->dre_oid, &target);
 	if (rc < 0)
 		D_GOTO(out, rc);
 
