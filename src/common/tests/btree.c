@@ -749,7 +749,9 @@ ik_btr_batch_oper(void **state)
 		ik_btr_kv_operate(NULL);
 	}
 
+	tst_fn_val.optval = NULL;
 	ik_btr_query(NULL);
+
 	/* lookup all rest records, delete 10000 of them, and repeat until
 	 * deleting all records.
 	 */
@@ -777,7 +779,10 @@ ik_btr_batch_oper(void **state)
 			ik_btr_kv_operate(NULL);
 		}
 	}
+
+	tst_fn_val.optval = NULL;
 	ik_btr_query(NULL);
+
 	D_FREE(arr);
 }
 
@@ -877,7 +882,9 @@ ik_btr_drain(void **state)
 		ik_btr_kv_operate(NULL);
 	}
 
+	tst_fn_val.optval = NULL;
 	ik_btr_query(NULL);
+
 	while (1) {
 		int	creds = drain_creds;
 		bool	empty = false;
