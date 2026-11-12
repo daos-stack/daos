@@ -43,14 +43,16 @@
 /** buffers handed out by the strict d_calloc mock or used to build engines manually */
 static struct dlck_engine      Engine_buf;
 static struct dlck_xstream     Xss_buf[TARGETS_MAX];
+static struct dlck_exec        Exec_buf;
 static struct dlck_ult         Ults_buf[TARGETS_MAX];
 static void                   *Ult_args_buf[TARGETS_MAX];
 static struct xstream_arg      Xa_buf;
 static struct dlck_control     Ctrl;
 
-/** per-target payloads and the custom argument passed to the ULT argument callbacks */
+/** per-target payloads and the custom arguments passed to the ULT argument callbacks */
 static int                     Payload[TARGETS_MAX];
-static int                     Custom;
+static int                     Custom_alloc;
+static int                     Custom_free;
 
 static struct dlck_args_engine Args = {.numa_node          = 1,
 				       .max_dma_buf_size   = 262144,
@@ -86,11 +88,11 @@ test_arg_alloc(struct dlck_engine *engine, int idx, void *custom, void **arg)
 static void
 test_arg_free(void *custom, void **arg)
 {
+	void *ptr;
+
 	check_expected_ptr(custom);
 	assert_non_null(arg);
-
-	void *ptr = *arg;
-
+	ptr = *arg;
 	check_expected_ptr(ptr);
 	*arg = NULL;
 }
@@ -101,7 +103,7 @@ test_arg_free(void *custom, void **arg)
 	do {                                                                                       \
 		expect_value(test_arg_alloc, engine, ENGINE);                                      \
 		expect_value(test_arg_alloc, idx, IDX);                                            \
-		expect_value(test_arg_alloc, custom, &Custom);                                     \
+		expect_value(test_arg_alloc, custom, &Custom_alloc);                               \
 		will_return(test_arg_alloc, RC);                                                   \
 		if ((RC) == DER_SUCCESS) {                                                         \
 			will_return(test_arg_alloc, PTR);                                          \
@@ -110,20 +112,22 @@ test_arg_free(void *custom, void **arg)
 
 #define EXPECT_TEST_ARG_FREE(PTR)                                                                  \
 	do {                                                                                       \
-		expect_value(test_arg_free, custom, &Custom);                                      \
+		expect_value(test_arg_free, custom, &Custom_free);                                 \
 		expect_value(test_arg_free, ptr, PTR);                                             \
 	} while (0)
 
-#define EXPECT_EXEC_ARRAYS_ALLOC(T)                                                                \
+#define EXPECT_EXEC_INIT_ALLOC(T)                                                                  \
 	do {                                                                                       \
+		EXPECT_D_CALLOC(1, sizeof(struct dlck_exec), &Exec_buf);                           \
 		EXPECT_D_CALLOC(T, sizeof(struct dlck_ult), Ults_buf);                             \
 		EXPECT_D_CALLOC(T, sizeof(void *), Ult_args_buf);                                  \
 	} while (0)
 
-#define EXPECT_EXEC_ARRAYS_FREE()                                                                  \
+#define EXPECT_EXEC_FINI_FREE()                                                                    \
 	do {                                                                                       \
 		expect_value(__wrap_d_free, ptr, Ult_args_buf);                                    \
 		expect_value(__wrap_d_free, ptr, Ults_buf);                                        \
+		expect_value(__wrap_d_free, ptr, &Exec_buf);                                       \
 	} while (0)
 
 #define EXPECT_ENGINE_ALLOC(T)                                                                     \
@@ -273,6 +277,23 @@ engine_build_nvme(unsigned targets)
 	Mock_dmi.dmi_nvme_ctxt = Mock_xs_ctxt;
 }
 
+/** build a job batch manually for the exec, join, and fini suites */
+static void
+exec_build(unsigned targets)
+{
+	Exec_buf.arg_free_fn     = test_arg_free;
+	Exec_buf.arg_free_fn_arg = &Custom_free;
+	Exec_buf.targets         = targets;
+	Exec_buf.ults            = Ults_buf;
+	Exec_buf.ult_args        = Ult_args_buf;
+	Exec_buf.join_fail       = false;
+
+	for (unsigned i = 0; i < targets; ++i) {
+		Ults_buf[i].thread = ABT_THREAD_NULL;
+		Ult_args_buf[i]    = &Payload[i];
+	}
+}
+
 /** setups & teardowns */
 
 static int
@@ -280,6 +301,7 @@ setup(void **unused)
 {
 	memset(&Engine_buf, 0, sizeof(Engine_buf));
 	memset(Xss_buf, 0, sizeof(Xss_buf));
+	memset(&Exec_buf, 0, sizeof(Exec_buf));
 	memset(Ults_buf, 0, sizeof(Ults_buf));
 	memset(Ult_args_buf, 0, sizeof(Ult_args_buf));
 	memset(&Xa_buf, 0, sizeof(Xa_buf));
@@ -371,45 +393,326 @@ test_arg_free_collects_outputs(void **unused)
 	assert_null(arg);
 }
 
-/** tests - dlck_engine_exec_all */
+/** tests - dlck_exec_init */
 
-/** verify all targets start, execute, and stop in order on the happy path */
+/** verify the batch allocation prepares the arguments of all the targets */
 static void
-test_exec_all_success(void **unused)
+test_exec_init_success(void **unused)
+{
+	struct dlck_exec *de = NULL;
+	int               rc;
+
+	engine_build(2);
+	EXPECT_EXEC_INIT_ALLOC(2);
+	for (int i = 0; i < 2; ++i) {
+		EXPECT_TEST_ARG_ALLOC(&Engine_buf, i, DER_SUCCESS, &Payload[i]);
+	}
+
+	rc = dlck_exec_init(&Engine_buf, test_arg_alloc, &Custom_alloc, test_arg_free, &Custom_free,
+			    &de);
+
+	assert_int_equal(rc, DER_SUCCESS);
+	assert_ptr_equal(de, &Exec_buf);
+	assert_int_equal(de->targets, 2);
+	assert_ptr_equal(de->arg_free_fn, test_arg_free);
+	assert_ptr_equal(de->arg_free_fn_arg, &Custom_free);
+	assert_ptr_equal(de->ults, Ults_buf);
+	assert_ptr_equal(de->ult_args, Ult_args_buf);
+	for (int i = 0; i < 2; ++i) {
+		assert_ptr_equal(de->ult_args[i], &Payload[i]);
+		assert_ptr_equal(de->ults[i].thread, ABT_THREAD_NULL);
+	}
+	assert_false(de->join_fail);
+}
+
+/** verify the DLCK_FAULT_ENGINE_EXEC fault injection stops the batch allocation */
+static void
+test_exec_init_fault(void **unused)
+{
+	struct dlck_exec *de = NULL;
+	int               rc;
+
+	engine_build(2);
+	daos_fail_loc_set(DLCK_FAULT_ENGINE_EXEC | DAOS_FAIL_ONCE);
+	daos_fail_value_set(ENOMEM);
+
+	rc = dlck_exec_init(&Engine_buf, test_arg_alloc, &Custom_alloc, test_arg_free, &Custom_free,
+			    &de);
+
+	assert_int_equal(rc, -DER_NOMEM);
+	assert_null(de);
+}
+
+/** verify a batch allocation failure is reported as -DER_NOMEM */
+static void
+test_exec_init_de_alloc_failure(void **unused)
+{
+	struct dlck_exec *de = NULL;
+	int               rc;
+
+	engine_build(2);
+	EXPECT_D_CALLOC(1, sizeof(struct dlck_exec), NULL);
+
+	rc = dlck_exec_init(&Engine_buf, test_arg_alloc, &Custom_alloc, test_arg_free, &Custom_free,
+			    &de);
+
+	assert_int_equal(rc, -DER_NOMEM);
+	assert_null(de);
+}
+
+/** verify an allocation failure of the ULTs array frees the batch */
+static void
+test_exec_init_ults_alloc_failure(void **unused)
+{
+	struct dlck_exec *de = NULL;
+	int               rc;
+
+	engine_build(2);
+	EXPECT_D_CALLOC(1, sizeof(struct dlck_exec), &Exec_buf);
+	EXPECT_D_CALLOC(2, sizeof(struct dlck_ult), NULL);
+	expect_value(__wrap_d_free, ptr, &Exec_buf);
+
+	rc = dlck_exec_init(&Engine_buf, test_arg_alloc, &Custom_alloc, test_arg_free, &Custom_free,
+			    &de);
+
+	assert_int_equal(rc, -DER_NOMEM);
+	assert_null(de);
+}
+
+/** verify an allocation failure of the arguments array frees the ULTs array and the batch */
+static void
+test_exec_init_args_alloc_failure(void **unused)
+{
+	struct dlck_exec *de = NULL;
+	int               rc;
+
+	engine_build(2);
+	EXPECT_D_CALLOC(1, sizeof(struct dlck_exec), &Exec_buf);
+	EXPECT_D_CALLOC(2, sizeof(struct dlck_ult), Ults_buf);
+	EXPECT_D_CALLOC(2, sizeof(void *), NULL);
+	expect_value(__wrap_d_free, ptr, Ults_buf);
+	expect_value(__wrap_d_free, ptr, &Exec_buf);
+
+	rc = dlck_exec_init(&Engine_buf, test_arg_alloc, &Custom_alloc, test_arg_free, &Custom_free,
+			    &de);
+
+	assert_int_equal(rc, -DER_NOMEM);
+	assert_null(de);
+}
+
+/** verify an argument allocation failure frees the already allocated arguments and the batch */
+static void
+test_exec_init_arg_alloc_failure(void **unused)
+{
+	struct dlck_exec *de = NULL;
+	int               rc;
+
+	engine_build(2);
+	EXPECT_EXEC_INIT_ALLOC(2);
+	EXPECT_TEST_ARG_ALLOC(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
+	EXPECT_TEST_ARG_ALLOC(&Engine_buf, 1, -DER_IO, NULL);
+	EXPECT_TEST_ARG_FREE(&Payload[0]);
+	EXPECT_TEST_ARG_FREE(NULL);
+	EXPECT_EXEC_FINI_FREE();
+
+	rc = dlck_exec_init(&Engine_buf, test_arg_alloc, &Custom_alloc, test_arg_free, &Custom_free,
+			    &de);
+
+	assert_int_equal(rc, -DER_IO);
+	assert_null(de);
+}
+
+/** tests - dlck_engine_exec */
+
+/** verify every target gets its ULT started on its own execution stream */
+static void
+test_engine_exec_success(void **unused)
 {
 	int rc;
 
 	engine_build(2);
-	EXPECT_EXEC_ARRAYS_ALLOC(2);
+	exec_build(2);
 	for (int i = 0; i < 2; ++i) {
-		EXPECT_TEST_ARG_ALLOC(&Engine_buf, i, DER_SUCCESS, &Payload[i]);
 		EXPECT_DLCK_ULT_CREATE(MOCK_POOL(i), DER_SUCCESS, MOCK_THREAD(i));
 		expect_value(test_exec_one, arg, &Payload[i]);
 	}
-	for (int i = 0; i < 2; ++i) {
-		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(i), ABT_SUCCESS);
-		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(i), ABT_SUCCESS);
-		EXPECT_TEST_ARG_FREE(&Payload[i]);
-	}
-	EXPECT_EXEC_ARRAYS_FREE();
 
-	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom,
-				  test_arg_free, &Custom, NULL);
+	rc = dlck_engine_exec(&Engine_buf, test_exec_one, &Exec_buf);
 
 	assert_int_equal(rc, DER_SUCCESS);
-	assert_false(Engine_buf.join_fail);
+	for (int i = 0; i < 2; ++i) {
+		assert_ptr_equal(Ults_buf[i].thread, MOCK_THREAD(i));
+	}
+	assert_false(Exec_buf.join_fail);
 }
 
-/** verify the progress messages a checker receives on the happy path */
+/** verify a ULT creation failure joins the already started ULTs */
 static void
-test_exec_all_success_with_checker(void **unused)
+test_engine_exec_ult_create_failure(void **unused)
+{
+	int rc;
+
+	engine_build(2);
+	exec_build(2);
+	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
+	expect_value(test_exec_one, arg, &Payload[0]);
+	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(1), -DER_NOMEM, NULL);
+	/** cleanup: the started ULT is joined and freed */
+	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
+	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_SUCCESS);
+
+	rc = dlck_engine_exec(&Engine_buf, test_exec_one, &Exec_buf);
+
+	assert_int_equal(rc, -DER_NOMEM);
+	assert_ptr_equal(Ults_buf[0].thread, ABT_THREAD_NULL);
+	assert_false(Exec_buf.join_fail);
+}
+
+/** verify a join failure during the cleanup keeps the thread and marks the batch */
+static void
+test_engine_exec_cleanup_join_failure(void **unused)
+{
+	int rc;
+
+	engine_build(2);
+	exec_build(2);
+	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
+	expect_value(test_exec_one, arg, &Payload[0]);
+	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(1), -DER_NOMEM, NULL);
+	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
+
+	rc = dlck_engine_exec(&Engine_buf, test_exec_one, &Exec_buf);
+
+	assert_int_equal(rc, -DER_NOMEM);
+	assert_ptr_equal(Ults_buf[0].thread, MOCK_THREAD(0));
+	assert_true(Exec_buf.join_fail);
+}
+
+/** tests - dlck_exec_join */
+
+/** verify all the ULTs are joined and freed on the happy path */
+static void
+test_exec_join_success(void **unused)
+{
+	int rc;
+
+	exec_build(2);
+	for (int i = 0; i < 2; ++i) {
+		Ults_buf[i].thread = MOCK_THREAD(i);
+		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(i), ABT_SUCCESS);
+		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(i), ABT_SUCCESS);
+	}
+
+	rc = dlck_exec_join(&Exec_buf);
+
+	assert_int_equal(rc, DER_SUCCESS);
+	for (int i = 0; i < 2; ++i) {
+		assert_ptr_equal(Ults_buf[i].thread, ABT_THREAD_NULL);
+	}
+	assert_false(Exec_buf.join_fail);
+}
+
+/** verify the DLCK_FAULT_ENGINE_JOIN fault injection marks the batch and joins the ULTs */
+static void
+test_exec_join_fault(void **unused)
+{
+	int rc;
+
+	exec_build(2);
+	daos_fail_loc_set(DLCK_FAULT_ENGINE_JOIN | DAOS_FAIL_ONCE);
+	daos_fail_value_set(EBUSY);
+	for (int i = 0; i < 2; ++i) {
+		Ults_buf[i].thread = MOCK_THREAD(i);
+		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(i), ABT_SUCCESS);
+		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(i), ABT_SUCCESS);
+	}
+
+	rc = dlck_exec_join(&Exec_buf);
+
+	assert_int_equal(rc, -DER_BUSY);
+	assert_true(Exec_buf.join_fail);
+}
+
+/** verify a join failure keeps the thread handle and the remaining ULTs are still joined */
+static void
+test_exec_join_join_failure(void **unused)
+{
+	int rc;
+
+	exec_build(2);
+	Ults_buf[0].thread = MOCK_THREAD(0);
+	Ults_buf[1].thread = MOCK_THREAD(1);
+	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
+	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(1), ABT_SUCCESS);
+	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(1), ABT_SUCCESS);
+
+	rc = dlck_exec_join(&Exec_buf);
+
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(Exec_buf.join_fail);
+	assert_ptr_equal(Ults_buf[0].thread, MOCK_THREAD(0));
+	assert_ptr_equal(Ults_buf[1].thread, ABT_THREAD_NULL);
+}
+
+/** verify a thread free failure is reported but the joined ULT's handle is abandoned */
+static void
+test_exec_join_thread_free_failure(void **unused)
+{
+	int rc;
+
+	exec_build(2);
+	Ults_buf[0].thread = MOCK_THREAD(0);
+	Ults_buf[1].thread = MOCK_THREAD(1);
+	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
+	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
+	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(1), ABT_SUCCESS);
+	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(1), ABT_SUCCESS);
+
+	rc = dlck_exec_join(&Exec_buf);
+
+	assert_int_equal(rc, -DER_INVAL);
+	assert_false(Exec_buf.join_fail);
+	assert_ptr_equal(Ults_buf[0].thread, ABT_THREAD_NULL);
+}
+
+/** tests - dlck_exec_fini */
+
+/** verify all the arguments are freed and the batch is released */
+static void
+test_exec_fini_success(void **unused)
+{
+	exec_build(2);
+	EXPECT_TEST_ARG_FREE(&Payload[0]);
+	EXPECT_TEST_ARG_FREE(&Payload[1]);
+	EXPECT_EXEC_FINI_FREE();
+
+	dlck_exec_fini(&Exec_buf);
+}
+
+/** verify the argument of a ULT which failed to join is left out */
+static void
+test_exec_fini_skips_unjoined(void **unused)
+{
+	exec_build(2);
+	Ults_buf[0].thread = MOCK_THREAD(0);
+	EXPECT_TEST_ARG_FREE(&Payload[1]);
+	EXPECT_EXEC_FINI_FREE();
+
+	dlck_exec_fini(&Exec_buf);
+}
+
+/** tests - dlck_engine_exec_all */
+
+/** verify the composition of the batch phases and the checker messages on the happy path */
+static void
+test_exec_all_success(void **unused)
 {
 	struct checker ck = {.ck_vprintf = mock_ck_vprintf, .ck_prefix = "- "};
 	int            rc;
 
 	engine_build(1);
 	EXPECT_MOCK_CK_VPRINTF(&ck, "%sStart targets... ", DER_SUCCESS);
-	EXPECT_EXEC_ARRAYS_ALLOC(1);
+	EXPECT_EXEC_INIT_ALLOC(1);
 	EXPECT_TEST_ARG_ALLOC(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
 	expect_value(test_exec_one, arg, &Payload[0]);
@@ -418,175 +721,38 @@ test_exec_all_success_with_checker(void **unused)
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
 	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_SUCCESS);
 	EXPECT_TEST_ARG_FREE(&Payload[0]);
-	EXPECT_EXEC_ARRAYS_FREE();
+	EXPECT_EXEC_FINI_FREE();
 	EXPECT_MOCK_CK_VPRINTF(&ck, "%sWait for targets to stop: " CHECKER_OK_INFIX ".\n",
 			       DER_SUCCESS);
 
-	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom,
-				  test_arg_free, &Custom, &ck);
+	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom_alloc,
+				  test_arg_free, &Custom_free, &ck);
 
 	assert_int_equal(rc, DER_SUCCESS);
-}
-
-/** verify the DLCK_FAULT_ENGINE_EXEC fault injection stops the execution before it starts */
-static void
-test_exec_all_fault_exec(void **unused)
-{
-	int rc;
-
-	engine_build(2);
-	daos_fail_loc_set(DLCK_FAULT_ENGINE_EXEC | DAOS_FAIL_ONCE);
-	daos_fail_value_set(ENOMEM);
-
-	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom,
-				  test_arg_free, &Custom, NULL);
-
-	assert_int_equal(rc, -DER_NOMEM);
-}
-
-/** verify an allocation failure of the ULTs array is reported as -DER_NOMEM */
-static void
-test_exec_all_ults_alloc_failure(void **unused)
-{
-	int rc;
-
-	engine_build(2);
-	EXPECT_D_CALLOC(2, sizeof(struct dlck_ult), NULL);
-
-	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom,
-				  test_arg_free, &Custom, NULL);
-
-	assert_int_equal(rc, -DER_NOMEM);
-}
-
-/** verify an allocation failure of the arguments array frees the ULTs array */
-static void
-test_exec_all_args_alloc_failure(void **unused)
-{
-	int rc;
-
-	engine_build(2);
-	EXPECT_D_CALLOC(2, sizeof(struct dlck_ult), Ults_buf);
-	EXPECT_D_CALLOC(2, sizeof(void *), NULL);
-	expect_value(__wrap_d_free, ptr, Ults_buf);
-
-	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom,
-				  test_arg_free, &Custom, NULL);
-
-	assert_int_equal(rc, -DER_NOMEM);
-}
-
-/** verify an argument allocation failure joins already started ULTs and frees their arguments */
-static void
-test_exec_all_arg_alloc_failure(void **unused)
-{
-	int rc;
-
-	engine_build(2);
-	EXPECT_EXEC_ARRAYS_ALLOC(2);
-	EXPECT_TEST_ARG_ALLOC(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
-	expect_value(test_exec_one, arg, &Payload[0]);
-	EXPECT_TEST_ARG_ALLOC(&Engine_buf, 1, -DER_IO, NULL);
-	/** cleanup: the started ULT is joined and freed; both arguments are released */
-	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
-	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_SUCCESS);
-	EXPECT_TEST_ARG_FREE(&Payload[0]);
-	EXPECT_TEST_ARG_FREE(NULL);
-	EXPECT_EXEC_ARRAYS_FREE();
-
-	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom,
-				  test_arg_free, &Custom, NULL);
-
-	assert_int_equal(rc, -DER_IO);
-}
-
-/** verify a ULT creation failure frees the just allocated argument as well */
-static void
-test_exec_all_ult_create_failure(void **unused)
-{
-	int rc;
-
-	engine_build(2);
-	EXPECT_EXEC_ARRAYS_ALLOC(2);
-	EXPECT_TEST_ARG_ALLOC(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
-	expect_value(test_exec_one, arg, &Payload[0]);
-	EXPECT_TEST_ARG_ALLOC(&Engine_buf, 1, DER_SUCCESS, &Payload[1]);
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(1), -DER_NOMEM, NULL);
-	/** cleanup */
-	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
-	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_SUCCESS);
-	EXPECT_TEST_ARG_FREE(&Payload[0]);
-	EXPECT_TEST_ARG_FREE(&Payload[1]);
-	EXPECT_EXEC_ARRAYS_FREE();
-
-	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom,
-				  test_arg_free, &Custom, NULL);
-
-	assert_int_equal(rc, -DER_NOMEM);
-}
-
-/** verify a join failure marks the engine as unstoppable and cleans up the rest */
-static void
-test_exec_all_join_failure(void **unused)
-{
-	int rc;
-
-	engine_build(2);
-	EXPECT_EXEC_ARRAYS_ALLOC(2);
-	for (int i = 0; i < 2; ++i) {
-		EXPECT_TEST_ARG_ALLOC(&Engine_buf, i, DER_SUCCESS, &Payload[i]);
-		EXPECT_DLCK_ULT_CREATE(MOCK_POOL(i), DER_SUCCESS, MOCK_THREAD(i));
-		expect_value(test_exec_one, arg, &Payload[i]);
-	}
-	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
-	/** cleanup joins both ULTs again */
-	for (int i = 0; i < 2; ++i) {
-		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(i), ABT_SUCCESS);
-		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(i), ABT_SUCCESS);
-		EXPECT_TEST_ARG_FREE(&Payload[i]);
-	}
-	EXPECT_EXEC_ARRAYS_FREE();
-
-	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom,
-				  test_arg_free, &Custom, NULL);
-
-	assert_int_equal(rc, -DER_INVAL);
-	assert_true(Engine_buf.join_fail);
-}
-
-/** verify a thread free failure is propagated without marking a join failure */
-static void
-test_exec_all_thread_free_failure(void **unused)
-{
-	int rc;
-
-	engine_build(2);
-	EXPECT_EXEC_ARRAYS_ALLOC(2);
-	for (int i = 0; i < 2; ++i) {
-		EXPECT_TEST_ARG_ALLOC(&Engine_buf, i, DER_SUCCESS, &Payload[i]);
-		EXPECT_DLCK_ULT_CREATE(MOCK_POOL(i), DER_SUCCESS, MOCK_THREAD(i));
-		expect_value(test_exec_one, arg, &Payload[i]);
-	}
-	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
-	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
-	/** cleanup */
-	for (int i = 0; i < 2; ++i) {
-		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(i), ABT_SUCCESS);
-		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(i), ABT_SUCCESS);
-		EXPECT_TEST_ARG_FREE(&Payload[i]);
-	}
-	EXPECT_EXEC_ARRAYS_FREE();
-
-	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom,
-				  test_arg_free, &Custom, NULL);
-
-	assert_int_equal(rc, -DER_INVAL);
 	assert_false(Engine_buf.join_fail);
 }
 
-/** verify the DLCK_FAULT_ENGINE_JOIN fault injection marks the engine as unstoppable */
+/** verify an execution failure releases the batch and is propagated */
+static void
+test_exec_all_exec_failure(void **unused)
+{
+	int rc;
+
+	engine_build(1);
+	EXPECT_EXEC_INIT_ALLOC(1);
+	EXPECT_TEST_ARG_ALLOC(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
+	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), -DER_NOMEM, NULL);
+	EXPECT_TEST_ARG_FREE(&Payload[0]);
+	EXPECT_EXEC_FINI_FREE();
+
+	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom_alloc,
+				  test_arg_free, &Custom_free, NULL);
+
+	assert_int_equal(rc, -DER_NOMEM);
+	assert_false(Engine_buf.join_fail);
+}
+
+/** verify a join failure of the batch marks the engine as unstoppable */
 static void
 test_exec_all_fault_join(void **unused)
 {
@@ -595,7 +761,7 @@ test_exec_all_fault_join(void **unused)
 	engine_build(1);
 	daos_fail_loc_set(DLCK_FAULT_ENGINE_JOIN | DAOS_FAIL_ONCE);
 	daos_fail_value_set(EBUSY);
-	EXPECT_EXEC_ARRAYS_ALLOC(1);
+	EXPECT_EXEC_INIT_ALLOC(1);
 	EXPECT_TEST_ARG_ALLOC(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
 	expect_value(test_exec_one, arg, &Payload[0]);
@@ -603,10 +769,10 @@ test_exec_all_fault_join(void **unused)
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
 	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_SUCCESS);
 	EXPECT_TEST_ARG_FREE(&Payload[0]);
-	EXPECT_EXEC_ARRAYS_FREE();
+	EXPECT_EXEC_FINI_FREE();
 
-	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom,
-				  test_arg_free, &Custom, NULL);
+	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom_alloc,
+				  test_arg_free, &Custom_free, NULL);
 
 	assert_int_equal(rc, -DER_BUSY);
 	assert_true(Engine_buf.join_fail);
@@ -1179,40 +1345,48 @@ static const struct CMUnitTest dlck_engine_tests[] = {
     TEST(102, test_arg_alloc_failure),
     TEST(103, test_arg_free_null),
     TEST(104, test_arg_free_collects_outputs),
-    TEST(105, test_exec_all_success),
-    TEST(106, test_exec_all_success_with_checker),
-    TEST(107, test_exec_all_fault_exec),
-    TEST(108, test_exec_all_ults_alloc_failure),
-    TEST(109, test_exec_all_args_alloc_failure),
-    TEST(110, test_exec_all_arg_alloc_failure),
-    TEST(111, test_exec_all_ult_create_failure),
-    TEST(112, test_exec_all_join_failure),
-    TEST(113, test_exec_all_thread_free_failure),
-    TEST(114, test_exec_all_fault_join),
-    TEST(115, test_start_success),
-    TEST(116, test_start_success_no_nvme),
-    TEST(117, test_start_fault),
-    TEST(118, test_start_engine_alloc_failure),
-    TEST(119, test_start_xss_alloc_failure),
-    TEST(120, test_start_dbtree_classes_failure),
-    TEST(121, test_start_bio_nvme_init_failure),
-    TEST(122, test_start_sm_init_failure),
-    TEST(123, test_start_tls_key_create_failure),
-    TEST(124, test_start_vos_tls_init_failure),
-    TEST(125, test_start_vos_sys_db_init_failure),
-    TEST(126, test_start_xs_create_failure),
-    TEST(127, test_start_xs_init_tls_failure),
-    TEST(128, test_start_xs_init_xsctxt_failure),
-    TEST(129, test_start_xs_init_eventual_failure),
-    TEST(130, test_start_xs_init_polling_ult_failure),
-    TEST(131, test_start_polling_eventual_test_failure),
-    TEST(132, test_stop_success),
-    TEST(133, test_stop_join_fail),
-    TEST(134, test_stop_fini_failure),
-    TEST(135, test_stop_pool_not_empty),
-    TEST(136, test_stop_xs_free_failure),
-    TEST(137, test_stop_sm_fini_failure),
-    TEST(138, test_stop_fini_ult_create_failure),
+    TEST(105, test_exec_init_success),
+    TEST(106, test_exec_init_fault),
+    TEST(107, test_exec_init_de_alloc_failure),
+    TEST(108, test_exec_init_ults_alloc_failure),
+    TEST(109, test_exec_init_args_alloc_failure),
+    TEST(110, test_exec_init_arg_alloc_failure),
+    TEST(111, test_engine_exec_success),
+    TEST(112, test_engine_exec_ult_create_failure),
+    TEST(113, test_engine_exec_cleanup_join_failure),
+    TEST(114, test_exec_join_success),
+    TEST(115, test_exec_join_fault),
+    TEST(116, test_exec_join_join_failure),
+    TEST(117, test_exec_join_thread_free_failure),
+    TEST(118, test_exec_fini_success),
+    TEST(119, test_exec_fini_skips_unjoined),
+    TEST(120, test_exec_all_success),
+    TEST(121, test_exec_all_exec_failure),
+    TEST(122, test_exec_all_fault_join),
+    TEST(123, test_start_success),
+    TEST(124, test_start_success_no_nvme),
+    TEST(125, test_start_fault),
+    TEST(126, test_start_engine_alloc_failure),
+    TEST(127, test_start_xss_alloc_failure),
+    TEST(128, test_start_dbtree_classes_failure),
+    TEST(129, test_start_bio_nvme_init_failure),
+    TEST(130, test_start_sm_init_failure),
+    TEST(131, test_start_tls_key_create_failure),
+    TEST(132, test_start_vos_tls_init_failure),
+    TEST(133, test_start_vos_sys_db_init_failure),
+    TEST(134, test_start_xs_create_failure),
+    TEST(135, test_start_xs_init_tls_failure),
+    TEST(136, test_start_xs_init_xsctxt_failure),
+    TEST(137, test_start_xs_init_eventual_failure),
+    TEST(138, test_start_xs_init_polling_ult_failure),
+    TEST(139, test_start_polling_eventual_test_failure),
+    TEST(140, test_stop_success),
+    TEST(141, test_stop_join_fail),
+    TEST(142, test_stop_fini_failure),
+    TEST(143, test_stop_pool_not_empty),
+    TEST(144, test_stop_xs_free_failure),
+    TEST(145, test_stop_sm_fini_failure),
+    TEST(146, test_stop_fini_ult_create_failure),
 };
 
 int

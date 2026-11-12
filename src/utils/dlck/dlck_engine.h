@@ -109,6 +109,85 @@ typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *custom,
 typedef void (*arg_free_fn_t)(void *custom, void **arg);
 
 /**
+ * \struct dlck_exec
+ *
+ * Job batch. ULTs + their arguments + the free function to clean it all up.
+ */
+struct dlck_exec {
+	/** in */
+	arg_free_fn_t    arg_free_fn;
+	void            *arg_free_fn_arg;
+	unsigned         targets;
+	/** state */
+	struct dlck_ult *ults;
+	void           **ult_args;
+	/** out */
+	bool             join_fail;
+};
+
+/**
+ * \brief Allocate a job batch and the arguments for all the target ULTs.
+ *
+ * The \p arg_alloc_fn function is called to allocate a separate argument for each of the targets.
+ * On failure, the already allocated arguments are freed using \p arg_free_fn and the batch is
+ * released.
+ *
+ * \param[in]	engine			Engine the batch is prepared for.
+ * \param[in]	arg_alloc_fn		Function to allocate an argument for a ULT.
+ * \param[in]	arg_alloc_fn_arg	Custom parameter for \p arg_alloc_fn.
+ * \param[in]	arg_free_fn		Function to free an argument of a ULT.
+ * \param[in]	arg_free_fn_arg		Custom parameter for \p arg_free_fn.
+ * \param[out]	de_ptr			Allocated job batch.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_NOMEM	Out of memory.
+ * \retval -DER_*	Other errors.
+ */
+int
+dlck_exec_init(struct dlck_engine *engine, arg_alloc_fn_t arg_alloc_fn, void *arg_alloc_fn_arg,
+	       arg_free_fn_t arg_free_fn, void *arg_free_fn_arg, struct dlck_exec **de_ptr);
+
+/**
+ * \brief Run the \p exec_one function as a ULT on each of the daos_io_* execution streams.
+ *
+ * On failure, the already started ULTs are joined; the batch remains valid and has to be released
+ * using dlck_exec_fini().
+ *
+ * \param[in]		engine		Engine to run the created ULTs on.
+ * \param[in]		exec_one	Function to run in the ULTs.
+ * \param[in,out]	de		Job batch with the ULTs' arguments.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_engine_exec(struct dlck_engine *engine, dlck_ult_func exec_one, struct dlck_exec *de);
+
+/**
+ * \brief Wait for all the ULTs of the batch to conclude.
+ *
+ * A ULT which fails to join is marked in the batch; its argument will not be freed by
+ * dlck_exec_fini() and the batch has to be reported via the engine's join_fail flag.
+ *
+ * \param[in,out]	de	Job batch to join.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
+int
+dlck_exec_join(struct dlck_exec *de);
+
+/**
+ * \brief Free the ULTs' arguments and release the batch.
+ *
+ * The arguments of ULTs which failed to join are left out.
+ *
+ * \param[in]	de	Job batch to release.
+ */
+void
+dlck_exec_fini(struct dlck_exec *de);
+
+/**
  * \brief Run the \p exec_one function as a set of ULTs on all the daos_io_* execution streams
  * of the \p engine.
  *
@@ -142,11 +221,11 @@ dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
  */
 struct xstream_arg {
 	/** in */
-	struct dlck_control *ctrl;   /** Control state. */
-	struct dlck_engine  *engine; /** Engine itself. */
-	struct dlck_xstream *xs;     /** The execution stream the ULT is run in. */
+	struct dlck_control  *ctrl;   /** Control state. */
+	struct dlck_engine   *engine; /** Engine itself. */
+	struct dlck_xstream  *xs;     /** The execution stream the ULT is run in. */
 	/** out */
-	volatile unsigned    progress __attribute__((__aligned__(CACHELINE_SIZE)));
+	volatile unsigned     progress __attribute__((__aligned__(CACHELINE_SIZE)));
 	struct checker_status status;
 };
 
