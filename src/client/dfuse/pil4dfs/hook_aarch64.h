@@ -1,11 +1,11 @@
 /**
- * (C) Copyright 2025 <COPYRIGHT HOLDER - to be set by the author>
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
- * Instruction helpers for the aarch64 flavour of the function hooking framework in hook.c.
+ * Instruction helpers for the aarch64 flavor of the function hooking framework in hook.c.
  *
  * To hook a function we overwrite ONE instruction at its entry with a direct "b" to a bounce
  * stub, so only the first instruction (or the second one when the first is a BTI landing pad) has
