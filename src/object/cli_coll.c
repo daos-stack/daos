@@ -377,8 +377,8 @@ obj_coll_oper_args_collapse(struct coll_oper_args *coa, struct dc_object *obj, u
 }
 
 int
-obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
-		  uint32_t map_ver, uint32_t idx)
+obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj, uint32_t map_ver, uint32_t idx,
+		  uint32_t former_leader, int *candidate)
 {
 	struct dc_obj_shard	*shard = NULL;
 	struct daos_coll_target	*dct;
@@ -484,6 +484,10 @@ obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
 
 	dcs->dcs_buf[dcs->dcs_nr++] = shard->do_id.id_shard;
 
+	if (candidate != NULL && !shard->do_rebuilding && !shard->do_reintegrating &&
+	    (former_leader == shard->do_shard || *candidate < 0))
+		*candidate = idx;
+
 	if (unlikely(dct->dct_tgt_nr == (uint8_t)(-1))) {
 		D_WARN("Too much shards for obj "DF_OID"reside on the same target %u/%u\n",
 		       DP_OID(obj->cob_md.omd_id), shard->do_target_rank, shard->do_target_idx);
@@ -518,7 +522,7 @@ obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
 
 		if (coa->coa_target_nr < DTX_COLL_INLINE_TARGETS &&
 		    !shard->do_rebuilding && !shard->do_reintegrating)
-			coa->coa_targets[coa->coa_target_nr++] = shard->do_target_id;
+			coa->coa_targets[coa->coa_target_nr++] = shard->do_shard_idx;
 
 		if (coa->coa_max_bitmap_sz < dct->dct_bitmap_sz)
 			coa->coa_max_bitmap_sz = dct->dct_bitmap_sz;
@@ -567,7 +571,7 @@ dc_obj_coll_punch_cb(tse_task_t *task, void *data)
 
 static int
 dc_obj_coll_punch_mbs(struct coll_oper_args *coa, struct dc_object *obj, uint32_t leader_id,
-		      struct dtx_memberships **p_mbs)
+		      uint32_t map_ver, struct dtx_memberships **p_mbs)
 {
 	struct dtx_memberships	*mbs;
 	struct dtx_daos_target	*ddt;
@@ -578,7 +582,7 @@ dc_obj_coll_punch_mbs(struct coll_oper_args *coa, struct dc_object *obj, uint32_
 
 	D_ALLOC(mbs, sizeof(*mbs) + sizeof(*ddt) * coa->coa_target_nr + sizeof(*dct));
 	if (mbs == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		return -DER_NOMEM;
 
 	/*
 	 * For object collective punch, even if we lost some redundancy groups when DTX resync,
@@ -594,10 +598,26 @@ dc_obj_coll_punch_mbs(struct coll_oper_args *coa, struct dc_object *obj, uint32_
 	ddt = &mbs->dm_tgts[0];
 	ddt[0].ddt_id = leader_id;
 
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (unlikely(obj->cob_version != map_ver))
+		D_GOTO(out, rc = -DER_STALE);
+
+	D_ASSERT(obj->cob_shards != NULL);
+
 	for (i = 0, j = 1; i < coa->coa_target_nr && j < coa->coa_target_nr; i++) {
-		if (coa->coa_targets[i] != ddt[0].ddt_id)
-			ddt[j++].ddt_id = coa->coa_targets[i];
+		struct pl_obj_shard *shard;
+
+		D_ASSERT(coa->coa_targets[i] < obj->cob_shards_nr);
+
+		shard = obj_get_shard(obj, coa->coa_targets[i]);
+
+		D_ASSERT(!shard->po_rebuilding);
+		D_ASSERT(!shard->po_reintegrating);
+
+		if (leader_id != shard->po_target)
+			ddt[j++].ddt_id = shard->po_target;
 	}
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	dct = (struct dtx_coll_target *)(ddt + coa->coa_target_nr);
 	dct->dct_fdom_lvl = obj->cob_md.omd_fdom_lvl;
@@ -608,8 +628,14 @@ dc_obj_coll_punch_mbs(struct coll_oper_args *coa, struct dc_object *obj, uint32_
 	/* The other fields will not be packed on-wire. Related engine will fill them in future. */
 
 	*p_mbs = mbs;
+	mbs    = NULL;
 
 out:
+	if (mbs != NULL) {
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		D_FREE(mbs);
+	}
+
 	return rc;
 }
 
@@ -701,18 +727,17 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	struct obj_coll_punch_cb_args	 cpca = { 0 };
 	uint32_t			 tgt_size = 0;
 	uint32_t			 mbs_max_size;
-	uint32_t			 inline_size;
-	uint32_t			 leader = -1;
-	uint32_t			 len;
-	int				 rc;
-	int				 i;
+	uint32_t                         inline_size;
+	int                              candidate = -1;
+	int                              rc;
+	int                              i;
 
 	rc = obj_coll_oper_args_init(coa, obj, true);
 	if (rc != 0)
 		goto out;
 
 	for (i = 0; i < obj->cob_shards_nr; i++) {
-		rc = obj_coll_prep_one(coa, obj, map_ver, i);
+		rc = obj_coll_prep_one(coa, obj, map_ver, i, auxi->former_leader, &candidate);
 		if (rc != 0)
 			goto out;
 	}
@@ -721,71 +746,23 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	if (rc != 0)
 		goto out;
 
-	if (auxi->io_retry) {
-		if (unlikely(spa->pa_auxi.shard >= obj->cob_shards_nr))
-			goto new_leader;
+	D_ASSERT(candidate >= 0);
 
-		/* Try to reuse the same leader. */
-		rc = obj_shard_open(obj, spa->pa_auxi.shard, map_ver, &shard);
-		if (rc == 0) {
-			if (!shard->do_rebuilding && !shard->do_reintegrating) {
-				tmp_tgt.dct_rank = shard->do_target_rank;
-				dct              = bsearch(&tmp_tgt, coa->coa_dcts, coa->coa_dct_nr,
-							   sizeof(tmp_tgt), dc_coll_sort_cmp);
-				D_ASSERT(dct != NULL);
+	rc = obj_shard_open(obj, candidate, map_ver, &shard);
+	if (rc != 0)
+		goto out;
 
-				goto gen_mbs;
-			}
+	tmp_tgt.dct_rank = shard->do_target_rank;
+	dct = bsearch(&tmp_tgt, coa->coa_dcts, coa->coa_dct_nr, sizeof(tmp_tgt), dc_coll_sort_cmp);
+	D_ASSERT(dct != NULL);
 
-			obj_shard_close(shard);
-			shard = NULL;
-		} else if (rc != -DER_NONEXIST) {
-			goto out;
-		}
-
-		/* Then change to new leader for retry. */
-	}
-
-new_leader:
-	if (leader == -1)
-		/* Randomly select a rank as the leader. */
-		leader = d_rand() % coa->coa_dct_nr;
-	else
-		leader = (leader + 1) % coa->coa_dct_nr;
-
-	dct = &coa->coa_dcts[leader];
-	len = dct->dct_bitmap_sz << 3;
-
-	for (i = 0; i < len; i++) {
-		if (isset(dct->dct_bitmap, i)) {
-			rc = obj_shard_open(obj, dct->dct_shards[i].dcs_idx, map_ver, &shard);
-			if (rc != 0)
-				goto out;
-
-			if (!shard->do_rebuilding && !shard->do_reintegrating)
-				goto gen_mbs;
-
-			obj_shard_close(shard);
-			shard = NULL;
-		}
-	}
-
-	goto new_leader;
-
-gen_mbs:
 	if (dct != &coa->coa_dcts[0]) {
 		memcpy(&tmp_tgt, &coa->coa_dcts[0], sizeof(tmp_tgt));
 		memcpy(&coa->coa_dcts[0], dct, sizeof(tmp_tgt));
 		memcpy(dct, &tmp_tgt, sizeof(tmp_tgt));
 	}
 
-	/* 'shard' is on the leader target that is must be the coa->coa_dcts[0]. */
-	D_ASSERTF(shard->do_target_rank == coa->coa_dcts[0].dct_rank,
-		  "Object "DF_OID" target array corrupted: rank %u vs %ur, nr %u\n",
-		  DP_OID(obj->cob_md.omd_id), shard->do_target_rank,
-		  coa->coa_dcts[0].dct_rank, coa->coa_dct_nr);
-
-	rc = dc_obj_coll_punch_mbs(coa, obj, shard->do_target_id, &mbs);
+	rc = dc_obj_coll_punch_mbs(coa, obj, shard->do_target_id, map_ver, &mbs);
 	if (rc < 0)
 		goto out;
 
@@ -819,7 +796,8 @@ gen_mbs:
 	}
 
 	spa->pa_auxi.target = shard->do_target_id;
-	spa->pa_auxi.shard = shard->do_shard_idx;
+	spa->pa_auxi.shard  = shard->do_shard_idx;
+	auxi->former_leader = shard->do_shard;
 
 	if (obj_is_ec(obj))
 		auxi->flags |= ORF_EC;
