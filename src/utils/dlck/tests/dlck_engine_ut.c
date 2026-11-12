@@ -19,7 +19,6 @@
 
 #include <daos/debug.h>
 
-#include <daos/checker.h>
 #include <daos/common.h>
 #include <engine/srv_internal.h>
 
@@ -27,7 +26,6 @@
 #include "../dlck_engine.h"
 #include "dlck_ut.h"
 #include "dlck_ut_abt_mock.h"
-#include "dlck_ut_checker_mock.h"
 #include "dlck_ut_daos_mock.h"
 #include "dlck_ut_mem_mock.h"
 
@@ -307,7 +305,6 @@ setup(void **unused)
 	memset(&Xa_buf, 0, sizeof(Xa_buf));
 	memset(&Ctrl, 0, sizeof(Ctrl));
 	memset(&Mock_dmi, 0, sizeof(Mock_dmi));
-	mock_ck_vprintf_check_output = false;
 
 	return 0;
 }
@@ -703,30 +700,24 @@ test_exec_fini_skips_unjoined(void **unused)
 
 /** tests - dlck_engine_exec_all */
 
-/** verify the composition of the batch phases and the checker messages on the happy path */
+/** verify the composition of the batch phases on the happy path */
 static void
 test_exec_all_success(void **unused)
 {
-	struct checker ck = {.ck_vprintf = mock_ck_vprintf, .ck_prefix = "- "};
-	int            rc;
+	int rc;
 
 	engine_build(1);
-	EXPECT_MOCK_CK_VPRINTF(&ck, "%sStart targets... ", DER_SUCCESS);
 	EXPECT_EXEC_INIT_ALLOC(1);
 	EXPECT_TEST_ARG_ALLOC(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
 	expect_value(test_exec_one, arg, &Payload[0]);
-	EXPECT_MOCK_CK_VPRINTF(&ck, CHECKER_OK_INFIX ".\n", DER_SUCCESS);
-	EXPECT_MOCK_CK_VPRINTF(&ck, "%sWait for targets to stop...\n", DER_SUCCESS);
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
 	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_SUCCESS);
 	EXPECT_TEST_ARG_FREE(&Payload[0]);
 	EXPECT_EXEC_FINI_FREE();
-	EXPECT_MOCK_CK_VPRINTF(&ck, "%sWait for targets to stop: " CHECKER_OK_INFIX ".\n",
-			       DER_SUCCESS);
 
 	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom_alloc,
-				  test_arg_free, &Custom_free, &ck);
+				  test_arg_free, &Custom_free, NULL);
 
 	assert_int_equal(rc, DER_SUCCESS);
 	assert_false(Engine_buf.join_fail);
