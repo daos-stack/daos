@@ -62,8 +62,7 @@ class StorageFormatReplaceTest(TestWithServers):
 
         self.log_step(f"Replace rank {rank}'s storage with 'dmg storage format --replace'")
         dmg = self.get_dmg_command()
-        dmg.hostlist = host
-        dmg.storage_format(replace=True, rank=rank)
+        dmg.storage_format(replace=True, rank=rank, hosts=host)
 
         self.log_step(f"Rank {rank} rejoins with its original rank reclaimed")
         if self.server_managers[0].check_rank_state([rank], ["joined"], 60):

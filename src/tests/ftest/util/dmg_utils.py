@@ -227,7 +227,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(("storage", "scan"), verbose=verbose)
 
     def storage_format(self, force=False, timeout=30, verbose=False, start=False, replace=False,
-                       rank=None):
+                       rank=None, hosts=None):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -248,6 +248,9 @@ class DmgCommand(DmgCommandBase):
                 Defaults to False
             rank (int): specific rank to replace. Only valid with replace=True.
                 Defaults to None
+            hosts (object): host(s) to scope this single invocation to, in place of the
+                hostlist already configured in the dmg config file. Required when
+                replace=True, which only accepts exactly one host. Defaults to None.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -258,13 +261,20 @@ class DmgCommand(DmgCommandBase):
 
         """
         saved_timeout = self.timeout
+        saved_hostlist = self._hostlist.value
         try:
             self.timeout = timeout
+            if hosts is not None:
+                # Setting self.hostlist would persist the override in the dmg config file used
+                # by every subsequent command. Set the command-line '-l' flag instead, which
+                # scopes the host list to this single invocation, as required by '--replace'.
+                self._hostlist.update(str(hosts), "dmg._hostlist")
             self._get_result(
                 ("storage", "format"), force=force, verbose=verbose, start=start,
                 replace=replace, rank=rank)
         finally:
             self.timeout = saved_timeout
+            self._hostlist.update(saved_hostlist, "dmg._hostlist")
         return self.result
 
     def storage_set_faulty(self, host, uuid, force=True):

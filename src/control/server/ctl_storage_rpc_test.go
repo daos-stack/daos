@@ -1937,10 +1937,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scmMounted bool // if scmMounted we emulate ext4 fs is mounted
 		tmpfsEmpty bool // if false, an already-mounted ramdisk is not empty
-		// Per-instance override of tmpfsEmpty, for multi-engine hosts where only one
-		// instance's ramdisk was force-reformatted by awaitStorageReady() (i.e. only
-		// that instance is the one actually replaced). Takes precedence over tmpfsEmpty
-		// when non-nil.
+		// Per-instance override of tmpfsEmpty. Precedence over tmpfsEmpty when non-nil.
 		tmpfsEmptyPerInst []bool
 		// Per-instance override of expStartReady. Takes precedence over expStartReady
 		// when non-nil.
@@ -2341,8 +2338,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		},
 		// MD-on-SSD replace: awaitStorageReady() force-reformats the ramdisk before
 		// the engine blocks on format, so the replaced engine's tmpfs reads as
-		// mounted-but-empty here. That is what lets --replace tell this engine
-		// apart from a bystander whose SCM was merely "already formatted".
+		// mounted-but-empty here.
 		"ram already mounted but empty; replace set": {
 			scmMounted:    true,
 			tmpfsEmpty:    true,
