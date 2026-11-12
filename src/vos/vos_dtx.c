@@ -2455,7 +2455,7 @@ vos_dtx_refresh_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_membership
 		}
 	}
 
-	rc = umem_tx_begin(umm, NULL);
+	rc = vos_cache_tx_begin(vos_cont2pool(cont));
 	if (rc != 0)
 		goto out;
 
@@ -4083,7 +4083,7 @@ vos_dtx_attach(struct dtx_handle *dth, bool persistent, bool exist)
 	 * will be accessed during DTX commit.
 	 */
 	if (persistent) {
-		rc = umem_tx_begin(umm, NULL);
+		rc = vos_cache_tx_begin(vos_cont2pool(cont));
 		if (rc != 0)
 			goto out;
 

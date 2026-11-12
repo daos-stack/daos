@@ -122,6 +122,12 @@ struct umem_store_iod {
 struct umem_store;
 
 struct umem_store_ops {
+	void *(*so_tfifo_create)(unsigned int tier);
+	void (*so_tfifo_destroy)(void *tq);
+	void (*so_tfifo_enter)(void *tq, unsigned int tier);
+	void (*so_tfifo_exit)(void *tq, unsigned int tier);
+	void (*so_tfifo_wait)(void *tq, unsigned int tier);
+	void (*so_tfifo_wakeup_next)(void *tq);
 	int	(*so_waitqueue_create)(void **wq);
 	void	(*so_waitqueue_destroy)(void *wq);
 	void	(*so_waitqueue_wait)(void *wq, bool yield_only);
@@ -216,6 +222,7 @@ enum umem_page_stats {
 	UMEM_PG_STATS_NONEVICTABLE = 0,
 	UMEM_PG_STATS_PINNED,
 	UMEM_PG_STATS_FREE,
+	UMEM_PG_STATS_NE_RSRV,
 	UMEM_PG_STATS_MAX,
 };
 
@@ -260,6 +267,8 @@ struct umem_cache {
 	uint32_t         ca_bmap_sz;
 	/** Free list for unmapped page info */
 	d_list_t         ca_pgs_free;
+	/** Free pages reserved for potential NE growth */
+	d_list_t           ca_pgs_ne_rsrv;
 	/** Non-evictable & evictable dirty pages */
 	d_list_t         ca_pgs_dirty;
 	/** All Non-evictable[0] & evictable[1] pages */
@@ -282,14 +291,8 @@ struct umem_cache {
 	uint32_t         ca_pgs_stats[UMEM_PG_STATS_MAX];
 	/** Cache stats */
 	uint64_t	 ca_cache_stats[UMEM_CACHE_STATS_MAX];
-	/** How many waiters waiting on free page reserve */
-	uint32_t         ca_reserve_waiters;
-	/** Waitqueue for free page reserve: umem_cache_reserve() */
-	void            *ca_reserve_wq;
-	/** Waiters for evictable pages to be unpinned */
-	uint32_t         ca_unpin_waiters;
-	/** Waitqueue for waiters for evictable pages to be unpinned */
-	void            *ca_unpin_wq;
+	/** TFIFO queue for free page reserving */
+	void            *ca_tfifo;
 	/** TODO: some other global status */
 	uint64_t        *ptr2off;
 	uintptr_t       *off2ptr;
@@ -408,6 +411,14 @@ struct umem_cache_range {
 	daos_size_t cr_size;
 };
 
+enum {
+	UMEM_RSRV_TIER_TX = 0,
+	UMEM_RSRV_TIER_DKEY,
+	UMEM_RSRV_TIER_OBJ,
+	UMEM_RSRV_TIER_NE,
+	UMEM_RSRV_TIER_MAX,
+};
+
 /** Map MD pages in specified range to memory pages. The range to be mapped should be empty
  *  (no page loading required). If caller tries to map non-evictable pages, page eviction
  *  won't be triggered when there are not enough free pages; If caller tries to map evictable
@@ -429,13 +440,13 @@ umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int ra
  * \param[in]	store		The umem store
  * \param[in]	ranges		Ranges to be mapped
  * \param[in]	range_nr	Number of ranges
- * \param[in]	for_sys		Internal access from system ULTs (aggregation etc.)
+ * \param[in]	tier		Tier of TFIFO
  *
  * \return	0 on success, negative value on error.
  */
 int
 umem_cache_load(struct umem_store *store, struct umem_cache_range *ranges, int range_nr,
-		bool for_sys);
+		unsigned int tier);
 
 struct umem_pin_handle;
 
@@ -446,14 +457,14 @@ struct umem_pin_handle;
  *  \param[in]	store		The umem store
  *  \param[in]	ranges		Ranges to be pinned
  *  \param[in]	range_nr	Number of ranges
- *  \param[in]	for_sys		Internal access from system ULTs (aggregation etc.)
+ *  \param[in]	tier		Tier of TFIFO
  *  \param[out] pin_handle	Returned pin handle
  *
  *  \return 0 on success
  */
 int
-umem_cache_pin(struct umem_store *store, struct umem_cache_range *rangs, int range_nr, bool for_sys,
-	       struct umem_pin_handle **pin_handle);
+umem_cache_pin(struct umem_store *store, struct umem_cache_range *rangs, int range_nr,
+	       unsigned int tier, struct umem_pin_handle **pin_handle);
 
 /** Unpin the pages pinned by prior umem_cache_pin().
  *
@@ -465,15 +476,13 @@ void
 umem_cache_unpin(struct umem_store *store, struct umem_pin_handle *pin_handle);
 
 /** Reserve few free pages for potential non-evictable zone grow within a transaction.
- *  Caller needs to ensure there is no CPU yielding after this call till transaction
- *  start.
  *
  *  \param[in]	store		The umem store
  *
  *  \return 0 on success
  */
 int
-umem_cache_reserve(struct umem_store *store);
+umem_cache_ne_reserve(struct umem_store *store);
 
 /** Inform umem cache the last committed ID.
  *

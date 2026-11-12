@@ -884,7 +884,7 @@ oi_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 
 	del_arg.cont = args;
 	del_arg.only_delete_entry = 0;
-	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
+	rc                        = vos_cache_tx_begin(vos_cont2pool(oiter->oit_cont));
 	if (rc != 0)
 		goto exit;
 
@@ -964,7 +964,7 @@ oi_iter_check_punch(daos_handle_t ih)
 	}
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
-	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
+	rc = vos_cache_tx_begin(vos_cont2pool(oiter->oit_cont));
 	if (rc != 0)
 		goto exit;
 
@@ -1025,7 +1025,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		return rc;
 	}
 
-	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
+	rc = vos_cache_tx_begin(vos_cont2pool(oiter->oit_cont));
 	if (rc != 0)
 		goto exit;
 
