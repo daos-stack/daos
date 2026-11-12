@@ -791,6 +791,17 @@ free_memory_in_hook(void)
 	}
 }
 
+/* The patching code below hard-codes x86_64: capstone is opened with CS_ARCH_X86, and the entry of
+ * each hooked function is overwritten with a 5-byte "jmp rel32" (opcode 0xE9). Applying that to
+ * another architecture (e.g. aarch64) overwrites the first instructions of the libc function with
+ * garbage and crashes the process (SIGILL/SIGSEGV), so refuse to patch there.
+ */
+#if defined(__x86_64__)
+#define HOOK_ARCH_SUPPORTED (1)
+#else
+#define HOOK_ARCH_SUPPORTED (0)
+#endif
+
 /* The max number of instruments of the entry code in original function to analyze */
 #define MAX_INSTUMENTS (24)
 
@@ -814,6 +825,14 @@ install_hook(void)
 	size_t               num_inst, idx_inst;
 	struct trampoline_t *tramp_list;
 	long                 rc;
+
+	if (!HOOK_ARCH_SUPPORTED) {
+		/* Leave libc untouched. Callers see "no hooks installed" and fall back to the
+		 * normal (non-intercepted) code path.
+		 */
+		D_ERROR("function interception is only supported on x86_64, no hooks installed\n");
+		return 0;
+	}
 
 	if (found_libc == 0)
 		return 0;
