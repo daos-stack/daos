@@ -1207,9 +1207,9 @@ class TestGroup():
         try:
             if install:
                 slurm_setup.install()
-            slurm_setup.update_config('daos_client')
+            slurm_setup.update_config(user, 'daos_client')
             slurm_setup.start_munge(user)
-            slurm_setup.start_slurm(True)
+            slurm_setup.start_slurm(user, True)
         except SlurmSetupException:
             message = "Error setting up slurm"
             result.tests[-1].fail_test(logger, "Run", message, sys.exc_info())

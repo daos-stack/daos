@@ -17,6 +17,7 @@ if [[ "${OUTPUT_TYPE:-rpm}" != rpm ]]; then
   exit 1
 fi
 
+SLURM_SERVICE_USER="${SLURM_SERVICE_USER:-jenkins}"
 VERSION="${slurm_version}"
 RELEASE="${slurm_release}"
 LICENSE="GPLv2+"
@@ -110,6 +111,10 @@ for daemon in slurmctld slurmd slurmdbd; do
   stage_files "${SBINDIR:-/usr/sbin}" "${daemon_files[@]}"
   clean_slurm_bin "${files[@]}"
   stage_files "${unitdir}" "${SL_SLURM_PREFIX}/lib/systemd/system/${daemon}.service"
+  if [[ "${daemon}" = slurmctld ]]; then
+    sed -i -e "s/^User=slurm$/User=${SLURM_SERVICE_USER}/" \
+      -e "s/^Group=slurm$/Group=${SLURM_SERVICE_USER}/" "${files[@]}"
+  fi
   if [[ "${daemon}" = slurmdbd ]]; then
     stage_files "${libdir}/slurm" "${SL_SLURM_PREFIX}/lib64/slurm/accounting_storage_mysql.so"
     clean_slurm_bin "${files[@]}"

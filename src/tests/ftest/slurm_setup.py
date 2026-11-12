@@ -88,10 +88,11 @@ class SlurmSetup():
         if not result.passed:
             raise SlurmSetupException(f"Error installing slurm packages on {result.failed_hosts}")
 
-    def update_config(self, partition):
+    def update_config(self, slurm_user, partition):
         """Update the slurm config.
 
         Args:
+            slurm_user (str): user to run Slurm as
             partition (str): name of the slurm partition to include in the configuration
 
         Raises:
@@ -107,7 +108,7 @@ class SlurmSetup():
             self._copy_file(self.all_nodes, source, os.path.splitext(source)[0])
 
         # Update the config file on all hosts
-        self._update_slurm_config(partition)
+        self._update_slurm_config(slurm_user, partition)
 
     def start_munge(self, user):
         """Start munge.
@@ -162,10 +163,11 @@ class SlurmSetup():
         # Restart munge on all nodes
         self._restart_systemctl(self.all_nodes, 'munge')
 
-    def start_slurm(self, debug):
+    def start_slurm(self, user, debug):
         """Start slurm.
 
         Args:
+            user (str): user account to run slurmctld as
             debug (bool): whether or not to display slurm debug
 
         Raises:
@@ -174,13 +176,13 @@ class SlurmSetup():
         self.log.info("Starting slurm")
 
         self._mkdir(self.all_nodes, self.SLURM_LOG_DIR)
-        self._update_file_ownership(self.all_nodes, self.SLURM_LOG_DIR, 'slurm')
+        self._update_file_ownership(self.all_nodes, self.SLURM_LOG_DIR, user)
         self._mkdir(self.all_nodes, '/var/spool/slurmd')
         self._mkdir(self.all_nodes, '/var/spool/slurmctld')
         self._mkdir(self.all_nodes, '/var/spool/slurm/d')
         self._mkdir(self.all_nodes, '/var/spool/slurm/ctld')
-        self._update_file_ownership(self.all_nodes, '/var/spool/slurm/ctld', 'slurm')
-        self._update_file(self.all_nodes, '/var/spool/slurmctld', '775', 'slurm')
+        self._update_file_ownership(self.all_nodes, '/var/spool/slurm/ctld', user)
+        self._update_file(self.all_nodes, '/var/spool/slurmctld', '775', user)
         self._remove_file(self.all_nodes, '/var/spool/slurmctld/clustername')
 
         # Restart slurmctld on the control node
@@ -246,20 +248,19 @@ class SlurmSetup():
             raise SlurmSetupException(
                 f'Error copying {source} to {destination} on {str(result.failed_hosts)}')
 
-    def _update_slurm_config(self, partition):
+    def _update_slurm_config(self, slurm_user, partition):
         """Update the slurm config file.
 
         Args:
+            slurm_user (str): user to run Slurm as
             partition (str): name of the slurm partition to include in the configuration
 
         Raises:
             SlurmSetupException: if there is a problem modifying slurm config file
         """
-        # Update the config file with the slurm cluster name
         self._modify_slurm_config_file(
-            'slurm cluster name', self.all_nodes, 's/ClusterName=cluster/ClusterName=ci_cluster/g',
+            'slurm user', self.all_nodes, f's/SlurmUser=slurm/SlurmUser={slurm_user}/g',
             self.root)
-
         self._modify_slurm_config_file(
             'accounting storage type', self.all_nodes,
             's|^[[:space:]]*#\\?[[:space:]]*AccountingStorageType[[:space:]]*=.*|'
@@ -595,7 +596,7 @@ def main():
 
     # Edit the slurm conf files
     try:
-        slurm_setup.update_config(args.partition)
+        slurm_setup.update_config(args.user, args.partition)
     except SlurmSetupException as error:
         logger.error(str(error))
         sys.exit(1)
@@ -609,7 +610,7 @@ def main():
 
     # Slurm Start-up
     try:
-        slurm_setup.start_slurm(args.debug)
+        slurm_setup.start_slurm(args.user, args.debug)
     except SlurmSetupException as error:
         logger.error(str(error))
         sys.exit(1)
