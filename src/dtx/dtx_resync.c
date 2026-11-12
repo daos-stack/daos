@@ -232,7 +232,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_resync_head *drh,
 		D_WARN("Need retry resync for DTX " DF_DTI " because of " DF_RC "\n",
 		       DP_DTI(&dte->dte_xid), DP_RC(rc));
 
-		/* If repeatedly hit the same network failure, let's wait for a while before retry. */
+		/* Repeatedly hit the same network failure, let's wait for a while before retry. */
 		if (drh->drh_last_err == rc)
 			dss_sleep(50);
 
