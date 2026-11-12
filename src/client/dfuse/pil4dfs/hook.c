@@ -7,8 +7,8 @@
 
 /**
  * This is a mini framework to intercept the functions in shared libraries under Linux.
- * It only works on x86_64 at this time. It will be extend it to support ARM64 in future.
- * libcapstone was adopted to disasseble binary code on x86_64.
+ * It supports x86_64 and aarch64. libcapstone is adopted to disassemble binary code on x86_64.
+ * On aarch64 only the PC-relative instruction classes need decoding, see hook_aarch64.h.
  */
 
 #ifndef _GNU_SOURCE
@@ -46,6 +46,9 @@
 
 #include "hook.h"
 #include "hook_int.h"
+#if defined(__aarch64__)
+#include "hook_aarch64.h"
+#endif
 
 #define MAX_LEN_DISASSEMBLE (28)
 
@@ -61,12 +64,14 @@ static struct module_patch_info_t *module_list;
 /* The flag whethere libc.so is found or not. */
 static int                        found_libc = 1;
 
+#if defined(__x86_64__)
 /* The instruction to jump to new function.
  * 00:  ff 25 00 00 00 00       jmp    QWORD PTR [rip+0x0]        # 6 <_main+0x6>
  * The long int +6 (0x1234567812345678) needs be replaced by the address of new function.
  */
 static unsigned char              instruction_bounce[] = {0xff, 0x25, 0x00, 0x00, 0x00, 0x00, 0x78,
 							  0x56, 0x34, 0x12, 0x78, 0x56, 0x34, 0x12};
+#endif
 
 /* The list of memory blocks allocated to hold patches for hook */
 static struct patch_block_t       patch_blk_list[MAX_MODULE];
@@ -475,6 +480,7 @@ uninstall_hook(void)
 {
 	int                  i, iBlk, iFunc;
 	void                *pbaseOrg;
+	char                *patch_addr;
 	size_t               MemSize_Modify;
 	struct trampoline_t *tramp_list;
 
@@ -485,18 +491,26 @@ uninstall_hook(void)
 		tramp_list = (struct trampoline_t *)(patch_blk_list[iBlk].patch_addr);
 
 		for (iFunc = 0; iFunc < patch_blk_list[iBlk].num_trampoline; iFunc++) {
+			/* the address of the code we overwrote */
+			patch_addr = (char *)(tramp_list[iFunc].addr_org_func);
+#if defined(__aarch64__)
+			if (patch_addr != NULL)
+				patch_addr += tramp_list[iFunc].patch_off;
+#endif
 			/* fast mod */
-			pbaseOrg = (void *)((long int)(tramp_list[iFunc].addr_org_func) & mask);
-			MemSize_Modify = determine_mem_block_size(
-			    (const void *)(tramp_list[iFunc].addr_org_func));
+			pbaseOrg       = (void *)((long int)patch_addr & mask);
+			MemSize_Modify = determine_mem_block_size((const void *)patch_addr);
 
 			if (pbaseOrg == NULL)
 				continue;
 			if (mprotect(pbaseOrg, MemSize_Modify,
 				     PROT_READ | PROT_WRITE | PROT_EXEC) != 0)
 				DS_WARN(errno, "mprotect() failed");
-			/* save original code for uninstall */
-			memcpy(tramp_list[iFunc].addr_org_func, tramp_list[iFunc].org_code, 5);
+			/* restore original code */
+			memcpy(patch_addr, tramp_list[iFunc].org_code, JMP_INSTRCTION_LEN);
+#if defined(__aarch64__)
+			__builtin___clear_cache(patch_addr, patch_addr + JMP_INSTRCTION_LEN);
+#endif
 			if (mprotect(pbaseOrg, MemSize_Modify, PROT_READ | PROT_EXEC) != 0)
 				DS_WARN(errno, "mprotect() failed");
 		}
@@ -674,8 +688,8 @@ find_usable_block(int idx_mod)
 		p_MemBlk = (((long int)(patch_blk_list[i].patch_addr) +
 			     (long int)(patch_blk_list[i].patch_addr_end)) /
 			    2);
-		if ((labs(p_Min - p_MemBlk) < NULL_RIP_VAR_OFFSET) &&
-		    (labs(p_Max - p_MemBlk) < NULL_RIP_VAR_OFFSET)) {
+		if ((labs(p_Min - p_MemBlk) < HOOK_BLOCK_MAX_DIST) &&
+		    (labs(p_Max - p_MemBlk) < HOOK_BLOCK_MAX_DIST)) {
 			return i;
 		}
 	}
@@ -742,6 +756,7 @@ allocate_memory_block_for_patches(void)
 			patch_blk_list[num_patch_blk].num_trampoline = 0;
 			patch_blk_list[num_patch_blk].patch_addr_end =
 			    patch_blk_list[num_patch_blk].patch_addr + MIN_MEM_SIZE;
+			module_list[idx_mod].idx_patch_blk = num_patch_blk;
 			num_patch_blk++;
 		}
 	}
@@ -761,7 +776,7 @@ determine_mem_block_size(const void *addr)
 
 	addr_code = (unsigned long int)addr;
 	res       = addr_code % page_size;
-	if ((res + 5) > page_size) {
+	if ((res + PATCH_SPAN_LEN) > page_size) {
 		/* close to the boundary of two memory pages */
 		return (size_t)(page_size * 2);
 	} else {
@@ -791,16 +806,7 @@ free_memory_in_hook(void)
 	}
 }
 
-/* The patching code below hard-codes x86_64: capstone is opened with CS_ARCH_X86, and the entry of
- * each hooked function is overwritten with a 5-byte "jmp rel32" (opcode 0xE9). Applying that to
- * another architecture (e.g. aarch64) overwrites the first instructions of the libc function with
- * garbage and crashes the process (SIGILL/SIGSEGV), so refuse to patch there.
- */
 #if defined(__x86_64__)
-#define HOOK_ARCH_SUPPORTED (1)
-#else
-#define HOOK_ARCH_SUPPORTED (0)
-#endif
 
 /* The max number of instruments of the entry code in original function to analyze */
 #define MAX_INSTUMENTS (24)
@@ -825,14 +831,6 @@ install_hook(void)
 	size_t               num_inst, idx_inst;
 	struct trampoline_t *tramp_list;
 	long                 rc;
-
-	if (!HOOK_ARCH_SUPPORTED) {
-		/* Leave libc untouched. Callers see "no hooks installed" and fall back to the
-		 * normal (non-intercepted) code path.
-		 */
-		D_ERROR("function interception is only supported on x86_64, no hooks installed\n");
-		return 0;
-	}
 
 	if (found_libc == 0)
 		return 0;
@@ -1026,6 +1024,166 @@ err:
 	quit_hook_init();
 	return 0;
 }
+
+#elif defined(__aarch64__)
+
+/* All the trampolines of a module have to fit in the memory block allocated for it. */
+_Static_assert(sizeof(struct trampoline_t) * MAX_PATCH <= MIN_MEM_SIZE,
+	       "the trampolines do not fit in one patch block");
+
+/*
+ * install_hook - Install hooks by setting up trampolines for all functions registered.
+ *
+ * aarch64 flavour: the instruction at the entry of a function (the second one if the first is a BTI
+ * landing pad, which has to stay) is replaced by a direct branch to a bounce stub that jumps to the
+ * new function. The displaced instruction is relocated into a trampoline, followed by a branch back
+ * into the original function, and the trampoline is what callers of the "original" function get.
+ *
+ * Returns:
+ *   The number of hooks actually installed.
+ */
+int
+install_hook(void)
+{
+	int                  idx_mod, idx_blk, iFunc, iFunc2, nFunc_InBlk, nwords, patch_idx;
+	int                  num_hook_installed = 0;
+	void                *pbaseOrg;
+	size_t               MemSize_Modify;
+	struct trampoline_t *tramp_list, *tramp;
+	uint32_t            *fn, *patch_insn, words[A64_MAX_RELOC_WORDS], bounce[2];
+	uint64_t             new_func;
+	long                 rc;
+
+	if (found_libc == 0)
+		return 0;
+
+	rc = sysconf(_SC_PAGESIZE);
+	if (rc == -1) {
+		DS_ERROR(errno, "sysconf() failed to query page size");
+		quit_hook_init();
+	}
+	page_size = (size_t)rc;
+	mask      = ~(page_size - 1);
+
+	query_all_org_func_addr();
+	allocate_memory_block_for_patches();
+
+	for (idx_mod = 0; idx_mod < num_module; idx_mod++) {
+		if (module_list[idx_mod].old_func_addr_min == 0 &&
+		    module_list[idx_mod].old_func_addr_max == 0)
+			continue;
+		idx_blk     = module_list[idx_mod].idx_patch_blk;
+		tramp_list  = (struct trampoline_t *)(patch_blk_list[idx_blk].patch_addr);
+		nFunc_InBlk = patch_blk_list[idx_blk].num_trampoline;
+
+		for (iFunc = 0; iFunc < module_list[idx_mod].num_hook; iFunc++) {
+			if (module_list[idx_mod].is_patch_disabled[iFunc])
+				continue;
+			for (iFunc2 = 0; iFunc2 < iFunc; iFunc2++) {
+				if (module_list[idx_mod].is_patch_disabled[iFunc2] == 0) {
+					/* a valid patch */
+					if (module_list[idx_mod].old_func_addr_list[iFunc] ==
+					    module_list[idx_mod].old_func_addr_list[iFunc2]) {
+						module_list[idx_mod].is_patch_disabled[iFunc] = 1;
+						/* disable duplicated patch */
+						module_list[idx_mod].old_func_addr_list[iFunc] = 0;
+						break;
+					}
+				}
+			}
+			/* recheck */
+			if (module_list[idx_mod].is_patch_disabled[iFunc])
+				continue;
+
+			fn         = (uint32_t *)(module_list[idx_mod].old_func_addr_list[iFunc]);
+			patch_idx  = a64_is_bti(fn[0]) ? 1 : 0;
+			patch_insn = &fn[patch_idx];
+			tramp      = &tramp_list[nFunc_InBlk];
+			new_func   = (uint64_t)(module_list[idx_mod].new_func_addr_list[iFunc]);
+
+			nwords = a64_relocate(*patch_insn, (uint64_t)patch_insn, words,
+					      A64_MAX_RELOC_WORDS, (uint64_t)tramp->trampoline,
+					      (uint64_t)(patch_insn + 1));
+			if (nwords < 0 ||
+			    !a64_branch_in_range((uint64_t)patch_insn, (uint64_t)tramp->bounce)) {
+				/* Leave this function alone. Callers of the "original" function get
+				 * the function itself.
+				 */
+				D_WARN("Cannot hook %s: entry code not supported or out of range\n",
+				       module_list[idx_mod].func_name_list[iFunc]);
+				*module_list[idx_mod].ptr_old_func_add_list[iFunc] = (long int)fn;
+				continue;
+			}
+
+			memset(tramp, 0, sizeof(*tramp));
+			tramp->addr_org_func = fn;
+			tramp->patch_off     = patch_idx * (int)sizeof(uint32_t);
+			memcpy(tramp->trampoline, words, nwords * sizeof(uint32_t));
+			bounce[0] = A64_LDR_X16_LIT8;
+			bounce[1] = A64_BR_X16;
+			memcpy(tramp->bounce, bounce, sizeof(bounce));
+			/* the address of new function */
+			memcpy(tramp->bounce + OFFSET_NEW_FUNC_ADDR, &new_func, sizeof(new_func));
+			/* save original code for uninstall */
+			memcpy(tramp->org_code, patch_insn, JMP_INSTRCTION_LEN);
+			__builtin___clear_cache((char *)tramp, (char *)(tramp + 1));
+
+			/* set up function pointers for original functions */
+			/* tramp->trampoline holds the entry address to call original function */
+			*module_list[idx_mod].ptr_old_func_add_list[iFunc] =
+			    (long int)(tramp->trampoline);
+
+			/* fast mod */
+			pbaseOrg       = (void *)((long int)patch_insn & mask);
+			MemSize_Modify = determine_mem_block_size((const void *)patch_insn);
+			if (mprotect(pbaseOrg, MemSize_Modify,
+				     PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
+				DS_ERROR(errno, "mprotect() failed");
+				goto err;
+			}
+
+			/* one aligned 32-bit store: a thread executing the entry sees either the old
+			 * or the new instruction.
+			 */
+			__atomic_store_n(patch_insn,
+					 a64_b((uint64_t)patch_insn, (uint64_t)tramp->bounce),
+					 __ATOMIC_RELEASE);
+			__builtin___clear_cache((char *)patch_insn, (char *)(patch_insn + 1));
+
+			if (mprotect(pbaseOrg, MemSize_Modify, PROT_READ | PROT_EXEC) != 0) {
+				DS_ERROR(errno, "mprotect() failed");
+				goto err;
+			}
+
+			nFunc_InBlk++;
+			num_hook_installed++;
+		}
+		patch_blk_list[idx_blk].num_trampoline += module_list[idx_mod].num_hook;
+	}
+
+	free_memory_in_hook();
+
+	return num_hook_installed;
+
+err:
+	quit_hook_init();
+	return 0;
+}
+
+#else /* neither x86_64 nor aarch64 */
+
+int
+install_hook(void)
+{
+	/* Leave libc untouched. Callers see "no hooks installed" and fall back to the normal
+	 * (non-intercepted) code path.
+	 */
+	D_ERROR("function interception is only supported on x86_64 and aarch64, no hooks "
+		"installed\n");
+	return 0;
+}
+
+#endif /* __x86_64__ / __aarch64__ */
 
 /*
  * register_a_hook - Add one target function into the list of the functions to intercept.
