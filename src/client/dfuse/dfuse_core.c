@@ -1460,8 +1460,9 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 						   POOL_TYPE_INIT(dfuse_event, de_list)};
 	int                       rc;
 	int                       idx = 0;
+	char                      max_read_opt[32];
 
-	args.argc = 5;
+	args.argc = 6;
 
 	if (dfuse_info->di_read_only)
 		args.argc++;
@@ -1498,6 +1499,15 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	idx++;
 
 	args.argv[idx] = strdup("-onoatime");
+	if (!args.argv[idx])
+		D_GOTO(err, rc = -DER_NOMEM);
+	idx++;
+
+	/* Do not let the kernel send reads larger than the buffers dfuse allocates for them. The
+	 * kernel enforces this option, and libfuse requires the init callback to agree with it.
+	 */
+	snprintf(max_read_opt, sizeof(max_read_opt), "-omax_read=%d", DFUSE_MAX_READ);
+	args.argv[idx] = strdup(max_read_opt);
 	if (!args.argv[idx])
 		D_GOTO(err, rc = -DER_NOMEM);
 	idx++;
