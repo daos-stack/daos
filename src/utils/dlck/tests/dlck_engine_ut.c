@@ -26,6 +26,7 @@
 #include "../dlck_engine.h"
 #include "dlck_ut.h"
 #include "dlck_ut_abt_mock.h"
+#include "dlck_ut_checker_mock.h"
 #include "dlck_ut_daos_mock.h"
 #include "dlck_ut_mem_mock.h"
 
@@ -88,15 +89,6 @@ test_arg_free(void *custom, void **arg)
 	*arg = NULL;
 }
 
-static int
-mock_ck_vprintf(struct checker *ck, const char *fmt, va_list ap)
-{
-	check_expected_ptr(ck);
-	check_expected(fmt);
-
-	return mock_type(int);
-}
-
 /** composite expectation helpers */
 
 #define EXPECT_TEST_ARG_ALLOC(ENGINE, IDX, RC, PTR)                                                \
@@ -114,13 +106,6 @@ mock_ck_vprintf(struct checker *ck, const char *fmt, va_list ap)
 	do {                                                                                       \
 		expect_value(test_arg_free, custom, &Custom);                                      \
 		expect_value(test_arg_free, ptr, PTR);                                             \
-	} while (0)
-
-#define EXPECT_MOCK_CK_VPRINTF(CK, FMT)                                                            \
-	do {                                                                                       \
-		expect_value(mock_ck_vprintf, ck, CK);                                             \
-		expect_string(mock_ck_vprintf, fmt, FMT);                                          \
-		will_return(mock_ck_vprintf, DER_SUCCESS);                                         \
 	} while (0)
 
 #define EXPECT_EXEC_ARRAYS_ALLOC(T)                                                                \
@@ -294,6 +279,7 @@ setup(void **unused)
 	memset(&Xa_buf, 0, sizeof(Xa_buf));
 	memset(&Ctrl, 0, sizeof(Ctrl));
 	memset(&Mock_dmi, 0, sizeof(Mock_dmi));
+	mock_ck_vprintf_check_output = false;
 
 	return 0;
 }
@@ -416,18 +402,19 @@ test_exec_all_success_with_checker(void **unused)
 	int            rc;
 
 	engine_build(1);
-	EXPECT_MOCK_CK_VPRINTF(&ck, "%sStart targets... ");
+	EXPECT_MOCK_CK_VPRINTF(&ck, "%sStart targets... ", DER_SUCCESS);
 	EXPECT_EXEC_ARRAYS_ALLOC(1);
 	EXPECT_TEST_ARG_ALLOC(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
 	EXPECT_DLCK_ULT_CREATE(Mock_pool, DER_SUCCESS);
 	expect_value(test_exec_one, arg, &Payload[0]);
-	EXPECT_MOCK_CK_VPRINTF(&ck, CHECKER_OK_INFIX ".\n");
-	EXPECT_MOCK_CK_VPRINTF(&ck, "%sWait for targets to stop...\n");
+	EXPECT_MOCK_CK_VPRINTF(&ck, CHECKER_OK_INFIX ".\n", DER_SUCCESS);
+	EXPECT_MOCK_CK_VPRINTF(&ck, "%sWait for targets to stop...\n", DER_SUCCESS);
 	EXPECT_ABT_THREAD_JOIN(Mock_thread, ABT_SUCCESS);
 	EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);
 	EXPECT_TEST_ARG_FREE(&Payload[0]);
 	EXPECT_EXEC_ARRAYS_FREE();
-	EXPECT_MOCK_CK_VPRINTF(&ck, "%sWait for targets to stop: " CHECKER_OK_INFIX ".\n");
+	EXPECT_MOCK_CK_VPRINTF(&ck, "%sWait for targets to stop: " CHECKER_OK_INFIX ".\n",
+			       DER_SUCCESS);
 
 	rc = dlck_engine_exec_all(&Engine_buf, test_exec_one, test_arg_alloc, &Custom,
 				  test_arg_free, &Custom, &ck);

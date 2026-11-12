@@ -35,6 +35,7 @@ def build_dlck_engine_ut(henv):
     srcs = [
         'dlck_engine_ut.c',
         'dlck_ut_abt_mock.c',
+        'dlck_ut_checker_mock.c',
         'dlck_ut_daos_mock.c',
         'dlck_ut_mem_mock.c',
         '../dlck_engine.c',
@@ -98,7 +99,8 @@ def build_dlck_checker_common_ut(henv):
     """Build dlck_checker_common_ut"""
     henv.require('cmocka')
 
-    henv.d_test_program('dlck_checker_common_ut', ['dlck_checker_common_ut.c'],
+    henv.d_test_program('dlck_checker_common_ut',
+                        ['dlck_checker_common_ut.c', 'dlck_ut_checker_mock.c'],
                         LIBS=['gurt', 'cmocka'])
 
 
