@@ -264,8 +264,12 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 			member.Rank, member.PrimaryFabricURI, member.SecondaryFabricURIs, joinResponse.PrevState, member.State)
 	}
 
+	checkMode, err := svc.checkerIsEnabled()
+	if err != nil {
+		return nil, err
+	}
 	joinState := mgmtpb.JoinResp_IN
-	if svc.checkerIsEnabled() {
+	if checkMode {
 		joinState = mgmtpb.JoinResp_CHECK
 	}
 	resp := &mgmtpb.JoinResp{
@@ -893,6 +897,16 @@ func fanout2pbStopResp(act string, fr *fanoutResponse) (*mgmtpb.SystemStopResp, 
 func newSystemStopFailedEvent(act, errs string) *events.RASEvent {
 	return events.NewGenericEvent(events.RASSystemStopFailed, events.RASSeverityError,
 		fmt.Sprintf("System shutdown failed during %q action, %s", act, errs), "")
+}
+
+func erroredRanks(results []*sharedpb.RankResult) *ranklist.RankSet {
+	failed := ranklist.NewRankSet()
+	for _, r := range results {
+		if r.Errored {
+			failed.Add(ranklist.Rank(r.Rank))
+		}
+	}
+	return failed
 }
 
 // processStopResp will raise failed event if the response results contain
