@@ -345,19 +345,18 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         for error in self.expected_errors:
             if error not in errors_count:
                 errors_count[error] = 0
-        for error in errors_count:
-            self.log.info("  %s [%s]: %s", err_to_str(error), error, errors_count[error])
+        for error, count in errors_count.items():
+            self.log.info("  %s [%s]: %s", err_to_str(error), error, count)
 
         if errors_count[self.DER_NOSPACE] <= 0:
             self.fail(
-                "Expected DER_NOSPACE (-1007) should be > 0: got={}"
-                .format(errors_count[self.DER_NOSPACE]))
+                f"Expected DER_NOSPACE (-1007) should be > 0: got={errors_count[self.DER_NOSPACE]}")
 
         if len(self.expected_errors) != len(errors_count):
             unexpected_errors_count = {
                 key: val for key, val in errors_count.items() if key not in self.expected_errors
             }
-            msg = 'Found unexpected errors in client logs {}: '.format(logfile_glob)
+            msg = f"Found unexpected errors in client logs {logfile_glob}: "
             msg += ", ".join(
                 f'{err_to_str(key)}({key}): got={val}'
                 for key, val in unexpected_errors_count.items())
@@ -714,9 +713,8 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         # Check if latest IOR read performance is in Tolerance of 5%, when
         # Storage space is full.
         if abs(max_mib_baseline - max_mib_latest) > (max_mib_baseline / 100 * 5):
-            self.fail('Latest IOR read performance is not under 5% Tolerance'
-                      ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
-                      .format(max_mib_baseline, max_mib_latest))
+            self.fail("Latest IOR read performance is not under 5% Tolerance Baseline Read MiB = "
+                      f"{max_mib_baseline} and latest IOR Read MiB = {max_mib_latest}")
 
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
