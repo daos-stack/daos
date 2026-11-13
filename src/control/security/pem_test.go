@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -174,6 +175,10 @@ func TestSecurity_Pem_ValidateCertDirectory(t *testing.T) {
 		},
 		"perms too open": {
 			perms:  0777,
+			expErr: errors.New("insecure permissions"),
+		},
+		"group writable": {
+			perms:  0775,
 			expErr: errors.New("insecure permissions"),
 		},
 		"not a directory": {
