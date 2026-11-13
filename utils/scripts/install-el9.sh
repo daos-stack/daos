@@ -18,8 +18,11 @@ dnf_install_args="${1:-}"
 
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
+<<<<<<< HEAD
     binutils \
     boost-python3-devel \
+=======
+>>>>>>> release/2.8
     bzip2 \
     capstone-devel \
     cmake \

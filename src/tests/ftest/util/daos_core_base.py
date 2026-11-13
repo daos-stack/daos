@@ -83,6 +83,7 @@ class DaosCoreBase(TestWithServers):
         cmocka_utils = CmockaUtils(
             self.hostlist_clients, self.subtest_name, self.outputdir, self.test_dir, self.log)
         daos_test_env = cmocka_utils.get_cmocka_env()
+        daos_test_env["CMOCKA_TEST_ABORT"] = "1"
         daos_test_env["D_LOG_FILE"] = get_log_file(self.client_log)
         daos_test_env["D_LOG_MASK"] = self.get_test_param("test_log_mask", "DEBUG")
         daos_test_env["DD_MASK"] = "mgmt,io,md,epc,rebuild,test"

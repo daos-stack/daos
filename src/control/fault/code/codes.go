@@ -118,6 +118,7 @@ const (
 	SystemBadFaultDomainDepth
 	SystemPoolLocked
 	SystemJoinReplaceRankNotFound
+	SystemJoinMemberExists
 )
 
 // client fault codes
@@ -159,6 +160,7 @@ const (
 	ServerPoolHasContainers
 	ServerPoolMemRatioNoRoles
 	ServerBadFaultDomainLabels
+	ServerPoolTooFewFaultDomains
 	ServerJoinReplaceEnabledPoolRank
 	ServerRankAdminExcluded
 	ServerTransparentHugepageEnabled

@@ -339,12 +339,11 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 static void
 rebuild_leader_set_update_time(struct rebuild_global_pool_tracker *rgt, d_rank_t rank)
 {
-	int i;
+	struct rebuild_server_status *status;
 
-	i = daos_array_find(rgt->rgt_servers_sorted, rgt->rgt_servers_number, rank,
-			    &servers_sort_ops);
-	if (i >= 0) {
-		rgt->rgt_servers[i].last_update = ABT_get_wtime();
+	status = rebuild_server_get_status(rgt, rank);
+	if (status != NULL) {
+		status->last_update = ABT_get_wtime();
 		return;
 	}
 	D_INFO("rank %u is not included in this rebuild.\n", rank);
@@ -1787,7 +1786,11 @@ rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver, daos_rebuild_opc_
 	merge_task->dst_schedule_time = max(merge_task->dst_schedule_time,
 					    daos_gettime_coarse() + delay_sec);
 	merge_task->dst_reclaim_eph   = max(merge_task->dst_reclaim_eph, reclaim_eph);
-	merge_task->dst_reclaim_ver = rebuild_task_get_min_version(pool->sp_map, tgts);
+	/* dst_reclaim_ver is the minimum version of all targets in the task (as set for a new task
+	 * in ds_rebuild_schedule()). Merging in targets with a higher version must not raise it.
+	 */
+	merge_task->dst_reclaim_ver =
+	    min(merge_task->dst_reclaim_ver, rebuild_task_get_min_version(pool->sp_map, tgts));
 	D_PRINT("%s [%s] ("DF_UUID" ver=%u/%u) id %u\n",
 		RB_OP_STR(rebuild_op), merge_task->dst_schedule_time == -1 ?
 		"queued/delayed" : "queued", DP_UUID(pool->sp_uuid), map_ver,
