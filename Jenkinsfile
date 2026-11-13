@@ -242,11 +242,10 @@ target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (!env.BRANCH_NAME.startsWith('daily-testing') &&
-     !env.BRANCH_NAME.startsWith('weekly-testing') &&
-     !env.BRANCH_NAME.startsWith('release/') &&
-     !env.BRANCH_NAME.startsWith('ci-') &&
-     env.BRANCH_NAME != 'master')) {
+    !(env.BRANCH_NAME =~ branchTypeRE('testing') ||
+      env.BRANCH_NAME =~ branchTypeRE('release') ||
+      env.BRANCH_NAME =~ branchTypeRE('downstream') ||
+      env.BRANCH_NAME == 'master')) {
     currentBuild.result = 'SUCCESS'
     return
 }
@@ -269,7 +268,7 @@ String vm9_label(String distro) {
         def_val: cachedCommitPragma(pragma: 'VM9-label', def_val: params.FUNCTIONAL_VM_LABEL))
 }
 
-// Get the default tags to use for a functional test stage based on the current build type
+// Get the default tags to use for a functional test stage based on the trigger conditions.
 String defaultTags(String timedTags, String prTags = 'always_passes') {
     /* groovylint-disable-next-line UnnecessaryGetter */
     return (isPr() || startedByLanding()) ? prTags : timedTags
@@ -308,16 +307,18 @@ pipeline {
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
                defaultValue: '',
-               description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+               description: 'Test-tag to use for all the Functional test stages. Overrides ' +
+                            'the default test tags for this run (i.e. pr, daily_regression, ' +
+                            'full_regression, etc.)')
         // The TestNvme and TestRepeat parameter definitions are purposely excluded. The functional
         // test stage launch.py --nvme argument is hard-coded in each stage definition to avoid the
         // stages from duplicating testing.
         string(name: 'TestProvider',
                defaultValue: '',
-               description: 'Test-provider to use for the non-Provider Functional Hardware test ' +
-                            'stages.  Specifies the default provider to use the daos_server ' +
-                            'config file when running functional tests (the launch.py ' +
-                            '--provider argument; i.e. "ucx+dc_x", "ofi+verbs;ofi_rxm", "ofi+tcp")')
+               description: 'Test-provider to use for the non-TCP/Verbs Functional Hardware test ' +
+                            'stages. Overrides the default provider to use in the daos_server ' +
+                            'config file when running functional tests (the launch.py --provider' +
+                            'argument; i.e. "ucx+dc_x", "ofi+verbs;ofi_rxm", "ofi+tcp")')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of latest. example: 1.3.103-1, 1.2-2')
@@ -412,16 +413,16 @@ pipeline {
                defaultValue: 'ci_ofed5',
                description: 'Label to use for the Functional Hardware Medium stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL',
-               defaultValue: 'ci_ofed5 || ci_nvme5_only',
+               defaultValue: 'ci_ofed5 || ci_ofed5_only',
                description: 'Label to use for the Functional Hardware Medium MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VMD_LABEL',
                defaultValue: 'ci_vmd5',
                description: 'Label to use for the Functional Hardware Medium VMD stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
-               defaultValue: 'ci_nvme9',
+               defaultValue: 'ci_ofed9',
                description: 'Label to use for 9 node Functional Hardware Large tests')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL',
-               defaultValue: 'ci_nvme9',
+               defaultValue: 'ci_ofed9',
                description: 'Label to use for the Functional Hardware Large MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_MD_ON_SSD_LABEL',
                defaultValue: 'ci_nvme5 || ci_nvme5_only',
@@ -443,7 +444,7 @@ pipeline {
                description: 'Label to use for 9 node Functional Hardware Large Verbs MD on SSD stage')
         string(name: 'FUNCTIONAL_CLUSTER_BOX_LABEL',
                defaultValue: 'cluster_box',
-               description: 'Label to use for the Functional Cluster Box Medium MD on SSD stages')
+               description: 'Label to use for the Functional Cluster Box stages')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
@@ -558,9 +559,9 @@ pipeline {
                             pragma_suffix: '-vm',
                             distro: 'ubuntu20',
                             base_branch: params.BaseBranch,
-                            other_packages: 'mercury-libfabric',
                             label: vm9_label('Ubuntu'),
                             next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric',
                             stage_tags: 'vm',
                             default_tags: defaultTags('full_regression'),
                             nvme: 'auto',
@@ -575,7 +576,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric mercury-ucx',
-                            stage_tags: 'hw,medium,-provider',
+                            stage_tags: 'hw,medium',
                             default_tags: defaultTags('full_regression'),
                             nvme: 'auto',
                             job_status: job_status_internal
@@ -588,7 +589,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: params.BaseBranch,
                             other_packages: 'mercury-libfabric mercury-ucx',
-                            stage_tags: 'hw,medium,-provider,-cb',
+                            stage_tags: 'hw,medium,-cb',
                             default_tags: defaultTags('full_regression'),
                             nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal
@@ -630,6 +631,20 @@ pipeline {
                             stage_tags: 'hw,large',
                             default_tags: defaultTags('full_regression'),
                             nvme: 'auto_md_on_ssd',
+                            job_status: job_status_internal
+                        ),
+                        'Functional Cluster Box Medium MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Cluster Box Medium MD on SSD',
+                            runStage: shouldStageRun('Functional Cluster Box Medium MD on SSD'),
+                            pragma_suffix: '-cb-medium-md-on-ssd',
+                            base_branch: params.BaseBranch,
+                            label: params.FUNCTIONAL_CLUSTER_BOX_LABEL,
+                            next_version: params.BaseBranch,
+                            other_packages: 'mercury-libfabric mercury-ucx',
+                            stage_tags: 'cb,medium',
+                            default_tags: defaultTags('full_regression'),
+                            nvme: 'auto_md_on_ssd',
+                            node_count: 5,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium TCP MD on SSD': getFunctionalTestStage(
