@@ -1233,7 +1233,7 @@ obj_prep_fetch_sgls(crt_rpc_t *rpc, struct obj_io_context *ioc)
 out:
 	if (rc) {
 		for (i = 0; i < nr; i++) {
-			for (i = 0; j < sgls[i].sg_nr; j++)
+			for (j = 0; j < sgls[i].sg_nr; j++)
 				D_FREE(sgls[i].sg_iovs[j].iov_buf);
 		}
 	}
