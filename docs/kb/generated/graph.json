@@ -1,0 +1,3867 @@
+{
+ "edges": [
+  {
+   "dst": "concepts",
+   "from": "card",
+   "kind": "related",
+   "src": "architecture"
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "bio",
+   "weight": 1
+  },
+  {
+   "dst": "container",
+   "kind": "includes",
+   "src": "cart",
+   "weight": 1
+  },
+  {
+   "dst": "mgmt",
+   "kind": "includes",
+   "src": "cart",
+   "weight": 1
+  },
+  {
+   "dst": "object",
+   "kind": "includes",
+   "src": "cart",
+   "weight": 1
+  },
+  {
+   "dst": "pipeline",
+   "kind": "includes",
+   "src": "cart",
+   "weight": 1
+  },
+  {
+   "dst": "pool",
+   "kind": "includes",
+   "src": "cart",
+   "weight": 1
+  },
+  {
+   "dst": "rpc:CHK_ACT",
+   "kind": "handles_rpc",
+   "src": "chk"
+  },
+  {
+   "dst": "rpc:CHK_CONT_LIST",
+   "kind": "handles_rpc",
+   "src": "chk"
+  },
+  {
+   "dst": "rpc:CHK_MARK",
+   "kind": "handles_rpc",
+   "src": "chk"
+  },
+  {
+   "dst": "rpc:CHK_POOL_MBS",
+   "kind": "handles_rpc",
+   "src": "chk"
+  },
+  {
+   "dst": "rpc:CHK_POOL_START",
+   "kind": "handles_rpc",
+   "src": "chk"
+  },
+  {
+   "dst": "rpc:CHK_QUERY",
+   "kind": "handles_rpc",
+   "src": "chk"
+  },
+  {
+   "dst": "rpc:CHK_REJOIN",
+   "kind": "handles_rpc",
+   "src": "chk"
+  },
+  {
+   "dst": "rpc:CHK_REPORT",
+   "kind": "handles_rpc",
+   "src": "chk"
+  },
+  {
+   "dst": "rpc:CHK_SET_POLICY",
+   "kind": "handles_rpc",
+   "src": "chk"
+  },
+  {
+   "dst": "rpc:CHK_START",
+   "kind": "handles_rpc",
+   "src": "chk"
+  },
+  {
+   "dst": "rpc:CHK_STOP",
+   "kind": "handles_rpc",
+   "src": "chk"
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "chk",
+   "weight": 8
+  },
+  {
+   "dst": "mgmt",
+   "kind": "includes",
+   "src": "chk",
+   "weight": 3
+  },
+  {
+   "dst": "pool",
+   "kind": "includes",
+   "src": "chk",
+   "weight": 3
+  },
+  {
+   "dst": "rsvc",
+   "kind": "includes",
+   "src": "chk",
+   "weight": 2
+  },
+  {
+   "dst": "vos",
+   "kind": "includes",
+   "src": "chk",
+   "weight": 3
+  },
+  {
+   "dst": "bio",
+   "kind": "includes",
+   "src": "common",
+   "weight": 1
+  },
+  {
+   "dst": "architecture",
+   "from": "card",
+   "kind": "related",
+   "src": "concepts"
+  },
+  {
+   "dst": "rpc:CONT_ACL_DELETE",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_ACL_UPDATE",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_ATTR_DEL",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_ATTR_GET",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_ATTR_LIST",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_ATTR_SET",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_CLOSE",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_CREATE",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_DESTROY",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_DESTROY_BYLABEL",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_EPOCH_AGGREGATE",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_OID_ALLOC",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_OPEN",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_OPEN_BYLABEL",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_PROP_SET",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_PROP_SET_BYLABEL",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_QUERY",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_SNAP_CREATE",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_SNAP_DESTROY",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_SNAP_LIST",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_SNAP_OIT_CREATE",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_SNAP_OIT_DESTROY",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_SNAP_OIT_OID_GET",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_TGT_DESTROY",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_TGT_EPOCH_AGGREGATE",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_TGT_QUERY",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "rpc:CONT_TGT_SNAPSHOT_NOTIFY",
+   "kind": "handles_rpc",
+   "src": "container"
+  },
+  {
+   "dst": "dtx",
+   "kind": "includes",
+   "src": "container",
+   "weight": 1
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "container",
+   "weight": 7
+  },
+  {
+   "dst": "object",
+   "kind": "includes",
+   "src": "container",
+   "weight": 1
+  },
+  {
+   "dst": "pool",
+   "kind": "includes",
+   "src": "container",
+   "weight": 4
+  },
+  {
+   "dst": "rdb",
+   "kind": "includes",
+   "src": "container",
+   "weight": 4
+  },
+  {
+   "dst": "rsvc",
+   "kind": "includes",
+   "src": "container",
+   "weight": 1
+  },
+  {
+   "dst": "security",
+   "kind": "includes",
+   "src": "container",
+   "weight": 5
+  },
+  {
+   "dst": "vos",
+   "kind": "includes",
+   "src": "container",
+   "weight": 3
+  },
+  {
+   "dst": "engine",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "control"
+  },
+  {
+   "dst": "mgmt",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "control"
+  },
+  {
+   "dst": "proto",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "control"
+  },
+  {
+   "dst": "security",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "control"
+  },
+  {
+   "dst": "drpc",
+   "from": "card",
+   "kind": "related",
+   "src": "control"
+  },
+  {
+   "dst": "engine",
+   "from": "card",
+   "kind": "related",
+   "src": "control"
+  },
+  {
+   "dst": "flow-pool-create",
+   "from": "card",
+   "kind": "related",
+   "src": "control"
+  },
+  {
+   "dst": "daos_agent",
+   "from": "card",
+   "kind": "used_by",
+   "src": "control"
+  },
+  {
+   "dst": "daos_server",
+   "from": "card",
+   "kind": "used_by",
+   "src": "control"
+  },
+  {
+   "dst": "dmg",
+   "from": "card",
+   "kind": "used_by",
+   "src": "control"
+  },
+  {
+   "dst": "container",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "dtx"
+  },
+  {
+   "dst": "engine",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "dtx"
+  },
+  {
+   "dst": "placement",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "dtx"
+  },
+  {
+   "dst": "pool",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "dtx"
+  },
+  {
+   "dst": "vos",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "dtx"
+  },
+  {
+   "dst": "rpc:DTX_ABORT",
+   "kind": "handles_rpc",
+   "src": "dtx"
+  },
+  {
+   "dst": "rpc:DTX_CHECK",
+   "kind": "handles_rpc",
+   "src": "dtx"
+  },
+  {
+   "dst": "rpc:DTX_COLL_ABORT",
+   "kind": "handles_rpc",
+   "src": "dtx"
+  },
+  {
+   "dst": "rpc:DTX_COLL_CHECK",
+   "kind": "handles_rpc",
+   "src": "dtx"
+  },
+  {
+   "dst": "rpc:DTX_COLL_COMMIT",
+   "kind": "handles_rpc",
+   "src": "dtx"
+  },
+  {
+   "dst": "rpc:DTX_COMMIT",
+   "kind": "handles_rpc",
+   "src": "dtx"
+  },
+  {
+   "dst": "rpc:DTX_REFRESH",
+   "kind": "handles_rpc",
+   "src": "dtx"
+  },
+  {
+   "dst": "container",
+   "kind": "includes",
+   "src": "dtx",
+   "weight": 5
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "dtx",
+   "weight": 5
+  },
+  {
+   "dst": "pool",
+   "kind": "includes",
+   "src": "dtx",
+   "weight": 1
+  },
+  {
+   "dst": "vos",
+   "kind": "includes",
+   "src": "dtx",
+   "weight": 6
+  },
+  {
+   "dst": "cos",
+   "from": "card",
+   "kind": "related",
+   "src": "dtx"
+  },
+  {
+   "dst": "epoch",
+   "from": "card",
+   "kind": "related",
+   "src": "dtx"
+  },
+  {
+   "dst": "object",
+   "from": "card",
+   "kind": "related",
+   "src": "dtx"
+  },
+  {
+   "dst": "container",
+   "from": "card",
+   "kind": "used_by",
+   "src": "dtx"
+  },
+  {
+   "dst": "object",
+   "from": "card",
+   "kind": "used_by",
+   "src": "dtx"
+  },
+  {
+   "dst": "rebuild",
+   "from": "card",
+   "kind": "used_by",
+   "src": "dtx"
+  },
+  {
+   "dst": "vos",
+   "from": "card",
+   "kind": "used_by",
+   "src": "dtx"
+  },
+  {
+   "dst": "bio",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "engine"
+  },
+  {
+   "dst": "cart",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "engine"
+  },
+  {
+   "dst": "chk",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "engine"
+  },
+  {
+   "dst": "common",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "engine"
+  },
+  {
+   "dst": "gurt",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "engine"
+  },
+  {
+   "dst": "vos",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "engine"
+  },
+  {
+   "dst": "bio",
+   "kind": "includes",
+   "src": "engine",
+   "weight": 2
+  },
+  {
+   "dst": "chk",
+   "kind": "includes",
+   "src": "engine",
+   "weight": 1
+  },
+  {
+   "dst": "vos",
+   "kind": "includes",
+   "src": "engine",
+   "weight": 3
+  },
+  {
+   "dst": "control",
+   "from": "card",
+   "kind": "related",
+   "src": "engine"
+  },
+  {
+   "dst": "drpc",
+   "from": "card",
+   "kind": "related",
+   "src": "engine"
+  },
+  {
+   "dst": "iv",
+   "from": "card",
+   "kind": "related",
+   "src": "engine"
+  },
+  {
+   "dst": "ult",
+   "from": "card",
+   "kind": "related",
+   "src": "engine"
+  },
+  {
+   "dst": "xstream",
+   "from": "card",
+   "kind": "related",
+   "src": "engine"
+  },
+  {
+   "dst": "bio",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "chk",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "container",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "dtx",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "mgmt",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "object",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "pipeline",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "pool",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "rdb",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "rebuild",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "rsvc",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "security",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "vos",
+   "from": "card",
+   "kind": "used_by",
+   "src": "engine"
+  },
+  {
+   "dst": "control",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-drive-replace"
+  },
+  {
+   "dst": "pool",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-drive-replace"
+  },
+  {
+   "dst": "rebuild",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-drive-replace"
+  },
+  {
+   "dst": "control",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-pool-create"
+  },
+  {
+   "dst": "mgmt",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-pool-create"
+  },
+  {
+   "dst": "pool",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-pool-create"
+  },
+  {
+   "dst": "rdb",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-pool-create"
+  },
+  {
+   "dst": "rsvc",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-pool-create"
+  },
+  {
+   "dst": "vos",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-pool-create"
+  },
+  {
+   "dst": "control",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-rebuild"
+  },
+  {
+   "dst": "dtx",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-rebuild"
+  },
+  {
+   "dst": "engine",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-rebuild"
+  },
+  {
+   "dst": "object",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-rebuild"
+  },
+  {
+   "dst": "placement",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-rebuild"
+  },
+  {
+   "dst": "pool",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-rebuild"
+  },
+  {
+   "dst": "rebuild",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-rebuild"
+  },
+  {
+   "dst": "bio",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-write-path"
+  },
+  {
+   "dst": "dtx",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-write-path"
+  },
+  {
+   "dst": "object",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-write-path"
+  },
+  {
+   "dst": "placement",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-write-path"
+  },
+  {
+   "dst": "vea",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-write-path"
+  },
+  {
+   "dst": "vos",
+   "from": "card",
+   "kind": "related",
+   "src": "flow-write-path"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_BIO_HEALTH_QUERY",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_CHK_ACT",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_CHK_PROP",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_CHK_QUERY",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_CHK_SET_POLICY",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_CHK_START",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_CHK_STOP",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_CONT_SET_OWNER",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_DEV_REPLACE",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_DEV_SET_FAULTY",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_GROUP_STATUS_GET",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_GROUP_UPDATE",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_LED_MANAGE",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_LIST_CONTAINERS",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_PING_RANK",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_CREATE",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_DELETE_ACL",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_DESTROY",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_DRAIN",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_EVICT",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_EXCLUDE",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_EXTEND",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_GET_ACL",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_GET_PROP",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_QUERY",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_QUERY_TARGETS",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_REBUILD_START",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_REBUILD_STOP",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_REINT",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_SELF_HEAL_EVAL",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_SET_PROP",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_UPDATE_ACL",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_POOL_UPGRADE",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_PREP_SHUTDOWN",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_SET_LOG_MASKS",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_SET_RANK",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_SET_UP",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_SMD_LIST_DEVS",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "drpc:DRPC_METHOD_MGMT_SMD_LIST_POOLS",
+   "kind": "handles_drpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_GET_BS_STATE",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_MARK",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_PARAMS_SET",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_POOL_FIND",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_POOL_GET_SVCRANKS",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_POOL_LIST",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_PROFILE",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_SVC_RIP",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_TGT_CREATE",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_TGT_DESTROY",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_TGT_MAP_UPDATE",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_TGT_MARK",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_TGT_PARAMS_SET",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_TGT_PROFILE",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "rpc:MGMT_TGT_SHARD_DESTROY",
+   "kind": "handles_rpc",
+   "src": "mgmt"
+  },
+  {
+   "dst": "bio",
+   "kind": "includes",
+   "src": "mgmt",
+   "weight": 5
+  },
+  {
+   "dst": "chk",
+   "kind": "includes",
+   "src": "mgmt",
+   "weight": 2
+  },
+  {
+   "dst": "container",
+   "kind": "includes",
+   "src": "mgmt",
+   "weight": 1
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "mgmt",
+   "weight": 4
+  },
+  {
+   "dst": "pool",
+   "kind": "includes",
+   "src": "mgmt",
+   "weight": 4
+  },
+  {
+   "dst": "rdb",
+   "kind": "includes",
+   "src": "mgmt",
+   "weight": 3
+  },
+  {
+   "dst": "rsvc",
+   "kind": "includes",
+   "src": "mgmt",
+   "weight": 3
+  },
+  {
+   "dst": "security",
+   "kind": "includes",
+   "src": "mgmt",
+   "weight": 1
+  },
+  {
+   "dst": "vos",
+   "kind": "includes",
+   "src": "mgmt",
+   "weight": 1
+  },
+  {
+   "dst": "bio",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "object"
+  },
+  {
+   "dst": "cart",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "object"
+  },
+  {
+   "dst": "container",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "object"
+  },
+  {
+   "dst": "dtx",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "object"
+  },
+  {
+   "dst": "engine",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "object"
+  },
+  {
+   "dst": "placement",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "object"
+  },
+  {
+   "dst": "pool",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "object"
+  },
+  {
+   "dst": "rebuild",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "object"
+  },
+  {
+   "dst": "security",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "object"
+  },
+  {
+   "dst": "vos",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_AKEY_RPC_ENUMERATE",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_DKEY_RPC_ENUMERATE",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RECX_RPC_ENUMERATE",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_COLL_PUNCH",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_COLL_QUERY",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_CPD",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_EC_AGGREGATE",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_EC_REPLICATE",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_ENUMERATE",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_FETCH",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_KEY2ANCHOR",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_MIGRATE",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_PUNCH",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_PUNCH_AKEYS",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_PUNCH_DKEYS",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_QUERY_KEY",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_SYNC",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_TGT_PUNCH",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_TGT_PUNCH_AKEYS",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_TGT_PUNCH_DKEYS",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_TGT_UPDATE",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_OBJ_RPC_UPDATE",
+   "kind": "handles_rpc",
+   "src": "object"
+  },
+  {
+   "dst": "bio",
+   "kind": "includes",
+   "src": "object",
+   "weight": 4
+  },
+  {
+   "dst": "container",
+   "kind": "includes",
+   "src": "object",
+   "weight": 4
+  },
+  {
+   "dst": "dtx",
+   "kind": "includes",
+   "src": "object",
+   "weight": 5
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "object",
+   "weight": 8
+  },
+  {
+   "dst": "pool",
+   "kind": "includes",
+   "src": "object",
+   "weight": 5
+  },
+  {
+   "dst": "rebuild",
+   "kind": "includes",
+   "src": "object",
+   "weight": 3
+  },
+  {
+   "dst": "security",
+   "kind": "includes",
+   "src": "object",
+   "weight": 1
+  },
+  {
+   "dst": "vos",
+   "kind": "includes",
+   "src": "object",
+   "weight": 6
+  },
+  {
+   "dst": "dtx",
+   "from": "card",
+   "kind": "related",
+   "src": "object"
+  },
+  {
+   "dst": "ec",
+   "from": "card",
+   "kind": "related",
+   "src": "object"
+  },
+  {
+   "dst": "placement",
+   "from": "card",
+   "kind": "related",
+   "src": "object"
+  },
+  {
+   "dst": "vos",
+   "from": "card",
+   "kind": "related",
+   "src": "object"
+  },
+  {
+   "dst": "client",
+   "from": "card",
+   "kind": "used_by",
+   "src": "object"
+  },
+  {
+   "dst": "container",
+   "from": "card",
+   "kind": "used_by",
+   "src": "object"
+  },
+  {
+   "dst": "pipeline",
+   "from": "card",
+   "kind": "used_by",
+   "src": "object"
+  },
+  {
+   "dst": "rebuild",
+   "from": "card",
+   "kind": "used_by",
+   "src": "object"
+  },
+  {
+   "dst": "rpc:DAOS_PIPELINE_RPC_RUN",
+   "kind": "handles_rpc",
+   "src": "pipeline"
+  },
+  {
+   "dst": "bio",
+   "kind": "includes",
+   "src": "pipeline",
+   "weight": 1
+  },
+  {
+   "dst": "container",
+   "kind": "includes",
+   "src": "pipeline",
+   "weight": 1
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "pipeline",
+   "weight": 2
+  },
+  {
+   "dst": "vos",
+   "kind": "includes",
+   "src": "pipeline",
+   "weight": 1
+  },
+  {
+   "dst": "bio",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "pool"
+  },
+  {
+   "dst": "cart",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "pool"
+  },
+  {
+   "dst": "container",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "pool"
+  },
+  {
+   "dst": "engine",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "pool"
+  },
+  {
+   "dst": "mgmt",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "pool"
+  },
+  {
+   "dst": "object",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "pool"
+  },
+  {
+   "dst": "rdb",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "pool"
+  },
+  {
+   "dst": "rebuild",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "pool"
+  },
+  {
+   "dst": "rsvc",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "pool"
+  },
+  {
+   "dst": "security",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "pool"
+  },
+  {
+   "dst": "vos",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_ACL_DELETE",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_ACL_UPDATE",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_ADD_IN",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_ADD_TGT",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_ATTR_DEL",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_ATTR_GET",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_ATTR_LIST",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_ATTR_SET",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_CONNECT",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_CREATE",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_DISCONNECT",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_DRAIN",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_EVAL_SELF_HEAL",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_EVICT",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_EXCLUDE",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_EXCLUDE_OUT",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_EXTEND",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_FILTER_CONT",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_LIST_CONT",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_PROP_GET",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_PROP_SET",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_QUERY",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_QUERY_INFO",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_RANKS_GET",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_REBUILD_START",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_REBUILD_STOP",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_RECOV_CONT",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_REINT",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_REPLICAS_ADD",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_REPLICAS_REMOVE",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_SVC_STOP",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_TGT_DISCARD",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_TGT_DISCONNECT",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_TGT_QUERY",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_TGT_QUERY_MAP",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_TGT_WARMUP",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:POOL_UPGRADE",
+   "kind": "handles_rpc",
+   "src": "pool"
+  },
+  {
+   "dst": "bio",
+   "kind": "includes",
+   "src": "pool",
+   "weight": 2
+  },
+  {
+   "dst": "container",
+   "kind": "includes",
+   "src": "pool",
+   "weight": 3
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "pool",
+   "weight": 6
+  },
+  {
+   "dst": "mgmt",
+   "kind": "includes",
+   "src": "pool",
+   "weight": 4
+  },
+  {
+   "dst": "object",
+   "kind": "includes",
+   "src": "pool",
+   "weight": 2
+  },
+  {
+   "dst": "rdb",
+   "kind": "includes",
+   "src": "pool",
+   "weight": 4
+  },
+  {
+   "dst": "rebuild",
+   "kind": "includes",
+   "src": "pool",
+   "weight": 3
+  },
+  {
+   "dst": "security",
+   "kind": "includes",
+   "src": "pool",
+   "weight": 3
+  },
+  {
+   "dst": "vos",
+   "kind": "includes",
+   "src": "pool",
+   "weight": 3
+  },
+  {
+   "dst": "iv",
+   "from": "card",
+   "kind": "related",
+   "src": "pool"
+  },
+  {
+   "dst": "pool_map",
+   "from": "card",
+   "kind": "related",
+   "src": "pool"
+  },
+  {
+   "dst": "rdb",
+   "from": "card",
+   "kind": "related",
+   "src": "pool"
+  },
+  {
+   "dst": "rsvc",
+   "from": "card",
+   "kind": "related",
+   "src": "pool"
+  },
+  {
+   "dst": "chk",
+   "from": "card",
+   "kind": "used_by",
+   "src": "pool"
+  },
+  {
+   "dst": "container",
+   "from": "card",
+   "kind": "used_by",
+   "src": "pool"
+  },
+  {
+   "dst": "dtx",
+   "from": "card",
+   "kind": "used_by",
+   "src": "pool"
+  },
+  {
+   "dst": "mgmt",
+   "from": "card",
+   "kind": "used_by",
+   "src": "pool"
+  },
+  {
+   "dst": "object",
+   "from": "card",
+   "kind": "used_by",
+   "src": "pool"
+  },
+  {
+   "dst": "rebuild",
+   "from": "card",
+   "kind": "used_by",
+   "src": "pool"
+  },
+  {
+   "dst": "security",
+   "from": "card",
+   "kind": "used_by",
+   "src": "pool"
+  },
+  {
+   "dst": "rpc:RDB_APPENDENTRIES",
+   "kind": "handles_rpc",
+   "src": "rdb"
+  },
+  {
+   "dst": "rpc:RDB_INSTALLSNAPSHOT",
+   "kind": "handles_rpc",
+   "src": "rdb"
+  },
+  {
+   "dst": "rpc:RDB_REQUESTVOTE",
+   "kind": "handles_rpc",
+   "src": "rdb"
+  },
+  {
+   "dst": "dtx",
+   "kind": "includes",
+   "src": "rdb",
+   "weight": 1
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "rdb",
+   "weight": 5
+  },
+  {
+   "dst": "mgmt",
+   "kind": "includes",
+   "src": "rdb",
+   "weight": 1
+  },
+  {
+   "dst": "object",
+   "kind": "includes",
+   "src": "rdb",
+   "weight": 1
+  },
+  {
+   "dst": "vos",
+   "kind": "includes",
+   "src": "rdb",
+   "weight": 4
+  },
+  {
+   "dst": "container",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "rebuild"
+  },
+  {
+   "dst": "dtx",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "rebuild"
+  },
+  {
+   "dst": "engine",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "rebuild"
+  },
+  {
+   "dst": "mgmt",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "rebuild"
+  },
+  {
+   "dst": "object",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "rebuild"
+  },
+  {
+   "dst": "placement",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "rebuild"
+  },
+  {
+   "dst": "pool",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "rebuild"
+  },
+  {
+   "dst": "security",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "rebuild"
+  },
+  {
+   "dst": "vos",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "rebuild"
+  },
+  {
+   "dst": "rpc:REBUILD_OBJECTS_SCAN",
+   "kind": "handles_rpc",
+   "src": "rebuild"
+  },
+  {
+   "dst": "container",
+   "kind": "includes",
+   "src": "rebuild",
+   "weight": 3
+  },
+  {
+   "dst": "dtx",
+   "kind": "includes",
+   "src": "rebuild",
+   "weight": 1
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "rebuild",
+   "weight": 5
+  },
+  {
+   "dst": "mgmt",
+   "kind": "includes",
+   "src": "rebuild",
+   "weight": 2
+  },
+  {
+   "dst": "object",
+   "kind": "includes",
+   "src": "rebuild",
+   "weight": 2
+  },
+  {
+   "dst": "pool",
+   "kind": "includes",
+   "src": "rebuild",
+   "weight": 3
+  },
+  {
+   "dst": "security",
+   "kind": "includes",
+   "src": "rebuild",
+   "weight": 1
+  },
+  {
+   "dst": "vos",
+   "kind": "includes",
+   "src": "rebuild",
+   "weight": 1
+  },
+  {
+   "dst": "dtx",
+   "from": "card",
+   "kind": "related",
+   "src": "rebuild"
+  },
+  {
+   "dst": "iv",
+   "from": "card",
+   "kind": "related",
+   "src": "rebuild"
+  },
+  {
+   "dst": "object",
+   "from": "card",
+   "kind": "related",
+   "src": "rebuild"
+  },
+  {
+   "dst": "placement",
+   "from": "card",
+   "kind": "related",
+   "src": "rebuild"
+  },
+  {
+   "dst": "pool",
+   "from": "card",
+   "kind": "related",
+   "src": "rebuild"
+  },
+  {
+   "dst": "object",
+   "from": "card",
+   "kind": "used_by",
+   "src": "rebuild"
+  },
+  {
+   "dst": "pool",
+   "from": "card",
+   "kind": "used_by",
+   "src": "rebuild"
+  },
+  {
+   "dst": "rpc:RSVC_START",
+   "kind": "handles_rpc",
+   "src": "rsvc"
+  },
+  {
+   "dst": "rpc:RSVC_STOP",
+   "kind": "handles_rpc",
+   "src": "rsvc"
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "rsvc",
+   "weight": 2
+  },
+  {
+   "dst": "rdb",
+   "kind": "includes",
+   "src": "rsvc",
+   "weight": 1
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "security",
+   "weight": 2
+  },
+  {
+   "dst": "pool",
+   "kind": "includes",
+   "src": "security",
+   "weight": 1
+  },
+  {
+   "dst": "bio",
+   "kind": "includes",
+   "src": "utils",
+   "weight": 5
+  },
+  {
+   "dst": "chk",
+   "kind": "includes",
+   "src": "utils",
+   "weight": 2
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "utils",
+   "weight": 5
+  },
+  {
+   "dst": "mgmt",
+   "kind": "includes",
+   "src": "utils",
+   "weight": 4
+  },
+  {
+   "dst": "vos",
+   "kind": "includes",
+   "src": "utils",
+   "weight": 7
+  },
+  {
+   "dst": "bio",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "vos"
+  },
+  {
+   "dst": "common",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "vos"
+  },
+  {
+   "dst": "dtx",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "vos"
+  },
+  {
+   "dst": "vea",
+   "from": "card",
+   "kind": "depends_on",
+   "src": "vos"
+  },
+  {
+   "dst": "bio",
+   "kind": "includes",
+   "src": "vos",
+   "weight": 4
+  },
+  {
+   "dst": "dtx",
+   "kind": "includes",
+   "src": "vos",
+   "weight": 2
+  },
+  {
+   "dst": "engine",
+   "kind": "includes",
+   "src": "vos",
+   "weight": 4
+  },
+  {
+   "dst": "object",
+   "kind": "includes",
+   "src": "vos",
+   "weight": 2
+  },
+  {
+   "dst": "vea",
+   "kind": "includes",
+   "src": "vos",
+   "weight": 1
+  },
+  {
+   "dst": "aggregation",
+   "from": "card",
+   "kind": "related",
+   "src": "vos"
+  },
+  {
+   "dst": "dtx",
+   "from": "card",
+   "kind": "related",
+   "src": "vos"
+  },
+  {
+   "dst": "epoch",
+   "from": "card",
+   "kind": "related",
+   "src": "vos"
+  },
+  {
+   "dst": "ilog",
+   "from": "card",
+   "kind": "related",
+   "src": "vos"
+  },
+  {
+   "dst": "chk",
+   "from": "card",
+   "kind": "used_by",
+   "src": "vos"
+  },
+  {
+   "dst": "container",
+   "from": "card",
+   "kind": "used_by",
+   "src": "vos"
+  },
+  {
+   "dst": "dtx",
+   "from": "card",
+   "kind": "used_by",
+   "src": "vos"
+  },
+  {
+   "dst": "mgmt",
+   "from": "card",
+   "kind": "used_by",
+   "src": "vos"
+  },
+  {
+   "dst": "object",
+   "from": "card",
+   "kind": "used_by",
+   "src": "vos"
+  },
+  {
+   "dst": "pipeline",
+   "from": "card",
+   "kind": "used_by",
+   "src": "vos"
+  },
+  {
+   "dst": "rdb",
+   "from": "card",
+   "kind": "used_by",
+   "src": "vos"
+  },
+  {
+   "dst": "rebuild",
+   "from": "card",
+   "kind": "used_by",
+   "src": "vos"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "aggregation",
+   "kind": "concept"
+  },
+  {
+   "card": "docs/kb/architecture.md",
+   "id": "architecture",
+   "kind": "overview"
+  },
+  {
+   "id": "bio",
+   "kind": "module"
+  },
+  {
+   "id": "cart",
+   "kind": "module"
+  },
+  {
+   "engine_module": "chk",
+   "id": "chk",
+   "kind": "module"
+  },
+  {
+   "id": "client",
+   "kind": "module"
+  },
+  {
+   "id": "common",
+   "kind": "module"
+  },
+  {
+   "card": "docs/kb/concepts.md",
+   "id": "concepts",
+   "kind": "overview"
+  },
+  {
+   "engine_module": "cont",
+   "id": "container",
+   "kind": "module"
+  },
+  {
+   "card": "docs/kb/modules/control.md",
+   "id": "control",
+   "kind": "module"
+  },
+  {
+   "id": "cos",
+   "kind": "concept"
+  },
+  {
+   "id": "daos_agent",
+   "kind": "module"
+  },
+  {
+   "id": "daos_server",
+   "kind": "module"
+  },
+  {
+   "id": "dmg",
+   "kind": "module"
+  },
+  {
+   "id": "drpc",
+   "kind": "concept"
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_CHK_DEREG_POOL",
+   "kind": "drpc",
+   "method_id": 308
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_CHK_LIST_POOL",
+   "kind": "drpc",
+   "method_id": 306
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_CHK_REG_POOL",
+   "kind": "drpc",
+   "method_id": 307
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_CHK_REPORT",
+   "kind": "drpc",
+   "method_id": 309
+  },
+  {
+   "handler": "ds_mgmt_drpc_bio_health_query",
+   "id": "drpc:DRPC_METHOD_MGMT_BIO_HEALTH_QUERY",
+   "kind": "drpc",
+   "method_id": 210
+  },
+  {
+   "handler": "ds_mgmt_drpc_check_act",
+   "id": "drpc:DRPC_METHOD_MGMT_CHK_ACT",
+   "kind": "drpc",
+   "method_id": 246
+  },
+  {
+   "handler": "ds_mgmt_drpc_check_prop",
+   "id": "drpc:DRPC_METHOD_MGMT_CHK_PROP",
+   "kind": "drpc",
+   "method_id": 245
+  },
+  {
+   "handler": "ds_mgmt_drpc_check_query",
+   "id": "drpc:DRPC_METHOD_MGMT_CHK_QUERY",
+   "kind": "drpc",
+   "method_id": 244
+  },
+  {
+   "handler": "ds_mgmt_drpc_check_set_policy",
+   "id": "drpc:DRPC_METHOD_MGMT_CHK_SET_POLICY",
+   "kind": "drpc",
+   "method_id": 249
+  },
+  {
+   "handler": "ds_mgmt_drpc_check_start",
+   "id": "drpc:DRPC_METHOD_MGMT_CHK_START",
+   "kind": "drpc",
+   "method_id": 242
+  },
+  {
+   "handler": "ds_mgmt_drpc_check_stop",
+   "id": "drpc:DRPC_METHOD_MGMT_CHK_STOP",
+   "kind": "drpc",
+   "method_id": 243
+  },
+  {
+   "handler": "ds_mgmt_drpc_cont_set_owner",
+   "id": "drpc:DRPC_METHOD_MGMT_CONT_SET_OWNER",
+   "kind": "drpc",
+   "method_id": 227
+  },
+  {
+   "handler": "ds_mgmt_drpc_dev_replace",
+   "id": "drpc:DRPC_METHOD_MGMT_DEV_REPLACE",
+   "kind": "drpc",
+   "method_id": 221
+  },
+  {
+   "handler": "ds_mgmt_drpc_dev_set_faulty",
+   "id": "drpc:DRPC_METHOD_MGMT_DEV_SET_FAULTY",
+   "kind": "drpc",
+   "method_id": 220
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_MGMT_GET_ATTACH_INFO",
+   "kind": "drpc",
+   "method_id": 206
+  },
+  {
+   "handler": "ds_mgmt_drpc_get_group_status",
+   "id": "drpc:DRPC_METHOD_MGMT_GROUP_STATUS_GET",
+   "kind": "drpc",
+   "method_id": 248
+  },
+  {
+   "handler": "ds_mgmt_drpc_group_update",
+   "id": "drpc:DRPC_METHOD_MGMT_GROUP_UPDATE",
+   "kind": "drpc",
+   "method_id": 232
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_MGMT_KILL_RANK",
+   "kind": "drpc",
+   "method_id": 201
+  },
+  {
+   "handler": "ds_mgmt_drpc_dev_manage_led",
+   "id": "drpc:DRPC_METHOD_MGMT_LED_MANAGE",
+   "kind": "drpc",
+   "method_id": 241
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_list_cont",
+   "id": "drpc:DRPC_METHOD_MGMT_LIST_CONTAINERS",
+   "kind": "drpc",
+   "method_id": 222
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_MGMT_NOTIFY_EXIT",
+   "kind": "drpc",
+   "method_id": 233
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_MGMT_NOTIFY_POOL_CONNECT",
+   "kind": "drpc",
+   "method_id": 235
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_MGMT_NOTIFY_POOL_DISCONNECT",
+   "kind": "drpc",
+   "method_id": 236
+  },
+  {
+   "handler": "ds_mgmt_drpc_ping_rank",
+   "id": "drpc:DRPC_METHOD_MGMT_PING_RANK",
+   "kind": "drpc",
+   "method_id": 225
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_create",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_CREATE",
+   "kind": "drpc",
+   "method_id": 207
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_delete_acl",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_DELETE_ACL",
+   "kind": "drpc",
+   "method_id": 217
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_destroy",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_DESTROY",
+   "kind": "drpc",
+   "method_id": 208
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_drain",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_DRAIN",
+   "kind": "drpc",
+   "method_id": 231
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_evict",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_EVICT",
+   "kind": "drpc",
+   "method_id": 230
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_exclude",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_EXCLUDE",
+   "kind": "drpc",
+   "method_id": 228
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_extend",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_EXTEND",
+   "kind": "drpc",
+   "method_id": 229
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_get_acl",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_GET_ACL",
+   "kind": "drpc",
+   "method_id": 213
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_get_prop",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_GET_PROP",
+   "kind": "drpc",
+   "method_id": 237
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_overwrite_acl",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL",
+   "kind": "drpc",
+   "method_id": 215
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_query",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_QUERY",
+   "kind": "drpc",
+   "method_id": 223
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_query_targets",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_QUERY_TARGETS",
+   "kind": "drpc",
+   "method_id": 240
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_rebuild_start",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_REBUILD_START",
+   "kind": "drpc",
+   "method_id": 250
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_rebuild_stop",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_REBUILD_STOP",
+   "kind": "drpc",
+   "method_id": 251
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_reintegrate",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_REINT",
+   "kind": "drpc",
+   "method_id": 226
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_self_heal_eval",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_SELF_HEAL_EVAL",
+   "kind": "drpc",
+   "method_id": 252
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_set_prop",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_SET_PROP",
+   "kind": "drpc",
+   "method_id": 224
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_update_acl",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_UPDATE_ACL",
+   "kind": "drpc",
+   "method_id": 216
+  },
+  {
+   "handler": "ds_mgmt_drpc_pool_upgrade",
+   "id": "drpc:DRPC_METHOD_MGMT_POOL_UPGRADE",
+   "kind": "drpc",
+   "method_id": 239
+  },
+  {
+   "handler": "ds_mgmt_drpc_prep_shutdown",
+   "id": "drpc:DRPC_METHOD_MGMT_PREP_SHUTDOWN",
+   "kind": "drpc",
+   "method_id": 218
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM",
+   "kind": "drpc",
+   "method_id": 247
+  },
+  {
+   "handler": "ds_mgmt_drpc_set_log_masks",
+   "id": "drpc:DRPC_METHOD_MGMT_SET_LOG_MASKS",
+   "kind": "drpc",
+   "method_id": 238
+  },
+  {
+   "handler": "ds_mgmt_drpc_set_rank",
+   "id": "drpc:DRPC_METHOD_MGMT_SET_RANK",
+   "kind": "drpc",
+   "method_id": 202
+  },
+  {
+   "handler": "ds_mgmt_drpc_set_up",
+   "id": "drpc:DRPC_METHOD_MGMT_SET_UP",
+   "kind": "drpc",
+   "method_id": 209
+  },
+  {
+   "handler": "ds_mgmt_drpc_smd_list_devs",
+   "id": "drpc:DRPC_METHOD_MGMT_SMD_LIST_DEVS",
+   "kind": "drpc",
+   "method_id": 211
+  },
+  {
+   "handler": "ds_mgmt_drpc_smd_list_pools",
+   "id": "drpc:DRPC_METHOD_MGMT_SMD_LIST_POOLS",
+   "kind": "drpc",
+   "method_id": 212
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_SEC_AGENT_REQUEST_CREDS",
+   "kind": "drpc",
+   "method_id": 101
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_SEC_VALIDATE_CREDS",
+   "kind": "drpc",
+   "method_id": 401
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_SRV_CLUSTER_EVENT",
+   "kind": "drpc",
+   "method_id": 304
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_SRV_GET_POOL_SVC",
+   "kind": "drpc",
+   "method_id": 303
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_SRV_GET_SYS_PROPS",
+   "kind": "drpc",
+   "method_id": 311
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_SRV_LIST_POOLS",
+   "kind": "drpc",
+   "method_id": 310
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_SRV_NOTIFY_READY",
+   "kind": "drpc",
+   "method_id": 301
+  },
+  {
+   "handler": "",
+   "id": "drpc:DRPC_METHOD_SRV_POOL_FIND_BYLABEL",
+   "kind": "drpc",
+   "method_id": 305
+  },
+  {
+   "card": "docs/kb/modules/dtx.md",
+   "engine_module": "dtx",
+   "id": "dtx",
+   "kind": "module"
+  },
+  {
+   "id": "ec",
+   "kind": "concept"
+  },
+  {
+   "card": "docs/kb/modules/engine.md",
+   "id": "engine",
+   "kind": "module"
+  },
+  {
+   "id": "epoch",
+   "kind": "concept"
+  },
+  {
+   "card": "docs/kb/flows/drive-replace.md",
+   "id": "flow-drive-replace",
+   "kind": "flow"
+  },
+  {
+   "card": "docs/kb/flows/pool-create.md",
+   "id": "flow-pool-create",
+   "kind": "flow"
+  },
+  {
+   "card": "docs/kb/flows/rebuild.md",
+   "id": "flow-rebuild",
+   "kind": "flow"
+  },
+  {
+   "card": "docs/kb/flows/write-path.md",
+   "id": "flow-write-path",
+   "kind": "flow"
+  },
+  {
+   "id": "gurt",
+   "kind": "module"
+  },
+  {
+   "id": "ilog",
+   "kind": "concept"
+  },
+  {
+   "id": "iv",
+   "kind": "concept"
+  },
+  {
+   "engine_module": "mgmt",
+   "id": "mgmt",
+   "kind": "module"
+  },
+  {
+   "card": "docs/kb/modules/object.md",
+   "engine_module": "obj",
+   "id": "object",
+   "kind": "module"
+  },
+  {
+   "engine_module": "pipeline",
+   "id": "pipeline",
+   "kind": "module"
+  },
+  {
+   "id": "placement",
+   "kind": "concept"
+  },
+  {
+   "card": "docs/kb/modules/pool.md",
+   "engine_module": "pool",
+   "id": "pool",
+   "kind": "module"
+  },
+  {
+   "id": "pool_map",
+   "kind": "concept"
+  },
+  {
+   "id": "proto",
+   "kind": "module"
+  },
+  {
+   "engine_module": "rdb",
+   "id": "rdb",
+   "kind": "module"
+  },
+  {
+   "card": "docs/kb/modules/rebuild.md",
+   "engine_module": "rebuild",
+   "id": "rebuild",
+   "kind": "module"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_chk_act_hdlr",
+   "handler_files": [
+    "src/chk/chk_srv.c"
+   ],
+   "id": "rpc:CHK_ACT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_chk_cont_list_hdlr",
+   "handler_files": [
+    "src/chk/chk_srv.c"
+   ],
+   "id": "rpc:CHK_CONT_LIST",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_chk_mark_hdlr",
+   "handler_files": [
+    "src/chk/chk_srv.c"
+   ],
+   "id": "rpc:CHK_MARK",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_chk_pool_mbs_hdlr",
+   "handler_files": [
+    "src/chk/chk_srv.c"
+   ],
+   "id": "rpc:CHK_POOL_MBS",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_chk_pool_start_hdlr",
+   "handler_files": [
+    "src/chk/chk_srv.c"
+   ],
+   "id": "rpc:CHK_POOL_START",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_chk_query_hdlr",
+   "handler_files": [
+    "src/chk/chk_srv.c"
+   ],
+   "id": "rpc:CHK_QUERY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_chk_rejoin_hdlr",
+   "handler_files": [
+    "src/chk/chk_srv.c"
+   ],
+   "id": "rpc:CHK_REJOIN",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_chk_report_hdlr",
+   "handler_files": [
+    "src/chk/chk_srv.c"
+   ],
+   "id": "rpc:CHK_REPORT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_chk_set_policy_hdlr",
+   "handler_files": [
+    "src/chk/chk_srv.c"
+   ],
+   "id": "rpc:CHK_SET_POLICY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_chk_start_hdlr",
+   "handler_files": [
+    "src/chk/chk_srv.c"
+   ],
+   "id": "rpc:CHK_START",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_chk_stop_hdlr",
+   "handler_files": [
+    "src/chk/chk_srv.c"
+   ],
+   "id": "rpc:CHK_STOP",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_ACL_DELETE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_ACL_UPDATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_ATTR_DEL",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_ATTR_GET",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_ATTR_LIST",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_ATTR_SET",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_CLOSE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_CREATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_DESTROY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_DESTROY_BYLABEL",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_EPOCH_AGGREGATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_oid_alloc_handler",
+   "handler_files": [
+    "src/container/srv_target.c"
+   ],
+   "id": "rpc:CONT_OID_ALLOC",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_OPEN",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_OPEN_BYLABEL",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_PROP_SET",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_cont_set_prop_srv_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_PROP_SET_BYLABEL",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_QUERY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_SNAP_CREATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_SNAP_DESTROY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_SNAP_LIST",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_SNAP_OIT_CREATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_SNAP_OIT_DESTROY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_cont_op_handler",
+   "handler_files": [
+    "src/container/srv_container.c"
+   ],
+   "id": "rpc:CONT_SNAP_OIT_OID_GET",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_cont_tgt_destroy_handler",
+   "handler_files": [
+    "src/container/srv_target.c"
+   ],
+   "id": "rpc:CONT_TGT_DESTROY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_cont_tgt_epoch_aggregate_handler",
+   "handler_files": [
+    "src/container/srv_target.c"
+   ],
+   "id": "rpc:CONT_TGT_EPOCH_AGGREGATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_cont_tgt_query_handler",
+   "handler_files": [
+    "src/container/srv_target.c"
+   ],
+   "id": "rpc:CONT_TGT_QUERY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_cont_tgt_snapshot_notify_handler",
+   "handler_files": [
+    "src/container/srv_target.c"
+   ],
+   "id": "rpc:CONT_TGT_SNAPSHOT_NOTIFY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_enum_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_AKEY_RPC_ENUMERATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_enum_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_DKEY_RPC_ENUMERATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_enum_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RECX_RPC_ENUMERATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_coll_punch_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_COLL_PUNCH",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_coll_query_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_COLL_QUERY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_cpd_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_CPD",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_ec_agg_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_EC_AGGREGATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_ec_rep_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_EC_REPLICATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_enum_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_ENUMERATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_rw_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_FETCH",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_key2anchor_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_KEY2ANCHOR",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_migrate_handler",
+   "handler_files": [
+    "src/object/srv_obj_migrate.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_MIGRATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_punch_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_PUNCH",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_punch_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_PUNCH_AKEYS",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_punch_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_PUNCH_DKEYS",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_query_key_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_QUERY_KEY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_sync_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_SYNC",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_tgt_punch_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_TGT_PUNCH",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_tgt_punch_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_TGT_PUNCH_AKEYS",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_tgt_punch_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_TGT_PUNCH_DKEYS",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_tgt_update_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_TGT_UPDATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_obj_rw_handler",
+   "handler_files": [
+    "src/object/srv_obj.c"
+   ],
+   "id": "rpc:DAOS_OBJ_RPC_UPDATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pipeline_run_handler",
+   "handler_files": [
+    "src/pipeline/srv_pipeline.c"
+   ],
+   "id": "rpc:DAOS_PIPELINE_RPC_RUN",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "dtx_handler",
+   "handler_files": [
+    "src/dtx/dtx_srv.c"
+   ],
+   "id": "rpc:DTX_ABORT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "dtx_handler",
+   "handler_files": [
+    "src/dtx/dtx_srv.c"
+   ],
+   "id": "rpc:DTX_CHECK",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "dtx_coll_handler",
+   "handler_files": [
+    "src/dtx/dtx_srv.c"
+   ],
+   "id": "rpc:DTX_COLL_ABORT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "dtx_coll_handler",
+   "handler_files": [
+    "src/dtx/dtx_srv.c"
+   ],
+   "id": "rpc:DTX_COLL_CHECK",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "dtx_coll_handler",
+   "handler_files": [
+    "src/dtx/dtx_srv.c"
+   ],
+   "id": "rpc:DTX_COLL_COMMIT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "dtx_handler",
+   "handler_files": [
+    "src/dtx/dtx_srv.c"
+   ],
+   "id": "rpc:DTX_COMMIT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "dtx_handler",
+   "handler_files": [
+    "src/dtx/dtx_srv.c"
+   ],
+   "id": "rpc:DTX_REFRESH",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_mgmt_hdlr_get_bs_state",
+   "handler_files": [
+    "src/mgmt/srv_query.c"
+   ],
+   "id": "rpc:MGMT_GET_BS_STATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_mgmt_mark_hdlr",
+   "handler_files": [
+    "src/mgmt/srv.c"
+   ],
+   "id": "rpc:MGMT_MARK",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_mgmt_params_set_hdlr",
+   "handler_files": [
+    "src/mgmt/srv.c"
+   ],
+   "id": "rpc:MGMT_PARAMS_SET",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_mgmt_pool_find_hdlr",
+   "handler_files": [
+    "src/mgmt/srv.c"
+   ],
+   "id": "rpc:MGMT_POOL_FIND",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_mgmt_pool_get_svcranks_hdlr",
+   "handler_files": [
+    "src/mgmt/srv.c"
+   ],
+   "id": "rpc:MGMT_POOL_GET_SVCRANKS",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_mgmt_pool_list_hdlr",
+   "handler_files": [
+    "src/mgmt/srv.c"
+   ],
+   "id": "rpc:MGMT_POOL_LIST",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_mgmt_profile_hdlr",
+   "handler_files": [
+    "src/mgmt/srv.c"
+   ],
+   "id": "rpc:MGMT_PROFILE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_mgmt_hdlr_svc_rip",
+   "handler_files": [
+    "src/mgmt/srv.c"
+   ],
+   "id": "rpc:MGMT_SVC_RIP",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_mgmt_hdlr_tgt_create",
+   "handler_files": [
+    "src/mgmt/srv_target.c"
+   ],
+   "id": "rpc:MGMT_TGT_CREATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_mgmt_hdlr_tgt_destroy",
+   "handler_files": [
+    "src/mgmt/srv_target.c"
+   ],
+   "id": "rpc:MGMT_TGT_DESTROY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_mgmt_hdlr_tgt_map_update",
+   "handler_files": [
+    "src/mgmt/srv_target.c"
+   ],
+   "id": "rpc:MGMT_TGT_MAP_UPDATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_mgmt_tgt_mark_hdlr",
+   "handler_files": [
+    "src/mgmt/srv_target.c"
+   ],
+   "id": "rpc:MGMT_TGT_MARK",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_mgmt_tgt_params_set_hdlr",
+   "handler_files": [
+    "src/mgmt/srv_target.c"
+   ],
+   "id": "rpc:MGMT_TGT_PARAMS_SET",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_mgmt_tgt_profile_hdlr",
+   "handler_files": [
+    "src/mgmt/srv_target.c"
+   ],
+   "id": "rpc:MGMT_TGT_PROFILE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_mgmt_hdlr_tgt_shard_destroy",
+   "handler_files": [
+    "src/mgmt/srv_target.c"
+   ],
+   "id": "rpc:MGMT_TGT_SHARD_DESTROY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_acl_delete_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_ACL_DELETE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_acl_update_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_ACL_UPDATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_update_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_ADD_IN",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_update_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_ADD_TGT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_attr_del_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_ATTR_DEL",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_attr_get_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_ATTR_GET",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_attr_list_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_ATTR_LIST",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_attr_set_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_ATTR_SET",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_connect_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_CONNECT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_create_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_CREATE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_disconnect_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_DISCONNECT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_update_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_DRAIN",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_eval_self_heal_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_EVAL_SELF_HEAL",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_evict_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_EVICT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_update_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_EXCLUDE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_update_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_EXCLUDE_OUT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_extend_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_EXTEND",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_filter_cont_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_FILTER_CONT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_list_cont_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_LIST_CONT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_prop_get_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_PROP_GET",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_prop_set_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_PROP_SET",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_query_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_QUERY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_query_info_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_QUERY_INFO",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_ranks_get_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_RANKS_GET",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_rebuild_start_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_REBUILD_START",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_rebuild_stop_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_REBUILD_STOP",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_recov_cont_handler",
+   "handler_files": [
+    "src/pool/srv_target.c"
+   ],
+   "id": "rpc:POOL_RECOV_CONT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_update_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_REINT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_replicas_update_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_REPLICAS_ADD",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_replicas_update_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_REPLICAS_REMOVE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_svc_stop_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_SVC_STOP",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_tgt_discard_handler",
+   "handler_files": [
+    "src/pool/srv_target.c"
+   ],
+   "id": "rpc:POOL_TGT_DISCARD",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_tgt_disconnect_handler",
+   "handler_files": [
+    "src/pool/srv_target.c"
+   ],
+   "id": "rpc:POOL_TGT_DISCONNECT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_tgt_query_handler",
+   "handler_files": [
+    "src/pool/srv_target.c"
+   ],
+   "id": "rpc:POOL_TGT_QUERY",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_tgt_query_map_handler",
+   "handler_files": [
+    "src/pool/srv_target.c"
+   ],
+   "id": "rpc:POOL_TGT_QUERY_MAP",
+   "kind": "rpc"
+  },
+  {
+   "direction": "client->server",
+   "handler": "ds_pool_tgt_warmup_handler",
+   "handler_files": [
+    "src/pool/srv_target.c"
+   ],
+   "id": "rpc:POOL_TGT_WARMUP",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_pool_upgrade_handler",
+   "handler_files": [
+    "src/pool/srv_pool.c"
+   ],
+   "id": "rpc:POOL_UPGRADE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "rdb_appendentries_handler",
+   "handler_files": [
+    "src/rdb/rdb_raft.c"
+   ],
+   "id": "rpc:RDB_APPENDENTRIES",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "rdb_installsnapshot_handler",
+   "handler_files": [
+    "src/rdb/rdb_raft.c"
+   ],
+   "id": "rpc:RDB_INSTALLSNAPSHOT",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "rdb_requestvote_handler",
+   "handler_files": [
+    "src/rdb/rdb_raft.c"
+   ],
+   "id": "rpc:RDB_REQUESTVOTE",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "rebuild_tgt_scan_handler",
+   "handler_files": [
+    "src/rebuild/scan.c"
+   ],
+   "id": "rpc:REBUILD_OBJECTS_SCAN",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_rsvc_start_handler",
+   "handler_files": [
+    "src/rsvc/srv.c"
+   ],
+   "id": "rpc:RSVC_START",
+   "kind": "rpc"
+  },
+  {
+   "direction": "server->server",
+   "handler": "ds_rsvc_stop_handler",
+   "handler_files": [
+    "src/rsvc/srv.c"
+   ],
+   "id": "rpc:RSVC_STOP",
+   "kind": "rpc"
+  },
+  {
+   "engine_module": "rsvc",
+   "id": "rsvc",
+   "kind": "module"
+  },
+  {
+   "engine_module": "security",
+   "id": "security",
+   "kind": "module"
+  },
+  {
+   "id": "ult",
+   "kind": "concept"
+  },
+  {
+   "id": "utils",
+   "kind": "module"
+  },
+  {
+   "id": "vea",
+   "kind": "module"
+  },
+  {
+   "card": "docs/kb/modules/vos.md",
+   "engine_module": "vos_srv",
+   "id": "vos",
+   "kind": "module"
+  },
+  {
+   "id": "xstream",
+   "kind": "concept"
+  }
+ ]
+}
