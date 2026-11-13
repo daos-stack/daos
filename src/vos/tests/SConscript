@@ -7,6 +7,7 @@ def scons():
 
     # build and export objects used by other unit tests
     senv = denv.Clone()
+    senv.Append(CPPDEFINES={'VOS_STANDALONE': '1'})
     senv.Append(CPPPATH=[Dir('..').srcnode()])
     senv.Append(OBJPREFIX="vts_")
     vts_src = ['vts_dtx.c', 'vts_io.c', 'vts_common.c', '../../object/srv_csum.c',
