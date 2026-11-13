@@ -1,5 +1,6 @@
 """
   (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -161,7 +162,9 @@ class ContainerLabelTest(TestWithServers):
 
         # Verify get-prop returns the correct label
         container.use_label = False
-        if not container.verify_prop({'label': new_label}):
+        try:
+            container.verify_prop({'label': new_label})
+        except AssertionError:
             self.fail('get-prop returned incorrect label')
         container.use_label = True
 
