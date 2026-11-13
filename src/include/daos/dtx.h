@@ -25,6 +25,8 @@
  */
 #define DTX_THRESHOLD_COUNT		(1 << 9)
 
+#define DTX_PIGGYBACK_COUNT             (1 << 6)
+
 /* The time (in second) threshold for batched DTX commit. */
 #define DTX_COMMIT_THRESHOLD_AGE	10
 
