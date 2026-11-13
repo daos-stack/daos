@@ -19,6 +19,8 @@
 #include <daos/tse.h>
 #include <gurt/atomic.h>
 
+#define DTP_CB_RUNNING	2
+
 struct tse_task_private {
 	struct tse_sched_private	*dtp_sched;
 
@@ -43,7 +45,11 @@ struct tse_task_private {
 	/* daos complete task callback list */
 	d_list_t			 dtp_comp_cb_list;
 
-	/* task has been completed */
+	/* task completion state: 0 = live, 1 = completed,
+	 * DTP_CB_RUNNING (2) = completion callbacks executing under
+	 * tse_task_complete(); the drain must not collect the task
+	 * while in that state, or it would free callback nodes the
+	 * traversal still advances to. See DAOS-19955. */
 	ATOMIC uint8_t			dtp_completed;
 	/* task is in running state */
 	ATOMIC uint8_t			dtp_running;
