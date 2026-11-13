@@ -24,6 +24,8 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -33,6 +35,7 @@ import (
 
 const (
 	checkerEnabledKey      = "checker_enabled"
+	checkerEnabledValue    = "true"
 	checkerPoliciesKey     = "checker_policies"
 	checkerLatestPolicyKey = "checker_latest_policy"
 	checkerLeaderKey       = "checker_leader"
@@ -80,29 +83,28 @@ func (svc *mgmtSvc) clearCheckerLeader() error {
 var errNoSavedPolicies = errors.New("no previous policies have been saved")
 
 func (svc *mgmtSvc) enableChecker() error {
-	if err := system.SetMgmtProperty(svc.sysdb, checkerEnabledKey, "true"); err != nil {
+	if err := system.SetMgmtProperty(svc.sysdb, checkerEnabledKey, checkerEnabledValue); err != nil {
 		return errors.Wrap(err, "failed to enable checker")
 	}
 	return nil
 }
 
 func (svc *mgmtSvc) disableChecker() error {
-	if err := system.SetMgmtProperty(svc.sysdb, checkerEnabledKey, "false"); err != nil {
+	if err := system.DelMgmtProperty(svc.sysdb, checkerEnabledKey); err != nil {
 		return errors.Wrap(err, "failed to disable checker")
 	}
 	return nil
 }
 
-func (svc *mgmtSvc) checkerIsEnabled() bool {
+func (svc *mgmtSvc) checkerIsEnabled() (bool, error) {
 	value, err := system.GetMgmtProperty(svc.sysdb, checkerEnabledKey)
 	if err != nil {
-		if !system.IsNotLeader(err) && !system.IsErrSystemAttrNotFound(err) &&
-			!system.IsNotReplica(err) && !errors.Is(err, system.ErrUninitialized) {
-			svc.log.Errorf("failed to get checker enabled value: %s", err)
+		if system.IsErrSystemAttrNotFound(err) {
+			return false, nil
 		}
-		return false
+		return false, errors.Wrap(err, "failed to get checker enabled value")
 	}
-	return value == "true"
+	return value == checkerEnabledValue, nil
 }
 
 // checkerRequest is a wrapper around a request that is made on behalf of
@@ -124,7 +126,11 @@ func (svc *mgmtSvc) unwrapCheckerReq(req proto.Message) (proto.Message, error) {
 		return cr.Message, nil
 	}
 
-	if svc.checkerIsEnabled() {
+	enabled, err := svc.checkerIsEnabled()
+	if err != nil {
+		return nil, err
+	}
+	if enabled {
 		return nil, checker.FaultCheckerEnabled
 	}
 
@@ -248,7 +254,11 @@ func (svc *mgmtSvc) forwardCheckLeaderDrpc(ctx context.Context, req proto.Messag
 }
 
 func (svc *mgmtSvc) verifyCheckerReady() error {
-	if !svc.checkerIsEnabled() {
+	enabled, err := svc.checkerIsEnabled()
+	if err != nil {
+		return err
+	}
+	if !enabled {
 		return checker.FaultCheckerNotEnabled
 	}
 
@@ -309,15 +319,24 @@ func (svc *mgmtSvc) startSystemRanks(ctx context.Context, sys string) error {
 		availRanks.Add(rank)
 	}
 
+	checkMode, err := svc.checkerIsEnabled()
+	if err != nil {
+		return err
+	}
+
 	// Finally, restart all of the ranks so that they join in
 	// checker mode.
 	startReq := &mgmtpb.SystemStartReq{
 		Sys:       sys,
-		CheckMode: svc.checkerIsEnabled(),
+		CheckMode: checkMode,
 		Ranks:     availRanks.String(),
 	}
-	if _, err := svc.SystemStart(ctx, startReq); err != nil {
+	startResp, err := svc.SystemStart(ctx, startReq)
+	if err != nil {
 		return errors.Wrap(err, "failed to start all ranks")
+	}
+	if failed := erroredRanks(startResp.Results); failed.Count() > 0 {
+		return errors.Errorf("failed to start rank(s) %s", failed)
 	}
 
 	return nil
@@ -476,19 +495,25 @@ func (svc *mgmtSvc) SystemCheckEnable(ctx context.Context, req *mgmtpb.CheckEnab
 		return nil, err
 	}
 
-	if svc.checkerIsEnabled() {
-		return &mgmtpb.DaosResp{Status: int32(daos.Already)}, nil
-	}
-
-	if err := svc.checkMemberStates(
-		system.MemberStateAdminExcluded,
-		system.MemberStateStopped,
-	); err != nil {
+	enabled, err := svc.checkerIsEnabled()
+	if err != nil {
 		return nil, err
 	}
-
-	if err := svc.enableChecker(); err != nil {
-		return nil, err
+	if enabled {
+		err := svc.checkMemberStates(system.MemberStateAdminExcluded, system.MemberStateCheckerStarted)
+		if err == nil {
+			return &mgmtpb.DaosResp{Status: int32(daos.Already)}, nil
+		}
+		if !fault.IsFaultCode(err, code.SystemCheckerInvalidMemberStates) {
+			return nil, err
+		}
+	} else {
+		if err := svc.checkMemberStates(system.MemberStateAdminExcluded, system.MemberStateStopped); err != nil {
+			return nil, err
+		}
+		if err := svc.enableChecker(); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := svc.startSystemRanks(ctx, req.Sys); err != nil {
@@ -504,27 +529,42 @@ func (svc *mgmtSvc) SystemCheckDisable(ctx context.Context, req *mgmtpb.CheckDis
 		return nil, err
 	}
 
-	if !svc.checkerIsEnabled() {
-		return &mgmtpb.DaosResp{Status: int32(daos.Already)}, nil
-	}
-
-	if err := svc.disableChecker(); err != nil {
+	enabled, err := svc.checkerIsEnabled()
+	if err != nil {
 		return nil, err
 	}
 
-	// Stop all of the ranks that are currently running in checker mode.
 	checkRanks, err := svc.sysdb.MemberRanks(system.MemberStateCheckerStarted)
 	if err != nil {
 		return nil, err
 	}
-	stopReq := &mgmtpb.SystemStopReq{
-		Sys: req.Sys,
-		// Do not force stop system, it may cause resource leak and fail next system start.
-		Force: false,
-		Ranks: ranklist.RankSetFromRanks(checkRanks).String(),
+	if !enabled && len(checkRanks) == 0 {
+		return &mgmtpb.DaosResp{Status: int32(daos.Already)}, nil
 	}
-	if _, err := svc.SystemStop(ctx, stopReq); err != nil {
-		return nil, errors.Wrap(err, "failed to stop all checker ranks")
+
+	stopRanks, err := svc.sysdb.MemberRanks(system.AllMemberFilter &^ system.MemberStateAdminExcluded)
+	if err != nil {
+		return nil, err
+	}
+	if len(stopRanks) > 0 {
+		stopReq := &mgmtpb.SystemStopReq{
+			Sys: req.Sys,
+			// dmg system stop is a force stop by default; match it.
+			Force: true,
+			Ranks: ranklist.RankSetFromRanks(stopRanks).String(),
+		}
+		stopResp, err := svc.SystemStop(ctx, stopReq)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to stop ranks")
+		}
+		if failed := erroredRanks(stopResp.Results); failed.Count() > 0 {
+			return nil, errors.Errorf("failed to stop rank(s) %s", failed)
+		}
+	}
+
+	// Joins are answered in checker mode until the flag is cleared.
+	if err := svc.disableChecker(); err != nil {
+		return nil, err
 	}
 
 	return &mgmtpb.DaosResp{}, nil
