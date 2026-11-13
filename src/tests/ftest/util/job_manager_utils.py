@@ -1157,18 +1157,59 @@ class Systemctl(JobManager):
             self.display_log_data(self.get_log_data(hosts, command))
 
     def log_additional_debug_data(self, hosts, since, until):
-        """Log additional information from a different journalctl command.
+        """Log additional debug information for a failed systemctl command.
 
         Args:
-            hosts (NodeSet): hosts from which to display the journalctl log data.
+            hosts (NodeSet): hosts from which to display the debug data.
             since (str): search log entries from this date.
             until (str, optional): search log entries up to this date. Defaults
                 to None, in which case it is not utilized.
         """
-        command = get_journalctl_command(
-            since, until, True, identifiers=["kernel", self._systemctl.service.value])
-        details = self.str_log_data(self.get_log_data(hosts, command))
-        self.log.info("Additional '%s' output:\n%s", command, details)
+        debug_commands = {
+            f"Journalctl {self._systemctl.service.value} kernel messages": [
+                get_journalctl_command(
+                    since, until, True, identifiers=["kernel", self._systemctl.service.value]),
+            ],
+            "Is the system under CPU pressure?": [
+                "vmstat 1 5",
+                "cat /proc/pressure/cpu",
+                "cat /proc/pressure/memory",
+                "cat /proc/pressure/io",
+                "mpstat -P ALL 1 3",
+                "cat /proc/loadavg"
+            ],
+            "Is the engine waiting on the CPU or blocked?": [
+                f"ps -C {','.join(self._exe_names)} -o pid,stat,wchan:24,pcpu,pmem,nlwp,etime,cmd"
+            ],
+            "Where is the engine stuck?": [
+                f"sudo -n gdb -batch -p $$(pgrep -o ${self._exe_names[-1]})"
+                " -ex 'thread apply all bt'",
+                f"cat /proc/$(pgrep -o ${self._exe_names[-1]})/stack"
+            ],
+            "Is the system under memory pressure?": [
+                "free -m; grep -E 'MemAvailable|Dirty|Writeback|SwapFree|HugePages_' /proc/meminfo",
+                "cat /proc/swaps"
+            ],
+            "OOM kills, hung tasks, lockups, clock problems?": [
+                "sudo -n dmesg -T |"
+                " grep -iE 'oom|hung task|blocked for more|soft lockup|clocksource|rcu'",
+            ],
+            "Hypervisor type, CPU count and clock source.": [
+                "systemd-detect-virt; lscpu | grep -iE 'hypervisor|^CPU|MHz';"
+                " cat /sys/devices/system/clocksource/clocksource0/current_clocksource",
+            ],
+            "Clock jumps": [
+                "chronyc tracking"
+            ],
+        }
+        for summary, command_list in debug_commands.items():
+            self.log.info("Collecting debug information; %s", summary)
+            for command in command_list:
+                try:
+                    details = self.str_log_data(self.get_log_data(hosts, command))
+                    self.log.info("Additional '%s' output:\n%s", command, details)
+                except CommandFailure as error:
+                    self.log.info("Problem running '%s': %s", command, error)
 
 
 class Clush(JobManager):
