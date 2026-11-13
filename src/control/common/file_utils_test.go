@@ -228,3 +228,68 @@ func TestUtils_SyncDir(t *testing.T) {
 		})
 	}
 }
+
+func TestUtils_WriteFileAtomic(t *testing.T) {
+	for name, tc := range map[string]struct {
+		existing     []byte
+		staleStaging bool
+		perm         os.FileMode
+		expErr       error
+	}{
+		"new file": {
+			perm: 0644,
+		},
+		"replace read-only file": {
+			existing: []byte("old"),
+			perm:     0400,
+		},
+		"stale read-only staging file": {
+			staleStaging: true,
+			perm:         0400,
+		},
+		"missing directory": {
+			perm:   0644,
+			expErr: errors.New("no such file or directory"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
+
+			path := filepath.Join(testDir, "file")
+			if tc.expErr != nil {
+				path = filepath.Join(testDir, "missing", "file")
+			}
+			if tc.existing != nil {
+				if err := os.WriteFile(path, tc.existing, tc.perm); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.staleStaging {
+				if err := os.WriteFile(path+".staging", []byte("stale"), 0400); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			gotErr := WriteFileAtomic(path, []byte("new"), tc.perm)
+			CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			got, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			AssertEqual(t, "new", string(got), "content")
+			fi, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			AssertEqual(t, tc.perm, fi.Mode().Perm(), "mode")
+			if _, err := os.Stat(path + ".staging"); !os.IsNotExist(err) {
+				t.Fatalf("staging file left behind: %v", err)
+			}
+		})
+	}
+}
