@@ -672,6 +672,10 @@ enum daos_io_flags {
 	DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY = 0x1000,
 	/* Do not degrade enumeration/fetch if data shard failed */
 	DIOF_EC_NO_DEGRADE = 0x2000,
+	/* EC fetch: the iom only maps the fetched extents, do not merge the
+	 * extents to be recovered from parity and do not recover them.
+	 */
+	DIOF_EC_IOM_NO_RECOV = 0x4000,
 };
 
 /**

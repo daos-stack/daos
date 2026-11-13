@@ -932,7 +932,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			D_GOTO(out, rc = -DER_PROTO);
 		}
 
-		if (is_ec_obj && !reasb_req->orr_recov) {
+		if (is_ec_obj && !reasb_req->orr_recov && !reasb_req->orr_iom_no_recov) {
 			rc = obj_ec_recov_add(reasb_req,
 					      orwo->orw_rels.ca_arrays,
 					      orwo->orw_rels.ca_count);
@@ -1054,6 +1054,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			for (i = 0; i < orw->orw_nr; i++) {
 				reply_maps = &orwo->orw_maps.ca_arrays[i];
 				recov_list = orwo->orw_rels.ca_arrays;
+				if (reasb_req != NULL && reasb_req->orr_iom_no_recov)
+					recov_list = NULL;
 				if (recov_list != NULL) {
 					recov_list += i;
 					if (recov_list->re_nr == 0)

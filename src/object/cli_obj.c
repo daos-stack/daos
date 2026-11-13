@@ -6329,6 +6329,8 @@ dc_obj_fetch_task(tse_task_t *task)
 		obj_auxi->flags |= ORF_FOR_MIGRATION;
 		obj_auxi->for_migrate = 1;
 	}
+	if (args->extra_flags & DIOF_EC_IOM_NO_RECOV)
+		obj_auxi->reasb_req.orr_iom_no_recov = 1;
 	if (args->extra_flags & DIOF_FOR_EC_AGG)
 		obj_auxi->flags |= ORF_FOR_EC_AGG;
 
