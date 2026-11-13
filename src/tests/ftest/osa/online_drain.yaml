@@ -65,7 +65,7 @@ mdtest:
     np: 2
   num_of_files_dirs: 100
   test_dir: "/tmp/"
-  iteration: 10
+  iteration: 20
   dfs_oclass: RP_2G4
   dfs_dir_oclass: RP_2G4
   manager: "MPICH"
