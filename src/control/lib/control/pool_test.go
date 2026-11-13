@@ -93,6 +93,17 @@ func TestControl_PoolDestroy(t *testing.T) {
 				},
 			},
 		},
+		"-DER_HG is retried": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.MercuryError, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDestroyResp{}),
+				},
+			},
+		},
 		"ErrPoolNotFound on first try is not retried": {
 			req: &PoolDestroyReq{
 				ID: test.MockUUID(),
