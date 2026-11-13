@@ -22,6 +22,12 @@ daos_rpc_cb(const struct crt_cb_info *cb_info)
 	}
 
 	tse_task_complete(task, rc);
+	/* drop the reference taken in daos_rpc_send(): it kept the
+	 * task alive until this callback ran, so a scheduler cancel
+	 * could not free the task out from under the in-flight RPC
+	 * and re-enter tse_task_complete() on freed memory (the
+	 * callback arrives as a raw pointer). See DAOS-19955. */
+	tse_task_decref(task);
 }
 
 int
@@ -31,6 +37,9 @@ daos_rpc_complete(crt_rpc_t *rpc, tse_task_t *task)
 
 	cbinfo.cci_arg = task;
 	cbinfo.cci_rc  = 0;
+	/* pair with the decref inside daos_rpc_cb(), matching what
+	 * crt_req_send() would have held for an async send */
+	tse_task_addref(task);
 	daos_rpc_cb(&cbinfo);
 	crt_req_decref(rpc);
 	return 0;
@@ -41,9 +50,15 @@ daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task)
 {
 	int rc;
 
+	/* The completion callback receives the task as a raw pointer;
+	 * hold a task reference for the RPC's own lifetime so a
+	 * scheduler cancel draining the task cannot free it before
+	 * the (possibly late) callback runs. See DAOS-19955. */
+	tse_task_addref(task);
 	rc = crt_req_send(rpc, daos_rpc_cb, task);
 	if (rc != 0) {
 		/** task will be completed in CB above */
+		tse_task_decref(task);
 		rc = 0;
 	}
 

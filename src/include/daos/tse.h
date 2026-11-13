@@ -122,6 +122,14 @@ void
 tse_sched_complete(tse_sched_t *sched, int ret, bool cancel);
 
 /**
+ * Check if the scheduler is being cancelled (drained for teardown).
+ *
+ * \param[in] sched		the scheduler pointer.
+ */
+bool
+tse_sched_is_cancelling(tse_sched_t *sched);
+
+/**
  * register complete callback for scheduler.
  *
  * \param[in] sched	scheduler where to register the completion callback.
