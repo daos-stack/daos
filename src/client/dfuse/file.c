@@ -8,10 +8,47 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-/* A lock is needed here, not for ie_open_count which is updated atomcially here and elsewhere
- * but to ensure that ie_active is also atomically updated with the reference count.
+/* Protect ie_active transitions as well as write-back errors and per-handle reporting cursors.
+ * ie_open_count is updated atomically here and elsewhere.
  */
 static pthread_mutex_t alock = PTHREAD_MUTEX_INITIALIZER;
+
+uint64_t
+dfuse_wb_error_sample(struct dfuse_inode_entry *ie)
+{
+	uint64_t seq;
+
+	D_MUTEX_LOCK(&alock);
+	seq = ie->ie_wb_error_seq;
+	D_MUTEX_UNLOCK(&alock);
+	return seq;
+}
+
+void
+dfuse_wb_error_record(struct dfuse_inode_entry *ie, int error)
+{
+	D_ASSERT(error != 0);
+
+	D_MUTEX_LOCK(&alock);
+	ie->ie_wb_error = error;
+	ie->ie_wb_error_seq++;
+	D_MUTEX_UNLOCK(&alock);
+}
+
+int
+dfuse_wb_error_check(struct dfuse_obj_hdl *oh)
+{
+	struct dfuse_inode_entry *ie = oh->doh_ie;
+	int                       rc = 0;
+
+	D_MUTEX_LOCK(&alock);
+	if (oh->doh_wb_error_seq != ie->ie_wb_error_seq) {
+		rc                   = ie->ie_wb_error;
+		oh->doh_wb_error_seq = ie->ie_wb_error_seq;
+	}
+	D_MUTEX_UNLOCK(&alock);
+	return rc;
+}
 
 /* Perhaps combine with dfuse_open_handle_init? */
 int
