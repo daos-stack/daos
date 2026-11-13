@@ -1,6 +1,7 @@
 #
 # (C) Copyright 2024-2025 Google LLC
 # (C) Copyright 2024-2026 Enakta Labs Ltd
+# (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -392,8 +393,7 @@ class WriteBuffer(io.BufferedIOBase):
                 (offset, chunk) = work
                 self._dfs.write(self._path, self._mode, self._oflags,
                                 self._class_name, self._file_chunk_size, offset, chunk)
-        # pylint: disable=broad-exception-caught
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             sys.exit(getattr(e, 'errno', errno.EIO))
 
     def write(self, data):

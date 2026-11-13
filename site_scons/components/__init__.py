@@ -105,45 +105,88 @@ _Static_assert(FI_VERSION_GE(
     return rc
 
 
-def define_mercury(reqs):
-    """Mercury definitions"""
-    libs = ['rt']
+def define_ofi(reqs):
+    """OFI definitions"""
+    fabrics = (
+        "cxi",
+        "efa",
+        "gni",
+        "lnx",
+        "mlx",
+        "mrail",
+        "opx",
+        "psm",
+        "psm2",
+        "psm3",
+        "rxm",
+        "rxd",
+        "shm",
+        "sockets",
+        "tcp",
+        "ucx",
+        "udp",
+        "usnic",
+        "verbs",
+        "xpmem",
+    )
 
-    if reqs.get_env('PLATFORM') == 'darwin':
-        libs = []
-    else:
-        reqs.define('rt', libs=['rt'])
+    enabled_default_fabrics = (
+        "opx",
+        "rxm",
+        "shm",
+        "tcp",
+        "verbs",
+    )
+
+    fabrics = (
+        "cxi",
+        "efa",
+        "gni",
+        "lnx",
+        "mlx",
+        "mrail",
+        "opx",
+        "psm",
+        "psm2",
+        "psm3",
+        "rxm",
+        "rxd",
+        "shm",
+        "sockets",
+        "tcp",
+        "ucx",
+        "udp",
+        "usnic",
+        "verbs",
+        "xpmem",
+    )
+
+    enabled_default_fabrics = (
+        "opx",
+        "rxm",
+        "shm",
+        "tcp",
+        "verbs",
+    )
 
     # pylint: disable-next=wrong-spelling-in-comment,fixme
-    # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
                  '--libdir=$OFI_PREFIX/lib64',
                  '--with-dlopen',
                  '--disable-static',
-                 '--disable-silent-rules',
-                 '--enable-sockets',
-                 '--enable-tcp',
-                 '--enable-verbs',
-                 '--enable-rxm',
-                 '--enable-shm',
-                 '--enable-psm2',
-                 '--enable-opx',
-                 '--disable-efa',
-                 '--disable-dmabuf_peer_mem',
-                 '--disable-hook_hmem',
-                 '--disable-hook_debug',
-                 '--disable-trace',
-                 '--disable-perf',
-                 '--disable-rxd',
-                 '--disable-mrail',
-                 '--disable-udp',
-                 '--disable-psm3']
+                 '--disable-silent-rules']
 
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
     else:
         ofi_build.append('--disable-debug')
+
+    for fabric in fabrics:
+        if fabric not in enabled_default_fabrics:
+            ofi_build.append(f'--disable-{fabric}')
+        else:
+            ofi_build.append(f'--enable-{fabric}')
 
     reqs.define('ofi',
                 retriever=GitRepoRetriever(),
@@ -159,6 +202,9 @@ def define_mercury(reqs):
                 patch_rpath=['lib64'],
                 build_env={'CFLAGS': "-fstack-usage -fPIC"})
 
+
+def define_ucx(reqs):
+    """UCX definitions"""
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
                      '--libdir=$UCX_PREFIX/lib64', '--enable-cma', '--without-cuda',
@@ -185,6 +231,31 @@ def define_mercury(reqs):
                 build_env={'CFLAGS': '-Wno-error'},
                 package='ucx-devel' if inst(reqs, 'ucx') else None)
 
+
+def define_mercury(reqs):
+    """Mercury definitions"""
+    libs = ['rt']
+
+    if reqs.get_env('PLATFORM') == 'darwin':
+        libs = []
+    else:
+        reqs.define('rt', libs=['rt'])
+
+    providers = reqs.get_env('PROVIDERS')
+    if 'all' in providers:
+        mercury_plugins = ['ofi', 'ucx']
+    else:
+        mercury_plugins = providers
+
+    if 'ofi' in mercury_plugins:
+        define_ofi(reqs)
+    if 'ucx' in mercury_plugins:
+        define_ucx(reqs)
+
+    def define_from_plugin(x, y):
+        """Return a define for a plugin"""
+        return f'-D{x}:BOOL=' + ('ON' if y in mercury_plugins else 'OFF')
+
     mercury_build = ['cmake',
                      '-DBUILD_SHARED_LIBS:BOOL=ON',
                      '-DCMAKE_CXX_FLAGS:STRING="-std=c++11"',
@@ -198,14 +269,14 @@ def define_mercury(reqs):
                      '-DBUILD_TESTING_PERF:BOOL=ON',
                      '-DBUILD_TESTING_UNIT:BOOL=OFF',
                      '-DMERCURY_USE_BOOST_PP:BOOL=ON',
-                     '-DMERCURY_USE_SYSTEM_BOOST:BOOL=ON',
+                     '-DMERCURY_USE_SYSTEM_BOOST:BOOL=OFF',
                      '-DMERCURY_USE_CHECKSUMS:BOOL=OFF',
                      '-DMERCURY_ENABLE_COUNTERS:BOOL=ON',
                      '-DMERCURY_ENABLE_DEBUG:BOOL=ON',
                      '-DNA_USE_DYNAMIC_PLUGINS:BOOL=ON',
                      '-DNA_USE_SM:BOOL=ON',
-                     '-DNA_USE_OFI:BOOL=ON',
-                     '-DNA_USE_UCX:BOOL=ON',
+                     define_from_plugin('NA_USE_OFI', 'ofi'),
+                     define_from_plugin('NA_USE_UCX', 'ucx'),
                      '../mercury']
 
     build_type = "RelWithDebInfo"
@@ -230,7 +301,7 @@ def define_mercury(reqs):
                           ['make', 'install']],
                 libs=['mercury'],
                 pkgconfig='mercury',
-                requires=['boost', 'ofi', 'ucx'] + libs,
+                requires=mercury_plugins + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 build_env={'CFLAGS': '-fstack-usage'})
@@ -248,8 +319,6 @@ def define_common(reqs):
 
     reqs.define('cunit', libs=['cunit'], headers=['CUnit/Basic.h'], package='CUnit-devel')
 
-    reqs.define('boost', headers=['boost/preprocessor.hpp'], package='boost-python36-devel')
-
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
     reqs.define('event', libs=['event'], package='libevent-devel')
@@ -261,11 +330,6 @@ def define_common(reqs):
     reqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'], package='libuuid-devel')
 
     reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
-
-    if ARM_PLATFORM:
-        reqs.define('ipmctl', skip_arch=True)
-    else:
-        reqs.define('ipmctl', package='ipmctl')
 
 
 def define_ompi(reqs):
@@ -349,6 +413,7 @@ def define_components(reqs):
                 retriever=GitRepoRetriever(),
                 commands=[['meson', 'setup', '--prefix=$FUSED_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSED_PREFIX/udev', '-Dutils=False',
+                           '-Dexamples=False', '-Dtests=False',
                            '--default-library', 'static', '../fused'],
                           ['meson', 'setup', '--reconfigure', '../fused'],
                           ['ninja', 'install']],

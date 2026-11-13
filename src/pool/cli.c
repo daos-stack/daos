@@ -596,46 +596,58 @@ out:
 	return rc;
 }
 
-static void
-pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list, bool enabled)
+static size_t
+pool_ranks_str_chunk_len(const char *str, size_t len)
 {
-	const size_t	MAXBYTES = 512;
-	char		line[MAXBYTES];
-	char	       *linepos = line;
-	int		ret;
-	unsigned int	written = 0;
-	unsigned int	remaining = MAXBYTES;
-	int		i;
+	size_t i;
 
-	ret = snprintf(linepos, remaining, DF_UUID": %s ranks: ", DP_UUID(pool->dp_pool),
-		       enabled ? "ENABLED" : "DISABLED");
-	if ((ret < 0) || (ret >= remaining))
-		goto err;
-	written += ret;
-	remaining -= ret;
-	linepos += ret;
+	if (len <= DC_POOL_RANKS_LOG_CHUNK)
+		return len;
 
-	for (i = 0; i < list->rrl_nr; i++) {
-		uint32_t	lo = list->rrl_ranges[i].lo;
-		uint32_t	hi = list->rrl_ranges[i].hi;
-		bool		lastrange = (i == (list->rrl_nr - 1));
+	for (i = DC_POOL_RANKS_LOG_CHUNK; i > 0; i--)
+		if (str[i - 1] == ',')
+			return i;
 
-		if (lo == hi)
-			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
-		else
-			ret = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
-		if ((ret < 0) || (ret >= remaining))
-			goto err;
-		written += ret;
-		remaining -= ret;
-		linepos += ret;
+	return DC_POOL_RANKS_LOG_CHUNK;
+}
+
+void
+dc_pool_log_ranks(uuid_t pool_uuid, d_rank_list_t *ranks, bool enabled)
+{
+	const char *state     = enabled ? "ENABLED" : "DISABLED";
+	char       *ranks_str = NULL;
+	const char *pos;
+	size_t      remaining;
+	size_t      chunk;
+	int         nparts = 0;
+	int         part;
+	int         rc;
+
+	D_ASSERT(ranks != NULL);
+	if (!D_LOG_ENABLED(DB_MD))
+		return;
+
+	rc = d_rank_list_to_str(ranks, &ranks_str);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID ": failed to format %s ranks: " DF_RC "\n",
+			DP_UUID(pool_uuid), state, DP_RC(rc));
+		return;
 	}
-	D_DEBUG(DB_MD, "%s\n", line);
-	return;
-err:
-	if (written > 0)
-		D_DEBUG(DB_MD, "%s%s\n", line, (ret >= remaining) ? " ...(TRUNCATED): " : "");
-	D_ERROR(DF_UUID": snprintf failed, %d\n", DP_UUID(pool->dp_pool), ret);
+
+	for (pos = ranks_str, remaining = strlen(ranks_str); remaining > 0;
+	     pos += chunk, remaining -= chunk) {
+		chunk = pool_ranks_str_chunk_len(pos, remaining);
+		nparts++;
+	}
+
+	for (part = 1, pos = ranks_str, remaining = strlen(ranks_str); remaining > 0;
+	     part++, pos += chunk, remaining -= chunk) {
+		chunk = pool_ranks_str_chunk_len(pos, remaining);
+		D_DEBUG(DB_MD, DF_UUID ": %s ranks (nr=%u, part %d/%d): %.*s\n", DP_UUID(pool_uuid),
+			state, ranks->rl_nr, part, nparts, (int)chunk, pos);
+	}
+
+	D_FREE(ranks_str);
 }
 
 /*
@@ -678,19 +690,16 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 
 	/* Scan all targets for populating ranks */
 	if (ranks != NULL) {
-		d_rank_range_list_t	*range_list;
 		bool	get_enabled = (info ? ((info->pi_bits & DPI_ENGINES_ENABLED) != 0) : false);
 
 		rc = pool_map_get_ranks(pool->dp_pool, map, get_enabled, ranks);
 		if (rc != 0)
 			goto out_unlock;
 
-		/* For debug logging - convert to rank ranges */
-		range_list = d_rank_range_list_create_from_ranks(*ranks);
-		if (range_list) {
-			pool_print_range_list(pool, range_list, get_enabled);
-			d_rank_range_list_free(range_list);
-		}
+		/* Formerly a side effect of building the debug log string; keep it unconditional */
+		if ((*ranks)->rl_nr > 0)
+			d_rank_list_sort(*ranks);
+		dc_pool_log_ranks(pool->dp_pool, *ranks, get_enabled);
 	}
 
 out_unlock:
@@ -2044,6 +2053,10 @@ unregister_map_task(struct dc_pool *pool, tse_task_t *task)
  * mra_i is an index in the internal node array of a pool map. It is used to
  * perform a round robin of the array starting from a random element.
  *
+ * mra_hint_rank is a preferred first rank to query (e.g. the engine that
+ * returned -DER_STALE), or CRT_NO_RANK. It is consumed once, after which
+ * the normal round robin resumes.
+ *
  * mra_n is the number of "serious" errors at which we will fall back to
  * POOL_QUERY via dc_pool_query. "Serious" errors like -DER_NO_HDL or
  * -DER_NONEXIST are not "retryable" normally. In the case of
@@ -2057,7 +2070,8 @@ struct map_refresh_arg {
 	bool			mra_passive;
 	bool			mra_fallen_back;
 	unsigned int		mra_map_version;
-	int			mra_i;
+	int                     mra_i;
+	d_rank_t                mra_hint_rank;
 	int			mra_n;
 	struct d_backoff_seq	mra_backoff_seq;
 };
@@ -2081,6 +2095,35 @@ choose_map_refresh_rank(struct map_refresh_arg *arg)
 	n = pool_map_find_ranks(arg->mra_pool->dp_map, PO_COMP_ID_ALL, &nodes);
 	/* There must be at least one rank. */
 	D_ASSERTF(n > 0, "%d\n", n);
+
+	/*
+	 * Try the hinted rank first (e.g. the engine that returned -DER_STALE):
+	 * known-alive and known to hold a newer map. Consume it once, then fall
+	 * back to the round robin below.
+	 *
+	 * TODO: the suite tests only confirm that a refresh advanced the client
+	 * map, which the hint exercises by construction but does not prove the
+	 * hinted rank was the one queried. A future change could add a fail-loc
+	 * tripwire + counter here (incremented only on the hint branch) that the
+	 * engine side confirms and the test reads back, turning the by-construction
+	 * argument into an explicit "hint rank was used" assertion.
+	 */
+	if (arg->mra_hint_rank != CRT_NO_RANK) {
+		d_rank_t hint = arg->mra_hint_rank;
+
+		arg->mra_hint_rank = CRT_NO_RANK;
+		for (i = 0; i < n; i++) {
+			if (nodes[i].do_comp.co_rank == hint &&
+			    nodes[i].do_comp.co_status == PO_COMP_ST_UPIN) {
+				arg->mra_i = i + 1;
+				D_DEBUG(DB_MD, DF_UUID ": using hint rank %u for map refresh\n",
+					DP_UUID(arg->mra_pool->dp_pool), hint);
+				return hint;
+			}
+		}
+		D_DEBUG(DB_MD, DF_UUID ": hint rank %u not usable (not UPIN), using round robin\n",
+			DP_UUID(arg->mra_pool->dp_pool), hint);
+	}
 
 	if (arg->mra_i == -1) {
 		/* Let i be a random integer in [0, n). */
@@ -2491,14 +2534,21 @@ out_pool:
  * In either case, the pool map refresh task may temporarily miss the latest
  * pool map version in certain scenarios, resulting in extra retries.
  *
+ * \a hint_rank optionally names a rank to query first (e.g. an engine that just
+ * returned -DER_STALE: provably alive and already on a newer map), so the
+ * refresh need not round robin onto ranks that may be down in the cached map.
+ * It is best effort: if the rank is not UPIN when the task runs, normal
+ * selection is used. Pass CRT_NO_RANK for no hint.
+ *
  * \param[in]	pool_hdl	pool handle
  * \param[in]	map_version	known pool map version
+ * \param[in]	hint_rank	preferred first rank to query, or CRT_NO_RANK
  * \param[in]	sched		scheduler
  * \param[out]	task		pool map refresh task
  */
 int
-dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version, tse_sched_t *sched,
-				tse_task_t **task)
+dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version, d_rank_t hint_rank,
+				tse_sched_t *sched, tse_task_t **task)
 {
 	struct dc_pool	       *pool;
 	tse_task_t	       *t;
@@ -2527,7 +2577,11 @@ dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version, ts
 	a->mra_fallen_back = false;
 	a->mra_map_version = map_version;
 	a->mra_i = -1;
+	a->mra_hint_rank   = hint_rank;
 	a->mra_n = 4;
+	if (hint_rank != CRT_NO_RANK)
+		D_DEBUG(DB_MD, DF_UUID ": %p: seeding map refresh with hint rank %u\n",
+			DP_UUID(pool->dp_pool), t, hint_rank);
 	rc = d_backoff_seq_init(&a->mra_backoff_seq, 0 /* nzeros */, 8 /* factor */,
 				1 << 10 /* next (us) */, 4 << 20 /* max (us) */);
 	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
