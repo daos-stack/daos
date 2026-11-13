@@ -57,6 +57,7 @@ message StorageFormatReq {
 	bool reformat = 3;
 	bool          replace  = 4;
 	uint32        rank     = 5; // Specific rank to replace (only valid with replace=true)
+	bool          start    = 6; // start the engines after format instead of holding them
 }
 
 message StorageFormatResp {

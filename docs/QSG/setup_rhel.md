@@ -416,6 +416,9 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		# format storage
 		dmg storage format -l $SERVER_NODES # can use --force if needed
 
+		# start the engines and wait for them to join
+		dmg system initialize -l $SERVER_NODES
+
 3. Verify that all servers have started:
 
 		# system query from ADMIN_NODES

@@ -298,23 +298,19 @@ func (svc *mgmtSvc) makePoolCheckLeaderCall(ctx context.Context, req poolChecker
 }
 
 func (svc *mgmtSvc) startSystemRanks(ctx context.Context, sys string) error {
-	// Use the group membership to determine the set of ranks
-	// that are available to be started.
-	gm, err := svc.sysdb.GroupMap()
+	// Every member that is not excluded restarts in checker mode.
+	ranks, err := svc.sysdb.MemberRanks(system.AllMemberFilter &^ system.ExcludedMemberFilter)
 	if err != nil {
-		return errors.Wrap(err, "failed to get group map")
+		return err
 	}
-	availRanks := ranklist.NewRankSet()
-	for rank := range gm.RankEntries {
-		availRanks.Add(rank)
+	if len(ranks) == 0 {
+		return errors.New("no ranks to start")
 	}
 
-	// Finally, restart all of the ranks so that they join in
-	// checker mode.
 	startReq := &mgmtpb.SystemStartReq{
 		Sys:       sys,
 		CheckMode: svc.checkerIsEnabled(),
-		Ranks:     availRanks.String(),
+		Ranks:     ranklist.RankSetFromRanks(ranks).String(),
 	}
 	if _, err := svc.SystemStart(ctx, startReq); err != nil {
 		return errors.Wrap(err, "failed to start all ranks")

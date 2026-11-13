@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -50,8 +51,10 @@ const (
 	MemberStateAdminExcluded MemberState = 0x0200
 	// MemberStateCheckerStarted indicates that the rank is running in checker mode.
 	MemberStateCheckerStarted MemberState = 0x0400
+	// MemberStateAwaitStart indicates the member is waiting to be started.
+	MemberStateAwaitStart MemberState = 0x0800
 	// MemberStateMax is the last entry indicating end of list.
-	MemberStateMax MemberState = 0x0800
+	MemberStateMax MemberState = 0x1000
 
 	// ExcludedMemberFilter defines the state(s) to be used when determining
 	// whether or not a member should be excluded from CaRT group map updates.
@@ -89,6 +92,8 @@ func (ms MemberState) String() string {
 		return "Unresponsive"
 	case MemberStateCheckerStarted:
 		return "CheckerStarted"
+	case MemberStateAwaitStart:
+		return "AwaitStart"
 	default:
 		return "Unknown"
 	}
@@ -118,6 +123,8 @@ func MemberStateFromString(in string) MemberState {
 		return MemberStateUnresponsive
 	case "checkerstarted":
 		return MemberStateCheckerStarted
+	case "awaitstart":
+		return MemberStateAwaitStart
 	default:
 		return MemberStateUnknown
 	}
@@ -139,6 +146,9 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		MemberStateAwaitFormat: {
 			MemberStateExcluded: true,
 		},
+		MemberStateAwaitStart: {
+			MemberStateExcluded: true,
+		},
 		MemberStateStarting: {
 			MemberStateExcluded: true,
 		},
@@ -147,6 +157,9 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		},
 		MemberStateJoined: {
 			MemberStateReady: true,
+		},
+		MemberStateStopped: {
+			MemberStateExcluded: true, // a stopped rank is expected to be dead
 		},
 		MemberStateErrored: {
 			MemberStateReady:    true,
@@ -171,6 +184,13 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 			MemberStateUnresponsive: true,
 		},
 	}[ms][to]
+}
+
+// StartsOnBoot reports whether an engine in this state starts again when
+// its daos_server restarts. A stopped or administratively excluded rank
+// waits for dmg system start.
+func (ms MemberState) StartsOnBoot() bool {
+	return ms != MemberStateStopped && ms != MemberStateAdminExcluded
 }
 
 // MemberStates2Mask returns a state bitmask and a flag indicating whether to include the "Unknown"
@@ -411,17 +431,35 @@ func (mrs MemberResults) Errors() error {
 	if err != nil {
 		return err
 	}
-
-	for _, mr := range mrs {
-		if mr.Errored {
-			rs.Add(mr.Rank)
-		}
+	hs, err := hostlist.CreateSet("")
+	if err != nil {
+		return err
 	}
 
+	for _, mr := range mrs {
+		if !mr.Errored {
+			continue
+		}
+		if mr.Rank == ranklist.NilRank {
+			if _, err := hs.Insert(mr.Addr); err != nil {
+				return err
+			}
+			continue
+		}
+		rs.Add(mr.Rank)
+	}
+
+	var msgs []string
 	if rs.Count() > 0 {
-		return errors.Errorf("failed %s %s",
-			english.PluralWord(rs.Count(), "rank", "ranks"),
-			rs.String())
+		msgs = append(msgs, fmt.Sprintf("failed %s %s",
+			english.PluralWord(rs.Count(), "rank", "ranks"), rs))
+	}
+	if hs.Count() > 0 {
+		msgs = append(msgs, fmt.Sprintf("failed %s %s",
+			english.PluralWord(hs.Count(), "host", "hosts"), hs))
+	}
+	if len(msgs) > 0 {
+		return errors.New(strings.Join(msgs, "; "))
 	}
 
 	return nil

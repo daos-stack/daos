@@ -208,7 +208,7 @@ Self-heal policy for the system (self_heal) none
 **3.** Add ranks to system by starting storage server DAOS services and
 formatting so that they join.
 
-Use `daos_server start` and `dmg storage format` commands.
+Use `daos_server start`, `dmg storage format` and `dmg system initialize` commands.
 
 **4.** Run system query which will indicate disabled system `self_heal` flags.
 

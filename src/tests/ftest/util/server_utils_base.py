@@ -1,5 +1,6 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
+(C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,6 +31,7 @@ class DaosServerCommand(YamlCommand):
     NORMAL_PATTERN = "DAOS I/O Engine.*process [0-9]+ started on"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
+    LISTENING_PATTERN = "listening on"
     SYSTEM_QUERY_PATTERN = "joined"
 
     DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
@@ -132,6 +134,11 @@ class DaosServerCommand(YamlCommand):
             mode (str): operation mode for the 'daos_server start' command
             host_qty (int): number of hosts issuing 'daos_server start'
         """
+        if mode == "listening":
+            # one control plane per host, before any engine starts
+            self.pattern = self.LISTENING_PATTERN
+            self.pattern_count = host_qty
+            return
         if mode == "format":
             self.pattern = self.FORMAT_PATTERN
         elif mode == "reformat":

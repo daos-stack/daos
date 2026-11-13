@@ -38,6 +38,7 @@ const (
 	CtlSvc_StopRanks_FullMethodName            = "/ctl.CtlSvc/StopRanks"
 	CtlSvc_ResetFormatRanks_FullMethodName     = "/ctl.CtlSvc/ResetFormatRanks"
 	CtlSvc_StartRanks_FullMethodName           = "/ctl.CtlSvc/StartRanks"
+	CtlSvc_StartEngines_FullMethodName         = "/ctl.CtlSvc/StartEngines"
 	CtlSvc_CollectLog_FullMethodName           = "/ctl.CtlSvc/CollectLog"
 	CtlSvc_CheckEngineRepair_FullMethodName    = "/ctl.CtlSvc/CheckEngineRepair"
 )
@@ -76,6 +77,8 @@ type CtlSvcClient interface {
 	ResetFormatRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
 	StartRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
+	// Start DAOS I/O Engines on a host by instance index. (gRPC fanout)
+	StartEngines(ctx context.Context, in *StartEnginesReq, opts ...grpc.CallOption) (*StartEnginesResp, error)
 	// Perform a Log collection on Servers for support/debug purpose
 	CollectLog(ctx context.Context, in *CollectLogReq, opts ...grpc.CallOption) (*CollectLogResp, error)
 	// Send the desired action to repair an inconsistency on a given engine.
@@ -210,6 +213,16 @@ func (c *ctlSvcClient) StartRanks(ctx context.Context, in *RanksReq, opts ...grp
 	return out, nil
 }
 
+func (c *ctlSvcClient) StartEngines(ctx context.Context, in *StartEnginesReq, opts ...grpc.CallOption) (*StartEnginesResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartEnginesResp)
+	err := c.cc.Invoke(ctx, CtlSvc_StartEngines_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *ctlSvcClient) CollectLog(ctx context.Context, in *CollectLogReq, opts ...grpc.CallOption) (*CollectLogResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CollectLogResp)
@@ -264,6 +277,8 @@ type CtlSvcServer interface {
 	ResetFormatRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
 	StartRanks(context.Context, *RanksReq) (*RanksResp, error)
+	// Start DAOS I/O Engines on a host by instance index. (gRPC fanout)
+	StartEngines(context.Context, *StartEnginesReq) (*StartEnginesResp, error)
 	// Perform a Log collection on Servers for support/debug purpose
 	CollectLog(context.Context, *CollectLogReq) (*CollectLogResp, error)
 	// Send the desired action to repair an inconsistency on a given engine.
@@ -313,6 +328,9 @@ func (UnimplementedCtlSvcServer) ResetFormatRanks(context.Context, *RanksReq) (*
 }
 func (UnimplementedCtlSvcServer) StartRanks(context.Context, *RanksReq) (*RanksResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method StartRanks not implemented")
+}
+func (UnimplementedCtlSvcServer) StartEngines(context.Context, *StartEnginesReq) (*StartEnginesResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartEngines not implemented")
 }
 func (UnimplementedCtlSvcServer) CollectLog(context.Context, *CollectLogReq) (*CollectLogResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method CollectLog not implemented")
@@ -557,6 +575,24 @@ func _CtlSvc_StartRanks_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CtlSvc_StartEngines_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartEnginesReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CtlSvcServer).StartEngines(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CtlSvc_StartEngines_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CtlSvcServer).StartEngines(ctx, req.(*StartEnginesReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CtlSvc_CollectLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CollectLogReq)
 	if err := dec(in); err != nil {
@@ -647,6 +683,10 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartRanks",
 			Handler:    _CtlSvc_StartRanks_Handler,
+		},
+		{
+			MethodName: "StartEngines",
+			Handler:    _CtlSvc_StartEngines_Handler,
 		},
 		{
 			MethodName: "CollectLog",

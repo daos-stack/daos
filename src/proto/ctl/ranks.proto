@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,3 +26,19 @@ message RanksResp {
 	repeated shared.RankResult results = 1;
 }
 
+// Request to start every engine on a host.
+message StartEnginesReq {}
+
+// Per-instance start result.
+message EngineResult
+{
+	uint32 index = 1; // engine instance index
+	string state = 2; // local engine state after the request
+	string error = 3; // why the engine exited instead of starting
+	string uuid  = 4; // superblock UUID; empty until formatted
+}
+
+message StartEnginesResp
+{
+	repeated EngineResult results = 1; // one per requested instance
+}

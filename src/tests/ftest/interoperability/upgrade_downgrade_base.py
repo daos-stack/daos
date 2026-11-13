@@ -54,7 +54,7 @@ class UpgradeDowngradeBase(IorTestBase):
         self.first_server = NodeSet(self.hostlist_servers[0])
         self.first_client = NodeSet(self.hostlist_clients[0])
 
-    def start_servers(self, server_groups=None, force=False):
+    def start_servers(self, server_groups=None, force=False, **kwargs):
         """Start the daos_server processes.
 
         Override base method to use a RemoteDmgCommand to run dmg on a server host.
@@ -68,6 +68,7 @@ class UpgradeDowngradeBase(IorTestBase):
                 file to define a single server group entry.
             force (bool, optional): whether or not to force starting the
                 servers. Defaults to False.
+            kwargs (dict): arguments for each server manager's start method
 
         Returns:
             bool: whether or not to force the starting of the agents
@@ -87,7 +88,7 @@ class UpgradeDowngradeBase(IorTestBase):
             self.server_managers[0].dmg.yaml,
             self.server_managers[0].dmg.hostlist_suffix)
 
-        return self.start_server_managers(force)
+        return self.start_server_managers(force, **kwargs)
 
     def system_stop(self, servers=True, agents=True):
         """Stop all servers and/or agents."""

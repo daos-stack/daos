@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -450,6 +450,218 @@ func (x *SystemStartResp) GetAbsenthosts() string {
 	return ""
 }
 
+// SystemInitializeReq supplies system initialize parameters.
+type SystemInitializeReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sys           string                 `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`                                     // DAOS system name
+	Hosts         string                 `protobuf:"bytes,2,opt,name=hosts,proto3" json:"hosts,omitempty"`                                 // hostset to start engines on
+	JoinTimeout   uint32                 `protobuf:"varint,3,opt,name=join_timeout,json=joinTimeout,proto3" json:"join_timeout,omitempty"` // seconds to wait for engines to join (0: no limit)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemInitializeReq) Reset() {
+	*x = SystemInitializeReq{}
+	mi := &file_mgmt_system_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemInitializeReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemInitializeReq) ProtoMessage() {}
+
+func (x *SystemInitializeReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_system_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemInitializeReq.ProtoReflect.Descriptor instead.
+func (*SystemInitializeReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_system_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SystemInitializeReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *SystemInitializeReq) GetHosts() string {
+	if x != nil {
+		return x.Hosts
+	}
+	return ""
+}
+
+func (x *SystemInitializeReq) GetJoinTimeout() uint32 {
+	if x != nil {
+		return x.JoinTimeout
+	}
+	return 0
+}
+
+// SystemInitializeResp returns results of attempts to start and join engines.
+type SystemInitializeResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Results       []*shared.RankResult   `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"` // joined ranks, or the host that fell short
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemInitializeResp) Reset() {
+	*x = SystemInitializeResp{}
+	mi := &file_mgmt_system_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemInitializeResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemInitializeResp) ProtoMessage() {}
+
+func (x *SystemInitializeResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_system_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemInitializeResp.ProtoReflect.Descriptor instead.
+func (*SystemInitializeResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_system_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SystemInitializeResp) GetResults() []*shared.RankResult {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+// SystemExtendReq supplies system extend parameters.
+type SystemExtendReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sys           string                 `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`                                     // DAOS system name
+	Hosts         string                 `protobuf:"bytes,2,opt,name=hosts,proto3" json:"hosts,omitempty"`                                 // hostset to start engines on
+	JoinTimeout   uint32                 `protobuf:"varint,3,opt,name=join_timeout,json=joinTimeout,proto3" json:"join_timeout,omitempty"` // seconds to wait for engines to join (0: no limit)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemExtendReq) Reset() {
+	*x = SystemExtendReq{}
+	mi := &file_mgmt_system_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemExtendReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemExtendReq) ProtoMessage() {}
+
+func (x *SystemExtendReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_system_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemExtendReq.ProtoReflect.Descriptor instead.
+func (*SystemExtendReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_system_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SystemExtendReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *SystemExtendReq) GetHosts() string {
+	if x != nil {
+		return x.Hosts
+	}
+	return ""
+}
+
+func (x *SystemExtendReq) GetJoinTimeout() uint32 {
+	if x != nil {
+		return x.JoinTimeout
+	}
+	return 0
+}
+
+// SystemExtendResp returns results of attempts to start and join engines.
+type SystemExtendResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Results       []*shared.RankResult   `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"` // joined ranks, or the host that fell short
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemExtendResp) Reset() {
+	*x = SystemExtendResp{}
+	mi := &file_mgmt_system_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemExtendResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemExtendResp) ProtoMessage() {}
+
+func (x *SystemExtendResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_system_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemExtendResp.ProtoReflect.Descriptor instead.
+func (*SystemExtendResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_system_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SystemExtendResp) GetResults() []*shared.RankResult {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
 // SystemExcludeReq supplies system exclude parameters.
 type SystemExcludeReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -463,7 +675,7 @@ type SystemExcludeReq struct {
 
 func (x *SystemExcludeReq) Reset() {
 	*x = SystemExcludeReq{}
-	mi := &file_mgmt_system_proto_msgTypes[5]
+	mi := &file_mgmt_system_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -475,7 +687,7 @@ func (x *SystemExcludeReq) String() string {
 func (*SystemExcludeReq) ProtoMessage() {}
 
 func (x *SystemExcludeReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[5]
+	mi := &file_mgmt_system_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -488,7 +700,7 @@ func (x *SystemExcludeReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemExcludeReq.ProtoReflect.Descriptor instead.
 func (*SystemExcludeReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{5}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SystemExcludeReq) GetSys() string {
@@ -529,7 +741,7 @@ type SystemExcludeResp struct {
 
 func (x *SystemExcludeResp) Reset() {
 	*x = SystemExcludeResp{}
-	mi := &file_mgmt_system_proto_msgTypes[6]
+	mi := &file_mgmt_system_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -541,7 +753,7 @@ func (x *SystemExcludeResp) String() string {
 func (*SystemExcludeResp) ProtoMessage() {}
 
 func (x *SystemExcludeResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[6]
+	mi := &file_mgmt_system_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -554,7 +766,7 @@ func (x *SystemExcludeResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemExcludeResp.ProtoReflect.Descriptor instead.
 func (*SystemExcludeResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{6}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SystemExcludeResp) GetResults() []*shared.RankResult {
@@ -577,7 +789,7 @@ type SystemDrainReq struct {
 
 func (x *SystemDrainReq) Reset() {
 	*x = SystemDrainReq{}
-	mi := &file_mgmt_system_proto_msgTypes[7]
+	mi := &file_mgmt_system_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -589,7 +801,7 @@ func (x *SystemDrainReq) String() string {
 func (*SystemDrainReq) ProtoMessage() {}
 
 func (x *SystemDrainReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[7]
+	mi := &file_mgmt_system_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -602,7 +814,7 @@ func (x *SystemDrainReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemDrainReq.ProtoReflect.Descriptor instead.
 func (*SystemDrainReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{7}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SystemDrainReq) GetSys() string {
@@ -644,7 +856,7 @@ type PoolRanksResp struct {
 
 func (x *PoolRanksResp) Reset() {
 	*x = PoolRanksResp{}
-	mi := &file_mgmt_system_proto_msgTypes[8]
+	mi := &file_mgmt_system_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -656,7 +868,7 @@ func (x *PoolRanksResp) String() string {
 func (*PoolRanksResp) ProtoMessage() {}
 
 func (x *PoolRanksResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[8]
+	mi := &file_mgmt_system_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -669,7 +881,7 @@ func (x *PoolRanksResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolRanksResp.ProtoReflect.Descriptor instead.
 func (*PoolRanksResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{8}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *PoolRanksResp) GetId() string {
@@ -697,7 +909,7 @@ type SystemDrainResp struct {
 
 func (x *SystemDrainResp) Reset() {
 	*x = SystemDrainResp{}
-	mi := &file_mgmt_system_proto_msgTypes[9]
+	mi := &file_mgmt_system_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -709,7 +921,7 @@ func (x *SystemDrainResp) String() string {
 func (*SystemDrainResp) ProtoMessage() {}
 
 func (x *SystemDrainResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[9]
+	mi := &file_mgmt_system_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -722,7 +934,7 @@ func (x *SystemDrainResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemDrainResp.ProtoReflect.Descriptor instead.
 func (*SystemDrainResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{9}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SystemDrainResp) GetReint() bool {
@@ -751,7 +963,7 @@ type SystemRebuildManageReq struct {
 
 func (x *SystemRebuildManageReq) Reset() {
 	*x = SystemRebuildManageReq{}
-	mi := &file_mgmt_system_proto_msgTypes[10]
+	mi := &file_mgmt_system_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -763,7 +975,7 @@ func (x *SystemRebuildManageReq) String() string {
 func (*SystemRebuildManageReq) ProtoMessage() {}
 
 func (x *SystemRebuildManageReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[10]
+	mi := &file_mgmt_system_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -776,7 +988,7 @@ func (x *SystemRebuildManageReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemRebuildManageReq.ProtoReflect.Descriptor instead.
 func (*SystemRebuildManageReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{10}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SystemRebuildManageReq) GetSys() string {
@@ -813,7 +1025,7 @@ type PoolRebuildManageResult struct {
 
 func (x *PoolRebuildManageResult) Reset() {
 	*x = PoolRebuildManageResult{}
-	mi := &file_mgmt_system_proto_msgTypes[11]
+	mi := &file_mgmt_system_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -825,7 +1037,7 @@ func (x *PoolRebuildManageResult) String() string {
 func (*PoolRebuildManageResult) ProtoMessage() {}
 
 func (x *PoolRebuildManageResult) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[11]
+	mi := &file_mgmt_system_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -838,7 +1050,7 @@ func (x *PoolRebuildManageResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolRebuildManageResult.ProtoReflect.Descriptor instead.
 func (*PoolRebuildManageResult) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{11}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PoolRebuildManageResult) GetId() string {
@@ -879,7 +1091,7 @@ type SystemRebuildManageResp struct {
 
 func (x *SystemRebuildManageResp) Reset() {
 	*x = SystemRebuildManageResp{}
-	mi := &file_mgmt_system_proto_msgTypes[12]
+	mi := &file_mgmt_system_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -891,7 +1103,7 @@ func (x *SystemRebuildManageResp) String() string {
 func (*SystemRebuildManageResp) ProtoMessage() {}
 
 func (x *SystemRebuildManageResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[12]
+	mi := &file_mgmt_system_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -904,7 +1116,7 @@ func (x *SystemRebuildManageResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemRebuildManageResp.ProtoReflect.Descriptor instead.
 func (*SystemRebuildManageResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{12}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SystemRebuildManageResp) GetResults() []*PoolRebuildManageResult {
@@ -924,7 +1136,7 @@ type SystemSelfHealEvalReq struct {
 
 func (x *SystemSelfHealEvalReq) Reset() {
 	*x = SystemSelfHealEvalReq{}
-	mi := &file_mgmt_system_proto_msgTypes[13]
+	mi := &file_mgmt_system_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -936,7 +1148,7 @@ func (x *SystemSelfHealEvalReq) String() string {
 func (*SystemSelfHealEvalReq) ProtoMessage() {}
 
 func (x *SystemSelfHealEvalReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[13]
+	mi := &file_mgmt_system_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -949,7 +1161,7 @@ func (x *SystemSelfHealEvalReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemSelfHealEvalReq.ProtoReflect.Descriptor instead.
 func (*SystemSelfHealEvalReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{13}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SystemSelfHealEvalReq) GetSys() string {
@@ -972,7 +1184,7 @@ type SystemQueryReq struct {
 
 func (x *SystemQueryReq) Reset() {
 	*x = SystemQueryReq{}
-	mi := &file_mgmt_system_proto_msgTypes[14]
+	mi := &file_mgmt_system_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -984,7 +1196,7 @@ func (x *SystemQueryReq) String() string {
 func (*SystemQueryReq) ProtoMessage() {}
 
 func (x *SystemQueryReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[14]
+	mi := &file_mgmt_system_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -997,7 +1209,7 @@ func (x *SystemQueryReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemQueryReq.ProtoReflect.Descriptor instead.
 func (*SystemQueryReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{14}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SystemQueryReq) GetSys() string {
@@ -1043,7 +1255,7 @@ type SystemQueryResp struct {
 
 func (x *SystemQueryResp) Reset() {
 	*x = SystemQueryResp{}
-	mi := &file_mgmt_system_proto_msgTypes[15]
+	mi := &file_mgmt_system_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1055,7 +1267,7 @@ func (x *SystemQueryResp) String() string {
 func (*SystemQueryResp) ProtoMessage() {}
 
 func (x *SystemQueryResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[15]
+	mi := &file_mgmt_system_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1068,7 +1280,7 @@ func (x *SystemQueryResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemQueryResp.ProtoReflect.Descriptor instead.
 func (*SystemQueryResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{15}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *SystemQueryResp) GetMembers() []*SystemMember {
@@ -1123,7 +1335,7 @@ type SystemEraseReq struct {
 
 func (x *SystemEraseReq) Reset() {
 	*x = SystemEraseReq{}
-	mi := &file_mgmt_system_proto_msgTypes[16]
+	mi := &file_mgmt_system_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1135,7 +1347,7 @@ func (x *SystemEraseReq) String() string {
 func (*SystemEraseReq) ProtoMessage() {}
 
 func (x *SystemEraseReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[16]
+	mi := &file_mgmt_system_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1148,7 +1360,7 @@ func (x *SystemEraseReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemEraseReq.ProtoReflect.Descriptor instead.
 func (*SystemEraseReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{16}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SystemEraseReq) GetSys() string {
@@ -1167,7 +1379,7 @@ type SystemEraseResp struct {
 
 func (x *SystemEraseResp) Reset() {
 	*x = SystemEraseResp{}
-	mi := &file_mgmt_system_proto_msgTypes[17]
+	mi := &file_mgmt_system_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1179,7 +1391,7 @@ func (x *SystemEraseResp) String() string {
 func (*SystemEraseResp) ProtoMessage() {}
 
 func (x *SystemEraseResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[17]
+	mi := &file_mgmt_system_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1192,7 +1404,7 @@ func (x *SystemEraseResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemEraseResp.ProtoReflect.Descriptor instead.
 func (*SystemEraseResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{17}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *SystemEraseResp) GetResults() []*shared.RankResult {
@@ -1213,7 +1425,7 @@ type SystemCleanupReq struct {
 
 func (x *SystemCleanupReq) Reset() {
 	*x = SystemCleanupReq{}
-	mi := &file_mgmt_system_proto_msgTypes[18]
+	mi := &file_mgmt_system_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1225,7 +1437,7 @@ func (x *SystemCleanupReq) String() string {
 func (*SystemCleanupReq) ProtoMessage() {}
 
 func (x *SystemCleanupReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[18]
+	mi := &file_mgmt_system_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1238,7 +1450,7 @@ func (x *SystemCleanupReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemCleanupReq.ProtoReflect.Descriptor instead.
 func (*SystemCleanupReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{18}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *SystemCleanupReq) GetSys() string {
@@ -1265,7 +1477,7 @@ type SystemCleanupResp struct {
 
 func (x *SystemCleanupResp) Reset() {
 	*x = SystemCleanupResp{}
-	mi := &file_mgmt_system_proto_msgTypes[19]
+	mi := &file_mgmt_system_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1277,7 +1489,7 @@ func (x *SystemCleanupResp) String() string {
 func (*SystemCleanupResp) ProtoMessage() {}
 
 func (x *SystemCleanupResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[19]
+	mi := &file_mgmt_system_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1290,7 +1502,7 @@ func (x *SystemCleanupResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemCleanupResp.ProtoReflect.Descriptor instead.
 func (*SystemCleanupResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{19}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *SystemCleanupResp) GetResults() []*SystemCleanupResp_CleanupResult {
@@ -1311,7 +1523,7 @@ type SystemSetAttrReq struct {
 
 func (x *SystemSetAttrReq) Reset() {
 	*x = SystemSetAttrReq{}
-	mi := &file_mgmt_system_proto_msgTypes[20]
+	mi := &file_mgmt_system_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1323,7 +1535,7 @@ func (x *SystemSetAttrReq) String() string {
 func (*SystemSetAttrReq) ProtoMessage() {}
 
 func (x *SystemSetAttrReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[20]
+	mi := &file_mgmt_system_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1336,7 +1548,7 @@ func (x *SystemSetAttrReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemSetAttrReq.ProtoReflect.Descriptor instead.
 func (*SystemSetAttrReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{20}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *SystemSetAttrReq) GetSys() string {
@@ -1365,7 +1577,7 @@ type SystemGetAttrReq struct {
 
 func (x *SystemGetAttrReq) Reset() {
 	*x = SystemGetAttrReq{}
-	mi := &file_mgmt_system_proto_msgTypes[21]
+	mi := &file_mgmt_system_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1377,7 +1589,7 @@ func (x *SystemGetAttrReq) String() string {
 func (*SystemGetAttrReq) ProtoMessage() {}
 
 func (x *SystemGetAttrReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[21]
+	mi := &file_mgmt_system_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1390,7 +1602,7 @@ func (x *SystemGetAttrReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemGetAttrReq.ProtoReflect.Descriptor instead.
 func (*SystemGetAttrReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{21}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SystemGetAttrReq) GetSys() string {
@@ -1417,7 +1629,7 @@ type SystemGetAttrResp struct {
 
 func (x *SystemGetAttrResp) Reset() {
 	*x = SystemGetAttrResp{}
-	mi := &file_mgmt_system_proto_msgTypes[22]
+	mi := &file_mgmt_system_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1429,7 +1641,7 @@ func (x *SystemGetAttrResp) String() string {
 func (*SystemGetAttrResp) ProtoMessage() {}
 
 func (x *SystemGetAttrResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[22]
+	mi := &file_mgmt_system_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1442,7 +1654,7 @@ func (x *SystemGetAttrResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemGetAttrResp.ProtoReflect.Descriptor instead.
 func (*SystemGetAttrResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{22}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SystemGetAttrResp) GetAttributes() map[string]string {
@@ -1463,7 +1675,7 @@ type SystemSetPropReq struct {
 
 func (x *SystemSetPropReq) Reset() {
 	*x = SystemSetPropReq{}
-	mi := &file_mgmt_system_proto_msgTypes[23]
+	mi := &file_mgmt_system_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1475,7 +1687,7 @@ func (x *SystemSetPropReq) String() string {
 func (*SystemSetPropReq) ProtoMessage() {}
 
 func (x *SystemSetPropReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[23]
+	mi := &file_mgmt_system_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1488,7 +1700,7 @@ func (x *SystemSetPropReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemSetPropReq.ProtoReflect.Descriptor instead.
 func (*SystemSetPropReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{23}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *SystemSetPropReq) GetSys() string {
@@ -1517,7 +1729,7 @@ type SystemGetPropReq struct {
 
 func (x *SystemGetPropReq) Reset() {
 	*x = SystemGetPropReq{}
-	mi := &file_mgmt_system_proto_msgTypes[24]
+	mi := &file_mgmt_system_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1529,7 +1741,7 @@ func (x *SystemGetPropReq) String() string {
 func (*SystemGetPropReq) ProtoMessage() {}
 
 func (x *SystemGetPropReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[24]
+	mi := &file_mgmt_system_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1542,7 +1754,7 @@ func (x *SystemGetPropReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemGetPropReq.ProtoReflect.Descriptor instead.
 func (*SystemGetPropReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{24}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *SystemGetPropReq) GetSys() string {
@@ -1569,7 +1781,7 @@ type SystemGetPropResp struct {
 
 func (x *SystemGetPropResp) Reset() {
 	*x = SystemGetPropResp{}
-	mi := &file_mgmt_system_proto_msgTypes[25]
+	mi := &file_mgmt_system_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1581,7 +1793,7 @@ func (x *SystemGetPropResp) String() string {
 func (*SystemGetPropResp) ProtoMessage() {}
 
 func (x *SystemGetPropResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[25]
+	mi := &file_mgmt_system_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1594,7 +1806,7 @@ func (x *SystemGetPropResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemGetPropResp.ProtoReflect.Descriptor instead.
 func (*SystemGetPropResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{25}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *SystemGetPropResp) GetProperties() map[string]string {
@@ -1616,7 +1828,7 @@ type SystemCleanupResp_CleanupResult struct {
 
 func (x *SystemCleanupResp_CleanupResult) Reset() {
 	*x = SystemCleanupResp_CleanupResult{}
-	mi := &file_mgmt_system_proto_msgTypes[26]
+	mi := &file_mgmt_system_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1628,7 +1840,7 @@ func (x *SystemCleanupResp_CleanupResult) String() string {
 func (*SystemCleanupResp_CleanupResult) ProtoMessage() {}
 
 func (x *SystemCleanupResp_CleanupResult) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[26]
+	mi := &file_mgmt_system_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1641,7 +1853,7 @@ func (x *SystemCleanupResp_CleanupResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemCleanupResp_CleanupResult.ProtoReflect.Descriptor instead.
 func (*SystemCleanupResp_CleanupResult) Descriptor() ([]byte, []int) {
-	return file_mgmt_system_proto_rawDescGZIP(), []int{19, 0}
+	return file_mgmt_system_proto_rawDescGZIP(), []int{23, 0}
 }
 
 func (x *SystemCleanupResp_CleanupResult) GetStatus() int32 {
@@ -1714,7 +1926,19 @@ const file_mgmt_system_proto_rawDesc = "" +
 	"\x0fSystemStartResp\x12,\n" +
 	"\aresults\x18\x01 \x03(\v2\x12.shared.RankResultR\aresults\x12 \n" +
 	"\vabsentranks\x18\x02 \x01(\tR\vabsentranks\x12 \n" +
-	"\vabsenthosts\x18\x03 \x01(\tR\vabsenthosts\"f\n" +
+	"\vabsenthosts\x18\x03 \x01(\tR\vabsenthosts\"`\n" +
+	"\x13SystemInitializeReq\x12\x10\n" +
+	"\x03sys\x18\x01 \x01(\tR\x03sys\x12\x14\n" +
+	"\x05hosts\x18\x02 \x01(\tR\x05hosts\x12!\n" +
+	"\fjoin_timeout\x18\x03 \x01(\rR\vjoinTimeout\"D\n" +
+	"\x14SystemInitializeResp\x12,\n" +
+	"\aresults\x18\x01 \x03(\v2\x12.shared.RankResultR\aresults\"\\\n" +
+	"\x0fSystemExtendReq\x12\x10\n" +
+	"\x03sys\x18\x01 \x01(\tR\x03sys\x12\x14\n" +
+	"\x05hosts\x18\x02 \x01(\tR\x05hosts\x12!\n" +
+	"\fjoin_timeout\x18\x03 \x01(\rR\vjoinTimeout\"@\n" +
+	"\x10SystemExtendResp\x12,\n" +
+	"\aresults\x18\x01 \x03(\v2\x12.shared.RankResultR\aresults\"f\n" +
 	"\x10SystemExcludeReq\x12\x10\n" +
 	"\x03sys\x18\x01 \x01(\tR\x03sys\x12\x14\n" +
 	"\x05ranks\x18\x02 \x01(\tR\x05ranks\x12\x14\n" +
@@ -1822,60 +2046,66 @@ func file_mgmt_system_proto_rawDescGZIP() []byte {
 	return file_mgmt_system_proto_rawDescData
 }
 
-var file_mgmt_system_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_mgmt_system_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_mgmt_system_proto_goTypes = []any{
 	(*SystemMember)(nil),                    // 0: mgmt.SystemMember
 	(*SystemStopReq)(nil),                   // 1: mgmt.SystemStopReq
 	(*SystemStopResp)(nil),                  // 2: mgmt.SystemStopResp
 	(*SystemStartReq)(nil),                  // 3: mgmt.SystemStartReq
 	(*SystemStartResp)(nil),                 // 4: mgmt.SystemStartResp
-	(*SystemExcludeReq)(nil),                // 5: mgmt.SystemExcludeReq
-	(*SystemExcludeResp)(nil),               // 6: mgmt.SystemExcludeResp
-	(*SystemDrainReq)(nil),                  // 7: mgmt.SystemDrainReq
-	(*PoolRanksResp)(nil),                   // 8: mgmt.PoolRanksResp
-	(*SystemDrainResp)(nil),                 // 9: mgmt.SystemDrainResp
-	(*SystemRebuildManageReq)(nil),          // 10: mgmt.SystemRebuildManageReq
-	(*PoolRebuildManageResult)(nil),         // 11: mgmt.PoolRebuildManageResult
-	(*SystemRebuildManageResp)(nil),         // 12: mgmt.SystemRebuildManageResp
-	(*SystemSelfHealEvalReq)(nil),           // 13: mgmt.SystemSelfHealEvalReq
-	(*SystemQueryReq)(nil),                  // 14: mgmt.SystemQueryReq
-	(*SystemQueryResp)(nil),                 // 15: mgmt.SystemQueryResp
-	(*SystemEraseReq)(nil),                  // 16: mgmt.SystemEraseReq
-	(*SystemEraseResp)(nil),                 // 17: mgmt.SystemEraseResp
-	(*SystemCleanupReq)(nil),                // 18: mgmt.SystemCleanupReq
-	(*SystemCleanupResp)(nil),               // 19: mgmt.SystemCleanupResp
-	(*SystemSetAttrReq)(nil),                // 20: mgmt.SystemSetAttrReq
-	(*SystemGetAttrReq)(nil),                // 21: mgmt.SystemGetAttrReq
-	(*SystemGetAttrResp)(nil),               // 22: mgmt.SystemGetAttrResp
-	(*SystemSetPropReq)(nil),                // 23: mgmt.SystemSetPropReq
-	(*SystemGetPropReq)(nil),                // 24: mgmt.SystemGetPropReq
-	(*SystemGetPropResp)(nil),               // 25: mgmt.SystemGetPropResp
-	(*SystemCleanupResp_CleanupResult)(nil), // 26: mgmt.SystemCleanupResp.CleanupResult
-	nil,                                     // 27: mgmt.SystemSetAttrReq.AttributesEntry
-	nil,                                     // 28: mgmt.SystemGetAttrResp.AttributesEntry
-	nil,                                     // 29: mgmt.SystemSetPropReq.PropertiesEntry
-	nil,                                     // 30: mgmt.SystemGetPropResp.PropertiesEntry
-	(*shared.RankResult)(nil),               // 31: shared.RankResult
+	(*SystemInitializeReq)(nil),             // 5: mgmt.SystemInitializeReq
+	(*SystemInitializeResp)(nil),            // 6: mgmt.SystemInitializeResp
+	(*SystemExtendReq)(nil),                 // 7: mgmt.SystemExtendReq
+	(*SystemExtendResp)(nil),                // 8: mgmt.SystemExtendResp
+	(*SystemExcludeReq)(nil),                // 9: mgmt.SystemExcludeReq
+	(*SystemExcludeResp)(nil),               // 10: mgmt.SystemExcludeResp
+	(*SystemDrainReq)(nil),                  // 11: mgmt.SystemDrainReq
+	(*PoolRanksResp)(nil),                   // 12: mgmt.PoolRanksResp
+	(*SystemDrainResp)(nil),                 // 13: mgmt.SystemDrainResp
+	(*SystemRebuildManageReq)(nil),          // 14: mgmt.SystemRebuildManageReq
+	(*PoolRebuildManageResult)(nil),         // 15: mgmt.PoolRebuildManageResult
+	(*SystemRebuildManageResp)(nil),         // 16: mgmt.SystemRebuildManageResp
+	(*SystemSelfHealEvalReq)(nil),           // 17: mgmt.SystemSelfHealEvalReq
+	(*SystemQueryReq)(nil),                  // 18: mgmt.SystemQueryReq
+	(*SystemQueryResp)(nil),                 // 19: mgmt.SystemQueryResp
+	(*SystemEraseReq)(nil),                  // 20: mgmt.SystemEraseReq
+	(*SystemEraseResp)(nil),                 // 21: mgmt.SystemEraseResp
+	(*SystemCleanupReq)(nil),                // 22: mgmt.SystemCleanupReq
+	(*SystemCleanupResp)(nil),               // 23: mgmt.SystemCleanupResp
+	(*SystemSetAttrReq)(nil),                // 24: mgmt.SystemSetAttrReq
+	(*SystemGetAttrReq)(nil),                // 25: mgmt.SystemGetAttrReq
+	(*SystemGetAttrResp)(nil),               // 26: mgmt.SystemGetAttrResp
+	(*SystemSetPropReq)(nil),                // 27: mgmt.SystemSetPropReq
+	(*SystemGetPropReq)(nil),                // 28: mgmt.SystemGetPropReq
+	(*SystemGetPropResp)(nil),               // 29: mgmt.SystemGetPropResp
+	(*SystemCleanupResp_CleanupResult)(nil), // 30: mgmt.SystemCleanupResp.CleanupResult
+	nil,                                     // 31: mgmt.SystemSetAttrReq.AttributesEntry
+	nil,                                     // 32: mgmt.SystemGetAttrResp.AttributesEntry
+	nil,                                     // 33: mgmt.SystemSetPropReq.PropertiesEntry
+	nil,                                     // 34: mgmt.SystemGetPropResp.PropertiesEntry
+	(*shared.RankResult)(nil),               // 35: shared.RankResult
 }
 var file_mgmt_system_proto_depIdxs = []int32{
-	31, // 0: mgmt.SystemStopResp.results:type_name -> shared.RankResult
-	31, // 1: mgmt.SystemStartResp.results:type_name -> shared.RankResult
-	31, // 2: mgmt.SystemExcludeResp.results:type_name -> shared.RankResult
-	31, // 3: mgmt.PoolRanksResp.results:type_name -> shared.RankResult
-	8,  // 4: mgmt.SystemDrainResp.responses:type_name -> mgmt.PoolRanksResp
-	11, // 5: mgmt.SystemRebuildManageResp.results:type_name -> mgmt.PoolRebuildManageResult
-	0,  // 6: mgmt.SystemQueryResp.members:type_name -> mgmt.SystemMember
-	31, // 7: mgmt.SystemEraseResp.results:type_name -> shared.RankResult
-	26, // 8: mgmt.SystemCleanupResp.results:type_name -> mgmt.SystemCleanupResp.CleanupResult
-	27, // 9: mgmt.SystemSetAttrReq.attributes:type_name -> mgmt.SystemSetAttrReq.AttributesEntry
-	28, // 10: mgmt.SystemGetAttrResp.attributes:type_name -> mgmt.SystemGetAttrResp.AttributesEntry
-	29, // 11: mgmt.SystemSetPropReq.properties:type_name -> mgmt.SystemSetPropReq.PropertiesEntry
-	30, // 12: mgmt.SystemGetPropResp.properties:type_name -> mgmt.SystemGetPropResp.PropertiesEntry
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	35, // 0: mgmt.SystemStopResp.results:type_name -> shared.RankResult
+	35, // 1: mgmt.SystemStartResp.results:type_name -> shared.RankResult
+	35, // 2: mgmt.SystemInitializeResp.results:type_name -> shared.RankResult
+	35, // 3: mgmt.SystemExtendResp.results:type_name -> shared.RankResult
+	35, // 4: mgmt.SystemExcludeResp.results:type_name -> shared.RankResult
+	35, // 5: mgmt.PoolRanksResp.results:type_name -> shared.RankResult
+	12, // 6: mgmt.SystemDrainResp.responses:type_name -> mgmt.PoolRanksResp
+	15, // 7: mgmt.SystemRebuildManageResp.results:type_name -> mgmt.PoolRebuildManageResult
+	0,  // 8: mgmt.SystemQueryResp.members:type_name -> mgmt.SystemMember
+	35, // 9: mgmt.SystemEraseResp.results:type_name -> shared.RankResult
+	30, // 10: mgmt.SystemCleanupResp.results:type_name -> mgmt.SystemCleanupResp.CleanupResult
+	31, // 11: mgmt.SystemSetAttrReq.attributes:type_name -> mgmt.SystemSetAttrReq.AttributesEntry
+	32, // 12: mgmt.SystemGetAttrResp.attributes:type_name -> mgmt.SystemGetAttrResp.AttributesEntry
+	33, // 13: mgmt.SystemSetPropReq.properties:type_name -> mgmt.SystemSetPropReq.PropertiesEntry
+	34, // 14: mgmt.SystemGetPropResp.properties:type_name -> mgmt.SystemGetPropResp.PropertiesEntry
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_mgmt_system_proto_init() }
@@ -1889,7 +2119,7 @@ func file_mgmt_system_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mgmt_system_proto_rawDesc), len(file_mgmt_system_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   31,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
