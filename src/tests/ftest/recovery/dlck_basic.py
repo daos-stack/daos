@@ -63,7 +63,8 @@ class DlckBasicTest(TestDlck):
                 "daos_nvme.conf")
             # Mount 128G of memory-backed tmpfs for testing purposes
             cmd = 'sudo bash -c "mkdir -p /mnt/dlck_test && ' \
-                  'mount -t tmpfs -o size=256G tmpfs /mnt/dlck_test"'
+                  'mount -t tmpfs -o rw,uid=daos_server,' \
+                  'gid=daos_server,mode=0775 tmpfs /mnt/dlck_test"'
             run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
             # Display the tmpfs mount
             run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
@@ -71,6 +72,7 @@ class DlckBasicTest(TestDlck):
             dlck.storage.value = "/mnt/dlck_test"
 
         self.log_step("Run dlck command to check the health of the pool and storage")
+        dlck.timeout = 180
         result = dlck.run()
 
         self.log_step("Perform dmg system start after running dlck command")
@@ -114,7 +116,8 @@ class DlckBasicTest(TestDlck):
                 "daos_nvme.conf")
             # Mount 128G of memory-backed tmpfs for testing purposes
             cmd = 'sudo bash -c "mkdir -p /mnt/dlck_test && ' \
-                  'mount -t tmpfs -o size=256G tmpfs /mnt/dlck_test"'
+                  'mount -t tmpfs -o rw,uid=daos_server,' \
+                  'gid=daos_server,mode=0775 tmpfs /mnt/dlck_test"'
             run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
             # Display the tmpfs mount
             run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
@@ -139,6 +142,7 @@ class DlckBasicTest(TestDlck):
             distribute_files(self.log, self.hostlist_servers, fault_inject_file,
                              fault_inject_file)
             self.log_step("Run dlck command after injecting fault")
+            dlck.timeout = 180
             result = dlck.run()
             errors.extend(self.check_dlck_result(result, test_fault))
 
