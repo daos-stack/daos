@@ -307,8 +307,8 @@ run_daos_rebuild_weekly_test(int rank, int size, int *sub_tests, int sub_tests_s
 		sub_tests      = NULL;
 	}
 
-	run_daos_sub_tests_only("DAOS_Rebuild_Weekly", rebuild_weekly_tests,
-				ARRAY_SIZE(rebuild_weekly_tests), sub_tests, sub_tests_size);
+	rc = run_daos_sub_tests_only("DAOS_Rebuild_Weekly", rebuild_weekly_tests,
+				     ARRAY_SIZE(rebuild_weekly_tests), sub_tests, sub_tests_size);
 
 	par_barrier(PAR_COMM_WORLD);
 
