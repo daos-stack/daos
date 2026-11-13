@@ -39,9 +39,11 @@ The Slurm RPMs create the standard `slurm` system account and runtime
 directories, and apply the normal systemd preset and upgrade/removal lifecycle.
 The `slurmctld` unit runs as `SLURM_SERVICE_USER` (default: `jenkins`); set this
 variable when building the RPMs if the cluster uses a different test account.
-The functional-test `--user` value must match that account. The RPMs do not
-force services to start. Functional-test setup supplies the cluster-specific
-configuration and prepares MUNGE credentials.
+Functional-test setup sets `SlurmUser` to match, then supplies the controller,
+node topology, partition, MUNGE credentials, and the epilog script path. FPM
+activates the `EpilogSlurmctld` setting in the packaged example config. The
+package also sets test defaults for accounting and PID/log paths. The RPMs do
+not force services to start.
 
 See [SchedMD's administrator guide](https://slurm.schedmd.com/quickstart_admin.html#manual_build)
 and [Slurm sources](https://github.com/schedmd/slurm).

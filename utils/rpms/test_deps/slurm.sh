@@ -144,6 +144,16 @@ build_package "${slurm_dev}"
 DESCRIPTION="Slurm example configuration files"
 stage_files "${sysconfdir}/slurm" "${SL_SLURM_PREFIX}"/etc/slurm/*.example
 for config in "${files[@]}"; do
+  if [[ "${config}" = */slurm.conf.example ]]; then
+    sed -i \
+      -e 's|^AccountingStorageType=.*|AccountingStorageType=accounting_storage/none|' \
+      -e 's|^SlurmctldPidFile=.*|SlurmctldPidFile=/var/spool/slurmctld/slurmctld.pid|' \
+      -e 's|^SlurmctldLogFile=.*|SlurmctldLogFile=/var/log/slurm/slurmctld.log|' \
+      -e 's|^SlurmdLogFile=.*|SlurmdLogFile=/var/log/slurm/slurmd.log|' \
+      -e 's|^SlurmctldHost=.*|SlurmctldHost=localhost|' \
+      -e 's|^#EpilogSlurmctld=$|EpilogSlurmctld=|' \
+      "${config}"
+  fi
   CONFIG_FILES+=("${config#"${tmp}"}")
 done
 ARCH=noarch

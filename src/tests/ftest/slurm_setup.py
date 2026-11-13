@@ -38,7 +38,6 @@ class SlurmSetup():
     PACKAGE_LIST = ['slurm', 'slurm-slurmdbd', 'slurm-slurmctld', 'slurm-slurmd',
                     'slurm-example-configs']
     SLURM_CONF = '/etc/slurm/slurm.conf'
-    SLURMCTLD_PID_FILE = '/var/spool/slurmctld/slurmctld.pid'
     SLURM_LOG_DIR = '/var/log/slurm'
 
     def __init__(self, log, nodes, control_node, sudo=False):
@@ -256,17 +255,15 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem modifying slurm config file
         """
+        # Update the config file with the slurm cluster name
+        self._modify_slurm_config_file(
+            'slurm cluster name', self.all_nodes, 's/ClusterName=cluster/ClusterName=ci_cluster/g',
+            self.root)
+
+        # Update the config file with the slurm user
         self._modify_slurm_config_file(
             'slurm user', self.all_nodes, f's/SlurmUser=slurm/SlurmUser={slurm_user}/g',
             self.root)
-        self._modify_slurm_config_file(
-            'accounting storage type', self.all_nodes,
-            's|^[[:space:]]*#\\?[[:space:]]*AccountingStorageType[[:space:]]*=.*|'
-            'AccountingStorageType=accounting_storage/none|', self.root)
-        self._modify_slurm_config_file(
-            'slurmctld pid file', self.all_nodes,
-            f's|^[[:space:]]*#\\?[[:space:]]*SlurmctldPidFile[[:space:]]*=.*|'
-            f'SlurmctldPidFile={self.SLURMCTLD_PID_FILE}|', self.root)
 
         # Update the config file with the removal of the NodeName entry
         self._modify_slurm_config_file(
@@ -277,28 +274,16 @@ class SlurmSetup():
             'epilog file', self.all_nodes,
             f's#EpilogSlurmctld=#EpilogSlurmctld={self.EPILOG_FILE}#g', self.root)
 
-        # Keep configured log paths consistent with the directories created for Slurm.
-        self._modify_slurm_config_file(
-            'slurmctld log file', self.all_nodes,
-            's#^[[:space:]]*SlurmctldLogFile=.*#SlurmctldLogFile=/var/log/slurm/slurmctld.log#',
-            self.root)
-        self._modify_slurm_config_file(
-            'slurmd log file', self.all_nodes,
-            's#^[[:space:]]*SlurmdLogFile=.*#SlurmdLogFile=/var/log/slurm/slurmd.log#',
-            self.root)
-
         # Update the config file with the slurm control node
         not_updated = self.all_nodes.copy()
         for control_keyword in ['SlurmctldHost', 'ControlMachine']:
-            command = (f"grep -E '^[[:space:]]*{control_keyword}[[:space:]]*=' "
-                       f'{self.SLURM_CONF}')
+            command = f'grep {control_keyword} {self.SLURM_CONF}'
             results = run_remote(self.log, self.all_nodes, command)
             if results.passed_hosts:
                 not_updated.remove(
                     self._modify_slurm_config_file(
                         'slurm control node', results.passed_hosts,
-                        f's/^[[:space:]]*{control_keyword}[[:space:]]*=.*/'
-                        f'{control_keyword}={str(self.control)}/',
+                        f's/{control_keyword}=localhost/{control_keyword}={str(self.control)}/g',
                         self.root))
         if not_updated:
             raise SlurmSetupException(f'Slurm control node not updated on {not_updated}')
