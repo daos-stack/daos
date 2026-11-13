@@ -15,6 +15,7 @@ import tempfile
 from os.path import join
 
 from .base import CulmTimer, NLTestFail
+from .watchdog import abort_fuse_connections, dfuse_connection_ids
 
 
 class NLTConf():
@@ -43,10 +44,30 @@ class NLTConf():
             os.makedirs(self.tmp_dir)
 
         self._compress_procs = []
+        self._cleaned = False
 
     def __del__(self):
+        self.cleanup()
+
+    def cleanup(self):
+        """Report any leaked dfuse mount, flush compression and remove the working directory"""
+        if self._cleaned:
+            return
+        self._cleaned = True
+
+        leaked = {conn: mnt for conn, mnt in dfuse_connection_ids().items()
+                  if mnt.startswith(self.dfuse_parent_dir)}
+        if leaked:
+            print(f'Leaked dfuse mounts at exit: {sorted(leaked.values())}', flush=True)
+            for line in abort_fuse_connections()[1]:
+                print(line, flush=True)
+
         self.flush_bz2()
-        os.rmdir(self.dfuse_parent_dir)
+
+        try:
+            os.rmdir(self.dfuse_parent_dir)
+        except OSError as err:
+            print(f'Could not remove {self.dfuse_parent_dir}: {err}', flush=True)
 
     def set_wf(self, wf):
         """Set the WarningsFactory object"""
