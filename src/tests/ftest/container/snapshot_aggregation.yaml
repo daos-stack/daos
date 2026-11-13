@@ -22,7 +22,7 @@ server_config:
   system_ram_reserved: 8
 
 pool:
-  scm_size: 80G
+  scm_size: 75G
   nvme_size: 100G
   target_list: [0, 1]
 
