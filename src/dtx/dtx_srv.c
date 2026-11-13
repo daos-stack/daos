@@ -254,14 +254,8 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays, NULL,
-				   &din->di_version, NULL, DCI_RESYNC);
-		if (rc == DTX_ST_INITED) {
-			/* For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
-			 * return 'DTX_ST_INITED' to avoid interoperability trouble if related
-			 * request is from old server.
-			 */
-			rc = -DER_NONEXIST;
-		} else if (rc == -DER_INPROGRESS && !dtx_cont_opened(cont)) {
+				   &din->di_version, NULL, DCI_RESYNC_FOLLOWER);
+		if (rc == -DER_INPROGRESS && !dtx_cont_opened(cont)) {
 			/* Trigger DTX re-index for subsequent (retry) DTX_CHECK. */
 			rc1 = start_dtx_reindex_ult(cont);
 			if (rc1 != 0)
@@ -292,6 +286,10 @@ dtx_handler(crt_rpc_t *rpc)
 
 			D_GOTO(out, rc = 0);
 		}
+
+		/* REFRESH sponsor needs to offer valid version instead of zero. */
+		if (unlikely(din->di_version == 0))
+			D_GOTO(out, rc = -DER_INVAL);
 
 		flags = din->di_flags.ca_arrays;
 

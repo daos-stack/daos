@@ -1005,8 +1005,7 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *che
 	struct dtx_share_peer	*tmp;
 	struct dtx_req_rec	*drr;
 	struct dtx_common_args	 dca;
-	d_list_t		 head;
-	d_list_t		 self;
+	d_list_t                 head;
 	d_rank_t		 myrank;
 	uint32_t		 flags;
 	int			 len = 0;
@@ -1019,7 +1018,6 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *che
 	uint32_t                 version = cont->sc_pool->spc_map_version;
 
 	D_INIT_LIST_HEAD(&head);
-	D_INIT_LIST_HEAD(&self);
 	crt_group_rank(NULL, &myrank);
 
 	d_list_for_each_entry_safe(dsp, tmp, check_list, dsp_link) {
@@ -1059,20 +1057,24 @@ again:
 			goto next;
 		}
 
-		/* If current server is the leader, then two possible cases:
+		/*
+		 * If current server is the DTX leader, then there must be DTX leader switch,
+		 * current one is the new leader. To simplify the logic and avoid race with
+		 * DTX resync and resent RPC handler, let's wait for DTX resync or resent RPC
+		 * handler to handle it and retry related operation sometime later.
 		 *
-		 * 1. In DTX resync, the status may be resolved sometime later.
-		 * 2. The DTX resync is done, but failed to handle related DTX.
-		 * 3. For orphan cleanup, that is almost impossible unless another
-		 *    pool map changes between DTX resync and DTX orphan cleanup.
-		 *    Under such case, another DTX resync will be triggered. For
-		 *    current DTX orphan cleanup, just ignore such case.
+		 * For IO case, add such dsp (DTX) into act_list. If it has been committed or
+		 * aborted before related operation being retried (on current target locally),
+		 * then such dsp in act_list is harmless since nobody will use it; otherwise,
+		 * related logic in VOS will ask the operation sponsor to retry remotely when
+		 * hit such prepared DTX again during retry on current target locally.
 		 */
 		if (myrank == target->ta_comp.co_rank &&
 		    dss_get_module_info()->dmi_tgt_id == target->ta_comp.co_index) {
 			d_list_del(&dsp->dsp_link);
 			if (for_io) {
-				d_list_add_tail(&dsp->dsp_link, &self);
+				dsp->dsp_status = -DER_INPROGRESS;
+				d_list_add_tail(&dsp->dsp_link, act_list);
 			} else {
 				D_WARN("Hit self leader for DTX " DF_DTI " when cleanup\n",
 				       DP_DTI(&dsp->dsp_xid));
@@ -1236,9 +1238,10 @@ next2:
 				d_list_del(&dsp->dsp_link);
 				dtx_dsp_free(dsp);
 			} else {
-				rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch,
-						    version);
-				if (rc1 == 0 || !for_io) {
+				if (likely(rc1 != -DER_INPROGRESS))
+					rc1 = vos_dtx_abort(cont->sc_hdl, &dsp->dsp_xid,
+							    dsp->dsp_epoch, version);
+				if (rc1 == 0 || rc1 == -DER_INPROGRESS || !for_io) {
 					d_list_del(&dsp->dsp_link);
 					dtx_dsp_free(dsp);
 				}
@@ -1283,59 +1286,11 @@ next2:
 			goto out;
 	}
 
-	/* Handle the entries whose leaders are on current server. */
-	d_list_for_each_entry_safe(dsp, tmp, &self, dsp_link) {
-		struct dtx_entry	dte;
-		struct dtx_entry	*pdte = &dte;
-		struct dtx_cos_key	 dck;
-
-		d_list_del(&dsp->dsp_link);
-
-		dte.dte_xid = dsp->dsp_xid;
-		dte.dte_ver = pool->sp_map_version;
-		dte.dte_refs = 1;
-		dte.dte_mbs = dsp->dsp_mbs;
-
-		rc = dtx_status_handle_one(cont, &dte, dsp->dsp_oid, dsp->dsp_dkey_hash,
-					   dsp->dsp_epoch, NULL, NULL);
-		switch (rc) {
-		case DSHR_NEED_COMMIT:
-			dck.oid = dsp->dsp_oid;
-			dck.dkey_hash = dsp->dsp_dkey_hash;
-			rc = dtx_commit(cont, &pdte, &dck, 1, true);
-			if (rc < 0 && rc != -DER_NONEXIST)
-				d_list_add_tail(&dsp->dsp_link, cmt_list);
-			else
-				dtx_dsp_free(dsp);
-			continue;
-		case DSHR_NEED_RETRY:
-			dtx_dsp_free(dsp);
-			D_GOTO(out, rc = -DER_INPROGRESS);
-		case 0:
-		case DSHR_IGNORE:
-			dtx_dsp_free(dsp);
-			continue;
-		case DSHR_ABORT_FAILED:
-			d_list_add_tail(&dsp->dsp_link, abt_list);
-			continue;
-		case DSHR_CORRUPT:
-			dtx_dsp_free(dsp);
-			D_GOTO(out, rc = -DER_DATA_LOSS);
-		default:
-			dtx_dsp_free(dsp);
-			goto out;
-		}
-	}
-
 	rc = 0;
 
 out:
 	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec, drr_link)) != NULL)
 		dtx_drr_cleanup(drr);
-
-	while ((dsp = d_list_pop_entry(&self, struct dtx_share_peer,
-				       dsp_link)) != NULL)
-		dtx_dsp_free(dsp);
 
 	return rc;
 }

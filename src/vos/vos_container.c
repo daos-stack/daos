@@ -470,6 +470,10 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		}
 	}
 
+	cont->vc_dtx_resync_ts = daos_gettime_coarse();
+	if (pool->vp_for_check)
+		cont->vc_dtx_resync_ver = 1;
+
 	/*
 	 * Assign vc_mod_epoch_bound with current HLC, then all former reported local stable
 	 * epoch (without persistently stored) before re-opening the container will be older
