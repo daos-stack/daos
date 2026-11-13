@@ -109,6 +109,12 @@ struct dc_tx {
 	/** Reference the pool. */
 	struct dc_pool          *tx_pool;
 
+	daos_unit_oid_t          tx_leader_oid;
+	/* Former DTX leader target ID before current resending. */
+	uint32_t                 tx_leader_tgt;
+	/* Save old MBS for new DTX leader when resend RPC. */
+	struct dtx_memberships  *tx_mbs;
+
 	struct daos_cpd_sg	 tx_head;
 	struct daos_cpd_sg	 tx_reqs;
 	struct daos_cpd_sg	 tx_disp;
@@ -234,6 +240,7 @@ dc_tx_free(struct d_hlink *hlink)
 	dc_cont_put(tx->tx_co);
 	dc_pool_put(tx->tx_pool);
 	D_MUTEX_DESTROY(&tx->tx_lock);
+	D_FREE(tx->tx_mbs);
 	D_FREE(tx);
 }
 
@@ -350,7 +357,8 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 		tx->tx_epoch.oe_flags = 0;
 	}
 
-	tx->tx_co = dc;
+	tx->tx_leader_tgt = UINT32_MAX;
+	tx->tx_co         = dc;
 	D_ASSERT(tx->tx_co != NULL);
 	tx->tx_flags = flags;
 	tx->tx_status = TX_OPEN;
@@ -539,12 +547,24 @@ dc_tx_cleanup(struct dc_tx *tx)
 
 	if (tx->tx_head.dcs_type == DCST_BULK_HEAD) {
 		dc_tx_bulk_free(&tx->tx_head_bulk.dcb_bulk);
-		/* Free MBS buffer. */
-		D_FREE(tx->tx_head_bulk.dcb_iov.iov_buf);
+		if (tx->tx_set_resend && tx->tx_head_bulk.dcb_iov.iov_buf != NULL) {
+			D_FREE(tx->tx_mbs);
+			tx->tx_mbs                       = tx->tx_head_bulk.dcb_iov.iov_buf;
+			tx->tx_head_bulk.dcb_iov.iov_buf = NULL;
+		} else {
+			/* Free MBS buffer. */
+			D_FREE(tx->tx_head_bulk.dcb_iov.iov_buf);
+		}
 	} else {
 		dcsh = tx->tx_head.dcs_buf;
 		if (dcsh != NULL) {
-			D_FREE(dcsh->dcsh_mbs);
+			if (tx->tx_set_resend && dcsh->dcsh_mbs != NULL) {
+				D_FREE(tx->tx_mbs);
+				tx->tx_mbs     = dcsh->dcsh_mbs;
+				dcsh->dcsh_mbs = NULL;
+			} else {
+				D_FREE(dcsh->dcsh_mbs);
+			}
 			D_FREE(dcsh);
 		}
 	}
@@ -1862,6 +1882,44 @@ out:
 }
 
 static int
+dc_tx_resend_leader(struct dc_tx *tx, struct dc_tx_req_group *dtrgs)
+{
+	struct dc_pool         *pool = tx->tx_pool;
+	struct pool_target     *target;
+	struct dtx_daos_target *ddt;
+	int                     rc;
+	int                     i;
+
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+	if (pool_map_get_version(pool->dp_map) != tx->tx_pm_ver)
+		D_GOTO(out, rc = -DER_STALE);
+
+	rc = pool_map_find_target(pool->dp_map, tx->tx_leader_tgt, &target);
+	if (rc == 1 && target->ta_comp.co_status == PO_COMP_ST_UPIN &&
+	    dtrgs[tx->tx_leader_tgt].dtrg_req_idx != NULL)
+		D_GOTO(out, rc = 1);
+
+	if (tx->tx_mbs == NULL)
+		D_GOTO(out, rc = 0);
+
+	/* The first UPIN target will be the new leader. */
+	for (i = 0, ddt = &tx->tx_mbs->dm_tgts[0]; i < tx->tx_mbs->dm_tgt_cnt; i++, ddt++) {
+		rc = pool_map_find_target(pool->dp_map, ddt->ddt_id, &target);
+		if (rc == 1 && target->ta_comp.co_status == PO_COMP_ST_UPIN &&
+		    dtrgs[ddt->ddt_id].dtrg_req_idx != NULL) {
+			tx->tx_leader_tgt = ddt->ddt_id;
+			D_GOTO(out, rc = 1);
+		}
+	}
+
+	rc = 0;
+
+out:
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+	return rc;
+}
+
+static int
 dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 {
 	daos_unit_oid_t			 leader_oid = { 0 };
@@ -1990,10 +2048,18 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	mbs = dcsh->dcsh_mbs;
 	mbs->dm_flags = DMF_CONTAIN_LEADER;
 
-	/* For the case of modification(s) within single RDG,
-	 * elect leader as standalone modification case does.
-	 */
-	if (mod_grp_cnt == 1) {
+	if (tx->tx_set_resend && tx->tx_leader_tgt != UINT32_MAX) {
+		rc = dc_tx_resend_leader(tx, dtrgs);
+		if (rc < 0)
+			goto out;
+
+		if (rc > 0) {
+			leader_oid      = tx->tx_leader_oid;
+			leader_dtrg_idx = tx->tx_leader_tgt;
+			rc              = 0;
+		}
+	} else if (mod_grp_cnt == 1) {
+		/* Modification within single RDG, elect leader as standalone modification does. */
 		uint8_t	*bit_map;
 
 		i = dc_tx_leftmost_req(tx, true);
@@ -2262,6 +2328,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	 * tx->tx_tgts_bulk.dcb_iov.iov_buf in dc_tx_cleanup().
 	 */
 	shard_tgts = NULL;
+
+	tx->tx_leader_oid = leader_oid;
+	tx->tx_leader_tgt = leader_dtrg_idx;
 
 	dc_tx_dump(tx);
 

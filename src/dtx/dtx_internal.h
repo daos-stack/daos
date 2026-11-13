@@ -268,8 +268,8 @@ void dtx_batched_commit(void *arg);
 void dtx_aggregation_main(void *arg);
 int start_dtx_reindex_ult(struct ds_cont_child *cont);
 void dtx_merge_check_result(int *tgt, int src);
-int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
-		   daos_unit_oid_t *oid, uint32_t version, struct pool_target **p_tgt);
+int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_t *oid,
+		   struct pool_target **p_tgt);
 int dtx_cleanup_internal(struct ds_cont_child *cont, struct sched_request *sr, uint32_t thd,
 			 bool for_orphan);
 
