@@ -267,23 +267,27 @@ func TestServer_EngineInstance_updateIncarnation(t *testing.T) {
 
 type (
 	MockInstanceConfig struct {
-		CallDrpcResp        *drpc.Response
-		CallDrpcErr         error
-		GetRankResp         ranklist.Rank
-		GetRankErr          error
-		TargetCount         int
-		Index               uint32
-		Started             atm.Bool
-		Ready               atm.Bool
-		CheckerMode         atm.Bool
-		LocalState          system.MemberState
-		RemoveSuperblockErr error
-		SetupRankErr        error
-		StopErr             error
-		ExitErr             error
-		ScmTierConfig       *storage.TierConfig
-		ScanBdevTiersResult []storage.BdevTierScanResult
-		LastHealthStats     map[string]*ctlpb.BioHealthResp
+		CallDrpcResp         *drpc.Response
+		CallDrpcErr          error
+		GetRankResp          ranklist.Rank
+		GetRankErr           error
+		TargetCount          int
+		Index                uint32
+		Started              atm.Bool
+		Ready                atm.Bool
+		CheckerMode          atm.Bool
+		LocalState           system.MemberState
+		LocalFormatState     string
+		AwaitingFormat       bool
+		NotifyStorageReadyFn func(*ranklist.Rank)
+		StorageProvider      *storage.Provider
+		RemoveSuperblockErr  error
+		SetupRankErr         error
+		StopErr              error
+		ExitErr              error
+		ScmTierConfig        *storage.TierConfig
+		ScanBdevTiersResult  []storage.BdevTierScanResult
+		LastHealthStats      map[string]*ctlpb.BioHealthResp
 	}
 
 	MockInstance struct {
@@ -337,6 +341,13 @@ func (mi *MockInstance) LocalState() system.MemberState {
 	return mi.cfg.LocalState
 }
 
+func (mi *MockInstance) LocalFormatState() string {
+	if mi.cfg.LocalFormatState != "" {
+		return mi.cfg.LocalFormatState
+	}
+	return mi.cfg.LocalState.String()
+}
+
 func (mi *MockInstance) RemoveSuperblock() error {
 	return mi.cfg.RemoveSuperblockErr
 }
@@ -376,7 +387,7 @@ func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ []storage.NvmeCont
 }
 
 func (mi *MockInstance) isAwaitingFormat() bool {
-	return false
+	return mi.cfg.AwaitingFormat
 }
 
 func (mi *MockInstance) getExitErr() error {
@@ -392,10 +403,14 @@ func (mi *MockInstance) isAwaitingStart() bool {
 }
 
 func (mi *MockInstance) NotifyDrpcReady(_ *srvpb.NotifyReadyReq) {}
-func (mi *MockInstance) NotifyStorageReady(_ *ranklist.Rank)     {}
-func (mi *MockInstance) NotifyStartReady()                       {}
-func (mi *MockInstance) abortStart()                             {}
-func (mi *MockInstance) holdStart(func())                        {}
+func (mi *MockInstance) NotifyStorageReady(rank *ranklist.Rank) {
+	if mi.cfg.NotifyStorageReadyFn != nil {
+		mi.cfg.NotifyStorageReadyFn(rank)
+	}
+}
+func (mi *MockInstance) NotifyStartReady() {}
+func (mi *MockInstance) abortStart()       {}
+func (mi *MockInstance) holdStart(func())  {}
 
 func (mi *MockInstance) GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	return nil, nil
@@ -414,7 +429,7 @@ func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountR
 }
 
 func (mi *MockInstance) GetStorage() *storage.Provider {
-	return nil
+	return mi.cfg.StorageProvider
 }
 
 func (mi *MockInstance) Debugf(format string, args ...interface{}) {

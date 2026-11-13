@@ -513,6 +513,31 @@ func TestDmg_SystemCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"system erase with no-wait",
+			"system erase --no-wait",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{FailOnUnavailable: true}),
+				printRequest(t, &control.SystemEraseReq{}),
+			}, " "),
+			nil,
+		},
+		{
+			// Without --no-wait, system erase blocks on
+			// control.WaitForStorageFormatReady(), which polls via a
+			// StorageFormatStatusReq request. The mock invoker reports
+			// the engine as already awaiting format, so the blocking
+			// wait loop exercises the synchronous poll exactly once
+			// before returning, rather than timing out.
+			"system erase without no-wait blocks on awaiting-format poll",
+			"system erase",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{FailOnUnavailable: true}),
+				printRequest(t, &control.SystemEraseReq{}),
+				printRequest(t, &control.StorageFormatStatusReq{}),
+			}, " "),
+			nil,
+		},
+		{
 			"system self-heal evaluate",
 			"system self-heal eval",
 			strings.Join([]string{
@@ -1013,7 +1038,7 @@ func TestDmg_systemEraseCmd_execute(t *testing.T) {
 		},
 		"success with no errors": {
 			resp:    &mgmtpb.SystemEraseResp{},
-			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
+			expInfo: "System erase successful. System can be re-initialized with 'dmg storage format'",
 		},
 		"uninitialized error from ms is now a genuine failure": {
 			// The server drains its response before restarting (see
@@ -1041,7 +1066,7 @@ func TestDmg_systemEraseCmd_execute(t *testing.T) {
 					},
 				},
 			},
-			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
+			expInfo: "System erase successful. System can be re-initialized with 'dmg storage format'",
 		},
 		"failure with rank errors": {
 			resp: &mgmtpb.SystemEraseResp{
@@ -1088,7 +1113,7 @@ func TestDmg_systemEraseCmd_execute(t *testing.T) {
 		},
 		"nil response": {
 			resp:    nil,
-			expInfo: "System erase successful. System is now uninitialized and ready for 'dmg storage format'",
+			expInfo: "System erase successful. System can be re-initialized with 'dmg storage format'",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1101,6 +1126,9 @@ func TestDmg_systemEraseCmd_execute(t *testing.T) {
 			})
 
 			cmd := new(systemEraseCmd)
+			// Skip WaitForStorageFormatReady polling; the mock invoker
+			// doesn't simulate engines reaching the awaiting-format state.
+			cmd.NoWait = true
 			cmd.setInvoker(mi)
 			cmd.SetLog(log)
 

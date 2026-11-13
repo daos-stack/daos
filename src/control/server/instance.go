@@ -199,6 +199,24 @@ func (ei *EngineInstance) setExitErr(err error) {
 	ei._exitErr = err
 }
 
+// LocalFormatState returns a finer-grained, format-centric state name than
+// LocalState, for use in format-status reporting: Stopped, AwaitingFormat,
+// AwaitingStart, EnginesStarting, or Ready.
+func (ei *EngineInstance) LocalFormatState() string {
+	switch {
+	case ei.IsReady():
+		return "Ready"
+	case ei.isAwaitingFormat():
+		return "AwaitingFormat"
+	case ei.isAwaitingStart():
+		return "AwaitingStart"
+	case ei.IsStarted():
+		return "EnginesStarting"
+	default:
+		return "Stopped"
+	}
+}
+
 // setIndex sets the server index assigned by the harness.
 func (ei *EngineInstance) setIndex(idx uint32) {
 	ei.runner.GetConfig().Index = idx
